@@ -182,7 +182,7 @@ function autoWidths(ws: ExcelJS.Worksheet, labels: string[], rows: unknown[][], 
 // ------------------------------------------------------------------ BCC
 const BCC_HEADERS = [
   "STT", "Mã thiết bị", "Chủng loại", "Vị trí lắp đặt", "Cương vị quản lý", "Tổ máy", "Cấp giám sát", "SL", "ĐVT",
-  "Tình trạng tổng thể", "Áp suất bình MFZ/KL bình CO2", "Vị trí đặt hiện tại", "Tình trạng bên ngoài",
+  "Tình trạng tổng thể", "Áp suất bình MFZ/KL bình CO2 (%)", "Vị trí đặt hiện tại", "Tình trạng bên ngoài",
   "Nguồn gốc / NSX", "Thời gian thay thế gần nhất", "Ngày sản xuất", "Thời gian sử dụng", "Đến hạn thay thế",
   "Ngày kiểm tra gần nhất", "Người kiểm tra", "Ghi chú khác", "Người ký", "Thời điểm ký", "Chữ ký",
 ];

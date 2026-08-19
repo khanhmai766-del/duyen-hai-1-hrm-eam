@@ -237,8 +237,10 @@ export async function loadBookData(periodId: string, positionCode: string) {
       sl: r.sl,
       ngayKiemTra: r.ngayKiemTra,
       tinhTrang: r.tinhTrang ?? "",
-      danhGia: r.tinhTrang ?? "",
-      ghiChu: noteOf(r.tinhTrang, r.apSuat),
+      // Bản mẫu ghi kèm số đo ngay trước kết luận: "(85%) Đạt". Bình chưa đo thì chỉ có
+      // kết luận — không bịa ra "(0%)", vì 0% nghĩa là đã đo và bình rỗng.
+      danhGia: r.apSuat === null ? (r.tinhTrang ?? "") : `(${r.apSuat}%) ${r.tinhTrang ?? ""}`.trim(),
+      ghiChu: "",
       ...signer(sigBcc, r.id, r.nguoiKiemTra),
     })),
     ...cabinets.map((r) => ({

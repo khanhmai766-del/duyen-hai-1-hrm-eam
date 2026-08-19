@@ -75,7 +75,8 @@ export interface ExtinguisherRow {
   sl: number | null;
   dvt: string | null;
   tinhTrang: string | null;
-  apSuat: string | null;
+  /** Phần trăm áp suất (MFZ/Foam) hoặc khối lượng còn lại (CO2), 0–100. */
+  apSuat: number | null;
   viTriHienTai: string | null;
   tinhTrangNgoai: string | null;
   nguonGoc: string | null;

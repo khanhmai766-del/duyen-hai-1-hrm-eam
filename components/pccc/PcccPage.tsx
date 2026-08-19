@@ -107,7 +107,7 @@ import {
   VALVE_LOAI_OPTIONS,
   VALVE_TINH_TRANG_OPTIONS,
   applyTccToggle,
-  resolveTinhTrang,
+
   suggestHoseReelMa,
 } from "@/lib/pccc-status";
 
@@ -474,16 +474,15 @@ export default function PcccPage() {
     });
   }
 
-  /** Ghi 1 ô của BCC vào bản nháp. Áp luôn quy tắc áp suất → tình trạng cho thấy ngay. */
-  function onDraftChange(rowId: string, field: string, value: unknown, row: ExtinguisherRow) {
+  /**
+   * Ghi 1 ô của BCC vào bản nháp.
+   *
+   * Không còn suy diễn gì ở đây: áp suất thôi ràng buộc tình trạng (TB 5100 tách hai
+   * đánh giá), nên ô nào người dùng gõ thì ghi đúng ô đó.
+   */
+  function onDraftChange(rowId: string, field: string, value: unknown) {
     patchDraft("BCC", rowId, (rowDraft) => {
       rowDraft[field] = value;
-      if (field === "apSuat" || field === "tinhTrang") {
-        const apSuat = (("apSuat" in rowDraft ? rowDraft.apSuat : row.apSuat) as string | null) ?? null;
-        const tinhTrang = (("tinhTrang" in rowDraft ? rowDraft.tinhTrang : row.tinhTrang) as string | null) ?? null;
-        const resolved = resolveTinhTrang(apSuat, tinhTrang);
-        if (resolved !== tinhTrang) rowDraft.tinhTrang = resolved;
-      }
     });
   }
 

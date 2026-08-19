@@ -36,9 +36,9 @@ import {
 import {
   BCC_TINH_TRANG_NGOAI_OPTIONS,
   BCC_VI_TRI_HIEN_TAI_OPTIONS,
-  apSuatOptions,
+
   hanThayTheTone,
-  tinhTrangOptions,
+  BCC_TINH_TRANG_OPTIONS,
 } from "@/lib/pccc-status";
 import { canEditPcccAdminField, canEditPcccRow, pcccLockReason, type ExtinguisherRow, type PcccWriteScopeMeta, type PositionOption } from "@/hooks/usePccc";
 
@@ -91,7 +91,7 @@ export function PcccExtinguishers({
   loading?: boolean;
   editing: boolean;
   draft: Record<string, Record<string, unknown>>;
-  onDraftChange: (rowId: string, field: string, value: unknown, row: ExtinguisherRow) => void;
+  onDraftChange: (rowId: string, field: string, value: unknown) => void;
   sort: SortState;
   onSort: (key: string) => void;
   page: number;
@@ -113,8 +113,8 @@ export function PcccExtinguishers({
   const canEditAdminField = canEdit && canEditPcccAdminField(writeScope);
 
   // Ghi vào BẢN NHÁP, không gọi API. Lưu 1 lượt khi bấm "Lưu".
-  function save(row: ExtinguisherRow, field: string, value: string) {
-    onDraftChange(row.id, field, value === "" ? null : value, row);
+  function save(row: ExtinguisherRow, field: string, value: string | number | null) {
+    onDraftChange(row.id, field, value === "" ? null : value);
   }
 
   return (
@@ -240,31 +240,33 @@ export function PcccExtinguishers({
                   >
                     {r.chungLoai}
                   </TableCell>
-                  {/* Tình trạng: danh sách bị áp suất ràng buộc — áp suất cảnh báo thì
-                      không còn lựa chọn "Khả dụng" (quy tắc của file Excel gốc). */}
+                  {/* Tình trạng: LUÔN đủ hai lựa chọn. Áp suất không còn ràng buộc ô này —
+                      hai đánh giá độc lập theo TB 5100 (xem lib/pccc-status.ts). */}
                   <TableCell
                     className={cn(TD_ROW, STICKY_TD, rowBg, "text-center", dirty("tinhTrang"))}
                     style={{ left: FROZEN.tinhTrang.left }}
                   >
                     <ToneSelectCell
                       value={r.tinhTrang}
-                      options={tinhTrangOptions(r.apSuat)}
+                      options={BCC_TINH_TRANG_OPTIONS}
                       disabled={!rowEditable}
                       lockedReason={lockReason()}
                       onChange={(v) => save(r, "tinhTrang", v)}
                     />
                   </TableCell>
-                  {/* Áp suất: bình CO2 đo theo khối lượng, MFZ/Foam theo vạch áp */}
+                  {/* Áp suất/KL: SỐ phần trăm 0–100 — bình CO2 là khối lượng còn lại so với
+                      mức chuẩn, MFZ/Foam là vạch áp trên đồng hồ. Một ô cho cả hai chủng loại. */}
                   <TableCell
                     className={cn(TD_ROW, STICKY_TD, STICKY_EDGE, rowBg, "text-center", dirty("apSuat"))}
                     style={{ left: FROZEN.apSuat.left }}
                   >
-                    <ToneSelectCell
-                      value={r.apSuat}
-                      options={apSuatOptions(r.chungLoai)}
+                    <EditableCell
+                      value={r.apSuat === null ? "" : `${r.apSuat}%`}
+                      type="number"
+                      align="center"
                       disabled={!rowEditable}
                       lockedReason={lockReason()}
-                      onChange={(v) => save(r, "apSuat", v)}
+                      onSave={(v) => save(r, "apSuat", v.trim() === "" ? null : Number(v))}
                     />
                   </TableCell>
                   <TableCell className={cn(TD_ROW, dirty("tinhTrangNgoai"))}>

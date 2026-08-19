@@ -1667,7 +1667,10 @@ model PcccExtinguisher {
   sl                  Float? // cột 7
   dvt                 String? // cột 8
   tinhTrang           String? // cột 9  — Khả dụng | Cần theo dõi | Bất khả dụng
-  apSuat              String? // cột 10 — Áp suất bình MFZ / KL bình CO2
+  // cột 10 — Áp suất bình MFZ / KL bình CO2, tính bằng PHẦN TRĂM (0–100).
+  // Trước là chuỗi chọn sẵn ("Đủ áp", "Hết áp", "Đúng theo khối lượng"…); mẫu mới cho
+  // đọc thẳng số trên đồng hồ/cân nên hai chủng loại dùng chung một ô số.
+  apSuat              Float?
   viTriHienTai        String? // cột 11
   tinhTrangNgoai      String? // cột 12 — Gỉ sét thân bình / tay nắm…
   nguonGoc            String? // cột 13 — Nguồn gốc / NSX

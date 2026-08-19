@@ -12,7 +12,7 @@ import {
   resolvePcccWriteScope,
   type FieldSpec,
 } from "@/lib/pccc-service";
-import { apSuatOptions, normalizeChungLoai, resolveTinhTrang } from "@/lib/pccc-status";
+import { isValidApSuat, normalizeChungLoai } from "@/lib/pccc-status";
 
 export const dynamic = "force-dynamic";
 
@@ -36,7 +36,7 @@ const EDITABLE: FieldSpec = {
   sl: "number",
   dvt: "string",
   tinhTrang: "string",
-  apSuat: "string",
+  apSuat: "number",
   viTriHienTai: "string",
   tinhTrangNgoai: "string",
   nguonGoc: "string",
@@ -129,17 +129,10 @@ export async function POST(req: NextRequest) {
 
       if ("chungLoai" in data) data.chungLoai = normalizeChungLoai(data.chungLoai as string | null);
 
-      const chungLoai = ("chungLoai" in data ? (data.chungLoai as string | null) : current.chungLoai) ?? null;
-      const apSuat = ("apSuat" in data ? (data.apSuat as string | null) : current.apSuat) ?? null;
-      const tinhTrang = ("tinhTrang" in data ? (data.tinhTrang as string | null) : current.tinhTrang) ?? null;
-      if (apSuat && !apSuatOptions(chungLoai).includes(apSuat)) {
-        errors.push({ id: item.id, ma: current.ma, message: `Áp suất "${apSuat}" không hợp lệ với ${chungLoai ?? "chủng loại này"}` });
+      // Áp suất/KL là SỐ PHẦN TRĂM 0–100. Không còn ràng buộc áp suất → tình trạng.
+      if ("apSuat" in data && !isValidApSuat(data.apSuat as number | null)) {
+        errors.push({ id: item.id, ma: current.ma, message: "Áp suất / khối lượng phải là số phần trăm từ 0 đến 100" });
         continue;
-      }
-      const resolved = resolveTinhTrang(apSuat, tinhTrang);
-      if (resolved !== tinhTrang) {
-        data.tinhTrang = resolved;
-        adjusted += 1;
       }
 
       if ("ngaySx" in data || "thoiGianSd" in data) {

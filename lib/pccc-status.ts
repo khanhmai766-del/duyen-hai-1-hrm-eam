@@ -54,30 +54,22 @@ export function normalizeChungLoai(raw: string | null | undefined): string | nul
   return CHUNG_LOAI_ALIASES[value.toLowerCase().replace(/\s+/g, " ")] ?? value;
 }
 
-/** MFZ (bột) và Foam: đo theo vạch áp trên đồng hồ. */
-export const AP_SUAT_OPTIONS_NORMAL = [
-  "Đủ áp",
-  "1/4 mức đỏ",
-  "2/4 mức đỏ",
-  "3/4 mức đỏ",
-  "4/4 mức đỏ",
-  "Hết áp",
-] as const;
+/**
+ * Áp suất bình MFZ/Foam và khối lượng bình CO2 ghi CHUNG một ô, đơn vị PHẦN TRĂM so với
+ * mức chuẩn của bình (0–100). Trước đây là hai danh sách chọn sẵn khác nhau theo chủng
+ * loại ("Đủ áp"…"Hết áp" cho bình có đồng hồ, "Đúng theo khối lượng"… cho CO2).
+ *
+ * Đổi theo mẫu mới: người kiểm tra đọc thẳng số trên đồng hồ / cân, không phải quy về
+ * một nấc mô tả. Nhờ vậy hai chủng loại dùng chung một ô và sổ Bảng II in được "(85%)".
+ */
+export const AP_SUAT_MIN = 0;
+export const AP_SUAT_MAX = 100;
 
-/** Bình CO2 không có đồng hồ áp — theo dõi bằng cân khối lượng. */
-export const AP_SUAT_OPTIONS_CO2 = ["Đúng theo khối lượng", "KL hao hụt nhiều, cần nạp lại"] as const;
-
-/** Mức cảnh báo (chưa phải mất hẳn khả năng chữa cháy). */
-export const AP_SUAT_WARN_VALUES = [
-  "1/4 mức đỏ",
-  "2/4 mức đỏ",
-  "3/4 mức đỏ",
-  "4/4 mức đỏ",
-  "KL hao hụt nhiều, cần nạp lại",
-] as const;
-
-/** Mức mất hẳn khả năng chữa cháy. */
-export const AP_SUAT_CRITICAL = "Hết áp";
+/** Số hợp lệ cho ô áp suất/KL: 0–100, hoặc bỏ trống khi chưa đo. */
+export function isValidApSuat(value: number | null | undefined): boolean {
+  if (value === null || value === undefined) return true;
+  return Number.isFinite(value) && value >= AP_SUAT_MIN && value <= AP_SUAT_MAX;
+}
 
 export const BCC_VI_TRI_HIEN_TAI_OPTIONS = [
   "Tại chỗ",
@@ -97,43 +89,15 @@ export function isCo2(chungLoai: string | null | undefined) {
   return (chungLoai ?? "").toUpperCase().includes("CO2");
 }
 
-/** Quy tắc 1 — danh sách áp suất theo chủng loại bình. */
-export function apSuatOptions(chungLoai: string | null | undefined): readonly string[] {
-  return isCo2(chungLoai) ? AP_SUAT_OPTIONS_CO2 : AP_SUAT_OPTIONS_NORMAL;
-}
-
-export function isApSuatWarn(apSuat: string | null | undefined) {
-  return (AP_SUAT_WARN_VALUES as readonly string[]).includes(apSuat ?? "");
-}
-
-export function isApSuatCritical(apSuat: string | null | undefined) {
-  return apSuat === AP_SUAT_CRITICAL;
-}
-
-/**
- * Quy tắc 2 — HẾT ÁP thì chỉ còn "Không đạt": bình không còn khả năng chữa cháy.
- *
- * Mức áp suất CẢNH BÁO (1/4…4/4 mức đỏ, KL hao hụt) không còn thu hẹp lựa chọn nữa:
- * dưới bộ hai mức, tình trạng ứng với nó là "Cần theo dõi" cũ, mà cái đó nay quy về
- * ĐẠT (vẫn dùng được). Trước đây quy tắc này bỏ "Khả dụng" khỏi danh sách vì còn một
- * mức trung gian để rơi vào — giờ không còn mức đó nữa.
- */
-export function tinhTrangOptions(apSuat: string | null | undefined): readonly string[] {
-  if (isApSuatCritical(apSuat)) return [TINH_TRANG_KHONG_DAT];
-  return BCC_TINH_TRANG_OPTIONS;
-}
-
-/**
- * Quy tắc 3 — tình trạng hợp lệ ứng với một cặp (áp suất, tình trạng người chọn).
- * Dùng cho cả lúc người dùng đổi áp suất (tự nâng mức) và lúc người dùng đổi tình
- * trạng (chặn hạ xuống "Khả dụng" khi áp suất chưa hồi phục).
- */
-export function resolveTinhTrang(apSuat: string | null | undefined, tinhTrang: string | null | undefined) {
-  // Chỉ còn MỘT ràng buộc: hết áp thì luôn Không đạt. Mức cảnh báo không ép gì —
-  // xem lý do ở tinhTrangOptions.
-  if (isApSuatCritical(apSuat)) return TINH_TRANG_KHONG_DAT;
-  return tinhTrang ?? null;
-}
+// Áp suất KHÔNG còn ràng buộc tình trạng.
+//
+// Quy tắc cũ: "Hết áp" ép tình trạng thành Không đạt và khoá ô chọn. Mẫu mới bỏ hẳn
+// liên kết này — theo TB 5100/TB-NĐDH, áp suất/khối lượng và "Đánh giá tình trạng hoạt
+// động" là HAI đánh giá độc lập, người kiểm tra tự chấm Đạt/Không đạt. Một bình 0% vẫn
+// có thể đang chờ nạp lại chứ chưa hẳn là hỏng, và ngược lại bình đủ áp vẫn có thể
+// Không đạt vì lý do khác (kẹt chốt, hỏng vòi phun).
+//
+// Vì vậy ô tình trạng luôn nhận cả hai lựa chọn: dùng thẳng BCC_TINH_TRANG_OPTIONS.
 
 /** Ba mức màu dùng chung cho cả nhãn tình trạng VÀ nhãn áp suất. */
 export type PcccTone = "ok" | "watch" | "bad" | "none";

@@ -72,8 +72,14 @@ export const TINH_TRANG = {
   BAD: TINH_TRANG_KHONG_DAT,
 } as const;
 
-/** Ngưỡng % còn lại của FOAM/CO2/DIESEL — theo công thức ô I5 của sheet nguồn. */
-export const FCD_THRESHOLDS = { ok: 0.9, watch: 0.7 } as const;
+/**
+ * Ngưỡng % còn lại của FOAM/CO2/DIESEL.
+ *
+ * 0,75 / 0,50 theo bản web mới (nghiệp vụ chốt 2026-08-19), thay cho 0,90 / 0,70 lấy
+ * từ công thức ô I5 của sheet nguồn cũ. Giống hệt ngưỡng FM200 bên dưới — hai bảng
+ * cùng đo "còn bao nhiêu phần trăm chất chữa cháy" nên không có lý do lệch nhau.
+ */
+export const FCD_THRESHOLDS = { ok: 0.75, watch: 0.5 } as const;
 
 /**
  * Ngưỡng % của FM200. CHƯA có sheet nguồn để đối chiếu (bảng FM200 không còn

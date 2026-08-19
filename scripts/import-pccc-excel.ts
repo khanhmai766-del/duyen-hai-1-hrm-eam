@@ -102,6 +102,22 @@ function asString(v: unknown): string | null {
   return null;
 }
 
+/**
+ * Ô "Áp suất bình MFZ/KL bình CO2 (%)" — nhận SỐ phần trăm.
+ *
+ * Vẫn đọc được ba nhãn của mẫu cũ để file Excel chưa cập nhật không nhập ra toàn ô
+ * trống. Các nấc "1/4…4/4 mức đỏ" cố tình KHÔNG quy đổi: chúng tả vị trí kim trong
+ * vùng đỏ chứ không phải một số đo, gán bừa phần trăm là bịa số liệu kiểm tra.
+ */
+function asApSuatPercent(v: unknown): number | null {
+  const n = asNumber(v);
+  if (n !== null) return n;
+  const text = asString(v);
+  if (text === "Đủ áp" || text === "Đúng theo khối lượng") return 100;
+  if (text === "Hết áp") return 0;
+  return null;
+}
+
 function asNumber(v: unknown): number | null {
   if (typeof v === "number" && Number.isFinite(v)) return v;
   if (typeof v === "string") {
@@ -173,7 +189,7 @@ type BccRow = {
   sl: number | null;
   dvt: string | null;
   tinhTrang: string | null;
-  apSuat: string | null;
+  apSuat: number | null;
   viTriHienTai: string | null;
   tinhTrangNgoai: string | null;
   nguonGoc: string | null;
@@ -208,7 +224,7 @@ function readBcc(ws: ExcelJS.Worksheet): BccRow[] {
       sl: asNumber(cellOf(ws, r, 7)),
       dvt: asString(cellOf(ws, r, 8)),
       tinhTrang: asString(cellOf(ws, r, 9)),
-      apSuat: asString(cellOf(ws, r, 10)),
+      apSuat: asApSuatPercent(cellOf(ws, r, 10)),
       viTriHienTai: asString(cellOf(ws, r, 11)),
       tinhTrangNgoai: asString(cellOf(ws, r, 12)),
       nguonGoc: asString(cellOf(ws, r, 13)),

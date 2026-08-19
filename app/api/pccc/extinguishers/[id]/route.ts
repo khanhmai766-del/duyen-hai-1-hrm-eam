@@ -12,7 +12,7 @@ import {
   resolvePcccWriteScope,
   type FieldSpec,
 } from "@/lib/pccc-service";
-import { apSuatOptions, normalizeChungLoai, resolveTinhTrang } from "@/lib/pccc-status";
+import { isValidApSuat, normalizeChungLoai } from "@/lib/pccc-status";
 
 export const dynamic = "force-dynamic";
 
@@ -26,7 +26,7 @@ const EDITABLE: FieldSpec = {
   sl: "number",
   dvt: "string",
   tinhTrang: "string",
-  apSuat: "string",
+  apSuat: "number",
   viTriHienTai: "string",
   tinhTrangNgoai: "string",
   nguonGoc: "string",
@@ -62,25 +62,11 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     assertAdminOnlyFields(user, data);
     assertPcccScopePatch(scope, data);
 
-    // Quy tắc TÌNH TRẠNG ↔ ÁP SUẤT của bảng gốc — cưỡng chế Ở SERVER, không tin
-    // client: áp suất phải nằm trong danh sách của chủng loại, và áp suất từ mức
-    // cảnh báo trở lên thì không được để "Khả dụng" (xem lib/pccc-status.ts).
     if ("chungLoai" in data) data.chungLoai = normalizeChungLoai(data.chungLoai as string | null);
-    if ("apSuat" in data || "tinhTrang" in data || "chungLoai" in data) {
-      const chungLoai = ("chungLoai" in data ? (data.chungLoai as string | null) : current.chungLoai) ?? null;
-      const apSuat = ("apSuat" in data ? (data.apSuat as string | null) : current.apSuat) ?? null;
-      const tinhTrang = ("tinhTrang" in data ? (data.tinhTrang as string | null) : current.tinhTrang) ?? null;
-
-      if (apSuat && !apSuatOptions(chungLoai).includes(apSuat)) {
-        return fail(`Áp suất "${apSuat}" không hợp lệ với ${chungLoai ?? "chủng loại này"}`);
-      }
-      const resolved = resolveTinhTrang(apSuat, tinhTrang);
-      if (resolved !== tinhTrang) {
-        // Người dùng chọn "Khả dụng" trong khi áp suất đang cảnh báo → nói rõ vì sao
-        // bị đổi, thay vì âm thầm ghi giá trị khác cái họ vừa bấm.
-        data.tinhTrang = resolved;
-        data.autoAdjustedTinhTrang = true;
-      }
+    // Áp suất/KL là SỐ PHẦN TRĂM 0–100 — chặn ở server, không tin client. Không còn
+    // ràng buộc nào giữa áp suất và tình trạng: hai đánh giá độc lập theo TB 5100.
+    if ("apSuat" in data && !isValidApSuat(data.apSuat as number | null)) {
+      return fail("Áp suất / khối lượng phải là số phần trăm từ 0 đến 100");
     }
     const autoAdjusted = Boolean(data.autoAdjustedTinhTrang);
     delete data.autoAdjustedTinhTrang;
