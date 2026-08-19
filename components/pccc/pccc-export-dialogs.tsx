@@ -46,9 +46,11 @@ export const EXCEL_SHEETS: ExportChoice[] = [
 export const BOOK_GROUP_CHOICES: (ExportChoice & { keys: string[] })[] = [
   { key: "BCC", keys: ["BCC"], label: "Bình chữa cháy (BCC)" },
   { key: "TCC", keys: ["TCC", "CVCC"], label: "Tủ chữa cháy + Cuộn vòi chữa cháy (TCC/CVCC)" },
-  { key: "NNBC", keys: ["NNBC"], label: "Nút nhấn báo cháy (NNBC)" },
   { key: "VAN", keys: ["VAN"], label: "Van chữa cháy" },
-  { key: "DEN", keys: ["DEN"], label: "Đèn EXIT + Đèn chiếu sáng sự cố" },
+  { key: "NNBC", keys: ["NNBC"], label: "Nút nhấn báo cháy (NNBC)" },
+  { key: "TDKCC", keys: ["TDKCC"], label: "Tủ điều khiển chữa cháy" },
+  { key: "DEN_EXIT", keys: ["DEN_EXIT"], label: "Đèn EXIT (thoát hiểm)" },
+  { key: "DEN_CSSC", keys: ["DEN_CSSC"], label: "Đèn chiếu sáng sự cố" },
 ];
 
 /** Khối "Tất cả" + danh sách ô tích. Tích "Tất cả" thì các ô con mờ đi như bản mẫu. */

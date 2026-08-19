@@ -135,7 +135,7 @@ export function PcccEmergencyLights({
               className={cn(TH_NAVY, STICKY_TH, STICKY_EDGE)}
               style={{ left: FROZEN.maKks.left, width: FROZEN.maKks.w, minWidth: FROZEN.maKks.w }}
             >
-              <SortHeader label="Mã KKS" sortKey="maKks" sort={sort} onSort={onSort} />
+              <SortHeader label="Mã KKS" sortKey="maKks" sort={sort} onSort={onSort} align="left" />
             </TableHead>
             <TableHead className={cn(TH_NAVY, "w-[300px]")}>
               <SortHeader label="Tên khu vực Layout" sortKey="tenKhuVuc" sort={sort} onSort={onSort} />
@@ -189,7 +189,7 @@ export function PcccEmergencyLights({
                     <RowExpander expanded={expanded} onToggle={() => setExpandedId(expanded ? null : r.id)} />
                   </TableCell>
                   <TableCell
-                    className={cn(TD_ROW, STICKY_TD, STICKY_EDGE, rowBg, "whitespace-nowrap text-center font-medium")}
+                    className={cn(TD_ROW, STICKY_TD, STICKY_EDGE, rowBg, "whitespace-nowrap text-left font-medium")}
                     style={{ left: FROZEN.maKks.left }}
                   >
                     <span className="inline-flex items-center gap-1">

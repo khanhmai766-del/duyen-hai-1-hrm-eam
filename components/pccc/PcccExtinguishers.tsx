@@ -150,7 +150,7 @@ export function PcccExtinguishers({
               className={cn(TH_NAVY, STICKY_TH)}
               style={{ left: FROZEN.ma.left, width: FROZEN.ma.w, minWidth: FROZEN.ma.w }}
             >
-              <SortHeader label="Mã thiết bị" sortKey="ma" sort={sort} onSort={onSort} />
+              <SortHeader label="Mã thiết bị" sortKey="ma" sort={sort} onSort={onSort} align="left" />
             </TableHead>
             <TableHead
               className={cn(TH_NAVY, STICKY_TH)}
@@ -224,7 +224,7 @@ export function PcccExtinguishers({
                     <RowExpander expanded={expanded} onToggle={() => setExpandedId(expanded ? null : r.id)} />
                   </TableCell>
                   <TableCell
-                    className={cn(TD_ROW, STICKY_TD, rowBg, "whitespace-nowrap text-center font-medium")}
+                    className={cn(TD_ROW, STICKY_TD, rowBg, "whitespace-nowrap text-left font-medium")}
                     style={{ left: FROZEN.ma.left }}
                   >
                     <span className="inline-flex items-center gap-1">

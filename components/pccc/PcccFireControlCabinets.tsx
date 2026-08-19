@@ -113,7 +113,7 @@ export function PcccFireControlCabinets({
               className={cn(TH_NAVY, STICKY_TH, STICKY_EDGE)}
               style={{ left: frozen.ma.left, width: frozen.ma.width, minWidth: frozen.ma.width }}
             >
-              <SortHeader label="Mã thiết bị" sortKey="ma" sort={sort} onSort={onSort} />
+              <SortHeader label="Mã thiết bị" sortKey="ma" sort={sort} onSort={onSort} align="left" />
             </TableHead>
             <TableHead className={cn(TH_NAVY, "w-[245px]")}>
               <SortHeader label="Hệ thống" sortKey="heThong" sort={sort} onSort={onSort} />
@@ -153,7 +153,7 @@ export function PcccFireControlCabinets({
                   <TableCell className={cn(TD_EXPAND, STICKY_TD, rowBg)} style={{ left: frozen.expand.left }}>
                     <RowExpander expanded={expanded} onToggle={() => setExpandedId(expanded ? null : row.id)} />
                   </TableCell>
-                  <TableCell className={cn(TD_ROW, STICKY_TD, STICKY_EDGE, rowBg, "whitespace-nowrap text-center font-medium")} style={{ left: frozen.ma.left }}>
+                  <TableCell className={cn(TD_ROW, STICKY_TD, STICKY_EDGE, rowBg, "whitespace-nowrap text-left font-medium")} style={{ left: frozen.ma.left }}>
                     <span className="inline-flex items-center gap-1">
                       {row.ma}
                       {canEdit && !rowEditable && <Lock className="size-3 shrink-0 text-slate-400" aria-label="Ngoài phạm vi cương vị của bạn" />}

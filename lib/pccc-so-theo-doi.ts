@@ -68,13 +68,24 @@ export function bookPositionOf(
  * Thứ tự ở đây là thứ tự in ra sổ, bám mẫu "BẢNG II": bình chữa cháy → thiết bị thuộc
  * hệ thống chữa cháy → đèn/phương tiện chiếu sáng sự cố, chỉ dẫn thoát nạn.
  */
+/**
+ * Các nhóm thiết bị của sổ Bảng II, THEO ĐÚNG THỨ TỰ IN RA.
+ *
+ * `band` là dòng tiêu đề in đè ngang cả bảng ngay trước nhóm, đúng như bản mẫu —
+ * người đọc sổ cần biết đang xem loại phương tiện nào mà không phải dò ngược lên đầu.
+ *
+ * Đèn EXIT và đèn chiếu sáng sự cố nằm CHUNG một bảng dữ liệu (phân biệt bằng cột
+ * `loai`) nhưng là HAI nhóm của sổ: bản mẫu dành cho mỗi loại một dải tiêu đề riêng.
+ */
 export const BOOK_GROUPS = [
-  { key: "BCC", label: "bình chữa cháy" },
-  { key: "TCC", label: "tủ chữa cháy" },
-  { key: "CVCC", label: "cuộn vòi chữa cháy" },
-  { key: "VAN", label: "van chữa cháy" },
-  { key: "NNBC", label: "nút nhấn báo cháy" },
-  { key: "DEN", label: "đèn sự cố" },
+  { key: "BCC", label: "bình chữa cháy", band: "BÌNH CHỮA CHÁY" },
+  { key: "TCC", label: "tủ chữa cháy", band: "TỦ CHỮA CHÁY" },
+  { key: "CVCC", label: "cuộn vòi chữa cháy", band: "CUỘN VÒI CHỮA CHÁY" },
+  { key: "VAN", label: "van chữa cháy", band: "VAN CHỮA CHÁY" },
+  { key: "NNBC", label: "nút nhấn báo cháy", band: "NÚT BÁO CHÁY" },
+  { key: "TDKCC", label: "tủ điều khiển chữa cháy", band: "TỦ ĐIỀU KHIỂN CHỮA CHÁY" },
+  { key: "DEN_EXIT", label: "đèn EXIT", band: "ĐÈN EXIT (THOÁT HIỂM)" },
+  { key: "DEN_CSSC", label: "đèn chiếu sáng sự cố", band: "ĐÈN CHIẾU SÁNG SỰ CỐ" },
 ] as const;
 
 export type BookGroupKey = (typeof BOOK_GROUPS)[number]["key"];
@@ -169,12 +180,14 @@ export async function loadBookData(periodId: string, positionCode: string, group
     hoseReels,
     valves,
     alarmButtons,
+    fireControlCabinets,
     lights,
     sigBcc,
     sigTcc,
     sigCvcc,
     sigVan,
     sigNnbc,
+    sigTdkcc,
     sigDen,
   ] = await Promise.all([
     prisma.pcccExtinguisher.findMany({
@@ -214,6 +227,11 @@ export async function loadBookData(periodId: string, positionCode: string, group
         components: { orderBy: [{ groupOrder: 'asc' }, { statusOrder: 'asc' }] },
       },
     }),
+    prisma.pcccFireControlCabinet.findMany({
+      where,
+      orderBy: [{ stt: "asc" }, { ma: "asc" }],
+      select: { id: true, ma: true, heThong: true, ngayKiemTra: true, tinhTrang: true, ghiChu: true, nguoiKiemTra: true },
+    }),
     prisma.pcccEmergencyLight.findMany({
       where,
       orderBy: [{ loai: "asc" }, { stt: "asc" }, { rowKey: "asc" }],
@@ -224,6 +242,7 @@ export async function loadBookData(periodId: string, positionCode: string, group
     signaturesOf(periodId, "HOSE_REEL"),
     signaturesOf(periodId, "VALVE"),
     signaturesOf(periodId, "ALARM_BUTTON"),
+    signaturesOf(periodId, "FIRE_CONTROL_CABINET"),
     signaturesOf(periodId, "EMERGENCY_LIGHT"),
   ]);
 
@@ -298,8 +317,20 @@ export async function loadBookData(periodId: string, positionCode: string, group
       ghiChu: noteOf(r.tinhTrangTongThe, r.khac),
       ...signer(sigNnbc, r.id, r.nguoiKiemTra),
     })),
+    ...fireControlCabinets.map((r) => ({
+      table: "TDKCC" as const,
+      ma: r.ma,
+      ten: r.heThong || "Tủ điều khiển chữa cháy",
+      dvt: "Tủ",
+      sl: 1,
+      ngayKiemTra: r.ngayKiemTra,
+      tinhTrang: r.tinhTrang ?? "",
+      danhGia: r.tinhTrang ?? "",
+      ghiChu: noteOf(r.tinhTrang, r.ghiChu),
+      ...signer(sigTdkcc, r.id, r.nguoiKiemTra),
+    })),
     ...lights.map((r) => ({
-      table: "DEN" as const,
+      table: (r.loai === "EXIT" ? "DEN_EXIT" : "DEN_CSSC") as BookGroupKey,
       ma: r.maKks,
       ten: `${r.loai === "EXIT" ? "Đèn EXIT" : "Đèn chiếu sáng sự cố"}${r.tenKhuVuc ? ` — ${r.tenKhuVuc}` : ""}`,
       dvt: "Bộ",
@@ -318,7 +349,9 @@ export async function loadBookData(periodId: string, positionCode: string, group
     CVCC: { rows: hoseReels, sig: sigCvcc },
     VAN: { rows: valves, sig: sigVan },
     NNBC: { rows: alarmButtons, sig: sigNnbc },
-    DEN: { rows: lights, sig: sigDen },
+    TDKCC: { rows: fireControlCabinets, sig: sigTdkcc },
+    DEN_EXIT: { rows: lights.filter((r) => r.loai === "EXIT"), sig: sigDen },
+    DEN_CSSC: { rows: lights.filter((r) => r.loai !== "EXIT"), sig: sigDen },
   };
   const groupCounts: BookGroupCount[] = BOOK_GROUPS.map((g) => ({
     key: g.key,
@@ -326,6 +359,13 @@ export async function loadBookData(periodId: string, positionCode: string, group
     total: counted[g.key].rows.length,
     signed: counted[g.key].rows.filter((r) => counted[g.key].sig.has(r.id)).length,
   }));
+
+  // Xếp dòng theo ĐÚNG thứ tự BOOK_GROUPS. Thứ tự tự nhiên của truy vấn không đảm bảo
+  // điều đó (đèn sắp theo cột `loai` nên CSSC đứng trước EXIT), mà bản in dựa vào việc
+  // mỗi nhóm nằm liền một khối: nhóm bị cắt làm hai đoạn sẽ sinh ra hai dải tiêu đề.
+  // Array.prototype.sort ổn định nên thứ tự trong từng nhóm giữ nguyên.
+  const thuTuNhom = new Map<string, number>(BOOK_GROUPS.map((g, i) => [g.key, i]));
+  rows.sort((a, b) => (thuTuNhom.get(a.table) ?? 0) - (thuTuNhom.get(b.table) ?? 0));
 
   const chon = groups?.length ? new Set<BookGroupKey>(groups) : null;
   return { rows: chon ? rows.filter((r) => chon.has(r.table)) : rows, groups: groupCounts };

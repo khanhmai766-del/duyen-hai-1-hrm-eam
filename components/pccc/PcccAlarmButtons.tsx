@@ -161,7 +161,7 @@ export function PcccAlarmButtons({
               className={cn(TH_NAVY, STICKY_TH, STICKY_EDGE)}
               style={{ left: FROZEN.maKks.left, width: FROZEN.maKks.w, minWidth: FROZEN.maKks.w }}
             >
-              <SortHeader label="Mã KKS" sortKey="maKks" sort={sort} onSort={onSort} />
+              <SortHeader label="Mã KKS" sortKey="maKks" sort={sort} onSort={onSort} align="left" />
             </TableHead>
             <TableHead rowSpan={2} className={cn(TH_NAVY, "w-[240px]")}>
               <SortHeader label="Vị trí cụ thể" sortKey="viTri" sort={sort} onSort={onSort} />
@@ -243,7 +243,7 @@ export function PcccAlarmButtons({
                     <RowExpander expanded={expanded} onToggle={() => setExpandedId(expanded ? null : r.id)} />
                   </TableCell>
                   <TableCell
-                    className={cn(TD_ROW, STICKY_TD, STICKY_EDGE, rowBg, "whitespace-nowrap text-center font-medium")}
+                    className={cn(TD_ROW, STICKY_TD, STICKY_EDGE, rowBg, "whitespace-nowrap text-left font-medium")}
                     style={{ left: FROZEN.maKks.left }}
                   >
                     <span className="inline-flex items-center gap-1">

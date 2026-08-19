@@ -16,7 +16,7 @@
  */
 import { PDFDocument, StandardFonts, type PDFImage, type PDFPage } from "pdf-lib";
 import fontkit from "@pdf-lib/fontkit";
-import type { BookRow } from "@/lib/pccc-so-theo-doi";
+import { BOOK_GROUPS, type BookRow } from "@/lib/pccc-so-theo-doi";
 import {
   BLACK,
   CONTENT_W,
@@ -33,7 +33,9 @@ import {
 } from "@/lib/pccc-pdf-kit";
 
 /** Bề rộng cột, cộng lại đúng bằng bề rộng vùng nội dung. 8 cột theo Mẫu số 01. */
-const COLS = [30, 172, 40, 34, 116, 94, 176, 100] as const;
+// Cột 3 và 4 đủ rộng cho tiêu đề NẰM MỘT DÒNG ("Đơn vị tính", "Số lượng"); phần dôi
+// ra lấy từ cột 2, vốn thừa chỗ vì tên phương tiện phần lớn chỉ vài chữ.
+const COLS = [30, 138, 58, 50, 116, 94, 176, 100] as const;
 const HEADERS = [
   "STT",
   "Tên phương tiện",
@@ -44,6 +46,17 @@ const HEADERS = [
   "Đánh giá tình trạng hoạt động",
   "Người được phân công quản lý",
 ] as const;
+
+/** Chiều cao dải tiêu đề nhóm — chỉ một dòng chữ in đậm nên thấp hơn hẳn dòng dữ liệu. */
+const BAND_H = 20;
+
+/**
+ * Chữ trên dải ngăn cách giữa các nhóm thiết bị.
+ *
+ * Lấy từ BOOK_GROUPS để danh mục nhóm chỉ khai báo MỘT nơi: thêm nhóm mới ở đó là bản
+ * in tự có dải, không phải nhớ sửa thêm chỗ này.
+ */
+const BAND_LABELS: Record<string, string> = Object.fromEntries(BOOK_GROUPS.map((g) => [g.key, g.band]));
 
 /** Cột "Ký mã hiệu" — mã thiết bị đứng RIÊNG một cột, không ghép vào tên phương tiện. */
 const MA_COL = 4;
@@ -193,11 +206,34 @@ export async function buildPcccBookPdf(input: BookPdfInput): Promise<Buffer> {
   let page = pdf.addPage([PAGE.w, PAGE.h]);
   let y = drawTableHeader(page, fonts, true);
   let stt = 0;
+  let nhomDangIn: string | null = null;
 
   for (const row of input.rows) {
-    if (y - ROW_H < MARGIN) {
+    // Sang nhóm thiết bị khác thì chèn một dải tiêu đề ngang cả bảng, đúng bản mẫu.
+    // Dải KHÔNG ăn số thứ tự: cột STT phải chạy liên tục xuyên suốt quyển sổ.
+    const band = row.table === nhomDangIn ? null : (BAND_LABELS[row.table] ?? null);
+    if (band) nhomDangIn = row.table;
+
+    // Đủ chỗ cho CẢ dải lẫn dòng đầu của nhóm mới thì mới in dải ở trang này — in dải
+    // ở đáy trang rồi dữ liệu sang trang sau là tiêu đề mồ côi.
+    if (y - (band ? BAND_H + ROW_H : ROW_H) < MARGIN) {
       page = pdf.addPage([PAGE.w, PAGE.h]);
       y = drawTableHeader(page, fonts, false);
+    }
+    if (band) {
+      const bandTop = y - BAND_H;
+      rect(page, MARGIN, bandTop, CONTENT_W, BAND_H);
+      drawCell(page, band, {
+        x: MARGIN,
+        y: bandTop,
+        w: CONTENT_W,
+        h: BAND_H,
+        font: fonts.bold,
+        size: FS.body,
+        align: "center",
+        maxLines: 1,
+      });
+      y = bandTop;
     }
     stt += 1;
     const top = y - ROW_H;

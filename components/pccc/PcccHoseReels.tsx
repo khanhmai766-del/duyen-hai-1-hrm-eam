@@ -179,7 +179,7 @@ export function PcccHoseReels({
               className={cn(TH_NAVY, STICKY_TH, STICKY_EDGE)}
               style={{ left: FROZEN.ma.left, width: FROZEN.ma.w, minWidth: FROZEN.ma.w }}
             >
-              <SortHeader label="Mã cuộn vòi" sortKey="ma" sort={sort} onSort={onSort} />
+              <SortHeader label="Mã cuộn vòi" sortKey="ma" sort={sort} onSort={onSort} align="left" />
             </TableHead>
             <TableHead rowSpan={2} className={cn(TH_NAVY, "w-[145px]")}>
               <SortHeader label="Cương vị quản lý" sortKey="cuongVi" sort={sort} onSort={onSort} />
@@ -270,7 +270,7 @@ export function PcccHoseReels({
                     <RowExpander expanded={expanded} onToggle={() => setExpandedId(expanded ? null : r.id)} />
                   </TableCell>
                   <TableCell
-                    className={cn(TD_ROW, STICKY_TD, STICKY_EDGE, rowBg, "whitespace-nowrap text-center font-medium")}
+                    className={cn(TD_ROW, STICKY_TD, STICKY_EDGE, rowBg, "whitespace-nowrap text-left font-medium")}
                     style={{ left: FROZEN.ma.left }}
                   >
                     <span className="inline-flex items-center gap-1">
