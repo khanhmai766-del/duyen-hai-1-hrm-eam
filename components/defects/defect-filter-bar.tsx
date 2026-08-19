@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Search, X, ChevronDown, Check, Unplug, ArrowUp } from "lucide-react";
+import { Search, X, ChevronDown, Check, Unplug, ArrowUp, Repeat2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
@@ -40,6 +40,9 @@ export function DefectFilterBar({
   onUpgradeCandidatesOnlyChange,
   upgradeCandidateTotal,
   showUpgradeCandidates,
+  repeatedRepairOnly,
+  onRepeatedRepairOnlyChange,
+  repeatedRepairTotal,
   canReset,
   onReset,
 }: {
@@ -66,6 +69,9 @@ export function DefectFilterBar({
   onUpgradeCandidatesOnlyChange: (value: boolean) => void;
   upgradeCandidateTotal: number;
   showUpgradeCandidates: boolean;
+  repeatedRepairOnly: boolean;
+  onRepeatedRepairOnlyChange: (value: boolean) => void;
+  repeatedRepairTotal: number;
   canReset: boolean;
   onReset: () => void;
 }) {
@@ -179,6 +185,29 @@ export function DefectFilterBar({
                   {upgradeCandidatesOnly && <Check className="h-3.5 w-3.5" strokeWidth={3} aria-hidden="true" />}
                 </button>
               )}
+              <button
+                type="button"
+                aria-pressed={repeatedRepairOnly}
+                aria-label="Chỉ hiển thị phiếu có nội dung sửa chữa lặp lại"
+                title="Chỉ hiển thị phiếu có ghi nội dung sửa chữa lặp lại"
+                onClick={() => onRepeatedRepairOnlyChange(!repeatedRepairOnly)}
+                className={cn(
+                  "inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-lg border px-2.5 text-[12.5px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/40 focus-visible:ring-offset-2",
+                  repeatedRepairOnly
+                    ? "border-violet-300 bg-violet-100 text-violet-800 shadow-sm"
+                    : "border-border bg-white text-muted-foreground hover:border-violet-300 hover:bg-violet-50 hover:text-violet-800"
+                )}
+              >
+                <Repeat2 className="h-3.5 w-3.5" strokeWidth={2.5} aria-hidden="true" />
+                <span className="hidden sm:inline">Sửa chữa lặp lại</span>
+                <span className={cn(
+                  "rounded-full px-1.5 tabular-nums",
+                  repeatedRepairOnly ? "bg-violet-200/70" : "bg-muted"
+                )}>
+                  {repeatedRepairTotal}
+                </span>
+                {repeatedRepairOnly && <Check className="h-3.5 w-3.5" strokeWidth={3} aria-hidden="true" />}
+              </button>
               <button
                 type="button"
                 aria-pressed={mismatchOnly}

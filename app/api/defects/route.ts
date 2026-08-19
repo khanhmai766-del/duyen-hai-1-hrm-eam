@@ -80,6 +80,7 @@ const LIST_SELECT = {
   cancelledByName: true,
   sourceStatusMismatch: true,
   repairResultRaw: true,
+  repeatedRepairRaw: true,
   reminderCount: true,
   lastRemindedAt: true,
   reminderLogs: {
@@ -229,6 +230,7 @@ export async function GET(req: NextRequest) {
     const severity = params.get("severity")?.trim();
     const mismatch = params.get("mismatch") === "true";
     const upgradeCandidate = params.get("upgradeCandidate") === "true";
+    const repeatedRepair = params.get("repeatedRepair") === "true";
     // "KQ sửa chữa" là chuỗi tự do đồng bộ từ Google Sheet (Đã thực hiện xong, Chờ vật tư,
     // Thuê ngoài…) nên lọc theo giá trị nguyên văn, không map sang enum.
     const repairResult = params.get("repairResult")?.trim();
@@ -401,6 +403,7 @@ export async function GET(req: NextRequest) {
     const upgradeCandidateTotal = base.filter((item) =>
       isSeverity2UpgradeCandidate(severityUpgradeInput(item), candidateNow)
     ).length;
+    const repeatedRepairTotal = base.filter((item) => Boolean(item.repeatedRepairRaw?.trim())).length;
 
     const filtered = base
       .filter((item) => {
@@ -408,6 +411,7 @@ export async function GET(req: NextRequest) {
           upgradeCandidate
           && !isSeverity2UpgradeCandidate(severityUpgradeInput(item), candidateNow)
         ) return false;
+        if (repeatedRepair && !item.repeatedRepairRaw?.trim()) return false;
         if (status && status !== "ALL") {
           if (status === "SOURCE_MISSING") {
             if (!(item.sourceType === "GOOGLE_SHEETS" && item.syncState === "MISSING")) return false;
@@ -497,6 +501,7 @@ export async function GET(req: NextRequest) {
       totalPages,
       scopeTotal,
       upgradeCandidateTotal,
+      repeatedRepairTotal,
       kpi,
       repairResults,
       // Ô lọc "Cương vị" chỉ được bày cương vị người dùng thực sự xem được; danh sách

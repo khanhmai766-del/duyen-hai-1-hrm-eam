@@ -98,6 +98,7 @@ export interface DefectListParams {
   repairResult?: string;
   mismatch?: boolean;
   upgradeCandidate?: boolean;
+  repeatedRepair?: boolean;
   q?: string;
   deviceSeq?: string;
   includeDescendants?: number;
@@ -110,6 +111,7 @@ export interface DefectListMeta {
   totalPages: number;
   scopeTotal: number;
   upgradeCandidateTotal?: number;
+  repeatedRepairTotal?: number;
   kpi: {
     chuaXuLy: number;
     coPct: number;

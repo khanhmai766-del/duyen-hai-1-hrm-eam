@@ -301,6 +301,7 @@ export default function DefectsPage() {
   const repairResultFromUrl = searchParams.get("repairResult")?.trim();
   const mismatchFromUrl = searchParams.get("mismatch") === "true";
   const upgradeCandidateFromUrl = searchParams.get("upgradeCandidate") === "true";
+  const repeatedRepairFromUrl = searchParams.get("repeatedRepair") === "true";
   const searchFromUrl = searchParams.get("q")?.trim();
   const pageSizeFromUrl = Number.parseInt(searchParams.get("limit") ?? "", 10);
   const pageFromUrl = Number.parseInt(searchParams.get("page") ?? "", 10);
@@ -385,6 +386,7 @@ export default function DefectsPage() {
   const [repairResultFilter, setRepairResultFilter] = React.useState(repairResultFromUrl || "ALL");
   const [mismatchOnly, setMismatchOnly] = React.useState(mismatchFromUrl);
   const [upgradeCandidatesOnly, setUpgradeCandidatesOnly] = React.useState(upgradeCandidateFromUrl);
+  const [repeatedRepairOnly, setRepeatedRepairOnly] = React.useState(repeatedRepairFromUrl);
   const [tableSearch, setTableSearch] = React.useState(searchFromUrl || "");
   const [pageSize, setPageSize] = React.useState(
     PAGE_SIZES.includes(pageSizeFromUrl) ? pageSizeFromUrl : 10
@@ -404,10 +406,11 @@ export default function DefectsPage() {
     repairResult: repairResultFilter,
     mismatch: mismatchOnly,
     upgradeCandidate: upgradeCandidatesOnly,
+    repeatedRepair: repeatedRepairOnly,
     q: deferredSearch,
     deviceSeq: deviceSeqFilter,
     includeDescendants,
-  }), [page, pageSize, section, unitFilter, mappedUnitFilter, requestFilter, positionFilter, statusFilter, severityFilter, repairResultFilter, mismatchOnly, upgradeCandidatesOnly, deferredSearch, deviceSeqFilter, includeDescendants]);
+  }), [page, pageSize, section, unitFilter, mappedUnitFilter, requestFilter, positionFilter, statusFilter, severityFilter, repairResultFilter, mismatchOnly, upgradeCandidatesOnly, repeatedRepairOnly, deferredSearch, deviceSeqFilter, includeDescendants]);
   const { data, isLoading, isFetching } = useDefects(listParams);
   const shiftSummary = useDefectShiftSummary(section);
   const pagedDefects = data?.data ?? [];
@@ -448,6 +451,7 @@ export default function DefectsPage() {
     if (repairResultFilter !== "ALL") query.set("repairResult", repairResultFilter);
     if (mismatchOnly) query.set("mismatch", "true");
     if (upgradeCandidatesOnly) query.set("upgradeCandidate", "true");
+    if (repeatedRepairOnly) query.set("repeatedRepair", "true");
     if (deferredSearch) query.set("q", deferredSearch);
     if (pageSize !== 10) query.set("limit", String(pageSize));
     if (page > 1) query.set("page", String(page));
@@ -460,6 +464,7 @@ export default function DefectsPage() {
     mappedUnitFilter,
     mismatchOnly,
     upgradeCandidatesOnly,
+    repeatedRepairOnly,
     page,
     pageSize,
     positionFilter,
@@ -472,7 +477,7 @@ export default function DefectsPage() {
     unitFilter,
   ]);
 
-  const isFiltered = deviceSeqFilter !== "" || unitFilter !== "S1" || requestFilter !== defaultRequestTypeOf(section) || positionFilter !== "ALL" || statusFilter !== "ALL" || severityFilter !== "ALL" || repairResultFilter !== "ALL" || mismatchOnly || upgradeCandidatesOnly || tableSearch.trim() !== "";
+  const isFiltered = deviceSeqFilter !== "" || unitFilter !== "S1" || requestFilter !== defaultRequestTypeOf(section) || positionFilter !== "ALL" || statusFilter !== "ALL" || severityFilter !== "ALL" || repairResultFilter !== "ALL" || mismatchOnly || upgradeCandidatesOnly || repeatedRepairOnly || tableSearch.trim() !== "";
   function resetFilters() {
     router.replace(`/defects?phan=${section}`, { scroll: false });
     setUnitFilter("S1");
@@ -483,6 +488,7 @@ export default function DefectsPage() {
     setRepairResultFilter("ALL");
     setMismatchOnly(false);
     setUpgradeCandidatesOnly(false);
+    setRepeatedRepairOnly(false);
     setTableSearch("");
   }
 
@@ -588,7 +594,7 @@ export default function DefectsPage() {
   React.useEffect(() => {
     setExpandedId(null);
     setPage(1);
-  }, [deviceSeqFilter, unitFilter, requestFilter, positionFilter, statusFilter, severityFilter, repairResultFilter, mismatchOnly, upgradeCandidatesOnly, tableSearch, pageSize]);
+  }, [deviceSeqFilter, unitFilter, requestFilter, positionFilter, statusFilter, severityFilter, repairResultFilter, mismatchOnly, upgradeCandidatesOnly, repeatedRepairOnly, tableSearch, pageSize]);
 
   return (
     <div className="space-y-6">
@@ -762,6 +768,9 @@ export default function DefectsPage() {
           onUpgradeCandidatesOnlyChange={setUpgradeCandidatesOnly}
           upgradeCandidateTotal={data?.meta?.upgradeCandidateTotal ?? 0}
           showUpgradeCandidates={canManage && operationUpdateAvailable}
+          repeatedRepairOnly={repeatedRepairOnly}
+          onRepeatedRepairOnlyChange={setRepeatedRepairOnly}
+          repeatedRepairTotal={data?.meta?.repeatedRepairTotal ?? 0}
           canReset={isFiltered}
           onReset={resetFilters}
         />
