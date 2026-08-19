@@ -51,6 +51,8 @@ export async function GET(req: NextRequest) {
       where.sequenceMonth = month;
     }
 
+    const { sequenceMonth: _thangDangLoc, ...monthCountWhere } = where;
+
     const [tickets, monthGroups] = await Promise.all([
       prisma.materialTicket.findMany({
         where,
@@ -67,6 +69,10 @@ export async function GET(req: NextRequest) {
       }),
       prisma.materialTicket.groupBy({
         by: ["sequenceMonth"],
+        // Đếm theo MỌI bộ lọc đang đặt TRỪ chính tháng — đó là ý nghĩa của con số trong ô
+        // chọn tháng. Trước đây groupBy không mang bộ lọc nào nên đang lọc riêng luồng hóa
+        // chất mà ô tháng vẫn hiện tổng cả hai luồng, đọc ra thành "lọc bị hỏng".
+        where: monthCountWhere,
         _count: { _all: true },
         orderBy: { sequenceMonth: "desc" },
       }),

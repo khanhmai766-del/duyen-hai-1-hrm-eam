@@ -664,6 +664,25 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
           },
           include: ITEM_INCLUDE,
         });
+      } else if (step === "stats" && t.type === CHEMICAL_TICKET_TYPE) {
+        // Bước cùng tên nhưng KHÁC NỘI DUNG ở luồng hóa chất: chốt lịch giao hàng và
+        // khối lượng giao, không có phiếu ĐXVT nào để nhập số. Trước đây dùng chung
+        // nhánh dưới nên hộp Xem lại của hóa chất hỏi số phiếu ĐXVT và tên VHV nhận
+        // phiếu — hai ô không tồn tại trong luồng này.
+        if (!t.statsAt) return fail("Bước xác nhận đề xuất chưa hoàn thành");
+        const ngay = new Date(String(body.deliveryScheduledAt || ""));
+        if (Number.isNaN(ngay.getTime())) return fail("Lịch giao hàng không hợp lệ");
+        const khoiLuong = Math.trunc(Number(body.deliveryQuantity));
+        if (!Number.isFinite(khoiLuong) || khoiLuong <= 0) return fail("Khối lượng giao phải lớn hơn 0");
+        const dvt = t.items[0]?.material.unit ?? "";
+        const fmt = (d: Date | null) => (d ? d.toISOString().slice(0, 10) : "—");
+        before = `Lịch giao: ${fmt(t.deliveryScheduledAt)}; Khối lượng giao: ${t.deliveryQuantity ?? "—"} ${dvt}`.trim();
+        after = `Lịch giao: ${fmt(ngay)}; Khối lượng giao: ${khoiLuong} ${dvt}`.trim();
+        up = await prisma.materialTicket.update({
+          where: { id: t.id },
+          data: { deliveryScheduledAt: ngay, deliveryQuantity: khoiLuong },
+          include: ITEM_INCLUDE,
+        });
       } else if (step === "stats") {
         if (!t.statsAt && !t.proposalIssuedAt) return fail("Bước Thống Kê xác nhận ĐXVT chưa hoàn thành");
         const value = String(body.proposalNumber || "").trim();

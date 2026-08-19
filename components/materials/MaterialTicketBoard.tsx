@@ -201,6 +201,9 @@ export default function MaterialTicketBoard({
   const [unitFilter, setUnitFilter] = useState("ALL");
   // Lọc theo luồng phiếu (cột Yêu cầu): Đề xuất / Ứng / Sử dụng hiện có.
   const [typeFilter, setTypeFilter] = useState("ALL");
+  /** Đang lọc riêng luồng hóa chất (gồm cả NH3 khai một bước) hay riêng vật tư thường? */
+  const chemicalOnly = typeFilter === CHEMICAL_TICKET_TYPE || typeFilter === SINGLE_STEP_TICKET_TYPE;
+  const materialOnly = typeFilter !== "ALL" && !chemicalOnly;
   const [editTicket, setEditTicket] = useState<MaterialTicket | null>(null);
   const [delTicket, setDelTicket] = useState<MaterialTicket | null>(null);
   const del = useDeleteTicket();
@@ -386,7 +389,15 @@ export default function MaterialTicketBoard({
               <option value={SINGLE_STEP_TICKET_TYPE}>Ghi nhận</option>
             </select>
           </span>
-          <span>Cương vị</span><span>Tên vật tư</span><span>Phiếu đề xuất</span><span>Số lượng</span><span>Trạng thái</span><span>Chờ</span><span>Thao tác</span>
+          <span>Cương vị</span><span>Tên vật tư</span>
+          {/*
+            Cột này mang hai nghĩa khác nhau: luồng vật tư thường theo dõi SỐ PHIẾU ĐXVT,
+            luồng hóa chất theo dõi NGÀY GIAO HÀNG (không có phiếu ĐXVT nào cả). Chỉ khi
+            đang lọc riêng một luồng mới đặt được tiêu đề dứt khoát; danh sách trộn thì
+            ghi cả hai để không nói sai về nửa số dòng.
+          */}
+          <span>{chemicalOnly ? "Ngày giao hàng" : materialOnly ? "Phiếu đề xuất" : "Phiếu đề xuất / Ngày giao"}</span>
+          <span>Số lượng</span><span>Trạng thái</span><span>Chờ</span><span>Thao tác</span>
         </div>
         {isLoading && <div className="empty"><Loader2 className="spin" size={18} /> Đang tải…</div>}
 	        {!isLoading && shown.map((t) => {
@@ -445,9 +456,16 @@ export default function MaterialTicketBoard({
               <span>{t.assignedPosition}</span>
               <span className="material-name" title={materialText}>{materialText}</span>
               <span className="proposal-cell">
-                {t.proposalNumber
-                  ? <span className="code">{t.proposalNumber}</span>
-                  : <span className="nophieu">{t.type === "SU_DUNG_HIEN_CO" ? "Không cần phiếu đề xuất" : "Chưa có phiếu đề xuất"}</span>}
+                {t.type === SINGLE_STEP_TICKET_TYPE
+                  /* Phiếu khai một bước xong ngay khi lập, không có lịch giao để chốt. */
+                  ? <span className="nophieu">Không áp dụng</span>
+                  : t.type === CHEMICAL_TICKET_TYPE
+                    ? (t.deliveryScheduledAt
+                      ? <span className="code">{new Date(t.deliveryScheduledAt).toLocaleDateString("vi-VN")}</span>
+                      : <span className="nophieu">Chưa chốt lịch giao</span>)
+                    : t.proposalNumber
+                      ? <span className="code">{t.proposalNumber}</span>
+                      : <span className="nophieu">{t.type === "SU_DUNG_HIEN_CO" ? "Không cần phiếu đề xuất" : "Chưa có phiếu đề xuất"}</span>}
               </span>
               <span>{t.items.some((i) => i.quantity > 0) ? t.items.filter((i) => i.quantity > 0).map((i) => `${i.quantity} ${i.material.unit}`).join(", ") : "Chưa nhập"}</span>
 	              <span className="status-stack">
@@ -1714,6 +1732,11 @@ function StepReviewDialog({ t, viewer, stepKey, onClose }: { t: MaterialTicket; 
   const editStep = permission;
   const [proposalNumber, setProposalNumber] = useState(t.proposalNumber ?? "");
   const [proposalReceiverNameReview, setProposalReceiverNameReview] = useState(t.proposalReceiverName ?? "");
+  // Bước "stats" của luồng hóa chất chốt LỊCH GIAO HÀNG + KHỐI LƯỢNG GIAO, không phải
+  // số phiếu ĐXVT — hai luồng dùng chung khóa bước nhưng nội dung khác hẳn nhau.
+  const isChemicalStats = t.type === CHEMICAL_TICKET_TYPE;
+  const [deliveryDateReview, setDeliveryDateReview] = useState(t.deliveryScheduledAt ? String(t.deliveryScheduledAt).slice(0, 10) : "");
+  const [deliveryQtyReview, setDeliveryQtyReview] = useState(t.deliveryQuantity != null ? String(t.deliveryQuantity) : "");
   const [receivedQuantity, setReceivedQuantity] = useState(t.receivedQuantity ?? 1);
   const [receivedMethod, setReceivedMethod] = useState(t.deliveryNoteNumber ?? t.receivedMethod ?? "");
   const [receiptSource, setReceiptSource] = useState<"ERP" | "EXISTING">(normalizeReceiptSource(t.receiptSource));
@@ -1734,7 +1757,14 @@ function StepReviewDialog({ t, viewer, stepKey, onClose }: { t: MaterialTicket; 
     if (!editStep) return;
     const payload: Record<string, unknown> = { action: "editStep", step: editStep };
     if (editStep === "confirm") Object.assign(payload, { note: reason.trim(), bbktNumber });
-    if (editStep === "stats") Object.assign(payload, { proposalNumber, proposalReceiverName: proposalReceiverNameReview });
+    if (editStep === "stats") {
+      Object.assign(
+        payload,
+        isChemicalStats
+          ? { deliveryScheduledAt: deliveryDateReview, deliveryQuantity: Number(deliveryQtyReview) }
+          : { proposalNumber, proposalReceiverName: proposalReceiverNameReview }
+      );
+    }
     if (editStep === "receive") Object.assign(payload, { receivedQuantity, deliveryNoteNumber: receivedMethod, receiptSource });
     if (editStep === "use") Object.assign(payload, {
       usedQuantity,
@@ -1773,7 +1803,11 @@ function StepReviewDialog({ t, viewer, stepKey, onClose }: { t: MaterialTicket; 
           <label>Lý do *<input value={reason} disabled={!canEdit} onChange={(e) => setReason(e.target.value)} placeholder="Nhập lý do thay thế vật tư" /></label>
           <label>Số biên bản kiểm tra (nếu có)<input value={bbktNumber} disabled={!canEdit} onChange={(e) => setBbktNumber(e.target.value)} placeholder="Chưa nhập số biên bản kiểm tra" /></label>
         </>}
-        {editStep === "stats" && <>
+        {editStep === "stats" && isChemicalStats && <>
+          <label>Lịch giao hàng<input type="date" value={deliveryDateReview} disabled={!canEdit} onChange={(e) => setDeliveryDateReview(e.target.value)} /></label>
+          <label>Khối lượng giao{t.items[0]?.material.unit ? ` (${t.items[0].material.unit})` : ""}<input type="number" min={1} value={deliveryQtyReview} disabled={!canEdit} onChange={(e) => setDeliveryQtyReview(e.target.value)} /></label>
+        </>}
+        {editStep === "stats" && !isChemicalStats && <>
           <label>Số phiếu ĐXVT<input value={proposalNumber} disabled={!canEdit} onChange={(e) => setProposalNumber(e.target.value)} /></label>
           {t.type !== "UNG" && <label>Tên VHV nhận phiếu ĐXVT<input value={proposalReceiverNameReview} disabled={!canEdit} onChange={(e) => setProposalReceiverNameReview(e.target.value)} /></label>}
         </>}
