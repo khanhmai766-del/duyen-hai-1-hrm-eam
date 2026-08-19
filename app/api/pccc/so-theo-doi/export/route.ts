@@ -13,9 +13,26 @@ import { uploadS3Object } from "@/lib/s3";
 export const dynamic = "force-dynamic";
 
 /**
- * GET /api/pccc/so-theo-doi/export?period=&cuongVi=
+ * Bản nháp mở THẲNG trong khung xem của hộp thoại (`inline`) chứ không rơi vào thư mục
+ * Tải xuống — người dùng còn chưa chốt in mà máy đã có sẵn một tệp thì đúng là thứ hộp
+ * thoại xem trước sinh ra để tránh.
+ */
+function pdfHeaders(fileName: string, preview: boolean): HeadersInit {
+  return {
+    "Content-Type": "application/pdf",
+    "Content-Disposition": `${preview ? "inline" : "attachment"}; filename="${fileName}"`,
+  };
+}
+
+/**
+ * GET /api/pccc/so-theo-doi/export?period=&cuongVi=&preview=1
  * Dựng "Sổ theo dõi phương tiện PCCC" (Mẫu số 01) của MỘT cương vị, LƯU LÊN S3 rồi trả
  * luôn tệp về cho trình duyệt tải xuống.
+ *
+ * `preview=1` = BẢN NHÁP để người dùng xem qua trước khi chốt: dựng đúng cùng một PDF
+ * nhưng KHÔNG đẩy lên S3 và KHÔNG ghi nhật ký. Xem trước là một thao tác đọc — soi thử
+ * năm lần rồi mới in mà lần nào cũng đẻ ra một bản lưu trữ thì kho S3 lẫn nhật ký kiểm
+ * toán đều loạn, không còn phân biệt được bản nào là bản đã phát hành.
  *
  * Lưu S3 trước, trả tệp sau và cả hai dùng CHUNG một buffer: bản người dùng cầm trên tay
  * luôn khớp từng byte với bản lưu trữ, không có chuyện in ra một đằng lưu một nẻo.
@@ -29,6 +46,7 @@ export async function GET(req: NextRequest) {
     await requirePermissionLevel(user, PCCC_PERMISSION.view, ["read", "personal", "manage", "full"]);
 
     const sp = req.nextUrl.searchParams;
+    const preview = sp.get("preview") === "1";
     const period = await resolvePeriod(sp.get("period"));
 
     // Bảng Foam·CO2·Diesel·FM200: một bản cho cả kỳ, không theo cương vị.
@@ -42,16 +60,18 @@ export async function GET(req: NextRequest) {
       ]);
       const pdf = await buildPcccFcdPdf({ periodLabel: period.label, report, signatureImages: images });
       const fcdName = fcdFileNameOf(period.label);
-      await uploadS3Object({ key: fcdKeyOf(period.label), body: pdf, contentType: "application/pdf", originalName: fcdName });
-      await audit(
-        user.id,
-        "EXPORT_PCCC_BOOK",
-        "PcccPeriod",
-        period.id,
-        auditDetailWithPosition(user, `Xuất bảng Foam·CO2·Diesel·FM200 ${period.label}`)
-      );
+      if (!preview) {
+        await uploadS3Object({ key: fcdKeyOf(period.label), body: pdf, contentType: "application/pdf", originalName: fcdName });
+        await audit(
+          user.id,
+          "EXPORT_PCCC_BOOK",
+          "PcccPeriod",
+          period.id,
+          auditDetailWithPosition(user, `Xuất bảng Foam·CO2·Diesel·FM200 ${period.label}`)
+        );
+      }
       return new Response(pdf as unknown as BodyInit, {
-        headers: { "Content-Type": "application/pdf", "Content-Disposition": `attachment; filename="${fcdName}"` },
+        headers: pdfHeaders(fcdName, preview),
       });
     }
 
@@ -73,21 +93,20 @@ export async function GET(req: NextRequest) {
 
     const key = bookKeyOf(period.label, positionCode);
     const fileName = bookFileNameOf(period.label, positionCode);
-    await uploadS3Object({ key, body: buffer, contentType: "application/pdf", originalName: fileName });
+    if (!preview) {
+      await uploadS3Object({ key, body: buffer, contentType: "application/pdf", originalName: fileName });
 
-    await audit(
-      user.id,
-      "EXPORT_PCCC_BOOK",
-      "PcccPeriod",
-      period.id,
-      auditDetailWithPosition(user, `Xuất sổ theo dõi PCCC ${period.label} · ${positionLabelOf(positionCode)} · ${rows.length} thiết bị`)
-    );
+      await audit(
+        user.id,
+        "EXPORT_PCCC_BOOK",
+        "PcccPeriod",
+        period.id,
+        auditDetailWithPosition(user, `Xuất sổ theo dõi PCCC ${period.label} · ${positionLabelOf(positionCode)} · ${rows.length} thiết bị`)
+      );
+    }
 
     return new Response(buffer as unknown as BodyInit, {
-      headers: {
-        "Content-Type": "application/pdf",
-        "Content-Disposition": `attachment; filename="${fileName}"`,
-      },
+      headers: pdfHeaders(fileName, preview),
     });
   });
 }

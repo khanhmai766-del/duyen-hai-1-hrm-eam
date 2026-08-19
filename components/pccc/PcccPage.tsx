@@ -784,6 +784,8 @@ export default function PcccPage() {
   const [signOpen, setSignOpen] = useState(false);
   const [signInfo, setSignInfo] = useState<PcccBulkSignPreview | null>(null);
   const [resultDialog, setResultDialog] = useState<ResultDialog | null>(null);
+  /** Bản nháp PDF đang mở để xem trước; `null` = chưa dựng bản nào. */
+  const [bookPreview, setBookPreview] = useState<{ url: string; filename: string } | null>(null);
   /** Bước XÁC NHẬN trước khi lưu — chỗ duy nhất nhắc được tổ máy trước khi ghi xuống DB. */
   const [saveConfirmOpen, setSaveConfirmOpen] = useState(false);
   const signPreview = usePcccBulkSignPreview();
@@ -1183,25 +1185,64 @@ export default function PcccPage() {
     }
   }
 
+  /** Địa chỉ API dựng bản in PDF của tab đang mở. */
+  function bookExportUrl(preview: boolean) {
+    return (
+      `/api/pccc/so-theo-doi/export?period=${encodeURIComponent(effectiveLabel)}&cuongVi=${encodeURIComponent(cuongVi)}` +
+      (tab === "FCD" ? "&tab=FCD" : "") +
+      (preview ? "&preview=1" : "")
+    );
+  }
+
   /**
-   * Bản in PDF của TAB ĐANG MỞ: tab Bình/Tủ chữa cháy ra Sổ theo dõi (Mẫu số 01) của
-   * cương vị, tab Foam·CO2·Diesel·FM200 ra bảng theo dõi của cả kỳ. Server dựng PDF,
-   * LƯU LÊN S3 rồi trả về đúng buffer đó — bản cầm tay và bản lưu trữ luôn khớp.
+   * BƯỚC 1 — dựng BẢN NHÁP và mở ra xem. Server dựng đúng PDF thật nhưng không đẩy S3,
+   * không ghi nhật ký, nên soi đi soi lại bao nhiêu lần cũng không sinh bản lưu trữ rác.
+   *
+   * Sổ này in ra là nộp cho cơ quan PCCC, sai một chữ ký hay thiếu một dòng là phải làm
+   * lại cả quyển — cho xem trước rồi mới chốt rẻ hơn nhiều so với phát hiện sau khi in.
    */
-  async function downloadBook() {
+  async function previewBook() {
     if (!effectiveLabel) return;
     setDownloading(true);
     try {
-      const { blob, filename } = await apiDownload(
-        `/api/pccc/so-theo-doi/export?period=${encodeURIComponent(effectiveLabel)}&cuongVi=${encodeURIComponent(cuongVi)}` +
-          (tab === "FCD" ? "&tab=FCD" : "")
-      );
+      const { blob, filename } = await apiDownload(bookExportUrl(true));
+      // Thu hồi bản nháp cũ trước khi thay: mỗi lần dựng là một blob nằm lại trong bộ nhớ
+      // trình duyệt cho tới khi đóng tab, mà sổ đầy đủ nặng cỡ vài chục MB.
+      setBookPreview((prev) => {
+        if (prev) URL.revokeObjectURL(prev.url);
+        return { url: URL.createObjectURL(blob), filename };
+      });
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setDownloading(false);
+    }
+  }
+
+  function closeBookPreview() {
+    setBookPreview((prev) => {
+      if (prev) URL.revokeObjectURL(prev.url);
+      return null;
+    });
+  }
+
+  /**
+   * BƯỚC 2 — chốt in. DỰNG LẠI từ server thay vì tải blob nháp đang cầm: chỉ bản đi qua
+   * lượt này mới được đẩy lên S3, và server cần chính buffer đó để bản lưu trữ khớp từng
+   * byte với bản người dùng cầm trên tay.
+   */
+  async function confirmBook() {
+    if (!effectiveLabel) return;
+    setDownloading(true);
+    try {
+      const { blob, filename } = await apiDownload(bookExportUrl(false));
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
       a.download = filename;
       a.click();
       URL.revokeObjectURL(url);
+      closeBookPreview();
       toast.success(`Đã xuất ${filename} và lưu lên kho S3`);
     } catch (e) {
       toast.error((e as Error).message);
@@ -1341,12 +1382,13 @@ export default function PcccPage() {
           <Button
             variant="outline"
             size="sm"
-            onClick={downloadBook}
+            onClick={previewBook}
             disabled={downloading}
             title={
-              tab === "FCD"
+              (tab === "FCD"
                 ? `Bảng theo dõi Foam · CO2 · Diesel · FM200 — ${period.label}`
-                : `Sổ theo dõi phương tiện PCCC (Mẫu số 01) — ${bookStatus.positionLabel} · ${period.label}`
+                : `Sổ theo dõi phương tiện PCCC (Mẫu số 01) — ${bookStatus.positionLabel} · ${period.label}`) +
+              " · bấm để xem trước bản nháp"
             }
             className="border-rose-200 bg-rose-50/60 text-rose-700 hover:bg-rose-100 hover:text-rose-800"
           >
@@ -1786,6 +1828,41 @@ export default function PcccPage() {
           người bấm phải thấy đúng bao nhiêu dòng sắp bị ghi tên mình vào. */}
       {/* Thêm cuộn vòi — bảng DUY NHẤT của module cho thêm dòng bằng tay: cuộn vòi
           không có trong Excel gốc nên số lượng thực tế mỗi tủ chỉ hiện trường mới biết. */}
+      {/*
+        XEM TRƯỚC BẢN IN — bản nháp dựng từ server, chưa lưu trữ gì. Người dùng lật đủ
+        các trang rồi mới bấm chốt; đóng hộp thoại là bản nháp biến mất không để lại dấu.
+      */}
+      <Dialog open={!!bookPreview} onOpenChange={(open) => !open && closeBookPreview()}>
+        <DialogContent className="sm:max-w-5xl">
+          <DialogHeader>
+            <DialogTitle>Xem trước bản in</DialogTitle>
+          </DialogHeader>
+          <p className="text-[13px] text-muted-foreground">
+            Đây là <span className="font-semibold text-slate-700">bản nháp</span> — chưa lưu lên kho S3 và chưa ghi
+            nhật ký. Kiểm tra xong hãy bấm <span className="font-semibold text-slate-700">Xác nhận in</span> để phát
+            hành bản chính thức.
+          </p>
+          {bookPreview && (
+            <iframe
+              src={bookPreview.url}
+              title={bookPreview.filename}
+              className="h-[68vh] w-full rounded-xl border border-slate-200 bg-slate-50"
+            />
+          )}
+          <DialogFooter className="sm:justify-between">
+            <span className="truncate text-[12px] text-muted-foreground">{bookPreview?.filename}</span>
+            <div className="flex gap-2">
+              <Button size="sm" variant="outline" onClick={closeBookPreview}>
+                Đóng
+              </Button>
+              <Button size="sm" onClick={confirmBook} disabled={downloading}>
+                {downloading ? "Đang xuất…" : "Xác nhận in"}
+              </Button>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={cvccAddOpen} onOpenChange={(open) => !open && setCvccAddOpen(false)}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
