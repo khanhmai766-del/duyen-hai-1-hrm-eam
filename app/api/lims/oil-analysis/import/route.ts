@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { audit, auditDetailWithPosition, fail, handle, ok, requireUser } from "@/lib/api";
-import { canManageMaterialCatalog } from "@/lib/constants";
+import { requirePermissionLevel } from "@/lib/rbac-guard";
 import { limsText, parseLimsDate, parseLimsDateTime } from "@/lib/lims-parse";
 
 export const dynamic = "force-dynamic";
@@ -65,9 +65,7 @@ type LimsRow = {
 export async function POST(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    if (!canManageMaterialCatalog(user)) {
-      return fail("Chỉ Quản đốc / Phó Quản đốc / Kỹ thuật viên / Quản trị được đồng bộ kết quả phân tích dầu", 403);
-    }
+    await requirePermissionLevel(user, "lims-sync", ["manage", "full", "personal"], "Bạn không có quyền đồng bộ kết quả phân tích dầu từ LIMS");
 
     const body = await req.json();
     const rows = Array.isArray(body?.rows) ? (body.rows as LimsRow[]) : [];

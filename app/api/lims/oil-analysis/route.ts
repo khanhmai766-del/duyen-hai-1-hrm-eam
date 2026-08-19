@@ -2,7 +2,7 @@ import type { NextRequest } from "next/server";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { handle, ok, requireUser } from "@/lib/api";
-import { canManageMaterialCatalog } from "@/lib/constants";
+import { hasPermissionLevel } from "@/lib/rbac-guard";
 
 export const dynamic = "force-dynamic";
 
@@ -57,7 +57,7 @@ export async function GET(req: NextRequest) {
       })),
       {
         days,
-        canSync: canManageMaterialCatalog(user),
+        canSync: await hasPermissionLevel(user, "lims-sync", ["manage", "full", "personal"]),
         // Phiếu PKT đã có ý kiến nhưng QLVH chưa phản hồi — phần cần theo dõi.
         pendingQlvhCount: items.filter((item) => !item.ykienQlvh).length,
       }

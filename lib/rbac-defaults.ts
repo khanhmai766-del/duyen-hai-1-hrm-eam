@@ -63,4 +63,7 @@ export const DEFAULT_RBAC_MATRIX: Record<string, Partial<Record<string, RbacLeve
   "pccc-close-period": { ADMIN: "full", MANAGER: "manage", SUPERVISOR: "none", TECHNICIAN: "none", VIEWER: "none" },
   "forum-write": { ADMIN: "personal", MANAGER: "personal", SUPERVISOR: "personal", TECHNICIAN: "personal", VIEWER: "personal" },
   "forum-moderate": { ADMIN: "full", MANAGER: "none", SUPERVISOR: "none", TECHNICIAN: "none", VIEWER: "none" },
+  // Đồng bộ kết quả phân tích dầu từ LIMS (portal.tpcduyenhai.com.vn/lims.xhtml).
+  // manage/full = được bấm đồng bộ; read = chỉ xem lịch sử; none = không thấy nút.
+  "lims-sync": { ADMIN: "full", MANAGER: "manage", SUPERVISOR: "manage", TECHNICIAN: "personal", VIEWER: "none" },
 };

@@ -11,7 +11,6 @@
 // Dữ liệu qua hooks/useOilAnalysis (TanStack Query).
 // =====================================================================
 import { useEffect, useMemo, useState } from "react";
-import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 import {
   AlertTriangle, CheckCircle2, ChevronDown, CloudDownload, ExternalLink,
@@ -22,7 +21,6 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { canManageMaterialCatalog } from "@/lib/constants";
 import { normalizeText } from "@/lib/nav";
 import { cn } from "@/lib/utils";
 import {
@@ -31,6 +29,7 @@ import {
   useOilAnalysisSyncStatus,
   type LimsFailureRow,
   type OilAnalysisFailureItem,
+  type OilAnalysisMeta,
 } from "@/hooks/useOilAnalysis";
 
 const LIMS_URL = "https://portal.tpcduyenhai.com.vn/lims.xhtml";
@@ -104,9 +103,6 @@ function isPending(item: OilAnalysisFailureItem) {
 }
 
 export default function OilAnalysisPage() {
-  const { data: session } = useSession();
-  const canSync = canManageMaterialCatalog(session?.user ?? {});
-
   const [days, setDays] = useState<number>(14);
   const [filter, setFilter] = useState<StatusFilter>("ALL");
   const [search, setSearch] = useState("");
@@ -119,6 +115,8 @@ export default function OilAnalysisPage() {
 
   // useMemo để mảng rỗng mặc định không tạo tham chiếu mới mỗi lần render.
   const items = useMemo(() => failuresQuery.data?.data ?? [], [failuresQuery.data]);
+  // canSync lấy từ server (qua RBAC động) để phản ánh đúng phân quyền đã cấu hình.
+  const canSync = (failuresQuery.data?.meta as OilAnalysisMeta | undefined)?.canSync ?? false;
   const syncing = stage !== "idle";
 
   const counts = useMemo(() => {
