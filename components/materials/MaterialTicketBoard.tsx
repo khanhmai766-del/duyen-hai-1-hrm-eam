@@ -17,7 +17,7 @@ import {
   type MaterialTicket, type TicketViewer, type WorkflowRoleMap,
 } from "@/hooks/useMaterialTickets";
 import { usePositions } from "@/hooks/useUsers";
-import { displayMaterialCategory, GAS_RETURN_STATUS, isChemicalFlowTicket, isGasCylinderTicket, isSingleStepTicketMaterial, CHEMICAL_TICKET_TYPE, isSupplementReason, MATERIAL_CATEGORIES, materialTicketRequiresRecovery, ticketReasonsFor, TICKET_REASONS, TICKET_REASON_OTHER, SINGLE_STEP_TICKET_TYPE, TICKET_MATERIAL_CATEGORIES, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
+import { displayMaterialCategory, GAS_RETURN_STATUS, isChemicalFlowTicket, isGasCylinderTicket, isSingleStepTicketMaterial, CHEMICAL_TICKET_TYPE, isSupplementReason, MATERIAL_CATEGORIES, materialTicketBelongsToRecoveryTab, materialTicketRequiresRecovery, ticketReasonsFor, TICKET_REASONS, TICKET_REASON_OTHER, SINGLE_STEP_TICKET_TYPE, TICKET_MATERIAL_CATEGORIES, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
 import { normalizeText } from "@/lib/nav";
 import { positionsMatch } from "@/lib/position-catalog";
 import {
@@ -238,8 +238,8 @@ export default function MaterialTicketBoard({
         : filter === "RUNNING" ? !FINISHED_STATUSES.includes(t.status)
         // Tab "Hóa chất": gom cả luồng hóa chất 3 bước và phiếu NH3 khai một bước.
         : filter === "CHEMICAL" ? normalizeText(t.materialCategory ?? "") === normalizeText("Hóa chất")
-        // Tab "Thu hồi": các phiếu có vật tư thu hồi (đã xuất hoặc sẽ xuất biên bản thu hồi)
-        : filter === "RECOVERY" ? Boolean(materialTicketRequiresRecovery(t) || t.recoveryDocUrl)
+        // Tab "Thu hồi": chỉ phiếu đã có BBTHVT hoặc snapshot nghiệp vụ xác nhận chắc chắn phải xuất.
+        : filter === "RECOVERY" ? materialTicketBelongsToRecoveryTab(t)
         : t.status === filter;
       const ticketCategory = t.materialCategory ? TICKET_TO_MATERIAL_CATEGORY[t.materialCategory] ?? t.materialCategory : "";
       const matchesMaterialCategory = materialCategoryFilter === "ALL" || ticketCategory === materialCategoryFilter;

@@ -483,6 +483,24 @@ export function materialTicketRequiresRecovery(ticket: {
   return ticket.recoveryRequired ?? reasonRequiresRecovery(ticket.proposalNote);
 }
 
+/**
+ * Điều kiện nghiêm ngặt của tab "Thu hồi":
+ * - File BBTHVT đã tồn tại thì luôn giữ lại để tra cứu lịch sử.
+ * - Phiếu chưa xuất file chỉ được nhận khi snapshot nghiệp vụ đã chốt rõ là phải thu hồi.
+ * - Không suy đoán từ chuỗi lý do, đồng thời loại phiếu từ chối và luồng trả vỏ chai khí.
+ */
+export function materialTicketBelongsToRecoveryTab(ticket: {
+  status?: string | null;
+  recoveryRequired?: boolean | null;
+  recoveryDocUrl?: string | null;
+  materialCategory?: string | null;
+}): boolean {
+  if (Boolean(ticket.recoveryDocUrl)) return true;
+  return ticket.status !== "TU_CHOI"
+    && !isGasCylinderTicket(ticket.materialCategory)
+    && ticket.recoveryRequired === true;
+}
+
 /** Loại vật tư của PHIẾU đi theo luồng hóa chất 3 bước. */
 export function isChemicalWorkflowCategory(materialCategory: string | null | undefined): boolean {
   return materialCategory === "Hóa chất";
