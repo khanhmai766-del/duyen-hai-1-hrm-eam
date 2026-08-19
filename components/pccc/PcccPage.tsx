@@ -27,6 +27,7 @@ import {
   ChevronDown,
   AlertTriangle,
   CalendarClock,
+  Check,
   CheckCircle2,
   ExternalLink,
   Lock,
@@ -791,6 +792,10 @@ export default function PcccPage() {
             : tab === "DEN"
               ? "EMERGENCY_LIGHT"
               : null;
+  /** Bảng đang mở — để nút chọn bảng hiện đúng tên và biểu tượng. */
+  const activeTab = TABS.find((t) => t.key === tab) ?? TABS[0];
+  const ActiveTabIcon = activeTab.icon;
+
   /** Tham số ký dùng chung cho cả xem trước lẫn ký thật — hai chỗ phải khớp từng chữ. */
   function signInput(target: PcccBulkSignTarget) {
     return {
@@ -1408,30 +1413,50 @@ export default function PcccPage() {
         )}
       </PageHeader>
 
-      {/* Tabs + nút sửa bảng (chỉ tab Bình chữa cháy) */}
-      <div className="flex flex-wrap items-end gap-1 border-b border-slate-200">
-        {TABS.map((t) => (
-          <button
-            key={t.key}
-            type="button"
-            onClick={() => switchTab(t.key)}
-            className={cn(
-              "-mb-px flex items-center gap-1.5 rounded-t-lg border border-b-0 px-3.5 py-2 text-[13px] font-medium transition",
-              tab === t.key
-                ? "border-slate-200 bg-white text-navy shadow-[0_-2px_0_0_#2563EB_inset]"
-                : "border-transparent text-muted-foreground hover:text-ink"
-            )}
-          >
-            <t.icon className="size-4" />
-            {t.label}
-          </button>
-        ))}
+      {/* Chọn bảng bằng DROPDOWN thay cho thanh tab: bảy nhóm thiết bị thì thanh tab
+          tràn dòng trên màn hình hẹp và đẩy nút Bộ lọc xuống. Cùng khuôn với ô chọn
+          loại vật tư ở trang Danh mục vật tư. */}
+      <div className="flex flex-wrap items-center gap-3 border-b border-slate-200 pb-3">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              type="button"
+              variant="outline"
+              className="h-10 w-auto justify-between gap-2 rounded-xl border-blue-100 bg-white px-4 text-sm font-semibold text-ink shadow-sm hover:bg-blue-50 hover:text-navy"
+            >
+              <span className="flex items-center gap-2 whitespace-nowrap">
+                <ActiveTabIcon className="h-4 w-4 shrink-0 text-navy" />
+                <span>{activeTab.label}</span>
+              </span>
+              <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="w-64">
+            {TABS.map((t) => {
+              const Icon = t.icon;
+              const active = tab === t.key;
+              return (
+                <DropdownMenuItem
+                  key={t.key}
+                  className={cn("justify-between gap-3", active && "bg-blue-50 text-navy")}
+                  onClick={() => switchTab(t.key)}
+                >
+                  <span className="flex min-w-0 items-center gap-2">
+                    <Icon className="h-4 w-4 shrink-0" />
+                    <span className="truncate">{t.label}</span>
+                  </span>
+                  {active && <Check className="h-4 w-4 shrink-0" />}
+                </DropdownMenuItem>
+              );
+            })}
+          </DropdownMenuContent>
+        </DropdownMenu>
 
         {/* Bộ lọc gom vào MỘT nút, bấm mới sổ bảng chọn — cùng khuôn với các trang
             Danh mục vật tư / Mệnh lệnh sản xuất. Tab Foam·CO2·Diesel·FM200 không có gì
             để lọc nên không hiện nút. */}
         {tab !== "FCD" && (
-          <div className="mb-1 ml-auto">
+          <div className="ml-auto">
             <Popover>
               <PopoverTrigger asChild>
                 <Button type="button" variant="soft" size="toolbar" className="group min-w-[112px] justify-between">
@@ -1631,7 +1656,7 @@ export default function PcccPage() {
           /* Đẩy sang mép phải. Ba tab kia đã có nút "Bộ lọc" mang `ml-auto` kéo cả cụm
              sang phải; tab Foam·CO2·Diesel·FM200 không có bộ lọc nên phải tự đẩy, không
              thì nút dính ngay sau dải tab. */
-          <div className={cn("mb-1 flex items-center gap-2", tab === "FCD" && "ml-auto")}>
+          <div className={cn("flex items-center gap-2", tab === "FCD" && "ml-auto")}>
             {dirtyCount > 0 && (
               <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
                 {dirtyCount} dòng chưa lưu
