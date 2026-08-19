@@ -3,7 +3,15 @@ import { audit, auditDetailWithPosition, fail, handle, requireUser } from "@/lib
 import { requirePermissionLevel } from "@/lib/rbac-guard";
 import { PCCC_PERMISSION, pcccPositionCodesOf, pcccWriteScopeOf, resolvePeriod } from "@/lib/pccc-service";
 import { loadSignatureImages } from "@/lib/pccc-archive";
-import { bookFileNameOf, bookKeyOf, bookPositionOf, bookStatusOf, loadBookData } from "@/lib/pccc-so-theo-doi";
+import {
+  BOOK_GROUPS,
+  bookFileNameOf,
+  bookKeyOf,
+  bookPositionOf,
+  bookStatusOf,
+  loadBookData,
+  type BookGroupKey,
+} from "@/lib/pccc-so-theo-doi";
 import { buildPcccBookPdf } from "@/lib/pccc-so-theo-doi-pdf";
 import { fcdFileNameOf, fcdKeyOf, fcdStatusOf, loadFcdReport } from "@/lib/pccc-fcd-report";
 import { buildPcccFcdPdf } from "@/lib/pccc-fcd-pdf";
@@ -82,7 +90,14 @@ export async function GET(req: NextRequest) {
       return fail(status.reason ?? "Chưa đủ điều kiện xuất sổ theo dõi", 409);
     }
 
-    const { rows } = await loadBookData(period.id, positionCode);
+    // ?groups=BCC,TCC — chọn nhóm thiết bị đưa vào sổ. Bỏ trống = in đủ sáu nhóm.
+    // Lọc theo DANH MỤC chuẩn chứ không tin chuỗi client gửi lên, để một tham số bịa
+    // không lọt xuống truy vấn.
+    const requested = (sp.get("groups") ?? "").split(",").map((g) => g.trim().toUpperCase());
+    const groups = BOOK_GROUPS.map((g) => g.key).filter((key) => requested.includes(key)) as BookGroupKey[];
+
+    const { rows } = await loadBookData(period.id, positionCode, groups);
+    if (!rows.length) return fail("Nhóm thiết bị đã chọn không có dòng nào ở cương vị này", 409);
     const signatureImages = await loadSignatureImages(rows.map((r) => r.signatureKey));
     const buffer = await buildPcccBookPdf({
       periodLabel: period.label,

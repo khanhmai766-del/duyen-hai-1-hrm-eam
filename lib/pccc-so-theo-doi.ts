@@ -156,7 +156,12 @@ export type BookStatus = {
 };
 
 /** Dòng của cương vị trong kỳ, kèm chữ ký — dùng chung cho cả đếm và dựng PDF. */
-export async function loadBookData(periodId: string, positionCode: string) {
+/**
+ * @param groups Chỉ lấy các nhóm này; bỏ trống = lấy đủ sáu nhóm. Lọc ở BƯỚC DỰNG
+ *   DÒNG chứ không lọc lúc truy vấn: `groups` trả về vẫn phải đếm đủ cả sáu nhóm để
+ *   giao diện biết nhóm nào còn thiếu chữ ký, kể cả nhóm người dùng không chọn in.
+ */
+export async function loadBookData(periodId: string, positionCode: string, groups?: BookGroupKey[]) {
   const where = { periodId, cuongViCode: positionCode };
   const [
     extinguishers,
@@ -315,14 +320,15 @@ export async function loadBookData(periodId: string, positionCode: string) {
     NNBC: { rows: alarmButtons, sig: sigNnbc },
     DEN: { rows: lights, sig: sigDen },
   };
-  const groups: BookGroupCount[] = BOOK_GROUPS.map((g) => ({
+  const groupCounts: BookGroupCount[] = BOOK_GROUPS.map((g) => ({
     key: g.key,
     label: g.label,
     total: counted[g.key].rows.length,
     signed: counted[g.key].rows.filter((r) => counted[g.key].sig.has(r.id)).length,
   }));
 
-  return { rows, groups };
+  const chon = groups?.length ? new Set<BookGroupKey>(groups) : null;
+  return { rows: chon ? rows.filter((r) => chon.has(r.table)) : rows, groups: groupCounts };
 }
 
 /** Trạng thái để client quyết định có hiện nút hay không. */

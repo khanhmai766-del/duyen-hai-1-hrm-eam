@@ -43,6 +43,7 @@ import { PageHeader } from "@/components/shared/page-header";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { PcccBookExportDialog, PcccExcelExportDialog } from "@/components/pccc/pccc-export-dialogs";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   DropdownMenu,
@@ -833,6 +834,16 @@ export default function PcccPage() {
   const [resultDialog, setResultDialog] = useState<ResultDialog | null>(null);
   /** Bản nháp PDF đang mở để xem trước; `null` = chưa dựng bản nào. */
   const [bookPreview, setBookPreview] = useState<{ url: string; filename: string } | null>(null);
+  const [excelOpen, setExcelOpen] = useState(false);
+  const [bookOpen, setBookOpen] = useState(false);
+  /**
+   * Phạm vi người dùng vừa chọn trong hộp thoại sổ Bảng II.
+   *
+   * Phải NHỚ LẠI, không đọc lại từ bộ lọc trang: bước "Xác nhận in" dựng lại từ server
+   * và bản chính thức bắt buộc phải trùng phạm vi với bản nháp vừa xem — người dùng đổi
+   * bộ lọc trong lúc soi bản nháp thì bản in ra sẽ khác thứ họ vừa duyệt.
+   */
+  const [bookScope, setBookScope] = useState<{ period: string; cuongVi: string; groups: string[] } | null>(null);
   /** Bước XÁC NHẬN trước khi lưu — chỗ duy nhất nhắc được tổ máy trước khi ghi xuống DB. */
   const [saveConfirmOpen, setSaveConfirmOpen] = useState(false);
   const signPreview = usePcccBulkSignPreview();
@@ -1167,6 +1178,15 @@ export default function PcccPage() {
     bccQuery.data?.meta?.cuongViList ??
     tccQuery.data?.meta?.cuongViList ??
     [];
+
+  /** Tháng chọn được trong hộp thoại xuất file = đúng các kỳ còn nằm trong cơ sở dữ liệu. */
+  const periodLabels = periods.map((p) => p.label);
+  /**
+   * Cương vị chọn được khi xuất sổ theo dõi. Sổ là sổ CỦA MỘT cương vị, có ô chữ ký của
+   * đúng người phụ trách — gộp mọi cương vị vào một quyển thì không biết ai ký vào đâu,
+   * nên danh sách này không có mục "Tất cả" như ô lọc.
+   */
+  const bookPositions = cuongViList.filter((p) => p.code);
   // Bốn bảng có cột Người giám sát; lấy THEO TAB vì danh sách đã cắt theo phạm vi xem
   // của chính bảng đó — lấy của tab khác là bày ra cấp giám sát không có trong bảng.
   const giamSatList: PositionOption[] =
@@ -1207,25 +1227,13 @@ export default function PcccPage() {
     fcdQuery.data?.meta?.writeScope;
   const scopeLimited = Boolean(writeScope && !writeScope.all);
 
-  async function download() {
-    if (!effectiveLabel) return;
+  /** Xuất Excel theo THÁNG và SHEET người dùng chọn trong hộp thoại. */
+  async function download(periodLabel: string, sheets: string[]) {
+    if (!periodLabel || !sheets.length) return;
     setDownloading(true);
     try {
-      // Đứng ở tab nào thì xuất sheet của tab đó; ở Tổng quan thì xuất TẤT CẢ.
-      // Tab Tủ chữa cháy xuất kèm CUỘN VÒI vì cuộn vòi là bảng con nằm cùng tab —
-      // xuất tủ mà thiếu cuộn vòi thì người nhận file tưởng chưa khai báo.
-      const SHEETS_BY_TAB: Partial<Record<TabKey, string>> = {
-        BCC: "BCC",
-        TCC: "TCC,CVCC",
-        TDKCC: "TDKCC",
-        FCD: "FCD",
-        NNBC: "NNBC",
-        VAN: "VAN",
-        DEN: "DEN",
-      };
-      const sheets = SHEETS_BY_TAB[tab] ?? "BCC,TCC,TDKCC,FCD,NNBC,VAN,DEN,CVCC";
       const { blob, filename } = await apiDownload(
-        `/api/pccc/export?period=${encodeURIComponent(effectiveLabel)}&sheets=${sheets}` +
+        `/api/pccc/export?period=${encodeURIComponent(periodLabel)}&sheets=${sheets.join(",")}` +
           `&cuongVi=${encodeURIComponent(cuongVi)}&machine=${encodeURIComponent(machine)}`
       );
       const url = URL.createObjectURL(blob);
@@ -1242,10 +1250,11 @@ export default function PcccPage() {
     }
   }
 
-  /** Địa chỉ API dựng bản in PDF của tab đang mở. */
-  function bookExportUrl(preview: boolean) {
+  /** Địa chỉ API dựng bản in PDF theo phạm vi đã chọn trong hộp thoại. */
+  function bookExportUrl(scope: { period: string; cuongVi: string; groups: string[] }, preview: boolean) {
     return (
-      `/api/pccc/so-theo-doi/export?period=${encodeURIComponent(effectiveLabel)}&cuongVi=${encodeURIComponent(cuongVi)}` +
+      `/api/pccc/so-theo-doi/export?period=${encodeURIComponent(scope.period)}&cuongVi=${encodeURIComponent(scope.cuongVi)}` +
+      `&groups=${scope.groups.join(",")}` +
       (tab === "FCD" ? "&tab=FCD" : "") +
       (preview ? "&preview=1" : "")
     );
@@ -1258,17 +1267,19 @@ export default function PcccPage() {
    * Sổ này in ra là nộp cho cơ quan PCCC, sai một chữ ký hay thiếu một dòng là phải làm
    * lại cả quyển — cho xem trước rồi mới chốt rẻ hơn nhiều so với phát hiện sau khi in.
    */
-  async function previewBook() {
-    if (!effectiveLabel) return;
+  async function previewBook(scope: { period: string; cuongVi: string; groups: string[] }) {
+    if (!scope.period) return;
     setDownloading(true);
+    setBookScope(scope);
     try {
-      const { blob, filename } = await apiDownload(bookExportUrl(true));
+      const { blob, filename } = await apiDownload(bookExportUrl(scope, true));
       // Thu hồi bản nháp cũ trước khi thay: mỗi lần dựng là một blob nằm lại trong bộ nhớ
       // trình duyệt cho tới khi đóng tab, mà sổ đầy đủ nặng cỡ vài chục MB.
       setBookPreview((prev) => {
         if (prev) URL.revokeObjectURL(prev.url);
         return { url: URL.createObjectURL(blob), filename };
       });
+      setBookOpen(false);
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
@@ -1289,10 +1300,10 @@ export default function PcccPage() {
    * byte với bản người dùng cầm trên tay.
    */
   async function confirmBook() {
-    if (!effectiveLabel) return;
+    if (!bookScope) return;
     setDownloading(true);
     try {
-      const { blob, filename } = await apiDownload(bookExportUrl(false));
+      const { blob, filename } = await apiDownload(bookExportUrl(bookScope, false));
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -1400,7 +1411,7 @@ export default function PcccPage() {
           <Button
             variant="outline"
             size="sm"
-            onClick={previewBook}
+            onClick={() => setBookOpen(true)}
             disabled={downloading}
             title={
               (tab === "FCD"
@@ -1449,15 +1460,15 @@ export default function PcccPage() {
               <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-sky-700">Kỳ đang xem</p>
               <button
                 type="button"
-                onClick={() => download()}
+                onClick={() => setExcelOpen(true)}
                 disabled={downloading}
                 className="mt-1 flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[13px] hover:bg-slate-50 disabled:opacity-60"
               >
                 <FileSpreadsheet className="size-4 shrink-0 text-emerald-600" />
                 <span className="min-w-0">
-                  <span className="block font-semibold text-ink">{period.label}</span>
+                  <span className="block font-semibold text-ink">Chọn tháng và sheet…</span>
                   <span className="block text-[11px] text-muted-foreground">
-                    {hasActiveFilter ? "theo bộ lọc đang đặt" : "toàn bộ"} · {tab === "OVERVIEW" ? "cả 3 bảng" : tab}
+                    {hasActiveFilter ? "theo bộ lọc đang đặt" : "toàn bộ"} · mặc định {period.label}
                   </span>
                 </span>
               </button>
@@ -1931,6 +1942,33 @@ export default function PcccPage() {
           người bấm phải thấy đúng bao nhiêu dòng sắp bị ghi tên mình vào. */}
       {/* Thêm cuộn vòi — bảng DUY NHẤT của module cho thêm dòng bằng tay: cuộn vòi
           không có trong Excel gốc nên số lượng thực tế mỗi tủ chỉ hiện trường mới biết. */}
+      <PcccExcelExportDialog
+        open={excelOpen}
+        onOpenChange={setExcelOpen}
+        periods={periodLabels}
+        defaultPeriod={effectiveLabel}
+        busy={downloading}
+        onExport={(periodLabel, sheets) => {
+          setExcelOpen(false);
+          void download(periodLabel, sheets);
+        }}
+      />
+
+      {/*
+        Danh sách cương vị lấy từ TAB ĐANG MỞ giống ô lọc; cương vị đang lọc làm mặc
+        định để mở hộp thoại ra là bấm xuất được ngay, không phải chọn lại.
+      */}
+      <PcccBookExportDialog
+        open={bookOpen}
+        onOpenChange={setBookOpen}
+        periods={periodLabels}
+        defaultPeriod={effectiveLabel}
+        positions={bookPositions}
+        defaultPosition={bookStatus?.positionCode ?? cuongVi ?? bookPositions[0]?.code ?? ""}
+        busy={downloading}
+        onExport={(periodLabel, code, groups) => void previewBook({ period: periodLabel, cuongVi: code, groups })}
+      />
+
       {/*
         XEM TRƯỚC BẢN IN — bản nháp dựng từ server, chưa lưu trữ gì. Người dùng lật đủ
         các trang rồi mới bấm chốt; đóng hộp thoại là bản nháp biến mất không để lại dấu.
