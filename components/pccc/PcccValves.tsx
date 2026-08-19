@@ -269,10 +269,10 @@ export function PcccValves({
                       <StatusBadge status={shortLabel(tinhTrang)} />
                     )}
                   </TableCell>
-                  <TableCell className={cn(TD_ROW, dirty("soYcsc"))}>
+                  <TableCell className={cn(TD_ROW, "text-center", dirty("soYcsc"))}>
                     <EditableCell value={val("soYcsc", r.soYcsc)} disabled={!rowEditable} lockedReason={lockReason()} onSave={(v) => save(r, "soYcsc", v || null)} />
                   </TableCell>
-                  <TableCell className={cn(TD_ROW, "whitespace-nowrap", dirty("nguoiKiemTra"))}>
+                  <TableCell className={cn(TD_ROW, "whitespace-nowrap text-center", dirty("nguoiKiemTra"))}>
                     <EditableCell
                       value={val("nguoiKiemTra", r.nguoiKiemTra)}
                       disabled={!rowEditable || !canEditAdminField}

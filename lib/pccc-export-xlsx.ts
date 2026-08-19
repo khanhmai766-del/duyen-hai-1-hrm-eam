@@ -15,6 +15,10 @@ const ARGB = (hex: string) => "FF" + hex;
 
 /** Màu tô theo nhãn tình trạng — khớp bảng chú giải của sheet gốc. */
 const STATUS_FILL: Record<string, string> = {
+  // Hai mức theo TB 5100 (bình, tủ, nút nhấn, cuộn vòi). Ba nhãn cũ vẫn giữ trong
+  // bảng màu để file lưu trữ của kỳ cũ mở ra không mất nền màu.
+  "Đạt": "C6EFCE",
+  "Không đạt": "FFC7CE",
   "Khả dụng": "C6EFCE",
   "Đủ mức": "C6EFCE",
   "Cần theo dõi": "FFEB9C",

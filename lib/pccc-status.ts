@@ -15,7 +15,23 @@
  *     báo → Cần theo dõi (giữ nguyên nếu đang là Bất khả dụng, vì nặng hơn).
  */
 
-export const BCC_TINH_TRANG_OPTIONS = ["Khả dụng", "Cần theo dõi", "Bất khả dụng"] as const;
+/**
+ * KẾT QUẢ KIỂM TRA — hai mức, dùng chung cho bình chữa cháy, tủ chữa cháy, nút nhấn
+ * báo cháy và cuộn vòi.
+ *
+ * Theo TB 5100/TB-NĐDH ngày 14/8/2026, mục "BẢNG II … Đánh giá tình trạng hoạt động":
+ * chỉ ghi Đạt / Không đạt, không còn mức trung gian. Ba mức cũ quy đổi theo đúng ánh xạ
+ * nghiệp vụ đã chốt: "Khả dụng" và "Cần theo dõi" (còn dùng được) đều thành ĐẠT;
+ * "Bất khả dụng" thành KHÔNG ĐẠT.
+ *
+ * Van chữa cháy KHÔNG dùng bộ này — van có ba mức riêng đọc thẳng từ file Excel nguồn
+ * (xem VALVE_TINH_TRANG_OPTIONS). Đèn cũng riêng vì có thêm mức "Không có đèn".
+ */
+export const TINH_TRANG_DAT = "Đạt";
+export const TINH_TRANG_KHONG_DAT = "Không đạt";
+export const DAT_KHONG_DAT_OPTIONS = [TINH_TRANG_DAT, TINH_TRANG_KHONG_DAT] as const;
+
+export const BCC_TINH_TRANG_OPTIONS = DAT_KHONG_DAT_OPTIONS;
 
 /**
  * Chủng loại bình — thứ tự giữ đúng sheet TỔNG QUAN.
@@ -94,9 +110,16 @@ export function isApSuatCritical(apSuat: string | null | undefined) {
   return apSuat === AP_SUAT_CRITICAL;
 }
 
-/** Quy tắc 2 — áp suất cảnh báo/hết áp thì bỏ "Khả dụng" khỏi danh sách chọn. */
+/**
+ * Quy tắc 2 — HẾT ÁP thì chỉ còn "Không đạt": bình không còn khả năng chữa cháy.
+ *
+ * Mức áp suất CẢNH BÁO (1/4…4/4 mức đỏ, KL hao hụt) không còn thu hẹp lựa chọn nữa:
+ * dưới bộ hai mức, tình trạng ứng với nó là "Cần theo dõi" cũ, mà cái đó nay quy về
+ * ĐẠT (vẫn dùng được). Trước đây quy tắc này bỏ "Khả dụng" khỏi danh sách vì còn một
+ * mức trung gian để rơi vào — giờ không còn mức đó nữa.
+ */
 export function tinhTrangOptions(apSuat: string | null | undefined): readonly string[] {
-  if (isApSuatCritical(apSuat) || isApSuatWarn(apSuat)) return ["Cần theo dõi", "Bất khả dụng"];
+  if (isApSuatCritical(apSuat)) return [TINH_TRANG_KHONG_DAT];
   return BCC_TINH_TRANG_OPTIONS;
 }
 
@@ -106,8 +129,9 @@ export function tinhTrangOptions(apSuat: string | null | undefined): readonly st
  * trạng (chặn hạ xuống "Khả dụng" khi áp suất chưa hồi phục).
  */
 export function resolveTinhTrang(apSuat: string | null | undefined, tinhTrang: string | null | undefined) {
-  if (isApSuatCritical(apSuat)) return "Bất khả dụng";
-  if (isApSuatWarn(apSuat)) return tinhTrang === "Bất khả dụng" ? "Bất khả dụng" : "Cần theo dõi";
+  // Chỉ còn MỘT ràng buộc: hết áp thì luôn Không đạt. Mức cảnh báo không ép gì —
+  // xem lý do ở tinhTrangOptions.
+  if (isApSuatCritical(apSuat)) return TINH_TRANG_KHONG_DAT;
   return tinhTrang ?? null;
 }
 
@@ -160,23 +184,26 @@ export function statusCountByGroup(components: TccComponent[]) {
   return map;
 }
 
-/** Tình trạng tổng thể của tủ — DẪN XUẤT, không cho sửa tay. */
+/**
+ * Tình trạng tổng thể suy từ các ô tích — DẪN XUẤT, không cho sửa tay. Dùng chung cho
+ * tủ chữa cháy, nút nhấn báo cháy và cuộn vòi.
+ *
+ * HAI MỨC theo TB 5100/TB-NĐDH: có khiếm khuyết NẶNG (ô cuối của bất kỳ nhóm nào) thì
+ * Không đạt; còn lại — kể cả có khiếm khuyết nhẹ, kể cả chưa tích ô nào — thì Đạt.
+ *
+ * Khiếm khuyết nhẹ KHÔNG bị nuốt mất: bảng vẫn hiện đủ ô đã tích, và tab Tổng quan vẫn
+ * đếm riêng ba mức nặng/nhẹ/bình thường theo từng nhóm linh kiện. Chỉ NHÃN TỔNG THỂ là
+ * hai mức, đúng như biểu mẫu yêu cầu.
+ */
 export function deriveCabinetStatus(components: TccComponent[]): string {
   const counts = statusCountByGroup(components);
-  let severe = false;
-  let minor = false;
-  let ok = false;
   for (const c of components) {
     if (!c.checked) continue;
-    const level = componentLevelOf(c.statusOrder, counts.get(c.groupLabel) ?? 1);
-    if (level === "huHongHoanToan") severe = true;
-    else if (level === "huHong1Phan") minor = true;
-    else ok = true;
+    if (componentLevelOf(c.statusOrder, counts.get(c.groupLabel) ?? 1) === "huHongHoanToan") {
+      return TINH_TRANG_KHONG_DAT;
+    }
   }
-  if (severe) return "Bất khả dụng";
-  if (minor) return "Cần theo dõi";
-  if (ok) return "Khả dụng";
-  return "Cần theo dõi";
+  return TINH_TRANG_DAT;
 }
 
 /**
@@ -296,7 +323,8 @@ export function isPcccLightLoai(value: unknown): value is PcccLightLoai {
   return value === "EXIT" || value === "CSSC";
 }
 
-export const HOSE_REEL_TINH_TRANG_OPTIONS = ["Đạt", "Không đạt"] as const;
+/** Giữ tên riêng cho dễ đọc ở bảng cuộn vòi; nội dung là bộ hai mức dùng chung. */
+export const HOSE_REEL_TINH_TRANG_OPTIONS = DAT_KHONG_DAT_OPTIONS;
 
 /**
  * Nhóm ô tích của bảng NNBC. Giữ đúng thứ tự cột nguồn — thứ tự QUYẾT ĐỊNH mức
@@ -339,22 +367,6 @@ export function hoseReelLabelDisplay(status: string): string {
   return HOSE_REEL_LABEL_DISPLAY[status] ?? status;
 }
 
-/**
- * Tình trạng tổng thể của một cuộn vòi — DẪN XUẤT, hai mức.
- *
- * KHÁC deriveCabinetStatus (tủ vẫn ba mức): theo TB 5100/TB-NĐDH ngày 14/8/2026
- * cuộn vòi chỉ còn Đạt / Không đạt. Có khiếm khuyết NẶNG (ô cuối của bất kỳ nhóm
- * nào) → "Không đạt"; còn lại — kể cả khiếm khuyết nhẹ, kể cả chưa tích ô nào —
- * → "Đạt".
- */
-export function deriveHoseReelStatus(components: TccComponent[]): string {
-  const counts = statusCountByGroup(components);
-  for (const c of components) {
-    if (!c.checked) continue;
-    if (componentLevelOf(c.statusOrder, counts.get(c.groupLabel) ?? 1) === "huHongHoanToan") return "Không đạt";
-  }
-  return "Đạt";
-}
 
 /**
  * Màu cho các nhãn CHỈ xuất hiện ở bốn bảng mới. Tách khỏi TONE_BY_VALUE ở trên

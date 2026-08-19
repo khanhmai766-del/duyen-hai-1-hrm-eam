@@ -30,7 +30,6 @@ import {
   HOSE_REEL_GROUPS,
   deriveCabinetStatus,
   deriveHoseReelMa,
-  deriveHoseReelStatus,
   type TccComponent,
 } from "../lib/pccc-status";
 
@@ -383,7 +382,7 @@ async function importHoseReels(periodId: string) {
           cuongVi: cab.cuongVi,
           cuongViCode: cab.cuongViCode,
           machine: cab.machine,
-          tinhTrangTongThe: deriveHoseReelStatus(components),
+          tinhTrangTongThe: deriveCabinetStatus(components),
           components: {
             create: components.map((c) => ({
               groupLabel: c.groupLabel, status: c.status, checked: c.checked,

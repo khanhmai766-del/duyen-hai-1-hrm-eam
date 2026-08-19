@@ -269,7 +269,7 @@ export function PcccCabinets({
                     <RowExpander expanded={expanded} onToggle={() => setExpandedId(expanded ? null : r.id)} />
                   </TableCell>
                   <TableCell
-                    className={cn(TD_ROW, STICKY_TD, STICKY_EDGE, rowBg, "whitespace-nowrap font-medium")}
+                    className={cn(TD_ROW, STICKY_TD, STICKY_EDGE, rowBg, "whitespace-nowrap text-center font-medium")}
                     style={{ left: FROZEN.ma.left }}
                   >
                     <span className="inline-flex items-center gap-1">
@@ -279,7 +279,7 @@ export function PcccCabinets({
                       )}
                     </span>
                   </TableCell>
-                  <TableCell className={cn(TD_ROW, "whitespace-nowrap", dirty("cuongVi"))}>
+                  <TableCell className={cn(TD_ROW, "whitespace-nowrap text-center", dirty("cuongVi"))}>
                     <EditableCell
                       value={val("cuongVi", r.cuongVi)}
                       type="select"
@@ -290,7 +290,7 @@ export function PcccCabinets({
                     />
                   </TableCell>
                   {/* Dẫn xuất từ các ô ☑ → chỉ đọc. Đang sửa thì server tính lại lúc lưu. */}
-                  <TableCell className={cn(TD_ROW, "whitespace-nowrap")}>
+                  <TableCell className={cn(TD_ROW, "whitespace-nowrap text-center")}>
                     <StatusBadge status={r.tinhTrangTongThe} />
                   </TableCell>
 
@@ -321,10 +321,10 @@ export function PcccCabinets({
                     })
                   )}
 
-                  <TableCell className={cn(TD_ROW, "border-l border-slate-200", dirty("soYcsc"))}>
+                  <TableCell className={cn(TD_ROW, "border-l border-slate-200 text-center", dirty("soYcsc"))}>
                     <EditableCell value={val("soYcsc", r.soYcsc)} disabled={!rowEditable} lockedReason={lockReason()} onSave={(v) => save(r, "soYcsc", v || null)} />
                   </TableCell>
-                  <TableCell className={cn(TD_ROW, "whitespace-nowrap", dirty("nguoiKiemTra"))}>
+                  <TableCell className={cn(TD_ROW, "whitespace-nowrap text-center", dirty("nguoiKiemTra"))}>
                     <EditableCell
                       value={val("nguoiKiemTra", r.nguoiKiemTra)}
                       disabled={!rowEditable || !canEditAdminField}

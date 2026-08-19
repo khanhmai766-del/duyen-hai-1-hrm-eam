@@ -310,7 +310,7 @@ export function PcccAlarmButtons({
                     })
                   )}
 
-                  <TableCell className={cn(TD_ROW, "whitespace-nowrap border-l border-slate-200", dirty("nguoiKiemTra"))}>
+                  <TableCell className={cn(TD_ROW, "whitespace-nowrap border-l border-slate-200 text-center", dirty("nguoiKiemTra"))}>
                     <EditableCell
                       value={val("nguoiKiemTra", r.nguoiKiemTra)}
                       disabled={!rowEditable || !canEditAdminField}

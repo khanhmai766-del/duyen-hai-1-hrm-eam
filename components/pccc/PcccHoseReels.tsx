@@ -315,10 +315,10 @@ export function PcccHoseReels({
                     })
                   )}
 
-                  <TableCell className={cn(TD_ROW, "border-l border-slate-200", dirty("soYcsc"))}>
+                  <TableCell className={cn(TD_ROW, "border-l border-slate-200 text-center", dirty("soYcsc"))}>
                     <EditableCell value={val("soYcsc", r.soYcsc)} disabled={!rowEditable} lockedReason={lockReason()} onSave={(v) => save(r, "soYcsc", v || null)} />
                   </TableCell>
-                  <TableCell className={cn(TD_ROW, "whitespace-nowrap", dirty("nguoiKiemTra"))}>
+                  <TableCell className={cn(TD_ROW, "whitespace-nowrap text-center", dirty("nguoiKiemTra"))}>
                     <EditableCell
                       value={val("nguoiKiemTra", r.nguoiKiemTra)}
                       disabled={!rowEditable || !canEditAdminField}

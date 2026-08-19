@@ -99,6 +99,8 @@ import { MACHINE_OPTIONS } from "@/components/pccc/pccc-shared";
 import { type SortState } from "@/components/pccc/pccc-table-card";
 import {
   CHUNG_LOAI_OPTIONS,
+  DAT_KHONG_DAT_OPTIONS,
+  TINH_TRANG_DAT,
   TINH_TRANG_CHUA_CAP_NHAT,
   HOSE_REEL_TINH_TRANG_OPTIONS,
   LIGHT_TINH_TRANG_OPTIONS,
@@ -135,7 +137,9 @@ const TABS: { key: TabKey; label: string; icon: typeof FlameKindling }[] = [
   { key: "DEN", label: "Đèn sự cố", icon: Lightbulb },
 ];
 
-const TINH_TRANG_FILTERS = ["Khả dụng", "Cần theo dõi", "Bất khả dụng"];
+// Bình chữa cháy, tủ chữa cháy, nút nhấn báo cháy và cuộn vòi dùng CHUNG bộ hai mức
+// theo TB 5100/TB-NĐDH. Van và đèn có vốn từ riêng, xem hai hằng số bên dưới.
+const TINH_TRANG_FILTERS = [...DAT_KHONG_DAT_OPTIONS];
 
 /** Nhãn bảng cho hộp thoại ký — sáu mục tiêu thì ternary lồng đã hết đọc nổi. */
 const SIGN_TARGET_LABEL: Record<PcccBulkSignTarget, string> = {
@@ -521,7 +525,7 @@ export default function PcccPage() {
   }
 
   /**
-   * Bấm 1 ô ☑ của TCC. Áp quy tắc "Khả dụng ↔ Bất khả dụng loại trừ nhau" NGAY trong
+   * Bấm 1 ô ☑ của TCC. Áp quy tắc "ô đầu ↔ ô cuối loại trừ nhau" NGAY trong
    * bản nháp để người dùng thấy ô đối lập tự bỏ tích, không phải chờ lưu xong.
    */
   function onToggleComponent(row: CabinetRow, groupLabel: string, status: string, nextChecked: boolean) {
@@ -762,7 +766,7 @@ export default function PcccPage() {
           ],
           note:
             (res.adjusted > 0
-              ? "Các dòng nâng mức là do quy tắc áp suất: áp suất từ mức cảnh báo trở lên thì không được để \"Khả dụng\". "
+              ? "Các dòng nâng mức là do quy tắc áp suất: bình HẾT ÁP thì luôn là \"Không đạt\". "
               : "") +
             "Chữ ký và dấu kiểm tra của các dòng vừa sửa đã bị xoá — ký lại sẽ điền lại ngày kiểm tra theo ngày ký.",
           resign: true,
@@ -990,7 +994,7 @@ export default function PcccPage() {
         return;
       }
       setTinhTrang(target.tinhTrang ?? "ALL");
-      const n = target.tinhTrang === "Khả dụng" ? s?.bcc.total.khaDung : s?.bcc.total.batKhaDung;
+      const n = target.tinhTrang === TINH_TRANG_DAT ? s?.bcc.total.dat : s?.bcc.total.khongDat;
       toast.success(`Đang lọc ${n ?? ""} bình ${(target.tinhTrang ?? "").toLowerCase()}`);
       return;
     }
@@ -1009,12 +1013,7 @@ export default function PcccPage() {
     }
     if (target.bang === "NNBC") {
       setTinhTrang(target.tinhTrang);
-      const n =
-        target.tinhTrang === "Khả dụng"
-          ? s?.nnbc.khaDung
-          : target.tinhTrang === "Cần theo dõi"
-            ? s?.nnbc.canTheoDoi
-            : s?.nnbc.batKhaDung;
+      const n = target.tinhTrang === TINH_TRANG_DAT ? s?.nnbc.dat : s?.nnbc.khongDat;
       toast.success(`Đang lọc ${n ?? ""} nút nhấn ${target.tinhTrang.toLowerCase()}`);
       return;
     }

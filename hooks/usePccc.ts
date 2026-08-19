@@ -194,9 +194,8 @@ export interface PcccSummary {
   // --- Bốn nhóm bổ sung đợt 2 ---
   nnbc: {
     tongSo: number;
-    khaDung: number;
-    canTheoDoi: number;
-    batKhaDung: number;
+    dat: number;
+    khongDat: number;
     theoNhom: ComponentBreakdownRow[];
   };
   van: {
@@ -242,14 +241,15 @@ export interface LightSummaryRow {
 export interface ExtinguisherSummaryRow {
   chungLoai: string;
   tongSo: number;
-  khaDung: number;
-  canTheoDoi: number;
-  batKhaDung: number;
+  dat: number;
+  khongDat: number;
+  /** Chưa có kết quả kiểm tra (tình trạng còn trống). */
+  chuaCapNhat: number;
   quaHanThayThe: number;
   sapDenHan: number;
   giSetThanBinh: number;
   giSetTayNam: number;
-  phanTramKhaDung: number;
+  phanTramDat: number;
 }
 
 /** Cương vị/cấp giám sát luôn đi theo cặp (mã, nhãn): lọc theo MÃ, hiển thị NHÃN. */

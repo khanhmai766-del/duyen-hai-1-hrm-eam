@@ -12,7 +12,7 @@ import {
   pickFields,
   type FieldSpec,
 } from "@/lib/pccc-service";
-import { applyTccToggle, deriveHoseReelStatus } from "@/lib/pccc-status";
+import { applyTccToggle, deriveCabinetStatus } from "@/lib/pccc-status";
 
 export const dynamic = "force-dynamic";
 
@@ -30,8 +30,8 @@ const EDITABLE: FieldSpec = {
 // PATCH /api/pccc/hose-reels/<id>
 // body: { ...trường định danh, components?: [{ groupLabel, status, checked }] }
 //
-// Quy tắc ô tích dùng chung với tủ chữa cháy (applyTccToggle), nhưng tình trạng tổng
-// thể suy theo luật RIÊNG hai mức Đạt/Không đạt của cuộn vòi (deriveHoseReelStatus).
+// Quy tắc ô tích và cách suy tình trạng tổng thể DÙNG CHUNG với tủ chữa cháy — từ
+// 2026-08-19 cả hai bảng đều hai mức Đạt/Không đạt theo TB 5100.
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
   return handle(async () => {
     const user = await requireUser();
@@ -73,7 +73,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     if (changed.length > 0) clearInspectionStamp("HOSE_REEL", data);
     const updated = await prisma.pcccHoseReel.update({
       where: { id: current.id },
-      data: { ...data, tinhTrangTongThe: deriveHoseReelStatus(current.components) },
+      data: { ...data, tinhTrangTongThe: deriveCabinetStatus(current.components) },
       include: { components: { orderBy: [{ groupOrder: "asc" }, { statusOrder: "asc" }] }, cabinet: { select: { id: true, ma: true, ten: true } } },
     });
     if (changed.length > 0) await clearSignature("HOSE_REEL", current.id);

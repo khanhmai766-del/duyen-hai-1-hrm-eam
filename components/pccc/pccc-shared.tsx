@@ -227,7 +227,9 @@ export function EditableCell({
   if (disabled) {
     const content = type === "date" ? fmtDate(initial) : initial || <span className="text-slate-300">—</span>;
     const base = cn(
-      "block w-full px-1 py-0.5 text-left text-[12px]",
+      // KHÔNG đóng cứng text-left: để ô cha quyết định canh lề (nhiều cột trong bảng
+      // canh giữa). Mặc định của ô bảng vốn đã là canh trái nên chỗ cũ không đổi.
+      "block w-full px-1 py-0.5 text-[12px]",
       wrap ? "whitespace-normal break-words" : "truncate",
       align === "right" && "text-right",
       align === "center" && "text-center"
@@ -253,7 +255,7 @@ export function EditableCell({
           setEditing(true);
         }}
         className={cn(
-          "block w-full rounded px-1 py-0.5 text-left text-[12px] hover:bg-accent/5 hover:ring-1 hover:ring-accent/20",
+          "block w-full rounded px-1 py-0.5 text-[12px] hover:bg-accent/5 hover:ring-1 hover:ring-accent/20",
           wrap ? "whitespace-normal break-words" : "truncate",
           align === "right" && "text-right",
           align === "center" && "text-center"

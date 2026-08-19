@@ -17,7 +17,7 @@ import {
   scopeWhere,
   signaturesOf,
 } from "@/lib/pccc-service";
-import { HOSE_REEL_GROUPS, deriveHoseReelStatus } from "@/lib/pccc-status";
+import { HOSE_REEL_GROUPS, deriveCabinetStatus } from "@/lib/pccc-status";
 
 export const dynamic = "force-dynamic";
 
@@ -169,7 +169,7 @@ export async function POST(req: NextRequest) {
         cuongVi: cabinet.cuongVi,
         cuongViCode: cabinet.cuongViCode,
         machine: cabinet.machine,
-        tinhTrangTongThe: deriveHoseReelStatus(components),
+        tinhTrangTongThe: deriveCabinetStatus(components),
         components: { create: components },
       },
       include: { components: { orderBy: [{ groupOrder: "asc" }, { statusOrder: "asc" }] }, cabinet: { select: { id: true, ma: true, ten: true } } },

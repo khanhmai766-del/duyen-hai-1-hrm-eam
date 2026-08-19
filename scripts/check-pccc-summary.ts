@@ -24,14 +24,14 @@ async function main() {
     [...s.rows, s.total].map((r) => ({
       "Chỉ số": r.chungLoai,
       "Tổng số": r.tongSo,
-      "Khả dụng": r.khaDung,
-      "Cần theo dõi": r.canTheoDoi,
-      "Bất khả dụng": r.batKhaDung,
+      "Đạt": r.dat,
+      "Không đạt": r.khongDat,
+      "Chưa cập nhật": r.chuaCapNhat,
       "Quá hạn": r.quaHanThayThe,
       "Sắp đến hạn": r.sapDenHan,
       "Gỉ thân": r.giSetThanBinh,
       "Gỉ tay nắm": r.giSetTayNam,
-      "% Khả dụng": (r.phanTramKhaDung * 100).toFixed(2) + "%",
+      "% Đạt": (r.phanTramDat * 100).toFixed(2) + "%",
     }))
   );
 

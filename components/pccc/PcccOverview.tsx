@@ -8,7 +8,8 @@ import { PercentBar, StatCard, StatusBadge, TD_CLASS, TH_CLASS, TableShell, fmtP
 import { LIGHT_KHONG_CO_DEN, TINH_TRANG_CHUA_CAP_NHAT } from "@/lib/pccc-status";
 import type { PcccSummary } from "@/hooks/usePccc";
 
-const TONE_COLOR = { ok: "#16A34A", watch: "#D97706", bad: "#DC2626" } as const;
+// `none` = chưa có kết quả kiểm tra — xám trung tính, KHÔNG tô đỏ như lỗi.
+const TONE_COLOR = { ok: "#16A34A", watch: "#D97706", bad: "#DC2626", none: "#94A3B8" } as const;
 
 type TccGroupRow = { groupLabel: string; binhThuong: number; huHong1Phan: number; huHongHoanToan: number };
 
@@ -70,9 +71,9 @@ export function PcccOverview({ summary, onDrill }: { summary: PcccSummary; onDri
 
   const donut = useMemo(
     () => [
-      { name: "Khả dụng", value: bccTotal.khaDung, tone: "ok" as const },
-      { name: "Cần theo dõi", value: bccTotal.canTheoDoi, tone: "watch" as const },
-      { name: "Bất khả dụng", value: bccTotal.batKhaDung, tone: "bad" as const },
+      { name: "Đạt", value: bccTotal.dat, tone: "ok" as const },
+      { name: "Không đạt", value: bccTotal.khongDat, tone: "bad" as const },
+      { name: "Chưa cập nhật", value: bccTotal.chuaCapNhat, tone: "none" as const },
     ],
     [bccTotal]
   );
@@ -114,20 +115,20 @@ export function PcccOverview({ summary, onDrill }: { summary: PcccSummary; onDri
         <StatCard
           label="Bình chữa cháy"
           value={bccTotal.tongSo}
-          hint={`${fmtPercent(bccTotal.phanTramKhaDung, 1)} khả dụng`}
-          tone={bccTotal.phanTramKhaDung >= 0.9 ? "ok" : bccTotal.phanTramKhaDung >= 0.7 ? "watch" : "bad"}
+          hint={`${fmtPercent(bccTotal.phanTramDat, 1)} đạt`}
+          tone={bccTotal.phanTramDat >= 0.9 ? "ok" : bccTotal.phanTramDat >= 0.7 ? "watch" : "bad"}
           icon={FlameKindling}
-          onClick={drill({ bang: "BCC", tinhTrang: "Khả dụng" })}
-          actionLabel={`Bấm để xem ${bccTotal.khaDung} bình khả dụng ở tab Bình chữa cháy`}
+          onClick={drill({ bang: "BCC", tinhTrang: "Đạt" })}
+          actionLabel={`Bấm để xem ${bccTotal.dat} bình đạt ở tab Bình chữa cháy`}
         />
         <StatCard
           label="Bình bất khả dụng"
-          value={bccTotal.batKhaDung}
-          hint={`${bccTotal.canTheoDoi} bình cần theo dõi`}
-          tone={bccTotal.batKhaDung > 0 ? "bad" : "ok"}
+          value={bccTotal.khongDat}
+          hint={`${bccTotal.chuaCapNhat} bình chưa cập nhật`}
+          tone={bccTotal.khongDat > 0 ? "bad" : "ok"}
           icon={AlertTriangle}
-          onClick={drill({ bang: "BCC", tinhTrang: "Bất khả dụng" })}
-          actionLabel={`Bấm để xem ${bccTotal.batKhaDung} bình bất khả dụng ở tab Bình chữa cháy`}
+          onClick={drill({ bang: "BCC", tinhTrang: "Không đạt" })}
+          actionLabel={`Bấm để xem ${bccTotal.khongDat} bình không đạt ở tab Bình chữa cháy`}
         />
         <StatCard
           label="Quá hạn thay thế"
@@ -144,7 +145,7 @@ export function PcccOverview({ summary, onDrill }: { summary: PcccSummary; onDri
           hint={`${summary.tcc.total.huHong1Phan} lỗi nhẹ · ${summary.tcc.total.binhThuong} bình thường`}
           tone={summary.tcc.total.huHongHoanToan > 0 ? "bad" : "ok"}
           icon={Layers}
-          onClick={drill({ bang: "TCC", tinhTrang: "Bất khả dụng" })}
+          onClick={drill({ bang: "TCC", tinhTrang: "Không đạt" })}
           actionLabel="Bấm để xem các tủ bất khả dụng (có linh kiện hỏng nặng) ở tab Tủ chữa cháy"
         />
       </div>
@@ -160,7 +161,7 @@ export function PcccOverview({ summary, onDrill }: { summary: PcccSummary; onDri
           <TableShell>
             <thead>
               <tr>
-                {["Chỉ số", "Tổng số", "Khả dụng", "Cần theo dõi", "Bất khả dụng", "Quá hạn", "Sắp đến hạn", "Gỉ sét thân", "Gỉ sét tay nắm", "% Khả dụng"].map(
+                {["Chỉ số", "Tổng số", "Đạt", "Không đạt", "Chưa cập nhật", "Quá hạn", "Sắp đến hạn", "Gỉ sét thân", "Gỉ sét tay nắm", "% Đạt"].map(
                   (h, i) => (
                     <th key={h} className={`${TH_CLASS} ${i > 0 ? "text-right" : ""}`}>
                       {h}
@@ -176,15 +177,15 @@ export function PcccOverview({ summary, onDrill }: { summary: PcccSummary; onDri
                   <tr key={r.chungLoai} className={isTotal ? "bg-slate-50 font-semibold" : "hover:bg-slate-50/60"}>
                     <td className={`${TD_CLASS} whitespace-nowrap`}>{r.chungLoai}</td>
                     <td className={`${TD_CLASS} text-right tabular-nums`}>{r.tongSo}</td>
-                    <td className={`${TD_CLASS} text-right tabular-nums text-emerald-700`}>{r.khaDung}</td>
-                    <td className={`${TD_CLASS} text-right tabular-nums text-amber-700`}>{r.canTheoDoi}</td>
-                    <td className={`${TD_CLASS} text-right tabular-nums text-rose-700`}>{r.batKhaDung}</td>
+                    <td className={`${TD_CLASS} text-right tabular-nums text-emerald-700`}>{r.dat}</td>
+                    <td className={`${TD_CLASS} text-right tabular-nums text-rose-700`}>{r.khongDat}</td>
+                    <td className={`${TD_CLASS} text-right tabular-nums text-muted-foreground`}>{r.chuaCapNhat || ""}</td>
                     <td className={`${TD_CLASS} text-right tabular-nums`}>{r.quaHanThayThe}</td>
                     <td className={`${TD_CLASS} text-right tabular-nums`}>{r.sapDenHan}</td>
                     <td className={`${TD_CLASS} text-right tabular-nums`}>{r.giSetThanBinh}</td>
                     <td className={`${TD_CLASS} text-right tabular-nums`}>{r.giSetTayNam}</td>
                     <td className={`${TD_CLASS} w-32`}>
-                      <PercentBar value={r.phanTramKhaDung} />
+                      <PercentBar value={r.phanTramDat} />
                     </td>
                   </tr>
                 );
@@ -198,7 +199,7 @@ export function PcccOverview({ summary, onDrill }: { summary: PcccSummary; onDri
               <div key={r.loaiRon} className="rounded-xl border border-slate-200 bg-white p-3.5">
                 <div className="flex items-center justify-between">
                   <p className="text-sm font-bold text-navy">Ron chữa cháy {r.loaiRon}</p>
-                  <StatusBadge status={r.thieuRon === 0 ? "Khả dụng" : "Cần theo dõi"} />
+                  <StatusBadge status={r.thieuRon === 0 ? "Đạt" : "Không đạt"} />
                 </div>
                 <p className="mt-0.5 text-[11px] text-muted-foreground">
                   {r.loaiTu} · {r.soTu} tủ × 3 ron (lăng phun 2 + ngàm 1) = {r.tongRon} ron
@@ -486,26 +487,20 @@ export function PcccOverview({ summary, onDrill }: { summary: PcccSummary; onDri
         <div className="grid gap-3 lg:grid-cols-[320px_1fr]">
           <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-1">
             <StatCard
-              label="Khả dụng"
-              value={summary.nnbc.khaDung}
+              label="Đạt"
+              value={summary.nnbc.dat}
               hint={`trên ${summary.nnbc.tongSo} nút nhấn`}
               tone="ok"
               icon={ShieldCheck}
-              onClick={drill({ bang: "NNBC", tinhTrang: "Khả dụng" })}
+              onClick={drill({ bang: "NNBC", tinhTrang: "Đạt" })}
             />
             <StatCard
-              label="Cần theo dõi"
-              value={summary.nnbc.canTheoDoi}
-              tone="watch"
-              icon={AlertTriangle}
-              onClick={drill({ bang: "NNBC", tinhTrang: "Cần theo dõi" })}
-            />
-            <StatCard
-              label="Bất khả dụng"
-              value={summary.nnbc.batKhaDung}
+              label="Không đạt"
+              value={summary.nnbc.khongDat}
+              hint="cần xử lý"
               tone="bad"
               icon={AlertTriangle}
-              onClick={drill({ bang: "NNBC", tinhTrang: "Bất khả dụng" })}
+              onClick={drill({ bang: "NNBC", tinhTrang: "Không đạt" })}
             />
           </div>
           <TableShell fill>

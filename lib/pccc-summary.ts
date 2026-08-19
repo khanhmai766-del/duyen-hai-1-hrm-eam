@@ -17,6 +17,8 @@ import {
   RON_WEIGHTS,
   LIGHT_KHONG_CO_DEN,
   VALVE_TINH_TRANG_OPTIONS,
+  TINH_TRANG_DAT,
+  TINH_TRANG_KHONG_DAT,
   componentLevelOf,
   cabinetComponentsForTcc,
 } from "@/lib/pccc-status";
@@ -61,11 +63,13 @@ export type Fm200PanelRow = {
 };
 
 // ------------------------------------------------------------------ hằng số
-/** Nhãn tình trạng tổng thể dùng chung cho BCC và TCC. */
+/**
+ * Nhãn tình trạng tổng thể — HAI MỨC theo TB 5100/TB-NĐDH, dùng chung cho bình chữa
+ * cháy, tủ chữa cháy, nút nhấn báo cháy và cuộn vòi. Xem DAT_KHONG_DAT_OPTIONS.
+ */
 export const TINH_TRANG = {
-  OK: "Khả dụng",
-  WATCH: "Cần theo dõi",
-  BAD: "Bất khả dụng",
+  OK: TINH_TRANG_DAT,
+  BAD: TINH_TRANG_KHONG_DAT,
 } as const;
 
 /** Ngưỡng % còn lại của FOAM/CO2/DIESEL — theo công thức ô I5 của sheet nguồn. */
@@ -84,14 +88,15 @@ export const SAP_DEN_HAN_DAYS = 90;
 export type ExtinguisherSummaryRow = {
   chungLoai: string;
   tongSo: number;
-  khaDung: number;
-  canTheoDoi: number;
-  batKhaDung: number;
+  dat: number;
+  khongDat: number;
+  /** Chưa có kết quả kiểm tra (tình trạng còn trống). */
+  chuaCapNhat: number;
   quaHanThayThe: number;
   sapDenHan: number;
   giSetThanBinh: number;
   giSetTayNam: number;
-  phanTramKhaDung: number;
+  phanTramDat: number;
 };
 
 /**
@@ -124,18 +129,21 @@ function isDueSoon(r: ExtinguisherRow, periodEnd: Date) {
 }
 
 function summarizeExtinguisherGroup(chungLoai: string, rows: ExtinguisherRow[], periodEnd: Date): ExtinguisherSummaryRow {
-  const khaDung = rows.filter((r) => r.tinhTrang === TINH_TRANG.OK).length;
+  const dat = rows.filter((r) => r.tinhTrang === TINH_TRANG.OK).length;
+  const khongDat = rows.filter((r) => r.tinhTrang === TINH_TRANG.BAD).length;
   return {
     chungLoai,
     tongSo: rows.length,
-    khaDung,
-    canTheoDoi: rows.filter((r) => r.tinhTrang === TINH_TRANG.WATCH).length,
-    batKhaDung: rows.filter((r) => r.tinhTrang === TINH_TRANG.BAD).length,
+    dat,
+    khongDat,
+    // Phần còn lại là bình chưa có kết quả kiểm tra — đếm riêng chứ không dồn vào
+    // "Không đạt", để không biến việc CHƯA làm thành việc làm HỎNG.
+    chuaCapNhat: rows.length - dat - khongDat,
     quaHanThayThe: rows.filter((r) => isOverdue(r, periodEnd)).length,
     sapDenHan: rows.filter((r) => isDueSoon(r, periodEnd)).length,
     giSetThanBinh: countGiSet(rows, "Gỉ sét thân bình"),
     giSetTayNam: countGiSet(rows, "Gỉ sét tay nắm"),
-    phanTramKhaDung: rows.length === 0 ? 0 : khaDung / rows.length,
+    phanTramDat: rows.length === 0 ? 0 : dat / rows.length,
   };
 }
 
@@ -398,9 +406,8 @@ function breakdownByGroup(rows: { components: CabinetComponentRow[] }[]): Compon
 
 export type AlarmButtonSummary = {
   tongSo: number;
-  khaDung: number;
-  canTheoDoi: number;
-  batKhaDung: number;
+  dat: number;
+  khongDat: number;
   theoNhom: ComponentBreakdownRow[];
 };
 
@@ -409,9 +416,8 @@ export function summarizeAlarmButtons(
 ): AlarmButtonSummary {
   return {
     tongSo: rows.length,
-    khaDung: rows.filter((r) => r.tinhTrangTongThe === TINH_TRANG.OK).length,
-    canTheoDoi: rows.filter((r) => r.tinhTrangTongThe === TINH_TRANG.WATCH).length,
-    batKhaDung: rows.filter((r) => r.tinhTrangTongThe === TINH_TRANG.BAD).length,
+    dat: rows.filter((r) => r.tinhTrangTongThe === TINH_TRANG.OK).length,
+    khongDat: rows.filter((r) => r.tinhTrangTongThe === TINH_TRANG.BAD).length,
     theoNhom: breakdownByGroup(rows),
   };
 }
@@ -428,8 +434,8 @@ export function summarizeHoseReels(
 ): HoseReelSummary {
   return {
     tongSo: rows.length,
-    dat: rows.filter((r) => r.tinhTrangTongThe === "Đạt").length,
-    khongDat: rows.filter((r) => r.tinhTrangTongThe === "Không đạt").length,
+    dat: rows.filter((r) => r.tinhTrangTongThe === TINH_TRANG.OK).length,
+    khongDat: rows.filter((r) => r.tinhTrangTongThe === TINH_TRANG.BAD).length,
     theoNhom: breakdownByGroup(rows),
   };
 }

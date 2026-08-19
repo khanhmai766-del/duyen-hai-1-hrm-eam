@@ -224,7 +224,7 @@ export function PcccExtinguishers({
                     <RowExpander expanded={expanded} onToggle={() => setExpandedId(expanded ? null : r.id)} />
                   </TableCell>
                   <TableCell
-                    className={cn(TD_ROW, STICKY_TD, rowBg, "whitespace-nowrap font-medium")}
+                    className={cn(TD_ROW, STICKY_TD, rowBg, "whitespace-nowrap text-center font-medium")}
                     style={{ left: FROZEN.ma.left }}
                   >
                     <span className="inline-flex items-center gap-1">
@@ -235,7 +235,7 @@ export function PcccExtinguishers({
                     </span>
                   </TableCell>
                   <TableCell
-                    className={cn(TD_ROW, STICKY_TD, rowBg, "whitespace-nowrap")}
+                    className={cn(TD_ROW, STICKY_TD, rowBg, "whitespace-nowrap text-center")}
                     style={{ left: FROZEN.chungLoai.left }}
                   >
                     {r.chungLoai}
@@ -243,7 +243,7 @@ export function PcccExtinguishers({
                   {/* Tình trạng: danh sách bị áp suất ràng buộc — áp suất cảnh báo thì
                       không còn lựa chọn "Khả dụng" (quy tắc của file Excel gốc). */}
                   <TableCell
-                    className={cn(TD_ROW, STICKY_TD, rowBg, dirty("tinhTrang"))}
+                    className={cn(TD_ROW, STICKY_TD, rowBg, "text-center", dirty("tinhTrang"))}
                     style={{ left: FROZEN.tinhTrang.left }}
                   >
                     <ToneSelectCell
@@ -256,7 +256,7 @@ export function PcccExtinguishers({
                   </TableCell>
                   {/* Áp suất: bình CO2 đo theo khối lượng, MFZ/Foam theo vạch áp */}
                   <TableCell
-                    className={cn(TD_ROW, STICKY_TD, STICKY_EDGE, rowBg, dirty("apSuat"))}
+                    className={cn(TD_ROW, STICKY_TD, STICKY_EDGE, rowBg, "text-center", dirty("apSuat"))}
                     style={{ left: FROZEN.apSuat.left }}
                   >
                     <ToneSelectCell
@@ -287,7 +287,7 @@ export function PcccExtinguishers({
                       onSave={(v) => save(r, "viTriHienTai", v)}
                     />
                   </TableCell>
-                  <TableCell className={cn(TD_ROW, "whitespace-nowrap", dirty("cuongVi"))}>
+                  <TableCell className={cn(TD_ROW, "whitespace-nowrap text-center", dirty("cuongVi"))}>
                     <EditableCell
                       value={r.cuongVi}
                       type="select"
@@ -297,7 +297,7 @@ export function PcccExtinguishers({
                       onSave={(v) => save(r, "cuongVi", v)}
                     />
                   </TableCell>
-                  <TableCell className={cn(TD_ROW, "whitespace-nowrap", dirty("ngaySx"))}>
+                  <TableCell className={cn(TD_ROW, "whitespace-nowrap text-center", dirty("ngaySx"))}>
                     <EditableCell value={r.ngaySx} type="date" disabled={!rowEditable} lockedReason={lockReason()} onSave={(v) => save(r, "ngaySx", v)} />
                   </TableCell>
                   <TableCell className={cn(TD_ROW, "text-right", dirty("thoiGianSd"))}>
@@ -325,7 +325,7 @@ export function PcccExtinguishers({
                   >
                     {fmtDate(r.denHanThayThe)}
                   </TableCell>
-                  <TableCell className={cn(TD_ROW, "whitespace-nowrap", dirty("thoiGianThayGanNhat"))}>
+                  <TableCell className={cn(TD_ROW, "whitespace-nowrap text-center", dirty("thoiGianThayGanNhat"))}>
                     <EditableCell
                       value={r.thoiGianThayGanNhat}
                       type="date"
@@ -334,7 +334,7 @@ export function PcccExtinguishers({
                       onSave={(v) => save(r, "thoiGianThayGanNhat", v)}
                     />
                   </TableCell>
-                  <TableCell className={cn(TD_ROW, "whitespace-nowrap", dirty("nguoiKiemTra"))}>
+                  <TableCell className={cn(TD_ROW, "whitespace-nowrap text-center", dirty("nguoiKiemTra"))}>
                     <EditableCell value={r.nguoiKiemTra} disabled={!rowEditable || !canEditAdminField} lockedReason={lockReason(true)} onSave={(v) => save(r, "nguoiKiemTra", v)} />
                   </TableCell>
                 </TableRow>

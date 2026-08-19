@@ -247,7 +247,7 @@ export function PcccEmergencyLights({
                       onSave={(v) => save(r, "ketQuaTest", v || null)}
                     />
                   </TableCell>
-                  <TableCell className={cn(TD_ROW, "whitespace-nowrap", dirty("nguoiKiemTra"))}>
+                  <TableCell className={cn(TD_ROW, "whitespace-nowrap text-center", dirty("nguoiKiemTra"))}>
                     <EditableCell
                       value={val("nguoiKiemTra", r.nguoiKiemTra)}
                       disabled={!rowEditable || !canEditAdminField}
