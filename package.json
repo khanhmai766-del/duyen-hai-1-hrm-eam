@@ -17,6 +17,7 @@
     "db:reset-equipment-tree": "node scripts/reset-equipment-tree.mjs",
     "import:equipment-tree": "node scripts/import-equipment-tree.mjs",
     "import:pccc": "tsx scripts/import-pccc-excel.ts",
+    "import:pccc-fire-control-cabinets": "tsx scripts/import-pccc-fire-control-cabinets.ts",
     "check:pccc": "tsx scripts/check-pccc-summary.ts",
     "pccc:rollover": "tsx scripts/pccc-rollover.ts",
     "normalize:pccc": "tsx scripts/normalize-pccc-positions.ts",

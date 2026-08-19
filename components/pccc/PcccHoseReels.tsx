@@ -125,8 +125,8 @@ export function PcccHoseReels({
   } as const;
 
   const componentCols = groups.reduce((n, g) => n + g.statuses.length, 0);
-  // + | Mã | Tủ cha | Cương vị | Tình trạng | <ô tích> | Số YCSC | Người kiểm tra | (xoá)
-  const colCount = 5 + componentCols + 2 + (onDelete ? 1 : 0);
+  // + | Mã | Cương vị | Tình trạng | <ô tích> | Số YCSC | Người kiểm tra | (xoá)
+  const colCount = 4 + componentCols + 2 + (onDelete ? 1 : 0);
 
   function save(row: HoseReelRow, field: string, value: unknown) {
     onDraftChange(row.id, field, value);
@@ -170,7 +170,7 @@ export function PcccHoseReels({
         ) : null
       }
     >
-      <Table className="min-w-[1520px]" wrapperClassName={TABLE_SCROLLER}>
+      <Table className="min-w-[1285px]" wrapperClassName={TABLE_SCROLLER}>
         <TableHeader>
           <TableRow ref={headRowRef} className={TR_HEAD}>
             <TableHead rowSpan={2} className={cn(TH_NAVY, TH_EXPAND, STICKY_TH)} style={{ left: FROZEN.expand.left }} />
@@ -180,9 +180,6 @@ export function PcccHoseReels({
               style={{ left: FROZEN.ma.left, width: FROZEN.ma.w, minWidth: FROZEN.ma.w }}
             >
               <SortHeader label="Mã cuộn vòi" sortKey="ma" sort={sort} onSort={onSort} />
-            </TableHead>
-            <TableHead rowSpan={2} className={cn(TH_NAVY, "w-[235px]")}>
-              <PlainHeader label="Thuộc tủ chữa cháy" />
             </TableHead>
             <TableHead rowSpan={2} className={cn(TH_NAVY, "w-[145px]")}>
               <SortHeader label="Cương vị quản lý" sortKey="cuongVi" sort={sort} onSort={onSort} />
@@ -282,9 +279,6 @@ export function PcccHoseReels({
                         <Lock className="size-3 shrink-0 text-slate-400" aria-label="Ngoài phạm vi cương vị của bạn" />
                       )}
                     </span>
-                  </TableCell>
-                  <TableCell className={cn(TD_ROW, "text-center text-[12.5px] text-slate-600")} title={r.cabinet.ten ?? undefined}>
-                    {r.cabinet.ma}
                   </TableCell>
                   <TableCell className={cn(TD_ROW, "whitespace-nowrap text-center", dirty("cuongVi"))}>
                     <EditableCell

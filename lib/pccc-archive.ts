@@ -17,7 +17,7 @@ import { signaturesOf } from "@/lib/pccc-service";
 
 // Bản lưu trữ hằng tháng phải có ĐỦ mọi nhóm: DB chỉ giữ 6 kỳ gần nhất, file trên S3
 // mới là bản ghi dài hạn — thiếu sheet nào ở đây là mất hẳn dữ liệu nhóm đó.
-const ALL_SHEETS: ExportSheet[] = ["BCC", "TCC", "FCD", "NNBC", "VAN", "DEN", "CVCC"];
+const ALL_SHEETS: ExportSheet[] = ["BCC", "TCC", "TDKCC", "FCD", "NNBC", "VAN", "DEN", "CVCC"];
 
 export const PCCC_ARCHIVE_PREFIX = (process.env.PCCC_ARCHIVE_S3_PREFIX || "pccc/archive").replace(/^\/+|\/+$/g, "");
 
@@ -89,6 +89,7 @@ export async function buildPeriodWorkbook(periodId: string, closing?: { closedAt
     valves,
     lights,
     hoseReels,
+    fireControlCabinets,
     sigBcc,
     sigTcc,
     sigBulk,
@@ -96,6 +97,7 @@ export async function buildPeriodWorkbook(periodId: string, closing?: { closedAt
     sigVan,
     sigDen,
     sigCvcc,
+    sigTdkcc,
   ] = await Promise.all([
     prisma.pcccExtinguisher.findMany({ where: { periodId }, orderBy: [{ stt: "asc" }, { ma: "asc" }] }),
     prisma.pcccCabinet.findMany({
@@ -120,6 +122,7 @@ export async function buildPeriodWorkbook(periodId: string, closing?: { closedAt
         cabinet: { select: { ma: true } },
       },
     }),
+    prisma.pcccFireControlCabinet.findMany({ where: { periodId }, orderBy: [{ stt: "asc" }, { ma: "asc" }] }),
     signaturesOf(periodId, "EXTINGUISHER"),
     signaturesOf(periodId, "CABINET"),
     signaturesOf(periodId, "BULK"),
@@ -127,6 +130,7 @@ export async function buildPeriodWorkbook(periodId: string, closing?: { closedAt
     signaturesOf(periodId, "VALVE"),
     signaturesOf(periodId, "EMERGENCY_LIGHT"),
     signaturesOf(periodId, "HOSE_REEL"),
+    signaturesOf(periodId, "FIRE_CONTROL_CABINET"),
   ]);
 
   const signatureImages = await loadSignatureImages([
@@ -137,6 +141,7 @@ export async function buildPeriodWorkbook(periodId: string, closing?: { closedAt
     ...[...sigVan.values()].map((s) => s.signatureKey),
     ...[...sigDen.values()].map((s) => s.signatureKey),
     ...[...sigCvcc.values()].map((s) => s.signatureKey),
+    ...[...sigTdkcc.values()].map((s) => s.signatureKey),
   ]);
 
   return buildPcccWorkbook(
@@ -150,6 +155,7 @@ export async function buildPeriodWorkbook(periodId: string, closing?: { closedAt
       valves: valves.map((r) => ({ ...r, signature: sigVan.get(r.id) ?? null })),
       emergencyLights: lights.map((r) => ({ ...r, signature: sigDen.get(r.id) ?? null })),
       hoseReels: hoseReels.map(({ cabinet, ...r }) => ({ ...r, cabinetMa: cabinet.ma, signature: sigCvcc.get(r.id) ?? null })),
+      fireControlCabinets: fireControlCabinets.map((r) => ({ ...r, signature: sigTdkcc.get(r.id) ?? null })),
       panels: panels.map((p) => ({
         ...p,
         mucValues: (p.mucValues ?? {}) as Record<string, number | null>,
@@ -162,7 +168,7 @@ export async function buildPeriodWorkbook(periodId: string, closing?: { closedAt
         soBon: bulks.length,
         soBangFm200: panels.length,
         soChuKy:
-          sigBcc.size + sigTcc.size + sigBulk.size + sigNnbc.size + sigVan.size + sigDen.size + sigCvcc.size,
+          sigBcc.size + sigTcc.size + sigBulk.size + sigNnbc.size + sigVan.size + sigDen.size + sigCvcc.size + sigTdkcc.size,
       },
     },
     ALL_SHEETS

@@ -33,7 +33,7 @@ export async function GET() {
         closedAt: true,
         archiveKey: true,
         archivedAt: true,
-        _count: { select: { extinguishers: true, cabinets: true, bulks: true, fm200Panels: true, signatures: true } },
+        _count: { select: { extinguishers: true, cabinets: true, bulks: true, fm200Panels: true, fireControlCabinets: true, signatures: true } },
       },
     });
 

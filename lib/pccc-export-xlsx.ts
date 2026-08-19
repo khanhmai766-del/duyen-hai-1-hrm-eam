@@ -31,7 +31,7 @@ const thin = { style: "thin" as const, color: { argb: ARGB("BFBFBF") } };
 const BORDER = { top: thin, left: thin, right: thin, bottom: thin };
 const HEADER_FILL = "1E3A5F";
 
-export type ExportSheet = "BCC" | "TCC" | "FCD" | "NNBC" | "VAN" | "DEN" | "CVCC";
+export type ExportSheet = "BCC" | "TCC" | "TDKCC" | "FCD" | "NNBC" | "VAN" | "DEN" | "CVCC";
 
 /** Một ô tích trong sheet hai tầng. */
 export type ComponentCell = { groupLabel: string; status: string; checked: boolean; groupOrder: number; statusOrder: number };
@@ -49,6 +49,7 @@ export type ExportInput = {
   valves?: Record<string, unknown>[];
   emergencyLights?: Record<string, unknown>[];
   hoseReels?: (Record<string, unknown> & { components: ComponentCell[] })[];
+  fireControlCabinets?: Record<string, unknown>[];
   panels: {
     title: string;
     binhLabels: string[];
@@ -397,6 +398,7 @@ export async function buildPcccWorkbook(input: ExportInput, sheets: ExportSheet[
   const imageIds = new Map<string, number>();
   if (sheets.includes("BCC")) writeBcc(wb, input, imageIds);
   if (sheets.includes("TCC")) writeTcc(wb, input, imageIds);
+  if (sheets.includes("TDKCC")) writeFireControlCabinets(wb, input, imageIds);
   if (sheets.includes("FCD")) writeFcd(wb, input, imageIds);
   if (sheets.includes("NNBC")) writeAlarmButtons(wb, input, imageIds);
   if (sheets.includes("VAN")) writeValves(wb, input, imageIds);
@@ -453,6 +455,16 @@ function writeFlatSheet(
   ws.getColumn(signCol).width = 18;
   spec.rows.forEach((r, i) => attachSignature(wb, ws, input.signatureImages, imageIds, 2 + i, signCol, r.signature?.signatureKey));
   ws.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: headers.length } };
+}
+
+function writeFireControlCabinets(wb: ExcelJS.Workbook, input: ExportInput, imageIds: Map<string, number>) {
+  writeFlatSheet(wb, input, imageIds, {
+    name: `TỦ ĐK CHỮA CHÁY - ${input.periodLabel}`,
+    headers: ["STT", "Hệ thống", "Mã thiết bị", "Vị trí hiện tại", "Cương vị quản lý", "Tổ máy", "Tình trạng", "Ngày kiểm tra", "Người kiểm tra", "Ghi chú"],
+    fields: ["stt", "heThong", "ma", "viTri", "cuongVi", "machine", "tinhTrang", "ngayKiemTra", "nguoiKiemTra", "ghiChu"],
+    rows: input.fireControlCabinets ?? [],
+    statusCol: 7,
+  });
 }
 
 /**

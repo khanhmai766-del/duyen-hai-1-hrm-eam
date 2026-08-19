@@ -28,7 +28,8 @@ export type PcccTargetType =
   | "ALARM_BUTTON"
   | "VALVE"
   | "EMERGENCY_LIGHT"
-  | "HOSE_REEL";
+  | "HOSE_REEL"
+  | "FIRE_CONTROL_CABINET";
 
 export const PCCC_PERMISSION = {
   view: "pccc-view",
@@ -97,6 +98,7 @@ const INSPECTION_STAMP: Record<PcccTargetType, readonly [string, string]> = {
   VALVE: ["ngayKiemTra", "nguoiKiemTra"],
   EMERGENCY_LIGHT: ["ngayKiemTra", "nguoiKiemTra"],
   HOSE_REEL: ["ngayKiemTra", "nguoiKiemTra"],
+  FIRE_CONTROL_CABINET: ["ngayKiemTra", "nguoiKiemTra"],
 };
 
 /**
@@ -200,7 +202,7 @@ export async function cuongViListOf(periodId: string, view: PcccViewScope = PCCC
   const CV = { distinct: ["cuongViCode" as const], select: { cuongViCode: true, cuongVi: true } };
   // Gộp ĐỦ mọi bảng có cột cương vị. Bỏ sót bảng nào thì cương vị chỉ xuất hiện ở bảng
   // đó sẽ vắng mặt trong ô lọc — người dùng không lọc nổi chính dữ liệu đang nhìn thấy.
-  const [bcc, tcc, fcd, nnbc, van, den, cvcc] = await Promise.all([
+  const [bcc, tcc, fcd, nnbc, van, den, cvcc, tdkcc] = await Promise.all([
     prisma.pcccExtinguisher.findMany({
       where: { periodId },
       distinct: ["cuongViCode"],
@@ -216,9 +218,10 @@ export async function cuongViListOf(periodId: string, view: PcccViewScope = PCCC
     prisma.pcccValve.findMany({ where: { periodId }, ...CV }),
     prisma.pcccEmergencyLight.findMany({ where: { periodId }, ...CV }),
     prisma.pcccHoseReel.findMany({ where: { periodId }, ...CV }),
+    prisma.pcccFireControlCabinet.findMany({ where: { periodId }, ...CV }),
   ]);
   const byCode = new Map<string, string>();
-  for (const r of [...bcc, ...tcc, ...fcd, ...nnbc, ...van, ...den, ...cvcc]) {
+  for (const r of [...bcc, ...tcc, ...fcd, ...nnbc, ...van, ...den, ...cvcc, ...tdkcc]) {
     if (!r.cuongViCode || !r.cuongVi) continue;
     if (!view.all && !view.codes.includes(r.cuongViCode as PositionCode)) continue;
     byCode.set(r.cuongViCode, r.cuongVi);
@@ -420,7 +423,8 @@ export type PcccScopeTable =
   | "EMERGENCY_LIGHT"
   // Cuộn vòi là danh mục CON của tủ chữa cháy nên đi theo ĐÚNG phạm vi của tủ:
   // cương vị được giao trọn bảng tủ thì cũng thao tác được trọn bảng cuộn vòi.
-  | "HOSE_REEL";
+  | "HOSE_REEL"
+  | "FIRE_CONTROL_CABINET";
 
 /** null = không có quyền ghi. Tách riêng để bản ném và bản không ném dùng chung một luật. */
 async function computePcccWriteScope(
@@ -629,7 +633,7 @@ export async function createNextPeriodFrom(sourceLabel: string) {
   const label = `T${String(nextMonth).padStart(2, "0")}.${nextYear}`;
   if (await prisma.pcccPeriod.findUnique({ where: { label } })) throw fail(`Kỳ ${label} đã tồn tại`, 409);
 
-  const [extinguishers, cabinets, bulks, panels, alarmButtons, valves, lights, hoseReels] = await Promise.all([
+  const [extinguishers, cabinets, bulks, panels, alarmButtons, valves, lights, hoseReels, fireControlCabinets] = await Promise.all([
     prisma.pcccExtinguisher.findMany({ where: { periodId: source.id } }),
     prisma.pcccCabinet.findMany({ where: { periodId: source.id }, include: { components: true } }),
     prisma.pcccBulk.findMany({ where: { periodId: source.id } }),
@@ -638,6 +642,7 @@ export async function createNextPeriodFrom(sourceLabel: string) {
     prisma.pcccValve.findMany({ where: { periodId: source.id } }),
     prisma.pcccEmergencyLight.findMany({ where: { periodId: source.id } }),
     prisma.pcccHoseReel.findMany({ where: { periodId: source.id }, include: { components: true } }),
+    prisma.pcccFireControlCabinet.findMany({ where: { periodId: source.id } }),
   ]);
 
   return prisma.$transaction(async (tx) => {
@@ -706,6 +711,15 @@ export async function createNextPeriodFrom(sourceLabel: string) {
 
     await tx.pcccEmergencyLight.createMany({
       data: lights.map(({ id, periodId, createdAt, updatedAt, ngayKiemTra, nguoiKiemTra, ...rest }) => ({
+        ...rest,
+        periodId: period.id,
+        ngayKiemTra: null,
+        nguoiKiemTra: null,
+      })),
+    });
+
+    await tx.pcccFireControlCabinet.createMany({
+      data: fireControlCabinets.map(({ id, periodId, createdAt, updatedAt, ngayKiemTra, nguoiKiemTra, ...rest }) => ({
         ...rest,
         periodId: period.id,
         ngayKiemTra: null,

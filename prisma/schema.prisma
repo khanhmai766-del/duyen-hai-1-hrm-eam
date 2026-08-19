@@ -468,10 +468,10 @@ model MaterialReplacement {
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt
 
-  material  Material                 @relation(fields: [materialId], references: [id], onDelete: Cascade)
-  device    EquipmentNode?           @relation(fields: [deviceSeq], references: [seq], onDelete: SetNull)
-  createdBy User                     @relation("MrCreatedBy", fields: [createdById], references: [id])
-  logs      MaterialReplacementLog[]
+  material       Material                 @relation(fields: [materialId], references: [id], onDelete: Cascade)
+  device         EquipmentNode?           @relation(fields: [deviceSeq], references: [seq], onDelete: SetNull)
+  createdBy      User                     @relation("MrCreatedBy", fields: [createdById], references: [id])
+  logs           MaterialReplacementLog[]
   // Các SYC thay thế đã ra cho chính điểm khai báo này.
   defectRequests DefectMaterialRequest[]
 
@@ -487,7 +487,7 @@ model MaterialReplacement {
 
 // Lịch sử mỗi lần thay thế vật tư tại một điểm thay thế.
 model MaterialReplacementLog {
-  id String @id @default(cuid())
+  id            String   @id @default(cuid())
   // Liên kết MỀM tới điểm thay thế: điểm theo dõi có vòng đời riêng (bị gỡ sau mỗi
   // lần ghi nhận, có thể bị xoá khi khai báo lại) nhưng lịch sử thì phải bất biến.
   // Vì vậy nullable + SetNull, và mọi thứ cần để hiển thị đều nằm ở snapshot dưới.
@@ -531,6 +531,8 @@ model MaterialReplacementLog {
   material    Material?            @relation(fields: [materialId], references: [id], onDelete: SetNull)
   doneBy      User                 @relation("MrDoneBy", fields: [doneById], references: [id])
 
+  // Chạy lại script nhập không được tạo bản sao: khoá duy nhất theo nguồn + vị trí dòng.
+  @@unique([importSource, importKey])
   // Lịch sử "các lần thay tại điểm X, mới nhất trước" đọc thẳng từ index; lọc theo
   // riêng replacementId cũng dùng chính index này (tiền tố cột đầu).
   @@index([replacementId, replacedAt(sort: Desc)])
@@ -541,8 +543,6 @@ model MaterialReplacementLog {
   @@index([deviceSeq, replacedAt(sort: Desc)])
   @@index([materialId])
   @@index([defectId])
-  // Chạy lại script nhập không được tạo bản sao: khoá duy nhất theo nguồn + vị trí dòng.
-  @@unique([importSource, importKey])
   @@index([importSource, replacedAt(sort: Desc)])
 }
 
@@ -656,7 +656,7 @@ model Defect {
   requestNumberReleasedAt    DateTime? // STT hủy trong cửa sổ 6 giờ được trả lại kho sau khi Sheet ACK
   requestNumberReusedAt      DateTime? // STT đã được một phiếu mới nhận lại
   requestNumberReusedById    String? // Snapshot ID phiếu mới nhận lại STT, không FK
-  requestNumberReuseEligible Boolean @default(false) // Chỉ phiếu hủy sau khi triển khai cơ chế mới được tái sử dụng STT
+  requestNumberReuseEligible Boolean   @default(false) // Chỉ phiếu hủy sau khi triển khai cơ chế mới được tái sử dụng STT
   shiftLeaderId              String? // Người giữ cương vị Trưởng ca tại thời điểm lập phiếu (không FK để giữ snapshot)
   shiftLeaderName            String? // Tên Trưởng ca snapshot, giữ nguyên nếu nhân sự đổi cương vị/tài khoản
   completedAt                DateTime? // Ngày đánh dấu "Đã xử lý" — dùng cho mốc ẩn khỏi danh sách sau 2 tuần
@@ -667,11 +667,11 @@ model Defect {
   createdAt                  DateTime  @default(now())
   updatedAt                  DateTime  @updatedAt
 
-  createdBy      User                  @relation("DefectCreatedBy", fields: [createdById], references: [id])
-  node           EquipmentNode?        @relation(fields: [deviceSeq], references: [seq], onDelete: SetNull)
-  relatedDevices DefectRelatedDevice[]
-  pendingHistory DefectHistoryPending?
-  reminderLogs   DefectReminderLog[]
+  createdBy        User                    @relation("DefectCreatedBy", fields: [createdById], references: [id])
+  node             EquipmentNode?          @relation(fields: [deviceSeq], references: [seq], onDelete: SetNull)
+  relatedDevices   DefectRelatedDevice[]
+  pendingHistory   DefectHistoryPending?
+  reminderLogs     DefectReminderLog[]
   materialRequests DefectMaterialRequest[]
 
   @@index([positionCode])
@@ -748,10 +748,10 @@ model DefectReminderLog {
 // Danh sách thiết bị liên quan của một phiếu khiếm khuyết.
 // Thiết bị chính vẫn nằm ở Defect.deviceSeq để giữ nguyên phân quyền/cương vị phụ trách.
 model DefectRelatedDevice {
-  defectId  String
-  deviceSeq String
+  defectId   String
+  deviceSeq  String
   mappedUnit String? // hồ sơ thiết bị liên quan: S1 | S2 | COMMON
-  createdAt DateTime @default(now())
+  createdAt  DateTime @default(now())
 
   defect Defect        @relation(fields: [defectId], references: [id], onDelete: Cascade)
   device EquipmentNode @relation("DefectRelatedEquipment", fields: [deviceSeq], references: [seq], onDelete: Cascade)
@@ -764,34 +764,34 @@ model DefectRelatedDevice {
 // Tách rời vòng đời Defect (không đặt FK) để phiếu khiếm khuyết có thể bị ẩn/xoá sau 2 tuần
 // mà lịch sử vẫn được giữ lại.
 model DefectHistory {
-  id              String    @id @default(cuid())
-  defectId        String? // nguồn (khiếm khuyết) — không ràng buộc quan hệ
+  id                String    @id @default(cuid())
+  defectId          String? // nguồn (khiếm khuyết) — không ràng buộc quan hệ
   // Bản ghi sinh từ SYC thay thế vật tư: hiển thị ở tab "Lịch sử thay thế" của
   // trang Lịch thay thế vật tư, KHÔNG hiện ở Lịch sử sửa chữa.
   // Cờ phẳng chép lúc ghi, cùng lối với Defect.isMaterialRequest — vì defectId cố
   // ý không có quan hệ nên không lọc lồng qua Defect được. Không có cột này thì
   // mỗi lần mở Lịch sử sửa chữa phải nạp toàn bộ id SYC rồi lọc bằng NOT IN.
-  isMaterialRequest Boolean @default(false)
-  unit            String // Tổ máy thực hiện (snapshot theo khiếm khuyết)
-  deviceSeq       String? // Khóa liên kết chuẩn với cây thiết bị (EquipmentNode.seq) — dùng lọc quyền/nhánh bằng SQL
-  mappedDeviceUnit String? // snapshot hồ sơ thiết bị đã ánh xạ: S1 | S2 | COMMON
-  device          String? // Thiết bị (mã thiết bị) — snapshot text, giữ lại khi node bị xóa
-  system          String? // Cương vị (snapshot theo khiếm khuyết)
-  requestType     String? // PCT (loại yêu cầu: Cơ | Điện | Hóa | …) — đồng bộ "Yêu Cầu"
-  workOrderNumber String? // Số phiếu công tác thực hiện
-  performedAt     DateTime // Ngày thực hiện
-  result          String? // Kết quả thực hiện
-  defectContent   String? // Nội dung công tác từ phiếu khiếm khuyết (snapshot)
-  content         String? // Nội dung thực hiện
-  requestNumber   String? // Số yêu cầu (snapshot)
-  reminderCount   Int       @default(0) // Số lần nhắc lại (snapshot)
-  lastRemindedAt  DateTime? // Thời điểm nhắc lại gần nhất (snapshot)
-  reminderRaw     String? // Nội dung nhắc lại nguyên văn tại lúc xác nhận
-  sourceKey       String? // Khóa dòng Google Sheet nguồn
-  sourceSnapshot  Json? // Bản chụp dữ liệu nguồn, không bị đồng bộ ghi đè
-  images          String[] // Hình ảnh (tối đa 3)
-  createdById     String
-  createdAt       DateTime  @default(now())
+  isMaterialRequest Boolean   @default(false)
+  unit              String // Tổ máy thực hiện (snapshot theo khiếm khuyết)
+  deviceSeq         String? // Khóa liên kết chuẩn với cây thiết bị (EquipmentNode.seq) — dùng lọc quyền/nhánh bằng SQL
+  mappedDeviceUnit  String? // snapshot hồ sơ thiết bị đã ánh xạ: S1 | S2 | COMMON
+  device            String? // Thiết bị (mã thiết bị) — snapshot text, giữ lại khi node bị xóa
+  system            String? // Cương vị (snapshot theo khiếm khuyết)
+  requestType       String? // PCT (loại yêu cầu: Cơ | Điện | Hóa | …) — đồng bộ "Yêu Cầu"
+  workOrderNumber   String? // Số phiếu công tác thực hiện
+  performedAt       DateTime // Ngày thực hiện
+  result            String? // Kết quả thực hiện
+  defectContent     String? // Nội dung công tác từ phiếu khiếm khuyết (snapshot)
+  content           String? // Nội dung thực hiện
+  requestNumber     String? // Số yêu cầu (snapshot)
+  reminderCount     Int       @default(0) // Số lần nhắc lại (snapshot)
+  lastRemindedAt    DateTime? // Thời điểm nhắc lại gần nhất (snapshot)
+  reminderRaw       String? // Nội dung nhắc lại nguyên văn tại lúc xác nhận
+  sourceKey         String? // Khóa dòng Google Sheet nguồn
+  sourceSnapshot    Json? // Bản chụp dữ liệu nguồn, không bị đồng bộ ghi đè
+  images            String[] // Hình ảnh (tối đa 3)
+  createdById       String
+  createdAt         DateTime  @default(now())
 
   createdBy      User                         @relation("DefectHistoryCreatedBy", fields: [createdById], references: [id])
   node           EquipmentNode?               @relation(fields: [deviceSeq], references: [seq], onDelete: SetNull)
@@ -918,10 +918,10 @@ model DefectSyncOutbox {
 
 // Snapshot danh sách thiết bị liên quan khi phiếu được chuyển sang lịch sử.
 model DefectHistoryRelatedDevice {
-  historyId String
-  deviceSeq String
+  historyId  String
+  deviceSeq  String
   mappedUnit String? // snapshot hồ sơ thiết bị liên quan: S1 | S2 | COMMON
-  createdAt DateTime @default(now())
+  createdAt  DateTime @default(now())
 
   history DefectHistory @relation(fields: [historyId], references: [id], onDelete: Cascade)
   device  EquipmentNode @relation("DefectHistoryRelatedEquipment", fields: [deviceSeq], references: [seq], onDelete: Cascade)
@@ -1331,7 +1331,6 @@ model MaterialStockLot {
   @@index([ticketId])
 }
 
-
 model MaterialLotUsage {
   id        String   @id @default(cuid())
   lotId     String
@@ -1465,16 +1464,16 @@ model RecoveryDocSequence {
 }
 
 model MaterialTicketItem {
-  id                  String  @id @default(cuid())
-  ticketId            String
-  materialId          String
-  erpCode             String?
-  erpName             String? // tên vật tư ERP đóng băng khi chọn mã, dùng cho biên bản
-  deviceSeq           String? // thiết bị theo EquipmentNode.seq; phiếu đề xuất mới có thể nhập tay tên thiết bị
+  id                   String   @id @default(cuid())
+  ticketId             String
+  materialId           String
+  erpCode              String?
+  erpName              String? // tên vật tư ERP đóng băng khi chọn mã, dùng cho biên bản
+  deviceSeq            String? // thiết bị theo EquipmentNode.seq; phiếu đề xuất mới có thể nhập tay tên thiết bị
   replacementPointKeys String[] @default([]) // các điểm/thiết bị được chọn; giữ deviceSeq đầu tiên để tương thích dữ liệu cũ
-  deviceNameManual    String?
-  quantity            Int     @default(1)
-  replacementQuantity Int? // số lượng thay thế do cương vị phân giao nhập ở luồng Ứng
+  deviceNameManual     String?
+  quantity             Int      @default(1)
+  replacementQuantity  Int? // số lượng thay thế do cương vị phân giao nhập ở luồng Ứng
 
   ticket   MaterialTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
   material Material       @relation(fields: [materialId], references: [id])
@@ -1611,32 +1610,33 @@ model OilAnalysisFailure {
 // Một kỳ kiểm tra = 1 tháng. Sang tháng mới, bản ghi được COPY từ kỳ trước rồi
 // xoá ngày/người kiểm tra + chữ ký (logic createNextMonthFrom của bản demo).
 model PcccPeriod {
-  id       String @id @default(cuid())
-  label    String @unique // "T08.2026" — đúng hậu tố tên sheet Excel
+  id       String  @id @default(cuid())
+  label    String  @unique // "T08.2026" — đúng hậu tố tên sheet Excel
   year     Int
   monthNo  Int // 1..12
   isClosed Boolean @default(false) // đã chốt: chỉ đọc, không cho sửa/ký thêm
 
-  closedAt    DateTime?
-  closedById  String? // id User (không FK — đã có audit log); null = hệ thống tự chốt
+  closedAt     DateTime?
+  closedById   String? // id User (không FK — đã có audit log); null = hệ thống tự chốt
   // Bản Excel đã đẩy lên S3 lúc chốt kỳ. DB chỉ giữ 6 kỳ gần nhất nên FILE TRÊN S3 mới
   // là bản lưu trữ dài hạn — vì vậy không được chốt kỳ khi chưa upload xong (xem
   // lib/pccc-rollover.ts).
   archiveKey   String? // vd "pccc/archive/2026/PCCC-T08.2026.xlsx"
   archivedAt   DateTime?
   archiveBytes Int?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
-  extinguishers   PcccExtinguisher[]
-  cabinets        PcccCabinet[]
-  bulks           PcccBulk[]
-  fm200Panels     PcccFm200Panel[]
-  alarmButtons    PcccAlarmButton[]
-  valves          PcccValve[]
-  emergencyLights PcccEmergencyLight[]
-  hoseReels       PcccHoseReel[]
-  signatures      PcccSignature[]
+  extinguishers       PcccExtinguisher[]
+  cabinets            PcccCabinet[]
+  bulks               PcccBulk[]
+  fm200Panels         PcccFm200Panel[]
+  alarmButtons        PcccAlarmButton[]
+  valves              PcccValve[]
+  emergencyLights     PcccEmergencyLight[]
+  hoseReels           PcccHoseReel[]
+  fireControlCabinets PcccFireControlCabinet[]
+  signatures          PcccSignature[]
 
   @@unique([year, monthNo])
   @@index([isClosed])
@@ -1660,7 +1660,7 @@ model PcccExtinguisher {
   // khóa dùng cho phân quyền; đổi cách viết nhãn không làm sai quyền. lib/pccc-position.ts
   cuongVi             String? // cột 5  — nhãn hiển thị đã chuẩn hoá
   cuongViCode         String? // PositionCode, vd BOILER_DEPUTY
-  machine             String  @default("COMMON") // S1 | S2 | COMMON (suy từ hậu tố cương vị)
+  machine             String    @default("COMMON") // S1 | S2 | COMMON (suy từ hậu tố cương vị)
   // Cấp giám sát (KHÔNG phải tên người): TK Lò máy / Trưởng kíp điện / Trưởng ca
   nguoiGiamSat        String? // cột 6  — nhãn hiển thị đã chuẩn hoá
   nguoiGiamSatCode    String? // PositionCode của cấp giám sát
@@ -1706,15 +1706,15 @@ model PcccCabinet {
   periodId String
   period   PcccPeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
 
-  stt     Float? // cột 1
-  ma      String // cột 2 — "Mã thiết bị"
-  ten     String? // cột 3 — Tên / Loại tủ (chứa INDOOR/OUTDOOR)
-  viTri   String? // cột 4
-  cuongVi String? // cột 5 — nhãn chuẩn hoá, xem ghi chú ở PcccExtinguisher.cuongVi
+  stt         Float? // cột 1
+  ma          String // cột 2 — "Mã thiết bị"
+  ten         String? // cột 3 — Tên / Loại tủ (chứa INDOOR/OUTDOOR)
+  viTri       String? // cột 4
+  cuongVi     String? // cột 5 — nhãn chuẩn hoá, xem ghi chú ở PcccExtinguisher.cuongVi
   cuongViCode String?
-  machine String  @default("COMMON") // S1 | S2 | COMMON
-  sl      Float? // cột 6
-  dvt     String? // cột 7
+  machine     String  @default("COMMON") // S1 | S2 | COMMON
+  sl          Float? // cột 6
+  dvt         String? // cột 7
 
   soYcsc       String? // cột kề sau khối linh kiện — "Số YCSC"
   ngayKiemTra  DateTime?
@@ -1774,7 +1774,7 @@ model PcccBulk {
   ten              String // "Bồn Foam" | "Bồn CO2" | "Mức dầu DO bơm chữa cháy Diesel"
   cuongVi          String? // nhãn chuẩn hoá, xem ghi chú ở PcccExtinguisher.cuongVi
   cuongViCode      String?
-  machine          String  @default("COMMON") // S1 | S2 | COMMON
+  machine          String    @default("COMMON") // S1 | S2 | COMMON
   viTri            String?
   dvt              String?
   khoiLuongThietKe Float?
@@ -1805,12 +1805,12 @@ model PcccFm200Panel {
   periodId String
   period   PcccPeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
 
-  panelKey   String // "KICH_TU" | "DKTT"
-  title      String // "THEO DÕI THÔNG SỐ HỆ THỐNG FM200 - PHÒNG KÍCH TỪ"
-  binhLabels String[] // ["1","2","3","4"] hoặc ["1A",…,"8B"] — giữ đúng thứ tự cột
+  panelKey    String // "KICH_TU" | "DKTT"
+  title       String // "THEO DÕI THÔNG SỐ HỆ THỐNG FM200 - PHÒNG KÍCH TỪ"
+  binhLabels  String[] // ["1","2","3","4"] hoặc ["1A",…,"8B"] — giữ đúng thứ tự cột
   cuongVi     String? // nhãn chuẩn hoá, xem ghi chú ở PcccExtinguisher.cuongVi
   cuongViCode String?
-  machine     String  @default("COMMON") // S1 | S2 | COMMON
+  machine     String   @default("COMMON") // S1 | S2 | COMMON
 
   mucMin    Float?
   mucMax    Float?
@@ -1837,6 +1837,36 @@ model PcccFm200Panel {
 // Chữ ký xác nhận. Quy tắc gốc: SỬA BẤT KỲ TRƯỜNG NÀO của dòng/bảng thì chữ ký
 // của dòng/bảng đó bị XOÁ, buộc ký lại. Vì vậy mỗi mục tiêu chỉ có TỐI ĐA 1 chữ
 // ký đang hiệu lực; lịch sử ký/xoá ký nằm ở AuditLog, không nhân bản ở đây.
+// TỦ ĐIỀU KHIỂN CHỮA CHÁY FM200/CO2 — mỗi bản ghi là một tủ ngoài hiện trường.
+// Không dùng chung PcccFm200Panel: model kia là bảng thông số nhiều bình nằm ngang.
+model PcccFireControlCabinet {
+  id       String     @id @default(cuid())
+  periodId String
+  period   PcccPeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
+
+  stt          Float?
+  heThong      String
+  ma           String
+  viTri        String?
+  cuongVi      String?
+  cuongViCode  String?
+  machine      String    @default("COMMON")
+  tinhTrang    String?
+  ghiChu       String?
+  ngayKiemTra  DateTime?
+  nguoiKiemTra String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([periodId, ma])
+  @@index([periodId, cuongViCode])
+  @@index([periodId, machine])
+  @@index([periodId, tinhTrang])
+  @@index([periodId, heThong])
+  @@map("pccc_fire_control_cabinets")
+}
+
 model PcccSignature {
   id       String     @id @default(cuid())
   periodId String

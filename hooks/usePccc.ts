@@ -11,7 +11,8 @@ export type PcccTargetType =
   | "ALARM_BUTTON"
   | "VALVE"
   | "EMERGENCY_LIGHT"
-  | "HOSE_REEL";
+  | "HOSE_REEL"
+  | "FIRE_CONTROL_CABINET";
 
 export interface PcccSignature {
   targetId?: string;
@@ -32,7 +33,7 @@ export interface PcccPeriod {
   /** Bản Excel đã đẩy lên S3 lúc chốt kỳ — null nghĩa là chưa lưu trữ. */
   archiveKey?: string | null;
   archivedAt?: string | null;
-  _count?: { extinguishers: number; cabinets: number; bulks: number; fm200Panels: number; signatures: number };
+  _count?: { extinguishers: number; cabinets: number; bulks: number; fm200Panels: number; fireControlCabinets: number; signatures: number };
 }
 
 /** Mốc thời gian do SERVER tính theo giờ VN (máy người dùng có thể sai đồng hồ/múi giờ). */
@@ -162,6 +163,23 @@ export interface Fm200Panel {
   apGhiChu: string | null;
   ngayKiemTra: string | null;
   nguoiKiemTra: string | null;
+  signature: PcccSignature | null;
+}
+
+export interface FireControlCabinetRow {
+  id: string;
+  stt: number | null;
+  heThong: string;
+  ma: string;
+  viTri: string | null;
+  cuongVi: string | null;
+  cuongViCode: string | null;
+  machine: string;
+  tinhTrang: string | null;
+  ghiChu: string | null;
+  ngayKiemTra: string | null;
+  nguoiKiemTra: string | null;
+  updatedAt: string;
   signature: PcccSignature | null;
 }
 
@@ -334,6 +352,7 @@ export interface PcccListMeta {
   cuongViList: PositionOption[];
   giamSatList?: PositionOption[];
   groups?: { label: string; statuses: string[] }[];
+  heThongList?: string[];
   writeScope?: PcccWriteScopeMeta;
   viewScope?: PcccViewScopeMeta;
 }
@@ -348,6 +367,7 @@ export interface PcccFilters {
   tinhTrang?: string;
   chungLoai?: string;
   loaiTu?: string;
+  heThong?: string;
   /** Ô lọc tình trạng RIÊNG của bảng cuộn vòi (vốn từ khác bảng tủ). */
   tinhTrangCvcc?: string;
   quaHan?: boolean;
@@ -422,6 +442,13 @@ export function usePcccBulks(filters: PcccFilters) {
   });
 }
 
+export function usePcccFireControlCabinets(filters: PcccFilters) {
+  return useQuery({
+    queryKey: ["pccc-fire-control-cabinets", filters],
+    queryFn: () => apiGet<FireControlCabinetRow[]>(`/api/pccc/fire-control-cabinets${qs(filters)}`),
+  });
+}
+
 /** Mọi mutation đều làm mới cả danh sách và tổng quan — số liệu dashboard là dẫn xuất. */
 function useInvalidatePccc() {
   const qc = useQueryClient();
@@ -432,6 +459,7 @@ function useInvalidatePccc() {
       "pccc-summary", "pccc-extinguishers", "pccc-cabinets", "pccc-bulks", "pccc-periods", "pccc-book-status",
       "pccc-alarm-buttons", "pccc-valves", "pccc-emergency-lights", "pccc-hose-reels",
       "pccc-hose-reel-cabinet-options",
+      "pccc-fire-control-cabinets",
     ];
     for (const key of keys) {
       qc.invalidateQueries({ queryKey: [key] });
@@ -448,6 +476,7 @@ const PATCH_URL: Record<PcccTargetType, string> = {
   VALVE: "/api/pccc/valves",
   EMERGENCY_LIGHT: "/api/pccc/emergency-lights",
   HOSE_REEL: "/api/pccc/hose-reels",
+  FIRE_CONTROL_CABINET: "/api/pccc/fire-control-cabinets",
 };
 
 export function usePcccUpdate(targetType: PcccTargetType) {
@@ -535,7 +564,8 @@ export type PcccBulkSignTarget =
   | "ALARM_BUTTON"
   | "VALVE"
   | "EMERGENCY_LIGHT"
-  | "HOSE_REEL";
+  | "HOSE_REEL"
+  | "FIRE_CONTROL_CABINET";
 
 export interface PcccBulkSignInput {
   targetType: PcccBulkSignTarget;

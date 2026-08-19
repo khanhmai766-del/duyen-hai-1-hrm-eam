@@ -18,7 +18,7 @@ import { loadSignatureImages } from "@/lib/pccc-archive";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const ALL_SHEETS: ExportSheet[] = ["BCC", "TCC", "FCD", "NNBC", "VAN", "DEN", "CVCC"];
+const ALL_SHEETS: ExportSheet[] = ["BCC", "TCC", "TDKCC", "FCD", "NNBC", "VAN", "DEN", "CVCC"];
 
 // GET /api/pccc/export?period=T08.2026&sheets=BCC,TCC,FCD&cuongVi=TBTH
 export async function GET(req: NextRequest) {
@@ -49,6 +49,7 @@ export async function GET(req: NextRequest) {
       valves,
       lights,
       hoseReels,
+      fireControlCabinets,
       sigBcc,
       sigTcc,
       sigBulk,
@@ -56,6 +57,7 @@ export async function GET(req: NextRequest) {
       sigVan,
       sigDen,
       sigCvcc,
+      sigTdkcc,
     ] = await Promise.all([
       prisma.pcccExtinguisher.findMany({
         where: { periodId: period.id, ...scopeBcc },
@@ -91,6 +93,10 @@ export async function GET(req: NextRequest) {
           cabinet: { select: { ma: true } },
         },
       }),
+      prisma.pcccFireControlCabinet.findMany({
+        where: { periodId: period.id, ...scopeWhere(sp.get("cuongVi"), sp.get("machine"), viewScope) },
+        orderBy: [{ stt: "asc" }, { ma: "asc" }],
+      }),
       signaturesOf(period.id, "EXTINGUISHER"),
       signaturesOf(period.id, "CABINET"),
       signaturesOf(period.id, "BULK"),
@@ -98,6 +104,7 @@ export async function GET(req: NextRequest) {
       signaturesOf(period.id, "VALVE"),
       signaturesOf(period.id, "EMERGENCY_LIGHT"),
       signaturesOf(period.id, "HOSE_REEL"),
+      signaturesOf(period.id, "FIRE_CONTROL_CABINET"),
     ]);
 
     // Ảnh chữ ký số của người ký, tải một lần theo key duy nhất (xem lib/pccc-archive.ts).
@@ -109,6 +116,7 @@ export async function GET(req: NextRequest) {
       ...[...sigVan.values()].map((s) => s.signatureKey),
       ...[...sigDen.values()].map((s) => s.signatureKey),
       ...[...sigCvcc.values()].map((s) => s.signatureKey),
+      ...[...sigTdkcc.values()].map((s) => s.signatureKey),
     ]);
 
     const buffer = await buildPcccWorkbook(
@@ -123,6 +131,7 @@ export async function GET(req: NextRequest) {
         emergencyLights: lights.map((r) => ({ ...r, signature: sigDen.get(r.id) ?? null })),
         // Mã tủ cha làm phẳng vào một cột để sheet đọc thẳng, khỏi lồng object.
         hoseReels: hoseReels.map(({ cabinet, ...r }) => ({ ...r, cabinetMa: cabinet.ma, signature: sigCvcc.get(r.id) ?? null })),
+        fireControlCabinets: fireControlCabinets.map((r) => ({ ...r, signature: sigTdkcc.get(r.id) ?? null })),
         panels: panels.map((p) => ({
           ...p,
           mucValues: (p.mucValues ?? {}) as Record<string, number | null>,

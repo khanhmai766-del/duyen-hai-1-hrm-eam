@@ -19,6 +19,7 @@ export const dynamic = "force-dynamic";
 const TARGETS: PcccTargetType[] = [
   "EXTINGUISHER", "CABINET", "BULK", "FM200_PANEL",
   "ALARM_BUTTON", "VALVE", "EMERGENCY_LIGHT", "HOSE_REEL",
+  "FIRE_CONTROL_CABINET",
 ];
 
 /** Trả về (kỳ, cương vị của mục tiêu, nhãn để ghi audit). Cương vị dùng để chặn ký ngoài phạm vi. */
@@ -51,6 +52,10 @@ async function locateTarget(targetType: PcccTargetType, targetId: string) {
     const r = await prisma.pcccHoseReel.findUnique({ where: { id: targetId }, include: { period: true } });
     return r && { period: r.period, label: r.ma, cuongViCode: r.cuongViCode };
   }
+  if (targetType === "FIRE_CONTROL_CABINET") {
+    const r = await prisma.pcccFireControlCabinet.findUnique({ where: { id: targetId }, include: { period: true } });
+    return r && { period: r.period, label: r.ma, cuongViCode: r.cuongViCode };
+  }
   const r = await prisma.pcccFm200Panel.findUnique({ where: { id: targetId }, include: { period: true } });
   return r && { period: r.period, label: r.title, cuongViCode: r.cuongViCode };
 }
@@ -73,6 +78,7 @@ const INSPECTION_STAMP_UPDATERS: Record<
   VALVE: (id, nguoiKiemTra, ngayKiemTra) => prisma.pcccValve.update({ where: { id }, data: { nguoiKiemTra, ngayKiemTra } }),
   EMERGENCY_LIGHT: (id, nguoiKiemTra, ngayKiemTra) => prisma.pcccEmergencyLight.update({ where: { id }, data: { nguoiKiemTra, ngayKiemTra } }),
   HOSE_REEL: (id, nguoiKiemTra, ngayKiemTra) => prisma.pcccHoseReel.update({ where: { id }, data: { nguoiKiemTra, ngayKiemTra } }),
+  FIRE_CONTROL_CABINET: (id, nguoiKiemTra, ngayKiemTra) => prisma.pcccFireControlCabinet.update({ where: { id }, data: { nguoiKiemTra, ngayKiemTra } }),
 };
 
 function parseBody(body: unknown) {

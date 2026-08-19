@@ -75,6 +75,7 @@ import {
   usePcccValves,
   usePcccEmergencyLights,
   usePcccHoseReels,
+  usePcccFireControlCabinets,
   usePcccCreateHoseReel,
   usePcccDeleteHoseReel,
   type AlarmButtonRow,
@@ -96,6 +97,7 @@ import { PcccAlarmButtons } from "@/components/pccc/PcccAlarmButtons";
 import { PcccValves } from "@/components/pccc/PcccValves";
 import { PcccEmergencyLights } from "@/components/pccc/PcccEmergencyLights";
 import { PcccHoseReels } from "@/components/pccc/PcccHoseReels";
+import { PcccFireControlCabinets } from "@/components/pccc/PcccFireControlCabinets";
 import { MACHINE_OPTIONS } from "@/components/pccc/pccc-shared";
 import { type SortState } from "@/components/pccc/pccc-table-card";
 import {
@@ -116,7 +118,7 @@ import {
 // tab) vì hình dạng dữ liệu giống hệt nhau — tách đôi chỉ làm thanh tab tràn trên
 // màn hình hẹp. Cuộn vòi không có tab riêng: nó là bảng CON nằm dưới tab Tủ chữa cháy,
 // đúng như bản demo.
-type TabKey = "OVERVIEW" | "BCC" | "TCC" | "FCD" | "NNBC" | "VAN" | "DEN";
+type TabKey = "OVERVIEW" | "BCC" | "TCC" | "TDKCC" | "FCD" | "NNBC" | "VAN" | "DEN";
 
 /**
  * Kỳ của tháng CHƯA TỚI, so theo mốc ngày của server. So bằng chuỗi `<năm><tháng>` cho
@@ -132,6 +134,7 @@ const TABS: { key: TabKey; label: string; icon: typeof FlameKindling }[] = [
   { key: "OVERVIEW", label: "Tổng quan", icon: ShieldCheck },
   { key: "BCC", label: "Bình chữa cháy", icon: FlameKindling },
   { key: "TCC", label: "Tủ chữa cháy", icon: Warehouse },
+  { key: "TDKCC", label: "Tủ điều khiển chữa cháy", icon: ShieldCheck },
   { key: "FCD", label: "Foam · CO2 · Diesel · FM200", icon: FileSpreadsheet },
   { key: "NNBC", label: "Nút nhấn báo cháy", icon: BellRing },
   { key: "VAN", label: "Van chữa cháy", icon: Gauge },
@@ -150,6 +153,7 @@ const SIGN_TARGET_LABEL: Record<PcccBulkSignTarget, string> = {
   VALVE: "van chữa cháy",
   EMERGENCY_LIGHT: "đèn sự cố",
   HOSE_REEL: "cuộn vòi chữa cháy",
+  FIRE_CONTROL_CABINET: "tủ điều khiển chữa cháy",
 };
 
 /**
@@ -273,6 +277,7 @@ export default function PcccPage() {
   const [chungLoai, setChungLoai] = useState("ALL");
   const [loaiTu, setLoaiTu] = useState("ALL");
   const [loaiVan, setLoaiVan] = useState("ALL");
+  const [heThongTuDk, setHeThongTuDk] = useState("ALL");
   // Bảng cuộn vòi nằm cùng tab với bảng tủ nhưng vốn từ tình trạng khác (hai mức so
   // với ba mức) nên phải có ô lọc RIÊNG — dùng chung thì lọc bảng này là bảng kia
   // trắng trơn.
@@ -305,9 +310,9 @@ export default function PcccPage() {
   const [editing, setEditing] = useState(false);
   // CVCC có ô nháp RIÊNG dù không có tab riêng: tab Tủ chữa cháy hiện hai bảng, gộp
   // chung một ô nháp thì lưu sẽ gửi dòng cuộn vòi sang endpoint của tủ.
-  type DraftKey = "BCC" | "TCC" | "FCD" | "NNBC" | "VAN" | "DEN" | "CVCC";
+  type DraftKey = "BCC" | "TCC" | "TDKCC" | "FCD" | "NNBC" | "VAN" | "DEN" | "CVCC";
   const [drafts, setDrafts] = useState<Record<DraftKey, Draft>>({
-    BCC: {}, TCC: {}, FCD: {}, NNBC: {}, VAN: {}, DEN: {}, CVCC: {},
+    BCC: {}, TCC: {}, TDKCC: {}, FCD: {}, NNBC: {}, VAN: {}, DEN: {}, CVCC: {},
   });
   const [baselines, setBaselines] = useState<{ BCC: Record<string, string>; TCC: Record<string, string> }>({
     BCC: {},
@@ -317,7 +322,7 @@ export default function PcccPage() {
   const [lightLoai, setLightLoai] = useState<"EXIT" | "CSSC">("EXIT");
   /** Tab đang có thể bật chế độ sửa. Chỉ tab Tổng quan là không sửa được. */
   const editableTab =
-    tab === "BCC" || tab === "TCC" || tab === "FCD" || tab === "NNBC" || tab === "VAN" || tab === "DEN" ? tab : null;
+    tab === "BCC" || tab === "TCC" || tab === "TDKCC" || tab === "FCD" || tab === "NNBC" || tab === "VAN" || tab === "DEN" ? tab : null;
   const draft = editableTab ? drafts[editableTab] : {};
   // Tab Tủ chữa cháy đếm cả sửa đổi của bảng con cuộn vòi — nếu không, bấm Lưu khi
   // chỉ sửa cuộn vòi sẽ bị coi là "không có gì thay đổi".
@@ -366,6 +371,9 @@ export default function PcccPage() {
   const summaryQuery = usePcccSummary({ ...baseFilters });
   const bccQuery = usePcccExtinguishers(tab === "BCC" ? listFilters : { ...baseFilters, page: 0 });
   const tccQuery = usePcccCabinets(tab === "TCC" ? listFilters : { ...baseFilters, page: 0 });
+  const tdkccQuery = usePcccFireControlCabinets(
+    tab === "TDKCC" ? { ...listFilters, heThong: heThongTuDk } : { ...baseFilters, page: 0 }
+  );
   const fcdQuery = usePcccBulks(tab === "FCD" ? baseFilters : { ...baseFilters, page: 0 });
   const nnbcQuery = usePcccAlarmButtons(tab === "NNBC" ? listFilters : { ...baseFilters, page: 0 });
   const vanQuery = usePcccValves(
@@ -382,7 +390,7 @@ export default function PcccPage() {
   );
   const cvccCabinetSearchPending = cvccAddOpen && cvccCabinetSearch.trim() !== cvccCabinetSearchDebounced;
   const cvccQuery = usePcccHoseReels(
-    tab === "TCC" ? { ...listFilters, tinhTrangCvcc, pageSize: 200 } : { ...baseFilters, page: 0 }
+    tab === "TCC" ? { ...listFilters, tinhTrangCvcc } : { ...baseFilters, page: 0 }
   );
 
   /**
@@ -400,6 +408,8 @@ export default function PcccPage() {
       ? bccQuery.data?.meta?.viewScope
       : tab === "TCC"
         ? tccQuery.data?.meta?.viewScope
+        : tab === "TDKCC"
+          ? tdkccQuery.data?.meta?.viewScope
         : tab === "FCD"
           ? fcdQuery.data?.meta?.viewScope
           : tab === "NNBC"
@@ -427,6 +437,7 @@ export default function PcccPage() {
   const updateValve = usePcccUpdate("VALVE");
   const updateLight = usePcccUpdate("EMERGENCY_LIGHT");
   const updateHoseReel = usePcccUpdate("HOSE_REEL");
+  const updateFireControlCabinet = usePcccUpdate("FIRE_CONTROL_CABINET");
   const createHoseReel = usePcccCreateHoseReel();
   const deleteHoseReel = usePcccDeleteHoseReel();
 
@@ -462,7 +473,7 @@ export default function PcccPage() {
     }
     // Bốn bảng đợt 2 lưu TỪNG DÒNG nên không cần mốc updatedAt (mốc đó chỉ dùng cho
     // route lưu-một-lượt, để phát hiện người khác vừa sửa cùng dòng).
-    if (editableTab === "NNBC" || editableTab === "VAN" || editableTab === "DEN") {
+    if (editableTab === "TDKCC" || editableTab === "NNBC" || editableTab === "VAN" || editableTab === "DEN") {
       setDrafts((prev) => ({ ...prev, [editableTab]: {} }));
       setEditing(true);
       return;
@@ -667,6 +678,7 @@ export default function PcccPage() {
 
   /** Ba bảng đợt 2 có tab riêng — cùng một luồng lưu, chỉ khác route và nhãn. */
   const ROW_BY_ROW_TABS = {
+    TDKCC: { label: "tủ điều khiển chữa cháy", table: "Tủ điều khiển chữa cháy", target: "FIRE_CONTROL_CABINET" },
     NNBC: { label: "nút nhấn báo cháy", table: "Nút nhấn báo cháy", target: "ALARM_BUTTON" },
     VAN: { label: "van chữa cháy", table: "Van chữa cháy", target: "VALVE" },
     DEN: { label: "đèn sự cố", table: "Đèn sự cố", target: "EMERGENCY_LIGHT" },
@@ -684,10 +696,12 @@ export default function PcccPage() {
       return;
     }
 
-    if (editableTab === "NNBC" || editableTab === "VAN" || editableTab === "DEN") {
+    if (editableTab === "TDKCC" || editableTab === "NNBC" || editableTab === "VAN" || editableTab === "DEN") {
       const meta = ROW_BY_ROW_TABS[editableTab];
       const mutate =
-        editableTab === "NNBC"
+        editableTab === "TDKCC"
+          ? updateFireControlCabinet.mutateAsync
+          : editableTab === "NNBC"
           ? updateAlarmButton.mutateAsync
           : editableTab === "VAN"
             ? updateValve.mutateAsync
@@ -810,7 +824,8 @@ export default function PcccPage() {
   }
 
   const saving =
-    bulkSave.isPending || bulkSaveCabinets.isPending || updateBulk.isPending || updatePanel.isPending || updateHoseReel.isPending;
+    bulkSave.isPending || bulkSaveCabinets.isPending || updateBulk.isPending || updatePanel.isPending ||
+    updateHoseReel.isPending || updateFireControlCabinet.isPending;
 
   // ---- Ký tên hàng loạt + hộp thoại kết quả
   const [signOpen, setSignOpen] = useState(false);
@@ -836,6 +851,8 @@ export default function PcccPage() {
       ? "EXTINGUISHER"
       : tab === "TCC"
         ? "CABINET"
+        : tab === "TDKCC"
+          ? "FIRE_CONTROL_CABINET"
         : tab === "NNBC"
           ? "ALARM_BUTTON"
           : tab === "VAN"
@@ -981,6 +998,8 @@ export default function PcccPage() {
     tab === "BCC" && giamSat !== "ALL",
     tab === "BCC" && quaHan,
     tab === "TCC" && loaiTu !== "ALL",
+    tab === "TDKCC" && heThongTuDk !== "ALL",
+    tab === "TDKCC" && tinhTrang !== "ALL",
     (tab === "NNBC" || tab === "VAN" || tab === "DEN") && tinhTrang !== "ALL",
     (tab === "NNBC" || tab === "VAN" || tab === "DEN") && giamSat !== "ALL",
     tab === "VAN" && loaiVan !== "ALL",
@@ -1015,6 +1034,7 @@ export default function PcccPage() {
     setChungLoai("ALL");
     setLoaiTu("ALL");
     setLoaiVan("ALL");
+    setHeThongTuDk("ALL");
     setTinhTrangCvcc("ALL");
     setGiamSat("ALL");
     setQ("");
@@ -1119,6 +1139,7 @@ export default function PcccPage() {
     tinhTrang !== "ALL" ||
     chungLoai !== "ALL" ||
     loaiTu !== "ALL" ||
+    heThongTuDk !== "ALL" ||
     giamSat !== "ALL" ||
     quaHan ||
     q.trim().length > 0;
@@ -1133,6 +1154,8 @@ export default function PcccPage() {
       ? bccQuery.data?.meta?.cuongViList
       : tab === "TCC"
         ? tccQuery.data?.meta?.cuongViList
+        : tab === "TDKCC"
+          ? tdkccQuery.data?.meta?.cuongViList
         : tab === "NNBC"
           ? nnbcQuery.data?.meta?.cuongViList
           : tab === "VAN"
@@ -1168,6 +1191,8 @@ export default function PcccPage() {
       ? bccQuery.data?.meta?.writeScope
       : tab === "TCC"
         ? tccQuery.data?.meta?.writeScope
+        : tab === "TDKCC"
+          ? tdkccQuery.data?.meta?.writeScope
         : tab === "FCD"
           ? fcdQuery.data?.meta?.writeScope
           : tab === "NNBC"
@@ -1192,12 +1217,13 @@ export default function PcccPage() {
       const SHEETS_BY_TAB: Partial<Record<TabKey, string>> = {
         BCC: "BCC",
         TCC: "TCC,CVCC",
+        TDKCC: "TDKCC",
         FCD: "FCD",
         NNBC: "NNBC",
         VAN: "VAN",
         DEN: "DEN",
       };
-      const sheets = SHEETS_BY_TAB[tab] ?? "BCC,TCC,FCD,NNBC,VAN,DEN,CVCC";
+      const sheets = SHEETS_BY_TAB[tab] ?? "BCC,TCC,TDKCC,FCD,NNBC,VAN,DEN,CVCC";
       const { blob, filename } = await apiDownload(
         `/api/pccc/export?period=${encodeURIComponent(effectiveLabel)}&sheets=${sheets}` +
           `&cuongVi=${encodeURIComponent(cuongVi)}&machine=${encodeURIComponent(machine)}`
@@ -1602,7 +1628,7 @@ export default function PcccPage() {
                   <div>
                     <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-sky-700">Lọc nội dung bảng</p>
                     <p className="mt-0.5 text-sm font-bold text-slate-900">
-                      {tab === "OVERVIEW" ? "Tổng quan" : tab === "BCC" ? "Bình chữa cháy" : "Tủ chữa cháy"}
+                      {activeTab.label}
                     </p>
                   </div>
                   {activeFilterCount > 0 && (
@@ -1739,6 +1765,35 @@ export default function PcccPage() {
                     </>
                   )}
 
+                  {tab === "TDKCC" && (
+                    <>
+                      <div className="grid gap-1.5">
+                        <Label className="text-xs font-semibold text-slate-600">Hệ thống</Label>
+                        <SelectBox
+                          value={heThongTuDk}
+                          onChange={(value) => {
+                            setHeThongTuDk(value);
+                            setPage(1);
+                          }}
+                          options={tdkccQuery.data?.meta?.heThongList ?? []}
+                          allLabel="Tất cả hệ thống"
+                        />
+                      </div>
+                      <div className="grid gap-1.5">
+                        <Label className="text-xs font-semibold text-slate-600">Tình trạng</Label>
+                        <SelectBox
+                          value={tinhTrang}
+                          onChange={(value) => {
+                            setTinhTrang(value);
+                            setPage(1);
+                          }}
+                          options={TINH_TRANG_FILTERS}
+                          allLabel="Tất cả tình trạng"
+                        />
+                      </div>
+                    </>
+                  )}
+
                   {tab === "TCC" && (
                     <>
                       <div className="grid gap-1.5">
@@ -1821,11 +1876,7 @@ export default function PcccPage() {
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-[260px]">
                   <DropdownMenuLabel className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
-                    {editableTab === "BCC"
-                      ? "Bình chữa cháy"
-                      : editableTab === "TCC"
-                        ? "Tủ chữa cháy & cuộn vòi"
-                        : "Foam · CO2 · Diesel · FM200"} · {period.label}
+                    {editableTab === "TCC" ? "Tủ chữa cháy & cuộn vòi" : activeTab.label} · {period.label}
                   </DropdownMenuLabel>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onSelect={beginEdit} className="gap-2">
@@ -2287,12 +2338,15 @@ export default function PcccPage() {
               onSort={toggleSort}
               page={cvccQuery.data?.meta?.page ?? 1}
               pageCount={cvccQuery.data?.meta?.pageCount ?? 1}
-              pageSize={200}
+              pageSize={pageSize}
               total={cvccQuery.data?.meta?.total ?? 0}
               filtered={hasActiveFilter}
               search={q}
               onPageChange={setPage}
-              onPageSizeChange={() => {}}
+              onPageSizeChange={(n) => {
+                setPageSize(n);
+                setPage(1);
+              }}
               onSearchChange={(v) => {
                 setQ(v);
                 setPage(1);
@@ -2330,6 +2384,37 @@ export default function PcccPage() {
           }}
           onSearchChange={(v) => {
             setQ(v);
+            setPage(1);
+          }}
+        />
+      )}
+
+      {tab === "TDKCC" && (
+        <PcccFireControlCabinets
+          rows={tdkccQuery.data?.data ?? []}
+          draft={drafts.TDKCC}
+          onDraftChange={draftChanger("TDKCC")}
+          toolbarExtra={scopeStatus}
+          cuongViList={cuongViList}
+          canManage={!readOnly}
+          writeScope={writeScope}
+          loading={tdkccQuery.isFetching}
+          editing={editing}
+          sort={sort}
+          onSort={toggleSort}
+          page={tdkccQuery.data?.meta?.page ?? 1}
+          pageCount={tdkccQuery.data?.meta?.pageCount ?? 1}
+          pageSize={pageSize}
+          total={tdkccQuery.data?.meta?.total ?? 0}
+          filtered={hasActiveFilter}
+          search={q}
+          onPageChange={setPage}
+          onPageSizeChange={(size) => {
+            setPageSize(size);
+            setPage(1);
+          }}
+          onSearchChange={(value) => {
+            setQ(value);
             setPage(1);
           }}
         />

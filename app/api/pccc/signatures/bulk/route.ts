@@ -38,7 +38,7 @@ export const dynamic = "force-dynamic";
  * từng mục ngay trong tab của chúng, không cần ký gộp theo cương vị.
  */
 
-type BulkTarget = "EXTINGUISHER" | "CABINET" | "ALARM_BUTTON" | "VALVE" | "EMERGENCY_LIGHT" | "HOSE_REEL";
+type BulkTarget = "EXTINGUISHER" | "CABINET" | "ALARM_BUTTON" | "VALVE" | "EMERGENCY_LIGHT" | "HOSE_REEL" | "FIRE_CONTROL_CABINET";
 
 type StampData = { nguoiKiemTra: string; ngayKiemTra: Date };
 
@@ -83,6 +83,11 @@ const BULK_TARGETS: Record<
     label: "cuộn vòi chữa cháy",
     findIds: (where) => prisma.pcccHoseReel.findMany({ where: where as Prisma.PcccHoseReelWhereInput, select: { id: true } }),
     stamp: (ids, data) => prisma.pcccHoseReel.updateMany({ where: { id: { in: ids } }, data }),
+  },
+  FIRE_CONTROL_CABINET: {
+    label: "tủ điều khiển chữa cháy",
+    findIds: (where) => prisma.pcccFireControlCabinet.findMany({ where: where as Prisma.PcccFireControlCabinetWhereInput, select: { id: true } }),
+    stamp: (ids, data) => prisma.pcccFireControlCabinet.updateMany({ where: { id: { in: ids } }, data }),
   },
 };
 
