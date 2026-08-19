@@ -12,7 +12,7 @@
  */
 import { prisma } from "@/lib/prisma";
 import { positionLabelOf, type PositionCode } from "@/lib/position-catalog";
-import { round2ToneOf } from "@/lib/pccc-status";
+import { TINH_TRANG_DAT, round2ToneOf } from "@/lib/pccc-status";
 import { signaturesOf } from "@/lib/pccc-service";
 
 /** Thư mục gốc trên S3. Tách khỏi `pccc/archive` vì vòng đời khác nhau hoàn toàn. */
@@ -82,6 +82,7 @@ export type BookGroupKey = (typeof BOOK_GROUPS)[number]["key"];
 export type BookRow = {
   /** Chỉ dùng để gom nhóm; số thứ tự vẫn chạy liên tục xuyên các nhóm. */
   table: BookGroupKey;
+  /** Cột "Ký mã hiệu" — mã thiết bị, đứng thành cột riêng đúng mẫu. */
   ma: string;
   /** Cột "Tên phương tiện" = chủng loại (BCC) / tên tủ (TCC) / tên van… */
   ten: string;
@@ -89,11 +90,34 @@ export type BookRow = {
   sl: number | null;
   ngayKiemTra: Date | null;
   tinhTrang: string;
-  /** Cột 8 "Ghi chú" của biểu mẫu — xem `noteOf`. Thiết bị còn tốt thì để trống. */
+  /**
+   * Cột "Đánh giá tình trạng hoạt động" — chữ IN RA SỔ.
+   *
+   * Thiết bị có ô tích (tủ, nút nhấn, cuộn vòi) thì liệt kê RÕ từng khiếm khuyết đang
+   * tích, ví dụ "Thân tủ: Gỉ sét nhẹ, có thể xử lý; Ngàm: Bất khả dụng" — biểu mẫu yêu
+   * cầu ghi rõ hỏng ở đâu chứ không chỉ một chữ "Không đạt". Không khiếm khuyết nào thì
+   * ghi "Đạt". Thiết bị một ô tình trạng (bình, van, đèn) thì lấy thẳng nhãn tình trạng.
+   */
+  danhGia: string;
+  /** Dòng phụ chữ nhỏ ngay dưới phần đánh giá — xem `noteOf`. Thiết bị tốt thì để trống. */
   ghiChu: string;
   nguoiKiemTra: string;
   signatureKey: string | null;
 };
+
+/**
+ * Liệt kê từng khiếm khuyết ĐANG TÍCH của một dòng có ô tích, dạng
+ * "Nhóm: trạng thái", nối nhau bằng "; ". Không có khiếm khuyết nào thì trả về "Đạt".
+ *
+ * Bỏ qua ô ĐẦU mỗi nhóm vì đó là mức bình thường/khả dụng, không phải khiếm khuyết.
+ * Nhãn nhóm trong dữ liệu viết HOA toàn bộ nên hạ về dạng câu cho dễ đọc trên giấy.
+ */
+function defectDetail(components: { groupLabel: string; status: string; checked: boolean; statusOrder: number }[]): string {
+  const parts = components
+    .filter((c) => c.checked && c.statusOrder > 0)
+    .map((c) => `${c.groupLabel.charAt(0)}${c.groupLabel.slice(1).toLowerCase()}: ${c.status}`);
+  return parts.length ? parts.join('; ') : TINH_TRANG_DAT;
+}
 
 /**
  * Cột 8 "Ghi chú" của Mẫu số 01 — CHỈ ghi cho thiết bị KHÔNG còn khả dụng (bất khả dụng
@@ -156,12 +180,20 @@ export async function loadBookData(periodId: string, positionCode: string) {
     prisma.pcccCabinet.findMany({
       where,
       orderBy: [{ stt: "asc" }, { ma: "asc" }],
-      select: { id: true, ma: true, ten: true, dvt: true, sl: true, ngayKiemTra: true, tinhTrangTongThe: true, ghiChu: true, nguoiKiemTra: true },
+      select: {
+        id: true, ma: true, ten: true, dvt: true, sl: true, ngayKiemTra: true,
+        tinhTrangTongThe: true, ghiChu: true, nguoiKiemTra: true,
+        components: { orderBy: [{ groupOrder: 'asc' }, { statusOrder: 'asc' }] },
+      },
     }),
     prisma.pcccHoseReel.findMany({
       where,
       orderBy: [{ stt: "asc" }, { ma: "asc" }],
-      select: { id: true, ma: true, ten: true, ngayKiemTra: true, tinhTrangTongThe: true, ghiChu: true, nguoiKiemTra: true },
+      select: {
+        id: true, ma: true, ten: true, ngayKiemTra: true,
+        tinhTrangTongThe: true, ghiChu: true, nguoiKiemTra: true,
+        components: { orderBy: [{ groupOrder: 'asc' }, { statusOrder: 'asc' }] },
+      },
     }),
     prisma.pcccValve.findMany({
       where,
@@ -171,7 +203,11 @@ export async function loadBookData(periodId: string, positionCode: string) {
     prisma.pcccAlarmButton.findMany({
       where,
       orderBy: [{ stt: "asc" }, { rowKey: "asc" }],
-      select: { id: true, maKks: true, viTri: true, ngayKiemTra: true, tinhTrangTongThe: true, khac: true, nguoiKiemTra: true },
+      select: {
+        id: true, maKks: true, viTri: true, ngayKiemTra: true,
+        tinhTrangTongThe: true, khac: true, nguoiKiemTra: true,
+        components: { orderBy: [{ groupOrder: 'asc' }, { statusOrder: 'asc' }] },
+      },
     }),
     prisma.pcccEmergencyLight.findMany({
       where,
@@ -201,6 +237,7 @@ export async function loadBookData(periodId: string, positionCode: string) {
       sl: r.sl,
       ngayKiemTra: r.ngayKiemTra,
       tinhTrang: r.tinhTrang ?? "",
+      danhGia: r.tinhTrang ?? "",
       ghiChu: noteOf(r.tinhTrang, r.apSuat),
       ...signer(sigBcc, r.id, r.nguoiKiemTra),
     })),
@@ -212,6 +249,7 @@ export async function loadBookData(periodId: string, positionCode: string) {
       sl: r.sl,
       ngayKiemTra: r.ngayKiemTra,
       tinhTrang: r.tinhTrangTongThe ?? "",
+      danhGia: defectDetail(r.components),
       ghiChu: noteOf(r.tinhTrangTongThe, r.ghiChu),
       ...signer(sigTcc, r.id, r.nguoiKiemTra),
     })),
@@ -223,6 +261,7 @@ export async function loadBookData(periodId: string, positionCode: string) {
       sl: 1,
       ngayKiemTra: r.ngayKiemTra,
       tinhTrang: r.tinhTrangTongThe ?? "",
+      danhGia: defectDetail(r.components),
       ghiChu: noteOf(r.tinhTrangTongThe, r.ghiChu),
       ...signer(sigCvcc, r.id, r.nguoiKiemTra),
     })),
@@ -234,6 +273,7 @@ export async function loadBookData(periodId: string, positionCode: string) {
       sl: 1,
       ngayKiemTra: r.ngayKiemTra,
       tinhTrang: r.tinhTrang ?? "",
+      danhGia: r.tinhTrang ?? "",
       ghiChu: noteOf(r.tinhTrang, r.moTa),
       ...signer(sigVan, r.id, r.nguoiKiemTra),
     })),
@@ -247,6 +287,7 @@ export async function loadBookData(periodId: string, positionCode: string) {
       sl: 1,
       ngayKiemTra: r.ngayKiemTra,
       tinhTrang: r.tinhTrangTongThe ?? "",
+      danhGia: defectDetail(r.components),
       ghiChu: noteOf(r.tinhTrangTongThe, r.khac),
       ...signer(sigNnbc, r.id, r.nguoiKiemTra),
     })),
@@ -258,6 +299,7 @@ export async function loadBookData(periodId: string, positionCode: string) {
       sl: 1,
       ngayKiemTra: r.ngayKiemTra,
       tinhTrang: r.tinhTrang ?? "",
+      danhGia: r.tinhTrang ?? "",
       ghiChu: noteOf(r.tinhTrang, r.ketQuaTest),
       ...signer(sigDen, r.id, r.nguoiKiemTra),
     })),

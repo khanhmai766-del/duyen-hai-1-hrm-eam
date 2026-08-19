@@ -33,20 +33,29 @@ import {
 } from "@/lib/pccc-pdf-kit";
 
 /** Bề rộng cột, cộng lại đúng bằng bề rộng vùng nội dung. 8 cột theo Mẫu số 01. */
-const COLS = [32, 222, 44, 44, 92, 106, 106, 116] as const;
+const COLS = [30, 172, 40, 34, 116, 94, 176, 100] as const;
 const HEADERS = [
   "STT",
   "Tên phương tiện",
-  "ĐVT",
+  "Đơn vị tính",
   "Số lượng",
-  "Thời gian kiểm tra, bảo dưỡng",
+  "Ký mã hiệu",
+  "Ngày, tháng, năm kiểm tra, bảo quản, bảo dưỡng",
   "Đánh giá tình trạng hoạt động",
   "Người được phân công quản lý",
-  "Ghi chú",
 ] as const;
 
-/** Cột "Người được phân công quản lý" — nơi đặt ảnh chữ ký. */
-const SIGN_COL = 6;
+/** Cột "Ký mã hiệu" — mã thiết bị đứng RIÊNG một cột, không ghép vào tên phương tiện. */
+const MA_COL = 4;
+
+/**
+ * Cột "Đánh giá tình trạng hoạt động". Bản mẫu gộp cả phần mô tả hỏng hóc vào đây thành
+ * một dòng phụ chữ nhỏ, nên sổ không còn cột "Ghi chú" riêng như bản cũ.
+ */
+const DANH_GIA_COL = 6;
+
+/** Cột "Người được phân công quản lý" — cột CUỐI, nơi đặt ảnh chữ ký. */
+const SIGN_COL = 7;
 
 /**
  * Đủ cao cho ảnh chữ ký NẰM TRÊN họ tên hai dòng — họ tên Việt dài, ép một dòng là cụt.
@@ -133,16 +142,18 @@ function drawTableHeader(page: PDFPage, fonts: PdfFonts, withTitle: boolean) {
   COLS.forEach((w, i) => {
     rect(page, x, y - headH, w, headH);
     if (i === SIGN_COL) {
-      // Cột 7 của bản mẫu có thêm dòng phụ "(Ký, ghi rõ họ tên)" — dòng này chính là chỗ
+      // Cột cuối của bản mẫu có thêm dòng phụ "(Ký, ghi rõ họ tên)" — dòng này chính là chỗ
       // giải thích vì sao ô bên dưới có ảnh chữ ký, bỏ đi là lệch mẫu.
       drawCell(page, HEADERS[i], { x, y: y - headH + 12, w, h: headH - 12, font: fonts.bold, size: FS.small, align: "center" });
       drawCell(page, "(Ký, ghi rõ họ tên)", { x, y: y - headH, w, h: 12, font: fonts.regular, size: 7, align: "center", maxLines: 1 });
     } else {
-      drawCell(page, HEADERS[i], { x, y: y - headH, w, h: headH, font: fonts.bold, size: FS.small, align: "center" });
+      // maxLines 4: tiêu đề "Ngày, tháng, năm kiểm tra, bảo quản, bảo dưỡng" của bản mẫu
+      // dài bốn dòng ở bề rộng cột này, để mặc định 3 là cụt mất chữ "bảo dưỡng".
+      drawCell(page, HEADERS[i], { x, y: y - headH, w, h: headH, font: fonts.bold, size: FS.small, align: "center", maxLines: 4 });
     }
     x += w;
   });
-  // Tầng số cột 1..7 của bản mẫu — cơ quan PCCC đối chiếu theo số cột này.
+  // Tầng số cột 1..8 của bản mẫu — cơ quan PCCC đối chiếu theo số cột này.
   x = MARGIN;
   COLS.forEach((w, i) => {
     rect(page, x, y - headH - numH, w, numH);
@@ -190,43 +201,57 @@ export async function buildPcccBookPdf(input: BookPdfInput): Promise<Buffer> {
     }
     stt += 1;
     const top = y - ROW_H;
-    // Cột 7 (chữ ký) vẽ riêng bên dưới vì có ảnh; các cột còn lại chỉ là chữ.
+    // Cột chữ ký vẽ riêng bên dưới vì có ảnh; cột đánh giá vẽ riêng vì có dòng phụ.
     const cells: Record<number, string> = {
       0: String(stt),
-      1: `${row.ten} ${row.ma}`.trim(),
+      1: row.ten,
       2: row.dvt,
-      3: row.sl === null || row.sl === undefined ? "" : String(row.sl),
-      4: fmtDate(row.ngayKiemTra),
-      5: row.tinhTrang,
-      7: row.ghiChu,
+      // Bản mẫu ghi số lượng hai chữ số ("01"), không phải "1".
+      3: row.sl === null || row.sl === undefined ? "" : String(row.sl).padStart(2, "0"),
+      [MA_COL]: row.ma,
+      5: fmtDate(row.ngayKiemTra),
     };
     let x = MARGIN;
     COLS.forEach((w, i) => {
       rect(page, x, top, w, ROW_H);
-      if (i in cells) {
-        // Ghi chú là câu mô tả hỏng hóc, dài hơn hẳn các ô khác — cho chữ nhỏ hơn và
-        // thêm một dòng để không bị cắt cụt mất phần "cần thay mới".
-        const isNote = i === 7;
-        // Cột "Tên phương tiện" gồm tên + MÃ THIẾT BỊ, mà mã nằm ở cuối chuỗi: bó 2 dòng
-        // là tên tủ dài nuốt mất mã, sổ in ra không tra được thiết bị nào.
-        const isName = i === 1;
+      if (i === DANH_GIA_COL) {
+        // Có mô tả hỏng hóc thì ô chia đôi: phần đánh giá nằm trên, mô tả thành dòng phụ
+        // chữ nhỏ nằm dưới — đúng bản mẫu, vốn đã bỏ cột "Ghi chú" riêng.
+        const noteH = row.ghiChu ? 16 : 0;
+        drawCell(page, row.danhGia, {
+          x,
+          y: top + noteH,
+          w,
+          h: ROW_H - noteH,
+          font: fonts.regular,
+          size: FS.small,
+          align: "center",
+          maxLines: row.ghiChu ? 3 : 4,
+        });
+        if (noteH) {
+          drawCell(page, row.ghiChu, { x, y: top, w, h: noteH, font: fonts.regular, size: 7, align: "center", maxLines: 2 });
+        }
+      } else if (i in cells) {
+        // Cột "Tên phương tiện" là chuỗi dài nhiều dòng nên căn trái; các cột còn lại đều
+        // ngắn và căn giữa (drawCell đã căn giữa theo chiều dọc sẵn).
+        // Tên và mã đều là chuỗi dài (tên đèn EXIT kèm số bản vẽ, mã tủ kèm mã KKS) nên
+        // dùng cỡ nhỏ và bốn dòng; các cột số liệu giữ cỡ thường.
+        const isLong = i === 1 || i === MA_COL;
         drawCell(page, cells[i], {
           x,
           y: top,
           w,
           h: ROW_H,
           font: fonts.regular,
-          size: isNote ? FS.small : FS.body,
-          // Ghi chú CĂN GIỮA như các cột số liệu khác (drawCell đã căn giữa theo chiều
-          // dọc sẵn); chỉ cột "Tên phương tiện" căn trái vì là chuỗi dài nhiều dòng.
-          align: isName ? "left" : "center",
-          maxLines: isName || isNote ? 3 : 2,
+          size: isLong ? FS.small : FS.body,
+          align: i === 1 ? "left" : "center",
+          maxLines: isLong ? 4 : 2,
         });
       }
       x += w;
     });
 
-    // Cột 7: ảnh chữ ký nằm trên, họ tên nằm dưới — đúng "Ký, ghi rõ họ tên".
+    // Cột cuối: ảnh chữ ký nằm trên, họ tên nằm dưới — đúng "Ký, ghi rõ họ tên".
     const signX = MARGIN + COLS.slice(0, SIGN_COL).reduce((a, b) => a + b, 0);
     const signW = COLS[SIGN_COL];
     const image = row.signatureKey ? embedded.get(row.signatureKey) : undefined;
