@@ -14,7 +14,7 @@ import {
   scopeWhere,
   signaturesOf,
 } from "@/lib/pccc-service";
-import { VALVE_LOAI_OPTIONS } from "@/lib/pccc-status";
+import { VALVE_LOAI_OPTIONS, tinhTrangWhere } from "@/lib/pccc-status";
 
 export const dynamic = "force-dynamic";
 
@@ -53,7 +53,7 @@ export async function GET(req: NextRequest) {
       // Bảng van CÓ cột "Người giám sát" nên cấp giám sát xem được phần mình giám sát.
       ...scopeWhere(sp.get("cuongVi"), sp.get("machine"), viewScope, { withSupervisor: true }),
       ...(giamSat && giamSat !== "ALL" ? { nguoiGiamSatCode: giamSat } : {}),
-      ...(tinhTrang && tinhTrang !== "ALL" ? { tinhTrang } : {}),
+      ...tinhTrangWhere(tinhTrang),
       ...((VALVE_LOAI_OPTIONS as readonly string[]).includes(loaiVan ?? "") ? { loaiVan: loaiVan as string } : {}),
       ...(q
         ? {

@@ -438,3 +438,17 @@ export function isAbsorbedByHoseReel(groupLabel: string) {
 export function cabinetComponentsForTcc<T extends { groupLabel: string }>(components: T[]): T[] {
   return components.filter((c) => !isAbsorbedByHoseReel(c.groupLabel));
 }
+
+/**
+ * Giá trị lọc đặc biệt cho ô "Tình trạng": chọn đúng những dòng CHƯA ĐƯỢC ĐÁNH GIÁ
+ * (`tinhTrang` còn trống). Không thể dùng chuỗi rỗng vì tham số rỗng trên URL bị hiểu
+ * là "không lọc"; dùng một mã riêng nên ý định luôn rõ ràng.
+ */
+export const TINH_TRANG_CHUA_CAP_NHAT = "__CHUA_CAP_NHAT__";
+
+/** Điều kiện Prisma cho ô lọc tình trạng, hiểu cả mã "chưa cập nhật" ở trên. */
+export function tinhTrangWhere(value: string | null | undefined) {
+  if (!value || value === "ALL") return {};
+  if (value === TINH_TRANG_CHUA_CAP_NHAT) return { tinhTrang: null };
+  return { tinhTrang: value };
+}

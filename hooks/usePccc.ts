@@ -347,6 +347,8 @@ export interface PcccFilters {
   tinhTrang?: string;
   chungLoai?: string;
   loaiTu?: string;
+  /** Ô lọc tình trạng RIÊNG của bảng cuộn vòi (vốn từ khác bảng tủ). */
+  tinhTrangCvcc?: string;
   quaHan?: boolean;
   q?: string;
   page?: number;

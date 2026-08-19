@@ -5,6 +5,7 @@ import { useMemo } from "react";
 import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { AlertTriangle, CalendarClock, CircleGauge, Droplets, FlameKindling, Layers, Lightbulb, ShieldCheck } from "lucide-react";
 import { PercentBar, StatCard, StatusBadge, TD_CLASS, TH_CLASS, TableShell, fmtPercent } from "@/components/pccc/pccc-shared";
+import { LIGHT_KHONG_CO_DEN, TINH_TRANG_CHUA_CAP_NHAT } from "@/lib/pccc-status";
 import type { PcccSummary } from "@/hooks/usePccc";
 
 const TONE_COLOR = { ok: "#16A34A", watch: "#D97706", bad: "#DC2626" } as const;
@@ -47,12 +48,20 @@ function SectionTitle({ index, title, note }: { index: string; title: string; no
  * "có bao nhiêu", người dùng luôn hỏi tiếp "những cái nào" — đây là đường đi thẳng
  * tới câu trả lời, khỏi phải tự dò lại bộ lọc.
  */
+/**
+ * Bấm một thẻ số ở Tổng quan → mở bảng chi tiết đã lọc sẵn đúng con số vừa bấm.
+ *
+ * Dạng ĐỐI TƯỢNG chứ không phải chuỗi hằng: mỗi nhóm thiết bị có vốn từ tình trạng
+ * riêng và số thẻ ngày càng nhiều, liệt kê thành hằng chuỗi thì vừa dài vừa phải sửa
+ * hai nơi mỗi lần thêm một thẻ.
+ */
 export type PcccOverviewDrill =
-  | "BCC_KHA_DUNG"
-  | "BCC_BAT_KHA_DUNG"
-  | "BCC_QUA_HAN"
-  | "TCC_HONG_NANG"
-  | "NNBC_BAT_KHA_DUNG";
+  | { bang: "BCC"; tinhTrang?: string; quaHan?: boolean }
+  | { bang: "TCC"; tinhTrang: string }
+  /** Bảng con nằm dưới tab Tủ chữa cháy — lọc bằng ô riêng của nó. */
+  | { bang: "CVCC"; tinhTrang: string }
+  | { bang: "NNBC"; tinhTrang: string }
+  | { bang: "DEN"; loai: "EXIT" | "CSSC"; tinhTrang: string };
 
 export function PcccOverview({ summary, onDrill }: { summary: PcccSummary; onDrill?: (target: PcccOverviewDrill) => void }) {
   const bccTotal = summary.bcc.total;
@@ -108,7 +117,7 @@ export function PcccOverview({ summary, onDrill }: { summary: PcccSummary; onDri
           hint={`${fmtPercent(bccTotal.phanTramKhaDung, 1)} khả dụng`}
           tone={bccTotal.phanTramKhaDung >= 0.9 ? "ok" : bccTotal.phanTramKhaDung >= 0.7 ? "watch" : "bad"}
           icon={FlameKindling}
-          onClick={drill("BCC_KHA_DUNG")}
+          onClick={drill({ bang: "BCC", tinhTrang: "Khả dụng" })}
           actionLabel={`Bấm để xem ${bccTotal.khaDung} bình khả dụng ở tab Bình chữa cháy`}
         />
         <StatCard
@@ -117,7 +126,7 @@ export function PcccOverview({ summary, onDrill }: { summary: PcccSummary; onDri
           hint={`${bccTotal.canTheoDoi} bình cần theo dõi`}
           tone={bccTotal.batKhaDung > 0 ? "bad" : "ok"}
           icon={AlertTriangle}
-          onClick={drill("BCC_BAT_KHA_DUNG")}
+          onClick={drill({ bang: "BCC", tinhTrang: "Bất khả dụng" })}
           actionLabel={`Bấm để xem ${bccTotal.batKhaDung} bình bất khả dụng ở tab Bình chữa cháy`}
         />
         <StatCard
@@ -126,7 +135,7 @@ export function PcccOverview({ summary, onDrill }: { summary: PcccSummary; onDri
           hint={`${bccTotal.sapDenHan} bình sắp đến hạn (90 ngày)`}
           tone={bccTotal.quaHanThayThe > 0 ? "watch" : "ok"}
           icon={CalendarClock}
-          onClick={drill("BCC_QUA_HAN")}
+          onClick={drill({ bang: "BCC", quaHan: true })}
           actionLabel={`Bấm để xem ${bccTotal.quaHanThayThe} bình quá hạn thay thế ở tab Bình chữa cháy`}
         />
         <StatCard
@@ -135,7 +144,7 @@ export function PcccOverview({ summary, onDrill }: { summary: PcccSummary; onDri
           hint={`${summary.tcc.total.huHong1Phan} lỗi nhẹ · ${summary.tcc.total.binhThuong} bình thường`}
           tone={summary.tcc.total.huHongHoanToan > 0 ? "bad" : "ok"}
           icon={Layers}
-          onClick={drill("TCC_HONG_NANG")}
+          onClick={drill({ bang: "TCC", tinhTrang: "Bất khả dụng" })}
           actionLabel="Bấm để xem các tủ bất khả dụng (có linh kiện hỏng nặng) ở tab Tủ chữa cháy"
         />
       </div>
@@ -354,9 +363,17 @@ export function PcccOverview({ summary, onDrill }: { summary: PcccSummary; onDri
                 hint={`trên ${summary.cvcc.tongSo} cuộn vòi`}
                 tone="ok"
                 icon={ShieldCheck}
+                onClick={drill({ bang: "CVCC", tinhTrang: "Đạt" })}
               />
               {/* Cuộn vòi chỉ HAI mức theo TB 5100/TB-NĐDH, khác tủ vẫn ba mức. */}
-              <StatCard label="Không đạt" value={summary.cvcc.khongDat} hint="cần xử lý" tone="bad" icon={AlertTriangle} />
+              <StatCard
+                label="Không đạt"
+                value={summary.cvcc.khongDat}
+                hint="cần xử lý"
+                tone="bad"
+                icon={AlertTriangle}
+                onClick={drill({ bang: "CVCC", tinhTrang: "Không đạt" })}
+              />
             </div>
             <TableShell fill>
               <thead>
@@ -474,14 +491,21 @@ export function PcccOverview({ summary, onDrill }: { summary: PcccSummary; onDri
               hint={`trên ${summary.nnbc.tongSo} nút nhấn`}
               tone="ok"
               icon={ShieldCheck}
+              onClick={drill({ bang: "NNBC", tinhTrang: "Khả dụng" })}
             />
-            <StatCard label="Cần theo dõi" value={summary.nnbc.canTheoDoi} tone="watch" icon={AlertTriangle} />
+            <StatCard
+              label="Cần theo dõi"
+              value={summary.nnbc.canTheoDoi}
+              tone="watch"
+              icon={AlertTriangle}
+              onClick={drill({ bang: "NNBC", tinhTrang: "Cần theo dõi" })}
+            />
             <StatCard
               label="Bất khả dụng"
               value={summary.nnbc.batKhaDung}
               tone="bad"
               icon={AlertTriangle}
-              onClick={drill("NNBC_BAT_KHA_DUNG")}
+              onClick={drill({ bang: "NNBC", tinhTrang: "Bất khả dụng" })}
             />
           </div>
           <TableShell fill>
@@ -575,8 +599,16 @@ export function PcccOverview({ summary, onDrill }: { summary: PcccSummary; onDri
                 hint={tiLeDat === null ? `trên ${r?.tongSo ?? 0} vị trí` : `${fmtPercent(tiLeDat, 0)} số đèn đã lắp`}
                 tone="ok"
                 icon={Lightbulb}
+                onClick={drill({ bang: "DEN", loai, tinhTrang: "Đạt" })}
               />
-              <StatCard label="Không đạt" value={r?.khongDat ?? 0} hint="cần xử lý" tone="bad" icon={AlertTriangle} />
+              <StatCard
+                label="Không đạt"
+                value={r?.khongDat ?? 0}
+                hint="cần xử lý"
+                tone="bad"
+                icon={AlertTriangle}
+                onClick={drill({ bang: "DEN", loai, tinhTrang: "Không đạt" })}
+              />
               {/* Tô XÁM, không phải đỏ: đây là ghi nhận hiện trạng lắp đặt chứ không phải
                   hỏng hóc — tô đỏ sẽ thổi phồng tỉ lệ lỗi của cả phân xưởng. */}
               <StatCard
@@ -585,6 +617,7 @@ export function PcccOverview({ summary, onDrill }: { summary: PcccSummary; onDri
                 hint="vị trí chưa lắp đèn"
                 tone="none"
                 icon={Layers}
+                onClick={drill({ bang: "DEN", loai, tinhTrang: LIGHT_KHONG_CO_DEN })}
               />
               <StatCard
                 label="Chưa cập nhật"
@@ -592,6 +625,7 @@ export function PcccOverview({ summary, onDrill }: { summary: PcccSummary; onDri
                 hint={`tổng ${r?.tongSo ?? 0} vị trí`}
                 tone={r?.chuaCapNhat ? "watch" : "none"}
                 icon={CalendarClock}
+                onClick={drill({ bang: "DEN", loai, tinhTrang: TINH_TRANG_CHUA_CAP_NHAT })}
               />
             </div>
             {tiLeDat !== null && (

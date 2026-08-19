@@ -99,6 +99,8 @@ import { MACHINE_OPTIONS } from "@/components/pccc/pccc-shared";
 import { type SortState } from "@/components/pccc/pccc-table-card";
 import {
   CHUNG_LOAI_OPTIONS,
+  TINH_TRANG_CHUA_CAP_NHAT,
+  HOSE_REEL_TINH_TRANG_OPTIONS,
   LIGHT_TINH_TRANG_OPTIONS,
   VALVE_LOAI_OPTIONS,
   VALVE_TINH_TRANG_OPTIONS,
@@ -151,7 +153,12 @@ const SIGN_TARGET_LABEL: Record<PcccBulkSignTarget, string> = {
  * Nút nhấn dùng lại ba mức của tủ chữa cháy vì tình trạng cũng suy từ ô tích.
  */
 const VAN_TINH_TRANG_FILTERS = [...VALVE_TINH_TRANG_OPTIONS];
-const DEN_TINH_TRANG_FILTERS = [...LIGHT_TINH_TRANG_OPTIONS];
+// Thêm mục "Chưa cập nhật" (tinhTrang còn trống) — thẻ cùng tên ở Tổng quan bấm vào
+// sẽ đặt đúng giá trị này, nên ô lọc phải có sẵn mục đó để hiện lại cho khớp.
+const DEN_TINH_TRANG_FILTERS = [
+  ...LIGHT_TINH_TRANG_OPTIONS.map((v) => ({ value: v, label: v })),
+  { value: TINH_TRANG_CHUA_CAP_NHAT, label: "Chưa cập nhật" },
+];
 
 /** Nội dung hộp thoại kết quả — dùng chung cho "lưu sửa đổi" và "ký tên". */
 type ResultDialog = {
@@ -261,6 +268,10 @@ export default function PcccPage() {
   const [chungLoai, setChungLoai] = useState("ALL");
   const [loaiTu, setLoaiTu] = useState("ALL");
   const [loaiVan, setLoaiVan] = useState("ALL");
+  // Bảng cuộn vòi nằm cùng tab với bảng tủ nhưng vốn từ tình trạng khác (hai mức so
+  // với ba mức) nên phải có ô lọc RIÊNG — dùng chung thì lọc bảng này là bảng kia
+  // trắng trơn.
+  const [tinhTrangCvcc, setTinhTrangCvcc] = useState("ALL");
   // Hộp thoại "Thêm cuộn vòi": chọn tủ cha rồi sửa mã gợi ý trước khi lưu.
   const [cvccAddOpen, setCvccAddOpen] = useState(false);
   const [cvccAddCabinetId, setCvccAddCabinetId] = useState("");
@@ -362,7 +373,9 @@ export default function PcccPage() {
   const cvccCabinetsQuery = usePcccCabinets(
     cvccAddOpen ? { ...baseFilters, pageSize: 500, page: 1, sort: "ma", dir: "asc" } : { ...baseFilters, page: 0 }
   );
-  const cvccQuery = usePcccHoseReels(tab === "TCC" ? { ...listFilters, pageSize: 200 } : { ...baseFilters, page: 0 });
+  const cvccQuery = usePcccHoseReels(
+    tab === "TCC" ? { ...listFilters, tinhTrangCvcc, pageSize: 200 } : { ...baseFilters, page: 0 }
+  );
 
   /**
    * Phạm vi XEM (quy tắc 4 — xem lib/pccc-service.ts). SERVER đã cắt dữ liệu rồi; cái
@@ -933,6 +946,7 @@ export default function PcccPage() {
     (tab === "NNBC" || tab === "VAN" || tab === "DEN") && tinhTrang !== "ALL",
     (tab === "NNBC" || tab === "VAN" || tab === "DEN") && giamSat !== "ALL",
     tab === "VAN" && loaiVan !== "ALL",
+    tab === "TCC" && tinhTrangCvcc !== "ALL",
   ].filter(Boolean).length;
 
   /**
@@ -950,41 +964,74 @@ export default function PcccPage() {
   }
 
   /**
-   * Bấm thẻ KPI ở tab Tổng quan → mở bảng chi tiết đã lọc sẵn đúng con số vừa bấm.
+   * Bấm thẻ số ở tab Tổng quan → mở bảng chi tiết đã lọc sẵn đúng con số vừa bấm.
    * Cương vị/tổ máy KHÔNG bị đụng tới (đó là phạm vi xem người dùng tự chọn), nhưng
    * các bộ lọc trạng thái thì đặt lại hết để hai lần bấm không chồng điều kiện lên nhau.
    */
   function drillFromOverview(target: PcccOverviewDrill) {
-    const targetTab: TabKey =
-      target === "TCC_HONG_NANG" ? "TCC" : target === "NNBC_BAT_KHA_DUNG" ? "NNBC" : "BCC";
+    // Cuộn vòi không có tab riêng — nó là bảng con nằm dưới tab Tủ chữa cháy.
+    const targetTab: TabKey = target.bang === "CVCC" ? "TCC" : target.bang;
     if (!switchTab(targetTab)) return;
     setTinhTrang("ALL");
     setQuaHan(false);
     setChungLoai("ALL");
     setLoaiTu("ALL");
     setLoaiVan("ALL");
+    setTinhTrangCvcc("ALL");
     setGiamSat("ALL");
     setQ("");
     setPage(1);
 
-    if (target === "BCC_KHA_DUNG") {
-      setTinhTrang("Khả dụng");
-      toast.success(`Đang lọc ${summaryQuery.data?.data.bcc.total.khaDung ?? ""} bình khả dụng`);
-    } else if (target === "BCC_BAT_KHA_DUNG") {
-      setTinhTrang("Bất khả dụng");
-      toast.success(`Đang lọc ${summaryQuery.data?.data.bcc.total.batKhaDung ?? ""} bình bất khả dụng`);
-    } else if (target === "BCC_QUA_HAN") {
-      setQuaHan(true);
-      toast.success(`Đang lọc ${summaryQuery.data?.data.bcc.total.quaHanThayThe ?? ""} bình quá hạn thay thế`);
-    } else if (target === "NNBC_BAT_KHA_DUNG") {
-      setTinhTrang("Bất khả dụng");
-      toast.success(`Đang lọc ${summaryQuery.data?.data.nnbc.batKhaDung ?? ""} nút nhấn bất khả dụng`);
-    } else {
-      // Thẻ đếm Ô LINH KIỆN hỏng nặng, còn bảng thì mỗi dòng là một TỦ — nên lọc theo
-      // tình trạng tổng thể "Bất khả dụng", tức đúng những tủ sinh ra các ô hỏng nặng đó.
-      setTinhTrang("Bất khả dụng");
-      toast.success("Đang lọc các tủ bất khả dụng (có linh kiện hỏng nặng)");
+    const s = summaryQuery.data?.data;
+    if (target.bang === "BCC") {
+      if (target.quaHan) {
+        setQuaHan(true);
+        toast.success(`Đang lọc ${s?.bcc.total.quaHanThayThe ?? ""} bình quá hạn thay thế`);
+        return;
+      }
+      setTinhTrang(target.tinhTrang ?? "ALL");
+      const n = target.tinhTrang === "Khả dụng" ? s?.bcc.total.khaDung : s?.bcc.total.batKhaDung;
+      toast.success(`Đang lọc ${n ?? ""} bình ${(target.tinhTrang ?? "").toLowerCase()}`);
+      return;
     }
+    if (target.bang === "TCC") {
+      // Thẻ đếm Ô LINH KIỆN hỏng nặng, còn bảng thì mỗi dòng là một TỦ — nên lọc theo
+      // tình trạng tổng thể, tức đúng những tủ sinh ra các ô hỏng nặng đó.
+      setTinhTrang(target.tinhTrang);
+      toast.success("Đang lọc các tủ bất khả dụng (có linh kiện hỏng nặng)");
+      return;
+    }
+    if (target.bang === "CVCC") {
+      setTinhTrangCvcc(target.tinhTrang);
+      const n = target.tinhTrang === "Đạt" ? s?.cvcc.dat : s?.cvcc.khongDat;
+      toast.success(`Đang lọc ${n ?? ""} cuộn vòi ${target.tinhTrang.toLowerCase()} — bảng con dưới bảng tủ`);
+      return;
+    }
+    if (target.bang === "NNBC") {
+      setTinhTrang(target.tinhTrang);
+      const n =
+        target.tinhTrang === "Khả dụng"
+          ? s?.nnbc.khaDung
+          : target.tinhTrang === "Cần theo dõi"
+            ? s?.nnbc.canTheoDoi
+            : s?.nnbc.batKhaDung;
+      toast.success(`Đang lọc ${n ?? ""} nút nhấn ${target.tinhTrang.toLowerCase()}`);
+      return;
+    }
+    // Đèn: đổi luôn loại đèn đang xem cho khớp thẻ vừa bấm.
+    setLightLoai(target.loai);
+    setTinhTrang(target.tinhTrang);
+    const row = s?.den.find((d) => d.loai === target.loai);
+    const n =
+      target.tinhTrang === "Đạt"
+        ? row?.dat
+        : target.tinhTrang === "Không đạt"
+          ? row?.khongDat
+          : target.tinhTrang === TINH_TRANG_CHUA_CAP_NHAT
+            ? row?.chuaCapNhat
+            : row?.khongCoDen;
+    const nhan = target.tinhTrang === TINH_TRANG_CHUA_CAP_NHAT ? "chưa cập nhật" : target.tinhTrang.toLowerCase();
+    toast.success(`Đang lọc ${n ?? ""} ${target.loai === "EXIT" ? "đèn EXIT" : "đèn chiếu sáng sự cố"} ${nhan}`);
   }
 
   /**
@@ -1028,6 +1075,7 @@ export default function PcccPage() {
     setGiamSat("ALL");
     setLoaiTu("ALL");
     setLoaiVan("ALL");
+    setTinhTrangCvcc("ALL");
     setQuaHan(false);
     setPage(1);
   }
@@ -1642,6 +1690,20 @@ export default function PcccPage() {
                           }}
                           options={TINH_TRANG_FILTERS}
                           allLabel="Tất cả tình trạng"
+                        />
+                      </div>
+                      <div className="grid gap-1.5">
+                        <Label className="text-xs font-semibold text-slate-600">Tình trạng cuộn vòi</Label>
+                        {/* Ô RIÊNG cho bảng con: cuộn vòi chỉ hai mức Đạt/Không đạt theo
+                            TB 5100, khác ba mức của tủ. */}
+                        <SelectBox
+                          value={tinhTrangCvcc}
+                          onChange={(v) => {
+                            setTinhTrangCvcc(v);
+                            setPage(1);
+                          }}
+                          options={[...HOSE_REEL_TINH_TRANG_OPTIONS]}
+                          allLabel="Tất cả tình trạng cuộn vòi"
                         />
                       </div>
                     </>

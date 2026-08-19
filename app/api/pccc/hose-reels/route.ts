@@ -46,7 +46,10 @@ export async function GET(req: NextRequest) {
     const page = Math.max(1, Number(sp.get("page") ?? 1));
     const pageSize = Math.min(MAX_PAGE_SIZE, Math.max(1, Number(sp.get("pageSize") ?? DEFAULT_PAGE_SIZE)));
     const q = sp.get("q")?.trim();
-    const tinhTrang = sp.get("tinhTrang");
+    // Ô lọc RIÊNG (`tinhTrangCvcc`), không dùng chung `tinhTrang` với bảng tủ: hai bảng
+    // nằm cùng một tab nhưng vốn từ tình trạng khác nhau (tủ ba mức, cuộn vòi hai mức),
+    // dùng chung một tham số thì lọc bảng này là bảng kia trắng trơn.
+    const tinhTrang = sp.get("tinhTrangCvcc");
     const cabinetId = sp.get("cabinetId")?.trim();
 
     const where: Prisma.PcccHoseReelWhereInput = {

@@ -14,7 +14,7 @@ import {
   scopeWhere,
   signaturesOf,
 } from "@/lib/pccc-service";
-import { LIGHT_TINH_TRANG_OPTIONS, isPcccLightLoai } from "@/lib/pccc-status";
+import { LIGHT_TINH_TRANG_OPTIONS, isPcccLightLoai, tinhTrangWhere } from "@/lib/pccc-status";
 
 export const dynamic = "force-dynamic";
 
@@ -59,7 +59,7 @@ export async function GET(req: NextRequest) {
       // Bảng đèn CÓ cột "Người giám sát" nên cấp giám sát xem được phần mình giám sát.
       ...scopeWhere(sp.get("cuongVi"), sp.get("machine"), viewScope, { withSupervisor: true }),
       ...(giamSat && giamSat !== "ALL" ? { nguoiGiamSatCode: giamSat } : {}),
-      ...(tinhTrang && tinhTrang !== "ALL" ? { tinhTrang } : {}),
+      ...tinhTrangWhere(tinhTrang),
       ...(q
         ? {
             OR: [
