@@ -577,6 +577,16 @@ const DEFAULT_PERMISSIONS: PermissionRow[] = [
     note: "Chạy tay việc chốt kỳ (xuất Excel lưu trữ lên S3), sinh kỳ tháng mới và dọn kỳ cũ khỏi cơ sở dữ liệu. Bình thường hệ thống tự chạy cuối tháng; quyền này chỉ dùng khi cần can thiệp.",
     matrix: { ADMIN: "full", MANAGER: "manage", SUPERVISOR: "none", TECHNICIAN: "none", VIEWER: "none" },
   },
+  {
+    id: "lims-sync",
+    group: "Tiện ích",
+    feature: "Đồng bộ kết quả phân tích dầu từ LIMS",
+    note:
+      "Cho phép bấm nút \"Đồng bộ\" để tiện ích Chrome đọc dữ liệu từ portal LIMS (portal.tpcduyenhai.com.vn/lims.xhtml) " +
+      "và ghi các mẫu Không Đạt vào hệ thống. " +
+      "Mức Cá nhân/Quản lý/Toàn quyền đều cho phép đồng bộ; Chỉ đọc = chỉ xem lịch sử; Không = ẩn nút đồng bộ.",
+    matrix: { ADMIN: "full", MANAGER: "manage", SUPERVISOR: "manage", TECHNICIAN: "personal", VIEWER: "none" },
+  },
 ];
 
 function mergeDefaultPermissions(rows: PermissionRow[]) {
