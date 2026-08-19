@@ -265,7 +265,7 @@ export function PcccHoseReels({
                     <RowExpander expanded={expanded} onToggle={() => setExpandedId(expanded ? null : r.id)} />
                   </TableCell>
                   <TableCell
-                    className={cn(TD_ROW, STICKY_TD, STICKY_EDGE, rowBg, "whitespace-nowrap font-medium")}
+                    className={cn(TD_ROW, STICKY_TD, STICKY_EDGE, rowBg, "whitespace-nowrap text-center font-medium")}
                     style={{ left: FROZEN.ma.left }}
                   >
                     <span className="inline-flex items-center gap-1">
@@ -275,12 +275,13 @@ export function PcccHoseReels({
                       )}
                     </span>
                   </TableCell>
-                  <TableCell className={cn(TD_ROW, "text-[12.5px] text-slate-600")} title={r.cabinet.ten ?? undefined}>
+                  <TableCell className={cn(TD_ROW, "text-center text-[12.5px] text-slate-600")} title={r.cabinet.ten ?? undefined}>
                     {r.cabinet.ma}
                   </TableCell>
-                  <TableCell className={cn(TD_ROW, "whitespace-nowrap", dirty("cuongVi"))}>
+                  <TableCell className={cn(TD_ROW, "whitespace-nowrap text-center", dirty("cuongVi"))}>
                     <EditableCell
                       value={val("cuongVi", r.cuongVi)}
+                      align="center"
                       type="select"
                       options={cuongViOptions}
                       disabled={!rowEditable || !canEditAdminField}
@@ -288,7 +289,7 @@ export function PcccHoseReels({
                       onSave={(v) => save(r, "cuongVi", v || null)}
                     />
                   </TableCell>
-                  <TableCell className={cn(TD_ROW, "whitespace-nowrap")}>
+                  <TableCell className={cn(TD_ROW, "whitespace-nowrap text-center")}>
                     <StatusBadge status={r.tinhTrangTongThe} />
                   </TableCell>
 

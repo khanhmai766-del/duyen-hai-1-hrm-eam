@@ -189,7 +189,7 @@ export function PcccEmergencyLights({
                     <RowExpander expanded={expanded} onToggle={() => setExpandedId(expanded ? null : r.id)} />
                   </TableCell>
                   <TableCell
-                    className={cn(TD_ROW, STICKY_TD, STICKY_EDGE, rowBg, "whitespace-nowrap font-medium")}
+                    className={cn(TD_ROW, STICKY_TD, STICKY_EDGE, rowBg, "whitespace-nowrap text-center font-medium")}
                     style={{ left: FROZEN.maKks.left }}
                   >
                     <span className="inline-flex items-center gap-1">
@@ -201,11 +201,12 @@ export function PcccEmergencyLights({
                   </TableCell>
                   {/* Ba cột cấp khu vực — chỉ đọc, xem ghi chú đầu file. */}
                   <TableCell className={cn(TD_ROW, "text-[12.5px] text-slate-600")}>{r.tenKhuVuc ?? "—"}</TableCell>
-                  <TableCell className={cn(TD_ROW, "whitespace-nowrap text-[12.5px] text-slate-600")}>{r.maBanVe ?? "—"}</TableCell>
+                  <TableCell className={cn(TD_ROW, "whitespace-nowrap text-center text-[12.5px] text-slate-600")}>{r.maBanVe ?? "—"}</TableCell>
                   <TableCell className={cn(TD_ROW, "text-center tabular-nums text-slate-600")}>{r.soLuongKhuVuc ?? "—"}</TableCell>
-                  <TableCell className={cn(TD_ROW, "whitespace-nowrap", dirty("cuongVi"))}>
+                  <TableCell className={cn(TD_ROW, "whitespace-nowrap text-center", dirty("cuongVi"))}>
                     <EditableCell
                       value={val("cuongVi", r.cuongVi)}
+                      align="center"
                       type="select"
                       options={cuongViOptions}
                       disabled={!rowEditable || !canEditAdminField}
@@ -213,18 +214,20 @@ export function PcccEmergencyLights({
                       onSave={(v) => save(r, "cuongVi", v || null)}
                     />
                   </TableCell>
-                  <TableCell className={cn(TD_ROW, "whitespace-nowrap", dirty("nguoiGiamSat"))}>
+                  <TableCell className={cn(TD_ROW, "whitespace-nowrap text-center", dirty("nguoiGiamSat"))}>
                     <EditableCell
                       value={val("nguoiGiamSat", r.nguoiGiamSat)}
+                      align="center"
                       disabled={!rowEditable || !canEditAdminField}
                       lockedReason={lockReason(true)}
                       onSave={(v) => save(r, "nguoiGiamSat", v || null)}
                     />
                   </TableCell>
-                  <TableCell className={cn(TD_ROW, dirty("tinhTrang"))}>
+                  <TableCell className={cn(TD_ROW, "text-center", dirty("tinhTrang"))}>
                     {rowEditable ? (
                       <EditableCell
                         value={tinhTrang}
+                        align="center"
                         type="select"
                         options={[...LIGHT_TINH_TRANG_OPTIONS]}
                         lockedReason={lockReason()}

@@ -243,7 +243,7 @@ export function PcccAlarmButtons({
                     <RowExpander expanded={expanded} onToggle={() => setExpandedId(expanded ? null : r.id)} />
                   </TableCell>
                   <TableCell
-                    className={cn(TD_ROW, STICKY_TD, STICKY_EDGE, rowBg, "whitespace-nowrap font-medium")}
+                    className={cn(TD_ROW, STICKY_TD, STICKY_EDGE, rowBg, "whitespace-nowrap text-center font-medium")}
                     style={{ left: FROZEN.maKks.left }}
                   >
                     <span className="inline-flex items-center gap-1">
@@ -262,9 +262,10 @@ export function PcccAlarmButtons({
                       onSave={(v) => save(r, "viTri", v || null)}
                     />
                   </TableCell>
-                  <TableCell className={cn(TD_ROW, "whitespace-nowrap", dirty("cuongVi"))}>
+                  <TableCell className={cn(TD_ROW, "whitespace-nowrap text-center", dirty("cuongVi"))}>
                     <EditableCell
                       value={val("cuongVi", r.cuongVi)}
+                      align="center"
                       type="select"
                       options={cuongViOptions}
                       disabled={!rowEditable || !canEditAdminField}
@@ -273,16 +274,17 @@ export function PcccAlarmButtons({
                     />
                   </TableCell>
                   {/* Cấp giám sát là phân công cố định, chỉ ADMIN đổi — như bảng bình chữa cháy. */}
-                  <TableCell className={cn(TD_ROW, "whitespace-nowrap", dirty("nguoiGiamSat"))}>
+                  <TableCell className={cn(TD_ROW, "whitespace-nowrap text-center", dirty("nguoiGiamSat"))}>
                     <EditableCell
                       value={val("nguoiGiamSat", r.nguoiGiamSat)}
+                      align="center"
                       disabled={!rowEditable || !canEditAdminField}
                       lockedReason={lockReason(true)}
                       onSave={(v) => save(r, "nguoiGiamSat", v || null)}
                     />
                   </TableCell>
                   {/* Dẫn xuất từ các ô tích → chỉ đọc, server tính lại lúc lưu. */}
-                  <TableCell className={cn(TD_ROW, "whitespace-nowrap")}>
+                  <TableCell className={cn(TD_ROW, "whitespace-nowrap text-center")}>
                     <StatusBadge status={r.tinhTrangTongThe} />
                   </TableCell>
 
