@@ -6,6 +6,7 @@ import { addMonths, DEFECT_UNITS, roundStock } from "@/lib/constants";
 import { EQUIPMENT_DEVICE_SELECT, equipmentNodeToDevice } from "@/lib/equipment-device";
 import { resolveEquipmentAccessForUser } from "@/lib/server-access";
 import { materialCatalogAccessWhere } from "@/lib/material-catalog-access";
+import { adjustStockToQuantity, sharedCodesOf, syncMaterialQuantity } from "@/lib/material-stock-lot";
 import { assertSeqsInScope } from "@/lib/equipment-tree-scope";
 import { maybeUploadDataUrl } from "@/lib/s3";
 import { hasPermissionLevel, requirePermissionLevel } from "@/lib/rbac-guard";
@@ -438,6 +439,16 @@ export async function POST(req: NextRequest) {
       await audit(user.id, "CREATE_MATERIAL", "Material", m.id, auditDetailWithPosition(user, `${m.code} (${machine})`));
       if (!firstMaterial) firstMaterial = m;
     }
+    // Vật tư mới khai kèm tồn mở đầu cũng phải có lô, y như khi sửa tay số tồn —
+    // không thì lại sinh ra một mã "có hàng trên màn hình, rỗng dưới kho lô".
+    // Chạy SAU vòng lặp vì các dòng sibling S1/S2/COMMON dùng CHUNG một kho theo mã.
+    const tonMoDau = Math.max(0, Math.trunc(Number(body.quantity) || 0));
+    if (tonMoDau > 0 && firstMaterial) {
+      await prisma.$transaction(async (tx) => {
+        await adjustStockToQuantity(tx, primaryCode, tonMoDau);
+        await syncMaterialQuantity(tx, primaryCode, sharedCodesOf({ code: primaryCode, erpCodes }));
+      });
+    }
     return ok(mapMaterial(firstMaterial, { ...document, erpCodes }));
   });
 }
@@ -594,14 +605,38 @@ export async function PUT(req: NextRequest) {
         }
       }
     }
-    // Đồng bộ quantity sang các bản ghi sibling (cùng code, khác machine).
+    /*
+     * Sửa tay số tồn = ĐIỀU CHỈNH KHO, không phải ghi đè một con số.
+     *
+     * Tồn thật nằm ở MaterialStockLot; `Material.quantity` chỉ là bản sao để hiển thị.
+     * Bản cũ ghi thẳng vào cột đó nên hai bên lệch nhau vĩnh viễn: màn hình phiếu báo
+     * còn hàng mà bước Sử dụng vật tư chết vì kho lô rỗng (đúng vết sự cố Dầu Shell
+     * Omala S2 GX320 — hiện có 418, lô 0). Giờ sinh/bớt lô cho khớp rồi mới đồng bộ
+     * con số hiển thị, nên hai bảng không thể lệch nữa.
+     */
     if (body.quantity != null) {
-      const updated = await prisma.material.findUnique({ where: { id: body.id }, select: { code: true, machine: true } });
+      const updated = await prisma.material.findUnique({
+        where: { id: body.id },
+        select: { code: true, erpCodes: true },
+      });
       if (updated) {
-        await prisma.material.updateMany({
-          where: { code: updated.code, machine: { not: updated.machine } },
-          data: { quantity: Number(body.quantity) },
+        const muc = Math.max(0, Math.trunc(Number(body.quantity)));
+        const delta = await prisma.$transaction(async (tx) => {
+          const changed = await adjustStockToQuantity(tx, updated.code, muc);
+          // Ghi lại con số hiển thị TỪ LÔ chứ không từ giá trị người dùng gõ: nếu hai
+          // đường tính ra khác nhau thì lô mới là bên đúng.
+          await syncMaterialQuantity(tx, updated.code, sharedCodesOf(updated));
+          return changed;
         });
+        if (delta !== 0) {
+          await audit(
+            user.id,
+            "ADJUST_MATERIAL_STOCK",
+            "Material",
+            body.id,
+            auditDetailWithPosition(user, `${updated.code}: điều chỉnh tồn ${delta > 0 ? "+" : ""}${delta} → ${muc}`)
+          );
+        }
       }
     }
     const m = await prisma.material.findUnique({ where: { id: body.id }, include: MATERIAL_INCLUDE });

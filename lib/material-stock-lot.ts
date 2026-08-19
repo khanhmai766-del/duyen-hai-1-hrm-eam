@@ -55,7 +55,7 @@ export function sharedCodesOf(material: { code: string; erpCodes?: string[] | nu
  * Sắp ở JS chứ không ở DB vì mỗi vật tư chỉ có vài lô, mà thứ tự "null đứng đầu" viết bằng
  * Prisma orderBy dễ sai âm thầm hơn là đọc ra rồi sắp.
  */
-function fifoSort(lots: StockLot[]) {
+function fifoSort<T extends { id: string; receivedAt: Date | null }>(lots: T[]): T[] {
   return [...lots].sort((a, b) => {
     if (!a.receivedAt && !b.receivedAt) return a.id.localeCompare(b.id);
     if (!a.receivedAt) return -1;
@@ -239,7 +239,18 @@ export async function consumeStock(
     plan = params.allocation.filter((item) => item.quantity > 0);
   } else {
     const { allocation, shortfall } = planAllocation(lots, quantity);
-    if (shortfall > 0) throw new Error(`Số lượng hiện có không đủ, còn thiếu ${shortfall}`);
+    if (shortfall > 0) {
+      // Nói RÕ mã vật tư và tồn thật theo lô: sự cố hay gặp là màn hình báo còn hàng
+      // (đọc `Material.quantity`) trong khi kho lô đã rỗng, mà thông báo cũ chỉ có mỗi
+      // con số thiếu nên không ai đoán được lệch ở đâu.
+      const con = lots.reduce((sum, lot) => sum + lot.quantityLeft, 0);
+      throw new Error(
+        `Số lượng hiện có không đủ, còn thiếu ${shortfall}` +
+          ` (mã ${materialCode}: cần ${quantity}, tồn theo lô ${con}).` +
+          ` Nếu màn hình vẫn báo còn hàng thì số tồn chưa được gắn với lô nào —` +
+          ` chạy scripts/backfill-opening-stock-lots.mjs để dựng lô tồn đầu kỳ.`
+      );
+    }
     plan = allocation;
   }
 
@@ -323,4 +334,78 @@ export async function reverseTicketStock(
     await tx.materialStockLot.delete({ where: { id: lot.id } });
   }
   return { removed, moved };
+}
+
+/**
+ * ĐẶT tổng tồn của một mã về đúng `target` bằng cách sinh/bớt lô, dùng cho ô số tồn gõ
+ * tay ở Danh mục vật tư.
+ *
+ * Trước đây form đó ghi thẳng `Material.quantity` mà không đụng tới lô, nên hai bảng lệch
+ * nhau vĩnh viễn: màn hình phiếu báo còn hàng còn bước sử dụng thì chết vì kho lô rỗng.
+ * Sự cố Dầu Shell Omala S2 GX320 (hiện có 418, lô 0) là đúng vết đó.
+ *
+ * Tăng thì dồn vào MỘT lô điều chỉnh duy nhất cho mỗi mã, không đẻ lô mới mỗi lần sửa.
+ * Giảm thì trừ LÔ ĐIỀU CHỈNH TRƯỚC, hết mới lấn sang các lô thật theo thứ tự ngược FIFO
+ * (mới nhất trước). Lô có phiếu giao hàng và lô tồn đầu kỳ là thứ đối chiếu được với
+ * chứng từ, còn lô điều chỉnh thì không — nên sửa số lên rồi sửa xuống phải triệt tiêu
+ * lẫn nhau chứ không được ăn mất chứng từ.
+ *
+ * Trả về số lượng đã thay đổi (dương = thêm, âm = bớt, 0 = vốn đã khớp).
+ */
+export const ADJUSTMENT_NOTE = 'Điều chỉnh tồn thủ công';
+
+export async function adjustStockToQuantity(
+  tx: Prisma.TransactionClient,
+  materialCode: string,
+  target: number
+): Promise<number> {
+  const muc = Math.max(0, Math.trunc(target));
+  const lots = await tx.materialStockLot.findMany({
+    where: { materialCode },
+    select: { id: true, quantityIn: true, quantityLeft: true, receivedAt: true, note: true },
+  });
+  const dangCo = lots.reduce((sum, lot) => sum + lot.quantityLeft, 0);
+  const delta = muc - dangCo;
+  if (delta === 0) return 0;
+
+  if (delta > 0) {
+    const loDieuChinh = lots.find((lot) => lot.note === ADJUSTMENT_NOTE);
+    if (loDieuChinh) {
+      await tx.materialStockLot.update({
+        where: { id: loDieuChinh.id },
+        data: { quantityIn: { increment: delta }, quantityLeft: { increment: delta } },
+      });
+    } else {
+      await tx.materialStockLot.create({
+        data: {
+          materialCode,
+          // receivedAt null = xếp ĐẦU hàng đợi FIFO, dùng hết trước các lô có phiếu.
+          receivedAt: null,
+          quantityIn: delta,
+          quantityLeft: delta,
+          note: ADJUSTMENT_NOTE,
+        },
+      });
+    }
+    return delta;
+  }
+
+  let canTru = -delta;
+  // Lô điều chỉnh đứng đầu hàng bị trừ; phần còn lại đảo danh sách đã sắp FIFO thay vì
+  // tự viết lại phép so sánh.
+  const thuTuTru = [
+    ...lots.filter((lot) => lot.note === ADJUSTMENT_NOTE),
+    ...[...fifoSort(lots.filter((lot) => lot.note !== ADJUSTMENT_NOTE))].reverse(),
+  ];
+  for (const lot of thuTuTru) {
+    if (canTru <= 0) break;
+    const bot = Math.min(lot.quantityLeft, canTru);
+    if (bot <= 0) continue;
+    await tx.materialStockLot.update({
+      where: { id: lot.id },
+      data: { quantityLeft: { decrement: bot } },
+    });
+    canTru -= bot;
+  }
+  return delta;
 }
