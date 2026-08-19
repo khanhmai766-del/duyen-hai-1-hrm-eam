@@ -15,7 +15,9 @@ export function reminderSummaryOf(value: unknown) {
 
   const normalized = normalizeText(raw);
   const declaredCount = Number(normalized.match(/so lan nhac lai\s*:?\s*(\d+)/)?.[1] ?? 0);
-  const numberedCounts = Array.from(normalized.matchAll(/nhac lai lan\s*(?:thu\s*)?(\d+)/g))
+  // Dữ liệu cũ trên Sheet không thống nhất: dòng đầu thường là
+  // "Nhắc lại lần 1", các dòng sau chỉ còn "Lần 2", "Lần 3"...
+  const numberedCounts = Array.from(normalized.matchAll(/(?:nhac lai\s*)?\blan\s*(?:thu\s*)?(\d+)/g))
     .map((match) => Number(match[1]))
     .filter(Number.isFinite);
   const dates = Array.from(raw.matchAll(/(\d{1,2})[\/-](\d{1,2})[\/-](\d{2,4})/g))

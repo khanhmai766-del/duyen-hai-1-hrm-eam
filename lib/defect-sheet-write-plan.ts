@@ -1,5 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import { reminderSummaryOf } from "@/lib/defect-reminder";
+import { normalizeText } from "@/lib/nav";
 
 const START_ROW = 6;
 const COLUMN_COUNT = 15; // A:O
@@ -151,7 +152,12 @@ function fullReminderHistory(payload: Payload) {
   const legacyEntries: Array<{ key: string; displayDate: string }> = [];
   for (const line of legacyLines) {
     const key = dateKeyOf(line);
-    if (/^nhắc lại lần/i.test(line) && key) {
+    // Sheet cũ chỉ ghi đầy đủ "Nhắc lại lần 1" ở dòng đầu; những dòng sau có
+    // dạng rút gọn "Lần 2", "Lần 3". Cả hai phải được đưa vào cùng một lịch sử
+    // để đánh lại số thứ tự, đồng thời loại bản ghi web đã đồng bộ vòng về có
+    // cùng ngày với một mốc cũ.
+    const isNumberedReminder = /^(?:nhac lai\s*)?lan\s*(?:thu\s*)?\d+\b/.test(normalizeText(line));
+    if (isNumberedReminder && key) {
       // Dòng này có thể chính là log web đã đồng bộ vòng về; log web là nguồn
       // chính xác hơn nên không giữ thêm bản legacy trùng ngày.
       if (!newDateKeys.has(key)) legacyEntries.push({ key, displayDate: line.match(/\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4}/)![0] });
