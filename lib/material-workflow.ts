@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { normalizeText } from "@/lib/nav";
+import { isShiftCommandPosition } from "@/lib/constants";
 
 /* ============================================================
    lib/material-workflow.ts
@@ -24,17 +25,16 @@ export function isMaterialTicketExtraAssignedPosition(position?: string | null) 
   return MATERIAL_TICKET_EXTRA_ASSIGNED_POSITIONS.some((item) => norm(item) === value);
 }
 
-/** Trưởng Ca / Trưởng Kíp / TK Lò máy / Trưởng Kíp Điện — nhóm duyệt, nghiệm thu, xuất file */
+/**
+ * Trưởng Ca / Trưởng Kíp / TK Lò máy / Trưởng Kíp Điện — nhóm duyệt, nghiệm thu, xuất file.
+ *
+ * Uỷ quyền cho `isShiftCommandPosition` để chỉ có MỘT định nghĩa "chỉ huy ca trực" trong
+ * cả hệ thống. Bản viết tay trước đây so chuỗi ĐÃ BỎ DẤU với literal CÒN DẤU ("trưởng ca")
+ * nên không bao giờ khớp: Trưởng ca và Trưởng kíp điện âm thầm mất quyền tạo phiếu, chỉ
+ * "TK Lò máy" lọt qua nhờ nhánh startsWith("tk ").
+ */
 export function isShiftLeader(position?: string | null) {
-  const p = norm(position);
-  if (!p) return false;
-  return (
-    p.includes("trưởng ca") ||
-    p.includes("trưởng kíp") ||
-    p.includes("tk lò") ||
-    p.includes("tk điện") ||
-    p.startsWith("tk ")
-  );
+  return isShiftCommandPosition(position);
 }
 
 /** Thống kê — nhập số phiếu Đề xuất vật tư */

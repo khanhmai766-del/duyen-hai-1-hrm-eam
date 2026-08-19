@@ -540,7 +540,8 @@ function LimsSyncChip({
         </Button>
         {!canSync && (
           <p className="mt-2 text-xs leading-5 text-muted-foreground">
-            Chỉ Quản đốc / Phó Quản đốc / Kỹ thuật viên / Quản trị được bấm đồng bộ. Bạn vẫn xem được danh sách.
+            Bạn chưa được cấp quyền đồng bộ kết quả phân tích dầu. Quản trị cấp quyền này ở trang Phân quyền, mục
+            Tiện ích. Bạn vẫn xem được danh sách.
           </p>
         )}
       </PopoverContent>

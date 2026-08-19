@@ -1,6 +1,5 @@
 // Centralized domain constants: statuses, roles, shift types, and their UI metadata.
 import { normalizeText } from "@/lib/nav";
-import { effectiveUserPosition, type PositionCarrier } from "@/lib/current-position";
 import {
   positionAllowedForUnit,
   positionLabelsForUnit,
@@ -493,18 +492,29 @@ export function isSingleStepTicketMaterial(materialCode: string | null | undefin
   return !!materialCode && (SINGLE_STEP_TICKET_MATERIAL_CODES as readonly string[]).includes(materialCode);
 }
 
-/** Ai được THAO TÁC Danh mục vật tư (thêm/sửa/xoá/xuất): Quản trị (ADMIN),
- *  Kỹ thuật viên (role TECHNICIAN hoặc chức vụ), Quản đốc / Phó Quản đốc.
- *  Xem nội dung bảng thì mọi cương vị đều được. */
-export function canManageMaterialCatalog(user: PositionCarrier & { role?: string | null }): boolean {
-  if (user.role === "ADMIN") return true;
-  if (user.role === "TECHNICIAN") return true;
-  // TỰ quy về cương vị ĐANG TRỰC thay vì tin vào trường `position` nơi gọi truyền xuống:
-  // phiên đăng nhập phía trình duyệt mang `position` là CHỨC DANH GỐC, lấy thẳng là giao diện
-  // ra kết quả khác máy chủ (máy chủ luôn xét cương vị đang trực).
-  const p = normalizeText(effectiveUserPosition(user) ?? user.position ?? "");
-  return p.includes("quan doc") || p.includes("ky thuat vien");
+/**
+ * Cương vị chỉ huy ca trực: Trưởng ca và hai Trưởng kíp.
+ *
+ * "TK Lò máy" và "TK Điện" là cách viết tắt CHÍNH THỨC của Trưởng kíp trong lịch trực
+ * (xem SHIFT_POSITION_DISPLAY_ORDER) — chỉ khớp chữ "trưởng kíp" là bỏ sót đúng người
+ * đang chỉ huy khối lò máy.
+ *
+ * So khớp trên chuỗi ĐÃ BỎ DẤU của `normalizeText`, nên literal ở đây cũng phải không
+ * dấu — viết "trưởng ca" có dấu thì không bao giờ khớp.
+ */
+export function isShiftCommandPosition(position: string | null | undefined): boolean {
+  const p = normalizeText(position ?? "");
+  if (!p) return false;
+  return (
+    p.includes("truong ca") ||
+    p.includes("truong kip") ||
+    // Bắt cả biến thể có tiền tố ("Phó TK Lò máy") chứ không chỉ chuỗi mở đầu bằng "tk ".
+    p.includes("tk lo") ||
+    p.includes("tk dien") ||
+    p.startsWith("tk ")
+  );
 }
+
 
 // ---- Tiện ích thời gian dùng chung ----
 
