@@ -36,7 +36,7 @@ import {
   TR_HEAD,
   type SortState,
 } from "@/components/pccc/pccc-table-card";
-import { hoseReelLabelDisplay } from "@/lib/pccc-status";
+import { deriveCabinetStatus, hoseReelLabelDisplay } from "@/lib/pccc-status";
 import {
   canEditPcccAdminField,
   canEditPcccRow,
@@ -243,6 +243,14 @@ export function PcccHoseReels({
               if (rowDraft && key in rowDraft) return Boolean(rowDraft[key]);
               return r.components.find((c) => c.groupLabel === groupLabel && c.status === status)?.checked ?? false;
             };
+            // Hiển thị tình trạng theo các ô đang chỉnh, giống website PCCC nguồn.
+            // Giá trị đã lưu chỉ được dùng khi dòng không có thay đổi nháp.
+            const effectiveStatus = deriveCabinetStatus(
+              r.components.map((component) => ({
+                ...component,
+                checked: tick(component.groupLabel, component.status),
+              }))
+            );
             const rowBg = rowBackground({ index, expanded, dirty: Boolean(rowDraft) });
 
             const statusCount = new Map<string, number>();
@@ -290,7 +298,7 @@ export function PcccHoseReels({
                     />
                   </TableCell>
                   <TableCell className={cn(TD_ROW, "whitespace-nowrap text-center")}>
-                    <StatusBadge status={r.tinhTrangTongThe} />
+                    <StatusBadge status={effectiveStatus} />
                   </TableCell>
 
                   {groups.flatMap((g) =>

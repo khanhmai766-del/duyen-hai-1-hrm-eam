@@ -394,6 +394,27 @@ export function usePcccCabinets(filters: PcccFilters) {
   });
 }
 
+export interface PcccCabinetOption {
+  id: string;
+  ma: string;
+  ten: string | null;
+  viTri: string | null;
+  cuongVi: string | null;
+  cuongViCode: string | null;
+  machine: string;
+  hoseReelCount: number;
+}
+
+/** Danh sách tủ rút gọn cho hộp thoại thêm cuộn vòi; chỉ gọi khi hộp thoại mở. */
+export function usePcccCabinetOptions(filters: Pick<PcccFilters, "period" | "cuongVi" | "machine" | "q">, enabled: boolean) {
+  return useQuery({
+    queryKey: ["pccc-hose-reel-cabinet-options", filters],
+    queryFn: () => apiGet<PcccCabinetOption[]>(`/api/pccc/hose-reels/cabinet-options${qs(filters)}`),
+    enabled,
+    staleTime: 30_000,
+  });
+}
+
 export function usePcccBulks(filters: PcccFilters) {
   return useQuery({
     queryKey: ["pccc-bulks", filters],
@@ -410,6 +431,7 @@ function useInvalidatePccc() {
     const keys = [
       "pccc-summary", "pccc-extinguishers", "pccc-cabinets", "pccc-bulks", "pccc-periods", "pccc-book-status",
       "pccc-alarm-buttons", "pccc-valves", "pccc-emergency-lights", "pccc-hose-reels",
+      "pccc-hose-reel-cabinet-options",
     ];
     for (const key of keys) {
       qc.invalidateQueries({ queryKey: [key] });

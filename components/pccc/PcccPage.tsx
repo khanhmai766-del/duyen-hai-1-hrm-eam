@@ -59,6 +59,7 @@ import { useRbacAccess } from "@/hooks/useRbacAccess";
 import {
   usePcccBulks,
   usePcccCabinets,
+  usePcccCabinetOptions,
   usePcccExtinguishers,
   usePcccPeriods,
   usePcccSummary,
@@ -280,6 +281,8 @@ export default function PcccPage() {
   const [cvccAddOpen, setCvccAddOpen] = useState(false);
   const [cvccAddCabinetId, setCvccAddCabinetId] = useState("");
   const [cvccAddMa, setCvccAddMa] = useState("");
+  const [cvccCabinetSearch, setCvccCabinetSearch] = useState("");
+  const [cvccCabinetSearchDebounced, setCvccCabinetSearchDebounced] = useState("");
   const [quaHan, setQuaHan] = useState(false);
   const [q, setQ] = useState("");
   const [page, setPage] = useState(1);
@@ -371,12 +374,13 @@ export default function PcccPage() {
   const denQuery = usePcccEmergencyLights(
     tab === "DEN" ? { ...listFilters, loai: lightLoai } : { ...baseFilters, page: 0, loai: lightLoai }
   );
-  // Cuộn vòi tải cùng lúc với tủ chữa cháy (bảng con của cùng một tab).
-  // Danh sách tủ để chọn cha: lấy RỜI với bảng đang hiển thị vì bảng chỉ có 25 dòng
-  // mỗi trang, mà tủ cần thêm cuộn vòi thường không nằm ở trang đang mở.
-  const cvccCabinetsQuery = usePcccCabinets(
-    cvccAddOpen ? { ...baseFilters, pageSize: 500, page: 1, sort: "ma", dir: "asc" } : { ...baseFilters, page: 0 }
+  // Danh sách tủ cho hộp thoại dùng endpoint NHẸ, lọc theo phạm vi GHI + cương vị đang
+  // chọn và chỉ trả tối đa 40 kết quả. Không tải lại 500 tủ đầy đủ cùng linh kiện/chữ ký.
+  const cvccCabinetsQuery = usePcccCabinetOptions(
+    { ...baseFilters, q: cvccCabinetSearchDebounced || undefined },
+    cvccAddOpen
   );
+  const cvccCabinetSearchPending = cvccAddOpen && cvccCabinetSearch.trim() !== cvccCabinetSearchDebounced;
   const cvccQuery = usePcccHoseReels(
     tab === "TCC" ? { ...listFilters, tinhTrangCvcc, pageSize: 200 } : { ...baseFilters, page: 0 }
   );
@@ -436,6 +440,16 @@ export default function PcccPage() {
     window.addEventListener("beforeunload", onBeforeUnload);
     return () => window.removeEventListener("beforeunload", onBeforeUnload);
   }, [dirtyCount]);
+
+  // Không bắn request theo từng phím khi nhiều người cùng tìm tủ để thêm cuộn vòi.
+  useEffect(() => {
+    if (!cvccAddOpen) {
+      setCvccCabinetSearchDebounced("");
+      return;
+    }
+    const timer = window.setTimeout(() => setCvccCabinetSearchDebounced(cvccCabinetSearch.trim()), 300);
+    return () => window.clearTimeout(timer);
+  }, [cvccAddOpen, cvccCabinetSearch]);
 
   function beginEdit() {
     if (!editableTab) return;
@@ -1054,8 +1068,8 @@ export default function PcccPage() {
   }
 
   /**
-   * Chọn tủ cha → gợi ý mã theo đúng công thức của bản demo, dựa trên SỐ CUỘN VÒI ĐÃ CÓ
-   * của tủ đó. Người dùng vẫn sửa được: mã thật do hiện trường quyết định.
+   * Chọn tủ cha → gợi ý mã theo đúng công thức của bản demo. Số cuộn đã có được server
+   * đếm ngay trong truy vấn lựa chọn, không suy từ trang cuộn vòi đang tải dở.
    */
   function pickCvccCabinet(cabinetId: string) {
     setCvccAddCabinetId(cabinetId);
@@ -1064,8 +1078,7 @@ export default function PcccPage() {
       setCvccAddMa("");
       return;
     }
-    const existing = (cvccQuery.data?.data ?? []).filter((r) => r.cabinet.id === cabinetId).length;
-    setCvccAddMa(suggestHoseReelMa(cab.ma, existing));
+    setCvccAddMa(suggestHoseReelMa(cab.ma, cab.hoseReelCount));
   }
 
   function submitCvccAdd() {
@@ -1902,7 +1915,14 @@ export default function PcccPage() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={cvccAddOpen} onOpenChange={(open) => !open && setCvccAddOpen(false)}>
+      <Dialog
+        open={cvccAddOpen}
+        onOpenChange={(open) => {
+          if (open) return;
+          setCvccAddOpen(false);
+          setCvccCabinetSearch("");
+        }}
+      >
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -1912,16 +1932,34 @@ export default function PcccPage() {
           </DialogHeader>
           <div className="grid gap-3 py-1">
             <p className="text-[12.5px] text-muted-foreground">
-              Chọn tủ chữa cháy cha — mã cuộn vòi được gợi ý theo mã tủ, sửa lại được trước khi lưu.
+              Chỉ hiện tủ thuộc cương vị bạn đang làm việc và bộ lọc cương vị hiện tại. Mã cuộn vòi được gợi ý theo mã
+              tủ, sửa lại được trước khi lưu.
             </p>
+            <div className="grid gap-1.5">
+              <Label className="text-xs font-semibold text-slate-600">Tìm tủ chữa cháy</Label>
+              <input
+                value={cvccCabinetSearch}
+                onChange={(e) => {
+                  setCvccCabinetSearch(e.target.value);
+                  setCvccAddCabinetId("");
+                  setCvccAddMa("");
+                }}
+                placeholder="Nhập mã tủ, tên hoặc vị trí…"
+                autoComplete="off"
+                className="h-10 w-full rounded-xl border border-input bg-white px-2.5 text-[13px] outline-none focus:ring-2 focus:ring-accent/20"
+              />
+            </div>
             <div className="grid gap-1.5">
               <Label className="text-xs font-semibold text-slate-600">Tủ chữa cháy cha</Label>
               <select
                 value={cvccAddCabinetId}
                 onChange={(e) => pickCvccCabinet(e.target.value)}
+                disabled={cvccCabinetsQuery.isFetching || cvccCabinetSearchPending}
                 className="h-10 w-full rounded-xl border border-input bg-white px-2.5 text-[13px] outline-none focus:ring-2 focus:ring-accent/20"
               >
-                <option value="">— Chọn tủ —</option>
+                <option value="">
+                  {cvccCabinetsQuery.isFetching || cvccCabinetSearchPending ? "Đang lọc danh sách tủ…" : "— Chọn tủ —"}
+                </option>
                 {(cvccCabinetsQuery.data?.data ?? []).map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.ma}
@@ -1929,8 +1967,21 @@ export default function PcccPage() {
                   </option>
                 ))}
               </select>
-              {cvccCabinetsQuery.isFetching && (
-                <span className="text-[11px] text-muted-foreground">Đang tải danh sách tủ…</span>
+              {!cvccCabinetsQuery.isFetching &&
+                !cvccCabinetSearchPending &&
+                !cvccCabinetsQuery.isError &&
+                (cvccCabinetsQuery.data?.data.length ?? 0) === 0 && (
+                <span className="text-[11px] text-amber-700">
+                  Không có tủ phù hợp với cương vị và nội dung tìm kiếm.
+                </span>
+              )}
+              {cvccCabinetsQuery.isError && (
+                <span className="text-[11px] text-rose-700">Không tải được danh sách tủ phù hợp.</span>
+              )}
+              {cvccCabinetsQuery.data?.meta?.hasMore && (
+                <span className="text-[11px] text-muted-foreground">
+                  Đang hiển thị 40 kết quả đầu tiên — nhập thêm mã hoặc vị trí để thu hẹp.
+                </span>
               )}
             </div>
             <div className="grid gap-1.5">
@@ -2220,6 +2271,7 @@ export default function PcccPage() {
               onAdd={() => {
                 setCvccAddCabinetId("");
                 setCvccAddMa("");
+                setCvccCabinetSearch("");
                 setCvccAddOpen(true);
               }}
               onDelete={(row: HoseReelRow) => {
