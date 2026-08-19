@@ -121,7 +121,7 @@ export function PcccHoseReels({
 
   const FROZEN = {
     expand: { w: 42, left: 0 },
-    ma: { w: 230, left: 42 },
+    ma: { w: 235, left: 42 },
   } as const;
 
   const componentCols = groups.reduce((n, g) => n + g.statuses.length, 0);
@@ -170,7 +170,7 @@ export function PcccHoseReels({
         ) : null
       }
     >
-      <Table className="min-w-[2100px]" wrapperClassName={TABLE_SCROLLER}>
+      <Table className="min-w-[1520px]" wrapperClassName={TABLE_SCROLLER}>
         <TableHeader>
           <TableRow ref={headRowRef} className={TR_HEAD}>
             <TableHead rowSpan={2} className={cn(TH_NAVY, TH_EXPAND, STICKY_TH)} style={{ left: FROZEN.expand.left }} />
@@ -181,13 +181,13 @@ export function PcccHoseReels({
             >
               <SortHeader label="Mã cuộn vòi" sortKey="ma" sort={sort} onSort={onSort} />
             </TableHead>
-            <TableHead rowSpan={2} className={cn(TH_NAVY, "w-[240px]")}>
+            <TableHead rowSpan={2} className={cn(TH_NAVY, "w-[235px]")}>
               <PlainHeader label="Thuộc tủ chữa cháy" />
             </TableHead>
-            <TableHead rowSpan={2} className={cn(TH_NAVY, "w-[160px]")}>
+            <TableHead rowSpan={2} className={cn(TH_NAVY, "w-[145px]")}>
               <SortHeader label="Cương vị quản lý" sortKey="cuongVi" sort={sort} onSort={onSort} />
             </TableHead>
-            <TableHead rowSpan={2} className={cn(TH_NAVY, "w-[120px]")}>
+            <TableHead rowSpan={2} className={cn(TH_NAVY, "w-[112px]")}>
               <SortHeader label="Tình trạng" sortKey="tinhTrangTongThe" sort={sort} onSort={onSort} />
             </TableHead>
             {groups.map((g) => (
@@ -195,10 +195,10 @@ export function PcccHoseReels({
                 <PlainHeader label={g.label} align="center" />
               </TableHead>
             ))}
-            <TableHead rowSpan={2} className={cn(TH_NAVY, "w-[100px]")}>
+            <TableHead rowSpan={2} className={cn(TH_NAVY, "w-[95px]")}>
               <SortHeader label="Số YCSC" sortKey="soYcsc" sort={sort} onSort={onSort} />
             </TableHead>
-            <TableHead rowSpan={2} className={cn(TH_NAVY, "w-[130px]")}>
+            <TableHead rowSpan={2} className={cn(TH_NAVY, "w-[125px]")}>
               <SortHeader label="Người kiểm tra" sortKey="nguoiKiemTra" sort={sort} onSort={onSort} />
             </TableHead>
             {onDelete && <TableHead rowSpan={2} className={cn(TH_NAVY, "w-[52px]")} />}

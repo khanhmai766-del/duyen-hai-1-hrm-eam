@@ -92,7 +92,7 @@ export function PcccEmergencyLights({
 
   const FROZEN = {
     expand: { w: 42, left: 0 },
-    maKks: { w: 130, left: 42 },
+    maKks: { w: 122, left: 42 },
   } as const;
 
   // + | Mã KKS | Khu vực | Mã bản vẽ | SL | Cương vị | Giám sát | Tình trạng | Kết quả test | Người kiểm tra
@@ -127,7 +127,7 @@ export function PcccEmergencyLights({
         ) : null
       }
     >
-      <Table className="min-w-[1700px]" wrapperClassName={TABLE_SCROLLER}>
+      <Table className="min-w-[1370px]" wrapperClassName={TABLE_SCROLLER}>
         <TableHeader>
           <TableRow className={TR_HEAD}>
             <TableHead className={cn(TH_NAVY, TH_EXPAND, STICKY_TH)} style={{ left: FROZEN.expand.left }} />
@@ -140,25 +140,26 @@ export function PcccEmergencyLights({
             <TableHead className={cn(TH_NAVY, "w-[300px]")}>
               <SortHeader label="Tên khu vực Layout" sortKey="tenKhuVuc" sort={sort} onSort={onSort} />
             </TableHead>
-            <TableHead className={cn(TH_NAVY, "w-[150px]")}>
+            <TableHead className={cn(TH_NAVY, "w-[145px]")}>
               <SortHeader label="Mã bảng vẽ" sortKey="maBanVe" sort={sort} onSort={onSort} />
             </TableHead>
-            <TableHead className={cn(TH_NAVY, "w-[70px] text-center")}>
+            <TableHead className={cn(TH_NAVY, "w-[62px] text-center")}>
               <PlainHeader label="SL khu vực" align="center" />
             </TableHead>
-            <TableHead className={cn(TH_NAVY, "w-[160px]")}>
+            <TableHead className={cn(TH_NAVY, "w-[140px]")}>
               <SortHeader label="Cương vị quản lý" sortKey="cuongVi" sort={sort} onSort={onSort} />
             </TableHead>
-            <TableHead className={cn(TH_NAVY, "w-[110px]")}>
+            <TableHead className={cn(TH_NAVY, "w-[115px]")}>
               <PlainHeader label="Người giám sát" />
             </TableHead>
-            <TableHead className={cn(TH_NAVY, "w-[140px]")}>
+            {/* Nhãn dài nhất là "Không có đèn" — 118px vừa đủ, rộng hơn là thừa khoảng trắng. */}
+            <TableHead className={cn(TH_NAVY, "w-[118px]")}>
               <SortHeader label="Tình trạng" sortKey="tinhTrang" sort={sort} onSort={onSort} />
             </TableHead>
-            <TableHead className={cn(TH_NAVY, "w-[280px]")}>
+            <TableHead className={cn(TH_NAVY, "w-[300px]")}>
               <PlainHeader label="Kết quả test gần nhất" />
             </TableHead>
-            <TableHead className={cn(TH_NAVY, "w-[130px]")}>
+            <TableHead className={cn(TH_NAVY, "w-[125px]")}>
               <SortHeader label="Người kiểm tra" sortKey="nguoiKiemTra" sort={sort} onSort={onSort} />
             </TableHead>
           </TableRow>

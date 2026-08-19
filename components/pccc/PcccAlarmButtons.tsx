@@ -116,7 +116,7 @@ export function PcccAlarmButtons({
   // nhiều chỗ cho khối ô tích.
   const FROZEN = {
     expand: { w: 42, left: 0 },
-    maKks: { w: 130, left: 42 },
+    maKks: { w: 122, left: 42 },
   } as const;
 
   const componentCols = groups.reduce((n, g) => n + g.statuses.length, 0);
@@ -152,7 +152,7 @@ export function PcccAlarmButtons({
         ) : null
       }
     >
-      <Table className="min-w-[1900px]" wrapperClassName={TABLE_SCROLLER}>
+      <Table className="min-w-[1395px]" wrapperClassName={TABLE_SCROLLER}>
         <TableHeader>
           <TableRow ref={headRowRef} className={TR_HEAD}>
             <TableHead rowSpan={2} className={cn(TH_NAVY, TH_EXPAND, STICKY_TH)} style={{ left: FROZEN.expand.left }} />
@@ -163,16 +163,16 @@ export function PcccAlarmButtons({
             >
               <SortHeader label="Mã KKS" sortKey="maKks" sort={sort} onSort={onSort} />
             </TableHead>
-            <TableHead rowSpan={2} className={cn(TH_NAVY, "w-[230px]")}>
+            <TableHead rowSpan={2} className={cn(TH_NAVY, "w-[240px]")}>
               <SortHeader label="Vị trí cụ thể" sortKey="viTri" sort={sort} onSort={onSort} />
             </TableHead>
-            <TableHead rowSpan={2} className={cn(TH_NAVY, "w-[160px]")}>
+            <TableHead rowSpan={2} className={cn(TH_NAVY, "w-[145px]")}>
               <SortHeader label="Cương vị quản lý" sortKey="cuongVi" sort={sort} onSort={onSort} />
             </TableHead>
-            <TableHead rowSpan={2} className={cn(TH_NAVY, "w-[120px]")}>
+            <TableHead rowSpan={2} className={cn(TH_NAVY, "w-[115px]")}>
               <PlainHeader label="Người giám sát" />
             </TableHead>
-            <TableHead rowSpan={2} className={cn(TH_NAVY, "w-[135px]")}>
+            <TableHead rowSpan={2} className={cn(TH_NAVY, "w-[128px]")}>
               <SortHeader label="Tình trạng" sortKey="tinhTrangTongThe" sort={sort} onSort={onSort} />
             </TableHead>
             {groups.map((g) => (
@@ -180,7 +180,7 @@ export function PcccAlarmButtons({
                 <PlainHeader label={g.label} align="center" />
               </TableHead>
             ))}
-            <TableHead rowSpan={2} className={cn(TH_NAVY, "w-[130px]")}>
+            <TableHead rowSpan={2} className={cn(TH_NAVY, "w-[125px]")}>
               <SortHeader label="Người kiểm tra" sortKey="nguoiKiemTra" sort={sort} onSort={onSort} />
             </TableHead>
           </TableRow>

@@ -99,7 +99,7 @@ export function PcccValves({
 
   const FROZEN = {
     expand: { w: 42, left: 0 },
-    maKks: { w: 150, left: 42 },
+    maKks: { w: 128, left: 42 },
   } as const;
 
   // + | Mã KKS | Tên van | Loại | Vị trí | Cương vị | Giám sát | Tình trạng | Số YCSC | Người kiểm tra
@@ -134,7 +134,7 @@ export function PcccValves({
         ) : null
       }
     >
-      <Table className="min-w-[1600px]" wrapperClassName={TABLE_SCROLLER}>
+      <Table className="min-w-[1360px]" wrapperClassName={TABLE_SCROLLER}>
         <TableHeader>
           <TableRow className={TR_HEAD}>
             <TableHead className={cn(TH_NAVY, TH_EXPAND, STICKY_TH)} style={{ left: FROZEN.expand.left }} />
@@ -144,28 +144,28 @@ export function PcccValves({
             >
               <SortHeader label="Mã KKS van" sortKey="maKks" sort={sort} onSort={onSort} />
             </TableHead>
-            <TableHead className={cn(TH_NAVY, "w-[260px]")}>
+            <TableHead className={cn(TH_NAVY, "w-[280px]")}>
               <SortHeader label="Tên van" sortKey="tenVan" sort={sort} onSort={onSort} />
             </TableHead>
-            <TableHead className={cn(TH_NAVY, "w-[100px]")}>
+            <TableHead className={cn(TH_NAVY, "w-[90px]")}>
               <SortHeader label="Loại van" sortKey="loaiVan" sort={sort} onSort={onSort} />
             </TableHead>
-            <TableHead className={cn(TH_NAVY, "w-[200px]")}>
+            <TableHead className={cn(TH_NAVY, "w-[165px]")}>
               <SortHeader label="Vị trí" sortKey="viTri" sort={sort} onSort={onSort} />
             </TableHead>
-            <TableHead className={cn(TH_NAVY, "w-[160px]")}>
+            <TableHead className={cn(TH_NAVY, "w-[145px]")}>
               <SortHeader label="Cương vị quản lý" sortKey="cuongVi" sort={sort} onSort={onSort} />
             </TableHead>
-            <TableHead className={cn(TH_NAVY, "w-[110px]")}>
+            <TableHead className={cn(TH_NAVY, "w-[115px]")}>
               <PlainHeader label="Người giám sát" />
             </TableHead>
-            <TableHead className={cn(TH_NAVY, "w-[200px]")}>
+            <TableHead className={cn(TH_NAVY, "w-[175px]")}>
               <SortHeader label="Tình trạng" sortKey="tinhTrang" sort={sort} onSort={onSort} />
             </TableHead>
-            <TableHead className={cn(TH_NAVY, "w-[110px]")}>
+            <TableHead className={cn(TH_NAVY, "w-[95px]")}>
               <SortHeader label="Số YCSC" sortKey="soYcsc" sort={sort} onSort={onSort} />
             </TableHead>
-            <TableHead className={cn(TH_NAVY, "w-[130px]")}>
+            <TableHead className={cn(TH_NAVY, "w-[125px]")}>
               <SortHeader label="Người kiểm tra" sortKey="nguoiKiemTra" sort={sort} onSort={onSort} />
             </TableHead>
           </TableRow>
