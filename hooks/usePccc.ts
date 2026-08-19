@@ -176,8 +176,6 @@ export interface PcccSummary {
       loaiRon: "DN50" | "DN65";
       loaiTu: "INDOOR" | "OUTDOOR";
       soTu: number;
-      /** Số cuộn vòi của các tủ thuộc loại này — mỗi cuộn một lăng phun. */
-      soCuonVoi: number;
       tongRon: number;
       dayDu: number;
       thieuRon: number;

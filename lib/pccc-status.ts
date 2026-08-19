@@ -238,8 +238,12 @@ export function tccPolarityViolations(components: TccComponent[]) {
  * 4 thiếu, OUTDOOR 106 / 4.
  */
 export const RON_WEIGHTS: Record<string, number> = { "LĂNG PHUN": 2, "NGÀM": 1 };
-// Số ron mỗi tủ KHÔNG còn là hằng số từ 2026-08-18: lăng phun đã chuyển xuống bảng
-// cuộn vòi, mà tủ ngoài trời có hai cuộn — xem summarizeRon trong lib/pccc-summary.ts.
+/**
+ * Số ron mỗi TỦ. Vẫn là hằng số dù lăng phun đã chuyển xuống bảng cuộn vòi: nghiệp vụ
+ * chốt 2026-08-19 giữ nguyên cách đếm theo tủ của sheet gốc — tủ ngoài trời có hai cuộn
+ * vòi nhưng vẫn chỉ tính 2 ron lăng phun cho cả tủ. Xem summarizeRon (lib/pccc-summary.ts).
+ */
+export const RON_PER_CABINET = Object.values(RON_WEIGHTS).reduce((a, b) => a + b, 0); // 3
 export const RON_STATUS_OK = "Khả dụng";
 export const RON_STATUS_MISSING = "Thiếu ron";
 

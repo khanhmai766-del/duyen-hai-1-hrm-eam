@@ -64,7 +64,7 @@ export async function GET(req: NextRequest) {
       }),
       prisma.pcccCabinet.findMany({
         where: { periodId: period.id, ...scopeTcc },
-        select: { ten: true, components: true },
+        select: { id: true, ten: true, components: true },
       }),
       prisma.pcccBulk.findMany({
         where: { periodId: period.id, ...scopeFcd },
@@ -87,8 +87,8 @@ export async function GET(req: NextRequest) {
       // Cuộn vòi là danh mục con của tủ nên đi theo ĐÚNG phạm vi của tủ.
       prisma.pcccHoseReel.findMany({
         where: { periodId: period.id, ...scopeTcc },
-        // Tên tủ cha cần cho phần RON: phải biết cuộn vòi thuộc nhánh INDOOR hay OUTDOOR.
-        select: { tinhTrangTongThe: true, components: true, cabinet: { select: { ten: true } } },
+        // Khoá tủ cha cần cho phần RON: gom các cuộn của cùng một tủ để tính ở CẤP TỦ.
+        select: { tinhTrangTongThe: true, components: true, cabinetId: true },
       }),
       cuongViListOf(period.id, viewScope),
       prisma.pcccSignature.count({ where: { periodId: period.id } }),
@@ -100,7 +100,7 @@ export async function GET(req: NextRequest) {
         // Ron lăng phun đọc ở bảng cuộn vòi từ 2026-08-18 — xem summarizeRon.
         tcc: summarizeCabinets(
           cabinets,
-          hoseReels.map((r) => ({ cabinetTen: r.cabinet.ten, components: r.components }))
+          hoseReels.map((r) => ({ cabinetId: r.cabinetId, components: r.components }))
         ),
         fcd: summarizeBulks(bulks),
         fm200: summarizeFm200(
