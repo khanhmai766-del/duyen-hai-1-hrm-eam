@@ -819,6 +819,15 @@ export function usePcccCreateHoseReel() {
   });
 }
 
+/** Thêm một thiết bị vào đúng bảng đang mở. Biểu mẫu theo loại nằm ở PcccCreateDialog. */
+export function usePcccCreateItem() {
+  const invalidate = useInvalidatePccc();
+  return useMutation({
+    mutationFn: (body: Record<string, unknown>) => apiMutate<{ id: string; kind: string }>("/api/pccc/items", "POST", body),
+    onSuccess: invalidate,
+  });
+}
+
 export function usePcccDeleteHoseReel() {
   const invalidate = useInvalidatePccc();
   return useMutation({

@@ -78,6 +78,7 @@ import {
   usePcccHoseReels,
   usePcccFireControlCabinets,
   usePcccCreateHoseReel,
+  usePcccCreateItem,
   usePcccDeleteHoseReel,
   type AlarmButtonRow,
   type HoseReelRow,
@@ -90,6 +91,7 @@ import {
   type PcccWriteScopeMeta,
   type PositionOption,
 } from "@/hooks/usePccc";
+import { PcccCreateDialog, type PcccCreateKind } from "@/components/pccc/PcccCreateDialog";
 import { PcccBulks } from "@/components/pccc/PcccBulks";
 import { PcccCabinets } from "@/components/pccc/PcccCabinets";
 import { PcccExtinguishers } from "@/components/pccc/PcccExtinguishers";
@@ -114,6 +116,7 @@ import {
 
   suggestHoseReelMa,
 } from "@/lib/pccc-status";
+import { POSITION_CATALOG } from "@/lib/position-catalog";
 
 // Bảy tab: hai loại đèn cố ý GỘP làm một ("Đèn sự cố", đổi loại bằng nút gạt trong
 // tab) vì hình dạng dữ liệu giống hệt nhau — tách đôi chỉ làm thanh tab tràn trên
@@ -289,6 +292,8 @@ export default function PcccPage() {
   const [cvccAddMa, setCvccAddMa] = useState("");
   const [cvccCabinetSearch, setCvccCabinetSearch] = useState("");
   const [cvccCabinetSearchDebounced, setCvccCabinetSearchDebounced] = useState("");
+  const [createKind, setCreateKind] = useState<PcccCreateKind>("EXTINGUISHER");
+  const [createOpen, setCreateOpen] = useState(false);
   const [quaHan, setQuaHan] = useState(false);
   const [q, setQ] = useState("");
   const [page, setPage] = useState(1);
@@ -440,6 +445,7 @@ export default function PcccPage() {
   const updateHoseReel = usePcccUpdate("HOSE_REEL");
   const updateFireControlCabinet = usePcccUpdate("FIRE_CONTROL_CABINET");
   const createHoseReel = usePcccCreateHoseReel();
+  const createItem = usePcccCreateItem();
   const deleteHoseReel = usePcccDeleteHoseReel();
 
   // Gom sửa đổi trong bộ nhớ nên PHẢI cảnh báo trước khi mất: đóng tab / tải lại trang.
@@ -1130,6 +1136,22 @@ export default function PcccPage() {
     );
   }
 
+  function openCreate(kind: PcccCreateKind) {
+    setCreateKind(kind);
+    setCreateOpen(true);
+  }
+
+  function submitCreate(body: Record<string, unknown>) {
+    createItem.mutate(body, {
+      onSuccess: () => {
+        setCreateOpen(false);
+        setPage(1);
+        toast.success("Đã thêm thiết bị PCCC mới");
+      },
+      onError: (error: Error) => toast.error(error.message),
+    });
+  }
+
   function clearFilters() {
     setCuongVi("ALL");
     setMachine("ALL");
@@ -1396,6 +1418,21 @@ export default function PcccPage() {
           </span>
         )}
       </span>
+    ) : null;
+
+  const createPositions: PositionOption[] = POSITION_CATALOG
+    .filter((item) => writeScope?.all || writeScope?.codes.includes(item.code))
+    .map((item) => ({ code: item.code, label: item.label }));
+  const defaultCreatePosition = cuongVi !== "ALL" ? cuongVi : createPositions.length === 1 ? createPositions[0].code : "";
+  const createButton = (kind: PcccCreateKind, label = "Thêm mới") =>
+    !readOnly ? (
+      <button
+        type="button"
+        onClick={() => openCreate(kind)}
+        className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-2.5 text-[12.5px] font-medium text-slate-700 transition hover:border-slate-400 hover:bg-slate-50"
+      >
+        <Plus className="size-3.5" /> {label}
+      </button>
     ) : null;
 
   return (
@@ -2094,6 +2131,19 @@ export default function PcccPage() {
         </DialogContent>
       </Dialog>
 
+      <PcccCreateDialog
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        kind={createKind}
+        period={period.label}
+        positions={createPositions}
+        defaultPosition={defaultCreatePosition}
+        defaultMachine={machine}
+        lightLoai={lightLoai}
+        pending={createItem.isPending}
+        onSubmit={submitCreate}
+      />
+
       <Dialog open={signOpen} onOpenChange={(open) => !open && setSignOpen(false)}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -2288,7 +2338,7 @@ export default function PcccPage() {
             pageSize={pageSize}
             total={bccQuery.data?.meta?.total ?? 0}
             filtered={hasActiveFilter}
-            toolbarExtra={scopeStatus}
+            toolbarExtra={<>{scopeStatus}{createButton("EXTINGUISHER")}</>}
             search={q}
             onPageChange={setPage}
             onPageSizeChange={(n) => {
@@ -2323,7 +2373,7 @@ export default function PcccPage() {
             pageSize={pageSize}
             total={tccQuery.data?.meta?.total ?? 0}
             filtered={hasActiveFilter}
-            toolbarExtra={scopeStatus}
+            toolbarExtra={<>{scopeStatus}{createButton("CABINET")}</>}
             search={q}
             onPageChange={setPage}
             onPageSizeChange={(n) => {
@@ -2401,7 +2451,7 @@ export default function PcccPage() {
           draft={drafts.NNBC}
           onDraftChange={draftChanger("NNBC")}
           onToggleComponent={componentToggler("NNBC")}
-          toolbarExtra={scopeStatus}
+          toolbarExtra={<>{scopeStatus}{createButton("ALARM_BUTTON")}</>}
           cuongViList={cuongViList}
           canManage={!readOnly}
           writeScope={writeScope}
@@ -2432,7 +2482,7 @@ export default function PcccPage() {
           rows={tdkccQuery.data?.data ?? []}
           draft={drafts.TDKCC}
           onDraftChange={draftChanger("TDKCC")}
-          toolbarExtra={scopeStatus}
+          toolbarExtra={<>{scopeStatus}{createButton("FIRE_CONTROL_CABINET")}</>}
           cuongViList={cuongViList}
           canManage={!readOnly}
           writeScope={writeScope}
@@ -2463,7 +2513,7 @@ export default function PcccPage() {
           rows={vanQuery.data?.data ?? []}
           draft={drafts.VAN}
           onDraftChange={draftChanger("VAN")}
-          toolbarExtra={scopeStatus}
+          toolbarExtra={<>{scopeStatus}{createButton("VALVE")}</>}
           cuongViList={cuongViList}
           canManage={!readOnly}
           writeScope={writeScope}
@@ -2521,6 +2571,7 @@ export default function PcccPage() {
                 ))}
               </div>
               {scopeStatus}
+              {createButton("EMERGENCY_LIGHT")}
             </>
           }
           cuongViList={cuongViList}
@@ -2560,6 +2611,8 @@ export default function PcccPage() {
             editing={editing && editableTab === "FCD"}
             draft={drafts.FCD}
             onDraftChange={onFcdDraftChange}
+            onAddBulk={() => openCreate("BULK")}
+            onAddPanel={() => openCreate("FM200_PANEL")}
           />
         ) : (
           <Skeleton className="h-72" />

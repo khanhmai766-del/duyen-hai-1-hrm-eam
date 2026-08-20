@@ -4,7 +4,7 @@
 // bảng FM200 bố cục NGANG — mỗi bình là 1 cột, KÝ 1 LẦN cho cả bảng.
 import { useState } from "react";
 import { toast } from "sonner";
-import { Gauge } from "lucide-react";
+import { Gauge, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useMeProfile } from "@/hooks/useUsers";
 import { PcccSignConfirmDialog } from "@/components/pccc/pccc-sign-dialog";
@@ -205,6 +205,8 @@ export function PcccBulks({
   editing,
   draft,
   onDraftChange,
+  onAddBulk,
+  onAddPanel,
 }: {
   bulks: BulkRow[];
   panels: Fm200Panel[];
@@ -217,6 +219,8 @@ export function PcccBulks({
   /** Sửa đổi chưa lưu. Khoá: `bulk:<id>` / `panel:<id>`; ô số FM200 dùng `muc:`/`ap:`. */
   draft?: Record<string, Record<string, unknown>>;
   onDraftChange?: (key: string, field: string, value: unknown) => void;
+  onAddBulk?: () => void;
+  onAddPanel?: () => void;
   /** Phạm vi ghi theo cương vị — dòng ngoài phạm vi vẫn XEM được nhưng khoá ô. */
   writeScope?: PcccWriteScopeMeta;
 }) {
@@ -267,6 +271,12 @@ export function PcccBulks({
 
   return (
     <div className="space-y-4">
+      {canManage && (onAddBulk || onAddPanel) && (
+        <div className="flex flex-wrap justify-end gap-2">
+          {onAddBulk && <button type="button" onClick={onAddBulk} className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-2.5 text-[12.5px] font-medium text-slate-700 transition hover:bg-slate-50"><Plus className="size-3.5" /> Thêm Foam · CO2 · Diesel</button>}
+          {onAddPanel && <button type="button" onClick={onAddPanel} className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-2.5 text-[12.5px] font-medium text-slate-700 transition hover:bg-slate-50"><Plus className="size-3.5" /> Thêm bảng FM200</button>}
+        </div>
+      )}
       <TableShell>
         <thead>
           <tr>
