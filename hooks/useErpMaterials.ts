@@ -3,7 +3,7 @@
 import { useQueries } from "@tanstack/react-query";
 import { apiGet } from "@/lib/fetcher";
 
-const GROUPED_STOCK_CATEGORIES = ["Dầu bôi trơn", "Lõi lọc dầu", "Thiết bị C&I", "Hóa Chất", "Chai Khí", "Bi Nghiền Than", "Văn phòng phẩm", "Khác"] as const;
+const GROUPED_STOCK_CATEGORIES = ["Dầu bôi trơn", "Lõi lọc dầu", "Thiết bị C&I", "Hóa Chất", "Chai Khí", "Bi Nghiền Than", "Văn phòng phẩm", "Dụng cụ sơn", "Khác"] as const;
 
 type GroupedStockCategory = (typeof GROUPED_STOCK_CATEGORIES)[number];
 

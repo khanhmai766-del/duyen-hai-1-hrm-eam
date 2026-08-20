@@ -62,7 +62,7 @@ export function canCreateTicket(user: { role?: string | null; position?: string 
 /* ---------- Phân quyền các bước quy trình (admin cấu hình, bảng MaterialWorkflowRole) ---------- */
 
 export const WORKFLOW_STEPS = [
-  "create", "confirm", "vhvReceive", "stats", "statsHandover", "receive", "use", "accept", "return", "settle", "manage",
+  "create", "confirm", "vhvReceive", "stats", "statsHandover", "receive", "issue", "use", "accept", "return", "settle", "manage",
 ] as const;
 export type WorkflowStep = (typeof WORKFLOW_STEPS)[number];
 
@@ -73,7 +73,8 @@ export const WORKFLOW_STEP_LABELS: Record<WorkflowStep, string> = {
   stats: "Thống kê xác nhận ĐXVT",
   statsHandover: "Xác nhận VHV nhận / trả phiếu ĐXVT",
   receive: "Nhận vật tư",
-  use: "Sử dụng vật tư",
+  issue: "Cấp vật tư từ hiện có",
+  use: "Ghi nhận sử dụng vật tư",
   accept: "Nghiệm thu + xuất BBNT",
   return: "Xác nhận trả (chai khí)",
   settle: "Quyết toán vật tư",
@@ -103,7 +104,7 @@ export async function getWorkflowRoleMap(): Promise<Record<WorkflowStep, string[
   const rows = await prisma.materialWorkflowRole.findMany({ select: { step: true, position: true } });
   const map: Record<WorkflowStep, string[]> = {
     create: [], confirm: [], vhvReceive: [], stats: [], statsHandover: [],
-    receive: [], use: [], accept: [], return: [], settle: [], manage: [],
+    receive: [], issue: [], use: [], accept: [], return: [], settle: [], manage: [],
   };
   for (const r of rows) {
     if ((WORKFLOW_STEPS as readonly string[]).includes(r.step)) map[r.step as WorkflowStep].push(r.position);
@@ -124,7 +125,7 @@ function defaultStepAllowed(step: WorkflowStep, user: { role?: string | null; po
   // statsHandover tách khỏi stats từ 2026-08-10 để giao được cho cương vị khác; khi
   // chưa cấu hình vẫn mặc định Thống kê y như trước, deploy không đổi hành vi.
   if (step === "stats" || step === "statsHandover" || step === "settle") return isStats(user.position);
-  if (step === "confirm" || step === "receive" || step === "use" || step === "accept") return isShiftLeader(user.position);
+  if (step === "confirm" || step === "receive" || step === "issue" || step === "use" || step === "accept") return isShiftLeader(user.position);
   if (step === "vhvReceive") return true; // khi chưa cấu hình, API vẫn giới hạn đúng cương vị được giao
   return false; // manage: mặc định chỉ người tạo phiếu (kiểm tra riêng tại API) + Admin
 }

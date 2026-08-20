@@ -2,7 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiMutate } from "@/lib/fetcher";
-import { CHEMICAL_TICKET_TYPE, GAS_RETURN_STATUS } from "@/lib/constants";
+import { CHEMICAL_TICKET_TYPE, GAS_RETURN_STATUS, OTHER_MATERIAL_TICKET_TYPE } from "@/lib/constants";
 
 export interface TicketItem {
   id: string;
@@ -14,6 +14,7 @@ export interface TicketItem {
   deviceNameManual: string | null;
   quantity: number;
   replacementQuantity: number | null;
+  receivedQuantity: number | null;
   material: { id: string; code: string; erpCodes?: string[]; name: string; unit: string; quantity: number };
   device: { seq: string; name: string; kks: string | null } | null;
 }
@@ -24,7 +25,7 @@ export interface MaterialTicket {
   sequenceNumber: number;
   // GHI_NHAN = phiếu khai một bước (NH3 lỏng): tạo xong là HOAN_TAT, không có bước tiếp.
   // HOA_CHAT = luồng hóa chất 3 bước (xem CHEMICAL_TICKET_TYPE trong lib/constants).
-  type: "CHUA_CHON" | "DE_XUAT" | "UNG" | "SU_DUNG_HIEN_CO" | "GHI_NHAN" | "HOA_CHAT";
+  type: "CHUA_CHON" | "DE_XUAT" | "UNG" | "SU_DUNG_HIEN_CO" | "GHI_NHAN" | "HOA_CHAT" | "VAT_TU_KHAC";
   unit: string;
   status: string;
   assignedPosition: string;
@@ -108,6 +109,7 @@ export interface ViewerSteps {
   vhvReceive: boolean;
   vhvReceiveConfigured: boolean;
   receive: boolean;
+  issue: boolean;
   use: boolean;
   accept: boolean;
   /** Xác nhận trả vỏ chai (bước cuối luồng chai khí); chưa cấu hình thì theo quyền bước Sử dụng. */
@@ -135,7 +137,7 @@ export interface TicketViewer {
 
 export type WorkflowRoleMap = {
   create: string[]; confirm: string[]; vhvReceive: string[]; stats: string[]; statsHandover: string[];
-  receive: string[]; use: string[]; accept: string[]; return: string[]; settle: string[]; manage: string[];
+  receive: string[]; issue: string[]; use: string[]; accept: string[]; return: string[]; settle: string[]; manage: string[];
 };
 
 const samePosition = (a?: string | null, b?: string | null) => {
@@ -224,6 +226,7 @@ export function useCreateTicket() {
       assignedPosition: string; materialCategory: string;
       materialId?: string; erpCode?: string; proposedQuantity?: number; replacementDeviceName?: string;
       replacementDeviceSeq?: string; replacementDeviceSeqs?: string[];
+      items?: Array<{ materialId: string; quantity: number; replacementDeviceSeqs?: string[] }>;
     }) =>
       apiMutate<MaterialTicket>("/api/material-tickets", "POST", body),
     onSuccess: () => {
@@ -279,6 +282,9 @@ export function actionsFor(t: MaterialTicket, v: TicketViewer | null): string[] 
   const canOperateAssigned = isAssigned || v.isAdmin;
   if (t.type === "CHUA_CHON") {
     if (t.status === "CHO_XAC_NHAN" && (v.steps?.confirm ?? v.isShiftLeader)) a.push("confirm");
+  } else if (t.type === OTHER_MATERIAL_TICKET_TYPE) {
+    if (t.status === "CHO_THONG_KE" && v.steps?.stats) a.push("otherApprove");
+    if (t.status === "NHAN_VAT_TU" && v.steps?.receive) a.push("otherReceive");
   } else if (t.type === CHEMICAL_TICKET_TYPE) {
     // Luồng hóa chất chỉ có hai lượt thao tác sau khi tạo phiếu.
     // Xác nhận bồn/thiết bị đủ điều kiện: Trưởng ca / TK Lò máy / Trưởng kíp điện.

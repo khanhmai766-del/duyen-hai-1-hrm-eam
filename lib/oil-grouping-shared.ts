@@ -10,7 +10,7 @@
 // phần thật sự phải nói chuyện với cơ sở dữ liệu.
 
 // Các loại vật tư được gom nhóm (khớp Material.category / ErpMaterial.category).
-export const GROUPABLE_CATEGORIES = ["Dầu bôi trơn", "Lõi lọc dầu", "Thiết bị C&I", "Hóa Chất", "Chai Khí", "Bi Nghiền Than", "Văn phòng phẩm", "Khác"] as const;
+export const GROUPABLE_CATEGORIES = ["Dầu bôi trơn", "Lõi lọc dầu", "Thiết bị C&I", "Hóa Chất", "Chai Khí", "Bi Nghiền Than", "Văn phòng phẩm", "Dụng cụ sơn", "Khác"] as const;
 export type GroupableCategory = (typeof GROUPABLE_CATEGORIES)[number];
 export const STANDALONE_GROUP_PREFIX = "__SINGLE__";
 

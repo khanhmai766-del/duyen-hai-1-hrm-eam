@@ -397,6 +397,7 @@ model Material {
   ticketItems     MaterialTicketItem[]
   defectRequests  DefectMaterialRequest[]
   replacementLogs MaterialReplacementLog[]
+  stockMovements  MaterialStockMovement[]
 
   @@unique([code, machine])
   @@index([system])
@@ -1344,6 +1345,41 @@ model MaterialLotUsage {
   @@index([lotId])
 }
 
+// Sổ nhập/cấp/sử dụng của kho Vật tư khác tại phân xưởng. Tồn thực tế vẫn nằm ở
+// MaterialStockLot; bảng này là chứng từ nghiệp vụ, còn phân bổ FIFO dùng
+// MaterialLotUsage với ticketId = "movement:<id>".
+model MaterialStockMovement {
+  id                 String   @id @default(cuid())
+  materialId         String
+  materialCode       String
+  type               String // RECEIPT | ISSUE | USE | ADJUST
+  quantity           Int
+  stockBefore        Int
+  stockAfter         Int
+  occurredAt         DateTime
+  ticketId           String?
+  ticketItemId       String?
+  assignedPosition   String?
+  unit               String?
+  deviceSeq          String?
+  receiverId         String?
+  receiverName       String?
+  issuerId           String?
+  issuerName         String?
+  note               String?
+  createdById        String
+  createdByName      String
+  createdByPosition  String?
+  createdAt          DateTime @default(now())
+
+  material Material @relation(fields: [materialId], references: [id])
+
+  @@index([materialCode, occurredAt(sort: Desc)])
+  @@index([materialId, occurredAt(sort: Desc)])
+  @@index([ticketId])
+  @@index([type, occurredAt(sort: Desc)])
+}
+
 model MaterialTicket {
   id             String @id @default(cuid())
   sequenceMonth  String // YYYY-MM theo giờ Việt Nam; mỗi tháng có dãy STT riêng
@@ -1478,6 +1514,7 @@ model MaterialTicketItem {
   deviceNameManual     String?
   quantity             Int      @default(1)
   replacementQuantity  Int? // số lượng thay thế do cương vị phân giao nhập ở luồng Ứng
+  receivedQuantity     Int? // số lượng thực lãnh của riêng dòng (phiếu Vật tư khác nhiều dòng)
 
   ticket   MaterialTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
   material Material       @relation(fields: [materialId], references: [id])

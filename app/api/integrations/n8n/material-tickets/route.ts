@@ -17,7 +17,7 @@ export const dynamic = "force-dynamic";
 const ITEM_INCLUDE = {
   items: {
     include: {
-      material: { select: { code: true, name: true, unit: true } },
+      material: { select: { code: true, name: true, unit: true, category: true } },
       device: { select: { name: true } },
     },
     orderBy: { id: "asc" as const },

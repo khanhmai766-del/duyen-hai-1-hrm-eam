@@ -9,7 +9,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
-import { AlertTriangle, Ban, Check, ChevronDown, ChevronLeft, ChevronRight, CircleDot, Boxes, CloudDownload, Cpu, Cylinder, Droplet, ExternalLink, Filter, FlaskConical, History, Loader2, MoreHorizontal, Paperclip, Pencil, Plus, RotateCcw, Search, Trash2, Unlink, X, type LucideIcon } from "lucide-react";
+import { AlertTriangle, Ban, Check, ChevronDown, ChevronLeft, ChevronRight, CircleDot, Boxes, CloudDownload, Cpu, Cylinder, Droplet, ExternalLink, Filter, FlaskConical, History, Loader2, MoreHorizontal, Paintbrush, Paperclip, Pencil, Plus, RotateCcw, Search, Trash2, Unlink, X, type LucideIcon } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { Button } from "@/components/ui/button";
@@ -58,6 +58,7 @@ const CATEGORY_META: Record<GroupingCategory, { icon: LucideIcon; defaultUnit: s
   "Chai Khí": { icon: Cylinder, defaultUnit: "Chai", codeHint: "CO2", nameHint: "Chai khí CO2" },
   "Bi Nghiền Than": { icon: CircleDot, defaultUnit: "Viên", codeHint: "BI60", nameHint: "Bi nghiền than 60mm" },
   "Văn phòng phẩm": { icon: Paperclip, defaultUnit: "Cái", codeHint: "VPP", nameHint: "Giấy in A4" },
+  "Dụng cụ sơn": { icon: Paintbrush, defaultUnit: "Cái", codeHint: "DCS", nameHint: "Cọ sơn" },
   "Khác": { icon: Boxes, defaultUnit: "Cái", codeHint: "KHAC", nameHint: "Vật tư khác" },
 };
 
@@ -70,6 +71,7 @@ const CATEGORY_BY_SLUG: Record<string, GroupingCategory> = {
   "chai-khi": "Chai Khí",
   "bi-nghien-than": "Bi Nghiền Than",
   "van-phong-pham": "Văn phòng phẩm",
+  "dung-cu-son": "Dụng cụ sơn",
   "khac": "Khác",
 };
 

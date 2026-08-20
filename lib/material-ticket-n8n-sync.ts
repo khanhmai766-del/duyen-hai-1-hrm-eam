@@ -16,10 +16,12 @@ type MaterialTicketSyncItem = {
   erpName: string | null;
   deviceNameManual: string | null;
   quantity: number;
+  receivedQuantity: number | null;
   material: {
     code: string;
     name: string;
     unit: string;
+    category: string | null;
   };
   device: {
     name: string;
@@ -192,8 +194,22 @@ function workflowTypeLabel(type: string) {
     SU_DUNG_HIEN_CO: "Sử dụng hiện có",
     HOA_CHAT: "Hóa chất",
     GHI_NHAN: "Ghi nhận một bước",
+    VAT_TU_KHAC: "Vật tư khác",
   };
   return labels[type] ?? type;
+}
+
+/**
+ * Luồng Vật tư khác chỉ đưa Chai Khí lên Sheet hiện hữu. Các loại con còn lại có
+ * sổ kho riêng trên website; mọi luồng vật tư cũ vẫn đồng bộ toàn bộ như trước.
+ */
+function itemsForMaterialSheet(ticket: MaterialTicketForN8nSync) {
+  if (ticket.type !== "VAT_TU_KHAC") return ticket.items;
+  return ticket.items.filter((item) => item.material.category === "Chai Khí" || item.material.category === "Chai khí");
+}
+
+function categoryForMaterialSheetRow(ticket: MaterialTicketForN8nSync, item: MaterialTicketSyncItem) {
+  return ticket.type === "VAT_TU_KHAC" ? item.material.category : ticket.materialCategory;
 }
 
 function unitLabel(unit: string) {
@@ -232,10 +248,10 @@ function chemicalReceivedSummary(ticket: MaterialTicketForN8nSync, unit: string)
  * AJ (SYNCED_AT) do n8n tự ghi tại thời điểm Google Sheets xác nhận thành công.
  */
 export function materialTicketRowsForN8n(ticket: MaterialTicketForN8nSync) {
-  return ticket.items.map((item) => {
+  return itemsForMaterialSheet(ticket).map((item) => {
     const syncKey = `${ticket.id}:${item.id}`;
     const receivedAt = ticket.receivedAt ?? ticket.vhvReceivedAt;
-    const receivedQuantity = ticket.receivedQuantity ?? ticket.vhvReceivedQuantity;
+    const receivedQuantity = item.receivedQuantity ?? ticket.receivedQuantity ?? ticket.vhvReceivedQuantity;
     const receivedByName = ticket.receivedByName ?? ticket.vhvReceivedByName;
     const proposedAt = ticket.proposedAt ?? ticket.createdAt;
     const proposedByName = ticket.proposedByName ?? ticket.createdByName;
@@ -249,7 +265,7 @@ export function materialTicketRowsForN8n(ticket: MaterialTicketForN8nSync) {
       workflowStatus: ticket.status,
       row: {
         A: materialTicketNumber(ticket),
-        B: ticket.materialCategory,
+        B: categoryForMaterialSheetRow(ticket, item),
         C: quantityWithUnit(ticket.remainingQuantity, unit),
         D: ticket.proposalNumber,
         E: formatDate(proposedAt),
@@ -298,10 +314,10 @@ export function materialTicketRowsForN8n(ticket: MaterialTicketForN8nSync) {
  * AL (SYNCED_AT) do n8n ghi sau khi Google Sheets xác nhận thành công.
  */
 export function materialTicketRowsForN8nV2(ticket: MaterialTicketForN8nSync) {
-  return ticket.items.map((item) => {
+  return itemsForMaterialSheet(ticket).map((item) => {
     const syncKey = `${ticket.id}:${item.id}`;
     const receivedAt = ticket.receivedAt ?? ticket.vhvReceivedAt;
-    const receivedQuantity = ticket.receivedQuantity ?? ticket.vhvReceivedQuantity;
+    const receivedQuantity = item.receivedQuantity ?? ticket.receivedQuantity ?? ticket.vhvReceivedQuantity;
     const receivedByName = ticket.receivedByName ?? ticket.vhvReceivedByName;
     const proposedAt = ticket.proposedAt ?? ticket.createdAt;
     const proposedByName = ticket.proposedByName ?? ticket.createdByName;
@@ -317,7 +333,7 @@ export function materialTicketRowsForN8nV2(ticket: MaterialTicketForN8nSync) {
         A: materialTicketNumber(ticket),
         B: workflowTypeLabel(ticket.type),
         C: unitLabel(ticket.unit),
-        D: materialCategoryLabel(ticket.materialCategory),
+        D: materialCategoryLabel(categoryForMaterialSheetRow(ticket, item)),
         E: quantityWithUnit(ticket.remainingQuantity, unit),
         F: ticket.proposalNumber,
         G: formatDate(proposedAt),

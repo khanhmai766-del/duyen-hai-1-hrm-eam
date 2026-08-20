@@ -17,7 +17,7 @@ import {
   type MaterialTicket, type TicketViewer, type WorkflowRoleMap,
 } from "@/hooks/useMaterialTickets";
 import { usePositions } from "@/hooks/useUsers";
-import { displayMaterialCategory, GAS_RETURN_STATUS, isChemicalFlowTicket, isGasCylinderTicket, isSingleStepTicketMaterial, CHEMICAL_TICKET_TYPE, isSupplementReason, MATERIAL_CATEGORIES, materialTicketBelongsToRecoveryTab, materialTicketRequiresRecovery, ticketReasonsFor, TICKET_REASONS, TICKET_REASON_OTHER, SINGLE_STEP_TICKET_TYPE, TICKET_MATERIAL_CATEGORIES, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
+import { COMMON_MATERIAL_POSITION, displayMaterialCategory, GAS_RETURN_STATUS, isChemicalFlowTicket, isGasCylinderTicket, isOtherMaterialCategory, isSingleStepTicketMaterial, CHEMICAL_TICKET_TYPE, isSupplementReason, MATERIAL_CATEGORIES, materialTicketBelongsToRecoveryTab, materialTicketRequiresRecovery, OTHER_MATERIAL_GROUP, OTHER_MATERIAL_TICKET_TYPE, ticketReasonsFor, TICKET_REASONS, TICKET_REASON_OTHER, SINGLE_STEP_TICKET_TYPE, TICKET_MATERIAL_CATEGORIES, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
 import { normalizeText } from "@/lib/nav";
 import { positionsMatch } from "@/lib/position-catalog";
 import {
@@ -89,6 +89,11 @@ const FLOW: Record<string, { key: string; label: string; who: string }[]> = {
   [SINGLE_STEP_TICKET_TYPE]: [
     { key: "B0", label: "VHV tạo đề xuất", who: "VHV" },
   ],
+  [OTHER_MATERIAL_TICKET_TYPE]: [
+    { key: "B0", label: "Lập phiếu đề xuất", who: "Người lập phiếu" },
+    { key: "CHO_PHIEU__XUAT_KHO", label: "Xác nhận mã ERP và số ĐXVT", who: "Thống kê" },
+    { key: "NHAN_VAT_TU", label: "Lãnh và nhập vào Hiện có", who: "Theo phân quyền quy trình" },
+  ],
   SU_DUNG_HIEN_CO: [
     { key: "B0", label: "VHV tạo đề xuất", who: "VHV" },
     { key: "XAC_NHAN_HIEN_CO", label: "Trưởng ca/Trưởng kíp xác nhận", who: "Trưởng ca/Trưởng kíp" },
@@ -103,6 +108,7 @@ const ORDER: Record<string, string[]> = {
   CHUA_CHON: ["B0", "CHO_XAC_NHAN"],
   [SINGLE_STEP_TICKET_TYPE]: ["B0", "HOAN_TAT"],
   [CHEMICAL_TICKET_TYPE]: ["B0", "CHO_THONG_KE", "CHO_PHIEU__XUAT_KHO", "NHAN_VAT_TU", "HOAN_TAT"],
+  [OTHER_MATERIAL_TICKET_TYPE]: ["B0", "CHO_PHIEU__XUAT_KHO", "NHAN_VAT_TU", "HOAN_TAT"],
   DE_XUAT: ["B0", "CHO_THONG_KE", "CHO_PHIEU__XUAT_KHO", "NHAN_VAT_TU", "SU_DUNG_VAT_TU", "CHO_NGHIEM_THU", "CHO_QUYET_TOAN", "HOAN_TAT"],
   UNG: ["B0", "VHV_LANH_VAT_TU", "SU_DUNG_VAT_TU", "CHO_NGHIEM_THU", "NHAN_VAT_TU", "CHO_PHIEU__XUAT_KHO", "CHO_QUYET_TOAN", "HOAN_TAT"],
   SU_DUNG_HIEN_CO: ["B0", "XAC_NHAN_HIEN_CO", "NHAN_TU_HIEN_CO", "SU_DUNG_VAT_TU", "CHO_NGHIEM_THU", "CHO_THONG_KE_XUAT_BIEN_BAN", "CHO_QUYET_TOAN", "HOAN_TAT"],
@@ -497,7 +503,7 @@ export default function MaterialTicketBoard({
                     })()}
               </span>
               <span className="ops">
-                {canEdit && (
+                {canEdit && t.type !== OTHER_MATERIAL_TICKET_TYPE && (
                   <span role="button" tabIndex={0} title="Sửa phiếu" className="op"
                     onClick={(e) => { e.stopPropagation(); setEditTicket(t); }}><Pencil size={14} /></span>
                 )}
@@ -562,7 +568,9 @@ export default function MaterialTicketBoard({
 }
 
 /* ================= tạo phiếu ================= */
-const CATEGORIES = TICKET_MATERIAL_CATEGORIES;
+const CATEGORIES = TICKET_MATERIAL_CATEGORIES.filter((category) =>
+  !["Chai khí", "Văn phòng phẩm", "Khác"].includes(category)
+);
 const UNITS = ["S1", "S2", "COMMON"];
 const SCCN_REPRESENTATIVES = ["Võ Văn Chiến", "Lê Văn Khánh", "Nguyễn Thanh Toàn"] as const;
 const SCCN_POSITIONS = ["Quản Đốc", "Phó Quản Đốc"] as const;
@@ -733,6 +741,7 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
   const [proposedQuantity, setProposedQuantity] = useState(1);
   const [replacementDeviceSeqs, setReplacementDeviceSeqs] = useState<string[]>([]);
   const [replacementSystems, setReplacementSystems] = useState<string[]>([]);
+  const [otherItems, setOtherItems] = useState<Array<{ materialId: string; quantity: number; replacementDeviceSeqs: string[] }>>([]);
   // Hóa chất / chai khí chỉ có lý do Nhập hoặc Khác — đổi loại vật tư mà lý do cũ không còn
   // hợp lệ thì xoá luôn, tránh gửi lên máy chủ một lý do đã bị khoá.
   const reasonOptions = useMemo(() => ticketReasonsFor(category), [category]);
@@ -748,16 +757,18 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
   const materialCategoryLabel = category ? TICKET_TO_MATERIAL_CATEGORY[category] ?? category : "";
   // Nghiệp vụ chốt 2026-08-10: KHÔNG chia cương vị theo tổ máy nữa — chọn S1, S2 hay
   // COMMON đều hiện đủ danh sách chức danh. Server cũng đã bỏ chốt tương ứng.
-  const positionOptions = useMemo(() => opts?.positions ?? [], [opts?.positions]);
+  const positionOptions = useMemo(() => [COMMON_MATERIAL_POSITION, ...(opts?.positions ?? []).filter((position) => position !== COMMON_MATERIAL_POSITION)], [opts?.positions]);
   const materialCards = useMemo(() => {
     if (!assigned || !materialCategoryLabel) return [];
     return (opts?.materials ?? []).filter((m) => {
-      const matchesCategory = m.category === materialCategoryLabel;
+      const matchesCategory = category === OTHER_MATERIAL_GROUP ? isOtherMaterialCategory(m.category) : m.category === materialCategoryLabel;
       const matchesUnit = m.machine === unit;
-      const matchesPosition = m.managingPositions.some((p) => positionsMatch(p, assigned));
+      const matchesPosition = assigned === COMMON_MATERIAL_POSITION
+        ? m.managingPositions.length === 0 && m.devices.length === 0
+        : m.managingPositions.some((p) => positionsMatch(p, assigned));
       return matchesCategory && matchesUnit && matchesPosition;
     });
-  }, [assigned, materialCategoryLabel, opts?.materials, unit]);
+  }, [assigned, category, materialCategoryLabel, opts?.materials, unit]);
   const isProposalType = false; // mã vật tư chỉ được chọn ở bước Trưởng ca/Trưởng kíp
   const selectedMaterial = materialCards.find((m) => m.id === selectedMaterialId) ?? null;
   const availableDeviceOptions = useMemo(
@@ -843,6 +854,7 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
         materialId: selectedMaterialId || undefined,
         proposedQuantity,
         replacementDeviceSeqs,
+        items: category === OTHER_MATERIAL_GROUP ? otherItems : undefined,
       });
       toast.success(`Đã tạo phiếu ${materialTicketReference(res)}`);
       onClose();
@@ -879,7 +891,7 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
             </div>
 
             <label>Cương vị được giao thực hiện *</label>
-            <select value={assigned} onChange={(e) => { setAssigned(e.target.value); setSelectedMaterialId(""); setSelectedErpCode(""); setReplacementDeviceSeqs([]); setReplacementSystems([]); }}>
+            <select value={assigned} onChange={(e) => { const next = e.target.value; setAssigned(next); if (next === COMMON_MATERIAL_POSITION) setUnit("COMMON"); setSelectedMaterialId(""); setSelectedErpCode(""); setReplacementDeviceSeqs([]); setReplacementSystems([]); setOtherItems([]); }}>
               <option value="">— Chọn cương vị (chỉ cương vị này thấy phiếu) —</option>
               {positionOptions.map((p) => <option key={p} value={p}>{p}</option>)}
             </select>
@@ -887,7 +899,7 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
             <label>Loại vật tư *</label>
             <div className="cats ticket-category-options">
               {CATEGORIES.map((c) => (
-                <button key={c} type="button" className={category === c ? "on" : ""} onClick={() => { setCategory(c); setSelectedMaterialId(""); setSelectedErpCode(""); setReplacementDeviceSeqs([]); setReplacementSystems([]); }}>{displayMaterialCategory(c)}</button>
+                <button key={c} type="button" className={category === c ? "on" : ""} onClick={() => { setCategory(c); setSelectedMaterialId(""); setSelectedErpCode(""); setReplacementDeviceSeqs([]); setReplacementSystems([]); setOtherItems([]); }}>{displayMaterialCategory(c)}</button>
               ))}
             </div>
 
@@ -900,19 +912,26 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
                   ) : !category ? (
                     <div className="material-empty">Chọn loại vật tư để hiện danh sách tên vật tư</div>
                   ) : materialCards.length ? (
-                    materialCards.map((m) => (
+                    materialCards.map((m) => {
+                      const otherSelected = otherItems.some((item) => item.materialId === m.id);
+                      return (
                       <button
                         key={m.id}
                         type="button"
-                        className={selectedMaterialId === m.id ? "on" : ""}
-                        onClick={() => { setSelectedMaterialId(m.id); setSelectedErpCode(""); setReplacementDeviceSeqs([]); setReplacementSystems([]); }}
+                        className={(category === OTHER_MATERIAL_GROUP ? otherSelected : selectedMaterialId === m.id) ? "on" : ""}
+                        onClick={() => category === OTHER_MATERIAL_GROUP
+                          ? setOtherItems((current) => otherSelected
+                            ? current.filter((item) => item.materialId !== m.id)
+                            : [...current, { materialId: m.id, quantity: 1, replacementDeviceSeqs: [] }])
+                          : (() => { setSelectedMaterialId(m.id); setSelectedErpCode(""); setReplacementDeviceSeqs([]); setReplacementSystems([]); })()}
                         title={`${m.code} - ${m.name}`}
                       >
-                        <span>{m.name}</span>
+                        <span>{category === OTHER_MATERIAL_GROUP && (otherSelected ? "✓ " : "+ ")}{m.name}</span>
+                        {category === OTHER_MATERIAL_GROUP && <small>{m.category}</small>}
                         <small>Hiện có: {m.quantity} {m.unit}</small>
                         <small>Số lượng ERP: {totalMaterialErpStock(m).toLocaleString("vi-VN")} {m.unit}</small>
                       </button>
-                    ))
+                    );})
                   ) : (
                     <div className="material-empty">
                       Cương vị này chưa quản lý vật tư nào thuộc loại đã chọn
@@ -934,7 +953,35 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
               </>
             )}
 
-            {type === "DE_XUAT" ? (
+            {category === OTHER_MATERIAL_GROUP && otherItems.length > 0 && (
+              <div className="frm-items">
+                <label>Vật tư đã chọn và số lượng đề xuất</label>
+                {otherItems.map((item) => {
+                  const material = materialCards.find((row) => row.id === item.materialId);
+                  const deviceOptions = (material?.devices ?? []).filter((device) => positionsMatch(device.managingPosition, assigned));
+                  return <div key={item.materialId} className="other-ticket-item">
+                    <div className="other-ticket-item-head">
+                      <b>{material?.name}</b>
+                      <label>Số lượng ({material?.unit})
+                        <input type="number" min={1} value={item.quantity} onChange={(event) => setOtherItems((current) => current.map((row) => row.materialId === item.materialId ? { ...row, quantity: Math.max(1, Math.trunc(Number(event.target.value)) || 1) } : row))} />
+                      </label>
+                    </div>
+                    {deviceOptions.length > 0 && <DeviceMultiSelect
+                      options={deviceOptions}
+                      allOptions={deviceOptions}
+                      value={item.replacementDeviceSeqs}
+                      onChange={(value) => setOtherItems((current) => current.map((row) => row.materialId === item.materialId ? { ...row, replacementDeviceSeqs: value } : row))}
+                    />}
+                  </div>;
+                })}
+              </div>
+            )}
+
+            {category === OTHER_MATERIAL_GROUP ? (
+              <div className="reason-grid">
+                <div className="field"><label>Ghi chú / lý do lãnh *</label><input value={reasonDetail} onChange={(event) => { setReasonChoice(TICKET_REASON_OTHER); setReasonDetail(event.target.value); }} placeholder="Nhập mục đích lãnh vật tư" /></div>
+              </div>
+            ) : type === "DE_XUAT" ? (
               <>
                 <div className="reason-grid">
                   <div className="field">
@@ -988,8 +1035,10 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
                   create.isPending ||
                   !assigned ||
                   !category ||
-                  !selectedMaterialId ||
-                  !note.trim() || proposedQuantity <= 0 || replacementDeviceSeqs.length === 0
+                  !note.trim() ||
+                  (category === OTHER_MATERIAL_GROUP
+                    ? otherItems.length === 0 || otherItems.some((item) => item.quantity <= 0 || ((materialCards.find((material) => material.id === item.materialId)?.devices ?? []).some((device) => positionsMatch(device.managingPosition, assigned)) && item.replacementDeviceSeqs.length === 0))
+                    : !selectedMaterialId || proposedQuantity <= 0 || replacementDeviceSeqs.length === 0)
                 }
                 onClick={submit}>
                 {create.isPending ? <Loader2 className="spin" size={14} /> : <Plus size={14} />} Tạo đề xuất
@@ -1012,7 +1061,8 @@ const WF_STEPS: { key: keyof WorkflowRoleMap; short: string; label: string; hint
   { key: "stats", short: "TK xác nhận ĐXVT", label: "Thống kê xác nhận ĐXVT (chọn mã vật tư + nhập số phiếu)", hint: "Trống = mặc định: cương vị Thống kê" },
   { key: "statsHandover", short: "Giao/trả phiếu", label: "Xác nhận VHV nhận / trả phiếu ĐXVT", hint: "Bước tách riêng khỏi Thống kê xác nhận ĐXVT — trống = mặc định: cương vị Thống kê" },
   { key: "receive", short: "Vật tư lãnh", label: "Xác nhận vật tư lãnh (khối lượng lãnh + nguồn lãnh)", hint: "Trống = mặc định: Trưởng Ca/Trưởng Kíp" },
-  { key: "use", short: "Sử dụng", label: "Sử dụng vật tư (PCT/LCT + khối lượng dùng)", hint: "Trống = mặc định: Trưởng Ca/Trưởng Kíp" },
+  { key: "issue", short: "Cấp vật tư", label: "Cấp vật tư từ số lượng hiện có", hint: "Trống = mặc định: Trưởng Ca/Trưởng Kíp; có thể chọn riêng cương vị phát vật tư" },
+  { key: "use", short: "Ghi nhận dùng", label: "Ghi nhận sử dụng vật tư (ngày + số lượng dùng)", hint: "Cương vị gắn với vật tư/thiết bị luôn được ghi nhận; chọn thêm tại đây để cấp quyền quản lý" },
   { key: "accept", short: "Nghiệm thu", label: "Nghiệm thu và xuất BBNT", hint: "Trống = mặc định: Trưởng Ca/Trưởng Kíp" },
   { key: "return", short: "Trả (chai khí)", label: "Xác nhận trả vỏ chai — bước cuối luồng Chai khí", hint: "Trống = dùng luôn quyền bước Sử dụng vật tư" },
   { key: "settle", short: "Quyết toán", label: "Quyết toán vật tư", hint: "Trống = mặc định: cương vị Thống kê" },
@@ -1627,7 +1677,7 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
                   <div className="material-overview-grid">
                     <div className="material-info-column">
                       <b>{it.erpName || it.material.name}</b>
-                      <span>{it.quantity > 0 ? `Số lượng đề xuất: ${it.quantity} ${it.material.unit}` : "Số lượng đề xuất: Chưa nhập"} · Hiện có: {it.material.quantity}{short ? " — THIẾU" : ""}</span>
+                      <span>{it.quantity > 0 ? `Số lượng đề xuất: ${it.quantity} ${it.material.unit}` : "Số lượng đề xuất: Chưa nhập"}{it.receivedQuantity != null ? ` · Thực lãnh: ${it.receivedQuantity} ${it.material.unit}` : ""} · Hiện có: {it.material.quantity}{short ? " — THIẾU" : ""}</span>
                       <span className="soft material-device-line">{it.deviceNameManual || (it.device ? `${it.device.seq} · ${it.device.name}` : "Chưa nhập thiết bị")}</span>
                       {itemIndex === 0 && t.bbktNumber && <span className="material-bbkt-line">Số biên bản kiểm tra: <b>{t.bbktNumber}</b></span>}
                     </div>
@@ -1975,7 +2025,7 @@ function LotAllocationPicker({
 function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | null }) {
   const acts = actionsFor(t, viewer);
   const act = useTicketAction(t.id);
-  const needItems = acts.includes("confirm") || acts.includes("receive") || acts.includes("propose") || acts.includes("stats") || acts.includes("accept") || acts.includes("statsExportDocuments");
+  const needItems = acts.includes("confirm") || acts.includes("receive") || acts.includes("propose") || acts.includes("stats") || acts.includes("accept") || acts.includes("statsExportDocuments") || acts.includes("otherApprove");
   const { data: opts } = useTicketOptions(needItems);
   const [items, setItems] = useState([{ materialId: "", erpCode: "", deviceSeq: "", quantity: 1 }]);
   const [note, setNote] = useState("");
@@ -1997,6 +2047,10 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
   const [receivedQty, setReceivedQty] = useState(String(t.deliveryQuantity ?? t.items[0]?.quantity ?? ""));
   const [receivedDate, setReceivedDate] = useState("");
   const [receiverName, setReceiverName] = useState(viewer?.name ?? "");
+  const [otherErpCodes, setOtherErpCodes] = useState<Record<string, string>>(() => Object.fromEntries(t.items.map((item) => [item.id, item.erpCode ?? ""])));
+  const [otherReceived, setOtherReceived] = useState<Record<string, number>>(() => Object.fromEntries(t.items.map((item) => [item.id, item.receivedQuantity ?? item.quantity])));
+  const [otherDeliveryNote, setOtherDeliveryNote] = useState(t.deliveryNoteNumber ?? "");
+  const [otherReceivedDate, setOtherReceivedDate] = useState(new Date().toISOString().slice(0, 10));
   const [qty, setQty] = useState(() => Math.max(1, t.items[0]?.quantity ?? 1)); // số lượng xác nhận / lãnh / sử dụng
   const [method, setMethod] = useState(""); // hình thức lãnh
   const [receiptSource, setReceiptSource] = useState<"ERP" | "EXISTING">("ERP");
@@ -2277,6 +2331,56 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
       </button>
     </div>
   );
+
+  if (t.type === OTHER_MATERIAL_TICKET_TYPE && acts.includes("otherApprove")) {
+    const rows = t.items.map((item) => {
+      const material = opts?.materials.find((row) => row.id === item.materialId);
+      const options = material?.erpCodes ?? [];
+      const effectiveCode = otherErpCodes[item.id] || (options.length === 1 ? options[0].code : "");
+      return { item, options, effectiveCode, selected: options.find((option) => option.code === effectiveCode) };
+    });
+    const valid = proposalNumberInput.trim() && rows.every(({ item, selected }) => selected && selected.erpStock >= item.quantity);
+    return <div className="act">
+      <label className="lb">Xác nhận đề xuất Vật tư khác</label>
+      <div className="note"><Package size={14} /><span>Đối chiếu mã ERP cho từng vật tư. Phiếu sau khi xác nhận sẽ chuyển thẳng sang bước đi lãnh.</span></div>
+      <div className="frm-items">
+        {rows.map(({ item, options, effectiveCode, selected }) => <div className="other-approve-row" key={item.id}>
+          <span><b>{item.material.name}</b><small>{item.quantity} {item.material.unit}</small></span>
+          <select value={effectiveCode} disabled={options.length === 1} onChange={(event) => setOtherErpCodes((current) => ({ ...current, [item.id]: event.target.value }))}>
+            <option value="">— Chọn mã ERP —</option>
+            {options.map((option) => <option key={option.code} value={option.code}>{option.code} · ERP: {option.erpStock.toLocaleString("vi-VN")}</option>)}
+          </select>
+          {options.length === 1 && <small className="text-emerald-700">Đã tự chọn mã duy nhất</small>}
+          {selected && selected.erpStock < item.quantity && <small className="text-red-600">Không đủ tồn ERP</small>}
+        </div>)}
+      </div>
+      <label className="field">Số phiếu ĐXVT *<input value={proposalNumberInput} onChange={(event) => setProposalNumberInput(event.target.value)} placeholder="Nhập số phiếu đề xuất vật tư" /></label>
+      <button className="btn primary big" disabled={!valid || act.isPending} onClick={() => run({ action: "otherApprove", proposalNumber: proposalNumberInput.trim(), items: rows.map(({ item, effectiveCode }) => ({ itemId: item.id, erpCode: effectiveCode })) }, "Đã xác nhận đề xuất, chuyển bước đi lãnh") }>
+        {act.isPending ? <Loader2 className="spin" size={15} /> : <FileText size={15} />} Xác nhận và xuất Phiếu ĐXVT
+      </button>
+    </div>;
+  }
+
+  if (t.type === OTHER_MATERIAL_TICKET_TYPE && acts.includes("otherReceive")) {
+    const valid = otherDeliveryNote.trim() && otherReceivedDate && t.items.every((item) => (otherReceived[item.id] ?? 0) > 0);
+    return <div className="act">
+      <label className="lb">Xác nhận đã lãnh Vật tư khác</label>
+      <div className="note"><Check size={14} /><span>Số lượng thực lãnh sẽ được cộng vào <b>Hiện có</b> của từng vật tư; phiếu hoàn tất ngay sau bước này.</span></div>
+      <div className="frm-items">
+        {t.items.map((item) => <div className="other-receive-row" key={item.id}>
+          <span><b>{item.erpName || item.material.name}</b><small>{item.erpCode} · đề xuất {item.quantity} {item.material.unit}</small></span>
+          <label>Thực lãnh ({item.material.unit})<input type="number" min={1} value={otherReceived[item.id] ?? item.quantity} onChange={(event) => setOtherReceived((current) => ({ ...current, [item.id]: Math.max(1, Math.trunc(Number(event.target.value)) || 1) }))} /></label>
+        </div>)}
+      </div>
+      <div className="chem-grid">
+        <div><label className="lb">Số phiếu giao hàng *</label><input value={otherDeliveryNote} onChange={(event) => setOtherDeliveryNote(event.target.value)} /></div>
+        <div><label className="lb">Ngày lãnh *</label><input type="date" value={otherReceivedDate} onChange={(event) => setOtherReceivedDate(event.target.value)} /></div>
+      </div>
+      <button className="btn primary big" disabled={!valid || act.isPending} onClick={() => run({ action: "otherReceive", deliveryNoteNumber: otherDeliveryNote.trim(), receivedAt: otherReceivedDate, items: t.items.map((item) => ({ itemId: item.id, receivedQuantity: otherReceived[item.id] })) }, "Đã lãnh vật tư, cộng vào Hiện có và hoàn tất phiếu") }>
+        {act.isPending ? <Loader2 className="spin" size={15} /> : <Check size={15} />} Xác nhận lãnh và hoàn tất
+      </button>
+    </div>;
+  }
 
   // ---- Luồng hóa chất: ba bước riêng, không dính mã ERP / Phiếu ĐXVT / biên bản nào.
   if (t.type === CHEMICAL_TICKET_TYPE && acts.includes("confirm")) {
@@ -3374,6 +3478,17 @@ const CSS = `
 .warnbox{display:flex;gap:8px;align-items:flex-start;background:${C.badBg};color:${C.bad};border-radius:10px;padding:10px 12px;font-size:12.5px;}
 .lockbox{display:flex;gap:8px;align-items:center;flex-wrap:wrap;background:${C.warnBg};color:${C.warn};border-radius:10px;padding:10px 12px;font-size:12.5px;}
 .frm-items{display:flex;flex-direction:column;gap:7px;}
+.other-ticket-item{display:flex;flex-direction:column;gap:9px;border:1px solid ${C.line};border-radius:12px;background:#fff;padding:11px 12px;}
+.other-ticket-item-head{display:grid;grid-template-columns:minmax(0,1fr) 150px;align-items:end;gap:12px;}
+.other-ticket-item-head>b{align-self:center;color:${C.navy};font-size:13px;}
+.other-ticket-item-head label{margin:0!important;}
+.other-ticket-item-head input{margin-top:5px;text-align:center;font-weight:800;}
+.other-approve-row,.other-receive-row{display:grid;grid-template-columns:minmax(180px,1fr) minmax(220px,1fr);align-items:end;gap:10px;border:1px solid ${C.line};border-radius:11px;background:#fff;padding:10px 12px;}
+.other-approve-row>span,.other-receive-row>span{display:flex;min-width:0;flex-direction:column;gap:3px;}
+.other-approve-row b,.other-receive-row b{color:${C.navy};font-size:13px;}
+.other-approve-row small,.other-receive-row small{color:${C.muted};font-size:11px;}
+.other-receive-row label{margin:0!important;}
+.other-receive-row input{margin-top:5px;text-align:center;font-weight:800;}
 .frm-item{display:grid;grid-template-columns:1.25fr 1.1fr 1.2fr 64px auto;gap:6px;}
 .hint{font-size:11px;color:${C.soft};margin:2px 0 0;}
 @media(max-width:700px){.receive-existing-row{grid-template-columns:1fr;}.receive-existing-hint{min-height:0;padding:0;}}

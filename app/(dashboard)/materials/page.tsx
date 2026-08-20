@@ -8,7 +8,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
-import { Plus, Minus, Package, Pencil, Trash2, Upload, X, Loader2, ImageIcon, Repeat, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ChevronDown, Check, FileText, Link2, ExternalLink, Droplet, Filter, Cpu, FlaskConical, Cylinder, CircleDot, Paperclip, Boxes, Layers, Download, FileSpreadsheet, AlertTriangle, CheckCircle2, Activity, type LucideIcon } from "lucide-react";
+import { Plus, Minus, Package, Pencil, Trash2, Upload, X, Loader2, ImageIcon, Repeat, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ChevronDown, Check, FileText, Link2, ExternalLink, Droplet, Filter, Cpu, FlaskConical, CircleDot, Boxes, Layers, Download, FileSpreadsheet, AlertTriangle, CheckCircle2, Activity, type LucideIcon } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { SearchBar } from "@/components/shared/search-bar";
 import { EmptyState } from "@/components/shared/empty-state";
@@ -33,7 +33,7 @@ import { ReplacementPointsEditor } from "@/components/materials/replacement-poin
 import { QlvtSyncAction } from "@/components/vat-tu/OilGroupingPage";
 import { useCreateReplacement } from "@/hooks/useReplacements";
 import { useRbacAccess } from "@/hooks/useRbacAccess";
-import { displayMaterialCategory, MATERIAL_CATEGORIES, DEFECT_UNITS, DEFECT_STATUS, addMonths, materialCategoryMatches, roundStock } from "@/lib/constants";
+import { displayMaterialCategory, MATERIAL_CATEGORIES, MATERIAL_CATEGORY_FILTERS, OTHER_MATERIAL_GROUP, DEFECT_UNITS, DEFECT_STATUS, addMonths, isOtherMaterialCategory, materialCategoryMatches, roundStock } from "@/lib/constants";
 import { normalizeText } from "@/lib/nav";
 import { positionLabelOf, positionsMatch } from "@/lib/position-catalog";
 import { parseScope, scopeCode } from "@/lib/equipment-units";
@@ -47,17 +47,22 @@ const MACHINE_TABS: { key: (typeof DEFECT_UNITS)[number]; label: string }[] = [
   { key: "COMMON", label: "COMMON" },
 ];
 
-// Tab loại vật tư (icon theo nhóm) — key trùng giá trị Material.category.
-const MATERIAL_CATEGORY_TABS: { key: (typeof MATERIAL_CATEGORIES)[number]; label: string; icon: LucideIcon }[] = [
+// Bộ lọc loại vật tư. "Vật tư khác" là nhóm hiển thị ảo, không phải giá trị Material.category.
+const MATERIAL_CATEGORY_TABS: { key: (typeof MATERIAL_CATEGORY_FILTERS)[number]; label: string; icon: LucideIcon }[] = [
   { key: "Dầu bôi trơn", label: "Dầu bôi trơn", icon: Droplet },
   { key: "Lõi lọc dầu", label: "Lõi lọc", icon: Filter },
   { key: "Thiết bị C&I", label: "Thiết bị C&I", icon: Cpu },
   { key: "Hóa Chất", label: "Hóa chất", icon: FlaskConical },
-  { key: "Chai Khí", label: "Chai khí", icon: Cylinder },
   { key: "Bi Nghiền Than", label: "Bi Nghiền Than", icon: CircleDot },
-  { key: "Văn phòng phẩm", label: "Văn phòng phẩm", icon: Paperclip },
-  { key: "Khác", label: "Khác", icon: Boxes },
+  { key: OTHER_MATERIAL_GROUP, label: "Vật tư khác", icon: Boxes },
 ];
+
+function categoryFilterFromParam(value: string | null): string | null {
+  if ((MATERIAL_CATEGORY_FILTERS as readonly string[]).includes(value ?? "")) return value;
+  // Tương thích các liên kết cũ trỏ thẳng tới một loại con trước khi gom nhóm.
+  if (isOtherMaterialCategory(value)) return OTHER_MATERIAL_GROUP;
+  return null;
+}
 
 // Form khiếm khuyết chỉ nạp khi thật sự mở panel "Ra SYC thay thế" — nó kéo theo
 // cây thiết bị và danh sách người dùng, không đáng tải cùng trang Danh mục vật tư.
@@ -106,9 +111,7 @@ function MaterialsPageContent() {
   const params = useSearchParams();
   const searchParam = params.get("search") ?? "";
   const categoryParam = params.get("category");
-  const initialCategory = (MATERIAL_CATEGORIES as readonly string[]).includes(categoryParam ?? "")
-    ? categoryParam!
-    : MATERIAL_CATEGORIES[0];
+  const initialCategory = categoryFilterFromParam(categoryParam) ?? MATERIAL_CATEGORIES[0];
   const [q, setQ] = React.useState(searchParam);
   const [categoryFilter, setCategoryFilter] = React.useState<string>(initialCategory);
   const [positionFilter, setPositionFilter] = React.useState("ALL");
@@ -225,9 +228,8 @@ function MaterialsPageContent() {
   }, [searchParam]);
 
   React.useEffect(() => {
-    if ((MATERIAL_CATEGORIES as readonly string[]).includes(categoryParam ?? "")) {
-      setCategoryFilter(categoryParam!);
-    }
+    const nextCategory = categoryFilterFromParam(categoryParam);
+    if (nextCategory) setCategoryFilter(nextCategory);
   }, [categoryParam]);
 
   React.useEffect(() => {
@@ -768,7 +770,7 @@ function MaterialsPageContent() {
           </PopoverContent>
         </Popover>
         {canCreate && (
-          <Button size="toolbar" onClick={() => { setIsNew(true); setEdit({ unit: "Cái", quantity: 0, minStock: 0, category: categoryFilter, machines: ["S1", "S2", "COMMON"], replacements: [] }); }}>
+          <Button size="toolbar" onClick={() => { setIsNew(true); setEdit({ unit: "Cái", quantity: 0, minStock: 0, category: categoryFilter === OTHER_MATERIAL_GROUP ? "Khác" : categoryFilter, machines: ["S1", "S2", "COMMON"], replacements: [] }); }}>
             <Plus className="h-4 w-4" /> Thêm vật tư
           </Button>
         )}
@@ -903,7 +905,14 @@ function MaterialsPageContent() {
                           </span>
                         )}
                         <div className="min-w-0">
-                          <div className="font-medium text-ink">{m.name}</div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="font-medium text-ink">{m.name}</span>
+                            {categoryFilter === OTHER_MATERIAL_GROUP && m.category && (
+                              <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-slate-600">
+                                {displayMaterialCategory(m.category)}
+                              </span>
+                            )}
+                          </div>
                           {m.note && <div className="truncate text-xs text-muted-foreground">{m.note}</div>}
                         </div>
                       </div>

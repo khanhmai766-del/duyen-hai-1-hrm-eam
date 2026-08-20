@@ -295,10 +295,38 @@ export const MATERIAL_CATEGORIES = [
   "Chai Khí",
   "Bi Nghiền Than",
   "Văn phòng phẩm",
+  "Dụng cụ sơn",
   // "Khác" luôn đứng cuối: đây là chỗ chứa những thứ chưa có nhóm riêng, không phải một
   // loại ngang hàng với các loại trên.
   "Khác",
 ] as const;
+
+/**
+ * Nhóm HIỂN THỊ "Vật tư khác" gom các loại con nhưng không đổi giá trị đang lưu.
+ *
+ * Giữ nguyên loại con là bắt buộc vì Chai Khí có luồng nghiệp vụ riêng, đồng thời
+ * mọi vật tư/điểm thiết bị hiện hữu tiếp tục giữ nguyên Material.id và category.
+ */
+export const OTHER_MATERIAL_GROUP = "Vật tư khác" as const;
+export const OTHER_MATERIAL_CATEGORIES = ["Chai Khí", "Văn phòng phẩm", "Dụng cụ sơn", "Khác"] as const;
+/** Cương vị ảo dùng cho vật tư không gắn cương vị/thiết bị. */
+export const COMMON_MATERIAL_POSITION = "Chung" as const;
+/** Loại phiếu riêng cho nhóm Vật tư khác; phiếu cũ vẫn giữ DE_XUAT/UNG. */
+export const OTHER_MATERIAL_TICKET_TYPE = "VAT_TU_KHAC" as const;
+
+/** Bộ lọc trên Danh mục vật tư: các loại con được trình bày dưới một nhóm cha. */
+export const MATERIAL_CATEGORY_FILTERS = [
+  "Dầu bôi trơn",
+  "Lõi lọc dầu",
+  "Thiết bị C&I",
+  "Hóa Chất",
+  "Bi Nghiền Than",
+  OTHER_MATERIAL_GROUP,
+] as const;
+
+export function isOtherMaterialCategory(category: string | null | undefined): boolean {
+  return category === "Chai Khí" || category === "Chai khí" || category === "Văn phòng phẩm" || category === "Dụng cụ sơn" || category === "Khác";
+}
 
 /** Nhãn hiển thị loại vật tư. Giữ nguyên giá trị lưu trữ để tương thích dữ liệu,
  *  nhưng thống nhất cách gọi ngắn gọn trên toàn bộ giao diện. */
@@ -309,6 +337,7 @@ export function displayMaterialCategory(category: string): string {
 /** So khớp loại vật tư với tab Danh mục — chấp nhận cả nhãn cũ còn trong dữ liệu
  *  ("Hóa chất"/"Vật tư tiêu hao" → Hóa Chất; "Bi nghiền"/"Bi nghiền than" → Bi Nghiền Than). */
 export function materialCategoryMatches(value: string | null | undefined, target: string): boolean {
+  if (target === OTHER_MATERIAL_GROUP) return isOtherMaterialCategory(value);
   return (
     value === target ||
     (target === "Hóa Chất" && (value === "Vật tư tiêu hao" || value === "Hóa chất")) ||
@@ -336,6 +365,7 @@ export const TICKET_TO_MATERIAL_CATEGORY: Record<string, string> = {
   "Bi nghiền": "Bi Nghiền Than",
   "Văn phòng phẩm": "Văn phòng phẩm",
   "Khác": "Khác",
+  [OTHER_MATERIAL_GROUP]: OTHER_MATERIAL_GROUP,
 };
 
 /** Loại vật tư chọn được khi lập PHIẾU vật tư. Khác cách viết với `MATERIAL_CATEGORIES`
@@ -348,6 +378,7 @@ export const TICKET_MATERIAL_CATEGORIES = [
   "Bi nghiền",
   "Văn phòng phẩm",
   "Khác",
+  OTHER_MATERIAL_GROUP,
 ] as const;
 
 /**

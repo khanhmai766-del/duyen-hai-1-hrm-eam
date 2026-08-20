@@ -12,7 +12,7 @@ import {
   returnStepAllowed,
   stepAllowedWithMap,
 } from "@/lib/material-workflow";
-import { CHEMICAL_TICKET_TYPE, isGasCylinderTicket, recoveryRequiredForReason, isChemicalWorkflowCategory, isSingleStepTicketMaterial, ticketReasonAllowed, SINGLE_STEP_TICKET_TYPE, TICKET_MATERIAL_CATEGORIES, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
+import { CHEMICAL_TICKET_TYPE, COMMON_MATERIAL_POSITION, isGasCylinderTicket, isOtherMaterialCategory, OTHER_MATERIAL_GROUP, OTHER_MATERIAL_TICKET_TYPE, recoveryRequiredForReason, isChemicalWorkflowCategory, isSingleStepTicketMaterial, ticketReasonAllowed, SINGLE_STEP_TICKET_TYPE, TICKET_MATERIAL_CATEGORIES, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
 import { positionCodeOf, positionsMatch } from "@/lib/position-catalog";
 import {
   isMaterialTicketMonthKey,
@@ -154,6 +154,7 @@ export async function GET(req: NextRequest) {
           stats: stepAllowedWithMap(wfMap, "stats", user),
           statsHandover: stepAllowedWithMap(wfMap, "statsHandover", user),
           receive: stepAllowedWithMap(wfMap, "receive", user),
+          issue: stepAllowedWithMap(wfMap, "issue", user),
           use: stepAllowedWithMap(wfMap, "use", user),
           accept: stepAllowedWithMap(wfMap, "accept", user),
           // Bước Xác nhận trả (chai khí): chưa cấu hình riêng thì theo quyền bước Sử dụng.
@@ -197,13 +198,102 @@ export async function POST(req: NextRequest) {
         ? { OR: [{ positionCode: assignedPositionCode }, { position: assignedPosition }] }
         : { position: assignedPosition },
     });
-    if (totalScopeCount > 0 && scopeCount === 0 && !isMaterialTicketExtraAssignedPosition(assignedPosition)) {
+    if (assignedPosition !== COMMON_MATERIAL_POSITION && totalScopeCount > 0 && scopeCount === 0 && !isMaterialTicketExtraAssignedPosition(assignedPosition)) {
       return fail(`Cương vị "${assignedPosition}" chưa được phân giao hệ thống thiết bị`);
     }
 
     // Loại vật tư
     const materialCategory = String(body.materialCategory || "").trim();
     if (!(TICKET_MATERIAL_CATEGORIES as readonly string[]).includes(materialCategory)) return fail("Vui lòng chọn loại vật tư");
+
+    // Nhóm Vật tư khác dùng một phiếu nhiều dòng. "Chung" dành cho vật tư không gắn
+    // cương vị/thiết bị; nếu đã gắn thì vẫn giữ đúng kết cấu cũ: cương vị → tổ máy → thiết bị.
+    if (materialCategory === OTHER_MATERIAL_GROUP) {
+      const rawItems = Array.isArray(body.items) ? body.items : [];
+      if (!rawItems.length) return fail("Vui lòng chọn ít nhất một vật tư");
+      if (rawItems.length > 50) return fail("Mỗi phiếu được chọn tối đa 50 vật tư");
+      const requestedItems: Array<{ materialId: string; quantity: number; replacementKeys: string[] }> = rawItems.map((raw: Record<string, unknown>) => ({
+        materialId: String(raw.materialId || "").trim(),
+        quantity: Math.trunc(Number(raw.quantity || 0)),
+        replacementKeys: Array.from(new Set<string>((Array.isArray(raw.replacementDeviceSeqs) ? raw.replacementDeviceSeqs : [])
+          .map((value: unknown) => String(value || "").trim()).filter(Boolean))),
+      }));
+      if (requestedItems.some((item) => !item.materialId)) return fail("Phiếu có dòng chưa chọn vật tư");
+      if (new Set(requestedItems.map((item) => item.materialId)).size !== requestedItems.length) return fail("Một vật tư chỉ được chọn một lần trong phiếu");
+      if (requestedItems.some((item) => !Number.isFinite(item.quantity) || item.quantity <= 0)) return fail("Số lượng đề xuất của mỗi vật tư phải lớn hơn 0");
+
+      const materials = await prisma.material.findMany({
+        where: { id: { in: requestedItems.map((item) => item.materialId) } },
+        select: {
+          id: true, code: true, name: true, category: true, machine: true,
+          replacements: {
+            select: { id: true, deviceSeq: true, location: true, system: true, managingPosition: true, device: { select: { name: true } } },
+          },
+        },
+      });
+      if (materials.length !== requestedItems.length) return fail("Có vật tư không còn tồn tại", 404);
+      const materialById = new Map(materials.map((material) => [material.id, material]));
+      const commonTicket = assignedPosition === COMMON_MATERIAL_POSITION;
+      if (commonTicket && unit !== "COMMON") return fail("Vật tư Chung phải chọn tổ máy Chung");
+
+      const itemData = requestedItems.map((requested) => {
+        const material = materialById.get(requested.materialId)!;
+        if (!isOtherMaterialCategory(material.category)) throw fail(`Vật tư "${material.name}" không thuộc nhóm Vật tư khác`);
+        const hasManagedScope = material.replacements.some((point) => Boolean(point.managingPosition?.trim() || point.deviceSeq));
+        if (commonTicket && hasManagedScope) throw fail(`Vật tư "${material.name}" đã gắn cương vị, không thể lập ở mục Chung`);
+        if (!commonTicket && !hasManagedScope) throw fail(`Vật tư "${material.name}" chưa gắn cương vị, vui lòng chọn cương vị Chung`);
+        if (material.machine !== unit) throw fail(`Vật tư "${material.name}" không thuộc tổ máy đã chọn`);
+
+        const matchingPoints = commonTicket
+          ? []
+          : material.replacements.filter((point) => positionsMatch(point.managingPosition, assignedPosition));
+        if (!commonTicket && !matchingPoints.length) throw fail(`Vật tư "${material.name}" không thuộc cương vị đã chọn`);
+        const pointByKey = new Map(matchingPoints.map((point) => [replacementPointSelectionKey(point), point]));
+        const selectedPoints = requested.replacementKeys.map((key) => pointByKey.get(key));
+        const hasDevice = matchingPoints.some((point) => Boolean(point.deviceSeq));
+        if (hasDevice && !requested.replacementKeys.length) throw fail(`Vui lòng chọn thiết bị cho vật tư "${material.name}"`);
+        if (selectedPoints.some((point) => !point)) throw fail(`Thiết bị đã chọn không thuộc vật tư "${material.name}" và cương vị được giao`);
+        const validPoints = selectedPoints.filter((point): point is NonNullable<typeof point> => Boolean(point));
+        const primary = validPoints[0];
+        const labels = validPoints.map((point) => replacementPointDisplayLabel(point));
+        return {
+          materialId: material.id,
+          erpCode: null,
+          quantity: requested.quantity,
+          deviceSeq: primary?.deviceSeq ?? null,
+          replacementPointKeys: requested.replacementKeys,
+          deviceNameManual: labels.join(", ") || null,
+        };
+      });
+
+      const sequenceMonth = materialTicketMonthKey();
+      const ticket = await prisma.$transaction(async (tx) => {
+        await tx.$executeRaw`LOCK TABLE "MaterialTicket" IN EXCLUSIVE MODE`;
+        const sequenceScope = sequenceScopeOfType(OTHER_MATERIAL_TICKET_TYPE);
+        const latest = await tx.materialTicket.aggregate({ where: { sequenceMonth, sequenceScope }, _max: { sequenceNumber: true } });
+        return tx.materialTicket.create({
+          data: {
+            sequenceMonth,
+            sequenceScope,
+            sequenceNumber: (latest._max.sequenceNumber ?? 0) + 1,
+            type: OTHER_MATERIAL_TICKET_TYPE,
+            unit,
+            status: "CHO_THONG_KE",
+            proposalNote,
+            recoveryRequired: false,
+            assignedPosition,
+            materialCategory: OTHER_MATERIAL_GROUP,
+            createdById: user.id,
+            createdByName: user.name ?? "",
+            items: { create: itemData },
+          },
+          include: ITEM_INCLUDE,
+        });
+      });
+      await audit(user.id, "CREATE_OTHER_MATERIAL_TICKET", "MaterialTicket", ticket.id,
+        `${materialTicketReference(ticket)}: ${requestedItems.length} vật tư, ${assignedPosition}, ${unit}`);
+      return ok(ticket);
+    }
     // Hóa chất luôn đi thẳng luồng Đề xuất — nghiệp vụ này không có Ứng lẫn Sử dụng hiện có
     // nên không để phiếu dừng ở trạng thái chờ chọn luồng. Chai khí thì VẪN chọn luồng
     // (Đề xuất hoặc Ứng) ở bước Trưởng ca/Trưởng kíp, chỉ bỏ Sử dụng hiện có.
