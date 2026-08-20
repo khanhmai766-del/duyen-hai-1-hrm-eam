@@ -16,6 +16,16 @@ import { replacementPointDisplayLabel, replacementPointSelectionKey } from "@/li
 
 export const dynamic = "force-dynamic";
 
+/**
+ * Phiếu thuộc LUỒNG HÓA CHẤT (hóa chất + NH3 khai một bước)?
+ *
+ * Luồng này chỉ ghi nhận khối lượng đề xuất và khối lượng nhập: hàng do nhà thầu giao
+ * thẳng theo hợp đồng, không qua kho DH1 nên KHÔNG cộng tồn và KHÔNG trừ ERP.
+ */
+function isChemicalSequenceTicket(type: string | null | undefined) {
+  return type === CHEMICAL_TICKET_TYPE || type === "GHI_NHAN";
+}
+
 const SCCN_REPRESENTATIVES = ["Võ Văn Chiến", "Lê Văn Khánh", "Nguyễn Thanh Toàn"] as const;
 const SCCN_POSITIONS = ["Quản Đốc", "Phó Quản Đốc"] as const;
 
@@ -691,6 +701,29 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         before = `Số phiếu ĐXVT: ${t.proposalNumber ?? "—"}; VHV nhận: ${t.proposalReceiverName ?? "—"}`;
         after = `Số phiếu ĐXVT: ${value}; VHV nhận: ${proposalReceiverName || "—"}`;
         up = await prisma.materialTicket.update({ where: { id: t.id }, data: { proposalNumber: value, proposalReceiverName: proposalReceiverName || null }, include: ITEM_INCLUDE });
+      } else if (step === "receive" && isChemicalSequenceTicket(t.type)) {
+        /*
+         * HÓA CHẤT — sửa lại khối lượng lãnh mà KHÔNG đụng tồn kho lẫn ERP.
+         *
+         * Hóa chất do nhà thầu giao thẳng theo hợp đồng, không đi qua kho DH1: phiếu chỉ
+         * GHI NHẬN khối lượng đề xuất và khối lượng nhập. Bước xác nhận lãnh (action
+         * "receive") đã đúng như vậy từ đầu, nhưng hộp Xem lại của chính bước đó lại rơi
+         * vào nhánh chung bên dưới — sửa số một lần là cộng khống vào tồn kho phân xưởng
+         * và trừ khống tồn ERP của một mã chưa từng xuất kho.
+         *
+         * Cũng không đòi số phiếu giao hàng: luồng này không phát sinh phiếu nào.
+         */
+        if (!t.receivedAt || t.receivedQuantity == null) return fail("Bước xác nhận khối lượng lãnh chưa hoàn thành");
+        const value = Math.trunc(Number(body.receivedQuantity));
+        if (!Number.isFinite(value) || value <= 0) return fail("Khối lượng lãnh phải lớn hơn 0");
+        const dvt = t.items[0]?.material.unit ?? "";
+        before = `Khối lượng lãnh: ${t.receivedQuantity} ${dvt}`.trim();
+        after = `Khối lượng lãnh: ${value} ${dvt}`.trim();
+        up = await prisma.materialTicket.update({
+          where: { id: t.id },
+          data: { receivedQuantity: value },
+          include: ITEM_INCLUDE,
+        });
       } else if (step === "receive") {
         if (!t.receivedAt || t.receivedQuantity == null) return fail("Bước xác nhận vật tư lãnh chưa hoàn thành");
         const value = Math.trunc(Number(body.receivedQuantity));

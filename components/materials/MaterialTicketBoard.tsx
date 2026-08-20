@@ -160,9 +160,15 @@ const normalizeReceiptSource = (source?: string | null): "ERP" | "EXISTING" =>
 // mang hai nghĩa khác hẳn nhau tùy luồng nên nhãn phải đọc theo luồng:
 //   • luồng Ứng → "Lãnh ngoài" (VHV tự lãnh ngoài kho DH1)
 //   • luồng SỬ DỤNG HIỆN CÓ → vật tư lấy từ kho phân xưởng, không lãnh ở đâu cả.
+//   • luồng HÓA CHẤT → nhà thầu giao thẳng theo hợp đồng, KHÔNG qua kho DH1.
 // Dùng chung một nhãn khiến phiếu "Sử dụng hiện có" hiện "Lãnh ngoài" — sai nghĩa.
+//
+// Riêng hóa chất, cột `receiptSource` trong DB vẫn mang giá trị mặc định 'ERP' vì luồng
+// này không hề hỏi nguồn lãnh — đọc thẳng cột đó ra là hiện 'Lãnh kho DH1', sai hoàn
+// toàn. Nhãn phải suy từ LOẠI PHIẾU chứ không từ cột dữ liệu.
 const receiptSourceLabel = (source?: string | null, ticketType?: string | null) => {
   if (ticketType === "SU_DUNG_HIEN_CO") return "Lấy từ Hiện có";
+  if (ticketType === CHEMICAL_TICKET_TYPE || ticketType === SINGLE_STEP_TICKET_TYPE) return "Nhà thầu giao ngoài";
   return normalizeReceiptSource(source) === "ERP" ? "Lãnh kho DH1" : "Lãnh ngoài";
 };
 const bbntDownloadUrl = (url: string, deviceName: string) => {
@@ -1664,7 +1670,19 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
                       <div className="meta-line received-summary">
                         <span>Vật tư lãnh: <b>{t.receivedQuantity} {t.items[0]?.material.unit ?? ""}</b></span>
                         <span>Nguồn lãnh: <b className="source-badge">{currentReceiptSourceLabel}</b></span>
-                        <em>{t.type === "SU_DUNG_HIEN_CO" ? "lấy từ số đang có, kho trừ ở bước sử dụng" : "đã cộng vào số lượng hiện có"}</em>
+                        {/*
+                          Hóa chất KHÔNG cộng vào tồn kho và KHÔNG trừ ERP: hàng do nhà thầu giao
+                          thẳng theo hợp đồng, phiếu chỉ ghi nhận khối lượng đề xuất và khối lượng
+                          nhập. Bước xác nhận lãnh ở API cũng không đụng lô hay ERP — câu chú thích
+                          cũ nói ngược lại với thứ hệ thống thực sự làm.
+                        */}
+                        <em>
+                          {t.type === CHEMICAL_TICKET_TYPE || t.type === SINGLE_STEP_TICKET_TYPE
+                            ? "chỉ ghi nhận khối lượng nhập, không cộng tồn kho và không trừ ERP"
+                            : t.type === "SU_DUNG_HIEN_CO"
+                              ? "lấy từ số đang có, kho trừ ở bước sử dụng"
+                              : "đã cộng vào số lượng hiện có"}
+                        </em>
                       </div>
                     )}
                     {t.vhvReceivedQuantity != null && <div className="meta-line">VHV đã lãnh: <b>{t.vhvReceivedQuantity} {t.items[0]?.material.unit ?? ""}</b></div>}
@@ -1732,9 +1750,13 @@ function StepReviewDialog({ t, viewer, stepKey, onClose }: { t: MaterialTicket; 
   const editStep = permission;
   const [proposalNumber, setProposalNumber] = useState(t.proposalNumber ?? "");
   const [proposalReceiverNameReview, setProposalReceiverNameReview] = useState(t.proposalReceiverName ?? "");
-  // Bước "stats" của luồng hóa chất chốt LỊCH GIAO HÀNG + KHỐI LƯỢNG GIAO, không phải
-  // số phiếu ĐXVT — hai luồng dùng chung khóa bước nhưng nội dung khác hẳn nhau.
-  const isChemicalStats = t.type === CHEMICAL_TICKET_TYPE;
+  /*
+   * Phiếu thuộc luồng hóa chất? Dùng cho CẢ HAI bước mà hộp Xem lại rẽ nhánh:
+   *   • "stats"   chốt lịch giao hàng + khối lượng giao, không phải số phiếu ĐXVT
+   *   • "receive" chỉ có khối lượng lãnh, không nguồn lãnh và không phiếu giao hàng
+   * Hai luồng dùng chung khóa bước nhưng nội dung khác hẳn nhau.
+   */
+  const isChemicalStats = t.type === CHEMICAL_TICKET_TYPE || t.type === SINGLE_STEP_TICKET_TYPE;
   const [deliveryDateReview, setDeliveryDateReview] = useState(t.deliveryScheduledAt ? String(t.deliveryScheduledAt).slice(0, 10) : "");
   const [deliveryQtyReview, setDeliveryQtyReview] = useState(t.deliveryQuantity != null ? String(t.deliveryQuantity) : "");
   const [receivedQuantity, setReceivedQuantity] = useState(t.receivedQuantity ?? 1);
@@ -1765,7 +1787,12 @@ function StepReviewDialog({ t, viewer, stepKey, onClose }: { t: MaterialTicket; 
           : { proposalNumber, proposalReceiverName: proposalReceiverNameReview }
       );
     }
-    if (editStep === "receive") Object.assign(payload, { receivedQuantity, deliveryNoteNumber: receivedMethod, receiptSource });
+    if (editStep === "receive") {
+      Object.assign(
+        payload,
+        isChemicalStats ? { receivedQuantity } : { receivedQuantity, deliveryNoteNumber: receivedMethod, receiptSource }
+      );
+    }
     if (editStep === "use") Object.assign(payload, {
       usedQuantity,
       materialUserName: materialUserName.trim(),
@@ -1811,7 +1838,18 @@ function StepReviewDialog({ t, viewer, stepKey, onClose }: { t: MaterialTicket; 
           <label>Số phiếu ĐXVT<input value={proposalNumber} disabled={!canEdit} onChange={(e) => setProposalNumber(e.target.value)} /></label>
           {t.type !== "UNG" && <label>Tên VHV nhận phiếu ĐXVT<input value={proposalReceiverNameReview} disabled={!canEdit} onChange={(e) => setProposalReceiverNameReview(e.target.value)} /></label>}
         </>}
-        {editStep === "receive" && <>
+        {editStep === "receive" && isChemicalStats && (
+          /*
+            Hóa chất: nhà thầu giao thẳng theo hợp đồng nên KHÔNG có nguồn lãnh để chọn và
+            KHÔNG phát sinh phiếu giao hàng. Bày hai ô đó ra là mời người dùng điền vào
+            chỗ máy chủ không hề đọc tới.
+          */
+          <label>
+            Khối lượng lãnh{t.items[0]?.material.unit ? ` (${t.items[0].material.unit})` : ""}
+            <input type="number" min={1} value={receivedQuantity} disabled={!canEdit} onChange={(e) => setReceivedQuantity(Number(e.target.value))} />
+          </label>
+        )}
+        {editStep === "receive" && !isChemicalStats && <>
           <label>Khối lượng lãnh<input type="number" min={1} value={receivedQuantity} disabled={!canEdit} onChange={(e) => setReceivedQuantity(Number(e.target.value))} /></label>
           <div className={`review-receive-row ${t.type !== "UNG" ? "single" : ""}`}>
             <div className="review-receive-source">
