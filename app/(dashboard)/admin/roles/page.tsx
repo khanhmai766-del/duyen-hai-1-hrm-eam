@@ -36,6 +36,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { RoleBadge } from "@/components/devices/status-badge";
@@ -774,7 +775,9 @@ export default function RolesPage() {
     userId: "",
     role: "" as RoleKey | "",
     profileId: "",
-    permissionId: "",
+    // Gán được NHIỀU quyền riêng trong một lần: cấp quyền cho một người thường là cấp cả
+    // một cụm chức năng, mở lại hộp thoại từng quyền một vừa lâu vừa dễ sót.
+    permissionIds: [] as string[],
     value: "read" as PermissionValue,
     note: "",
   });
@@ -908,7 +911,7 @@ export default function RolesPage() {
       toast.error("Cương vị này không có tài khoản đang hoạt động");
       return;
     }
-    if (!assignment.role && !assignment.profileId && !assignment.permissionId) {
+    if (!assignment.role && !assignment.profileId && assignment.permissionIds.length === 0) {
       toast.error("Vui lòng chọn vai trò hệ thống, phân quyền hoặc quyền riêng cần gán");
       return;
     }
@@ -918,29 +921,39 @@ export default function RolesPage() {
           await updateUser.mutateAsync({ id: targetUser.id, role: assignment.role });
         }
       }
-      const nextOverrides = assignment.permissionId || assignment.profileId
+      // Mỗi quyền được chọn sinh MỘT dòng cho MỖI user đích. Chọn hồ sơ mở rộng thì thay
+      // bằng đúng một dòng mang khóa "__ROLE_PROFILE__" như trước.
+      const capGan = assignment.permissionIds.length
+        ? assignment.permissionIds
+        : assignment.profileId ? ["__ROLE_PROFILE__"] : [];
+      const coGiGan = capGan.length > 0;
+      const nextOverrides = coGiGan
         ? [
+            // Bỏ bản gán CŨ của đúng các cặp (user × quyền) sắp ghi đè, giữ nguyên mọi
+            // quyền riêng khác mà người đó đang có.
             ...userOverrides.filter(
               (item) =>
                 !(targetUsers.some((targetUser) => targetUser.id === item.userId) &&
-                  item.permissionId === (assignment.permissionId || "__ROLE_PROFILE__") &&
+                  capGan.includes(item.permissionId) &&
                   item.roleId === (assignment.profileId || undefined)
                 )
             ),
-            ...targetUsers.map((targetUser, index) => ({
-              id: `override-${Date.now()}-${index}`,
-              userId: targetUser.id,
-              permissionId: assignment.permissionId || "__ROLE_PROFILE__",
-              roleId: assignment.profileId || undefined,
-              value: assignment.value,
-              note: assignment.note.trim()
-                || (assignmentTarget === "POSITION" ? `Gán theo cương vị ${assignmentPosition}` : undefined),
-              createdAt: new Date().toISOString(),
-            })),
+            ...targetUsers.flatMap((targetUser, userIndex) =>
+              capGan.map((permissionId, permIndex) => ({
+                id: `override-${Date.now()}-${userIndex}-${permIndex}`,
+                userId: targetUser.id,
+                permissionId,
+                roleId: assignment.profileId || undefined,
+                value: assignment.value,
+                note: assignment.note.trim()
+                  || (assignmentTarget === "POSITION" ? `Gán theo cương vị ${assignmentPosition}` : undefined),
+                createdAt: new Date().toISOString(),
+              }))
+            ),
           ]
         : userOverrides;
 
-      if (assignment.permissionId || assignment.profileId) {
+      if (coGiGan) {
         await saveRbac.mutateAsync({
           permissions: normalizeMergedRoleMatrix(permissions),
           roles: customRoles,
@@ -953,7 +966,7 @@ export default function RolesPage() {
       setAssignUserSearch("");
       setAssignmentTarget("USER");
       setAssignmentPosition("");
-      setAssignment({ userId: "", role: "", profileId: "", permissionId: "", value: "read", note: "" });
+      setAssignment({ userId: "", role: "", profileId: "", permissionIds: [], value: "read", note: "" });
       toast.success(
         assignmentTarget === "POSITION"
           ? `Đã cập nhật quyền cho ${targetUsers.length} tài khoản thuộc cương vị ${assignmentPosition}`
@@ -1395,19 +1408,80 @@ export default function RolesPage() {
             <div className="grid gap-3 sm:grid-cols-[1fr_180px]">
               <div className="grid gap-1.5">
                 <Label>Quyền riêng</Label>
-                <Select value={assignment.permissionId || "NONE"} onValueChange={(value) => setAssignment((state) => ({ ...state, permissionId: value === "NONE" ? "" : value }))}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Chọn quyền cần gán" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="NONE">Không gán quyền riêng</SelectItem>
-                    {permissions.map((permission) => (
-                      <SelectItem key={permission.id} value={permission.id}>
-                        {permission.feature}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                {/*
+                  Danh sách TÍCH NHIỀU thay cho ô chọn một: cấp quyền cho một người thường
+                  là cấp cả một cụm chức năng. Cả cụm dùng CHUNG một mức ở ô "Cấp quyền"
+                  bên cạnh — cần mức khác nhau thì lưu thành nhiều lượt.
+                */}
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button type="button" variant="outline" className="h-10 justify-between font-normal">
+                      <span className={assignment.permissionIds.length ? "text-ink" : "text-muted-foreground"}>
+                        {assignment.permissionIds.length === 0
+                          ? "Không gán quyền riêng"
+                          : assignment.permissionIds.length === 1
+                            ? permissionById.get(assignment.permissionIds[0])?.feature ?? assignment.permissionIds[0]
+                            : `Đã chọn ${assignment.permissionIds.length} quyền`}
+                      </span>
+                      <ChevronsUpDown className="size-4 shrink-0 text-slate-400" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent align="start" className="w-[min(28rem,calc(100vw-3rem))] p-0">
+                    <div className="flex items-center justify-between border-b border-slate-100 px-3 py-2">
+                      <span className="text-[12px] font-semibold text-slate-600">
+                        {assignment.permissionIds.length}/{permissions.length} quyền
+                      </span>
+                      <div className="flex gap-1">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 text-[12px]"
+                          onClick={() => setAssignment((state) => ({ ...state, permissionIds: permissions.map((p) => p.id) }))}
+                        >
+                          Chọn tất cả
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 text-[12px]"
+                          onClick={() => setAssignment((state) => ({ ...state, permissionIds: [] }))}
+                        >
+                          Bỏ chọn
+                        </Button>
+                      </div>
+                    </div>
+                    <div className="max-h-72 overflow-auto p-1.5">
+                      {permissions.map((permission) => {
+                        const checked = assignment.permissionIds.includes(permission.id);
+                        return (
+                          <label
+                            key={permission.id}
+                            className="flex cursor-pointer items-start gap-2.5 rounded-lg px-2 py-1.5 text-[13px] hover:bg-slate-50"
+                          >
+                            <Checkbox
+                              checked={checked}
+                              className="mt-0.5"
+                              onCheckedChange={(v: boolean | "indeterminate") =>
+                                setAssignment((state) => ({
+                                  ...state,
+                                  permissionIds: v === true
+                                    ? [...state.permissionIds, permission.id]
+                                    : state.permissionIds.filter((id) => id !== permission.id),
+                                }))
+                              }
+                            />
+                            <span className="min-w-0">
+                              <span className="block font-medium text-ink">{permission.feature}</span>
+                              <span className="block text-[11px] text-muted-foreground">{permission.group}</span>
+                            </span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </PopoverContent>
+                </Popover>
               </div>
               <div className="grid gap-1.5">
                 <Label>Cấp quyền</Label>
