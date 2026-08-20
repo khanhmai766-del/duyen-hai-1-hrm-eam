@@ -8,26 +8,29 @@
 - Dòng dữ liệu đầu tiên: `3`
 - Khóa upsert: cột `AG` (`SYNC_KEY`)
 
-## Bố cục V2 chạy song song
+## Hai đích đồng bộ V2
 
-- Sheet mới: `VH1_VTDONGBO`
-- Vùng tiêu đề/dữ liệu: `A2:AO`
+- Sheet vật tư: `VH1_VTDONGBO`
+- Vùng tiêu đề/dữ liệu vật tư: `A2:AL`
 - Dòng dữ liệu đầu tiên: `3`
-- Khóa upsert: cột `AL` (`SYNC_KEY`)
-- API thêm query parameter `layout=vh1_v2`.
-- Workflow import: `workflow-vh1-v2.json`.
+- Khóa upsert vật tư: cột `AI` (`SYNC_KEY`)
+- Workflow vật tư: `workflow-vh1-v2.json`
+- Sheet hóa chất: `VH1_HOACHAT_DONGBO`
+- Vùng tiêu đề/dữ liệu hóa chất: `A2:U`
+- Khóa upsert hóa chất: cột `R` (`SYNC_KEY`)
+- Workflow hóa chất: `workflow-chemical-v2.json`
+- API dùng `layout=vh1_v2` và `syncScope=materials|chemicals`.
 
 Mapper mặc định vẫn dùng bố cục cũ để workflow `VT_DONGBO` tiếp tục hoạt động.
-Chỉ workflow V2 gửi `layout=vh1_v2` và dùng watermark riêng
-`materialV2UpdatedAfter`.
+Hai workflow V2 có watermark độc lập: `materialV2UpdatedAfter` và
+`chemicalV2UpdatedAfter`.
 
 Các cột bổ sung của V2:
 
 - B: Luồng thực hiện; C: Tổ máy.
-- O: Người xác nhận bồn/thiết bị đủ điều kiện.
-- P: Khối lượng giao hàng theo lịch và lịch giao.
-- Q: Khối lượng lãnh thực tế, người lãnh và ngày lãnh.
-- AL:AO: dữ liệu kỹ thuật hệ thống.
+- Sheet vật tư không có ba cột hóa chất; `AI:AL` là dữ liệu kỹ thuật hệ thống.
+- Sheet hóa chất giữ A:Q, trong đó O:Q là xác nhận/giao hóa chất; `R:U` là dữ
+  liệu kỹ thuật hệ thống.
 - Lần đồng bộ V2 từ đầu trả các phiếu theo tháng cấp STT rồi STT website tăng
   dần; các lượt tăng dần sau đó upsert đúng dòng theo `SYNC_KEY` và không làm
   đảo các dòng cũ.
@@ -36,9 +39,9 @@ Các cột bổ sung của V2:
 
 - Khi xóa phiếu, website ghi một tombstone cho từng `SYNC_KEY` trước khi cascade
   xóa các item.
-- API V2 trả `meta.deletedSyncKeys`; mapper legacy không thay đổi.
-- Workflow V2 tìm khóa tại cột AL và gửi `deleteDimension` theo thứ tự dòng từ
-  dưới lên, sau đó upsert dữ liệu trong cùng một Google Sheets `batchUpdate`.
+- API V2 trả `meta.deletedSyncKeys`; mapper legacy không thay đổi. Mỗi workflow
+  tìm các khóa này trong sheet của mình (AI hoặc R), chỉ xóa khóa thực sự tồn
+  tại rồi upsert trong cùng một Google Sheets `batchUpdate`.
 - STT lấy trực tiếp từ phiếu trên website; khi xóa dòng, workflow không tự đánh
   lại STT theo vị trí trên Sheet.
 - Watermark chỉ được lưu khi toàn bộ thao tác Google Sheets thành công; chạy lại
@@ -47,7 +50,7 @@ Các cột bổ sung của V2:
 ## API website
 
 ```http
-GET /api/integrations/n8n/material-tickets?updatedAfter=<ISO-8601>&limit=100
+GET /api/integrations/n8n/material-tickets?layout=vh1_v2&syncScope=<materials|chemicals>&updatedAfter=<ISO-8601>&limit=200
 Authorization: Bearer <N8N_MATERIAL_SYNC_TOKEN>
 ```
 
@@ -56,9 +59,8 @@ tiếp endpoint với `cursor=meta.nextCursor`; không gửi lại `updatedAfter
 trang sau. Chỉ lưu `meta.watermark` sau khi tất cả các trang và thao tác ghi
 Google Sheets đã thành công.
 
-Mỗi phần tử `data[]` là một dòng sheet. `row.A` đến `row.AI` ánh xạ trực tiếp
-vào cột tương ứng. Cột `AJ` do n8n đặt bằng thời điểm hiện tại sau khi chuẩn bị
-ghi. Một phiếu có nhiều item sẽ có nhiều dòng với `SYNC_KEY` khác nhau.
+Mỗi phần tử `data[]` là một dòng sheet. Với vật tư, API trả `row.A:AK` và n8n
+ghi `AL` (`SYNCED_AT`). Với hóa chất, API trả `row.A:T` và n8n ghi `U`.
 
 Cột `AD` lấy trực tiếp từ `MaterialTicket.bbntDoNumber` (Số BBNT D-Office được
 nhập tại bước quyết toán).
@@ -78,8 +80,8 @@ Quy ước dữ liệu nghiệp vụ:
 
 ## Lịch production
 
-- Trigger: `8,23,38,53 * * * *` (mỗi 15 phút).
-- Sau trigger chờ 40 giây rồi mới gọi website/Google Sheets.
+- Vật tư: giây 40 tại phút `8,23,38,53` mỗi giờ.
+- Hóa chất: giây 10 tại phút `5,20,35,50` mỗi giờ.
 - Timezone workflow: `Asia/Ho_Chi_Minh`.
 - Không bật đồng bộ ngược từ Sheet về website.
 

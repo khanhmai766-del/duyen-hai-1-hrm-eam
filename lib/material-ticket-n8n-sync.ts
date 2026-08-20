@@ -293,9 +293,9 @@ export function materialTicketRowsForN8n(ticket: MaterialTicketForN8nSync) {
 }
 
 /**
- * Bố cục V2 dành riêng cho VH1_VTDONGBO!A2:AO.
- * Giữ nguyên mapper cũ để workflow VT_DONGBO đang chạy không bị thay đổi cột.
- * AO (SYNCED_AT) do n8n ghi sau khi Google Sheets xác nhận thành công.
+ * Bố cục vật tư V2 dành riêng cho VH1_VTDONGBO!A2:AL.
+ * Ba cột hóa chất O:Q đã được bỏ; các cột phía sau dịch trái ba vị trí.
+ * AL (SYNCED_AT) do n8n ghi sau khi Google Sheets xác nhận thành công.
  */
 export function materialTicketRowsForN8nV2(ticket: MaterialTicketForN8nSync) {
   return ticket.items.map((item) => {
@@ -328,32 +328,72 @@ export function materialTicketRowsForN8nV2(ticket: MaterialTicketForN8nSync) {
         L: quantityWithUnit(item.quantity, unit),
         M: ticket.proposalNote,
         N: null,
-        O: ticket.type === "HOA_CHAT" ? ticket.confirmedByName : null,
+        O: formatDate(receivedAt),
+        P: quantityWithUnit(receivedQuantity, unit),
+        Q: receivedByName,
+        R: joinUniqueText([ticket.receivedMethod, ticket.deliveryNoteNumber]),
+        S: null,
+        T: materialUserName,
+        U: formatDate(ticket.usedAt),
+        V: ticket.completionNote,
+        W: ticket.pctNumber,
+        X: quantityWithUnit(ticket.usedQuantity, unit),
+        Y: quantityWithUnit(ticket.remainingQuantity, unit),
+        Z: null,
+        AA: recoverySummary(ticket, unit),
+        AB: null,
+        AC: joinText([formatDate(ticket.completedAt), ticket.completedByName]),
+        AD: ticket.completionNote,
+        AE: null,
+        AF: ticket.bbntDoNumber,
+        AG: recoveryDocumentNumber(ticket),
+        AH: null,
+        AI: syncKey,
+        AJ: formatDateTime(ticket.updatedAt),
+        AK: ticket.status,
+      },
+    };
+  });
+}
+
+/**
+ * Bố cục hóa chất dành riêng cho VH1_HOACHAT_DONGBO!A2:U.
+ * Chỉ giữ phần đề xuất, xác nhận/giao hóa chất và bốn cột kỹ thuật R:U.
+ * U (SYNCED_AT) do n8n ghi sau khi Google Sheets xác nhận thành công.
+ */
+export function chemicalTicketRowsForN8nV2(ticket: MaterialTicketForN8nSync) {
+  return ticket.items.map((item) => {
+    const syncKey = `${ticket.id}:${item.id}`;
+    const proposedAt = ticket.proposedAt ?? ticket.createdAt;
+    const proposedByName = ticket.proposedByName ?? ticket.createdByName;
+    const proposedByPosition = ticket.proposedByPosition ?? ticket.assignedPosition;
+    const unit = item.material.unit;
+
+    return {
+      syncKey,
+      sourceUpdatedAt: ticket.updatedAt.toISOString(),
+      workflowStatus: ticket.status,
+      row: {
+        A: materialTicketNumber(ticket),
+        B: workflowTypeLabel(ticket.type),
+        C: unitLabel(ticket.unit),
+        D: materialCategoryLabel(ticket.materialCategory),
+        E: quantityWithUnit(ticket.remainingQuantity, unit),
+        F: ticket.proposalNumber,
+        G: formatDate(proposedAt),
+        H: proposedByPosition,
+        I: proposedByName,
+        J: item.erpCode,
+        K: item.material.name,
+        L: quantityWithUnit(item.quantity, unit),
+        M: ticket.proposalNote,
+        N: null,
+        O: ticket.confirmedByName,
         P: chemicalScheduledSummary(ticket, unit),
         Q: chemicalReceivedSummary(ticket, unit),
-        R: formatDate(receivedAt),
-        S: quantityWithUnit(receivedQuantity, unit),
-        T: receivedByName,
-        U: joinUniqueText([ticket.receivedMethod, ticket.deliveryNoteNumber]),
-        V: null,
-        W: materialUserName,
-        X: formatDate(ticket.usedAt),
-        Y: ticket.completionNote,
-        Z: ticket.pctNumber,
-        AA: quantityWithUnit(ticket.usedQuantity, unit),
-        AB: quantityWithUnit(ticket.remainingQuantity, unit),
-        AC: null,
-        AD: recoverySummary(ticket, unit),
-        AE: null,
-        AF: joinText([formatDate(ticket.completedAt), ticket.completedByName]),
-        AG: ticket.completionNote,
-        AH: null,
-        AI: ticket.bbntDoNumber,
-        AJ: recoveryDocumentNumber(ticket),
-        AK: null,
-        AL: syncKey,
-        AM: formatDateTime(ticket.updatedAt),
-        AN: ticket.status,
+        R: syncKey,
+        S: formatDateTime(ticket.updatedAt),
+        T: ticket.status,
       },
     };
   });

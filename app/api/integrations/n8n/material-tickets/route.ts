@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 import { fail, handle, ok } from "@/lib/api";
 import {
+  chemicalTicketRowsForN8nV2,
   decodeMaterialTicketSyncCursor,
   encodeMaterialTicketSyncCursor,
   materialTicketRowsForN8n,
@@ -33,6 +34,9 @@ export async function GET(req: NextRequest) {
       const sp = req.nextUrl.searchParams;
       const limit = parseMaterialTicketSyncLimit(sp.get("limit"));
       const layout = sp.get("layout") === "vh1_v2" ? "vh1_v2" : "legacy";
+      const syncScope = layout === "vh1_v2"
+        ? sp.get("syncScope") === "chemicals" ? "chemicals" : "materials"
+        : "all";
       const cursorValue = sp.get("cursor")?.trim();
       const cursor = cursorValue ? decodeMaterialTicketSyncCursor(cursorValue) : null;
       const updatedAfter = cursor ? null : parseMaterialTicketUpdatedAfter(sp.get("updatedAfter"));
@@ -40,9 +44,8 @@ export async function GET(req: NextRequest) {
       // đang chạy không bị nhảy qua watermark của lượt hiện tại.
       const boundary = cursor?.boundary ?? new Date();
 
-      const tickets = await prisma.materialTicket.findMany({
-        where: cursor
-          ? {
+      const changeFilter = cursor
+        ? {
               AND: [
                 { updatedAt: { lte: boundary } },
                 {
@@ -53,7 +56,15 @@ export async function GET(req: NextRequest) {
                 },
               ],
             }
-          : { updatedAt: { gt: updatedAfter!, lte: boundary } },
+        : { updatedAt: { gt: updatedAfter!, lte: boundary } };
+      const scopeFilter = syncScope === "chemicals"
+        ? { type: "HOA_CHAT" as const }
+        : { type: { not: "HOA_CHAT" as const } };
+
+      const tickets = await prisma.materialTicket.findMany({
+        where: layout === "vh1_v2"
+          ? { AND: [scopeFilter, changeFilter] }
+          : changeFilter,
         include: ITEM_INCLUDE,
         orderBy: [{ updatedAt: "asc" }, { id: "asc" }],
         take: limit + 1,
@@ -76,9 +87,11 @@ export async function GET(req: NextRequest) {
               || left.id.localeCompare(right.id);
           })
         : page;
-      const rows = layout === "vh1_v2"
-        ? outputPage.flatMap(materialTicketRowsForN8nV2)
-        : outputPage.flatMap(materialTicketRowsForN8n);
+      const rows = layout !== "vh1_v2"
+        ? outputPage.flatMap(materialTicketRowsForN8n)
+        : syncScope === "chemicals"
+          ? outputPage.flatMap(chemicalTicketRowsForN8nV2)
+          : outputPage.flatMap(materialTicketRowsForN8nV2);
       const deletionRows = layout === "vh1_v2" && !cursor
         ? await prisma.materialTicketSyncDeletion.findMany({
             where: { deletedAt: { gt: updatedAfter!, lte: boundary } },
@@ -101,6 +114,7 @@ export async function GET(req: NextRequest) {
         deletedSyncKeys: deletionRows.map((row) => row.syncKey),
         deletedRowCount: deletionRows.length,
         layout,
+        syncScope,
       });
     } catch (error) {
       return fail(error instanceof Error ? error.message : "Dữ liệu đồng bộ không hợp lệ", 400);

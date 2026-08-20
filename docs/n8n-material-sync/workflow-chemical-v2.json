@@ -1,10 +1,10 @@
 {
-  "name": "PRODUCTION - Đồng bộ vật tư sang VH1_VTDONGBO",
+  "name": "PRODUCTION - Đồng bộ hóa chất sang VH1_HOACHAT_DONGBO",
   "nodes": [
     {
       "parameters": {},
       "id": "material-v2-manual-trigger",
-      "name": "Chạy thử thủ công V2",
+      "name": "Chạy thử thủ công hóa chất",
       "type": "n8n-nodes-base.manualTrigger",
       "typeVersion": 1,
       "position": [
@@ -18,13 +18,13 @@
           "interval": [
             {
               "field": "cronExpression",
-              "expression": "40 8,23,38,53 * * * *"
+              "expression": "10 5,20,35,50 * * * *"
             }
           ]
         }
       },
       "id": "material-v2-schedule-trigger",
-      "name": "Lịch 15 phút V2",
+      "name": "Lịch 15 phút hóa chất",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
       "position": [
@@ -34,10 +34,10 @@
     },
     {
       "parameters": {
-        "jsCode": "const state = $getWorkflowStaticData('global');\nreturn [{ json: {\n  updatedAfter: state.materialV2UpdatedAfter ?? '1970-01-01T00:00:00.000Z',\n} }];"
+        "jsCode": "const state = $getWorkflowStaticData('global');\nreturn [{ json: {\n  updatedAfter: state.chemicalV2UpdatedAfter ?? '1970-01-01T00:00:00.000Z',\n} }];"
       },
       "id": "material-v2-prepare-watermark",
-      "name": "Chuẩn bị watermark V2",
+      "name": "Chuẩn bị watermark hóa chất",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -67,7 +67,7 @@
             },
             {
               "name": "syncScope",
-              "value": "materials"
+              "value": "chemicals"
             }
           ]
         },
@@ -76,7 +76,7 @@
         }
       },
       "id": "material-v2-fetch-api",
-      "name": "Lấy phiếu vật tư V2",
+      "name": "Lấy phiếu vật tư hóa chất",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.4,
       "position": [
@@ -131,7 +131,7 @@
         }
       },
       "id": "material-v2-read-sheet-metadata",
-      "name": "Đọc metadata Sheet V2",
+      "name": "Đọc metadata Sheet hóa chất",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.4,
       "position": [
@@ -150,7 +150,7 @@
     },
     {
       "parameters": {
-        "url": "https://sheets.googleapis.com/v4/spreadsheets/1jGwOsAc18N_aCLarHbGppuhcNM1RDkLDfgh4dmVBnoA/values/VH1_VTDONGBO!AI3:AI?majorDimension=ROWS",
+        "url": "https://sheets.googleapis.com/v4/spreadsheets/1jGwOsAc18N_aCLarHbGppuhcNM1RDkLDfgh4dmVBnoA/values/VH1_HOACHAT_DONGBO!R3:R?majorDimension=ROWS",
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "googleSheetsOAuth2Api",
         "options": {
@@ -158,7 +158,7 @@
         }
       },
       "id": "material-v2-read-sync-keys",
-      "name": "Đọc SYNC_KEY V2",
+      "name": "Đọc SYNC_KEY hóa chất",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.4,
       "position": [
@@ -177,10 +177,10 @@
     },
     {
       "parameters": {
-        "jsCode": "const response = $('Lấy phiếu vật tư V2').first().json;\nif (response.meta?.hasMore) {\n  throw new Error('API còn trang dữ liệu; chưa cập nhật watermark để tránh bỏ sót');\n}\nif (response.meta?.layout !== 'vh1_v2') {\n  throw new Error('API chưa trả đúng bố cục vh1_v2; hãy build website mới trước khi chạy');\n}\nif (response.meta?.syncScope !== 'materials') {\n  throw new Error('API chưa trả đúng phạm vi materials');\n}\nconst changes = Array.isArray(response.data) ? response.data : [];\nconst deletedKeys = new Set(\n  (Array.isArray(response.meta?.deletedSyncKeys) ? response.meta.deletedSyncKeys : [])\n    .map((key) => String(key ?? '').trim())\n    .filter(Boolean)\n);\nconst keyRows = Array.isArray($json.values) ? $json.values : [];\nconst metadata = $('Đọc metadata Sheet V2').first().json;\nconst sheet = (Array.isArray(metadata.sheets) ? metadata.sheets : [])\n  .find((entry) => entry?.properties?.title === 'VH1_VTDONGBO');\nconst sheetId = sheet?.properties?.sheetId;\nif (!Number.isInteger(sheetId)) throw new Error('Không tìm thấy sheetId của VH1_VTDONGBO');\n\nconst originalRowByKey = new Map();\nfor (let index = 0; index < keyRows.length; index++) {\n  const key = String(keyRows[index]?.[0] ?? '').trim();\n  if (key && !originalRowByKey.has(key)) originalRowByKey.set(key, index + 3);\n}\nconst deletedRows = Array.from(deletedKeys)\n  .map((key) => originalRowByKey.get(key))\n  .filter((row) => Number.isInteger(row))\n  .sort((a, b) => b - a);\nconst deletedBefore = (rowNumber) => deletedRows.reduce(\n  (count, deletedRow) => count + Number(deletedRow < rowNumber),\n  0\n);\n\nconst rowByKey = new Map();\nfor (const [key, originalRow] of originalRowByKey.entries()) {\n  if (deletedKeys.has(key)) continue;\n  rowByKey.set(key, originalRow - deletedBefore(originalRow));\n}\nlet nextRow = keyRows.length + 3 - deletedRows.length;\nconst columns = [\n  ...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split(''),\n  ...Array.from({ length: 12 }, (_, index) => `A${String.fromCharCode(65 + index)}`),\n];\nconst formatDateTime = (value) => new Intl.DateTimeFormat('en-GB', {\n  timeZone: 'Asia/Ho_Chi_Minh',\n  day: '2-digit', month: '2-digit', year: 'numeric',\n  hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23',\n}).format(value).replace(',', '');\nconst syncedAt = formatDateTime(new Date());\nconst requests = deletedRows.map((rowNumber) => ({\n  deleteDimension: {\n    range: {\n      sheetId,\n      dimension: 'ROWS',\n      startIndex: rowNumber - 1,\n      endIndex: rowNumber,\n    },\n  },\n}));\n\nfor (const change of changes) {\n  const key = String(change.syncKey ?? change.row?.AI ?? '').trim();\n  if (!key) throw new Error('Dòng vật tư thiếu SYNC_KEY');\n  if (deletedKeys.has(key)) continue;\n  let rowNumber = rowByKey.get(key);\n  if (!rowNumber) {\n    rowNumber = nextRow++;\n    rowByKey.set(key, rowNumber);\n  }\n  const values = columns.map((column) => {\n    if (column === 'AL') return syncedAt;\n    const value = change.row?.[column];\n    return value === null || value === undefined ? '' : value;\n  });\n  requests.push({\n    updateCells: {\n      start: { sheetId, rowIndex: rowNumber - 1, columnIndex: 0 },\n      rows: [{\n        values: values.map((value) => ({\n          userEnteredValue: value === ''\n            ? {}\n            : typeof value === 'number'\n              ? { numberValue: value }\n              : typeof value === 'boolean'\n                ? { boolValue: value }\n                : { stringValue: String(value) },\n        })),\n      }],\n      fields: 'userEnteredValue',\n    },\n  });\n}\n\nif (requests.length === 0) {\n  // Tombstone không còn dòng tương ứng (ví dụ phiếu bị xóa trước lần sync đầu).\n  // Ghi lại đúng tiêu đề AI2 như một no-op để batchUpdate vẫn thành công và được phép lưu watermark.\n  requests.push({\n    updateCells: {\n      start: { sheetId, rowIndex: 1, columnIndex: 34 },\n      rows: [{ values: [{ userEnteredValue: { stringValue: 'SYNC_KEY' } }] }],\n      fields: 'userEnteredValue',\n    },\n  });\n}\n\nreturn [{ json: {\n  requests,\n  watermark: response.meta?.watermark,\n  syncedRows: changes.length,\n  deletedRows: deletedRows.length,\n  missingDeletedKeys: deletedKeys.size - deletedRows.length,\n} }];"
+        "jsCode": "const response = $('Lấy phiếu vật tư hóa chất').first().json;\nif (response.meta?.hasMore) {\n  throw new Error('API còn trang dữ liệu; chưa cập nhật watermark để tránh bỏ sót');\n}\nif (response.meta?.layout !== 'vh1_v2') {\n  throw new Error('API chưa trả đúng bố cục vh1_v2; hãy build website mới trước khi chạy');\n}\nif (response.meta?.syncScope !== 'chemicals') {\n  throw new Error('API chưa trả đúng phạm vi chemicals');\n}\nconst changes = Array.isArray(response.data) ? response.data : [];\nconst deletedKeys = new Set(\n  (Array.isArray(response.meta?.deletedSyncKeys) ? response.meta.deletedSyncKeys : [])\n    .map((key) => String(key ?? '').trim())\n    .filter(Boolean)\n);\nconst keyRows = Array.isArray($json.values) ? $json.values : [];\nconst metadata = $('Đọc metadata Sheet hóa chất').first().json;\nconst sheet = (Array.isArray(metadata.sheets) ? metadata.sheets : [])\n  .find((entry) => entry?.properties?.title === 'VH1_HOACHAT_DONGBO');\nconst sheetId = sheet?.properties?.sheetId;\nif (!Number.isInteger(sheetId)) throw new Error('Không tìm thấy sheetId của VH1_HOACHAT_DONGBO');\n\nconst originalRowByKey = new Map();\nfor (let index = 0; index < keyRows.length; index++) {\n  const key = String(keyRows[index]?.[0] ?? '').trim();\n  if (key && !originalRowByKey.has(key)) originalRowByKey.set(key, index + 3);\n}\nconst deletedRows = Array.from(deletedKeys)\n  .map((key) => originalRowByKey.get(key))\n  .filter((row) => Number.isInteger(row))\n  .sort((a, b) => b - a);\nconst deletedBefore = (rowNumber) => deletedRows.reduce(\n  (count, deletedRow) => count + Number(deletedRow < rowNumber),\n  0\n);\n\nconst rowByKey = new Map();\nfor (const [key, originalRow] of originalRowByKey.entries()) {\n  if (deletedKeys.has(key)) continue;\n  rowByKey.set(key, originalRow - deletedBefore(originalRow));\n}\nlet nextRow = keyRows.length + 3 - deletedRows.length;\nconst columns = 'ABCDEFGHIJKLMNOPQRSTU'.split('');\nconst formatDateTime = (value) => new Intl.DateTimeFormat('en-GB', {\n  timeZone: 'Asia/Ho_Chi_Minh',\n  day: '2-digit', month: '2-digit', year: 'numeric',\n  hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23',\n}).format(value).replace(',', '');\nconst syncedAt = formatDateTime(new Date());\nconst requests = deletedRows.map((rowNumber) => ({\n  deleteDimension: {\n    range: {\n      sheetId,\n      dimension: 'ROWS',\n      startIndex: rowNumber - 1,\n      endIndex: rowNumber,\n    },\n  },\n}));\n\nfor (const change of changes) {\n  const key = String(change.syncKey ?? change.row?.R ?? '').trim();\n  if (!key) throw new Error('Dòng hóa chất thiếu SYNC_KEY');\n  if (deletedKeys.has(key)) continue;\n  let rowNumber = rowByKey.get(key);\n  if (!rowNumber) {\n    rowNumber = nextRow++;\n    rowByKey.set(key, rowNumber);\n  }\n  const values = columns.map((column) => {\n    if (column === 'U') return syncedAt;\n    const value = change.row?.[column];\n    return value === null || value === undefined ? '' : value;\n  });\n  requests.push({\n    updateCells: {\n      start: { sheetId, rowIndex: rowNumber - 1, columnIndex: 0 },\n      rows: [{\n        values: values.map((value) => ({\n          userEnteredValue: value === ''\n            ? {}\n            : typeof value === 'number'\n              ? { numberValue: value }\n              : typeof value === 'boolean'\n                ? { boolValue: value }\n                : { stringValue: String(value) },\n        })),\n      }],\n      fields: 'userEnteredValue',\n    },\n  });\n}\n\nif (requests.length === 0) {\n  // Tombstone không còn dòng tương ứng (ví dụ phiếu bị xóa trước lần sync đầu).\n  // Ghi lại đúng tiêu đề R2 như một no-op để batchUpdate vẫn thành công và được phép lưu watermark.\n  requests.push({\n    updateCells: {\n      start: { sheetId, rowIndex: 1, columnIndex: 17 },\n      rows: [{ values: [{ userEnteredValue: { stringValue: 'SYNC_KEY' } }] }],\n      fields: 'userEnteredValue',\n    },\n  });\n}\n\nreturn [{ json: {\n  requests,\n  watermark: response.meta?.watermark,\n  syncedRows: changes.length,\n  deletedRows: deletedRows.length,\n  missingDeletedKeys: deletedKeys.size - deletedRows.length,\n} }];"
       },
       "id": "material-v2-plan-writes",
-      "name": "Lập kế hoạch upsert V2",
+      "name": "Lập kế hoạch upsert hóa chất",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -202,7 +202,7 @@
         }
       },
       "id": "material-v2-write-batch",
-      "name": "Áp dụng xóa và upsert V2",
+      "name": "Áp dụng xóa và upsert hóa chất",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.4,
       "position": [
@@ -221,7 +221,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const plan = $('Lập kế hoạch upsert V2').first().json;\nif (!plan.watermark) throw new Error('Thiếu watermark sau khi ghi Sheet V2');\nconst state = $getWorkflowStaticData('global');\nstate.materialV2UpdatedAfter = plan.watermark;\nreturn [{ json: {\n  success: true,\n  syncedRows: plan.syncedRows,\n  deletedRows: plan.deletedRows,\n  missingDeletedKeys: plan.missingDeletedKeys,\n  watermark: plan.watermark,\n  targetSheet: 'VH1_VTDONGBO',\n} }];"
+        "jsCode": "const plan = $('Lập kế hoạch upsert hóa chất').first().json;\nif (!plan.watermark) throw new Error('Thiếu watermark sau khi ghi Sheet V2');\nconst state = $getWorkflowStaticData('global');\nstate.chemicalV2UpdatedAfter = plan.watermark;\nreturn [{ json: {\n  success: true,\n  syncedRows: plan.syncedRows,\n  deletedRows: plan.deletedRows,\n  missingDeletedKeys: plan.missingDeletedKeys,\n  watermark: plan.watermark,\n  targetSheet: 'VH1_HOACHAT_DONGBO',\n} }];"
       },
       "id": "material-v2-save-watermark-after-write",
       "name": "Lưu watermark V2 sau khi ghi",
@@ -234,7 +234,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const response = $('Lấy phiếu vật tư V2').first().json;\nif (response.meta?.hasMore) throw new Error('API còn trang dữ liệu');\nif (response.meta?.layout !== 'vh1_v2') throw new Error('API chưa trả đúng bố cục vh1_v2');\nif (response.meta?.syncScope !== 'materials') throw new Error('API chưa trả đúng phạm vi materials');\nif (!response.meta?.watermark) throw new Error('Thiếu watermark từ API');\nconst state = $getWorkflowStaticData('global');\nstate.materialV2UpdatedAfter = response.meta.watermark;\nreturn [{ json: {\n  success: true,\n  syncedRows: 0,\n  watermark: response.meta.watermark,\n  targetSheet: 'VH1_VTDONGBO',\n} }];"
+        "jsCode": "const response = $('Lấy phiếu vật tư hóa chất').first().json;\nif (response.meta?.hasMore) throw new Error('API còn trang dữ liệu');\nif (response.meta?.layout !== 'vh1_v2') throw new Error('API chưa trả đúng bố cục vh1_v2');\nif (response.meta?.syncScope !== 'chemicals') throw new Error('API chưa trả đúng phạm vi chemicals');\nif (!response.meta?.watermark) throw new Error('Thiếu watermark từ API');\nconst state = $getWorkflowStaticData('global');\nstate.chemicalV2UpdatedAfter = response.meta.watermark;\nreturn [{ json: {\n  success: true,\n  syncedRows: 0,\n  watermark: response.meta.watermark,\n  targetSheet: 'VH1_HOACHAT_DONGBO',\n} }];"
       },
       "id": "material-v2-save-watermark-empty",
       "name": "Lưu watermark V2 khi không có dòng",
@@ -247,40 +247,40 @@
     }
   ],
   "connections": {
-    "Chạy thử thủ công V2": {
+    "Chạy thử thủ công hóa chất": {
       "main": [
         [
           {
-            "node": "Chuẩn bị watermark V2",
+            "node": "Chuẩn bị watermark hóa chất",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Lịch 15 phút V2": {
+    "Lịch 15 phút hóa chất": {
       "main": [
         [
           {
-            "node": "Chuẩn bị watermark V2",
+            "node": "Chuẩn bị watermark hóa chất",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Chuẩn bị watermark V2": {
+    "Chuẩn bị watermark hóa chất": {
       "main": [
         [
           {
-            "node": "Lấy phiếu vật tư V2",
+            "node": "Lấy phiếu vật tư hóa chất",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Lấy phiếu vật tư V2": {
+    "Lấy phiếu vật tư hóa chất": {
       "main": [
         [
           {
@@ -295,7 +295,7 @@
       "main": [
         [
           {
-            "node": "Đọc metadata Sheet V2",
+            "node": "Đọc metadata Sheet hóa chất",
             "type": "main",
             "index": 0
           }
@@ -309,40 +309,40 @@
         ]
       ]
     },
-    "Đọc metadata Sheet V2": {
+    "Đọc metadata Sheet hóa chất": {
       "main": [
         [
           {
-            "node": "Đọc SYNC_KEY V2",
+            "node": "Đọc SYNC_KEY hóa chất",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Đọc SYNC_KEY V2": {
+    "Đọc SYNC_KEY hóa chất": {
       "main": [
         [
           {
-            "node": "Lập kế hoạch upsert V2",
+            "node": "Lập kế hoạch upsert hóa chất",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Lập kế hoạch upsert V2": {
+    "Lập kế hoạch upsert hóa chất": {
       "main": [
         [
           {
-            "node": "Áp dụng xóa và upsert V2",
+            "node": "Áp dụng xóa và upsert hóa chất",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Áp dụng xóa và upsert V2": {
+    "Áp dụng xóa và upsert hóa chất": {
       "main": [
         [
           {

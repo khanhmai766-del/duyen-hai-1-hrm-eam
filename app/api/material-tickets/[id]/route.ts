@@ -443,8 +443,8 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
         await reverseTicketStock(tx, { materialCode: deletedMaterial.code, ticketId: t.id });
         await syncMaterialQuantity(tx, deletedMaterial.code, sharedCodesOf(deletedMaterial));
       }
-      // Ghi tombstone trước khi cascade xóa các item. Workflow V2 dùng các khóa này
-      // để xóa đúng mọi dòng của phiếu khỏi VH1_VTDONGBO.
+      // Ghi tombstone trước khi cascade xóa các item. Hai workflow V2 dùng các
+      // khóa này để xóa đúng dòng khỏi sheet vật tư hoặc sheet hóa chất.
       if (t.items.length > 0) {
         await tx.materialTicketSyncDeletion.createMany({
           data: t.items.map((item) => ({
@@ -475,7 +475,9 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
           WHERE "sequenceMonth" = ${t.sequenceMonth} AND "sequenceScope" = ${t.sequenceScope}
         )
         UPDATE "MaterialTicket" AS ticket
-        SET "sequenceNumber" = ranked."nextSequenceNumber"
+        SET
+          "sequenceNumber" = ranked."nextSequenceNumber",
+          "updatedAt" = CURRENT_TIMESTAMP
         FROM ranked
         WHERE ticket.id = ranked.id
       `;
