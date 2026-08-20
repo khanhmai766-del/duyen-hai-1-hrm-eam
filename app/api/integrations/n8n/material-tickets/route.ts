@@ -58,8 +58,8 @@ export async function GET(req: NextRequest) {
             }
         : { updatedAt: { gt: updatedAfter!, lte: boundary } };
       const scopeFilter = syncScope === "chemicals"
-        ? { type: "HOA_CHAT" as const }
-        : { type: { not: "HOA_CHAT" as const } };
+        ? { sequenceScope: "CHEMICAL" }
+        : { sequenceScope: "MATERIAL" };
 
       const tickets = await prisma.materialTicket.findMany({
         where: layout === "vh1_v2"

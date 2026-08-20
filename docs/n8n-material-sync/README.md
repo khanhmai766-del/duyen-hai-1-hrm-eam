@@ -20,6 +20,8 @@
 - Khóa upsert hóa chất: cột `R` (`SYNC_KEY`)
 - Workflow hóa chất: `workflow-chemical-v2.json`
 - API dùng `layout=vh1_v2` và `syncScope=materials|chemicals`.
+- Phạm vi được lọc theo `sequenceScope`: `MATERIAL` vào sheet vật tư;
+  `CHEMICAL` (gồm cả hóa chất khai một bước mang STT `HC-*`) vào sheet hóa chất.
 
 Mapper mặc định vẫn dùng bố cục cũ để workflow `VT_DONGBO` tiếp tục hoạt động.
 Hai workflow V2 có watermark độc lập: `materialV2UpdatedAfter` và
