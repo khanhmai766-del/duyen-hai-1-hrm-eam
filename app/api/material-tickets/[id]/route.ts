@@ -10,12 +10,21 @@ import { materialTicketFileBase, materialTicketReference } from "@/lib/material-
 import { normalizeText } from "@/lib/nav";
 import { consumeStock, deliveryNoteSummary, receiveIntoLot, releaseUsage, reverseTicketStock, sharedCodesOf, syncMaterialQuantity, usedLotsOfTicket } from "@/lib/material-stock-lot";
 import { parseDateInput } from "@/lib/utils";
-import { CHEMICAL_TICKET_TYPE, COMMON_MATERIAL_POSITION, GAS_RETURN_STATUS, isChemicalFlowTicket, isGasCylinderTicket, materialTicketRequiresRecovery, OTHER_MATERIAL_TICKET_TYPE, recoveryRequiredForReason, ticketReasonAllowed, TICKET_MATERIAL_CATEGORIES, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
+import { CHEMICAL_TICKET_TYPE, COMMON_MATERIAL_POSITION, GAS_RETURN_STATUS, isChemicalFlowTicket, isGasCylinderCategory, isGasCylinderTicket, materialTicketRequiresRecovery, OTHER_MATERIAL_TICKET_TYPE, recoveryRequiredForReason, ticketReasonAllowed, TICKET_MATERIAL_CATEGORIES, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
 import { positionsMatch } from "@/lib/position-catalog";
 import { replacementPointDisplayLabel, replacementPointSelectionKey } from "@/lib/material-replacement-display";
 import { receiveOtherMaterial } from "@/lib/other-material-stock";
 
 export const dynamic = "force-dynamic";
+
+function lotStockUnit(category: string | null | undefined, unit: string | null | undefined) {
+  return isGasCylinderCategory(category) && ["S1", "S2", "COMMON"].includes(unit ?? "") ? unit! : "COMMON";
+}
+
+function stockSyncOptions(category: string | null | undefined, unit: string | null | undefined) {
+  const stockUnit = lotStockUnit(category, unit);
+  return isGasCylinderCategory(category) ? { stockUnit, machine: stockUnit } : { stockUnit };
+}
 
 /**
  * Phiếu thuộc LUỒNG HÓA CHẤT (hóa chất + NH3 khai một bước)?
@@ -446,8 +455,9 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
       // thì phiếu tạo thử rồi xóa vẫn để lại số ma trong kho — đã gặp trên production: một phiếu
       // lãnh 27 dùng 18 rồi bị xóa, kho dôi ra 9 không ai truy được vì phiếu không còn.
       for (const deletedMaterial of deletedMaterials) {
-        await reverseTicketStock(tx, { materialCode: deletedMaterial.code, ticketId: t.id });
-        await syncMaterialQuantity(tx, deletedMaterial.code, sharedCodesOf(deletedMaterial));
+        const stockUnit = lotStockUnit(deletedMaterial.category, t.unit);
+        await reverseTicketStock(tx, { materialCode: deletedMaterial.code, stockUnit, ticketId: t.id });
+        await syncMaterialQuantity(tx, deletedMaterial.code, sharedCodesOf(deletedMaterial), stockSyncOptions(deletedMaterial.category, t.unit));
       }
       if (t.type === OTHER_MATERIAL_TICKET_TYPE) {
         await tx.materialStockMovement.deleteMany({ where: { ticketId: t.id } });
@@ -880,13 +890,13 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
           if (delta || method !== (t.deliveryNoteNumber ?? "")) {
             try {
               await receiveIntoLot(tx, {
-                materialCode: item.material.code, quantity: delta, ticketId: t.id,
+                materialCode: item.material.code, stockUnit: lotStockUnit(item.material.category, t.unit), quantity: delta, ticketId: t.id,
                 deliveryNote: method, erpCode,
               });
             } catch (error) {
               throw fail((error as Error).message);
             }
-            await syncMaterialQuantity(tx, item.material.code, sharedCodesOf(item.material));
+            await syncMaterialQuantity(tx, item.material.code, sharedCodesOf(item.material), stockSyncOptions(item.material.category, t.unit));
           }
           if (erpDelta) await tx.$executeRaw`UPDATE "ErpMaterial" SET "erpStock" = "erpStock" + ${erpDelta}, "updatedAt" = NOW() WHERE "code" = ${erpCode}`;
           return tx.materialTicket.update({ where: { id: t.id }, data: { receivedQuantity: value, receivedMethod: method || null, deliveryNoteNumber: method || null, receiptSource, remainingQuantity: value - (t.usedQuantity ?? 0) }, include: ITEM_INCLUDE });
@@ -926,11 +936,11 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
           if (delta) {
             // Chia lại từ đầu theo số dùng mới: trả hết phần cũ về lô rồi cấp lại, không cộng dồn.
             try {
-              await consumeStock(tx, { materialCode: item.material.code, ticketId: t.id, quantity: value });
+              await consumeStock(tx, { materialCode: item.material.code, stockUnit: lotStockUnit(item.material.category, t.unit), ticketId: t.id, quantity: value });
             } catch (error) {
               throw fail((error as Error).message);
             }
-            await syncMaterialQuantity(tx, item.material.code, sharedCodesOf(item.material));
+            await syncMaterialQuantity(tx, item.material.code, sharedCodesOf(item.material), stockSyncOptions(item.material.category, t.unit));
           }
           return tx.materialTicket.update({
             where: { id: t.id },
@@ -1304,11 +1314,12 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         // Lô của phiếu Ứng: tạo trước, số phiếu giao hàng điền sau ở bước Thống kê xác nhận.
         await receiveIntoLot(tx, {
           materialCode: item.material.code,
+          stockUnit: lotStockUnit(item.material.category, t.unit),
           quantity,
           ticketId: t.id,
           erpCode: item.erpCode,
         });
-        await syncMaterialQuantity(tx, item.material.code, sharedCodes);
+        await syncMaterialQuantity(tx, item.material.code, sharedCodes, stockSyncOptions(item.material.category, t.unit));
         return tx.materialTicket.findUnique({ where: { id: t.id }, include: ITEM_INCLUDE });
       });
       if (!up) return fail("Bước VHV lãnh vật tư đã được xác nhận trước đó");
@@ -1597,12 +1608,13 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         // ở đây chỉ cộng phần chênh và điền số phiếu vào đúng lô đó.
         await receiveIntoLot(tx, {
           materialCode: item.material.code,
+          stockUnit: lotStockUnit(item.material.category, t.unit),
           quantity: materialIncrement,
           ticketId: t.id,
           deliveryNote: receivedMethod,
           erpCode,
         });
-        await syncMaterialQuantity(tx, item.material.code, sharedCodes);
+        await syncMaterialQuantity(tx, item.material.code, sharedCodes, stockSyncOptions(item.material.category, t.unit));
         if (receiptSource === "ERP") await tx.$executeRaw`
           UPDATE "ErpMaterial" SET "erpStock" = ${erpAfter}, "updatedAt" = NOW() WHERE "code" = ${erpCode}
         `;
@@ -1675,7 +1687,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       if (t.type === "SU_DUNG_HIEN_CO" && usedQuantity > received) return fail(`Số lượng sử dụng vượt số lượng đã nhận từ Hiện có (${received})`);
       const mat = await prisma.material.findUnique({
         where: { id: item.materialId },
-        select: { id: true, code: true, erpCodes: true, name: true, quantity: true },
+        select: { id: true, code: true, erpCodes: true, name: true, quantity: true, category: true, machine: true },
       });
       if (!mat) return fail("Không tìm thấy vật tư trong Danh mục", 404);
       if (usedQuantity > mat.quantity) {
@@ -1693,6 +1705,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         try {
           await consumeStock(tx, {
             materialCode: mat.code,
+            stockUnit: lotStockUnit(mat.category, t.unit),
             ticketId: t.id,
             quantity: usedQuantity,
             allocation: requestedAllocation,
@@ -1700,7 +1713,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         } catch (error) {
           throw fail((error as Error).message);
         }
-        await syncMaterialQuantity(tx, mat.code, sharedCodesOf(mat));
+        await syncMaterialQuantity(tx, mat.code, sharedCodesOf(mat), stockSyncOptions(mat.category, t.unit));
         return tx.materialTicket.update({
           where: { id: t.id },
           data: {
@@ -1749,7 +1762,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       }
       const mat = await prisma.material.findUnique({
         where: { id: item.materialId },
-        select: { id: true, code: true, erpCodes: true, name: true, quantity: true },
+        select: { id: true, code: true, erpCodes: true, name: true, quantity: true, category: true, machine: true },
       });
       if (!mat) return fail("Không tìm thấy vật tư trong Danh mục", 404);
       // Phiếu cũ đã đi qua bước Sử dụng (bước nay đã bỏ) thì phần nó đang giữ đã bị trừ khỏi
@@ -1764,11 +1777,11 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         // nghĩa là số chai đó đã dùng hết. Không trừ ở đây thì lượng lãnh về nằm lại trong
         // Hiện có vĩnh viễn — đúng loại tồn ảo đã phải đi dọn hôm 17/08.
         try {
-          await consumeStock(tx, { materialCode: mat.code, ticketId: t.id, quantity: returnedQuantity });
+          await consumeStock(tx, { materialCode: mat.code, stockUnit: lotStockUnit(mat.category, t.unit), ticketId: t.id, quantity: returnedQuantity });
         } catch (error) {
           throw fail((error as Error).message);
         }
-        await syncMaterialQuantity(tx, mat.code, sharedCodesOf(mat));
+        await syncMaterialQuantity(tx, mat.code, sharedCodesOf(mat), stockSyncOptions(mat.category, t.unit));
         return tx.materialTicket.update({
           where: { id: t.id },
           data: {
@@ -1849,11 +1862,12 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
           await prisma.$transaction(async (tx) => {
             await consumeStock(tx, {
               materialCode: item.material.code,
+              stockUnit: lotStockUnit(item.material.category, t.unit),
               ticketId: t.id,
               quantity: t.usedQuantity ?? 0,
               allocation: acceptAllocation,
             });
-            await syncMaterialQuantity(tx, item.material.code, sharedCodesOf(item.material));
+            await syncMaterialQuantity(tx, item.material.code, sharedCodesOf(item.material), stockSyncOptions(item.material.category, t.unit));
           });
         } catch (error) {
           return fail((error as Error).message);

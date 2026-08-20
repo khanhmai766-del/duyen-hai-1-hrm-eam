@@ -20,6 +20,7 @@ export interface OilMaterialRow {
 
 export interface OilStockGroup {
   id: string;
+  category: GroupingCategory;
   code: string;
   name: string;
   baseUnit: string;
@@ -151,6 +152,21 @@ export function useOilStock(category: GroupingCategory) {
   return useQuery({
     queryKey: ["oil-stock", category],
     queryFn: () => apiGet<OilStockData>(`/api/vat-tu/oil-grouping/stock?category=${encodeURIComponent(category)}`),
+  });
+}
+
+export function useMoveOilGroupCategory() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { groupId: string; targetCategory: "Khác" | "Dụng cụ sơn" | "Văn phòng phẩm" }) =>
+      apiMutate("/api/vat-tu/oil-grouping/groups", "PATCH", { action: "MOVE_CATEGORY", ...input }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["oil-stock"] });
+      qc.invalidateQueries({ queryKey: ["oil-grouping-summary"] });
+      qc.invalidateQueries({ queryKey: ["grouped-erp-materials"] });
+      qc.invalidateQueries({ queryKey: ["materials"] });
+      qc.invalidateQueries({ queryKey: ["other-material-stock"] });
+    },
   });
 }
 

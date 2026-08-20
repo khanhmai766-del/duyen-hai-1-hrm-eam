@@ -35,6 +35,7 @@ import { useCreateReplacement } from "@/hooks/useReplacements";
 import { useRbacAccess } from "@/hooks/useRbacAccess";
 import { displayMaterialCategory, MATERIAL_CATEGORIES, MATERIAL_CATEGORY_FILTERS, OTHER_MATERIAL_GROUP, DEFECT_UNITS, DEFECT_STATUS, addMonths, isOtherMaterialCategory, materialCategoryMatches, roundStock } from "@/lib/constants";
 import { normalizeText } from "@/lib/nav";
+import { STANDALONE_GROUP_PREFIX } from "@/lib/oil-grouping-shared";
 import { positionLabelOf, positionsMatch } from "@/lib/position-catalog";
 import { parseScope, scopeCode } from "@/lib/equipment-units";
 import { cn, formatDate, formatDateInput } from "@/lib/utils";
@@ -1167,7 +1168,7 @@ function MaterialsPageContent() {
                           />
                           <span className="min-w-0">
                             <span className="flex min-w-0 items-center gap-2">
-                              <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-[11px] font-bold text-navy">{group.code}</span>
+                              {!group.code.startsWith(STANDALONE_GROUP_PREFIX) && <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-[11px] font-bold text-navy">{group.code}</span>}
                               <span className="truncate text-sm font-semibold text-ink">{group.name}</span>
                             </span>
                             <span className="mt-0.5 block truncate text-xs text-muted-foreground">

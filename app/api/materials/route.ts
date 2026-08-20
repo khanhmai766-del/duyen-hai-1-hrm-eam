@@ -2,7 +2,7 @@ import type { NextRequest } from "next/server";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, requireRole, handle, audit, auditDetailWithPosition } from "@/lib/api";
-import { addMonths, DEFECT_UNITS, roundStock } from "@/lib/constants";
+import { addMonths, DEFECT_UNITS, isGasCylinderCategory, roundStock } from "@/lib/constants";
 import { EQUIPMENT_DEVICE_SELECT, equipmentNodeToDevice } from "@/lib/equipment-device";
 import { resolveEquipmentAccessForUser } from "@/lib/server-access";
 import { materialCatalogAccessWhere } from "@/lib/material-catalog-access";
@@ -445,8 +445,10 @@ export async function POST(req: NextRequest) {
     const tonMoDau = Math.max(0, Math.trunc(Number(body.quantity) || 0));
     if (tonMoDau > 0 && firstMaterial) {
       await prisma.$transaction(async (tx) => {
-        await adjustStockToQuantity(tx, primaryCode, tonMoDau);
-        await syncMaterialQuantity(tx, primaryCode, sharedCodesOf({ code: primaryCode, erpCodes }));
+        const stockUnit = isGasCylinderCategory(sharedData.category) ? primaryMachine : "COMMON";
+        await adjustStockToQuantity(tx, primaryCode, tonMoDau, stockUnit);
+        await syncMaterialQuantity(tx, primaryCode, sharedCodesOf({ code: primaryCode, erpCodes }),
+          isGasCylinderCategory(sharedData.category) ? { stockUnit, machine: primaryMachine } : { stockUnit });
       });
     }
     return ok(mapMaterial(firstMaterial, { ...document, erpCodes }));
@@ -617,15 +619,17 @@ export async function PUT(req: NextRequest) {
     if (body.quantity != null) {
       const updated = await prisma.material.findUnique({
         where: { id: body.id },
-        select: { code: true, erpCodes: true },
+        select: { code: true, erpCodes: true, category: true, machine: true },
       });
       if (updated) {
         const muc = Math.max(0, Math.trunc(Number(body.quantity)));
         const delta = await prisma.$transaction(async (tx) => {
-          const changed = await adjustStockToQuantity(tx, updated.code, muc);
+          const stockUnit = isGasCylinderCategory(updated.category) ? updated.machine : "COMMON";
+          const changed = await adjustStockToQuantity(tx, updated.code, muc, stockUnit);
           // Ghi lại con số hiển thị TỪ LÔ chứ không từ giá trị người dùng gõ: nếu hai
           // đường tính ra khác nhau thì lô mới là bên đúng.
-          await syncMaterialQuantity(tx, updated.code, sharedCodesOf(updated));
+          await syncMaterialQuantity(tx, updated.code, sharedCodesOf(updated),
+            isGasCylinderCategory(updated.category) ? { stockUnit, machine: updated.machine } : { stockUnit });
           return changed;
         });
         if (delta !== 0) {

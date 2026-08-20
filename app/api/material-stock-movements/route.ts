@@ -44,6 +44,7 @@ export async function GET(req: NextRequest) {
           { assignedPosition: { contains: historySearch, mode: "insensitive" } },
           { deviceSeq: { contains: historySearch, mode: "insensitive" } },
           { note: { contains: historySearch, mode: "insensitive" } },
+          { erpCodes: { has: historySearch } },
         ],
       } : {}),
     };
@@ -84,6 +85,7 @@ export async function GET(req: NextRequest) {
       return {
         id: material.id,
         code: material.code,
+        erpCodes: material.erpCodes.length ? material.erpCodes : [material.code],
         name: material.name,
         unit: material.unit,
         category: material.category,

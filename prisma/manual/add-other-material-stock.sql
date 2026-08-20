@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS "MaterialStockMovement" (
   "id" TEXT NOT NULL,
   "materialId" TEXT NOT NULL,
   "materialCode" TEXT NOT NULL,
+  "erpCodes" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
   "type" TEXT NOT NULL,
   "quantity" INTEGER NOT NULL,
   "stockBefore" INTEGER NOT NULL,
@@ -28,6 +29,30 @@ CREATE TABLE IF NOT EXISTS "MaterialStockMovement" (
   "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT "MaterialStockMovement_pkey" PRIMARY KEY ("id")
 );
+
+ALTER TABLE "MaterialStockMovement"
+  ADD COLUMN IF NOT EXISTS "erpCodes" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[];
+
+-- Bổ sung mã ERP cho lịch sử nhập cũ từ lô gốc của phiếu (nếu xác định được).
+UPDATE "MaterialStockMovement" movement
+SET "erpCodes" = ARRAY[lot."erpCode"]
+FROM "MaterialStockLot" lot
+WHERE movement."type" = 'RECEIPT'
+  AND movement."ticketId" = lot."ticketId"
+  AND lot."erpCode" IS NOT NULL
+  AND cardinality(movement."erpCodes") = 0;
+
+UPDATE "MaterialStockMovement" movement
+SET "erpCodes" = used."codes"
+FROM (
+  SELECT usage."ticketId", ARRAY_AGG(DISTINCT lot."erpCode") FILTER (WHERE lot."erpCode" IS NOT NULL) AS "codes"
+  FROM "MaterialLotUsage" usage
+  JOIN "MaterialStockLot" lot ON lot."id" = usage."lotId"
+  GROUP BY usage."ticketId"
+) used
+WHERE used."ticketId" = 'movement:' || movement."id"
+  AND cardinality(movement."erpCodes") = 0
+  AND cardinality(used."codes") > 0;
 
 DO $$ BEGIN
   ALTER TABLE "MaterialStockMovement"

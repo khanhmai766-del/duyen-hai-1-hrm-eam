@@ -10,6 +10,7 @@ import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, handle, audit } from "@/lib/api";
 import { requireErpMaterialManage } from "@/lib/erp-material-access";
 import { roundStock } from "@/lib/constants";
+import { STANDALONE_GROUP_PREFIX } from "@/lib/oil-grouping-shared";
 
 export const dynamic = "force-dynamic";
 
@@ -90,6 +91,39 @@ export async function PATCH(req: NextRequest) {
     await requireErpMaterialManage(user);
 
     const body = await req.json().catch(() => ({}));
+    if (body?.action === "MOVE_CATEGORY") {
+      const groupId = String(body.groupId ?? "").trim();
+      const targetCategory = String(body.targetCategory ?? "").trim();
+      const movableCategories = ["Khác", "Dụng cụ sơn", "Văn phòng phẩm"];
+      if (!groupId) return fail("Thiếu nhóm vật tư cần chuyển loại");
+      if (!movableCategories.includes(targetCategory)) return fail("Loại vật tư đích không hợp lệ");
+      const group = await prisma.oilType.findUnique({
+        where: { id: groupId },
+        include: { materials: { select: { code: true } } },
+      });
+      if (!group) return fail("Không tìm thấy nhóm vật tư", 404);
+      if (!movableCategories.includes(group.category)) return fail("Chỉ chuyển loại giữa Khác, Dụng cụ sơn và Văn phòng phẩm");
+      if (group.category === targetCategory) return ok(group);
+      const erpCodes = group.materials.map((material) => material.code);
+      const updatedCatalogRows = await prisma.$transaction(async (tx) => {
+        await tx.oilType.update({ where: { id: group.id }, data: { category: targetCategory } });
+        await tx.erpMaterial.updateMany({ where: { oilTypeId: group.id }, data: { category: targetCategory } });
+        if (erpCodes.length) {
+          return tx.$executeRaw`
+            UPDATE "Material"
+            SET "category" = ${targetCategory}
+            WHERE
+              (cardinality("erpCodes") > 0 AND "erpCodes" <@ ${erpCodes}::text[])
+              OR (cardinality("erpCodes") = 0 AND "code" = ANY(${erpCodes}::text[]))
+          `;
+        }
+        return 0;
+      });
+      const groupLabel = group.code.startsWith(STANDALONE_GROUP_PREFIX) ? group.name : `${group.code} · ${group.name}`;
+      await audit(user.id, "OIL_GROUP_MOVE_CATEGORY", "OilType", group.id,
+        `Chuyển loại ${groupLabel}: ${group.category} → ${targetCategory}; ${erpCodes.length} mã ERP`);
+      return ok({ id: group.id, fromCategory: group.category, category: targetCategory, updatedErpCodes: erpCodes.length, updatedCatalogRows });
+    }
     const materialId = String(body?.materialId ?? "").trim();
     if (!materialId) return fail("Thiếu id vật tư ERP");
 

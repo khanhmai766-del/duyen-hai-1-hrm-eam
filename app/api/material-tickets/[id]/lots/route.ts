@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { fail, handle, ok, requireUser } from "@/lib/api";
 import { availableLots, lotLabel, usedLotsOfTicket } from "@/lib/material-stock-lot";
+import { isGasCylinderCategory } from "@/lib/constants";
 
 export const dynamic = "force-dynamic";
 
@@ -19,6 +20,8 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
     const ticket = await prisma.materialTicket.findUnique({
       where: { id: params.id },
       select: {
+        unit: true,
+        materialCategory: true,
         usedQuantity: true,
         items: { select: { material: { select: { code: true, unit: true, name: true } } }, take: 1 },
       },
@@ -28,7 +31,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
     if (!material) return fail("Phiếu chưa có vật tư", 404);
 
     const [lots, used] = await Promise.all([
-      availableLots(prisma, material.code),
+      availableLots(prisma, material.code, isGasCylinderCategory(ticket.materialCategory) ? ticket.unit : "COMMON"),
       usedLotsOfTicket(prisma, params.id),
     ]);
     const usedById = new Map(used.map((lot) => [lot.id, lot.used]));

@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { ok, requireUser, handle } from "@/lib/api";
 import { requireErpMaterialView } from "@/lib/erp-material-access";
 import { parseErpCode } from "@/lib/oil-matching";
+import { isGasCylinderCategory } from "@/lib/constants";
 import { isGroupableCategory, pendingCountByCategory, type GroupableCategory } from "@/lib/oil-grouping-sync";
 
 export const dynamic = "force-dynamic";
@@ -61,24 +62,22 @@ export async function GET(req: NextRequest) {
         qtyInBase: erpStock * m.conversionFactor,
       }));
       const totalQty = materials.reduce((s, m) => s + m.qtyInBase, 0);
+      const matchingCatalogRows = catalogRows.filter((row) => {
+        const codes = new Set(t.materials.map((material) => material.code));
+        return codes.has(row.code) || (row.erpCodes ?? []).some((code) => codes.has(code));
+      });
       return {
         id: t.id,
+        category: t.category,
         code: t.code,
         name: t.name,
         baseUnit: t.baseUnit,
         minStock: t.minStock,
-        // S1/S2/COMMON là ba nơi khai báo cùng một kho dùng chung, không phải
-        // ba lượng tồn độc lập. Các dòng liên kết cùng nhóm phải có quantity
-        // đồng bộ; chỉ lấy một giá trị (không cộng thành 3 lần).
-        onHandQty: Math.max(
-          0,
-          ...catalogRows
-            .filter((row) => {
-              const codes = new Set(t.materials.map((material) => material.code));
-              return codes.has(row.code) || (row.erpCodes ?? []).some((code) => codes.has(code));
-            })
-            .map((row) => Number(row.quantity || 0))
-        ),
+        // Vật tư thường dùng chung kho giữa các dòng khai báo nên chỉ lấy giá trị lớn nhất.
+        // Riêng Chai khí đã tách tồn theo tổ máy, tổng quan nhóm phải cộng S1/S2/COMMON.
+        onHandQty: isGasCylinderCategory(t.category)
+          ? matchingCatalogRows.reduce((sum, row) => sum + Number(row.quantity || 0), 0)
+          : Math.max(0, ...matchingCatalogRows.map((row) => Number(row.quantity || 0))),
         totalQty,
         belowMin: t.minStock != null && totalQty < t.minStock,
         materialCount: materials.length,

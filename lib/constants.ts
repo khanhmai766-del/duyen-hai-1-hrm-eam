@@ -328,6 +328,11 @@ export function isOtherMaterialCategory(category: string | null | undefined): bo
   return category === "Chai Khí" || category === "Chai khí" || category === "Văn phòng phẩm" || category === "Dụng cụ sơn" || category === "Khác";
 }
 
+/** Nhận diện Chai khí ở cả nhãn Danh mục (Khí) và nhãn Phiếu (khí). */
+export function isGasCylinderCategory(category: string | null | undefined): boolean {
+  return category === "Chai Khí" || category === "Chai khí";
+}
+
 /** Nhãn hiển thị loại vật tư. Giữ nguyên giá trị lưu trữ để tương thích dữ liệu,
  *  nhưng thống nhất cách gọi ngắn gọn trên toàn bộ giao diện. */
 export function displayMaterialCategory(category: string): string {
@@ -407,7 +412,7 @@ export function isChemicalFlowTicket(materialCategory: string | null | undefined
  * không phải loại phiếu thứ ba; tách type riêng sẽ phải sửa lại mọi nơi đang lọc theo type.
  */
 export function isGasCylinderTicket(materialCategory: string | null | undefined): boolean {
-  return materialCategory === "Chai khí";
+  return isGasCylinderCategory(materialCategory);
 }
 
 /** Trạng thái bước cuối của luồng chai khí: chờ VHV xác nhận đã trả vỏ chai về kho. */

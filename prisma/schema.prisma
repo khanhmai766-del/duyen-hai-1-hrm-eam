@@ -1306,15 +1306,16 @@ model BgtsTurbineShutdownRow {
 // đúng số phiếu của lô đã dùng. Mỗi lần lãnh về nay là một lô; dùng thì trừ LÔ CŨ TRƯỚC
 // (FIFO) để dọn hết tồn của phiếu cũ rồi mới ăn sang phiếu mới.
 //
-// KHOÁ LÀ MÃ VẬT TƯ (`materialCode`), KHÔNG phải id: một mã có tới ba dòng Material (S1/S2/
-// COMMON) nhưng dùng CHUNG một kho — câu lệnh cộng/trừ tồn sẵn có cũng đang ghi đồng loạt theo
-// mã. Tách lô theo tổ máy sẽ chẻ đôi một kho có thật.
+// KHOÁ LÔ LÀ `materialCode + stockUnit`, không phải id. Vật tư thường dùng stockUnit=COMMON
+// để giữ kho chung như trước; riêng Chai khí tách S1/S2/COMMON vì chai lãnh tổ nào chỉ được
+// cộng/trừ tại tổ đó.
 //
 // `Material.quantity` GIỮ LẠI làm tổng các lô còn lại (tính lại sau mỗi lần ghi), để mọi màn hình
 // và báo cáo đang đọc cột đó không phải sửa.
 model MaterialStockLot {
   id           String    @id @default(cuid())
-  materialCode String // = Material.code, kho dùng chung cho cả S1/S2/COMMON
+  materialCode String // = Material.code
+  stockUnit    String    @default("COMMON") // Chai khí tách kho S1 | S2 | COMMON; vật tư khác dùng COMMON
   deliveryNote String? // số phiếu giao hàng; null = tồn đầu kỳ chưa rõ phiếu
   erpCode      String? // mã vật tư ERP đã lãnh, in kèm trên biên bản
   // null = tồn đầu kỳ: xếp ĐẦU hàng đợi FIFO để dùng hết trước các lô có phiếu.
@@ -1328,7 +1329,7 @@ model MaterialStockLot {
 
   usages MaterialLotUsage[]
 
-  @@index([materialCode, quantityLeft])
+  @@index([materialCode, stockUnit, quantityLeft])
   @@index([ticketId])
 }
 
@@ -1352,6 +1353,7 @@ model MaterialStockMovement {
   id                 String   @id @default(cuid())
   materialId         String
   materialCode       String
+  erpCodes           String[] @default([]) // mã ERP thực tế của lô nhập/các lô FIFO đã xuất
   type               String // RECEIPT | ISSUE | USE | ADJUST
   quantity           Int
   stockBefore        Int

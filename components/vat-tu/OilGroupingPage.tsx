@@ -9,7 +9,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
-import { AlertTriangle, Ban, Check, ChevronDown, ChevronLeft, ChevronRight, CircleDot, Boxes, CloudDownload, Cpu, Cylinder, Droplet, ExternalLink, Filter, FlaskConical, History, Loader2, MoreHorizontal, Paintbrush, Paperclip, Pencil, Plus, RotateCcw, Search, Trash2, Unlink, X, type LucideIcon } from "lucide-react";
+import { AlertTriangle, ArrowRightLeft, Ban, Check, ChevronDown, ChevronLeft, ChevronRight, CircleDot, Boxes, CloudDownload, Cpu, Cylinder, Droplet, ExternalLink, Filter, FlaskConical, History, Loader2, MoreHorizontal, Paintbrush, Paperclip, Pencil, Plus, RotateCcw, Search, Trash2, Unlink, X, type LucideIcon } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { Button } from "@/components/ui/button";
@@ -32,6 +32,7 @@ import {
   useDeletePendingGroupedErpMaterials,
   useUpdateOilGroup,
   useDeleteOilGroup,
+  useMoveOilGroupCategory,
   useUngroupErpMaterial,
   GROUPING_CATEGORIES,
   type GroupingCategory,
@@ -749,10 +750,14 @@ function StockBoard({
   const canManage = rbac.can("erp-material-manage", ["manage", "full"]);
   const updateGroup = useUpdateOilGroup();
   const deleteGroup = useDeleteOilGroup();
+  const moveCategory = useMoveOilGroupCategory();
 
   const [open, setOpen] = useState<Set<string>>(new Set());
   const [edit, setEdit] = useState<{ id: string; code: string; name: string; baseUnit: string; minStock: string } | null>(null);
   const [deleting, setDeleting] = useState<OilStockGroup | null>(null);
+  const [moving, setMoving] = useState<OilStockGroup | null>(null);
+  const [targetCategory, setTargetCategory] = useState<"Khác" | "Dụng cụ sơn" | "Văn phòng phẩm">("Dụng cụ sơn");
+  const movableCategories = ["Khác", "Dụng cụ sơn", "Văn phòng phẩm"] as const;
 
   const toggle = (id: string) =>
     setOpen((p) => {
@@ -799,6 +804,23 @@ function StockBoard({
     }
   };
 
+  const startMoveCategory = (group: OilStockGroup) => {
+    const target = movableCategories.find((category) => category !== group.category) ?? "Khác";
+    setTargetCategory(target);
+    setMoving(group);
+  };
+
+  const confirmMoveCategory = async () => {
+    if (!moving) return;
+    try {
+      await moveCategory.mutateAsync({ groupId: moving.id, targetCategory });
+      toast.success(`Đã chuyển “${moving.name}” từ ${moving.category} sang ${targetCategory}`);
+      setMoving(null);
+    } catch (error) {
+      toast.error((error as Error).message);
+    }
+  };
+
   if (loading) return <div className="py-12 text-center text-slate-400">Đang tải…</div>;
   if (groups.length === 0)
     return (
@@ -832,6 +854,7 @@ function StockBoard({
                 toggle={toggle}
                 canManage={canManage}
                 onEdit={() => startEdit(g)}
+                onMove={movableCategories.includes(g.category as typeof movableCategories[number]) ? () => startMoveCategory(g) : undefined}
                 onDelete={() => setDeleting(g)}
               />
             ))}
@@ -901,6 +924,22 @@ function StockBoard({
         loading={deleteGroup.isPending}
         onConfirm={confirmDelete}
       />
+
+      <Dialog open={!!moving} onOpenChange={(open) => !open && setMoving(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader><DialogTitle>Chuyển loại vật tư</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Vật tư</p>
+              <p className="mt-1 font-semibold text-slate-900">{moving?.name}</p>
+              <p className="text-sm text-slate-500">Loại hiện tại: {moving?.category}</p>
+            </div>
+            <div><Label className="mb-1.5 block">Chuyển sang loại *</Label><select className="h-10 w-full rounded-md border border-input bg-white px-3 text-sm" value={targetCategory} onChange={(event) => setTargetCategory(event.target.value as typeof targetCategory)}>{movableCategories.filter((category) => category !== moving?.category).map((category) => <option key={category}>{category}</option>)}</select></div>
+            <p className="text-xs leading-5 text-slate-500">Mã ERP, tồn kho, lịch sử và thiết bị đã gắn được giữ nguyên. Hệ thống chỉ cập nhật loại vật tư đồng bộ ở các danh mục liên quan.</p>
+          </div>
+          <DialogFooter><Button variant="outline" onClick={() => setMoving(null)}>Hủy</Button><Button disabled={moveCategory.isPending} onClick={confirmMoveCategory}>{moveCategory.isPending ? <Loader2 className="h-4 w-4 animate-spin"/> : <ArrowRightLeft className="h-4 w-4"/>}Xác nhận chuyển</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -911,6 +950,7 @@ function GroupRows({
   toggle,
   canManage,
   onEdit,
+  onMove,
   onDelete,
 }: {
   g: OilStockGroup;
@@ -918,6 +958,7 @@ function GroupRows({
   toggle: (id: string) => void;
   canManage: boolean;
   onEdit: () => void;
+  onMove?: () => void;
   onDelete: () => void;
 }) {
   const updateErpStock = useUpdateGroupedErpStock();
@@ -973,6 +1014,7 @@ function GroupRows({
               <Button variant="ghost" size="icon" title="Sửa nhóm" onClick={onEdit}>
                 <Pencil className="h-4 w-4" />
               </Button>
+              {onMove && <Button variant="ghost" size="icon" title="Chuyển loại vật tư" className="text-blue-700 hover:bg-blue-50 hover:text-blue-800" onClick={onMove}><ArrowRightLeft className="h-4 w-4" /></Button>}
               <Button
                 variant="ghost"
                 size="icon"

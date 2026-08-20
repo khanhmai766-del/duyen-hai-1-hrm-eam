@@ -7,9 +7,9 @@
  *
  * BA ĐIỀU RÀNG BUỘC CÁCH VIẾT Ở ĐÂY, đừng sửa nếu chưa đọc:
  *
- *  1. KHOÁ LÀ `Material.code`, KHÔNG phải materialId. Một mã vật tư có tới ba dòng Material
- *     (S1/S2/COMMON) nhưng dùng CHUNG một kho — các câu lệnh cộng/trừ tồn sẵn có cũng ghi
- *     đồng loạt theo mã. Khoá theo id sẽ chẻ một kho có thật thành ba.
+ *  1. Khoá lô gồm `Material.code + stockUnit`. Vật tư thường vẫn dùng COMMON để giữ kho
+ *     chung như trước; riêng Chai khí dùng S1/S2/COMMON vì chai đã lãnh cho tổ nào phải
+ *     được cộng/trừ đúng tổ đó.
  *
  *  2. `Material.quantity` VẪN LÀ NGUỒN ĐỌC của mọi màn hình. Sau mỗi lần đụng lô phải gọi
  *     `syncMaterialQuantity` để cột đó bằng đúng tổng các lô, nếu không hai con số sẽ trôi
@@ -24,6 +24,7 @@ type Db = PrismaClient | Prisma.TransactionClient;
 
 export type StockLot = {
   id: string;
+  stockUnit: string;
   deliveryNote: string | null;
   erpCode: string | null;
   receivedAt: Date | null;
@@ -66,6 +67,7 @@ function fifoSort<T extends { id: string; receivedAt: Date | null }>(lots: T[]):
 
 const LOT_SELECT = {
   id: true,
+  stockUnit: true,
   deliveryNote: true,
   erpCode: true,
   receivedAt: true,
@@ -75,9 +77,9 @@ const LOT_SELECT = {
 } as const;
 
 /** Các lô CÒN HÀNG của một mã vật tư, theo thứ tự sẽ bị trừ. */
-export async function availableLots(db: Db, materialCode: string): Promise<StockLot[]> {
+export async function availableLots(db: Db, materialCode: string, stockUnit = "COMMON"): Promise<StockLot[]> {
   const lots = await db.materialStockLot.findMany({
-    where: { materialCode, quantityLeft: { gt: 0 } },
+    where: { materialCode, stockUnit, quantityLeft: { gt: 0 } },
     select: LOT_SELECT,
   });
   return fifoSort(lots);
@@ -104,17 +106,32 @@ export async function lotsByCodes(db: Db, materialCodes: string[]): Promise<Map<
  * Đặt LẠI tổng "Hiện có" của mọi dòng Material dùng chung kho = tổng các lô còn lại.
  * Trả về con số vừa ghi để nơi gọi ghi nhật ký.
  */
-export async function syncMaterialQuantity(tx: Prisma.TransactionClient, materialCode: string, sharedCodes: string[]) {
+export async function syncMaterialQuantity(
+  tx: Prisma.TransactionClient,
+  materialCode: string,
+  sharedCodes: string[],
+  options: { stockUnit?: string; machine?: string } = {},
+) {
+  const stockUnit = options.stockUnit ?? "COMMON";
   const sum = await tx.materialStockLot.aggregate({
-    where: { materialCode },
+    where: { materialCode, stockUnit },
     _sum: { quantityLeft: true },
   });
   const total = Math.max(0, sum._sum.quantityLeft ?? 0);
-  await tx.$executeRaw`
-    UPDATE "Material"
-    SET "quantity" = ${total}
-    WHERE "code" = ANY(${sharedCodes}::text[]) OR "erpCodes" && ${sharedCodes}::text[]
-  `;
+  if (options.machine) {
+    await tx.$executeRaw`
+      UPDATE "Material"
+      SET "quantity" = ${total}
+      WHERE ("code" = ANY(${sharedCodes}::text[]) OR "erpCodes" && ${sharedCodes}::text[])
+        AND "machine" = ${options.machine}
+    `;
+  } else {
+    await tx.$executeRaw`
+      UPDATE "Material"
+      SET "quantity" = ${total}
+      WHERE "code" = ANY(${sharedCodes}::text[]) OR "erpCodes" && ${sharedCodes}::text[]
+    `;
+  }
   return total;
 }
 
@@ -129,6 +146,7 @@ export async function receiveIntoLot(
   tx: Prisma.TransactionClient,
   params: {
     materialCode: string;
+    stockUnit?: string;
     quantity: number;
     ticketId: string;
     deliveryNote?: string | null;
@@ -137,9 +155,10 @@ export async function receiveIntoLot(
   }
 ) {
   const { materialCode, ticketId, quantity } = params;
+  const stockUnit = params.stockUnit ?? "COMMON";
   const deliveryNote = params.deliveryNote?.trim() || null;
   const existing = await tx.materialStockLot.findFirst({
-    where: { materialCode, ticketId },
+    where: { materialCode, stockUnit, ticketId },
     select: { id: true, quantityIn: true, quantityLeft: true },
   });
 
@@ -148,6 +167,7 @@ export async function receiveIntoLot(
     return tx.materialStockLot.create({
       data: {
         materialCode,
+        stockUnit,
         ticketId,
         deliveryNote,
         erpCode: params.erpCode?.trim() || null,
@@ -214,13 +234,13 @@ export function planAllocation(lots: StockLot[], quantity: number): { allocation
  */
 export async function consumeStock(
   tx: Prisma.TransactionClient,
-  params: { materialCode: string; ticketId: string; quantity: number; allocation?: LotAllocation[] }
+  params: { materialCode: string; stockUnit?: string; ticketId: string; quantity: number; allocation?: LotAllocation[] }
 ): Promise<LotAllocation[]> {
   const { materialCode, ticketId, quantity } = params;
   await releaseUsage(tx, ticketId);
   if (quantity <= 0) return [];
 
-  const lots = await availableLots(tx, materialCode);
+  const lots = await availableLots(tx, materialCode, params.stockUnit ?? "COMMON");
   let plan: LotAllocation[];
 
   if (params.allocation?.length) {
@@ -298,13 +318,14 @@ export function deliveryNoteSummary(used: Array<{ deliveryNote: string | null; u
  */
 export async function reverseTicketStock(
   tx: Prisma.TransactionClient,
-  params: { materialCode: string; ticketId: string }
+  params: { materialCode: string; stockUnit?: string; ticketId: string }
 ) {
   const { materialCode, ticketId } = params;
+  const stockUnit = params.stockUnit ?? "COMMON";
   await releaseUsage(tx, ticketId);
 
   const lot = await tx.materialStockLot.findFirst({
-    where: { materialCode, ticketId },
+    where: { materialCode, stockUnit, ticketId },
     select: { id: true, quantityIn: true, quantityLeft: true },
   });
   if (!lot) return { removed: 0, moved: 0 };
@@ -312,7 +333,7 @@ export async function reverseTicketStock(
   let moved = 0;
   const others = await tx.materialLotUsage.findMany({ where: { lotId: lot.id }, select: { id: true, ticketId: true, quantity: true } });
   for (const usage of others) {
-    const targets = (await availableLots(tx, materialCode)).filter((item) => item.id !== lot.id);
+    const targets = (await availableLots(tx, materialCode, stockUnit)).filter((item) => item.id !== lot.id);
     const { allocation, shortfall } = planAllocation(targets, usage.quantity);
     if (shortfall > 0) continue; // không đủ chỗ chuyển — giữ nguyên lần dùng này
     await tx.materialLotUsage.delete({ where: { id: usage.id } });
@@ -357,11 +378,12 @@ export const ADJUSTMENT_NOTE = 'Điều chỉnh tồn thủ công';
 export async function adjustStockToQuantity(
   tx: Prisma.TransactionClient,
   materialCode: string,
-  target: number
+  target: number,
+  stockUnit = "COMMON",
 ): Promise<number> {
   const muc = Math.max(0, Math.trunc(target));
   const lots = await tx.materialStockLot.findMany({
-    where: { materialCode },
+    where: { materialCode, stockUnit },
     select: { id: true, quantityIn: true, quantityLeft: true, receivedAt: true, note: true },
   });
   const dangCo = lots.reduce((sum, lot) => sum + lot.quantityLeft, 0);
@@ -379,6 +401,7 @@ export async function adjustStockToQuantity(
       await tx.materialStockLot.create({
         data: {
           materialCode,
+          stockUnit,
           // receivedAt null = xếp ĐẦU hàng đợi FIFO, dùng hết trước các lô có phiếu.
           receivedAt: null,
           quantityIn: delta,
