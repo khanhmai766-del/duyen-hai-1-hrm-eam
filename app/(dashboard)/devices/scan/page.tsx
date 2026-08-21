@@ -69,21 +69,35 @@ function DeviceScanner() {
     }
     setState("starting");
     setMessage("Đang mở camera sau...");
+    let stream: MediaStream | null = null;
     try {
+      // Xin camera ngay trong chính thao tác chạm. Nếu chờ tải thư viện trước,
+      // Safari/iOS có thể làm mất user activation và chặn hộp thoại cấp quyền.
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: false,
+        video: {
+          facingMode: { ideal: "environment" },
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+        },
+      });
       const { BrowserQRCodeReader } = await import("@zxing/browser");
       const reader = new BrowserQRCodeReader(undefined, { delayBetweenScanAttempts: 120, delayBetweenScanSuccess: 800 });
-      const controls = await reader.decodeFromConstraints(
-        { audio: false, video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } } },
+      const controls = await reader.decodeFromStream(
+        stream,
         videoRef.current ?? undefined,
         (result) => {
           if (result?.getText()) void resolveValue(result.getText());
         }
       );
+      // Từ đây controls chịu trách nhiệm dừng và giải phóng stream.
+      stream = null;
       controlsRef.current = controls;
       setTorchAvailable(Boolean(controls.switchTorch));
       setState("scanning");
       setMessage("Đưa mã QR vào giữa khung ngắm");
     } catch (error) {
+      stream?.getTracks().forEach((track) => track.stop());
       stopScanner();
       setState("error");
       setMessage(cameraErrorMessage(error));
