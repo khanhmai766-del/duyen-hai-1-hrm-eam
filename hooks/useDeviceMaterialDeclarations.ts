@@ -68,6 +68,8 @@ export type DeviceMaterialDeclarationUpdateInput = {
   id: string;
   deviceSeq: string;
   materialId: string;
+  machines?: string[];
+  materialIdsByMachine?: Record<string, string>;
   system?: string | null;
   location?: string | null;
   managingPosition?: string | null;
@@ -82,8 +84,10 @@ export type DeviceMaterialDeclarationUpdateInput = {
 export function useUpdateDeviceMaterialDeclaration() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, deviceSeq: _deviceSeq, ...body }: DeviceMaterialDeclarationUpdateInput) =>
-      apiMutate(`/api/material-replacements/${encodeURIComponent(id)}`, "PUT", body),
+    mutationFn: ({ id, deviceSeq, ...body }: DeviceMaterialDeclarationUpdateInput) =>
+      body.machines && body.machines.length > 1
+        ? apiMutate("/api/device-material-declarations", "PUT", { id, deviceSeq, ...body })
+        : apiMutate(`/api/material-replacements/${encodeURIComponent(id)}`, "PUT", body),
     onSuccess: async (_data, variables) => {
       await Promise.all([
         qc.invalidateQueries({ queryKey: ["device", variables.deviceSeq] }),

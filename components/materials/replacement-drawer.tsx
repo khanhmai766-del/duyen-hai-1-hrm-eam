@@ -21,10 +21,13 @@ import { formatDate } from "@/lib/utils";
 
 export function ReplacementDrawer({
   material,
+  managingPosition,
   role,
   onClose,
 }: {
   material: { id: string; code: string; name: string; system?: string | null; machine?: string | null } | null;
+  /** Bộ lọc cương vị đang chọn ở Danh mục vật tư; null = mọi cương vị được phép xem. */
+  managingPosition?: string | null;
   role?: string;
   onClose: () => void;
 }) {
@@ -34,7 +37,12 @@ export function ReplacementDrawer({
   // ĐÓNG mà không chặn thì filters rỗng = tải TOÀN BỘ danh sách điểm thay thế (366 dòng /
   // 327 KB) một cách vô ích trên trang Danh mục vật tư.
   const { data, isLoading } = useReplacements(
-    material ? { materialId: material.id } : {},
+    material
+      ? {
+          materialId: material.id,
+          ...(managingPosition ? { managingPosition } : {}),
+        }
+      : {},
     { enabled: !!material }
   );
   // Điểm theo dõi là bản ghi RIÊNG (tạo từ nút "Thêm điểm"); xoá ở đây chỉ xoá điểm
@@ -63,6 +71,9 @@ export function ReplacementDrawer({
               <h2 className="font-bold text-ink">Theo dõi thay thế vật tư</h2>
             </div>
             <p className="mt-0.5 truncate text-sm text-muted-foreground">{material.code} — {material.name}</p>
+            {managingPosition && (
+              <p className="mt-1 text-xs font-semibold text-accent">Cương vị: {managingPosition}</p>
+            )}
           </div>
           <button onClick={onClose} className="rounded-md p-1.5 hover:bg-muted"><X className="h-4 w-4" /></button>
         </div>
@@ -100,6 +111,7 @@ export function ReplacementDrawer({
                     <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
                       <span className="inline-flex items-center gap-1"><Repeat className="h-3 w-3" /> {replacementIntervalLabel(p.intervalMonths, p.intervalNote)}</span>
                       {p.location && <span>Thiết bị: {p.location}</span>}
+                      {p.managingPosition && <span>Cương vị: {p.managingPosition}</span>}
                       <span>Lần gần nhất: {formatDate(p.lastReplacedAt)}</span>
                       <span>Đến hạn: {formatDate(p.nextDueAt)}</span>
                     </div>

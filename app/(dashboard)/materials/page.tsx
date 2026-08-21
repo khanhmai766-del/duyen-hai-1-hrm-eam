@@ -1346,7 +1346,12 @@ function MaterialsPageContent() {
         onConfirm={confirmBulkDelete}
       />
 
-      <ReplacementDrawer material={replMaterial} role={role} onClose={() => setReplMaterial(null)} />
+      <ReplacementDrawer
+        material={replMaterial}
+        managingPosition={positionFilter === "ALL" ? null : positionFilter}
+        role={role}
+        onClose={() => setReplMaterial(null)}
+      />
 
       <ImportReplacementsDialog
         open={importOpen}

@@ -51,12 +51,12 @@ export function DeviceMaterialDeclarationDialog({
 }) {
   const availablePositions = usePositions();
   const editing = Boolean(declaration);
-  const canApplyBothUnits = !editing && (machine === "S1" || machine === "S2");
+  const canApplyBothUnits = machine === "S1" || machine === "S2";
   const [machineMode, setMachineMode] = React.useState<"CURRENT" | "BOTH">("CURRENT");
   const selectedMachines = React.useMemo(
-    () => declaration
-      ? [declaration.machine]
-      : machineMode === "BOTH" && canApplyBothUnits ? ["S1", "S2"] : [machine],
+    () => machineMode === "BOTH" && canApplyBothUnits
+      ? ["S1", "S2"]
+      : [declaration?.machine ?? machine],
     [canApplyBothUnits, declaration, machine, machineMode]
   );
   const positions = React.useMemo(
@@ -150,6 +150,8 @@ export function DeviceMaterialDeclarationDialog({
           id: declaration.id,
           deviceSeq: device.code,
           materialId,
+          machines: selectedMachines,
+          materialIdsByMachine: selectedMaterial?.materialIdsByMachine ?? {},
           system: device.system,
           // Điểm đã gắn cây dùng deviceSeq làm nguồn chuẩn; không chụp lại tên
           // thiết bị vào location vì sẽ bị cũ sau khi đổi tên thiết bị.
@@ -162,7 +164,9 @@ export function DeviceMaterialDeclarationDialog({
           note: note || null,
           recoveryOnSupplement,
         });
-        toast.success("Đã cập nhật thông tin vật tư khai báo");
+        toast.success(selectedMachines.length === 2
+          ? "Đã cập nhật thông tin vật tư khai báo cho cả S1 và S2"
+          : `Đã cập nhật thông tin vật tư khai báo cho ${selectedMachines[0]}`);
       } else {
         await create.mutateAsync({
           deviceSeq: device.code,
@@ -240,7 +244,9 @@ export function DeviceMaterialDeclarationDialog({
                 </div>
               )}
               {machineMode === "BOTH" && (
-                <p className="mt-1.5 text-[11px] text-muted-foreground">Chỉ hiển thị vật tư đã có trong danh mục của cả hai tổ máy.</p>
+                <p className="mt-1.5 text-[11px] text-muted-foreground">
+                  Chỉ hiển thị vật tư đã có trong danh mục của cả hai tổ máy. Khi lưu, cùng thông tin sẽ được cập nhật cho S1 và S2.
+                </p>
               )}
             </Field>
 

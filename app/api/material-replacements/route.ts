@@ -70,6 +70,7 @@ export async function GET(req: NextRequest) {
     const sp = req.nextUrl.searchParams;
     const q = sp.get("q")?.trim();
     const materialId = sp.get("materialId");
+    const managingPosition = sp.get("managingPosition")?.trim();
     const due = sp.get("due");
 
     // Chu kỳ 0 chỉ dùng để khai báo liên kết vật tư - thiết bị, không xuất hiện
@@ -92,7 +93,14 @@ export async function GET(req: NextRequest) {
       orderBy: { nextDueAt: "asc" },
       include: INCLUDE,
     });
-    const visiblePoints = points.filter((point) => canViewMaterialReplacement(access, point, viewScope));
+    // Bộ lọc cương vị của Danh mục vật tư phải đi xuyên suốt tới panel theo dõi.
+    // Lọc SAU rào quyền để tham số trên URL chỉ có thể thu hẹp tập được xem, tuyệt đối
+    // không thể dùng nó để nới quyền. `positionsMatch` xử lý cả mã, nhãn và alias cũ.
+    const visiblePoints = points.filter(
+      (point) =>
+        canViewMaterialReplacement(access, point, viewScope) &&
+        (!managingPosition || positionsMatch(point.managingPositionCode ?? point.managingPosition, managingPosition))
+    );
 
     // Điểm chỉ lấy mẫu định kỳ không tính vào bộ đếm cảnh báo thay thế: trễ kỳ
     // lấy mẫu nhẹ hơn hẳn quá hạn thay vật tư, gộp chung sẽ làm loãng cảnh báo.

@@ -297,9 +297,9 @@ export async function GET(req: NextRequest) {
     const materialRows = await prisma.material.findMany({
       where: {
         ...(machine ? { machine } : {}),
-        // Vật tư chưa khai báo thiết bị vẫn phải xuất hiện để người dùng có thể
-        // tiếp tục bổ sung điểm dùng/thay thế. Khi đã có khai báo, chỉ hiện vật
-        // tư có ít nhất một thiết bị thuộc phạm vi Xem/Sửa của cương vị hiện tại.
+        // Giữ vật tư chưa khai báo trong tập ứng viên để người có quyền xem toàn
+        // danh mục còn có thể bổ sung điểm. Với tài khoản bị giới hạn cương vị,
+        // các dòng chưa có cương vị sẽ được loại ở bước kiểm tra JS bên dưới.
         OR: [
           { replacements: { none: {} } },
           { replacements: { some: materialAccess.replacement } },
@@ -307,6 +307,10 @@ export async function GET(req: NextRequest) {
       },
       orderBy: { code: "asc" },
       include: {
+        // Phải biết vật tư THỰC SỰ chưa có điểm khai báo hay chỉ không còn điểm nào
+        // sau khi lọc quyền. Dùng `material.replacements.length` ở dưới là sai vì
+        // relation này đã bị `where: materialAccess.replacement` thu hẹp trước đó.
+        _count: { select: { replacements: true } },
         replacements: {
           ...MATERIAL_INCLUDE.replacements,
           include: {
@@ -332,14 +336,18 @@ export async function GET(req: NextRequest) {
     });
     // Dòng nhập file không có deviceSeq phải kiểm tra quyền theo tên hệ thống
     // trong JS vì SQL không thể dùng cùng phép normalizeText tiếng Việt của
-    // access-context. Chỉ giữ vật tư có điểm khai báo người dùng thực sự được xem;
-    // vật tư hoàn toàn chưa có điểm vẫn hiện để có thể tiếp tục khai báo.
+    // access-context. Chỉ giữ vật tư có điểm khai báo người dùng thực sự được xem.
+    // Vật tư hoàn toàn chưa có điểm chỉ hiện cho người có phạm vi xem toàn danh mục.
     const materials = materialRows.flatMap((material) => {
-      const hadNoPoints = material.replacements.length === 0;
+      const hadNoPoints = material._count.replacements === 0;
       const replacements = material.replacements.filter((replacement) =>
         fullCatalogView || canViewMaterialReplacement(access, replacement, viewScope)
       );
-      return hadNoPoints || replacements.length > 0
+      // Vật tư chưa có điểm khai báo không có cương vị để đối chiếu. Chỉ người có
+      // phạm vi xem toàn danh mục mới được thấy các dòng này. Nếu cho mọi cương vị
+      // thấy, bản sao S2 chưa khai báo sẽ lọt vào danh mục trong khi bản S1 có điểm
+      // thuộc cương vị khác lại bị ẩn — đúng nghịch lý người dùng vừa phản ánh.
+      return replacements.length > 0 || (hadNoPoints && fullCatalogView)
         ? [{ ...material, replacements }]
         : [];
     });

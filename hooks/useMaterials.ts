@@ -118,6 +118,9 @@ export type MaterialInput = Partial<Material> & {
 function invalidateMaterialCatalog(qc: ReturnType<typeof useQueryClient>) {
   qc.invalidateQueries({ queryKey: ["materials"] });
   qc.invalidateQueries({ queryKey: ["device-material-options"] });
+  // Chi tiết điểm thay thế cũng chính là nguồn của khối "Vật tư được khai báo"
+  // trên lý lịch thiết bị. Không làm mới cache này sẽ khiến hai màn hình lệch nhau.
+  qc.invalidateQueries({ queryKey: ["device"] });
 }
 
 export function useUpsertMaterial() {

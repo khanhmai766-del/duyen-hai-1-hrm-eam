@@ -109,7 +109,7 @@ export default function ChemicalInventoryPage() {
   return (
     <div className="space-y-5">
       <PageHeader
-        title="Tồn kho hóa chất"
+        title="TỊNH KHO HÓA CHẤT"
         description={
           grid
             ? `Sổ theo dõi hóa chất và nhiên liệu của Phân xưởng Vận hành 1 — kỳ ${periodLabel(month)}`

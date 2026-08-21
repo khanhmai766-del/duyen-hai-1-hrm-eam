@@ -153,7 +153,7 @@ export const NAV_SECTIONS: NavSection[] = [
         keywords: "ton kho theo nhom vat tu loai dau loc dau hoa chat chai khi bi nghien than gom nhom erp de xuat nhap nguong canh bao",
       },
       {
-        label: "Tồn kho hóa chất",
+        label: "Tịnh kho hóa chất",
         href: "/chemical-inventory",
         icon: FlaskConical,
         permissionIds: ["chemical-inventory-manage"],

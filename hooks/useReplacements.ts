@@ -34,6 +34,8 @@ export interface ReplacementDetail extends MaterialReplacement {
 export interface ReplacementFilters {
   q?: string;
   materialId?: string;
+  /** Chỉ lấy điểm thuộc cương vị đang lọc ở Danh mục vật tư. */
+  managingPosition?: string;
   due?: string; // OVERDUE | DUE_SOON | OK | WARN | ALL
 }
 
@@ -189,6 +191,7 @@ export function useReplacements(filters: ReplacementFilters = {}, options?: { en
   const qs = new URLSearchParams();
   if (filters.q) qs.set("q", filters.q);
   if (filters.materialId) qs.set("materialId", filters.materialId);
+  if (filters.managingPosition) qs.set("managingPosition", filters.managingPosition);
   if (filters.due && filters.due !== "ALL") qs.set("due", filters.due);
   return useQuery({
     enabled: options?.enabled ?? true,
