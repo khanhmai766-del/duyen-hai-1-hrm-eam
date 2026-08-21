@@ -1,13 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import { QRCodeSVG } from "qrcode.react";
 import { ArrowLeft, Printer, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useDevice } from "@/hooks/useDevices";
 import { Skeleton } from "@/components/ui/skeleton";
 import { RbacProtectedRoute } from "@/components/shared/rbac-protected-route";
+import { deviceQrValue } from "@/lib/device-qr";
 
 export default function DeviceQrPage() {
   return (
@@ -19,15 +20,17 @@ export default function DeviceQrPage() {
 
 function DeviceQrPageContent() {
   const { id } = useParams<{ id: string }>();
-  const { data, isLoading } = useDevice(id);
+  const searchParams = useSearchParams();
+  const machine = searchParams.get("machine");
+  const { data, isLoading } = useDevice(id, machine);
   const device = data?.data;
-  const url = typeof window !== "undefined" && device ? `${window.location.origin}/public/equipment/${encodeURIComponent(device.code)}` : "";
+  const url = typeof window !== "undefined" && device ? deviceQrValue(device.id, device.machine, window.location.origin) : "";
 
   return (
     <div className="flex min-h-[70vh] flex-col items-center justify-center">
       <div className="no-print mb-6 flex w-full max-w-md items-center justify-between">
         <Button asChild variant="ghost" size="sm">
-          <Link href={`/devices/${id}`}><ArrowLeft className="h-4 w-4" /> Quay lại</Link>
+          <Link href={`/devices/${id}${machine ? `?machine=${encodeURIComponent(machine)}` : ""}`}><ArrowLeft className="h-4 w-4" /> Quay lại</Link>
         </Button>
         <Button onClick={() => window.print()} variant="accent" size="sm">
           <Printer className="h-4 w-4" /> In mã QR
@@ -52,7 +55,7 @@ function DeviceQrPageContent() {
             {device.managingPosition && <div className="text-sm text-muted-foreground">{device.managingPosition}</div>}
           </div>
           <p className="mt-6 max-w-xs text-xs text-muted-foreground">
-            Quét mã để xem lý lịch & lịch sử sửa chữa thiết bị
+            Camera điện thoại xem thông tin cơ bản · Trình quét trong website mở hồ sơ đầy đủ
           </p>
         </div>
       )}

@@ -16,8 +16,8 @@ export function useDeviceQrCards(params: { enabled?: boolean } = {}) {
 export function useAddDeviceQrCard() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (deviceSeq: string) => apiMutate("/api/device-qr-cards", "POST", { deviceSeq }),
-    onSuccess: (_data, deviceSeq) => {
+    mutationFn: ({ deviceSeq, machine }: { deviceSeq: string; machine?: string }) => apiMutate("/api/device-qr-cards", "POST", { deviceSeq, machine }),
+    onSuccess: (_data, { deviceSeq }) => {
       qc.invalidateQueries({ queryKey: ["device-qr-cards"] });
       qc.invalidateQueries({ queryKey: ["device", deviceSeq] });
     },
@@ -27,8 +27,8 @@ export function useAddDeviceQrCard() {
 export function useRemoveDeviceQrCard() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (deviceSeq: string) => apiMutate(`/api/device-qr-cards?seq=${encodeURIComponent(deviceSeq)}`, "DELETE"),
-    onSuccess: (_data, deviceSeq) => {
+    mutationFn: ({ deviceSeq, machine }: { deviceSeq: string; machine?: string }) => apiMutate(`/api/device-qr-cards?seq=${encodeURIComponent(deviceSeq)}${machine ? `&machine=${encodeURIComponent(machine)}` : ""}`, "DELETE"),
+    onSuccess: (_data, { deviceSeq }) => {
       qc.invalidateQueries({ queryKey: ["device-qr-cards"] });
       qc.invalidateQueries({ queryKey: ["device", deviceSeq] });
     },

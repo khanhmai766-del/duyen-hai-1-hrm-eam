@@ -5,6 +5,7 @@ import { QRCodeSVG } from "qrcode.react";
 import { ExternalLink } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { deviceQrValue } from "@/lib/device-qr";
 
 export function QRModal({
   open,
@@ -13,12 +14,9 @@ export function QRModal({
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
-  device: { id: string; code: string; name: string; system?: string | null };
+  device: { id: string; code: string; name: string; system?: string | null; machine?: string | null };
 }) {
-  const url =
-    typeof window !== "undefined"
-      ? `${window.location.origin}/public/equipment/${encodeURIComponent(device.code)}`
-      : `/public/equipment/${encodeURIComponent(device.code)}`;
+  const url = deviceQrValue(device.id, device.machine, typeof window !== "undefined" ? window.location.origin : null);
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-sm">
@@ -35,7 +33,7 @@ export function QRModal({
             {device.system && <div className="text-xs text-muted-foreground">{device.system}</div>}
           </div>
           <Button asChild variant="outline" className="w-full">
-            <Link href={`/devices/${device.id}/qr`}>
+            <Link href={`/devices/${device.id}/qr${device.machine ? `?machine=${encodeURIComponent(device.machine)}` : ""}`}>
               <ExternalLink className="h-4 w-4" /> Trang in mã QR
             </Link>
           </Button>

@@ -1,151 +1,123 @@
-import { notFound } from "next/navigation";
-import { ExternalLink, FileText, ImageIcon, Layers3, ShieldCheck, Zap } from "lucide-react";
+import { ExternalLink, FileText, ImageIcon, QrCode, ShieldCheck, ShieldX, Zap } from "lucide-react";
 import { prisma } from "@/lib/prisma";
-import { buildEquipmentTreeIndex, getNormalizedEquipmentNodes } from "@/lib/equipment-tree";
+import { canonicalSeq, s2Kks } from "@/lib/equipment-units";
+import { normalizeQrMachine } from "@/lib/device-qr";
+import { resolveActiveDeviceQrCard } from "@/lib/device-qr-access";
+import { getCachedEquipmentNodeFull, getEquipmentTreeIndexFor } from "@/lib/equipment-node-cache";
 
 export const dynamic = "force-dynamic";
 
-export default async function PublicEquipmentNodePage({ params }: { params: { seq: string } }) {
-  const seq = decodeURIComponent(params.seq);
-  const nodes = await getNormalizedEquipmentNodes(prisma);
-  const { bySeq, parentOf } = buildEquipmentTreeIndex(nodes);
-  const node = bySeq.get(seq);
+export default async function PublicEquipmentQrPage({
+  params,
+  searchParams,
+}: {
+  params: { seq: string };
+  searchParams: { machine?: string };
+}) {
+  const displayedSeq = decodeURIComponent(params.seq);
+  const seq = canonicalSeq(displayedSeq);
+  const requestedMachine = normalizeQrMachine(searchParams.machine)
+    ?? (/^DH1\.S2(?:\.|$)/i.test(displayedSeq) ? "S2" : null);
+  const card = await resolveActiveDeviceQrCard(seq, requestedMachine);
+  if (!card) return <InactiveQr />;
 
-  if (!node) notFound();
-
-  const parent = node.parentSeq ? bySeq.get(parentOf.get(node.seq) ?? node.parentSeq) : null;
-  const imageUrl = node.imageUrl ?? null;
-  const attachedInfo = node.attachedInfo;
-  const documentUrl = node.documentUrl;
+  const nodes = await getCachedEquipmentNodeFull();
+  const index = getEquipmentTreeIndexFor(nodes);
+  const node = index.bySeq.get(seq);
+  if (!node) return <InactiveQr />;
+  const parentSeq = index.parentOf.get(seq) ?? node.parentSeq ?? null;
+  const parent = parentSeq ? index.bySeq.get(parentSeq) ?? null : null;
+  const [profile, parentProfile] = await Promise.all([
+    prisma.equipmentProfile.findUnique({ where: { nodeSeq_machine: { nodeSeq: seq, machine: card.machine } } }),
+    parent
+      ? prisma.equipmentProfile.findUnique({ where: { nodeSeq_machine: { nodeSeq: parent.seq, machine: card.machine } } })
+      : Promise.resolve(null),
+  ]);
+  const isS2 = card.machine === "S2";
+  const name = profile?.name ?? node.name;
+  const kks = profile?.kks ?? (isS2 ? s2Kks(node.kks ?? null) : node.kks ?? null);
+  const system = parentProfile?.name ?? parent?.name ?? "Thư mục gốc";
+  const imageUrl = profile?.imageUrl ?? (isS2 ? null : node.imageUrl ?? null);
+  const attachedInfo = profile?.attachedInfo ?? (isS2 ? null : node.attachedInfo ?? null);
+  const documentUrl = profile?.documentUrl ?? (isS2 ? null : node.documentUrl ?? null);
 
   return (
-    <main className="min-h-screen bg-[#f4f7fb] text-slate-950">
-      <section className="relative overflow-hidden border-b border-slate-200 bg-white">
-        <div className="absolute inset-y-0 right-0 hidden w-1/2 bg-[radial-gradient(circle_at_70%_35%,rgba(37,99,235,0.13),transparent_34%),linear-gradient(135deg,transparent,rgba(20,184,166,0.09))] lg:block" />
-        <div className="relative mx-auto grid max-w-6xl gap-8 px-4 py-8 sm:px-6 lg:grid-cols-[1.15fr_0.85fr] lg:px-8 lg:py-10">
-          <div className="space-y-6">
-            <div className="flex flex-wrap items-center gap-3">
-              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-navy text-white shadow-lg shadow-navy/20">
-                <Zap className="h-5 w-5" />
-              </div>
-              <div>
-                <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">VẬN HÀNH 1 · THÔNG TIN THIẾT BỊ</p>
-                <p className="mt-1 text-sm text-slate-500">Trang xem công khai từ mã QR thiết bị</p>
-              </div>
-            </div>
-
-            <div>
-              <div className="mb-3 inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
-                <ShieldCheck className="mr-1.5 h-3.5 w-3.5" />
-                Có thể xem không cần đăng nhập
-              </div>
-              <h1 className="max-w-3xl text-3xl font-black leading-tight text-ink sm:text-4xl">{node.name}</h1>
-              <div className="mt-4 flex flex-wrap gap-2">
-                <InfoPill label="Số thứ tự" value={node.seq} mono />
-                <InfoPill label="Thư mục" value={parent?.name || "Thư mục gốc"} />
-                <InfoPill label="Bản vẽ" value={node.drawing || "Chưa cập nhật"} />
-              </div>
-            </div>
-          </div>
-
-          <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-xl shadow-slate-200/80">
-            {imageUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={imageUrl} alt={node.name} className="aspect-[4/3] w-full rounded-xl object-cover" />
-            ) : (
-              <div className="flex aspect-[4/3] w-full flex-col items-center justify-center rounded-xl bg-slate-100 text-slate-400">
-                <ImageIcon className="h-10 w-10" />
-                <span className="mt-2 text-sm font-medium">Chưa có hình ảnh</span>
-              </div>
-            )}
+    <main className="min-h-screen bg-[#eef3f8] text-slate-950">
+      <header className="border-b border-slate-200 bg-[#09233f] text-white">
+        <div className="mx-auto flex max-w-5xl items-center gap-3 px-4 py-5 sm:px-6">
+          <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-amber-400 text-[#09233f]"><Zap className="h-6 w-6" /></span>
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-sky-200">Vận Hành 1 · PowerPlant EAM</p>
+            <h1 className="mt-1 text-lg font-black">Tra cứu nhanh thiết bị</h1>
           </div>
         </div>
-      </section>
+      </header>
 
-      <section className="mx-auto grid max-w-6xl gap-5 px-4 py-6 sm:px-6 lg:grid-cols-12 lg:px-8">
-        <div className="space-y-5 lg:col-span-7">
-          <Panel title="Thông tin thiết bị" icon={FileText}>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Detail label="Tên thiết bị" value={node.name} />
-              <Detail label="Số thứ tự" value={node.seq} mono />
-              <Detail label="Thư mục cha" value={parent?.name || "Thư mục gốc"} />
-              <Detail label="Bản vẽ liên quan" value={node.drawing || "Chưa cập nhật"} />
+      <div className="mx-auto grid max-w-5xl gap-5 px-4 py-6 sm:px-6 lg:grid-cols-[0.9fr_1.1fr]">
+        <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+          {imageUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={imageUrl} alt={name} className="aspect-[4/3] w-full object-cover" />
+          ) : (
+            <div className="flex aspect-[4/3] flex-col items-center justify-center bg-slate-100 text-slate-500">
+              <ImageIcon className="h-11 w-11" /><span className="mt-2 text-sm font-semibold">Chưa có hình ảnh</span>
             </div>
-            {attachedInfo && (
-              <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
-                <div className="text-xs font-bold uppercase tracking-wide text-slate-500">Thông tin đính kèm</div>
-                <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-700">{attachedInfo}</p>
-              </div>
-            )}
-            {documentUrl && (
-              <a
-                href={documentUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-4 inline-flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-100"
-              >
-                <ExternalLink className="h-4 w-4" />
-                Mở tài liệu đính kèm
-              </a>
-            )}
-          </Panel>
-        </div>
+          )}
+          <div className="border-t border-slate-100 p-4">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">
+              <ShieldCheck className="h-3.5 w-3.5" /> Mã QR đang hiệu lực
+            </span>
+          </div>
+        </section>
 
-        <div className="space-y-5 lg:col-span-5">
-          <Panel title="Dữ liệu lý lịch" icon={Layers3}>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Detail label="Số thứ tự" value={node.seq} mono />
-              <Detail label="Thư mục" value={parent?.name || "Thư mục gốc"} />
-              <Detail label="Bản vẽ" value={node.drawing || "Chưa cập nhật"} />
-              <Detail label="Nguồn dữ liệu" value="Cây thiết bị" />
+        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+          <p className="font-mono text-sm font-black text-blue-700">{displayedSeq}</p>
+          <h2 className="mt-2 text-2xl font-black leading-tight text-[#09233f] sm:text-3xl">{name}</h2>
+          <dl className="mt-5 grid gap-3 sm:grid-cols-2">
+            <Detail label="Mã thiết bị" value={displayedSeq} mono />
+            <Detail label="Mã KKS" value={kks || "Chưa cập nhật"} mono />
+            <Detail label="Thuộc hệ thống" value={system} />
+            <Detail label="Bản vẽ liên quan" value={node.drawing || "Chưa cập nhật"} />
+          </dl>
+
+          {attachedInfo && (
+            <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <h3 className="flex items-center gap-2 text-sm font-black text-[#09233f]"><FileText className="h-4 w-4" /> Thông tin đính kèm</h3>
+              <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-700">{attachedInfo}</p>
             </div>
-          </Panel>
-        </div>
-      </section>
-
-      <footer className="mx-auto max-w-6xl px-4 pb-8 text-xs text-slate-500 sm:px-6 lg:px-8">
-        Dữ liệu chỉ phục vụ tra cứu nhanh tại hiện trường. Các thao tác chỉnh sửa yêu cầu đăng nhập hệ thống.
-      </footer>
+          )}
+          {documentUrl && (
+            <a href={documentUrl} target="_blank" rel="noopener noreferrer" className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-xl bg-blue-700 px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-blue-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+              <ExternalLink className="h-4 w-4" /> Mở tài liệu đính kèm
+            </a>
+          )}
+          <p className="mt-6 border-t border-slate-100 pt-4 text-xs leading-5 text-slate-500">
+            Trang công khai chỉ hiển thị thông tin nhận diện cơ bản. Đăng nhập hệ thống và dùng chức năng Quét QR để xem hồ sơ nghiệp vụ theo quyền được cấp.
+          </p>
+        </section>
+      </div>
     </main>
   );
 }
 
-function InfoPill({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+function Detail({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm">
-      <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400">{label}</div>
-      <div className={mono ? "font-mono text-sm font-bold text-navy" : "text-sm font-bold text-slate-900"}>{value}</div>
+    <div className="rounded-xl border border-slate-200 p-3">
+      <dt className="text-[11px] font-bold uppercase tracking-wide text-slate-500">{label}</dt>
+      <dd className={`mt-1 text-sm font-bold text-slate-900 ${mono ? "font-mono" : ""}`}>{value}</dd>
     </div>
   );
 }
 
-function Panel({ title, icon: Icon, children }: { title: string; icon: typeof FileText; children: React.ReactNode }) {
+function InactiveQr() {
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-      <h2 className="mb-4 flex items-center gap-2 text-base font-black text-ink">
-        <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-blue-50 text-blue-700">
-          <Icon className="h-4 w-4" />
-        </span>
-        {title}
-      </h2>
-      {children}
-    </section>
-  );
-}
-
-function Detail({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
-  return (
-    <div className="rounded-xl border border-slate-200 bg-white p-3">
-      <div className="text-xs font-bold uppercase tracking-wide text-slate-500">{label}</div>
-      <div className={mono ? "mt-1 font-mono text-sm font-bold text-navy" : "mt-1 text-sm font-semibold text-slate-900"}>{value}</div>
-    </div>
-  );
-}
-
-function EmptyState({ text }: { text: string }) {
-  return (
-    <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-3 py-4 text-sm text-slate-500">
-      {text}
-    </div>
+    <main className="flex min-h-screen items-center justify-center bg-[#eef3f8] p-4 text-slate-950">
+      <section className="w-full max-w-md rounded-2xl border border-red-200 bg-white p-7 text-center shadow-lg">
+        <span className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-red-50 text-red-700"><ShieldX className="h-8 w-8" /></span>
+        <h1 className="mt-4 text-xl font-black text-[#09233f]">Mã QR không còn hiệu lực</h1>
+        <p className="mt-2 text-sm leading-6 text-slate-600">Thẻ QR đã được gỡ, thiết bị không tồn tại hoặc mã không đúng phạm vi tổ máy.</p>
+        <div className="mt-5 inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-600"><QrCode className="h-4 w-4" /> PowerPlant EAM</div>
+      </section>
+    </main>
   );
 }

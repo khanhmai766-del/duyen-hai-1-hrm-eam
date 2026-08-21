@@ -13,6 +13,7 @@ export interface DeviceRecord {
   managingPosition: string | null;
   managingPositions?: string[];
   machine?: string;
+  qrCardKey?: string;
   images: string[];
   attachedInfo: string | null;
   documentUrl: string | null;

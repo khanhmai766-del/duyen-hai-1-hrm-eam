@@ -25,6 +25,7 @@ import {
   Package,
   Plus,
   Loader2,
+  ScanLine,
   type LucideIcon,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -68,6 +69,7 @@ import { normalizeText } from "@/lib/nav";
 import { announcementPositionLabel, uniqueVietnamesePositions } from "@/lib/positions";
 import { positionsMatch } from "@/lib/position-catalog";
 import { formatDate, cn } from "@/lib/utils";
+import { deviceQrValue } from "@/lib/device-qr";
 
 type ViewMode = "tree" | "detail" | "form";
 const VIEWS: { key: ViewMode; label: string; icon: LucideIcon; adminOnly?: boolean }[] = [
@@ -177,6 +179,9 @@ function DevicesPageContent() {
   return (
     <div className="space-y-6">
       <PageHeader title="THÔNG TIN THIẾT BỊ" description="Lý lịch & quản lý tài sản thiết bị nhà máy">
+        <Button asChild variant="accent" size="toolbar">
+          <Link href="/devices/scan"><ScanLine className="h-4 w-4" /> Quét QR</Link>
+        </Button>
         <DeviceGuideButton canManage={isSystemAdmin} />
         {view === "tree" && (
           <ExportButton
@@ -260,7 +265,7 @@ function QrCardsSection({ canCreate, canDelete, q, onQr }: { canCreate: boolean;
   const { data, isLoading } = useDeviceQrCards();
   const add = useAddDeviceQrCard();
   const removeCard = useRemoveDeviceQrCard();
-  const [picked, setPicked] = React.useState<{ seq: string; name: string } | null>(null);
+  const [picked, setPicked] = React.useState<{ seq: string; name: string; machine: TreeScope } | null>(null);
   const [removeTarget, setRemoveTarget] = React.useState<DeviceListItem | null>(null);
 
   const allCards = data?.data ?? [];
@@ -272,7 +277,7 @@ function QrCardsSection({ canCreate, canDelete, q, onQr }: { canCreate: boolean;
   async function addCard() {
     if (!picked?.seq) return toast.error("Chọn thiết bị từ cây thư mục trước");
     try {
-      await add.mutateAsync(picked.seq);
+      await add.mutateAsync({ deviceSeq: picked.seq, machine: picked.machine });
       toast.success(`Đã tạo thẻ QR: ${picked.seq} — ${picked.name}`);
       setPicked(null);
     } catch (e) {
@@ -289,13 +294,12 @@ function QrCardsSection({ canCreate, canDelete, q, onQr }: { canCreate: boolean;
               <div className="mb-1.5 text-sm font-semibold text-ink">Chọn thiết bị tạo thẻ QR</div>
               <EquipmentTreePicker
                 value={picked?.seq ?? ""}
-                onChange={(node) => setPicked(node ? { seq: node.seq, name: node.name } : null)}
+                onChange={(node) => setPicked(node ? { seq: node.seq, name: node.name, machine: node.machine } : null)}
                 includeLeaves
-                leafOnly
-                placeholder="Chọn thiết bị (thư mục con cuối cùng) từ cây..."
+                placeholder="Chọn thiết bị hoặc thư mục cha từ cây..."
               />
               <p className="mt-1.5 text-xs text-muted-foreground">
-                Chỉ tạo thẻ cho thiết bị quan trọng cần quét mã — không sinh thẻ hàng loạt cho toàn bộ thiết bị.
+                Có thể tạo QR cho thiết bị lá hoặc thiết bị lớn/thư mục cha để tra cứu dữ liệu tổng hợp của nhánh.
               </p>
             </div>
             <Button onClick={addCard} disabled={add.isPending || !picked?.seq} className="shrink-0 sm:mt-6">
@@ -315,13 +319,13 @@ function QrCardsSection({ canCreate, canDelete, q, onQr }: { canCreate: boolean;
         open={!!removeTarget}
         onOpenChange={(o) => !o && setRemoveTarget(null)}
         title="Gỡ thẻ QR thiết bị?"
-        description={removeTarget ? `Gỡ thẻ QR của "${removeTarget.code} — ${removeTarget.name}" khỏi tab Thẻ. Thiết bị và dữ liệu liên quan KHÔNG bị xoá.` : undefined}
+        description={removeTarget ? `Gỡ thẻ QR của "${removeTarget.code} — ${removeTarget.name}". Mã đã in sẽ bị vô hiệu hóa ngay; thiết bị và dữ liệu liên quan vẫn được giữ nguyên.` : undefined}
         confirmLabel="Gỡ thẻ"
         loading={removeCard.isPending}
         onConfirm={async () => {
           if (!removeTarget) return;
           try {
-            await removeCard.mutateAsync(removeTarget.code);
+            await removeCard.mutateAsync({ deviceSeq: removeTarget.id, machine: removeTarget.machine });
             toast.success("Đã gỡ thẻ QR — thiết bị vẫn giữ nguyên");
             setRemoveTarget(null);
           } catch (e) {
@@ -388,9 +392,7 @@ function buildTreeExportRows(nodes: EquipmentNode[], scope: TreeScope): Record<s
 }
 
 function systemRowQrValue(row: SystemTreeRow) {
-  const path = row.deviceId ? `/public/devices/${row.deviceId}` : `/public/equipment/${encodeURIComponent(row.seq)}`;
-  if (typeof window === "undefined") return path;
-  return `${window.location.origin}${path}`;
+  return deviceQrValue(row.seq, defaultScopeOf(row.seq), typeof window !== "undefined" ? window.location.origin : null);
 }
 
 function SystemLeafCardView({ rows, selectedSystemName }: { rows: SystemTreeRow[]; selectedSystemName: string }) {
@@ -893,12 +895,12 @@ function DetailView({
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
         {pagedDevices.map((d) => (
           <Card
-            key={d.id}
+            key={d.qrCardKey ?? `${d.id}:${d.machine ?? ""}`}
             role="button"
             tabIndex={0}
-            onClick={() => router.push(`/devices/${encodeURIComponent(d.id)}`)}
+            onClick={() => router.push(`/devices/${encodeURIComponent(d.id)}${d.machine ? `?machine=${encodeURIComponent(d.machine)}` : ""}`)}
             onKeyDown={(event) => {
-              if (event.key === "Enter" || event.key === " ") router.push(`/devices/${encodeURIComponent(d.id)}`);
+              if (event.key === "Enter" || event.key === " ") router.push(`/devices/${encodeURIComponent(d.id)}${d.machine ? `?machine=${encodeURIComponent(d.machine)}` : ""}`);
             }}
             className="group overflow-hidden border-border bg-white transition-all hover:-translate-y-0.5 hover:border-accent/50 hover:shadow-lg"
           >
@@ -938,7 +940,7 @@ function DetailView({
                   <InfoPill label="Cương vị" value={d.managingPosition ?? "—"} />
                 </div>
                 <div className="flex h-[104px] w-[104px] items-center justify-center rounded-xl border border-dashed border-border bg-white p-2">
-                  <QRCodeSVG value={d.qrCodeData || `/public/equipment/${encodeURIComponent(d.code)}`} size={82} includeMargin={false} />
+                  <QRCodeSVG value={deviceQrValue(d.id, d.machine, typeof window !== "undefined" ? window.location.origin : null)} size={82} includeMargin={false} />
                 </div>
               </div>
 

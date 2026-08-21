@@ -24,6 +24,7 @@ import { useAddDeviceQrCard, useRemoveDeviceQrCard } from "@/hooks/useDeviceQrCa
 import { cn, formatDate } from "@/lib/utils";
 import { DEFECT_SEVERITY, DEFECT_STATUS, defectSeverityCriteriaLabels } from "@/lib/constants";
 import { defaultScopeOf, TREE_SCOPES } from "@/lib/equipment-units";
+import { deviceQrValue } from "@/lib/device-qr";
 
 export default function DeviceDetailPage() {
   return (
@@ -60,7 +61,7 @@ function DeviceDetailPageContent() {
   const [defectOpen, setDefectOpen] = React.useState(false);
 
   const device = data?.data;
-  const url = typeof window !== "undefined" && device ? `${window.location.origin}/public/equipment/${encodeURIComponent(device.code)}` : "";
+  const url = typeof window !== "undefined" && device ? deviceQrValue(device.id, device.machine, window.location.origin) : "";
   const canCreateQr = Boolean(device && rbac.can("device-manage", ["personal", "manage", "full"]) && access.canEdit);
   const canDeleteQr = Boolean(device && rbac.can("device-manage", ["manage", "full"]) && access.canEdit);
   const canDeclareMaterial = Boolean(device && rbac.can("replacement-manage", ["personal", "manage", "full"]) && access.canEdit);
@@ -89,7 +90,7 @@ function DeviceDetailPageContent() {
 
   async function createQrCard() {
     try {
-      await addQrCard.mutateAsync(device!.code);
+      await addQrCard.mutateAsync({ deviceSeq: device!.id, machine: device!.machine });
       toast.success("Đã khởi tạo mã QR thiết bị");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Không khởi tạo được mã QR");
@@ -518,7 +519,7 @@ function DeviceDetailPageContent() {
                   <Download className="h-4 w-4" /> Tải QR
                 </Button>
                 <Button asChild variant="outline">
-                  <Link href={`/devices/${id}/qr`}>Trang in</Link>
+                  <Link href={`/devices/${id}/qr?machine=${encodeURIComponent(deviceMachine)}`}>Trang in</Link>
                 </Button>
               </div>
               {canDeleteQr && (
@@ -550,12 +551,12 @@ function DeviceDetailPageContent() {
         open={qrDeleteOpen}
         onOpenChange={setQrDeleteOpen}
         title="Xóa mã QR thiết bị?"
-        description="Mã QR sẽ bị gỡ khỏi danh sách thẻ. Thiết bị, lý lịch, vật tư và lịch sử sửa chữa vẫn được giữ nguyên."
+        description="Mã QR sẽ bị vô hiệu hóa ngay và không thể mở bằng camera điện thoại hoặc trình quét trong website. Thiết bị, lý lịch, vật tư và lịch sử sửa chữa vẫn được giữ nguyên."
         confirmLabel="Xóa mã QR"
         loading={removeQrCard.isPending}
         onConfirm={async () => {
           try {
-            await removeQrCard.mutateAsync(device.code);
+            await removeQrCard.mutateAsync({ deviceSeq: device.id, machine: device.machine });
             toast.success("Đã xóa mã QR thiết bị");
             setQrDeleteOpen(false);
           } catch (error) {

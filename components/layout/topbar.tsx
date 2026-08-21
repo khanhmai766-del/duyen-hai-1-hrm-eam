@@ -82,7 +82,7 @@ async function logout(callbackUrl = "/login") {
   }
 }
 
-export function Topbar({ onMenuClick, onToggleSidebar }: { onMenuClick: () => void; onToggleSidebar?: () => void }) {
+export function Topbar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
   const { data: session } = useSession();
   const rbac = useRbacAccess();
   const isSystemAdmin = session?.user?.role === "ADMIN";
@@ -276,10 +276,6 @@ export function Topbar({ onMenuClick, onToggleSidebar }: { onMenuClick: () => vo
 
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center gap-4 border-b border-border bg-background/95 px-4 backdrop-blur md:px-6">
-      <button onClick={onMenuClick} className="rounded-md p-2 hover:bg-muted lg:hidden" aria-label="Menu">
-        <Menu className="h-5 w-5" />
-      </button>
-
       {/* Desktop sidebar collapse toggle */}
       <button
         onClick={onToggleSidebar}

@@ -27,6 +27,7 @@ import {
   Calculator,
   Zap,
   Gauge,
+  ScanLine,
 } from "lucide-react";
 import { effectiveUserPosition, type PositionCarrier } from "@/lib/current-position";
 
@@ -100,6 +101,7 @@ export const NAV_SECTIONS: NavSection[] = [
     items: [
       { label: "Dashboard", href: "/reports", icon: BarChart3, keywords: "report bao cao thong ke analytics dashboard thiet bi" },
       { label: "Thông tin thiết bị", href: "/devices", icon: Cpu, permissionIds: ["device-view"], keywords: "device thiet bi may moc esp fgd boiler turbine" },
+      { label: "Quét QR thiết bị", href: "/devices/scan", icon: ScanLine, permissionIds: ["device-view"], keywords: "quet scan camera qr thiet bi hien truong" },
       {
         // Hai phần bám đúng hai Google Sheet nguồn (sheet Cơ và sheet Điện).
         label: "Khiếm khuyết thiết bị",

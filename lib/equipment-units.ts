@@ -10,7 +10,7 @@ export const COMMON_BRANCHES = new Set(["5", "6"]);
 
 /** Số nhánh hệ thống của một seq (DH1.S1.5.1.1 → "5"); null nếu là nút gốc DH1.S1. */
 export function branchOf(seq: string): string | null {
-  const m = seq.match(/^DH1\.S1\.(\d+)/);
+  const m = seq.match(/^DH1\.S1\.(\d+)/) ?? seq.match(/^(\d+)/);
   return m ? m[1] : null;
 }
 

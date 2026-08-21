@@ -11,23 +11,23 @@ import { assertSeqEditable, filterEquipmentNodesForUser } from "@/lib/server-acc
 import { requireDeviceCreate, requireDeviceManage, requireDeviceView } from "@/lib/device-permissions";
 import { ensureDeviceQrCardTable } from "@/lib/device-qr-card-table";
 import { ensureRepairMachineColumn } from "@/lib/repair-machine";
+import { deviceQrValue, normalizeQrMachine } from "@/lib/device-qr";
+import { defaultScopeOf, machinesOf, scopeCode } from "@/lib/equipment-units";
 
 export const dynamic = "force-dynamic";
-
-function publicEquipmentUrl(seq: string) {
-  const base = process.env.NEXT_PUBLIC_APP_URL || "";
-  return `${base}/public/equipment/${encodeURIComponent(seq)}`;
-}
 
 // Cùng shape với /api/devices để tab "Thẻ" tái dùng nguyên lưới thẻ hiện có.
 function toCardRecord(
   node: NormalizedEquipmentNode,
   parent: NormalizedEquipmentNode | null,
+  machine: "S1" | "S2" | "COMMON",
   stats?: { repairCount: number; latestRepairAt: Date | null }
 ) {
   return {
     id: node.seq,
-    code: node.seq,
+    qrCardKey: `${node.seq}:${machine}`,
+    code: scopeCode(node.seq, machine),
+    machine,
     name: node.name,
     system: parent?.name ?? null,
     systemSeq: parent?.seq ?? null,
@@ -35,7 +35,7 @@ function toCardRecord(
     images: node.imageUrl ? [node.imageUrl] : [],
     attachedInfo: node.attachedInfo ?? null,
     documentUrl: node.documentUrl ?? null,
-    qrCodeData: publicEquipmentUrl(node.seq),
+    qrCodeData: deviceQrValue(node.seq, machine),
     createdAt: new Date(0).toISOString(),
     updatedAt: new Date(0).toISOString(),
     repairLogs: stats?.latestRepairAt ? [{ startedAt: stats.latestRepairAt.toISOString() }] : [],
@@ -50,7 +50,7 @@ export async function GET() {
     const user = await requireUser();
     await requireDeviceView(user);
     await Promise.all([ensureDeviceQrCardTable(), ensureRepairMachineColumn()]);
-    const cards = await prisma.deviceQrCard.findMany({ select: { deviceSeq: true } });
+    const cards = await prisma.deviceQrCard.findMany({ select: { deviceSeq: true, machine: true } });
     if (!cards.length) return ok([], { total: 0 });
 
     const cardSeqs = new Set(cards.map((c) => c.deviceSeq));
@@ -72,19 +72,22 @@ export async function GET() {
       repairStats.map((item) => [item.deviceSeq, { repairCount: item._count._all, latestRepairAt: item._max.startedAt }])
     );
 
-    const data = seqs
-      .sort(compareEquipmentSeq)
-      .map((seq) => {
+    const data = cards
+      .filter((card) => visibleSeqs.has(card.deviceSeq) && index.bySeq.has(card.deviceSeq))
+      .sort((a, b) => compareEquipmentSeq(a.deviceSeq, b.deviceSeq) || a.machine.localeCompare(b.machine))
+      .map((card) => {
+        const seq = card.deviceSeq;
         const node = index.bySeq.get(seq)!;
         const parentSeq = index.parentOf.get(seq) ?? node.parentSeq ?? null;
         const parent = parentSeq ? index.bySeq.get(parentSeq) ?? null : null;
-        return toCardRecord(node, parent, statsBySeq.get(seq));
+        const machine = normalizeQrMachine(card.machine) ?? defaultScopeOf(seq);
+        return toCardRecord(node, parent, machine, statsBySeq.get(seq));
       });
     return ok(data, { total: data.length });
   });
 }
 
-/** POST /api/device-qr-cards — chọn thêm 1 thiết bị (node lá) tạo thẻ QR. */
+/** POST /api/device-qr-cards — tạo thẻ QR cho thiết bị lá hoặc thiết bị lớn/thư mục cha. */
 export async function POST(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
@@ -99,14 +102,13 @@ export async function POST(req: NextRequest) {
     const index = getEquipmentTreeIndexFor(nodes);
     const node = index.bySeq.get(deviceSeq);
     if (!node) return fail("Không tìm thấy thiết bị trong cây thư mục", 404);
-    if ((index.childrenOf.get(deviceSeq) ?? []).length > 0) {
-      return fail("Chỉ tạo thẻ QR cho thiết bị ở thư mục con cuối cùng (node lá)");
-    }
-    const exists = await prisma.deviceQrCard.findFirst({ where: { deviceSeq } });
-    if (exists) return fail("Thiết bị này đã có thẻ QR");
+    const machine = normalizeQrMachine(body.machine) ?? defaultScopeOf(deviceSeq);
+    if (!machinesOf(deviceSeq).includes(machine)) return fail("Tổ máy không phù hợp với thiết bị đã chọn");
+    const exists = await prisma.deviceQrCard.findFirst({ where: { deviceSeq, machine } });
+    if (exists) return fail("Thiết bị này đã có thẻ QR trong phạm vi tổ máy đã chọn");
 
-    const card = await prisma.deviceQrCard.create({ data: { deviceSeq, createdById: user.id } });
-    await audit(user.id, "CREATE_DEVICE_QR_CARD", "DeviceQrCard", card.id, deviceSeq);
+    const card = await prisma.deviceQrCard.create({ data: { deviceSeq, machine, createdById: user.id } });
+    await audit(user.id, "CREATE_DEVICE_QR_CARD", "DeviceQrCard", card.id, `${deviceSeq} · ${machine}`);
     return ok(card);
   });
 }
@@ -120,9 +122,10 @@ export async function DELETE(req: NextRequest) {
     const seq = req.nextUrl.searchParams.get("seq")?.trim();
     if (!seq) return fail("Thiếu seq thiết bị");
     await assertSeqEditable(user, seq);
-    const { count } = await prisma.deviceQrCard.deleteMany({ where: { deviceSeq: seq } });
+    const machine = normalizeQrMachine(req.nextUrl.searchParams.get("machine"));
+    const { count } = await prisma.deviceQrCard.deleteMany({ where: { deviceSeq: seq, ...(machine ? { machine } : {}) } });
     if (!count) return fail("Thiết bị này chưa có thẻ QR", 404);
-    await audit(user.id, "DELETE_DEVICE_QR_CARD", "DeviceQrCard", seq, seq);
-    return ok({ seq });
+    await audit(user.id, "DELETE_DEVICE_QR_CARD", "DeviceQrCard", seq, `${seq}${machine ? ` · ${machine}` : ""}`);
+    return ok({ seq, machine });
   });
 }

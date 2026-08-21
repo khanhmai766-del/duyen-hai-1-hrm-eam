@@ -17,6 +17,7 @@ import { ensureRepairMachineColumn } from "@/lib/repair-machine";
 import { ensureDeviceQrCardTable } from "@/lib/device-qr-card-table";
 import { normalizeText } from "@/lib/nav";
 import { MAX_EQUIPMENT_DEPTH, canonicalSeq, machinesOf, s2Code, s2Kks, type EquipmentMachine, validateEquipmentSeq } from "@/lib/equipment-units";
+import { deviceQrValue } from "@/lib/device-qr";
 
 export const dynamic = "force-dynamic";
 
@@ -26,11 +27,6 @@ function parentSeqOf(seq: string) {
   return parts.length ? parts.join(".") : null;
 }
 
-
-function publicEquipmentUrl(seq: string) {
-  const base = process.env.NEXT_PUBLIC_APP_URL || "";
-  return `${base}/public/equipment/${encodeURIComponent(seq)}`;
-}
 
 function toDeviceRecord(node: NormalizedEquipmentNode, parent: NormalizedEquipmentNode | null) {
   return {
@@ -44,7 +40,7 @@ function toDeviceRecord(node: NormalizedEquipmentNode, parent: NormalizedEquipme
     images: node.imageUrl ? [node.imageUrl] : [],
     attachedInfo: node.attachedInfo ?? null,
     documentUrl: node.documentUrl ?? null,
-    qrCodeData: publicEquipmentUrl(node.seq),
+    qrCodeData: deviceQrValue(node.seq),
     createdAt: new Date(0).toISOString(),
     updatedAt: new Date(0).toISOString(),
     repairLogs: [],
@@ -195,7 +191,7 @@ async function findEquipmentRecord(seq: string, requestedMachine?: string | null
     images: profile?.imageUrl ? [profile.imageUrl] : (isSecondary ? [] : base.images),
     attachedInfo: profile?.attachedInfo ?? (isSecondary ? null : base.attachedInfo),
     documentUrl: profile?.documentUrl ?? (isSecondary ? null : base.documentUrl),
-    qrCodeData: publicEquipmentUrl(node.seq),
+    qrCodeData: deviceQrValue(node.seq, machine),
     managingPosition: managingPositions[0] ?? null,
     managingPositions,
     repairLogs,

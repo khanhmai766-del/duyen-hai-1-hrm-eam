@@ -7,6 +7,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { ArrowDown, ArrowUp } from "lucide-react";
 import { Sidebar } from "./sidebar";
 import { Topbar } from "./topbar";
+import { MobileBottomNav } from "./mobile-bottom-nav";
 import { BroadcastModal } from "@/components/shared/broadcast-modal";
 import { PowerLoadingOverlay } from "@/components/shared/power-loading-overlay";
 import { pathAllowedForPosition } from "@/lib/nav";
@@ -62,8 +63,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           collapsed ? "lg:pl-[76px]" : "lg:pl-[280px]"
         )}
       >
-        <Topbar onMenuClick={() => setMobileOpen(true)} onToggleSidebar={() => setCollapsed((c) => !c)} />
-        <main className="flex-1 p-4 md:p-6 lg:p-8 animate-fade-in">
+        <Topbar onToggleSidebar={() => setCollapsed((c) => !c)} />
+        <main className="flex-1 p-4 pb-[calc(7rem+env(safe-area-inset-bottom))] md:p-6 md:pb-[calc(7rem+env(safe-area-inset-bottom))] lg:p-8 lg:pb-8 animate-fade-in">
           {blockedByPosition ? (
             <div className="rounded-xl border border-amber-200 bg-amber-50 p-5 text-sm font-medium text-amber-800 shadow-sm">
               Chức vụ Thống kê chỉ được truy cập các mục Quản lý người dùng và Quản lý vật tư.
@@ -73,6 +74,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           )}
         </main>
       </div>
+
+      <MobileBottomNav onOpenAllMenu={() => setMobileOpen(true)} />
 
       {/* Thông báo hệ thống giữa màn hình (do Quản trị phát) */}
       <BroadcastModal />
@@ -119,7 +122,7 @@ function PageScrollButtons() {
   }, []);
 
   return (
-    <div className="fixed right-3 top-1/2 z-30 flex -translate-y-1/2 flex-col gap-2 sm:right-5">
+    <div className="fixed right-3 top-1/2 z-30 hidden -translate-y-1/2 flex-col gap-2 sm:right-5 lg:flex">
       <ScrollButton icon={ArrowUp} label="Quay lại đầu trang" visible={scrollState.canGoTop} onClick={scrollToTop} />
       <ScrollButton icon={ArrowDown} label="Đi đến cuối trang" visible={scrollState.canGoBottom} onClick={scrollToBottom} />
     </div>

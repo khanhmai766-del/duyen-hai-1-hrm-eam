@@ -20,6 +20,7 @@ import { recomputeChildCount } from "@/lib/equipment-child-count";
 import { requireDeviceCreate, requireDeviceView } from "@/lib/device-permissions";
 import { canonicalSeq, MAX_EQUIPMENT_DEPTH, validateEquipmentSeq } from "@/lib/equipment-units";
 import { canBypassEquipmentPositionScope } from "@/lib/material-equipment-access";
+import { deviceQrValue } from "@/lib/device-qr";
 
 export const dynamic = "force-dynamic";
 
@@ -29,11 +30,6 @@ function parentSeqOf(seq: string) {
   return parts.length ? parts.join(".") : null;
 }
 
-
-function publicEquipmentUrl(seq: string) {
-  const base = process.env.NEXT_PUBLIC_APP_URL || "";
-  return `${base}/public/equipment/${encodeURIComponent(seq)}`;
-}
 
 function toDeviceRecord(
   node: NormalizedEquipmentNode,
@@ -52,7 +48,7 @@ function toDeviceRecord(
     images: node.imageUrl ? [node.imageUrl] : [],
     attachedInfo: node.attachedInfo ?? null,
     documentUrl: node.documentUrl ?? null,
-    qrCodeData: publicEquipmentUrl(node.seq),
+    qrCodeData: deviceQrValue(node.seq),
     // Bỏ createdAt/updatedAt (luôn là hằng 1970-01-01, không nơi nào đọc) và materials
     // (luôn rỗng): với 21.948 thiết bị, ba trường chết này chiếm ~2,5 MB mỗi lần trả về.
     repairLogs: [],
