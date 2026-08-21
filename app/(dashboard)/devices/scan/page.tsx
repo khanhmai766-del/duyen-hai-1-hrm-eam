@@ -81,11 +81,17 @@ function DeviceScanner() {
           height: { ideal: 720 },
         },
       });
+      const video = videoRef.current;
+      if (!video) throw new Error("Không tìm thấy khung xem camera");
+      // Safari/iOS ổn định hơn khi stream được gắn và phát ngay, trước mọi
+      // khoảng chờ tải bộ giải mã. Video phải muted + playsInline + autoPlay.
+      video.srcObject = stream;
+      await video.play();
       const { BrowserQRCodeReader } = await import("@zxing/browser");
       const reader = new BrowserQRCodeReader(undefined, { delayBetweenScanAttempts: 120, delayBetweenScanSuccess: 800 });
       const controls = await reader.decodeFromStream(
         stream,
-        videoRef.current ?? undefined,
+        video,
         (result) => {
           if (result?.getText()) void resolveValue(result.getText());
         }
@@ -98,6 +104,7 @@ function DeviceScanner() {
       setMessage("Đưa mã QR vào giữa khung ngắm");
     } catch (error) {
       stream?.getTracks().forEach((track) => track.stop());
+      if (stream && videoRef.current?.srcObject === stream) videoRef.current.srcObject = null;
       stopScanner();
       setState("error");
       setMessage(cameraErrorMessage(error));
@@ -151,7 +158,7 @@ function DeviceScanner() {
         <div className="relative grid gap-0 lg:grid-cols-[1.35fr_0.65fr]">
           <div className="p-3 sm:p-5">
             <div className="relative aspect-[3/4] max-h-[72vh] overflow-hidden rounded-[22px] border border-white/15 bg-black sm:aspect-video">
-              <video ref={videoRef} className={`h-full w-full object-cover ${state === "scanning" ? "opacity-100" : "opacity-35"}`} muted playsInline aria-label="Hình ảnh camera quét mã QR" />
+              <video ref={videoRef} className={`h-full w-full object-cover ${state === "scanning" ? "opacity-100" : "opacity-35"}`} autoPlay muted playsInline aria-label="Hình ảnh camera quét mã QR" />
               <div className="pointer-events-none absolute inset-0 flex items-center justify-center p-10">
                 <div className="relative aspect-square w-full max-w-[280px]">
                   <Corner className="left-0 top-0 border-l-4 border-t-4" />
@@ -217,8 +224,10 @@ function Corner({ className }: { className: string }) {
 
 function cameraErrorMessage(error: unknown) {
   const name = error instanceof DOMException ? error.name : "";
-  if (name === "NotAllowedError") return "Bạn chưa cấp quyền camera. Hãy cho phép camera trong cài đặt trình duyệt rồi thử lại.";
+  if (name === "NotAllowedError") return "Safari đang chặn camera. Hãy mở Cài đặt trang web của duyenhai1.vn, chọn Camera → Cho phép rồi chạm Thử lại.";
   if (name === "NotFoundError") return "Không tìm thấy camera trên thiết bị này.";
   if (name === "NotReadableError") return "Camera đang được ứng dụng khác sử dụng. Hãy đóng ứng dụng đó rồi thử lại.";
+  if (name === "AbortError") return "Safari đã dừng việc mở camera. Hãy tải lại trang rồi chạm Mở camera.";
+  if (name === "OverconstrainedError") return "Safari không dùng được camera sau với cấu hình hiện tại. Hãy tải lại trang hoặc chọn ảnh QR.";
   return "Không mở được camera. Hãy kiểm tra HTTPS, quyền camera hoặc chọn ảnh QR từ điện thoại.";
 }
