@@ -23,7 +23,7 @@ import { useRbacAccess } from "@/hooks/useRbacAccess";
 import { useAddDeviceQrCard, useRemoveDeviceQrCard } from "@/hooks/useDeviceQrCards";
 import { cn, formatDate } from "@/lib/utils";
 import { DEFECT_SEVERITY, DEFECT_STATUS, defectSeverityCriteriaLabels } from "@/lib/constants";
-import { defaultScopeOf, TREE_SCOPES } from "@/lib/equipment-units";
+import { defaultScopeOf, scopeCode, TREE_SCOPES } from "@/lib/equipment-units";
 import { deviceQrValue } from "@/lib/device-qr";
 
 export default function DeviceDetailPage() {
@@ -71,6 +71,18 @@ function DeviceDetailPageContent() {
     if (!device) return "S1";
     return device.machine ?? defaultScopeOf(device.id);
   }, [device]);
+  const materialEditDeclaration = device?.materialDeclarations.find((item) => item.id === materialEditId) ?? null;
+  const materialEditDevice = materialEditDeclaration?.device
+    ? {
+        code: materialEditDeclaration.device.id,
+        displayCode: scopeCode(materialEditDeclaration.device.id, deviceMachine as "S1" | "S2" | "COMMON"),
+        name: materialEditDeclaration.device.name,
+        system: materialEditDeclaration.device.system,
+        managingPosition: materialEditDeclaration.managingPosition ?? null,
+      }
+    : device
+      ? { ...device, code: device.id, displayCode: device.code }
+      : null;
   // Quay lại đúng CÂY đã mở thiết bị này (S1 / S2 / Dùng chung).
   const treeReturnUrl = device
     ? `/devices?view=tree&scope=${encodeURIComponent(deviceMachine)}&focusSeq=${encodeURIComponent(device.id)}`
@@ -253,10 +265,14 @@ function DeviceDetailPageContent() {
                     </div>
                     <div className="mt-1.5 text-[11.5px] leading-relaxed text-muted-foreground">
                       <span className="font-medium text-slate-700">{item.device?.name ?? device.name}</span>
-                      {item.device?.seq && item.device.seq !== device.id && (
-                        <span className="block font-mono">Thiết bị con: {item.device.seq}</span>
+                      {item.device?.id && item.device.id !== device.id && (
+                        <span className="block font-mono text-[10.5px]">
+                          Thiết bị con: {scopeCode(item.device.id, deviceMachine as "S1" | "S2" | "COMMON")}
+                        </span>
                       )}
-                      {!item.device?.seq && device.system && <span className="block">Thư mục cha: {device.system}</span>}
+                      {(item.device?.system ?? device.system) && (
+                        <span className="block">Thư mục cha: {item.device?.system ?? device.system}</span>
+                      )}
                     </div>
                     <div className="mt-1.5 flex items-end justify-between gap-2 text-[11.5px] text-muted-foreground">
                       <span>
@@ -491,9 +507,9 @@ function DeviceDetailPageContent() {
       <DeviceMaterialDeclarationDialog
         open={Boolean(materialEditId)}
         onOpenChange={(open) => !open && setMaterialEditId(null)}
-        device={{ ...device, code: device.id, displayCode: device.code }}
+        device={materialEditDevice ?? { ...device, code: device.id, displayCode: device.code }}
         machine={deviceMachine}
-        declaration={device.materialDeclarations.find((item) => item.id === materialEditId) ?? null}
+        declaration={materialEditDeclaration}
       />
 
       {defectOpen && (

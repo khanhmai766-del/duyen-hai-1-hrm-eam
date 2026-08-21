@@ -6,7 +6,12 @@ import {
   getEquipmentSeqsWithinDepth,
   type NormalizedEquipmentNode,
 } from "@/lib/equipment-tree";
-import { assertSeqEditable, assertSeqViewable, managingPositionsForEquipmentSeq } from "@/lib/server-access";
+import {
+  assertSeqEditable,
+  assertSeqViewable,
+  managingPositionsForEquipmentSeq,
+  resolveEquipmentAccessForUser,
+} from "@/lib/server-access";
 import { maybeUploadDataUrl } from "@/lib/s3";
 import { invalidateDeviceListCache } from "@/lib/device-list-cache";
 import { getCachedEquipmentNodeList, invalidateEquipmentNodeCache, getEquipmentTreeIndexFor } from "@/lib/equipment-node-cache";
@@ -16,8 +21,11 @@ import { requireDeviceDelete, requireDeviceManage, requireDeviceView } from "@/l
 import { ensureRepairMachineColumn } from "@/lib/repair-machine";
 import { ensureDeviceQrCardTable } from "@/lib/device-qr-card-table";
 import { normalizeText } from "@/lib/nav";
+import { EQUIPMENT_DEVICE_SELECT, equipmentNodeToDevice } from "@/lib/equipment-device";
 import { MAX_EQUIPMENT_DEPTH, canonicalSeq, machinesOf, s2Code, s2Kks, type EquipmentMachine, validateEquipmentSeq } from "@/lib/equipment-units";
 import { deviceQrValue } from "@/lib/device-qr";
+import { resolvePositionViewScope } from "@/lib/position-data-scope";
+import { canViewMaterialReplacement } from "@/lib/material-replacement-access";
 
 export const dynamic = "force-dynamic";
 
@@ -109,11 +117,13 @@ async function findEquipmentRecord(seq: string, requestedMachine?: string | null
       include: { material: true, device: { select: { seq: true, name: true } } },
     }),
     prisma.materialReplacement.findMany({
+      // Phạm vi lý lịch có thể gồm thiết bị cha + các thiết bị con. Dùng cùng
+      // profileSeqs với lịch sửa chữa để điểm vừa khai báo ở thiết bị con không bị bỏ sót.
       where: { deviceSeq: { in: profileSeqs }, machine, isActive: false },
       orderBy: { createdAt: "desc" },
       include: {
         material: { select: { id: true, code: true, name: true, unit: true, machine: true, category: true } },
-        device: { select: { seq: true, name: true } },
+        device: { select: EQUIPMENT_DEVICE_SELECT },
         _count: { select: { logs: true, defectRequests: true } },
       },
     }),
@@ -207,7 +217,13 @@ async function findEquipmentRecord(seq: string, requestedMachine?: string | null
     managingPositions,
     repairLogs,
     materials,
-    materialDeclarations,
+    materialDeclarations: materialDeclarations.map((point) => {
+      const declarationDevice = equipmentNodeToDevice(point.device);
+      if (declarationDevice && point.device?.parentSeq) {
+        declarationDevice.system = index.bySeq.get(point.device.parentSeq)?.name ?? null;
+      }
+      return { ...point, deviceId: point.deviceSeq, device: declarationDevice };
+    }),
     materialUsage: replacementUsage,
     hasQrCard: Boolean(qrCard),
     qrCardCreatedAt: qrCard?.createdAt ?? null,
@@ -232,7 +248,17 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
       req.nextUrl.searchParams.get("includeDescendants")
     );
     if (!device) return fail("Không tìm thấy thiết bị", 404);
-    return ok(device);
+    // Lý lịch thiết bị và Danh mục vật tư phải dùng cùng HAI rào xem: phạm vi
+    // cây thiết bị + cương vị quản lý của điểm khai báo. Trước đây lý lịch chỉ
+    // kiểm tra quyền xem node cha nên vẫn làm lộ vật tư của cương vị khác.
+    const [equipmentAccess, materialViewScope] = await Promise.all([
+      resolveEquipmentAccessForUser(user),
+      resolvePositionViewScope(user, "material"),
+    ]);
+    const materialDeclarations = device.materialDeclarations.filter((point) =>
+      canViewMaterialReplacement(equipmentAccess, point, materialViewScope)
+    );
+    return ok({ ...device, materialDeclarations });
   });
 }
 
