@@ -17,15 +17,14 @@ export function parseDefectEnvironmentSheet(value: unknown): DefectEnvironmentSh
   return normalized === "CO" || normalized === "DIEN" ? normalized : null;
 }
 
-export function resolveDefectEnvironmentSheetTarget(value: unknown) {
+export function resolveDefectEnvironmentSheetTarget(
+  value: unknown,
+  spreadsheetIds: Record<DefectEnvironmentSheet, string>
+) {
   const target = parseDefectEnvironmentSheet(value);
   if (!target) throw new Error("Vui lòng chọn Sheet Môi Trường – Cơ hoặc Môi Trường – Điện");
 
-  const spreadsheetId = (
-    target === "CO"
-      ? process.env.N8N_DEFECT_CO_SPREADSHEET_ID
-      : process.env.N8N_DEFECT_DIEN_SPREADSHEET_ID
-  )?.trim();
+  const spreadsheetId = spreadsheetIds[target]?.trim();
   if (!spreadsheetId) {
     throw new Error(`Chưa cấu hình Google Sheet Môi Trường – ${target === "CO" ? "Cơ" : "Điện"}`);
   }

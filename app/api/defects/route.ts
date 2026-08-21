@@ -628,7 +628,10 @@ export async function POST(req: NextRequest) {
         return fail("Vui lòng nhập Mã Trạm ghi lên Google Sheet");
       }
       try {
-        environmentTarget = resolveDefectEnvironmentSheetTarget(body.environmentSheet);
+        environmentTarget = resolveDefectEnvironmentSheetTarget(
+          body.environmentSheet,
+          N8N_DEFECT_SOURCE_SPREADSHEET_IDS
+        );
       } catch (error) {
         return fail(error instanceof Error ? error.message : "Sheet Môi Trường không hợp lệ");
       }
