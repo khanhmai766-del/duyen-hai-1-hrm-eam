@@ -8,14 +8,22 @@ import {
   Filter, ChevronDown,
 } from "lucide-react";
 import { toast } from "sonner";
+import {
+  ChemicalTruckPanel,
+  ChemicalTruckRows,
+  emptyTruck,
+  truckRowError,
+  trucksToPayload,
+  type TruckRow,
+} from "./ChemicalTruckRows";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   useMaterialTickets, useTicketOptions, useCreateTicket, useTicketAction, useDeleteTicket,
   useWorkflowRoles, useSaveWorkflowRoles, actionsFor,
   useTicketLots,
-  type MaterialTicket, type TicketViewer, type WorkflowRoleMap,
-} from "@/hooks/useMaterialTickets";
+  samePosition,
+  type MaterialTicket, type TicketViewer, type WorkflowRoleMap } from "@/hooks/useMaterialTickets";
 import { usePositions } from "@/hooks/useUsers";
 import { COMMON_MATERIAL_POSITION, displayMaterialCategory, GAS_RETURN_STATUS, isChemicalFlowTicket, isGasCylinderTicket, isOtherMaterialCategory, isSingleStepTicketMaterial, CHEMICAL_TICKET_TYPE, isSupplementReason, MATERIAL_CATEGORIES, materialTicketBelongsToRecoveryTab, materialTicketRequiresRecovery, OTHER_MATERIAL_GROUP, OTHER_MATERIAL_TICKET_TYPE, ticketReasonsFor, TICKET_REASONS, TICKET_REASON_OTHER, SINGLE_STEP_TICKET_TYPE, TICKET_MATERIAL_CATEGORIES, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
 import { normalizeText } from "@/lib/nav";
@@ -413,7 +421,9 @@ export default function MaterialTicketBoard({
         </div>
         {isLoading && <div className="empty"><Loader2 className="spin" size={18} /> Đang tải…</div>}
 	        {!isLoading && shown.map((t) => {
-		          const baseMeta = t.type === CHEMICAL_TICKET_TYPE && t.status === "CHO_XAC_NHAN"
+		          const baseMeta = t.type === SINGLE_STEP_TICKET_TYPE && t.status === "NHAN_VAT_TU"
+		            ? { label: "Chờ VHV ghi chuyến xe", c: "#7c3aed" }
+		            : t.type === CHEMICAL_TICKET_TYPE && t.status === "CHO_XAC_NHAN"
 		            ? { label: "Chờ xác nhận bồn/thiết bị", c: "#7c3aed" }
 		            : t.type === CHEMICAL_TICKET_TYPE && t.status === "CHO_THONG_KE"
 		            ? { label: "Chờ xác nhận đề xuất", c: "#7c3aed" }
@@ -1749,6 +1759,12 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
                   </div>
                 )}
                 <ActionArea t={t} viewer={viewer} />
+                {/*
+                  Phiếu NH3 khai một bước xong là HOÀN TẤT ngay, nhưng xe về rải rác vài
+                  ngày sau — nên chuyến xe phải ghi được ở đây, ngoài luồng bước. Khối này
+                  cũng dùng để bổ sung / sửa lại danh sách xe của phiếu hóa chất đã lãnh.
+                */}
+                <ChemicalTruckSection t={t} viewer={viewer} />
               </div>
 
               {exportedDocumentCount > 0 && (
@@ -2022,6 +2038,68 @@ function LotAllocationPicker({
 }
 
 /* ================= hành động theo lượt ================= */
+/**
+ * Khối "Chuyến xe hóa chất đã nhập" trong panel chi tiết phiếu.
+ *
+ * Chỉ hiện với phiếu thuộc luồng hóa chất. Cố ý nằm NGOÀI ActionArea vì phiếu NH3
+ * hoàn tất ngay khi tạo — nếu gắn theo bước thì sẽ không bao giờ hiện, mà xe thì
+ * mấy ngày sau mới về.
+ */
+function ChemicalTruckSection({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | null }) {
+  const act = useTicketAction(t.id);
+  const isChemicalTicket = t.type === CHEMICAL_TICKET_TYPE || t.type === SINGLE_STEP_TICKET_TYPE;
+  const alreadyLinked = (t.chemicalReceiptIds?.length ?? 0) > 0;
+
+  // Bước xác nhận lãnh của LUỒNG HÓA CHẤT đã có bảng xe riêng trong ActionArea — bày
+  // thêm ở đây là hai chỗ nhập cho cùng một thứ. Phiếu NH3 thì ngược lại: đây chính là
+  // bước duy nhất của nó, phải luôn hiện.
+  const atReceiveStep = t.type === CHEMICAL_TICKET_TYPE && t.status === "NHAN_VAT_TU";
+  if (!isChemicalTicket || atReceiveStep) return null;
+
+  // Phiếu NH3 chưa hoàn tất: ghi chuyến xe xong là hoàn tất phiếu.
+  const completesTicket = t.type === SINGLE_STEP_TICKET_TYPE && t.status !== "HOAN_TAT";
+
+  const canEdit = !!viewer && (viewer.isAdmin || samePosition(viewer.position, t.assignedPosition));
+  const unit = t.items[0]?.material.unit ?? "";
+
+  return (
+    <div className="act" style={{ marginTop: 10 }}>
+      <label className="lb">
+        {completesTicket ? "Ghi chuyến xe nhập — bước cuối để hoàn tất phiếu" : "Chuyến xe hóa chất đã nhập"}
+        {alreadyLinked && (
+          <span style={{ marginLeft: 8, fontWeight: 500, color: "#0f766e" }}>
+            · đã ghi {t.chemicalReceiptIds.length} chuyến vào sổ
+          </span>
+        )}
+      </label>
+      <ChemicalTruckPanel
+        initialRows={[emptyTruck(t.receivedAt ? String(t.receivedAt).slice(0, 10) : "")]}
+        unit={unit}
+        canEdit={canEdit}
+        pending={act.isPending}
+        submitLabel={completesTicket ? "Lưu chuyến xe và hoàn tất phiếu" : "Lưu chuyến xe vào sổ hóa chất"}
+        onSubmit={async (rows) => {
+          try {
+            await act.mutateAsync({ action: "chemicalTrucks", trucks: trucksToPayload(rows) });
+            toast.success(
+              completesTicket
+                ? `Đã ghi ${rows.length} chuyến xe và hoàn tất phiếu`
+                : `Đã ghi ${rows.length} chuyến xe vào sổ Tồn kho hóa chất`
+            );
+          } catch (e) {
+            toast.error(e instanceof Error ? e.message : "Ghi chuyến xe thất bại");
+          }
+        }}
+      />
+      {!canEdit && (
+        <p className="note">
+          <AlertTriangle size={13} /> Chỉ VHV được giao phiếu ({t.assignedPosition}) mới ghi được chuyến xe.
+        </p>
+      )}
+    </div>
+  );
+}
+
 function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | null }) {
   const acts = actionsFor(t, viewer);
   const act = useTicketAction(t.id);
@@ -2046,6 +2124,11 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
   const [deliveryQty, setDeliveryQty] = useState(String(t.deliveryQuantity ?? t.items[0]?.quantity ?? ""));
   const [receivedQty, setReceivedQty] = useState(String(t.deliveryQuantity ?? t.items[0]?.quantity ?? ""));
   const [receivedDate, setReceivedDate] = useState("");
+  // Bảng chuyến xe của luồng hóa chất. Mặc định một dòng trống, ngày gợi ý theo lịch giao.
+  const [truckRows, setTruckRows] = useState<TruckRow[]>(() => [
+    emptyTruck(t.deliveryScheduledAt ? String(t.deliveryScheduledAt).slice(0, 10) : ""),
+  ]);
+  const truckError = truckRows.map(truckRowError).find(Boolean) ?? null;
   const [receiverName, setReceiverName] = useState(viewer?.name ?? "");
   const [otherErpCodes, setOtherErpCodes] = useState<Record<string, string>>(() => Object.fromEntries(t.items.map((item) => [item.id, item.erpCode ?? ""])));
   const [otherReceived, setOtherReceived] = useState<Record<string, number>>(() => Object.fromEntries(t.items.map((item) => [item.id, item.receivedQuantity ?? item.quantity])));
@@ -2428,23 +2511,29 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
         {t.deliveryScheduledAt && (
           <div className="note"><Check size={14} /><span>Theo lịch: giao <b>{t.deliveryQuantity?.toLocaleString("vi-VN")} {unit}</b> ngày <b>{fmtDay(t.deliveryScheduledAt)}</b>.</span></div>
         )}
+        {/*
+          Hóa chất về theo ĐỢT NHIỀU XE nên bước này là một BẢNG, không phải ba ô đơn.
+          Khối lượng lãnh của phiếu = tổng các chuyến; ngày lãnh lấy ngày muộn nhất.
+          Từng chuyến chạy thẳng sang sổ Tồn kho hóa chất, qua cơ chế chống trùng hai cửa.
+        */}
+        <ChemicalTruckRows rows={truckRows} onChange={setTruckRows} unit={unit} disabled={act.isPending} />
+        {truckError && (
+          <p className="note" style={{ background: C.badBg, color: C.bad }}>
+            <AlertTriangle size={13} /> {truckError}
+          </p>
+        )}
         <div className="chem-grid">
-          <div>
-            <label className="lb">Khối lượng lãnh *{unit ? ` (${unit})` : ""}</label>
-            <input type="number" min={1} value={receivedQty} onChange={(e) => setReceivedQty(e.target.value)} />
-          </div>
-          <div>
-            <label className="lb">Ngày lãnh *</label>
-            <input type="date" value={receivedDate} onChange={(e) => setReceivedDate(e.target.value)} />
-          </div>
           <div>
             <label className="lb">VHV lãnh *</label>
             <input value={receiverName} onChange={(e) => setReceiverName(e.target.value)} placeholder="Họ tên người lãnh" />
           </div>
         </div>
         <button className="btn primary big"
-          disabled={act.isPending || Number(receivedQty) <= 0 || !receivedDate || !receiverName.trim()}
-          onClick={() => run({ action: "receive", receivedQuantity: Number(receivedQty), receivedAt: receivedDate, receivedByName: receiverName.trim() }, "Đã xác nhận lãnh, phiếu hoàn tất")}>
+          disabled={act.isPending || Boolean(truckError) || !receiverName.trim()}
+          onClick={() => run(
+            { action: "receive", receivedByName: receiverName.trim(), trucks: trucksToPayload(truckRows) },
+            "Đã xác nhận lãnh, phiếu hoàn tất và chuyến xe đã vào sổ hóa chất"
+          )}>
           <Check size={15} /> Xác nhận lãnh và hoàn tất
         </button>
       </div>

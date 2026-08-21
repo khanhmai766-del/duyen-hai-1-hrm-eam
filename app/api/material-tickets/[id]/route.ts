@@ -10,6 +10,7 @@ import { materialTicketFileBase, materialTicketReference } from "@/lib/material-
 import { normalizeText } from "@/lib/nav";
 import { consumeStock, deliveryNoteSummary, receiveIntoLot, releaseUsage, reverseTicketStock, sharedCodesOf, syncMaterialQuantity, usedLotsOfTicket } from "@/lib/material-stock-lot";
 import { parseDateInput } from "@/lib/utils";
+import { linkTicketTrucks, unlinkTicketTrucks, type TruckInput } from "@/lib/chemical-inventory/ticket-link";
 import { CHEMICAL_TICKET_TYPE, COMMON_MATERIAL_POSITION, GAS_RETURN_STATUS, isChemicalFlowTicket, isGasCylinderCategory, isGasCylinderTicket, materialTicketRequiresRecovery, OTHER_MATERIAL_TICKET_TYPE, recoveryRequiredForReason, ticketReasonAllowed, TICKET_MATERIAL_CATEGORIES, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
 import { positionsMatch } from "@/lib/position-catalog";
 import { replacementPointDisplayLabel, replacementPointSelectionKey } from "@/lib/material-replacement-display";
@@ -461,6 +462,13 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
       }
       if (t.type === OTHER_MATERIAL_TICKET_TYPE) {
         await tx.materialStockMovement.deleteMany({ where: { ticketId: t.id } });
+      }
+      // Gỡ các chuyến xe hóa chất phiếu này đã ghi sang sổ tồn kho. Bỏ qua bước này
+      // thì sổ hóa chất còn lại những chuyến trỏ vào một phiếu không còn tồn tại —
+      // đúng loại "số ma" mà đoạn hoàn kho phía trên sinh ra để tránh.
+      // Chuyến vốn có từ nhật ký ngày chỉ bị THÁO liên kết, không bị xóa.
+      if (t.chemicalReceiptIds.length > 0) {
+        await unlinkTicketTrucks(tx, t.id, t.chemicalReceiptIds);
       }
       // Ghi tombstone trước khi cascade xóa các item. Hai workflow V2 dùng các
       // khóa này để xóa đúng dòng khỏi sheet vật tư hoặc sheet hóa chất.
@@ -1053,7 +1061,12 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       return ok(up);
     }
 
-    if (["HOAN_TAT", "TU_CHOI"].includes(t.status)) return fail("Phiếu đã khóa, không thể thao tác");
+    // Ghi chuyến xe hóa chất là ngoại lệ DUY NHẤT được thao tác trên phiếu đã hoàn tất:
+    // xe về rải rác vài ngày sau khi lãnh, và phiếu cũ (trước khi có bước này) đã ở
+    // trạng thái HOÀN TẤT sẵn — chặn ở đây thì không bao giờ bổ sung được chuyến xe.
+    if (["HOAN_TAT", "TU_CHOI"].includes(t.status) && action !== "chemicalTrucks") {
+      return fail("Phiếu đã khóa, không thể thao tác");
+    }
 
     /* ---------- helper kiểm tra items (dùng cho propose) ---------- */
     async function validateItems() {
@@ -1522,6 +1535,82 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     // ở trạng thái CHO_PHIEU_YCSC. Ứng vẫn dùng bước gộp như hiện tại.
     // Ứng: bước gộp "XÁC NHẬN ĐXVT" (chỉ Thống kê): nguồn lãnh + mã ERP + khối lượng
     // + số phiếu giao hàng + số phiếu ĐXVT → chuyển Quyết toán; chưa xuất biên bản tại đây.
+    /**
+     * Ghi các chuyến xe hóa chất cho một phiếu ĐÃ HOÀN TẤT.
+     *
+     * Dành cho phiếu NH3 (khai một bước — tạo xong là HOÀN TẤT) và cho việc bổ sung
+     * / sửa lại danh sách xe của phiếu hóa chất sau khi đã lãnh. Xe về rải rác vài
+     * ngày sau khi đề xuất nên không thể bắt phiếu chờ mới cho ghi.
+     *
+     * Lượng đề xuất trên phiếu chỉ là số tham khảo — CỐ Ý không so với lượng nhập.
+     */
+    if (action === "chemicalTrucks") {
+      if (!isChemicalSequenceTicket(t.type)) {
+        return fail("Chỉ phiếu hóa chất mới ghi được chuyến xe nhập");
+      }
+      const assigned = samePosition(user.position, t.assignedPosition);
+      if (!assigned && user.role !== "ADMIN") {
+        return fail("Chỉ VHV được giao phiếu mới ghi được chuyến xe nhập", 403);
+      }
+      const trucks = Array.isArray(body.trucks) ? (body.trucks as TruckInput[]) : [];
+
+      // Gửi mảng rỗng = gỡ hết chuyến xe của phiếu.
+      if (trucks.length === 0) {
+        const removed = await prisma.$transaction((tx) => unlinkTicketTrucks(tx, t.id, t.chemicalReceiptIds));
+        await audit(user.id, "MT_CHEMICAL_TRUCKS", "MaterialTicket", t.id,
+          `${materialTicketReference(t)}: gỡ toàn bộ chuyến xe khỏi sổ hóa chất (${removed} dòng bị xóa)`);
+        return ok(await getTicket(t.id));
+      }
+
+      const linkResult = await prisma.$transaction(async (tx) =>
+        linkTicketTrucks(
+          tx,
+          { id: t.id, assignedPosition: t.assignedPosition, chemicalReceiptIds: t.chemicalReceiptIds, items: t.items },
+          trucks,
+          { userId: user.id, chemicalItemId: String(body.chemicalItemId || "") || null }
+        )
+      );
+
+      // Ngày nhập của phiếu = ngày muộn nhất trong các chuyến xe.
+      const latestTruckDate = trucks
+        .map((truck) => parseDateInput(truck.receivedAt))
+        .filter((d): d is Date => Boolean(d) && !Number.isNaN(d.getTime()))
+        .sort((a, b) => b.getTime() - a.getTime())[0];
+
+      // Phiếu NH3: đề xuất chỉ hoàn tất KHI ĐÃ ghi khối lượng nhập, biển số và ngày nhập.
+      // Trước đây phiếu hoàn tất ngay lúc lập, nên không có chỗ nào ghi lại hàng thực về.
+      const completesNow = t.type === "GHI_NHAN" && t.status !== "HOAN_TAT";
+
+      // Cột receivedQuantity là Int và chỉ để hiển thị nhanh trên phiếu; con số chính
+      // xác tới 4 số lẻ nằm ở ChemicalReceipt.
+      await prisma.materialTicket.update({
+        where: { id: t.id },
+        data: {
+          receivedQuantity: Math.round(linkResult.totalAccepted),
+          receivedAt: latestTruckDate ?? t.receivedAt,
+          ...(completesNow
+            ? {
+                status: "HOAN_TAT",
+                receivedById: user.id,
+                receivedByName: user.name ?? null,
+                receivedByPosition: user.position ?? null,
+                completedAt: new Date(),
+                completedById: user.id,
+                completedByName: user.name ?? null,
+                completedByPosition: user.position ?? null,
+              }
+            : {}),
+        },
+      });
+
+      await audit(user.id, "MT_CHEMICAL_TRUCKS", "MaterialTicket", t.id,
+        `${materialTicketReference(t)}: ghi ${linkResult.receiptIds.length} chuyến xe, tổng ${linkResult.totalAccepted} ` +
+        `(${linkResult.created} mới, ${linkResult.linked} gắn vào bản ghi có sẵn)` +
+        (completesNow ? "; hoàn tất phiếu" : ""));
+
+      return ok({ ...(await getTicket(t.id)), chemicalLink: linkResult });
+    }
+
     if (action === "receive") {
       // LUỒNG HÓA CHẤT — bước 3 (cuối): VHV điền khối lượng lãnh, ngày lãnh, người lãnh.
       // Xong là HOÀN TẤT, không qua sử dụng — nghiệm thu — quyết toán.
@@ -1531,12 +1620,62 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         if (!assigned && user.role !== "ADMIN") {
           return fail("Chỉ VHV được giao phiếu mới xác nhận khối lượng lãnh", 403);
         }
+        const receivedByName = String(body.receivedByName || "").trim();
+        if (!receivedByName) return fail("Vui lòng nhập tên VHV lãnh");
+
+        // Hóa chất về theo ĐỢT NHIỀU XE (đề xuất định kỳ 2–3 ngày một lần), nên bước
+        // này nhận một BẢNG chuyến xe chứ không phải ba ô đơn. Mỗi chuyến có ngày,
+        // biển số và hai số cân riêng; khối lượng lãnh của phiếu là TỔNG các chuyến.
+        //
+        // KHÔNG so lượng đề xuất với lượng nhập: lượng đề xuất chỉ là số tham khảo.
+        const trucks = Array.isArray(body.trucks) ? (body.trucks as TruckInput[]) : null;
+
+        if (trucks && trucks.length > 0) {
+          const linkResult = await prisma.$transaction(async (tx) =>
+            linkTicketTrucks(
+              tx,
+              { id: t.id, assignedPosition: t.assignedPosition, chemicalReceiptIds: t.chemicalReceiptIds, items: t.items },
+              trucks,
+              { userId: user.id, chemicalItemId: String(body.chemicalItemId || "") || null }
+            )
+          );
+
+          const receivedAtFromTrucks = trucks
+            .map((truck) => parseDateInput(truck.receivedAt))
+            .filter((d): d is Date => Boolean(d) && !Number.isNaN(d.getTime()))
+            .sort((a, b) => b.getTime() - a.getTime())[0];
+
+          const updated = await prisma.materialTicket.update({
+            where: { id: t.id },
+            data: {
+              // Cột cũ là Int; khối lượng chính xác tới 4 số lẻ nằm ở ChemicalReceipt.
+              receivedQuantity: Math.round(linkResult.totalAccepted),
+              receivedAt: receivedAtFromTrucks ?? new Date(),
+              receivedById: user.id,
+              receivedByName,
+              receivedByPosition: user.position ?? null,
+              status: "HOAN_TAT",
+              completedAt: new Date(),
+              completedById: user.id,
+              completedByName: receivedByName,
+              completedByPosition: user.position ?? null,
+            },
+            include: ITEM_INCLUDE,
+          });
+
+          await audit(user.id, "MT_RECEIVE", "MaterialTicket", t.id,
+            `${materialTicketReference(t)}: Xác nhận lãnh hóa chất ${linkResult.receiptIds.length} chuyến xe, ` +
+            `tổng ${linkResult.totalAccepted} — ${receivedByName}; ` +
+            `${linkResult.created} chuyến ghi mới, ${linkResult.linked} chuyến gắn vào bản ghi có sẵn; hoàn tất phiếu`);
+
+          return ok({ ...updated, chemicalLink: linkResult });
+        }
+
+        // Không gửi bảng xe: giữ nguyên đường cũ để phiếu đang dở không bị kẹt.
         const receivedQuantity = Math.trunc(Number(body.receivedQuantity));
         if (!Number.isFinite(receivedQuantity) || receivedQuantity <= 0) return fail("Khối lượng lãnh phải lớn hơn 0");
         const receivedAt = body.receivedAt ? parseDateInput(body.receivedAt) : null;
         if (!receivedAt || Number.isNaN(receivedAt.getTime())) return fail("Vui lòng chọn ngày lãnh");
-        const receivedByName = String(body.receivedByName || "").trim();
-        if (!receivedByName) return fail("Vui lòng nhập tên VHV lãnh");
         const updated = await prisma.materialTicket.update({
           where: { id: t.id },
           data: {

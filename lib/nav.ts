@@ -153,6 +153,14 @@ export const NAV_SECTIONS: NavSection[] = [
         keywords: "ton kho theo nhom vat tu loai dau loc dau hoa chat chai khi bi nghien than gom nhom erp de xuat nhap nguong canh bao",
       },
       {
+        label: "Tồn kho hóa chất",
+        href: "/chemical-inventory",
+        icon: FlaskConical,
+        permissionIds: ["chemical-inventory-manage"],
+        keywords:
+          "ton kho hoa chat nh3 amoniac naoh xut hcl axit naclo javen pac nh4oh bon dau hfo diesel do chua chay nhat ky ngay suat hao dau cuc hop dong nhap hoa chat",
+      },
+      {
         label: "Lịch thay thế vật tư",
         href: "/replacements",
         icon: Repeat,

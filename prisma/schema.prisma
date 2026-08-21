@@ -1396,19 +1396,25 @@ model MaterialTicket {
   assignedPosition String // cương vị được giao — CHỈ cương vị này thao tác đề xuất/nhập liệu và thấy phiếu (trừ nhóm quản lý)
   materialCategory String? // Loại vật tư: "Dầu bôi trơn" | "Lọc dầu" | "Hóa chất" | "Bi nghiền"
 
-  bbktNumber                 String? // số Biên Bản Kiểm Tra (Đề xuất: nhập ở bước nghiệm thu, nếu có; Ứng: bổ sung sau PDF)
-  proposalNote               String? // ghi chú khi tạo phiếu đề xuất (thay cho BBKT ở B0)
-  pctNumber                  String? // số PCT/LCT (nhập ở bước nghiệm thu/xuất file)
-  proposalNumber             String? // số phiếu đề xuất vật tư (Thống kê nhập)
-  proposalDocUrl             String? // file Word Phiếu ĐXVT (QLVT.12) trên MinIO — xuất trước khi nhập số phiếu
-  proposalIssuedAt           DateTime? // Thống kê xác nhận giao phiếu ĐXVT (giữ tên cột cũ để tương thích dữ liệu)
-  proposalReceiverName       String? // tên VHV nhận phiếu ĐXVT khi Thống kê giao phiếu
-  deliveryNoteNumber         String? // số phiếu giao hàng
-  repairRequestNumber        String? // số yêu cầu sửa chữa
-  completionNote             String? // thông tin xác nhận thay thế xong
-  chiHuyName                 String? // tên chỉ huy trực tiếp (SCCN) — in vào BBNT
-  docUrl                     String? // file Word BBNT trên MinIO
-  bbktDocUrl                 String? // file Word BBKT, tách riêng khỏi BBNT DO
+  bbktNumber           String? // số Biên Bản Kiểm Tra (Đề xuất: nhập ở bước nghiệm thu, nếu có; Ứng: bổ sung sau PDF)
+  proposalNote         String? // ghi chú khi tạo phiếu đề xuất (thay cho BBKT ở B0)
+  pctNumber            String? // số PCT/LCT (nhập ở bước nghiệm thu/xuất file)
+  proposalNumber       String? // số phiếu đề xuất vật tư (Thống kê nhập)
+  proposalDocUrl       String? // file Word Phiếu ĐXVT (QLVT.12) trên MinIO — xuất trước khi nhập số phiếu
+  proposalIssuedAt     DateTime? // Thống kê xác nhận giao phiếu ĐXVT (giữ tên cột cũ để tương thích dữ liệu)
+  proposalReceiverName String? // tên VHV nhận phiếu ĐXVT khi Thống kê giao phiếu
+  deliveryNoteNumber   String? // số phiếu giao hàng
+  repairRequestNumber  String? // số yêu cầu sửa chữa
+  completionNote       String? // thông tin xác nhận thay thế xong
+  chiHuyName           String? // tên chỉ huy trực tiếp (SCCN) — in vào BBNT
+  docUrl               String? // file Word BBNT trên MinIO
+  bbktDocUrl           String? // file Word BBKT, tách riêng khỏi BBNT DO
+  // Các chuyến xe hóa chất đã ghi cho phiếu này (ChemicalReceipt.id).
+  // Luồng hóa chất không đi qua kho DH1 nên phiếu KHÔNG cộng tồn và KHÔNG trừ ERP
+  // (xem commit 83aa5b5); ba trường ngày nhập / biển số / khối lượng của từng chuyến
+  // xe chỉ tồn tại trong ChemicalReceipt — ở đây chỉ giữ con trỏ, không giữ bản sao.
+  chemicalReceiptIds   String[]  @default([])
+
   recoveryRequired           Boolean? // có vật tư thu hồi hay không
   recoveryQuantity           Int?
   recoveryReturnedAt         DateTime?
@@ -2176,4 +2182,230 @@ model PcccHoseReelComponent {
   @@unique([reelId, groupLabel, status])
   @@index([reelId])
   @@map("pccc_hose_reel_components")
+}
+
+// ============================================================================
+// TỒN KHO HÓA CHẤT — sổ theo dõi hóa chất & nhiên liệu của Phân xưởng Vận hành 1
+//
+// KHÔNG dùng chung Material/MaterialStockLot: các model đó lưu Int và phục vụ
+// FIFO theo phiếu vật tư kho DH1, còn hóa chất là số thập phân do nhà thầu giao
+// thẳng theo hợp đồng (xem commit 83aa5b5 — luồng hóa chất không cộng tồn kho,
+// không trừ ERP).
+//
+// Đây là nhóm model ĐẦU TIÊN của repo dùng Decimal. Mọi giá trị Decimal PHẢI đi
+// qua toNumber() trong lib/chemical-inventory/serialize.ts trước khi trả ra API —
+// trả thẳng object Decimal sang Client Component thì Next 14 ném
+// "Only plain objects can be passed to Client Components".
+// Đặc tả đầy đủ: docs/ton-kho-hoa-chat-spec.md
+// ============================================================================
+
+/// Danh mục mặt hàng theo dõi: 6 hóa chất + 5 bồn HFO + 5 dòng dầu Diesel/DO.
+/// Ứng đúng dòng 6..21 của các tab báo cáo tháng trong workbook nguồn.
+model ChemicalInventoryItem {
+  id            String  @id @default(cuid())
+  code          String  @unique // NH3_99, NACLO_10, HFO_1, DIESEL_KHAN_1…
+  name          String // đúng nhãn cột B của sheet, dùng để khớp khi import
+  concentration String?
+  itemType      String // CHEMICAL | HFO | DIESEL | OTHER
+  baseUnit      String // KG | TON | LITER — đơn vị LƯU TRỮ, mọi phép cộng dùng đơn vị này
+  displayUnit   String? // đơn vị HIỂN THỊ nếu khác baseUnit (NH3 lưu KG, nhật ký hiện TON)
+
+  // MONTHLY: đọc tồn 1 lần/tháng trên lưới. DAILY: có nhật ký ngày (hiện chỉ NH3).
+  // Mặt hàng DAILY thì dòng MONTH_END do server sinh, người dùng KHÔNG nhập tay.
+  trackingMode String @default("MONTHLY")
+
+  sheetRow     Int? // 6..21 — dòng cố định trong tab báo cáo tháng
+  receiptSheet String? // tên tab phiếu nhập tương ứng; null với nhiên liệu (không có phiếu)
+  materialCode String? // mã vật tư ERP, lấy từ tab Hợp đồng — dùng chung cho mọi năm
+
+  /// Cương vị NHẬN hàng mặc định của mặt hàng này — điền sẵn khi tạo phiếu nhập.
+  /// Suy từ dữ liệu thật: NH3 luôn về NH3-LHP, NaClO/PAC về XLN hỗn hợp, HCl/NaOH/NH4OH
+  /// về Máy phó. Khác với cương vị GIỮ TỒN trên lưới tháng — HCl giữ ở ba nơi nhưng
+  /// luôn do Máy phó nhận rồi mới phân về.
+  defaultPosition String?
+
+  tankCapacity      Decimal? @db.Decimal(18, 4) // sức chứa bồn, vẽ thanh mức
+  lowStockThreshold Decimal? @db.Decimal(18, 4) // ngưỡng cảnh báo tồn thấp
+
+  sortOrder Int      @default(0)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  readings  ChemicalStockReading[]
+  receipts  ChemicalReceipt[]
+  contracts ChemicalContract[]
+
+  @@index([itemType, sortOrder])
+}
+
+/// Kỳ nhập liệu theo tháng. Sổ giấy gộp nhiều năm vào một bảng dài; ở đây mỗi
+/// tháng là một kỳ riêng, phải mở kỳ trước khi nhập.
+model ChemicalInventoryPeriod {
+  id        String @id @default(cuid())
+  periodKey String @unique // "YYYY-MM"
+
+  // DRAFT | LOCKED. CHƯA áp ràng buộc "n-1 phải khóa trước" — người dùng muốn chạy
+  // thực tế xem sao. Giữ cột sẵn để bật quy tắc sau mà không phải migrate.
+  status String @default("DRAFT")
+
+  // Kỳ mồi (2025-12): chỉ mang tồn cuối để làm tồn đầu cho tháng 01/2026.
+  // Không hiển thị trên giao diện, không tính tiêu hao.
+  isSeed Boolean @default(false)
+
+  generationMwh Decimal? @db.Decimal(18, 3) // sản lượng điện S1+S2, tính suất hao đầu cực kg/MWh
+
+  lockedAt   DateTime?
+  lockedById String?
+  note       String?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  readings ChemicalStockReading[]
+
+  @@index([status])
+}
+
+/// Một lần đọc tồn tại một cương vị. Khái niệm DUY NHẤT phục vụ cả lưới tháng
+/// lẫn nhật ký ngày — không tách thành hai bảng để khỏi phải đồng bộ.
+///
+///   kind = "MONTH_END" → ô trên lưới tồn kho tháng
+///   kind = "DAILY"     → một dòng nhật ký ngày (hiện chỉ NH3)
+///
+/// Với mặt hàng DAILY, dòng MONTH_END được SINH RA từ dòng DAILY của ngày cuối
+/// cùng theo lịch của tháng (source = "DERIVED"). Ngày cuối tháng chưa có bản đọc
+/// thì MONTH_END để null — TUYỆT ĐỐI không lấy bản đọc giữa tháng làm tồn cuối.
+model ChemicalStockReading {
+  id           String   @id @default(cuid())
+  periodId     String
+  periodKey    String // denormalize để truy vấn lưới tháng bằng một câu, tránh join thừa
+  itemId       String
+  positionCode String // PositionCode của lib/position-catalog.ts; "UNASSIGNED" nếu sheet không ghi
+  readDate     DateTime @db.Date // ngày đọc (hiểu là mốc 24h00 của ngày đó)
+  kind         String // DAILY | MONTH_END
+
+  // null = CHƯA ĐỌC, khác hẳn 0 = đã đọc và bằng 0. Sheet phân biệt hai thứ này;
+  // gộp lại là hỏng số liệu tiêu hao.
+  quantity Decimal? @db.Decimal(18, 4)
+
+  // Nguyên văn khi ô nguồn là chữ chứ không phải số — ví dụ "Mức bồn dầu DO lò hơi
+  // phụ" tháng 07/2026 ghi mức mm đo tại DCS/Local chứ không phải thể tích.
+  rawText String?
+
+  note        String?
+  source      String   @default("MANUAL") // MANUAL | SHEET_IMPORT | DERIVED
+  updatedById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  period ChemicalInventoryPeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
+  item   ChemicalInventoryItem   @relation(fields: [itemId], references: [id])
+
+  @@unique([itemId, positionCode, readDate, kind])
+  @@index([periodKey, kind, itemId])
+  @@index([itemId, readDate])
+  @@index([periodId])
+}
+
+/// Một chuyến xe hóa chất về nhà máy.
+///
+/// CÓ HAI CỬA GHI: bước xác nhận lãnh của phiếu vật tư, và nhật ký ngày. Cùng một
+/// chuyến xe. Khóa (itemId, receivedAt, vehicleNumber) là thứ chặn cộng đôi —
+/// đã kiểm dữ liệu thật: trong cùng một ngày các biển số luôn khác nhau.
+/// Cửa vào sau phải GẮN vào dòng đã có, không tạo dòng mới.
+model ChemicalReceipt {
+  id         String   @id @default(cuid())
+  itemId     String
+  receivedAt DateTime @db.Date
+
+  // Suy từ receivedAt theo giờ Việt Nam. SERVER tự tính — client gửi lên thì bỏ qua.
+  periodKey String
+
+  // Biển số xe nhập hàng, đã chuẩn hóa: bỏ gạch/chấm/khoảng trắng, viết hoa, tối đa
+  // 8 ký tự ("51C-214.77" → "51C21477"). Là khóa chống trùng cùng với (itemId, receivedAt).
+  vehicleNumber String?
+
+  // Nguyên văn ô "Xe" trong sổ Excel. Cũng là biển số nhưng thường GHI TẮT (chỉ vài
+  // chữ số cuối, như 478, 269, 504). Giữ lại để đối chiếu với bản gốc.
+  //
+  // Lưu ý khi nối hai nguồn: sổ ghi tắt còn nhật ký ghi đủ, nên KHÔNG dò trùng theo
+  // biển số — đối chiếu tháng 07/2026 cho thấy hai bên ghi khác hẳn nhau cho cùng
+  // một chuyến. Khóa nối hai nguồn là (ngày + khối lượng), cặp đó khớp 17/17.
+  vehicleRef String?
+
+  plantWeight      Decimal? @db.Decimal(18, 4)
+  contractorWeight Decimal? @db.Decimal(18, 4)
+
+  // Luôn quy về baseUnit của mặt hàng. Bằng MIN(hai số cân) khi có đủ hai số.
+  // Đây là con số DUY NHẤT dùng để tính tồn/tiêu hao/hợp đồng — không bao giờ so
+  // với khối lượng đề xuất trên phiếu (lượng đề xuất chỉ là số tham khảo).
+  acceptedWeight Decimal @db.Decimal(18, 4)
+
+  receivingPosition    String? // PositionCode đã chuẩn hóa
+  receivingPositionRaw String? // nguyên văn khi không chuẩn hóa được, vd nhiều cương vị trong một ô
+
+  note   String?
+  source String  @default("MANUAL") // MANUAL | SHEET_IMPORT | MATERIAL_TICKET | DAILY_LOG
+
+  sourceSheet String?
+  sourceRow   Int?
+  sourceKey   String? @unique // "<fileHash>|<sheet>|<row>" — giữ import idempotent
+
+  materialTicketId String? // phiếu vật tư đã gắn; có giá trị thì xóa phải hủy phiếu gốc
+
+  warnings    String[] @default([])
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  item ChemicalInventoryItem @relation(fields: [itemId], references: [id])
+
+  @@unique([itemId, receivedAt, vehicleNumber])
+  @@index([periodKey, itemId])
+  @@index([itemId, receivedAt])
+  @@index([materialTicketId])
+}
+
+/// Hợp đồng cung cấp hóa chất theo năm.
+/// KHÔNG lưu "đã nhận" — cột đó trong sheet gốc bị trộn lẫn lượng sử dụng từ tháng 9
+/// (xem docs/ton-kho-hoa-chat-spec.md mục 3.7). Backend luôn cộng lại từ ChemicalReceipt.
+model ChemicalContract {
+  id     String @id @default(cuid())
+  year   Int
+  itemId String
+
+  materialCode     String?
+  supplier         String?
+  origin           String?
+  contractQuantity Decimal @db.Decimal(18, 4)
+  forecastDemand   Decimal @default(0) @db.Decimal(18, 4)
+
+  note      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  item ChemicalInventoryItem @relation(fields: [itemId], references: [id])
+
+  @@unique([year, itemId])
+  @@index([year])
+}
+
+/// Kết quả một lần import workbook (dry-run hoặc commit).
+model ChemicalImportBatch {
+  id       String @id @default(cuid())
+  fileName String
+  fileHash String
+  status   String // PREVIEW | COMMITTED | FAILED
+
+  importedRows Int @default(0)
+  updatedRows  Int @default(0)
+  skippedRows  Int @default(0)
+  errorRows    Int @default(0)
+
+  detail Json // { bySheet, issues, reconcile, summary }
+
+  createdById String
+  createdAt   DateTime @default(now())
+
+  @@index([createdAt])
 }

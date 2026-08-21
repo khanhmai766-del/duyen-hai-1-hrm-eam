@@ -72,6 +72,12 @@ export function useRbacAccess() {
     void queryClient.invalidateQueries({ queryKey: ["replacement-history"] });
     void queryClient.invalidateQueries({ queryKey: ["devices"] });
     void queryClient.invalidateQueries({ queryKey: ["equipment-tree"] });
+    void queryClient.invalidateQueries({ queryKey: ["chemical-inventory"] });
+    void queryClient.invalidateQueries({ queryKey: ["chemical-daily"] });
+    void queryClient.invalidateQueries({ queryKey: ["chemical-receipts"] });
+    void queryClient.invalidateQueries({ queryKey: ["chemical-contracts"] });
+    void queryClient.invalidateQueries({ queryKey: ["chemical-inventory-annual"] });
+    void queryClient.invalidateQueries({ queryKey: ["chemical-import-history"] });
   }, [permissionSignature, queryClient, user?.id]);
 
   const permissionLevel = React.useCallback(

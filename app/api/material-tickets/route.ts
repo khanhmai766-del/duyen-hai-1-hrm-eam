@@ -328,13 +328,14 @@ export async function POST(req: NextRequest) {
     const expectedCategory = TICKET_TO_MATERIAL_CATEGORY[materialCategory] ?? materialCategory;
     if (selectedMaterial.category !== expectedCategory) return fail("Vật tư không thuộc loại vật tư đã chọn");
     if (selectedMaterial.machine !== unit) return fail("Vật tư không thuộc tổ máy đã chọn");
-    // Vật tư khai MỘT BƯỚC (NH3 lỏng): lập phiếu xong là hoàn tất luôn — xem
-    // SINGLE_STEP_TICKET_MATERIAL_CODES. Phiếu vẫn nằm đủ trên bảng theo dõi, chỉ là không
-    // còn bước nào để ai thao tác tiếp.
+    // NH3 lỏng (xem SINGLE_STEP_TICKET_MATERIAL_CODES): lập phiếu là ĐỀ XUẤT, chưa hoàn tất.
+    // Xe về rải rác 2–3 ngày sau, nên phiếu đứng ở bước VHV ghi chuyến xe — khối lượng
+    // nhập thực tế, biển số và ngày nhập — ghi xong mới tính hoàn tất.
+    // (Trước 2026-08-21 phiếu hoàn tất ngay lúc lập, không có chỗ ghi hàng thực về.)
     const singleStep = isSingleStepTicketMaterial(selectedMaterial.code);
     if (singleStep) {
       type = SINGLE_STEP_TICKET_TYPE;
-      nextStatus = "HOAN_TAT";
+      nextStatus = "NHAN_VAT_TU";
     } else if (isChemicalWorkflowCategory(materialCategory)) {
       // Luồng hóa chất: giữ nguyên bước đầu là Trưởng ca/TK Lò máy/Trưởng kíp điện xác nhận
       // bồn và thiết bị đủ điều kiện nhận hóa chất (nextStatus mặc định CHO_XAC_NHAN).

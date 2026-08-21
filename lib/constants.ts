@@ -428,7 +428,14 @@ export const GAS_RETURN_STATUS = "CHO_TRA_VO";
  */
 export const SINGLE_STEP_TICKET_MATERIAL_CODES = ["1.61.16.003.VIE.00.000"] as const;
 
-/** Giá trị `MaterialTicket.type` của phiếu khai một bước. */
+/**
+ * Giá trị `MaterialTicket.type` của phiếu NH3 lỏng.
+ *
+ * Tên "khai một bước" là di sản: từ 2026-08-21 phiếu KHÔNG còn hoàn tất ngay lúc lập.
+ * Lập phiếu là ĐỀ XUẤT; xe về rải rác 2–3 ngày sau nên phiếu đứng ở `NHAN_VAT_TU` chờ
+ * chính VHV được giao ghi chuyến xe (khối lượng nhập thực tế + biển số + ngày nhập),
+ * ghi xong mới chuyển `HOAN_TAT`. Xem action "chemicalTrucks".
+ */
 export const SINGLE_STEP_TICKET_TYPE = "GHI_NHAN";
 
 /**

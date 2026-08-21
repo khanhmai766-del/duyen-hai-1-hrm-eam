@@ -393,6 +393,13 @@ const DEFAULT_PERMISSIONS: PermissionRow[] = [
     matrix: { ADMIN: "full", MANAGER: "full", SUPERVISOR: "read", TECHNICIAN: "read", VIEWER: "read" },
   },
   {
+    id: "chemical-inventory-manage",
+    group: "Vật tư",
+    feature: "Tồn kho hóa chất",
+    note: "Quyền Đọc chỉ tra cứu. Quyền Cá nhân được nhập tồn, nhật ký NH3 và phiếu nhập đúng cương vị đang đảm nhiệm. Quyền Quản lý được thao tác mọi cương vị, nhập sản lượng, quản lý kỳ, hợp đồng và xem trước dữ liệu Excel. Toàn quyền được ghi dữ liệu Excel và mở khóa kỳ.",
+    matrix: { ADMIN: "full", MANAGER: "manage", SUPERVISOR: "personal", TECHNICIAN: "personal", VIEWER: "read" },
+  },
+  {
     id: "replacement-manage",
     group: "Vật tư",
     feature: "Lịch thay thế vật tư",

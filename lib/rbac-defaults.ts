@@ -34,6 +34,9 @@ export const DEFAULT_RBAC_MATRIX: Record<string, Partial<Record<string, RbacLeve
   "defect-manual-sync": { ADMIN: "full", MANAGER: "read", SUPERVISOR: "read", TECHNICIAN: "none", VIEWER: "none" },
   "defect-two-way-sync": { ADMIN: "full", MANAGER: "none", SUPERVISOR: "none", TECHNICIAN: "none", VIEWER: "none" },
   "material-manage": { ADMIN: "full", MANAGER: "full", SUPERVISOR: "read", TECHNICIAN: "read", VIEWER: "read" },
+  // Sổ hóa chất tách khỏi Danh mục vật tư. Cá nhân chỉ nhập cho cương vị đang trực;
+  // Quản lý được chốt kỳ/toàn cương vị; Toàn quyền mới ghi import và mở khóa sổ.
+  "chemical-inventory-manage": { ADMIN: "full", MANAGER: "manage", SUPERVISOR: "personal", TECHNICIAN: "personal", VIEWER: "read" },
   "erp-material-manage": { ADMIN: "full", MANAGER: "manage", SUPERVISOR: "read", TECHNICIAN: "read", VIEWER: "read" },
   "replacement-manage": { ADMIN: "full", MANAGER: "manage", SUPERVISOR: "manage", TECHNICIAN: "read", VIEWER: "read" },
   // Phạm vi XEM theo cương vị cho vật tư / lịch thay thế. Cùng lý do với `defect-view`:

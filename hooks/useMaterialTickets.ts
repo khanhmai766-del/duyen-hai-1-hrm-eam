@@ -2,7 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiMutate } from "@/lib/fetcher";
-import { CHEMICAL_TICKET_TYPE, GAS_RETURN_STATUS, OTHER_MATERIAL_TICKET_TYPE } from "@/lib/constants";
+import { CHEMICAL_TICKET_TYPE, GAS_RETURN_STATUS, OTHER_MATERIAL_TICKET_TYPE, SINGLE_STEP_TICKET_TYPE } from "@/lib/constants";
 
 export interface TicketItem {
   id: string;
@@ -49,6 +49,8 @@ export interface MaterialTicket {
   deliveryScheduledAt: string | null;
   deliveryQuantity: number | null;
   recoveryReturnedAt: string | null;
+  /** Con trỏ sang các chuyến xe trong sổ Tồn kho hóa chất (ChemicalReceipt.id). */
+  chemicalReceiptIds: string[];
   recoveryDocUrl: string | null;
   workStartedAt: string | null;
   workEndedAt: string | null;
@@ -140,7 +142,7 @@ export type WorkflowRoleMap = {
   receive: string[]; issue: string[]; use: string[]; accept: string[]; return: string[]; settle: string[]; manage: string[];
 };
 
-const samePosition = (a?: string | null, b?: string | null) => {
+export const samePosition = (a?: string | null, b?: string | null) => {
   const left = (a ?? "").trim().toLocaleLowerCase("vi");
   const right = (b ?? "").trim().toLocaleLowerCase("vi");
   return !!left && left === right;
@@ -296,6 +298,11 @@ export function actionsFor(t: MaterialTicket, v: TicketViewer | null): string[] 
     // được phân bước lại thấy "đến lượt" ở phiếu hóa chất của mọi cương vị khác.
     if (t.status === "NHAN_VAT_TU" && canOperateAssigned) a.push("receive");
     if (t.status === "VAT_TU_KHONG_CO" && (v.isShiftLeader || v.isAdmin || v.id === t.createdById)) a.push("reject");
+  } else if (t.type === SINGLE_STEP_TICKET_TYPE) {
+    // NH3 lỏng: lập phiếu là đề xuất, CHÍNH VHV được giao ghi chuyến xe (khối lượng
+    // nhập thực tế + biển số + ngày nhập) rồi phiếu mới hoàn tất. Không rào theo bước
+    // "Nhận vật tư" vì bước đó có phạm vi toàn phân xưởng, sẽ kéo cương vị khác vào.
+    if (t.status === "NHAN_VAT_TU" && canOperateAssigned) a.push("chemicalTrucks");
   } else if (["DE_XUAT", "UNG", "SU_DUNG_HIEN_CO"].includes(t.type)) {
     if (t.status === "CHO_DE_XUAT" && isAssigned && v.hasScope) a.push("propose");
     if (t.status === "CHO_XAC_NHAN" && (v.steps?.confirm ?? v.isShiftLeader)) a.push("confirm");
