@@ -13,31 +13,36 @@ const SESSION_COOKIES = [
 ];
 
 const PUBLIC_PATHS = ["/login", "/api/auth", "/api/webauthn", "/api/public", "/api/integrations/n8n", "/videos", "/public"];
+const AUTHENTICATED_PUBLIC_PATHS = ["/public/equipment", "/public/devices"];
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
-  if (PUBLIC_PATHS.some((p) => pathname.startsWith(p))) {
+  const requiresAuthentication = AUTHENTICATED_PUBLIC_PATHS.some((p) => pathname.startsWith(p));
+  if (!requiresAuthentication && PUBLIC_PATHS.some((p) => pathname.startsWith(p))) {
     return NextResponse.next();
   }
 
   const hasSession = SESSION_COOKIES.some((c) => req.cookies.has(c));
   if (!hasSession) {
     const url = req.nextUrl.clone();
+    const callbackUrl = `${pathname}${req.nextUrl.search}`;
     url.pathname = "/login";
-    url.searchParams.set("callbackUrl", pathname);
+    url.search = "";
+    url.searchParams.set("callbackUrl", callbackUrl);
     return NextResponse.redirect(url);
   }
 
   const token = await getToken({ req, secret: process.env.AUTH_SECRET });
   if (token?.accessMode === "DEFECT_READ_ONLY") {
-    const isAllowedPage = pathname === "/defects" || pathname.startsWith("/defects/") || pathname === "/account";
+    const isAllowedPage = pathname === "/defects" || pathname.startsWith("/defects/") || pathname === "/devices/scan" || pathname === "/account" || requiresAuthentication;
     const isAllowedApi =
       pathname.startsWith("/api/auth") ||
       pathname.startsWith("/api/public") ||
       (pathname === "/api/me" || pathname.startsWith("/api/me/")) ||
       pathname === "/api/auth/logout-audit" ||
       pathname === "/api/rbac/me" ||
+      (req.method === "POST" && pathname === "/api/device-qr/resolve") ||
       (req.method === "GET" && (
         pathname === "/api/defects" ||
         pathname.startsWith("/api/defects/") ||

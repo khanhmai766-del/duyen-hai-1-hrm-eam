@@ -79,7 +79,6 @@ export function MobileBottomNav({ onOpenAllMenu }: { onOpenAllMenu: () => void }
   const [query, setQuery] = React.useState("");
   const user = session?.user;
   const readOnlyDefects = user?.accessMode === "DEFECT_READ_ONLY";
-  const canScanDevices = !readOnlyDefects && can("device-view", [...NAV_ACCESS_LEVELS]);
   const positionCarrier = React.useMemo(
     () => ({
       position: user?.position,
@@ -141,7 +140,7 @@ export function MobileBottomNav({ onOpenAllMenu }: { onOpenAllMenu: () => void }
             active={defectOpen || routeMatches(pathname, "/defects")}
             onClick={() => setDefectOpen(true)}
           />
-          {canScanDevices ? <Link
+          <Link
             href="/devices/scan"
             aria-label="Quét mã QR thiết bị"
             className="group flex min-h-16 flex-col items-center justify-end gap-1 pb-1.5 text-center"
@@ -155,16 +154,7 @@ export function MobileBottomNav({ onOpenAllMenu }: { onOpenAllMenu: () => void }
               <ScanLine className="h-7 w-7" strokeWidth={2.4} />
             </span>
             <span className="-mt-2 text-[11px] font-bold leading-none text-orange-700 dark:text-orange-300">Quét QR</span>
-          </Link> : <span
-            aria-disabled="true"
-            title="Tài khoản chưa được cấp quyền xem thiết bị"
-            className="flex min-h-16 flex-col items-center justify-end gap-1 pb-1.5 text-center opacity-40 grayscale"
-          >
-            <span className="flex h-[58px] w-[58px] -translate-y-2 items-center justify-center rounded-full border-4 border-white bg-gradient-to-br from-orange-400 to-orange-600 text-white shadow-lg dark:border-slate-950">
-              <ScanLine className="h-7 w-7" strokeWidth={2.4} />
-            </span>
-            <span className="-mt-2 text-[11px] font-bold leading-none text-orange-700 dark:text-orange-300">Quét QR</span>
-          </span>}
+          </Link>
           <BottomLink
             href="/replacement-procedures"
             label="Vật tư"

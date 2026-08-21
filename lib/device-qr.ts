@@ -9,7 +9,7 @@ export type DeviceQrTarget = {
   legacy: boolean;
 };
 
-/** URL công khai để camera điện thoại mở được; trang đích chỉ trả thông tin cơ bản. */
+/** URL thẻ có kiểm tra hiệu lực; middleware yêu cầu đăng nhập trước khi mở hồ sơ. */
 export function deviceQrValue(seq: string, machine?: string | null, origin?: string | null) {
   const canonical = canonicalSeq(seq.trim());
   const normalizedMachine = normalizeQrMachine(machine) ?? defaultScopeOf(canonical);
@@ -40,7 +40,7 @@ export function parseDeviceQrValue(rawValue: unknown): DeviceQrTarget | null {
 
   try {
     const url = new URL(raw, "https://qr.invalid");
-    const match = url.pathname.match(/^\/public\/(?:equipment|devices)\/([^/]+)\/?$/);
+    const match = url.pathname.match(/^\/(?:public\/(?:equipment|devices)|devices)\/([^/]+)\/?$/);
     if (!match) return null;
     const displayedSeq = decodeSafely(match[1]);
     if (!displayedSeq) return null;
@@ -69,4 +69,15 @@ function decodeSafely(value: string) {
 
 export function deviceDetailUrl(seq: string, machine: EquipmentMachine) {
   return `/devices/${encodeURIComponent(canonicalSeq(seq))}?machine=${encodeURIComponent(machine)}`;
+}
+
+/** Đích sau khi quét: tài khoản tra cứu khiếm khuyết vẫn quét được nhưng không vượt phạm vi dữ liệu. */
+export function authenticatedDeviceQrUrl(seq: string, machine: EquipmentMachine, accessMode?: string | null) {
+  const canonical = canonicalSeq(seq);
+  if (accessMode === "DEFECT_READ_ONLY") {
+    const encodedSeq = encodeURIComponent(canonical);
+    const encodedMachine = encodeURIComponent(machine);
+    return `/defects?deviceSeq=${encodedSeq}&unit=${encodedMachine}&mappedUnit=${encodedMachine}&includeDescendants=2`;
+  }
+  return deviceDetailUrl(canonical, machine);
 }

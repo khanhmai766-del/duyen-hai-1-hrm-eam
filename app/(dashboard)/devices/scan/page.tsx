@@ -5,18 +5,13 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { AlertTriangle, Camera, CheckCircle2, Flashlight, ImagePlus, Loader2, QrCode, RotateCcw, ScanLine, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { RbacProtectedRoute } from "@/components/shared/rbac-protected-route";
 import { apiMutate } from "@/lib/fetcher";
 
 type ScannerControls = { stop: () => void; switchTorch?: (enabled: boolean) => Promise<void> };
 type ScanState = "idle" | "starting" | "scanning" | "resolving" | "error";
 
 export default function DeviceScannerPage() {
-  return (
-    <RbacProtectedRoute permissionId="device-view" featureLabel="Quét QR thiết bị">
-      <DeviceScanner />
-    </RbacProtectedRoute>
-  );
+  return <DeviceScanner />;
 }
 
 function DeviceScanner() {
@@ -154,7 +149,18 @@ function DeviceScanner() {
               </div>
               {state !== "scanning" && (
                 <div className="absolute inset-0 flex items-center justify-center">
-                  {state === "starting" || state === "resolving" ? <Loader2 className="h-10 w-10 animate-spin text-sky-300 motion-reduce:animate-none" /> : <QrCode className="h-14 w-14 text-white/55" />}
+                  {state === "starting" || state === "resolving" ? (
+                    <Loader2 className="h-10 w-10 animate-spin text-sky-300 motion-reduce:animate-none" />
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={startScanner}
+                      className="flex min-h-28 min-w-44 flex-col items-center justify-center gap-2 rounded-2xl border border-white/20 bg-slate-950/65 px-5 text-white backdrop-blur transition-colors hover:bg-slate-950/80 focus:outline-none focus:ring-2 focus:ring-sky-300"
+                    >
+                      <QrCode className="h-12 w-12 text-white/75" />
+                      <span className="text-sm font-bold">{state === "error" ? "Chạm để thử lại camera" : "Chạm để mở camera"}</span>
+                    </button>
+                  )}
                 </div>
               )}
               <div className="absolute inset-x-3 bottom-3 flex justify-center">

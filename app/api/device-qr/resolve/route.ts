@@ -1,7 +1,6 @@
 import type { NextRequest } from "next/server";
 import { fail, handle, ok, requireUser } from "@/lib/api";
-import { requireDeviceView } from "@/lib/device-permissions";
-import { parseDeviceQrValue, deviceDetailUrl } from "@/lib/device-qr";
+import { authenticatedDeviceQrUrl, parseDeviceQrValue } from "@/lib/device-qr";
 import { resolveActiveDeviceQrCard } from "@/lib/device-qr-access";
 import { assertSeqViewable } from "@/lib/server-access";
 import { prisma } from "@/lib/prisma";
@@ -11,7 +10,6 @@ export const dynamic = "force-dynamic";
 export async function POST(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    await requireDeviceView(user);
     const body = await req.json().catch(() => null) as { value?: unknown } | null;
     const target = parseDeviceQrValue(body?.value);
     if (!target) return fail("Mã QR không thuộc hệ thống thiết bị Vận Hành 1", 400);
@@ -25,7 +23,7 @@ export async function POST(req: NextRequest) {
     return ok({
       seq: target.seq,
       machine: card.machine,
-      url: deviceDetailUrl(target.seq, card.machine),
+      url: authenticatedDeviceQrUrl(target.seq, card.machine, user.accessMode),
       legacy: target.legacy,
     });
   });
