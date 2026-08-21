@@ -119,7 +119,20 @@ async function findEquipmentRecord(seq: string, requestedMachine?: string | null
     prisma.materialReplacement.findMany({
       // Phạm vi lý lịch có thể gồm thiết bị cha + các thiết bị con. Dùng cùng
       // profileSeqs với lịch sửa chữa để điểm vừa khai báo ở thiết bị con không bị bỏ sót.
-      where: { deviceSeq: { in: profileSeqs }, machine, isActive: false },
+      //
+      // Một điểm khai báo trỏ tới thiết bị theo HAI cách (xem quy tắc định danh ở
+      // POST /api/material-replacements): cột `deviceSeq`, HOẶC `deviceSeq = null`
+      // kèm mã thiết bị nằm trong cột `system`. Chỉ lọc theo `deviceSeq` sẽ bỏ sót
+      // toàn bộ nhóm thứ hai — đó là lý do vật tư khai ở Danh mục vật tư vẫn hiện
+      // đủ nhưng lý lịch thiết bị lại trống.
+      where: {
+        machine,
+        isActive: false,
+        OR: [
+          { deviceSeq: { in: profileSeqs } },
+          { deviceSeq: null, system: { in: profileSeqs } },
+        ],
+      },
       orderBy: { createdAt: "desc" },
       include: {
         material: { select: { id: true, code: true, name: true, unit: true, machine: true, category: true } },
@@ -218,11 +231,26 @@ async function findEquipmentRecord(seq: string, requestedMachine?: string | null
     repairLogs,
     materials,
     materialDeclarations: materialDeclarations.map((point) => {
-      const declarationDevice = equipmentNodeToDevice(point.device);
-      if (declarationDevice && point.device?.parentSeq) {
-        declarationDevice.system = index.bySeq.get(point.device.parentSeq)?.name ?? null;
+      // Điểm trỏ thiết bị qua cột `system` thì không có quan hệ `device` để Prisma
+      // nạp — dựng lại từ chỉ mục cây, nếu không thẻ khai báo sẽ khuyết tên thiết bị.
+      const systemNode = !point.deviceSeq && point.system ? index.bySeq.get(point.system) ?? null : null;
+      const sourceNode = point.device
+        ?? (systemNode
+          ? {
+              seq: systemNode.seq,
+              name: systemNode.name,
+              parentSeq: systemNode.parentSeq,
+              imageUrl: systemNode.imageUrl ?? null,
+              attachedInfo: systemNode.attachedInfo ?? null,
+              documentUrl: systemNode.documentUrl ?? null,
+            }
+          : null);
+
+      const declarationDevice = equipmentNodeToDevice(sourceNode);
+      if (declarationDevice && sourceNode?.parentSeq) {
+        declarationDevice.system = index.bySeq.get(sourceNode.parentSeq)?.name ?? null;
       }
-      return { ...point, deviceId: point.deviceSeq, device: declarationDevice };
+      return { ...point, deviceId: point.deviceSeq ?? sourceNode?.seq ?? null, device: declarationDevice };
     }),
     materialUsage: replacementUsage,
     hasQrCard: Boolean(qrCard),
