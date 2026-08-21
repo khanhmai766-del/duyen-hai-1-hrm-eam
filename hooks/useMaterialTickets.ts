@@ -357,3 +357,34 @@ export function useTicketLots(ticketId: string) {
     staleTime: 10_000,
   });
 }
+
+/** Chuyến xe hóa chất đã ghi từ một phiếu, kèm trạng thái khóa do máy chủ quyết. */
+export type TicketChemicalTrucks = {
+  trucks: Array<{
+    id: string;
+    receivedAt: string;
+    vehicleNumber: string | null;
+    plantWeight: number | null;
+    acceptedWeight: number;
+    note: string | null;
+    fromDailyLog: boolean;
+  }>;
+  /** Đã ghi vào sổ → số liệu chốt, muốn sửa phải có quyền riêng. */
+  locked: boolean;
+  canEdit: boolean;
+  canUnlock: boolean;
+};
+
+/**
+ * Quyền mở khóa do MÁY CHỦ trả về chứ không suy ở client: bảng phân quyền đọc theo
+ * cương vị, client không có đủ dữ kiện để tự kết luận.
+ */
+export function useTicketChemicalTrucks(ticketId: string, enabled: boolean) {
+  return useQuery({
+    queryKey: ["ticket-chemical-trucks", ticketId],
+    queryFn: async () =>
+      (await apiGet<TicketChemicalTrucks>(`/api/material-tickets/${ticketId}/chemical-trucks`)).data,
+    enabled,
+    staleTime: 10_000,
+  });
+}

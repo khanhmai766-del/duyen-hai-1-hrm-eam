@@ -11,6 +11,8 @@ import { normalizeText } from "@/lib/nav";
 import { consumeStock, deliveryNoteSummary, receiveIntoLot, releaseUsage, reverseTicketStock, sharedCodesOf, syncMaterialQuantity, usedLotsOfTicket } from "@/lib/material-stock-lot";
 import { parseDateInput } from "@/lib/utils";
 import { linkTicketTrucks, unlinkTicketTrucks, type TruckInput } from "@/lib/chemical-inventory/ticket-link";
+import { CHEMICAL_TRUCK_EDIT_PERMISSION_ID } from "@/lib/chemical-inventory/constants";
+import { hasPermissionLevel } from "@/lib/rbac-guard";
 import { CHEMICAL_TICKET_TYPE, COMMON_MATERIAL_POSITION, GAS_RETURN_STATUS, isChemicalFlowTicket, isGasCylinderCategory, isGasCylinderTicket, isOtherMaterialAdvanceTicket, isOtherMaterialTicketType, materialTicketRequiresRecovery, OTHER_MATERIAL_ADVANCE_TICKET_TYPE, OTHER_MATERIAL_TICKET_TYPE, recoveryRequiredForReason, ticketReasonAllowed, TICKET_MATERIAL_CATEGORIES, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
 import { positionsMatch } from "@/lib/position-catalog";
 import { replacementPointDisplayLabel, replacementPointSelectionKey } from "@/lib/material-replacement-display";
@@ -1749,6 +1751,22 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       if (!assigned && user.role !== "ADMIN") {
         return fail("Chỉ VHV được giao phiếu mới ghi được chuyến xe nhập", 403);
       }
+
+      /**
+       * Lưu xong là CHỐT: số liệu đã chạy sang sổ Tồn kho hóa chất, nên từ lúc đó
+       * mọi lần ghi lại đều là SỬA SỐ ĐÃ CHỐT, không còn là nhập lần đầu.
+       *
+       * Rào ở đây chứ không chỉ ở giao diện: bảng xe gọi thẳng API này, ẩn nút mà
+       * để ngỏ máy chủ thì chưa gọi là khóa.
+       */
+      const locked = t.chemicalReceiptIds.length > 0;
+      if (locked && !(await hasPermissionLevel(user, CHEMICAL_TRUCK_EDIT_PERMISSION_ID, ["manage", "full"]))) {
+        return fail(
+          "Chuyến xe của phiếu này đã chốt. Cần quyền “Sửa chuyến xe đã chốt” mới sửa hoặc gỡ được.",
+          403
+        );
+      }
+
       const trucks = Array.isArray(body.trucks) ? (body.trucks as TruckInput[]) : [];
 
       // Gửi mảng rỗng = gỡ hết chuyến xe của phiếu.

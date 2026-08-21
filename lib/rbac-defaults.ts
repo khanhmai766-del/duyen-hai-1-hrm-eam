@@ -37,6 +37,9 @@ export const DEFAULT_RBAC_MATRIX: Record<string, Partial<Record<string, RbacLeve
   // Sổ hóa chất tách khỏi Danh mục vật tư. Cá nhân chỉ nhập cho cương vị đang trực;
   // Quản lý được chốt kỳ/toàn cương vị; Toàn quyền mới ghi import và mở khóa sổ.
   "chemical-inventory-manage": { ADMIN: "full", MANAGER: "manage", SUPERVISOR: "personal", TECHNICIAN: "personal", VIEWER: "read" },
+  // Sửa lại chuyến xe của phiếu ĐÃ CHỐT. Mặc định KHÔNG giao cho ai ngoài quản trị —
+  // chờ phân xưởng chỉ định cương vị nào được đụng vào số đã chốt.
+  "chemical-truck-edit": { ADMIN: "full", MANAGER: "none", SUPERVISOR: "none", TECHNICIAN: "none", VIEWER: "none" },
   "erp-material-manage": { ADMIN: "full", MANAGER: "manage", SUPERVISOR: "read", TECHNICIAN: "read", VIEWER: "read" },
   "replacement-manage": { ADMIN: "full", MANAGER: "manage", SUPERVISOR: "manage", TECHNICIAN: "read", VIEWER: "read" },
   // Phạm vi XEM theo cương vị cho vật tư / lịch thay thế. Cùng lý do với `defect-view`:

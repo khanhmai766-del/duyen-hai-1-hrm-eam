@@ -11,6 +11,15 @@ import type { PositionCode } from "@/lib/position-catalog";
 /** Quyền riêng của sổ hóa chất; không dùng chung với Danh mục Vận Hành 1. */
 export const CHEMICAL_PERMISSION_ID = "chemical-inventory-manage";
 
+/**
+ * Quyền SỬA LẠI danh sách chuyến xe của một phiếu đã chốt.
+ *
+ * Tách hẳn khỏi `CHEMICAL_PERMISSION_ID`: người giữ sổ hóa chất và người được phép
+ * đụng vào số đã chốt trên phiếu vật tư không nhất thiết là một. Ghi LẦN ĐẦU vẫn là
+ * việc của chính VHV được giao phiếu — quyền này chỉ mở cánh cửa sửa về sau.
+ */
+export const CHEMICAL_TRUCK_EDIT_PERMISSION_ID = "chemical-truck-edit";
+
 /** Đơn vị lưu trữ. Mọi phép cộng chỉ được thực hiện trong cùng một đơn vị. */
 export const BASE_UNITS = ["KG", "TON", "LITER"] as const;
 export type BaseUnit = (typeof BASE_UNITS)[number];

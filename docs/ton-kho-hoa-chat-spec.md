@@ -626,6 +626,22 @@ Lập phiếu (đề xuất)  →  status NHAN_VAT_TU  →  VHV ghi chuyến xe 
 - `receivedQuantity` (Int) trên phiếu chỉ để hiển thị nhanh; số chính xác tới 4 số lẻ
   nằm ở `ChemicalReceipt`. `receivedAt` = ngày muộn nhất trong các chuyến.
 
+### 7.1f. Lưu chuyến xe = CHỐT, sửa lại phải có quyền riêng
+
+Ghi chuyến xe xong thì số liệu đã chạy sang sổ tồn kho và phiếu đã hoàn tất, nên mọi
+lần ghi lại sau đó là **sửa số đã chốt**, không còn là nhập lần đầu:
+
+- Phiếu có `chemicalReceiptIds` khác rỗng ⇒ **khóa**. Bảng xe thành bảng chỉ đọc.
+- Mở khóa cần quyền riêng `chemical-truck-edit` ở mức `manage`/`full`. Tách khỏi
+  `chemical-inventory-manage` vì người giữ sổ hóa chất và người được đụng vào số đã
+  chốt trên phiếu vật tư không nhất thiết là một. Mặc định **chưa giao cho ai** ngoài
+  quản trị — phân xưởng tự chỉ định.
+- Rào đặt ở **máy chủ**, không chỉ ẩn nút: bảng xe gọi thẳng API, ẩn nút mà để ngỏ
+  máy chủ thì chưa gọi là khóa. Thao tác gỡ sạch chuyến xe cũng là sửa, cũng bị chặn.
+- Payload của phiếu chỉ mang mảng id nên bảng xe **không tự biết** mình đã ghi gì —
+  phải đọc qua `GET /api/material-tickets/[id]/chemical-trucks`. Cửa này cố ý không đi
+  qua API sổ hóa chất vì cửa đó đòi quyền giữ sổ, mà VHV ghi xe thường không có.
+
 ### 7.1e. Cương vị nhận — mặc định theo hóa chất, luôn lưu dạng MÃ
 
 `ChemicalInventoryItem.defaultPosition` giữ cương vị NHẬN hàng mặc định, suy từ dữ

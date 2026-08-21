@@ -7,8 +7,10 @@ import {
   AlertTriangle, Ban, Download, CircleCheck, Circle, CircleDot, Loader2, Pencil, Trash2, UserCog, CalendarDays,
   Filter, ChevronDown,
 } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
+  ChemicalTruckLockedTable,
   ChemicalTruckPanel,
   ChemicalTruckRows,
   emptyTruck,
@@ -22,6 +24,7 @@ import {
   useMaterialTickets, useTicketOptions, useCreateTicket, useTicketAction, useDeleteTicket,
   useWorkflowRoles, useSaveWorkflowRoles, actionsFor,
   useTicketLots,
+  useTicketChemicalTrucks,
   samePosition,
   type MaterialTicket, type TicketViewer, type WorkflowRoleMap } from "@/hooks/useMaterialTickets";
 import { usePositions } from "@/hooks/useUsers";
@@ -2124,6 +2127,7 @@ function LotAllocationPicker({
  */
 function ChemicalTruckSection({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | null }) {
   const act = useTicketAction(t.id);
+  const qc = useQueryClient();
   const isChemicalTicket = t.type === CHEMICAL_TICKET_TYPE || t.type === SINGLE_STEP_TICKET_TYPE;
   const alreadyLinked = (t.chemicalReceiptIds?.length ?? 0) > 0;
 
@@ -2131,13 +2135,24 @@ function ChemicalTruckSection({ t, viewer }: { t: MaterialTicket; viewer: Ticket
   // thêm ở đây là hai chỗ nhập cho cùng một thứ. Phiếu NH3 thì ngược lại: đây chính là
   // bước duy nhất của nó, phải luôn hiện.
   const atReceiveStep = t.type === CHEMICAL_TICKET_TYPE && t.status === "NHAN_VAT_TU";
-  if (!isChemicalTicket || atReceiveStep) return null;
+  const applies = isChemicalTicket && !atReceiveStep;
+
+  // Trạng thái khóa và quyền mở khóa do máy chủ quyết; ẩn nút mà để ngỏ API thì
+  // chưa gọi là khóa, nên hai bên phải dùng chung một nguồn.
+  const saved = useTicketChemicalTrucks(t.id, applies);
+  const [unlocked, setUnlocked] = useState(false);
+
+  if (!applies) return null;
 
   // Phiếu NH3 chưa hoàn tất: ghi chuyến xe xong là hoàn tất phiếu.
   const completesTicket = t.type === SINGLE_STEP_TICKET_TYPE && t.status !== "HOAN_TAT";
 
-  const canEdit = !!viewer && (viewer.isAdmin || samePosition(viewer.position, t.assignedPosition));
+  const assigned = !!viewer && (viewer.isAdmin || samePosition(viewer.position, t.assignedPosition));
   const unit = t.items[0]?.material.unit ?? "";
+  const trucks = saved.data?.trucks ?? [];
+  const locked = (saved.data?.locked ?? alreadyLinked) && !unlocked;
+  const canUnlock = saved.data?.canUnlock ?? false;
+  const canEdit = assigned && (saved.data?.canEdit ?? !alreadyLinked);
 
   return (
     <div className="act" style={{ marginTop: 10 }}>
@@ -2149,28 +2164,64 @@ function ChemicalTruckSection({ t, viewer }: { t: MaterialTicket; viewer: Ticket
           </span>
         )}
       </label>
-      <ChemicalTruckPanel
-        initialRows={[emptyTruck(t.receivedAt ? String(t.receivedAt).slice(0, 10) : "")]}
-        unit={unit}
-        canEdit={canEdit}
-        pending={act.isPending}
-        submitLabel={completesTicket ? "Lưu chuyến xe và hoàn tất phiếu" : "Lưu chuyến xe vào sổ hóa chất"}
-        onSubmit={async (rows) => {
-          try {
-            await act.mutateAsync({ action: "chemicalTrucks", trucks: trucksToPayload(rows) });
-            toast.success(
-              completesTicket
-                ? `Đã ghi ${rows.length} chuyến xe và hoàn tất phiếu`
-                : `Đã ghi ${rows.length} chuyến xe vào sổ Tồn kho hóa chất`
-            );
-          } catch (e) {
-            toast.error(e instanceof Error ? e.message : "Ghi chuyến xe thất bại");
+
+      {saved.isLoading ? (
+        <p className="note">Đang tải chuyến xe đã ghi…</p>
+      ) : locked && trucks.length > 0 ? (
+        <ChemicalTruckLockedTable
+          trucks={trucks}
+          unit={unit}
+          canUnlock={assigned && canUnlock}
+          onUnlock={() => setUnlocked(true)}
+        />
+      ) : (
+        <ChemicalTruckPanel
+          // Mở khóa thì điền sẵn số đã ghi — bắt gõ lại từ đầu là mời người ta nhập sai.
+          initialRows={
+            trucks.length
+              ? trucks.map((row) => ({
+                  ...emptyTruck(row.receivedAt),
+                  vehicleNumber: row.vehicleNumber ?? "",
+                  plantWeight: String(row.acceptedWeight),
+                  note: row.note ?? "",
+                }))
+              : [emptyTruck(t.receivedAt ? String(t.receivedAt).slice(0, 10) : "")]
           }
-        }}
-      />
-      {!canEdit && (
+          unit={unit}
+          canEdit={canEdit}
+          pending={act.isPending}
+          submitLabel={
+            unlocked
+              ? "Lưu lại và khóa chuyến xe"
+              : completesTicket
+                ? "Lưu chuyến xe và hoàn tất phiếu"
+                : "Lưu chuyến xe vào sổ hóa chất"
+          }
+          onSubmit={async (rows) => {
+            try {
+              await act.mutateAsync({ action: "chemicalTrucks", trucks: trucksToPayload(rows) });
+              setUnlocked(false);
+              await qc.invalidateQueries({ queryKey: ["ticket-chemical-trucks", t.id] });
+              toast.success(
+                completesTicket
+                  ? `Đã ghi ${rows.length} chuyến xe, hoàn tất và khóa phiếu`
+                  : `Đã ghi ${rows.length} chuyến xe vào sổ Tồn kho hóa chất`
+              );
+            } catch (e) {
+              toast.error(e instanceof Error ? e.message : "Ghi chuyến xe thất bại");
+            }
+          }}
+        />
+      )}
+
+      {!assigned && (
         <p className="note">
           <AlertTriangle size={13} /> Chỉ VHV được giao phiếu ({t.assignedPosition}) mới ghi được chuyến xe.
+        </p>
+      )}
+      {assigned && locked && trucks.length > 0 && !canUnlock && (
+        <p className="note">
+          <AlertTriangle size={13} /> Chuyến xe đã chốt. Cần quyền “Sửa chuyến xe đã chốt” mới sửa hoặc gỡ được.
         </p>
       )}
     </div>

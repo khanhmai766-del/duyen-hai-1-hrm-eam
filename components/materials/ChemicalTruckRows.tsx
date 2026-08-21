@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { AlertTriangle, Check, Loader2, Plus, Trash2 } from "lucide-react";
+import { AlertTriangle, Check, Loader2, Lock, Plus, Trash2, Unlock } from "lucide-react";
 import { MAX_VEHICLE_NUMBER_LENGTH } from "@/lib/chemical-inventory/constants";
 
 /**
@@ -270,6 +270,103 @@ export function ChemicalTruckPanel({
           {pending ? <Loader2 className="spin" size={14} /> : <Check size={14} />} {submitLabel}
         </button>
       )}
+    </div>
+  );
+}
+
+/**
+ * Bảng CHỈ ĐỌC của các chuyến xe đã chốt.
+ *
+ * Ghi xong là số liệu đã chạy sang sổ Tồn kho hóa chất và phiếu đã hoàn tất, nên mặc
+ * định không cho gõ đè. Ai được phân quyền "Sửa chuyến xe đã chốt" thì có nút mở khóa,
+ * mở ra đúng bảng nhập cũ với số liệu đã ghi điền sẵn.
+ */
+export function ChemicalTruckLockedTable({
+  trucks,
+  unit,
+  canUnlock,
+  onUnlock,
+}: {
+  trucks: Array<{
+    id: string;
+    receivedAt: string;
+    vehicleNumber: string | null;
+    acceptedWeight: number;
+    note: string | null;
+    fromDailyLog: boolean;
+  }>;
+  unit?: string;
+  canUnlock: boolean;
+  onUnlock: () => void;
+}) {
+  const total = trucks.reduce((sum, row) => sum + row.acceptedWeight, 0);
+
+  return (
+    <div style={{ display: "grid", gap: 8 }}>
+      <div
+        style={{
+          display: "flex",
+          gap: 8,
+          alignItems: "flex-start",
+          background: "#f0fdf4",
+          border: "1px solid #bbf7d0",
+          borderRadius: 8,
+          padding: "8px 10px",
+          fontSize: 12.5,
+          color: "#14532d",
+        }}
+      >
+        <Lock size={14} style={{ marginTop: 2, flexShrink: 0 }} />
+        <span>
+          Đã chốt <b>{trucks.length} chuyến</b> vào sổ <b>Tồn kho hóa chất</b> và hoàn tất đề xuất.
+          Số liệu khóa lại để tồn kho không lệch;{" "}
+          {canUnlock ? "mở khóa nếu cần sửa." : "cần quyền “Sửa chuyến xe đã chốt” mới sửa được."}
+        </span>
+      </div>
+
+      <div style={{ overflowX: "auto" }}>
+        <table style={{ width: "100%", minWidth: 520, borderCollapse: "separate", borderSpacing: "4px 3px" }}>
+          <thead>
+            <tr>
+              <th style={{ ...HEAD, width: 26 }}>#</th>
+              <th style={{ ...HEAD, minWidth: 116 }}>Ngày nhập</th>
+              <th style={{ ...HEAD, minWidth: 108 }}>Biển số xe</th>
+              <th style={{ ...HEAD, minWidth: 124, textAlign: "right" }}>Khối lượng hàng</th>
+              <th style={{ ...HEAD }}>Ghi chú</th>
+            </tr>
+          </thead>
+          <tbody>
+            {trucks.map((row, index) => (
+              <tr key={row.id}>
+                <td style={{ fontSize: 12, color: "#94a3b8" }}>{index + 1}</td>
+                <td style={{ fontSize: 13 }}>{row.receivedAt.split("-").reverse().join("/")}</td>
+                <td style={{ fontSize: 13 }}>{row.vehicleNumber || "—"}</td>
+                <td style={{ fontSize: 13, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
+                  {row.acceptedWeight.toLocaleString("vi-VN", { maximumFractionDigits: 3 })}
+                </td>
+                <td style={{ fontSize: 12.5, color: "#64748b" }}>
+                  {row.fromDailyLog ? "Gắn vào bản ghi có sẵn của nhật ký ngày" : row.note || "—"}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
+        <span style={{ fontSize: 12.5, color: "#475569" }}>
+          Tổng {trucks.length} chuyến ·{" "}
+          <b style={{ fontVariantNumeric: "tabular-nums" }}>
+            {total.toLocaleString("vi-VN", { maximumFractionDigits: 3 })}
+            {unit ? ` ${unit}` : ""}
+          </b>
+        </span>
+        {canUnlock && (
+          <button type="button" className="btn" onClick={onUnlock}>
+            <Unlock size={14} /> Mở khóa để sửa
+          </button>
+        )}
+      </div>
     </div>
   );
 }
