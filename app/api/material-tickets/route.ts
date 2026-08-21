@@ -12,7 +12,7 @@ import {
   returnStepAllowed,
   stepAllowedWithMap,
 } from "@/lib/material-workflow";
-import { CHEMICAL_TICKET_TYPE, COMMON_MATERIAL_POSITION, isGasCylinderTicket, isOtherMaterialCategory, OTHER_MATERIAL_GROUP, OTHER_MATERIAL_TICKET_TYPE, recoveryRequiredForReason, isChemicalWorkflowCategory, isSingleStepTicketMaterial, ticketReasonAllowed, SINGLE_STEP_TICKET_TYPE, TICKET_MATERIAL_CATEGORIES, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
+import { CHEMICAL_TICKET_TYPE, COMMON_MATERIAL_POSITION, isGasCylinderTicket, isOtherMaterialCategory, OTHER_MATERIAL_ADVANCE_TICKET_TYPE, OTHER_MATERIAL_GROUP, OTHER_MATERIAL_TICKET_TYPE, recoveryRequiredForReason, isChemicalWorkflowCategory, isSingleStepTicketMaterial, ticketReasonAllowed, SINGLE_STEP_TICKET_TYPE, TICKET_MATERIAL_CATEGORIES, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
 import { positionCodeOf, positionsMatch } from "@/lib/position-catalog";
 import {
   isMaterialTicketMonthKey,
@@ -209,6 +209,9 @@ export async function POST(req: NextRequest) {
     // Nhóm Vật tư khác dùng một phiếu nhiều dòng. "Chung" dành cho vật tư không gắn
     // cương vị/thiết bị; nếu đã gắn thì vẫn giữ đúng kết cấu cũ: cương vị → tổ máy → thiết bị.
     if (materialCategory === OTHER_MATERIAL_GROUP) {
+      const workflowType = String(body.workflowType || "DE_XUAT").trim();
+      if (workflowType !== "DE_XUAT" && workflowType !== "UNG") return fail("Luồng Vật tư khác không hợp lệ");
+      const ticketType = workflowType === "UNG" ? OTHER_MATERIAL_ADVANCE_TICKET_TYPE : OTHER_MATERIAL_TICKET_TYPE;
       const rawItems = Array.isArray(body.items) ? body.items : [];
       if (!rawItems.length) return fail("Vui lòng chọn ít nhất một vật tư");
       if (rawItems.length > 50) return fail("Mỗi phiếu được chọn tối đa 50 vật tư");
@@ -269,16 +272,16 @@ export async function POST(req: NextRequest) {
       const sequenceMonth = materialTicketMonthKey();
       const ticket = await prisma.$transaction(async (tx) => {
         await tx.$executeRaw`LOCK TABLE "MaterialTicket" IN EXCLUSIVE MODE`;
-        const sequenceScope = sequenceScopeOfType(OTHER_MATERIAL_TICKET_TYPE);
+        const sequenceScope = sequenceScopeOfType(ticketType);
         const latest = await tx.materialTicket.aggregate({ where: { sequenceMonth, sequenceScope }, _max: { sequenceNumber: true } });
         return tx.materialTicket.create({
           data: {
             sequenceMonth,
             sequenceScope,
             sequenceNumber: (latest._max.sequenceNumber ?? 0) + 1,
-            type: OTHER_MATERIAL_TICKET_TYPE,
+            type: ticketType,
             unit,
-            status: "CHO_THONG_KE",
+            status: workflowType === "UNG" ? "NHAN_VAT_TU" : "CHO_THONG_KE",
             proposalNote,
             recoveryRequired: false,
             assignedPosition,
@@ -290,8 +293,8 @@ export async function POST(req: NextRequest) {
           include: ITEM_INCLUDE,
         });
       });
-      await audit(user.id, "CREATE_OTHER_MATERIAL_TICKET", "MaterialTicket", ticket.id,
-        `${materialTicketReference(ticket)}: ${requestedItems.length} vật tư, ${assignedPosition}, ${unit}`);
+      await audit(user.id, workflowType === "UNG" ? "CREATE_OTHER_MATERIAL_ADVANCE_TICKET" : "CREATE_OTHER_MATERIAL_TICKET", "MaterialTicket", ticket.id,
+        `${materialTicketReference(ticket)}: luồng ${workflowType === "UNG" ? "Ứng" : "Đề xuất"}, ${requestedItems.length} vật tư, ${assignedPosition}, ${unit}`);
       return ok(ticket);
     }
     // Hóa chất luôn đi thẳng luồng Đề xuất — nghiệp vụ này không có Ứng lẫn Sử dụng hiện có

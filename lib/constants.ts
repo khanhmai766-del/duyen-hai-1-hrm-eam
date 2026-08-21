@@ -313,6 +313,16 @@ export const OTHER_MATERIAL_CATEGORIES = ["Chai Khí", "Văn phòng phẩm", "D�
 export const COMMON_MATERIAL_POSITION = "Chung" as const;
 /** Loại phiếu riêng cho nhóm Vật tư khác; phiếu cũ vẫn giữ DE_XUAT/UNG. */
 export const OTHER_MATERIAL_TICKET_TYPE = "VAT_TU_KHAC" as const;
+/** Vật tư khác lãnh trước, hoàn thiện số ĐXVT sau. Tách type để không đổi luồng phiếu cũ. */
+export const OTHER_MATERIAL_ADVANCE_TICKET_TYPE = "VAT_TU_KHAC_UNG" as const;
+
+export function isOtherMaterialTicketType(type: string | null | undefined): boolean {
+  return type === OTHER_MATERIAL_TICKET_TYPE || type === OTHER_MATERIAL_ADVANCE_TICKET_TYPE;
+}
+
+export function isOtherMaterialAdvanceTicket(type: string | null | undefined): boolean {
+  return type === OTHER_MATERIAL_ADVANCE_TICKET_TYPE;
+}
 
 /** Bộ lọc trên Danh mục vật tư: các loại con được trình bày dưới một nhóm cha. */
 export const MATERIAL_CATEGORY_FILTERS = [

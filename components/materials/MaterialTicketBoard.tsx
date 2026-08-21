@@ -25,7 +25,7 @@ import {
   samePosition,
   type MaterialTicket, type TicketViewer, type WorkflowRoleMap } from "@/hooks/useMaterialTickets";
 import { usePositions } from "@/hooks/useUsers";
-import { COMMON_MATERIAL_POSITION, displayMaterialCategory, GAS_RETURN_STATUS, isChemicalFlowTicket, isGasCylinderTicket, isOtherMaterialCategory, isSingleStepTicketMaterial, CHEMICAL_TICKET_TYPE, isSupplementReason, MATERIAL_CATEGORIES, materialTicketBelongsToRecoveryTab, materialTicketRequiresRecovery, OTHER_MATERIAL_GROUP, OTHER_MATERIAL_TICKET_TYPE, ticketReasonsFor, TICKET_REASONS, TICKET_REASON_OTHER, SINGLE_STEP_TICKET_TYPE, TICKET_MATERIAL_CATEGORIES, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
+import { COMMON_MATERIAL_POSITION, displayMaterialCategory, GAS_RETURN_STATUS, isChemicalFlowTicket, isGasCylinderTicket, isOtherMaterialAdvanceTicket, isOtherMaterialCategory, isOtherMaterialTicketType, isSingleStepTicketMaterial, CHEMICAL_TICKET_TYPE, isSupplementReason, MATERIAL_CATEGORIES, materialTicketBelongsToRecoveryTab, materialTicketRequiresRecovery, OTHER_MATERIAL_ADVANCE_TICKET_TYPE, OTHER_MATERIAL_GROUP, OTHER_MATERIAL_TICKET_TYPE, ticketReasonsFor, TICKET_REASONS, TICKET_REASON_OTHER, SINGLE_STEP_TICKET_TYPE, TICKET_MATERIAL_CATEGORIES, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
 import { normalizeText } from "@/lib/nav";
 import { positionsMatch } from "@/lib/position-catalog";
 import {
@@ -102,6 +102,11 @@ const FLOW: Record<string, { key: string; label: string; who: string }[]> = {
     { key: "CHO_PHIEU__XUAT_KHO", label: "Xác nhận mã ERP và số ĐXVT", who: "Thống kê" },
     { key: "NHAN_VAT_TU", label: "Lãnh và nhập vào Hiện có", who: "Theo phân quyền quy trình" },
   ],
+  [OTHER_MATERIAL_ADVANCE_TICKET_TYPE]: [
+    { key: "B0", label: "Lập phiếu ứng", who: "Người lập phiếu" },
+    { key: "NHAN_VAT_TU", label: "Lãnh ứng và nhập vào Hiện có", who: "Theo phân quyền quy trình" },
+    { key: "CHO_THONG_KE", label: "Hoàn thiện số ĐXVT và chứng từ", who: "Thống kê" },
+  ],
   SU_DUNG_HIEN_CO: [
     { key: "B0", label: "VHV tạo đề xuất", who: "VHV" },
     { key: "XAC_NHAN_HIEN_CO", label: "Trưởng ca/Trưởng kíp xác nhận", who: "Trưởng ca/Trưởng kíp" },
@@ -117,6 +122,7 @@ const ORDER: Record<string, string[]> = {
   [SINGLE_STEP_TICKET_TYPE]: ["B0", "HOAN_TAT"],
   [CHEMICAL_TICKET_TYPE]: ["B0", "CHO_THONG_KE", "CHO_PHIEU__XUAT_KHO", "NHAN_VAT_TU", "HOAN_TAT"],
   [OTHER_MATERIAL_TICKET_TYPE]: ["B0", "CHO_PHIEU__XUAT_KHO", "NHAN_VAT_TU", "HOAN_TAT"],
+  [OTHER_MATERIAL_ADVANCE_TICKET_TYPE]: ["B0", "NHAN_VAT_TU", "CHO_THONG_KE", "HOAN_TAT"],
   DE_XUAT: ["B0", "CHO_THONG_KE", "CHO_PHIEU__XUAT_KHO", "NHAN_VAT_TU", "SU_DUNG_VAT_TU", "CHO_NGHIEM_THU", "CHO_QUYET_TOAN", "HOAN_TAT"],
   UNG: ["B0", "VHV_LANH_VAT_TU", "SU_DUNG_VAT_TU", "CHO_NGHIEM_THU", "NHAN_VAT_TU", "CHO_PHIEU__XUAT_KHO", "CHO_QUYET_TOAN", "HOAN_TAT"],
   SU_DUNG_HIEN_CO: ["B0", "XAC_NHAN_HIEN_CO", "NHAN_TU_HIEN_CO", "SU_DUNG_VAT_TU", "CHO_NGHIEM_THU", "CHO_THONG_KE_XUAT_BIEN_BAN", "CHO_QUYET_TOAN", "HOAN_TAT"],
@@ -153,6 +159,7 @@ const orderOf = (t: { type: string; materialCategory: string | null }) =>
 const flowStatusKey = (status: string, type: string) =>
   (type === "DE_XUAT" || type === CHEMICAL_TICKET_TYPE) && status === "CHO_XAC_NHAN" ? "CHO_THONG_KE"
   : type === "DE_XUAT" && status === "CHO_THONG_KE_XUAT_BIEN_BAN" ? "CHO_NGHIEM_THU"
+  : type === OTHER_MATERIAL_ADVANCE_TICKET_TYPE && status === "CHO_THONG_KE" ? "CHO_THONG_KE"
   : status === "CHO_THONG_KE" ? "CHO_PHIEU__XUAT_KHO"
   : status === "CHO_XAC_NHAN_PHAT" ? "CHO_PHIEU__XUAT_KHO"
   : status === "CHO_PHIEU_YCSC" ? "NHAN_VAT_TU"
@@ -267,7 +274,10 @@ export default function MaterialTicketBoard({
       const ticketCategory = t.materialCategory ? TICKET_TO_MATERIAL_CATEGORY[t.materialCategory] ?? t.materialCategory : "";
       const matchesMaterialCategory = materialCategoryFilter === "ALL" || ticketCategory === materialCategoryFilter;
       const matchesUnit = unitFilter === "ALL" || t.unit === unitFilter;
-      const matchesType = typeFilter === "ALL" || t.type === typeFilter;
+      const matchesType = typeFilter === "ALL"
+        || (typeFilter === "DE_XUAT" ? t.type === "DE_XUAT" || t.type === OTHER_MATERIAL_TICKET_TYPE
+          : typeFilter === "UNG" ? t.type === "UNG" || t.type === OTHER_MATERIAL_ADVANCE_TICKET_TYPE
+          : t.type === typeFilter);
       const searchable = normalizeText([
         t.proposalNumber,
         ...t.items.flatMap((it) => [it.erpName, it.material.name, it.material.code]),
@@ -421,14 +431,18 @@ export default function MaterialTicketBoard({
         </div>
         {isLoading && <div className="empty"><Loader2 className="spin" size={18} /> Đang tải…</div>}
 	        {!isLoading && shown.map((t) => {
-		          const baseMeta = t.type === SINGLE_STEP_TICKET_TYPE && t.status === "NHAN_VAT_TU"
+	          const baseMeta = t.type === SINGLE_STEP_TICKET_TYPE && t.status === "NHAN_VAT_TU"
 		            ? { label: "Chờ VHV ghi chuyến xe", c: "#7c3aed" }
 		            : t.type === CHEMICAL_TICKET_TYPE && t.status === "CHO_XAC_NHAN"
 		            ? { label: "Chờ xác nhận bồn/thiết bị", c: "#7c3aed" }
 		            : t.type === CHEMICAL_TICKET_TYPE && t.status === "CHO_THONG_KE"
 		            ? { label: "Chờ xác nhận đề xuất", c: "#7c3aed" }
-		            : t.type === CHEMICAL_TICKET_TYPE && t.status === "NHAN_VAT_TU"
-		            ? { label: "Chờ VHV xác nhận lãnh", c: "#7c3aed" }
+	            : t.type === CHEMICAL_TICKET_TYPE && t.status === "NHAN_VAT_TU"
+	            ? { label: "Chờ VHV xác nhận lãnh", c: "#7c3aed" }
+	            : t.type === OTHER_MATERIAL_ADVANCE_TICKET_TYPE && t.status === "NHAN_VAT_TU"
+	            ? { label: "Chờ lãnh vật tư ứng", c: C.ung }
+	            : t.type === OTHER_MATERIAL_ADVANCE_TICKET_TYPE && t.status === "CHO_THONG_KE"
+	            ? { label: "Chờ hoàn thiện ĐXVT", c: "#0891b2" }
 		            : t.type === "UNG" && t.status === "CHO_XAC_NHAN_PHAT"
 		            ? { label: "Chưa xác nhận trả phiếu", c: C.warn }
 		            : t.type === "UNG" && t.status === "NHAN_VAT_TU"
@@ -466,7 +480,7 @@ export default function MaterialTicketBoard({
                   ? <span className="tag ghinhan"><FlaskConical size={11} /> Ghi nhận</span>
                   : t.type === CHEMICAL_TICKET_TYPE
                   ? <span className="tag hoachat"><FlaskConical size={11} /> Hóa chất</span>
-                  : t.type === "UNG"
+                  : t.type === "UNG" || t.type === OTHER_MATERIAL_ADVANCE_TICKET_TYPE
                   ? <span className="tag ung"><Zap size={11} /> Ứng</span>
                   : t.type === "CHUA_CHON"
                     ? <span className="tag"><Clock size={11} /> Chờ chọn luồng</span>
@@ -513,7 +527,7 @@ export default function MaterialTicketBoard({
                     })()}
               </span>
               <span className="ops">
-                {canEdit && t.type !== OTHER_MATERIAL_TICKET_TYPE && (
+                {canEdit && !isOtherMaterialTicketType(t.type) && (
                   <span role="button" tabIndex={0} title="Sửa phiếu" className="op"
                     onClick={(e) => { e.stopPropagation(); setEditTicket(t); }}><Pencil size={14} /></span>
                 )}
@@ -859,7 +873,7 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
   async function submit() {
     try {
       const res = await create.mutateAsync({
-        unit, note: note.trim() || undefined,
+        unit, note: note.trim() || undefined, workflowType: type ?? "DE_XUAT",
         assignedPosition: assigned, materialCategory: category,
         materialId: selectedMaterialId || undefined,
         proposedQuantity,
@@ -913,6 +927,25 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
               ))}
             </div>
 
+            {category === OTHER_MATERIAL_GROUP && (
+              <div className="other-flow-picker">
+                <label>Luồng thực hiện *</label>
+                <div className="seg3 flow-toggle" aria-label="Chọn luồng Vật tư khác">
+                  <button type="button" className={type === "DE_XUAT" ? "on" : ""} onClick={() => setType("DE_XUAT")}>
+                    <ClipboardList size={14} /> Đề xuất
+                  </button>
+                  <button type="button" className={type === "UNG" ? "on" : ""} onClick={() => setType("UNG")}>
+                    <Zap size={14} /> Ứng
+                  </button>
+                </div>
+                <p className={`note ${type === "UNG" ? "ung" : ""}`}>
+                  {type === "UNG"
+                    ? <><Zap size={13} /> Lãnh và cộng vào Hiện có trước; Thống kê hoàn thiện số ĐXVT sau.</>
+                    : <><ClipboardList size={13} /> Thống kê xác nhận ĐXVT trước, sau đó mới lãnh và cộng vào Hiện có.</>}
+                </p>
+              </div>
+            )}
+
             {type && (
               <>
                 <label>Tên vật tư</label>
@@ -965,7 +998,7 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
 
             {category === OTHER_MATERIAL_GROUP && otherItems.length > 0 && (
               <div className="frm-items">
-                <label>Vật tư đã chọn và số lượng đề xuất</label>
+                <label>Vật tư đã chọn và số lượng {type === "UNG" ? "ứng" : "đề xuất"}</label>
                 {otherItems.map((item) => {
                   const material = materialCards.find((row) => row.id === item.materialId);
                   const deviceOptions = (material?.devices ?? []).filter((device) => positionsMatch(device.managingPosition, assigned));
@@ -989,7 +1022,7 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
 
             {category === OTHER_MATERIAL_GROUP ? (
               <div className="reason-grid">
-                <div className="field"><label>Ghi chú / lý do lãnh *</label><input value={reasonDetail} onChange={(event) => { setReasonChoice(TICKET_REASON_OTHER); setReasonDetail(event.target.value); }} placeholder="Nhập mục đích lãnh vật tư" /></div>
+                <div className="field"><label>Ghi chú / lý do {type === "UNG" ? "ứng" : "lãnh"} *</label><input value={reasonDetail} onChange={(event) => { setReasonChoice(TICKET_REASON_OTHER); setReasonDetail(event.target.value); }} placeholder={type === "UNG" ? "Nhập lý do cần ứng vật tư" : "Nhập mục đích lãnh vật tư"} /></div>
               </div>
             ) : type === "DE_XUAT" ? (
               <>
@@ -1051,7 +1084,7 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
                     : !selectedMaterialId || proposedQuantity <= 0 || replacementDeviceSeqs.length === 0)
                 }
                 onClick={submit}>
-                {create.isPending ? <Loader2 className="spin" size={14} /> : <Plus size={14} />} Tạo đề xuất
+                {create.isPending ? <Loader2 className="spin" size={14} /> : type === "UNG" && category === OTHER_MATERIAL_GROUP ? <Zap size={14} /> : <Plus size={14} />} {type === "UNG" && category === OTHER_MATERIAL_GROUP ? "Tạo phiếu ứng" : "Tạo đề xuất"}
               </button>
             </div>
           </div>
@@ -1612,6 +1645,9 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
     || t.vhvReceivedQuantity != null
     || t.usedQuantity != null,
   );
+  const otherReceivedSummary = isOtherMaterialTicketType(t.type)
+    ? t.items.map((item) => `${item.receivedQuantity ?? item.quantity} ${item.material.unit}`).join(", ")
+    : "";
   const activityLogs = [
     t.createdAt && { at: t.createdAt, who: t.createdByName, what: "Tạo phiếu" },
     t.proposedAt && { at: t.proposedAt, who: t.proposedByName, pos: t.proposedByPosition, what: t.type === "UNG" ? "Nhập liệu thay thế" : "Đề xuất vật tư" },
@@ -1620,15 +1656,17 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
     t.statsAt && { at: t.statsAt, who: t.statsByName, pos: t.statsByPosition, what: `Xác nhận ĐXVT: ${t.proposalNumber ?? ""}${t.proposalReceiverName ? ` · VHV nhận: ${t.proposalReceiverName}` : ""}` },
     t.proposalIssuedAt && !t.statsAt && { at: t.proposalIssuedAt, who: t.statsByName, pos: t.statsByPosition, what: `Xác nhận ĐXVT${t.proposalReceiverName ? ` · VHV nhận: ${t.proposalReceiverName}` : ""}` },
     t.receivedAt && { at: t.receivedAt, who: t.receivedByName, pos: t.receivedByPosition, what: [
-      `Xác nhận vật tư lãnh: ${t.receivedQuantity ?? ""}`,
+      `Xác nhận vật tư lãnh: ${otherReceivedSummary || t.receivedQuantity || ""}`,
       receiptSourceLabel(t.receiptSource, t.type),
       // Luồng Sử dụng hiện có không có phiếu giao hàng — in "—" chỉ tố thêm nghi ngờ thiếu dữ liệu.
       (t.deliveryNoteNumber ?? t.receivedMethod) ? `Phiếu giao hàng ${t.deliveryNoteNumber ?? t.receivedMethod}` : "",
     ].filter(Boolean).join(" · ") },
     t.usedAt && { at: t.usedAt, who: t.usedByName, pos: t.usedByPosition, what: `Sử dụng vật tư${t.materialUserName ? ` — VHV: ${t.materialUserName}` : ""}: dùng ${t.usedQuantity ?? ""}, còn lại ${t.remainingQuantity ?? ""}` },
-    t.completedAt && { at: t.completedAt, who: t.completedByName, pos: t.completedByPosition, what: isGasCylinderTicket(t.materialCategory)
-      ? `Xác nhận trả: ${t.recoveryQuantity ?? ""} ${t.items[0]?.material.unit ?? ""}`.trim()
-      : `Nghiệm thu, xuất BBNT ký tay${materialTicketRequiresRecovery(t) ? " và BBTHVT" : ""}` },
+    t.completedAt && { at: t.completedAt, who: t.completedByName, pos: t.completedByPosition, what: isOtherMaterialTicketType(t.type)
+      ? isOtherMaterialAdvanceTicket(t.type) ? "Hoàn thiện ĐXVT, kết thúc phiếu ứng" : "Lãnh vật tư và hoàn tất phiếu"
+      : isGasCylinderTicket(t.materialCategory)
+        ? `Xác nhận trả: ${t.recoveryQuantity ?? ""} ${t.items[0]?.material.unit ?? ""}`.trim()
+        : `Nghiệm thu, xuất BBNT ký tay${materialTicketRequiresRecovery(t) ? " và BBTHVT" : ""}` },
     t.settledAt && { at: t.settledAt, who: t.settledByName, what: `Quyết toán vật tư · Số BBNT DO ${t.bbntDoNumber ?? "—"}` },
     ...(t.activityLogs ?? []).filter((log) => log.action === "MT_EDIT_STEP").map((log) => ({
       at: log.createdAt, who: log.user.name, pos: log.user.position, what: log.detail ?? "Chỉnh sửa nội dung bước",
@@ -2103,7 +2141,7 @@ function ChemicalTruckSection({ t, viewer }: { t: MaterialTicket; viewer: Ticket
 function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | null }) {
   const acts = actionsFor(t, viewer);
   const act = useTicketAction(t.id);
-  const needItems = acts.includes("confirm") || acts.includes("receive") || acts.includes("propose") || acts.includes("stats") || acts.includes("accept") || acts.includes("statsExportDocuments") || acts.includes("otherApprove");
+  const needItems = acts.includes("confirm") || acts.includes("receive") || acts.includes("propose") || acts.includes("stats") || acts.includes("accept") || acts.includes("statsExportDocuments") || acts.includes("otherApprove") || acts.includes("otherAdvanceReceive") || acts.includes("otherAdvanceApprove");
   const { data: opts } = useTicketOptions(needItems);
   const [items, setItems] = useState([{ materialId: "", erpCode: "", deviceSeq: "", quantity: 1 }]);
   const [note, setNote] = useState("");
@@ -2414,6 +2452,89 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
       </button>
     </div>
   );
+
+  if (t.type === OTHER_MATERIAL_ADVANCE_TICKET_TYPE && acts.includes("otherAdvanceReceive")) {
+    const rows = t.items.map((item) => {
+      const material = opts?.materials.find((row) => row.id === item.materialId);
+      const options = material?.erpCodes ?? [];
+      const effectiveCode = otherErpCodes[item.id] || item.erpCode || (options.length === 1 ? options[0].code : "");
+      return { item, options, effectiveCode, selected: options.find((option) => option.code === effectiveCode) };
+    });
+    const valid = otherReceivedDate
+      && rows.every(({ item }) => (otherReceived[item.id] ?? 0) > 0)
+      && (receiptSource === "EXISTING" || rows.every(({ selected, item }) => selected && selected.erpStock >= (otherReceived[item.id] ?? 0)));
+    return <div className="act">
+      <label className="lb">Lãnh ứng Vật tư khác</label>
+      <div className="note ung"><Zap size={14} /><span>Số lượng thực lãnh được cộng vào <b>Hiện có ngay</b>. Thống kê sẽ bổ sung số ĐXVT sau và không cộng tồn lần nữa.</span></div>
+      <div className="seg3 flow-toggle" aria-label="Nguồn lãnh vật tư ứng">
+        <button type="button" className={receiptSource === "ERP" ? "on" : ""} onClick={() => setReceiptSource("ERP")}>Lãnh kho DH1</button>
+        <button type="button" className={receiptSource === "EXISTING" ? "on" : ""} onClick={() => setReceiptSource("EXISTING")}>Nguồn ngoài</button>
+      </div>
+      <div className="frm-items">
+        {rows.map(({ item, options, effectiveCode, selected }) => <div className="other-approve-row" key={item.id}>
+          <span><b>{item.material.name}</b><small>Đề nghị ứng {item.quantity} {item.material.unit}</small></span>
+          <select value={effectiveCode} disabled={options.length === 1} onChange={(event) => setOtherErpCodes((current) => ({ ...current, [item.id]: event.target.value }))}>
+            <option value="">{receiptSource === "ERP" ? "— Chọn mã ERP —" : "— Chưa xác định mã —"}</option>
+            {options.map((option) => <option key={option.code} value={option.code}>{option.code} · ERP: {option.erpStock.toLocaleString("vi-VN")}</option>)}
+          </select>
+          <label>Thực lãnh ({item.material.unit})<input type="number" min={1} value={otherReceived[item.id] ?? item.quantity} onChange={(event) => setOtherReceived((current) => ({ ...current, [item.id]: Math.max(1, Math.trunc(Number(event.target.value)) || 1) }))} /></label>
+          {receiptSource === "ERP" && selected && selected.erpStock < (otherReceived[item.id] ?? item.quantity) && <small className="text-red-600">Không đủ tồn ERP</small>}
+          {options.length === 1 && <small className="text-emerald-700">Đã tự chọn mã duy nhất</small>}
+        </div>)}
+      </div>
+      <div className="chem-grid">
+        <div><label className="lb">Số phiếu giao hàng (nếu đã có)</label><input value={otherDeliveryNote} onChange={(event) => setOtherDeliveryNote(event.target.value)} /></div>
+        <div><label className="lb">Ngày lãnh *</label><input type="date" value={otherReceivedDate} onChange={(event) => setOtherReceivedDate(event.target.value)} /></div>
+      </div>
+      <button className="btn primary big" disabled={!valid || act.isPending} onClick={() => run({
+        action: "otherAdvanceReceive",
+        receiptSource,
+        deliveryNoteNumber: otherDeliveryNote.trim() || undefined,
+        receivedAt: otherReceivedDate,
+        items: rows.map(({ item, effectiveCode }) => ({ itemId: item.id, erpCode: effectiveCode || undefined, receivedQuantity: otherReceived[item.id] ?? item.quantity })),
+      }, "Đã lãnh ứng, cộng vào Hiện có và chuyển Thống kê hoàn thiện ĐXVT") }>
+        {act.isPending ? <Loader2 className="spin" size={15} /> : <Zap size={15} />} Xác nhận lãnh ứng
+      </button>
+    </div>;
+  }
+
+  if (t.type === OTHER_MATERIAL_ADVANCE_TICKET_TYPE && acts.includes("otherAdvanceApprove")) {
+    const sourceIsErp = normalizeReceiptSource(t.receiptSource) === "ERP";
+    const rows = t.items.map((item) => {
+      const material = opts?.materials.find((row) => row.id === item.materialId);
+      const options = material?.erpCodes ?? [];
+      const effectiveCode = otherErpCodes[item.id] || item.erpCode || (options.length === 1 ? options[0].code : "");
+      return { item, options, effectiveCode, selected: options.find((option) => option.code === effectiveCode) };
+    });
+    const valid = proposalNumberInput.trim() && otherDeliveryNote.trim() && rows.every(({ selected }) => Boolean(selected));
+    return <div className="act">
+      <label className="lb">Hoàn thiện ĐXVT cho vật tư đã ứng</label>
+      <div className="note"><FileText size={14} /><span>Vật tư đã được cộng vào <b>Hiện có</b> tại bước lãnh ứng. Bước này chỉ hoàn thiện hồ sơ và kết thúc phiếu.</span></div>
+      <div className="frm-items">
+        {rows.map(({ item, options, effectiveCode }) => <div className="other-approve-row" key={item.id}>
+          <span><b>{item.material.name}</b><small>Đã lãnh {item.receivedQuantity ?? item.quantity} {item.material.unit}</small></span>
+          <select value={effectiveCode} disabled={options.length === 1 || (sourceIsErp && Boolean(item.erpCode))} onChange={(event) => setOtherErpCodes((current) => ({ ...current, [item.id]: event.target.value }))}>
+            <option value="">— Chọn mã ERP —</option>
+            {options.map((option) => <option key={option.code} value={option.code}>{option.code} · ERP hiện tại: {option.erpStock.toLocaleString("vi-VN")}</option>)}
+          </select>
+          {sourceIsErp && item.erpCode && <small className="text-emerald-700">Mã đã trừ khi lãnh ứng</small>}
+          {!item.erpCode && options.length === 1 && <small className="text-emerald-700">Đã tự chọn mã duy nhất</small>}
+        </div>)}
+      </div>
+      <div className="chem-grid">
+        <div><label className="lb">Số phiếu ĐXVT *</label><input value={proposalNumberInput} onChange={(event) => setProposalNumberInput(event.target.value)} /></div>
+        <div><label className="lb">Số phiếu giao hàng *</label><input value={otherDeliveryNote} onChange={(event) => setOtherDeliveryNote(event.target.value)} /></div>
+      </div>
+      <button className="btn primary big" disabled={!valid || act.isPending} onClick={() => run({
+        action: "otherAdvanceApprove",
+        proposalNumber: proposalNumberInput.trim(),
+        deliveryNoteNumber: otherDeliveryNote.trim(),
+        items: rows.map(({ item, effectiveCode }) => ({ itemId: item.id, erpCode: effectiveCode })),
+      }, "Đã hoàn thiện ĐXVT và kết thúc phiếu ứng") }>
+        {act.isPending ? <Loader2 className="spin" size={15} /> : <Check size={15} />} Hoàn thiện và kết thúc phiếu
+      </button>
+    </div>;
+  }
 
   if (t.type === OTHER_MATERIAL_TICKET_TYPE && acts.includes("otherApprove")) {
     const rows = t.items.map((item) => {
@@ -3568,6 +3689,10 @@ const CSS = `
 .lockbox{display:flex;gap:8px;align-items:center;flex-wrap:wrap;background:${C.warnBg};color:${C.warn};border-radius:10px;padding:10px 12px;font-size:12.5px;}
 .frm-items{display:flex;flex-direction:column;gap:7px;}
 .other-ticket-item{display:flex;flex-direction:column;gap:9px;border:1px solid ${C.line};border-radius:12px;background:#fff;padding:11px 12px;}
+.other-flow-picker{display:grid;gap:8px;padding:12px 14px;border:1px solid #dbeafe;border-radius:14px;background:linear-gradient(135deg,#f8fbff,#f0fdfa);}
+.other-flow-picker>label{margin:0!important;color:${C.navy};font-size:12px;font-weight:850;}
+.other-flow-picker .flow-toggle{justify-self:start;}
+.other-flow-picker .note{margin:0;}
 .other-ticket-item-head{display:grid;grid-template-columns:minmax(0,1fr) 150px;align-items:end;gap:12px;}
 .other-ticket-item-head>b{align-self:center;color:${C.navy};font-size:13px;}
 .other-ticket-item-head label{margin:0!important;}

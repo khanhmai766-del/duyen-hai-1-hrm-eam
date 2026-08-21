@@ -2,7 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiMutate } from "@/lib/fetcher";
-import { CHEMICAL_TICKET_TYPE, GAS_RETURN_STATUS, OTHER_MATERIAL_TICKET_TYPE, SINGLE_STEP_TICKET_TYPE } from "@/lib/constants";
+import { CHEMICAL_TICKET_TYPE, GAS_RETURN_STATUS, isOtherMaterialAdvanceTicket, isOtherMaterialTicketType, SINGLE_STEP_TICKET_TYPE } from "@/lib/constants";
 
 export interface TicketItem {
   id: string;
@@ -25,7 +25,7 @@ export interface MaterialTicket {
   sequenceNumber: number;
   // GHI_NHAN = phiếu khai một bước (NH3 lỏng): tạo xong là HOAN_TAT, không có bước tiếp.
   // HOA_CHAT = luồng hóa chất 3 bước (xem CHEMICAL_TICKET_TYPE trong lib/constants).
-  type: "CHUA_CHON" | "DE_XUAT" | "UNG" | "SU_DUNG_HIEN_CO" | "GHI_NHAN" | "HOA_CHAT" | "VAT_TU_KHAC";
+  type: "CHUA_CHON" | "DE_XUAT" | "UNG" | "SU_DUNG_HIEN_CO" | "GHI_NHAN" | "HOA_CHAT" | "VAT_TU_KHAC" | "VAT_TU_KHAC_UNG";
   unit: string;
   status: string;
   assignedPosition: string;
@@ -224,7 +224,7 @@ export function useCreateTicket() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (body: {
-      type?: "DE_XUAT" | "UNG"; unit: string; bbktNumber?: string; note?: string;
+      type?: "DE_XUAT" | "UNG"; workflowType?: "DE_XUAT" | "UNG"; unit: string; bbktNumber?: string; note?: string;
       assignedPosition: string; materialCategory: string;
       materialId?: string; erpCode?: string; proposedQuantity?: number; replacementDeviceName?: string;
       replacementDeviceSeq?: string; replacementDeviceSeqs?: string[];
@@ -236,6 +236,7 @@ export function useCreateTicket() {
       qc.invalidateQueries({ queryKey: ["material-ticket-options"] });
       qc.invalidateQueries({ queryKey: ["materials"] });
       qc.invalidateQueries({ queryKey: ["oil-stock"] });
+      qc.invalidateQueries({ queryKey: ["other-material-stock"] });
     },
   });
 }
@@ -250,6 +251,7 @@ export function useTicketAction(id: string | null) {
       qc.invalidateQueries({ queryKey: ["material-ticket-options"] });
       qc.invalidateQueries({ queryKey: ["materials"] });
       qc.invalidateQueries({ queryKey: ["oil-stock"] });
+      qc.invalidateQueries({ queryKey: ["other-material-stock"] });
     },
   });
 }
@@ -258,7 +260,12 @@ export function useDeleteTicket() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => apiMutate(`/api/material-tickets/${id}`, "DELETE"),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["material-tickets"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["material-tickets"] });
+      qc.invalidateQueries({ queryKey: ["material-ticket-options"] });
+      qc.invalidateQueries({ queryKey: ["materials"] });
+      qc.invalidateQueries({ queryKey: ["other-material-stock"] });
+    },
   });
 }
 
@@ -284,9 +291,14 @@ export function actionsFor(t: MaterialTicket, v: TicketViewer | null): string[] 
   const canOperateAssigned = isAssigned || v.isAdmin;
   if (t.type === "CHUA_CHON") {
     if (t.status === "CHO_XAC_NHAN" && (v.steps?.confirm ?? v.isShiftLeader)) a.push("confirm");
-  } else if (t.type === OTHER_MATERIAL_TICKET_TYPE) {
-    if (t.status === "CHO_THONG_KE" && v.steps?.stats) a.push("otherApprove");
-    if (t.status === "NHAN_VAT_TU" && v.steps?.receive) a.push("otherReceive");
+  } else if (isOtherMaterialTicketType(t.type)) {
+    if (isOtherMaterialAdvanceTicket(t.type)) {
+      if (t.status === "NHAN_VAT_TU" && v.steps?.receive) a.push("otherAdvanceReceive");
+      if (t.status === "CHO_THONG_KE" && v.steps?.stats) a.push("otherAdvanceApprove");
+    } else {
+      if (t.status === "CHO_THONG_KE" && v.steps?.stats) a.push("otherApprove");
+      if (t.status === "NHAN_VAT_TU" && v.steps?.receive) a.push("otherReceive");
+    }
   } else if (t.type === CHEMICAL_TICKET_TYPE) {
     // Luồng hóa chất chỉ có hai lượt thao tác sau khi tạo phiếu.
     // Xác nhận bồn/thiết bị đủ điều kiện: Trưởng ca / TK Lò máy / Trưởng kíp điện.

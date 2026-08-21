@@ -11,7 +11,7 @@ import { normalizeText } from "@/lib/nav";
 import { consumeStock, deliveryNoteSummary, receiveIntoLot, releaseUsage, reverseTicketStock, sharedCodesOf, syncMaterialQuantity, usedLotsOfTicket } from "@/lib/material-stock-lot";
 import { parseDateInput } from "@/lib/utils";
 import { linkTicketTrucks, unlinkTicketTrucks, type TruckInput } from "@/lib/chemical-inventory/ticket-link";
-import { CHEMICAL_TICKET_TYPE, COMMON_MATERIAL_POSITION, GAS_RETURN_STATUS, isChemicalFlowTicket, isGasCylinderCategory, isGasCylinderTicket, materialTicketRequiresRecovery, OTHER_MATERIAL_TICKET_TYPE, recoveryRequiredForReason, ticketReasonAllowed, TICKET_MATERIAL_CATEGORIES, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
+import { CHEMICAL_TICKET_TYPE, COMMON_MATERIAL_POSITION, GAS_RETURN_STATUS, isChemicalFlowTicket, isGasCylinderCategory, isGasCylinderTicket, isOtherMaterialAdvanceTicket, isOtherMaterialTicketType, materialTicketRequiresRecovery, OTHER_MATERIAL_ADVANCE_TICKET_TYPE, OTHER_MATERIAL_TICKET_TYPE, recoveryRequiredForReason, ticketReasonAllowed, TICKET_MATERIAL_CATEGORIES, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
 import { positionsMatch } from "@/lib/position-catalog";
 import { replacementPointDisplayLabel, replacementPointSelectionKey } from "@/lib/material-replacement-display";
 import { receiveOtherMaterial } from "@/lib/other-material-stock";
@@ -460,7 +460,20 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
         await reverseTicketStock(tx, { materialCode: deletedMaterial.code, stockUnit, ticketId: t.id });
         await syncMaterialQuantity(tx, deletedMaterial.code, sharedCodesOf(deletedMaterial), stockSyncOptions(deletedMaterial.category, t.unit));
       }
-      if (t.type === OTHER_MATERIAL_TICKET_TYPE) {
+      if (isOtherMaterialTicketType(t.type)) {
+        // Phiếu Vật tư khác đã lãnh từng trừ ERP ở đúng bước nhập kho. Khi xóa phiếu,
+        // hoàn cả hai vế (ERP + Hiện có), nếu không ERP sẽ hụt vĩnh viễn dù chứng từ mất.
+        const shouldRestoreErp = !isOtherMaterialAdvanceTicket(t.type) || normalizeReceiptSource(t.receiptSource) === "ERP";
+        if (shouldRestoreErp && t.receivedAt) {
+          const restoreByCode = new Map<string, number>();
+          for (const item of t.items) {
+            if (!item.erpCode || !item.receivedQuantity) continue;
+            restoreByCode.set(item.erpCode, (restoreByCode.get(item.erpCode) ?? 0) + item.receivedQuantity);
+          }
+          for (const [code, quantity] of restoreByCode) {
+            await tx.erpMaterial.updateMany({ where: { code }, data: { erpStock: { increment: quantity } } });
+          }
+        }
         await tx.materialStockMovement.deleteMany({ where: { ticketId: t.id } });
       }
       // Gỡ các chuyến xe hóa chất phiếu này đã ghi sang sổ tồn kho. Bỏ qua bước này
@@ -523,6 +536,175 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     const action = String(body.action || "");
     const t = await getTicket(params.id);
     if (!t) return fail("Không tìm thấy phiếu", 404);
+
+    // Vật tư khác — luồng Ứng: lãnh trước khi có số ĐXVT. Đây là bước DUY NHẤT
+    // được phép trừ ERP và cộng Hiện có; bước Thống kê phía sau chỉ hoàn thiện hồ sơ.
+    if (action === "otherAdvanceReceive") {
+      if (t.type !== OTHER_MATERIAL_ADVANCE_TICKET_TYPE || t.status !== "NHAN_VAT_TU") return fail("Phiếu không ở bước lãnh ứng Vật tư khác");
+      if (!stepAllowedWithMap(await getWorkflowRoleMap(), "receive", user)) return fail("Bạn không có quyền xác nhận lãnh vật tư", 403);
+      const receiptSource = normalizeReceiptSource(body.receiptSource);
+      const deliveryNoteNumber = String(body.deliveryNoteNumber || "").trim() || null;
+      const receivedAt = body.receivedAt ? parseDateInput(body.receivedAt) : new Date();
+      if (Number.isNaN(receivedAt.getTime())) return fail("Ngày lãnh không hợp lệ");
+      const rawItems = Array.isArray(body.items) ? body.items : [];
+      const rowByItemId = new Map<string, { quantity: number; erpCode: string }>(rawItems.map((row: Record<string, unknown>) => [
+        String(row.itemId || ""),
+        { quantity: Math.trunc(Number(row.receivedQuantity || 0)), erpCode: String(row.erpCode || "").trim() },
+      ]));
+      if (t.items.some((item) => !Number.isFinite(rowByItemId.get(item.id)?.quantity) || (rowByItemId.get(item.id)?.quantity ?? 0) <= 0)) {
+        return fail("Số lượng thực lãnh của mỗi vật tư phải lớn hơn 0");
+      }
+
+      const selectedCodeByItemId = new Map<string, string>();
+      for (const item of t.items) {
+        const allowedCodes = item.material.erpCodes.length ? item.material.erpCodes : [item.material.code];
+        const requestedCode = rowByItemId.get(item.id)?.erpCode || (allowedCodes.length === 1 ? allowedCodes[0] : "");
+        if (receiptSource === "ERP" && !requestedCode) return fail(`Vui lòng chọn mã ERP cho vật tư "${item.material.name}"`);
+        if (requestedCode && !allowedCodes.includes(requestedCode)) return fail(`Mã ERP "${requestedCode}" không thuộc vật tư "${item.material.name}"`);
+        if (requestedCode) selectedCodeByItemId.set(item.id, requestedCode);
+      }
+
+      const selectedCodes = [...new Set(selectedCodeByItemId.values())];
+      const erpRows = selectedCodes.length
+        ? await prisma.erpMaterial.findMany({ where: { code: { in: selectedCodes }, isActive: true }, select: { code: true, name: true } })
+        : [];
+      const erpByCode = new Map(erpRows.map((row) => [row.code, row]));
+      for (const code of selectedCodes) if (!erpByCode.has(code)) return fail(`Không tìm thấy mã ERP "${code}"`, 404);
+      const requestedByCode = new Map<string, number>();
+      if (receiptSource === "ERP") {
+        for (const item of t.items) {
+          const code = selectedCodeByItemId.get(item.id)!;
+          requestedByCode.set(code, (requestedByCode.get(code) ?? 0) + rowByItemId.get(item.id)!.quantity);
+        }
+      }
+
+      const updated = await prisma.$transaction(async (tx) => {
+        await tx.$queryRaw`SELECT "id" FROM "MaterialTicket" WHERE "id" = ${t.id} FOR UPDATE`;
+        const current = await tx.materialTicket.findUnique({ where: { id: t.id }, select: { status: true } });
+        if (current?.status !== "NHAN_VAT_TU") throw fail("Phiếu đã được người khác xác nhận lãnh trước đó", 409);
+
+        for (const [code, quantity] of requestedByCode) {
+          const result = await tx.erpMaterial.updateMany({
+            where: { code, isActive: true, erpStock: { gte: quantity } },
+            data: { erpStock: { decrement: quantity } },
+          });
+          if (result.count !== 1) throw fail(`Mã ERP "${code}" không đủ số lượng để lãnh ${quantity.toLocaleString("vi-VN")}`);
+        }
+
+        for (const item of t.items) {
+          const row = rowByItemId.get(item.id)!;
+          const erpCode = selectedCodeByItemId.get(item.id) || null;
+          await receiveOtherMaterial(tx, {
+            material: item.material,
+            ticketId: t.id,
+            ticketItemId: item.id,
+            quantity: row.quantity,
+            deliveryNote: deliveryNoteNumber,
+            erpCode,
+            occurredAt: receivedAt,
+            assignedPosition: t.assignedPosition,
+            unit: t.unit,
+            deviceSeq: item.deviceSeq,
+            actor: user,
+            note: t.proposalNote,
+          });
+          await tx.materialTicketItem.update({
+            where: { id: item.id },
+            data: {
+              quantity: row.quantity,
+              receivedQuantity: row.quantity,
+              erpCode,
+              erpName: erpCode ? erpByCode.get(erpCode)?.name ?? null : null,
+            },
+          });
+        }
+
+        return tx.materialTicket.update({
+          where: { id: t.id },
+          data: {
+            receiptSource,
+            deliveryNoteNumber,
+            receivedAt,
+            receivedById: user.id,
+            receivedByName: user.name ?? "",
+            receivedByPosition: user.position ?? null,
+            status: "CHO_THONG_KE",
+          },
+          include: ITEM_INCLUDE,
+        });
+      });
+      await audit(user.id, "MT_OTHER_ADVANCE_RECEIVE", "MaterialTicket", t.id,
+        `${materialTicketReference(t)}: lãnh ứng ${t.items.length} vật tư từ ${receiptSourceLabel(receiptSource)}; đã cộng Hiện có`);
+      return ok(updated);
+    }
+
+    // Vật tư khác — luồng Ứng: Thống kê bổ sung ĐXVT/chứng từ sau khi hàng đã vào kho.
+    // Tuyệt đối không gọi receiveOtherMaterial và không trừ ERP ở bước này.
+    if (action === "otherAdvanceApprove") {
+      if (t.type !== OTHER_MATERIAL_ADVANCE_TICKET_TYPE || t.status !== "CHO_THONG_KE" || !t.receivedAt) return fail("Phiếu không ở bước hoàn thiện ĐXVT cho vật tư ứng");
+      if (!stepAllowedWithMap(await getWorkflowRoleMap(), "stats", user)) return fail("Bạn không có quyền Thống kê hoàn thiện đề xuất vật tư", 403);
+      const proposalNumber = String(body.proposalNumber || "").trim();
+      const deliveryNoteNumber = String(body.deliveryNoteNumber || t.deliveryNoteNumber || "").trim();
+      if (!proposalNumber) return fail("Vui lòng nhập số phiếu đề xuất vật tư");
+      if (!deliveryNoteNumber) return fail("Vui lòng nhập số phiếu giao hàng");
+      const rawItems = Array.isArray(body.items) ? body.items : [];
+      const requestedCodeByItemId = new Map<string, string>(rawItems.map((row: Record<string, unknown>) => [String(row.itemId || ""), String(row.erpCode || "").trim()]));
+      const codeByItemId = new Map<string, string>();
+      for (const item of t.items) {
+        const allowedCodes = item.material.erpCodes.length ? item.material.erpCodes : [item.material.code];
+        const code = requestedCodeByItemId.get(item.id) || item.erpCode || (allowedCodes.length === 1 ? allowedCodes[0] : "");
+        if (!code) return fail(`Vui lòng chọn mã ERP cho vật tư "${item.material.name}"`);
+        if (!allowedCodes.includes(code)) return fail(`Mã ERP "${code}" không thuộc vật tư "${item.material.name}"`);
+        if (normalizeReceiptSource(t.receiptSource) === "ERP" && item.erpCode && code !== item.erpCode) {
+          return fail(`Không thể đổi mã ERP của vật tư "${item.material.name}" vì mã này đã được trừ khi lãnh ứng`);
+        }
+        codeByItemId.set(item.id, code);
+      }
+      const codes = [...new Set(codeByItemId.values())];
+      const erpRows = await prisma.erpMaterial.findMany({ where: { code: { in: codes }, isActive: true }, select: { code: true, name: true } });
+      const erpByCode = new Map(erpRows.map((row) => [row.code, row]));
+      for (const code of codes) if (!erpByCode.has(code)) return fail(`Không tìm thấy mã ERP "${code}"`, 404);
+      const overrides = new Map(t.items.map((item) => {
+        const code = codeByItemId.get(item.id)!;
+        return [item.id, { materialCode: code, materialName: erpByCode.get(code)!.name }] as const;
+      }));
+      const proposalDoc = await buildProposalDocument(t, user, overrides);
+      const completedAt = new Date();
+      const updated = await prisma.$transaction(async (tx) => {
+        await tx.$queryRaw`SELECT "id" FROM "MaterialTicket" WHERE "id" = ${t.id} FOR UPDATE`;
+        const current = await tx.materialTicket.findUnique({ where: { id: t.id }, select: { status: true } });
+        if (current?.status !== "CHO_THONG_KE") throw fail("Phiếu đã được người khác hoàn thiện trước đó", 409);
+        for (const item of t.items) {
+          const code = codeByItemId.get(item.id)!;
+          const erpName = erpByCode.get(code)!.name;
+          await tx.materialTicketItem.update({ where: { id: item.id }, data: { erpCode: code, erpName } });
+          await tx.materialStockLot.updateMany({ where: { ticketId: t.id, materialCode: item.material.code }, data: { erpCode: code, deliveryNote: deliveryNoteNumber } });
+          await tx.materialStockMovement.updateMany({ where: { ticketId: t.id, ticketItemId: item.id, type: "RECEIPT" }, data: { erpCodes: [code] } });
+        }
+        return tx.materialTicket.update({
+          where: { id: t.id },
+          data: {
+            proposalNumber,
+            proposalDocUrl: proposalDoc.url,
+            proposalIssuedAt: completedAt,
+            deliveryNoteNumber,
+            statsById: user.id,
+            statsByName: user.name ?? "",
+            statsByPosition: user.position ?? null,
+            statsAt: completedAt,
+            completedAt,
+            completedById: user.id,
+            completedByName: user.name ?? "",
+            completedByPosition: user.position ?? null,
+            status: "HOAN_TAT",
+          },
+          include: ITEM_INCLUDE,
+        });
+      });
+      await audit(user.id, "MT_OTHER_ADVANCE_APPROVE", "MaterialTicket", t.id,
+        `${materialTicketReference(t)}: hoàn thiện ĐXVT ${proposalNumber}, phiếu giao hàng ${deliveryNoteNumber}; không thay đổi tồn kho`);
+      return ok(updated);
+    }
 
     // Phiếu Vật tư khác: Thống kê đối chiếu mã ERP cho từng dòng và cấp số ĐXVT.
     // Đây là luồng riêng để phiếu cũ (kể cả Chai khí) giữ nguyên trạng thái/lịch sử.

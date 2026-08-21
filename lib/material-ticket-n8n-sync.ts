@@ -195,8 +195,13 @@ function workflowTypeLabel(type: string) {
     HOA_CHAT: "Hóa chất",
     GHI_NHAN: "Ghi nhận một bước",
     VAT_TU_KHAC: "Vật tư khác",
+    VAT_TU_KHAC_UNG: "Ứng Vật tư khác",
   };
   return labels[type] ?? type;
+}
+
+function isOtherMaterialTicketType(type: string) {
+  return type === "VAT_TU_KHAC" || type === "VAT_TU_KHAC_UNG";
 }
 
 /**
@@ -204,12 +209,12 @@ function workflowTypeLabel(type: string) {
  * sổ kho riêng trên website; mọi luồng vật tư cũ vẫn đồng bộ toàn bộ như trước.
  */
 function itemsForMaterialSheet(ticket: MaterialTicketForN8nSync) {
-  if (ticket.type !== "VAT_TU_KHAC") return ticket.items;
+  if (!isOtherMaterialTicketType(ticket.type)) return ticket.items;
   return ticket.items.filter((item) => item.material.category === "Chai Khí" || item.material.category === "Chai khí");
 }
 
 function categoryForMaterialSheetRow(ticket: MaterialTicketForN8nSync, item: MaterialTicketSyncItem) {
-  return ticket.type === "VAT_TU_KHAC" ? item.material.category : ticket.materialCategory;
+  return isOtherMaterialTicketType(ticket.type) ? item.material.category : ticket.materialCategory;
 }
 
 function unitLabel(unit: string) {
