@@ -39,8 +39,11 @@ Các cột bổ sung của V2:
 
 ### Đồng bộ thao tác xóa
 
-- Khi xóa phiếu, website ghi một tombstone cho từng `SYNC_KEY` trước khi cascade
-  xóa các item.
+- Khi xóa phiếu chưa hoàn tất, website ghi một tombstone cho từng `SYNC_KEY`
+  trước khi cascade xóa item; workflow xóa dòng Sheet và hệ thống dồn lại STT.
+- Khi xóa phiếu `HOAN_TAT`, website không tạo tombstone: dòng Sheet và STT đã
+  đồng bộ được giữ nguyên làm bản sao dự phòng; các phiếu còn lại không bị dồn
+  STT trong thao tác xóa này.
 - API V2 trả `meta.deletedSyncKeys`; mapper legacy không thay đổi. Mỗi workflow
   tìm các khóa này trong sheet của mình (AI hoặc R), chỉ xóa khóa thực sự tồn
   tại rồi upsert trong cùng một Google Sheets `batchUpdate`.

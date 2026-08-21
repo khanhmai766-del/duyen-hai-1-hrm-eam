@@ -447,6 +447,9 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
     }
     if (!(await canManageTicket(user, t)))
       return fail("Bạn không có quyền xóa phiếu (Quản trị phân quyền ở mục Phân quyền quy trình)", 403);
+    // Phiếu hoàn tất là hồ sơ lịch sử: có thể xóa khỏi website nhưng phải giữ
+    // nguyên dòng đã đồng bộ trên Sheet. Phiếu dang dở mới được xóa khỏi Sheet.
+    const preserveCompletedSheetRow = t.status === "HOAN_TAT";
     const deletedMaterials = [...new Map(t.items.map((item) => [item.material.code, item.material])).values()];
     await prisma.$transaction(async (tx) => {
       // Chặn thao tác tạo/xóa đồng thời trong lúc dồn STT để không phát sinh
@@ -483,9 +486,9 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
       if (t.chemicalReceiptIds.length > 0) {
         await unlinkTicketTrucks(tx, t.id, t.chemicalReceiptIds);
       }
-      // Ghi tombstone trước khi cascade xóa các item. Hai workflow V2 dùng các
-      // khóa này để xóa đúng dòng khỏi sheet vật tư hoặc sheet hóa chất.
-      if (t.items.length > 0) {
+      // Chỉ phiếu chưa hoàn tất mới phát lệnh xóa Sheet. Phiếu hoàn tất không
+      // tạo tombstone nên dòng đã đồng bộ tiếp tục được giữ làm hồ sơ lịch sử.
+      if (!preserveCompletedSheetRow && t.items.length > 0) {
         await tx.materialTicketSyncDeletion.createMany({
           data: t.items.map((item) => ({
             ticketId: t.id,
@@ -496,34 +499,46 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
       }
       await tx.materialTicket.delete({ where: { id: t.id } });
 
-      // Chỉ dồn STT trong tháng VÀ trong dãy của phiếu vừa xóa. Các tháng cũ giữ
-      // nguyên dãy số riêng để tra cứu lịch sử; và xóa một phiếu hóa chất KHÔNG được
-      // làm xê dịch số của phiếu vật tư thường, vì hai bên là hai quyển sổ khác nhau.
-      await tx.$executeRaw`
-        UPDATE "MaterialTicket"
-        SET "sequenceNumber" = -"sequenceNumber"
-        WHERE "sequenceMonth" = ${t.sequenceMonth} AND "sequenceScope" = ${t.sequenceScope}
-      `;
-      await tx.$executeRaw`
-        WITH ranked AS (
-          SELECT
-            id,
-            ROW_NUMBER() OVER (
-              ORDER BY "sequenceNumber" DESC, "createdAt" ASC, id ASC
-            )::INTEGER AS "nextSequenceNumber"
-          FROM "MaterialTicket"
+      if (!preserveCompletedSheetRow) {
+        // Chỉ dồn STT khi xóa phiếu dang dở. Khi xóa phiếu hoàn tất, giữ nguyên
+        // STT của các phiếu còn lại để hồ sơ Sheet không bị thay đổi dây chuyền.
+        await tx.$executeRaw`
+          UPDATE "MaterialTicket"
+          SET "sequenceNumber" = -"sequenceNumber"
           WHERE "sequenceMonth" = ${t.sequenceMonth} AND "sequenceScope" = ${t.sequenceScope}
-        )
-        UPDATE "MaterialTicket" AS ticket
-        SET
-          "sequenceNumber" = ranked."nextSequenceNumber",
-          "updatedAt" = CURRENT_TIMESTAMP
-        FROM ranked
-        WHERE ticket.id = ranked.id
-      `;
+        `;
+        await tx.$executeRaw`
+          WITH ranked AS (
+            SELECT
+              id,
+              ROW_NUMBER() OVER (
+                ORDER BY "sequenceNumber" DESC, "createdAt" ASC, id ASC
+              )::INTEGER AS "nextSequenceNumber"
+            FROM "MaterialTicket"
+            WHERE "sequenceMonth" = ${t.sequenceMonth} AND "sequenceScope" = ${t.sequenceScope}
+          )
+          UPDATE "MaterialTicket" AS ticket
+          SET
+            "sequenceNumber" = ranked."nextSequenceNumber",
+            "updatedAt" = CURRENT_TIMESTAMP
+          FROM ranked
+          WHERE ticket.id = ranked.id
+        `;
+      }
     });
-    await audit(user.id, "MT_DELETE", "MaterialTicket", t.id, `${materialTicketReference(t)}: xóa phiếu`);
-    return ok({ id: t.id, sequenceNumber: t.sequenceNumber, sequenceMonth: t.sequenceMonth });
+    await audit(
+      user.id,
+      "MT_DELETE",
+      "MaterialTicket",
+      t.id,
+      `${materialTicketReference(t)}: xóa phiếu${preserveCompletedSheetRow ? "; giữ hồ sơ trên Sheet" : ""}`,
+    );
+    return ok({
+      id: t.id,
+      sequenceNumber: t.sequenceNumber,
+      sequenceMonth: t.sequenceMonth,
+      sheetRowPreserved: preserveCompletedSheetRow,
+    });
   });
 }
 
