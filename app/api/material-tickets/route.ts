@@ -203,14 +203,41 @@ export async function POST(req: NextRequest) {
     }
 
     // Loại vật tư
-    const materialCategory = String(body.materialCategory || "").trim();
+    let materialCategory = String(body.materialCategory || "").trim();
     if (!(TICKET_MATERIAL_CATEGORIES as readonly string[]).includes(materialCategory)) return fail("Vui lòng chọn loại vật tư");
+
+    // Chai khí được trình bày bên trong nhóm "Vật tư khác", nhưng khi đã gắn cương vị
+    // thì vẫn phải đi luồng riêng: tạo ở CHUA_CHON để Trưởng ca/Trưởng kíp quyết định
+    // Đề xuất hay Ứng. Chuẩn hóa cả request cũ/tự gọi API để không thể bỏ qua bước này.
+    if (materialCategory === OTHER_MATERIAL_GROUP && assignedPosition !== COMMON_MATERIAL_POSITION) {
+      const rawItems = Array.isArray(body.items) ? body.items as Array<Record<string, unknown>> : [];
+      const itemIds = rawItems.map((item) => String(item.materialId || "").trim()).filter(Boolean);
+      const gasMaterials = itemIds.length
+        ? await prisma.material.findMany({
+            where: { id: { in: itemIds }, category: { in: ["Chai Khí", "Chai khí"] } },
+            select: { id: true },
+          })
+        : [];
+      if (gasMaterials.length) {
+        if (rawItems.length !== 1 || gasMaterials.length !== 1) {
+          return fail("Chai khí phải lập phiếu riêng để Trưởng ca/Trưởng kíp chọn luồng");
+        }
+        const gasItem = rawItems[0];
+        materialCategory = "Chai khí";
+        body.materialId = gasMaterials[0].id;
+        body.proposedQuantity = gasItem.quantity;
+        body.replacementDeviceSeqs = gasItem.replacementDeviceSeqs;
+      }
+    }
 
     // Nhóm Vật tư khác dùng một phiếu nhiều dòng. "Chung" dành cho vật tư không gắn
     // cương vị/thiết bị; nếu đã gắn thì vẫn giữ đúng kết cấu cũ: cương vị → tổ máy → thiết bị.
     if (materialCategory === OTHER_MATERIAL_GROUP) {
       const workflowType = String(body.workflowType || "DE_XUAT").trim();
       if (workflowType !== "DE_XUAT" && workflowType !== "UNG") return fail("Luồng Vật tư khác không hợp lệ");
+      if (assignedPosition !== COMMON_MATERIAL_POSITION && workflowType === "UNG") {
+        return fail("Chỉ chọn trực tiếp luồng Ứng khi cương vị được giao là Chung");
+      }
       const ticketType = workflowType === "UNG" ? OTHER_MATERIAL_ADVANCE_TICKET_TYPE : OTHER_MATERIAL_TICKET_TYPE;
       const rawItems = Array.isArray(body.items) ? body.items : [];
       if (!rawItems.length) return fail("Vui lòng chọn ít nhất một vật tư");

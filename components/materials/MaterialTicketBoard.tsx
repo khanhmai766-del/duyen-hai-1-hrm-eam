@@ -820,6 +820,19 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
         : [],
     [selectedMaterial]
   );
+  const selectedManagedGasItem = useMemo(() => {
+    if (category !== OTHER_MATERIAL_GROUP || assigned === COMMON_MATERIAL_POSITION) return null;
+    return otherItems.find((item) => {
+      const material = materialCards.find((row) => row.id === item.materialId);
+      return isGasCylinderTicket(material?.category);
+    }) ?? null;
+  }, [assigned, category, materialCards, otherItems]);
+
+  // Bộ chọn nhanh Đề xuất / Ứng của kho "Vật tư khác" chỉ dành cho cương vị Chung.
+  // Chai khí có cương vị phải để Trưởng ca/Trưởng kíp chọn luồng ở bước xác nhận.
+  React.useEffect(() => {
+    if (assigned !== COMMON_MATERIAL_POSITION && type !== "DE_XUAT") setType("DE_XUAT");
+  }, [assigned, type]);
 
   React.useEffect(() => {
     if (!materialCards.length) {
@@ -872,13 +885,21 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
 
   async function submit() {
     try {
+      const managedGasMaterial = selectedManagedGasItem
+        ? materialCards.find((material) => material.id === selectedManagedGasItem.materialId)
+        : null;
       const res = await create.mutateAsync({
-        unit, note: note.trim() || undefined, workflowType: type ?? "DE_XUAT",
-        assignedPosition: assigned, materialCategory: category,
-        materialId: selectedMaterialId || undefined,
-        proposedQuantity,
-        replacementDeviceSeqs,
-        items: category === OTHER_MATERIAL_GROUP ? otherItems : undefined,
+        unit,
+        note: note.trim() || undefined,
+        workflowType: assigned === COMMON_MATERIAL_POSITION ? type ?? "DE_XUAT" : "DE_XUAT",
+        assignedPosition: assigned,
+        // Chai khí vẫn nằm trong nhóm hiển thị "Vật tư khác", nhưng phiếu phải dùng
+        // luồng Chai khí cũ để Trưởng ca/Trưởng kíp chọn Đề xuất hoặc Ứng.
+        materialCategory: managedGasMaterial ? "Chai khí" : category,
+        materialId: (managedGasMaterial?.id ?? selectedMaterialId) || undefined,
+        proposedQuantity: selectedManagedGasItem?.quantity ?? proposedQuantity,
+        replacementDeviceSeqs: selectedManagedGasItem?.replacementDeviceSeqs ?? replacementDeviceSeqs,
+        items: category === OTHER_MATERIAL_GROUP && !managedGasMaterial ? otherItems : undefined,
       });
       toast.success(`Đã tạo phiếu ${materialTicketReference(res)}`);
       onClose();
@@ -927,7 +948,7 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
               ))}
             </div>
 
-            {category === OTHER_MATERIAL_GROUP && (
+            {category === OTHER_MATERIAL_GROUP && assigned === COMMON_MATERIAL_POSITION && (
               <div className="other-flow-picker">
                 <label>Luồng thực hiện *</label>
                 <div className="seg3 flow-toggle" aria-label="Chọn luồng Vật tư khác">
@@ -963,9 +984,21 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
                         type="button"
                         className={(category === OTHER_MATERIAL_GROUP ? otherSelected : selectedMaterialId === m.id) ? "on" : ""}
                         onClick={() => category === OTHER_MATERIAL_GROUP
-                          ? setOtherItems((current) => otherSelected
-                            ? current.filter((item) => item.materialId !== m.id)
-                            : [...current, { materialId: m.id, quantity: 1, replacementDeviceSeqs: [] }])
+                          ? setOtherItems((current) => {
+                            if (otherSelected) return current.filter((item) => item.materialId !== m.id);
+                            if (assigned !== COMMON_MATERIAL_POSITION && isGasCylinderTicket(m.category)) {
+                              return [{ materialId: m.id, quantity: 1, replacementDeviceSeqs: [] }];
+                            }
+                            const hasManagedGas = assigned !== COMMON_MATERIAL_POSITION && current.some((item) => {
+                              const material = materialCards.find((row) => row.id === item.materialId);
+                              return isGasCylinderTicket(material?.category);
+                            });
+                            if (hasManagedGas) {
+                              toast.error("Chai khí cần lập phiếu riêng để Trưởng ca/Trưởng kíp chọn luồng");
+                              return current;
+                            }
+                            return [...current, { materialId: m.id, quantity: 1, replacementDeviceSeqs: [] }];
+                          })
                           : (() => { setSelectedMaterialId(m.id); setSelectedErpCode(""); setReplacementDeviceSeqs([]); setReplacementSystems([]); })()}
                         title={`${m.code} - ${m.name}`}
                       >
@@ -1018,6 +1051,12 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
                   </div>;
                 })}
               </div>
+            )}
+
+            {selectedManagedGasItem && (
+              <p className="note ghinhan">
+                <Check size={13} /> Phiếu Chai khí sẽ chuyển đến Trưởng ca/Trưởng kíp để chọn luồng <b>Đề xuất</b> hoặc <b>Ứng</b>.
+              </p>
             )}
 
             {category === OTHER_MATERIAL_GROUP ? (
