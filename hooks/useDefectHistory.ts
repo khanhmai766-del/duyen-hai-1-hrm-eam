@@ -50,6 +50,36 @@ export function useDefectHistory(filters: DefectHistoryFilters = {}) {
   return useQuery({
     queryKey: ["defect-history", filters],
     queryFn: () => apiGet<DefectHistoryItem[]>(`/api/defect-history?${qs.toString()}`),
+    // Giữ nguyên bảng và ô tìm kiếm trong lúc truy vấn ký tự tiếp theo. Nếu trả
+    // về trạng thái loading trắng, cả Card bị tháo khỏi DOM và ô nhập mất focus.
+    placeholderData: (previous) => previous,
+  });
+}
+
+export interface ReopenPendingDefectResult {
+  id: string;
+  status: string;
+  syncQueued: boolean;
+  materialReversal: { removed: number; restored: number; skipped: number } | null;
+}
+
+export function useReopenPendingDefect() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, status }: { id: string; status: string }) =>
+      apiMutate<ReopenPendingDefectResult>(`/api/defects/${id}/reopen`, "POST", { status }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["defect-history"] });
+      qc.invalidateQueries({ queryKey: ["defects"] });
+      qc.invalidateQueries({ queryKey: ["defect"] });
+      qc.invalidateQueries({ queryKey: ["defect-shift-summary"] });
+      qc.invalidateQueries({ queryKey: ["defect-sync-status"] });
+      qc.invalidateQueries({ queryKey: ["defect-two-way-sync"] });
+      qc.invalidateQueries({ queryKey: ["defect-sync-queue"] });
+      qc.invalidateQueries({ queryKey: ["materials"] });
+      qc.invalidateQueries({ queryKey: ["replacements"] });
+      qc.invalidateQueries({ queryKey: ["replacement-history"] });
+    },
   });
 }
 

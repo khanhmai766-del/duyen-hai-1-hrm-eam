@@ -60,6 +60,11 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       if (pending) {
         return fail(`Phiếu đang chờ hoàn thiện lịch sử đến ${pending.finalizeAt.toLocaleDateString("vi-VN")}`);
       }
+      // Lưu lịch sử cũng là một thay đổi trạng thái phải tới được Sheet. Chặn
+      // trước khi đổi dữ liệu cục bộ nếu hàng đợi UPDATE đang tắt.
+      if (!(await isDefectSyncFeatureEnabled("UPDATE"))) {
+        return fail("Tính năng cập nhật Vận hành từ website đang tạm khóa; chưa thể lưu lịch sử", 503);
+      }
     }
     const access = await resolveEquipmentAccessForUser(user);
     if (access.hasExplicitScopes && !access.canEditDeviceLike({ device: defect.device, system: defect.system })) {
@@ -108,9 +113,16 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
             syncState: "ACTIVE",
           },
         });
-        if (defect.websiteCreated) {
-          await enqueueDefectSyncEvent(tx, { defect: updated, eventType: "UPDATE" });
-        }
+        // Luôn làm mới snapshot cuối cùng khi chuyển sang chờ chốt. Nếu lần đổi
+        // trạng thái trước còn PENDING/FAILED, sự kiện được gộp và retry ngay;
+        // nếu n8n đã claim PROCESSING, một UPDATE mới được tạo để không mất trạng
+        // thái cuối khi người dùng bấm hai thao tác liên tiếp.
+        const syncEvent = await enqueueDefectSyncEvent(tx, {
+          defect: updated,
+          eventType: "UPDATE",
+          extra: sheetOrigin ? { writeScope: "SHEET_ORIGIN_LIMITED" } : undefined,
+        });
+        if (!syncEvent) throw new Error("DEFECT_HISTORY_SYNC_NOT_QUEUED");
         if (shouldRecordReplacement) {
           await recordMaterialRequestReplacements(tx, {
             defectId: defect.id,
@@ -121,6 +133,11 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
           });
         }
         return created;
+      }).catch((error) => {
+        if (error instanceof Error && error.message === "DEFECT_HISTORY_SYNC_NOT_QUEUED") {
+          throw fail("Không tạo được tác vụ cập nhật Google Sheet; phiếu chưa được chuyển sang chờ chốt", 503);
+        }
+        throw error;
       });
 
       await audit(

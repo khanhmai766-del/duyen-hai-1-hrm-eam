@@ -73,7 +73,11 @@ function parseRequestNumber(value: unknown) {
 }
 
 function yearFromSheetDate(value: unknown) {
-  const match = text(value).match(/^\d{1,2}[/-]\d{1,2}[/-](\d{4})$/);
+  // Một số hàng Sheet cũ từng bị nối nội dung nhắc lại ngay sau ngày phát hiện,
+  // ví dụ "22/07/2026 nhắc lại lần 2 ngày 26/07/2026". Ngày đầu ô vẫn là
+  // ngày nhận diện của hàng gốc; chấp nhận phần chữ phía sau để UPDATE không báo
+  // nhầm "không tìm thấy hàng", nhưng không tự sửa/ghi đè ô dữ liệu nguồn này.
+  const match = text(value).match(/^\d{1,2}[/-]\d{1,2}[/-](\d{4})(?:\D|$)/);
   return match ? Number(match[1]) : null;
 }
 

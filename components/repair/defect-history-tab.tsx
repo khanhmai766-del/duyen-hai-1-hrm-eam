@@ -16,6 +16,7 @@ import {
   Plus,
   Pencil,
   FileClock,
+  RotateCcw,
   Filter,
   Check,
   UserRound,
@@ -34,6 +35,7 @@ import { DefectHistoryDialog } from "@/components/repair/defect-history-dialog";
 import { DefectExpandedDetailsById } from "@/components/defects/defect-expanded-details";
 import { LockChip } from "@/components/shared/lock-chip";
 import { PendingHistoryEditDialog } from "@/components/repair/pending-history-edit-dialog";
+import { ReopenPendingDefectDialog, type ReopenPendingDefectTarget } from "@/components/repair/reopen-pending-defect-dialog";
 import { useDefectHistory, useDeleteDefectHistory, type DefectHistoryFilters, type DefectHistoryItem } from "@/hooks/useDefectHistory";
 import { usePositions } from "@/hooks/useUsers";
 import { useRbacAccess } from "@/hooks/useRbacAccess";
@@ -73,6 +75,7 @@ export function DefectHistoryTab({ role }: { role?: string }) {
   const rbac = useRbacAccess();
   const canCreate = rbac.can("defect-manage", ["personal", "manage", "full"]);
   const canManage = rbac.can("defect-manage", ["manage", "full"]);
+  const canReopenPending = rbac.can("defect-close", ["manage", "full"]);
   const canDelete = rbac.can("defect-history-delete", ["full"]);
   // Loại Quản đốc / Phó quản đốc / Thống kê / Kỹ thuật viên khỏi bộ lọc cương vị.
   const positions = usePositions().filter(isSelectableManagingPosition);
@@ -124,6 +127,7 @@ export function DefectHistoryTab({ role }: { role?: string }) {
   const [createOpen, setCreateOpen] = React.useState(false);
   const [editTarget, setEditTarget] = React.useState<DefectHistoryItem | null>(null);
   const [pendingEditDefectId, setPendingEditDefectId] = React.useState<string | null>(null);
+  const [reopenTarget, setReopenTarget] = React.useState<ReopenPendingDefectTarget | null>(null);
   const [expandedId, setExpandedId] = React.useState<string | null>(null);
 
   function setFilter<K extends keyof DefectHistoryFilters>(k: K, v: string) {
@@ -164,7 +168,7 @@ export function DefectHistoryTab({ role }: { role?: string }) {
   const pagedRows = visibleRows;
   const firstShown = totalRows ? (page - 1) * pageSize + 1 : 0;
   const lastShown = Math.min(page * pageSize, totalRows);
-  const actionCol = canManage || canDelete;
+  const actionCol = canManage || canDelete || canReopenPending;
   // Mở rộng + Nội dung khiếm khuyết + Loại yêu cầu + Tổ máy + Cương vị
   // + Kết thúc + Người cập nhật + Chốt lịch sử (+ Thao tác)
   // Cột "Nguồn" chỉ có nghĩa khi bản ghi CÒN CHỜ CHỐT: lúc đó nó vẫn dính với phiếu
@@ -463,6 +467,20 @@ export function DefectHistoryTab({ role }: { role?: string }) {
                                   <FileClock className="h-4 w-4" />
                                 </Button>
                               )}
+                              {canReopenPending && pending && r.pendingDefectId && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  title="Rút chờ chốt, đưa lại Tồn đọng"
+                                  className="text-amber-700 hover:bg-amber-50 hover:text-amber-800"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setReopenTarget({ id: r.pendingDefectId!, requestNumber: r.requestNumber });
+                                  }}
+                                >
+                                  <RotateCcw className="h-4 w-4" />
+                                </Button>
+                              )}
                               {canManage && !pending && (
                                 <Button variant="ghost" size="icon" title="Sửa" onClick={(e) => { e.stopPropagation(); setEditTarget(r); }}>
                                   <Pencil className="h-4 w-4" />
@@ -521,6 +539,9 @@ export function DefectHistoryTab({ role }: { role?: string }) {
       <DefectHistoryDialog open={!!editTarget} onOpenChange={(o) => !o && setEditTarget(null)} record={editTarget} />
       {pendingEditDefectId && (
         <PendingHistoryEditDialog defectId={pendingEditDefectId} onClose={() => setPendingEditDefectId(null)} />
+      )}
+      {reopenTarget && (
+        <ReopenPendingDefectDialog target={reopenTarget} onClose={() => setReopenTarget(null)} />
       )}
 
 
