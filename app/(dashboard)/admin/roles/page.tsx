@@ -400,13 +400,6 @@ const DEFAULT_PERMISSIONS: PermissionRow[] = [
     matrix: { ADMIN: "full", MANAGER: "manage", SUPERVISOR: "personal", TECHNICIAN: "personal", VIEWER: "read" },
   },
   {
-    id: "chemical-truck-edit",
-    group: "Vật tư",
-    feature: "Sửa chuyến xe đã chốt",
-    note: "Chuyến xe nhập hóa chất ghi lần đầu là việc của chính VHV được giao phiếu; lưu xong thì khóa lại và phiếu hoàn tất. Quyền Quản lý/Toàn quyền mới được mở khóa sửa hoặc gỡ chuyến xe đã chốt. Mặc định chỉ Quản trị viên.",
-    matrix: { ADMIN: "full", MANAGER: "none", SUPERVISOR: "none", TECHNICIAN: "none", VIEWER: "none" },
-  },
-  {
     id: "replacement-manage",
     group: "Vật tư",
     feature: "Lịch thay thế vật tư",

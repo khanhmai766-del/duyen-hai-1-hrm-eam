@@ -194,6 +194,9 @@ export async function updateReceipt(tx: Tx, id: string, input: ReceiptInput, use
     await recomputeMonthEnd(tx, existing.itemId, existing.receivingPosition, newPeriodKey);
   }
 
+  // Sửa ở sổ thì phiếu vật tư phải thấy số mới — nó chỉ hiển thị lại, không tính gì.
+  if (existing.materialTicketId) await syncMaterialTicketFromReceipts(tx, existing.materialTicketId);
+
   return updated;
 }
 
@@ -201,16 +204,45 @@ export async function deleteReceipt(tx: Tx, id: string) {
   const existing = await tx.chemicalReceipt.findUnique({ where: { id } });
   if (!existing) throw fail("Không tìm thấy phiếu nhập", 404);
 
-  if (existing.materialTicketId) {
-    throw fail(
-      "Phiếu này sinh từ phiếu vật tư — muốn xóa phải hủy phiếu vật tư gốc, nếu không phiếu đó sẽ trỏ vào khoảng trống",
-      409
-    );
-  }
-
   await requireEditablePeriod(tx, existing.periodKey);
   await tx.chemicalReceipt.delete({ where: { id } });
+
+  // Dòng sinh từ phiếu vật tư XÓA ĐƯỢC ở đây, vì bảng xe trên phiếu đã khóa sau khi
+  // chốt — sổ hóa chất là cửa sửa duy nhất. Nhưng phải gỡ id khỏi phiếu ngay, không
+  // thì phiếu trỏ vào khoảng trống và số "đã lãnh" của nó đứng yên ở giá trị cũ.
+  if (existing.materialTicketId) await syncMaterialTicketFromReceipts(tx, existing.materialTicketId);
+
   return existing;
 }
 
 export { formatPeriod };
+
+/**
+ * Dựng lại phần hiển thị của phiếu vật tư từ các chuyến xe CÒN LẠI trong sổ.
+ *
+ * Sổ hóa chất là nguồn duy nhất; phiếu chỉ soi lại. Chạy sau mỗi lần sửa/xóa ở sổ để
+ * `chemicalReceiptIds` không giữ id đã chết và số "đã lãnh" không đứng yên ở giá trị cũ.
+ *
+ * Xóa hết chuyến thì phiếu trở về trạng thái CHƯA CHỐT, bảng xe trên phiếu mở lại —
+ * đó là lối thoát đúng khi lỡ ghi nhầm cả cụm, không cần quyền đặc biệt nào.
+ */
+export async function syncMaterialTicketFromReceipts(tx: Tx, materialTicketId: string) {
+  const rows = await tx.chemicalReceipt.findMany({
+    where: { materialTicketId },
+    select: { id: true, receivedAt: true, acceptedWeight: true },
+    orderBy: { receivedAt: "asc" },
+  });
+
+  const total = rows.reduce((sum, row) => sum + row.acceptedWeight.toNumber(), 0);
+  await tx.materialTicket
+    .update({
+      where: { id: materialTicketId },
+      data: {
+        chemicalReceiptIds: rows.map((row) => row.id),
+        // Cột Int chỉ để hiện nhanh trên phiếu; số chính xác tới 4 số lẻ nằm ở sổ.
+        receivedQuantity: rows.length ? Math.round(total) : null,
+        receivedAt: rows.length ? rows[rows.length - 1].receivedAt : null,
+      },
+    })
+    .catch(() => null);
+}

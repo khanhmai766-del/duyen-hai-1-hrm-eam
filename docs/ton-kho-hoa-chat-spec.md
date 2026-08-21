@@ -626,21 +626,31 @@ Lập phiếu (đề xuất)  →  status NHAN_VAT_TU  →  VHV ghi chuyến xe 
 - `receivedQuantity` (Int) trên phiếu chỉ để hiển thị nhanh; số chính xác tới 4 số lẻ
   nằm ở `ChemicalReceipt`. `receivedAt` = ngày muộn nhất trong các chuyến.
 
-### 7.1f. Lưu chuyến xe = CHỐT, sửa lại phải có quyền riêng
+### 7.1f. Chốt trên phiếu = khóa; sổ hóa chất là cửa sửa duy nhất
 
-Ghi chuyến xe xong thì số liệu đã chạy sang sổ tồn kho và phiếu đã hoàn tất, nên mọi
-lần ghi lại sau đó là **sửa số đã chốt**, không còn là nhập lần đầu:
+Luồng nhập hóa chất chỉ có MỘT chiều ghi và MỘT chỗ sửa:
 
-- Phiếu có `chemicalReceiptIds` khác rỗng ⇒ **khóa**. Bảng xe thành bảng chỉ đọc.
-- Mở khóa cần quyền riêng `chemical-truck-edit` ở mức `manage`/`full`. Tách khỏi
-  `chemical-inventory-manage` vì người giữ sổ hóa chất và người được đụng vào số đã
-  chốt trên phiếu vật tư không nhất thiết là một. Mặc định **chưa giao cho ai** ngoài
-  quản trị — phân xưởng tự chỉ định.
-- Rào đặt ở **máy chủ**, không chỉ ẩn nút: bảng xe gọi thẳng API, ẩn nút mà để ngỏ
-  máy chủ thì chưa gọi là khóa. Thao tác gỡ sạch chuyến xe cũng là sửa, cũng bị chặn.
-- Payload của phiếu chỉ mang mảng id nên bảng xe **không tự biết** mình đã ghi gì —
-  phải đọc qua `GET /api/material-tickets/[id]/chemical-trucks`. Cửa này cố ý không đi
-  qua API sổ hóa chất vì cửa đó đòi quyền giữ sổ, mà VHV ghi xe thường không có.
+1. Tab **Theo dõi vật tư** — VHV được giao nhập khối lượng lãnh, ngày nhập, biển số
+   rồi bấm **Chốt**. Phiếu hoàn tất, số liệu chạy sang sổ.
+2. Từ giây phút đó bảng xe trên phiếu **chỉ đọc, khóa hẳn — kể cả quản trị**.
+3. Mọi sửa/xóa về sau làm ở **Tịnh kho hóa chất**: nhật ký NH3 hoặc tab Phiếu nhập.
+   Sửa xong phiếu vật tư tự cập nhật theo (`syncMaterialTicketFromReceipts`).
+
+Vì sao không cho mở khóa tại chỗ: hai cửa cùng sửa một con số là mời hai người ghi
+đè nhau, mà chỉ sổ mới có ràng buộc kỳ (khóa sổ tháng), chống trùng chuyến và tính
+lại tồn cuối tháng. Cho sửa ở phiếu là bỏ qua cả ba.
+
+Hệ quả bắt buộc phải mở kèm, nếu không sẽ kẹt cứng:
+
+- Dòng sinh từ phiếu vật tư **xóa được** ở sổ (trước đây bị chặn). Không mở thì một
+  chuyến ghi nhầm sẽ không còn đường gỡ ở bất kỳ đâu.
+- Xóa/sửa ở sổ phải đồng bộ ngược `chemicalReceiptIds` và `receivedQuantity` của
+  phiếu, kẻo phiếu trỏ vào id đã chết và số "đã lãnh" đứng yên ở giá trị cũ.
+- Xóa hết chuyến ⇒ phiếu trở về **chưa chốt**, bảng xe mở lại. Đó là lối thoát đúng
+  khi lỡ ghi nhầm cả cụm, không cần quyền đặc biệt nào.
+
+Phân quyền sửa ở sổ dùng chính `chemical-inventory-manage` (sửa cần mức ghi, xóa cần
+mức `manage`) — không đẻ thêm quyền riêng cho phiếu vật tư.
 
 ### 7.1e. Cương vị nhận — mặc định theo hóa chất, luôn lưu dạng MÃ
 

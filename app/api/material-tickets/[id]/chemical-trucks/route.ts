@@ -1,8 +1,6 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { fail, handle, ok, requireUser } from "@/lib/api";
-import { hasPermissionLevel } from "@/lib/rbac-guard";
-import { CHEMICAL_TRUCK_EDIT_PERMISSION_ID } from "@/lib/chemical-inventory/constants";
 import { positionsMatch } from "@/lib/position-catalog";
 
 export const dynamic = "force-dynamic";
@@ -54,16 +52,10 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
       fromDailyLog: row.source !== "MATERIAL_TICKET",
     }));
 
+    // Chốt là khóa hẳn: sổ hóa chất (nhật ký NH3 / tab Phiếu nhập) là cửa sửa duy nhất.
     const locked = trucks.length > 0;
     const assigned = user.role === "ADMIN" || positionsMatch(user.position, ticket.assignedPosition);
-    const canUnlock = await hasPermissionLevel(user, CHEMICAL_TRUCK_EDIT_PERMISSION_ID, ["manage", "full"]);
 
-    return ok({
-      trucks,
-      locked,
-      // Ghi LẦN ĐẦU: chính VHV được giao. Sửa lại sau khi chốt: phải có quyền riêng.
-      canEdit: assigned && (!locked || canUnlock),
-      canUnlock,
-    });
+    return ok({ trucks, locked, canEdit: assigned && !locked });
   });
 }

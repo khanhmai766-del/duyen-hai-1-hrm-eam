@@ -537,7 +537,11 @@ export type ReceiptListItem = {
   source: string;
   materialTicketId: string | null;
   warnings: string[];
-  /** Phiếu sinh từ phiếu vật tư chỉ được sửa, không được xóa ở màn tồn kho. */
+  /**
+   * Còn lại chỉ vì kỳ có thể đã khóa sổ. Phiếu sinh từ phiếu vật tư TRƯỚC ĐÂY bị chặn
+   * xóa ở đây, nhưng bảng xe trên phiếu đã khóa sau khi chốt nên sổ là cửa sửa duy
+   * nhất — chặn nốt thì không còn đường gỡ một chuyến ghi nhầm.
+   */
   deletable: boolean;
 };
 
@@ -592,7 +596,7 @@ export async function listReceipts(
     source: r.source,
     materialTicketId: r.materialTicketId,
     warnings: r.warnings,
-    deletable: r.materialTicketId === null,
+    deletable: true,
   }));
 
   // Tìm kiếm không dấu chạy sau khi lấy trang: dữ liệu mỗi tháng chỉ vài chục dòng,

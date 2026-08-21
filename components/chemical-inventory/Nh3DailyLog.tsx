@@ -362,7 +362,7 @@ export function Nh3DailyLog({
                       <td className="px-4 py-2 text-right tabular-nums">{fmt(toDisplay(t.contractorWeight), 2)}</td>
                       <td className="px-4 py-2 text-right font-medium tabular-nums">{fmt(toDisplay(t.acceptedWeight), 2)}</td>
                       <td className="px-2 py-2 text-right">
-                        {canDelete && !t.materialTicketId && (
+                        {canDelete && (
                           <button
                             type="button"
                             onClick={() => setConfirmTruck({ id: t.id, label: `${t.vehicleNumber ?? "chuyến xe"} ngày ${shortLabel(row.date)}` })}

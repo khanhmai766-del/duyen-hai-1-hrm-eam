@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { AlertTriangle, Check, Loader2, Lock, Plus, Trash2, Unlock } from "lucide-react";
+import { AlertTriangle, ArrowUpRight, Check, Loader2, Lock, Plus, Trash2 } from "lucide-react";
 import { MAX_VEHICLE_NUMBER_LENGTH } from "@/lib/chemical-inventory/constants";
 
 /**
@@ -277,15 +277,14 @@ export function ChemicalTruckPanel({
 /**
  * Bảng CHỈ ĐỌC của các chuyến xe đã chốt.
  *
- * Ghi xong là số liệu đã chạy sang sổ Tồn kho hóa chất và phiếu đã hoàn tất, nên mặc
- * định không cho gõ đè. Ai được phân quyền "Sửa chuyến xe đã chốt" thì có nút mở khóa,
- * mở ra đúng bảng nhập cũ với số liệu đã ghi điền sẵn.
+ * Ghi xong là số liệu đã chạy sang sổ Tồn kho hóa chất và phiếu đã hoàn tất. Từ đó
+ * phiếu vật tư chỉ còn soi lại; muốn sửa thì sang sổ — nhật ký NH3 hoặc tab Phiếu
+ * nhập. Cố ý KHÔNG có nút mở khóa tại chỗ: hai cửa cùng sửa một con số là mời hai
+ * người ghi đè nhau, mà chỉ sổ mới có ràng buộc kỳ, chống trùng và tính lại tồn cuối.
  */
 export function ChemicalTruckLockedTable({
   trucks,
   unit,
-  canUnlock,
-  onUnlock,
 }: {
   trucks: Array<{
     id: string;
@@ -296,8 +295,6 @@ export function ChemicalTruckLockedTable({
     fromDailyLog: boolean;
   }>;
   unit?: string;
-  canUnlock: boolean;
-  onUnlock: () => void;
 }) {
   const total = trucks.reduce((sum, row) => sum + row.acceptedWeight, 0);
 
@@ -319,8 +316,8 @@ export function ChemicalTruckLockedTable({
         <Lock size={14} style={{ marginTop: 2, flexShrink: 0 }} />
         <span>
           Đã chốt <b>{trucks.length} chuyến</b> vào sổ <b>Tồn kho hóa chất</b> và hoàn tất đề xuất.
-          Số liệu khóa lại để tồn kho không lệch;{" "}
-          {canUnlock ? "mở khóa nếu cần sửa." : "cần quyền “Sửa chuyến xe đã chốt” mới sửa được."}
+          Số liệu khóa tại đây để tồn kho không lệch. Cần sửa hoặc xóa thì làm ở sổ —
+          nhật ký NH3 hoặc tab <b>Phiếu nhập</b> — sửa xong phiếu này tự cập nhật theo.
         </span>
       </div>
 
@@ -361,11 +358,13 @@ export function ChemicalTruckLockedTable({
             {unit ? ` ${unit}` : ""}
           </b>
         </span>
-        {canUnlock && (
-          <button type="button" className="btn" onClick={onUnlock}>
-            <Unlock size={14} /> Mở khóa để sửa
-          </button>
-        )}
+        <a
+          href="/chemical-inventory"
+          className="btn"
+          style={{ textDecoration: "none" }}
+        >
+          Sửa ở Tịnh kho hóa chất <ArrowUpRight size={14} />
+        </a>
       </div>
     </div>
   );
