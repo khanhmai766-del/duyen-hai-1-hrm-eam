@@ -340,7 +340,7 @@ export default function DefectsPage() {
     syncFeatures?.twoWaySyncEnabled && syncFeatures.websiteRemindEnabled
   );
   const syncStatus = useDefectSyncStatus(canViewSync);
-  const latestSyncRun = syncStatus.data?.data?.[0];
+  const latestSyncRun = syncStatus.data?.data?.runs[0];
   const syncRunning = latestSyncRun?.status === "RUNNING";
   const observedSyncRef = React.useRef<{ id: string; status: string } | null>(null);
 
@@ -621,7 +621,8 @@ export default function DefectsPage() {
             thay cho 2 banner cũ chiếm trọn chiều ngang phía trên bộ lọc. */}
         {canViewSync && (
           <DefectSyncChip
-            runs={syncStatus.data?.data ?? []}
+            runs={syncStatus.data?.data?.runs ?? []}
+            health={syncStatus.data?.data?.health}
             running={syncRunning}
             syncing={sync.isPending || syncStatus.isLoading}
             canRunSync={canRunSync}

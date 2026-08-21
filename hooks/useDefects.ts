@@ -3,6 +3,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiMutate } from "@/lib/fetcher";
 import type { Defect, DefectSyncRun, DefectSyncSetting } from "@prisma/client";
+import type { DefectSyncHealth } from "@/lib/defect-sync-health";
 
 export interface DefectSyncTrafficMetrics {
   todayTotal: number;
@@ -14,6 +15,8 @@ export interface DefectSyncTrafficMetrics {
   waiting: number;
   queued: number;
   processing: number;
+  failed: number;
+  staleWaiting: number;
   queuedUpdate: number;
   queuedCreate: number;
   queuedRemind: number;
@@ -204,6 +207,9 @@ export function useCreateDefect() {
     onSuccess: (_data, variables) => {
       qc.invalidateQueries({ queryKey: ["defects"] });
       qc.invalidateQueries({ queryKey: ["defect-shift-summary"] });
+      qc.invalidateQueries({ queryKey: ["defect-sync-status"] });
+      qc.invalidateQueries({ queryKey: ["defect-two-way-sync"] });
+      qc.invalidateQueries({ queryKey: ["defect-sync-queue"] });
       if (typeof variables.device === "string" && variables.device) {
         qc.invalidateQueries({ queryKey: ["device", variables.device] });
       }
@@ -275,13 +281,18 @@ export interface DefectSyncResult {
   message: string;
 }
 
+export interface DefectSyncStatus {
+  runs: DefectSyncRun[];
+  health: DefectSyncHealth;
+}
+
 export function useDefectSyncStatus(enabled = true) {
   return useQuery({
     queryKey: ["defect-sync-status"],
-    queryFn: () => apiGet<DefectSyncRun[]>("/api/defects/sync"),
+    queryFn: () => apiGet<DefectSyncStatus>("/api/defects/sync"),
     enabled,
     refetchInterval: (query) => {
-      const latest = query.state.data?.data?.[0];
+      const latest = query.state.data?.data?.runs[0];
       return latest?.status === "RUNNING" ? 3_000 : 30_000;
     },
     refetchIntervalInBackground: false,

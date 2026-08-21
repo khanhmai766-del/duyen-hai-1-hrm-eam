@@ -18,6 +18,10 @@ import {
   ServerOff,
   ShieldAlert,
   TimerReset,
+  AlertTriangle,
+  CheckCircle2,
+  Route,
+  Clock3,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -39,17 +43,17 @@ import {
 } from "@/hooks/useDefects";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { cn } from "@/lib/utils";
+import type { DefectSyncHealth } from "@/lib/defect-sync-health";
 
 /**
  * Trạng thái đồng bộ khiếm khuyết gói trong MỘT chip ở thanh tiêu đề: bấm vào mới mở
  * bảng chi tiết (số liệu lần chạy + cờ đồng bộ hai chiều). Trước đây hai khối này là
  * banner chiếm trọn chiều ngang, đẩy bộ lọc và bảng dữ liệu xuống dưới màn hình.
  *
- * Thuần GIAO DIỆN: dữ liệu và hành động vẫn do trang truyền vào (run/onSync) hoặc dùng
- * đúng hook cũ (cờ hai chiều) — không đổi API, không đổi luồng nghiệp vụ.
+ * Trạng thái sức khỏe được backend tổng hợp từ lịch sử nhận Sheet, cấu hình năm đích
+ * và transactional outbox; các thao tác bật/tắt vẫn dùng API đồng bộ hai chiều cũ.
  */
 
-const timeFmt = new Intl.DateTimeFormat("vi-VN", { hour: "2-digit", minute: "2-digit" });
 const fullFmt = new Intl.DateTimeFormat("vi-VN", {
   day: "2-digit",
   month: "2-digit",
@@ -79,6 +83,7 @@ function sourceLabelOf(run: DefectSyncRun) {
 
 export function DefectSyncChip({
   runs,
+  health,
   running,
   syncing,
   canRunSync,
@@ -87,6 +92,7 @@ export function DefectSyncChip({
 }: {
   /** 5 lượt chạy gần nhất do /api/defects/sync trả sẵn; [0] là mới nhất. */
   runs: DefectSyncRun[];
+  health?: DefectSyncHealth;
   running: boolean;
   syncing: boolean;
   canRunSync: boolean;
@@ -99,9 +105,34 @@ export function DefectSyncChip({
   const previous = runs.slice(1);
   const success = run?.status === "SUCCESS";
   const failed = !!run && !running && !success;
+  const healthError = health?.level === "ERROR";
+  const healthWarning = health?.level === "WARNING";
 
-  const label = !run ? "Chưa đồng bộ" : running ? "Đang đồng bộ…" : success ? "Đã đồng bộ" : "Đồng bộ lỗi";
-  const dotTone = running ? "bg-sky-500" : success ? "bg-emerald-500" : failed ? "bg-rose-500" : "bg-slate-300";
+  const label = running && !healthError
+    ? "Google Sheet · Đang đồng bộ"
+    : healthError
+      ? "Google Sheet · Có lỗi"
+      : healthWarning
+        ? health?.queue.waiting
+          ? `Google Sheet · ${health.queue.waiting} đang chờ`
+          : "Google Sheet · Cần kiểm tra"
+        : health
+          ? "Google Sheet · Hoạt động tốt"
+          : "Google Sheet · Đang kiểm tra";
+  const dotTone = healthError
+    ? "bg-rose-500"
+    : healthWarning
+      ? "bg-amber-500"
+      : running
+        ? "bg-sky-500"
+        : health
+          ? "bg-emerald-500"
+          : "bg-slate-300";
+  const borderTone = healthError
+    ? "border-rose-200 bg-rose-50/40 hover:border-rose-300"
+    : healthWarning
+      ? "border-amber-200 bg-amber-50/40 hover:border-amber-300"
+      : "border-border bg-white hover:border-emerald-300";
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -109,8 +140,9 @@ export function DefectSyncChip({
         <button
           type="button"
           className={cn(
-            "flex h-10 items-center gap-2 rounded-lg border bg-white px-3 text-sm font-semibold text-ink shadow-sm transition-colors",
-            open ? "border-accent ring-2 ring-accent/15" : "border-border hover:border-muted-foreground/30"
+            "flex h-10 items-center gap-2 rounded-lg border px-3 text-sm font-semibold text-ink shadow-sm transition-colors",
+            borderTone,
+            open && "ring-2 ring-accent/15"
           )}
           title="Xem chi tiết đồng bộ khiếm khuyết"
         >
@@ -119,13 +151,12 @@ export function DefectSyncChip({
             <span className={cn("relative inline-flex h-2 w-2 rounded-full", dotTone)} />
           </span>
           {label}
-          {run && <span className="font-medium text-muted-foreground">{timeFmt.format(new Date(run.startedAt))}</span>}
           <TwoWayWarnDot enabled={canManageTwoWaySync} />
           <ChevronDown className={cn("h-3.5 w-3.5 text-muted-foreground transition-transform", open && "rotate-180")} />
         </button>
       </PopoverTrigger>
 
-      <PopoverContent align="end" sideOffset={8} className="w-[430px] p-4">
+      <PopoverContent align="end" sideOffset={8} className="max-h-[78vh] w-[calc(100vw-24px)] max-w-[470px] overflow-y-auto p-4">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <div className="flex items-center gap-2 text-sm font-bold text-ink">
@@ -151,6 +182,8 @@ export function DefectSyncChip({
             </Button>
           )}
         </div>
+
+        {health && <SyncHealthOverview health={health} running={running} />}
 
         {run && !running && (
           <div className="mt-3 grid grid-cols-5 gap-px overflow-hidden rounded-lg border border-border bg-border">
@@ -218,6 +251,103 @@ export function DefectSyncChip({
         )}
       </PopoverContent>
     </Popover>
+  );
+}
+
+function SyncHealthOverview({ health, running }: { health: DefectSyncHealth; running: boolean }) {
+  const healthy = health.level === "HEALTHY";
+  const error = health.level === "ERROR";
+  const tone = error
+    ? "border-rose-200 bg-rose-50/70 text-rose-950"
+    : healthy
+      ? "border-emerald-200 bg-emerald-50/70 text-emerald-950"
+      : "border-amber-200 bg-amber-50/70 text-amber-950";
+  const StatusIcon = error ? ShieldAlert : healthy ? CheckCircle2 : AlertTriangle;
+  const destinationsReady = health.destinations.every((destination) => destination.configured);
+
+  return (
+    <div className="mt-3 space-y-3">
+      <div className={cn("rounded-xl border p-3", tone)}>
+        <div className="flex items-start gap-2.5">
+          <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-white/80 shadow-sm ring-1 ring-current/10">
+            <StatusIcon className="h-4 w-4" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="text-[13px] font-bold">
+              {error
+                ? "Có lỗi cần kiểm tra"
+                : healthy
+                  ? running ? "Hệ thống đang nhận dữ liệu" : "Các luồng đang hoạt động tốt"
+                  : "Có thay đổi đang chờ xử lý"}
+            </p>
+            {health.issues.length === 0 ? (
+              <p className="mt-0.5 text-[11px] leading-relaxed text-current/75">
+                Cấu hình đủ năm đích và không có sự kiện ghi Sheet bị kẹt.
+              </p>
+            ) : (
+              <ul className="mt-1 space-y-1 text-[11px] leading-relaxed text-current/85">
+                {health.issues.map((issue, index) => (
+                  <li key={`${issue.level}-${index}`} className="flex gap-1.5">
+                    <span aria-hidden="true">•</span>
+                    <span>{issue.message}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+        <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50/80 px-3 py-2.5">
+          <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-slate-600">
+            <Route className="h-3.5 w-3.5 text-blue-700" />
+            5 đích ghi nhận
+          </div>
+          <span className={cn("text-[10px] font-semibold", destinationsReady ? "text-emerald-700" : "text-rose-700")}>
+            {destinationsReady ? "Đã kiểm tra cấu hình" : "Thiếu cấu hình"}
+          </span>
+        </div>
+        <div className="divide-y divide-slate-100">
+          {health.destinations.map((destination) => (
+            <div key={destination.key} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-3 py-2.5">
+              <div className="min-w-0">
+                <p className="truncate text-xs font-semibold text-ink">{destination.label}</p>
+                <p className="mt-0.5 text-[10px] text-muted-foreground">{destination.sourceLabel}</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <code className="rounded-md bg-slate-100 px-2 py-1 text-[10px] font-semibold text-slate-700">
+                  {destination.sheetName}
+                </code>
+                <span
+                  className={cn("h-2 w-2 rounded-full", destination.configured ? "bg-emerald-500" : "bg-rose-500")}
+                  title={destination.configured ? "Đã cấu hình" : "Thiếu cấu hình"}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2">
+        {health.sources.map((source) => (
+          <div key={source.source} className="rounded-lg border border-border bg-muted/15 px-3 py-2.5">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs font-bold text-ink">{source.label}</span>
+              <span className="rounded-full bg-emerald-50 px-1.5 py-0.5 text-[9px] font-bold text-emerald-700">
+                {source.configuredBy === "ENVIRONMENT" ? "Cấu hình server" : "Production mặc định"}
+              </span>
+            </div>
+            <div className="mt-1.5 flex items-center gap-1.5 text-[10px] text-muted-foreground">
+              <Clock3 className="h-3 w-3" />
+              {source.lastSuccessAt
+                ? `Nhận dữ liệu ${fullFmt.format(new Date(source.lastSuccessAt))}`
+                : "Chưa có lượt nhận thành công"}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 

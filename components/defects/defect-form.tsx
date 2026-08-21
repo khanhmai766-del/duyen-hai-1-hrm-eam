@@ -120,6 +120,9 @@ export function DefectForm({
   const operationUpdateAvailable = Boolean(
     syncSetting?.twoWaySyncEnabled && syncSetting.operationUpdateEnabled
   );
+  const websiteCreateAvailable = Boolean(
+    syncSetting?.twoWaySyncEnabled && syncSetting.websiteCreateEnabled
+  );
   const operationFeatureLocked = isSynced && !operationUpdateAvailable;
   const operationFieldsLocked = isSynced && (
     defect?.status === "DA_XU_LY" || operationFeatureLocked
@@ -628,10 +631,24 @@ export function DefectForm({
     // SYC thay thế vật tư: chỉ gửi danh sách điểm; server tự dựng lại tổ máy/cương
     // vị/thiết bị từ Danh mục nên các giá trị tương ứng ở trên chỉ để hiển thị.
     if (materialRequest) payload.replacementIds = materialRequest.replacementIds;
+    function showCreatedToast(created: DefectItem) {
+      const electrical = ["Điện", "I&C"].includes(created.requestType ?? "")
+        || created.sourceSheetName === "DH1 qt OL";
+      const destination = `${electrical ? "Sheet Điện" : "Sheet Cơ"} · ${created.sourceSheetName || "Chưa xác định tab"}`;
+      toast.success(`Đã tạo phiếu ${created.requestNumber || "khiếm khuyết"}`, {
+        description: websiteCreateAvailable
+          ? `Đang chờ n8n ghi vào ${destination}`
+          : `Đã lưu trên website · Luồng thêm mới sang ${destination} đang tắt`,
+      });
+    }
     try {
-      if (isEdit) await update.mutateAsync({ id: defect!.id, ...payload });
-      else await create.mutateAsync(payload);
-      toast.success(isEdit ? "Đã cập nhật khiếm khuyết" : "Đã lưu khiếm khuyết");
+      if (isEdit) {
+        await update.mutateAsync({ id: defect!.id, ...payload });
+        toast.success("Đã cập nhật khiếm khuyết");
+      } else {
+        const created = await create.mutateAsync(payload);
+        showCreatedToast(created);
+      }
       onDone?.();
     } catch (e) {
       const message = (e as Error).message;
@@ -639,8 +656,8 @@ export function DefectForm({
       if (materialRequest && !isEdit && message.includes("Xác nhận để vẫn ra phiếu mới")) {
         if (!window.confirm(`${message}\n\nBạn vẫn muốn ra số yêu cầu mới?`)) return;
         try {
-          await create.mutateAsync({ ...payload, allowDuplicate: true });
-          toast.success("Đã lưu khiếm khuyết");
+          const created = await create.mutateAsync({ ...payload, allowDuplicate: true });
+          showCreatedToast(created);
           onDone?.();
         } catch (retryError) {
           toast.error((retryError as Error).message);

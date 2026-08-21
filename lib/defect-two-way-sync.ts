@@ -64,7 +64,7 @@ export async function getDefectSyncTrafficMetrics() {
     prisma.defectSyncOutbox.findMany({
       where: { status: { in: ["PENDING", "PROCESSING", "FAILED"] } },
       orderBy: { createdAt: "asc" },
-      select: { eventType: true, status: true, createdAt: true },
+      select: { eventType: true, status: true, createdAt: true, claimedAt: true },
     }),
   ]);
   const successfulDurations = todayRows.flatMap((row) =>
@@ -74,6 +74,11 @@ export async function getDefectSyncTrafficMetrics() {
   );
   const count = (predicate: (row: (typeof todayRows)[number]) => boolean) =>
     todayRows.filter(predicate).length;
+  const staleBefore = Date.now() - 15 * 60 * 1000;
+  const staleWaiting = waitingRows.filter((row) => {
+    const since = row.status === "PROCESSING" ? row.claimedAt ?? row.createdAt : row.createdAt;
+    return since.getTime() < staleBefore;
+  }).length;
 
   return {
     todayTotal: todayRows.length,
@@ -83,6 +88,8 @@ export async function getDefectSyncTrafficMetrics() {
     todaySuccess: count((row) => row.status === "SUCCESS"),
     todayFailed: count((row) => row.status === "FAILED"),
     waiting: waitingRows.length,
+    failed: waitingRows.filter((row) => row.status === "FAILED").length,
+    staleWaiting,
     queued: waitingRows.filter((row) => row.status !== "PROCESSING").length,
     processing: waitingRows.filter((row) => row.status === "PROCESSING").length,
     queuedUpdate: waitingRows.filter((row) => row.status !== "PROCESSING" && row.eventType === "UPDATE").length,

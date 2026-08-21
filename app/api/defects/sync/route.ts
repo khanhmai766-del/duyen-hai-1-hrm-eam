@@ -1,6 +1,9 @@
 import { prisma } from "@/lib/prisma";
 import { audit, auditDetailWithPosition, fail, handle, ok, requireUser } from "@/lib/api";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
+import { getDefectSyncTrafficMetrics } from "@/lib/defect-two-way-sync";
+import { N8N_DEFECT_SOURCE_SPREADSHEET_IDS } from "@/lib/defect-n8n-sync";
+import { buildDefectSyncHealth } from "@/lib/defect-sync-health";
 
 export const dynamic = "force-dynamic";
 
@@ -13,11 +16,33 @@ export async function GET() {
       ["read", "personal", "manage", "full"],
       "Không đủ quyền xem trạng thái đồng bộ n8n"
     );
-    const runs = await prisma.defectSyncRun.findMany({
-      orderBy: { startedAt: "desc" },
-      take: 5,
+    const [runs, metrics, lastCoSuccess, lastDienSuccess] = await Promise.all([
+      prisma.defectSyncRun.findMany({
+        orderBy: { startedAt: "desc" },
+        take: 5,
+      }),
+      getDefectSyncTrafficMetrics(),
+      prisma.defectSyncRun.findFirst({
+        where: { status: "SUCCESS", completedSources: { has: "CO" } },
+        orderBy: { finishedAt: "desc" },
+        select: { finishedAt: true },
+      }),
+      prisma.defectSyncRun.findFirst({
+        where: { status: "SUCCESS", completedSources: { has: "DIEN" } },
+        orderBy: { finishedAt: "desc" },
+        select: { finishedAt: true },
+      }),
+    ]);
+    const health = buildDefectSyncHealth({
+      latestRun: runs[0] ?? null,
+      metrics,
+      spreadsheetIds: N8N_DEFECT_SOURCE_SPREADSHEET_IDS,
+      lastSuccessAt: {
+        CO: lastCoSuccess?.finishedAt ?? null,
+        DIEN: lastDienSuccess?.finishedAt ?? null,
+      },
     });
-    return ok(runs);
+    return ok({ runs, health });
   });
 }
 
