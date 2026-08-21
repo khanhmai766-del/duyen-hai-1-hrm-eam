@@ -25,7 +25,6 @@ import {
   Package,
   Plus,
   Loader2,
-  ScanLine,
   type LucideIcon,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -179,9 +178,6 @@ function DevicesPageContent() {
   return (
     <div className="space-y-6">
       <PageHeader title="THÔNG TIN THIẾT BỊ" description="Lý lịch & quản lý tài sản thiết bị nhà máy">
-        <Button asChild variant="accent" size="toolbar">
-          <Link href="/devices/scan"><ScanLine className="h-4 w-4" /> Quét QR</Link>
-        </Button>
         <DeviceGuideButton canManage={isSystemAdmin} />
         {view === "tree" && (
           <ExportButton

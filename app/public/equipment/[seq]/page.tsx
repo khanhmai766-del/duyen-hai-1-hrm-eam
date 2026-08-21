@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { canonicalSeq, s2Kks } from "@/lib/equipment-units";
 import { normalizeQrMachine } from "@/lib/device-qr";
 import { resolveActiveDeviceQrCard } from "@/lib/device-qr-access";
-import { getCachedEquipmentNodeFull, getEquipmentTreeIndexFor } from "@/lib/equipment-node-cache";
+import { normalizeEquipmentNodeName } from "@/lib/equipment-tree";
 
 export const dynamic = "force-dynamic";
 
@@ -21,20 +21,30 @@ export default async function PublicEquipmentQrPage({
   const card = await resolveActiveDeviceQrCard(seq, requestedMachine);
   if (!card) return <InactiveQr />;
 
-  const nodes = await getCachedEquipmentNodeFull();
-  const index = getEquipmentTreeIndexFor(nodes);
-  const node = index.bySeq.get(seq);
+  // Trang công khai chỉ cần một thiết bị: không nạp/normalize toàn bộ cây và ảnh base64.
+  const node = await prisma.equipmentNode.findUnique({
+    where: { seq },
+    select: { seq: true, parentSeq: true, name: true, kks: true, drawing: true, attachedInfo: true, documentUrl: true, imageUrl: true },
+  });
   if (!node) return <InactiveQr />;
-  const parentSeq = index.parentOf.get(seq) ?? node.parentSeq ?? null;
-  const parent = parentSeq ? index.bySeq.get(parentSeq) ?? null : null;
-  const [profile, parentProfile] = await Promise.all([
-    prisma.equipmentProfile.findUnique({ where: { nodeSeq_machine: { nodeSeq: seq, machine: card.machine } } }),
-    parent
-      ? prisma.equipmentProfile.findUnique({ where: { nodeSeq_machine: { nodeSeq: parent.seq, machine: card.machine } } })
-      : Promise.resolve(null),
-  ]);
+  const ancestorSeqs = ancestorCandidates(seq);
+  let parent = node.parentSeq
+    ? await prisma.equipmentNode.findUnique({ where: { seq: node.parentSeq }, select: { seq: true, name: true } })
+    : null;
+  if (!parent && ancestorSeqs.length) {
+    parent = await prisma.equipmentNode.findFirst({
+      where: { seq: { in: ancestorSeqs } },
+      orderBy: { depth: "desc" },
+      select: { seq: true, name: true },
+    });
+  }
+  const profiles = await prisma.equipmentProfile.findMany({
+    where: { machine: card.machine, nodeSeq: { in: [seq, parent?.seq].filter((value): value is string => Boolean(value)) } },
+  });
+  const profile = profiles.find((item) => item.nodeSeq === seq) ?? null;
+  const parentProfile = profiles.find((item) => item.nodeSeq === parent?.seq) ?? null;
   const isS2 = card.machine === "S2";
-  const name = profile?.name ?? node.name;
+  const name = profile?.name ?? normalizeEquipmentNodeName(seq, node.name);
   const kks = profile?.kks ?? (isS2 ? s2Kks(node.kks ?? null) : node.kks ?? null);
   const system = parentProfile?.name ?? parent?.name ?? "Thư mục gốc";
   const imageUrl = profile?.imageUrl ?? (isS2 ? null : node.imageUrl ?? null);
@@ -98,6 +108,17 @@ export default async function PublicEquipmentQrPage({
       </div>
     </main>
   );
+}
+
+function ancestorCandidates(seq: string) {
+  const parts = seq.split(".");
+  const result: string[] = [];
+  parts.pop();
+  while (parts.length) {
+    result.push(parts.join("."));
+    parts.pop();
+  }
+  return result;
 }
 
 function Detail({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) {

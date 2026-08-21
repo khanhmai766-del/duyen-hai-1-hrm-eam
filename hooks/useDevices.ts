@@ -60,6 +60,7 @@ export interface DeviceWithRelations extends DeviceRecord {
     intervalNote?: string | null;
     note?: string | null;
     _count?: { logs: number; defectRequests: number };
+    device?: { seq: string; name: string } | null;
     material: { id: string; code?: string; name: string; unit: string; machine: string; category?: string | null };
   }>;
   materialUsage: Array<{
@@ -68,8 +69,10 @@ export interface DeviceWithRelations extends DeviceRecord {
     quantity?: number | null;
     note?: string | null;
     replacement: {
+      deviceSeq?: string | null;
       location?: string | null;
       system?: string | null;
+      device?: { seq: string; name: string } | null;
       material: { id: string; name: string; unit: string; machine: string; category?: string | null };
     };
   }>;

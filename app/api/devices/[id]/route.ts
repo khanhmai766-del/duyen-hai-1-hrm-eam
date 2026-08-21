@@ -9,7 +9,7 @@ import {
 import { assertSeqEditable, assertSeqViewable, managingPositionsForEquipmentSeq } from "@/lib/server-access";
 import { maybeUploadDataUrl } from "@/lib/s3";
 import { invalidateDeviceListCache } from "@/lib/device-list-cache";
-import { getCachedEquipmentNodeFull, invalidateEquipmentNodeCache,  getEquipmentTreeIndexFor } from "@/lib/equipment-node-cache";
+import { getCachedEquipmentNodeList, invalidateEquipmentNodeCache, getEquipmentTreeIndexFor } from "@/lib/equipment-node-cache";
 import { recomputeChildCount } from "@/lib/equipment-child-count";
 import { hasPermissionLevel } from "@/lib/rbac-guard";
 import { requireDeviceDelete, requireDeviceManage, requireDeviceView } from "@/lib/device-permissions";
@@ -51,10 +51,18 @@ function toDeviceRecord(node: NormalizedEquipmentNode, parent: NormalizedEquipme
 
 async function findEquipmentRecord(seq: string, requestedMachine?: string | null, requestedDescendantDepth?: string | null) {
   await Promise.all([ensureRepairMachineColumn(), ensureDeviceQrCardTable()]);
-  const nodes = await getCachedEquipmentNodeFull();
+  // Cây nhẹ đủ để tính cha/con và phạm vi tổng hợp. Dữ liệu nặng (đặc biệt ảnh
+  // base64) chỉ đọc cho đúng thiết bị đang mở, không kéo ảnh của toàn bộ cây.
+  const nodes = await getCachedEquipmentNodeList();
   const index = getEquipmentTreeIndexFor(nodes);
-  const node = index.bySeq.get(seq);
-  if (!node) return null;
+  const lightNode = index.bySeq.get(seq);
+  if (!lightNode) return null;
+  const detail = await prisma.equipmentNode.findUnique({
+    where: { seq },
+    select: { kks: true, attachedInfo: true, documentUrl: true, imageUrl: true },
+  });
+  if (!detail) return null;
+  const node: NormalizedEquipmentNode = { ...lightNode, ...detail };
   const allowedMachines = machinesOf(node.seq);
   const normalizedMachine = requestedMachine?.toUpperCase() as EquipmentMachine | undefined;
   const machine = normalizedMachine && allowedMachines.includes(normalizedMachine)
@@ -96,26 +104,29 @@ async function findEquipmentRecord(seq: string, requestedMachine?: string | null
       },
     }),
     prisma.equipmentMaterial.findMany({
-      where: { deviceSeq: node.seq, material: { machine } },
+      where: { deviceSeq: { in: profileSeqs }, material: { machine } },
       orderBy: { usedAt: "desc" },
-      include: { material: true },
+      include: { material: true, device: { select: { seq: true, name: true } } },
     }),
     prisma.materialReplacement.findMany({
-      where: { deviceSeq: node.seq, machine, isActive: false },
+      where: { deviceSeq: { in: profileSeqs }, machine, isActive: false },
       orderBy: { createdAt: "desc" },
       include: {
         material: { select: { id: true, code: true, name: true, unit: true, machine: true, category: true } },
+        device: { select: { seq: true, name: true } },
         _count: { select: { logs: true, defectRequests: true } },
       },
     }),
     prisma.materialReplacementLog.findMany({
-      where: { replacement: { deviceSeq: node.seq, machine } },
+      where: { replacement: { deviceSeq: { in: profileSeqs }, machine } },
       orderBy: { replacedAt: "desc" },
       include: {
         replacement: {
           select: {
+            deviceSeq: true,
             location: true,
             system: true,
+            device: { select: { seq: true, name: true } },
             material: { select: { id: true, name: true, unit: true, machine: true, category: true } },
           },
         },
@@ -263,7 +274,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     if (parentSeq) {
       // Dùng cây chuẩn hoá giống API cây thiết bị; một số thư mục hệ thống tổng
       // hợp có trên giao diện nhưng không có dòng vật lý riêng trong DB.
-      const normalizedNodes = await getCachedEquipmentNodeFull();
+      const normalizedNodes = await getCachedEquipmentNodeList();
       const parent = normalizedNodes.find((item) => item.seq === parentSeq);
       if (!parent) return fail("Không tìm thấy thư mục hoặc thiết bị cha đã chọn");
       if (parent.seq === currentSeq) return fail("Thiết bị không thể là thư mục cha của chính nó");

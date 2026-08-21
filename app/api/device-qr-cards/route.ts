@@ -2,11 +2,11 @@ import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { audit, fail, handle, ok, requireUser } from "@/lib/api";
 import {
-  buildEquipmentTreeIndex,
   compareEquipmentSeq,
+  normalizeEquipmentNodeName,
   type NormalizedEquipmentNode,
 } from "@/lib/equipment-tree";
-import { getCachedEquipmentNodeFull,  getEquipmentTreeIndexFor } from "@/lib/equipment-node-cache";
+import { getCachedEquipmentNodeList, getEquipmentTreeIndexFor } from "@/lib/equipment-node-cache";
 import { assertSeqEditable, filterEquipmentNodesForUser } from "@/lib/server-access";
 import { requireDeviceCreate, requireDeviceManage, requireDeviceView } from "@/lib/device-permissions";
 import { ensureDeviceQrCardTable } from "@/lib/device-qr-card-table";
@@ -29,6 +29,7 @@ function toCardRecord(
     code: scopeCode(node.seq, machine),
     machine,
     name: node.name,
+    kks: node.kks ?? null,
     system: parent?.name ?? null,
     systemSeq: parent?.seq ?? null,
     managingPosition: null,
@@ -54,30 +55,45 @@ export async function GET() {
     if (!cards.length) return ok([], { total: 0 });
 
     const cardSeqs = new Set(cards.map((c) => c.deviceSeq));
-    const nodes = await getCachedEquipmentNodeFull();
+    // Chỉ dùng bản cây nhẹ để tính quyền và quan hệ cha. Ảnh/base64 cùng thông tin
+    // đính kèm chỉ được đọc cho đúng các thiết bị đã có thẻ, không kéo cả cây vào RAM.
+    const nodes = await getCachedEquipmentNodeList();
     const visibleNodes = await filterEquipmentNodesForUser(user, nodes);
     const visibleSeqs = new Set(visibleNodes.map((node) => node.seq));
     const index = getEquipmentTreeIndexFor(nodes);
 
     const seqs = [...cardSeqs].filter((seq) => visibleSeqs.has(seq) && index.bySeq.has(seq));
-    const repairStats = seqs.length
-      ? await prisma.repairLog.groupBy({
+    const [repairStats, cardDetails] = seqs.length
+      ? await Promise.all([prisma.repairLog.groupBy({
           by: ["deviceSeq"],
           where: { deviceSeq: { in: seqs } },
           _count: { _all: true },
           _max: { startedAt: true },
-        })
-      : [];
+        }), prisma.equipmentNode.findMany({
+          where: { seq: { in: seqs } },
+          select: { seq: true, name: true, kks: true, attachedInfo: true, documentUrl: true, imageUrl: true },
+        })])
+      : [[], []];
     const statsBySeq = new Map(
       repairStats.map((item) => [item.deviceSeq, { repairCount: item._count._all, latestRepairAt: item._max.startedAt }])
     );
+    const detailBySeq = new Map(cardDetails.map((item) => [item.seq, item]));
 
     const data = cards
       .filter((card) => visibleSeqs.has(card.deviceSeq) && index.bySeq.has(card.deviceSeq))
       .sort((a, b) => compareEquipmentSeq(a.deviceSeq, b.deviceSeq) || a.machine.localeCompare(b.machine))
       .map((card) => {
         const seq = card.deviceSeq;
-        const node = index.bySeq.get(seq)!;
+        const lightNode = index.bySeq.get(seq)!;
+        const detail = detailBySeq.get(seq);
+        const node: NormalizedEquipmentNode = {
+          ...lightNode,
+          name: normalizeEquipmentNodeName(seq, detail?.name ?? lightNode.name),
+          kks: detail?.kks ?? null,
+          attachedInfo: detail?.attachedInfo ?? null,
+          documentUrl: detail?.documentUrl ?? null,
+          imageUrl: detail?.imageUrl ?? null,
+        };
         const parentSeq = index.parentOf.get(seq) ?? node.parentSeq ?? null;
         const parent = parentSeq ? index.bySeq.get(parentSeq) ?? null : null;
         const machine = normalizeQrMachine(card.machine) ?? defaultScopeOf(seq);
@@ -98,9 +114,7 @@ export async function POST(req: NextRequest) {
     if (!deviceSeq) return fail("Chưa chọn thiết bị");
     await assertSeqEditable(user, deviceSeq);
 
-    const nodes = await getCachedEquipmentNodeFull();
-    const index = getEquipmentTreeIndexFor(nodes);
-    const node = index.bySeq.get(deviceSeq);
+    const node = await prisma.equipmentNode.findUnique({ where: { seq: deviceSeq }, select: { seq: true } });
     if (!node) return fail("Không tìm thấy thiết bị trong cây thư mục", 404);
     const machine = normalizeQrMachine(body.machine) ?? defaultScopeOf(deviceSeq);
     if (!machinesOf(deviceSeq).includes(machine)) return fail("Tổ máy không phù hợp với thiết bị đã chọn");

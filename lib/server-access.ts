@@ -333,6 +333,7 @@ export async function resolveEquipmentTreeAccess(
 // Kiểm tra quyền xem bằng cùng resolver dùng cho cây/danh sách để ma trận khối,
 // quyền kế thừa và cương vị quản lý luôn cho cùng một kết quả.
 export async function assertSeqViewable(user: SessionUser, seq: string) {
+  if (!(await equipmentScopeCheckRequired(user))) return;
   const access = await resolveEquipmentAccessForUser(user);
   if (!access.canViewSeq(seq)) {
     throw fail("Cương vị của bạn không có quyền xem hệ thống thiết bị này", 403);
@@ -357,10 +358,20 @@ export async function assertOilSootAccess(user: { id?: string; role?: string | n
 }
 
 export async function assertSeqEditable(user: SessionUser, seq: string) {
+  if (!(await equipmentScopeCheckRequired(user))) return;
   const access = await resolveEquipmentAccessForUser(user);
   if (!access.canEditSeq(seq)) {
     throw fail("Cương vị của bạn không có quyền chỉnh sửa hệ thống thiết bị này", 403);
   }
+}
+
+/** Tránh nạp toàn bộ cây chỉ để kiểm tra một mã khi cương vị vốn không bị giới hạn scope. */
+async function equipmentScopeCheckRequired(user: SessionUser) {
+  if (user.role === "ADMIN" || user.accessMode === "DEFECT_READ_ONLY") return false;
+  const position = user.currentPosition ?? user.position ?? "";
+  if (!position || isUnrestrictedEquipmentPosition(position)) return false;
+  const scopes = await loadPositionSystemScopeRows();
+  return hasExplicitScopes(scopes, position);
 }
 
 export async function assertSeqsEditable(user: SessionUser, seqs: Array<string | null | undefined>) {

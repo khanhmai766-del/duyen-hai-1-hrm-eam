@@ -185,8 +185,8 @@ function DeviceDetailPageContent() {
 
       <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-12">
         {/* Cột trái — HỒ SƠ: định danh và vật tư của thiết bị. */}
-        <div className="space-y-5 lg:col-span-4">
-          <SectionCard icon={Cpu} title="Thông tin thiết bị" tone="navy">
+        <div className="contents lg:col-span-4 lg:block lg:space-y-5">
+          <SectionCard icon={Cpu} title="Thông tin thiết bị" tone="navy" className="order-3 lg:order-none">
             <dl className="text-sm">
               <Row label="Tổ máy" value={deviceMachine === "COMMON" ? "COMMON · Dùng chung" : deviceMachine} />
               <Row label="Hệ thống" value={device.system ?? "—"} />
@@ -213,7 +213,7 @@ function DeviceDetailPageContent() {
           </SectionCard>
 
           {device.images?.length > 0 && (
-            <SectionCard icon={ImageIcon} title="Hình ảnh" tone="slate">
+            <SectionCard icon={ImageIcon} title="Hình ảnh" tone="slate" className="order-4 lg:order-none">
               <div className="grid grid-cols-3 gap-2">
                 {device.images.map((src, i) => (
                   <a key={i} href={src} target="_blank" rel="noopener noreferrer" className="block">
@@ -229,6 +229,12 @@ function DeviceDetailPageContent() {
             icon={Package}
             title="Vật tư được khai báo"
             tone="sky"
+            className="order-5 lg:order-none"
+            subtitle={
+              device.includesDescendants
+                ? `Gồm thiết bị này và ${device.includedDeviceCount! - 1} thiết bị con đến cấp ${historyDepth}`
+                : undefined
+            }
             actions={
               canDeclareMaterial && (
                 <Button size="sm" variant="outline" className="h-8 shrink-0 rounded-lg border-blue-200 text-accent hover:bg-blue-50" onClick={() => setMaterialOpen(true)}>
@@ -246,8 +252,11 @@ function DeviceDetailPageContent() {
                       <MachineBadge machine={item.material.machine} />
                     </div>
                     <div className="mt-1.5 text-[11.5px] leading-relaxed text-muted-foreground">
-                      <span className="font-medium text-slate-700">{device.name}</span>
-                      {device.system && <span className="block">Thư mục cha: {device.system}</span>}
+                      <span className="font-medium text-slate-700">{item.device?.name ?? device.name}</span>
+                      {item.device?.seq && item.device.seq !== device.id && (
+                        <span className="block font-mono">Thiết bị con: {item.device.seq}</span>
+                      )}
+                      {!item.device?.seq && device.system && <span className="block">Thư mục cha: {device.system}</span>}
                     </div>
                     <div className="mt-1.5 flex items-end justify-between gap-2 text-[11.5px] text-muted-foreground">
                       <span>
@@ -284,7 +293,17 @@ function DeviceDetailPageContent() {
             </div>
           </SectionCard>
 
-          <SectionCard icon={PackageCheck} title="Vật tư đã sử dụng" tone="emerald">
+          <SectionCard
+            icon={PackageCheck}
+            title="Vật tư đã sử dụng"
+            tone="emerald"
+            className="order-6 lg:order-none"
+            subtitle={
+              device.includesDescendants
+                ? `Tổng hợp theo ${device.includedDeviceCount} thiết bị trong phạm vi đang chọn`
+                : undefined
+            }
+          >
             <div className="grid gap-2.5">
               {device.materialUsage?.length ? (
                 device.materialUsage.slice(0, showAllUsage ? undefined : 3).map((item) => (
@@ -296,6 +315,12 @@ function DeviceDetailPageContent() {
                     <div className="mt-1.5 text-[11.5px] text-muted-foreground">
                       {item.replacement.location || item.replacement.system || "Chưa ghi rõ vị trí"}
                     </div>
+                    {item.replacement.device?.seq && item.replacement.device.seq !== device.id && (
+                      <div className="mt-1 text-[11.5px] text-muted-foreground">
+                        <span className="font-medium text-slate-700">{item.replacement.device.name}</span>
+                        <span className="block font-mono">Thiết bị con: {item.replacement.device.seq}</span>
+                      </div>
+                    )}
                     <div className="mt-1.5 text-[11.5px] text-muted-foreground">
                       {formatDate(item.replacedAt)}{item.quantity ? ` · ${item.quantity} ${item.replacement.material.unit}` : ""}
                     </div>
@@ -316,11 +341,12 @@ function DeviceDetailPageContent() {
         </div>
 
         {/* Cột phải — HOẠT ĐỘNG: lịch sử đã làm và việc đang tồn. */}
-        <div className="space-y-5 lg:col-span-8">
+        <div className="contents lg:col-span-8 lg:block lg:space-y-5">
           <SectionCard
             icon={Wrench}
             title="Lịch sử sửa chữa"
             tone="sky"
+            className="order-2 lg:order-none"
             subtitle={
               device.includesDescendants
                 ? `Gồm thiết bị này và ${device.includedDeviceCount! - 1} thiết bị con đến cấp ${historyDepth}`
@@ -379,6 +405,7 @@ function DeviceDetailPageContent() {
             icon={AlertTriangle}
             title="Khiếm khuyết hiện tại"
             tone="amber"
+            className="order-1 lg:order-none"
             count={device.currentDefects?.length ?? 0}
             actions={
               <>
@@ -608,6 +635,7 @@ function SectionCard({
   tone,
   count,
   actions,
+  className,
   children,
 }: {
   icon: LucideIcon;
@@ -616,6 +644,7 @@ function SectionCard({
   tone: "navy" | "sky" | "emerald" | "amber" | "slate";
   count?: number;
   actions?: React.ReactNode;
+  className?: string;
   children: React.ReactNode;
 }) {
   const tones = {
@@ -626,7 +655,7 @@ function SectionCard({
     slate: "bg-slate-100 text-slate-500 dark:bg-white/10 dark:text-slate-300",
   } as const;
   return (
-    <Card className="overflow-hidden border-slate-200/80 shadow-[0_12px_32px_-26px_rgba(15,23,42,0.6)] dark:border-white/10">
+    <Card className={cn("overflow-hidden border-slate-200/80 shadow-[0_12px_32px_-26px_rgba(15,23,42,0.6)] dark:border-white/10", className)}>
       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-slate-100 px-5 py-3.5 dark:border-white/10">
         <div className="flex min-w-0 items-center gap-2.5">
           <span className={cn("grid h-8 w-8 shrink-0 place-items-center rounded-lg", tones[tone])}>

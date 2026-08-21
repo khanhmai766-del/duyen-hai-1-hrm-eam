@@ -25,6 +25,7 @@ function DeviceScanner() {
   const videoRef = React.useRef<HTMLVideoElement>(null);
   const controlsRef = React.useRef<ScannerControls | null>(null);
   const resolvingRef = React.useRef(false);
+  const autoStartedRef = React.useRef(false);
   const [state, setState] = React.useState<ScanState>("idle");
   const [message, setMessage] = React.useState("Đưa mã QR vào giữa khung ngắm");
   const [torchAvailable, setTorchAvailable] = React.useState(false);
@@ -93,6 +94,14 @@ function DeviceScanner() {
       setMessage(cameraErrorMessage(error));
     }
   }, [resolveValue, stopScanner]);
+
+  // Nút Quét QR ở thanh điều hướng đã là thao tác chủ động của người dùng.
+  // Khi trang sẵn sàng, mở camera ngay; nếu trình duyệt chặn thì nút thử lại vẫn còn.
+  React.useEffect(() => {
+    if (autoStartedRef.current || searchParams.get("error") === "qr-inactive") return;
+    autoStartedRef.current = true;
+    void startScanner();
+  }, [searchParams, startScanner]);
 
   async function toggleTorch() {
     if (!controlsRef.current?.switchTorch) return;
