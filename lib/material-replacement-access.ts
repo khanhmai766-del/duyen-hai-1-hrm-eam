@@ -31,7 +31,13 @@ export function canViewMaterialReplacement(
   if (!canViewPosition(target.managingPositionCode ?? target.managingPosition, view)) return false;
   if (!access.hasExplicitScopes) return true;
   if (target.deviceSeq) return access.canViewSeq(target.deviceSeq);
-  if (target.system) return access.canViewDeviceLike({ system: target.system });
+  // Cột `system` mang HAI loại giá trị: TÊN hệ thống (dữ liệu nhập từ sổ) hoặc MÃ
+  // thiết bị (điểm khai báo thẳng từ cây, `deviceSeq` để trống). `canViewDeviceLike`
+  // chỉ so theo tên nên mã thiết bị luôn trượt — thử theo mã trước rồi mới theo tên.
+  // Tên hệ thống không bao giờ trùng dạng mã nên không có nguy cơ nới quyền nhầm.
+  if (target.system) {
+    return access.canViewSeq(target.system) || access.canViewDeviceLike({ system: target.system });
+  }
   // Dòng LƯU TRỮ không có thiết bị lẫn hệ thống để đối chiếu với cây thiết bị, nên rào
   // cương vị ở trên là rào duy nhất áp dụng được. Không có nhánh này thì mọi cương vị
   // có cấu hình phạm vi cây (hiện là 1205 bản ghi trên prod) sẽ KHÔNG thấy dòng nào.
@@ -49,6 +55,10 @@ export function canEditMaterialReplacement(
   target: ReplacementScopeTarget
 ) {
   if (!access.hasExplicitScopes) return true;
+  // Cùng lý do như phần XEM: điểm khai báo từ cây để mã thiết bị ở cột `system`.
+  // Không có nhánh này thì cương vị được cấp quyền sửa đúng thiết bị đó vẫn bấm
+  // "Sửa" không được. Vẫn phải có quyền SỬA trên chính thiết bị, không nới thêm.
+  if (!target.deviceSeq && target.system && access.canEditSeq(target.system)) return true;
   return access.canEditDeviceLike({
     device: target.deviceSeq,
     system: target.system,
