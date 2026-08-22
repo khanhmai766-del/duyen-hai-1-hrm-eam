@@ -535,10 +535,23 @@ export function usePcccBulkSaveCabinets() {
 }
 
 /** Kết quả xem trước / ký hàng loạt theo cương vị. */
+/** Một dòng để tick chọn trong hộp thoại ký. */
+export interface PcccBulkSignRow {
+  id: string;
+  code: string;
+  label: string;
+  /** Ngày kiểm tra đang ghi trên dòng — mốc để biết dòng này đã đi kiểm hôm nào. */
+  ngayKiemTra: string | null;
+  signed: boolean;
+}
+
 export interface PcccBulkSignPreview {
   total: number;
   alreadySigned: number;
   willSign: number;
+  rows: PcccBulkSignRow[];
+  /** true = quá nhiều dòng để bày ra chọn; chỉ ký hết được. */
+  rowsTruncated: boolean;
   scopeLabel: string;
   periodLabel: string;
   signerName: string;
@@ -575,6 +588,8 @@ export interface PcccBulkSignInput {
   /** BẮT BUỘC khi targetType = EMERGENCY_LIGHT: hai loại đèn chung một bảng. */
   loai?: "EXIT" | "CSSC";
   preview?: boolean;
+  /** Chọn riêng dòng để ký. Bỏ trống = ký hết. */
+  targetIds?: string[];
 }
 
 /**

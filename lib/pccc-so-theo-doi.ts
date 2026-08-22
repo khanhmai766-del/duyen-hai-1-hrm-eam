@@ -24,13 +24,28 @@ export const PCCC_BOOK_PREFIX = (process.env.PCCC_BOOK_S3_PREFIX || "pccc/so-the
  * Chia theo NĂM → KỲ → CƯƠNG VỊ: mỗi cương vị mỗi tháng đúng MỘT tệp, bấm xuất lần nữa
  * thì ghi đè. Giữ nhiều phiên bản chỉ tổ làm người tra cứu phân vân bản nào là bản nộp.
  */
-export function bookKeyOf(periodLabel: string, positionCode: string) {
-  const year = periodLabel.split(".")[1] ?? "0000";
-  return `${PCCC_BOOK_PREFIX}/${year}/${periodLabel}/${positionCode}.pdf`;
+/** Tổ máy hợp lệ để lọc sổ. Chuỗi rỗng / không hợp lệ = in tất cả tổ máy. */
+export const BOOK_MACHINES = ["S1", "S2", "COMMON"] as const;
+export type BookMachine = (typeof BOOK_MACHINES)[number];
+
+export function normalizeBookMachine(value: string | null | undefined): BookMachine | null {
+  const raw = (value ?? "").trim().toUpperCase();
+  return (BOOK_MACHINES as readonly string[]).includes(raw) ? (raw as BookMachine) : null;
 }
 
-export function bookFileNameOf(periodLabel: string, positionCode: string) {
-  return `So-theo-doi-PCCC-${positionCode}-${periodLabel}.pdf`;
+/**
+ * Khóa lưu trữ và tên tệp mang theo tổ máy khi có lọc.
+ *
+ * Không mang thì sổ tổ máy 2 chốt in sau sẽ GHI ĐÈ lên sổ tổ máy 1 của cùng cương vị,
+ * cùng kỳ — bản lưu trữ mất một quyển mà không ai hay.
+ */
+export function bookKeyOf(periodLabel: string, positionCode: string, machine?: BookMachine | null) {
+  const year = periodLabel.split(".")[1] ?? "0000";
+  return `${PCCC_BOOK_PREFIX}/${year}/${periodLabel}/${positionCode}${machine ? `-${machine}` : ""}.pdf`;
+}
+
+export function bookFileNameOf(periodLabel: string, positionCode: string, machine?: BookMachine | null) {
+  return `So-theo-doi-PCCC-${positionCode}${machine ? `-${machine}` : ""}-${periodLabel}.pdf`;
 }
 
 /**
@@ -172,8 +187,14 @@ export type BookStatus = {
  *   DÒNG chứ không lọc lúc truy vấn: `groups` trả về vẫn phải đếm đủ cả sáu nhóm để
  *   giao diện biết nhóm nào còn thiếu chữ ký, kể cả nhóm người dùng không chọn in.
  */
-export async function loadBookData(periodId: string, positionCode: string, groups?: BookGroupKey[]) {
-  const where = { periodId, cuongViCode: positionCode };
+export async function loadBookData(
+  periodId: string,
+  positionCode: string,
+  groups?: BookGroupKey[],
+  machine?: BookMachine | null
+) {
+  // `machine` là chiều LỌC thuần: bỏ trống thì in cả ba tổ máy như trước.
+  const where = { periodId, cuongViCode: positionCode, ...(machine ? { machine } : {}) };
   const [
     extinguishers,
     cabinets,

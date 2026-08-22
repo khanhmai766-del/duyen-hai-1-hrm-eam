@@ -837,6 +837,21 @@ export default function PcccPage() {
   // ---- Ký tên hàng loạt + hộp thoại kết quả
   const [signOpen, setSignOpen] = useState(false);
   const [signInfo, setSignInfo] = useState<PcccBulkSignPreview | null>(null);
+  /**
+   * Dòng được tick để ký. `null` = KHÔNG chọn gì = ký hết (nếp cũ).
+   *
+   * Cố ý phân biệt `null` với tập rỗng: tập rỗng nghĩa là người dùng đã vào chọn rồi
+   * bỏ hết, lúc đó không được âm thầm quay về "ký hết" — nút phải mờ đi.
+   */
+  const [signPicked, setSignPicked] = useState<Set<string> | null>(null);
+  const [signPickerOpen, setSignPickerOpen] = useState(false);
+  /** Số dòng thực sự sẽ ký: có chọn thì đếm phần chọn, không thì toàn bộ phạm vi. */
+  const signToSign = signPicked ? signPicked.size : signInfo?.total ?? 0;
+  /** Trong phần sắp ký có bao nhiêu dòng đã ký trước đó — ký lại là đè ngày kiểm tra cũ. */
+  const willResign = signInfo
+    ? signInfo.rows.filter((r) => r.signed && (signPicked ? signPicked.has(r.id) : true)).length
+      || (signPicked ? 0 : signInfo.alreadySigned)
+    : 0;
   const [resultDialog, setResultDialog] = useState<ResultDialog | null>(null);
   /** Bản nháp PDF đang mở để xem trước; `null` = chưa dựng bản nào. */
   const [bookPreview, setBookPreview] = useState<{ url: string; filename: string } | null>(null);
@@ -849,7 +864,9 @@ export default function PcccPage() {
    * và bản chính thức bắt buộc phải trùng phạm vi với bản nháp vừa xem — người dùng đổi
    * bộ lọc trong lúc soi bản nháp thì bản in ra sẽ khác thứ họ vừa duyệt.
    */
-  const [bookScope, setBookScope] = useState<{ period: string; cuongVi: string; groups: string[] } | null>(null);
+  // `machine` phải nằm trong kiểu: bước CHỐT IN dựng lại từ chính scope này, thiếu nó
+  // là bản chốt in ra cả ba tổ máy trong khi bản nháp vừa xem chỉ có một.
+  const [bookScope, setBookScope] = useState<{ period: string; cuongVi: string; groups: string[]; machine?: string } | null>(null);
   /** Bước XÁC NHẬN trước khi lưu — chỗ duy nhất nhắc được tổ máy trước khi ghi xuống DB. */
   const [saveConfirmOpen, setSaveConfirmOpen] = useState(false);
   const signPreview = usePcccBulkSignPreview();
@@ -897,6 +914,8 @@ export default function PcccPage() {
 
   function openSignDialog(target: PcccBulkSignTarget) {
     setSignInfo(null);
+    setSignPicked(null);
+    setSignPickerOpen(false);
     setSigningTarget(target);
     // HOÃN một nhịp mới mở hộp thoại. Menu của Radix khi đóng sẽ trả lại tiêu điểm, và
     // chính cú trả tiêu điểm đó bị hộp thoại hiểu là "bấm ra ngoài" nên đóng luôn hộp
@@ -917,7 +936,7 @@ export default function PcccPage() {
   function confirmSign() {
     if (!signingTarget) return;
     bulkSign.mutate(
-      signInput(signingTarget),
+      { ...signInput(signingTarget), ...(signPicked ? { targetIds: [...signPicked] } : {}) },
       {
         onSuccess: (res) => {
           setSignOpen(false);
@@ -1273,10 +1292,12 @@ export default function PcccPage() {
   }
 
   /** Địa chỉ API dựng bản in PDF theo phạm vi đã chọn trong hộp thoại. */
-  function bookExportUrl(scope: { period: string; cuongVi: string; groups: string[] }, preview: boolean) {
+  function bookExportUrl(scope: { period: string; cuongVi: string; groups: string[]; machine?: string }, preview: boolean) {
     return (
       `/api/pccc/so-theo-doi/export?period=${encodeURIComponent(scope.period)}&cuongVi=${encodeURIComponent(scope.cuongVi)}` +
       `&groups=${scope.groups.join(",")}` +
+      // Bỏ trống = in cả ba tổ máy; đừng gửi tham số rỗng cho khỏi rác URL.
+      (scope.machine ? `&machine=${encodeURIComponent(scope.machine)}` : "") +
       (tab === "FCD" ? "&tab=FCD" : "") +
       (preview ? "&preview=1" : "")
     );
@@ -1289,7 +1310,7 @@ export default function PcccPage() {
    * Sổ này in ra là nộp cho cơ quan PCCC, sai một chữ ký hay thiếu một dòng là phải làm
    * lại cả quyển — cho xem trước rồi mới chốt rẻ hơn nhiều so với phát hiện sau khi in.
    */
-  async function previewBook(scope: { period: string; cuongVi: string; groups: string[] }) {
+  async function previewBook(scope: { period: string; cuongVi: string; groups: string[]; machine?: string }) {
     if (!scope.period) return;
     setDownloading(true);
     setBookScope(scope);
@@ -2003,7 +2024,7 @@ export default function PcccPage() {
         positions={bookPositions}
         defaultPosition={bookStatus?.positionCode ?? cuongVi ?? bookPositions[0]?.code ?? ""}
         busy={downloading}
-        onExport={(periodLabel, code, groups) => void previewBook({ period: periodLabel, cuongVi: code, groups })}
+        onExport={(periodLabel, code, groups, machine) => void previewBook({ period: periodLabel, cuongVi: code, groups, machine })}
       />
 
       {/*
@@ -2186,18 +2207,106 @@ export default function PcccPage() {
                 <Row label="Kỳ kiểm tra" value={signInfo.periodLabel} />
                 <Row label="Cương vị" value={signInfo.scopeLabel || "—"} />
                 <Row label="Tổ máy" value={machineLabelOf(machine)} />
-                <Row label="Số dòng sẽ ký" value={`${signInfo.willSign} dòng`} strong />
-                {signInfo.alreadySigned > 0 && (
-                  <Row label="Trong đó đã ký trước đó" value={`${signInfo.alreadySigned} dòng — sẽ ký đè`} />
+                <Row
+                  label="Số dòng sẽ ký"
+                  value={signPicked ? `${signPicked.size} / ${signInfo.total} dòng đã chọn` : `${signInfo.total} dòng (tất cả)`}
+                  strong
+                />
+                {willResign > 0 && (
+                  <Row label="Trong đó đã ký trước đó" value={`${willResign} dòng — sẽ ký đè`} />
                 )}
                 <Row label="Người ký" value={signInfo.signerName || "—"} />
               </div>
+
+              {/* CHỌN RIÊNG DÒNG ĐỂ KÝ.
+                  Cương vị nhiều bình đi kiểm tra làm hai ngày; ký hết trong một lần sẽ
+                  đóng dấu cùng một `ngayKiemTra` cho cả phần chưa đi. Mặc định vẫn là ký
+                  hết — chọn riêng là thao tác phải chủ động mở ra. */}
+              {signInfo.rowsTruncated ? (
+                <p className="text-[12px] text-muted-foreground">
+                  Danh sách quá dài để chọn riêng ({signInfo.total} dòng) — lượt ký này sẽ ký toàn bộ.
+                </p>
+              ) : signInfo.rows.length > 0 ? (
+                <div className="rounded-xl border border-slate-200">
+                  <button
+                    type="button"
+                    onClick={() => setSignPickerOpen((v) => !v)}
+                    className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left"
+                  >
+                    <span className="min-w-0">
+                      <span className="block text-[13px] font-semibold text-ink">Chọn riêng dòng để ký</span>
+                      <span className="block text-[11px] text-muted-foreground">
+                        {signPicked
+                          ? `Đang chọn ${signPicked.size} dòng`
+                          : "Không chọn = ký hết. Mở ra nếu kiểm tra làm nhiều ngày."}
+                      </span>
+                    </span>
+                    <ChevronDown className={cn("size-4 shrink-0 text-slate-400 transition-transform", signPickerOpen && "rotate-180")} />
+                  </button>
+
+                  {signPickerOpen && (
+                    <div className="border-t border-slate-200 p-2">
+                      <div className="mb-2 flex flex-wrap gap-1.5">
+                        <Button size="sm" variant="outline" className="h-7 text-[11px]"
+                          onClick={() => setSignPicked(new Set(signInfo.rows.map((r) => r.id)))}>
+                          Chọn tất cả
+                        </Button>
+                        {/* Lối tắt cho ngày kiểm tra thứ hai — đúng việc người dùng cần làm. */}
+                        <Button size="sm" variant="outline" className="h-7 text-[11px]"
+                          onClick={() => setSignPicked(new Set(signInfo.rows.filter((r) => !r.signed).map((r) => r.id)))}>
+                          Chỉ dòng chưa ký ({signInfo.rows.filter((r) => !r.signed).length})
+                        </Button>
+                        <Button size="sm" variant="ghost" className="h-7 text-[11px]" onClick={() => setSignPicked(null)}>
+                          Bỏ chọn (ký hết)
+                        </Button>
+                      </div>
+                      <div className="max-h-56 space-y-0.5 overflow-y-auto">
+                        {signInfo.rows.map((row) => {
+                          const checked = signPicked ? signPicked.has(row.id) : true;
+                          return (
+                            <label key={row.id}
+                              className="flex cursor-pointer items-start gap-2 rounded-lg px-2 py-1.5 hover:bg-slate-50">
+                              <input
+                                type="checkbox"
+                                className="mt-0.5 size-3.5 shrink-0"
+                                checked={checked}
+                                onChange={(e) => {
+                                  // Lần tick đầu tiên chuyển từ "ký hết" sang danh sách thật:
+                                  // lấy toàn bộ làm điểm xuất phát rồi mới thêm/bớt.
+                                  const next = new Set(signPicked ?? signInfo.rows.map((r) => r.id));
+                                  if (e.target.checked) next.add(row.id);
+                                  else next.delete(row.id);
+                                  setSignPicked(next);
+                                }}
+                              />
+                              <span className="min-w-0 flex-1">
+                                <span className="block truncate text-[12px] font-medium text-ink">{row.code}</span>
+                                {row.label && <span className="block truncate text-[11px] text-muted-foreground">{row.label}</span>}
+                              </span>
+                              {row.signed && (
+                                <span className="shrink-0 rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700">
+                                  đã ký{row.ngayKiemTra ? ` ${new Date(row.ngayKiemTra).toLocaleDateString("vi-VN")}` : ""}
+                                </span>
+                              )}
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : null}
               <MachineNotice machine={machine} />
               <p className="text-[12px] text-muted-foreground">
                 Xác nhận sẽ ghi <b>chữ ký</b>, <b>người kiểm tra</b> ({signInfo.signerName}) và <b>ngày kiểm tra</b> (
-                {new Date().toLocaleDateString("vi-VN")}) cho toàn bộ số dòng trên.
+                {new Date().toLocaleDateString("vi-VN")}) cho {signPicked ? "các dòng đã chọn" : "toàn bộ số dòng trên"}.
               </p>
-              {signInfo.willSign === 0 && (
+              {signPicked?.size === 0 && (
+                <p className="rounded-lg border border-amber-200 bg-amber-50 p-2 text-[12px] text-amber-800">
+                  Chưa chọn dòng nào. Bấm <b>Bỏ chọn (ký hết)</b> nếu muốn ký toàn bộ.
+                </p>
+              )}
+              {signInfo.total === 0 && (
                 <p className="rounded-lg border border-amber-200 bg-amber-50 p-2 text-[12px] text-amber-800">
                   Không có dòng nào thuộc phạm vi ký của bạn. Kiểm tra lại bộ lọc cương vị.
                 </p>
@@ -2209,7 +2318,7 @@ export default function PcccPage() {
               Huỷ
             </Button>
             {signInfo?.hasSignature !== false && (
-              <Button size="sm" onClick={confirmSign} disabled={bulkSign.isPending || !signInfo || signInfo.willSign === 0}>
+              <Button size="sm" onClick={confirmSign} disabled={bulkSign.isPending || !signInfo || signToSign === 0}>
                 <PenLine className={cn("mr-1.5 size-4", bulkSign.isPending && "animate-pulse")} />
                 {bulkSign.isPending ? "Đang ký…" : "Xác nhận ký"}
               </Button>

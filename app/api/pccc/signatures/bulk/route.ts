@@ -42,6 +42,21 @@ type BulkTarget = "EXTINGUISHER" | "CABINET" | "ALARM_BUTTON" | "VALVE" | "EMERG
 
 type StampData = { nguoiKiemTra: string; ngayKiemTra: Date };
 
+/** Một dòng để hộp thoại bày ra cho người dùng tick chọn. */
+type PickRow = { id: string; code: string; label: string; ngayKiemTra: string | null };
+
+/**
+ * Số dòng tối đa gửi kèm bản xem trước.
+ *
+ * Cương vị nhiều bình nhất hiện chưa tới 200 dòng; đặt trần để một kỳ dữ liệu bất
+ * thường không biến hộp thoại thành trang tải vài MB. Vượt trần thì vẫn ký hết được
+ * (chế độ mặc định), chỉ là không bày danh sách để tick.
+ */
+const MAX_PICK_ROWS = 500;
+
+const joinLabel = (...parts: Array<string | null | undefined>) =>
+  parts.map((x) => (x ?? "").trim()).filter(Boolean).join(" · ");
+
 /**
  * Sáu bảng ký gộp được. Bảng tra thay cho chuỗi if/else: mỗi bảng chỉ khác nhau ở
  * delegate Prisma và nhãn ghi vào nhật ký, phần còn lại của luồng ký là một.
@@ -51,42 +66,92 @@ const BULK_TARGETS: Record<
   {
     label: string;
     findIds: (where: Record<string, unknown>) => Promise<{ id: string }[]>;
+    listRows: (where: Record<string, unknown>) => Promise<PickRow[]>;
     stamp: (ids: string[], data: StampData) => Prisma.PrismaPromise<unknown>;
   }
 > = {
   EXTINGUISHER: {
     label: "bình chữa cháy",
     findIds: (where) => prisma.pcccExtinguisher.findMany({ where: where as Prisma.PcccExtinguisherWhereInput, select: { id: true } }),
+    listRows: async (where) =>
+      (await prisma.pcccExtinguisher.findMany({
+        where: where as Prisma.PcccExtinguisherWhereInput,
+        orderBy: [{ stt: "asc" }, { ma: "asc" }],
+        take: MAX_PICK_ROWS,
+        select: { id: true, ma: true, chungLoai: true, viTri: true, ngayKiemTra: true },
+      })).map((r) => ({ id: r.id, code: r.ma, label: joinLabel(r.chungLoai, r.viTri), ngayKiemTra: r.ngayKiemTra?.toISOString() ?? null })),
     stamp: (ids, data) => prisma.pcccExtinguisher.updateMany({ where: { id: { in: ids } }, data }),
   },
   CABINET: {
     label: "tủ chữa cháy",
     findIds: (where) => prisma.pcccCabinet.findMany({ where: where as Prisma.PcccCabinetWhereInput, select: { id: true } }),
+    listRows: async (where) =>
+      (await prisma.pcccCabinet.findMany({
+        where: where as Prisma.PcccCabinetWhereInput,
+        orderBy: [{ stt: "asc" }, { ma: "asc" }],
+        take: MAX_PICK_ROWS,
+        select: { id: true, ma: true, ten: true, viTri: true, ngayKiemTra: true },
+      })).map((r) => ({ id: r.id, code: r.ma, label: joinLabel(r.ten, r.viTri), ngayKiemTra: r.ngayKiemTra?.toISOString() ?? null })),
     stamp: (ids, data) => prisma.pcccCabinet.updateMany({ where: { id: { in: ids } }, data }),
   },
   ALARM_BUTTON: {
     label: "nút nhấn báo cháy",
     findIds: (where) => prisma.pcccAlarmButton.findMany({ where: where as Prisma.PcccAlarmButtonWhereInput, select: { id: true } }),
+    listRows: async (where) =>
+      (await prisma.pcccAlarmButton.findMany({
+        where: where as Prisma.PcccAlarmButtonWhereInput,
+        orderBy: [{ stt: "asc" }, { maKks: "asc" }],
+        take: MAX_PICK_ROWS,
+        select: { id: true, maKks: true, tenKhuVuc: true, viTri: true, ngayKiemTra: true },
+      })).map((r) => ({ id: r.id, code: r.maKks, label: joinLabel(r.tenKhuVuc, r.viTri), ngayKiemTra: r.ngayKiemTra?.toISOString() ?? null })),
     stamp: (ids, data) => prisma.pcccAlarmButton.updateMany({ where: { id: { in: ids } }, data }),
   },
   VALVE: {
     label: "van chữa cháy",
     findIds: (where) => prisma.pcccValve.findMany({ where: where as Prisma.PcccValveWhereInput, select: { id: true } }),
+    listRows: async (where) =>
+      (await prisma.pcccValve.findMany({
+        where: where as Prisma.PcccValveWhereInput,
+        orderBy: [{ stt: "asc" }, { maKks: "asc" }],
+        take: MAX_PICK_ROWS,
+        select: { id: true, maKks: true, tenVan: true, viTri: true, ngayKiemTra: true },
+      })).map((r) => ({ id: r.id, code: r.maKks, label: joinLabel(r.tenVan, r.viTri), ngayKiemTra: r.ngayKiemTra?.toISOString() ?? null })),
     stamp: (ids, data) => prisma.pcccValve.updateMany({ where: { id: { in: ids } }, data }),
   },
   EMERGENCY_LIGHT: {
     label: "đèn sự cố",
     findIds: (where) => prisma.pcccEmergencyLight.findMany({ where: where as Prisma.PcccEmergencyLightWhereInput, select: { id: true } }),
+    listRows: async (where) =>
+      (await prisma.pcccEmergencyLight.findMany({
+        where: where as Prisma.PcccEmergencyLightWhereInput,
+        orderBy: [{ stt: "asc" }, { maKks: "asc" }],
+        take: MAX_PICK_ROWS,
+        select: { id: true, maKks: true, tenKhuVuc: true, ngayKiemTra: true },
+      })).map((r) => ({ id: r.id, code: r.maKks, label: joinLabel(r.tenKhuVuc), ngayKiemTra: r.ngayKiemTra?.toISOString() ?? null })),
     stamp: (ids, data) => prisma.pcccEmergencyLight.updateMany({ where: { id: { in: ids } }, data }),
   },
   HOSE_REEL: {
     label: "cuộn vòi chữa cháy",
     findIds: (where) => prisma.pcccHoseReel.findMany({ where: where as Prisma.PcccHoseReelWhereInput, select: { id: true } }),
+    listRows: async (where) =>
+      (await prisma.pcccHoseReel.findMany({
+        where: where as Prisma.PcccHoseReelWhereInput,
+        orderBy: [{ stt: "asc" }, { ma: "asc" }],
+        take: MAX_PICK_ROWS,
+        select: { id: true, ma: true, ten: true, viTri: true, ngayKiemTra: true },
+      })).map((r) => ({ id: r.id, code: r.ma, label: joinLabel(r.ten, r.viTri), ngayKiemTra: r.ngayKiemTra?.toISOString() ?? null })),
     stamp: (ids, data) => prisma.pcccHoseReel.updateMany({ where: { id: { in: ids } }, data }),
   },
   FIRE_CONTROL_CABINET: {
     label: "tủ điều khiển chữa cháy",
     findIds: (where) => prisma.pcccFireControlCabinet.findMany({ where: where as Prisma.PcccFireControlCabinetWhereInput, select: { id: true } }),
+    listRows: async (where) =>
+      (await prisma.pcccFireControlCabinet.findMany({
+        where: where as Prisma.PcccFireControlCabinetWhereInput,
+        orderBy: [{ stt: "asc" }, { ma: "asc" }],
+        take: MAX_PICK_ROWS,
+        select: { id: true, ma: true, viTri: true, ngayKiemTra: true },
+      })).map((r) => ({ id: r.id, code: r.ma, label: joinLabel(r.viTri), ngayKiemTra: r.ngayKiemTra?.toISOString() ?? null })),
     stamp: (ids, data) => prisma.pcccFireControlCabinet.updateMany({ where: { id: { in: ids } }, data }),
   },
 };
@@ -134,6 +199,13 @@ export async function POST(req: NextRequest) {
       /** Chỉ dùng cho EMERGENCY_LIGHT: "EXIT" | "CSSC". */
       loai?: string;
       preview?: boolean;
+      /**
+       * Chọn riêng một số dòng để ký. BỎ TRỐNG = ký hết, giữ nguyên nếp cũ.
+       *
+       * Sinh ra cho cương vị nhiều bình chữa cháy: đi kiểm tra làm hai ngày, ngày nào
+       * ký đúng phần đã đi ngày đó, để `ngayKiemTra` phản ánh ngày kiểm tra thật.
+       */
+      targetIds?: string[];
     };
     if (!isBulkTarget(body.targetType)) {
       return fail(`targetType phải là một trong: ${Object.keys(BULK_TARGETS).join(", ")}`);
@@ -156,7 +228,19 @@ export async function POST(req: NextRequest) {
     assertPeriodWritable(period);
 
     const where = whereOf(period.id, scope, body.cuongVi, body.machine, loai);
-    const ids = (await target.findIds(where)).map((r) => r.id);
+    const scopedIds = (await target.findIds(where)).map((r) => r.id);
+
+    /**
+     * Danh sách client gửi lên chỉ có quyền THU HẸP, không mở rộng.
+     *
+     * Luôn giao với tập trong phạm vi: gửi id của cương vị khác lên thì id đó rơi ra
+     * ngoài, chứ không thành một cửa ký vượt quyền.
+     */
+    const picked = Array.isArray(body.targetIds)
+      ? body.targetIds.filter((id): id is string => typeof id === "string" && id.length > 0)
+      : null;
+    const pickedSet = picked && picked.length ? new Set(picked) : null;
+    const ids = pickedSet ? scopedIds.filter((id) => pickedSet.has(id)) : scopedIds;
 
     const [alreadySigned, signatureKey] = await Promise.all([
       prisma.pcccSignature.count({ where: { periodId: period.id, targetType, targetId: { in: ids } } }),
@@ -167,10 +251,21 @@ export async function POST(req: NextRequest) {
     // kể cả việc người dùng chưa có chữ ký số, để hộp thoại nhắc TRƯỚC khi bấm xác nhận
     // thay vì để họ bấm rồi mới ăn lỗi.
     if (body.preview) {
+      // Kèm danh sách để hộp thoại bày ra cho tick chọn. Dòng nào đã ký kỳ này thì đánh
+      // dấu sẵn, người ký ngày thứ hai chỉ việc lọc lấy phần chưa ký.
+      const rows = scopedIds.length <= MAX_PICK_ROWS ? await target.listRows(where) : [];
+      const signedIds = new Set(
+        (await prisma.pcccSignature.findMany({
+          where: { periodId: period.id, targetType, targetId: { in: rows.map((r) => r.id) } },
+          select: { targetId: true },
+        })).map((r) => r.targetId)
+      );
       return ok({
-        total: ids.length,
+        total: scopedIds.length,
         alreadySigned,
         willSign: ids.length,
+        rows: rows.map((r) => ({ ...r, signed: signedIds.has(r.id) })),
+        rowsTruncated: scopedIds.length > MAX_PICK_ROWS,
         scopeLabel: describeScope(scope, body.cuongVi),
         periodLabel: period.label,
         signerName: user.name ?? user.email ?? "",
@@ -187,7 +282,14 @@ export async function POST(req: NextRequest) {
         409
       );
     }
-    if (ids.length === 0) return fail("Không có dòng nào thuộc phạm vi ký của bạn", 409);
+    if (ids.length === 0) {
+      return fail(
+        pickedSet
+          ? "Các dòng đã chọn không nằm trong phạm vi ký của bạn"
+          : "Không có dòng nào thuộc phạm vi ký của bạn",
+        409
+      );
+    }
 
     const signedAt = new Date();
     const signerName = user.name ?? user.email ?? "";
@@ -220,7 +322,7 @@ export async function POST(req: NextRequest) {
       period.id,
       auditDetailWithPosition(
         user,
-        `Ký ${ids.length} dòng ${target.label}${loai ? ` (${loai})` : ""} · ` +
+        `Ký ${ids.length}${pickedSet ? `/${scopedIds.length} (chọn riêng)` : ""} dòng ${target.label}${loai ? ` (${loai})` : ""} · ` +
           `${period.label} · ${describeScope(scope, body.cuongVi)}`
       ),
       { saveToAuditLog: true }

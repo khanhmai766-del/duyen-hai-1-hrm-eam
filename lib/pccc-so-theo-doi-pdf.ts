@@ -79,6 +79,8 @@ const ROW_H = 46;
 export type BookPdfInput = {
   periodLabel: string;
   positionLabel: string;
+  /** Nhãn tổ máy đang lọc ("Tổ máy 1"…). Bỏ trống = sổ gồm cả ba tổ máy. */
+  machineLabel?: string | null;
   rows: BookRow[];
   /** Ảnh chữ ký theo S3 key (đã tải sẵn ở lớp gọi) — thiếu ảnh thì cột 7 chỉ còn tên. */
   signatureImages: Map<string, Buffer>;
@@ -116,7 +118,9 @@ function drawCover(page: PDFPage, fonts: PdfFonts, input: BookPdfInput, year: st
 
   y -= 34;
   const lines = [
-    `Tên cơ sở: KHU VỰC ${input.positionLabel.toUpperCase()} - PX VẬN HÀNH 1 - NHÀ MÁY NHIỆT ĐIỆN DUYÊN HẢI 1`,
+    // Tổ máy in ngay sau tên cơ sở: sổ đã lọc theo tổ máy thì người cầm quyển in phải
+    // đọc được ngay là quyển của tổ nào, không phải suy từ danh sách thiết bị bên trong.
+    `Tên cơ sở: KHU VỰC ${input.positionLabel.toUpperCase()}${input.machineLabel ? ` - ${input.machineLabel.toUpperCase()}` : ""} - PX VẬN HÀNH 1 - NHÀ MÁY NHIỆT ĐIỆN DUYÊN HẢI 1`,
     "Địa chỉ: Khóm Mù U, phường Duyên Hải, tỉnh Vĩnh Long",
     "Số điện thoại: (+84) 0294 3923222    Fax: (+84) 0294 3923243",
     `Lập sổ ngày 01 tháng 04 năm ${year}`,
@@ -181,7 +185,7 @@ export async function buildPcccBookPdf(input: BookPdfInput): Promise<Buffer> {
   const pdf = await PDFDocument.create();
   pdf.registerFontkit(fontkit);
   const fonts = await loadPdfFonts(pdf);
-  pdf.setTitle(`So theo doi phuong tien PCCC - ${input.positionLabel} - ${input.periodLabel}`);
+  pdf.setTitle(`So theo doi phuong tien PCCC - ${input.positionLabel}${input.machineLabel ? ` - ${input.machineLabel}` : ""} - ${input.periodLabel}`);
   // Phông chuẩn chỉ để pdf-lib khỏi tự nhúng Helvetica khi tài liệu rỗng; không vẽ chữ Việt bằng nó.
   await pdf.embedFont(StandardFonts.Helvetica);
 

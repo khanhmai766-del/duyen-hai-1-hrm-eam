@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import { MACHINE_OPTIONS } from "@/components/pccc/pccc-shared";
 
 /** Khung chung: tiêu đề + mô tả + các khối chọn + nút xuất. */
 const SECTION = "rounded-xl border border-slate-200 bg-slate-50/60 px-3.5 py-3";
@@ -201,12 +202,17 @@ export function PcccBookExportDialog({
   positions: { code: string; label: string }[];
   defaultPosition: string;
   busy: boolean;
-  onExport: (periodLabel: string, cuongVi: string, groups: string[]) => void;
+  onExport: (periodLabel: string, cuongVi: string, groups: string[], machine: string) => void;
 }) {
   const st = usePickState(open, defaultPeriod);
   const [cuongVi, setCuongVi] = useState(defaultPosition);
+  // "" = in cả ba tổ máy, giữ đúng hành vi trước khi có bộ lọc này.
+  const [machine, setMachine] = useState("");
   useEffect(() => {
-    if (open) setCuongVi(defaultPosition);
+    if (open) {
+      setCuongVi(defaultPosition);
+      setMachine("");
+    }
   }, [open, defaultPosition]);
 
   const groups = useMemo(
@@ -226,15 +232,28 @@ export function PcccBookExportDialog({
           <span className="font-semibold text-slate-700">bản nháp để xem trước</span>, chốt in ở bước sau.
         </p>
         <PeriodPicker periods={periods} value={st.period} onChange={st.setPeriod} />
-        <div className={SECTION}>
-          <Label className={SECTION_TITLE}>Chọn cương vị quản lý</Label>
-          <select className={SELECT} value={cuongVi} onChange={(e) => setCuongVi(e.target.value)}>
-            {positions.map((p) => (
-              <option key={p.code} value={p.code}>
-                {p.label}
-              </option>
-            ))}
-          </select>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className={SECTION}>
+            <Label className={SECTION_TITLE}>Chọn cương vị quản lý</Label>
+            <select className={SELECT} value={cuongVi} onChange={(e) => setCuongVi(e.target.value)}>
+              {positions.map((p) => (
+                <option key={p.code} value={p.code}>
+                  {p.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className={SECTION}>
+            <Label className={SECTION_TITLE}>Chọn tổ máy</Label>
+            <select className={SELECT} value={machine} onChange={(e) => setMachine(e.target.value)}>
+              <option value="">Tất cả tổ máy</option>
+              {MACHINE_OPTIONS.map((m) => (
+                <option key={m.value} value={m.value}>
+                  {m.label}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
         <ChoiceList
           title="Chọn nhóm thiết bị cần xuất"
@@ -248,7 +267,7 @@ export function PcccBookExportDialog({
           <Button size="sm" variant="outline" onClick={() => onOpenChange(false)}>
             Đóng
           </Button>
-          <Button size="sm" disabled={busy || !cuongVi || groups.length === 0} onClick={() => onExport(st.period, cuongVi, groups)}>
+          <Button size="sm" disabled={busy || !cuongVi || groups.length === 0} onClick={() => onExport(st.period, cuongVi, groups, machine)}>
             {busy ? "Đang dựng…" : "Xem trước"}
           </Button>
         </DialogFooter>

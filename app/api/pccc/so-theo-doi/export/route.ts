@@ -10,6 +10,7 @@ import {
   bookPositionOf,
   bookStatusOf,
   loadBookData,
+  normalizeBookMachine,
   type BookGroupKey,
 } from "@/lib/pccc-so-theo-doi";
 import { buildPcccBookPdf } from "@/lib/pccc-so-theo-doi-pdf";
@@ -19,6 +20,9 @@ import { positionLabelOf } from "@/lib/position-catalog";
 import { uploadS3Object } from "@/lib/s3";
 
 export const dynamic = "force-dynamic";
+
+/** Nhãn tổ máy in lên bìa sổ — giữ đúng chữ dùng trên giao diện PCCC. */
+const MACHINE_LABELS: Record<string, string> = { S1: "Tổ máy 1", S2: "Tổ máy 2", COMMON: "Common" };
 
 /**
  * Bản nháp mở THẲNG trong khung xem của hộp thoại (`inline`) chứ không rơi vào thư mục
@@ -96,18 +100,31 @@ export async function GET(req: NextRequest) {
     const requested = (sp.get("groups") ?? "").split(",").map((g) => g.trim().toUpperCase());
     const groups = BOOK_GROUPS.map((g) => g.key).filter((key) => requested.includes(key)) as BookGroupKey[];
 
-    const { rows } = await loadBookData(period.id, positionCode, groups);
-    if (!rows.length) return fail("Nhóm thiết bị đã chọn không có dòng nào ở cương vị này", 409);
+    // ?machine=S1|S2|COMMON — lọc theo tổ máy. Bỏ trống hoặc giá trị lạ = in cả ba,
+    // giữ nguyên hành vi cũ. Chuẩn hóa ở đây chứ không tin chuỗi client gửi lên.
+    const machine = normalizeBookMachine(sp.get("machine"));
+    const machineLabel = machine ? MACHINE_LABELS[machine] : null;
+
+    const { rows } = await loadBookData(period.id, positionCode, groups, machine);
+    if (!rows.length) {
+      return fail(
+        machine
+          ? `Nhóm thiết bị đã chọn không có dòng nào ở cương vị này thuộc ${machineLabel}`
+          : "Nhóm thiết bị đã chọn không có dòng nào ở cương vị này",
+        409
+      );
+    }
     const signatureImages = await loadSignatureImages(rows.map((r) => r.signatureKey));
     const buffer = await buildPcccBookPdf({
       periodLabel: period.label,
       positionLabel: positionLabelOf(positionCode),
+      machineLabel,
       rows,
       signatureImages,
     });
 
-    const key = bookKeyOf(period.label, positionCode);
-    const fileName = bookFileNameOf(period.label, positionCode);
+    const key = bookKeyOf(period.label, positionCode, machine);
+    const fileName = bookFileNameOf(period.label, positionCode, machine);
     if (!preview) {
       await uploadS3Object({ key, body: buffer, contentType: "application/pdf", originalName: fileName });
 
@@ -116,7 +133,7 @@ export async function GET(req: NextRequest) {
         "EXPORT_PCCC_BOOK",
         "PcccPeriod",
         period.id,
-        auditDetailWithPosition(user, `Xuất sổ theo dõi PCCC ${period.label} · ${positionLabelOf(positionCode)} · ${rows.length} thiết bị`)
+        auditDetailWithPosition(user, `Xuất sổ theo dõi PCCC ${period.label} · ${positionLabelOf(positionCode)}${machineLabel ? ` · ${machineLabel}` : ""} · ${rows.length} thiết bị`)
       );
     }
 

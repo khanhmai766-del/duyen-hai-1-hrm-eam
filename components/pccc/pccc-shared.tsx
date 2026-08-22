@@ -100,11 +100,18 @@ export function StatCard({
   /** Bấm vào thì lọc ra gì — hiện thành tooltip, cũng là nhãn cho trình đọc màn hình. */
   actionLabel?: string;
 }) {
-  const ring: Record<StatusTone, string> = {
-    ok: "ring-emerald-200 bg-emerald-50/60",
-    watch: "ring-amber-200 bg-amber-50/60",
-    bad: "ring-rose-200 bg-rose-50/60",
-    none: "ring-slate-200 bg-white",
+  /** Dải màu mảnh bên trái — đủ để nhận ra mức độ mà không nhuộm cả thẻ. */
+  const rail: Record<StatusTone, string> = {
+    ok: "bg-emerald-500",
+    watch: "bg-amber-500",
+    bad: "bg-rose-500",
+    none: "bg-slate-300",
+  };
+  const iconBox: Record<StatusTone, string> = {
+    ok: "bg-emerald-50 text-emerald-600 ring-emerald-100",
+    watch: "bg-amber-50 text-amber-600 ring-amber-100",
+    bad: "bg-rose-50 text-rose-600 ring-rose-100",
+    none: "bg-slate-50 text-slate-500 ring-slate-100",
   };
   const valueColor: Record<StatusTone, string> = {
     ok: "text-emerald-700",
@@ -120,29 +127,25 @@ export function StatCard({
       title={actionLabel}
       aria-label={actionLabel ? `${label}: ${value} — ${actionLabel}` : undefined}
       className={cn(
-        "group relative flex min-w-0 flex-1 items-start gap-3 rounded-xl p-3.5 text-left ring-1 transition duration-150",
-        ring[tone],
+        // NỀN TRẮNG, không nhuộm màu cả thẻ: một dải KPI bốn thẻ đỏ/xanh kín nền đọc như
+        // bốn cảnh báo ngang hàng nhau. Màu dồn vào dải trái + ô biểu tượng + con số.
+        "group relative flex min-w-0 flex-1 items-start gap-3 overflow-hidden rounded-xl border border-slate-200 bg-white py-3.5 pl-4 pr-3.5 text-left shadow-[0_1px_2px_rgba(16,24,40,0.04)] transition duration-150",
         onClick &&
-          "cursor-pointer hover:-translate-y-0.5 hover:shadow-lg hover:ring-2 focus-visible:-translate-y-0.5 focus-visible:shadow-lg focus-visible:outline-none focus-visible:ring-2 active:translate-y-0 active:shadow-sm",
-        active && "ring-2 ring-offset-1 ring-offset-white",
+          "cursor-pointer hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md focus-visible:-translate-y-0.5 focus-visible:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-navy/30 active:translate-y-0 active:shadow-sm",
+        active && "border-navy/40 ring-2 ring-navy/20",
         !onClick && "cursor-default"
       )}
     >
+      <span className={cn("absolute inset-y-0 left-0 w-1", rail[tone])} aria-hidden />
       {Icon && (
-        <span
-          className={cn(
-            "mt-0.5 grid size-9 shrink-0 place-items-center rounded-lg bg-white/80 ring-1 transition",
-            ring[tone],
-            onClick && "group-hover:scale-110"
-          )}
-        >
-          <Icon className={cn("size-4", valueColor[tone])} />
+        <span className={cn("mt-0.5 grid size-9 shrink-0 place-items-center rounded-lg ring-1 transition", iconBox[tone], onClick && "group-hover:scale-105")}>
+          <Icon className="size-4" />
         </span>
       )}
       <span className="min-w-0">
-        <span className="block truncate text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{label}</span>
-        <span className={cn("block text-2xl font-bold leading-tight", valueColor[tone])}>{value}</span>
-        {hint && <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">{hint}</span>}
+        <span className="block truncate text-[10.5px] font-semibold uppercase tracking-[0.06em] text-slate-500">{label}</span>
+        <span className={cn("mt-1 block text-[26px] font-bold leading-none tracking-tight tabular-nums", valueColor[tone])}>{value}</span>
+        {hint && <span className="mt-1.5 block truncate text-[11px] leading-tight text-muted-foreground">{hint}</span>}
       </span>
       {/* Chỉ dấu "bấm được" — chỉ hiện khi rê chuột nên lúc thường thẻ vẫn gọn như cũ. */}
       {onClick && (
