@@ -33,7 +33,7 @@ import { ReplacementPointsEditor } from "@/components/materials/replacement-poin
 import { QlvtSyncAction } from "@/components/vat-tu/OilGroupingPage";
 import { useCreateReplacement } from "@/hooks/useReplacements";
 import { useRbacAccess } from "@/hooks/useRbacAccess";
-import { displayMaterialCategory, MATERIAL_CATEGORIES, MATERIAL_CATEGORY_FILTERS, OTHER_MATERIAL_GROUP, DEFECT_UNITS, DEFECT_STATUS, addMonths, isOtherMaterialCategory, materialCategoryMatches, roundStock } from "@/lib/constants";
+import { displayMaterialCategory, replacementDueStatus, type ReplDueKey, MATERIAL_CATEGORIES, MATERIAL_CATEGORY_FILTERS, OTHER_MATERIAL_GROUP, DEFECT_UNITS, DEFECT_STATUS, addMonths, isOtherMaterialCategory, materialCategoryMatches, roundStock } from "@/lib/constants";
 import { normalizeText } from "@/lib/nav";
 import { STANDALONE_GROUP_PREFIX } from "@/lib/oil-grouping-shared";
 import { positionLabelOf, positionsMatch } from "@/lib/position-catalog";
@@ -2230,6 +2230,36 @@ function MaterialExpandedDetails({
       })
     );
   }, [m.replacements, points]);
+  /**
+   * Trạng thái đến hạn XẤU NHẤT trong các điểm theo dõi của một dòng khai báo.
+   *
+   * Một dòng khai báo có thể mở nhiều điểm (mỗi thiết bị con một điểm). Lấy theo điểm
+   * đầu tiên tìm thấy thì một điểm quá hạn nằm lẫn giữa mấy điểm còn hạn sẽ hiện màu
+   * xanh — đúng thứ nút màu này sinh ra để cảnh báo. Quá hạn thắng, rồi tới sắp hạn.
+   */
+  const trackingDueByDeclaration = React.useMemo(() => {
+    const allPoints = m.replacements ?? [];
+    const rank: Record<ReplDueKey, number> = { OVERDUE: 0, DUE_SOON: 1, OK: 2 };
+    return new Map(
+      points.flatMap((declaration) => {
+        const matched = allPoints.filter((candidate) => {
+          if (!candidate.isActive) return false;
+          if (declaration.deviceSeq) return candidate.deviceSeq === declaration.deviceSeq;
+          return (
+            !candidate.deviceSeq &&
+            (candidate.system?.trim() || null) === (declaration.system?.trim() || null) &&
+            (candidate.location?.trim() || null) === (declaration.location?.trim() || null)
+          );
+        });
+        if (!matched.length) return [];
+        const worst = matched
+          .map((point) => replacementDueStatus(point.nextDueAt))
+          .reduce((a, b) => (rank[a] <= rank[b] ? a : b));
+        // Điểm chỉ lấy mẫu dùng tông xanh dương riêng — xem SAMPLING_DUE ở lib/constants.ts.
+        return [[declaration.id, { key: worst, samplingOnly: matched.every((point) => point.samplingOnly) }] as const];
+      })
+    );
+  }, [m.replacements, points]);
   const createPoint = useCreateReplacement();
 
   type PanelPoint = NonNullable<MaterialWithDevices["replacements"]>[number];
@@ -2389,11 +2419,34 @@ function MaterialExpandedDetails({
                     : deviceLimit > 1
                       ? `Thêm điểm (${activeCount}/${deviceLimit})`
                       : "Thêm điểm";
+              const tracking = trackingDueByDeclaration.get(p.id);
+              /**
+               * Nền nút "Đang theo dõi" mang luôn trạng thái đến hạn, cùng bảng màu với
+               * tab Trạng thái theo dõi: đỏ quá hạn · vàng sắp hạn · xanh lá còn hạn.
+               * Nút "Thêm điểm" giữ xanh dương vì nó là hành động, chưa có hạn nào để báo.
+               */
+              const TRACKING_TONE: Record<ReplDueKey, string> = {
+                OVERDUE: "bg-red-600 hover:bg-red-700 focus-visible:ring-red-600",
+                DUE_SOON: "bg-amber-500 hover:bg-amber-600 focus-visible:ring-amber-500",
+                OK: "bg-emerald-600 hover:bg-emerald-700 focus-visible:ring-emerald-600",
+              };
+              // Điểm chỉ lấy mẫu dùng CHUNG ba màu này, không tách tông riêng: cùng là
+              // việc tới hạn phải làm, nhìn một bảng màu duy nhất đỡ phải học hai lần.
+              const trackingTone = tracking
+                ? TRACKING_TONE[tracking.key]
+                : "bg-accent hover:bg-accent/90 focus-visible:ring-accent";
+              const TRACKING_STATUS_TEXT: Record<ReplDueKey, string> = {
+                OVERDUE: "đang QUÁ HẠN",
+                DUE_SOON: "SẮP ĐẾN HẠN",
+                OK: "còn hạn",
+              };
               const trackingTitle =
                 p.intervalMonths === 0
                   ? "Chu kỳ 0 không theo dõi lịch thay thế"
                   : capacityReached
-                    ? "Xem điểm này đang quá hạn, sắp đến hạn hay còn hạn"
+                    ? tracking
+                      ? `Điểm này ${tracking.samplingOnly ? "kỳ lấy mẫu: " : ""}${TRACKING_STATUS_TEXT[tracking.key]} — bấm để xem chi tiết`
+                      : "Xem điểm này đang quá hạn, sắp đến hạn hay còn hạn"
                     : "Thêm điểm theo dõi thời gian thay thế cho thiết bị này";
               const selectable = canSelect(p);
               const checked = selectedIds.includes(p.id);
@@ -2447,7 +2500,10 @@ function MaterialExpandedDetails({
                         href={`/replacements?tab=status&pointId=${encodeURIComponent(activePoint.id)}`}
                         title={trackingTitle}
                         aria-label={`Xem trạng thái theo dõi của ${p.device?.name || p.location || p.system || m.name}`}
-                        className="inline-flex max-w-full items-center justify-center gap-1 whitespace-nowrap rounded-lg bg-accent px-2 py-1.5 text-[11px] font-semibold text-white shadow-sm transition-all hover:-translate-y-0.5 hover:bg-accent/90 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
+                        className={cn(
+                          "inline-flex max-w-full items-center justify-center gap-1 whitespace-nowrap rounded-lg px-2 py-1.5 text-[11px] font-semibold text-white shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2",
+                          trackingTone
+                        )}
                       >
                         <Activity className="h-3.5 w-3.5" /> {trackingLabel}
                       </Link>
