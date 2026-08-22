@@ -1,9 +1,10 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { buildBbntDoDocument, deliveryNoteForDocuments, getTicket, ITEM_INCLUDE, type FullTicket } from "@/lib/material-ticket-bbnt-do";
 import { ok, fail, requireUser, handle, audit } from "@/lib/api";
 import { isShiftLeader, isTechnician, getWorkflowRoleMap, isMaterialTicketExtraAssignedPosition, returnStepAllowed, stepAllowedWithMap } from "@/lib/material-workflow";
+import { resolveSignatureBuffer } from "@/lib/bbnt-do-doc";
 import { generateBbntDoc, type BbntItem } from "@/lib/bbnt-doc";
-import { generateBbntDoDoc, resolveSignatureBuffer, type BbntDoItem } from "@/lib/bbnt-do-doc";
 import { generateBbthvtDoc } from "@/lib/bbthvt-doc";
 import { generateDxvtDoc } from "@/lib/dxvt-doc";
 import { materialTicketFileBase, materialTicketReference } from "@/lib/material-ticket-sequence";
@@ -11,7 +12,8 @@ import { normalizeText } from "@/lib/nav";
 import { consumeStock, deliveryNoteSummary, receiveIntoLot, releaseUsage, reverseTicketStock, sharedCodesOf, syncMaterialQuantity, usedLotsOfTicket } from "@/lib/material-stock-lot";
 import { parseDateInput } from "@/lib/utils";
 import { linkTicketTrucks, unlinkTicketTrucks, type TruckInput } from "@/lib/chemical-inventory/ticket-link";
-import { CHEMICAL_TICKET_TYPE, COMMON_MATERIAL_POSITION, GAS_RETURN_STATUS, isChemicalFlowTicket, isGasCylinderCategory, isGasCylinderTicket, isOtherMaterialAdvanceTicket, isOtherMaterialTicketType, materialTicketRequiresRecovery, OTHER_MATERIAL_ADVANCE_TICKET_TYPE, OTHER_MATERIAL_TICKET_TYPE, recoveryRequiredForReason, ticketReasonAllowed, TICKET_MATERIAL_CATEGORIES, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
+import { countUsagePhotos, deleteUsagePhotos } from "@/lib/material-usage-photo";
+import { MIN_USAGE_PHOTOS, MISSING_USAGE_PHOTO_MESSAGE, usesHandwrittenBbnt, CHEMICAL_TICKET_TYPE, COMMON_MATERIAL_POSITION, GAS_RETURN_STATUS, isChemicalFlowTicket, isGasCylinderCategory, isGasCylinderTicket, isOtherMaterialAdvanceTicket, isOtherMaterialTicketType, materialTicketRequiresRecovery, OTHER_MATERIAL_ADVANCE_TICKET_TYPE, OTHER_MATERIAL_TICKET_TYPE, recoveryRequiredForReason, ticketReasonAllowed, TICKET_MATERIAL_CATEGORIES, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
 import { positionsMatch } from "@/lib/position-catalog";
 import { replacementPointDisplayLabel, replacementPointSelectionKey } from "@/lib/material-replacement-display";
 import { receiveOtherMaterial } from "@/lib/other-material-stock";
@@ -40,20 +42,6 @@ function isChemicalSequenceTicket(type: string | null | undefined) {
 const SCCN_REPRESENTATIVES = ["Võ Văn Chiến", "Lê Văn Khánh", "Nguyễn Thanh Toàn"] as const;
 const SCCN_POSITIONS = ["Quản Đốc", "Phó Quản Đốc"] as const;
 
-const ITEM_INCLUDE = {
-  items: {
-    include: {
-      material: { select: { id: true, code: true, erpCodes: true, name: true, unit: true, quantity: true, category: true, machine: true } },
-      device: { select: { seq: true, name: true, kks: true } },
-    },
-  },
-} as const;
-
-type FullTicket = NonNullable<Awaited<ReturnType<typeof getTicket>>>;
-
-async function getTicket(id: string) {
-  return prisma.materialTicket.findUnique({ where: { id }, include: ITEM_INCLUDE });
-}
 
 async function recoveryRequiredForTicketReason(t: FullTicket, proposalNote: string) {
   const item = t.items[0];
@@ -123,98 +111,6 @@ function toBbntItems(t: FullTicket, quantityOverrides?: Map<string, number>): Bb
  * Chèn chữ ký số: Quản đốc (đại diện chủ quản) + người sử dụng vật tư (Người lập).
  * `overrides` cho giá trị vừa nhập trong request hiện tại nhưng chưa ghi vào `t`.
  */
-async function buildBbntDoDocument(
-  t: FullTicket,
-  overrides?: {
-    pctNumber?: string;
-    workStartedAt?: Date;
-    workEndedAt?: Date;
-    receivedQuantity?: number;
-    deliveryNoteNumber?: string;
-    itemOverride?: { materialCode: string; materialName: string };
-    sccnRepresentative?: { name: string; position: string };
-  }
-) {
-  const items: BbntDoItem[] = t.items.map((it, index) => ({
-    deviceSeq: it.deviceSeq,
-    deviceName: it.deviceNameManual || it.device?.name || "",
-    materialCode: (index === 0 ? overrides?.itemOverride?.materialCode : undefined) || it.erpCode || it.material.code,
-    materialName: (index === 0 ? overrides?.itemOverride?.materialName : undefined) || it.erpName || it.material.name,
-    materialUnit: it.material.unit,
-  }));
-  // "Hệ thống, thiết bị" theo cột Hệ thống/thiết bị của Chi tiết điểm thay thế:
-  // tên node cây thiết bị; thiết bị đã xóa thì rơi về hệ thống của điểm thay thế.
-  const missingDevice = t.items.filter((it) => !it.device?.name && it.deviceSeq);
-  const systemBySeq = new Map<string, string>();
-  if (missingDevice.length) {
-    const points = await prisma.materialReplacement.findMany({
-      where: { OR: missingDevice.map((it) => ({ materialId: it.materialId, deviceSeq: it.deviceSeq! })) },
-      select: { deviceSeq: true, system: true },
-    });
-    for (const point of points) {
-      if (point.deviceSeq && point.system) systemBySeq.set(point.deviceSeq, point.system);
-    }
-  }
-  const heThongThietBi = [...new Set(
-    t.items
-      .map((it) => it.device?.name || (it.deviceSeq ? systemBySeq.get(it.deviceSeq) : null) || it.deviceSeq)
-      .filter(Boolean) as string[]
-  )].join(", ");
-  const signatureSelect = { name: true, position: true, signatureKey: true, signatureUrl: true } as const;
-  const [usedByUser, activeUsers] = await Promise.all([
-    t.usedById
-      ? prisma.user.findUnique({ where: { id: t.usedById }, select: signatureSelect })
-      : Promise.resolve(null),
-    prisma.user.findMany({ where: { isActive: true }, select: signatureSelect }),
-  ]);
-  // Quản đốc PXVH1 (không tính Phó quản đốc): giữ riêng với đại diện SCCN.
-  const defaultQuanDoc = activeUsers.find((u) => normalizeText(u.position ?? "").startsWith("quan doc")) ?? null;
-  const selectedSccnRepresentative = overrides?.sccnRepresentative
-    ?? (t.sccnRepresentativeName && t.sccnRepresentativePosition
-      ? { name: t.sccnRepresentativeName, position: t.sccnRepresentativePosition }
-      : undefined);
-  const selectedSccnUser = selectedSccnRepresentative
-    ? activeUsers.find((u) => normalizeText(u.name) === normalizeText(selectedSccnRepresentative.name)) ?? null
-    : null;
-  // Người in vào biên bản: ưu tiên tên VHV trực tiếp sử dụng vật tư (nhập tay ở bước
-  // sử dụng); chữ ký lấy theo tài khoản khớp tên đó, không khớp thì theo tài khoản
-  // thao tác bước sử dụng (chỉ khi cùng tên) để tránh ký nhầm người.
-  const materialUserName = t.materialUserName?.trim() || null;
-  let signer: typeof usedByUser = usedByUser;
-  if (materialUserName && normalizeText(materialUserName) !== normalizeText(usedByUser?.name ?? "")) {
-    signer = activeUsers.find((u) => normalizeText(u.name) === normalizeText(materialUserName)) ?? null;
-  }
-  const [chuKyNguoiLap, chuKyQuanDoc] = await Promise.all([
-    resolveSignatureBuffer(signer),
-    resolveSignatureBuffer(defaultQuanDoc),
-  ]);
-  return generateBbntDoDoc({
-    fileBaseName: materialTicketFileBase(t),
-    unit: t.unit,
-    materialCategory: t.materialCategory,
-    heThongThietBi,
-    bbktNumber: t.bbktNumber,
-    pctNumber: overrides?.pctNumber ?? t.pctNumber,
-    proposalNumber: t.proposalNumber,
-    deliveryNoteNumber: overrides?.deliveryNoteNumber ?? (await deliveryNoteForDocuments(t)) ?? t.deliveryNoteNumber,
-    sccnRepresentativeName: selectedSccnRepresentative?.name ?? selectedSccnUser?.name ?? null,
-    sccnRepresentativePosition: selectedSccnRepresentative?.position ?? selectedSccnUser?.position ?? null,
-    quanDocName: defaultQuanDoc?.name ?? null,
-    quanDocPosition: defaultQuanDoc?.position ?? null,
-    usedByName: materialUserName || t.usedByName,
-    usedByPosition: (materialUserName ? signer?.position : null) ?? t.usedByPosition,
-    workStartedAt: overrides?.workStartedAt ?? t.workStartedAt,
-    workEndedAt: overrides?.workEndedAt ?? t.workEndedAt,
-    receivedQuantity: overrides?.receivedQuantity ?? t.receivedQuantity,
-    usedQuantity: t.usedQuantity,
-    recoveryQuantity: t.recoveryQuantity,
-    recoveryReturned: Boolean(t.recoveryReturnedAt),
-    items,
-    chuKyQuanDoc,
-    chuKyNguoiLap,
-  });
-}
-
 /** Năm hiện tại theo giờ Việt Nam — mốc reset dãy số văn bản BBTHVT. */
 function vietnamYear(value = new Date()) {
   return Number(new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Ho_Chi_Minh", year: "numeric" }).format(value));
@@ -314,11 +210,6 @@ async function buildProposalDocument(
  * dùng 7 lít = 5 lít phiếu cũ + 2 lít phiếu mới), nên in đủ cả hai kèm số lượng thay vì chỉ số
  * phiếu trên đầu phiếu. Phiếu cũ chưa có sổ lô thì rơi về số phiếu đã lưu như trước.
  */
-async function deliveryNoteForDocuments(t: FullTicket) {
-  const used = await usedLotsOfTicket(prisma, t.id);
-  const unit = t.items[0]?.material.unit ?? null;
-  return deliveryNoteSummary(used, unit) || t.deliveryNoteNumber || t.receivedMethod || undefined;
-}
 
 async function buildRecoveryDocument(
   t: FullTicket,
@@ -384,7 +275,10 @@ async function refreshExistingDocuments(
     urls.proposalDocUrl = proposal.url;
   }
 
-  if (previous.bbktDocUrl && !skip.has("bbktDocUrl")) {
+  // BBNT ký tay chỉ còn cho bi nghiền. Phiếu loại khác đã xuất file trước 2026 thì
+  // GIỮ NGUYÊN bản cũ — mẫu chung đã gỡ khỏi máy chủ nên có muốn dựng lại cũng không
+  // còn gì để dựng.
+  if (previous.bbktDocUrl && !skip.has("bbktDocUrl") && usesHandwrittenBbnt(updated.materialCategory)) {
     const bbnt = await generateBbntDoc({
       fileBaseName: materialTicketFileBase(updated),
       materialCategory: updated.materialCategory,
@@ -526,6 +420,9 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
         `;
       }
     });
+    // Sau giao dịch, không phải trong: xóa tệp trên kho không hoàn tác được, mà giao
+    // dịch thì có thể rollback — làm bên trong là có lúc phiếu còn nguyên nhưng ảnh mất.
+    await deleteUsagePhotos([t.usagePhotoBeforeKey, t.usagePhotoAfterKey, t.usagePhotoSpecKey]);
     await audit(
       user.id,
       "MT_DELETE",
@@ -864,17 +761,18 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       }
       const materialCategory = String(body.materialCategory || "").trim();
       if (!(TICKET_MATERIAL_CATEGORIES as readonly string[]).includes(materialCategory)) return fail("Vui lòng chọn loại vật tư");
-      const bbkt = String(body.bbktNumber || "").trim(); // BBKT giờ là tuỳ chọn (bổ sung ở bước Nghiệm thu)
+      // KHÔNG đụng tới `bbktNumber` ở đây. Số BBKT nhập một lần ở bước chọn luồng và chỉ
+      // sửa qua "Xem lại" bước đó. Nếu vẫn ghi tại đây, mỗi lần Sửa phiếu mà thân yêu cầu
+      // không mang số cũ là cột bị đặt về null — xóa mất số đã nhập mà không ai hay.
       const data: {
         unit: string;
         assignedPosition: string;
         materialCategory: string;
-        bbktNumber: string | null;
         proposalNote?: string | null;
         recoveryRequired?: boolean;
         recoveryQuantity?: number | null;
         recoveryReturnedAt?: Date | null;
-      } = { unit, assignedPosition, materialCategory, bbktNumber: bbkt || null };
+      } = { unit, assignedPosition, materialCategory };
       let editedItemData: {
         materialId: string;
         erpCode: string | null;
@@ -1122,6 +1020,8 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         const recoveryReturned = recoveryRequired && body.recoveryReturned === true;
         if (value <= 0) return fail("Số lượng sử dụng phải lớn hơn 0");
         if (!materialUserName) return fail("Vui lòng nhập tên VHV sử dụng vật tư");
+        // Sửa lại bước này cũng phải giữ đủ ảnh — gỡ bớt còn 1 ảnh rồi lưu là lách rào.
+        if (countUsagePhotos(t) < MIN_USAGE_PHOTOS) return fail(MISSING_USAGE_PHOTO_MESSAGE);
         if (recoveryRequired && (!recoveryQuantity || recoveryQuantity <= 0)) return fail("Vui lòng nhập số lượng vật tư thu hồi");
         if (!recoveryRequired && t.recoveryDocUrl) {
           return fail("Biên bản vật tư thu hồi đã được cấp. Không thể chuyển sang không có vật tư thu hồi; vui lòng liên hệ Quản trị để xử lý hồ sơ.");
@@ -1160,7 +1060,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
                 recoveryQuantity,
                 recoveryReturnedAt: recoveryReturned ? (t.recoveryReturnedAt ?? new Date()) : null,
               }),
-              // Biên bản thu hồi chỉ được sinh cùng BBNT ký tay ở bước Nghiệm thu.
+              // Biên bản thu hồi chỉ được sinh ở bước Nghiệm thu.
               // Khi chỉnh sửa sau nghiệm thu, bổ sung tài liệu còn thiếu ngay trong lần lưu.
               recoveryDocUrl: recoveryRequired && t.completedAt
                 ? (recoveryDoc?.url ?? t.recoveryDocUrl)
@@ -1175,6 +1075,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         const pct = String(body.pctNumber || "").trim();
         const chiHuy = String(body.chiHuyName || "").trim();
         const note = String(body.completionNote ?? t.completionNote ?? "").trim();
+        const pctNoiDung = String(body.pctContent ?? t.pctContent ?? "").trim();
         const workStartedAt = new Date(String(body.workStartedAt || ""));
         const workEndedAt = new Date(String(body.workEndedAt || ""));
         if (!pct || !chiHuy || !note) return fail("Vui lòng nhập đầy đủ số PCT/LCT, tên chỉ huy và nội dung nghiệm thu");
@@ -1190,25 +1091,28 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         // giờ nghiệm thu không được phép đổi người ký thay Thống kê.
         before = `${t.pctNumber ?? "—"}; ${t.chiHuyName ?? "—"}; ${t.workStartedAt?.toISOString() ?? "—"} → ${t.workEndedAt?.toISOString() ?? "—"}`;
         after = `${pct}; ${chiHuy}; ${workStartedAt.toISOString()} → ${workEndedAt.toISOString()}`;
-        const { url } = await generateBbntDoc({
-          fileBaseName: materialTicketFileBase(t),
-          materialCategory: t.materialCategory,
-          soGiaoHang: await deliveryNoteForDocuments(t),
-          lyDo: t.proposalNote,
-          soBBKT: t.bbktNumber,
-          soPCT: pct,
-          noiDung: note,
-          thoiGianBatDau: workStartedAt,
-          thoiGianKetThuc: workEndedAt,
-          tenChiHuy: chiHuy,
-          tenTruongCa: t.completedByName ?? "",
-          tenVHV: t.proposedByName,
-          chucVuVHV: t.proposedByPosition,
-          unit: t.unit,
-          usedByName: t.materialUserName || t.usedByName,
-          usedByPosition: t.usedByPosition,
-          items: toBbntItems(t),
-        });
+        // BBNT ký tay chỉ còn cho bi nghiền; loại khác sửa bước này không sinh file nào.
+        const bbktDoc = usesHandwrittenBbnt(t.materialCategory)
+          ? await generateBbntDoc({
+              fileBaseName: materialTicketFileBase(t),
+              materialCategory: t.materialCategory,
+              soGiaoHang: await deliveryNoteForDocuments(t),
+              lyDo: t.proposalNote,
+              soBBKT: t.bbktNumber,
+              soPCT: pct,
+              noiDung: note,
+              thoiGianBatDau: workStartedAt,
+              thoiGianKetThuc: workEndedAt,
+              tenChiHuy: chiHuy,
+              tenTruongCa: t.completedByName ?? "",
+              tenVHV: t.proposedByName,
+              chucVuVHV: t.proposedByPosition,
+              unit: t.unit,
+              usedByName: t.materialUserName || t.usedByName,
+              usedByPosition: t.usedByPosition,
+              items: toBbntItems(t),
+            })
+          : null;
         // Chỉ tái xuất BBNT D-Office nếu loại tài liệu này đã được phát hành.
         // Phiếu đang chờ tác vụ Thống kê không được sinh file sớm.
         const bbntDo = t.docUrl
@@ -1223,12 +1127,13 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         up = await prisma.materialTicket.update({
           where: { id: t.id },
           data: {
+            pctContent: pctNoiDung || null,
             pctNumber: pct,
             chiHuyName: chiHuy,
             completionNote: note,
             workStartedAt,
             workEndedAt,
-            bbktDocUrl: url,
+            ...(bbktDoc ? { bbktDocUrl: bbktDoc.url } : {}),
             ...(bbntDo ? { docUrl: bbntDo.url } : {}),
             ...(recoveryDoc ? { recoveryDocUrl: recoveryDoc.url } : {}),
           },
@@ -1236,7 +1141,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         });
       }
       if (!up) return fail("Không thể cập nhật bước");
-      // Bước accept đã tự xuất lại BBNT ký tay, BBNT D-Office và biên bản thu hồi ở trên.
+      // Bước accept đã tự xuất lại BBNT D-Office và biên bản thu hồi ở trên.
       // Các file còn lại (nếu đã tồn tại) được tạo lại từ dữ liệu vừa lưu.
       const skipRefreshedInStep = step === "accept"
         ? new Set<keyof ExportedDocumentUrls>(["bbktDocUrl", "docUrl", "recoveryDocUrl"])
@@ -1486,7 +1391,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     }
 
     // Luồng Ứng — VHV chỉ ghi nhận số lượng thực tế đã lãnh.
-    // Mã vật tư nhập tay (nếu có) được bổ sung tại bước Nghiệm thu + BBNT ký tay.
+    // Mã vật tư nhập tay (nếu có) được bổ sung tại bước Nghiệm thu.
     // Số đã lãnh được cộng vào Hiện có để bước Sử dụng có thể trừ sau đó; ERP không thay đổi.
     if (action === "vhvReceive") {
       if (t.type !== "UNG" || t.status !== "VHV_LANH_VAT_TU") return fail("Phiếu không ở bước VHV lãnh vật tư");
@@ -2034,6 +1939,8 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       if (recoveryRequired && (!recoveryQuantity || recoveryQuantity <= 0)) return fail("Vui lòng nhập số lượng vật tư thu hồi");
       if (!Number.isFinite(usedQuantity) || usedQuantity <= 0) return fail("Khối lượng vật tư sử dụng phải lớn hơn 0");
       if (!materialUserName) return fail("Vui lòng nhập tên VHV sử dụng vật tư");
+      // Ảnh hiện trường là bằng chứng đi kèm biên bản — thiếu thì không cho qua bước.
+      if (countUsagePhotos(t) < MIN_USAGE_PHOTOS) return fail(MISSING_USAGE_PHOTO_MESSAGE);
 
       const item = t.items[0];
       if (!item) return fail("Phiếu chưa có vật tư");
@@ -2078,7 +1985,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
             // VHV xác nhận trực tiếp việc đã trả vật tư thu hồi cho kho tại bước này.
             recoveryReturnedAt: recoveryReturned ? new Date() : null,
             // Không xuất file tại bước xác nhận sử dụng; bước Nghiệm thu sẽ sinh đồng thời
-            // BBNT ký tay và Biên bản vật tư thu hồi.
+            // Biên bản vật tư thu hồi.
             recoveryDocUrl: null,
             usedQuantity, remainingQuantity: remaining, materialUserName,
             usedById: user.id, usedByName: user.name ?? "",
@@ -2175,11 +2082,15 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       // PCT/chỉ huy/nội dung đã nhập ở bước SỬ DỤNG VẬT TƯ; phiếu cũ (trước khi có
       // bước này) vẫn nhận từ form nghiệm thu để tương thích.
       const note = String(body.completionNote || "").trim();
+      // Nội dung PCT không bắt buộc: nhiều công việc nhỏ không có PCT riêng, bắt nhập
+      // sẽ khiến người ta gõ bừa cho qua — số PCT/LCT mới là thứ buộc phải có.
+      const pctNoiDung = String(body.pctContent || "").trim();
       const pct = String(body.pctNumber || "").trim();
       const chiHuy = String(body.chiHuyName || "").trim();
       const workStartedAt = new Date(String(body.workStartedAt || ""));
       const workEndedAt = new Date(String(body.workEndedAt || ""));
-      const bbkt = String(body.bbktNumber || "").trim(); // Số BBNT ký tay bổ sung ở bước này (nếu có)
+      // Số BBKT nhập MỘT LẦN ở bước chọn luồng; bước này chỉ đọc, không ghi đè.
+      // Sửa về sau đi qua đường có phân quyền (editInfo / editStep "confirm").
       const recoveryRequired = materialTicketRequiresRecovery(t);
       if (!note) return fail("Vui lòng nhập thông tin xác nhận thay thế xong");
       if (!pct) return fail("Vui lòng nhập số PCT/LCT");
@@ -2229,9 +2140,6 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         }
       }
       const itemOverride = { materialCode: erpCode, materialName: erpMaterial.name };
-      const bbntItems = toBbntItems(t).map((bbntItem, index) => index === 0
-        ? { ...bbntItem, materialCode: erpCode, materialName: erpMaterial.name }
-        : bbntItem);
 
       // Một mã/tên ERP duy nhất được áp dụng cho các biên bản.
       //
@@ -2241,16 +2149,21 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       // thuộc về họ, hoặc phát hành một biên bản rồi ghi đè lại ở bước sau.
       //   - Đề xuất và Sử dụng hiện có: Thống kê xuất ở bước CHO_THONG_KE_XUAT_BIEN_BAN.
       //   - Ứng: Thống kê xuất cùng Phiếu ĐXVT (statsExportProposal).
+      // Từ 2026 BBNT ký tay chỉ còn cho bi nghiền; loại khác chỉ xuất BBTHVT.
+      const bbntItems = toBbntItems(t).map((bbntItem, index) => index === 0
+        ? { ...bbntItem, materialCode: erpCode, materialName: erpMaterial.name }
+        : bbntItem);
       const documents = {
-        bbkt: await generateBbntDoc({
-          fileBaseName: materialTicketFileBase(t), materialCategory: t.materialCategory, soGiaoHang: await deliveryNoteForDocuments(t), lyDo: t.proposalNote, soBBKT: bbkt || t.bbktNumber, soPCT: pct, noiDung: note,
-          thoiGianBatDau: workStartedAt, thoiGianKetThuc: workEndedAt,
-          tenChiHuy: chiHuy, tenTruongCa: user.name ?? "",
-          tenVHV: t.proposedByName, chucVuVHV: t.proposedByPosition,
-          unit: t.unit, usedByName: t.materialUserName || t.usedByName, usedByPosition: t.usedByPosition,
-          items: bbntItems,
-        }),
-        // Mọi phiếu đã chốt yêu cầu thu hồi đều xuất BBTHVT đồng thời với BBNT ký tay.
+        bbkt: usesHandwrittenBbnt(t.materialCategory)
+          ? await generateBbntDoc({
+              fileBaseName: materialTicketFileBase(t), materialCategory: t.materialCategory, soGiaoHang: await deliveryNoteForDocuments(t), lyDo: t.proposalNote, soBBKT: t.bbktNumber, soPCT: pct, noiDung: note,
+              thoiGianBatDau: workStartedAt, thoiGianKetThuc: workEndedAt,
+              tenChiHuy: chiHuy, tenTruongCa: user.name ?? "",
+              tenVHV: t.proposedByName, chucVuVHV: t.proposedByPosition,
+              unit: t.unit, usedByName: t.materialUserName || t.usedByName, usedByPosition: t.usedByPosition,
+              items: bbntItems,
+            })
+          : null,
         recovery: recoveryRequired
           ? await buildRecoveryDocument(t, { pctNumber: pct, itemOverride })
           : null,
@@ -2268,19 +2181,18 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
               : ["DE_XUAT", "SU_DUNG_HIEN_CO"].includes(t.type)
                 ? "CHO_THONG_KE_XUAT_BIEN_BAN"
                 : "CHO_QUYET_TOAN",
-            completionNote: note, pctNumber: pct, chiHuyName: chiHuy,
-            bbktDocUrl: documents.bbkt.url,
+            completionNote: note, pctContent: pctNoiDung || null, pctNumber: pct, chiHuyName: chiHuy,
+            ...(documents.bbkt ? { bbktDocUrl: documents.bbkt.url } : {}),
             ...(documents.recovery ? { recoveryDocUrl: documents.recovery.url } : {}),
             recoveryRequired,
             workStartedAt, workEndedAt,
-            ...(bbkt ? { bbktNumber: bbkt } : {}),
             completedById: user.id, completedByName: user.name ?? "",
             completedByPosition: user.position ?? null, completedAt: new Date(),
           },
           include: ITEM_INCLUDE,
         });
       });
-      await audit(user.id, "MT_ACCEPT", "MaterialTicket", t.id, `${materialTicketReference(t)}: nghiệm thu với mã ERP ${erpCode}, xuất BBNT ký tay${documents.recovery ? " và Biên bản vật tư thu hồi" : ""}, ${t.type === "UNG" ? "chuyển Thống kê xác nhận ĐXVT" : t.type === "DE_XUAT" ? "chuyển Thống kê xuất BBNT D-Office" : t.type === "SU_DUNG_HIEN_CO" ? "chuyển Thống kê xác nhận mã vật tư" : "chờ Thống kê quyết toán"}`);
+      await audit(user.id, "MT_ACCEPT", "MaterialTicket", t.id, `${materialTicketReference(t)}: nghiệm thu với mã ERP ${erpCode}${documents.bbkt ? ", xuất BBNT ký tay" : ""}${documents.recovery ? ", xuất Biên bản vật tư thu hồi" : ""}, ${t.type === "UNG" ? "chuyển Thống kê xác nhận ĐXVT" : t.type === "DE_XUAT" ? "chuyển Thống kê xuất BBNT D-Office" : t.type === "SU_DUNG_HIEN_CO" ? "chuyển Thống kê xác nhận mã vật tư" : "chờ Thống kê quyết toán"}`);
       return ok(up);
     }
 
@@ -2314,9 +2226,6 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       // trên biên bản. Giữ biến tường minh thay vì bỏ hẳn điều kiện để chỗ này còn đọc ra
       // được ý định khi có thêm luồng khác đi qua.
       const exportsBbntDo = t.type === "DE_XUAT" || t.type === "SU_DUNG_HIEN_CO";
-      if (exportsBbntDo && !t.bbktDocUrl) {
-        return fail("Chưa xuất BBNT ký tay ở tác vụ nghiệm thu trước đó");
-      }
       if (exportsBbntDo && !SCCN_REPRESENTATIVES.includes(sccnRepresentativeName as typeof SCCN_REPRESENTATIVES[number])) {
         return fail("Vui lòng chọn đại diện SCCN hợp lệ");
       }
@@ -2336,7 +2245,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
           }
         : null;
 
-      // BBTHVT đã được xuất đồng thời với BBNT ký tay ở bước Nghiệm thu.
+      // BBTHVT đã được xuất ở bước Nghiệm thu.
       const up = await prisma.$transaction(async (tx) => {
         await tx.materialTicketItem.update({ where: { id: item.id }, data: { erpCode, erpName: erpMaterial.name } });
         return tx.materialTicket.update({
@@ -2380,15 +2289,26 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
           bbntDoNumber,
           settledAt: new Date(),
           settledByName: user.name ?? "",
+          // Ảnh hiện trường hết vai trò: BBNT D-Office đã nhúng sẵn ba ảnh bên trong,
+          // giữ thêm bản rời chỉ tốn chỗ. Gỡ khóa trước, xóa tệp sau.
+          usagePhotoBeforeKey: null,
+          usagePhotoAfterKey: null,
+          usagePhotoSpecKey: null,
         },
         include: ITEM_INCLUDE,
       });
+      const removedPhotos = await deleteUsagePhotos([
+        t.usagePhotoBeforeKey,
+        t.usagePhotoAfterKey,
+        t.usagePhotoSpecKey,
+      ]);
       await audit(
         user.id,
         "MT_SETTLE",
         "MaterialTicket",
         t.id,
-        `${materialTicketReference(t)}: đã xác nhận quyết toán vật tư, số BBNT DO ${bbntDoNumber}`
+        `${materialTicketReference(t)}: đã xác nhận quyết toán vật tư, số BBNT DO ${bbntDoNumber}` +
+          (removedPhotos ? `; xóa ${removedPhotos} ảnh hiện trường khỏi kho tệp` : "")
       );
       return ok(up);
     }

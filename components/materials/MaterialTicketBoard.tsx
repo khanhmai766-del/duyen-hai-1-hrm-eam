@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { UsagePhotoCard } from "./UsagePhotoCard";
 import {
   ChemicalTruckLockedTable,
   ChemicalTruckPanel,
@@ -25,10 +26,11 @@ import {
   useWorkflowRoles, useSaveWorkflowRoles, actionsFor,
   useTicketLots,
   useTicketChemicalTrucks,
+  useTicketUsagePhotos,
   samePosition,
   type MaterialTicket, type TicketViewer, type WorkflowRoleMap } from "@/hooks/useMaterialTickets";
 import { usePositions } from "@/hooks/useUsers";
-import { COMMON_MATERIAL_POSITION, displayMaterialCategory, GAS_RETURN_STATUS, isChemicalFlowTicket, isGasCylinderTicket, isOtherMaterialAdvanceTicket, isOtherMaterialCategory, isOtherMaterialTicketType, isSingleStepTicketMaterial, CHEMICAL_TICKET_TYPE, isSupplementReason, MATERIAL_CATEGORIES, materialTicketBelongsToRecoveryTab, materialTicketRequiresRecovery, OTHER_MATERIAL_ADVANCE_TICKET_TYPE, OTHER_MATERIAL_GROUP, OTHER_MATERIAL_TICKET_TYPE, ticketReasonsFor, TICKET_REASONS, TICKET_REASON_OTHER, SINGLE_STEP_TICKET_TYPE, TICKET_MATERIAL_CATEGORIES, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
+import { MIN_USAGE_PHOTOS, usesHandwrittenBbnt, COMMON_MATERIAL_POSITION, displayMaterialCategory, GAS_RETURN_STATUS, isChemicalFlowTicket, isGasCylinderTicket, isOtherMaterialAdvanceTicket, isOtherMaterialCategory, isOtherMaterialTicketType, isSingleStepTicketMaterial, CHEMICAL_TICKET_TYPE, isSupplementReason, MATERIAL_CATEGORIES, materialTicketBelongsToRecoveryTab, materialTicketRequiresRecovery, OTHER_MATERIAL_ADVANCE_TICKET_TYPE, OTHER_MATERIAL_GROUP, OTHER_MATERIAL_TICKET_TYPE, ticketReasonsFor, TICKET_REASONS, TICKET_REASON_OTHER, SINGLE_STEP_TICKET_TYPE, TICKET_MATERIAL_CATEGORIES, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
 import { normalizeText } from "@/lib/nav";
 import { positionsMatch } from "@/lib/position-catalog";
 import {
@@ -110,13 +112,15 @@ const FLOW: Record<string, { key: string; label: string; who: string }[]> = {
     { key: "NHAN_VAT_TU", label: "Lãnh ứng và nhập vào Hiện có", who: "Theo phân quyền quy trình" },
     { key: "CHO_THONG_KE", label: "Hoàn thiện số ĐXVT và chứng từ", who: "Thống kê" },
   ],
+  // Luồng Sử dụng hiện có không có BBNT ký tay: bước nghiệm thu chỉ xuất BBTHVT, còn
+  // BBNT D-Office do Thống kê xuất ở bước sau. Tên bước gọi đúng tệp thực sự được xuất.
   SU_DUNG_HIEN_CO: [
     { key: "B0", label: "VHV tạo đề xuất", who: "VHV" },
     { key: "XAC_NHAN_HIEN_CO", label: "Trưởng ca/Trưởng kíp xác nhận", who: "Trưởng ca/Trưởng kíp" },
     { key: "NHAN_TU_HIEN_CO", label: "Xác nhận vật tư lãnh", who: "Theo phân quyền quy trình" },
     { key: "SU_DUNG_VAT_TU", label: "Xác nhận vật tư sử dụng", who: "Theo phân quyền quy trình" },
-    { key: "CHO_NGHIEM_THU", label: "Nghiệm thu và xuất BBNT", who: "Theo phân quyền quy trình" },
-    { key: "CHO_THONG_KE_XUAT_BIEN_BAN", label: "Thống kê xác nhận mã vật tư", who: "Thống kê" },
+    { key: "CHO_NGHIEM_THU", label: "Nghiệm thu và xuất BBTHVT", who: "Theo phân quyền quy trình" },
+    { key: "CHO_THONG_KE_XUAT_BIEN_BAN", label: "Xuất BBNT DO", who: "Thống kê" },
     { key: "CHO_QUYET_TOAN", label: "Quyết toán vật tư", who: "Thống kê" },
   ],
 };
@@ -1312,7 +1316,6 @@ function EditDialog({ t, onClose }: { t: MaterialTicket; onClose: () => void }) 
   const canEditProposalDetails = ["CHUA_CHON", "DE_XUAT", "UNG", "SU_DUNG_HIEN_CO", CHEMICAL_TICKET_TYPE, SINGLE_STEP_TICKET_TYPE].includes(t.type);
   const canEditErpCode = ["DE_XUAT", "UNG", "SU_DUNG_HIEN_CO"].includes(t.type);
   const [unit, setUnit] = useState(t.unit);
-  const [bbkt, setBbkt] = useState(t.bbktNumber ?? "");
   const [assigned, setAssigned] = useState(t.assignedPosition);
   const [category, setCategory] = useState(t.materialCategory ?? "");
   const [selectedMaterialId, setSelectedMaterialId] = useState(t.items[0]?.materialId ?? "");
@@ -1451,7 +1454,7 @@ function EditDialog({ t, onClose }: { t: MaterialTicket; onClose: () => void }) 
   async function submit() {
     try {
       await act.mutateAsync({
-        action: "editInfo", unit, bbktNumber: bbkt.trim() || undefined,
+        action: "editInfo", unit,
         assignedPosition: assigned, materialCategory: category,
         materialId: selectedMaterialId || undefined,
         erpCode: selectedErpCode || undefined,
@@ -1570,11 +1573,6 @@ function EditDialog({ t, onClose }: { t: MaterialTicket; onClose: () => void }) 
               {selectedMaterialId && !selectedDeviceOptions.length && <p className="hint">Vật tư này chưa có thiết bị thuộc cương vị đã chọn trong Chi tiết điểm thay thế. Vui lòng khai báo tại Danh mục vận hành 1 trước.</p>}
             </>
           )}
-
-          <div className="field">
-            <label>Số biên bản kiểm tra (nếu có)</label>
-            <input value={bbkt} onChange={(e) => setBbkt(e.target.value)} placeholder="Nhập số biên bản kiểm tra" />
-          </div>
 
           <div className="frm-f">
             <button className="btn ghost" onClick={onClose}>Hủy</button>
@@ -1708,7 +1706,7 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
       ? isOtherMaterialAdvanceTicket(t.type) ? "Hoàn thiện ĐXVT, kết thúc phiếu ứng" : "Lãnh vật tư và hoàn tất phiếu"
       : isGasCylinderTicket(t.materialCategory)
         ? `Xác nhận trả: ${t.recoveryQuantity ?? ""} ${t.items[0]?.material.unit ?? ""}`.trim()
-        : `Nghiệm thu, xuất BBNT ký tay${materialTicketRequiresRecovery(t) ? " và BBTHVT" : ""}` },
+        : `Nghiệm thu${materialTicketRequiresRecovery(t) ? ", xuất BBTHVT" : ""}` },
     t.settledAt && { at: t.settledAt, who: t.settledByName, what: `Quyết toán vật tư · Số BBNT DO ${t.bbntDoNumber ?? "—"}` },
     ...(t.activityLogs ?? []).filter((log) => log.action === "MT_EDIT_STEP").map((log) => ({
       at: log.createdAt, who: log.user.name, pos: log.user.position, what: log.detail ?? "Chỉnh sửa nội dung bước",
@@ -1855,6 +1853,8 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
                 </div>
                 <div className="document-download-links">
                   {t.proposalDocUrl && <a className="pdf" href={t.proposalDocUrl} target="_blank" rel="noreferrer"><Download size={14} /> Phiếu Đề Xuất Vật Tư</a>}
+                  {/* Đã NGỪNG phát hành. Nút chỉ còn hiện với phiếu cũ đã xuất trước đó — hồ sơ đã có
+                      thì phải tải lại được, chỉ là từ nay không sinh thêm bản mới nào. */}
                   {handwrittenBbntUrl && <a className="pdf" href={handwrittenBbntUrl} target="_blank" rel="noreferrer"><Download size={14} /> Biên Bản Nghiệm Thu Ký Tay</a>}
                   {t.docUrl && <a className="pdf" href={t.docUrl} target="_blank" rel="noreferrer"><Download size={14} /> Biên Bản Nghiệm Thu D-Office</a>}
                   {recoveryDocumentUrl && <a className="pdf recovery-download" href={recoveryDocumentUrl} target="_blank" rel="noreferrer"><Download size={14} /> Biên Bản Vật Tư Thu Hồi</a>}
@@ -1915,8 +1915,13 @@ function StepReviewDialog({ t, viewer, stepKey, onClose }: { t: MaterialTicket; 
   const [pctNumber, setPctNumber] = useState(t.pctNumber ?? "");
   const [chiHuyName, setChiHuyName] = useState(t.chiHuyName ?? "");
   const [completionNote, setCompletionNote] = useState(t.completionNote ?? "");
+  const [pctContent, setPctContent] = useState(t.pctContent ?? "");
   const [bbktNumber, setBbktNumber] = useState(t.bbktNumber ?? "");
   const [reason, setReason] = useState(t.proposalNote ?? "");
+  // Ảnh hiện trường của bước sử dụng — xem lại, gỡ, thay ảnh khác ngay tại đây.
+  const usagePhotos = useTicketUsagePhotos(t.id, editStep === "use");
+  const usagePhotoCount = (usagePhotos.data ?? []).filter((photo) => photo.url).length;
+  const missingUsagePhotos = editStep === "use" && usagePhotoCount < MIN_USAGE_PHOTOS;
   const [workStartedAt, setWorkStartedAt] = useState(datetimeLocalValue(t.workStartedAt));
   const [workEndedAt, setWorkEndedAt] = useState(datetimeLocalValue(t.workEndedAt));
 
@@ -1947,6 +1952,7 @@ function StepReviewDialog({ t, viewer, stepKey, onClose }: { t: MaterialTicket; 
     if (editStep === "accept") Object.assign(payload, {
       pctNumber,
       chiHuyName,
+      pctContent,
       completionNote,
       workStartedAt,
       workEndedAt,
@@ -2017,6 +2023,7 @@ function StepReviewDialog({ t, viewer, stepKey, onClose }: { t: MaterialTicket; 
             <label>Tên VHV sử dụng vật tư<input value={materialUserName} disabled={!canEdit} onChange={(e) => setMaterialUserName(e.target.value)} placeholder="Nhập tên VHV sử dụng vật tư" /></label>
             <label>Số lượng sử dụng ({t.items[0]?.material.unit ?? ""})<input type="number" min={1} value={usedQuantity} disabled={!canEdit} onChange={(e) => setUsedQuantity(Number(e.target.value))} /></label>
           </div>
+          <UsagePhotoCard ticketId={t.id} canEdit={canEdit} />
           {materialTicketRequiresRecovery(t) && (
             <div className="review-recovery-grid">
               <label>Số lượng vật tư thu hồi ghi vào BBTHVT ({t.items[0]?.material.unit ?? ""}) *
@@ -2024,7 +2031,7 @@ function StepReviewDialog({ t, viewer, stepKey, onClose }: { t: MaterialTicket; 
               </label>
               <label className={`recovery-return-check ${recoveryReturned ? "checked" : ""}`}>
                 <input type="checkbox" disabled={!canEdit} checked={recoveryReturned} onChange={(e) => setRecoveryReturned(e.target.checked)} />
-                <span><b>VHV xác nhận đã trả vật tư thu hồi xong</b>{recoveryReturned && <small>Ngày trả: {fmtDay(t.recoveryReturnedAt ?? new Date().toISOString())}</small>}</span>
+                <span><b>VHV xác nhận đã trả vật tư thu hồi xong</b><small className="cycle">Định kỳ thứ 5 hằng tuần</small>{recoveryReturned && <small>Ngày trả: {fmtDay(t.recoveryReturnedAt ?? new Date().toISOString())}</small>}</span>
               </label>
             </div>
           )}
@@ -2038,9 +2045,14 @@ function StepReviewDialog({ t, viewer, stepKey, onClose }: { t: MaterialTicket; 
               <input value={chiHuyName} disabled={!canEdit} onChange={(e) => setChiHuyName(e.target.value)} />
             </label>
           </div>
-          <label>Nội dung nghiệm thu *
-            <textarea rows={3} value={completionNote} disabled={!canEdit} onChange={(e) => setCompletionNote(e.target.value)} />
-          </label>
+          <div className="review-accept-grid">
+            <label>Nội dung PCT
+              <textarea rows={3} value={pctContent} disabled={!canEdit} onChange={(e) => setPctContent(e.target.value)} />
+            </label>
+            <label>Nội dung nghiệm thu *
+              <textarea rows={3} value={completionNote} disabled={!canEdit} onChange={(e) => setCompletionNote(e.target.value)} />
+            </label>
+          </div>
           <div className="review-accept-grid">
             <label>Thời gian bắt đầu nghiệm thu *
               <input type="datetime-local" value={workStartedAt} disabled={!canEdit} onChange={(e) => setWorkStartedAt(e.target.value)} />
@@ -2053,7 +2065,15 @@ function StepReviewDialog({ t, viewer, stepKey, onClose }: { t: MaterialTicket; 
               cùng lúc xuất BBNT D-Office mang tên người đó. */}
         </>}
         {permission && !canEdit && <p className="hint">Bạn có thể xem lại nhưng chưa được phân quyền chỉnh sửa bước này.</p>}
-        <div className="frm-f"><button className="btn ghost" onClick={onClose}>Đóng</button>{canEdit && <button className="btn primary" disabled={act.isPending || (editStep === "confirm" && !reason.trim()) || (editStep === "accept" && (!pctNumber.trim() || !chiHuyName.trim() || !completionNote.trim() || !workStartedAt || !workEndedAt))} onClick={save}>{act.isPending ? <Loader2 className="spin" size={14} /> : <Pencil size={14} />} Lưu chỉnh sửa</button>}</div>
+        <div className="frm-f">
+          {missingUsagePhotos && (
+            <span className="note" style={{ marginRight: "auto" }}>
+              <AlertTriangle size={13} /> Cần tối thiểu {MIN_USAGE_PHOTOS} trên 3 ảnh hiện trường ({usagePhotoCount}/3).
+            </span>
+          )}
+          <button className="btn ghost" onClick={onClose}>Đóng</button>
+          {canEdit && <button className="btn primary" disabled={act.isPending || missingUsagePhotos || (editStep === "confirm" && !reason.trim()) || (editStep === "accept" && (!pctNumber.trim() || !chiHuyName.trim() || !completionNote.trim() || !workStartedAt || !workEndedAt))} onClick={save}>{act.isPending ? <Loader2 className="spin" size={14} /> : <Pencil size={14} />} Lưu chỉnh sửa</button>}
+        </div>
       </div>
     </div>
   </>;
@@ -2088,7 +2108,6 @@ function LotAllocationPicker({
 
   return (
     <div className="lot-picker">
-      <label className="lb">Phân bổ theo phiếu giao hàng — đã dùng {info.usedQuantity} {info.unit}</label>
       <table className="lot-table">
         <thead>
           <tr><th>Số phiếu giao hàng</th><th>Mã vật tư</th><th>Có thể lấy</th><th>Lấy</th></tr>
@@ -2206,13 +2225,18 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
   const { data: opts } = useTicketOptions(needItems);
   const [items, setItems] = useState([{ materialId: "", erpCode: "", deviceSeq: "", quantity: 1 }]);
   const [note, setNote] = useState("");
+  const [pctNoiDung, setPctNoiDung] = useState(t.pctContent ?? "");
   // Tách riêng từng loại số chứng từ. Trước đây dùng chung một state `num`, nên
   // số ĐXVT vừa nhập có thể bị giữ lại và tự xuất hiện trong ô số biên bản kiểm tra ở bước sau.
   const [proposalNumberInput, setProposalNumberInput] = useState("");
-  const [bbktNumberInput, setBbktNumberInput] = useState("");
+  const [bbktNumberInput, setBbktNumberInput] = useState(t.bbktNumber ?? "");
   const [confirmReasonInput, setConfirmReasonInput] = useState(t.proposalNote ?? ""); // Lý do — bước Xác nhận yêu cầu (lưu vào proposalNote)
   const [repairRequestNumber, setRepairRequestNumber] = useState(t.repairRequestNumber ?? "");
   const [materialUserNameInput, setMaterialUserNameInput] = useState(t.materialUserName ?? "");
+  // Đủ 2/3 ảnh mới cho qua bước sử dụng vật tư. Máy chủ cũng chặn — đây chỉ để người
+  // dùng biết trước lý do nút mờ, thay vì bấm rồi nhận thông báo lỗi.
+  const usagePhotos = useTicketUsagePhotos(t.id, acts.includes("use"));
+  const usagePhotoCount = (usagePhotos.data ?? []).filter((photo) => photo.url).length;
   const [pct, setPct] = useState("");
   const [chiHuy, setChiHuy] = useState("");
   const [proposalReceiverName, setProposalReceiverName] = useState(t.proposalReceiverName ?? "");
@@ -2790,7 +2814,10 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
           <label className="field">Lý do
             <input name={`reason-confirm-${t.id}`} autoComplete="off" value={confirmReasonInput} onChange={(e) => setConfirmReasonInput(e.target.value)} placeholder="VD: thay định kỳ / hư hỏng đột xuất…" />
           </label>
-          <label className="field">Biên Bản Kiểm Tra
+          {/* CHỖ DUY NHẤT nhập số BBKT trong quy trình. Nạp sẵn số đã có vì tác vụ
+              confirm luôn ghi đè — để trống mà bấm Xác nhận là xóa mất số cũ.
+              Sửa về sau chỉ qua đường có phân quyền: nút Sửa phiếu hoặc "Xem lại" bước này. */}
+          <label className="field">Số biên bản kiểm tra
             <input name={`bbkt-confirm-${t.id}`} autoComplete="off" value={bbktNumberInput} onChange={(e) => setBbktNumberInput(e.target.value)} placeholder="Nhập số biên bản kiểm tra" />
           </label>
         </div>
@@ -3088,6 +3115,8 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
 	            <input type="number" min={1} max={stock} value={qty} onChange={(e) => setQty(Math.max(1, Math.trunc(Number(e.target.value)) || 1))} />
 	          </label>
 	        </div>
+        {/* Ảnh không bắt buộc: thiếu ảnh thì ô tương ứng trong BBNT để trống, không chặn bước. */}
+        <UsagePhotoCard ticketId={t.id} canEdit />
         {recoveryRequired && (
           <div className="recovery-quantity-row">
             <label className="field">Số lượng vật tư thu hồi ghi vào BBTHVT{unit ? ` (${unit})` : ""} *
@@ -3097,6 +3126,9 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
               <input type="checkbox" checked={recoveryReturned} onChange={(e) => setRecoveryReturned(e.target.checked)} />
               <span>
                 <b>VHV xác nhận đã trả vật tư thu hồi xong</b>
+                {/* Kho chỉ nhận vật tư thu hồi theo lịch cố định — nhắc ngay tại ô tick
+                    để VHV không tick trước rồi ôm vật tư chờ cả tuần. */}
+                <small className="cycle">Định kỳ thứ 5 hằng tuần</small>
                 {recoveryReturned && <small>Ngày trả: {fmtDay(t.recoveryReturnedAt ?? new Date().toISOString())}</small>}
               </span>
             </label>
@@ -3106,7 +3138,10 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
           <div className="warnbox"><AlertTriangle size={15} /> Số lượng vật tư sử dụng đã nhập vượt số lượng hiện có. Hiện còn {stock} {unit}; vui lòng nhập lại số lượng.</div>
         )}
         {quantityExceedsReceived && <div className="warnbox"><AlertTriangle size={15} /> Số lượng sử dụng vượt số lượng đã nhận từ Hiện có ({received} {unit}).</div>}
-        <button className="btn primary big" disabled={!materialUserNameInput.trim() || qty <= 0 || quantityExceedsStock || quantityExceedsReceived || (recoveryRequired && (!Number.isFinite(recoveryQuantity) || recoveryQuantity <= 0)) || act.isPending}
+        {usagePhotoCount < MIN_USAGE_PHOTOS && (
+          <div className="warnbox"><AlertTriangle size={15} /> Cần tối thiểu {MIN_USAGE_PHOTOS} trên 3 ảnh hiện trường mới xác nhận được ({usagePhotoCount}/3 ảnh).</div>
+        )}
+        <button className="btn primary big" disabled={!materialUserNameInput.trim() || qty <= 0 || usagePhotoCount < MIN_USAGE_PHOTOS || quantityExceedsStock || quantityExceedsReceived || (recoveryRequired && (!Number.isFinite(recoveryQuantity) || recoveryQuantity <= 0)) || act.isPending}
           onClick={() => run({ action: "use", materialUserName: materialUserNameInput.trim(), usedQuantity: qty, ...(recoveryRequired ? { recoveryQuantity, recoveryReturned } : {}) }, "Đã xác nhận sử dụng vật tư")}>
           {act.isPending ? <Loader2 className="spin" size={15} /> : <Check size={15} />} Xác nhận
         </button>
@@ -3160,31 +3195,23 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
       ? selectedMaterialOption.erpCodes
       : (t.items[0]?.material.erpCodes?.length ? t.items[0].material.erpCodes : [t.items[0]?.material.code].filter(Boolean) as string[])
           .map((code) => ({ code, name: t.items[0]?.material.name ?? "", erpStock: 0 }));
-    const selectedErp = codeOptions.find((option) => option.code === erpCode);
     const exportsRecoveryDocument = materialTicketRequiresRecovery(t);
+    // BBNT ký tay chỉ còn cho bi nghiền — xem `usesHandwrittenBbnt` ở lib/bbnt-doc.ts.
+    const exportsHandwrittenBbnt = usesHandwrittenBbnt(t.materialCategory);
     return (
       <div className="act">
           <>
-            <div className="accept-two-grid">
+            {/* Còn một ô sau khi số BBKT dời về bước chọn luồng — cho trải hết bề ngang
+                thay vì để nửa hàng trống. */}
+            <div className="accept-two-grid one-col">
               <label className="field">Mã vật tư dùng xuất biên bản *
                 <select value={erpCode} onChange={(e) => setErpCode(e.target.value)}>
                   <option value="">— Chọn mã vật tư ERP —</option>
                   {codeOptions.map((option) => <option key={option.code} value={option.code}>{option.code} · ERP: {option.erpStock.toLocaleString("vi-VN")} {t.items[0]?.material.unit ?? ""}</option>)}
                 </select>
               </label>
-              <label className="field">Số BBNT ký tay
-                <input name={`bbkt-accept-${t.id}`} autoComplete="off" placeholder="Nhập số BBNT ký tay" value={bbktNumberInput} onChange={(e) => setBbktNumberInput(e.target.value)} />
-              </label>
             </div>
             <LotAllocationPicker ticketId={t.id} value={lotAllocation} onChange={setLotAllocation} />
-            {selectedErp && (
-              <p className="hint">
-                Tất cả biên bản Word sẽ sử dụng mã <b>{selectedErp.code}</b> và tên <b>{selectedErp.name || t.items[0]?.material.name}</b>.
-                {t.type === "UNG"
-                  ? " BBNT D-Office sẽ được xuất cùng Phiếu ĐXVT ở bước Xác nhận ĐXVT."
-                  : " BBNT D-Office sẽ được Thống kê xuất ở bước sau, sau khi chọn đại diện SCCN."}
-              </p>
-            )}
             <div className="accept-two-grid">
               <label className="field">Số PCT/LCT *
                 <input placeholder="Nhập số PCT/LCT" value={pct} onChange={(e) => setPct(e.target.value)} />
@@ -3193,7 +3220,16 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
                 <input placeholder="Nhập tên chỉ huy trực tiếp" value={chiHuy} onChange={(e) => setChiHuy(e.target.value)} />
               </label>
             </div>
-            <textarea rows={3} placeholder="Nội dung nghiệm thu…" value={note} onChange={(e) => setNote(e.target.value)} />
+            {/* Hai nội dung đi đôi với nhau: bên trái là việc GIAO theo PCT, bên phải là
+                kết quả NGHIỆM THU. Đặt cạnh nhau để người ghi đối chiếu được ngay. */}
+            <div className="accept-two-grid accept-note-grid">
+              <label className="field">Nội dung PCT
+                <textarea rows={3} placeholder="Nội dung công việc ghi trên PCT/LCT…" value={pctNoiDung} onChange={(e) => setPctNoiDung(e.target.value)} />
+              </label>
+              <label className="field">Nội dung nghiệm thu *
+                <textarea rows={3} placeholder="Nội dung nghiệm thu…" value={note} onChange={(e) => setNote(e.target.value)} />
+              </label>
+            </div>
             <div className="accept-two-grid">
               <label className="field">Thời gian bắt đầu nghiệm thu *
                 <input type="datetime-local" value={startedAt} onChange={(e) => setStartedAt(e.target.value)} />
@@ -3206,16 +3242,19 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
         <button className="btn primary big" disabled={act.isPending || !erpCode || !note.trim() || !pct.trim() || !chiHuy.trim() || !startedAt || !endedAt}
           onClick={() => run(
             {
-              action: "accept", erpCode, completionNote: note.trim(), pctNumber: pct.trim(), chiHuyName: chiHuy.trim(),
-              bbktNumber: bbktNumberInput.trim() || undefined, workStartedAt: startedAt, workEndedAt: endedAt,
+              action: "accept", erpCode, completionNote: note.trim(), pctContent: pctNoiDung.trim(), pctNumber: pct.trim(), chiHuyName: chiHuy.trim(),
+              workStartedAt: startedAt, workEndedAt: endedAt,
               ...(lotAllocation ? { lotAllocation: Object.entries(lotAllocation).map(([lotId, quantity]) => ({ lotId, quantity })) } : {}),
             },
-            t.type === "UNG"
-              ? `Đã nghiệm thu và xuất BBNT ký tay${exportsRecoveryDocument ? " cùng BBTHVT" : ""}`
-              : `Đã xuất BBNT ký tay${exportsRecoveryDocument ? " và BBTHVT" : ""}, chuyển Thống kê xuất BBNT D-Office`,
+            [
+              "Đã nghiệm thu",
+              [exportsHandwrittenBbnt && "BBNT ký tay", exportsRecoveryDocument && "BBTHVT"].filter(Boolean).join(" và "),
+            ].filter(Boolean).join(", xuất ") + (t.type === "UNG" ? "" : ", chuyển Thống kê xuất BBNT D-Office"),
           )}>
           {act.isPending ? <Loader2 className="spin" size={15} /> : <FileText size={15} />}
-          {exportsRecoveryDocument ? " Xác nhận và xuất BBNT ký tay + BBTHVT" : " Xác nhận và xuất BBNT ký tay"}
+          {" Xác nhận nghiệm thu"}
+          {exportsHandwrittenBbnt && " và xuất BBNT ký tay"}
+          {exportsRecoveryDocument && (exportsHandwrittenBbnt ? " + BBTHVT" : " và xuất BBTHVT")}
         </button>
       </div>
     );
@@ -3233,7 +3272,7 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
     // đại diện SCCN, và biên bản phải mang tên người đó. Tên bước giữ theo từng luồng vì
     // người dùng gọi quen như vậy.
     const exportsBbntDo = t.type === "DE_XUAT" || t.type === "SU_DUNG_HIEN_CO";
-    const stepLabel = t.type === "DE_XUAT" ? "Thống kê xuất BBNT D-Office" : "Thống kê xác nhận mã vật tư";
+    const stepLabel = t.type === "DE_XUAT" ? "Thống kê xuất BBNT D-Office" : "Xuất BBNT DO";
     return (
       <div className="act">
         <label className="lb">{stepLabel}</label>
@@ -3269,7 +3308,7 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
         )}
         <p className="hint">
           {exportsBbntDo
-            ? `BBNT ký tay${materialTicketRequiresRecovery(t) ? " và Biên bản vật tư thu hồi" : ""} đã được xuất ở bước Nghiệm thu. Chọn đại diện SCCN để xuất BBNT D-Office, sau đó chuyển sang bước Quyết toán.`
+            ? `${[usesHandwrittenBbnt(t.materialCategory) && "BBNT ký tay", materialTicketRequiresRecovery(t) && "Biên bản vật tư thu hồi"].filter(Boolean).join(" và ") || "Hồ sơ"} đã được xuất ở bước Nghiệm thu. Chọn đại diện SCCN để xuất BBNT D-Office, sau đó chuyển sang bước Quyết toán.`
             : "Bước này chỉ xác nhận mã vật tư trước khi chuyển quyết toán."}
         </p>
         <button className="btn primary big" disabled={!erpCode || act.isPending || (exportsBbntDo && (!sccnRepresentative || !sccnPosition))}
@@ -3712,6 +3751,9 @@ const CSS = `
 .accept-two-grid{display:grid;grid-template-columns:repeat(2,minmax(260px,1fr));gap:12px;align-items:end;}
 .accept-two-grid .field{min-width:0;margin:0!important;}
 .accept-two-grid .field input{height:42px;margin-top:6px;}
+.accept-two-grid.one-col{grid-template-columns:minmax(0,1fr);}
+.accept-note-grid{align-items:start;}
+.accept-note-grid .field textarea{margin-top:6px;width:100%;}
 .use-field-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-items:end;}
 .use-field-grid .field{min-width:0;margin:0!important;}
 .use-field-grid .field input{height:42px;margin-top:6px;}
@@ -3725,6 +3767,7 @@ const CSS = `
 .recovery-return-check span{display:flex;min-width:0;flex-direction:column;gap:2px;line-height:1.25;}
 .recovery-return-check b{font-size:12px;color:${C.navy};}
 .recovery-return-check small{font-size:11px;font-weight:700;color:#15803d;}
+.recovery-return-check small.cycle{font-weight:600;color:#64748b;}
 .act-field-row{display:grid;grid-template-columns:156px minmax(0,1fr);align-items:center;gap:10px;}
 .act-field-row label:not(.lb){margin-bottom:0;}
 .advance-item-row{display:grid;grid-template-columns:minmax(150px,1.2fr) minmax(150px,1fr) 130px auto;align-items:end;gap:6px;}

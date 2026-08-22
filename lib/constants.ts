@@ -339,6 +339,36 @@ export function isOtherMaterialCategory(category: string | null | undefined): bo
 }
 
 /** Nhận diện Chai khí ở cả nhãn Danh mục (Khí) và nhãn Phiếu (khí). */
+/**
+ * BBNT ký tay CHỈ CÒN cho luồng bi nghiền.
+ *
+ * Từ 2026 phân xưởng bỏ biên bản ký tay ở mọi loại vật tư khác và mẫu chung
+ * `bbnt-template.docx` đã bị xóa khỏi máy chủ — gọi xuất cho loại khác là đi tìm một
+ * tệp không còn tồn tại. Đặt ở đây (không đặt trong lib/bbnt-doc.ts) vì giao diện
+ * cũng phải biết, mà file đó kéo theo fs/docxtemplater, không sang được trình duyệt.
+ *
+ * Nhãn loại trên PHIẾU là "Bi nghiền", trong Danh mục vật tư là "Bi Nghiền Than".
+ */
+/**
+ * Số ảnh hiện trường TỐI THIỂU để qua bước sử dụng vật tư.
+ *
+ * Hai trên ba: bắt đủ ba thì có công việc không có gì để chụp ở ô thứ ba (vật tư
+ * không có nhãn thông số), người ta sẽ chụp bừa cho qua. Dưới hai thì biên bản không
+ * còn chứng minh được hiện trường trước và sau.
+ *
+ * Đặt ở đây chứ không ở lib/material-usage-photo.ts vì giao diện cũng phải biết, mà
+ * file đó kéo theo sharp/S3 — không sang được trình duyệt.
+ */
+export const MIN_USAGE_PHOTOS = 2;
+
+export const MISSING_USAGE_PHOTO_MESSAGE =
+  `Vui lòng tải tối thiểu ${MIN_USAGE_PHOTOS} trên 3 ảnh hiện trường trước khi xác nhận`;
+
+export function usesHandwrittenBbnt(materialCategory: string | null | undefined): boolean {
+  const value = (materialCategory ?? "").trim().toLowerCase();
+  return value === "bi nghiền" || value === "bi nghiền than";
+}
+
 export function isGasCylinderCategory(category: string | null | undefined): boolean {
   return category === "Chai Khí" || category === "Chai khí";
 }

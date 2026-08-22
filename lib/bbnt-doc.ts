@@ -3,6 +3,7 @@ import { readFileSync } from "fs";
 import PizZip from "pizzip";
 import Docxtemplater from "docxtemplater";
 import { uploadS3Object, s3ProxyUrl } from "@/lib/s3";
+import { usesHandwrittenBbnt } from "@/lib/constants";
 import { bbntHandwrittenFileName, vietnamDatePath, vietnamDocumentDate } from "@/lib/material-document-name";
 
 /* ============================================================
@@ -52,18 +53,16 @@ export interface BbntData {
  * Cùng bộ token nên không phải điền khác đi — chỉ đổi tệp mẫu. Nhãn loại trên PHIẾU là
  * "Bi nghiền", nhãn trong Danh mục vật tư là "Bi Nghiền Than" — nhận cả hai.
  */
-function bbntTemplateFileName(materialCategory?: string | null) {
-  const value = (materialCategory ?? "").trim().toLowerCase();
-  return value === "bi nghiền" || value === "bi nghiền than" ? "bbnt-template-bi.docx" : "bbnt-template.docx";
-}
-
 function joinUniq(arr: Array<string | null | undefined>) {
   return [...new Set(arr.filter(Boolean) as string[])].join(", ");
 }
 
 /** Sinh file Word BBNT, upload MinIO, trả về { key, url } */
 export async function generateBbntDoc(d: BbntData): Promise<{ key: string; url: string }> {
-  const tplPath = path.join(process.cwd(), "templates", bbntTemplateFileName(d.materialCategory));
+  if (!usesHandwrittenBbnt(d.materialCategory)) {
+    throw new Error("BBNT ký tay chỉ còn áp dụng cho luồng bi nghiền");
+  }
+  const tplPath = path.join(process.cwd(), "templates", "bbnt-template-bi.docx");
   const zip = new PizZip(readFileSync(tplPath));
   const doc = new Docxtemplater(zip, {
     delimiters: { start: "{{", end: "}}" },

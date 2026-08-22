@@ -1,5 +1,6 @@
 import path from "path";
 import { readFileSync } from "fs";
+import sharp from "sharp";
 import PizZip from "pizzip";
 import Docxtemplater from "docxtemplater";
 import ImageModule from "docxtemplater-image-module-free";
@@ -33,6 +34,7 @@ export interface BbntDoData {
   heThongThietBi?: string | null; // tên hệ thống/thiết bị theo Chi tiết điểm thay thế (EquipmentNode.name)
   bbktNumber?: string | null; // số biên bản kiểm tra
   pctNumber?: string | null;
+  pctContent?: string | null; // nội dung công việc trên PCT/LCT, in ngay sau số PCT
   proposalNumber?: string | null;
   deliveryNoteNumber?: string | null; // số phiếu giao hàng
   sccnRepresentativeName?: string | null; // đại diện Phân xưởng Sửa chữa Cơ nhiệt
@@ -49,8 +51,100 @@ export interface BbntDoData {
   recoveryReturned?: boolean; // đã hoàn trả vật tư thu hồi
   issuedAt?: Date; // ngày bổ sung (trùng BBNT ký tay); mặc định: thời điểm xuất
   items: BbntDoItem[];
+  /**
+   * Khóa S3 của bản đã phát hành trước đó.
+   *
+   * Có giá trị thì GHI ĐÈ đúng tệp đó thay vì tạo tệp mới. Mỗi lần sửa phiếu đều
+   * dựng lại biên bản; không ghi đè thì mỗi lần sửa đẻ thêm một tệp, phiếu chỉ trỏ
+   * vào bản mới nhất còn các bản cũ nằm lại chiếm chỗ vĩnh viễn.
+   */
+  existingKey?: string | null;
   chuKyQuanDoc?: Buffer | null; // ảnh chữ ký số Quản đốc
   chuKyNguoiLap?: Buffer | null; // ảnh chữ ký số người sử dụng vật tư
+  /** Ba ảnh hiện trường chèn vào bảng "Hình ảnh quá trình công tác". */
+  anhTruoc?: Buffer | null;
+  anhSau?: Buffer | null;
+  anhThongSo?: Buffer | null;
+}
+
+/** Tên tag ảnh hiện trường, theo thứ tự ba ô trong bảng của mẫu. */
+const PHOTO_TAGS = ["anhTruoc", "anhSau", "anhThongSo"] as const;
+
+/**
+ * Khung chứa ảnh trong ô bảng, tính theo pixel 96dpi.
+ *
+ * Bảng ảnh chia ba cột trên khổ giấy A4 lề chuẩn (~15,9cm vùng chữ) nên mỗi ô rộng
+ * ~5,3cm ≈ 200px. Chừa lại chút mép để ảnh không đội đường kẻ.
+ */
+const PHOTO_BOX = { width: 190, height: 200 };
+
+/** Thu ảnh vừa khung, GIỮ NGUYÊN TỈ LỆ — ép cứng một cỡ là ảnh dọc bị bóp méo. */
+async function photoSize(buffer: Buffer): Promise<[number, number]> {
+  try {
+    const meta = await sharp(buffer).metadata();
+    const w = meta.width ?? PHOTO_BOX.width;
+    const h = meta.height ?? PHOTO_BOX.height;
+    const scale = Math.min(PHOTO_BOX.width / w, PHOTO_BOX.height / h, 1);
+    return [Math.round(w * scale), Math.round(h * scale)];
+  } catch {
+    return [PHOTO_BOX.width, PHOTO_BOX.height];
+  }
+}
+
+/**
+ * Chèn tag ảnh vào ba ô TRỐNG nằm ngay trên hàng chú thích "Hình 1 / Hình 2 / Hình 3".
+ *
+ * Mẫu do phân xưởng tự soạn trên Word và còn sửa tiếp, nên KHÔNG bắt người soạn phải
+ * gõ đúng `{{%anhTruoc}}` vào từng ô — chỉ cần giữ hàng chú thích như hiện tại là
+ * chạy được. Cùng cách làm với `patchSccnRepresentativeTokens`.
+ *
+ * Ô nào không có ảnh thì không chèn tag, để ô trống — chèn tag rỗng sẽ làm module
+ * ảnh dựng một Buffer rỗng và hỏng cả file.
+ */
+function patchUsagePhotoCells(documentXml: string, hasPhoto: boolean[]) {
+  if (documentXml.includes("{{%anhTruoc}}")) return documentXml; // mẫu đã tự gắn tag
+  const captionIndex = documentXml.indexOf("Hình 1");
+  if (captionIndex < 0) return documentXml;
+
+  // Dò mốc hàng bằng `<w:tr ` / `<w:tr>` chứ KHÔNG phải chuỗi "<w:tr": `<w:trPr>`
+  // (thuộc tính hàng) cũng bắt đầu bằng đúng chuỗi đó, dò thô sẽ bắt nhầm nó và
+  // chèn ảnh vào ngay hàng chú thích thay vì hàng trống phía trên.
+  const rowStarts = [...documentXml.matchAll(/<w:tr[ >]/g)].map((m) => m.index ?? -1);
+  const captionRowPos = rowStarts.findLastIndex((start) => start < captionIndex);
+  if (captionRowPos <= 0) return documentXml;
+
+  const photoRowStart = rowStarts[captionRowPos - 1];
+  const photoRowEnd = documentXml.indexOf("</w:tr>", photoRowStart);
+  if (photoRowEnd < 0 || photoRowEnd > rowStarts[captionRowPos]) return documentXml;
+
+  let row = documentXml.slice(photoRowStart, photoRowEnd);
+  let cellIndex = 0;
+  let cursor = 0;
+  let patched = "";
+
+  while (cellIndex < PHOTO_TAGS.length) {
+    const cellStart = row.indexOf("<w:tc>", cursor) >= 0 ? row.indexOf("<w:tc>", cursor) : row.indexOf("<w:tc ", cursor);
+    if (cellStart < 0) break;
+    const cellEnd = row.indexOf("</w:tc>", cellStart);
+    if (cellEnd < 0) break;
+
+    const cell = row.slice(cellStart, cellEnd);
+    // Chèn run mang tag vào cuối đoạn văn đầu tiên của ô. Run phải đứng SAU <w:pPr>
+    // nên nối ngay trước </w:p> là đúng thứ tự OOXML.
+    const paragraphEnd = cell.indexOf("</w:p>");
+    if (paragraphEnd >= 0 && hasPhoto[cellIndex]) {
+      const tag = `<w:r><w:t>{{%${PHOTO_TAGS[cellIndex]}}}</w:t></w:r>`;
+      patched += row.slice(cursor, cellStart) + cell.slice(0, paragraphEnd) + tag + cell.slice(paragraphEnd);
+    } else {
+      patched += row.slice(cursor, cellEnd);
+    }
+    cursor = cellEnd;
+    cellIndex += 1;
+  }
+
+  if (cellIndex === 0) return documentXml;
+  row = patched + row.slice(cursor);
+  return documentXml.slice(0, photoRowStart) + row + documentXml.slice(photoRowEnd);
 }
 
 /** Tải ảnh chữ ký số của một user: ưu tiên key MinIO, rơi về data URL base64. */
@@ -68,6 +162,17 @@ export async function resolveSignatureBuffer(
     // chữ ký hỏng/thiếu → bỏ trống chỗ ký, không chặn xuất biên bản
   }
   return null;
+}
+
+/**
+ * Chữ thuần của mẫu, đã gộp các đoạn chạy.
+ *
+ * Word hay cắt một token thành nhiều `<w:r>` (mẫu lõi lọc đang bị vậy với
+ * `{{pctNumber}}`), nên dò token bằng cách tìm chuỗi thô trong XML sẽ trượt.
+ * Docxtemplater tự nối lại được, còn code của ta thì phải tự gộp trước khi dò.
+ */
+function templatePlainText(documentXml: string) {
+  return [...documentXml.matchAll(/<w:t[^>]*>([^<]*)<\/w:t>/g)].map((m) => m[1]).join("");
 }
 
 function joinUniq(arr: Array<string | null | undefined>) {
@@ -181,16 +286,32 @@ export async function generateBbntDoDoc(d: BbntDoData): Promise<{ key: string; u
       "Chức vụ: {{quanDocPosition}}"
     );
   }
+  const photos: Record<(typeof PHOTO_TAGS)[number], Buffer | null> = {
+    anhTruoc: d.anhTruoc ?? null,
+    anhSau: d.anhSau ?? null,
+    anhThongSo: d.anhThongSo ?? null,
+  };
   if (documentXml) {
+    documentXml = patchUsagePhotoCells(documentXml, PHOTO_TAGS.map((tag) => Boolean(photos[tag])));
     zip.file("word/document.xml", documentXml);
   }
+
+  // Cỡ ảnh phải tính TRƯỚC vì getSize của module là hàm đồng bộ, không await được.
+  const photoSizes = new Map<string, [number, number]>();
+  for (const tag of PHOTO_TAGS) {
+    const buffer = photos[tag];
+    if (buffer) photoSizes.set(tag, await photoSize(buffer));
+  }
+
   // Giá trị tag ảnh phải là CHUỖI base64 (Buffer là object sẽ bị module hiểu nhầm
   // thành dữ liệu đã resolve và crash) — getImage decode lại thành Buffer.
   const imageModule = new ImageModule({
     centered: true,
     getImage: (tagValue) => Buffer.from(String(tagValue), "base64"),
-    // Chữ ký hiển thị ~4.2cm x 1.7cm — đủ rõ, không phá bố cục khối ký
-    getSize: () => [160, 64],
+    // Chữ ký hiển thị ~4.2cm x 1.7cm — đủ rõ, không phá bố cục khối ký.
+    // Ảnh hiện trường thì theo khung ô bảng, mỗi ảnh một cỡ theo tỉ lệ gốc.
+    getSize: (_img: unknown, _tagValue: unknown, tagName: string) =>
+      photoSizes.get(tagName) ?? [160, 64],
   });
   const doc = new Docxtemplater(zip, {
     delimiters: { start: "{{", end: "}}" },
@@ -200,14 +321,34 @@ export async function generateBbntDoDoc(d: BbntDoData): Promise<{ key: string; u
   });
 
   const issuedAt = d.issuedAt ?? new Date();
+
+  /**
+   * Nội dung PCT in ngay sau số PCT, trên cùng một dòng của mục "Đối tượng nghiệm thu".
+   *
+   * Cả ba mẫu đều dùng `{{pctNumber}}` đúng MỘT lần ở dòng đó, nên ghép thẳng vào giá
+   * trị là đủ — không phải vá OOXML, và không sợ Word cắt token thành nhiều đoạn.
+   * Mẫu nào tự đặt sẵn `{{pctContent}}` thì tôn trọng chỗ người soạn đã chọn, và
+   * KHÔNG ghép nữa để nội dung không in ra hai lần.
+   */
+  const pctContent = (d.pctContent ?? "").trim();
+  const templateHasPctContentTag = documentXml ? templatePlainText(documentXml).includes("{{pctContent}}") : false;
+  const pctNumberText = templateHasPctContentTag
+    ? d.pctNumber || ""
+    : [d.pctNumber || "", pctContent].filter(Boolean).join(" — ");
+
   doc.render({
     unit: d.unit,
     heThongThietBi: d.heThongThietBi || joinUniq(d.items.map((item) => item.deviceSeq)),
     deviceNameManual: joinUniq(d.items.map((item) => item.deviceName)),
     soBBKT: d.bbktNumber || "",
-    pctNumber: d.pctNumber || "",
-    proposalNumber: d.proposalNumber ? `Phiếu đề xuất vật tư số ${d.proposalNumber}` : "Phiếu đề xuất vật tư: (không)",
-    deliveryNote: d.deliveryNoteNumber ? `Phiếu giao hàng số ${d.deliveryNoteNumber}` : "",
+    pctNumber: pctNumberText,
+    pctContent: pctContent,
+    // CHỈ điền SỐ, không kèm chữ dẫn. Mẫu đã có sẵn "Phiếu đề xuất vật tư số …" và
+    // "Phiếu giao hàng số …" trước ô điền, ghép thêm ở đây là in ra lặp hai lần:
+    // "Phiếu đề xuất vật tư số Phiếu đề xuất vật tư số 123".
+    // Không có số thì ghi "(không)" cho đồng bộ với các dòng căn cứ khác trong mục a).
+    proposalNumber: d.proposalNumber || "(không)",
+    deliveryNote: d.deliveryNoteNumber || "(không)",
     sccnRepresentativeName: d.sccnRepresentativeName || "",
     sccnRepresentativePosition: d.sccnRepresentativePosition || "",
     quanDocName: d.quanDocName || "……………………………",
@@ -238,13 +379,20 @@ export async function generateBbntDoDoc(d: BbntDoData): Promise<{ key: string; u
     chuKyQuanDoc: d.chuKyQuanDoc ? d.chuKyQuanDoc.toString("base64") : "",
     coChuKyNguoiLap: Boolean(d.chuKyNguoiLap),
     chuKyNguoiLap: d.chuKyNguoiLap ? d.chuKyNguoiLap.toString("base64") : "",
+    anhTruoc: photos.anhTruoc ? photos.anhTruoc.toString("base64") : "",
+    anhSau: photos.anhSau ? photos.anhSau.toString("base64") : "",
+    anhThongSo: photos.anhThongSo ? photos.anhThongSo.toString("base64") : "",
   });
 
   const buf = doc.getZip().generate({ type: "nodebuffer", compression: "DEFLATE" }) as Buffer;
 
   const fileName = bbntDoFileName(d.items.map((item) => item.deviceName), issuedAt);
-  // Cây thư mục Năm/Tháng/Ngày — xem chú thích ở lib/bbnt-doc.ts.
-  const key = `public/Thay The Vat Tu/BBNT D-Office/${vietnamDatePath(issuedAt)}/${d.fileBaseName} - ${fileName}`;
+  // Cây thư mục Năm/Tháng/Ngày — xem chú thích ở lib/bbthvt-doc.ts.
+  // Đã phát hành rồi thì ghi đè đúng tệp cũ: link trên phiếu không đổi, và sửa phiếu
+  // nhiều lần cũng không sinh thêm tệp. Tên tệp giữ theo bản đầu, kể cả khi tên thiết
+  // bị đổi về sau — đổi tên là lại đẻ tệp mới, đúng thứ cần tránh.
+  const key = d.existingKey
+    || `public/Thay The Vat Tu/BBNT D-Office/${vietnamDatePath(issuedAt)}/${d.fileBaseName} - ${fileName}`;
   await uploadS3Object({ key, body: buf, contentType: DOCX_MIME, originalName: fileName });
   return { key, url: s3ProxyUrl(key, fileName) };
 }

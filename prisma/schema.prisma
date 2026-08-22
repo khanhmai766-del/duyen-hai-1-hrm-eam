@@ -1405,6 +1405,7 @@ model MaterialTicket {
   proposalReceiverName String? // tên VHV nhận phiếu ĐXVT khi Thống kê giao phiếu
   deliveryNoteNumber   String? // số phiếu giao hàng
   repairRequestNumber  String? // số yêu cầu sửa chữa
+  pctContent           String? // nội dung công việc ghi trên PCT/LCT
   completionNote       String? // thông tin xác nhận thay thế xong
   chiHuyName           String? // tên chỉ huy trực tiếp (SCCN) — in vào BBNT
   docUrl               String? // file Word BBNT trên MinIO
@@ -1468,6 +1469,12 @@ model MaterialTicket {
   usedQuantity          Int? // khối lượng vật tư sử dụng
   remainingQuantity     Int? // còn lại = lãnh − dùng (âm = dùng vượt phần lãnh, trừ vào tồn kho)
   materialUserName      String? // tên VHV trực tiếp sử dụng vật tư
+  // Ba ảnh hiện trường chèn vào BBNT D-Office, lưu KHÓA S3 chứ không phải base64
+  // (ảnh chụp máy là vài MB, nhét vào cột text sẽ phình bảng phiếu).
+  // TẠM THỜI: xóa hẳn khỏi S3 khi Thống kê xác nhận quyết toán — xem action "settle".
+  usagePhotoBeforeKey   String? // Hình 1 — thiết bị TRƯỚC khi thay thế/bổ sung
+  usagePhotoAfterKey    String? // Hình 2 — thiết bị SAU khi thay thế/bổ sung
+  usagePhotoSpecKey     String? // Hình 3 — thông số thiết bị hoặc vật tư thay thế
   usedById              String?
   usedByName            String?
   usedByPosition        String?

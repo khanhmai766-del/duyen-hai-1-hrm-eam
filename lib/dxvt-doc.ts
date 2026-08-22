@@ -141,7 +141,7 @@ export async function generateDxvtDoc(d: DxvtData): Promise<{ key: string; url: 
   const buf = doc.getZip().generate({ type: "nodebuffer", compression: "DEFLATE" }) as Buffer;
 
   const fileName = dxvtFileName(d.items.map((item) => item.deviceName), issuedAt);
-  // Cây thư mục Năm/Tháng/Ngày — xem chú thích ở lib/bbnt-doc.ts.
+  // Cây thư mục Năm/Tháng/Ngày — xem chú thích ở lib/bbthvt-doc.ts.
   const key = `public/Thay The Vat Tu/Phieu DXVT/${vietnamDatePath(issuedAt)}/${d.fileBaseName} - ${fileName}`;
   await uploadS3Object({ key, body: buf, contentType: DOCX_MIME, originalName: fileName });
   return { key, url: s3ProxyUrl(key, fileName) };

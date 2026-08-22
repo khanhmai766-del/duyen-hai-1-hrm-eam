@@ -78,7 +78,8 @@ export async function generateBbthvtDoc(d: BbthvtData): Promise<{ key: string; u
 
   const issuedAt = d.issuedAt ?? new Date();
   const fileName = bbthvtFileName(d.items.map((item) => item.deviceName), issuedAt);
-  // Cây thư mục Năm/Tháng/Ngày — xem chú thích ở lib/bbnt-doc.ts.
+  // Cây thư mục MinIO: <loại biên bản>/<Năm>/<Tháng>/<Ngày>/<file> (theo ngày xuất,
+  // giờ VN); tiền tố định danh phiếu chống trùng tên, tên tải về vẫn là fileName gọn.
   const key = `public/Thay The Vat Tu/BBTHVT/${vietnamDatePath(issuedAt)}/${d.fileBaseName} - ${fileName}`;
   await uploadS3Object({ key, body: buf, contentType: DOCX_MIME, originalName: fileName });
   return { key, url: s3ProxyUrl(key, fileName) };

@@ -39,6 +39,7 @@ export interface MaterialTicket {
   proposalReceiverName: string | null;
   deliveryNoteNumber: string | null;
   repairRequestNumber: string | null;
+  pctContent: string | null;
   completionNote: string | null;
   chiHuyName: string | null;
   docUrl: string | null;
@@ -386,5 +387,43 @@ export function useTicketChemicalTrucks(ticketId: string, enabled: boolean) {
       (await apiGet<TicketChemicalTrucks>(`/api/material-tickets/${ticketId}/chemical-trucks`)).data,
     enabled,
     staleTime: 10_000,
+  });
+}
+
+/** Ba ô ảnh hiện trường của bước "Sử dụng vật tư". */
+export type TicketUsagePhoto = {
+  slot: "before" | "after" | "spec";
+  title: string;
+  hint: string;
+  key: string | null;
+  url: string | null;
+};
+
+export function useTicketUsagePhotos(ticketId: string, enabled: boolean) {
+  return useQuery({
+    queryKey: ["ticket-usage-photos", ticketId],
+    queryFn: async () =>
+      (await apiGet<{ photos: TicketUsagePhoto[] }>(`/api/material-tickets/${ticketId}/usage-photos`)).data.photos,
+    enabled,
+    staleTime: 10_000,
+  });
+}
+
+/**
+ * Đặt hoặc gỡ ảnh cho MỘT ô. Gửi ngay lúc chọn ảnh chứ không gom vào lúc bấm Xác
+ * nhận: ba ảnh cộng lại vài MB, nhét chung vào thân yêu cầu của bước sử dụng là dễ
+ * quá giới hạn và mất luôn cả phần nhập tay.
+ */
+export function useSetTicketUsagePhoto(ticketId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { slot: string; dataUrl: string | null }) =>
+      input.dataUrl
+        ? apiMutate<{ photos: TicketUsagePhoto[] }>(`/api/material-tickets/${ticketId}/usage-photos`, "PUT", input)
+        : apiMutate<{ photos: TicketUsagePhoto[] }>(
+            `/api/material-tickets/${ticketId}/usage-photos?slot=${input.slot}`,
+            "DELETE"
+          ),
+    onSuccess: (data) => qc.setQueryData(["ticket-usage-photos", ticketId], data.photos),
   });
 }
