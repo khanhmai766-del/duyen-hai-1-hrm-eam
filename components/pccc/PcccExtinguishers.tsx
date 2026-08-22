@@ -36,6 +36,7 @@ import {
 import {
   BCC_TINH_TRANG_NGOAI_OPTIONS,
   BCC_VI_TRI_HIEN_TAI_OPTIONS,
+  CHUNG_LOAI_OPTIONS,
 
   hanThayTheTone,
   BCC_TINH_TRANG_OPTIONS,
@@ -235,10 +236,18 @@ export function PcccExtinguishers({
                     </span>
                   </TableCell>
                   <TableCell
-                    className={cn(TD_ROW, STICKY_TD, rowBg, "whitespace-nowrap text-center")}
+                    className={cn(TD_ROW, STICKY_TD, rowBg, "whitespace-nowrap text-center", dirty("chungLoai"))}
                     style={{ left: FROZEN.chungLoai.left }}
                   >
-                    {r.chungLoai}
+                    <EditableCell
+                      value={r.chungLoai}
+                      type="select"
+                      options={[...CHUNG_LOAI_OPTIONS]}
+                      align="center"
+                      disabled={!rowEditable}
+                      lockedReason={lockReason()}
+                      onSave={(value) => save(r, "chungLoai", value)}
+                    />
                   </TableCell>
                   {/* Tình trạng: LUÔN đủ hai lựa chọn. Áp suất không còn ràng buộc ô này —
                       hai đánh giá độc lập theo TB 5100 (xem lib/pccc-status.ts). */}
