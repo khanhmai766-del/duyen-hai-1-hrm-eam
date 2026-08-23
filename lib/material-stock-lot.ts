@@ -31,6 +31,10 @@ export type StockLot = {
   quantityIn: number;
   quantityLeft: number;
   ticketId: string | null;
+  /** Ảnh phiếu xuất kho liên 3 của lô — xem lib/material-delivery-photo.ts. */
+  deliveryPhotoKey: string | null;
+  deliveryPhotoAt: Date | null;
+  deliveryPhotoByName: string | null;
 };
 
 /** Một lần sử dụng lấy bao nhiêu từ lô nào. */
@@ -74,6 +78,9 @@ const LOT_SELECT = {
   quantityIn: true,
   quantityLeft: true,
   ticketId: true,
+  deliveryPhotoKey: true,
+  deliveryPhotoAt: true,
+  deliveryPhotoByName: true,
 } as const;
 
 /** Các lô CÒN HÀNG của một mã vật tư, theo thứ tự sẽ bị trừ. */

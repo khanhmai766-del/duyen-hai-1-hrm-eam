@@ -5,6 +5,7 @@ import { Camera, Info, Loader2, X } from "lucide-react";
 import { toast } from "sonner";
 import { useSetTicketUsagePhoto, useTicketUsagePhotos, type TicketUsagePhoto } from "@/hooks/useMaterialTickets";
 import { MIN_USAGE_PHOTOS } from "@/lib/constants";
+import { downscaleImage } from "@/lib/image-downscale";
 
 /**
  * Ba ô ảnh hiện trường của bước "Xác nhận sử dụng vật tư".
@@ -16,30 +17,6 @@ import { MIN_USAGE_PHOTOS } from "@/lib/constants";
  * Ảnh gửi lên ngay khi chọn — xem `useSetTicketUsagePhoto` để biết vì sao không gom
  * vào lúc bấm Xác nhận.
  */
-
-/** Thu nhỏ trước khi gửi để yêu cầu không nặng; máy chủ vẫn nén lại lần nữa. */
-function downscale(file: File, maxSize = 1600): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onerror = () => reject(new Error("Không đọc được tệp ảnh"));
-    reader.onload = () => {
-      const img = new Image();
-      img.onerror = () => resolve(reader.result as string);
-      img.onload = () => {
-        const scale = Math.min(1, maxSize / Math.max(img.width, img.height));
-        const canvas = document.createElement("canvas");
-        canvas.width = Math.round(img.width * scale);
-        canvas.height = Math.round(img.height * scale);
-        const ctx = canvas.getContext("2d");
-        if (!ctx) return resolve(reader.result as string);
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        resolve(canvas.toDataURL("image/jpeg", 0.82));
-      };
-      img.src = reader.result as string;
-    };
-    reader.readAsDataURL(file);
-  });
-}
 
 function PhotoSlot({
   photo,
@@ -132,7 +109,7 @@ export function UsagePhotoCard({ ticketId, canEdit }: { ticketId: string; canEdi
     if (file.size > 12 * 1024 * 1024) return toast.error("Ảnh tối đa 12MB");
     setBusySlot(slot);
     try {
-      const dataUrl = await downscale(file);
+      const dataUrl = await downscaleImage(file);
       await setPhoto.mutateAsync({ slot, dataUrl });
       toast.success("Đã tải ảnh lên");
     } catch (e) {

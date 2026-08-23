@@ -1324,6 +1324,18 @@ model MaterialStockLot {
   quantityLeft Int // còn lại sau khi trừ các lần sử dụng
   ticketId     String? // phiếu đã lãnh lô này về; mỗi phiếu một lô
   note         String?
+  // Ảnh phiếu xuất kho LIÊN 3, bắt buộc kèm theo Biên bản vật tư thu hồi (chú thích số 6
+  // của mẫu QLVT.06: "Nộp kèm bản photo Phiếu Giao hàng").
+  //
+  // Ảnh thuộc về LÔ chứ không thuộc về phiếu, vì một lô lãnh về có thể được nhiều phiếu
+  // dùng dần: phần chưa dùng hết thành tồn, phiếu sau lấy tiếp từ đúng lô đó và vẫn phải
+  // xuất kèm đúng tờ liên 3 ấy. Gắn vào phiếu thì phiếu sau không còn gì để in.
+  //
+  // Xoá khi lô dùng hết VÀ mọi phiếu đã dùng lô đều quyết toán xong — xem
+  // `purgeSettledLotPhotos`.
+  deliveryPhotoKey    String? // khóa S3
+  deliveryPhotoAt     DateTime?
+  deliveryPhotoByName String? // người đính kèm, đóng băng tại thời điểm chụp
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 

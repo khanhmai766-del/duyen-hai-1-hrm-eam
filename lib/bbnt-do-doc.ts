@@ -71,23 +71,41 @@ export interface BbntDoData {
 const PHOTO_TAGS = ["anhTruoc", "anhSau", "anhThongSo"] as const;
 
 /**
- * Khung chứa ảnh trong ô bảng, tính theo pixel 96dpi.
+ * Khung chứa ảnh trong ô bảng, tính theo pixel 96dpi — dùng khi không đọc được bề
+ * ngang thật của ô.
  *
  * Bảng ảnh chia ba cột trên khổ giấy A4 lề chuẩn (~15,9cm vùng chữ) nên mỗi ô rộng
- * ~5,3cm ≈ 200px. Chừa lại chút mép để ảnh không đội đường kẻ.
+ * ~5,3cm ≈ 200px. Chừa lại chút mép để ảnh không đội đường kẻ. Chiều cao rộng tay
+ * hơn bề ngang: ảnh dọc chụp bằng điện thoại mà bị kẹp ở 200px thì chỉ lấp được nửa
+ * ô, và người dùng lại kéo tay cho kín — kéo tay là chỗ ảnh bị méo tỉ lệ.
  */
-const PHOTO_BOX = { width: 190, height: 200 };
+const PHOTO_BOX = { width: 190, height: 240 };
+
+/**
+ * Bề ngang khả dụng của một ô bảng, đổi twip → pixel 96dpi.
+ *
+ * Ba cột của mẫu KHÔNG bằng nhau (2977 / 2835 / 3871 twip), nên lấy chung một cỡ
+ * 190px là để phí gần 1,5cm bề ngang ở cột thứ ba.
+ */
+function cellWidthPx(cell: string): number | null {
+  const match = /<w:tcW\s+w:w="(\d+)"\s+w:type="dxa"/.exec(cell);
+  if (!match) return null;
+  // 1 twip = 1/1440 inch → chia 15 ra pixel 96dpi. Trừ lề trong ô (mặc định 108
+  // twip mỗi bên) và chút mép để ảnh không đội đường kẻ.
+  const px = Math.round(Number(match[1]) / 15) - 18;
+  return px > 40 ? px : null;
+}
 
 /** Thu ảnh vừa khung, GIỮ NGUYÊN TỈ LỆ — ép cứng một cỡ là ảnh dọc bị bóp méo. */
-async function photoSize(buffer: Buffer): Promise<[number, number]> {
+async function photoSize(buffer: Buffer, box: { width: number; height: number }): Promise<[number, number]> {
   try {
     const meta = await sharp(buffer).metadata();
-    const w = meta.width ?? PHOTO_BOX.width;
-    const h = meta.height ?? PHOTO_BOX.height;
-    const scale = Math.min(PHOTO_BOX.width / w, PHOTO_BOX.height / h, 1);
+    const w = meta.width ?? box.width;
+    const h = meta.height ?? box.height;
+    const scale = Math.min(box.width / w, box.height / h, 1);
     return [Math.round(w * scale), Math.round(h * scale)];
   } catch {
-    return [PHOTO_BOX.width, PHOTO_BOX.height];
+    return [box.width, box.height];
   }
 }
 
@@ -100,24 +118,29 @@ async function photoSize(buffer: Buffer): Promise<[number, number]> {
  *
  * Ô nào không có ảnh thì không chèn tag, để ô trống — chèn tag rỗng sẽ làm module
  * ảnh dựng một Buffer rỗng và hỏng cả file.
+ *
+ * Trả kèm bề ngang từng ô: đằng nào cũng phải duyệt qua các ô ở đây, và cỡ ảnh phải
+ * tính theo đúng ô chứa nó.
  */
 function patchUsagePhotoCells(documentXml: string, hasPhoto: boolean[]) {
-  if (documentXml.includes("{{%anhTruoc}}")) return documentXml; // mẫu đã tự gắn tag
+  const unchanged = { xml: documentXml, widths: [] as Array<number | null> };
+  if (documentXml.includes("{{%anhTruoc}}")) return unchanged; // mẫu đã tự gắn tag
   const captionIndex = documentXml.indexOf("Hình 1");
-  if (captionIndex < 0) return documentXml;
+  if (captionIndex < 0) return unchanged;
 
   // Dò mốc hàng bằng `<w:tr ` / `<w:tr>` chứ KHÔNG phải chuỗi "<w:tr": `<w:trPr>`
   // (thuộc tính hàng) cũng bắt đầu bằng đúng chuỗi đó, dò thô sẽ bắt nhầm nó và
   // chèn ảnh vào ngay hàng chú thích thay vì hàng trống phía trên.
   const rowStarts = [...documentXml.matchAll(/<w:tr[ >]/g)].map((m) => m.index ?? -1);
   const captionRowPos = rowStarts.findLastIndex((start) => start < captionIndex);
-  if (captionRowPos <= 0) return documentXml;
+  if (captionRowPos <= 0) return unchanged;
 
   const photoRowStart = rowStarts[captionRowPos - 1];
   const photoRowEnd = documentXml.indexOf("</w:tr>", photoRowStart);
-  if (photoRowEnd < 0 || photoRowEnd > rowStarts[captionRowPos]) return documentXml;
+  if (photoRowEnd < 0 || photoRowEnd > rowStarts[captionRowPos]) return unchanged;
 
   let row = documentXml.slice(photoRowStart, photoRowEnd);
+  const widths: Array<number | null> = [];
   let cellIndex = 0;
   let cursor = 0;
   let patched = "";
@@ -129,6 +152,7 @@ function patchUsagePhotoCells(documentXml: string, hasPhoto: boolean[]) {
     if (cellEnd < 0) break;
 
     const cell = row.slice(cellStart, cellEnd);
+    widths.push(cellWidthPx(cell));
     // Chèn run mang tag vào cuối đoạn văn đầu tiên của ô. Run phải đứng SAU <w:pPr>
     // nên nối ngay trước </w:p> là đúng thứ tự OOXML.
     const paragraphEnd = cell.indexOf("</w:p>");
@@ -142,9 +166,12 @@ function patchUsagePhotoCells(documentXml: string, hasPhoto: boolean[]) {
     cellIndex += 1;
   }
 
-  if (cellIndex === 0) return documentXml;
+  if (cellIndex === 0) return unchanged;
   row = patched + row.slice(cursor);
-  return documentXml.slice(0, photoRowStart) + row + documentXml.slice(photoRowEnd);
+  return {
+    xml: documentXml.slice(0, photoRowStart) + row + documentXml.slice(photoRowEnd),
+    widths,
+  };
 }
 
 /** Tải ảnh chữ ký số của một user: ưu tiên key MinIO, rơi về data URL base64. */
@@ -291,16 +318,21 @@ export async function generateBbntDoDoc(d: BbntDoData): Promise<{ key: string; u
     anhSau: d.anhSau ?? null,
     anhThongSo: d.anhThongSo ?? null,
   };
+  let photoCellWidths: Array<number | null> = [];
   if (documentXml) {
-    documentXml = patchUsagePhotoCells(documentXml, PHOTO_TAGS.map((tag) => Boolean(photos[tag])));
+    const patched = patchUsagePhotoCells(documentXml, PHOTO_TAGS.map((tag) => Boolean(photos[tag])));
+    documentXml = patched.xml;
+    photoCellWidths = patched.widths;
     zip.file("word/document.xml", documentXml);
   }
 
   // Cỡ ảnh phải tính TRƯỚC vì getSize của module là hàm đồng bộ, không await được.
   const photoSizes = new Map<string, [number, number]>();
-  for (const tag of PHOTO_TAGS) {
+  for (const [index, tag] of PHOTO_TAGS.entries()) {
     const buffer = photos[tag];
-    if (buffer) photoSizes.set(tag, await photoSize(buffer));
+    if (!buffer) continue;
+    const width = photoCellWidths[index] ?? PHOTO_BOX.width;
+    photoSizes.set(tag, await photoSize(buffer, { width, height: PHOTO_BOX.height }));
   }
 
   // Giá trị tag ảnh phải là CHUỖI base64 (Buffer là object sẽ bị module hiểu nhầm

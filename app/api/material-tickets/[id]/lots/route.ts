@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { fail, handle, ok, requireUser } from "@/lib/api";
 import { availableLots, lotLabel, usedLotsOfTicket } from "@/lib/material-stock-lot";
+import { deliveryPhotoUrl } from "@/lib/material-delivery-photo";
 import { isGasCylinderCategory } from "@/lib/constants";
 
 export const dynamic = "force-dynamic";
@@ -54,6 +55,9 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
           receivedAt: lot.receivedAt,
           available: lot.quantityLeft + mine,
           taken: mine,
+          // Ảnh phiếu xuất kho liên 3 của lô. Luồng "Sử dụng hiện có" không tự tải ảnh nào —
+          // nó xem và in lại đúng tấm của lô mà nó rút, xem lib/material-delivery-photo.ts.
+          deliveryPhotoUrl: deliveryPhotoUrl(lot.deliveryPhotoKey),
         };
       }),
     });

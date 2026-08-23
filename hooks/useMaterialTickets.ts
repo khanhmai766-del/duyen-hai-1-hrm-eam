@@ -348,13 +348,25 @@ export interface TicketLotInfo {
   unit: string;
   materialName: string;
   usedQuantity: number;
-  lots: Array<{ id: string; label: string; erpCode: string | null; receivedAt: string | null; available: number; taken: number }>;
+  lots: Array<{
+    id: string;
+    label: string;
+    erpCode: string | null;
+    receivedAt: string | null;
+    available: number;
+    taken: number;
+    /** Ảnh phiếu xuất kho liên 3 của lô — nguồn ảnh cho phụ lục BBTHVT. */
+    deliveryPhotoUrl: string | null;
+  }>;
 }
 
 export function useTicketLots(ticketId: string) {
   return useQuery({
     queryKey: ["ticket-lots", ticketId],
     queryFn: () => apiGet<TicketLotInfo>(`/api/material-tickets/${ticketId}/lots`),
+    // Gọi với chuỗi rỗng nghĩa là "chưa cần lô": nơi gọi truyền "" để tắt hẳn truy vấn thay vì
+    // phải bọc thêm điều kiện quanh chỗ dùng.
+    enabled: Boolean(ticketId),
     staleTime: 10_000,
   });
 }

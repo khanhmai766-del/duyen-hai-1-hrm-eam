@@ -13,6 +13,8 @@ import { consumeStock, deliveryNoteSummary, receiveIntoLot, releaseUsage, revers
 import { parseDateInput } from "@/lib/utils";
 import { linkTicketTrucks, unlinkTicketTrucks, type TruckInput } from "@/lib/chemical-inventory/ticket-link";
 import { countUsagePhotos, deleteUsagePhotos } from "@/lib/material-usage-photo";
+import { deleteDeliveryPhotos, deliveryPhotoLotsOfTicket, loadDeliveryPhotoBuffer, purgeSettledLotPhotos, uploadDeliveryPhoto, MISSING_DELIVERY_PHOTO_MESSAGE } from "@/lib/material-delivery-photo";
+import { keyFromPublicUrl } from "@/lib/s3";
 import { MIN_USAGE_PHOTOS, MISSING_USAGE_PHOTO_MESSAGE, usesHandwrittenBbnt, CHEMICAL_TICKET_TYPE, COMMON_MATERIAL_POSITION, GAS_RETURN_STATUS, isChemicalFlowTicket, isGasCylinderCategory, isGasCylinderTicket, isOtherMaterialAdvanceTicket, isOtherMaterialTicketType, materialTicketRequiresRecovery, OTHER_MATERIAL_ADVANCE_TICKET_TYPE, OTHER_MATERIAL_TICKET_TYPE, recoveryRequiredForReason, ticketReasonAllowed, TICKET_MATERIAL_CATEGORIES, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
 import { positionsMatch } from "@/lib/position-catalog";
 import { replacementPointDisplayLabel, replacementPointSelectionKey } from "@/lib/material-replacement-display";
@@ -211,6 +213,25 @@ async function buildProposalDocument(
  * phiếu trên đầu phiếu. Phiếu cũ chưa có sổ lô thì rơi về số phiếu đã lưu như trước.
  */
 
+/**
+ * Ảnh phiếu xuất kho liên 3 kèm theo BBTHVT — phụ lục bắt buộc của mẫu QLVT.06 (chú thích số 6).
+ *
+ * Lô nào được tính thì xem `deliveryPhotoLotsOfTicket`; lô chưa có ảnh thì bỏ qua tấm đó, không
+ * chặn xuất biên bản.
+ */
+async function loadTicketDeliveryPhotos(t: FullTicket) {
+  const unit = t.items[0]?.material.unit ?? "";
+  const lots = await deliveryPhotoLotsOfTicket(prisma, t.id, await usedLotsOfTicket(prisma, t.id));
+
+  const photos = await Promise.all(
+    lots.map(async (lot) => {
+      const buffer = await loadDeliveryPhotoBuffer(lot.deliveryPhotoKey);
+      return buffer ? { deliveryNote: lot.deliveryNote, used: lot.used, unit, buffer } : null;
+    })
+  );
+  return photos.filter((photo): photo is NonNullable<typeof photo> => photo !== null);
+}
+
 async function buildRecoveryDocument(
   t: FullTicket,
   overrides?: {
@@ -221,7 +242,12 @@ async function buildRecoveryDocument(
   }
 ) {
   const docNo = await assignRecoveryDocNo(t);
+  const deliveryPhotos = await loadTicketDeliveryPhotos(t);
   return generateBbthvtDoc({
+    deliveryPhotos,
+    // Bổ sung ảnh liên 3 cho phiếu cũ rồi xuất lại phải GHI ĐÈ đúng tệp đang treo trên phiếu,
+    // không đẻ tệp mới ở thư mục ngày hôm nay.
+    existingKey: keyFromPublicUrl(t.recoveryDocUrl),
     fileBaseName: materialTicketFileBase(t),
     soVB: String(docNo).padStart(2, "0"),
     recoveryQuantity: overrides?.recoveryQuantity !== undefined ? overrides.recoveryQuantity : t.recoveryQuantity,
@@ -989,6 +1015,16 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         const erpDelta = (oldSource === "ERP" ? t.receivedQuantity : 0) - (receiptSource === "ERP" ? value : 0);
         if (item.material.quantity + delta < 0 || erpRows[0].erpStock + erpDelta < 0) return fail("Không thể điều chỉnh vì số lượng hiện có hoặc ERP sẽ âm");
         before = `Nhận ${t.receivedQuantity}, phiếu giao hàng ${t.deliveryNoteNumber ?? t.receivedMethod ?? "—"}`; after = `Nhận ${value}, phiếu giao hàng ${method}`;
+        // Sửa lại bước nhận cũng là chỗ chụp lại tờ liên 3 khi ảnh cũ mờ hoặc nhầm phiếu.
+        // Không gửi ảnh mới thì giữ nguyên ảnh cũ — bắt buộc đã chặn từ lúc xác nhận.
+        const replacementPhotoDataUrl = String(body.deliveryPhotoDataUrl || "").trim();
+        const editedLot = await prisma.materialStockLot.findFirst({
+          where: { ticketId: t.id },
+          select: { id: true, deliveryPhotoKey: true },
+        });
+        const replacementPhoto = replacementPhotoDataUrl
+          ? await uploadDeliveryPhoto(t.id, replacementPhotoDataUrl)
+          : null;
         up = await prisma.$transaction(async (tx) => {
           if (delta || method !== (t.deliveryNoteNumber ?? "")) {
             try {
@@ -1001,9 +1037,24 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
             }
             await syncMaterialQuantity(tx, item.material.code, sharedCodesOf(item.material), stockSyncOptions(item.material.category, t.unit));
           }
+          if (replacementPhoto) {
+            const lotId = editedLot?.id
+              ?? (await tx.materialStockLot.findFirst({ where: { ticketId: t.id }, select: { id: true } }))?.id;
+            if (lotId) {
+              await tx.materialStockLot.update({
+                where: { id: lotId },
+                data: {
+                  deliveryPhotoKey: replacementPhoto.key,
+                  deliveryPhotoAt: new Date(),
+                  deliveryPhotoByName: user.name ?? "",
+                },
+              });
+            }
+          }
           if (erpDelta) await tx.$executeRaw`UPDATE "ErpMaterial" SET "erpStock" = "erpStock" + ${erpDelta}, "updatedAt" = NOW() WHERE "code" = ${erpCode}`;
           return tx.materialTicket.update({ where: { id: t.id }, data: { receivedQuantity: value, receivedMethod: method || null, deliveryNoteNumber: method || null, receiptSource, remainingQuantity: value - (t.usedQuantity ?? 0) }, include: ITEM_INCLUDE });
         });
+        if (replacementPhoto && editedLot?.deliveryPhotoKey) await deleteDeliveryPhotos([editedLot.deliveryPhotoKey]);
       } else if (step === "use") {
         if (!t.usedAt || t.usedQuantity == null) return fail("Bước sử dụng vật tư chưa hoàn thành");
         const value = Math.trunc(Number(body.usedQuantity));
@@ -1830,6 +1881,16 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       const receivedMethod = String(body.deliveryNoteNumber || body.receivedMethod || "").trim();
       const receiptSource = t.type === "UNG" ? normalizeReceiptSource(body.receiptSource) : "ERP";
       if (!receivedMethod) return fail("Vui lòng nhập số phiếu giao hàng");
+      // Ảnh liên 3 đi liền với số phiếu giao hàng vừa nhập, vì đây là lúc DUY NHẤT tờ liên 3
+      // còn trong tay người lãnh. Bắt buộc cho mọi phiếu chứ không chỉ phiếu có thu hồi: phần
+      // lãnh về chưa dùng hết nằm lại thành tồn, phiếu sau rút tiếp từ đúng lô đó và vẫn phải
+      // nộp kèm đúng tờ này — lúc ấy mới đi xin lại thì đã muộn.
+      const deliveryPhotoDataUrl = String(body.deliveryPhotoDataUrl || "").trim();
+      const lotBefore = await prisma.materialStockLot.findFirst({
+        where: { ticketId: t.id },
+        select: { id: true, deliveryPhotoKey: true },
+      });
+      if (!deliveryPhotoDataUrl && !lotBefore?.deliveryPhotoKey) return fail(MISSING_DELIVERY_PHOTO_MESSAGE);
       const proposalNumber = t.type === "UNG" ? String(body.proposalNumber || t.proposalNumber || "").trim() : "";
       if (t.type === "UNG" && !proposalNumber) return fail("Vui lòng nhập số phiếu đề xuất vật tư");
       const item = t.items[0];
@@ -1862,11 +1923,14 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         ? receivedQuantity - (t.vhvReceivedQuantity ?? 0)
         : receivedQuantity;
       if (before + materialIncrement < 0) return fail("Số lượng xác nhận làm Hiện có bị âm");
+      // Đưa ảnh lên S3 TRƯỚC giao dịch: gọi mạng bên trong transaction là giữ khoá hàng kho
+      // suốt thời gian chờ. Giao dịch hỏng thì tệp thừa nằm lại S3, chấp nhận được.
+      const uploadedPhoto = deliveryPhotoDataUrl ? await uploadDeliveryPhoto(t.id, deliveryPhotoDataUrl) : null;
       const up = await prisma.$transaction(async (tx) => {
         const sharedCodes = sharedCodesOf(item.material);
         // Vào lô mang SỐ PHIẾU GIAO HÀNG vừa nhập; luồng Ứng đã tạo lô ở bước VHV lãnh nên
         // ở đây chỉ cộng phần chênh và điền số phiếu vào đúng lô đó.
-        await receiveIntoLot(tx, {
+        const lot = await receiveIntoLot(tx, {
           materialCode: item.material.code,
           stockUnit: lotStockUnit(item.material.category, t.unit),
           quantity: materialIncrement,
@@ -1874,6 +1938,19 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
           deliveryNote: receivedMethod,
           erpCode,
         });
+        // `receiveIntoLot` trả null khi phần chênh bằng 0 và lô chưa tồn tại; lô đã có từ
+        // bước trước thì dùng lại đúng lô đó.
+        const lotId = lot?.id ?? lotBefore?.id ?? null;
+        if (uploadedPhoto && lotId) {
+          await tx.materialStockLot.update({
+            where: { id: lotId },
+            data: {
+              deliveryPhotoKey: uploadedPhoto.key,
+              deliveryPhotoAt: new Date(),
+              deliveryPhotoByName: user.name ?? "",
+            },
+          });
+        }
         await syncMaterialQuantity(tx, item.material.code, sharedCodes, stockSyncOptions(item.material.category, t.unit));
         if (receiptSource === "ERP") await tx.$executeRaw`
           UPDATE "ErpMaterial" SET "erpStock" = ${erpAfter}, "updatedAt" = NOW() WHERE "code" = ${erpCode}
@@ -1903,11 +1980,31 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         await tx.materialTicketItem.update({ where: { id: item.id }, data: { erpCode, erpName: erpMaterial.name } });
         return tx.materialTicket.findUnique({ where: { id: t!.id }, include: ITEM_INCLUDE });
       });
+      // Ảnh cũ chỉ được xoá SAU khi giao dịch đã ghi khoá ảnh mới: đổi thứ tự là có lúc phiếu
+      // trỏ vào tệp vừa bị xoá.
+      if (uploadedPhoto && lotBefore?.deliveryPhotoKey) await deleteDeliveryPhotos([lotBefore.deliveryPhotoKey]);
+
+      // Luồng Ứng xuất BBTHVT ngay từ bước Nghiệm thu, trong khi ảnh liên 3 chỉ
+      // được gắn vào lô ở bước Thống kê xác nhận ĐXVT này. Vì vậy phải dựng lại
+      // biên bản SAU KHI giao dịch lô đã commit; dựng trước transaction thì
+      // `loadTicketDeliveryPhotos` chưa thấy deliveryPhotoKey vừa lưu. `existingKey` trong
+      // `buildRecoveryDocument` bảo đảm ghi đè đúng tệp cũ, không sinh file mồ côi.
+      let responseTicket = up;
+      if (up?.recoveryDocUrl) {
+        const recoveryDoc = await buildRecoveryDocument(up, {
+          deliveryNoteNumber: receivedMethod,
+        });
+        responseTicket = await prisma.materialTicket.update({
+          where: { id: up.id },
+          data: { recoveryDocUrl: recoveryDoc.url },
+          include: ITEM_INCLUDE,
+        });
+      }
       await audit(
         user.id, "MT_RECEIVE", "MaterialTicket", t.id,
-        `${materialTicketReference(t)}: ${receiptSourceLabel(receiptSource)} ${receivedQuantity} (${receivedMethod}) — Hiện có ${item.material.code}: ${before} → ${before + materialIncrement}; ERP ${erpCode}: ${erpBefore} → ${erpAfter}${t.type !== "UNG" ? "; chờ nhập số yêu cầu sửa chữa" : `; số phiếu ĐXVT ${proposalNumber}; chuyển Quyết toán`}`
+        `${materialTicketReference(t)}: ${receiptSourceLabel(receiptSource)} ${receivedQuantity} (${receivedMethod}) — Hiện có ${item.material.code}: ${before} → ${before + materialIncrement}; ERP ${erpCode}: ${erpBefore} → ${erpAfter}${uploadedPhoto ? "; đính kèm ảnh phiếu xuất kho liên 3" : ""}${t.type !== "UNG" ? "; chờ nhập số yêu cầu sửa chữa" : `; số phiếu ĐXVT ${proposalNumber}; chuyển Quyết toán`}`
       );
-      return ok(up);
+      return ok(responseTicket);
     }
 
     if (action === "repairRequest") {
@@ -2302,13 +2399,19 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         t.usagePhotoAfterKey,
         t.usagePhotoSpecKey,
       ]);
+      // Ảnh liên 3 thì theo LÔ chứ không theo phiếu, nên chỉ dọn được những lô mà phiếu này
+      // vừa là mảnh ghép cuối: lô đã hết hàng và mọi phiếu từng rút lô đó đều đã quyết toán.
+      // Lô còn hàng vẫn giữ ảnh để phiếu sau in vào biên bản của nó.
+      const touchedLotIds = [...new Set((await usedLotsOfTicket(prisma, t.id)).map((lot) => lot.id))];
+      const removedDeliveryPhotos = await purgeSettledLotPhotos(prisma, touchedLotIds).catch(() => 0);
       await audit(
         user.id,
         "MT_SETTLE",
         "MaterialTicket",
         t.id,
         `${materialTicketReference(t)}: đã xác nhận quyết toán vật tư, số BBNT DO ${bbntDoNumber}` +
-          (removedPhotos ? `; xóa ${removedPhotos} ảnh hiện trường khỏi kho tệp` : "")
+          (removedPhotos ? `; xóa ${removedPhotos} ảnh hiện trường khỏi kho tệp` : "") +
+          (removedDeliveryPhotos ? `; xóa ${removedDeliveryPhotos} ảnh phiếu xuất kho liên 3 của lô đã dùng hết` : "")
       );
       return ok(up);
     }

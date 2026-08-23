@@ -10,6 +10,7 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { UsagePhotoCard } from "./UsagePhotoCard";
+import { DeliveryPhotoField } from "./DeliveryPhotoField";
 import {
   ChemicalTruckLockedTable,
   ChemicalTruckPanel,
@@ -1908,6 +1909,13 @@ function StepReviewDialog({ t, viewer, stepKey, onClose }: { t: MaterialTicket; 
   const [receivedQuantity, setReceivedQuantity] = useState(t.receivedQuantity ?? 1);
   const [receivedMethod, setReceivedMethod] = useState(t.deliveryNoteNumber ?? t.receivedMethod ?? "");
   const [receiptSource, setReceiptSource] = useState<"ERP" | "EXISTING">(normalizeReceiptSource(t.receiptSource));
+  // Ảnh liên 3 đang gắn trên lô của phiếu — lô của chính phiếu này, nhận ra qua `taken`/nhãn
+  // số phiếu giao hàng. Chỉ nạp khi đang mở đúng bước nhận để không gọi thừa.
+  const [reviewDeliveryPhoto, setReviewDeliveryPhoto] = useState<string | null>(null);
+  const reviewLots = useTicketLots(editStep === "receive" && !isChemicalStats ? t.id : "");
+  const reviewLotPhotoUrl =
+    (reviewLots.data?.data.lots ?? []).find((lot) => lot.label === (t.deliveryNoteNumber ?? t.receivedMethod))
+      ?.deliveryPhotoUrl ?? null;
   const [usedQuantity, setUsedQuantity] = useState(t.usedQuantity ?? 1);
   const [materialUserName, setMaterialUserName] = useState(t.materialUserName ?? "");
   const [recoveryQuantity, setRecoveryQuantity] = useState(t.recoveryQuantity ?? 1);
@@ -1941,7 +1949,14 @@ function StepReviewDialog({ t, viewer, stepKey, onClose }: { t: MaterialTicket; 
     if (editStep === "receive") {
       Object.assign(
         payload,
-        isChemicalStats ? { receivedQuantity } : { receivedQuantity, deliveryNoteNumber: receivedMethod, receiptSource }
+        isChemicalStats
+          ? { receivedQuantity }
+          : {
+              receivedQuantity,
+              deliveryNoteNumber: receivedMethod,
+              receiptSource,
+              ...(reviewDeliveryPhoto ? { deliveryPhotoDataUrl: reviewDeliveryPhoto } : {}),
+            }
       );
     }
     if (editStep === "use") Object.assign(payload, {
@@ -2017,6 +2032,14 @@ function StepReviewDialog({ t, viewer, stepKey, onClose }: { t: MaterialTicket; 
               <input value={receivedMethod} disabled={!canEdit} onChange={(e) => setReceivedMethod(e.target.value)} />
             </label>
           </div>
+          {/* Chụp lại tờ liên 3 khi ảnh cũ mờ hoặc nhầm phiếu. Không chọn ảnh mới thì giữ nguyên
+              ảnh đang gắn trên lô. */}
+          <DeliveryPhotoField
+            value={reviewDeliveryPhoto}
+            existingUrl={reviewLotPhotoUrl}
+            disabled={!canEdit}
+            onChange={setReviewDeliveryPhoto}
+          />
         </>}
         {(editStep === "use") && <>
           <div className="review-use-grid">
@@ -2110,13 +2133,20 @@ function LotAllocationPicker({
     <div className="lot-picker">
       <table className="lot-table">
         <thead>
-          <tr><th>Số phiếu giao hàng</th><th>Mã vật tư</th><th>Có thể lấy</th><th>Lấy</th></tr>
+          {/* Cột "Liên 3" cho thấy lô nào có sẵn ảnh phiếu xuất kho: lấy hàng từ lô nào thì
+              BBTHVT tự in kèm ảnh của lô đó, người dùng không phải tải thêm gì. */}
+          <tr><th>Số phiếu giao hàng</th><th>Mã vật tư</th><th>Liên 3</th><th>Có thể lấy</th><th>Lấy</th></tr>
         </thead>
         <tbody>
           {info.lots.map((lot) => (
             <tr key={lot.id}>
               <td>{lot.label}</td>
               <td className="lot-code">{lot.erpCode || "—"}</td>
+              <td className="lot-code">
+                {lot.deliveryPhotoUrl
+                  ? <a className="pdf-inline" href={lot.deliveryPhotoUrl} target="_blank" rel="noreferrer">Xem ảnh</a>
+                  : "—"}
+              </td>
               <td className="lot-num">{lot.available} {info.unit}</td>
               <td className="lot-num">
                 <input
@@ -2259,6 +2289,9 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
   const [otherReceivedDate, setOtherReceivedDate] = useState(new Date().toISOString().slice(0, 10));
   const [qty, setQty] = useState(() => Math.max(1, t.items[0]?.quantity ?? 1)); // số lượng xác nhận / lãnh / sử dụng
   const [method, setMethod] = useState(""); // hình thức lãnh
+  // Ảnh phiếu xuất kho liên 3 — giữ trong state rồi gửi kèm chính lần xác nhận, vì lô vật tư
+  // (chủ sở hữu của ảnh) chỉ ra đời khi bấm xác nhận. Xem lib/material-delivery-photo.ts.
+  const [deliveryPhoto, setDeliveryPhoto] = useState<string | null>(null);
   const [receiptSource, setReceiptSource] = useState<"ERP" | "EXISTING">("ERP");
   const [workflowType, setWorkflowType] = useState<"DE_XUAT" | "UNG" | "SU_DUNG_HIEN_CO">("DE_XUAT");
   const [erpCode, setErpCode] = useState(t.items[0]?.erpCode ?? "");
@@ -3040,6 +3073,9 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
             />
           </label>
         </div>
+        {/* Ảnh liên 3 nằm ngay dưới ô số phiếu giao hàng vì hai thứ đó là một cặp: số phiếu
+            và bản chụp của chính tờ phiếu ấy. */}
+        <DeliveryPhotoField value={deliveryPhoto} onChange={setDeliveryPhoto} />
         {advanceDocumentLocked && (
           <div className="accept-two-grid">
             <label className="field">Đại diện SCCN *
@@ -3071,8 +3107,8 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
             {act.isPending ? <Loader2 className="spin" size={15} /> : <FileText size={15} />} Xác nhận &amp; xuất Phiếu Đề Xuất Vật Tư
           </button>
         ) : (
-          <button className="btn primary big" disabled={qty <= 0 || (isAdvance && (!erpCode || !proposalNumberInput.trim())) || !method.trim() || act.isPending}
-            onClick={() => run({ action: "receive", receivedQuantity: qty, deliveryNoteNumber: method.trim(), receiptSource: isAdvance ? receiptSource : "ERP", ...(isAdvance ? { erpCode, proposalNumber: proposalNumberInput.trim() } : {}) }, isAdvance ? (isGasTicket ? "Đã xác nhận ĐXVT, chuyển bước Sử dụng vật tư" : "Đã xác nhận ĐXVT, chuyển Quyết toán") : "Đã xác nhận số phiếu giao hàng")}>
+          <button className="btn primary big" disabled={qty <= 0 || (isAdvance && (!erpCode || !proposalNumberInput.trim())) || !method.trim() || !deliveryPhoto || act.isPending}
+            onClick={() => run({ action: "receive", receivedQuantity: qty, deliveryNoteNumber: method.trim(), deliveryPhotoDataUrl: deliveryPhoto, receiptSource: isAdvance ? receiptSource : "ERP", ...(isAdvance ? { erpCode, proposalNumber: proposalNumberInput.trim() } : {}) }, isAdvance ? (isGasTicket ? "Đã xác nhận ĐXVT, chuyển bước Sử dụng vật tư" : "Đã xác nhận ĐXVT, chuyển Quyết toán") : "Đã xác nhận số phiếu giao hàng")}>
             {act.isPending ? <Loader2 className="spin" size={15} /> : <Check size={15} />} {isAdvance ? "Xác nhận ĐXVT" : "Xác nhận số phiếu giao hàng"}
           </button>
         )}

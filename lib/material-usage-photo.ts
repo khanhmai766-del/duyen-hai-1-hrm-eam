@@ -47,24 +47,49 @@ export function isUsagePhotoSlot(value: unknown): value is UsagePhotoSlot {
 }
 
 /** Ảnh gốc từ điện thoại có thể vài chục MB — chặn sớm trước khi giải mã. */
-const MAX_UPLOAD_BYTES = 12 * 1024 * 1024;
+export const MAX_PHOTO_UPLOAD_BYTES = 12 * 1024 * 1024;
 
 /**
- * Nén ảnh về JPEG 1280px.
+ * Trần dung lượng mỗi ảnh. BBNT chứa tối đa 3 ảnh, mẫu rỗng nặng ~26KB, nên chốt
+ * trần ở đây là chốt luôn cỡ biên bản (~0,95MB) dù người dùng gửi ảnh gì.
+ */
+const MAX_PHOTO_BYTES = 300 * 1024;
+/** Hạ dần chất lượng cho tới khi lọt trần; bậc cuối là bậc chấp nhận dù còn vượt. */
+const PHOTO_QUALITY_STEPS = [80, 74, 68];
+
+/**
+ * Nén ảnh về JPEG 1600px, giữ đủ độ phân giải màu.
  *
  * CỐ Ý không dùng WebP như preset ảnh chung của kho tệp: Word chỉ đọc được WebP từ
  * bản M365 gần đây, máy trong phân xưởng dùng Word cũ sẽ hiện ô ảnh vỡ trong BBNT.
  * JPEG thì bản Word nào cũng chèn được.
+ *
+ * `chromaSubsampling: "4:4:4"` là thứ quyết định ảnh có "vỡ" hay không, chứ không
+ * phải số pixel: ảnh hiện trường của phân xưởng hầu hết đã vẽ chú thích lên (khung
+ * đỏ, chữ vàng, nhãn thông số), mà mặc định 4:2:0 chỉ lấy mẫu màu ở nửa độ phân giải
+ * nên đúng những nét chữ màu đó nhòe thành mảng. Giữ đủ màu đắt thêm ~15% dung lượng.
+ *
+ * 1600px là để chừa biên phóng: ô ảnh trong BBNT chỉ rộng ~5cm (1280px đã là ~640dpi),
+ * nhưng người dùng hay kéo to ảnh trong Word cho kín ô nên cần dư pixel.
  */
 export async function compressUsagePhoto(buffer: Buffer) {
-  return sharp(buffer)
+  const resized = sharp(buffer)
     .rotate() // ảnh điện thoại xoay theo EXIF; không xoay lại thì nằm ngang trong Word
-    .resize({ width: 1280, height: 1280, fit: "inside", withoutEnlargement: true })
-    .jpeg({ quality: 72, mozjpeg: true })
-    .toBuffer();
+    .resize({ width: 1600, height: 1600, fit: "inside", withoutEnlargement: true });
+
+  const encode = (quality: number) =>
+    resized.clone().jpeg({ quality, mozjpeg: true, chromaSubsampling: "4:4:4" }).toBuffer();
+
+  let out = await encode(PHOTO_QUALITY_STEPS[0]);
+  for (const quality of PHOTO_QUALITY_STEPS.slice(1)) {
+    if (out.byteLength <= MAX_PHOTO_BYTES) break;
+    out = await encode(quality);
+  }
+  return out;
 }
 
-function parseDataUrl(value: string) {
+/** Tách data URL ảnh do trình duyệt gửi lên; dùng chung với ảnh phiếu xuất kho liên 3. */
+export function parseImageDataUrl(value: string) {
   const match = /^data:(image\/[a-z+]+);base64,(.+)$/i.exec(value.trim());
   if (!match) return null;
   return { contentType: match[1], buffer: Buffer.from(match[2], "base64") };
@@ -76,9 +101,9 @@ export async function uploadUsagePhoto(
   slot: UsagePhotoSlot,
   dataUrl: string
 ): Promise<{ key: string; url: string; bytes: number }> {
-  const parsed = parseDataUrl(dataUrl);
+  const parsed = parseImageDataUrl(dataUrl);
   if (!parsed) throw new Error("Dữ liệu ảnh không hợp lệ");
-  if (parsed.buffer.byteLength > MAX_UPLOAD_BYTES) throw new Error("Ảnh quá lớn, tối đa 12MB");
+  if (parsed.buffer.byteLength > MAX_PHOTO_UPLOAD_BYTES) throw new Error("Ảnh quá lớn, tối đa 12MB");
 
   const body = await compressUsagePhoto(parsed.buffer);
   // Khóa mang timestamp: thay ảnh cùng vị trí không ghi đè bản cũ giữa chừng, và
