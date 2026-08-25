@@ -25,6 +25,7 @@ import {
   FlameKindling,
   MonitorCog,
   Calculator,
+  CalendarRange,
   Zap,
   Gauge,
 } from "lucide-react";
@@ -40,6 +41,8 @@ export interface NavItem {
   allowedPositionKeywords?: readonly string[];
   /** Opens an external destination in a new browser tab. */
   external?: boolean;
+  /** Chỉ active khi pathname khớp chính xác, không active theo route con. */
+  exact?: boolean;
   /** Extra search terms (accent-free) to improve topbar search matching. */
   keywords?: string;
   children?: NavItem[];
@@ -159,6 +162,21 @@ export const NAV_SECTIONS: NavSection[] = [
         permissionIds: ["chemical-inventory-manage"],
         keywords:
           "ton kho hoa chat nh3 amoniac naoh xut hcl axit naclo javen pac nh4oh bon dau hfo diesel do chua chay nhat ky ngay suat hao dau cuc hop dong nhap hoa chat",
+      },
+      {
+        label: "Kế hoạch vật tư năm",
+        href: "/material-annual-plans",
+        icon: Calculator,
+        exact: true,
+        permissionIds: ["material-manage"],
+        keywords: "ke hoach vat tu nam qlvt20 du toan nhu cau luy ke su dung ton kho",
+      },
+      {
+        label: "Nhu cầu vật tư tháng",
+        href: "/material-annual-plans/monthly",
+        icon: CalendarRange,
+        permissionIds: ["material-manage"],
+        keywords: "bieu tong hop nhu cau vat tu thang qlvt20 xuat excel du toan nam sau luy ke da su dung",
       },
       {
         label: "Lịch thay thế vật tư",

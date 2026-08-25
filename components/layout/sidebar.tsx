@@ -13,17 +13,17 @@ import { useAdminMode } from "@/hooks/useAdminMode";
 
 const NAV_ACCESS_LEVELS = ["read", "personal", "manage", "full"] as const;
 
-function pathActive(pathname: string, href: string) {
+function pathActive(pathname: string, href: string, exact = false) {
   if (href === "/") return pathname === "/";
   const base = href.split("?")[0];
-  if (href.includes("?")) return pathname === base;
+  if (exact || href.includes("?")) return pathname === base;
   return pathname === base || pathname.startsWith(base + "/");
 }
 
 // Active theo cả query: các mục con cùng path chỉ khác tham số (vd /materials?may=S1)
 // phải so tham số, nếu không cả nhóm sáng cùng lúc.
-function hrefActive(pathname: string, search: URLSearchParams, href: string) {
-  if (!pathActive(pathname, href)) return false;
+function hrefActive(pathname: string, search: URLSearchParams, href: string, exact = false) {
+  if (!pathActive(pathname, href, exact)) return false;
   const query = href.split("?")[1];
   if (!query) return true;
   return Array.from(new URLSearchParams(query)).every(([key, value]) => search.get(key) === value);
@@ -283,8 +283,8 @@ function NavEntry({ item, onNavigate, collapsed = false }: { item: NavItem; onNa
   const search = useSearchParams();
   const Icon = item.icon;
   const hasChildren = !!item.children?.length;
-  const childActive = hasChildren && item.children!.some((c) => pathActive(pathname, c.href));
-  const active = pathActive(pathname, item.href) || childActive;
+  const childActive = hasChildren && item.children!.some((c) => pathActive(pathname, c.href, c.exact));
+  const active = pathActive(pathname, item.href, item.exact) || childActive;
   const [open, setOpen] = React.useState(childActive);
 
   React.useEffect(() => {
@@ -388,7 +388,7 @@ function NavEntry({ item, onNavigate, collapsed = false }: { item: NavItem; onNa
         <div className="ml-4 mt-1.5 space-y-1 border-l border-blue-100 pl-3 dark:border-slate-700">
           {item.children!.map((c) => {
             const ChildIcon = c.icon;
-            const cActive = hrefActive(pathname, search, c.href);
+            const cActive = hrefActive(pathname, search, c.href, c.exact);
             return (
               <Link
                 key={c.href}

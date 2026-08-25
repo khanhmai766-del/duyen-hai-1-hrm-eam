@@ -67,3 +67,10 @@ CREATE INDEX IF NOT EXISTS "MaterialReplacementLog_ticketId_idx"
 -- ràng buộc này KHÔNG đụng tới dữ liệu đang có.
 CREATE UNIQUE INDEX IF NOT EXISTS "MaterialReplacementLog_replacementId_ticketId_key"
   ON "MaterialReplacementLog" ("replacementId", "ticketId");
+
+-- 5) Phân biệt dòng lịch sử PHÁT SINH ngoài lịch với dòng định kỳ ------------------------
+-- Không suy được từ `replacementId IS NULL`: dòng định kỳ cũng rơi vào null khi điểm đã hết
+-- chu kỳ đang theo dõi tại lúc quyết toán.
+ALTER TABLE "MaterialReplacementLog" ADD COLUMN IF NOT EXISTS "unplanned" BOOLEAN NOT NULL DEFAULT false;
+CREATE INDEX IF NOT EXISTS "MaterialReplacementLog_unplanned_replacedAt_idx"
+  ON "MaterialReplacementLog" ("unplanned", "replacedAt" DESC);

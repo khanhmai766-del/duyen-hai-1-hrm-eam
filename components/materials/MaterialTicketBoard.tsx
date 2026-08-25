@@ -93,7 +93,7 @@ const FLOW: Record<string, { key: string; label: string; who: string }[]> = {
     { key: "B0", label: "VHV tạo đề xuất", who: "VHV" },
     { key: "VHV_LANH_VAT_TU", label: "VHV lãnh vật tư", who: "VHV được giao thực hiện" },
     { key: "SU_DUNG_VAT_TU", label: "Xác nhận vật tư sử dụng", who: "Theo phân quyền quy trình" },
-    { key: "CHO_NGHIEM_THU", label: "Nghiệm thu và xuất BBNT", who: "Theo phân quyền quy trình" },
+    { key: "CHO_NGHIEM_THU", label: "Nghiệm thu công việc", who: "Theo phân quyền quy trình" },
     { key: "NHAN_VAT_TU", label: "Xác nhận ĐXVT", who: "Thống kê" },
     { key: "CHO_QUYET_TOAN", label: "Quyết toán vật tư", who: "Thống kê" },
   ],
@@ -175,7 +175,7 @@ const flowStatusKey = (status: string, type: string) =>
   : type === OTHER_MATERIAL_ADVANCE_TICKET_TYPE && status === "CHO_THONG_KE" ? "CHO_THONG_KE"
   : status === "CHO_THONG_KE" ? "CHO_PHIEU__XUAT_KHO"
   : status === "CHO_XAC_NHAN_PHAT" ? "CHO_PHIEU__XUAT_KHO"
-  : status === "CHO_PHIEU_YCSC" ? "NHAN_VAT_TU"
+  : status === "CHO_PHIEU_YCSC" ? (type === "UNG" ? "VHV_LANH_VAT_TU" : "NHAN_VAT_TU")
   : status;
 /** Chỉ ngày, không giờ — lịch giao hàng và ngày lãnh là mốc ngày. */
 const fmtDay = (s?: string | null) =>
@@ -2306,9 +2306,28 @@ function RepairRequestSection({ t, viewer }: { t: MaterialTicket; viewer: Ticket
           ) : !canLinkDefect ? (
             <span className="note"><AlertTriangle size={13} /> Bạn không có quyền ra SYC ở bước xác nhận vật tư lãnh</span>
           ) : (
-            <button type="button" className="pdf" onClick={() => setOpen(true)}>
-              <Wrench size={14} /> Ra SYC sửa chữa
-            </button>
+            <>
+              <button type="button" className="pdf" onClick={() => setOpen(true)}>
+                <Wrench size={14} /> Ra SYC sửa chữa
+              </button>
+              {t.type === "UNG" && t.status === "CHO_PHIEU_YCSC" && (
+                <button
+                  type="button"
+                  className="pdf repair-request-skip"
+                  disabled={act.isPending}
+                  onClick={async () => {
+                    try {
+                      await act.mutateAsync({ action: "skipRepairRequest" });
+                      toast.success("Đã xác nhận tự thực hiện, chuyển sang bước sử dụng vật tư");
+                    } catch (error) {
+                      toast.error(error instanceof Error ? error.message : "Không thể chuyển bước");
+                    }
+                  }}
+                >
+                  <ChevronRight size={14} /> Không cần SYC
+                </button>
+              )}
+            </>
           )}
         </div>
       </div>
@@ -2485,12 +2504,12 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
   const [otherReceived, setOtherReceived] = useState<Record<string, number>>(() => Object.fromEntries(t.items.map((item) => [item.id, item.receivedQuantity ?? item.quantity])));
   const [otherDeliveryNote, setOtherDeliveryNote] = useState(t.deliveryNoteNumber ?? "");
   const [otherReceivedDate, setOtherReceivedDate] = useState(new Date().toISOString().slice(0, 10));
-  const [qty, setQty] = useState(() => Math.max(1, t.items[0]?.quantity ?? 1)); // số lượng xác nhận / lãnh / sử dụng
+  const [qty, setQty] = useState(() => Math.max(1, t.receivedQuantity ?? t.vhvReceivedQuantity ?? t.items[0]?.quantity ?? 1)); // số lượng xác nhận / lãnh / sử dụng
   const [method, setMethod] = useState(""); // hình thức lãnh
   // Ảnh phiếu xuất kho liên 3 — giữ trong state rồi gửi kèm chính lần xác nhận, vì lô vật tư
   // (chủ sở hữu của ảnh) chỉ ra đời khi bấm xác nhận. Xem lib/material-delivery-photo.ts.
   const [deliveryPhoto, setDeliveryPhoto] = useState<string | null>(null);
-  const [receiptSource, setReceiptSource] = useState<"ERP" | "EXISTING">("ERP");
+  const [receiptSource, setReceiptSource] = useState<"ERP" | "EXISTING">(normalizeReceiptSource(t.receiptSource));
   const [workflowType, setWorkflowType] = useState<"DE_XUAT" | "UNG" | "SU_DUNG_HIEN_CO">("DE_XUAT");
   const [erpCode, setErpCode] = useState(t.items[0]?.erpCode ?? "");
   const [sccnRepresentative, setSccnRepresentative] = useState(t.sccnRepresentativeName ?? "");
@@ -3165,7 +3184,7 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
   if (acts.includes("vhvReceive")) {
     const unit = t.items[0]?.material.unit ?? "";
     return <div className="act">
-      <div className="vhv-receive-grid">
+      <div className={`vhv-receive-grid${isGasTicket ? " has-receiver" : ""}`}>
         <label className="field">Số lượng vật tư đã lãnh{unit ? ` (${unit})` : ""} *
           <input type="number" min={1} value={qty} onChange={(e) => setQty(Math.max(1, Math.trunc(Number(e.target.value)) || 1))} />
         </label>
@@ -3174,9 +3193,9 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
             <input value={receiverName} onChange={(e) => setReceiverName(e.target.value)} placeholder="Họ tên người lãnh" />
           </label>
         )}
+        <button className="btn primary big vhv-receive-confirm" disabled={qty <= 0 || (isGasTicket && !receiverName.trim()) || act.isPending} onClick={() => run({ action: "vhvReceive", quantity: qty, vhvReceivedByName: receiverName.trim() || undefined }, "Đã ghi nhận VHV lãnh vật tư")}><Check size={15} /> Xác nhận</button>
       </div>
       <p className="hint">Sau khi xác nhận, số lượng đã lãnh được cộng vào Hiện có để sử dụng ở bước sau. Nếu cần đội sửa chữa, dùng nút “Ra SYC sửa chữa” trong hồ sơ phiếu. Số lượng ERP không thay đổi.</p>
-      <button className="btn primary big" disabled={qty <= 0 || (isGasTicket && !receiverName.trim()) || act.isPending} onClick={() => run({ action: "vhvReceive", quantity: qty, vhvReceivedByName: receiverName.trim() || undefined }, "Đã ghi nhận VHV lãnh vật tư")}><Check size={15} /> Xác nhận</button>
     </div>;
   }
 
@@ -3206,6 +3225,147 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
     const receiveCodeOptions = selectedMaterialOption?.erpCodes?.length
       ? selectedMaterialOption.erpCodes
       : (t.items[0]?.material.erpCodes ?? []).map((code) => ({ code, name: "", erpStock: 0 }));
+
+    if (isAdvance) {
+      const exportsRecoveryDocument = materialTicketRequiresRecovery(t) && !isGasTicket;
+      const recoveryDocumentNeedsRetry = Boolean(t.receivedAt) && exportsRecoveryDocument && !t.recoveryDocUrl;
+      const deliveryDocumentsConfirmed = Boolean(t.receivedAt) && !recoveryDocumentNeedsRetry;
+      const selectedErp = receiveCodeOptions.find((option) => option.code === erpCode);
+
+      // PHA 1 — đúng hai dữ liệu nghiệp vụ: mã ERP + khối lượng thực lãnh.
+      if (!advanceProposalExported) return (
+        <div className="act advance-document-phase">
+          <div className="advance-phase-head">
+            <span className="advance-phase-index">1</span>
+            <div><b>Đối chiếu vật tư và xuất Phiếu ĐXVT</b><small>Chốt mã vật tư, khối lượng lãnh và nguồn lãnh.</small></div>
+          </div>
+          <div className="act-title-row receive-title-row">
+            <div className="receive-location">
+              <span>Vị trí lãnh vật tư:</span>
+              <em>{receiptSource === "ERP" ? "Số lượng lãnh sẽ được trừ khỏi số lượng ERP." : "Lãnh ngoài không làm thay đổi số lượng ERP."}</em>
+            </div>
+            <div className="seg2 receive-source-toggle" aria-label="Nguồn lãnh vật tư">
+              <button type="button" className={receiptSource === "ERP" ? "on" : ""} onClick={() => setReceiptSource("ERP")}>Lãnh kho DH1</button>
+              <button type="button" className={receiptSource === "EXISTING" ? "on" : ""} onClick={() => setReceiptSource("EXISTING")}>Lãnh ngoài</button>
+            </div>
+          </div>
+          <div className="advance-phase-grid">
+            <label className="field">Mã vật tư *
+              <select value={erpCode} disabled={advanceMaterialCodeLocked} onChange={(e) => setErpCode(e.target.value)}>
+                <option value="">— Chọn mã vật tư ERP —</option>
+                {receiveCodeOptions.map((option) => <option key={option.code} value={option.code}>{option.code} · ERP: {option.erpStock} {unit}</option>)}
+              </select>
+            </label>
+            <label className="field">Khối lượng vật tư lãnh{unit ? ` (${unit})` : ""} *
+              <input type="number" min={1} value={qty} onChange={(e) => setQty(Math.max(1, Math.trunc(Number(e.target.value)) || 1))} />
+            </label>
+          </div>
+          {selectedErp && (
+            <p className="hint">Phiếu ĐXVT sẽ ghi <b>{qty} {unit}</b> của mã <b>{selectedErp.code}</b> vào trường khối lượng trong mẫu.</p>
+          )}
+          <button
+            className="btn primary big"
+            disabled={!erpCode || qty <= 0 || act.isPending}
+            onClick={() => run(
+              { action: "statsExportProposal", erpCode, receivedQuantity: qty, receiptSource },
+              "Đã xác nhận mã, khối lượng và xuất Phiếu Đề Xuất Vật Tư"
+            )}
+          >
+            {act.isPending ? <Loader2 className="spin" size={15} /> : <FileText size={15} />} Xác nhận &amp; xuất Phiếu Đề Xuất Vật Tư
+          </button>
+        </div>
+      );
+
+      // PHA 2 — số ĐXVT + số giao hàng + ảnh liên 3 đi cùng nhau; BBTHVT chỉ sinh
+      // sau khi ảnh đã được gắn vào lô để phụ lục không còn bị xuất thiếu.
+      if (!deliveryDocumentsConfirmed) return (
+        <div className="act advance-document-phase">
+          <div className="advance-phase-head">
+            <span className="advance-phase-index done"><Check size={14} /></span>
+            <div><b>Hoàn thiện chứng từ giao hàng</b><small>Phiếu ĐXVT đã xuất — nhập số chứng từ và liên 3.</small></div>
+          </div>
+          <div className="note"><FileText size={15} /><span>Đã xuất Phiếu Đề Xuất Vật Tư — <a className="pdf-inline" href={t.proposalDocUrl!} target="_blank" rel="noreferrer">xem phiếu</a>.</span></div>
+          {recoveryDocumentNeedsRetry ? (
+            <div className="warnbox"><AlertTriangle size={15} /> Số ĐXVT, số giao hàng và ảnh liên 3 đã lưu; BBTHVT chưa tạo xong. Bấm xuất lại để tiếp tục.</div>
+          ) : <>
+            <div className="advance-phase-grid">
+              <label className="field">Số phiếu ĐXVT *
+                <input placeholder="Số phiếu ĐXVT (vd: ĐXVT-051)" value={proposalNumberInput} onChange={(e) => setProposalNumberInput(e.target.value)} />
+              </label>
+              <label className="field">Số phiếu giao hàng *
+                <input placeholder="Nhập số phiếu giao hàng" value={method} onChange={(e) => setMethod(e.target.value)} />
+              </label>
+            </div>
+            <DeliveryPhotoField value={deliveryPhoto} onChange={setDeliveryPhoto} />
+          </>}
+          <button
+            className="btn primary big"
+            disabled={recoveryDocumentNeedsRetry
+              ? act.isPending
+              : !proposalNumberInput.trim() || !method.trim() || !deliveryPhoto || act.isPending}
+            onClick={() => run(
+              recoveryDocumentNeedsRetry ? { action: "receive" } : {
+                action: "receive",
+                proposalNumber: proposalNumberInput.trim(),
+                deliveryNoteNumber: method.trim(),
+                deliveryPhotoDataUrl: deliveryPhoto,
+                receivedQuantity: t.receivedQuantity ?? qty,
+                receiptSource,
+              },
+              recoveryDocumentNeedsRetry
+                ? "Đã xuất lại BBTHVT"
+                : exportsRecoveryDocument
+                ? "Đã xác nhận chứng từ, ảnh liên 3 và xuất BBTHVT"
+                : isGasTicket ? "Đã xác nhận chứng từ, chuyển bước xác nhận trả" : "Đã xác nhận chứng từ giao hàng"
+            )}
+          >
+            {act.isPending ? <Loader2 className="spin" size={15} /> : <FileText size={15} />}
+            {recoveryDocumentNeedsRetry
+              ? " Xuất lại BBTHVT"
+              : exportsRecoveryDocument ? " Xác nhận & xuất BBTHVT" : " Xác nhận chứng từ giao hàng"}
+          </button>
+        </div>
+      );
+
+      // PHA 3 — chỉ còn đúng hai lựa chọn đại diện SCCN; BBNT D-Office là tài liệu
+      // cuối của bước Xác nhận ĐXVT trước khi chuyển sang Quyết toán.
+      return (
+        <div className="act advance-document-phase">
+          <div className="advance-phase-head">
+            <span className="advance-phase-index">3</span>
+            <div><b>Xuất BBNT D-Office</b><small>Chọn đại diện SCCN ký biên bản và hoàn thành bước Xác nhận ĐXVT.</small></div>
+          </div>
+          <div className="advance-document-summary">
+            <a className="pdf" href={t.proposalDocUrl!} target="_blank" rel="noreferrer"><Download size={14} /> Phiếu Đề Xuất Vật Tư</a>
+            {t.recoveryDocUrl && <a className="pdf recovery-download" href={t.recoveryDocUrl} target="_blank" rel="noreferrer"><Download size={14} /> Biên Bản Vật Tư Thu Hồi</a>}
+          </div>
+          <div className="advance-phase-grid">
+            <label className="field">Đại diện SCCN *
+              <select value={sccnRepresentative} onChange={(e) => setSccnRepresentative(e.target.value)}>
+                <option value="">— Chọn đại diện SCCN —</option>
+                {SCCN_REPRESENTATIVES.map((name) => <option key={name} value={name}>{name}</option>)}
+              </select>
+            </label>
+            <label className="field">Chức vụ *
+              <select value={sccnPosition} onChange={(e) => setSccnPosition(e.target.value)}>
+                <option value="">— Chọn chức vụ —</option>
+                {SCCN_POSITIONS.map((position) => <option key={position} value={position}>{position}</option>)}
+              </select>
+            </label>
+          </div>
+          <button
+            className="btn primary big"
+            disabled={!sccnRepresentative || !sccnPosition || act.isPending}
+            onClick={() => run(
+              { action: "statsExportAdvanceBbntDo", sccnRepresentative, sccnPosition },
+              "Đã xuất BBNT D-Office và chuyển bước Quyết toán"
+            )}
+          >
+            {act.isPending ? <Loader2 className="spin" size={15} /> : <FileText size={15} />} Xác nhận &amp; xuất BBNT D-Office
+          </button>
+        </div>
+      );
+    }
     return (
       <div className="act">
         {isAdvance && <div className="act-title-row receive-title-row">
@@ -3390,7 +3550,9 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
       ? selectedMaterialOption.erpCodes
       : (t.items[0]?.material.erpCodes?.length ? t.items[0].material.erpCodes : [t.items[0]?.material.code].filter(Boolean) as string[])
           .map((code) => ({ code, name: t.items[0]?.material.name ?? "", erpStock: 0 }));
-    const exportsRecoveryDocument = materialTicketRequiresRecovery(t);
+    // Luồng Ứng chờ tới bước Xác nhận ĐXVT, sau khi có số giao hàng + ảnh liên 3,
+    // mới xuất BBTHVT. Hai luồng còn lại vẫn xuất tại Nghiệm thu như cũ.
+    const exportsRecoveryDocument = t.type !== "UNG" && materialTicketRequiresRecovery(t);
     // BBNT ký tay chỉ còn cho bi nghiền — xem `usesHandwrittenBbnt` ở lib/bbnt-doc.ts.
     const exportsHandwrittenBbnt = usesHandwrittenBbnt(t.materialCategory);
     return (
@@ -3844,8 +4006,10 @@ const CSS = `
 .receive-field-grid .field{min-width:0;margin:0!important;}
 .receive-field-grid .field input,.receive-field-grid .field select{width:100%;margin-top:6px;}
 .vhv-receive-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-items:end;min-width:0;}
+.vhv-receive-grid.has-receiver{grid-template-columns:repeat(3,minmax(0,1fr));}
 .vhv-receive-grid .field{min-width:0;margin:0!important;}
 .vhv-receive-grid .field input{width:100%;margin-top:6px;}
+.vhv-receive-confirm{width:100%;height:42px;margin:0;padding:0 14px;align-self:end;}
 .confirm-field-row{display:grid;grid-template-columns:minmax(280px,1.45fr) minmax(150px,.65fr) minmax(220px,1fr);gap:10px;align-items:end;}
 .confirm-field-row.two-even{grid-template-columns:repeat(2,minmax(0,1fr));}
 .confirm-field-row.three-even{grid-template-columns:minmax(160px,.7fr) minmax(0,1fr) minmax(0,1fr);}
@@ -3908,6 +4072,8 @@ const CSS = `
 .item.short{border-color:${C.bad};background:${C.badBg};}
 .done-note{display:flex;gap:7px;align-items:flex-start;background:${C.okBg};color:${C.ok};border-radius:10px;padding:10px 12px;font-size:12.5px;margin-bottom:10px;}
 .pdf{display:inline-flex;align-items:center;gap:7px;border:1.5px solid ${C.navy};color:${C.navy};background:#fff;border-radius:10px;padding:9px 13px;font-weight:600;font-size:13px;cursor:pointer;margin-bottom:12px;text-decoration:none;}
+.repair-request-skip{border-color:#94a3b8;color:#64748b;background:#fff;}
+.repair-request-skip:disabled{opacity:.55;cursor:not-allowed;}
 .pdf-inline{color:${C.navy};font-weight:700;text-decoration:underline;}
 .lot-photo-preview-trigger{border:0;background:transparent;padding:0;font:inherit;cursor:pointer;}
 .lot-photo-preview-trigger:hover{color:${C.accent};}
@@ -3937,6 +4103,19 @@ const CSS = `
 .source-badge{display:inline-flex;align-items:center;border-radius:999px;background:#e0f2fe;color:#0369a1;padding:2px 8px;font-size:12px;line-height:1.3;}
 .act{border:1.5px dashed ${C.accent}66;background:linear-gradient(180deg,#f8fbff 0%,${C.accent}08 100%);border-radius:16px;padding:14px;margin-bottom:16px;display:flex;flex-direction:column;gap:11px;box-shadow:inset 0 1px 0 rgba(255,255,255,.85);}
 .act label:not(.lb){display:block;font-size:11.5px;font-weight:600;color:#64748b;margin-bottom:-4px;}
+.advance-document-phase{gap:13px;}
+.advance-phase-head{display:flex;align-items:center;gap:10px;color:${C.navy};}
+.advance-phase-head>div{display:flex;min-width:0;flex-direction:column;gap:2px;}
+.advance-phase-head b{font-size:13.5px;}
+.advance-phase-head small{color:${C.muted};font-size:11.5px;line-height:1.35;}
+.advance-phase-index{display:grid;width:28px;height:28px;flex:0 0 28px;place-items:center;border-radius:9px;background:${C.accent};color:#fff;font-size:12px;font-weight:800;box-shadow:0 4px 10px ${C.accent}30;}
+.advance-phase-index.done{background:${C.ok};}
+.advance-phase-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-items:end;}
+.advance-phase-grid .field{min-width:0;margin:0!important;}
+.advance-phase-grid .field input,.advance-phase-grid .field select{height:42px;margin-top:6px;}
+.advance-document-summary{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;}
+.advance-document-summary .pdf{justify-content:center;min-width:0;margin:0;border-color:#8fa7ba;font-size:12px;text-align:center;}
+.advance-document-summary .recovery-download{border-color:#0f766e;background:#ecfdf5;color:#0f766e;}
 .receive-existing-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px;align-items:end;}
 .receive-existing-field{display:flex;min-width:0;flex-direction:column;gap:11px;}
 .receive-existing-hint{display:flex;min-height:42px;align-items:center;margin:0;padding:0 2px;line-height:1.45;}
@@ -4031,7 +4210,7 @@ const CSS = `
 .logrow span{color:${C.soft};white-space:nowrap;}
 .logrow b{white-space:nowrap;}
 .logrow em{font-style:normal;color:${C.muted};white-space:nowrap;}
-@media(max-width:640px){.panel{width:100%;}.detail-inline{min-width:1040px;padding:10px 12px;}.row{min-width:1040px;grid-template-columns:64px minmax(108px,.9fr) minmax(108px,.86fr) minmax(188px,1.36fr) minmax(120px,.95fr) 82px minmax(168px,1fr) 66px 70px;padding:11px 12px;font-size:12.5px;}.tag{padding:4px 7px}.nophieu{padding:3px 6px}.st{padding:5px 8px}.material-cards{grid-template-columns:1fr;}.edit-field-grid,.bbkt-grid,.confirm-field-row,.stats-issue-grid,.accept-two-grid,.use-field-grid,.recovery-quantity-row,.receive-field-grid,.receive-field-grid.advance-receive-fields,.vhv-receive-grid,.review-receive-row,.review-use-grid,.review-recovery-grid,.review-accept-grid{grid-template-columns:1fr;gap:8px;}.step-review-dialog .frm-f{flex-wrap:wrap;}.step-review-dialog .frm-f>.note{flex-basis:100%;}.step-review-dialog .frm-f>.btn.primary{min-width:132px;}.erp-readonly-row{grid-template-columns:minmax(110px,.8fr) minmax(180px,1.5fr) minmax(110px,.7fr);}.review-receive-toggle{width:100%;}.review-receive-toggle button{flex:1;}.qty-field input{padding-left:8px;padding-right:8px;}}
+@media(max-width:640px){.panel{width:100%;}.detail-inline{min-width:1040px;padding:10px 12px;}.row{min-width:1040px;grid-template-columns:64px minmax(108px,.9fr) minmax(108px,.86fr) minmax(188px,1.36fr) minmax(120px,.95fr) 82px minmax(168px,1fr) 66px 70px;padding:11px 12px;font-size:12.5px;}.tag{padding:4px 7px}.nophieu{padding:3px 6px}.st{padding:5px 8px}.material-cards{grid-template-columns:1fr;}.edit-field-grid,.bbkt-grid,.confirm-field-row,.stats-issue-grid,.accept-two-grid,.use-field-grid,.recovery-quantity-row,.receive-field-grid,.receive-field-grid.advance-receive-fields,.vhv-receive-grid,.advance-phase-grid,.advance-document-summary,.review-receive-row,.review-use-grid,.review-recovery-grid,.review-accept-grid{grid-template-columns:1fr;gap:8px;}.step-review-dialog .frm-f{flex-wrap:wrap;}.step-review-dialog .frm-f>.note{flex-basis:100%;}.step-review-dialog .frm-f>.btn.primary{min-width:132px;}.erp-readonly-row{grid-template-columns:minmax(110px,.8fr) minmax(180px,1.5fr) minmax(110px,.7fr);}.review-receive-toggle{width:100%;}.review-receive-toggle button{flex:1;}.qty-field input{padding-left:8px;padding-right:8px;}}
 @media(max-width:640px){.ticket-unit-field{grid-template-columns:58px minmax(0,1fr);gap:8px;}.ticket-unit-options{max-width:none;}.ticket-unit-options button{padding-left:6px;padding-right:6px;}.ticket-category-options{grid-template-columns:repeat(3,minmax(0,1fr));}}
 @media(max-width:760px){.top-tools{align-items:stretch;flex-direction:column;}.turn{max-width:100%;min-width:0;}.turn-spacer{display:none;}.month-filter{align-self:flex-start;max-width:100%;}.month-filter select{max-width:calc(100vw - 108px);}.filters{align-self:flex-start;max-width:100%;overflow-x:auto;}.filters button{white-space:nowrap;}.act-title-row{align-items:stretch;flex-direction:column;gap:8px;}.receive-location{width:100%;align-items:flex-start;flex-direction:column;gap:3px;}.flow-toggle,.receive-source-toggle{width:100%;}.flow-toggle button,.receive-source-toggle button{flex:1;min-width:0;padding:0 8px;}.act-field-row,.advance-item-row{grid-template-columns:1fr;gap:6px;}.replacement-entry-row{grid-template-columns:24px minmax(0,1fr) 120px 30px;}.activity-drawer{width:86%;}}
 `;

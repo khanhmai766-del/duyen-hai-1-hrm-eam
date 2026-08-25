@@ -50,7 +50,7 @@ async function main() {
       // KHÔNG đụng materialCode khi cập nhật: giá trị đó đến từ tab Hợp đồng lúc
       // import, ghi đè bằng null ở đây là xoá mất liên kết sang danh mục ERP.
       update: data,
-      create: { code: item.code, ...data },
+      create: { code: item.code, materialCode: item.materialCode ?? null, ...data },
     });
 
     if (existing) updated += 1;

@@ -398,11 +398,72 @@ model Material {
   defectRequests  DefectMaterialRequest[]
   replacementLogs MaterialReplacementLog[]
   stockMovements  MaterialStockMovement[]
+  annualPlans     MaterialAnnualPlan[]
 
   @@unique([code, machine])
   @@index([system])
   @@index([quantity])
   @@index([machine])
+}
+
+// Chỉ tiêu kế hoạch năm theo biểu QLVT.20. Khoá nghiệp vụ dùng LOẠI VẬT TƯ + TÊN
+// CHỮ đã chuẩn hoá, không dùng STT hoặc ép theo mã ERP: một tên có thể chưa được cấp
+// mã, và cùng mã có thể xuất hiện trên nhiều dòng mục đích sử dụng trong biểu nguồn.
+model MaterialAnnualPlan {
+  id                String   @id @default(cuid())
+  year              Int
+  materialCategory  String
+  materialNameKey   String
+  materialNameLabel String
+  erpCode           String?
+  materialId        String?
+  unitLabel         String
+  plannedQuantity   Decimal  @db.Decimal(18, 4)
+  note              String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  material Material? @relation(fields: [materialId], references: [id], onDelete: SetNull)
+
+  @@unique([year, materialCategory, materialNameKey])
+  @@index([year, materialCategory])
+  @@index([erpCode])
+  @@index([materialId])
+}
+
+/// Nhu cầu vật tư THEO THÁNG — cột H (số lượng yêu cầu) và cột J (mục đích, vị trí sử dụng)
+/// của biểu QLVT.20.
+///
+/// Đây là HAI cột duy nhất người dùng còn phải nhập tay. Các cột còn lại của biểu đều do hệ
+/// thống tự sinh: E từ `MaterialAnnualPlan`, F từ `MaterialReplacementLog`, G = E − F (tính chứ
+/// không lưu), I/K từ `MaterialStockLot`, lưới T1..T12 từ chính phần thực dùng.
+///
+/// KHÔNG khoá duy nhất theo vật tư: một mã vật tư có nhiều dòng trong cùng một tháng, mỗi dòng
+/// một mục đích sử dụng — đúng như biểu gốc đang làm.
+model MaterialMonthlyRequest {
+  id        String @id @default(cuid())
+  // "YYYY-MM" theo giờ Việt Nam, cùng quy ước chốt kỳ với sổ hóa chất (`periodKeyOf`).
+  periodKey String
+
+  // Khoá nghiệp vụ trùng với `MaterialAnnualPlan` để ghép được chỉ tiêu năm vào dòng tháng.
+  materialCategory  String
+  materialNameKey   String
+  materialNameLabel String
+  erpCode           String?
+  unitLabel         String
+
+  purpose      String // cột J — mục đích, vị trí sử dụng
+  quantity     Decimal @db.Decimal(18, 4) // cột H — số lượng yêu cầu trong tháng
+  proposerName String? // cột L — người đề xuất
+  note         String?
+
+  createdById   String
+  createdByName String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([periodKey, materialCategory])
+  @@index([materialCategory, materialNameKey])
 }
 
 model ErpMaterial {
@@ -528,6 +589,13 @@ model MaterialReplacementLog {
   // được dùng để tính luỹ kế sử dụng cho biểu dự toán năm QLVT.20.
   ticketId           String? // phiếu vật tư đã ghi dòng này; null = dòng do SYC hoặc nhập tay
   usedQuantity       Int?
+  // Vật tư dùng cho việc PHÁT SINH ngoài lịch (phiếu không gắn điểm thay thế nào).
+  //
+  // Phải là cột riêng chứ không suy từ `replacementId = null`: dòng ĐỊNH KỲ cũng có
+  // `replacementId = null` khi điểm đã hết chu kỳ đang theo dõi tại lúc quyết toán. Dự toán năm
+  // sau tách "nhu cầu định kỳ" khỏi "bình quân phát sinh" nên hai loại phải phân biệt được chắc
+  // chắn, không dựa vào dấu hiệu gián tiếp.
+  unplanned          Boolean @default(false)
   bbntDoNumber       String?
   bbntDoUrl          String?
   proposalNumber     String? // số phiếu ĐXVT
@@ -571,6 +639,7 @@ model MaterialReplacementLog {
   @@index([materialId])
   @@index([defectId])
   @@index([importSource, replacedAt(sort: Desc)])
+  @@index([unplanned, replacedAt(sort: Desc)])
   @@index([ticketId])
 }
 

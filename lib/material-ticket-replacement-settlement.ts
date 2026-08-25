@@ -1,5 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import { addMonths, isSupplementReason } from "@/lib/constants";
+import { fail } from "@/lib/api";
 import { buildReplacementLogData } from "@/lib/material-replacement-log";
 import { deliveryNoteSummary, usedLotsOfTicket } from "@/lib/material-stock-lot";
 import { normalizeText } from "@/lib/nav";
@@ -147,9 +148,17 @@ export async function recordSettledTicketReplacements(
       defectId: true,
       repairRequestNumber: true,
       defect: { select: { id: true, requestNumber: true, completedAt: true } },
+      unit: true,
+      assignedPosition: true,
       items: {
         take: 1,
-        select: { material: { select: { unit: true } } },
+        select: {
+          materialId: true,
+          deviceSeq: true,
+          deviceNameManual: true,
+          material: { select: { unit: true } },
+          device: { select: { name: true } },
+        },
       },
       replacementLinks: {
         orderBy: { createdAt: "asc" },
@@ -161,35 +170,115 @@ export async function recordSettledTicketReplacements(
       },
     },
   });
-  if (!ticket) throw new Error("Không tìm thấy phiếu vật tư để ghi lịch sử thay thế");
-  if (ticket.replacementLinks.length === 0) {
-    return { logged: 0, renewed: 0, released: 0 };
-  }
+  // `handle()` chỉ giữ nguyên thông báo khi ta ném Response; ném Error thường thì người dùng
+  // chỉ nhận được "Lỗi máy chủ" 500 và không biết phải sửa gì.
+  if (!ticket) throw fail("Không tìm thấy phiếu vật tư để ghi lịch sử thay thế", 404);
 
   const usedQuantity = Math.max(0, Math.round(ticket.usedQuantity ?? 0));
-  const weights = ticket.replacementLinks.map((link) =>
-    link.plannedQuantity ?? Math.max(0, link.replacement.quantity * Math.max(1, link.replacement.deviceCount)),
-  );
-  const allocated = allocateUsedQuantity(usedQuantity, weights);
   const lots = await usedLotsOfTicket(tx, ticket.id);
   const lotSummary = deliveryNoteSummary(lots, ticket.items[0]?.material.unit);
   const deliveryNoteNumber = lotSummary
     || ticket.deliveryNoteNumber?.trim()
     || ticket.receivedMethod?.trim()
     || null;
-  const replacedAt = ticket.workEndedAt
+  const workDoneAt = ticket.workEndedAt
     ?? ticket.defect?.completedAt
     ?? ticket.completedAt
     ?? ticket.usedAt;
+
+  /** Chứng từ và số liệu dùng chung cho mọi dòng lịch sử của phiếu này. */
+  const ticketColumns = {
+    ticketId: ticket.id,
+    pctNumber: ticket.pctNumber?.trim() || null,
+    bbntDoNumber: params.bbntDoNumber,
+    bbntDoUrl: ticket.docUrl?.trim() || null,
+    proposalNumber: ticket.proposalNumber?.trim() || null,
+    deliveryNoteNumber,
+    defectId: ticket.defectId,
+    requestNumber: ticket.defect?.requestNumber ?? ticket.repairRequestNumber?.trim() ?? null,
+  };
+
+  /**
+   * PHIẾU KHÔNG GẮN ĐIỂM THAY THẾ — vật tư dùng cho việc phát sinh ngoài lịch.
+   *
+   * Vẫn phải ghi lịch sử, nếu không thì phần vật tư này biến mất khỏi cột "Luỹ kế đã sử dụng"
+   * của biểu dự toán QLVT.20, và công thức dự toán năm sau mất luôn thành phần "bình quân
+   * phát sinh" — vốn là phần khó dự báo nhất.
+   *
+   * Đánh dấu bằng cột `unplanned` chứ KHÔNG suy từ `replacementId = null`: dòng định kỳ cũng
+   * rơi vào null khi điểm đã hết chu kỳ đang theo dõi tại lúc quyết toán.
+   */
+  if (ticket.replacementLinks.length === 0) {
+    const item = ticket.items[0];
+    // Không tiêu hao thì không có gì để đưa vào báo cáo năm; ghi dòng 0 chỉ làm nhiễu sổ.
+    if (!item || usedQuantity <= 0) return { logged: 0, renewed: 0, released: 0 };
+
+    await tx.materialReplacementLog.create({
+      data: {
+        ...buildReplacementLogData({
+          point: {
+            id: ticket.id,
+            materialId: item.materialId,
+            deviceSeq: item.deviceSeq,
+            machine: ticket.unit,
+            system: null,
+            location: item.deviceNameManual,
+            managingPosition: ticket.assignedPosition,
+            // Không thuộc điểm theo dõi nào nên không có chu kỳ để ghi.
+            intervalMonths: 0,
+            intervalNote: null,
+            material: { unit: item.material.unit },
+            device: item.device,
+          },
+          replacementId: null,
+          doneById: params.doneById,
+          // Việc phát sinh không gia hạn chu kỳ nào nên mốc thời gian không ảnh hưởng tính
+          // chu kỳ; thiếu thì lấy ngày quyết toán thay vì CHẶN quyết toán như nhánh định kỳ.
+          replacedAt: workDoneAt ?? params.settledAt,
+          quantity: null,
+          note: ticket.completionNote?.trim() || "Sử dụng vật tư ngoài lịch thay thế",
+          defect: ticket.defect
+            ? { id: ticket.defect.id, requestNumber: ticket.defect.requestNumber }
+            : null,
+        }),
+        ...ticketColumns,
+        usedQuantity,
+        unplanned: true,
+      },
+    });
+    return { logged: 1, renewed: 0, released: 0 };
+  }
+
+  const weights = ticket.replacementLinks.map((link) =>
+    link.plannedQuantity ?? Math.max(0, link.replacement.quantity * Math.max(1, link.replacement.deviceCount)),
+  );
+  const allocated = allocateUsedQuantity(usedQuantity, weights);
+  const replacedAt = workDoneAt;
   if (!replacedAt) {
-    throw new Error("Phiếu thiếu thời gian hoàn thành công việc nên chưa thể chốt lịch sử thay thế");
+    throw fail("Phiếu thiếu thời gian hoàn thành công việc nên chưa thể chốt lịch sử thay thế", 409);
   }
 
   const isSupplement = isSupplementReason(ticket.proposalNote);
   let logged = 0;
   let renewed = 0;
   let released = 0;
-  const handledTrackingIds = new Set<string>();
+
+  /**
+   * NHIỀU liên kết có thể quy về CÙNG một chu kỳ đang theo dõi: phiếu gắn cả dòng khai báo cũ
+   * lẫn chu kỳ mới của cùng vị trí, hoặc `moveOpenTicketLinks` vừa dồn chúng lại. Log bị khoá
+   * `@@unique([replacementId, ticketId])` nên phải GỘP trước rồi mới ghi — ghi thẳng từng liên
+   * kết sẽ ném lỗi trùng khoá và chặn hẳn việc quyết toán phiếu.
+   *
+   * Gộp thì CỘNG DỒN khối lượng chứ không bỏ bớt: phần đã chia cho liên kết bị gộp vào vẫn là
+   * vật tư đã tiêu thật, đánh rơi là hụt luỹ kế sử dụng của biểu dự toán năm.
+   */
+  type LogGroup = {
+    logPoint: SettlementPoint;
+    trackedId: string | null;
+    plannedQuantity: number | null;
+    usedQuantity: number;
+  };
+  const groups = new Map<string, LogGroup>();
 
   for (let index = 0; index < ticket.replacementLinks.length; index += 1) {
     const link = ticket.replacementLinks[index];
@@ -198,12 +287,36 @@ export async function recordSettledTicketReplacements(
     if (tracked) await moveOpenTicketLinks(tx, source.id, tracked.id);
 
     const logPoint = tracked ?? source;
+    const groupKey = tracked ? `tracked:${tracked.id}` : `source:${source.id}`;
+    const plannedQuantity = link.plannedQuantity ?? weights[index] ?? null;
+    const usedForLink = allocated[index] ?? 0;
+    const merged = groups.get(groupKey);
+    if (merged) {
+      merged.usedQuantity += usedForLink;
+      if (plannedQuantity !== null) {
+        merged.plannedQuantity = (merged.plannedQuantity ?? 0) + plannedQuantity;
+      }
+      continue;
+    }
+    groups.set(groupKey, {
+      logPoint,
+      trackedId: tracked?.id ?? null,
+      plannedQuantity,
+      usedQuantity: usedForLink,
+    });
+  }
+
+  for (const group of groups.values()) {
+    // `logPoint` chính là chu kỳ đang theo dõi khi `trackedId` có giá trị, nên dùng lại được
+    // cho cả việc gia hạn bên dưới mà không phải đọc lại DB.
+    const { logPoint, trackedId } = group;
+    const tracked = trackedId ? logPoint : null;
     const logData = buildReplacementLogData({
       point: logPoint,
       replacementId: tracked?.id ?? null,
       doneById: params.doneById,
       replacedAt,
-      quantity: link.plannedQuantity ?? weights[index] ?? null,
+      quantity: group.plannedQuantity,
       note: ticket.completionNote?.trim() || "Ghi nhận khi quyết toán phiếu vật tư",
       defect: ticket.defect
         ? { id: ticket.defect.id, requestNumber: ticket.defect.requestNumber }
@@ -213,21 +326,14 @@ export async function recordSettledTicketReplacements(
     await tx.materialReplacementLog.create({
       data: {
         ...logData,
-        ticketId: ticket.id,
-        usedQuantity: allocated[index] ?? 0,
-        pctNumber: ticket.pctNumber?.trim() || null,
-        bbntDoNumber: params.bbntDoNumber,
-        bbntDoUrl: ticket.docUrl?.trim() || null,
-        proposalNumber: ticket.proposalNumber?.trim() || null,
-        deliveryNoteNumber,
-        defectId: ticket.defectId,
-        requestNumber: ticket.defect?.requestNumber ?? ticket.repairRequestNumber?.trim() ?? null,
+        ...ticketColumns,
+        usedQuantity: group.usedQuantity,
       },
     });
     logged += 1;
 
-    if (!tracked || handledTrackingIds.has(tracked.id) || isSupplement) continue;
-    handledTrackingIds.add(tracked.id);
+    // Nhóm đã là duy nhất theo chu kỳ nên không cần chống trùng thêm ở đây.
+    if (!tracked || isSupplement) continue;
     await tx.$queryRaw`
       SELECT pg_advisory_xact_lock(hashtext(${replacementTargetKey(tracked)}))::text AS lock_result
     `;

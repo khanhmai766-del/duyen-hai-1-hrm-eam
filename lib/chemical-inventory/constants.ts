@@ -74,6 +74,8 @@ export const UNASSIGNED_POSITION = "UNASSIGNED";
 
 export type SeedItem = {
   code: string;
+  /** Mã ERP chuẩn đã đối chiếu giữa sổ tịnh kho và biểu QLVT.20. */
+  materialCode?: string;
   name: string;
   concentration?: string;
   itemType: ChemicalItemType;
@@ -104,6 +106,7 @@ export type SeedItem = {
 export const SEED_ITEMS: readonly SeedItem[] = [
   {
     code: "NH3_99",
+    materialCode: "1.61.16.003.VIE.00.000",
     defaultPosition: "AUX_BOILER_NH3",
     name: "Dung dịch NH3 99%",
     concentration: "99%",
@@ -120,6 +123,7 @@ export const SEED_ITEMS: readonly SeedItem[] = [
   },
   {
     code: "NACLO_10",
+    materialCode: "1.61.26.003.VIE.00.000",
     defaultPosition: "MIXED_WATER_TREATMENT",
     name: "Dung dịch NaClO 10%",
     concentration: "10%",
@@ -131,6 +135,7 @@ export const SEED_ITEMS: readonly SeedItem[] = [
   },
   {
     code: "HCL_31",
+    materialCode: "1.61.06.038.VIE.00.000",
     defaultPosition: "TURBINE_DEPUTY",
     name: "Dung dịch HCl 31%",
     concentration: "31%",
@@ -142,6 +147,7 @@ export const SEED_ITEMS: readonly SeedItem[] = [
   },
   {
     code: "NAOH_32",
+    materialCode: "1.61.16.008.VIE.00.000",
     defaultPosition: "TURBINE_DEPUTY",
     name: "Dung dịch NaOH 32%",
     concentration: "32%",
@@ -153,6 +159,7 @@ export const SEED_ITEMS: readonly SeedItem[] = [
   },
   {
     code: "PAC_12",
+    materialCode: "1.61.86.566.VIE.02.000",
     defaultPosition: "MIXED_WATER_TREATMENT",
     name: "Dung dịch PAC 12% lỏng",
     concentration: "12%",
@@ -164,6 +171,7 @@ export const SEED_ITEMS: readonly SeedItem[] = [
   },
   {
     code: "NH4OH_20",
+    materialCode: "1.61.86.518.VIE.00.000",
     defaultPosition: "TURBINE_DEPUTY",
     name: "Dung dịch NH4OH 20%",
     concentration: "20%",

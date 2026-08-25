@@ -249,6 +249,7 @@ export function useTicketAction(id: string | null) {
       apiMutate<MaterialTicket>(`/api/material-tickets/${id}`, "PUT", body),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["material-tickets"] });
+      if (id) qc.invalidateQueries({ queryKey: ["ticket-replacement-request", id] });
       qc.invalidateQueries({ queryKey: ["material-ticket-options"] });
       qc.invalidateQueries({ queryKey: ["materials"] });
       qc.invalidateQueries({ queryKey: ["oil-stock"] });
@@ -331,7 +332,11 @@ export function actionsFor(t: MaterialTicket, v: TicketViewer | null): string[] 
     if (t.status === "NHAN_VAT_TU" && (t.type === "UNG" ? v.steps?.stats : (canOperateAssigned && (v.steps?.receive ?? v.isShiftLeader)))) a.push("receive");
     // Chỉ đánh dấu "đến lượt" cho nút Ra SYC ở cột hồ sơ. Số SYC phải do Defect thật
     // cấp và neo ngược bằng defectId, không còn action nhập tay.
-    if (t.status === "CHO_PHIEU_YCSC" && canOperateAssigned && (v.steps?.receive ?? v.isShiftLeader)) a.push("createRepairRequest");
+    if (t.status === "CHO_PHIEU_YCSC" && canOperateAssigned && (
+      t.type === "UNG"
+        ? (v.steps?.vhvReceiveConfigured ? v.steps.vhvReceive : true)
+        : (v.steps?.receive ?? v.isShiftLeader)
+    )) a.push("createRepairRequest");
     if (t.status === "SU_DUNG_VAT_TU" && canOperateAssigned && (v.steps?.use ?? v.isShiftLeader)) a.push("use");
     if (t.status === "CHO_NGHIEM_THU" && (v.steps?.accept ?? v.isShiftLeader)) a.push("accept");
     // Chai khí: bước cuối là xác nhận trả vỏ chai, không nghiệm thu và không quyết toán.

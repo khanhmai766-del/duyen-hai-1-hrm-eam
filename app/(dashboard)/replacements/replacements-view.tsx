@@ -66,7 +66,7 @@ import { usePositions } from "@/hooks/useUsers";
 import { normalizePctNumber } from "@/lib/material-replacement-source";
 
 type TabKey = "schedule" | "status" | "history";
-type HistorySortKey = "subject" | "source" | "replacedAt" | "quantity" | "doneBy" | "locked";
+type HistorySortKey = "subject" | "pctNumber" | "replacedAt" | "quantity" | "doneBy" | "locked";
 type SortDir = "asc" | "desc";
 
 function replacementScheduleState(point: ReplacementItem) {
@@ -447,8 +447,8 @@ export function ReplacementsPageContent({ only }: { only?: TabKey } = {}) {
   const filteredLogs = searchQ.trim()
     ? logsInMonthRange.filter((l) => {
         const device = l.replacement ? linkedDeviceOf(l.replacement) : null;
-        // Tìm được cả theo số yêu cầu, số phiếu công tác và nội dung/kết quả thực hiện.
-        return `${l.replacement?.material.code} ${l.replacement?.material.name} ${device?.code ?? ""} ${device?.name ?? ""} ${l.note ?? ""} ${l.requestNumber ?? ""} ${l.defectHistory?.workOrderNumber ?? ""} ${l.defectHistory?.content ?? ""} ${l.defectHistory?.result ?? ""}`.toLowerCase().includes(searchQ.toLowerCase());
+        // Tìm được cả theo số yêu cầu, số PCT/LCT và nội dung/kết quả thực hiện.
+        return `${l.replacement?.material.code} ${l.replacement?.material.name} ${device?.code ?? ""} ${device?.name ?? ""} ${l.note ?? ""} ${l.requestNumber ?? ""} ${l.pctNumber ?? ""} ${l.defectHistory?.workOrderNumber ?? ""} ${l.defectHistory?.content ?? ""} ${l.defectHistory?.result ?? ""}`.toLowerCase().includes(searchQ.toLowerCase());
       })
     : logsInMonthRange;
   // Phân trang bảng lịch sử — cùng khuôn với Lịch sử sửa chữa. Cần thiết vì bộ lưu trữ
@@ -474,9 +474,9 @@ export function ReplacementsPageContent({ only }: { only?: TabKey } = {}) {
   const historyLastShown = Math.min(historySafePage * historyPageSize, filteredLogs.length);
   const historyFocusScrollRef = React.useRef<string | null>(null);
 
-  const focusHistoryRequest = React.useCallback((log: ReplacementLogItem) => {
-    const requestNumber = log.requestNumber?.trim();
-    if (!requestNumber) return;
+  const focusHistoryPct = React.useCallback((log: ReplacementLogItem) => {
+    const pctNumber = replacementHistoryPctNumber(log);
+    if (!pctNumber) return;
 
     const replacedMonth = ym(log.replacedAt);
     const category = log.replacement?.material.category;
@@ -484,15 +484,15 @@ export function ReplacementsPageContent({ only }: { only?: TabKey } = {}) {
       replacementCategoryMatches(category, candidate)
     );
 
-    // Một SYC có thể sinh nhiều dòng lịch sử khi thay cho nhiều điểm. Lọc theo số
-    // yêu cầu để bày tất cả các dòng liên quan, đồng thời mở đúng dòng vừa bấm.
+    // Một PCT/LCT có thể bao gồm nhiều điểm thay thế. Lọc theo số phiếu để
+    // bày tất cả các dòng liên quan, đồng thời mở đúng dòng vừa bấm.
     setMachineFilter(replacementLogMachine(log));
     setPositionFilter("ALL");
     setCategoryFilter(matchedCategory ?? "ALL");
     setHistoryFromMonth(replacedMonth);
     setHistoryToMonth(replacedMonth);
-    setSearchQ(requestNumber);
-    setDebouncedSearchQ(requestNumber);
+    setSearchQ(pctNumber);
+    setDebouncedSearchQ(pctNumber);
     setHistoryPage(1);
     setExpandedLogId(log.id);
     historyFocusScrollRef.current = log.id;
@@ -600,7 +600,7 @@ export function ReplacementsPageContent({ only }: { only?: TabKey } = {}) {
       },
       {
         key: "workOrderNumber",
-        header: "Số PCT",
+        header: "Số PCT/LCT",
         width: 16,
         align: "center" as const,
         value: (l: ReplacementLogItem) => normalizePctNumber(l.defectHistory?.workOrderNumber ?? l.pctNumber),
@@ -1110,7 +1110,7 @@ export function ReplacementsPageContent({ only }: { only?: TabKey } = {}) {
                     <Input
                       value={searchQ}
                       onChange={(event) => setSearchQ(event.target.value)}
-                      placeholder="Vật tư, thiết bị, số phiếu..."
+                      placeholder="Vật tư, thiết bị, số PCT/LCT..."
                       className="h-9 rounded-xl pl-9"
                     />
                   </div>
@@ -1126,7 +1126,7 @@ export function ReplacementsPageContent({ only }: { only?: TabKey } = {}) {
                       <ReplacementHistorySortHeader label="Vật tư / Thiết bị" sortKey="subject" sort={historySort} onSort={toggleHistorySort} />
                     </TableHead>
                     <TableHead className="w-[190px] bg-[#00558F] px-2">
-                      <ReplacementHistorySortHeader label="Nguồn" sortKey="source" sort={historySort} onSort={toggleHistorySort} align="center" />
+                      <ReplacementHistorySortHeader label="Số PCT/LCT" sortKey="pctNumber" sort={historySort} onSort={toggleHistorySort} align="center" />
                     </TableHead>
                     <TableHead className="w-[126px] bg-[#00558F] px-2">
                       <ReplacementHistorySortHeader label="Ngày thay" sortKey="replacedAt" sort={historySort} onSort={toggleHistorySort} align="center" />
@@ -1201,25 +1201,21 @@ export function ReplacementsPageContent({ only }: { only?: TabKey } = {}) {
                         )}
                       </TableCell>
                       <TableCell className="px-3 py-2.5 text-center">
-                        {l.requestNumber ? (
+                        {replacementHistoryPctNumber(l) ? (
                           <button
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
-                              focusHistoryRequest(l);
+                              focusHistoryPct(l);
                             }}
-                            title="Lọc theo số yêu cầu và mở chi tiết lịch sử thay thế"
+                            title="Lọc theo số PCT/LCT và mở chi tiết lịch sử thay thế"
                             className="inline-block rounded-md bg-sky-50 px-2.5 py-0.5 text-[12.5px] font-semibold text-[#00558F] transition-colors hover:bg-sky-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00558F]/40"
-                            aria-label={`Tra lịch sử thay thế của số yêu cầu ${l.requestNumber}`}
+                            aria-label={`Tra lịch sử thay thế của số PCT/LCT ${replacementHistoryPctNumber(l)}`}
                           >
-                            {l.requestNumber}
+                            {replacementHistoryPctNumber(l)}
                           </button>
-                        ) : l.imported ? (
-                          <span className="text-[12.5px] text-muted-foreground" title="Nhập từ sổ theo dõi vật tư">
-                            {normalizePctNumber(l.pctNumber) || "—"}
-                          </span>
                         ) : (
-                          <span className="text-[12.5px] text-muted-foreground">Ghi thủ công</span>
+                          <span className="text-[12.5px] text-muted-foreground">—</span>
                         )}
                       </TableCell>
                       <TableCell className="whitespace-nowrap px-3 py-2.5 text-center font-mono text-[13px] font-semibold text-ink">
@@ -1691,8 +1687,14 @@ function historySortValue(row: ReplacementLogItem, key: HistorySortKey): string 
   if (key === "quantity") return row.usedQuantity ?? row.quantity ?? 0;
   if (key === "doneBy") return row.doneByName || row.doneBy.name;
   if (key === "locked") return replacementHistoryStatus(row) === "PENDING" ? 1 : 0;
-  if (key === "source") return normalizePctNumber(row.requestNumber ?? row.defectHistory?.workOrderNumber ?? row.pctNumber);
+  if (key === "pctNumber") return replacementHistoryPctNumber(row);
   return `${replacement?.material.name ?? row.materialNameLabel ?? ""} ${device?.name ?? row.deviceLabel ?? ""} ${device?.code ?? row.deviceSeq ?? ""}`;
+}
+
+/** Số nhập khi Lưu lịch sử SYC là bản mới nhất; PCT trên phiếu vật tư là giá trị dự phòng. */
+function replacementHistoryPctNumber(row: ReplacementLogItem) {
+  return normalizePctNumber(row.defectHistory?.workOrderNumber)
+    || normalizePctNumber(row.pctNumber);
 }
 
 function ReplacementHistorySortHeader({
