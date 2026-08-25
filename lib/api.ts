@@ -117,7 +117,7 @@ export async function audit(
     durable?: boolean;
   }
 ) {
-  const activity = writeActivityLog({
+  const payload = {
     actorUserId: userId,
     actorName: options?.actorName,
     action,
@@ -130,11 +130,16 @@ export async function audit(
     ipAddress: options?.ipAddress,
     userAgent: options?.userAgent,
     saveToAuditLog: options?.saveToAuditLog,
-  }).catch(() => {
+  };
+  // Một vài luồng dùng AuditLog làm nguồn trạng thái (vd. "lần đồng bộ gần nhất").
+  // Với chúng, lỗi ghi audit phải làm request thất bại; không thể báo thành công
+  // khi người dùng sẽ ngay lập tức đọc lại một mốc cũ.
+  if (options?.durable) {
+    await writeActivityLog(payload);
+    return;
+  }
+  // Các thao tác thông thường không bị chặn bởi audit phụ trợ.
+  void writeActivityLog(payload).catch(() => {
     // non-fatal
   });
-  // Một vài luồng dùng AuditLog làm nguồn trạng thái (vd. "lần đồng bộ gần nhất").
-  // Các luồng đó phải chờ INSERT xong, nếu không UI có thể báo thành công nhưng vẫn
-  // đọc lại mốc cũ ngay sau response.
-  if (options?.durable) await activity;
 }
