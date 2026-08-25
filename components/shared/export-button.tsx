@@ -3,7 +3,7 @@
 import type { ReactNode } from "react";
 import * as XLSX from "xlsx";
 import { toast } from "sonner";
-import { ExportMenu } from "@/components/shared/export-menu";
+import { ExportMenu, type ExportMenuAction } from "@/components/shared/export-menu";
 import { printHtmlReport } from "@/lib/print-report";
 
 interface ExportButtonProps {
@@ -18,6 +18,7 @@ interface ExportButtonProps {
   periodLabel?: string;
   periodDescription?: string;
   className?: string;
+  menuActions?: ExportMenuAction[];
 }
 
 const LABELS: Record<string, string> = {
@@ -123,6 +124,7 @@ export function ExportButton({
   periodLabel,
   periodDescription,
   className,
+  menuActions,
 }: ExportButtonProps) {
   async function resolveRows(): Promise<Record<string, unknown>[] | null> {
     let data = rows;
@@ -210,6 +212,7 @@ export function ExportButton({
       periodControl={periodControl}
       periodLabel={periodLabel}
       periodDescription={periodDescription}
+      menuActions={menuActions}
       onExportExcel={exportExcel}
       onExportPdf={exportPdf}
       className={className}

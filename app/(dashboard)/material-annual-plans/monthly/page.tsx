@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { toast } from "sonner";
-import { CalendarDays, ChevronLeft, ChevronRight, Download, Loader2, Pencil, Plus, Search, Trash2, TrendingUp } from "lucide-react";
+import { CalendarDays, Download, Loader2, Pencil, Plus, Search, Trash2, TrendingUp } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { RbacProtectedRoute } from "@/components/shared/rbac-protected-route";
 import { TablePageSizeSelector, TablePaginationFooter } from "@/components/shared/table-pagination-controls";
@@ -37,12 +37,6 @@ const currentPeriod = () => {
     timeZone: "Asia/Ho_Chi_Minh", year: "numeric", month: "2-digit",
   }).formatToParts(new Date());
   return `${parts.find((p) => p.type === "year")?.value}-${parts.find((p) => p.type === "month")?.value}`;
-};
-
-const shiftPeriod = (period: string, offset: number) => {
-  const [year, month] = period.split("-").map(Number);
-  const shifted = new Date(year, month - 1 + offset, 1);
-  return `${shifted.getFullYear()}-${String(shifted.getMonth() + 1).padStart(2, "0")}`;
 };
 
 export default function MaterialMonthlyReportPage() {
@@ -103,18 +97,7 @@ function MonthlyReportContent() {
       <PageHeader
         title="TỔNG HỢP NHU CẦU VẬT TƯ"
       >
-        <div className="flex shrink-0 items-center gap-1" aria-label="Điều hướng tháng xem nhu cầu vật tư">
-          <Button
-            type="button"
-            variant="outline"
-            size="icon"
-            className="h-10 w-10 rounded-xl"
-            title="Xem tháng trước"
-            aria-label="Xem tháng trước"
-            onClick={() => setPeriodKey((current) => shiftPeriod(current, -1))}
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
+        <div className="flex shrink-0 items-center" aria-label="Chọn tháng xem nhu cầu vật tư">
           <div className="relative w-[176px] shrink-0">
             <Input
               type="month"
@@ -128,17 +111,6 @@ function MonthlyReportContent() {
             />
             <CalendarDays className="pointer-events-none absolute right-3 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-slate-500" />
           </div>
-          <Button
-            type="button"
-            variant="outline"
-            size="icon"
-            className="h-10 w-10 rounded-xl"
-            title="Xem tháng sau"
-            aria-label="Xem tháng sau"
-            onClick={() => setPeriodKey((current) => shiftPeriod(current, 1))}
-          >
-            <ChevronRight className="h-4 w-4" />
-          </Button>
         </div>
         <Button variant="outline" className="h-10 rounded-xl" onClick={() => setForecastOpen(true)}>
           <TrendingUp className="h-4 w-4" /> Dự toán {year + 1}
@@ -187,7 +159,7 @@ function MonthlyReportContent() {
                   value={selectedGroup}
                   onChange={(event) => setGroupFilter(event.target.value)}
                   aria-label="Chọn nhóm vật tư hiển thị"
-                  className="h-9 w-full max-w-[460px] cursor-pointer rounded-lg border border-slate-200 bg-white px-3 text-sm font-bold text-slate-800 shadow-sm outline-none transition focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
+                  className="h-9 w-full max-w-[460px] cursor-pointer rounded-lg border border-slate-200 bg-white px-3 text-center text-sm font-bold text-slate-800 shadow-sm outline-none transition [text-align-last:center] focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
                 >
                   {groupOptions.map((option) => (
                     <option key={option.group} value={option.group}>

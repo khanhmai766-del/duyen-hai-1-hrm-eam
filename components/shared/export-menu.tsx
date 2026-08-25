@@ -14,6 +14,14 @@ interface ExportMenuProps {
   onExportPdf: () => void | Promise<void>;
   className?: string;
   disabled?: boolean;
+  menuActions?: ExportMenuAction[];
+}
+
+export interface ExportMenuAction {
+  label: string;
+  description?: string;
+  icon: React.ReactNode;
+  onSelect: () => void;
 }
 
 type ExportFormat = "excel" | "pdf";
@@ -26,6 +34,7 @@ export function ExportMenu({
   onExportPdf,
   className,
   disabled = false,
+  menuActions = [],
 }: ExportMenuProps) {
   const [open, setOpen] = React.useState(false);
   const [exporting, setExporting] = React.useState<ExportFormat | null>(null);
@@ -69,6 +78,35 @@ export function ExportMenu({
         </div>
 
         <div className="space-y-4 p-4">
+          {menuActions.length > 0 && (
+            <div>
+              <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">Nhập dữ liệu</p>
+              <div className="space-y-2">
+                {menuActions.map((action) => (
+                  <button
+                    key={action.label}
+                    type="button"
+                    onClick={() => {
+                      setOpen(false);
+                      action.onSelect();
+                    }}
+                    className="flex w-full items-center gap-3 rounded-xl border border-sky-200 bg-sky-50/60 px-3 py-2.5 text-left transition hover:-translate-y-0.5 hover:border-sky-300 hover:bg-sky-50 hover:shadow-md dark:border-sky-500/25 dark:bg-sky-500/10"
+                  >
+                    <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-white text-sky-700 shadow-sm dark:bg-slate-800 dark:text-sky-300">
+                      {action.icon}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-sm font-bold text-slate-800 dark:text-slate-100">{action.label}</span>
+                      {action.description && (
+                        <span className="mt-0.5 block text-[10px] text-slate-500 dark:text-slate-400">{action.description}</span>
+                      )}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           {periodControl && (
             <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-3 dark:border-slate-700 dark:bg-slate-800/70">
               <div className="mb-2.5 flex items-start gap-2.5">

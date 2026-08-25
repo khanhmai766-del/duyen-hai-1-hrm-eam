@@ -36,7 +36,7 @@ import {
 import { DefectForm } from "@/components/defects/defect-form";
 import type { DefectItem } from "@/hooks/useDefects";
 import { usePositions } from "@/hooks/useUsers";
-import { MIN_USAGE_PHOTOS, usesHandwrittenBbnt, COMMON_MATERIAL_POSITION, displayMaterialCategory, GAS_RETURN_STATUS, isChemicalFlowTicket, isGasCylinderTicket, isOtherMaterialAdvanceTicket, isOtherMaterialCategory, isOtherMaterialTicketType, isSingleStepTicketMaterial, CHEMICAL_TICKET_TYPE, isSupplementReason, MATERIAL_CATEGORIES, materialTicketBelongsToRecoveryTab, materialTicketRequiresRecovery, OTHER_MATERIAL_ADVANCE_TICKET_TYPE, OTHER_MATERIAL_GROUP, OTHER_MATERIAL_TICKET_TYPE, ticketReasonsFor, TICKET_REASONS, TICKET_REASON_OTHER, SINGLE_STEP_TICKET_TYPE, TICKET_MATERIAL_CATEGORIES, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
+import { MIN_USAGE_PHOTOS, usesHandwrittenBbnt, COMMON_MATERIAL_POSITION, displayMaterialCategory, GAS_RETURN_STATUS, isChemicalFlowTicket, isGasCylinderTicket, isOtherMaterialAdvanceTicket, isOtherMaterialCategory, isOtherMaterialTicketType, isSingleStepTicketMaterial, CHEMICAL_TICKET_TYPE, isSupplementReason, MATERIAL_CATEGORY_FILTERS, materialCategoryMatches, materialTicketBelongsToRecoveryTab, materialTicketRequiresRecovery, OTHER_MATERIAL_ADVANCE_TICKET_TYPE, OTHER_MATERIAL_GROUP, OTHER_MATERIAL_TICKET_TYPE, ticketReasonsFor, TICKET_REASONS, TICKET_REASON_OTHER, SINGLE_STEP_TICKET_TYPE, TICKET_MATERIAL_CATEGORIES, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
 import { normalizeText } from "@/lib/nav";
 import { positionsMatch } from "@/lib/position-catalog";
 import {
@@ -216,6 +216,11 @@ const materialCatalogHref = (ticket: MaterialTicket, code: string) => {
   return `/materials?${qs.toString()}`;
 };
 const FINISHED_STATUSES = ["HOAN_TAT", "TU_CHOI"];
+const STATUS_FILTER_OPTIONS = [
+  { value: "ALL", label: "Tất cả" },
+  { value: "RUNNING", label: "Đang thực hiện" },
+  { value: "HOAN_TAT", label: "Hoàn tất" },
+] as const;
 /* Số ngày phiếu đứng ở bước hiện tại = hôm nay - mốc thao tác gần nhất trên phiếu */
 const waitDaysOf = (t: MaterialTicket) => {
   const stamps = [t.createdAt, t.proposedAt, t.confirmedAt, t.statsAt, t.receivedAt, t.usedAt, t.completedAt]
@@ -260,6 +265,8 @@ export default function MaterialTicketBoard({
   const selectedMonthCount = monthFilter === "ALL"
     ? monthOptions.reduce((sum, item) => sum + item.count, 0)
     : monthOptions.find((item) => item.month === monthFilter)?.count ?? 0;
+  const selectedStatusFilter = STATUS_FILTER_OPTIONS.find((option) => option.value === filter)
+    ?? STATUS_FILTER_OPTIONS[0];
   const myTurn = useMemo(() => tickets.filter((t) => actionsFor(t, viewer).length > 0), [tickets, viewer]);
   const myTurnIds = useMemo(() => new Set(myTurn.map((t) => t.id)), [myTurn]);
   const waitDays = useMemo(() => new Map(tickets.map((t) => [t.id, waitDaysOf(t)])), [tickets]);
@@ -285,7 +292,7 @@ export default function MaterialTicketBoard({
         : filter === "RECOVERY" ? materialTicketBelongsToRecoveryTab(t)
         : t.status === filter;
       const ticketCategory = t.materialCategory ? TICKET_TO_MATERIAL_CATEGORY[t.materialCategory] ?? t.materialCategory : "";
-      const matchesMaterialCategory = materialCategoryFilter === "ALL" || ticketCategory === materialCategoryFilter;
+      const matchesMaterialCategory = materialCategoryFilter === "ALL" || materialCategoryMatches(ticketCategory, materialCategoryFilter);
       const matchesUnit = unitFilter === "ALL" || t.unit === unitFilter;
       const matchesType = typeFilter === "ALL"
         || (typeFilter === "DE_XUAT" ? t.type === "DE_XUAT" || t.type === OTHER_MATERIAL_TICKET_TYPE
@@ -317,7 +324,33 @@ export default function MaterialTicketBoard({
             <Zap size={13} /> Đến lượt bạn
             <span className="mine-count">{myTurn.length}</span>
           </button>
-          {[["ALL", "Tất cả"], ["RUNNING", "Đang thực hiện"], ["HOAN_TAT", "Hoàn tất"], ["CHEMICAL", "Hóa chất"], ["RECOVERY", "Thu hồi"]].map(([k, l]) => (
+          <Popover>
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                className={`status-filter-trigger ${STATUS_FILTER_OPTIONS.some((option) => option.value === filter) ? "on" : ""}`}
+                aria-label={`Lọc theo trạng thái: ${selectedStatusFilter.label}`}
+              >
+                <span>{selectedStatusFilter.label}</span>
+                <ChevronDown size={14} aria-hidden="true" />
+              </button>
+            </PopoverTrigger>
+            <PopoverContent align="start" sideOffset={7} className="status-filter-menu">
+              <div className="status-filter-heading">Trạng thái phiếu</div>
+              {STATUS_FILTER_OPTIONS.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  className={filter === option.value ? "selected" : ""}
+                  onClick={() => setFilter(option.value)}
+                >
+                  <span>{option.label}</span>
+                  {filter === option.value && <Check size={15} aria-hidden="true" />}
+                </button>
+              ))}
+            </PopoverContent>
+          </Popover>
+          {[["CHEMICAL", "Hóa chất"], ["RECOVERY", "Thu hồi"]].map(([k, l]) => (
             <button key={k} className={filter === k ? "on" : ""} onClick={() => setFilter(k)}>{l}</button>
           ))}
         </div>
@@ -402,7 +435,7 @@ export default function MaterialTicketBoard({
                   className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-800 outline-none transition focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
                 >
                   <option value="ALL">Tất cả loại</option>
-                  {MATERIAL_CATEGORIES.map((c) => <option key={c} value={c}>{displayMaterialCategory(c)}</option>)}
+                  {MATERIAL_CATEGORY_FILTERS.map((c) => <option key={c} value={c}>{displayMaterialCategory(c)}</option>)}
                 </select>
               </label>
               <label className="grid gap-1.5 text-xs font-semibold text-slate-600">
@@ -493,7 +526,7 @@ export default function MaterialTicketBoard({
             >
               <span className="code-cell">
                 <span className={`exp ${isOpen ? "open" : ""}`} title={isOpen ? "Thu gọn" : "Mở chi tiết"}>
-                  {isOpen ? <Minus size={12} /> : <Plus size={12} />}
+                  {isOpen ? <Minus size={10} /> : <Plus size={10} />}
                 </span>
                 <span className="code">{t.sequenceNumber}</span>
               </span>
@@ -3782,6 +3815,18 @@ const CSS = `
 .filters button.on{background:${C.navy};color:#fff;}
 .filters button.mine-tab{display:inline-flex;align-items:center;gap:6px;font-weight:700;color:${C.warn};}
 .filters button.mine-tab.on{background:#f59e0b;color:#fff;}
+.filters button.status-filter-trigger{position:relative;display:inline-flex;align-items:center;justify-content:center;min-width:142px;white-space:nowrap;transition:background .18s,color .18s,box-shadow .18s;}
+.filters button.status-filter-trigger>span{width:100%;padding:0 16px;text-align:center;}
+.filters button.status-filter-trigger>svg{position:absolute;right:9px;flex:0 0 auto;color:#94a3b8;transition:transform .18s,color .18s;}
+.filters button.status-filter-trigger[data-state=open]>svg{transform:rotate(180deg);}
+.filters button.status-filter-trigger.on>svg{color:#bfdbfe;}
+.status-filter-menu{width:174px!important;padding:6px!important;border:1px solid #dbe5f0!important;border-radius:12px!important;background:#fff!important;box-shadow:0 14px 34px rgba(15,23,42,.14)!important;}
+.status-filter-heading{padding:6px 9px 7px;color:#94a3b8;font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;}
+.status-filter-menu button{display:flex;width:100%;align-items:center;justify-content:space-between;gap:10px;border:0;border-radius:8px;background:transparent;padding:8px 9px;color:#475569;font-family:Poppins,Inter,sans-serif;font-size:12.5px;font-weight:650;line-height:1.25;white-space:nowrap;cursor:pointer;transition:background .16s,color .16s;}
+.status-filter-menu button:hover{background:#f1f5f9;color:${C.navy};}
+.status-filter-menu button:focus-visible{outline:2px solid #60a5fa;outline-offset:1px;}
+.status-filter-menu button.selected{background:#eff6ff;color:${C.accent};font-weight:750;}
+.status-filter-menu button>svg{flex:0 0 auto;}
 .mine-count{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;padding:0 5px;border-radius:999px;font-size:10.5px;font-weight:800;background:${C.warnBg};color:${C.warn};}
 .mine-tab.on .mine-count{background:rgba(255,255,255,.28);color:#fff;}
 .btn{display:inline-flex;align-items:center;gap:6px;font-family:Poppins,Inter,sans-serif;font-weight:600;font-size:13px;border-radius:10px;padding:9px 14px;cursor:pointer;border:1px solid ${C.line};background:#fff;color:#475569;transition:.15s;}
@@ -3793,7 +3838,8 @@ const CSS = `
 .btn.tiny{font-size:11.5px;padding:5px 9px;border-radius:8px;align-self:flex-start;}
 .mini{border:1px solid ${C.line};background:#fff;border-radius:8px;cursor:pointer;color:#94a3b8;display:grid;place-items:center;width:30px;}
 .list{background:#fff;border:1px solid ${C.line};border-radius:14px;overflow-x:auto;overflow-y:hidden;box-shadow:0 1px 2px rgba(15,23,42,.04);}
-.row{display:grid;grid-template-columns:48px 120px 108px minmax(240px,2.2fr) 132px 84px minmax(176px,1.1fr) 60px 68px;gap:10px;align-items:center;min-width:1144px;width:100%;text-align:left;min-height:54px;padding:6px 14px;border:0;border-bottom:1px solid ${C.line};background:#fff;cursor:pointer;font-size:13px;}
+.row{display:grid;grid-template-columns:48px 120px 108px minmax(240px,2.2fr) 180px 84px minmax(176px,1.1fr) 60px 68px;gap:10px;align-items:center;min-width:1192px;width:100%;text-align:left;min-height:54px;padding:6px 14px;border:0;border-bottom:1px solid ${C.line};background:#fff;cursor:pointer;font-size:13px;}
+.row:not(.rhead)>span:nth-child(n+2):nth-child(-n+7){justify-self:stretch;text-align:center;}
 .code-cell{display:inline-flex;align-items:center;justify-content:flex-start;gap:6px;min-width:0;}
 .code-cell .code{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .ops{display:flex;gap:6px;justify-content:center;}
@@ -3829,20 +3875,21 @@ const CSS = `
 .wait-badge.warm{color:${C.warn};}
 .wait-badge.hot{color:${C.bad};}
 .rhead{background:#fbfbfa;font-size:11px;font-weight:700;letter-spacing:.04em;line-height:1.25;text-transform:uppercase;color:${C.soft};cursor:default;min-height:40px;}
-.rhead .type-head{display:flex;justify-content:flex-start;}
-.rhead .type-head select{border:0;background:transparent;font:inherit;font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:${C.soft};cursor:pointer;outline:0;padding:0;max-width:100%;text-align:left;text-align-last:left;}
+.rhead>span{display:flex;align-items:center;justify-content:center;min-width:0;text-align:center;white-space:nowrap;}
+.rhead .type-head{display:flex;justify-content:center;}
+.rhead .type-head select{border:0;background:transparent;font:inherit;font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:${C.soft};cursor:pointer;outline:0;padding:0;max-width:100%;text-align:center;text-align-last:center;}
 .rhead .type-head select.filtering{color:${C.navy};}
 .code{font-family:Poppins,Inter,sans-serif;font-weight:600;color:${C.navy};}
-.proposal-cell{display:flex;min-width:0;flex-direction:column;align-items:flex-start;gap:3px;text-align:left;}
+.proposal-cell{display:flex;min-width:0;flex-direction:column;align-items:center;gap:3px;text-align:center;}
 .proposal-cell small{display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:${C.muted};font-size:10.5px;font-weight:600;}
 .nophieu{display:inline-block;background:${C.warnBg};color:${C.warn};font-size:11px;font-weight:600;padding:3px 8px;border-radius:7px;}
 .soft{color:${C.soft};}
 .tag{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;padding:4px 9px;border-radius:8px;}
 .tag.ung{background:${C.ungBg};color:${C.ung};}
 .tag.dx{background:${C.accent}14;color:${C.accent};}
-.kind-cell{display:flex;flex-direction:column;align-items:flex-start;gap:4px;min-width:0;text-align:left;}
+.kind-cell{display:flex;flex-direction:column;align-items:center;gap:4px;min-width:0;text-align:center;}
 .kind-top{display:inline-flex;align-items:center;gap:6px;min-width:0;}
-.exp{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;flex:0 0 auto;border-radius:50%;background:#10b981;color:#fff;box-shadow:0 1px 2px rgba(15,23,42,.2);}
+.exp{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;flex:0 0 auto;border-radius:50%;background:#10b981;color:#fff;box-shadow:0 1px 2px rgba(15,23,42,.18);}
 .exp.open{background:#f43f5e;}
 .detail-inline{min-width:1144px;border-bottom:1px solid ${C.line};background:#f6f8fb;padding:12px 16px;}
 .detail-inline .dwrap{position:relative;border:1px solid ${C.line};border-radius:14px;overflow:hidden;background:#fff;box-shadow:0 8px 22px rgba(15,23,42,.07);}
@@ -3863,12 +3910,12 @@ const CSS = `
 .activity-row b{font-size:12px;color:${C.navy};overflow-wrap:anywhere;}
 .activity-row span{font-size:11.5px;color:${C.muted};line-height:1.35;}
 .kind-sub{display:block;max-width:100%;color:${C.soft};font-size:10.5px;font-weight:600;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.material-name{display:block;min-width:0;color:${C.navy};font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.material-name{display:block;min-width:0;color:${C.navy};font-size:13px;font-weight:700;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .d{width:9px;height:9px;border-radius:50%;background:#e2e8f0;}
 .d.on{background:${C.ok};}
 .d.cur{background:${C.accent};box-shadow:0 0 0 3px ${C.accent}30;}
 .st{font-size:11.5px;font-weight:700;padding:5px 10px;border-radius:9px;text-align:center;white-space:nowrap;}
-.status-stack{display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:2px;min-width:0;width:100%;}
+.status-stack{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;min-width:0;width:100%;text-align:center;}
 .status-stack .st{display:inline-block;max-width:100%;box-sizing:border-box;}
 .status-stack .status-secondary{display:block;max-width:100%;padding:0 2px;font-size:10.5px;font-weight:700;line-height:1.25;color:${C.warn};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .empty{padding:40px;text-align:center;color:${C.soft};display:flex;gap:8px;align-items:center;justify-content:center;}
@@ -4225,7 +4272,7 @@ const CSS = `
 .logrow span{color:${C.soft};white-space:nowrap;}
 .logrow b{white-space:nowrap;}
 .logrow em{font-style:normal;color:${C.muted};white-space:nowrap;}
-@media(max-width:640px){.panel{width:100%;}.detail-inline{min-width:1040px;padding:10px 12px;}.row{min-width:1040px;grid-template-columns:64px minmax(108px,.9fr) minmax(108px,.86fr) minmax(188px,1.36fr) minmax(120px,.95fr) 82px minmax(168px,1fr) 66px 70px;padding:11px 12px;font-size:12.5px;}.tag{padding:4px 7px}.nophieu{padding:3px 6px}.st{padding:5px 8px}.material-cards{grid-template-columns:1fr;}.edit-field-grid,.bbkt-grid,.confirm-field-row,.stats-issue-grid,.accept-two-grid,.use-field-grid,.recovery-quantity-row,.receive-field-grid,.receive-field-grid.advance-receive-fields,.vhv-receive-grid,.advance-phase-grid,.advance-document-summary,.review-receive-row,.review-use-grid,.review-recovery-grid,.review-accept-grid{grid-template-columns:1fr;gap:8px;}.step-review-dialog .frm-f{flex-wrap:wrap;}.step-review-dialog .frm-f>.note{flex-basis:100%;}.step-review-dialog .frm-f>.btn.primary{min-width:132px;}.erp-readonly-row{grid-template-columns:minmax(110px,.8fr) minmax(180px,1.5fr) minmax(110px,.7fr);}.review-receive-toggle{width:100%;}.review-receive-toggle button{flex:1;}.qty-field input{padding-left:8px;padding-right:8px;}}
+@media(max-width:640px){.panel{width:100%;}.detail-inline{min-width:1140px;padding:10px 12px;}.row{min-width:1140px;grid-template-columns:64px minmax(108px,.9fr) minmax(108px,.86fr) minmax(188px,1.36fr) minmax(180px,.95fr) 82px minmax(168px,1fr) 66px 70px;padding:11px 12px;font-size:12.5px;}.tag{padding:4px 7px}.nophieu{padding:3px 6px}.st{padding:5px 8px}.material-cards{grid-template-columns:1fr;}.edit-field-grid,.bbkt-grid,.confirm-field-row,.stats-issue-grid,.accept-two-grid,.use-field-grid,.recovery-quantity-row,.receive-field-grid,.receive-field-grid.advance-receive-fields,.vhv-receive-grid,.advance-phase-grid,.advance-document-summary,.review-receive-row,.review-use-grid,.review-recovery-grid,.review-accept-grid{grid-template-columns:1fr;gap:8px;}.step-review-dialog .frm-f{flex-wrap:wrap;}.step-review-dialog .frm-f>.note{flex-basis:100%;}.step-review-dialog .frm-f>.btn.primary{min-width:132px;}.erp-readonly-row{grid-template-columns:minmax(110px,.8fr) minmax(180px,1.5fr) minmax(110px,.7fr);}.review-receive-toggle{width:100%;}.review-receive-toggle button{flex:1;}.qty-field input{padding-left:8px;padding-right:8px;}}
 @media(max-width:640px){.ticket-unit-field{grid-template-columns:58px minmax(0,1fr);gap:8px;}.ticket-unit-options{max-width:none;}.ticket-unit-options button{padding-left:6px;padding-right:6px;}.ticket-category-options{grid-template-columns:repeat(3,minmax(0,1fr));}}
 @media(max-width:760px){.top-tools{align-items:stretch;flex-direction:column;}.turn{max-width:100%;min-width:0;}.turn-spacer{display:none;}.month-filter{align-self:flex-start;max-width:100%;}.month-filter select{max-width:calc(100vw - 108px);}.filters{align-self:flex-start;max-width:100%;overflow-x:auto;}.filters button{white-space:nowrap;}.act-title-row{align-items:stretch;flex-direction:column;gap:8px;}.receive-location{width:100%;align-items:flex-start;flex-direction:column;gap:3px;}.flow-toggle,.receive-source-toggle{width:100%;}.flow-toggle button,.receive-source-toggle button{flex:1;min-width:0;padding:0 8px;}.act-field-row,.advance-item-row{grid-template-columns:1fr;gap:6px;}.replacement-entry-row{grid-template-columns:24px minmax(0,1fr) 120px 30px;}.activity-drawer{width:86%;}}
 `;

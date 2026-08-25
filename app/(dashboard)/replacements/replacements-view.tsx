@@ -756,6 +756,12 @@ export function ReplacementsPageContent({ only }: { only?: TabKey } = {}) {
             rows={exportRows}
             filename={`vat-tu-can-thay-the-${horizonMonths === 12 ? "1-nam" : `${horizonMonths}-thang`}`}
             title={`VẬT TƯ CẦN THAY THẾ TRONG ${horizonLabel.toUpperCase()}`}
+            menuActions={canCreate ? [{
+              label: "Nhập lịch theo dõi",
+              description: "Tạo hoặc cập nhật lịch từ file Excel",
+              icon: <Upload className="h-4 w-4" />,
+              onSelect: () => setScheduleImportOpen(true),
+            }] : undefined}
             widths={{ material: 26, target: 22, device: 18, quantity: 7, dvt: 6, interval: 11, lastReplaced: 11, nextDue: 11, status: 10, cuongViQuanLy: 14 }}
             periodLabel="Khoảng thời gian dự báo"
             periodDescription="Xuất các điểm đã quá hạn và sắp đến hạn trong khoảng đã chọn."
@@ -914,17 +920,6 @@ export function ReplacementsPageContent({ only }: { only?: TabKey } = {}) {
             className="w-full sm:w-72 lg:w-80"
             shortcut
           />
-          {tab === "schedule" && canCreate && (
-            <Button
-              type="button"
-              variant="outline"
-              className="h-9 rounded-xl border-sky-200 bg-white px-4 text-accent shadow-sm hover:border-accent hover:bg-sky-50"
-              onClick={() => setScheduleImportOpen(true)}
-            >
-              <Upload className="h-4 w-4" />
-              Nhập lịch theo dõi
-            </Button>
-          )}
         </div>
       </div>}
 
