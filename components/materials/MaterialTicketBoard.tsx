@@ -5,7 +5,7 @@ import Link from "next/link";
 import {
   Plus, Minus, X, Check, FileText, Zap, FlaskConical, ClipboardList, Package, Clock, ChevronRight,
   AlertTriangle, Ban, Download, CircleCheck, Circle, CircleDot, Loader2, Pencil, Trash2, UserCog, CalendarDays,
-  Filter, ChevronDown,
+  Filter, ChevronDown, Search,
   Wrench, ExternalLink,
 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -226,11 +226,9 @@ const waitDaysOf = (t: MaterialTicket) => {
 
 export default function MaterialTicketBoard({
   creating = false,
-  searchQ = "",
   onCloseCreate,
 }: {
   creating?: boolean;
-  searchQ?: string;
   onCloseCreate?: () => void;
 } = {}) {
   const [monthFilter, setMonthFilter] = useState(() => materialTicketMonthKey());
@@ -241,6 +239,8 @@ export default function MaterialTicketBoard({
   const [unitFilter, setUnitFilter] = useState("ALL");
   // Lọc theo luồng phiếu (cột Yêu cầu): Đề xuất / Ứng / Sử dụng hiện có.
   const [typeFilter, setTypeFilter] = useState("ALL");
+  // Ô tìm kiếm nằm cùng hàng với bộ lọc — nó lọc chính bảng này chứ không phải cả trang.
+  const [searchQ, setSearchQ] = useState("");
   /** Đang lọc riêng luồng hóa chất (gồm cả NH3 khai một bước) hay riêng vật tư thường? */
   const chemicalOnly = typeFilter === CHEMICAL_TICKET_TYPE || typeFilter === SINGLE_STEP_TICKET_TYPE;
   const materialOnly = typeFilter !== "ALL" && !chemicalOnly;
@@ -322,6 +322,15 @@ export default function MaterialTicketBoard({
           ))}
         </div>
         <div className="turn-spacer" />
+        <label className="tool-search">
+          <Search size={14} aria-hidden="true" />
+          <input
+            value={searchQ}
+            onChange={(e) => setSearchQ(e.target.value)}
+            placeholder="Tìm phiếu đề xuất, tên vật tư..."
+            aria-label="Tìm phiếu đề xuất hoặc tên vật tư"
+          />
+        </label>
         <label className="month-filter" title="Lọc và thống kê phiếu theo tháng">
           <CalendarDays size={14} aria-hidden="true" />
           <select
@@ -415,7 +424,7 @@ export default function MaterialTicketBoard({
 
       <div className="list">
         <div className="row rhead">
-          <span>Số thứ tự</span>
+          <span>STT</span>
           <span className="type-head">
             <select
               className={typeFilter !== "ALL" ? "filtering" : ""}
@@ -522,9 +531,7 @@ export default function MaterialTicketBoard({
 	                  {mine && <i className="pd" />}{baseMeta.label}
 	                </span>
 	                {recoveryPending && (
-	                  <span className="st status-secondary" style={{ color: C.warn, background: C.warn + "16" }}>
-	                    Chờ xác nhận trả vật tư thu hồi
-	                  </span>
+	                  <small className="status-secondary" title="Chờ xác nhận trả vật tư thu hồi">Chờ xác nhận trả vật tư thu hồi</small>
 	                )}
 	              </span>
               <span className="wait-cell">
@@ -3724,7 +3731,7 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
 
 /* ============================== CSS ============================== */
 const CSS = `
-.mtw{font-family:Inter,system-ui,sans-serif;background:${C.cream};color:#1f2430;padding:20px;border-radius:20px;min-height:640px;position:relative;}
+.mtw{font-family:Inter,system-ui,sans-serif;color:#1f2430;position:relative;}
 .mtw *{box-sizing:border-box;font-family:inherit;}
 .step-review{width:100%;text-align:left;border:0;background:transparent;cursor:pointer;}
 .step-review:disabled{cursor:default;}
@@ -3757,8 +3764,13 @@ const CSS = `
 .head-ic{width:44px;height:44px;border-radius:13px;display:grid;place-items:center;color:#fff;background:linear-gradient(135deg,${C.navy},${C.accent});}
 .head h1{font-family:Poppins,Inter,sans-serif;font-size:21px;font-weight:700;color:${C.navy};margin:0;}
 .head p{margin:2px 0 0;font-size:12.5px;color:${C.muted};}
-.top-tools{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;}
+.top-tools{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px;}
 .turn-spacer{flex:1 1 auto;min-width:0;}
+.tool-search{display:inline-flex;align-items:center;gap:7px;flex:0 1 250px;min-width:180px;height:38px;padding:0 11px;border:1px solid ${C.line};background:#fff;border-radius:11px;box-shadow:0 1px 2px rgba(15,23,42,.04);transition:border-color .15s,box-shadow .15s;}
+.tool-search:focus-within{border-color:#60a5fa;box-shadow:0 0 0 3px rgba(37,99,235,.1);}
+.tool-search>svg{flex:0 0 auto;color:${C.soft};}
+.tool-search input{flex:1 1 auto;min-width:0;border:0;background:transparent;outline:0;font-size:12.5px;font-weight:600;color:${C.navy};}
+.tool-search input::placeholder{color:${C.soft};font-weight:500;}
 .month-filter{display:inline-flex;align-items:center;flex:0 0 auto;height:38px;border:1px solid #bfdbfe;background:linear-gradient(180deg,#fff 0%,#f8fbff 100%);border-radius:11px;padding:3px 5px 3px 10px;box-shadow:0 1px 2px rgba(15,23,42,.04);transition:border-color .15s,box-shadow .15s;}
 .month-filter:focus-within{border-color:#60a5fa;box-shadow:0 0 0 3px rgba(37,99,235,.1);}
 .month-filter>svg{flex:0 0 auto;color:${C.accent};}
@@ -3780,15 +3792,18 @@ const CSS = `
 .btn.big{width:100%;justify-content:center;padding:13px;font-size:14px;margin-top:8px;}
 .btn.tiny{font-size:11.5px;padding:5px 9px;border-radius:8px;align-self:flex-start;}
 .mini{border:1px solid ${C.line};background:#fff;border-radius:8px;cursor:pointer;color:#94a3b8;display:grid;place-items:center;width:30px;}
-.list{background:#fff;border:1px solid ${C.line};border-radius:16px;overflow-x:auto;overflow-y:hidden;}
-.row{display:grid;grid-template-columns:72px minmax(116px,.95fr) minmax(118px,.9fr) minmax(210px,1.55fr) minmax(132px,1fr) 92px minmax(190px,1.18fr) 72px 74px;gap:8px;align-items:center;min-width:1140px;width:100%;text-align:left;padding:12px 16px;border:0;border-bottom:1px solid ${C.line};background:#fff;cursor:pointer;font-size:13px;}
-.code-cell{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-width:0;}
+.list{background:#fff;border:1px solid ${C.line};border-radius:14px;overflow-x:auto;overflow-y:hidden;box-shadow:0 1px 2px rgba(15,23,42,.04);}
+.row{display:grid;grid-template-columns:48px 120px 108px minmax(240px,2.2fr) 132px 84px minmax(176px,1.1fr) 60px 68px;gap:10px;align-items:center;min-width:1144px;width:100%;text-align:left;min-height:54px;padding:6px 14px;border:0;border-bottom:1px solid ${C.line};background:#fff;cursor:pointer;font-size:13px;}
+.code-cell{display:inline-flex;align-items:center;justify-content:flex-start;gap:6px;min-width:0;}
 .code-cell .code{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .ops{display:flex;gap:6px;justify-content:center;}
 .op{display:grid;place-items:center;width:28px;height:28px;border-radius:8px;border:1px solid ${C.line};background:#fff;color:${C.muted};cursor:pointer;transition:.15s;}
 .op:hover{border-color:${C.accent};color:${C.accent};}
 .op.del:hover{border-color:${C.bad};color:${C.bad};background:${C.badBg};}
-.row>span:nth-child(1),.row>span:nth-child(2),.row>span:nth-child(3),.row>span:nth-child(4),.row>span:nth-child(5),.row>span:nth-child(6),.row>span:nth-child(7),.row>span:nth-child(8){text-align:center;justify-self:stretch;}
+.row>span{min-width:0;justify-self:stretch;}
+.row>span:nth-child(1),.row>span:nth-child(6){font-variant-numeric:tabular-nums;}
+.row>span:nth-child(6){text-align:right;}
+.row>span:nth-child(8),.row>span:nth-child(9){text-align:center;}
 .row:hover{background:#fafaf8;}
 .row.mine{background:#fffbeb;box-shadow:inset 3px 0 0 #f59e0b;}
 /* Phiếu khai một bước — nền xanh ngọc để tách hẳn khỏi các phiếu còn đi tiếp quy trình. */
@@ -3813,23 +3828,23 @@ const CSS = `
 .wait-badge{display:inline-flex;align-items:center;justify-content:center;min-width:58px;max-width:100%;height:28px;border-radius:8px;background:#eef2f7;padding:0 7px;font-size:12px;font-weight:700;line-height:1;color:${C.soft};white-space:nowrap;}
 .wait-badge.warm{color:${C.warn};}
 .wait-badge.hot{color:${C.bad};}
-.rhead{background:#fbfbfa;font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:${C.soft};cursor:default;}
-.rhead .type-head{display:flex;justify-content:center;}
-.rhead .type-head select{border:0;background:transparent;font:inherit;font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:${C.soft};cursor:pointer;outline:0;padding:0;max-width:100%;text-align:center;text-align-last:center;}
+.rhead{background:#fbfbfa;font-size:11px;font-weight:700;letter-spacing:.04em;line-height:1.25;text-transform:uppercase;color:${C.soft};cursor:default;min-height:40px;}
+.rhead .type-head{display:flex;justify-content:flex-start;}
+.rhead .type-head select{border:0;background:transparent;font:inherit;font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:${C.soft};cursor:pointer;outline:0;padding:0;max-width:100%;text-align:left;text-align-last:left;}
 .rhead .type-head select.filtering{color:${C.navy};}
 .code{font-family:Poppins,Inter,sans-serif;font-weight:600;color:${C.navy};}
-.proposal-cell{display:flex;min-width:0;flex-direction:column;align-items:center;gap:3px;text-align:center;}
+.proposal-cell{display:flex;min-width:0;flex-direction:column;align-items:flex-start;gap:3px;text-align:left;}
 .proposal-cell small{display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:${C.muted};font-size:10.5px;font-weight:600;}
 .nophieu{display:inline-block;background:${C.warnBg};color:${C.warn};font-size:11px;font-weight:600;padding:3px 8px;border-radius:7px;}
 .soft{color:${C.soft};}
 .tag{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;padding:4px 9px;border-radius:8px;}
 .tag.ung{background:${C.ungBg};color:${C.ung};}
 .tag.dx{background:${C.accent}14;color:${C.accent};}
-.kind-cell{display:flex;flex-direction:column;align-items:center;gap:5px;min-width:0;text-align:center;}
+.kind-cell{display:flex;flex-direction:column;align-items:flex-start;gap:4px;min-width:0;text-align:left;}
 .kind-top{display:inline-flex;align-items:center;gap:6px;min-width:0;}
 .exp{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;flex:0 0 auto;border-radius:50%;background:#10b981;color:#fff;box-shadow:0 1px 2px rgba(15,23,42,.2);}
 .exp.open{background:#f43f5e;}
-.detail-inline{min-width:1132px;border-bottom:1px solid ${C.line};background:#f6f8fb;padding:12px 16px;}
+.detail-inline{min-width:1144px;border-bottom:1px solid ${C.line};background:#f6f8fb;padding:12px 16px;}
 .detail-inline .dwrap{position:relative;border:1px solid ${C.line};border-radius:14px;overflow:hidden;background:#fff;box-shadow:0 8px 22px rgba(15,23,42,.07);}
 .dclose{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;flex:0 0 28px;border-radius:8px;border:1px solid ${C.line};background:#f8fafc;color:#64748b;cursor:pointer;}
 .dclose:hover{background:#eef2f7;color:#0f172a;}
@@ -3848,14 +3863,14 @@ const CSS = `
 .activity-row b{font-size:12px;color:${C.navy};overflow-wrap:anywhere;}
 .activity-row span{font-size:11.5px;color:${C.muted};line-height:1.35;}
 .kind-sub{display:block;max-width:100%;color:${C.soft};font-size:10.5px;font-weight:600;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.material-name{display:block;min-width:0;color:${C.navy};font-size:12.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.material-name{display:block;min-width:0;color:${C.navy};font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .d{width:9px;height:9px;border-radius:50%;background:#e2e8f0;}
 .d.on{background:${C.ok};}
 .d.cur{background:${C.accent};box-shadow:0 0 0 3px ${C.accent}30;}
 .st{font-size:11.5px;font-weight:700;padding:5px 10px;border-radius:9px;text-align:center;white-space:nowrap;}
-.status-stack{display:flex;flex-direction:column;align-items:stretch;justify-content:center;gap:5px;min-width:0;width:100%;}
-.status-stack .st{display:block;width:100%;box-sizing:border-box;}
-.status-stack .status-secondary{white-space:normal;line-height:1.25;}
+.status-stack{display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:2px;min-width:0;width:100%;}
+.status-stack .st{display:inline-block;max-width:100%;box-sizing:border-box;}
+.status-stack .status-secondary{display:block;max-width:100%;padding:0 2px;font-size:10.5px;font-weight:700;line-height:1.25;color:${C.warn};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .empty{padding:40px;text-align:center;color:${C.soft};display:flex;gap:8px;align-items:center;justify-content:center;}
 .spin{animation:mtwspin 1s linear infinite;}@keyframes mtwspin{to{transform:rotate(360deg);}}
 .ovl{position:fixed;inset:0;background:rgba(15,23,42,.38);z-index:40;}
