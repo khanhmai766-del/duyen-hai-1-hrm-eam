@@ -83,7 +83,6 @@ function MaterialAnnualPlansContent() {
   return <div className="space-y-5">
     <PageHeader
       title="KẾ HOẠCH VẬT TƯ NĂM"
-      description={`Sổ chỉ tiêu năm ${year}`}
     >
       <label className="flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 shadow-sm">
         Năm

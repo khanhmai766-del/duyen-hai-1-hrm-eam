@@ -115,7 +115,6 @@ export default function ChemicalInventoryPage() {
             ? `Sổ theo dõi hóa chất và nhiên liệu của Phân xưởng Vận hành 1 — kỳ ${periodLabel(month)}`
             : "Sổ theo dõi hóa chất và nhiên liệu của Phân xưởng Vận hành 1"
         }
-        stacked
       >
         <div className="flex items-center gap-1 rounded-md border border-border p-0.5">
           <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => setMonth(shiftPeriod(month, -1))} aria-label="Tháng trước">
