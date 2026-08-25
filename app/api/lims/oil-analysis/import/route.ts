@@ -75,7 +75,44 @@ export async function POST(req: NextRequest) {
     const sourceCount = Number.isSafeInteger(requestedSourceCount) && requestedSourceCount >= rows.length
       ? requestedSourceCount
       : rows.length;
-    if (!rows.length) return fail("LIMS chưa trả về mẫu dầu Không Đạt nào trong khoảng thời gian đã chọn");
+    // Không có mẫu Không Đạt cũng là một lượt đọc LIMS hợp lệ. Trước đây nhánh này
+    // trả lỗi sớm nên giao diện không có mốc xác nhận mới, dù LIMS đã được quét xong.
+    if (!rows.length) {
+      const syncedAt = new Date();
+      const detail = auditDetailWithPosition(
+        user,
+        `Đọc ${sourceCount} dòng LIMS, không có mẫu Không Đạt của PX Vận hành 1`
+      );
+      await audit(user.id, "SYNC_OIL_ANALYSIS_FROM_LIMS", "OilAnalysisFailure", undefined, detail, {
+        durable: true,
+        saveToAuditLog: true,
+        afterData: { sourceCount, total: 0, created: 0, updated: 0, opinionChanged: 0, unchanged: 0, skipped: 0 },
+        changedFields: ["sourceCount", "total", "created", "updated", "opinionChanged", "unchanged", "skipped"],
+      });
+      return ok({
+        total: 0,
+        created: 0,
+        updated: 0,
+        opinionChanged: 0,
+        unchanged: 0,
+        skipped: 0,
+        errors: [],
+        sync: {
+          id: `pending-${syncedAt.getTime()}`,
+          syncedAt: syncedAt.toISOString(),
+          syncedBy: user.name ?? user.email ?? "Không xác định",
+          position: user.currentPosition ?? user.position ?? null,
+          detail,
+          sourceCount,
+          total: 0,
+          created: 0,
+          updated: 0,
+          opinionChanged: 0,
+          unchanged: 0,
+          skipped: 0,
+        },
+      });
+    }
 
     const seen = new Set<string>();
     const errors: string[] = [];

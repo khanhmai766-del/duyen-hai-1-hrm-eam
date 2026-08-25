@@ -203,9 +203,13 @@ export default function OilAnalysisPage() {
       if (!result?.ok) {
         const message = result?.message || "Không lấy được dữ liệu từ LIMS";
         setSyncIssue({ code: result?.code, message, url: result?.sourceUrl ?? result?.qlvtUrl });
-        // "Không có mẫu Không Đạt" là tin tốt, không phải lỗi.
+        // "Không có mẫu Không Đạt" là tin tốt, nhưng vẫn phải lưu mốc đã quét
+        // để trạng thái/audit phản ánh lần kiểm tra vừa hoàn tất.
         if (result?.code === "LIMS_NO_FAILURE") {
-          toast.success(message);
+          setStage("saving");
+          const saved = await importFromLims.mutateAsync({ rows: [], sourceCount: result.sourceCount });
+          toast.success(`Đã đọc ${result.sourceCount ?? 0} phiếu LIMS. Không có mẫu Không Đạt của ${TARGET_DON_VI}.`);
+          if (saved.errors.length) toast.warning(saved.errors.slice(0, 3).join("; "));
           return;
         }
         throw new Error(message);
