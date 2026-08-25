@@ -44,6 +44,7 @@ export const ACTION_CONFIG: Record<string, ActionConfig> = Object.fromEntries([
   ["DEACTIVATE_USER", { category: "SYSTEM", saveToAuditLog: true, label: "Khoá người dùng" }],
   ["ACTIVATE_USER", { category: "SYSTEM", saveToAuditLog: true, label: "Mở khoá người dùng" }],
   ["IMPORT_USERS", { category: "SYSTEM", saveToAuditLog: true, label: "Import người dùng" }],
+  ["SYNC_OIL_ANALYSIS_FROM_LIMS", { category: "SYSTEM", saveToAuditLog: true, label: "Đồng bộ kết quả phân tích dầu từ LIMS" }],
 ]) as Record<string, ActionConfig>;
 
 function inferCategory(action: string): ActivityLogCategory {

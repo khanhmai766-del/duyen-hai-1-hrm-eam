@@ -189,7 +189,14 @@ export async function POST(req: NextRequest) {
       user,
       `Đọc ${sourceCount} dòng LIMS, ghi nhận ${parsed.length} mẫu Không Đạt (${created} phiếu mới, ${updated} phiếu đã thay đổi, ${opinionChanged} phiếu đổi đánh giá/ý kiến, ${unchanged} phiếu không đổi), bỏ qua ${errors.length} dòng không hợp lệ`
     );
-    await audit(user.id, "SYNC_OIL_ANALYSIS_FROM_LIMS", "OilAnalysisFailure", undefined, detail, { durable: true });
+    await audit(user.id, "SYNC_OIL_ANALYSIS_FROM_LIMS", "OilAnalysisFailure", undefined, detail, {
+      durable: true,
+      // Lưu cả vào Audit hệ thống để quản trị viên có dấu vết lâu dài, ngoài
+      // Activity Log dùng cho chip trạng thái đồng bộ.
+      saveToAuditLog: true,
+      afterData: { sourceCount, total: parsed.length, created, updated, opinionChanged, unchanged, skipped: errors.length },
+      changedFields: ["sourceCount", "total", "created", "updated", "opinionChanged", "unchanged", "skipped"],
+    });
 
     return ok({
       total: parsed.length,
