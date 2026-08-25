@@ -7,7 +7,7 @@ import { limsText, parseLimsDate, parseLimsDateTime } from "@/lib/lims-parse";
 export const dynamic = "force-dynamic";
 
 const SYNC_DETAIL_RE =
-  /Đọc (\d+) dòng LIMS, ghi nhận (\d+) mẫu Không Đạt \((\d+) phiếu mới, (\d+) phiếu đã có, (\d+) phiếu đổi đánh giá\/ý kiến\), bỏ qua (\d+) dòng không hợp lệ/;
+  /Đọc (\d+) dòng LIMS, ghi nhận (\d+) mẫu Không Đạt \((\d+) phiếu mới, (\d+) phiếu đã thay đổi, (\d+) phiếu đổi đánh giá\/ý kiến, (\d+) phiếu không đổi\), bỏ qua (\d+) dòng không hợp lệ/;
 
 function syncCountsFromDetail(detail: string | null) {
   const match = detail?.match(SYNC_DETAIL_RE);
@@ -18,7 +18,8 @@ function syncCountsFromDetail(detail: string | null) {
     created: Number(match[3]),
     updated: Number(match[4]),
     opinionChanged: Number(match[5]),
-    skipped: Number(match[6]),
+    unchanged: Number(match[6]),
+    skipped: Number(match[7]),
   };
 }
 
@@ -123,21 +124,40 @@ export async function POST(req: NextRequest) {
 
     const existing = await prisma.oilAnalysisFailure.findMany({
       where: { limsId: { in: parsed.map((item) => item.limsId) } },
-      select: { limsId: true, danhGia: true, ykienPkt: true, ykienQlvh: true, ngayTraKq: true },
+      select: {
+        limsId: true, soPhieu: true, khuVuc: true, donVi: true, tenMau: true,
+        ngayLayMau: true, danhGia: true, ykienPkt: true, ykienQlvh: true, ngayTraKq: true,
+      },
     });
     const existingByLimsId = new Map(existing.map((item) => [item.limsId, item]));
 
     const syncedAt = new Date();
     let created = 0;
     let updated = 0;
+    let unchanged = 0;
     // Phiếu đã có nhưng LIMS vừa bổ sung/sửa ý kiến — đáng chú ý hơn là chỉ "updated".
     let opinionChanged = 0;
 
     await prisma.$transaction(
-      parsed.map((item) => {
+      parsed.flatMap((item) => {
         const current = existingByLimsId.get(item.limsId);
-        if (!current) created += 1;
-        else {
+        if (!current) {
+          created += 1;
+        } else {
+          const sameRecord =
+            current.soPhieu === item.soPhieu &&
+            current.khuVuc === item.khuVuc &&
+            current.donVi === item.donVi &&
+            current.tenMau === item.tenMau &&
+            current.ngayLayMau?.getTime() === item.ngayLayMau?.getTime() &&
+            current.danhGia === item.danhGia &&
+            current.ykienPkt === item.ykienPkt &&
+            current.ykienQlvh === item.ykienQlvh &&
+            current.ngayTraKq?.getTime() === item.ngayTraKq?.getTime();
+          if (sameRecord) {
+            unchanged += 1;
+            return [];
+          }
           updated += 1;
           const sameOpinion =
             current.ykienPkt === item.ykienPkt &&
@@ -145,7 +165,7 @@ export async function POST(req: NextRequest) {
             current.danhGia === item.danhGia;
           if (!sameOpinion) opinionChanged += 1;
         }
-        return prisma.oilAnalysisFailure.upsert({
+        return [prisma.oilAnalysisFailure.upsert({
           where: { limsId: item.limsId },
           // firstSeenAt chỉ đặt lúc tạo — giữ nguyên khi cập nhật để biết phiếu về từ bao giờ.
           create: { ...item, firstSeenAt: syncedAt, syncedAt },
@@ -161,21 +181,22 @@ export async function POST(req: NextRequest) {
             ngayTraKq: item.ngayTraKq,
             syncedAt,
           },
-        });
+        })];
       })
     );
 
     const detail = auditDetailWithPosition(
       user,
-      `Đọc ${sourceCount} dòng LIMS, ghi nhận ${parsed.length} mẫu Không Đạt (${created} phiếu mới, ${updated} phiếu đã có, ${opinionChanged} phiếu đổi đánh giá/ý kiến), bỏ qua ${errors.length} dòng không hợp lệ`
+      `Đọc ${sourceCount} dòng LIMS, ghi nhận ${parsed.length} mẫu Không Đạt (${created} phiếu mới, ${updated} phiếu đã thay đổi, ${opinionChanged} phiếu đổi đánh giá/ý kiến, ${unchanged} phiếu không đổi), bỏ qua ${errors.length} dòng không hợp lệ`
     );
-    await audit(user.id, "SYNC_OIL_ANALYSIS_FROM_LIMS", "OilAnalysisFailure", undefined, detail);
+    await audit(user.id, "SYNC_OIL_ANALYSIS_FROM_LIMS", "OilAnalysisFailure", undefined, detail, { durable: true });
 
     return ok({
       total: parsed.length,
       created,
       updated,
       opinionChanged,
+      unchanged,
       skipped: errors.length,
       errors,
       sync: {
@@ -189,6 +210,7 @@ export async function POST(req: NextRequest) {
         created,
         updated,
         opinionChanged,
+        unchanged,
         skipped: errors.length,
       },
     });

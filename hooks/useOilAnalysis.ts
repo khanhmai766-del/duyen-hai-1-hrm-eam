@@ -50,6 +50,7 @@ export interface OilAnalysisSyncStatus {
   created?: number;
   updated?: number;
   opinionChanged?: number;
+  unchanged?: number;
   skipped?: number;
 }
 
@@ -58,6 +59,7 @@ export interface OilAnalysisImportResult {
   created: number;
   updated: number;
   opinionChanged: number;
+  unchanged: number;
   skipped: number;
   errors: string[];
   sync: OilAnalysisSyncStatus;
@@ -89,6 +91,9 @@ export function useImportOilAnalysisFromLims() {
         data: [result.sync, ...(current?.data ?? [])].slice(0, 5),
         meta: current?.meta ?? null,
       }));
+      // Bản ghi audit đã được API cam kết trước khi trả response; lấy lại ID và
+      // thời điểm thực từ server để chip không còn giữ mốc cũ sau lần đồng bộ.
+      void qc.invalidateQueries({ queryKey: ["oil-analysis-sync-status"] });
       qc.invalidateQueries({ queryKey: ["oil-analysis-failures"] });
     },
   });

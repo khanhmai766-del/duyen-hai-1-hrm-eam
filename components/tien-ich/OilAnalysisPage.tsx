@@ -217,7 +217,9 @@ export default function OilAnalysisPage() {
       setStage("saving");
       const saved = await importFromLims.mutateAsync({ rows, sourceCount: result.sourceCount });
       toast.success(
-        `Đã đọc ${result.sourceCount ?? rows.length} phiếu LIMS, ghi nhận ${saved.total} mẫu Không Đạt của ${TARGET_DON_VI}: ${saved.created} phiếu mới, ${saved.opinionChanged} phiếu đổi đánh giá/ý kiến.`
+        saved.created || saved.updated
+          ? `Đã đọc ${result.sourceCount ?? rows.length} phiếu LIMS: ${saved.created} phiếu mới, ${saved.updated} phiếu thay đổi (${saved.opinionChanged} phiếu đổi đánh giá/ý kiến).`
+          : `Đã đọc ${result.sourceCount ?? rows.length} phiếu LIMS. ${saved.unchanged} phiếu Không Đạt của ${TARGET_DON_VI} không có thay đổi.`
       );
       if (saved.errors.length) toast.warning(saved.errors.slice(0, 3).join("; "));
     } catch (error) {

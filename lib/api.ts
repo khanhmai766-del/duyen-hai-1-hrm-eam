@@ -113,13 +113,11 @@ export async function audit(
     ipAddress?: string | null;
     userAgent?: string | null;
     saveToAuditLog?: boolean;
+    /** Dùng khi response/phần giao diện phụ thuộc ngay vào mốc audit vừa ghi. */
+    durable?: boolean;
   }
 ) {
-  // Ghi log KHÔNG chặn response: kích hoạt ở chế độ nền (không await) để mutation
-  // trả kết quả ngay, không phải đợi 1-2 insert DB + (tuỳ chọn) upload S3. App chạy
-  // trên Node server (VPS) nên promise nền vẫn hoàn tất sau khi response đã gửi.
-  // Lỗi ghi log là không nghiêm trọng → nuốt qua .catch.
-  void writeActivityLog({
+  const activity = writeActivityLog({
     actorUserId: userId,
     actorName: options?.actorName,
     action,
@@ -135,4 +133,8 @@ export async function audit(
   }).catch(() => {
     // non-fatal
   });
+  // Một vài luồng dùng AuditLog làm nguồn trạng thái (vd. "lần đồng bộ gần nhất").
+  // Các luồng đó phải chờ INSERT xong, nếu không UI có thể báo thành công nhưng vẫn
+  // đọc lại mốc cũ ngay sau response.
+  if (options?.durable) await activity;
 }
