@@ -533,6 +533,8 @@ export async function POST(req: NextRequest) {
     // gửi kèm — nhờ vậy phiếu luôn trỏ đúng node đã khai báo, không thể ráng nhầm.
     // Điểm khai báo ở cấp THƯ MỤC vẫn được chấp nhận (chỉ riêng loại phiếu này).
     let materialRequest: ResolvedMaterialRequest | null = null;
+    // Lý do vượt cổng vật tư; rỗng nghĩa là phiếu ra đúng quy trình (vật tư đã về).
+    let materialGateOverrideReason = "";
     if (body.replacementIds !== undefined && body.replacementIds !== null) {
       const resolved = await resolveMaterialRequest(prisma, body.replacementIds);
       if (typeof resolved === "string") return fail(resolved);
@@ -562,6 +564,50 @@ export async function POST(req: NextRequest) {
         if (open) {
           return fail(
             `Điểm "${open.pointLabel}" đã có số yêu cầu ${open.defect.requestNumber ?? "?"} chưa xử lý xong. Xác nhận để vẫn ra phiếu mới.`,
+            409
+          );
+        }
+      }
+
+      // CỔNG VẬT TƯ — ra SYC khi vật tư đã về, không phải trước.
+      //
+      // Trước đây SYC ra bất cứ lúc nào, nên có cảnh đội sửa chữa sang tới nơi mà vật tư chưa
+      // có. Nay điểm phải gắn một phiếu vật tư đã qua bước xác nhận vật tư lãnh: `receivedAt`
+      // cho luồng Đề xuất và Hiện có, `vhvReceivedAt` cho luồng Ứng (luồng Ứng ghi số lãnh ở
+      // bước VHV lãnh, `receivedAt` mãi tới bước Thống kê xác nhận ĐXVT mới có).
+      //
+      // CẢNH BÁO chứ KHÔNG chặn cứng: hỏng đột xuất là lúc cần ra SYC gấp nhất. Vượt cổng thì
+      // phải nêu lý do và được ghi lại — xem `materialGateOverrideReason` dưới đây.
+      if (body.allowWithoutMaterial) {
+        materialGateOverrideReason = String(body.materialGateReason ?? "").trim();
+        if (!materialGateOverrideReason) {
+          return fail("Vui lòng nêu lý do ra số yêu cầu khi chưa có vật tư");
+        }
+      } else {
+        const pointIds = resolved.rows.map((row) => row.replacementId);
+        const ready = await prisma.materialTicketReplacement.findMany({
+          where: {
+            replacementId: { in: pointIds },
+            ticket: {
+              // Chỉ tính phiếu ĐANG MỞ. Một điểm được thay nhiều lần qua nhiều năm nên nó gắn
+              // rất nhiều phiếu cũ; vật tư của những phiếu đã HOÀN TẤT đã tiêu cho lần thay
+              // trước rồi, không phải vật tư của lần này. Bỏ điều kiện này thì điểm nào từng
+              // thay xong một lần sẽ vĩnh viễn lọt cổng — đúng thứ cổng sinh ra để chặn.
+              status: { notIn: ["HOAN_TAT", "TU_CHOI"] },
+              OR: [{ receivedAt: { not: null } }, { vhvReceivedAt: { not: null } }],
+            },
+          },
+          select: { replacementId: true },
+        });
+        const readyIds = new Set(ready.map((row) => row.replacementId));
+        const missing = resolved.rows.filter((row) => !readyIds.has(row.replacementId));
+        if (missing.length > 0) {
+          const names = missing.slice(0, 3).map((row) => `"${row.pointLabel}"`).join(", ");
+          const more = missing.length > 3 ? ` và ${missing.length - 3} điểm khác` : "";
+          return fail(
+            `Chưa có phiếu vật tư nào xác nhận đã lãnh vật tư cho ${names}${more}.` +
+              ` Hãy lập phiếu đề xuất vật tư và xác nhận vật tư lãnh trước khi ra số yêu cầu.` +
+              ` Trường hợp gấp, xác nhận và nêu lý do để vẫn ra phiếu.`,
             409
           );
         }
@@ -716,6 +762,90 @@ export async function POST(req: NextRequest) {
       });
       return created;
     });
+
+    /**
+     * Neo SYC vừa ra vào các phiếu vật tư đã cấp vật tư cho chính những điểm này.
+     *
+     * Có HAI cửa ra SYC thay thế: từ Danh mục vật tư (chọn nhiều điểm, có thể thuộc nhiều
+     * phiếu) và từ chính phiếu vật tư. Nếu chỉ cửa thứ hai neo `defectId` thì SYC ra từ Danh
+     * mục để lại phiếu vật tư "chưa có SYC" — phiếu vẫn hiện nút Ra SYC và người dùng ra tiếp
+     * phiếu thứ hai cho cùng một lần thay. Neo ở đây, sau khi phiếu đã tạo xong, nên CẢ HAI
+     * cửa đều cho ra kết quả giống nhau.
+     *
+     * Chỉ neo phiếu ĐANG MỞ và CHƯA có SYC: phiếu đã hoàn tất là của lần thay trước, còn phiếu
+     * đã có SYC thì giữ nguyên số cũ chứ không ghi đè.
+     *
+     * Lỗi ở bước này KHÔNG được làm hỏng việc ra phiếu — số đã cấp và đã vào hộp thư đi Google
+     * Sheet rồi, ném lỗi ở đây chỉ khiến người dùng bấm lại và tiêu thêm một số nữa.
+     */
+    if (materialRequest) {
+      try {
+        const materialRequestPointIds = new Set(
+          materialRequest.rows.map((row) => row.replacementId)
+        );
+        const linked = await prisma.materialTicketReplacement.findMany({
+          where: {
+            replacementId: { in: [...materialRequestPointIds] },
+            ticket: {
+              status: { notIn: ["HOAN_TAT", "TU_CHOI"] },
+              defectId: null,
+              repairRequestNumber: null,
+              // ĐÚNG điều kiện mà cổng vật tư đã dùng để cho phiếu này ra: neo vào chính những
+              // phiếu đã mang vật tư về cho lần thay này, không neo bừa vào mọi phiếu đang mở
+              // của điểm (một điểm có thể còn phiếu dở dang chưa lãnh, không liên quan).
+              OR: [{ receivedAt: { not: null } }, { vhvReceivedAt: { not: null } }],
+            },
+          },
+          select: { ticketId: true },
+        });
+        const candidateTicketIds = [...new Set(linked.map((row) => row.ticketId))];
+        // Trùng một điểm chưa đủ: phiếu nhiều điểm chỉ được neo khi Defect chứa TOÀN BỘ
+        // điểm của phiếu. Một Defect vẫn có thể gom nhiều phiếu nếu từng phiếu đều đạt.
+        const allCandidateLinks = candidateTicketIds.length > 0
+          ? await prisma.materialTicketReplacement.findMany({
+              where: { ticketId: { in: candidateTicketIds } },
+              select: { ticketId: true, replacementId: true },
+            })
+          : [];
+        const linksByTicket = new Map<string, string[]>();
+        for (const link of allCandidateLinks) {
+          const pointIds = linksByTicket.get(link.ticketId) ?? [];
+          pointIds.push(link.replacementId);
+          linksByTicket.set(link.ticketId, pointIds);
+        }
+        const ticketIds = candidateTicketIds.filter((ticketId) =>
+          (linksByTicket.get(ticketId) ?? []).every((pointId) => materialRequestPointIds.has(pointId))
+        );
+        if (ticketIds.length > 0) {
+          await prisma.$transaction(async (tx) => {
+            await tx.materialTicket.updateMany({
+              where: {
+                id: { in: ticketIds },
+                status: { notIn: ["HOAN_TAT", "TU_CHOI"] },
+                defectId: null,
+                repairRequestNumber: null,
+                OR: [{ receivedAt: { not: null } }, { vhvReceivedAt: { not: null } }],
+              },
+              data: { defectId: defect.id, repairRequestNumber: defect.requestNumber },
+            });
+            // Trước đây luồng Đề xuất cần action `repairRequest` nhập tay để qua bước này.
+            // Defect thật đã được tạo và neo thành công thì chuyển thẳng sang Sử dụng vật tư.
+            await tx.materialTicket.updateMany({
+              where: {
+                id: { in: ticketIds },
+                type: "DE_XUAT",
+                status: "CHO_PHIEU_YCSC",
+                defectId: defect.id,
+              },
+              data: { status: "SU_DUNG_VAT_TU" },
+            });
+          });
+        }
+      } catch {
+        // bỏ qua — xem chú thích trên
+      }
+    }
+
     await audit(
       user.id,
       materialRequest ? "CREATE_MATERIAL_DEFECT" : "CREATE_DEFECT",
@@ -724,7 +854,10 @@ export async function POST(req: NextRequest) {
       materialRequest
         ? auditDetailWithPosition(
             user,
-            `${defectAuditReference("Tạo phiếu", defect)} · SYC thay thế ${materialRequest.rows.length} điểm`
+            `${defectAuditReference("Tạo phiếu", defect)} · SYC thay thế ${materialRequest.rows.length} điểm` +
+              // Ghi rõ vào nhật ký khi phiếu ra mà chưa có vật tư: đây là ngoại lệ có chủ đích,
+              // phải đếm được cuối tháng chứ không lặng lẽ trôi qua.
+              (materialGateOverrideReason ? ` · RA KHI CHƯA CÓ VẬT TƯ — lý do: ${materialGateOverrideReason}` : "")
           )
         : auditDetailWithPosition(user, defectAuditReference("Tạo phiếu", defect))
     );

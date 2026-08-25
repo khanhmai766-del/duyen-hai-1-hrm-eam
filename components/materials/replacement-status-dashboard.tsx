@@ -9,12 +9,14 @@ import {
   Clock3,
   FlaskConical,
   MapPin,
+  Wrench,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
   REPL_DUE,
   REPL_DUE_ORDER,
+  REPLACEMENT_IN_PROGRESS,
   daysUntilDue,
   replacementDueStatus,
   replacementIntervalLabel,
@@ -39,18 +41,28 @@ export type ReplacementStatusPoint = {
   intervalNote: string | null;
   quantity: number;
   deviceCount: number;
+  inProgressTickets?: Array<{ id: string; number: string; repairRequestNumber: string | null }>;
   isDemo?: boolean;
 };
 
-type StatusFilter = "ALL" | ReplDueKey;
+type DisplayStatus = ReplDueKey | "IN_PROGRESS";
+type StatusFilter = "ALL" | DisplayStatus;
+const STATUS_ORDER: DisplayStatus[] = ["IN_PROGRESS", ...REPL_DUE_ORDER];
 
-const STATUS_STYLE: Record<ReplDueKey, {
+const STATUS_STYLE: Record<DisplayStatus, {
   icon: typeof AlertTriangle;
   card: string;
   iconWrap: string;
   value: string;
   row: string;
 }> = {
+  IN_PROGRESS: {
+    icon: Wrench,
+    card: "border-blue-200 bg-[linear-gradient(135deg,#fff_15%,#eff6ff)]",
+    iconWrap: "bg-blue-100 text-blue-600",
+    value: "text-blue-700",
+    row: "border-l-blue-500",
+  },
   OVERDUE: {
     icon: AlertTriangle,
     card: "border-rose-200 bg-[linear-gradient(135deg,#fff_15%,#fff1f2)]",
@@ -74,7 +86,18 @@ const STATUS_STYLE: Record<ReplDueKey, {
   },
 };
 
+function displayStatus(point: ReplacementStatusPoint): DisplayStatus {
+  return (point.inProgressTickets?.length ?? 0) > 0
+    ? "IN_PROGRESS"
+    : replacementDueStatus(point.nextDueAt);
+}
+
+function displayStatusLabel(status: DisplayStatus) {
+  return status === "IN_PROGRESS" ? REPLACEMENT_IN_PROGRESS.label : REPL_DUE[status].label;
+}
+
 function dueLabel(point: ReplacementStatusPoint) {
+  if ((point.inProgressTickets?.length ?? 0) > 0) return REPLACEMENT_IN_PROGRESS.label;
   const days = daysUntilDue(point.nextDueAt);
   if (days < 0) return `Quá hạn ${Math.abs(days)} ngày`;
   if (days === 0) return "Đến hạn hôm nay";
@@ -92,19 +115,20 @@ export function ReplacementStatusDashboard({
 }) {
   const [filter, setFilter] = React.useState<StatusFilter>("ALL");
   const counts = React.useMemo(() => {
-    const value = { OVERDUE: 0, DUE_SOON: 0, OK: 0 };
-    for (const point of points) value[replacementDueStatus(point.nextDueAt)] += 1;
+    const value = { OVERDUE: 0, DUE_SOON: 0, OK: 0, IN_PROGRESS: 0 };
+    for (const point of points) value[displayStatus(point)] += 1;
     return value;
   }, [points]);
   const filtered = React.useMemo(
     () =>
       [...points]
-        .filter((point) => filter === "ALL" || replacementDueStatus(point.nextDueAt) === filter)
+        .filter((point) => filter === "ALL" || displayStatus(point) === filter)
         .sort((a, b) => new Date(a.nextDueAt).getTime() - new Date(b.nextDueAt).getTime()),
     [filter, points]
   );
   const total = points.length;
-  const safeRate = total ? Math.round((counts.OK / total) * 100) : 0;
+  const ratedTotal = total - counts.IN_PROGRESS;
+  const safeRate = ratedTotal ? Math.round((counts.OK / ratedTotal) * 100) : 0;
   const demoCount = points.filter((point) => point.isDemo).length;
   React.useEffect(() => {
     if (!focusPointId || isLoading || !filtered.some((point) => point.id === focusPointId)) return;
@@ -159,12 +183,12 @@ export function ReplacementStatusDashboard({
                 <span>{counts.OVERDUE + counts.DUE_SOON} cần chú ý</span>
               </div>
               <div className="flex h-2.5 overflow-hidden rounded-full bg-white/15">
-                {REPL_DUE_ORDER.map((key) => (
+                {STATUS_ORDER.map((key) => (
                   <span
                     key={key}
                     style={{
                       width: `${total ? (counts[key] / total) * 100 : 0}%`,
-                      backgroundColor: REPL_DUE[key].dot,
+                      backgroundColor: key === "IN_PROGRESS" ? REPLACEMENT_IN_PROGRESS.dot : REPL_DUE[key].dot,
                     }}
                   />
                 ))}
@@ -185,8 +209,8 @@ export function ReplacementStatusDashboard({
         </Card>
       </div>
 
-      <div className="grid gap-3 md:grid-cols-3">
-        {REPL_DUE_ORDER.map((key) => {
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        {STATUS_ORDER.map((key) => {
           const style = STATUS_STYLE[key];
           const Icon = style.icon;
           return (
@@ -206,8 +230,9 @@ export function ReplacementStatusDashboard({
                 </div>
                 <span className={cn("text-3xl font-black tracking-tight", style.value)}>{counts[key]}</span>
               </div>
-              <div className="mt-3 font-bold text-ink">{REPL_DUE[key].label}</div>
+              <div className="mt-3 font-bold text-ink">{displayStatusLabel(key)}</div>
               <div className="mt-0.5 text-xs text-muted-foreground">
+                {key === "IN_PROGRESS" && "Đã có phiếu vật tư, tạm dừng tính cảnh báo quá hạn"}
                 {key === "OVERDUE" && "Đã qua ngày đến hạn, cần ưu tiên xử lý"}
                 {key === "DUE_SOON" && "Còn tối đa 30 ngày trước thời điểm thay"}
                 {key === "OK" && "Còn trên 30 ngày trước thời điểm thay"}
@@ -235,7 +260,7 @@ export function ReplacementStatusDashboard({
             >
               Tất cả <span className="ml-1 rounded-full bg-current/10 px-1.5 text-xs">{total}</span>
             </Button>
-            {REPL_DUE_ORDER.map((key) => (
+            {STATUS_ORDER.map((key) => (
               <Button
                 key={key}
                 type="button"
@@ -244,8 +269,8 @@ export function ReplacementStatusDashboard({
                 className="h-8 rounded-full"
                 onClick={() => setFilter(key)}
               >
-                <span className="mr-1.5 h-1.5 w-1.5 rounded-full" style={{ backgroundColor: REPL_DUE[key].dot }} />
-                {REPL_DUE[key].label} {counts[key]}
+                <span className="mr-1.5 h-1.5 w-1.5 rounded-full" style={{ backgroundColor: key === "IN_PROGRESS" ? REPLACEMENT_IN_PROGRESS.dot : REPL_DUE[key].dot }} />
+                {displayStatusLabel(key)} {counts[key]}
               </Button>
             ))}
           </div>
@@ -260,7 +285,7 @@ export function ReplacementStatusDashboard({
         ) : (
           <div className="divide-y divide-border">
             {filtered.map((point) => {
-              const status = replacementDueStatus(point.nextDueAt);
+              const status = displayStatus(point);
               const style = STATUS_STYLE[status];
               return (
                 <div
@@ -288,6 +313,11 @@ export function ReplacementStatusDashboard({
                       )}
                     </div>
                     <div className="mt-0.5 font-mono text-xs text-navy">{point.materialCode}</div>
+                    {(point.inProgressTickets ?? []).map((ticket) => (
+                      <div key={ticket.id} className="mt-1 text-xs font-medium text-blue-700">
+                        {ticket.number}{ticket.repairRequestNumber ? ` · SYC ${ticket.repairRequestNumber}` : ""}
+                      </div>
+                    ))}
                   </div>
 
                   <div className="min-w-0 text-sm">
@@ -321,7 +351,10 @@ export function ReplacementStatusDashboard({
                   </div>
 
                   <div className="lg:text-right">
-                    <span className={cn("inline-flex rounded-full px-2.5 py-1 text-xs font-bold", REPL_DUE[status].badge)}>
+                    <span className={cn(
+                      "inline-flex rounded-full px-2.5 py-1 text-xs font-bold",
+                      status === "IN_PROGRESS" ? REPLACEMENT_IN_PROGRESS.badge : REPL_DUE[status].badge,
+                    )}>
                       {dueLabel(point)}
                     </span>
                     <div className="mt-1 text-xs text-muted-foreground">

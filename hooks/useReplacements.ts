@@ -22,6 +22,12 @@ export interface ReplacementItem extends MaterialReplacement {
   material: ReplacementMaterial & { imageUrl: string | null };
   device: ReplacementDevice | null;
   _count: { logs: number };
+  /** Phiếu vật tư đã gắn với điểm nhưng chưa quyết toán: điểm không còn tính quá hạn. */
+  inProgressTickets?: Array<{
+    id: string;
+    number: string;
+    repairRequestNumber: string | null;
+  }>;
 }
 
 export interface ReplacementDetail extends MaterialReplacement {
@@ -36,7 +42,7 @@ export interface ReplacementFilters {
   materialId?: string;
   /** Chỉ lấy điểm thuộc cương vị đang lọc ở Danh mục vật tư. */
   managingPosition?: string;
-  due?: string; // OVERDUE | DUE_SOON | OK | WARN | ALL
+  due?: string; // IN_PROGRESS | OVERDUE | DUE_SOON | OK | WARN | ALL
 }
 
 export interface ReplacementLogItem extends MaterialReplacementLog {

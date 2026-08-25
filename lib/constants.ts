@@ -673,6 +673,13 @@ export const REPL_DUE = {
   OK: { label: "Còn hạn", badge: "bg-green-100 text-green-800", dot: "#16A34A" },
 } as const;
 
+/** Điểm đã có phiếu vật tư phục vụ nhưng phiếu chưa quyết toán. */
+export const REPLACEMENT_IN_PROGRESS = {
+  label: "Đang thay thế",
+  badge: "bg-blue-100 text-blue-800",
+  dot: "#2563EB",
+} as const;
+
 /**
  * Cùng ba mốc thời gian như REPL_DUE nhưng dành cho điểm CHỈ LẤY MẪU định kỳ:
  * tông xanh dương và chữ theo nghiệp vụ lấy mẫu, để không lẫn với vật tư quá

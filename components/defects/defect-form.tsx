@@ -75,6 +75,13 @@ export type DefectMaterialRequestSeed = {
     materialUnit: string;
   }>;
   suggestedContent: string;
+  /** Giá trị mồi chỉ dùng cho dữ liệu demo local; production không gửi khối này. */
+  demoDefaults?: {
+    condition: "A" | "B";
+    severity: "1" | "2" | "3" | "4";
+    severityCriteria: string[];
+    shiftLeaderId: string;
+  };
 };
 
 export function DefectForm({
@@ -103,7 +110,8 @@ export function DefectForm({
   section?: DefectSectionKey;
   lockDevice?: boolean;
   showDeviceHistory?: boolean;
-  onDone?: () => void;
+  /** Nhận luôn phiếu vừa tạo để nơi gọi neo nó vào hồ sơ của mình (vd phiếu vật tư). */
+  onDone?: (created?: DefectItem) => void;
   onMappingSaved?: (defect: DefectItem) => void;
   /** Báo cho panel cha biết lúc nào cần nới rộng để đặt lịch sử cạnh form. */
   onDeviceHistoryVisibilityChange?: (visible: boolean) => void;
@@ -188,9 +196,9 @@ export function DefectForm({
     deviceSystem: initialDevice?.system ?? "",
     deviceSystemSeq: initialDevice?.systemSeq ?? "",
     system: defect?.system ?? initialDevice?.managingPosition ?? "",
-    severity: defect?.severity ?? "",
-    severityCriteria: defect?.severityCriteria ?? [],
-    condition: defect?.condition ?? "",
+    severity: defect?.severity ?? initialMaterialRequest?.demoDefaults?.severity ?? "",
+    severityCriteria: defect?.severityCriteria ?? initialMaterialRequest?.demoDefaults?.severityCriteria ?? [],
+    condition: defect?.condition ?? initialMaterialRequest?.demoDefaults?.condition ?? "",
     fireSafetyImpact: defect?.fireSafetyImpact ?? "Không",
     environmentSafetyImpact: defect?.environmentSafetyImpact ?? "Không",
     // Phiếu mới để VHV chủ động chọn Cơ/Điện để tránh ghi nhầm Sheet — trừ SYC
@@ -208,7 +216,7 @@ export function DefectForm({
     reminderCount: defect?.reminderCount ?? 0,
     lastRemindedAt: toDateInput(defect?.lastRemindedAt),
     postRepairAwaitingMaterial: defect?.postRepairAwaitingMaterial ?? false,
-    shiftLeaderId: defect?.shiftLeaderId ?? "",
+    shiftLeaderId: defect?.shiftLeaderId ?? initialMaterialRequest?.demoDefaults?.shiftLeaderId ?? "",
     note: defect?.note ?? "",
     repeatedRepairRaw: defect?.repeatedRepairRaw ?? "",
     sourceDeviceRaw: defect?.sourceDeviceRaw ?? "",
@@ -645,11 +653,12 @@ export function DefectForm({
       if (isEdit) {
         await update.mutateAsync({ id: defect!.id, ...payload });
         toast.success("Đã cập nhật khiếm khuyết");
+        onDone?.();
       } else {
         const created = await create.mutateAsync(payload);
         showCreatedToast(created);
+        onDone?.(created);
       }
-      onDone?.();
     } catch (e) {
       const message = (e as Error).message;
       // Điểm đã có phiếu dang dở — hỏi lại rồi ra phiếu mới nếu người dùng đồng ý.
@@ -658,7 +667,32 @@ export function DefectForm({
         try {
           const created = await create.mutateAsync({ ...payload, allowDuplicate: true });
           showCreatedToast(created);
-          onDone?.();
+          onDone?.(created);
+        } catch (retryError) {
+          toast.error((retryError as Error).message);
+        }
+        return;
+      }
+      // Cổng vật tư: điểm chưa có phiếu vật tư nào xác nhận đã lãnh. Cho vượt nhưng BẮT
+      // NHẬP LÝ DO — lý do được ghi vào nhật ký để cuối tháng đếm được số ca ngoại lệ.
+      if (materialRequest && !isEdit && message.includes("Trường hợp gấp")) {
+        const reason = window.prompt(
+          `${message}\n\nNêu lý do ra số yêu cầu khi chưa có vật tư:`,
+          ""
+        );
+        if (reason === null) return;
+        if (!reason.trim()) {
+          toast.error("Vui lòng nêu lý do ra số yêu cầu khi chưa có vật tư");
+          return;
+        }
+        try {
+          const created = await create.mutateAsync({
+            ...payload,
+            allowWithoutMaterial: true,
+            materialGateReason: reason.trim(),
+          });
+          showCreatedToast(created);
+          onDone?.(created);
         } catch (retryError) {
           toast.error((retryError as Error).message);
         }

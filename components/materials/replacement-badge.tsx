@@ -1,6 +1,6 @@
-import { FlaskConical } from "lucide-react";
+import { FlaskConical, Wrench } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { REPL_DUE, SAMPLING_DUE, replacementDueStatus, daysUntilDue, type ReplDueKey } from "@/lib/constants";
+import { REPLACEMENT_IN_PROGRESS, REPL_DUE, SAMPLING_DUE, replacementDueStatus, daysUntilDue, type ReplDueKey } from "@/lib/constants";
 
 /** Diễn giải số ngày còn lại đến hạn thay thế. */
 function replDueText(nextDueAt: Date | string): string {
@@ -9,6 +9,21 @@ function replDueText(nextDueAt: Date | string): string {
   if (d === 0) return "Đến hạn hôm nay";
   if (d === 1) return "Còn 1 ngày";
   return `Còn ${d} ngày`;
+}
+
+export function ReplacementInProgressBadge({ className }: { className?: string }) {
+  return (
+    <span
+      className={cn(
+        "inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-semibold",
+        REPLACEMENT_IN_PROGRESS.badge,
+        className,
+      )}
+    >
+      <Wrench className="h-3 w-3" />
+      {REPLACEMENT_IN_PROGRESS.label}
+    </span>
+  );
 }
 
 /** Diễn giải số ngày cho điểm CHỈ LẤY MẪU — không dùng chữ "quá hạn thay thế". */

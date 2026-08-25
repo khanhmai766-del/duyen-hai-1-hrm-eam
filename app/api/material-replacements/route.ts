@@ -19,6 +19,11 @@ import {
   canViewMaterialReplacement,
 } from "@/lib/material-replacement-access";
 import { positionViewScopeMeta, resolvePositionViewScope } from "@/lib/position-data-scope";
+import { materialTicketReference } from "@/lib/material-ticket-sequence";
+import {
+  replacementTargetKey,
+  type ReplacementTicketProgress,
+} from "@/lib/material-ticket-replacement-settlement";
 
 export const dynamic = "force-dynamic";
 
@@ -43,9 +48,10 @@ const INCLUDE = {
   _count: { select: { logs: true } },
 } satisfies Prisma.MaterialReplacementInclude;
 
-function mapPoint(point: any) {
+function mapPoint(point: any, inProgressTickets: ReplacementTicketProgress[] = []) {
   return {
     ...point,
+    inProgressTickets,
     deviceId: point.deviceSeq ?? null,
     device: equipmentNodeToDevice(point.device),
     material: point.material
@@ -102,26 +108,68 @@ export async function GET(req: NextRequest) {
         (!managingPosition || positionsMatch(point.managingPositionCode ?? point.managingPosition, managingPosition))
     );
 
+    // Liên kết cũ có thể đang neo vào dòng khai báo (isActive=false), trong khi lịch chỉ trả
+    // điểm theo dõi đang hoạt động. Ghép theo đúng khóa vật tư + thiết bị/vị trí để trạng thái
+    // "Đang thay thế" vẫn chính xác cho cả dữ liệu đã tạo trước giai đoạn 3.
+    const openLinks = visiblePoints.length > 0
+      ? await prisma.materialTicketReplacement.findMany({
+          where: {
+            ticket: { settledAt: null, status: { notIn: ["HOAN_TAT", "TU_CHOI"] } },
+          },
+          select: {
+            replacement: {
+              select: { materialId: true, deviceSeq: true, system: true, location: true },
+            },
+            ticket: {
+              select: {
+                id: true,
+                sequenceMonth: true,
+                sequenceNumber: true,
+                sequenceScope: true,
+                repairRequestNumber: true,
+              },
+            },
+          },
+        })
+      : [];
+    const progressByTarget = new Map<string, ReplacementTicketProgress[]>();
+    for (const link of openLinks) {
+      const key = replacementTargetKey(link.replacement);
+      const list = progressByTarget.get(key) ?? [];
+      if (!list.some((ticket) => ticket.id === link.ticket.id)) {
+        list.push({
+          id: link.ticket.id,
+          number: materialTicketReference(link.ticket),
+          repairRequestNumber: link.ticket.repairRequestNumber,
+        });
+      }
+      progressByTarget.set(key, list);
+    }
+    const progressOf = (point: (typeof visiblePoints)[number]) =>
+      progressByTarget.get(replacementTargetKey(point)) ?? [];
+
     // Điểm chỉ lấy mẫu định kỳ không tính vào bộ đếm cảnh báo thay thế: trễ kỳ
     // lấy mẫu nhẹ hơn hẳn quá hạn thay vật tư, gộp chung sẽ làm loãng cảnh báo.
-    const counts = { OVERDUE: 0, DUE_SOON: 0, OK: 0, SAMPLING: 0 };
+    const counts = { OVERDUE: 0, DUE_SOON: 0, OK: 0, SAMPLING: 0, IN_PROGRESS: 0 };
     for (const p of visiblePoints) {
-      if (p.samplingOnly) counts.SAMPLING++;
+      if (progressOf(p).length > 0) counts.IN_PROGRESS++;
+      else if (p.samplingOnly) counts.SAMPLING++;
       else counts[replacementDueStatus(p.nextDueAt)]++;
     }
 
     let filtered = visiblePoints;
     if (due && due !== "ALL") {
-      if (due === "SAMPLING") filtered = visiblePoints.filter((p) => p.samplingOnly);
+      if (due === "IN_PROGRESS") filtered = visiblePoints.filter((p) => progressOf(p).length > 0);
+      else if (due === "SAMPLING") filtered = visiblePoints.filter((p) => progressOf(p).length === 0 && p.samplingOnly);
       // WARN nuôi chuông cảnh báo ở thanh trên cùng nên loại điểm chỉ lấy mẫu.
       else if (due === "WARN") {
-        filtered = visiblePoints.filter((p) => !p.samplingOnly && replacementDueStatus(p.nextDueAt) !== "OK");
+        filtered = visiblePoints.filter((p) => progressOf(p).length === 0 && !p.samplingOnly && replacementDueStatus(p.nextDueAt) !== "OK");
       } else {
-        filtered = visiblePoints.filter((p) => !p.samplingOnly && replacementDueStatus(p.nextDueAt) === due);
+        filtered = visiblePoints.filter((p) => progressOf(p).length === 0 && !p.samplingOnly && replacementDueStatus(p.nextDueAt) === due);
       }
     }
 
-    return ok(filtered.map(mapPoint), {
+    return ok(filtered.map((point) => mapPoint(point, progressOf(point))), {
       total: filtered.length,
       counts,
       warn: counts.OVERDUE + counts.DUE_SOON,

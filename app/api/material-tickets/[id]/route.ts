@@ -15,10 +15,12 @@ import { linkTicketTrucks, unlinkTicketTrucks, type TruckInput } from "@/lib/che
 import { countUsagePhotos, deleteUsagePhotos } from "@/lib/material-usage-photo";
 import { deleteDeliveryPhotos, deliveryPhotoLotsOfTicket, loadDeliveryPhotoBuffer, purgeSettledLotPhotos, uploadDeliveryPhoto, MISSING_DELIVERY_PHOTO_MESSAGE } from "@/lib/material-delivery-photo";
 import { keyFromPublicUrl } from "@/lib/s3";
+import { syncTicketReplacementLinks, type LinkablePoint } from "@/lib/material-ticket-replacement-link";
 import { MIN_USAGE_PHOTOS, MISSING_USAGE_PHOTO_MESSAGE, usesHandwrittenBbnt, CHEMICAL_TICKET_TYPE, COMMON_MATERIAL_POSITION, GAS_RETURN_STATUS, isChemicalFlowTicket, isGasCylinderCategory, isGasCylinderTicket, isOtherMaterialAdvanceTicket, isOtherMaterialTicketType, materialTicketRequiresRecovery, OTHER_MATERIAL_ADVANCE_TICKET_TYPE, OTHER_MATERIAL_TICKET_TYPE, recoveryRequiredForReason, ticketReasonAllowed, TICKET_MATERIAL_CATEGORIES, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
 import { positionsMatch } from "@/lib/position-catalog";
 import { replacementPointDisplayLabel, replacementPointSelectionKey } from "@/lib/material-replacement-display";
 import { receiveOtherMaterial } from "@/lib/other-material-stock";
+import { recordSettledTicketReplacements } from "@/lib/material-ticket-replacement-settlement";
 
 export const dynamic = "force-dynamic";
 
@@ -66,9 +68,6 @@ const normalizeReceiptSource = (source: unknown): "ERP" | "EXISTING" =>
 
 const receiptSourceLabel = (source: unknown) =>
   normalizeReceiptSource(source) === "ERP" ? "lãnh kho DH1" : "lãnh ngoài";
-
-const sameTicketNumber = (left?: string | null, right?: string | null) =>
-  !!left?.trim() && !!right?.trim() && left.trim().toLocaleLowerCase("vi") === right.trim().toLocaleLowerCase("vi");
 
 /** Sửa/Xoá phiếu: ADMIN, cương vị được cấu hình bước "manage"; khi CHƯA cấu hình → người tạo phiếu (mặc định cũ). */
 function samePosition(a?: string | null, b?: string | null) {
@@ -474,6 +473,11 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     const action = String(body.action || "");
     const t = await getTicket(params.id);
     if (!t) return fail("Không tìm thấy phiếu", 404);
+    // Từ Giai đoạn 2, số SYC không được nhập tay. Client cũ gọi action này phải bị chặn
+    // rõ ràng thay vì lưu một số không có Defect/defectId đứng sau.
+    if (action === "repairRequest") {
+      return fail("Không còn hỗ trợ nhập tay số yêu cầu sửa chữa. Hãy dùng nút Ra SYC sửa chữa để tạo phiếu chính thức.", 409);
+    }
 
     // Vật tư khác — luồng Ứng: lãnh trước khi có số ĐXVT. Đây là bước DUY NHẤT
     // được phép trừ ERP và cộng Hiện có; bước Thống kê phía sau chỉ hoàn thiện hồ sơ.
@@ -807,6 +811,9 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         replacementPointKeys: string[];
         deviceNameManual: string | null;
       } | null = null;
+      // Điểm thay thế sau khi sửa — dùng để đặt lại bảng nối. Đổi danh sách thiết bị ở đây thì
+      // liên kết cũ phải biến mất chứ không cộng dồn.
+      let editedReplacementPoints: LinkablePoint[] = [];
 
       if (["CHUA_CHON", "DE_XUAT", "UNG", "SU_DUNG_HIEN_CO", CHEMICAL_TICKET_TYPE, "GHI_NHAN"].includes(t.type)) {
         const proposalNote = String(body.note || "").trim();
@@ -841,7 +848,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         if (erpCode && !allowedCodes.includes(erpCode)) return fail("Mã vật tư không thuộc tên vật tư đã chọn");
         const replacementPoints = await prisma.materialReplacement.findMany({
           where: { materialId },
-          select: { id: true, deviceSeq: true, location: true, system: true, managingPosition: true, recoveryOnSupplement: true, device: { select: { name: true } } },
+          select: { id: true, deviceSeq: true, location: true, system: true, managingPosition: true, recoveryOnSupplement: true, quantity: true, deviceCount: true, device: { select: { name: true } } },
         });
         const assignedPointByKey = new Map<string, (typeof replacementPoints)[number]>();
         for (const point of replacementPoints) {
@@ -861,6 +868,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         );
         const primaryReplacementPoint = validReplacementPoints[0];
         const primaryReplacementKey = requestedReplacementKeys[0];
+        editedReplacementPoints = validReplacementPoints;
         editedItemData = {
           materialId,
           erpCode: erpCode || null,
@@ -900,6 +908,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
               ...editedItemData,
             },
           });
+          await syncTicketReplacementLinks(tx, t.id, editedReplacementPoints);
         }
         return tx.materialTicket.findUnique({
           where: { id: t.id },
@@ -1221,6 +1230,136 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       return fail("Phiếu đã khóa, không thể thao tác");
     }
 
+    /**
+     * Neo SYC vừa ra vào phiếu vật tư.
+     *
+     * Phiếu khiếm khuyết do chính DefectForm tạo (dùng lại nguyên đường của màn Khiếm khuyết,
+     * kể cả việc đẩy Google Sheet); ở đây chỉ ghi lại mối liên hệ. `repairRequestNumber` giữ
+     * làm SNAPSHOT số hiệu vì phiếu khiếm khuyết có thể bị xoá, còn số đã in trên chứng từ
+     * thì không được biến mất theo.
+     */
+    if (action === "linkDefect") {
+      const defectId = String(body.defectId || "").trim();
+      if (!defectId) return fail("Thiếu số yêu cầu cần gắn");
+
+      if (!["DE_XUAT", "UNG", "SU_DUNG_HIEN_CO"].includes(t.type)) {
+        return fail("Loại phiếu này không hỗ trợ ra SYC thay thế vật tư", 409);
+      }
+      if (isGasCylinderTicket(t.materialCategory)) {
+        return fail("Phiếu Chai khí không phát sinh SYC sửa chữa", 409);
+      }
+
+      // Quyền phải khớp đúng cửa xác nhận vật tư lãnh của từng luồng. Đây là bước tạo
+      // hồ sơ sửa chữa thật, không thể chỉ dựa vào việc người dùng nhìn thấy phiếu.
+      const wfMap = await getWorkflowRoleMap();
+      if (t.type === "UNG") {
+        if (wfMap.vhvReceive.length > 0) {
+          if (!stepAllowedWithMap(wfMap, "vhvReceive", user)) {
+            return fail("Bạn không có quyền ra SYC tại bước VHV lãnh vật tư", 403);
+          }
+        } else {
+          const err = assignedPositionError(user, t);
+          if (err) return err;
+        }
+      } else {
+        if (!stepAllowedWithMap(wfMap, "receive", user)) {
+          return fail("Bạn không có quyền ra SYC tại bước xác nhận vật tư lãnh", 403);
+        }
+        const err = assignedPositionError(user, t);
+        if (err) return err;
+      }
+
+      if (!t.receivedAt && !t.vhvReceivedAt) {
+        return fail("Chỉ được ra SYC sau khi vật tư lãnh đã được xác nhận", 409);
+      }
+
+      const [defect, ticketLinks] = await Promise.all([
+        prisma.defect.findUnique({
+          where: { id: defectId },
+          select: {
+            id: true,
+            requestNumber: true,
+            isMaterialRequest: true,
+            cancelledAt: true,
+            materialRequests: { select: { replacementId: true } },
+          },
+        }),
+        prisma.materialTicketReplacement.findMany({
+          where: { ticketId: t.id },
+          select: { replacementId: true },
+        }),
+      ]);
+      if (!defect) return fail("Không tìm thấy số yêu cầu", 404);
+      if (defect.cancelledAt) return fail("Số yêu cầu này đã bị hủy, không thể gắn vào phiếu", 409);
+      if (!defect.isMaterialRequest) {
+        return fail("Số yêu cầu không phải hồ sơ thay thế vật tư của phiếu", 409);
+      }
+      if (!defect.requestNumber?.trim()) {
+        return fail("Số yêu cầu chưa được cấp số, chưa thể gắn vào phiếu", 409);
+      }
+      if (ticketLinks.length === 0) {
+        return fail("Phiếu chưa gắn điểm thay thế nên không thể neo SYC", 409);
+      }
+
+      // Một SYC có thể gom nhiều phiếu, nhưng phải chứa ĐỦ mọi điểm của từng phiếu được
+      // neo vào nó. Không so chuỗi thiết bị vì hai kỳ thay trên cùng thiết bị là hai hồ sơ khác.
+      const defectPointIds = new Set(
+        defect.materialRequests
+          .map((row) => row.replacementId)
+          .filter((id): id is string => Boolean(id))
+      );
+      const missingPoint = ticketLinks.find((link) => !defectPointIds.has(link.replacementId));
+      if (missingPoint) {
+        return fail("Số yêu cầu không chứa đầy đủ các điểm thay thế của phiếu vật tư", 409);
+      }
+
+      if (t.defectId && t.defectId !== defect.id) {
+        return fail(`Phiếu đã gắn SYC ${t.repairRequestNumber || t.defectId}; không được ghi đè liên kết cũ`, 409);
+      }
+      if (!t.defectId && t.repairRequestNumber) {
+        return fail(`Phiếu đang giữ số SYC cũ ${t.repairRequestNumber} nhưng thiếu liên kết Defect; cần quản trị rà soát trước khi gắn lại`, 409);
+      }
+
+      const transitionAfterLink = t.type === "DE_XUAT" && t.status === "CHO_PHIEU_YCSC"
+        ? { status: "SU_DUNG_VAT_TU" }
+        : {};
+
+      // Gọi lại cùng Defect là idempotent (Defect POST có thể đã tự neo trước callback của
+      // client). Trường hợp này vẫn chữa luôn phiếu Đề xuất cũ còn mắc ở CHO_PHIEU_YCSC.
+      if (t.defectId === defect.id) {
+        const up = await prisma.materialTicket.update({
+          where: { id: t.id },
+          data: {
+            repairRequestNumber: t.repairRequestNumber ?? defect.requestNumber,
+            ...transitionAfterLink,
+          },
+          include: ITEM_INCLUDE,
+        });
+        return ok(up);
+      }
+
+      // Điều kiện trong UPDATE là hàng rào chống hai yêu cầu đồng thời ghi đè nhau sau khi
+      // các bước kiểm tra phía trên đã chạy.
+      const claimed = await prisma.materialTicket.updateMany({
+        where: { id: t.id, defectId: null, repairRequestNumber: null },
+        data: {
+          defectId: defect.id,
+          repairRequestNumber: defect.requestNumber,
+          ...transitionAfterLink,
+        },
+      });
+      if (claimed.count === 0) {
+        const current = await prisma.materialTicket.findUnique({ where: { id: t.id }, include: ITEM_INCLUDE });
+        if (current?.defectId === defect.id) return ok(current);
+        return fail("Phiếu vừa được gắn với một SYC khác; dữ liệu mới không được ghi đè", 409);
+      }
+      const up = await prisma.materialTicket.findUnique({ where: { id: t.id }, include: ITEM_INCLUDE });
+      if (!up) return fail("Không tìm thấy phiếu sau khi gắn SYC", 404);
+      await audit(user.id, "MT_LINK_DEFECT", "MaterialTicket", t.id,
+        `${materialTicketReference(t)}: gắn số yêu cầu sửa chữa ${defect.requestNumber}`);
+      return ok(up);
+    }
+
     /* ---------- helper kiểm tra items (dùng cho propose) ---------- */
     async function validateItems() {
       const items: Array<{ materialId: string; erpCode?: string; deviceSeq: string; quantity: number }> =
@@ -1455,7 +1594,9 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       }
       const quantity = Math.trunc(Number(body.quantity));
       if (!Number.isFinite(quantity) || quantity <= 0) return fail("Số lượng vật tư đã lãnh phải lớn hơn 0");
-      const repairRequestNumber = String(body.repairRequestNumber || "").trim();
+      if (String(body.repairRequestNumber || "").trim()) {
+        return fail("Không nhập số yêu cầu sửa chữa tại bước VHV lãnh vật tư. Hãy dùng nút Ra SYC sửa chữa để tạo phiếu chính thức.", 409);
+      }
       // Tên VHV lãnh: chai khí bắt buộc khai (người lãnh thường không phải người bấm máy);
       // các loại khác giữ nguyên nếp cũ là lấy tên người đăng nhập.
       const vhvReceivedByName = String(body.vhvReceivedByName || "").trim();
@@ -1470,7 +1611,6 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
             // Chai khí Ứng: lãnh xong mới tới Thống kê xác nhận ĐXVT rồi mới sử dụng.
             status: isGasCylinderTicket(t.materialCategory) ? "NHAN_VAT_TU" : "SU_DUNG_VAT_TU",
             vhvReceivedQuantity: quantity,
-            repairRequestNumber: repairRequestNumber || null,
             vhvReceivedByName: vhvReceivedByName || user.name || "",
             vhvReceivedByPosition: user.position ?? null,
             vhvReceivedAt: new Date(),
@@ -1489,7 +1629,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         return tx.materialTicket.findUnique({ where: { id: t.id }, include: ITEM_INCLUDE });
       });
       if (!up) return fail("Bước VHV lãnh vật tư đã được xác nhận trước đó");
-      await audit(user.id, "MT_VHV_RECEIVE", "MaterialTicket", t.id, `${materialTicketReference(t)}: VHV lãnh ${quantity}${vhvReceivedByName ? ` — ${vhvReceivedByName}` : ""}${repairRequestNumber ? `; số yêu cầu sửa chữa ${repairRequestNumber}` : ""}; Hiện có ${item.material.quantity} → ${item.material.quantity + quantity}; ERP không đổi`);
+      await audit(user.id, "MT_VHV_RECEIVE", "MaterialTicket", t.id, `${materialTicketReference(t)}: VHV lãnh ${quantity}${vhvReceivedByName ? ` — ${vhvReceivedByName}` : ""}; Hiện có ${item.material.quantity} → ${item.material.quantity + quantity}; ERP không đổi`);
       return ok(up);
     }
 
@@ -2002,21 +2142,9 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       }
       await audit(
         user.id, "MT_RECEIVE", "MaterialTicket", t.id,
-        `${materialTicketReference(t)}: ${receiptSourceLabel(receiptSource)} ${receivedQuantity} (${receivedMethod}) — Hiện có ${item.material.code}: ${before} → ${before + materialIncrement}; ERP ${erpCode}: ${erpBefore} → ${erpAfter}${uploadedPhoto ? "; đính kèm ảnh phiếu xuất kho liên 3" : ""}${t.type !== "UNG" ? "; chờ nhập số yêu cầu sửa chữa" : `; số phiếu ĐXVT ${proposalNumber}; chuyển Quyết toán`}`
+        `${materialTicketReference(t)}: ${receiptSourceLabel(receiptSource)} ${receivedQuantity} (${receivedMethod}) — Hiện có ${item.material.code}: ${before} → ${before + materialIncrement}; ERP ${erpCode}: ${erpBefore} → ${erpAfter}${uploadedPhoto ? "; đính kèm ảnh phiếu xuất kho liên 3" : ""}${t.type !== "UNG" ? "; chờ ra SYC sửa chữa" : `; số phiếu ĐXVT ${proposalNumber}; chuyển Quyết toán`}`
       );
       return ok(responseTicket);
-    }
-
-    if (action === "repairRequest") {
-      if (!["DE_XUAT", "UNG"].includes(t.type) || t.status !== "CHO_PHIEU_YCSC") return fail("Phiếu không ở bước Xác nhận vật tư lãnh");
-      if (!stepAllowedWithMap(await getWorkflowRoleMap(), "receive", user)) return fail("Bạn không có quyền ở bước Xác nhận vật tư lãnh", 403);
-      { const err = assignedPositionError(user, t); if (err) return err; }
-      const value = String(body.repairRequestNumber || "").trim();
-      if (!value) return fail("Vui lòng nhập số yêu cầu sửa chữa");
-      if (sameTicketNumber(value, t.proposalNumber)) return fail("Số yêu cầu sửa chữa phải nhập mới, không được trùng với số phiếu ĐXVT");
-      const up = await prisma.materialTicket.update({ where: { id: t.id }, data: { status: "SU_DUNG_VAT_TU", repairRequestNumber: value }, include: ITEM_INCLUDE });
-      await audit(user.id, "MT_REPAIR_REQUEST", "MaterialTicket", t.id, `${materialTicketReference(t)}: xác nhận số yêu cầu sửa chữa ${value}; chuyển Sử dụng vật tư`);
-      return ok(up);
     }
 
     // B2'' — SỬ DỤNG VẬT TƯ: PCT/LCT + chỉ huy + nội dung + khối lượng dùng.
@@ -2378,21 +2506,43 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       if (!stepAllowedWithMap(await getWorkflowRoleMap(), "settle", user)) return fail("Bạn không có quyền xác nhận quyết toán", 403);
       const bbntDoNumber = String(body.bbntDoNumber || "").trim();
       if (!bbntDoNumber) return fail("Vui lòng nhập số BBNT DO trước khi xác nhận quyết toán");
-      // Các biên bản đã được xuất qua các tác vụ Nghiệm thu; bước này chỉ xác nhận quyết toán.
-      const up = await prisma.materialTicket.update({
-        where: { id: t.id },
-        data: {
-          status: "HOAN_TAT",
+      const settledAt = new Date();
+      // Chốt trạng thái, lịch sử thực dùng và chu kỳ kế tiếp trong MỘT transaction. Khóa theo
+      // ticket bảo đảm hai lần bấm đồng thời không thể sinh hai dòng lịch sử hoặc gia hạn hai lần.
+      const { up, replacementResult } = await prisma.$transaction(async (tx) => {
+        await tx.$queryRaw`
+          SELECT pg_advisory_xact_lock(hashtext(${`material-ticket-settle:${t.id}`}))::text AS lock_result
+        `;
+        const current = await tx.materialTicket.findUnique({
+          where: { id: t.id },
+          select: { status: true, settledAt: true },
+        });
+        if (!current || current.status !== "CHO_QUYET_TOAN" || current.settledAt) {
+          throw fail("Phiếu đã được quyết toán hoặc không còn ở bước quyết toán", 409);
+        }
+
+        const replacementResult = await recordSettledTicketReplacements(tx, {
+          ticketId: t.id,
+          doneById: user.id,
           bbntDoNumber,
-          settledAt: new Date(),
-          settledByName: user.name ?? "",
-          // Ảnh hiện trường hết vai trò: BBNT D-Office đã nhúng sẵn ba ảnh bên trong,
-          // giữ thêm bản rời chỉ tốn chỗ. Gỡ khóa trước, xóa tệp sau.
-          usagePhotoBeforeKey: null,
-          usagePhotoAfterKey: null,
-          usagePhotoSpecKey: null,
-        },
-        include: ITEM_INCLUDE,
+          settledAt,
+        });
+        const up = await tx.materialTicket.update({
+          where: { id: t.id },
+          data: {
+            status: "HOAN_TAT",
+            bbntDoNumber,
+            settledAt,
+            settledByName: user.name ?? "",
+            // Ảnh hiện trường hết vai trò: BBNT D-Office đã nhúng sẵn ba ảnh bên trong,
+            // giữ thêm bản rời chỉ tốn chỗ. Gỡ khóa trước, xóa tệp sau.
+            usagePhotoBeforeKey: null,
+            usagePhotoAfterKey: null,
+            usagePhotoSpecKey: null,
+          },
+          include: ITEM_INCLUDE,
+        });
+        return { up, replacementResult };
       });
       const removedPhotos = await deleteUsagePhotos([
         t.usagePhotoBeforeKey,
@@ -2409,7 +2559,8 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         "MT_SETTLE",
         "MaterialTicket",
         t.id,
-        `${materialTicketReference(t)}: đã xác nhận quyết toán vật tư, số BBNT DO ${bbntDoNumber}` +
+        `${materialTicketReference(t)}: đã xác nhận quyết toán vật tư, số BBNT DO ${bbntDoNumber}; ` +
+          `ghi ${replacementResult.logged} dòng lịch sử, gia hạn ${replacementResult.renewed} điểm` +
           (removedPhotos ? `; xóa ${removedPhotos} ảnh hiện trường khỏi kho tệp` : "") +
           (removedDeliveryPhotos ? `; xóa ${removedDeliveryPhotos} ảnh phiếu xuất kho liên 3 của lô đã dùng hết` : "")
       );

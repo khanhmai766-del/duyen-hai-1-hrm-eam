@@ -6,6 +6,7 @@ import {
   Plus, Minus, X, Check, FileText, Zap, FlaskConical, ClipboardList, Package, Clock, ChevronRight,
   AlertTriangle, Ban, Download, CircleCheck, Circle, CircleDot, Loader2, Pencil, Trash2, UserCog, CalendarDays,
   Filter, ChevronDown,
+  Wrench, ExternalLink,
 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -21,6 +22,7 @@ import {
   type TruckRow,
 } from "./ChemicalTruckRows";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   useMaterialTickets, useTicketOptions, useCreateTicket, useTicketAction, useDeleteTicket,
@@ -29,7 +31,10 @@ import {
   useTicketChemicalTrucks,
   useTicketUsagePhotos,
   samePosition,
-  type MaterialTicket, type TicketViewer, type WorkflowRoleMap } from "@/hooks/useMaterialTickets";
+  type MaterialTicket, type TicketViewer, type WorkflowRoleMap,
+  useTicketReplacementRequest } from "@/hooks/useMaterialTickets";
+import { DefectForm } from "@/components/defects/defect-form";
+import type { DefectItem } from "@/hooks/useDefects";
 import { usePositions } from "@/hooks/useUsers";
 import { MIN_USAGE_PHOTOS, usesHandwrittenBbnt, COMMON_MATERIAL_POSITION, displayMaterialCategory, GAS_RETURN_STATUS, isChemicalFlowTicket, isGasCylinderTicket, isOtherMaterialAdvanceTicket, isOtherMaterialCategory, isOtherMaterialTicketType, isSingleStepTicketMaterial, CHEMICAL_TICKET_TYPE, isSupplementReason, MATERIAL_CATEGORIES, materialTicketBelongsToRecoveryTab, materialTicketRequiresRecovery, OTHER_MATERIAL_ADVANCE_TICKET_TYPE, OTHER_MATERIAL_GROUP, OTHER_MATERIAL_TICKET_TYPE, ticketReasonsFor, TICKET_REASONS, TICKET_REASON_OTHER, SINGLE_STEP_TICKET_TYPE, TICKET_MATERIAL_CATEGORIES, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
 import { normalizeText } from "@/lib/nav";
@@ -1661,6 +1666,21 @@ function ReasonPicker({
 }
 
 /* ================= chi tiết ================= */
+const REPAIR_REQUEST_VISIBLE_STATUSES = new Set([
+  "NHAN_VAT_TU",
+  "NHAN_TU_HIEN_CO",
+  "VHV_LANH_VAT_TU",
+  "SU_DUNG_VAT_TU",
+  "CHO_NGHIEM_THU",
+  "CHO_PHIEU_YCSC",
+]);
+
+const showsRepairRequestSection = (ticket: MaterialTicket) =>
+  Boolean(ticket.repairRequestNumber)
+  || (["DE_XUAT", "UNG", "SU_DUNG_HIEN_CO"].includes(ticket.type)
+    && !isGasCylinderTicket(ticket.materialCategory)
+    && REPAIR_REQUEST_VISIBLE_STATUSES.has(ticket.status));
+
 function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewer | null; onClose: () => void }) {
   const [showActivity, setShowActivity] = useState(false);
   const [reviewStep, setReviewStep] = useState<string | null>(null);
@@ -1677,6 +1697,7 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
   // Không hiển thị biên bản thu hồi cũ từng sinh sớm trước khi bước Nghiệm thu hoàn thành.
   const recoveryDocumentUrl = t.completedAt ? t.recoveryDocUrl : null;
   const exportedDocumentCount = [t.proposalDocUrl, t.docUrl, handwrittenBbntUrl, recoveryDocumentUrl].filter(Boolean).length;
+  const hasSupportColumn = showsRepairRequestSection(t) || exportedDocumentCount > 0;
   const hasCompletionSummary = Boolean(
     (t.type !== "UNG" && t.pctNumber)
     || t.repairRequestNumber
@@ -1793,7 +1814,7 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
           )}
 
           <div className="step-workspace">
-            <div className={`completion-overview ${exportedDocumentCount > 0 ? "with-documents" : ""}`}>
+            <div className={`completion-overview ${hasSupportColumn ? "with-support" : ""}`}>
               <div className="completion-details">
                 {hasCompletionSummary && (
                   <div className="completion-summary-card">
@@ -1846,21 +1867,27 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
                 <ChemicalTruckSection t={t} viewer={viewer} />
               </div>
 
-              {exportedDocumentCount > 0 && (
-              <div className="document-downloads" aria-label="Biên bản đã xuất">
-                <div className="document-downloads-head">
-                  <span className="document-downloads-label"><FileText size={14} /> Biên bản đã xuất</span>
-                  <span className="document-downloads-count">{exportedDocumentCount} tệp</span>
+              {hasSupportColumn && (
+                <div className="completion-support-column">
+                  <RepairRequestSection t={t} viewer={viewer} />
+
+                  {exportedDocumentCount > 0 && (
+                    <div className="document-downloads" aria-label="Biên bản đã xuất">
+                      <div className="document-downloads-head">
+                        <span className="document-downloads-label"><FileText size={14} /> Biên bản đã xuất</span>
+                        <span className="document-downloads-count">{exportedDocumentCount} tệp</span>
+                      </div>
+                      <div className="document-download-links">
+                        {t.proposalDocUrl && <a className="pdf" href={t.proposalDocUrl} target="_blank" rel="noreferrer"><Download size={14} /> Phiếu Đề Xuất Vật Tư</a>}
+                        {/* Đã NGỪNG phát hành. Nút chỉ còn hiện với phiếu cũ đã xuất trước đó — hồ sơ đã có
+                            thì phải tải lại được, chỉ là từ nay không sinh thêm bản mới nào. */}
+                        {handwrittenBbntUrl && <a className="pdf" href={handwrittenBbntUrl} target="_blank" rel="noreferrer"><Download size={14} /> Biên Bản Nghiệm Thu Ký Tay</a>}
+                        {t.docUrl && <a className="pdf" href={t.docUrl} target="_blank" rel="noreferrer"><Download size={14} /> Biên Bản Nghiệm Thu D-Office</a>}
+                        {recoveryDocumentUrl && <a className="pdf recovery-download" href={recoveryDocumentUrl} target="_blank" rel="noreferrer"><Download size={14} /> Biên Bản Vật Tư Thu Hồi</a>}
+                      </div>
+                    </div>
+                  )}
                 </div>
-                <div className="document-download-links">
-                  {t.proposalDocUrl && <a className="pdf" href={t.proposalDocUrl} target="_blank" rel="noreferrer"><Download size={14} /> Phiếu Đề Xuất Vật Tư</a>}
-                  {/* Đã NGỪNG phát hành. Nút chỉ còn hiện với phiếu cũ đã xuất trước đó — hồ sơ đã có
-                      thì phải tải lại được, chỉ là từ nay không sinh thêm bản mới nào. */}
-                  {handwrittenBbntUrl && <a className="pdf" href={handwrittenBbntUrl} target="_blank" rel="noreferrer"><Download size={14} /> Biên Bản Nghiệm Thu Ký Tay</a>}
-                  {t.docUrl && <a className="pdf" href={t.docUrl} target="_blank" rel="noreferrer"><Download size={14} /> Biên Bản Nghiệm Thu D-Office</a>}
-                  {recoveryDocumentUrl && <a className="pdf recovery-download" href={recoveryDocumentUrl} target="_blank" rel="noreferrer"><Download size={14} /> Biên Bản Vật Tư Thu Hồi</a>}
-                </div>
-              </div>
               )}
             </div>
           </div>
@@ -1987,7 +2014,7 @@ function StepReviewDialog({ t, viewer, stepKey, onClose }: { t: MaterialTicket; 
     <div className="ovl" onClick={onClose} />
     <div className="dlg step-review-dialog">
       <div className="dlg-h"><b>{label}</b><button className="x" onClick={onClose}><X size={16} /></button></div>
-      <div className="frm">
+      <div className="frm frm-scroll step-review-form">
         {!permission && <p className="note">Bước này được xem lại trong thông tin tổng quan của phiếu.</p>}
         {editStep === "confirm" && <>
           <label>Luồng thực hiện<input value={t.type === "DE_XUAT" ? "Đề xuất" : t.type === "UNG" ? "Ứng" : "Sử dụng hiện có"} disabled /></label>
@@ -2049,7 +2076,7 @@ function StepReviewDialog({ t, viewer, stepKey, onClose }: { t: MaterialTicket; 
           <UsagePhotoCard ticketId={t.id} canEdit={canEdit} />
           {materialTicketRequiresRecovery(t) && (
             <div className="review-recovery-grid">
-              <label>Số lượng vật tư thu hồi ghi vào BBTHVT ({t.items[0]?.material.unit ?? ""}) *
+              <label className="review-recovery-quantity">Số lượng vật tư thu hồi ghi vào BBTHVT ({t.items[0]?.material.unit ?? ""}) *
                 <input type="number" min={1} value={recoveryQuantity} disabled={!canEdit} onChange={(e) => setRecoveryQuantity(Number(e.target.value))} />
               </label>
               <label className={`recovery-return-check ${recoveryReturned ? "checked" : ""}`}>
@@ -2116,6 +2143,7 @@ function LotAllocationPicker({
 }: { ticketId: string; value: Record<string, number> | null; onChange: (next: Record<string, number>) => void }) {
   const { data, isLoading } = useTicketLots(ticketId);
   const info = data?.data;
+  const [previewLot, setPreviewLot] = useState<{ url: string; label: string } | null>(null);
 
   React.useEffect(() => {
     if (!info || value) return;
@@ -2144,7 +2172,15 @@ function LotAllocationPicker({
               <td className="lot-code">{lot.erpCode || "—"}</td>
               <td className="lot-code">
                 {lot.deliveryPhotoUrl
-                  ? <a className="pdf-inline" href={lot.deliveryPhotoUrl} target="_blank" rel="noreferrer">Xem ảnh</a>
+                  ? (
+                    <button
+                      type="button"
+                      className="pdf-inline lot-photo-preview-trigger"
+                      onClick={() => setPreviewLot({ url: lot.deliveryPhotoUrl!, label: lot.label })}
+                    >
+                      Xem ảnh
+                    </button>
+                  )
                   : "—"}
               </td>
               <td className="lot-num">{lot.available} {info.unit}</td>
@@ -2162,6 +2198,38 @@ function LotAllocationPicker({
       {diff !== 0 && (
         <div className="warnbox"><AlertTriangle size={15} /> Tổng đang phân bổ {total} {info.unit}, {diff > 0 ? `thừa ${diff}` : `thiếu ${-diff}`} so với số đã sử dụng ({info.usedQuantity} {info.unit}).</div>
       )}
+
+      <Dialog open={Boolean(previewLot)} onOpenChange={(open) => !open && setPreviewLot(null)}>
+        <DialogContent className="max-w-4xl overflow-hidden p-0">
+          <DialogHeader className="border-b border-slate-200 bg-slate-50 px-5 py-4 text-left">
+            <DialogTitle>Ảnh phiếu xuất kho liên 3</DialogTitle>
+            <p className="text-xs text-slate-500">Phiếu giao hàng: <b className="text-slate-700">{previewLot?.label}</b></p>
+          </DialogHeader>
+          <div className="flex min-h-[320px] max-h-[72vh] items-center justify-center overflow-auto bg-slate-950/95 p-4">
+            {previewLot && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={previewLot.url}
+                alt={`Ảnh liên 3 của phiếu giao hàng ${previewLot.label}`}
+                className="max-h-[68vh] max-w-full rounded-md object-contain shadow-2xl"
+              />
+            )}
+          </div>
+          <DialogFooter className="border-t border-slate-200 bg-white px-5 py-3 sm:justify-between">
+            <span className="truncate text-xs text-slate-500">Kiểm tra ảnh trước khi xuất biên bản vật tư thu hồi.</span>
+            <div className="flex gap-2">
+              <Button type="button" size="sm" variant="outline" onClick={() => setPreviewLot(null)}>Đóng</Button>
+              {previewLot && (
+                <Button type="button" size="sm" asChild>
+                  <a href={previewLot.url} download={`lien-3-${previewLot.label}.jpg`}>
+                    <Download className="h-4 w-4" /> Tải ảnh
+                  </a>
+                </Button>
+              )}
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -2174,6 +2242,137 @@ function LotAllocationPicker({
  * hoàn tất ngay khi tạo — nếu gắn theo bước thì sẽ không bao giờ hiện, mà xe thì
  * mấy ngày sau mới về.
  */
+/**
+ * Ra SYC sửa chữa từ chính phiếu vật tư — "cổng vật tư đứng trước SYC".
+ *
+ * Trước đây SYC ra bất cứ lúc nào nên có cảnh đội sửa chữa sang tới nơi mà vật tư chưa về.
+ * Nay phiếu vật tư ra trước, xác nhận có vật tư xong mới tới lượt SYC.
+ *
+ * MỘT CHẠM chứ không tự động tạo: số yêu cầu là tài nguyên cấp phát một chiều rồi đẩy lên
+ * Google Sheet, tự sinh là tiêu số cho cả những lần VHV tự thay không cần đội sửa chữa. Form
+ * mồi sẵn 100% (nội dung lấy từ lý do đề xuất + số ĐXVT, thiết bị/cương vị lấy từ điểm thay
+ * thế gắn trên phiếu), người thao tác chỉ đọc lại rồi bấm một lần.
+ *
+ * Dùng LẠI DefectForm của màn Khiếm khuyết, không dựng form riêng — nhờ vậy phiếu ra từ đây
+ * giống hệt phiếu ra từ Danh mục vật tư, kể cả việc đẩy Google Sheet.
+ */
+function RepairRequestSection({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | null }) {
+  const [open, setOpen] = useState(false);
+  const applies = showsRepairRequestSection(t);
+  // Tải điều kiện ngay khi hồ sơ phiếu được mở để quyết định CÓ HIỆN NÚT hay không;
+  // trước đây chỉ tải sau cú bấm nên form đã mở rồi mới biết phiếu chưa đủ điều kiện.
+  const seed = useTicketReplacementRequest(t.id, applies && !t.repairRequestNumber);
+  const act = useTicketAction(t.id);
+
+  const assigned = Boolean(viewer && (viewer.isAdmin || samePosition(viewer.position, t.assignedPosition)));
+  const canLinkDefect = Boolean(viewer && (
+    viewer.isAdmin
+    || (t.type === "UNG"
+      ? (viewer.steps?.vhvReceiveConfigured ? viewer.steps.vhvReceive : assigned)
+      : (assigned && (viewer.steps?.receive ?? viewer.isShiftLeader)))
+  ));
+
+  // Chỉ hiện ở các bước từ "xác nhận vật tư lãnh" trở đi, và chỉ khi phiếu chưa gắn SYC.
+  if (!applies) return null;
+
+  if (t.repairRequestNumber) {
+    return (
+      <div className="document-downloads" aria-label="Số yêu cầu sửa chữa">
+        <div className="document-downloads-head">
+          <span className="document-downloads-label"><Wrench size={14} /> Số yêu cầu sửa chữa</span>
+        </div>
+        <div className="document-download-links">
+          <a className="pdf" href={`/defects?q=${encodeURIComponent(t.repairRequestNumber)}`} target="_blank" rel="noreferrer">
+            <ExternalLink size={14} /> {t.repairRequestNumber}
+          </a>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <div className="document-downloads" aria-label="Số yêu cầu sửa chữa">
+        <div className="document-downloads-head">
+          <span className="document-downloads-label"><Wrench size={14} /> Số yêu cầu sửa chữa</span>
+        </div>
+        <div className="document-download-links">
+          {seed.isLoading ? (
+            <span className="note"><Clock size={13} /> Đang kiểm tra điều kiện ra SYC…</span>
+          ) : seed.isError ? (
+            <span className="note"><AlertTriangle size={13} /> Không kiểm tra được điều kiện ra SYC</span>
+          ) : !seed.data?.eligible ? (
+            <span className="note"><Clock size={13} /> {seed.data?.reason ?? "Phiếu chưa đủ điều kiện ra SYC"}</span>
+          ) : !canLinkDefect ? (
+            <span className="note"><AlertTriangle size={13} /> Bạn không có quyền ra SYC ở bước xác nhận vật tư lãnh</span>
+          ) : (
+            <button type="button" className="pdf" onClick={() => setOpen(true)}>
+              <Wrench size={14} /> Ra SYC sửa chữa
+            </button>
+          )}
+        </div>
+      </div>
+
+      {open && seed.data?.eligible && canLinkDefect && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 60 }}>
+          <div
+            style={{ position: "absolute", inset: 0, background: "rgba(15,23,42,.45)" }}
+            onClick={() => setOpen(false)}
+          />
+          <div
+            style={{
+              position: "absolute", top: 0, right: 0, bottom: 0, width: "100%", maxWidth: 720,
+              background: "#fff", boxShadow: "-8px 0 32px rgba(15,23,42,.18)", display: "flex",
+              flexDirection: "column", overflow: "hidden",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: 16, borderBottom: "1px solid #e2e8f0" }}>
+              <div>
+                <b style={{ fontSize: 16 }}>Ra số yêu cầu sửa chữa</b>
+                <p style={{ margin: "2px 0 0", fontSize: 12, color: "#64748b" }}>
+                  Nội dung và thiết bị đã điền sẵn từ phiếu vật tư — kiểm tra lại rồi lưu.
+                </p>
+              </div>
+              <button type="button" onClick={() => setOpen(false)} aria-label="Đóng"
+                style={{ width: 36, height: 36, borderRadius: 8, border: "none", background: "transparent", cursor: "pointer" }}>
+                <X size={18} />
+              </button>
+            </div>
+
+            <div style={{ flex: 1, minHeight: 0, overflow: "auto" }}>
+              {seed.isLoading && <p style={{ padding: 16, fontSize: 13, color: "#64748b" }}>Đang tải dữ liệu phiếu…</p>}
+              {seed.data && !seed.data.materialRequest && (
+                <p style={{ padding: 16, fontSize: 13, color: "#b45309" }}>
+                  {seed.data.reason ?? "Phiếu chưa gắn điểm thay thế nào nên không ra được SYC thay thế."}
+                </p>
+              )}
+              {seed.data?.eligible && seed.data.materialRequest && seed.data.device && (
+                <DefectForm
+                  lockDevice
+                  initialDevice={seed.data.device}
+                  initialMaterialRequest={seed.data.materialRequest}
+                  onDone={async (created?: DefectItem) => {
+                    setOpen(false);
+                    if (created?.id) {
+                      try {
+                        await act.mutateAsync({ action: "linkDefect", defectId: created.id });
+                      } catch (error) {
+                        // SYC đã ra thành công rồi; chỉ mối liên hệ chưa ghi được.
+                        toast.error(`Đã ra SYC nhưng chưa gắn được vào phiếu: ${(error as Error).message}`);
+                      }
+                    }
+                  }}
+                  onCancel={() => setOpen(false)}
+                />
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
 function ChemicalTruckSection({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | null }) {
   const act = useTicketAction(t.id);
   const qc = useQueryClient();
@@ -2261,7 +2460,6 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
   const [proposalNumberInput, setProposalNumberInput] = useState("");
   const [bbktNumberInput, setBbktNumberInput] = useState(t.bbktNumber ?? "");
   const [confirmReasonInput, setConfirmReasonInput] = useState(t.proposalNote ?? ""); // Lý do — bước Xác nhận yêu cầu (lưu vào proposalNote)
-  const [repairRequestNumber, setRepairRequestNumber] = useState(t.repairRequestNumber ?? "");
   const [materialUserNameInput, setMaterialUserNameInput] = useState(t.materialUserName ?? "");
   // Đủ 2/3 ảnh mới cho qua bước sử dụng vật tư. Máy chủ cũng chặn — đây chỉ để người
   // dùng biết trước lý do nút mờ, thay vì bấm rồi nhận thông báo lỗi.
@@ -2316,10 +2514,6 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
   const proposalFlowAvailable = isChemicalTicket
     ? true
     : opts ? confirmationErpInfoRows.some((row) => row.erpStock > 0) : null;
-  const repairRequestConflictsProposal =
-    !!repairRequestNumber.trim() &&
-    !!t.proposalNumber?.trim() &&
-    repairRequestNumber.trim().toLocaleLowerCase("vi") === t.proposalNumber.trim().toLocaleLowerCase("vi");
   const [replacementRows, setReplacementRows] = useState<Array<{ key: string; itemId: string; deviceSeq: string; quantity: number }>>(() =>
     t.items.map((item, index) => ({
       key: `${item.id}-${index}`,
@@ -2350,18 +2544,6 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
       setWorkflowType("UNG");
     }
   }, [proposalFlowAvailable, t.status, t.type, workflowType]);
-
-  React.useEffect(() => {
-    setRepairRequestNumber((current) => {
-      if (t.repairRequestNumber) return t.repairRequestNumber;
-      if (
-        current.trim() &&
-        t.proposalNumber?.trim() &&
-        current.trim().toLocaleLowerCase("vi") === t.proposalNumber.trim().toLocaleLowerCase("vi")
-      ) return "";
-      return current;
-    });
-  }, [t.id, t.repairRequestNumber, t.proposalNumber]);
 
   React.useEffect(() => {
     if (t.status !== "CHO_NHAP_LIEU_THAY_THE") return;
@@ -2415,7 +2597,7 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
       VHV_LANH_VAT_TU: `Cương vị VHV được giao "${t.assignedPosition}"`,
       NHAN_TU_HIEN_CO: `Cương vị được giao "${t.assignedPosition}" nhận vật tư từ Hiện có`,
       NHAN_VAT_TU: "Người được phân quyền Xác nhận vật tư lãnh",
-      CHO_PHIEU_YCSC: "Người được phân quyền Xác nhận vật tư lãnh nhập số yêu cầu sửa chữa",
+      CHO_PHIEU_YCSC: "Người được phân quyền ra SYC sửa chữa từ phiếu vật tư",
       SU_DUNG_VAT_TU: "Người được phân quyền Xác nhận vật tư sử dụng",
       CHO_NGHIEM_THU: "Người được phân quyền Nghiệm thu",
       CHO_TRA_VO: "Người được phân quyền Xác nhận trả (chai khí)",
@@ -2992,15 +3174,9 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
             <input value={receiverName} onChange={(e) => setReceiverName(e.target.value)} placeholder="Họ tên người lãnh" />
           </label>
         )}
-        {/* Chai khí không gắn với công việc sửa chữa nào nên bỏ hẳn ô số YCSC ở cả hai luồng. */}
-        {!isGasTicket && (
-          <label className="field">Số yêu cầu sửa chữa (nếu có)
-            <input value={repairRequestNumber} onChange={(e) => setRepairRequestNumber(e.target.value)} placeholder="Nhập số yêu cầu sửa chữa hoặc để trống" />
-          </label>
-        )}
       </div>
-      <p className="hint">Sau khi xác nhận, số lượng đã lãnh được cộng vào Hiện có để sử dụng ở bước sau. Số lượng ERP không thay đổi.</p>
-      <button className="btn primary big" disabled={qty <= 0 || (isGasTicket && !receiverName.trim()) || act.isPending} onClick={() => run({ action: "vhvReceive", quantity: qty, repairRequestNumber: repairRequestNumber.trim() || undefined, vhvReceivedByName: receiverName.trim() || undefined }, "Đã ghi nhận VHV lãnh vật tư")}><Check size={15} /> Xác nhận</button>
+      <p className="hint">Sau khi xác nhận, số lượng đã lãnh được cộng vào Hiện có để sử dụng ở bước sau. Nếu cần đội sửa chữa, dùng nút “Ra SYC sửa chữa” trong hồ sơ phiếu. Số lượng ERP không thay đổi.</p>
+      <button className="btn primary big" disabled={qty <= 0 || (isGasTicket && !receiverName.trim()) || act.isPending} onClick={() => run({ action: "vhvReceive", quantity: qty, vhvReceivedByName: receiverName.trim() || undefined }, "Đã ghi nhận VHV lãnh vật tư")}><Check size={15} /> Xác nhận</button>
     </div>;
   }
 
@@ -3115,23 +3291,6 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
       </div>
     );
   }
-
-  if (acts.includes("repairRequest")) return (
-    <div className="act">
-      <label className="lb">Xác nhận vật tư lãnh</label>
-      <div className="note"><Check size={15} /> Đã xác nhận số phiếu giao hàng <b>{t.deliveryNoteNumber ?? t.receivedMethod ?? "—"}</b>. Nhập số yêu cầu sửa chữa để hoàn tất bước này.</div>
-      <div className="act-field-row">
-        <label>Số yêu cầu sửa chữa *</label>
-        <input value={repairRequestNumber} onChange={(e) => setRepairRequestNumber(e.target.value)} placeholder="Nhập số yêu cầu sửa chữa" />
-      </div>
-      {repairRequestConflictsProposal && (
-        <div className="warnbox"><AlertTriangle size={15} /> Số yêu cầu sửa chữa phải nhập mới, không được trùng với số phiếu ĐXVT.</div>
-      )}
-      <button className="btn primary big" disabled={!repairRequestNumber.trim() || repairRequestConflictsProposal || act.isPending} onClick={() => run({ action: "repairRequest", repairRequestNumber: repairRequestNumber.trim() }, "Đã xác nhận số yêu cầu sửa chữa")}>
-        <Check size={15}/> Xác nhận số yêu cầu sửa chữa
-      </button>
-    </div>
-  );
 
   if (acts.includes("use")) {
     const unit = t.items[0]?.material.unit ?? "";
@@ -3409,7 +3568,9 @@ const CSS = `
 .step-review:disabled{cursor:default;}
 .step-review:not(:disabled):hover{background:#f8fafc;border-radius:10px;}
 .step.recovery-pending{color:${C.warn};background:${C.warnBg};}
-.step-review-dialog{width:min(680px,calc(100vw - 32px));max-height:86vh;overflow-x:hidden;overflow-y:auto;}
+.dlg.step-review-dialog{width:min(680px,calc(100vw - 32px));max-height:min(90dvh,860px);display:flex;flex-direction:column;overflow:hidden;}
+.step-review-dialog>.dlg-h{flex:0 0 auto;}
+.step-review-dialog>.step-review-form{min-height:0;overflow-x:hidden;overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable;}
 .review-receive-row{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,.65fr);gap:12px;align-items:end;min-width:0;}
 .review-receive-row.single{grid-template-columns:minmax(0,1fr) minmax(170px,1fr);}
 .review-receive-source{display:flex;flex-direction:column;gap:6px;min-width:0;}
@@ -3418,7 +3579,17 @@ const CSS = `
 .review-receive-toggle button{height:40px;min-width:0;padding:0 12px;font-size:12px;line-height:1.2;white-space:nowrap;}
 .review-delivery-field{gap:6px;min-width:0;}
 .review-delivery-field input{height:40px;margin:0;}
-.review-use-grid,.review-recovery-grid,.review-accept-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-items:end;min-width:0;}
+.review-use-grid,.review-accept-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-items:end;min-width:0;}
+.review-recovery-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(280px,1.08fr);gap:12px;align-items:stretch;min-width:0;}
+.review-recovery-grid>label{min-width:0;}
+.review-recovery-quantity{display:flex;flex-direction:column;justify-content:flex-end;gap:6px;line-height:1.35;}
+.review-recovery-quantity input{margin-top:auto;}
+.step-review-dialog .review-recovery-grid .recovery-return-check{min-height:64px;align-self:end;}
+.step-review-dialog .review-recovery-grid .recovery-return-check b{overflow-wrap:anywhere;}
+.step-review-dialog .frm-f{align-items:center;flex-wrap:nowrap;}
+.step-review-dialog .frm-f>.note{flex:1 1 260px;min-width:0;margin-right:0!important;line-height:1.35;}
+.step-review-dialog .frm-f>.btn{flex:0 0 auto;justify-content:center;white-space:nowrap;}
+.step-review-dialog .frm-f>.btn.primary{min-width:142px;}
 .head{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:14px;}
 .head-l{display:flex;gap:13px;align-items:center;}
 .head-ic{width:44px;height:44px;border-radius:13px;display:grid;place-items:center;color:#fff;background:linear-gradient(135deg,${C.navy},${C.accent});}
@@ -3738,17 +3909,20 @@ const CSS = `
 .done-note{display:flex;gap:7px;align-items:flex-start;background:${C.okBg};color:${C.ok};border-radius:10px;padding:10px 12px;font-size:12.5px;margin-bottom:10px;}
 .pdf{display:inline-flex;align-items:center;gap:7px;border:1.5px solid ${C.navy};color:${C.navy};background:#fff;border-radius:10px;padding:9px 13px;font-weight:600;font-size:13px;cursor:pointer;margin-bottom:12px;text-decoration:none;}
 .pdf-inline{color:${C.navy};font-weight:700;text-decoration:underline;}
+.lot-photo-preview-trigger{border:0;background:transparent;padding:0;font:inherit;cursor:pointer;}
+.lot-photo-preview-trigger:hover{color:${C.accent};}
 .ticket-note-row{display:flex;align-items:center;gap:6px 26px;min-width:0;margin-bottom:8px;flex-wrap:wrap;}
 .ticket-note-row .meta-line{display:flex;align-items:baseline;gap:4px;min-width:0;margin:0;}
 .ticket-note-row .repair-request-meta{flex:0 1 auto;}
 .ticket-note-row b{overflow-wrap:anywhere;}
 .completion-overview{display:grid;grid-template-columns:minmax(0,1fr);gap:12px;align-items:stretch;min-width:0;}
-.completion-overview.with-documents{grid-template-columns:minmax(0,1fr) minmax(250px,26%);}
+.completion-overview.with-support{grid-template-columns:minmax(0,1fr) minmax(250px,26%);}
 .completion-details{display:flex;min-width:0;flex-direction:column;gap:12px;padding-top:1px;}
 .completion-details>.act{margin-bottom:0;}
 .completion-summary-card{display:flex;min-width:0;flex-direction:column;gap:9px;border:1px solid ${C.line};border-radius:12px;background:linear-gradient(145deg,#fff 0%,#fbfcfe 100%);padding:13px 14px;box-shadow:0 4px 14px rgba(30,64,175,.05);}
 .completion-summary-card .ticket-note-row,.completion-summary-card .done-note,.completion-summary-card .meta-line{margin-bottom:0;}
-.document-downloads{display:flex;min-width:0;min-height:100%;align-self:stretch;flex-direction:column;justify-content:flex-start;gap:12px;border:1px solid #c9ded7;border-radius:12px;background:linear-gradient(145deg,#f7fcfa 0%,#eef8f4 100%);padding:14px;box-shadow:0 4px 14px rgba(15,118,110,.07);}
+.completion-support-column{display:flex;min-width:0;align-self:start;flex-direction:column;gap:12px;}
+.document-downloads{display:flex;min-width:0;align-self:stretch;flex-direction:column;justify-content:flex-start;gap:12px;border:1px solid #c9ded7;border-radius:12px;background:linear-gradient(145deg,#f7fcfa 0%,#eef8f4 100%);padding:14px;box-shadow:0 4px 14px rgba(15,118,110,.07);}
 .document-downloads-head{display:flex;align-items:center;justify-content:space-between;gap:10px;min-width:0;}
 .document-downloads-label{display:flex;align-items:center;gap:7px;min-width:0;color:#0f766e;font-size:12.5px;font-weight:800;}
 .document-downloads-count{flex:0 0 auto;border-radius:999px;background:#dff3eb;color:#0f766e;padding:3px 7px;font-size:10.5px;font-weight:800;line-height:1.2;}
@@ -3852,12 +4026,12 @@ const CSS = `
 .top-items-head{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:32px;margin:-4px 0 6px;}
 .top-items-head .lb{min-width:0;margin:0;}
 .p-top .loglist{border-top:0;border-left:1px dashed ${C.line};padding:4px 0 4px 16px;}
-@media(max-width:1100px){.p-top{grid-template-columns:1fr;}.p-top .top-items,.p-top .loglist{border-left:0;padding-left:0;border-top:1px dashed ${C.line};padding-top:12px;margin-bottom:10px;}.completion-overview.with-documents{grid-template-columns:1fr;}.document-downloads{width:100%;}.activity-drawer{width:min(420px,70%);}}
+@media(max-width:1100px){.p-top{grid-template-columns:1fr;}.p-top .top-items,.p-top .loglist{border-left:0;padding-left:0;border-top:1px dashed ${C.line};padding-top:12px;margin-bottom:10px;}.completion-overview.with-support{grid-template-columns:1fr;}.document-downloads{width:100%;}.activity-drawer{width:min(420px,70%);}}
 .logrow{display:flex;align-items:baseline;gap:9px;font-size:12px;padding:5px 0;color:#475569;white-space:nowrap;}
 .logrow span{color:${C.soft};white-space:nowrap;}
 .logrow b{white-space:nowrap;}
 .logrow em{font-style:normal;color:${C.muted};white-space:nowrap;}
-@media(max-width:640px){.panel{width:100%;}.detail-inline{min-width:1040px;padding:10px 12px;}.row{min-width:1040px;grid-template-columns:64px minmax(108px,.9fr) minmax(108px,.86fr) minmax(188px,1.36fr) minmax(120px,.95fr) 82px minmax(168px,1fr) 66px 70px;padding:11px 12px;font-size:12.5px;}.tag{padding:4px 7px}.nophieu{padding:3px 6px}.st{padding:5px 8px}.material-cards{grid-template-columns:1fr;}.edit-field-grid,.bbkt-grid,.confirm-field-row,.stats-issue-grid,.accept-two-grid,.use-field-grid,.recovery-quantity-row,.receive-field-grid,.receive-field-grid.advance-receive-fields,.vhv-receive-grid,.review-receive-row,.review-use-grid,.review-recovery-grid,.review-accept-grid{grid-template-columns:1fr;gap:8px;}.erp-readonly-row{grid-template-columns:minmax(110px,.8fr) minmax(180px,1.5fr) minmax(110px,.7fr);}.review-receive-toggle{width:100%;}.review-receive-toggle button{flex:1;}.qty-field input{padding-left:8px;padding-right:8px;}}
+@media(max-width:640px){.panel{width:100%;}.detail-inline{min-width:1040px;padding:10px 12px;}.row{min-width:1040px;grid-template-columns:64px minmax(108px,.9fr) minmax(108px,.86fr) minmax(188px,1.36fr) minmax(120px,.95fr) 82px minmax(168px,1fr) 66px 70px;padding:11px 12px;font-size:12.5px;}.tag{padding:4px 7px}.nophieu{padding:3px 6px}.st{padding:5px 8px}.material-cards{grid-template-columns:1fr;}.edit-field-grid,.bbkt-grid,.confirm-field-row,.stats-issue-grid,.accept-two-grid,.use-field-grid,.recovery-quantity-row,.receive-field-grid,.receive-field-grid.advance-receive-fields,.vhv-receive-grid,.review-receive-row,.review-use-grid,.review-recovery-grid,.review-accept-grid{grid-template-columns:1fr;gap:8px;}.step-review-dialog .frm-f{flex-wrap:wrap;}.step-review-dialog .frm-f>.note{flex-basis:100%;}.step-review-dialog .frm-f>.btn.primary{min-width:132px;}.erp-readonly-row{grid-template-columns:minmax(110px,.8fr) minmax(180px,1.5fr) minmax(110px,.7fr);}.review-receive-toggle{width:100%;}.review-receive-toggle button{flex:1;}.qty-field input{padding-left:8px;padding-right:8px;}}
 @media(max-width:640px){.ticket-unit-field{grid-template-columns:58px minmax(0,1fr);gap:8px;}.ticket-unit-options{max-width:none;}.ticket-unit-options button{padding-left:6px;padding-right:6px;}.ticket-category-options{grid-template-columns:repeat(3,minmax(0,1fr));}}
 @media(max-width:760px){.top-tools{align-items:stretch;flex-direction:column;}.turn{max-width:100%;min-width:0;}.turn-spacer{display:none;}.month-filter{align-self:flex-start;max-width:100%;}.month-filter select{max-width:calc(100vw - 108px);}.filters{align-self:flex-start;max-width:100%;overflow-x:auto;}.filters button{white-space:nowrap;}.act-title-row{align-items:stretch;flex-direction:column;gap:8px;}.receive-location{width:100%;align-items:flex-start;flex-direction:column;gap:3px;}.flow-toggle,.receive-source-toggle{width:100%;}.flow-toggle button,.receive-source-toggle button{flex:1;min-width:0;padding:0 8px;}.act-field-row,.advance-item-row{grid-template-columns:1fr;gap:6px;}.replacement-entry-row{grid-template-columns:24px minmax(0,1fr) 120px 30px;}.activity-drawer{width:86%;}}
 `;

@@ -14,7 +14,7 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { TableSkeleton } from "@/components/shared/skeletons";
 import { RbacProtectedRoute } from "@/components/shared/rbac-protected-route";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
-import { ReplacementBadge, SamplingOnlyChip } from "@/components/materials/replacement-badge";
+import { ReplacementBadge, ReplacementInProgressBadge, SamplingOnlyChip } from "@/components/materials/replacement-badge";
 import { ReplacementCalendar, dayKey } from "@/components/materials/replacement-calendar";
 import {
   ReplacementStatusDashboard,
@@ -52,6 +52,7 @@ import {
   isSelectableManagingPosition,
   REPL_DUE,
   REPL_DUE_ORDER,
+  REPLACEMENT_IN_PROGRESS,
   addMonths,
   materialMachineTone,
   replacementDueStatus,
@@ -67,6 +68,12 @@ import { normalizePctNumber } from "@/lib/material-replacement-source";
 type TabKey = "schedule" | "status" | "history";
 type HistorySortKey = "subject" | "source" | "replacedAt" | "quantity" | "doneBy" | "locked";
 type SortDir = "asc" | "desc";
+
+function replacementScheduleState(point: ReplacementItem) {
+  return (point.inProgressTickets?.length ?? 0) > 0
+    ? "IN_PROGRESS" as const
+    : replacementDueStatus(point.nextDueAt);
+}
 
 // Bộ lọc tổ máy: theo tab Danh mục vật tư mà vật tư thuộc về (Material.machine).
 const MACHINE_FILTERS = [
@@ -373,6 +380,7 @@ export function ReplacementsPageContent({ only }: { only?: TabKey } = {}) {
       intervalNote: point.intervalNote,
       quantity: point.quantity,
       deviceCount: point.deviceCount,
+      inProgressTickets: point.inProgressTickets ?? [],
     };
   });
   const demoSearch = debouncedSearchQ.trim().toLocaleLowerCase("vi");
@@ -388,10 +396,10 @@ export function ReplacementsPageContent({ only }: { only?: TabKey } = {}) {
   const statusPoints = [...actualStatusPoints, ...statusDemoPoints];
   // Lọc theo tháng/năm: chỉ các điểm có NGÀY ĐẾN HẠN trong tháng đang chọn.
   const byMonth = byCategory.filter((p) => ym(p.nextDueAt) === month);
-  const counts = { OVERDUE: 0, DUE_SOON: 0, OK: 0 };
-  for (const p of byMonth) counts[replacementDueStatus(p.nextDueAt)]++;
+  const counts = { OVERDUE: 0, DUE_SOON: 0, OK: 0, IN_PROGRESS: 0 };
+  for (const p of byMonth) counts[replacementScheduleState(p)]++;
   const total = byMonth.length;
-  const points = due === "ALL" ? byMonth : byMonth.filter((p) => replacementDueStatus(p.nextDueAt) === due);
+  const points = due === "ALL" ? byMonth : byMonth.filter((p) => replacementScheduleState(p) === due);
   // Panel bên phải: cả tháng, hoặc chỉ ngày đang chọn trên lịch; sắp theo ngày đến hạn.
   const panelPoints = (selectedDay ? points.filter((p) => dayKey(p.nextDueAt) === selectedDay) : [...points]).sort(
     (a, b) => new Date(a.nextDueAt).getTime() - new Date(b.nextDueAt).getTime()
@@ -566,10 +574,10 @@ export function ReplacementsPageContent({ only }: { only?: TabKey } = {}) {
       },
       {
         key: "quantity",
-        header: "Số lượng",
+        header: "Khối lượng thực dùng",
         width: 14,
         align: "center" as const,
-        value: (l: ReplacementLogItem) => (l.quantity != null ? `${l.quantity} ${l.replacement?.material.unit ?? ""}` : ""),
+        value: (l: ReplacementLogItem) => ((l.usedQuantity ?? l.quantity) != null ? `${l.usedQuantity ?? l.quantity} ${l.replacement?.material.unit ?? ""}` : ""),
       },
       {
         key: "requestNumber",
@@ -635,7 +643,9 @@ export function ReplacementsPageContent({ only }: { only?: TabKey } = {}) {
         interval: replacementIntervalLabel(p.intervalMonths, p.intervalNote),
         lastReplaced: formatDate(p.lastReplacedAt),
         nextDue: formatDate(p.nextDueAt),
-        status: REPL_DUE[replacementDueStatus(p.nextDueAt)].label,
+        status: replacementScheduleState(p) === "IN_PROGRESS"
+          ? REPLACEMENT_IN_PROGRESS.label
+          : REPL_DUE[replacementDueStatus(p.nextDueAt)].label,
         cuongViQuanLy: p.managingPosition ?? "",
       };
     });
@@ -937,6 +947,14 @@ export function ReplacementsPageContent({ only }: { only?: TabKey } = {}) {
                 headerRight={
                   <div className="flex flex-wrap items-center justify-end gap-1.5">
                     <Chip compact active={due === "ALL"} onClick={() => setDue("ALL")} label="Tất cả" count={total} />
+                    <Chip
+                      compact
+                      active={due === "IN_PROGRESS"}
+                      onClick={() => setDue("IN_PROGRESS")}
+                      label={REPLACEMENT_IN_PROGRESS.label}
+                      count={counts.IN_PROGRESS}
+                      dot={REPLACEMENT_IN_PROGRESS.dot}
+                    />
                     {REPL_DUE_ORDER.map((k) => (
                       <Chip key={k} compact active={due === k} onClick={() => setDue(k)} label={REPL_DUE[k].label} count={counts[k]} dot={REPL_DUE[k].dot} />
                     ))}
@@ -996,7 +1014,9 @@ export function ReplacementsPageContent({ only }: { only?: TabKey } = {}) {
                               <div className="font-mono text-[11px] text-navy">{p.material.code}</div>
                               {p.samplingOnly && <SamplingOnlyChip className="mt-1" />}
                             </div>
-                            <ReplacementBadge nextDueAt={p.nextDueAt} withText samplingOnly={p.samplingOnly} />
+                            {(p.inProgressTickets?.length ?? 0) > 0
+                              ? <ReplacementInProgressBadge />
+                              : <ReplacementBadge nextDueAt={p.nextDueAt} withText samplingOnly={p.samplingOnly} />}
                           </div>
                           <div className="mt-1.5 space-y-1 text-xs text-muted-foreground">
                             <div className="flex items-center gap-1.5">
@@ -1015,6 +1035,14 @@ export function ReplacementsPageContent({ only }: { only?: TabKey } = {}) {
                             <div>
                               Đến hạn: <span className="font-semibold text-ink">{formatDate(p.nextDueAt)}</span>
                             </div>
+                            {(p.inProgressTickets ?? []).map((ticket) => (
+                              <div key={ticket.id} className="rounded-lg border border-blue-100 bg-blue-50 px-2 py-1 text-blue-800">
+                                Phiếu vật tư: <span className="font-semibold">{ticket.number}</span>
+                                {ticket.repairRequestNumber && (
+                                  <> · SYC: <span className="font-semibold">{ticket.repairRequestNumber}</span></>
+                                )}
+                              </div>
+                            ))}
                           </div>
                           <div className="mt-2 flex items-center gap-1 border-t border-border/60 pt-2">
                             {/* Chỉ xem — lịch sử thay thế chỉ sinh từ SYC thay thế vật tư. */}
@@ -1198,7 +1226,7 @@ export function ReplacementsPageContent({ only }: { only?: TabKey } = {}) {
                         {formatDate(l.replacedAt)}
                       </TableCell>
                       <TableCell className="px-3 py-2.5 text-center text-sm">
-                        {l.quantity != null ? `${l.quantity.toLocaleString("vi-VN")} ${l.unitLabel ?? l.replacement?.material.unit ?? ""}` : "—"}
+                        {(l.usedQuantity ?? l.quantity) != null ? `${(l.usedQuantity ?? l.quantity)!.toLocaleString("vi-VN")} ${l.unitLabel ?? l.replacement?.material.unit ?? ""}` : "—"}
                       </TableCell>
                       <TableCell className="px-3 py-2.5 text-center">
                         {/* Dòng lưu trữ đối chiếu tên trên sổ với hồ sơ user. Không dùng
@@ -1660,7 +1688,7 @@ function historySortValue(row: ReplacementLogItem, key: HistorySortKey): string 
   const replacement = row.replacement;
   const device = replacement?.device ?? replacement?.material.deviceMaterials?.[0]?.device ?? null;
   if (key === "replacedAt") return new Date(row.replacedAt).getTime();
-  if (key === "quantity") return row.quantity ?? 0;
+  if (key === "quantity") return row.usedQuantity ?? row.quantity ?? 0;
   if (key === "doneBy") return row.doneByName || row.doneBy.name;
   if (key === "locked") return replacementHistoryStatus(row) === "PENDING" ? 1 : 0;
   if (key === "source") return normalizePctNumber(row.requestNumber ?? row.defectHistory?.workOrderNumber ?? row.pctNumber);

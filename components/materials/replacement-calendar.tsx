@@ -5,7 +5,7 @@ import { CalendarDays, ChevronDown, ChevronLeft, ChevronRight } from "lucide-rea
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { materialMachineTone, REPL_DUE, REPL_DUE_ORDER } from "@/lib/constants";
+import { materialMachineTone, REPLACEMENT_IN_PROGRESS, REPL_DUE, REPL_DUE_ORDER } from "@/lib/constants";
 import type { ReplacementItem } from "@/hooks/useReplacements";
 
 /** "YYYY-MM-DD" theo giờ địa phương — khoá so khớp ô ngày trên lịch. */
@@ -175,18 +175,29 @@ export function ReplacementCalendar({ month, onMonthChange, points, selectedDay,
                       {d.getDate()}
                     </span>
                   </span>
-                  {events.slice(0, MAX_CHIPS_PER_DAY).map((p) => (
-                    <span
-                      key={p.id}
-                      title={`${p.material.code} — ${p.material.name}`}
-                      className={cn(
-                        "block w-full truncate rounded px-1.5 py-0.5 text-[11px] font-medium shadow-sm",
-                        materialMachineTone(p.material.machine).chip
-                      )}
-                    >
-                      {p.material.name}
-                    </span>
-                  ))}
+                  {events.slice(0, MAX_CHIPS_PER_DAY).map((p) => {
+                    const progress = p.inProgressTickets ?? [];
+                    const progressText = progress
+                      .map((ticket) => `${ticket.number}${ticket.repairRequestNumber ? ` · SYC ${ticket.repairRequestNumber}` : ""}`)
+                      .join("; ");
+                    return (
+                      <span
+                        key={p.id}
+                        title={`${p.material.code} — ${p.material.name}${progressText ? ` · Đang thay thế: ${progressText}` : ""}`}
+                        className={cn(
+                          "block w-full truncate rounded px-1.5 py-0.5 text-[11px] font-medium shadow-sm",
+                          progress.length > 0
+                            ? REPLACEMENT_IN_PROGRESS.badge
+                            : materialMachineTone(p.material.machine).chip,
+                        )}
+                      >
+                        {progress.length > 0 && (
+                          <span className="mr-1 inline-block h-1.5 w-1.5 rounded-full bg-white" />
+                        )}
+                        {p.material.name}
+                      </span>
+                    );
+                  })}
                   {overflow > 0 && <span className="px-1 text-[11px] font-semibold text-accent">+{overflow} vật tư khác</span>}
                 </button>
               );

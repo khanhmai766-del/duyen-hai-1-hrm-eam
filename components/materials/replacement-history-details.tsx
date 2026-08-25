@@ -51,12 +51,22 @@ export function ReplacementHistoryDetails({ log }: { log: ReplacementLogItem }) 
           }
         />
         <Field
-          label="Số lượng đã thay"
-          value={log.quantity != null ? `${log.quantity.toLocaleString("vi-VN")} ${log.unitLabel ?? point?.material.unit ?? ""}` : null}
+          label="Khối lượng thực dùng"
+          value={(log.usedQuantity ?? log.quantity) != null ? `${(log.usedQuantity ?? log.quantity)!.toLocaleString("vi-VN")} ${log.unitLabel ?? point?.material.unit ?? ""}` : null}
         />
+        {log.usedQuantity != null && (
+          <Field
+            label="Khối lượng kế hoạch"
+            value={log.quantity != null ? `${log.quantity.toLocaleString("vi-VN")} ${log.unitLabel ?? point?.material.unit ?? ""}` : null}
+          />
+        )}
         <Field label="Ngày thay" value={formatDate(log.replacedAt)} mono />
         <Field label="Người ghi nhận" value={log.doneBy.name} />
         <Field label="Số yêu cầu" value={log.requestNumber} mono />
+        <Field label="Số PCT/LCT" value={log.pctNumber} mono />
+        <Field label="Số BBNT DO" value={log.bbntDoNumber} mono />
+        <Field label="Số phiếu ĐXVT" value={log.proposalNumber} mono />
+        <Field label="Phiếu giao hàng" value={log.deliveryNoteNumber} mono />
         <Field label="Loại yêu cầu" value={history?.requestType} />
       </div>
 

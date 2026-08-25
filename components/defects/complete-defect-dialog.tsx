@@ -47,8 +47,8 @@ export function CompleteDefectDialog({
   });
   const sheetTracked = defect?.sourceType === "GOOGLE_SHEETS" || defect?.websiteCreated;
   const editingPending = Boolean(defect?.pendingHistory);
-  // Đóng vòng lặp với Danh mục vật tư: mặc định tick sẵn vì phiếu thay thế xong
-  // gần như luôn đi kèm việc dời hạn của điểm theo dõi.
+  // Đường dự phòng cho hồ sơ SYC cũ không có phiếu vật tư. Hồ sơ có phiếu sẽ chốt
+  // khối lượng thực dùng và gia hạn chu kỳ tại bước quyết toán phiếu.
   const [recordReplacement, setRecordReplacement] = React.useState(true);
   React.useEffect(() => { setRecordReplacement(true); }, [defect?.id]);
   const hasSheetSourceData = defect?.sourceType === "GOOGLE_SHEETS";
@@ -102,18 +102,27 @@ export function CompleteDefectDialog({
         // Hạn chốt giữ nguyên theo lần xác nhận đầu, sửa thông tin không dời hạn.
         toast.success("Đã cập nhật thông tin chờ chốt lịch sử");
       } else {
-        // Phiếu rời khỏi bảng Khiếm khuyết ngay sau bước này nên phải nói rõ
-        // nó nằm ở đâu, kèm lối mở thẳng sang trang Lịch sử sửa chữa.
-        toast.success("Đã chuyển phiếu sang Lịch sử sửa chữa", {
-          description: sheetTracked
-            ? `Phiếu không còn ở bảng Khiếm khuyết. Tra cứu ở Lịch sử sửa chữa, lọc Chờ chốt — hệ thống tự chốt sau ${pendingDays} ngày.`
-            : "Phiếu không còn ở bảng Khiếm khuyết. Tra cứu ở Lịch sử sửa chữa.",
+        // SYC vật tư thuộc hồ sơ lần thay thế, vì vậy sau khi lưu phải đi
+        // thẳng sang Lịch sử thay thế. Khiếm khuyết thông thường vẫn về Lịch sử
+        // sửa chữa như cũ, tránh trộn hai loại hồ sơ trên cùng một màn.
+        const isReplacementHistory = defect.isMaterialRequest;
+        const historyPath = isReplacementHistory ? "/replacement-history" : "/repair-history";
+        const historyLabel = isReplacementHistory ? "Lịch sử thay thế" : "Lịch sử sửa chữa";
+        toast.success(`Đã chuyển phiếu sang ${historyLabel}`, {
+          description: isReplacementHistory
+            ? sheetTracked
+              ? `Hồ sơ thay thế đã được ghi nhận. Nội dung SYC tiếp tục được cập nhật và tự chốt sau ${pendingDays} ngày.`
+              : "Hồ sơ thay thế đã được ghi nhận."
+            : sheetTracked
+              ? `Phiếu không còn ở bảng Khiếm khuyết. Tra cứu ở Lịch sử sửa chữa, lọc Chờ chốt — hệ thống tự chốt sau ${pendingDays} ngày.`
+              : "Phiếu không còn ở bảng Khiếm khuyết. Tra cứu ở Lịch sử sửa chữa.",
           duration: 8000,
           action: {
-            label: "Mở lịch sử",
-            onClick: () => router.push("/repair-history"),
+            label: isReplacementHistory ? "Mở lịch sử thay thế" : "Mở lịch sử",
+            onClick: () => router.push(historyPath),
           },
         });
+        if (isReplacementHistory) router.push(historyPath);
       }
       onClose();
     } catch (e) {
@@ -156,10 +165,10 @@ export function CompleteDefectDialog({
                   className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer accent-[#00558F]"
                 />
                 <span className="text-sm leading-5">
-                  <span className="font-semibold text-ink">Ghi nhận đã thay thế vật tư</span>
+                  <span className="font-semibold text-ink">Ghi nhận thay thế (hồ sơ không có phiếu vật tư)</span>
                   <span className="block text-xs text-muted-foreground">
-                    Ghi lần thay vào lịch sử của các điểm thuộc phiếu này và dời hạn kế tiếp thêm
-                    một chu kỳ. Bỏ tick nếu thực tế chưa thay xong — điểm sẽ vẫn báo đến hạn.
+                    Hệ thống chỉ ghi tại đây khi điểm chưa gắn phiếu vật tư. Nếu đã có phiếu,
+                    lịch sử và chu kỳ kế tiếp sẽ tự chốt theo khối lượng thực dùng lúc quyết toán.
                   </span>
                 </span>
               </label>

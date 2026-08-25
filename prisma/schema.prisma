@@ -465,16 +465,26 @@ model MaterialReplacement {
   nextDueAt            DateTime // ngày đến hạn kế tiếp
   note                 String?
   isActive             Boolean   @default(true)
+  // Đã sinh chu kỳ kế tiếp cho điểm này hay chưa. Một điểm có thể được cấp vật tư nhiều đợt
+  // (lãnh hai lần cho cùng một lần thay), mỗi đợt là một phiếu và một dòng lịch sử — nhưng
+  // CHU KỲ CHỈ ĐƯỢC GIA HẠN MỘT LẦN. Lần quyết toán sau thấy cột này đã có giá trị thì chỉ
+  // ghi lịch sử, không tạo điểm mới nữa.
+  renewalAppliedAt     DateTime?
+  // Công tắc tự động gia hạn. Tắt cho những điểm có chu kỳ thực tế lệch nhiều so với khai
+  // báo — khi đó vẫn ghi lịch sử nhưng để người dùng tự khai lại chu kỳ mới.
+  autoRenew            Boolean   @default(true)
   createdById          String
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt
 
-  material       Material                 @relation(fields: [materialId], references: [id], onDelete: Cascade)
-  device         EquipmentNode?           @relation(fields: [deviceSeq], references: [seq], onDelete: SetNull)
-  createdBy      User                     @relation("MrCreatedBy", fields: [createdById], references: [id])
+  material       Material                    @relation(fields: [materialId], references: [id], onDelete: Cascade)
+  device         EquipmentNode?              @relation(fields: [deviceSeq], references: [seq], onDelete: SetNull)
+  createdBy      User                        @relation("MrCreatedBy", fields: [createdById], references: [id])
   logs           MaterialReplacementLog[]
   // Các SYC thay thế đã ra cho chính điểm khai báo này.
   defectRequests DefectMaterialRequest[]
+  // Các phiếu vật tư phục vụ điểm này — xem model MaterialTicketReplacement.
+  ticketLinks    MaterialTicketReplacement[]
 
   @@index([deviceSeq])
   // Index prefix cho truy vấn cả nhánh cây: WHERE deviceSeq LIKE '1.2.%'
@@ -512,6 +522,17 @@ model MaterialReplacementLog {
   defectId         String?
   requestNumber    String?
 
+  // --- Số liệu THỰC TẾ, ghi tại bước quyết toán của phiếu vật tư (giai đoạn 3) ---
+  // `quantity` phía trên là số KẾ HOẠCH khi dòng do SYC sinh ra (= quantity × deviceCount
+  // của điểm). `usedQuantity` mới là khối lượng đã tiêu thụ thật, và là con số DUY NHẤT
+  // được dùng để tính luỹ kế sử dụng cho biểu dự toán năm QLVT.20.
+  ticketId           String? // phiếu vật tư đã ghi dòng này; null = dòng do SYC hoặc nhập tay
+  usedQuantity       Int?
+  bbntDoNumber       String?
+  bbntDoUrl          String?
+  proposalNumber     String? // số phiếu ĐXVT
+  deliveryNoteNumber String? // số phiếu giao hàng của lô đã dùng
+
   // --- Dữ liệu LƯU TRỮ nhập từ Google Sheet theo dõi vật tư (07.2025 → 08.2026) ---
   // Chỉ để TRA CỨU: các dòng này không gắn điểm theo dõi (replacementId = null) nên
   // không đụng vào luồng ghi nhận thay thế đang chạy trên web.
@@ -534,6 +555,11 @@ model MaterialReplacementLog {
 
   // Chạy lại script nhập không được tạo bản sao: khoá duy nhất theo nguồn + vị trí dòng.
   @@unique([importSource, importKey])
+  // Một phiếu chỉ ghi ĐÚNG MỘT dòng cho mỗi điểm: gọi lại tác vụ quyết toán bao nhiêu lần
+  // cũng không sinh dòng thứ hai. Đây là khoá idempotent của giai đoạn 3.
+  // Dòng do SYC/nhập tay sinh có ticketId = null nên không dính ràng buộc này (Postgres coi
+  // mỗi NULL là khác nhau trong unique index).
+  @@unique([replacementId, ticketId])
   // Lịch sử "các lần thay tại điểm X, mới nhất trước" đọc thẳng từ index; lọc theo
   // riêng replacementId cũng dùng chính index này (tiền tố cột đầu).
   @@index([replacementId, replacedAt(sort: Desc)])
@@ -545,6 +571,7 @@ model MaterialReplacementLog {
   @@index([materialId])
   @@index([defectId])
   @@index([importSource, replacedAt(sort: Desc)])
+  @@index([ticketId])
 }
 
 // Cầu nối "Chi tiết điểm thay thế" (Danh mục vật tư) → Số yêu cầu khiếm khuyết.
@@ -674,6 +701,9 @@ model Defect {
   pendingHistory   DefectHistoryPending?
   reminderLogs     DefectReminderLog[]
   materialRequests DefectMaterialRequest[]
+  // Phiếu vật tư đã ra SYC này. Quan hệ đặt tên vì Defect còn nối MaterialTicket qua
+  // DefectMaterialRequest ở trên, Prisma cần phân biệt hai đường.
+  materialTickets  MaterialTicket[]        @relation("MaterialTicketDefect")
 
   @@index([positionCode])
   // Bảng này phình nhanh nhất (mỗi ca trực đẻ thêm phiếu) nên chỉ giữ index KHÔNG
@@ -1313,17 +1343,17 @@ model BgtsTurbineShutdownRow {
 // `Material.quantity` GIỮ LẠI làm tổng các lô còn lại (tính lại sau mỗi lần ghi), để mọi màn hình
 // và báo cáo đang đọc cột đó không phải sửa.
 model MaterialStockLot {
-  id           String    @id @default(cuid())
-  materialCode String // = Material.code
-  stockUnit    String    @default("COMMON") // Chai khí tách kho S1 | S2 | COMMON; vật tư khác dùng COMMON
-  deliveryNote String? // số phiếu giao hàng; null = tồn đầu kỳ chưa rõ phiếu
-  erpCode      String? // mã vật tư ERP đã lãnh, in kèm trên biên bản
+  id                  String    @id @default(cuid())
+  materialCode        String // = Material.code
+  stockUnit           String    @default("COMMON") // Chai khí tách kho S1 | S2 | COMMON; vật tư khác dùng COMMON
+  deliveryNote        String? // số phiếu giao hàng; null = tồn đầu kỳ chưa rõ phiếu
+  erpCode             String? // mã vật tư ERP đã lãnh, in kèm trên biên bản
   // null = tồn đầu kỳ: xếp ĐẦU hàng đợi FIFO để dùng hết trước các lô có phiếu.
-  receivedAt   DateTime?
-  quantityIn   Int // số lãnh về ban đầu
-  quantityLeft Int // còn lại sau khi trừ các lần sử dụng
-  ticketId     String? // phiếu đã lãnh lô này về; mỗi phiếu một lô
-  note         String?
+  receivedAt          DateTime?
+  quantityIn          Int // số lãnh về ban đầu
+  quantityLeft        Int // còn lại sau khi trừ các lần sử dụng
+  ticketId            String? // phiếu đã lãnh lô này về; mỗi phiếu một lô
+  note                String?
   // Ảnh phiếu xuất kho LIÊN 3, bắt buộc kèm theo Biên bản vật tư thu hồi (chú thích số 6
   // của mẫu QLVT.06: "Nộp kèm bản photo Phiếu Giao hàng").
   //
@@ -1336,8 +1366,8 @@ model MaterialStockLot {
   deliveryPhotoKey    String? // khóa S3
   deliveryPhotoAt     DateTime?
   deliveryPhotoByName String? // người đính kèm, đóng băng tại thời điểm chụp
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
   usages MaterialLotUsage[]
 
@@ -1362,29 +1392,29 @@ model MaterialLotUsage {
 // MaterialStockLot; bảng này là chứng từ nghiệp vụ, còn phân bổ FIFO dùng
 // MaterialLotUsage với ticketId = "movement:<id>".
 model MaterialStockMovement {
-  id                 String   @id @default(cuid())
-  materialId         String
-  materialCode       String
-  erpCodes           String[] @default([]) // mã ERP thực tế của lô nhập/các lô FIFO đã xuất
-  type               String // RECEIPT | ISSUE | USE | ADJUST
-  quantity           Int
-  stockBefore        Int
-  stockAfter         Int
-  occurredAt         DateTime
-  ticketId           String?
-  ticketItemId       String?
-  assignedPosition   String?
-  unit               String?
-  deviceSeq          String?
-  receiverId         String?
-  receiverName       String?
-  issuerId           String?
-  issuerName         String?
-  note               String?
-  createdById        String
-  createdByName      String
-  createdByPosition  String?
-  createdAt          DateTime @default(now())
+  id                String   @id @default(cuid())
+  materialId        String
+  materialCode      String
+  erpCodes          String[] @default([]) // mã ERP thực tế của lô nhập/các lô FIFO đã xuất
+  type              String // RECEIPT | ISSUE | USE | ADJUST
+  quantity          Int
+  stockBefore       Int
+  stockAfter        Int
+  occurredAt        DateTime
+  ticketId          String?
+  ticketItemId      String?
+  assignedPosition  String?
+  unit              String?
+  deviceSeq         String?
+  receiverId        String?
+  receiverName      String?
+  issuerId          String?
+  issuerName        String?
+  note              String?
+  createdById       String
+  createdByName     String
+  createdByPosition String?
+  createdAt         DateTime @default(now())
 
   material Material @relation(fields: [materialId], references: [id])
 
@@ -1410,6 +1440,10 @@ model MaterialTicket {
 
   bbktNumber           String? // số Biên Bản Kiểm Tra (Đề xuất: nhập ở bước nghiệm thu, nếu có; Ứng: bổ sung sau PDF)
   proposalNote         String? // ghi chú khi tạo phiếu đề xuất (thay cho BBKT ở B0)
+  // SYC sửa chữa đã ra TỪ phiếu này (giai đoạn 2 — cổng vật tư đứng trước SYC).
+  // `repairRequestNumber` phía dưới vẫn giữ nguyên làm SNAPSHOT số hiệu: phiếu khiếm khuyết
+  // có thể bị xoá, số đã in trên chứng từ thì không được biến mất theo.
+  defectId             String?
   pctNumber            String? // số PCT/LCT (nhập ở bước nghiệm thu/xuất file)
   proposalNumber       String? // số phiếu đề xuất vật tư (Thống kê nhập)
   proposalDocUrl       String? // file Word Phiếu ĐXVT (QLVT.12) trên MinIO — xuất trước khi nhập số phiếu
@@ -1499,7 +1533,9 @@ model MaterialTicket {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  items MaterialTicketItem[]
+  items            MaterialTicketItem[]
+  defect           Defect?                     @relation("MaterialTicketDefect", fields: [defectId], references: [id], onDelete: SetNull)
+  replacementLinks MaterialTicketReplacement[]
 
   @@unique([sequenceMonth, sequenceScope, sequenceNumber])
   @@index([sequenceMonth, sequenceScope])
@@ -1507,6 +1543,34 @@ model MaterialTicket {
   @@index([unit, status])
   @@index([type])
   @@index([assignedPosition])
+  @@index([defectId])
+}
+
+/// Phiếu vật tư phục vụ điểm thay thế nào.
+///
+/// Thay cho `MaterialTicketItem.replacementPointKeys` — mảng đó chỉ chứa CHUỖI `deviceSeq`
+/// (xem `replacementPointSelectionKey`), nên biết phiếu phục vụ thiết bị nào nhưng không biết
+/// phục vụ KỲ THAY THẾ nào. Không có khoá ngoại thật thì không thể ghi lịch sử thay thế bằng
+/// khối lượng thực dùng, cũng không mồi sẵn được thiết bị/cương vị khi ra SYC từ phiếu.
+///
+/// Mảng cũ VẪN GIỮ, không xoá: `lib/equipment-move.ts` còn dựa vào nó khi đổi mã thiết bị, và
+/// nó là snapshot đọc được cả khi điểm đã bị xoá khỏi danh mục.
+model MaterialTicketReplacement {
+  id              String   @id @default(cuid())
+  ticketId        String
+  // Xoá điểm khỏi danh mục thì gỡ luôn liên kết; lịch sử thay thế không bị ảnh hưởng vì
+  // MaterialReplacementLog neo mềm và mang đủ snapshot.
+  replacementId   String
+  /// Nhu cầu của điểm tại lúc gắn = `quantity × deviceCount`. Snapshot, cố ý không đọc lại
+  /// qua quan hệ: sửa khai báo điểm sau đó không được làm đổi con số phiếu đã căn cứ.
+  plannedQuantity Int?
+  createdAt       DateTime @default(now())
+
+  ticket      MaterialTicket      @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  replacement MaterialReplacement @relation(fields: [replacementId], references: [id], onDelete: Cascade)
+
+  @@unique([ticketId, replacementId])
+  @@index([replacementId])
 }
 
 // Phân quyền các bước của quy trình phiếu thay thế vật tư: admin gán CƯƠNG VỊ nào

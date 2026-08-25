@@ -21,6 +21,7 @@ import {
   materialTicketReference,
 } from "@/lib/material-ticket-sequence";
 import { replacementPointDisplayLabel, replacementPointSelectionKey } from "@/lib/material-replacement-display";
+import { syncTicketReplacementLinks, type LinkablePoint } from "@/lib/material-ticket-replacement-link";
 
 export const dynamic = "force-dynamic";
 
@@ -257,7 +258,7 @@ export async function POST(req: NextRequest) {
         select: {
           id: true, code: true, name: true, category: true, machine: true,
           replacements: {
-            select: { id: true, deviceSeq: true, location: true, system: true, managingPosition: true, device: { select: { name: true } } },
+            select: { id: true, deviceSeq: true, location: true, system: true, managingPosition: true, quantity: true, deviceCount: true, device: { select: { name: true } } },
           },
         },
       });
@@ -266,6 +267,9 @@ export async function POST(req: NextRequest) {
       const commonTicket = assignedPosition === COMMON_MATERIAL_POSITION;
       if (commonTicket && unit !== "COMMON") return fail("Vật tư Chung phải chọn tổ máy Chung");
 
+      // Phiếu Vật tư khác gom nhiều vật tư, mỗi vật tư một tập điểm riêng. Gom tất cả lại để
+      // neo phiếu vào từng điểm sau khi tạo — xem lib/material-ticket-replacement-link.ts.
+      const linkedPoints: LinkablePoint[] = [];
       const itemData = requestedItems.map((requested) => {
         const material = materialById.get(requested.materialId)!;
         if (!isOtherMaterialCategory(material.category)) throw fail(`Vật tư "${material.name}" không thuộc nhóm Vật tư khác`);
@@ -284,6 +288,7 @@ export async function POST(req: NextRequest) {
         if (hasDevice && !requested.replacementKeys.length) throw fail(`Vui lòng chọn thiết bị cho vật tư "${material.name}"`);
         if (selectedPoints.some((point) => !point)) throw fail(`Thiết bị đã chọn không thuộc vật tư "${material.name}" và cương vị được giao`);
         const validPoints = selectedPoints.filter((point): point is NonNullable<typeof point> => Boolean(point));
+        linkedPoints.push(...validPoints);
         const primary = validPoints[0];
         const labels = validPoints.map((point) => replacementPointDisplayLabel(point));
         return {
@@ -301,7 +306,7 @@ export async function POST(req: NextRequest) {
         await tx.$executeRaw`LOCK TABLE "MaterialTicket" IN EXCLUSIVE MODE`;
         const sequenceScope = sequenceScopeOfType(ticketType);
         const latest = await tx.materialTicket.aggregate({ where: { sequenceMonth, sequenceScope }, _max: { sequenceNumber: true } });
-        return tx.materialTicket.create({
+        const created = await tx.materialTicket.create({
           data: {
             sequenceMonth,
             sequenceScope,
@@ -319,6 +324,8 @@ export async function POST(req: NextRequest) {
           },
           include: ITEM_INCLUDE,
         });
+        await syncTicketReplacementLinks(tx, created.id, linkedPoints);
+        return created;
       });
       await audit(user.id, workflowType === "UNG" ? "CREATE_OTHER_MATERIAL_ADVANCE_TICKET" : "CREATE_OTHER_MATERIAL_TICKET", "MaterialTicket", ticket.id,
         `${materialTicketReference(ticket)}: luồng ${workflowType === "UNG" ? "Ứng" : "Đề xuất"}, ${requestedItems.length} vật tư, ${assignedPosition}, ${unit}`);
@@ -373,7 +380,7 @@ export async function POST(req: NextRequest) {
     }
     const replacementPoints = await prisma.materialReplacement.findMany({
       where: { materialId: selectedMaterial.id },
-      select: { id: true, deviceSeq: true, location: true, system: true, managingPosition: true, recoveryOnSupplement: true, device: { select: { name: true } } },
+      select: { id: true, deviceSeq: true, location: true, system: true, managingPosition: true, recoveryOnSupplement: true, quantity: true, deviceCount: true, device: { select: { name: true } } },
     });
     const assignedPointByKey = new Map<string, (typeof replacementPoints)[number]>();
     for (const point of replacementPoints) {
@@ -441,6 +448,9 @@ export async function POST(req: NextRequest) {
         },
         include: ITEM_INCLUDE,
       });
+      // Neo phiếu vào ĐÚNG KỲ của từng điểm thay thế. Mảng replacementPointKeys ở trên chỉ là
+      // chuỗi thiết bị nên không đủ — xem lib/material-ticket-replacement-link.ts.
+      await syncTicketReplacementLinks(tx, ticket.id, validReplacementPoints);
       return ticket;
     });
 

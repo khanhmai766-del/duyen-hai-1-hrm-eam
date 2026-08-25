@@ -3,6 +3,7 @@ import { positionCodeOf, positionsMatch } from "@/lib/position-catalog";
 import { normalizeText } from "@/lib/nav";
 import { MAX_DEFECT_RELATED_DEVICES } from "@/lib/defect-related-devices";
 import { buildReplacementLogData } from "@/lib/material-replacement-log";
+import { replacementTargetKey } from "@/lib/material-ticket-replacement-settlement";
 
 /** Tối đa 1 thiết bị chính + N thiết bị liên quan trong cùng một SYC. */
 export const MAX_MATERIAL_REQUEST_POINTS = MAX_DEFECT_RELATED_DEVICES + 1;
@@ -174,6 +175,7 @@ export async function recordMaterialRequestReplacements(
   const links = await tx.defectMaterialRequest.findMany({
     where: { defectId: params.defectId },
     select: {
+      replacementId: true,
       quantity: true,
       pointLabel: true,
       materialId: true,
@@ -182,6 +184,21 @@ export async function recordMaterialRequestReplacements(
   });
   if (links.length === 0) return { logged: 0, released: 0 };
 
+  // Từ giai đoạn 3, phiếu vật tư là nguồn sự thật về khối lượng sử dụng. Nếu một điểm đã
+  // có phiếu phục vụ thì chờ quyết toán phiếu để ghi log; hoàn thành SYC không được ghi
+  // một dòng kế hoạch trước rồi tạo thêm một dòng thực tế sau đó.
+  const ticketLinks = await tx.materialTicketReplacement.findMany({
+    where: { ticket: { defectId: params.defectId } },
+    select: {
+      replacementId: true,
+      replacement: {
+        select: { materialId: true, deviceSeq: true, system: true, location: true },
+      },
+    },
+  });
+  const linkedReplacementIds = new Set(ticketLinks.map((link) => link.replacementId));
+  const linkedTargetKeys = new Set(ticketLinks.map((link) => replacementTargetKey(link.replacement)));
+
   let logged = 0;
   let released = 0;
   for (const link of links) {
@@ -189,6 +206,10 @@ export async function recordMaterialRequestReplacements(
     // Điểm khai báo đã bị xoá khỏi danh mục sau khi ra phiếu — không còn đủ dữ liệu
     // vị trí để dựng snapshot, bỏ qua thay vì ghi một dòng lịch sử khuyết thông tin.
     if (!declaration) continue;
+    if (
+      (link.replacementId && linkedReplacementIds.has(link.replacementId))
+      || linkedTargetKeys.has(replacementTargetKey(declaration))
+    ) continue;
 
     const tracked = declaration.deviceSeq
       ? await tx.materialReplacement.findFirst({
@@ -258,7 +279,9 @@ export async function revertMaterialRequestReplacements(
   // defectId là cột snapshot trên log (có index riêng) nên tra thẳng được, không phải
   // đi vòng qua DefectMaterialRequest — vốn có thể đã bị sửa sau khi ra phiếu.
   const logs = await tx.materialReplacementLog.findMany({
-    where: { defectId: params.defectId },
+    // Chỉ hoàn tác các dòng dự phòng do chính bước hoàn thành SYC tạo. Dòng đã chốt từ
+    // quyết toán phiếu vật tư là sự thật sử dụng và không được xóa khi SYC bị mở lại.
+    where: { defectId: params.defectId, ticketId: null },
     select: { id: true, replacementId: true },
   });
   if (logs.length === 0) return { removed: 0, restored: 0, skipped: 0 };

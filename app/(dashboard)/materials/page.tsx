@@ -1070,6 +1070,9 @@ function MaterialsPageContent() {
         </Card>
       )}
 
+      {/* MỘT thanh thao tác cho toàn trang — xem chú thích ở ReplacementRequestBar. */}
+      <ReplacementRequestBar selection={materialRequestSelection} onChange={setMaterialRequestSelection} />
+
       <Dialog
         open={!!editingDetails}
         onOpenChange={(open) => {
@@ -2267,7 +2270,6 @@ function MaterialExpandedDetails({
   // ── Ra số yêu cầu thay thế ────────────────────────────────────────────────
   // Chọn nhiều điểm → MỘT phiếu. Ràng buộc: cùng tổ máy + cùng cương vị quản lý
   // (server kiểm lại), vì một phiếu chỉ mang được một cặp giá trị này lên Sheet.
-  const [requestOpen, setRequestOpen] = React.useState(false);
   const selectablePoints = React.useMemo(() => points.filter((p) => !!p.deviceSeq), [points]);
   const selectedIds = React.useMemo(() => selectedItems.map((item) => item.point.id), [selectedItems]);
   const anchor = selectedItems[0]?.point ?? null;
@@ -2288,7 +2290,6 @@ function MaterialExpandedDetails({
         ? current.filter((item) => item.point.id !== point.id)
         : [...current, { material: m, point }]
     );
-  const selectedPoints = selectedItems;
 
   const [tracking, setTracking] = React.useState<PanelPoint | null>(null);
   const [trackDate, setTrackDate] = React.useState("");
@@ -2357,18 +2358,14 @@ function MaterialExpandedDetails({
           <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             Chi tiết điểm thay thế ({points.length})
           </span>
+          {/* Thao tác trên tập đã chọn nằm ở THANH DUY NHẤT cuối trang (ReplacementRequestBar).
+              Tập chọn là toàn trang chứ không theo từng vật tư, nên đặt nút trong panel của mỗi
+              vật tư sẽ lặp lại đúng một nút với đúng một con số ở mọi panel đang bung — người
+              dùng tưởng mỗi nút ra SYC cho riêng nhóm đó. */}
           {selectedIds.length > 0 ? (
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-medium text-muted-foreground">
-                Đã chọn {selectedIds.length} điểm · {new Set(selectedItems.map((item) => item.material.id)).size} vật tư
-              </span>
-              <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={() => onSelectedItemsChange([])}>
-                Bỏ chọn
-              </Button>
-              <Button type="button" size="sm" className="h-7 px-3 text-xs" onClick={() => setRequestOpen(true)}>
-                <FileText className="h-3.5 w-3.5" /> Ra SYC thay thế
-              </Button>
-            </div>
+            <span className="text-xs font-medium text-muted-foreground">
+              Đã chọn {selectedIds.length} điểm · {new Set(selectedItems.map((item) => item.material.id)).size} vật tư
+            </span>
           ) : (
             selectablePoints.length > 0 && (
               <span className="text-[11px] text-muted-foreground">
@@ -2529,70 +2526,6 @@ function MaterialExpandedDetails({
 
       {/* Panel nhập khiếm khuyết trượt từ phải — dùng chung DefectForm với màn Khiếm khuyết,
           chỉ khác ở chỗ được mồi sẵn bằng các điểm thay thế đã chọn. */}
-      {requestOpen && selectedPoints.length > 0 && (
-        <div className="fixed inset-0 z-50">
-          <div className="absolute inset-0 bg-ink/45 backdrop-blur-[1px]" onClick={() => setRequestOpen(false)} />
-          <div className="absolute inset-y-0 right-0 flex min-h-0 w-full max-w-2xl flex-col overflow-hidden bg-white shadow-2xl animate-in slide-in-from-right">
-            <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border bg-gradient-to-r from-emerald-50/80 to-white p-4">
-              <div>
-                <h2 className="text-lg font-bold text-ink">Ra số yêu cầu thay thế vật tư</h2>
-                <p className="mt-0.5 text-xs text-muted-foreground">
-                  {selectedPoints.length} điểm · {new Set(selectedPoints.map((item) => item.material.id)).size} vật tư
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setRequestOpen(false)}
-                className="flex h-10 w-10 items-center justify-center rounded-lg text-muted-foreground hover:bg-white hover:text-ink"
-                aria-label="Đóng"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            <DefectForm
-              lockDevice
-              initialDevice={{
-                code: selectedPoints[0].point.deviceSeq ?? "",
-                name: selectedPoints[0].point.device?.name || selectedPoints[0].point.location || "",
-                // Điểm ở cấp thư mục thì chính nó là "hệ thống chính" của phiếu.
-                system: selectedPoints[0].point.deviceIsFolder
-                  ? selectedPoints[0].point.device?.name ?? null
-                  : selectedPoints[0].point.device?.system ?? selectedPoints[0].point.system ?? null,
-                systemSeq: selectedPoints[0].point.deviceSeq ?? null,
-                managingPosition: selectedPoints[0].point.managingPosition ?? null,
-                unit: selectedPoints[0].point.machine ?? selectedPoints[0].material.machine ?? null,
-              }}
-              initialMaterialRequest={{
-                replacementIds: selectedPoints.map((item) => item.point.id),
-                materialName: selectedPoints[0].material.name,
-                materialUnit: selectedPoints[0].material.unit,
-                materialCategory: selectedPoints[0].material.category ?? null,
-                primaryIsFolder: !!selectedPoints[0].point.deviceIsFolder,
-                primarySystemName: selectedPoints[0].point.deviceIsFolder
-                  ? selectedPoints[0].point.device?.name ?? ""
-                  : selectedPoints[0].point.device?.system ?? selectedPoints[0].point.system ?? "",
-                primaryDeviceName: selectedPoints[0].point.device?.name || selectedPoints[0].point.location || "",
-                points: selectedPoints.map(({ material, point }) => ({
-                  id: point.id,
-                  label: [point.device?.system || point.system, point.device?.name || point.location]
-                    .filter(Boolean)
-                    .filter((part, index, all) => all.indexOf(part) === index)
-                    .join(" · "),
-                  quantity: point.quantity * (point.deviceCount || 1),
-                  materialName: material.name,
-                  materialUnit: material.unit,
-                })),
-                suggestedContent: buildReplacementRequestContent(selectedPoints),
-              }}
-              onDone={() => {
-                setRequestOpen(false);
-                onSelectedItemsChange([]);
-              }}
-              onCancel={() => setRequestOpen(false)}
-            />
-          </div>
-        </div>
-      )}
 
       <Dialog open={!!tracking} onOpenChange={(open) => !open && setTracking(null)}>
         <DialogContent className="sm:max-w-md">
@@ -2659,6 +2592,114 @@ function MaterialExpandedDetails({
 }
 
 type PanelReplacementPoint = NonNullable<MaterialWithDevices["replacements"]>[number];
+/**
+ * Thanh thao tác DUY NHẤT cho tập điểm đang chọn ở Danh mục vật tư.
+ *
+ * Trước đây nút "Ra SYC thay thế" nằm trong panel bung của TỪNG vật tư, trong khi tập chọn là
+ * toàn trang — bung ba vật tư là hiện ba nút giống hệt nhau, cùng đếm "Đã chọn 2 điểm", làm
+ * người dùng tưởng mỗi nút chỉ ra SYC cho nhóm của nó. Gom về một thanh nổi ở đáy màn hình:
+ * một tập chọn, một nút, một phạm vi.
+ *
+ * Cửa này CỐ Ý được giữ song song với nút "Ra SYC sửa chữa" trên phiếu vật tư: chỉ ở đây mới
+ * gộp được nhiều điểm thuộc NHIỀU phiếu khác nhau vào một SYC (vd 6 bồn dầu LP/HP do ba phiếu
+ * cấp). Cả hai cửa đều đi qua cổng vật tư và đều được neo ngược về phiếu — xem chú thích
+ * "Neo SYC vừa ra vào các phiếu vật tư" trong app/api/defects/route.ts.
+ */
+function ReplacementRequestBar({
+  selection,
+  onChange,
+}: {
+  selection: MaterialRequestSelection[];
+  onChange: React.Dispatch<React.SetStateAction<MaterialRequestSelection[]>>;
+}) {
+  const [open, setOpen] = React.useState(false);
+  if (selection.length === 0) return null;
+  const materialCount = new Set(selection.map((item) => item.material.id)).size;
+
+  return (
+    <>
+      <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40 flex justify-center px-4 pb-4">
+        <div className="pointer-events-auto flex flex-wrap items-center gap-3 rounded-xl border border-border bg-white px-4 py-2.5 shadow-lg">
+          <span className="text-sm font-medium text-ink">
+            Đã chọn <b>{selection.length}</b> điểm · {materialCount} vật tư
+          </span>
+          <Button type="button" variant="ghost" size="sm" className="h-8 px-3 text-xs" onClick={() => onChange([])}>
+            Bỏ chọn
+          </Button>
+          <Button type="button" size="sm" className="h-8 px-3 text-xs" onClick={() => setOpen(true)}>
+            <FileText className="h-3.5 w-3.5" /> Ra SYC thay thế
+          </Button>
+        </div>
+      </div>
+
+    {open && selection.length > 0 && (
+      <div className="fixed inset-0 z-50">
+        <div className="absolute inset-0 bg-ink/45 backdrop-blur-[1px]" onClick={() => setOpen(false)} />
+        <div className="absolute inset-y-0 right-0 flex min-h-0 w-full max-w-2xl flex-col overflow-hidden bg-white shadow-2xl animate-in slide-in-from-right">
+          <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border bg-gradient-to-r from-emerald-50/80 to-white p-4">
+            <div>
+              <h2 className="text-lg font-bold text-ink">Ra số yêu cầu thay thế vật tư</h2>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                {selection.length} điểm · {new Set(selection.map((item) => item.material.id)).size} vật tư
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              className="flex h-10 w-10 items-center justify-center rounded-lg text-muted-foreground hover:bg-white hover:text-ink"
+              aria-label="Đóng"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+          <DefectForm
+            lockDevice
+            initialDevice={{
+              code: selection[0].point.deviceSeq ?? "",
+              name: selection[0].point.device?.name || selection[0].point.location || "",
+              // Điểm ở cấp thư mục thì chính nó là "hệ thống chính" của phiếu.
+              system: selection[0].point.deviceIsFolder
+                ? selection[0].point.device?.name ?? null
+                : selection[0].point.device?.system ?? selection[0].point.system ?? null,
+              systemSeq: selection[0].point.deviceSeq ?? null,
+              managingPosition: selection[0].point.managingPosition ?? null,
+              unit: selection[0].point.machine ?? selection[0].material.machine ?? null,
+            }}
+            initialMaterialRequest={{
+              replacementIds: selection.map((item) => item.point.id),
+              materialName: selection[0].material.name,
+              materialUnit: selection[0].material.unit,
+              materialCategory: selection[0].material.category ?? null,
+              primaryIsFolder: !!selection[0].point.deviceIsFolder,
+              primarySystemName: selection[0].point.deviceIsFolder
+                ? selection[0].point.device?.name ?? ""
+                : selection[0].point.device?.system ?? selection[0].point.system ?? "",
+              primaryDeviceName: selection[0].point.device?.name || selection[0].point.location || "",
+              points: selection.map(({ material, point }) => ({
+                id: point.id,
+                label: [point.device?.system || point.system, point.device?.name || point.location]
+                  .filter(Boolean)
+                  .filter((part, index, all) => all.indexOf(part) === index)
+                  .join(" · "),
+                quantity: point.quantity * (point.deviceCount || 1),
+                materialName: material.name,
+                materialUnit: material.unit,
+              })),
+              suggestedContent: buildReplacementRequestContent(selection),
+            }}
+            onDone={() => {
+              setOpen(false);
+              onChange([]);
+            }}
+            onCancel={() => setOpen(false)}
+          />
+        </div>
+      </div>
+    )}
+    </>
+  );
+}
+
 type MaterialRequestSelection = {
   material: MaterialWithDevices;
   point: PanelReplacementPoint;

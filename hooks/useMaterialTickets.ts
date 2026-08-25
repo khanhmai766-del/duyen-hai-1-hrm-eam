@@ -281,7 +281,7 @@ export function useDeleteTicket() {
  * thấy "Đến lượt bạn" ở cả phiếu của Máy nghiền / Máy phó / XLN hỗn hợp.
  *
  * Bước của VHV (bắt buộc trùng cương vị phiếu): propose, vhvReceive, receiveExisting,
- * receive (trừ luồng Ứng), repairRequest, use, returnItems.
+ * receive (trừ luồng Ứng), createRepairRequest, use, returnItems.
  * Bước điều hành (giữ phạm vi toàn phân xưởng, vì là việc chung của cả ca): confirm,
  * stats, statsHandover, accept, settle, statsExportDocuments, reject.
  */
@@ -329,7 +329,9 @@ export function actionsFor(t: MaterialTicket, v: TicketViewer | null): string[] 
     if (t.status === "NHAN_TU_HIEN_CO" && canOperateAssigned && (v.steps?.receive ?? v.isShiftLeader)) a.push("receiveExisting");
     // Ứng: bước gộp "Xác nhận ĐXVT" — chỉ Thống kê; luồng khác giữ quyền Nhận vật tư.
     if (t.status === "NHAN_VAT_TU" && (t.type === "UNG" ? v.steps?.stats : (canOperateAssigned && (v.steps?.receive ?? v.isShiftLeader)))) a.push("receive");
-    if (t.status === "CHO_PHIEU_YCSC" && canOperateAssigned && (v.steps?.receive ?? v.isShiftLeader)) a.push("repairRequest");
+    // Chỉ đánh dấu "đến lượt" cho nút Ra SYC ở cột hồ sơ. Số SYC phải do Defect thật
+    // cấp và neo ngược bằng defectId, không còn action nhập tay.
+    if (t.status === "CHO_PHIEU_YCSC" && canOperateAssigned && (v.steps?.receive ?? v.isShiftLeader)) a.push("createRepairRequest");
     if (t.status === "SU_DUNG_VAT_TU" && canOperateAssigned && (v.steps?.use ?? v.isShiftLeader)) a.push("use");
     if (t.status === "CHO_NGHIEM_THU" && (v.steps?.accept ?? v.isShiftLeader)) a.push("accept");
     // Chai khí: bước cuối là xác nhận trả vỏ chai, không nghiệm thu và không quyết toán.
@@ -437,5 +439,51 @@ export function useSetTicketUsagePhoto(ticketId: string) {
             "DELETE"
           ),
     onSuccess: (data) => qc.setQueryData(["ticket-usage-photos", ticketId], data.photos),
+  });
+}
+
+/** Dữ liệu mồi sẵn cho nút "Ra SYC sửa chữa" trên phiếu vật tư. */
+export type TicketReplacementRequest = {
+  eligible: boolean;
+  alreadyLinked?: boolean;
+  reason: string | null;
+  device?: {
+    code: string;
+    name: string;
+    system: string | null;
+    systemSeq: string | null;
+    managingPosition: string | null;
+    unit: string | null;
+  };
+  materialRequest?: {
+    replacementIds: string[];
+    materialName: string;
+    materialUnit: string;
+    materialCategory: string | null;
+    primaryIsFolder: boolean;
+    primarySystemName: string;
+    primaryDeviceName: string;
+    points: Array<{ id: string; label: string; quantity: number; materialName: string; materialUnit: string }>;
+    suggestedContent: string;
+    demoDefaults?: {
+      condition: "A" | "B";
+      severity: "1" | "2" | "3" | "4";
+      severityCriteria: string[];
+      shiftLeaderId: string;
+    };
+  };
+};
+
+/**
+ * Chỉ tải cho phiếu đang mở chi tiết. UI cần biết `eligible` trước khi hiện nút ra SYC,
+ * nhưng không đáng nạp dữ liệu điểm thay thế cho mọi phiếu đang thu gọn trong danh sách.
+ */
+export function useTicketReplacementRequest(ticketId: string, enabled: boolean) {
+  return useQuery({
+    queryKey: ["ticket-replacement-request", ticketId],
+    queryFn: async () =>
+      (await apiGet<TicketReplacementRequest>(`/api/material-tickets/${ticketId}/replacement-request`)).data,
+    enabled,
+    staleTime: 10_000,
   });
 }
