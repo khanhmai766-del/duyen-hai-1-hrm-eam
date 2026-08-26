@@ -208,8 +208,8 @@ export function ChemicalTruckRows({
 }
 
 /**
- * Khối ghi chuyến xe dùng cho phiếu ĐÃ HOÀN TẤT (phiếu NH3 khai một bước, hoặc bổ
- * sung / sửa lại danh sách xe sau khi đã lãnh).
+ * Khối ghi chuyến xe dùng tại bước VHV xác nhận khối lượng lãnh của NH3, hoặc để
+ * bổ sung dữ liệu cho phiếu hóa chất thường đã hoàn tất nhưng chưa có chuyến xe.
  */
 export function ChemicalTruckPanel({
   initialRows,

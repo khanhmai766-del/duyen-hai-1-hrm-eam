@@ -459,9 +459,8 @@ export function isGasCylinderTicket(materialCategory: string | null | undefined)
 export const GAS_RETURN_STATUS = "CHO_TRA_VO";
 
 /**
- * VẬT TƯ KHAI MỘT BƯỚC: lập phiếu xong là hết, không đi tiếp lãnh — sử dụng — nghiệm thu —
- * quyết toán. NH3 lỏng bơm thẳng từ xe bồn vào bồn chứa hệ thống SCR: không có việc "lãnh
- * vật tư" hay "nghiệm thu" cho từng phiếu, phiếu chỉ để GHI NHẬN lượng đã dùng vào sổ theo dõi.
+ * LUỒNG NH3 RÚT GỌN: không đi qua sử dụng — nghiệm thu — quyết toán. Sau khi tạo đề xuất,
+ * VHV được giao nhập các chuyến xe và xác nhận khối lượng thực lãnh; chốt xong mới hoàn tất.
  *
  * Khoá theo MÃ vật tư chứ không theo tên: tên gọi trong danh mục còn sửa được (đang là
  * "Hóa chât NH3 lỏng" — sai chính tả), mã ERP thì không.

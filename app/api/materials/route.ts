@@ -249,23 +249,22 @@ async function updateMaterialErpCodes(materialId: string, erpCodes: string[]) {
   `;
 }
 
-function visibleDefectRequestWhere(loggedDefectIds: string[]): Prisma.DefectMaterialRequestWhereInput {
-  const activeDefect = { cancelledAt: null };
-  if (loggedDefectIds.length === 0) return { defect: activeDefect };
+/**
+ * Số chip SYC hiển thị trên mỗi dòng điểm thay thế, và biên lấy dư trước khi lọc.
+ *
+ * Điều kiện "đã ghi lịch sử" không diễn đạt được bằng SQL ở đây: `MaterialReplacementLog`
+ * neo MỀM vào Defect (`defectId` là chuỗi, cố ý không có khoá ngoại — xem schema), nên
+ * Prisma không nối được hai bảng trong cùng một `where`. Vì vậy lọc ở JS sau khi lấy dư.
+ *
+ * Lấy dư 10 là an toàn tuyệt đối trên thực tế: danh sách sắp xếp mới nhất trước, mà phiếu
+ * bị loại luôn là phiếu ĐÃ XỬ LÝ XONG và đã ghi lịch sử — tức các phiếu CŨ nằm cuối danh
+ * sách. Ba chip đầu gần như luôn là phiếu đang mở.
+ */
+const DEFECT_CHIP_LIMIT = 3;
+const DEFECT_CHIP_FETCH = 10;
 
-  return {
-    defect: {
-      ...activeDefect,
-      // Chỉ reset SYC khỏi danh mục khi phiếu vừa ĐÃ XỬ LÝ, vừa thực sự được ghi
-      // vào lịch sử thay thế. Quan hệ DefectMaterialRequest vẫn được giữ nguyên để
-      // lịch sử tiếp tục tra cứu số phiếu cũ và có thể khôi phục nếu bỏ xác nhận.
-      OR: [
-        { status: { not: "DA_XU_LY" } },
-        { id: { notIn: loggedDefectIds } },
-      ],
-    },
-  };
-}
+/** Phiếu chưa bị huỷ — phần điều kiện DUY NHẤT còn diễn đạt được trong truy vấn. */
+const visibleDefectRequestWhere: Prisma.DefectMaterialRequestWhereInput = { defect: { cancelledAt: null } };
 
 export async function GET(req: NextRequest) {
   return handle(async () => {
@@ -283,16 +282,6 @@ export async function GET(req: NextRequest) {
     const viewScope = await resolvePositionViewScope(user, "material");
     const fullCatalogView = viewScope.all;
     const materialAccess = materialCatalogAccessWhere(access, fullCatalogView);
-
-    // MaterialReplacementLog giữ defectId/requestNumber dạng snapshot độc lập. Dùng
-    // defectId để nhận diện SYC đã được xác nhận lưu lịch sử, nhưng không xóa liên kết
-    // gốc — số yêu cầu cũ vẫn còn nguyên trong trang Lịch sử thay thế vật tư.
-    const loggedDefectRows = await prisma.materialReplacementLog.findMany({
-      where: { defectId: { not: null } },
-      distinct: ["defectId"],
-      select: { defectId: true },
-    });
-    const loggedDefectIds = loggedDefectRows.flatMap((row) => row.defectId ? [row.defectId] : []);
 
     const materialRows = await prisma.material.findMany({
       where: {
@@ -315,11 +304,12 @@ export async function GET(req: NextRequest) {
           ...MATERIAL_INCLUDE.replacements,
           include: {
             ...MATERIAL_INCLUDE.replacements.include,
-            // Lọc trước `take: 3`, tránh các SYC đã reset/cancelled chiếm mất chỗ
-            // của yêu cầu đang cần theo dõi hoặc yêu cầu mới vừa phát hành.
+            // Lấy dư rồi mới cắt còn 3 ở bước lọc JS bên dưới — điều kiện "đã ghi lịch sử"
+            // không nối được trong SQL (xem DEFECT_CHIP_FETCH).
             defectRequests: {
               ...MATERIAL_INCLUDE.replacements.include.defectRequests,
-              where: visibleDefectRequestWhere(loggedDefectIds),
+              take: DEFECT_CHIP_FETCH,
+              where: visibleDefectRequestWhere,
             },
           },
           where: materialAccess.replacement,
@@ -351,6 +341,43 @@ export async function GET(req: NextRequest) {
         ? [{ ...material, replacements }]
         : [];
     });
+
+    /**
+     * Cắt chip SYC còn `DEFECT_CHIP_LIMIT`, bỏ phiếu vừa ĐÃ XỬ LÝ vừa đã ghi vào lịch sử.
+     *
+     * Trước đây bước này làm bằng một mảng `notIn` dựng từ việc quét TOÀN BỘ
+     * `MaterialReplacementLog` ở đầu mỗi lượt tải Danh mục — bảng đó chỉ có tăng (còn mang
+     * cả dữ liệu lưu trữ từ Google Sheet cũ), nên chi phí trang tăng dần theo thời gian dùng
+     * và mỗi truy vấn phải nhúng kèm hàng trăm id.
+     *
+     * Nay chỉ tra đúng những SYC ĐANG hiện trên màn và ĐANG ở trạng thái "Đã xử lý" — dùng
+     * index `MaterialReplacementLog(defectId)`, danh sách id đếm trên đầu ngón tay.
+     * Quan hệ gốc vẫn giữ nguyên: số yêu cầu cũ còn đủ trong trang Lịch sử thay thế vật tư.
+     */
+    const processedDefectIds = Array.from(new Set(
+      materials.flatMap((material) => material.replacements.flatMap((replacement) =>
+        replacement.defectRequests
+          .filter((request) => request.defect.status === "DA_XU_LY")
+          .map((request) => request.defect.id)
+      ))
+    ));
+    const loggedDefectIds = new Set(
+      processedDefectIds.length
+        ? (await prisma.materialReplacementLog.findMany({
+            where: { defectId: { in: processedDefectIds } },
+            distinct: ["defectId"],
+            select: { defectId: true },
+          })).flatMap((row) => row.defectId ? [row.defectId] : [])
+        : []
+    );
+    for (const material of materials) {
+      for (const replacement of material.replacements) {
+        replacement.defectRequests = replacement.defectRequests
+          .filter((request) => !(request.defect.status === "DA_XU_LY" && loggedDefectIds.has(request.defect.id)))
+          .slice(0, DEFECT_CHIP_LIMIT);
+      }
+    }
+
     const documents = await materialDocumentMap(materials.map((material) => material.id));
     // Tra tên node cha 1 lần cho mọi thiết bị của các điểm thay thế → cột "Hệ thống".
     const parentSeqs = Array.from(

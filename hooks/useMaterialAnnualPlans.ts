@@ -1,5 +1,6 @@
 "use client";
 
+import * as React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiUpload } from "@/lib/fetcher";
 import type { AnnualPlanImportPreview } from "@/lib/material-annual-plan-import";
@@ -25,7 +26,11 @@ export function useMaterialAnnualPlans(year: number) {
     queryKey: annualPlanKey(year),
     queryFn: () => apiGet<MaterialAnnualPlanSummary>(`/api/material-annual-plans?year=${year}`).then((response) => response.data),
     enabled: Number.isInteger(year),
-    staleTime: 30_000,
+    // Bằng TTL đệm máy chủ (lib/material-annual-plan-cache.ts): hỏi lại sớm hơn chỉ tốn
+    // một vòng mạng để nhận về đúng bản vừa nhận.
+    staleTime: 60_000,
+    // Đổi năm thì giữ bảng cũ trên màn cho tới khi có số mới, thay vì nháy về khung xương.
+    placeholderData: (previous) => previous,
   });
 }
 
@@ -106,13 +111,45 @@ export type MonthlyUsageRow = {
 
 const monthlyKey = (periodKey: string) => ["material-monthly-report", periodKey] as const;
 
+const monthlyQueryOptions = (periodKey: string) => ({
+  queryKey: monthlyKey(periodKey),
+  queryFn: () =>
+    apiGet<MonthlyReportResult>(`/api/material-annual-plans/monthly?period=${periodKey}`).then((r) => r.data),
+  staleTime: 60_000,
+});
+
 export function useMaterialMonthlyReport(periodKey: string) {
+  const queryClient = useQueryClient();
+  const valid = /^\d{4}-\d{2}$/.test(periodKey);
+
+  /**
+   * Nạp trước tháng liền trước và liền sau.
+   *
+   * Người dùng duyệt biểu bằng hai nút mũi tên nên tháng kế tiếp gần như chắc chắn được mở.
+   * Máy chủ đã đệm sẵn phần tổng hợp cả năm (dùng chung cho mọi tháng), nên mỗi lượt nạp
+   * trước chỉ còn đúng một truy vấn lấy dòng nhu cầu của tháng đó — rẻ tới mức không cần
+   * cân nhắc, mà bấm mũi tên thì bảng hiện ra ngay.
+   */
+  React.useEffect(() => {
+    if (!valid) return;
+    const [year, month] = periodKey.split("-").map(Number);
+    const shift = (delta: number) => {
+      const date = new Date(Date.UTC(year, month - 1 + delta, 1));
+      return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
+    };
+    const timer = setTimeout(() => {
+      for (const neighbour of [shift(-1), shift(1)]) {
+        queryClient.prefetchQuery(monthlyQueryOptions(neighbour));
+      }
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [periodKey, queryClient, valid]);
+
   return useQuery({
-    queryKey: monthlyKey(periodKey),
-    queryFn: () =>
-      apiGet<MonthlyReportResult>(`/api/material-annual-plans/monthly?period=${periodKey}`).then((r) => r.data),
-    enabled: /^\d{4}-\d{2}$/.test(periodKey),
-    staleTime: 15_000,
+    ...monthlyQueryOptions(periodKey),
+    enabled: valid,
+    // Bấm sang tháng khác giữ nguyên bảng đang xem cho tới khi có số mới.
+    placeholderData: (previous) => previous,
   });
 }
 
@@ -123,7 +160,9 @@ export function useSaveMonthlyRequest(periodKey: string) {
       body.id
         ? apiMutate(`/api/material-annual-plans/monthly/${body.id}`, "PUT", body)
         : apiMutate("/api/material-annual-plans/monthly", "POST", { ...body, periodKey }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: monthlyKey(periodKey) }),
+    // Mỗi báo cáo tháng đều mang lưới nhu cầu của cả năm. Khi sửa một tháng phải làm
+    // mới toàn bộ biến thể đang nằm trong cache, nếu không chuyển tháng sẽ thấy màu cũ.
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["material-monthly-report"] }),
   });
 }
 
@@ -131,7 +170,7 @@ export function useDeleteMonthlyRequest(periodKey: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => apiMutate(`/api/material-annual-plans/monthly/${id}`, "DELETE", {}),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: monthlyKey(periodKey) }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["material-monthly-report"] }),
   });
 }
 

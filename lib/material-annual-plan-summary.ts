@@ -90,8 +90,61 @@ export async function getMaterialAnnualPlanSummary(prisma: PrismaClient, year: n
   const chemicalByMaterialCode = new Map(
     chemicalItems.flatMap((item) => item.materialCode ? [[item.materialCode.trim().toUpperCase(), item] as const] : []),
   );
+
   const chemicalAnnualByItem = new Map(chemicalAnnual.rows.map((row) => [row.itemId, row]));
   const contractByItem = new Map(contracts.map((contract) => [contract.itemId, contract]));
+
+  /**
+   * Tồn theo lô được LẬP CHỈ MỤC một lần thay vì quét lại cả bảng cho từng dòng kế hoạch.
+   *
+   * Bản cũ gọi `lots.filter(...)` bên trong `plans.map(...)`, tức là O(số dòng kế hoạch ×
+   * số lô) và còn `trim().toUpperCase()` lại mã ERP ở mỗi lần so — với biểu thật (177 dòng)
+   * và vài trăm lô thì mỗi lượt gọi tốn hàng chục nghìn phép so chuỗi kèm cấp phát chuỗi mới,
+   * nhân thêm bốn đầu API cùng dùng chung hàm này.
+   *
+   * Một lô có thể khớp CẢ hai đường (mã danh mục và mã ERP) của cùng một dòng kế hoạch, nên
+   * phải khử trùng theo id lô — bản cũ khử tự nhiên nhờ chỉ duyệt mảng một lượt.
+   */
+  const lotsByMaterialCode = new Map<string, typeof lots>();
+  const lotsByErpCode = new Map<string, typeof lots>();
+  const pushLot = (bucket: Map<string, typeof lots>, key: string, lot: (typeof lots)[number]) => {
+    const list = bucket.get(key);
+    if (list) list.push(lot);
+    else bucket.set(key, [lot]);
+  };
+  for (const lot of lots) {
+    if (lot.materialCode) pushLot(lotsByMaterialCode, lot.materialCode, lot);
+    const erpKey = lot.erpCode?.trim().toUpperCase();
+    if (erpKey) pushLot(lotsByErpCode, erpKey, lot);
+  }
+  const stockOfPlan = (materialCode: string | null | undefined, erpCode: string | null | undefined) => {
+    const byMaterial = materialCode ? lotsByMaterialCode.get(materialCode) ?? [] : [];
+    const byErp = erpCode ? lotsByErpCode.get(erpCode.trim().toUpperCase()) ?? [] : [];
+    if (byErp.length === 0) return byMaterial.reduce((total, lot) => total + lot.quantityLeft, 0);
+    if (byMaterial.length === 0) return byErp.reduce((total, lot) => total + lot.quantityLeft, 0);
+    const seen = new Set<string>();
+    let total = 0;
+    for (const lot of byMaterial) {
+      seen.add(lot.id);
+      total += lot.quantityLeft;
+    }
+    for (const lot of byErp) if (!seen.has(lot.id)) total += lot.quantityLeft;
+    return total;
+  };
+
+  /** Tồn cuối kỳ gần nhất theo trạng thái kỳ — duyệt lùi tại chỗ, không sao chép mảng. */
+  const latestClosing = (
+    months: AnnualPlanMonthValue[],
+    closing: (number | null)[] | undefined,
+    status: AnnualPlanMonthValue["status"],
+  ) => {
+    for (let index = months.length - 1; index >= 0; index -= 1) {
+      if (months[index].status !== status) continue;
+      const value = closing?.[months[index].month - 1] ?? null;
+      if (value !== null) return value;
+    }
+    return null;
+  };
 
   /**
    * Thực dùng gom theo HAI khoá, vì kế hoạch và lịch sử không cùng một khoá.
@@ -149,8 +202,8 @@ export async function getMaterialAnnualPlanSummary(prisma: PrismaClient, year: n
           draftQuantity: status === "DRAFT" ? consumed : null,
         };
       });
-      const officialStock = [...months].reverse().find((month) => month.status === "LOCKED" && (annual?.closing[month.month - 1] ?? null) !== null);
-      const draftStock = [...months].reverse().find((month) => month.status === "DRAFT" && (annual?.closing[month.month - 1] ?? null) !== null);
+      const officialStock = latestClosing(months, annual?.closing, "LOCKED");
+      const draftStock = latestClosing(months, annual?.closing, "DRAFT");
       const usedQuantity = sum(months.map((month) => month.usedQuantity));
       const draftUsedQuantity = sum(months.map((month) => month.draftQuantity));
       return {
@@ -170,8 +223,8 @@ export async function getMaterialAnnualPlanSummary(prisma: PrismaClient, year: n
         usedQuantity,
         draftUsedQuantity,
         remainingQuantity: plannedQuantity - usedQuantity,
-        stockQuantity: officialStock ? annual?.closing[officialStock.month - 1] ?? 0 : 0,
-        draftStockQuantity: draftStock ? annual?.closing[draftStock.month - 1] ?? null : null,
+        stockQuantity: officialStock ?? 0,
+        draftStockQuantity: draftStock,
         months,
         note: plan.note,
       };
@@ -180,10 +233,7 @@ export async function getMaterialAnnualPlanSummary(prisma: PrismaClient, year: n
     const materialMonths = (plan.materialId ? materialUsageById.get(plan.materialId) : undefined)
       ?? materialUsageByNameKey.get(`${plan.materialCategory}|${plan.materialNameKey}`)
       ?? Array<number>(12).fill(0);
-    const matchingLots = lots.filter((lot) =>
-      (plan.material?.code && lot.materialCode === plan.material.code)
-      || (plan.erpCode && lot.erpCode?.trim().toUpperCase() === plan.erpCode.trim().toUpperCase()),
-    );
+    const stockQuantity = stockOfPlan(plan.material?.code, plan.erpCode);
     const usedQuantity = sum(materialMonths);
     return {
       id: plan.id,
@@ -202,7 +252,7 @@ export async function getMaterialAnnualPlanSummary(prisma: PrismaClient, year: n
       usedQuantity,
       draftUsedQuantity: 0,
       remainingQuantity: planQuantity - usedQuantity,
-      stockQuantity: matchingLots.reduce((total, lot) => total + lot.quantityLeft, 0),
+      stockQuantity,
       draftStockQuantity: null,
       months: materialMonths.map((value, index) => ({
         month: index + 1,

@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 import { audit, auditDetailWithPosition, fail, handle, ok, requireUser } from "@/lib/api";
 import { buildAnnualPlanImportPreview, resolveAnnualPlanRows } from "@/lib/material-annual-plan-import";
 import { prisma } from "@/lib/prisma";
+import { invalidateMaterialAnnualPlanCache } from "@/lib/material-annual-plan-cache";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
 import { readAnnualPlanWorkbook } from "../shared";
 
@@ -75,6 +76,9 @@ export async function POST(req: NextRequest) {
         note: `Nhập từ QLVT.20 · ${fileName} · ${preview.selectedSheet} · dòng ${row.sourceRow}`,
       },
     })));
+
+    // Chỉ tiêu năm vừa đổi — cột E và cột G của biểu phải đọc lại ngay.
+    invalidateMaterialAnnualPlanCache(preview.detectedYear);
 
     const created = rows.filter((row) => !existingKeys.has(`${row.materialCategory}|${row.materialNameKey}`)).length;
     const updated = rows.length - created;

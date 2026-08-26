@@ -1,7 +1,8 @@
 import type { PrismaClient } from "@prisma/client";
 import { toNumberRequired } from "@/lib/chemical-inventory/serialize";
 import { ANNUAL_PLAN_GROUPS, type AnnualPlanGroup } from "@/lib/material-annual-plan-import";
-import { getMaterialAnnualPlanSummary, type AnnualPlanSummaryRow } from "@/lib/material-annual-plan-summary";
+import { getCachedMaterialAnnualPlanSummary } from "@/lib/material-annual-plan-cache";
+import { type AnnualPlanSummaryRow } from "@/lib/material-annual-plan-summary";
 
 /**
  * Biểu QLVT.20 "Biểu tổng hợp nhu cầu vật tư" của MỘT tháng, dựng từ số liệu hệ thống.
@@ -48,8 +49,12 @@ export type MonthlyReportRow = {
   purpose: string | null;
   /** L — người đề xuất. */
   proposerName: string | null;
-  /** M–X — tháng nào trong năm có phát sinh sử dụng. */
+  /** M–X — tháng nào trong năm có phát sinh sử dụng (giữ để xuất QLVT.20). */
   monthMarks: boolean[];
+  /** Khối lượng đã khai nhu cầu theo T1..T12 — dùng cho dòng thời gian trên web. */
+  monthRequestedQuantities: number[];
+  /** Khối lượng đã sử dụng theo T1..T12 — bấm được để truy ngược chi tiết. */
+  monthUsedQuantities: number[];
   /** Tháng chưa chốt sổ hóa chất thì số liệu chỉ là tạm tính. */
   provisional: boolean;
   note: string | null;
@@ -82,13 +87,14 @@ export async function getMaterialMonthlyReport(
   prisma: PrismaClient,
   period: { periodKey: string; year: number; month: number },
 ): Promise<MonthlyReportResult> {
-  const [summary, requests] = await Promise.all([
-    getMaterialAnnualPlanSummary(prisma, period.year),
+  const [summary, requestsInYear] = await Promise.all([
+    getCachedMaterialAnnualPlanSummary(prisma, period.year),
     prisma.materialMonthlyRequest.findMany({
-      where: { periodKey: period.periodKey },
-      orderBy: [{ materialCategory: "asc" }, { materialNameLabel: "asc" }, { createdAt: "asc" }],
+      where: { periodKey: { gte: `${period.year}-01`, lte: `${period.year}-12` } },
+      orderBy: [{ periodKey: "asc" }, { materialCategory: "asc" }, { materialNameLabel: "asc" }, { createdAt: "asc" }],
     }),
   ]);
+  const requests = requestsInYear.filter((request) => request.periodKey === period.periodKey);
 
   const planByKey = new Map<string, AnnualPlanSummaryRow>(
     summary.rows.map((row) => [planKeyOf(row), row]),
@@ -102,6 +108,22 @@ export async function getMaterialMonthlyReport(
    */
   const marksOf = (plan: AnnualPlanSummaryRow | undefined) =>
     Array.from({ length: 12 }, (_, index) => (plan?.months[index]?.usedQuantity ?? 0) > 0);
+  const usedQuantitiesOf = (plan: AnnualPlanSummaryRow | undefined) =>
+    Array.from({ length: 12 }, (_, index) => plan?.months[index]?.usedQuantity ?? 0);
+
+  // Một vật tư có thể có nhiều dòng mục đích trong cùng tháng. Lưới năm hiển thị tổng nhu
+  // cầu theo vật tư/tháng để không bỏ sót dòng và không phụ thuộc tháng người dùng đang mở.
+  const requestedByPlanKey = new Map<string, number[]>();
+  for (const request of requestsInYear) {
+    const parsed = parsePeriodKey(request.periodKey);
+    if (!parsed || parsed.year !== period.year) continue;
+    const key = planKeyOf(request);
+    const quantities = requestedByPlanKey.get(key) ?? Array<number>(12).fill(0);
+    quantities[parsed.month - 1] += toNumberRequired(request.quantity);
+    requestedByPlanKey.set(key, quantities);
+  }
+  const requestedQuantitiesOf = (row: { materialCategory: string; materialNameKey: string }) =>
+    requestedByPlanKey.get(planKeyOf(row)) ?? Array<number>(12).fill(0);
 
   const rowOfRequest = (request: (typeof requests)[number]): MonthlyReportRow => {
     const plan = planByKey.get(planKeyOf(request));
@@ -122,6 +144,8 @@ export async function getMaterialMonthlyReport(
       purpose: request.purpose,
       proposerName: request.proposerName,
       monthMarks: marksOf(plan),
+      monthRequestedQuantities: requestedQuantitiesOf(request),
+      monthUsedQuantities: usedQuantitiesOf(plan),
       provisional: (plan?.draftUsedQuantity ?? 0) > 0,
       note: request.note,
     };
@@ -155,6 +179,8 @@ export async function getMaterialMonthlyReport(
       purpose: null,
       proposerName: null,
       monthMarks: marksOf(plan),
+      monthRequestedQuantities: requestedQuantitiesOf(plan),
+      monthUsedQuantities: usedQuantitiesOf(plan),
       provisional: plan.draftUsedQuantity > 0,
       note: plan.note,
     });

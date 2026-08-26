@@ -32,7 +32,8 @@ import {
   useTicketUsagePhotos,
   samePosition,
   type MaterialTicket, type TicketViewer, type WorkflowRoleMap,
-  useTicketReplacementRequest } from "@/hooks/useMaterialTickets";
+  useTicketReplacementRequest,
+  usePrefetchTicketOptions } from "@/hooks/useMaterialTickets";
 import { DefectForm } from "@/components/defects/defect-form";
 import type { DefectItem } from "@/hooks/useDefects";
 import { usePositions } from "@/hooks/useUsers";
@@ -104,9 +105,10 @@ const FLOW: Record<string, { key: string; label: string; who: string }[]> = {
     { key: "CHO_PHIEU__XUAT_KHO", label: "Xác nhận đề xuất vật tư", who: "Thống kê hoặc Kỹ thuật viên" },
     { key: "NHAN_VAT_TU", label: "VHV xác nhận khối lượng lãnh", who: "VHV được giao" },
   ],
-  // Khai một bước (NH3 lỏng): lập phiếu là xong, không có bước nào để thao tác tiếp.
+  // NH3 lỏng: tạo đề xuất trước, VHV được giao chốt chuyến xe và khối lượng thực lãnh sau.
   [SINGLE_STEP_TICKET_TYPE]: [
     { key: "B0", label: "VHV tạo đề xuất", who: "VHV" },
+    { key: "NHAN_VAT_TU", label: "VHV xác nhận khối lượng lãnh", who: "VHV được giao" },
   ],
   [OTHER_MATERIAL_TICKET_TYPE]: [
     { key: "B0", label: "Lập phiếu đề xuất", who: "Người lập phiếu" },
@@ -132,7 +134,7 @@ const FLOW: Record<string, { key: string; label: string; who: string }[]> = {
 };
 const ORDER: Record<string, string[]> = {
   CHUA_CHON: ["B0", "CHO_XAC_NHAN"],
-  [SINGLE_STEP_TICKET_TYPE]: ["B0", "HOAN_TAT"],
+  [SINGLE_STEP_TICKET_TYPE]: ["B0", "NHAN_VAT_TU", "HOAN_TAT"],
   [CHEMICAL_TICKET_TYPE]: ["B0", "CHO_THONG_KE", "CHO_PHIEU__XUAT_KHO", "NHAN_VAT_TU", "HOAN_TAT"],
   [OTHER_MATERIAL_TICKET_TYPE]: ["B0", "CHO_PHIEU__XUAT_KHO", "NHAN_VAT_TU", "HOAN_TAT"],
   [OTHER_MATERIAL_ADVANCE_TICKET_TYPE]: ["B0", "NHAN_VAT_TU", "CHO_THONG_KE", "HOAN_TAT"],
@@ -238,6 +240,9 @@ export default function MaterialTicketBoard({
 } = {}) {
   const [monthFilter, setMonthFilter] = useState(() => materialTicketMonthKey());
   const { data, isLoading } = useMaterialTickets(monthFilter);
+  // Kéo trước danh mục cho form phiếu trong lúc trình duyệt rảnh — chỉ cho người thật sự
+  // lập được phiếu, để tài khoản chỉ xem không phải tải một khối dữ liệu họ không dùng tới.
+  usePrefetchTicketOptions(Boolean(data?.viewer?.canCreate));
   const [openId, setOpenId] = useState<string | null>(null);
   const progressDialogRef = React.useRef<HTMLElement>(null);
   const [filter, setFilter] = useState("ALL");
@@ -529,7 +534,7 @@ export default function MaterialTicketBoard({
         {isLoading && <div className="empty"><Loader2 className="spin" size={18} /> Đang tải…</div>}
 	        {!isLoading && shown.map((t) => {
 	          const baseMeta = t.type === SINGLE_STEP_TICKET_TYPE && t.status === "NHAN_VAT_TU"
-		            ? { label: "Chờ VHV ghi chuyến xe", c: "#7c3aed" }
+            ? { label: "Chờ VHV xác nhận khối lượng lãnh", c: "#7c3aed" }
 		            : t.type === CHEMICAL_TICKET_TYPE && t.status === "CHO_XAC_NHAN"
 		            ? { label: "Chờ xác nhận bồn/thiết bị", c: "#7c3aed" }
 		            : t.type === CHEMICAL_TICKET_TYPE && t.status === "CHO_THONG_KE"
@@ -1840,7 +1845,9 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
       (t.deliveryNoteNumber ?? t.receivedMethod) ? `Phiếu giao hàng ${t.deliveryNoteNumber ?? t.receivedMethod}` : "",
     ].filter(Boolean).join(" · ") },
     t.usedAt && { at: t.usedAt, who: t.usedByName, pos: t.usedByPosition, what: `Sử dụng vật tư${t.materialUserName ? ` — VHV: ${t.materialUserName}` : ""}: dùng ${t.usedQuantity ?? ""}, còn lại ${t.remainingQuantity ?? ""}` },
-    t.completedAt && { at: t.completedAt, who: t.completedByName, pos: t.completedByPosition, what: isOtherMaterialTicketType(t.type)
+    t.completedAt && { at: t.completedAt, who: t.completedByName, pos: t.completedByPosition, what: t.type === SINGLE_STEP_TICKET_TYPE
+      ? `VHV xác nhận khối lượng lãnh: ${t.receivedQuantity ?? ""} ${t.items[0]?.material.unit ?? ""}`.trim()
+      : isOtherMaterialTicketType(t.type)
       ? isOtherMaterialAdvanceTicket(t.type) ? "Hoàn thiện ĐXVT, kết thúc phiếu ứng" : "Lãnh vật tư và hoàn tất phiếu"
       : isGasCylinderTicket(t.materialCategory)
         ? `Xác nhận trả: ${t.recoveryQuantity ?? ""} ${t.items[0]?.material.unit ?? ""}`.trim()
@@ -1975,11 +1982,8 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
                   </div>
                 )}
                 <ActionArea t={t} viewer={viewer} />
-                {/*
-                  Phiếu NH3 khai một bước xong là HOÀN TẤT ngay, nhưng xe về rải rác vài
-                  ngày sau — nên chuyến xe phải ghi được ở đây, ngoài luồng bước. Khối này
-                  cũng dùng để bổ sung / sửa lại danh sách xe của phiếu hóa chất đã lãnh.
-                */}
+                {/* NH3 dùng khối riêng cho bước VHV xác nhận khối lượng lãnh; hóa chất
+                    thường nhập xe trong ActionArea và chỉ xem lại tại đây sau khi chốt. */}
                 <ChemicalTruckSection t={t} viewer={viewer} />
               </div>
 
@@ -2354,9 +2358,9 @@ function LotAllocationPicker({
 /**
  * Khối "Chuyến xe hóa chất đã nhập" trong panel chi tiết phiếu.
  *
- * Chỉ hiện với phiếu thuộc luồng hóa chất. Cố ý nằm NGOÀI ActionArea vì phiếu NH3
- * hoàn tất ngay khi tạo — nếu gắn theo bước thì sẽ không bao giờ hiện, mà xe thì
- * mấy ngày sau mới về.
+ * Chỉ hiện với phiếu thuộc luồng hóa chất. Cố ý nằm ngoài ActionArea để NH3 có một
+ * workspace riêng cho bước VHV xác nhận khối lượng lãnh; hóa chất thường vẫn nhập
+ * xe tại action `receive` của bước cuối.
  */
 /**
  * Ra SYC sửa chữa từ chính phiếu vật tư — "cổng vật tư đứng trước SYC".
@@ -2514,11 +2518,16 @@ function ChemicalTruckSection({ t, viewer }: { t: MaterialTicket; viewer: Ticket
   const isChemicalTicket = t.type === CHEMICAL_TICKET_TYPE || t.type === SINGLE_STEP_TICKET_TYPE;
   const alreadyLinked = (t.chemicalReceiptIds?.length ?? 0) > 0;
 
-  // Bước xác nhận lãnh của LUỒNG HÓA CHẤT đã có bảng xe riêng trong ActionArea — bày
-  // thêm ở đây là hai chỗ nhập cho cùng một thứ. Phiếu NH3 thì ngược lại: đây chính là
-  // bước duy nhất của nó, phải luôn hiện.
+  // Hóa chất khác NH3 chỉ nhập chuyến xe tại bước VHV xác nhận khối lượng lãnh trong
+  // ActionArea. Khối độc lập này chỉ dành cho NH3, hoặc để xem lại các chuyến đã chốt
+  // của phiếu hóa chất thường sau khi phiếu hoàn tất.
   const atReceiveStep = t.type === CHEMICAL_TICKET_TYPE && t.status === "NHAN_VAT_TU";
-  const applies = isChemicalTicket && !atReceiveStep;
+  const isSingleStepTicket = t.type === SINGLE_STEP_TICKET_TYPE
+    && (t.status === "NHAN_VAT_TU" || alreadyLinked);
+  const isCompletedChemicalTicket = t.type === CHEMICAL_TICKET_TYPE
+    && t.status === "HOAN_TAT"
+    && alreadyLinked;
+  const applies = isChemicalTicket && !atReceiveStep && (isSingleStepTicket || isCompletedChemicalTicket);
 
   // Trạng thái khóa và quyền mở khóa do máy chủ quyết; ẩn nút mà để ngỏ API thì
   // chưa gọi là khóa, nên hai bên phải dùng chung một nguồn.
@@ -2538,7 +2547,7 @@ function ChemicalTruckSection({ t, viewer }: { t: MaterialTicket; viewer: Ticket
   return (
     <div className="act" style={{ marginTop: 10 }}>
       <label className="lb">
-        {completesTicket ? "Ghi chuyến xe nhập — bước cuối để hoàn tất phiếu" : "Chuyến xe hóa chất đã nhập"}
+        {completesTicket ? "VHV xác nhận khối lượng lãnh" : "Chuyến xe hóa chất đã nhập"}
         {alreadyLinked && (
           <span style={{ marginLeft: 8, fontWeight: 500, color: "#0f766e" }}>
             · đã ghi {t.chemicalReceiptIds.length} chuyến vào sổ
@@ -2556,7 +2565,7 @@ function ChemicalTruckSection({ t, viewer }: { t: MaterialTicket; viewer: Ticket
           unit={unit}
           canEdit={canEdit}
           pending={act.isPending}
-          submitLabel={completesTicket ? "Chốt chuyến xe và hoàn tất phiếu" : "Chốt chuyến xe vào sổ hóa chất"}
+          submitLabel={completesTicket ? "Xác nhận, chốt chuyến xe và hoàn tất" : "Chốt chuyến xe vào sổ hóa chất"}
           onSubmit={async (rows) => {
             try {
               await act.mutateAsync({ action: "chemicalTrucks", trucks: trucksToPayload(rows) });
@@ -3916,6 +3925,7 @@ const CSS = `
 .mini{border:1px solid ${C.line};background:#fff;border-radius:8px;cursor:pointer;color:#94a3b8;display:grid;place-items:center;width:30px;}
 .list{background:#fff;border:1px solid ${C.line};border-radius:14px;overflow-x:auto;overflow-y:hidden;box-shadow:0 1px 2px rgba(15,23,42,.04);}
 .row{display:grid;grid-template-columns:48px 120px 108px minmax(240px,2.2fr) 180px 84px minmax(176px,1.1fr) 60px 68px;gap:10px;align-items:center;min-width:1192px;width:100%;text-align:left;min-height:54px;padding:6px 14px;border:0;border-bottom:1px solid ${C.line};background:#fff;cursor:pointer;font-size:13px;}
+.row:not(.rhead){min-height:62px;padding-top:9px;padding-bottom:9px;}
 .row:not(.rhead)>span:nth-child(n+2):nth-child(-n+7){justify-self:stretch;text-align:center;}
 .code-cell{display:inline-flex;align-items:center;justify-content:flex-start;gap:6px;min-width:0;}
 .code-cell .code{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}

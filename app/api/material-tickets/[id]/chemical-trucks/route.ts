@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { fail, handle, ok, requireUser } from "@/lib/api";
 import { positionsMatch } from "@/lib/position-catalog";
+import { CHEMICAL_TICKET_TYPE, SINGLE_STEP_TICKET_TYPE } from "@/lib/constants";
 
 export const dynamic = "force-dynamic";
 
@@ -20,7 +21,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
     const user = await requireUser();
     const ticket = await prisma.materialTicket.findUnique({
       where: { id: params.id },
-      select: { id: true, assignedPosition: true, chemicalReceiptIds: true },
+      select: { id: true, type: true, status: true, assignedPosition: true, chemicalReceiptIds: true },
     });
     if (!ticket) return fail("Không tìm thấy phiếu", 404);
 
@@ -55,7 +56,10 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
     // Chốt là khóa hẳn: sổ hóa chất (nhật ký NH3 / tab Phiếu nhập) là cửa sửa duy nhất.
     const locked = trucks.length > 0;
     const assigned = user.role === "ADMIN" || positionsMatch(user.position, ticket.assignedPosition);
+    const canStartTruckEntry = ticket.type === SINGLE_STEP_TICKET_TYPE
+      ? ticket.status === "NHAN_VAT_TU"
+      : ticket.type === CHEMICAL_TICKET_TYPE && ticket.status === "HOAN_TAT";
 
-    return ok({ trucks, locked, canEdit: assigned && !locked });
+    return ok({ trucks, locked, canEdit: assigned && !locked && canStartTruckEntry });
   });
 }
