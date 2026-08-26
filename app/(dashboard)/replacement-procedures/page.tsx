@@ -22,32 +22,34 @@ export default function ReplacementProceduresPage() {
   const [view, setView] = useState<"TICKETS" | "OTHER_STOCK">("TICKETS");
 
   return (
-    <div className="space-y-4">
-      <PageHeader
-        title="QUY TRÌNH THAY THẾ VẬT TƯ"
-        description={`Phiếu đề xuất & Ứng vật tư${position ? ` · Bạn: ${position}` : ""}`}
-      >
+    <div className="space-y-3 sm:space-y-4">
+      <div className="[&_h1]:text-[22px] sm:[&_h1]:text-2xl">
+        <PageHeader
+          title="QUY TRÌNH THAY THẾ VẬT TƯ"
+          description={`Phiếu đề xuất & Ứng vật tư${position ? ` · Bạn: ${position}` : ""}`}
+          hideDescriptionOnMobile
+        >
         {/* Chuyển vùng dữ liệu đứng ngay cạnh tiêu đề: nó là "đang xem cái gì", không phải thao tác. */}
-        <div className="inline-flex rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
+        <div className="inline-flex min-w-0 flex-1 rounded-xl border border-slate-200 bg-white p-1 shadow-sm sm:flex-none">
           <button
             onClick={() => setView("TICKETS")}
-            className={`inline-flex h-8 items-center gap-2 rounded-lg px-3 text-[13px] font-semibold transition ${view === "TICKETS" ? "bg-slate-900 text-white shadow" : "text-slate-600 hover:bg-slate-50"}`}
+            className={`inline-flex h-8 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-lg px-2.5 text-[12px] font-semibold transition sm:flex-none sm:gap-2 sm:px-3 sm:text-[13px] ${view === "TICKETS" ? "bg-slate-900 text-white shadow" : "text-slate-600 hover:bg-slate-50"}`}
           >
             <ClipboardList className="h-4 w-4" />Đề xuất
           </button>
           <button
             onClick={() => setView("OTHER_STOCK")}
-            className={`inline-flex h-8 items-center gap-2 rounded-lg px-3 text-[13px] font-semibold transition ${view === "OTHER_STOCK" ? "bg-slate-900 text-white shadow" : "text-slate-600 hover:bg-slate-50"}`}
+            className={`inline-flex h-8 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-lg px-2.5 text-[12px] font-semibold transition sm:flex-none sm:gap-2 sm:px-3 sm:text-[13px] ${view === "OTHER_STOCK" ? "bg-slate-900 text-white shadow" : "text-slate-600 hover:bg-slate-50"}`}
           >
             <Boxes className="h-4 w-4" />Vật tư khác
           </button>
         </div>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="soft" size="toolbar" className="group gap-2">
+            <Button variant="soft" size="toolbar" className="group h-10 w-10 shrink-0 gap-2 px-0 sm:w-auto sm:px-3" aria-label="Tài liệu vật tư" title="Tài liệu vật tư">
               <FileText className="h-4 w-4 text-sky-700" />
-              Tài liệu vật tư
-              <ChevronDown className="h-3.5 w-3.5 text-slate-400 transition-transform duration-200 group-data-[state=open]:rotate-180" aria-hidden="true" />
+              <span className="hidden sm:inline">Tài liệu vật tư</span>
+              <ChevronDown className="hidden h-3.5 w-3.5 text-slate-400 transition-transform duration-200 group-data-[state=open]:rotate-180 sm:block" aria-hidden="true" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" sideOffset={7} className="w-60 rounded-xl p-1.5 shadow-xl">
@@ -68,11 +70,12 @@ export default function ReplacementProceduresPage() {
           </DropdownMenuContent>
         </DropdownMenu>
         {canCreate && view === "TICKETS" && (
-          <Button size="toolbar" onClick={() => setCreating(true)}>
-            <Plus className="h-4 w-4" /> Tạo đề xuất
+          <Button size="toolbar" className="h-10 w-10 shrink-0 px-0 sm:w-auto sm:px-3" onClick={() => setCreating(true)} aria-label="Tạo đề xuất" title="Tạo đề xuất">
+            <Plus className="h-4 w-4" /> <span className="hidden sm:inline">Tạo đề xuất</span>
           </Button>
         )}
-      </PageHeader>
+        </PageHeader>
+      </div>
       {view === "TICKETS" ? <MaterialTicketBoard
           creating={creating}
           onCloseCreate={() => setCreating(false)}

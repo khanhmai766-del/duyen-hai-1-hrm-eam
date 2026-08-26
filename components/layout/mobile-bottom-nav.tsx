@@ -39,6 +39,24 @@ import { cn } from "@/lib/utils";
 const NAV_ACCESS_LEVELS = ["read", "personal", "manage", "full"] as const;
 const PRIMARY_PATHS = ["/hr", "/defects", "/devices/scan", "/replacement-procedures"];
 
+/**
+ * Tab "Thêm" trên mobile là danh sách thao tác nhanh, không phải bản sao toàn bộ
+ * sidebar desktop. Chỉ những đường dẫn được duyệt dưới đây mới xuất hiện; quyền
+ * RBAC và giới hạn theo cương vị vẫn được kiểm tra sau lớp whitelist này.
+ */
+const MOBILE_MORE_PATHS: Record<string, "ALL" | readonly string[]> = {
+  "Quản lý người dùng": ["/", "/notifications"],
+  "Quản lý thiết bị": ["/repair-history", "/pccc", "/documents/archive"],
+  "QUẢN LÝ VẬT TƯ": "ALL",
+  "QUẢN LÝ TÀI LIỆU SỐ": "ALL",
+  "TIỆN ÍCH": ["/tien-ich/phan-tich-dau", "/api/model-control/open"],
+};
+
+function mobileMoreItemAllowed(sectionTitle: string, item: NavItem) {
+  const allowedPaths = MOBILE_MORE_PATHS[sectionTitle];
+  return allowedPaths === "ALL" || Boolean(allowedPaths?.includes(item.href));
+}
+
 function routeMatches(pathname: string, href: string) {
   const base = href.split("?")[0];
   if (base === "/") return pathname === "/";
@@ -77,6 +95,7 @@ export function MobileBottomNav({ onOpenAllMenu }: { onOpenAllMenu: () => void }
   const [defectOpen, setDefectOpen] = React.useState(false);
   const [moreOpen, setMoreOpen] = React.useState(false);
   const [query, setQuery] = React.useState("");
+  const moreTitleRef = React.useRef<HTMLHeadingElement>(null);
   const user = session?.user;
   const readOnlyDefects = user?.accessMode === "DEFECT_READ_ONLY";
   const positionCarrier = React.useMemo(
@@ -94,11 +113,16 @@ export function MobileBottomNav({ onOpenAllMenu }: { onOpenAllMenu: () => void }
     return navSectionsForPosition(positionCarrier)
       .map((section) => {
         const items = section.items.flatMap((item) => {
-          if (PRIMARY_PATHS.some((path) => routeMatches(path, item.href))) return [];
           if (item.children?.length) {
-            return item.children.filter((child) => itemAllowed(child, user?.role, can, adminMode, positionCarrier));
+            return item.children.filter((child) =>
+              mobileMoreItemAllowed(section.title, child)
+              && itemAllowed(child, user?.role, can, adminMode, positionCarrier)
+            );
           }
-          return itemAllowed(item, user?.role, can, adminMode, positionCarrier) ? [item] : [];
+          return mobileMoreItemAllowed(section.title, item)
+            && itemAllowed(item, user?.role, can, adminMode, positionCarrier)
+            ? [item]
+            : [];
         });
         return { title: sectionTitle(section), items };
       })
@@ -124,6 +148,14 @@ export function MobileBottomNav({ onOpenAllMenu }: { onOpenAllMenu: () => void }
   const openAllMenu = () => {
     setMoreOpen(false);
     onOpenAllMenu();
+  };
+
+  const focusMoreTitleInsteadOfSearch: React.ComponentProps<typeof DialogContent>["onOpenAutoFocus"] = (event) => {
+    // Radix mặc định focus phần tử nhập liệu đầu tiên, khiến bàn phím mobile bật ngay.
+    // Đặt focus vào tiêu đề để giữ khả năng tiếp cận mà không mở bàn phím; input vẫn
+    // focus bình thường khi người dùng chủ động chạm vào ô tìm kiếm.
+    event.preventDefault();
+    window.requestAnimationFrame(() => moreTitleRef.current?.focus({ preventScroll: true }));
   };
 
   return (
@@ -198,9 +230,12 @@ export function MobileBottomNav({ onOpenAllMenu }: { onOpenAllMenu: () => void }
       </Dialog>
 
       <Dialog open={moreOpen} onOpenChange={(open) => { setMoreOpen(open); if (!open) setQuery(""); }}>
-        <MobileSheet className="max-h-[82dvh] grid-rows-[auto_auto_1fr_auto] overflow-hidden">
+        <MobileSheet
+          className="max-h-[82dvh] grid-rows-[auto_auto_1fr_auto] overflow-hidden"
+          onOpenAutoFocus={focusMoreTitleInsteadOfSearch}
+        >
           <DialogHeader>
-            <DialogTitle>Thêm chức năng</DialogTitle>
+            <DialogTitle ref={moreTitleRef} tabIndex={-1} className="outline-none">Thêm chức năng</DialogTitle>
             <DialogDescription>Các mục dưới đây được hiển thị theo quyền tài khoản của bạn.</DialogDescription>
           </DialogHeader>
 
@@ -249,9 +284,18 @@ export function MobileBottomNav({ onOpenAllMenu }: { onOpenAllMenu: () => void }
   );
 }
 
-function MobileSheet({ className, children }: { className?: string; children: React.ReactNode }) {
+function MobileSheet({
+  className,
+  children,
+  onOpenAutoFocus,
+}: {
+  className?: string;
+  children: React.ReactNode;
+  onOpenAutoFocus?: React.ComponentProps<typeof DialogContent>["onOpenAutoFocus"];
+}) {
   return (
     <DialogContent
+      onOpenAutoFocus={onOpenAutoFocus}
       className={cn(
         "bottom-0 left-0 right-0 top-auto w-full max-w-none translate-x-0 translate-y-0 gap-4 rounded-t-[28px] border-x-0 border-b-0 p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom sm:left-1/2 sm:max-w-lg sm:-translate-x-1/2",
         className
