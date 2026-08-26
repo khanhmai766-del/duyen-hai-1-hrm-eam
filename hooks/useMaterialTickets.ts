@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiMutate } from "@/lib/fetcher";
 import { CHEMICAL_TICKET_TYPE, GAS_RETURN_STATUS, isOtherMaterialAdvanceTicket, isOtherMaterialTicketType, SINGLE_STEP_TICKET_TYPE } from "@/lib/constants";
@@ -23,7 +24,7 @@ export interface MaterialTicket {
   id: string;
   sequenceMonth: string;
   sequenceNumber: number;
-  // GHI_NHAN = phiếu khai một bước (NH3 lỏng): tạo xong là HOAN_TAT, không có bước tiếp.
+  // GHI_NHAN = phiếu NH3 lỏng: tạo đề xuất → VHV xác nhận khối lượng lãnh → HOAN_TAT.
   // HOA_CHAT = luồng hóa chất 3 bước (xem CHEMICAL_TICKET_TYPE trong lib/constants).
   type: "CHUA_CHON" | "DE_XUAT" | "UNG" | "SU_DUNG_HIEN_CO" | "GHI_NHAN" | "HOA_CHAT" | "VAT_TU_KHAC" | "VAT_TU_KHAC_UNG";
   unit: string;
@@ -197,27 +198,54 @@ export function useMaterialTickets(month = "ALL") {
   });
 }
 
+const ticketOptionsKey = ["material-ticket-options"] as const;
+
+async function fetchTicketOptions() {
+  const res = await apiGet<{
+    devices: { seq: string; name: string; depth: number; parentSeq: string | null }[];
+    materials: {
+      id: string; code: string; name: string; unit: string; quantity: number; category: string | null;
+      machine: string;
+      erpCodes: { code: string; name: string; erpStock: number }[];
+      managingPositions: string[];
+      devices: { seq: string; label: string; system: string | null; managingPosition: string | null; recoveryOnSupplement: boolean }[];
+    }[];
+    positions: string[];
+  }>("/api/material-tickets/options");
+  return res.data;
+}
+
+/**
+ * Nạp trước danh mục cho form phiếu, chạy khi trình duyệt rảnh.
+ *
+ * `useTicketOptions` chỉ chạy lúc hộp thoại Tạo phiếu / Sửa phiếu được mount, mà endpoint này
+ * nặng (cây thiết bị tới 2000 nút + toàn bộ danh mục kèm điểm thay thế và tồn ERP) — nên cú
+ * bấm "Tạo phiếu" đầu tiên phải ngồi chờ. Kéo về trước trong lúc rảnh thì hộp thoại mở ra là
+ * có sẵn dữ liệu, mà vẫn không tranh băng thông với lượt tải đầu của trang.
+ */
+export function usePrefetchTicketOptions(enabled: boolean) {
+  const qc = useQueryClient();
+  useEffect(() => {
+    if (!enabled || typeof window === "undefined") return;
+    const run = () => { void qc.prefetchQuery({ queryKey: ticketOptionsKey, queryFn: fetchTicketOptions, staleTime: 60_000 }); };
+    // requestIdleCallback chưa có trên Safari — lùi về setTimeout.
+    const canIdle = "requestIdleCallback" in window;
+    const handle = canIdle ? window.requestIdleCallback(run, { timeout: 4000 }) : window.setTimeout(run, 1500);
+    return () => {
+      if (canIdle) window.cancelIdleCallback(handle);
+      else window.clearTimeout(handle);
+    };
+  }, [enabled, qc]);
+}
+
 export function useTicketOptions(enabled: boolean) {
   return useQuery({
-    queryKey: ["material-ticket-options"],
+    queryKey: ticketOptionsKey,
     enabled,
     // Endpoint nặng (cây thiết bị + toàn bộ danh mục kèm ERP) — không tải lại
     // mỗi lần mở form; mutation liên quan vẫn invalidate nên dữ liệu không cũ.
     staleTime: 60_000,
-    queryFn: async () => {
-      const res = await apiGet<{
-        devices: { seq: string; name: string; depth: number; parentSeq: string | null }[];
-        materials: {
-          id: string; code: string; name: string; unit: string; quantity: number; category: string | null;
-          machine: string;
-          erpCodes: { code: string; name: string; erpStock: number }[];
-          managingPositions: string[];
-          devices: { seq: string; label: string; system: string | null; managingPosition: string | null; recoveryOnSupplement: boolean }[];
-        }[];
-        positions: string[];
-      }>("/api/material-tickets/options");
-      return res.data;
-    },
+    queryFn: fetchTicketOptions,
   });
 }
 

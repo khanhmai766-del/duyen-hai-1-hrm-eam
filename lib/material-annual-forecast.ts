@@ -1,7 +1,7 @@
 import type { PrismaClient } from "@prisma/client";
 import { periodKeyOf } from "@/lib/chemical-inventory/normalize";
 import { annualPlanGroupOfCategory, annualPlanNameKey } from "@/lib/material-annual-plan-import";
-import { getMaterialAnnualPlanSummary } from "@/lib/material-annual-plan-summary";
+import { getCachedMaterialAnnualPlanSummary } from "@/lib/material-annual-plan-cache";
 
 /**
  * Dự toán nhu cầu vật tư cho năm sau.
@@ -84,7 +84,7 @@ export async function getMaterialAnnualForecast(
   const historyTo = new Date(Date.UTC(baseYear + 1, 0, 1) + BOUNDARY_MS);
 
   const [currentSummary, duePoints, unplannedLogs, lots] = await Promise.all([
-    getMaterialAnnualPlanSummary(prisma, baseYear),
+    getCachedMaterialAnnualPlanSummary(prisma, baseYear),
     prisma.materialReplacement.findMany({
       where: {
         isActive: true,

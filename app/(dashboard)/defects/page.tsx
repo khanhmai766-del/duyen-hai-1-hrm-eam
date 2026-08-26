@@ -606,7 +606,7 @@ export default function DefectsPage() {
       <PageHeader
         title={`KHIẾM KHUYẾT THIẾT BỊ — ${sectionConfig.label.toUpperCase()}`}
         description={`Phiếu đồng bộ từ Google Sheet ${sectionConfig.source === "CO" ? "Cơ" : "Điện"} · theo dõi sự cố & khiếm khuyết đang tồn đọng`}
-        mobileTitle={sectionConfig.label.toUpperCase()}
+        mobileTitle={sectionConfig.label.replace(/^Sheet\b/i, "Phần").toUpperCase()}
         hideDescriptionOnMobile
         mobileInline
       >

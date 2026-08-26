@@ -76,11 +76,11 @@ export function RowExpander({ expanded, onToggle }: { expanded: boolean; onToggl
       title={expanded ? "Thu gọn" : "Xem chi tiết"}
       className={cn(
         // Cỡ ăn theo cỡ chữ của bảng (13px) — nút to hơn sẽ đội chiều cao cả hàng.
-        "inline-flex h-[18px] w-[18px] items-center justify-center rounded-full text-white shadow-sm transition-all duration-200",
+        "inline-flex h-7 w-7 items-center justify-center rounded-full text-white shadow-sm transition-all duration-200 md:h-[18px] md:w-[18px]",
         expanded ? "rotate-45 bg-[#00558F]" : "bg-emerald-600 hover:bg-emerald-700"
       )}
     >
-      <Plus className="h-2.5 w-2.5" strokeWidth={3} />
+      <Plus className="h-3.5 w-3.5 md:h-2.5 md:w-2.5" strokeWidth={3} />
     </button>
   );
 }
@@ -113,7 +113,7 @@ export function DetailField({
         // Cột nhãn phải đủ rộng cho nhãn DÀI NHẤT ("Linh kiện đang lỗi", "Nguồn gốc /
         // NSX") nằm gọn MỘT dòng: nhãn gãy đôi dòng làm khối chi tiết trông rối hơn hẳn
         // so với việc hy sinh vài chục pixel bề ngang của phần giá trị.
-        "grid min-w-0 grid-cols-[116px_1fr] items-start gap-x-3",
+        "grid min-w-0 grid-cols-[92px_1fr] items-start gap-x-2.5 sm:grid-cols-[116px_1fr] sm:gap-x-3",
         span === 2 && "sm:col-span-2",
         span === "full" && "col-span-full"
       )}
@@ -150,7 +150,7 @@ export function FaultChip({ group, status, tone }: { group: string; status: stri
  */
 export function DetailPanel({ children }: { children: React.ReactNode }) {
   return (
-    <div className="sticky left-0 w-[min(100%,1120px)] border-l-[3px] border-[#00558F] bg-slate-50/80 py-3 pl-4 pr-5">
+    <div className="sticky left-0 w-[min(100%,1120px)] border-l-[3px] border-[#00558F] bg-slate-50/80 px-3 py-3 sm:pl-4 sm:pr-5">
       {/* Khoảng hở NGANG rộng hơn hở DỌC: cột nọ phải tách hẳn khỏi cột kia, còn các
           dòng trong cùng một cột thì nên đứng gần nhau để đọc thành cụm. */}
       <div className="grid gap-x-10 gap-y-2.5 sm:grid-cols-2 lg:grid-cols-3">{children}</div>
@@ -248,9 +248,9 @@ export function PcccTableCard({
   const lastShown = Math.min(page * pageSize, total);
 
   return (
-    <Card className="overflow-hidden">
+    <Card className="overflow-hidden border-0 bg-transparent shadow-none md:border md:bg-card md:shadow-sm">
       {/* Thanh công cụ: số dòng bên trái, tìm kiếm bên phải */}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-muted/25 px-4 py-3">
+      <div className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white px-3 py-3 shadow-sm md:flex-row md:flex-wrap md:items-center md:justify-between md:rounded-none md:border-x-0 md:border-t-0 md:bg-muted/25 md:px-4 md:shadow-none">
         <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
           <span>Hiển thị</span>
           <select
@@ -268,9 +268,9 @@ export function PcccTableCard({
           <span>dòng</span>
           {toolbarExtra}
         </div>
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-muted-foreground">Tìm kiếm:</span>
-          <div className="relative w-60">
+        <div className="flex w-full items-center gap-2 md:w-auto">
+          <span className="hidden text-sm text-muted-foreground md:inline">Tìm kiếm:</span>
+          <div className="relative w-full md:w-60">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               value={search}
@@ -286,9 +286,9 @@ export function PcccTableCard({
           vùng cuộn lồng nhau làm sticky mất tác dụng (đầu bảng/cột đóng băng bám vào
           vùng trong, còn vùng ngoài mới là cái đang cuộn). Bảng tự truyền
           wrapperClassName để đặt chiều cao tối đa. */}
-      {children}
+      <div className="pccc-mobile-table">{children}</div>
 
-      <div className="flex flex-col gap-3 border-t border-border bg-muted/25 px-4 py-3 text-sm text-muted-foreground md:flex-row md:items-center md:justify-between">
+      <div className="mt-3 flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-muted-foreground shadow-sm md:mt-0 md:flex-row md:items-center md:justify-between md:rounded-none md:border-x-0 md:border-b-0 md:bg-muted/25 md:shadow-none">
         <div>
           {total === 0 ? (
             "Không có bản ghi nào"
@@ -303,6 +303,100 @@ export function PcccTableCard({
         </div>
         <Pager page={page} totalPages={Math.max(1, pageCount)} onGo={onPageChange} />
       </div>
+      <style jsx global>{`
+        @media (max-width: 767px) {
+          .pccc-mobile-table {
+            margin-top: 12px;
+          }
+          .pccc-mobile-table > div {
+            max-height: none !important;
+            overflow: visible !important;
+          }
+          .pccc-mobile-table table {
+            display: block;
+            min-width: 0 !important;
+            width: 100%;
+          }
+          .pccc-mobile-table thead {
+            display: none;
+          }
+          .pccc-mobile-table tbody {
+            display: grid;
+            gap: 12px;
+            padding: 12px;
+            border-radius: 18px;
+            background: rgb(248 250 252 / 0.72);
+          }
+          .pccc-mobile-table tbody > tr:not(:has(> td[colspan])) {
+            display: grid;
+            grid-template-columns: 38px minmax(0, 1fr);
+            align-items: center;
+            overflow: hidden;
+            border: 1px solid rgb(226 232 240) !important;
+            border-radius: 16px;
+            background: white !important;
+            box-shadow: 0 8px 24px rgb(15 23 42 / 0.06);
+          }
+          .pccc-mobile-table tbody > tr:not(:has(> td[colspan])) > td {
+            position: static !important;
+            left: auto !important;
+            z-index: auto !important;
+            width: auto !important;
+            min-width: 0 !important;
+            max-width: none !important;
+            border: 0 !important;
+            background: transparent !important;
+            box-shadow: none !important;
+          }
+          .pccc-mobile-table tbody > tr:not(:has(> td[colspan])) > td:first-child {
+            grid-column: 1;
+            grid-row: 1 / span 3;
+            align-self: stretch;
+            display: grid;
+            place-items: center;
+            padding: 12px 5px !important;
+            border-right: 1px dashed rgb(203 213 225) !important;
+          }
+          .pccc-mobile-table tbody > tr:not(:has(> td[colspan])) > td:nth-child(2) {
+            grid-column: 2;
+            padding: 12px 12px 5px !important;
+            font-size: 14px !important;
+            font-weight: 800;
+            color: rgb(15 23 42);
+          }
+          .pccc-mobile-table tbody > tr:not(:has(> td[colspan])) > td:nth-child(3),
+          .pccc-mobile-table tbody > tr:not(:has(> td[colspan])) > td:nth-child(4) {
+            grid-column: 2;
+            padding: 2px 12px !important;
+            font-size: 11px !important;
+            color: rgb(71 85 105);
+          }
+          .pccc-mobile-table tbody > tr:not(:has(> td[colspan])) > td:nth-child(4) {
+            padding-bottom: 12px !important;
+          }
+          .pccc-mobile-table tbody > tr:not(:has(> td[colspan])) > td:nth-child(n + 5) {
+            display: none !important;
+          }
+          .pccc-mobile-table tbody > tr:has(> td[colspan]) {
+            display: block;
+            margin-top: -12px;
+            overflow: hidden;
+            border: 1px solid rgb(186 230 253) !important;
+            border-top: 0 !important;
+            border-radius: 0 0 16px 16px;
+            background: white !important;
+          }
+          .pccc-mobile-table tbody > tr:has(> td[colspan]) > td {
+            display: block !important;
+            width: 100% !important;
+            padding: 0 !important;
+          }
+          .pccc-mobile-table tbody > tr:has(> td[colspan]) > td > div {
+            position: static !important;
+            width: 100% !important;
+          }
+        }
+      `}</style>
     </Card>
   );
 }

@@ -454,7 +454,7 @@ export async function POST(req: NextRequest) {
       return ticket;
     });
 
-    const workflowLabel = type === SINGLE_STEP_TICKET_TYPE ? "khai một bước" : type === CHEMICAL_TICKET_TYPE ? "luồng hóa chất" : type === "DE_XUAT" ? "luồng Đề xuất" : "chưa chọn luồng";
+    const workflowLabel = type === SINGLE_STEP_TICKET_TYPE ? "luồng NH3 rút gọn" : type === CHEMICAL_TICKET_TYPE ? "luồng hóa chất" : type === "DE_XUAT" ? "luồng Đề xuất" : "chưa chọn luồng";
     await audit(user.id, "CREATE_MATERIAL_TICKET", "MaterialTicket", ticket.id,
       `${materialTicketReference(ticket)} (${workflowLabel}, ${unit}) — giao: ${assignedPosition}, loại: ${materialCategory}, vật tư: ${selectedMaterial!.name}, số lượng đề xuất: ${proposedQuantity}, thiết bị: ${replacementDeviceLabels.join(", ")}`);
     return ok(ticket);

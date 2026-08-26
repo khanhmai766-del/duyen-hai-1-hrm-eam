@@ -16,11 +16,12 @@ import { countUsagePhotos, deleteUsagePhotos } from "@/lib/material-usage-photo"
 import { deleteDeliveryPhotos, deliveryPhotoLotsOfTicket, loadDeliveryPhotoBuffer, purgeSettledLotPhotos, uploadDeliveryPhoto, MISSING_DELIVERY_PHOTO_MESSAGE } from "@/lib/material-delivery-photo";
 import { keyFromPublicUrl } from "@/lib/s3";
 import { syncTicketReplacementLinks, type LinkablePoint } from "@/lib/material-ticket-replacement-link";
-import { MIN_USAGE_PHOTOS, MISSING_USAGE_PHOTO_MESSAGE, usesHandwrittenBbnt, CHEMICAL_TICKET_TYPE, COMMON_MATERIAL_POSITION, GAS_RETURN_STATUS, isChemicalFlowTicket, isGasCylinderCategory, isGasCylinderTicket, isOtherMaterialAdvanceTicket, isOtherMaterialTicketType, materialTicketRequiresRecovery, OTHER_MATERIAL_ADVANCE_TICKET_TYPE, OTHER_MATERIAL_TICKET_TYPE, recoveryRequiredForReason, ticketReasonAllowed, TICKET_MATERIAL_CATEGORIES, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
+import { MIN_USAGE_PHOTOS, MISSING_USAGE_PHOTO_MESSAGE, usesHandwrittenBbnt, CHEMICAL_TICKET_TYPE, COMMON_MATERIAL_POSITION, GAS_RETURN_STATUS, isChemicalFlowTicket, isGasCylinderCategory, isGasCylinderTicket, isOtherMaterialAdvanceTicket, isOtherMaterialTicketType, materialTicketRequiresRecovery, OTHER_MATERIAL_ADVANCE_TICKET_TYPE, OTHER_MATERIAL_TICKET_TYPE, recoveryRequiredForReason, SINGLE_STEP_TICKET_TYPE, ticketReasonAllowed, TICKET_MATERIAL_CATEGORIES, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
 import { positionsMatch } from "@/lib/position-catalog";
 import { replacementPointDisplayLabel, replacementPointSelectionKey } from "@/lib/material-replacement-display";
 import { receiveOtherMaterial } from "@/lib/other-material-stock";
 import { recordSettledTicketReplacements } from "@/lib/material-ticket-replacement-settlement";
+import { invalidateMaterialAnnualPlanCache } from "@/lib/material-annual-plan-cache";
 
 export const dynamic = "force-dynamic";
 
@@ -40,7 +41,7 @@ function stockSyncOptions(category: string | null | undefined, unit: string | nu
  * thẳng theo hợp đồng, không qua kho DH1 nên KHÔNG cộng tồn và KHÔNG trừ ERP.
  */
 function isChemicalSequenceTicket(type: string | null | undefined) {
-  return type === CHEMICAL_TICKET_TYPE || type === "GHI_NHAN";
+  return type === CHEMICAL_TICKET_TYPE || type === SINGLE_STEP_TICKET_TYPE;
 }
 
 const SCCN_REPRESENTATIVES = ["Võ Văn Chiến", "Lê Văn Khánh", "Nguyễn Thanh Toàn"] as const;
@@ -1931,17 +1932,30 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     // Ứng: bước gộp "XÁC NHẬN ĐXVT" (chỉ Thống kê): nguồn lãnh + mã ERP + khối lượng
     // + số phiếu giao hàng + số phiếu ĐXVT → chuyển Quyết toán; chưa xuất biên bản tại đây.
     /**
-     * Ghi các chuyến xe hóa chất cho một phiếu ĐÃ HOÀN TẤT.
+     * Ghi các chuyến xe hóa chất.
      *
-     * Dành cho phiếu NH3 (khai một bước — tạo xong là HOÀN TẤT) và cho việc bổ sung
-     * / sửa lại danh sách xe của phiếu hóa chất sau khi đã lãnh. Xe về rải rác vài
-     * ngày sau khi đề xuất nên không thể bắt phiếu chờ mới cho ghi.
+     * Với NH3, đây là bước VHV xác nhận khối lượng lãnh và chính lần chốt này mới
+     * chuyển phiếu sang HOÀN TẤT. Với hóa chất thường, action chỉ dành cho dữ liệu
+     * tương thích của phiếu đã hoàn tất; luồng hiện hành ghi xe bằng action `receive`.
      *
      * Lượng đề xuất trên phiếu chỉ là số tham khảo — CỐ Ý không so với lượng nhập.
      */
     if (action === "chemicalTrucks") {
       if (!isChemicalSequenceTicket(t.type)) {
         return fail("Chỉ phiếu hóa chất mới ghi được chuyến xe nhập");
+      }
+      // Hóa chất khác NH3 phải đi đủ luồng: xác nhận bồn/thiết bị → xác nhận đề xuất →
+      // VHV xác nhận khối lượng lãnh. Việc nhập xe của bước cuối đi qua action `receive`;
+      // `chemicalTrucks` chỉ còn dùng để ghi NH3 hoặc bổ sung dữ liệu cho phiếu thường
+      // đã hoàn tất. Rào tại API để không thể bỏ qua các bước trước bằng request trực tiếp.
+      if (t.type === CHEMICAL_TICKET_TYPE && t.status !== "HOAN_TAT") {
+        return fail(
+          "Chuyến xe hóa chất chỉ được nhập tại bước VHV xác nhận khối lượng lãnh, sau khi các bước xác nhận trước đã hoàn tất",
+          409
+        );
+      }
+      if (t.type === SINGLE_STEP_TICKET_TYPE && t.status !== "NHAN_VAT_TU") {
+        return fail("Phiếu NH3 không ở bước VHV xác nhận khối lượng lãnh", 409);
       }
       const assigned = samePosition(user.position, t.assignedPosition);
       if (!assigned && user.role !== "ADMIN") {
@@ -1976,15 +1990,6 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         return ok(await getTicket(t.id));
       }
 
-      const linkResult = await prisma.$transaction(async (tx) =>
-        linkTicketTrucks(
-          tx,
-          { id: t.id, assignedPosition: t.assignedPosition, chemicalReceiptIds: t.chemicalReceiptIds, items: t.items },
-          trucks,
-          { userId: user.id, chemicalItemId: String(body.chemicalItemId || "") || null }
-        )
-      );
-
       // Ngày nhập của phiếu = ngày muộn nhất trong các chuyến xe.
       const latestTruckDate = trucks
         .map((truck) => parseDateInput(truck.receivedAt))
@@ -1993,28 +1998,39 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
 
       // Phiếu NH3: đề xuất chỉ hoàn tất KHI ĐÃ ghi khối lượng nhập, biển số và ngày nhập.
       // Trước đây phiếu hoàn tất ngay lúc lập, nên không có chỗ nào ghi lại hàng thực về.
-      const completesNow = t.type === "GHI_NHAN" && t.status !== "HOAN_TAT";
+      const completesNow = t.type === SINGLE_STEP_TICKET_TYPE && t.status === "NHAN_VAT_TU";
 
-      // Cột receivedQuantity là Int và chỉ để hiển thị nhanh trên phiếu; con số chính
-      // xác tới 4 số lẻ nằm ở ChemicalReceipt.
-      await prisma.materialTicket.update({
-        where: { id: t.id },
-        data: {
-          receivedQuantity: Math.round(linkResult.totalAccepted),
-          receivedAt: latestTruckDate ?? t.receivedAt,
-          ...(completesNow
-            ? {
-                status: "HOAN_TAT",
-                receivedById: user.id,
-                receivedByName: user.name ?? null,
-                receivedByPosition: user.position ?? null,
-                completedAt: new Date(),
-                completedById: user.id,
-                completedByName: user.name ?? null,
-                completedByPosition: user.position ?? null,
-              }
-            : {}),
-        },
+      // Ghi sổ chuyến xe và chuyển trạng thái trong CÙNG giao dịch: không có tình huống
+      // sổ đã nhận xe nhưng phiếu vẫn đang chờ, hoặc phiếu hoàn tất mà sổ chưa có dữ liệu.
+      const linkResult = await prisma.$transaction(async (tx) => {
+        const result = await linkTicketTrucks(
+          tx,
+          { id: t.id, assignedPosition: t.assignedPosition, chemicalReceiptIds: t.chemicalReceiptIds, items: t.items },
+          trucks,
+          { userId: user.id, chemicalItemId: String(body.chemicalItemId || "") || null }
+        );
+        // Cột receivedQuantity là Int và chỉ để hiển thị nhanh trên phiếu; con số chính
+        // xác tới 4 số lẻ nằm ở ChemicalReceipt.
+        await tx.materialTicket.update({
+          where: { id: t.id },
+          data: {
+            receivedQuantity: Math.round(result.totalAccepted),
+            receivedAt: latestTruckDate ?? t.receivedAt,
+            ...(completesNow
+              ? {
+                  status: "HOAN_TAT",
+                  receivedById: user.id,
+                  receivedByName: user.name ?? null,
+                  receivedByPosition: user.position ?? null,
+                  completedAt: new Date(),
+                  completedById: user.id,
+                  completedByName: user.name ?? null,
+                  completedByPosition: user.position ?? null,
+                }
+              : {}),
+          },
+        });
+        return result;
       });
 
       await audit(user.id, "MT_CHEMICAL_TRUCKS", "MaterialTicket", t.id,
@@ -2774,6 +2790,10 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       // Lô còn hàng vẫn giữ ảnh để phiếu sau in vào biên bản của nó.
       const touchedLotIds = [...new Set((await usedLotsOfTicket(prisma, t.id)).map((lot) => lot.id))];
       const removedDeliveryPhotos = await purgeSettledLotPhotos(prisma, touchedLotIds).catch(() => 0);
+      // Dòng lịch sử vừa ghi là số liệu của cột "Luỹ kế đã sử dụng" trên biểu QLVT.20; xoá đệm
+      // để Thống kê mở ngay biểu tháng là thấy, không phải chờ hết TTL. Không tra được chính xác
+      // năm của `replacedAt` ở đây nên xoá sạch — đệm dựng lại chỉ tốn một lượt tính.
+      invalidateMaterialAnnualPlanCache();
       await audit(
         user.id,
         "MT_SETTLE",

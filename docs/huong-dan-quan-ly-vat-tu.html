@@ -1,0 +1,766 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<title>Hướng dẫn sử dụng phần Quản lý vật tư</title>
+<style>
+  @page { size: A4; margin: 15mm 13mm 15mm 13mm; }
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Segoe UI", "Times New Roman", serif;
+    font-size: 10.2pt; line-height: 1.5; color: #16202c; margin: 0;
+  }
+  h1, h2, h3, h4 { font-family: "Segoe UI", Arial, sans-serif; color: #10263f; margin: 0; }
+  h1 { font-size: 21pt; letter-spacing: -.3px; }
+  h2 {
+    font-size: 14pt; margin: 0 0 9px; padding: 7px 10px;
+    background: #10263f; color: #fff; border-radius: 3px;
+    page-break-after: avoid;
+  }
+  h3 { font-size: 11.6pt; margin: 15px 0 6px; color: #0d4a7a; page-break-after: avoid; }
+  h3::before { content: "\258D"; color: #2f8fd0; margin-right: 5px; }
+  h4 { font-size: 10.4pt; margin: 11px 0 4px; color: #24384f; page-break-after: avoid; }
+  p { margin: 0 0 7px; text-align: justify; }
+  ul, ol { margin: 0 0 8px; padding-left: 19px; }
+  li { margin-bottom: 3px; }
+  code, .mono { font-family: Consolas, "Courier New", monospace; font-size: 9pt;
+    background: #eef3f8; padding: 0 3px; border-radius: 2px; color: #0b3a5e; }
+  table { width: 100%; border-collapse: collapse; margin: 6px 0 12px; font-size: 9.1pt; }
+  th, td { border: 1px solid #b9c8d6; padding: 4px 6px; vertical-align: top; }
+  th { background: #dce8f2; color: #10263f; font-weight: 700; text-align: left; }
+  tr { page-break-inside: avoid; }
+  tbody tr:nth-child(even) td { background: #f6f9fc; }
+  td.c, th.c { text-align: center; }
+  .sec { page-break-before: always; }
+  .lead { font-size: 10.6pt; color: #3a4c60; margin-bottom: 12px; }
+  .box { border-left: 4px solid #2f8fd0; background: #f0f7fd; padding: 7px 11px; margin: 8px 0 11px; border-radius: 0 3px 3px 0; page-break-inside: avoid; }
+  .warn { border-left-color: #d97706; background: #fdf6ec; }
+  .bad { border-left-color: #dc2626; background: #fdeeee; }
+  .ok { border-left-color: #16a34a; background: #edf8f1; }
+  .box b { color: #10263f; }
+  .box p:last-child, .box ul:last-child, .box ol:last-child { margin-bottom: 0; }
+  .tag { display: inline-block; font-family: Consolas, monospace; font-size: 8.4pt;
+    padding: 1px 5px; border-radius: 3px; background: #10263f; color: #fff; white-space: nowrap; }
+  .tag.g { background: #16a34a; } .tag.o { background: #ea580c; }
+  .tag.p { background: #7c3aed; } .tag.b { background: #0891b2; }
+  .tag.r { background: #dc2626; } .tag.w { background: #d97706; }
+  .cover { text-align: center; padding-top: 52mm; page-break-after: always; }
+  .cover .kicker { letter-spacing: 3px; font-size: 9.5pt; color: #2f8fd0; font-weight: 700; }
+  .cover h1 { margin: 12px 0 6px; font-size: 27pt; line-height: 1.15; }
+  .cover .sub { font-size: 12pt; color: #4a5c70; }
+  .cover .rule { width: 70mm; height: 3px; background: #2f8fd0; margin: 18px auto; }
+  .cover .meta { margin-top: 24mm; font-size: 9.5pt; color: #5c6b7d; line-height: 1.9; }
+  .toc { font-size: 10pt; }
+  .toc div { padding: 3px 0; border-bottom: 1px dotted #c6d3e0; }
+  .toc .l2 { padding-left: 16px; font-size: 9.3pt; color: #3a4c60; border-bottom: none; }
+  .flow { display: table; width: 100%; border-collapse: separate; border-spacing: 3px 0; margin: 6px 0 10px; }
+  .flow .st { display: table-cell; background: #eef4fa; border: 1px solid #b9c8d6;
+    border-top: 3px solid #2f8fd0; border-radius: 3px; padding: 5px 4px; font-size: 8.2pt; text-align: center; vertical-align: top; }
+  .flow .st b { display: block; font-size: 8.6pt; color: #10263f; }
+  .flow .st i { display: block; font-style: normal; color: #6b7c8f; font-size: 7.6pt; margin-top: 2px; }
+  .formula { background: #10263f; color: #eaf3fb; font-family: Consolas, monospace; font-size: 9.2pt;
+    padding: 9px 12px; border-radius: 4px; margin: 8px 0 11px; line-height: 1.65; white-space: pre-wrap; }
+  .formula b { color: #7fc4f0; }
+  .ex { border: 1px solid #b9c8d6; border-radius: 4px; margin: 9px 0 12px; page-break-inside: avoid; }
+  .ex .hd { background: #24384f; color: #fff; font-weight: 700; font-size: 9.4pt; padding: 4px 9px; }
+  .ex .bd { padding: 8px 10px; }
+  .ex .bd p:last-child, .ex .bd table:last-child, .ex .bd ol:last-child { margin-bottom: 0; }
+  .small { font-size: 8.8pt; color: #5c6b7d; }
+  .foot { margin-top: 16px; border-top: 1px solid #c6d3e0; padding-top: 6px; font-size: 8.6pt; color: #6b7c8f; }
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <div class="kicker">CÔNG TY NHIỆT ĐIỆN DUYÊN HẢI 1 — PHÂN XƯỞNG VẬN HÀNH 1</div>
+  <h1>HƯỚNG DẪN SỬ DỤNG<br>PHẦN QUẢN LÝ VẬT TƯ</h1>
+  <div class="rule"></div>
+  <div class="sub">Từ điểm theo dõi &rarr; đề xuất &rarr; ba luồng thực hiện &rarr; biên bản<br>&rarr; quyết toán &amp; gia hạn chu kỳ &rarr; nhu cầu tháng &amp; kế hoạch năm</div>
+  <div class="meta">
+    Hệ thống PowerPlant EAM (dh1-app)<br>
+    Dành cho VHV, Trưởng ca / Trưởng kíp, Kỹ thuật viên, Thống kê và Quản trị<br>
+    Mọi ví dụ, công thức và quy tắc trong tài liệu được đối chiếu trực tiếp với phần mềm đang chạy
+  </div>
+</div>
+
+<h2>Mục lục</h2>
+<div class="toc">
+  <div><b>1. Bản đồ module &amp; vai trò</b></div>
+  <div class="l2">1.1 Tám màn hình &middot; 1.2 Ai làm được bước nào &middot; 1.3 Ba tầng dữ liệu</div>
+  <div><b>2. Điểm theo dõi — tạo, đọc và quản lý</b></div>
+  <div class="l2">2.1 Hai tầng khai báo &middot; 2.2 Ví dụ tạo điểm &middot; 2.3 Giới hạn số điểm &middot; 2.4 Điểm lấy mẫu định kỳ &middot; 2.5 Đọc màu trạng thái</div>
+  <div><b>3. Tạo đề xuất vật tư (lập phiếu)</b></div>
+  <div class="l2">3.1 Ai được lập &middot; 3.2 Các trường bắt buộc &middot; 3.3 Lý do đề xuất quyết định biên bản &middot; 3.4 Số hiệu phiếu</div>
+  <div><b>4. Ba luồng thực hiện</b></div>
+  <div class="l2">4.1 Bước chọn luồng &middot; 4.2 Luồng ĐỀ XUẤT &middot; 4.3 Luồng ỨNG &middot; 4.4 Luồng SỬ DỤNG HIỆN CÓ &middot; 4.5 Bảng so sánh</div>
+  <div><b>5. Các luồng biến thể</b></div>
+  <div class="l2">5.1 Hóa chất ba bước &middot; 5.2 NH3 lỏng &middot; 5.3 Chai khí &middot; 5.4 Vật tư khác</div>
+  <div><b>6. Xuất các biên bản</b></div>
+  <div class="l2">6.1 Bốn loại chứng từ &middot; 6.2 Điều kiện ảnh &middot; 6.3 Ai xuất ở bước nào &middot; 6.4 Số văn bản BBTHVT</div>
+  <div><b>7. Quyết toán, ghi lịch sử và gia hạn điểm theo dõi</b></div>
+  <div class="l2">7.1 Bước quyết toán &middot; 7.2 Phân bổ khối lượng thực dùng &middot; 7.3 Gia hạn tự động &middot; 7.4 Khi nào KHÔNG gia hạn &middot; 7.5 Lãnh nhiều đợt</div>
+  <div><b>8. Liên kết Nhu cầu tháng &harr; Kế hoạch năm &harr; Tịnh kho hóa chất</b></div>
+  <div class="l2">8.1 Biểu QLVT.20 &middot; 8.2 Nguồn từng cột &middot; 8.3 Hai mạch số liệu &middot; 8.4 Truy ngược &middot; 8.5 Dự toán năm sau</div>
+  <div><b>9. Các trường hợp khác &amp; xử lý sự cố</b></div>
+</div>
+
+<div class="sec"></div>
+<h2>1. Bản đồ module &amp; vai trò</h2>
+<p class="lead">Mục <b>QUẢN LÝ VẬT TƯ</b> trên thanh điều hướng gồm tám màn hình. Chúng không rời rạc: một lần thay thế vật tư đi xuyên qua ít nhất bốn màn, và con số cuối cùng rơi vào biểu dự toán năm.</p>
+
+<h3>1.1 Tám màn hình</h3>
+<table>
+<colgroup><col style="width:23%"><col style="width:20%"><col style="width:38%"><col style="width:19%"></colgroup>
+<tr><th>Màn hình</th><th>Đường dẫn</th><th>Dùng để làm gì</th><th>Quyền cần có</th></tr>
+<tr><td><b>Danh mục Vận Hành 1</b></td><td><code>/materials</code></td><td>Danh mục vật tư PXVH1, khai báo thiết bị dùng vật tư, <b>tạo điểm theo dõi</b>, ra SYC thay thế, bảng phiếu vật tư</td><td><code>material-manage</code></td></tr>
+<tr><td><b>Vật tư theo ERP</b></td><td><code>/vat-tu/loai-dau</code></td><td>Tồn kho ERP gom theo loại dầu, đồng bộ từ QLVT</td><td><code>erp-material-manage</code></td></tr>
+<tr><td><b>Tịnh kho hóa chất</b></td><td><code>/chemical-inventory</code></td><td>Sổ tồn kho hóa chất theo kỳ tháng, phiếu nhập xe bồn, hợp đồng năm</td><td><code>chemical-inventory-manage</code></td></tr>
+<tr><td><b>Kế hoạch vật tư năm</b></td><td><code>/material-annual-plans</code></td><td>Chỉ tiêu kế hoạch năm theo biểu QLVT.20, nhập từ file Excel</td><td><code>material-manage</code></td></tr>
+<tr><td><b>Nhu cầu vật tư tháng</b></td><td><code>/material-annual-plans/monthly</code></td><td>Biểu tổng hợp nhu cầu tháng, xuất QLVT.20, dự toán năm sau</td><td><code>material-manage</code></td></tr>
+<tr><td><b>Lịch thay thế vật tư</b></td><td><code>/replacements</code></td><td>Lịch đến hạn và tab Trạng thái theo dõi của từng điểm</td><td><code>replacement-manage</code></td></tr>
+<tr><td><b>Theo dõi vật tư</b></td><td><code>/replacement-procedures</code></td><td>Lưu đồ quy trình thay thế vật tư, bảng theo dõi phiếu</td><td>mọi tài khoản</td></tr>
+<tr><td><b>Lịch sử thay thế</b></td><td><code>/replacement-history</code></td><td>Sổ lịch sử mọi lần thay, gồm cả dữ liệu lưu trữ từ Google Sheet cũ</td><td><code>replacement-manage</code></td></tr>
+</table>
+
+<div class="box"><p><b>Bảng phiếu vật tư nằm ở đâu?</b> Không có menu riêng. Bảng phiếu thay thế vật tư nằm ngay trong màn <b>Danh mục Vận Hành 1</b> và màn <b>Theo dõi vật tư</b> — người dùng mở đúng màn mình có việc rồi thao tác trên phiếu.</p></div>
+
+<h3>1.2 Ai làm được bước nào</h3>
+<p>Hệ thống có <b>hai rào giao nhau</b>. Muốn bấm được một nút phải qua cả hai:</p>
+<ol>
+<li><b>Phân quyền BƯỚC</b> — Quản trị gán cương vị nào được làm bước nào (mục <i>Phân quyền quy trình</i>). Phạm vi là <b>toàn phân xưởng</b>.</li>
+<li><b>Cương vị của PHIẾU</b> — chỉ áp cho các bước do VHV được giao phiếu thực hiện.</li>
+</ol>
+<table>
+<colgroup><col style="width:24%"><col style="width:40%"><col style="width:36%"></colgroup>
+<tr><th>Nhóm bước</th><th>Các bước</th><th>Rào áp dụng</th></tr>
+<tr><td><b>Bước của VHV</b></td><td>đề xuất, VHV lãnh vật tư, nhận từ hiện có, xác nhận vật tư lãnh (trừ luồng Ứng), ra SYC, sử dụng vật tư, xác nhận trả vỏ</td><td>Phân quyền bước <b>+ bắt buộc trùng cương vị phiếu</b></td></tr>
+<tr><td><b>Bước điều hành</b></td><td>xác nhận / chọn luồng, Thống kê xác nhận ĐXVT, nghiệm thu, xuất biên bản, quyết toán, từ chối</td><td>Chỉ phân quyền bước (toàn phân xưởng)</td></tr>
+</table>
+<p>Mười hai bước cấu hình được: <code>create</code>, <code>confirm</code>, <code>vhvReceive</code>, <code>stats</code>, <code>statsHandover</code>, <code>receive</code>, <code>issue</code>, <code>use</code>, <code>accept</code>, <code>return</code>, <code>settle</code>, <code>manage</code>. Bước <b>chưa cấu hình</b> rơi về mặc định: <code>create</code> &rarr; Quản trị / Kỹ thuật viên / Trưởng ca &middot; Trưởng kíp; <code>stats</code>, <code>statsHandover</code>, <code>settle</code> &rarr; Thống kê; <code>confirm</code>, <code>receive</code>, <code>issue</code>, <code>use</code>, <code>accept</code> &rarr; Trưởng ca &middot; Trưởng kíp; <code>return</code> &rarr; dùng luôn quyền của bước <code>use</code>. Tài khoản <b>ADMIN luôn làm được mọi bước</b>.</p>
+
+<div class="box warn"><p><b>Mọi cương vị đều XEM được toàn bộ phiếu.</b> Chỉ <i>hành động</i> mới bị giới hạn. Thấy phiếu nhưng không thấy nút nghĩa là chưa tới lượt hoặc chưa được phân quyền bước — không phải lỗi hiển thị. Phiếu đến lượt mình có nhãn <b>“Đến lượt bạn”</b>.</p></div>
+
+<h3>1.3 Ba tầng dữ liệu cần phân biệt</h3>
+<table>
+<colgroup><col style="width:22%"><col style="width:44%"><col style="width:34%"></colgroup>
+<tr><th>Tầng</th><th>Nội dung</th><th>Vòng đời</th></tr>
+<tr><td><b>Dòng khai báo thiết bị</b></td><td>“Vật tư X dùng cho thiết bị Y, mỗi thiết bị cần Z đơn vị, có N thiết bị, chu kỳ M tháng”</td><td>Vĩnh viễn, chỉ sửa khi thay đổi thiết kế</td></tr>
+<tr><td><b>Điểm theo dõi</b><br><span class="small">(đang đếm thời gian)</span></td><td>Một kỳ thay thế cụ thể: lần thay gần nhất, ngày đến hạn kế tiếp</td><td><b>Bị gỡ sau mỗi lần thay</b>; hệ thống tự sinh kỳ mới</td></tr>
+<tr><td><b>Dòng lịch sử</b></td><td>Sự thật đã xảy ra: ngày thay, khối lượng THỰC dùng, số PCT/LCT, số BBNT DO, số ĐXVT, số phiếu giao hàng</td><td>Bất biến, không bị xóa theo điểm</td></tr>
+</table>
+<div class="box"><p>Lịch sử neo <b>MỀM</b> vào điểm theo dõi. Điểm bị gỡ hay bị xóa thì dòng lịch sử vẫn đứng một mình được nhờ mang đầy đủ ảnh chụp: tên thiết bị, hệ thống, tổ máy, cương vị, chu kỳ, đơn vị tính. Đó là lý do bảng Lịch sử thay thế vẫn đầy đủ dù danh mục đã đổi nhiều lần.</p></div>
+
+<div class="sec"></div>
+<h2>2. Điểm theo dõi — tạo, đọc và quản lý</h2>
+<p class="lead">Điểm theo dõi là đồng hồ đếm ngược của một kỳ thay thế. Nó quyết định vật tư nào lên lịch, phiếu vật tư neo vào đâu, dòng lịch sử nào được ghi và cột “nhu cầu định kỳ” của dự toán năm sau bằng bao nhiêu. Sai ở đây thì sai cả chuỗi.</p>
+
+<h3>2.1 Hai tầng khai báo — đừng nhầm lẫn</h3>
+<table>
+<colgroup><col style="width:30%"><col style="width:35%"><col style="width:35%"></colgroup>
+<tr><th></th><th>Bước 1 — Thêm thiết bị theo dõi</th><th>Bước 2 — Thêm điểm theo dõi</th></tr>
+<tr><td><b>Mở từ đâu</b></td><td>Nút <b>+</b> ở cột <i>Thao tác</i> của dòng vật tư trong Danh mục</td><td>Nút <b>“Thêm điểm”</b> ở cột <i>Theo dõi</i> trong bảng “Chi tiết điểm thay thế”</td></tr>
+<tr><td><b>Ý nghĩa</b></td><td>Khai báo <b>thiết kế</b>: vật tư này phục vụ thiết bị nào, cần bao nhiêu, chu kỳ bao nhiêu</td><td>Bật <b>đồng hồ</b>: bắt đầu đếm thời gian cho một kỳ thay cụ thể</td></tr>
+<tr><td><b>Có lên lịch không</b></td><td><b>KHÔNG.</b> Chỉ khai báo, không hiện trên Lịch thay thế</td><td><b>CÓ.</b> Xuất hiện trên Lịch thay thế và tab Trạng thái theo dõi</td></tr>
+<tr><td><b>Trường nhập</b></td><td>Cương vị, Hệ thống, Thiết bị, Chu kỳ thay thế (tháng), Ghi chú chu kỳ, Số lượng, Số thiết bị</td><td>Lần thay gần nhất, Chu kỳ thay thế (tháng), tuỳ chọn “Vật tư lấy mẫu định kỳ”, Ghi chú</td></tr>
+</table>
+<div class="box bad"><p><b>Điểm theo dõi CHỈ được tạo từ thao tác “Thêm điểm”.</b> Không có đường nào khác. Thêm thiết bị theo dõi ở bước 1 <b>không</b> tự kích hoạt đếm thời gian — đây là chỗ hay bị hiểu nhầm nhất, dẫn tới “đã khai rồi mà không thấy trên lịch”.</p></div>
+
+<h3>2.2 Ví dụ đầy đủ — tạo một điểm theo dõi</h3>
+<div class="ex">
+<div class="hd">VÍ DỤ 1 — Dầu bôi trơn Total Preslia 32, bồn dầu thùng nghiền A, tổ máy S1</div>
+<div class="bd">
+<p><b>Bối cảnh.</b> Vật tư <i>Dầu Total Preslia 32</i> đã có trong Danh mục Vận Hành 1, tab S1, loại <i>Dầu bôi trơn</i>, ĐVT <i>Lít</i>. Cương vị quản lý: <i>Máy nghiền</i>. Vừa thay dầu ngày 12/03/2026, chu kỳ O&amp;M 12 tháng.</p>
+<p><b>Các bước thao tác</b></p>
+<ol>
+<li>Mở <code>/materials</code>, chọn tab tổ máy <b>S1</b>, lọc loại <b>Dầu bôi trơn</b>, tìm “Preslia 32”.</li>
+<li>Nếu dòng vật tư chưa gắn thiết bị: bấm <b>+</b> cột Thao tác &rarr; hộp thoại <i>Thêm thiết bị theo dõi</i>. Chọn <b>Cương vị</b> = Máy nghiền &rarr; <b>Hệ thống</b> = TRẠM DẦU BÔI TRƠN HP-LP &rarr; <b>Thiết bị</b> = Bồn dầu LP/HP thùng nghiền A. Nhập <b>Chu kỳ thay thế</b> = 12, <b>Ghi chú chu kỳ</b> = “2500h”, <b>Số lượng</b> = 120 (Lít cho MỖI thiết bị), <b>Số thiết bị</b> = 2. Lưu.</li>
+<li>Bung panel của vật tư (bấm mũi tên đầu dòng) &rarr; bảng <b>Chi tiết điểm thay thế</b> hiện dòng vừa khai. Cột <i>Số lượng</i> hiển thị <b>240 Lít</b> = 120 &times; 2.</li>
+<li>Bấm <b>“Thêm điểm”</b> ở cột <i>Theo dõi</i> &rarr; hộp thoại <i>Thêm điểm theo dõi</i>:
+  <ul>
+    <li><b>Lần thay gần nhất</b>: 12/03/2026</li>
+    <li><b>Chu kỳ thay thế (tháng)</b>: 12 (đã mồi sẵn theo khai báo, sửa được)</li>
+    <li>Bỏ trống ô “Vật tư lấy mẫu định kỳ”</li>
+    <li><b>Ghi chú</b>: “Thay theo O&amp;M sau đại tu 03/2026”</li>
+  </ul>
+</li>
+<li>Bấm <b>Thêm điểm</b>. Hệ thống báo <i>“Đã thêm điểm theo dõi”</i>.</li>
+</ol>
+<p><b>Kết quả.</b> Ngày đến hạn kế tiếp = 12/03/2026 + 12 tháng = <b>12/03/2027</b>. Nút cột <i>Theo dõi</i> đổi thành <b>“Thêm điểm (1/2)”</b> — vì dòng khai báo có 2 thiết bị, mới bật đồng hồ cho 1. Bấm tiếp để bật cho thiết bị thứ hai.</p>
+</div>
+</div>
+
+<div class="formula"><b>nextDueAt</b> = lastReplacedAt + intervalMonths (tháng)
+<b>Nhu cầu của điểm</b> = quantity &times; deviceCount        (ví dụ: 120 &times; 2 = 240 Lít)</div>
+
+<h3>2.3 Giới hạn số điểm theo mỗi dòng khai báo</h3>
+<p>Số điểm đang hoạt động không được vượt <b>Số thiết bị</b> đã khai. Nhãn nút phản ánh đúng tình trạng:</p>
+<table>
+<colgroup><col style="width:26%"><col style="width:74%"></colgroup>
+<tr><th>Nhãn nút</th><th>Nghĩa</th></tr>
+<tr><td><span class="tag b">Thêm điểm</span></td><td>Dòng khai 1 thiết bị, chưa có điểm nào đang chạy</td></tr>
+<tr><td><span class="tag b">Thêm điểm (1/3)</span></td><td>Khai 3 thiết bị, đang theo dõi 1 — còn 2 chỗ</td></tr>
+<tr><td><span class="tag g">Đang theo dõi</span></td><td>Khai 1 thiết bị và đã có điểm; bấm để xem trạng thái</td></tr>
+<tr><td><span class="tag g">Đã đủ 3/3</span></td><td>Đã bật hết số điểm cho phép</td></tr>
+<tr><td><span class="tag">Không theo dõi</span> <span class="small">(mờ, không bấm được)</span></td><td>Chu kỳ khai báo bằng <b>0</b> — vật tư chỉ khai danh mục, không theo lịch</td></tr>
+</table>
+<p>Nếu cố thêm quá giới hạn, hệ thống báo lỗi:</p>
+<ul>
+<li><i>“Thiết bị này đã có điểm theo dõi. Chỉ được thêm lại sau khi điểm hiện tại bị xoá hoặc được ghi nhận vào lịch sử thay thế.”</i></li>
+<li><i>“Đã đủ 3/3 điểm theo dõi theo số lượng thiết bị đã khai báo.”</i></li>
+</ul>
+<div class="box"><p><b>Muốn theo dõi nhiều hơn?</b> Sửa lại <b>Số thiết bị</b> trên dòng khai báo trước, rồi mới thêm điểm. Điểm theo dõi kế thừa giới hạn từ dòng khai báo — hệ thống không tin số client gửi lên.</p></div>
+
+<h3>2.4 Điểm lấy mẫu định kỳ</h3>
+<p>Tích ô <b>“Vật tư lấy mẫu định kỳ”</b> cho những vật tư mà O&amp;M chỉ yêu cầu lấy mẫu, theo dõi hoặc châm bổ sung chứ không thay định kỳ (điển hình: dầu bồn lớn, dầu máy biến áp).</p>
+<ul>
+<li>Vẫn có chu kỳ và vẫn nhắc khi tới hạn.</li>
+<li><b>Không</b> cộng vào cảnh báo quá hạn thay thế — để cảnh báo thật không bị loãng.</li>
+<li>Hiển thị riêng trên lịch, dùng chung bảng ba màu đỏ / vàng / xanh.</li>
+<li>Vẫn được <b>gia hạn</b> chu kỳ khi quyết toán như điểm thường.</li>
+</ul>
+<div class="box warn"><p><b>Chu kỳ bằng 0 bị chặn</b> ngay cả với điểm lấy mẫu: <i>“Điểm lấy mẫu định kỳ vẫn cần chu kỳ (tháng) để nhắc tới kỳ”</i>. Chu kỳ 0 chỉ dùng cho vật tư khai danh mục thuần tuý, không theo dõi lịch.</p></div>
+
+<h3>2.5 Đọc màu trạng thái</h3>
+<p>Nút cột <i>Theo dõi</i> mang luôn màu trạng thái đến hạn, đồng bộ với tab <i>Trạng thái theo dõi</i> ở màn Lịch thay thế:</p>
+<table>
+<colgroup><col style="width:20%"><col style="width:22%"><col style="width:58%"></colgroup>
+<tr><th class="c">Màu</th><th>Trạng thái</th><th>Ghi chú</th></tr>
+<tr><td class="c"><span class="tag r">ĐỎ</span></td><td>Đang QUÁ HẠN</td><td>Đã qua ngày đến hạn kế tiếp</td></tr>
+<tr><td class="c"><span class="tag w">VÀNG</span></td><td>SẮP ĐẾN HẠN</td><td>Trong ngưỡng cảnh báo trước hạn</td></tr>
+<tr><td class="c"><span class="tag g">XANH LÁ</span></td><td>Còn hạn</td><td>Bình thường</td></tr>
+<tr><td class="c"><span class="tag b">XANH DƯƠNG</span></td><td>Hành động “Thêm điểm”</td><td>Chưa có đồng hồ nào để báo hạn</td></tr>
+</table>
+<p>Một dòng khai báo có thể mở nhiều điểm; nút lấy <b>trạng thái xấu nhất</b> — quá hạn thắng, rồi tới sắp hạn. Bấm nút màu sẽ nhảy sang <code>/replacements?tab=status&amp;pointId=…</code> để xem chi tiết đúng điểm đó.</p>
+
+<div class="sec"></div>
+<h2>3. Tạo đề xuất vật tư (lập phiếu)</h2>
+<p class="lead">Đề xuất vật tư là điểm khởi đầu của mọi luồng. Từ 2026 phân xưởng áp dụng nguyên tắc <b>“cổng vật tư đứng trước SYC”</b>: phiếu vật tư ra trước, số yêu cầu sửa chữa ra sau — để đội sửa chữa không sang khi vật tư chưa về.</p>
+
+<h3>3.1 Ai được lập phiếu</h3>
+<p>Bước <code>create</code>. Khi Quản trị chưa cấu hình riêng thì mặc định gồm: <b>Quản trị (ADMIN)</b>, <b>Kỹ thuật viên</b> (vai trò TECHNICIAN hoặc chức vụ có chữ “Kỹ thuật viên”), <b>Trưởng ca / Trưởng kíp</b> (gồm TK Lò máy, Trưởng kíp điện). Không đủ quyền sẽ nhận lỗi: <i>“Bạn không có quyền tạo phiếu thay thế vật tư (Quản trị phân quyền ở mục Phân quyền quy trình)”</i>.</p>
+
+<h3>3.2 Các trường bắt buộc khi lập phiếu</h3>
+<table>
+<colgroup><col style="width:22%"><col style="width:48%"><col style="width:30%"></colgroup>
+<tr><th>Trường</th><th>Quy tắc</th><th>Lỗi nếu sai</th></tr>
+<tr><td><b>Tổ máy</b></td><td>S1 / S2 / COMMON. Vật tư chọn phải cùng tổ máy với phiếu</td><td>“Tổ máy không hợp lệ” · “Vật tư không thuộc tổ máy đã chọn”</td></tr>
+<tr><td><b>Cương vị được giao</b></td><td>Bắt buộc. Phải là cương vị đã được phân giao cây thiết bị (ngoại lệ: <i>Kỹ thuật viên</i>, <i>Thống kê</i>, cương vị ảo <i>Chung</i>)</td><td>“Cương vị … chưa được phân giao hệ thống thiết bị”</td></tr>
+<tr><td><b>Loại vật tư</b></td><td>Dầu bôi trơn · Lọc dầu · Hóa chất · Chai khí · Bi nghiền · Văn phòng phẩm · Khác · Vật tư khác</td><td>“Vui lòng chọn loại vật tư”</td></tr>
+<tr><td><b>Tên vật tư</b></td><td>Lọc theo loại đã chọn và theo tổ máy</td><td>“Vật tư không thuộc loại vật tư đã chọn”</td></tr>
+<tr><td><b>Số lượng đề xuất</b></td><td>Nguyên, lớn hơn 0</td><td>“Số lượng đề xuất phải lớn hơn 0”</td></tr>
+<tr><td><b>Thiết bị thay thế</b></td><td>Ít nhất 1, tối đa 50. Chỉ chọn được thiết bị thuộc <b>cương vị được giao</b></td><td>“Vui lòng chọn ít nhất một thiết bị thay thế” · “… không thuộc cương vị được giao quản lý”</td></tr>
+<tr><td><b>Ghi chú lý do</b></td><td>Bắt buộc. Chọn từ: <b>Bổ sung</b> · <b>Thay thế</b> · <b>Nhập</b> · <b>Khác</b></td><td>“Vui lòng nhập ghi chú lý do”</td></tr>
+</table>
+
+<div class="box ok"><p><b>Chọn thiết bị chính là chọn ĐIỂM THEO DÕI.</b> Khi lưu phiếu, hệ thống neo phiếu vào đúng kỳ thay thế của từng điểm (bảng liên kết phiếu &harr; điểm), đồng thời chụp lại <b>nhu cầu kế hoạch</b> của điểm tại thời điểm gắn (<code>quantity &times; deviceCount</code>). Con số chụp này về sau dùng để chia khối lượng thực dùng ở bước quyết toán — sửa khai báo điểm sau đó <b>không</b> làm đổi con số phiếu đã căn cứ.</p></div>
+
+<h3>3.3 Lý do đề xuất quyết định có biên bản thu hồi hay không</h3>
+<table>
+<colgroup><col style="width:16%"><col style="width:44%"><col style="width:40%"></colgroup>
+<tr><th>Lý do</th><th>Hệ quả</th><th>Áp dụng cho</th></tr>
+<tr><td><b>Thay thế</b></td><td>Phiếu <b>CÓ</b> vật tư thu hồi &rarr; bước Sử dụng bắt nhập số lượng thu hồi &rarr; xuất <b>BBTHVT</b></td><td>Vật tư kỹ thuật</td></tr>
+<tr><td><b>Bổ sung</b></td><td>Mặc định <b>KHÔNG</b> thu hồi. Chỉ có thu hồi nếu điểm được bật cờ <i>“Bổ sung vẫn phải lập biên bản thu hồi”</i>. <b>Không gia hạn chu kỳ</b> khi quyết toán</td><td>Vật tư kỹ thuật</td></tr>
+<tr><td><b>Nhập</b> · <b>Khác</b></td><td>Không thu hồi</td><td><b>Bắt buộc</b> với Hóa chất và Chai khí — hai loại này chỉ chọn được Nhập / Khác</td></tr>
+</table>
+<div class="box warn"><p>Hóa chất và chai khí mua theo lô về kho rồi dùng dần, không gắn với một điểm thay thế cụ thể. Chọn nhầm lý do sẽ bị chặn: <i>“Loại vật tư ‘Hóa chất’ chỉ chọn lý do Nhập hoặc Khác”</i>.</p></div>
+
+<h3>3.4 Số hiệu phiếu</h3>
+<p>Mỗi tháng có <b>hai dãy số song song</b>, không lẫn vào nhau:</p>
+<table>
+<colgroup><col style="width:18%"><col style="width:26%"><col style="width:56%"></colgroup>
+<tr><th>Dãy</th><th>Ví dụ số hiệu</th><th>Phiếu thuộc dãy</th></tr>
+<tr><td><b>MATERIAL</b></td><td><code>STT VT-7 tháng 08/2026</code></td><td>Toàn bộ vật tư kỹ thuật: dầu, lọc, bi nghiền, chai khí, vật tư khác</td></tr>
+<tr><td><b>CHEMICAL</b></td><td><code>STT HC-3 tháng 08/2026</code></td><td>Phiếu hóa chất và phiếu NH3 lỏng</td></tr>
+</table>
+<p>Số thứ tự cố định trong tháng, tăng liên tục theo thứ tự tạo phiếu, và <b>không đổi</b> sau khi phiếu chuyển luồng.</p>
+
+<div class="sec"></div>
+<h2>4. Ba luồng thực hiện</h2>
+<p class="lead">Sau khi VHV lập phiếu, phiếu đứng ở trạng thái <span class="tag">Chờ xác nhận</span> để Trưởng ca / Trưởng kíp chọn một trong ba luồng. Lựa chọn này quyết định toàn bộ đường đi còn lại và <b>không đổi được</b> về sau (trừ khi Quản trị sửa bước).</p>
+
+<h3>4.1 Bước chọn luồng — điều kiện của từng lựa chọn</h3>
+<table>
+<colgroup><col style="width:20%"><col style="width:44%"><col style="width:36%"></colgroup>
+<tr><th>Luồng</th><th>Điều kiện được chọn</th><th>Trạng thái tiếp theo</th></tr>
+<tr><td><b>ĐỀ XUẤT</b><br><span class="small">lãnh chính thức từ kho công ty</span></td><td>Phải có <b>ít nhất một mã ERP</b> đã duyệt (CONFIRMED) còn tồn kho lớn hơn 0</td><td><span class="tag p">Chờ thống kê</span></td></tr>
+<tr><td><b>ỨNG</b><br><span class="small">VHV lãnh trước, hoàn thiện hồ sơ sau</span></td><td>Luôn chọn được — kể cả khi ERP hết tồn</td><td><span class="tag b">Chờ VHV lãnh vật tư</span></td></tr>
+<tr><td><b>SỬ DỤNG HIỆN CÓ</b><br><span class="small">lấy từ kho phân xưởng</span></td><td>Tồn <b>Hiện có</b> của phân xưởng phải đủ số lượng xác nhận</td><td><span class="tag b">Nhận vật tư hiện có</span></td></tr>
+</table>
+<div class="box bad"><p>Không đủ điều kiện, hệ thống chặn ngay tại bước chọn luồng với thông báo cụ thể:</p>
+<ul>
+<li><i>“Không thể chọn luồng Đề xuất vì tất cả mã vật tư ERP đều không còn tồn kho. Vui lòng chọn luồng Ứng”</i></li>
+<li><i>“Số lượng hiện có không đủ: Dầu Preslia 32 (cần 240, tồn 90) — không thể chọn luồng Sử dụng hiện có. Vui lòng chọn Đề xuất hoặc Ứng.”</i></li>
+</ul></div>
+<p>Tại bước này Trưởng ca cũng có thể chỉnh <b>số lượng xác nhận</b>, nhập <b>số BBKT</b> (nếu có) và sửa lại <b>lý do</b>. Nếu vật tư không có hoặc không đủ, dùng nút <b>Từ chối</b> kèm lý do bắt buộc — phiếu đóng vĩnh viễn ở trạng thái <span class="tag r">Từ chối</span>.</p>
+
+<h3>4.2 Luồng ĐỀ XUẤT — bảy bước</h3>
+<div class="flow">
+<div class="st"><b>B0</b><i>VHV tạo đề xuất</i></div>
+<div class="st"><b>Xác nhận</b><i>Trưởng ca / Trưởng kíp</i></div>
+<div class="st"><b>Xác nhận ĐXVT</b><i>Thống kê</i></div>
+<div class="st"><b>Vật tư lãnh</b><i>VHV được giao</i></div>
+<div class="st"><b>Sử dụng</b><i>VHV được giao</i></div>
+<div class="st"><b>Nghiệm thu</b><i>Theo phân quyền</i></div>
+<div class="st"><b>Quyết toán</b><i>Thống kê</i></div>
+</div>
+<table>
+<colgroup><col style="width:5%"><col style="width:22%"><col style="width:16%"><col style="width:57%"></colgroup>
+<tr><th class="c">#</th><th>Bước / trạng thái</th><th>Người làm</th><th>Nhập gì · hệ thống làm gì</th></tr>
+<tr><td class="c">1</td><td><b>Tạo phiếu</b><br><span class="tag">Chờ xác nhận</span></td><td>VHV / KTV / TC-TK</td><td>Tổ máy, cương vị, loại, tên vật tư, số lượng, thiết bị, lý do</td></tr>
+<tr><td class="c">2</td><td><b>Trưởng ca xác nhận</b><br><span class="tag p">Chờ thống kê</span></td><td>Trưởng ca / Trưởng kíp</td><td>Chọn luồng <b>Đề xuất</b>, chốt số lượng, số BBKT (tuỳ chọn)</td></tr>
+<tr><td class="c">3a</td><td><b>Xuất Phiếu ĐXVT</b></td><td>Thống kê</td><td>Chọn <b>mã vật tư ERP</b> &rarr; hệ thống kiểm tra tồn ERP đủ &rarr; xuất <b>Phiếu ĐXVT (QLVT.12)</b>. Sau khi xuất, <b>mã ERP bị khóa</b></td></tr>
+<tr><td class="c">3b</td><td><b>Nhập số ĐXVT</b><br><span class="tag" style="background:#0f766e">Chờ TK xác nhận ĐXVT</span></td><td>Thống kê</td><td>Nhập <b>số phiếu đề xuất vật tư</b>. Không xuất file trước thì bị chặn: <i>“Vui lòng xác nhận mã vật tư và xuất Phiếu ĐXVT trước khi nhập số phiếu”</i></td></tr>
+<tr><td class="c">3c</td><td><b>Giao phiếu cho VHV</b></td><td>Người được phân quyền <code>statsHandover</code></td><td>Nhập <b>tên VHV nhận phiếu ĐXVT</b> &rarr; chuyển sang bước lãnh</td></tr>
+<tr><td class="c">4</td><td><b>Xác nhận vật tư lãnh</b><br><span class="tag b">Xác nhận vật tư lãnh</span></td><td>VHV được giao<br><span class="small">(bắt buộc trùng cương vị phiếu)</span></td><td><b>Khối lượng lãnh</b>, <b>số phiếu giao hàng</b>, <b>ảnh phiếu xuất kho liên 3</b> (bắt buộc), mã ERP. Hệ thống: tạo <b>lô kho</b> mang số giao hàng, <b>cộng Hiện có</b>, <b>trừ tồn ERP</b></td></tr>
+<tr><td class="c">5</td><td><b>Ra SYC sửa chữa</b></td><td>VHV được giao</td><td>Nút <b>“Ra SYC sửa chữa”</b> trong hồ sơ phiếu — form mồi sẵn 100%. Phiếu chuyển sang bước Sử dụng ngay khi SYC được gắn</td></tr>
+<tr><td class="c">6</td><td><b>Sử dụng vật tư</b><br><span class="tag p">Sử dụng vật tư</span></td><td>VHV được giao</td><td><b>Khối lượng sử dụng</b>, <b>tên VHV sử dụng</b>, số lượng thu hồi (nếu có), <b>tối thiểu 2/3 ảnh hiện trường</b>. Hệ thống <b>trừ Hiện có</b> theo FIFO các lô</td></tr>
+<tr><td class="c">7</td><td><b>Nghiệm thu</b><br><span class="tag w">Chờ nghiệm thu</span></td><td>Theo phân quyền <code>accept</code></td><td><b>Số PCT/LCT</b>, <b>tên chỉ huy trực tiếp (SCCN)</b>, <b>thời gian bắt đầu / kết thúc</b>, nội dung xác nhận, mã ERP. Xuất <b>BBTHVT</b> nếu phiếu có thu hồi</td></tr>
+<tr><td class="c">8</td><td><b>Thống kê xuất BBNT DO</b><br><span class="tag" style="background:#0f766e">Chờ TK xác nhận mã</span></td><td>Thống kê</td><td>Chọn mã ERP và <b>đại diện SCCN</b> &rarr; xuất <b>BBNT D-Office</b> (nhúng sẵn 3 ảnh hiện trường)</td></tr>
+<tr><td class="c">9</td><td><b>Quyết toán</b><br><span class="tag p">Chờ quyết toán</span></td><td>Thống kê</td><td>Nhập <b>số BBNT DO</b> &rarr; <span class="tag g">Hoàn tất</span>. Hệ thống ghi lịch sử thay thế và <b>gia hạn chu kỳ</b> (mục 7)</td></tr>
+</table>
+
+<div class="box warn"><p><b>Luồng Đề xuất bắt buộc phải ra SYC.</b> Không có nút “Không cần SYC” ở luồng này — chỉ luồng Ứng mới có. Nếu công việc thực sự không cần đội sửa chữa, hãy chọn luồng Ứng ngay từ bước xác nhận.</p></div>
+
+<h3>4.3 Luồng ỨNG — sáu bước, thứ tự đảo ngược</h3>
+<p>Luồng Ứng dành cho việc <b>gấp</b>: VHV lãnh vật tư trước, hồ sơ ĐXVT hoàn thiện sau. Điểm khác biệt lớn nhất là bước <b>Thống kê xác nhận ĐXVT nằm SAU nghiệm thu</b>, chứ không nằm trước bước lãnh như luồng Đề xuất.</p>
+<div class="flow">
+<div class="st"><b>B0</b><i>VHV tạo đề xuất</i></div>
+<div class="st"><b>VHV lãnh</b><i>VHV được giao</i></div>
+<div class="st"><b>Sử dụng</b><i>VHV được giao</i></div>
+<div class="st"><b>Nghiệm thu</b><i>Theo phân quyền</i></div>
+<div class="st"><b>Xác nhận ĐXVT</b><i>Thống kê — 3 pha</i></div>
+<div class="st"><b>Quyết toán</b><i>Thống kê</i></div>
+</div>
+<table>
+<colgroup><col style="width:5%"><col style="width:22%"><col style="width:16%"><col style="width:57%"></colgroup>
+<tr><th class="c">#</th><th>Bước / trạng thái</th><th>Người làm</th><th>Nhập gì · hệ thống làm gì</th></tr>
+<tr><td class="c">1</td><td><b>Tạo phiếu</b> + <b>Trưởng ca chọn luồng Ứng</b><br><span class="tag b">Chờ VHV lãnh vật tư</span></td><td>VHV &rarr; TC/TK</td><td>Như luồng Đề xuất, chỉ khác lựa chọn ở bước xác nhận</td></tr>
+<tr><td class="c">2</td><td><b>VHV lãnh vật tư</b><br><span class="tag b">Xác nhận vật tư lãnh</span></td><td>VHV được giao</td><td>Chỉ nhập <b>số lượng thực tế đã lãnh</b>. Hệ thống tạo lô (chưa có số giao hàng) và <b>cộng Hiện có</b>. <b>ERP không đổi</b> ở bước này</td></tr>
+<tr><td class="c">3</td><td><b>Ra SYC hoặc bỏ qua</b></td><td>VHV được giao</td><td>Hai lựa chọn: <b>“Ra SYC sửa chữa”</b> hoặc <b>“Không cần SYC”</b> (VHV tự thay) &rarr; chuyển sang bước Sử dụng</td></tr>
+<tr><td class="c">4</td><td><b>Sử dụng vật tư</b></td><td>VHV được giao</td><td>Giống luồng Đề xuất: khối lượng dùng, tên VHV sử dụng, thu hồi, tối thiểu 2/3 ảnh hiện trường</td></tr>
+<tr><td class="c">5</td><td><b>Nghiệm thu</b></td><td>Theo phân quyền <code>accept</code></td><td>PCT/LCT, chỉ huy SCCN, thời gian. <b>BBTHVT chưa xuất ở đây</b> — chờ có ảnh liên 3</td></tr>
+<tr><td class="c">6a</td><td><b>Pha 1 — xuất ĐXVT</b><br><span class="tag b">Xác nhận vật tư lãnh</span></td><td>Thống kê</td><td>Chọn <b>nguồn lãnh</b> (Kho công ty / Lãnh ngoài), mã ERP, <b>khối lượng lãnh chính thức</b> &rarr; xuất <b>Phiếu ĐXVT</b>. Hệ thống bù chênh lệch vào Hiện có; nếu nguồn = kho công ty thì <b>trừ tồn ERP</b></td></tr>
+<tr><td class="c">6b</td><td><b>Pha 2 — chứng từ giao hàng</b></td><td>Thống kê</td><td><b>Số phiếu ĐXVT</b>, <b>số phiếu giao hàng</b>, <b>ảnh liên 3</b> &rarr; sau đó mới xuất <b>BBTHVT</b> (nếu có thu hồi)</td></tr>
+<tr><td class="c">6c</td><td><b>Pha 3 — BBNT DO</b></td><td>Thống kê</td><td>Chọn <b>đại diện SCCN</b> &rarr; xuất <b>BBNT D-Office</b> &rarr; chuyển Quyết toán</td></tr>
+<tr><td class="c">7</td><td><b>Quyết toán</b></td><td>Thống kê</td><td>Nhập số BBNT DO &rarr; <span class="tag g">Hoàn tất</span> + ghi lịch sử + gia hạn</td></tr>
+</table>
+<div class="box"><p><b>Vì sao luồng Ứng gộp bước?</b> Ở luồng Ứng, hành động “Xác nhận vật tư lãnh” của Thống kê <b>kiêm luôn</b> bước Thống kê xác nhận ĐXVT. Đó là lý do trạng thái hiển thị vẫn là “Xác nhận vật tư lãnh” nhưng người thao tác lại là Thống kê chứ không phải VHV.</p></div>
+
+<h3>4.4 Luồng SỬ DỤNG HIỆN CÓ — bảy bước, không lãnh kho</h3>
+<p>Vật tư lấy thẳng từ tồn kho phân xưởng, không lãnh ở đâu cả. <b>Không có bước “VHV lãnh vật tư”</b> và <b>không có bước ra SYC</b> — phiếu đi thẳng từ nhận sang sử dụng.</p>
+<div class="flow">
+<div class="st"><b>B0</b><i>VHV tạo đề xuất</i></div>
+<div class="st"><b>Xác nhận</b><i>Trưởng ca / Trưởng kíp</i></div>
+<div class="st"><b>Nhận từ hiện có</b><i>VHV được giao</i></div>
+<div class="st"><b>Sử dụng</b><i>VHV được giao</i></div>
+<div class="st"><b>Nghiệm thu</b><i>xuất BBTHVT</i></div>
+<div class="st"><b>Xuất BBNT DO</b><i>Thống kê</i></div>
+<div class="st"><b>Quyết toán</b><i>Thống kê</i></div>
+</div>
+<table>
+<colgroup><col style="width:5%"><col style="width:24%"><col style="width:16%"><col style="width:55%"></colgroup>
+<tr><th class="c">#</th><th>Bước / trạng thái</th><th>Người làm</th><th>Nhập gì · hệ thống làm gì</th></tr>
+<tr><td class="c">1–2</td><td><b>Tạo phiếu</b> + <b>chọn luồng Sử dụng hiện có</b><br><span class="tag b">Nhận vật tư hiện có</span></td><td>VHV &rarr; TC/TK</td><td>Hệ thống kiểm tra tồn Hiện có đủ mới cho chọn luồng này</td></tr>
+<tr><td class="c">3</td><td><b>Xác nhận vật tư lãnh</b></td><td>VHV được giao</td><td>Nhập <b>số lượng nhận</b>. Không được vượt tồn Hiện có. Bước này <b>chưa trừ tồn</b> — chỉ ghi nhận</td></tr>
+<tr><td class="c">4</td><td><b>Sử dụng vật tư</b></td><td>VHV được giao</td><td>Khối lượng dùng (không vượt số đã nhận), tên VHV sử dụng, thu hồi, tối thiểu 2/3 ảnh hiện trường. Bước này mới <b>trừ Hiện có</b></td></tr>
+<tr><td class="c">5</td><td><b>Nghiệm thu và xuất BBTHVT</b></td><td>Theo phân quyền <code>accept</code></td><td>PCT/LCT, chỉ huy SCCN, thời gian, mã ERP &rarr; xuất <b>BBTHVT</b> nếu có thu hồi</td></tr>
+<tr><td class="c">6</td><td><b>Xuất BBNT DO</b></td><td>Thống kê</td><td>Chọn mã ERP và đại diện SCCN &rarr; xuất <b>BBNT D-Office</b></td></tr>
+<tr><td class="c">7</td><td><b>Quyết toán</b></td><td>Thống kê</td><td>Số BBNT DO &rarr; <span class="tag g">Hoàn tất</span> + ghi lịch sử + gia hạn</td></tr>
+</table>
+
+<h3>4.5 Bảng so sánh ba luồng</h3>
+<table>
+<colgroup><col style="width:28%"><col style="width:24%"><col style="width:24%"><col style="width:24%"></colgroup>
+<tr><th>Tiêu chí</th><th>ĐỀ XUẤT</th><th>ỨNG</th><th>SỬ DỤNG HIỆN CÓ</th></tr>
+<tr><td>Nguồn vật tư</td><td>Kho công ty (ERP)</td><td>Lãnh trước, hợp thức sau</td><td>Kho phân xưởng</td></tr>
+<tr><td>Thời điểm xuất Phiếu ĐXVT</td><td><b>Trước</b> khi lãnh</td><td><b>Sau</b> khi nghiệm thu</td><td>Không có</td></tr>
+<tr><td>Trừ tồn ERP tại bước</td><td>Xác nhận vật tư lãnh</td><td>Pha 1 của Thống kê<br><span class="small">(chỉ khi nguồn = kho công ty)</span></td><td>Không trừ ERP</td></tr>
+<tr><td>Cộng Hiện có tại bước</td><td>Xác nhận vật tư lãnh</td><td>VHV lãnh vật tư</td><td>Không cộng</td></tr>
+<tr><td>Trừ Hiện có tại bước</td><td>Sử dụng vật tư</td><td>Sử dụng vật tư</td><td>Sử dụng vật tư</td></tr>
+<tr><td>Ảnh liên 3 nộp ở bước</td><td>Xác nhận vật tư lãnh</td><td>Pha 2 của Thống kê</td><td>Không có<br><span class="small">(lô đã có ảnh từ phiếu lãnh trước)</span></td></tr>
+<tr><td>Bắt buộc ra SYC?</td><td><b>Có</b></td><td>Không — có nút “Không cần SYC”</td><td>Không có bước này</td></tr>
+<tr><td>Người xuất BBNT DO</td><td>Thống kê (bước riêng)</td><td>Thống kê (pha 3)</td><td>Thống kê (bước riêng)</td></tr>
+<tr><td>Quyết toán</td><td colspan="3" class="c">Giống nhau — Thống kê nhập số BBNT DO &rarr; ghi lịch sử + gia hạn chu kỳ</td></tr>
+</table>
+
+<div class="sec"></div>
+<h2>5. Các luồng biến thể</h2>
+<p class="lead">Bốn nhóm vật tư có nghiệp vụ khác hẳn nên không đi ba luồng chuẩn. Hệ thống tự nhận diện theo loại vật tư ngay khi lập phiếu — người dùng không phải chọn.</p>
+
+<h3>5.1 Hóa chất — ba bước</h3>
+<p>Hóa chất mua theo lô, giao bằng xe bồn theo hợp đồng, bơm thẳng vào bồn của hệ thống nên <b>không có biên bản nghiệm thu cho từng lần giao</b>. Bỏ hẳn cụm sử dụng — nghiệm thu — quyết toán.</p>
+<div class="flow">
+<div class="st"><b>B1</b><i>VHV tạo đề xuất</i></div>
+<div class="st"><b>B2 — Xác nhận bồn / thiết bị đủ điều kiện</b><i>Trưởng ca · TK Lò máy · Trưởng kíp điện</i></div>
+<div class="st"><b>B3 — Xác nhận đề xuất</b><i>Thống kê HOẶC Kỹ thuật viên</i></div>
+<div class="st"><b>B4 — VHV xác nhận khối lượng lãnh</b><i>VHV được giao</i></div>
+</div>
+<ul>
+<li><b>Bước 2</b> không chọn luồng, không đổi số lượng — chỉ xác nhận bồn và thiết bị sẵn sàng nhận hóa chất. Bỏ trống bước này là xe bồn đến nơi mới biết bồn chưa sẵn sàng.</li>
+<li><b>Bước 3</b> chốt <b>lịch giao hàng</b> và <b>khối lượng giao</b>. Đây là bước duy nhất trong toàn hệ thống mà <b>Kỹ thuật viên</b> làm ngang quyền với Thống kê.</li>
+<li><b>Bước 4</b> chỉ <b>chính VHV được giao phiếu</b> mới làm được. Nhập bảng <b>chuyến xe</b> (ngày nhập, biển số, số cân) — khối lượng lãnh của phiếu là <b>tổng các chuyến</b>. Xong là <span class="tag g">Hoàn tất</span>.</li>
+<li>Phiếu hóa chất <b>không cộng tồn Hiện có</b> và <b>không trừ ERP</b> — hàng không qua kho DH1. Các chuyến xe được ghi vào sổ <b>Tịnh kho hóa chất</b>, một chỗ lưu hai chỗ nhìn.</li>
+</ul>
+<div class="box warn"><p><b>Cố ý KHÔNG so lượng đề xuất với lượng nhập.</b> Lượng đề xuất trên phiếu chỉ là số tham khảo; xe về rải rác và cân thực tế mới là số vào sổ.</p></div>
+
+<h3>5.2 NH3 lỏng — khai một bước</h3>
+<p>NH3 lỏng bơm thẳng từ xe bồn vào bồn chứa hệ thống SCR: không có việc “lãnh vật tư” hay “nghiệm thu” cho từng phiếu. Phiếu chỉ để <b>ghi nhận lượng đã dùng</b> vào sổ theo dõi.</p>
+<ul>
+<li>Lập phiếu = ĐỀ XUẤT. Phiếu đứng ở bước ghi chuyến xe (xe về rải rác 2–3 ngày sau).</li>
+<li>Chính <b>VHV được giao</b> ghi khối lượng nhập thực tế, biển số, ngày nhập &rarr; phiếu <span class="tag g">Hoàn tất</span>.</li>
+<li>Nhận diện theo <b>mã ERP</b> chứ không theo tên (tên trong danh mục còn sửa được, mã thì không).</li>
+<li>Phiếu đã hoàn tất vẫn <b>bổ sung / sửa lại danh sách xe</b> được, vì xe về sau khi phiếu đóng.</li>
+</ul>
+
+<h3>5.3 Chai khí — bỏ nghiệm thu, thêm bước trả vỏ</h3>
+<p>Chai khí lãnh về là đổi vỏ; dùng xong phải trả vỏ rỗng về kho. Vẫn chọn Đề xuất hoặc Ứng như vật tư thường (<b>không có</b> Sử dụng hiện có — chai khí lãnh về là dùng ngay, không tồn sẵn), nhưng <b>bỏ nghiệm thu, bỏ quyết toán, bỏ BBNT và BBTHVT</b>.</p>
+<table>
+<colgroup><col style="width:14%"><col style="width:86%"></colgroup>
+<tr><th>Luồng</th><th>Các bước</th></tr>
+<tr><td><b>Đề xuất</b></td><td>tạo &rarr; TC/TK xác nhận &rarr; Thống kê xác nhận ĐXVT &rarr; xác nhận lãnh &rarr; <b>xác nhận trả vỏ</b></td></tr>
+<tr><td><b>Ứng</b></td><td>tạo &rarr; TC/TK xác nhận &rarr; VHV xác nhận lãnh &rarr; Thống kê xác nhận ĐXVT &rarr; <b>xác nhận trả vỏ</b></td></tr>
+</table>
+<p>Bước cuối nhập <b>số lượng vỏ trả</b>, <b>ngày trả</b>, <b>tên người trả</b>; số vỏ trả không được vượt số đã lãnh. Bước lãnh của luồng Ứng bắt buộc khai <b>tên VHV lãnh</b> (người lãnh thường không phải người bấm máy). Chai khí <b>không phát sinh SYC sửa chữa</b>.</p>
+<div class="box"><p>Chai khí được trình bày bên trong nhóm hiển thị <b>“Vật tư khác”</b> nhưng vẫn đi luồng riêng. Vì vậy chai khí <b>phải lập phiếu riêng</b>, không gộp chung phiếu nhiều dòng: <i>“Chai khí phải lập phiếu riêng để Trưởng ca/Trưởng kíp chọn luồng”</i>.</p></div>
+
+<h3>5.4 Vật tư khác — một phiếu nhiều dòng</h3>
+<p>Gồm văn phòng phẩm, dụng cụ sơn và các loại khác. Một phiếu chứa <b>tối đa 50 vật tư</b>, mỗi vật tư một dòng riêng.</p>
+<table>
+<colgroup><col style="width:20%"><col style="width:80%"></colgroup>
+<tr><th>Biến thể</th><th>Các bước</th></tr>
+<tr><td><b>Đề xuất</b></td><td>Lập phiếu &rarr; <b>Thống kê xác nhận mã ERP và số ĐXVT</b> &rarr; <b>Lãnh và nhập vào Hiện có</b> &rarr; Hoàn tất</td></tr>
+<tr><td><b>Ứng</b></td><td>Lập phiếu ứng &rarr; <b>Lãnh ứng và nhập vào Hiện có</b> (bước duy nhất được trừ ERP) &rarr; <b>Thống kê hoàn thiện số ĐXVT và chứng từ</b> &rarr; Hoàn tất</td></tr>
+</table>
+<p>Chọn trực tiếp luồng <b>Ứng</b> chỉ được phép khi cương vị được giao là <b>“Chung”</b> (vật tư không gắn cương vị / thiết bị). Vật tư đã gắn cương vị vẫn phải đi theo kết cấu cương vị &rarr; tổ máy &rarr; thiết bị như thường.</p>
+
+<div class="sec"></div>
+<h2>6. Xuất các biên bản</h2>
+<p class="lead">Hệ thống sinh bốn loại chứng từ Word, mỗi loại có người xuất và thời điểm xuất riêng. Không có chỗ nào cho phép xuất tuỳ tiện — mỗi biên bản gắn chặt vào một bước quy trình.</p>
+
+<h3>6.1 Bốn loại chứng từ</h3>
+<table>
+<colgroup><col style="width:18%"><col style="width:22%"><col style="width:30%"><col style="width:30%"></colgroup>
+<tr><th>Chứng từ</th><th>Biểu mẫu</th><th>Xuất ở bước nào</th><th>Điều kiện</th></tr>
+<tr><td><b>Phiếu ĐXVT</b><br><span class="small">Đề xuất vật tư</span></td><td>QLVT.12<br><code>dxvt-template.docx</code></td><td>Thống kê xác nhận ĐXVT — pha 1<br><span class="small">Đề xuất: trước khi lãnh · Ứng: sau nghiệm thu</span></td><td>Đã chọn mã ERP hợp lệ. Với luồng Đề xuất: tồn ERP phải đủ khối lượng</td></tr>
+<tr><td><b>BBKT</b><br><span class="small">Biên bản kiểm tra ký tay</span></td><td><code>bbnt-template-bi.docx</code></td><td>Bước Nghiệm thu</td><td><b>CHỈ còn cho bi nghiền.</b> Từ 2026 các loại khác đã bỏ biên bản ký tay</td></tr>
+<tr><td><b>BBTHVT</b><br><span class="small">Biên bản vật tư thu hồi</span></td><td>QLVT.06<br><code>bbthvt-template.docx</code></td><td>Đề xuất &amp; Hiện có: bước Nghiệm thu<br>Ứng: pha 2 của Thống kê</td><td>Phiếu có <b>thu hồi</b> (lý do “Thay thế”, hoặc “Bổ sung” trên điểm bật cờ thu hồi) và đã nhập số lượng thu hồi</td></tr>
+<tr><td><b>BBNT D-Office</b><br><span class="small">Biên bản nghiệm thu</span></td><td><code>bbnt-do-template-dau / loi / bi.docx</code><br><span class="small">chọn theo loại vật tư</span></td><td>Đề xuất &amp; Hiện có: bước Thống kê xuất biên bản<br>Ứng: pha 3 của Thống kê</td><td>Đã có đủ Phiếu ĐXVT, số ĐXVT, số giao hàng, ảnh liên 3, BBTHVT (nếu có thu hồi), và đã chọn <b>đại diện SCCN</b></td></tr>
+</table>
+
+<div class="box"><p><b>Vì sao BBNT D-Office không xuất ngay ở bước Nghiệm thu?</b> Biên bản D-Office phải mang tên <b>đại diện SCCN</b>, mà người chọn đại diện là Thống kê chứ không phải người nghiệm thu. Xuất sớm sẽ hoặc phải hỏi người nghiệm thu một thông tin không thuộc về họ, hoặc phát hành một biên bản rồi ghi đè lại ở bước sau.</p></div>
+
+<h3>6.2 Hai loại ảnh bắt buộc</h3>
+<table>
+<colgroup><col style="width:22%"><col style="width:20%"><col style="width:30%"><col style="width:28%"></colgroup>
+<tr><th>Ảnh</th><th>Nộp ở bước</th><th>Yêu cầu</th><th>Vòng đời</th></tr>
+<tr><td><b>Ảnh phiếu xuất kho LIÊN 3</b></td><td>Đề xuất: bước lãnh<br>Ứng: pha 2 Thống kê</td><td><b>Bắt buộc cho mọi phiếu</b>, kể cả phiếu không có thu hồi</td><td>Gắn vào <b>LÔ</b> chứ không vào phiếu. Chỉ xóa khi lô hết hàng VÀ mọi phiếu đã rút lô đều quyết toán xong</td></tr>
+<tr><td><b>Ba ảnh hiện trường</b><br><span class="small">Trước · Sau · Thông số</span></td><td>Bước Sử dụng vật tư</td><td><b>Tối thiểu 2 trên 3 ảnh</b> mới qua được bước</td><td>Nhúng vào BBNT D-Office. <b>Xóa hẳn</b> khỏi kho tệp khi quyết toán</td></tr>
+</table>
+<div class="box warn"><p><b>Vì sao ảnh liên 3 thuộc về LÔ?</b> Một lô lãnh về có thể được nhiều phiếu dùng dần: phần chưa dùng hết thành tồn, phiếu sau lấy tiếp từ đúng lô đó và vẫn phải nộp kèm đúng tờ liên 3 ấy. Gắn vào phiếu thì phiếu sau không còn gì để in.</p>
+<p>Đây cũng là lúc <b>duy nhất</b> tờ liên 3 còn trong tay người lãnh. Bỏ qua rồi mới đi xin lại thì đã muộn.</p></div>
+
+<h3>6.3 Tải và xuất lại</h3>
+<ul>
+<li>Mọi tệp đã xuất hiện trong khối <b>Hồ sơ phiếu</b> ở cuối chi tiết phiếu, bấm để tải về.</li>
+<li><b>Phiếu ĐXVT chỉ xuất một lần</b>: đã xuất rồi thì mã ERP bị khóa — <i>“Phiếu ĐXVT đã được xuất; mã vật tư đã được khóa”</i>.</li>
+<li><b>BBNT D-Office cũng chỉ xuất một lần</b> — <i>“BBNT D-Office đã được xuất”</i>.</li>
+<li><b>BBTHVT xuất lại được</b> nếu dịch vụ sinh file lỗi giữa chừng: dữ liệu chứng từ vẫn còn, chỉ cần bấm lại tại đúng pha đó. Khi xuất lại, <b>số văn bản giữ nguyên</b>.</li>
+</ul>
+
+<h3>6.4 Số văn bản BBTHVT</h3>
+<div class="formula">Số văn bản BBTHVT tăng dần 1, 2, 3… và <b>reset về 1 khi sang năm mới</b>.
+Số đã cấp cho một phiếu thì <b>giữ nguyên vĩnh viễn</b>, kể cả khi xuất lại biên bản.</div>
+<p>Cơ chế cấp số là nguyên tử (atomic increment) nên hai người bấm xuất cùng lúc không thể nhận cùng một số.</p>
+
+<div class="sec"></div>
+<h2>7. Quyết toán, ghi lịch sử và gia hạn điểm theo dõi</h2>
+<p class="lead">Đây là mắt xích khép kín vòng: bước quyết toán là <b>cửa ghi DUY NHẤT</b> đưa số liệu thực dùng vào sổ lịch sử, và cũng là nơi chu kỳ theo dõi được gia hạn sang kỳ kế tiếp.</p>
+
+<h3>7.1 Bước quyết toán</h3>
+<p>Thống kê mở phiếu ở trạng thái <span class="tag p">Chờ quyết toán</span>, nhập <b>số BBNT DO</b> và xác nhận. Chỉ một trường, nhưng phía sau hệ thống làm bốn việc trong <b>cùng một giao dịch</b>:</p>
+<ol>
+<li>Chuyển phiếu sang <span class="tag g">Hoàn tất</span>, ghi số BBNT DO và mốc quyết toán.</li>
+<li>Ghi <b>một dòng lịch sử thay thế cho mỗi điểm</b> mà phiếu phục vụ, mang khối lượng <b>THỰC dùng</b>.</li>
+<li><b>Gia hạn chu kỳ</b>: gỡ điểm cũ và sinh điểm mới cho kỳ kế tiếp.</li>
+<li>Dọn ảnh hiện trường khỏi kho tệp (BBNT DO đã nhúng sẵn ba ảnh bên trong).</li>
+</ol>
+<div class="box ok"><p><b>Chống trùng tuyệt đối.</b> Giao dịch được khóa theo phiếu, và hệ thống kiểm tra lại trạng thái ngay bên trong khóa. Hai người bấm quyết toán cùng lúc — hoặc một người bấm hai lần — chỉ sinh <b>đúng một</b> dòng lịch sử và gia hạn <b>đúng một</b> lần. Lần thứ hai nhận: <i>“Phiếu đã được quyết toán hoặc không còn ở bước quyết toán”</i>.</p></div>
+
+<h3>7.2 Ghi lịch sử — dòng lịch sử mang những gì</h3>
+<table>
+<colgroup><col style="width:26%"><col style="width:74%"></colgroup>
+<tr><th>Trường</th><th>Lấy từ đâu</th></tr>
+<tr><td><b>Khối lượng thực dùng</b></td><td>Khối lượng sử dụng của phiếu, <b>phân bổ theo tỉ lệ</b> cho từng điểm (xem 7.3)</td></tr>
+<tr><td><b>Ngày thay thế</b></td><td><b>Ngày kết thúc công việc</b> trên phiếu; thiếu thì lấy ngày SYC hoàn thành &rarr; ngày nghiệm thu &rarr; ngày sử dụng</td></tr>
+<tr><td>Số PCT/LCT</td><td>Nhập ở bước Nghiệm thu</td></tr>
+<tr><td>Số BBNT DO + đường dẫn tệp</td><td>Nhập/xuất ở bước quyết toán và bước xuất biên bản</td></tr>
+<tr><td>Số phiếu ĐXVT</td><td>Thống kê nhập</td></tr>
+<tr><td>Số phiếu giao hàng</td><td>Tổng hợp từ <b>các lô đã rút</b> của phiếu; không có thì lấy số ghi trên phiếu</td></tr>
+<tr><td>Số SYC sửa chữa</td><td>Từ phiếu khiếm khuyết đã gắn</td></tr>
+<tr><td>Ảnh chụp điểm</td><td>Thiết bị, hệ thống, tổ máy, cương vị, chu kỳ, ĐVT — để dòng lịch sử tự đứng một mình</td></tr>
+</table>
+<div class="box bad"><p><b>Ngày thay thế KHÔNG phải ngày quyết toán.</b> Quyết toán có thể muộn hơn rất nhiều; lấy nó làm mốc sẽ làm trôi toàn bộ chu kỳ của điểm. Nếu phiếu thiếu thời gian hoàn thành công việc, hệ thống <b>chặn quyết toán</b>: <i>“Phiếu thiếu thời gian hoàn thành công việc nên chưa thể chốt lịch sử thay thế”</i> — hãy sửa lại bước Nghiệm thu trước.</p></div>
+
+<h3>7.3 Phân bổ khối lượng thực dùng cho nhiều điểm</h3>
+<p>Một phiếu có thể phục vụ nhiều điểm cùng lúc. Khối lượng thực dùng được chia theo tỉ lệ <b>nhu cầu kế hoạch đã chụp</b> của từng điểm, phần dư dồn về điểm đầu tiên:</p>
+<div class="formula">trọng số của điểm  = plannedQuantity (đã chụp lúc gắn phiếu)
+                   = quantity &times; deviceCount
+
+phần của điểm i    = <b>làm tròn xuống</b>( tổng thực dùng &times; trọng số&#8202;i / tổng trọng số )
+phần dư            &rarr; cộng hết vào <b>điểm đầu tiên</b></div>
+<div class="ex">
+<div class="hd">VÍ DỤ 2 — Một phiếu 250 Lít phục vụ hai điểm</div>
+<div class="bd">
+<p><b>Đầu vào.</b> Phiếu dùng thực tế <b>250 Lít</b>. Điểm A có nhu cầu kế hoạch <b>120</b>, điểm B có <b>60</b>. Tổng trọng số = 180.</p>
+<table>
+<colgroup><col style="width:16%"><col style="width:14%"><col style="width:40%"><col style="width:30%"></colgroup>
+<tr><th>Điểm</th><th class="c">Trọng số</th><th>Phép tính</th><th class="c">Được ghi</th></tr>
+<tr><td>A (điểm đầu)</td><td class="c">120</td><td>⌊250 &times; 120 / 180⌋ = 166 &nbsp;→&nbsp; + phần dư 1</td><td class="c"><b>167 Lít</b></td></tr>
+<tr><td>B</td><td class="c">60</td><td>⌊250 &times; 60 / 180⌋ = 83</td><td class="c"><b>83 Lít</b></td></tr>
+<tr><td colspan="3"><b>Tổng kiểm tra</b></td><td class="c"><b>250 Lít</b> ✔</td></tr>
+</table>
+<p class="small">Phần dư được dồn thay vì bỏ đi, vì đó là vật tư đã tiêu thật — đánh rơi là hụt luỹ kế sử dụng của biểu dự toán năm.</p>
+</div>
+</div>
+<div class="box"><p><b>Phiếu KHÔNG gắn điểm nào?</b> Vẫn ghi một dòng lịch sử, đánh dấu <b>“phát sinh ngoài lịch”</b>. Nếu không ghi, phần vật tư này biến mất khỏi cột “Luỹ kế đã sử dụng” của QLVT.20 và công thức dự toán năm sau mất luôn thành phần “bình quân phát sinh” — vốn là phần khó dự báo nhất. Chỉ khi khối lượng dùng bằng 0 thì không ghi dòng nào.</p></div>
+
+<h3>7.4 Gia hạn chu kỳ tự động</h3>
+<p>Ngay trong giao dịch quyết toán, với mỗi điểm được ghi lịch sử:</p>
+<div class="formula">NẾU điểm còn hoạt động VÀ autoRenew = bật VÀ chu kỳ &gt; 0 VÀ chưa từng gia hạn:
+    1. Gỡ điểm cũ            (isActive = false, đóng dấu mốc đã gia hạn)
+    2. TẠO ĐIỂM MỚI sao chép toàn bộ cấu hình, với:
+           lastReplacedAt = <b>ngày thay thế</b>
+           nextDueAt      = <b>ngày thay thế + chu kỳ (tháng)</b>
+NGƯỢC LẠI:
+    Chỉ gỡ điểm cũ, KHÔNG sinh điểm mới &rarr; phải &ldquo;Thêm điểm&rdquo; lại bằng tay</div>
+<div class="ex">
+<div class="hd">VÍ DỤ 3 — Vòng đời trọn vẹn của một điểm theo dõi</div>
+<div class="bd">
+<table>
+<colgroup><col style="width:16%"><col style="width:42%"><col style="width:42%"></colgroup>
+<tr><th>Mốc</th><th>Việc xảy ra</th><th>Trạng thái điểm</th></tr>
+<tr><td>12/03/2026</td><td>Thêm điểm, lần thay gần nhất = 12/03/2026, chu kỳ 12 tháng</td><td>Đang theo dõi · đến hạn <b>12/03/2027</b> · <span class="tag g">còn hạn</span></td></tr>
+<tr><td>~02/2027</td><td>Vào ngưỡng cảnh báo</td><td><span class="tag w">SẮP ĐẾN HẠN</span> trên Lịch thay thế</td></tr>
+<tr><td>05/03/2027</td><td>Lập phiếu vật tư, chọn đúng điểm này</td><td>Điểm được neo vào phiếu; nhu cầu kế hoạch <b>240 Lít</b> được chụp lại</td></tr>
+<tr><td>18/03/2027</td><td>Kết thúc công việc lúc 16:30 (ghi ở bước Nghiệm thu)</td><td>Đang chờ quyết toán</td></tr>
+<tr><td>02/04/2027</td><td><b>Thống kê quyết toán</b>, nhập số BBNT DO</td><td>Ghi lịch sử: ngày thay <b>18/03/2027</b> (KHÔNG phải 02/04), thực dùng 235 Lít.<br>Điểm cũ bị gỡ. <b>Sinh điểm mới</b>: lần thay gần nhất 18/03/2027, đến hạn <b>18/03/2028</b></td></tr>
+</table>
+<p class="small">Lưu ý mốc gia hạn bám theo <b>ngày kết thúc công việc</b> (18/03), không bám theo ngày quyết toán (02/04). Nhờ vậy chu kỳ không bị trôi dần theo độ trễ của khâu hành chính.</p>
+</div>
+</div>
+
+<h3>7.5 Bốn trường hợp KHÔNG gia hạn tự động</h3>
+<table>
+<colgroup><col style="width:26%"><col style="width:40%"><col style="width:34%"></colgroup>
+<tr><th>Trường hợp</th><th>Hệ thống làm gì</th><th>Người dùng phải làm gì</th></tr>
+<tr><td><b>Lý do phiếu là “Bổ sung”</b></td><td>Ghi lịch sử, <b>không gỡ và không gia hạn</b> điểm — châm bổ sung không phải một lần thay</td><td>Không cần làm gì; điểm vẫn chạy theo hạn cũ</td></tr>
+<tr><td><b>Điểm tắt tự động gia hạn</b></td><td>Ghi lịch sử, gỡ điểm cũ, <b>không sinh điểm mới</b></td><td>Vào Danh mục, bấm <b>“Thêm điểm”</b> và khai lại chu kỳ thực tế</td></tr>
+<tr><td><b>Chu kỳ khai báo bằng 0</b></td><td>Ghi lịch sử, gỡ điểm cũ</td><td>Sửa chu kỳ trên dòng khai báo rồi thêm điểm lại</td></tr>
+<tr><td><b>Điểm đã gia hạn ở lần quyết toán trước</b></td><td>Chỉ ghi thêm dòng lịch sử, <b>không gia hạn lần hai</b></td><td>Không cần làm gì</td></tr>
+</table>
+<div class="box"><p><b>Vì sao có công tắc tắt tự động gia hạn?</b> Dành cho những điểm có chu kỳ thực tế lệch nhiều so với khai báo. Khi đó hệ thống vẫn ghi đủ lịch sử nhưng để người dùng tự khai lại chu kỳ mới, thay vì tiếp tục sinh ra một hạn sai.</p></div>
+
+<h3>7.6 Lãnh nhiều đợt cho cùng một lần thay</h3>
+<p>Một điểm có thể được cấp vật tư nhiều đợt (lãnh thiếu, lãnh bù). Mỗi đợt là một phiếu và một dòng lịch sử riêng — <b>nhưng chu kỳ chỉ được gia hạn MỘT lần</b>.</p>
+<ul>
+<li>Phiếu thứ nhất quyết toán: ghi lịch sử + gia hạn, điểm cũ được đóng dấu “đã gia hạn”.</li>
+<li>Phiếu thứ hai quyết toán: hệ thống nhận ra điểm đã có dấu, chỉ <b>ghi thêm dòng lịch sử</b>, không tạo kỳ mới.</li>
+<li>Phiếu đang mở còn trỏ vào dòng khai báo sẽ được <b>tự động chuyển</b> sang đúng kỳ đang theo dõi, để lần quyết toán sau vẫn nhìn thấy dấu đã gia hạn.</li>
+<li>Cả hai dòng lịch sử đều mang khối lượng thực dùng riêng &rarr; luỹ kế của biểu QLVT.20 cộng đủ cả hai đợt.</li>
+</ul>
+
+<h3>7.7 Điểm đang chờ quyết toán</h3>
+<p>Điểm đã gắn phiếu nhưng phiếu chưa quyết toán được xem là <b>“đang thay thế”</b>: hiển thị riêng trên lịch kèm số phiếu vật tư và số SYC, và <b>không tính vào cảnh báo quá hạn</b>. Điểm chỉ rời khỏi lịch khi phiếu quyết toán xong.</p>
+
+<div class="sec"></div>
+<h2>8. Liên kết Nhu cầu tháng &harr; Kế hoạch năm &harr; Tịnh kho hóa chất</h2>
+<p class="lead">Ba màn hình này là một thể thống nhất. Biểu QLVT.20 “Biểu tổng hợp nhu cầu vật tư” trước đây gõ tay toàn bộ 12 cột nên số liệu trôi; nay <b>chỉ còn hai cột do người dùng nhập</b>, phần còn lại hệ thống tự sinh và truy ngược được.</p>
+
+<h3>8.1 Biểu QLVT.20 — cột nào của ai</h3>
+<table>
+<colgroup><col style="width:6%"><col style="width:26%"><col style="width:16%"><col style="width:52%"></colgroup>
+<tr><th class="c">Cột</th><th>Tên cột</th><th class="c">Nguồn</th><th>Cách tính</th></tr>
+<tr><td class="c">A</td><td>STT</td><td class="c">Hệ thống</td><td>Đánh lại theo nhóm; <b>không</b> dùng làm khóa</td></tr>
+<tr><td class="c">B</td><td>Mã ERP</td><td class="c">Hệ thống</td><td>Từ kế hoạch năm, tra khớp khi nhập file</td></tr>
+<tr><td class="c">C</td><td>Tên, quy cách</td><td class="c">Hệ thống</td><td>Từ kế hoạch năm</td></tr>
+<tr><td class="c">D</td><td>ĐVT</td><td class="c">Hệ thống</td><td>Từ kế hoạch năm</td></tr>
+<tr><td class="c"><b>E</b></td><td><b>Kế hoạch năm</b></td><td class="c">Hệ thống</td><td>Mạch vật tư: chỉ tiêu <i>Kế hoạch vật tư năm</i><br>Mạch hóa chất: dự báo nhu cầu hợp đồng, không có thì lấy khối lượng hợp đồng</td></tr>
+<tr><td class="c"><b>F</b></td><td><b>Luỹ kế đã sử dụng</b></td><td class="c">Hệ thống</td><td>Mạch vật tư: tổng <b>khối lượng thực dùng</b> trên các dòng lịch sử trong năm<br>Mạch hóa chất: tổng tiêu thụ của các tháng <b>đã chốt sổ</b></td></tr>
+<tr><td class="c"><b>G</b></td><td><b>Còn lại</b></td><td class="c">Hệ thống</td><td><b>Luôn bằng E − F</b>, tính tại chỗ, không lưu cột riêng</td></tr>
+<tr><td class="c"><b>H</b></td><td><b>Yêu cầu trong tháng</b></td><td class="c"><b>Người dùng</b></td><td>Khai bằng nút <b>“Khai nhu cầu tháng”</b></td></tr>
+<tr><td class="c">I, K</td><td>Tồn kho / Tồn P.KHVT</td><td class="c">Hệ thống</td><td>Mạch vật tư: tổng số còn lại của các lô kho<br>Mạch hóa chất: tồn cuối kỳ của tháng chốt sổ gần nhất</td></tr>
+<tr><td class="c"><b>J</b></td><td><b>Mục đích, vị trí sử dụng</b></td><td class="c"><b>Người dùng</b></td><td>Nhập cùng lúc với cột H</td></tr>
+<tr><td class="c">L</td><td>Người đề xuất</td><td class="c">Người dùng</td><td>Mặc định là tên người khai</td></tr>
+<tr><td class="c">M–X</td><td>Lưới T1..T12</td><td class="c">Hệ thống</td><td>Tháng nào <b>có phát sinh sử dụng</b> thì được đánh dấu — suy từ chính cột F, không tick tay</td></tr>
+</table>
+<div class="box bad"><p><b>E, F, G, I, K và lưới T1..T12 KHÔNG cho nhập tay.</b> Đo trên file Excel tháng 8.2026 cũ: <b>41/238 dòng</b> có G ≠ E − F, <b>20 mã</b> mang chỉ tiêu năm mâu thuẫn nhau giữa các dòng, và luỹ kế của dầu Total Preslia 32 đứng yên ở 832 lít suốt tháng 6, 7, 8 trong khi vẫn tiếp tục yêu cầu thêm 1.248 lít. Đó là lý do các cột này bị khóa.</p></div>
+
+<h3>8.2 Hai mạch số liệu — phân luồng thế nào</h3>
+<div class="formula">Mã ERP của dòng kế hoạch <b>khớp</b> một mặt hàng trong sổ Tịnh kho hóa chất?
+   ├─ CÓ    &rarr; <b>MẠCH HÓA CHẤT</b>  (số liệu lấy từ sổ tịnh kho)
+   └─ KHÔNG &rarr; <b>MẠCH VẬT TƯ</b>    (số liệu lấy từ lịch sử thay thế + lô kho)</div>
+<table>
+<colgroup><col style="width:16%"><col style="width:42%"><col style="width:42%"></colgroup>
+<tr><th></th><th>MẠCH VẬT TƯ</th><th>MẠCH HÓA CHẤT</th></tr>
+<tr><td><b>Kế hoạch (E)</b></td><td>Chỉ tiêu nhập ở màn Kế hoạch vật tư năm</td><td>Dự báo nhu cầu &rarr; khối lượng hợp đồng &rarr; chỉ tiêu kế hoạch (thứ tự ưu tiên)</td></tr>
+<tr><td><b>Thực dùng (F)</b></td><td>Tổng khối lượng thực dùng trên dòng lịch sử thay thế</td><td>Tổng tiêu thụ tháng, tính theo công thức tịnh kho</td></tr>
+<tr><td><b>Tồn (I, K)</b></td><td>Tổng số còn lại của các lô kho khớp mã</td><td>Tồn cuối kỳ của tháng đã chốt sổ gần nhất</td></tr>
+<tr><td><b>Nhãn hiển thị</b></td><td>“Mạch vật tư”</td><td>“Tịnh kho hóa chất”</td></tr>
+</table>
+<div class="formula">Công thức tiêu thụ của mạch hóa chất (theo từng tháng):
+    <b>Tiêu thụ</b> = Tồn cuối kỳ trước + Nhập trong kỳ − Tồn cuối kỳ này</div>
+<div class="box warn"><p><b>Tháng chưa chốt sổ chỉ là TẠM TÍNH.</b> Chỉ tháng ở trạng thái <b>đã chốt</b> mới được cộng vào cột F. Tháng đang mở hiển thị riêng dạng tạm tính và dòng được đánh dấu <i>“tạm tính”</i> trên biểu tháng. Muốn số chính thức, phải chốt sổ tháng ở màn Tịnh kho hóa chất.</p>
+<p><b>Không nhân bản, không đồng bộ hai chiều.</b> Mỗi con số chỉ có một chỗ lưu; biểu QLVT.20 chỉ đọc chứ không ghi ngược về sổ hóa chất.</p></div>
+
+<h3>8.3 Cách ghép luỹ kế vào dòng kế hoạch</h3>
+<p>Kế hoạch năm khóa theo <b>(năm, nhóm vật tư, tên chữ đã chuẩn hoá)</b> — không ép theo mã ERP. Lý do: đo trên file thật tháng 8.2026, <b>196/196 dòng</b> của mạch vật tư không tra được vật tư tương ứng trong Danh mục Vận Hành 1. Nếu chỉ ghép theo mã, cột “Luỹ kế đã sử dụng” của gần như toàn bộ mạch vật tư sẽ luôn bằng 0 và cột “Còn lại” luôn bằng nguyên kế hoạch — báo cáo trông hợp lệ nhưng sai.</p>
+<div class="formula">Ghép luỹ kế theo thứ tự:
+   1. Tra theo <b>vật tư trong Danh mục</b>          (chính xác nhất)
+   2. Không có &rarr; tra theo <b>(nhóm | tên chữ chuẩn hoá)</b>  (giống khóa kế hoạch)</div>
+<p>Hai đường không thể đếm trùng, vì khóa duy nhất của kế hoạch là (năm, nhóm, tên) nên một dòng lịch sử chỉ rơi vào đúng một dòng kế hoạch. Chuẩn hoá tên là bỏ dấu, thường hoá và gộp khoảng trắng.</p>
+<div class="box"><p><b>Ngoại lệ hóa chất:</b> sáu mặt hàng tịnh kho đã xác minh khớp 6/6 mã ERP, nên với chúng hệ thống <b>gắn mã ERP và ưu tiên tra theo mã</b>.</p></div>
+
+<h3>8.4 Ba nhóm của biểu</h3>
+<table>
+<colgroup><col style="width:10%"><col style="width:44%"><col style="width:46%"></colgroup>
+<tr><th class="c">Nhóm</th><th>Tên</th><th>Lưu ý</th></tr>
+<tr><td class="c"><b>I</b></td><td>Dầu nhớt bôi trơn</td><td>Đi mạch vật tư</td></tr>
+<tr><td class="c"><b>II</b></td><td>Lọc dầu và lọc nước</td><td>Đi mạch vật tư</td></tr>
+<tr><td class="c"><b>III</b></td><td>Chai khí, hạt nhựa, dầu DO, hóa chất và vật tư phụ khác</td><td><b>Trộn hai mạch.</b> Sáu mặt hàng tịnh kho đi mạch hóa chất; hạt nhựa Lewatit, Aceton, nước làm mát Turbocool… đi mạch vật tư</td></tr>
+</table>
+
+<h3>8.5 Ví dụ đầy đủ — khai nhu cầu tháng và đọc kết quả</h3>
+<div class="ex">
+<div class="hd">VÍ DỤ 4 — Khai nhu cầu tháng 09/2026 cho dầu Total Preslia 32</div>
+<div class="bd">
+<ol>
+<li>Mở <code>/material-annual-plans/monthly</code>. Dùng mũi tên hoặc ô chọn tháng để về <b>09/2026</b>.</li>
+<li>Bấm <b>“Khai nhu cầu tháng”</b>. Nhập:
+  <ul>
+    <li><b>Nhóm</b>: I. Dầu nhớt bôi trơn</li>
+    <li><b>Tên vật tư</b>: Dầu Total Preslia 32 &nbsp;·&nbsp; <b>ĐVT</b>: Lít &nbsp;·&nbsp; <b>Mã ERP</b> (nếu biết)</li>
+    <li><b>Số lượng yêu cầu (cột H)</b>: 480</li>
+    <li><b>Mục đích, vị trí sử dụng (cột J)</b>: “Thay định kỳ bồn dầu LP/HP thùng nghiền A, B — S1”</li>
+  </ul>
+</li>
+<li>Lưu. Dòng xuất hiện trong nhóm I, mang sẵn các cột hệ thống:</li>
+</ol>
+<table>
+<colgroup><col style="width:20%"><col style="width:14%"><col style="width:66%"></colgroup>
+<tr><th>Cột</th><th class="c">Giá trị</th><th>Vì sao</th></tr>
+<tr><td>E — Kế hoạch năm</td><td class="c">3.000 L</td><td>Chỉ tiêu đã nhập ở màn Kế hoạch vật tư năm 2026</td></tr>
+<tr><td>F — Luỹ kế đã dùng</td><td class="c">1.312 L</td><td>Tổng khối lượng thực dùng của các phiếu đã quyết toán trong năm 2026</td></tr>
+<tr><td>G — Còn lại</td><td class="c">1.688 L</td><td>3.000 − 1.312, tính tại chỗ</td></tr>
+<tr><td>H — Yêu cầu tháng</td><td class="c">480 L</td><td>Vừa khai</td></tr>
+<tr><td>I / K — Tồn</td><td class="c">209 L</td><td>Tổng phần còn lại của các lô kho khớp mã</td></tr>
+<tr><td>M–X — Lưới tháng</td><td class="c">T3, T6, T8</td><td>Ba tháng có phát sinh sử dụng trong năm</td></tr>
+</table>
+<p><b>Truy ngược.</b> Bấm vào ô <b>1.312</b> (hoặc vào một ô tháng được đánh dấu) &rarr; mở danh sách <b>từng phiếu</b> tạo nên con số đó: số hiệu phiếu, ngày thay, thiết bị, khối lượng, và phần nào là “phát sinh ngoài lịch”. Đây chính là thứ bản Excel không làm được.</p>
+</div>
+</div>
+
+<h3>8.6 Nhập kế hoạch năm từ file QLVT.20</h3>
+<p>Ở màn <b>Kế hoạch vật tư năm</b>, bấm <b>“Nhập QLVT.20”</b> và chọn file Excel. Hệ thống đọc cột B (mã ERP), C (tên quy cách), D (ĐVT), E (kế hoạch năm) của một sheet tháng, bỏ dòng tiêu đề và dòng nhóm, rồi <b>hiện bảng đối chiếu trước khi ghi</b>:</p>
+<table>
+<colgroup><col style="width:26%"><col style="width:74%"></colgroup>
+<tr><th>Chỉ số đối chiếu</th><th>Ý nghĩa</th></tr>
+<tr><td><b>Dòng có kế hoạch</b></td><td>Số dòng thực sự mang chỉ tiêu; dòng trống bị bỏ qua</td></tr>
+<tr><td><b>Khớp mã ERP</b></td><td>Số dòng tra được mã trong danh mục hệ thống</td></tr>
+<tr><td><b>Mã ERP lệch</b></td><td>Mã có trong file nhưng không có trong hệ thống — cảnh báo vàng</td></tr>
+<tr><td><b>Mâu thuẫn</b></td><td>Cùng một mã xuất hiện nhiều dòng với <b>giá trị kế hoạch khác nhau</b>. Người dùng <b>buộc phải chọn một giá trị</b>; hệ thống không tự lấy dòng đầu</td></tr>
+</table>
+<p>Chỉ sau khi xem báo cáo đối chiếu, người dùng mới bấm xác nhận để ghi. Không có đường nào ghi thẳng mà bỏ qua bước đối chiếu.</p>
+
+<h3>8.7 Dự toán nhu cầu năm sau</h3>
+<p>Ở màn Nhu cầu vật tư tháng, mở hộp thoại <b>Dự toán nhu cầu vật tư năm N+1</b>:</p>
+<div class="formula"><b>Nhu cầu năm sau</b> = ( Nhu cầu định kỳ + Bình quân phát sinh ) &times; Hệ số dự phòng
+                 − Tồn có thể dùng chuyển năm
+
+<b>Nhu cầu định kỳ</b>     = Σ (quantity &times; deviceCount) của các điểm có ngày đến hạn
+                       rơi vào năm dự toán
+<b>Bình quân phát sinh</b>  = trung bình phần thực dùng <b>KHÔNG gắn điểm</b> của 3 năm gần nhất
+<b>Hệ số dự phòng</b>       = 1,10 (nhóm I và II) · 1,15 (nhóm III)
+<b>Tồn chuyển năm</b>       = Σ phần còn lại của các lô kho còn dùng được</div>
+<div class="box ok"><p><b>Ba thành phần được TÁCH RỜI trên báo cáo</b>, không gộp sẵn thành một con số. Nhu cầu định kỳ tính chính xác được từ chu kỳ và số thiết bị của từng điểm; nhu cầu phát sinh chỉ ước lượng được bằng trung bình lịch sử. Gộp chung là mất khả năng giải trình khi bị hỏi “căn cứ đâu ra con số này”. Báo cáo còn hiện <b>số điểm đến hạn</b> và <b>số năm thực sự có dữ liệu</b> để người đọc tự đánh giá độ tin cậy.</p></div>
+
+<h3>8.8 Xuất Excel nộp P.KHVT</h3>
+<p>Nút <b>“Xuất QLVT.20”</b> sinh file Excel giữ nguyên biểu mẫu gốc: cùng khối tiêu đề, cùng ba nhóm, cùng thứ tự cột A–X. File mở được bằng Excel và nộp thẳng cho P.KHVT.</p>
+
+<div class="sec"></div>
+<h2>9. Các trường hợp khác &amp; xử lý sự cố</h2>
+
+<h3>9.1 Cổng vật tư — ra SYC khi chưa có vật tư</h3>
+<p>Từ 2026, SYC thay thế vật tư chỉ ra được khi điểm đã gắn <b>một phiếu vật tư đang mở và đã qua bước xác nhận vật tư lãnh</b>. Nếu chưa đủ điều kiện, hệ thống <b>cảnh báo chứ không chặn cứng</b> — hỏng đột xuất là lúc cần ra SYC gấp nhất.</p>
+<ul>
+<li>Muốn vượt cổng, phải <b>nêu lý do</b>; bỏ trống sẽ bị chặn: <i>“Vui lòng nêu lý do ra số yêu cầu khi chưa có vật tư”</i>.</li>
+<li>Lý do được ghi vào nhật ký kiểm toán kèm dấu <b>“RA KHI CHƯA CÓ VẬT TƯ”</b>.</li>
+<li>Chỉ phiếu <b>đang mở</b> mới tính. Phiếu đã Hoàn tất là vật tư của lần thay trước, không lọt cổng.</li>
+</ul>
+
+<h3>9.2 Trùng số yêu cầu</h3>
+<p>Nếu điểm đã có SYC chưa xử lý xong, hệ thống cảnh báo: <i>“Điểm ‘…’ đã có số yêu cầu … chưa xử lý xong. Xác nhận để vẫn ra phiếu mới.”</i> Đây là cảnh báo, không phải lỗi — xác nhận lại là ra được phiếu mới.</p>
+
+<h3>9.3 Gộp nhiều điểm vào một SYC</h3>
+<p>Ở màn Danh mục vật tư, tick chọn nhiều điểm ở nhiều vật tư rồi dùng thanh thao tác cuối trang để ra <b>một</b> SYC chung. Ràng buộc: các điểm phải <b>cùng tổ máy</b> và <b>cùng cương vị quản lý</b> — một phiếu chỉ mang được một cặp giá trị này. Điểm chưa gắn thiết bị không chọn được.</p>
+<p>Chiều ngược lại: một SYC có thể gom nhiều phiếu vật tư, nhưng SYC đó <b>phải chứa đủ mọi điểm</b> của từng phiếu được neo vào nó — nếu không sẽ bị chặn: <i>“Số yêu cầu không chứa đầy đủ các điểm thay thế của phiếu vật tư”</i>.</p>
+
+<h3>9.4 Sửa phiếu đã đi qua bước</h3>
+<table>
+<colgroup><col style="width:22%"><col style="width:34%"><col style="width:44%"></colgroup>
+<tr><th>Thao tác</th><th>Ai làm</th><th>Ghi chú</th></tr>
+<tr><td><b>Sửa thông tin phiếu</b></td><td>Người tạo phiếu, Quản trị, hoặc cương vị được phân bước <code>manage</code></td><td>Sửa các trường hành chính, không đổi trạng thái</td></tr>
+<tr><td><b>Sửa bước đã qua</b></td><td>Theo phân quyền của chính bước đó</td><td>Mọi lần sửa đều được ghi nhật ký và hiển thị trong <b>lịch sử phiếu</b> ở chi tiết phiếu</td></tr>
+<tr><td><b>Từ chối phiếu</b></td><td>Người tạo phiếu, Quản trị, Trưởng ca / Trưởng kíp</td><td>Chỉ ở bước chờ xác nhận hoặc “vật tư không có”. Bắt buộc nhập lý do. Phiếu đóng vĩnh viễn</td></tr>
+<tr><td><b>Xóa phiếu</b></td><td>Theo phân quyền <code>manage</code></td><td>Phiếu đã xóa vẫn để lại dấu vết để đồng bộ Google Sheet gỡ đúng dòng</td></tr>
+</table>
+<div class="box warn"><p><b>Số SYC không nhập tay được nữa.</b> Gọi thẳng chức năng cũ sẽ nhận: <i>“Không còn hỗ trợ nhập tay số yêu cầu sửa chữa. Hãy dùng nút Ra SYC sửa chữa để tạo phiếu chính thức.”</i> Lý do: số SYC phải do một phiếu khiếm khuyết thật cấp và neo ngược lại được.</p></div>
+
+<h3>9.5 Chọn lô khi lập biên bản</h3>
+<p>Mặc định hệ thống rút vật tư theo <b>FIFO</b> — dọn hết lô cũ trước rồi mới ăn sang lô mới. Người lập biên bản có thể <b>chọn lại</b> lấy bao nhiêu từ từng phiếu giao hàng, ở bước Sử dụng hoặc bước Nghiệm thu. Tổng phân bổ vẫn phải bằng số đã sử dụng, để biên bản không lệch với kho.</p>
+<p>Lô <b>tồn đầu kỳ</b> (chưa rõ phiếu giao hàng) được xếp <b>đầu</b> hàng đợi FIFO để dùng hết trước.</p>
+
+<h3>9.6 Dữ liệu lưu trữ từ Google Sheet cũ</h3>
+<p>Sổ theo dõi vật tư trên Google Sheet giai đoạn 07/2025 → 08/2026 đã được nhập vào bảng Lịch sử thay thế để tra cứu. Các dòng này:</p>
+<ul>
+<li><b>Không gắn điểm theo dõi</b> nên không đụng vào luồng ghi nhận đang chạy trên web;</li>
+<li><b>Không được tính</b> vào cột “Luỹ kế đã sử dụng” của biểu QLVT.20 và <b>không</b> dùng làm căn cứ tính kế hoạch — chỉ mang tính tham khảo;</li>
+<li>Hiển thị nhãn riêng trên bảng Lịch sử thay thế.</li>
+</ul>
+<div class="box"><p>Hệ quả về mốc thời gian: <b>2026 sẽ không có luỹ kế đầy đủ</b> theo chuẩn mới. <b>2027 là năm đầu tiên</b> dự toán tự tính được hoàn toàn từ số liệu hệ thống; kế hoạch 2027 vẫn lập tay nhưng đối chiếu được với phần thực dùng ghi nhận từ nay.</p></div>
+
+<h3>9.7 Bảng tra lỗi thường gặp</h3>
+<table>
+<colgroup><col style="width:46%"><col style="width:54%"></colgroup>
+<tr><th>Thông báo</th><th>Cách xử lý</th></tr>
+<tr><td>“Thiết bị này đã có điểm theo dõi…”</td><td>Điểm cũ chưa được ghi nhận vào lịch sử. Hoàn tất phiếu đang mở, hoặc xóa điểm nếu khai nhầm</td></tr>
+<tr><td>“Đã đủ n/n điểm theo dõi theo số lượng thiết bị đã khai báo”</td><td>Sửa <b>Số thiết bị</b> trên dòng khai báo trước</td></tr>
+<tr><td>“Chu kỳ 0 không theo dõi lịch thay thế”</td><td>Nhập chu kỳ lớn hơn 0 ở hộp thoại Thêm điểm</td></tr>
+<tr><td>“Không thể chọn luồng Đề xuất vì tất cả mã vật tư ERP đều không còn tồn kho”</td><td>Chọn luồng <b>Ứng</b>, hoặc chờ đồng bộ lại tồn ERP từ QLVT</td></tr>
+<tr><td>“Số lượng hiện có không đủ… không thể chọn luồng Sử dụng hiện có”</td><td>Chọn Đề xuất hoặc Ứng</td></tr>
+<tr><td>“Vui lòng tải tối thiểu 2 trên 3 ảnh hiện trường trước khi xác nhận”</td><td>Chụp và tải ít nhất 2 trong 3 ảnh: trước — sau — thông số</td></tr>
+<tr><td>“Vui lòng nhập số phiếu giao hàng” / thiếu ảnh liên 3</td><td>Cả hai đi liền nhau ở bước xác nhận vật tư lãnh; không bỏ qua được</td></tr>
+<tr><td>“Phiếu có thu hồi chưa có số lượng vật tư thu hồi”</td><td>Sửa lại bước <b>Sử dụng vật tư</b> để nhập số lượng thu hồi, rồi nghiệm thu lại</td></tr>
+<tr><td>“Phiếu thiếu thời gian hoàn thành công việc nên chưa thể chốt lịch sử thay thế”</td><td>Sửa bước Nghiệm thu, nhập thời gian bắt đầu / kết thúc công việc</td></tr>
+<tr><td>“Phiếu đã được quyết toán hoặc không còn ở bước quyết toán”</td><td>Ai đó đã quyết toán trước. Tải lại trang để thấy trạng thái mới</td></tr>
+<tr><td>“Cương vị … chưa được phân giao hệ thống thiết bị”</td><td>Nhờ Quản trị phân giao phạm vi cây thiết bị cho cương vị đó</td></tr>
+<tr><td>“Bạn không có quyền … (Quản trị phân quyền ở mục Phân quyền quy trình)”</td><td>Nhờ Quản trị bổ sung cương vị vào bước tương ứng</td></tr>
+</table>
+
+<h3>9.8 Danh sách kiểm tra nhanh cho từng vai trò</h3>
+<table>
+<colgroup><col style="width:22%"><col style="width:78%"></colgroup>
+<tr><th>Vai trò</th><th>Việc thường xuyên</th></tr>
+<tr><td><b>VHV được giao</b></td><td>Lập đề xuất khi điểm sắp đến hạn · xác nhận vật tư lãnh kèm số giao hàng và ảnh liên 3 · ra SYC (hoặc chọn “Không cần SYC” ở luồng Ứng) · ghi khối lượng sử dụng kèm ảnh hiện trường</td></tr>
+<tr><td><b>Trưởng ca / Trưởng kíp</b></td><td>Chọn luồng cho phiếu mới · nghiệm thu công việc (PCT/LCT, chỉ huy SCCN, thời gian) · từ chối phiếu khi vật tư không có</td></tr>
+<tr><td><b>Kỹ thuật viên</b></td><td>Lập phiếu · xác nhận đề xuất hóa chất (lịch giao hàng, khối lượng giao)</td></tr>
+<tr><td><b>Thống kê</b></td><td>Xuất Phiếu ĐXVT và nhập số ĐXVT · giao phiếu cho VHV · xuất BBNT D-Office · <b>quyết toán</b> · khai nhu cầu tháng · nhập kế hoạch năm · xuất QLVT.20</td></tr>
+<tr><td><b>Quản trị</b></td><td>Phân quyền 12 bước quy trình · phân giao phạm vi cây thiết bị theo cương vị · rà soát nhật ký kiểm toán</td></tr>
+</table>
+
+<div class="foot">
+Tài liệu hướng dẫn sử dụng phần Quản lý vật tư — Hệ thống PowerPlant EAM, Phân xưởng Vận hành 1, Công ty Nhiệt điện Duyên Hải 1.<br>
+Nội dung được đối chiếu trực tiếp với phần mềm đang vận hành. Khi quy trình hoặc phân quyền thay đổi, tài liệu cần được cập nhật lại tương ứng.
+</div>
+
+</body>
+</html>

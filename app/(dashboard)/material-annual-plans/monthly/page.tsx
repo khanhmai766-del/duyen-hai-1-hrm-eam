@@ -167,7 +167,10 @@ function MonthlyReportContent() {
                     </option>
                   ))}
                 </select>
-                <TablePageSizeSelector value={pageSize} onChange={setPageSize} />
+                <div className="flex flex-wrap items-center justify-between gap-3 sm:justify-end">
+                  <MonthTimelineLegend />
+                  <TablePageSizeSelector value={pageSize} onChange={setPageSize} />
+                </div>
               </div>
               <div className="overflow-x-auto">
                   <table className="w-full min-w-[1280px] text-[13px]">
@@ -181,14 +184,17 @@ function MonthlyReportContent() {
                         <th className="px-2 py-0 align-middle text-right font-semibold text-sky-700">Yêu cầu tháng</th>
                         <th className="px-2 py-0 align-middle text-right font-semibold">Tồn kho</th>
                         <th className="px-3 py-0 align-middle text-left font-semibold text-sky-700">Mục đích, vị trí</th>
-                        <th className="px-2 py-0 align-middle text-center font-semibold">T1–T12</th>
+                        <th className="px-2 py-0 align-middle text-center font-semibold">
+                          <span className="block">T1–T12</span>
+                          <span className="block text-[9px] font-medium normal-case tracking-normal text-slate-400">Nhu cầu / sử dụng</span>
+                        </th>
                         <th className="px-2 py-0 align-middle" />
                       </tr>
                     </thead>
                     <tbody>
                       {group.rows.map(({ row, key }) => (
-                        <tr key={key} className="border-t border-slate-100 align-top">
-                          <td className="px-3 py-2">
+                        <tr key={key} className="h-[58px] border-t border-slate-100 align-middle">
+                          <td className="px-3 py-2.5">
                             <div className="font-semibold text-slate-900">{row.materialNameLabel}</div>
                             <div className="text-[11px] text-slate-500">
                               {row.erpCode ?? "chưa có mã ERP"}
@@ -196,9 +202,9 @@ function MonthlyReportContent() {
                               {row.requestId === null && <span className="ml-2 rounded bg-amber-50 px-1.5 py-0.5 font-semibold text-amber-700">chưa khai nhu cầu</span>}
                             </div>
                           </td>
-                          <td className="px-2 py-2 text-center text-slate-600">{row.unitLabel}</td>
-                          <td className="px-2 py-2 text-right tabular-nums">{fmt(row.plannedQuantity)}</td>
-                          <td className="px-2 py-2 text-right tabular-nums">
+                          <td className="px-2 py-2.5 text-center text-slate-600">{row.unitLabel}</td>
+                          <td className="px-2 py-2.5 text-right tabular-nums">{fmt(row.plannedQuantity)}</td>
+                          <td className="px-2 py-2.5 text-right tabular-nums">
                             {/* Bấm để xem chính những phiếu tạo nên con số này — thứ file Excel không làm được. */}
                             <button
                               type="button"
@@ -209,29 +215,25 @@ function MonthlyReportContent() {
                             </button>
                             {row.provisional && <span className="ml-1 text-[10px] text-amber-600">tạm tính</span>}
                           </td>
-                          <td className="px-2 py-2 text-right tabular-nums font-semibold">{fmt(row.remainingQuantity)}</td>
-                          <td className="px-2 py-2 text-right tabular-nums font-bold text-sky-800">{fmt(row.requestedQuantity)}</td>
-                          <td className="px-2 py-2 text-right tabular-nums text-slate-600">{fmt(row.stockQuantity)}</td>
-                          <td className="px-3 py-2 text-slate-700">{row.purpose ?? <span className="text-slate-400">—</span>}</td>
-                          <td className="px-2 py-2">
-                            <div className="flex justify-center gap-[2px]">
-                              {row.monthMarks.map((marked, monthIndex) => (
-                                <button
+                          <td className="px-2 py-2.5 text-right tabular-nums font-semibold">{fmt(row.remainingQuantity)}</td>
+                          <td className="px-2 py-2.5 text-right tabular-nums font-bold text-sky-800">{fmt(row.requestedQuantity)}</td>
+                          <td className="px-2 py-2.5 text-right tabular-nums text-slate-600">{fmt(row.stockQuantity)}</td>
+                          <td className="px-3 py-2.5 text-slate-700">{row.purpose ?? <span className="text-slate-400">—</span>}</td>
+                          <td className="px-2 py-2.5">
+                            <div className="flex justify-center gap-[3px]" aria-label="Trạng thái nhu cầu và sử dụng theo 12 tháng">
+                              {row.monthUsedQuantities.map((usedQuantity, monthIndex) => (
+                                <MonthTimelineCell
                                   key={monthIndex}
-                                  type="button"
-                                  title={`Tháng ${monthIndex + 1}${marked ? " — bấm xem chi tiết" : " — không phát sinh"}`}
-                                  disabled={!marked}
-                                  onClick={() => setUsageTarget({ row, month: monthIndex + 1 })}
-                                  className={`h-4 w-4 rounded-[3px] text-[9px] font-bold leading-4 ${
-                                    marked ? "bg-sky-600 text-white hover:bg-sky-700" : "bg-slate-100 text-slate-300"
-                                  }`}
-                                >
-                                  {monthIndex + 1}
-                                </button>
+                                  month={monthIndex + 1}
+                                  unit={row.unitLabel}
+                                  requestedQuantity={row.monthRequestedQuantities[monthIndex] ?? 0}
+                                  usedQuantity={usedQuantity}
+                                  onOpenUsage={() => setUsageTarget({ row, month: monthIndex + 1 })}
+                                />
                               ))}
                             </div>
                           </td>
-                          <td className="px-2 py-2 text-right">
+                          <td className="px-2 py-2.5 text-right">
                             {canEdit && row.requestId && (
                               <div className="flex justify-end gap-1">
                                 <button type="button" title="Sửa" className="rounded p-1 text-slate-500 hover:bg-slate-100" onClick={() => setEditing(row)}>
@@ -302,6 +304,59 @@ function Chip({ label, value, tone = "slate" }: { label: string; value: React.Re
   return (
     <span className={`rounded-full border px-3 py-1 font-semibold ${tones[tone]}`}>
       {label}: <b>{value}</b>
+    </span>
+  );
+}
+
+function MonthTimelineLegend() {
+  return (
+    <div className="flex items-center gap-3 whitespace-nowrap text-[10px] font-semibold text-slate-500" aria-label="Chú giải trạng thái theo tháng">
+      <span className="inline-flex items-center gap-1.5"><i className="h-2.5 w-2.5 rounded-[3px] border border-sky-300 bg-sky-100" />Đã khai</span>
+      <span className="inline-flex items-center gap-1.5"><i className="h-2.5 w-2.5 rounded-[3px] bg-emerald-500" />Đã dùng</span>
+      <span className="inline-flex items-center gap-1.5"><i className="h-2.5 w-2.5 rounded-[3px] bg-[linear-gradient(135deg,#0ea5e9_0_50%,#10b981_50%_100%)]" />Cả hai</span>
+    </div>
+  );
+}
+
+function MonthTimelineCell({
+  month,
+  unit,
+  requestedQuantity,
+  usedQuantity,
+  onOpenUsage,
+}: {
+  month: number;
+  unit: string;
+  requestedQuantity: number;
+  usedQuantity: number;
+  onOpenUsage: () => void;
+}) {
+  const requested = requestedQuantity > 0;
+  const used = usedQuantity > 0;
+  const title = [
+    `Tháng ${month}`,
+    requested ? `Đã khai: ${fmt(requestedQuantity)} ${unit}` : "Chưa khai nhu cầu",
+    used ? `Đã dùng: ${fmt(usedQuantity)} ${unit} — bấm xem chi tiết` : "Chưa phát sinh sử dụng",
+  ].join(" · ");
+  const tone = requested && used
+    ? "border-teal-500 bg-[linear-gradient(135deg,#0ea5e9_0_50%,#10b981_50%_100%)] text-white shadow-sm ring-1 ring-teal-100 hover:brightness-95"
+    : used
+      ? "border-emerald-500 bg-emerald-500 text-white shadow-sm hover:bg-emerald-600"
+      : requested
+        ? "border-sky-300 bg-sky-100 text-sky-800 shadow-[inset_0_-1px_0_rgba(14,165,233,.12)]"
+        : "border-slate-100 bg-slate-50 text-slate-300";
+
+  return (
+    <span title={title} className="inline-flex">
+      <button
+        type="button"
+        disabled={!used}
+        aria-label={title}
+        onClick={onOpenUsage}
+        className={`grid h-[18px] w-[18px] place-items-center rounded-[5px] border text-[9px] font-extrabold tabular-nums transition ${tone} ${used ? "cursor-pointer" : "cursor-default"}`}
+      >
+        {month}
+      </button>
     </span>
   );
 }

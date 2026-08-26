@@ -1,5 +1,6 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { invalidateMaterialAnnualPlanCache } from "@/lib/material-annual-plan-cache";
 import { audit, auditDetailWithPosition, fail, handle, ok, requireUser } from "@/lib/api";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
 import { CHEMICAL_PERMISSION_ID } from "@/lib/chemical-inventory/constants";
@@ -36,6 +37,10 @@ export async function POST(req: NextRequest, { params }: { params: { periodKey: 
       where: { id: existing.id },
       data: { status: "DRAFT", lockedAt: null, lockedById: null, note: reason },
     });
+
+    // Trạng thái kỳ quyết định tháng đó vào cột "Luỹ kế đã sử dụng" của biểu QLVT.20
+    // là số CHÍNH THỨC hay chỉ tạm tính — xoá đệm để biểu đọc lại ngay.
+    invalidateMaterialAnnualPlanCache(Number(period.value.slice(0, 4)));
 
     await audit(
       user.id,

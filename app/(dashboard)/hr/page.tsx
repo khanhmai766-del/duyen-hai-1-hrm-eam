@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { CalendarDays, UserCheck, Network, Users, ArrowRight, Phone, ChevronRight, Sunrise, Sunset, Moon, CalendarPlus } from "lucide-react";
+import { CalendarDays, UserCheck, Network, Users, ArrowRight, Phone, PhoneCall, ChevronRight, Sunrise, Sunset, Moon, CalendarPlus } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { StatCard } from "@/components/shared/stat-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -82,7 +82,7 @@ export default function HrOverviewPage() {
   const { data: shiftData } = useShift({ date, shiftType: curShift });
   const { data: usersData } = useUsers();
   const shift = shiftData?.data;
-  const users = usersData?.data ?? [];
+  const users = React.useMemo(() => usersData?.data ?? [], [usersData?.data]);
   const sortedUsers = React.useMemo(() => [...users].sort(compareStaff), [users]);
   const duyenHaiStaffCount = React.useMemo(
     () => users.filter((u) => u.isActive && isDuyenHaiEmployeeId(u.employeeId)).length,
@@ -137,8 +137,45 @@ export default function HrOverviewPage() {
         })}
       </div>
 
-      <Card>
-        <CardHeader className="flex-row items-center justify-between">
+      <Card className="overflow-hidden border-sky-100 shadow-[0_18px_45px_-34px_rgba(15,54,92,0.65)] sm:overflow-visible sm:border-border sm:shadow-sm">
+        <div className="relative overflow-hidden bg-gradient-to-br from-[#092f58] via-[#0b4677] to-[#087ca7] px-4 pb-4 pt-4 text-white sm:hidden">
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-0 opacity-[0.13] [background-image:linear-gradient(rgba(255,255,255,.4)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,.4)_1px,transparent_1px)] [background-size:22px_22px]"
+          />
+          <div className="relative flex items-center gap-3">
+            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-white/15 shadow-inner ring-1 ring-white/25 backdrop-blur-sm">
+              <Users className="h-5 w-5" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <h2 className="text-[17px] font-extrabold leading-tight tracking-tight">Danh bạ nhân sự</h2>
+                <span className="rounded-full bg-cyan-300/15 px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-wide text-cyan-100 ring-1 ring-cyan-200/20">
+                  {users.length} hồ sơ
+                </span>
+              </div>
+              <p className="mt-0.5 text-[11px] font-medium text-sky-100/85">Nguồn lực vận hành · Duyên Hải 1</p>
+            </div>
+            {users.length > PREVIEW_COUNT && (
+              <button
+                type="button"
+                onClick={() => setDetailOpen(true)}
+                className="flex min-h-11 shrink-0 items-center gap-1 rounded-[14px] bg-white px-3 text-[11px] font-extrabold text-navy shadow-lg shadow-sky-950/20 transition-transform active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+              >
+                Tất cả <ChevronRight className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+          <div className="relative mt-4 flex items-center justify-between rounded-xl bg-black/15 px-3 py-2 text-[10px] font-semibold text-sky-100 ring-1 ring-white/10 backdrop-blur-sm">
+            <span>{Math.min(PREVIEW_COUNT, users.length)} nhân sự ưu tiên</span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-300 shadow-[0_0_7px_rgba(110,231,183,.9)]" />
+              Dữ liệu đồng bộ
+            </span>
+          </div>
+        </div>
+
+        <CardHeader className="hidden flex-row items-center justify-between sm:flex">
           <CardTitle>Danh sách nhân sự</CardTitle>
           {users.length > PREVIEW_COUNT && (
             <Button variant="outline" size="sm" onClick={() => setDetailOpen(true)}>
@@ -146,7 +183,7 @@ export default function HrOverviewPage() {
             </Button>
           )}
         </CardHeader>
-        <CardContent className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <CardContent className="grid grid-cols-1 gap-2 bg-gradient-to-b from-sky-50/70 to-white p-3.5 sm:grid-cols-2 sm:gap-3 sm:bg-none sm:p-6 lg:grid-cols-3">
           {sortedUsers.slice(0, PREVIEW_COUNT).map((u) => (
             <PersonCard key={u.id} u={u} />
           ))}
@@ -245,22 +282,55 @@ function ShiftOverviewCard({ shiftType }: { shiftType: ShiftTypeKey }) {
 /* ---- Staff card: photo · name · position · phone ---- */
 function PersonCard({ u }: { u: SafeUser }) {
   return (
-    <div className="flex items-center gap-3 rounded-xl border border-border p-3 transition-colors hover:border-accent/40 hover:bg-accent/5">
+    <div className="group relative flex min-h-[88px] items-center gap-3 overflow-hidden rounded-2xl border border-slate-200/90 bg-gradient-to-r from-white via-white to-sky-50/45 px-3 py-2.5 shadow-[0_7px_22px_-20px_rgba(15,23,42,0.75)] transition-[border-color,background-color,transform,box-shadow] duration-200 active:scale-[0.99] sm:min-h-0 sm:rounded-xl sm:border-border sm:bg-none sm:p-3 sm:shadow-none sm:hover:border-accent/40 sm:hover:bg-accent/5">
+      <span className="absolute inset-y-3 left-0 w-[3px] rounded-r-full bg-gradient-to-b from-sky-400 to-blue-700 sm:hidden" aria-hidden />
       {u.avatarUrl ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={u.avatarUrl} alt={u.name} className="h-14 w-14 shrink-0 rounded-full object-cover ring-1 ring-border" />
+        <span className="relative h-14 w-14 shrink-0">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={u.avatarUrl} alt={u.name} className="h-14 w-14 rounded-[18px] object-cover shadow-sm ring-2 ring-white sm:rounded-full sm:ring-1 sm:ring-border" />
+          <span
+            className={cn("absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-[3px] border-white", u.isActive ? "bg-emerald-500" : "bg-slate-400")}
+            title={u.isActive ? "Tài khoản đang hoạt động" : "Tài khoản đã ngưng"}
+          />
+        </span>
       ) : (
-        <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-navy text-sm font-bold text-white">
+        <span className="relative flex h-14 w-14 shrink-0 items-center justify-center rounded-[18px] bg-gradient-to-br from-[#214d7c] via-navy to-[#087ca7] text-sm font-extrabold text-white shadow-[0_9px_20px_-12px_rgba(8,71,119,0.9)] ring-2 ring-white sm:rounded-full sm:bg-navy sm:shadow-none sm:ring-0">
           {initials(u.name)}
-        </div>
+          <span
+            className={cn("absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-[3px] border-white", u.isActive ? "bg-emerald-500" : "bg-slate-400")}
+            title={u.isActive ? "Tài khoản đang hoạt động" : "Tài khoản đã ngưng"}
+          />
+        </span>
       )}
       <div className="min-w-0 flex-1">
-        <div className="truncate font-semibold text-ink">{u.name}</div>
-        <div className="truncate text-xs font-medium text-accent">{u.position ?? "—"}</div>
-        <div className="mt-1 inline-flex items-center gap-1.5 text-sm text-muted-foreground">
-          <Phone className="h-3.5 w-3.5 shrink-0" /> {u.phone ?? "—"}
+        <div className="truncate text-[14px] font-extrabold leading-tight text-slate-900 sm:font-semibold sm:text-ink">{u.name}</div>
+        <div className="mt-1 flex min-w-0 items-center gap-1.5">
+          <span className="max-w-full truncate rounded-full bg-sky-50 px-2 py-0.5 text-[10px] font-bold text-sky-700 ring-1 ring-sky-100 sm:bg-transparent sm:p-0 sm:text-xs sm:font-medium sm:text-accent sm:ring-0">
+            {u.position ?? "—"}
+          </span>
+        </div>
+        <div className="mt-1.5 flex min-w-0 items-center gap-2 text-[11px] font-medium text-slate-500 sm:mt-1 sm:text-sm sm:text-muted-foreground">
+          <span className="inline-flex min-w-0 items-center gap-1.5">
+            <Phone className="h-3.5 w-3.5 shrink-0" />
+            <span className="truncate font-mono tracking-wide sm:font-sans sm:tracking-normal">{formatStaffPhone(u.phone)}</span>
+          </span>
+          {u.department && <span className="truncate text-[10px] text-slate-400 sm:hidden">· {u.department}</span>}
         </div>
       </div>
+      {u.phone && (
+        <a
+          href={`tel:${u.phone}`}
+          aria-label={`Gọi ${u.name}, số ${u.phone}`}
+          className="grid h-11 w-11 shrink-0 place-items-center rounded-[14px] bg-emerald-50 text-emerald-700 shadow-sm ring-1 ring-emerald-200 transition-colors active:bg-emerald-600 active:text-white sm:hidden"
+        >
+          <PhoneCall className="h-4 w-4" />
+        </a>
+      )}
     </div>
   );
+}
+
+function formatStaffPhone(phone?: string | null) {
+  if (!phone) return "Chưa cập nhật";
+  return phone.replace(/^(\d{4})(\d{3})(\d{3})$/, "$1 $2 $3");
 }
