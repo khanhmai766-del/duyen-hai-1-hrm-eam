@@ -33,6 +33,7 @@
     "migrate:files-to-s3": "tsx scripts/migrate-files-to-s3.ts",
     "audit:s3:compact": "tsx scripts/compact-audit-s3.ts",
     "perf:audit": "node scripts/perf-audit.mjs",
+    "mobile:audit": "node scripts/mobile-audit.mjs",
     "lint:dead": "knip"
   },
   "prisma": {
