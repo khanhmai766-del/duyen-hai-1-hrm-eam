@@ -127,20 +127,20 @@ export function MonthlyGrid({
         <table className="w-full min-w-[1100px] border-collapse text-sm">
           <thead className="sticky top-0 z-20">
             <tr className="bg-muted text-[11px] uppercase tracking-wider text-muted-foreground">
-              <th className="sticky left-0 z-30 min-w-[220px] border-b border-r border-border bg-muted px-3 py-2 text-left font-semibold">
+              <th className="sticky left-0 z-30 min-w-[220px] border-b border-r border-border bg-muted px-3 py-2 text-center align-middle font-semibold">
                 Tên hóa chất
               </th>
-              <th className="border-b border-border px-2 py-2 text-left font-semibold">Đơn vị</th>
+              <th className="border-b border-border px-2 py-2 text-center align-middle font-semibold">ĐVT</th>
               {grid.positions.map((p) => (
-                <th key={p.code} className="border-b border-border px-2 py-2 text-right font-semibold" title={p.label}>
+                <th key={p.code} className="border-b border-border px-2 py-2 text-center align-middle font-semibold" title={p.label}>
                   {p.label}
                 </th>
               ))}
-              <th className="border-b border-l border-border bg-slate-100 px-2 py-2 text-right font-semibold">Tổng tồn cuối</th>
-              <th className="border-b border-border bg-slate-100 px-2 py-2 text-right font-semibold">Tồn đầu</th>
-              <th className="border-b border-border bg-slate-100 px-2 py-2 text-right font-semibold">Nhập</th>
-              <th className="border-b border-border bg-slate-100 px-2 py-2 text-right font-semibold">Sử dụng</th>
-              <th className="border-b border-border px-2 py-2 text-left font-semibold">Cảnh báo</th>
+              <th className="border-b border-l border-border bg-slate-100 px-2 py-2 text-center align-middle font-semibold">Tồn cuối</th>
+              <th className="border-b border-border bg-slate-100 px-2 py-2 text-center align-middle font-semibold">Tồn đầu</th>
+              <th className="border-b border-border bg-slate-100 px-2 py-2 text-center align-middle font-semibold">Nhập</th>
+              <th className="border-b border-border bg-slate-100 px-2 py-2 text-center align-middle font-semibold">Sử dụng</th>
+              <th className="border-b border-border px-2 py-2 text-center align-middle font-semibold">Cảnh báo</th>
             </tr>
           </thead>
           <tbody>

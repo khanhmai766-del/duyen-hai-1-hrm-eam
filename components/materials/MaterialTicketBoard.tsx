@@ -3964,7 +3964,7 @@ const CSS = `
 .btn.primary:disabled{opacity:.5;cursor:not-allowed;}
 .btn.danger{background:${C.bad};border-color:${C.bad};color:#fff;}
 .btn.ghost{background:#fff;}
-.btn.big{width:100%;justify-content:center;padding:13px;font-size:14px;margin-top:8px;}
+.btn.big{width:100%;min-height:40px;justify-content:center;padding:9px 14px;font-size:13px;margin-top:6px;}
 .btn.tiny{font-size:11.5px;padding:5px 9px;border-radius:8px;align-self:flex-start;}
 .mini{border:1px solid ${C.line};background:#fff;border-radius:8px;cursor:pointer;color:#94a3b8;display:grid;place-items:center;width:30px;}
 .list{background:#fff;border:1px solid ${C.line};border-radius:14px;overflow-x:auto;overflow-y:hidden;box-shadow:0 1px 2px rgba(15,23,42,.04);}
@@ -4235,7 +4235,7 @@ const CSS = `
 .vhv-receive-grid.has-receiver{grid-template-columns:repeat(3,minmax(0,1fr));}
 .vhv-receive-grid .field{min-width:0;margin:0!important;}
 .vhv-receive-grid .field input{width:100%;margin-top:6px;}
-.vhv-receive-confirm{width:100%;height:42px;margin:0;padding:0 14px;align-self:end;}
+.vhv-receive-confirm{width:100%;height:40px;margin:0;padding:0 14px;align-self:end;}
 .confirm-field-row{display:grid;grid-template-columns:minmax(280px,1.45fr) minmax(150px,.65fr) minmax(220px,1fr);gap:10px;align-items:end;}
 .confirm-field-row.two-even{grid-template-columns:repeat(2,minmax(0,1fr));}
 .confirm-field-row.three-even{grid-template-columns:minmax(160px,.7fr) minmax(0,1fr) minmax(0,1fr);}
