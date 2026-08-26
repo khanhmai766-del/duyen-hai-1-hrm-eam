@@ -55,15 +55,25 @@ export function expiredPeriodKeyWhere(now = new Date()): Prisma.StringFilter {
 /**
  * Các kỳ đã quá hạn lưu, lọc từ danh sách kỳ đang có thật trong DB.
  *
- * Chỉ tháng 12 của NĂM LIỀN TRƯỚC mới được giữ, vì chỉ nó mới tiếp giáp tháng 01 của năm đang
- * chạy. Tháng 12 của các năm xa hơn đã hết vai trò tồn đầu kỳ ngay khi năm sau nó bị dọn, nên
- * cũng phải đi — không thì mỗi năm bỏ lại một tháng 12 mồ côi, tích mãi.
+ * Giữ tháng 12 của NĂM LIỀN TRƯỚC, vì chỉ nó mới tiếp giáp tháng 01 của năm đang chạy. Tháng 12
+ * của các năm xa hơn đã hết vai trò tồn đầu kỳ ngay khi năm sau nó bị dọn nên cũng phải đi —
+ * không thì mỗi năm bỏ lại một tháng 12 mồ côi, tích mãi.
+ *
+ * NẾU KHÔNG CÓ THÁNG 12 thì giữ kỳ MỚI NHẤT trong số sắp bị xoá. Sổ có thể ngừng ở tháng 8 vì
+ * chưa ai nhập tiếp; lúc đó xoá sạch theo đúng nghĩa đen là bỏ luôn tồn cuối cùng còn biết, và
+ * cả năm mới không tính được tiêu hao. Mục đích của việc giữ lại là bắc cầu tồn kho sang năm
+ * sau, nên cứ tháng cuối cùng có số mà giữ.
  */
 export function expiredKeysOf(keys: string[], now = new Date()) {
   const year = vietnamToday(now).year;
   const boundary = periodKey(year, 1);
+  const expired = keys.filter((key) => key < boundary);
+  if (!expired.length) return expired;
   const keptDecember = periodKey(year - 1, 12);
-  return keys.filter((key) => key < boundary && key !== keptDecember);
+  const bridge = expired.includes(keptDecember)
+    ? keptDecember
+    : expired.reduce((latest, key) => (key > latest ? key : latest));
+  return expired.filter((key) => key !== bridge);
 }
 
 /* ------------------------------------------------------------------ *
