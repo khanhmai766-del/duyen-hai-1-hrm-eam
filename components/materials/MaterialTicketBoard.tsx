@@ -3806,8 +3806,13 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
         {selectedErp && (
           <div className="erp-readonly-panel" aria-label="Thông tin vật tư dùng để xuất biên bản">
             <div className="erp-readonly-head"><span><Package size={15} /> Thông tin đưa vào biên bản</span><em>Đã đối chiếu ERP</em></div>
-            <div className="erp-readonly-row">
-              <b>{selectedErp.code}</b><span>{selectedErp.name}</span><strong>{selectedErp.erpStock.toLocaleString("vi-VN")} {unit}</strong>
+            <div className="erp-readonly-table">
+              <div className="erp-readonly-row erp-readonly-labels" aria-hidden="true">
+                <span>Mã vật tư</span><span>Tên vật tư</span><span>Số lượng ERP</span>
+              </div>
+              <div className="erp-readonly-row">
+                <b>{selectedErp.code}</b><span>{selectedErp.name}</span><strong>{selectedErp.erpStock.toLocaleString("vi-VN")} {unit}</strong>
+              </div>
             </div>
           </div>
         )}
@@ -4029,7 +4034,7 @@ const CSS = `
 .detail-inline .dwrap{position:relative;border:1px solid ${C.line};border-radius:14px;overflow:hidden;background:#fff;box-shadow:0 8px 22px rgba(15,23,42,.07);}
 .ticket-detail-layer{position:fixed;inset:0;z-index:60;display:grid;place-items:center;padding:20px;isolation:isolate;}
 .ticket-detail-backdrop{position:absolute;inset:0;z-index:0;border:0;background:rgba(15,35,64,.52);backdrop-filter:blur(5px);cursor:default;animation:ticketBackdropIn .18s ease-out both;}
-.ticket-detail-modal{position:relative;z-index:1;display:flex;width:min(1120px,calc(100vw - 40px));max-height:calc(100dvh - 40px);min-height:0;flex-direction:column;overflow:hidden;border:1px solid rgba(255,255,255,.76);border-radius:22px;background:#f7f9fc;box-shadow:0 30px 90px rgba(15,35,64,.34),0 2px 0 rgba(255,255,255,.8) inset;outline:0;animation:ticketModalIn .2s ease-out both;}
+.ticket-detail-modal{position:relative;z-index:1;display:flex;width:min(1320px,calc(100vw - 32px));max-height:calc(100dvh - 40px);min-height:0;flex-direction:column;overflow:hidden;border:1px solid rgba(255,255,255,.76);border-radius:22px;background:#f7f9fc;box-shadow:0 30px 90px rgba(15,35,64,.34),0 2px 0 rgba(255,255,255,.8) inset;outline:0;animation:ticketModalIn .2s ease-out both;}
 .ticket-detail-header{position:relative;display:flex;align-items:center;gap:12px;min-width:0;flex:0 0 auto;border-bottom:1px solid #dbe5ef;background:linear-gradient(135deg,#f8fbff 0%,#eef6ff 52%,#f0fdfa 100%);padding:14px 58px 14px 16px;}
 .ticket-detail-icon{display:grid;width:42px;height:42px;flex:0 0 42px;place-items:center;border-radius:13px;background:linear-gradient(145deg,${C.navy},#2563eb);color:#fff;box-shadow:0 8px 20px rgba(30,58,95,.22);}
 .ticket-detail-heading{display:flex;min-width:0;flex:1;flex-direction:column;gap:2px;}
@@ -4241,11 +4246,12 @@ const CSS = `
 .erp-readonly-head span{display:flex;align-items:center;gap:7px;font-size:12.5px;font-weight:800;}
 .erp-readonly-head em{border:1px solid #cbd9e8;border-radius:999px;background:white;padding:2px 8px;color:${C.muted};font-size:10px;font-style:normal;font-weight:700;text-transform:uppercase;letter-spacing:.04em;}
 .erp-readonly-table{display:grid;}
-.erp-readonly-row{display:grid;grid-template-columns:minmax(120px,.75fr) minmax(220px,1.7fr) minmax(120px,.65fr);gap:12px;align-items:center;padding:9px 12px;border-top:1px solid #e8eef5;color:#334155;font-size:12.5px;}
+.erp-readonly-row{display:grid;grid-template-columns:178px minmax(0,1fr) minmax(0,max-content);gap:10px 16px;align-items:start;padding:11px 13px;border-top:1px solid #e8eef5;color:#334155;font-size:12.5px;line-height:1.5;}
 .erp-readonly-row:first-child{border-top:0;}
-.erp-readonly-row b{color:${C.navy};font-family:inherit;font-variant-numeric:tabular-nums;}
-.erp-readonly-row strong{color:#0f766e;text-align:right;white-space:nowrap;}
-.erp-readonly-labels{padding-top:6px;padding-bottom:6px;background:#f8fafc;color:${C.muted};font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.045em;}
+.erp-readonly-row b{align-self:start;border:1px solid #dbe5f0;border-radius:7px;background:#fff;padding:2px 7px;color:${C.navy};font-family:inherit;font-size:12px;font-variant-numeric:tabular-nums;letter-spacing:.01em;white-space:nowrap;}
+.erp-readonly-row>span{min-width:0;overflow-wrap:anywhere;}
+.erp-readonly-row strong{align-self:start;color:#0f766e;text-align:right;white-space:nowrap;}
+.erp-readonly-labels{padding-top:7px;padding-bottom:7px;background:#f8fafc;color:${C.muted};font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.045em;}
 .erp-readonly-labels span:last-child{text-align:right;}
 .note{display:flex;align-items:center;gap:6px;font-size:12px;border-radius:9px;padding:9px 11px;}
 .note.ung{background:${C.ungBg};color:${C.ung};}
@@ -4419,6 +4425,7 @@ const CSS = `
 .other-receive-row input{margin-top:5px;text-align:center;font-weight:800;}
 .frm-item{display:grid;grid-template-columns:1.25fr 1.1fr 1.2fr 64px auto;gap:6px;}
 .hint{font-size:11px;color:${C.soft};margin:2px 0 0;}
+@media(max-width:640px){.erp-readonly-row{grid-template-columns:1fr;gap:3px;}.erp-readonly-row b{justify-self:start;}.erp-readonly-row strong{text-align:left;}.erp-readonly-labels{display:none;}}
 @media(max-width:700px){.receive-existing-row{grid-template-columns:1fr;}.receive-existing-hint{min-height:0;padding:0;}}
 .loglist{border-top:1px dashed ${C.line};padding-top:12px;}
 .p-top{display:grid;grid-template-columns:minmax(180px,.55fr) minmax(560px,2fr);gap:4px 20px;align-items:start;}
@@ -4431,7 +4438,7 @@ const CSS = `
 .logrow span{color:${C.soft};white-space:nowrap;}
 .logrow b{white-space:nowrap;}
 .logrow em{font-style:normal;color:${C.muted};white-space:nowrap;}
-@media(max-width:640px){.panel{width:100%;}.detail-inline{min-width:1140px;padding:10px 12px;}.row{min-width:1140px;grid-template-columns:64px minmax(108px,.9fr) minmax(108px,.86fr) minmax(188px,1.36fr) minmax(180px,.95fr) 82px minmax(168px,1fr) 66px 70px;padding:11px 12px;font-size:12.5px;}.tag{padding:4px 7px}.nophieu{padding:3px 6px}.st{padding:5px 8px}.material-cards{grid-template-columns:1fr;}.edit-field-grid,.bbkt-grid,.confirm-field-row,.stats-issue-grid,.accept-two-grid,.use-field-grid,.recovery-quantity-row,.receive-field-grid,.receive-field-grid.advance-receive-fields,.vhv-receive-grid,.advance-phase-grid,.advance-document-summary,.review-receive-row,.review-use-grid,.review-recovery-grid,.review-accept-grid{grid-template-columns:1fr;gap:8px;}.step-review-dialog .frm-f{flex-wrap:wrap;}.step-review-dialog .frm-f>.note{flex-basis:100%;}.step-review-dialog .frm-f>.btn.primary{min-width:132px;}.erp-readonly-row{grid-template-columns:minmax(110px,.8fr) minmax(180px,1.5fr) minmax(110px,.7fr);}.review-receive-toggle{width:100%;}.review-receive-toggle button{flex:1;}.qty-field input{padding-left:8px;padding-right:8px;}}
+@media(max-width:640px){.panel{width:100%;}.detail-inline{min-width:1140px;padding:10px 12px;}.row{min-width:1140px;grid-template-columns:64px minmax(108px,.9fr) minmax(108px,.86fr) minmax(188px,1.36fr) minmax(180px,.95fr) 82px minmax(168px,1fr) 66px 70px;padding:11px 12px;font-size:12.5px;}.tag{padding:4px 7px}.nophieu{padding:3px 6px}.st{padding:5px 8px}.material-cards{grid-template-columns:1fr;}.edit-field-grid,.bbkt-grid,.confirm-field-row,.stats-issue-grid,.accept-two-grid,.use-field-grid,.recovery-quantity-row,.receive-field-grid,.receive-field-grid.advance-receive-fields,.vhv-receive-grid,.advance-phase-grid,.advance-document-summary,.review-receive-row,.review-use-grid,.review-recovery-grid,.review-accept-grid{grid-template-columns:1fr;gap:8px;}.step-review-dialog .frm-f{flex-wrap:wrap;}.step-review-dialog .frm-f>.note{flex-basis:100%;}.step-review-dialog .frm-f>.btn.primary{min-width:132px;}.review-receive-toggle{width:100%;}.review-receive-toggle button{flex:1;}.qty-field input{padding-left:8px;padding-right:8px;}}
 @media(max-width:640px){.ticket-unit-field{grid-template-columns:58px minmax(0,1fr);gap:8px;}.ticket-unit-options{max-width:none;}.ticket-unit-options button{padding-left:6px;padding-right:6px;}.ticket-category-options{grid-template-columns:repeat(3,minmax(0,1fr));}}
 @media(max-width:760px){
   .mtw{padding-bottom:6px;}
