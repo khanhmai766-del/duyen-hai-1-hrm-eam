@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useSession } from "next-auth/react";
-import { Boxes, ChevronDown, ClipboardList, ExternalLink, FileSpreadsheet, FileText, Plus } from "lucide-react";
+import { BookOpen, Boxes, ChevronDown, ClipboardList, ExternalLink, FileSpreadsheet, FileText, Plus } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -12,6 +12,7 @@ import { useMaterialTickets } from "@/hooks/useMaterialTickets";
 import { MATERIAL_TRACKING_SHEET_URL } from "@/lib/links";
 
 const PROCEDURE_FLOW_PDF_URL = "/api/material-procedure-flow";
+const MATERIAL_GUIDE_PDF_URL = "/material-procedures/huong-dan-quan-ly-vat-tu.pdf";
 
 export default function ReplacementProceduresPage() {
   const { data: session } = useSession();
@@ -52,7 +53,7 @@ export default function ReplacementProceduresPage() {
               <ChevronDown className="hidden h-3.5 w-3.5 text-slate-400 transition-transform duration-200 group-data-[state=open]:rotate-180 sm:block" aria-hidden="true" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" sideOffset={7} className="w-60 rounded-xl p-1.5 shadow-xl">
+          <DropdownMenuContent align="end" sideOffset={7} className="w-72 rounded-xl p-1.5 shadow-xl">
             <DropdownMenuItem asChild className="cursor-pointer rounded-lg px-2.5 py-2.5">
               <a href={PROCEDURE_FLOW_PDF_URL} target="_blank" rel="noreferrer">
                 <FileText className="h-4 w-4 text-sky-700" />
@@ -64,6 +65,13 @@ export default function ReplacementProceduresPage() {
               <a href={MATERIAL_TRACKING_SHEET_URL} target="_blank" rel="noopener noreferrer">
                 <FileSpreadsheet className="h-4 w-4 text-emerald-700" />
                 <span className="flex-1 font-semibold">Mở sheet vật tư</span>
+                <ExternalLink className="h-3.5 w-3.5 text-slate-400" aria-hidden="true" />
+              </a>
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild className="cursor-pointer rounded-lg px-2.5 py-2.5">
+              <a href={MATERIAL_GUIDE_PDF_URL} target="_blank" rel="noopener noreferrer">
+                <BookOpen className="h-4 w-4 text-amber-600" />
+                <span className="flex-1 font-semibold">Mở hướng dẫn quản lý vật tư</span>
                 <ExternalLink className="h-3.5 w-3.5 text-slate-400" aria-hidden="true" />
               </a>
             </DropdownMenuItem>
