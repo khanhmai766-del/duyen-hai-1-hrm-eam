@@ -24,6 +24,11 @@ import {
   Undo2,
   Minus,
   ChevronDown,
+  ChevronRight,
+  CloudSun,
+  LayoutGrid,
+  ContactRound,
+  PhoneCall,
 } from "lucide-react";
 import { StatCard } from "@/components/shared/stat-card";
 import { StatCardSkeleton } from "@/components/shared/skeletons";
@@ -79,7 +84,7 @@ export default function DashboardPage() {
   return (
     <div className="-mt-2 space-y-4 lg:-mt-4">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
-        <div className="shrink-0">
+        <div className="hidden shrink-0 sm:block">
           <h1 className="text-2xl font-bold tracking-tight text-ink">
             Welcome back, {session?.user?.name ?? ""} 👋
           </h1>
@@ -90,8 +95,18 @@ export default function DashboardPage() {
 
       <SafeOperationCard canManage={rbac.can("operation-events", ["manage", "full"])} />
 
+      <MobileKpiGrid
+        m={m}
+        loading={me.isLoading}
+        online={online}
+        avatarUrl={m?.avatarUrl}
+        userName={session?.user?.name}
+        userPosition={currentPosition.position || session?.user?.position}
+        employeeId={session?.user?.employeeId}
+      />
+
       {/* Stat row — all four cards stretch to the user-photo card's height */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4 xl:items-stretch">
+      <div className="hidden gap-4 sm:grid sm:grid-cols-2 xl:grid-cols-4 xl:items-stretch">
         {/* 1 — Current user: full-bleed photo with overlaid name/title */}
         <Link href="/account" className="group block h-full rounded-xl focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2" aria-label="Mở thông tin cá nhân">
           <Card className="relative min-h-[230px] overflow-hidden border-0 text-white transition-shadow group-hover:shadow-md">
@@ -158,12 +173,148 @@ export default function DashboardPage() {
             canManage={rbac.can("operation-events", ["manage", "full"])}
           />
         </div>
-        <div className="min-w-0 [&>*]:h-full">
+        <div className="min-w-0 sm:hidden">
+          <MobileUtilityHub />
+        </div>
+        <div className="hidden min-w-0 sm:block sm:[&>*]:h-full">
           <SupportLinksCard />
         </div>
-        <div className="min-w-0 [&>*]:h-full">
+        <div className="hidden min-w-0 sm:block sm:[&>*]:h-full">
           <ContactCard />
         </div>
+      </div>
+    </div>
+  );
+}
+
+function MobileKpiGrid({
+  m,
+  loading,
+  online,
+  avatarUrl,
+  userName,
+  userPosition,
+  employeeId,
+}: {
+  m?: MyDashboard;
+  loading: boolean;
+  online: boolean;
+  avatarUrl?: string | null;
+  userName?: string | null;
+  userPosition?: string | null;
+  employeeId?: string | null;
+}) {
+  const opensAdminAttendance = shouldOpenAdminAttendance(userPosition);
+  const attendanceHref = opensAdminAttendance ? "/hr/admin-attendance" : "/hr/org-chart";
+  const dutyPosition = m?.position ?? m?.pendingPosition;
+  const attendanceStatus = loading
+    ? "Đang tải..."
+    : m?.position
+      ? "Đã điểm danh"
+      : m?.pendingPosition
+        ? "Chờ duyệt"
+        : "Chưa điểm danh";
+  const monthLabel = m ? `Tháng ${String(m.month).padStart(2, "0")}/${m.year}` : "Tháng hiện tại";
+
+  const tileClassName =
+    "group relative flex min-h-[116px] min-w-0 flex-col overflow-hidden rounded-[18px] border p-3.5 text-left shadow-[0_8px_24px_-18px_rgba(15,23,42,0.55)] transition-[transform,box-shadow,border-color] duration-200 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2";
+
+  return (
+    <section aria-label="Tổng quan nhanh" className="grid grid-cols-2 gap-2.5 sm:hidden">
+      <Link
+        href="/account"
+        aria-label="Mở thông tin cá nhân"
+        className={cn(tileClassName, "border-sky-100 bg-gradient-to-br from-white via-sky-50/80 to-blue-100/70")}
+      >
+        <div className="flex items-start justify-between gap-2">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-navy text-[11px] font-bold text-white shadow-sm ring-1 ring-white">
+            {avatarUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={avatarUrl} alt="" className="h-full w-full object-cover" />
+            ) : (
+              initials(userName ?? "?")
+            )}
+          </span>
+          <span className="inline-flex items-center gap-1 rounded-full bg-white/80 px-2 py-1 text-[10px] font-bold text-slate-600 shadow-sm ring-1 ring-slate-200/70">
+            <span className={cn("h-1.5 w-1.5 rounded-full", online ? "bg-emerald-500" : "bg-slate-400")} />
+            {online ? "Online" : "Offline"}
+          </span>
+        </div>
+        <div className="mt-auto min-w-0 pt-3">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-sky-700/75">Tài khoản</p>
+          <p className="mt-0.5 line-clamp-2 text-[13px] font-bold leading-[1.25] text-navy">
+            {userPosition || employeeId || "Xem hồ sơ cá nhân"}
+          </p>
+        </div>
+      </Link>
+
+      <Link
+        href="/hr/shift-roster?view=timesheet"
+        aria-label="Mở lịch trực ca, bảng công"
+        className={cn(tileClassName, "border-emerald-100 bg-gradient-to-br from-white via-emerald-50/80 to-teal-100/65")}
+      >
+        <div className="flex items-start justify-between">
+          <span className="grid h-9 w-9 place-items-center rounded-xl bg-emerald-500 text-white shadow-[0_7px_16px_-8px_rgba(16,185,129,0.9)]">
+            <CalendarCheck className="h-[18px] w-[18px]" />
+          </span>
+          <ChevronRight className="h-4 w-4 text-emerald-700/50 transition-transform group-active:translate-x-0.5" />
+        </div>
+        <div className="mt-auto pt-2.5">
+          <p className="text-[22px] font-extrabold leading-none tracking-tight text-emerald-700 tabular-nums">
+            {loading ? "—" : `${m?.workingDays ?? 0} ngày`}
+          </p>
+          <p className="mt-1 text-[11px] font-semibold leading-tight text-emerald-950/75">Ngày công · {monthLabel}</p>
+        </div>
+      </Link>
+
+      <Link
+        href={attendanceHref}
+        aria-label="Mở chức năng điểm danh"
+        className={cn(tileClassName, "border-amber-100 bg-gradient-to-br from-white via-amber-50/75 to-orange-100/65")}
+      >
+        <div className="flex items-start justify-between">
+          <span className="grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 text-white shadow-[0_7px_16px_-8px_rgba(234,88,12,0.9)]">
+            <Briefcase className="h-[18px] w-[18px]" />
+          </span>
+          <ChevronRight className="h-4 w-4 text-orange-700/50 transition-transform group-active:translate-x-0.5" />
+        </div>
+        <div className="mt-auto min-w-0 pt-2.5">
+          <p className="line-clamp-2 text-[15px] font-extrabold leading-[1.15] text-orange-950">{attendanceStatus}</p>
+          <p className="mt-1 truncate text-[11px] font-medium text-orange-900/65">
+            {dutyPosition ?? (opensAdminAttendance ? "Chấm công hành chính" : "Sơ đồ tổ chức ca")}
+          </p>
+        </div>
+      </Link>
+
+      <MobileWeatherKpi tileClassName={tileClassName} />
+    </section>
+  );
+}
+
+function MobileWeatherKpi({ tileClassName }: { tileClassName: string }) {
+  const loc = useUserLocation();
+  const coords = loc.data ?? undefined;
+  const weather = useWeather(coords);
+  const place = usePlaceInfo(coords);
+  const data = weather.data;
+  const scene = weatherScene(data?.current.weather_code);
+  const locationName = place.data?.name ?? PLANT_LOCATION.name;
+
+  return (
+    <div className={cn(tileClassName, "border-cyan-100 bg-gradient-to-br from-white via-cyan-50/75 to-sky-100/70")}>
+      <div className="flex items-start justify-between">
+        <span className="grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br from-sky-400 to-blue-600 text-white shadow-[0_7px_16px_-8px_rgba(37,99,235,0.9)]">
+          <CloudSun className="h-[18px] w-[18px]" />
+        </span>
+        <span className="rounded-full bg-white/75 px-2 py-1 text-[10px] font-bold text-sky-700 ring-1 ring-sky-100">Trực tiếp</span>
+      </div>
+      <div className="mt-auto min-w-0 pt-2.5">
+        <p className="text-[22px] font-extrabold leading-none tracking-tight text-sky-800 tabular-nums">
+          {data ? `${Math.round(data.current.temperature_2m)}°C` : "—"}
+        </p>
+        <p className="mt-1 truncate text-[11px] font-semibold leading-tight text-sky-950/70">
+          {data ? scene.label : "Đang tải..."} · {locationName}
+        </p>
       </div>
     </div>
   );
@@ -281,6 +432,194 @@ function ContactCard() {
       </CardContent>
     </Card>
   );
+}
+
+type MobileUtilityTab = "links" | "contacts";
+
+function MobileUtilityHub() {
+  const [activeTab, setActiveTab] = React.useState<MobileUtilityTab>("links");
+  const [linkGroup, setLinkGroup] = React.useState<SupportLinkGroup>("ops");
+  const links = SUPPORT_LINKS.filter((link) => link.group === linkGroup);
+  const tabId = (tab: MobileUtilityTab) => `mobile-utility-tab-${tab}`;
+  const panelId = (tab: MobileUtilityTab) => `mobile-utility-panel-${tab}`;
+
+  return (
+    <section className="overflow-hidden rounded-[22px] border border-sky-100 bg-white shadow-[0_18px_45px_-30px_rgba(15,54,92,0.6)]">
+      <div className="relative overflow-hidden bg-gradient-to-br from-[#092f58] via-[#0b4677] to-[#087ca7] px-4 pb-4 pt-4 text-white">
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 opacity-[0.13] [background-image:linear-gradient(rgba(255,255,255,.4)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,.4)_1px,transparent_1px)] [background-size:22px_22px]"
+        />
+        <div className="relative flex items-center gap-3">
+          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-white/15 shadow-inner ring-1 ring-white/25 backdrop-blur-sm">
+            <LayoutGrid className="h-5 w-5" />
+          </span>
+          <div className="min-w-0">
+            <h2 className="text-[17px] font-extrabold leading-tight tracking-tight">Trung tâm tiện ích</h2>
+            <p className="mt-0.5 text-[11px] font-medium text-sky-100/85">Kết nối nhanh hệ thống và danh bạ vận hành</p>
+          </div>
+        </div>
+
+        <div
+          role="tablist"
+          aria-label="Tiện ích hỗ trợ"
+          className="relative mt-4 grid grid-cols-2 rounded-[14px] bg-black/15 p-1 ring-1 ring-white/15 backdrop-blur-sm"
+        >
+          <MobileUtilityTabButton
+            id={tabId("links")}
+            controls={panelId("links")}
+            active={activeTab === "links"}
+            onClick={() => setActiveTab("links")}
+            icon={Link2}
+            label="Liên kết"
+            count={SUPPORT_LINKS.length}
+          />
+          <MobileUtilityTabButton
+            id={tabId("contacts")}
+            controls={panelId("contacts")}
+            active={activeTab === "contacts"}
+            onClick={() => setActiveTab("contacts")}
+            icon={ContactRound}
+            label="Danh bạ"
+            count={CONTROL_ROOM_CONTACTS.length}
+          />
+        </div>
+      </div>
+
+      {activeTab === "links" ? (
+        <div
+          id={panelId("links")}
+          role="tabpanel"
+          aria-labelledby={tabId("links")}
+          className="p-3.5"
+        >
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-[0.13em] text-sky-700">Danh mục số</p>
+              <p className="mt-0.5 text-sm font-bold text-slate-900">Liên kết hỗ trợ</p>
+            </div>
+            <div className="inline-flex rounded-xl bg-slate-100 p-1 ring-1 ring-slate-200/70">
+              <MobileLinkGroupButton active={linkGroup === "ops"} onClick={() => setLinkGroup("ops")} label="Vận hành" />
+              <MobileLinkGroupButton active={linkGroup === "personal"} onClick={() => setLinkGroup("personal")} label="Cá nhân" />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            {links.map((link, index) => (
+              <a
+                key={link.href}
+                href={link.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="group flex min-h-[58px] items-center gap-3 rounded-2xl border border-slate-200/90 bg-gradient-to-r from-white to-sky-50/40 px-3 py-2.5 shadow-[0_4px_16px_-14px_rgba(15,23,42,0.55)] transition-[border-color,background-color,transform] duration-200 active:scale-[0.985] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              >
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-sky-100 text-[11px] font-extrabold text-sky-700 ring-1 ring-sky-200/70">
+                  {String(index + 1).padStart(2, "0")}
+                </span>
+                <span className="min-w-0 flex-1 text-[13px] font-bold leading-snug text-slate-800">{link.name}</span>
+                <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-white text-sky-700 shadow-sm ring-1 ring-slate-200 transition-colors group-active:bg-sky-600 group-active:text-white">
+                  <ExternalLink className="h-3.5 w-3.5" />
+                </span>
+              </a>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <div
+          id={panelId("contacts")}
+          role="tabpanel"
+          aria-labelledby={tabId("contacts")}
+          className="p-3.5"
+        >
+          <div className="mb-3">
+            <p className="text-[10px] font-bold uppercase tracking-[0.13em] text-emerald-700">Kết nối trực tiếp</p>
+            <p className="mt-0.5 text-sm font-bold text-slate-900">Danh bạ phòng điều khiển</p>
+          </div>
+
+          <div className="space-y-2">
+            {CONTROL_ROOM_CONTACTS.map((contact) => (
+              <a
+                key={contact.phone}
+                href={`tel:${contact.phone}`}
+                aria-label={`Gọi ${contact.label}, số ${contact.phone}`}
+                className="group flex min-h-[64px] items-center gap-3 rounded-2xl border border-slate-200/90 bg-gradient-to-r from-white to-emerald-50/35 px-3 py-2.5 shadow-[0_4px_16px_-14px_rgba(15,23,42,0.55)] transition-[border-color,background-color,transform] duration-200 active:scale-[0.985] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+              >
+                <span className="grid h-10 w-10 shrink-0 place-items-center rounded-[14px] bg-gradient-to-br from-emerald-400 to-teal-600 text-[11px] font-extrabold text-white shadow-[0_8px_18px_-10px_rgba(5,150,105,0.9)]">
+                  {initials(contact.label.replace(/^Ô\.\s*/, ""))}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[12px] font-bold leading-snug text-slate-800">{contact.label}</span>
+                  <span className="mt-1 block font-mono text-[11px] font-bold tracking-wide text-emerald-700">
+                    {formatPhoneDisplay(contact.phone)}
+                  </span>
+                </span>
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 transition-colors group-active:bg-emerald-600 group-active:text-white">
+                  <PhoneCall className="h-4 w-4" />
+                </span>
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function MobileUtilityTabButton({
+  id,
+  controls,
+  active,
+  onClick,
+  icon: Icon,
+  label,
+  count,
+}: {
+  id: string;
+  controls: string;
+  active: boolean;
+  onClick: () => void;
+  icon: typeof Link2;
+  label: string;
+  count: number;
+}) {
+  return (
+    <button
+      id={id}
+      type="button"
+      role="tab"
+      aria-selected={active}
+      aria-controls={controls}
+      tabIndex={active ? 0 : -1}
+      onClick={onClick}
+      className={cn(
+        "flex min-h-11 items-center justify-center gap-2 rounded-[11px] px-2 text-xs font-bold transition-[background-color,color,box-shadow] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80",
+        active ? "bg-white text-navy shadow-sm" : "text-white/75 active:bg-white/10 active:text-white"
+      )}
+    >
+      <Icon className="h-4 w-4" />
+      {label}
+      <span className={cn("rounded-full px-1.5 py-0.5 text-[9px] font-extrabold", active ? "bg-sky-100 text-sky-700" : "bg-white/15 text-white/80")}>{count}</span>
+    </button>
+  );
+}
+
+function MobileLinkGroupButton({ active, onClick, label }: { active: boolean; onClick: () => void; label: string }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "min-h-11 rounded-lg px-2.5 text-[10px] font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
+        active ? "bg-navy text-white shadow-sm" : "text-slate-500 active:bg-white"
+      )}
+    >
+      {label}
+    </button>
+  );
+}
+
+function formatPhoneDisplay(phone: string) {
+  return phone.replace(/^(\d{4})(\d{3})(\d{3})$/, "$1 $2 $3");
 }
 
 const ADMIN_ATTENDANCE_CARD_POSITIONS = ["quan doc", "pho quan doc", "ky thuat vien", "thong ke"];
@@ -606,6 +945,7 @@ function SafeOperationCard({ canManage }: { canManage: boolean }) {
   const { data, isLoading } = useSafeOperations();
   const updateSafeOperation = useUpdateSafeOperation();
   const events = data?.data ?? [];
+  const [mobileExpanded, setMobileExpanded] = React.useState(false);
 
   const [editing, setEditing] = React.useState<EditingTarget>(null);
   const [resetTarget, setResetTarget] = React.useState<ResetTarget>(null);
@@ -801,9 +1141,18 @@ function SafeOperationCard({ canManage }: { canManage: boolean }) {
   return (
     <Card className="overflow-hidden border-sky-200/90 bg-[#f8fcff] shadow-[0_18px_45px_rgba(14,74,140,0.10)]">
       <CardHeader className="relative overflow-hidden border-b-[3px] border-blue-800/90 p-0">
-        <SafeOperationProcessStrip />
+        <SafeOperationProcessStrip
+          expanded={mobileExpanded}
+          onToggle={() => setMobileExpanded((current) => !current)}
+        />
       </CardHeader>
-      <CardContent className="grid gap-4 bg-[linear-gradient(180deg,#f7fcff_0%,#ffffff_42%)] p-3 lg:grid-cols-2 lg:p-4">
+      <CardContent
+        id="safe-operation-units"
+        className={cn(
+          "gap-4 bg-[linear-gradient(180deg,#f7fcff_0%,#ffffff_42%)] p-3 sm:grid lg:grid-cols-2 lg:p-4",
+          mobileExpanded ? "grid" : "hidden"
+        )}
+      >
         {isLoading ? (
           <>
             <div className="h-96 rounded-lg border border-sky-200 bg-white/70" />
@@ -987,11 +1336,24 @@ function SafeOperationCard({ canManage }: { canManage: boolean }) {
   );
 }
 
-function SafeOperationProcessStrip() {
+function SafeOperationProcessStrip({ expanded, onToggle }: { expanded: boolean; onToggle: () => void }) {
   const stages = ["Nhiên liệu", "Lò hơi", "Tuabin - máy phát", "Điện năng", "Nhà máy nhiệt điện Duyên Hải 1"];
 
   return (
     <div className="relative">
+      <button
+        type="button"
+        onClick={onToggle}
+        className="absolute inset-0 z-20 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-sky-500 sm:hidden"
+        aria-expanded={expanded}
+        aria-controls="safe-operation-units"
+        aria-label={expanded ? "Thu gọn thời gian vận hành hai tổ máy" : "Xem thời gian vận hành hai tổ máy"}
+      >
+        <span className="sr-only">{expanded ? "Thu gọn" : "Mở rộng"}</span>
+        <span className="absolute bottom-2 right-2 grid h-7 w-7 place-items-center rounded-full border border-blue-100 bg-white/90 text-blue-800 shadow-sm backdrop-blur-sm">
+          <ChevronDown className={cn("h-4 w-4 transition-transform duration-200", expanded && "rotate-180")} aria-hidden="true" />
+        </span>
+      </button>
       {/* Ảnh nền dây chuyền + tiêu đề overlay lên trên */}
       <div className="relative h-[120px] w-full overflow-hidden sm:h-[148px] lg:h-[172px]">
         {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -1013,7 +1375,7 @@ function SafeOperationProcessStrip() {
         </CardTitle>
       </div>
       {/* Chú thích các công đoạn */}
-      <div className="grid grid-cols-2 gap-x-3 gap-y-1 border-t-[3px] border-blue-800/90 bg-white/95 px-2 py-1 sm:grid-cols-5">
+      <div className="hidden grid-cols-5 gap-x-3 gap-y-1 border-t-[3px] border-blue-800/90 bg-white/95 px-2 py-1 sm:grid">
         {stages.map((stage, index) => (
           <div
             key={stage}
@@ -1260,7 +1622,9 @@ function OperationInfoCard({ canCreate, canManage }: { canCreate: boolean; canMa
   const [open, setOpen] = React.useState(false);
   const [editingId, setEditingId] = React.useState<string | null>(null);
   const [form, setForm] = React.useState({ type: "DRILL_INCIDENT", title: "", date: "", note: "" });
-  const events = data?.data ?? [];
+  const [mobilePaused, setMobilePaused] = React.useState(false);
+  const [mobileSlide, setMobileSlide] = React.useState({ current: 0, previous: null as number | null, cycle: 0 });
+  const events = React.useMemo(() => data?.data ?? [], [data?.data]);
   const upcomingEvents = React.useMemo(
     () =>
       events
@@ -1268,6 +1632,24 @@ function OperationInfoCard({ canCreate, canManage }: { canCreate: boolean; canMa
         .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()),
     [events]
   );
+  const activeMobileIndex = upcomingEvents.length ? mobileSlide.current % upcomingEvents.length : 0;
+
+  React.useEffect(() => {
+    setMobileSlide({ current: 0, previous: null, cycle: 0 });
+  }, [upcomingEvents.length]);
+
+  React.useEffect(() => {
+    if (upcomingEvents.length < 2 || mobilePaused) return;
+    const timer = window.setInterval(() => {
+      if (document.visibilityState !== "visible") return;
+      setMobileSlide((slide) => ({
+        current: (slide.current + 1) % upcomingEvents.length,
+        previous: slide.current,
+        cycle: slide.cycle + 1,
+      }));
+    }, 2000);
+    return () => window.clearInterval(timer);
+  }, [mobilePaused, upcomingEvents.length]);
 
   function openCreate() {
     setEditingId(null);
@@ -1308,8 +1690,121 @@ function OperationInfoCard({ canCreate, canManage }: { canCreate: boolean; canMa
   }
 
   return (
-    <Card className="h-full">
-      <CardHeader className="flex-row items-center justify-between space-y-0 pb-3">
+    <Card className="h-full overflow-hidden border-sky-100 shadow-[0_18px_45px_-34px_rgba(15,54,92,0.65)] sm:overflow-visible sm:border-border sm:shadow-sm">
+      <div className="sm:hidden">
+        <div className="relative overflow-hidden bg-gradient-to-br from-[#092f58] via-[#0b4677] to-[#087ca7] px-4 pb-4 pt-4 text-white">
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-0 opacity-[0.13] [background-image:radial-gradient(circle_at_1px_1px,rgba(255,255,255,.75)_1px,transparent_0)] [background-size:18px_18px]"
+          />
+          <div className="relative flex items-center gap-3">
+            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-white/15 shadow-inner ring-1 ring-white/25 backdrop-blur-sm">
+              <Activity className="h-5 w-5" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <h2 className="text-[17px] font-extrabold leading-tight tracking-tight">Bảng tin nội bộ</h2>
+                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-400/15 px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-wide text-emerald-100 ring-1 ring-emerald-300/25">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-300" /> Live
+                </span>
+              </div>
+              <p className="mt-0.5 text-[11px] font-medium text-sky-100/85">Lịch diễn tập và thông tin vận hành sắp tới</p>
+            </div>
+            {canCreate && (
+              <button
+                type="button"
+                onClick={openCreate}
+                aria-label="Thêm thông tin nội bộ"
+                className="grid h-11 w-11 shrink-0 place-items-center rounded-[14px] bg-white text-navy shadow-lg shadow-sky-950/20 transition-transform active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+              >
+                <Plus className="h-5 w-5" />
+              </button>
+            )}
+          </div>
+
+          <div className="relative mt-4 flex items-center justify-between rounded-xl bg-black/15 px-3 py-2 text-[10px] font-semibold text-sky-100 ring-1 ring-white/10 backdrop-blur-sm">
+            <span>{upcomingEvents.length ? `${upcomingEvents.length} lịch sắp tới` : "Chưa có lịch mới"}</span>
+            {upcomingEvents.length > 1 && (
+              <span className="inline-flex items-center gap-1.5">
+                <span className="relative flex h-2 w-2">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-cyan-300 opacity-50" />
+                  <span className="relative inline-flex h-2 w-2 rounded-full bg-cyan-300" />
+                </span>
+                Tự động · 2 giây
+              </span>
+            )}
+          </div>
+        </div>
+
+        <div
+          className="bg-gradient-to-b from-sky-50/75 to-white p-3.5"
+          onPointerDown={() => setMobilePaused(true)}
+          onPointerUp={() => setMobilePaused(false)}
+          onPointerCancel={() => setMobilePaused(false)}
+          onFocusCapture={() => setMobilePaused(true)}
+          onBlurCapture={() => setMobilePaused(false)}
+        >
+          {isLoading ? (
+            <div className="h-[174px] animate-pulse rounded-2xl bg-sky-100/70" />
+          ) : upcomingEvents.length === 0 ? (
+            <div className="flex h-[174px] flex-col items-center justify-center rounded-2xl border border-dashed border-sky-200 bg-white/80 px-6 text-center">
+              <span className="grid h-12 w-12 place-items-center rounded-2xl bg-sky-50 text-sky-500 ring-1 ring-sky-100">
+                <ShieldCheck className="h-6 w-6" />
+              </span>
+              <p className="mt-3 text-sm font-bold text-slate-800">Chưa có lịch diễn tập mới</p>
+              <p className="mt-1 text-[11px] leading-relaxed text-slate-500">Thông tin từ hôm nay trở đi sẽ tự động xuất hiện tại đây.</p>
+            </div>
+          ) : (
+            <div className="relative h-[174px] overflow-hidden rounded-2xl" aria-live={mobilePaused ? "polite" : "off"}>
+              {mobileSlide.previous !== null && upcomingEvents[mobileSlide.previous] && (
+                <div
+                  key={`operation-out-${mobileSlide.cycle}`}
+                  aria-hidden
+                  className="pointer-events-none absolute inset-0 z-0 animate-[mobileNoticeOut_420ms_cubic-bezier(.4,0,.2,1)_forwards]"
+                >
+                  <MobileOperationSlide event={upcomingEvents[mobileSlide.previous]} canManage={false} onEdit={openEdit} onRemove={remove} />
+                </div>
+              )}
+              <div
+                key={`operation-in-${mobileSlide.cycle}`}
+                className={cn("absolute inset-0 z-10", mobileSlide.cycle > 0 && "animate-[mobileNoticeIn_420ms_cubic-bezier(.4,0,.2,1)_both]")}
+              >
+                <MobileOperationSlide event={upcomingEvents[activeMobileIndex]} canManage={canManage} onEdit={openEdit} onRemove={remove} />
+              </div>
+            </div>
+          )}
+
+          {upcomingEvents.length > 1 && (
+            <div className="mt-3 flex items-center justify-center gap-1.5" aria-label={`Tin ${activeMobileIndex + 1} trên ${upcomingEvents.length}`}>
+              {upcomingEvents.map((event, index) => (
+                <span
+                  key={event.id}
+                  className={cn(
+                    "h-1.5 rounded-full transition-all duration-300",
+                    index === activeMobileIndex ? "w-5 bg-sky-600" : "w-1.5 bg-sky-200"
+                  )}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+
+        <style>{`
+          @keyframes mobileNoticeIn {
+            from { transform: translate3d(0, 100%, 0); opacity: .4; }
+            to { transform: translate3d(0, 0, 0); opacity: 1; }
+          }
+          @keyframes mobileNoticeOut {
+            from { transform: translate3d(0, 0, 0); opacity: 1; }
+            to { transform: translate3d(0, -100%, 0); opacity: .25; }
+          }
+          @media (prefers-reduced-motion: reduce) {
+            [class*="mobileNoticeIn"], [class*="mobileNoticeOut"] { animation: none !important; }
+          }
+        `}</style>
+      </div>
+
+      <CardHeader className="hidden flex-row items-center justify-between space-y-0 pb-3 sm:flex">
         <CardTitle>Thông tin nội bộ</CardTitle>
         {canCreate && (
           <Button size="sm" variant="outline" onClick={openCreate}>
@@ -1317,7 +1812,7 @@ function OperationInfoCard({ canCreate, canManage }: { canCreate: boolean; canMa
           </Button>
         )}
       </CardHeader>
-      <CardContent>
+      <CardContent className="hidden sm:block">
         <p className="mb-2 text-xs text-muted-foreground">
           Lịch diễn tập sự cố, diễn tập PCCC ( Trưởng Ca cập nhập)
         </p>
@@ -1412,5 +1907,73 @@ function OperationInfoCard({ canCreate, canManage }: { canCreate: boolean; canMa
         </DialogContent>
       </Dialog>
     </Card>
+  );
+}
+
+function MobileOperationSlide({
+  event,
+  canManage,
+  onEdit,
+  onRemove,
+}: {
+  event: OperationEvent;
+  canManage: boolean;
+  onEdit: (event: OperationEvent) => void;
+  onRemove: (id: string) => void;
+}) {
+  const meta = OPERATION_TYPE[event.type as keyof typeof OPERATION_TYPE] ?? OPERATION_TYPE.OTHER;
+  const tone = eventDateTone(event.date);
+  const eventDate = parseDateInput(event.date);
+
+  return (
+    <article
+      className={cn(
+        "relative flex h-full min-w-0 gap-3 overflow-hidden rounded-2xl border bg-white p-3.5 shadow-[0_12px_30px_-24px_rgba(15,23,42,0.7)]",
+        tone === "today" ? "border-emerald-200" : tone === "future" ? "border-amber-200" : "border-slate-200"
+      )}
+    >
+      <span
+        aria-hidden
+        className={cn(
+          "absolute inset-y-0 left-0 w-1",
+          tone === "today" ? "bg-emerald-500" : tone === "future" ? "bg-amber-500" : "bg-slate-300"
+        )}
+      />
+      <div className={cn("flex h-[66px] w-[52px] shrink-0 flex-col items-center justify-center rounded-[15px] ring-1", EVENT_TONES[tone].date)}>
+        <span className="text-[22px] font-black leading-none tabular-nums">{eventDate.getDate()}</span>
+        <span className="mt-1 text-[10px] font-bold uppercase tracking-wide">Tháng {eventDate.getMonth() + 1}</span>
+      </div>
+      <div className="flex min-w-0 flex-1 flex-col">
+        <div className="flex min-w-0 items-start justify-between gap-2">
+          <span className={`inline-flex max-w-full truncate rounded-full px-2 py-1 text-[9px] font-extrabold uppercase tracking-wide ${meta.badge}`}>{meta.label}</span>
+          {canManage && (
+            <div className="flex shrink-0 gap-1">
+              <button
+                type="button"
+                onClick={() => onEdit(event)}
+                aria-label={`Sửa ${event.title}`}
+                className="grid h-11 w-11 place-items-center rounded-xl bg-slate-50 text-slate-500 ring-1 ring-slate-200 transition-colors active:bg-sky-100 active:text-sky-700"
+              >
+                <Pencil className="h-3.5 w-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => onRemove(event.id)}
+                aria-label={`Xóa ${event.title}`}
+                className="grid h-11 w-11 place-items-center rounded-xl bg-rose-50 text-rose-500 ring-1 ring-rose-100 transition-colors active:bg-rose-100 active:text-rose-700"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          )}
+        </div>
+        <h3 className="mt-2 line-clamp-2 text-[14px] font-extrabold leading-[1.25] text-slate-900">{event.title}</h3>
+        {event.note ? (
+          <p className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-slate-500">{event.note}</p>
+        ) : (
+          <p className="mt-1 text-[11px] text-slate-400">Cập nhật bởi {event.createdBy?.name ?? "bộ phận vận hành"}</p>
+        )}
+      </div>
+    </article>
   );
 }

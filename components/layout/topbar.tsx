@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { useSession, signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
@@ -287,7 +288,7 @@ export function Topbar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
       </button>
 
       {/* Global search — sits where the greeting used to be */}
-      <div ref={boxRef} className="relative min-w-0 flex-1 sm:flex-none">
+      <div ref={boxRef} className="relative hidden min-w-0 sm:block sm:flex-none">
         <form onSubmit={onSubmit}>
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <input
@@ -339,6 +340,16 @@ export function Topbar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
               )}
             </div>
           )}
+      </div>
+
+      <div className="min-w-0 flex-1 sm:hidden">
+        <p className="whitespace-nowrap text-[12px] font-semibold leading-4 text-muted-foreground">
+          Welcome back
+        </p>
+        <p className="flex min-w-0 items-center gap-1 whitespace-nowrap text-[17px] font-bold leading-5 tracking-tight text-ink">
+          <span className="truncate">{displayName}</span>
+          <span className="shrink-0" aria-hidden="true">👋</span>
+        </p>
       </div>
 
       <div className="ml-auto flex items-center gap-3">
@@ -563,8 +574,19 @@ export function Topbar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
           )}
         </button>
 
-        {/* Light / dark theme toggle */}
-        <ThemeToggle />
+        {/* Desktop/tablet giữ nút giao diện; mobile dùng logo EVN làm lối về trang chủ. */}
+        <div className="hidden sm:block">
+          <ThemeToggle />
+        </div>
+        <Link
+          href="/"
+          prefetch={false}
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-blue-100 bg-white shadow-md shadow-blue-900/10 ring-1 ring-white transition-transform duration-200 hover:scale-105 active:scale-95 sm:hidden"
+          aria-label="Về trang chủ"
+          title="Về trang chủ"
+        >
+          <Image src="/brand/4.png" alt="Logo EVN" width={28} height={28} className="h-7 w-7 object-contain" priority />
+        </Link>
 
         {/* User profile — click to open the account menu */}
         <div ref={profileRef} className="relative border-l border-border pl-3">
