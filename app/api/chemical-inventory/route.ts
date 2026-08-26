@@ -1,5 +1,6 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { runMaterialRetention } from "@/lib/material-retention";
 import { handle, ok, requireUser } from "@/lib/api";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
 import { CHEMICAL_PERMISSION_ID } from "@/lib/chemical-inventory/constants";
@@ -20,6 +21,10 @@ export const dynamic = "force-dynamic";
 export async function GET(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
+    // Dọn dữ liệu vật tư đã hết hạn lưu. Không có cron trong hệ thống này nên các đợt xoá
+    // chạy ké lần đọc, nhiều nhất một lượt mỗi giờ. Cố ý KHÔNG await: dọn dẹp không được
+    // làm chậm màn hình của người dùng, và lỗi đã được nuốt sẵn bên trong.
+    void runMaterialRetention(prisma);
     await requirePermissionLevel(user, CHEMICAL_PERMISSION_ID, [...READ_LEVELS], "Không đủ quyền xem tồn kho hóa chất");
 
     const month = parsePeriodKey(req.nextUrl.searchParams.get("month") ?? "");

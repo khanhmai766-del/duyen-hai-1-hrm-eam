@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 import { audit, auditDetailWithPosition, fail, handle, ok, requireUser } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
+import { runMaterialRetention } from "@/lib/material-retention";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
 import { annualPlanNameKey, ANNUAL_PLAN_GROUPS } from "@/lib/material-annual-plan-import";
 import { getMaterialMonthlyReport, parsePeriodKey } from "@/lib/material-monthly-report";
@@ -13,6 +14,10 @@ const GROUPS = Object.values(ANNUAL_PLAN_GROUPS) as string[];
 export async function GET(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
+    // Dọn dữ liệu vật tư đã hết hạn lưu. Không có cron trong hệ thống này nên các đợt xoá
+    // chạy ké lần đọc, nhiều nhất một lượt mỗi giờ. Cố ý KHÔNG await: dọn dẹp không được
+    // làm chậm màn hình của người dùng, và lỗi đã được nuốt sẵn bên trong.
+    void runMaterialRetention(prisma);
     await requirePermissionLevel(
       user,
       "material-manage",
