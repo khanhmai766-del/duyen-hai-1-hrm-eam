@@ -22,6 +22,8 @@ import {
   CheckCircle2,
   Route,
   Clock3,
+  FileSpreadsheet,
+  ExternalLink,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -88,6 +90,8 @@ export function DefectSyncChip({
   syncing,
   canRunSync,
   canManageTwoWaySync,
+  sheetUrl,
+  sheetLabel,
   onSync,
 }: {
   /** 5 lượt chạy gần nhất do /api/defects/sync trả sẵn; [0] là mới nhất. */
@@ -97,6 +101,8 @@ export function DefectSyncChip({
   syncing: boolean;
   canRunSync: boolean;
   canManageTwoWaySync: boolean;
+  sheetUrl?: string;
+  sheetLabel?: string;
   onSync: () => void;
 }) {
   const [open, setOpen] = React.useState(false);
@@ -133,30 +139,54 @@ export function DefectSyncChip({
     : healthWarning
       ? "border-amber-200 bg-amber-50/40 hover:border-amber-300"
       : "border-border bg-white hover:border-emerald-300";
-
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <button
           type="button"
           className={cn(
-            "flex h-10 items-center gap-2 rounded-lg border px-3 text-sm font-semibold text-ink shadow-sm transition-colors",
+            "flex h-11 w-12 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border px-0 text-sm font-semibold text-ink shadow-sm transition-colors sm:h-10 sm:w-auto sm:justify-start sm:gap-2 sm:rounded-lg sm:px-3",
             borderTone,
             open && "ring-2 ring-accent/15"
           )}
-          title="Xem chi tiết đồng bộ khiếm khuyết"
+          aria-label={`${label}. Mở công cụ Google Sheet`}
+          title="Mở công cụ Google Sheet"
         >
-          <span className="relative flex h-2 w-2 shrink-0">
+          <span className="relative sm:hidden" aria-hidden="true">
+            <FileSpreadsheet className="h-[18px] w-[18px] text-blue-700" />
+            {running && <span className="absolute -right-1 -top-1 h-2 w-2 animate-ping rounded-full bg-sky-400 opacity-70" />}
+            <span className={cn("absolute -right-1 -top-1 h-2 w-2 rounded-full ring-2 ring-white", dotTone)} />
+          </span>
+          <span className="relative hidden h-2 w-2 shrink-0 sm:flex">
             {running && <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-sky-400 opacity-70" />}
             <span className={cn("relative inline-flex h-2 w-2 rounded-full", dotTone)} />
           </span>
-          {label}
-          <TwoWayWarnDot enabled={canManageTwoWaySync} />
-          <ChevronDown className={cn("h-3.5 w-3.5 text-muted-foreground transition-transform", open && "rotate-180")} />
+          <span className="hidden sm:inline">{label}</span>
+          <span className="hidden sm:contents"><TwoWayWarnDot enabled={canManageTwoWaySync} /></span>
+          <ChevronDown className={cn("hidden h-3.5 w-3.5 text-muted-foreground transition-transform sm:block", open && "rotate-180")} />
         </button>
       </PopoverTrigger>
 
       <PopoverContent align="end" sideOffset={8} className="max-h-[78vh] w-[calc(100vw-24px)] max-w-[470px] overflow-y-auto p-4">
+        {sheetUrl && sheetLabel && (
+          <div className="mb-4 border-b border-border pb-4 sm:hidden">
+            <a
+              href={sheetUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="group flex items-center gap-3 rounded-xl border border-sky-200 bg-gradient-to-r from-sky-50 to-white p-3 shadow-sm transition-colors hover:border-sky-300 hover:bg-sky-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
+            >
+              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-blue-700 text-white shadow-sm">
+                <FileSpreadsheet className="h-5 w-5" aria-hidden="true" />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-bold text-ink">Mở {sheetLabel}</span>
+                <span className="mt-0.5 block truncate text-xs text-muted-foreground">Xem dữ liệu nguồn trên Google Sheet</span>
+              </span>
+              <ExternalLink className="h-4 w-4 shrink-0 text-sky-600 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" aria-hidden="true" />
+            </a>
+          </div>
+        )}
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <div className="flex items-center gap-2 text-sm font-bold text-ink">

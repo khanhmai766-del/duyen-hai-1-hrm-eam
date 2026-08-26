@@ -8,7 +8,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ShieldAlert, Wrench, CircleSlash, CircleDashed, CirclePause, Package, Plus, X, Pencil, CircleX, CheckCircle2, BellRing, CloudOff, FileClock, FileSpreadsheet, ExternalLink, Minus, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Filter, Check, ArrowUp, Loader2, ClipboardList, Ban, type LucideIcon } from "lucide-react";
+import { ShieldAlert, Wrench, CircleSlash, CircleDashed, CirclePause, Package, Plus, X, Pencil, CircleX, CheckCircle2, BellRing, CloudOff, FileClock, FileSpreadsheet, ExternalLink, Minus, ChevronLeft, ChevronRight, ChevronDown, ChevronsLeft, ChevronsRight, Filter, Check, ArrowUp, Loader2, ClipboardList, Ban, MoreHorizontal, type LucideIcon } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
 import { TableSkeleton } from "@/components/shared/skeletons";
@@ -562,6 +562,11 @@ export default function DefectsPage() {
   const [remindShiftLeaderId, setRemindShiftLeaderId] = React.useState("");
   const [expandedId, setExpandedId] = React.useState<string | null>(null);
   const [detailLoadingId, setDetailLoadingId] = React.useState<string | null>(null);
+  const [mobileShiftSummaryExpanded, setMobileShiftSummaryExpanded] = React.useState(false);
+
+  React.useEffect(() => {
+    setMobileShiftSummaryExpanded(false);
+  }, [section]);
 
   function openCreate() {
     setEditTarget(null);
@@ -601,8 +606,11 @@ export default function DefectsPage() {
       <PageHeader
         title={`KHIẾM KHUYẾT THIẾT BỊ — ${sectionConfig.label.toUpperCase()}`}
         description={`Phiếu đồng bộ từ Google Sheet ${sectionConfig.source === "CO" ? "Cơ" : "Điện"} · theo dõi sự cố & khiếm khuyết đang tồn đọng`}
+        mobileTitle={sectionConfig.label.toUpperCase()}
+        hideDescriptionOnMobile
+        mobileInline
       >
-        {!readOnlyDefects && <Button variant="soft" size="toolbar" asChild>
+        {!readOnlyDefects && <Button variant="soft" size="toolbar" className={canViewSync ? "hidden sm:inline-flex" : undefined} asChild>
           <a
             href={sectionConfig.source === "CO" ? MECHANICAL_CHEMICAL_SHEET_URL : ELECTRICAL_SHEET_URL}
             target="_blank"
@@ -627,6 +635,8 @@ export default function DefectsPage() {
             syncing={sync.isPending || syncStatus.isLoading}
             canRunSync={canRunSync}
             canManageTwoWaySync={canManageTwoWaySync}
+            sheetUrl={sectionConfig.source === "CO" ? MECHANICAL_CHEMICAL_SHEET_URL : ELECTRICAL_SHEET_URL}
+            sheetLabel={sectionConfig.label}
             onSync={async () => {
               try {
                 const result = await sync.mutateAsync();
@@ -638,14 +648,33 @@ export default function DefectsPage() {
           />
         )}
         {canCreate && websiteCreateAvailable && (
-          <Button size="toolbar" onClick={openCreate}>
-            <Plus className="h-4 w-4" /> Thêm mới
+          <Button
+            size="toolbar"
+            className="h-11 w-12 px-0 sm:h-9 sm:w-auto sm:px-3"
+            onClick={openCreate}
+            aria-label="Thêm mới"
+            title="Thêm mới"
+          >
+            <Plus className="!h-5 !w-5" />
+            <span className="hidden sm:inline">Thêm mới</span>
           </Button>
         )}
       </PageHeader>
 
       <div className="flex flex-col gap-3 rounded-xl border border-sky-200 bg-gradient-to-r from-sky-50 via-white to-amber-50 px-4 py-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex min-w-0 items-center gap-3">
+        <div className="relative flex min-w-0 items-center gap-3 pr-9 sm:pr-0">
+          <button
+            type="button"
+            onClick={() => setMobileShiftSummaryExpanded((current) => !current)}
+            aria-expanded={mobileShiftSummaryExpanded}
+            aria-controls="defect-shift-summary-counts"
+            aria-label={mobileShiftSummaryExpanded ? "Thu gọn thống kê ca hiện tại" : "Mở rộng thống kê ca hiện tại"}
+            className="absolute inset-0 z-10 cursor-pointer rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2 sm:hidden"
+          >
+            <span className="absolute right-0 top-1/2 grid h-8 w-8 -translate-y-1/2 place-items-center rounded-full bg-white/85 text-sky-800 shadow-sm ring-1 ring-sky-200 backdrop-blur-sm">
+              <ChevronDown className={cn("h-4 w-4 transition-transform duration-200", mobileShiftSummaryExpanded && "rotate-180")} />
+            </span>
+          </button>
           <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-navy text-white shadow-sm">
             <ClipboardList className="h-5 w-5" />
           </span>
@@ -661,37 +690,47 @@ export default function DefectsPage() {
             </p>
           </div>
         </div>
-        {shiftSummary.isLoading ? (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" /> Đang tổng hợp…
+        <div
+          id="defect-shift-summary-counts"
+          className={cn(
+            "sm:block",
+            mobileShiftSummaryExpanded ? "block" : "hidden"
+          )}
+        >
+          <div>
+            {shiftSummary.isLoading ? (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" /> Đang tổng hợp…
+              </div>
+            ) : shiftSummary.isError ? (
+              <p className="text-sm font-medium text-red-600">Không tải được thống kê ca</p>
+            ) : (
+              <div className={cn(
+                "grid gap-2 text-center",
+                section === "co" ? "grid-cols-2 sm:grid-cols-5" : "grid-cols-2 sm:grid-cols-4"
+              )}>
+                <ShiftSummaryCount
+                  label="Đã ra"
+                  value={shiftSummary.data?.data.issued ?? 0}
+                  tone="sky"
+                />
+                {(shiftSummary.data?.data.byRequestType ?? []).map((item) => {
+                  const label = item.requestType === "Môi Trường"
+                    ? section === "co" ? "Môi trường Cơ" : "Môi trường Điện"
+                    : item.requestType;
+                  return (
+                    <ShiftSummaryCount key={item.requestType} label={`Phiếu ${label}`} value={item.issued} tone="emerald" />
+                  );
+                })}
+                <ShiftSummaryCount
+                  label="Đã hủy"
+                  value={shiftSummary.data?.data.cancelled ?? 0}
+                  tone="red"
+                />
+              </div>
+            )}
           </div>
-        ) : shiftSummary.isError ? (
-          <p className="text-sm font-medium text-red-600">Không tải được thống kê ca</p>
-        ) : (
-          <div className={cn(
-            "grid gap-2 text-center",
-            section === "co" ? "grid-cols-2 sm:grid-cols-5" : "grid-cols-2 sm:grid-cols-4"
-          )}>
-            <ShiftSummaryCount
-              label="Đã ra"
-              value={shiftSummary.data?.data.issued ?? 0}
-              tone="sky"
-            />
-            {(shiftSummary.data?.data.byRequestType ?? []).map((item) => {
-              const label = item.requestType === "Môi Trường"
-                ? section === "co" ? "Môi trường Cơ" : "Môi trường Điện"
-                : item.requestType;
-              return (
-                <ShiftSummaryCount key={item.requestType} label={`Phiếu ${label}`} value={item.issued} tone="emerald" />
-              );
-            })}
-            <ShiftSummaryCount
-              label="Đã hủy"
-              value={shiftSummary.data?.data.cancelled ?? 0}
-              tone="red"
-            />
-          </div>
-        )}
+        </div>
       </div>
 
       {deviceSeqFilter && (
@@ -720,12 +759,12 @@ export default function DefectsPage() {
 
       {/* Thẻ KPI đứng trước thanh lọc: người dùng nhìn số liệu tổng quan rồi mới
           bấm thẻ để lọc, nên thứ tự này khớp với thao tác thực tế. */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="grid grid-cols-2 gap-2.5 sm:gap-4 lg:grid-cols-5">
         <DefectKpi label="Chưa thực hiện" value={chuaXuLy} icon={CircleDashed} tone="rose" active={statusFilter === "CHUA_XU_LY"} onClick={() => toggleStatus("CHUA_XU_LY")} />
         <DefectKpi label="Đang thực hiện" value={coPct} icon={Wrench} tone="sky" active={statusFilter === "CO_PCT"} onClick={() => toggleStatus("CO_PCT")} />
         <DefectKpi label="Chờ vật tư" value={choVatTu} icon={Package} tone="amber" active={statusFilter === "CHO_VAT_TU"} onClick={() => toggleStatus("CHO_VAT_TU")} />
         <DefectKpi label="Chờ ngừng máy" value={choNgungMay} icon={CirclePause} tone="orange" active={statusFilter === "CHO_NGUNG_MAY"} onClick={() => toggleStatus("CHO_NGUNG_MAY")} />
-        <DefectKpi label="Chưa lưu lịch sử" value={tonDong} icon={CircleSlash} tone="violet" active={statusFilter === "TON_DONG"} onClick={() => toggleStatus("TON_DONG")} />
+        <DefectKpi className="col-span-2 sm:col-span-1" label="Chưa lưu lịch sử" value={tonDong} icon={CircleSlash} tone="violet" active={statusFilter === "TON_DONG"} onClick={() => toggleStatus("TON_DONG")} />
       </div>
 
       {!isLoading && scopeTotal > 0 && (
@@ -797,6 +836,146 @@ export default function DefectsPage() {
         )
       ) : (
         <Card className="overflow-hidden">
+          <div className="space-y-2.5 bg-slate-50/70 p-2.5 sm:hidden">
+            {pagedDefects.map((d) => {
+              const expanded = expandedId === d.id;
+              const awaitingHistoryConfirmation =
+                (d.sourceType === "GOOGLE_SHEETS" || d.websiteCreated) &&
+                !d.cancelledAt &&
+                !!d.deviceSeq &&
+                !d.pendingHistory &&
+                !d.postRepairAwaitingMaterial &&
+                d.syncState !== "CONFIRMED" &&
+                d.status === "DA_XU_LY";
+              const unitLabel = d.unit === "COMMON" ? d.commonSubUnit || "Common" : d.unit;
+
+              return (
+                <article
+                  key={d.id}
+                  className={cn(
+                    "overflow-hidden rounded-2xl border bg-white shadow-[0_8px_24px_-20px_rgba(15,23,42,0.65)] transition-colors",
+                    expanded ? "border-blue-300 ring-2 ring-blue-100" : "border-slate-200"
+                  )}
+                >
+                  <div className="flex items-start gap-2 px-3.5 pb-2 pt-3.5">
+                    <button
+                      type="button"
+                      onClick={() => setExpandedId(expanded ? null : d.id)}
+                      aria-expanded={expanded}
+                      className="min-w-0 flex-1 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                    >
+                      <span className="flex flex-wrap items-center gap-1.5">
+                        <span className="inline-flex h-6 items-center rounded-lg bg-navy px-2 text-[11px] font-extrabold text-white">
+                          {unitLabel}
+                        </span>
+                        <span className="text-[15px] font-extrabold tabular-nums text-slate-950">
+                          {d.requestNumber || "Chưa có số"}
+                        </span>
+                        {d.isMaterialRequest && (
+                          <span className="rounded-full bg-sky-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-sky-700 ring-1 ring-sky-200">
+                            SYC vật tư
+                          </span>
+                        )}
+                      </span>
+                      <span className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                        <DefectMobileStatus defect={d} />
+                        {d.severity && (
+                          <span className={cn("inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[10px] font-bold", SEVERITY_TONE[d.severity] ?? "bg-muted text-ink")}>
+                            M{d.severity}
+                          </span>
+                        )}
+                      </span>
+                    </button>
+
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button
+                          type="button"
+                          aria-label={`Thao tác phiếu ${d.requestNumber || d.id}`}
+                          className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-slate-200 bg-white text-slate-600 shadow-sm transition-colors active:bg-slate-100"
+                        >
+                          <MoreHorizontal className="h-5 w-5" />
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-60 p-1.5">
+                        <DropdownMenuLabel className="text-[11px] uppercase tracking-wider text-muted-foreground">Thao tác phiếu</DropdownMenuLabel>
+                        <DropdownMenuItem onSelect={() => setExpandedId(expanded ? null : d.id)}>
+                          {expanded ? <Minus /> : <Plus />}
+                          {expanded ? "Thu gọn chi tiết" : "Xem thông tin chi tiết"}
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        {canClose && awaitingHistoryConfirmation && (
+                          <DropdownMenuItem disabled={detailLoadingId === d.id} onSelect={() => void openComplete(d)}>
+                            <CheckCircle2 /> Lưu lịch sử
+                          </DropdownMenuItem>
+                        )}
+                        {canClose && d.sourceType !== "GOOGLE_SHEETS" && !d.websiteCreated && d.status !== "DA_XU_LY" && (
+                          <DropdownMenuItem disabled={detailLoadingId === d.id} onSelect={() => void openComplete(d)}>
+                            <CheckCircle2 /> Hoàn thành
+                          </DropdownMenuItem>
+                        )}
+                        {canManage && websiteRemindAvailable && (d.sourceType !== "GOOGLE_SHEETS" || d.websiteCreated || !!d.deviceSeq) && d.status !== "DA_XU_LY" && (
+                          <DropdownMenuItem onSelect={() => { setRemindShiftLeaderId(""); setRemindTarget(d); }}>
+                            <BellRing /> Nhắc lại
+                          </DropdownMenuItem>
+                        )}
+                        {canClose && d.pendingHistory && (
+                          <DropdownMenuItem disabled={detailLoadingId === d.id} onSelect={() => void openComplete(d)}>
+                            <FileClock /> Sửa thông tin lịch sử
+                          </DropdownMenuItem>
+                        )}
+                        {canManage && (operationUpdateAvailable || (d.sourceType === "GOOGLE_SHEETS" && !d.websiteCreated)) && !d.pendingHistory && (
+                          <DropdownMenuItem disabled={detailLoadingId === d.id} onSelect={() => void openEdit(d)}>
+                            <Pencil /> {d.deviceSeq ? "Cập nhật phiếu" : "Gắn thiết bị"}
+                          </DropdownMenuItem>
+                        )}
+                        {canManage && operationUpdateAvailable && d.severity2UpgradeCandidate && (
+                          <DropdownMenuItem onSelect={() => setUpgradeTarget(d)}>
+                            <ArrowUp /> Xem xét nâng Mức 2
+                          </DropdownMenuItem>
+                        )}
+                        {canManage && operationUpdateAvailable && !d.cancelledAt && !d.pendingHistory && d.status !== "DA_XU_LY" && (
+                          <DropdownMenuItem
+                            className="text-rose-700 focus:text-rose-700"
+                            onSelect={() => { setCancelNote("Vận hành hủy phiếu"); setCancelTarget(d); }}
+                          >
+                            <CircleX /> Hủy phiếu
+                          </DropdownMenuItem>
+                        )}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setExpandedId(expanded ? null : d.id)}
+                    aria-expanded={expanded}
+                    className="block w-full px-3.5 pb-3.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500"
+                  >
+                    <span className="line-clamp-3 text-[13.5px] font-semibold leading-5 text-slate-900">
+                      {d.content || "Chưa có nội dung khiếm khuyết"}
+                    </span>
+                    <span className="mt-2.5 flex items-center gap-2 border-t border-slate-100 pt-2.5 text-[11px] text-slate-500">
+                      <span className="min-w-0 flex-1 truncate font-medium">{d.system || "Chưa có cương vị"}</span>
+                      <span className="shrink-0">{formatDate(d.detectedAt)}</span>
+                      {d.reminderCount > 0 && <span className="shrink-0 font-bold text-amber-700">Nhắc {d.reminderCount}</span>}
+                      <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-slate-50 text-slate-500 ring-1 ring-slate-200">
+                        <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", expanded && "rotate-180")} />
+                      </span>
+                    </span>
+                  </button>
+
+                  {expanded && (
+                    <div className="border-t border-blue-100 bg-[linear-gradient(180deg,#f8fbff_0%,#f8fafc_100%)] p-2.5">
+                      <DefectExpandedDetailsById id={d.id} />
+                    </div>
+                  )}
+                </article>
+              );
+            })}
+          </div>
+
+          <div className="hidden sm:block">
           <PersistentHorizontalScroll>
           <Table className="min-w-[1196px] table-fixed">
             <TableHeader className="bg-muted/40">
@@ -1100,6 +1279,7 @@ export default function DefectsPage() {
             </TableBody>
           </Table>
           </PersistentHorizontalScroll>
+          </div>
           <div className="flex flex-col gap-3 border-t border-border p-4 text-sm text-muted-foreground md:flex-row md:items-center md:justify-between">
             <div>
               Hiển thị {firstShown}-{lastShown} trong tổng số {total} bản ghi
@@ -1107,7 +1287,7 @@ export default function DefectsPage() {
               {isFetching && <span className="ml-2 text-blue-600">· Đang cập nhật…</span>}
             </div>
             <div className="flex flex-wrap items-center gap-2 md:ml-auto">
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <div className="hidden items-center gap-2 text-sm text-muted-foreground sm:flex">
                 <span>Hiển thị</span>
                 <select
                   value={pageSize}
@@ -1531,7 +1711,23 @@ function ShiftSummaryCount({
  * KPI card 3D: nghiêng theo con trỏ (perspective tilt), phân lớp chiều sâu
  * (số & icon nổi lên bằng translateZ), bóng màu + lớp bóng kính.
  */
-function DefectKpi({ value, label, icon: Icon, tone, active, onClick }: { value: number; label: string; icon: any; tone: keyof typeof KPI_TONES; active?: boolean; onClick?: () => void }) {
+function DefectKpi({
+  value,
+  label,
+  icon: Icon,
+  tone,
+  active,
+  onClick,
+  className,
+}: {
+  value: number;
+  label: string;
+  icon: LucideIcon;
+  tone: keyof typeof KPI_TONES;
+  active?: boolean;
+  onClick?: () => void;
+  className?: string;
+}) {
   const t = KPI_TONES[tone];
   const ref = React.useRef<HTMLDivElement>(null);
   const [tilt, setTilt] = React.useState("perspective(900px)");
@@ -1552,28 +1748,31 @@ function DefectKpi({ value, label, icon: Icon, tone, active, onClick }: { value:
       ref={ref}
       role="button"
       tabIndex={0}
+      aria-pressed={active}
+      aria-label={`${label}: ${value}${active ? " · đang lọc" : ""}`}
       onClick={onClick}
       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick?.(); } }}
       onMouseMove={onMove}
       onMouseLeave={() => setTilt("perspective(900px) rotateX(0deg) rotateY(0deg) scale(1)")}
       style={{ transform: tilt, transformStyle: "preserve-3d" }}
       className={cn(
-        "group relative flex cursor-pointer items-center justify-between gap-3 rounded-2xl bg-gradient-to-br px-6 py-5 shadow-lg ring-1 transition-[transform,box-shadow] duration-200 will-change-transform hover:shadow-2xl focus:outline-none",
+        "group relative flex min-h-[100px] cursor-pointer items-center justify-between gap-2.5 overflow-hidden rounded-[18px] bg-gradient-to-br p-3.5 shadow-md ring-1 transition-[transform,box-shadow] duration-200 active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-navy focus-visible:ring-offset-2 sm:min-h-0 sm:gap-3 sm:rounded-2xl sm:px-6 sm:py-5 sm:shadow-lg sm:will-change-transform sm:hover:shadow-2xl",
         t.bg,
         t.shadow,
-        active ? "ring-2 ring-navy ring-offset-2" : "ring-white/60"
+        active ? "ring-2 ring-navy ring-offset-1 sm:ring-offset-2" : "ring-white/60",
+        className
       )}
     >
       {/* lớp bóng kính ở trên */}
       <div className="pointer-events-none absolute inset-0 rounded-2xl bg-gradient-to-b from-white/60 via-transparent to-transparent opacity-70" />
-      <div className="relative min-w-0" style={{ transform: "translateZ(28px)" }}>
-        <div className={cn("text-[42px] font-extrabold leading-none tracking-tight", t.num)} style={{ textShadow: "0 2px 4px rgba(0,0,0,0.08)" }}>
+      <div className="relative min-w-0 flex-1" style={{ transform: "translateZ(28px)" }}>
+        <div className={cn("text-[30px] font-extrabold leading-none tracking-tight tabular-nums sm:text-[42px]", t.num)} style={{ textShadow: "0 2px 4px rgba(0,0,0,0.08)" }}>
           {value}
         </div>
-        <div className="mt-2.5 truncate text-sm font-semibold text-muted-foreground">{label}</div>
+        <div className="mt-1.5 line-clamp-2 text-[11px] font-bold leading-tight text-slate-600 sm:mt-2.5 sm:truncate sm:text-sm sm:font-semibold sm:text-muted-foreground">{label}</div>
       </div>
       <Icon
-        className={cn("relative h-16 w-16 shrink-0 drop-shadow-md transition-transform duration-200 group-hover:scale-110", t.icon)}
+        className={cn("relative h-10 w-10 shrink-0 rounded-xl bg-white/55 p-2 drop-shadow-sm ring-1 ring-white/70 transition-transform duration-200 sm:h-16 sm:w-16 sm:rounded-none sm:bg-transparent sm:p-0 sm:drop-shadow-md sm:ring-0 sm:group-hover:scale-110", t.icon)}
         strokeWidth={1.5}
         style={{ transform: "translateZ(48px)" }}
       />
@@ -1590,4 +1789,33 @@ function DefectStatusBadge({ status }: { status: string }) {
       {meta.label}
     </span>
   );
+}
+
+function DefectMobileStatus({ defect }: { defect: DefectItem }) {
+  if (defect.cancelledAt) {
+    return <span className="inline-flex rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-bold text-rose-800">Đã hủy · Chờ đồng bộ</span>;
+  }
+  if (defect.syncState === "MISSING") {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-bold text-rose-800">
+        <CloudOff className="h-3 w-3" /> Không còn nguồn
+      </span>
+    );
+  }
+  if (defect.pendingHistory) {
+    return <span className="inline-flex rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-bold text-blue-800">Chờ chốt lịch sử</span>;
+  }
+  if (
+    (defect.sourceType === "GOOGLE_SHEETS" || defect.websiteCreated) &&
+    defect.deviceSeq &&
+    !defect.postRepairAwaitingMaterial &&
+    defect.syncState !== "CONFIRMED" &&
+    defect.status === "DA_XU_LY"
+  ) {
+    return <span className="inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800">Chờ lưu lịch sử</span>;
+  }
+  if (defect.postRepairAwaitingMaterial) {
+    return <span className="inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800">Đã xử lý · Chờ vật tư</span>;
+  }
+  return <DefectStatusBadge status={defect.status} />;
 }

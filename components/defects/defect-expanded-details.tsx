@@ -19,7 +19,7 @@ import { useRbacAccess } from "@/hooks/useRbacAccess";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
-import { ArrowRightLeft, Loader2 } from "lucide-react";
+import { ArrowRightLeft, ChevronDown, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 /**
@@ -33,126 +33,156 @@ import { toast } from "sonner";
 export function DefectExpandedDetails({ defect }: { defect: DefectItem }) {
   // Ảnh nào đang mở trong khung xem; null = đóng.
   const [viewerIndex, setViewerIndex] = React.useState<number | null>(null);
-  const detailCardClass = "w-full space-y-2 rounded-xl border border-border/70 bg-white/70 p-4 shadow-sm";
+  const [mobileSections, setMobileSections] = React.useState({ operation: true, tracking: false, repair: false });
+  const detailCardClass = "w-full overflow-hidden rounded-2xl border border-border/70 bg-white/80 shadow-sm sm:space-y-2 sm:rounded-xl sm:p-4";
+  const toggleMobileSection = (section: keyof typeof mobileSections) => {
+    setMobileSections((current) => ({ ...current, [section]: !current[section] }));
+  };
   const severityCriteria = defectSeverityCriteriaLabels(defect.severity, defect.severityCriteria);
   const severityDisplay = severityCriteria.length > 0
     ? severityCriteria.map((criterion) => `Mức ${defect.severity} · ${criterion}`).join("\n")
     : DEFECT_SEVERITY[defect.severity as keyof typeof DEFECT_SEVERITY] || defect.severity || "—";
 
   return (
-    <div className="grid gap-4 px-1 py-1 text-[13px] leading-5 lg:grid-cols-2 xl:grid-cols-3">
+    <div className="grid gap-2.5 text-[13px] leading-5 sm:gap-4 sm:px-1 sm:py-1 lg:grid-cols-2 xl:grid-cols-3">
       <div className={detailCardClass}>
-        <div className="mb-3 border-b border-blue-100 pb-2">
-          <h3 className="text-sm font-bold uppercase tracking-wide text-blue-800">Thông tin Vận hành</h3>
-          <p className="text-xs text-muted-foreground">Thông tin bổ sung của phiếu Vận hành</p>
-        </div>
-        <RequestNumberControl defect={defect} />
-        <DetailLine label="Nội dung khiếm khuyết" value={defect.content || "—"} multiline />
-        <DetailLine label="Yêu cầu" value={defect.requestType || "—"} />
-        <DetailLine label="Trưởng ca" value={defect.shiftLeaderName || "—"} />
-        {defect.sourceType === "GOOGLE_SHEETS" && (
-          <DetailLine label="Thiết bị theo nguồn" value={defect.sourceDeviceRaw || "—"} multiline />
-        )}
-        <DetailLine
-          label="Thiết bị đã gắn"
-          value={defect.node
-            ? `${defect.node.name} (${scopeCode(defect.node.seq, parseScope(defect.mappedDeviceUnit ?? defect.unit))} · ${defect.mappedDeviceUnit ?? defect.unit})`
-            : defect.device
-              ? `${defect.device} · ${defect.mappedDeviceUnit ?? defect.unit}`
-            : "—"}
-          multiline
-        />
-        <RelatedDevicesLine defect={defect} />
-        <div className="mt-4 border-t border-red-100 pt-3">
-          <h4 className="mb-2 text-xs font-bold uppercase tracking-wide text-red-800">BGĐ chỉ đạo</h4>
-          <div className="space-y-2">
-            <DetailLine label="KTAT rà soát" value={defect.ktatReviewRaw || "—"} multiline />
-            <DetailLine label="BGĐ chỉ đạo" value={defect.boardDirectionRaw || "—"} multiline />
-          </div>
-        </div>
-      </div>
-      <div className={detailCardClass}>
-        <div className="mb-3 border-b border-sky-100 pb-2">
-          <h3 className="text-sm font-bold uppercase tracking-wide text-sky-800">Theo dõi Vận hành</h3>
-          <p className="text-xs text-muted-foreground">Ảnh hưởng, lịch sử nhắc lại và ghi chú</p>
-        </div>
-        <DetailLine
-          label="Mức độ"
-          value={severityDisplay}
-          multiline
-        />
-        <DetailLine
-          label="Điều kiện thực hiện"
-          value={DEFECT_CONDITION[defect.condition as keyof typeof DEFECT_CONDITION] || defect.condition || "—"}
-        />
-        <DetailLine label="Ảnh hưởng PCCC" value={defect.fireSafetyImpact || "—"} />
-        <DetailLine label="Môi trường, ATVSLĐ" value={defect.environmentSafetyImpact || "—"} />
-        <DetailLine label="Ngày nhắc gần nhất" value={defect.lastRemindedAt ? formatDate(defect.lastRemindedAt) : "—"} />
-        {defect.sourceType === "GOOGLE_SHEETS" && (
-          <>
-            <DetailLine label="Nội dung nhắc lại" value={defect.reminderRaw || "—"} multiline />
-            <DetailLine label="Sửa chữa lặp lại" value={defect.repeatedRepairRaw || "—"} multiline />
-          </>
-        )}
-        <DetailLine label="Ghi chú Vận hành" value={defect.note || "—"} multiline />
-        <DetailLine label="Người cập nhật cuối" value={defect.createdBy?.name || "—"} />
-        {defect.images.length > 0 && (
-          <div className="pt-1">
-            <div className="mb-2 font-semibold text-ink">Hình ảnh:</div>
-            <div className="flex flex-wrap gap-2">
-              {defect.images.map((src, index) => (
-                <button
-                  key={src}
-                  type="button"
-                  onClick={() => setViewerIndex(index)}
-                  aria-label={`Xem ảnh khiếm khuyết ${index + 1}`}
-                  className="block rounded-lg transition hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-                >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={src} alt={`Ảnh khiếm khuyết ${index + 1}`} className="h-20 w-20 cursor-zoom-in rounded-lg border border-border object-cover" />
-                </button>
-              ))}
+        <button
+          type="button"
+          onClick={() => toggleMobileSection("operation")}
+          aria-expanded={mobileSections.operation}
+          className="flex w-full items-center justify-between gap-3 border-b border-blue-100 px-3.5 py-3 text-left sm:mb-3 sm:cursor-default sm:px-0 sm:pb-2 sm:pt-0"
+        >
+          <span>
+            <span className="block text-sm font-bold uppercase tracking-wide text-blue-800">Thông tin Vận hành</span>
+            <span className="block text-xs text-muted-foreground">Thông tin bổ sung của phiếu Vận hành</span>
+          </span>
+          <ChevronDown className={cn("h-4 w-4 shrink-0 text-blue-700 transition-transform sm:hidden", mobileSections.operation && "rotate-180")} />
+        </button>
+        <div className={cn("space-y-2 px-3.5 py-3.5 sm:block sm:p-0", mobileSections.operation ? "block" : "hidden")}>
+          <RequestNumberControl defect={defect} />
+          <DetailLine label="Nội dung khiếm khuyết" value={defect.content || "—"} multiline />
+          <DetailLine label="Yêu cầu" value={defect.requestType || "—"} />
+          <DetailLine label="Trưởng ca" value={defect.shiftLeaderName || "—"} />
+          {defect.sourceType === "GOOGLE_SHEETS" && (
+            <DetailLine label="Thiết bị theo nguồn" value={defect.sourceDeviceRaw || "—"} multiline />
+          )}
+          <DetailLine
+            label="Thiết bị đã gắn"
+            value={defect.node
+              ? `${defect.node.name} (${scopeCode(defect.node.seq, parseScope(defect.mappedDeviceUnit ?? defect.unit))} · ${defect.mappedDeviceUnit ?? defect.unit})`
+              : defect.device
+                ? `${defect.device} · ${defect.mappedDeviceUnit ?? defect.unit}`
+              : "—"}
+            multiline
+          />
+          <RelatedDevicesLine defect={defect} />
+          <div className="mt-4 border-t border-red-100 pt-3">
+            <h4 className="mb-2 text-xs font-bold uppercase tracking-wide text-red-800">BGĐ chỉ đạo</h4>
+            <div className="space-y-2">
+              <DetailLine label="KTAT rà soát" value={defect.ktatReviewRaw || "—"} multiline />
+              <DetailLine label="BGĐ chỉ đạo" value={defect.boardDirectionRaw || "—"} multiline />
             </div>
-            <ImageLightbox
-              images={defect.images}
-              index={viewerIndex}
-              onIndexChange={setViewerIndex}
-              onClose={() => setViewerIndex(null)}
-              alt="Ảnh khiếm khuyết"
-            />
           </div>
-        )}
+        </div>
       </div>
       <div className={detailCardClass}>
-        <div className="mb-3 border-b border-emerald-100 pb-2">
-          <h3 className="text-sm font-bold uppercase tracking-wide text-emerald-800">Nội dung Sửa chữa</h3>
-          <p className="text-xs text-muted-foreground">Kế hoạch, thực hiện và dữ liệu đồng bộ</p>
+        <button
+          type="button"
+          onClick={() => toggleMobileSection("tracking")}
+          aria-expanded={mobileSections.tracking}
+          className="flex w-full items-center justify-between gap-3 border-b border-sky-100 px-3.5 py-3 text-left sm:mb-3 sm:cursor-default sm:px-0 sm:pb-2 sm:pt-0"
+        >
+          <span>
+            <span className="block text-sm font-bold uppercase tracking-wide text-sky-800">Theo dõi Vận hành</span>
+            <span className="block text-xs text-muted-foreground">Ảnh hưởng, lịch sử nhắc lại và ghi chú</span>
+          </span>
+          <ChevronDown className={cn("h-4 w-4 shrink-0 text-sky-700 transition-transform sm:hidden", mobileSections.tracking && "rotate-180")} />
+        </button>
+        <div className={cn("space-y-2 px-3.5 py-3.5 sm:block sm:p-0", mobileSections.tracking ? "block" : "hidden")}>
+          <DetailLine label="Mức độ" value={severityDisplay} multiline />
+          <DetailLine
+            label="Điều kiện thực hiện"
+            value={DEFECT_CONDITION[defect.condition as keyof typeof DEFECT_CONDITION] || defect.condition || "—"}
+          />
+          <DetailLine label="Ảnh hưởng PCCC" value={defect.fireSafetyImpact || "—"} />
+          <DetailLine label="Môi trường, ATVSLĐ" value={defect.environmentSafetyImpact || "—"} />
+          <DetailLine label="Ngày nhắc gần nhất" value={defect.lastRemindedAt ? formatDate(defect.lastRemindedAt) : "—"} />
+          {defect.sourceType === "GOOGLE_SHEETS" && (
+            <>
+              <DetailLine label="Nội dung nhắc lại" value={defect.reminderRaw || "—"} multiline />
+              <DetailLine label="Sửa chữa lặp lại" value={defect.repeatedRepairRaw || "—"} multiline />
+            </>
+          )}
+          <DetailLine label="Ghi chú Vận hành" value={defect.note || "—"} multiline />
+          <DetailLine label="Người cập nhật cuối" value={defect.createdBy?.name || "—"} />
+          {defect.images.length > 0 && (
+            <div className="pt-1">
+              <div className="mb-2 font-semibold text-ink">Hình ảnh:</div>
+              <div className="flex flex-wrap gap-2">
+                {defect.images.map((src, index) => (
+                  <button
+                    key={src}
+                    type="button"
+                    onClick={() => setViewerIndex(index)}
+                    aria-label={`Xem ảnh khiếm khuyết ${index + 1}`}
+                    className="block rounded-lg transition hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={src} alt={`Ảnh khiếm khuyết ${index + 1}`} className="h-20 w-20 cursor-zoom-in rounded-lg border border-border object-cover" />
+                  </button>
+                ))}
+              </div>
+              <ImageLightbox
+                images={defect.images}
+                index={viewerIndex}
+                onIndexChange={setViewerIndex}
+                onClose={() => setViewerIndex(null)}
+                alt="Ảnh khiếm khuyết"
+              />
+            </div>
+          )}
         </div>
-        <DetailLine label="Số PCT/LCT" value={defect.repairOrderNumberRaw || "—"} />
-        <DetailLine label="Giải pháp sửa chữa" value={defect.repairSolutionRaw || "—"} multiline />
-        <DetailLine label="Kế hoạch thực hiện" value={defect.repairPlanRaw || "—"} multiline />
-        <DetailLine label="Đơn vị sửa chữa" value={defect.repairUnitRaw || "—"} multiline />
-        <DetailLine label="Kết quả thực hiện" value={defect.repairResultRaw || "—"} multiline />
-        <DetailLine label="Người thực hiện" value={defect.repairPerformedByRaw || "—"} multiline />
-        <DetailLine label="Ngày thực hiện" value={formatDate(defect.repairStartedAt)} />
-        <DetailLine label="Ngày hoàn thành" value={formatDate(defect.sourceCompletedAt)} />
-        <DetailLine label="Nội dung đã thực hiện" value={defect.repairPerformedContentRaw || "—"} multiline />
-        <DetailLine label="Ghi chú Sửa chữa" value={defect.repairNoteRaw || "—"} multiline />
-        {defect.sourceType === "GOOGLE_SHEETS" && (
-          <>
-            <DetailLine
-              label="Trạng thái đồng bộ"
-              value={defect.syncState === "MISSING" ? "⚠ Không còn trên Google Sheet" : "Đang có trên Google Sheet"}
-            />
-            {defect.pendingHistory && (
-              <>
-                <DetailLine label="Xác nhận chờ lịch sử" value={formatDate(defect.pendingHistory.startedAt)} />
-                <DetailLine label="Dự kiến chốt lịch sử" value={formatDate(defect.pendingHistory.finalizeAt)} />
-              </>
-            )}
-            <DetailLine label="Đồng bộ gần nhất" value={formatDate(defect.sourceSyncedAt)} />
-          </>
-        )}
+      </div>
+      <div className={detailCardClass}>
+        <button
+          type="button"
+          onClick={() => toggleMobileSection("repair")}
+          aria-expanded={mobileSections.repair}
+          className="flex w-full items-center justify-between gap-3 border-b border-emerald-100 px-3.5 py-3 text-left sm:mb-3 sm:cursor-default sm:px-0 sm:pb-2 sm:pt-0"
+        >
+          <span>
+            <span className="block text-sm font-bold uppercase tracking-wide text-emerald-800">Nội dung Sửa chữa</span>
+            <span className="block text-xs text-muted-foreground">Kế hoạch, thực hiện và dữ liệu đồng bộ</span>
+          </span>
+          <ChevronDown className={cn("h-4 w-4 shrink-0 text-emerald-700 transition-transform sm:hidden", mobileSections.repair && "rotate-180")} />
+        </button>
+        <div className={cn("space-y-2 px-3.5 py-3.5 sm:block sm:p-0", mobileSections.repair ? "block" : "hidden")}>
+          <DetailLine label="Số PCT/LCT" value={defect.repairOrderNumberRaw || "—"} />
+          <DetailLine label="Giải pháp sửa chữa" value={defect.repairSolutionRaw || "—"} multiline />
+          <DetailLine label="Kế hoạch thực hiện" value={defect.repairPlanRaw || "—"} multiline />
+          <DetailLine label="Đơn vị sửa chữa" value={defect.repairUnitRaw || "—"} multiline />
+          <DetailLine label="Kết quả thực hiện" value={defect.repairResultRaw || "—"} multiline />
+          <DetailLine label="Người thực hiện" value={defect.repairPerformedByRaw || "—"} multiline />
+          <DetailLine label="Ngày thực hiện" value={formatDate(defect.repairStartedAt)} />
+          <DetailLine label="Ngày hoàn thành" value={formatDate(defect.sourceCompletedAt)} />
+          <DetailLine label="Nội dung đã thực hiện" value={defect.repairPerformedContentRaw || "—"} multiline />
+          <DetailLine label="Ghi chú Sửa chữa" value={defect.repairNoteRaw || "—"} multiline />
+          {defect.sourceType === "GOOGLE_SHEETS" && (
+            <>
+              <DetailLine
+                label="Trạng thái đồng bộ"
+                value={defect.syncState === "MISSING" ? "⚠ Không còn trên Google Sheet" : "Đang có trên Google Sheet"}
+              />
+              {defect.pendingHistory && (
+                <>
+                  <DetailLine label="Xác nhận chờ lịch sử" value={formatDate(defect.pendingHistory.startedAt)} />
+                  <DetailLine label="Dự kiến chốt lịch sử" value={formatDate(defect.pendingHistory.finalizeAt)} />
+                </>
+              )}
+              <DetailLine label="Đồng bộ gần nhất" value={formatDate(defect.sourceSyncedAt)} />
+            </>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -286,9 +316,9 @@ export function DefectExpandedDetailsById({ id }: { id: string }) {
 
 function DetailLine({ label, value, multiline = false }: { label: string; value: string; multiline?: boolean }) {
   return (
-    <div className="grid grid-cols-[132px_minmax(0,1fr)] items-start gap-3">
-      <div className="whitespace-nowrap font-semibold text-ink">{label}:</div>
-      <div className={cn("min-w-0 text-ink", multiline ? "whitespace-pre-wrap break-words" : "truncate")} title={!multiline ? value : undefined}>
+    <div className="grid items-start gap-0.5 border-b border-slate-100 pb-2 last:border-b-0 last:pb-0 sm:grid-cols-[132px_minmax(0,1fr)] sm:gap-3 sm:border-b-0 sm:pb-0">
+      <div className="text-[10.5px] font-bold uppercase tracking-wide text-slate-500 sm:whitespace-nowrap sm:text-[13px] sm:normal-case sm:tracking-normal sm:text-ink">{label}:</div>
+      <div className={cn("min-w-0 text-[13px] leading-5 text-ink sm:text-[13px]", multiline ? "whitespace-pre-wrap break-words" : "truncate")} title={!multiline ? value : undefined}>
         {value}
       </div>
     </div>
@@ -301,9 +331,9 @@ function RelatedDevicesLine({ defect }: { defect: DefectItem }) {
   const hiddenCount = defect.relatedDevices.length - 3;
 
   return (
-    <div className="grid grid-cols-[132px_minmax(0,1fr)] items-start gap-3">
-      <div className="whitespace-nowrap font-semibold text-ink">Thiết bị liên quan:</div>
-      <div className="min-w-0 text-ink">
+    <div className="grid items-start gap-0.5 border-b border-slate-100 pb-2 last:border-b-0 last:pb-0 sm:grid-cols-[132px_minmax(0,1fr)] sm:gap-3 sm:border-b-0 sm:pb-0">
+      <div className="text-[10.5px] font-bold uppercase tracking-wide text-slate-500 sm:whitespace-nowrap sm:text-[13px] sm:normal-case sm:tracking-normal sm:text-ink">Thiết bị liên quan:</div>
+      <div className="min-w-0 text-[13px] leading-5 text-ink">
         {visibleDevices.length > 0 ? (
           <div className="space-y-1">
             {visibleDevices.map((item) => {

@@ -342,17 +342,7 @@ export function Topbar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
           )}
       </div>
 
-      <div className="min-w-0 flex-1 sm:hidden">
-        <p className="whitespace-nowrap text-[12px] font-semibold leading-4 text-muted-foreground">
-          Welcome back
-        </p>
-        <p className="flex min-w-0 items-center gap-1 whitespace-nowrap text-[17px] font-bold leading-5 tracking-tight text-ink">
-          <span className="truncate">{displayName}</span>
-          <span className="shrink-0" aria-hidden="true">👋</span>
-        </p>
-      </div>
-
-      <div className="ml-auto flex items-center gap-3">
+      <div className="flex w-full items-center gap-2 sm:ml-auto sm:w-auto sm:gap-3">
         <div ref={notifRef} className="relative">
           <button
             onClick={() => setNotifOpen((o) => !o)}
@@ -588,8 +578,18 @@ export function Topbar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
           <Image src="/brand/4.png" alt="Logo EVN" width={28} height={28} className="h-7 w-7 object-contain" priority />
         </Link>
 
+        <div className="ml-auto min-w-0 flex-1 text-right sm:hidden">
+          <p className="whitespace-nowrap text-[12px] font-semibold leading-4 text-muted-foreground">
+            Welcome back
+          </p>
+          <p className="flex min-w-0 items-center justify-end gap-1 whitespace-nowrap text-[17px] font-bold leading-5 tracking-tight text-ink">
+            <span className="truncate">{displayName}</span>
+            <span className="shrink-0" aria-hidden="true">👋</span>
+          </p>
+        </div>
+
         {/* User profile — click to open the account menu */}
-        <div ref={profileRef} className="relative border-l border-border pl-3">
+        <div ref={profileRef} className="relative sm:border-l sm:border-border sm:pl-3">
           <button
             onClick={() => setProfileOpen((o) => !o)}
             className="flex items-center gap-2.5 rounded-xl py-1 pl-1 pr-1.5 transition-colors hover:bg-muted"

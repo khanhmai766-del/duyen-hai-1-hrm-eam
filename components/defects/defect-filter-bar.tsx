@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Search, X, ChevronDown, Check, Unplug, ArrowUp, Repeat2 } from "lucide-react";
+import { Search, X, ChevronDown, Check, Unplug, ArrowUp, Repeat2, SlidersHorizontal } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
@@ -76,6 +76,10 @@ export function DefectFilterBar({
   onReset: () => void;
 }) {
   const searchRef = React.useRef<HTMLInputElement>(null);
+  const [mobileFiltersOpen, setMobileFiltersOpen] = React.useState(false);
+  const advancedFilterCount = dropdowns.filter(
+    (dropdown) => dropdown.allValue !== undefined && dropdown.value !== dropdown.allValue
+  ).length;
 
   // Ctrl/⌘ + K nhảy vào ô tìm kiếm — thao tác lặp nhiều nhất trên trang này.
   React.useEffect(() => {
@@ -115,50 +119,91 @@ export function DefectFilterBar({
 
         {/* Tổ máy: bấm nhiều nhất nên để lộ sẵn thay vì giấu trong dropdown.
             Không cần nhãn — S1 / S2 / Common đã tự nói rõ đây là tổ máy. */}
-        <div className="flex h-10 shrink-0 items-center gap-0.5 rounded-lg border border-border bg-muted/40 p-1">
-          {units.map((value) => (
-            <button
-              key={value}
-              type="button"
-              onClick={() => onUnitChange(value)}
-              className={cn(
-                "h-8 rounded-md px-3.5 text-sm font-semibold transition-colors",
-                unit === value ? "bg-navy text-white shadow-sm" : "text-muted-foreground hover:text-ink"
-              )}
-            >
-              {value === "ALL" ? "Tất cả" : value === "COMMON" ? "Common" : value}
-            </button>
+        <div className="flex w-full items-center gap-2 sm:contents">
+          <div className="flex h-10 min-w-0 flex-1 items-center gap-0.5 rounded-lg border border-border bg-muted/40 p-1 sm:flex-none">
+            {units.map((value) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => onUnitChange(value)}
+                className={cn(
+                  "h-8 min-w-0 flex-1 rounded-md px-2 text-sm font-semibold transition-colors sm:flex-none sm:px-3.5",
+                  unit === value ? "bg-navy text-white shadow-sm" : "text-muted-foreground hover:text-ink"
+                )}
+              >
+                {value === "ALL" ? "Tất cả" : value === "COMMON" ? "Common" : value}
+              </button>
+            ))}
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setMobileFiltersOpen((open) => !open)}
+            aria-expanded={mobileFiltersOpen}
+            aria-controls="defect-mobile-advanced-filters"
+            className={cn(
+              "flex h-10 shrink-0 items-center gap-1.5 rounded-lg border px-2.5 text-sm font-bold transition-colors sm:hidden",
+              mobileFiltersOpen || advancedFilterCount > 0
+                ? "border-blue-200 bg-blue-50 text-accent"
+                : "border-border bg-white text-muted-foreground"
+            )}
+          >
+            <SlidersHorizontal className="h-4 w-4" aria-hidden="true" />
+            Lọc
+            {advancedFilterCount > 0 && (
+              <span className="grid h-5 min-w-5 place-items-center rounded-full bg-accent px-1 text-[10px] font-bold text-white">
+                {advancedFilterCount}
+              </span>
+            )}
+            <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", mobileFiltersOpen && "rotate-180")} aria-hidden="true" />
+          </button>
+        </div>
+
+        <div className="hidden sm:contents">
+          {dropdowns.map((dd) => (
+            <FilterDropdown key={dd.label} {...dd} />
           ))}
         </div>
 
-        {dropdowns.map((dd) => (
-          <FilterDropdown key={dd.label} {...dd} />
-        ))}
+        {mobileFiltersOpen && (
+          <div
+            id="defect-mobile-advanced-filters"
+            className="grid w-full grid-cols-2 gap-2 rounded-xl border border-sky-100 bg-slate-50/70 p-2.5 sm:hidden"
+          >
+            {dropdowns.map((dd, index) => (
+              <div key={dd.label} className={cn(index === dropdowns.length - 1 && dropdowns.length % 2 === 1 && "col-span-2")}>
+                <FilterDropdown {...dd} triggerClassName="w-full justify-between" />
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {chips.length > 0 && (
         <div className="flex flex-wrap items-center gap-2 border-t border-dashed border-border px-3 py-2.5">
-          <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Đang lọc</span>
-          {chips.map((chip) => (
-            <span
-              key={chip.key}
-              className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 pl-2.5 pr-1.5 text-[12.5px] font-semibold text-accent"
-            >
-              <span className="font-semibold text-accent/60">{chip.label}:</span>
-              {chip.value}
-              {chip.onClear && (
-                <button
-                  type="button"
-                  onClick={chip.onClear}
-                  aria-label={`Bỏ lọc ${chip.label}`}
-                  className="flex h-[18px] w-[18px] items-center justify-center rounded text-accent/60 transition-colors hover:bg-blue-100 hover:text-accent"
-                >
-                  <X className="h-3 w-3" />
-                </button>
-              )}
-            </span>
-          ))}
-          <div className="ml-auto flex flex-wrap items-center justify-end gap-3">
+          <div className="flex w-full min-w-0 items-center gap-2 overflow-x-auto pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:w-auto sm:flex-1 sm:flex-wrap sm:overflow-visible sm:pb-0">
+            <span className="shrink-0 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Đang lọc</span>
+            {chips.map((chip) => (
+              <span
+                key={chip.key}
+                className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 pl-2.5 pr-1.5 text-[12.5px] font-semibold text-accent"
+              >
+                <span className="font-semibold text-accent/60">{chip.label}:</span>
+                {chip.value}
+                {chip.onClear && (
+                  <button
+                    type="button"
+                    onClick={chip.onClear}
+                    aria-label={`Bỏ lọc ${chip.label}`}
+                    className="flex h-[18px] w-[18px] items-center justify-center rounded text-accent/60 transition-colors hover:bg-blue-100 hover:text-accent"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                )}
+              </span>
+            ))}
+          </div>
+          <div className="flex w-full items-center justify-between gap-3 sm:ml-auto sm:w-auto sm:flex-wrap sm:justify-end">
             <div className="flex shrink-0 items-center gap-2">
               {showUpgradeCandidates && (
                 <button
@@ -262,6 +307,7 @@ function FilterDropdown({
   allLabel,
   allValue,
   onChange,
+  triggerClassName,
 }: {
   label: string;
   value: string;
@@ -269,6 +315,7 @@ function FilterDropdown({
   allLabel?: string;
   allValue?: string;
   onChange: (value: string) => void;
+  triggerClassName?: string;
 }) {
   const [open, setOpen] = React.useState(false);
   const active = allValue === undefined ? true : value !== allValue;
@@ -284,7 +331,8 @@ function FilterDropdown({
             active
               ? "border-blue-200 bg-blue-50 text-accent"
               : "border-border bg-white text-muted-foreground hover:text-ink",
-            open && "ring-2 ring-accent/15"
+            open && "ring-2 ring-accent/15",
+            triggerClassName
           )}
         >
           {label}
