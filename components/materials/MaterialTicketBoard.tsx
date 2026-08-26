@@ -3499,10 +3499,6 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
             <span className="advance-phase-index">3</span>
             <div><b>Xuất BBNT D-Office</b><small>Chọn đại diện SCCN ký biên bản và hoàn thành bước Xác nhận ĐXVT.</small></div>
           </div>
-          <div className="advance-document-summary">
-            <a className="pdf" href={t.proposalDocUrl!} target="_blank" rel="noreferrer"><Download size={14} /> Phiếu Đề Xuất Vật Tư</a>
-            {t.recoveryDocUrl && <a className="pdf recovery-download" href={t.recoveryDocUrl} target="_blank" rel="noreferrer"><Download size={14} /> Biên Bản Vật Tư Thu Hồi</a>}
-          </div>
           <div className="advance-phase-grid">
             <label className="field">Đại diện SCCN *
               <select value={sccnRepresentative} onChange={(e) => setSccnRepresentative(e.target.value)}>
@@ -4340,9 +4336,6 @@ const CSS = `
 .advance-phase-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-items:end;}
 .advance-phase-grid .field{min-width:0;margin:0!important;}
 .advance-phase-grid .field input,.advance-phase-grid .field select{height:42px;margin-top:6px;}
-.advance-document-summary{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;}
-.advance-document-summary .pdf{justify-content:center;min-width:0;margin:0;border-color:#8fa7ba;font-size:12px;text-align:center;}
-.advance-document-summary .recovery-download{border-color:#0f766e;background:#ecfdf5;color:#0f766e;}
 .receive-existing-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px;align-items:end;}
 .receive-existing-field{display:flex;min-width:0;flex-direction:column;gap:11px;}
 .receive-existing-hint{display:flex;min-height:42px;align-items:center;margin:0;padding:0 2px;line-height:1.45;}
@@ -4438,7 +4431,7 @@ const CSS = `
 .logrow span{color:${C.soft};white-space:nowrap;}
 .logrow b{white-space:nowrap;}
 .logrow em{font-style:normal;color:${C.muted};white-space:nowrap;}
-@media(max-width:640px){.panel{width:100%;}.detail-inline{min-width:1140px;padding:10px 12px;}.row{min-width:1140px;grid-template-columns:64px minmax(108px,.9fr) minmax(108px,.86fr) minmax(188px,1.36fr) minmax(180px,.95fr) 82px minmax(168px,1fr) 66px 70px;padding:11px 12px;font-size:12.5px;}.tag{padding:4px 7px}.nophieu{padding:3px 6px}.st{padding:5px 8px}.material-cards{grid-template-columns:1fr;}.edit-field-grid,.bbkt-grid,.confirm-field-row,.stats-issue-grid,.accept-two-grid,.use-field-grid,.recovery-quantity-row,.receive-field-grid,.receive-field-grid.advance-receive-fields,.vhv-receive-grid,.advance-phase-grid,.advance-document-summary,.review-receive-row,.review-use-grid,.review-recovery-grid,.review-accept-grid{grid-template-columns:1fr;gap:8px;}.step-review-dialog .frm-f{flex-wrap:wrap;}.step-review-dialog .frm-f>.note{flex-basis:100%;}.step-review-dialog .frm-f>.btn.primary{min-width:132px;}.review-receive-toggle{width:100%;}.review-receive-toggle button{flex:1;}.qty-field input{padding-left:8px;padding-right:8px;}}
+@media(max-width:640px){.panel{width:100%;}.detail-inline{min-width:1140px;padding:10px 12px;}.row{min-width:1140px;grid-template-columns:64px minmax(108px,.9fr) minmax(108px,.86fr) minmax(188px,1.36fr) minmax(180px,.95fr) 82px minmax(168px,1fr) 66px 70px;padding:11px 12px;font-size:12.5px;}.tag{padding:4px 7px}.nophieu{padding:3px 6px}.st{padding:5px 8px}.material-cards{grid-template-columns:1fr;}.edit-field-grid,.bbkt-grid,.confirm-field-row,.stats-issue-grid,.accept-two-grid,.use-field-grid,.recovery-quantity-row,.receive-field-grid,.receive-field-grid.advance-receive-fields,.vhv-receive-grid,.advance-phase-grid,.review-receive-row,.review-use-grid,.review-recovery-grid,.review-accept-grid{grid-template-columns:1fr;gap:8px;}.step-review-dialog .frm-f{flex-wrap:wrap;}.step-review-dialog .frm-f>.note{flex-basis:100%;}.step-review-dialog .frm-f>.btn.primary{min-width:132px;}.review-receive-toggle{width:100%;}.review-receive-toggle button{flex:1;}.qty-field input{padding-left:8px;padding-right:8px;}}
 @media(max-width:640px){.ticket-unit-field{grid-template-columns:58px minmax(0,1fr);gap:8px;}.ticket-unit-options{max-width:none;}.ticket-unit-options button{padding-left:6px;padding-right:6px;}.ticket-category-options{grid-template-columns:repeat(3,minmax(0,1fr));}}
 @media(max-width:760px){
   .mtw{padding-bottom:6px;}
