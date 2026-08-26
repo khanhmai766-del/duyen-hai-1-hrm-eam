@@ -425,7 +425,7 @@ export function EquipmentTreePicker({
           </button>
         </div>}
 
-        <div className="max-h-[min(320px,calc(100vh-12rem))] min-h-0 touch-pan-y overscroll-contain overflow-y-auto px-1.5 pb-1.5 [scrollbar-gutter:stable]">
+        <div className="max-h-[min(320px,calc(100dvh-12rem))] min-h-0 touch-pan-y overscroll-contain overflow-y-auto px-1.5 pb-1.5 [scrollbar-gutter:stable]">
           {searchActive ? (
             searchQuery.isLoading ? (
               <div className="flex items-center justify-center py-10 text-muted-foreground">

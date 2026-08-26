@@ -31,7 +31,7 @@ export default async function LegacyEquipmentQrPage({
 
 function InactiveQr() {
   return (
-    <main className="flex min-h-screen items-center justify-center bg-[#eef3f8] p-4 text-slate-950">
+    <main className="flex min-h-dvh items-center justify-center bg-[#eef3f8] p-4 text-slate-950">
       <section className="w-full max-w-md rounded-2xl border border-red-200 bg-white p-7 text-center shadow-lg">
         <span className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-red-50 text-red-700">
           <ShieldX className="h-8 w-8" />

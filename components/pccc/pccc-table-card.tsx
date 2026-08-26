@@ -405,7 +405,7 @@ export function PcccTableCard({
 export const TH_NAVY = "sticky top-0 z-10 bg-[#00558F] px-2 py-2.5 align-middle";
 
 /** Vùng cuộn của bảng — dùng cho `wrapperClassName` của <Table>. */
-export const TABLE_SCROLLER = "max-h-[calc(100vh-330px)] overflow-auto";
+export const TABLE_SCROLLER = "max-h-[calc(100dvh-330px)] overflow-auto";
 
 /**
  * Cột ĐÓNG BĂNG khi cuộn ngang. Ô tiêu đề vừa dính trên vừa dính trái nên phải nằm

@@ -1930,7 +1930,7 @@ function ProcedurePositionPicker({
             Tất cả cương vị
           </label>
         </div>
-        <div className="max-h-[min(18rem,calc(100vh-12rem))] overflow-y-auto overscroll-contain p-2">
+        <div className="max-h-[min(18rem,calc(100dvh-12rem))] overflow-y-auto overscroll-contain p-2">
           {positions.length ? (
             positions.map((position) => (
               <label key={position} className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-2 text-sm hover:bg-muted">

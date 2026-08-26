@@ -25,7 +25,7 @@ const LIMS_FIELDS = [
 
 export default function QlvtSyncPrivacyPage() {
   return (
-    <main className="min-h-screen bg-[#071b35] px-4 py-10 text-slate-100 sm:px-6 lg:py-16">
+    <main className="min-h-dvh bg-[#071b35] px-4 py-10 text-slate-100 sm:px-6 lg:py-16">
       <div className="mx-auto max-w-4xl overflow-hidden rounded-[2rem] border border-cyan-300/20 bg-[#0d2948] shadow-2xl shadow-black/30">
         <header className="relative overflow-hidden border-b border-white/10 px-6 py-10 sm:px-10">
           <div className="absolute -right-20 -top-24 h-72 w-72 rounded-full bg-cyan-400/10 blur-3xl" />

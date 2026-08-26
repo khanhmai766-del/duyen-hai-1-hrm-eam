@@ -36,7 +36,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }, [blockedByPosition, router]);
 
   return (
-    <div className="flex min-h-screen bg-warmwhite dark:bg-background">
+    <div className="flex min-h-dvh bg-warmwhite dark:bg-background">
       {/* Desktop sidebar — elevated above the AppShell background; collapses to an icon rail */}
       <aside
         className={cn(

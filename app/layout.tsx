@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Be_Vietnam_Pro } from "next/font/google";
 import "./globals.css";
 import { Providers } from "./providers";
@@ -19,6 +19,25 @@ export const metadata: Metadata = {
     shortcut: "/brand/4.png",
     apple: "/brand/4.png",
   },
+};
+
+/**
+ * `viewport-fit=cover` là BẮT BUỘC: nếu thiếu, iOS Safari trả về 0px cho mọi
+ * `env(safe-area-inset-*)`, khiến thanh điều hướng dưới và các sheet bị thanh home
+ * (iPhone X trở lên) che mất. Next tự phát meta viewport mặc định nhưng KHÔNG kèm
+ * `viewport-fit`, nên phải khai báo tường minh ở đây.
+ *
+ * Cố ý KHÔNG đặt `maximumScale`/`userScalable: false` — người vận hành cần phóng to
+ * các bảng số liệu dày trên điện thoại.
+ */
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#F8F7F4" },
+    { media: "(prefers-color-scheme: dark)", color: "#131720" },
+  ],
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
