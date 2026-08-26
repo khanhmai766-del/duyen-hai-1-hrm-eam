@@ -47,6 +47,12 @@ const GRID_TINTS = [
 ];
 const NAV_ACCESS_LEVELS = ["read", "personal", "manage", "full"] as const;
 
+/** Header mobile chỉ giữ tên lót cuối + tên để gọn mà vẫn đủ nhận diện người dùng. */
+function mobileDisplayNameOf(fullName: string) {
+  const parts = fullName.trim().split(/\s+/).filter(Boolean);
+  return parts.slice(-2).join(" ") || fullName;
+}
+
 function navItemAllowed(
   item: NavItem,
   role: string | undefined,
@@ -133,6 +139,7 @@ export function Topbar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
   const totalAlerts = notices.length + activeReplAlerts.length;
   const { data: dash } = useMyDashboard();
   const displayName = session?.user?.name || profile?.name || "Tài khoản";
+  const mobileDisplayName = mobileDisplayNameOf(displayName);
   const displayRole = role || profile?.role || "";
   const avatarUrl = dash?.data?.avatarUrl ?? profile?.avatarUrl ?? null;
   const accountSubtitle =
@@ -343,7 +350,7 @@ export function Topbar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
       </div>
 
       <div className="flex w-full items-center gap-2 sm:ml-auto sm:w-auto sm:gap-3">
-        <div ref={notifRef} className="relative">
+        <div ref={notifRef} className="relative order-4 sm:order-none">
           <button
             onClick={() => setNotifOpen((o) => !o)}
             className="relative flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 text-white shadow-lg shadow-amber-500/30 ring-1 ring-white/50 transition-transform duration-200 before:absolute before:inset-x-1 before:top-0.5 before:h-1/3 before:rounded-t-lg before:bg-white/30 hover:scale-105 active:scale-95"
@@ -571,25 +578,32 @@ export function Topbar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
         <Link
           href="/"
           prefetch={false}
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-blue-100 bg-white shadow-md shadow-blue-900/10 ring-1 ring-white transition-transform duration-200 hover:scale-105 active:scale-95 sm:hidden"
+          className="group relative isolate order-1 flex h-11 shrink-0 items-center gap-2 overflow-hidden rounded-[15px] border border-sky-300/30 bg-[linear-gradient(135deg,#061a36_0%,#0b376d_58%,#075b9a_100%)] py-1 pl-1 pr-2.5 shadow-[0_8px_22px_-10px_rgba(3,74,140,0.9)] ring-1 ring-white/70 transition duration-200 before:pointer-events-none before:absolute before:inset-0 before:bg-[radial-gradient(circle_at_18%_-30%,rgba(125,211,252,0.65),transparent_48%)] after:pointer-events-none after:absolute after:-right-4 after:-top-7 after:h-14 after:w-14 after:rounded-full after:border after:border-white/10 hover:border-sky-200/60 hover:shadow-[0_10px_26px_-10px_rgba(2,132,199,0.95)] active:scale-[0.98] sm:hidden"
           aria-label="Về trang chủ"
           title="Về trang chủ"
         >
-          <Image src="/brand/4.png" alt="Logo EVN" width={28} height={28} className="h-7 w-7 object-contain" priority />
+          <span className="relative z-10 grid h-9 w-9 shrink-0 place-items-center rounded-[12px] border border-white/80 bg-white/95 shadow-[0_0_0_3px_rgba(56,189,248,0.12),0_5px_12px_-4px_rgba(0,0,0,0.55)] transition-transform duration-200 group-hover:scale-105">
+            <Image src="/brand/4.png" alt="Logo EVN" width={28} height={28} className="h-7 w-7 object-contain" priority />
+          </span>
+          <span className="relative z-10 flex flex-col justify-center border-l border-white/20 pl-2 leading-none">
+            <span className="whitespace-nowrap text-[7px] font-bold uppercase tracking-[0.18em] text-sky-200">Nhiệt Điện</span>
+            <span className="mt-1 whitespace-nowrap text-[12px] font-black uppercase tracking-[0.04em] text-white [text-shadow:0_1px_8px_rgba(125,211,252,0.35)]">Duyên Hải 1</span>
+            <span aria-hidden="true" className="mt-1 h-[2px] w-full rounded-full bg-gradient-to-r from-cyan-300 via-sky-400 to-transparent opacity-90" />
+          </span>
         </Link>
 
-        <div className="ml-auto min-w-0 flex-1 text-right sm:hidden">
+        <div className="order-2 ml-auto min-w-0 flex-1 text-right sm:hidden">
           <p className="whitespace-nowrap text-[12px] font-semibold leading-4 text-muted-foreground">
             Welcome back
           </p>
           <p className="flex min-w-0 items-center justify-end gap-1 whitespace-nowrap text-[17px] font-bold leading-5 tracking-tight text-ink">
-            <span className="truncate">{displayName}</span>
+            <span className="truncate">{mobileDisplayName}</span>
             <span className="shrink-0" aria-hidden="true">👋</span>
           </p>
         </div>
 
         {/* User profile — click to open the account menu */}
-        <div ref={profileRef} className="relative sm:border-l sm:border-border sm:pl-3">
+        <div ref={profileRef} className="relative order-3 sm:order-none sm:border-l sm:border-border sm:pl-3">
           <button
             onClick={() => setProfileOpen((o) => !o)}
             className="flex items-center gap-2.5 rounded-xl py-1 pl-1 pr-1.5 transition-colors hover:bg-muted"

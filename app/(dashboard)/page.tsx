@@ -1364,13 +1364,13 @@ function SafeOperationProcessStrip({ expanded, onToggle }: { expanded: boolean; 
         />
         {/* Lớp phủ sáng phía trên giúp chữ tiêu đề nổi rõ, dễ đọc */}
         <div className="pointer-events-none absolute inset-x-0 top-0 h-2/3 bg-gradient-to-b from-white via-white/70 to-transparent" />
-        <CardTitle className="absolute inset-x-0 top-0 flex items-center gap-3 px-4 pt-3 text-lg font-black uppercase leading-tight tracking-normal text-blue-900 sm:px-6 sm:text-xl lg:text-2xl">
-          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-blue-200 bg-white/90 text-blue-800 shadow-sm sm:h-12 sm:w-12">
-            <ShieldCheck className="h-6 w-6" />
+        <CardTitle className="absolute inset-x-0 top-0 flex items-center gap-2 px-3 pt-3 text-[15px] font-black uppercase leading-none tracking-[-0.02em] text-blue-900 sm:gap-3 sm:px-6 sm:text-xl sm:leading-tight sm:tracking-normal lg:text-2xl">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-blue-200 bg-white/90 text-blue-800 shadow-sm sm:h-12 sm:w-12">
+            <ShieldCheck className="h-5 w-5 sm:h-6 sm:w-6" />
           </span>
-          <span>
+          <span className="whitespace-nowrap">
             Thời gian vận hành an toàn
-            <span className="ml-2 whitespace-nowrap align-middle text-xs font-semibold tracking-wider text-slate-500 sm:text-sm">Safe Operation</span>
+            <span className="ml-1.5 align-middle text-[9px] font-semibold tracking-[0.08em] text-slate-500 sm:ml-2 sm:text-sm sm:tracking-wider">Safe Operation</span>
           </span>
         </CardTitle>
       </div>

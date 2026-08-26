@@ -778,13 +778,13 @@ function MaterialsPageContent() {
       </PageHeader>
 
       {/* Lọc loại vật tư dạng dropdown; ô tìm kiếm cùng hàng bên phải */}
-      <div className="flex flex-wrap items-center gap-3 border-b border-border pb-3">
+      <div className="grid grid-cols-2 gap-2 border-b border-border pb-3 sm:flex sm:flex-wrap sm:items-center sm:gap-3">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
               type="button"
               variant="outline"
-              className="h-10 w-auto justify-between gap-2 rounded-xl border-blue-100 bg-white px-4 text-sm font-semibold text-ink shadow-sm hover:bg-blue-50 hover:text-navy"
+              className="h-10 w-full justify-between gap-2 rounded-xl border-blue-100 bg-white px-3 text-sm font-semibold text-ink shadow-sm hover:bg-blue-50 hover:text-navy sm:w-auto sm:px-4"
             >
               <span className="flex items-center gap-2 whitespace-nowrap">
                 <ActiveCategoryIcon className="h-4 w-4 shrink-0 text-navy" />
@@ -813,10 +813,10 @@ function MaterialsPageContent() {
             })}
           </DropdownMenuContent>
         </DropdownMenu>
-        <Button variant="outline" size="toolbar" onClick={() => setLotBoardOpen(true)} title="Tồn hiện có tách theo số phiếu giao hàng">
-          <Layers className="h-4 w-4" /> Tồn theo phiếu giao hàng
+        <Button variant="outline" size="toolbar" className="w-full px-2 sm:w-auto" onClick={() => setLotBoardOpen(true)} title="Tồn hiện có tách theo số phiếu giao hàng">
+          <Layers className="h-4 w-4" /> <span className="sm:hidden">Tồn theo phiếu</span><span className="hidden sm:inline">Tồn theo phiếu giao hàng</span>
         </Button>
-        <div className="ml-auto flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto">
+        <div className="col-span-2 ml-auto flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto">
           <SearchBar value={q} onChange={setQ} placeholder="Tìm theo mã, tên, thiết bị..." className="w-full sm:w-72" />
           {canManage && <QlvtSyncAction />}
         </div>
@@ -848,8 +848,156 @@ function MaterialsPageContent() {
           action={isFiltered ? { label: "Xoá bộ lọc", onClick: () => { setQ(""); setPositionFilter("ALL"); } } : undefined}
         />
       ) : (
-        <Card className="overflow-hidden">
-          <div className="overflow-x-auto">
+        <Card className="overflow-hidden border-0 bg-transparent shadow-none md:border md:bg-card md:shadow-sm">
+          <div className="grid gap-3 md:hidden">
+            {pagedMaterials.map((m) => {
+              const checked = selected.has(m.id);
+              const expanded = expandedIds.has(m.id);
+              const linkedCodes = materialErpCodes(m);
+              const linkedErpStock = linkedCodes.length ? erpStockByCodes(linkedCodes) : m.minStock;
+              return (
+                <article
+                  key={m.id}
+                  className={cn(
+                    "overflow-hidden rounded-2xl border bg-white shadow-[0_8px_24px_rgba(15,23,42,0.06)] transition",
+                    expanded ? "border-sky-300 ring-2 ring-sky-100" : "border-slate-200",
+                    checked && "border-blue-300 bg-blue-50/30"
+                  )}
+                >
+                  <div className="p-4">
+                    <div className="flex items-start gap-3">
+                      {canManage && (
+                        <Checkbox
+                          aria-label={`Chọn ${m.code}`}
+                          checked={checked}
+                          onCheckedChange={(v) => toggleOne(m.id, v === true)}
+                          className="mt-1"
+                        />
+                      )}
+                      {m.imageUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={m.imageUrl} alt={m.name} className="h-11 w-11 shrink-0 rounded-xl border border-slate-200 object-cover" />
+                      ) : (
+                        <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-[linear-gradient(145deg,#e0f2fe,#eff6ff)] text-[#00558F] shadow-inner">
+                          <Package className="h-5 w-5" />
+                        </span>
+                      )}
+                      <button type="button" onClick={() => toggleExpanded(m.id)} className="min-w-0 flex-1 text-left">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span className="line-clamp-2 text-[15px] font-bold leading-snug text-slate-900">{m.name}</span>
+                          {categoryFilter === OTHER_MATERIAL_GROUP && m.category && (
+                            <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-slate-600">
+                              {displayMaterialCategory(m.category)}
+                            </span>
+                          )}
+                        </div>
+                        <div className="mt-1 flex items-center gap-1.5 text-[11px] text-slate-500">
+                          <span className="font-mono font-semibold text-[#00558F]">{m.code || "Chưa có mã ERP"}</span>
+                          <span>·</span>
+                          <span>{m.unit}</span>
+                        </div>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => toggleExpanded(m.id)}
+                        aria-expanded={expanded}
+                        className={cn(
+                          "grid h-9 w-9 shrink-0 place-items-center rounded-xl border transition",
+                          expanded ? "rotate-180 border-sky-300 bg-sky-50 text-[#00558F]" : "border-slate-200 bg-white text-slate-500"
+                        )}
+                        aria-label={expanded ? "Thu gọn chi tiết" : "Mở chi tiết"}
+                      >
+                        <ChevronDown className="h-4 w-4" />
+                      </button>
+                    </div>
+
+                    {m.note && <p className="mt-2 line-clamp-2 text-xs leading-relaxed text-slate-500">{m.note}</p>}
+
+                    <div className="mt-3 grid grid-cols-2 gap-2">
+                      <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-3">
+                        <div className="text-[10px] font-bold uppercase tracking-[0.08em] text-slate-400">Hiện có</div>
+                        <div className="mt-1 flex flex-wrap items-center gap-2">
+                          <StockBadge quantity={m.quantity} minStock={m.minStock} category={m.category} />
+                          <InlineNumberCell
+                            value={m.quantity}
+                            canEdit={canEditStock(m)}
+                            ariaLabel={`Sửa Hiện Có của ${m.code}`}
+                            onSave={async (v) => {
+                              await upsert.mutateAsync({ id: m.id, quantity: v });
+                              toast.success(`Đã cập nhật Hiện Có: ${m.code} → ${v}`);
+                            }}
+                          />
+                        </div>
+                      </div>
+                      <div className="rounded-xl border border-sky-100 bg-sky-50/70 p-3">
+                        <div className="text-[10px] font-bold uppercase tracking-[0.08em] text-sky-500">Số liệu ERP</div>
+                        <div className="mt-1 text-lg font-extrabold tabular-nums text-[#00558F]">{fmtNumber(linkedErpStock)}</div>
+                      </div>
+                    </div>
+
+                    <div className="mt-3 flex items-center justify-between border-t border-dashed border-slate-200 pt-3">
+                      <button type="button" onClick={() => toggleExpanded(m.id)} className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#00558F]">
+                        <Activity className="h-3.5 w-3.5" />
+                        {expanded ? "Ẩn thông tin" : "Xem thông tin & điểm thay thế"}
+                      </button>
+                      <div className="flex items-center gap-1">
+                        {canManage && (
+                          <>
+                            <Button variant="ghost" size="icon" title="Thêm thiết bị theo dõi" className="h-9 w-9 text-emerald-600 hover:bg-emerald-50" onClick={() => openTrackingDialog(m)}>
+                              <Plus className="h-4 w-4" />
+                            </Button>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-9 w-9" aria-label="Tác vụ vật tư"><Pencil className="h-4 w-4" /></Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="w-60">
+                                <DropdownMenuItem onSelect={() => setReplMaterial(m)}><Repeat /><span>Theo dõi thay thế</span></DropdownMenuItem>
+                                <DropdownMenuItem onSelect={() => openEditDetails(m)}><Repeat className="text-accent" /><span>Chi tiết điểm thay thế</span></DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem onSelect={() => { setIsNew(false); setEdit(materialForEdit(m)); }}><Package className="text-navy" /><span>Thông tin vật tư</span></DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem disabled={!replacementRowsForEdit(m).length} className="text-destructive focus:text-destructive" onSelect={() => openDeleteDetails(m)}><Repeat /><span>Xóa chi tiết điểm thay thế</span></DropdownMenuItem>
+                                <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={() => setDeleting(m)}><Trash2 /><span>Xóa vật tư</span></DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </>
+                        )}
+                        {!canManage && (
+                          <Button variant="ghost" size="icon" className="h-9 w-9 text-accent" title="Mở theo dõi thay thế vật tư" onClick={() => setReplMaterial(m)}>
+                            <Repeat className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {expanded && (
+                    <div className="border-t border-sky-100 bg-[linear-gradient(180deg,#f8fbff,#ffffff)] p-3">
+                      <MaterialExpandedDetails
+                        m={m}
+                        positionFilter={positionFilter}
+                        selectedItems={materialRequestSelection}
+                        onSelectedItemsChange={setMaterialRequestSelection}
+                        onOpenTracking={() => setReplMaterial(m)}
+                      />
+                      {trackingMaterial?.id === m.id && (
+                        <InlineTrackingEditor
+                          material={m}
+                          rows={trackingRows}
+                          saving={upsert.isPending}
+                          onRowsChange={setTrackingRows}
+                          onCancel={() => { setTrackingMaterial(null); setTrackingRows([]); }}
+                          onSave={confirmAddTrackingPoints}
+                        />
+                      )}
+                    </div>
+                  )}
+                </article>
+              );
+            })}
+          </div>
+
+          <div className="hidden overflow-x-auto md:block">
           <Table className="min-w-[880px]">
             <TableHeader className="bg-muted/40">
               <TableRow className="hover:bg-transparent">

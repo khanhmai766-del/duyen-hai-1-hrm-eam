@@ -3,7 +3,7 @@
 import React, { useMemo, useState } from "react";
 import Link from "next/link";
 import {
-  Plus, Minus, X, Check, FileText, Zap, FlaskConical, ClipboardList, Package, Clock, ChevronRight,
+  Plus, Minus, X, Check, FileText, Zap, FlaskConical, ClipboardList, Package, Clock, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight,
   AlertTriangle, Ban, Download, CircleCheck, Circle, CircleDot, Loader2, Pencil, Trash2, UserCog, CalendarDays,
   Filter, ChevronDown, Search,
   Wrench, ExternalLink,
@@ -218,6 +218,7 @@ const materialCatalogHref = (ticket: MaterialTicket, code: string) => {
   return `/materials?${qs.toString()}`;
 };
 const FINISHED_STATUSES = ["HOAN_TAT", "TU_CHOI"];
+const TICKET_PAGE_SIZE = 10;
 const STATUS_FILTER_OPTIONS = [
   { value: "ALL", label: "Tất cả" },
   { value: "RUNNING", label: "Đang thực hiện" },
@@ -252,6 +253,7 @@ export default function MaterialTicketBoard({
   const [typeFilter, setTypeFilter] = useState("ALL");
   // Ô tìm kiếm nằm cùng hàng với bộ lọc — nó lọc chính bảng này chứ không phải cả trang.
   const [searchQ, setSearchQ] = useState("");
+  const [listPage, setListPage] = useState(1);
   /** Đang lọc riêng luồng hóa chất (gồm cả NH3 khai một bước) hay riêng vật tư thường? */
   const chemicalOnly = typeFilter === CHEMICAL_TICKET_TYPE || typeFilter === SINGLE_STEP_TICKET_TYPE;
   const materialOnly = typeFilter !== "ALL" && !chemicalOnly;
@@ -259,7 +261,7 @@ export default function MaterialTicketBoard({
   const [delTicket, setDelTicket] = useState<MaterialTicket | null>(null);
   const del = useDeleteTicket();
 
-  const tickets = data?.tickets ?? [];
+  const tickets = useMemo(() => data?.tickets ?? [], [data?.tickets]);
   const viewer = data?.viewer ?? null;
   const monthOptions = useMemo(() => {
     const options = [...(data?.months ?? [])];
@@ -319,11 +321,25 @@ export default function MaterialTicketBoard({
     );
   }, [tickets, filter, myTurnIds, materialCategoryFilter, unitFilter, typeFilter, searchText]);
   const activeFilterCount = Number(materialCategoryFilter !== "ALL") + Number(unitFilter !== "ALL");
+  const totalPages = Math.max(1, Math.ceil(shown.length / TICKET_PAGE_SIZE));
+  const currentPage = Math.min(listPage, totalPages);
+  const firstShown = shown.length === 0 ? 0 : (currentPage - 1) * TICKET_PAGE_SIZE + 1;
+  const lastShown = Math.min(currentPage * TICKET_PAGE_SIZE, shown.length);
+  const visibleTickets = shown.slice(firstShown ? firstShown - 1 : 0, lastShown);
   const openTicket = openId ? tickets.find((ticket) => ticket.id === openId) ?? null : null;
   const openTicketMaterialText = openTicket
     ? Array.from(new Set(openTicket.items.map((item) => item.erpName || item.material?.name).filter(Boolean))).join(", ") || "Phiếu vật tư"
     : "";
   const openTicketStatus = openTicket ? STATUS[openTicket.status] ?? { label: openTicket.status, c: C.soft } : null;
+
+  React.useEffect(() => {
+    setListPage(1);
+    setOpenId(null);
+  }, [filter, materialCategoryFilter, monthFilter, searchText, typeFilter, unitFilter]);
+
+  React.useEffect(() => {
+    setListPage((page) => Math.min(page, totalPages));
+  }, [totalPages]);
 
   React.useEffect(() => {
     if (!openId) return;
@@ -532,7 +548,7 @@ export default function MaterialTicketBoard({
           <span>Số lượng</span><span>Trạng thái</span><span>Chờ</span><span>Thao tác</span>
         </div>
         {isLoading && <div className="empty"><Loader2 className="spin" size={18} /> Đang tải…</div>}
-	        {!isLoading && shown.map((t) => {
+	        {!isLoading && visibleTickets.map((t) => {
 	          const baseMeta = t.type === SINGLE_STEP_TICKET_TYPE && t.status === "NHAN_VAT_TU"
             ? { label: "Chờ VHV xác nhận khối lượng lãnh", c: "#7c3aed" }
 		            : t.type === CHEMICAL_TICKET_TYPE && t.status === "CHO_XAC_NHAN"
@@ -648,6 +664,29 @@ export default function MaterialTicketBoard({
           <div className="empty">{filter === "MINE" ? "☕ Không có phiếu nào chờ bạn xử lý." : "Không có phiếu nào."}</div>
         )}
       </div>
+
+      {!isLoading && shown.length > 0 && (
+        <nav className="ticket-pagination" aria-label="Phân trang danh sách phiếu vật tư">
+          <div className="ticket-pagination-summary">
+            Hiển thị <b>{firstShown}–{lastShown}</b> trong tổng số <b>{shown.length}</b> bản ghi
+          </div>
+          <div className="ticket-pagination-actions">
+            <button type="button" onClick={() => setListPage(1)} disabled={currentPage <= 1} aria-label="Trang đầu" title="Trang đầu">
+              <ChevronsLeft size={16} />
+            </button>
+            <button type="button" onClick={() => setListPage((page) => Math.max(1, page - 1))} disabled={currentPage <= 1} aria-label="Trang trước" title="Trang trước">
+              <ChevronLeft size={16} />
+            </button>
+            <span className="ticket-page-indicator" aria-label={`Trang ${currentPage} trên ${totalPages}`}>{currentPage}/{totalPages}</span>
+            <button type="button" onClick={() => setListPage((page) => Math.min(totalPages, page + 1))} disabled={currentPage >= totalPages} aria-label="Trang sau" title="Trang sau">
+              <ChevronRight size={16} />
+            </button>
+            <button type="button" onClick={() => setListPage(totalPages)} disabled={currentPage >= totalPages} aria-label="Trang cuối" title="Trang cuối">
+              <ChevronsRight size={16} />
+            </button>
+          </div>
+        </nav>
+      )}
 
       {openTicket && openTicketStatus && (
         <div className="ticket-detail-layer">
@@ -3924,6 +3963,14 @@ const CSS = `
 .btn.tiny{font-size:11.5px;padding:5px 9px;border-radius:8px;align-self:flex-start;}
 .mini{border:1px solid ${C.line};background:#fff;border-radius:8px;cursor:pointer;color:#94a3b8;display:grid;place-items:center;width:30px;}
 .list{background:#fff;border:1px solid ${C.line};border-radius:14px;overflow-x:auto;overflow-y:hidden;box-shadow:0 1px 2px rgba(15,23,42,.04);}
+.ticket-pagination{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-top:12px;border:1px solid ${C.line};border-radius:14px;background:#fff;padding:12px 14px;box-shadow:0 1px 2px rgba(15,23,42,.04);}
+.ticket-pagination-summary{color:${C.muted};font-size:12.5px;}
+.ticket-pagination-summary b{color:${C.navy};font-variant-numeric:tabular-nums;}
+.ticket-pagination-actions{display:flex;align-items:center;gap:7px;}
+.ticket-pagination-actions button{display:grid;width:34px;height:34px;place-items:center;border:1px solid #dbe3ec;border-radius:10px;background:#fff;color:#64748b;cursor:pointer;transition:border-color .15s,background .15s,color .15s,transform .15s;}
+.ticket-pagination-actions button:hover:not(:disabled){border-color:#93c5fd;background:#eff6ff;color:${C.accent};transform:translateY(-1px);}
+.ticket-pagination-actions button:disabled{cursor:not-allowed;opacity:.35;}
+.ticket-page-indicator{display:grid;height:34px;min-width:48px;place-items:center;border-radius:10px;background:${C.navy};padding:0 9px;color:#fff;font-size:11.5px;font-weight:850;font-variant-numeric:tabular-nums;box-shadow:0 5px 12px rgba(30,58,95,.18);}
 .row{display:grid;grid-template-columns:48px 120px 108px minmax(240px,2.2fr) 180px 84px minmax(176px,1.1fr) 60px 68px;gap:10px;align-items:center;min-width:1192px;width:100%;text-align:left;min-height:54px;padding:6px 14px;border:0;border-bottom:1px solid ${C.line};background:#fff;cursor:pointer;font-size:13px;}
 .row:not(.rhead){min-height:62px;padding-top:9px;padding-bottom:9px;}
 .row:not(.rhead)>span:nth-child(n+2):nth-child(-n+7){justify-self:stretch;text-align:center;}
@@ -4408,6 +4455,11 @@ const CSS = `
   .advanced-filter-label,.advanced-filter-chevron{display:none!important;}
 
   .list{width:100%;overflow:visible;border:0;border-radius:0;background:transparent;box-shadow:none;}
+  .ticket-pagination{align-items:flex-start;flex-direction:column;gap:12px;margin-top:2px;padding:14px 16px;border-color:#dbe5ef;border-radius:16px;box-shadow:0 5px 16px rgba(15,35,64,.055);}
+  .ticket-pagination-summary{font-size:12px;}
+  .ticket-pagination-actions{width:100%;justify-content:flex-start;gap:8px;}
+  .ticket-pagination-actions button{width:34px;height:34px;}
+  .ticket-page-indicator{min-width:52px;}
   .rhead{display:none;}
   .row:not(.rhead){position:relative;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));grid-template-areas:"code kind" "material material" "position position" "proposal quantity" "status wait";gap:10px 12px;width:100%;min-width:0;min-height:0;margin:0 0 10px;padding:13px 14px;border:1px solid #dbe5ef;border-radius:16px;background:#fff;box-shadow:0 5px 16px rgba(15,35,64,.065);font-size:12.5px;text-align:left;overflow:hidden;}
   .row:not(.rhead):hover{background:#fff;}
