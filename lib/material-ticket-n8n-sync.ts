@@ -41,6 +41,7 @@ export type MaterialTicketForN8nSync = {
   proposalNumber: string | null;
   proposalNote: string | null;
   pctNumber: string | null;
+  pctContent: string | null;
   bbntDoNumber: string | null;
   deliveryNoteNumber: string | null;
   completionNote: string | null;
@@ -238,7 +239,10 @@ function chemicalScheduledSummary(ticket: MaterialTicketForN8nSync, unit: string
 }
 
 function chemicalReceivedSummary(ticket: MaterialTicketForN8nSync, unit: string) {
-  if (ticket.type !== "HOA_CHAT") return null;
+  // NH3 dùng type GHI_NHAN nhưng hiện cũng đã có bước ghi chuyến xe và khối
+  // lượng lãnh thực tế. Giữ cùng bố cục cột Q với hóa chất thường để workflow
+  // n8n hiện hữu không phải đổi mapping.
+  if (ticket.type !== "HOA_CHAT" && ticket.type !== "GHI_NHAN") return null;
   return joinText([
     ticket.receivedQuantity != null
       ? `Khối lượng: ${quantityWithUnit(ticket.receivedQuantity, unit)}`
@@ -293,7 +297,7 @@ export function materialTicketRowsForN8n(ticket: MaterialTicketForN8nSync) {
         S: formatDate(ticket.usedAt),
         // Chỉ điền khi bước nghiệm thu đã có nội dung xác nhận hoàn thành.
         T: ticket.completionNote,
-        U: ticket.pctNumber,
+        U: joinText([ticket.pctNumber, ticket.pctContent]),
         V: quantityWithUnit(ticket.usedQuantity, unit),
         W: quantityWithUnit(ticket.remainingQuantity, unit),
         X: null,
@@ -357,7 +361,8 @@ export function materialTicketRowsForN8nV2(ticket: MaterialTicketForN8nSync) {
         T: materialUserName,
         U: formatDate(ticket.usedAt),
         V: ticket.completionNote,
-        W: ticket.pctNumber,
+        // Ghép nội dung vào chính cột PCT/LCT hiện hữu, không thêm cột Sheet.
+        W: joinText([ticket.pctNumber, ticket.pctContent]),
         X: quantityWithUnit(ticket.usedQuantity, unit),
         Y: quantityWithUnit(ticket.remainingQuantity, unit),
         Z: null,
