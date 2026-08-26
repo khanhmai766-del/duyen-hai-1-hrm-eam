@@ -67,6 +67,7 @@ import {
   usePcccArchives,
   usePcccBookStatus,
   usePcccRollover,
+  usePcccToggleItemCreation,
   usePcccBulkSign,
   usePcccBulkSignPreview,
   usePcccBulkSaveExtinguishers,
@@ -320,6 +321,22 @@ export default function PcccPage() {
   const [drafts, setDrafts] = useState<Record<DraftKey, Draft>>({
     BCC: {}, TCC: {}, TDKCC: {}, FCD: {}, NNBC: {}, VAN: {}, DEN: {}, CVCC: {},
   });
+  // Danh sách thiết bị đã được kiểm tra trong PHIÊN màn hình hiện tại. Mỗi thay đổi
+  // tự đánh dấu dòng; người dùng cũng có thể tick tay ngay ở ô Người kiểm tra.
+  const [inspectionSelections, setInspectionSelections] = useState<Partial<Record<PcccBulkSignTarget, Set<string>>>>({});
+
+  function toggleInspection(target: PcccBulkSignTarget, rowId: string, checked: boolean) {
+    setInspectionSelections((prev) => {
+      const next = new Set(prev[target] ?? []);
+      if (checked) next.add(rowId);
+      else next.delete(rowId);
+      return { ...prev, [target]: next };
+    });
+  }
+
+  function inspectionIds(target: PcccBulkSignTarget) {
+    return inspectionSelections[target] ?? new Set<string>();
+  }
   const [baselines, setBaselines] = useState<{ BCC: Record<string, string>; TCC: Record<string, string> }>({
     BCC: {},
     TCC: {},
@@ -446,6 +463,7 @@ export default function PcccPage() {
   const updateFireControlCabinet = usePcccUpdate("FIRE_CONTROL_CABINET");
   const createHoseReel = usePcccCreateHoseReel();
   const createItem = usePcccCreateItem();
+  const toggleItemCreation = usePcccToggleItemCreation();
   const deleteHoseReel = usePcccDeleteHoseReel();
 
   // Gom sửa đổi trong bộ nhớ nên PHẢI cảnh báo trước khi mất: đóng tab / tải lại trang.
@@ -510,6 +528,17 @@ export default function PcccPage() {
       apply(rowDraft);
       return { ...prev, [tabKey]: { ...prev[tabKey], [rowId]: rowDraft } };
     });
+    const targetByDraft: Partial<Record<DraftKey, PcccBulkSignTarget>> = {
+      BCC: "EXTINGUISHER",
+      TCC: "CABINET",
+      TDKCC: "FIRE_CONTROL_CABINET",
+      NNBC: "ALARM_BUTTON",
+      VAN: "VALVE",
+      DEN: "EMERGENCY_LIGHT",
+      CVCC: "HOSE_REEL",
+    };
+    const target = targetByDraft[tabKey];
+    if (target) toggleInspection(target, rowId, true);
   }
 
   /**
@@ -837,20 +866,14 @@ export default function PcccPage() {
   // ---- Ký tên hàng loạt + hộp thoại kết quả
   const [signOpen, setSignOpen] = useState(false);
   const [signInfo, setSignInfo] = useState<PcccBulkSignPreview | null>(null);
-  /**
-   * Dòng được tick để ký. `null` = KHÔNG chọn gì = ký hết (nếp cũ).
-   *
-   * Cố ý phân biệt `null` với tập rỗng: tập rỗng nghĩa là người dùng đã vào chọn rồi
-   * bỏ hết, lúc đó không được âm thầm quay về "ký hết" — nút phải mờ đi.
-   */
-  const [signPicked, setSignPicked] = useState<Set<string> | null>(null);
+  /** Dòng đã tick kiểm tra trong phiên; tập rỗng luôn có nghĩa là không được ký. */
+  const [signPicked, setSignPicked] = useState<Set<string>>(new Set());
   const [signPickerOpen, setSignPickerOpen] = useState(false);
   /** Số dòng thực sự sẽ ký: có chọn thì đếm phần chọn, không thì toàn bộ phạm vi. */
-  const signToSign = signPicked ? signPicked.size : signInfo?.total ?? 0;
+  const signToSign = signPicked.size;
   /** Trong phần sắp ký có bao nhiêu dòng đã ký trước đó — ký lại là đè ngày kiểm tra cũ. */
   const willResign = signInfo
-    ? signInfo.rows.filter((r) => r.signed && (signPicked ? signPicked.has(r.id) : true)).length
-      || (signPicked ? 0 : signInfo.alreadySigned)
+    ? signInfo.rows.filter((r) => r.signed && signPicked.has(r.id)).length
     : 0;
   const [resultDialog, setResultDialog] = useState<ResultDialog | null>(null);
   /** Bản nháp PDF đang mở để xem trước; `null` = chưa dựng bản nào. */
@@ -914,7 +937,7 @@ export default function PcccPage() {
 
   function openSignDialog(target: PcccBulkSignTarget) {
     setSignInfo(null);
-    setSignPicked(null);
+    setSignPicked(new Set(inspectionIds(target)));
     setSignPickerOpen(false);
     setSigningTarget(target);
     // HOÃN một nhịp mới mở hộp thoại. Menu của Radix khi đóng sẽ trả lại tiêu điểm, và
@@ -924,7 +947,12 @@ export default function PcccPage() {
     signPreview.mutate(
       signInput(target),
       {
-        onSuccess: setSignInfo,
+        onSuccess: (preview) => {
+          setSignInfo(preview);
+          if (preview.rowsTruncated) return;
+          const scoped = new Set(preview.rows.map((row) => row.id));
+          setSignPicked(new Set([...inspectionIds(target)].filter((id) => scoped.has(id))));
+        },
         onError: (e: Error) => {
           setSignOpen(false);
           toast.error(e.message);
@@ -936,9 +964,14 @@ export default function PcccPage() {
   function confirmSign() {
     if (!signingTarget) return;
     bulkSign.mutate(
-      { ...signInput(signingTarget), ...(signPicked ? { targetIds: [...signPicked] } : {}) },
+      { ...signInput(signingTarget), targetIds: [...signPicked] },
       {
         onSuccess: (res) => {
+          const signedIds = new Set(signPicked);
+          setInspectionSelections((prev) => ({
+            ...prev,
+            [signingTarget]: new Set([...(prev[signingTarget] ?? [])].filter((id) => !signedIds.has(id))),
+          }));
           setSignOpen(false);
           setResultDialog({
             title: "Đã ký xác nhận",
@@ -1445,8 +1478,10 @@ export default function PcccPage() {
     .filter((item) => writeScope?.all || writeScope?.codes.includes(item.code))
     .map((item) => ({ code: item.code, label: item.label }));
   const defaultCreatePosition = cuongVi !== "ALL" ? cuongVi : createPositions.length === 1 ? createPositions[0].code : "";
+  const canControlItemCreation = can("pccc-control-item-creation", ["manage", "full"]);
+  const itemCreationEnabled = period.allowItemCreation && !readOnly;
   const createButton = (kind: PcccCreateKind, label = "Thêm mới") =>
-    !readOnly ? (
+    itemCreationEnabled ? (
       <button
         type="button"
         onClick={() => openCreate(kind)}
@@ -1640,6 +1675,7 @@ export default function PcccPage() {
             title={dirtyCount > 0 ? "Lưu hoặc huỷ các thay đổi trước khi đổi kỳ" : undefined}
             onChange={(e) => {
               setPeriodLabel(e.target.value);
+              setInspectionSelections({});
               setPage(1);
             }}
             className="h-9 rounded-md border border-input bg-white px-2 text-[13px] font-semibold outline-none focus:ring-2 focus:ring-accent/20"
@@ -1665,6 +1701,55 @@ export default function PcccPage() {
             >
               <CalendarClock className="size-3" /> Chưa tới kỳ — chỉ đọc
             </span>
+          )}
+          {!period.isClosed && !periodNotStarted && (
+            <button
+              type="button"
+              role="switch"
+              aria-checked={period.allowItemCreation}
+              disabled={!canControlItemCreation || toggleItemCreation.isPending}
+              onClick={() =>
+                toggleItemCreation.mutate(
+                  { id: period.id, enabled: !period.allowItemCreation },
+                  {
+                    onSuccess: (updated) =>
+                      toast.success(
+                        updated.allowItemCreation
+                          ? "Đã mở chức năng thêm thiết bị PCCC"
+                          : "Đã khoá chức năng thêm thiết bị PCCC"
+                      ),
+                    onError: (error: Error) => toast.error(error.message),
+                  }
+                )
+              }
+              title={
+                canControlItemCreation
+                  ? "Cấp quản lý bật trong thời gian bổ sung danh mục, sau đó tắt để giữ bộ thiết bị chuẩn"
+                  : "Chỉ cấp quản lý được bật hoặc tắt chức năng thêm thiết bị"
+              }
+              className={cn(
+                "inline-flex h-9 items-center gap-2 rounded-lg border px-2.5 text-[12px] font-semibold transition disabled:cursor-not-allowed disabled:opacity-70",
+                period.allowItemCreation
+                  ? "border-emerald-300 bg-emerald-50 text-emerald-800"
+                  : "border-slate-300 bg-slate-50 text-slate-600"
+              )}
+            >
+              <span
+                aria-hidden="true"
+                className={cn(
+                  "relative h-5 w-9 rounded-full transition-colors",
+                  period.allowItemCreation ? "bg-emerald-600" : "bg-slate-300"
+                )}
+              >
+                <span
+                  className={cn(
+                    "absolute top-0.5 size-4 rounded-full bg-white shadow-sm transition-transform",
+                    period.allowItemCreation ? "translate-x-[18px]" : "translate-x-0.5"
+                  )}
+                />
+              </span>
+              Thêm thiết bị: {period.allowItemCreation ? "Đang bật" : "Đang khoá"}
+            </button>
           )}
         </div>
 
@@ -2209,7 +2294,7 @@ export default function PcccPage() {
                 <Row label="Tổ máy" value={machineLabelOf(machine)} />
                 <Row
                   label="Số dòng sẽ ký"
-                  value={signPicked ? `${signPicked.size} / ${signInfo.total} dòng đã chọn` : `${signInfo.total} dòng (tất cả)`}
+                  value={`${signPicked.size} / ${signInfo.total} dòng đã kiểm tra`}
                   strong
                 />
                 {willResign > 0 && (
@@ -2218,13 +2303,11 @@ export default function PcccPage() {
                 <Row label="Người ký" value={signInfo.signerName || "—"} />
               </div>
 
-              {/* CHỌN RIÊNG DÒNG ĐỂ KÝ.
-                  Cương vị nhiều bình đi kiểm tra làm hai ngày; ký hết trong một lần sẽ
-                  đóng dấu cùng một `ngayKiemTra` cho cả phần chưa đi. Mặc định vẫn là ký
-                  hết — chọn riêng là thao tác phải chủ động mở ra. */}
+              {/* Chỉ ký các dòng đã tick ở cột Người kiểm tra. Danh sách tại đây là bước
+                  rà soát cuối, tuyệt đối không có nếp "bỏ chọn = ký hết". */}
               {signInfo.rowsTruncated ? (
                 <p className="text-[12px] text-muted-foreground">
-                  Danh sách quá dài để chọn riêng ({signInfo.total} dòng) — lượt ký này sẽ ký toàn bộ.
+                  Danh sách có {signInfo.total} dòng nên không hiển thị hết ở đây. Lượt ký vẫn chỉ gồm {signPicked.size} dòng đã tick trên bảng.
                 </p>
               ) : signInfo.rows.length > 0 ? (
                 <div className="rounded-xl border border-slate-200">
@@ -2234,11 +2317,9 @@ export default function PcccPage() {
                     className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left"
                   >
                     <span className="min-w-0">
-                      <span className="block text-[13px] font-semibold text-ink">Chọn riêng dòng để ký</span>
+                      <span className="block text-[13px] font-semibold text-ink">Thiết bị đã kiểm tra trong phiên</span>
                       <span className="block text-[11px] text-muted-foreground">
-                        {signPicked
-                          ? `Đang chọn ${signPicked.size} dòng`
-                          : "Không chọn = ký hết. Mở ra nếu kiểm tra làm nhiều ngày."}
+                        Đang chọn {signPicked.size} dòng · mở để rà soát trước khi ký
                       </span>
                     </span>
                     <ChevronDown className={cn("size-4 shrink-0 text-slate-400 transition-transform", signPickerOpen && "rotate-180")} />
@@ -2247,22 +2328,13 @@ export default function PcccPage() {
                   {signPickerOpen && (
                     <div className="border-t border-slate-200 p-2">
                       <div className="mb-2 flex flex-wrap gap-1.5">
-                        <Button size="sm" variant="outline" className="h-7 text-[11px]"
-                          onClick={() => setSignPicked(new Set(signInfo.rows.map((r) => r.id)))}>
-                          Chọn tất cả
-                        </Button>
-                        {/* Lối tắt cho ngày kiểm tra thứ hai — đúng việc người dùng cần làm. */}
-                        <Button size="sm" variant="outline" className="h-7 text-[11px]"
-                          onClick={() => setSignPicked(new Set(signInfo.rows.filter((r) => !r.signed).map((r) => r.id)))}>
-                          Chỉ dòng chưa ký ({signInfo.rows.filter((r) => !r.signed).length})
-                        </Button>
-                        <Button size="sm" variant="ghost" className="h-7 text-[11px]" onClick={() => setSignPicked(null)}>
-                          Bỏ chọn (ký hết)
+                        <Button size="sm" variant="ghost" className="h-7 text-[11px]" onClick={() => setSignPicked(new Set())}>
+                          Bỏ chọn các dòng
                         </Button>
                       </div>
                       <div className="max-h-56 space-y-0.5 overflow-y-auto">
                         {signInfo.rows.map((row) => {
-                          const checked = signPicked ? signPicked.has(row.id) : true;
+                          const checked = signPicked.has(row.id);
                           return (
                             <label key={row.id}
                               className="flex cursor-pointer items-start gap-2 rounded-lg px-2 py-1.5 hover:bg-slate-50">
@@ -2271,9 +2343,7 @@ export default function PcccPage() {
                                 className="mt-0.5 size-3.5 shrink-0"
                                 checked={checked}
                                 onChange={(e) => {
-                                  // Lần tick đầu tiên chuyển từ "ký hết" sang danh sách thật:
-                                  // lấy toàn bộ làm điểm xuất phát rồi mới thêm/bớt.
-                                  const next = new Set(signPicked ?? signInfo.rows.map((r) => r.id));
+                                  const next = new Set(signPicked);
                                   if (e.target.checked) next.add(row.id);
                                   else next.delete(row.id);
                                   setSignPicked(next);
@@ -2299,11 +2369,11 @@ export default function PcccPage() {
               <MachineNotice machine={machine} />
               <p className="text-[12px] text-muted-foreground">
                 Xác nhận sẽ ghi <b>chữ ký</b>, <b>người kiểm tra</b> ({signInfo.signerName}) và <b>ngày kiểm tra</b> (
-                {new Date().toLocaleDateString("vi-VN")}) cho {signPicked ? "các dòng đã chọn" : "toàn bộ số dòng trên"}.
+                {new Date().toLocaleDateString("vi-VN")}) chỉ cho các dòng đã đánh dấu kiểm tra.
               </p>
-              {signPicked?.size === 0 && (
+              {signPicked.size === 0 && (
                 <p className="rounded-lg border border-amber-200 bg-amber-50 p-2 text-[12px] text-amber-800">
-                  Chưa chọn dòng nào. Bấm <b>Bỏ chọn (ký hết)</b> nếu muốn ký toàn bộ.
+                  Chưa có thiết bị nào được đánh dấu. Đóng hộp thoại và tick tại cột <b>Người kiểm tra</b>, hoặc chọn từng dòng trong danh sách trên.
                 </p>
               )}
               {signInfo.total === 0 && (
@@ -2439,6 +2509,8 @@ export default function PcccPage() {
             loading={bccQuery.isFetching}
             editing={editing}
             draft={draft}
+            inspectionSelectedIds={inspectionIds("EXTINGUISHER")}
+            onInspectionToggle={(id, checked) => toggleInspection("EXTINGUISHER", id, checked)}
             onDraftChange={onDraftChange}
             sort={sort}
             onSort={toggleSort}
@@ -2473,6 +2545,8 @@ export default function PcccPage() {
             loading={tccQuery.isFetching}
             editing={editing}
             draft={draft}
+            inspectionSelectedIds={inspectionIds("CABINET")}
+            onInspectionToggle={(id, checked) => toggleInspection("CABINET", id, checked)}
             onDraftChange={onTccDraftChange}
             onToggleComponent={onToggleComponent}
             sort={sort}
@@ -2514,14 +2588,16 @@ export default function PcccPage() {
               loading={cvccQuery.isFetching}
               editing={editing}
               draft={drafts.CVCC}
+              inspectionSelectedIds={inspectionIds("HOSE_REEL")}
+              onInspectionToggle={(id, checked) => toggleInspection("HOSE_REEL", id, checked)}
               onDraftChange={draftChanger("CVCC")}
               onToggleComponent={componentToggler("CVCC")}
-              onAdd={() => {
+              onAdd={itemCreationEnabled ? () => {
                 setCvccAddCabinetId("");
                 setCvccAddMa("");
                 setCvccCabinetSearch("");
                 setCvccAddOpen(true);
-              }}
+              } : undefined}
               onDelete={(row: HoseReelRow) => {
                 // Xoá ghi NGAY, không chờ bấm Lưu: đây là thay đổi CẤU TRÚC chứ không
                 // phải sửa một ô — nên hỏi lại rồi làm dứt điểm.
@@ -2558,6 +2634,8 @@ export default function PcccPage() {
           rows={nnbcQuery.data?.data ?? []}
           groups={nnbcQuery.data?.meta?.groups ?? []}
           draft={drafts.NNBC}
+          inspectionSelectedIds={inspectionIds("ALARM_BUTTON")}
+          onInspectionToggle={(id, checked) => toggleInspection("ALARM_BUTTON", id, checked)}
           onDraftChange={draftChanger("NNBC")}
           onToggleComponent={componentToggler("NNBC")}
           toolbarExtra={<>{scopeStatus}{createButton("ALARM_BUTTON")}</>}
@@ -2590,6 +2668,8 @@ export default function PcccPage() {
         <PcccFireControlCabinets
           rows={tdkccQuery.data?.data ?? []}
           draft={drafts.TDKCC}
+          inspectionSelectedIds={inspectionIds("FIRE_CONTROL_CABINET")}
+          onInspectionToggle={(id, checked) => toggleInspection("FIRE_CONTROL_CABINET", id, checked)}
           onDraftChange={draftChanger("TDKCC")}
           toolbarExtra={<>{scopeStatus}{createButton("FIRE_CONTROL_CABINET")}</>}
           cuongViList={cuongViList}
@@ -2621,6 +2701,8 @@ export default function PcccPage() {
         <PcccValves
           rows={vanQuery.data?.data ?? []}
           draft={drafts.VAN}
+          inspectionSelectedIds={inspectionIds("VALVE")}
+          onInspectionToggle={(id, checked) => toggleInspection("VALVE", id, checked)}
           onDraftChange={draftChanger("VAN")}
           toolbarExtra={<>{scopeStatus}{createButton("VALVE")}</>}
           cuongViList={cuongViList}
@@ -2652,6 +2734,8 @@ export default function PcccPage() {
         <PcccEmergencyLights
           rows={denQuery.data?.data ?? []}
           draft={drafts.DEN}
+          inspectionSelectedIds={inspectionIds("EMERGENCY_LIGHT")}
+          onInspectionToggle={(id, checked) => toggleInspection("EMERGENCY_LIGHT", id, checked)}
           onDraftChange={draftChanger("DEN")}
           toolbarExtra={
             <>
@@ -2720,8 +2804,8 @@ export default function PcccPage() {
             editing={editing && editableTab === "FCD"}
             draft={drafts.FCD}
             onDraftChange={onFcdDraftChange}
-            onAddBulk={() => openCreate("BULK")}
-            onAddPanel={() => openCreate("FM200_PANEL")}
+            onAddBulk={itemCreationEnabled ? () => openCreate("BULK") : undefined}
+            onAddPanel={itemCreationEnabled ? () => openCreate("FM200_PANEL") : undefined}
           />
         ) : (
           <Skeleton className="h-72" />

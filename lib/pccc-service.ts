@@ -34,6 +34,7 @@ export type PcccTargetType =
 export const PCCC_PERMISSION = {
   view: "pccc-view",
   manage: "pccc-manage",
+  controlItemCreation: "pccc-control-item-creation",
   close: "pccc-close-period",
 } as const;
 

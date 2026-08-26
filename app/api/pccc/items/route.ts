@@ -86,6 +86,9 @@ export async function POST(req: NextRequest) {
 
     const period = await resolvePeriod(text(body.period) || null);
     assertPeriodWritable(period);
+    if (!period.allowItemCreation) {
+      return fail("Chức năng thêm thiết bị PCCC đang tắt. Cấp quản lý phải bật công tắc thêm mới trước khi thao tác.", 423);
+    }
     const scope = await resolvePcccWriteScope(user, "Không đủ quyền thêm thiết bị PCCC", tableOf(kind));
 
     const cuongViCode = nullableText(body.cuongViCode) as PositionCode | null;

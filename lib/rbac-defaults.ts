@@ -63,6 +63,7 @@ export const DEFAULT_RBAC_MATRIX: Record<string, Partial<Record<string, RbacLeve
   // trực tiếp quản lý thiết bị; chốt kỳ chỉ quản lý trở lên.
   "pccc-view": { ADMIN: "full", MANAGER: "read", SUPERVISOR: "read", TECHNICIAN: "read", VIEWER: "read" },
   "pccc-manage": { ADMIN: "full", MANAGER: "manage", SUPERVISOR: "manage", TECHNICIAN: "personal", VIEWER: "none" },
+  "pccc-control-item-creation": { ADMIN: "full", MANAGER: "manage", SUPERVISOR: "none", TECHNICIAN: "none", VIEWER: "none" },
   "pccc-close-period": { ADMIN: "full", MANAGER: "manage", SUPERVISOR: "none", TECHNICIAN: "none", VIEWER: "none" },
   "forum-write": { ADMIN: "personal", MANAGER: "personal", SUPERVISOR: "personal", TECHNICIAN: "personal", VIEWER: "personal" },
   "forum-moderate": { ADMIN: "full", MANAGER: "none", SUPERVISOR: "none", TECHNICIAN: "none", VIEWER: "none" },

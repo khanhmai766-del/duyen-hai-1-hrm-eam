@@ -29,6 +29,7 @@ export interface PcccPeriod {
   year: number;
   monthNo: number;
   isClosed: boolean;
+  allowItemCreation: boolean;
   closedAt: string | null;
   /** Bản Excel đã đẩy lên S3 lúc chốt kỳ — null nghĩa là chưa lưu trữ. */
   archiveKey?: string | null;
@@ -550,7 +551,7 @@ export interface PcccBulkSignPreview {
   alreadySigned: number;
   willSign: number;
   rows: PcccBulkSignRow[];
-  /** true = quá nhiều dòng để bày ra chọn; chỉ ký hết được. */
+  /** true = quá nhiều dòng để bày hết trong hộp thoại; vẫn ký đúng các id đã tick. */
   rowsTruncated: boolean;
   scopeLabel: string;
   periodLabel: string;
@@ -588,7 +589,7 @@ export interface PcccBulkSignInput {
   /** BẮT BUỘC khi targetType = EMERGENCY_LIGHT: hai loại đèn chung một bảng. */
   loai?: "EXIT" | "CSSC";
   preview?: boolean;
-  /** Chọn riêng dòng để ký. Bỏ trống = ký hết. */
+  /** Danh sách thiết bị đã đánh dấu kiểm tra; bắt buộc khi ký thật. */
   targetIds?: string[];
 }
 
@@ -689,6 +690,15 @@ export function usePcccTogglePeriodClose() {
   const invalidate = useInvalidatePccc();
   return useMutation({
     mutationFn: (id: string) => apiMutate<PcccPeriod>(`/api/pccc/periods/${id}/close`, "POST"),
+    onSuccess: invalidate,
+  });
+}
+
+export function usePcccToggleItemCreation() {
+  const invalidate = useInvalidatePccc();
+  return useMutation({
+    mutationFn: ({ id, enabled }: { id: string; enabled: boolean }) =>
+      apiMutate<PcccPeriod>(`/api/pccc/periods/${id}/item-creation`, "POST", { enabled }),
     onSuccess: invalidate,
   });
 }

@@ -17,6 +17,37 @@ export function notifyPcccLocked(reason: string) {
   toast.warning(reason, { id: "pccc-locked", duration: 5000 });
 }
 
+/**
+ * Dấu chọn "đã kiểm tra trong phiên". Đây là lựa chọn tạm trên màn hình, chưa ghi DB;
+ * chỉ các dòng được đánh dấu mới được gửi sang cửa ký xác nhận.
+ */
+export function InspectionMark({
+  checked,
+  disabled,
+  onChange,
+  children,
+}: {
+  checked: boolean;
+  disabled?: boolean;
+  onChange: (checked: boolean) => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex min-w-[122px] items-center gap-2">
+      <input
+        type="checkbox"
+        checked={checked}
+        disabled={disabled}
+        onChange={(event) => onChange(event.target.checked)}
+        aria-label={checked ? "Bỏ đánh dấu thiết bị đã kiểm tra trong phiên" : "Đánh dấu thiết bị đã kiểm tra trong phiên"}
+        title="Đánh dấu thiết bị đã kiểm tra trong phiên để đưa vào lượt ký"
+        className="size-4 shrink-0 cursor-pointer rounded border-slate-300 accent-emerald-600 disabled:cursor-not-allowed disabled:opacity-40"
+      />
+      <div className="min-w-0 flex-1">{children}</div>
+    </div>
+  );
+}
+
 export const dateFmt = new Intl.DateTimeFormat("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric" });
 
 export function fmtDate(value: string | null | undefined) {

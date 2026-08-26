@@ -579,6 +579,16 @@ const DEFAULT_PERMISSIONS: PermissionRow[] = [
     matrix: { ADMIN: "full", MANAGER: "manage", SUPERVISOR: "manage", TECHNICIAN: "personal", VIEWER: "none" },
   },
   {
+    id: "pccc-control-item-creation",
+    group: "Thiết bị PCCC",
+    feature: "Bật/tắt chức năng thêm thiết bị PCCC",
+    note:
+      "Cho phép mở tạm thời cửa thêm thiết bị trong một kỳ kiểm tra, sau đó khoá lại để bảo vệ bộ thiết bị chuẩn. " +
+      "Quyền này chỉ điều khiển công tắc; người thêm thiết bị vẫn phải có quyền cập nhật PCCC và đúng phạm vi cương vị. " +
+      "Mặc định chỉ Quản trị viên và Quản lý được sử dụng.",
+    matrix: { ADMIN: "full", MANAGER: "manage", SUPERVISOR: "none", TECHNICIAN: "none", VIEWER: "none" },
+  },
+  {
     id: "pccc-close-period",
     group: "Thiết bị PCCC",
     feature: "Chuyển kỳ kiểm tra PCCC",

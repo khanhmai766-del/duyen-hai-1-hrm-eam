@@ -18,7 +18,7 @@ import { s3ProxyUrl } from "@/lib/s3";
 export const dynamic = "force-dynamic";
 
 /**
- * KÝ HÀNG LOẠT theo cương vị — thay cho việc bấm ký từng dòng trong bảng nghìn dòng.
+ * KÝ THEO CÁC THIẾT BỊ ĐÃ ĐÁNH DẤU trong phiên kiểm tra.
  *
  * Quy trình giấy: đi kiểm tra xong, người phụ trách ký xác nhận cho TOÀN BỘ phần thiết
  * bị thuộc cương vị mình. Nên một chữ ký ở đây kéo theo ba thứ được ghi cùng lúc, trong
@@ -49,8 +49,8 @@ type PickRow = { id: string; code: string; label: string; ngayKiemTra: string | 
  * Số dòng tối đa gửi kèm bản xem trước.
  *
  * Cương vị nhiều bình nhất hiện chưa tới 200 dòng; đặt trần để một kỳ dữ liệu bất
- * thường không biến hộp thoại thành trang tải vài MB. Vượt trần thì vẫn ký hết được
- * (chế độ mặc định), chỉ là không bày danh sách để tick.
+ * thường không biến hộp thoại thành trang tải vài MB. Vượt trần vẫn ký đúng danh sách
+ * id client gửi lên, chỉ là không bày toàn bộ danh sách để rà soát trong hộp thoại.
  */
 const MAX_PICK_ROWS = 500;
 
@@ -199,12 +199,7 @@ export async function POST(req: NextRequest) {
       /** Chỉ dùng cho EMERGENCY_LIGHT: "EXIT" | "CSSC". */
       loai?: string;
       preview?: boolean;
-      /**
-       * Chọn riêng một số dòng để ký. BỎ TRỐNG = ký hết, giữ nguyên nếp cũ.
-       *
-       * Sinh ra cho cương vị nhiều bình chữa cháy: đi kiểm tra làm hai ngày, ngày nào
-       * ký đúng phần đã đi ngày đó, để `ngayKiemTra` phản ánh ngày kiểm tra thật.
-       */
+      /** Danh sách bắt buộc khi ký thật: chỉ thiết bị đã đánh dấu kiểm tra trong phiên. */
       targetIds?: string[];
     };
     if (!isBulkTarget(body.targetType)) {
@@ -239,7 +234,10 @@ export async function POST(req: NextRequest) {
     const picked = Array.isArray(body.targetIds)
       ? body.targetIds.filter((id): id is string => typeof id === "string" && id.length > 0)
       : null;
-    const pickedSet = picked && picked.length ? new Set(picked) : null;
+    if (!body.preview && (!picked || picked.length === 0)) {
+      return fail("Chưa chọn thiết bị đã kiểm tra. Hãy tick từng dòng tại cột Người kiểm tra trước khi ký.", 409);
+    }
+    const pickedSet = picked ? new Set(picked) : null;
     const ids = pickedSet ? scopedIds.filter((id) => pickedSet.has(id)) : scopedIds;
 
     const [alreadySigned, signatureKey] = await Promise.all([

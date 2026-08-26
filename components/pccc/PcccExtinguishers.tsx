@@ -12,13 +12,10 @@ import { Fragment, useState } from "react";
 import { Loader2, Lock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { EditableCell, ToneSelectCell, fmtDate, SignatureStamp } from "@/components/pccc/pccc-shared";
+import { EditableCell, InspectionMark, ToneSelectCell, fmtDate, SignatureStamp } from "@/components/pccc/pccc-shared";
 import {
   DetailField,
   DetailPanel,
-  STICKY_EDGE,
-  STICKY_TD,
-  STICKY_TH,
   TABLE_SCROLLER,
   PcccTableCard,
   PlainHeader,
@@ -47,10 +44,9 @@ import { canEditPcccAdminField, canEditPcccRow, pcccLockReason, type Extinguishe
 const COL_COUNT = 13;
 
 /**
- * 5 cột đầu ĐÓNG BĂNG khi cuộn ngang: nút chi tiết, mã thiết bị, chủng loại, tình
- * trạng, áp suất — đủ để luôn biết đang xem bình nào và nó đang thế nào.
- * `left` phải cộng dồn ĐÚNG bề rộng các cột trước, nên bề rộng cột khai ở đây thay vì
- * rải rác trong JSX.
+ * Trên màn hình rộng, 5 cột đầu đóng băng như bố cục nghiệp vụ hiện tại. Trên điện
+ * thoại/máy tính bảng nhỏ chỉ MÃ THIẾT BỊ bám trái để còn đủ chỗ thao tác kiểm tra,
+ * tick người kiểm tra và ký. Các mốc `left` desktop phải cộng dồn đúng bề rộng cột.
  */
 const FROZEN = {
   expand: { w: 42, left: 0 },
@@ -70,6 +66,8 @@ export function PcccExtinguishers({
   editing,
   draft,
   onDraftChange,
+  inspectionSelectedIds,
+  onInspectionToggle,
   sort,
   onSort,
   page,
@@ -93,6 +91,8 @@ export function PcccExtinguishers({
   editing: boolean;
   draft: Record<string, Record<string, unknown>>;
   onDraftChange: (rowId: string, field: string, value: unknown) => void;
+  inspectionSelectedIds: Set<string>;
+  onInspectionToggle: (rowId: string, checked: boolean) => void;
   sort: SortState;
   onSort: (key: string) => void;
   page: number;
@@ -146,28 +146,34 @@ export function PcccExtinguishers({
       <Table className="min-w-[1500px]" wrapperClassName={TABLE_SCROLLER}>
         <TableHeader>
           <TableRow className={TR_HEAD}>
-            <TableHead className={cn(TH_NAVY, TH_EXPAND, STICKY_TH)} style={{ left: FROZEN.expand.left }} />
+            <TableHead className={cn(TH_NAVY, TH_EXPAND, "lg:left-0 lg:z-20")} />
             <TableHead
-              className={cn(TH_NAVY, STICKY_TH)}
-              style={{ left: FROZEN.ma.left, width: FROZEN.ma.w, minWidth: FROZEN.ma.w }}
+              className={cn(
+                TH_NAVY,
+                "left-0 z-20 shadow-[inset_-1px_0_0_rgba(15,23,42,0.18)] lg:left-[42px] lg:shadow-none"
+              )}
+              style={{ width: FROZEN.ma.w, minWidth: FROZEN.ma.w }}
             >
               <SortHeader label="Mã thiết bị" sortKey="ma" sort={sort} onSort={onSort} align="left" />
             </TableHead>
             <TableHead
-              className={cn(TH_NAVY, STICKY_TH)}
-              style={{ left: FROZEN.chungLoai.left, width: FROZEN.chungLoai.w, minWidth: FROZEN.chungLoai.w }}
+              className={cn(TH_NAVY, "lg:left-[232px] lg:z-20")}
+              style={{ width: FROZEN.chungLoai.w, minWidth: FROZEN.chungLoai.w }}
             >
               <SortHeader label="Chủng loại" sortKey="chungLoai" sort={sort} onSort={onSort} />
             </TableHead>
             <TableHead
-              className={cn(TH_NAVY, STICKY_TH)}
-              style={{ left: FROZEN.tinhTrang.left, width: FROZEN.tinhTrang.w, minWidth: FROZEN.tinhTrang.w }}
+              className={cn(TH_NAVY, "lg:left-[342px] lg:z-20")}
+              style={{ width: FROZEN.tinhTrang.w, minWidth: FROZEN.tinhTrang.w }}
             >
               <SortHeader label="Tình trạng" sortKey="tinhTrang" sort={sort} onSort={onSort} />
             </TableHead>
             <TableHead
-              className={cn(TH_NAVY, STICKY_TH, STICKY_EDGE)}
-              style={{ left: FROZEN.apSuat.left, width: FROZEN.apSuat.w, minWidth: FROZEN.apSuat.w }}
+              className={cn(
+                TH_NAVY,
+                "lg:left-[492px] lg:z-20 lg:shadow-[inset_-1px_0_0_rgba(15,23,42,0.12)]"
+              )}
+              style={{ width: FROZEN.apSuat.w, minWidth: FROZEN.apSuat.w }}
             >
               <SortHeader label="Áp suất / KL" sortKey="apSuat" sort={sort} onSort={onSort} />
             </TableHead>
@@ -221,12 +227,15 @@ export function PcccExtinguishers({
             return (
               <Fragment key={r.id}>
                 <TableRow className={cn(rowBg, ROW_HOVER)}>
-                  <TableCell className={cn(TD_EXPAND, STICKY_TD, rowBg)} style={{ left: FROZEN.expand.left }}>
+                  <TableCell className={cn(TD_EXPAND, rowBg, "lg:sticky lg:left-0 lg:z-[1] lg:group-hover:bg-sky-50")}>
                     <RowExpander expanded={expanded} onToggle={() => setExpandedId(expanded ? null : r.id)} />
                   </TableCell>
                   <TableCell
-                    className={cn(TD_ROW, STICKY_TD, rowBg, "whitespace-nowrap text-left font-medium")}
-                    style={{ left: FROZEN.ma.left }}
+                    className={cn(
+                      TD_ROW,
+                      rowBg,
+                      "sticky left-0 z-[1] whitespace-nowrap text-left font-medium shadow-[inset_-1px_0_0_rgba(15,23,42,0.18)] group-hover:bg-sky-50 lg:left-[42px] lg:shadow-none"
+                    )}
                   >
                     <span className="inline-flex items-center gap-1">
                       {r.ma}
@@ -236,8 +245,12 @@ export function PcccExtinguishers({
                     </span>
                   </TableCell>
                   <TableCell
-                    className={cn(TD_ROW, STICKY_TD, rowBg, "whitespace-nowrap text-center", dirty("chungLoai"))}
-                    style={{ left: FROZEN.chungLoai.left }}
+                    className={cn(
+                      TD_ROW,
+                      rowBg,
+                      "whitespace-nowrap text-center lg:sticky lg:left-[232px] lg:z-[1] lg:group-hover:bg-sky-50",
+                      dirty("chungLoai")
+                    )}
                   >
                     <EditableCell
                       value={r.chungLoai}
@@ -252,8 +265,12 @@ export function PcccExtinguishers({
                   {/* Tình trạng: LUÔN đủ hai lựa chọn. Áp suất không còn ràng buộc ô này —
                       hai đánh giá độc lập theo TB 5100 (xem lib/pccc-status.ts). */}
                   <TableCell
-                    className={cn(TD_ROW, STICKY_TD, rowBg, "text-center", dirty("tinhTrang"))}
-                    style={{ left: FROZEN.tinhTrang.left }}
+                    className={cn(
+                      TD_ROW,
+                      rowBg,
+                      "text-center lg:sticky lg:left-[342px] lg:z-[1] lg:group-hover:bg-sky-50",
+                      dirty("tinhTrang")
+                    )}
                   >
                     <ToneSelectCell
                       value={r.tinhTrang}
@@ -266,8 +283,12 @@ export function PcccExtinguishers({
                   {/* Áp suất/KL: SỐ phần trăm 0–100 — bình CO2 là khối lượng còn lại so với
                       mức chuẩn, MFZ/Foam là vạch áp trên đồng hồ. Một ô cho cả hai chủng loại. */}
                   <TableCell
-                    className={cn(TD_ROW, STICKY_TD, STICKY_EDGE, rowBg, "text-center", dirty("apSuat"))}
-                    style={{ left: FROZEN.apSuat.left }}
+                    className={cn(
+                      TD_ROW,
+                      rowBg,
+                      "text-center lg:sticky lg:left-[492px] lg:z-[1] lg:shadow-[inset_-1px_0_0_rgba(15,23,42,0.12)] lg:group-hover:bg-sky-50",
+                      dirty("apSuat")
+                    )}
                   >
                     <EditableCell
                       value={r.apSuat === null ? "" : `${r.apSuat}%`}
@@ -346,7 +367,9 @@ export function PcccExtinguishers({
                     />
                   </TableCell>
                   <TableCell className={cn(TD_ROW, "whitespace-nowrap text-center", dirty("nguoiKiemTra"))}>
-                    <EditableCell value={r.nguoiKiemTra} disabled={!rowEditable || !canEditAdminField} lockedReason={lockReason(true)} onSave={(v) => save(r, "nguoiKiemTra", v)} />
+                    <InspectionMark checked={inspectionSelectedIds.has(r.id)} disabled={!canManage || !canEditPcccRow(writeScope, base)} onChange={(checked) => onInspectionToggle(r.id, checked)}>
+                      <EditableCell value={r.nguoiKiemTra} disabled={!rowEditable || !canEditAdminField} lockedReason={lockReason(true)} onSave={(v) => save(r, "nguoiKiemTra", v)} />
+                    </InspectionMark>
                   </TableCell>
                 </TableRow>
 

@@ -14,7 +14,7 @@ import { Fragment, useEffect, useRef, useState } from "react";
 import { Loader2, Lock, Plus, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { EditableCell, StatusBadge, TickCell, componentTone, SignatureStamp } from "@/components/pccc/pccc-shared";
+import { EditableCell, InspectionMark, StatusBadge, TickCell, componentTone, SignatureStamp } from "@/components/pccc/pccc-shared";
 import {
   DetailField,
   DetailPanel,
@@ -60,6 +60,8 @@ export function PcccHoseReels({
   draft,
   onDraftChange,
   onToggleComponent,
+  inspectionSelectedIds,
+  onInspectionToggle,
   onAdd,
   onDelete,
   sort,
@@ -85,6 +87,8 @@ export function PcccHoseReels({
   draft: Record<string, Record<string, unknown>>;
   onDraftChange: (rowId: string, field: string, value: unknown) => void;
   onToggleComponent: (row: HoseReelRow, groupLabel: string, status: string, nextChecked: boolean) => void;
+  inspectionSelectedIds: Set<string>;
+  onInspectionToggle: (rowId: string, checked: boolean) => void;
   /** Mở hộp thoại thêm cuộn vòi (chọn tủ cha + mã). Không truyền = ẩn nút. */
   onAdd?: () => void;
   /** Xoá hẳn một cuộn vòi. Ghi ngay, không chờ lưu bảng. */
@@ -321,12 +325,9 @@ export function PcccHoseReels({
                     <EditableCell value={val("soYcsc", r.soYcsc)} disabled={!rowEditable} lockedReason={lockReason()} onSave={(v) => save(r, "soYcsc", v || null)} />
                   </TableCell>
                   <TableCell className={cn(TD_ROW, "whitespace-nowrap text-center", dirty("nguoiKiemTra"))}>
-                    <EditableCell
-                      value={val("nguoiKiemTra", r.nguoiKiemTra)}
-                      disabled={!rowEditable || !canEditAdminField}
-                      lockedReason={lockReason(true)}
-                      onSave={(v) => save(r, "nguoiKiemTra", v || null)}
-                    />
+                    <InspectionMark checked={inspectionSelectedIds.has(r.id)} disabled={!canManage || !canEditPcccRow(writeScope, r)} onChange={(checked) => onInspectionToggle(r.id, checked)}>
+                      <EditableCell value={val("nguoiKiemTra", r.nguoiKiemTra)} disabled={!rowEditable || !canEditAdminField} lockedReason={lockReason(true)} onSave={(v) => save(r, "nguoiKiemTra", v || null)} />
+                    </InspectionMark>
                   </TableCell>
                   {onDelete && (
                     <TableCell className={cn(TD_ROW, "text-center")}>

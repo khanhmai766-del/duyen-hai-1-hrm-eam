@@ -4,7 +4,7 @@ import { Fragment, useState } from "react";
 import { Loader2, Lock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { EditableCell, SignatureStamp, StatusBadge } from "@/components/pccc/pccc-shared";
+import { EditableCell, InspectionMark, SignatureStamp, StatusBadge } from "@/components/pccc/pccc-shared";
 import {
   DetailField,
   DetailPanel,
@@ -43,6 +43,8 @@ export function PcccFireControlCabinets({
   editing,
   draft,
   onDraftChange,
+  inspectionSelectedIds,
+  onInspectionToggle,
   sort,
   onSort,
   page,
@@ -64,6 +66,8 @@ export function PcccFireControlCabinets({
   editing: boolean;
   draft: Record<string, Record<string, unknown>>;
   onDraftChange: (rowId: string, field: string, value: unknown) => void;
+  inspectionSelectedIds: Set<string>;
+  onInspectionToggle: (rowId: string, checked: boolean) => void;
   sort: SortState;
   onSort: (key: string) => void;
   page: number;
@@ -185,7 +189,9 @@ export function PcccFireControlCabinets({
                           <EditableCell value={value("ngayKiemTra", row.ngayKiemTra)} type="date" disabled={!rowEditable || !canEditAdminField} lockedReason={lockReason(true)} onSave={(v) => save("ngayKiemTra", v || null)} />
                         </DetailField>
                         <DetailField label="Người kiểm tra">
-                          <EditableCell value={value("nguoiKiemTra", row.nguoiKiemTra)} disabled={!rowEditable || !canEditAdminField} lockedReason={lockReason(true)} onSave={(v) => save("nguoiKiemTra", v || null)} />
+                          <InspectionMark checked={inspectionSelectedIds.has(row.id)} disabled={!canManage || !canEditPcccRow(writeScope, row)} onChange={(checked) => onInspectionToggle(row.id, checked)}>
+                            <EditableCell value={value("nguoiKiemTra", row.nguoiKiemTra)} disabled={!rowEditable || !canEditAdminField} lockedReason={lockReason(true)} onSave={(v) => save("nguoiKiemTra", v || null)} />
+                          </InspectionMark>
                         </DetailField>
                         <DetailField label="Chữ ký"><SignatureStamp signature={row.signature} /></DetailField>
                         <DetailField label="Ghi chú" span="full">

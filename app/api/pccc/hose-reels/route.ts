@@ -134,6 +134,9 @@ export async function POST(req: NextRequest) {
     assertPeriodWritable(cabinet.period);
     // Quyền theo TỦ CHA: ai sửa được tủ thì thêm được cuộn vòi cho tủ đó.
     assertPcccScope(scope, cabinet);
+    if (!cabinet.period.allowItemCreation) {
+      return fail("Chức năng thêm thiết bị PCCC đang tắt. Cấp quản lý phải bật công tắc thêm mới trước khi thao tác.", 423);
+    }
 
     if (await prisma.pcccHoseReel.findUnique({ where: { periodId_ma: { periodId: cabinet.periodId, ma } } })) {
       return fail(`Mã "${ma}" đã có trong kỳ ${cabinet.period.label}`, 409);

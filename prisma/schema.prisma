@@ -1811,11 +1811,14 @@ model OilAnalysisFailure {
 // Một kỳ kiểm tra = 1 tháng. Sang tháng mới, bản ghi được COPY từ kỳ trước rồi
 // xoá ngày/người kiểm tra + chữ ký (logic createNextMonthFrom của bản demo).
 model PcccPeriod {
-  id       String  @id @default(cuid())
-  label    String  @unique // "T08.2026" — đúng hậu tố tên sheet Excel
-  year     Int
-  monthNo  Int // 1..12
-  isClosed Boolean @default(false) // đã chốt: chỉ đọc, không cho sửa/ký thêm
+  id                String  @id @default(cuid())
+  label             String  @unique // "T08.2026" — đúng hậu tố tên sheet Excel
+  year              Int
+  monthNo           Int // 1..12
+  isClosed          Boolean @default(false) // đã chốt: chỉ đọc, không cho sửa/ký thêm
+  // Khoá cấu trúc danh mục chuẩn. Chỉ khi cấp quản lý chủ động bật thì API mới cho
+  // thêm thiết bị vào kỳ; mặc định tắt để tránh phát sinh thiết bị ngoài danh mục.
+  allowItemCreation Boolean @default(false)
 
   closedAt     DateTime?
   closedById   String? // id User (không FK — đã có audit log); null = hệ thống tự chốt

@@ -14,6 +14,7 @@ import { cn } from "@/lib/utils";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
   EditableCell,
+  InspectionMark,
   StatusBadge,
   TickCell,
   componentTone,
@@ -62,6 +63,8 @@ export function PcccCabinets({
   draft,
   onDraftChange,
   onToggleComponent,
+  inspectionSelectedIds,
+  onInspectionToggle,
   sort,
   onSort,
   page,
@@ -91,6 +94,8 @@ export function PcccCabinets({
   draft: Record<string, Record<string, unknown>>;
   onDraftChange: (rowId: string, field: string, value: unknown) => void;
   onToggleComponent: (row: CabinetRow, groupLabel: string, status: string, nextChecked: boolean) => void;
+  inspectionSelectedIds: Set<string>;
+  onInspectionToggle: (rowId: string, checked: boolean) => void;
   sort: SortState;
   onSort: (key: string) => void;
   page: number;
@@ -325,12 +330,14 @@ export function PcccCabinets({
                     <EditableCell value={val("soYcsc", r.soYcsc)} disabled={!rowEditable} lockedReason={lockReason()} onSave={(v) => save(r, "soYcsc", v || null)} />
                   </TableCell>
                   <TableCell className={cn(TD_ROW, "whitespace-nowrap text-center", dirty("nguoiKiemTra"))}>
-                    <EditableCell
-                      value={val("nguoiKiemTra", r.nguoiKiemTra)}
-                      disabled={!rowEditable || !canEditAdminField}
-                      lockedReason={lockReason(true)}
-                      onSave={(v) => save(r, "nguoiKiemTra", v || null)}
-                    />
+                    <InspectionMark checked={inspectionSelectedIds.has(r.id)} disabled={!canManage || !canEditPcccRow(writeScope, r)} onChange={(checked) => onInspectionToggle(r.id, checked)}>
+                      <EditableCell
+                        value={val("nguoiKiemTra", r.nguoiKiemTra)}
+                        disabled={!rowEditable || !canEditAdminField}
+                        lockedReason={lockReason(true)}
+                        onSave={(v) => save(r, "nguoiKiemTra", v || null)}
+                      />
+                    </InspectionMark>
                   </TableCell>
                 </TableRow>
 
