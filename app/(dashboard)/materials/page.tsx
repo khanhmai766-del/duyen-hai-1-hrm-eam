@@ -36,7 +36,7 @@ import { useRbacAccess } from "@/hooks/useRbacAccess";
 import { displayMaterialCategory, replacementDueStatus, type ReplDueKey, MATERIAL_CATEGORIES, MATERIAL_CATEGORY_FILTERS, OTHER_MATERIAL_GROUP, DEFECT_UNITS, DEFECT_STATUS, addMonths, isOtherMaterialCategory, materialCategoryMatches, roundStock } from "@/lib/constants";
 import { normalizeText } from "@/lib/nav";
 import { STANDALONE_GROUP_PREFIX } from "@/lib/oil-grouping-shared";
-import { positionLabelOf, positionsMatch } from "@/lib/position-catalog";
+import { positionLabelOf, positionLabelsForUnit, positionsMatch } from "@/lib/position-catalog";
 import { parseScope, scopeCode } from "@/lib/equipment-units";
 import { cn, formatDate, formatDateInput } from "@/lib/utils";
 import type { Material } from "@/types";
@@ -252,8 +252,9 @@ function MaterialsPageContent() {
     (m: MaterialWithDevices) => materialPointLabels(m).join(", "),
     [materialPointLabels]
   );
-  // Danh sách cương vị lấy trực tiếp từ các dòng khai báo của tổ máy + loại vật tư
-  // đang xem. Chuẩn hóa nhãn và gộp các bí danh để tránh lựa chọn trùng nhau.
+  // Luôn hiện đầy đủ danh mục cương vị chuẩn cho cả S1, S2 và COMMON, kể cả khi
+  // cương vị chưa có vật tư trong tổ máy/loại vật tư đang xem. Bổ sung các nhãn
+  // phát sinh từ dữ liệu cũ để người dùng vẫn lọc được các dòng chưa chuẩn hóa.
   /**
    * Sửa ô "Hiện có" (số đếm thực tế tại kho của phân xưởng): ngoài nhóm quản lý danh mục,
    * cương vị NÀO ĐANG QUẢN LÝ thiết bị đã khai báo vật tư này cũng sửa được — họ là người
@@ -270,10 +271,8 @@ function MaterialsPageContent() {
   );
 
   const managingPositionOptions = React.useMemo(() => {
-    const positions: string[] = [];
+    const positions = positionLabelsForUnit();
     for (const material of data?.data ?? []) {
-      if ((material.machine ?? "COMMON") !== machineTab) continue;
-      if (!materialCategoryMatches(material.category, categoryFilter)) continue;
       for (const replacement of material.replacements ?? []) {
         if (replacement.isActive || !replacement.managingPosition?.trim()) continue;
         const label = positionLabelOf(replacement.managingPosition);
@@ -281,7 +280,7 @@ function MaterialsPageContent() {
       }
     }
     return positions.sort(compareNatural);
-  }, [categoryFilter, data?.data, machineTab]);
+  }, [data?.data]);
 
   React.useEffect(() => {
     if (
