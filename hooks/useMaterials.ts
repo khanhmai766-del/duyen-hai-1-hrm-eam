@@ -121,6 +121,10 @@ function invalidateMaterialCatalog(qc: ReturnType<typeof useQueryClient>) {
   // Chi tiết điểm thay thế cũng chính là nguồn của khối "Vật tư được khai báo"
   // trên lý lịch thiết bị. Không làm mới cache này sẽ khiến hai màn hình lệch nhau.
   qc.invalidateQueries({ queryKey: ["device"] });
+  // Danh mục cũng là nguồn của dropdown "Mã vật tư" ở phiếu (bước Đề xuất và bước
+  // Nghiệm thu/xuất biên bản). Thiếu dòng này thì thêm mã ERP xong, màn hình theo dõi
+  // vật tư vẫn giữ danh sách mã cũ cho tới khi hết staleTime hoặc tải lại trang.
+  qc.invalidateQueries({ queryKey: ["material-ticket-options"] });
 }
 
 export function useUpsertMaterial() {

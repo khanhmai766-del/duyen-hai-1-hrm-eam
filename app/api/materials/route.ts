@@ -250,6 +250,47 @@ async function updateMaterialErpCodes(materialId: string, erpCodes: string[]) {
 }
 
 /**
+ * Đồng bộ danh mục mã ERP sang các DÒNG SIBLING của cùng vật tư (khác tổ máy).
+ *
+ * Một vật tư dùng chung cho nhiều tổ máy tồn tại thành NHIỀU dòng `Material`, gom nhóm
+ * theo `code` (xem cột "machines" ở GET). Nhưng phiếu vật tư neo vào ĐÚNG dòng của tổ máy
+ * mình, còn dropdown "Mã vật tư" ở bước Đề xuất / Nghiệm thu lại đọc `erpCodes` của chính
+ * dòng đó. Nếu chỉ ghi mã cho dòng đang mở, người sửa ở tab S1 sẽ thấy phiếu tổ máy S2 vẫn
+ * hiện danh sách mã cũ — đúng vết "cập nhật 4 mã nhưng phiếu chỉ có 3 mã".
+ *
+ * Tìm sibling theo `code` CŨ vì dòng chính có thể vừa đổi mã chính; đổi xong ở đây thì
+ * bước đồng bộ tổ máy phía sau (gom theo `code` mới) mới không coi sibling là dòng thiếu.
+ */
+async function syncSiblingErpCodes(args: {
+  materialId: string;
+  previousCode: string;
+  primaryCode: string;
+  erpCodes: string[];
+  minStock?: number | null;
+}) {
+  const siblings = await prisma.material.findMany({
+    where: { code: args.previousCode, id: { not: args.materialId } },
+    select: { id: true },
+  });
+  if (!siblings.length) return [];
+  const ids = siblings.map((sibling) => sibling.id);
+  await prisma.material.updateMany({
+    where: { id: { in: ids } },
+    data: {
+      code: args.primaryCode,
+      // "Số liệu ERP" là tổng tồn của đúng cụm mã vừa chọn nên đi kèm luôn.
+      ...(args.minStock != null ? { minStock: Number(args.minStock) } : {}),
+    },
+  });
+  await prisma.$executeRaw`
+    UPDATE "Material"
+    SET "erpCodes" = ${args.erpCodes}::text[]
+    WHERE "id" = ANY(${ids}::text[])
+  `;
+  return ids;
+}
+
+/**
  * Số chip SYC hiển thị trên mỗi dòng điểm thay thế, và biên lấy dư trước khi lọc.
  *
  * Điều kiện "đã ghi lịch sử" không diễn đạt được bằng SQL ở đây: `MaterialReplacementLog`
@@ -538,6 +579,7 @@ export async function PUT(req: NextRequest) {
       const exists = await materialWithAnyErpCode(erpCodes, body.id, currentMaterial.machine);
       if (exists) return fail("Mã vật tư ERP đã được gom trong Danh mục vật tư PXVH1");
     }
+    let syncedSiblingIds: string[] = [];
     const defaultSystem = body.system !== undefined ? body.system?.trim() || null : undefined;
     const imageUrl =
       body.imageUrl !== undefined
@@ -564,6 +606,13 @@ export async function PUT(req: NextRequest) {
     });
     if (erpCodes) {
       await updateMaterialErpCodes(body.id, erpCodes);
+      syncedSiblingIds = await syncSiblingErpCodes({
+        materialId: body.id,
+        previousCode: currentMaterial.code,
+        primaryCode: primaryCode!,
+        erpCodes,
+        minStock: body.minStock,
+      });
     }
     if (document !== undefined) {
       await updateMaterialDocument(body.id, document);
@@ -679,7 +728,16 @@ export async function PUT(req: NextRequest) {
       }
     }
     const m = await prisma.material.findUnique({ where: { id: body.id }, include: MATERIAL_INCLUDE });
-    await audit(user.id, "UPDATE_MATERIAL", "Material", body.id, auditDetailWithPosition(user, m?.code));
+    await audit(
+      user.id,
+      "UPDATE_MATERIAL",
+      "Material",
+      body.id,
+      auditDetailWithPosition(
+        user,
+        syncedSiblingIds.length ? `${m?.code} (đồng bộ mã ERP cho ${syncedSiblingIds.length} tổ máy khác)` : m?.code
+      )
+    );
     return ok(m ? mapMaterial(m, document ?? (await materialDocumentMap()).get(body.id)) : null);
   });
 }
