@@ -295,7 +295,10 @@ export function Topbar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
       </button>
 
       {/* Global search — sits where the greeting used to be */}
-      <div ref={boxRef} className="relative hidden min-w-0 sm:block sm:flex-none">
+      {/* `sm:flex-none` cu khoa o tim kiem o 288px cung, khien topbar tran 44px trong
+          dai 768-1023px (sidebar da an vi la `lg:`, nhung thanh nav day van hien).
+          Cho no co lai va chi giu 288px lam tran tren. */}
+      <div ref={boxRef} className="relative hidden min-w-0 sm:block sm:min-w-0 sm:flex-1 sm:basis-72 sm:max-w-72 lg:max-w-80">
         <form onSubmit={onSubmit}>
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <input
@@ -306,7 +309,7 @@ export function Topbar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
             }}
             onFocus={() => setOpen(true)}
             placeholder="Tìm kiếm chức năng, thiết bị..."
-            className="h-9 w-full rounded-full border border-input bg-warmwhite pl-9 pr-3 text-sm outline-none transition-all focus:border-accent focus:ring-2 focus:ring-accent/20 sm:w-72 lg:w-80"
+            className="h-9 w-full rounded-full border border-input bg-warmwhite pl-9 pr-3 text-sm outline-none transition-all focus:border-accent focus:ring-2 focus:ring-accent/20"
           />
         </form>
 
@@ -596,8 +599,11 @@ export function Topbar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
           <p className="whitespace-nowrap text-[12px] font-semibold leading-4 text-muted-foreground">
             Welcome back
           </p>
-          <p className="flex min-w-0 items-center justify-end gap-1 whitespace-nowrap text-[16px] font-bold leading-5 tracking-tight text-ink">
-            <span className="whitespace-nowrap">{mobileDisplayName}</span>
+          <p className="flex min-w-0 items-center justify-end gap-1 whitespace-nowrap text-[13px] font-bold leading-5 tracking-tight text-ink min-[380px]:text-[15px] sm:text-[16px]">
+            {/* `truncate` la BAT BUOC: thieu overflow:hidden thi ten dai tran khoi cot
+                grid minmax(96px,1fr) va lam ca trang cuon ngang duoc tren may 360px.
+                Bu lai bang cach thu nho chu o khoi hep — tu 375px tro len ten van du. */}
+            <span className="truncate">{mobileDisplayName}</span>
             <span className="shrink-0" aria-hidden="true">👋</span>
           </p>
         </div>

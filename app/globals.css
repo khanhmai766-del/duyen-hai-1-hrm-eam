@@ -66,6 +66,42 @@
   ::selection {
     @apply bg-accent/20;
   }
+
+  /* ─── Chống iOS tự phóng to khi chạm vào ô nhập ──────────────────────────────
+     Safari trên iOS tự phóng trang khi focus vào input/select/textarea có
+     font-size < 16px, rồi KHÔNG tự thu lại — người dùng phải chụm tay mỗi lần
+     nhập. Không có cách nào khác ngoài việc đủ 16px (trừ khi tắt hẳn zoom, mà
+     ta cố ý không tắt vì người vận hành cần phóng to bảng số liệu).
+
+     Chỉ áp cho màn CẢM ỨNG HẸP: desktop và iPad giữ nguyên cỡ chữ dày đặc hiện
+     có, nên các lưới nhập nhiều cột không bị nới ra. `pointer: coarse` loại trừ
+     luôn trình duyệt desktop thu nhỏ cửa sổ. */
+  @media (max-width: 640px) and (pointer: coarse) {
+    input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
+    select,
+    textarea {
+      font-size: 16px;
+    }
+  }
+
+  /* ─── Nới vùng chạm tối thiểu 44×44 ──────────────────────────────────────────
+     Nới bằng lớp giả nên KHÔNG đổi kích thước hình vẽ, không đẩy giãn bố cục —
+     mật độ giao diện giữ nguyên, chỉ vùng nhận ngón tay rộng ra. Ngưỡng 44px
+     theo Apple HIG và WCAG 2.5.5. Phần tử cha phải không cắt (overflow) mới ăn. */
+  @media (pointer: coarse) {
+    .touch-44 {
+      position: relative;
+    }
+    .touch-44::after {
+      content: "";
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: max(100%, 44px);
+      height: max(100%, 44px);
+      transform: translate(-50%, -50%);
+    }
+  }
   /* Smooth the light↔dark flip without animating page transitions. */
   html.theme-ready body,
   html.theme-ready body * {
