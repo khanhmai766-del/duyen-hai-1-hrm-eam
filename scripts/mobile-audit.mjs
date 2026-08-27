@@ -144,6 +144,22 @@ function soatTrongTrang({ safeTop, safeBottom, daODayTrang }) {
     return s.visibility !== "hidden" && s.display !== "none" && Number(s.opacity) > 0.05;
   };
 
+  /**
+   * Phần tử có THẬT SỰ đang hiện trong khung nhìn và nằm trên cùng tại điểm giữa nó không?
+   * Đây là chốt chặn quan trọng nhất của phép kiểm "bị che": rất nhiều thẻ/bảng có khung
+   * cuộn DỌC riêng (`overflow-y:auto` bên trong thẻ có max-height), nội dung nằm dưới tầm
+   * nhìn của khung đó vẫn trả về toạ độ hợp lệ nhưng người dùng chỉ cần cuộn khung nội bộ
+   * là thấy — không phải bị thanh nav che. Không lọc bước này thì báo cáo đầy dương tính giả.
+   */
+  const dangHienThat = (el, r) => {
+    const cx = r.left + r.width / 2;
+    const cy = r.top + r.height / 2;
+    if (cx < 0 || cx > rong || cy < 0 || cy > cao) return false;
+    const tren = document.elementFromPoint(cx, cy);
+    if (!tren) return false;
+    return tren === el || el.contains(tren) || tren.contains(el);
+  };
+
   /** Phần tử có nằm trong một khung cuộn ngang cố ý không (bảng rộng, dải chip…)? */
   const trongKhungCuonNgang = (el) => {
     for (let p = el.parentElement; p && p !== document.documentElement; p = p.parentElement) {
@@ -163,6 +179,9 @@ function soatTrongTrang({ safeTop, safeBottom, daODayTrang }) {
       if (!nhinThay(el, r)) continue;
       // Bỏ qua phần tử bị dịch ra ngoài có chủ đích (drawer đóng, sheet ẩn).
       if (getComputedStyle(el).position === "fixed" && r.left >= rong) continue;
+      // Phần tử `fixed inset-x-0` bám mép trái sẽ tự giãn theo khối chứa ban đầu khi
+      // trang đã tràn — nó ăn theo chứ không phải thủ phạm, báo lên chỉ gây nhiễu.
+      if (getComputedStyle(el).position === "fixed" && r.left <= 1) continue;
       if (r.right <= rong + 1) continue;
       if (trongKhungCuonNgang(el)) continue;
       tranNgang.push({ ...ta(el), thoRa: Math.round(r.right - rong) });
@@ -186,6 +205,7 @@ function soatTrongTrang({ safeTop, safeBottom, daODayTrang }) {
       if (thanhNav && thanhNav.contains(el)) continue;          // chính thanh nav
       if (el.closest("[data-mobile-audit-ignore]")) continue;   // cho phép miễn trừ tại chỗ
       if (r.top >= cao || r.bottom <= 0) continue;              // ngoài khung nhìn hiện tại
+      if (!dangHienThat(el, r)) continue;                       // nằm dưới đáy khung cuộn nội bộ
       // Ở ĐẦU trang chỉ báo phần tử NEO CỐ ĐỊNH — nội dung cuộn được thì cuộn tiếp là thấy.
       // Khi ĐÃ CUỘN HẾT xuống đáy thì mọi phần tử còn nằm dưới vạch đều thật sự
       // không chạm tới được (đệm đáy của <main> không đủ), nên xét tất cả.
@@ -210,6 +230,7 @@ function soatTrongTrang({ safeTop, safeBottom, daODayTrang }) {
     const r = el.getBoundingClientRect();
     if (!nhinThay(el, r)) continue;
     if (r.top > cao || r.bottom < 0) continue; // chỉ xét phần đang hiển thị
+    if (!dangHienThat(el, r)) continue;        // đang bị cuộn khuất trong khung nội bộ
     if (el.closest("table")) continue;         // ô trong bảng dày — xét riêng, không spam
     if (r.width >= NGUONG_CHAM && r.height >= NGUONG_CHAM) continue;
     chamNho.push({
