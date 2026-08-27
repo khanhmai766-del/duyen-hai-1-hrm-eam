@@ -395,9 +395,12 @@ function OverviewTab({
 
   return (
     <div className="grid gap-4 lg:grid-cols-2">
-      <div className="rounded-xl border border-border bg-white p-4">
+      {/* `min-w-0`: thiếu nó thì bảng 5 cột bên dưới ép giãn cả ô lưới, kéo THEO cả
+          thẻ "Cần đối chiếu" bên cạnh rộng ra 405px và làm cả trang cuộn ngang. */}
+      <div className="min-w-0 rounded-xl border border-border bg-white p-4">
         <h3 className="text-sm font-bold uppercase tracking-wider text-ink">Cân đối trong kỳ</h3>
-        <table className="mt-3 w-full text-sm">
+        <div className="mt-3 overflow-x-auto">
+        <table className="w-full min-w-[300px] text-sm">
           <thead>
             <tr className="border-b border-border text-[11px] uppercase tracking-wider text-muted-foreground">
               <th className="py-1.5 text-left font-semibold">Mặt hàng</th>
@@ -412,7 +415,7 @@ function OverviewTab({
               .filter((r) => r.itemType === "CHEMICAL")
               .map((r) => (
                 <tr key={r.itemId} className="border-b border-border/50 last:border-0">
-                  <td className="max-w-[180px] truncate py-1.5 pr-2">{r.name}</td>
+                  <td className="max-w-[110px] truncate py-1.5 pr-2 sm:max-w-[180px]">{r.name}</td>
                   <td className="py-1.5 text-right tabular-nums">{fmt(r.openingTotal, 0)}</td>
                   <td className="py-1.5 text-right tabular-nums">{fmt(r.receivedTotal, 0)}</td>
                   <td className={cn("py-1.5 text-right tabular-nums", r.consumedTotal !== null && r.consumedTotal < 0 && "font-semibold text-red-700")}>
@@ -423,10 +426,11 @@ function OverviewTab({
               ))}
           </tbody>
         </table>
+        </div>
         <p className="mt-2 text-[11px] text-muted-foreground">Đơn vị: kg. Nhiên liệu xem ở tab Tồn theo cương vị.</p>
       </div>
 
-      <div className="rounded-xl border border-border bg-white p-4">
+      <div className="min-w-0 rounded-xl border border-border bg-white p-4">
         <h3 className="text-sm font-bold uppercase tracking-wider text-ink">Cần đối chiếu</h3>
         {flagged.length === 0 ? (
           <p className="mt-3 text-sm text-muted-foreground">Không có mặt hàng nào cần đối chiếu trong kỳ này.</p>

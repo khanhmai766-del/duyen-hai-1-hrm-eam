@@ -75,12 +75,18 @@
 
      Chỉ áp cho màn CẢM ỨNG HẸP: desktop và iPad giữ nguyên cỡ chữ dày đặc hiện
      có, nên các lưới nhập nhiều cột không bị nới ra. `pointer: coarse` loại trừ
-     luôn trình duyệt desktop thu nhỏ cửa sổ. */
+     luôn trình duyệt desktop thu nhỏ cửa sổ.
+
+     `!important` là cần thiết chứ không phải cẩu thả: cỡ chữ ở đây do class tiện ích
+     của Tailwind (`text-sm`, `text-xs`…) đặt, mà class luôn thắng bộ chọn thẻ trần.
+     Đo thực tế cho thấy `input` tình cờ thắng nhờ chuỗi `:not()` đẩy độ ưu tiên lên
+     (0,4,1), còn `select`/`textarea` (0,0,1) thì thua — sai lệch âm thầm đúng ở chỗ
+     khó thấy nhất. Ép `!important` cho cả ba để hành vi nhất quán. */
   @media (max-width: 640px) and (pointer: coarse) {
     input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
     select,
     textarea {
-      font-size: 16px;
+      font-size: 16px !important;
     }
   }
 

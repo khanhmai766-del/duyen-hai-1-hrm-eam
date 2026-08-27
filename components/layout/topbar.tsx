@@ -352,7 +352,7 @@ export function Topbar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
           )}
       </div>
 
-      <div className="grid w-full grid-cols-[auto_minmax(96px,1fr)_auto_auto] items-center gap-2 sm:ml-auto sm:flex sm:w-auto sm:gap-3">
+      <div className="grid w-full grid-cols-[auto_minmax(72px,1fr)_auto_auto] items-center gap-2 sm:ml-auto sm:flex sm:w-auto sm:gap-3">
         <div ref={notifRef} className="relative order-4 sm:order-none">
           <button
             onClick={() => setNotifOpen((o) => !o)}
@@ -581,7 +581,7 @@ export function Topbar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
         <Link
           href="/"
           prefetch={false}
-          className="group relative isolate order-1 flex h-11 shrink-0 items-center gap-2 overflow-hidden rounded-[15px] border border-sky-300/30 bg-[linear-gradient(135deg,#061a36_0%,#0b376d_58%,#075b9a_100%)] py-1 pl-1 pr-2.5 shadow-[0_8px_22px_-10px_rgba(3,74,140,0.9)] ring-1 ring-white/70 transition duration-200 before:pointer-events-none before:absolute before:inset-0 before:bg-[radial-gradient(circle_at_18%_-30%,rgba(125,211,252,0.65),transparent_48%)] after:pointer-events-none after:absolute after:-right-4 after:-top-7 after:h-14 after:w-14 after:rounded-full after:border after:border-white/10 hover:border-sky-200/60 hover:shadow-[0_10px_26px_-10px_rgba(2,132,199,0.95)] active:scale-[0.98] max-[420px]:w-[138px] max-[420px]:gap-1 max-[420px]:pr-1.5 sm:hidden"
+          className="group relative isolate order-1 flex h-11 shrink-0 items-center gap-2 overflow-hidden rounded-[15px] border border-sky-300/30 bg-[linear-gradient(135deg,#061a36_0%,#0b376d_58%,#075b9a_100%)] py-1 pl-1 pr-2.5 shadow-[0_8px_22px_-10px_rgba(3,74,140,0.9)] ring-1 ring-white/70 transition duration-200 before:pointer-events-none before:absolute before:inset-0 before:bg-[radial-gradient(circle_at_18%_-30%,rgba(125,211,252,0.65),transparent_48%)] after:pointer-events-none after:absolute after:-right-4 after:-top-7 after:h-14 after:w-14 after:rounded-full after:border after:border-white/10 hover:border-sky-200/60 hover:shadow-[0_10px_26px_-10px_rgba(2,132,199,0.95)] active:scale-[0.98] max-[420px]:w-[138px] max-[420px]:gap-1 max-[420px]:pr-1.5 max-[374px]:w-[116px] sm:hidden"
           aria-label="Về trang chủ"
           title="Về trang chủ"
         >

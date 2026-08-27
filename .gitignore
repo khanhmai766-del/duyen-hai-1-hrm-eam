@@ -42,6 +42,6 @@ scripts/data/equipment-dedupe-backup-*.json
 # Dữ liệu n8n chạy thử trực tiếp trên máy, tách biệt hoàn toàn n8n production
 /.n8n-local/
 
-# Ảnh chụp & mốc so sánh của scripts/mobile-audit.mjs
-/.mobile-audit/
-/mobile-audit-*.json
+# Ảnh chụp & mốc so sánh của scripts/mobile-audit.mjs (mọi biến thể tên thư mục/mốc)
+/.mobile-audit*/
+/mobile-*.json

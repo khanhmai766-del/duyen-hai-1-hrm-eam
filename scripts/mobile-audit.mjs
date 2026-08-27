@@ -58,12 +58,13 @@ const THU_MUC_ANH = arg("shots-dir", ".mobile-audit");
  * vùng bị che. Số đo lấy theo thông số Apple/Android chính thức.
  */
 const BANG_MAY = [
-  { id: "s8",  ten: "Galaxy S8/S22 (hẹp nhất)", width: 360, height: 740, dsf: 3, safeTop: 0,  safeBottom: 0  },
-  { id: "se",  ten: "iPhone SE (2/3)",          width: 375, height: 667, dsf: 2, safeTop: 0,  safeBottom: 0  },
-  { id: "i14", ten: "iPhone 14/15/16",          width: 393, height: 852, dsf: 3, safeTop: 59, safeBottom: 34 },
-  { id: "px7", ten: "Pixel 7",                  width: 412, height: 915, dsf: 2.6, safeTop: 24, safeBottom: 24 },
-  { id: "max", ten: "iPhone 15/16 Pro Max",     width: 430, height: 932, dsf: 3, safeTop: 59, safeBottom: 34 },
-  { id: "mini", ten: "iPad mini (dọc)",         width: 768, height: 1024, dsf: 2, safeTop: 24, safeBottom: 20 },
+  { id: "s8",  ten: "Galaxy S8/S22 (hẹp nhất)", width: 360, height: 740, dsf: 3, safeTop: 0,  safeBottom: 0,  dienThoai: true },
+  { id: "se",  ten: "iPhone SE (2/3)",          width: 375, height: 667, dsf: 2, safeTop: 0,  safeBottom: 0,  dienThoai: true },
+  { id: "i14", ten: "iPhone 14/15/16",          width: 393, height: 852, dsf: 3, safeTop: 59, safeBottom: 34, dienThoai: true },
+  { id: "px7", ten: "Pixel 7",                  width: 412, height: 915, dsf: 2.6, safeTop: 24, safeBottom: 24, dienThoai: true },
+  { id: "max", ten: "iPhone 15/16 Pro Max",     width: 430, height: 932, dsf: 3, safeTop: 59, safeBottom: 34, dienThoai: true },
+  // iPad KHÔNG có hành vi tự phóng khi focus (khung nhìn đủ rộng), nên bỏ phép kiểm đó.
+  { id: "mini", ten: "iPad mini (dọc)",         width: 768, height: 1024, dsf: 2, safeTop: 24, safeBottom: 20, dienThoai: false },
 ];
 
 const TRANG_MAC_DINH = [
@@ -113,7 +114,7 @@ if (!PASSWORD) {
 
 // ─── Phép kiểm chạy TRONG trang ───────────────────────────────────────────────
 // Hàm này được serialize sang trình duyệt nên phải khép kín, không dùng biến ngoài.
-function soatTrongTrang({ safeTop, safeBottom, daODayTrang }) {
+function soatTrongTrang({ safeTop, safeBottom, daODayTrang, dienThoai }) {
   const NGUONG_CHAM = 44; // px CSS — Apple HIG & WCAG 2.5.5 (Target Size)
   const CHON_TUONG_TAC =
     'a[href], button, input, select, textarea, [role="button"], [role="tab"], [role="link"], [role="checkbox"], [role="switch"], [tabindex]:not([tabindex="-1"])';
@@ -171,6 +172,15 @@ function soatTrongTrang({ safeTop, safeBottom, daODayTrang }) {
 
   const tatCa = Array.from(document.querySelectorAll("body *"));
 
+  /**
+   * Thùng chứa hay điều khiển thật? Radix gắn `tabindex="0"` lên panel của tab, còn
+   * nhiều thẻ bọc cũng nhận tabindex — chúng lọt vào bộ chọn tương tác nhưng không
+   * phải thứ người dùng nhắm ngón tay vào. Dấu hiệu chắc chắn: bên trong nó còn
+   * phần tử tương tác khác.
+   */
+  const laDieuKhienThat = (el) =>
+    !el.querySelector(CHON_TUONG_TAC);
+
   // ── 1. Tràn ngang ──────────────────────────────────────────────────────────
   const tranNgang = [];
   if (document.documentElement.scrollWidth > rong + 1) {
@@ -206,6 +216,7 @@ function soatTrongTrang({ safeTop, safeBottom, daODayTrang }) {
       if (el.closest("[data-mobile-audit-ignore]")) continue;   // cho phép miễn trừ tại chỗ
       if (r.top >= cao || r.bottom <= 0) continue;              // ngoài khung nhìn hiện tại
       if (!dangHienThat(el, r)) continue;                       // nằm dưới đáy khung cuộn nội bộ
+      if (!laDieuKhienThat(el)) continue;                        // thùng chứa, không phải nút bấm
       // Ở ĐẦU trang chỉ báo phần tử NEO CỐ ĐỊNH — nội dung cuộn được thì cuộn tiếp là thấy.
       // Khi ĐÃ CUỘN HẾT xuống đáy thì mọi phần tử còn nằm dưới vạch đều thật sự
       // không chạm tới được (đệm đáy của <main> không đủ), nên xét tất cả.
@@ -231,6 +242,7 @@ function soatTrongTrang({ safeTop, safeBottom, daODayTrang }) {
     if (!nhinThay(el, r)) continue;
     if (r.top > cao || r.bottom < 0) continue; // chỉ xét phần đang hiển thị
     if (!dangHienThat(el, r)) continue;        // đang bị cuộn khuất trong khung nội bộ
+    if (!laDieuKhienThat(el)) continue;                        // thùng chứa, không phải nút bấm
     if (el.closest("table")) continue;         // ô trong bảng dày — xét riêng, không spam
     if (r.width >= NGUONG_CHAM && r.height >= NGUONG_CHAM) continue;
     chamNho.push({
@@ -244,8 +256,10 @@ function soatTrongTrang({ safeTop, safeBottom, daODayTrang }) {
   chamNho.sort((a, b) => a.canh - b.canh);
 
   // ── 4. Ô nhập khiến iOS tự phóng to ────────────────────────────────────────
+  // Chỉ Safari trên iPHONE mới tự phóng trang khi focus vào ô nhập < 16px; trên iPad
+  // khung nhìn đủ rộng nên không xảy ra. Kiểm ở khổ tablet chỉ tạo cảnh báo nhiễu.
   const tuPhongTo = [];
-  for (const el of document.querySelectorAll("input, select, textarea")) {
+  for (const el of dienThoai ? document.querySelectorAll("input, select, textarea") : []) {
     const r = el.getBoundingClientRect();
     if (!nhinThay(el, r)) continue;
     if (el.type === "hidden" || el.type === "checkbox" || el.type === "radio") continue;
@@ -336,6 +350,7 @@ for (const m of may) {
       safeTop: m.safeTop,
       safeBottom: m.safeBottom,
       daODayTrang: false,
+      dienThoai: m.dienThoai,
     });
 
     // Lượt hai: cuộn hết xuống đáy rồi soát lại phần bị che. Bắt đúng trường hợp
@@ -346,6 +361,7 @@ for (const m of may) {
       safeTop: m.safeTop,
       safeBottom: m.safeBottom,
       daODayTrang: true,
+      dienThoai: m.dienThoai,
     });
     bao.biCheCuoiTrang = oDay.biChe;
     bao.soBiCheCuoiTrang = oDay.soBiChe;
