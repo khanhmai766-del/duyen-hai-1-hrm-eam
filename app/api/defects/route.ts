@@ -721,6 +721,9 @@ export async function POST(req: NextRequest) {
     const requestYear = (detectedAt ?? new Date()).getUTCFullYear();
     const requestType = String(body.requestType ?? "").trim();
     if (!requestType) return fail("Vui lòng chọn loại phiếu");
+    if (materialRequest && !["Cơ", "Điện"].includes(requestType)) {
+      return fail("SYC sửa chữa vật tư chỉ được chọn phiếu Cơ hoặc phiếu Điện");
+    }
     if (requestType === "Hành Chính IT") return fail("Loại yêu cầu Hành Chính IT đã ngừng sử dụng");
     let environmentTarget: ReturnType<typeof resolveDefectEnvironmentSheetTarget> | null = null;
     if (requestType === "Môi Trường") {

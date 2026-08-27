@@ -82,12 +82,61 @@ export interface ReplacementLogItem extends MaterialReplacementLog {
   } | null;
 }
 
+/**
+ * SYC vật tư đã xử lý nhưng phiếu vật tư liên quan chưa quyết toán. Đây chưa phải
+ * lịch sử thay thế chính thức vì chưa khóa được khối lượng thực dùng.
+ */
+export interface PendingReplacementSettlement {
+  ticketId: string;
+  ticketNumber: string;
+  ticketType: string;
+  ticketStatus: string;
+  unit: string;
+  assignedPosition: string;
+  pctNumber: string | null;
+  usedQuantity: number | null;
+  defectId: string | null;
+  requestNumber: string | null;
+  defectCompletedAt: string | Date | null;
+  ticketCompletedAt: string | Date | null;
+  updatedAt: string | Date;
+  history: {
+    status: "PENDING" | "FINALIZED";
+    performedAt: string | Date | null;
+    finalizeAt: string | Date | null;
+    workOrderNumber: string | null;
+    content: string | null;
+    result: string | null;
+  } | null;
+  points: Array<{
+    id: string;
+    plannedQuantity: number | null;
+    machine: string;
+    system: string | null;
+    location: string | null;
+    managingPosition: string | null;
+    deviceSeq: string | null;
+    device: ReplacementDevice | null;
+    material: ReplacementMaterial;
+  }>;
+}
+
+export interface ReplacementHistoryMeta {
+  total: number;
+  capped: boolean;
+  pendingSettlements: PendingReplacementSettlement[];
+  pendingSettlementsCapped: boolean;
+}
+
 export function useReplacementHistory(filters: { q?: string } = {}) {
   const qs = new URLSearchParams();
   if (filters.q) qs.set("q", filters.q);
   return useQuery({
     queryKey: ["replacement-history", filters],
-    queryFn: () => apiGet<ReplacementLogItem[]>(`/api/material-replacements/history?${qs.toString()}`),
+    queryFn: () => apiGet<ReplacementLogItem[]>(`/api/material-replacements/history?${qs.toString()}`) as Promise<{
+      data: ReplacementLogItem[];
+      meta: ReplacementHistoryMeta;
+    }>,
     // Lịch sử là dữ liệu đã chốt, đổi rất ít. Không có staleTime thì mỗi lần chuyển
     // trang lại tải lại toàn bộ (646 dòng) và bảng chớp trắng.
     staleTime: 60_000,

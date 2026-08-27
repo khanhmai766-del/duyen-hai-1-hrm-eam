@@ -9,6 +9,7 @@ import { canViewMaterialReplacement } from "@/lib/material-replacement-access";
 import { resolvePositionViewScope } from "@/lib/position-data-scope";
 import { normalizeText } from "@/lib/nav";
 import { normalizePctNumber, normalizeReplacementSourceNote } from "@/lib/material-replacement-source";
+import { materialTicketReference } from "@/lib/material-ticket-sequence";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +18,9 @@ export const dynamic = "force-dynamic";
 // giao diện lọc khoảng tháng ở CLIENT nên trần cắt trước sẽ làm các tháng cũ biến mất
 // hẳn khỏi bảng. `meta.capped` vẫn báo lên khi chạm trần.
 const HISTORY_TAKE = 2000;
+// Nhóm chờ quyết toán chỉ chứa phiếu đang mở nên số lượng thực tế nhỏ. Vẫn đặt trần để
+// một dữ liệu lỗi không làm trang lịch sử tải vô hạn quan hệ điểm thay thế.
+const PENDING_SETTLEMENT_TAKE = 200;
 
 export async function GET(req: NextRequest) {
   return handle(async () => {
@@ -52,11 +56,12 @@ export async function GET(req: NextRequest) {
       ];
     }
 
-    const logs = await prisma.materialReplacementLog.findMany({
-      where,
-      orderBy: { replacedAt: "desc" },
-      take: HISTORY_TAKE,
-      include: {
+    const [logs, pendingSettlementTickets] = await Promise.all([
+      prisma.materialReplacementLog.findMany({
+        where,
+        orderBy: { replacedAt: "desc" },
+        take: HISTORY_TAKE,
+        include: {
         // Tầng 4: avatar đi qua publicUserRef (proxy theo key) — không chở base64.
         doneBy: { select: { id: true, name: true, position: true, avatarUrl: true, avatarKey: true } },
         // Vật tư đọc thẳng từ snapshot của log, không qua điểm thay thế.
@@ -101,7 +106,131 @@ export async function GET(req: NextRequest) {
             },
           },
         },
-      },
+        },
+      }),
+      // SYC đã xử lý nhưng phiếu vật tư chưa quyết toán chưa có MaterialReplacementLog.
+      // Trả riêng nhóm này để người dùng vẫn theo dõi được, tuyệt đối không tạo log kế
+      // hoạch sớm vì khối lượng thực dùng chỉ được khóa tại bước quyết toán.
+      prisma.materialTicket.findMany({
+        where: {
+          settledAt: null,
+          status: { notIn: ["HOAN_TAT", "TU_CHOI"] },
+          defect: { is: { isMaterialRequest: true, status: "DA_XU_LY" } },
+          replacementLinks: { some: {} },
+        },
+        orderBy: { updatedAt: "desc" },
+        take: PENDING_SETTLEMENT_TAKE,
+        select: {
+          id: true,
+          sequenceMonth: true,
+          sequenceNumber: true,
+          sequenceScope: true,
+          type: true,
+          unit: true,
+          status: true,
+          assignedPosition: true,
+          pctNumber: true,
+          usedQuantity: true,
+          completedAt: true,
+          updatedAt: true,
+          defectId: true,
+          repairRequestNumber: true,
+          defect: {
+            select: {
+              requestNumber: true,
+              completedAt: true,
+              confirmedHistoryId: true,
+              pendingHistory: {
+                select: {
+                  performedAt: true,
+                  finalizeAt: true,
+                  workOrderNumber: true,
+                  content: true,
+                  result: true,
+                },
+              },
+            },
+          },
+          replacementLinks: {
+            orderBy: { createdAt: "asc" },
+            select: {
+              plannedQuantity: true,
+              replacement: {
+                select: {
+                  id: true,
+                  machine: true,
+                  system: true,
+                  location: true,
+                  managingPosition: true,
+                  managingPositionCode: true,
+                  deviceSeq: true,
+                  material: {
+                    select: {
+                      id: true,
+                      code: true,
+                      name: true,
+                      unit: true,
+                      system: true,
+                      machine: true,
+                      category: true,
+                    },
+                  },
+                  device: { select: EQUIPMENT_DEVICE_SELECT },
+                },
+              },
+            },
+          },
+        },
+      }),
+    ]);
+
+    const pendingSettlements = pendingSettlementTickets.flatMap((ticket) => {
+      // Rào quyền theo từng điểm, cùng quy tắc với bảng lịch sử chính. Phiếu nhiều điểm
+      // chỉ trả những điểm người dùng được xem; không còn điểm nào thì giấu cả phiếu.
+      const visiblePoints = ticket.replacementLinks
+        .filter((link) => canViewMaterialReplacement(access, link.replacement, viewScope))
+        .map((link) => ({
+          id: link.replacement.id,
+          plannedQuantity: link.plannedQuantity,
+          machine: link.replacement.machine,
+          system: link.replacement.system,
+          location: link.replacement.location,
+          managingPosition: link.replacement.managingPosition,
+          deviceSeq: link.replacement.deviceSeq,
+          device: equipmentNodeToDevice(link.replacement.device),
+          material: link.replacement.material,
+        }));
+      if (visiblePoints.length === 0) return [];
+
+      const pending = ticket.defect?.pendingHistory;
+      return [{
+        ticketId: ticket.id,
+        ticketNumber: materialTicketReference(ticket),
+        ticketType: ticket.type,
+        ticketStatus: ticket.status,
+        unit: ticket.unit,
+        assignedPosition: ticket.assignedPosition,
+        pctNumber: normalizePctNumber(ticket.pctNumber) || null,
+        usedQuantity: ticket.usedQuantity,
+        defectId: ticket.defectId,
+        requestNumber: ticket.defect?.requestNumber ?? ticket.repairRequestNumber,
+        defectCompletedAt: ticket.defect?.completedAt,
+        ticketCompletedAt: ticket.completedAt,
+        updatedAt: ticket.updatedAt,
+        history: pending
+          ? {
+              status: "PENDING" as const,
+              performedAt: pending.performedAt,
+              finalizeAt: pending.finalizeAt,
+              workOrderNumber: pending.workOrderNumber,
+              content: pending.content,
+              result: pending.result,
+            }
+          : ticket.defect?.confirmedHistoryId
+            ? { status: "FINALIZED" as const, performedAt: null, finalizeAt: null, workOrderNumber: null, content: null, result: null }
+            : null,
+        points: visiblePoints,
+      }];
     });
     // Nội dung thực hiện của các dòng sinh từ SYC thay thế vật tư được ĐỌC SỐNG từ
     // lịch sử khiếm khuyết, không chép cứng: phiếu còn đi qua giai đoạn chờ chốt và
@@ -259,7 +388,12 @@ export async function GET(req: NextRequest) {
             : fromSnapshot,
         };
       }),
-      { total: visibleLogs.length, capped: logs.length === HISTORY_TAKE }
+      {
+        total: visibleLogs.length,
+        capped: logs.length === HISTORY_TAKE,
+        pendingSettlements,
+        pendingSettlementsCapped: pendingSettlementTickets.length === PENDING_SETTLEMENT_TAKE,
+      }
     );
   });
 }

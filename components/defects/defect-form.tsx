@@ -30,7 +30,6 @@ import {
   DEFECT_REQUEST_TYPES,
   DEFECT_STATUS,
   DEFECT_STATUS_ORDER,
-  defaultRequestTypeForMaterialCategory,
   isSelectableManagingPosition,
 } from "@/lib/constants";
 import { cn, formatDate, formatDateInput } from "@/lib/utils";
@@ -51,6 +50,7 @@ function toDateInput(v: Date | string | null | undefined): string {
 
 const NONE = "__none__";
 const YES_NO_OPTIONS = ["Có", "Không"] as const;
+const MATERIAL_REQUEST_TYPES = ["Cơ", "Điện"] as const;
 
 /**
  * Mồi cho phiếu ra từ "Chi tiết điểm thay thế" của Danh mục vật tư.
@@ -61,7 +61,7 @@ export type DefectMaterialRequestSeed = {
   replacementIds: string[];
   materialName: string;
   materialUnit: string;
-  /** Loại vật tư (Material.category) — quyết định gợi ý Cơ/Điện cho phiếu. */
+  /** Loại vật tư (Material.category), dùng để hiển thị/tham chiếu nguồn. */
   materialCategory: string | null;
   /** Node gắn phiếu là THƯ MỤC (điểm khai báo ở cấp hệ thống) — chỉ SYC thay thế mới cho phép. */
   primaryIsFolder: boolean;
@@ -148,7 +148,11 @@ export function DefectForm({
   // thông thường không cung cấp cửa chọn vật tư riêng.
   const materialRequest = initialMaterialRequest ?? null;
   const sectionSource = section ? DEFECT_SECTIONS[section].source : "";
-  const requestTypeOptions = section ? DEFECT_SECTIONS[section].requestTypes : DEFECT_REQUEST_TYPES;
+  const requestTypeOptions = materialRequest
+    ? MATERIAL_REQUEST_TYPES
+    : section
+      ? DEFECT_SECTIONS[section].requestTypes
+      : DEFECT_REQUEST_TYPES;
   const requestTypeLabel = React.useCallback(
     (requestType: string) => {
       if (requestType !== "Môi Trường" || !section) return requestType;
@@ -202,12 +206,10 @@ export function DefectForm({
     condition: defect?.condition ?? initialMaterialRequest?.demoDefaults?.condition ?? "",
     fireSafetyImpact: defect?.fireSafetyImpact ?? "Không",
     environmentSafetyImpact: defect?.environmentSafetyImpact ?? "Không",
-    // Phiếu mới để VHV chủ động chọn Cơ/Điện để tránh ghi nhầm Sheet — trừ SYC
-    // thay thế của dầu bôi trơn / lõi lọc dầu / bi nghiền than, luôn thuộc phần
-    // Cơ nên điền sẵn. Người lập vẫn đổi lại được.
+    // SYC thay thế vật tư mặc định vào phiếu Cơ, nhưng người lập được đổi sang
+    // phiếu Điện ở bước Nội dung trước khi lưu.
     requestType:
-      (defect?.requestType
-        ?? defaultRequestTypeForMaterialCategory(initialMaterialRequest?.materialCategory))
+      (defect?.requestType ?? (initialMaterialRequest ? "Cơ" : ""))
       || (section ? defaultRequestTypeOf(section) : ""),
     environmentSheet: defectEnvironmentSheetFromName(defect?.sourceSheetName) || sectionSource,
     requestNumber: defect?.requestNumber ?? "",
@@ -1366,7 +1368,13 @@ export function DefectForm({
         <div className={cn(!isSynced && step === 3 ? "block" : "hidden")}>
           <div className="mx-auto w-full max-w-2xl space-y-6">
             <Section eyebrow="Phiếu yêu cầu">
-              <Field label="Yêu cầu" required hint="Cơ và Điện ghi vào hai Google Sheet khác nhau.">
+              <Field
+                label="Yêu cầu"
+                required
+                hint={materialRequest
+                  ? "SYC vật tư mặc định là phiếu Cơ; có thể đổi sang phiếu Điện trước khi lưu."
+                  : "Cơ và Điện ghi vào hai Google Sheet khác nhau."}
+              >
                   <Select value={form.requestType} onValueChange={selectRequestType} disabled={isEdit}>
                     <SelectTrigger className="h-11"><SelectValue placeholder="Chọn loại yêu cầu" /></SelectTrigger>
                     <SelectContent>

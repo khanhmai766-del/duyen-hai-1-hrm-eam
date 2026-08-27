@@ -610,14 +610,24 @@ export default function DefectsPage() {
         hideDescriptionOnMobile
         mobileInline
       >
-        {!readOnlyDefects && <Button variant="soft" size="toolbar" className={canViewSync ? "hidden sm:inline-flex" : undefined} asChild>
+        {!readOnlyDefects && <Button
+          variant="soft"
+          size="toolbar"
+          className={canViewSync
+            ? "hidden sm:inline-flex"
+            : "h-11 w-12 shrink-0 px-0 sm:h-9 sm:w-auto sm:px-3"}
+          asChild
+        >
           <a
             href={sectionConfig.source === "CO" ? MECHANICAL_CHEMICAL_SHEET_URL : ELECTRICAL_SHEET_URL}
             target="_blank"
             rel="noopener noreferrer"
+            aria-label={`Mở ${sectionConfig.label}`}
+            title={`Mở ${sectionConfig.label}`}
           >
-            <FileSpreadsheet className="h-4 w-4" /> Mở {sectionConfig.label}
-            <ExternalLink className="h-3.5 w-3.5 opacity-70" aria-hidden="true" />
+            <FileSpreadsheet className="h-5 w-5 sm:h-4 sm:w-4" />
+            <span className="hidden sm:inline">Mở {sectionConfig.label}</span>
+            <ExternalLink className="hidden h-3.5 w-3.5 opacity-70 sm:block" aria-hidden="true" />
           </a>
         </Button>}
         {readOnlyDefects && (

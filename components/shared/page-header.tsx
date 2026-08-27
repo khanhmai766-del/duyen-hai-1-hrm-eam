@@ -29,9 +29,9 @@ export function PageHeader({
           ? "flex items-center justify-between gap-2 sm:items-start"
           : "flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between"
     )}>
-      <div className={cn("min-w-0", mobileInline && "shrink-0 sm:shrink")}>
+      <div className={cn("min-w-0", mobileInline && "flex-1 sm:shrink")}>
         <h1 className={mobileTitle ? "hidden text-2xl font-bold tracking-tight text-ink sm:block" : "text-2xl font-bold tracking-tight text-ink"}>{title}</h1>
-        {mobileTitle && <h1 className={cn("font-bold tracking-tight text-ink sm:hidden", mobileInline ? "whitespace-nowrap text-2xl" : "text-2xl")}>{mobileTitle}</h1>}
+        {mobileTitle && <h1 className={cn("font-bold tracking-tight text-ink sm:hidden", mobileInline ? "truncate whitespace-nowrap text-xl min-[380px]:text-2xl" : "text-2xl")}>{mobileTitle}</h1>}
         {description && (
           <p className={hideDescriptionOnMobile ? "mt-1 hidden text-sm text-muted-foreground sm:block" : "mt-1 text-sm text-muted-foreground"}>
             {description}
@@ -43,7 +43,7 @@ export function PageHeader({
           stacked
             ? "flex w-full flex-wrap items-center gap-2.5"
             : mobileInline
-              ? "flex min-w-0 flex-1 items-center justify-end gap-1.5 sm:shrink-0 sm:flex-none sm:flex-wrap sm:gap-2.5"
+              ? "flex shrink-0 items-center justify-end gap-1.5 sm:flex-none sm:flex-wrap sm:gap-2.5"
               : "flex shrink-0 flex-wrap items-center justify-end gap-2.5"
         )}>
           {children}

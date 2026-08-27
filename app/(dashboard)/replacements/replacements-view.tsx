@@ -24,6 +24,7 @@ import { ReplacementScheduleImportDialog } from "@/components/materials/replacem
 import { ReplacementPointForm } from "@/components/materials/replacement-point-form";
 import { ReplacementPointDetailsDialog } from "@/components/materials/replacement-point-details-dialog";
 import { ReplacementHistoryDetails } from "@/components/materials/replacement-history-details";
+import { PendingReplacementSettlements } from "@/components/materials/pending-replacement-settlements";
 import { PendingHistoryEditDialog } from "@/components/repair/pending-history-edit-dialog";
 import { LockChip } from "@/components/shared/lock-chip";
 import { Card } from "@/components/ui/card";
@@ -64,6 +65,7 @@ import { positionLabelOf, positionsMatch } from "@/lib/position-catalog";
 import { EquipmentTreePicker } from "@/components/devices/equipment-tree-picker";
 import { usePositions } from "@/hooks/useUsers";
 import { normalizePctNumber } from "@/lib/material-replacement-source";
+import { normalizeText } from "@/lib/nav";
 
 type TabKey = "schedule" | "status" | "history";
 type HistorySortKey = "subject" | "pctNumber" | "replacedAt" | "quantity" | "doneBy" | "locked";
@@ -302,6 +304,10 @@ export function ReplacementsPageContent({ only }: { only?: TabKey } = {}) {
   const { data, isLoading } = useReplacements({ q: debouncedSearchQ }, { enabled: only !== "history" });
   const history = useReplacementHistory();
   const logs = React.useMemo(() => history.data?.data ?? [], [history.data?.data]);
+  const pendingSettlements = React.useMemo(
+    () => history.data?.meta.pendingSettlements ?? [],
+    [history.data?.meta.pendingSettlements]
+  );
   const del = useDeleteReplacement();
   const delLog = useDeleteReplacementLog();
   const all = React.useMemo(() => data?.data ?? [], [data?.data]);
@@ -328,6 +334,9 @@ export function ReplacementsPageContent({ only }: { only?: TabKey } = {}) {
               replacementLogMachine(log) === machineFilter
           )
           .map((log) => positionLabelOf(log.replacement?.managingPosition)),
+        ...pendingSettlements.flatMap((settlement) =>
+          settlement.points.map((point) => positionLabelOf(point.managingPosition))
+        ),
       ].filter((position): position is string => Boolean(position))
     )
   )
@@ -451,6 +460,48 @@ export function ReplacementsPageContent({ only }: { only?: TabKey } = {}) {
         return `${l.replacement?.material.code} ${l.replacement?.material.name} ${device?.code ?? ""} ${device?.name ?? ""} ${l.note ?? ""} ${l.requestNumber ?? ""} ${l.pctNumber ?? ""} ${l.defectHistory?.workOrderNumber ?? ""} ${l.defectHistory?.content ?? ""} ${l.defectHistory?.result ?? ""}`.toLowerCase().includes(searchQ.toLowerCase());
       })
     : logsInMonthRange;
+  const filteredPendingSettlements = React.useMemo(
+    () => pendingSettlements.filter((settlement) => {
+      const points = settlement.points.filter((point) => {
+        const matchesMachine = machineFilter === "ALL"
+          || (point.material.machine ?? point.machine) === machineFilter;
+        const matchesPosition = positionFilter === "ALL"
+          || positionsMatch(point.managingPosition, positionFilter);
+        const matchesCategory = replacementCategoryMatches(point.material.category, categoryFilter);
+        return matchesMachine && matchesPosition && matchesCategory;
+      });
+      if (points.length === 0) return false;
+
+      const date = settlement.history?.performedAt
+        ?? settlement.defectCompletedAt
+        ?? settlement.ticketCompletedAt
+        ?? settlement.updatedAt;
+      const settlementMonth = ym(date);
+      if (settlementMonth < historyFromMonth || settlementMonth > historyToMonth) return false;
+
+      const keyword = normalizeText(searchQ);
+      if (!keyword) return true;
+      return normalizeText([
+        settlement.requestNumber,
+        settlement.ticketNumber,
+        settlement.pctNumber,
+        settlement.assignedPosition,
+        settlement.history?.workOrderNumber,
+        settlement.history?.content,
+        settlement.history?.result,
+        ...points.flatMap((point) => [
+          point.material.code,
+          point.material.name,
+          point.device?.code,
+          point.device?.name,
+          point.deviceSeq,
+          point.system,
+          point.location,
+        ]),
+      ].filter(Boolean).join(" ")).includes(keyword);
+    }),
+    [pendingSettlements, machineFilter, positionFilter, categoryFilter, historyFromMonth, historyToMonth, searchQ]
+  );
   // Phân trang bảng lịch sử — cùng khuôn với Lịch sử sửa chữa. Cần thiết vì bộ lưu trữ
   // nhập từ sổ theo dõi có 645 dòng: mở rộng khoảng tháng ra cả năm là dựng một lượt
   // vài trăm hàng, vừa chậm vừa khó đọc.
@@ -1074,14 +1125,22 @@ export function ReplacementsPageContent({ only }: { only?: TabKey } = {}) {
         <div className="space-y-6">
           {history.isLoading ? (
             <TableSkeleton rows={8} />
-          ) : logs.length === 0 && !historyHasActiveFilters ? (
-            <EmptyState
-              icon={History}
-              title={`Không có ghi nhận thay thế ${historyRangeLabel}`}
-              description="Chọn khoảng tháng khác để xem lịch sử thay thế."
-            />
           ) : (
-            <Card className="overflow-hidden">
+            <>
+              <PendingReplacementSettlements
+                rows={filteredPendingSettlements}
+                capped={history.data?.meta.pendingSettlementsCapped}
+              />
+              {logs.length === 0 ? (
+                filteredPendingSettlements.length === 0 && (
+                  <EmptyState
+                    icon={History}
+                    title={historyHasActiveFilters ? "Không tìm thấy hồ sơ phù hợp" : `Không có ghi nhận thay thế ${historyRangeLabel}`}
+                    description="Chọn khoảng tháng hoặc điều chỉnh bộ lọc để xem lịch sử thay thế."
+                  />
+                )
+              ) : (
+              <Card className="overflow-hidden">
               {/* Thanh công cụ cùng khuôn Lịch sử sửa chữa: cỡ trang trái, tìm kiếm phải. */}
               <div className="flex flex-col gap-3 border-b border-border bg-muted/25 px-3 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:px-4">
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -1376,7 +1435,9 @@ export function ReplacementsPageContent({ only }: { only?: TabKey } = {}) {
                 </div>
                 <HistoryPager page={historySafePage} totalPages={historyTotalPages} onGo={setHistoryPage} />
               </div>
-            </Card>
+              </Card>
+              )}
+            </>
           )}
         </div>
       )}
