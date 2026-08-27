@@ -1,4 +1,4 @@
-export const MAX_DEFECT_RELATED_DEVICES = 20;
+export const MAX_DEFECT_RELATED_DEVICES = 50;
 
 export function normalizeRelatedDeviceSeqs(value: unknown, primaryDeviceSeq?: unknown): string[] | null {
   if (value === undefined) return [];

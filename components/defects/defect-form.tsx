@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useCreateDefect, useDefectTwoWaySync, useUpdateDefect, type DefectItem } from "@/hooks/useDefects";
 import { usePositions, useUsers } from "@/hooks/useUsers";
 import { MAX_DEFECT_IMAGES } from "@/lib/defect-images";
+import { MAX_DEFECT_RELATED_DEVICES } from "@/lib/defect-related-devices";
 import { useEquipmentNode } from "@/hooks/useEquipment";
 import {
   EquipmentTreePicker,
@@ -453,8 +454,8 @@ export function DefectForm({
           relatedDeviceUnits: {},
         };
       }
-      if (current.relatedDeviceSeqs.length >= 20) {
-        toast.error("Mỗi khiếm khuyết chỉ được chọn tối đa 20 thiết bị liên quan");
+      if (current.relatedDeviceSeqs.length >= MAX_DEFECT_RELATED_DEVICES) {
+        toast.error(`Mỗi khiếm khuyết chỉ được chọn tối đa ${MAX_DEFECT_RELATED_DEVICES} thiết bị liên quan`);
         return current;
       }
       return {
