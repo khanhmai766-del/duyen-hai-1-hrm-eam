@@ -35,7 +35,7 @@ import {
   useTicketReplacementRequest,
   usePrefetchTicketOptions } from "@/hooks/useMaterialTickets";
 import { DefectForm } from "@/components/defects/defect-form";
-import type { DefectItem } from "@/hooks/useDefects";
+import { useDefects, type DefectItem } from "@/hooks/useDefects";
 import { usePositions } from "@/hooks/useUsers";
 import { MIN_USAGE_PHOTOS, usesHandwrittenBbnt, COMMON_MATERIAL_POSITION, displayMaterialCategory, GAS_RETURN_STATUS, isChemicalFlowTicket, isGasCylinderTicket, isOtherMaterialAdvanceTicket, isOtherMaterialCategory, isOtherMaterialTicketType, isSingleStepTicketMaterial, CHEMICAL_TICKET_TYPE, isSupplementReason, MATERIAL_CATEGORY_FILTERS, materialCategoryMatches, materialTicketBelongsToRecoveryTab, materialTicketRequiresRecovery, OTHER_MATERIAL_ADVANCE_TICKET_TYPE, OTHER_MATERIAL_GROUP, OTHER_MATERIAL_TICKET_TYPE, ticketReasonsFor, TICKET_REASONS, TICKET_REASON_OTHER, SINGLE_STEP_TICKET_TYPE, TICKET_MATERIAL_CATEGORIES, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
 import { normalizeText } from "@/lib/nav";
@@ -2417,6 +2417,7 @@ function LotAllocationPicker({
  */
 function RepairRequestSection({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | null }) {
   const [open, setOpen] = useState(false);
+  const [adoptOpen, setAdoptOpen] = useState(false);
   const applies = showsRepairRequestSection(t);
   // Tải điều kiện ngay khi hồ sơ phiếu được mở để quyết định CÓ HIỆN NÚT hay không;
   // trước đây chỉ tải sau cú bấm nên form đã mở rồi mới biết phiếu chưa đủ điều kiện.
@@ -2488,8 +2489,18 @@ function RepairRequestSection({ t, viewer }: { t: MaterialTicket; viewer: Ticket
               )}
             </>
           )}
+          {/* Cửa hậu QUẢN TRỊ: cố ý đặt NGOÀI chuỗi điều kiện phía trên, vì nó tồn tại đúng
+              cho lúc luồng chuẩn không đi được (SYC đã ra sẵn ở tab Khiếm khuyết). */}
+          {viewer?.isAdmin && (
+            <button type="button" className="pdf" onClick={() => setAdoptOpen(true)}
+              title="Ngoại lệ dành cho Quản trị: neo phiếu vào một SYC đã lập ở tab Khiếm khuyết">
+              <Wrench size={14} /> Gắn SYC đã có
+            </button>
+          )}
         </div>
       </div>
+
+      {adoptOpen && <AdoptDefectDialog t={t} onClose={() => setAdoptOpen(false)} />}
 
       {open && seed.data?.eligible && canLinkDefect && (
         <div style={{ position: "fixed", inset: 0, zIndex: 60 }}>
@@ -2548,6 +2559,139 @@ function RepairRequestSection({ t, viewer }: { t: MaterialTicket; viewer: Ticket
         </div>
       )}
     </>
+  );
+}
+
+/**
+ * NGOẠI LỆ CHO QUẢN TRỊ — neo phiếu vật tư vào một SYC đã lập sẵn ở tab Khiếm khuyết.
+ *
+ * Luồng chuẩn là "Ra SYC sửa chữa": tạo mới hồ sơ thay thế vật tư từ chính phiếu. Nhưng
+ * thực tế người vận hành thường ra SYC trước rồi mới lập phiếu vật tư — SYC đó là khiếm
+ * khuyết thường nên phiếu không neo vào được và kẹt ở bước xác nhận vật tư lãnh.
+ *
+ * Server không neo suông: nó sinh đủ các dòng điểm thay thế cho SYC rồi mới gắn, nên vòng
+ * kín quyết toán vẫn nguyên. Xem action `adoptDefect` trong app/api/material-tickets/[id].
+ */
+function AdoptDefectDialog({ t, onClose }: { t: MaterialTicket; onClose: () => void }) {
+  const [q, setQ] = useState("");
+  const [picked, setPicked] = useState<DefectItem | null>(null);
+  const [reason, setReason] = useState("");
+  const act = useTicketAction(t.id);
+
+  // Chỉ tra khi đã gõ đủ 2 ký tự — danh sách khiếm khuyết rất lớn.
+  const search = useDefects({ q: q.trim().length >= 2 ? q.trim() : undefined, unit: t.unit, limit: 20 });
+  const results = q.trim().length >= 2 ? (search.data?.data ?? []) : [];
+
+  const submit = async () => {
+    if (!picked) return toast.error("Chưa chọn số yêu cầu sửa chữa");
+    if (reason.trim().length < 10) return toast.error("Vui lòng nêu lý do (tối thiểu 10 ký tự)");
+    try {
+      await act.mutateAsync({ action: "adoptDefect", defectId: picked.id, reason: reason.trim() });
+      toast.success(`Đã gắn SYC ${picked.requestNumber} vào phiếu`);
+      onClose();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Không gắn được SYC");
+    }
+  };
+
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 60 }}>
+      <div style={{ position: "absolute", inset: 0, background: "rgba(15,23,42,.45)" }} onClick={onClose} />
+      <div
+        style={{
+          position: "absolute", top: 0, right: 0, bottom: 0, width: "100%", maxWidth: 640,
+          background: "#fff", boxShadow: "-8px 0 32px rgba(15,23,42,.18)", display: "flex",
+          flexDirection: "column", overflow: "hidden",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: 16, borderBottom: "1px solid #e2e8f0" }}>
+          <div>
+            <b style={{ fontSize: 16 }}>Gắn SYC đã có</b>
+            <p style={{ margin: "2px 0 0", fontSize: 12, color: "#64748b" }}>
+              Ngoại lệ dành cho Quản trị — dùng khi số yêu cầu đã được lập sẵn ở tab Khiếm khuyết.
+            </p>
+          </div>
+          <button type="button" onClick={onClose} aria-label="Đóng"
+            style={{ width: 36, height: 36, borderRadius: 8, border: "none", background: "transparent", cursor: "pointer" }}>
+            <X size={18} />
+          </button>
+        </div>
+
+        <div style={{ flex: 1, minHeight: 0, overflow: "auto", padding: 16, display: "grid", gap: 14 }}>
+          <label style={{ display: "grid", gap: 6 }}>
+            <span style={{ fontSize: 13, fontWeight: 600 }}>Tìm số yêu cầu (tổ máy {t.unit})</span>
+            <input
+              value={q}
+              onChange={(e) => { setQ(e.target.value); setPicked(null); }}
+              placeholder="Nhập số yêu cầu hoặc nội dung, ví dụ: 2025/2026 hoặc bổ sung dầu VRL"
+              style={{ height: 40, borderRadius: 8, border: "1px solid #cbd5e1", padding: "0 12px", fontSize: 14 }}
+            />
+          </label>
+
+          <div style={{ border: "1px solid #e2e8f0", borderRadius: 10, overflow: "hidden" }}>
+            {q.trim().length < 2 ? (
+              <p style={{ margin: 0, padding: 14, fontSize: 13, color: "#64748b" }}>Gõ ít nhất 2 ký tự để tìm.</p>
+            ) : search.isLoading ? (
+              <p style={{ margin: 0, padding: 14, fontSize: 13, color: "#64748b" }}>Đang tìm…</p>
+            ) : results.length === 0 ? (
+              <p style={{ margin: 0, padding: 14, fontSize: 13, color: "#64748b" }}>Không tìm thấy số yêu cầu phù hợp.</p>
+            ) : (
+              results.map((d) => {
+                const chosen = picked?.id === d.id;
+                return (
+                  <button
+                    key={d.id}
+                    type="button"
+                    onClick={() => setPicked(d)}
+                    style={{
+                      display: "block", width: "100%", textAlign: "left", padding: "10px 12px",
+                      border: "none", borderBottom: "1px solid #f1f5f9", cursor: "pointer",
+                      background: chosen ? "#eff6ff" : "#fff",
+                    }}
+                  >
+                    <span style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 13, fontWeight: 700, color: "#0f172a" }}>
+                      {d.requestNumber || "(chưa cấp số)"}
+                      <span style={{ fontWeight: 500, color: "#64748b" }}>· {d.system || "—"}</span>
+                    </span>
+                    <span style={{ display: "block", marginTop: 2, fontSize: 12, color: "#475569" }}>
+                      {(d.content || "").slice(0, 110) || "(không có nội dung)"}
+                    </span>
+                  </button>
+                );
+              })
+            )}
+          </div>
+
+          <label style={{ display: "grid", gap: 6 }}>
+            <span style={{ fontSize: 13, fontWeight: 600 }}>Lý do gắn thủ công *</span>
+            <textarea
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              rows={3}
+              placeholder="Ví dụ: SYC đã ra ngày 26/08 trước khi lập phiếu vật tư, công việc đã thực hiện xong."
+              style={{ borderRadius: 8, border: "1px solid #cbd5e1", padding: 10, fontSize: 14, resize: "vertical" }}
+            />
+            <span style={{ fontSize: 12, color: "#64748b" }}>
+              Lý do được ghi vào nhật ký hệ thống kèm tên người thao tác.
+            </span>
+          </label>
+        </div>
+
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, padding: 16, borderTop: "1px solid #e2e8f0" }}>
+          <button type="button" onClick={onClose}
+            style={{ height: 40, padding: "0 16px", borderRadius: 8, border: "1px solid #cbd5e1", background: "#fff", cursor: "pointer" }}>
+            Huỷ
+          </button>
+          <button type="button" onClick={submit} disabled={act.isPending || !picked || reason.trim().length < 10}
+            style={{
+              height: 40, padding: "0 16px", borderRadius: 8, border: "none", color: "#fff", cursor: "pointer",
+              background: act.isPending || !picked || reason.trim().length < 10 ? "#94a3b8" : "#0f766e",
+            }}>
+            {act.isPending ? "Đang gắn…" : "Gắn SYC vào phiếu"}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 

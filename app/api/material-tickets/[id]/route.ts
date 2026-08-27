@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { buildBbntDoDocument, deliveryNoteForDocuments, getTicket, ITEM_INCLUDE, type FullTicket } from "@/lib/material-ticket-bbnt-do";
-import { ok, fail, requireUser, handle, audit } from "@/lib/api";
+import { ok, fail, requireUser, requireRole, handle, audit } from "@/lib/api";
 import { isShiftLeader, isTechnician, getWorkflowRoleMap, isMaterialTicketExtraAssignedPosition, returnStepAllowed, stepAllowedWithMap } from "@/lib/material-workflow";
 import { resolveSignatureBuffer } from "@/lib/bbnt-do-doc";
 import { generateBbntDoc, type BbntItem } from "@/lib/bbnt-doc";
@@ -16,6 +16,7 @@ import { countUsagePhotos, deleteUsagePhotos } from "@/lib/material-usage-photo"
 import { deleteDeliveryPhotos, deliveryPhotoLotsOfTicket, loadDeliveryPhotoBuffer, purgeSettledLotPhotos, uploadDeliveryPhoto, MISSING_DELIVERY_PHOTO_MESSAGE } from "@/lib/material-delivery-photo";
 import { keyFromPublicUrl } from "@/lib/s3";
 import { syncTicketReplacementLinks, type LinkablePoint } from "@/lib/material-ticket-replacement-link";
+import { pointLabelOf, resolveMaterialRequest } from "@/lib/defect-material-request";
 import { MIN_USAGE_PHOTOS, MISSING_USAGE_PHOTO_MESSAGE, usesHandwrittenBbnt, CHEMICAL_TICKET_TYPE, COMMON_MATERIAL_POSITION, GAS_RETURN_STATUS, isChemicalFlowTicket, isGasCylinderCategory, isGasCylinderTicket, isOtherMaterialAdvanceTicket, isOtherMaterialTicketType, materialTicketRequiresRecovery, OTHER_MATERIAL_ADVANCE_TICKET_TYPE, OTHER_MATERIAL_TICKET_TYPE, recoveryRequiredForReason, SINGLE_STEP_TICKET_TYPE, ticketReasonAllowed, TICKET_MATERIAL_CATEGORIES, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
 import { positionsMatch } from "@/lib/position-catalog";
 import { replacementPointDisplayLabel, replacementPointSelectionKey } from "@/lib/material-replacement-display";
@@ -1364,6 +1365,108 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       if (!up) return fail("Không tìm thấy phiếu sau khi gắn SYC", 404);
       await audit(user.id, "MT_LINK_DEFECT", "MaterialTicket", t.id,
         `${materialTicketReference(t)}: gắn số yêu cầu sửa chữa ${defect.requestNumber}`);
+      return ok(up);
+    }
+
+    /**
+     * CỬA HẬU CHỈ DÀNH CHO QUẢN TRỊ — gắn một SYC ĐÃ CÓ (lập ở tab Khiếm khuyết) vào phiếu.
+     *
+     * Vì sao cần: luồng chuẩn `linkDefect` đòi SYC phải là hồ sơ thay thế vật tư và phải
+     * mang sẵn đủ các điểm thay thế của phiếu. Thực tế người vận hành ra SYC ở tab Khiếm
+     * khuyết trước rồi mới lập phiếu vật tư, nên SYC đó là khiếm khuyết thường và phiếu
+     * không neo vào đâu được — phiếu kẹt vĩnh viễn ở bước xác nhận vật tư lãnh.
+     *
+     * Cách xử lý KHÔNG phải nới lỏng cổng kiểm rồi neo suông: làm vậy thì lúc quyết toán,
+     * lịch sử thay thế và dự toán năm mất mắt xích. Thay vào đó "nhận nuôi" SYC — sinh đủ
+     * `DefectMaterialRequest` từ chính các điểm phiếu đang gắn rồi đánh dấu SYC là hồ sơ
+     * thay thế vật tư. Sau bước này SYC thoả mãn mọi điều kiện của luồng chuẩn, vòng kín
+     * còn nguyên.
+     *
+     * Bắt buộc nêu lý do và ghi vào AuditLog: đây là ngoại lệ, phải truy được về sau.
+     */
+    if (action === "adoptDefect") {
+      requireRole(user, ["ADMIN"]);
+
+      const defectId = String(body.defectId || "").trim();
+      if (!defectId) return fail("Thiếu số yêu cầu cần gắn");
+      const reason = String(body.reason || "").trim();
+      if (reason.length < 10) return fail("Vui lòng nêu lý do gắn SYC đã có (tối thiểu 10 ký tự)");
+
+      if (!["DE_XUAT", "UNG", "SU_DUNG_HIEN_CO"].includes(t.type)) {
+        return fail("Loại phiếu này không hỗ trợ ra SYC thay thế vật tư", 409);
+      }
+      if (isGasCylinderTicket(t.materialCategory)) {
+        return fail("Phiếu Chai khí không phát sinh SYC sửa chữa", 409);
+      }
+      if (!t.receivedAt && !t.vhvReceivedAt) {
+        return fail("Chỉ được gắn SYC sau khi vật tư lãnh đã được xác nhận", 409);
+      }
+      if (t.defectId || t.repairRequestNumber) {
+        return fail(`Phiếu đã gắn SYC ${t.repairRequestNumber || t.defectId}`, 409);
+      }
+
+      const ticketLinks = await prisma.materialTicketReplacement.findMany({
+        where: { ticketId: t.id },
+        select: { replacementId: true },
+      });
+      if (ticketLinks.length === 0) {
+        return fail("Phiếu chưa gắn điểm thay thế nên không thể neo SYC", 409);
+      }
+
+      const defect = await prisma.defect.findUnique({
+        where: { id: defectId },
+        select: { id: true, requestNumber: true, unit: true, isMaterialRequest: true, cancelledAt: true },
+      });
+      if (!defect) return fail("Không tìm thấy số yêu cầu", 404);
+      if (defect.cancelledAt) return fail("Số yêu cầu này đã bị hủy, không thể gắn vào phiếu", 409);
+      if (!defect.requestNumber?.trim()) {
+        return fail("Số yêu cầu chưa được cấp số, chưa thể gắn vào phiếu", 409);
+      }
+      // Chốt tổ máy: rào rẻ nhất chặn chọn nhầm SYC của tổ máy khác. Cương vị KHÔNG chốt
+      // vì ngoại lệ hay rơi đúng vào ca một cương vị làm hộ cương vị khác.
+      if (defect.unit !== t.unit) {
+        return fail(`SYC ${defect.requestNumber} thuộc tổ máy ${defect.unit}, không khớp phiếu (${t.unit})`, 409);
+      }
+
+      // Dùng đúng bộ giải mà luồng chuẩn dùng, để nhãn và số lượng ghi ra không lệch.
+      const resolved = await resolveMaterialRequest(prisma, ticketLinks.map((link) => link.replacementId));
+      if (typeof resolved === "string") return fail(resolved, 409);
+
+      await prisma.$transaction(async (tx) => {
+        for (const point of resolved.points) {
+          await tx.defectMaterialRequest.upsert({
+            where: { defectId_replacementId: { defectId: defect.id, replacementId: point.id } },
+            create: {
+              defectId: defect.id,
+              replacementId: point.id,
+              materialId: point.material.id,
+              // Cùng công thức nhu cầu của điểm: dung tích mỗi thiết bị × số thiết bị.
+              quantity: Math.max(0, point.quantity) * Math.max(1, point.deviceCount || 1),
+              unitLabel: point.material.unit,
+              pointLabel: pointLabelOf(point),
+            },
+            update: {},
+          });
+        }
+        if (!defect.isMaterialRequest) {
+          await tx.defect.update({ where: { id: defect.id }, data: { isMaterialRequest: true } });
+        }
+        await tx.materialTicket.update({
+          where: { id: t.id },
+          data: {
+            defectId: defect.id,
+            repairRequestNumber: defect.requestNumber,
+            ...(t.status === "CHO_PHIEU_YCSC" ? { status: "SU_DUNG_VAT_TU" } : {}),
+          },
+        });
+      });
+
+      await audit(user.id, "MT_ADOPT_DEFECT", "MaterialTicket", t.id,
+        `${materialTicketReference(t)}: QUẢN TRỊ gắn SYC đã có ${defect.requestNumber} `
+        + `(${resolved.points.length} điểm) — lý do: ${reason}`);
+
+      const up = await prisma.materialTicket.findUnique({ where: { id: t.id }, include: ITEM_INCLUDE });
+      if (!up) return fail("Không tìm thấy phiếu sau khi gắn SYC", 404);
       return ok(up);
     }
 
