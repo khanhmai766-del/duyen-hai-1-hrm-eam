@@ -503,9 +503,28 @@ export const TICKET_REASON_OTHER = "Khác";
  */
 export const BULK_TICKET_REASONS = ["Nhập", "Khác"] as const;
 
+/**
+ * Dầu mỡ gắn với MỘT ĐIỂM thay thế trên thiết bị: hoặc châm thêm cho đủ mức (Bổ sung),
+ * hoặc xả cũ thay mới (Thay thế). "Nhập" là nghiệp vụ nhập kho theo lô, "Khác" là lối
+ * thoát cho vật tư không phân loại được — cả hai đều không có nghĩa với dầu.
+ *
+ * Chặn ở đây không chỉ để form gọn. Cờ `recoveryOnSupplement` (điểm vẫn phải lập biên bản
+ * thu hồi dù chỉ châm bổ sung) CHỈ kích hoạt khi lý do đúng dạng "Bổ sung"; chọn "Khác"
+ * là cờ im lặng không nổ, phiếu đi hết luồng mà thiếu BBTHVT — đã xảy ra thật với phiếu
+ * 1680/VH1 và 1682/VH1 tháng 08/2026.
+ */
+export const OIL_TICKET_REASONS = ["Bổ sung", "Thay thế"] as const;
+
+/** Loại vật tư này là dầu mỡ bôi trơn? */
+export function isLubricantCategory(materialCategory: string | null | undefined): boolean {
+  return materialCategory === "Dầu bôi trơn";
+}
+
 /** Danh sách lý do chọn được theo loại vật tư của phiếu. */
 export function ticketReasonsFor(materialCategory: string | null | undefined): readonly string[] {
-  return isChemicalFlowTicket(materialCategory) ? BULK_TICKET_REASONS : TICKET_REASONS;
+  if (isChemicalFlowTicket(materialCategory)) return BULK_TICKET_REASONS;
+  if (isLubricantCategory(materialCategory)) return OIL_TICKET_REASONS;
+  return TICKET_REASONS;
 }
 
 /** Lý do đã nhập có hợp lệ với loại vật tư không — dùng chung cho giao diện và máy chủ. */

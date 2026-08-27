@@ -1796,22 +1796,31 @@ function joinReason(choice: string, detail: string) {
 function ReasonPicker({
   choice, detail, onChoice, onDetail, options = TICKET_REASONS,
 }: { choice: string; detail: string; onChoice: (v: string) => void; onDetail: (v: string) => void; options?: readonly string[] }) {
+  // Vẽ ĐỦ bốn lý do rồi KHOÁ những cái không hợp loại vật tư, thay vì ẩn đi. Ẩn thì người
+  // dùng tưởng hệ thống thiếu lựa chọn; để mờ kèm tooltip thì thấy ngay là có luật.
   return (
     <>
       <div className="reason-chips">
-        {options.map((item) => (
-          <button
-            key={item}
-            type="button"
-            className={choice === item ? "on" : ""}
-            onClick={() => {
-              if (choice !== item) onDetail("");
-              onChoice(item);
-            }}
-          >
-            {item}
-          </button>
-        ))}
+        {TICKET_REASONS.map((item) => {
+          const allowed = options.includes(item);
+          return (
+            <button
+              key={item}
+              type="button"
+              disabled={!allowed}
+              aria-disabled={!allowed}
+              title={allowed ? undefined : `Loại vật tư này không dùng lý do "${item}"`}
+              className={choice === item ? "on" : ""}
+              onClick={() => {
+                if (!allowed) return;
+                if (choice !== item) onDetail("");
+                onChoice(item);
+              }}
+            >
+              {item}
+            </button>
+          );
+        })}
       </div>
       {choice && (
         <input
@@ -4364,6 +4373,8 @@ const CSS = `
 .reason-chips button{min-height:34px;padding:7px 6px;border-radius:8px;border:1.5px solid ${C.line};background:#fff;font-weight:600;font-size:12px;line-height:1.15;color:#64748b;cursor:pointer;white-space:nowrap;transition:border-color .15s ease,background-color .15s ease,color .15s ease;}
 .reason-chips button:hover{border-color:#94a3b8;background:#f8fafc;}
 .reason-chips button.on{border-color:${C.accent};background:${C.accent}10;color:${C.accent};}
+.reason-chips button:disabled{opacity:.45;background:#f1f5f9;border-color:#e2e8f0;color:#94a3b8;cursor:not-allowed;}
+.reason-chips button:disabled:hover{border-color:#e2e8f0;background:#f1f5f9;}
 .reason-detail{margin-top:6px;}
 /* Hộp Sửa phiếu chia đôi bề ngang; để ô Lý do ăn trọn hàng để 4 lựa chọn nằm một dòng
    thay vì gãy 3+1 trông như xếp hỏng. */
