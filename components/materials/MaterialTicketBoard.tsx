@@ -22,6 +22,7 @@ import {
   type TruckRow,
 } from "./ChemicalTruckRows";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
@@ -2583,30 +2584,56 @@ type AdoptCandidate = {
   source: "Khiếm khuyết" | "Lịch sử sửa chữa";
 };
 
+/** Hoãn giá trị lại `delay` ms — để mỗi phím gõ không bắn một request. */
+function useDebounced<T>(value: T, delay = 350) {
+  const [debounced, setDebounced] = useState(value);
+  React.useEffect(() => {
+    const timer = setTimeout(() => setDebounced(value), delay);
+    return () => clearTimeout(timer);
+  }, [value, delay]);
+  return debounced;
+}
+
+/**
+ * NGOẠI LỆ CHO QUẢN TRỊ — neo phiếu vật tư vào một SYC đã lập sẵn.
+ *
+ * Luồng chuẩn là "Ra SYC sửa chữa": tạo mới hồ sơ thay thế vật tư từ chính phiếu. Nhưng
+ * thực tế người vận hành thường ra SYC trước rồi mới lập phiếu vật tư — SYC đó là khiếm
+ * khuyết thường nên phiếu không neo vào được và kẹt ở bước xác nhận vật tư lãnh.
+ *
+ * Server không neo suông: nó sinh đủ các dòng điểm thay thế cho SYC rồi mới gắn, nên vòng
+ * kín quyết toán vẫn nguyên. Xem action `adoptDefect` trong app/api/material-tickets/[id].
+ */
 function AdoptDefectDialog({ t, onClose }: { t: MaterialTicket; onClose: () => void }) {
   const [q, setQ] = useState("");
   const [picked, setPicked] = useState<AdoptCandidate | null>(null);
   const [reason, setReason] = useState("");
   const act = useTicketAction(t.id);
 
-  // Chỉ tra khi đã gõ đủ 2 ký tự — hai bảng nguồn đều rất lớn.
-  const keyword = q.trim().length >= 2 ? q.trim() : undefined;
+  // Gõ phím KHÔNG gọi API ngay: `/api/defects` là endpoint nặng (đo trên production có
+  // lần 1,4 giây), bắn mỗi ký tự sẽ làm cả trang giật. Chờ ngừng gõ 350ms rồi mới tra.
+  const typed = q.trim();
+  const keyword = useDebounced(typed.length >= 2 ? typed : "", 350);
+  const enabled = keyword.length >= 2;
 
   // NGUỒN 1 — Khiếm khuyết thiết bị PHẦN CƠ (Sheet Cơ - Hóa: Cơ | Môi Trường | Hóa).
-  const defects = useDefects({ q: keyword, unit: t.unit, section: "co", limit: 20 });
+  const defects = useDefects(enabled ? { q: keyword, unit: t.unit, section: "co", limit: 10 } : {});
   // NGUỒN 2 — Lịch sử sửa chữa. Endpoint đã tự loại hồ sơ thay thế vật tư
   // (`isMaterialRequest = false`), nên ở đây chỉ còn SYC sửa chữa thật.
-  const history = useDefectHistory(keyword ? { search: keyword, unit: t.unit, pageSize: "20" } : {});
+  const history = useDefectHistory(enabled ? { search: keyword, unit: t.unit, pageSize: "10" } : {});
 
-  const loading = defects.isLoading || history.isLoading;
+  // Đang chờ kết quả cho từ khoá MỚI — tính cả quãng vừa gõ xong mà bộ hoãn chưa nhả,
+  // nếu không danh sách cũ đứng im và trông như hỏng.
+  const settling = typed.length >= 2 && keyword !== typed;
+  const loading = settling || (enabled && (defects.isFetching || history.isFetching));
 
   /**
-   * Gộp hai nguồn về một danh sách chọn. Khoá gộp là `defectId` — một SYC vừa nằm ở tab
-   * Khiếm khuyết vừa có dòng trong Lịch sử sửa chữa thì chỉ hiện MỘT lần, ưu tiên bản ở
-   * tab Khiếm khuyết vì đó là bản gốc còn sống (dòng lịch sử chỉ là ảnh chụp).
+   * Gộp hai nguồn về một danh sách. Khoá gộp là `defectId` — một SYC vừa ở tab Khiếm
+   * khuyết vừa có dòng Lịch sử sửa chữa thì chỉ hiện MỘT lần, ưu tiên bản ở tab Khiếm
+   * khuyết vì đó là bản gốc còn sống (dòng lịch sử chỉ là ảnh chụp).
    */
-  const results = React.useMemo<AdoptCandidate[]>(() => {
-    if (!keyword) return [];
+  const results = useMemo<AdoptCandidate[]>(() => {
+    if (!enabled) return [];
     const byId = new Map<string, AdoptCandidate>();
     for (const d of defects.data?.data ?? []) {
       byId.set(d.id, {
@@ -2629,11 +2656,13 @@ function AdoptDefectDialog({ t, onClose }: { t: MaterialTicket; onClose: () => v
       });
     }
     return [...byId.values()];
-  }, [keyword, defects.data, history.data]);
+  }, [enabled, defects.data, history.data]);
+
+  const reasonOk = reason.trim().length >= 10;
+  const canSubmit = Boolean(picked) && reasonOk && !act.isPending;
 
   const submit = async () => {
-    if (!picked) return toast.error("Chưa chọn số yêu cầu sửa chữa");
-    if (reason.trim().length < 10) return toast.error("Vui lòng nêu lý do (tối thiểu 10 ký tự)");
+    if (!picked || !reasonOk) return;
     try {
       await act.mutateAsync({ action: "adoptDefect", defectId: picked.id, reason: reason.trim() });
       toast.success(`Đã gắn SYC ${picked.requestNumber} vào phiếu`);
@@ -2644,110 +2673,129 @@ function AdoptDefectDialog({ t, onClose }: { t: MaterialTicket; onClose: () => v
   };
 
   return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 60 }}>
-      <div style={{ position: "absolute", inset: 0, background: "rgba(15,23,42,.45)" }} onClick={onClose} />
-      <div
-        style={{
-          position: "absolute", top: 0, right: 0, bottom: 0, width: "100%", maxWidth: 640,
-          background: "#fff", boxShadow: "-8px 0 32px rgba(15,23,42,.18)", display: "flex",
-          flexDirection: "column", overflow: "hidden",
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: 16, borderBottom: "1px solid #e2e8f0" }}>
-          <div>
-            <b style={{ fontSize: 16 }}>Gắn SYC đã có</b>
-            <p style={{ margin: "2px 0 0", fontSize: 12, color: "#64748b" }}>
-              Ngoại lệ dành cho Quản trị — dùng khi số yêu cầu đã được lập sẵn ở tab Khiếm khuyết.
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-slate-900/45 backdrop-blur-[2px]" onClick={onClose} />
+      <div className="relative flex max-h-[88vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-slate-900/10">
+        <div className="flex items-start gap-3 border-b border-slate-200 bg-slate-50/80 px-5 py-4">
+          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-teal-600 text-white shadow-sm">
+            <Wrench size={16} />
+          </span>
+          <div className="min-w-0 flex-1">
+            <h3 className="text-[15px] font-bold leading-tight text-slate-900">Gắn SYC đã có</h3>
+            <p className="mt-0.5 text-xs leading-snug text-slate-500">
+              Ngoại lệ dành cho Quản trị · Nguồn: Khiếm khuyết phần Cơ và Lịch sử sửa chữa · Tổ máy {t.unit}
             </p>
           </div>
           <button type="button" onClick={onClose} aria-label="Đóng"
-            style={{ width: 36, height: 36, borderRadius: 8, border: "none", background: "transparent", cursor: "pointer" }}>
-            <X size={18} />
+            className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-slate-400 transition-colors hover:bg-slate-200 hover:text-slate-700">
+            <X size={16} />
           </button>
         </div>
 
-        <div style={{ flex: 1, minHeight: 0, overflow: "auto", padding: 16, display: "grid", gap: 14 }}>
-          <label style={{ display: "grid", gap: 6 }}>
-            <span style={{ fontSize: 13, fontWeight: 600 }}>Tìm số yêu cầu (tổ máy {t.unit})</span>
-            <span style={{ fontSize: 12, color: "#64748b" }}>
-              Nguồn: Khiếm khuyết thiết bị phần Cơ và Lịch sử sửa chữa.
-            </span>
+        {/* Thân dùng flex-col nên co đúng chiều cao nội dung — bản trước dùng grid không
+            khoá alignContent nên các hàng tự kéo giãn, tạo khoảng trống rất lớn. */}
+        <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-5 py-4">
+          <div className="relative">
+            <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
+              autoFocus
               value={q}
               onChange={(e) => { setQ(e.target.value); setPicked(null); }}
-              placeholder="Nhập số yêu cầu hoặc nội dung, ví dụ: 2025/2026 hoặc bổ sung dầu VRL"
-              style={{ height: 40, borderRadius: 8, border: "1px solid #cbd5e1", padding: "0 12px", fontSize: 14 }}
+              placeholder="Tìm theo số yêu cầu hoặc nội dung…"
+              className="h-10 w-full rounded-lg border border-slate-300 bg-white pl-9 pr-9 text-sm outline-none transition-colors placeholder:text-slate-400 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20"
             />
-          </label>
-
-          <div style={{ border: "1px solid #e2e8f0", borderRadius: 10, overflow: "hidden" }}>
-            {q.trim().length < 2 ? (
-              <p style={{ margin: 0, padding: 14, fontSize: 13, color: "#64748b" }}>Gõ ít nhất 2 ký tự để tìm.</p>
-            ) : loading ? (
-              <p style={{ margin: 0, padding: 14, fontSize: 13, color: "#64748b" }}>Đang tìm…</p>
-            ) : results.length === 0 ? (
-              <p style={{ margin: 0, padding: 14, fontSize: 13, color: "#64748b" }}>Không tìm thấy số yêu cầu phù hợp.</p>
-            ) : (
-              results.map((d) => {
-                const chosen = picked?.id === d.id;
-                return (
-                  <button
-                    key={d.id}
-                    type="button"
-                    onClick={() => setPicked(d)}
-                    style={{
-                      display: "block", width: "100%", textAlign: "left", padding: "10px 12px",
-                      border: "none", borderBottom: "1px solid #f1f5f9", cursor: "pointer",
-                      background: chosen ? "#eff6ff" : "#fff",
-                    }}
-                  >
-                    <span style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 13, fontWeight: 700, color: "#0f172a" }}>
-                      {d.requestNumber}
-                      <span style={{ fontWeight: 500, color: "#64748b" }}>· {d.position || "—"}</span>
-                      <span style={{
-                        marginLeft: "auto", fontSize: 11, fontWeight: 600, borderRadius: 999, padding: "2px 8px",
-                        background: d.source === "Khiếm khuyết" ? "#e0f2fe" : "#f1f5f9",
-                        color: d.source === "Khiếm khuyết" ? "#0369a1" : "#475569",
-                      }}>
-                        {d.source}
-                      </span>
-                    </span>
-                    <span style={{ display: "block", marginTop: 2, fontSize: 12, color: "#475569" }}>
-                      {d.content.slice(0, 110) || "(không có nội dung)"}
-                    </span>
-                  </button>
-                );
-              })
-            )}
+            {loading && <Loader2 size={15} className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-slate-400" />}
           </div>
 
-          <label style={{ display: "grid", gap: 6 }}>
-            <span style={{ fontSize: 13, fontWeight: 600 }}>Lý do gắn thủ công *</span>
+          {typed.length < 2 ? (
+            <p className="rounded-lg bg-slate-50 px-3 py-2.5 text-xs text-slate-500">
+              Gõ ít nhất 2 ký tự để tìm. Ví dụ: <b>2025/2026</b> hoặc <b>bổ sung dầu VRL</b>.
+            </p>
+          ) : (
+            <div className="max-h-64 overflow-y-auto rounded-lg border border-slate-200">
+              {loading && results.length === 0 ? (
+                <p className="px-3 py-6 text-center text-xs text-slate-500">Đang tìm…</p>
+              ) : results.length === 0 ? (
+                <p className="px-3 py-6 text-center text-xs text-slate-500">Không tìm thấy số yêu cầu phù hợp.</p>
+              ) : (
+                results.map((d) => {
+                  const chosen = picked?.id === d.id;
+                  return (
+                    <button
+                      key={d.id}
+                      type="button"
+                      onClick={() => setPicked(d)}
+                      className={cn(
+                        "flex w-full items-start gap-2.5 border-b border-slate-100 px-3 py-2.5 text-left transition-colors last:border-b-0",
+                        chosen ? "bg-teal-50" : "hover:bg-slate-50"
+                      )}
+                    >
+                      <span className={cn(
+                        "mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded-full border",
+                        chosen ? "border-teal-600 bg-teal-600 text-white" : "border-slate-300"
+                      )}>
+                        {chosen && <Check size={11} strokeWidth={3} />}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                          <b className="text-[13px] font-bold tabular-nums text-slate-900">{d.requestNumber}</b>
+                          {d.position && <span className="text-xs text-slate-500">· {d.position}</span>}
+                          <span className={cn(
+                            "ml-auto rounded-full px-2 py-0.5 text-[10.5px] font-semibold",
+                            d.source === "Khiếm khuyết" ? "bg-sky-100 text-sky-700" : "bg-slate-100 text-slate-600"
+                          )}>
+                            {d.source}
+                          </span>
+                        </span>
+                        <span className="mt-0.5 block truncate text-xs text-slate-600">
+                          {d.content || "(không có nội dung)"}
+                        </span>
+                      </span>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          )}
+
+          <div>
+            <div className="mb-1.5 flex items-baseline justify-between gap-2">
+              <span className="text-[13px] font-semibold text-slate-800">
+                Lý do gắn thủ công <span className="text-red-500">*</span>
+              </span>
+              <span className={cn("text-[11px]", reasonOk ? "text-emerald-600" : "text-slate-400")}>
+                {reason.trim().length}/10 ký tự
+              </span>
+            </div>
             <textarea
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               rows={3}
               placeholder="Ví dụ: SYC đã ra ngày 26/08 trước khi lập phiếu vật tư, công việc đã thực hiện xong."
-              style={{ borderRadius: 8, border: "1px solid #cbd5e1", padding: 10, fontSize: 14, resize: "vertical" }}
+              className="w-full resize-y rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none transition-colors placeholder:text-slate-400 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20"
             />
-            <span style={{ fontSize: 12, color: "#64748b" }}>
-              Lý do được ghi vào nhật ký hệ thống kèm tên người thao tác.
-            </span>
-          </label>
+            <p className="mt-1 text-[11px] text-slate-500">Ghi vào nhật ký hệ thống kèm tên người thao tác.</p>
+          </div>
         </div>
 
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, padding: 16, borderTop: "1px solid #e2e8f0" }}>
-          <button type="button" onClick={onClose}
-            style={{ height: 40, padding: "0 16px", borderRadius: 8, border: "1px solid #cbd5e1", background: "#fff", cursor: "pointer" }}>
-            Huỷ
-          </button>
-          <button type="button" onClick={submit} disabled={act.isPending || !picked || reason.trim().length < 10}
-            style={{
-              height: 40, padding: "0 16px", borderRadius: 8, border: "none", color: "#fff", cursor: "pointer",
-              background: act.isPending || !picked || reason.trim().length < 10 ? "#94a3b8" : "#0f766e",
-            }}>
-            {act.isPending ? "Đang gắn…" : "Gắn SYC vào phiếu"}
-          </button>
+        <div className="flex items-center justify-between gap-3 border-t border-slate-200 bg-slate-50/80 px-5 py-3">
+          <span className="truncate text-xs text-slate-500">
+            {picked ? <>Sẽ gắn <b className="text-slate-700">{picked.requestNumber}</b> vào phiếu</> : "Chưa chọn số yêu cầu"}
+          </span>
+          <span className="flex shrink-0 gap-2">
+            <button type="button" onClick={onClose}
+              className="h-9 rounded-lg border border-slate-300 bg-white px-4 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50">
+              Huỷ
+            </button>
+            <button type="button" onClick={submit} disabled={!canSubmit}
+              className={cn(
+                "inline-flex h-9 items-center gap-1.5 rounded-lg px-4 text-sm font-semibold text-white transition-colors",
+                canSubmit ? "bg-teal-600 hover:bg-teal-700" : "cursor-not-allowed bg-slate-300"
+              )}>
+              {act.isPending && <Loader2 size={14} className="animate-spin" />}
+              {act.isPending ? "Đang gắn…" : "Gắn SYC vào phiếu"}
+            </button>
+          </span>
         </div>
       </div>
     </div>
