@@ -2,6 +2,12 @@ import type { NextRequest } from "next/server";
 import { fail, handle, requireUser } from "@/lib/api";
 import { getS3Object } from "@/lib/s3";
 import { bbntHandwrittenFileName } from "@/lib/material-document-name";
+import {
+  avatarNotModified,
+  avatarResponseBody,
+  avatarResponseHeaders,
+  getDeliveredAvatar,
+} from "@/lib/avatar-delivery-cache";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -36,6 +42,17 @@ export async function GET(req: NextRequest) {
     if (!validKey(key)) return fail("Key không hợp lệ", 400);
     const requestedFileName = req.nextUrl.searchParams.get("filename")?.trim();
     const requestedDeviceName = req.nextUrl.searchParams.get("deviceName")?.trim();
+
+    if (key.startsWith("avatars/")) {
+      const avatar = await getDeliveredAvatar(key);
+      const headers = avatarResponseHeaders(avatar, "private");
+      if (avatarNotModified(req, avatar)) {
+        const notModifiedHeaders = new Headers(headers);
+        notModifiedHeaders.delete("Content-Length");
+        return new Response(null, { status: 304, headers: notModifiedHeaders });
+      }
+      return new Response(avatarResponseBody(avatar), { headers });
+    }
 
     const object = await getS3Object(key);
     const body = object.Body;

@@ -336,7 +336,7 @@ function HanhChinhCard({
                 )}>
                   {m.user.avatarUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={m.user.avatarUrl} alt={m.user.name} className="h-full w-full object-cover" />
+                    <img src={m.user.avatarUrl} alt={m.user.name} loading="lazy" decoding="async" className="h-full w-full object-cover" />
                   ) : (
                     <span className="flex h-full w-full items-center justify-center bg-navy">{initials(m.user.name)}</span>
                   )}
@@ -556,7 +556,7 @@ function GroupCard({ group, canManage, canApprove, myId }: { group: HcGroup; can
                 )}>
                   {m.user.avatarUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={m.user.avatarUrl} alt={m.user.name} className="h-full w-full object-cover" />
+                    <img src={m.user.avatarUrl} alt={m.user.name} loading="lazy" decoding="async" className="h-full w-full object-cover" />
                   ) : (
                     <span className="flex h-full w-full items-center justify-center bg-navy">{initials(m.user.name)}</span>
                   )}

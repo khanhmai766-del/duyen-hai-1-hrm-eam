@@ -99,6 +99,45 @@ const LIST_SELECT = {
   },
 } satisfies Prisma.DefectSelect;
 
+// Tập nhẹ chỉ phục vụ lọc/KPI/sắp xếp trước khi lấy quan hệ đầy đủ của đúng trang.
+// LIST_SELECT trước đây chở cả các trường đồng bộ, cờ hiển thị và pendingHistory cho
+// 5–6 nghìn phiếu dù sau cùng client chỉ nhận 10 dòng.
+const CANDIDATE_SELECT = {
+  id: true,
+  unit: true,
+  device: true,
+  system: true,
+  severity: true,
+  requestType: true,
+  requestNumber: true,
+  content: true,
+  status: true,
+  detectedAt: true,
+  sourceType: true,
+  syncState: true,
+  postRepairAwaitingMaterial: true,
+  cancelledAt: true,
+  repairResultRaw: true,
+  repeatedRepairRaw: true,
+  reminderCount: true,
+  lastRemindedAt: true,
+  reminderLogs: {
+    orderBy: { occurredAt: "asc" as const },
+    take: 2,
+    select: { occurredAt: true },
+  },
+  note: true,
+  createdAt: true,
+  createdBy: { select: { name: true } },
+  relatedDevices: {
+    select: { deviceSeq: true, device: { select: { name: true } } },
+  },
+} satisfies Prisma.DefectSelect;
+
+type DefectCandidate = Prisma.DefectGetPayload<{ select: typeof CANDIDATE_SELECT }>;
+const parsedRequestNumberByCandidate = new WeakMap<DefectCandidate, ReturnType<typeof parseDefectRequestNumber>>();
+const normalizedSearchByCandidate = new WeakMap<DefectCandidate, string>();
+
 const PAGE_SELECT = {
   ...LIST_SELECT,
   sourceStatusRaw: true,
@@ -170,6 +209,39 @@ function parseDefectRequestNumber(value: string | null) {
   return Number.isSafeInteger(sequence) && Number.isSafeInteger(year)
     ? { sequence, year }
     : null;
+}
+
+function candidateRequestNumber(defect: DefectCandidate) {
+  if (parsedRequestNumberByCandidate.has(defect)) {
+    return parsedRequestNumberByCandidate.get(defect) ?? null;
+  }
+  const parsed = parseDefectRequestNumber(defect.requestNumber);
+  parsedRequestNumberByCandidate.set(defect, parsed);
+  return parsed;
+}
+
+function candidateSearchText(defect: DefectCandidate) {
+  const hit = normalizedSearchByCandidate.get(defect);
+  if (hit !== undefined) return hit;
+  const value = normalizeText([
+    defect.requestNumber,
+    defect.requestType,
+    defect.unit,
+    defect.system,
+    defect.device,
+    ...defect.relatedDevices.flatMap((related) => [related.deviceSeq, related.device.name]),
+    defect.content,
+    defect.repairResultRaw,
+    defect.note,
+    defect.createdBy?.name,
+  ].filter(Boolean).join(" "));
+  normalizedSearchByCandidate.set(defect, value);
+  return value;
+}
+
+function candidateStatusMismatch(defect: DefectCandidate) {
+  const repairStatus = defectResultStatusOf(defect.repairResultRaw);
+  return repairStatus !== null && repairStatus !== defect.status;
 }
 
 function defectQueryTiming(startedAt: number, total: number) {
@@ -328,7 +400,7 @@ export async function GET(req: NextRequest) {
     const [candidates, scopeRows] = await getOrSetDefectListCache(listCacheKey, () => Promise.all([
       prisma.defect.findMany({
         where,
-        select: LIST_SELECT,
+        select: CANDIDATE_SELECT,
       }),
       // Mẫu số "x / y bản ghi" cũng phải nằm trong phạm vi cương vị, nếu không người
       // dùng vẫn đọc được tổng số phiếu của cương vị khác. Rào cương vị so khớp theo MÃ
@@ -369,14 +441,7 @@ export async function GET(req: NextRequest) {
           !position ||
           position === "ALL" ||
           announcementPositionsMatch(defect.system, position)
-      )
-      .map((defect) => {
-        const repairStatus = defectResultStatusOf(defect.repairResultRaw);
-        return {
-          ...defect,
-          sourceStatusMismatch: repairStatus !== null && repairStatus !== defect.status,
-        };
-      });
+      );
 
     const kpi = {
       chuaXuLy: base.filter((item) => item.status === "CHUA_XU_LY").length,
@@ -427,7 +492,7 @@ export async function GET(req: NextRequest) {
         }
         if (severity && severity !== "ALL" && item.severity !== severity) return false;
         if (repairResult && repairResult !== "ALL" && (item.repairResultRaw ?? "") !== repairResult) return false;
-        if (mismatch && !item.sourceStatusMismatch) return false;
+        if (mismatch && !candidateStatusMismatch(item)) return false;
         if (sourceMissingQuery) {
           return item.sourceType === "GOOGLE_SHEETS" && item.syncState === "MISSING";
         }
@@ -439,18 +504,7 @@ export async function GET(req: NextRequest) {
           );
         }
         if (!query) return true;
-        return normalizeText([
-          item.requestNumber,
-          item.requestType,
-          item.unit,
-          item.system,
-          item.device,
-          ...item.relatedDevices.flatMap((related) => [related.deviceSeq, related.device.name]),
-          item.content,
-          item.repairResultRaw,
-          item.note,
-          item.createdBy?.name,
-        ].filter(Boolean).join(" ")).includes(query);
+        return candidateSearchText(item).includes(query);
       })
       .sort((a, b) => {
         if (upgradeCandidate) {
@@ -462,8 +516,8 @@ export async function GET(req: NextRequest) {
           if (ageDifference !== 0) return ageDifference;
           if (a.severity !== b.severity) return a.severity === "3" ? -1 : 1;
         }
-        const requestA = parseDefectRequestNumber(a.requestNumber);
-        const requestB = parseDefectRequestNumber(b.requestNumber);
+        const requestA = candidateRequestNumber(a);
+        const requestB = candidateRequestNumber(b);
         if (requestA && requestB) {
           if (requestA.year !== requestB.year) return requestB.year - requestA.year;
           if (requestA.sequence !== requestB.sequence) return requestB.sequence - requestA.sequence;

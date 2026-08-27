@@ -113,7 +113,7 @@ function archiveGroups(registrations: HcRegistration[]) {
 function Avatar({ reg, size, ring }: { reg: HcRegistration; size: string; ring: string }) {
   return reg.user.avatarUrl ? (
     // eslint-disable-next-line @next/next/no-img-element
-    <img src={reg.user.avatarUrl} alt={reg.user.name} className={`${size} rounded-full object-cover border-2 ${ring} shrink-0`} title={reg.user.name} />
+    <img src={reg.user.avatarUrl} alt={reg.user.name} loading="lazy" decoding="async" className={`${size} rounded-full object-cover border-2 ${ring} shrink-0`} title={reg.user.name} />
   ) : (
     <span className={`${size} rounded-full border-2 ${ring} ${hashColor(reg.user.id)} text-white font-bold flex items-center justify-center shrink-0`} title={reg.user.name}>
       {initials(reg.user.name)}

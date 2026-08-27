@@ -1,4 +1,4 @@
-import { safeEmployeeCode, uploadS3Object } from "@/lib/s3";
+import { safeEmployeeCode, uploadImageBufferToS3, uploadS3Object } from "@/lib/s3";
 
 const AVATAR_DATA_URL_RE = /^data:([^;,]+);base64,(.+)$/;
 
@@ -30,16 +30,17 @@ export async function avatarUpdate(value: unknown, employeeId: string) {
   if (!match) return { avatarUrl: raw, avatarKey: null };
 
   const mimeType = match[1];
-  const ext = imageExtensionForMime(mimeType, "Ảnh đại diện");
-  const code = safeEmployeeCode(employeeId);
-  const key = `avatars/${code}.${ext}`;
-  await uploadS3Object({
-    key,
-    body: Buffer.from(match[2], "base64"),
+  imageExtensionForMime(mimeType, "Ảnh đại diện");
+  safeEmployeeCode(employeeId);
+  // Key theo nội dung/lần upload giúp trình duyệt không giữ nhầm ảnh cũ. Helper đồng
+  // thời chuẩn hóa ảnh về WebP 256×256 nên cả upload từ API lẫn upload ZIP đều nhẹ.
+  const uploaded = await uploadImageBufferToS3({
+    buffer: Buffer.from(match[2], "base64"),
     contentType: mimeType,
-    originalName: `${code}.${ext}`,
+    folder: "avatars",
+    preset: "avatar",
   });
-  return { avatarUrl: null, avatarKey: key };
+  return { avatarUrl: null, avatarKey: uploaded.key };
 }
 
 export async function signatureUpdate(value: unknown, employeeId: string) {

@@ -194,6 +194,8 @@ function Person({ item }: { item: PublicAssignment }) {
         <img
           src={item.user.avatarUrl!}
           alt=""
+          loading="lazy"
+          decoding="async"
           className="h-full w-full rounded-full object-cover"
           onError={() => setImageFailed(true)}
         />

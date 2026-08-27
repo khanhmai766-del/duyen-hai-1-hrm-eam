@@ -17,7 +17,7 @@ export interface ShiftDetail {
 
 export function useShift(
   params: { date: string; shiftType?: string; unit?: string },
-  options: { refetchInterval?: number | false } = {}
+  options: { refetchInterval?: number | false; refetchIntervalInBackground?: boolean } = {}
 ) {
   const qs = new URLSearchParams();
   qs.set("date", params.date);
@@ -28,7 +28,9 @@ export function useShift(
     queryFn: () => apiGet<ShiftDetail | null>(`/api/shifts?${qs.toString()}`),
     staleTime: 15 * 1000,
     refetchInterval: options.refetchInterval,
-    refetchIntervalInBackground: Boolean(options.refetchInterval),
+    // Màn hình trình chiếu vẫn cập nhật đúng chu kỳ khi đang được xem, nhưng tab đã
+    // ẩn không tiếp tục bắn request 10 giây/lần. Khi quay lại, TanStack tự refetch focus.
+    refetchIntervalInBackground: options.refetchIntervalInBackground ?? false,
   });
 }
 

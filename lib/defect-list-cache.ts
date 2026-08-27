@@ -11,8 +11,11 @@
 // TTL ngắn + xoá sạch theo generation mỗi khi có bản ghi khiếm khuyết bị ghi (xem
 // `lib/prisma.ts`), nên không có cửa sổ nào người dùng thấy dữ liệu cũ sau khi chính họ sửa.
 
-const DEFECT_LIST_CACHE_TTL_MS = 30_000;
-const DEFECT_LIST_CACHE_MAX_ENTRIES = 60;
+// Mọi mutation Defect đều invalidates theo generation, nên tăng TTL không tạo cửa sổ
+// dữ liệu cũ sau thao tác. Giới hạn entry thấp hơn để nhiều phạm vi người dùng không giữ
+// hàng chục bản sao của tập ứng viên trong heap Next.js.
+const DEFECT_LIST_CACHE_TTL_MS = 60_000;
+const DEFECT_LIST_CACHE_MAX_ENTRIES = 24;
 
 type CacheEntry<T> = { value: T; expiresAt: number; createdAt: number };
 

@@ -8,39 +8,21 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useDevices } from "@/hooks/useDevices";
+import { EquipmentTreePicker, type PickerEquipmentNode } from "@/components/devices/equipment-tree-picker";
+import { useEquipmentNode } from "@/hooks/useEquipment";
 import { useUpdateReplacement, type ReplacementItem } from "@/hooks/useReplacements";
+import { usePositions } from "@/hooks/useUsers";
 import { addMonths } from "@/lib/constants";
-import { positionLabelOf, positionsMatch } from "@/lib/position-catalog";
+import { positionLabelOf } from "@/lib/position-catalog";
+import { selectableManagingPositionOptions } from "@/lib/positions";
+import { parseScopeParam } from "@/lib/equipment-units";
 import { formatDateInput } from "@/lib/utils";
 
 function toDateInput(v: Date | string | null | undefined): string {
   return formatDateInput(v);
 }
 
-const NO_SYSTEM = "__none__";
-const NO_DEVICE = "__none__";
 const NO_POSITION = "__none__";
-
-function positionsOfDevice(device: {
-  managingPosition: string | null;
-  managingPositions?: string[];
-}) {
-  return device.managingPositions?.length
-    ? device.managingPositions
-    : device.managingPosition
-      ? [device.managingPosition]
-      : [];
-}
-
-function deviceHasPosition(
-  device: Parameters<typeof positionsOfDevice>[0],
-  position: string
-) {
-  return positionsOfDevice(device).some((candidate) =>
-    positionsMatch(candidate, position)
-  );
-}
 
 export function ReplacementPointForm({
   materialId,
@@ -55,23 +37,12 @@ export function ReplacementPointForm({
   onDone?: () => void;
 }) {
   const update = useUpdateReplacement();
-  const { data: devicesData } = useDevices({ permissionScope: "replacement-manage" });
-  const devices = React.useMemo(
-    () => devicesData?.data ?? [],
-    [devicesData?.data]
-  );
+  const allPositions = usePositions();
   const devicePositions = React.useMemo(
-    () =>
-      Array.from(
-        new Set(
-          devices
-            .flatMap(positionsOfDevice)
-            .map(positionLabelOf)
-            .filter(Boolean)
-        )
-      ).sort((a, b) => a.localeCompare(b, "vi")),
-    [devices]
+    () => selectableManagingPositionOptions(allPositions),
+    [allPositions]
   );
+  const scope = parseScopeParam(point?.machine) ?? undefined;
 
   const [form, setForm] = React.useState({
     deviceId: point?.deviceId ?? "",
@@ -84,95 +55,42 @@ export function ReplacementPointForm({
     note: point?.note ?? "",
     samplingOnly: point?.samplingOnly === true,
   });
+  const [selectedParentSeq, setSelectedParentSeq] = React.useState<string | null>(null);
+  const parentQuery = useEquipmentNode(
+    selectedParentSeq,
+    scope,
+    "replacement-manage",
+    form.managingPosition || null
+  );
 
   function set<K extends keyof typeof form>(k: K, v: (typeof form)[K]) {
     setForm((f) => ({ ...f, [k]: v }));
   }
-  const positionDevices = React.useMemo(
-    () =>
-      devices.filter(
-        (device) =>
-          !form.managingPosition ||
-          deviceHasPosition(device, form.managingPosition)
-      ),
-    [devices, form.managingPosition]
-  );
-  const deviceSystems = React.useMemo(
-    () => Array.from(new Set(positionDevices.map((device) => device.system).filter((v): v is string => !!v))).sort((a, b) => a.localeCompare(b, "vi")),
-    [positionDevices]
-  );
-  const filteredDevices = React.useMemo(
-    () => positionDevices.filter((device) => !form.system || device.system === form.system),
-    [positionDevices, form.system]
-  );
-  function setDevice(deviceId: string) {
-    setForm((f) => {
-      const nextDeviceId = deviceId === NO_DEVICE ? "" : deviceId;
-      const device = devices.find((d) => d.id === nextDeviceId);
-      const positions = device ? positionsOfDevice(device).map(positionLabelOf) : [];
-      return {
-        ...f,
-        deviceId: nextDeviceId,
-        managingPosition: positions.some((position) =>
-          positionsMatch(position, f.managingPosition)
-        )
-          ? f.managingPosition
-          : positions[0] ?? "",
-        system: device?.system ?? "",
-      };
-    });
+  function setDevice(node: PickerEquipmentNode | null) {
+    setSelectedParentSeq(node?.parentSeq ?? null);
+    setForm((current) => ({
+      ...current,
+      deviceId: node?.seq ?? "",
+      // Khi chọn node lá, tên hệ thống cha được lấy bằng đúng API node nhẹ bên dưới.
+      // Giữ rỗng trong lúc tải để không vô tình lưu tên hệ thống của thiết bị trước.
+      system: node?.hasChildren ? node.name : "",
+    }));
   }
   function setPosition(position: string) {
-    setForm((f) => {
-      const managingPosition = position === NO_POSITION ? "" : position;
-      const selectedDevice = devices.find((d) => d.id === f.deviceId);
-      const positionDevices = devices.filter(
-        (d) => !managingPosition || deviceHasPosition(d, managingPosition)
-      );
-      const keepSystem = !f.system || positionDevices.some((d) => d.system === f.system);
-      const nextSystem = keepSystem ? f.system : "";
-      const keepDevice =
-        !selectedDevice ||
-        ((!managingPosition || deviceHasPosition(selectedDevice, managingPosition)) &&
-          (!nextSystem || selectedDevice.system === nextSystem));
-      return {
-        ...f,
-        managingPosition,
-        deviceId: keepDevice ? f.deviceId : "",
-        system: nextSystem,
-      };
-    });
-  }
-  function setSystem(systemValue: string) {
-    setForm((f) => {
-      const system = systemValue === NO_SYSTEM ? "" : systemValue;
-      const selectedDevice = devices.find((d) => d.id === f.deviceId);
-      const keepDevice =
-        !selectedDevice ||
-        ((!f.managingPosition || deviceHasPosition(selectedDevice, f.managingPosition)) &&
-          (!system || selectedDevice.system === system));
-      return {
-        ...f,
-        system,
-        deviceId: keepDevice ? f.deviceId : "",
-      };
-    });
+    const managingPosition = position === NO_POSITION ? "" : position;
+    setSelectedParentSeq(null);
+    setForm((current) => current.managingPosition === managingPosition
+      ? current
+      : { ...current, managingPosition, deviceId: "", system: "" });
   }
 
   React.useEffect(() => {
-    if (!form.deviceId) return;
-    const device = devices.find((d) => d.id === form.deviceId);
-    if (!device) return;
-    const positions = positionsOfDevice(device).map(positionLabelOf);
-    const managingPosition = positions.some((position) =>
-      positionsMatch(position, form.managingPosition)
-    )
-      ? form.managingPosition
-      : positions[0] ?? "";
-    const system = device.system ?? "";
-    if (form.managingPosition === managingPosition && form.system === system) return;
-    setForm((f) => ({ ...f, managingPosition, system }));
-  }, [devices, form.deviceId, form.managingPosition, form.system]);
+    const parent = parentQuery.data?.data;
+    if (!selectedParentSeq || !parent || parent.seq !== selectedParentSeq) return;
+    setForm((current) => current.system === parent.name
+      ? current
+      : { ...current, system: parent.name });
+  }, [parentQuery.data, selectedParentSeq]);
 
   function recompute(next: typeof form) {
     const base = next.lastReplacedAt ? new Date(next.lastReplacedAt) : new Date();
@@ -220,7 +138,7 @@ export function ReplacementPointForm({
 
   return (
     <form onSubmit={submit} className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-      <div>
+      <div className="sm:col-span-2">
         <Label className="mb-1.5 block">Cương vị *</Label>
         <Select value={form.managingPosition || NO_POSITION} onValueChange={setPosition}>
           <SelectTrigger><SelectValue placeholder="Chọn cương vị" /></SelectTrigger>
@@ -232,30 +150,29 @@ export function ReplacementPointForm({
         </Select>
       </div>
 
-      <div>
-        <Label className="mb-1.5 block">Hệ thống *</Label>
-        <Select value={form.system || NO_SYSTEM} onValueChange={setSystem}>
-          <SelectTrigger><SelectValue placeholder="Chọn hệ thống" /></SelectTrigger>
-          <SelectContent>
-            {deviceSystems.map((s) => (
-              <SelectItem key={s} value={s}>{s}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
       <div className="sm:col-span-2">
         <Label className="mb-1.5 block">Thiết bị *</Label>
-        <Select value={form.deviceId || NO_DEVICE} onValueChange={setDevice}>
-          <SelectTrigger><SelectValue placeholder="Chọn thiết bị" /></SelectTrigger>
-          <SelectContent>
-            {filteredDevices.map((device) => (
-              <SelectItem key={device.id} value={device.id}>
-                {device.name} ({device.code})
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <EquipmentTreePicker
+          value={form.deviceId}
+          onChange={setDevice}
+          position={form.managingPosition || null}
+          accessFilter="edit"
+          includeLeaves
+          leafOnly
+          scope={scope}
+          permissionScope="replacement-manage"
+          placeholder={form.managingPosition ? "Chọn hoặc tìm thiết bị" : "Chọn cương vị trước"}
+          disabled={!form.managingPosition}
+          allowClear={false}
+          selectionLabel={form.deviceId === point?.deviceId ? point?.device?.name : undefined}
+        />
+        <p className="mt-1.5 text-xs text-muted-foreground">
+          {parentQuery.isLoading
+            ? "Đang xác định hệ thống cha…"
+            : form.system
+              ? <>Hệ thống: <b className="font-medium text-ink">{form.system}</b></>
+              : "Tìm theo tên, mã KKS hoặc bung cây đến thiết bị cần chọn."}
+        </p>
       </div>
 
       <Field label="Chu kỳ thay thế (tháng) *">

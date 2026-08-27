@@ -25,7 +25,6 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
-import { useDevices } from "@/hooks/useDevices";
 import { usePositions } from "@/hooks/useUsers";
 import { useRbacAccess } from "@/hooks/useRbacAccess";
 import {
@@ -298,7 +297,6 @@ export function DocumentCatalogPage({
   const hasActions = canEdit || canDelete;
   const needsPositionOptions = showEquipmentScope || canImportProcedure;
   const docs = useDocuments(category);
-  const devices = useDevices({ enabled: needsPositionOptions });
   const userPositions = usePositions({ enabled: needsPositionOptions });
   const upsert = useUpsertDocument();
   const remove = useDeleteDocument();
@@ -353,12 +351,12 @@ export function DocumentCatalogPage({
   const positionOptions = React.useMemo(
     () => {
       if (!needsPositionOptions) return [];
-      return announcementPositionOptions([
-        ...(devices.data?.data ?? []).map((device) => device.managingPosition),
-        ...userPositions,
-      ]).filter((value) => value !== LEGACY_COMMON_POSITION && isSelectableManagingPosition(value));
+      // Cương vị là dữ liệu nhân sự; không tải toàn bộ ~21k thiết bị chỉ để suy lại
+      // chính danh sách này. usePositions đã trả danh mục cương vị đang có người dùng.
+      return announcementPositionOptions(userPositions)
+        .filter((value) => value !== LEGACY_COMMON_POSITION && isSelectableManagingPosition(value));
     },
-    [devices.data?.data, needsPositionOptions, userPositions]
+    [needsPositionOptions, userPositions]
   );
   const blockOptions = React.useMemo(() => [...MANAGEMENT_BLOCK_OPTIONS], []);
   const activeYearFilter = hasYearField ? yearFilter || yearOptions[0] || "" : "";

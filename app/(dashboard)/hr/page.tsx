@@ -287,7 +287,7 @@ function PersonCard({ u }: { u: SafeUser }) {
       {u.avatarUrl ? (
         <span className="relative h-14 w-14 shrink-0">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={u.avatarUrl} alt={u.name} className="h-14 w-14 rounded-[18px] object-cover shadow-sm ring-2 ring-white sm:rounded-full sm:ring-1 sm:ring-border" />
+          <img src={u.avatarUrl} alt={u.name} loading="lazy" decoding="async" className="h-14 w-14 rounded-[18px] object-cover shadow-sm ring-2 ring-white sm:rounded-full sm:ring-1 sm:ring-border" />
           <span
             className={cn("absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-[3px] border-white", u.isActive ? "bg-emerald-500" : "bg-slate-400")}
             title={u.isActive ? "Tài khoản đang hoạt động" : "Tài khoản đã ngưng"}

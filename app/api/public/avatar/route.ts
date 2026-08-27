@@ -1,6 +1,11 @@
 import type { NextRequest } from "next/server";
 import { fail, handle } from "@/lib/api";
-import { getS3Object } from "@/lib/s3";
+import {
+  avatarNotModified,
+  avatarResponseBody,
+  avatarResponseHeaders,
+  getDeliveredAvatar,
+} from "@/lib/avatar-delivery-cache";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -14,19 +19,13 @@ export async function GET(req: NextRequest) {
     const key = req.nextUrl.searchParams.get("key")?.trim() ?? "";
     if (!PUBLIC_AVATAR_KEY.test(key)) return fail("Đường dẫn ảnh đại diện không hợp lệ", 400);
 
-    const object = await getS3Object(key);
-    if (!object.Body) return fail("Không đọc được ảnh đại diện", 404);
-
-    const stream = typeof object.Body.transformToWebStream === "function"
-      ? object.Body.transformToWebStream()
-      : (object.Body as unknown as ReadableStream);
-
-    return new Response(stream, {
-      headers: {
-        "Content-Type": object.ContentType || "image/jpeg",
-        "Cache-Control": "public, max-age=300, stale-while-revalidate=3600",
-        "X-Content-Type-Options": "nosniff",
-      },
-    });
+    const avatar = await getDeliveredAvatar(key);
+    const headers = avatarResponseHeaders(avatar, "public");
+    if (avatarNotModified(req, avatar)) {
+      const notModifiedHeaders = new Headers(headers);
+      notModifiedHeaders.delete("Content-Length");
+      return new Response(null, { status: 304, headers: notModifiedHeaders });
+    }
+    return new Response(avatarResponseBody(avatar), { headers });
   });
 }

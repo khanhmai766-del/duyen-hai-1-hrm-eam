@@ -2,7 +2,7 @@ import path from "path";
 import yauzl, { type Entry } from "yauzl";
 import { prisma } from "@/lib/prisma";
 import { audit } from "@/lib/api";
-import { fileExtension, safeEmployeeCode, uploadS3Object } from "@/lib/s3";
+import { fileExtension, safeEmployeeCode, uploadImageBufferToS3, uploadS3Object } from "@/lib/s3";
 
 type MediaKind = "avatar" | "signature";
 
@@ -135,8 +135,17 @@ async function uploadForUser(kind: MediaKind, employeeCode: string, fileName: st
   const code = safeEmployeeCode(employeeCode);
   const existing = await prisma.user.findUnique({ where: { employeeId: code }, select: { id: true } });
   if (!existing) throw new Error("Không tìm thấy mã nhân viên");
-  const key = keyFor(kind, code, ext);
-  await uploadS3Object({ key, body: buffer, contentType: mimeType || contentType(ext), originalName: fileName });
+  const key = kind === "avatar"
+    ? (await uploadImageBufferToS3({
+        buffer,
+        contentType: mimeType || contentType(ext),
+        folder: "avatars",
+        preset: "avatar",
+      })).key
+    : keyFor(kind, code, ext);
+  if (kind === "signature") {
+    await uploadS3Object({ key, body: buffer, contentType: mimeType || contentType(ext), originalName: fileName });
+  }
   await prisma.user.update({
     where: { id: existing.id },
     data:

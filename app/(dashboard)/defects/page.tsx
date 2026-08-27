@@ -1498,7 +1498,7 @@ function DefectUserAvatar({ user }: { user?: DefectItem["createdBy"] | null }) {
       <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-navy text-[11px] font-bold text-white shadow-sm ring-1 ring-border">
         {user.avatarUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={user.avatarUrl} alt={user.name} className="h-full w-full object-cover" />
+          <img src={user.avatarUrl} alt={user.name} loading="lazy" decoding="async" className="h-full w-full object-cover" />
         ) : (
           initials(user.name)
         )}

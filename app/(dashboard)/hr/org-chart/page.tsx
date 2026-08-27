@@ -679,7 +679,7 @@ function CheckInDialog({
             <div className="flex h-40 w-40 items-center justify-center overflow-hidden rounded-lg bg-navy text-2xl font-bold text-white ring-1 ring-border">
               {me?.avatarUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={me.avatarUrl} alt={session?.user?.name ?? ""} className="h-full w-full object-cover" />
+                <img src={me.avatarUrl} alt={session?.user?.name ?? ""} decoding="async" className="h-full w-full object-cover" />
               ) : (
                 initials(session?.user?.name ?? "?")
               )}
@@ -1273,7 +1273,7 @@ function PersonnelPicker({
             <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-navy text-[10px] font-bold text-white">
               {u.avatarUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={u.avatarUrl} alt={u.name} className="h-full w-full object-cover" />
+                <img src={u.avatarUrl} alt={u.name} loading="lazy" decoding="async" className="h-full w-full object-cover" />
               ) : (
                 initials(u.name)
               )}
@@ -1550,7 +1550,7 @@ function ManagementPerson({
       >
         {user.avatarUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={user.avatarUrl} alt={user.name} className="h-full w-full object-cover" />
+          <img src={user.avatarUrl} alt={user.name} loading="lazy" decoding="async" className="h-full w-full object-cover" />
         ) : (
           initials(user.name)
         )}
@@ -1718,7 +1718,7 @@ function Occupants({
             >
               {o.user.avatarUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={o.user.avatarUrl} alt={o.user.name} className="h-full w-full object-cover" />
+                <img src={o.user.avatarUrl} alt={o.user.name} loading="lazy" decoding="async" className="h-full w-full object-cover" />
               ) : (
                 initials(o.user.name)
               )}
@@ -1794,7 +1794,7 @@ function CompactOccupant({
         >
           {occupant.user.avatarUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={occupant.user.avatarUrl} alt={occupant.user.name} className="h-full w-full object-cover" />
+            <img src={occupant.user.avatarUrl} alt={occupant.user.name} loading="lazy" decoding="async" className="h-full w-full object-cover" />
           ) : (
             initials(occupant.user.name)
           )}
