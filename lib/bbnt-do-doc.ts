@@ -366,7 +366,10 @@ export async function generateBbntDoDoc(d: BbntDoData): Promise<{ key: string; u
   const templateHasPctContentTag = documentXml ? templatePlainText(documentXml).includes("{{pctContent}}") : false;
   const pctNumberText = templateHasPctContentTag
     ? d.pctNumber || ""
-    : [d.pctNumber || "", pctContent].filter(Boolean).join(" — ");
+    : [d.pctNumber || "", pctContent ? `Nội dung PCT/LCT: ${pctContent}` : ""].filter(Boolean).join(" — ");
+  const pctContentText = templateHasPctContentTag && pctContent
+    ? ` — Nội dung PCT/LCT: ${pctContent}`
+    : pctContent;
 
   doc.render({
     unit: d.unit,
@@ -374,7 +377,7 @@ export async function generateBbntDoDoc(d: BbntDoData): Promise<{ key: string; u
     deviceNameManual: joinUniq(d.items.map((item) => item.deviceName)),
     soBBKT: d.bbktNumber || "",
     pctNumber: pctNumberText,
-    pctContent: pctContent,
+    pctContent: pctContentText,
     // CHỈ điền SỐ, không kèm chữ dẫn. Mẫu đã có sẵn "Phiếu đề xuất vật tư số …" và
     // "Phiếu giao hàng số …" trước ô điền, ghép thêm ở đây là in ra lặp hai lần:
     // "Phiếu đề xuất vật tư số Phiếu đề xuất vật tư số 123".

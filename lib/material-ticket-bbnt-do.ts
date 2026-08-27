@@ -39,6 +39,7 @@ export async function buildBbntDoDocument(
   t: FullTicket,
   overrides?: {
     pctNumber?: string;
+    pctContent?: string;
     workStartedAt?: Date;
     workEndedAt?: Date;
     receivedQuantity?: number;
@@ -112,7 +113,7 @@ export async function buildBbntDoDocument(
     heThongThietBi,
     bbktNumber: t.bbktNumber,
     pctNumber: overrides?.pctNumber ?? t.pctNumber,
-    pctContent: t.pctContent,
+    pctContent: overrides?.pctContent ?? t.pctContent,
     proposalNumber: t.proposalNumber,
     deliveryNoteNumber: overrides?.deliveryNoteNumber ?? (await deliveryNoteForDocuments(t)) ?? t.deliveryNoteNumber,
     sccnRepresentativeName: selectedSccnRepresentative?.name ?? selectedSccnUser?.name ?? null,

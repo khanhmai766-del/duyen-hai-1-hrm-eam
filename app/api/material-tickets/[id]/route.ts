@@ -1184,6 +1184,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         const bbntDo = t.docUrl
           ? await buildBbntDoDocument(t, {
               pctNumber: pct,
+              pctContent: pctNoiDung,
               workStartedAt,
               workEndedAt,
             })
