@@ -36,6 +36,7 @@ import {
   usePrefetchTicketOptions } from "@/hooks/useMaterialTickets";
 import { DefectForm } from "@/components/defects/defect-form";
 import { useDefects, type DefectItem } from "@/hooks/useDefects";
+import { useDefectHistory } from "@/hooks/useDefectHistory";
 import { usePositions } from "@/hooks/useUsers";
 import { MIN_USAGE_PHOTOS, usesHandwrittenBbnt, COMMON_MATERIAL_POSITION, displayMaterialCategory, GAS_RETURN_STATUS, isChemicalFlowTicket, isGasCylinderTicket, isOtherMaterialAdvanceTicket, isOtherMaterialCategory, isOtherMaterialTicketType, isSingleStepTicketMaterial, CHEMICAL_TICKET_TYPE, isSupplementReason, MATERIAL_CATEGORY_FILTERS, materialCategoryMatches, materialTicketBelongsToRecoveryTab, materialTicketRequiresRecovery, OTHER_MATERIAL_ADVANCE_TICKET_TYPE, OTHER_MATERIAL_GROUP, OTHER_MATERIAL_TICKET_TYPE, ticketReasonsFor, TICKET_REASONS, TICKET_REASON_OTHER, SINGLE_STEP_TICKET_TYPE, TICKET_MATERIAL_CATEGORIES, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
 import { normalizeText } from "@/lib/nav";
@@ -2572,15 +2573,63 @@ function RepairRequestSection({ t, viewer }: { t: MaterialTicket; viewer: Ticket
  * Server không neo suông: nó sinh đủ các dòng điểm thay thế cho SYC rồi mới gắn, nên vòng
  * kín quyết toán vẫn nguyên. Xem action `adoptDefect` trong app/api/material-tickets/[id].
  */
+/** Một dòng chọn được trong hộp thoại — gộp từ hai nguồn về cùng một hình dạng. */
+type AdoptCandidate = {
+  /** Luôn là id của Defect: server neo phiếu vào khiếm khuyết, không neo vào dòng lịch sử. */
+  id: string;
+  requestNumber: string;
+  position: string | null;
+  content: string;
+  source: "Khiếm khuyết" | "Lịch sử sửa chữa";
+};
+
 function AdoptDefectDialog({ t, onClose }: { t: MaterialTicket; onClose: () => void }) {
   const [q, setQ] = useState("");
-  const [picked, setPicked] = useState<DefectItem | null>(null);
+  const [picked, setPicked] = useState<AdoptCandidate | null>(null);
   const [reason, setReason] = useState("");
   const act = useTicketAction(t.id);
 
-  // Chỉ tra khi đã gõ đủ 2 ký tự — danh sách khiếm khuyết rất lớn.
-  const search = useDefects({ q: q.trim().length >= 2 ? q.trim() : undefined, unit: t.unit, limit: 20 });
-  const results = q.trim().length >= 2 ? (search.data?.data ?? []) : [];
+  // Chỉ tra khi đã gõ đủ 2 ký tự — hai bảng nguồn đều rất lớn.
+  const keyword = q.trim().length >= 2 ? q.trim() : undefined;
+
+  // NGUỒN 1 — Khiếm khuyết thiết bị PHẦN CƠ (Sheet Cơ - Hóa: Cơ | Môi Trường | Hóa).
+  const defects = useDefects({ q: keyword, unit: t.unit, section: "co", limit: 20 });
+  // NGUỒN 2 — Lịch sử sửa chữa. Endpoint đã tự loại hồ sơ thay thế vật tư
+  // (`isMaterialRequest = false`), nên ở đây chỉ còn SYC sửa chữa thật.
+  const history = useDefectHistory(keyword ? { search: keyword, unit: t.unit, pageSize: "20" } : {});
+
+  const loading = defects.isLoading || history.isLoading;
+
+  /**
+   * Gộp hai nguồn về một danh sách chọn. Khoá gộp là `defectId` — một SYC vừa nằm ở tab
+   * Khiếm khuyết vừa có dòng trong Lịch sử sửa chữa thì chỉ hiện MỘT lần, ưu tiên bản ở
+   * tab Khiếm khuyết vì đó là bản gốc còn sống (dòng lịch sử chỉ là ảnh chụp).
+   */
+  const results = React.useMemo<AdoptCandidate[]>(() => {
+    if (!keyword) return [];
+    const byId = new Map<string, AdoptCandidate>();
+    for (const d of defects.data?.data ?? []) {
+      byId.set(d.id, {
+        id: d.id,
+        requestNumber: d.requestNumber || "(chưa cấp số)",
+        position: d.system || null,
+        content: d.content || "",
+        source: "Khiếm khuyết",
+      });
+    }
+    for (const h of history.data?.data ?? []) {
+      // Dòng lịch sử không còn trỏ về khiếm khuyết nào thì không neo phiếu vào đâu được.
+      if (!h.defectId || byId.has(h.defectId)) continue;
+      byId.set(h.defectId, {
+        id: h.defectId,
+        requestNumber: h.requestNumber || "(chưa cấp số)",
+        position: h.system || null,
+        content: h.content || h.defectContent || "",
+        source: "Lịch sử sửa chữa",
+      });
+    }
+    return [...byId.values()];
+  }, [keyword, defects.data, history.data]);
 
   const submit = async () => {
     if (!picked) return toast.error("Chưa chọn số yêu cầu sửa chữa");
@@ -2620,6 +2669,9 @@ function AdoptDefectDialog({ t, onClose }: { t: MaterialTicket; onClose: () => v
         <div style={{ flex: 1, minHeight: 0, overflow: "auto", padding: 16, display: "grid", gap: 14 }}>
           <label style={{ display: "grid", gap: 6 }}>
             <span style={{ fontSize: 13, fontWeight: 600 }}>Tìm số yêu cầu (tổ máy {t.unit})</span>
+            <span style={{ fontSize: 12, color: "#64748b" }}>
+              Nguồn: Khiếm khuyết thiết bị phần Cơ và Lịch sử sửa chữa.
+            </span>
             <input
               value={q}
               onChange={(e) => { setQ(e.target.value); setPicked(null); }}
@@ -2631,7 +2683,7 @@ function AdoptDefectDialog({ t, onClose }: { t: MaterialTicket; onClose: () => v
           <div style={{ border: "1px solid #e2e8f0", borderRadius: 10, overflow: "hidden" }}>
             {q.trim().length < 2 ? (
               <p style={{ margin: 0, padding: 14, fontSize: 13, color: "#64748b" }}>Gõ ít nhất 2 ký tự để tìm.</p>
-            ) : search.isLoading ? (
+            ) : loading ? (
               <p style={{ margin: 0, padding: 14, fontSize: 13, color: "#64748b" }}>Đang tìm…</p>
             ) : results.length === 0 ? (
               <p style={{ margin: 0, padding: 14, fontSize: 13, color: "#64748b" }}>Không tìm thấy số yêu cầu phù hợp.</p>
@@ -2650,11 +2702,18 @@ function AdoptDefectDialog({ t, onClose }: { t: MaterialTicket; onClose: () => v
                     }}
                   >
                     <span style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 13, fontWeight: 700, color: "#0f172a" }}>
-                      {d.requestNumber || "(chưa cấp số)"}
-                      <span style={{ fontWeight: 500, color: "#64748b" }}>· {d.system || "—"}</span>
+                      {d.requestNumber}
+                      <span style={{ fontWeight: 500, color: "#64748b" }}>· {d.position || "—"}</span>
+                      <span style={{
+                        marginLeft: "auto", fontSize: 11, fontWeight: 600, borderRadius: 999, padding: "2px 8px",
+                        background: d.source === "Khiếm khuyết" ? "#e0f2fe" : "#f1f5f9",
+                        color: d.source === "Khiếm khuyết" ? "#0369a1" : "#475569",
+                      }}>
+                        {d.source}
+                      </span>
                     </span>
                     <span style={{ display: "block", marginTop: 2, fontSize: 12, color: "#475569" }}>
-                      {(d.content || "").slice(0, 110) || "(không có nội dung)"}
+                      {d.content.slice(0, 110) || "(không có nội dung)"}
                     </span>
                   </button>
                 );
