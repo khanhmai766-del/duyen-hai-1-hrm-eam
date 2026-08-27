@@ -2491,11 +2491,15 @@ function RepairRequestSection({ t, viewer }: { t: MaterialTicket; viewer: Ticket
               )}
             </>
           )}
-          {/* Cửa hậu QUẢN TRỊ: cố ý đặt NGOÀI chuỗi điều kiện phía trên, vì nó tồn tại đúng
-              cho lúc luồng chuẩn không đi được (SYC đã ra sẵn ở tab Khiếm khuyết). */}
-          {viewer?.isAdmin && (
+          {/* Lối đi ngoại lệ: cố ý đặt NGOÀI chuỗi điều kiện phía trên, vì nó tồn tại đúng
+              cho lúc luồng chuẩn không đi được (SYC đã ra sẵn ở tab Khiếm khuyết).
+              Quyền dùng CHUNG `canLinkDefect` với nút "Ra SYC sửa chữa" — ai được phân
+              quyền tới bước xác nhận vật tư lãnh thì thao tác được, không riêng Quản trị.
+              Chỉ hiện khi phiếu ĐÃ xác nhận lãnh: chưa xác nhận thì server chắc chắn từ
+              chối, hiện nút ra chỉ để người dùng bấm vào rồi ăn lỗi. */}
+          {canLinkDefect && Boolean(t.receivedAt || t.vhvReceivedAt) && (
             <button type="button" className="pdf" onClick={() => setAdoptOpen(true)}
-              title="Ngoại lệ dành cho Quản trị: neo phiếu vào một SYC đã lập ở tab Khiếm khuyết">
+              title="Neo phiếu vào một số yêu cầu đã lập sẵn ở tab Khiếm khuyết hoặc Lịch sử sửa chữa">
               <Wrench size={14} /> Gắn SYC đã có
             </button>
           )}
@@ -2595,7 +2599,7 @@ function useDebounced<T>(value: T, delay = 350) {
 }
 
 /**
- * NGOẠI LỆ CHO QUẢN TRỊ — neo phiếu vật tư vào một SYC đã lập sẵn.
+ * LỐI ĐI NGOẠI LỆ — neo phiếu vật tư vào một SYC đã lập sẵn.
  *
  * Luồng chuẩn là "Ra SYC sửa chữa": tạo mới hồ sơ thay thế vật tư từ chính phiếu. Nhưng
  * thực tế người vận hành thường ra SYC trước rồi mới lập phiếu vật tư — SYC đó là khiếm
@@ -2683,7 +2687,7 @@ function AdoptDefectDialog({ t, onClose }: { t: MaterialTicket; onClose: () => v
           <div className="min-w-0 flex-1">
             <h3 className="text-[15px] font-bold leading-tight text-slate-900">Gắn SYC đã có</h3>
             <p className="mt-0.5 text-xs leading-snug text-slate-500">
-              Ngoại lệ dành cho Quản trị · Nguồn: Khiếm khuyết phần Cơ và Lịch sử sửa chữa · Tổ máy {t.unit}
+              Nguồn: Khiếm khuyết phần Cơ và Lịch sử sửa chữa · Tổ máy {t.unit}
             </p>
           </div>
           <button type="button" onClick={onClose} aria-label="Đóng"

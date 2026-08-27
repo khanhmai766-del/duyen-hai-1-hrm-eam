@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { buildBbntDoDocument, deliveryNoteForDocuments, getTicket, ITEM_INCLUDE, type FullTicket } from "@/lib/material-ticket-bbnt-do";
-import { ok, fail, requireUser, requireRole, handle, audit } from "@/lib/api";
+import { ok, fail, requireUser, handle, audit } from "@/lib/api";
 import { isShiftLeader, isTechnician, getWorkflowRoleMap, isMaterialTicketExtraAssignedPosition, returnStepAllowed, stepAllowedWithMap } from "@/lib/material-workflow";
 import { resolveSignatureBuffer } from "@/lib/bbnt-do-doc";
 import { generateBbntDoc, type BbntItem } from "@/lib/bbnt-doc";
@@ -1369,7 +1369,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     }
 
     /**
-     * CỬA HẬU CHỈ DÀNH CHO QUẢN TRỊ — gắn một SYC ĐÃ CÓ (lập ở tab Khiếm khuyết) vào phiếu.
+     * LỐI ĐI NGOẠI LỆ — gắn một SYC ĐÃ CÓ (lập ở tab Khiếm khuyết) vào phiếu.
      *
      * Vì sao cần: luồng chuẩn `linkDefect` đòi SYC phải là hồ sơ thay thế vật tư và phải
      * mang sẵn đủ các điểm thay thế của phiếu. Thực tế người vận hành ra SYC ở tab Khiếm
@@ -1382,11 +1382,10 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
      * thay thế vật tư. Sau bước này SYC thoả mãn mọi điều kiện của luồng chuẩn, vòng kín
      * còn nguyên.
      *
-     * Bắt buộc nêu lý do và ghi vào AuditLog: đây là ngoại lệ, phải truy được về sau.
+     * Quyền đúng bằng luồng chuẩn: ai được phân quyền tới bước xác nhận vật tư lãnh thì
+     * thao tác được. Bắt buộc nêu lý do và ghi AuditLog vì đây vẫn là lối đi ngoại lệ.
      */
     if (action === "adoptDefect") {
-      requireRole(user, ["ADMIN"]);
-
       const defectId = String(body.defectId || "").trim();
       if (!defectId) return fail("Thiếu số yêu cầu cần gắn");
       const reason = String(body.reason || "").trim();
@@ -1398,6 +1397,28 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       if (isGasCylinderTicket(t.materialCategory)) {
         return fail("Phiếu Chai khí không phát sinh SYC sửa chữa", 409);
       }
+
+      // Quyền ĐÚNG BẰNG luồng chuẩn `linkDefect`: ai được phân quyền tới bước xác nhận
+      // vật tư lãnh thì thao tác được, không giới hạn riêng Quản trị. Hai helper dưới đều
+      // cho ADMIN đi qua nên Quản trị vẫn giữ nguyên quyền.
+      const wfMapAdopt = await getWorkflowRoleMap();
+      if (t.type === "UNG") {
+        if (wfMapAdopt.vhvReceive.length > 0) {
+          if (!stepAllowedWithMap(wfMapAdopt, "vhvReceive", user)) {
+            return fail("Bạn không có quyền gắn SYC tại bước VHV lãnh vật tư", 403);
+          }
+        } else {
+          const err = assignedPositionError(user, t);
+          if (err) return err;
+        }
+      } else {
+        if (!stepAllowedWithMap(wfMapAdopt, "receive", user)) {
+          return fail("Bạn không có quyền gắn SYC tại bước xác nhận vật tư lãnh", 403);
+        }
+        const err = assignedPositionError(user, t);
+        if (err) return err;
+      }
+
       if (!t.receivedAt && !t.vhvReceivedAt) {
         return fail("Chỉ được gắn SYC sau khi vật tư lãnh đã được xác nhận", 409);
       }
@@ -1462,7 +1483,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       });
 
       await audit(user.id, "MT_ADOPT_DEFECT", "MaterialTicket", t.id,
-        `${materialTicketReference(t)}: QUẢN TRỊ gắn SYC đã có ${defect.requestNumber} `
+        `${materialTicketReference(t)}: gắn SYC đã có ${defect.requestNumber} `
         + `(${resolved.points.length} điểm) — lý do: ${reason}`);
 
       const up = await prisma.materialTicket.findUnique({ where: { id: t.id }, include: ITEM_INCLUDE });
