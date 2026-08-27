@@ -6,14 +6,13 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { QRCodeSVG } from "qrcode.react";
 import { toast } from "sonner";
-import { AlertTriangle, ArrowLeft, Download, Pencil, Trash2, FileText, Package, UserCog, ExternalLink, QrCode, Loader2, Plus, X, PackagePlus, Cpu, Wrench, PackageCheck, CheckCircle2, ImageIcon, type LucideIcon } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Download, Pencil, Trash2, FileText, Package, UserCog, ExternalLink, QrCode, Loader2, Plus, PackagePlus, Cpu, Wrench, PackageCheck, CheckCircle2, ImageIcon, type LucideIcon } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DeviceForm } from "@/components/devices/device-form";
 import { DeviceMaterialDeclarationDialog } from "@/components/devices/device-material-declaration-dialog";
-import { DefectForm } from "@/components/defects/defect-form";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { RbacProtectedRoute } from "@/components/shared/rbac-protected-route";
 import { CardSkeleton } from "@/components/shared/skeletons";
@@ -58,7 +57,6 @@ function DeviceDetailPageContent() {
   const [showAllUsage, setShowAllUsage] = React.useState(false);
   const [materialOpen, setMaterialOpen] = React.useState(false);
   const [materialEditId, setMaterialEditId] = React.useState<string | null>(null);
-  const [defectOpen, setDefectOpen] = React.useState(false);
 
   const device = data?.data;
   const url = typeof window !== "undefined" && device ? deviceQrValue(device.id, device.machine, window.location.origin) : "";
@@ -66,7 +64,6 @@ function DeviceDetailPageContent() {
   const canDeleteQr = Boolean(device && rbac.can("device-manage", ["manage", "full"]) && access.canEdit);
   const canDeclareMaterial = Boolean(device && rbac.can("replacement-manage", ["personal", "manage", "full"]) && access.canEdit);
   const canEditMaterialDeclaration = Boolean(device && rbac.can("replacement-manage", ["manage", "full"]) && access.canEdit);
-  const canCreateDefect = Boolean(device && rbac.can("defect-manage", ["personal", "manage", "full"]) && access.canEdit);
   const deviceMachine = React.useMemo(() => {
     if (!device) return "S1";
     return device.machine ?? defaultScopeOf(device.id);
@@ -424,16 +421,9 @@ function DeviceDetailPageContent() {
             className="order-1 lg:order-none"
             count={device.currentDefects?.length ?? 0}
             actions={
-              <>
-                {canCreateDefect && (
-                  <Button size="sm" className="h-8 rounded-lg bg-amber-600 text-white shadow-none hover:bg-amber-700" onClick={() => setDefectOpen(true)}>
-                    <Plus className="h-4 w-4" /> Thêm khiếm khuyết
-                  </Button>
-                )}
-                <Button asChild variant="link" size="sm" className="h-7 px-1">
-                  <Link href={fullDefectsUrl}>Xem danh sách</Link>
-                </Button>
-              </>
+              <Button asChild variant="link" size="sm" className="h-7 px-1">
+                <Link href={fullDefectsUrl}>Xem danh sách</Link>
+              </Button>
             }
           >
             <>
@@ -511,37 +501,6 @@ function DeviceDetailPageContent() {
         machine={deviceMachine}
         declaration={materialEditDeclaration}
       />
-
-      {defectOpen && (
-        <div className="fixed inset-0 z-50">
-          <div className="absolute inset-0 bg-ink/45 backdrop-blur-[1px]" onClick={() => setDefectOpen(false)} />
-          <div className="absolute inset-y-0 right-0 flex min-h-0 w-full max-w-2xl flex-col overflow-hidden bg-white shadow-2xl animate-in slide-in-from-right">
-            <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border bg-gradient-to-r from-amber-50/80 to-white p-4">
-              <div>
-                <h2 className="text-lg font-bold text-ink">Thêm khiếm khuyết thiết bị</h2>
-                <p className="mt-0.5 text-xs text-muted-foreground">Thiết bị và hệ thống đã được điền sẵn từ lý lịch.</p>
-              </div>
-              <button type="button" onClick={() => setDefectOpen(false)} className="flex h-10 w-10 items-center justify-center rounded-lg text-muted-foreground hover:bg-white hover:text-ink" aria-label="Đóng">
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            <DefectForm
-              initialDevice={{
-                code: device.id,
-                displayCode: device.code,
-                name: device.name,
-                system: device.system,
-                systemSeq: device.systemSeq,
-                managingPosition: device.managingPosition,
-                unit: deviceMachine,
-              }}
-              lockDevice
-              onDone={() => setDefectOpen(false)}
-              onCancel={() => setDefectOpen(false)}
-            />
-          </div>
-        </div>
-      )}
 
       <Dialog open={qrOpen} onOpenChange={setQrOpen}>
         <DialogContent className="max-w-sm overflow-hidden">

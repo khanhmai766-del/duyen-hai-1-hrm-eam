@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
-import { Repeat, Eye, Pencil, Trash2, Cpu, History, CalendarCheck, Activity, ChevronDown, ChevronLeft, ChevronRight, ListFilter, RotateCcw, Upload, FileClock, Search, Plus, ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
+import { Repeat, Eye, Pencil, Trash2, Cpu, History, CalendarCheck, Activity, ChevronDown, ChevronLeft, ChevronRight, ListFilter, RotateCcw, Upload, FileClock, Search, Plus, ArrowDown, ArrowUp, ArrowUpDown, ArrowUpRight } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { ExportButton } from "@/components/shared/export-button";
 import { SearchBar } from "@/components/shared/search-bar";
@@ -24,7 +24,6 @@ import { ReplacementScheduleImportDialog } from "@/components/materials/replacem
 import { ReplacementPointForm } from "@/components/materials/replacement-point-form";
 import { ReplacementPointDetailsDialog } from "@/components/materials/replacement-point-details-dialog";
 import { ReplacementHistoryDetails } from "@/components/materials/replacement-history-details";
-import { PendingReplacementSettlements } from "@/components/materials/pending-replacement-settlements";
 import { PendingHistoryEditDialog } from "@/components/repair/pending-history-edit-dialog";
 import { LockChip } from "@/components/shared/lock-chip";
 import { Card } from "@/components/ui/card";
@@ -46,6 +45,7 @@ import {
   type ReplacementItem,
   type ReplacementDevice,
   type ReplacementLogItem,
+  type PendingReplacementSettlement,
 } from "@/hooks/useReplacements";
 import {
   displayMaterialCategory,
@@ -70,6 +70,9 @@ import { normalizeText } from "@/lib/nav";
 type TabKey = "schedule" | "status" | "history";
 type HistorySortKey = "subject" | "pctNumber" | "replacedAt" | "quantity" | "doneBy" | "locked";
 type SortDir = "asc" | "desc";
+type HistoryTableRow =
+  | { kind: "pending-settlement"; settlement: PendingReplacementSettlement }
+  | { kind: "history"; log: ReplacementLogItem };
 
 function replacementScheduleState(point: ReplacementItem) {
   return (point.inProgressTickets?.length ?? 0) > 0
@@ -515,14 +518,22 @@ export function ReplacementsPageContent({ only }: { only?: TabKey } = {}) {
     () => [...filteredLogs].sort((a, b) => compareHistoryLogs(a, b, historySort.key, historySort.dir)),
     [filteredLogs, historySort]
   );
-  const historyTotalPages = Math.max(1, Math.ceil(filteredLogs.length / historyPageSize));
+  // Phiếu chờ quyết toán luôn đứng trước lịch sử đã chốt, bất kể người dùng đang
+  // sắp xếp cột nào. Trong chính nhóm chờ, phiếu cập nhật gần nhất đứng trước.
+  const combinedHistoryRows = React.useMemo<HistoryTableRow[]>(() => [
+    ...[...filteredPendingSettlements]
+      .sort((a, b) => pendingSettlementDate(b).getTime() - pendingSettlementDate(a).getTime())
+      .map((settlement) => ({ kind: "pending-settlement" as const, settlement })),
+    ...sortedFilteredLogs.map((log) => ({ kind: "history" as const, log })),
+  ], [filteredPendingSettlements, sortedFilteredLogs]);
+  const historyTotalPages = Math.max(1, Math.ceil(combinedHistoryRows.length / historyPageSize));
   React.useEffect(() => {
     setHistoryPage(1);
   }, [historyFromMonth, historyToMonth, machineFilter, positionFilter, categoryFilter, searchQ, historyPageSize, historySort]);
   const historySafePage = Math.min(historyPage, historyTotalPages);
-  const pagedLogs = sortedFilteredLogs.slice((historySafePage - 1) * historyPageSize, historySafePage * historyPageSize);
-  const historyFirstShown = filteredLogs.length ? (historySafePage - 1) * historyPageSize + 1 : 0;
-  const historyLastShown = Math.min(historySafePage * historyPageSize, filteredLogs.length);
+  const pagedHistoryRows = combinedHistoryRows.slice((historySafePage - 1) * historyPageSize, historySafePage * historyPageSize);
+  const historyFirstShown = combinedHistoryRows.length ? (historySafePage - 1) * historyPageSize + 1 : 0;
+  const historyLastShown = Math.min(historySafePage * historyPageSize, combinedHistoryRows.length);
   const historyFocusScrollRef = React.useRef<string | null>(null);
 
   const focusHistoryPct = React.useCallback((log: ReplacementLogItem) => {
@@ -552,7 +563,7 @@ export function ReplacementsPageContent({ only }: { only?: TabKey } = {}) {
   React.useEffect(() => {
     const focusId = historyFocusScrollRef.current;
     if (!focusId || expandedLogId !== focusId) return;
-    const targetIndex = sortedFilteredLogs.findIndex((log) => log.id === focusId);
+    const targetIndex = combinedHistoryRows.findIndex((row) => row.kind === "history" && row.log.id === focusId);
     if (targetIndex < 0) return;
     const targetPage = Math.floor(targetIndex / historyPageSize) + 1;
     if (targetPage !== historySafePage) {
@@ -567,7 +578,7 @@ export function ReplacementsPageContent({ only }: { only?: TabKey } = {}) {
       historyFocusScrollRef.current = null;
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [expandedLogId, historyPageSize, historySafePage, sortedFilteredLogs]);
+  }, [combinedHistoryRows, expandedLogId, historyPageSize, historySafePage]);
 
   const historyRangeLabel = historyFromMonth === historyToMonth
     ? `tháng ${ymLabel(historyFromMonth)}`
@@ -1127,18 +1138,12 @@ export function ReplacementsPageContent({ only }: { only?: TabKey } = {}) {
             <TableSkeleton rows={8} />
           ) : (
             <>
-              <PendingReplacementSettlements
-                rows={filteredPendingSettlements}
-                capped={history.data?.meta.pendingSettlementsCapped}
-              />
-              {logs.length === 0 ? (
-                filteredPendingSettlements.length === 0 && (
-                  <EmptyState
-                    icon={History}
-                    title={historyHasActiveFilters ? "Không tìm thấy hồ sơ phù hợp" : `Không có ghi nhận thay thế ${historyRangeLabel}`}
-                    description="Chọn khoảng tháng hoặc điều chỉnh bộ lọc để xem lịch sử thay thế."
-                  />
-                )
+              {combinedHistoryRows.length === 0 ? (
+                <EmptyState
+                  icon={History}
+                  title={historyHasActiveFilters ? "Không tìm thấy hồ sơ phù hợp" : `Không có ghi nhận thay thế ${historyRangeLabel}`}
+                  description="Chọn khoảng tháng hoặc điều chỉnh bộ lọc để xem lịch sử thay thế."
+                />
               ) : (
               <Card className="overflow-hidden">
               {/* Thanh công cụ cùng khuôn Lịch sử sửa chữa: cỡ trang trái, tìm kiếm phải. */}
@@ -1172,9 +1177,13 @@ export function ReplacementsPageContent({ only }: { only?: TabKey } = {}) {
               </div>
 
               <div className="grid gap-3 bg-slate-50/70 p-3 md:hidden">
-                {pagedLogs.length === 0 ? (
+                {pagedHistoryRows.length === 0 ? (
                   <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-4 py-10 text-center text-sm text-slate-500">Không tìm thấy bản ghi phù hợp.</div>
-                ) : pagedLogs.map((l) => {
+                ) : pagedHistoryRows.map((row) => {
+                  if (row.kind === "pending-settlement") {
+                    return <PendingSettlementMobileCard key={`pending-${row.settlement.ticketId}`} settlement={row.settlement} />;
+                  }
+                  const l = row.log;
                   const expanded = expandedLogId === l.id;
                   const device = l.replacement ? linkedDeviceOf(l.replacement) : null;
                   const historyStatus = replacementHistoryStatus(l);
@@ -1253,7 +1262,7 @@ export function ReplacementsPageContent({ only }: { only?: TabKey } = {}) {
                       <ReplacementHistorySortHeader label="Người ghi nhận" sortKey="doneBy" sort={historySort} onSort={toggleHistorySort} align="center" />
                     </TableHead>
                     <TableHead className="w-[145px] bg-[#00558F] px-2">
-                      <ReplacementHistorySortHeader label="Chốt lịch sử" sortKey="locked" sort={historySort} onSort={toggleHistorySort} align="center" />
+                      <ReplacementHistorySortHeader label="Trạng thái" sortKey="locked" sort={historySort} onSort={toggleHistorySort} align="center" />
                     </TableHead>
                     <TableHead className="w-[108px] bg-[#00558F] px-2 text-center text-[11px] font-semibold uppercase tracking-wider text-white">
                       Thao tác
@@ -1261,13 +1270,17 @@ export function ReplacementsPageContent({ only }: { only?: TabKey } = {}) {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {pagedLogs.length === 0 ? (
+                  {pagedHistoryRows.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={8} className="py-12 text-center text-sm text-muted-foreground">
                         Không tìm thấy bản ghi phù hợp.
                       </TableCell>
                     </TableRow>
-                  ) : pagedLogs.map((l) => {
+                  ) : pagedHistoryRows.map((row) => {
+                    if (row.kind === "pending-settlement") {
+                      return <PendingSettlementTableRow key={`pending-${row.settlement.ticketId}`} settlement={row.settlement} />;
+                    }
+                    const l = row.log;
                     const expanded = expandedLogId === l.id;
                     const device = l.replacement ? linkedDeviceOf(l.replacement) : null;
                     const historyStatus = replacementHistoryStatus(l);
@@ -1423,12 +1436,12 @@ export function ReplacementsPageContent({ only }: { only?: TabKey } = {}) {
               </div>
               <div className="flex flex-col gap-3 border-t border-border bg-muted/25 px-4 py-3 text-sm text-muted-foreground md:flex-row md:items-center md:justify-between">
                 <div>
-                  {filteredLogs.length === 0 ? (
+                  {combinedHistoryRows.length === 0 ? (
                     "Không có bản ghi nào"
                   ) : (
                     <>
                       Hiển thị <b className="font-mono text-ink">{historyFirstShown}</b>–<b className="font-mono text-ink">{historyLastShown}</b> trong tổng số{" "}
-                      <b className="font-mono text-ink">{filteredLogs.length}</b> bản ghi
+                      <b className="font-mono text-ink">{combinedHistoryRows.length}</b> bản ghi
                       {historyHasActiveFilters && <span> sau lọc</span>}
                     </>
                   )}
@@ -1753,6 +1766,120 @@ function ReplacementLogEditDialog({ log, onClose }: { log: ReplacementLogItem | 
 }
 
 /** Điều hướng trang cho bảng Lịch sử thay thế — cùng khuôn với Lịch sử sửa chữa. */
+function pendingSettlementDate(row: PendingReplacementSettlement) {
+  return new Date(
+    row.history?.performedAt
+      ?? row.defectCompletedAt
+      ?? row.ticketCompletedAt
+      ?? row.updatedAt
+  );
+}
+
+function pendingSettlementSummary(row: PendingReplacementSettlement) {
+  const unique = (values: string[]) => [...new Set(values.map((value) => value.trim()).filter(Boolean))];
+  const materials = unique(row.points.map((point) => `${point.material.code} · ${point.material.name}`));
+  const devices = unique(row.points.map((point) => point.device?.name ?? point.location ?? point.deviceSeq ?? ""));
+  const pctNumber = normalizePctNumber(row.history?.workOrderNumber) || normalizePctNumber(row.pctNumber);
+  return { materials, devices, pctNumber };
+}
+
+function PendingSettlementStatus() {
+  return (
+    <span className="inline-flex rounded-full bg-amber-100 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wide text-amber-800 ring-1 ring-amber-200">
+      Chờ quyết toán
+    </span>
+  );
+}
+
+function PendingSettlementMobileCard({ settlement }: { settlement: PendingReplacementSettlement }) {
+  const { materials, devices, pctNumber } = pendingSettlementSummary(settlement);
+  return (
+    <article className="overflow-hidden rounded-2xl border border-amber-200 bg-[linear-gradient(145deg,#fffdf7,#ffffff)] shadow-[0_8px_24px_rgba(180,83,9,0.08)]">
+      <div className="p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+            {pctNumber ? (
+              <span className="rounded-full bg-sky-50 px-2.5 py-1 font-mono text-[10px] font-bold text-[#00558F]">PCT/LCT {pctNumber}</span>
+            ) : (
+              <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-semibold text-slate-500">Chưa có PCT/LCT</span>
+            )}
+            <span className="rounded-full bg-slate-900 px-2 py-1 font-mono text-[9px] font-bold text-white">SYC {settlement.requestNumber ?? "—"}</span>
+          </div>
+          <PendingSettlementStatus />
+        </div>
+
+        <h3 className="mt-3 line-clamp-2 text-[15px] font-bold leading-[1.45] text-slate-900">
+          {materials[0] || "Vật tư chưa xác định"}
+        </h3>
+        {materials.length > 1 && <div className="mt-0.5 text-[10.5px] font-semibold text-amber-700">+{materials.length - 1} vật tư khác</div>}
+        <div className="mt-2 rounded-xl border border-amber-100 bg-white/80 px-3 py-2.5">
+          <div className="line-clamp-2 text-xs font-semibold text-slate-700">{devices[0] || "Chưa gắn thiết bị"}</div>
+          {devices.length > 1 && <div className="mt-0.5 text-[10.5px] text-slate-500">+{devices.length - 1} điểm thay thế khác</div>}
+        </div>
+
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <div className="rounded-xl bg-amber-50/70 px-3 py-2.5">
+            <div className="text-[9px] font-bold uppercase tracking-wider text-amber-700/70">Ngày xử lý</div>
+            <div className="mt-1 font-mono text-sm font-bold text-slate-800">{formatDate(pendingSettlementDate(settlement))}</div>
+          </div>
+          <div className="rounded-xl bg-amber-50/70 px-3 py-2.5">
+            <div className="text-[9px] font-bold uppercase tracking-wider text-amber-700/70">Số lượng</div>
+            <div className="mt-1 text-sm font-bold text-amber-800">Chưa chốt</div>
+          </div>
+        </div>
+
+        <div className="mt-3 flex items-center justify-between gap-3 border-t border-dashed border-amber-200 pt-3">
+          <span className="truncate text-[10.5px] text-slate-500">{settlement.ticketNumber}</span>
+          <Link href="/replacement-procedures" className="inline-flex shrink-0 items-center gap-1 text-xs font-bold text-amber-800 hover:underline">
+            Mở quy trình <ArrowUpRight className="h-3.5 w-3.5" />
+          </Link>
+        </div>
+      </div>
+    </article>
+  );
+}
+
+function PendingSettlementTableRow({ settlement }: { settlement: PendingReplacementSettlement }) {
+  const { materials, devices, pctNumber } = pendingSettlementSummary(settlement);
+  return (
+    <TableRow className="border-amber-100 bg-amber-50/55 hover:bg-amber-50/80">
+      <TableCell className="px-0 py-3 text-center">
+        <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-amber-500 text-white shadow-sm" title="Phiếu đang chờ quyết toán">
+          <FileClock className="h-3.5 w-3.5" />
+        </span>
+      </TableCell>
+      <TableCell className="px-3 py-2.5">
+        <div className="font-semibold leading-snug text-ink">{materials[0] || "Vật tư chưa xác định"}</div>
+        {materials.length > 1 && <div className="mt-0.5 text-[10.5px] font-semibold text-amber-700">+{materials.length - 1} vật tư khác</div>}
+        <div className="mt-0.5 font-mono text-[11.5px] tracking-tight text-muted-foreground">
+          {devices[0] || "chưa gắn thiết bị"}{devices.length > 1 ? ` · +${devices.length - 1} điểm khác` : ""}
+        </div>
+        <div className="mt-1 inline-flex items-center gap-1 rounded-full bg-white px-2 py-0.5 text-[10.5px] font-semibold text-amber-700 ring-1 ring-amber-100">
+          SYC {settlement.requestNumber ?? "—"} · {settlement.ticketNumber}
+        </div>
+      </TableCell>
+      <TableCell className="px-3 py-2.5 text-center">
+        {pctNumber ? (
+          <span className="inline-block rounded-md bg-sky-50 px-2.5 py-0.5 text-[12.5px] font-semibold text-[#00558F]">{pctNumber}</span>
+        ) : (
+          <span className="text-[12.5px] text-muted-foreground">—</span>
+        )}
+      </TableCell>
+      <TableCell className="whitespace-nowrap px-3 py-2.5 text-center font-mono text-[13px] font-semibold text-ink">
+        {formatDate(pendingSettlementDate(settlement))}
+      </TableCell>
+      <TableCell className="px-3 py-2.5 text-center text-xs font-semibold text-amber-800">Chưa chốt</TableCell>
+      <TableCell className="px-3 py-2.5 text-center text-[11px] text-muted-foreground">—</TableCell>
+      <TableCell className="px-3 py-2.5 text-center"><PendingSettlementStatus /></TableCell>
+      <TableCell className="px-3 py-2.5 text-center">
+        <Button asChild type="button" variant="ghost" size="icon" className="text-amber-700 hover:bg-amber-100 hover:text-amber-900" title="Mở quy trình vật tư">
+          <Link href="/replacement-procedures"><ArrowUpRight className="h-4 w-4" /></Link>
+        </Button>
+      </TableCell>
+    </TableRow>
+  );
+}
+
 function HistoryPager({ page, totalPages, onGo }: { page: number; totalPages: number; onGo: (p: number) => void }) {
   const items: Array<number | "gap"> = [];
   for (let i = 1; i <= totalPages; i++) {
