@@ -13,7 +13,11 @@ import { MAX_DEFECT_RELATED_DEVICES, normalizeRelatedDeviceSeqs } from "@/lib/de
 import { enqueueDefectSyncEvent } from "@/lib/defect-sync-outbox";
 import { canViewPosition, resolvePositionViewScope } from "@/lib/position-data-scope";
 import { positionCodeOf } from "@/lib/position-catalog";
-import { revertMaterialRequestReplacements } from "@/lib/defect-material-request";
+import {
+  detachMaterialTicketsFromDefect,
+  moTaGoPhieuVatTu,
+  revertMaterialRequestReplacements,
+} from "@/lib/defect-material-request";
 import {
   normalizeMappedUnit,
   validateMappedDevice,
@@ -555,10 +559,23 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
     if (access.hasExplicitScopes && !access.canEditDeviceLike({ device: existing.device, system: existing.system })) {
       return fail("Cương vị của bạn không có quyền thao tác trên phiếu khiếm khuyết này", 403);
     }
-    await prisma.defect.delete({ where: { id: params.id } });
+    // `MaterialTicket.defectId` là cột thường, KHÔNG có khoá ngoại — xoá Defect không kéo
+    // theo gì, phiếu vật tư sẽ trỏ vào một SYC không còn tồn tại. Phải gỡ tay, và gỡ
+    // TRƯỚC khi xoá, trong cùng giao dịch, để không có khoảnh khắc nào dữ liệu hở.
+    let goPhieu = { daLui: [] as string[], giuNguyenBuoc: [] as string[], tong: 0 };
+    await prisma.$transaction(async (tx) => {
+      if (existing.isMaterialRequest) {
+        await revertMaterialRequestReplacements(tx, { defectId: existing.id });
+        goPhieu = await detachMaterialTicketsFromDefect(tx, { defectId: existing.id });
+      }
+      await tx.defect.delete({ where: { id: params.id } });
+    });
     const storedImages = existing.images.length > 0 ? existing.images : existing.imageUrl ? [existing.imageUrl] : [];
     await Promise.all(storedImages.map((url) => deleteFromS3(url)));
-    await audit(user.id, "DELETE_DEFECT", "Defect", params.id, auditDetailWithPosition(user));
+    await audit(user.id, "DELETE_DEFECT", "Defect", params.id, auditDetailWithPosition(
+      user,
+      goPhieu.tong > 0 ? `Phiếu vật tư: ${moTaGoPhieuVatTu(goPhieu)}` : undefined,
+    ));
     return ok({ id: params.id });
   });
 }

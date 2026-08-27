@@ -4,6 +4,7 @@ import { normalizeText } from "@/lib/nav";
 import { MAX_DEFECT_RELATED_DEVICES } from "@/lib/defect-related-devices";
 import { buildReplacementLogData } from "@/lib/material-replacement-log";
 import { replacementTargetKey } from "@/lib/material-ticket-replacement-settlement";
+import { materialTicketNumber } from "@/lib/material-ticket-sequence";
 
 /** Tối đa 1 thiết bị chính + N thiết bị liên quan trong cùng một SYC. */
 export const MAX_MATERIAL_REQUEST_POINTS = MAX_DEFECT_RELATED_DEVICES + 1;
@@ -272,6 +273,70 @@ export async function recordMaterialRequestReplacements(
  * Luật "một dòng khai báo chỉ nuôi được deviceCount điểm" được giữ nguyên, khoá tuần
  * tự bằng đúng advisory lock mà POST /api/material-replacements dùng.
  */
+/**
+ * Bước duy nhất mà phiếu vật tư còn LÙI ĐƯỢC về chỗ gắn SYC.
+ *
+ * Gắn SYC đẩy phiếu từ CHO_PHIEU_YCSC sang SU_DUNG_VAT_TU, nên huỷ/xoá SYC lúc phiếu còn
+ * ở đúng bước đó là hoàn tác sạch. Đi xa hơn thì phiếu đã sinh biên bản MANG SỐ HIỆU
+ * (BBTHVT, BBNT D-Office) — lùi bước sẽ tạo mâu thuẫn giấy tờ, nên chỉ gỡ liên kết và
+ * ghi lại để người dùng tự xử.
+ */
+const BUOC_LUI_DUOC = "SU_DUNG_VAT_TU";
+
+/**
+ * Gỡ các phiếu vật tư đang neo vào một SYC sắp bị huỷ hoặc xoá.
+ *
+ * Không làm việc này thì phiếu vật tư khoe một số SYC không còn tồn tại (`MaterialTicket
+ * .defectId` là cột thường, KHÔNG có khoá ngoại nên xoá Defect không kéo theo gì), và
+ * phiếu vẫn đứng sau cổng SYC dù chẳng còn SYC nào.
+ *
+ * Trả về hai danh sách để nơi gọi ghi vào AuditLog — nhất là `giuNguyenBuoc`, vì đó là
+ * các phiếu cần người thật xem lại.
+ */
+export async function detachMaterialTicketsFromDefect(
+  tx: Prisma.TransactionClient,
+  params: { defectId: string }
+) {
+  const tickets = await tx.materialTicket.findMany({
+    where: { defectId: params.defectId },
+    select: {
+      id: true,
+      status: true,
+      sequenceMonth: true,
+      sequenceNumber: true,
+      sequenceScope: true,
+    },
+  });
+
+  const daLui: string[] = [];
+  const giuNguyenBuoc: string[] = [];
+
+  for (const ticket of tickets) {
+    const luiDuoc = ticket.status === BUOC_LUI_DUOC;
+    await tx.materialTicket.update({
+      where: { id: ticket.id },
+      data: {
+        defectId: null,
+        repairRequestNumber: null,
+        ...(luiDuoc ? { status: "CHO_PHIEU_YCSC" } : {}),
+      },
+    });
+    (luiDuoc ? daLui : giuNguyenBuoc).push(materialTicketNumber(ticket));
+  }
+
+  return { daLui, giuNguyenBuoc, tong: tickets.length };
+}
+
+/** Câu mô tả gắn vào AuditLog của bước huỷ/xoá SYC; rỗng khi không có phiếu nào neo vào. */
+export function moTaGoPhieuVatTu(ket: { daLui: string[]; giuNguyenBuoc: string[] }) {
+  const phan: string[] = [];
+  if (ket.daLui.length) phan.push(`trả ${ket.daLui.join(", ")} về bước gắn SYC`);
+  if (ket.giuNguyenBuoc.length) {
+    phan.push(`gỡ liên kết ${ket.giuNguyenBuoc.join(", ")} nhưng GIỮ NGUYÊN bước vì đã xuất biên bản — cần rà lại`);
+  }
+  return phan.join("; ");
+}
+
 export async function revertMaterialRequestReplacements(
   tx: Prisma.TransactionClient,
   params: { defectId: string }

@@ -7,6 +7,11 @@ import { enqueueDefectSyncEvent } from "@/lib/defect-sync-outbox";
 import { publicUserRef } from "@/lib/s3";
 import { isDefectSyncFeatureEnabled } from "@/lib/defect-two-way-sync";
 import { defectAuditReference } from "@/lib/defect-audit";
+import {
+  detachMaterialTicketsFromDefect,
+  moTaGoPhieuVatTu,
+  revertMaterialRequestReplacements,
+} from "@/lib/defect-material-request";
 
 const INCLUDE = {
   createdBy: { select: { id: true, name: true, position: true, avatarUrl: true, avatarKey: true } },
@@ -53,7 +58,16 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     }
 
     const cancelledAt = new Date();
+    // Kết quả gỡ phiếu vật tư — gán trong giao dịch, dùng lại khi ghi AuditLog bên dưới.
+    let goPhieu = { daLui: [] as string[], giuNguyenBuoc: [] as string[], tong: 0 };
     const defect = await prisma.$transaction(async (tx) => {
+      // SYC thay thế bị huỷ thì mọi dấu vết nó để lại bên vật tư phải được hoàn tác:
+      // dòng lịch sử thay thế dự phòng, và liên kết trên phiếu vật tư. Thiếu bước này
+      // thì phiếu vật tư vẫn khoe một số SYC đã huỷ và vẫn đứng sau cổng SYC.
+      if (existing.isMaterialRequest) {
+        await revertMaterialRequestReplacements(tx, { defectId: existing.id });
+        goPhieu = await detachMaterialTicketsFromDefect(tx, { defectId: existing.id });
+      }
       const updated = await tx.defect.update({
         where: { id: existing.id },
         data: {
@@ -111,7 +125,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         [
           defectAuditReference("Hủy phiếu", existing),
           `Lý do: ${note}`,
-        ].join(" · ")
+          goPhieu.tong > 0 ? `Phiếu vật tư: ${moTaGoPhieuVatTu(goPhieu)}` : "",
+        ].filter(Boolean).join(" · ")
       )
     );
     return ok({ ...defect, createdBy: publicUserRef(defect.createdBy) });
