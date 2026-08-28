@@ -225,6 +225,16 @@ export function DefectForm({
     sourceDeviceRaw: defect?.sourceDeviceRaw ?? "",
     images: defect?.images ?? (defect?.imageUrl ? [defect.imageUrl] : []),
   });
+  const operationNoteRef = React.useRef<HTMLTextAreaElement>(null);
+
+  // Ghi chú từ Google Sheet có thể rất dài. Tự nới ô theo toàn bộ nội dung để
+  // người dùng đọc và hiệu chỉnh được ngay, thay vì bị giấu trong input một dòng.
+  React.useLayoutEffect(() => {
+    const textarea = operationNoteRef.current;
+    if (!textarea || !isSynced) return;
+    textarea.style.height = "0px";
+    textarea.style.height = `${Math.max(textarea.scrollHeight, 96)}px`;
+  }, [form.note, isSynced]);
 
   React.useEffect(() => {
     onDeviceHistoryVisibilityChange?.(showDeviceHistory && Boolean(form.device));
@@ -1062,9 +1072,18 @@ export function DefectForm({
                       <SelectContent>{DEFECT_CONDITION_ORDER.map((value) => <SelectItem key={value} value={value}>{DEFECT_CONDITION[value]}</SelectItem>)}</SelectContent>
                     </Select>
                   </StackField>
-                  <StackField label="Ghi chú">
-                    <Input className="h-11" value={form.note} disabled={operationFeatureLocked} onChange={(event) => set("note", event.target.value)} />
-                  </StackField>
+                  <div className="md:col-span-2">
+                    <StackField label="Ghi chú">
+                      <Textarea
+                        ref={operationNoteRef}
+                        className="min-h-24 resize-none overflow-y-hidden leading-relaxed"
+                        value={form.note}
+                        disabled={operationFeatureLocked}
+                        onChange={(event) => set("note", event.target.value)}
+                        placeholder="Nhập ghi chú cập nhật Vận hành"
+                      />
+                    </StackField>
+                  </div>
                 </div>
                 <p className="mt-3 text-xs text-blue-800/75">Nhắc lại được ghi riêng vào cột H bằng nút “Nhắc lại” trên danh sách.</p>
               </div>
