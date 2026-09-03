@@ -16,6 +16,12 @@ interface StatCardProps {
   bgCover?: string;
   /** Optional call-to-action shown inline with the label (e.g. "Mở →"). */
   cta?: string;
+  /**
+   * Bản GỌN: thu nhỏ đệm, biểu tượng và cỡ số. Dùng khi hàng thẻ chỉ là phần phụ của
+   * trang chứ không phải nội dung chính — vd trang TBYCNN, nơi bảng dữ liệu mới là
+   * thứ cần chỗ, hàng thẻ cỡ mặc định đẩy bảng xuống quá sâu.
+   */
+  compact?: boolean;
 }
 
 const TINTS = {
@@ -26,13 +32,14 @@ const TINTS = {
   blue: { bg: "bg-blue-50", icon: "bg-gradient-to-br from-sky-400 to-blue-600 text-white shadow-blue-500/30" },
 };
 
-export function StatCard({ label, value, icon: Icon, tint = "navy", trend, hint, bgImage, bgBadge, bgCover, cta }: StatCardProps) {
+export function StatCard({ label, value, icon: Icon, tint = "navy", trend, hint, bgImage, bgBadge, bgCover, cta, compact }: StatCardProps) {
   const t = TINTS[tint];
   const cover = !!bgCover;
   return (
     <div
       className={cn(
-        "group relative flex h-full flex-col justify-between overflow-hidden rounded-xl border p-5 transition-shadow hover:shadow-sm",
+        "group relative flex h-full flex-col justify-between overflow-hidden rounded-xl border transition-shadow hover:shadow-sm",
+        compact ? "p-3.5" : "p-5",
         cover ? "min-h-[150px] border-0 text-white" : cn("border-border", t.bg)
       )}
     >
@@ -66,11 +73,12 @@ export function StatCard({ label, value, icon: Icon, tint = "navy", trend, hint,
       <div className="relative flex items-start justify-between">
         <div
           className={cn(
-            "relative flex h-11 w-11 items-center justify-center rounded-xl shadow-lg ring-1 ring-white/40 before:absolute before:inset-x-1 before:top-0.5 before:h-1/3 before:rounded-t-lg before:bg-white/25",
+            "relative flex items-center justify-center rounded-xl shadow-lg ring-1 ring-white/40 before:absolute before:inset-x-1 before:top-0.5 before:h-1/3 before:rounded-t-lg before:bg-white/25",
+            compact ? "h-9 w-9" : "h-11 w-11",
             t.icon
           )}
         >
-          <Icon className="relative h-5 w-5" />
+          <Icon className={cn("relative", compact ? "h-4 w-4" : "h-5 w-5")} />
         </div>
         {trend && (
           <span
@@ -84,9 +92,15 @@ export function StatCard({ label, value, icon: Icon, tint = "navy", trend, hint,
           </span>
         )}
       </div>
-      <div className={cn("relative mt-4", cover && "[text-shadow:0_1px_6px_rgba(0,0,0,0.6)]")}>
-        <div className={cn("text-[40px] font-bold leading-none", cover ? "text-white" : "text-ink")}>{value}</div>
-        <div className={cn("mt-2 flex items-center justify-between gap-2 text-sm font-medium", cover ? "text-white/90" : "text-muted-foreground")}>
+      <div className={cn("relative", compact ? "mt-2.5" : "mt-4", cover && "[text-shadow:0_1px_6px_rgba(0,0,0,0.6)]")}>
+        <div className={cn("font-bold leading-none", compact ? "text-[28px]" : "text-[40px]", cover ? "text-white" : "text-ink")}>{value}</div>
+        <div
+          className={cn(
+            "flex items-center justify-between gap-2 font-medium",
+            compact ? "mt-1.5 text-[12.5px] leading-tight" : "mt-2 text-sm",
+            cover ? "text-white/90" : "text-muted-foreground"
+          )}
+        >
           <span>{label}</span>
           {cta && (
             <span className={cn("inline-flex items-center gap-1 whitespace-nowrap text-xs font-semibold", cover ? "text-white" : "text-accent")}>
