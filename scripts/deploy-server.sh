@@ -93,8 +93,18 @@ for f in "${SQL_FILES[@]:-}"; do
 done
 
 # Sửa tay trên server rồi deploy đè là mất sạch phần sửa đó mà không ai biết.
-if [[ -n "$(git status --porcelain --untracked-files=no)" ]]; then
-  git status --short --untracked-files=no | sed 's/^/    /'
+#
+# TRỪ package-lock.json: lockfile sinh trên Windows, `npm install` chạy trên Linux luôn
+# viết lại nó (thêm cờ "dev" cho các gói nhị phân theo nền tảng) mà không đổi phiên bản
+# gói nào. Đó là rác của chính bước npm install ở deploy TRƯỚC — chặn vì nó thì lần deploy
+# nào cũng chặn. Trả file về bản gốc rồi đi tiếp.
+if ! git diff --quiet -- package-lock.json; then
+  warn "package-lock.json bị npm viết lại (rác nền tảng) — trả về bản trong git."
+  run "git checkout -- package-lock.json"
+fi
+DIRTY=$(git status --porcelain --untracked-files=no)
+if [[ -n "$DIRTY" ]]; then
+  echo "$DIRTY" | sed 's/^/    /'
   die "Có thay đổi chưa commit trên server. Xử lý xong rồi hãy deploy."
 fi
 
