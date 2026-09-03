@@ -20,11 +20,11 @@ export const dynamic = "force-dynamic";
  * `ketQuaTest` là văn bản tự do lấy nguyên văn từ ô "Tháng MM/YYYY" của sheet nguồn
  * (kèm cả số phiếu YCSC) — sửa được vì mỗi kỳ người kiểm tra ghi lại kết quả mới.
  *
- * `tenKhuVuc`/`maBanVe`/`soLuongKhuVuc` là dữ liệu CẤP KHU VỰC dùng chung cho nhiều
- * đèn, nên KHÔNG cho sửa lẻ trên từng dòng: sửa một dòng sẽ làm khu vực đó tự mâu
- * thuẫn với chính nó. Cần đổi thì đổi ở nguồn rồi nhập lại.
+ * `tenKhuVuc`/`maBanVe` là dữ liệu định danh CẤP KHU VỰC nên vẫn chỉ đọc.
+ * `soLuongKhuVuc` được phép hiệu chỉnh để phản ánh số lượng kiểm kê thực tế.
  */
 const EDITABLE: FieldSpec = {
+  soLuongKhuVuc: "number",
   cuongVi: "string",
   machine: "string",
   nguoiGiamSat: "string",
@@ -56,6 +56,9 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     // một lựa chọn HỢP LỆ (vị trí thực tế không lắp đèn), không phải giá trị rác.
     if ("tinhTrang" in data && data.tinhTrang !== null && !(LIGHT_TINH_TRANG_OPTIONS as readonly string[]).includes(String(data.tinhTrang))) {
       return fail("Tình trạng đèn không hợp lệ");
+    }
+    if ("soLuongKhuVuc" in data && data.soLuongKhuVuc !== null && Number(data.soLuongKhuVuc) < 0) {
+      return fail("Số lượng khu vực không được nhỏ hơn 0");
     }
 
     const changed = Object.keys(data).filter(

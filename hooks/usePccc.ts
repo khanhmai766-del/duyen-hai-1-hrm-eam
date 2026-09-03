@@ -762,7 +762,7 @@ export interface EmergencyLightRow {
   stt: number | null;
   rowKey: string;
   maKks: string;
-  /** Ba cột cấp KHU VỰC — dùng chung cho nhiều đèn, không sửa lẻ từng dòng. */
+  /** Dữ liệu cấp KHU VỰC được trải xuống từng dòng; số lượng có thể hiệu chỉnh. */
   tenKhuVuc: string | null;
   maBanVe: string | null;
   soLuongKhuVuc: number | null;

@@ -5,8 +5,8 @@
 // đôi code và làm thanh tab dài thêm.
 //
 // Ba cột "Tên khu vực Layout" / "Mã bảng vẽ" / "Số lượng khu vực" là dữ liệu CẤP KHU
-// VỰC dùng chung cho nhiều đèn (trong Excel là ô merge), nên hiển thị CHỈ ĐỌC — sửa
-// lẻ trên một dòng sẽ làm khu vực đó tự mâu thuẫn với chính nó.
+// VỰC được trải xuống từng dòng từ ô merge của Excel. Tên khu vực và mã bản vẽ giữ
+// nguyên chỉ đọc; số lượng được phép hiệu chỉnh khi kiểm kê thực tế thay đổi.
 import { Fragment, useState } from "react";
 import { Loader2, Lock } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -203,10 +203,21 @@ export function PcccEmergencyLights({
                       )}
                     </span>
                   </TableCell>
-                  {/* Ba cột cấp khu vực — chỉ đọc, xem ghi chú đầu file. */}
+                  {/* Hai cột định danh khu vực giữ chỉ đọc; số lượng được hiệu chỉnh tại chỗ. */}
                   <TableCell className={cn(TD_ROW, "text-[12.5px] text-slate-600")}>{r.tenKhuVuc ?? "—"}</TableCell>
                   <TableCell className={cn(TD_ROW, "whitespace-nowrap text-center text-[12.5px] text-slate-600")}>{r.maBanVe ?? "—"}</TableCell>
-                  <TableCell className={cn(TD_ROW, "text-center tabular-nums text-slate-600")}>{r.soLuongKhuVuc ?? "—"}</TableCell>
+                  <TableCell className={cn(TD_ROW, "text-center tabular-nums", dirty("soLuongKhuVuc"))}>
+                    <EditableCell
+                      value={val("soLuongKhuVuc", r.soLuongKhuVuc)}
+                      type="number"
+                      min={0}
+                      compact
+                      align="center"
+                      disabled={!rowEditable}
+                      lockedReason={lockReason()}
+                      onSave={(v) => save(r, "soLuongKhuVuc", v === "" ? null : Number(v))}
+                    />
+                  </TableCell>
                   <TableCell className={cn(TD_ROW, "whitespace-nowrap text-center", dirty("cuongVi"))}>
                     <EditableCell
                       value={val("cuongVi", r.cuongVi)}

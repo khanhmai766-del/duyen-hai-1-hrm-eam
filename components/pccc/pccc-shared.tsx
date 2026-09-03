@@ -218,6 +218,7 @@ export function PercentBar({ value, tone }: { value: number | null; tone?: Statu
 export function EditableCell({
   value,
   type = "text",
+  min,
   options,
   disabled,
   lockedReason,
@@ -228,6 +229,7 @@ export function EditableCell({
 }: {
   value: string | number | null;
   type?: "text" | "number" | "date" | "select";
+  min?: number;
   options?: string[];
   disabled?: boolean;
   /** Có lý do = ô khoá do phân quyền: vẫn bấm được, nhưng chỉ để hiện popup giải thích. */
@@ -332,6 +334,7 @@ export function EditableCell({
     <input
       ref={ref as React.RefObject<HTMLInputElement>}
       type={type}
+      min={type === "number" ? min : undefined}
       value={draft}
       onChange={(e) => setDraft(e.target.value)}
       onBlur={commit}

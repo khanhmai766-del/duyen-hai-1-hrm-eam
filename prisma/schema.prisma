@@ -2224,7 +2224,7 @@ model PcccValve {
 //
 // `tenKhuVuc`/`maBanVe`/`soLuongKhuVuc` là dữ liệu ở CẤP KHU VỰC (nhiều đèn dùng
 // chung một bản vẽ Layout, trong Excel là ô merge) — đã được "trải" xuống từng
-// dòng đèn lúc nhập liệu, đúng cách bản demo làm.
+// dòng đèn lúc nhập liệu. `soLuongKhuVuc` có thể được hiệu chỉnh khi kiểm kê.
 //
 // `ketQuaTest` giữ NGUYÊN VĂN ô "Tháng MM/YYYY" mới nhất của sheet nguồn (chứa
 // cả số phiếu YCSC); `tinhTrang` là bậc suy ra từ văn bản đó, có mức thứ ba
