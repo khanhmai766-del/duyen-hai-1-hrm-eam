@@ -65,6 +65,11 @@ export const DEFAULT_RBAC_MATRIX: Record<string, Partial<Record<string, RbacLeve
   "pccc-manage": { ADMIN: "full", MANAGER: "manage", SUPERVISOR: "manage", TECHNICIAN: "personal", VIEWER: "none" },
   "pccc-control-item-creation": { ADMIN: "full", MANAGER: "manage", SUPERVISOR: "none", TECHNICIAN: "none", VIEWER: "none" },
   "pccc-close-period": { ADMIN: "full", MANAGER: "manage", SUPERVISOR: "none", TECHNICIAN: "none", VIEWER: "none" },
+  // TBYCNN (thiết bị yêu cầu nghiêm ngặt về ATLĐ): mở xem cho mọi vai trò như PCCC —
+  // đây là hồ sơ an toàn, ai cũng cần tra hạn kiểm định. Ghi thì siết hơn PCCC: dữ liệu
+  // kiểm định do đơn vị kiểm định cấp, không phải ai trực ca cũng sửa được.
+  "tbycnn-view": { ADMIN: "full", MANAGER: "read", SUPERVISOR: "read", TECHNICIAN: "read", VIEWER: "read" },
+  "tbycnn-manage": { ADMIN: "full", MANAGER: "manage", SUPERVISOR: "manage", TECHNICIAN: "personal", VIEWER: "none" },
   "forum-write": { ADMIN: "personal", MANAGER: "personal", SUPERVISOR: "personal", TECHNICIAN: "personal", VIEWER: "personal" },
   "forum-moderate": { ADMIN: "full", MANAGER: "none", SUPERVISOR: "none", TECHNICIAN: "none", VIEWER: "none" },
   // Đồng bộ kết quả phân tích dầu từ LIMS (portal.tpcduyenhai.com.vn/lims.xhtml).

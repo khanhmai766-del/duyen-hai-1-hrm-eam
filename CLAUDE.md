@@ -74,6 +74,9 @@ When adding a JS file to the extension, also add it to the file list in `chrome-
 ### Domain model (`prisma/schema.prisma`)
 Single source of truth; richer than the README. Core entities: `User` (role enum ADMIN/SUPERVISOR/TECHNICIAN/VIEWER) + `WebAuthnCredential`; shift/attendance (`Shift`, `ShiftAssignment`, `CheckIn`, `ShiftHandover`, `HcGroup`/`HcCheckIn` for admin attendance); equipment (`Device`, `RepairLog`, `Material`, `DeviceMaterial`, `MaterialReplacement`/`MaterialReplacementLog`); defects (`Defect`, `DefectHistory` — history is intentionally FK-free so defect tickets can be hidden/purged while history persists); content (`Announcement`/`AnnouncementRead`, `ForumPost`/`ForumReply`, `OperationEvent`); `AuditLog`. `@/*` path alias maps to the repo root.
 
+### Periodic safety registers (PCCC, TBYCNN)
+Two modules share one shape: a **period** row per month plus equipment rows scoped to it, positions normalized against `lib/position-catalog.ts` (label without unit suffix + `PositionCode` + `machine`), server-side xlsx export via exceljs, and writes blocked once the period is closed. PCCC (`pccc_*`, `docs/pccc.md`) is the mature one; TBYCNN — thiết bị yêu cầu nghiêm ngặt về ATLĐ (`tbycnn_*`, `docs/tbycnn.md`) was ported from a standalone localStorage HTML app and is at phase 1 (no period rollover yet). Copy the PCCC patterns when extending either.
+
 ### Shared conventions
 - `lib/constants.ts` holds enum→label maps and ordering (`ROLES`, `REPAIR_STATUS`, `DEFECT_*`, `SHIFT_TYPE`, …) plus shift-window/date helpers — reuse these instead of hardcoding Vietnamese labels.
 - `lib/nav.ts` `normalizeText()` does diacritic-insensitive, lowercase folding — used for all search/filter/position matching (e.g. excluding management positions from selects). Reuse it for any Vietnamese text comparison.

@@ -2564,3 +2564,132 @@ model ChemicalImportBatch {
 
   @@index([createdAt])
 }
+
+// ============================================================================
+// TBYCNN — THIẾT BỊ YÊU CẦU NGHIÊM NGẶT VỀ AN TOÀN LAO ĐỘNG
+//
+// Nguồn: ứng dụng rời "QuanLyThietBi_project" (1 file HTML + localStorage) —
+// 709 thiết bị / 21 cương vị, đã qua 11 bước làm sạch của bản cũ trước khi nạp.
+// Cách tổ chức bám theo module PCCC (PcccPeriod/PcccExtinguisher): cùng bài toán
+// "thiết bị an toàn, kiểm tra định kỳ, chốt sổ theo tháng".
+// ============================================================================
+
+/// Kỳ (tháng) của sổ TBYCNN. Kỳ chưa chốt là kỳ đang làm việc — mọi thao tác
+/// thêm/sửa đều rơi vào kỳ này; kỳ đã chốt chỉ đọc (xem `lib/tbycnn.ts`).
+model TbycnnPeriod {
+  id       String  @id @default(cuid())
+  label    String  @unique // "2026-09" — giữ đúng định dạng kỳ của bản cũ
+  year     Int
+  monthNo  Int // 1..12
+  isClosed Boolean @default(false)
+
+  closedAt   DateTime?
+  closedById String? // id User (không FK — đã có audit log); null = hệ thống tự chốt
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  equipments TbycnnEquipment[]
+  signatures TbycnnSignature[]
+
+  @@unique([year, monthNo])
+  @@index([isClosed])
+  @@map("tbycnn_periods")
+}
+
+/// Một dòng thiết bị TBYCNN trong một kỳ.
+///
+/// Ngày tháng: dữ liệu gốc có ~45% ô KHÔNG phải ngày hợp lệ ("-", "Không có",
+/// "Tem bị mờ", "06/26"…). Vì vậy mỗi mốc thời gian lưu HAI trường: `*Text` giữ
+/// nguyên văn người dùng nhập (không bao giờ mất thông tin) và `kd*` là ngày đã
+/// parse được — chỉ dùng để lọc/đếm quá hạn. Không parse được thì ngày = null.
+model TbycnnEquipment {
+  id       String       @id @default(cuid())
+  periodId String
+  period   TbycnnPeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
+
+  /// id gốc trong bộ dữ liệu nguồn — khóa upsert để chạy lại import không nhân bản.
+  sourceId Int?
+
+  // -- Cương vị quản lý ------------------------------------------------------
+  // Chuẩn hoá theo lib/position-catalog.ts giống PCCC: nhãn không hậu tố tổ máy
+  // + mã cương vị (dùng cho phân quyền) + tổ máy tách riêng.
+  khuVuc      String // nhãn gốc có hậu tố tổ máy ("Máy nghiền S1") — nhóm hiển thị ở sidebar
+  cuongVi     String? // nhãn chuẩn ("Máy nghiền")
+  cuongViCode String? // PositionCode, vd COAL_MILL
+  machine     String  @default("COMMON") // S1 | S2 | COMMON
+
+  // -- Danh mục --------------------------------------------------------------
+  nhom    String // nguyên văn có số La Mã theo từng cương vị, vd "II. VAN AN TOÀN"
+  nhomSo  Int? // số La Mã đã parse (I→1) — chỉ để sắp xếp đúng thứ tự file gốc
+  danhMuc String // tên danh mục đã bỏ số La Mã — khóa gộp nhóm ở trang Tổng hợp
+  tt      Int? // STT trong từng (cương vị, danh mục)
+
+  // -- Thông tin gốc của thiết bị (khóa sửa khi đã có sẵn, xem lib/tbycnn.ts) --
+  tenThietBi     String
+  soLuong        Int?
+  maHieu         String?
+  kks            String?
+  thongSoKyThuat String?
+  viTri          String?
+  chucDanhQuanLy String?
+  donViQuanLy    String?
+
+  // -- Thông tin kiểm định (luôn cho sửa) ------------------------------------
+  chuKyThu       Float? // chu kỳ thử, đơn vị NĂM
+  kdGanNhat      DateTime?
+  kdGanNhatText  String?
+  soBbkd         String?
+  donViKd        String?
+  kdTiepTheo     DateTime?
+  kdTiepTheoText String?
+
+  // -- Tình trạng ------------------------------------------------------------
+  // Không lưu chuỗi tình trạng: suy ra từ hai con số này (computeTinhTrang) vì một
+  // dòng có soLuong > 1 vừa có cái khả dụng vừa có cái hỏng.
+  soLuongKhaDung      Int?
+  soLuongKhongKhaDung Int?
+  khiemKhuyet         String?
+  ghiChu              String?
+
+  /// Tham chiếu MỀM tới cây thiết bị (EquipmentNode.seq) — chưa map, để dành.
+  deviceSeq String?
+
+  signature TbycnnSignature?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([periodId, sourceId])
+  @@index([periodId, khuVuc])
+  @@index([periodId, cuongViCode])
+  @@index([periodId, danhMuc])
+  @@index([periodId, kdTiepTheo])
+  @@map("tbycnn_equipments")
+}
+
+/// Chữ ký xác nhận của cương vị phụ trách cho MỘT dòng thiết bị trong kỳ.
+///
+/// Mỗi dòng nhiều nhất một chữ ký hiệu lực (`equipmentId` là khoá duy nhất) — ký lại
+/// là cập nhật chữ ký cũ chứ không đẻ bản ghi thứ hai, giống `PcccSignature`.
+model TbycnnSignature {
+  id       String       @id @default(cuid())
+  periodId String
+  period   TbycnnPeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
+
+  equipmentId String          @unique
+  equipment   TbycnnEquipment @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
+
+  userId         String // id User đã ký
+  // Chốt cứng tên + cương vị + ảnh chữ ký LÚC KÝ: người dùng đổi tên hoặc thay chữ ký
+  // trong hồ sơ cá nhân về sau thì bản ký cũ vẫn phải hiện đúng cái đã ký.
+  signerName     String
+  signerPosition String?
+  signatureKey   String? @map("signature_key") // S3 key, không lưu base64 (xem lib/pccc-service.ts)
+
+  signedAt DateTime @default(now())
+
+  @@index([periodId])
+  @@index([userId])
+  @@map("tbycnn_signatures")
+}

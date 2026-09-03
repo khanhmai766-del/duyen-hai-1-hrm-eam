@@ -596,6 +596,34 @@ const DEFAULT_PERMISSIONS: PermissionRow[] = [
     matrix: { ADMIN: "full", MANAGER: "manage", SUPERVISOR: "none", TECHNICIAN: "none", VIEWER: "none" },
   },
   {
+    id: "tbycnn-view",
+    group: "Thiết bị YCNN về ATLĐ",
+    feature: "Xem sổ thiết bị yêu cầu nghiêm ngặt về ATLĐ",
+    note:
+      "Xem danh mục thiết bị yêu cầu nghiêm ngặt (van an toàn, thiết bị áp lực, thiết bị nâng, " +
+      "thiết bị điện phòng nổ…), hạn kiểm định và tình trạng khả dụng của toàn phân xưởng, " +
+      "kèm xuất báo cáo Excel. Sổ này là hồ sơ an toàn chung nên mở xem cho mọi vai trò, " +
+      "KHÔNG thu hẹp theo cương vị như PCCC.",
+    matrix: { ADMIN: "full", MANAGER: "read", SUPERVISOR: "read", TECHNICIAN: "read", VIEWER: "read" },
+  },
+  {
+    id: "tbycnn-manage",
+    group: "Thiết bị YCNN về ATLĐ",
+    feature: "Cập nhật và ký xác nhận thiết bị yêu cầu nghiêm ngặt về ATLĐ",
+    note:
+      "Cập nhật kết quả kiểm định (ngày kiểm định, số biên bản, đơn vị kiểm định, chu kỳ thử), " +
+      "số lượng khả dụng/không khả dụng, khiếm khuyết và ghi chú; và KÝ XÁC NHẬN các dòng đã kiểm tra. " +
+      "Quyền này quyết định CÓ ĐƯỢC GHI hay không, KHÔNG quyết định phạm vi: từ mức Cá nhân trở lên " +
+      "đều chỉ sửa/ký được thiết bị thuộc đúng CHỨC DANH ĐANG LÀM VIỆC của mình. " +
+      "Sửa/ký được toàn phân xưởng chỉ dành cho: Quản trị viên và các chức danh Quản đốc / Phó quản đốc / " +
+      "Kỹ thuật viên / Trưởng ca. Chưa khai chức danh thì không sửa được gì. " +
+      "Ký cần có chữ ký số trong hồ sơ Tài khoản. " +
+      "Thông tin gốc của thiết bị (tên, thông số, vị trí, chức danh quản lý) bị KHOÁ khi sửa — " +
+      "chỉ mở khi thêm thiết bị mới; riêng Mã hiệu/KKS được bổ sung nếu đang trống. " +
+      "Thiết bị gốc theo hồ sơ nhà máy không xoá được; thiết bị tự thêm chỉ xoá được trong 30 ngày.",
+    matrix: { ADMIN: "full", MANAGER: "manage", SUPERVISOR: "manage", TECHNICIAN: "personal", VIEWER: "none" },
+  },
+  {
     id: "lims-sync",
     group: "Tiện ích",
     feature: "Đồng bộ kết quả phân tích dầu từ LIMS",

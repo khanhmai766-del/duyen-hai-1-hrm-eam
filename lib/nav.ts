@@ -28,6 +28,7 @@ import {
   CalendarRange,
   Zap,
   Gauge,
+  HardHat,
 } from "lucide-react";
 import { effectiveUserPosition, type PositionCarrier } from "@/lib/current-position";
 
@@ -121,6 +122,14 @@ export const NAV_SECTIONS: NavSection[] = [
         icon: FlameKindling,
         permissionIds: ["pccc-view"],
         keywords: "pccc phong chay chua chay binh chua chay bcc tu chua chay tcc foam co2 diesel fm200 ron lang phun ngam cuon ong an toan",
+      },
+      {
+        label: "Thiết bị YCNN về ATLĐ",
+        href: "/tbycnn",
+        icon: HardHat,
+        permissionIds: ["tbycnn-view"],
+        keywords:
+          "tbycnn thiet bi yeu cau nghiem ngat an toan lao dong atld kiem dinh van an toan thiet bi ap luc thiet bi nang dien phong no duong ong ap luc dong ho ap luc qua han",
       },
       {
         label: "Thư mục lưu trữ",
