@@ -25,7 +25,25 @@
 #
 set -Eeuo pipefail
 
-cd "$(dirname "${BASH_SOURCE[0]}")/.."
+# CHẠY TỪ MỘT BẢN SAO Ở /tmp, KHÔNG CHẠY TRỰC TIẾP FILE NÀY.
+#
+# Bước 2 `git pull` có thể thay đổi CHÍNH FILE NÀY trong lúc bash đang đọc nó. Bash đọc
+# script theo byte offset chứ không nạp hết một lần: file đổi độ dài giữa chừng là con trỏ
+# nhảy vào giữa một câu lệnh khác, hành vi không đoán trước được. Lần deploy 31251c6 may
+# mà không gãy — nhưng đó là may, không phải đúng.
+if [[ -z "${DEPLOY_SELF_COPY:-}" ]]; then
+  _self=$(mktemp /tmp/dh1-deploy.XXXXXX.sh)
+  cp "${BASH_SOURCE[0]}" "$_self"
+  chmod +x "$_self"
+  # Bản sao nằm ở /tmp nên không tự suy ra được thư mục app — truyền sang bằng biến.
+  export DEPLOY_SELF_COPY="$_self"
+  export DEPLOY_APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+  exec "$_self" "$@"
+fi
+# Dọn bản sao khi chạy xong, kể cả khi lỗi giữa chừng.
+trap 'rm -f -- "${DEPLOY_SELF_COPY:-}"' EXIT
+
+cd "${DEPLOY_APP_DIR:-$(dirname "${BASH_SOURCE[0]}")/..}"
 APP_DIR=$(pwd)
 PM2_NAME=${PM2_NAME:-dh1-app}
 APP_URL=${APP_URL:-http://localhost:3000}
