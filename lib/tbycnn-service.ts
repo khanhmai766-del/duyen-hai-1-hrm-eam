@@ -256,7 +256,13 @@ function isManagementUser(user: PositionCarrier) {
 
 async function computeWriteScope(user: PositionCarrier): Promise<TbycnnWriteScope | null> {
   if (isManagementUser(user)) return SCOPE_ALL;
-  if (!(await hasPermissionLevel(user, TBYCNN_PERMISSION.manage, ["personal"]))) return null;
+  // MỌI cương vị đều sửa được — nhưng chỉ trong phạm vi cương vị của mình (`scopeWhere`
+  // và `assertTbycnnScope` vẫn chặn dòng ngoài phạm vi). Trước đây còn đòi thêm quyền
+  // `tbycnn-manage`, khiến người trực tiếp đi kiểm định lại không nhập được kết quả cho
+  // chính thiết bị mình quản, phải nhờ quản trị cấp quyền từng cương vị một.
+  //
+  // Tài khoản chưa gán cương vị vẫn KHÔNG ghi được: codes rỗng thì
+  // `resolveTbycnnWriteScope` ném 403 với thông báo rõ ràng.
   return { all: false, codes: pcccPositionCodesOf(user) };
 }
 

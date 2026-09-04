@@ -25,6 +25,7 @@ import {
   FileText,
   Filter,
   Loader2,
+  Download,
   Pencil,
   PenLine,
   Save,
@@ -706,34 +707,48 @@ export default function TbycnnPage() {
             </div>
           </PopoverContent>
         </Popover>
-        {/* Thứ tự PDF → Excel giữ đúng thanh công cụ của ứng dụng rời, để người dùng cũ
-            không phải dò lại vị trí nút. */}
-        <Button
-          variant="outline"
-          size="toolbar"
-          onClick={() => handleExport("pdf")}
-          disabled={exporting !== null || isLoading}
-        >
-          {exporting === "pdf" ? (
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          ) : (
-            <FileText className="mr-2 h-4 w-4" />
-          )}
-          Xuất PDF
-        </Button>
-        <Button
-          variant="outline"
-          size="toolbar"
-          onClick={() => handleExport("excel")}
-          disabled={exporting !== null || isLoading}
-        >
-          {exporting === "excel" ? (
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          ) : (
-            <FileSpreadsheet className="mr-2 h-4 w-4" />
-          )}
-          Xuất Excel
-        </Button>
+        {/* MỘT cửa xuất file, bấm mới sổ chọn định dạng — cùng khuôn với nút "Chỉnh sửa"
+            và "Bộ lọc" ngay cạnh. Hai nút rời trước đây chiếm chỗ gấp đôi trên thanh công
+            cụ mà mỗi lượt người dùng chỉ chọn một định dạng. Thứ tự PDF → Excel giữ nguyên
+            để người dùng cũ không phải dò lại. */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="outline"
+              size="toolbar"
+              className="group"
+              disabled={exporting !== null || isLoading}
+            >
+              {exporting !== null ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Download className="mr-2 h-4 w-4" />
+              )}
+              Xuất File
+              <ChevronDown className="ml-1 size-3.5 text-slate-400 transition-transform duration-200 group-data-[state=open]:rotate-180" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-[248px]">
+            <DropdownMenuLabel className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
+              Thiết bị YCNN về ATLĐ · {data?.period?.label ?? "—"}
+            </DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onSelect={() => handleExport("pdf")} className="gap-2">
+              <FileText className="size-4 text-rose-600" />
+              <span className="min-w-0">
+                <span className="block font-medium">Xuất PDF</span>
+                <span className="block text-[11px] text-muted-foreground">Khổ A4 ngang, để in và ký</span>
+              </span>
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => handleExport("excel")} className="gap-2">
+              <FileSpreadsheet className="size-4 text-emerald-600" />
+              <span className="min-w-0">
+                <span className="block font-medium">Xuất Excel</span>
+                <span className="block text-[11px] text-muted-foreground">Bảng dữ liệu để lọc và tổng hợp</span>
+              </span>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </PageHeader>
 
       {error && (
