@@ -165,6 +165,7 @@ export async function GET(req: NextRequest) {
           accept: stepAllowedWithMap(wfMap, "accept", user),
           // Bước Xác nhận trả (chai khí): chưa cấu hình riêng thì theo quyền bước Sử dụng.
           return: returnStepAllowed(wfMap, user),
+          returnConfigured: wfMap.return.length > 0,
           settle: stepAllowedWithMap(wfMap, "settle", user),
           manage: stepAllowedWithMap(wfMap, "manage", user),
           manageConfigured: wfMap.manage.length > 0,

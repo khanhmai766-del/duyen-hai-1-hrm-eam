@@ -148,6 +148,29 @@ export function stepAllowedWithMap(
 }
 
 /**
+ * Bước do CHÍNH VHV được giao phiếu thực hiện: lãnh vật tư (Ứng), ra SYC sửa chữa,
+ * xác nhận trả vỏ chai.
+ *
+ * Danh sách cương vị admin cấu hình cho các bước này là quyền BỔ SUNG — để Quản đốc /
+ * Phó QĐ / KTV làm hộ được — chứ KHÔNG thay cho cương vị được giao phiếu. Bản cũ hiểu
+ * là thay thế, nên khi bước `vhvReceive` và `return` được gán 3 cương vị quản lý
+ * (2026-08-21) thì chính VHV Máy phó cầm phiếu lại mất nút "Xác nhận lãnh vật tư",
+ * nút "Ra SYC sửa chữa" và nút trả vỏ chai.
+ *
+ * Chỉ xét danh sách khi bước ĐÃ cấu hình: `defaultStepAllowed("vhvReceive")` trả về true
+ * cho tất cả (vốn dựa vào cương vị phiếu để rào), cộng thẳng vào sẽ mở toang cho mọi người.
+ */
+export function assignedOrConfiguredStep(
+  map: Record<WorkflowStep, string[]>,
+  step: WorkflowStep,
+  user: { role?: string | null; position?: string | null },
+  isAssigned: boolean
+) {
+  if (isAssigned || user.role === "ADMIN") return true;
+  return map[step].length > 0 && stepAllowedWithMap(map, step, user);
+}
+
+/**
  * Bước "Xác nhận trả" (chai khí) mới có từ 2026-08, chưa cương vị nào được gán.
  * Khi Quản trị chưa cấu hình riêng thì DÙNG LUÔN quyền của bước Sử dụng vật tư — người
  * mang chai đi dùng cũng là người mang vỏ đi trả; mặc định theo `isShiftLeader` như các

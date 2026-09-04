@@ -118,6 +118,7 @@ export interface ViewerSteps {
   accept: boolean;
   /** Xác nhận trả vỏ chai (bước cuối luồng chai khí); chưa cấu hình thì theo quyền bước Sử dụng. */
   return: boolean;
+  returnConfigured: boolean;
   stats: boolean;
   statsHandover: boolean;
   settle: boolean;
@@ -354,21 +355,26 @@ export function actionsFor(t: MaterialTicket, v: TicketViewer | null): string[] 
     // Xác nhận VHV nhận phiếu (hoặc đã trả phiếu): quyền RIÊNG "statsHandover" để giao
     // được cho cương vị khác ngoài Thống kê.
     if (t.status === "CHO_XAC_NHAN_PHAT" && (v.steps?.statsHandover ?? v.steps?.stats)) a.push("stats");
-    if (t.status === "VHV_LANH_VAT_TU" && (v.steps?.vhvReceiveConfigured ? v.steps.vhvReceive : canOperateAssigned)) a.push("vhvReceive");
+    // Các bước của CHÍNH VHV cầm phiếu: cương vị được giao luôn thao tác được, danh sách
+    // cương vị admin cấu hình cho bước chỉ mở THÊM (Quản đốc/Phó QĐ/KTV làm hộ). Xem
+    // `assignedOrConfiguredStep` ở lib/material-workflow.ts — API rào y hệt.
+    const configuredGrant = (allowed?: boolean, configured?: boolean) => Boolean(configured && allowed);
+    const canVhvReceive = canOperateAssigned || configuredGrant(v.steps?.vhvReceive, v.steps?.vhvReceiveConfigured);
+    if (t.status === "VHV_LANH_VAT_TU" && canVhvReceive) a.push("vhvReceive");
     if (t.status === "NHAN_TU_HIEN_CO" && canOperateAssigned && (v.steps?.receive ?? v.isShiftLeader)) a.push("receiveExisting");
     // Ứng: bước gộp "Xác nhận ĐXVT" — chỉ Thống kê; luồng khác giữ quyền Nhận vật tư.
     if (t.status === "NHAN_VAT_TU" && (t.type === "UNG" ? v.steps?.stats : (canOperateAssigned && (v.steps?.receive ?? v.isShiftLeader)))) a.push("receive");
     // Chỉ đánh dấu "đến lượt" cho nút Ra SYC ở cột hồ sơ. Số SYC phải do Defect thật
     // cấp và neo ngược bằng defectId, không còn action nhập tay.
-    if (t.status === "CHO_PHIEU_YCSC" && canOperateAssigned && (
+    if (t.status === "CHO_PHIEU_YCSC" && (
       t.type === "UNG"
-        ? (v.steps?.vhvReceiveConfigured ? v.steps.vhvReceive : true)
-        : (v.steps?.receive ?? v.isShiftLeader)
+        ? canVhvReceive
+        : (canOperateAssigned && (v.steps?.receive ?? v.isShiftLeader))
     )) a.push("createRepairRequest");
     if (t.status === "SU_DUNG_VAT_TU" && canOperateAssigned && (v.steps?.use ?? v.isShiftLeader)) a.push("use");
     if (t.status === "CHO_NGHIEM_THU" && (v.steps?.accept ?? v.isShiftLeader)) a.push("accept");
     // Chai khí: bước cuối là xác nhận trả vỏ chai, không nghiệm thu và không quyết toán.
-    if (t.status === GAS_RETURN_STATUS && canOperateAssigned && (v.steps?.return ?? v.steps?.use ?? v.isShiftLeader)) a.push("returnItems");
+    if (t.status === GAS_RETURN_STATUS && (canOperateAssigned || configuredGrant(v.steps?.return, v.steps?.returnConfigured))) a.push("returnItems");
     if (t.status === "CHO_THONG_KE_XUAT_BIEN_BAN" && v.steps?.stats) a.push("statsExportDocuments");
     if (t.status === "CHO_QUYET_TOAN" && v.steps?.settle) a.push("settle");
   } else {

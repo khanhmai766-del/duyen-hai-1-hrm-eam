@@ -1314,14 +1314,14 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
 const WF_STEPS: { key: keyof WorkflowRoleMap; short: string; label: string; hint: string }[] = [
   { key: "create", short: "Tạo phiếu", label: "Tạo phiếu / Đề xuất vật tư (B0)", hint: "Trống = mặc định: Quản trị, Kỹ thuật viên, Trưởng Ca/Trưởng Kíp" },
   { key: "confirm", short: "Xác nhận ĐX", label: "Xác nhận phiếu đề xuất", hint: "Trống = mặc định: Trưởng Ca/Trưởng Kíp" },
-  { key: "vhvReceive", short: "Ứng · VHV lãnh", label: "Ứng — VHV lãnh vật tư", hint: "Trống = chỉ cương vị được giao phiếu; nếu cấu hình = đúng các cương vị được chọn" },
+  { key: "vhvReceive", short: "Ứng · VHV lãnh", label: "Ứng — VHV lãnh vật tư", hint: "Cương vị được giao phiếu LUÔN lãnh được; chọn thêm tại đây để cương vị khác lãnh hộ (áp dụng cả nút Ra SYC sửa chữa)" },
   { key: "stats", short: "TK xác nhận ĐXVT", label: "Thống kê xác nhận ĐXVT (chọn mã vật tư + nhập số phiếu)", hint: "Trống = mặc định: cương vị Thống kê" },
   { key: "statsHandover", short: "Giao/trả phiếu", label: "Xác nhận VHV nhận / trả phiếu ĐXVT", hint: "Bước tách riêng khỏi Thống kê xác nhận ĐXVT — trống = mặc định: cương vị Thống kê" },
   { key: "receive", short: "Vật tư lãnh", label: "Xác nhận vật tư lãnh (khối lượng lãnh + nguồn lãnh)", hint: "Trống = mặc định: Trưởng Ca/Trưởng Kíp" },
   { key: "issue", short: "Cấp vật tư", label: "Cấp vật tư từ số lượng hiện có", hint: "Trống = mặc định: Trưởng Ca/Trưởng Kíp; có thể chọn riêng cương vị phát vật tư" },
   { key: "use", short: "Ghi nhận dùng", label: "Ghi nhận sử dụng vật tư (ngày + số lượng dùng)", hint: "Cương vị gắn với vật tư/thiết bị luôn được ghi nhận; chọn thêm tại đây để cấp quyền quản lý" },
   { key: "accept", short: "Nghiệm thu", label: "Nghiệm thu và xuất BBNT", hint: "Trống = mặc định: Trưởng Ca/Trưởng Kíp" },
-  { key: "return", short: "Trả (chai khí)", label: "Xác nhận trả vỏ chai — bước cuối luồng Chai khí", hint: "Trống = dùng luôn quyền bước Sử dụng vật tư" },
+  { key: "return", short: "Trả (chai khí)", label: "Xác nhận trả vỏ chai — bước cuối luồng Chai khí", hint: "Cương vị được giao phiếu LUÔN trả được; chọn thêm tại đây để cương vị khác trả hộ" },
   { key: "settle", short: "Quyết toán", label: "Quyết toán vật tư", hint: "Trống = mặc định: cương vị Thống kê" },
   { key: "manage", short: "Sửa / Xoá", label: "Sửa / Xoá phiếu", hint: "Trống = người tạo phiếu; nếu cấu hình = đúng các cương vị được chọn (Quản trị luôn được)" },
 ];
@@ -2438,8 +2438,9 @@ function RepairRequestSection({ t, viewer }: { t: MaterialTicket; viewer: Ticket
   const assigned = Boolean(viewer && (viewer.isAdmin || samePosition(viewer.position, t.assignedPosition)));
   const canLinkDefect = Boolean(viewer && (
     viewer.isAdmin
+    // Cương vị được giao phiếu luôn gắn được SYC; danh sách cấu hình bước chỉ mở thêm.
     || (t.type === "UNG"
-      ? (viewer.steps?.vhvReceiveConfigured ? viewer.steps.vhvReceive : assigned)
+      ? (assigned || Boolean(viewer.steps?.vhvReceiveConfigured && viewer.steps.vhvReceive))
       : (assigned && (viewer.steps?.receive ?? viewer.isShiftLeader)))
   ));
 

@@ -2,7 +2,7 @@ import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { buildBbntDoDocument, deliveryNoteForDocuments, getTicket, ITEM_INCLUDE, type FullTicket } from "@/lib/material-ticket-bbnt-do";
 import { ok, fail, requireUser, handle, audit } from "@/lib/api";
-import { isShiftLeader, isTechnician, getWorkflowRoleMap, isMaterialTicketExtraAssignedPosition, returnStepAllowed, stepAllowedWithMap } from "@/lib/material-workflow";
+import { isShiftLeader, isTechnician, getWorkflowRoleMap, isMaterialTicketExtraAssignedPosition, stepAllowedWithMap, assignedOrConfiguredStep } from "@/lib/material-workflow";
 import { resolveSignatureBuffer } from "@/lib/bbnt-do-doc";
 import { generateBbntDoc, type BbntItem } from "@/lib/bbnt-doc";
 import { generateBbthvtDoc } from "@/lib/bbthvt-doc";
@@ -1262,13 +1262,8 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       // hồ sơ sửa chữa thật, không thể chỉ dựa vào việc người dùng nhìn thấy phiếu.
       const wfMap = await getWorkflowRoleMap();
       if (t.type === "UNG") {
-        if (wfMap.vhvReceive.length > 0) {
-          if (!stepAllowedWithMap(wfMap, "vhvReceive", user)) {
-            return fail("Bạn không có quyền ra SYC tại bước VHV lãnh vật tư", 403);
-          }
-        } else {
-          const err = assignedPositionError(user, t);
-          if (err) return err;
+        if (!assignedOrConfiguredStep(wfMap, "vhvReceive", user, isAssignedPosition(user, t))) {
+          return fail("Bạn không có quyền ra SYC tại bước VHV lãnh vật tư", 403);
         }
       } else {
         if (!stepAllowedWithMap(wfMap, "receive", user)) {
@@ -1404,13 +1399,8 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       // cho ADMIN đi qua nên Quản trị vẫn giữ nguyên quyền.
       const wfMapAdopt = await getWorkflowRoleMap();
       if (t.type === "UNG") {
-        if (wfMapAdopt.vhvReceive.length > 0) {
-          if (!stepAllowedWithMap(wfMapAdopt, "vhvReceive", user)) {
-            return fail("Bạn không có quyền gắn SYC tại bước VHV lãnh vật tư", 403);
-          }
-        } else {
-          const err = assignedPositionError(user, t);
-          if (err) return err;
+        if (!assignedOrConfiguredStep(wfMapAdopt, "vhvReceive", user, isAssignedPosition(user, t))) {
+          return fail("Bạn không có quyền gắn SYC tại bước VHV lãnh vật tư", 403);
         }
       } else {
         if (!stepAllowedWithMap(wfMapAdopt, "receive", user)) {
@@ -1505,13 +1495,8 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         return fail("Phiếu đã có số yêu cầu sửa chữa, không thể chọn bỏ qua", 409);
       }
       const wfMap = await getWorkflowRoleMap();
-      if (wfMap.vhvReceive.length > 0) {
-        if (!stepAllowedWithMap(wfMap, "vhvReceive", user)) {
-          return fail("Bạn không có quyền xác nhận tại bước VHV lãnh vật tư", 403);
-        }
-      } else {
-        const err = assignedPositionError(user, t);
-        if (err) return err;
+      if (!assignedOrConfiguredStep(wfMap, "vhvReceive", user, isAssignedPosition(user, t))) {
+        return fail("Bạn không có quyền xác nhận tại bước VHV lãnh vật tư", 403);
       }
       const up = await prisma.materialTicket.update({
         where: { id: t.id },
@@ -1749,11 +1734,8 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     if (action === "vhvReceive") {
       if (t.type !== "UNG" || t.status !== "VHV_LANH_VAT_TU") return fail("Phiếu không ở bước VHV lãnh vật tư");
       const wfMap = await getWorkflowRoleMap();
-      if (wfMap.vhvReceive.length > 0) {
-        if (!stepAllowedWithMap(wfMap, "vhvReceive", user)) return fail("Bạn không có quyền ở bước VHV lãnh vật tư", 403);
-      } else {
-        const assignedError = assignedPositionError(user, t);
-        if (assignedError) return assignedError;
+      if (!assignedOrConfiguredStep(wfMap, "vhvReceive", user, isAssignedPosition(user, t))) {
+        return fail("Bạn không có quyền ở bước VHV lãnh vật tư", 403);
       }
       const quantity = Math.trunc(Number(body.quantity));
       if (!Number.isFinite(quantity) || quantity <= 0) return fail("Số lượng vật tư đã lãnh phải lớn hơn 0");
@@ -2591,9 +2573,15 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     if (action === "returnItems") {
       if (!isGasCylinderTicket(t.materialCategory)) return fail("Bước Xác nhận trả chỉ áp dụng cho phiếu Chai khí");
       if (!["DE_XUAT", "UNG"].includes(t.type) || t.status !== GAS_RETURN_STATUS) return fail("Phiếu không ở bước Xác nhận trả");
-      if (!returnStepAllowed(await getWorkflowRoleMap(), user))
-        return fail("Bạn không có quyền ở bước Xác nhận trả (Quản trị phân quyền ở mục Phân quyền quy trình)", 403);
-      { const err = assignedPositionError(user, t); if (err) return err; }
+      // Người lãnh chai chính là người mang vỏ đi trả, nên cương vị được giao phiếu luôn
+      // trả được; danh sách cấu hình bước chỉ mở THÊM cho cương vị khác làm hộ.
+      {
+        const wfMapReturn = await getWorkflowRoleMap();
+        const step = wfMapReturn.return.length > 0 ? "return" : "use";
+        if (!assignedOrConfiguredStep(wfMapReturn, step, user, isAssignedPosition(user, t))) {
+          return fail("Bạn không có quyền ở bước Xác nhận trả (Quản trị phân quyền ở mục Phân quyền quy trình)", 403);
+        }
+      }
       const returnedQuantity = Math.trunc(Number(body.returnedQuantity));
       if (!Number.isFinite(returnedQuantity) || returnedQuantity <= 0) return fail("Số lượng vỏ chai trả phải lớn hơn 0");
       const returnedAt = body.returnedAt ? parseDateInput(body.returnedAt) : new Date();
