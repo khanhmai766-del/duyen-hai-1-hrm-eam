@@ -54,7 +54,6 @@ import {
   DetailPanel,
   PCCC_PAGE_SIZES,
   PcccTableCard,
-  PlainHeader,
   ROW_HOVER,
   RowExpander,
   SortHeader,
@@ -94,7 +93,7 @@ import { TbycnnSignDialog } from "@/components/tbycnn/TbycnnSignDialog";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 
 const ALL = "__all__";
-const COL_COUNT = 13;
+const COL_COUNT = 11;
 
 /** Thứ tự gốc của hồ sơ nhà máy (cương vị → số La Mã → STT) — không phải một cột. */
 const SOURCE_ORDER = "__source__";
@@ -162,13 +161,16 @@ function StatusBadge({ value }: { value: string }) {
 function SignatureStamp({ signature }: { signature: TbycnnEquipment["signature"] }) {
   if (!signature) return <span className="text-[11px] text-muted-foreground">Chưa ký</span>;
   return (
-    <span className="flex flex-col items-center gap-0.5 leading-tight">
+    <span className="flex flex-col items-start gap-0.5 leading-tight">
       {signature.signatureUrl && (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={signature.signatureUrl} alt="Chữ ký" className="h-7 max-w-[120px] object-contain" />
+        <img src={signature.signatureUrl} alt="Chữ ký" className="h-9 max-w-[160px] object-contain" />
       )}
-      <span className="text-[11px] font-medium text-ink">{signature.signerName}</span>
-      <span className="text-[10px] text-muted-foreground">{formatVNDate(signature.signedAt)}</span>
+      <span className="text-[12px] font-medium text-ink">
+        {signature.signerName}
+        {signature.signerPosition ? ` · ${signature.signerPosition}` : ""}
+      </span>
+      <span className="text-[11px] text-muted-foreground">Ký ngày {formatVNDate(signature.signedAt)}</span>
     </span>
   );
 }
@@ -744,7 +746,7 @@ export default function TbycnnPage() {
             ) : null
           }
         >
-          <Table className="min-w-[1600px]" wrapperClassName={TABLE_SCROLLER}>
+          <Table className="min-w-[1540px]" wrapperClassName={TABLE_SCROLLER}>
             <TableHeader>
               <TableRow className={TR_HEAD}>
                 <TableHead className={cn(TH_NAVY, TH_EXPAND, "lg:left-0 lg:z-20")} />
@@ -767,9 +769,6 @@ export default function TbycnnPage() {
                 <TableHead className={cn(TH_NAVY, "w-[90px]")}>
                   <SortHeader label="Tổ máy" sortKey="machine" sort={sort} onSort={toggleSort} />
                 </TableHead>
-                <TableHead className={cn(TH_NAVY, "w-[60px]")}>
-                  <SortHeader label="SL" sortKey="soLuong" sort={sort} onSort={toggleSort} />
-                </TableHead>
                 <TableHead className={cn(TH_NAVY, "w-[170px]")}>
                   <SortHeader label="Mã hiệu" sortKey="maHieu" sort={sort} onSort={toggleSort} align="left" />
                 </TableHead>
@@ -787,9 +786,6 @@ export default function TbycnnPage() {
                 </TableHead>
                 <TableHead className={cn(TH_NAVY, "w-[150px]")}>
                   <SortHeader label="Tình trạng" sortKey="tinhTrang" sort={sort} onSort={toggleSort} />
-                </TableHead>
-                <TableHead className={cn(TH_NAVY, "w-[150px]")}>
-                  <PlainHeader label="Chữ ký" />
                 </TableHead>
               </TableRow>
             </TableHeader>
@@ -837,7 +833,6 @@ export default function TbycnnPage() {
                       <TableCell className={cn(TD_ROW, "text-center")}>
                         <MachineBadge machine={row.machine} />
                       </TableCell>
-                      <TableCell className={cn(TD_ROW, "text-center")}>{row.soLuong ?? "—"}</TableCell>
                       <TableCell className={TD_ROW}>{row.maHieu ?? "—"}</TableCell>
                       <TableCell className={cn(TD_ROW, "font-mono text-[11px]")}>{row.kks ?? "—"}</TableCell>
                       <TableCell className={cn(TD_ROW, "text-center", dirty("chuKyThu"))}>
@@ -879,9 +874,6 @@ export default function TbycnnPage() {
                       <TableCell className={cn(TD_ROW, "text-center")}>
                         <StatusBadge value={row.tinhTrang} />
                       </TableCell>
-                      <TableCell className={cn(TD_ROW, "text-center")}>
-                        <SignatureStamp signature={saved.signature} />
-                      </TableCell>
                     </TableRow>
                     {expanded && (
                       <TableRow className="hover:bg-transparent">
@@ -894,17 +886,10 @@ export default function TbycnnPage() {
                                 vẫn lưu trong DB và vẫn nằm trong file Excel xuất ra. */}
                             <DetailField label="Vị trí">{row.viTri ?? "—"}</DetailField>
                             <DetailField label="Đơn vị quản lý">{row.donViQuanLy ?? "—"}</DetailField>
-                            <DetailField label="Số BBKĐ">
-                              {editable ? (
-                                <EditableCell
-                                  value={row.soBbkd}
-                                  wrap
-                                  onSave={(v) => setDraftValue(saved, "soBbkd", v.trim() || null)}
-                                />
-                              ) : (
-                                row.soBbkd ?? "—"
-                              )}
-                            </DetailField>
+                            {/* Số lượng đứng ngay TRÊN "Khả dụng" (cùng cột 3) để soi nhanh
+                                ràng buộc khả dụng + không khả dụng = số lượng. Là thông tin
+                                gốc theo hồ sơ nhà máy nên chỉ đọc, kể cả khi mở khoá bảng. */}
+                            <DetailField label="Số lượng">{row.soLuong ?? "—"}</DetailField>
                             {/* Đơn vị kiểm định KHÔNG span 2 nữa: để nguyên thì nửa phải của ô
                                 bỏ trống, đẩy "Không khả dụng" xuống đứng một mình cả một hàng. */}
                             <DetailField label="Đơn vị kiểm định">
@@ -934,7 +919,7 @@ export default function TbycnnPage() {
                                 row.soLuongKhongKhaDung ?? "—"
                               )}
                             </DetailField>
-                            <DetailField label={`Khả dụng / ${row.soLuong ?? "—"}`}>
+                            <DetailField label="Khả dụng">
                               {editable ? (
                                 <EditableCell
                                   value={row.soLuongKhaDung}
@@ -944,6 +929,23 @@ export default function TbycnnPage() {
                               ) : (
                                 row.soLuongKhaDung ?? "—"
                               )}
+                            </DetailField>
+                            {/* Số BBKĐ và Chữ ký đi cùng hàng: cùng là dấu vết xác nhận của
+                                lượt kiểm định — số biên bản do đơn vị kiểm định cấp, chữ ký do
+                                cương vị phụ trách đóng sau khi đi kiểm tra. */}
+                            <DetailField label="Số BBKĐ">
+                              {editable ? (
+                                <EditableCell
+                                  value={row.soBbkd}
+                                  wrap
+                                  onSave={(v) => setDraftValue(saved, "soBbkd", v.trim() || null)}
+                                />
+                              ) : (
+                                row.soBbkd ?? "—"
+                              )}
+                            </DetailField>
+                            <DetailField label="Chữ ký" span={2}>
+                              <SignatureStamp signature={saved.signature} />
                             </DetailField>
                             <DetailField label="Thông số kỹ thuật" span="full">
                               <span className="whitespace-pre-line">{row.thongSoKyThuat ?? "—"}</span>

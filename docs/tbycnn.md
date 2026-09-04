@@ -170,11 +170,26 @@ Trường `khuVuc` (nhãn thô "ESP S1") vẫn giữ nguyên trong DB và **vẫ
 tiêu đề gộp của file Excel xuất ra** — file đó phải bám đúng bố cục hồ sơ gốc của nhà
 máy, đừng đổi theo giao diện.
 
-Nhờ khối chi tiết mà bảng chỉ còn **13 cột** (kể cả nút "+" và cột Chữ ký) thay vì 17.
+Nhờ khối chi tiết mà bảng chỉ còn **11 cột** (kể cả nút "+") thay vì 17.
 KHÔNG có cột nút sửa từng dòng: sửa đi qua "Chỉnh sửa → Sửa bảng", để hai lối sửa khỏi
 tồn tại song song với hai bộ quy tắc phải giữ đồng bộ. Các cột chuyển vào khối chi
-tiết: Vị trí, Chức danh quản lý, Đơn vị quản lý, Số BBKĐ, Đơn vị kiểm định, Thông số kỹ
-thuật, Khiếm khuyết, Ghi chú. Cột `Tên TBYCNN` đóng băng khi cuộn ngang (vai trò của
+tiết: Vị trí, Chức danh quản lý, Đơn vị quản lý, Số lượng, Số BBKĐ, Đơn vị kiểm định,
+Thông số kỹ thuật, Khiếm khuyết, Ghi chú và **Chữ ký**.
+
+Khối chi tiết xếp 3 cột, thứ tự có chủ đích chứ không phải liệt kê ngẫu nhiên:
+
+```
+Vị trí            │ Đơn vị quản lý  │ Số lượng
+Đơn vị kiểm định  │ Không khả dụng  │ Khả dụng
+Số BBKĐ           │ Chữ ký (2 cột)
+Thông số kỹ thuật (cả hàng)
+Khiếm khuyết (2 cột)               │ Ghi chú
+```
+
+- **Số lượng** đứng ngay TRÊN *Khả dụng* (cùng cột 3) để soi nhanh ràng buộc
+  khả dụng + không khả dụng = số lượng mà server kiểm khi lưu.
+- **Số BBKĐ và Chữ ký** cùng hàng: cùng là dấu vết xác nhận của lượt kiểm định — số biên
+  bản do đơn vị kiểm định cấp, chữ ký do cương vị phụ trách đóng sau khi đi kiểm tra. Cột `Tên TBYCNN` đóng băng khi cuộn ngang (vai trò của
 "Mã thiết bị" bên PCCC — mất nó thì cuộn xong không biết đang đọc dòng nào).
 
 **Đã BỎ dòng tiêu đề gộp theo danh mục** của bản cũ. Có phân trang và sắp xếp thì dòng
