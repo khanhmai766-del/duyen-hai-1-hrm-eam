@@ -30,6 +30,14 @@ APP_DIR=$(pwd)
 PM2_NAME=${PM2_NAME:-dh1-app}
 APP_URL=${APP_URL:-http://localhost:3000}
 BACKUP_DIR=${BACKUP_DIR:-/root}
+# `reload` thay cho `restart` để hạn chế gián đoạn.
+#
+# NÓI THẲNG GIỚI HẠN: pm2 chỉ thật sự reload không-downtime khi chạy CLUSTER mode. App này
+# chạy FORK mode (1 instance — cố ý, vì cache node/index/access là in-process, xem
+# docs/deploy-equipment-tree.md), mà ở fork mode `reload` rơi về đúng hành vi của
+# `restart`. Vẫn để `reload` vì nó không hại gì và đúng ý muốn giảm gián đoạn; muốn
+# downtime bằng 0 thật thì phải chuyển sang cluster, việc đó lại phá cache in-process.
+PM2_ACTION=${PM2_ACTION:-reload}
 
 BRANCH=main
 KEEP=2
@@ -75,7 +83,7 @@ if [[ $DO_ROLLBACK == 1 ]]; then
   warn "muốn lùi cả DB phải nạp lại bản dump trong $BACKUP_DIR."
   run "rm -rf .next.before-rollback && mv .next .next.before-rollback"
   run "cp -r '$SNAP' .next"
-  run "pm2 restart $PM2_NAME --update-env >/dev/null"
+  run "pm2 $PM2_ACTION $PM2_NAME --update-env >/dev/null"
   ok "Đã quay lại $SNAP và restart."
   exit 0
 fi
@@ -194,8 +202,8 @@ else
 fi
 
 # ---------------------------------------------------------------- 6. restart + smoke test
-step "6/7 · RESTART & KIỂM TRA"
-run "pm2 restart '$PM2_NAME' --update-env >/dev/null"
+step "6/7 · NẠP LẠI ỨNG DỤNG & KIỂM TRA"
+run "pm2 $PM2_ACTION '$PM2_NAME' --update-env >/dev/null"
 if [[ $DRY_RUN == 0 ]]; then
   sleep 8
   FAILED=0

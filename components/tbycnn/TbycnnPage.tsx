@@ -95,6 +95,17 @@ import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 const ALL = "__all__";
 const COL_COUNT = 11;
 
+/*
+ * Hàng CAO HƠN một nhịp so với `TD_ROW` gốc.
+ *
+ * `TD_ROW` (py-1) được đặt cho bảng PCCC, nơi gần như ô nào cũng chứa `EditableCell` hay
+ * badge — mấy thứ đó tự có đệm riêng nên hàng ở đó cao ~41px. Bảng này phần lớn là chữ
+ * trần nên cùng một lớp lại ra hàng ~31px, nhìn chật và khó dò theo hàng. Bù lại bằng
+ * đệm dọc ngay tại đây thay vì sửa `TD_ROW` dùng chung, kẻo bảng PCCC bị đội theo.
+ */
+const TD_TALL = cn(TD_ROW, "py-2.5");
+const TD_EXPAND_TALL = cn(TD_EXPAND, "py-2.5");
+
 /** Thứ tự gốc của hồ sơ nhà máy (cương vị → số La Mã → STT) — không phải một cột. */
 const SOURCE_ORDER = "__source__";
 const DEFAULT_SORT: SortState = { key: SOURCE_ORDER, dir: "asc" };
@@ -814,12 +825,12 @@ export default function TbycnnPage() {
                 return (
                   <Fragment key={row.id}>
                     <TableRow className={cn(rowBg, ROW_HOVER)}>
-                      <TableCell className={cn(TD_EXPAND, rowBg, "lg:sticky lg:left-0 lg:z-[1] lg:group-hover:bg-sky-50")}>
+                      <TableCell className={cn(TD_EXPAND_TALL, rowBg, "lg:sticky lg:left-0 lg:z-[1] lg:group-hover:bg-sky-50")}>
                         <RowExpander expanded={expanded} onToggle={() => setExpandedId(expanded ? null : row.id)} />
                       </TableCell>
                       <TableCell
                         className={cn(
-                          TD_ROW,
+                          TD_TALL,
                           rowBg,
                           "sticky left-0 z-[1] text-left font-medium shadow-[inset_-1px_0_0_rgba(15,23,42,0.18)] group-hover:bg-sky-50 lg:left-[42px] lg:shadow-none"
                         )}
@@ -828,14 +839,14 @@ export default function TbycnnPage() {
                       </TableCell>
                       {/* Nhãn CHUẨN theo danh mục chức danh của hệ thống, không phải chuỗi
                           thô trong file gốc — hậu tố tổ máy đã tách sang cột riêng. */}
-                      <TableCell className={cn(TD_ROW, "text-center")}>{row.cuongVi ?? row.khuVuc}</TableCell>
-                      <TableCell className={cn(TD_ROW, "text-center text-[11.5px] leading-tight")}>{row.danhMuc}</TableCell>
-                      <TableCell className={cn(TD_ROW, "text-center")}>
+                      <TableCell className={cn(TD_TALL, "text-center")}>{row.cuongVi ?? row.khuVuc}</TableCell>
+                      <TableCell className={cn(TD_TALL, "text-center text-[11.5px] leading-tight")}>{row.danhMuc}</TableCell>
+                      <TableCell className={cn(TD_TALL, "text-center")}>
                         <MachineBadge machine={row.machine} />
                       </TableCell>
-                      <TableCell className={TD_ROW}>{row.maHieu ?? "—"}</TableCell>
-                      <TableCell className={cn(TD_ROW, "font-mono text-[11px]")}>{row.kks ?? "—"}</TableCell>
-                      <TableCell className={cn(TD_ROW, "text-center", dirty("chuKyThu"))}>
+                      <TableCell className={TD_TALL}>{row.maHieu ?? "—"}</TableCell>
+                      <TableCell className={cn(TD_TALL, "font-mono text-[11px]")}>{row.kks ?? "—"}</TableCell>
+                      <TableCell className={cn(TD_TALL, "text-center", dirty("chuKyThu"))}>
                         {editable ? (
                           <EditableCell
                             value={row.chuKyThu}
@@ -849,7 +860,7 @@ export default function TbycnnPage() {
                       </TableCell>
                       {/* Hai ô ngày nhận CẢ CHỮ ("Chưa dán tem", "06/26") nên là ô text, không
                           phải ô chọn ngày — ép kiểu date ở đây là mất dữ liệu gốc. */}
-                      <TableCell className={cn(TD_ROW, "text-center", dirty("kdGanNhatText"))}>
+                      <TableCell className={cn(TD_TALL, "text-center", dirty("kdGanNhatText"))}>
                         {editable ? (
                           <EditableCell
                             value={displayKdDate(row.kdGanNhat, row.kdGanNhatText)}
@@ -860,7 +871,7 @@ export default function TbycnnPage() {
                           displayKdDate(row.kdGanNhat, row.kdGanNhatText) || <span className="text-muted-foreground">—</span>
                         )}
                       </TableCell>
-                      <TableCell className={cn(TD_ROW, "text-center", dirty("kdTiepTheoText"))}>
+                      <TableCell className={cn(TD_TALL, "text-center", dirty("kdTiepTheoText"))}>
                         {editable ? (
                           <EditableCell
                             value={displayKdDate(row.kdTiepTheo, row.kdTiepTheoText)}
@@ -871,7 +882,7 @@ export default function TbycnnPage() {
                           <KdCell row={row} />
                         )}
                       </TableCell>
-                      <TableCell className={cn(TD_ROW, "text-center")}>
+                      <TableCell className={cn(TD_TALL, "text-center")}>
                         <StatusBadge value={row.tinhTrang} />
                       </TableCell>
                     </TableRow>
