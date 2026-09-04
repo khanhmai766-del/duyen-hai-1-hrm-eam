@@ -6,6 +6,29 @@ import Docxtemplater from "docxtemplater";
 import ImageModule from "docxtemplater-image-module-free";
 import { uploadS3Object, s3ProxyUrl, getS3ObjectBuffer } from "@/lib/s3";
 import { bbntDoFileName, vietnamDatePath, vietnamDocumentDate } from "@/lib/material-document-name";
+import { normalizeText } from "@/lib/nav";
+
+/**
+ * Chức danh in ở Ô CHỮ KÝ của đại diện SCCN — KHÁC dòng "Chức vụ:" trong thân biên bản.
+ *
+ * Quản Đốc ký bằng chính danh nghĩa mình. Chức danh khác là KÝ THAY, nên theo thể thức
+ * văn bản hành chính phải ghi "KT." kèm chức danh thật ở dòng dưới.
+ *
+ * Mẫu .docx dùng thẻ VIẾT HOA `{{SCCNREPRESENTATIVEPOSITION}}` cho ô chữ ký, tách hẳn
+ * khỏi thẻ thường `{{sccnRepresentativePosition}}` của dòng "Chức vụ:". Docxtemplater
+ * phân biệt hoa thường nên hai chỗ nhận hai giá trị khác nhau mà không phải sửa mẫu.
+ *
+ * Xuống dòng dựa vào `linebreaks: true` đã bật lúc khởi tạo Docxtemplater.
+ */
+function sccnSignatureTitle(position?: string | null) {
+  const value = (position ?? "").trim();
+  if (!value) return "";
+  if (normalizeText(value) === normalizeText("Quản Đốc")) return "QUẢN ĐỐC PX.SCCN";
+  // Dòng dưới lấy theo chức danh ĐƯỢC CHỌN chứ không viết cứng "PHÓ QUẢN ĐỐC": hôm nay
+  // danh sách chỉ có hai giá trị nên kết quả như nhau, nhưng nếu về sau thêm chức danh
+  // thì biên bản vẫn ghi đúng người ký thay thay vì ghi sai một chức vụ không liên quan.
+  return `KT. QUẢN ĐỐC PX.SCCN\n${value.toUpperCase()}`;
+}
 
 /* ============================================================
    lib/bbnt-do-doc.ts
@@ -386,6 +409,8 @@ export async function generateBbntDoDoc(d: BbntDoData): Promise<{ key: string; u
     deliveryNote: d.deliveryNoteNumber || "(không)",
     sccnRepresentativeName: d.sccnRepresentativeName || "",
     sccnRepresentativePosition: d.sccnRepresentativePosition || "",
+    // Thẻ viết hoa của ô chữ ký — xem sccnSignatureTitle ở đầu tệp.
+    SCCNREPRESENTATIVEPOSITION: sccnSignatureTitle(d.sccnRepresentativePosition),
     quanDocName: d.quanDocName || "……………………………",
     quanDocPosition: d.quanDocPosition || "Quản Đốc",
     usedByName: d.usedByName || "……………………………",
