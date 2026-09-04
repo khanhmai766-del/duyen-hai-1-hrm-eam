@@ -22,6 +22,7 @@ import {
   CheckCircle2,
   ChevronDown,
   FileSpreadsheet,
+  FileText,
   Filter,
   Loader2,
   Pencil,
@@ -82,6 +83,7 @@ import {
 import { EditableCell } from "@/components/pccc/pccc-shared";
 import {
   downloadTbycnnExcel,
+  downloadTbycnnPdf,
   useSaveTbycnnBulk,
   useTbycnn,
   useTbycnnSign,
@@ -253,7 +255,7 @@ export default function TbycnnPage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(PCCC_PAGE_SIZES[0]);
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [exporting, setExporting] = useState(false);
+  const [exporting, setExporting] = useState<"excel" | "pdf" | null>(null);
 
   /**
    * Chế độ "SỬA BẢNG": bảng khoá theo mặc định, mở khoá mới sửa được. Mọi thay đổi giữ
@@ -489,18 +491,21 @@ export default function TbycnnPage() {
     }
   }
 
-  async function handleExport() {
-    setExporting(true);
+  /** Hai nút xuất dùng CHUNG bộ lọc đang đặt — bấm nút nào cũng ra đúng phần đang xem. */
+  async function handleExport(kind: "excel" | "pdf") {
+    setExporting(kind);
     try {
-      await downloadTbycnnExcel({
+      const params = {
         cuongViCode: cuongViCode === ALL ? undefined : cuongViCode,
         machine: machine === ALL ? undefined : machine,
-      });
-      toast.success("Đã tải báo cáo Excel");
+      };
+      if (kind === "excel") await downloadTbycnnExcel(params);
+      else await downloadTbycnnPdf(params);
+      toast.success(kind === "excel" ? "Đã tải báo cáo Excel" : "Đã tải bản in PDF");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Không tải được báo cáo");
     } finally {
-      setExporting(false);
+      setExporting(null);
     }
   }
 
@@ -690,8 +695,32 @@ export default function TbycnnPage() {
             </div>
           </PopoverContent>
         </Popover>
-        <Button variant="outline" size="toolbar" onClick={handleExport} disabled={exporting || isLoading}>
-          {exporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileSpreadsheet className="mr-2 h-4 w-4" />}
+        {/* Thứ tự PDF → Excel giữ đúng thanh công cụ của ứng dụng rời, để người dùng cũ
+            không phải dò lại vị trí nút. */}
+        <Button
+          variant="outline"
+          size="toolbar"
+          onClick={() => handleExport("pdf")}
+          disabled={exporting !== null || isLoading}
+        >
+          {exporting === "pdf" ? (
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          ) : (
+            <FileText className="mr-2 h-4 w-4" />
+          )}
+          Xuất PDF
+        </Button>
+        <Button
+          variant="outline"
+          size="toolbar"
+          onClick={() => handleExport("excel")}
+          disabled={exporting !== null || isLoading}
+        >
+          {exporting === "excel" ? (
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          ) : (
+            <FileSpreadsheet className="mr-2 h-4 w-4" />
+          )}
           Xuất Excel
         </Button>
       </PageHeader>

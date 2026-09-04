@@ -178,17 +178,32 @@ export function useUnsignTbycnn() {
   });
 }
 
-/** Tải file Excel của kỳ; bỏ trống cả hai bộ lọc = xuất toàn bộ. */
-export async function downloadTbycnnExcel(params: { period?: string; cuongViCode?: string; machine?: string }) {
+export type TbycnnExportParams = { period?: string; cuongViCode?: string; machine?: string };
+
+function exportQuery(params: TbycnnExportParams) {
   const qs = new URLSearchParams();
   if (params.period) qs.set("period", params.period);
   if (params.cuongViCode) qs.set("cuongViCode", params.cuongViCode);
   if (params.machine) qs.set("machine", params.machine);
-  const { blob, filename } = await apiDownload(`/api/tbycnn/export?${qs.toString()}`);
+  return qs.toString();
+}
+
+async function saveAs(path: string, fallbackName: string) {
+  const { blob, filename } = await apiDownload(path);
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = filename;
+  a.download = filename || fallbackName;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+/** Tải file Excel của kỳ; bỏ trống cả hai bộ lọc = xuất toàn bộ. */
+export async function downloadTbycnnExcel(params: TbycnnExportParams) {
+  await saveAs(`/api/tbycnn/export?${exportQuery(params)}`, "TBYCNN.xlsx");
+}
+
+/** Bản in A4 ngang — cùng bộ lọc với bản Excel để hai nút luôn ra cùng phạm vi. */
+export async function downloadTbycnnPdf(params: TbycnnExportParams) {
+  await saveAs(`/api/tbycnn/export-pdf?${exportQuery(params)}`, "TBYCNN.pdf");
 }
