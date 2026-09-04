@@ -10,7 +10,7 @@ import { generateDxvtDoc } from "@/lib/dxvt-doc";
 import { materialTicketFileBase, materialTicketReference } from "@/lib/material-ticket-sequence";
 import { normalizeText } from "@/lib/nav";
 import { consumeStock, deliveryNoteSummary, receiveIntoLot, releaseUsage, reverseTicketStock, sharedCodesOf, syncMaterialQuantity, usedLotsOfTicket } from "@/lib/material-stock-lot";
-import { parseDateInput } from "@/lib/utils";
+import { parseDateInput, parseVietnamDateTimeInput } from "@/lib/utils";
 import { linkTicketTrucks, unlinkTicketTrucks, type TruckInput } from "@/lib/chemical-inventory/ticket-link";
 import { countUsagePhotos, deleteUsagePhotos } from "@/lib/material-usage-photo";
 import { deleteDeliveryPhotos, deliveryPhotoLotsOfTicket, loadDeliveryPhotoBuffer, purgeSettledLotPhotos, uploadDeliveryPhoto, MISSING_DELIVERY_PHOTO_MESSAGE } from "@/lib/material-delivery-photo";
@@ -1142,8 +1142,8 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         const chiHuy = String(body.chiHuyName || "").trim();
         const note = String(body.completionNote ?? t.completionNote ?? "").trim();
         const pctNoiDung = String(body.pctContent ?? t.pctContent ?? "").trim();
-        const workStartedAt = new Date(String(body.workStartedAt || ""));
-        const workEndedAt = new Date(String(body.workEndedAt || ""));
+        const workStartedAt = parseVietnamDateTimeInput(String(body.workStartedAt || ""));
+        const workEndedAt = parseVietnamDateTimeInput(String(body.workEndedAt || ""));
         if (!pct || !chiHuy || !note) return fail("Vui lòng nhập đầy đủ số PCT/LCT, tên chỉ huy và nội dung nghiệm thu");
         if (Number.isNaN(workStartedAt.getTime()) || Number.isNaN(workEndedAt.getTime())) {
           return fail("Vui lòng chọn thời gian bắt đầu và kết thúc nghiệm thu");
@@ -2660,8 +2660,8 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       const pctNoiDung = String(body.pctContent || "").trim();
       const pct = String(body.pctNumber || "").trim();
       const chiHuy = String(body.chiHuyName || "").trim();
-      const workStartedAt = new Date(String(body.workStartedAt || ""));
-      const workEndedAt = new Date(String(body.workEndedAt || ""));
+      const workStartedAt = parseVietnamDateTimeInput(String(body.workStartedAt || ""));
+      const workEndedAt = parseVietnamDateTimeInput(String(body.workEndedAt || ""));
       // Số BBKT nhập MỘT LẦN ở bước chọn luồng; bước này chỉ đọc, không ghi đè.
       // Sửa về sau đi qua đường có phân quyền (editInfo / editStep "confirm").
       const recoveryRequired = materialTicketRequiresRecovery(t);
