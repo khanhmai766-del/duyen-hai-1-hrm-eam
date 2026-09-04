@@ -283,6 +283,25 @@ export async function tbycnnWriteScopeOf(user: PositionCarrier) {
 }
 
 /**
+ * Trưởng kíp XEM được toàn bộ sổ TBYCNN, dù thiết bị không mang cương vị của mình.
+ * Họ điều hành cả kíp nên phải nắm được tình trạng kiểm định của mọi cương vị dưới quyền.
+ *
+ * Chỉ nới phạm vi XEM, KHÔNG nới phạm vi ghi: sửa số liệu và ký vẫn bó theo cương vị như cũ.
+ *
+ * Cố ý KHÔNG thêm vào `isUnrestrictedEquipmentPosition` (lib/position-system-scopes.ts):
+ * danh sách đó dùng chung cho cây thiết bị và PCCC, nới ở đó là âm thầm mở rộng hai module
+ * không ai yêu cầu. PCCC cũng nới theo từng bảng bằng hàm riêng — đây là cùng một cách.
+ */
+// BOILER_TURBINE_SHIFT_LEAD = "TK Lò máy", ELECTRICAL_SHIFT_LEAD = "Trưởng kíp điện".
+// KHÔNG liệt kê SHIFT_SUPERVISOR ("Trưởng ca") ở đây — cương vị đó đã nằm trong cấp
+// quản lý của `isManagementUser`, thêm nữa chỉ gây hiểu nhầm là hai luật khác nhau.
+const TBYCNN_VIEW_ALL_CODES: readonly PositionCode[] = ["BOILER_TURBINE_SHIFT_LEAD", "ELECTRICAL_SHIFT_LEAD"];
+
+function isTbycnnViewAllPosition(user: PositionCarrier) {
+  return pcccPositionCodesOf(user).some((code) => TBYCNN_VIEW_ALL_CODES.includes(code));
+}
+
+/**
  * Phạm vi XEM sổ TBYCNN — dựng theo đúng khuôn `resolvePcccViewScope`.
  *
  * KHÁC phạm vi ghi ở một điểm: không đòi quyền `tbycnn-manage`. Người chỉ được xem vẫn
@@ -294,6 +313,8 @@ export async function tbycnnWriteScopeOf(user: PositionCarrier) {
 export async function resolveTbycnnViewScope(user: PositionCarrier): Promise<TbycnnWriteScope> {
   // Quản đốc / Phó QĐ / KTV / Trưởng ca + Quản trị: xem toàn bộ, không cần cấu hình gì.
   if (isManagementUser(user)) return SCOPE_ALL;
+  // Trưởng kíp: xem toàn bộ nhưng KHÔNG kèm quyền ghi (xem TBYCNN_VIEW_ALL_CODES).
+  if (isTbycnnViewAllPosition(user)) return SCOPE_ALL;
   // Cửa riêng cho tài khoản chỉ-đọc cần xem toàn cảnh (lãnh đạo, tài khoản báo cáo).
   if (await hasPermissionLevel(user, TBYCNN_PERMISSION.view, ["manage", "full"])) return SCOPE_ALL;
   return { all: false, codes: pcccPositionCodesOf(user) };
