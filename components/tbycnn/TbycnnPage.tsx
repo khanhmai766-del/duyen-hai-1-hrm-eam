@@ -288,6 +288,17 @@ export default function TbycnnPage() {
     return [...map].map(([value, label]) => ({ value, label })).sort((a, b) => a.label.localeCompare(b.label, "vi"));
   }, [rows]);
 
+  /**
+   * Nói rõ vì sao bảng chỉ có ngần này dòng. Không có câu này thì người dùng cương vị hẹp
+   * mở sổ ra thấy 12 thiết bị thay vì 709 và tưởng dữ liệu bị mất.
+   */
+  const viewScope = data?.viewScope;
+  const viewScopeLabel = !viewScope || viewScope.all
+    ? ""
+    : viewScope.labels.length
+      ? ` · chỉ xem cương vị ${viewScope.labels.join(" · ")}`
+      : " · tài khoản chưa gán cương vị nên chưa thấy thiết bị nào";
+
   const machineList = useMemo(() => {
     const used = new Set(rows.map((r) => r.machine));
     return PCCC_MACHINES.filter((m) => used.has(m));
@@ -516,7 +527,7 @@ export default function TbycnnPage() {
         mobileTitle="Thiết bị YCNN"
         description={
           data?.period
-            ? `Kỳ ${data.period.label} · ${rows.length} thiết bị của ${cuongViList.length} cương vị quản lý`
+            ? `Kỳ ${data.period.label} · ${rows.length} thiết bị của ${cuongViList.length} cương vị quản lý${viewScopeLabel}`
             : "Danh mục thiết bị yêu cầu nghiêm ngặt và hạn kiểm định"
         }
         hideDescriptionOnMobile

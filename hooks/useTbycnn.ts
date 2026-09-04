@@ -101,6 +101,9 @@ export function useTbycnn(period?: string) {
         periods: (res.meta?.periods as TbycnnPeriodInfo[] | undefined) ?? [],
         canManage: Boolean(res.meta?.canManage),
         writeScope: (res.meta?.writeScope as TbycnnWriteScope | undefined) ?? { all: false, codes: [], labels: [] },
+        // Phạm vi XEM: sổ chỉ trả về thiết bị thuộc cương vị của tài khoản (trừ cấp
+        // quản lý). Giữ lại để giao diện giải thích, đừng để người dùng tưởng mất dữ liệu.
+        viewScope: (res.meta?.viewScope as TbycnnWriteScope | undefined) ?? { all: true, codes: [], labels: [] },
       };
     },
   });

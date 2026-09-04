@@ -9,6 +9,8 @@ import {
   TBYCNN_ORDER_BY,
   TBYCNN_PERMISSION,
   TBYCNN_READ_LEVELS,
+  resolveTbycnnViewScope,
+  scopeWhere,
 } from "@/lib/tbycnn-service";
 
 // exceljs cần Node runtime (không chạy trên Edge).
@@ -42,9 +44,13 @@ export async function GET(req: NextRequest) {
     const cuongViCode = (sp.get("cuongViCode") ?? "").trim();
     const machine = (sp.get("machine") ?? "").trim();
 
+    // Xuất file phải bó đúng phạm vi đang xem, nếu không người dùng lấy được bằng nút
+    // Xuất Excel đúng những dòng màn hình vừa giấu đi.
+    const viewScope = await resolveTbycnnViewScope(user);
     const rows = await prisma.tbycnnEquipment.findMany({
       where: {
         periodId: period.id,
+        ...scopeWhere(viewScope),
         ...(cuongViCode ? { cuongViCode } : {}),
         ...(machine ? { machine } : {}),
       },

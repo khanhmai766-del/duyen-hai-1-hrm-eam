@@ -282,7 +282,33 @@ export async function tbycnnWriteScopeOf(user: PositionCarrier) {
   return { all: scope.all, codes: scope.codes as string[], labels: scope.codes.map((c) => positionLabelOf(c)) };
 }
 
-/** Điều kiện `where` của phạm vi — dùng chung cho sửa hàng loạt và ký. */
+/**
+ * Phạm vi XEM sổ TBYCNN — dựng theo đúng khuôn `resolvePcccViewScope`.
+ *
+ * KHÁC phạm vi ghi ở một điểm: không đòi quyền `tbycnn-manage`. Người chỉ được xem vẫn
+ * phải thấy thiết bị thuộc cương vị mình; bắt họ có quyền sửa mới thấy là chặn nhầm.
+ *
+ * Chưa khai chức danh thì KHÔNG thấy gì — cùng luật với PCCC và lib/position-data-scope.ts.
+ * Hồ sơ thiếu dữ liệu không được biến thành cửa xem tất.
+ */
+export async function resolveTbycnnViewScope(user: PositionCarrier): Promise<TbycnnWriteScope> {
+  // Quản đốc / Phó QĐ / KTV / Trưởng ca + Quản trị: xem toàn bộ, không cần cấu hình gì.
+  if (isManagementUser(user)) return SCOPE_ALL;
+  // Cửa riêng cho tài khoản chỉ-đọc cần xem toàn cảnh (lãnh đạo, tài khoản báo cáo).
+  if (await hasPermissionLevel(user, TBYCNN_PERMISSION.view, ["manage", "full"])) return SCOPE_ALL;
+  return { all: false, codes: pcccPositionCodesOf(user) };
+}
+
+/** Bản gọn cho client hiện nhãn "Phạm vi xem: …". */
+export function tbycnnScopeMeta(scope: TbycnnWriteScope) {
+  return {
+    all: scope.all,
+    codes: scope.codes as string[],
+    labels: scope.codes.map((code) => positionLabelOf(code)),
+  };
+}
+
+/** Điều kiện `where` của phạm vi — dùng chung cho xem, sửa hàng loạt và ký. */
 export function scopeWhere(scope: TbycnnWriteScope): Prisma.TbycnnEquipmentWhereInput {
   return scope.all ? {} : { cuongViCode: { in: scope.codes } };
 }

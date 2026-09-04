@@ -12,6 +12,8 @@ import {
   TBYCNN_ORDER_BY,
   TBYCNN_PERMISSION,
   TBYCNN_READ_LEVELS,
+  resolveTbycnnViewScope,
+  scopeWhere,
 } from "@/lib/tbycnn-service";
 
 // pdf-lib + sharp cần Node runtime (không chạy trên Edge).
@@ -43,8 +45,11 @@ export async function GET(req: NextRequest) {
     const cuongViCode = (sp.get("cuongViCode") ?? "").trim();
     const machine = (sp.get("machine") ?? "").trim();
 
+    // Cùng lý do như xuất Excel: nút xuất không được là cửa sau vượt phạm vi xem.
+    const viewScope = await resolveTbycnnViewScope(user);
     const where: Prisma.TbycnnEquipmentWhereInput = {
       periodId: period.id,
+      ...scopeWhere(viewScope),
       ...(cuongViCode ? { cuongViCode } : {}),
       ...(machine ? { machine } : {}),
     };

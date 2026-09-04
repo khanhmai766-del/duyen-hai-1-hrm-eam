@@ -14,6 +14,9 @@ import {
   TBYCNN_READ_LEVELS,
   resolveTbycnnWriteScope,
   tbycnnWriteScopeOf,
+  resolveTbycnnViewScope,
+  tbycnnScopeMeta,
+  scopeWhere,
 } from "@/lib/tbycnn-service";
 
 export const dynamic = "force-dynamic";
@@ -36,9 +39,14 @@ export async function GET(req: NextRequest) {
     );
 
     const period = await resolvePeriod(req.nextUrl.searchParams.get("period"));
+    // Sổ chỉ hiện thiết bị thuộc cương vị quản lý của người đang xem — lọc NGAY TRONG
+    // truy vấn như PCCC, không trả hết rồi để giao diện ẩn bớt: các thẻ thống kê và
+    // tiêu đề "N thiết bị của M cương vị" đều đếm từ danh sách trả về, nên lọc ở server
+    // là chỗ duy nhất khiến mọi con số cùng nói một phạm vi.
+    const viewScope = await resolveTbycnnViewScope(user);
     const [rows, periods, writeScope] = await Promise.all([
       prisma.tbycnnEquipment.findMany({
-        where: { periodId: period.id },
+        where: { periodId: period.id, ...scopeWhere(viewScope) },
         orderBy: TBYCNN_ORDER_BY,
         include: { signature: true },
       }),
@@ -60,6 +68,8 @@ export async function GET(req: NextRequest) {
         // "Chỉnh sửa" và khoá sẵn ô ngoài phạm vi.
         canManage: writeScope.all || writeScope.codes.length > 0,
         writeScope,
+        // Giao diện hiện nhãn "Phạm vi xem: …" để người dùng biết vì sao bảng ít dòng.
+        viewScope: tbycnnScopeMeta(viewScope),
       }
     );
   });
