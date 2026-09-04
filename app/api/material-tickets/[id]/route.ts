@@ -2,7 +2,7 @@ import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { buildBbntDoDocument, deliveryNoteForDocuments, getTicket, ITEM_INCLUDE, type FullTicket } from "@/lib/material-ticket-bbnt-do";
 import { ok, fail, requireUser, handle, audit } from "@/lib/api";
-import { isShiftLeader, isTechnician, getWorkflowRoleMap, isMaterialTicketExtraAssignedPosition, stepAllowedWithMap, assignedOrConfiguredStep } from "@/lib/material-workflow";
+import { isShiftLeader, isTechnician, getPositionScopes, getWorkflowRoleMap, isMaterialTicketExtraAssignedPosition, stepAllowedWithMap, assignedOrConfiguredStep } from "@/lib/material-workflow";
 import { resolveSignatureBuffer } from "@/lib/bbnt-do-doc";
 import { generateBbntDoc, type BbntItem } from "@/lib/bbnt-doc";
 import { generateBbthvtDoc } from "@/lib/bbthvt-doc";
@@ -18,7 +18,7 @@ import { keyFromPublicUrl } from "@/lib/s3";
 import { syncTicketReplacementLinks, type LinkablePoint } from "@/lib/material-ticket-replacement-link";
 import { pointLabelOf, resolveMaterialRequest } from "@/lib/defect-material-request";
 import { MIN_USAGE_PHOTOS, MISSING_USAGE_PHOTO_MESSAGE, usesHandwrittenBbnt, CHEMICAL_TICKET_TYPE, COMMON_MATERIAL_POSITION, GAS_RETURN_STATUS, isChemicalFlowTicket, isGasCylinderCategory, isGasCylinderTicket, isOtherMaterialAdvanceTicket, isOtherMaterialTicketType, materialTicketRequiresRecovery, OTHER_MATERIAL_ADVANCE_TICKET_TYPE, OTHER_MATERIAL_TICKET_TYPE, recoveryRequiredForReason, SINGLE_STEP_TICKET_TYPE, ticketReasonAllowed, TICKET_MATERIAL_CATEGORIES, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
-import { positionsMatch } from "@/lib/position-catalog";
+import { positionLabelOf, positionsMatch } from "@/lib/position-catalog";
 import { replacementPointDisplayLabel, replacementPointSelectionKey } from "@/lib/material-replacement-display";
 import { receiveOtherMaterial } from "@/lib/other-material-stock";
 import { recordSettledTicketReplacements } from "@/lib/material-ticket-replacement-settlement";
@@ -786,11 +786,11 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         return fail("Bạn không có quyền sửa phiếu (Quản trị phân quyền ở mục Phân quyền quy trình)", 403);
       const unit = String(body.unit || "").trim();
       if (!["S1", "S2", "COMMON"].includes(unit)) return fail("Tổ máy không hợp lệ");
-      const assignedPosition = String(body.assignedPosition || "").trim();
+      const assignedPosition = positionLabelOf(String(body.assignedPosition || "").trim());
       if (!assignedPosition) return fail("Vui lòng chọn cương vị được giao");
       // Không còn ràng buộc cương vị theo tổ máy (bỏ 2026-08-10) — xem POST /api/material-tickets.
       const totalScopeCount = await prisma.positionSystemScope.count();
-      const scopeCount = await prisma.positionSystemScope.count({ where: { position: assignedPosition } });
+      const scopeCount = (await getPositionScopes(assignedPosition)).length;
       if (assignedPosition !== COMMON_MATERIAL_POSITION && totalScopeCount > 0 && scopeCount === 0 && !isMaterialTicketExtraAssignedPosition(assignedPosition)) {
         return fail(`Cương vị "${assignedPosition}" chưa được phân giao hệ thống thiết bị`);
       }

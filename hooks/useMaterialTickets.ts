@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiMutate } from "@/lib/fetcher";
 import { CHEMICAL_TICKET_TYPE, GAS_RETURN_STATUS, isOtherMaterialAdvanceTicket, isOtherMaterialTicketType, SINGLE_STEP_TICKET_TYPE } from "@/lib/constants";
+import { positionsMatch } from "@/lib/position-catalog";
 
 export interface TicketItem {
   id: string;
@@ -145,11 +146,11 @@ export type WorkflowRoleMap = {
   receive: string[]; issue: string[]; use: string[]; accept: string[]; return: string[]; settle: string[]; manage: string[];
 };
 
-export const samePosition = (a?: string | null, b?: string | null) => {
-  const left = (a ?? "").trim().toLocaleLowerCase("vi");
-  const right = (b ?? "").trim().toLocaleLowerCase("vi");
-  return !!left && left === right;
-};
+/**
+ * So khớp theo mã cương vị chuẩn thay vì nhãn hiển thị thô. Dữ liệu cũ có thể khác
+ * viết hoa, dấu tiếng Việt hoặc dùng -, – và — nhưng vẫn phải là cùng một cương vị.
+ */
+export const samePosition = positionsMatch;
 
 /** Cấu hình phân quyền quy trình (chỉ ADMIN gọi được). */
 export function useWorkflowRoles(enabled: boolean) {

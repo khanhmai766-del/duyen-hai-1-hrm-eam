@@ -14,7 +14,7 @@ import {
   stepAllowedWithMap,
 } from "@/lib/material-workflow";
 import { CHEMICAL_TICKET_TYPE, COMMON_MATERIAL_POSITION, isGasCylinderTicket, isOtherMaterialCategory, OTHER_MATERIAL_ADVANCE_TICKET_TYPE, OTHER_MATERIAL_GROUP, OTHER_MATERIAL_TICKET_TYPE, recoveryRequiredForReason, isChemicalWorkflowCategory, isSingleStepTicketMaterial, ticketReasonAllowed, SINGLE_STEP_TICKET_TYPE, TICKET_MATERIAL_CATEGORIES, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
-import { positionCodeOf, positionsMatch } from "@/lib/position-catalog";
+import { positionLabelOf, positionsMatch } from "@/lib/position-catalog";
 import {
   isMaterialTicketMonthKey,
   materialTicketMonthKey,
@@ -193,18 +193,13 @@ export async function POST(req: NextRequest) {
     if (!proposalNote) return fail("Vui lòng nhập ghi chú lý do");
 
     // Cương vị được giao: bắt buộc, và phải là cương vị có phân giao cây thiết bị
-    const assignedPosition = String(body.assignedPosition || "").trim();
+    const assignedPosition = positionLabelOf(String(body.assignedPosition || "").trim());
     if (!assignedPosition) return fail("Vui lòng chọn cương vị được giao thực hiện");
     // Không còn ràng buộc cương vị theo tổ máy (bỏ 2026-08-10): cùng một chức danh đi
     // vận hành được cả S1, S2 lẫn COMMON. Phạm vi vẫn siết bằng phân giao cây thiết bị
     // ngay bên dưới.
     const totalScopeCount = await prisma.positionSystemScope.count();
-    const assignedPositionCode = positionCodeOf(assignedPosition);
-    const scopeCount = await prisma.positionSystemScope.count({
-      where: assignedPositionCode
-        ? { OR: [{ positionCode: assignedPositionCode }, { position: assignedPosition }] }
-        : { position: assignedPosition },
-    });
+    const scopeCount = (await getPositionScopes(assignedPosition)).length;
     if (assignedPosition !== COMMON_MATERIAL_POSITION && totalScopeCount > 0 && scopeCount === 0 && !isMaterialTicketExtraAssignedPosition(assignedPosition)) {
       return fail(`Cương vị "${assignedPosition}" chưa được phân giao hệ thống thiết bị`);
     }

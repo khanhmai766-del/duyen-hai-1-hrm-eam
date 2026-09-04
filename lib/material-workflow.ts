@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { normalizeText } from "@/lib/nav";
 import { isShiftCommandPosition } from "@/lib/constants";
+import { positionCodeOf, positionsMatch } from "@/lib/position-catalog";
 
 /* ============================================================
    lib/material-workflow.ts
@@ -114,9 +115,7 @@ export async function getWorkflowRoleMap(): Promise<Record<WorkflowStep, string[
 }
 
 function positionInList(position: string | null | undefined, list: string[]) {
-  const p = norm(position);
-  if (!p) return false;
-  return list.some((item) => norm(item) === p);
+  return list.some((item) => positionsMatch(item, position));
 }
 
 /** Mặc định khi bước CHƯA được admin cấu hình (giữ hành vi cũ, không gãy khi mới deploy). */
@@ -191,14 +190,19 @@ export async function canDoStep(step: WorkflowStep, user: { role?: string | null
 /** Lấy danh sách systemSeq được phân giao cho một cương vị (PositionSystemScope) */
 export async function getPositionScopes(position?: string | null): Promise<string[]> {
   if (!position) return [];
-  const cached = scopesCache.get(position);
+  // Dùng mã chuẩn làm cache key để các bí danh của cùng một cương vị dùng chung kết quả.
+  const cacheKey = positionCodeOf(position) ?? norm(position);
+  const cached = scopesCache.get(cacheKey);
   if (cached && cached.expires > Date.now()) return cached.value;
+  // Một số dòng cũ chưa có positionCode và còn lưu nhãn dùng gạch dài/viết hoa khác
+  // danh mục hiện tại. Lọc qua positionsMatch để không làm mất phạm vi của các dòng đó.
   const rows = await prisma.positionSystemScope.findMany({
-    where: { position },
-    select: { systemSeq: true },
+    select: { systemSeq: true, position: true, positionCode: true },
   });
-  const scopes = rows.map((r) => r.systemSeq);
-  scopesCache.set(position, { value: scopes, expires: Date.now() + CONFIG_CACHE_TTL_MS });
+  const scopes = rows
+    .filter((row) => positionsMatch(row.positionCode ?? row.position, position))
+    .map((row) => row.systemSeq);
+  scopesCache.set(cacheKey, { value: scopes, expires: Date.now() + CONFIG_CACHE_TTL_MS });
   return scopes;
 }
 

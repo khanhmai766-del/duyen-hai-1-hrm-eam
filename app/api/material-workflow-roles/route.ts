@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, requireRole, handle, audit } from "@/lib/api";
 import { getWorkflowRoleMap, invalidateWorkflowConfigCache, WORKFLOW_STEPS, type WorkflowStep } from "@/lib/material-workflow";
+import { positionLabelOf, positionsMatch } from "@/lib/position-catalog";
 
 export const dynamic = "force-dynamic";
 
@@ -31,8 +32,8 @@ export async function PUT(req: NextRequest) {
       if (list == null) continue;
       if (!Array.isArray(list)) return fail(`Danh sách cương vị của bước "${step}" không hợp lệ`);
       for (const raw of list) {
-        const position = String(raw ?? "").trim();
-        if (position && !rows.some((r) => r.step === step && r.position === position)) {
+        const position = positionLabelOf(String(raw ?? "").trim());
+        if (position && !rows.some((r) => r.step === step && positionsMatch(r.position, position))) {
           rows.push({ step, position });
         }
       }
