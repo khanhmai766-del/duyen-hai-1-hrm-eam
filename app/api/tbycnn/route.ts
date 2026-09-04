@@ -18,6 +18,7 @@ import {
   tbycnnScopeMeta,
   scopeWhere,
 } from "@/lib/tbycnn-service";
+import { ensureTbycnnRollover } from "@/lib/tbycnn-rollover";
 
 export const dynamic = "force-dynamic";
 
@@ -37,6 +38,10 @@ export async function GET(req: NextRequest) {
       [...TBYCNN_READ_LEVELS],
       "Không đủ quyền xem sổ thiết bị yêu cầu nghiêm ngặt"
     );
+
+    // Sang kỳ đúng hạn kể cả khi bộ hẹn giờ chết: lượt tải trang đầu tiên của tháng mới
+    // tự chốt kỳ cũ và sinh kỳ mới. Lỗi ở đây KHÔNG được chặn việc xem sổ.
+    await ensureTbycnnRollover().catch((e) => console.error("[tbycnn] tự động chuyển kỳ lỗi:", e));
 
     const period = await resolvePeriod(req.nextUrl.searchParams.get("period"));
     // Sổ chỉ hiện thiết bị thuộc cương vị quản lý của người đang xem — lọc NGAY TRONG
