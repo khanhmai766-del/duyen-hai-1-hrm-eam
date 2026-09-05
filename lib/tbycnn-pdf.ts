@@ -13,7 +13,9 @@
  * phông PHẢI nhúng từ `assets/fonts` (phông có sẵn của PDF là WinAnsi, gặp chữ Việt có
  * dấu là NÉM LỖI), và ảnh chữ ký phải qua `signatureInk` (nền trong suốt in ra thành ô đen).
  */
-import { PDFDocument, type PDFImage, type PDFPage } from "pdf-lib";
+import fs from "node:fs/promises";
+import path from "node:path";
+import { PDFDocument, rgb, type PDFFont, type PDFImage, type PDFPage } from "pdf-lib";
 import fontkit from "@pdf-lib/fontkit";
 import {
   BLACK,
@@ -206,10 +208,110 @@ function drawSignatureBlock(
   }
 }
 
+/* ══════════════════════ TRANG BÌA (Biểu mẫu 2) ══════════════════════ */
+
+/** Hai màu của bộ nhận diện EVNGENCO1 — chữ "EVN" xanh, "GENCO1" đỏ. */
+const EVN_BLUE = rgb(0.106, 0.294, 0.573);
+const EVN_RED = rgb(0.847, 0.106, 0.145);
+
+/**
+ * Kẻ dòng chấm để điền tay, bắt đầu ngay sau nhãn.
+ *
+ * Dùng chuỗi dấu chấm chứ không phải nét đứt vẽ bằng `drawLine`: bản mẫu giấy là dấu
+ * chấm, và chấm theo phông thì giãn cách khớp với chữ nhãn đứng cạnh.
+ */
+function dottedField(
+  page: PDFPage,
+  label: string,
+  font: PDFFont,
+  size: number,
+  x: number,
+  y: number,
+  width: number
+) {
+  page.drawText(label, { x, y, size, font, color: BLACK });
+  const labelW = font.widthOfTextAtSize(label + " ", size);
+  const dotW = font.widthOfTextAtSize(".", size);
+  const count = Math.max(0, Math.floor((width - labelW) / dotW));
+  if (count > 0) {
+    page.drawText(".".repeat(count), { x: x + labelW, y, size, font, color: BLACK });
+  }
+}
+
+/**
+ * Trang bìa đứng TRƯỚC mọi trang bảng, dựng theo Biểu mẫu 2 của quy trình ATLĐ.
+ *
+ * Ba chỗ cố ý làm khác cho tiện in ấn, đừng "sửa lại cho giống mẫu" nếu chưa hỏi:
+ *
+ *  - Khổ giấy giữ A4 NGANG như các trang bảng. Bản mẫu là khổ dọc, nhưng trộn hai chiều
+ *    giấy trong một tệp thì máy in hai mặt xoay trang bìa lung tung và kẹp tài liệu lệch.
+ *  - Ba dòng "Chức danh QLVH / Người phụ trách / Vĩnh Long, ngày…" để TRỐNG đúng như bản
+ *    mẫu — sổ in ra là để ký tay, điền sẵn tên theo phạm vi lọc dễ ghi nhầm người.
+ *  - Chữ "EVNGENCO1" vẽ bằng phông chứ không nhúng ảnh: kho ảnh chỉ có bản lô-gô ngang
+ *    kèm sẵn dòng "TỔNG CÔNG TY PHÁT ĐIỆN 1", không xếp chồng được như bản mẫu.
+ */
+async function drawCoverPage(pdf: PDFDocument, fonts: PdfFonts) {
+  const page = pdf.insertPage(0, [PAGE.w, PAGE.h]);
+  const mid = PAGE.w / 2;
+
+  // Khung viền đôi.
+  rect(page, 28, 28, PAGE.w - 56, PAGE.h - 56);
+  rect(page, 34, 34, PAGE.w - 68, PAGE.h - 68);
+
+  drawCentered(page, "TỔNG CÔNG TY PHÁT ĐIỆN 1", fonts.regular, 12, 505);
+  drawCentered(page, "CÔNG TY NHIỆT ĐIỆN DUYÊN HẢI", fonts.bold, 13.5, 485);
+
+  // Ngôi sao EVNGENCO1. Thiếu tệp ảnh thì bỏ qua phần lô-gô chứ KHÔNG hỏng cả bản in —
+  // sổ không có lô-gô vẫn dùng được, sổ không xuất được thì không.
+  let wordmarkY = 451;
+  try {
+    const star = await pdf.embedPng(
+      await fs.readFile(path.join(process.cwd(), "public", "brand", "4.png"))
+    );
+    const h = 74;
+    const w = (star.width / star.height) * h;
+    page.drawImage(star, { x: mid - w / 2, y: 475 - h, width: w, height: h });
+    wordmarkY = 475 - h - 20;
+  } catch {
+    // không có lô-gô — chữ EVNGENCO1 dâng lên lấp chỗ
+  }
+
+  // "EVNGENCO1" hai màu: đo bề rộng từng nửa rồi đặt sao cho cả cụm nằm giữa trang.
+  const wmSize = 20;
+  const wEvn = fonts.bold.widthOfTextAtSize("EVN", wmSize);
+  const wGenco = fonts.bold.widthOfTextAtSize("GENCO1", wmSize);
+  const wmX = mid - (wEvn + wGenco) / 2;
+  page.drawText("EVN", { x: wmX, y: wordmarkY, size: wmSize, font: fonts.bold, color: EVN_BLUE });
+  page.drawText("GENCO1", {
+    x: wmX + wEvn,
+    y: wordmarkY,
+    size: wmSize,
+    font: fonts.bold,
+    color: EVN_RED,
+  });
+
+  drawCentered(page, "SỔ THEO DÕI THIẾT BỊ CÓ YÊU CẦU", fonts.bold, 23, 313);
+  drawCentered(page, "NGHIÊM NGẶT AN TOÀN LAO ĐỘNG", fonts.bold, 23, 281);
+
+  drawCentered(page, "Tên đơn vị: PHÂN XƯỞNG VẬN HÀNH 1", fonts.bold, 13, 229);
+
+  // Khối điền tay thụt vào cho cân với khối tiêu đề ở trên.
+  const fieldX = MARGIN + 110;
+  const fieldW = CONTENT_W - 220;
+  dottedField(page, "Chức danh QLVH:", fonts.regular, 12, fieldX, 183, fieldW);
+  dottedField(page, "Người phụ trách tại cơ sở:", fonts.regular, 12, fieldX, 155, fieldW);
+
+  drawCentered(page, "Vĩnh Long, ngày …… tháng …… năm 20……", fonts.regular, 12, 91);
+}
+
 export async function buildTbycnnPdf(input: TbycnnPdfInput): Promise<Buffer> {
   const pdf = await PDFDocument.create();
   pdf.registerFontkit(fontkit);
   const fonts = await loadPdfFonts(pdf);
+
+  // Trang bìa dựng SAU CÙNG bằng `insertPage(0, …)` chứ không dựng trước: vòng vẽ bảng
+  // bên dưới đánh dấu trang hiện hành bằng `pdf.addPage()` nối đuôi, nếu bìa nằm sẵn ở
+  // đầu thì mọi phép đếm trang của nó đều lệch một.
 
   // Nhúng trước từng ảnh chữ ký một lần, dùng lại cho mọi trang.
   const embedded = new Map<string, PDFImage>();
@@ -297,6 +399,8 @@ export async function buildTbycnnPdf(input: TbycnnPdfInput): Promise<Buffer> {
         }
       : null
   );
+
+  await drawCoverPage(pdf, fonts);
 
   return Buffer.from(await pdf.save());
 }
