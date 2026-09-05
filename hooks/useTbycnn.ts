@@ -206,7 +206,24 @@ export async function downloadTbycnnExcel(params: TbycnnExportParams) {
   await saveAs(`/api/tbycnn/export?${exportQuery(params)}`, "TBYCNN.xlsx");
 }
 
+/**
+ * Địa chỉ dựng bản in PDF. `preview` = bản nháp (server trả `inline`, không ghi nhật ký).
+ *
+ * Tách ra khỏi `downloadTbycnnPdf` vì luồng xem trước gọi HAI lượt cùng một địa chỉ chỉ
+ * khác mỗi cờ này — để hai chỗ tự ghép chuỗi là sớm muộn bộ lọc của bản nháp lệch khỏi
+ * bộ lọc của bản chốt, và người dùng in ra thứ khác với thứ vừa xem.
+ */
+export function tbycnnPdfUrl(params: TbycnnExportParams, preview = false) {
+  const qs = exportQuery(params);
+  return `/api/tbycnn/export-pdf?${qs}${preview ? (qs ? "&" : "") + "preview=1" : ""}`;
+}
+
+/** Bản nháp để soi trong khung xem trước — KHÔNG tải về, KHÔNG ghi nhật ký. */
+export async function fetchTbycnnPdfPreview(params: TbycnnExportParams) {
+  return apiDownload(tbycnnPdfUrl(params, true));
+}
+
 /** Bản in A4 ngang — cùng bộ lọc với bản Excel để hai nút luôn ra cùng phạm vi. */
 export async function downloadTbycnnPdf(params: TbycnnExportParams) {
-  await saveAs(`/api/tbycnn/export-pdf?${exportQuery(params)}`, "TBYCNN.pdf");
+  await saveAs(tbycnnPdfUrl(params), "TBYCNN.pdf");
 }

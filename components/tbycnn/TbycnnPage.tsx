@@ -85,6 +85,7 @@ import { EditableCell } from "@/components/pccc/pccc-shared";
 import {
   downloadTbycnnExcel,
   downloadTbycnnPdf,
+  fetchTbycnnPdfPreview,
   useSaveTbycnnBulk,
   useTbycnn,
   useTbycnnSign,
@@ -92,6 +93,13 @@ import {
   type TbycnnEquipment,
   type TbycnnSignPreview,
 } from "@/hooks/useTbycnn";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { TbycnnSignDialog } from "@/components/tbycnn/TbycnnSignDialog";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 
@@ -257,6 +265,8 @@ export default function TbycnnPage() {
   const [pageSize, setPageSize] = useState(PCCC_PAGE_SIZES[0]);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [exporting, setExporting] = useState<"excel" | "pdf" | null>(null);
+  /** Bản nháp PDF đang mở để xem trước; `null` = chưa dựng bản nào. */
+  const [pdfPreview, setPdfPreview] = useState<{ url: string; filename: string } | null>(null);
 
   /**
    * Chế độ "SỬA BẢNG": bảng khoá theo mặc định, mở khoá mới sửa được. Mọi thay đổi giữ
@@ -503,19 +513,71 @@ export default function TbycnnPage() {
     }
   }
 
-  /** Hai nút xuất dùng CHUNG bộ lọc đang đặt — bấm nút nào cũng ra đúng phần đang xem. */
-  async function handleExport(kind: "excel" | "pdf") {
-    setExporting(kind);
+  /** Bộ lọc đang đặt, dùng CHUNG cho mọi lượt xuất — bấm nút nào cũng ra đúng phần đang xem. */
+  function exportParams() {
+    return {
+      cuongViCode: cuongViCode === ALL ? undefined : cuongViCode,
+      machine: machine === ALL ? undefined : machine,
+    };
+  }
+
+  /** Excel tải thẳng: bảng số liệu mở ra sửa được, không có gì để "duyệt trước khi in". */
+  async function handleExportExcel() {
+    setExporting("excel");
     try {
-      const params = {
-        cuongViCode: cuongViCode === ALL ? undefined : cuongViCode,
-        machine: machine === ALL ? undefined : machine,
-      };
-      if (kind === "excel") await downloadTbycnnExcel(params);
-      else await downloadTbycnnPdf(params);
-      toast.success(kind === "excel" ? "Đã tải báo cáo Excel" : "Đã tải bản in PDF");
+      await downloadTbycnnExcel(exportParams());
+      toast.success("Đã tải báo cáo Excel");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Không tải được báo cáo");
+    } finally {
+      setExporting(null);
+    }
+  }
+
+  /**
+   * BƯỚC 1 — dựng BẢN NHÁP và mở khung xem. Cùng luồng hai bước của sổ PCCC.
+   *
+   * Sổ này in ra là để trình đoàn kiểm tra ATLĐ ký: sai bộ lọc, thiếu một cương vị hay
+   * hụt chữ ký là phải in lại cả tập. Soi trước rẻ hơn nhiều so với phát hiện sau khi in.
+   * Bản nháp không ghi nhật ký nên xem đi xem lại bao nhiêu lần cũng không để lại rác.
+   */
+  async function previewPdf() {
+    setExporting("pdf");
+    try {
+      const { blob, filename } = await fetchTbycnnPdfPreview(exportParams());
+      // Thu hồi bản nháp cũ trước khi thay: mỗi lượt dựng là một blob nằm lại trong bộ
+      // nhớ trình duyệt cho tới khi đóng tab, mà sổ đủ 709 dòng không nhẹ.
+      setPdfPreview((prev) => {
+        if (prev) URL.revokeObjectURL(prev.url);
+        return { url: URL.createObjectURL(blob), filename };
+      });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Không dựng được bản xem trước");
+    } finally {
+      setExporting(null);
+    }
+  }
+
+  function closePdfPreview() {
+    setPdfPreview((prev) => {
+      if (prev) URL.revokeObjectURL(prev.url);
+      return null;
+    });
+  }
+
+  /**
+   * BƯỚC 2 — chốt in. DỰNG LẠI từ server thay vì tải xuống blob nháp đang cầm: chỉ lượt
+   * này mới được ghi nhật ký "đã xuất PDF", và dựng lại thì bản tải về mang đúng số liệu
+   * tại thời điểm bấm chốt, kể cả khi người khác vừa sửa sổ trong lúc bản nháp đang mở.
+   */
+  async function confirmPdf() {
+    setExporting("pdf");
+    try {
+      await downloadTbycnnPdf(exportParams());
+      closePdfPreview();
+      toast.success("Đã tải bản in PDF");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Không tải được bản in");
     } finally {
       setExporting(null);
     }
@@ -733,14 +795,14 @@ export default function TbycnnPage() {
               Thiết bị YCNN về ATLĐ · {data?.period?.label ?? "—"}
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onSelect={() => handleExport("pdf")} className="gap-2">
+            <DropdownMenuItem onSelect={() => void previewPdf()} className="gap-2">
               <FileText className="size-4 text-rose-600" />
               <span className="min-w-0">
                 <span className="block font-medium">Xuất PDF</span>
-                <span className="block text-[11px] text-muted-foreground">Khổ A4 ngang, để in và ký</span>
+                <span className="block text-[11px] text-muted-foreground">Xem trước rồi mới chốt in</span>
               </span>
             </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => handleExport("excel")} className="gap-2">
+            <DropdownMenuItem onSelect={() => void handleExportExcel()} className="gap-2">
               <FileSpreadsheet className="size-4 text-emerald-600" />
               <span className="min-w-0">
                 <span className="block font-medium">Xuất Excel</span>
@@ -1049,6 +1111,42 @@ export default function TbycnnPage() {
           </Table>
         </PcccTableCard>
       )}
+
+      {/*
+        XEM TRƯỚC BẢN IN — bản nháp dựng từ server, chưa ghi nhật ký. Người dùng lật đủ
+        các trang rồi mới bấm chốt; đóng hộp thoại là bản nháp biến mất không để lại dấu.
+        Cùng khuôn với hộp thoại xem trước của sổ PCCC.
+      */}
+      <Dialog open={!!pdfPreview} onOpenChange={(open) => !open && closePdfPreview()}>
+        <DialogContent className="flex max-h-[92vh] flex-col sm:max-w-5xl">
+          <DialogHeader>
+            <DialogTitle>Xem trước bản in</DialogTitle>
+          </DialogHeader>
+          <p className="text-[13px] text-muted-foreground">
+            Đây là <span className="font-semibold text-slate-700">bản nháp</span> — chưa ghi nhật ký xuất file.
+            Kiểm tra xong hãy bấm <span className="font-semibold text-slate-700">Xác nhận in</span> để tải bản
+            chính thức về máy.
+          </p>
+          {pdfPreview && (
+            <iframe
+              src={pdfPreview.url}
+              title={pdfPreview.filename}
+              className="h-[68vh] w-full rounded-xl border border-slate-200 bg-slate-50"
+            />
+          )}
+          <DialogFooter className="sm:justify-between">
+            <span className="truncate text-[12px] text-muted-foreground">{pdfPreview?.filename}</span>
+            <div className="flex gap-2">
+              <Button size="sm" variant="outline" onClick={closePdfPreview}>
+                Đóng
+              </Button>
+              <Button size="sm" onClick={() => void confirmPdf()} disabled={exporting !== null}>
+                {exporting === "pdf" ? "Đang xuất…" : "Xác nhận in"}
+              </Button>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <TbycnnSignDialog
         open={signOpen}

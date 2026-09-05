@@ -21,7 +21,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /**
- * GET /api/tbycnn/export-pdf?period=YYYY-MM&cuongViCode=&machine=
+ * GET /api/tbycnn/export-pdf?period=YYYY-MM&cuongViCode=&machine=&preview=1
  *
  * Bản in A4 ngang của sổ TBYCNN — thay cho nút "Xuất PDF" của ứng dụng rời, vốn chỉ mở
  * tab trắng rồi gọi `window.print()` (xem README mục 6.9 của bản cũ). Dựng ở server nên
@@ -29,6 +29,12 @@ export const dynamic = "force-dynamic";
  *
  * Cùng bộ tham số lọc với `export` (Excel) để hai nút trên thanh công cụ luôn in ra cùng
  * một phạm vi — người dùng bấm nút nào cũng nhận đúng phần đang xem.
+ *
+ * `preview=1` = BẢN NHÁP để soi trước khi in: dựng ĐÚNG cùng một PDF (nếu khác thì xem
+ * trước thành vô nghĩa), chỉ khác hai điểm — trả `inline` để trình duyệt hiện thẳng trong
+ * khung xem thay vì tải về, và KHÔNG ghi nhật ký. Người dùng lật tới lật lui bản nháp cả
+ * chục lần, ghi hết vào AuditLog thì lần xuất thật chìm nghỉm giữa đống bản nháp.
+ * Dựng lại y hệt PCCC (`app/api/pccc/so-theo-doi/export/route.ts`).
  */
 export async function GET(req: NextRequest) {
   return handle(async () => {
@@ -41,6 +47,7 @@ export async function GET(req: NextRequest) {
     );
 
     const sp = req.nextUrl.searchParams;
+    const preview = sp.get("preview") === "1";
     const period = await resolvePeriod(sp.get("period"));
     const cuongViCode = (sp.get("cuongViCode") ?? "").trim();
     const machine = (sp.get("machine") ?? "").trim();
@@ -77,13 +84,15 @@ export async function GET(req: NextRequest) {
       signatureImages,
     });
 
-    await audit(
-      user.id,
-      "EXPORT_TBYCNN_PDF",
-      "TbycnnPeriod",
-      period.id,
-      auditDetailWithPosition(user, `Xuất PDF TBYCNN ${period.label} · ${scopeLabel} (${rows.length} thiết bị)`)
-    );
+    if (!preview) {
+      await audit(
+        user.id,
+        "EXPORT_TBYCNN_PDF",
+        "TbycnnPeriod",
+        period.id,
+        auditDetailWithPosition(user, `Xuất PDF TBYCNN ${period.label} · ${scopeLabel} (${rows.length} thiết bị)`)
+      );
+    }
 
     // Tên tệp bỏ dấu: một số trình duyệt và máy in mạng vẫn cắt chữ có dấu trong
     // Content-Disposition thành ký tự lạ.
@@ -97,7 +106,8 @@ export async function GET(req: NextRequest) {
     return new Response(buffer as unknown as BodyInit, {
       headers: {
         "Content-Type": "application/pdf",
-        "Content-Disposition": `attachment; filename="TBYCNN-${period.label}-${slug}.pdf"`,
+        "Content-Disposition":
+          `${preview ? "inline" : "attachment"}; filename="TBYCNN-${period.label}-${slug}.pdf"`,
       },
     });
   });
