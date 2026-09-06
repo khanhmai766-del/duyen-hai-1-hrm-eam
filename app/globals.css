@@ -538,6 +538,67 @@
   }
 }
 
+/* ── Hoạ tiết nền thẻ KPI ────────────────────────────────────────────────────
+   Vẽ HOÀN TOÀN bằng gradient CSS, cố ý không dùng ảnh: thẻ không tốn thêm một
+   byte tải nào, không có ảnh nào phải chờ tải xong mới hiện (thẻ KPI nằm ngay
+   đầu trang nên một ảnh chậm là cả trang trông như treo), và không có animation
+   nên trình duyệt vẽ một lần rồi thôi.
+
+   Mỗi hoạ tiết nói đúng nội dung thẻ nó nằm dưới, giữ ở mức RẤT NHẠT — con số
+   mới là thứ phải đọc được từ xa, hoa văn chỉ để nền thôi hết đơn sắc.
+   Cùng lối vẽ với `.login-access-grid` để hai chỗ không thành hai phong cách. */
+.kpi-tex {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+/* Tổng thiết bị — giấy kẻ ô của bản vẽ kỹ thuật: cả một sổ đăng ký thiết bị. */
+.kpi-tex-grid {
+  background-image:
+    linear-gradient(rgba(30, 58, 95, 0.055) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(30, 58, 95, 0.055) 1px, transparent 1px),
+    linear-gradient(135deg, rgba(30, 58, 95, 0.05), transparent 62%);
+  background-size: 14px 14px, 14px 14px, 100% 100%;
+}
+
+/* Khả dụng — lưới chấm đều tăm tắp: mọi thiết bị đều có mặt, đều bình thường. */
+.kpi-tex-dots {
+  background-image:
+    radial-gradient(rgba(5, 150, 105, 0.11) 1px, transparent 1.6px),
+    linear-gradient(135deg, rgba(16, 185, 129, 0.09), transparent 60%);
+  background-size: 13px 13px, 100% 100%;
+}
+
+/* Có thiết bị hỏng — vạch chéo vàng đen của băng cảnh báo hiện trường. */
+.kpi-tex-hazard {
+  background-image:
+    repeating-linear-gradient(45deg, rgba(217, 119, 6, 0.05) 0 6px, transparent 6px 22px),
+    linear-gradient(135deg, rgba(245, 158, 11, 0.09), transparent 60%);
+}
+
+/* Quá hạn kiểm định — vòng sóng lan từ góc dưới phải: còi báo đang hú. */
+.kpi-tex-rings {
+  background-image:
+    repeating-radial-gradient(circle at 88% 108%, rgba(220, 38, 38, 0.06) 0 1.5px, transparent 1.5px 16px),
+    linear-gradient(135deg, rgba(239, 68, 68, 0.09), transparent 60%);
+}
+
+/* Sắp đến hạn — vạch chia như thước đo, bám mép dưới: thời gian đang đếm lùi. */
+.kpi-tex-ticks {
+  background-image:
+    repeating-linear-gradient(90deg, rgba(37, 99, 235, 0.12) 0 1px, transparent 1px 12px),
+    linear-gradient(135deg, rgba(59, 130, 246, 0.09), transparent 60%);
+  background-size: 100% 22px, 100% 100%;
+  background-position: left bottom, left top;
+  background-repeat: no-repeat, no-repeat;
+}
+
+/* Nền tối: cùng hoa văn nhưng dịu lại, kẻo trên nền sẫm nó nổi hơn cả con số. */
+.dark .kpi-tex {
+  opacity: 0.5;
+}
+
 /* Print styles for QR + reports */
 @media print {
   .no-print,

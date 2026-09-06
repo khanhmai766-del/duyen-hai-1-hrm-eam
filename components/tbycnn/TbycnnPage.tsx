@@ -832,19 +832,19 @@ export default function TbycnnPage() {
           phân biệt được hai việc khác hẳn nhau. */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
         <KpiCard active={status === ALL && kd === ALL} onClick={() => applyKpi(null)}>
-          <StatCard compact label="Tổng thiết bị" value={stats.total} icon={Wrench} tint="navy" />
+          <StatCard compact labelTop texture="grid" label="Tổng thiết bị" value={stats.total} icon={Wrench} tint="navy" />
         </KpiCard>
         <KpiCard active={status === "Khả dụng"} onClick={() => applyKpi({ status: "Khả dụng" })}>
-          <StatCard compact label="Khả dụng" value={stats.khaDung} icon={CheckCircle2} tint="green" />
+          <StatCard compact labelTop texture="dots" label="Khả dụng" value={stats.khaDung} icon={CheckCircle2} tint="green" />
         </KpiCard>
         <KpiCard active={status === "Không khả dụng"} onClick={() => applyKpi({ status: "Không khả dụng" })}>
-          <StatCard compact label="Có thiết bị hỏng" value={stats.khongKhaDung} icon={ShieldAlert} tint="amber" />
+          <StatCard compact labelTop texture="hazard" label="Có thiết bị hỏng" value={stats.khongKhaDung} icon={ShieldAlert} tint="amber" />
         </KpiCard>
         <KpiCard active={kd === "overdue"} onClick={() => applyKpi({ kd: "overdue" })}>
-          <StatCard compact label="Quá hạn kiểm định" value={stats.quaHan} icon={AlertTriangle} tint="red" />
+          <StatCard compact labelTop texture="rings" label="Quá hạn kiểm định" value={stats.quaHan} icon={AlertTriangle} tint="red" />
         </KpiCard>
         <KpiCard active={kd === "soon"} onClick={() => applyKpi({ kd: "soon" })}>
-          <StatCard compact label="Sắp đến hạn (<3 tháng)" value={stats.sapHan} icon={CalendarClock} tint="blue" />
+          <StatCard compact labelTop texture="ticks" label="Sắp đến hạn (<3 tháng)" value={stats.sapHan} icon={CalendarClock} tint="blue" />
         </KpiCard>
       </div>
 

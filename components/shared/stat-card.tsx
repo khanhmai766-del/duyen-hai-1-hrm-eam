@@ -17,6 +17,18 @@ interface StatCardProps {
   /** Optional call-to-action shown inline with the label (e.g. "Mở →"). */
   cta?: string;
   /**
+   * Đưa nhãn lên hàng trên, nằm phải cạnh biểu tượng, chừa cả khoảng dưới cho con số.
+   *
+   * Chỉ là TUỲ CHỌN, không đổi bố cục mặc định: `StatCard` dùng chung cho hàng chục
+   * trang, đổi thẳng chỗ đứng của nhãn là mọi trang khác lệch theo.
+   */
+  labelTop?: boolean;
+  /**
+   * Hoạ tiết nền (xem `.kpi-tex-*` trong app/globals.css). Vẽ bằng gradient CSS nên
+   * không tốn byte tải nào. Bỏ trống = nền một màu như cũ.
+   */
+  texture?: "grid" | "dots" | "hazard" | "rings" | "ticks";
+  /**
    * Bản GỌN: thu nhỏ đệm, biểu tượng và cỡ số. Dùng khi hàng thẻ chỉ là phần phụ của
    * trang chứ không phải nội dung chính — vd trang TBYCNN, nơi bảng dữ liệu mới là
    * thứ cần chỗ, hàng thẻ cỡ mặc định đẩy bảng xuống quá sâu.
@@ -32,7 +44,7 @@ const TINTS = {
   blue: { bg: "bg-blue-50", icon: "bg-gradient-to-br from-sky-400 to-blue-600 text-white shadow-blue-500/30" },
 };
 
-export function StatCard({ label, value, icon: Icon, tint = "navy", trend, hint, bgImage, bgBadge, bgCover, cta, compact }: StatCardProps) {
+export function StatCard({ label, value, icon: Icon, tint = "navy", trend, hint, bgImage, bgBadge, bgCover, cta, compact, labelTop, texture }: StatCardProps) {
   const t = TINTS[tint];
   const cover = !!bgCover;
   return (
@@ -55,6 +67,9 @@ export function StatCard({ label, value, icon: Icon, tint = "navy", trend, hint,
           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/45 to-black/25" />
         </>
       )}
+      {/* Hoạ tiết nằm DƯỚI mọi nội dung (không có z-index, các khối sau đều `relative`)
+          và trên nền màu của thẻ. Không áp cho thẻ ảnh bìa: ở đó đã có ảnh thật. */}
+      {texture && !cover && <div aria-hidden className={cn("kpi-tex", `kpi-tex-${texture}`)} />}
       {bgImage && !cover && (
         <div className="pointer-events-none absolute -bottom-4 -right-3 h-32 w-32 select-none transition-transform duration-500 group-hover:scale-105">
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -80,6 +95,18 @@ export function StatCard({ label, value, icon: Icon, tint = "navy", trend, hint,
         >
           <Icon className={cn("relative", compact ? "h-4 w-4" : "h-5 w-5")} />
         </div>
+        {labelTop && (
+          // Căn phải và bám mép trên của biểu tượng: nhãn dài ("Sắp đến hạn (<3 tháng)")
+          // xuống dòng lên phía trên chứ không đẩy con số bên dưới.
+          <span
+            className={cn(
+              "max-w-[68%] text-right text-[11.5px] font-semibold leading-tight",
+              cover ? "text-white/90" : "text-muted-foreground"
+            )}
+          >
+            {label}
+          </span>
+        )}
         {trend && (
           <span
             className={cn(
@@ -94,20 +121,23 @@ export function StatCard({ label, value, icon: Icon, tint = "navy", trend, hint,
       </div>
       <div className={cn("relative", compact ? "mt-2.5" : "mt-4", cover && "[text-shadow:0_1px_6px_rgba(0,0,0,0.6)]")}>
         <div className={cn("font-bold leading-none", compact ? "text-[28px]" : "text-[40px]", cover ? "text-white" : "text-ink")}>{value}</div>
-        <div
-          className={cn(
-            "flex items-center justify-between gap-2 font-medium",
-            compact ? "mt-1.5 text-[12.5px] leading-tight" : "mt-2 text-sm",
-            cover ? "text-white/90" : "text-muted-foreground"
-          )}
-        >
-          <span>{label}</span>
-          {cta && (
-            <span className={cn("inline-flex items-center gap-1 whitespace-nowrap text-xs font-semibold", cover ? "text-white" : "text-accent")}>
-              {cta} <ArrowRight className="h-3.5 w-3.5" />
-            </span>
-          )}
-        </div>
+        {/* Nhãn đã lên hàng trên thì hàng này chỉ còn lý do tồn tại nếu có `cta`. */}
+        {(!labelTop || cta) && (
+          <div
+            className={cn(
+              "flex items-center justify-between gap-2 font-medium",
+              compact ? "mt-1.5 text-[12.5px] leading-tight" : "mt-2 text-sm",
+              cover ? "text-white/90" : "text-muted-foreground"
+            )}
+          >
+            {!labelTop && <span>{label}</span>}
+            {cta && (
+              <span className={cn("inline-flex items-center gap-1 whitespace-nowrap text-xs font-semibold", cover ? "text-white" : "text-accent")}>
+                {cta} <ArrowRight className="h-3.5 w-3.5" />
+              </span>
+            )}
+          </div>
+        )}
         {hint && <div className={cn("mt-0.5 text-xs", cover ? "text-white/75" : "text-muted-foreground/70")}>{hint}</div>}
       </div>
     </div>
