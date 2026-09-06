@@ -1702,55 +1702,10 @@ export default function PcccPage() {
               <CalendarClock className="size-3" /> Chưa tới kỳ — chỉ đọc
             </span>
           )}
-          {!period.isClosed && !periodNotStarted && (
-            <button
-              type="button"
-              role="switch"
-              aria-checked={period.allowItemCreation}
-              disabled={!canControlItemCreation || toggleItemCreation.isPending}
-              onClick={() =>
-                toggleItemCreation.mutate(
-                  { id: period.id, enabled: !period.allowItemCreation },
-                  {
-                    onSuccess: (updated) =>
-                      toast.success(
-                        updated.allowItemCreation
-                          ? "Đã mở chức năng thêm thiết bị PCCC"
-                          : "Đã khoá chức năng thêm thiết bị PCCC"
-                      ),
-                    onError: (error: Error) => toast.error(error.message),
-                  }
-                )
-              }
-              title={
-                canControlItemCreation
-                  ? "Cấp quản lý bật trong thời gian bổ sung danh mục, sau đó tắt để giữ bộ thiết bị chuẩn"
-                  : "Chỉ cấp quản lý được bật hoặc tắt chức năng thêm thiết bị"
-              }
-              className={cn(
-                "inline-flex h-9 items-center gap-2 rounded-lg border px-2.5 text-[12px] font-semibold transition disabled:cursor-not-allowed disabled:opacity-70",
-                period.allowItemCreation
-                  ? "border-emerald-300 bg-emerald-50 text-emerald-800"
-                  : "border-slate-300 bg-slate-50 text-slate-600"
-              )}
-            >
-              <span
-                aria-hidden="true"
-                className={cn(
-                  "relative h-5 w-9 rounded-full transition-colors",
-                  period.allowItemCreation ? "bg-emerald-600" : "bg-slate-300"
-                )}
-              >
-                <span
-                  className={cn(
-                    "absolute top-0.5 size-4 rounded-full bg-white shadow-sm transition-transform",
-                    period.allowItemCreation ? "translate-x-[18px]" : "translate-x-0.5"
-                  )}
-                />
-              </span>
-              Thêm thiết bị: {period.allowItemCreation ? "Đang bật" : "Đang khoá"}
-            </button>
-          )}
+          {/* Công tắc "Thêm thiết bị" đã chuyển xuống menu Chỉnh sửa (tìm "CÔNG TẮC CẤP KỲ"
+              ở cuối tệp). Hàng này giờ chỉ còn ô chọn kỳ và các NHÃN TRẠNG THÁI, không còn
+              nút bấm rời: thanh công cụ trước đây có tới bốn cửa (công tắc, Bộ lọc, Chỉnh
+              sửa, xuất file) nên trên màn hình hẹp là xuống dòng vỡ hàng. */}
         </div>
 
         {/* Bộ lọc gom vào MỘT nút, bấm mới sổ bảng chọn — cùng khuôn với các trang
@@ -2073,6 +2028,72 @@ export default function PcccPage() {
                         </span>
                       </DropdownMenuItem>
                     )
+                  )}
+
+                  {/* CÔNG TẮC CẤP KỲ, tách khỏi hai mục trên bằng vạch ngăn: "Sửa bảng" và
+                      "Ký tên" tác động lên các dòng đang xem, còn cái này mở/khoá quyền thêm
+                      thiết bị cho CẢ KỲ và cho mọi người — nhìn lẫn vào nhau là bấm nhầm.
+
+                      Giữ nguyên hai điều kiện của nút cũ: ẩn khi kỳ chưa tới, và người không
+                      đủ quyền vẫn THẤY (mờ đi) để biết vì sao mình không thêm được thiết bị. */}
+                  {!periodNotStarted && (
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        disabled={!canControlItemCreation || toggleItemCreation.isPending}
+                        // Không đóng menu sau khi bấm: đây là công tắc, người bấm cần THẤY
+                        // nó lật sang trạng thái mới ngay tại chỗ.
+                        onSelect={(e) => {
+                          e.preventDefault();
+                          toggleItemCreation.mutate(
+                            { id: period.id, enabled: !period.allowItemCreation },
+                            {
+                              onSuccess: (updated) =>
+                                toast.success(
+                                  updated.allowItemCreation
+                                    ? "Đã mở chức năng thêm thiết bị PCCC"
+                                    : "Đã khoá chức năng thêm thiết bị PCCC"
+                                ),
+                              onError: (error: Error) => toast.error(error.message),
+                            }
+                          );
+                        }}
+                        title={
+                          canControlItemCreation
+                            ? "Cấp quản lý bật trong thời gian bổ sung danh mục, sau đó tắt để giữ bộ thiết bị chuẩn"
+                            : "Chỉ cấp quản lý được bật hoặc tắt chức năng thêm thiết bị"
+                        }
+                        className="gap-2"
+                      >
+                        {period.allowItemCreation ? (
+                          <Plus className="size-4 text-emerald-600" />
+                        ) : (
+                          <Lock className="size-4 text-slate-400" />
+                        )}
+                        <span className="min-w-0 flex-1">
+                          <span className="block font-medium">Thêm thiết bị</span>
+                          <span className="block text-[11px] text-muted-foreground">
+                            {period.allowItemCreation
+                              ? "Đang bật — thêm được thiết bị vào kỳ"
+                              : "Đang khoá — giữ bộ thiết bị chuẩn"}
+                          </span>
+                        </span>
+                        <span
+                          aria-hidden="true"
+                          className={cn(
+                            "relative h-5 w-9 shrink-0 rounded-full transition-colors",
+                            period.allowItemCreation ? "bg-emerald-600" : "bg-slate-300"
+                          )}
+                        >
+                          <span
+                            className={cn(
+                              "absolute top-0.5 size-4 rounded-full bg-white shadow-sm transition-transform",
+                              period.allowItemCreation ? "translate-x-[18px]" : "translate-x-0.5"
+                            )}
+                          />
+                        </span>
+                      </DropdownMenuItem>
+                    </>
                   )}
                 </DropdownMenuContent>
               </DropdownMenu>
