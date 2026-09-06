@@ -586,8 +586,8 @@ export default function TbycnnPage() {
   return (
     <div className="space-y-5">
       <PageHeader
-        title="Thiết bị yêu cầu nghiêm ngặt về ATLĐ"
-        mobileTitle="Thiết bị YCNN"
+        title="THIẾT BỊ YÊU CẦU NGHIÊM NGẶT VỀ ATLĐ"
+        mobileTitle="THIẾT BỊ YCNN"
         description={
           data?.period
             ? `Kỳ ${data.period.label} · ${rows.length} thiết bị của ${cuongViList.length} cương vị quản lý${viewScopeLabel}`
