@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
 import { QRCodeSVG } from "qrcode.react";
-import { ArrowLeft, Printer, Zap } from "lucide-react";
+import { ArrowLeft, Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useDevice } from "@/hooks/useDevices";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -42,8 +42,8 @@ function DeviceQrPageContent() {
       ) : (
         <div className="print-full flex w-full max-w-md flex-col items-center rounded-2xl border border-border bg-white p-10 text-center shadow-sm">
           <div className="mb-4 flex items-center gap-2 text-navy">
-            <Zap className="h-6 w-6 text-amber-400" fill="currentColor" />
-            <span className="text-lg font-bold">PowerPlant EAM</span>
+            <img src="/brand/4.png" alt="Logo EVN" className="h-7 w-7 object-contain" />
+            <span className="text-base font-bold">Duyen Hai 1 Thermal Power Plant</span>
           </div>
           <div className="rounded-xl border-2 border-navy/10 p-4">
             <QRCodeSVG value={url} size={300} level="H" />
