@@ -82,6 +82,7 @@ import {
   TBYCNN_KD_FILTERS,
   TBYCNN_KD_LABEL,
   TBYCNN_STATUS_FILTERS,
+  romanOf,
 } from "@/lib/tbycnn";
 import { EditableCell } from "@/components/pccc/pccc-shared";
 import {
@@ -106,7 +107,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { TbycnnSignDialog } from "@/components/tbycnn/TbycnnSignDialog";
-import { TbycnnCreateDialog, type TbycnnCreateGroup } from "@/components/tbycnn/TbycnnCreateDialog";
+import { TbycnnCreateDialog, type TbycnnCreatePosition } from "@/components/tbycnn/TbycnnCreateDialog";
+import { POSITION_CATALOG, positionLabelOf } from "@/lib/position-catalog";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 
 const ALL = "__all__";
@@ -308,23 +310,19 @@ export default function TbycnnPage() {
   const itemCreationEnabled = Boolean(period?.allowItemCreation) && !period?.isClosed && canManage;
 
   /**
-   * Cương vị + danh mục để chọn khi thêm thiết bị, dựng từ CHÍNH các dòng người dùng
-   * được ghi. Cương vị chưa có dòng nào trong kỳ sẽ không xuất hiện — `khuVuc` mang hậu
-   * tố tổ máy ("Máy nghiền S1") nên không suy ngược ra được từ mã cương vị, mà gõ tay
-   * thì lệch một dấu cách là sinh ra một nhóm mới trông y hệt nhóm cũ.
+   * Cương vị để chọn khi thêm thiết bị: lấy thẳng DANH MỤC CHỨC DANH CHUẨN của hệ thống
+   * (`lib/position-catalog.ts`) rồi lọc theo phạm vi ghi — không dựng danh sách riêng từ
+   * các dòng đang có. Dựng từ dữ liệu thì cương vị chưa có dòng nào trong kỳ sẽ không
+   * bao giờ thêm được thiết bị đầu tiên, mà nhãn cũng dễ lệch khỏi danh mục chung.
    */
-  const createGroups = useMemo<TbycnnCreateGroup[]>(() => {
-    const map = new Map<string, Set<string>>();
-    for (const r of rows) {
-      if (!r.canWrite) continue;
-      const nhoms = map.get(r.khuVuc) ?? new Set<string>();
-      nhoms.add(r.nhom);
-      map.set(r.khuVuc, nhoms);
-    }
-    return [...map]
-      .map(([khuVuc, nhoms]) => ({ khuVuc, nhoms: [...nhoms].sort((a, b) => a.localeCompare(b, "vi")) }))
-      .sort((a, b) => a.khuVuc.localeCompare(b.khuVuc, "vi"));
-  }, [rows]);
+  const createPositions = useMemo<TbycnnCreatePosition[]>(() => {
+    const scope = data?.writeScope;
+    return POSITION_CATALOG.filter((item) => scope?.all || scope?.codes.includes(item.code)).map((item) => ({
+      code: item.code,
+      label: item.label,
+      units: item.units,
+    }));
+  }, [data?.writeScope]);
 
   /**
    * Danh sách cương vị của ô lọc: mỗi CHỨC DANH một mục, không nhân đôi theo tổ máy.
@@ -497,8 +495,27 @@ export default function TbycnnPage() {
   }
 
   function submitCreate(body: Record<string, unknown>) {
-    const khuVuc = String(body.khuVuc ?? "");
-    const nhom = String(body.nhom ?? "");
+    const machine = String(body.machine ?? "COMMON");
+    const label = positionLabelOf(String(body.cuongViCode ?? ""));
+    // `khuVuc` là nhãn CÓ hậu tố tổ máy ("Máy nghiền S1") — khoá gộp nhóm của sổ và của
+    // bản Excel/PDF. ƯU TIÊN dùng lại đúng chuỗi cương vị này đang có trong kỳ thay vì
+    // ghép từ nhãn danh mục chuẩn: hồ sơ gốc có chỗ viết khác danh mục (đo được 1 ca —
+    // "Khí Nén – Nhà Dầu" gạch dài, danh mục ghi "Khí nén - Nhà dầu"), ghép mù là sinh
+    // ra nhóm thứ hai trông y hệt nhóm cũ. Chưa có dòng nào thì mới ghép mới; server
+    // vẫn tự tách lại bằng `normalizePosition` nên mã cương vị không thể sai.
+    const khuVuc =
+      rows.find((r) => r.cuongViCode === body.cuongViCode && r.machine === machine)?.khuVuc ??
+      (machine === "COMMON" ? label : `${label} ${machine}`);
+
+    // `nhom` = "<số La Mã>. <danh mục>". Số La Mã đánh RIÊNG theo từng cương vị nên
+    // không hỏi người dùng: danh mục đã có ở cương vị này thì dùng lại đúng chuỗi cũ,
+    // danh mục mới thì lấy số kế tiếp của cương vị đó.
+    const danhMuc = String(body.danhMuc ?? "");
+    const sameKhuVuc = rows.filter((r) => r.khuVuc === khuVuc);
+    const nhom =
+      sameKhuVuc.find((r) => r.danhMuc === danhMuc)?.nhom ??
+      `${romanOf(sameKhuVuc.reduce((max, r) => Math.max(max, r.nhomSo ?? 0), 0) + 1)}. ${danhMuc}`;
+
     // STT trong nhóm do CLIENT tính: sổ xếp theo (cương vị → số La Mã → STT), thiếu STT
     // thì dòng mới dồn lên đầu nhóm chứ không nằm cuối như người thêm mong đợi. Tính từ
     // các dòng đang tải sẵn nên không tốn thêm một vòng gọi mạng.
@@ -507,7 +524,7 @@ export default function TbycnnPage() {
         .filter((r) => r.khuVuc === khuVuc && r.nhom === nhom)
         .reduce((max, r) => Math.max(max, r.tt ?? 0), 0) + 1;
     createEquipment.mutate(
-      { ...body, tt: nextTt },
+      { ...body, khuVuc, nhom, tt: nextTt },
       {
         onSuccess: (created) => {
           setCreateOpen(false);
@@ -1293,21 +1310,13 @@ export default function TbycnnPage() {
         open={createOpen}
         onOpenChange={setCreateOpen}
         period={period?.label ?? "—"}
-        groups={createGroups}
-        // Đang lọc đúng một cương vị thì điền sẵn cương vị đó: người dùng gần như luôn
-        // thêm thiết bị cho chính nhóm mình vừa mở ra xem.
-        defaultKhuVuc={
-          cuongViCode === ALL
-            ? undefined
-            : (() => {
-                const matched = [
-                  ...new Set(
-                    rows.filter((r) => (r.cuongViCode ?? r.khuVuc) === cuongViCode && r.canWrite).map((r) => r.khuVuc)
-                  ),
-                ];
-                return matched.length === 1 ? matched[0] : undefined;
-              })()
-        }
+        positions={createPositions}
+        // Đúng cột "Danh mục" của bảng — bản rút gọn, không kèm số La Mã.
+        danhMucList={danhMucList}
+        // Đang lọc sẵn cương vị / tổ máy nào thì điền sẵn cái đó: người dùng gần như
+        // luôn thêm thiết bị cho chính nhóm mình vừa mở ra xem.
+        defaultPositionCode={cuongViCode === ALL ? undefined : cuongViCode}
+        defaultMachine={machine === ALL ? undefined : machine}
         pending={createEquipment.isPending}
         onSubmit={submitCreate}
       />

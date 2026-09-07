@@ -107,11 +107,28 @@ thứ đem đi nộp; mở cửa thêm mới thường trực thì mỗi ngườ
 - Kỳ mới sinh ra luôn khoá: `lib/tbycnn-rollover.ts` không chép cờ này sang kỳ sau.
 - Cột DB thêm bằng `prisma/manual/add-tbycnn-item-creation.sql` (idempotent).
 
-Hộp thoại thêm (`components/tbycnn/TbycnnCreateDialog.tsx`) bắt **chọn** cương vị và danh
-mục từ dữ liệu đang có thay vì gõ tự do: `khuVuc` (`Máy nghiền S1`) và `nhom`
-(`II. VAN AN TOÀN`) là khoá gộp nhóm của cả sổ lẫn bản Excel/PDF, lệch một dấu cách là
-sinh ra một nhóm mới trông y hệt nhóm cũ. Vẫn có cửa nhập danh mục mới khi thật sự cần.
-STT trong nhóm do client tính (max + 1) — thiếu STT thì dòng mới dồn lên đầu nhóm.
+Hộp thoại thêm (`components/tbycnn/TbycnnCreateDialog.tsx`) không cho gõ tự do ba khoá
+gộp nhóm — `khuVuc`, `nhom`, và qua đó là `danhMuc`:
+
+- **Cương vị** chọn từ `POSITION_CATALOG` (danh mục chức danh chuẩn của hệ thống) lọc
+  theo phạm vi ghi, kèm ô **Tổ máy** riêng chỉ liệt kê tổ máy mà chức danh đó có mặt
+  (`item.units`) — đúng khuôn `PcccCreateDialog`.
+- **Danh mục** chọn từ đúng các giá trị của **cột "Danh mục"** trên bảng (bản rút gọn,
+  hiện 7 giá trị), không phải chuỗi `nhom` có số La Mã.
+
+Trang ghép lại hai khoá trước khi gọi API (`submitCreate`):
+
+- `khuVuc` = **dùng lại đúng chuỗi đang có** của cặp (cương vị, tổ máy) trong kỳ; chưa có
+  dòng nào thì mới ghép `"<nhãn> <tổ máy>"`. Ghép mù theo nhãn danh mục là hỏng: hồ sơ gốc
+  có 1 ca viết khác danh mục (`Khí Nén – Nhà Dầu` gạch dài ≠ `Khí nén - Nhà dầu`), đủ để
+  đẻ ra nhóm thứ hai trông y hệt nhóm cũ.
+- `nhom` = chuỗi cũ nếu danh mục đó đã có ở cương vị này; nếu là danh mục mới thì
+  `"<số La Mã kế tiếp của cương vị>. <danh mục>"` (`romanOf`, nghịch đảo `extractNhomSo`)
+  — số La Mã đánh **riêng theo từng cương vị** nên đó là việc của máy, không hỏi người dùng.
+- `tt` = max + 1 trong nhóm; thiếu STT thì dòng mới dồn lên đầu nhóm (xem `TBYCNN_ORDER_BY`).
+
+Đã đối chiếu toàn bộ 709 dòng của kỳ: ghép rồi cho `normalizePosition` tách lại ra đúng
+`cuongViCode`/`machine` ở **100%** số dòng.
 
 ### Phạm vi ghi / ký theo cương vị
 

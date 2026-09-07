@@ -5,10 +5,11 @@
 //
 // Khác `PcccCreateDialog` ở hai điểm, do hình dạng dữ liệu khác chứ không phải sở thích:
 //
-// 1. Cương vị và danh mục CHỌN TỪ DỮ LIỆU ĐANG CÓ chứ không nhập tự do. `khuVuc` và
-//    `nhom` là khoá gộp nhóm của cả sổ lẫn bản Excel/PDF ("Máy nghiền S1", "II. VAN AN
-//    TOÀN"); gõ tay thì chỉ cần lệch một dấu cách là sinh ra một nhóm mới trông y hệt
-//    nhóm cũ. Vẫn để cửa nhập danh mục mới cho trường hợp thật sự cần.
+// 1. Cương vị CHỌN TỪ DANH MỤC CHỨC DANH CHUẨN của hệ thống (`lib/position-catalog.ts`)
+//    kèm ô Tổ máy riêng, đúng khuôn PCCC — không gõ tay và cũng không bịa danh sách
+//    riêng cho module này. Danh mục thì chọn từ CỘT "DANH MỤC" của bảng (bản rút gọn,
+//    7 giá trị) chứ không phải chuỗi `nhom` có số La Mã: số La Mã đánh riêng theo từng
+//    cương vị nên nó là chuyện của máy, không phải thứ bắt người dùng chọn.
 // 2. Chia ba khối (nhận dạng · kiểm định · tình trạng) đúng ba khối của model. Biểu mẫu
 //    này 15 ô — dồn thành một lưới phẳng thì không đọc được ô nào thuộc phần nào.
 // =====================================================================
@@ -17,11 +18,12 @@ import { Plus, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import { MACHINE_LABEL, PCCC_MACHINES } from "@/lib/pccc-position";
 
-/** Một cương vị kèm các danh mục đang có của nó, dựng từ dữ liệu kỳ đang xem. */
-export type TbycnnCreateGroup = { khuVuc: string; nhoms: string[] };
+/** Một chức danh của danh mục chuẩn, kèm các tổ máy mà chức danh đó có mặt. */
+export type TbycnnCreatePosition = { code: string; label: string; units: readonly string[] };
 
-const NEW_NHOM = "__new__";
+const NEW_DANH_MUC = "__new__";
 
 const control =
   "h-10 w-full rounded-xl border border-input bg-white px-3 text-[13px] outline-none transition focus:border-sky-400 focus:ring-2 focus:ring-sky-100";
@@ -64,30 +66,42 @@ export function TbycnnCreateDialog({
   open,
   onOpenChange,
   period,
-  groups,
-  defaultKhuVuc,
+  positions,
+  danhMucList,
+  defaultPositionCode,
+  defaultMachine,
   pending,
   onSubmit,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   period: string;
-  /** Cương vị người dùng ĐƯỢC GHI — chỗ gọi đã lọc theo phạm vi, đây chỉ hiển thị. */
-  groups: TbycnnCreateGroup[];
-  defaultKhuVuc?: string;
+  /** Chức danh người dùng ĐƯỢC GHI — chỗ gọi đã lọc theo phạm vi, đây chỉ hiển thị. */
+  positions: TbycnnCreatePosition[];
+  /** Đúng các giá trị của cột "Danh mục" trên bảng, đã rút gọn (bỏ số La Mã). */
+  danhMucList: string[];
+  defaultPositionCode?: string;
+  defaultMachine?: string;
   pending?: boolean;
   onSubmit: (body: Record<string, unknown>) => void;
 }) {
-  const initial = useMemo<Record<string, string>>(
-    () => ({
-      khuVuc: defaultKhuVuc && groups.some((g) => g.khuVuc === defaultKhuVuc) ? defaultKhuVuc : groups.length === 1 ? groups[0].khuVuc : "",
-      nhom: "",
-      nhomMoi: "",
+  const initial = useMemo<Record<string, string>>(() => {
+    const code =
+      defaultPositionCode && positions.some((p) => p.code === defaultPositionCode)
+        ? defaultPositionCode
+        : positions.length === 1
+          ? positions[0].code
+          : "";
+    const units = positions.find((p) => p.code === code)?.units ?? PCCC_MACHINES;
+    return {
+      cuongViCode: code,
+      machine: defaultMachine && units.includes(defaultMachine) ? defaultMachine : units[0] ?? "COMMON",
+      danhMuc: "",
+      danhMucMoi: "",
       tenThietBi: "",
       soLuong: "1",
-    }),
-    [defaultKhuVuc, groups]
-  );
+    };
+  }, [defaultMachine, defaultPositionCode, positions]);
   const [form, setForm] = useState(initial);
   useEffect(() => {
     if (open) setForm(initial);
@@ -98,9 +112,11 @@ export function TbycnnCreateDialog({
     (event: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
       setForm((prev) => ({ ...prev, [key]: event.target.value }));
 
-  const nhomList = groups.find((g) => g.khuVuc === form.khuVuc)?.nhoms ?? [];
-  const nhom = form.nhom === NEW_NHOM ? form.nhomMoi.trim() : form.nhom;
-  const ready = Boolean(form.khuVuc && nhom && form.tenThietBi.trim());
+  // Chức danh chỉ tồn tại ở cấp dùng chung thì không chào mời "Tổ máy 1/2" — danh mục
+  // chuẩn đã ghi sẵn chức danh nào có mặt ở tổ máy nào (`units`).
+  const machineOptions = positions.find((p) => p.code === form.cuongViCode)?.units ?? PCCC_MACHINES;
+  const danhMuc = form.danhMuc === NEW_DANH_MUC ? form.danhMucMoi.trim() : form.danhMuc;
+  const ready = Boolean(form.cuongViCode && danhMuc && form.tenThietBi.trim());
 
   return (
     <Dialog open={open} onOpenChange={(next) => !pending && onOpenChange(next)}>
@@ -124,38 +140,55 @@ export function TbycnnCreateDialog({
             <Field label="Cương vị quản lý" required>
               <select
                 className={control}
-                value={form.khuVuc}
-                // Đổi cương vị thì bỏ danh mục đang chọn: danh mục của cương vị cũ
-                // (số La Mã đánh theo từng cương vị) không còn nghĩa ở cương vị mới.
-                onChange={(e) => setForm((prev) => ({ ...prev, khuVuc: e.target.value, nhom: "", nhomMoi: "" }))}
+                value={form.cuongViCode}
+                // Đổi chức danh có thể làm tổ máy đang chọn thành vô nghĩa — kéo về tổ
+                // máy đầu tiên mà chức danh mới có mặt.
+                onChange={(e) => {
+                  const code = e.target.value;
+                  const units = positions.find((p) => p.code === code)?.units ?? PCCC_MACHINES;
+                  setForm((prev) => ({
+                    ...prev,
+                    cuongViCode: code,
+                    machine: units.includes(prev.machine) ? prev.machine : units[0] ?? "COMMON",
+                  }));
+                }}
               >
                 <option value="">— Chọn cương vị —</option>
-                {groups.map((g) => (
-                  <option key={g.khuVuc} value={g.khuVuc}>
-                    {g.khuVuc}
+                {positions.map((p) => (
+                  <option key={p.code} value={p.code}>
+                    {p.label}
                   </option>
                 ))}
               </select>
             </Field>
-            <Field label="Danh mục" required>
-              <select className={control} value={form.nhom} onChange={set("nhom")} disabled={!form.khuVuc}>
+            <Field label="Tổ máy" required>
+              <select className={control} value={form.machine} onChange={set("machine")}>
+                {machineOptions.map((unit) => (
+                  <option key={unit} value={unit}>
+                    {MACHINE_LABEL[unit as (typeof PCCC_MACHINES)[number]] ?? unit}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Danh mục" required span>
+              <select className={control} value={form.danhMuc} onChange={set("danhMuc")}>
                 <option value="">— Chọn danh mục —</option>
-                {nhomList.map((x) => (
+                {danhMucList.map((x) => (
                   <option key={x} value={x}>
                     {x}
                   </option>
                 ))}
-                <option value={NEW_NHOM}>+ Danh mục mới…</option>
+                <option value={NEW_DANH_MUC}>+ Danh mục mới…</option>
               </select>
             </Field>
-            {form.nhom === NEW_NHOM && (
+            {form.danhMuc === NEW_DANH_MUC && (
               <Field
                 label="Tên danh mục mới"
                 required
                 span
-                hint="Giữ đúng khuôn của sổ, kèm số La Mã ở đầu — ví dụ: IV. THIẾT BỊ NÂNG"
+                hint="Viết in hoa như các danh mục sẵn có, KHÔNG kèm số La Mã — hệ thống tự đánh số theo cương vị"
               >
-                <input className={control} value={form.nhomMoi} onChange={set("nhomMoi")} placeholder="IV. THIẾT BỊ NÂNG" />
+                <input className={control} value={form.danhMucMoi} onChange={set("danhMucMoi")} placeholder="THIẾT BỊ NÂNG" />
               </Field>
             )}
             <Field label="Tên thiết bị" required span>
@@ -228,7 +261,7 @@ export function TbycnnCreateDialog({
           <Button size="sm" variant="outline" onClick={() => onOpenChange(false)} disabled={pending}>
             Huỷ
           </Button>
-          <Button size="sm" onClick={() => onSubmit({ ...form, nhom, period })} disabled={pending || !ready}>
+          <Button size="sm" onClick={() => onSubmit({ ...form, danhMuc, period })} disabled={pending || !ready}>
             <Plus className="mr-1.5 size-4" />
             {pending ? "Đang thêm…" : "Thêm thiết bị"}
           </Button>

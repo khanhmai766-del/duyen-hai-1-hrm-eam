@@ -181,6 +181,28 @@ export function extractNhomSo(nhom?: string | null): number | null {
   return total || null;
 }
 
+const ROMAN_LITERALS: [number, string][] = [
+  [1000, "M"], [900, "CM"], [500, "D"], [400, "CD"], [100, "C"], [90, "XC"],
+  [50, "L"], [40, "XL"], [10, "X"], [9, "IX"], [5, "V"], [4, "IV"], [1, "I"],
+];
+
+/**
+ * 4 → "IV". Nghịch đảo của `extractNhomSo`, dùng khi ĐẶT TÊN một danh mục mới cho một
+ * cương vị: số La Mã trong `nhom` đánh riêng theo từng cương vị, thêm danh mục mà không
+ * đánh số thì dòng đó rơi xuống cuối sổ (xem TBYCNN_ORDER_BY).
+ */
+export function romanOf(value: number): string {
+  let remain = Math.max(1, Math.trunc(value));
+  let out = "";
+  for (const [num, literal] of ROMAN_LITERALS) {
+    while (remain >= num) {
+      out += literal;
+      remain -= num;
+    }
+  }
+  return out;
+}
+
 // ------------------------------------------------------- khoá trường khi sửa
 /**
  * Các trường LUÔN được sửa dù thiết bị đã có sẵn — thông tin "vận hành", cần cập nhật
