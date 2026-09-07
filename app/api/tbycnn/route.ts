@@ -67,7 +67,15 @@ export async function GET(req: NextRequest) {
     return ok(
       rows.map((row) => serializeEquipment(row, now, scope)),
       {
-        period: { label: period.label, isClosed: period.isClosed, closedAt: period.closedAt },
+        // `id` để giao diện gọi được route bật/tắt công tắc thêm thiết bị của ĐÚNG kỳ
+        // đang xem; `allowItemCreation` để nút "Thêm thiết bị" hiện/ẩn theo công tắc.
+        period: {
+          id: period.id,
+          label: period.label,
+          isClosed: period.isClosed,
+          closedAt: period.closedAt,
+          allowItemCreation: period.allowItemCreation,
+        },
         periods,
         // Có quyền ghi hay không, và ghi được cương vị nào — giao diện dùng để hiện menu
         // "Chỉnh sửa" và khoá sẵn ô ngoài phạm vi.
@@ -94,6 +102,14 @@ export async function POST(req: NextRequest) {
     const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
     const period = await resolvePeriod(body.period as string | undefined);
     if (period.isClosed) throw fail(`Kỳ ${period.label} đã chốt sổ, không thêm được thiết bị`, 409);
+    // Công tắc cấp kỳ (giống PCCC): sổ là danh mục theo hồ sơ nhà máy nên cửa thêm mới
+    // đóng theo mặc định, cấp quản lý chỉ mở trong lúc bổ sung danh mục.
+    if (!period.allowItemCreation) {
+      throw fail(
+        "Chức năng thêm thiết bị đang tắt. Cấp quản lý phải bật công tắc trong menu Chỉnh sửa trước khi thao tác.",
+        423
+      );
+    }
 
     const identity = identityData(body);
     if (!identity.khuVuc) throw fail("Thiếu cương vị quản lý", 400);

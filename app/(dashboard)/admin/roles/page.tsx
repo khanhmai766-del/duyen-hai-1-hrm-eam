@@ -624,6 +624,16 @@ const DEFAULT_PERMISSIONS: PermissionRow[] = [
     matrix: { ADMIN: "full", MANAGER: "manage", SUPERVISOR: "manage", TECHNICIAN: "personal", VIEWER: "none" },
   },
   {
+    id: "tbycnn-control-item-creation",
+    group: "Thiết bị YCNN về ATLĐ",
+    feature: "Bật/tắt chức năng thêm thiết bị YCNN",
+    note:
+      "Cho phép mở tạm thời cửa thêm thiết bị trong một kỳ, sau đó khoá lại để giữ bộ thiết bị chuẩn theo hồ sơ nhà máy. " +
+      "Quyền này chỉ điều khiển công tắc; người thêm thiết bị vẫn phải sửa được sổ và đúng phạm vi cương vị của mình. " +
+      "Kỳ mới luôn sinh ra ở trạng thái khoá. Mặc định chỉ Quản trị viên và Quản lý được sử dụng.",
+    matrix: { ADMIN: "full", MANAGER: "manage", SUPERVISOR: "none", TECHNICIAN: "none", VIEWER: "none" },
+  },
+  {
     id: "lims-sync",
     group: "Tiện ích",
     feature: "Đồng bộ kết quả phân tích dầu từ LIMS",

@@ -6,8 +6,10 @@ dùng lại NextAuth/RBAC, AuditLog và exceljs như module PCCC.
 
 Trạng thái: **pha 1 đã xong** — schema, import 709 thiết bị, API `/api/tbycnn/*`,
 trang `/tbycnn`, xuất Excel phía server, phân quyền `tbycnn-view` / `tbycnn-manage`.
-**Pha 2 chưa làm**: chốt sổ theo kỳ + xem kỳ đã chốt, thêm/xoá thiết bị trên giao
-diện (API đã có), xuất PDF có khối ký tên.
+Đã bổ sung sau đó: **thêm thiết bị trên giao diện** sau một công tắc cấp kỳ
+(`tbycnn-control-item-creation`, xem mục 4b) và xuất PDF.
+**Pha 2 chưa làm**: chốt sổ theo kỳ + xem kỳ đã chốt, nút xoá thiết bị trên giao diện
+(API đã có).
 
 ## 1. Mô hình dữ liệu
 
@@ -76,7 +78,8 @@ người dùng gọi thẳng route được.
 | Route | Quyền | Ghi chú |
 | --- | --- | --- |
 | `GET /api/tbycnn?period=` | `tbycnn-view` ≥ read | Trả **toàn bộ** thiết bị của kỳ một lượt; giao diện lọc/nhóm tại chỗ như bản cũ |
-| `POST /api/tbycnn` | `tbycnn-manage` ≥ personal | Thêm thiết bị (`sourceId = null`) |
+| `POST /api/tbycnn` | phạm vi cương vị + công tắc kỳ | Thêm thiết bị (`sourceId = null`); trả **423** khi công tắc đang khoá |
+| `POST /api/tbycnn/periods/[id]/item-creation` | `tbycnn-control-item-creation` ≥ manage | Bật/tắt công tắc thêm thiết bị của một kỳ |
 | `PUT /api/tbycnn/[id]` | `tbycnn-manage` ≥ personal | Chỉ nhận trường **có mặt** trong body; bỏ qua mọi trường bị khoá |
 | `DELETE /api/tbycnn/[id]` | `tbycnn-manage` ≥ personal | Chỉ thiết bị tự thêm, trong 30 ngày |
 | `POST /api/tbycnn/bulk` | phạm vi cương vị | Lưu MỘT LƯỢT các dòng vừa sửa ở chế độ "Sửa bảng" — một transaction, toàn bộ hoặc không gì cả |
@@ -89,6 +92,26 @@ Mọi ô Excel ghi kiểu **chuỗi** kể cả ngày và số — dữ liệu g
 `-`; để Excel tự suy kiểu là đổi nghĩa.
 
 Kỳ đã chốt (`isClosed`) chặn mọi ghi ở tầng API, sẵn cho pha 2.
+
+### 4b. Công tắc "Thêm thiết bị" (cấp kỳ)
+
+`TbycnnPeriod.allowItemCreation` — **mặc định khoá**, cùng luật với
+`PcccPeriod.allowItemCreation`. Sổ này là danh mục thiết bị theo hồ sơ nhà máy và cũng là
+thứ đem đi nộp; mở cửa thêm mới thường trực thì mỗi người thêm một dòng là hỏng bộ chuẩn.
+
+- Cấp quản lý bật trong lúc bổ sung danh mục rồi tắt lại — công tắc nằm trong menu
+  **Chỉnh sửa** của trang, dưới một vạch ngăn (hai mục trên tác động lên dòng đang xem,
+  công tắc thì tác động lên **cả kỳ và mọi người**).
+- Quyền `tbycnn-control-item-creation` chỉ điều khiển **công tắc**; người thêm thiết bị
+  vẫn phải qua `resolveTbycnnWriteScope` và đúng cương vị của mình.
+- Kỳ mới sinh ra luôn khoá: `lib/tbycnn-rollover.ts` không chép cờ này sang kỳ sau.
+- Cột DB thêm bằng `prisma/manual/add-tbycnn-item-creation.sql` (idempotent).
+
+Hộp thoại thêm (`components/tbycnn/TbycnnCreateDialog.tsx`) bắt **chọn** cương vị và danh
+mục từ dữ liệu đang có thay vì gõ tự do: `khuVuc` (`Máy nghiền S1`) và `nhom`
+(`II. VAN AN TOÀN`) là khoá gộp nhóm của cả sổ lẫn bản Excel/PDF, lệch một dấu cách là
+sinh ra một nhóm mới trông y hệt nhóm cũ. Vẫn có cửa nhập danh mục mới khi thật sự cần.
+STT trong nhóm do client tính (max + 1) — thiếu STT thì dòng mới dồn lên đầu nhóm.
 
 ### Phạm vi ghi / ký theo cương vị
 
@@ -241,7 +264,7 @@ dành cho cương vị và danh mục.
 
 - Chốt sổ theo kỳ + màn hình xem kỳ đã chốt (`TbycnnPeriod.isClosed` đã sẵn ở schema
   và API; thiếu route `rollover` và bộ chọn kỳ trên giao diện).
-- Nút thêm / xoá thiết bị trên giao diện — API đã có, chưa gắn nút.
+- Nút **xoá** thiết bị trên giao diện — API đã có, chưa gắn nút (thêm thì đã xong, mục 4b).
 - Xuất PDF khổ A4 ngang có khối ký tên (bản cũ in bằng `window.print()`); nếu làm nên
   dùng `lib/pccc-pdf-kit.ts` thay vì in từ trình duyệt.
 - Map `deviceSeq` sang cây thiết bị `EquipmentNode`.

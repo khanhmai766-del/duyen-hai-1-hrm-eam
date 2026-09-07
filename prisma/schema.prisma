@@ -2583,6 +2583,12 @@ model TbycnnPeriod {
   monthNo  Int // 1..12
   isClosed Boolean @default(false)
 
+  /// Công tắc CẤP KỲ mở cửa thêm thiết bị, cùng luật với `PcccPeriod.allowItemCreation`.
+  /// Mặc định KHOÁ, và kỳ mới sinh ra cũng khoá (lib/tbycnn-rollover.ts không chép cờ
+  /// này) — sổ là danh mục thiết bị theo hồ sơ nhà máy, mở thường trực thì mỗi người
+  /// thêm một dòng là hỏng bộ chuẩn.
+  allowItemCreation Boolean @default(false)
+
   closedAt   DateTime?
   closedById String? // id User (không FK — đã có audit log); null = hệ thống tự chốt
 

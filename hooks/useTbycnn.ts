@@ -85,6 +85,10 @@ export interface TbycnnPeriodInfo {
   label: string;
   isClosed: boolean;
   closedAt: string | null;
+  /** Chỉ có ở KỲ ĐANG XEM (`meta.period`); danh sách `meta.periods` không kèm. */
+  id?: string;
+  /** Công tắc cấp kỳ cho phép thêm thiết bị — xem model TbycnnPeriod. */
+  allowItemCreation?: boolean;
 }
 
 const KEY = ["tbycnn"] as const;
@@ -119,11 +123,33 @@ export function useUpdateTbycnn() {
   });
 }
 
+/**
+ * Thêm thiết bị. Body để mở (`Record`) chứ không phải `Partial<TbycnnEquipment>`: biểu
+ * mẫu gửi số dưới dạng CHUỖI và kèm vài khoá ngoài model (`period`), còn server tự ép
+ * kiểu trong `identityData`/`operationalData`.
+ */
 export function useCreateTbycnn() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (payload: Partial<TbycnnEquipment>) =>
+    mutationFn: (payload: Record<string, unknown>) =>
       apiMutate<TbycnnEquipment>("/api/tbycnn", "POST", payload),
+    onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
+  });
+}
+
+/**
+ * Bật/tắt công tắc thêm thiết bị của một kỳ. Trả về kỳ sau khi đổi để chỗ gọi báo đúng
+ * trạng thái mới thay vì đoán theo giá trị vừa gửi đi.
+ */
+export function useToggleTbycnnItemCreation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, enabled }: { id: string; enabled: boolean }) =>
+      apiMutate<{ id: string; label: string; allowItemCreation: boolean }>(
+        `/api/tbycnn/periods/${id}/item-creation`,
+        "POST",
+        { enabled }
+      ),
     onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
   });
 }

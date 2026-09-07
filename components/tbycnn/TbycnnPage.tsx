@@ -25,9 +25,11 @@ import {
   FileText,
   Filter,
   Loader2,
+  Lock,
   Download,
   Pencil,
   PenLine,
+  Plus,
   Save,
   ShieldAlert,
   Wrench,
@@ -86,13 +88,16 @@ import {
   downloadTbycnnExcel,
   downloadTbycnnPdf,
   fetchTbycnnPdfPreview,
+  useCreateTbycnn,
   useSaveTbycnnBulk,
   useTbycnn,
   useTbycnnSign,
   useTbycnnSignPreview,
+  useToggleTbycnnItemCreation,
   type TbycnnEquipment,
   type TbycnnSignPreview,
 } from "@/hooks/useTbycnn";
+import { useRbacAccess } from "@/hooks/useRbacAccess";
 import {
   Dialog,
   DialogContent,
@@ -101,6 +106,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { TbycnnSignDialog } from "@/components/tbycnn/TbycnnSignDialog";
+import { TbycnnCreateDialog, type TbycnnCreateGroup } from "@/components/tbycnn/TbycnnCreateDialog";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 
 const ALL = "__all__";
@@ -278,6 +284,17 @@ export default function TbycnnPage() {
   const [saveConfirmOpen, setSaveConfirmOpen] = useState(false);
   const saveBulk = useSaveTbycnnBulk();
 
+  /**
+   * THÊM THIẾT BỊ — cửa đóng theo mặc định, cấp quản lý mở bằng công tắc trong menu
+   * Chỉnh sửa. Sổ này là danh mục theo hồ sơ nhà máy: mở thường trực thì mỗi người thêm
+   * một dòng là hỏng bộ chuẩn, mà bản Excel/PDF nộp lên lại lấy đúng danh mục này.
+   */
+  const [createOpen, setCreateOpen] = useState(false);
+  const createEquipment = useCreateTbycnn();
+  const toggleItemCreation = useToggleTbycnnItemCreation();
+  const { can } = useRbacAccess();
+  const canControlItemCreation = can("tbycnn-control-item-creation", ["manage", "full"]);
+
   const [signOpen, setSignOpen] = useState(false);
   const [signPreview, setSignPreview] = useState<TbycnnSignPreview | null>(null);
   const previewSign = useTbycnnSignPreview();
@@ -287,6 +304,27 @@ export default function TbycnnPage() {
 
   const rows = useMemo(() => data?.rows ?? [], [data]);
   const canManage = Boolean(data?.canManage);
+  const period = data?.period;
+  const itemCreationEnabled = Boolean(period?.allowItemCreation) && !period?.isClosed && canManage;
+
+  /**
+   * Cương vị + danh mục để chọn khi thêm thiết bị, dựng từ CHÍNH các dòng người dùng
+   * được ghi. Cương vị chưa có dòng nào trong kỳ sẽ không xuất hiện — `khuVuc` mang hậu
+   * tố tổ máy ("Máy nghiền S1") nên không suy ngược ra được từ mã cương vị, mà gõ tay
+   * thì lệch một dấu cách là sinh ra một nhóm mới trông y hệt nhóm cũ.
+   */
+  const createGroups = useMemo<TbycnnCreateGroup[]>(() => {
+    const map = new Map<string, Set<string>>();
+    for (const r of rows) {
+      if (!r.canWrite) continue;
+      const nhoms = map.get(r.khuVuc) ?? new Set<string>();
+      nhoms.add(r.nhom);
+      map.set(r.khuVuc, nhoms);
+    }
+    return [...map]
+      .map(([khuVuc, nhoms]) => ({ khuVuc, nhoms: [...nhoms].sort((a, b) => a.localeCompare(b, "vi")) }))
+      .sort((a, b) => a.khuVuc.localeCompare(b.khuVuc, "vi"));
+  }, [rows]);
 
   /**
    * Danh sách cương vị của ô lọc: mỗi CHỨC DANH một mục, không nhân đôi theo tổ máy.
@@ -456,6 +494,44 @@ export default function TbycnnPage() {
   function beginEdit() {
     setDraft({});
     setTableEditing(true);
+  }
+
+  function submitCreate(body: Record<string, unknown>) {
+    const khuVuc = String(body.khuVuc ?? "");
+    const nhom = String(body.nhom ?? "");
+    // STT trong nhóm do CLIENT tính: sổ xếp theo (cương vị → số La Mã → STT), thiếu STT
+    // thì dòng mới dồn lên đầu nhóm chứ không nằm cuối như người thêm mong đợi. Tính từ
+    // các dòng đang tải sẵn nên không tốn thêm một vòng gọi mạng.
+    const nextTt =
+      rows
+        .filter((r) => r.khuVuc === khuVuc && r.nhom === nhom)
+        .reduce((max, r) => Math.max(max, r.tt ?? 0), 0) + 1;
+    createEquipment.mutate(
+      { ...body, tt: nextTt },
+      {
+        onSuccess: (created) => {
+          setCreateOpen(false);
+          toast.success(`Đã thêm "${created.tenThietBi}" vào ${khuVuc}`);
+        },
+        onError: (e: Error) => toast.error(e.message),
+      }
+    );
+  }
+
+  function toggleCreation() {
+    if (!period?.id) return;
+    toggleItemCreation.mutate(
+      { id: period.id, enabled: !period.allowItemCreation },
+      {
+        onSuccess: (updated) =>
+          toast.success(
+            updated.allowItemCreation
+              ? "Đã mở chức năng thêm thiết bị YCNN"
+              : "Đã khoá chức năng thêm thiết bị YCNN"
+          ),
+        onError: (e: Error) => toast.error(e.message),
+      }
+    );
   }
 
   function cancelEdit() {
@@ -644,6 +720,62 @@ export default function TbycnnPage() {
                     </span>
                   </span>
                 </DropdownMenuItem>
+
+                {/* CÔNG TẮC CẤP KỲ, tách khỏi hai mục trên bằng vạch ngăn — cùng khuôn
+                    với menu Chỉnh sửa của PCCC: "Sửa bảng" và "Ký tên" tác động lên các
+                    dòng đang xem, còn cái này mở/khoá cửa thêm thiết bị cho CẢ KỲ và cho
+                    mọi người, để lẫn vào nhau là bấm nhầm.
+
+                    Người không đủ quyền vẫn THẤY mục này (mờ đi) để biết vì sao mình
+                    không thêm được thiết bị, thay vì đi hỏi khắp nơi. */}
+                {period && !period.isClosed && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      disabled={!canControlItemCreation || toggleItemCreation.isPending}
+                      // Không đóng menu sau khi bấm: đây là công tắc, người bấm cần THẤY
+                      // nó lật sang trạng thái mới ngay tại chỗ.
+                      onSelect={(e) => {
+                        e.preventDefault();
+                        toggleCreation();
+                      }}
+                      title={
+                        canControlItemCreation
+                          ? "Cấp quản lý bật trong lúc bổ sung danh mục, sau đó tắt để giữ bộ thiết bị chuẩn"
+                          : "Chỉ cấp quản lý được bật hoặc tắt chức năng thêm thiết bị"
+                      }
+                      className="gap-2"
+                    >
+                      {period.allowItemCreation ? (
+                        <Plus className="size-4 text-emerald-600" />
+                      ) : (
+                        <Lock className="size-4 text-slate-400" />
+                      )}
+                      <span className="min-w-0 flex-1">
+                        <span className="block font-medium">Thêm thiết bị</span>
+                        <span className="block text-[11px] text-muted-foreground">
+                          {period.allowItemCreation
+                            ? "Đang bật — thêm được thiết bị vào kỳ"
+                            : "Đang khoá — giữ bộ thiết bị chuẩn"}
+                        </span>
+                      </span>
+                      <span
+                        aria-hidden="true"
+                        className={cn(
+                          "relative h-5 w-9 shrink-0 rounded-full transition-colors",
+                          period.allowItemCreation ? "bg-emerald-600" : "bg-slate-300"
+                        )}
+                      >
+                        <span
+                          className={cn(
+                            "absolute top-0.5 size-4 rounded-full bg-white shadow-sm transition-transform",
+                            period.allowItemCreation ? "translate-x-[18px]" : "translate-x-0.5"
+                          )}
+                        />
+                      </span>
+                    </DropdownMenuItem>
+                  </>
+                )}
               </DropdownMenuContent>
             </DropdownMenu>
           ))}
@@ -867,11 +999,20 @@ export default function TbycnnPage() {
           filtered={hasFilter}
           onPageChange={setPage}
           toolbarExtra={
-            sort.key !== SOURCE_ORDER ? (
-              <Button variant="ghost" size="sm" onClick={() => setSort(DEFAULT_SORT)}>
-                Về thứ tự hồ sơ gốc
-              </Button>
-            ) : null
+            <>
+              {/* Chỉ hiện khi công tắc đang bật — nút xám bấm không được chỉ tổ gây hỏi;
+                  ai bật được thì bật ngay trong menu Chỉnh sửa cách đó một bước. */}
+              {itemCreationEnabled && (
+                <Button variant="outline" size="sm" onClick={() => setCreateOpen(true)}>
+                  <Plus className="mr-1.5 size-4" /> Thêm thiết bị
+                </Button>
+              )}
+              {sort.key !== SOURCE_ORDER && (
+                <Button variant="ghost" size="sm" onClick={() => setSort(DEFAULT_SORT)}>
+                  Về thứ tự hồ sơ gốc
+                </Button>
+              )}
+            </>
           }
         >
           <Table className="min-w-[1540px]" wrapperClassName={TABLE_SCROLLER}>
@@ -1147,6 +1288,29 @@ export default function TbycnnPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <TbycnnCreateDialog
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        period={period?.label ?? "—"}
+        groups={createGroups}
+        // Đang lọc đúng một cương vị thì điền sẵn cương vị đó: người dùng gần như luôn
+        // thêm thiết bị cho chính nhóm mình vừa mở ra xem.
+        defaultKhuVuc={
+          cuongViCode === ALL
+            ? undefined
+            : (() => {
+                const matched = [
+                  ...new Set(
+                    rows.filter((r) => (r.cuongViCode ?? r.khuVuc) === cuongViCode && r.canWrite).map((r) => r.khuVuc)
+                  ),
+                ];
+                return matched.length === 1 ? matched[0] : undefined;
+              })()
+        }
+        pending={createEquipment.isPending}
+        onSubmit={submitCreate}
+      />
 
       <TbycnnSignDialog
         open={signOpen}

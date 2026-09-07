@@ -30,6 +30,9 @@ import {
 export const TBYCNN_PERMISSION = {
   view: "tbycnn-view",
   manage: "tbycnn-manage",
+  /// Chỉ điều khiển CÔNG TẮC cấp kỳ, không phải quyền thêm thiết bị: người thêm vẫn
+  /// phải qua `resolveTbycnnWriteScope` và đúng cương vị.
+  controlItemCreation: "tbycnn-control-item-creation",
 } as const;
 
 export const TBYCNN_READ_LEVELS = ["read", "personal", "manage", "full"] as const;
