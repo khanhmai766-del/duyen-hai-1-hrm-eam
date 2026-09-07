@@ -65,7 +65,7 @@ const STATUS: Record<string, { label: string; c: string }> = {
   VHV_LANH_VAT_TU: { label: "Chờ VHV lãnh vật tư", c: "#2563eb" },
   NHAN_TU_HIEN_CO: { label: "Nhận vật tư hiện có", c: "#0891b2" },
   NHAN_VAT_TU: { label: "Xác nhận vật tư lãnh", c: "#0891b2" },
-  CHO_PHIEU_YCSC: { label: "Xác nhận vật tư lãnh", c: "#0891b2" },
+  CHO_PHIEU_YCSC: { label: "Đã lãnh vật tư · Chờ xử lý SYC", c: "#0891b2" },
   SU_DUNG_VAT_TU: { label: "Sử dụng vật tư", c: "#6d28d9" },
   CHO_NGHIEM_THU: { label: "Chờ nghiệm thu", c: C.warn },
   CHO_TRA_VO: { label: "Chờ xác nhận trả", c: C.warn },
@@ -1921,7 +1921,10 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
 	            const cur = s.key === flowStatus;
 	            const recoveryPending = s.key === "SU_DUNG_VAT_TU" && !!t.usedAt && materialTicketRequiresRecovery(t) && !t.recoveryReturnedAt;
 	            const reviewable = done || (t.type === "UNG" && s.key === "CHO_HOAN_THIEN" && !!t.bbktNumber);
-	            const caption = t.type === "DE_XUAT" && t.status === "CHO_THONG_KE_XUAT_BIEN_BAN" && s.key === "CHO_NGHIEM_THU"
+	            const waitingForRepairRequest = t.type === "DE_XUAT" && t.status === "CHO_PHIEU_YCSC" && cur;
+	            const caption = waitingForRepairRequest
+	              ? "Cần tạo hoặc gắn SYC để tiếp tục"
+	              : t.type === "DE_XUAT" && t.status === "CHO_THONG_KE_XUAT_BIEN_BAN" && s.key === "CHO_NGHIEM_THU"
 	              ? "Thống kê · Chờ xuất BBNT D-Office"
 	              : s.key === "CHO_PHIEU__XUAT_KHO" && t.proposalReceiverName
 	              ? "Xem lại"
@@ -1929,7 +1932,7 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
 	            return (
 	              <button type="button" key={s.key} disabled={!reviewable} onClick={() => setReviewStep(s.key)} className={`step step-review ${done && !recoveryPending ? "done" : ""} ${recoveryPending ? "recovery-pending" : ""} ${cur ? "cur" : ""}`}>
 	                {recoveryPending ? <AlertTriangle size={17} /> : done ? <CircleCheck size={17} /> : cur ? <CircleDot size={17} /> : <Circle size={17} />}
-	                <div><b>{s.label}</b><span>{recoveryPending ? "Chưa xác nhận trả vật tư thu hồi · Xem lại" : caption}</span></div>
+	                <div><b>{waitingForRepairRequest ? "Đã lãnh vật tư · Chờ SYC" : s.label}</b><span>{recoveryPending ? "Chưa xác nhận trả vật tư thu hồi · Xem lại" : caption}</span></div>
 	              </button>
 	            );
 	          })}
@@ -2468,6 +2471,14 @@ function RepairRequestSection({ t, viewer }: { t: MaterialTicket; viewer: Ticket
         <div className="document-downloads-head">
           <span className="document-downloads-label"><Wrench size={14} /> Số yêu cầu sửa chữa</span>
         </div>
+        {t.type === "DE_XUAT" && t.status === "CHO_PHIEU_YCSC" && (
+          <div className="repair-request-guidance">
+            <b><CircleCheck size={15} /> Đã xác nhận lãnh vật tư</b>
+            <p>Để chuyển sang bước <strong>Xác nhận vật tư sử dụng</strong>, cần liên kết số yêu cầu sửa chữa (SYC).</p>
+            <p>Chọn <strong>Ra SYC sửa chữa</strong> nếu chưa có, hoặc <strong>Gắn SYC đã có</strong> nếu đã lập SYC.</p>
+            {!canLinkDefect && <p>Nhờ người được phân quyền xử lý SYC cho phiếu này để tiếp tục.</p>}
+          </div>
+        )}
         <div className="document-download-links">
           {seed.isLoading ? (
             <span className="note"><Clock size={13} /> Đang kiểm tra điều kiện ra SYC…</span>
@@ -4564,6 +4575,10 @@ const CSS = `
 .pdf{display:inline-flex;align-items:center;gap:7px;border:1.5px solid ${C.navy};color:${C.navy};background:#fff;border-radius:10px;padding:9px 13px;font-weight:600;font-size:13px;cursor:pointer;margin-bottom:12px;text-decoration:none;}
 .repair-request-skip{border-color:#94a3b8;color:#64748b;background:#fff;}
 .repair-request-skip:disabled{opacity:.55;cursor:not-allowed;}
+.repair-request-guidance{padding:12px;border:1px solid #a5ddd2;border-radius:10px;background:#f0fdfa;color:#134e4a;font-size:13px;line-height:1.6;}
+.repair-request-guidance>b{display:flex;align-items:center;gap:6px;color:#166534;}
+.repair-request-guidance>b svg{flex-shrink:0;}
+.repair-request-guidance p{margin:8px 0 0;}
 .pdf-inline{color:${C.navy};font-weight:700;text-decoration:underline;}
 .lot-photo-preview-trigger{border:0;background:transparent;padding:0;font:inherit;cursor:pointer;}
 .lot-photo-preview-trigger:hover{color:${C.accent};}
