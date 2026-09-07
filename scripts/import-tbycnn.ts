@@ -56,6 +56,7 @@ function mapRow(raw: SourceRecord, periodId: string) {
   const kdTiepTheoTextRaw = trimOrNull(raw.thoiGianKdTiepTheo);
   // Mã lỗi Excel còn sót (#VALUE!…) coi như ô trống — bản cũ cũng vậy.
   const kdTiepTheoText = isExcelErrorMarker(kdTiepTheoTextRaw) ? null : kdTiepTheoTextRaw;
+  const chuKyThuNam = toNumberOrNull(raw.chuKyThu);
 
   return {
     periodId,
@@ -76,7 +77,10 @@ function mapRow(raw: SourceRecord, periodId: string) {
     viTri: trimOrNull(raw.viTri),
     chucDanhQuanLy: trimOrNull(raw.chucDanhQuanLy),
     donViQuanLy: trimOrNull(raw.donViQuanLy),
-    chuKyThu: toNumberOrNull(raw.chuKyThu),
+    // Tệp nguồn ghi chu kỳ thử theo NĂM, cột trong DB nay theo THÁNG (xem
+    // prisma/manual/convert-tbycnn-chu-ky-thu-to-months.sql) — quy đổi ngay tại đây để
+    // chạy lại script nhập không kéo dữ liệu về đơn vị cũ.
+    chuKyThu: chuKyThuNam == null ? null : chuKyThuNam * 12,
     kdGanNhat: parseVNDate(kdGanNhatText),
     kdGanNhatText,
     soBbkd: trimOrNull(raw.soBBKD),

@@ -19,6 +19,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { MACHINE_LABEL, PCCC_MACHINES } from "@/lib/pccc-position";
+import { computeDefaultKdTiepTheo, formatVNDate } from "@/lib/tbycnn";
 
 /** Một chức danh của danh mục chuẩn, kèm các tổ máy mà chức danh đó có mặt. */
 export type TbycnnCreatePosition = { code: string; label: string; units: readonly string[] };
@@ -117,6 +118,14 @@ export function TbycnnCreateDialog({
   const machineOptions = positions.find((p) => p.code === form.cuongViCode)?.units ?? PCCC_MACHINES;
   const danhMuc = form.danhMuc === NEW_DANH_MUC ? form.danhMucMoi.trim() : form.danhMuc;
   const ready = Boolean(form.cuongViCode && danhMuc && form.tenThietBi.trim());
+
+  // Ô lịch trả về "yyyy-mm-dd"; sổ thì lưu chữ "dd/mm/yyyy". Đổi qua lại ngay tại đây để
+  // phần còn lại của biểu mẫu không phải biết hai định dạng.
+  const kdGanNhat = form.kdGanNhat ? new Date(`${form.kdGanNhat}T00:00:00Z`) : null;
+  const kdTiepTheo = computeDefaultKdTiepTheo(
+    kdGanNhat && !Number.isNaN(kdGanNhat.getTime()) ? kdGanNhat : null,
+    Number(form.chuKyThu) || null
+  );
 
   return (
     <Dialog open={open} onOpenChange={(next) => !pending && onOpenChange(next)}>
@@ -217,17 +226,43 @@ export function TbycnnCreateDialog({
           </Section>
 
           <Section title="Kiểm định">
-            <Field label="Chu kỳ thử (năm)">
-              <input type="number" min="0" step="0.5" className={control} value={form.chuKyThu ?? ""} onChange={set("chuKyThu")} />
+            <Field label="Chu kỳ thử (tháng)" hint="Ví dụ: 12 · 24 · 36 tháng">
+              <input
+                type="number"
+                min="0"
+                step="1"
+                className={control}
+                value={form.chuKyThu ?? ""}
+                onChange={set("chuKyThu")}
+                placeholder="24"
+              />
             </Field>
             <Field label="Số biên bản kiểm định">
               <input className={control} value={form.soBbkd ?? ""} onChange={set("soBbkd")} />
             </Field>
-            <Field label="Kiểm định gần nhất" hint="Nhập dd/mm/yyyy, hoặc ghi nguyên văn khi không có ngày">
-              <input className={control} value={form.kdGanNhatText ?? ""} onChange={set("kdGanNhatText")} placeholder="19/05/2025" />
+            {/* Lịch chọn ngày thay cho ô chữ tự do. Ô chữ chỉ cần cho THIẾT BỊ CŨ có
+                những giá trị như "Tem bị mờ" / "06/26"; thiết bị vừa thêm thì hoặc có
+                ngày kiểm định thật, hoặc để trống. */}
+            <Field label="Kiểm định gần nhất" hint="Chọn từ lịch; để trống nếu chưa kiểm định">
+              <input type="date" className={control} value={form.kdGanNhat ?? ""} onChange={set("kdGanNhat")} />
             </Field>
-            <Field label="Kiểm định tiếp theo" hint="Để trống thì hệ thống tự tính = KĐ gần nhất + chu kỳ thử">
-              <input className={control} value={form.kdTiepTheoText ?? ""} onChange={set("kdTiepTheoText")} />
+            <Field
+              label="Kiểm định tiếp theo"
+              hint={
+                kdTiepTheo
+                  ? "Tự tính = KĐ gần nhất + chu kỳ thử"
+                  : "Nhập KĐ gần nhất và chu kỳ thử để hệ thống tự tính"
+              }
+            >
+              {/* CHỈ ĐỌC: đây là giá trị dẫn xuất. Server tính lại bằng chính hàm này
+                  (`computeDefaultKdTiepTheo`) khi ghi, nên ô này là bản xem trước chứ
+                  không phải một đường nhập liệu thứ hai có thể lệch. */}
+              <input
+                readOnly
+                className={`${control} cursor-not-allowed bg-slate-50 text-slate-600`}
+                value={kdTiepTheo ? formatVNDate(kdTiepTheo) : "—"}
+                tabIndex={-1}
+              />
             </Field>
             <Field label="Đơn vị kiểm định" span>
               <input className={control} value={form.donViKd ?? ""} onChange={set("donViKd")} />
@@ -260,7 +295,22 @@ export function TbycnnCreateDialog({
           <Button size="sm" variant="outline" onClick={() => onOpenChange(false)} disabled={pending}>
             Huỷ
           </Button>
-          <Button size="sm" onClick={() => onSubmit({ ...form, danhMuc, period })} disabled={pending || !ready}>
+          <Button
+            size="sm"
+            onClick={() => {
+              // Bỏ hai khoá chỉ dùng trong biểu mẫu (`kdGanNhat` dạng ISO, `danhMucMoi`)
+              // và gửi đúng tên trường của sổ. KHÔNG gửi `kdTiepTheoText`: để trống thì
+              // server tự tính, một chỗ tính duy nhất.
+              const { kdGanNhat: _iso, danhMucMoi: _moi, ...rest } = form;
+              onSubmit({
+                ...rest,
+                danhMuc,
+                kdGanNhatText: kdGanNhat ? formatVNDate(kdGanNhat) : "",
+                period,
+              });
+            }}
+            disabled={pending || !ready}
+          >
             <Plus className="mr-1.5 size-4" />
             {pending ? "Đang thêm…" : "Thêm thiết bị"}
           </Button>

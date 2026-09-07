@@ -49,7 +49,7 @@ const COLS: { key: string; label: string; w: number; align?: "center" }[] = [
   { key: "thongSoKyThuat", label: "Thông số kỹ thuật", w: 116 },
   { key: "viTri", label: "Vị trí", w: 54 },
   { key: "chucDanhQuanLy", label: "Chức danh quản lý", w: 48 },
-  { key: "chuKyThu", label: "Chu kỳ thử (năm)", w: 22, align: "center" },
+  { key: "chuKyThu", label: "Chu kỳ thử (tháng)", w: 22, align: "center" },
   { key: "kdGanNhat", label: "Thời gian KĐ gần nhất", w: 40, align: "center" },
   { key: "soBbkd", label: "Số BBKĐ", w: 42 },
   { key: "donViKd", label: "Đơn vị KĐ", w: 54 },

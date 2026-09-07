@@ -66,12 +66,30 @@ npx prisma db execute --file prisma/sql/tbycnn-init.sql --schema prisma/schema.p
 | `computeTinhTrang` | Tình trạng **suy ra** từ `soLuongKhaDung` / `soLuongKhongKhaDung`, không lưu chuỗi. Một dòng `soLuong > 1` có thể vừa có cái tốt vừa có cái hỏng → `"3 khả dụng, 2 không khả dụng"`. |
 | `statusMatch` | Lọc theo tình trạng **không** so khớp nguyên văn: lọc "Khả dụng" bắt cả dòng hỗn hợp, nên dòng hỗn hợp xuất hiện ở cả hai kết quả lọc. |
 | `kdStatus` | `overdue` / `soon` (≤ 90 ngày) / `ok`; không có ngày hợp lệ → `null` ("chưa có hạn"). |
-| `computeDefaultKdTiepTheo` | Bỏ trống "KĐ tiếp theo" → tự tính = KĐ gần nhất + chu kỳ thử (năm). Thiếu dữ liệu thì để trống, **không** ghi đè giá trị đặc biệt như "Không có". |
+| `computeDefaultKdTiepTheo` | Bỏ trống "KĐ tiếp theo" → tự tính = KĐ gần nhất + chu kỳ thử tính bằng **THÁNG**. Cuối tháng thì **kẹp** về ngày cuối tháng đích (31/01 + 1 tháng = 28/02, năm nhuận 29/02) chứ không để `Date` cuộn sang 03/03. Thiếu dữ liệu thì để trống, **không** ghi đè giá trị đặc biệt như "Không có". |
 | `TBYCNN_EDITABLE_ON_EDIT` | Chỉ nhóm "vận hành" được sửa khi thiết bị đã có; thông tin gốc bị khoá. `maHieu`/`kks` cho bổ sung nếu đang trống. |
 | `canDeleteEquipment` | Thiết bị gốc (`sourceId != null`) **không bao giờ** xoá được; thiết bị tự thêm chỉ xoá được trong 30 ngày. |
 
 Quy tắc khoá trường và giới hạn xoá được **cưỡng chế ở API**, không chỉ ở giao diện —
 người dùng gọi thẳng route được.
+
+### Chu kỳ thử tính bằng THÁNG (đổi 2026-09-07)
+
+`chuKyThu` trước đây là **năm**; hồ sơ có thiết bị chu kỳ 6 và 18 tháng nên đơn vị năm
+không diễn tả được. Đổi bằng `prisma/manual/convert-tbycnn-chu-ky-thu-to-months.sql`
+(nhân 12 — dữ liệu nguồn chỉ có 1/2/3 năm nên chính xác tuyệt đối). Tệp SQL **được ăn cả
+ngã về không**: mệnh đề `NOT EXISTS (… chuKyThu > 6)` chốt điều kiện "cả bảng còn theo
+năm", nên chạy lại lần hai không đổi dòng nào và không thể có trạng thái nửa năm nửa tháng.
+
+Đổi kèm: nhãn cột ở bảng (`Chu kỳ (tháng)`), file Excel và bản in PDF (`Chu kỳ thử
+(tháng)`), và `scripts/import-tbycnn.ts` (tệp nguồn vẫn ghi năm → nhân 12 lúc nạp, chạy
+lại script không kéo dữ liệu về đơn vị cũ).
+
+Trên biểu mẫu thêm thiết bị: **Kiểm định gần nhất** là ô lịch (`<input type="date">`,
+đổi qua lại `yyyy-mm-dd` ↔ `dd/mm/yyyy` ngay trong hộp thoại), **Kiểm định tiếp theo** là
+ô **chỉ đọc** hiện bản xem trước — biểu mẫu không gửi `kdTiepTheoText` nên server vẫn là
+chỗ tính duy nhất. Ô chữ tự do cho các giá trị như "Tem bị mờ" chỉ còn ở chế độ **Sửa
+bảng** dành cho thiết bị cũ.
 
 ## 4. API
 

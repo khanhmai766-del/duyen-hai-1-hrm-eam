@@ -2642,7 +2642,7 @@ model TbycnnEquipment {
   donViQuanLy    String?
 
   // -- Thông tin kiểm định (luôn cho sửa) ------------------------------------
-  chuKyThu       Float? // chu kỳ thử, đơn vị NĂM
+  chuKyThu       Float? // chu kỳ thử, đơn vị THÁNG (đổi từ năm 2026-09-07, xem prisma/manual/convert-tbycnn-chu-ky-thu-to-months.sql)
   kdGanNhat      DateTime?
   kdGanNhatText  String?
   soBbkd         String?

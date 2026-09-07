@@ -57,15 +57,19 @@ export function isExcelErrorMarker(value?: string | null) {
 }
 
 /**
- * Mặc định "KĐ tiếp theo" = "KĐ gần nhất" + chu kỳ thử (năm, làm tròn xuống).
+ * Mặc định "KĐ tiếp theo" = "KĐ gần nhất" + chu kỳ thử tính bằng THÁNG.
  * Thiếu dữ liệu để tính thì trả null — KHÔNG ghi đè các giá trị đặc biệt như "Không có".
  */
-export function computeDefaultKdTiepTheo(ganNhat: Date | null, chuKyThu: number | null): Date | null {
-  if (!ganNhat || !chuKyThu || chuKyThu <= 0) return null;
-  const years = Math.floor(chuKyThu);
-  if (!years) return null;
-  const next = new Date(ganNhat.getTime());
-  next.setUTCFullYear(next.getUTCFullYear() + years);
+export function computeDefaultKdTiepTheo(ganNhat: Date | null, chuKyThuThang: number | null): Date | null {
+  if (!ganNhat || !chuKyThuThang || chuKyThuThang <= 0) return null;
+  const months = Math.round(chuKyThuThang);
+  if (!months) return null;
+  const day = ganNhat.getUTCDate();
+  // Dựng ngày 1 của tháng đích rồi mới đặt ngày: `setUTCMonth` trực tiếp sẽ cuộn tràn —
+  // 31/01 + 1 tháng ra 03/03 vì tháng 2 không có ngày 31. Ở đây kẹp về ngày cuối tháng.
+  const next = new Date(Date.UTC(ganNhat.getUTCFullYear(), ganNhat.getUTCMonth() + months, 1));
+  const lastDay = new Date(Date.UTC(next.getUTCFullYear(), next.getUTCMonth() + 1, 0)).getUTCDate();
+  next.setUTCDate(Math.min(day, lastDay));
   return next;
 }
 
@@ -253,7 +257,7 @@ export const TBYCNN_COLUMNS: TbycnnColumn[] = [
   { key: "thongSoKyThuat", label: "Thông số kỹ thuật", width: 220, clamp: true },
   { key: "viTri", label: "Vị trí", width: 150, clamp: true },
   { key: "chucDanhQuanLy", label: "Chức danh quản lý", width: 150, clamp: true },
-  { key: "chuKyThu", label: "Chu kỳ thử (năm)", width: 84, align: "center" },
+  { key: "chuKyThu", label: "Chu kỳ thử (tháng)", width: 84, align: "center" },
   { key: "kdGanNhat", label: "KĐ gần nhất", width: 110, align: "center" },
   { key: "soBbkd", label: "Số BBKĐ", width: 120, clamp: true },
   { key: "donViKd", label: "Đơn vị KĐ", width: 170, clamp: true },

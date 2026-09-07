@@ -1070,7 +1070,7 @@ export default function TbycnnPage() {
                   <SortHeader label="KKS" sortKey="kks" sort={sort} onSort={toggleSort} align="left" />
                 </TableHead>
                 <TableHead className={cn(TH_NAVY, "w-[85px]")}>
-                  <SortHeader label="Chu kỳ thử" sortKey="chuKyThu" sort={sort} onSort={toggleSort} />
+                  <SortHeader label="Chu kỳ (tháng)" sortKey="chuKyThu" sort={sort} onSort={toggleSort} />
                 </TableHead>
                 <TableHead className={cn(TH_NAVY, "w-[115px]")}>
                   <SortHeader label="KĐ gần nhất" sortKey="kdGanNhat" sort={sort} onSort={toggleSort} />
