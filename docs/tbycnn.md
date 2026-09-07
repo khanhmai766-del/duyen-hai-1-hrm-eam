@@ -200,19 +200,29 @@ PCCC — hai việc này luôn đi cùng một lượt đi hiện trường:
 Thay nút "Xuất PDF" của bản cũ, vốn chỉ `window.open()` rồi `window.print()` (README bản
 cũ mục 6.9). Dựng Ở SERVER bằng `lib/tbycnn-pdf.ts` trên nền `lib/pccc-pdf-kit.ts`:
 
-- **A4 NGANG**, đủ 16 cột đúng mảng `COLUMNS` của bản cũ, gộp theo `cương vị — danh mục
-  La Mã`, đầu bảng vẽ lại ở MỖI trang (bản in đóng thành tập, lật giữa chừng phải tra
-  được cột), khối ký tên "Vĩnh Long, ngày dd tháng mm năm yyyy" ở cuối.
+- **A4 NGANG**, 17 cột (16 cột của bản cũ + cột **Chữ ký xác nhận**), gộp theo
+  `cương vị — danh mục La Mã`, đầu bảng vẽ lại ở MỖI trang (bản in đóng thành tập, lật
+  giữa chừng phải tra được cột), đánh số `Trang k/n` ở chân mỗi trang bảng.
 - **Cùng bộ lọc với nút Excel** (`cuongViCode` + `machine`) để hai nút luôn in ra cùng một
   phạm vi.
-- **Chữ ký số** được đóng vào khối ký tên — thứ bản cũ không có. Chỉ đóng khi CẢ phạm vi
-  in do đúng MỘT người ký; nhiều người ký mà in một cái tên là nói sai ai đã kiểm tra
-  phần nào, lúc đó để trống cho ký tay.
+- Trình bày cho hội đồng kiểm tra: đầu bảng và dòng nhóm có nền đậm hơn, thân bảng kẻ sọc
+  rất nhạt (`ZEBRA_FILL`) để mắt lần theo hàng ngang giữa 17 cột.
+
+**HAI LOẠI CHỮ KÝ, đừng gộp lại:**
+
+| | Ở đâu | Nội dung |
+| --- | --- | --- |
+| **Chữ ký xác nhận** | cột cuối của TỪNG DÒNG | ảnh chữ ký + họ tên của cương vị quản lý đã ký xác nhận dòng đó (`TbycnnSignature`). Dòng chưa ký để **trống** cho ký tay — in sẵn tên vào dòng chưa kiểm tra là chứng nhận khống. |
+| **Người lập biểu** | khối cuối sổ | người TỔNG HỢP và in quyển sổ. **Luôn để trống** cho ký tay. |
+
+Trước 2026-09-07 khối "Người lập biểu" tự đóng chữ ký của người ký xác nhận khi cả phạm vi
+in do một người ký — hai vai trò khác hẳn nhau, đóng nhầm là biến người đi kiểm tra thành
+người lập biểu. Đã bỏ.
 
 Hai con số phải giữ khi sửa lại bố cục:
 
-1. **Bề rộng 16 cột cộng lại đúng `CONTENT_W` = 762pt.** Lệch một chút là đường kẻ dọc
-   cuối bảng rơi ra ngoài lề.
+1. **Bề rộng 17 cột cộng lại đúng `CONTENT_W` = 762pt** — nay có `COLS_W` tự kiểm ngay lúc
+   nạp module và ném lỗi nếu lệch, thay vì để đường kẻ dọc cuối bảng lặng lẽ rơi ra ngoài lề.
 2. **`MAX_LINES = 24`.** `wrap()` vượt trần là CẮT chữ và chèn "…", mà mục 6.9 của bản cũ
    nói rõ PDF "luôn in đầy đủ nội dung" — mất chữ ở đây là mất dữ liệu hồ sơ kiểm định.
    Ô dài nhất trong 709 dòng cần 22 dòng (một ô Ghi chú); đo bằng chính phông sẽ in chứ

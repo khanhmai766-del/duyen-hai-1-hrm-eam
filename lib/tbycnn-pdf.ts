@@ -15,12 +15,13 @@
  */
 import fs from "node:fs/promises";
 import path from "node:path";
-import { PDFDocument, rgb, type PDFFont, type PDFImage, type PDFPage } from "pdf-lib";
+import { PDFDocument, rgb, type PDFFont, type PDFImage, type PDFPage, type RGB } from "pdf-lib";
 import fontkit from "@pdf-lib/fontkit";
 import {
   BLACK,
   CONTENT_W,
   FS,
+  LINE,
   MARGIN,
   PAGE,
   drawCell,
@@ -42,22 +43,46 @@ import { computeTinhTrang, displayKdDate } from "@/lib/tbycnn";
  */
 const COLS: { key: string; label: string; w: number; align?: "center" }[] = [
   { key: "tt", label: "TT", w: 18, align: "center" },
-  { key: "tenThietBi", label: "Tên TBYCNN", w: 76 },
+  { key: "tenThietBi", label: "Tên TBYCNN", w: 72 },
   { key: "soLuong", label: "SL", w: 16, align: "center" },
-  { key: "maHieu", label: "Mã hiệu", w: 58 },
+  { key: "maHieu", label: "Mã hiệu", w: 54 },
   { key: "kks", label: "KKS", w: 46 },
-  { key: "thongSoKyThuat", label: "Thông số kỹ thuật", w: 116 },
-  { key: "viTri", label: "Vị trí", w: 54 },
-  { key: "chucDanhQuanLy", label: "Chức danh quản lý", w: 48 },
-  { key: "chuKyThu", label: "Chu kỳ thử (tháng)", w: 22, align: "center" },
-  { key: "kdGanNhat", label: "Thời gian KĐ gần nhất", w: 40, align: "center" },
-  { key: "soBbkd", label: "Số BBKĐ", w: 42 },
-  { key: "donViKd", label: "Đơn vị KĐ", w: 54 },
-  { key: "kdTiepTheo", label: "Thời gian KĐ tiếp theo", w: 40, align: "center" },
-  { key: "khiemKhuyet", label: "Khiếm khuyết", w: 50 },
+  { key: "thongSoKyThuat", label: "Thông số kỹ thuật", w: 86 },
+  { key: "viTri", label: "Vị trí", w: 48 },
+  { key: "chucDanhQuanLy", label: "Chức danh quản lý", w: 36 },
+  { key: "chuKyThu", label: "Chu kỳ (tháng)", w: 36, align: "center" },
+  // Hai cột ngày rộng 46pt để "19/05/2025" lọt gọn MỘT dòng: ngày kiểm định bị bẻ
+  // thành "19/05/202" / "5" là thứ hội đồng đọc nhầm ngay.
+  { key: "kdGanNhat", label: "Thời gian KĐ gần nhất", w: 46, align: "center" },
+  { key: "soBbkd", label: "Số BBKĐ", w: 38 },
+  { key: "donViKd", label: "Đơn vị KĐ", w: 46 },
+  { key: "kdTiepTheo", label: "Thời gian KĐ tiếp theo", w: 46, align: "center" },
+  { key: "khiemKhuyet", label: "Khiếm khuyết", w: 44 },
   { key: "tinhTrang", label: "Tình trạng", w: 38, align: "center" },
-  { key: "ghiChu", label: "Ghi chú", w: 44 },
+  { key: "ghiChu", label: "Ghi chú", w: 38 },
+  // Cột cuối là CHỮ KÝ CỦA NGƯỜI ĐÃ KÝ XÁC NHẬN từng dòng (cương vị quản lý thiết bị đó),
+  // KHÔNG dính dáng gì tới khối "Người lập biểu" ở cuối sổ — xem `drawSignatureBlock`.
+  { key: "chuKy", label: "Chữ ký xác nhận", w: 54, align: "center" },
 ];
+
+/** Bề rộng cộng lại phải BẰNG ĐÚNG `CONTENT_W`, lệch là đường kẻ dọc rơi ra ngoài lề. */
+const COLS_W = COLS.reduce((sum, col) => sum + col.w, 0);
+if (COLS_W !== CONTENT_W) {
+  throw new Error(`Bề rộng cột sổ TBYCNN cộng lại ${COLS_W}pt, phải bằng ${CONTENT_W}pt`);
+}
+
+/* ── Nền các loại hàng. Bản in nộp hội đồng kiểm tra: đầu bảng và dòng nhóm phải
+      nổi hẳn lên, còn thân bảng kẻ sọc RẤT nhạt để mắt lần theo hàng ngang giữa 17 cột
+      mà không biến tờ giấy thành vằn vện. ── */
+const HEAD_FILL = rgb(0.886, 0.918, 0.953);
+const GROUP_FILL = rgb(0.937, 0.953, 0.973);
+const ZEBRA_FILL = rgb(0.976, 0.98, 0.988);
+
+/** Như `rect` của bộ dựng chung nhưng tô được nền. Giữ nguyên độ dày nét để cả hai sổ
+    PCCC và TBYCNN in ra cùng một kiểu khung. */
+function cellBox(page: PDFPage, x: number, y: number, w: number, h: number, fill?: RGB) {
+  page.drawRectangle({ x, y, width: w, height: h, color: fill, borderColor: BLACK, borderWidth: LINE });
+}
 
 const FS_BODY = 6.5;
 const FS_HEAD = 6.5;
@@ -134,10 +159,66 @@ function cellText(row: TbycnnPdfRow, key: string): string {
 function rowHeight(row: TbycnnPdfRow, fonts: PdfFonts): number {
   let lines = 1;
   for (const col of COLS) {
+    if (col.key === "chuKy") continue; // ô ảnh, không tính theo chữ
     const n = wrap(cellText(row, col.key), fonts.regular, FS_BODY, col.w - CELL_PAD * 2, MAX_LINES).length;
     if (n > lines) lines = n;
   }
-  return Math.max(14, lines * LINE_H + 5);
+  // Hàng đã ký phải cao tối thiểu SIG_ROW_H: nét ký bóp vào 14pt thì in ra chỉ còn một
+  // vệt mực, hội đồng không đối chiếu được với chữ ký mẫu.
+  const floor = row.signature ? SIG_ROW_H : 14;
+  return Math.max(floor, lines * LINE_H + 5);
+}
+
+/** Chiều cao tối thiểu của hàng ĐÃ KÝ, đủ chỗ cho ảnh chữ ký + họ tên bên dưới. */
+const SIG_ROW_H = 30;
+
+/**
+ * Ô "Chữ ký xác nhận" của MỘT DÒNG: ảnh chữ ký của người đã ký dòng đó, họ tên in nhỏ
+ * bên dưới để hội đồng đối chiếu được mà không phải lật sang chỗ khác.
+ *
+ * Chưa ký thì để TRỐNG — ô trống là chỗ ký tay, còn in sẵn tên ai đó vào dòng chưa kiểm
+ * tra là chứng nhận khống.
+ */
+function drawSignatureCell(
+  page: PDFPage,
+  fonts: PdfFonts,
+  box: { x: number; y: number; w: number; h: number },
+  signature: TbycnnPdfRow["signature"],
+  image?: PDFImage
+) {
+  const name = signature?.signerName?.trim();
+  if (!name) return;
+
+  const nameSize = 5.2;
+  const nameLines = wrap(name, fonts.regular, nameSize, box.w - 4, 2);
+  const nameH = nameLines.length * (nameSize + 0.8);
+
+  if (image) {
+    const maxW = box.w - 6;
+    const maxH = Math.max(6, Math.min(box.h - nameH - 5, 22));
+    const scale = Math.min(maxW / image.width, maxH / image.height);
+    const w = image.width * scale;
+    const h = image.height * scale;
+    page.drawImage(image, {
+      x: box.x + (box.w - w) / 2,
+      y: box.y + nameH + 2 + (box.h - nameH - 2 - h) / 2,
+      width: w,
+      height: h,
+    });
+  }
+
+  let cursor = box.y + nameH - nameSize + 0.5;
+  for (const line of nameLines) {
+    const lineW = fonts.regular.widthOfTextAtSize(line, nameSize);
+    page.drawText(line, {
+      x: box.x + (box.w - lineW) / 2,
+      y: cursor,
+      size: nameSize,
+      font: fonts.regular,
+      color: BLACK,
+    });
+    cursor -= nameSize + 0.8;
+  }
 }
 
 function drawPageHeader(page: PDFPage, fonts: PdfFonts, input: TbycnnPdfInput): number {
@@ -153,7 +234,7 @@ function drawTableHeader(page: PDFPage, fonts: PdfFonts, top: number): number {
   const y = top - HEADER_H;
   let x = MARGIN;
   for (const col of COLS) {
-    rect(page, x, y, col.w, HEADER_H);
+    cellBox(page, x, y, col.w, HEADER_H, HEAD_FILL);
     drawCell(page, col.label, {
       x,
       y,
@@ -169,13 +250,16 @@ function drawTableHeader(page: PDFPage, fonts: PdfFonts, top: number): number {
   return y;
 }
 
-/** Khối ký tên cuối sổ — giữ đúng bản cũ, thêm chữ ký số nếu cả phạm vi do một người ký. */
-function drawSignatureBlock(
-  page: PDFPage,
-  fonts: PdfFonts,
-  top: number,
-  signer: { name: string; position: string | null; image?: PDFImage } | null
-) {
+/**
+ * Khối ký cuối sổ — "NGƯỜI LẬP BIỂU", tức người TỔNG HỢP và in ra quyển sổ này.
+ *
+ * CỐ Ý ĐỂ TRỐNG cho ký tay. Đây KHÔNG phải chữ ký xác nhận kiểm tra: chữ ký xác nhận là
+ * của từng cương vị quản lý cho từng dòng thiết bị và đã nằm ở cột cuối bảng
+ * (`drawSignatureCell`). Trước đây khối này tự đóng chữ ký của người ký xác nhận khi cả
+ * phạm vi in do một người ký — hai vai trò khác hẳn nhau, đóng nhầm là biến người đi
+ * kiểm tra thành người lập biểu.
+ */
+function drawSignatureBlock(page: PDFPage, fonts: PdfFonts, top: number) {
   const now = new Date();
   const dateLine = `Vĩnh Long, ngày ${String(now.getDate()).padStart(2, "0")} tháng ${String(
     now.getMonth() + 1
@@ -196,16 +280,6 @@ function drawSignatureBlock(
   center("NGƯỜI LẬP BIỂU", fonts.bold, FS.body);
   y -= FS.body + 2;
   center("(Ký, ghi rõ họ tên)", fonts.regular, FS.small);
-  y -= 52;
-
-  if (signer?.image) {
-    const h = 40;
-    const w = (signer.image.width / signer.image.height) * h;
-    page.drawImage(signer.image, { x: x + (blockW - w) / 2, y: y + 6, width: w, height: h });
-  }
-  if (signer) {
-    center(signer.name, fonts.bold, FS.body);
-  }
 }
 
 /* ══════════════════════ TRANG BÌA (Biểu mẫu 2) ══════════════════════ */
@@ -334,6 +408,7 @@ export async function buildTbycnnPdf(input: TbycnnPdfInput): Promise<Buffer> {
   // Dòng tiêu đề nhóm chèn lại mỗi khi (cương vị, danh mục La Mã) đổi — giống hệt cách
   // bản cũ và file Excel gốc trình bày.
   let lastGroup = "";
+  let zebra = false;
   for (const row of input.rows) {
     const group = `${row.khuVuc} — ${row.nhom}`;
     const h = rowHeight(row, fonts);
@@ -341,7 +416,7 @@ export async function buildTbycnnPdf(input: TbycnnPdfInput): Promise<Buffer> {
     if (y - needed < MARGIN + 12) newPage();
 
     if (group !== lastGroup) {
-      rect(page, MARGIN, y - GROUP_H, CONTENT_W, GROUP_H);
+      cellBox(page, MARGIN, y - GROUP_H, CONTENT_W, GROUP_H, GROUP_FILL);
       drawCell(page, group, {
         x: MARGIN,
         y: y - GROUP_H,
@@ -353,54 +428,66 @@ export async function buildTbycnnPdf(input: TbycnnPdfInput): Promise<Buffer> {
       });
       y -= GROUP_H;
       lastGroup = group;
+      // Mỗi nhóm bắt đầu lại từ hàng nền trắng, để sọc không nhảy lung tung giữa các nhóm.
+      zebra = false;
     }
 
     let x = MARGIN;
+    const fill = zebra ? ZEBRA_FILL : undefined;
     for (const col of COLS) {
-      rect(page, x, y - h, col.w, h);
-      drawCell(page, cellText(row, col.key), {
-        x,
-        y: y - h,
-        w: col.w,
-        h,
-        font: fonts.regular,
-        size: FS_BODY,
-        align: col.align,
-        maxLines: MAX_LINES,
-      });
+      cellBox(page, x, y - h, col.w, h, fill);
+      if (col.key === "chuKy") {
+        drawSignatureCell(
+          page,
+          fonts,
+          { x, y: y - h, w: col.w, h },
+          row.signature,
+          row.signature?.signatureKey ? embedded.get(row.signature.signatureKey) : undefined
+        );
+      } else {
+        drawCell(page, cellText(row, col.key), {
+          x,
+          y: y - h,
+          w: col.w,
+          h,
+          font: fonts.regular,
+          size: FS_BODY,
+          align: col.align,
+          maxLines: MAX_LINES,
+        });
+      }
       x += col.w;
     }
     y -= h;
+    zebra = !zebra;
   }
 
-  // Chỉ đóng chữ ký khi CẢ phạm vi in do đúng MỘT người ký. Nhiều người ký mà in một
-  // cái tên là nói sai ai đã kiểm tra phần nào — lúc đó để trống cho ký tay.
-  const signers = new Map<string, { name: string; position: string | null; key: string | null }>();
-  for (const row of input.rows) {
-    if (!row.signature) continue;
-    signers.set(row.signature.signerName, {
-      name: row.signature.signerName,
-      position: row.signature.signerPosition,
-      key: row.signature.signatureKey,
-    });
+  // Khối ký không đủ chỗ thì sang trang mới — nhưng trang đó chỉ có tiêu đề và khối ký,
+  // KHÔNG vẽ lại đầu bảng: một đầu bảng 17 cột trống trơn phía trên chữ ký trông như bản
+  // in bị lỗi giữa chừng.
+  if (y < MARGIN + 130) {
+    page = pdf.addPage([PAGE.w, PAGE.h]);
+    y = drawPageHeader(page, fonts, input);
   }
-  const onlySigner = signers.size === 1 ? [...signers.values()][0] : null;
-
-  if (y < MARGIN + 130) newPage();
-  drawSignatureBlock(
-    page,
-    fonts,
-    y,
-    onlySigner
-      ? {
-          name: onlySigner.name,
-          position: onlySigner.position,
-          image: onlySigner.key ? embedded.get(onlySigner.key) : undefined,
-        }
-      : null
-  );
+  drawSignatureBlock(page, fonts, y);
 
   await drawCoverPage(pdf, fonts);
+
+  // Đánh số trang SAU KHI đã chèn bìa, và bỏ qua chính trang bìa: sổ in ra đóng thành
+  // tập dày, thiếu số trang thì rơi mất một tờ cũng không ai biết.
+  const pages = pdf.getPages();
+  const total = pages.length - 1;
+  for (let i = 1; i < pages.length; i++) {
+    const label = `Trang ${i}/${total}`;
+    const w = fonts.regular.widthOfTextAtSize(label, FS.small);
+    pages[i].drawText(label, {
+      x: PAGE.w - MARGIN - w,
+      y: MARGIN - 16,
+      size: FS.small,
+      font: fonts.regular,
+      color: BLACK,
+    });
+  }
 
   return Buffer.from(await pdf.save());
 }
