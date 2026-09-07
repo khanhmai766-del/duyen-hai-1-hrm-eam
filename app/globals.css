@@ -689,7 +689,9 @@
      mã QR nằm lọt thỏm giữa tờ A5. */
   .qr-print-code {
     width: 100%;
-    max-width: 108mm;
+    /* 100mm chứ không phải hết bề ngang: thêm khối cương vị quản lý và dấu AI thì thẻ
+       cao lên, để mã QR to hết cỡ là tràn sang trang thứ hai. Đo lại khi sửa bố cục. */
+    max-width: 100mm;
     margin: 0 auto;
   }
   .qr-print-code svg {
@@ -708,7 +710,7 @@
     font-size: 14pt !important;
   }
   .qr-print-info {
-    margin-top: 6mm !important;
+    margin-top: 5mm !important;
   }
   .qr-print-devicecode {
     font-size: 14pt !important;
@@ -720,11 +722,21 @@
   .qr-print-system {
     font-size: 12pt !important;
   }
+  .qr-print-positions {
+    margin-top: 4mm !important;
+  }
+  .qr-print-positions-label {
+    font-size: 8pt !important;
+  }
   .qr-print-position {
     font-size: 11pt !important;
   }
+  /* Dấu AI ở góc: in ra vừa phải, không tranh chỗ với dòng chú thích. */
+  .qr-print-ai {
+    margin-top: 2mm !important;
+  }
   .qr-print-note {
-    margin-top: 5mm !important;
+    margin-top: 3mm !important;
     max-width: none !important;
     font-size: 8pt !important;
   }
