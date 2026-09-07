@@ -116,12 +116,33 @@ export function fmtDate(value: Date | string | null | undefined) {
  */
 const INK = { r: 11, g: 61, b: 145 };
 
+/** Mức xám tại phân vị `p` của biểu đồ độ sáng (0…255). Dùng để dò nền và nét của ảnh chụp. */
+function lumPercentile(hist: Uint32Array, total: number, p: number) {
+  const target = total * p;
+  let acc = 0;
+  for (let level = 0; level < 256; level++) {
+    acc += hist[level];
+    if (acc >= target) return level;
+  }
+  return 255;
+}
+
 /**
  * Chuẩn hoá ảnh chữ ký trước khi nhúng: tô mực xanh + ÉP NỀN TRẮNG.
  *
- * Chữ ký trong hồ sơ là PNG có KÊNH TRONG SUỐT (nét chữ trên nền rỗng). Rất nhiều trình
- * xem PDF và gần như mọi máy in dựng vùng trong suốt thành ĐEN — in ra là một ô đen sì
- * đè lên cột chữ ký, tưởng hỏng cả quyển sổ.
+ * Vùng trong suốt phải bị ép thành trắng vì rất nhiều trình xem PDF và gần như mọi máy
+ * in dựng nó thành ĐEN — in ra là một ô đen sì đè lên cột chữ ký, tưởng hỏng cả quyển sổ.
+ *
+ * ẢNH CHỮ KÝ TRONG HỒ SƠ CÓ HAI KIỂU, đo trên dữ liệu thật ngày 2026-09-07:
+ *
+ *  1. **Nền trong suốt** — ký trực tiếp trên canvas: ~90% điểm ảnh alpha = 0, nét là số
+ *     ít điểm đục. Đâu là mực đọc từ KÊNH ALPHA.
+ *  2. **Nền trắng đặc** — ảnh chụp / bản quét: alpha = 1 ở MỌI điểm, nét là số ít điểm
+ *     tối trên nền sáng (độ sáng trung bình 0.93–0.96).
+ *
+ * Bản đầu chỉ biết kiểu 1 nên lấy alpha làm độ phủ mực; gặp kiểu 2 thì mọi điểm đều
+ * alpha = 1 và cả khung ảnh bị tô xanh — in ra là một KHỐI XANH ĐẶC thay cho chữ ký.
+ * Vì vậy phải nhận dạng kiểu ảnh trước rồi mới chọn cách đọc nét.
  *
  * Ảnh lỗi thì trả lại nguyên bản: thà chữ ký hiển thị chưa chuẩn còn hơn mất chữ ký.
  */
@@ -129,16 +150,47 @@ export async function signatureInk(buffer: Buffer): Promise<Buffer> {
   try {
     // Làm việc trên RGBA thô: cần chính kênh alpha để biết đâu là nét, đâu là nền.
     const { data, info } = await sharp(buffer).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
-    const out = Buffer.alloc(info.width * info.height * 3);
+    const pixels = info.width * info.height;
+
+    // Có đáng kể điểm trong suốt thì đây là ảnh kiểu 1. Ngưỡng 2% chứ không phải "có một
+    // điểm trong suốt nào không": ảnh quét đôi khi dính vài điểm rìa alpha < 255.
+    let clear = 0;
+    for (let i = 3; i < data.length; i += 4) if (data[i] <= 5) clear++;
+    const transparentBg = clear / pixels > 0.02;
+
+    // Với ảnh nền đặc, KHÔNG giả định nền là trắng tinh: có bản chụp giấy dưới ánh sáng
+    // tối, nền giấy chỉ sáng cỡ 0,6 nên lấy mốc trắng cứng là cả tờ giấy hoá xanh. Đo
+    // ngay trên ảnh: phân vị 85% độ sáng coi là NỀN, phân vị 2% là NÉT ĐẬM NHẤT, rồi
+    // giãn khoảng giữa hai mốc đó ra thành 0…1.
+    let bgLum = 1;
+    let inkLum = 0;
+    if (!transparentBg) {
+      const hist = new Uint32Array(256);
+      for (let i = 0; i < data.length; i += 4) {
+        hist[Math.round(0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2])]++;
+      }
+      bgLum = lumPercentile(hist, pixels, 0.85) / 255;
+      inkLum = lumPercentile(hist, pixels, 0.02) / 255;
+    }
+    // Sàn 0,12 chặn phép chia cho khoảng quá hẹp: ảnh gần như một màu (quét hỏng) thì
+    // thà ra nhạt còn hơn khuếch đại nhiễu thành một mảng mực.
+    const span = Math.max(0.12, bgLum - inkLum);
+
+    const out = Buffer.alloc(pixels * 3);
     for (let i = 0, o = 0; i < data.length; i += 4, o += 3) {
       const alpha = data[i + 3] / 255;
       // Độ sáng của điểm ảnh gốc giữ lại phần đậm/nhạt (nét mảnh ở rìa nhạt hơn),
       // nếu ép cứng một màu thì chữ ký trông như hình vẽ vector, mất nét bút.
       const lum = (0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]) / 255;
+      // Trừ 0,15 rồi giãn lại: cắt phần sát nền (vân giấy, nhiễu ảnh) về hẳn 0 thay vì
+      // để nó thành một lớp xanh mờ phủ kín ô chữ ký.
+      const cover = transparentBg
+        ? alpha
+        : Math.min(1, Math.max(0, ((bgLum - lum) / span - 0.15) / 0.85));
       const k = 1 - lum * 0.35;
-      out[o] = Math.round(255 + (INK.r * k - 255) * alpha);
-      out[o + 1] = Math.round(255 + (INK.g * k - 255) * alpha);
-      out[o + 2] = Math.round(255 + (INK.b * k - 255) * alpha);
+      out[o] = Math.round(255 + (INK.r * k - 255) * cover);
+      out[o + 1] = Math.round(255 + (INK.g * k - 255) * cover);
+      out[o + 2] = Math.round(255 + (INK.b * k - 255) * cover);
     }
     return await sharp(out, { raw: { width: info.width, height: info.height, channels: 3 } })
       .png({ compressionLevel: 9 })
