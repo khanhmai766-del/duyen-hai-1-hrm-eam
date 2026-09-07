@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
 import { QRCodeSVG } from "qrcode.react";
@@ -19,6 +20,13 @@ export default function DeviceQrPage() {
 }
 
 function DeviceQrPageContent() {
+  // Khổ giấy in do @page quyết định, mà @page chỉ đọc được tên trang từ gốc tài
+  // liệu — gắn cờ lên body để cả tờ in lấy khổ A5, khỏi sinh một trang A4 trắng.
+  useEffect(() => {
+    document.body.classList.add("printing-qr");
+    return () => document.body.classList.remove("printing-qr");
+  }, []);
+
   const { id } = useParams<{ id: string }>();
   const searchParams = useSearchParams();
   const machine = searchParams.get("machine");
@@ -27,7 +35,7 @@ function DeviceQrPageContent() {
   const url = typeof window !== "undefined" && device ? deviceQrValue(device.id, device.machine, window.location.origin) : "";
 
   return (
-    <div className="flex min-h-[70vh] flex-col items-center justify-center">
+    <div className="qr-print-page flex min-h-[70vh] flex-col items-center justify-center">
       <div className="no-print mb-6 flex w-full max-w-md items-center justify-between">
         <Button asChild variant="ghost" size="sm">
           <Link href={`/devices/${id}${machine ? `?machine=${encodeURIComponent(machine)}` : ""}`}><ArrowLeft className="h-4 w-4" /> Quay lại</Link>
@@ -40,21 +48,21 @@ function DeviceQrPageContent() {
       {isLoading || !device ? (
         <Skeleton className="h-[420px] w-[340px] rounded-2xl" />
       ) : (
-        <div className="print-full flex w-full max-w-md flex-col items-center rounded-2xl border border-border bg-white p-10 text-center shadow-sm">
-          <div className="mb-4 flex items-center gap-2 text-navy">
-            <img src="/brand/4.png" alt="Logo EVN" className="h-7 w-7 object-contain" />
+        <div className="qr-print-sheet flex w-full max-w-md flex-col items-center rounded-2xl border border-border bg-white p-10 text-center shadow-sm">
+          <div className="qr-print-brand mb-4 flex items-center gap-2 text-navy">
+            <img src="/brand/4.png" alt="Logo EVN" className="qr-print-logo h-7 w-7 object-contain" />
             <span className="text-base font-bold">Duyen Hai 1 Thermal Power Plant</span>
           </div>
-          <div className="rounded-xl border-2 border-navy/10 p-4">
+          <div className="qr-print-code rounded-xl border-2 border-navy/10 p-4">
             <QRCodeSVG value={url} size={300} level="H" />
           </div>
-          <div className="mt-6 space-y-1">
-            <div className="font-mono text-lg font-bold text-navy">{device.code}</div>
-            <div className="text-xl font-semibold text-ink">{device.name}</div>
-            {device.system && <div className="text-muted-foreground">{device.system}</div>}
-            {device.managingPosition && <div className="text-sm text-muted-foreground">{device.managingPosition}</div>}
+          <div className="qr-print-info mt-6 space-y-1">
+            <div className="qr-print-devicecode font-mono text-lg font-bold text-navy">{device.code}</div>
+            <div className="qr-print-devicename text-xl font-semibold text-ink">{device.name}</div>
+            {device.system && <div className="qr-print-system text-muted-foreground">{device.system}</div>}
+            {device.managingPosition && <div className="qr-print-position text-sm text-muted-foreground">{device.managingPosition}</div>}
           </div>
-          <p className="mt-6 max-w-xs text-xs text-muted-foreground">
+          <p className="qr-print-note mt-6 max-w-xs text-xs text-muted-foreground">
             Camera điện thoại xem thông tin cơ bản · Trình quét trong website mở hồ sơ đầy đủ
           </p>
         </div>

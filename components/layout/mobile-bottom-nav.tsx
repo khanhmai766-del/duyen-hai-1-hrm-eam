@@ -162,7 +162,7 @@ export function MobileBottomNav({ onOpenAllMenu }: { onOpenAllMenu: () => void }
     <>
       <nav
         aria-label="Điều hướng chính trên điện thoại"
-        className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200/90 bg-white/95 pb-[env(safe-area-inset-bottom)] shadow-[0_-12px_30px_-18px_rgba(15,23,42,0.45)] backdrop-blur-xl dark:border-slate-700 dark:bg-slate-950/95 lg:hidden"
+        className="no-print fixed inset-x-0 bottom-0 z-40 border-t border-slate-200/90 bg-white/95 pb-[env(safe-area-inset-bottom)] shadow-[0_-12px_30px_-18px_rgba(15,23,42,0.45)] backdrop-blur-xl dark:border-slate-700 dark:bg-slate-950/95 lg:hidden"
       >
         <div className="mx-auto grid h-[68px] max-w-lg grid-cols-5 items-end px-1">
           <BottomLink href="/hr" label="Lịch làm việc" icon={CalendarDays} active={routeMatches(pathname, "/hr")} disabled={readOnlyDefects} />

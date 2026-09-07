@@ -652,3 +652,80 @@
     position: static !important;
   }
 }
+
+/* Thẻ in mã QR thiết bị: đúng một thẻ trọn khổ A5 dọc.
+   Dùng @page ĐẶT TÊN (qr-card) chứ không đặt khổ giấy toàn cục — trang sơ đồ
+   tổ chức và tiến trình tách lưới cũng gọi window.print() và cần khổ khác. */
+@media print {
+  @page qr-card {
+    size: A5 portrait;
+    margin: 8mm;
+  }
+
+  /* Bọc ngoài đang căn giữa theo 70vh; để nguyên thì thẻ bị đẩy xuống, tràn
+     sang trang thứ hai. */
+  .qr-print-page {
+    display: block !important;
+    min-height: 0 !important;
+  }
+
+  body.printing-qr {
+    page: qr-card;
+  }
+
+  .qr-print-sheet {
+    page: qr-card;
+    width: 100% !important;
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 6mm !important;
+    box-shadow: none !important;
+    break-inside: avoid;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* qrcode.react ghi cứng width/height 300px lên thẻ <svg> — không ghi đè thì
+     mã QR nằm lọt thỏm giữa tờ A5. */
+  .qr-print-code {
+    width: 100%;
+    max-width: 108mm;
+    margin: 0 auto;
+  }
+  .qr-print-code svg {
+    width: 100% !important;
+    height: auto !important;
+  }
+
+  .qr-print-brand {
+    margin-bottom: 5mm !important;
+  }
+  .qr-print-logo {
+    width: 11mm !important;
+    height: 11mm !important;
+  }
+  .qr-print-brand span {
+    font-size: 14pt !important;
+  }
+  .qr-print-info {
+    margin-top: 6mm !important;
+  }
+  .qr-print-devicecode {
+    font-size: 14pt !important;
+  }
+  .qr-print-devicename {
+    font-size: 18pt !important;
+    line-height: 1.25 !important;
+  }
+  .qr-print-system {
+    font-size: 12pt !important;
+  }
+  .qr-print-position {
+    font-size: 11pt !important;
+  }
+  .qr-print-note {
+    margin-top: 5mm !important;
+    max-width: none !important;
+    font-size: 8pt !important;
+  }
+}
