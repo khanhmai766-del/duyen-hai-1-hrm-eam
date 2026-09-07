@@ -209,12 +209,11 @@ export function TbycnnCreateDialog({
             <Field label="Thông số kỹ thuật" span>
               <input className={control} value={form.thongSoKyThuat ?? ""} onChange={set("thongSoKyThuat")} />
             </Field>
-            <Field label="Chức danh quản lý">
-              <input className={control} value={form.chucDanhQuanLy ?? ""} onChange={set("chucDanhQuanLy")} />
-            </Field>
-            <Field label="Đơn vị quản lý">
-              <input className={control} value={form.donViQuanLy ?? ""} onChange={set("donViQuanLy")} />
-            </Field>
+            {/* KHÔNG hỏi "Chức danh quản lý" và "Đơn vị quản lý": cả hai suy được từ ô
+                Cương vị ở trên. Đơn vị thì cả 709 dòng nguồn đều là PXVH1 (sổ của riêng
+                phân xưởng Vận hành 1), còn chức danh lấy theo đúng chữ mà các dòng cùng
+                cương vị đang dùng — có cương vị ghi tắt ("TBTH", "TPĐ", "XLNHH"), hỏi
+                người dùng là mỗi người gõ một kiểu. Xem `submitCreate` ở TbycnnPage. */}
           </Section>
 
           <Section title="Kiểm định">

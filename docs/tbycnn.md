@@ -126,6 +126,12 @@ Trang ghép lại hai khoá trước khi gọi API (`submitCreate`):
   `"<số La Mã kế tiếp của cương vị>. <danh mục>"` (`romanOf`, nghịch đảo `extractNhomSo`)
   — số La Mã đánh **riêng theo từng cương vị** nên đó là việc của máy, không hỏi người dùng.
 - `tt` = max + 1 trong nhóm; thiếu STT thì dòng mới dồn lên đầu nhóm (xem `TBYCNN_ORDER_BY`).
+- `chucDanhQuanLy` và `donViQuanLy` **không có trên biểu mẫu** — cả hai suy được từ ô
+  Cương vị. Đơn vị luôn là `TBYCNN_DON_VI_QUAN_LY` = `PXVH1` (709/709 dòng nguồn);
+  chức danh chép đúng chữ mà các dòng cùng cương vị đang dùng, vì một số cương vị ghi tắt
+  trong sổ (`Trạm bơm tuần hoàn` → `TBTH`, `Trực phụ điện` → `TPĐ`, `XLN hỗn hợp` →
+  `XLNHH`), hỏi người dùng là mỗi người gõ một kiểu. `identityData` cũng đặt hai giá trị
+  này ở **server** để không dòng nào rỗng khi có chỗ gọi API mà quên gửi.
 
 Đã đối chiếu toàn bộ 709 dòng của kỳ: ghép rồi cho `normalizePosition` tách lại ra đúng
 `cuongViCode`/`machine` ở **100%** số dòng.

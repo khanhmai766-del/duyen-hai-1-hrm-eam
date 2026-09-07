@@ -497,15 +497,23 @@ export default function TbycnnPage() {
   function submitCreate(body: Record<string, unknown>) {
     const machine = String(body.machine ?? "COMMON");
     const label = positionLabelOf(String(body.cuongViCode ?? ""));
+    // Một dòng sẵn có của ĐÚNG cặp (cương vị, tổ máy) — nguồn để chép lại cách viết đang
+    // dùng trong sổ, thay vì tự ghép rồi lệch.
+    const sibling = rows.find((r) => r.cuongViCode === body.cuongViCode && r.machine === machine);
+
     // `khuVuc` là nhãn CÓ hậu tố tổ máy ("Máy nghiền S1") — khoá gộp nhóm của sổ và của
     // bản Excel/PDF. ƯU TIÊN dùng lại đúng chuỗi cương vị này đang có trong kỳ thay vì
     // ghép từ nhãn danh mục chuẩn: hồ sơ gốc có chỗ viết khác danh mục (đo được 1 ca —
     // "Khí Nén – Nhà Dầu" gạch dài, danh mục ghi "Khí nén - Nhà dầu"), ghép mù là sinh
     // ra nhóm thứ hai trông y hệt nhóm cũ. Chưa có dòng nào thì mới ghép mới; server
     // vẫn tự tách lại bằng `normalizePosition` nên mã cương vị không thể sai.
-    const khuVuc =
-      rows.find((r) => r.cuongViCode === body.cuongViCode && r.machine === machine)?.khuVuc ??
-      (machine === "COMMON" ? label : `${label} ${machine}`);
+    const khuVuc = sibling?.khuVuc ?? (machine === "COMMON" ? label : `${label} ${machine}`);
+
+    // "Chức danh quản lý" KHÔNG hỏi người dùng nữa: nó chính là cương vị vừa chọn. Chép
+    // đúng chữ mà các dòng cùng cương vị đang dùng vì một số cương vị ghi tắt trong sổ
+    // ("Trạm bơm tuần hoàn" → "TBTH", "Trực phụ điện" → "TPĐ"); chưa có dòng nào thì lấy
+    // luôn `khuVuc`. "Đơn vị quản lý" để server điền PXVH1.
+    const chucDanhQuanLy = sibling?.chucDanhQuanLy ?? khuVuc;
 
     // `nhom` = "<số La Mã>. <danh mục>". Số La Mã đánh RIÊNG theo từng cương vị nên
     // không hỏi người dùng: danh mục đã có ở cương vị này thì dùng lại đúng chuỗi cũ,
@@ -524,7 +532,7 @@ export default function TbycnnPage() {
         .filter((r) => r.khuVuc === khuVuc && r.nhom === nhom)
         .reduce((max, r) => Math.max(max, r.tt ?? 0), 0) + 1;
     createEquipment.mutate(
-      { ...body, khuVuc, nhom, tt: nextTt },
+      { ...body, khuVuc, nhom, chucDanhQuanLy, tt: nextTt },
       {
         onSuccess: (created) => {
           setCreateOpen(false);

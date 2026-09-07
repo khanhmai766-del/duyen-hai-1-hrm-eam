@@ -22,6 +22,7 @@ import {
   parsePeriodLabel,
   parseVNDate,
   periodLabelOf,
+  TBYCNN_DON_VI_QUAN_LY,
   toIntOrNull,
   toNumberOrNull,
   trimOrNull,
@@ -223,8 +224,11 @@ export function identityData(body: Record<string, unknown>) {
     kks: trimOrNull(body.kks),
     thongSoKyThuat: trimOrNull(body.thongSoKyThuat),
     viTri: trimOrNull(body.viTri),
-    chucDanhQuanLy: trimOrNull(body.chucDanhQuanLy),
-    donViQuanLy: trimOrNull(body.donViQuanLy),
+    // Hai ô này KHÔNG còn trên biểu mẫu (xem TbycnnCreateDialog): chức danh quản lý chính
+    // là cương vị vừa chọn, còn đơn vị thì sổ nào cũng PXVH1. Chốt ở server để không dòng
+    // nào rỗng, kể cả khi có chỗ gọi API mà quên gửi.
+    chucDanhQuanLy: trimOrNull(body.chucDanhQuanLy) ?? (khuVuc || null),
+    donViQuanLy: trimOrNull(body.donViQuanLy) ?? TBYCNN_DON_VI_QUAN_LY,
   };
 }
 
