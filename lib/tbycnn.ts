@@ -267,15 +267,20 @@ export const TBYCNN_EDITABLE_ON_EDIT = [
  * trên bảng, năm thẻ thống kê và con số "đã kiểm tra N đạt" trên biên bản sẽ nói ba kiểu
  * khác nhau về cùng một cái thang.
  *
- * Trả `null` khi không suy được (ô để trống, hoặc dòng có số lượng khác 1 thì không thể
- * chia được từ một chữ "Đạt").
+ * XOÁ TRẮNG Kết quả nghĩa là CHƯA CÓ kết quả kiểm tra — Tình trạng phải về "Chưa cập
+ * nhật" (hai ô null), tuyệt đối không phải "Không khả dụng". Một cái thang chưa được thử
+ * tải khác hẳn một cái thang thử xong bị đánh trượt.
+ *
+ * Trả `null` (không suy được, giữ nguyên giá trị đang có) khi dòng có số lượng khác 1:
+ * một chữ "Đạt" không chia được cho nhiều cái.
  */
 export function suyKhaDungTuKetQua(
   ketQuaThu: string | null | undefined,
   soLuong: number | null | undefined
-): { soLuongKhaDung: number; soLuongKhongKhaDung: number } | null {
+): { soLuongKhaDung: number | null; soLuongKhongKhaDung: number | null } | null {
+  if ((soLuong ?? 1) !== 1) return null;
   const value = String(ketQuaThu ?? "").trim();
-  if (!value || (soLuong ?? 1) !== 1) return null;
+  if (!value) return { soLuongKhaDung: null, soLuongKhongKhaDung: null };
   const dat = value.toLowerCase().startsWith("đạt");
   return { soLuongKhaDung: dat ? 1 : 0, soLuongKhongKhaDung: dat ? 0 : 1 };
 }

@@ -5,6 +5,7 @@
     "cuongViRaw rỗng = hồ sơ KHÔNG ghi cương vị quản lý (nay chỉ còn 3 dây đai mới).",
     "Bảng dụng cụ điện cầm tay: bản PDF cập nhật ghi cương vị quản lý ở cột Ghi chú — đưa vào đúng cột Cương vị, không chép lại vào Ghi chú.",
     "kdTiepTheoText rỗng = hồ sơ để trống.",
+    "ketQua rỗng = CHƯA THỬ trong đợt này -> Tình trạng \"Chưa cập nhật\". PXVH1-THANG-03: bản giấy ghi \"Đạt\" nhưng bỏ trống cả hai mốc kiểm định, và con số tổng kết 16 của chính biên bản đó chỉ đếm 16 thang thật sự thử ngày 20/05/2026 (đã hỏi và người dùng xác nhận: chưa thử).",
     "Bảng 1 và 2: 'kết quả' là kết quả THỬ TẢI. Bảng 3: 'kết quả' là cột Đánh giá."
   ],
   "bangs": [
@@ -17,7 +18,7 @@
       "records": [
         { "tt": 1, "tenThietBi": "Thang di động", "maHieu": "PXVH1-THANG-01", "thongSo": "Thang chữ A-1,7m", "cuongViRaw": "TK Lò Máy", "ketQua": "Đạt" },
         { "tt": 2, "tenThietBi": "Thang di động", "maHieu": "PXVH1-THANG-02", "thongSo": "Thang chữ A-1,7m", "cuongViRaw": "Thiết bị đo lường và điều khiển", "ketQua": "Đạt" },
-        { "tt": 3, "tenThietBi": "Thang di động", "maHieu": "PXVH1-THANG-03", "thongSo": "Thang chữ A-1,7m", "cuongViRaw": "Trạm bơm nước thô", "ketQua": "Đạt", "kdTiepTheoText": "" },
+        { "tt": 3, "tenThietBi": "Thang di động", "maHieu": "PXVH1-THANG-03", "thongSo": "Thang chữ A-1,7m", "cuongViRaw": "Trạm bơm nước thô", "ketQua": "", "kdTiepTheoText": "" },
         { "tt": 4, "tenThietBi": "Thang di động", "maHieu": "PXVH1-THANG-04", "thongSo": "Thang chữ A-1,7m", "cuongViRaw": "Khí nén – Nhà dầu", "ketQua": "Đạt" },
         { "tt": 5, "tenThietBi": "Thang di động", "maHieu": "PXVH1-THANG-05", "thongSo": "Thang chữ A-1,7m", "cuongViRaw": "Trạm bơm tuần hoàn", "ketQua": "Đạt" },
         { "tt": 6, "tenThietBi": "Thang di động", "maHieu": "PXVH1-THANG-06", "thongSo": "Thang chữ A-1,7m", "cuongViRaw": "ESP", "ketQua": "Đạt" },

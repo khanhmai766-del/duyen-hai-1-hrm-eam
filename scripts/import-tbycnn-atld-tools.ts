@@ -213,7 +213,17 @@ async function main() {
       // (đã chốt với người dùng) — không có một trong hai thì để trống, không đoán tiếp.
       const kdGanNhat = kdTiepTheo && chuKyThu ? subtractMonths(kdTiepTheo, Math.round(chuKyThu)) : null;
 
-      const dat = raw.ketQua.trim().toLowerCase() === "đạt";
+      /*
+       * `ketQua` để TRỐNG = thiết bị CHƯA ĐƯỢC THỬ trong đợt này (vd PXVH1-THANG-03: bản
+       * giấy có chữ "Đạt" nhưng bỏ trống cả hai mốc kiểm định, và con số tổng kết của
+       * chính biên bản đó — 16 — chỉ đếm 16 thang thật sự thử ngày 20/05/2026).
+       *
+       * Chưa thử thì Tình trạng về "Chưa cập nhật" (hai ô null), KHÔNG phải "Không khả
+       * dụng": chưa thử khác hẳn thử xong bị đánh trượt.
+       */
+      const ketQua = raw.ketQua.trim();
+      const chuaThu = ketQua === "";
+      const dat = ketQua.toLowerCase() === "đạt";
       const taiTrong = raw.taiTrongThuKg ?? table.taiTrongThuKg;
       const thoiGianThu = raw.thoiGianThuPhut ?? table.thoiGianThuPhut;
 
@@ -237,7 +247,7 @@ async function main() {
         tinhTrangSuDung: raw.tinhTrang?.trim() || null,
         kiemTraBangMat: raw.kiemTraBangMat?.trim() || null,
         cachDienMOhm: raw.cachDienMOhm ?? null,
-        ketQuaThu: raw.ketQua.trim(),
+        ketQuaThu: chuaThu ? null : ketQua,
         // Hồ sơ để trống cột này ở cả 6 dòng dụng cụ điện; giữ null chứ không bịa "Không".
         nghiemThuSauSuaChua: null,
         chucDanhQuanLy: group.chucDanhQuanLy ?? (khuVuc || null),
@@ -247,10 +257,10 @@ async function main() {
         kdGanNhatText: kdGanNhat ? formatVN(kdGanNhat) : null,
         kdTiepTheo,
         kdTiepTheoText,
-        soLuongKhaDung: dat ? 1 : 0,
-        soLuongKhongKhaDung: dat ? 0 : 1,
+        soLuongKhaDung: chuaThu ? null : dat ? 1 : 0,
+        soLuongKhongKhaDung: chuaThu ? null : dat ? 0 : 1,
         // Kết quả đã có cột riêng; `khiemKhuyet` chỉ giữ phần GIẢI THÍCH của dòng không đạt.
-        khiemKhuyet: dat ? null : raw.ketQua.trim(),
+        khiemKhuyet: chuaThu || dat ? null : ketQua,
         /*
          * Ghi chú CHỈ giữ thứ thuộc về hồ sơ. Trước đây có thêm câu "KĐ gần nhất suy ra
          * từ KĐ tiếp theo trừ chu kỳ" — ghi chú nội bộ của lượt nhập, nhưng cột Ghi chú

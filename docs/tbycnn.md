@@ -359,6 +359,17 @@ chỗ này nói cùng một sự thật — dụng cụ còn dùng được hay 
 nhau thì huy hiệu Tình trạng trên bảng, năm thẻ thống kê và con số "đã kiểm tra N đạt"
 trên biên bản sẽ nói ba kiểu khác nhau về cùng một cái thang.
 
+**Xoá trắng Kết quả = CHƯA THỬ**, Tình trạng về "Chưa cập nhật" (hai ô null) chứ tuyệt đối
+không phải "Không khả dụng": một cái thang chưa được thử tải khác hẳn một cái thử xong bị
+đánh trượt. Luật này áp cả ở script nạp (`ketQua` rỗng trong tệp nguồn) lẫn ở ô sửa trên
+bảng.
+
+Ca thật đã dùng tới nó — **PXVH1-THANG-03**: bản giấy ghi "Đạt" nhưng bỏ trống cả hai mốc
+kiểm định, trong khi 16 thang "Đạt" còn lại đều có 20/05/2026 → 20/11/2026. Chính con số
+tổng kết của biên bản đó ("đã kiểm tra 16 thang đạt") chỉ đếm 16 thang thật sự thử ngày
+20/05. Đã hỏi và người dùng xác nhận thang này CHƯA THỬ. Sau khi sửa, cả ba biên bản in ra
+khớp tuyệt đối bản giấy: 16/20, 10/13, 6/6.
+
 Hai ngoại lệ KHÔNG suy, giữ nguyên giá trị đang có:
 
 - Người dùng tự đặt `soLuongKhaDung`/`soLuongKhongKhaDung` trong CÙNG lượt sửa — giá trị
