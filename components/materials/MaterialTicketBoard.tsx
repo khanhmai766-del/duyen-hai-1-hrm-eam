@@ -2090,11 +2090,31 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
   );
 }
 
+/* Trạng thái bước → { nội dung gửi lên máy chủ, quyền cần có }. Xem chú thích trong
+   StepReviewDialog về việc vì sao hai khóa này không còn là một. */
+const STEP_EDIT = {
+  CHO_XAC_NHAN: { step: "confirm", permission: "confirm" },
+  CHO_THONG_KE: { step: "confirm", permission: "confirm" },
+  CHO_PHIEU__XUAT_KHO: { step: "stats", permission: "stats" },
+  CHO_XAC_NHAN_PHAT: { step: "stats", permission: "stats" },
+  NHAN_VAT_TU: { step: "receive", permission: "receive" },
+  SU_DUNG_VAT_TU: { step: "use", permission: "use" },
+  CHO_NGHIEM_THU: { step: "accept", permission: "accept" },
+  CHO_THONG_KE_XUAT_BIEN_BAN: { step: "statsExport", permission: "stats" },
+  CHO_QUYET_TOAN: { step: "settle", permission: "settle" },
+} as const satisfies Record<string, { step: string; permission: keyof NonNullable<TicketViewer["steps"]> }>;
+
 function StepReviewDialog({ t, viewer, stepKey, onClose }: { t: MaterialTicket; viewer: TicketViewer | null; stepKey: string; onClose: () => void }) {
   const act = useTicketAction(t.id);
-  const permission: keyof NonNullable<TicketViewer["steps"]> | null = ({ CHO_XAC_NHAN: "confirm", CHO_THONG_KE: "confirm", CHO_PHIEU__XUAT_KHO: "stats", CHO_XAC_NHAN_PHAT: "stats", NHAN_VAT_TU: "receive", SU_DUNG_VAT_TU: "use", CHO_NGHIEM_THU: "accept" } as const)[stepKey as "CHO_XAC_NHAN" | "CHO_THONG_KE" | "CHO_PHIEU__XUAT_KHO" | "CHO_XAC_NHAN_PHAT" | "NHAN_VAT_TU" | "SU_DUNG_VAT_TU" | "CHO_NGHIEM_THU"] ?? null;
+  /*
+   * `step` là khóa NỘI DUNG gửi lên máy chủ, `permission` là khóa PHÂN QUYỀN — hai thứ khác
+   * nhau kể từ khi hai bước cuối mở cho sửa: "statsExport" (đại diện SCCN) và "stats" (số phiếu
+   * ĐXVT) đều do Thống kê làm nhưng sửa hai nhóm dữ liệu không liên quan gì nhau.
+   */
+  const stepEdit = STEP_EDIT[stepKey as keyof typeof STEP_EDIT] ?? null;
+  const permission: keyof NonNullable<TicketViewer["steps"]> | null = stepEdit?.permission ?? null;
   const canEdit = !!permission && !!viewer?.steps?.[permission];
-  const editStep = permission;
+  const editStep = stepEdit?.step ?? null;
   const [proposalNumber, setProposalNumber] = useState(t.proposalNumber ?? "");
   const [proposalReceiverNameReview, setProposalReceiverNameReview] = useState(t.proposalReceiverName ?? "");
   /*
@@ -2132,6 +2152,14 @@ function StepReviewDialog({ t, viewer, stepKey, onClose }: { t: MaterialTicket; 
   const missingUsagePhotos = editStep === "use" && usagePhotoCount < MIN_USAGE_PHOTOS;
   const [workStartedAt, setWorkStartedAt] = useState(datetimeLocalValue(t.workStartedAt));
   const [workEndedAt, setWorkEndedAt] = useState(datetimeLocalValue(t.workEndedAt));
+  // Bước Xuất BBNT DO: đại diện SCCN ký thay phân xưởng sửa chữa, tên in thẳng lên biên bản.
+  const [sccnRepresentativeReview, setSccnRepresentativeReview] = useState(t.sccnRepresentativeName ?? "");
+  const [sccnPositionReview, setSccnPositionReview] = useState(t.sccnRepresentativePosition ?? "");
+  // Quyết toán xong là ba ảnh hiện trường bị xóa khỏi kho tệp, nên in lại BBNT D-Office sau
+  // mốc đó sẽ ra một bản không còn ảnh. Để người dùng tự quyết, mặc định KHÔNG in lại.
+  const [reissueBbntDo, setReissueBbntDo] = useState(false);
+  // Bước Quyết toán: số biên bản D-Office cấp cho tệp BBNT đã xuất.
+  const [bbntDoNumberReview, setBbntDoNumberReview] = useState(t.bbntDoNumber ?? "");
 
   const label = flowOf(t).find((step) => step.key === stepKey)?.label ?? "Chi tiết bước";
   async function save() {
@@ -2172,12 +2200,26 @@ function StepReviewDialog({ t, viewer, stepKey, onClose }: { t: MaterialTicket; 
       workStartedAt,
       workEndedAt,
     });
+    if (editStep === "statsExport") Object.assign(payload, {
+      sccnRepresentative: sccnRepresentativeReview,
+      sccnPosition: sccnPositionReview,
+      // Máy chủ chỉ đọc cờ này khi phiếu đã quyết toán; chưa quyết toán thì luôn in lại.
+      reissueBbntDo,
+    });
+    if (editStep === "settle") Object.assign(payload, { bbntDoNumber: bbntDoNumberReview.trim() });
     try {
       await act.mutateAsync(payload);
       const hasExportedDocuments = Boolean(t.proposalDocUrl || t.bbktDocUrl || t.docUrl || t.recoveryDocUrl);
-      toast.success(hasExportedDocuments
-        ? "Đã lưu chỉnh sửa và cập nhật biên bản đã xuất"
-        : "Đã chỉnh sửa bước và cập nhật hoạt động");
+      // Hai bước cuối không đụng tới biên bản (trừ khi chủ động chọn in lại BBNT D-Office),
+      // nên đừng hứa "đã cập nhật biên bản đã xuất" cho một tệp không hề được ghi lại.
+      toast.success(
+        editStep === "settle" ? "Đã lưu số BBNT DO và đồng bộ sang lịch sử thay thế"
+        : editStep === "statsExport" ? (t.settledAt && !reissueBbntDo
+            ? "Đã lưu đại diện SCCN; giữ nguyên tệp BBNT D-Office đã phát hành"
+            : "Đã lưu đại diện SCCN và xuất lại BBNT D-Office")
+        : hasExportedDocuments ? "Đã lưu chỉnh sửa và cập nhật biên bản đã xuất"
+        : "Đã chỉnh sửa bước và cập nhật hoạt động"
+      );
       onClose();
     }
     catch (error) { toast.error(error instanceof Error ? error.message : "Không thể chỉnh sửa bước"); }
@@ -2287,6 +2329,51 @@ function StepReviewDialog({ t, viewer, stepKey, onClose }: { t: MaterialTicket; 
           {/* Đại diện SCCN KHÔNG nằm ở bước này — Thống kê chọn ở bước xác nhận mã vật tư,
               cùng lúc xuất BBNT D-Office mang tên người đó. */}
         </>}
+        {editStep === "statsExport" && <>
+          {/* Mã vật tư để nguyên đúng như lúc bấm xuất: đổi mã sau khi đã nhận hàng thì ERP
+              đã trừ ở mã cũ, còn biên bản và sổ lịch sử thì mang mã cũ. */}
+          <label>Mã vật tư ERP<input value={t.items[0]?.erpCode ?? t.items[0]?.material.code ?? "—"} disabled /></label>
+          <label>Tên vật tư ERP<input value={t.items[0]?.erpName ?? t.items[0]?.material.name ?? "—"} disabled /></label>
+          <div className="review-accept-grid">
+            <label>Đại diện SCCN *
+              <select value={sccnRepresentativeReview} disabled={!canEdit} onChange={(e) => setSccnRepresentativeReview(e.target.value)}>
+                <option value="">— Chọn đại diện SCCN —</option>
+                {SCCN_REPRESENTATIVES.map((name) => <option key={name} value={name}>{name}</option>)}
+              </select>
+            </label>
+            <label>Chức vụ *
+              <select value={sccnPositionReview} disabled={!canEdit} onChange={(e) => setSccnPositionReview(e.target.value)}>
+                <option value="">— Chọn chức vụ —</option>
+                {SCCN_POSITIONS.map((position) => <option key={position} value={position}>{position}</option>)}
+              </select>
+            </label>
+          </div>
+          {t.settledAt ? (
+            <label className={`reissue-doc-check ${reissueBbntDo ? "checked" : ""}`}>
+              <input type="checkbox" disabled={!canEdit} checked={reissueBbntDo} onChange={(e) => setReissueBbntDo(e.target.checked)} />
+              <span>
+                <b>Xuất lại BBNT D-Office theo tên đại diện mới</b>
+                <small>Phiếu đã quyết toán nên 3 ảnh hiện trường đã bị xóa. Bản in lại sẽ ghi đè đúng tệp đang treo trên phiếu và KHÔNG còn ảnh. Không tick thì chỉ sửa dữ liệu, tệp cũ giữ nguyên.</small>
+              </span>
+            </label>
+          ) : (
+            <p className="hint">Lưu xong sẽ xuất lại BBNT D-Office mang tên đại diện mới, ghi đè đúng tệp đang treo trên phiếu.</p>
+          )}
+        </>}
+        {editStep === "settle" && <>
+          <label>Số BBNT DO *
+            <input value={bbntDoNumberReview} disabled={!canEdit} onChange={(e) => setBbntDoNumberReview(e.target.value)} placeholder="Nhập số BBNT DO" autoComplete="off" />
+          </label>
+          <div className="review-accept-grid">
+            <label>Người quyết toán<input value={t.settledByName || "—"} disabled /></label>
+            <label>Ngày quyết toán<input value={t.settledAt ? fmtDay(t.settledAt) : "—"} disabled /></label>
+          </div>
+          <p className="hint">
+            Số này là số D-Office cấp cho tệp BBNT đã xuất, không in trong biên bản nào nên sửa
+            ở đây không phải xuất lại tệp. Máy chủ cập nhật luôn số chứng từ trên các dòng lịch
+            sử thay thế đã ghi khi quyết toán, để biểu dự toán năm không lệch số với phiếu.
+          </p>
+        </>}
         {permission && !canEdit && <p className="hint">Bạn có thể xem lại nhưng chưa được phân quyền chỉnh sửa bước này.</p>}
         <div className="frm-f">
           {missingUsagePhotos && (
@@ -2295,7 +2382,7 @@ function StepReviewDialog({ t, viewer, stepKey, onClose }: { t: MaterialTicket; 
             </span>
           )}
           <button className="btn ghost" onClick={onClose}>Đóng</button>
-          {canEdit && <button className="btn primary" disabled={act.isPending || missingUsagePhotos || (editStep === "confirm" && !reason.trim()) || (editStep === "accept" && (!pctNumber.trim() || !chiHuyName.trim() || !completionNote.trim() || !workStartedAt || !workEndedAt))} onClick={save}>{act.isPending ? <Loader2 className="spin" size={14} /> : <Pencil size={14} />} Lưu chỉnh sửa</button>}
+          {canEdit && <button className="btn primary" disabled={act.isPending || missingUsagePhotos || (editStep === "confirm" && !reason.trim()) || (editStep === "accept" && (!pctNumber.trim() || !chiHuyName.trim() || !completionNote.trim() || !workStartedAt || !workEndedAt)) || (editStep === "statsExport" && (!sccnRepresentativeReview || !sccnPositionReview)) || (editStep === "settle" && !bbntDoNumberReview.trim())} onClick={save}>{act.isPending ? <Loader2 className="spin" size={14} /> : <Pencil size={14} />} Lưu chỉnh sửa</button>}
         </div>
       </div>
     </div>
@@ -4659,6 +4746,15 @@ const CSS = `
 .recovery-return-check b{font-size:12px;color:${C.navy};}
 .recovery-return-check small{font-size:11px;font-weight:700;color:#15803d;}
 .recovery-return-check small.cycle{font-weight:600;color:#64748b;}
+/* Ô tick in lại biên bản đã phát hành: màu cảnh báo chứ không phải màu xác nhận — tick vào
+   là ghi đè tệp cũ, đúng thứ người dùng cần dừng lại một nhịp trước khi chọn. */
+.reissue-doc-check{display:flex!important;min-height:42px;align-items:flex-start;gap:10px;margin:0!important;border:1px solid ${C.line};border-radius:10px;background:#fff;padding:10px 13px;color:${C.navy};cursor:pointer;transition:border-color .16s,background .16s,box-shadow .16s;}
+.reissue-doc-check:hover{border-color:#fcd34d;background:#fffbeb;}
+.reissue-doc-check.checked{border-color:${C.warn};background:${C.warnBg};box-shadow:0 0 0 2px rgba(217,119,6,.09);}
+.reissue-doc-check input{width:19px!important;height:19px!important;min-width:19px;margin:2px 0 0!important;padding:0!important;accent-color:${C.warn};cursor:pointer;}
+.reissue-doc-check span{display:flex;min-width:0;flex-direction:column;gap:3px;line-height:1.35;}
+.reissue-doc-check b{font-size:12px;color:${C.navy};}
+.reissue-doc-check small{font-size:11px;font-weight:600;color:#92400e;overflow-wrap:anywhere;}
 .act-field-row{display:grid;grid-template-columns:156px minmax(0,1fr);align-items:center;gap:10px;}
 .act-field-row label:not(.lb){margin-bottom:0;}
 .advance-item-row{display:grid;grid-template-columns:minmax(150px,1.2fr) minmax(150px,1fr) 130px auto;align-items:end;gap:6px;}

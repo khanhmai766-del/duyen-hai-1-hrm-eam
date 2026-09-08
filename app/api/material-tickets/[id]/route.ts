@@ -928,8 +928,11 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     // của bước; các thay đổi số lượng được bù trừ theo chênh lệch vào tồn kho.
     if (action === "editStep") {
       const step = String(body.step || "");
+      // Khóa bước KHÁC khóa phân quyền: hai bước cuối đều do Thống kê làm nhưng nội dung sửa
+      // khác hẳn nhau, nên "statsExport" mượn quyền "stats" chứ không gộp làm một.
       const permissionByStep = {
         confirm: "confirm", stats: "stats", receive: "receive", use: "use", accept: "accept",
+        statsExport: "stats", settle: "settle",
       } as const;
       const permission = permissionByStep[step as keyof typeof permissionByStep];
       if (!permission) return fail("Bước chỉnh sửa không hợp lệ");
@@ -939,6 +942,9 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       let after = "";
       let up: FullTicket | null = null;
       let recoveryDocumentCreatedAfterEdit = false;
+      /* Sửa đại diện SCCN có kéo theo việc in lại BBNT D-Office hay không — xem nhánh
+         "statsExport" bên dưới, chỗ duy nhất đặt cờ này. */
+      let reissueBbntDo = false;
 
       if (step === "confirm") {
         if (!t.confirmedAt) return fail("Bước Trưởng ca/Trưởng kíp xác nhận chưa hoàn thành");
@@ -1208,12 +1214,82 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
           },
           include: ITEM_INCLUDE,
         });
+      } else if (step === "statsExport") {
+        /*
+         * Sửa lại bước Xuất BBNT D-Office = sửa ĐẠI DIỆN SCCN, không sửa mã vật tư.
+         * Mã vật tư đã khóa ngay từ lúc bấm xuất (giao diện bước đó cũng để select disabled):
+         * đổi mã sau khi nhận hàng là ErpMaterial đã bị trừ ở mã cũ, còn dòng lịch sử thay thế
+         * và các biên bản đã phát hành thì mang mã cũ — không có đường nào gỡ lại cho sạch.
+         */
+        if (!["DE_XUAT", "SU_DUNG_HIEN_CO"].includes(t.type)) {
+          return fail("Luồng phiếu này không đi qua bước xuất BBNT D-Office");
+        }
+        if (!t.docUrl) return fail("Bước xuất BBNT D-Office chưa hoàn thành");
+        const name = String(body.sccnRepresentative || "").trim();
+        const position = String(body.sccnPosition || "").trim();
+        if (!SCCN_REPRESENTATIVES.includes(name as typeof SCCN_REPRESENTATIVES[number])) {
+          return fail("Vui lòng chọn đại diện SCCN hợp lệ");
+        }
+        if (!SCCN_POSITIONS.includes(position as typeof SCCN_POSITIONS[number])) {
+          return fail("Vui lòng chọn chức vụ đại diện SCCN hợp lệ");
+        }
+        /*
+         * Quyết toán xong là ba ảnh hiện trường bị xóa khỏi kho tệp và gỡ khóa khỏi phiếu
+         * (xem action "settle"). BBNT D-Office in lại lúc đó sẽ GHI ĐÈ đúng tệp cũ bằng một
+         * bản KHÔNG CÒN ẢNH — mất hẳn, không dựng lại được. Nên với phiếu đã quyết toán,
+         * chỉ in lại khi người dùng chủ động tick, còn mặc định thì chỉ sửa dữ liệu.
+         */
+        reissueBbntDo = t.settledAt ? body.reissueBbntDo === true : true;
+        before = `Đại diện SCCN: ${t.sccnRepresentativeName ?? "—"} — ${t.sccnRepresentativePosition ?? "—"}`;
+        after = `Đại diện SCCN: ${name} — ${position}${reissueBbntDo ? "; xuất lại BBNT D-Office" : "; giữ nguyên tệp BBNT D-Office đã phát hành"}`;
+        up = await prisma.materialTicket.update({
+          where: { id: t.id },
+          data: { sccnRepresentativeName: name, sccnRepresentativePosition: position },
+          include: ITEM_INCLUDE,
+        });
+      } else if (step === "settle") {
+        if (!t.settledAt) return fail("Bước quyết toán vật tư chưa hoàn thành");
+        const value = String(body.bbntDoNumber || "").trim();
+        if (!value) return fail("Vui lòng nhập số BBNT DO");
+        before = `Số BBNT DO: ${t.bbntDoNumber ?? "—"}`;
+        after = `Số BBNT DO: ${value}`;
+        up = await prisma.$transaction(async (tx) => {
+          /*
+           * Số BBNT DO đã được chép sang từng dòng MaterialReplacementLog lúc quyết toán —
+           * đó là cột chứng từ của biểu dự toán QLVT.20. Sửa mỗi phiếu mà bỏ sổ thì hai nơi
+           * nói hai số khác nhau, và không còn dấu vết nào chỉ ra số nào mới đúng.
+           */
+          await tx.materialReplacementLog.updateMany({
+            where: { ticketId: t.id },
+            data: { bbntDoNumber: value },
+          });
+          return tx.materialTicket.update({
+            where: { id: t.id },
+            data: { bbntDoNumber: value },
+            include: ITEM_INCLUDE,
+          });
+        });
+        // Đệm biểu dự toán năm giữ sẵn số chứng từ vừa đổi.
+        invalidateMaterialAnnualPlanCache();
       }
       if (!up) return fail("Không thể cập nhật bước");
       // Bước accept đã tự xuất lại BBNT D-Office và biên bản thu hồi ở trên.
       // Các file còn lại (nếu đã tồn tại) được tạo lại từ dữ liệu vừa lưu.
       const skipRefreshedInStep = step === "accept"
         ? new Set<keyof ExportedDocumentUrls>(["bbktDocUrl", "docUrl", "recoveryDocUrl"])
+        // Đại diện SCCN chỉ xuất hiện trên BBNT D-Office; ĐXVT, BBNT ký tay và BBTHVT không
+        // mang tên người đó nên in lại chúng là ghi đè vô cớ lên tệp đã phát hành.
+        : step === "statsExport"
+        ? new Set<keyof ExportedDocumentUrls>(
+            reissueBbntDo
+              ? ["proposalDocUrl", "bbktDocUrl", "recoveryDocUrl"]
+              : ["proposalDocUrl", "bbktDocUrl", "recoveryDocUrl", "docUrl"]
+          )
+        // Số BBNT DO không nằm trong biên bản nào — nó là số do D-Office cấp cho chính tệp
+        // BBNT đã xuất. Không có gì để in lại, mà phiếu tới bước này thì ảnh hiện trường đã
+        // bị xóa nên in lại là mất ảnh.
+        : step === "settle"
+        ? new Set<keyof ExportedDocumentUrls>(["proposalDocUrl", "bbktDocUrl", "recoveryDocUrl", "docUrl"])
         : step === "use" && !t.completedAt
           // Không tái tạo liên kết BBTHVT cũ trước khi phiếu hoàn tất bước Nghiệm thu.
           ? new Set<keyof ExportedDocumentUrls>(["recoveryDocUrl"])
