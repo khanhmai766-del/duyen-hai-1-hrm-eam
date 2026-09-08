@@ -1420,10 +1420,37 @@ export default function TbycnnPage() {
                                 // `break-words` cắt cả chuỗi liền không dấu cách như
                                 // "MPPB600V1", nếu không nó đẩy cả cột rộng ra.
                                 "break-words",
-                                col.numeric ? "text-center tabular-nums" : "text-[12px] leading-tight"
+                                col.numeric ? "text-center tabular-nums" : "text-[12px] leading-tight",
+                                dirty(col.key)
                               )}
                             >
-                              {value == null || value === "" ? "—" : String(value)}
+                              {/* Bảy cột này là số liệu ghi lại MỖI LƯỢT ĐI KIỂM TRA (thử tải,
+                                  đo cách điện, kết quả) nên mở khoá ở chế độ Sửa bảng — xem
+                                  TBYCNN_EDITABLE_ON_EDIT. Sửa "Kết quả" thì server tự chỉnh
+                                  luôn hai ô khả dụng cho khớp (suyKhaDungTuKetQua). */}
+                              {editable ? (
+                                <EditableCell
+                                  value={(value ?? null) as string | number | null}
+                                  type={col.numeric ? "number" : "text"}
+                                  align={col.numeric ? "center" : "left"}
+                                  wrap={!col.numeric}
+                                  onSave={(v) =>
+                                    setDraftValue(
+                                      saved,
+                                      col.key,
+                                      col.numeric
+                                        ? v.trim() === ""
+                                          ? null
+                                          : Number(v)
+                                        : v.trim() || null
+                                    )
+                                  }
+                                />
+                              ) : value == null || value === "" ? (
+                                "—"
+                              ) : (
+                                String(value)
+                              )}
                             </TableCell>
                           );
                         })

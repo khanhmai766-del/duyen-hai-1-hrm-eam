@@ -1,7 +1,14 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { audit, auditDetailWithPosition, fail, handle, ok, requireUser } from "@/lib/api";
-import { computeDefaultKdTiepTheo, parseVNDate, TBYCNN_FILLABLE_WHEN_EMPTY, trimOrNull, validateSoLuong } from "@/lib/tbycnn";
+import {
+  computeDefaultKdTiepTheo,
+  parseVNDate,
+  suyKhaDungTuKetQua,
+  TBYCNN_FILLABLE_WHEN_EMPTY,
+  trimOrNull,
+  validateSoLuong,
+} from "@/lib/tbycnn";
 import { canWriteRow, operationalData, resolveTbycnnWriteScope } from "@/lib/tbycnn-service";
 
 export const dynamic = "force-dynamic";
@@ -59,6 +66,19 @@ export async function POST(req: NextRequest) {
         Object.assign(data, { [field]: trimOrNull(update[field]) });
       }
       if (Object.keys(data).length === 0) continue;
+
+      /*
+       * Đổi "Kết quả" thì kéo theo hai ô số lượng khả dụng — trừ khi người dùng tự đặt
+       * chúng trong CÙNG lượt sửa (giá trị họ gõ tay luôn thắng).
+       *
+       * Hai chỗ này nói cùng một sự thật: dụng cụ còn dùng được hay không. Để lệch nhau
+       * thì huy hiệu Tình trạng, năm thẻ thống kê và con số "đã kiểm tra N đạt" trên
+       * biên bản nói ba kiểu khác nhau về cùng một cái thang.
+       */
+      if ("ketQuaThu" in data && !("soLuongKhaDung" in data) && !("soLuongKhongKhaDung" in data)) {
+        const suy = suyKhaDungTuKetQua(data.ketQuaThu, existing.soLuong);
+        if (suy) Object.assign(data, suy);
+      }
 
       const khaDung = "soLuongKhaDung" in data ? data.soLuongKhaDung ?? null : existing.soLuongKhaDung;
       const khongKhaDung =

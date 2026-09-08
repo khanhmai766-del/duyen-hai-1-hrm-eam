@@ -5,6 +5,7 @@ import { requirePermissionLevel } from "@/lib/rbac-guard";
 import {
   computeDefaultKdTiepTheo,
   parseVNDate,
+  suyKhaDungTuKetQua,
   TBYCNN_FILLABLE_WHEN_EMPTY,
   trimOrNull,
   validateSoLuong,
@@ -55,6 +56,19 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       if (!(field in body)) continue;
       if (String(existing[field] ?? "").trim()) continue;
       Object.assign(data, { [field]: trimOrNull(body[field]) });
+    }
+
+    /*
+     * Đổi "Kết quả" thì kéo theo hai ô số lượng khả dụng — trừ khi người dùng tự đặt
+     * chúng trong CÙNG lượt sửa (giá trị họ gõ tay luôn thắng).
+     *
+     * Hai chỗ này nói cùng một sự thật: dụng cụ còn dùng được hay không. Để lệch nhau
+     * thì huy hiệu Tình trạng, năm thẻ thống kê và con số "đã kiểm tra N đạt" trên
+     * biên bản nói ba kiểu khác nhau về cùng một cái thang.
+     */
+    if ("ketQuaThu" in data && !("soLuongKhaDung" in data) && !("soLuongKhongKhaDung" in data)) {
+      const suy = suyKhaDungTuKetQua(data.ketQuaThu, existing.soLuong);
+      if (suy) Object.assign(data, suy);
     }
 
     const khaDung = "soLuongKhaDung" in data ? data.soLuongKhaDung ?? null : existing.soLuongKhaDung;

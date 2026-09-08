@@ -183,6 +183,14 @@ export type TbycnnOperationalData = {
   kdGanNhatText?: string | null;
   kdTiepTheo?: Date | null;
   kdTiepTheoText?: string | null;
+  // Bảy cột riêng của ba bảng dụng cụ ATLĐ.
+  taiTrongThuKg?: number | null;
+  thoiGianThuPhut?: number | null;
+  tinhTrangSuDung?: string | null;
+  kiemTraBangMat?: string | null;
+  cachDienMOhm?: number | null;
+  ketQuaThu?: string | null;
+  nghiemThuSauSuaChua?: string | null;
 };
 
 /**
@@ -209,6 +217,13 @@ export function operationalData(body: OperationalInput) {
     data.kdTiepTheoText = text;
     data.kdTiepTheo = parseVNDate(text);
   }
+  if ("taiTrongThuKg" in body) data.taiTrongThuKg = toNumberOrNull(body.taiTrongThuKg);
+  if ("thoiGianThuPhut" in body) data.thoiGianThuPhut = toIntOrNull(body.thoiGianThuPhut);
+  if ("tinhTrangSuDung" in body) data.tinhTrangSuDung = trimOrNull(body.tinhTrangSuDung);
+  if ("kiemTraBangMat" in body) data.kiemTraBangMat = trimOrNull(body.kiemTraBangMat);
+  if ("cachDienMOhm" in body) data.cachDienMOhm = toNumberOrNull(body.cachDienMOhm);
+  if ("ketQuaThu" in body) data.ketQuaThu = trimOrNull(body.ketQuaThu);
+  if ("nghiemThuSauSuaChua" in body) data.nghiemThuSauSuaChua = trimOrNull(body.nghiemThuSauSuaChua);
   return data;
 }
 

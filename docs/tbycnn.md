@@ -348,6 +348,23 @@ Bảy cột thêm bằng `prisma/manual/add-tbycnn-tool-columns.sql` (additive, 
 Trước đó các giá trị này bị ghép chuỗi vào `thongSoKyThuat` / `ghiChu`: không lọc, không
 sắp xếp, không đối chiếu được với bản giấy.
 
+### Bảy cột mới sửa được ở "Sửa bảng"
+
+Cả bảy đều nằm trong `TBYCNN_EDITABLE_ON_EDIT`: chúng là số liệu ghi lại MỖI LƯỢT đi kiểm
+tra (thử tải, đo cách điện, kết quả), không phải thông tin gốc theo hồ sơ nhà máy.
+
+**Đổi `ketQuaThu` thì server tự chỉnh `soLuongKhaDung`/`soLuongKhongKhaDung`** cho khớp
+(`suyKhaDungTuKetQua`, cài ở CẢ `PUT /api/tbycnn/[id]` lẫn `POST /api/tbycnn/bulk`). Hai
+chỗ này nói cùng một sự thật — dụng cụ còn dùng được hay không — nên để chúng tự do lệch
+nhau thì huy hiệu Tình trạng trên bảng, năm thẻ thống kê và con số "đã kiểm tra N đạt"
+trên biên bản sẽ nói ba kiểu khác nhau về cùng một cái thang.
+
+Hai ngoại lệ KHÔNG suy, giữ nguyên giá trị đang có:
+
+- Người dùng tự đặt `soLuongKhaDung`/`soLuongKhongKhaDung` trong CÙNG lượt sửa — giá trị
+  gõ tay luôn thắng.
+- Dòng có `soLuong` khác 1: một chữ "Đạt" không chia được cho nhiều cái.
+
 ### Bản in của ba bảng
 
 `colsFor(tab)` ở `lib/tbycnn-pdf.ts` trả bộ cột theo bảng; `fitWidths` kéo bề rộng cho tổng
@@ -414,6 +431,3 @@ sửa hằng trong script dựng mẫu:
 - Xuất PDF khổ A4 ngang có khối ký tên (bản cũ in bằng `window.print()`); nếu làm nên
   dùng `lib/pccc-pdf-kit.ts` thay vì in từ trình duyệt.
 - Map `deviceSeq` sang cây thiết bị `EquipmentNode`.
-- **Sửa được bảy cột mới trong chế độ "Sửa bảng"**: `TBYCNN_EDITABLE_ON_EDIT` chưa có
-  chúng nên API bỏ qua, giao diện cũng hiện dạng chữ thường. Cột `ketQuaThu` là thứ người
-  đi kiểm tra cập nhật mỗi chu kỳ nên đây là việc nên làm sớm.

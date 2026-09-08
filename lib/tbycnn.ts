@@ -247,7 +247,38 @@ export const TBYCNN_EDITABLE_ON_EDIT = [
   "soLuongKhongKhaDung",
   "khiemKhuyet",
   "ghiChu",
+  // Bảy cột của ba bảng dụng cụ ATLĐ. Đều là số liệu GHI LẠI MỖI LƯỢT ĐI KIỂM TRA (thử
+  // tải, đo cách điện, kết quả), không phải thông tin gốc theo hồ sơ nhà máy — nên thuộc
+  // nhóm vận hành, sửa được. `ketQuaThu` là thứ người đi kiểm tra cập nhật mỗi chu kỳ.
+  "taiTrongThuKg",
+  "thoiGianThuPhut",
+  "tinhTrangSuDung",
+  "kiemTraBangMat",
+  "cachDienMOhm",
+  "ketQuaThu",
+  "nghiemThuSauSuaChua",
 ] as const;
+
+/**
+ * "Đạt" / "Không đạt" của một dòng dụng cụ suy ra hai ô số lượng khả dụng.
+ *
+ * Cột `ketQuaThu` và cặp `soLuongKhaDung`/`soLuongKhongKhaDung` NÓI CÙNG MỘT SỰ THẬT:
+ * dụng cụ này còn dùng được hay không. Để hai nơi tự do lệch nhau thì huy hiệu Tình trạng
+ * trên bảng, năm thẻ thống kê và con số "đã kiểm tra N đạt" trên biên bản sẽ nói ba kiểu
+ * khác nhau về cùng một cái thang.
+ *
+ * Trả `null` khi không suy được (ô để trống, hoặc dòng có số lượng khác 1 thì không thể
+ * chia được từ một chữ "Đạt").
+ */
+export function suyKhaDungTuKetQua(
+  ketQuaThu: string | null | undefined,
+  soLuong: number | null | undefined
+): { soLuongKhaDung: number; soLuongKhongKhaDung: number } | null {
+  const value = String(ketQuaThu ?? "").trim();
+  if (!value || (soLuong ?? 1) !== 1) return null;
+  const dat = value.toLowerCase().startsWith("đạt");
+  return { soLuongKhaDung: dat ? 1 : 0, soLuongKhongKhaDung: dat ? 0 : 1 };
+}
 
 /** Bổ sung được khi đang trống, dù các trường gốc khác đã khoá. */
 export const TBYCNN_FILLABLE_WHEN_EMPTY = ["maHieu", "kks"] as const;
