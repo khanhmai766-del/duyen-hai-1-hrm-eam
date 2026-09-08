@@ -585,6 +585,28 @@ export function materialTicketRequiresRecovery(ticket: {
 }
 
 /**
+ * Vật tư ĐƯỢC PHÉP ghi khối lượng thu hồi = 0 mà vẫn qua bước.
+ *
+ * Mặc định phiếu có thu hồi phải khai > 0: khai 0 gần như luôn là quên nhập, và BBTHVT
+ * ghi 0 thì biên bản vô nghĩa. Riêng dầu EA Ultra Plus của máy nghiền có trường hợp châm
+ * bù mà không rút ra được giọt dầu cũ nào — số thật là 0, bắt gõ 1 là ép người dùng khai
+ * khống vào biên bản.
+ *
+ * Khoá theo MÃ ERP chứ không theo tên: cùng một thứ dầu mà Danh mục vật tư ghi "Dầu EA
+ * Ultra Plus 301193 (EA Lubricant/ India)" còn bảng ERP ghi "Dầu bôi trơn EA Ultra Plus
+ * 301193 EA Lubricant/ India" — so tên là hụt một nửa số phiếu.
+ */
+export const ZERO_RECOVERY_MATERIAL_CODES: readonly string[] = ["1.31.03.119.IND.00.000"];
+
+/** Khối lượng thu hồi nhỏ nhất được chấp nhận của phiếu: 0 cho vật tư ngoại lệ, còn lại 1. */
+export function minRecoveryQuantity(ticket: {
+  items?: ReadonlyArray<{ erpCode?: string | null; material?: { code?: string | null } | null }> | null;
+}): number {
+  const codes = (ticket.items ?? []).flatMap((item) => [item.erpCode, item.material?.code]);
+  return codes.some((code) => code && ZERO_RECOVERY_MATERIAL_CODES.includes(code.trim())) ? 0 : 1;
+}
+
+/**
  * Điều kiện nghiêm ngặt của tab "Thu hồi":
  * - File BBTHVT đã tồn tại thì luôn giữ lại để tra cứu lịch sử.
  * - Phiếu chưa xuất file chỉ được nhận khi snapshot nghiệp vụ đã chốt rõ là phải thu hồi.

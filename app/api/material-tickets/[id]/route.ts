@@ -17,7 +17,7 @@ import { deleteDeliveryPhotos, deliveryPhotoLotsOfTicket, loadDeliveryPhotoBuffe
 import { keyFromPublicUrl } from "@/lib/s3";
 import { syncTicketReplacementLinks, type LinkablePoint } from "@/lib/material-ticket-replacement-link";
 import { pointLabelOf, resolveMaterialRequest } from "@/lib/defect-material-request";
-import { MIN_USAGE_PHOTOS, MISSING_USAGE_PHOTO_MESSAGE, usesHandwrittenBbnt, CHEMICAL_TICKET_TYPE, COMMON_MATERIAL_POSITION, GAS_RETURN_STATUS, isChemicalFlowTicket, isGasCylinderCategory, isGasCylinderTicket, isOtherMaterialAdvanceTicket, isOtherMaterialTicketType, materialTicketRequiresRecovery, OTHER_MATERIAL_ADVANCE_TICKET_TYPE, OTHER_MATERIAL_TICKET_TYPE, recoveryRequiredForReason, SINGLE_STEP_TICKET_TYPE, ticketReasonAllowed, TICKET_MATERIAL_CATEGORIES, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
+import { MIN_USAGE_PHOTOS, MISSING_USAGE_PHOTO_MESSAGE, usesHandwrittenBbnt, CHEMICAL_TICKET_TYPE, COMMON_MATERIAL_POSITION, GAS_RETURN_STATUS, isChemicalFlowTicket, isGasCylinderCategory, isGasCylinderTicket, isOtherMaterialAdvanceTicket, isOtherMaterialTicketType, materialTicketRequiresRecovery, minRecoveryQuantity, OTHER_MATERIAL_ADVANCE_TICKET_TYPE, OTHER_MATERIAL_TICKET_TYPE, recoveryRequiredForReason, SINGLE_STEP_TICKET_TYPE, ticketReasonAllowed, TICKET_MATERIAL_CATEGORIES, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
 import { positionLabelOf, positionsMatch } from "@/lib/position-catalog";
 import { replacementPointDisplayLabel, replacementPointSelectionKey } from "@/lib/material-replacement-display";
 import { receiveOtherMaterial } from "@/lib/other-material-stock";
@@ -1093,7 +1093,15 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         if (!materialUserName) return fail("Vui lòng nhập tên VHV sử dụng vật tư");
         // Sửa lại bước này cũng phải giữ đủ ảnh — gỡ bớt còn 1 ảnh rồi lưu là lách rào.
         if (countUsagePhotos(t) < MIN_USAGE_PHOTOS) return fail(MISSING_USAGE_PHOTO_MESSAGE);
-        if (recoveryRequired && (!recoveryQuantity || recoveryQuantity <= 0)) return fail("Vui lòng nhập số lượng vật tư thu hồi");
+        // Ngưỡng nhỏ nhất theo vật tư: dầu EA Ultra Plus cho phép 0 (xem minRecoveryQuantity).
+        // Viết theo ngưỡng chứ không phải `!recoveryQuantity` — số 0 rơi vào nhánh falsy nên
+        // cách viết cũ chặn luôn cả trường hợp hợp lệ.
+        const minRecovery = minRecoveryQuantity(t);
+        if (recoveryRequired && (recoveryQuantity == null || !Number.isFinite(recoveryQuantity) || recoveryQuantity < minRecovery)) {
+          return fail(minRecovery === 0
+            ? "Số lượng vật tư thu hồi không hợp lệ"
+            : "Vui lòng nhập số lượng vật tư thu hồi");
+        }
         if (!recoveryRequired && t.recoveryDocUrl) {
           return fail("Biên bản vật tư thu hồi đã được cấp. Không thể chuyển sang không có vật tư thu hồi; vui lòng liên hệ Quản trị để xử lý hồ sơ.");
         }
@@ -2579,7 +2587,12 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       const recoveryReturned = recoveryRequired && body.recoveryReturned === true;
       const usedQuantity = Math.trunc(Number(body.usedQuantity));
       const materialUserName = String(body.materialUserName || "").trim();
-      if (recoveryRequired && (!recoveryQuantity || recoveryQuantity <= 0)) return fail("Vui lòng nhập số lượng vật tư thu hồi");
+      const minRecovery = minRecoveryQuantity(t);
+      if (recoveryRequired && (recoveryQuantity == null || !Number.isFinite(recoveryQuantity) || recoveryQuantity < minRecovery)) {
+        return fail(minRecovery === 0
+          ? "Số lượng vật tư thu hồi không hợp lệ"
+          : "Vui lòng nhập số lượng vật tư thu hồi");
+      }
       if (!Number.isFinite(usedQuantity) || usedQuantity <= 0) return fail("Khối lượng vật tư sử dụng phải lớn hơn 0");
       if (!materialUserName) return fail("Vui lòng nhập tên VHV sử dụng vật tư");
       // Ảnh hiện trường là bằng chứng đi kèm biên bản — thiếu thì không cho qua bước.
@@ -2746,7 +2759,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       if (!chiHuy) return fail("Vui lòng nhập tên chỉ huy trực tiếp (SCCN)");
       if (Number.isNaN(workStartedAt.getTime()) || Number.isNaN(workEndedAt.getTime())) return fail("Vui lòng chọn thời gian bắt đầu và kết thúc");
       if (workEndedAt <= workStartedAt) return fail("Thời gian kết thúc nghiệm thu phải sau thời gian bắt đầu nghiệm thu");
-      if (recoveryRequired && (!t.recoveryQuantity || t.recoveryQuantity <= 0)) {
+      if (recoveryRequired && (t.recoveryQuantity == null || t.recoveryQuantity < minRecoveryQuantity(t))) {
         return fail("Phiếu có thu hồi chưa có số lượng vật tư thu hồi. Vui lòng chỉnh sửa bước Sử dụng vật tư trước khi nghiệm thu.");
       }
 
@@ -2855,7 +2868,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       const item = t.items[0];
       if (!item) return fail("Phiếu chưa có vật tư");
       const recoveryRequired = materialTicketRequiresRecovery(t);
-      if (recoveryRequired && (!t.recoveryQuantity || t.recoveryQuantity <= 0)) {
+      if (recoveryRequired && (t.recoveryQuantity == null || t.recoveryQuantity < minRecoveryQuantity(t))) {
         return fail("Phiếu có thu hồi chưa có số lượng vật tư thu hồi. Vui lòng chỉnh sửa bước Sử dụng vật tư trước khi xuất biên bản.");
       }
       const erpCode = String(body.erpCode || "").trim();

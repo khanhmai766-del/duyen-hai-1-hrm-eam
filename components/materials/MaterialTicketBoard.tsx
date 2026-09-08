@@ -39,7 +39,7 @@ import { DefectForm } from "@/components/defects/defect-form";
 import { useDefects, type DefectItem } from "@/hooks/useDefects";
 import { useDefectHistory } from "@/hooks/useDefectHistory";
 import { usePositions } from "@/hooks/useUsers";
-import { MIN_USAGE_PHOTOS, usesHandwrittenBbnt, COMMON_MATERIAL_POSITION, displayMaterialCategory, GAS_RETURN_STATUS, isChemicalFlowTicket, isGasCylinderTicket, isOtherMaterialAdvanceTicket, isOtherMaterialCategory, isOtherMaterialTicketType, isSingleStepTicketMaterial, CHEMICAL_TICKET_TYPE, isSupplementReason, MATERIAL_CATEGORY_FILTERS, materialCategoryMatches, materialTicketBelongsToRecoveryTab, materialTicketRequiresRecovery, OTHER_MATERIAL_ADVANCE_TICKET_TYPE, OTHER_MATERIAL_GROUP, OTHER_MATERIAL_TICKET_TYPE, ticketReasonsFor, TICKET_REASONS, TICKET_REASON_OTHER, SINGLE_STEP_TICKET_TYPE, TICKET_MATERIAL_CATEGORIES, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
+import { MIN_USAGE_PHOTOS, minRecoveryQuantity, usesHandwrittenBbnt, COMMON_MATERIAL_POSITION, displayMaterialCategory, GAS_RETURN_STATUS, isChemicalFlowTicket, isGasCylinderTicket, isOtherMaterialAdvanceTicket, isOtherMaterialCategory, isOtherMaterialTicketType, isSingleStepTicketMaterial, CHEMICAL_TICKET_TYPE, isSupplementReason, MATERIAL_CATEGORY_FILTERS, materialCategoryMatches, materialTicketBelongsToRecoveryTab, materialTicketRequiresRecovery, OTHER_MATERIAL_ADVANCE_TICKET_TYPE, OTHER_MATERIAL_GROUP, OTHER_MATERIAL_TICKET_TYPE, ticketReasonsFor, TICKET_REASONS, TICKET_REASON_OTHER, SINGLE_STEP_TICKET_TYPE, TICKET_MATERIAL_CATEGORIES, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
 import { normalizeText } from "@/lib/nav";
 import { positionsMatch } from "@/lib/position-catalog";
 import {
@@ -2138,7 +2138,11 @@ function StepReviewDialog({ t, viewer, stepKey, onClose }: { t: MaterialTicket; 
       ?.deliveryPhotoUrl ?? null;
   const [usedQuantity, setUsedQuantity] = useState(t.usedQuantity ?? 1);
   const [materialUserName, setMaterialUserName] = useState(t.materialUserName ?? "");
-  const [recoveryQuantity, setRecoveryQuantity] = useState(t.recoveryQuantity ?? 1);
+  // Ngưỡng thu hồi nhỏ nhất theo vật tư — dầu EA Ultra Plus cho phép 0, xem
+  // `minRecoveryQuantity`. Dùng cho cả giá trị mặc định, thuộc tính min của ô nhập và
+  // điều kiện tắt nút lưu, để ba chỗ không lệch nhau.
+  const minRecovery = minRecoveryQuantity(t);
+  const [recoveryQuantity, setRecoveryQuantity] = useState(t.recoveryQuantity ?? minRecovery);
   const [recoveryReturned, setRecoveryReturned] = useState(!!t.recoveryReturnedAt);
   const [pctNumber, setPctNumber] = useState(t.pctNumber ?? "");
   const [chiHuyName, setChiHuyName] = useState(t.chiHuyName ?? "");
@@ -2292,7 +2296,7 @@ function StepReviewDialog({ t, viewer, stepKey, onClose }: { t: MaterialTicket; 
           {materialTicketRequiresRecovery(t) && (
             <div className="review-recovery-grid">
               <label className="review-recovery-quantity">Số lượng vật tư thu hồi ghi vào BBTHVT ({t.items[0]?.material.unit ?? ""}) *
-                <input type="number" min={1} value={recoveryQuantity} disabled={!canEdit} onChange={(e) => setRecoveryQuantity(Number(e.target.value))} />
+                <input type="number" min={minRecovery} value={recoveryQuantity} disabled={!canEdit} onChange={(e) => setRecoveryQuantity(Number(e.target.value))} />
               </label>
               <label className={`recovery-return-check ${recoveryReturned ? "checked" : ""}`}>
                 <input type="checkbox" disabled={!canEdit} checked={recoveryReturned} onChange={(e) => setRecoveryReturned(e.target.checked)} />
@@ -3044,7 +3048,9 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
   const [bbntDoNumberInput, setBbntDoNumberInput] = useState(t.bbntDoNumber ?? "");
   const [settlementConfirmed, setSettlementConfirmed] = useState(false);
   const [recoveryQuantityInput, setRecoveryQuantityInput] = useState(() =>
-    String(t.recoveryQuantity ?? (isGasCylinderTicket(t.materialCategory) ? (t.receivedQuantity ?? t.vhvReceivedQuantity ?? 1) : 1)));
+    String(t.recoveryQuantity ?? (isGasCylinderTicket(t.materialCategory)
+      ? (t.receivedQuantity ?? t.vhvReceivedQuantity ?? 1)
+      : minRecoveryQuantity(t))));
   const [recoveryReturned, setRecoveryReturned] = useState(!!t.recoveryReturnedAt);
   const [startedAt, setStartedAt] = useState("");
   const [endedAt, setEndedAt] = useState("");
@@ -3983,6 +3989,8 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
     const quantityExceedsReceived = t.type === "SU_DUNG_HIEN_CO" && qty > received;
 	    const recoveryRequired = materialTicketRequiresRecovery(t);
 	    const recoveryQuantity = Math.trunc(Number(recoveryQuantityInput));
+	    // Dầu EA Ultra Plus châm bù có lúc không rút ra được giọt dầu cũ nào — ngưỡng 0.
+	    const minRecovery = minRecoveryQuantity(t);
 	            return (
 	              <div className="act">
 	        <div className="use-field-grid">
@@ -3998,7 +4006,7 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
         {recoveryRequired && (
           <div className="recovery-quantity-row">
             <label className="field">Số lượng vật tư thu hồi ghi vào BBTHVT{unit ? ` (${unit})` : ""} *
-              <input type="number" min={1} value={recoveryQuantityInput} onChange={(e) => setRecoveryQuantityInput(e.target.value)} />
+              <input type="number" min={minRecovery} value={recoveryQuantityInput} onChange={(e) => setRecoveryQuantityInput(e.target.value)} />
             </label>
             <label className={`recovery-return-check ${recoveryReturned ? "checked" : ""}`}>
               <input type="checkbox" checked={recoveryReturned} onChange={(e) => setRecoveryReturned(e.target.checked)} />
@@ -4019,7 +4027,7 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
         {usagePhotoCount < MIN_USAGE_PHOTOS && (
           <div className="warnbox"><AlertTriangle size={15} /> Cần tối thiểu {MIN_USAGE_PHOTOS} trên 3 ảnh hiện trường mới xác nhận được ({usagePhotoCount}/3 ảnh).</div>
         )}
-        <button className="btn primary big" disabled={!materialUserNameInput.trim() || qty <= 0 || usagePhotoCount < MIN_USAGE_PHOTOS || quantityExceedsStock || quantityExceedsReceived || (recoveryRequired && (!Number.isFinite(recoveryQuantity) || recoveryQuantity <= 0)) || act.isPending}
+        <button className="btn primary big" disabled={!materialUserNameInput.trim() || qty <= 0 || usagePhotoCount < MIN_USAGE_PHOTOS || quantityExceedsStock || quantityExceedsReceived || (recoveryRequired && (!Number.isFinite(recoveryQuantity) || recoveryQuantity < minRecovery)) || act.isPending}
           onClick={() => run({ action: "use", materialUserName: materialUserNameInput.trim(), usedQuantity: qty, ...(recoveryRequired ? { recoveryQuantity, recoveryReturned } : {}) }, "Đã xác nhận sử dụng vật tư")}>
           {act.isPending ? <Loader2 className="spin" size={15} /> : <Check size={15} />} Xác nhận
         </button>
