@@ -32,7 +32,7 @@ import {
   wrap,
   type PdfFonts,
 } from "@/lib/pccc-pdf-kit";
-import { computeTinhTrang, displayKdDate } from "@/lib/tbycnn";
+import { computeTinhTrang, displayKdDate, TBYCNN_NO_POSITION_LABEL, type TbycnnToolTab } from "@/lib/tbycnn";
 
 /**
  * 16 cột đúng mảng `COLUMNS` của bản cũ. Bề rộng cộng lại BẰNG ĐÚNG `CONTENT_W` (762pt) —
@@ -41,7 +41,7 @@ import { computeTinhTrang, displayKdDate } from "@/lib/tbycnn";
  * Chia chỗ theo nội dung thật của 709 dòng chứ không chia đều: "Thông số kỹ thuật" là
  * đoạn văn nhiều dòng nên lấy phần rộng nhất, còn "TT"/"SL"/"Chu kỳ" chỉ chứa 1–2 chữ số.
  */
-const COLS: { key: string; label: string; w: number; align?: "center" }[] = [
+const MAIN_COLS: PdfCol[] = [
   { key: "tt", label: "TT", w: 18, align: "center" },
   { key: "tenThietBi", label: "Tên TBYCNN", w: 72 },
   { key: "soLuong", label: "SL", w: 16, align: "center" },
@@ -66,7 +66,62 @@ const COLS: { key: string; label: string; w: number; align?: "center" }[] = [
 ];
 
 /** Bề rộng cộng lại phải BẰNG ĐÚNG `CONTENT_W`, lệch là đường kẻ dọc rơi ra ngoài lề. */
-const COLS_W = COLS.reduce((sum, col) => sum + col.w, 0);
+type PdfCol = { key: string; label: string; w: number; align?: "center" };
+
+/**
+ * Ba bảng dụng cụ ATLĐ in bằng ĐÚNG cột của biểu mẫu chúng (tải trọng thử, thời gian thử,
+ * trị số cách điện…), không phải 17 cột của sổ chính — in bằng bộ cột chung thì nửa số cột
+ * bỏ trống mà các số vừa đo lại không có chỗ nào để in.
+ *
+ * Bề rộng ở đây ghi theo TỈ LỆ mong muốn; `fitWidths` kéo cho tổng khớp CONTENT_W.
+ */
+function toolCols(tab: TbycnnToolTab): PdfCol[] {
+  return fitWidths([
+    { key: "tt", label: "TT", w: 20, align: "center" },
+    { key: "tenThietBi", label: "Tên dụng cụ", w: 95 },
+    { key: "maHieu", label: "Mã hiệu", w: 78 },
+    ...tab.columns.map((col) => ({
+      key: col.key,
+      label: col.label,
+      w: col.width * 0.42,
+      ...(col.numeric ? { align: "center" as const } : {}),
+    })),
+    { key: "cuongVi", label: "Cương vị quản lý", w: 62 },
+    { key: "chuKyThu", label: "Chu kỳ (tháng)", w: 34, align: "center" },
+    { key: "kdTiepTheo", label: "Thời gian kiểm tra tiếp theo", w: 50, align: "center" },
+    { key: "chuKy", label: "Chữ ký xác nhận", w: 58, align: "center" },
+  ]);
+}
+
+/**
+ * Kéo bề rộng cho tổng BẰNG ĐÚNG `CONTENT_W`: lệch một chút là đường kẻ dọc cuối bảng
+ * rơi ra ngoài lề giấy. Chênh lệch sau khi làm tròn dồn vào cột RỘNG NHẤT — cột hẹp
+ * (TT, Chu kỳ) mà bị cộng thêm vài pt thì nhìn ra ngay là bảng bị lệch.
+ */
+function fitWidths(cols: PdfCol[]): PdfCol[] {
+  const raw = cols.reduce((sum, col) => sum + col.w, 0);
+  const scaled = cols.map((col) => ({ ...col, w: Math.round((col.w / raw) * CONTENT_W) }));
+  const drift = CONTENT_W - scaled.reduce((sum, col) => sum + col.w, 0);
+  if (drift !== 0) {
+    const widest = scaled.reduce((best, col) => (col.w > best.w ? col : best), scaled[0]);
+    widest.w += drift;
+  }
+  // Cùng chốt kiểm với `MAIN_COLS`: thà ném lỗi lúc dựng còn hơn để đường kẻ dọc cuối
+  // bảng lặng lẽ rơi ra ngoài lề giấy trên tập hồ sơ đã in.
+  const total = scaled.reduce((sum, col) => sum + col.w, 0);
+  if (total !== CONTENT_W) {
+    throw new Error(`Bề rộng cột bảng dụng cụ cộng lại ${total}pt, phải bằng ${CONTENT_W}pt`);
+  }
+  return scaled;
+}
+
+/** Bộ cột của bản in: sổ chính giữ nguyên 17 cột đã căn tay, ba bảng dụng cụ theo biểu mẫu riêng.
+ *  Xuất ra để đo lại số dòng gói chữ khi đổi bề rộng (xem docs/tbycnn.md mục 5b). */
+export function colsFor(tab: TbycnnToolTab | null): PdfCol[] {
+  return tab ? toolCols(tab) : MAIN_COLS;
+}
+
+const COLS_W = MAIN_COLS.reduce((sum, col) => sum + col.w, 0);
 if (COLS_W !== CONTENT_W) {
   throw new Error(`Bề rộng cột sổ TBYCNN cộng lại ${COLS_W}pt, phải bằng ${CONTENT_W}pt`);
 }
@@ -124,6 +179,14 @@ export type TbycnnPdfRow = {
   soLuongKhaDung: number | null;
   soLuongKhongKhaDung: number | null;
   ghiChu: string | null;
+  // Cột riêng của 3 bảng dụng cụ ATLĐ; null với mọi dòng của sổ chính.
+  taiTrongThuKg: number | null;
+  thoiGianThuPhut: number | null;
+  tinhTrangSuDung: string | null;
+  kiemTraBangMat: string | null;
+  cachDienMOhm: number | null;
+  ketQuaThu: string | null;
+  nghiemThuSauSuaChua: string | null;
   khuVuc: string;
   cuongVi: string | null;
   machine: string;
@@ -136,6 +199,8 @@ export type TbycnnPdfInput = {
   /** Nhãn phạm vi in ra dưới tiêu đề: cương vị + tổ máy, hoặc "Toàn phân xưởng". */
   scopeLabel: string;
   rows: TbycnnPdfRow[];
+  /** Bảng dụng cụ đang in; null = sổ chính. Quyết định bộ cột của bản in. */
+  toolTab?: TbycnnToolTab | null;
   /** Ảnh chữ ký lấy từ S3, khoá là `signatureKey`. */
   signatureImages: Map<string, Buffer>;
 };
@@ -148,6 +213,8 @@ function cellText(row: TbycnnPdfRow, key: string): string {
       return displayKdDate(row.kdTiepTheo, row.kdTiepTheoText);
     case "tinhTrang":
       return computeTinhTrang(row.soLuongKhaDung, row.soLuongKhongKhaDung);
+    case "cuongVi":
+      return row.cuongVi || row.khuVuc || TBYCNN_NO_POSITION_LABEL;
     default: {
       const v = (row as unknown as Record<string, unknown>)[key];
       return v == null ? "" : String(v);
@@ -156,9 +223,9 @@ function cellText(row: TbycnnPdfRow, key: string): string {
 }
 
 /** Chiều cao hàng = ô cần nhiều dòng nhất. Bản cũ cũng in đủ nội dung, không cắt. */
-function rowHeight(row: TbycnnPdfRow, fonts: PdfFonts): number {
+function rowHeight(row: TbycnnPdfRow, fonts: PdfFonts, cols: PdfCol[]): number {
   let lines = 1;
-  for (const col of COLS) {
+  for (const col of cols) {
     if (col.key === "chuKy") continue; // ô ảnh, không tính theo chữ
     const n = wrap(cellText(row, col.key), fonts.regular, FS_BODY, col.w - CELL_PAD * 2, MAX_LINES).length;
     if (n > lines) lines = n;
@@ -230,10 +297,10 @@ function drawPageHeader(page: PDFPage, fonts: PdfFonts, input: TbycnnPdfInput): 
 }
 
 /** Đầu bảng VẼ LẠI Ở MỖI TRANG — bản in đóng thành tập, lật giữa chừng phải tra được cột. */
-function drawTableHeader(page: PDFPage, fonts: PdfFonts, top: number): number {
+function drawTableHeader(page: PDFPage, fonts: PdfFonts, top: number, cols: PdfCol[]): number {
   const y = top - HEADER_H;
   let x = MARGIN;
-  for (const col of COLS) {
+  for (const col of cols) {
     cellBox(page, x, y, col.w, HEADER_H, HEAD_FILL);
     drawCell(page, col.label, {
       x,
@@ -397,12 +464,13 @@ export async function buildTbycnnPdf(input: TbycnnPdfInput): Promise<Buffer> {
     }
   }
 
+  const cols = colsFor(input.toolTab ?? null);
   let page = pdf.addPage([PAGE.w, PAGE.h]);
-  let y = drawTableHeader(page, fonts, drawPageHeader(page, fonts, input));
+  let y = drawTableHeader(page, fonts, drawPageHeader(page, fonts, input), cols);
 
   const newPage = () => {
     page = pdf.addPage([PAGE.w, PAGE.h]);
-    y = drawTableHeader(page, fonts, drawPageHeader(page, fonts, input));
+    y = drawTableHeader(page, fonts, drawPageHeader(page, fonts, input), cols);
   };
 
   // Dòng tiêu đề nhóm chèn lại mỗi khi (cương vị, danh mục La Mã) đổi — giống hệt cách
@@ -410,8 +478,10 @@ export async function buildTbycnnPdf(input: TbycnnPdfInput): Promise<Buffer> {
   let lastGroup = "";
   let zebra = false;
   for (const row of input.rows) {
-    const group = `${row.khuVuc} — ${row.nhom}`;
-    const h = rowHeight(row, fonts);
+    // Dòng hồ sơ để trống cương vị vẫn phải có tiêu đề nhóm đọc được, không phải một
+    // dấu gạch ngang lửng lơ đầu trang in.
+    const group = `${row.khuVuc || TBYCNN_NO_POSITION_LABEL} — ${row.nhom}`;
+    const h = rowHeight(row, fonts, cols);
     const needed = (group !== lastGroup ? GROUP_H : 0) + h;
     if (y - needed < MARGIN + 12) newPage();
 
@@ -434,7 +504,7 @@ export async function buildTbycnnPdf(input: TbycnnPdfInput): Promise<Buffer> {
 
     let x = MARGIN;
     const fill = zebra ? ZEBRA_FILL : undefined;
-    for (const col of COLS) {
+    for (const col of cols) {
       cellBox(page, x, y - h, col.w, h, fill);
       if (col.key === "chuKy") {
         drawSignatureCell(

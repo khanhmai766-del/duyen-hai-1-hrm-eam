@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { apiDownload, apiGet, apiMutate } from "@/lib/fetcher";
+import { apiDownload, apiDownloadPost, apiGet, apiMutate } from "@/lib/fetcher";
 
 export interface TbycnnEquipment {
   id: string;
@@ -38,6 +38,16 @@ export interface TbycnnEquipment {
   /** Suy ra ở server từ hai ô số lượng — client không tự tính lại. */
   tinhTrang: string;
   ghiChu: string | null;
+  // Cột riêng của 3 bảng dụng cụ ATLĐ (xem TBYCNN_TOOL_TABS) — null với dòng sổ chính.
+  taiTrongThuKg: number | null;
+  thoiGianThuPhut: number | null;
+  /** "Qua sử dụng" / "Dây mới" — KHÁC cột `tinhTrang` suy từ số lượng khả dụng. */
+  tinhTrangSuDung: string | null;
+  kiemTraBangMat: string | null;
+  cachDienMOhm: number | null;
+  /** Cột "Kết quả" (thang, dây đai) và "Đánh giá" (dụng cụ điện). */
+  ketQuaThu: string | null;
+  nghiemThuSauSuaChua: string | null;
   canDelete: boolean;
   /** Dòng này có nằm trong phạm vi cương vị được ghi của người đăng nhập không. */
   canWrite: boolean;
@@ -207,13 +217,15 @@ export function useUnsignTbycnn() {
   });
 }
 
-export type TbycnnExportParams = { period?: string; cuongViCode?: string; machine?: string };
+/** `bang` = khoá bảng dụng cụ đang xem (TBYCNN_TOOL_TABS); bỏ trống = sổ chính. */
+export type TbycnnExportParams = { period?: string; cuongViCode?: string; machine?: string; bang?: string };
 
 function exportQuery(params: TbycnnExportParams) {
   const qs = new URLSearchParams();
   if (params.period) qs.set("period", params.period);
   if (params.cuongViCode) qs.set("cuongViCode", params.cuongViCode);
   if (params.machine) qs.set("machine", params.machine);
+  if (params.bang) qs.set("bang", params.bang);
   return qs.toString();
 }
 
@@ -247,6 +259,30 @@ export function tbycnnPdfUrl(params: TbycnnExportParams, preview = false) {
 /** Bản nháp để soi trong khung xem trước — KHÔNG tải về, KHÔNG ghi nhật ký. */
 export async function fetchTbycnnPdfPreview(params: TbycnnExportParams) {
   return apiDownload(tbycnnPdfUrl(params, true));
+}
+
+/**
+ * BIÊN BẢN KIỂM TRA ĐỊNH KỲ (.docx) của một bảng dụng cụ ATLĐ.
+ *
+ * KHÔNG nhận `cuongViCode`/`machine`: biên bản là văn bản pháp lý cho TOÀN BỘ đợt kiểm
+ * tra, xuất một phần theo bộ lọc đang đặt là ra biên bản thiếu thiết bị.
+ */
+export async function downloadTbycnnBbkt(payload: {
+  bang: string;
+  period?: string;
+  ngayBanHanh?: string | null;
+  gio: string;
+  ngayKiemTra?: string | null;
+  diaDiem: string;
+  thanhPhan: Array<{ ten: string; chucDanh: string }>;
+}) {
+  const { blob, filename } = await apiDownloadPost("/api/tbycnn/export-bbkt", payload);
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 /** Bản in A4 ngang — cùng bộ lọc với bản Excel để hai nút luôn ra cùng phạm vi. */

@@ -7,6 +7,7 @@ import { loadSignatureImages } from "@/lib/pccc-archive";
 import { positionLabelOf } from "@/lib/position-catalog";
 import { MACHINE_LABEL, isPcccMachine } from "@/lib/pccc-position";
 import { buildTbycnnPdf } from "@/lib/tbycnn-pdf";
+import { tbycnnToolTabOf, TBYCNN_TOOL_DANH_MUCS } from "@/lib/tbycnn";
 import {
   resolvePeriod,
   TBYCNN_ORDER_BY,
@@ -21,7 +22,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /**
- * GET /api/tbycnn/export-pdf?period=YYYY-MM&cuongViCode=&machine=&preview=1
+ * GET /api/tbycnn/export-pdf?period=YYYY-MM&cuongViCode=&machine=&bang=&preview=1
  *
  * Bản in A4 ngang của sổ TBYCNN — thay cho nút "Xuất PDF" của ứng dụng rời, vốn chỉ mở
  * tab trắng rồi gọi `window.print()` (xem README mục 6.9 của bản cũ). Dựng ở server nên
@@ -51,6 +52,12 @@ export async function GET(req: NextRequest) {
     const period = await resolvePeriod(sp.get("period"));
     const cuongViCode = (sp.get("cuongViCode") ?? "").trim();
     const machine = (sp.get("machine") ?? "").trim();
+    /*
+     * `bang` = bảng đang xem. Ba bảng dụng cụ ATLĐ in bằng biểu mẫu riêng của chúng và
+     * KHÔNG nằm trong sổ chính — xem TBYCNN_TOOL_TABS. Không truyền → in sổ chính, tức
+     * loại hẳn ba danh mục dụng cụ ra.
+     */
+    const toolTab = tbycnnToolTabOf(sp.get("bang"));
 
     // Cùng lý do như xuất Excel: nút xuất không được là cửa sau vượt phạm vi xem.
     const viewScope = await resolveTbycnnViewScope(user);
@@ -59,6 +66,7 @@ export async function GET(req: NextRequest) {
       ...scopeWhere(viewScope),
       ...(cuongViCode ? { cuongViCode } : {}),
       ...(machine ? { machine } : {}),
+      ...(toolTab ? { danhMuc: toolTab.danhMuc } : { danhMuc: { notIn: [...TBYCNN_TOOL_DANH_MUCS] } }),
     };
 
     const rows = await prisma.tbycnnEquipment.findMany({
@@ -69,6 +77,7 @@ export async function GET(req: NextRequest) {
 
     const scopeLabel =
       [
+        toolTab ? toolTab.label : null,
         cuongViCode ? positionLabelOf(cuongViCode) : "Toàn phân xưởng",
         machine && isPcccMachine(machine) && machine !== "COMMON" ? MACHINE_LABEL[machine] : null,
       ]
@@ -81,6 +90,7 @@ export async function GET(req: NextRequest) {
       periodLabel: period.label,
       scopeLabel,
       rows,
+      toolTab,
       signatureImages,
     });
 
@@ -90,7 +100,7 @@ export async function GET(req: NextRequest) {
         "EXPORT_TBYCNN_PDF",
         "TbycnnPeriod",
         period.id,
-        auditDetailWithPosition(user, `Xuất PDF TBYCNN ${period.label} · ${scopeLabel} (${rows.length} thiết bị)`)
+        auditDetailWithPosition(user, `Xuất PDF ${toolTab ? toolTab.label : "TBYCNN"} ${period.label} · ${scopeLabel} (${rows.length} thiết bị)`)
       );
     }
 
@@ -107,7 +117,7 @@ export async function GET(req: NextRequest) {
       headers: {
         "Content-Type": "application/pdf",
         "Content-Disposition":
-          `${preview ? "inline" : "attachment"}; filename="TBYCNN-${period.label}-${slug}.pdf"`,
+          `${preview ? "inline" : "attachment"}; filename="${toolTab ? toolTab.key : "TBYCNN"}-${period.label}-${slug}.pdf"`,
       },
     });
   });

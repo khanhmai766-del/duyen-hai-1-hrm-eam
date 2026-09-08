@@ -30,6 +30,7 @@ import {
   Pencil,
   PenLine,
   Plus,
+  Trash2,
   Save,
   ShieldAlert,
   Wrench,
@@ -82,10 +83,17 @@ import {
   TBYCNN_KD_FILTERS,
   TBYCNN_KD_LABEL,
   TBYCNN_STATUS_FILTERS,
+  tbycnnPositionKey,
+  tbycnnPositionLabel,
+  tbycnnToolTabOf,
+  tbycnnToolTableColumns,
+  isTbycnnToolDanhMuc,
+  TBYCNN_TOOL_TABS,
   romanOf,
 } from "@/lib/tbycnn";
 import { EditableCell } from "@/components/pccc/pccc-shared";
 import {
+  downloadTbycnnBbkt,
   downloadTbycnnExcel,
   downloadTbycnnPdf,
   fetchTbycnnPdfPreview,
@@ -98,21 +106,29 @@ import {
   type TbycnnEquipment,
   type TbycnnSignPreview,
 } from "@/hooks/useTbycnn";
+import { bbktFormOf, BBKT_MAX_MEMBERS, type BbktMember } from "@/lib/tbycnn-bbkt";
 import { useRbacAccess } from "@/hooks/useRbacAccess";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { TbycnnSignDialog } from "@/components/tbycnn/TbycnnSignDialog";
 import { TbycnnCreateDialog, type TbycnnCreatePosition } from "@/components/tbycnn/TbycnnCreateDialog";
 import { POSITION_CATALOG, positionLabelOf } from "@/lib/position-catalog";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 
 const ALL = "__all__";
-const COL_COUNT = 11;
+/* Số cột của SỔ CHÍNH: nút "+" · Tên · Cương vị · Danh mục · Tổ máy · Mã hiệu · KKS ·
+   Chu kỳ · KĐ gần nhất · KĐ tiếp theo · Tình trạng. Bảng dụng cụ bỏ BA cột (Danh mục,
+   Tổ máy, KKS) và thay bằng bộ cột của biểu mẫu nó — xem `colCount` trong TbycnnPage. */
+const MAIN_COL_COUNT = 11;
+/** Khoá tab của sổ chính. Ba tab còn lại lấy khoá từ TBYCNN_TOOL_TABS. */
+const MAIN_TAB = "MAIN";
 
 /*
  * Hàng CAO HƠN một nhịp so với `TD_ROW` gốc.
@@ -251,6 +267,14 @@ function sortValue(row: TbycnnEquipment, key: string): string | number | null {
       return row.soLuong;
     case "chuKyThu":
       return row.chuKyThu;
+    // Ba cột số của bảng dụng cụ: so theo SỐ. Rơi vào nhánh mặc định là so chuỗi, khi đó
+    // 1050 đứng trước 600 vì "1" < "6".
+    case "taiTrongThuKg":
+      return row.taiTrongThuKg;
+    case "thoiGianThuPhut":
+      return row.thoiGianThuPhut;
+    case "cachDienMOhm":
+      return row.cachDienMOhm;
     default: {
       const value = (row as unknown as Record<string, unknown>)[key];
       return value == null || value === "" ? null : String(value);
@@ -272,6 +296,8 @@ export default function TbycnnPage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(PCCC_PAGE_SIZES[0]);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  /** Bảng đang xem: MAIN_TAB hoặc khoá của một bảng trong TBYCNN_TOOL_TABS. */
+  const [tab, setTab] = useState<string>(MAIN_TAB);
   const [exporting, setExporting] = useState<"excel" | "pdf" | null>(null);
   /** Bản nháp PDF đang mở để xem trước; `null` = chưa dựng bản nào. */
   const [pdfPreview, setPdfPreview] = useState<{ url: string; filename: string } | null>(null);
@@ -304,7 +330,70 @@ export default function TbycnnPage() {
 
   const dirtyCount = Object.keys(draft).length;
 
-  const rows = useMemo(() => data?.rows ?? [], [data]);
+  /*
+   * TẦNG CHỌN BẢNG. Ba bảng dụng cụ ATLĐ (thang di động / dây đai / dụng cụ điện cầm tay)
+   * có biểu mẫu riêng nên tách hẳn khỏi sổ chính: đổi tab là đổi luôn bộ dòng, bộ cột,
+   * năm thẻ thống kê và phạm vi của nút Xuất File. Một dòng chỉ thuộc ĐÚNG MỘT tab, nên
+   * không có chuyện đếm hai lần.
+   */
+  const allRows = useMemo(() => data?.rows ?? [], [data]);
+  const activeTool = useMemo(() => tbycnnToolTabOf(tab), [tab]);
+  const rows = useMemo(
+    () =>
+      allRows.filter((r) => (activeTool ? r.danhMuc === activeTool.danhMuc : !isTbycnnToolDanhMuc(r.danhMuc))),
+    [allRows, activeTool]
+  );
+  /** Số dòng của từng tab, hiện thành huy hiệu — biết bảng nào có gì mà không phải bấm thử. */
+  const tabCounts = useMemo(() => {
+    const counts: Record<string, number> = { [MAIN_TAB]: 0 };
+    for (const tool of TBYCNN_TOOL_TABS) counts[tool.key] = 0;
+    for (const r of allRows) {
+      const tool = TBYCNN_TOOL_TABS.find((t) => t.danhMuc === r.danhMuc);
+      counts[tool ? tool.key : MAIN_TAB] += 1;
+    }
+    return counts;
+  }, [allRows]);
+  /**
+   * Ở ba bảng dụng cụ, MỌI tiêu đề cột canh giữa ô — bảng vừa khung, cột nào cũng hẹp
+   * nên nhãn canh trái lệch hẳn về một bên trông rời rạc. Sổ chính giữ nguyên canh trái
+   * ở Tên / Mã hiệu / KKS: bảng đó cuộn ngang, canh trái giúp dò cột nhanh hơn.
+   */
+  const headAlign = (fallback: "left" | "center") => (activeTool ? "center" : fallback);
+
+  /** Cột dựng thành cột trên bảng — cột `detailOnly` chỉ hiện ở khối chi tiết, nhưng
+   *  VẪN nằm trong bản Excel và bản in PDF vì biểu mẫu giấy có chúng. */
+  const toolTableColumns = useMemo(() => (activeTool ? tbycnnToolTableColumns(activeTool) : []), [activeTool]);
+
+  /**
+   * BỀ RỘNG BẢNG DỤNG CỤ — chia theo TỈ LỆ, không đặt px cứng.
+   *
+   * Sổ chính 16 cột thì buộc phải cuộn ngang, nên khung bảng có sẵn thanh cuộn riêng cả
+   * hai chiều (`TABLE_SCROLLER`). Ba bảng dụng cụ ít cột hơn hẳn và phải VỪA KHUNG: đặt
+   * px cứng là lại sinh thanh cuộn, mà cuộn trong một khung lồng bên trong trang thì
+   * người dùng phải kéo hai tầng mới đọc hết một dòng.
+   *
+   * Trọng số của các cột dùng chung ghi ở đây; cột riêng của từng bảng lấy `width` trong
+   * TBYCNN_TOOL_TABS làm trọng số. Quy ra phần trăm nên tổng luôn bằng đúng bề ngang khung.
+   */
+  const toolWidths = useMemo(() => {
+    if (!activeTool) return null;
+    const shared = { tenThietBi: 150, cuongVi: 110, maHieu: 95, chuKyThu: 60, kdGanNhat: 85, kdTiepTheo: 85, tinhTrang: 95 };
+    // Cột nút "+" rộng 42px CỐ ĐỊNH: phải chừa phần của nó ra khỏi 100%, không thì các cột
+    // phần trăm cộng lại đủ 100% rồi cộng thêm 42px là bảng tràn khỏi khung.
+    const EXPANDER_W = 42;
+    const total =
+      EXPANDER_W +
+      Object.values(shared).reduce((sum, w) => sum + w, 0) +
+      toolTableColumns.reduce((sum, col) => sum + col.width, 0);
+    const pct = (w: number) => `${((w / total) * 100).toFixed(3)}%`;
+    return {
+      shared: Object.fromEntries(Object.entries(shared).map(([k, w]) => [k, pct(w)])) as Record<string, string>,
+      tool: Object.fromEntries(toolTableColumns.map((col) => [col.key, pct(col.width)])) as Record<string, string>,
+    };
+  }, [activeTool, toolTableColumns]);
+
+  /** Số cột thân bảng: bảng dụng cụ bỏ Danh mục + KKS, thêm bộ cột của biểu mẫu nó. */
+  const colCount = activeTool ? MAIN_COL_COUNT - 3 + toolTableColumns.length : MAIN_COL_COUNT;
   const canManage = Boolean(data?.canManage);
   const period = data?.period;
   const itemCreationEnabled = Boolean(period?.allowItemCreation) && !period?.isClosed && canManage;
@@ -331,7 +420,7 @@ export default function TbycnnPage() {
    */
   const cuongViList = useMemo(() => {
     const map = new Map<string, string>();
-    for (const r of rows) map.set(r.cuongViCode ?? r.khuVuc, r.cuongVi ?? r.khuVuc);
+    for (const r of rows) map.set(tbycnnPositionKey(r), tbycnnPositionLabel(r));
     return [...map].map(([value, label]) => ({ value, label })).sort((a, b) => a.label.localeCompare(b.label, "vi"));
   }, [rows]);
 
@@ -350,9 +439,16 @@ export default function TbycnnPage() {
     const used = new Set(rows.map((r) => r.machine));
     return PCCC_MACHINES.filter((m) => used.has(m));
   }, [rows]);
+  /** Ô lọc Danh mục — chỉ có nghĩa ở sổ chính (bảng dụng cụ mỗi bảng đúng một danh mục). */
   const danhMucList = useMemo(
     () => [...new Set(rows.map((r) => r.danhMuc))].sort((a, b) => a.localeCompare(b, "vi")),
     [rows]
+  );
+  /* Hộp THÊM THIẾT BỊ phải thấy đủ danh mục của cả sổ, không phải riêng tab đang xem:
+     lấy theo tab thì đứng ở sổ chính không bao giờ thêm được một cái thang. */
+  const danhMucListForCreate = useMemo(
+    () => [...new Set(allRows.map((r) => r.danhMuc))].sort((a, b) => a.localeCompare(b, "vi")),
+    [allRows]
   );
 
   /**
@@ -366,7 +462,7 @@ export default function TbycnnPage() {
   const scoped = useMemo(() => {
     const q = normalizeText(search);
     return rows.filter((r) => {
-      if (cuongViCode !== ALL && (r.cuongViCode ?? r.khuVuc) !== cuongViCode) return false;
+      if (cuongViCode !== ALL && tbycnnPositionKey(r) !== cuongViCode) return false;
       if (machine !== ALL && r.machine !== machine) return false;
       if (danhMuc !== ALL && r.danhMuc !== danhMuc) return false;
       if (!q) return true;
@@ -435,6 +531,15 @@ export default function TbycnnPage() {
   useEffect(() => {
     setPage(1);
   }, [search, cuongViCode, machine, danhMuc, status, kd, sort, pageSize]);
+
+  /* Đổi bảng thì bỏ lọc danh mục và thu gọn dòng đang mở: bảng dụng cụ chỉ có MỘT danh
+     mục nên ô lọc đó vô nghĩa, mà để nguyên giá trị cũ là bảng ra rỗng không rõ vì sao. */
+  useEffect(() => {
+    setDanhMuc(ALL);
+    setMachine(ALL);
+    setExpandedId(null);
+    setPage(1);
+  }, [tab]);
 
   // Số ô lọc đang bật — hiện thành huy hiệu trên nút "Bộ lọc" để biết bảng đang bị
   // cắt bớt mà không phải mở bảng chọn ra xem. Ô tìm kiếm KHÔNG tính vào đây: nó nằm
@@ -587,6 +692,9 @@ export default function TbycnnPage() {
     return {
       cuongViCode: cuongViCode === ALL ? undefined : cuongViCode,
       machine: machine === ALL ? undefined : machine,
+      // Xuất đúng BẢNG đang xem: bấm Xuất File ở tab Thang di động mà nhận cả quyển sổ
+      // thì nút đó nói dối người dùng.
+      bang: activeTool?.key,
     };
   }
 
@@ -611,6 +719,60 @@ export default function TbycnnPage() {
       setSignOpen(false);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Ký thất bại");
+    }
+  }
+
+  /*
+   * BIÊN BẢN KIỂM TRA ĐỊNH KỲ (.docx). Phần chữ đầu biên bản đổi theo từng đợt (thành
+   * phần kiểm tra, giờ, địa điểm) nên hỏi trước khi xuất, điền sẵn theo bản mẫu của
+   * chính biểu mẫu đó. Bảng phụ lục thì máy chủ dựng lại từ sổ, không hỏi.
+   */
+  const bbktForm = useMemo(() => bbktFormOf(tab), [tab]);
+  const [bbktOpen, setBbktOpen] = useState(false);
+  const [bbktBusy, setBbktBusy] = useState(false);
+  const [bbktNgayBanHanh, setBbktNgayBanHanh] = useState("");
+  const [bbktGio, setBbktGio] = useState("");
+  const [bbktNgayKiemTra, setBbktNgayKiemTra] = useState("");
+  const [bbktDiaDiem, setBbktDiaDiem] = useState("");
+  const [bbktThanhPhan, setBbktThanhPhan] = useState<BbktMember[]>([]);
+
+  /** Mở hộp thoại: nạp lại giá trị mặc định của ĐÚNG biểu mẫu đang xem. Ngày kiểm tra lấy
+   *  từ KĐ gần nhất phổ biến nhất của bảng — đó chính là ngày đi kiểm tra của đợt đó. */
+  function openBbktDialog() {
+    if (!bbktForm) return;
+    const tally = new Map<string, number>();
+    for (const row of rows) {
+      const value = displayKdDate(row.kdGanNhat, row.kdGanNhatText);
+      if (value) tally.set(value, (tally.get(value) ?? 0) + 1);
+    }
+    const ngay = [...tally.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? "";
+    setBbktNgayBanHanh("");
+    setBbktGio(bbktForm.macDinh.gio);
+    setBbktNgayKiemTra(ngay);
+    setBbktDiaDiem(bbktForm.macDinh.diaDiem);
+    setBbktThanhPhan(bbktForm.macDinh.thanhPhan.map((m) => ({ ...m })));
+    setBbktOpen(true);
+  }
+
+  async function submitBbkt() {
+    if (!bbktForm) return;
+    setBbktBusy(true);
+    try {
+      await downloadTbycnnBbkt({
+        bang: bbktForm.key,
+        period: data?.period?.label,
+        ngayBanHanh: bbktNgayBanHanh || null,
+        gio: bbktGio,
+        ngayKiemTra: bbktNgayKiemTra || null,
+        diaDiem: bbktDiaDiem,
+        thanhPhan: bbktThanhPhan,
+      });
+      setBbktOpen(false);
+      toast.success(`Đã tải ${bbktForm.label.toLowerCase()}`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Không tải được biên bản");
+    } finally {
+      setBbktBusy(false);
     }
   }
 
@@ -691,7 +853,7 @@ export default function TbycnnPage() {
         mobileTitle="THIẾT BỊ YCNN"
         description={
           data?.period
-            ? `Kỳ ${data.period.label} · ${rows.length} thiết bị của ${cuongViList.length} cương vị quản lý${viewScopeLabel}`
+            ? `Kỳ ${data.period.label} · ${activeTool ? `${activeTool.label}: ` : ""}${rows.length} thiết bị của ${cuongViList.length} cương vị quản lý${viewScopeLabel}`
             : "Danh mục thiết bị yêu cầu nghiêm ngặt và hạn kiểm định"
         }
         hideDescriptionOnMobile
@@ -858,39 +1020,46 @@ export default function TbycnnPage() {
                 </Select>
               </div>
               {/* Tổ máy là chiều LỌC XEM riêng, KHÔNG phải một phần của nhãn cương vị:
-                  cùng một chức danh đi vận hành được cả hai tổ (lib/pccc-position.ts). */}
-              <div className="grid gap-1.5">
-                <Label className="text-xs font-semibold text-slate-600">Tổ máy</Label>
-                <Select value={machine} onValueChange={setMachine}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Tổ máy" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={ALL}>Tất cả tổ máy</SelectItem>
-                    {machineList.map((m) => (
-                      <SelectItem key={m} value={m}>
-                        {MACHINE_LABEL[m]}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="grid gap-1.5">
-                <Label className="text-xs font-semibold text-slate-600">Danh mục</Label>
-                <Select value={danhMuc} onValueChange={setDanhMuc}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Danh mục" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={ALL}>Tất cả danh mục</SelectItem>
-                    {danhMucList.map((v) => (
-                      <SelectItem key={v} value={v}>
-                        {v}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+                  cùng một chức danh đi vận hành được cả hai tổ (lib/pccc-position.ts).
+                  Ẩn ở ba bảng dụng cụ cùng lý do với cột Tổ máy — ở đó chỉ có Common. */}
+              {!activeTool && (
+                <div className="grid gap-1.5">
+                  <Label className="text-xs font-semibold text-slate-600">Tổ máy</Label>
+                  <Select value={machine} onValueChange={setMachine}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Tổ máy" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={ALL}>Tất cả tổ máy</SelectItem>
+                      {machineList.map((m) => (
+                        <SelectItem key={m} value={m}>
+                          {MACHINE_LABEL[m]}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+              {/* Ba bảng dụng cụ mỗi bảng đúng MỘT danh mục — bày ô lọc chỉ có một lựa chọn
+                  là mời người dùng bấm vào thứ không đổi được gì. */}
+              {!activeTool && (
+                <div className="grid gap-1.5">
+                  <Label className="text-xs font-semibold text-slate-600">Danh mục</Label>
+                  <Select value={danhMuc} onValueChange={setDanhMuc}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Danh mục" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={ALL}>Tất cả danh mục</SelectItem>
+                      {danhMucList.map((v) => (
+                        <SelectItem key={v} value={v}>
+                          {v}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
               <div className="grid gap-1.5">
                 <Label className="text-xs font-semibold text-slate-600">Tình trạng</Label>
                 <Select value={status} onValueChange={setStatus}>
@@ -966,6 +1135,20 @@ export default function TbycnnPage() {
                 <span className="block text-[11px] text-muted-foreground">Bảng dữ liệu để lọc và tổng hợp</span>
               </span>
             </DropdownMenuItem>
+            {/* Chỉ ba bảng dụng cụ ATLĐ mới có biểu mẫu biên bản kiểm tra; sổ chính thì
+                không có mẫu tương ứng nên không bày nút ra cho bấm hụt. */}
+            {bbktForm && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onSelect={openBbktDialog} className="gap-2">
+                  <FileText className="size-4 text-sky-700" />
+                  <span className="min-w-0">
+                    <span className="block font-medium">Xuất BBKT (Word)</span>
+                    <span className="block text-[11px] text-muted-foreground">{bbktForm.label}</span>
+                  </span>
+                </DropdownMenuItem>
+              </>
+            )}
           </DropdownMenuContent>
         </DropdownMenu>
       </PageHeader>
@@ -975,6 +1158,44 @@ export default function TbycnnPage() {
           {error instanceof Error ? error.message : "Không tải được dữ liệu"}
         </Card>
       )}
+
+      {/* TẦNG CHỌN BẢNG. Ba bảng dụng cụ ATLĐ theo dõi kết quả thử tải / đo cách điện, còn
+          sổ chính theo dõi thiết bị áp lực và nâng hạ — hai loại hồ sơ, hai bộ cột. Đổi tab
+          là đổi cả bảng, năm thẻ thống kê lẫn phạm vi nút Xuất File. */}
+      <div
+        className="flex flex-wrap gap-1.5 rounded-xl border border-slate-200 bg-slate-50 p-1.5"
+        role="tablist"
+        aria-label="Chọn bảng thiết bị"
+      >
+        {[{ key: MAIN_TAB, label: "Sổ chính" }, ...TBYCNN_TOOL_TABS].map((item) => {
+          const active = tab === item.key;
+          return (
+            <button
+              key={item.key}
+              type="button"
+              role="tab"
+              aria-selected={active}
+              onClick={() => setTab(item.key)}
+              className={cn(
+                "flex items-center gap-2 rounded-lg px-3.5 py-2 text-[13px] font-semibold transition-colors",
+                active
+                  ? "bg-white text-navy shadow-sm ring-1 ring-slate-200"
+                  : "text-slate-600 hover:bg-white/70 hover:text-navy"
+              )}
+            >
+              {item.label}
+              <span
+                className={cn(
+                  "rounded-full px-1.5 py-0.5 text-[11px] font-bold tabular-nums",
+                  active ? "bg-navy/10 text-navy" : "bg-slate-200 text-slate-600"
+                )}
+              >
+                {tabCounts[item.key] ?? 0}
+              </span>
+            </button>
+          );
+        })}
+      </div>
 
       {/* Năm thẻ vừa là thống kê vừa là lối lọc nhanh — bấm thẻ nào thì bảng bên dưới
           còn đúng chừng ấy dòng. Bấm lại thẻ đang bật để bỏ lọc.
@@ -1040,7 +1261,12 @@ export default function TbycnnPage() {
             </>
           }
         >
-          <Table className="min-w-[1540px]" wrapperClassName={TABLE_SCROLLER}>
+          <Table
+            className={activeTool ? "w-full table-fixed" : "min-w-[1540px]"}
+            /* Bảng dụng cụ vừa khung nên KHÔNG cần khung cuộn lồng: bỏ cả trần chiều cao
+               lẫn overflow để cả bảng hiện một lượt, trang cuộn như bình thường. */
+            wrapperClassName={activeTool ? "overflow-visible" : TABLE_SCROLLER}
+          >
             <TableHeader>
               <TableRow className={TR_HEAD}>
                 <TableHead className={cn(TH_NAVY, TH_EXPAND, "lg:left-0 lg:z-20")} />
@@ -1049,44 +1275,92 @@ export default function TbycnnPage() {
                 <TableHead
                   className={cn(
                     TH_NAVY,
-                    "left-0 z-20 w-[280px] min-w-[280px] shadow-[inset_-1px_0_0_rgba(15,23,42,0.18)] lg:left-[42px] lg:shadow-none"
+                    // Đóng băng cột tên CHỈ có nghĩa khi bảng cuộn ngang. Bảng dụng cụ vừa
+                    // khung nên bỏ hẳn, kẻo còn lại một vệt đổ bóng dọc không rõ để làm gì.
+                    activeTool
+                      ? ""
+                      : "left-0 z-20 w-[280px] min-w-[280px] shadow-[inset_-1px_0_0_rgba(15,23,42,0.18)] lg:left-[42px] lg:shadow-none"
                   )}
+                  style={toolWidths ? { width: toolWidths.shared.tenThietBi } : undefined}
                 >
-                  <SortHeader label="Tên TBYCNN" sortKey="tenThietBi" sort={sort} onSort={toggleSort} align="left" />
+                  <SortHeader label="Tên TBYCNN" sortKey="tenThietBi" sort={sort} onSort={toggleSort} align={headAlign("left")} wrap={Boolean(activeTool)} />
                 </TableHead>
-                <TableHead className={cn(TH_NAVY, "w-[150px]")}>
-                  <SortHeader label="Cương vị quản lý" sortKey="cuongVi" sort={sort} onSort={toggleSort} />
+                <TableHead
+                  className={cn(TH_NAVY, !activeTool && "w-[150px]")}
+                  style={toolWidths ? { width: toolWidths.shared.cuongVi } : undefined}
+                >
+                  <SortHeader label="Cương vị quản lý" sortKey="cuongVi" sort={sort} onSort={toggleSort} wrap={Boolean(activeTool)} />
                 </TableHead>
-                <TableHead className={cn(TH_NAVY, "w-[190px]")}>
-                  <SortHeader label="Danh mục" sortKey="danhMuc" sort={sort} onSort={toggleSort} />
+                {/* Bảng dụng cụ chỉ có MỘT danh mục (chính là tên tab) — in lại ở mỗi dòng
+                    là chiếm chỗ mà không nói thêm được gì. */}
+                {!activeTool && (
+                  <TableHead className={cn(TH_NAVY, "w-[190px]")}>
+                    <SortHeader label="Danh mục" sortKey="danhMuc" sort={sort} onSort={toggleSort} wrap={Boolean(activeTool)} />
+                  </TableHead>
+                )}
+                {/* Dụng cụ ATLĐ mang mã PXVH1-* nên thuộc cả phân xưởng, 39/39 dòng đều
+                    Common — cột này chỉ lặp lại một chữ suốt cả bảng. Sổ chính thì vẫn cần,
+                    ở đó S1/S2 là chiều tra cứu thật. */}
+                {!activeTool && (
+                  <TableHead className={cn(TH_NAVY, "w-[90px]")}>
+                    <SortHeader label="Tổ máy" sortKey="machine" sort={sort} onSort={toggleSort} wrap={Boolean(activeTool)} />
+                  </TableHead>
+                )}
+                <TableHead
+                  className={cn(TH_NAVY, !activeTool && "w-[170px]")}
+                  style={toolWidths ? { width: toolWidths.shared.maHieu } : undefined}
+                >
+                  <SortHeader label="Mã hiệu" sortKey="maHieu" sort={sort} onSort={toggleSort} align={headAlign("left")} wrap={Boolean(activeTool)} />
                 </TableHead>
-                <TableHead className={cn(TH_NAVY, "w-[90px]")}>
-                  <SortHeader label="Tổ máy" sortKey="machine" sort={sort} onSort={toggleSort} />
+                {/* Sổ chính: KKS. Ba bảng dụng cụ: đúng cột của biểu mẫu giấy (tải trọng thử,
+                    thời gian thử, trị số cách điện…) — xem TBYCNN_TOOL_TABS. */}
+                {activeTool ? (
+                  toolTableColumns.map((col) => (
+                    <TableHead key={col.key} className={TH_NAVY} style={{ width: toolWidths?.tool[col.key] }}>
+                      <SortHeader
+                        label={col.label}
+                        sortKey={col.key}
+                        sort={sort}
+                        onSort={toggleSort}
+                        align="center" wrap={Boolean(activeTool)}
+                      />
+                    </TableHead>
+                  ))
+                ) : (
+                  <TableHead className={cn(TH_NAVY, "w-[140px]")}>
+                    <SortHeader label="KKS" sortKey="kks" sort={sort} onSort={toggleSort} align="left" wrap={Boolean(activeTool)} />
+                  </TableHead>
+                )}
+                <TableHead
+                  className={cn(TH_NAVY, !activeTool && "w-[85px]")}
+                  style={toolWidths ? { width: toolWidths.shared.chuKyThu } : undefined}
+                >
+                  <SortHeader label="Chu kỳ (tháng)" sortKey="chuKyThu" sort={sort} onSort={toggleSort} wrap={Boolean(activeTool)} />
                 </TableHead>
-                <TableHead className={cn(TH_NAVY, "w-[170px]")}>
-                  <SortHeader label="Mã hiệu" sortKey="maHieu" sort={sort} onSort={toggleSort} align="left" />
+                <TableHead
+                  className={cn(TH_NAVY, !activeTool && "w-[115px]")}
+                  style={toolWidths ? { width: toolWidths.shared.kdGanNhat } : undefined}
+                >
+                  <SortHeader label="KĐ gần nhất" sortKey="kdGanNhat" sort={sort} onSort={toggleSort} wrap={Boolean(activeTool)} />
                 </TableHead>
-                <TableHead className={cn(TH_NAVY, "w-[140px]")}>
-                  <SortHeader label="KKS" sortKey="kks" sort={sort} onSort={toggleSort} align="left" />
+                <TableHead
+                  className={cn(TH_NAVY, !activeTool && "w-[125px]")}
+                  style={toolWidths ? { width: toolWidths.shared.kdTiepTheo } : undefined}
+                >
+                  <SortHeader label="KĐ tiếp theo" sortKey="kdTiepTheo" sort={sort} onSort={toggleSort} wrap={Boolean(activeTool)} />
                 </TableHead>
-                <TableHead className={cn(TH_NAVY, "w-[85px]")}>
-                  <SortHeader label="Chu kỳ (tháng)" sortKey="chuKyThu" sort={sort} onSort={toggleSort} />
-                </TableHead>
-                <TableHead className={cn(TH_NAVY, "w-[115px]")}>
-                  <SortHeader label="KĐ gần nhất" sortKey="kdGanNhat" sort={sort} onSort={toggleSort} />
-                </TableHead>
-                <TableHead className={cn(TH_NAVY, "w-[125px]")}>
-                  <SortHeader label="KĐ tiếp theo" sortKey="kdTiepTheo" sort={sort} onSort={toggleSort} />
-                </TableHead>
-                <TableHead className={cn(TH_NAVY, "w-[150px]")}>
-                  <SortHeader label="Tình trạng" sortKey="tinhTrang" sort={sort} onSort={toggleSort} />
+                <TableHead
+                  className={cn(TH_NAVY, !activeTool && "w-[150px]")}
+                  style={toolWidths ? { width: toolWidths.shared.tinhTrang } : undefined}
+                >
+                  <SortHeader label="Tình trạng" sortKey="tinhTrang" sort={sort} onSort={toggleSort} wrap={Boolean(activeTool)} />
                 </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {pageRows.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={COL_COUNT} className="py-12 text-center text-sm text-muted-foreground">
+                  <TableCell colSpan={colCount} className="py-12 text-center text-sm text-muted-foreground">
                     Không tìm thấy thiết bị phù hợp.
                   </TableCell>
                 </TableRow>
@@ -1115,20 +1389,47 @@ export default function TbycnnPage() {
                         className={cn(
                           TD_TALL,
                           rowBg,
-                          "sticky left-0 z-[1] text-left font-medium shadow-[inset_-1px_0_0_rgba(15,23,42,0.18)] group-hover:bg-sky-50 lg:left-[42px] lg:shadow-none"
+                          "text-left font-medium break-words",
+                          !activeTool &&
+                            "sticky left-0 z-[1] shadow-[inset_-1px_0_0_rgba(15,23,42,0.18)] group-hover:bg-sky-50 lg:left-[42px] lg:shadow-none"
                         )}
                       >
                         {row.tenThietBi}
                       </TableCell>
                       {/* Nhãn CHUẨN theo danh mục chức danh của hệ thống, không phải chuỗi
                           thô trong file gốc — hậu tố tổ máy đã tách sang cột riêng. */}
-                      <TableCell className={cn(TD_TALL, "text-center")}>{row.cuongVi ?? row.khuVuc}</TableCell>
-                      <TableCell className={cn(TD_TALL, "text-center text-[11.5px] leading-tight")}>{row.danhMuc}</TableCell>
-                      <TableCell className={cn(TD_TALL, "text-center")}>
-                        <MachineBadge machine={row.machine} />
-                      </TableCell>
-                      <TableCell className={TD_TALL}>{row.maHieu ?? "—"}</TableCell>
-                      <TableCell className={cn(TD_TALL, "font-mono text-[11px]")}>{row.kks ?? "—"}</TableCell>
+                      <TableCell className={cn(TD_TALL, "text-center break-words")}>{tbycnnPositionLabel(row)}</TableCell>
+                      {!activeTool && (
+                        <TableCell className={cn(TD_TALL, "text-center text-[11.5px] leading-tight")}>{row.danhMuc}</TableCell>
+                      )}
+                      {!activeTool && (
+                        <TableCell className={cn(TD_TALL, "text-center")}>
+                          <MachineBadge machine={row.machine} />
+                        </TableCell>
+                      )}
+                      <TableCell className={cn(TD_TALL, "break-words")}>{row.maHieu ?? "—"}</TableCell>
+                      {activeTool ? (
+                        toolTableColumns.map((col) => {
+                          const value = row[col.key];
+                          return (
+                            <TableCell
+                              key={col.key}
+                              className={cn(
+                                TD_TALL,
+                                // Bảng vừa khung nên chữ dài PHẢI xuống dòng trong ô;
+                                // `break-words` cắt cả chuỗi liền không dấu cách như
+                                // "MPPB600V1", nếu không nó đẩy cả cột rộng ra.
+                                "break-words",
+                                col.numeric ? "text-center tabular-nums" : "text-[12px] leading-tight"
+                              )}
+                            >
+                              {value == null || value === "" ? "—" : String(value)}
+                            </TableCell>
+                          );
+                        })
+                      ) : (
+                        <TableCell className={cn(TD_TALL, "font-mono text-[11px]")}>{row.kks ?? "—"}</TableCell>
+                      )}
                       <TableCell className={cn(TD_TALL, "text-center", dirty("chuKyThu"))}>
                         {editable ? (
                           <EditableCell
@@ -1171,7 +1472,7 @@ export default function TbycnnPage() {
                     </TableRow>
                     {expanded && (
                       <TableRow className="hover:bg-transparent">
-                        <TableCell colSpan={COL_COUNT} className="bg-slate-50/80 p-0">
+                        <TableCell colSpan={colCount} className="bg-slate-50/80 p-0">
                           <DetailPanel>
                             {/* Hai trường đầu là thông tin GỐC theo hồ sơ nhà máy — chỉ đọc
                                 kể cả khi đang mở khoá bảng (xem lib/tbycnn.ts).
@@ -1241,9 +1542,18 @@ export default function TbycnnPage() {
                             <DetailField label="Chữ ký" span={2}>
                               <SignatureStamp signature={saved.signature} />
                             </DetailField>
-                            <DetailField label="Thông số kỹ thuật" span="full">
+                            {/* Ở bảng dụng cụ, "Nghiệm thu sau khi sửa chữa" đứng NGAY CẠNH
+                                Thông số kỹ thuật: cùng là mô tả tình trạng thiết bị. Nó đã gỡ
+                                khỏi cột trên bảng vì gần như luôn trống, nhưng vẫn còn trong
+                                bản Excel và bản in — biểu mẫu giấy có cột này. */}
+                            <DetailField label="Thông số kỹ thuật" span={activeTool ? 2 : "full"}>
                               <span className="whitespace-pre-line">{row.thongSoKyThuat ?? "—"}</span>
                             </DetailField>
+                            {activeTool && (
+                              <DetailField label="Nghiệm thu sau khi sửa chữa">
+                                <span className="whitespace-pre-line">{row.nghiemThuSauSuaChua ?? "—"}</span>
+                              </DetailField>
+                            )}
                             <DetailField label="Khiếm khuyết" span={2}>
                               {editable ? (
                                 <EditableCell
@@ -1277,6 +1587,112 @@ export default function TbycnnPage() {
           </Table>
         </PcccTableCard>
       )}
+
+      {/*
+        HỘP THOẠI XUẤT BIÊN BẢN KIỂM TRA ĐỊNH KỲ.
+
+        Chỉ hỏi phần ĐỔI THEO TỪNG ĐỢT. Căn cứ pháp lý, phương pháp kiểm tra, kiến nghị và
+        khối ký nằm sẵn trong mẫu Word; bảng phụ lục do máy chủ dựng lại từ sổ nên không
+        có gì để hỏi — và cũng không thể lệch với số liệu đang hiện trên bảng.
+      */}
+      <Dialog open={bbktOpen} onOpenChange={(open) => (open ? setBbktOpen(true) : setBbktOpen(false))}>
+        <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-[640px]">
+          <DialogHeader>
+            <DialogTitle>{bbktForm?.label ?? "Biên bản kiểm tra định kỳ"}</DialogTitle>
+            <DialogDescription>
+              Kỳ {data?.period?.label ?? "—"} · {rows.length} thiết bị. Bảng phụ lục lấy đúng số liệu đang
+              hiện trên bảng, sửa trên web rồi xuất lại là biên bản khớp ngay.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid gap-4">
+            <div className="grid gap-3 sm:grid-cols-3">
+              <label className="grid gap-1.5">
+                <span className="text-xs font-semibold text-slate-600">Giờ kiểm tra</span>
+                <Input value={bbktGio} onChange={(e) => setBbktGio(e.target.value)} placeholder="8h" />
+              </label>
+              <label className="grid gap-1.5">
+                <span className="text-xs font-semibold text-slate-600">Ngày kiểm tra</span>
+                <Input
+                  value={bbktNgayKiemTra}
+                  onChange={(e) => setBbktNgayKiemTra(e.target.value)}
+                  placeholder="dd/mm/yyyy"
+                />
+              </label>
+              <label className="grid gap-1.5">
+                <span className="text-xs font-semibold text-slate-600">Ngày ban hành</span>
+                <Input type="date" value={bbktNgayBanHanh} onChange={(e) => setBbktNgayBanHanh(e.target.value)} />
+              </label>
+            </div>
+            <p className="-mt-2 text-[11px] text-muted-foreground">
+              Bỏ trống Ngày ban hành thì biên bản in ra “ngày …… tháng …… năm ………” cho văn thư điền tay,
+              đúng như bản mẫu. Ô “Số: /VH1” cũng để trống chờ cấp số.
+            </p>
+
+            <label className="grid gap-1.5">
+              <span className="text-xs font-semibold text-slate-600">Địa điểm</span>
+              <Input value={bbktDiaDiem} onChange={(e) => setBbktDiaDiem(e.target.value)} />
+            </label>
+
+            <div className="grid gap-2">
+              <span className="text-xs font-semibold text-slate-600">Thành phần kiểm tra</span>
+              {bbktThanhPhan.map((member, index) => (
+                <div key={index} className="grid gap-2 sm:grid-cols-[1fr_1fr]">
+                  <Input
+                    value={member.ten}
+                    placeholder="Họ và tên"
+                    onChange={(e) =>
+                      setBbktThanhPhan((prev) =>
+                        prev.map((m, i) => (i === index ? { ...m, ten: e.target.value } : m))
+                      )
+                    }
+                  />
+                  <div className="flex gap-2">
+                    <Input
+                      value={member.chucDanh}
+                      placeholder="Chức danh"
+                      onChange={(e) =>
+                        setBbktThanhPhan((prev) =>
+                          prev.map((m, i) => (i === index ? { ...m, chucDanh: e.target.value } : m))
+                        )
+                      }
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      aria-label={`Bỏ người thứ ${index + 1}`}
+                      onClick={() => setBbktThanhPhan((prev) => prev.filter((_, i) => i !== index))}
+                    >
+                      <Trash2 className="size-4 text-slate-400" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+              {bbktThanhPhan.length < BBKT_MAX_MEMBERS && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="justify-self-start"
+                  onClick={() => setBbktThanhPhan((prev) => [...prev, { ten: "", chucDanh: "" }])}
+                >
+                  <Plus className="mr-1.5 size-4" /> Thêm người
+                </Button>
+              )}
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBbktOpen(false)} disabled={bbktBusy}>
+              Đóng
+            </Button>
+            <Button onClick={() => void submitBbkt()} disabled={bbktBusy || rows.length === 0}>
+              {bbktBusy ? "Đang dựng…" : "Tải biên bản Word"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/*
         XEM TRƯỚC BẢN IN — bản nháp dựng từ server, chưa ghi nhật ký. Người dùng lật đủ
@@ -1320,7 +1736,7 @@ export default function TbycnnPage() {
         period={period?.label ?? "—"}
         positions={createPositions}
         // Đúng cột "Danh mục" của bảng — bản rút gọn, không kèm số La Mã.
-        danhMucList={danhMucList}
+        danhMucList={danhMucListForCreate}
         // Đang lọc sẵn cương vị / tổ máy nào thì điền sẵn cái đó: người dùng gần như
         // luôn thêm thiết bị cho chính nhóm mình vừa mở ra xem.
         defaultPositionCode={cuongViCode === ALL ? undefined : cuongViCode}

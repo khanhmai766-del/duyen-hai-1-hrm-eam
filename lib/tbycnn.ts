@@ -18,6 +18,29 @@ export const TBYCNN_KD_SOON_DAYS = 90; // "sắp đến hạn" = dưới 3 thán
 /** Đơn vị quản lý mặc định — cả 709 dòng nguồn đều là PXVH1. */
 export const TBYCNN_DON_VI_QUAN_LY = "PXVH1";
 
+/**
+ * Dòng KHÔNG có cương vị quản lý — hồ sơ để trống thật, không phải dữ liệu thiếu.
+ * Có từ bộ dụng cụ ATLĐ 2026-09: 3 dây đai mới chưa giao cho ai, và cả bảng dụng cụ
+ * điện cầm tay vốn không có cột Cương vị.
+ *
+ * Khoá lọc BẮT BUỘC khác chuỗi rỗng: ô lọc Cương vị dựng bằng Radix `<SelectItem>`, mà
+ * `value=""` thì Radix ném lỗi và sập cả bảng chọn Bộ lọc — một dòng khuVuc rỗng đủ làm
+ * hỏng trang cho mọi người.
+ */
+export const TBYCNN_NO_POSITION_KEY = "__CHUA_CO_CUONG_VI__";
+export const TBYCNN_NO_POSITION_LABEL = "Chưa có cương vị";
+
+/** Khoá lọc theo cương vị: mã chuẩn → nhãn thô → khoá "chưa có". Dùng chung cho ô lọc và
+ *  vị từ lọc, hai chỗ lệch nhau là bấm lọc ra bảng rỗng. */
+export function tbycnnPositionKey(row: { cuongViCode?: string | null; khuVuc?: string | null }) {
+  return row.cuongViCode || row.khuVuc || TBYCNN_NO_POSITION_KEY;
+}
+
+/** Nhãn hiển thị cương vị của một dòng, kể cả dòng hồ sơ để trống. */
+export function tbycnnPositionLabel(row: { cuongVi?: string | null; khuVuc?: string | null }) {
+  return row.cuongVi || row.khuVuc || TBYCNN_NO_POSITION_LABEL;
+}
+
 // --------------------------------------------------------------------- ngày tháng
 /** "dd/mm/yyyy" → Date (UTC, 00:00). Trả null với mọi chuỗi không đúng định dạng. */
 export function parseVNDate(input?: string | null): Date | null {
@@ -269,6 +292,106 @@ export const TBYCNN_COLUMNS: TbycnnColumn[] = [
 
 /** Cột cuối cùng còn được ghim khi cuộn ngang (mô phỏng Freeze Panes của Excel). */
 export const TBYCNN_FREEZE_UPTO = "tenThietBi";
+
+// ------------------------------------------------- 3 bảng dụng cụ ATLĐ tách riêng
+/**
+ * Ba bảng dụng cụ ATLĐ có BIỂU MẪU RIÊNG, không dùng chung bộ cột với sổ chính:
+ * sổ chính theo dõi thiết bị chịu áp lực / nâng hạ (KKS, số BBKĐ, đơn vị kiểm định),
+ * còn ba bảng này theo dõi kết quả thử tải và đo cách điện.
+ *
+ * Vì vậy chúng được TÁCH HẲN khỏi sổ chính — cả bảng, năm thẻ thống kê lẫn file xuất ra:
+ * để lẫn thì mỗi dòng đều thiếu quá nửa số cột của biểu mẫu nó thuộc về, và tổng trên
+ * thẻ đếm gộp hai loại hồ sơ khác nhau.
+ *
+ * Khoá là `danhMuc` — cùng chuỗi mà script nạp và người dùng chọn trên biểu mẫu thêm
+ * thiết bị, nên không cần thêm cột phân loại nào.
+ */
+export type TbycnnToolColumn = {
+  key:
+    | "thongSoKyThuat"
+    | "taiTrongThuKg"
+    | "thoiGianThuPhut"
+    | "tinhTrangSuDung"
+    | "kiemTraBangMat"
+    | "cachDienMOhm"
+    | "ketQuaThu"
+    | "nghiemThuSauSuaChua"
+    | "ghiChu";
+  label: string;
+  width: number;
+  /** Ô số: canh giữa, trống thì hiện "—". */
+  numeric?: boolean;
+  /**
+   * CHỈ hiện trong khối chi tiết (nút "+"), KHÔNG dựng thành cột trên bảng.
+   *
+   * Vẫn nằm trong bản Excel và bản in PDF: đó là cột CÓ THẬT trong biểu mẫu giấy, bỏ đi
+   * là bản nộp không còn khớp mẫu. Chỉ trên màn hình mới cắt bớt, vì các cột này gần như
+   * luôn trống hoặc lặp lại y hệt nhau ở mọi dòng.
+   */
+  detailOnly?: boolean;
+};
+
+export type TbycnnToolTab = {
+  key: string;
+  /** Nhãn trên tầng chọn — ngắn, vì đứng cạnh ba nhãn khác. */
+  label: string;
+  /** Giá trị `danhMuc` trong DB. Đây là khoá duy nhất phân biệt ba bảng. */
+  danhMuc: string;
+  columns: TbycnnToolColumn[];
+};
+
+export const TBYCNN_TOOL_TABS: TbycnnToolTab[] = [
+  {
+    key: "THANG",
+    label: "Thang di động",
+    danhMuc: "THANG DI ĐỘNG",
+    columns: [
+      { key: "thongSoKyThuat", label: "Thông số kỹ thuật", width: 200 },
+      { key: "taiTrongThuKg", label: "Tải trọng thử (kg)", width: 110, numeric: true },
+      { key: "thoiGianThuPhut", label: "Thời gian thử (phút)", width: 110, numeric: true },
+      { key: "ketQuaThu", label: "Kết quả", width: 150 },
+    ],
+  },
+  {
+    key: "DAY_DAI",
+    label: "Dây đai an toàn",
+    danhMuc: "DÂY ĐAI AN TOÀN",
+    columns: [
+      { key: "taiTrongThuKg", label: "Tải trọng thử (kg)", width: 110, numeric: true },
+      { key: "tinhTrangSuDung", label: "Tình trạng", width: 130 },
+      { key: "ketQuaThu", label: "Kết quả", width: 190 },
+    ],
+  },
+  {
+    key: "DUNG_CU_DIEN",
+    label: "Dụng cụ điện cầm tay",
+    danhMuc: "DỤNG CỤ ĐIỆN CẦM TAY",
+    columns: [
+      { key: "thongSoKyThuat", label: "Thông số kỹ thuật", width: 250 },
+      { key: "kiemTraBangMat", label: "Kiểm tra bằng mắt", width: 120 },
+      { key: "cachDienMOhm", label: "Trị số đo cách điện (MΩ)", width: 120, numeric: true },
+      { key: "ketQuaThu", label: "Đánh giá", width: 100 },
+      { key: "nghiemThuSauSuaChua", label: "Nghiệm thu sau khi sửa chữa", width: 150, detailOnly: true },
+      { key: "ghiChu", label: "Ghi chú", width: 150, detailOnly: true },
+    ],
+  },
+];
+
+/** Cột dựng thành CỘT TRÊN BẢNG (bỏ các cột chỉ hiện ở khối chi tiết). */
+export function tbycnnToolTableColumns(tab: TbycnnToolTab) {
+  return tab.columns.filter((col) => !col.detailOnly);
+}
+
+/** Danh mục thuộc ba bảng dụng cụ — dùng để LOẠI khỏi sổ chính. */
+export const TBYCNN_TOOL_DANH_MUCS: readonly string[] = TBYCNN_TOOL_TABS.map((tab) => tab.danhMuc);
+
+export function isTbycnnToolDanhMuc(danhMuc?: string | null) {
+  return !!danhMuc && TBYCNN_TOOL_DANH_MUCS.includes(danhMuc);
+}
+
+export function tbycnnToolTabOf(key?: string | null) {
+  return TBYCNN_TOOL_TABS.find((tab) => tab.key === key) ?? null;
+}
 
 // -------------------------------------------------------------------- kỳ (tháng)
 /** "2026-09" cho thời điểm truyền vào. */

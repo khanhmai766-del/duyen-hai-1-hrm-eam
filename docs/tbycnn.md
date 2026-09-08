@@ -311,6 +311,101 @@ phải giữ nguyên**: nút "+" → Tên TBYCNN → Cương vị → Danh mục
 trí 5 (ngay sau Danh mục) để trên điện thoại nó rơi vào phần bị ẩn — hai dòng phụ của thẻ
 dành cho cương vị và danh mục.
 
+## 5c. Ba bảng dụng cụ ATLĐ tách riêng
+
+Sổ này thực chất chứa HAI loại hồ sơ: thiết bị áp lực / nâng hạ (KKS, số BBKĐ, đơn vị
+kiểm định) và **dụng cụ ATLĐ** (kết quả thử tải, đo cách điện). Hai loại có biểu mẫu khác
+hẳn nhau nên để chung một bảng thì dòng nào cũng thiếu quá nửa số cột của biểu mẫu nó
+thuộc về, mà năm thẻ thống kê lại gộp hai thứ không so sánh được với nhau.
+
+Vì vậy trang có **tầng chọn bảng**: `Sổ chính · Thang di động · Dây đai an toàn · Dụng cụ
+điện cầm tay`. Cấu hình ở `TBYCNN_TOOL_TABS` (lib/tbycnn.ts), khoá phân biệt là `danhMuc`
+— không thêm cột phân loại nào.
+
+- **Một dòng chỉ thuộc ĐÚNG MỘT tab.** Sổ chính LOẠI ba danh mục dụng cụ
+  (`isTbycnnToolDanhMuc`), nên không có chuyện đếm hai lần.
+- Đổi tab là đổi cả bộ dòng, **bộ cột**, năm thẻ thống kê và **phạm vi nút Xuất File**
+  (`?bang=` của cả hai route xuất). Bấm Xuất File ở tab Thang mà nhận về cả quyển sổ thì
+  nút đó nói dối.
+- Ô lọc **Danh mục** ẩn ở ba tab dụng cụ: mỗi bảng đúng một danh mục nên ô đó chỉ có một
+  lựa chọn. Ngược lại, hộp **Thêm thiết bị** vẫn liệt kê đủ danh mục của cả sổ
+  (`danhMucListForCreate`) — lấy theo tab thì đứng ở sổ chính không bao giờ thêm được
+  một cái thang.
+
+### Cột riêng, lưu thành cột thật
+
+Bảy cột thêm bằng `prisma/manual/add-tbycnn-tool-columns.sql` (additive, idempotent):
+`taiTrongThuKg`, `thoiGianThuPhut`, `tinhTrangSuDung`, `kiemTraBangMat`, `cachDienMOhm`,
+`ketQuaThu`, `nghiemThuSauSuaChua`.
+
+- **`tinhTrangSuDung` ("Qua sử dụng" / "Dây mới") KHÁC cột `tinhTrang`** suy từ
+  `soLuongKhaDung`/`soLuongKhongKhaDung`. Đừng gộp hai thứ này.
+- `ketQuaThu` dùng chung cho cột "Kết quả" (thang, dây đai) và "Đánh giá" (dụng cụ điện) —
+  cùng một ý nghĩa.
+- Ba cột số phải có nhánh riêng trong `sortValue`, nếu không sắp xếp theo chuỗi và 1050
+  đứng trước 600.
+
+Trước đó các giá trị này bị ghép chuỗi vào `thongSoKyThuat` / `ghiChu`: không lọc, không
+sắp xếp, không đối chiếu được với bản giấy.
+
+### Bản in của ba bảng
+
+`colsFor(tab)` ở `lib/tbycnn-pdf.ts` trả bộ cột theo bảng; `fitWidths` kéo bề rộng cho tổng
+bằng đúng `CONTENT_W` (762pt) và **ném lỗi nếu lệch** — cùng chốt kiểm với `MAIN_COLS`.
+Chênh lệch sau khi làm tròn dồn vào cột rộng nhất, không rải vào cột hẹp (TT, Chu kỳ) vì
+nhìn ra ngay là bảng bị lệch.
+
+Đã **đo lại** số dòng gói chữ như mục 5b yêu cầu: ô dài nhất của cả ba bảng cần **5 dòng**
+(cột Ghi chú của bảng dụng cụ điện), còn xa trần `MAX_LINES = 24`. Đổi bề rộng cột là phải
+đo lại.
+
+## 5d. Biên bản kiểm tra định kỳ (BBKT) — xuất Word
+
+Ba bảng dụng cụ, ba biểu mẫu biên bản riêng, bám đúng bản mẫu của phân xưởng:
+
+| Bảng | Mẫu | Đặc thù |
+| --- | --- | --- |
+| Thang di động | `templates/bbkt-thang-di-dong.docx` | thử tải tĩnh; phụ lục 10 cột |
+| Dây đeo an toàn | `templates/bbkt-day-dai-an-toan.docx` | thử tải tĩnh + động; 9 cột; có trang ảnh |
+| Dụng cụ điện cầm tay | `templates/bbkt-dung-cu-dien-cam-tay.docx` | đo cách điện; 11 cột, đầu bảng HAI TẦNG; có trang ảnh |
+
+Khuôn giống hệt BBNT/BBTHVT của module vật tư: `scripts/build-tbycnn-bbkt-templates.mjs`
+sinh mẫu `.docx` có token `{{...}}`, `lib/tbycnn-bbkt-doc.ts` điền bằng docxtemplater,
+`POST /api/tbycnn/export-bbkt` trả tệp về. Phần chữ đổi theo đợt (thành phần kiểm tra,
+giờ, địa điểm) hỏi qua hộp thoại, điền sẵn theo `BBKT_FORMS` ở `lib/tbycnn-bbkt.ts`.
+
+Những điểm dễ làm sai khi sửa lại:
+
+- **Bảng phụ lục KHÔNG chép cứng** — dựng lại từ sổ ở mỗi lượt xuất. Đó là cả mục đích:
+  sửa số liệu trên web rồi xuất lại là biên bản khớp ngay.
+- **Mỗi tệp có HAI section**: phần chữ khổ dọc, phụ lục khổ ngang. Nhét chung một section
+  dọc thì bảng 10-11 cột bị bóp lại không đọc nổi. Section đầu khai trong `<w:p><w:pPr>`
+  cuối phần chữ, section cuối khai ở cuối `<w:body>`.
+- **Thành phần kiểm tra nở theo HÀNG BẢNG**: hai thẻ `{{#thanhPhan}}` / `{{/thanhPhan}}`
+  đặt ở hai ô KHÁC NHAU của cùng một hàng, docxtemplater nhận ra đó là vòng lặp hàng.
+  Gom cả hai vào một ô thì 4 người dồn vào một dòng.
+- **`POST` chứ không phải `GET`** như hai nút xuất kia: biên bản mang theo cả danh sách
+  thành phần kiểm tra, nhét vào query string vừa dài vừa bẩn nhật ký. Dùng `apiDownloadPost`.
+- **Không có bước xem trước.** Đã thử dựng bản nháp .docx ngay trong trình duyệt bằng
+  `docx-preview` (nạp động) nhưng chunk không tải được ở môi trường dev, nên đã gỡ cả thư
+  viện lẫn luồng hai bước — nút bấm là tải thẳng. Muốn làm lại thì hướng khả dĩ là dựng
+  bản xem trước bằng PDF ở SERVER trên nền `lib/pccc-pdf-kit.ts` (đã dùng cho sổ chính),
+  chứ đừng vẽ lại một bản HTML riêng: sửa mẫu Word mà quên sửa bản HTML là người dùng
+  duyệt một đằng, nộp một nẻo.
+- **Biên bản không nhận bộ lọc cương vị/tổ máy**: đây là văn bản pháp lý cho TOÀN đợt
+  kiểm tra, xuất một phần theo bộ lọc đang đặt là ra biên bản thiếu thiết bị.
+- **Cột Ghi chú của bảng dụng cụ điện được IN THẲNG vào biên bản.** Đừng dùng nó để ghi
+  chú nội bộ của lượt nhập liệu — đã một lần lọt câu "KĐ gần nhất suy ra từ…" lên văn bản
+  nộp lên, phải gỡ ra.
+- **Số biên bản và ngày ban hành để TRỐNG** theo bản mẫu (`Số:        /VH1`,
+  "ngày …… tháng …… năm ………") cho văn thư cấp số khi phát hành.
+
+Hai chỗ **cố ý sửa khác bản mẫu** vì đây là văn bản báo cáo — muốn giữ nguyên lỗi gốc thì
+sửa hằng trong script dựng mẫu:
+
+- "KIỂM TRA ĐÌNH KỲ" → "KIỂM TRA **ĐỊNH** KỲ" (bản thang và dây đai gõ nhầm)
+- "KT. TRƯỞNG **PHONG** KTAT" → "KT. TRƯỞNG **PHÒNG** KTAT" (cả ba bản gõ nhầm)
+
 ## 6. Việc còn để ngỏ (pha 2)
 
 - Chốt sổ theo kỳ + màn hình xem kỳ đã chốt (`TbycnnPeriod.isClosed` đã sẵn ở schema
@@ -319,3 +414,6 @@ dành cho cương vị và danh mục.
 - Xuất PDF khổ A4 ngang có khối ký tên (bản cũ in bằng `window.print()`); nếu làm nên
   dùng `lib/pccc-pdf-kit.ts` thay vì in từ trình duyệt.
 - Map `deviceSeq` sang cây thiết bị `EquipmentNode`.
+- **Sửa được bảy cột mới trong chế độ "Sửa bảng"**: `TBYCNN_EDITABLE_ON_EDIT` chưa có
+  chúng nên API bỏ qua, giao diện cũng hiện dạng chữ thường. Cột `ketQuaThu` là thứ người
+  đi kiểm tra cập nhật mỗi chu kỳ nên đây là việc nên làm sớm.

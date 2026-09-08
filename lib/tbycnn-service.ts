@@ -126,6 +126,14 @@ export function serializeEquipment(
     soLuongKhongKhaDung: row.soLuongKhongKhaDung,
     tinhTrang: computeTinhTrang(row.soLuongKhaDung, row.soLuongKhongKhaDung),
     ghiChu: row.ghiChu,
+    // Cột riêng của 3 bảng dụng cụ ATLĐ; null với mọi dòng của sổ chính.
+    taiTrongThuKg: row.taiTrongThuKg,
+    thoiGianThuPhut: row.thoiGianThuPhut,
+    tinhTrangSuDung: row.tinhTrangSuDung,
+    kiemTraBangMat: row.kiemTraBangMat,
+    cachDienMOhm: row.cachDienMOhm,
+    ketQuaThu: row.ketQuaThu,
+    nghiemThuSauSuaChua: row.nghiemThuSauSuaChua,
     canDelete: canDeleteEquipment(row, now),
     // Cờ do SERVER tính: giao diện khoá sẵn ô ngoài phạm vi cương vị thay vì để người
     // dùng sửa xong mới ăn 403.

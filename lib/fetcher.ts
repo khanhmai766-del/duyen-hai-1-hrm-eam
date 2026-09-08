@@ -82,6 +82,31 @@ export async function apiDownload(url: string) {
   return { blob: await res.blob(), filename };
 }
 
+/**
+ * Như `apiDownload` nhưng gửi bằng POST kèm thân JSON — dùng khi tệp cần nhiều tham số
+ * hơn mức nhét gọn vào query string (vd biên bản kiểm tra mang theo thành phần kiểm tra).
+ */
+export async function apiDownloadPost(url: string, payload: unknown) {
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    let message: string | null = null;
+    try {
+      message = (JSON.parse(text) as ApiResponse<unknown>).error ?? null;
+    } catch {
+      message = describeNonJson(res, text, "Không thể tải tệp");
+    }
+    throw new Error(message || "Không thể tải tệp");
+  }
+  const disposition = res.headers.get("Content-Disposition") ?? "";
+  const filename = /filename="([^"]+)"/.exec(disposition)?.[1] ?? "download.docx";
+  return { blob: await res.blob(), filename };
+}
+
 export async function apiUpload<T>(url: string, formData: FormData): Promise<T> {
   const res = await fetch(url, { method: "POST", body: formData });
   const json = await readEnvelope<T>(res, "Tải tệp thất bại");

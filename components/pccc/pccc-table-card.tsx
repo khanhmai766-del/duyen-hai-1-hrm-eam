@@ -25,12 +25,21 @@ export function SortHeader({
   sort,
   onSort,
   align = "center",
+  wrap = false,
 }: {
   label: string;
   sortKey: string;
   sort: SortState;
   onSort: (key: string) => void;
   align?: "left" | "center";
+  /**
+   * Cho nhãn XUỐNG DÒNG trong ô. Mặc định `false` — bảng PCCC và sổ chính TBYCNN rộng hơn
+   * khung nhìn nên cột nào cũng đủ chỗ, giữ một dòng cho gọn.
+   *
+   * Bật ở bảng có bề rộng CỐ ĐỊNH (ba bảng dụng cụ ATLĐ): ở đó cột hẹp mà nhãn không
+   * xuống dòng thì nó tràn khỏi ô và đè lên nhãn cột bên cạnh.
+   */
+  wrap?: boolean;
 }) {
   const active = sort.key === sortKey;
   const Icon = !active ? ArrowUpDown : sort.dir === "asc" ? ArrowUp : ArrowDown;
@@ -43,8 +52,8 @@ export function SortHeader({
         align === "center" && "justify-center"
       )}
     >
-      <span className="whitespace-nowrap">{label}</span>
-      <Icon className={cn("h-3.5 w-3.5", active ? "text-white" : "text-white/50")} />
+      <span className={wrap ? "min-w-0 [overflow-wrap:anywhere]" : "whitespace-nowrap"}>{label}</span>
+      <Icon className={cn("h-3.5 w-3.5 shrink-0", active ? "text-white" : "text-white/50")} />
     </button>
   );
 }

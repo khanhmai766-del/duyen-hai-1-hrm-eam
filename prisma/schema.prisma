@@ -2658,6 +2658,23 @@ model TbycnnEquipment {
   khiemKhuyet         String?
   ghiChu              String?
 
+  // -- Cột riêng của 3 bảng dụng cụ ATLĐ --------------------------------------
+  // Thang di động / Dây đai an toàn / Dụng cụ điện cầm tay có biểu mẫu riêng, cột riêng.
+  // Trước đây phải nhét vào `thongSoKyThuat` và `ghiChu` dưới dạng chuỗi ghép — không lọc,
+  // không sắp xếp, không đối chiếu được với bản giấy. Xem TBYCNN_TOOL_TABS ở lib/tbycnn.ts.
+  // Cột nào không thuộc bảng của dòng đó thì để null, KHÔNG dùng lại cho ý nghĩa khác.
+  taiTrongThuKg   Float? // tải trọng thử (kg) — thang di động, dây đai
+  thoiGianThuPhut Int? // thời gian thử (phút) — thang di động
+  /// "Qua sử dụng" / "Dây mới" — cột Tình trạng của bảng dây đai. KHÁC hẳn cột "Tình trạng"
+  /// suy từ soLuongKhaDung/soLuongKhongKhaDung; đừng gộp hai thứ này.
+  tinhTrangSuDung String?
+  kiemTraBangMat  String? // "Bình thường"… — dụng cụ điện cầm tay
+  cachDienMOhm    Float? // trị số đo cách điện (MΩ) — dụng cụ điện cầm tay
+  /// Cột "Kết quả" (thang, dây đai) và "Đánh giá" (dụng cụ điện) — cùng một ý nghĩa nên
+  /// dùng chung một cột: "Đạt", "Không", "Không đạt – Thay bằng dây mới #1"…
+  ketQuaThu           String?
+  nghiemThuSauSuaChua String? // cột cuối của bảng dụng cụ điện cầm tay
+
   /// Tham chiếu MỀM tới cây thiết bị (EquipmentNode.seq) — chưa map, để dành.
   deviceSeq String?
 

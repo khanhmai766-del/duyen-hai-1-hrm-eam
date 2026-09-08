@@ -1,0 +1,75 @@
+{
+  "_nguon": "TBYCNN_Final.pdf — 3 bảng: Thang di động, Dây đai an toàn, Dụng cụ điện cầm tay",
+  "_ghiChu": [
+    "Chép NGUYÊN VĂN từ hồ sơ, kể cả chỗ viết có vẻ sai (vd 'Bose GSB13RE' — nhiều khả năng là Bosch).",
+    "cuongViRaw rỗng = hồ sơ KHÔNG ghi cương vị quản lý (nay chỉ còn 3 dây đai mới).",
+    "Bảng dụng cụ điện cầm tay: bản PDF cập nhật ghi cương vị quản lý ở cột Ghi chú — đưa vào đúng cột Cương vị, không chép lại vào Ghi chú.",
+    "kdTiepTheoText rỗng = hồ sơ để trống.",
+    "Bảng 1 và 2: 'kết quả' là kết quả THỬ TẢI. Bảng 3: 'kết quả' là cột Đánh giá."
+  ],
+  "bangs": [
+    {
+      "danhMuc": "THANG DI ĐỘNG",
+      "chuKyThuThang": 6,
+      "kdTiepTheoText": "20/11/2026",
+      "taiTrongThuKg": 110,
+      "thoiGianThuPhut": 5,
+      "records": [
+        { "tt": 1, "tenThietBi": "Thang di động", "maHieu": "PXVH1-THANG-01", "thongSo": "Thang chữ A-1,7m", "cuongViRaw": "TK Lò Máy", "ketQua": "Đạt" },
+        { "tt": 2, "tenThietBi": "Thang di động", "maHieu": "PXVH1-THANG-02", "thongSo": "Thang chữ A-1,7m", "cuongViRaw": "Thiết bị đo lường và điều khiển", "ketQua": "Đạt" },
+        { "tt": 3, "tenThietBi": "Thang di động", "maHieu": "PXVH1-THANG-03", "thongSo": "Thang chữ A-1,7m", "cuongViRaw": "Trạm bơm nước thô", "ketQua": "Đạt", "kdTiepTheoText": "" },
+        { "tt": 4, "tenThietBi": "Thang di động", "maHieu": "PXVH1-THANG-04", "thongSo": "Thang chữ A-1,7m", "cuongViRaw": "Khí nén – Nhà dầu", "ketQua": "Đạt" },
+        { "tt": 5, "tenThietBi": "Thang di động", "maHieu": "PXVH1-THANG-05", "thongSo": "Thang chữ A-1,7m", "cuongViRaw": "Trạm bơm tuần hoàn", "ketQua": "Đạt" },
+        { "tt": 6, "tenThietBi": "Thang di động", "maHieu": "PXVH1-THANG-06", "thongSo": "Thang chữ A-1,7m", "cuongViRaw": "ESP", "ketQua": "Đạt" },
+        { "tt": 7, "tenThietBi": "Thang di động", "maHieu": "PXVH1-THANG-07", "thongSo": "Thang chữ A-1,7m", "cuongViRaw": "Máy nghiền", "ketQua": "Đạt" },
+        { "tt": 8, "tenThietBi": "Thang di động", "maHieu": "PXVH1-THANG-08", "thongSo": "Thang chữ A-1,7m", "cuongViRaw": "Trợ thủ", "ketQua": "Đạt" },
+        { "tt": 9, "tenThietBi": "Thang di động", "maHieu": "PXVH1-THANG-09", "thongSo": "Thang chữ A-1,7m", "cuongViRaw": "Máy phó", "ketQua": "Đạt" },
+        { "tt": 10, "tenThietBi": "Thang di động", "maHieu": "PXVH1-THANG-10", "thongSo": "Thang chữ A-4m", "cuongViRaw": "Máy phó", "ketQua": "Đạt" },
+        { "tt": 11, "tenThietBi": "Thang di động", "maHieu": "PXVH1-THANG-11", "thongSo": "Thang chữ I-5m", "cuongViRaw": "Máy phó", "ketQua": "Không", "chuKyThuThang": null, "kdTiepTheoText": "" },
+        { "tt": 12, "tenThietBi": "Thang di động", "maHieu": "PXVH1-THANG-12", "thongSo": "Thang chữ I-4m", "cuongViRaw": "Máy phó", "ketQua": "Không", "chuKyThuThang": null, "kdTiepTheoText": "" },
+        { "tt": 13, "tenThietBi": "Thang di động", "maHieu": "PXVH1-THANG-13", "thongSo": "Thang chữ I-2m", "cuongViRaw": "Máy phó", "ketQua": "Không", "chuKyThuThang": null, "kdTiepTheoText": "" },
+        { "tt": 14, "tenThietBi": "Thang di động", "maHieu": "PXVH1-THANG-14", "thongSo": "Thang chữ A-1,7m", "cuongViRaw": "FGD", "ketQua": "Đạt" },
+        { "tt": 15, "tenThietBi": "Thang di động", "maHieu": "PXVH1-THANG-15", "thongSo": "Thang chữ A-4m", "cuongViRaw": "Thiết bị đo lường và điều khiển", "ketQua": "Đạt" },
+        { "tt": 16, "tenThietBi": "Thang di động", "maHieu": "PXVH1-THANG-16", "thongSo": "Thang chữ A-1,7m", "cuongViRaw": "XLNT", "ketQua": "Đạt" },
+        { "tt": 17, "tenThietBi": "Thang di động", "maHieu": "PXVH1-THANG-17", "thongSo": "Thang chữ A-1,7m", "cuongViRaw": "XLN hỗn hợp", "ketQua": "Đạt" },
+        { "tt": 18, "tenThietBi": "Thang di động", "maHieu": "PXVH1-THANG-18", "thongSo": "Thang chữ A-2m", "cuongViRaw": "XLN hỗn hợp", "ketQua": "Đạt" },
+        { "tt": 19, "tenThietBi": "Thang di động", "maHieu": "PXVH1-THANG-19", "thongSo": "Thang chữ A-2m", "cuongViRaw": "NH3- Lò hơi phụ", "ketQua": "Đạt" },
+        { "tt": 20, "tenThietBi": "Thang di động", "maHieu": "PXVH1-THANG-20", "thongSo": "Thang chữ I-4m", "cuongViRaw": "XLNT", "ketQua": "Đạt" }
+      ]
+    },
+    {
+      "danhMuc": "DÂY ĐAI AN TOÀN",
+      "chuKyThuThang": 6,
+      "kdTiepTheoText": "08/12/2026",
+      "taiTrongThuKg": 225,
+      "records": [
+        { "tt": 1, "tenThietBi": "Dây đeo an toàn", "maHieu": "PXVH1-DĐAT-01", "cuongViRaw": "TK Lò Máy", "tinhTrang": "Qua sử dụng", "ketQua": "Đạt" },
+        { "tt": 2, "tenThietBi": "Dây đeo an toàn", "maHieu": "PXVH1-DĐAT-02", "cuongViRaw": "Thải xỉ", "tinhTrang": "Qua sử dụng", "ketQua": "Đạt" },
+        { "tt": 3, "tenThietBi": "Dây đeo an toàn", "maHieu": "PXVH1-DĐAT-03", "cuongViRaw": "Trợ thủ", "cuongViHoSo": "Trợ thủ, Máy Phó", "tinhTrang": "Qua sử dụng", "ketQua": "Đạt" },
+        { "tt": 4, "tenThietBi": "Dây đeo an toàn", "maHieu": "PXVH1-DĐAT-04", "cuongViRaw": "ESP", "tinhTrang": "Qua sử dụng", "ketQua": "Đạt" },
+        { "tt": 5, "tenThietBi": "Dây đeo an toàn", "maHieu": "PXVH1-DĐAT-05", "cuongViRaw": "FGD", "tinhTrang": "Qua sử dụng", "ketQua": "Không đạt – Thay bằng dây mới #1" },
+        { "tt": 6, "tenThietBi": "Dây đeo an toàn", "maHieu": "PXVH1-DĐAT-06", "cuongViRaw": "FGD", "tinhTrang": "Qua sử dụng", "ketQua": "Không đạt – Thay bằng dây mới #2" },
+        { "tt": 7, "tenThietBi": "Dây đeo an toàn", "maHieu": "PXVH1-DĐAT-07", "cuongViRaw": "Máy nghiền", "tinhTrang": "Qua sử dụng", "ketQua": "Không đạt – Thay bằng dây mới #3" },
+        { "tt": 8, "tenThietBi": "Dây đeo an toàn", "maHieu": "PXVH1-DĐAT-08", "cuongViRaw": "Máy nghiền", "tinhTrang": "Qua sử dụng", "ketQua": "Đạt" },
+        { "tt": 9, "tenThietBi": "Dây đeo an toàn", "maHieu": "PXVH1-DĐAT-09", "cuongViRaw": "Trợ thủ", "cuongViHoSo": "Trợ thủ, Máy Phó", "tinhTrang": "Qua sử dụng", "ketQua": "Đạt" },
+        { "tt": 10, "tenThietBi": "Dây đeo an toàn", "maHieu": "PXVH1-DĐAT-10", "cuongViRaw": "Trạm bơm tuần hoàn", "tinhTrang": "Qua sử dụng", "ketQua": "Đạt" },
+        { "tt": 11, "tenThietBi": "Dây đeo an toàn", "maHieu": "Dây mới #1", "cuongViRaw": "", "taiTrongThuKg": 300, "tinhTrang": "Dây mới", "ketQua": "Đạt" },
+        { "tt": 12, "tenThietBi": "Dây đeo an toàn", "maHieu": "Dây mới #2", "cuongViRaw": "", "taiTrongThuKg": 300, "tinhTrang": "Dây mới", "ketQua": "Đạt" },
+        { "tt": 13, "tenThietBi": "Dây đeo an toàn", "maHieu": "Dây mới #3", "cuongViRaw": "", "taiTrongThuKg": 300, "tinhTrang": "Dây mới", "ketQua": "Đạt" }
+      ]
+    },
+    {
+      "danhMuc": "DỤNG CỤ ĐIỆN CẦM TAY",
+      "chuKyThuThang": 6,
+      "kdTiepTheoText": "03/01/2027",
+      "records": [
+        { "tt": 1, "tenThietBi": "Máy thổi bụi", "maHieu": "PXVH1-MTB-02", "cuongViRaw": "Thiết bị đo lường và điều khiển", "thongSo": "Model: Portable blower MPPB600V1 - Công suất 600W - Điện áp 220VAC", "kiemTraBangMat": "Bình thường", "cachDienMOhm": 200, "ketQua": "Đạt" },
+        { "tt": 2, "tenThietBi": "Máy khoan", "maHieu": "PXVH1-MK-01", "cuongViRaw": "Thiết bị đo lường và điều khiển", "thongSo": "Model: Bose GSB13RE Professional - Công suất 600W - Điện áp 220VAC", "kiemTraBangMat": "Bình thường", "cachDienMOhm": 200, "ketQua": "Đạt" },
+        { "tt": 3, "tenThietBi": "Máy rút vòi thổi bụi", "maHieu": "PXVH1-MRVTB-01", "cuongViRaw": "Thiết bị đo lường và điều khiển", "thongSo": "Model: DPB3 P1B30 -FF-30 - Công suất 1050W - Điện áp 220VAC", "kiemTraBangMat": "Bình thường", "cachDienMOhm": 200, "ketQua": "Đạt" },
+        { "tt": 4, "tenThietBi": "Máy rút vòi thổi bụi", "maHieu": "PXVH1-MRVTB-02", "cuongViRaw": "Thiết bị đo lường và điều khiển", "thongSo": "- Điện áp 220VAC", "kiemTraBangMat": "Bình thường", "cachDienMOhm": 200, "ketQua": "Đạt" },
+        { "tt": 5, "tenThietBi": "Máy hút bụi", "maHieu": "PXVH1-MHB-01", "cuongViRaw": "Thiết bị đo lường và điều khiển", "thongSo": "Model: Hitachi CV950Y - Công suất 1600W - Điện áp 220VAC", "kiemTraBangMat": "Bình thường", "cachDienMOhm": 200, "ketQua": "Đạt" },
+        { "tt": 6, "tenThietBi": "Máy hút bụi", "maHieu": "PXVH1-MHB-02", "cuongViRaw": "Thiết bị đo lường và điều khiển", "thongSo": "Model: Hitachi CV-BH18 - Công suất 1700W - Điện áp 220VAC", "kiemTraBangMat": "Bình thường", "cachDienMOhm": 200, "ketQua": "Đạt" }
+      ]
+    }
+  ]
+}
