@@ -1,0 +1,827 @@
+{
+  "name": "DỰ PHÒNG - Vật tư, phiếu hóa chất và nhập hóa chất - mỗi giờ",
+  "nodes": [
+    {
+      "id": "backup-manual-all",
+      "name": "Chạy thủ công cả 3 tab",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "parameters": {},
+      "position": [
+        -1200,
+        480
+      ]
+    },
+    {
+      "id": "backup-materials-0",
+      "name": "Lịch mỗi giờ · VH1_VTDONGBO",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "17 12 * * * *"
+            }
+          ]
+        }
+      },
+      "position": [
+        -920,
+        180
+      ]
+    },
+    {
+      "id": "backup-materials-1",
+      "name": "Cấu hình dự phòng · VH1_VTDONGBO",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "return [{ json: {\n  \"scope\": \"materials\",\n  \"sheetName\": \"VH1_VTDONGBO\",\n  \"keyIndex\": 28,\n  \"sourceColumns\": 31,\n  \"lastColumn\": \"AH\",\n  \"cron\": \"17 12 * * * *\",\n  \"spreadsheetId\": \"1wamJN787FowPLI3zU-383CME5R-EkI72EP5qLrhj5J4\"\n} }];"
+      },
+      "position": [
+        -680,
+        80
+      ]
+    },
+    {
+      "id": "backup-materials-2",
+      "name": "Đọc ảnh chụp website · VH1_VTDONGBO",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "parameters": {
+        "url": "https://duyenhai1.vn/api/integrations/n8n/material-backup",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "scope",
+              "value": "={{ $json.scope }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 60000,
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "position": [
+        -440,
+        80
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "id": "backup-materials-3",
+      "name": "Đọc cấu trúc tab · VH1_VTDONGBO",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "parameters": {
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleSheetsOAuth2Api",
+        "options": {
+          "timeout": 60000
+        },
+        "url": "https://sheets.googleapis.com/v4/spreadsheets/1wamJN787FowPLI3zU-383CME5R-EkI72EP5qLrhj5J4?fields=sheets.properties(sheetId%2Ctitle%2CgridProperties)"
+      },
+      "position": [
+        -200,
+        80
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "id": "backup-materials-4",
+      "name": "Đọc dữ liệu dự phòng · VH1_VTDONGBO",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "parameters": {
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleSheetsOAuth2Api",
+        "options": {
+          "timeout": 60000
+        },
+        "url": "https://sheets.googleapis.com/v4/spreadsheets/1wamJN787FowPLI3zU-383CME5R-EkI72EP5qLrhj5J4/values/VH1_VTDONGBO?valueRenderOption=UNFORMATTED_VALUE"
+      },
+      "position": [
+        40,
+        80
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "id": "backup-materials-5",
+      "name": "Đối chiếu và lập gói ghi · VH1_VTDONGBO",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "function planBackup($, $json) {\n  // Mã nhúng vào Code node của ba workflow dự phòng. Không gọi mạng tại đây.\n  const config = $('Cấu hình dự phòng · VH1_VTDONGBO').first().json;\n  const response = $('Đọc ảnh chụp website · VH1_VTDONGBO').first().json;\n  const metadata = $('Đọc cấu trúc tab · VH1_VTDONGBO').first().json;\n  const meta = response.meta;\n  if (response.error || meta?.contract !== 'material-backup-v1' || meta.scope !== config.scope\n      || meta.complete !== true || !Array.isArray(response.data) || meta.rowCount !== response.data.length\n      || !Array.isArray(meta.entityIds) || !Number.isFinite(Date.parse(meta.snapshotAt))) {\n    throw new Error('Ảnh chụp website không đầy đủ hoặc sai phạm vi; dừng ghi Sheet');\n  }\n  const properties = metadata.sheets?.find((sheet) => sheet.properties?.title === config.sheetName)?.properties;\n  if (!Number.isInteger(properties?.sheetId)) throw new Error(`Không tìm thấy tab ${config.sheetName}`);\n  if (!Array.isArray($json.values)) throw new Error('Không đọc được tiêu đề và dữ liệu tab dự phòng');\n  const [, headers, ...existing] = $json.values;\n  const keyIndex = config.keyIndex;\n  const syncedIndex = config.sourceColumns;\n  const statusIndex = syncedIndex + 1;\n  const missingIndex = statusIndex + 1;\n  const totalColumns = missingIndex + 1;\n  for (const [offset, header] of ['SYNC_KEY', 'SOURCE_UPDATED_AT', 'WORKFLOW_STATUS', 'SYNCED_AT'].entries()) {\n    if (headers?.[keyIndex + offset] !== header) throw new Error(`Sai bố cục cột ${header} trên ${config.sheetName}`);\n  }\n  for (const [index, expected] of [[statusIndex, 'Tình trạng trên website'], [missingIndex, 'Phát hiện không còn lúc']]) {\n    if (headers[index] && headers[index] !== expected) throw new Error('Cột bổ sung đã có nội dung khác; dừng để tránh ghi đè');\n  }\n  const entities = new Set(meta.entityIds);\n  if (entities.size !== meta.entityIds.length || [...entities].some((id) => typeof id !== 'string' || !id)) {\n    throw new Error('Danh sách ID nguồn không hợp lệ');\n  }\n  const currentByKey = new Map();\n  const currentByEntity = new Map();\n  for (const row of response.data) {\n    if (typeof row.syncKey !== 'string' || !row.syncKey || currentByKey.has(row.syncKey)\n        || !entities.has(row.entityId) || !Array.isArray(row.values) || row.values.length !== config.sourceColumns\n        || row.values[keyIndex] !== row.syncKey || !Number.isFinite(Date.parse(row.sourceUpdatedAt))\n        || row.values.some((value) => value !== null && typeof value !== 'string' && (typeof value !== 'number' || !Number.isFinite(value)))) {\n      throw new Error('Khóa hoặc nội dung nguồn không hợp lệ; dừng ghi Sheet');\n    }\n    currentByKey.set(row.syncKey, row);\n    currentByEntity.set(row.entityId, [...(currentByEntity.get(row.entityId) ?? []), row]);\n  }\n  const entityOf = (key) => config.scope === 'receipts' ? key.slice('receipt:'.length) : key.split(':')[0];\n  const rowByKey = new Map();\n  const oldByEntity = new Map();\n  for (let index = 0; index < existing.length; index++) {\n    const values = existing[index];\n    const key = String(values[keyIndex] ?? '').trim();\n    if (!key) {\n      if (values.some((value) => value !== '' && value != null)) {\n        throw new Error(`Dòng ${index + 3} có dữ liệu nhưng thiếu SYNC_KEY; cần kiểm tra trước khi đồng bộ`);\n      }\n      continue;\n    }\n    if (rowByKey.has(key) || (config.scope === 'receipts' ? !/^receipt:[^:]+$/.test(key) : !/^[^:]+:[^:]+$/.test(key))) {\n      throw new Error(`Khóa trùng hoặc không hợp lệ tại dòng ${index + 3}`);\n    }\n    const record = { key, values, rowIndex: index + 2 };\n    rowByKey.set(key, record);\n    const entityId = entityOf(key);\n    oldByEntity.set(entityId, [...(oldByEntity.get(entityId) ?? []), record]);\n  }\n  // Sửa phiếu hiện có có thể tạo lại item ID. Trường hợp một dòng → một dòng\n  // khớp bằng ID phiếu, giữ vị trí trên Sheet thay vì sinh thêm dòng trùng.\n  const reusedKeys = new Set();\n  const targetByKey = new Map();\n  let nextRowIndex = existing.length + 2;\n  for (const row of response.data) {\n    let target = rowByKey.get(row.syncKey);\n    if (!target && config.scope !== 'receipts') {\n      const previous = oldByEntity.get(row.entityId) ?? [];\n      if (currentByEntity.get(row.entityId).length === 1 && previous.length === 1 && !currentByKey.has(previous[0].key)) {\n        target = previous[0];\n        reusedKeys.add(target.key);\n      }\n    }\n    targetByKey.set(row.syncKey, target?.rowIndex ?? nextRowIndex++);\n  }\n  const sheetId = properties.sheetId;\n  const requests = [];\n  const requiredRows = Math.max(3, nextRowIndex);\n  if (properties.gridProperties.rowCount < requiredRows || properties.gridProperties.columnCount < totalColumns) {\n    requests.push({ updateSheetProperties: {\n      properties: { sheetId, gridProperties: {\n        rowCount: Math.max(properties.gridProperties.rowCount, requiredRows),\n        columnCount: Math.max(properties.gridProperties.columnCount, totalColumns),\n      } }, fields: 'gridProperties.rowCount,gridProperties.columnCount',\n    } });\n  }\n  const cell = (value) => ({ userEnteredValue: value == null || value === '' ? {}\n    : typeof value === 'number' ? { numberValue: value } : { stringValue: String(value) } });\n  const update = (rowIndex, columnIndex, values) => ({ updateCells: {\n    start: { sheetId, rowIndex, columnIndex }, rows: [{ values: values.map(cell) }], fields: 'userEnteredValue',\n  } });\n  requests.push(update(1, statusIndex, ['Tình trạng trên website', 'Phát hiện không còn lúc']));\n  requests.push({ repeatCell: {\n    range: { sheetId, startRowIndex: 1, endRowIndex: 2, startColumnIndex: statusIndex, endColumnIndex: totalColumns },\n    cell: { userEnteredFormat: { textFormat: { bold: true }, wrapStrategy: 'WRAP' } },\n    fields: 'userEnteredFormat.textFormat.bold,userEnteredFormat.wrapStrategy',\n  } });\n  requests.push({ updateDimensionProperties: {\n    range: { sheetId, dimension: 'COLUMNS', startIndex: statusIndex, endIndex: totalColumns },\n    properties: { pixelSize: 220 }, fields: 'pixelSize',\n  } });\n  const checkedAt = new Intl.DateTimeFormat('en-GB', {\n    timeZone: 'Asia/Ho_Chi_Minh', day: '2-digit', month: '2-digit', year: 'numeric',\n    hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23',\n  }).format(new Date(meta.snapshotAt)).replace(',', '');\n  const paintStatus = (rowIndex, missing) => ({ repeatCell: {\n    range: { sheetId, startRowIndex: rowIndex, endRowIndex: rowIndex + 1, startColumnIndex: statusIndex, endColumnIndex: totalColumns },\n    cell: { userEnteredFormat: {\n      backgroundColor: missing ? { red: 0.92, green: 0.92, blue: 0.92 } : { red: 0.89, green: 0.96, blue: 0.90 },\n      wrapStrategy: 'WRAP',\n    } }, fields: 'userEnteredFormat.backgroundColor,userEnteredFormat.wrapStrategy',\n  } });\n  for (const row of response.data) {\n    const rowIndex = targetByKey.get(row.syncKey);\n    requests.push(update(rowIndex, 0, [...row.values, checkedAt, 'Đang lưu trên website', null]));\n    requests.push(paintStatus(rowIndex, false));\n  }\n  let missingRows = 0;\n  for (const old of rowByKey.values()) {\n    if (currentByKey.has(old.key) || reusedKeys.has(old.key)) continue;\n    missingRows++;\n    const status = entities.has(entityOf(old.key))\n      ? 'Dòng vật tư đã thay đổi hoặc ngoài phạm vi'\n      : 'Không còn trên website';\n    // Không gọi đây là ngày xóa: có thể là xóa thủ công hoặc dọn theo kỳ.\n    const firstMissingAt = old.values[missingIndex] || checkedAt;\n    requests.push(update(old.rowIndex, statusIndex, [status, firstMissingAt]));\n    requests.push(paintStatus(old.rowIndex, true));\n  }\n  if (config.scope === 'receipts') {\n    requests.push({ repeatCell: {\n      range: { sheetId, startRowIndex: 2, endRowIndex: requiredRows, startColumnIndex: 3, endColumnIndex: 6 },\n      cell: { userEnteredFormat: { numberFormat: { type: 'NUMBER', pattern: '#,##0.####' } } },\n      fields: 'userEnteredFormat.numberFormat',\n    } });\n  }\n  // Chia gói nhỏ; mỗi gói chỉ ghi ô/thuộc tính tuyệt đối nên retry không xóa nhầm dòng.\n  const batches = [];\n  let pending = [], size = 0;\n  for (const request of requests) {\n    const length = JSON.stringify(request).length;\n    if (length > 400_000) throw new Error('Một dòng quá lớn để ghi Sheet an toàn');\n    if (pending.length && (pending.length >= 200 || size + length > 400_000)) {\n      batches.push(pending); pending = []; size = 0;\n    }\n    pending.push(request); size += length;\n  }\n  if (pending.length) batches.push(pending);\n  return batches.map((batch, index) => ({ json: {\n    requests: batch, batch: index + 1, batchCount: batches.length,\n    targetSheet: config.sheetName, sourceRows: response.data.length, missingRows, reusedRows: reusedKeys.size,\n  } }));\n}\n\nreturn planBackup($, $json);"
+      },
+      "position": [
+        280,
+        80
+      ]
+    },
+    {
+      "id": "backup-materials-6",
+      "name": "Ghi bản dự phòng · VH1_VTDONGBO",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "parameters": {
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleSheetsOAuth2Api",
+        "options": {
+          "timeout": 60000,
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 1200
+            }
+          }
+        },
+        "method": "POST",
+        "url": "https://sheets.googleapis.com/v4/spreadsheets/1wamJN787FowPLI3zU-383CME5R-EkI72EP5qLrhj5J4:batchUpdate",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ requests: $json.requests }) }}"
+      },
+      "position": [
+        520,
+        80
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "id": "backup-materials-7",
+      "name": "Kết quả · VH1_VTDONGBO",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "const batches = $('Đối chiếu và lập gói ghi · VH1_VTDONGBO').all();\nconst first = batches[0].json;\nreturn [{ json: { success: true, targetSheet: first.targetSheet, syncedRows: first.sourceRows, missingRows: first.missingRows, reusedRows: first.reusedRows, batches: batches.length } }];"
+      },
+      "position": [
+        760,
+        80
+      ]
+    },
+    {
+      "id": "backup-materials-8",
+      "name": "Hướng dẫn · VH1_VTDONGBO",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "parameters": {
+        "content": "## Dự phòng VH1_VTDONGBO\nChạy mỗi giờ theo cron `17 12 * * * *`, múi giờ Asia/Ho_Chi_Minh.\n\n1. Website cần có API /api/integrations/n8n/material-backup.\n2. Chọn Header Auth: Authorization = Bearer <N8N_MATERIAL_SYNC_TOKEN> cho node đọc website.\n3. Chọn Google Sheets OAuth2 cho 3 node Google của nhánh này; tài khoản cần quyền sửa file dự phòng.\n4. Nút chạy thủ công chạy cả 3 tab lần lượt; lịch tự động chỉ chạy tab tương ứng. Không chạy thủ công chồng lượt tự động.\n\nGiữ hồ sơ mất khỏi website, đánh dấu thời điểm phát hiện; không suy đoán ngày/người xóa. Đối chiếu toàn bộ mỗi lượt, không dùng watermark. TINH_KHO_MONTH chưa đồng bộ.",
+        "height": 400,
+        "width": 580
+      },
+      "position": [
+        -900,
+        400
+      ]
+    },
+    {
+      "id": "backup-chemicals-0",
+      "name": "Lịch mỗi giờ · VH1_HOACHAT_DONGBO",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "29 16 * * * *"
+            }
+          ]
+        }
+      },
+      "position": [
+        -920,
+        1080
+      ]
+    },
+    {
+      "id": "backup-chemicals-1",
+      "name": "Cấu hình dự phòng · VH1_HOACHAT_DONGBO",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "return [{ json: {\n  \"scope\": \"chemicals\",\n  \"sheetName\": \"VH1_HOACHAT_DONGBO\",\n  \"keyIndex\": 13,\n  \"sourceColumns\": 16,\n  \"lastColumn\": \"S\",\n  \"cron\": \"29 16 * * * *\",\n  \"spreadsheetId\": \"1wamJN787FowPLI3zU-383CME5R-EkI72EP5qLrhj5J4\"\n} }];"
+      },
+      "position": [
+        -680,
+        980
+      ]
+    },
+    {
+      "id": "backup-chemicals-2",
+      "name": "Đọc ảnh chụp website · VH1_HOACHAT_DONGBO",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "parameters": {
+        "url": "https://duyenhai1.vn/api/integrations/n8n/material-backup",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "scope",
+              "value": "={{ $json.scope }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 60000,
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "position": [
+        -440,
+        980
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "id": "backup-chemicals-3",
+      "name": "Đọc cấu trúc tab · VH1_HOACHAT_DONGBO",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "parameters": {
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleSheetsOAuth2Api",
+        "options": {
+          "timeout": 60000
+        },
+        "url": "https://sheets.googleapis.com/v4/spreadsheets/1wamJN787FowPLI3zU-383CME5R-EkI72EP5qLrhj5J4?fields=sheets.properties(sheetId%2Ctitle%2CgridProperties)"
+      },
+      "position": [
+        -200,
+        980
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "id": "backup-chemicals-4",
+      "name": "Đọc dữ liệu dự phòng · VH1_HOACHAT_DONGBO",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "parameters": {
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleSheetsOAuth2Api",
+        "options": {
+          "timeout": 60000
+        },
+        "url": "https://sheets.googleapis.com/v4/spreadsheets/1wamJN787FowPLI3zU-383CME5R-EkI72EP5qLrhj5J4/values/VH1_HOACHAT_DONGBO?valueRenderOption=UNFORMATTED_VALUE"
+      },
+      "position": [
+        40,
+        980
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "id": "backup-chemicals-5",
+      "name": "Đối chiếu và lập gói ghi · VH1_HOACHAT_DONGBO",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "function planBackup($, $json) {\n  // Mã nhúng vào Code node của ba workflow dự phòng. Không gọi mạng tại đây.\n  const config = $('Cấu hình dự phòng · VH1_HOACHAT_DONGBO').first().json;\n  const response = $('Đọc ảnh chụp website · VH1_HOACHAT_DONGBO').first().json;\n  const metadata = $('Đọc cấu trúc tab · VH1_HOACHAT_DONGBO').first().json;\n  const meta = response.meta;\n  if (response.error || meta?.contract !== 'material-backup-v1' || meta.scope !== config.scope\n      || meta.complete !== true || !Array.isArray(response.data) || meta.rowCount !== response.data.length\n      || !Array.isArray(meta.entityIds) || !Number.isFinite(Date.parse(meta.snapshotAt))) {\n    throw new Error('Ảnh chụp website không đầy đủ hoặc sai phạm vi; dừng ghi Sheet');\n  }\n  const properties = metadata.sheets?.find((sheet) => sheet.properties?.title === config.sheetName)?.properties;\n  if (!Number.isInteger(properties?.sheetId)) throw new Error(`Không tìm thấy tab ${config.sheetName}`);\n  if (!Array.isArray($json.values)) throw new Error('Không đọc được tiêu đề và dữ liệu tab dự phòng');\n  const [, headers, ...existing] = $json.values;\n  const keyIndex = config.keyIndex;\n  const syncedIndex = config.sourceColumns;\n  const statusIndex = syncedIndex + 1;\n  const missingIndex = statusIndex + 1;\n  const totalColumns = missingIndex + 1;\n  for (const [offset, header] of ['SYNC_KEY', 'SOURCE_UPDATED_AT', 'WORKFLOW_STATUS', 'SYNCED_AT'].entries()) {\n    if (headers?.[keyIndex + offset] !== header) throw new Error(`Sai bố cục cột ${header} trên ${config.sheetName}`);\n  }\n  for (const [index, expected] of [[statusIndex, 'Tình trạng trên website'], [missingIndex, 'Phát hiện không còn lúc']]) {\n    if (headers[index] && headers[index] !== expected) throw new Error('Cột bổ sung đã có nội dung khác; dừng để tránh ghi đè');\n  }\n  const entities = new Set(meta.entityIds);\n  if (entities.size !== meta.entityIds.length || [...entities].some((id) => typeof id !== 'string' || !id)) {\n    throw new Error('Danh sách ID nguồn không hợp lệ');\n  }\n  const currentByKey = new Map();\n  const currentByEntity = new Map();\n  for (const row of response.data) {\n    if (typeof row.syncKey !== 'string' || !row.syncKey || currentByKey.has(row.syncKey)\n        || !entities.has(row.entityId) || !Array.isArray(row.values) || row.values.length !== config.sourceColumns\n        || row.values[keyIndex] !== row.syncKey || !Number.isFinite(Date.parse(row.sourceUpdatedAt))\n        || row.values.some((value) => value !== null && typeof value !== 'string' && (typeof value !== 'number' || !Number.isFinite(value)))) {\n      throw new Error('Khóa hoặc nội dung nguồn không hợp lệ; dừng ghi Sheet');\n    }\n    currentByKey.set(row.syncKey, row);\n    currentByEntity.set(row.entityId, [...(currentByEntity.get(row.entityId) ?? []), row]);\n  }\n  const entityOf = (key) => config.scope === 'receipts' ? key.slice('receipt:'.length) : key.split(':')[0];\n  const rowByKey = new Map();\n  const oldByEntity = new Map();\n  for (let index = 0; index < existing.length; index++) {\n    const values = existing[index];\n    const key = String(values[keyIndex] ?? '').trim();\n    if (!key) {\n      if (values.some((value) => value !== '' && value != null)) {\n        throw new Error(`Dòng ${index + 3} có dữ liệu nhưng thiếu SYNC_KEY; cần kiểm tra trước khi đồng bộ`);\n      }\n      continue;\n    }\n    if (rowByKey.has(key) || (config.scope === 'receipts' ? !/^receipt:[^:]+$/.test(key) : !/^[^:]+:[^:]+$/.test(key))) {\n      throw new Error(`Khóa trùng hoặc không hợp lệ tại dòng ${index + 3}`);\n    }\n    const record = { key, values, rowIndex: index + 2 };\n    rowByKey.set(key, record);\n    const entityId = entityOf(key);\n    oldByEntity.set(entityId, [...(oldByEntity.get(entityId) ?? []), record]);\n  }\n  // Sửa phiếu hiện có có thể tạo lại item ID. Trường hợp một dòng → một dòng\n  // khớp bằng ID phiếu, giữ vị trí trên Sheet thay vì sinh thêm dòng trùng.\n  const reusedKeys = new Set();\n  const targetByKey = new Map();\n  let nextRowIndex = existing.length + 2;\n  for (const row of response.data) {\n    let target = rowByKey.get(row.syncKey);\n    if (!target && config.scope !== 'receipts') {\n      const previous = oldByEntity.get(row.entityId) ?? [];\n      if (currentByEntity.get(row.entityId).length === 1 && previous.length === 1 && !currentByKey.has(previous[0].key)) {\n        target = previous[0];\n        reusedKeys.add(target.key);\n      }\n    }\n    targetByKey.set(row.syncKey, target?.rowIndex ?? nextRowIndex++);\n  }\n  const sheetId = properties.sheetId;\n  const requests = [];\n  const requiredRows = Math.max(3, nextRowIndex);\n  if (properties.gridProperties.rowCount < requiredRows || properties.gridProperties.columnCount < totalColumns) {\n    requests.push({ updateSheetProperties: {\n      properties: { sheetId, gridProperties: {\n        rowCount: Math.max(properties.gridProperties.rowCount, requiredRows),\n        columnCount: Math.max(properties.gridProperties.columnCount, totalColumns),\n      } }, fields: 'gridProperties.rowCount,gridProperties.columnCount',\n    } });\n  }\n  const cell = (value) => ({ userEnteredValue: value == null || value === '' ? {}\n    : typeof value === 'number' ? { numberValue: value } : { stringValue: String(value) } });\n  const update = (rowIndex, columnIndex, values) => ({ updateCells: {\n    start: { sheetId, rowIndex, columnIndex }, rows: [{ values: values.map(cell) }], fields: 'userEnteredValue',\n  } });\n  requests.push(update(1, statusIndex, ['Tình trạng trên website', 'Phát hiện không còn lúc']));\n  requests.push({ repeatCell: {\n    range: { sheetId, startRowIndex: 1, endRowIndex: 2, startColumnIndex: statusIndex, endColumnIndex: totalColumns },\n    cell: { userEnteredFormat: { textFormat: { bold: true }, wrapStrategy: 'WRAP' } },\n    fields: 'userEnteredFormat.textFormat.bold,userEnteredFormat.wrapStrategy',\n  } });\n  requests.push({ updateDimensionProperties: {\n    range: { sheetId, dimension: 'COLUMNS', startIndex: statusIndex, endIndex: totalColumns },\n    properties: { pixelSize: 220 }, fields: 'pixelSize',\n  } });\n  const checkedAt = new Intl.DateTimeFormat('en-GB', {\n    timeZone: 'Asia/Ho_Chi_Minh', day: '2-digit', month: '2-digit', year: 'numeric',\n    hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23',\n  }).format(new Date(meta.snapshotAt)).replace(',', '');\n  const paintStatus = (rowIndex, missing) => ({ repeatCell: {\n    range: { sheetId, startRowIndex: rowIndex, endRowIndex: rowIndex + 1, startColumnIndex: statusIndex, endColumnIndex: totalColumns },\n    cell: { userEnteredFormat: {\n      backgroundColor: missing ? { red: 0.92, green: 0.92, blue: 0.92 } : { red: 0.89, green: 0.96, blue: 0.90 },\n      wrapStrategy: 'WRAP',\n    } }, fields: 'userEnteredFormat.backgroundColor,userEnteredFormat.wrapStrategy',\n  } });\n  for (const row of response.data) {\n    const rowIndex = targetByKey.get(row.syncKey);\n    requests.push(update(rowIndex, 0, [...row.values, checkedAt, 'Đang lưu trên website', null]));\n    requests.push(paintStatus(rowIndex, false));\n  }\n  let missingRows = 0;\n  for (const old of rowByKey.values()) {\n    if (currentByKey.has(old.key) || reusedKeys.has(old.key)) continue;\n    missingRows++;\n    const status = entities.has(entityOf(old.key))\n      ? 'Dòng vật tư đã thay đổi hoặc ngoài phạm vi'\n      : 'Không còn trên website';\n    // Không gọi đây là ngày xóa: có thể là xóa thủ công hoặc dọn theo kỳ.\n    const firstMissingAt = old.values[missingIndex] || checkedAt;\n    requests.push(update(old.rowIndex, statusIndex, [status, firstMissingAt]));\n    requests.push(paintStatus(old.rowIndex, true));\n  }\n  if (config.scope === 'receipts') {\n    requests.push({ repeatCell: {\n      range: { sheetId, startRowIndex: 2, endRowIndex: requiredRows, startColumnIndex: 3, endColumnIndex: 6 },\n      cell: { userEnteredFormat: { numberFormat: { type: 'NUMBER', pattern: '#,##0.####' } } },\n      fields: 'userEnteredFormat.numberFormat',\n    } });\n  }\n  // Chia gói nhỏ; mỗi gói chỉ ghi ô/thuộc tính tuyệt đối nên retry không xóa nhầm dòng.\n  const batches = [];\n  let pending = [], size = 0;\n  for (const request of requests) {\n    const length = JSON.stringify(request).length;\n    if (length > 400_000) throw new Error('Một dòng quá lớn để ghi Sheet an toàn');\n    if (pending.length && (pending.length >= 200 || size + length > 400_000)) {\n      batches.push(pending); pending = []; size = 0;\n    }\n    pending.push(request); size += length;\n  }\n  if (pending.length) batches.push(pending);\n  return batches.map((batch, index) => ({ json: {\n    requests: batch, batch: index + 1, batchCount: batches.length,\n    targetSheet: config.sheetName, sourceRows: response.data.length, missingRows, reusedRows: reusedKeys.size,\n  } }));\n}\n\nreturn planBackup($, $json);"
+      },
+      "position": [
+        280,
+        980
+      ]
+    },
+    {
+      "id": "backup-chemicals-6",
+      "name": "Ghi bản dự phòng · VH1_HOACHAT_DONGBO",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "parameters": {
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleSheetsOAuth2Api",
+        "options": {
+          "timeout": 60000,
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 1200
+            }
+          }
+        },
+        "method": "POST",
+        "url": "https://sheets.googleapis.com/v4/spreadsheets/1wamJN787FowPLI3zU-383CME5R-EkI72EP5qLrhj5J4:batchUpdate",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ requests: $json.requests }) }}"
+      },
+      "position": [
+        520,
+        980
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "id": "backup-chemicals-7",
+      "name": "Kết quả · VH1_HOACHAT_DONGBO",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "const batches = $('Đối chiếu và lập gói ghi · VH1_HOACHAT_DONGBO').all();\nconst first = batches[0].json;\nreturn [{ json: { success: true, targetSheet: first.targetSheet, syncedRows: first.sourceRows, missingRows: first.missingRows, reusedRows: first.reusedRows, batches: batches.length } }];"
+      },
+      "position": [
+        760,
+        980
+      ]
+    },
+    {
+      "id": "backup-chemicals-8",
+      "name": "Hướng dẫn · VH1_HOACHAT_DONGBO",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "parameters": {
+        "content": "## Dự phòng VH1_HOACHAT_DONGBO\nChạy mỗi giờ theo cron `29 16 * * * *`, múi giờ Asia/Ho_Chi_Minh.\n\n1. Website cần có API /api/integrations/n8n/material-backup.\n2. Chọn Header Auth: Authorization = Bearer <N8N_MATERIAL_SYNC_TOKEN> cho node đọc website.\n3. Chọn Google Sheets OAuth2 cho 3 node Google của nhánh này; tài khoản cần quyền sửa file dự phòng.\n4. Nút chạy thủ công chạy cả 3 tab lần lượt; lịch tự động chỉ chạy tab tương ứng. Không chạy thủ công chồng lượt tự động.\n\nGiữ hồ sơ mất khỏi website, đánh dấu thời điểm phát hiện; không suy đoán ngày/người xóa. Đối chiếu toàn bộ mỗi lượt, không dùng watermark. TINH_KHO_MONTH chưa đồng bộ.",
+        "height": 400,
+        "width": 580
+      },
+      "position": [
+        -900,
+        1300
+      ]
+    },
+    {
+      "id": "backup-receipts-0",
+      "name": "Lịch mỗi giờ · NHAP_HOA_CHAT",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "47 19 * * * *"
+            }
+          ]
+        }
+      },
+      "position": [
+        -920,
+        1980
+      ]
+    },
+    {
+      "id": "backup-receipts-1",
+      "name": "Cấu hình dự phòng · NHAP_HOA_CHAT",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "return [{ json: {\n  \"scope\": \"receipts\",\n  \"sheetName\": \"NHAP_HOA_CHAT\",\n  \"keyIndex\": 7,\n  \"sourceColumns\": 10,\n  \"lastColumn\": \"M\",\n  \"cron\": \"47 19 * * * *\",\n  \"spreadsheetId\": \"1wamJN787FowPLI3zU-383CME5R-EkI72EP5qLrhj5J4\"\n} }];"
+      },
+      "position": [
+        -680,
+        1880
+      ]
+    },
+    {
+      "id": "backup-receipts-2",
+      "name": "Đọc ảnh chụp website · NHAP_HOA_CHAT",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "parameters": {
+        "url": "https://duyenhai1.vn/api/integrations/n8n/material-backup",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "scope",
+              "value": "={{ $json.scope }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 60000,
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "position": [
+        -440,
+        1880
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "id": "backup-receipts-3",
+      "name": "Đọc cấu trúc tab · NHAP_HOA_CHAT",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "parameters": {
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleSheetsOAuth2Api",
+        "options": {
+          "timeout": 60000
+        },
+        "url": "https://sheets.googleapis.com/v4/spreadsheets/1wamJN787FowPLI3zU-383CME5R-EkI72EP5qLrhj5J4?fields=sheets.properties(sheetId%2Ctitle%2CgridProperties)"
+      },
+      "position": [
+        -200,
+        1880
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "id": "backup-receipts-4",
+      "name": "Đọc dữ liệu dự phòng · NHAP_HOA_CHAT",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "parameters": {
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleSheetsOAuth2Api",
+        "options": {
+          "timeout": 60000
+        },
+        "url": "https://sheets.googleapis.com/v4/spreadsheets/1wamJN787FowPLI3zU-383CME5R-EkI72EP5qLrhj5J4/values/NHAP_HOA_CHAT?valueRenderOption=UNFORMATTED_VALUE"
+      },
+      "position": [
+        40,
+        1880
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "id": "backup-receipts-5",
+      "name": "Đối chiếu và lập gói ghi · NHAP_HOA_CHAT",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "function planBackup($, $json) {\n  // Mã nhúng vào Code node của ba workflow dự phòng. Không gọi mạng tại đây.\n  const config = $('Cấu hình dự phòng · NHAP_HOA_CHAT').first().json;\n  const response = $('Đọc ảnh chụp website · NHAP_HOA_CHAT').first().json;\n  const metadata = $('Đọc cấu trúc tab · NHAP_HOA_CHAT').first().json;\n  const meta = response.meta;\n  if (response.error || meta?.contract !== 'material-backup-v1' || meta.scope !== config.scope\n      || meta.complete !== true || !Array.isArray(response.data) || meta.rowCount !== response.data.length\n      || !Array.isArray(meta.entityIds) || !Number.isFinite(Date.parse(meta.snapshotAt))) {\n    throw new Error('Ảnh chụp website không đầy đủ hoặc sai phạm vi; dừng ghi Sheet');\n  }\n  const properties = metadata.sheets?.find((sheet) => sheet.properties?.title === config.sheetName)?.properties;\n  if (!Number.isInteger(properties?.sheetId)) throw new Error(`Không tìm thấy tab ${config.sheetName}`);\n  if (!Array.isArray($json.values)) throw new Error('Không đọc được tiêu đề và dữ liệu tab dự phòng');\n  const [, headers, ...existing] = $json.values;\n  const keyIndex = config.keyIndex;\n  const syncedIndex = config.sourceColumns;\n  const statusIndex = syncedIndex + 1;\n  const missingIndex = statusIndex + 1;\n  const totalColumns = missingIndex + 1;\n  for (const [offset, header] of ['SYNC_KEY', 'SOURCE_UPDATED_AT', 'WORKFLOW_STATUS', 'SYNCED_AT'].entries()) {\n    if (headers?.[keyIndex + offset] !== header) throw new Error(`Sai bố cục cột ${header} trên ${config.sheetName}`);\n  }\n  for (const [index, expected] of [[statusIndex, 'Tình trạng trên website'], [missingIndex, 'Phát hiện không còn lúc']]) {\n    if (headers[index] && headers[index] !== expected) throw new Error('Cột bổ sung đã có nội dung khác; dừng để tránh ghi đè');\n  }\n  const entities = new Set(meta.entityIds);\n  if (entities.size !== meta.entityIds.length || [...entities].some((id) => typeof id !== 'string' || !id)) {\n    throw new Error('Danh sách ID nguồn không hợp lệ');\n  }\n  const currentByKey = new Map();\n  const currentByEntity = new Map();\n  for (const row of response.data) {\n    if (typeof row.syncKey !== 'string' || !row.syncKey || currentByKey.has(row.syncKey)\n        || !entities.has(row.entityId) || !Array.isArray(row.values) || row.values.length !== config.sourceColumns\n        || row.values[keyIndex] !== row.syncKey || !Number.isFinite(Date.parse(row.sourceUpdatedAt))\n        || row.values.some((value) => value !== null && typeof value !== 'string' && (typeof value !== 'number' || !Number.isFinite(value)))) {\n      throw new Error('Khóa hoặc nội dung nguồn không hợp lệ; dừng ghi Sheet');\n    }\n    currentByKey.set(row.syncKey, row);\n    currentByEntity.set(row.entityId, [...(currentByEntity.get(row.entityId) ?? []), row]);\n  }\n  const entityOf = (key) => config.scope === 'receipts' ? key.slice('receipt:'.length) : key.split(':')[0];\n  const rowByKey = new Map();\n  const oldByEntity = new Map();\n  for (let index = 0; index < existing.length; index++) {\n    const values = existing[index];\n    const key = String(values[keyIndex] ?? '').trim();\n    if (!key) {\n      if (values.some((value) => value !== '' && value != null)) {\n        throw new Error(`Dòng ${index + 3} có dữ liệu nhưng thiếu SYNC_KEY; cần kiểm tra trước khi đồng bộ`);\n      }\n      continue;\n    }\n    if (rowByKey.has(key) || (config.scope === 'receipts' ? !/^receipt:[^:]+$/.test(key) : !/^[^:]+:[^:]+$/.test(key))) {\n      throw new Error(`Khóa trùng hoặc không hợp lệ tại dòng ${index + 3}`);\n    }\n    const record = { key, values, rowIndex: index + 2 };\n    rowByKey.set(key, record);\n    const entityId = entityOf(key);\n    oldByEntity.set(entityId, [...(oldByEntity.get(entityId) ?? []), record]);\n  }\n  // Sửa phiếu hiện có có thể tạo lại item ID. Trường hợp một dòng → một dòng\n  // khớp bằng ID phiếu, giữ vị trí trên Sheet thay vì sinh thêm dòng trùng.\n  const reusedKeys = new Set();\n  const targetByKey = new Map();\n  let nextRowIndex = existing.length + 2;\n  for (const row of response.data) {\n    let target = rowByKey.get(row.syncKey);\n    if (!target && config.scope !== 'receipts') {\n      const previous = oldByEntity.get(row.entityId) ?? [];\n      if (currentByEntity.get(row.entityId).length === 1 && previous.length === 1 && !currentByKey.has(previous[0].key)) {\n        target = previous[0];\n        reusedKeys.add(target.key);\n      }\n    }\n    targetByKey.set(row.syncKey, target?.rowIndex ?? nextRowIndex++);\n  }\n  const sheetId = properties.sheetId;\n  const requests = [];\n  const requiredRows = Math.max(3, nextRowIndex);\n  if (properties.gridProperties.rowCount < requiredRows || properties.gridProperties.columnCount < totalColumns) {\n    requests.push({ updateSheetProperties: {\n      properties: { sheetId, gridProperties: {\n        rowCount: Math.max(properties.gridProperties.rowCount, requiredRows),\n        columnCount: Math.max(properties.gridProperties.columnCount, totalColumns),\n      } }, fields: 'gridProperties.rowCount,gridProperties.columnCount',\n    } });\n  }\n  const cell = (value) => ({ userEnteredValue: value == null || value === '' ? {}\n    : typeof value === 'number' ? { numberValue: value } : { stringValue: String(value) } });\n  const update = (rowIndex, columnIndex, values) => ({ updateCells: {\n    start: { sheetId, rowIndex, columnIndex }, rows: [{ values: values.map(cell) }], fields: 'userEnteredValue',\n  } });\n  requests.push(update(1, statusIndex, ['Tình trạng trên website', 'Phát hiện không còn lúc']));\n  requests.push({ repeatCell: {\n    range: { sheetId, startRowIndex: 1, endRowIndex: 2, startColumnIndex: statusIndex, endColumnIndex: totalColumns },\n    cell: { userEnteredFormat: { textFormat: { bold: true }, wrapStrategy: 'WRAP' } },\n    fields: 'userEnteredFormat.textFormat.bold,userEnteredFormat.wrapStrategy',\n  } });\n  requests.push({ updateDimensionProperties: {\n    range: { sheetId, dimension: 'COLUMNS', startIndex: statusIndex, endIndex: totalColumns },\n    properties: { pixelSize: 220 }, fields: 'pixelSize',\n  } });\n  const checkedAt = new Intl.DateTimeFormat('en-GB', {\n    timeZone: 'Asia/Ho_Chi_Minh', day: '2-digit', month: '2-digit', year: 'numeric',\n    hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23',\n  }).format(new Date(meta.snapshotAt)).replace(',', '');\n  const paintStatus = (rowIndex, missing) => ({ repeatCell: {\n    range: { sheetId, startRowIndex: rowIndex, endRowIndex: rowIndex + 1, startColumnIndex: statusIndex, endColumnIndex: totalColumns },\n    cell: { userEnteredFormat: {\n      backgroundColor: missing ? { red: 0.92, green: 0.92, blue: 0.92 } : { red: 0.89, green: 0.96, blue: 0.90 },\n      wrapStrategy: 'WRAP',\n    } }, fields: 'userEnteredFormat.backgroundColor,userEnteredFormat.wrapStrategy',\n  } });\n  for (const row of response.data) {\n    const rowIndex = targetByKey.get(row.syncKey);\n    requests.push(update(rowIndex, 0, [...row.values, checkedAt, 'Đang lưu trên website', null]));\n    requests.push(paintStatus(rowIndex, false));\n  }\n  let missingRows = 0;\n  for (const old of rowByKey.values()) {\n    if (currentByKey.has(old.key) || reusedKeys.has(old.key)) continue;\n    missingRows++;\n    const status = entities.has(entityOf(old.key))\n      ? 'Dòng vật tư đã thay đổi hoặc ngoài phạm vi'\n      : 'Không còn trên website';\n    // Không gọi đây là ngày xóa: có thể là xóa thủ công hoặc dọn theo kỳ.\n    const firstMissingAt = old.values[missingIndex] || checkedAt;\n    requests.push(update(old.rowIndex, statusIndex, [status, firstMissingAt]));\n    requests.push(paintStatus(old.rowIndex, true));\n  }\n  if (config.scope === 'receipts') {\n    requests.push({ repeatCell: {\n      range: { sheetId, startRowIndex: 2, endRowIndex: requiredRows, startColumnIndex: 3, endColumnIndex: 6 },\n      cell: { userEnteredFormat: { numberFormat: { type: 'NUMBER', pattern: '#,##0.####' } } },\n      fields: 'userEnteredFormat.numberFormat',\n    } });\n  }\n  // Chia gói nhỏ; mỗi gói chỉ ghi ô/thuộc tính tuyệt đối nên retry không xóa nhầm dòng.\n  const batches = [];\n  let pending = [], size = 0;\n  for (const request of requests) {\n    const length = JSON.stringify(request).length;\n    if (length > 400_000) throw new Error('Một dòng quá lớn để ghi Sheet an toàn');\n    if (pending.length && (pending.length >= 200 || size + length > 400_000)) {\n      batches.push(pending); pending = []; size = 0;\n    }\n    pending.push(request); size += length;\n  }\n  if (pending.length) batches.push(pending);\n  return batches.map((batch, index) => ({ json: {\n    requests: batch, batch: index + 1, batchCount: batches.length,\n    targetSheet: config.sheetName, sourceRows: response.data.length, missingRows, reusedRows: reusedKeys.size,\n  } }));\n}\n\nreturn planBackup($, $json);"
+      },
+      "position": [
+        280,
+        1880
+      ]
+    },
+    {
+      "id": "backup-receipts-6",
+      "name": "Ghi bản dự phòng · NHAP_HOA_CHAT",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "parameters": {
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleSheetsOAuth2Api",
+        "options": {
+          "timeout": 60000,
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 1200
+            }
+          }
+        },
+        "method": "POST",
+        "url": "https://sheets.googleapis.com/v4/spreadsheets/1wamJN787FowPLI3zU-383CME5R-EkI72EP5qLrhj5J4:batchUpdate",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ requests: $json.requests }) }}"
+      },
+      "position": [
+        520,
+        1880
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "id": "backup-receipts-7",
+      "name": "Kết quả · NHAP_HOA_CHAT",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "const batches = $('Đối chiếu và lập gói ghi · NHAP_HOA_CHAT').all();\nconst first = batches[0].json;\nreturn [{ json: { success: true, targetSheet: first.targetSheet, syncedRows: first.sourceRows, missingRows: first.missingRows, reusedRows: first.reusedRows, batches: batches.length } }];"
+      },
+      "position": [
+        760,
+        1880
+      ]
+    },
+    {
+      "id": "backup-receipts-8",
+      "name": "Hướng dẫn · NHAP_HOA_CHAT",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "parameters": {
+        "content": "## Dự phòng NHAP_HOA_CHAT\nChạy mỗi giờ theo cron `47 19 * * * *`, múi giờ Asia/Ho_Chi_Minh.\n\n1. Website cần có API /api/integrations/n8n/material-backup.\n2. Chọn Header Auth: Authorization = Bearer <N8N_MATERIAL_SYNC_TOKEN> cho node đọc website.\n3. Chọn Google Sheets OAuth2 cho 3 node Google của nhánh này; tài khoản cần quyền sửa file dự phòng.\n4. Nút chạy thủ công chạy cả 3 tab lần lượt; lịch tự động chỉ chạy tab tương ứng. Không chạy thủ công chồng lượt tự động.\n\nGiữ hồ sơ mất khỏi website, đánh dấu thời điểm phát hiện; không suy đoán ngày/người xóa. Đối chiếu toàn bộ mỗi lượt, không dùng watermark. TINH_KHO_MONTH chưa đồng bộ.",
+        "height": 400,
+        "width": 580
+      },
+      "position": [
+        -900,
+        2200
+      ]
+    }
+  ],
+  "connections": {
+    "Chạy thủ công cả 3 tab": {
+      "main": [
+        [
+          {
+            "node": "Cấu hình dự phòng · VH1_VTDONGBO",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Cấu hình dự phòng · VH1_HOACHAT_DONGBO",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Cấu hình dự phòng · NHAP_HOA_CHAT",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lịch mỗi giờ · VH1_VTDONGBO": {
+      "main": [
+        [
+          {
+            "node": "Cấu hình dự phòng · VH1_VTDONGBO",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cấu hình dự phòng · VH1_VTDONGBO": {
+      "main": [
+        [
+          {
+            "node": "Đọc ảnh chụp website · VH1_VTDONGBO",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Đọc ảnh chụp website · VH1_VTDONGBO": {
+      "main": [
+        [
+          {
+            "node": "Đọc cấu trúc tab · VH1_VTDONGBO",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Đọc cấu trúc tab · VH1_VTDONGBO": {
+      "main": [
+        [
+          {
+            "node": "Đọc dữ liệu dự phòng · VH1_VTDONGBO",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Đọc dữ liệu dự phòng · VH1_VTDONGBO": {
+      "main": [
+        [
+          {
+            "node": "Đối chiếu và lập gói ghi · VH1_VTDONGBO",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Đối chiếu và lập gói ghi · VH1_VTDONGBO": {
+      "main": [
+        [
+          {
+            "node": "Ghi bản dự phòng · VH1_VTDONGBO",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ghi bản dự phòng · VH1_VTDONGBO": {
+      "main": [
+        [
+          {
+            "node": "Kết quả · VH1_VTDONGBO",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lịch mỗi giờ · VH1_HOACHAT_DONGBO": {
+      "main": [
+        [
+          {
+            "node": "Cấu hình dự phòng · VH1_HOACHAT_DONGBO",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cấu hình dự phòng · VH1_HOACHAT_DONGBO": {
+      "main": [
+        [
+          {
+            "node": "Đọc ảnh chụp website · VH1_HOACHAT_DONGBO",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Đọc ảnh chụp website · VH1_HOACHAT_DONGBO": {
+      "main": [
+        [
+          {
+            "node": "Đọc cấu trúc tab · VH1_HOACHAT_DONGBO",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Đọc cấu trúc tab · VH1_HOACHAT_DONGBO": {
+      "main": [
+        [
+          {
+            "node": "Đọc dữ liệu dự phòng · VH1_HOACHAT_DONGBO",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Đọc dữ liệu dự phòng · VH1_HOACHAT_DONGBO": {
+      "main": [
+        [
+          {
+            "node": "Đối chiếu và lập gói ghi · VH1_HOACHAT_DONGBO",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Đối chiếu và lập gói ghi · VH1_HOACHAT_DONGBO": {
+      "main": [
+        [
+          {
+            "node": "Ghi bản dự phòng · VH1_HOACHAT_DONGBO",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ghi bản dự phòng · VH1_HOACHAT_DONGBO": {
+      "main": [
+        [
+          {
+            "node": "Kết quả · VH1_HOACHAT_DONGBO",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lịch mỗi giờ · NHAP_HOA_CHAT": {
+      "main": [
+        [
+          {
+            "node": "Cấu hình dự phòng · NHAP_HOA_CHAT",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cấu hình dự phòng · NHAP_HOA_CHAT": {
+      "main": [
+        [
+          {
+            "node": "Đọc ảnh chụp website · NHAP_HOA_CHAT",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Đọc ảnh chụp website · NHAP_HOA_CHAT": {
+      "main": [
+        [
+          {
+            "node": "Đọc cấu trúc tab · NHAP_HOA_CHAT",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Đọc cấu trúc tab · NHAP_HOA_CHAT": {
+      "main": [
+        [
+          {
+            "node": "Đọc dữ liệu dự phòng · NHAP_HOA_CHAT",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Đọc dữ liệu dự phòng · NHAP_HOA_CHAT": {
+      "main": [
+        [
+          {
+            "node": "Đối chiếu và lập gói ghi · NHAP_HOA_CHAT",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Đối chiếu và lập gói ghi · NHAP_HOA_CHAT": {
+      "main": [
+        [
+          {
+            "node": "Ghi bản dự phòng · NHAP_HOA_CHAT",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ghi bản dự phòng · NHAP_HOA_CHAT": {
+      "main": [
+        [
+          {
+            "node": "Kết quả · NHAP_HOA_CHAT",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Ho_Chi_Minh",
+    "executionTimeout": 2700
+  },
+  "active": false,
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": []
+}
