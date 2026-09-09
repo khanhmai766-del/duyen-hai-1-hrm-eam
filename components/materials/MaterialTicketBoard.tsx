@@ -41,6 +41,7 @@ import { useDefectHistory } from "@/hooks/useDefectHistory";
 import { usePositions } from "@/hooks/useUsers";
 import { MIN_USAGE_PHOTOS, minRecoveryQuantity, usesHandwrittenBbnt, COMMON_MATERIAL_POSITION, displayMaterialCategory, GAS_RETURN_STATUS, isChemicalFlowTicket, isGasCylinderTicket, isOtherMaterialAdvanceTicket, isOtherMaterialCategory, isOtherMaterialTicketType, isSingleStepTicketMaterial, CHEMICAL_TICKET_TYPE, isSupplementReason, MATERIAL_CATEGORY_FILTERS, materialCategoryMatches, materialTicketBelongsToRecoveryTab, materialTicketRequiresRecovery, OTHER_MATERIAL_ADVANCE_TICKET_TYPE, OTHER_MATERIAL_GROUP, OTHER_MATERIAL_TICKET_TYPE, ticketReasonsFor, TICKET_REASONS, TICKET_REASON_OTHER, SINGLE_STEP_TICKET_TYPE, TICKET_MATERIAL_CATEGORIES, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
 import { normalizeText } from "@/lib/nav";
+import { materialTicketAlert } from "@/lib/material-ticket-alerts";
 import { positionsMatch } from "@/lib/position-catalog";
 import {
   materialTicketMonthKey,
@@ -241,20 +242,29 @@ export default function MaterialTicketBoard({
   creating?: boolean;
   onCloseCreate?: () => void;
 } = {}) {
-  const [monthFilter, setMonthFilter] = useState(() => materialTicketMonthKey());
+  const [filter, setFilter] = useState("MINE");
+  const [regularMonthFilter, setRegularMonthFilter] = useState(() => materialTicketMonthKey());
+  const [myTurnMonthFilter, setMyTurnMonthFilter] = useState("ALL");
+  // Giữ tháng của các tab khác độc lập với mặc định tất cả tháng ở Đến lượt bạn.
+  const monthFilter = filter === "MINE" ? myTurnMonthFilter : regularMonthFilter;
+  const setMonthFilter = filter === "MINE" ? setMyTurnMonthFilter : setRegularMonthFilter;
   const { data, isLoading } = useMaterialTickets(monthFilter);
   // Kéo trước danh mục cho form phiếu trong lúc trình duyệt rảnh — chỉ cho người thật sự
   // lập được phiếu, để tài khoản chỉ xem không phải tải một khối dữ liệu họ không dùng tới.
   usePrefetchTicketOptions(Boolean(data?.viewer?.canCreate));
   const [openId, setOpenId] = useState<string | null>(null);
   const progressDialogRef = React.useRef<HTMLElement>(null);
-  const [filter, setFilter] = useState("ALL");
   const [materialCategoryFilter, setMaterialCategoryFilter] = useState("ALL");
   const [unitFilter, setUnitFilter] = useState("ALL");
   // Lọc theo luồng phiếu (cột Yêu cầu): Đề xuất / Ứng / Sử dụng hiện có.
   const [typeFilter, setTypeFilter] = useState("ALL");
   // Ô tìm kiếm nằm cùng hàng với bộ lọc — nó lọc chính bảng này chứ không phải cả trang.
   const [searchQ, setSearchQ] = useState("");
+  const [alertNow, setAlertNow] = useState(() => Date.now());
+  React.useEffect(() => {
+    const timer = window.setInterval(() => setAlertNow(Date.now()), 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
   const [listPage, setListPage] = useState(1);
   /** Đang lọc riêng luồng hóa chất (gồm cả NH3 khai một bước) hay riêng vật tư thường? */
   const chemicalOnly = typeFilter === CHEMICAL_TICKET_TYPE || typeFilter === SINGLE_STEP_TICKET_TYPE;
@@ -286,7 +296,7 @@ export default function MaterialTicketBoard({
   React.useEffect(() => {
     if (defaultFilterApplied.current || !data) return;
     defaultFilterApplied.current = true;
-    if (myTurn.length > 0) setFilter("MINE");
+    if (myTurn.length === 0) setFilter("ALL");
   }, [data, myTurn.length]);
 
   const searchText = normalizeText(searchQ);
@@ -572,6 +582,7 @@ export default function MaterialTicketBoard({
 		            : STATUS[t.status] ?? { label: t.status, c: C.soft };
 	          const recoveryPending = !!t.usedAt && materialTicketRequiresRecovery(t) && !t.recoveryReturnedAt;
 	          const mine = actionsFor(t, viewer).length > 0;
+              const warning = materialTicketAlert(t, alertNow);
 	          // Sửa/Xoá: Admin hoặc cương vị được phân quyền bước "Sửa/Xoá phiếu";
 	          // khi admin CHƯA cấu hình bước này → người tạo phiếu (mặc định cũ).
 	          const canEdit =
@@ -628,9 +639,10 @@ export default function MaterialTicketBoard({
               </span>
               <span className="quantity-cell">{t.items.some((i) => i.quantity > 0) ? t.items.filter((i) => i.quantity > 0).map((i) => `${i.quantity} ${i.material.unit}`).join(", ") : "Chưa nhập"}</span>
 	              <span className="status-stack">
-	                <span className="st status-primary" style={{ color: baseMeta.c, background: baseMeta.c + "16" }}>
+	                <span className="st status-primary" style={{ color: warning ? C.bad : baseMeta.c, background: warning ? C.badBg : baseMeta.c + "16" }}>
 	                  {mine && <i className="pd" />}{baseMeta.label}
 	                </span>
+                    {warning && <small className="ticket-warning"><AlertTriangle size={13} aria-hidden="true" /><span>{warning}</span></small>}
 	                {recoveryPending && (
 	                  <small className="status-secondary" title="Chờ xác nhận trả vật tư thu hồi">Chờ xác nhận trả vật tư thu hồi</small>
 	                )}
@@ -1858,6 +1870,7 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
   const flow = flowOf(t);
   const order = orderOf(t);
   const flowStatus = flowStatusKey(t.status, t.type);
+  const warning = materialTicketAlert(t);
   const idx = t.status === "TU_CHOI" ? 99 : t.status === "VAT_TU_KHONG_CO" ? 1 : order.indexOf(flowStatus);
   const currentReceiptSourceLabel = receiptSourceLabel(t.receiptSource, t.type);
   const replacementDeviceName = Array.from(new Set(t.items
@@ -1919,6 +1932,10 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
 	            const si = order.indexOf(s.key);
 	            const done = t.status === "HOAN_TAT" || si < idx;
 	            const cur = s.key === flowStatus;
+                const stepWarning = warning && s.key === (
+                  t.type === "UNG" && ["CHO_THONG_KE", "CHO_PHIEU__XUAT_KHO", "CHO_XAC_NHAN_PHAT"].includes(t.status)
+                    ? "NHAN_VAT_TU" : flowStatus
+                );
 	            const recoveryPending = s.key === "SU_DUNG_VAT_TU" && !!t.usedAt && materialTicketRequiresRecovery(t) && !t.recoveryReturnedAt;
 	            const reviewable = done || (t.type === "UNG" && s.key === "CHO_HOAN_THIEN" && !!t.bbktNumber);
 	            const waitingForRepairRequest = t.type === "DE_XUAT" && t.status === "CHO_PHIEU_YCSC" && cur;
@@ -1930,9 +1947,9 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
 	              ? "Xem lại"
 	              : `${s.who}${reviewable ? " · Xem lại" : ""}`;
 	            return (
-	              <button type="button" key={s.key} disabled={!reviewable} onClick={() => setReviewStep(s.key)} className={`step step-review ${done && !recoveryPending ? "done" : ""} ${recoveryPending ? "recovery-pending" : ""} ${cur ? "cur" : ""}`}>
-	                {recoveryPending ? <AlertTriangle size={17} /> : done ? <CircleCheck size={17} /> : cur ? <CircleDot size={17} /> : <Circle size={17} />}
-	                <div><b>{waitingForRepairRequest ? "Đã lãnh vật tư · Chờ SYC" : s.label}</b><span>{recoveryPending ? "Chưa xác nhận trả vật tư thu hồi · Xem lại" : caption}</span></div>
+	              <button type="button" key={s.key} disabled={!reviewable} onClick={() => setReviewStep(s.key)} className={`step step-review ${done && !recoveryPending ? "done" : ""} ${recoveryPending ? "recovery-pending" : ""} ${cur ? "cur" : ""} ${stepWarning ? "step-warning" : ""}`}>
+	                {stepWarning || recoveryPending ? <AlertTriangle size={17} /> : done ? <CircleCheck size={17} /> : cur ? <CircleDot size={17} /> : <Circle size={17} />}
+	                <div><b>{waitingForRepairRequest ? "Đã lãnh vật tư · Chờ SYC" : s.label}</b><span>{stepWarning ? warning : recoveryPending ? "Chưa xác nhận trả vật tư thu hồi · Xem lại" : caption}</span></div>
 	              </button>
 	            );
 	          })}
@@ -4645,6 +4662,10 @@ const CSS = `
 .step.cur b{color:${C.accent};}
 .step.rejected{color:${C.bad};background:${C.badBg};}
 .step.rejected b{color:${C.bad};}
+.status-stack .ticket-warning{display:flex;align-items:flex-start;gap:4px;color:${C.bad};font-size:11px;font-weight:600;line-height:1.4;white-space:normal;}
+.ticket-warning svg{flex-shrink:0;margin-top:1px;}
+.step.step-warning,.ticket-detail-modal .step.step-warning{color:${C.bad};background:${C.badBg};border-color:#fecaca;box-shadow:inset 3px 0 0 ${C.bad};}
+.step.step-warning b{color:${C.bad};}
 .lb{display:flex;align-items:center;gap:6px;font-family:inherit;font-weight:600;font-size:12.5px;color:${C.navy};margin-bottom:8px;}
 .items{margin-bottom:14px;}
 .step-workspace{margin-top:12px;}
