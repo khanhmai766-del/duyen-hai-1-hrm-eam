@@ -2276,7 +2276,7 @@ function StepReviewDialog({ t, viewer, stepKey, onClose }: { t: MaterialTicket; 
           <label>Tên vật tư ERP<input value={t.items[0]?.erpName ?? t.items[0]?.material.name ?? "—"} disabled /></label>
           <label>Số lượng đã xác nhận<input value={`${t.items[0]?.quantity ?? 0} ${t.items[0]?.material.unit ?? ""}`} disabled /></label>
           <label>Lý do *<input value={reason} disabled={!canEdit} onChange={(e) => setReason(e.target.value)} placeholder="Nhập lý do thay thế vật tư" /></label>
-          <label>Số biên bản kiểm tra (nếu có)<input value={bbktNumber} disabled={!canEdit} onChange={(e) => setBbktNumber(e.target.value)} placeholder="Chưa nhập số biên bản kiểm tra" /></label>
+          <label>Số biên bản kiểm tra (nếu có)<input value={bbktNumber} disabled={!canEdit} onChange={(e) => setBbktNumber(e.target.value)} placeholder="Chưa nhập số biên bản kiểm tra (ngày dd/mm/yyyy)" /></label>
         </>}
         {editStep === "stats" && isChemicalStats && <>
           <label>Lịch giao hàng<input type="date" value={deliveryDateReview} disabled={!canEdit} onChange={(e) => setDeliveryDateReview(e.target.value)} /></label>
@@ -3627,7 +3627,7 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
               confirm luôn ghi đè — để trống mà bấm Xác nhận là xóa mất số cũ.
               Sửa về sau chỉ qua đường có phân quyền: nút Sửa phiếu hoặc "Xem lại" bước này. */}
           <label className="field">Số biên bản kiểm tra
-            <input name={`bbkt-confirm-${t.id}`} autoComplete="off" value={bbktNumberInput} onChange={(e) => setBbktNumberInput(e.target.value)} placeholder="Nhập số biên bản kiểm tra" />
+            <input name={`bbkt-confirm-${t.id}`} autoComplete="off" value={bbktNumberInput} onChange={(e) => setBbktNumberInput(e.target.value)} placeholder="Nhập số biên bản kiểm tra (ngày dd/mm/yyyy)" />
           </label>
         </div>
         <button className="btn primary big" disabled={qty <= 0 || (workflowType === "DE_XUAT" && proposalFlowAvailable !== true) || (workflowType === "SU_DUNG_HIEN_CO" && !canUseExistingStock) || act.isPending} onClick={() => run({ action: "confirm", workflowType, proposedQuantity: qty, proposalNote: confirmReasonInput.trim() || undefined, bbktNumber: bbktNumberInput.trim() || undefined }, `Đã chọn luồng ${workflowType === "DE_XUAT" ? "Đề xuất" : workflowType === "UNG" ? "Ứng" : "Sử dụng hiện có"}`)}><Check size={15} /> Xác nhận</button>
