@@ -4,7 +4,6 @@ import { useRef, useState } from "react";
 import { Camera, Info, Loader2, X } from "lucide-react";
 import { toast } from "sonner";
 import { useSetTicketUsagePhoto, useTicketUsagePhotos, type TicketUsagePhoto } from "@/hooks/useMaterialTickets";
-import { MIN_USAGE_PHOTOS } from "@/lib/constants";
 import { downscaleImage } from "@/lib/image-downscale";
 
 /**
@@ -101,8 +100,6 @@ export function UsagePhotoCard({ ticketId, canEdit }: { ticketId: string; canEdi
   const [busySlot, setBusySlot] = useState<string | null>(null);
 
   const rows = photos.data ?? [];
-  const filled = rows.filter((row) => row.url).length;
-  const enough = filled >= MIN_USAGE_PHOTOS;
 
   async function pick(slot: string, file: File) {
     if (!file.type.startsWith("image/")) return toast.error("Vui lòng chọn tệp ảnh");
@@ -137,11 +134,10 @@ export function UsagePhotoCard({ ticketId, canEdit }: { ticketId: string; canEdi
         marginTop: 10, border: "1px solid #e2e8f0", borderRadius: 10, padding: "10px 12px 12px", background: "#fff",
       }}
     >
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 8 }}>
+      {/* Không còn huy hiệu đếm "n/3 ảnh": nay bắt buộc đủ ba, mà ba ô ảnh ngay bên dưới
+          đã cho thấy ô nào trống — con số ở đây chỉ lặp lại điều mắt đã thấy. */}
+      <div style={{ marginBottom: 8 }}>
         <b style={{ fontSize: 13 }}>Hình ảnh quá trình công tác</b>
-        <span style={{ fontSize: 11.5, fontWeight: 600, color: enough ? "#0f766e" : "#b45309" }}>
-          {filled}/3 ảnh{enough ? "" : ` · cần tối thiểu ${MIN_USAGE_PHOTOS}`}
-        </span>
       </div>
 
       <div
@@ -153,7 +149,7 @@ export function UsagePhotoCard({ ticketId, canEdit }: { ticketId: string; canEdi
         <Info size={13} style={{ marginTop: 2, flexShrink: 0 }} />
         <span>
           Ba ảnh này được chèn thẳng vào bảng <b>Hình ảnh quá trình công tác</b> của biên bản
-          BBNT D-Office, đúng thứ tự dưới đây. Bắt buộc tối thiểu <b>{MIN_USAGE_PHOTOS} trên 3 ảnh</b>.
+          BBNT D-Office, đúng thứ tự dưới đây. Bắt buộc <b>chụp đủ cả 3 ảnh</b> mới xác nhận được.
         </span>
       </div>
 

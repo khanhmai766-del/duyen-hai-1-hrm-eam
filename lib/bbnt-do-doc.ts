@@ -59,6 +59,7 @@ export interface BbntDoData {
   pctNumber?: string | null;
   pctContent?: string | null; // nội dung công việc trên PCT/LCT, in ngay sau số PCT
   proposalNumber?: string | null;
+  proposalDate?: Date | string | null; // ngày ghi trên tờ phiếu ĐXVT
   deliveryNoteNumber?: string | null; // số phiếu giao hàng
   sccnRepresentativeName?: string | null; // đại diện Phân xưởng Sửa chữa Cơ nhiệt
   sccnRepresentativePosition?: string | null;
@@ -263,6 +264,43 @@ function bbntDoTemplateFileName(materialCategory?: string | null) {
   return "bbnt-do-template-bi.docx";
 }
 
+/**
+ * Chèn `{{proposalDate}}` vào ô trống ngày ngay sau "Phiếu đề xuất vật tư số …".
+ *
+ * Mẫu do phân xưởng tự soạn và còn sửa tiếp, nên KHÔNG bắt người soạn gõ đúng token —
+ * cùng cách làm với `patchSccnRepresentativeTokens` và `patchUsagePhotoCells`.
+ *
+ * Chỉ đụng ô chấm ĐẦU TIÊN nằm giữa `{{proposalNumber}}` và `{{deliveryNote}}`: câu này
+ * có HAI ô ngày ("Phiếu đề xuất … ngày ……. Phiếu giao hàng số … ngày ……"), vá nhầm ô
+ * thứ hai là ngày ĐXVT nhảy sang chỗ ngày giao hàng.
+ *
+ * Không tìm thấy thì trả nguyên văn — biên bản in ra y như trước, không hỏng gì.
+ */
+function patchProposalDateToken(documentXml: string) {
+  if (documentXml.includes("{{proposalDate}}")) return documentXml; // mẫu đã tự gắn tag
+  const numberAt = documentXml.indexOf("{{proposalNumber}}");
+  if (numberAt < 0) return documentXml;
+  const deliveryAt = documentXml.indexOf("{{deliveryNote}}", numberAt);
+  const limit = deliveryAt > numberAt ? deliveryAt : documentXml.length;
+  const ngayAt = documentXml.indexOf("ngày", numberAt);
+  if (ngayAt < 0 || ngayAt > limit) return documentXml;
+  // Ô trống = một <w:t> chỉ gồm dấu chấm / ba chấm / khoảng trắng.
+  const blankCell = /<w:t([^>]*)>([\s.…]*[.…][\s.…]*)<\/w:t>/g;
+  blankCell.lastIndex = ngayAt;
+  const found = blankCell.exec(documentXml);
+  if (!found || found.index > limit) return documentXml;
+  // GIỮ NGUYÊN khoảng trắng hai đầu ô chấm: mẫu bi ghi "……. " (có dấu cách cuối), nuốt
+  // mất là ngày dính liền vào "Phiếu giao hàng số …" ngay sau đó.
+  const blank = found[2];
+  const lead = /^\s*/.exec(blank)?.[0] ?? "";
+  const trail = /\s*$/.exec(blank)?.[0] ?? "";
+  return (
+    documentXml.slice(0, found.index) +
+    `<w:t${found[1]}>${lead}{{proposalDate}}${trail}</w:t>` +
+    documentXml.slice(found.index + found[0].length)
+  );
+}
+
 function patchSccnRepresentativeTokens(documentXml: string) {
   let patched = documentXml;
   const sectionMarker = "Đại diện đơn vị sửa chữa: Phân xưởng Sửa chữa cơ nhiệt:";
@@ -327,6 +365,7 @@ export async function generateBbntDoDoc(d: BbntDoData): Promise<{ key: string; u
       "{{quanDocName}}"
     );
     documentXml = patchSccnRepresentativeTokens(documentXml);
+    documentXml = patchProposalDateToken(documentXml);
   }
   // Tương thích với mẫu đang được mở/khóa hoặc bản mẫu cũ đã deploy:
   // thay chức vụ cố định bằng token ngay trong OOXML trước khi render.
@@ -406,6 +445,8 @@ export async function generateBbntDoDoc(d: BbntDoData): Promise<{ key: string; u
     // "Phiếu đề xuất vật tư số Phiếu đề xuất vật tư số 123".
     // Không có số thì ghi "(không)" cho đồng bộ với các dòng căn cứ khác trong mục a).
     proposalNumber: d.proposalNumber || "(không)",
+    // Chưa nhập ngày thì in lại ô chấm y như bản mẫu để còn điền tay, không để trống trơ.
+    proposalDate: vnDate(d.proposalDate) || "…….",
     deliveryNote: d.deliveryNoteNumber || "(không)",
     sccnRepresentativeName: d.sccnRepresentativeName || "",
     sccnRepresentativePosition: d.sccnRepresentativePosition || "",

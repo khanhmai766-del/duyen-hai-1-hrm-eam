@@ -39,7 +39,7 @@ import { DefectForm } from "@/components/defects/defect-form";
 import { useDefects, type DefectItem } from "@/hooks/useDefects";
 import { useDefectHistory } from "@/hooks/useDefectHistory";
 import { usePositions } from "@/hooks/useUsers";
-import { MIN_USAGE_PHOTOS, minRecoveryQuantity, usesHandwrittenBbnt, COMMON_MATERIAL_POSITION, displayMaterialCategory, GAS_RETURN_STATUS, isChemicalFlowTicket, isGasCylinderTicket, isOtherMaterialAdvanceTicket, isOtherMaterialCategory, isOtherMaterialTicketType, isSingleStepTicketMaterial, CHEMICAL_TICKET_TYPE, isSupplementReason, MATERIAL_CATEGORY_FILTERS, materialCategoryMatches, materialTicketBelongsToRecoveryTab, materialTicketRequiresRecovery, OTHER_MATERIAL_ADVANCE_TICKET_TYPE, OTHER_MATERIAL_GROUP, OTHER_MATERIAL_TICKET_TYPE, ticketReasonsFor, TICKET_REASONS, TICKET_REASON_OTHER, SINGLE_STEP_TICKET_TYPE, TICKET_MATERIAL_CATEGORIES, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
+import { MIN_USAGE_PHOTOS, requiredUsagePhotos, minRecoveryQuantity, usesHandwrittenBbnt, COMMON_MATERIAL_POSITION, displayMaterialCategory, GAS_RETURN_STATUS, isChemicalFlowTicket, isGasCylinderTicket, isOtherMaterialAdvanceTicket, isOtherMaterialCategory, isOtherMaterialTicketType, isSingleStepTicketMaterial, CHEMICAL_TICKET_TYPE, isSupplementReason, MATERIAL_CATEGORY_FILTERS, materialCategoryMatches, materialTicketBelongsToRecoveryTab, materialTicketRequiresRecovery, OTHER_MATERIAL_ADVANCE_TICKET_TYPE, OTHER_MATERIAL_GROUP, OTHER_MATERIAL_TICKET_TYPE, ticketReasonsFor, TICKET_REASONS, TICKET_REASON_OTHER, SINGLE_STEP_TICKET_TYPE, TICKET_MATERIAL_CATEGORIES, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
 import { normalizeText } from "@/lib/nav";
 import { materialTicketAlert } from "@/lib/material-ticket-alerts";
 import { positionsMatch } from "@/lib/position-catalog";
@@ -192,6 +192,13 @@ const datetimeLocalValue = (value?: string | null) => {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "";
   return new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
+};
+/** ISO → "yyyy-mm-dd" cho <input type="date">, theo giờ địa phương để không lùi một ngày. */
+const dateInputValue = (value?: string | null) => {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 10);
 };
 const normalizeReceiptSource = (source?: string | null): "ERP" | "EXISTING" =>
   source === "EXISTING" || source === "OUTSIDE" ? "EXISTING" : "ERP";
@@ -2140,6 +2147,8 @@ function StepReviewDialog({ t, viewer, stepKey, onClose }: { t: MaterialTicket; 
   const editStep = stepEdit?.step ?? null;
   const [proposalNumber, setProposalNumber] = useState(t.proposalNumber ?? "");
   const [proposalReceiverNameReview, setProposalReceiverNameReview] = useState(t.proposalReceiverName ?? "");
+  /** Ngày ghi trên tờ phiếu ĐXVT — in vào ô "ngày ……" của BBNT D-Office. */
+  const [proposalDateReview, setProposalDateReview] = useState(() => dateInputValue(t.proposalDate));
   /*
    * Phiếu thuộc luồng hóa chất? Dùng cho CẢ HAI bước mà hộp Xem lại rẽ nhánh:
    *   • "stats"   chốt lịch giao hàng + khối lượng giao, không phải số phiếu ĐXVT
@@ -2176,7 +2185,10 @@ function StepReviewDialog({ t, viewer, stepKey, onClose }: { t: MaterialTicket; 
   // Ảnh hiện trường của bước sử dụng — xem lại, gỡ, thay ảnh khác ngay tại đây.
   const usagePhotos = useTicketUsagePhotos(t.id, editStep === "use");
   const usagePhotoCount = (usagePhotos.data ?? []).filter((photo) => photo.url).length;
-  const missingUsagePhotos = editStep === "use" && usagePhotoCount < MIN_USAGE_PHOTOS;
+  /* Ngưỡng ảnh CỦA CHÍNH PHIẾU: phiếu qua bước hồi luật còn 2/3 được tha, không thì mở
+     hộp Xem lại ra là nút Lưu xám vĩnh viễn. Cùng luật với máy chủ. */
+  const requiredPhotos = requiredUsagePhotos(t);
+  const missingUsagePhotos = editStep === "use" && usagePhotoCount < requiredPhotos;
   const [workStartedAt, setWorkStartedAt] = useState(datetimeLocalValue(t.workStartedAt));
   const [workEndedAt, setWorkEndedAt] = useState(datetimeLocalValue(t.workEndedAt));
   // Bước Xuất BBNT DO: đại diện SCCN ký thay phân xưởng sửa chữa, tên in thẳng lên biên bản.
@@ -2198,7 +2210,7 @@ function StepReviewDialog({ t, viewer, stepKey, onClose }: { t: MaterialTicket; 
         payload,
         isChemicalStats
           ? { deliveryScheduledAt: deliveryDateReview, deliveryQuantity: Number(deliveryQtyReview) }
-          : { proposalNumber, proposalReceiverName: proposalReceiverNameReview }
+          : { proposalNumber, proposalReceiverName: proposalReceiverNameReview, proposalDate: proposalDateReview || null }
       );
     }
     if (editStep === "receive") {
@@ -2271,7 +2283,12 @@ function StepReviewDialog({ t, viewer, stepKey, onClose }: { t: MaterialTicket; 
           <label>Khối lượng giao{t.items[0]?.material.unit ? ` (${t.items[0].material.unit})` : ""}<input type="number" min={1} value={deliveryQtyReview} disabled={!canEdit} onChange={(e) => setDeliveryQtyReview(e.target.value)} /></label>
         </>}
         {editStep === "stats" && !isChemicalStats && <>
-          <label>Số phiếu ĐXVT<input value={proposalNumber} disabled={!canEdit} onChange={(e) => setProposalNumber(e.target.value)} /></label>
+          <div className="review-accept-grid">
+            <label>Số phiếu ĐXVT<input value={proposalNumber} disabled={!canEdit} onChange={(e) => setProposalNumber(e.target.value)} /></label>
+            <label>Ngày phiếu ĐXVT
+              <input type="date" value={proposalDateReview} disabled={!canEdit} onChange={(e) => setProposalDateReview(e.target.value)} />
+            </label>
+          </div>
           {t.type !== "UNG" && <label>Tên VHV nhận phiếu ĐXVT<input value={proposalReceiverNameReview} disabled={!canEdit} onChange={(e) => setProposalReceiverNameReview(e.target.value)} /></label>}
         </>}
         {editStep === "receive" && isChemicalStats && (
@@ -2405,7 +2422,7 @@ function StepReviewDialog({ t, viewer, stepKey, onClose }: { t: MaterialTicket; 
         <div className="frm-f">
           {missingUsagePhotos && (
             <span className="note" style={{ marginRight: "auto" }}>
-              <AlertTriangle size={13} /> Cần tối thiểu {MIN_USAGE_PHOTOS} trên 3 ảnh hiện trường ({usagePhotoCount}/3).
+              <AlertTriangle size={13} /> Cần {requiredPhotos >= MIN_USAGE_PHOTOS ? "chụp đủ 3" : `tối thiểu ${requiredPhotos} trên 3`} ảnh hiện trường (còn thiếu {requiredPhotos - usagePhotoCount}).
             </span>
           )}
           <button className="btn ghost" onClick={onClose}>Đóng</button>
@@ -3031,6 +3048,8 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
   // Tách riêng từng loại số chứng từ. Trước đây dùng chung một state `num`, nên
   // số ĐXVT vừa nhập có thể bị giữ lại và tự xuất hiện trong ô số biên bản kiểm tra ở bước sau.
   const [proposalNumberInput, setProposalNumberInput] = useState("");
+  /** Ngày ghi trên tờ phiếu ĐXVT (yyyy-mm-dd của <input type="date">). */
+  const [proposalDateInput, setProposalDateInput] = useState(() => dateInputValue(t.proposalDate));
   const [bbktNumberInput, setBbktNumberInput] = useState(t.bbktNumber ?? "");
   const [confirmReasonInput, setConfirmReasonInput] = useState(t.proposalNote ?? ""); // Lý do — bước Xác nhận yêu cầu (lưu vào proposalNote)
   const [materialUserNameInput, setMaterialUserNameInput] = useState(t.materialUserName ?? "");
@@ -3658,7 +3677,7 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
     const selectedStatsErp = statsCodeOptions.find((option) => option.code === erpCode);
     return (
       <div className="act">
-        <div className={`stats-issue-grid ${asksForErpCode ? "" : "single"}`}>
+        <div className={`stats-issue-grid ${isReceiverPhase ? "single" : asksForErpCode ? "triple" : ""}`}>
           {!isReceiverPhase ? (
             <>
               {asksForErpCode && (
@@ -3681,6 +3700,18 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
                   disabled={proposalLocked}
                   value={proposalNumberInput}
                   onChange={(e) => setProposalNumberInput(e.target.value)}
+                />
+              </label>
+              {/* Ngày GHI TRÊN tờ phiếu, đi liền với số phiếu: BBNT D-Office có sẵn ô
+                  "Phiếu đề xuất vật tư số … ngày ……", thiếu ngày là biên bản hụt một nửa
+                  căn cứ. Không bắt buộc — phiếu cũ có khi chỉ còn nhớ số. */}
+              <label className="field">Ngày phiếu ĐXVT
+                <input
+                  type="date"
+                  name={`proposal-date-${t.id}`}
+                  disabled={proposalLocked}
+                  value={proposalDateInput}
+                  onChange={(e) => setProposalDateInput(e.target.value)}
                 />
               </label>
             </>
@@ -3726,7 +3757,7 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
                 ? { action: "stats", proposalNumber: t.proposalNumber, proposalReceiverName: proposalReceiverName.trim() }
                 : isReceiverPhase
                   ? { action: "stats", proposalNumber: t.proposalNumber }
-                : { action: "stats", proposalNumber: proposalNumberInput.trim() },
+                : { action: "stats", proposalNumber: proposalNumberInput.trim(), proposalDate: proposalDateInput || null },
               asksForReceiver ? "Đã xác nhận VHV nhận phiếu ĐXVT" : isReceiverPhase ? "Đã xác nhận trả phiếu" : "Đã xác nhận số phiếu ĐXVT"
             )}
           >
@@ -4048,7 +4079,7 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
         )}
         {quantityExceedsReceived && <div className="warnbox"><AlertTriangle size={15} /> Số lượng sử dụng vượt số lượng đã nhận từ Hiện có ({received} {unit}).</div>}
         {usagePhotoCount < MIN_USAGE_PHOTOS && (
-          <div className="warnbox"><AlertTriangle size={15} /> Cần tối thiểu {MIN_USAGE_PHOTOS} trên 3 ảnh hiện trường mới xác nhận được ({usagePhotoCount}/3 ảnh).</div>
+          <div className="warnbox"><AlertTriangle size={15} /> Phải chụp đủ 3 ảnh hiện trường mới xác nhận được (còn thiếu {MIN_USAGE_PHOTOS - usagePhotoCount} ảnh).</div>
         )}
         <button className="btn primary big" disabled={!materialUserNameInput.trim() || qty <= 0 || usagePhotoCount < MIN_USAGE_PHOTOS || quantityExceedsStock || quantityExceedsReceived || (recoveryRequired && (!Number.isFinite(recoveryQuantity) || recoveryQuantity < minRecovery)) || act.isPending}
           onClick={() => run({ action: "use", materialUserName: materialUserNameInput.trim(), usedQuantity: qty, ...(recoveryRequired ? { recoveryQuantity, recoveryReturned } : {}) }, "Đã xác nhận sử dụng vật tư")}>
@@ -4761,6 +4792,7 @@ const CSS = `
 .settlement-check:focus-within .settlement-check-box{box-shadow:0 0 0 3px ${C.accent}24;}
 .stats-issue-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;align-items:end;}
 .stats-issue-grid.single{grid-template-columns:1fr;}
+.stats-issue-grid.triple{grid-template-columns:minmax(0,1.4fr) minmax(0,1fr) minmax(0,.72fr);}
 .stats-issue-grid .field{min-width:0;margin:0!important;}
 .stats-issue-grid .field input{margin-top:6px;}
 .accept-two-grid{display:grid;grid-template-columns:repeat(2,minmax(260px,1fr));gap:12px;align-items:end;}
@@ -4846,7 +4878,7 @@ const CSS = `
 .logrow span{color:${C.soft};white-space:nowrap;}
 .logrow b{white-space:nowrap;}
 .logrow em{font-style:normal;color:${C.muted};white-space:nowrap;}
-@media(max-width:640px){.panel{width:100%;}.detail-inline{min-width:1140px;padding:10px 12px;}.row{min-width:1140px;grid-template-columns:64px minmax(108px,.9fr) minmax(108px,.86fr) minmax(188px,1.36fr) minmax(180px,.95fr) 82px minmax(168px,1fr) 66px 70px;padding:11px 12px;font-size:12.5px;}.tag{padding:4px 7px}.nophieu{padding:3px 6px}.st{padding:5px 8px}.material-cards{grid-template-columns:1fr;}.edit-field-grid,.bbkt-grid,.confirm-field-row,.stats-issue-grid,.accept-two-grid,.use-field-grid,.recovery-quantity-row,.receive-field-grid,.receive-field-grid.advance-receive-fields,.vhv-receive-grid,.advance-phase-grid,.review-receive-row,.review-use-grid,.review-recovery-grid,.review-accept-grid{grid-template-columns:1fr;gap:8px;}.step-review-dialog .frm-f{flex-wrap:wrap;}.step-review-dialog .frm-f>.note{flex-basis:100%;}.step-review-dialog .frm-f>.btn.primary{min-width:132px;}.review-receive-toggle{width:100%;}.review-receive-toggle button{flex:1;}.qty-field input{padding-left:8px;padding-right:8px;}}
+@media(max-width:640px){.panel{width:100%;}.detail-inline{min-width:1140px;padding:10px 12px;}.row{min-width:1140px;grid-template-columns:64px minmax(108px,.9fr) minmax(108px,.86fr) minmax(188px,1.36fr) minmax(180px,.95fr) 82px minmax(168px,1fr) 66px 70px;padding:11px 12px;font-size:12.5px;}.tag{padding:4px 7px}.nophieu{padding:3px 6px}.st{padding:5px 8px}.material-cards{grid-template-columns:1fr;}.edit-field-grid,.bbkt-grid,.confirm-field-row,.stats-issue-grid,.accept-two-grid,.use-field-grid,.recovery-quantity-row,.receive-field-grid,.stats-issue-grid.triple,.receive-field-grid.advance-receive-fields,.vhv-receive-grid,.advance-phase-grid,.review-receive-row,.review-use-grid,.review-recovery-grid,.review-accept-grid{grid-template-columns:1fr;gap:8px;}.step-review-dialog .frm-f{flex-wrap:wrap;}.step-review-dialog .frm-f>.note{flex-basis:100%;}.step-review-dialog .frm-f>.btn.primary{min-width:132px;}.review-receive-toggle{width:100%;}.review-receive-toggle button{flex:1;}.qty-field input{padding-left:8px;padding-right:8px;}}
 @media(max-width:640px){.ticket-unit-field{grid-template-columns:58px minmax(0,1fr);gap:8px;}.ticket-unit-options{max-width:none;}.ticket-unit-options button{padding-left:6px;padding-right:6px;}.ticket-category-options{grid-template-columns:repeat(3,minmax(0,1fr));}}
 @media(max-width:760px){
   .mtw{padding-bottom:6px;}

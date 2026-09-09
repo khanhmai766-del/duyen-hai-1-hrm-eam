@@ -350,19 +350,52 @@ export function isOtherMaterialCategory(category: string | null | undefined): bo
  * Nhãn loại trên PHIẾU là "Bi nghiền", trong Danh mục vật tư là "Bi Nghiền Than".
  */
 /**
- * Số ảnh hiện trường TỐI THIỂU để qua bước sử dụng vật tư.
+ * Số ảnh hiện trường BẮT BUỘC để qua bước sử dụng vật tư — ĐỦ CẢ BA.
  *
- * Hai trên ba: bắt đủ ba thì có công việc không có gì để chụp ở ô thứ ba (vật tư
- * không có nhãn thông số), người ta sẽ chụp bừa cho qua. Dưới hai thì biên bản không
- * còn chứng minh được hiện trường trước và sau.
+ * Trước đây là 2/3, với lý do "có công việc không có gì để chụp ở ô thứ ba nên người ta
+ * sẽ chụp bừa cho qua". Nghiệp vụ chốt lại (2026-09-09): ba ảnh này in thẳng vào bảng
+ * Hình ảnh quá trình công tác của BBNT D-Office, thiếu một ô là biên bản nộp lên có ô
+ * trống — nên bắt đủ ba, không còn ngưỡng "tối thiểu".
  *
  * Đặt ở đây chứ không ở lib/material-usage-photo.ts vì giao diện cũng phải biết, mà
  * file đó kéo theo sharp/S3 — không sang được trình duyệt.
  */
-export const MIN_USAGE_PHOTOS = 2;
+export const MIN_USAGE_PHOTOS = 3;
 
-export const MISSING_USAGE_PHOTO_MESSAGE =
-  `Vui lòng tải tối thiểu ${MIN_USAGE_PHOTOS} trên 3 ảnh hiện trường trước khi xác nhận`;
+/** Ngưỡng CŨ (2/3), chỉ còn dùng cho phiếu đã qua bước trước ngày luật mới có hiệu lực. */
+export const LEGACY_MIN_USAGE_PHOTOS = 2;
+
+/**
+ * Mốc hiệu lực của luật "đủ 3 ảnh": 00:00 ngày 09/09/2026, giờ Việt Nam (UTC+7).
+ *
+ * Phiếu qua bước Sử dụng TRƯỚC mốc này được tha: lúc đó luật chỉ đòi 2/3, siết ngược lại
+ * thì 5 phiếu đang chạy dở bị khoá không sửa nổi bước đó nữa. Phiếu từ mốc này trở đi
+ * phải đủ ba.
+ *
+ * Dùng mốc thời gian chứ không phải danh sách id: danh sách id thì ba tháng nữa đọc lại
+ * không ai biết vì sao có đúng 5 dòng đó, còn mốc thì tự nó giải thích.
+ */
+export const USAGE_PHOTO_FULL_SET_SINCE = new Date("2026-09-08T17:00:00.000Z");
+
+/**
+ * Số ảnh bắt buộc của MỘT phiếu cụ thể.
+ *
+ * Chưa qua bước Sử dụng (`usedAt` rỗng) → đang xác nhận bây giờ → phải đủ ba.
+ */
+export function requiredUsagePhotos(ticket: { usedAt?: Date | string | null }): number {
+  if (!ticket.usedAt) return MIN_USAGE_PHOTOS;
+  const usedAt = new Date(ticket.usedAt);
+  if (Number.isNaN(usedAt.getTime())) return MIN_USAGE_PHOTOS;
+  return usedAt < USAGE_PHOTO_FULL_SET_SINCE ? LEGACY_MIN_USAGE_PHOTOS : MIN_USAGE_PHOTOS;
+}
+
+export function missingUsagePhotoMessage(required = MIN_USAGE_PHOTOS) {
+  return required >= MIN_USAGE_PHOTOS
+    ? "Vui lòng tải đủ 3 ảnh hiện trường trước khi xác nhận"
+    : `Vui lòng tải tối thiểu ${required} trên 3 ảnh hiện trường trước khi xác nhận`;
+}
+
+export const MISSING_USAGE_PHOTO_MESSAGE = missingUsagePhotoMessage();
 
 export function usesHandwrittenBbnt(materialCategory: string | null | undefined): boolean {
   const value = (materialCategory ?? "").trim().toLowerCase();

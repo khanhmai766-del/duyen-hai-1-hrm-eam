@@ -36,6 +36,8 @@ export interface MaterialTicket {
   proposalNote: string | null;
   pctNumber: string | null;
   proposalNumber: string | null;
+  /** Ngày ghi TRÊN tờ phiếu ĐXVT (ISO) — khác `proposalIssuedAt` là mốc thao tác. */
+  proposalDate: string | null;
   proposalDocUrl: string | null;
   proposalIssuedAt: string | null;
   proposalReceiverName: string | null;

@@ -1515,6 +1515,10 @@ model MaterialTicket {
   defectId             String?
   pctNumber            String? // số PCT/LCT (nhập ở bước nghiệm thu/xuất file)
   proposalNumber       String? // số phiếu đề xuất vật tư (Thống kê nhập)
+  /// NGÀY GHI TRÊN phiếu ĐXVT giấy — khác hẳn `proposalIssuedAt` (mốc Thống kê thao tác
+  /// trên hệ thống). BBNT D-Office có sẵn ô "Phiếu đề xuất vật tư số … ngày ……" nên số
+  /// và ngày phải đi cùng nhau, không thì biên bản in ra thiếu một nửa căn cứ.
+  proposalDate         DateTime?
   proposalDocUrl       String? // file Word Phiếu ĐXVT (QLVT.12) trên MinIO — xuất trước khi nhập số phiếu
   proposalIssuedAt     DateTime? // Thống kê xác nhận giao phiếu ĐXVT (giữ tên cột cũ để tương thích dữ liệu)
   proposalReceiverName String? // tên VHV nhận phiếu ĐXVT khi Thống kê giao phiếu

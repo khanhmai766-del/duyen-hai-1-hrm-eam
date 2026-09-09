@@ -17,7 +17,7 @@ import { deleteDeliveryPhotos, deliveryPhotoLotsOfTicket, loadDeliveryPhotoBuffe
 import { keyFromPublicUrl } from "@/lib/s3";
 import { syncTicketReplacementLinks, type LinkablePoint } from "@/lib/material-ticket-replacement-link";
 import { pointLabelOf, resolveMaterialRequest } from "@/lib/defect-material-request";
-import { MIN_USAGE_PHOTOS, MISSING_USAGE_PHOTO_MESSAGE, usesHandwrittenBbnt, CHEMICAL_TICKET_TYPE, COMMON_MATERIAL_POSITION, GAS_RETURN_STATUS, isChemicalFlowTicket, isGasCylinderCategory, isGasCylinderTicket, isOtherMaterialAdvanceTicket, isOtherMaterialTicketType, materialTicketRequiresRecovery, minRecoveryQuantity, OTHER_MATERIAL_ADVANCE_TICKET_TYPE, OTHER_MATERIAL_TICKET_TYPE, recoveryRequiredForReason, SINGLE_STEP_TICKET_TYPE, ticketReasonAllowed, TICKET_MATERIAL_CATEGORIES, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
+import { MIN_USAGE_PHOTOS, MISSING_USAGE_PHOTO_MESSAGE, missingUsagePhotoMessage, requiredUsagePhotos, usesHandwrittenBbnt, CHEMICAL_TICKET_TYPE, COMMON_MATERIAL_POSITION, GAS_RETURN_STATUS, isChemicalFlowTicket, isGasCylinderCategory, isGasCylinderTicket, isOtherMaterialAdvanceTicket, isOtherMaterialTicketType, materialTicketRequiresRecovery, minRecoveryQuantity, OTHER_MATERIAL_ADVANCE_TICKET_TYPE, OTHER_MATERIAL_TICKET_TYPE, recoveryRequiredForReason, SINGLE_STEP_TICKET_TYPE, ticketReasonAllowed, TICKET_MATERIAL_CATEGORIES, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
 import { positionLabelOf, positionsMatch } from "@/lib/position-catalog";
 import { replacementPointDisplayLabel, replacementPointSelectionKey } from "@/lib/material-replacement-display";
 import { receiveOtherMaterial } from "@/lib/other-material-stock";
@@ -994,9 +994,26 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         const value = String(body.proposalNumber || "").trim();
         const proposalReceiverName = String(body.proposalReceiverName || t.proposalReceiverName || "").trim();
         if (!value) return fail("Vui lòng nhập số phiếu ĐXVT");
-        before = `Số phiếu ĐXVT: ${t.proposalNumber ?? "—"}; VHV nhận: ${t.proposalReceiverName ?? "—"}`;
-        after = `Số phiếu ĐXVT: ${value}; VHV nhận: ${proposalReceiverName || "—"}`;
-        up = await prisma.materialTicket.update({ where: { id: t.id }, data: { proposalNumber: value, proposalReceiverName: proposalReceiverName || null }, include: ITEM_INCLUDE });
+        const editedProposalDate = body.proposalDate === undefined
+          ? undefined
+          : (() => {
+              const raw = String(body.proposalDate ?? "").trim();
+              if (!raw) return null;
+              const parsed = parseDateInput(raw);
+              return Number.isNaN(parsed.getTime()) ? null : parsed;
+            })();
+        const dateLabel = (value: Date | null | undefined) => (value ? value.toLocaleDateString("vi-VN") : "—");
+        before = `Số phiếu ĐXVT: ${t.proposalNumber ?? "—"} ngày ${dateLabel(t.proposalDate)}; VHV nhận: ${t.proposalReceiverName ?? "—"}`;
+        after = `Số phiếu ĐXVT: ${value} ngày ${dateLabel(editedProposalDate === undefined ? t.proposalDate : editedProposalDate)}; VHV nhận: ${proposalReceiverName || "—"}`;
+        up = await prisma.materialTicket.update({
+          where: { id: t.id },
+          data: {
+            proposalNumber: value,
+            proposalReceiverName: proposalReceiverName || null,
+            ...(editedProposalDate === undefined ? {} : { proposalDate: editedProposalDate }),
+          },
+          include: ITEM_INCLUDE,
+        });
       } else if (step === "receive" && isChemicalSequenceTicket(t.type)) {
         /*
          * HÓA CHẤT — sửa lại khối lượng lãnh mà KHÔNG đụng tồn kho lẫn ERP.
@@ -1091,8 +1108,15 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         const recoveryReturned = recoveryRequired && body.recoveryReturned === true;
         if (value <= 0) return fail("Số lượng sử dụng phải lớn hơn 0");
         if (!materialUserName) return fail("Vui lòng nhập tên VHV sử dụng vật tư");
-        // Sửa lại bước này cũng phải giữ đủ ảnh — gỡ bớt còn 1 ảnh rồi lưu là lách rào.
-        if (countUsagePhotos(t) < MIN_USAGE_PHOTOS) return fail(MISSING_USAGE_PHOTO_MESSAGE);
+        /*
+         * Sửa lại bước này cũng phải giữ đủ ảnh — gỡ bớt còn 1 ảnh rồi lưu là lách rào.
+         *
+         * Nhưng dùng ngưỡng CỦA CHÍNH PHIẾU (`requiredUsagePhotos`), không phải ngưỡng
+         * hiện hành: phiếu qua bước hồi luật còn 2/3 mà nay đòi 3 thì khoá luôn, không sửa
+         * nổi một ô nào khác của bước đó nữa.
+         */
+        const requiredPhotos = requiredUsagePhotos(t);
+        if (countUsagePhotos(t) < requiredPhotos) return fail(missingUsagePhotoMessage(requiredPhotos));
         // Ngưỡng nhỏ nhất theo vật tư: dầu EA Ultra Plus cho phép 0 (xem minRecoveryQuantity).
         // Viết theo ngưỡng chứ không phải `!recoveryQuantity` — số 0 rơi vào nhánh falsy nên
         // cách viết cũ chặn luôn cả trường hợp hợp lệ.
@@ -2068,6 +2092,19 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       const num = String(body.proposalNumber || t.proposalNumber || "").trim();
       const proposalReceiverName = String(body.proposalReceiverName || t.proposalReceiverName || "").trim();
       if (!num) return fail("Vui lòng nhập số phiếu đề xuất vật tư");
+      /*
+       * NGÀY GHI TRÊN tờ phiếu ĐXVT — không phải mốc thao tác trên hệ thống. Không bắt
+       * buộc: có phiếu cũ chỉ còn nhớ số, bắt nhập ngày là chặn cả bước.
+       * Bỏ trống thì giữ nguyên giá trị đang có thay vì xoá trắng.
+       */
+      const proposalDate = body.proposalDate === undefined
+        ? undefined
+        : (() => {
+            const raw = String(body.proposalDate ?? "").trim();
+            if (!raw) return null;
+            const parsed = parseDateInput(raw);
+            return Number.isNaN(parsed.getTime()) ? null : parsed;
+          })();
 
       if (t.status !== "CHO_XAC_NHAN_PHAT") {
         const item = t.items[0];
@@ -2092,13 +2129,14 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
             data: {
               status: "CHO_XAC_NHAN_PHAT",
               proposalNumber: num,
+              ...(proposalDate === undefined ? {} : { proposalDate }),
               statsById: user.id, statsByName: user.name ?? "",
               statsByPosition: user.position ?? null, statsAt: new Date(),
             },
             include: ITEM_INCLUDE,
           });
         });
-        await audit(user.id, "MT_STATS", "MaterialTicket", t.id, `${materialTicketReference(t)}: Xác nhận số phiếu ĐXVT: ${num}${erpCode ? `; mã vật tư ${erpCode}` : ""}`);
+        await audit(user.id, "MT_STATS", "MaterialTicket", t.id, `${materialTicketReference(t)}: Xác nhận số phiếu ĐXVT: ${num}${proposalDate ? ` ngày ${proposalDate.toLocaleDateString("vi-VN")}` : ""}${erpCode ? `; mã vật tư ${erpCode}` : ""}`);
         return ok(up);
       }
 
@@ -2596,6 +2634,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       if (!Number.isFinite(usedQuantity) || usedQuantity <= 0) return fail("Khối lượng vật tư sử dụng phải lớn hơn 0");
       if (!materialUserName) return fail("Vui lòng nhập tên VHV sử dụng vật tư");
       // Ảnh hiện trường là bằng chứng đi kèm biên bản — thiếu thì không cho qua bước.
+      // Ở đây LUÔN đòi đủ ba: phiếu đang qua bước ngay bây giờ nên không thuộc diện được tha.
       if (countUsagePhotos(t) < MIN_USAGE_PHOTOS) return fail(MISSING_USAGE_PHOTO_MESSAGE);
 
       const item = t.items[0];
