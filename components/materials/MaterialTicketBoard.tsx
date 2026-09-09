@@ -2160,6 +2160,9 @@ function StepReviewDialog({ t, viewer, stepKey, onClose }: { t: MaterialTicket; 
   const [deliveryQtyReview, setDeliveryQtyReview] = useState(t.deliveryQuantity != null ? String(t.deliveryQuantity) : "");
   const [receivedQuantity, setReceivedQuantity] = useState(t.receivedQuantity ?? 1);
   const [receivedMethod, setReceivedMethod] = useState(t.deliveryNoteNumber ?? t.receivedMethod ?? "");
+  /** Ngày trên tờ phiếu giao hàng. KHÁC `deliveryDateReview` phía trên — đó là LỊCH giao
+   *  hàng của luồng hóa chất, hai thứ không liên quan gì nhau. */
+  const [deliveryNoteDateReview, setDeliveryNoteDateReview] = useState(() => dateInputValue(t.deliveryNoteDate));
   const [receiptSource, setReceiptSource] = useState<"ERP" | "EXISTING">(normalizeReceiptSource(t.receiptSource));
   // Ảnh liên 3 đang gắn trên lô của phiếu — lô của chính phiếu này, nhận ra qua `taken`/nhãn
   // số phiếu giao hàng. Chỉ nạp khi đang mở đúng bước nhận để không gọi thừa.
@@ -2221,6 +2224,7 @@ function StepReviewDialog({ t, viewer, stepKey, onClose }: { t: MaterialTicket; 
           : {
               receivedQuantity,
               deliveryNoteNumber: receivedMethod,
+              deliveryNoteDate: deliveryNoteDateReview || null,
               receiptSource,
               ...(reviewDeliveryPhoto ? { deliveryPhotoDataUrl: reviewDeliveryPhoto } : {}),
             }
@@ -2318,6 +2322,9 @@ function StepReviewDialog({ t, viewer, stepKey, onClose }: { t: MaterialTicket; 
               <input value={receivedMethod} disabled={!canEdit} onChange={(e) => setReceivedMethod(e.target.value)} />
             </label>
           </div>
+          <label>Ngày phiếu giao hàng
+            <input type="date" value={deliveryNoteDateReview} disabled={!canEdit} onChange={(e) => setDeliveryNoteDateReview(e.target.value)} />
+          </label>
           {/* Chụp lại tờ liên 3 khi ảnh cũ mờ hoặc nhầm phiếu. Không chọn ảnh mới thì giữ nguyên
               ảnh đang gắn trên lô. */}
           <DeliveryPhotoField
@@ -3050,6 +3057,8 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
   const [proposalNumberInput, setProposalNumberInput] = useState("");
   /** Ngày ghi trên tờ phiếu ĐXVT (yyyy-mm-dd của <input type="date">). */
   const [proposalDateInput, setProposalDateInput] = useState(() => dateInputValue(t.proposalDate));
+  /** Ngày ghi trên phiếu giao hàng. */
+  const [deliveryDateInput, setDeliveryDateInput] = useState(() => dateInputValue(t.deliveryNoteDate));
   const [bbktNumberInput, setBbktNumberInput] = useState(t.bbktNumber ?? "");
   const [confirmReasonInput, setConfirmReasonInput] = useState(t.proposalNote ?? ""); // Lý do — bước Xác nhận yêu cầu (lưu vào proposalNote)
   const [materialUserNameInput, setMaterialUserNameInput] = useState(t.materialUserName ?? "");
@@ -3882,6 +3891,9 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
               <label className="field">Số phiếu giao hàng *
                 <input placeholder="Nhập số phiếu giao hàng" value={method} onChange={(e) => setMethod(e.target.value)} />
               </label>
+              <label className="field">Ngày phiếu giao hàng
+                <input type="date" value={deliveryDateInput} onChange={(e) => setDeliveryDateInput(e.target.value)} />
+              </label>
             </div>
             <DeliveryPhotoField value={deliveryPhoto} onChange={setDeliveryPhoto} />
           </>}
@@ -3895,6 +3907,7 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
                 action: "receive",
                 proposalNumber: proposalNumberInput.trim(),
                 deliveryNoteNumber: method.trim(),
+                deliveryNoteDate: deliveryDateInput || null,
                 deliveryPhotoDataUrl: deliveryPhoto,
                 receivedQuantity: t.receivedQuantity ?? qty,
                 receiptSource,
@@ -3991,6 +4004,11 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
               onChange={(e) => setMethod(e.target.value)}
             />
           </label>
+          {/* Ngày ghi TRÊN tờ phiếu giao hàng, đi liền với số phiếu: BBNT D-Office có sẵn
+              ô "Phiếu giao hàng số … ngày ……". Không bắt buộc, cùng luật với ngày phiếu ĐXVT. */}
+          <label className="field">Ngày phiếu giao hàng
+            <input type="date" value={deliveryDateInput} onChange={(e) => setDeliveryDateInput(e.target.value)} />
+          </label>
         </div>
         {/* Ảnh liên 3 nằm ngay dưới ô số phiếu giao hàng vì hai thứ đó là một cặp: số phiếu
             và bản chụp của chính tờ phiếu ấy. */}
@@ -4027,7 +4045,7 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
           </button>
         ) : (
           <button className="btn primary big" disabled={qty <= 0 || (isAdvance && (!erpCode || !proposalNumberInput.trim())) || !method.trim() || !deliveryPhoto || act.isPending}
-            onClick={() => run({ action: "receive", receivedQuantity: qty, deliveryNoteNumber: method.trim(), deliveryPhotoDataUrl: deliveryPhoto, receiptSource: isAdvance ? receiptSource : "ERP", ...(isAdvance ? { erpCode, proposalNumber: proposalNumberInput.trim() } : {}) }, isAdvance ? (isGasTicket ? "Đã xác nhận ĐXVT, chuyển bước Sử dụng vật tư" : "Đã xác nhận ĐXVT, chuyển Quyết toán") : "Đã xác nhận số phiếu giao hàng")}>
+            onClick={() => run({ action: "receive", receivedQuantity: qty, deliveryNoteNumber: method.trim(), deliveryNoteDate: deliveryDateInput || null, deliveryPhotoDataUrl: deliveryPhoto, receiptSource: isAdvance ? receiptSource : "ERP", ...(isAdvance ? { erpCode, proposalNumber: proposalNumberInput.trim() } : {}) }, isAdvance ? (isGasTicket ? "Đã xác nhận ĐXVT, chuyển bước Sử dụng vật tư" : "Đã xác nhận ĐXVT, chuyển Quyết toán") : "Đã xác nhận số phiếu giao hàng")}>
             {act.isPending ? <Loader2 className="spin" size={15} /> : <Check size={15} />} {isAdvance ? "Xác nhận ĐXVT" : "Xác nhận số phiếu giao hàng"}
           </button>
         )}

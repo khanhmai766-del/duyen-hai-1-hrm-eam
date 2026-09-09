@@ -1523,6 +1523,9 @@ model MaterialTicket {
   proposalIssuedAt     DateTime? // Thống kê xác nhận giao phiếu ĐXVT (giữ tên cột cũ để tương thích dữ liệu)
   proposalReceiverName String? // tên VHV nhận phiếu ĐXVT khi Thống kê giao phiếu
   deliveryNoteNumber   String? // số phiếu giao hàng
+  /// NGÀY GHI TRÊN phiếu giao hàng — cùng lý do với `proposalDate`: BBNT D-Office có
+  /// sẵn ô "Phiếu giao hàng số … ngày ……", thiếu ngày là biên bản hụt một nửa căn cứ.
+  deliveryNoteDate     DateTime?
   repairRequestNumber  String? // số yêu cầu sửa chữa
   pctContent           String? // nội dung công việc ghi trên PCT/LCT
   completionNote       String? // thông tin xác nhận thay thế xong

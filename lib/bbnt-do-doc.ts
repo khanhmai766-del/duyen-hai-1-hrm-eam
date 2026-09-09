@@ -61,6 +61,7 @@ export interface BbntDoData {
   proposalNumber?: string | null;
   proposalDate?: Date | string | null; // ngày ghi trên tờ phiếu ĐXVT
   deliveryNoteNumber?: string | null; // số phiếu giao hàng
+  deliveryNoteDate?: Date | string | null; // ngày ghi trên phiếu giao hàng
   sccnRepresentativeName?: string | null; // đại diện Phân xưởng Sửa chữa Cơ nhiệt
   sccnRepresentativePosition?: string | null;
   quanDocName?: string | null; // tên Quản đốc (đại diện đơn vị chủ quản)
@@ -265,40 +266,68 @@ function bbntDoTemplateFileName(materialCategory?: string | null) {
 }
 
 /**
- * Chèn `{{proposalDate}}` vào ô trống ngày ngay sau "Phiếu đề xuất vật tư số …".
+ * Thay ô ngày ĐỂ TRỐNG ngay sau một token bằng token ngày tương ứng.
+ *
+ * Dùng cho cả hai chỗ trong cùng một câu căn cứ:
+ *   "Phiếu đề xuất vật tư số {{proposalNumber}} ngày …… Phiếu giao hàng số
+ *    {{deliveryNote}} ngày ……;"
  *
  * Mẫu do phân xưởng tự soạn và còn sửa tiếp, nên KHÔNG bắt người soạn gõ đúng token —
  * cùng cách làm với `patchSccnRepresentativeTokens` và `patchUsagePhotoCells`.
  *
- * Chỉ đụng ô chấm ĐẦU TIÊN nằm giữa `{{proposalNumber}}` và `{{deliveryNote}}`: câu này
- * có HAI ô ngày ("Phiếu đề xuất … ngày ……. Phiếu giao hàng số … ngày ……"), vá nhầm ô
- * thứ hai là ngày ĐXVT nhảy sang chỗ ngày giao hàng.
+ * BA chỗ dễ làm sai, đều đã gặp thật trong 3 mẫu đang chạy:
+ *   1. Word CẮT NHỎ chữ tuỳ tiện — mẫu dầu để ô chấm của phiếu giao hàng thành 3 run
+ *      ("…" + "….." + ";"), mẫu bi tách cả chữ "ngày". Nên phải GHÉP chữ của cả đoạn
+ *      rồi mới dò, không dò theo từng run.
+ *   2. Ô chấm có khi DÍNH LIỀN dấu chấm phẩy ("……;"). Chỉ thay đúng phần chấm, giữ lại
+ *      dấu ";" và mọi thứ phía sau.
+ *   3. Chỉ ghi đè các run mà vùng cần thay THỰC SỰ chạm tới. Gộp cả đoạn vào một run là
+ *      nuốt luôn token `{{deliveryNote}}` nằm sau đó, khiến lượt vá thứ hai không còn
+ *      tìm thấy gì.
  *
- * Không tìm thấy thì trả nguyên văn — biên bản in ra y như trước, không hỏng gì.
+ * Không khớp thì trả nguyên văn — biên bản in ra y như trước, không hỏng gì.
  */
-function patchProposalDateToken(documentXml: string) {
-  if (documentXml.includes("{{proposalDate}}")) return documentXml; // mẫu đã tự gắn tag
-  const numberAt = documentXml.indexOf("{{proposalNumber}}");
-  if (numberAt < 0) return documentXml;
-  const deliveryAt = documentXml.indexOf("{{deliveryNote}}", numberAt);
-  const limit = deliveryAt > numberAt ? deliveryAt : documentXml.length;
-  const ngayAt = documentXml.indexOf("ngày", numberAt);
-  if (ngayAt < 0 || ngayAt > limit) return documentXml;
-  // Ô trống = một <w:t> chỉ gồm dấu chấm / ba chấm / khoảng trắng.
-  const blankCell = /<w:t([^>]*)>([\s.…]*[.…][\s.…]*)<\/w:t>/g;
-  blankCell.lastIndex = ngayAt;
-  const found = blankCell.exec(documentXml);
-  if (!found || found.index > limit) return documentXml;
-  // GIỮ NGUYÊN khoảng trắng hai đầu ô chấm: mẫu bi ghi "……. " (có dấu cách cuối), nuốt
-  // mất là ngày dính liền vào "Phiếu giao hàng số …" ngay sau đó.
-  const blank = found[2];
-  const lead = /^\s*/.exec(blank)?.[0] ?? "";
-  const trail = /\s*$/.exec(blank)?.[0] ?? "";
-  return (
-    documentXml.slice(0, found.index) +
-    `<w:t${found[1]}>${lead}{{proposalDate}}${trail}</w:t>` +
-    documentXml.slice(found.index + found[0].length)
-  );
+function patchDateBlankAfter(documentXml: string, anchorToken: string, dateToken: string) {
+  if (documentXml.includes(dateToken)) return documentXml; // mẫu đã tự gắn tag
+  const at = documentXml.indexOf(anchorToken);
+  if (at < 0) return documentXml;
+  const anchorEnd = at + anchorToken.length;
+  const paragraphEnd = documentXml.indexOf("</w:p>", anchorEnd);
+  if (paragraphEnd < 0) return documentXml;
+
+  const segment = documentXml.slice(anchorEnd, paragraphEnd);
+  const cells = [...segment.matchAll(/<w:t([^>]*)>([\s\S]*?)<\/w:t>/g)];
+  if (!cells.length) return documentXml;
+  const tail = cells.map((cell) => cell[2]).join("");
+  // Giữ lại chữ "ngày", chỉ thay chuỗi chấm ngay sau nó.
+  const blank = /^(\s*ngày\s*:?\s*)([.…]+)/.exec(tail);
+  if (!blank) return documentXml;
+
+  const blankEnd = blank[0].length;
+  const edits: Array<{ index: number; length: number; text: string }> = [];
+  let cursor = 0;
+  for (const cell of cells) {
+    const start = cursor;
+    const end = start + cell[2].length;
+    cursor = end;
+    if (start >= blankEnd) break; // run nằm hoàn toàn sau vùng thay — để nguyên
+    const keepAfter = end > blankEnd ? cell[2].slice(blankEnd - start) : "";
+    edits.push({
+      index: cell.index ?? 0,
+      length: cell[0].length,
+      text: (start === 0 ? blank[1] + dateToken : "") + keepAfter,
+    });
+  }
+
+  let patched = segment;
+  for (let i = edits.length - 1; i >= 0; i -= 1) {
+    const edit = edits[i];
+    patched =
+      patched.slice(0, edit.index) +
+      `<w:t xml:space="preserve">${edit.text}</w:t>` +
+      patched.slice(edit.index + edit.length);
+  }
+  return documentXml.slice(0, anchorEnd) + patched + documentXml.slice(paragraphEnd);
 }
 
 /**
@@ -414,7 +443,8 @@ export async function generateBbntDoDoc(d: BbntDoData): Promise<{ key: string; u
       "{{quanDocName}}"
     );
     documentXml = patchSccnRepresentativeTokens(documentXml);
-    documentXml = patchProposalDateToken(documentXml);
+    documentXml = patchDateBlankAfter(documentXml, "{{proposalNumber}}", "{{proposalDate}}");
+    documentXml = patchDateBlankAfter(documentXml, "{{deliveryNote}}", "{{deliveryNoteDate}}");
     documentXml = patchBbktDateBlank(documentXml, Boolean(String(d.bbktNumber ?? "").trim()));
   }
   // Tương thích với mẫu đang được mở/khóa hoặc bản mẫu cũ đã deploy:
@@ -498,6 +528,8 @@ export async function generateBbntDoDoc(d: BbntDoData): Promise<{ key: string; u
     // Chưa nhập ngày thì in lại ô chấm y như bản mẫu để còn điền tay, không để trống trơ.
     proposalDate: vnDate(d.proposalDate) || "…….",
     deliveryNote: d.deliveryNoteNumber || "(không)",
+    // Chưa nhập ngày thì in lại ô chấm y như bản mẫu để còn điền tay.
+    deliveryNoteDate: vnDate(d.deliveryNoteDate) || "……",
     sccnRepresentativeName: d.sccnRepresentativeName || "",
     sccnRepresentativePosition: d.sccnRepresentativePosition || "",
     // Thẻ viết hoa của ô chữ ký — xem sccnSignatureTitle ở đầu tệp.

@@ -471,6 +471,21 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
 
 // PUT /api/material-tickets/[id]   { action, ...payload }
 // Mọi khóa (trạng thái × cương vị × phạm vi × 2 ngày) thi hành TẠI ĐÂY.
+/**
+ * Ngày ghi TRÊN chứng từ giấy (phiếu ĐXVT, phiếu giao hàng) — in vào ô "ngày ……" của
+ * BBNT D-Office. Không bắt buộc.
+ *
+ * Trả `undefined` khi thân yêu cầu KHÔNG gửi trường đó, để chỗ ghi bỏ qua thay vì xoá
+ * trắng: sửa một ô khác không được làm mất ngày đã nhập.
+ */
+const parseTicketDate = (value: unknown) => {
+  if (value === undefined) return undefined;
+  const raw = String(value ?? "").trim();
+  if (!raw) return null;
+  const parsed = parseDateInput(raw);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
 export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
   return handle(async () => {
     const user = await requireUser();
@@ -1041,6 +1056,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         if (!t.receivedAt || t.receivedQuantity == null) return fail("Bước xác nhận vật tư lãnh chưa hoàn thành");
         const value = Math.trunc(Number(body.receivedQuantity));
         const method = String(body.deliveryNoteNumber || body.receivedMethod || "").trim();
+        const editedDeliveryDate = parseTicketDate(body.deliveryNoteDate);
         const receiptSource = t.type === "UNG" ? normalizeReceiptSource(body.receiptSource) : "ERP";
         if (value <= 0 || !method) return fail("Khối lượng lãnh hoặc số phiếu giao hàng không hợp lệ");
         const item = t.items[0]; if (!item) return fail("Phiếu chưa có vật tư");
@@ -1089,7 +1105,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
             }
           }
           if (erpDelta) await tx.$executeRaw`UPDATE "ErpMaterial" SET "erpStock" = "erpStock" + ${erpDelta}, "updatedAt" = NOW() WHERE "code" = ${erpCode}`;
-          return tx.materialTicket.update({ where: { id: t.id }, data: { receivedQuantity: value, receivedMethod: method || null, deliveryNoteNumber: method || null, receiptSource, remainingQuantity: value - (t.usedQuantity ?? 0) }, include: ITEM_INCLUDE });
+          return tx.materialTicket.update({ where: { id: t.id }, data: { receivedQuantity: value, receivedMethod: method || null, deliveryNoteNumber: method || null, receiptSource, remainingQuantity: value - (t.usedQuantity ?? 0), ...(editedDeliveryDate === undefined ? {} : { deliveryNoteDate: editedDeliveryDate }) }, include: ITEM_INCLUDE });
         });
         if (replacementPhoto && editedLot?.deliveryPhotoKey) await deleteDeliveryPhotos([editedLot.deliveryPhotoKey]);
       } else if (step === "use") {
@@ -2396,6 +2412,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         if (!erpCode) return fail("Phiếu ĐXVT chưa khóa mã vật tư ERP", 409);
         const proposalNumber = String(body.proposalNumber || "").trim();
         const deliveryNoteNumber = String(body.deliveryNoteNumber || body.receivedMethod || "").trim();
+        const deliveryNoteDate = parseTicketDate(body.deliveryNoteDate);
         if (!proposalNumber) return fail("Vui lòng nhập số phiếu đề xuất vật tư");
         if (!deliveryNoteNumber) return fail("Vui lòng nhập số phiếu giao hàng");
 
@@ -2464,6 +2481,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
               proposalIssuedAt: new Date(),
               deliveryNoteNumber,
               receivedMethod: deliveryNoteNumber,
+              ...(deliveryNoteDate === undefined ? {} : { deliveryNoteDate }),
               receivedQuantity,
               receiptSource,
               remainingQuantity: receivedQuantity - (t.usedQuantity ?? 0),

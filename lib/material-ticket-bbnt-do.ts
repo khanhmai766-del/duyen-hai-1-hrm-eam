@@ -116,6 +116,7 @@ export async function buildBbntDoDocument(
     pctContent: overrides?.pctContent ?? t.pctContent,
     proposalNumber: t.proposalNumber,
     proposalDate: t.proposalDate,
+    deliveryNoteDate: t.deliveryNoteDate,
     deliveryNoteNumber: overrides?.deliveryNoteNumber ?? (await deliveryNoteForDocuments(t)) ?? t.deliveryNoteNumber,
     sccnRepresentativeName: selectedSccnRepresentative?.name ?? selectedSccnUser?.name ?? null,
     sccnRepresentativePosition: selectedSccnRepresentative?.position ?? selectedSccnUser?.position ?? null,

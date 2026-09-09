@@ -42,6 +42,8 @@ export interface MaterialTicket {
   proposalIssuedAt: string | null;
   proposalReceiverName: string | null;
   deliveryNoteNumber: string | null;
+  /** Ngày ghi trên phiếu giao hàng (ISO). */
+  deliveryNoteDate: string | null;
   repairRequestNumber: string | null;
   pctContent: string | null;
   completionNote: string | null;
