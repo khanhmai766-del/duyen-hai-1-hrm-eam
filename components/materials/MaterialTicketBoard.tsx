@@ -609,7 +609,12 @@ export default function MaterialTicketBoard({
                 <span className={`exp ${isOpen ? "open" : ""}`} title={isOpen ? "Thu gọn" : "Mở chi tiết"}>
                   {isOpen ? <Minus size={10} /> : <Plus size={10} />}
                 </span>
-                <span className="code">{t.sequenceNumber}</span>
+                <span className="ticket-sequence">
+                  <span className="code">{t.sequenceNumber}</span>
+                  <small className="ticket-sequence-month" aria-label={materialTicketMonthLabel(t.sequenceMonth)}>
+                    {t.sequenceMonth.split("-").reverse().join("/")}
+                  </small>
+                </span>
               </span>
               <span className="kind-cell">
                 {t.type === SINGLE_STEP_TICKET_TYPE
@@ -4361,11 +4366,13 @@ const CSS = `
 .ticket-pagination-actions button:hover:not(:disabled){border-color:#93c5fd;background:#eff6ff;color:${C.accent};transform:translateY(-1px);}
 .ticket-pagination-actions button:disabled{cursor:not-allowed;opacity:.35;}
 .ticket-page-indicator{display:grid;height:34px;min-width:48px;place-items:center;border-radius:10px;background:${C.navy};padding:0 9px;color:#fff;font-size:11.5px;font-weight:850;font-variant-numeric:tabular-nums;box-shadow:0 5px 12px rgba(30,58,95,.18);}
-.row{display:grid;grid-template-columns:48px 120px 108px minmax(240px,2.2fr) 180px 84px minmax(176px,1.1fr) 60px 68px;gap:10px;align-items:center;min-width:1192px;width:100%;text-align:left;min-height:54px;padding:6px 14px;border:0;border-bottom:1px solid ${C.line};background:#fff;cursor:pointer;font-size:13px;}
+.row{display:grid;grid-template-columns:88px 120px 108px minmax(240px,2.2fr) 180px 84px minmax(176px,1.1fr) 60px 68px;gap:10px;align-items:center;min-width:1232px;width:100%;text-align:left;min-height:54px;padding:6px 14px;border:0;border-bottom:1px solid ${C.line};background:#fff;cursor:pointer;font-size:13px;}
 .row:not(.rhead){min-height:62px;padding-top:9px;padding-bottom:9px;}
 .row:not(.rhead)>span:nth-child(n+2):nth-child(-n+7){justify-self:stretch;text-align:center;}
 .code-cell{display:inline-flex;align-items:center;justify-content:flex-start;gap:6px;min-width:0;}
 .code-cell .code{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.ticket-sequence{display:flex;flex-direction:column;gap:2px;min-width:0;}
+.ticket-sequence-month{font-size:11px;font-weight:600;line-height:1.3;color:#475569;white-space:nowrap;}
 .ops{display:flex;gap:6px;justify-content:center;}
 .op{display:grid;place-items:center;width:28px;height:28px;border-radius:8px;border:1px solid ${C.line};background:#fff;color:${C.muted};cursor:pointer;transition:.15s;}
 .op:hover{border-color:${C.accent};color:${C.accent};}
