@@ -325,13 +325,15 @@ export default function MaterialTicketBoard({
       const matchesSearch = !searchText || searchable.includes(searchText);
       return matchesStatus && matchesMaterialCategory && matchesUnit && matchesType && matchesSearch;
     });
-    // Tháng mới nhất đứng trước; trong từng tháng, STT cao nhất là phiếu mới nhất.
+    // Ưu tiên phiếu cảnh báo trước khi phân trang; mỗi nhóm vẫn xếp tháng và STT mới nhất trước.
+    const warningIds = new Set(list.filter((ticket) => materialTicketAlert(ticket, alertNow)).map((ticket) => ticket.id));
     return list.sort((a, b) =>
-      b.sequenceMonth.localeCompare(a.sequenceMonth)
+      Number(warningIds.has(b.id)) - Number(warningIds.has(a.id))
+      || b.sequenceMonth.localeCompare(a.sequenceMonth)
       || b.sequenceNumber - a.sequenceNumber
       || b.createdAt.localeCompare(a.createdAt)
     );
-  }, [tickets, filter, myTurnIds, materialCategoryFilter, unitFilter, typeFilter, searchText]);
+  }, [tickets, filter, myTurnIds, materialCategoryFilter, unitFilter, typeFilter, searchText, alertNow]);
   const activeFilterCount = Number(materialCategoryFilter !== "ALL") + Number(unitFilter !== "ALL");
   const totalPages = Math.max(1, Math.ceil(shown.length / TICKET_PAGE_SIZE));
   const currentPage = Math.min(listPage, totalPages);
@@ -4661,8 +4663,8 @@ const CSS = `
 .step.cur b{color:${C.accent};}
 .step.rejected{color:${C.bad};background:${C.badBg};}
 .step.rejected b{color:${C.bad};}
-.row.row-warning{background:${C.badBg};box-shadow:inset 3px 0 0 ${C.bad};}
-.row.row-warning:hover{background:#fee2e2;}
+.row.row-warning{background:#fca5a5;border-bottom-color:#ef4444;box-shadow:inset 5px 0 0 #b91c1c;}
+.row.row-warning:hover{background:#f87171;}
 .step.step-warning,.ticket-detail-modal .step.step-warning{color:${C.bad};background:${C.badBg};border-color:#fecaca;box-shadow:inset 3px 0 0 ${C.bad};}
 .step.step-warning b{color:${C.bad};}
 .lb{display:flex;align-items:center;gap:6px;font-family:inherit;font-weight:600;font-size:12.5px;color:${C.navy};margin-bottom:8px;}
