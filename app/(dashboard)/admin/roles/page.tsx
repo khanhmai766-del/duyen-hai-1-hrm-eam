@@ -9,6 +9,7 @@ import {
   ChevronsUpDown,
   CircleDot,
   Eye,
+  Info,
   KeyRound,
   Lock,
   Plus,
@@ -164,6 +165,21 @@ function strongestPermission(values: Array<PermissionValue | undefined>): Permis
 
 function roleMatrixIds(role: RoleColumn) {
   return role.sourceRoleIds ?? [role.id];
+}
+
+/**
+ * Vai trò HỆ THỐNG mà một cột ma trận thật sự khoá vào (`User.role`).
+ *
+ * Cần in ra ngay dưới nhãn cột vì nhãn được đặt bằng tên CHỨC VỤ ("Trưởng ca / Kỹ thuật
+ * viên") trong khi thứ nó so khớp lại là vai trò. Đã có ca thật: một tài khoản khai chức
+ * vụ "Trưởng ca" nhưng vai trò VIEWER, bật cột này lên Toàn quyền mà tài khoản đó vẫn
+ * không thấy nút — vì nó rơi vào cột Người xem.
+ *
+ * Cột hồ sơ riêng do Quản trị tạo thì không ứng với vai trò hệ thống nào.
+ */
+function roleSystemKeys(role: RoleColumn): RoleKey[] {
+  if (role.sourceRoleIds) return role.sourceRoleIds;
+  return role.systemRole ? [role.systemRole] : [];
 }
 
 function roleMatrixValue(matrix: Record<string, PermissionValue>, role: RoleColumn): PermissionValue {
@@ -1183,6 +1199,32 @@ export default function RolesPage() {
               </div>
             ))}
           </div>
+
+          {/*
+            CẢNH BÁO DỄ HIỂU NHẦM NHẤT CỦA TRANG NÀY.
+
+            Nhãn cột đặt theo tên CHỨC VỤ ("Trưởng ca / Kỹ thuật viên") nhưng thứ nó so khớp
+            là VAI TRÒ hệ thống (`User.role`). Đã gặp ca thật: tài khoản khai chức vụ
+            "Trưởng ca" mà vai trò là Người xem, bật cột lên Toàn quyền vẫn không thấy nút —
+            mất khá lâu mới lần ra. Nói thẳng ra ở đây, kèm lối đi đúng khi muốn cấp theo
+            chức vụ.
+          */}
+          <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50/70 p-3">
+            <Info className="mt-0.5 size-4 shrink-0 text-amber-600" aria-hidden="true" />
+            <div className="min-w-0 space-y-1 text-[12.5px] leading-5 text-amber-900">
+              <p>
+                <strong>Các cột dưới đây là VAI TRÒ hệ thống của tài khoản, không phải chức vụ.</strong> Mã vai
+                trò in ngay dưới tên cột (<code className="rounded bg-white/70 px-1 py-0.5 font-mono text-[10.5px]">SUPERVISOR</code>,{" "}
+                <code className="rounded bg-white/70 px-1 py-0.5 font-mono text-[10.5px]">TECHNICIAN</code>…).
+              </p>
+              <p>
+                Một người khai chức vụ “Trưởng ca” nhưng vai trò là <em>Người xem</em> thì vẫn ăn theo cột{" "}
+                <em>Người xem</em> — bật cột “Trưởng ca / Kỹ thuật viên” lên không giúp gì cho tài khoản đó.
+                Muốn cấp <strong>theo chức vụ</strong>, dùng nút <strong>“Gán quyền user”</strong> ở đầu trang rồi
+                chọn tab <strong>“Toàn cương vị”</strong>.
+              </p>
+            </div>
+          </div>
         </CardHeader>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
@@ -1195,11 +1237,41 @@ export default function RolesPage() {
                   <th className="min-w-[360px] px-4 py-3.5 text-left text-xs font-semibold uppercase text-muted-foreground">
                     Chức năng
                   </th>
-                  {matrixRoleColumns.map((role) => (
-                    <th key={role.id} className="min-w-[148px] px-4 py-3.5 text-center text-xs font-semibold uppercase leading-4 text-muted-foreground">
-                      {role.label}
-                    </th>
-                  ))}
+                  {matrixRoleColumns.map((role) => {
+                    const systemKeys = roleSystemKeys(role);
+                    return (
+                      <th key={role.id} className="min-w-[168px] px-3 py-3 align-top text-center">
+                        <span className="block text-xs font-semibold uppercase leading-4 text-muted-foreground">
+                          {role.label}
+                        </span>
+                        {/* Mã vai trò in ngay dưới nhãn: nhãn đặt theo tên chức vụ, mà thứ
+                            cột này so khớp lại là `User.role` — xem roleSystemKeys. */}
+                        <span
+                          className="mt-1.5 inline-flex max-w-full flex-wrap items-center justify-center gap-1"
+                          title={
+                            systemKeys.length
+                              ? `Áp cho tài khoản có VAI TRÒ ${systemKeys.join(" hoặc ")} — không xét chức vụ`
+                              : "Hồ sơ quyền riêng, chỉ áp cho tài khoản được gán đích danh"
+                          }
+                        >
+                          {systemKeys.length ? (
+                            systemKeys.map((key) => (
+                              <code
+                                key={key}
+                                className="rounded bg-white/80 px-1.5 py-0.5 font-mono text-[10px] font-semibold leading-4 tracking-tight text-slate-500 ring-1 ring-slate-200/80"
+                              >
+                                {key}
+                              </code>
+                            ))
+                          ) : (
+                            <code className="rounded bg-cyan-50 px-1.5 py-0.5 font-mono text-[10px] font-semibold leading-4 text-cyan-700 ring-1 ring-cyan-200/80">
+                              hồ sơ riêng
+                            </code>
+                          )}
+                        </span>
+                      </th>
+                    );
+                  })}
                 </tr>
               </thead>
               <tbody>
