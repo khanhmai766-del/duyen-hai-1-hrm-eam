@@ -597,7 +597,7 @@ export default function MaterialTicketBoard({
           return (
             <React.Fragment key={t.id}>
             <button
-              className={`row ${mine ? "mine" : ""} ${t.type === SINGLE_STEP_TICKET_TYPE ? "ghinhan" : ""}`}
+              className={`row ${mine ? "mine" : ""} ${t.type === SINGLE_STEP_TICKET_TYPE ? "ghinhan" : ""} ${warning ? "row-warning" : ""}`}
               onClick={() => setOpenId(isOpen ? null : t.id)}
               aria-expanded={isOpen}
               aria-haspopup="dialog"
@@ -642,7 +642,6 @@ export default function MaterialTicketBoard({
 	                <span className="st status-primary" style={{ color: warning ? C.bad : baseMeta.c, background: warning ? C.badBg : baseMeta.c + "16" }}>
 	                  {mine && <i className="pd" />}{baseMeta.label}
 	                </span>
-                    {warning && <small className="ticket-warning"><AlertTriangle size={13} aria-hidden="true" /><span>{warning}</span></small>}
 	                {recoveryPending && (
 	                  <small className="status-secondary" title="Chờ xác nhận trả vật tư thu hồi">Chờ xác nhận trả vật tư thu hồi</small>
 	                )}
@@ -1949,7 +1948,7 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
 	            return (
 	              <button type="button" key={s.key} disabled={!reviewable} onClick={() => setReviewStep(s.key)} className={`step step-review ${done && !recoveryPending ? "done" : ""} ${recoveryPending ? "recovery-pending" : ""} ${cur ? "cur" : ""} ${stepWarning ? "step-warning" : ""}`}>
 	                {stepWarning || recoveryPending ? <AlertTriangle size={17} /> : done ? <CircleCheck size={17} /> : cur ? <CircleDot size={17} /> : <Circle size={17} />}
-	                <div><b>{waitingForRepairRequest ? "Đã lãnh vật tư · Chờ SYC" : s.label}</b><span>{stepWarning ? warning : recoveryPending ? "Chưa xác nhận trả vật tư thu hồi · Xem lại" : caption}</span></div>
+	                <div><b>{waitingForRepairRequest ? "Đã lãnh vật tư · Chờ SYC" : s.label}</b><span>{recoveryPending ? "Chưa xác nhận trả vật tư thu hồi · Xem lại" : caption}</span></div>
 	              </button>
 	            );
 	          })}
@@ -4662,8 +4661,8 @@ const CSS = `
 .step.cur b{color:${C.accent};}
 .step.rejected{color:${C.bad};background:${C.badBg};}
 .step.rejected b{color:${C.bad};}
-.status-stack .ticket-warning{display:flex;align-items:flex-start;gap:4px;color:${C.bad};font-size:11px;font-weight:600;line-height:1.4;white-space:normal;}
-.ticket-warning svg{flex-shrink:0;margin-top:1px;}
+.row.row-warning{background:${C.badBg};box-shadow:inset 3px 0 0 ${C.bad};}
+.row.row-warning:hover{background:#fee2e2;}
 .step.step-warning,.ticket-detail-modal .step.step-warning{color:${C.bad};background:${C.badBg};border-color:#fecaca;box-shadow:inset 3px 0 0 ${C.bad};}
 .step.step-warning b{color:${C.bad};}
 .lb{display:flex;align-items:center;gap:6px;font-family:inherit;font-weight:600;font-size:12.5px;color:${C.navy};margin-bottom:8px;}
