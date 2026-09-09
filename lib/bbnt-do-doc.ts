@@ -301,6 +301,55 @@ function patchProposalDateToken(documentXml: string) {
   );
 }
 
+/**
+ * Bỏ ô ngày để trống nằm ngay sau `{{soBBKT}}` — "Biên bản kiểm tra … ngày ……;".
+ *
+ * Ô nhập trên web nay hướng dẫn gõ CẢ SỐ LẪN NGÀY vào một chỗ ("12 ngày 05/09/2026"),
+ * nên giữ thêm ô trống này là biên bản in ra lặp: "… 12 ngày 05/09/2026 ngày ……;".
+ *
+ * KHÔNG cắt theo từng run: mẫu bi tách chữ "ngày" làm đôi giữa hai run (`" ngà"` +
+ * `"y: …."`), cắt theo run là hụt mất một nửa. Ở đây ghép chữ của cả đoạn phía sau token
+ * rồi mới cắt, sau đó dồn phần còn lại vào run đầu.
+ *
+ * Chỉ bỏ khi phiếu THỰC SỰ có số biên bản: không có số thì ô trống vẫn là chỗ điền tay,
+ * mà bỏ đi còn ra "Biên bản kiểm tra ; (không)" trông như lỗi.
+ */
+function patchBbktDateBlank(documentXml: string, hasBbktNumber: boolean) {
+  if (!hasBbktNumber) return documentXml;
+  const token = "{{soBBKT}}";
+  const at = documentXml.indexOf(token);
+  if (at < 0) return documentXml;
+  const tokenEnd = at + token.length;
+  /*
+   * Dấu cách nằm NGAY SAU token, bên trong cùng run: "…{{soBBKT}} </w:t>" (mẫu dầu và
+   * lõi lọc). Không nuốt nó thì bỏ ô ngày xong còn thừa khoảng trắng trước dấu ";".
+   */
+  const gap = /^[ \t]+(?=<\/w:t>)/.exec(documentXml.slice(tokenEnd))?.[0] ?? "";
+  const from = tokenEnd + gap.length;
+  const paragraphEnd = documentXml.indexOf("</w:p>", from);
+  if (paragraphEnd < 0) return documentXml;
+
+  const segment = documentXml.slice(from, paragraphEnd);
+  const cells = [...segment.matchAll(/<w:t([^>]*)>([\s\S]*?)<\/w:t>/g)];
+  if (!cells.length) return documentXml;
+  const tail = cells.map((cell) => cell[2]).join("");
+  // "ngày" + dấu hai chấm tuỳ chọn + chuỗi chấm. Không khớp thì để nguyên, không đoán.
+  const blank = /^\s*ngày\s*:?\s*[.…]+\s*/.exec(tail);
+  if (!blank) return documentXml;
+  const rest = tail.slice(blank[0].length);
+
+  // Ghi đè từ CUỐI lên đầu để chỉ số của các ô phía trước không bị dịch.
+  let patched = segment;
+  for (let i = cells.length - 1; i >= 0; i -= 1) {
+    const cell = cells[i];
+    patched =
+      patched.slice(0, cell.index) +
+      `<w:t xml:space="preserve">${i === 0 ? rest : ""}</w:t>` +
+      patched.slice(cell.index! + cell[0].length);
+  }
+  return documentXml.slice(0, tokenEnd) + patched + documentXml.slice(paragraphEnd);
+}
+
 function patchSccnRepresentativeTokens(documentXml: string) {
   let patched = documentXml;
   const sectionMarker = "Đại diện đơn vị sửa chữa: Phân xưởng Sửa chữa cơ nhiệt:";
@@ -366,6 +415,7 @@ export async function generateBbntDoDoc(d: BbntDoData): Promise<{ key: string; u
     );
     documentXml = patchSccnRepresentativeTokens(documentXml);
     documentXml = patchProposalDateToken(documentXml);
+    documentXml = patchBbktDateBlank(documentXml, Boolean(String(d.bbktNumber ?? "").trim()));
   }
   // Tương thích với mẫu đang được mở/khóa hoặc bản mẫu cũ đã deploy:
   // thay chức vụ cố định bằng token ngay trong OOXML trước khi render.
