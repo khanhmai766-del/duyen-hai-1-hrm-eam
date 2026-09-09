@@ -4670,7 +4670,8 @@ const CSS = `
 .receive-source-toggle button{min-width:148px;height:34px;padding:0 16px;border:0;border-radius:9px;background:transparent;color:#dbeafe;font-size:12.5px;font-weight:800;letter-spacing:-.01em;white-space:nowrap;transition:background .16s ease,color .16s ease;}
 .receive-source-toggle button:hover{background:rgba(255,255,255,.1);color:#fff;}
 .receive-source-toggle button.on{background:rgba(255,255,255,.18);color:#fff;box-shadow:0 1px 0 rgba(255,255,255,.12),inset 0 0 0 1px rgba(255,255,255,.08);}
-.receive-field-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;align-items:end;}
+/* Khối lượng + số phiếu giao hàng + ngày phiếu là một cụm chứng từ: giữ chung một hàng. */
+.receive-field-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;align-items:end;}
 .receive-field-grid.advance-receive-fields{grid-template-columns:repeat(2,minmax(0,1fr));}
 .receive-field-grid .field{min-width:0;margin:0!important;}
 .receive-field-grid .field input,.receive-field-grid .field select{width:100%;margin-top:6px;}
