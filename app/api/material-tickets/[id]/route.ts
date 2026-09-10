@@ -17,7 +17,7 @@ import { deleteDeliveryPhotos, deliveryPhotoLotsOfTicket, loadDeliveryPhotoBuffe
 import { keyFromPublicUrl } from "@/lib/s3";
 import { syncTicketReplacementLinks, type LinkablePoint } from "@/lib/material-ticket-replacement-link";
 import { pointLabelOf, resolveMaterialRequest } from "@/lib/defect-material-request";
-import { MIN_USAGE_PHOTOS, MISSING_USAGE_PHOTO_MESSAGE, missingUsagePhotoMessage, requiredUsagePhotos, usesHandwrittenBbnt, CHEMICAL_TICKET_TYPE, COMMON_MATERIAL_POSITION, GAS_RETURN_STATUS, isChemicalFlowTicket, isGasCylinderCategory, isGasCylinderTicket, isOtherMaterialAdvanceTicket, isOtherMaterialTicketType, materialTicketRequiresRecovery, minRecoveryQuantity, RECOVERY_HANDOVER_STATUS, statusAfterMaterialDocuments, OTHER_MATERIAL_ADVANCE_TICKET_TYPE, OTHER_MATERIAL_TICKET_TYPE, recoveryRequiredForReason, SINGLE_STEP_TICKET_TYPE, ticketReasonAllowed, TICKET_MATERIAL_CATEGORIES, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
+import { MIN_USAGE_PHOTOS, MISSING_USAGE_PHOTO_MESSAGE, missingUsagePhotoMessage, requiredUsagePhotos, usesHandwrittenBbnt, CHEMICAL_TICKET_TYPE, COMMON_MATERIAL_POSITION, GAS_RETURN_STATUS, isChemicalFlowTicket, isGasCylinderCategory, isGasCylinderTicket, isOtherMaterialAdvanceTicket, isOtherMaterialTicketType, materialTicketRequiresRecovery, minRecoveryQuantity, RECOVERY_HANDOVER_STATUS, statusAfterSettlement, OTHER_MATERIAL_ADVANCE_TICKET_TYPE, OTHER_MATERIAL_TICKET_TYPE, recoveryRequiredForReason, SINGLE_STEP_TICKET_TYPE, ticketReasonAllowed, TICKET_MATERIAL_CATEGORIES, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
 import { positionLabelOf, positionsMatch } from "@/lib/position-catalog";
 import { replacementPointDisplayLabel, replacementPointSelectionKey } from "@/lib/material-replacement-display";
 import { receiveOtherMaterial } from "@/lib/other-material-stock";
@@ -373,7 +373,8 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
       return fail("Bạn không có quyền xóa phiếu (Quản trị phân quyền ở mục Phân quyền quy trình)", 403);
     // Phiếu hoàn tất là hồ sơ lịch sử: có thể xóa khỏi website nhưng phải giữ
     // nguyên dòng đã đồng bộ trên Sheet. Phiếu dang dở mới được xóa khỏi Sheet.
-    const preserveCompletedSheetRow = t.status === "HOAN_TAT";
+    // Phiếu đã quyết toán cũng là hồ sơ lịch sử dù còn nán lại bước trả phiếu thu hồi.
+    const preserveCompletedSheetRow = t.status === "HOAN_TAT" || Boolean(t.settledAt);
     const deletedMaterials = [...new Map(t.items.map((item) => [item.material.code, item.material])).values()];
     await prisma.$transaction(async (tx) => {
       // Chặn thao tác tạo/xóa đồng thời trong lúc dồn STT để không phát sinh
@@ -2079,12 +2080,10 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
           position: sccnRepresentativePosition,
         },
       });
-      // Phiếu có thu hồi rẽ qua bước trả kho BBTHVT trước khi được quyết toán.
-      const nextStatus = statusAfterMaterialDocuments(t);
       const up = await prisma.materialTicket.update({
         where: { id: t.id },
         data: {
-          status: nextStatus,
+          status: "CHO_QUYET_TOAN",
           docUrl: bbntDo.url,
           sccnRepresentativeName,
           sccnRepresentativePosition,
@@ -2092,7 +2091,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         include: ITEM_INCLUDE,
       });
       await audit(user.id, "MT_STATS_EXPORT_BBNT_DO", "MaterialTicket", t.id,
-        `${materialTicketReference(t)}: xuất BBNT D-Office; chuyển ${nextStatus === RECOVERY_HANDOVER_STATUS ? "Xác nhận trả phiếu vật tư thu hồi" : "Quyết toán"}`);
+        `${materialTicketReference(t)}: xuất BBNT D-Office; chuyển Quyết toán`);
       return ok(up);
     }
 
@@ -2194,9 +2193,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       const up = await prisma.materialTicket.update({
         where: { id: t.id },
         data: {
-          // Đường cũ của luồng Ứng (trả phiếu ĐXVT là xong hồ sơ) cũng phải rẽ qua bước trả
-          // kho khi phiếu có vật tư thu hồi — nếu không, phiếu Ứng cũ sẽ lọt thẳng Quyết toán.
-          status: t.type === "UNG" ? statusAfterMaterialDocuments(t) : "NHAN_VAT_TU",
+          status: t.type === "UNG" ? "CHO_QUYET_TOAN" : "NHAN_VAT_TU",
           proposalNumber: num,
           proposalIssuedAt: new Date(),
           proposalReceiverName: t.type === "UNG" ? null : proposalReceiverName || null,
@@ -2513,9 +2510,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
             data: {
               status: isGasCylinderTicket(t.materialCategory)
                 ? GAS_RETURN_STATUS
-                // Phiếu Ứng cũ đã có BBNT D-Office từ trước thì đi thẳng tới bước cuối —
-                // vẫn phải rẽ qua bước trả kho nếu có thu hồi.
-                : t.docUrl ? statusAfterMaterialDocuments(t) : "NHAN_VAT_TU",
+                : t.docUrl ? "CHO_QUYET_TOAN" : "NHAN_VAT_TU",
               proposalNumber,
               proposalIssuedAt: new Date(),
               deliveryNoteNumber,
@@ -3010,7 +3005,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         return tx.materialTicket.update({
           where: { id: t.id },
           data: {
-            status: statusAfterMaterialDocuments(t),
+            status: "CHO_QUYET_TOAN",
             ...(documents?.bbntDo ? { docUrl: documents.bbntDo.url } : {}),
             recoveryRequired,
             ...(exportsBbntDo
@@ -3028,21 +3023,27 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         "MT_STATS_EXPORT",
         "MaterialTicket",
         t.id,
-        `${materialTicketReference(t)}: xác nhận mã ${erpCode}${exportsBbntDo ? ", xuất BBNT D-Office" : ""}, ` +
-          `chuyển ${statusAfterMaterialDocuments(t) === RECOVERY_HANDOVER_STATUS ? "Xác nhận trả phiếu vật tư thu hồi" : "Quyết toán"}`,
+        exportsBbntDo
+          ? `${materialTicketReference(t)}: xác nhận mã ${erpCode}, xuất BBNT D-Office, chuyển Quyết toán`
+          : `${materialTicketReference(t)}: xác nhận mã ${erpCode}, chuyển Quyết toán`,
       );
       return ok(up);
     }
 
     /*
-     * BƯỚC TRẢ KHO VẬT TƯ THU HỒI — chỉ phiếu có BBTHVT đi qua, đứng ngay trước Quyết toán.
-     * Không sinh và không sửa biên bản nào: BBTHVT đã xuất ở bước Nghiệm thu (Ứng: ở pha
-     * chứng từ giao hàng), bước này chỉ ghi nhận chứng từ + vật tư đã thực sự về tới kho.
+     * BƯỚC CUỐI CỦA PHIẾU CÓ THU HỒI — trả phiếu (biên bản) vật tư thu hồi cho kho.
+     *
+     * Đứng SAU quyết toán: đây thuần là việc theo dõi chứng từ, không phải điều kiện chốt số
+     * liệu. Số thực dùng, dòng lịch sử thay thế và gia hạn chu kỳ đã khóa xong ở bước quyết
+     * toán. Không sinh và không sửa biên bản nào — BBTHVT đã xuất từ bước Nghiệm thu (luồng
+     * Ứng: ở pha chứng từ giao hàng).
      */
     if (action === "recoveryHandover") {
       if (!["DE_XUAT", "UNG", "SU_DUNG_HIEN_CO"].includes(t.type) || t.status !== RECOVERY_HANDOVER_STATUS) {
         return fail("Phiếu không ở bước Xác nhận trả phiếu vật tư thu hồi");
       }
+      // Chỉ tới được đây sau quyết toán; thiếu mốc này nghĩa là dữ liệu đã lệch ở đâu đó.
+      if (!t.settledAt) return fail("Phiếu chưa được quyết toán", 409);
       // Người mang vật tư thu hồi sang kho chính là VHV cầm phiếu, nên cương vị được giao
       // luôn xác nhận được; danh sách cấu hình của bước chỉ mở THÊM cho cương vị khác làm hộ.
       {
@@ -3059,7 +3060,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       const up = await prisma.materialTicket.update({
         where: { id: t.id },
         data: {
-          status: "CHO_QUYET_TOAN",
+          status: "HOAN_TAT",
           recoveryHandoverAt: handoverAt,
           recoveryHandoverById: user.id,
           recoveryHandoverByName: handoverByName,
@@ -3073,12 +3074,11 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       });
       await audit(user.id, "MT_RECOVERY_HANDOVER", "MaterialTicket", t.id,
         `${materialTicketReference(t)}: xác nhận đã trả phiếu vật tư thu hồi${t.recoveryQuantity != null ? ` (${t.recoveryQuantity} ${t.items[0]?.material.unit ?? ""})`.trimEnd() : ""} ` +
-        `ngày ${handoverAt.toLocaleDateString("vi-VN")} — ${handoverByName}; chuyển Quyết toán`);
+        `ngày ${handoverAt.toLocaleDateString("vi-VN")} — ${handoverByName}; hoàn tất phiếu`);
       return ok(up);
     }
 
     if (action === "settle") {
-      if (t.status === RECOVERY_HANDOVER_STATUS) return fail("Phiếu chưa xác nhận trả phiếu vật tư thu hồi");
       if (!["DE_XUAT", "UNG", "SU_DUNG_HIEN_CO"].includes(t.type) || t.status !== "CHO_QUYET_TOAN") return fail("Phiếu không ở bước quyết toán");
       if (!stepAllowedWithMap(await getWorkflowRoleMap(), "settle", user)) return fail("Bạn không có quyền xác nhận quyết toán", 403);
       const bbntDoNumber = String(body.bbntDoNumber || "").trim();
@@ -3107,7 +3107,9 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         const up = await tx.materialTicket.update({
           where: { id: t.id },
           data: {
-            status: "HOAN_TAT",
+            // Phiếu có thu hồi chưa hoàn tất ngay: còn một việc theo dõi là trả phiếu (biên
+            // bản) vật tư thu hồi cho kho. Số liệu thì đã chốt xong ngay tại giao dịch này.
+            status: statusAfterSettlement(t),
             bbntDoNumber,
             settledAt,
             settledByName: user.name ?? "",
@@ -3142,6 +3144,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         t.id,
         `${materialTicketReference(t)}: đã xác nhận quyết toán vật tư, số BBNT DO ${bbntDoNumber}; ` +
           `ghi ${replacementResult.logged} dòng lịch sử, gia hạn ${replacementResult.renewed} điểm` +
+          (statusAfterSettlement(t) === RECOVERY_HANDOVER_STATUS ? "; chờ trả phiếu vật tư thu hồi" : "") +
           (removedPhotos ? `; xóa ${removedPhotos} ảnh hiện trường khỏi kho tệp` : "") +
           (removedDeliveryPhotos ? `; xóa ${removedDeliveryPhotos} ảnh phiếu xuất kho liên 3 của lô đã dùng hết` : "")
       );

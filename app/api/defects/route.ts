@@ -647,6 +647,9 @@ export async function POST(req: NextRequest) {
               // rất nhiều phiếu cũ; vật tư của những phiếu đã HOÀN TẤT đã tiêu cho lần thay
               // trước rồi, không phải vật tư của lần này. Bỏ điều kiện này thì điểm nào từng
               // thay xong một lần sẽ vĩnh viễn lọt cổng — đúng thứ cổng sinh ra để chặn.
+              // `settledAt` mới là ranh giới thật: phiếu có thu hồi còn nán lại một bước theo
+              // dõi chứng từ SAU quyết toán, số liệu thì đã chốt xong rồi.
+              settledAt: null,
               status: { notIn: ["HOAN_TAT", "TU_CHOI"] },
               OR: [{ receivedAt: { not: null } }, { vhvReceivedAt: { not: null } }],
             },
@@ -844,6 +847,7 @@ export async function POST(req: NextRequest) {
           where: {
             replacementId: { in: [...materialRequestPointIds] },
             ticket: {
+              settledAt: null,
               status: { notIn: ["HOAN_TAT", "TU_CHOI"] },
               defectId: null,
               repairRequestNumber: null,
@@ -878,6 +882,7 @@ export async function POST(req: NextRequest) {
             await tx.materialTicket.updateMany({
               where: {
                 id: { in: ticketIds },
+                settledAt: null,
                 status: { notIn: ["HOAN_TAT", "TU_CHOI"] },
                 defectId: null,
                 repairRequestNumber: null,

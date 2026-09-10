@@ -56,7 +56,7 @@ export interface MaterialTicket {
   deliveryScheduledAt: string | null;
   deliveryQuantity: number | null;
   recoveryReturnedAt: string | null;
-  /** Bước Xác nhận trả phiếu vật tư thu hồi (ngay trước Quyết toán) — ngày trả kho do người
+  /** Bước Xác nhận trả phiếu vật tư thu hồi (bước cuối, sau Quyết toán) — ngày trả kho do người
    *  xác nhận nhập, khác `recoveryReturnedAt` do VHV tự khai ở bước Sử dụng vật tư. */
   recoveryHandoverAt: string | null;
   recoveryHandoverByName: string | null;

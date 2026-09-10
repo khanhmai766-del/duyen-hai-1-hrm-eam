@@ -1544,7 +1544,7 @@ model MaterialTicket {
   recoveryDocUrl             String? // biên bản vật tư thu hồi (bổ sung khi có mẫu)
   recoveryDocNo              Int? // số văn bản BBTHVT đã cấp — giữ nguyên khi xuất lại biên bản
   recoveryDocNoYear          Int? // năm cấp số văn bản (dãy số reset mỗi năm)
-  // BƯỚC TRẢ PHIẾU VẬT TƯ THU HỒI (CHO_TRA_KHO_THU_HOI) — đứng ngay trước Quyết toán.
+  // BƯỚC TRẢ PHIẾU VẬT TƯ THU HỒI (CHO_TRA_KHO_THU_HOI) — bước CUỐI, đứng sau Quyết toán.
   // Khác `recoveryReturnedAt` (VHV tự khai lúc Sử dụng vật tư, nguồn của ô "khối lượng hoàn
   // trả" in trên BBNT D-Office): bốn cột này ghi lúc chứng từ + vật tư đã thực sự về tới kho.
   recoveryHandoverAt         DateTime? // ngày trả kho do người xác nhận nhập

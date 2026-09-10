@@ -492,8 +492,9 @@ export function isGasCylinderTicket(materialCategory: string | null | undefined)
 export const GAS_RETURN_STATUS = "CHO_TRA_VO";
 
 /**
- * Phiếu CÓ THU HỒI phải qua một bước nữa trước khi quyết toán: VHV mang vật tư thu hồi
- * cùng Biên bản vật tư thu hồi (BBTHVT) sang kho, kho nhận xong mới xác nhận trên hệ thống.
+ * Phiếu CÓ THU HỒI còn một bước nữa SAU khi quyết toán: VHV mang vật tư thu hồi cùng Biên
+ * bản vật tư thu hồi (BBTHVT) sang kho, kho nhận xong mới xác nhận trên hệ thống. Đây thuần
+ * là việc theo dõi chứng từ nên đứng sau, không chặn việc chốt số liệu.
  *
  * KHÁC với ô tick "đã trả vật tư thu hồi xong" ở bước Sử dụng vật tư (`recoveryReturnedAt`):
  * ô đó là VHV tự khai lúc làm xong việc và là nguồn của ô "khối lượng hoàn trả" in trên
@@ -639,18 +640,20 @@ export function materialTicketNeedsRecoveryHandover(ticket: {
 }
 
 /**
- * Trạng thái kế tiếp sau khi hồ sơ (BBNT D-Office / BBTHVT) đã xuất xong: phiếu có thu hồi
- * rẽ qua bước trả kho, phiếu không thu hồi đi thẳng vào quyết toán như trước.
- * Dùng chung cho CẢ BA đường vào quyết toán (Đề xuất, Ứng, Sử dụng hiện có) để không nơi nào
- * lọt bước.
+ * Trạng thái kế tiếp sau khi Thống kê xác nhận quyết toán: phiếu có thu hồi còn nợ một việc
+ * theo dõi — trả phiếu (biên bản) vật tư thu hồi cho kho — nên chưa hoàn tất ngay.
+ *
+ * Bước này đứng SAU quyết toán chứ không phải trước: nó chỉ ghi thông tin trả biên bản để
+ * theo dõi, không phải điều kiện của việc chốt số liệu. Số thực dùng, dòng lịch sử thay thế
+ * và gia hạn chu kỳ đều đã khóa xong tại bước quyết toán.
  */
-export function statusAfterMaterialDocuments(ticket: {
+export function statusAfterSettlement(ticket: {
   recoveryRequired?: boolean | null;
   proposalNote?: string | null;
   materialCategory?: string | null;
   recoveryHandoverAt?: Date | string | null;
 }): string {
-  return materialTicketNeedsRecoveryHandover(ticket) ? RECOVERY_HANDOVER_STATUS : "CHO_QUYET_TOAN";
+  return materialTicketNeedsRecoveryHandover(ticket) ? RECOVERY_HANDOVER_STATUS : "HOAN_TAT";
 }
 
 /**
