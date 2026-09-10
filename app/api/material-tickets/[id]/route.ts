@@ -17,7 +17,7 @@ import { deleteDeliveryPhotos, deliveryPhotoLotsOfTicket, loadDeliveryPhotoBuffe
 import { keyFromPublicUrl } from "@/lib/s3";
 import { syncTicketReplacementLinks, type LinkablePoint } from "@/lib/material-ticket-replacement-link";
 import { pointLabelOf, resolveMaterialRequest } from "@/lib/defect-material-request";
-import { MIN_USAGE_PHOTOS, MISSING_USAGE_PHOTO_MESSAGE, missingUsagePhotoMessage, requiredUsagePhotos, usesHandwrittenBbnt, CHEMICAL_TICKET_TYPE, COMMON_MATERIAL_POSITION, GAS_RETURN_STATUS, isChemicalFlowTicket, isGasCylinderCategory, isGasCylinderTicket, isOtherMaterialAdvanceTicket, isOtherMaterialTicketType, materialTicketRequiresRecovery, minRecoveryQuantity, OTHER_MATERIAL_ADVANCE_TICKET_TYPE, OTHER_MATERIAL_TICKET_TYPE, recoveryRequiredForReason, SINGLE_STEP_TICKET_TYPE, ticketReasonAllowed, TICKET_MATERIAL_CATEGORIES, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
+import { MIN_USAGE_PHOTOS, MISSING_USAGE_PHOTO_MESSAGE, missingUsagePhotoMessage, requiredUsagePhotos, usesHandwrittenBbnt, CHEMICAL_TICKET_TYPE, COMMON_MATERIAL_POSITION, GAS_RETURN_STATUS, isChemicalFlowTicket, isGasCylinderCategory, isGasCylinderTicket, isOtherMaterialAdvanceTicket, isOtherMaterialTicketType, materialTicketRequiresRecovery, minRecoveryQuantity, RECOVERY_HANDOVER_STATUS, statusAfterMaterialDocuments, OTHER_MATERIAL_ADVANCE_TICKET_TYPE, OTHER_MATERIAL_TICKET_TYPE, recoveryRequiredForReason, SINGLE_STEP_TICKET_TYPE, ticketReasonAllowed, TICKET_MATERIAL_CATEGORIES, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
 import { positionLabelOf, positionsMatch } from "@/lib/position-catalog";
 import { replacementPointDisplayLabel, replacementPointSelectionKey } from "@/lib/material-replacement-display";
 import { receiveOtherMaterial } from "@/lib/other-material-stock";
@@ -947,7 +947,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       // khác hẳn nhau, nên "statsExport" mượn quyền "stats" chứ không gộp làm một.
       const permissionByStep = {
         confirm: "confirm", stats: "stats", receive: "receive", use: "use", accept: "accept",
-        statsExport: "stats", settle: "settle",
+        statsExport: "stats", recoveryHandover: "recoveryReturn", settle: "settle",
       } as const;
       const permission = permissionByStep[step as keyof typeof permissionByStep];
       if (!permission) return fail("Bước chỉnh sửa không hợp lệ");
@@ -974,6 +974,11 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         const recoveryRequired = await recoveryRequiredForTicketReason(t, reason);
         if (!recoveryRequired && t.recoveryDocUrl) {
           return fail("Biên bản vật tư thu hồi đã được cấp. Không thể đổi phiếu sang trạng thái không thu hồi; vui lòng liên hệ Quản trị để xử lý hồ sơ.");
+        }
+        // Phiếu đang đứng ở chính bước trả kho: bỏ cờ thu hồi sẽ xoá bước đang dở khỏi luồng
+        // và phiếu kẹt lại ở một trạng thái không còn tồn tại trong quy trình của nó.
+        if (!recoveryRequired && t.status === RECOVERY_HANDOVER_STATUS) {
+          return fail("Phiếu đang ở bước Xác nhận trả phiếu vật tư thu hồi. Hãy xác nhận trả phiếu trước khi đổi lý do sang loại không thu hồi.");
         }
         up = await prisma.materialTicket.update({
           where: { id: t.id },
@@ -1295,6 +1300,32 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
           data: { sccnRepresentativeName: name, sccnRepresentativePosition: position },
           include: ITEM_INCLUDE,
         });
+      } else if (step === "recoveryHandover") {
+        if (!t.recoveryHandoverAt) return fail("Bước Xác nhận trả phiếu vật tư thu hồi chưa hoàn thành");
+        /*
+         * Quyền của bước này KHÔNG lấy được từ `permissionByStep` ở trên: chưa cấu hình thì
+         * `defaultStepAllowed("recoveryReturn")` mở cho tất cả (vốn dựa vào cương vị phiếu để
+         * rào), nên phải rào lại đúng như lúc thao tác bước.
+         */
+        {
+          const wfMapHandover = await getWorkflowRoleMap();
+          const handoverStep = wfMapHandover.recoveryReturn.length > 0 ? "recoveryReturn" : "use";
+          if (!assignedOrConfiguredStep(wfMapHandover, handoverStep, user, isAssignedPosition(user, t))) {
+            return fail("Bạn không có quyền chỉnh sửa bước Xác nhận trả phiếu vật tư thu hồi", 403);
+          }
+        }
+        const at = body.handoverAt ? parseDateInput(body.handoverAt) : t.recoveryHandoverAt;
+        if (Number.isNaN(at.getTime())) return fail("Ngày trả kho không hợp lệ");
+        const name = String(body.handoverByName || "").trim();
+        if (!name) return fail("Vui lòng nhập tên người trả kho");
+        const fmtDay = (d: Date | null) => (d ? d.toLocaleDateString("vi-VN") : "—");
+        before = `Trả phiếu vật tư thu hồi: ${fmtDay(t.recoveryHandoverAt)} — ${t.recoveryHandoverByName ?? "—"}`;
+        after = `Trả phiếu vật tư thu hồi: ${fmtDay(at)} — ${name}`;
+        up = await prisma.materialTicket.update({
+          where: { id: t.id },
+          data: { recoveryHandoverAt: at, recoveryHandoverByName: name },
+          include: ITEM_INCLUDE,
+        });
       } else if (step === "settle") {
         if (!t.settledAt) return fail("Bước quyết toán vật tư chưa hoàn thành");
         const value = String(body.bbntDoNumber || "").trim();
@@ -1336,7 +1367,9 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         // Số BBNT DO không nằm trong biên bản nào — nó là số do D-Office cấp cho chính tệp
         // BBNT đã xuất. Không có gì để in lại, mà phiếu tới bước này thì ảnh hiện trường đã
         // bị xóa nên in lại là mất ảnh.
-        : step === "settle"
+        // Ngày/người trả kho không nằm trên bất kỳ biên bản nào — không có gì để in lại, mà
+        // phiếu ở bước này thì ảnh hiện trường có thể đã bị xóa (quyết toán), in lại là mất ảnh.
+        : step === "settle" || step === "recoveryHandover"
         ? new Set<keyof ExportedDocumentUrls>(["proposalDocUrl", "bbktDocUrl", "recoveryDocUrl", "docUrl"])
         : step === "use" && !t.completedAt
           // Không tái tạo liên kết BBTHVT cũ trước khi phiếu hoàn tất bước Nghiệm thu.
@@ -2046,10 +2079,12 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
           position: sccnRepresentativePosition,
         },
       });
+      // Phiếu có thu hồi rẽ qua bước trả kho BBTHVT trước khi được quyết toán.
+      const nextStatus = statusAfterMaterialDocuments(t);
       const up = await prisma.materialTicket.update({
         where: { id: t.id },
         data: {
-          status: "CHO_QUYET_TOAN",
+          status: nextStatus,
           docUrl: bbntDo.url,
           sccnRepresentativeName,
           sccnRepresentativePosition,
@@ -2057,7 +2092,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         include: ITEM_INCLUDE,
       });
       await audit(user.id, "MT_STATS_EXPORT_BBNT_DO", "MaterialTicket", t.id,
-        `${materialTicketReference(t)}: xuất BBNT D-Office; chuyển Quyết toán`);
+        `${materialTicketReference(t)}: xuất BBNT D-Office; chuyển ${nextStatus === RECOVERY_HANDOVER_STATUS ? "Xác nhận trả phiếu vật tư thu hồi" : "Quyết toán"}`);
       return ok(up);
     }
 
@@ -2159,7 +2194,9 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       const up = await prisma.materialTicket.update({
         where: { id: t.id },
         data: {
-          status: t.type === "UNG" ? "CHO_QUYET_TOAN" : "NHAN_VAT_TU",
+          // Đường cũ của luồng Ứng (trả phiếu ĐXVT là xong hồ sơ) cũng phải rẽ qua bước trả
+          // kho khi phiếu có vật tư thu hồi — nếu không, phiếu Ứng cũ sẽ lọt thẳng Quyết toán.
+          status: t.type === "UNG" ? statusAfterMaterialDocuments(t) : "NHAN_VAT_TU",
           proposalNumber: num,
           proposalIssuedAt: new Date(),
           proposalReceiverName: t.type === "UNG" ? null : proposalReceiverName || null,
@@ -2476,7 +2513,9 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
             data: {
               status: isGasCylinderTicket(t.materialCategory)
                 ? GAS_RETURN_STATUS
-                : t.docUrl ? "CHO_QUYET_TOAN" : "NHAN_VAT_TU",
+                // Phiếu Ứng cũ đã có BBNT D-Office từ trước thì đi thẳng tới bước cuối —
+                // vẫn phải rẽ qua bước trả kho nếu có thu hồi.
+                : t.docUrl ? statusAfterMaterialDocuments(t) : "NHAN_VAT_TU",
               proposalNumber,
               proposalIssuedAt: new Date(),
               deliveryNoteNumber,
@@ -2971,7 +3010,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         return tx.materialTicket.update({
           where: { id: t.id },
           data: {
-            status: "CHO_QUYET_TOAN",
+            status: statusAfterMaterialDocuments(t),
             ...(documents?.bbntDo ? { docUrl: documents.bbntDo.url } : {}),
             recoveryRequired,
             ...(exportsBbntDo
@@ -2989,14 +3028,57 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         "MT_STATS_EXPORT",
         "MaterialTicket",
         t.id,
-        exportsBbntDo
-          ? `${materialTicketReference(t)}: xác nhận mã ${erpCode}, xuất BBNT D-Office, chuyển Quyết toán`
-          : `${materialTicketReference(t)}: xác nhận mã ${erpCode}, chuyển Quyết toán`,
+        `${materialTicketReference(t)}: xác nhận mã ${erpCode}${exportsBbntDo ? ", xuất BBNT D-Office" : ""}, ` +
+          `chuyển ${statusAfterMaterialDocuments(t) === RECOVERY_HANDOVER_STATUS ? "Xác nhận trả phiếu vật tư thu hồi" : "Quyết toán"}`,
       );
       return ok(up);
     }
 
+    /*
+     * BƯỚC TRẢ KHO VẬT TƯ THU HỒI — chỉ phiếu có BBTHVT đi qua, đứng ngay trước Quyết toán.
+     * Không sinh và không sửa biên bản nào: BBTHVT đã xuất ở bước Nghiệm thu (Ứng: ở pha
+     * chứng từ giao hàng), bước này chỉ ghi nhận chứng từ + vật tư đã thực sự về tới kho.
+     */
+    if (action === "recoveryHandover") {
+      if (!["DE_XUAT", "UNG", "SU_DUNG_HIEN_CO"].includes(t.type) || t.status !== RECOVERY_HANDOVER_STATUS) {
+        return fail("Phiếu không ở bước Xác nhận trả phiếu vật tư thu hồi");
+      }
+      // Người mang vật tư thu hồi sang kho chính là VHV cầm phiếu, nên cương vị được giao
+      // luôn xác nhận được; danh sách cấu hình của bước chỉ mở THÊM cho cương vị khác làm hộ.
+      {
+        const wfMapHandover = await getWorkflowRoleMap();
+        const step = wfMapHandover.recoveryReturn.length > 0 ? "recoveryReturn" : "use";
+        if (!assignedOrConfiguredStep(wfMapHandover, step, user, isAssignedPosition(user, t))) {
+          return fail("Bạn không có quyền ở bước Xác nhận trả phiếu vật tư thu hồi (Quản trị phân quyền ở mục Phân quyền quy trình)", 403);
+        }
+      }
+      const handoverAt = body.handoverAt ? parseDateInput(body.handoverAt) : new Date();
+      if (Number.isNaN(handoverAt.getTime())) return fail("Ngày trả kho không hợp lệ");
+      const handoverByName = String(body.handoverByName || "").trim();
+      if (!handoverByName) return fail("Vui lòng nhập tên người trả kho");
+      const up = await prisma.materialTicket.update({
+        where: { id: t.id },
+        data: {
+          status: "CHO_QUYET_TOAN",
+          recoveryHandoverAt: handoverAt,
+          recoveryHandoverById: user.id,
+          recoveryHandoverByName: handoverByName,
+          recoveryHandoverByPosition: user.position ?? null,
+          // Ô tick "đã trả vật tư thu hồi xong" ở bước Sử dụng vật tư có thể bị bỏ quên; giờ
+          // vật tư đã nằm trong kho nên điền nốt cho khỏi treo cảnh báo đỏ ở bước đó. Đã tick
+          // rồi thì GIỮ NGUYÊN mốc cũ — đó mới là ngày VHV khai và là ngày đã in ra biên bản.
+          ...(t.recoveryReturnedAt ? {} : { recoveryReturnedAt: handoverAt }),
+        },
+        include: ITEM_INCLUDE,
+      });
+      await audit(user.id, "MT_RECOVERY_HANDOVER", "MaterialTicket", t.id,
+        `${materialTicketReference(t)}: xác nhận đã trả phiếu vật tư thu hồi${t.recoveryQuantity != null ? ` (${t.recoveryQuantity} ${t.items[0]?.material.unit ?? ""})`.trimEnd() : ""} ` +
+        `ngày ${handoverAt.toLocaleDateString("vi-VN")} — ${handoverByName}; chuyển Quyết toán`);
+      return ok(up);
+    }
+
     if (action === "settle") {
+      if (t.status === RECOVERY_HANDOVER_STATUS) return fail("Phiếu chưa xác nhận trả phiếu vật tư thu hồi");
       if (!["DE_XUAT", "UNG", "SU_DUNG_HIEN_CO"].includes(t.type) || t.status !== "CHO_QUYET_TOAN") return fail("Phiếu không ở bước quyết toán");
       if (!stepAllowedWithMap(await getWorkflowRoleMap(), "settle", user)) return fail("Bạn không có quyền xác nhận quyết toán", 403);
       const bbntDoNumber = String(body.bbntDoNumber || "").trim();

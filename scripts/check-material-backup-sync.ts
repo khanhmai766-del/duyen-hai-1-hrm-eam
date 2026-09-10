@@ -11,6 +11,7 @@ const ticket: MaterialTicketForN8nSync = {
   materialCategory: "Dầu", proposalNumber: "DX-10", proposalNote: "Bổ sung", pctNumber: "PCT-12", pctContent: "Nội dung PCT",
   bbntDoNumber: "BBNT-5", deliveryNoteNumber: "PGH-3", completionNote: "Đã thay dầu", bbktNumber: null,
   recoveryRequired: true, recoveryQuantity: 2, recoveryReturnedAt: now, recoveryDocNo: 3, recoveryDocNoYear: 2026,
+  recoveryHandoverAt: now, recoveryHandoverByName: "Người trả kho",
   createdByName: "Người tạo", proposedByName: "Người đề xuất", proposedByPosition: "Cương vị",
   proposedAt: now, confirmedByName: "Người xác nhận", deliveryScheduledAt: now, deliveryQuantity: 20,
   vhvReceivedQuantity: null, vhvReceivedByName: null, vhvReceivedAt: null,

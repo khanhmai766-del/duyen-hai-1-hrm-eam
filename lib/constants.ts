@@ -492,6 +492,17 @@ export function isGasCylinderTicket(materialCategory: string | null | undefined)
 export const GAS_RETURN_STATUS = "CHO_TRA_VO";
 
 /**
+ * Phiếu CÓ THU HỒI phải qua một bước nữa trước khi quyết toán: VHV mang vật tư thu hồi
+ * cùng Biên bản vật tư thu hồi (BBTHVT) sang kho, kho nhận xong mới xác nhận trên hệ thống.
+ *
+ * KHÁC với ô tick "đã trả vật tư thu hồi xong" ở bước Sử dụng vật tư (`recoveryReturnedAt`):
+ * ô đó là VHV tự khai lúc làm xong việc và là nguồn của ô "khối lượng hoàn trả" in trên
+ * BBNT D-Office — biên bản được xuất TRƯỚC bước này nên không thể lấy dữ liệu của bước này.
+ * Bước này ghi một dữ kiện khác: chứng từ đã thực sự về tới kho.
+ */
+export const RECOVERY_HANDOVER_STATUS = "CHO_TRA_KHO_THU_HOI";
+
+/**
  * LUỒNG NH3 RÚT GỌN: không đi qua sử dụng — nghiệm thu — quyết toán. Sau khi tạo đề xuất,
  * VHV được giao nhập các chuyến xe và xác nhận khối lượng thực lãnh; chốt xong mới hoàn tất.
  *
@@ -615,6 +626,31 @@ export function materialTicketRequiresRecovery(ticket: {
 }): boolean {
   if (isGasCylinderTicket(ticket.materialCategory)) return false;
   return ticket.recoveryRequired ?? reasonRequiresRecovery(ticket.proposalNote);
+}
+
+/** Phiếu còn nợ bước trả phiếu vật tư thu hồi (có thu hồi và chưa ai xác nhận đã nộp kho). */
+export function materialTicketNeedsRecoveryHandover(ticket: {
+  recoveryRequired?: boolean | null;
+  proposalNote?: string | null;
+  materialCategory?: string | null;
+  recoveryHandoverAt?: Date | string | null;
+}): boolean {
+  return materialTicketRequiresRecovery(ticket) && !ticket.recoveryHandoverAt;
+}
+
+/**
+ * Trạng thái kế tiếp sau khi hồ sơ (BBNT D-Office / BBTHVT) đã xuất xong: phiếu có thu hồi
+ * rẽ qua bước trả kho, phiếu không thu hồi đi thẳng vào quyết toán như trước.
+ * Dùng chung cho CẢ BA đường vào quyết toán (Đề xuất, Ứng, Sử dụng hiện có) để không nơi nào
+ * lọt bước.
+ */
+export function statusAfterMaterialDocuments(ticket: {
+  recoveryRequired?: boolean | null;
+  proposalNote?: string | null;
+  materialCategory?: string | null;
+  recoveryHandoverAt?: Date | string | null;
+}): string {
+  return materialTicketNeedsRecoveryHandover(ticket) ? RECOVERY_HANDOVER_STATUS : "CHO_QUYET_TOAN";
 }
 
 /**

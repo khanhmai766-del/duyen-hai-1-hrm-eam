@@ -11,6 +11,7 @@ import {
   isMaterialTicketExtraAssignedPosition,
   isTechnician,
   returnStepAllowed,
+  recoveryReturnStepAllowed,
   stepAllowedWithMap,
 } from "@/lib/material-workflow";
 import { CHEMICAL_TICKET_TYPE, COMMON_MATERIAL_POSITION, isGasCylinderTicket, isOtherMaterialCategory, OTHER_MATERIAL_ADVANCE_TICKET_TYPE, OTHER_MATERIAL_GROUP, OTHER_MATERIAL_TICKET_TYPE, recoveryRequiredForReason, isChemicalWorkflowCategory, isSingleStepTicketMaterial, ticketReasonAllowed, SINGLE_STEP_TICKET_TYPE, TICKET_MATERIAL_CATEGORIES, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
@@ -166,6 +167,10 @@ export async function GET(req: NextRequest) {
           // Bước Xác nhận trả (chai khí): chưa cấu hình riêng thì theo quyền bước Sử dụng.
           return: returnStepAllowed(wfMap, user),
           returnConfigured: wfMap.return.length > 0,
+          // Bước Xác nhận trả phiếu vật tư thu hồi: cùng luật với bước trả vỏ chai — cương vị
+          // được giao phiếu luôn làm được (client tự cộng), danh sách cấu hình mở thêm.
+          recoveryReturn: recoveryReturnStepAllowed(wfMap, user),
+          recoveryReturnConfigured: wfMap.recoveryReturn.length > 0,
           settle: stepAllowedWithMap(wfMap, "settle", user),
           manage: stepAllowedWithMap(wfMap, "manage", user),
           manageConfigured: wfMap.manage.length > 0,

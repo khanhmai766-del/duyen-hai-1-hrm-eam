@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiMutate } from "@/lib/fetcher";
-import { CHEMICAL_TICKET_TYPE, GAS_RETURN_STATUS, isOtherMaterialAdvanceTicket, isOtherMaterialTicketType, SINGLE_STEP_TICKET_TYPE } from "@/lib/constants";
+import { CHEMICAL_TICKET_TYPE, GAS_RETURN_STATUS, isOtherMaterialAdvanceTicket, isOtherMaterialTicketType, RECOVERY_HANDOVER_STATUS, SINGLE_STEP_TICKET_TYPE } from "@/lib/constants";
 import { positionsMatch } from "@/lib/position-catalog";
 
 export interface TicketItem {
@@ -56,6 +56,11 @@ export interface MaterialTicket {
   deliveryScheduledAt: string | null;
   deliveryQuantity: number | null;
   recoveryReturnedAt: string | null;
+  /** Bước Xác nhận trả phiếu vật tư thu hồi (ngay trước Quyết toán) — ngày trả kho do người
+   *  xác nhận nhập, khác `recoveryReturnedAt` do VHV tự khai ở bước Sử dụng vật tư. */
+  recoveryHandoverAt: string | null;
+  recoveryHandoverByName: string | null;
+  recoveryHandoverByPosition: string | null;
   /** Con trỏ sang các chuyến xe trong sổ Tồn kho hóa chất (ChemicalReceipt.id). */
   chemicalReceiptIds: string[];
   recoveryDocUrl: string | null;
@@ -124,6 +129,9 @@ export interface ViewerSteps {
   /** Xác nhận trả vỏ chai (bước cuối luồng chai khí); chưa cấu hình thì theo quyền bước Sử dụng. */
   return: boolean;
   returnConfigured: boolean;
+  /** Xác nhận trả phiếu vật tư thu hồi; chưa cấu hình thì theo quyền bước Sử dụng. */
+  recoveryReturn: boolean;
+  recoveryReturnConfigured: boolean;
   stats: boolean;
   statsHandover: boolean;
   settle: boolean;
@@ -147,7 +155,8 @@ export interface TicketViewer {
 
 export type WorkflowRoleMap = {
   create: string[]; confirm: string[]; vhvReceive: string[]; stats: string[]; statsHandover: string[];
-  receive: string[]; issue: string[]; use: string[]; accept: string[]; return: string[]; settle: string[]; manage: string[];
+  receive: string[]; issue: string[]; use: string[]; accept: string[]; return: string[];
+  recoveryReturn: string[]; settle: string[]; manage: string[];
 };
 
 /**
@@ -381,6 +390,10 @@ export function actionsFor(t: MaterialTicket, v: TicketViewer | null): string[] 
     // Chai khí: bước cuối là xác nhận trả vỏ chai, không nghiệm thu và không quyết toán.
     if (t.status === GAS_RETURN_STATUS && (canOperateAssigned || configuredGrant(v.steps?.return, v.steps?.returnConfigured))) a.push("returnItems");
     if (t.status === "CHO_THONG_KE_XUAT_BIEN_BAN" && v.steps?.stats) a.push("statsExportDocuments");
+    // Trả phiếu vật tư thu hồi: cùng luật với bước trả vỏ chai — VHV cầm phiếu luôn làm được.
+    if (t.status === RECOVERY_HANDOVER_STATUS
+      && (canOperateAssigned || configuredGrant(v.steps?.recoveryReturn, v.steps?.recoveryReturnConfigured))
+    ) a.push("recoveryHandover");
     if (t.status === "CHO_QUYET_TOAN" && v.steps?.settle) a.push("settle");
   } else {
     if (t.status === "NHAN_VAT_TU" && canOperateAssigned && (v.steps?.receive ?? v.isShiftLeader)) a.push("receive");
