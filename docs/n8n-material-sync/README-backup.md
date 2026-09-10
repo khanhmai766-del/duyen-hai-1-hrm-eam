@@ -24,15 +24,15 @@ vẫn giữ file đích và lịch cũ.
 
 File được tạo cục bộ, chưa import hoặc kích hoạt trên n8n và chưa ghi Google Sheet.
 
-1. Website cần có mã API mới `GET /api/integrations/n8n/material-backup?scope=materials|chemicals|receipts`.
+1. Website cần có API `GET /api/integrations/n8n/material-backup?mode=incremental&scope=materials|chemicals|receipts`.
    Cần đưa phần mã website lên server theo quy trình triển khai riêng trước khi chạy workflow.
    Không cần sửa schema hoặc cơ sở dữ liệu. API dùng biến `N8N_MATERIAL_SYNC_TOKEN` hiện có.
 2. Import `workflow-backup-all.json` qua **Import from File** trong n8n. Workflow mặc định `active: false`. Nếu đã import ba bản riêng trước đó, tắt lịch của các bản dự phòng riêng để tránh chạy trùng; giữ nguyên workflow đồng bộ chính.
-3. Trong mỗi nhánh, node **Đọc ảnh chụp website · tên tab**: chọn credential **Header Auth** đang dùng cho vật tư.
+3. Trong mỗi nhánh, node **Đọc thay đổi website · tên tab**: chọn credential **Header Auth** đang dùng cho vật tư.
    Header `Authorization`, giá trị `Bearer <N8N_MATERIAL_SYNC_TOKEN>`. Không ghi token vào JSON.
 4. Trong mỗi nhánh, ba node **Đọc cấu trúc tab**, **Đọc dữ liệu dự phòng**, **Ghi bản dự phòng** (có hậu tố tên tab):
    chọn credential **Google Sheets OAuth2 API**. Tài khoản này phải có quyền chỉnh sửa file mới.
-5. Nút **Chạy thủ công cả 3 tab** chạy lần lượt ba nhánh (execution order v1, từ trên xuống). Kiểm tra cột dữ liệu và ba node **Kết quả**, sau đó bật workflow. Mỗi lịch tự động chỉ chạy nhánh tương ứng. Không chạy thủ công chồng lên lượt tự động. Nếu một nhánh lỗi khi chạy thủ công, lượt chạy dừng; các lịch tự động còn lại vẫn là các lượt riêng.
+5. Nút **Chạy thủ công cả 3 tab** chạy ba nhánh. Lần đầu lấy toàn bộ để tạo mốc. Kiểm tra cột dữ liệu và ba node **Kết quả**, sau đó bật workflow. Mỗi lịch tự động chỉ chạy nhánh tương ứng. Không chạy thủ công chồng lên lượt tự động.
 
 Node HTTP dùng credential riêng cho website và Google; phần ghi chia gói, mỗi gói
 cách nhau 1,2 giây. Xem [tài liệu HTTP Request của n8n](https://docs.n8n.io/integrations/builtin/core-nodes/n8n-nodes-base.httprequest/).
@@ -64,12 +64,18 @@ Giống luồng cũ, Vật tư khác chỉ đưa nhóm Chai Khí vào tab vật 
 
 ## Sửa phiếu và hồ sơ không còn trên website
 
-Mỗi lượt lấy **ảnh chụp đầy đủ**, không dùng watermark. Vì vậy thay đổi tên vật tư
-hoặc dữ liệu liên quan vẫn được cập nhật dù timestamp trên phiếu không đổi.
-API đọc trong transaction `RepeatableRead` để danh sách ID và các dòng thuộc cùng
-một ảnh chụp. Tối đa 10.000 phiếu/10.000 chuyến/10.000 dòng mỗi phạm vi; vượt ngưỡng
-thì API báo lỗi và không trả ảnh chụp bị cắt. Không bị giới hạn một trang 200 phiếu
-như workflow cũ.
+Lần đầu workflow lấy toàn bộ dữ liệu. Sau khi ghi Sheet thành công, workflow mới lưu
+watermark. Mỗi giờ sau chỉ API đọc các phiếu/chuyến có `updatedAt` mới hơn watermark,
+cùng nhật ký xóa phát sinh trong khoảng đó. Có khoảng giao 60 giây nên dữ liệu sát
+ranh giới được đọc lặp an toàn; upsert bằng `SYNC_KEY` không tạo dòng trùng.
+
+Nếu lượt ghi Google Sheets lỗi, watermark không đổi và lượt sau sẽ lấy lại thay đổi.
+Nếu không có thay đổi, workflow lưu watermark mới rồi kết thúc, không gọi API Google
+Sheets và không đọc tab. Mỗi ngày, lượt đầu tiên chỉ đối chiếu danh sách ID/SYNC_KEY
+hiện có để phát hiện hồ sơ bị tiến trình dọn theo kỳ xóa; không tải lại nội dung mọi phiếu.
+
+API đọc trong transaction `RepeatableRead`. Mỗi lượt thay đổi hoặc đối chiếu giới hạn
+10.000 bản ghi; vượt ngưỡng thì báo lỗi và không cập nhật watermark.
 
 Workflow thêm hai cột cuối:
 
@@ -87,10 +93,13 @@ các hồ sơ đó vào bản mới phải lấy từ bản Sheet cũ hoặc ngu
 Khi sửa làm đổi item ID, trường hợp một dòng cũ và một dòng mới của cùng ID phiếu
 được cập nhật ngay tại vị trí cũ. Trường hợp nhiều dòng không xác định được quan hệ
 1–1 thì giữ dòng cũ với nhãn thay đổi và thêm dòng mới; không tự ghép nhầm vật tư.
-Khi bản ghi xuất hiện trở lại, nhãn chuyển xanh và xóa thời điểm phát hiện thiếu.
+Khi bản ghi xuất hiện trở lại hoặc được sửa, nhãn chuyển xanh và xóa thời điểm phát hiện thiếu.
+
+Phần định dạng `NHAP_HOA_CHAT` cũng nằm trong workflow: số nguyên hiện `22.590`,
+số lẻ mới hiện phần thập phân. Không còn dấu phẩy dư ở cuối số nguyên.
 
 Nếu thiếu tab, sai tiêu đề kỹ thuật, khóa trùng, dòng có dữ liệu nhưng thiếu khóa,
-API lỗi hoặc ảnh chụp không đầy đủ, workflow dừng trước khi ghi. Không xóa dòng Sheet.
+API lỗi hoặc dữ liệu thay đổi không đầy đủ, workflow dừng trước khi ghi. Không xóa dòng Sheet.
 Ghi theo vị trí tuyệt đối và chỉ cập nhật giá trị/định dạng cần thiết; chạy lại sau
 một gói bị lỗi có thể tiếp tục đối chiếu từ dữ liệu đã ghi. Xem
 [Google Sheets batchUpdate](https://developers.google.com/workspace/sheets/api/guides/batchupdate).

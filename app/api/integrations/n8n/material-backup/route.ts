@@ -2,7 +2,7 @@ import type { NextRequest } from "next/server";
 import { fail, handle, ok } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 import { verifyN8nMaterialTicketToken } from "@/lib/material-ticket-n8n-sync";
-import { BACKUP_SCOPES, readBackupSnapshot, type BackupScope } from "@/lib/material-backup-sync";
+import { BACKUP_SCOPES, readBackupChanges, readBackupSnapshot, type BackupScope } from "@/lib/material-backup-sync";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +16,14 @@ export async function GET(req: NextRequest) {
     if (!BACKUP_SCOPES.includes(scope as BackupScope)) {
       return fail("Phạm vi đồng bộ phải là materials, chemicals hoặc receipts", 400);
     }
-    const snapshot = await readBackupSnapshot(prisma, scope as BackupScope);
+    const sp = req.nextUrl.searchParams;
+    const since = sp.get("updatedAfter");
+    if (since && (!Number.isFinite(Date.parse(since)) || Date.parse(since) > Date.now())) {
+      return fail("Mốc đồng bộ không hợp lệ", 400);
+    }
+    const snapshot = sp.get("mode") === "incremental"
+      ? await readBackupChanges(prisma, scope as BackupScope, since ? new Date(since) : null, sp.get("reconcile") === "true")
+      : await readBackupSnapshot(prisma, scope as BackupScope);
     const response = ok(snapshot.rows, snapshot.meta);
     response.headers.set("Cache-Control", "no-store");
     return response;

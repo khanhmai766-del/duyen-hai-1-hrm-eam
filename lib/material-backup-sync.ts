@@ -123,3 +123,88 @@ export async function readBackupSnapshot(db: PrismaClient, scope: BackupScope) {
     };
   }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead, timeout: 30_000 });
 }
+
+export async function readBackupChanges(db: PrismaClient, scope: BackupScope, updatedAfter: Date | null, reconcile: boolean) {
+  if (updatedAfter && (!Number.isFinite(updatedAfter.getTime()) || updatedAfter.getTime() > Date.now())) {
+    throw new Error("Mốc đồng bộ không hợp lệ");
+  }
+  // Giữ khoảng giao nhau để thay đổi gần ranh giới được đọc lại an toàn.
+  const since = updatedAfter ? new Date(Math.max(0, updatedAfter.getTime() - 60_000)) : new Date(0);
+  return db.$transaction(async (tx) => {
+    const boundary = new Date();
+    const timeFilter = { gt: since, lte: boundary };
+    const checkInventory = !updatedAfter || reconcile;
+    let rows: BackupRow[];
+    let changedEntityIds: string[];
+    let inventory: { entityIds: string[]; syncKeys: string[] } | null = null;
+    if (scope === "receipts") {
+      const receipts = await tx.chemicalReceipt.findMany({
+        where: { updatedAt: timeFilter }, select: RECEIPT_SELECT,
+        orderBy: [{ updatedAt: "asc" }, { id: "asc" }], take: BACKUP_MAX_RECORDS + 1,
+      });
+      assertComplete(receipts.length);
+      rows = receipts.map(backupReceiptRow);
+      changedEntityIds = receipts.map((row) => row.id);
+      if (checkInventory) {
+        const ids = await tx.chemicalReceipt.findMany({ select: { id: true }, take: BACKUP_MAX_RECORDS + 1 });
+        assertComplete(ids.length);
+        inventory = { entityIds: ids.map((row) => row.id), syncKeys: ids.map((row) => `receipt:${row.id}`) };
+      }
+    } else {
+      // Đọc cả phiếu vừa đổi phạm vi để đánh dấu dòng cũ ở tab trước đó.
+      const tickets = await tx.materialTicket.findMany({
+        where: { updatedAt: timeFilter },
+        include: { items: { include: {
+          material: { select: { code: true, name: true, unit: true, category: true } },
+          device: { select: { name: true } },
+        }, orderBy: { id: "asc" } } },
+        orderBy: [{ updatedAt: "asc" }, { id: "asc" }], take: BACKUP_MAX_RECORDS + 1,
+      });
+      assertComplete(tickets.length);
+      const sequenceScope = scope === "materials" ? "MATERIAL" : "CHEMICAL";
+      rows = tickets.filter((ticket) => ticket.sequenceScope === sequenceScope)
+        .sort((a, b) => a.sequenceMonth.localeCompare(b.sequenceMonth) || a.sequenceNumber - b.sequenceNumber)
+        .flatMap((ticket) => backupTicketRows(ticket, scope));
+      changedEntityIds = tickets.map((ticket) => ticket.id);
+      if (checkInventory) {
+        const ticketsWithKeys = await tx.materialTicket.findMany({
+          select: { id: true, sequenceScope: true, type: true, items: {
+            select: { id: true, material: { select: { category: true } } },
+          } }, take: BACKUP_MAX_RECORDS + 1,
+        });
+        assertComplete(ticketsWithKeys.length);
+        inventory = {
+          entityIds: ticketsWithKeys.map((ticket) => ticket.id),
+          syncKeys: ticketsWithKeys.filter((ticket) => ticket.sequenceScope === sequenceScope).flatMap((ticket) =>
+            ticket.items.filter((item) => scope === "chemicals"
+              || !["VAT_TU_KHAC", "VAT_TU_KHAC_UNG"].includes(ticket.type)
+              || ["Chai Khí", "Chai khí"].includes(item.material.category ?? ""))
+              .map((item) => `${ticket.id}:${item.id}`)),
+        };
+        assertComplete(inventory.syncKeys.length);
+      }
+    }
+    const deletions = updatedAfter ? await tx.auditLog.findMany({
+      where: { createdAt: timeFilter, entity: scope === "receipts" ? "ChemicalReceipt" : "MaterialTicket",
+        action: scope === "receipts" ? "DELETE_CHEMICAL_RECEIPT" : "MT_DELETE", entityId: { not: null } },
+      select: { entityId: true }, take: BACKUP_MAX_RECORDS + 1,
+    }) : [];
+    assertComplete(deletions.length);
+    const tombstones = updatedAfter && scope !== "receipts" ? await tx.materialTicketSyncDeletion.findMany({
+      where: { deletedAt: timeFilter }, select: { ticketId: true }, take: BACKUP_MAX_RECORDS + 1,
+    }) : [];
+    assertComplete(tombstones.length);
+    const deletedIds = [...new Set([...deletions.map((row) => row.entityId!), ...tombstones.map((row) => row.ticketId)])];
+    const restored = deletedIds.length ? scope === "receipts"
+      ? await tx.chemicalReceipt.findMany({ where: { id: { in: deletedIds } }, select: { id: true } })
+      : await tx.materialTicket.findMany({ where: { id: { in: deletedIds } }, select: { id: true } })
+      : [];
+    const restoredIds = new Set(restored.map((row) => row.id));
+    assertComplete(rows.length);
+    return { rows, meta: {
+      contract: "material-backup-v2", scope, complete: true, snapshotAt: boundary.toISOString(),
+      watermark: boundary.toISOString(), rowCount: rows.length, changedEntityIds,
+      deletedEntityIds: deletedIds.filter((id) => !restoredIds.has(id)), inventory,
+    } };
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead, timeout: 30_000 });
+}

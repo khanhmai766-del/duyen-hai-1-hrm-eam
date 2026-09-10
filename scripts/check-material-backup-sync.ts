@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { Prisma, type PrismaClient } from "@prisma/client";
-import { BACKUP_MAX_RECORDS, backupReceiptRow, backupTicketRows, readBackupSnapshot, type BackupRow } from "@/lib/material-backup-sync";
+import { BACKUP_MAX_RECORDS, backupReceiptRow, backupTicketRows, readBackupChanges, readBackupSnapshot, type BackupRow } from "@/lib/material-backup-sync";
 import type { MaterialTicketForN8nSync } from "@/lib/material-ticket-n8n-sync";
 
 const now = new Date("2026-09-09T05:00:00.000Z");
@@ -41,18 +41,22 @@ assert.deepEqual(receipt.values.slice(0, 8), ["09/09/2026", "NaOH (kg)", "51C001
 function run(scope: "materials" | "chemicals" | "receipts", rows: BackupRow[], existing: unknown[][] = [], extras: Record<string, unknown> = {}) {
   const workflow = JSON.parse(readFileSync("docs/n8n-material-sync/workflow-backup-all.json", "utf8"));
   const sheetName = { materials: "VH1_VTDONGBO", chemicals: "VH1_HOACHAT_DONGBO", receipts: "NHAP_HOA_CHAT" }[scope];
-  const code = workflow.nodes.find((node: { name: string }) => node.name === `Cấu hình dự phòng · ${sheetName}`).parameters.jsCode;
-  const config = new Function(code)()[0].json;
-  const headers = Array(config.sourceColumns + 3).fill("");
-  ["SYNC_KEY", "SOURCE_UPDATED_AT", "WORKFLOW_STATUS", "SYNCED_AT"].forEach((header, i) => { headers[config.keyIndex + i] = header; });
+  const config = {
+    materials: { scope, sheetName, keyIndex: 28, sourceColumns: 31 },
+    chemicals: { scope, sheetName, keyIndex: 13, sourceColumns: 16 },
+    receipts: { scope, sheetName, keyIndex: 7, sourceColumns: 10 },
+  }[scope];
+  const headers = ["SYNC_KEY", "SOURCE_UPDATED_AT", "WORKFLOW_STATUS", "SYNCED_AT", "Tình trạng trên website", "Phát hiện không còn lúc"];
   const nodes = {
     "Cấu hình dự phòng": config,
-    "Đọc ảnh chụp website": { data: rows, meta: { contract: "material-backup-v1", scope, complete: true,
-      snapshotAt: now.toISOString(), entityIds: [...new Set(rows.map((row) => row.entityId))], rowCount: rows.length, ...extras } },
+    "Đọc thay đổi website": { data: rows, meta: { contract: "material-backup-v2", scope, complete: true,
+      snapshotAt: now.toISOString(), watermark: now.toISOString(), changedEntityIds: [...new Set(rows.map((row) => row.entityId))],
+      deletedEntityIds: [], inventory: null, rowCount: rows.length, ...extras } },
     "Đọc cấu trúc tab": { sheets: [{ properties: { sheetId: 42, title: config.sheetName, gridProperties: { rowCount: 10, columnCount: config.sourceColumns + 1 } } }] },
   };
   const embedded = workflow.nodes.find((node: { name: string }) => node.name === `Đối chiếu và lập gói ghi · ${sheetName}`).parameters.jsCode;
-  const result = new Function("$", "$json", embedded)((name: string) => ({ first: () => ({ json: nodes[name.replace(` · ${sheetName}`, "") as keyof typeof nodes] }) }), { values: [["Nhóm tiêu đề"], headers, ...existing] });
+  const technicalExisting = existing.map((values) => (values as unknown[]).slice(config.keyIndex));
+  const result = new Function("$", "$json", embedded)((name: string) => ({ first: () => ({ json: nodes[name.replace(` · ${sheetName}`, "") as keyof typeof nodes] }) }), { values: [headers, ...technicalExisting] });
   return { result, requests: result.flatMap((item: { json: { requests: unknown[] } }) => item.json.requests), config };
 }
 function valuesOf(request: any) {
@@ -72,23 +76,24 @@ const reused = run("materials", [replaced], [stored]);
 assert.equal(reused.result[0].json.reusedRows, 1);
 assert.equal(reused.result[0].json.missingRows, 0);
 assert.ok(reused.requests.some((request: any) => request.updateCells?.start.rowIndex === 2 && valuesOf(request)?.[28] === replaced.syncKey));
-const missing = run("materials", [], [stored]);
+const missing = run("materials", [], [stored], { deletedEntityIds: [material.entityId] });
 assert.equal(missing.result[0].json.missingRows, 1);
 assert.ok(missing.requests.some((request: any) => request.updateCells?.start.rowIndex === 2
   && request.updateCells.start.columnIndex === 32 && valuesOf(request)[0] === "Không còn trên website"));
 assert.ok(!missing.requests.some((request: any) => request.deleteDimension || (request.updateCells?.start.rowIndex === 2 && request.updateCells.start.columnIndex === 0)));
 const previouslyMissing = [...stored]; previouslyMissing[32] = "Không còn trên website"; previouslyMissing[33] = "08/09/2026 12:00:00";
-const stillMissing = run("materials", [], [previouslyMissing]);
+const stillMissing = run("materials", [], [previouslyMissing], { deletedEntityIds: [material.entityId] });
 assert.ok(stillMissing.requests.some((request: any) => valuesOf(request)?.[1] === previouslyMissing[33]));
 const restored = run("materials", [material], [previouslyMissing]);
 assert.ok(restored.requests.some((request: any) => valuesOf(request)?.[32] === "Đang lưu trên website" && valuesOf(request)?.[33] === null));
-const outsideScope = run("materials", [], [stored], { entityIds: [material.entityId] });
+const outsideScope = run("materials", [], [stored], { changedEntityIds: [material.entityId] });
 assert.ok(outsideScope.requests.some((request: any) => valuesOf(request)?.[0] === "Dòng vật tư đã thay đổi hoặc ngoài phạm vi"));
 assert.throws(() => run("materials", [], [stored], { complete: false }), /không đầy đủ/);
 assert.throws(() => run("materials", [], [stored], { rowCount: 1 }), /không đầy đủ/);
 assert.throws(() => run("materials", [material, material]), /không hợp lệ/);
 assert.throws(() => run("materials", [material], [stored, stored]), /Khóa trùng/);
-assert.throws(() => run("materials", [material], [["Dữ liệu nhập tay"]]), /thiếu SYNC_KEY/);
+const invalidStored = Array(material.values.length).fill(null); invalidStored[29] = "Dữ liệu nhập tay";
+assert.throws(() => run("materials", [material], [invalidStored]), /thiếu SYNC_KEY/);
 for (const [scope, row] of [["chemicals", chemical], ["receipts", receipt]] as const) {
   const check = run(scope, [row]);
   assert.equal(check.result[0].json.sourceRows, 1);
@@ -100,6 +105,10 @@ const large = run("materials", manyRows);
 assert.ok(large.result.length > 1);
 assert.ok(large.requests.some((request: any) => request.updateSheetProperties?.properties.gridProperties.rowCount === 252));
 assert.equal(large.requests.filter((request: any) => request.updateCells?.start.columnIndex === 0).length, 250);
+const receiptFormat = run("receipts", [receipt]);
+const formatRequest = receiptFormat.requests.find((request: any) => request.updateCells?.start.columnIndex === 3 && request.updateCells?.fields === "userEnteredFormat.numberFormat");
+assert.deepEqual(formatRequest.updateCells.rows[0].values.map((cell: any) => cell.userEnteredFormat.numberFormat.pattern),
+  ["#,##0.####", "#,##0.####", "#,##0.####"]);
 
 async function main() {
   let transactionOptions: unknown;
@@ -113,6 +122,29 @@ async function main() {
   assert.equal(snapshot.meta.complete, true);
   assert.equal(snapshot.meta.rowCount, 1);
   assert.deepEqual(transactionOptions, { isolationLevel: "RepeatableRead", timeout: 30_000 });
+  let receiptChangeQuery: any;
+  const incrementalDb = {
+    $transaction: async (callback: (tx: unknown) => unknown, options: unknown) => {
+      transactionOptions = options;
+      return callback({
+        chemicalReceipt: { findMany: async (args: any) => {
+          if (args.where?.updatedAt) { receiptChangeQuery = args; return [{
+            id: "receipt-1", receivedAt: new Date("2026-09-09T00:00:00Z"), updatedAt: now,
+            vehicleNumber: "51C00123", vehicleRef: null, plantWeight: new Prisma.Decimal(12), contractorWeight: null,
+            acceptedWeight: new Prisma.Decimal(12), receivingPosition: null, receivingPositionRaw: null,
+            item: { name: "NaOH", baseUnit: "KG" },
+          }]; }
+          return [];
+        } },
+        auditLog: { findMany: async () => [] },
+      });
+    },
+  } as unknown as PrismaClient;
+  const incremental = await readBackupChanges(incrementalDb, "receipts", new Date("2026-09-09T04:00:00Z"), false);
+  assert.equal(incremental.meta.contract, "material-backup-v2");
+  assert.equal(incremental.meta.inventory, null);
+  assert.equal(incremental.rows.length, 1);
+  assert.equal(receiptChangeQuery.where.updatedAt.gt.toISOString(), "2026-09-09T03:59:00.000Z");
   const overLimit = {
     $transaction: async (callback: (tx: unknown) => unknown) => callback({
       chemicalReceipt: { findMany: async () => Array(BACKUP_MAX_RECORDS + 1).fill({}) },
@@ -145,6 +177,14 @@ async function main() {
       for (const name of branchNodes) if (name !== schedule.name) assert.ok(manualNodes.has(name));
     }
     assert.equal([...manualNodes].filter((name) => name.startsWith("Kết quả ·")).length, 3);
+    for (const sheetName of ["VH1_VTDONGBO", "VH1_HOACHAT_DONGBO", "NHAP_HOA_CHAT"]) {
+      const decision = workflow.connections[`Có thay đổi hoặc cần đối chiếu? · ${sheetName}`].main;
+      assert.equal(decision[0][0].node, `Đọc cấu trúc tab · ${sheetName}`);
+      assert.equal(decision[1][0].node, `Lưu mốc khi không đổi · ${sheetName}`);
+      assert.equal(workflow.connections[`Lưu mốc khi không đổi · ${sheetName}`], undefined);
+      const keyNode = workflow.nodes.find((node: { name: string }) => node.name === `Đọc khóa dự phòng · ${sheetName}`);
+      assert.match(keyNode.parameters.url, /!(AC|N|H)2:(AH|S|M)/);
+    }
     for (const node of workflow.nodes) {
       if (node.type === "n8n-nodes-base.code") new Function(node.parameters.jsCode);
       if (node.parameters.url?.includes('sheets.googleapis.com')) assert.ok(node.parameters.url.includes('1wamJN787FowPLI3zU-383CME5R-EkI72EP5qLrhj5J4'));
