@@ -103,6 +103,7 @@ import {
   useTbycnnSign,
   useTbycnnSignPreview,
   useToggleTbycnnItemCreation,
+  useToggleTbycnnItemDeletion,
   type TbycnnEquipment,
   type TbycnnSignPreview,
 } from "@/hooks/useTbycnn";
@@ -323,12 +324,26 @@ export default function TbycnnPage() {
   const { can } = useRbacAccess();
   const canControlItemCreation = can("tbycnn-control-item-creation", ["manage", "full"]);
 
+  /**
+   * XOÁ THIẾT BỊ — công tắc riêng, mặc định khoá và mặc định CHỈ Quản trị bật/tắt được.
+   * Bật thì xoá được cả dòng gốc theo hồ sơ nhà máy, mà dòng xoá đi mất luôn ở kỳ này và
+   * mọi kỳ sau (chuyển kỳ chép từ kỳ trước) — không gộp chung công tắc với "Thêm thiết bị"
+   * vì hậu quả của hai việc khác hẳn nhau.
+   *
+   * Đánh dấu xoá giữ trong `pendingDeletes` rồi ghi CÙNG lượt Lưu với các ô đã sửa: bấm
+   * nhầm thì bấm lại là bỏ dấu, hoặc Huỷ cả lượt.
+   */
+  const toggleItemDeletion = useToggleTbycnnItemDeletion();
+  const canControlItemDeletion = can("tbycnn-control-item-deletion", ["manage", "full"]);
+  const [pendingDeletes, setPendingDeletes] = useState<string[]>([]);
+
   const [signOpen, setSignOpen] = useState(false);
   const [signPreview, setSignPreview] = useState<TbycnnSignPreview | null>(null);
   const previewSign = useTbycnnSignPreview();
   const sign = useTbycnnSign();
 
   const dirtyCount = Object.keys(draft).length;
+  const deleteCount = pendingDeletes.length;
 
   /*
    * TẦNG CHỌN BẢNG. Ba bảng dụng cụ ATLĐ (thang di động / dây đai / dụng cụ điện cầm tay)
@@ -397,6 +412,8 @@ export default function TbycnnPage() {
   const canManage = Boolean(data?.canManage);
   const period = data?.period;
   const itemCreationEnabled = Boolean(period?.allowItemCreation) && !period?.isClosed && canManage;
+  /** Cửa xoá đang mở? Chỉ khi Quản trị đã bật công tắc của kỳ và người xem ghi được sổ. */
+  const itemDeletionEnabled = Boolean(period?.allowItemDeletion) && !period?.isClosed && canManage;
 
   /**
    * Cương vị để chọn khi thêm thiết bị: lấy thẳng DANH MỤC CHỨC DANH CHUẨN của hệ thống
@@ -596,7 +613,20 @@ export default function TbycnnPage() {
 
   function beginEdit() {
     setDraft({});
+    setPendingDeletes([]);
     setTableEditing(true);
+  }
+
+  /** Đánh dấu / bỏ đánh dấu xoá một dòng. Bỏ luôn phần nháp đã sửa của dòng đó — sửa rồi
+   *  xoá là hai ý ngược nhau, giữ cả hai chỉ khiến máy chủ phải từ chối cả lượt. */
+  function toggleDelete(row: TbycnnEquipment) {
+    setPendingDeletes((prev) => (prev.includes(row.id) ? prev.filter((id) => id !== row.id) : [...prev, row.id]));
+    setDraft((prev) => {
+      if (!prev[row.id]) return prev;
+      const next = { ...prev };
+      delete next[row.id];
+      return next;
+    });
   }
 
   function submitCreate(body: Record<string, unknown>) {
@@ -666,25 +696,51 @@ export default function TbycnnPage() {
 
   function cancelEdit() {
     setDraft({});
+    setPendingDeletes([]);
     setTableEditing(false);
   }
 
   async function saveEdits() {
-    if (dirtyCount === 0) {
+    if (dirtyCount === 0 && deleteCount === 0) {
       cancelEdit();
       return;
     }
     try {
-      const res = await saveBulk.mutateAsync(
-        Object.entries(draft).map(([id, patch]) => ({ id, ...patch }))
+      const res = await saveBulk.mutateAsync({
+        updates: Object.entries(draft).map(([id, patch]) => ({ id, ...patch })),
+        deletes: pendingDeletes,
+      });
+      toast.success(
+        [res.saved > 0 && `Đã lưu ${res.saved} dòng`, res.deleted > 0 && `xoá ${res.deleted} thiết bị`]
+          .filter(Boolean)
+          .join(", ")
       );
-      toast.success(`Đã lưu ${res.saved} dòng`);
       cancelEdit();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Lưu thất bại");
     } finally {
       setSaveConfirmOpen(false);
     }
+  }
+
+  function toggleDeletion() {
+    if (!period?.id) return;
+    toggleItemDeletion.mutate(
+      { id: period.id, enabled: !period.allowItemDeletion },
+      {
+        onSuccess: (updated) => {
+          // Khoá cửa lại thì bỏ luôn các dấu xoá đang treo, không để chúng đi theo lượt Lưu
+          // sau khi quyền đã bị rút.
+          if (!updated.allowItemDeletion) setPendingDeletes([]);
+          toast.success(
+            updated.allowItemDeletion
+              ? "Đã mở chức năng xoá thiết bị YCNN"
+              : "Đã khoá chức năng xoá thiết bị YCNN"
+          );
+        },
+        onError: (e: Error) => toast.error(e.message),
+      }
+    );
   }
 
   /** Tham số ký = bộ lọc đang đặt trên màn hình; xem trước và ký thật phải khớp từng chữ. */
@@ -870,11 +926,15 @@ export default function TbycnnPage() {
               {/* Không sửa gì thì đóng luôn chế độ sửa — hỏi "lưu 0 dòng?" là hỏi thừa. */}
               <Button
                 size="toolbar"
-                onClick={() => (dirtyCount === 0 ? saveEdits() : setSaveConfirmOpen(true))}
+                onClick={() => (dirtyCount === 0 && deleteCount === 0 ? saveEdits() : setSaveConfirmOpen(true))}
                 disabled={saveBulk.isPending}
               >
                 <Save className={cn("mr-1.5 size-4", saveBulk.isPending && "animate-pulse")} />
-                {saveBulk.isPending ? "Đang lưu…" : dirtyCount > 0 ? `Lưu ${dirtyCount} dòng` : "Lưu"}
+                {saveBulk.isPending
+                  ? "Đang lưu…"
+                  : [dirtyCount > 0 && `Lưu ${dirtyCount} dòng`, deleteCount > 0 && `xoá ${deleteCount}`]
+                      .filter(Boolean)
+                      .join(" · ") || "Lưu"}
               </Button>
             </>
           ) : (
@@ -957,6 +1017,50 @@ export default function TbycnnPage() {
                           className={cn(
                             "absolute top-0.5 size-4 rounded-full bg-white shadow-sm transition-transform",
                             period.allowItemCreation ? "translate-x-[18px]" : "translate-x-0.5"
+                          )}
+                        />
+                      </span>
+                    </DropdownMenuItem>
+                    {/* CÔNG TẮC XOÁ — tách riêng khỏi "Thêm thiết bị" vì hậu quả khác hẳn:
+                        thêm nhầm thì xoá đi, còn xoá nhầm là mất dòng ở kỳ này và mọi kỳ
+                        sau. Mặc định chỉ Quản trị viên bật/tắt được. */}
+                    <DropdownMenuItem
+                      disabled={!canControlItemDeletion || toggleItemDeletion.isPending}
+                      onSelect={(e) => {
+                        e.preventDefault();
+                        toggleDeletion();
+                      }}
+                      title={
+                        canControlItemDeletion
+                          ? "Bật trong lúc dọn sổ rồi tắt lại — mở thì xoá được cả thiết bị theo hồ sơ gốc"
+                          : "Chỉ Quản trị viên được bật hoặc tắt chức năng xoá thiết bị"
+                      }
+                      className="gap-2"
+                    >
+                      {period.allowItemDeletion ? (
+                        <Trash2 className="size-4 text-rose-600" />
+                      ) : (
+                        <Lock className="size-4 text-slate-400" />
+                      )}
+                      <span className="min-w-0 flex-1">
+                        <span className="block font-medium">Xoá thiết bị</span>
+                        <span className="block text-[11px] text-muted-foreground">
+                          {period.allowItemDeletion
+                            ? "Đang bật — xoá được cả thiết bị hồ sơ gốc"
+                            : "Đang khoá — không xoá được dòng nào"}
+                        </span>
+                      </span>
+                      <span
+                        aria-hidden="true"
+                        className={cn(
+                          "relative h-5 w-9 shrink-0 rounded-full transition-colors",
+                          period.allowItemDeletion ? "bg-rose-600" : "bg-slate-300"
+                        )}
+                      >
+                        <span
+                          className={cn(
+                            "absolute top-0.5 size-4 rounded-full bg-white shadow-sm transition-transform",
+                            period.allowItemDeletion ? "translate-x-[18px]" : "translate-x-0.5"
                           )}
                         />
                       </span>
@@ -1376,9 +1480,25 @@ export default function TbycnnPage() {
                  * trong suốt là chữ của cột kia hiện xuyên qua. `rowBackground()` của PCCC
                  * trả bg-slate-50/70 nên không dùng lại được ở bảng rộng này.
                  */
-                const rowBg = rowDirty ? "bg-amber-50" : expanded ? "bg-sky-50" : index % 2 === 1 ? "bg-slate-50" : "bg-white";
+                // Dòng đánh dấu xoá tô hồng và gạch ngang tên — nhìn một cái là biết bấm Lưu
+                // sẽ mất những dòng nào, không phải nhớ mình vừa bấm ở đâu.
+                const markedDelete = pendingDeletes.includes(row.id);
+                const rowBg = markedDelete
+                  ? "bg-rose-50"
+                  : rowDirty
+                    ? "bg-amber-50"
+                    : expanded
+                      ? "bg-sky-50"
+                      : index % 2 === 1
+                        ? "bg-slate-50"
+                        : "bg-white";
                 // Sửa được hay không do SERVER quyết (phạm vi cương vị), không tự suy ở client.
-                const editable = tableEditing && saved.canWrite;
+                // Dòng sắp xoá thì thôi cho sửa: hai ý ngược nhau trong cùng một lượt lưu.
+                const editable = tableEditing && saved.canWrite && !markedDelete;
+                /* Nút xoá chỉ hiện khi: đang Sửa bảng, Quản trị đã bật công tắc xoá của kỳ,
+                   và dòng thuộc phạm vi cương vị của người dùng. Máy chủ rào lại đủ ba điều
+                   kiện này nên ẩn nút chỉ là cho đỡ bấm nhầm, không phải hàng rào duy nhất. */
+                const canMarkDelete = tableEditing && itemDeletionEnabled && saved.canWrite;
                 return (
                   <Fragment key={row.id}>
                     <TableRow className={cn(rowBg, ROW_HOVER)}>
@@ -1394,7 +1514,27 @@ export default function TbycnnPage() {
                             "sticky left-0 z-[1] shadow-[inset_-1px_0_0_rgba(15,23,42,0.18)] group-hover:bg-sky-50 lg:left-[42px] lg:shadow-none"
                         )}
                       >
-                        {row.tenThietBi}
+                        <span className="flex items-start gap-1.5">
+                          {canMarkDelete && (
+                            <button
+                              type="button"
+                              onClick={() => toggleDelete(saved)}
+                              title={markedDelete ? "Bỏ đánh dấu xoá" : "Đánh dấu xoá thiết bị này khi bấm Lưu"}
+                              aria-pressed={markedDelete}
+                              className={cn(
+                                "mt-0.5 grid size-5 shrink-0 place-items-center rounded transition-colors",
+                                markedDelete
+                                  ? "bg-rose-600 text-white hover:bg-rose-700"
+                                  : "text-slate-400 hover:bg-rose-100 hover:text-rose-600"
+                              )}
+                            >
+                              {markedDelete ? <X className="size-3.5" /> : <Trash2 className="size-3.5" />}
+                            </button>
+                          )}
+                          <span className={cn("min-w-0", markedDelete && "text-rose-700 line-through")}>
+                            {row.tenThietBi}
+                          </span>
+                        </span>
                       </TableCell>
                       {/* Nhãn CHUẨN theo danh mục chức danh của hệ thống, không phải chuỗi
                           thô trong file gốc — hậu tố tổ máy đã tách sang cột riêng. */}
@@ -1786,10 +1926,18 @@ export default function TbycnnPage() {
       <ConfirmDialog
         open={saveConfirmOpen}
         onOpenChange={setSaveConfirmOpen}
-        title={`Lưu ${dirtyCount} dòng đã sửa?`}
-        description="Toàn bộ thay đổi được ghi trong một lượt. Ghi xong không hoàn tác được — hãy soát lại các ô nền vàng."
-        confirmLabel="Lưu"
-        destructive={false}
+        title={
+          deleteCount > 0
+            ? `Lưu ${dirtyCount} dòng đã sửa và XOÁ ${deleteCount} thiết bị?`
+            : `Lưu ${dirtyCount} dòng đã sửa?`
+        }
+        description={
+          deleteCount > 0
+            ? `Toàn bộ thay đổi được ghi trong một lượt. ${deleteCount} thiết bị nền hồng sẽ bị xoá khỏi sổ — mất ở kỳ này và mọi kỳ sau, KHÔNG hoàn tác được. Hãy soát lại trước khi lưu.`
+            : "Toàn bộ thay đổi được ghi trong một lượt. Ghi xong không hoàn tác được — hãy soát lại các ô nền vàng."
+        }
+        confirmLabel={deleteCount > 0 ? `Lưu và xoá ${deleteCount} thiết bị` : "Lưu"}
+        destructive={deleteCount > 0}
         loading={saveBulk.isPending}
         onConfirm={saveEdits}
       />

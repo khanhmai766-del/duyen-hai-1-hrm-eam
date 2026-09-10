@@ -34,6 +34,9 @@ export const TBYCNN_PERMISSION = {
   /// Chỉ điều khiển CÔNG TẮC cấp kỳ, không phải quyền thêm thiết bị: người thêm vẫn
   /// phải qua `resolveTbycnnWriteScope` và đúng cương vị.
   controlItemCreation: "tbycnn-control-item-creation",
+  /// Công tắc XOÁ thiết bị — quyền riêng, mặc định CHỈ Quản trị viên có. Bật công tắc mới
+  /// mở đường xoá; người xoá vẫn phải có quyền ghi sổ và đúng phạm vi cương vị của mình.
+  controlItemDeletion: "tbycnn-control-item-deletion",
 } as const;
 
 export const TBYCNN_READ_LEVELS = ["read", "personal", "manage", "full"] as const;
@@ -69,7 +72,22 @@ export async function resolvePeriod(label?: string | null) {
   });
 }
 
-export function canDeleteEquipment(row: Pick<TbycnnEquipment, "sourceId" | "createdAt">, now = new Date()) {
+/**
+ * Được xoá dòng này không?
+ *
+ * `periodUnlocked` = công tắc "Xoá thiết bị" của KỲ đang bật (Quản trị bật khi cần dọn sổ).
+ * Bật thì xoá được mọi dòng, kể cả thiết bị gốc theo hồ sơ nhà máy — đây là cửa duy nhất
+ * gỡ được dòng gốc, và vì thế nó mặc định khoá.
+ *
+ * Công tắc tắt thì giữ nguyên luật cũ: dòng gốc không xoá được, dòng tự thêm chỉ xoá được
+ * trong 30 ngày.
+ */
+export function canDeleteEquipment(
+  row: Pick<TbycnnEquipment, "sourceId" | "createdAt">,
+  now = new Date(),
+  periodUnlocked = false
+) {
+  if (periodUnlocked) return true;
   // sourceId != null = thiết bị gốc theo hồ sơ nhà máy → không bao giờ xoá được.
   if (row.sourceId != null) return false;
   const age = now.getTime() - row.createdAt.getTime();
@@ -93,7 +111,9 @@ export type TbycnnEquipmentDto = ReturnType<typeof serializeEquipment>;
 export function serializeEquipment(
   row: TbycnnEquipment & { signature?: { signerName: string; signerPosition: string | null; signedAt: Date; signatureKey: string | null } | null },
   now = new Date(),
-  scope?: TbycnnWriteScope
+  scope?: TbycnnWriteScope,
+  /** Công tắc "Xoá thiết bị" của kỳ — quyết định `canDelete` của mọi dòng trong kỳ. */
+  periodUnlockedForDelete = false
 ) {
   return {
     id: row.id,
@@ -134,7 +154,7 @@ export function serializeEquipment(
     cachDienMOhm: row.cachDienMOhm,
     ketQuaThu: row.ketQuaThu,
     nghiemThuSauSuaChua: row.nghiemThuSauSuaChua,
-    canDelete: canDeleteEquipment(row, now),
+    canDelete: canDeleteEquipment(row, now, periodUnlockedForDelete),
     // Cờ do SERVER tính: giao diện khoá sẵn ô ngoài phạm vi cương vị thay vì để người
     // dùng sửa xong mới ăn 403.
     canWrite: scope ? canWriteRow(scope, row) : false,

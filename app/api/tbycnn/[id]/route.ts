@@ -12,7 +12,9 @@ import {
 } from "@/lib/tbycnn";
 import {
   canDeleteEquipment,
+  canWriteRow,
   operationalData,
+  resolveTbycnnWriteScope,
   serializeEquipment,
   TBYCNN_DELETE_WINDOW_DAYS,
   TBYCNN_PERMISSION,
@@ -102,8 +104,11 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
 }
 
 /**
- * DELETE /api/tbycnn/[id] — chỉ thiết bị TỰ THÊM và trong 30 ngày (mục 6.7 bản cũ).
- * Thiết bị gốc theo hồ sơ nhà máy không xoá được bằng bất kỳ quyền nào.
+ * DELETE /api/tbycnn/[id] — xoá một thiết bị.
+ *
+ * Mặc định giữ luật cũ (mục 6.7 bản cũ): chỉ thiết bị TỰ THÊM và trong 30 ngày. Khi Quản
+ * trị bật công tắc "Xoá thiết bị" của kỳ thì mọi dòng xoá được, kể cả dòng gốc theo hồ sơ
+ * nhà máy — vẫn phải đúng phạm vi cương vị của người xoá.
  */
 export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
   return handle(async () => {
@@ -117,15 +122,21 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
 
     const existing = await prisma.tbycnnEquipment.findUnique({
       where: { id: params.id },
-      include: { period: { select: { label: true, isClosed: true } } },
+      include: { period: { select: { label: true, isClosed: true, allowItemDeletion: true } } },
     });
     if (!existing) throw fail("Không tìm thấy thiết bị", 404);
     if (existing.period.isClosed) throw fail(`Kỳ ${existing.period.label} đã chốt sổ, chỉ xem được`, 409);
-    if (!canDeleteEquipment(existing)) {
+    // Phạm vi cương vị: cưỡng chế y như bước sửa, không để công tắc mở ra thành xoá được
+    // thiết bị của cương vị khác.
+    const scope = await resolveTbycnnWriteScope(user);
+    if (!canWriteRow(scope, existing)) {
+      throw fail(`"${existing.tenThietBi}" không thuộc cương vị quản lý của bạn`, 403);
+    }
+    if (!canDeleteEquipment(existing, new Date(), existing.period.allowItemDeletion)) {
       throw fail(
         existing.sourceId != null
-          ? "Thiết bị theo hồ sơ gốc của nhà máy — không xoá được"
-          : `Chỉ xoá được thiết bị tự thêm trong vòng ${TBYCNN_DELETE_WINDOW_DAYS} ngày`,
+          ? "Thiết bị theo hồ sơ gốc của nhà máy — cần Quản trị bật công tắc Xoá thiết bị của kỳ"
+          : `Chỉ xoá được thiết bị tự thêm trong vòng ${TBYCNN_DELETE_WINDOW_DAYS} ngày, hoặc cần Quản trị bật công tắc Xoá thiết bị`,
         403
       );
     }

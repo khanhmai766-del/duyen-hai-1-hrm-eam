@@ -71,6 +71,9 @@ export const DEFAULT_RBAC_MATRIX: Record<string, Partial<Record<string, RbacLeve
   "tbycnn-view": { ADMIN: "full", MANAGER: "read", SUPERVISOR: "read", TECHNICIAN: "read", VIEWER: "read" },
   "tbycnn-manage": { ADMIN: "full", MANAGER: "manage", SUPERVISOR: "manage", TECHNICIAN: "personal", VIEWER: "none" },
   "tbycnn-control-item-creation": { ADMIN: "full", MANAGER: "manage", SUPERVISOR: "none", TECHNICIAN: "none", VIEWER: "none" },
+  // Xoá thiết bị mở được cả dòng gốc theo hồ sơ nhà máy nên MẶC ĐỊNH chỉ Quản trị viên
+  // bật/tắt được công tắc; ai xoá thì vẫn theo quyền ghi sổ "tbycnn-manage".
+  "tbycnn-control-item-deletion": { ADMIN: "full", MANAGER: "none", SUPERVISOR: "none", TECHNICIAN: "none", VIEWER: "none" },
   "forum-write": { ADMIN: "personal", MANAGER: "personal", SUPERVISOR: "personal", TECHNICIAN: "personal", VIEWER: "personal" },
   "forum-moderate": { ADMIN: "full", MANAGER: "none", SUPERVISOR: "none", TECHNICIAN: "none", VIEWER: "none" },
   // Đồng bộ kết quả phân tích dầu từ LIMS (portal.tpcduyenhai.com.vn/lims.xhtml).

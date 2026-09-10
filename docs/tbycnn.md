@@ -7,9 +7,9 @@ dùng lại NextAuth/RBAC, AuditLog và exceljs như module PCCC.
 Trạng thái: **pha 1 đã xong** — schema, import 709 thiết bị, API `/api/tbycnn/*`,
 trang `/tbycnn`, xuất Excel phía server, phân quyền `tbycnn-view` / `tbycnn-manage`.
 Đã bổ sung sau đó: **thêm thiết bị trên giao diện** sau một công tắc cấp kỳ
-(`tbycnn-control-item-creation`, xem mục 4b) và xuất PDF.
-**Pha 2 chưa làm**: chốt sổ theo kỳ + xem kỳ đã chốt, nút xoá thiết bị trên giao diện
-(API đã có).
+(`tbycnn-control-item-creation`, xem mục 4b), **xoá thiết bị ngay trong chế độ Sửa bảng**
+sau một công tắc cấp kỳ riêng (`tbycnn-control-item-deletion`, xem mục 4c) và xuất PDF.
+**Pha 2 chưa làm**: chốt sổ theo kỳ + xem kỳ đã chốt.
 
 ## 1. Mô hình dữ liệu
 
@@ -68,7 +68,7 @@ npx prisma db execute --file prisma/sql/tbycnn-init.sql --schema prisma/schema.p
 | `kdStatus` | `overdue` / `soon` (≤ 90 ngày) / `ok`; không có ngày hợp lệ → `null` ("chưa có hạn"). |
 | `computeDefaultKdTiepTheo` | Bỏ trống "KĐ tiếp theo" → tự tính = KĐ gần nhất + chu kỳ thử tính bằng **THÁNG**. Cuối tháng thì **kẹp** về ngày cuối tháng đích (31/01 + 1 tháng = 28/02, năm nhuận 29/02) chứ không để `Date` cuộn sang 03/03. Thiếu dữ liệu thì để trống, **không** ghi đè giá trị đặc biệt như "Không có". |
 | `TBYCNN_EDITABLE_ON_EDIT` | Chỉ nhóm "vận hành" được sửa khi thiết bị đã có; thông tin gốc bị khoá. `maHieu`/`kks` cho bổ sung nếu đang trống. |
-| `canDeleteEquipment` | Thiết bị gốc (`sourceId != null`) **không bao giờ** xoá được; thiết bị tự thêm chỉ xoá được trong 30 ngày. |
+| `canDeleteEquipment` | Công tắc `TbycnnPeriod.allowItemDeletion` **tắt** (mặc định): thiết bị gốc (`sourceId != null`) không xoá được, thiết bị tự thêm chỉ xoá được trong 30 ngày. Công tắc **bật**: xoá được mọi dòng, kể cả dòng gốc. |
 
 Quy tắc khoá trường và giới hạn xoá được **cưỡng chế ở API**, không chỉ ở giao diện —
 người dùng gọi thẳng route được.
@@ -175,6 +175,29 @@ Chữ ký là **ảnh chữ ký số** trong hồ sơ cá nhân (`User.signature
 cái tên gõ ra — chặn cả ở server chứ không chỉ ở hộp thoại. Tên, cương vị và S3 key được
 **chốt cứng lúc ký**: người ký đổi tên hoặc thay chữ ký trong hồ sơ về sau thì bản ký cũ
 vẫn hiện đúng cái đã ký.
+
+
+### 4c. Xoá thiết bị (thêm 2026-09-10)
+
+Nằm ngay trong chế độ **Sửa bảng**: mỗi dòng có một nút thùng rác ở cột Tên thiết bị,
+bấm để đánh dấu (dòng tô hồng, tên gạch ngang), bấm lại để bỏ dấu. Các dòng đánh dấu
+được xoá **cùng lượt Lưu** với các ô đã sửa, trong cùng một transaction ở
+`POST /api/tbycnn/bulk` (trường `deletes`) — không có cảnh xoá xong mới báo lỗi phần sửa.
+
+Ba rào, cưỡng chế ở API chứ không chỉ ẩn nút:
+
+1. **Công tắc cấp kỳ** `allowItemDeletion` — mặc định KHOÁ, kỳ mới cũng khoá
+   (`lib/tbycnn-rollover.ts` không chép cờ). Bật/tắt qua
+   `POST /api/tbycnn/periods/<id>/item-deletion`, quyền `tbycnn-control-item-deletion`
+   **mặc định chỉ Quản trị viên**. Công tắc bật thì xoá được cả dòng gốc theo hồ sơ nhà máy.
+2. **Quyền ghi sổ** `tbycnn-manage` — người xoá phải sửa được sổ.
+3. **Phạm vi cương vị** `canWriteRow` — chỉ xoá được dòng thuộc cương vị của mình
+   (Quản trị / Quản đốc / Phó QĐ / KTV / Trưởng ca thì toàn phân xưởng).
+
+Vì sao tách hẳn công tắc khỏi "Thêm thiết bị": thêm nhầm thì xoá đi, còn **xoá nhầm là
+mất dòng ở kỳ này và mọi kỳ sau** (chuyển kỳ chép từ kỳ trước). Lưu ý ngược lại: chạy lại
+lệnh nhập từ file gốc sẽ **dựng lại** dòng gốc đã xoá (upsert theo `sourceId`).
+
 
 ## 5. Giao diện `/tbycnn`
 
@@ -438,7 +461,6 @@ sửa hằng trong script dựng mẫu:
 
 - Chốt sổ theo kỳ + màn hình xem kỳ đã chốt (`TbycnnPeriod.isClosed` đã sẵn ở schema
   và API; thiếu route `rollover` và bộ chọn kỳ trên giao diện).
-- Nút **xoá** thiết bị trên giao diện — API đã có, chưa gắn nút (thêm thì đã xong, mục 4b).
 - Xuất PDF khổ A4 ngang có khối ký tên (bản cũ in bằng `window.print()`); nếu làm nên
   dùng `lib/pccc-pdf-kit.ts` thay vì in từ trình duyệt.
 - Map `deviceSeq` sang cây thiết bị `EquipmentNode`.

@@ -2603,6 +2603,13 @@ model TbycnnPeriod {
   /// thêm một dòng là hỏng bộ chuẩn.
   allowItemCreation Boolean @default(false)
 
+  /// Công tắc CẤP KỲ mở cửa XOÁ thiết bị — kể cả thiết bị gốc theo hồ sơ nhà máy và
+  /// thiết bị tự thêm đã quá 30 ngày (xem `canDeleteEquipment`). Mặc định KHOÁ và kỳ mới
+  /// cũng khoá; công tắc do QUẢN TRỊ bật khi cần dọn sổ, xong thì tắt lại. Tách hẳn khỏi
+  /// `allowItemCreation` vì hậu quả khác hẳn: thêm nhầm thì xoá đi, xoá nhầm thì mất dòng
+  /// ở kỳ này và mọi kỳ sau (chuyển kỳ chép từ kỳ trước).
+  allowItemDeletion Boolean @default(false)
+
   closedAt   DateTime?
   closedById String? // id User (không FK — đã có audit log); null = hệ thống tự chốt
 

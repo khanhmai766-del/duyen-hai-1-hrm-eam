@@ -99,6 +99,8 @@ export interface TbycnnPeriodInfo {
   id?: string;
   /** Công tắc cấp kỳ cho phép thêm thiết bị — xem model TbycnnPeriod. */
   allowItemCreation?: boolean;
+  /** Công tắc cấp kỳ cho phép XOÁ thiết bị (kể cả dòng gốc); chỉ Quản trị bật/tắt. */
+  allowItemDeletion?: boolean;
 }
 
 const KEY = ["tbycnn"] as const;
@@ -164,6 +166,20 @@ export function useToggleTbycnnItemCreation() {
   });
 }
 
+/** Bật/tắt công tắc XOÁ thiết bị của một kỳ — quyền riêng, mặc định chỉ Quản trị viên. */
+export function useToggleTbycnnItemDeletion() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, enabled }: { id: string; enabled: boolean }) =>
+      apiMutate<{ id: string; label: string; allowItemDeletion: boolean }>(
+        `/api/tbycnn/periods/${id}/item-deletion`,
+        "POST",
+        { enabled }
+      ),
+    onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
+  });
+}
+
 export function useDeleteTbycnn() {
   const qc = useQueryClient();
   return useMutation({
@@ -173,14 +189,21 @@ export function useDeleteTbycnn() {
 }
 
 /**
- * Lưu MỘT LƯỢT các dòng vừa sửa ở chế độ "Sửa bảng". Gửi cả loạt trong một request để
- * server ghi trong một transaction — nửa chừng hỏng thì không dòng nào vào.
+ * Lưu MỘT LƯỢT các dòng vừa sửa (và các dòng đánh dấu xoá) ở chế độ "Sửa bảng". Gửi cả
+ * loạt trong một request để server ghi trong một transaction — nửa chừng hỏng thì không
+ * dòng nào vào, và không có cảnh xoá xong mới báo lỗi ở phần sửa.
  */
 export function useSaveTbycnnBulk() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (updates: Array<{ id: string } & Record<string, unknown>>) =>
-      apiMutate<{ saved: number }>("/api/tbycnn/bulk", "POST", { updates }),
+    mutationFn: (payload: {
+      updates: Array<{ id: string } & Record<string, unknown>>;
+      deletes?: string[];
+    }) =>
+      apiMutate<{ saved: number; deleted: number }>("/api/tbycnn/bulk", "POST", {
+        updates: payload.updates,
+        deletes: payload.deletes ?? [],
+      }),
     onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
   });
 }

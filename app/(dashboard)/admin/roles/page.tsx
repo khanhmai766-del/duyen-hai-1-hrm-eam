@@ -650,6 +650,18 @@ const DEFAULT_PERMISSIONS: PermissionRow[] = [
     matrix: { ADMIN: "full", MANAGER: "manage", SUPERVISOR: "none", TECHNICIAN: "none", VIEWER: "none" },
   },
   {
+    id: "tbycnn-control-item-deletion",
+    group: "Thiết bị YCNN về ATLĐ",
+    feature: "Bật/tắt chức năng xoá thiết bị YCNN",
+    note:
+      "Cho phép mở tạm thời cửa XOÁ thiết bị trong một kỳ, sau đó khoá lại. Công tắc bật thì xoá được MỌI dòng, " +
+      "kể cả thiết bị gốc theo hồ sơ nhà máy và thiết bị tự thêm đã quá 30 ngày — đây là cửa duy nhất gỡ được dòng gốc. " +
+      "Dòng đã xoá mất ở kỳ này và mọi kỳ sau (kỳ mới chép từ kỳ trước), nên mặc định CHỈ Quản trị viên được bật/tắt. " +
+      "Quyền này chỉ điều khiển công tắc; người xoá vẫn phải sửa được sổ (quyền Sổ thiết bị YCNN) và đúng phạm vi " +
+      "cương vị của mình. Kỳ mới luôn sinh ra ở trạng thái khoá.",
+    matrix: { ADMIN: "full", MANAGER: "none", SUPERVISOR: "none", TECHNICIAN: "none", VIEWER: "none" },
+  },
+  {
     id: "lims-sync",
     group: "Tiện ích",
     feature: "Đồng bộ kết quả phân tích dầu từ LIMS",

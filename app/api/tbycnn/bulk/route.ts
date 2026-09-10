@@ -9,7 +9,13 @@ import {
   trimOrNull,
   validateSoLuong,
 } from "@/lib/tbycnn";
-import { canWriteRow, operationalData, resolveTbycnnWriteScope } from "@/lib/tbycnn-service";
+import {
+  canDeleteEquipment,
+  canWriteRow,
+  operationalData,
+  resolveTbycnnWriteScope,
+  TBYCNN_DELETE_WINDOW_DAYS,
+} from "@/lib/tbycnn-service";
 
 export const dynamic = "force-dynamic";
 
@@ -25,6 +31,10 @@ export const dynamic = "force-dynamic";
  *
  * Vẫn cưỡng chế đủ ba rào như route sửa một dòng: phạm vi cương vị, khoá trường gốc, và
  * tổng khả dụng + không khả dụng = số lượng.
+ *
+ * `deletes` đi CHUNG một lượt với `updates` vì cùng một thao tác của người dùng: dọn sổ
+ * xong bấm Lưu một lần. Chung transaction nên không có cảnh xoá xong mới phát hiện một
+ * dòng sửa không hợp lệ và đứng giữa hai trạng thái.
  */
 /** Một dòng sửa: { id, ...các trường vận hành }. */
 type Update = Record<string, unknown>;
@@ -34,17 +44,25 @@ export async function POST(req: NextRequest) {
     const user = await requireUser();
     const scope = await resolveTbycnnWriteScope(user);
 
-    const body = (await req.json().catch(() => ({}))) as { updates?: Update[] };
+    const body = (await req.json().catch(() => ({}))) as { updates?: Update[]; deletes?: unknown };
     const updates = Array.isArray(body.updates) ? body.updates : [];
-    if (updates.length === 0) throw fail("Không có dòng nào để lưu", 400);
+    const deleteIds = [
+      ...new Set((Array.isArray(body.deletes) ? body.deletes : []).map((id) => String(id ?? "")).filter(Boolean)),
+    ];
+    if (updates.length === 0 && deleteIds.length === 0) throw fail("Không có dòng nào để lưu", 400);
     if (updates.length > 1000) throw fail("Quá 1000 dòng một lượt — hãy lọc bớt rồi lưu lại", 400);
+    if (deleteIds.length > 1000) throw fail("Quá 1000 dòng xoá một lượt — hãy lọc bớt rồi làm lại", 400);
 
     const ids = updates.map((u) => String(u.id ?? "")).filter(Boolean);
     if (ids.length !== updates.length) throw fail("Có dòng thiếu id", 400);
+    // Một dòng vừa sửa vừa xoá thì sửa là vô nghĩa — chặn ở đây cho lỗi nói đúng nguyên
+    // nhân, thay vì để transaction chết vì cập nhật một bản ghi vừa bị xoá.
+    const conflicting = ids.filter((id) => deleteIds.includes(id));
+    if (conflicting.length > 0) throw fail("Có dòng vừa được sửa vừa được đánh dấu xoá — hãy tải lại trang", 400);
 
     const rows = await prisma.tbycnnEquipment.findMany({
-      where: { id: { in: ids } },
-      include: { period: { select: { label: true, isClosed: true } } },
+      where: { id: { in: [...ids, ...deleteIds] } },
+      include: { period: { select: { label: true, isClosed: true, allowItemDeletion: true } } },
     });
     const byId = new Map(rows.map((r) => [r.id, r]));
 
@@ -97,6 +115,37 @@ export async function POST(req: NextRequest) {
       writes.push(prisma.tbycnnEquipment.update({ where: { id }, data }));
     }
 
+    /*
+     * XOÁ DÒNG. Cùng ba rào với bước sửa, cộng thêm công tắc "Xoá thiết bị" của kỳ:
+     * `canDeleteEquipment` chỉ nới cho dòng gốc khi Quản trị đã bật công tắc đó.
+     * Giữ lại bản ghi trước khi xoá để ghi vào nhật ký — xoá xong thì không tra lại được.
+     */
+    const deleted: typeof rows = [];
+    for (const id of deleteIds) {
+      const existing = byId.get(id);
+      // Người khác vừa xoá xong thì coi như đã đạt mục đích, không bắt người dùng làm lại
+      // cả lượt chỉ vì một dòng đã biến mất.
+      if (!existing) continue;
+      if (existing.period.isClosed) throw fail(`Kỳ ${existing.period.label} đã chốt sổ, chỉ xem được`, 409);
+      if (!canWriteRow(scope, existing)) {
+        throw fail(`"${existing.tenThietBi}" không thuộc cương vị quản lý của bạn`, 403);
+      }
+      if (!canDeleteEquipment(existing, new Date(), existing.period.allowItemDeletion)) {
+        throw fail(
+          existing.sourceId != null
+            ? `"${existing.tenThietBi}" là thiết bị theo hồ sơ gốc — cần Quản trị bật công tắc Xoá thiết bị của kỳ`
+            : `"${existing.tenThietBi}": chỉ xoá được thiết bị tự thêm trong vòng ${TBYCNN_DELETE_WINDOW_DAYS} ngày, hoặc cần Quản trị bật công tắc Xoá thiết bị`,
+          403
+        );
+      }
+      deleted.push(existing);
+    }
+    // Số dòng SỬA phải chốt trước khi nhét lệnh xoá vào cùng mảng, không thì đếm nhầm.
+    const savedCount = writes.length;
+    if (deleted.length > 0) {
+      writes.push(prisma.tbycnnEquipment.deleteMany({ where: { id: { in: deleted.map((r) => r.id) } } }));
+    }
+
     if (writes.length === 0) throw fail("Không có thay đổi nào để lưu", 400);
     await prisma.$transaction(writes);
 
@@ -105,10 +154,16 @@ export async function POST(req: NextRequest) {
       "UPDATE_TBYCNN_BULK",
       "TbycnnEquipment",
       undefined,
-      auditDetailWithPosition(user, `Lưu một lượt ${writes.length} dòng sổ TBYCNN`),
-      { saveToAuditLog: true }
+      auditDetailWithPosition(
+        user,
+        `Lưu một lượt ${savedCount} dòng sổ TBYCNN` +
+          (deleted.length > 0
+            ? `; xoá ${deleted.length} thiết bị: ${deleted.map((r) => `"${r.tenThietBi}" (${r.khuVuc})`).join(", ")}`
+            : "")
+      ),
+      { saveToAuditLog: true, ...(deleted.length > 0 ? { beforeData: deleted } : {}) }
     );
 
-    return ok({ saved: writes.length });
+    return ok({ saved: savedCount, deleted: deleted.length });
   });
 }

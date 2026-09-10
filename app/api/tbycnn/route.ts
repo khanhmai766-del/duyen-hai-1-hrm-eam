@@ -65,7 +65,7 @@ export async function GET(req: NextRequest) {
     const now = new Date();
     const scope = { all: writeScope.all, codes: writeScope.codes as never[] };
     return ok(
-      rows.map((row) => serializeEquipment(row, now, scope)),
+      rows.map((row) => serializeEquipment(row, now, scope, period.allowItemDeletion && !period.isClosed)),
       {
         // `id` để giao diện gọi được route bật/tắt công tắc thêm thiết bị của ĐÚNG kỳ
         // đang xem; `allowItemCreation` để nút "Thêm thiết bị" hiện/ẩn theo công tắc.
@@ -75,6 +75,7 @@ export async function GET(req: NextRequest) {
           isClosed: period.isClosed,
           closedAt: period.closedAt,
           allowItemCreation: period.allowItemCreation,
+          allowItemDeletion: period.allowItemDeletion,
         },
         periods,
         // Có quyền ghi hay không, và ghi được cương vị nào — giao diện dùng để hiện menu
