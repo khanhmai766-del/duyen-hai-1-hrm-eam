@@ -22,6 +22,7 @@ export const dynamic = "force-dynamic";
 const TICKET_SELECT = {
   id: true,
   status: true,
+  settledAt: true,
   assignedPosition: true,
   docUrl: true,
   usagePhotoBeforeKey: true,
@@ -32,6 +33,7 @@ const TICKET_SELECT = {
 type TicketRow = {
   id: string;
   status: string;
+  settledAt: Date | null;
   assignedPosition: string;
   docUrl: string | null;
   usagePhotoBeforeKey: string | null;
@@ -68,6 +70,16 @@ async function requireUsagePhotoEditor(
   if (!positionsMatch(user.position, t.assignedPosition)) {
     throw fail(`Phiếu này được giao cho cương vị "${t.assignedPosition}" — bạn chỉ được xem`, 403);
   }
+}
+
+/**
+ * Quyết toán xong là CHỐT: ảnh còn nằm trên kho thêm vài ngày (xem
+ * `USAGE_PHOTO_RETENTION_DAYS`) nhưng chỉ để XEM LẠI và in lại biên bản, không phải để sửa.
+ * Đổi ảnh ở giai đoạn này sẽ tự động in đè lên BBNT D-Office đã phát hành — đúng thứ mà mốc
+ * quyết toán sinh ra để ngăn.
+ */
+function requireNotSettled(t: TicketRow) {
+  if (t.settledAt) throw fail("Phiếu đã quyết toán — ảnh hiện trường chỉ còn để xem lại, không sửa được", 409);
 }
 
 /**
@@ -119,6 +131,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     const user = await requireUser();
     const t = await loadTicket(params.id);
     await requireUsagePhotoEditor(user, t);
+    requireNotSettled(t);
 
     const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
     const slot = body.slot;
@@ -158,6 +171,7 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
     const user = await requireUser();
     const t = await loadTicket(params.id);
     await requireUsagePhotoEditor(user, t);
+    requireNotSettled(t);
 
     const slot = req.nextUrl.searchParams.get("slot");
     if (!isUsagePhotoSlot(slot)) return fail("Vị trí ảnh không hợp lệ");

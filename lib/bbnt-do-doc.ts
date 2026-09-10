@@ -7,12 +7,18 @@ import ImageModule from "docxtemplater-image-module-free";
 import { uploadS3Object, s3ProxyUrl, getS3ObjectBuffer } from "@/lib/s3";
 import { bbntDoFileName, vietnamDatePath, vietnamDocumentDate } from "@/lib/material-document-name";
 import { normalizeText } from "@/lib/nav";
+import { SCDTD_QUAN_DOC, SCDTD_REPRESENTATIVES } from "@/lib/constants";
 
 /**
- * Chức danh in ở Ô CHỮ KÝ của đại diện SCCN — KHÁC dòng "Chức vụ:" trong thân biên bản.
+ * Chức danh in ở Ô CHỮ KÝ của đại diện đơn vị sửa chữa — KHÁC dòng "Chức vụ:" trong thân
+ * biên bản (dòng đó in nguyên chức vụ đã chọn).
  *
- * Quản Đốc ký bằng chính danh nghĩa mình. Chức danh khác là KÝ THAY, nên theo thể thức
- * văn bản hành chính phải ghi "KT." kèm chức danh thật ở dòng dưới.
+ * Quản Đốc ký bằng chính danh nghĩa mình. Người khác là KÝ THAY, nên theo thể thức văn bản
+ * hành chính phải ghi "KT." kèm chức danh thật ở dòng dưới:
+ *
+ *   Phan Nguyễn Anh Thư            → "QUẢN ĐỐC PX. SCĐTĐ"
+ *   Hứa Minh Tùng, Nguyễn Ngọc Tuấn → "KT. QUẢN ĐỐC PX. SCĐTĐ" + chức vụ đã chọn ở dòng hai
+ *   Ba đại diện PX. SCCN            → luật cũ, xét theo ô "Chức vụ" đang chọn
  *
  * Mẫu .docx dùng thẻ VIẾT HOA `{{SCCNREPRESENTATIVEPOSITION}}` cho ô chữ ký, tách hẳn
  * khỏi thẻ thường `{{sccnRepresentativePosition}}` của dòng "Chức vụ:". Docxtemplater
@@ -20,14 +26,25 @@ import { normalizeText } from "@/lib/nav";
  *
  * Xuống dòng dựa vào `linebreaks: true` đã bật lúc khởi tạo Docxtemplater.
  */
-function sccnSignatureTitle(position?: string | null) {
+export function sccnSignatureTitle(name?: string | null, position?: string | null) {
   const value = (position ?? "").trim();
+  const signer = normalizeText(name ?? "");
+  // MỘT Ô CHỌN, HAI PHÂN XƯỞNG: biên bản không có trường nào khai phân xưởng của người ký,
+  // nên suy từ chính TÊN trong danh mục đại diện.
+  const isScdtd = (SCDTD_REPRESENTATIVES as readonly string[]).some((item) => normalizeText(item) === signer);
+  const xuong = isScdtd ? "PX. SCĐTĐ" : "PX.SCCN";
+  // PX. SC.ĐTĐ khoá "ai là Quản Đốc" theo TÊN: chọn nhầm ô Chức vụ thì biên bản vẫn phải ghi
+  // đúng thẩm quyền thật, không biến Quản Đốc thành người ký thay. PX. SCCN giữ luật cũ (xét
+  // theo chức vụ được chọn) để biên bản của ba đại diện cũ không đổi một chữ.
+  const laQuanDoc = isScdtd
+    ? signer === normalizeText(SCDTD_QUAN_DOC)
+    : normalizeText(value) === normalizeText("Quản Đốc");
+  if (laQuanDoc) return `QUẢN ĐỐC ${xuong}`;
   if (!value) return "";
-  if (normalizeText(value) === normalizeText("Quản Đốc")) return "QUẢN ĐỐC PX.SCCN";
-  // Dòng dưới lấy theo chức danh ĐƯỢC CHỌN chứ không viết cứng "PHÓ QUẢN ĐỐC": hôm nay
-  // danh sách chỉ có hai giá trị nên kết quả như nhau, nhưng nếu về sau thêm chức danh
-  // thì biên bản vẫn ghi đúng người ký thay thay vì ghi sai một chức vụ không liên quan.
-  return `KT. QUẢN ĐỐC PX.SCCN\n${value.toUpperCase()}`;
+  // Dòng dưới lấy theo chức danh ĐƯỢC CHỌN chứ không viết cứng "PHÓ QUẢN ĐỐC": danh sách
+  // chức vụ còn thêm về sau, và biên bản phải ghi đúng người ký thay thay vì một chức vụ
+  // không liên quan.
+  return `KT. QUẢN ĐỐC ${xuong}\n${value.toUpperCase()}`;
 }
 
 /* ============================================================
@@ -533,7 +550,7 @@ export async function generateBbntDoDoc(d: BbntDoData): Promise<{ key: string; u
     sccnRepresentativeName: d.sccnRepresentativeName || "",
     sccnRepresentativePosition: d.sccnRepresentativePosition || "",
     // Thẻ viết hoa của ô chữ ký — xem sccnSignatureTitle ở đầu tệp.
-    SCCNREPRESENTATIVEPOSITION: sccnSignatureTitle(d.sccnRepresentativePosition),
+    SCCNREPRESENTATIVEPOSITION: sccnSignatureTitle(d.sccnRepresentativeName, d.sccnRepresentativePosition),
     quanDocName: d.quanDocName || "……………………………",
     quanDocPosition: d.quanDocPosition || "Quản Đốc",
     usedByName: d.usedByName || "……………………………",

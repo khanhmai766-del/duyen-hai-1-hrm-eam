@@ -1646,13 +1646,21 @@ model MaterialTicket {
   recoveryDocUrl             String? // biên bản vật tư thu hồi (bổ sung khi có mẫu)
   recoveryDocNo              Int? // số văn bản BBTHVT đã cấp — giữ nguyên khi xuất lại biên bản
   recoveryDocNoYear          Int? // năm cấp số văn bản (dãy số reset mỗi năm)
-  // BƯỚC TRẢ PHIẾU VẬT TƯ THU HỒI (CHO_TRA_KHO_THU_HOI) — bước CUỐI, đứng sau Quyết toán.
-  // Khác `recoveryReturnedAt` (VHV tự khai lúc Sử dụng vật tư, nguồn của ô "khối lượng hoàn
-  // trả" in trên BBNT D-Office): bốn cột này ghi lúc chứng từ + vật tư đã thực sự về tới kho.
-  recoveryHandoverAt         DateTime? // ngày trả kho do người xác nhận nhập
-  recoveryHandoverById       String?
-  recoveryHandoverByName     String? // tên người mang đi trả (có thể nhờ người khác)
-  recoveryHandoverByPosition String?
+  // BƯỚC TRẢ PHIẾU VẬT TƯ THU HỒI (CHO_TRA_PHIEU_THU_HOI) — đứng ngay TRƯỚC Quyết toán.
+  //
+  // Theo dõi TỜ BIÊN BẢN, không phải hiện vật: `recoveryReturnedAt` ở trên là VHV khai đã
+  // giao vật tư thu hồi (nguồn ô "khối lượng hoàn trả" in trên BBNT D-Office), hai việc khác
+  // hẳn nhau nên không dùng chung cột nào.
+  //
+  // Hai chặng vì tờ biên bản đi rồi mới về:
+  recoveryDocSentAt           DateTime? // chặng 1 — đã đem BBTHVT sang kho
+  recoveryDocSentById         String?
+  recoveryDocSentByName       String? // người đem biên bản đi nộp
+  recoveryDocSentByPosition   String?
+  recoveryDocSignedAt         DateTime? // chặng 2 — kho đã ký và trả lại biên bản
+  recoveryDocSignedById       String?
+  recoveryDocSignedByName     String? // người nhận lại biên bản đã ký
+  recoveryDocSignedByPosition String?
   workStartedAt              DateTime? // thời gian ghi vào BBNT DO
   workEndedAt                DateTime?
   sccnRepresentativeName     String? // đại diện đơn vị sửa chữa cơ nhiệt in trên BBNT D-Office

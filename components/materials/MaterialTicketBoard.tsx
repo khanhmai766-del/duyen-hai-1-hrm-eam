@@ -6,7 +6,7 @@ import {
   Plus, Minus, X, Check, FileText, Zap, FlaskConical, ClipboardList, Package, Clock, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight,
   AlertTriangle, Ban, Download, CircleCheck, Circle, CircleDot, Loader2, Pencil, Trash2, UserCog, CalendarDays,
   Filter, ChevronDown, Search,
-  Wrench, ExternalLink,
+  Wrench, ExternalLink, Lock,
 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -39,7 +39,7 @@ import { DefectForm } from "@/components/defects/defect-form";
 import { useDefects, type DefectItem } from "@/hooks/useDefects";
 import { useDefectHistory } from "@/hooks/useDefectHistory";
 import { usePositions } from "@/hooks/useUsers";
-import { MIN_USAGE_PHOTOS, requiredUsagePhotos, minRecoveryQuantity, usesHandwrittenBbnt, COMMON_MATERIAL_POSITION, displayMaterialCategory, GAS_RETURN_STATUS, isChemicalFlowTicket, isGasCylinderTicket, isOtherMaterialAdvanceTicket, isOtherMaterialCategory, isOtherMaterialTicketType, isSingleStepTicketMaterial, CHEMICAL_TICKET_TYPE, isSupplementReason, MATERIAL_CATEGORY_FILTERS, materialCategoryMatches, materialTicketBelongsToRecoveryTab, materialTicketRequiresRecovery, RECOVERY_HANDOVER_STATUS, OTHER_MATERIAL_ADVANCE_TICKET_TYPE, OTHER_MATERIAL_GROUP, OTHER_MATERIAL_TICKET_TYPE, ticketReasonsFor, TICKET_REASONS, TICKET_REASON_OTHER, SINGLE_STEP_TICKET_TYPE, TICKET_MATERIAL_CATEGORIES, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
+import { MIN_USAGE_PHOTOS, USAGE_PHOTO_RETENTION_DAYS, requiredUsagePhotos, minRecoveryQuantity, usesHandwrittenBbnt, COMMON_MATERIAL_POSITION, displayMaterialCategory, GAS_RETURN_STATUS, isChemicalFlowTicket, isGasCylinderTicket, isOtherMaterialAdvanceTicket, isOtherMaterialCategory, isOtherMaterialTicketType, isSingleStepTicketMaterial, CHEMICAL_TICKET_TYPE, isSupplementReason, MATERIAL_CATEGORY_FILTERS, materialCategoryMatches, materialTicketBelongsToRecoveryTab, materialTicketRequiresRecovery, materialTicketAwaitsRecoveryDocSignature, SCCN_POSITIONS, SCCN_REPRESENTATIVES, RECOVERY_HANDOVER_STATUS, OTHER_MATERIAL_ADVANCE_TICKET_TYPE, OTHER_MATERIAL_GROUP, OTHER_MATERIAL_TICKET_TYPE, ticketReasonsFor, TICKET_REASONS, TICKET_REASON_OTHER, SINGLE_STEP_TICKET_TYPE, TICKET_MATERIAL_CATEGORIES, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
 import { normalizeText } from "@/lib/nav";
 import { materialTicketAlert } from "@/lib/material-ticket-alerts";
 import { positionsMatch } from "@/lib/position-catalog";
@@ -80,9 +80,10 @@ const STATUS: Record<string, { label: string; c: string }> = {
   HOAN_TAT: { label: "Hoàn tất", c: C.ok },
   TU_CHOI: { label: "Từ chối", c: C.bad },
 };
-/* Bước trả phiếu vật tư thu hồi — CHỈ hiện với phiếu có BBTHVT (xem `flowOf`/`orderOf`), là
-   bước CUỐI CÙNG, đứng sau Quyết toán: nó chỉ ghi thông tin trả biên bản để theo dõi, còn số
-   liệu thì đã chốt xong ở bước quyết toán. */
+/* Bước trả phiếu vật tư thu hồi — CHỈ hiện với phiếu có BBTHVT, tức lý do "Thay thế"/"Thay
+   mới" (xem `flowOf`/`orderOf`). Đứng ngay TRƯỚC Quyết toán và có HAI CHẶNG: đem biên bản
+   sang kho (mở đường sang Quyết toán ngay) rồi kho ký trả lại (đóng nốt hồ sơ, bấm được kể cả
+   khi phiếu đã hoàn tất). */
 const RECOVERY_HANDOVER_STEP = {
   key: RECOVERY_HANDOVER_STATUS,
   label: "Trả phiếu vật tư thu hồi",
@@ -100,8 +101,8 @@ const FLOW: Record<string, { key: string; label: string; who: string }[]> = {
     { key: "NHAN_VAT_TU", label: "Xác nhận vật tư lãnh", who: "Theo phân quyền quy trình" },
     { key: "SU_DUNG_VAT_TU", label: "Xác nhận vật tư sử dụng", who: "Theo phân quyền quy trình" },
     { key: "CHO_NGHIEM_THU", label: "Nghiệm thu và xuất BBNT", who: "Theo phân quyền quy trình" },
-    { key: "CHO_QUYET_TOAN", label: "Quyết toán vật tư", who: "Thống kê" },
     RECOVERY_HANDOVER_STEP,
+    { key: "CHO_QUYET_TOAN", label: "Quyết toán vật tư", who: "Thống kê" },
   ],
   UNG: [
     { key: "B0", label: "VHV tạo đề xuất", who: "VHV" },
@@ -109,8 +110,8 @@ const FLOW: Record<string, { key: string; label: string; who: string }[]> = {
     { key: "SU_DUNG_VAT_TU", label: "Xác nhận vật tư sử dụng", who: "Theo phân quyền quy trình" },
     { key: "CHO_NGHIEM_THU", label: "Nghiệm thu công việc", who: "Theo phân quyền quy trình" },
     { key: "NHAN_VAT_TU", label: "Xác nhận ĐXVT", who: "Thống kê" },
-    { key: "CHO_QUYET_TOAN", label: "Quyết toán vật tư", who: "Thống kê" },
     RECOVERY_HANDOVER_STEP,
+    { key: "CHO_QUYET_TOAN", label: "Quyết toán vật tư", who: "Thống kê" },
   ],
   // Luồng hóa chất: bỏ bước Trưởng ca/Trưởng kíp và cả cụm sử dụng — nghiệm thu — quyết toán.
   [CHEMICAL_TICKET_TYPE]: [
@@ -143,8 +144,8 @@ const FLOW: Record<string, { key: string; label: string; who: string }[]> = {
     { key: "SU_DUNG_VAT_TU", label: "Xác nhận vật tư sử dụng", who: "Theo phân quyền quy trình" },
     { key: "CHO_NGHIEM_THU", label: "Nghiệm thu và xuất BBTHVT", who: "Theo phân quyền quy trình" },
     { key: "CHO_THONG_KE_XUAT_BIEN_BAN", label: "Xuất BBNT DO", who: "Thống kê" },
-    { key: "CHO_QUYET_TOAN", label: "Quyết toán vật tư", who: "Thống kê" },
     RECOVERY_HANDOVER_STEP,
+    { key: "CHO_QUYET_TOAN", label: "Quyết toán vật tư", who: "Thống kê" },
   ],
 };
 const ORDER: Record<string, string[]> = {
@@ -153,9 +154,9 @@ const ORDER: Record<string, string[]> = {
   [CHEMICAL_TICKET_TYPE]: ["B0", "CHO_THONG_KE", "CHO_PHIEU__XUAT_KHO", "NHAN_VAT_TU", "HOAN_TAT"],
   [OTHER_MATERIAL_TICKET_TYPE]: ["B0", "CHO_PHIEU__XUAT_KHO", "NHAN_VAT_TU", "HOAN_TAT"],
   [OTHER_MATERIAL_ADVANCE_TICKET_TYPE]: ["B0", "NHAN_VAT_TU", "CHO_THONG_KE", "HOAN_TAT"],
-  DE_XUAT: ["B0", "CHO_THONG_KE", "CHO_PHIEU__XUAT_KHO", "NHAN_VAT_TU", "SU_DUNG_VAT_TU", "CHO_NGHIEM_THU", "CHO_QUYET_TOAN", RECOVERY_HANDOVER_STATUS, "HOAN_TAT"],
-  UNG: ["B0", "VHV_LANH_VAT_TU", "SU_DUNG_VAT_TU", "CHO_NGHIEM_THU", "NHAN_VAT_TU", "CHO_PHIEU__XUAT_KHO", "CHO_QUYET_TOAN", RECOVERY_HANDOVER_STATUS, "HOAN_TAT"],
-  SU_DUNG_HIEN_CO: ["B0", "XAC_NHAN_HIEN_CO", "NHAN_TU_HIEN_CO", "SU_DUNG_VAT_TU", "CHO_NGHIEM_THU", "CHO_THONG_KE_XUAT_BIEN_BAN", "CHO_QUYET_TOAN", RECOVERY_HANDOVER_STATUS, "HOAN_TAT"],
+  DE_XUAT: ["B0", "CHO_THONG_KE", "CHO_PHIEU__XUAT_KHO", "NHAN_VAT_TU", "SU_DUNG_VAT_TU", "CHO_NGHIEM_THU", RECOVERY_HANDOVER_STATUS, "CHO_QUYET_TOAN", "HOAN_TAT"],
+  UNG: ["B0", "VHV_LANH_VAT_TU", "SU_DUNG_VAT_TU", "CHO_NGHIEM_THU", "NHAN_VAT_TU", "CHO_PHIEU__XUAT_KHO", RECOVERY_HANDOVER_STATUS, "CHO_QUYET_TOAN", "HOAN_TAT"],
+  SU_DUNG_HIEN_CO: ["B0", "XAC_NHAN_HIEN_CO", "NHAN_TU_HIEN_CO", "SU_DUNG_VAT_TU", "CHO_NGHIEM_THU", "CHO_THONG_KE_XUAT_BIEN_BAN", RECOVERY_HANDOVER_STATUS, "CHO_QUYET_TOAN", "HOAN_TAT"],
 };
 /* Chai khí (xem `isGasCylinderTicket`): vẫn là DE_XUAT/UNG nhưng bỏ nghiệm thu + quyết toán,
    thay bằng bước cuối Xác nhận trả vỏ chai. Ứng thì Thống kê xác nhận ĐXVT nằm SAU bước lãnh. */
@@ -187,10 +188,10 @@ const isGasTicketFlow = (t: { type: string; materialCategory: string | null }) =
    ra chỉ thành một bước "đã xong" không có thật trong hồ sơ. */
 type FlowTicket = {
   type: string; status?: string; materialCategory: string | null;
-  recoveryRequired?: boolean | null; proposalNote?: string | null; recoveryHandoverAt?: string | null;
+  recoveryRequired?: boolean | null; proposalNote?: string | null; recoveryDocSentAt?: string | null;
 };
 const showsRecoveryHandoverStep = (t: FlowTicket) =>
-  materialTicketRequiresRecovery(t) && (!!t.recoveryHandoverAt || t.status !== "HOAN_TAT");
+  materialTicketRequiresRecovery(t) && (!!t.recoveryDocSentAt || t.status !== "HOAN_TAT");
 const flowOf = (t: FlowTicket) => {
   const steps = (isGasTicketFlow(t) ? GAS_FLOW[t.type] : FLOW[t.type]) ?? FLOW.CHUA_CHON;
   return showsRecoveryHandoverStep(t) ? steps : steps.filter((s) => s.key !== RECOVERY_HANDOVER_STATUS);
@@ -262,7 +263,7 @@ const STATUS_FILTER_OPTIONS = [
 ] as const;
 /* Số ngày phiếu đứng ở bước hiện tại = hôm nay - mốc thao tác gần nhất trên phiếu */
 const waitDaysOf = (t: MaterialTicket) => {
-  const stamps = [t.createdAt, t.proposedAt, t.confirmedAt, t.statsAt, t.receivedAt, t.usedAt, t.completedAt, t.recoveryHandoverAt]
+  const stamps = [t.createdAt, t.proposedAt, t.confirmedAt, t.statsAt, t.receivedAt, t.usedAt, t.completedAt, t.recoveryDocSentAt]
     .filter(Boolean)
     .map((s) => new Date(s as string).getTime());
   return Math.max(0, Math.floor((Date.now() - Math.max(...stamps)) / 86_400_000));
@@ -822,8 +823,6 @@ const CATEGORIES = TICKET_MATERIAL_CATEGORIES.filter((category) =>
   !["Chai khí", "Văn phòng phẩm", "Khác"].includes(category)
 );
 const UNITS = ["S1", "S2", "COMMON"];
-const SCCN_REPRESENTATIVES = ["Võ Văn Chiến", "Lê Văn Khánh", "Nguyễn Thanh Toàn"] as const;
-const SCCN_POSITIONS = ["Quản Đốc", "Phó Quản Đốc"] as const;
 type TicketDeviceOption = { seq: string; label: string; system: string | null; managingPosition: string | null; recoveryOnSupplement: boolean };
 const totalMaterialErpStock = (material: { erpCodes: { erpStock: number }[] }) =>
   material.erpCodes.reduce((total, item) => total + Number(item.erpStock || 0), 0);
@@ -1955,8 +1954,10 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
       : isGasCylinderTicket(t.materialCategory)
         ? `Xác nhận trả: ${t.recoveryQuantity ?? ""} ${t.items[0]?.material.unit ?? ""}`.trim()
         : `Nghiệm thu${materialTicketRequiresRecovery(t) ? ", xuất BBTHVT" : ""}` },
-    t.recoveryHandoverAt && { at: t.recoveryHandoverAt, who: t.recoveryHandoverByName, pos: t.recoveryHandoverByPosition,
-      what: `Trả phiếu vật tư thu hồi${t.recoveryQuantity != null ? `: ${t.recoveryQuantity} ${t.items[0]?.material.unit ?? ""}`.trimEnd() : ""}` },
+    t.recoveryDocSentAt && { at: t.recoveryDocSentAt, who: t.recoveryDocSentByName, pos: t.recoveryDocSentByPosition,
+      what: `Đem Biên bản vật tư thu hồi sang kho${t.recoveryQuantity != null ? ` — ${t.recoveryQuantity} ${t.items[0]?.material.unit ?? ""}`.trimEnd() : ""}` },
+    t.recoveryDocSignedAt && { at: t.recoveryDocSignedAt, who: t.recoveryDocSignedByName, pos: t.recoveryDocSignedByPosition,
+      what: "Kho đã ký và trả lại Biên bản vật tư thu hồi" },
     t.settledAt && { at: t.settledAt, who: t.settledByName, what: `Quyết toán vật tư · Số BBNT DO ${t.bbntDoNumber ?? "—"}` },
     ...(t.activityLogs ?? []).filter((log) => log.action === "MT_EDIT_STEP").map((log) => ({
       at: log.createdAt, who: log.user.name, pos: log.user.position, what: log.detail ?? "Chỉnh sửa nội dung bước",
@@ -1978,7 +1979,10 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
                   t.type === "UNG" && ["CHO_THONG_KE", "CHO_PHIEU__XUAT_KHO", "CHO_XAC_NHAN_PHAT"].includes(t.status)
                     ? "NHAN_VAT_TU" : flowStatus
                 );
+	            // Hai cảnh báo vàng KHÁC NHAU, đừng gộp: một cái là VHV chưa giao hiện vật thu
+	            // hồi (bước Sử dụng), cái kia là kho chưa ký trả lại TỜ BIÊN BẢN (bước Trả phiếu).
 	            const recoveryPending = s.key === "SU_DUNG_VAT_TU" && !!t.usedAt && materialTicketRequiresRecovery(t) && !t.recoveryReturnedAt;
+	            const docSignaturePending = s.key === RECOVERY_HANDOVER_STATUS && materialTicketAwaitsRecoveryDocSignature(t);
 	            const reviewable = done || (t.type === "UNG" && s.key === "CHO_HOAN_THIEN" && !!t.bbktNumber);
 	            const waitingForRepairRequest = t.type === "DE_XUAT" && t.status === "CHO_PHIEU_YCSC" && cur;
 	            const caption = waitingForRepairRequest
@@ -1988,10 +1992,15 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
 	              : s.key === "CHO_PHIEU__XUAT_KHO" && t.proposalReceiverName
 	              ? "Xem lại"
 	              : `${s.who}${reviewable ? " · Xem lại" : ""}`;
+	            const pendingMark = recoveryPending || docSignaturePending;
 	            return (
-	              <button type="button" key={s.key} disabled={!reviewable} onClick={() => setReviewStep(s.key)} className={`step step-review ${done && !recoveryPending ? "done" : ""} ${recoveryPending ? "recovery-pending" : ""} ${cur ? "cur" : ""} ${stepWarning ? "step-warning" : ""}`}>
-	                {stepWarning || recoveryPending ? <AlertTriangle size={17} /> : done ? <CircleCheck size={17} /> : cur ? <CircleDot size={17} /> : <Circle size={17} />}
-	                <div><b>{waitingForRepairRequest ? "Đã lãnh vật tư · Chờ SYC" : s.label}</b><span>{recoveryPending ? "Chưa xác nhận trả vật tư thu hồi · Xem lại" : caption}</span></div>
+	              <button type="button" key={s.key} disabled={!reviewable && !docSignaturePending} onClick={() => setReviewStep(s.key)} className={`step step-review ${done && !pendingMark ? "done" : ""} ${pendingMark ? "recovery-pending" : ""} ${cur ? "cur" : ""} ${stepWarning ? "step-warning" : ""}`}>
+	                {stepWarning || pendingMark ? <AlertTriangle size={17} /> : done ? <CircleCheck size={17} /> : cur ? <CircleDot size={17} /> : <Circle size={17} />}
+	                <div><b>{waitingForRepairRequest ? "Đã lãnh vật tư · Chờ SYC" : s.label}</b><span>
+	                  {recoveryPending ? "Chưa xác nhận trả vật tư thu hồi · Xem lại"
+	                    : docSignaturePending ? "Kho chưa ký trả lại biên bản · Xác nhận"
+	                    : caption}
+	                </span></div>
 	              </button>
 	            );
 	          })}
@@ -2160,7 +2169,7 @@ const STEP_EDIT = {
   SU_DUNG_VAT_TU: { step: "use", permission: "use" },
   CHO_NGHIEM_THU: { step: "accept", permission: "accept" },
   CHO_THONG_KE_XUAT_BIEN_BAN: { step: "statsExport", permission: "stats" },
-  [RECOVERY_HANDOVER_STATUS]: { step: "recoveryHandover", permission: "recoveryReturn" },
+  [RECOVERY_HANDOVER_STATUS]: { step: "recoveryDoc", permission: "recoveryReturn" },
   CHO_QUYET_TOAN: { step: "settle", permission: "settle" },
 } as const satisfies Record<string, { step: string; permission: keyof NonNullable<TicketViewer["steps"]> }>;
 
@@ -2216,7 +2225,9 @@ function StepReviewDialog({ t, viewer, stepKey, onClose }: { t: MaterialTicket; 
   const [bbktNumber, setBbktNumber] = useState(t.bbktNumber ?? "");
   const [reason, setReason] = useState(t.proposalNote ?? "");
   // Ảnh hiện trường của bước sử dụng — xem lại, gỡ, thay ảnh khác ngay tại đây.
-  const usagePhotos = useTicketUsagePhotos(t.id, editStep === "use");
+  // Bước "Xuất BBNT DO" cũng cần biết ảnh còn hay đã bị dọn, để lời cảnh báo về việc in lại
+  // biên bản nói đúng tình trạng thật của phiếu này.
+  const usagePhotos = useTicketUsagePhotos(t.id, editStep === "use" || editStep === "statsExport");
   const usagePhotoCount = (usagePhotos.data ?? []).filter((photo) => photo.url).length;
   /* Ngưỡng ảnh CỦA CHÍNH PHIẾU: phiếu qua bước hồi luật còn 2/3 được tha, không thì mở
      hộp Xem lại ra là nút Lưu xám vĩnh viễn. Cùng luật với máy chủ. */
@@ -2232,9 +2243,24 @@ function StepReviewDialog({ t, viewer, stepKey, onClose }: { t: MaterialTicket; 
   const [reissueBbntDo, setReissueBbntDo] = useState(false);
   // Bước Quyết toán: số biên bản D-Office cấp cho tệp BBNT đã xuất.
   const [bbntDoNumberReview, setBbntDoNumberReview] = useState(t.bbntDoNumber ?? "");
-  // Bước Trả phiếu vật tư thu hồi: ngày nộp kho và người mang đi nộp.
-  const [handoverDateReview, setHandoverDateReview] = useState(dateInputValue(t.recoveryHandoverAt));
-  const [handoverNameReview, setHandoverNameReview] = useState(t.recoveryHandoverByName ?? "");
+  // Bước Trả phiếu vật tư thu hồi: chỉ sửa NGÀY của hai chặng; tên người là dấu vết của cú
+  // bấm xác nhận nên máy chủ giữ nguyên, không cho gõ đè.
+  const [docSentDateReview, setDocSentDateReview] = useState(dateInputValue(t.recoveryDocSentAt));
+  const [docSignedDateReview, setDocSignedDateReview] = useState(dateInputValue(t.recoveryDocSignedAt));
+  /*
+   * Bấm xác nhận ngay trong hộp này thì mốc do máy chủ ghi phải chảy thẳng vào ô ngày, chứ
+   * không để ô trống trong khi thẻ bên trên đã hiện ngày — người dùng mở hộp ra trước, hai
+   * ô kia khởi tạo lúc đó nên không tự biết chuyện vừa xảy ra.
+   *
+   * Chỉ đồng bộ khi GIÁ TRỊ ĐÃ LƯU đổi (null → có ngày, hoặc lần sửa trước vừa lưu xong),
+   * nên chữ người dùng đang gõ dở không bị đạp; sửa rồi bấm Lưu mới ghi thay đổi.
+   */
+  React.useEffect(() => {
+    setDocSentDateReview(dateInputValue(t.recoveryDocSentAt));
+  }, [t.recoveryDocSentAt]);
+  React.useEffect(() => {
+    setDocSignedDateReview(dateInputValue(t.recoveryDocSignedAt));
+  }, [t.recoveryDocSignedAt]);
 
   const label = flowOf(t).find((step) => step.key === stepKey)?.label ?? "Chi tiết bước";
   async function save() {
@@ -2282,9 +2308,9 @@ function StepReviewDialog({ t, viewer, stepKey, onClose }: { t: MaterialTicket; 
       // Máy chủ chỉ đọc cờ này khi phiếu đã quyết toán; chưa quyết toán thì luôn in lại.
       reissueBbntDo,
     });
-    if (editStep === "recoveryHandover") Object.assign(payload, {
-      handoverAt: handoverDateReview,
-      handoverByName: handoverNameReview.trim(),
+    if (editStep === "recoveryDoc") Object.assign(payload, {
+      docSentAt: docSentDateReview,
+      docSignedAt: docSignedDateReview,
     });
     if (editStep === "settle") Object.assign(payload, { bbntDoNumber: bbntDoNumberReview.trim() });
     try {
@@ -2293,7 +2319,7 @@ function StepReviewDialog({ t, viewer, stepKey, onClose }: { t: MaterialTicket; 
       // Hai bước cuối không đụng tới biên bản (trừ khi chủ động chọn in lại BBNT D-Office),
       // nên đừng hứa "đã cập nhật biên bản đã xuất" cho một tệp không hề được ghi lại.
       toast.success(
-        editStep === "recoveryHandover" ? "Đã lưu ngày và người trả phiếu vật tư thu hồi"
+        editStep === "recoveryDoc" ? "Đã lưu ngày của bước trả phiếu vật tư thu hồi"
         : editStep === "settle" ? "Đã lưu số BBNT DO và đồng bộ sang lịch sử thay thế"
         : editStep === "statsExport" ? (t.settledAt && !reissueBbntDo
             ? "Đã lưu đại diện SCCN; giữ nguyên tệp BBNT D-Office đã phát hành"
@@ -2424,7 +2450,7 @@ function StepReviewDialog({ t, viewer, stepKey, onClose }: { t: MaterialTicket; 
           <label>Mã vật tư ERP<input value={t.items[0]?.erpCode ?? t.items[0]?.material.code ?? "—"} disabled /></label>
           <label>Tên vật tư ERP<input value={t.items[0]?.erpName ?? t.items[0]?.material.name ?? "—"} disabled /></label>
           <div className="review-accept-grid">
-            <label>Đại diện SCCN *
+            <label>Đại diện SCCN/ SC. ĐTĐ *
               <select value={sccnRepresentativeReview} disabled={!canEdit} onChange={(e) => setSccnRepresentativeReview(e.target.value)}>
                 <option value="">— Chọn đại diện SCCN —</option>
                 {SCCN_REPRESENTATIVES.map((name) => <option key={name} value={name}>{name}</option>)}
@@ -2442,26 +2468,66 @@ function StepReviewDialog({ t, viewer, stepKey, onClose }: { t: MaterialTicket; 
               <input type="checkbox" disabled={!canEdit} checked={reissueBbntDo} onChange={(e) => setReissueBbntDo(e.target.checked)} />
               <span>
                 <b>Xuất lại BBNT D-Office theo tên đại diện mới</b>
-                <small>Phiếu đã quyết toán nên 3 ảnh hiện trường đã bị xóa. Bản in lại sẽ ghi đè đúng tệp đang treo trên phiếu và KHÔNG còn ảnh. Không tick thì chỉ sửa dữ liệu, tệp cũ giữ nguyên.</small>
+                <small>
+                  {/* Ảnh nay sống thêm vài ngày sau quyết toán, nên câu cảnh báo phải nói đúng
+                      tình trạng THẬT của phiếu này chứ không hù dọa chung chung. */}
+                  {usagePhotoCount > 0
+                    ? `Phiếu đã quyết toán. Ba ảnh hiện trường còn trên kho tệp (${usagePhotoCount}/3) nên bản in lại vẫn có ảnh; quá ${USAGE_PHOTO_RETENTION_DAYS} ngày kể từ lúc quyết toán thì ảnh bị dọn và in lại sẽ mất ảnh.`
+                    : `Phiếu đã quyết toán quá ${USAGE_PHOTO_RETENTION_DAYS} ngày nên 3 ảnh hiện trường đã bị dọn. Bản in lại sẽ ghi đè đúng tệp đang treo trên phiếu và KHÔNG còn ảnh.`}
+                  {" Không tick thì chỉ sửa dữ liệu, tệp cũ giữ nguyên."}
+                </small>
               </span>
             </label>
           ) : (
             <p className="hint">Lưu xong sẽ xuất lại BBNT D-Office mang tên đại diện mới, ghi đè đúng tệp đang treo trên phiếu.</p>
           )}
         </>}
-        {editStep === "recoveryHandover" && <>
-          <div className="review-accept-grid">
-            <label>Ngày trả kho *
-              <input type="date" value={handoverDateReview} disabled={!canEdit} onChange={(e) => setHandoverDateReview(e.target.value)} />
-            </label>
-            <label>Người trả kho *
-              <input value={handoverNameReview} disabled={!canEdit} onChange={(e) => setHandoverNameReview(e.target.value)} placeholder="Họ tên người mang đi nộp" />
-            </label>
+        {editStep === "recoveryDoc" && <>
+          {/* Cùng hai thẻ chặng như khung thao tác, để người dùng không phải học hai bố cục.
+              Chặng 2 bấm được NGAY TẠI ĐÂY kể cả khi phiếu đã đi tiếp — đó là đường duy nhất
+              đóng nốt hồ sơ sau khi chặng 1 đã đẩy phiếu sang Quyết toán. */}
+          <div className="doc-return-grid">
+            <DocReturnStage
+              index={1}
+              title="Đem biên bản sang kho"
+              hint="Chưa xác nhận."
+              doneAt={t.recoveryDocSentAt}
+              doneBy={t.recoveryDocSentByName}
+              actionLabel="Xác nhận đã đem đi trả"
+              disabled={act.isPending || !canEdit}
+              onConfirm={() => void act.mutateAsync({ action: "recoveryHandover" })
+                .then(() => toast.success("Đã ghi nhận đem biên bản sang kho"))
+                .catch((e) => toast.error(e instanceof Error ? e.message : "Không ghi được"))}
+            />
+            <DocReturnStage
+              index={2}
+              title="Kho ký và trả lại biên bản"
+              hint="Bấm khi đã nhận lại biên bản có chữ ký của kho."
+              doneAt={t.recoveryDocSignedAt}
+              doneBy={t.recoveryDocSignedByName}
+              actionLabel="Xác nhận kho đã ký trả lại"
+              lockedNote="Chờ xác nhận bước 1"
+              locked={!t.recoveryDocSentAt}
+              disabled={act.isPending || !canEdit}
+              onConfirm={() => void act.mutateAsync({ action: "recoveryDocSigned" })
+                .then(() => toast.success("Đã ghi nhận kho ký trả lại biên bản"))
+                .catch((e) => toast.error(e instanceof Error ? e.message : "Không ghi được"))}
+            />
           </div>
+          {t.recoveryDocSentAt && (
+            <div className="review-accept-grid">
+              <label>Ngày đem đi trả
+                <input type="date" value={docSentDateReview} disabled={!canEdit} onChange={(e) => setDocSentDateReview(e.target.value)} />
+              </label>
+              <label>Ngày kho ký trả lại
+                <input type="date" value={docSignedDateReview} disabled={!canEdit || !t.recoveryDocSignedAt} onChange={(e) => setDocSignedDateReview(e.target.value)} />
+              </label>
+            </div>
+          )}
           <p className="hint">
-            Bước cuối, đứng sau Quyết toán: ghi nhận vật tư thu hồi và Biên bản vật tư thu hồi
-            đã về tới kho. Ngày và người trả kho không in trong biên bản nào nên sửa ở đây
-            không phải xuất lại tệp.
+            Bước này theo dõi TỜ BIÊN BẢN thu hồi, khác với ô &ldquo;đã trả vật tư thu hồi xong&rdquo;
+            ở bước Sử dụng vật tư (đó là VHV giao hiện vật). Tên người xác nhận do hệ thống ghi
+            theo người bấm nên không sửa được; chỉ chỉnh lại ngày nếu bấm muộn hơn thực tế.
           </p>
         </>}
         {editStep === "settle" && <>
@@ -2486,7 +2552,7 @@ function StepReviewDialog({ t, viewer, stepKey, onClose }: { t: MaterialTicket; 
             </span>
           )}
           <button className="btn ghost" onClick={onClose}>Đóng</button>
-          {canEdit && <button className="btn primary" disabled={act.isPending || missingUsagePhotos || (editStep === "confirm" && !reason.trim()) || (editStep === "accept" && (!pctNumber.trim() || !chiHuyName.trim() || !completionNote.trim() || !workStartedAt || !workEndedAt)) || (editStep === "statsExport" && (!sccnRepresentativeReview || !sccnPositionReview)) || (editStep === "settle" && !bbntDoNumberReview.trim()) || (editStep === "recoveryHandover" && (!handoverDateReview || !handoverNameReview.trim()))} onClick={save}>{act.isPending ? <Loader2 className="spin" size={14} /> : <Pencil size={14} />} Lưu chỉnh sửa</button>}
+          {canEdit && <button className="btn primary" disabled={act.isPending || missingUsagePhotos || (editStep === "confirm" && !reason.trim()) || (editStep === "accept" && (!pctNumber.trim() || !chiHuyName.trim() || !completionNote.trim() || !workStartedAt || !workEndedAt)) || (editStep === "statsExport" && (!sccnRepresentativeReview || !sccnPositionReview)) || (editStep === "settle" && !bbntDoNumberReview.trim()) || (editStep === "recoveryDoc" && !docSentDateReview)} onClick={save}>{act.isPending ? <Loader2 className="spin" size={14} /> : <Pencil size={14} />} Lưu chỉnh sửa</button>}
         </div>
       </div>
     </div>
@@ -3097,6 +3163,51 @@ function ChemicalTruckSection({ t, viewer }: { t: MaterialTicket; viewer: Ticket
   );
 }
 
+/**
+ * MỘT CHẶNG của bước Trả phiếu vật tư thu hồi. Dùng chung cho khung thao tác và hộp "Xem
+ * lại" nên hai chỗ luôn nói cùng một thứ.
+ *
+ * Xong rồi thì thẻ chuyển sang trạng thái đã ghi (ngày + người, do máy chủ đóng băng lúc
+ * bấm) và nút biến mất — không có nút nào bấm lại được để tránh ghi đè dấu vết.
+ */
+function DocReturnStage({
+  index, title, hint, doneAt, doneBy, actionLabel, onConfirm, locked = false, lockedNote, disabled = false,
+}: {
+  index: number;
+  title: string;
+  hint: string;
+  doneAt: string | null;
+  doneBy: string | null;
+  actionLabel: string;
+  onConfirm: () => void;
+  locked?: boolean;
+  lockedNote?: string;
+  disabled?: boolean;
+}) {
+  const done = Boolean(doneAt);
+  return (
+    <div className={`doc-return-stage ${done ? "done" : locked ? "locked" : "ready"}`}>
+      <div className="doc-return-head">
+        <span className="doc-return-index">{done ? <Check size={13} strokeWidth={3} /> : locked ? <Lock size={12} /> : index}</span>
+        <b>{title}</b>
+      </div>
+      {done ? (
+        <div className="doc-return-done">
+          <span className="doc-return-date">{fmtDay(doneAt)}</span>
+          {doneBy && <span className="doc-return-by">{doneBy}</span>}
+        </div>
+      ) : (
+        <p className="doc-return-hint">{locked ? lockedNote ?? hint : hint}</p>
+      )}
+      {!done && (
+        <button type="button" className="btn primary doc-return-btn" disabled={locked || disabled} onClick={onConfirm}>
+          <Check size={15} /> {actionLabel}
+        </button>
+      )}
+    </div>
+  );
+}
+
 function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | null }) {
   const acts = actionsFor(t, viewer);
   const act = useTicketAction(t.id);
@@ -3156,10 +3267,6 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
       ? (t.receivedQuantity ?? t.vhvReceivedQuantity ?? 1)
       : minRecoveryQuantity(t))));
   const [recoveryReturned, setRecoveryReturned] = useState(!!t.recoveryReturnedAt);
-  // Bước Trả phiếu vật tư thu hồi: ngày mặc định là hôm nay, người trả mặc định là người đang
-  // đăng nhập — cả hai đều sửa được vì có thể nhờ người khác mang đi nộp.
-  const [recoveryHandoverDate, setRecoveryHandoverDate] = useState(() => new Date().toISOString().slice(0, 10));
-  const [recoveryHandoverName, setRecoveryHandoverName] = useState(t.recoveryHandoverByName ?? t.materialUserName ?? viewer?.name ?? "");
   const [startedAt, setStartedAt] = useState("");
   const [endedAt, setEndedAt] = useState("");
   const confirmationMaterialOption = opts?.materials.find((material) => material.id === t.items[0]?.materialId);
@@ -3993,7 +4100,7 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
             <div><b>Xuất BBNT D-Office</b><small>Chọn đại diện SCCN ký biên bản và hoàn thành bước Xác nhận ĐXVT.</small></div>
           </div>
           <div className="advance-phase-grid">
-            <label className="field">Đại diện SCCN *
+            <label className="field">Đại diện SCCN/ SC. ĐTĐ *
               <select value={sccnRepresentative} onChange={(e) => setSccnRepresentative(e.target.value)}>
                 <option value="">— Chọn đại diện SCCN —</option>
                 {SCCN_REPRESENTATIVES.map((name) => <option key={name} value={name}>{name}</option>)}
@@ -4072,7 +4179,7 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
         <DeliveryPhotoField value={deliveryPhoto} onChange={setDeliveryPhoto} />
         {advanceDocumentLocked && (
           <div className="accept-two-grid">
-            <label className="field">Đại diện SCCN *
+            <label className="field">Đại diện SCCN/ SC. ĐTĐ *
               <select value={sccnRepresentative} onChange={(e) => setSccnRepresentative(e.target.value)}>
                 <option value="">— Chọn đại diện SCCN —</option>
                 {SCCN_REPRESENTATIVES.map((name) => <option key={name} value={name}>{name}</option>)}
@@ -4314,7 +4421,7 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
         )}
         {exportsBbntDo && (
           <div className="accept-two-grid">
-            <label className="field">Đại diện SCCN *
+            <label className="field">Đại diện SCCN/ SC. ĐTĐ *
               <select value={sccnRepresentative} onChange={(e) => setSccnRepresentative(e.target.value)}>
                 <option value="">— Chọn đại diện SCCN —</option>
                 {SCCN_REPRESENTATIVES.map((name) => <option key={name} value={name}>{name}</option>)}
@@ -4355,29 +4462,36 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
       <div className="act">
         <label className="lb">Trả phiếu vật tư thu hồi</label>
         <div className="note"><FileText size={14} /><span>
-          Phiếu đã quyết toán xong. Nộp <b>vật tư thu hồi{t.recoveryQuantity != null ? ` (${t.recoveryQuantity}${unit ? ` ${unit}` : ""})` : ""}</b> kèm <b>Biên bản vật tư thu hồi</b> cho kho, kho nhận xong thì ghi lại thông tin tại đây để hoàn tất phiếu.
+          Đem <b>Biên bản vật tư thu hồi</b>{t.recoveryQuantity != null ? <> (vật tư thu hồi <b>{t.recoveryQuantity}{unit ? ` ${unit}` : ""}</b>)</> : null} sang kho ký.
+          Xác nhận <b>bước 1</b> là phiếu đi tiếp sang Quyết toán ngay, không phải đứng chờ chữ ký của kho.
         </span></div>
         {!t.recoveryDocUrl && (
-          <div className="warnbox"><AlertTriangle size={15} /> Phiếu chưa có tệp BBTHVT trên hệ thống. Vẫn xác nhận được nếu bản giấy đã nộp kho, nhưng nên báo Thống kê xuất lại biên bản.</div>
+          <div className="warnbox"><AlertTriangle size={15} /> Phiếu chưa có tệp BBTHVT trên hệ thống — báo Thống kê xuất biên bản trước khi đem đi.</div>
         )}
-        <div className="chem-grid">
-          <div>
-            <label className="lb">Ngày trả kho *</label>
-            <input type="date" value={recoveryHandoverDate} onChange={(e) => setRecoveryHandoverDate(e.target.value)} />
-          </div>
-          <div>
-            <label className="lb">Người trả kho *</label>
-            <input value={recoveryHandoverName} onChange={(e) => setRecoveryHandoverName(e.target.value)} placeholder="Họ tên người mang đi nộp" />
-          </div>
+        <div className="doc-return-grid">
+          <DocReturnStage
+            index={1}
+            title="Đem biên bản sang kho"
+            hint="Bấm khi đã cầm biên bản qua kho. Ngày và tên người xác nhận được ghi tự động."
+            doneAt={t.recoveryDocSentAt}
+            doneBy={t.recoveryDocSentByName}
+            actionLabel="Xác nhận đã đem đi trả"
+            disabled={act.isPending}
+            onConfirm={() => run({ action: "recoveryHandover" }, "Đã ghi nhận đem biên bản sang kho")}
+          />
+          <DocReturnStage
+            index={2}
+            title="Kho ký và trả lại biên bản"
+            hint="Chỉ mở sau bước 1. Bấm khi đã nhận lại biên bản có chữ ký của kho."
+            doneAt={t.recoveryDocSignedAt}
+            doneBy={t.recoveryDocSignedByName}
+            actionLabel="Xác nhận kho đã ký trả lại"
+            lockedNote="Chờ xác nhận bước 1"
+            locked={!t.recoveryDocSentAt}
+            disabled={act.isPending}
+            onConfirm={() => run({ action: "recoveryDocSigned" }, "Đã ghi nhận kho ký trả lại biên bản")}
+          />
         </div>
-        <button className="btn primary big"
-          disabled={act.isPending || !recoveryHandoverDate || !recoveryHandoverName.trim()}
-          onClick={() => run(
-            { action: "recoveryHandover", handoverAt: recoveryHandoverDate, handoverByName: recoveryHandoverName.trim() },
-            "Đã xác nhận trả phiếu vật tư thu hồi, phiếu hoàn tất",
-          )}>
-          {act.isPending ? <Loader2 className="spin" size={15} /> : <Check size={15} />} Xác nhận đã trả phiếu và hoàn tất
-        </button>
       </div>
     );
   }
@@ -4885,6 +4999,25 @@ const CSS = `
 .receive-existing-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px;align-items:end;}
 .receive-existing-field{display:flex;min-width:0;flex-direction:column;gap:11px;}
 .receive-existing-hint{display:flex;min-height:42px;align-items:center;margin:0;padding:0 2px;line-height:1.45;}
+/* HAI CHẶNG của bước Trả phiếu vật tư thu hồi. Dùng lại đúng ngôn ngữ hình khối của các
+   thẻ sẵn có trong khung thao tác (viền mảnh, bo 12px, nền gradient nhạt) để không sinh ra
+   một kiểu thẻ thứ hai; chỉ khác ở màu trạng thái: chờ → xanh, xong → xanh lá, khoá → xám. */
+.doc-return-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px;}
+.doc-return-stage{display:flex;flex-direction:column;gap:8px;border:1px solid #dbe3ee;border-radius:12px;background:#fff;padding:12px 14px;box-shadow:0 1px 2px rgba(15,35,64,.04);transition:border-color .16s ease,box-shadow .16s ease;}
+.doc-return-stage.ready{border-color:#bfdbfe;background:linear-gradient(145deg,#eff6ff 0%,#f8fbff 100%);}
+.doc-return-stage.done{border-color:#bbf7d0;background:linear-gradient(145deg,#f0fdf4 0%,#f8fffb 100%);}
+.doc-return-stage.locked{background:#f8fafc;color:#94a3b8;}
+.doc-return-head{display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:800;color:${C.navy};}
+.doc-return-stage.locked .doc-return-head{color:#94a3b8;}
+.doc-return-index{display:grid;place-items:center;width:20px;height:20px;flex-shrink:0;border-radius:999px;background:${C.accent};color:#fff;font-size:11px;font-weight:800;}
+.doc-return-stage.done .doc-return-index{background:${C.ok};}
+.doc-return-stage.locked .doc-return-index{background:#cbd5e1;}
+.doc-return-hint{margin:0;font-size:11.5px;line-height:1.45;color:#64748b;}
+.doc-return-stage.locked .doc-return-hint{color:#94a3b8;}
+.doc-return-done{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 8px;}
+.doc-return-date{font-size:14px;font-weight:800;color:${C.ok};}
+.doc-return-by{font-size:11.5px;font-weight:600;color:#64748b;}
+.doc-return-btn{width:100%;justify-content:center;margin-top:auto;}
 .settlement-number-card{display:flex;flex-direction:column;gap:7px;border:1px solid #bfdbfe;border-radius:12px;background:linear-gradient(145deg,#eff6ff 0%,#f8fbff 100%);padding:13px 15px;box-shadow:0 2px 8px rgba(37,99,235,.06);}
 .settlement-number-card .field{margin:0!important;color:${C.navy}!important;font-size:12px!important;font-weight:800!important;}
 .settlement-number-card .field input{height:42px;margin-top:7px;background:#fff;}

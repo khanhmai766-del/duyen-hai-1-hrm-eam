@@ -49,8 +49,9 @@ export type MaterialTicketForN8nSync = {
   recoveryRequired: boolean | null;
   recoveryQuantity: number | null;
   recoveryReturnedAt: Date | null;
-  recoveryHandoverAt: Date | null;
-  recoveryHandoverByName: string | null;
+  recoveryDocSentAt: Date | null;
+  recoveryDocSentByName: string | null;
+  recoveryDocSignedAt: Date | null;
   recoveryDocNo: number | null;
   recoveryDocNoYear: number | null;
   createdByName: string;
@@ -173,17 +174,18 @@ function quantityWithUnit(value: number | null, unit: string) {
 
 function recoverySummary(ticket: MaterialTicketForN8nSync, unit: string) {
   if (!ticket.recoveryRequired && !ticket.recoveryQuantity && !ticket.recoveryReturnedAt) return null;
-  // Bước Trả phiếu vật tư thu hồi ghép vào ĐÚNG ô này thay vì thêm cột Sheet mới — thêm cột là
-  // phải sửa mapping của mọi workflow n8n đang chạy.
+  // Hai chặng của bước Trả phiếu vật tư thu hồi ghép vào ĐÚNG ô này thay vì thêm cột Sheet
+  // mới — thêm cột là phải sửa mapping của mọi workflow n8n đang chạy.
   return joinText([
     ticket.recoveryReturnedAt ? `Ngày trả: ${formatDate(ticket.recoveryReturnedAt)}` : null,
     ticket.materialUserName || ticket.usedByName
       ? `Người trả: ${ticket.materialUserName ?? ticket.usedByName}`
       : null,
     ticket.recoveryQuantity != null ? `Số lượng trả: ${quantityWithUnit(ticket.recoveryQuantity, unit)}` : null,
-    ticket.recoveryHandoverAt
-      ? `Nộp kho: ${formatDate(ticket.recoveryHandoverAt)}${ticket.recoveryHandoverByName ? ` — ${ticket.recoveryHandoverByName}` : ""}`
+    ticket.recoveryDocSentAt
+      ? `Nộp biên bản: ${formatDate(ticket.recoveryDocSentAt)}${ticket.recoveryDocSentByName ? ` — ${ticket.recoveryDocSentByName}` : ""}`
       : null,
+    ticket.recoveryDocSignedAt ? `Kho ký trả lại: ${formatDate(ticket.recoveryDocSignedAt)}` : null,
   ]);
 }
 

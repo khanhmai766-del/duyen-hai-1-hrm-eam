@@ -1,14 +1,16 @@
 import sharp from "sharp";
 import { uploadS3Object, deleteS3ObjectByKey, s3ProxyUrl, getS3ObjectBuffer } from "@/lib/s3";
 import { vietnamDatePath } from "@/lib/material-document-name";
-import { MIN_USAGE_PHOTOS } from "@/lib/constants";
+import { MIN_USAGE_PHOTOS, USAGE_PHOTO_RETENTION_DAYS } from "@/lib/constants";
+import type { PrismaClient } from "@prisma/client";
 
 /**
  * Ba ảnh hiện trường của bước "Xác nhận sử dụng vật tư".
  *
- * Ảnh chỉ sống tới lúc quyết toán: mục đích duy nhất của chúng là chèn vào BBNT
- * D-Office. Quyết toán xong thì biên bản đã có ảnh nhúng bên trong, giữ thêm bản
- * rời trên S3 chỉ tốn chỗ — xem `deleteUsagePhotos` gọi từ action "settle".
+ * Mục đích duy nhất của chúng là chèn vào BBNT D-Office. Quyết toán xong thì biên bản đã
+ * có ảnh nhúng bên trong, nên bản rời trên S3 chỉ còn là bản dự phòng để soát lại và in
+ * lại biên bản — giữ thêm `USAGE_PHOTO_RETENTION_DAYS` ngày rồi mới dọn, xem
+ * `purgeExpiredUsagePhotos`.
  */
 
 export { MIN_USAGE_PHOTOS };
@@ -126,6 +128,44 @@ export async function deleteUsagePhotos(keys: Array<string | null | undefined>) 
     }
   }
   return removed;
+}
+
+/**
+ * Dọn ảnh hiện trường của các phiếu đã quyết toán quá hạn giữ.
+ *
+ * Quét theo MỐC QUYẾT TOÁN chứ không hẹn giờ riêng cho từng phiếu: gọi lúc nào cũng cho
+ * cùng một kết quả, chạy sót một hôm thì hôm sau dọn bù, và không cần trạng thái nào khác
+ * ngoài `settledAt` sẵn có.
+ *
+ * Xoá tệp TRƯỚC rồi mới gỡ khóa: gỡ khóa trước mà xoá tệp hỏng thì tệp nằm lại kho vĩnh
+ * viễn, không còn ai biết đường tìm. Ngược lại, tệp mất mà khóa còn thì lần sau quét lại
+ * (deleteUsagePhotos bỏ qua tệp đã biến mất) rồi gỡ khóa — không có gì kẹt.
+ */
+export async function purgeExpiredUsagePhotos(
+  db: Pick<PrismaClient, "materialTicket">,
+  now = new Date()
+) {
+  const deadline = new Date(now.getTime() - USAGE_PHOTO_RETENTION_DAYS * 86_400_000);
+  const rows = await db.materialTicket.findMany({
+    where: {
+      settledAt: { not: null, lte: deadline },
+      OR: [
+        { usagePhotoBeforeKey: { not: null } },
+        { usagePhotoAfterKey: { not: null } },
+        { usagePhotoSpecKey: { not: null } },
+      ],
+    },
+    select: { id: true, usagePhotoBeforeKey: true, usagePhotoAfterKey: true, usagePhotoSpecKey: true },
+  });
+  let removed = 0;
+  for (const row of rows) {
+    removed += await deleteUsagePhotos([row.usagePhotoBeforeKey, row.usagePhotoAfterKey, row.usagePhotoSpecKey]);
+    await db.materialTicket.update({
+      where: { id: row.id },
+      data: { usagePhotoBeforeKey: null, usagePhotoAfterKey: null, usagePhotoSpecKey: null },
+    });
+  }
+  return { tickets: rows.length, removed };
 }
 
 /** Nạp ảnh để chèn vào BBNT; thiếu ảnh thì bỏ trống ô, không chặn xuất biên bản. */

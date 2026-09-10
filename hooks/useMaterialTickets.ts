@@ -56,11 +56,15 @@ export interface MaterialTicket {
   deliveryScheduledAt: string | null;
   deliveryQuantity: number | null;
   recoveryReturnedAt: string | null;
-  /** Bước Xác nhận trả phiếu vật tư thu hồi (bước cuối, sau Quyết toán) — ngày trả kho do người
-   *  xác nhận nhập, khác `recoveryReturnedAt` do VHV tự khai ở bước Sử dụng vật tư. */
-  recoveryHandoverAt: string | null;
-  recoveryHandoverByName: string | null;
-  recoveryHandoverByPosition: string | null;
+  /* BƯỚC TRẢ PHIẾU VẬT TƯ THU HỒI — theo dõi TỜ BIÊN BẢN, khác hẳn `recoveryReturnedAt`
+     (VHV khai đã giao hiện vật thu hồi ở bước Sử dụng vật tư). Hai chặng: đem đi, rồi kho
+     ký trả lại. Mốc và tên người do máy chủ ghi tại thời điểm bấm xác nhận. */
+  recoveryDocSentAt: string | null;
+  recoveryDocSentByName: string | null;
+  recoveryDocSentByPosition: string | null;
+  recoveryDocSignedAt: string | null;
+  recoveryDocSignedByName: string | null;
+  recoveryDocSignedByPosition: string | null;
   /** Con trỏ sang các chuyến xe trong sổ Tồn kho hóa chất (ChemicalReceipt.id). */
   chemicalReceiptIds: string[];
   recoveryDocUrl: string | null;
@@ -391,6 +395,8 @@ export function actionsFor(t: MaterialTicket, v: TicketViewer | null): string[] 
     if (t.status === GAS_RETURN_STATUS && (canOperateAssigned || configuredGrant(v.steps?.return, v.steps?.returnConfigured))) a.push("returnItems");
     if (t.status === "CHO_THONG_KE_XUAT_BIEN_BAN" && v.steps?.stats) a.push("statsExportDocuments");
     // Trả phiếu vật tư thu hồi: cùng luật với bước trả vỏ chai — VHV cầm phiếu luôn làm được.
+    // Chặng 2 (kho ký trả lại) KHÔNG nằm ở đây: chặng 1 đã đẩy phiếu sang bước sau, nên nút
+    // của chặng 2 sống trong hộp "Xem lại" của chính bước đó.
     if (t.status === RECOVERY_HANDOVER_STATUS
       && (canOperateAssigned || configuredGrant(v.steps?.recoveryReturn, v.steps?.recoveryReturnConfigured))
     ) a.push("recoveryHandover");

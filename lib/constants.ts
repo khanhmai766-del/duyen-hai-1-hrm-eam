@@ -360,6 +360,15 @@ export function isOtherMaterialCategory(category: string | null | undefined): bo
  * Đặt ở đây chứ không ở lib/material-usage-photo.ts vì giao diện cũng phải biết, mà
  * file đó kéo theo sharp/S3 — không sang được trình duyệt.
  */
+/**
+ * Giữ ba ảnh hiện trường thêm bao nhiêu ngày SAU khi quyết toán rồi mới xoá khỏi kho tệp.
+ *
+ * Trước đây xoá ngay trong lượt quyết toán, nên phát hiện sai sót sau đó là hết đường in
+ * lại BBNT D-Office có ảnh. Chừa một khoảng để còn soát lại; hết hạn thì dọn, vì biên bản
+ * đã nhúng sẵn ảnh bên trong, giữ bản rời mãi chỉ tốn chỗ.
+ */
+export const USAGE_PHOTO_RETENTION_DAYS = 2;
+
 export const MIN_USAGE_PHOTOS = 3;
 
 /** Ngưỡng CŨ (2/3), chỉ còn dùng cho phiếu đã qua bước trước ngày luật mới có hiệu lực. */
@@ -492,16 +501,21 @@ export function isGasCylinderTicket(materialCategory: string | null | undefined)
 export const GAS_RETURN_STATUS = "CHO_TRA_VO";
 
 /**
- * Phiếu CÓ THU HỒI còn một bước nữa SAU khi quyết toán: VHV mang vật tư thu hồi cùng Biên
- * bản vật tư thu hồi (BBTHVT) sang kho, kho nhận xong mới xác nhận trên hệ thống. Đây thuần
- * là việc theo dõi chứng từ nên đứng sau, không chặn việc chốt số liệu.
+ * TRẢ PHIẾU (BIÊN BẢN) VẬT TƯ THU HỒI — bước đứng ngay TRƯỚC Quyết toán, chỉ với phiếu có
+ * BBTHVT (tức lý do "Thay thế"/"Thay mới", xem `materialTicketRequiresRecovery`).
  *
- * KHÁC với ô tick "đã trả vật tư thu hồi xong" ở bước Sử dụng vật tư (`recoveryReturnedAt`):
- * ô đó là VHV tự khai lúc làm xong việc và là nguồn của ô "khối lượng hoàn trả" in trên
- * BBNT D-Office — biên bản được xuất TRƯỚC bước này nên không thể lấy dữ liệu của bước này.
- * Bước này ghi một dữ kiện khác: chứng từ đã thực sự về tới kho.
+ * ĐỪNG LẪN với ô tick "đã trả vật tư thu hồi xong" ở bước Sử dụng vật tư
+ * (`recoveryReturnedAt`): đó là VHV khai đã giao HIỆN VẬT thu hồi, và là nguồn của ô "khối
+ * lượng hoàn trả" in trên BBNT D-Office. Bước này theo dõi TỜ BIÊN BẢN — hai việc khác nhau,
+ * hai bộ cột khác nhau, không cái nào suy ra cái nào.
+ *
+ * Bước có HAI CHẶNG, vì tờ biên bản đi rồi mới về:
+ *   1. `recoveryDocSentAt`   — đã đem BBTHVT sang kho (mở đường sang Quyết toán ngay, không
+ *                              bắt cả phiếu đứng chờ chữ ký của kho);
+ *   2. `recoveryDocSignedAt` — kho đã ký và trả lại biên bản (chốt hồ sơ).
+ * Xong chặng 1 mà chưa xong chặng 2 thì bước hiện màu vàng cảnh báo cho tới khi có chữ ký.
  */
-export const RECOVERY_HANDOVER_STATUS = "CHO_TRA_KHO_THU_HOI";
+export const RECOVERY_HANDOVER_STATUS = "CHO_TRA_PHIEU_THU_HOI";
 
 /**
  * LUỒNG NH3 RÚT GỌN: không đi qua sử dụng — nghiệm thu — quyết toán. Sau khi tạo đề xuất,
@@ -585,6 +599,38 @@ export function ticketReasonAllowed(
   const choice = TICKET_REASONS.find((item) => raw === item || raw.startsWith(`${item}:`));
   return !choice || (allowed as readonly string[]).includes(choice);
 }
+/**
+ * Người ký thay đơn vị sửa chữa trên BBNT D-Office và chức vụ của họ.
+ *
+ * MỘT nguồn duy nhất cho cả giao diện lẫn máy chủ: trước đây mỗi bên giữ một bản chép tay,
+ * thêm tên ở bên này mà quên bên kia thì người dùng chọn được tên đó rồi ăn ngay lỗi
+ * "Vui lòng chọn đại diện SCCN hợp lệ" — mà lỗi lại không nói ra nguyên nhân thật.
+ */
+export const SCCN_REPRESENTATIVES = [
+  "Võ Văn Chiến",
+  "Lê Văn Khánh",
+  "Nguyễn Thanh Toàn",
+  "Phan Nguyễn Anh Thư",
+  "Hứa Minh Tùng",
+  "Nguyễn Ngọc Tuấn",
+] as const;
+export const SCCN_POSITIONS = ["Quản Đốc", "Phó Quản Đốc", "Kỹ thuật viên"] as const;
+
+/**
+ * Đại diện thuộc PX. SC.ĐTĐ; các tên còn lại trong `SCCN_REPRESENTATIVES` thuộc PX. SCCN.
+ *
+ * Hai phân xưởng dùng CHUNG một ô chọn trên biên bản, nên ô chữ ký phải suy ra phân xưởng
+ * từ chính TÊN người ký — không có ô nào khác nói ra điều đó.
+ */
+export const SCDTD_REPRESENTATIVES = ["Phan Nguyễn Anh Thư", "Hứa Minh Tùng", "Nguyễn Ngọc Tuấn"] as const;
+
+/**
+ * Quản Đốc PX. SC.ĐTĐ — người DUY NHẤT của phân xưởng đó ký bằng chính danh nghĩa mình.
+ * Khoá theo tên chứ không theo ô "Chức vụ" đang chọn: chọn nhầm chức vụ thì biên bản vẫn
+ * phải ghi đúng thẩm quyền thật, chứ không biến Quản Đốc thành người ký thay.
+ */
+export const SCDTD_QUAN_DOC = "Phan Nguyễn Anh Thư";
+
 export const TICKET_REASON_REPLACEMENT = "Thay thế";
 export const TICKET_REASON_RENEWAL = "Thay mới";
 
@@ -629,31 +675,35 @@ export function materialTicketRequiresRecovery(ticket: {
   return ticket.recoveryRequired ?? reasonRequiresRecovery(ticket.proposalNote);
 }
 
-/** Phiếu còn nợ bước trả phiếu vật tư thu hồi (có thu hồi và chưa ai xác nhận đã nộp kho). */
-export function materialTicketNeedsRecoveryHandover(ticket: {
+type RecoveryDocTicket = {
   recoveryRequired?: boolean | null;
   proposalNote?: string | null;
   materialCategory?: string | null;
-  recoveryHandoverAt?: Date | string | null;
-}): boolean {
-  return materialTicketRequiresRecovery(ticket) && !ticket.recoveryHandoverAt;
+  recoveryDocSentAt?: Date | string | null;
+  recoveryDocSignedAt?: Date | string | null;
+};
+
+/** Chặng 1 còn nợ: phiếu có BBTHVT mà chưa ai xác nhận đã đem biên bản sang kho. */
+export function materialTicketNeedsRecoveryHandover(ticket: RecoveryDocTicket): boolean {
+  return materialTicketRequiresRecovery(ticket) && !ticket.recoveryDocSentAt;
 }
 
 /**
- * Trạng thái kế tiếp sau khi Thống kê xác nhận quyết toán: phiếu có thu hồi còn nợ một việc
- * theo dõi — trả phiếu (biên bản) vật tư thu hồi cho kho — nên chưa hoàn tất ngay.
- *
- * Bước này đứng SAU quyết toán chứ không phải trước: nó chỉ ghi thông tin trả biên bản để
- * theo dõi, không phải điều kiện của việc chốt số liệu. Số thực dùng, dòng lịch sử thay thế
- * và gia hạn chu kỳ đều đã khóa xong tại bước quyết toán.
+ * Chặng 2 còn nợ: biên bản đã đem đi nhưng kho CHƯA ký trả lại. Phiếu vẫn chạy tiếp được
+ * (quyết toán, hoàn tất) — chỉ hiện cảnh báo vàng ở bước để không ai quên đi đòi chữ ký.
  */
-export function statusAfterSettlement(ticket: {
-  recoveryRequired?: boolean | null;
-  proposalNote?: string | null;
-  materialCategory?: string | null;
-  recoveryHandoverAt?: Date | string | null;
-}): string {
-  return materialTicketNeedsRecoveryHandover(ticket) ? RECOVERY_HANDOVER_STATUS : "HOAN_TAT";
+export function materialTicketAwaitsRecoveryDocSignature(ticket: RecoveryDocTicket): boolean {
+  return materialTicketRequiresRecovery(ticket) && !!ticket.recoveryDocSentAt && !ticket.recoveryDocSignedAt;
+}
+
+/**
+ * Trạng thái kế tiếp sau khi hồ sơ (BBNT D-Office / BBTHVT) đã xuất xong: phiếu có thu hồi
+ * rẽ qua bước trả phiếu BBTHVT, phiếu không thu hồi đi thẳng vào quyết toán.
+ * Dùng chung cho CẢ BA luồng có thu hồi (Đề xuất, Ứng, Sử dụng hiện có) để không nơi nào
+ * lọt bước.
+ */
+export function statusAfterMaterialDocuments(ticket: RecoveryDocTicket): string {
+  return materialTicketNeedsRecoveryHandover(ticket) ? RECOVERY_HANDOVER_STATUS : "CHO_QUYET_TOAN";
 }
 
 /**
