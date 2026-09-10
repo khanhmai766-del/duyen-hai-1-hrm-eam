@@ -11,10 +11,10 @@
 // Đây cũng là bảng DUY NHẤT của module cho thêm/xoá dòng bằng tay: cuộn vòi không có
 // trong Excel gốc nên số lượng thực tế mỗi tủ chỉ hiện trường mới biết.
 import { Fragment, useEffect, useRef, useState } from "react";
-import { Loader2, Lock, Plus, Trash2 } from "lucide-react";
+import { Loader2, Lock, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { EditableCell, InspectionMark, StatusBadge, TickCell, componentTone, SignatureStamp } from "@/components/pccc/pccc-shared";
+import { EditableCell, InspectionMark, StatusBadge, TickCell, componentTone, SignatureStamp, PcccDeleteCell, PCCC_ROW_DELETING } from "@/components/pccc/pccc-shared";
 import {
   DetailField,
   DetailPanel,
@@ -63,7 +63,8 @@ export function PcccHoseReels({
   inspectionSelectedIds,
   onInspectionToggle,
   onAdd,
-  onDelete,
+  onToggleDelete,
+  deletingIds,
   sort,
   onSort,
   page,
@@ -91,8 +92,11 @@ export function PcccHoseReels({
   onInspectionToggle: (rowId: string, checked: boolean) => void;
   /** Mở hộp thoại thêm cuộn vòi (chọn tủ cha + mã). Không truyền = ẩn nút. */
   onAdd?: () => void;
-  /** Xoá hẳn một cuộn vòi. Ghi ngay, không chờ lưu bảng. */
-  onDelete?: (row: HoseReelRow) => void;
+  /** Có truyền = công tắc "Xoá thiết bị" của kỳ đang bật; bấm để ĐÁNH DẤU, xoá lúc bấm Lưu.
+   *  Trước 10/09/2026 cuộn vòi xoá NGAY và không cần công tắc — nay đi chung luật với bảy
+   *  loại còn lại để cả sổ PCCC chỉ có một cách xoá. */
+  onToggleDelete?: (rowId: string) => void;
+  deletingIds?: Set<string>;
   sort: SortState;
   onSort: (key: string) => void;
   page: number;
@@ -130,7 +134,7 @@ export function PcccHoseReels({
 
   const componentCols = groups.reduce((n, g) => n + g.statuses.length, 0);
   // + | Mã | Cương vị | Tình trạng | <ô tích> | Số YCSC | Người kiểm tra | (xoá)
-  const colCount = 4 + componentCols + 2 + (onDelete ? 1 : 0);
+  const colCount = 4 + componentCols + 2 + (onToggleDelete ? 1 : 0);
 
   function save(row: HoseReelRow, field: string, value: unknown) {
     onDraftChange(row.id, field, value);
@@ -202,7 +206,7 @@ export function PcccHoseReels({
             <TableHead rowSpan={2} className={cn(TH_NAVY, "w-[125px]")}>
               <SortHeader label="Người kiểm tra" sortKey="nguoiKiemTra" sort={sort} onSort={onSort} />
             </TableHead>
-            {onDelete && <TableHead rowSpan={2} className={cn(TH_NAVY, "w-[52px]")} />}
+            {onToggleDelete && <TableHead rowSpan={2} className={cn(TH_NAVY, "w-[52px]")} />}
           </TableRow>
           <TableRow className={TR_HEAD}>
             {groups.flatMap((g) =>
@@ -253,6 +257,8 @@ export function PcccHoseReels({
               }))
             );
             const rowBg = rowBackground({ index, expanded, dirty: Boolean(rowDraft) });
+            // Dòng đã đánh dấu xoá: tô hồng, gạch ngang — bấm Lưu là mất dòng này.
+            const deleting = Boolean(deletingIds?.has(r.id));
 
             const statusCount = new Map<string, number>();
             for (const c of r.components) {
@@ -269,7 +275,7 @@ export function PcccHoseReels({
 
             return (
               <Fragment key={r.id}>
-                <TableRow className={cn(rowBg, ROW_HOVER)}>
+                <TableRow className={cn(rowBg, ROW_HOVER, deleting && PCCC_ROW_DELETING)}>
                   <TableCell className={cn(TD_EXPAND, STICKY_TD, rowBg)} style={{ left: FROZEN.expand.left }}>
                     <RowExpander expanded={expanded} onToggle={() => setExpandedId(expanded ? null : r.id)} />
                   </TableCell>
@@ -329,17 +335,9 @@ export function PcccHoseReels({
                       <EditableCell value={val("nguoiKiemTra", r.nguoiKiemTra)} disabled={!rowEditable || !canEditAdminField} lockedReason={lockReason(true)} onSave={(v) => save(r, "nguoiKiemTra", v || null)} />
                     </InspectionMark>
                   </TableCell>
-                  {onDelete && (
+                  {onToggleDelete && (
                     <TableCell className={cn(TD_ROW, "text-center")}>
-                      <button
-                        type="button"
-                        disabled={!rowEditable}
-                        onClick={() => onDelete(r)}
-                        title={rowEditable ? "Xoá cuộn vòi này" : "Ngoài phạm vi cương vị của bạn"}
-                        className="rounded-md p-1 text-slate-400 transition enabled:hover:bg-rose-50 enabled:hover:text-rose-600 disabled:cursor-not-allowed disabled:opacity-40"
-                      >
-                        <Trash2 className="size-3.5" />
-                      </button>
+                      <PcccDeleteCell marked={deleting} disabled={!rowEditable} onToggle={() => onToggleDelete(r.id)} label="cuộn vòi" />
                     </TableCell>
                   )}
                 </TableRow>

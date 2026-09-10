@@ -14,6 +14,8 @@ import {
 } from "@/lib/pccc-service";
 import { LIGHT_TINH_TRANG_OPTIONS } from "@/lib/pccc-status";
 
+import { pcccDeleteHandler } from "@/lib/pccc-delete";
+
 export const dynamic = "force-dynamic";
 
 /**
@@ -80,3 +82,21 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     return ok({ ...updated, signature: null, signatureCleared: changed.length > 0 });
   });
 }
+
+/**
+ * DELETE /api/pccc/emergency-lights/[id] — xoá đèn sự cố khỏi kỳ.
+ *
+ * Chỉ mở khi Quản trị đã bật công tắc "Xoá thiết bị" của kỳ; mọi rào khác nằm trong
+ * `pcccDeleteHandler`.
+ */
+export const DELETE = pcccDeleteHandler({
+  target: "EMERGENCY_LIGHT",
+  scopeTable: "EMERGENCY_LIGHT",
+  denyMessage: "Không đủ quyền xoá đèn sự cố",
+  notFound: "Không tìm thấy đèn sự cố",
+  auditAction: "DELETE_PCCC_EMERGENCY_LIGHT",
+  entity: "PcccEmergencyLight",
+  find: (id) => prisma.pcccEmergencyLight.findUnique({ where: { id }, include: { period: true } }),
+  remove: (id) => prisma.pcccEmergencyLight.delete({ where: { id } }),
+  label: (row) => `${row.loai} · ${row.maKks}`,
+});

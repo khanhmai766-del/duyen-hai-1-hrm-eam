@@ -12,7 +12,7 @@ import { Fragment, useEffect, useRef, useState } from "react";
 import { Loader2, Lock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { EditableCell, InspectionMark, StatusBadge, TickCell, componentTone, SignatureStamp } from "@/components/pccc/pccc-shared";
+import { EditableCell, InspectionMark, StatusBadge, TickCell, componentTone, SignatureStamp, PcccDeleteCell, PCCC_ROW_DELETING } from "@/components/pccc/pccc-shared";
 import {
   DetailField,
   DetailPanel,
@@ -70,6 +70,8 @@ export function PcccAlarmButtons({
   search,
   onPageChange,
   onPageSizeChange,
+  onToggleDelete,
+  deletingIds,
   onSearchChange,
 }: {
   rows: AlarmButtonRow[];
@@ -96,6 +98,9 @@ export function PcccAlarmButtons({
   onPageChange: (p: number) => void;
   onPageSizeChange: (n: number) => void;
   onSearchChange: (v: string) => void;
+  /** Có truyền = công tắc "Xoá thiết bị" của kỳ đang bật; bấm để ĐÁNH DẤU, xoá lúc bấm Lưu. */
+  onToggleDelete?: (rowId: string) => void;
+  deletingIds?: Set<string>;
 }) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   // Tầng 2 của đầu bảng phải dính ngay dưới tầng 1 — đo chiều cao thật thay vì đóng
@@ -125,7 +130,7 @@ export function PcccAlarmButtons({
 
   const componentCols = groups.reduce((n, g) => n + g.statuses.length, 0);
   // + | Mã KKS | Vị trí | Cương vị | Giám sát | Tình trạng | <ô tích> | Người kiểm tra
-  const colCount = 6 + componentCols + 1;
+  const colCount = 6 + componentCols + 1 + (onToggleDelete ? 1 : 0);
 
   function save(row: AlarmButtonRow, field: string, value: unknown) {
     onDraftChange(row.id, field, value);
@@ -203,6 +208,7 @@ export function PcccAlarmButtons({
                 </TableHead>
               ))
             )}
+            {onToggleDelete && <TableHead className={cn(TH_NAVY, "w-[52px]")} />}
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -226,6 +232,8 @@ export function PcccAlarmButtons({
               return r.components.find((c) => c.groupLabel === groupLabel && c.status === status)?.checked ?? false;
             };
             const rowBg = rowBackground({ index, expanded, dirty: Boolean(rowDraft) });
+            // Dòng đã đánh dấu xoá: tô hồng, gạch ngang — bấm Lưu là mất dòng này.
+            const deleting = Boolean(deletingIds?.has(r.id));
 
             const statusCount = new Map<string, number>();
             for (const c of r.components) {
@@ -242,7 +250,7 @@ export function PcccAlarmButtons({
 
             return (
               <Fragment key={r.id}>
-                <TableRow className={cn(rowBg, ROW_HOVER)}>
+                <TableRow className={cn(rowBg, ROW_HOVER, deleting && PCCC_ROW_DELETING)}>
                   <TableCell className={cn(TD_EXPAND, STICKY_TD, rowBg)} style={{ left: FROZEN.expand.left }}>
                     <RowExpander expanded={expanded} onToggle={() => setExpandedId(expanded ? null : r.id)} />
                   </TableCell>
@@ -319,6 +327,11 @@ export function PcccAlarmButtons({
                       <EditableCell value={val("nguoiKiemTra", r.nguoiKiemTra)} disabled={!rowEditable || !canEditAdminField} lockedReason={lockReason(true)} onSave={(v) => save(r, "nguoiKiemTra", v || null)} />
                     </InspectionMark>
                   </TableCell>
+                  {onToggleDelete && (
+                    <TableCell className={cn(TD_ROW, "text-center")}>
+                      <PcccDeleteCell marked={deleting} disabled={!rowEditable} onToggle={() => onToggleDelete(r.id)} label="nút nhấn báo cháy" />
+                    </TableCell>
+                  )}
                 </TableRow>
 
                 {expanded && (

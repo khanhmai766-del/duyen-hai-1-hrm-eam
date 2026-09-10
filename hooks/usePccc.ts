@@ -30,6 +30,8 @@ export interface PcccPeriod {
   monthNo: number;
   isClosed: boolean;
   allowItemCreation: boolean;
+  /** Công tắc cấp kỳ cho phép XOÁ thiết bị; mặc định khoá, chỉ Quản trị bật/tắt. */
+  allowItemDeletion: boolean;
   closedAt: string | null;
   /** Bản Excel đã đẩy lên S3 lúc chốt kỳ — null nghĩa là chưa lưu trữ. */
   archiveKey?: string | null;
@@ -694,6 +696,31 @@ export function usePcccTogglePeriodClose() {
   });
 }
 
+/**
+ * Xoá MỘT thiết bị PCCC bất kỳ. Dùng chung `PATCH_URL` với hook sửa vì cùng bộ route
+ * `[id]` — thêm loại mới chỉ phải khai một chỗ.
+ *
+ * Máy chủ đòi công tắc "Xoá thiết bị" của kỳ đang bật (xem lib/pccc-delete.ts), nên hook
+ * này không tự đoán quyền; lỗi 409/403 hiện thẳng cho người dùng.
+ */
+export function usePcccDelete(targetType: PcccTargetType) {
+  const invalidate = useInvalidatePccc();
+  return useMutation({
+    mutationFn: (id: string) => apiMutate<{ id: string }>(`${PATCH_URL[targetType]}/${id}`, "DELETE"),
+    onSuccess: invalidate,
+  });
+}
+
+/** Bật/tắt công tắc XOÁ thiết bị của một kỳ — quyền riêng, mặc định chỉ Quản trị viên. */
+export function usePcccToggleItemDeletion() {
+  const invalidate = useInvalidatePccc();
+  return useMutation({
+    mutationFn: ({ id, enabled }: { id: string; enabled: boolean }) =>
+      apiMutate<PcccPeriod>(`/api/pccc/periods/${id}/item-deletion`, "POST", { enabled }),
+    onSuccess: invalidate,
+  });
+}
+
 export function usePcccToggleItemCreation() {
   const invalidate = useInvalidatePccc();
   return useMutation({
@@ -853,10 +880,7 @@ export function usePcccCreateItem() {
   });
 }
 
+/** Giữ tên cũ cho chỗ gọi sẵn có; ruột là hook xoá dùng chung. */
 export function usePcccDeleteHoseReel() {
-  const invalidate = useInvalidatePccc();
-  return useMutation({
-    mutationFn: (id: string) => apiMutate<{ id: string }>(`/api/pccc/hose-reels/${id}`, "DELETE"),
-    onSuccess: invalidate,
-  });
+  return usePcccDelete("HOSE_REEL");
 }

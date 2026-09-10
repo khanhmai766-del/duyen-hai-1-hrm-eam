@@ -14,6 +14,8 @@ import {
 } from "@/lib/pccc-service";
 import { fcdStatus } from "@/lib/pccc-summary";
 
+import { pcccDeleteHandler } from "@/lib/pccc-delete";
+
 export const dynamic = "force-dynamic";
 
 const EDITABLE: FieldSpec = {
@@ -70,3 +72,21 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     return ok({ ...updated, signature: null, signatureCleared: changed.length > 0 });
   });
 }
+
+/**
+ * DELETE /api/pccc/bulks/[id] — xoá thiết bị Foam · CO2 · Diesel khỏi kỳ.
+ *
+ * Chỉ mở khi Quản trị đã bật công tắc "Xoá thiết bị" của kỳ; mọi rào khác nằm trong
+ * `pcccDeleteHandler`.
+ */
+export const DELETE = pcccDeleteHandler({
+  target: "BULK",
+  scopeTable: "BULK",
+  denyMessage: "Không đủ quyền xoá thiết bị Foam · CO2 · Diesel",
+  notFound: "Không tìm thấy thiết bị Foam · CO2 · Diesel",
+  auditAction: "DELETE_PCCC_BULK",
+  entity: "PcccBulk",
+  find: (id) => prisma.pcccBulk.findUnique({ where: { id }, include: { period: true } }),
+  remove: (id) => prisma.pcccBulk.delete({ where: { id } }),
+  label: (row) => row.ten ?? "(không tên)",
+});

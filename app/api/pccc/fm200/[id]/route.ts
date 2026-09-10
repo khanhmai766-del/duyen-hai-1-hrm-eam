@@ -13,6 +13,8 @@ import {
   type FieldSpec,
 } from "@/lib/pccc-service";
 
+import { pcccDeleteHandler } from "@/lib/pccc-delete";
+
 export const dynamic = "force-dynamic";
 
 const EDITABLE: FieldSpec = {
@@ -89,3 +91,21 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     return ok({ ...updated, signature: null, signatureCleared: changed.length > 0 });
   });
 }
+
+/**
+ * DELETE /api/pccc/fm200/[id] — xoá bảng thông số FM200 khỏi kỳ.
+ *
+ * Chỉ mở khi Quản trị đã bật công tắc "Xoá thiết bị" của kỳ; mọi rào khác nằm trong
+ * `pcccDeleteHandler`.
+ */
+export const DELETE = pcccDeleteHandler({
+  target: "FM200_PANEL",
+  scopeTable: "FM200_PANEL",
+  denyMessage: "Không đủ quyền xoá bảng thông số FM200",
+  notFound: "Không tìm thấy bảng thông số FM200",
+  auditAction: "DELETE_PCCC_FM200_PANEL",
+  entity: "PcccFm200Panel",
+  find: (id) => prisma.pcccFm200Panel.findUnique({ where: { id }, include: { period: true } }),
+  remove: (id) => prisma.pcccFm200Panel.delete({ where: { id } }),
+  label: (row) => row.title ?? "(không tên)",
+});

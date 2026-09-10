@@ -14,6 +14,8 @@ import {
 } from "@/lib/pccc-service";
 import { applyTccToggle, deriveCabinetStatus } from "@/lib/pccc-status";
 
+import { pcccDeleteHandler } from "@/lib/pccc-delete";
+
 export const dynamic = "force-dynamic";
 
 const EDITABLE: FieldSpec = {
@@ -91,3 +93,21 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     return ok({ ...updated, signature: null, signatureCleared: changed.length > 0 });
   });
 }
+
+/**
+ * DELETE /api/pccc/alarm-buttons/[id] — xoá nút nhấn báo cháy khỏi kỳ.
+ *
+ * Chỉ mở khi Quản trị đã bật công tắc "Xoá thiết bị" của kỳ; mọi rào khác nằm trong
+ * `pcccDeleteHandler`.
+ */
+export const DELETE = pcccDeleteHandler({
+  target: "ALARM_BUTTON",
+  scopeTable: "ALARM_BUTTON",
+  denyMessage: "Không đủ quyền xoá nút nhấn báo cháy",
+  notFound: "Không tìm thấy nút nhấn báo cháy",
+  auditAction: "DELETE_PCCC_ALARM_BUTTON",
+  entity: "PcccAlarmButton",
+  find: (id) => prisma.pcccAlarmButton.findUnique({ where: { id }, include: { period: true } }),
+  remove: (id) => prisma.pcccAlarmButton.delete({ where: { id } }),
+  label: (row) => row.maKks ?? "(không tên)",
+});

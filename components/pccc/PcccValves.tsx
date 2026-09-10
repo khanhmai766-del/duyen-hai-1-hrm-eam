@@ -9,7 +9,7 @@ import { Fragment, useState } from "react";
 import { Loader2, Lock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { EditableCell, InspectionMark, StatusBadge, SignatureStamp } from "@/components/pccc/pccc-shared";
+import { EditableCell, InspectionMark, StatusBadge, SignatureStamp, PcccDeleteCell, PCCC_ROW_DELETING } from "@/components/pccc/pccc-shared";
 import {
   DetailField,
   DetailPanel,
@@ -71,6 +71,8 @@ export function PcccValves({
   search,
   onPageChange,
   onPageSizeChange,
+  onToggleDelete,
+  deletingIds,
   onSearchChange,
 }: {
   rows: ValveRow[];
@@ -95,6 +97,9 @@ export function PcccValves({
   onPageChange: (p: number) => void;
   onPageSizeChange: (n: number) => void;
   onSearchChange: (v: string) => void;
+  /** Có truyền = công tắc "Xoá thiết bị" của kỳ đang bật; bấm để ĐÁNH DẤU, xoá lúc bấm Lưu. */
+  onToggleDelete?: (rowId: string) => void;
+  deletingIds?: Set<string>;
 }) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const cuongViOptions = cuongViList.map((o) => o.label);
@@ -107,7 +112,7 @@ export function PcccValves({
   } as const;
 
   // + | Mã KKS | Tên van | Loại | Vị trí | Cương vị | Giám sát | Tình trạng | Số YCSC | Người kiểm tra
-  const colCount = 10;
+  const colCount = 10 + (onToggleDelete ? 1 : 0);
 
   function save(row: ValveRow, field: string, value: unknown) {
     onDraftChange(row.id, field, value);
@@ -172,6 +177,7 @@ export function PcccValves({
             <TableHead className={cn(TH_NAVY, "w-[125px]")}>
               <SortHeader label="Người kiểm tra" sortKey="nguoiKiemTra" sort={sort} onSort={onSort} />
             </TableHead>
+            {onToggleDelete && <TableHead className={cn(TH_NAVY, "w-[52px]")} />}
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -190,11 +196,13 @@ export function PcccValves({
             const dirty = (field: string) => (rowDraft && field in rowDraft ? "bg-amber-100/60" : "");
             const val = <T,>(field: string, saved: T) => (rowDraft && field in rowDraft ? (rowDraft[field] as T) : saved);
             const rowBg = rowBackground({ index, expanded, dirty: Boolean(rowDraft) });
+            // Dòng đã đánh dấu xoá: tô hồng, gạch ngang — bấm Lưu là mất dòng này.
+            const deleting = Boolean(deletingIds?.has(r.id));
             const tinhTrang = val("tinhTrang", r.tinhTrang);
 
             return (
               <Fragment key={r.id}>
-                <TableRow className={cn(rowBg, ROW_HOVER)}>
+                <TableRow className={cn(rowBg, ROW_HOVER, deleting && PCCC_ROW_DELETING)}>
                   <TableCell className={cn(TD_EXPAND, STICKY_TD, rowBg)} style={{ left: FROZEN.expand.left }}>
                     <RowExpander expanded={expanded} onToggle={() => setExpandedId(expanded ? null : r.id)} />
                   </TableCell>
@@ -281,6 +289,11 @@ export function PcccValves({
                       <EditableCell value={val("nguoiKiemTra", r.nguoiKiemTra)} disabled={!rowEditable || !canEditAdminField} lockedReason={lockReason(true)} onSave={(v) => save(r, "nguoiKiemTra", v || null)} />
                     </InspectionMark>
                   </TableCell>
+                  {onToggleDelete && (
+                    <TableCell className={cn(TD_ROW, "text-center")}>
+                      <PcccDeleteCell marked={deleting} disabled={!rowEditable} onToggle={() => onToggleDelete(r.id)} label="van chữa cháy" />
+                    </TableCell>
+                  )}
                 </TableRow>
 
                 {expanded && (

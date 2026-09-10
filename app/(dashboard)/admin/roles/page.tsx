@@ -605,6 +605,18 @@ const DEFAULT_PERMISSIONS: PermissionRow[] = [
     matrix: { ADMIN: "full", MANAGER: "manage", SUPERVISOR: "none", TECHNICIAN: "none", VIEWER: "none" },
   },
   {
+    id: "pccc-control-item-deletion",
+    group: "Thiết bị PCCC",
+    feature: "Bật/tắt chức năng xoá thiết bị PCCC",
+    note:
+      "Cho phép mở tạm thời cửa XOÁ thiết bị trong một kỳ, sau đó khoá lại. Công tắc bật thì trong chế độ Sửa bảng, mỗi dòng " +
+      "hiện nút thùng rác để đánh dấu; các dòng đánh dấu bị xoá khi bấm Lưu. Áp dụng cho cả tám loại thiết bị và cuộn vòi. " +
+      "Dòng đã xoá mất ở kỳ này và mọi kỳ sau (kỳ mới sinh ra từ kỳ trước), nên mặc định CHỈ Quản trị viên được bật/tắt. " +
+      "Quyền này chỉ điều khiển công tắc; người xoá vẫn phải sửa được sổ PCCC và đúng phạm vi cương vị của mình. " +
+      "Kỳ mới luôn sinh ra ở trạng thái khoá.",
+    matrix: { ADMIN: "full", MANAGER: "none", SUPERVISOR: "none", TECHNICIAN: "none", VIEWER: "none" },
+  },
+  {
     id: "pccc-close-period",
     group: "Thiết bị PCCC",
     feature: "Chuyển kỳ kiểm tra PCCC",

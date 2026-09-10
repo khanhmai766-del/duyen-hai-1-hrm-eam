@@ -36,6 +36,7 @@ import {
   Pencil,
   Save,
   ShieldCheck,
+  Trash2,
   Warehouse,
   X,
 } from "lucide-react";
@@ -68,6 +69,8 @@ import {
   usePcccBookStatus,
   usePcccRollover,
   usePcccToggleItemCreation,
+  usePcccToggleItemDeletion,
+  usePcccDelete,
   usePcccBulkSign,
   usePcccBulkSignPreview,
   usePcccBulkSaveExtinguishers,
@@ -464,7 +467,40 @@ export default function PcccPage() {
   const createHoseReel = usePcccCreateHoseReel();
   const createItem = usePcccCreateItem();
   const toggleItemCreation = usePcccToggleItemCreation();
+  const toggleItemDeletion = usePcccToggleItemDeletion();
   const deleteHoseReel = usePcccDeleteHoseReel();
+  /*
+   * XOÁ THIẾT BỊ — đánh dấu trước, xoá cùng lượt Lưu, giống sổ TBYCNN.
+   *
+   * `pendingDeletes` gom theo BẢNG (cùng khoá với `drafts`) vì mỗi bảng gọi một route xoá
+   * riêng; gộp chung một tập id thì lưu sẽ bắn id của bảng này sang endpoint của bảng kia —
+   * đúng cái bẫy mà bản nháp đã phải tách theo tab để tránh.
+   */
+  const [pendingDeletes, setPendingDeletes] = useState<Partial<Record<DraftKey, string[]>>>({});
+  const deleteExtinguisher = usePcccDelete("EXTINGUISHER");
+  const deleteCabinet = usePcccDelete("CABINET");
+  const deleteFireControlCabinet = usePcccDelete("FIRE_CONTROL_CABINET");
+  const deleteBulk = usePcccDelete("BULK");
+  const deleteFm200Panel = usePcccDelete("FM200_PANEL");
+  const deleteAlarmButton = usePcccDelete("ALARM_BUTTON");
+  const deleteValve = usePcccDelete("VALVE");
+  const deleteLight = usePcccDelete("EMERGENCY_LIGHT");
+
+  /** Bật/tắt dấu xoá của một dòng; bỏ luôn phần nháp đã sửa vì sửa rồi xoá là hai ý ngược nhau. */
+  function toggleDelete(key: DraftKey, rowId: string) {
+    setPendingDeletes((prev) => {
+      const list = prev[key] ?? [];
+      return { ...prev, [key]: list.includes(rowId) ? list.filter((id) => id !== rowId) : [...list, rowId] };
+    });
+    setDrafts((prev) => {
+      if (!prev[key][rowId]) return prev;
+      const rest = { ...prev[key] };
+      delete rest[rowId];
+      return { ...prev, [key]: rest };
+    });
+  }
+
+  const deleteCount = Object.values(pendingDeletes).reduce((sum, list) => sum + (list?.length ?? 0), 0);
 
   // Gom sửa đổi trong bộ nhớ nên PHẢI cảnh báo trước khi mất: đóng tab / tải lại trang.
   useEffect(() => {
@@ -489,6 +525,7 @@ export default function PcccPage() {
 
   function beginEdit() {
     if (!editableTab) return;
+    setPendingDeletes({});
     // Tab FCD chỉ có 3 bồn + 2 bảng FM200 và LƯU TỪNG MỤC bằng route PATCH sẵn có, nên
     // không có mốc `updatedAt` để chống ghi đè như hai bảng nghìn dòng kia.
     if (editableTab === "FCD") {
@@ -511,7 +548,10 @@ export default function PcccPage() {
   }
 
   function cancelEdit() {
-    if (dirtyCount > 0 && !window.confirm(`Bỏ ${dirtyCount} dòng đang sửa chưa lưu?`)) return;
+    if ((dirtyCount > 0 || deleteCount > 0) && !window.confirm(
+      `Bỏ ${dirtyCount} dòng đang sửa${deleteCount > 0 ? ` và ${deleteCount} dấu xoá` : ""} chưa lưu?`
+    )) return;
+    setPendingDeletes({});
     if (editableTab) {
       setDrafts((prev) => ({
         ...prev,
@@ -720,9 +760,45 @@ export default function PcccPage() {
     DEN: { label: "đèn sự cố", table: "Đèn sự cố", target: "EMERGENCY_LIGHT" },
   } as const;
 
-  function saveEdits() {
+  /**
+   * Thực hiện các dấu xoá đang treo. Chạy TUẦN TỰ và DỪNG ngay khi có lỗi: mỗi lần xoá là
+   * một route riêng, bắn song song vài chục request vào cùng một kỳ chỉ tổ tranh nhau ghi,
+   * mà lỗi giữa chừng thì người dùng cần biết chính xác còn dòng nào chưa xoá.
+   *
+   * Dòng nào xoá xong thì gỡ khỏi dấu treo ngay, để bấm lại không xoá hai lần.
+   */
+  async function runPendingDeletes() {
+    const mutateByKey: Partial<Record<DraftKey, (id: string) => Promise<unknown>>> = {
+      BCC: deleteExtinguisher.mutateAsync,
+      TCC: deleteCabinet.mutateAsync,
+      CVCC: deleteHoseReel.mutateAsync,
+      TDKCC: deleteFireControlCabinet.mutateAsync,
+      NNBC: deleteAlarmButton.mutateAsync,
+      VAN: deleteValve.mutateAsync,
+      DEN: deleteLight.mutateAsync,
+    };
+    for (const [key, ids] of Object.entries(pendingDeletes) as [DraftKey, string[] | undefined][]) {
+      const mutate = mutateByKey[key];
+      if (!mutate || !ids?.length) continue;
+      for (const id of ids) {
+        try {
+          await mutate(id);
+          setPendingDeletes((prev) => ({ ...prev, [key]: (prev[key] ?? []).filter((item) => item !== id) }));
+        } catch (e) {
+          toast.error(`Chưa xoá xong: ${(e as Error).message}`, { duration: 10_000 });
+          return false;
+        }
+      }
+    }
+    return true;
+  }
+
+  async function saveEdits() {
     setSaveConfirmOpen(false);
     if (!editableTab) return;
+    // Xoá TRƯỚC rồi mới lưu sửa: hai việc độc lập nhau, và làm ngược lại thì lưu xong mà
+    // xoá hỏng sẽ để người dùng tưởng cả lượt đã xong.
+    if (deleteCount > 0 && !(await runPendingDeletes())) return;
     if (dirtyCount === 0) {
       setEditing(false);
       return;
@@ -1480,6 +1556,10 @@ export default function PcccPage() {
   const defaultCreatePosition = cuongVi !== "ALL" ? cuongVi : createPositions.length === 1 ? createPositions[0].code : "";
   const canControlItemCreation = can("pccc-control-item-creation", ["manage", "full"]);
   const itemCreationEnabled = period.allowItemCreation && !readOnly;
+  const canControlItemDeletion = can("pccc-control-item-deletion", ["manage", "full"]);
+  /* Cửa xoá đang mở? Chỉ khi Quản trị đã bật công tắc của kỳ VÀ kỳ còn ghi được. Máy chủ
+     rào lại đủ, chỗ này chỉ để ẩn nút cho đỡ bấm nhầm. */
+  const itemDeletionEnabled = period.allowItemDeletion && !readOnly;
   const createButton = (kind: PcccCreateKind, label = "Thêm mới") =>
     itemCreationEnabled ? (
       <button
@@ -1965,7 +2045,7 @@ export default function PcccPage() {
                   Huỷ
                 </Button>
                 {/* Không sửa gì thì đóng luôn chế độ sửa — hỏi "lưu 0 dòng?" là hỏi thừa. */}
-                <Button size="sm" onClick={() => (dirtyCount === 0 ? saveEdits() : setSaveConfirmOpen(true))} disabled={saving}>
+                <Button size="sm" onClick={() => (dirtyCount === 0 && deleteCount === 0 ? void saveEdits() : setSaveConfirmOpen(true))} disabled={saving}>
                   <Save className={cn("mr-1.5 size-4", saving && "animate-pulse")} />
                   {saving ? "Đang lưu…" : "Lưu"}
                 </Button>
@@ -2089,6 +2169,65 @@ export default function PcccPage() {
                             className={cn(
                               "absolute top-0.5 size-4 rounded-full bg-white shadow-sm transition-transform",
                               period.allowItemCreation ? "translate-x-[18px]" : "translate-x-0.5"
+                            )}
+                          />
+                        </span>
+                      </DropdownMenuItem>
+                      {/* CÔNG TẮC XOÁ — tách riêng khỏi "Thêm thiết bị" vì hậu quả khác hẳn:
+                          thêm nhầm thì xoá đi, còn xoá nhầm là mất dòng ở kỳ này và mọi kỳ
+                          sau. Mặc định chỉ Quản trị viên bật/tắt được. */}
+                      <DropdownMenuItem
+                        disabled={!canControlItemDeletion || toggleItemDeletion.isPending}
+                        onSelect={(e) => {
+                          e.preventDefault();
+                          toggleItemDeletion.mutate(
+                            { id: period.id, enabled: !period.allowItemDeletion },
+                            {
+                              onSuccess: (updated) => {
+                                // Khoá cửa lại thì bỏ luôn các dấu xoá đang treo, không để
+                                // chúng đi theo lượt Lưu sau khi quyền đã bị rút.
+                                if (!updated.allowItemDeletion) setPendingDeletes({});
+                                toast.success(
+                                  updated.allowItemDeletion
+                                    ? "Đã mở chức năng xoá thiết bị PCCC"
+                                    : "Đã khoá chức năng xoá thiết bị PCCC"
+                                );
+                              },
+                              onError: (error: Error) => toast.error(error.message),
+                            }
+                          );
+                        }}
+                        title={
+                          canControlItemDeletion
+                            ? "Bật trong lúc dọn sổ rồi tắt lại — mở thì xoá được thiết bị khỏi danh mục chuẩn"
+                            : "Chỉ Quản trị viên được bật hoặc tắt chức năng xoá thiết bị"
+                        }
+                        className="gap-2"
+                      >
+                        {period.allowItemDeletion ? (
+                          <Trash2 className="size-4 text-rose-600" />
+                        ) : (
+                          <Lock className="size-4 text-slate-400" />
+                        )}
+                        <span className="min-w-0 flex-1">
+                          <span className="block font-medium">Xoá thiết bị</span>
+                          <span className="block text-[11px] text-muted-foreground">
+                            {period.allowItemDeletion
+                              ? "Đang bật — xoá được thiết bị khỏi sổ"
+                              : "Đang khoá — không xoá được dòng nào"}
+                          </span>
+                        </span>
+                        <span
+                          aria-hidden="true"
+                          className={cn(
+                            "relative h-5 w-9 shrink-0 rounded-full transition-colors",
+                            period.allowItemDeletion ? "bg-rose-600" : "bg-slate-300"
+                          )}
+                        >
+                          <span
+                            className={cn(
+                              "absolute top-0.5 size-4 rounded-full bg-white shadow-sm transition-transform",
+                              period.allowItemDeletion ? "translate-x-[18px]" : "translate-x-0.5"
                             )}
                           />
                         </span>
@@ -2445,8 +2584,15 @@ export default function PcccPage() {
               <Row label="Kỳ kiểm tra" value={period.label} />
               <Row label="Tổ máy" value={machineLabelOf(machine)} />
               <Row label="Số dòng sẽ lưu" value={`${dirtyCount} dòng`} strong />
+              {deleteCount > 0 && <Row label="Số thiết bị sẽ XOÁ" value={`${deleteCount} thiết bị`} strong />}
             </div>
             <MachineNotice machine={machine} />
+            {deleteCount > 0 && (
+              <p className="rounded-lg border border-rose-200 bg-rose-50 p-2.5 text-[12px] text-rose-700">
+                <b>{deleteCount} thiết bị nền hồng sẽ bị xoá khỏi sổ</b> — mất ở kỳ này và mọi kỳ sau,
+                KHÔNG hoàn tác được. Hãy soát lại trước khi lưu.
+              </p>
+            )}
             <p className="text-[12px] text-muted-foreground">
               Lưu xong, <b>chữ ký của các dòng vừa sửa sẽ bị xoá</b> — cần ký lại để xác nhận số liệu mới.
             </p>
@@ -2455,7 +2601,7 @@ export default function PcccPage() {
             <Button variant="ghost" size="sm" onClick={() => setSaveConfirmOpen(false)} disabled={saving}>
               Huỷ
             </Button>
-            <Button size="sm" onClick={saveEdits} disabled={saving}>
+            <Button size="sm" onClick={() => void saveEdits()} disabled={saving}>
               <Save className={cn("mr-1.5 size-4", saving && "animate-pulse")} />
               {saving ? "Đang lưu…" : "Xác nhận lưu"}
             </Button>
@@ -2529,6 +2675,8 @@ export default function PcccPage() {
             writeScope={writeScope}
             loading={bccQuery.isFetching}
             editing={editing}
+            onToggleDelete={itemDeletionEnabled && editing ? (rowId) => toggleDelete("BCC", rowId) : undefined}
+            deletingIds={new Set(pendingDeletes.BCC ?? [])}
             draft={draft}
             inspectionSelectedIds={inspectionIds("EXTINGUISHER")}
             onInspectionToggle={(id, checked) => toggleInspection("EXTINGUISHER", id, checked)}
@@ -2565,6 +2713,8 @@ export default function PcccPage() {
             writeScope={writeScope}
             loading={tccQuery.isFetching}
             editing={editing}
+            onToggleDelete={itemDeletionEnabled && editing ? (rowId) => toggleDelete("TCC", rowId) : undefined}
+            deletingIds={new Set(pendingDeletes.TCC ?? [])}
             draft={draft}
             inspectionSelectedIds={inspectionIds("CABINET")}
             onInspectionToggle={(id, checked) => toggleInspection("CABINET", id, checked)}
@@ -2608,6 +2758,8 @@ export default function PcccPage() {
               writeScope={cvccQuery.data?.meta?.writeScope}
               loading={cvccQuery.isFetching}
               editing={editing}
+              onToggleDelete={itemDeletionEnabled && editing ? (rowId) => toggleDelete("CVCC", rowId) : undefined}
+              deletingIds={new Set(pendingDeletes.CVCC ?? [])}
               draft={drafts.CVCC}
               inspectionSelectedIds={inspectionIds("HOSE_REEL")}
               onInspectionToggle={(id, checked) => toggleInspection("HOSE_REEL", id, checked)}
@@ -2619,15 +2771,6 @@ export default function PcccPage() {
                 setCvccCabinetSearch("");
                 setCvccAddOpen(true);
               } : undefined}
-              onDelete={(row: HoseReelRow) => {
-                // Xoá ghi NGAY, không chờ bấm Lưu: đây là thay đổi CẤU TRÚC chứ không
-                // phải sửa một ô — nên hỏi lại rồi làm dứt điểm.
-                if (!window.confirm(`Xoá cuộn vòi ${row.ma}? Thao tác này không hoàn tác được.`)) return;
-                deleteHoseReel.mutate(row.id, {
-                  onSuccess: () => toast.success(`Đã xoá cuộn vòi ${row.ma}`),
-                  onError: (e: Error) => toast.error(e.message),
-                });
-              }}
               sort={sort}
               onSort={toggleSort}
               page={cvccQuery.data?.meta?.page ?? 1}
@@ -2665,6 +2808,8 @@ export default function PcccPage() {
           writeScope={writeScope}
           loading={nnbcQuery.isFetching}
           editing={editing}
+          onToggleDelete={itemDeletionEnabled && editing ? (rowId) => toggleDelete("NNBC", rowId) : undefined}
+          deletingIds={new Set(pendingDeletes.NNBC ?? [])}
           sort={sort}
           onSort={toggleSort}
           page={nnbcQuery.data?.meta?.page ?? 1}
@@ -2698,6 +2843,8 @@ export default function PcccPage() {
           writeScope={writeScope}
           loading={tdkccQuery.isFetching}
           editing={editing}
+          onToggleDelete={itemDeletionEnabled && editing ? (rowId) => toggleDelete("TDKCC", rowId) : undefined}
+          deletingIds={new Set(pendingDeletes.TDKCC ?? [])}
           sort={sort}
           onSort={toggleSort}
           page={tdkccQuery.data?.meta?.page ?? 1}
@@ -2731,6 +2878,8 @@ export default function PcccPage() {
           writeScope={writeScope}
           loading={vanQuery.isFetching}
           editing={editing}
+          onToggleDelete={itemDeletionEnabled && editing ? (rowId) => toggleDelete("VAN", rowId) : undefined}
+          deletingIds={new Set(pendingDeletes.VAN ?? [])}
           sort={sort}
           onSort={toggleSort}
           page={vanQuery.data?.meta?.page ?? 1}
@@ -2793,6 +2942,8 @@ export default function PcccPage() {
           writeScope={writeScope}
           loading={denQuery.isFetching}
           editing={editing}
+          onToggleDelete={itemDeletionEnabled && editing ? (rowId) => toggleDelete("DEN", rowId) : undefined}
+          deletingIds={new Set(pendingDeletes.DEN ?? [])}
           sort={sort}
           onSort={toggleSort}
           page={denQuery.data?.meta?.page ?? 1}

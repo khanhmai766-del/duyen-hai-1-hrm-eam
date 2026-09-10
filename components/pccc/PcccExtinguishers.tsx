@@ -12,7 +12,7 @@ import { Fragment, useState } from "react";
 import { Loader2, Lock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { EditableCell, InspectionMark, ToneSelectCell, fmtDate, SignatureStamp } from "@/components/pccc/pccc-shared";
+import { EditableCell, InspectionMark, PcccDeleteCell, PCCC_ROW_DELETING, ToneSelectCell, fmtDate, SignatureStamp } from "@/components/pccc/pccc-shared";
 import {
   DetailField,
   DetailPanel,
@@ -79,6 +79,8 @@ export function PcccExtinguishers({
   search,
   onPageChange,
   onPageSizeChange,
+  onToggleDelete,
+  deletingIds,
   onSearchChange,
 }: {
   rows: ExtinguisherRow[];
@@ -105,6 +107,9 @@ export function PcccExtinguishers({
   onPageChange: (p: number) => void;
   onPageSizeChange: (n: number) => void;
   onSearchChange: (v: string) => void;
+  /** Có truyền = công tắc "Xoá thiết bị" của kỳ đang bật; bấm để ĐÁNH DẤU, xoá lúc bấm Lưu. */
+  onToggleDelete?: (rowId: string) => void;
+  deletingIds?: Set<string>;
 }) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const cuongViOptions = cuongViList.map((o) => o.label);
@@ -201,12 +206,13 @@ export function PcccExtinguishers({
             <TableHead className={cn(TH_NAVY, "w-[130px]")}>
               <SortHeader label="Người kiểm tra" sortKey="nguoiKiemTra" sort={sort} onSort={onSort} />
             </TableHead>
+            {onToggleDelete && <TableHead className={cn(TH_NAVY, "w-[52px]")} />}
           </TableRow>
         </TableHeader>
         <TableBody>
           {rows.length === 0 && !loading && (
             <TableRow>
-              <TableCell colSpan={COL_COUNT} className="py-12 text-center text-sm text-muted-foreground">
+              <TableCell colSpan={COL_COUNT + (onToggleDelete ? 1 : 0)} className="py-12 text-center text-sm text-muted-foreground">
                 Không tìm thấy bản ghi phù hợp.
               </TableCell>
             </TableRow>
@@ -224,9 +230,11 @@ export function PcccExtinguishers({
             const lockReason = (adminField = false) => (canEdit ? pcccLockReason(writeScope, base, adminField) : undefined);
             // Một màu nền duy nhất cho cả hàng VÀ các ô đóng băng — xem rowBackground.
             const rowBg = rowBackground({ index, expanded, dirty: Boolean(rowDraft) });
+            // Dòng đã đánh dấu xoá: tô hồng, gạch ngang — nhìn là biết bấm Lưu sẽ mất dòng nào.
+            const deleting = Boolean(deletingIds?.has(r.id));
             return (
               <Fragment key={r.id}>
-                <TableRow className={cn(rowBg, ROW_HOVER)}>
+                <TableRow className={cn(rowBg, ROW_HOVER, deleting && PCCC_ROW_DELETING)}>
                   <TableCell className={cn(TD_EXPAND, rowBg, "lg:sticky lg:left-0 lg:z-[1] lg:group-hover:bg-sky-50")}>
                     <RowExpander expanded={expanded} onToggle={() => setExpandedId(expanded ? null : r.id)} />
                   </TableCell>
@@ -371,11 +379,16 @@ export function PcccExtinguishers({
                       <EditableCell value={r.nguoiKiemTra} disabled={!rowEditable || !canEditAdminField} lockedReason={lockReason(true)} onSave={(v) => save(r, "nguoiKiemTra", v)} />
                     </InspectionMark>
                   </TableCell>
+                  {onToggleDelete && (
+                    <TableCell className={cn(TD_ROW, "text-center")}>
+                      <PcccDeleteCell marked={deleting} disabled={!rowEditable} onToggle={() => onToggleDelete(r.id)} label="bình chữa cháy" />
+                    </TableCell>
+                  )}
                 </TableRow>
 
                 {expanded && (
                   <TableRow className="hover:bg-transparent">
-                    <TableCell colSpan={COL_COUNT} className="bg-slate-50/80 p-0">
+                    <TableCell colSpan={COL_COUNT + (onToggleDelete ? 1 : 0)} className="bg-slate-50/80 p-0">
                       <DetailPanel>
                         <DetailField label="Vị trí lắp đặt">
                           <EditableCell value={r.viTri} disabled={!rowEditable} lockedReason={lockReason()} onSave={(v) => save(r, "viTri", v)} />

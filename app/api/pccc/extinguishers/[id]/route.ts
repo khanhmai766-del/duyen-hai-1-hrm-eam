@@ -14,6 +14,8 @@ import {
 } from "@/lib/pccc-service";
 import { isValidApSuat, normalizeChungLoai } from "@/lib/pccc-status";
 
+import { pcccDeleteHandler } from "@/lib/pccc-delete";
+
 export const dynamic = "force-dynamic";
 
 /** Các trường người dùng được sửa trên web. Cột dẫn xuất (denHanThayThe) tính lại từ ngaySx + thoiGianSd. */
@@ -103,3 +105,21 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     });
   });
 }
+
+/**
+ * DELETE /api/pccc/extinguishers/[id] — xoá bình chữa cháy khỏi kỳ.
+ *
+ * Chỉ mở khi Quản trị đã bật công tắc "Xoá thiết bị" của kỳ; mọi rào khác nằm trong
+ * `pcccDeleteHandler`.
+ */
+export const DELETE = pcccDeleteHandler({
+  target: "EXTINGUISHER",
+  scopeTable: "EXTINGUISHER",
+  denyMessage: "Không đủ quyền xoá bình chữa cháy",
+  notFound: "Không tìm thấy bình chữa cháy",
+  auditAction: "DELETE_PCCC_EXTINGUISHER",
+  entity: "PcccExtinguisher",
+  find: (id) => prisma.pcccExtinguisher.findUnique({ where: { id }, include: { period: true } }),
+  remove: (id) => prisma.pcccExtinguisher.delete({ where: { id } }),
+  label: (row) => row.ma ?? "(không tên)",
+});

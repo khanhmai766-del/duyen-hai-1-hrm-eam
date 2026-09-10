@@ -64,6 +64,9 @@ export const DEFAULT_RBAC_MATRIX: Record<string, Partial<Record<string, RbacLeve
   "pccc-view": { ADMIN: "full", MANAGER: "read", SUPERVISOR: "read", TECHNICIAN: "read", VIEWER: "read" },
   "pccc-manage": { ADMIN: "full", MANAGER: "manage", SUPERVISOR: "manage", TECHNICIAN: "personal", VIEWER: "none" },
   "pccc-control-item-creation": { ADMIN: "full", MANAGER: "manage", SUPERVISOR: "none", TECHNICIAN: "none", VIEWER: "none" },
+  // Cùng luật với TBYCNN: xoá thiết bị mở được cả dòng của danh mục chuẩn nên MẶC ĐỊNH chỉ
+  // Quản trị viên bật/tắt được công tắc; ai xoá thì vẫn theo quyền ghi "pccc-manage".
+  "pccc-control-item-deletion": { ADMIN: "full", MANAGER: "none", SUPERVISOR: "none", TECHNICIAN: "none", VIEWER: "none" },
   "pccc-close-period": { ADMIN: "full", MANAGER: "manage", SUPERVISOR: "none", TECHNICIAN: "none", VIEWER: "none" },
   // TBYCNN (thiết bị yêu cầu nghiêm ngặt về ATLĐ): mở xem cho mọi vai trò như PCCC —
   // đây là hồ sơ an toàn, ai cũng cần tra hạn kiểm định. Ghi thì siết hơn PCCC: dữ liệu

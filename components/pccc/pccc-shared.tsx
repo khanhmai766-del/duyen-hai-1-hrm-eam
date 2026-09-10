@@ -2,7 +2,7 @@
 // Thành phần dùng chung cho 4 tab PCCC: nhãn trạng thái, thẻ số liệu, thanh %,
 // ô sửa tại chỗ và ô chữ ký. Giữ ở 1 chỗ để 3 bảng nhìn như một hệ thống.
 import { useEffect, useRef, useState } from "react";
-import { ArrowRight, Check, PenLine, ShieldCheck } from "lucide-react";
+import { ArrowRight, Check, PenLine, ShieldCheck, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { round2ToneOf, type PcccTone } from "@/lib/pccc-status";
@@ -614,6 +614,55 @@ export function componentTone(statusOrder: number, statusCount: number): StatusT
   if (statusOrder === statusCount - 1) return "bad";
   return "watch";
 }
+
+/**
+ * Ô XOÁ ở cuối mỗi dòng của các bảng PCCC.
+ *
+ * Không xoá ngay: bấm là ĐÁNH DẤU, dòng tô hồng, bấm lại thì bỏ dấu, và chỉ tới lúc bấm
+ * "Lưu" mới thật sự xoá — cùng luật với sổ TBYCNN, và hợp với cách sửa bảng PCCC vốn đã là
+ * gom nháp rồi lưu một lượt (bấm Huỷ là bỏ sạch).
+ *
+ * Cột này CHỈ hiện khi Quản trị đã bật công tắc "Xoá thiết bị" của kỳ; trang truyền
+ * `onToggleDelete` khi và chỉ khi cửa đó mở.
+ */
+export function PcccDeleteCell({
+  marked,
+  disabled,
+  onToggle,
+  label = "thiết bị này",
+}: {
+  marked: boolean;
+  disabled?: boolean;
+  onToggle: () => void;
+  label?: string;
+}) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onToggle}
+      aria-pressed={marked}
+      title={
+        disabled
+          ? "Ngoài phạm vi cương vị của bạn"
+          : marked
+            ? "Bỏ đánh dấu xoá"
+            : `Đánh dấu xoá ${label} khi bấm Lưu`
+      }
+      className={cn(
+        "rounded-md p-1 transition disabled:cursor-not-allowed disabled:opacity-40",
+        marked
+          ? "bg-rose-600 text-white enabled:hover:bg-rose-700"
+          : "text-slate-400 enabled:hover:bg-rose-50 enabled:hover:text-rose-600"
+      )}
+    >
+      {marked ? <X className="size-3.5" /> : <Trash2 className="size-3.5" />}
+    </button>
+  );
+}
+
+/** Nền dòng đang đánh dấu xoá — dùng chung để bảy bảng tô cùng một màu. */
+export const PCCC_ROW_DELETING = "bg-rose-50 [&_td]:text-rose-700 [&_td]:line-through";
 
 export function TableShell({
   children,

@@ -14,6 +14,8 @@ import {
 } from "@/lib/pccc-service";
 import { applyTccToggle, deriveCabinetStatus } from "@/lib/pccc-status";
 
+import { pcccDeleteHandler } from "@/lib/pccc-delete";
+
 export const dynamic = "force-dynamic";
 
 const EDITABLE: FieldSpec = {
@@ -94,29 +96,21 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 //
 // KHÔNG đánh số lại STT các dòng còn lại: đánh lại thì mọi dòng đều bị coi là "đã sửa"
 // và mất sạch chữ ký của cả bảng chỉ vì xoá một dòng.
-export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
-  return handle(async () => {
-    const user = await requireUser();
-    const scope = await resolvePcccWriteScope(user, "Không đủ quyền xoá cuộn vòi", "HOSE_REEL");
-
-    const current = await prisma.pcccHoseReel.findUnique({ where: { id: params.id }, include: { period: true } });
-    if (!current) return fail("Không tìm thấy cuộn vòi chữa cháy", 404);
-    assertPeriodWritable(current.period);
-    assertPcccScope(scope, current);
-
-    // Ô tích đi theo khoá ngoại cascade; chữ ký trỏ bằng cột thường nên phải xoá tay,
-    // nếu không sẽ để lại chữ ký mồ côi trỏ vào một dòng không còn tồn tại.
-    await clearSignature("HOSE_REEL", current.id);
-    await prisma.pcccHoseReel.delete({ where: { id: current.id } });
-
-    await audit(
-      user.id,
-      "DELETE_PCCC_HOSE_REEL",
-      "PcccHoseReel",
-      current.id,
-      auditDetailWithPosition(user, `${current.period.label} · ${current.ma}`),
-      { beforeData: current }
-    );
-    return ok({ id: current.id });
-  });
-}
+/**
+ * DELETE /api/pccc/hose-reels/[id] — xoá cuộn vòi khỏi kỳ.
+ *
+ * Từ 10/09/2026 đi CHUNG LUẬT với bảy loại còn lại: phải có công tắc "Xoá thiết bị" của kỳ
+ * do Quản trị bật. Trước đó cuộn vòi là loại duy nhất xoá được tự do — một sổ mà hai luật
+ * xoá thì không ai nhớ nổi chỗ nào được chỗ nào không.
+ */
+export const DELETE = pcccDeleteHandler({
+  target: "HOSE_REEL",
+  scopeTable: "HOSE_REEL",
+  denyMessage: "Không đủ quyền xoá cuộn vòi",
+  notFound: "Không tìm thấy cuộn vòi chữa cháy",
+  auditAction: "DELETE_PCCC_HOSE_REEL",
+  entity: "PcccHoseReel",
+  find: (id) => prisma.pcccHoseReel.findUnique({ where: { id }, include: { period: true } }),
+  remove: (id) => prisma.pcccHoseReel.delete({ where: { id } }),
+  label: (row) => row.ma,
+});

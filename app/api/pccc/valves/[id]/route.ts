@@ -14,6 +14,8 @@ import {
 } from "@/lib/pccc-service";
 import { VALVE_LOAI_OPTIONS, VALVE_TINH_TRANG_OPTIONS } from "@/lib/pccc-status";
 
+import { pcccDeleteHandler } from "@/lib/pccc-delete";
+
 export const dynamic = "force-dynamic";
 
 const EDITABLE: FieldSpec = {
@@ -77,3 +79,21 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     return ok({ ...updated, signature: null, signatureCleared: changed.length > 0 });
   });
 }
+
+/**
+ * DELETE /api/pccc/valves/[id] — xoá van chữa cháy khỏi kỳ.
+ *
+ * Chỉ mở khi Quản trị đã bật công tắc "Xoá thiết bị" của kỳ; mọi rào khác nằm trong
+ * `pcccDeleteHandler`.
+ */
+export const DELETE = pcccDeleteHandler({
+  target: "VALVE",
+  scopeTable: "VALVE",
+  denyMessage: "Không đủ quyền xoá van chữa cháy",
+  notFound: "Không tìm thấy van chữa cháy",
+  auditAction: "DELETE_PCCC_VALVE",
+  entity: "PcccValve",
+  find: (id) => prisma.pcccValve.findUnique({ where: { id }, include: { period: true } }),
+  remove: (id) => prisma.pcccValve.delete({ where: { id } }),
+  label: (row) => row.maKks ?? "(không tên)",
+});

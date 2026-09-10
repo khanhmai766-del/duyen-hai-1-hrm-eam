@@ -4,7 +4,7 @@ import { Fragment, useState } from "react";
 import { Loader2, Lock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { EditableCell, InspectionMark, SignatureStamp, StatusBadge } from "@/components/pccc/pccc-shared";
+import { EditableCell, InspectionMark, SignatureStamp, StatusBadge, PcccDeleteCell, PCCC_ROW_DELETING } from "@/components/pccc/pccc-shared";
 import {
   DetailField,
   DetailPanel,
@@ -56,6 +56,8 @@ export function PcccFireControlCabinets({
   search,
   onPageChange,
   onPageSizeChange,
+  onToggleDelete,
+  deletingIds,
   onSearchChange,
 }: {
   rows: FireControlCabinetRow[];
@@ -80,13 +82,16 @@ export function PcccFireControlCabinets({
   onPageChange: (page: number) => void;
   onPageSizeChange: (size: number) => void;
   onSearchChange: (value: string) => void;
+  /** Có truyền = công tắc "Xoá thiết bị" của kỳ đang bật; bấm để ĐÁNH DẤU, xoá lúc bấm Lưu. */
+  onToggleDelete?: (rowId: string) => void;
+  deletingIds?: Set<string>;
 }) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const canEdit = canManage && editing;
   const canEditAdminField = canEdit && canEditPcccAdminField(writeScope);
   const cuongViOptions = cuongViList.map((item) => item.label);
   const frozen = { expand: { left: 0 }, ma: { left: 42, width: 250 } } as const;
-  const colCount = 7;
+  const colCount = 7 + (onToggleDelete ? 1 : 0);
 
   return (
     <PcccTableCard
@@ -134,6 +139,7 @@ export function PcccFireControlCabinets({
             <TableHead className={cn(TH_NAVY, "w-[145px]")}>
               <SortHeader label="Tình trạng" sortKey="tinhTrang" sort={sort} onSort={onSort} />
             </TableHead>
+            {onToggleDelete && <TableHead className={cn(TH_NAVY, "w-[52px]")} />}
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -148,12 +154,14 @@ export function PcccFireControlCabinets({
             const value = <T,>(field: string, saved: T) => (rowDraft && field in rowDraft ? (rowDraft[field] as T) : saved);
             const lockReason = (adminField = false) => (canEdit ? pcccLockReason(writeScope, row, adminField) : undefined);
             const rowBg = rowBackground({ index, expanded, dirty: Boolean(rowDraft) });
+            // Dòng đã đánh dấu xoá: tô hồng, gạch ngang — bấm Lưu là mất dòng này.
+            const deleting = Boolean(deletingIds?.has(row.id));
             const status = value("tinhTrang", row.tinhTrang);
             const save = (field: string, next: unknown) => onDraftChange(row.id, field, next);
 
             return (
               <Fragment key={row.id}>
-                <TableRow className={cn(rowBg, ROW_HOVER)}>
+                <TableRow className={cn(rowBg, ROW_HOVER, deleting && PCCC_ROW_DELETING)}>
                   <TableCell className={cn(TD_EXPAND, STICKY_TD, rowBg)} style={{ left: frozen.expand.left }}>
                     <RowExpander expanded={expanded} onToggle={() => setExpandedId(expanded ? null : row.id)} />
                   </TableCell>
@@ -180,6 +188,11 @@ export function PcccFireControlCabinets({
                       <EditableCell value={status} align="center" type="select" options={[...DAT_KHONG_DAT_OPTIONS]} lockedReason={lockReason()} onSave={(v) => save("tinhTrang", v || null)} />
                     ) : <StatusBadge status={status} />}
                   </TableCell>
+                  {onToggleDelete && (
+                    <TableCell className={cn(TD_ROW, "text-center")}>
+                      <PcccDeleteCell marked={deleting} disabled={!rowEditable} onToggle={() => onToggleDelete(row.id)} label="tủ điều khiển chữa cháy" />
+                    </TableCell>
+                  )}
                 </TableRow>
                 {expanded && (
                   <TableRow className="hover:bg-transparent">

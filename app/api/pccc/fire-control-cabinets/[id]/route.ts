@@ -14,6 +14,8 @@ import {
 } from "@/lib/pccc-service";
 import { DAT_KHONG_DAT_OPTIONS } from "@/lib/pccc-status";
 
+import { pcccDeleteHandler } from "@/lib/pccc-delete";
+
 export const dynamic = "force-dynamic";
 
 const EDITABLE: FieldSpec = {
@@ -70,3 +72,21 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     return ok({ ...updated, signature: null, signatureCleared: changed.length > 0 });
   });
 }
+
+/**
+ * DELETE /api/pccc/fire-control-cabinets/[id] — xoá tủ điều khiển chữa cháy khỏi kỳ.
+ *
+ * Chỉ mở khi Quản trị đã bật công tắc "Xoá thiết bị" của kỳ; mọi rào khác nằm trong
+ * `pcccDeleteHandler`.
+ */
+export const DELETE = pcccDeleteHandler({
+  target: "FIRE_CONTROL_CABINET",
+  scopeTable: "FIRE_CONTROL_CABINET",
+  denyMessage: "Không đủ quyền xoá tủ điều khiển chữa cháy",
+  notFound: "Không tìm thấy tủ điều khiển chữa cháy",
+  auditAction: "DELETE_PCCC_FIRE_CONTROL_CABINET",
+  entity: "PcccFireControlCabinet",
+  find: (id) => prisma.pcccFireControlCabinet.findUnique({ where: { id }, include: { period: true } }),
+  remove: (id) => prisma.pcccFireControlCabinet.delete({ where: { id } }),
+  label: (row) => row.ma ?? "(không tên)",
+});

@@ -1943,6 +1943,11 @@ model PcccPeriod {
   // Khoá cấu trúc danh mục chuẩn. Chỉ khi cấp quản lý chủ động bật thì API mới cho
   // thêm thiết bị vào kỳ; mặc định tắt để tránh phát sinh thiết bị ngoài danh mục.
   allowItemCreation Boolean @default(false)
+  /// Công tắc CẤP KỲ mở cửa XOÁ thiết bị khỏi sổ, cùng luật với `TbycnnPeriod.allowItemDeletion`.
+  /// Mặc định KHOÁ và kỳ mới cũng khoá (lib/pccc-rollover.ts không chép cờ này). Tách hẳn
+  /// khỏi `allowItemCreation` vì hậu quả khác hẳn: thêm nhầm thì xoá đi, còn xoá nhầm là mất
+  /// dòng ở kỳ này và mọi kỳ sau (kỳ mới sinh ra từ kỳ trước).
+  allowItemDeletion Boolean @default(false)
 
   closedAt     DateTime?
   closedById   String? // id User (không FK — đã có audit log); null = hệ thống tự chốt

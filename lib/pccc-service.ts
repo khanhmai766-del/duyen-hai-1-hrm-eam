@@ -35,6 +35,9 @@ export const PCCC_PERMISSION = {
   view: "pccc-view",
   manage: "pccc-manage",
   controlItemCreation: "pccc-control-item-creation",
+  /// Công tắc XOÁ thiết bị — quyền riêng, mặc định CHỈ Quản trị viên có. Bật công tắc mới
+  /// mở đường xoá; người xoá vẫn phải có quyền ghi và đúng phạm vi cương vị của mình.
+  controlItemDeletion: "pccc-control-item-deletion",
   close: "pccc-close-period",
 } as const;
 
@@ -84,6 +87,26 @@ export function periodWriteBlockReason(period: { isClosed: boolean; label: strin
 export function assertPeriodWritable(period: { isClosed: boolean; label: string; year: number; monthNo: number }) {
   const reason = periodWriteBlockReason(period);
   if (reason) throw fail(reason, 409);
+}
+
+/**
+ * Xoá được thiết bị khỏi kỳ này chưa?
+ *
+ * Ngoài các điều kiện ghi thông thường còn phải có CÔNG TẮC CẤP KỲ do Quản trị bật. Sổ PCCC
+ * là danh mục theo hồ sơ nhà máy: mở thường trực thì một cú bấm nhầm trong lúc sửa bảng hằng
+ * ngày là mất dòng ở kỳ này và mọi kỳ sau (kỳ mới chép từ kỳ trước).
+ */
+export function assertPeriodDeletable(period: {
+  isClosed: boolean;
+  label: string;
+  year: number;
+  monthNo: number;
+  allowItemDeletion: boolean;
+}) {
+  assertPeriodWritable(period);
+  if (!period.allowItemDeletion) {
+    throw fail(`Kỳ ${period.label} đang khoá chức năng xoá thiết bị — nhờ Quản trị bật công tắc "Xoá thiết bị"`, 409);
+  }
 }
 
 /**

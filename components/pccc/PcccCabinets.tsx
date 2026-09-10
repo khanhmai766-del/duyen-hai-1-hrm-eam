@@ -20,6 +20,8 @@ import {
   componentTone,
   fmtDate,
   SignatureStamp,
+  PcccDeleteCell,
+  PCCC_ROW_DELETING,
 } from "@/components/pccc/pccc-shared";
 import {
   DetailField,
@@ -76,6 +78,8 @@ export function PcccCabinets({
   search,
   onPageChange,
   onPageSizeChange,
+  onToggleDelete,
+  deletingIds,
   onSearchChange,
 }: {
   rows: CabinetRow[];
@@ -108,6 +112,9 @@ export function PcccCabinets({
   onPageChange: (p: number) => void;
   onPageSizeChange: (n: number) => void;
   onSearchChange: (v: string) => void;
+  /** Có truyền = công tắc "Xoá thiết bị" của kỳ đang bật; bấm để ĐÁNH DẤU, xoá lúc bấm Lưu. */
+  onToggleDelete?: (rowId: string) => void;
+  deletingIds?: Set<string>;
 }) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   // Đầu bảng 2 TẦNG: tầng 2 (OK/!/✕) phải dính ngay DƯỚI tầng 1, nên `top` của nó bằng
@@ -141,7 +148,7 @@ export function PcccCabinets({
 
   const componentCols = groups.reduce((n, g) => n + g.statuses.length, 0);
   // + | Mã | Cương vị | Tình trạng | <ô linh kiện> | Số YCSC | Người kiểm tra
-  const colCount = 4 + componentCols + 2;
+  const colCount = 4 + componentCols + 2 + (onToggleDelete ? 1 : 0);
 
   /** Ghi vào BẢN NHÁP, không gọi API. Lưu một lượt khi bấm "Lưu". */
   function save(row: CabinetRow, field: string, value: unknown) {
@@ -224,6 +231,7 @@ export function PcccCabinets({
                 </TableHead>
               ))
             )}
+            {onToggleDelete && <TableHead className={cn(TH_NAVY, "w-[52px]")} />}
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -252,6 +260,8 @@ export function PcccCabinets({
               return r.components.find((c) => c.groupLabel === groupLabel && c.status === status)?.checked ?? false;
             };
             const rowBg = rowBackground({ index, expanded, dirty: Boolean(rowDraft) });
+            // Dòng đã đánh dấu xoá: tô hồng, gạch ngang — bấm Lưu là mất dòng này.
+            const deleting = Boolean(deletingIds?.has(r.id));
             // Khiếm khuyết đang có của tủ (bỏ cột đầu = "Khả dụng"), kèm cờ mức nặng để
             // tô chip. Tính theo trạng thái HIỆU LỰC nên phản ánh cả ô vừa tích trong
             // bản nháp, chưa lưu cũng thấy ngay.
@@ -269,7 +279,7 @@ export function PcccCabinets({
               }));
             return (
               <Fragment key={r.id}>
-                <TableRow className={cn(rowBg, ROW_HOVER)}>
+                <TableRow className={cn(rowBg, ROW_HOVER, deleting && PCCC_ROW_DELETING)}>
                   <TableCell className={cn(TD_EXPAND, STICKY_TD, rowBg)} style={{ left: FROZEN.expand.left }}>
                     <RowExpander expanded={expanded} onToggle={() => setExpandedId(expanded ? null : r.id)} />
                   </TableCell>
@@ -339,6 +349,11 @@ export function PcccCabinets({
                       />
                     </InspectionMark>
                   </TableCell>
+                  {onToggleDelete && (
+                    <TableCell className={cn(TD_ROW, "text-center")}>
+                      <PcccDeleteCell marked={deleting} disabled={!rowEditable} onToggle={() => onToggleDelete(r.id)} label="tủ chữa cháy" />
+                    </TableCell>
+                  )}
                 </TableRow>
 
                 {expanded && (

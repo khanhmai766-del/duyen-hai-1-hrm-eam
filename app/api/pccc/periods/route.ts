@@ -31,6 +31,7 @@ export async function GET() {
         monthNo: true,
         isClosed: true,
         allowItemCreation: true,
+        allowItemDeletion: true,
         closedAt: true,
         archiveKey: true,
         archivedAt: true,
