@@ -1493,6 +1493,108 @@ model MaterialStockMovement {
   @@index([type, occurredAt(sort: Desc)])
 }
 
+/// Danh bạ người của nhà thầu: mã người dùng chung giữa cả hai sổ PCT.
+model WorkPermitPerson {
+  id String @id @default(cuid())
+  code String @unique
+  name String
+  company String
+  canCommand Boolean @default(false)
+  isActive Boolean @default(true)
+  searchText String
+  version Int @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  sessions WorkPermitSession[]
+}
+
+/// Một PCT có nhiều lần cho phép/kết thúc công tác. Kết thúc lần làm việc không đóng PCT.
+model WorkPermitSession {
+  id String @id @default(cuid())
+  permitId String
+  permit WorkPermit @relation(fields: [permitId], references: [id], onDelete: Restrict)
+  commanderId String
+  commander WorkPermitPerson @relation(fields: [commanderId], references: [id], onDelete: Restrict)
+  commanderCode String @default("")
+  commanderName String
+  company String
+  members Json
+  workerCount Int
+  openedAt DateTime
+  endedAt DateTime?
+  authorizerName String
+  endConfirmedByName String @default("")
+  endNote String @default("")
+  searchText String @default("")
+  createdById String
+  createdByName String
+  endedById String?
+  endedByName String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([permitId, openedAt])
+  @@index([commanderId, openedAt, endedAt])
+}
+
+/// Sổ ghi nhận cấp PCT; không thay thế việc cho phép làm việc trên phiếu chính thức.
+model WorkPermit {
+  id String @id @default(cuid())
+  format String? // PAPER / ELECTRONIC; null với phiếu cũ chưa ghi riêng.
+  workType String? // PLANNED = KH, UNPLANNED = ĐX; phiếu cũ chưa phân loại để null.
+  kind String
+  year Int
+  number String
+  status String @default("DRAFT")
+  unit String
+  content String
+  location String @default("")
+  workDate String
+  issuerName String @default("")
+  issuerUserId String?
+  commanderPersonId String?
+  leaderName String @default("")
+  commanderName String @default("")
+  teamName String @default("")
+  teamType String @default("INTERNAL")
+  members Json @default("[]")
+  workerCount Int?
+  authorizerName String @default("")
+  issuedAt DateTime?
+  authorizedAt DateTime?
+  closedAt DateTime?
+  result String @default("")
+  note String @default("")
+  statusReason String @default("")
+  repairRequestNumber String @default("")
+  searchText String @default("")
+  createdById String
+  createdByName String
+  version Int @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  history WorkPermitHistory[]
+  sessions WorkPermitSession[]
+
+  @@unique([kind, year, number])
+  @@index([kind, workDate])
+  @@index([status, workDate])
+}
+
+model WorkPermitHistory {
+  id String @id @default(cuid())
+  permitId String
+  permit WorkPermit @relation(fields: [permitId], references: [id], onDelete: Restrict)
+  actorId String
+  actorName String
+  action String
+  before Json?
+  after Json
+  createdAt DateTime @default(now())
+
+  @@index([permitId, createdAt])
+}
+
 model MaterialTicket {
   id             String @id @default(cuid())
   sequenceMonth  String // YYYY-MM theo giờ Việt Nam; mỗi tháng có dãy STT riêng
