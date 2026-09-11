@@ -2,7 +2,7 @@
 import { useMutation, useQuery, useQueryClient, useInfiniteQuery } from "@tanstack/react-query";
 import { apiDownload, apiGet, apiMutate } from "@/lib/fetcher";
 import type { PermitHistory, PermitListRow, PermitDetailRow, PermitPerson, PermitRow, PermitStatus, PermitSession } from "@/lib/work-permits";
-export interface PermitMeta { total: number; page: number; pageSize: number; counts: Partial<Record<PermitStatus, number>>; canWrite: boolean }
+export interface PermitMeta { total: number; page: number; pageSize: number; counts: Partial<Record<PermitStatus, number>>; canIssue: boolean; canExecute: boolean }
 export interface PermitNumberSuggestion { highest: string | null; suggested: string | null }
 export function useWorkPermits(filters: string, enabled = true) {
   return useQuery({ queryKey: ["work-permits", filters], enabled, queryFn: () => apiGet<PermitListRow[]>(`/api/work-permits?${filters}`) as Promise<{ data: PermitListRow[]; meta: PermitMeta }> });
@@ -60,4 +60,13 @@ export function usePermitHistoryDetail(permitId: string, historyId: string, enab
 export function usePermitEmployees(q: string, page: number, enabled: boolean) {
   return useQuery({ queryKey: ["work-permit-employees", q, page], enabled, staleTime: 60000,
     queryFn: () => apiGet<Array<{ id: string; name: string; employeeId: string | null; position: string | null; department: string | null }>>(`/api/work-permits/employees?${new URLSearchParams({ q, page: String(page) })}`) as Promise<{ data: Array<{ id: string; name: string; employeeId: string | null; position: string | null; department: string | null }>; meta: { total: number } }> });
+}
+
+export function useExecuteWorkPermit(id: string) {
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: (body: unknown) => apiMutate<PermitRow>(`/api/work-permits/${id}/execution`, "POST", body), onSuccess: () => {
+    qc.invalidateQueries({ queryKey: ["work-permits"] });
+    qc.invalidateQueries({ queryKey: ["work-permit"] });
+    qc.invalidateQueries({ queryKey: ["work-permit-people"] });
+  } });
 }

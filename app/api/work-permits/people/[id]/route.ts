@@ -1,12 +1,12 @@
+import { requirePermitIssue } from "@/lib/server/work-permit-permissions";
 import { prisma } from "@/lib/prisma";
-import { audit, fail, ok, requireRole, requireUser } from "@/lib/api";
-import { PERMIT_WRITE_ROLES } from "@/lib/work-permits";
+import { audit, fail, ok, requireUser } from "@/lib/api";
 import { permitBody, permitHandle } from "@/lib/server/work-permits";
 import { parsePermitPerson } from "@/lib/server/work-permit-people";
 export const dynamic = "force-dynamic";
 export async function PUT(req: Request, { params }: { params: { id: string } }) {
   return permitHandle(async () => {
-    const user = await requireUser(); requireRole(user, PERMIT_WRITE_ROLES);
+    const user = await requireUser(); await requirePermitIssue(user);
     const body = await permitBody(req); const data = parsePermitPerson(body);
     const row = await prisma.$transaction(async tx => {
       await tx.$queryRaw`SELECT "id" FROM "WorkPermitPerson" WHERE "id" = ${params.id} FOR UPDATE`;

@@ -1,0 +1,4 @@
+export const DOCUMENT_TYPES=["CONTRACT","LEGAL","TECHNICAL","DRAWING","INSPECTION","ACCEPTANCE","PAYMENT","OTHER"] as const;export type DocumentType=(typeof DOCUMENT_TYPES)[number];export type MalwareScanStatus="PENDING"|"CLEAN"|"INFECTED"|"ERROR";
+export interface DocumentRecord{id:string;contractId:string;contractNumber:string;packageName:string;displayName:string;documentType:DocumentType;referenceNumber?:string;documentDate?:string;description?:string;mediaType:string;sizeBytes:number;sha256Hex:string;driveFileId:string;driveWebUrl?:string;malwareScanStatus:MalwareScanStatus;uploadedBy:string;uploaderDisplayName?:string;uploadedAt:string;archivedAt?:string;}
+export interface DocumentSummary{total:number;clean:number;pending:number;error:number;thisMonth:number;}
+export interface DocumentOptions{contracts:Array<{id:string;contractNumber:string;packageName:string}>;}

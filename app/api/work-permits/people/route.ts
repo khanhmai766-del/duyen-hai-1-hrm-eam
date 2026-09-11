@@ -1,7 +1,7 @@
+import { requirePermitIssue, permitCapabilities } from "@/lib/server/work-permit-permissions";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { audit, fail, ok, requireRole, requireUser } from "@/lib/api";
-import { PERMIT_WRITE_ROLES } from "@/lib/work-permits";
+import { audit, fail, ok, requireUser } from "@/lib/api";
 import { permitBody, permitHandle, permitSearchTerm } from "@/lib/server/work-permits";
 import { parsePermitPerson } from "@/lib/server/work-permit-people";
 export const dynamic = "force-dynamic";
@@ -32,12 +32,12 @@ export async function GET(req: Request) {
         if (!member || typeof member !== "object" || Array.isArray(member)) return false;
         return member.personId ? member.personId === person.id : member.code === person.code;
       }))).map(session => ({ sessionId: session.id, role: session.commanderId === person.id ? "CHTT" : "MEMBER", openedAt: session.openedAt, permit: session.permit })),
-    })), { total, canWrite: PERMIT_WRITE_ROLES.includes(user.role) });
+    })), { total, canWrite: (await permitCapabilities(user)).canIssue });
   });
 }
 export async function POST(req: Request) {
   return permitHandle(async () => {
-    const user = await requireUser(); requireRole(user, PERMIT_WRITE_ROLES);
+    const user = await requireUser(); await requirePermitIssue(user);
     const data = parsePermitPerson(await permitBody(req));
     try {
       const row = await prisma.workPermitPerson.create({ data });

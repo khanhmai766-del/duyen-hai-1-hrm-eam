@@ -221,6 +221,9 @@ function managerDefaultValue(row: PermissionRow): PermissionValue {
 
 function normalizeMergedRoleMatrix(rows: PermissionRow[]) {
   return rows.map((row) => {
+    // Preserve independent PCT defaults when saving another permission. The
+    // combined column still explicitly changes both roles when it is edited.
+    if (["work-permit-issue", "work-permit-execute"].includes(row.id)) return row;
     const mergedValue = strongestPermission([row.matrix.SUPERVISOR, row.matrix.TECHNICIAN]);
     return {
       ...row,
@@ -476,6 +479,27 @@ const DEFAULT_PERMISSIONS: PermissionRow[] = [
     feature: "Xem thông tin thiết bị qua QR công khai",
     note: "Người quét QR có thể xem thông tin thiết bị công khai, kể cả khi không có tài khoản hệ thống.",
     matrix: { ADMIN: "read", SUPERVISOR: "read", TECHNICIAN: "read", VIEWER: "read" },
+  },
+  {
+    id: "work-permit-issue",
+    group: "Tài liệu số",
+    feature: "Sổ cấp PCT — Cấp phiếu",
+    note: "Tạo, cấp, chỉnh sửa thông tin và hủy phiếu; quản lý danh bạ nhà thầu và danh mục biện pháp an toàn. Không bao gồm cho phép làm việc hoặc cập nhật thực hiện.",
+    matrix: { ADMIN: "full", MANAGER: "manage", SUPERVISOR: "manage", TECHNICIAN: "none", VIEWER: "none" },
+  },
+  {
+    id: "work-permit-execute",
+    group: "Tài liệu số",
+    feature: "Sổ cấp PCT — Thực hiện phiếu",
+    note: "Cho phép vào làm việc, mở/kết thúc ngày làm việc, bàn giao CHTT, tạm dừng, cập nhật tiến độ/kết quả và đóng phiếu. Không được tạo hoặc sửa nội dung cấp phiếu.",
+    matrix: { ADMIN: "full", MANAGER: "manage", SUPERVISOR: "manage", TECHNICIAN: "none", VIEWER: "none" },
+  },
+  {
+    id: "contract-access",
+    group: "Tài liệu số",
+    feature: "Quản lý hợp đồng",
+    note: "Quyền mở phân hệ; phạm vi dữ liệu và vai trò nghiệp vụ được cấp trong Nhân sự và phân quyền của hợp đồng. Toàn quyền cho phép quản trị phân hệ khi đồng thời có vai trò quản trị hợp đồng.",
+    matrix: { ADMIN: "full", SUPERVISOR: "read", TECHNICIAN: "read", VIEWER: "read" },
   },
   {
     id: "document-procedure",

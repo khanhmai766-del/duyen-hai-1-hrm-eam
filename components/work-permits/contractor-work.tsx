@@ -95,7 +95,7 @@ export function PermitMembersEditor({ members, onChange, commander }: { members:
   </div>;
 }
 
-export function ContractorSessions({ permit, canWrite }: { permit: PermitDetailRow; canWrite: boolean }) {
+export function ContractorSessions({ permit, canExecute }: { permit: PermitDetailRow; canExecute: boolean }) {
   const [showAllSessions, setShowAllSessions] = useState(false);
   const [action, setAction] = useState<"open" | PermitSession | null>(null);
   const [handoff, setHandoff] = useState(false);
@@ -104,11 +104,11 @@ export function ContractorSessions({ permit, canWrite }: { permit: PermitDetailR
   if (permit.teamType !== "CONTRACTOR") return null;
   const live = permit.sessions.find(s => !s.endedAt);
   return <section className="space-y-3 rounded-xl border border-sky-200 bg-sky-50/40 p-4 dark:bg-sky-950/20">
-    <div className="flex flex-wrap items-center justify-between gap-3"><h3 className="font-semibold">Các lần làm việc của nhà thầu</h3>{canWrite && !live && ["ISSUED", "WAITING"].includes(permit.status) && <Button onClick={() => { setHandoff(false); setAction("open"); }}><Play />Cho phép / mở lần làm việc</Button>}</div>
+    <div className="flex flex-wrap items-center justify-between gap-3"><h3 className="font-semibold">Các lần làm việc của nhà thầu</h3>{canExecute && !live && ["ISSUED", "WAITING"].includes(permit.status) && <Button onClick={() => { setHandoff(false); setAction("open"); }}><Play />Cho phép / mở lần làm việc</Button>}</div>
     <p className="text-sm text-muted-foreground">Mỗi lần lưu riêng CHTT, nhân viên và thời gian. Kết thúc lần làm việc giải phóng CHTT để làm phiếu khác; PCT vẫn giữ để tiếp tục lần sau.</p>
     {!permit.sessions.length && <p className="rounded-lg bg-background p-3 text-sm">Chưa ghi nhận lần làm việc. Phiếu phải được cấp trước khi mở lần đầu.</p>}
     {visibleSessions.map(s => <article key={s.id} className={`space-y-2 rounded-lg border bg-background p-3 ${s.endedAt ? "border-border" : "border-emerald-400"}`}>
-      <div className="flex flex-wrap items-start justify-between gap-2"><div><b>{s.commanderName} · {s.commanderCode}</b><p className="text-sm text-muted-foreground">{s.company}</p></div>{!s.endedAt && canWrite && <div className="flex flex-wrap gap-2"><Button variant="outline" onClick={() => { setHandoff(true); setAction(s); }}>Bàn giao / đổi CHTT</Button><Button variant="outline" onClick={() => { setHandoff(false); setAction(s); }}><Square />Kết thúc lần làm việc</Button></div>}</div>
+      <div className="flex flex-wrap items-start justify-between gap-2"><div><b>{s.commanderName} · {s.commanderCode}</b><p className="text-sm text-muted-foreground">{s.company}</p></div>{!s.endedAt && canExecute && <div className="flex flex-wrap gap-2"><Button variant="outline" onClick={() => { setHandoff(true); setAction(s); }}>Bàn giao / đổi CHTT</Button><Button variant="outline" onClick={() => { setHandoff(false); setAction(s); }}><Square />Kết thúc lần làm việc</Button></div>}</div>
       <p className="text-sm"><strong>{fmt(s.openedAt)}</strong> → {s.endedAt ? fmt(s.endedAt) : <strong className="text-emerald-700">Đang làm · chưa kết thúc</strong>}</p>
       <p className="text-sm">Người cho phép: {s.authorizerName} · CHTT và {s.members.filter(m => m.personId ? m.personId !== s.commanderId : m.code !== s.commanderCode).length} nhân viên bổ sung</p>
       {s.endedAt && <p className="text-sm">Xác nhận kết thúc: {s.endConfirmedByName}{s.progress != null ? ` · Tiến độ ${s.progress}%` : ""}{s.endNote ? ` · ${s.endNote}` : ""}</p>}

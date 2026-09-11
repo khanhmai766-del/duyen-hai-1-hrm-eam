@@ -1,12 +1,12 @@
+import { requirePermitIssue } from "@/lib/server/work-permit-permissions";
 import { prisma } from "@/lib/prisma";
-import { audit, fail, ok, requireRole, requireUser } from "@/lib/api";
-import { PERMIT_WRITE_ROLES } from "@/lib/work-permits";
+import { audit, fail, ok, requireUser } from "@/lib/api";
 import { permitBody, permitHandle } from "@/lib/server/work-permits";
 import { parseSafetyItem } from "@/lib/server/work-permit-safety";
 export const dynamic = "force-dynamic";
 export async function PUT(req: Request, { params }: { params: { id: string } }) {
   return permitHandle(async () => {
-    const user = await requireUser(); requireRole(user, PERMIT_WRITE_ROLES);
+    const user = await requireUser(); await requirePermitIssue(user);
     const body = await permitBody(req), data = parseSafetyItem(body);
     const result = await prisma.$transaction(async tx => {
       const before = await tx.workPermitSafetyMeasure.findUnique({ where: { id: params.id } });

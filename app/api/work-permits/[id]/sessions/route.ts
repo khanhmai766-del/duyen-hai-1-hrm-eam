@@ -1,13 +1,13 @@
+import { requirePermitExecute } from "@/lib/server/work-permit-permissions";
 import { normalizeText } from "@/lib/nav";
 import { prisma } from "@/lib/prisma";
-import { audit, fail, ok, requireRole, requireUser } from "@/lib/api";
-import { PERMIT_WRITE_ROLES } from "@/lib/work-permits";
+import { audit, fail, ok, requireUser } from "@/lib/api";
 import { permitBody, permitHandle, permitInstant, permitSnapshot, permitText } from "@/lib/server/work-permits";
 import { assertCommanderFree, readSessionOpen, resolveSessionMembers, validateSessionTime } from "@/lib/server/work-permit-sessions";
 export const dynamic = "force-dynamic";
 export async function POST(req: Request, { params }: { params: { id: string } }) {
   return permitHandle(async () => {
-    const user = await requireUser(); requireRole(user, PERMIT_WRITE_ROLES);
+    const user = await requireUser(); await requirePermitExecute(user);
     const body = await permitBody(req);
     if (!["open", "end", "handoff"].includes(String(body.action))) return fail("Thao tác lần làm việc không hợp lệ");
     const result = await prisma.$transaction(async tx => {

@@ -1,7 +1,9 @@
+import { permitIssueUpdateNeedsExecution } from "@/lib/work-permit-permissions";
+import { requirePermitIssue, requirePermitExecute, permitCapabilities } from "@/lib/server/work-permit-permissions";
 import { resolvePermitSafety } from "@/lib/server/work-permit-safety";
 import { prisma } from "@/lib/prisma";
-import { audit, fail, ok, requireRole, requireUser } from "@/lib/api";
-import { formatPermitNumber, PERMIT_PAGE_SIZE, PERMIT_WRITE_ROLES } from "@/lib/work-permits";
+import { audit, fail, ok, requireUser } from "@/lib/api";
+import { formatPermitNumber, PERMIT_PAGE_SIZE } from "@/lib/work-permits";
 import { parsePermit, permitBody, permitFilters, permitHandle, permitSnapshot } from "@/lib/server/work-permits";
 import { resolvePermitIdentities } from "@/lib/server/work-permit-identities";
 import { permitListSelect } from "@/lib/server/work-permit-selects";
@@ -17,13 +19,15 @@ export async function GET(req: Request) {
       prisma.workPermit.count({ where }),
       prisma.workPermit.groupBy({ by: ["status"], orderBy: { status: "asc" }, where: { ...where, status: undefined }, _count: true }),
     ]);
-    return ok(rows, { total, page, pageSize: PERMIT_PAGE_SIZE, counts: Object.fromEntries(groups.map(g => [g.status, g._count])), canWrite: PERMIT_WRITE_ROLES.includes(user.role) });
+    return ok(rows, { total, page, pageSize: PERMIT_PAGE_SIZE, counts: Object.fromEntries(groups.map(g => [g.status, g._count])), ...await permitCapabilities(user) });
   });
 }
 export async function POST(req: Request) {
   return permitHandle(async () => {
-    const user = await requireUser(); requireRole(user, PERMIT_WRITE_ROLES);
+    const user = await requireUser(); await requirePermitIssue(user);
     const body = await permitBody(req);
+    if (permitIssueUpdateNeedsExecution({}, body)) await requirePermitExecute(user);
+    if (body.progress !== undefined && body.progress !== null) return fail("Chưa được cập nhật tiến độ khi tạo phiếu");
     const status = body.status === "ISSUED" ? "ISSUED" : "DRAFT";
     if (body.status !== "ISSUED" && body.status !== "DRAFT") return fail("Phiếu mới phải ở trạng thái Nháp hoặc Đã cấp");
     const row = await prisma.$transaction(async tx => {

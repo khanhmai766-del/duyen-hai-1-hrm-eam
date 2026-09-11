@@ -207,6 +207,7 @@ export const NAV_SECTIONS: NavSection[] = [
   {
     title: "QUẢN LÝ TÀI LIỆU SỐ",
     items: [
+      { label: "Quản lý hợp đồng", href: "/documents/contracts", icon: FileText, permissionIds: ["contract-access"], keywords: "quan ly hop dong nha thau tien do nghiem thu" },
       { label: "Sổ cấp phiếu công tác", href: "/work-permits", icon: ClipboardList, keywords: "pct phieu cong tac co nhiet hoa dien cap phieu giao ca" },
       { label: "Danh mục quy trình", href: "/documents/procedures", icon: FileText, keywords: "danh muc quy trinh van hanh procedure sop tai lieu so" },
       { label: "Sơ đồ P&ID", href: "/documents/pid", icon: Workflow, keywords: "danh muc so do pid p&id ban ve tai lieu ky thuat" },

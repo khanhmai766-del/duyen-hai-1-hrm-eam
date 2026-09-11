@@ -37,7 +37,6 @@ export const CONTRACTOR_PERMIT_TRANSITIONS: Record<PermitStatus, readonly Permit
   DRAFT: ["ISSUED", "CANCELLED"], ISSUED: ["CANCELLED"], ACTIVE: [], PAUSED: [],
   WAITING: ["CLOSED", "CANCELLED"], CLOSED: [], CANCELLED: [],
 };
-export const PERMIT_WRITE_ROLES = ["ADMIN", "MANAGER", "SUPERVISOR"];
 export const PERMIT_DISCIPLINES = { HYDRO: "Thủy", MECHANICAL: "Cơ", THERMAL: "Nhiệt", CHEMICAL: "Hóa" } as const;
 export type PermitDiscipline = keyof typeof PERMIT_DISCIPLINES;
 export interface PermitInput {

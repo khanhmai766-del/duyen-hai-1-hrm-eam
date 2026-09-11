@@ -1,6 +1,7 @@
+import { requirePermitIssue, permitCapabilities } from "@/lib/server/work-permit-permissions";
 import { prisma } from "@/lib/prisma";
-import { audit, fail, ok, requireRole, requireUser } from "@/lib/api";
-import { PERMIT_KINDS, PERMIT_WRITE_ROLES } from "@/lib/work-permits";
+import { audit, fail, ok, requireUser } from "@/lib/api";
+import { PERMIT_KINDS } from "@/lib/work-permits";
 import { SAFETY_PAGE_SIZE } from "@/lib/work-permit-safety";
 import { permitBody, permitHandle, permitSearchTerm } from "@/lib/server/work-permits";
 import { parseSafetyItem } from "@/lib/server/work-permit-safety";
@@ -17,12 +18,12 @@ export async function GET(req: Request) {
       prisma.workPermitSafetyMeasure.findMany({ where, select: { id: true, kind: true, hazard: true, measure: true, source: true, isActive: true, version: true }, orderBy: [{ createdAt: "asc" }, { id: "asc" }], skip: (page - 1) * SAFETY_PAGE_SIZE, take: SAFETY_PAGE_SIZE }),
       prisma.workPermitSafetyMeasure.count({ where }),
     ]);
-    return ok(rows, { total, page, pageSize: SAFETY_PAGE_SIZE, canWrite: PERMIT_WRITE_ROLES.includes(user.role) });
+    return ok(rows, { total, page, pageSize: SAFETY_PAGE_SIZE, canWrite: (await permitCapabilities(user)).canIssue });
   });
 }
 export async function POST(req: Request) {
   return permitHandle(async () => {
-    const user = await requireUser(); requireRole(user, PERMIT_WRITE_ROLES);
+    const user = await requireUser(); await requirePermitIssue(user);
     const data = parseSafetyItem(await permitBody(req));
     const row = await prisma.workPermitSafetyMeasure.create({ data });
     await audit(user.id, "CREATE_PERMIT_SAFETY", "WorkPermitSafetyMeasure", row.id, JSON.stringify(data));
