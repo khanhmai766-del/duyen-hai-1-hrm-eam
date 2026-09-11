@@ -98,8 +98,5 @@ CREATE POLICY contractors_update_policy ON tcms.contractors FOR UPDATE
 USING(tcms.has_permission('contract.identity.update'))
 WITH CHECK(tcms.has_permission('contract.identity.update'));
 
-REVOKE DELETE ON tcms.contractors FROM tcms_app_runtime;
-GRANT SELECT,INSERT,UPDATE ON tcms.contractors TO tcms_app_runtime;
-
 INSERT INTO tcms.schema_migrations(version) VALUES('014_contractor_management');
 COMMIT;

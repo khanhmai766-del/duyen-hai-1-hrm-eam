@@ -52,7 +52,5 @@ CREATE POLICY contract_goods_items_update_policy ON tcms.contract_goods_items FO
 CREATE POLICY contract_goods_items_delete_policy ON tcms.contract_goods_items FOR DELETE USING (
   tcms.has_permission('contract.identity.update') AND tcms.can_access_contract(contract_id)
 );
-GRANT SELECT, INSERT, UPDATE, DELETE ON tcms.contract_goods_items TO tcms_app_runtime;
-
 INSERT INTO tcms.schema_migrations (version) VALUES ('008_contract_goods_items');
 COMMIT;

@@ -34,7 +34,7 @@ test("migration 011 uses least privilege, audit, optimistic lock and last-admin 
   assert.match(sql, /app_users_write_audit/);
   assert.match(sql, /version integer NOT NULL DEFAULT 1/);
   assert.doesNotMatch(sql, /GRANT[^;]*DELETE ON tcms\.app_users/i);
-  assert.match(sql, /GRANT SELECT, INSERT, UPDATE, DELETE ON tcms\.user_role_scopes/);
+  assert.doesNotMatch(sql, /tcms_app_runtime/);
 });
 
 test("migration 012 keeps table-specific trigger fields in separate branches", async () => {

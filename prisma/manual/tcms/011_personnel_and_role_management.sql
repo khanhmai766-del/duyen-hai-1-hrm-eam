@@ -105,8 +105,5 @@ FOR EACH ROW EXECUTE FUNCTION tcms.write_identity_audit();
 CREATE TRIGGER user_role_scopes_write_audit AFTER INSERT OR UPDATE OR DELETE ON tcms.user_role_scopes
 FOR EACH ROW EXECUTE FUNCTION tcms.write_identity_audit();
 
-GRANT SELECT, INSERT, UPDATE ON tcms.app_users TO tcms_app_runtime;
-GRANT SELECT, INSERT, UPDATE, DELETE ON tcms.user_role_scopes TO tcms_app_runtime;
-
 INSERT INTO tcms.schema_migrations(version) VALUES ('011_personnel_and_role_management');
 COMMIT;

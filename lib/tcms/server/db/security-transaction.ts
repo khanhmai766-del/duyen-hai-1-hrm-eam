@@ -16,10 +16,11 @@ export async function withSecurityTransaction<T>(
   const client = await getPool().connect();
   try {
     await client.query("BEGIN");
-    // Always drop owner/superuser privileges before executing business queries.
-    await client.query("SET LOCAL ROLE tcms_app_runtime");
+    // The contract module shares the website database login. FORCE RLS on every
+    // business table keeps the owner subject to policies as well.
+    await client.query("SET LOCAL row_security = on");
     const role = await client.query("SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user");
-    if (!role.rows.length || role.rows[0].rolsuper || role.rows[0].rolbypassrls) throw new Error("TCMS_UNSAFE_RUNTIME_ROLE");
+    if (!role.rows.length || role.rows[0].rolsuper || role.rows[0].rolbypassrls) throw new Error("TCMS_UNSAFE_DATABASE_ROLE");
     const permissions = [...permissionsForRoles(context.principal.roles), "audit.write"];
     const settings: Array<[string, string]> = [
       ["app.actor_id", context.principal.userId],

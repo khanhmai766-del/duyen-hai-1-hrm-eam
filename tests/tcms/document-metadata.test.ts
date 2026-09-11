@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-test("document migration keeps new metadata immutable and applies least privilege", async () => {
+test("document migration keeps new metadata immutable under website-owned RLS", async () => {
   const [metadataSql, scannerSql] = await Promise.all([
     readFile(
       new URL("../../prisma/manual/tcms/019_document_metadata_google_drive.sql", import.meta.url),
@@ -16,7 +16,7 @@ test("document migration keeps new metadata immutable and applies least privileg
 
   assert.match(metadataSql, /NEW\.drive_parent_folder_id IS DISTINCT FROM OLD\.drive_parent_folder_id/);
   assert.match(metadataSql, /NEW\.drive_web_url IS DISTINCT FROM OLD\.drive_web_url/);
-  assert.match(metadataSql, /GRANT SELECT,INSERT,UPDATE ON tcms\.documents TO tcms_app_runtime/);
+  assert.doesNotMatch(metadataSql, /tcms_app_runtime/);
   assert.doesNotMatch(metadataSql, /GRANT ALL/);
   assert.match(scannerSql, /malware_scan_status = 'CLEAN'/);
   assert.match(scannerSql, /uploaded_by = current_setting\('app\.actor_id', true\)/);

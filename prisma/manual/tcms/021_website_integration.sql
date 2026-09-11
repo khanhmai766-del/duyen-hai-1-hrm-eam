@@ -21,16 +21,8 @@ CROSS JOIN (VALUES ('SYSTEM_ADMIN'), ('CONTRACT_MANAGER')) r(code)
 WHERE u.role::text='ADMIN' AND u."isActive" AND COALESCE(u."accessMode",'NORMAL') <> 'DEFECT_READ_ONLY'
 ON CONFLICT DO NOTHING;
 
--- Runtime must always enter this non-owner, non-bypass role before business SQL.
-DO $$ BEGIN
-  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname='tcms_app_runtime' AND (rolsuper OR rolbypassrls)) THEN
-    RAISE EXCEPTION 'tcms_app_runtime must not bypass RLS';
-  END IF;
-  EXECUTE format('GRANT tcms_app_runtime TO %I', current_user);
-END $$;
-
--- Needed for replacement of the old free-text supervisor list in a contract edit.
-GRANT DELETE ON tcms.contract_supervisors TO tcms_app_runtime;
+-- The website database login owns this schema. Business tables use FORCE RLS,
+-- while API transactions reject superuser and BYPASSRLS connections.
 
 COMMENT ON COLUMN tcms.app_users.identity_subject IS 'Website account binding: vh1:<public.User.id>. No additional password is stored.';
 INSERT INTO tcms.schema_migrations(version) VALUES ('021_website_integration');

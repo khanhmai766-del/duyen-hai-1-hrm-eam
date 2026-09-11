@@ -50,6 +50,5 @@ CREATE POLICY technical_issues_select ON tcms.technical_issues FOR SELECT USING(
 CREATE POLICY technical_issues_insert ON tcms.technical_issues FOR INSERT WITH CHECK(tcms.has_permission('contract.progress.update') AND tcms.can_access_contract(contract_id));
 CREATE POLICY technical_issues_update ON tcms.technical_issues FOR UPDATE USING(tcms.has_permission('contract.progress.update') AND tcms.can_access_contract(contract_id)) WITH CHECK(tcms.has_permission('contract.progress.update') AND tcms.can_access_contract(contract_id));
 
-GRANT SELECT,INSERT,UPDATE ON tcms.inspections,tcms.technical_issues TO tcms_app_runtime;
 INSERT INTO tcms.schema_migrations(version) VALUES('017_inspections_and_technical_issues');
 COMMIT;

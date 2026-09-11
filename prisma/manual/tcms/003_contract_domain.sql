@@ -88,8 +88,5 @@ CREATE POLICY contract_items_update_policy ON tcms.contract_items FOR UPDATE
   USING (tcms.can_access_contract(contract_id) AND (tcms.has_permission('contract.identity.update') OR tcms.has_permission('contract.progress.update') OR tcms.has_permission('contract.acceptance.update')))
   WITH CHECK (tcms.can_access_contract(contract_id));
 
-GRANT SELECT, INSERT, UPDATE ON tcms.contractors, tcms.contract_items TO tcms_app_runtime;
-GRANT DELETE ON tcms.contract_supervisors TO tcms_app_runtime;
-
 INSERT INTO tcms.schema_migrations (version) VALUES ('003_contract_domain');
 COMMIT;

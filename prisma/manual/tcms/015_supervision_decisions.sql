@@ -108,8 +108,5 @@ CREATE POLICY supervision_assignments_update ON tcms.supervision_assignments FOR
 CREATE POLICY supervision_assignments_delete ON tcms.supervision_assignments FOR DELETE USING(
   tcms.has_permission('contract.assignment.manage') AND tcms.can_access_contract(contract_id));
 
-GRANT SELECT,INSERT,UPDATE ON tcms.supervision_decisions TO tcms_app_runtime;
-GRANT SELECT,INSERT,UPDATE,DELETE ON tcms.supervision_assignments TO tcms_app_runtime;
-
 INSERT INTO tcms.schema_migrations(version) VALUES('015_supervision_decisions');
 COMMIT;

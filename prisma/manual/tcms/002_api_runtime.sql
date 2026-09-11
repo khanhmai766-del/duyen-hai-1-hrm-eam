@@ -51,17 +51,8 @@ ALTER TABLE tcms.contract_supervisors FORCE ROW LEVEL SECURITY;
 ALTER TABLE tcms.documents FORCE ROW LEVEL SECURITY;
 ALTER TABLE tcms.audit_events FORCE ROW LEVEL SECURITY;
 
-DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'tcms_app_runtime') THEN
-    CREATE ROLE tcms_app_runtime NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT;
-  END IF;
-END $$;
-
-GRANT USAGE ON SCHEMA tcms TO tcms_app_runtime;
-GRANT SELECT ON tcms.schema_migrations, tcms.app_users, tcms.user_role_scopes, tcms.roles,
-  tcms.role_permissions, tcms.permissions, tcms.departments TO tcms_app_runtime;
-GRANT SELECT, INSERT, UPDATE ON tcms.contracts, tcms.contract_departments, tcms.contract_supervisors TO tcms_app_runtime;
-GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA tcms TO tcms_app_runtime;
+-- The integrated website uses its existing non-superuser database login.
+-- FORCE RLS above keeps the table owner subject to the same business policies.
 
 INSERT INTO tcms.schema_migrations (version) VALUES ('002_api_runtime');
 COMMIT;

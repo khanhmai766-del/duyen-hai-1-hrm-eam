@@ -124,8 +124,6 @@ CREATE POLICY contract_time_rules_delete_policy ON tcms.contract_time_rules FOR 
   tcms.has_permission('contract.identity.update') AND tcms.can_access_contract(contract_id)
 );
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON tcms.work_scopes, tcms.contract_time_rules TO tcms_app_runtime;
-
 INSERT INTO tcms.schema_migrations (version)
 VALUES ('007_contract_time_rules_and_work_scopes');
 

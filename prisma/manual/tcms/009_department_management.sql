@@ -42,6 +42,7 @@ AFTER INSERT OR UPDATE ON tcms.departments
 FOR EACH ROW EXECUTE FUNCTION tcms.write_row_audit();
 
 ALTER TABLE tcms.departments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE tcms.departments FORCE ROW LEVEL SECURITY;
 CREATE POLICY departments_select_policy ON tcms.departments FOR SELECT USING (
   tcms.has_permission('contract.read')
   OR tcms.has_permission('system.configure')
@@ -53,8 +54,6 @@ CREATE POLICY departments_insert_policy ON tcms.departments FOR INSERT WITH CHEC
 CREATE POLICY departments_update_policy ON tcms.departments FOR UPDATE
   USING (tcms.has_permission('system.configure'))
   WITH CHECK (tcms.has_permission('system.configure'));
-
-GRANT SELECT, INSERT, UPDATE ON tcms.departments TO tcms_app_runtime;
 
 INSERT INTO tcms.schema_migrations (version) VALUES ('009_department_management');
 COMMIT;

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { canContractPermission } from "../../lib/tcms/server/contracts/contract-api";
 import { authorize, type SecurityPrincipal } from "../../lib/tcms/lib/security/authorization";
@@ -23,4 +24,18 @@ test("website login does not pretend to verify MFA or authorize exports", () => 
   assert.equal(user.mfaVerified, false);
   assert.equal(authorize(user, "data.export").allowed, false);
   assert.equal(authorize({ ...user, websiteSession: undefined, assignedContractIds: [contract.id] }, "contract.status.transition", { id: contract.id, departmentIds: contract.departmentIds!, status: "ACTIVE" }).allowed, false);
+});
+
+test("website database role is constrained by forced RLS", async () => {
+  const [transaction, runtimeMigration, integrationMigration] = await Promise.all([
+    readFile(new URL("../../lib/tcms/server/db/security-transaction.ts", import.meta.url), "utf8"),
+    readFile(new URL("../../prisma/manual/tcms/002_api_runtime.sql", import.meta.url), "utf8"),
+    readFile(new URL("../../prisma/manual/tcms/021_website_integration.sql", import.meta.url), "utf8"),
+  ]);
+  assert.match(transaction, /SET LOCAL row_security = on/);
+  assert.match(transaction, /rolsuper, rolbypassrls/);
+  assert.doesNotMatch(transaction, /SET LOCAL ROLE/);
+  assert.match(runtimeMigration, /FORCE ROW LEVEL SECURITY/g);
+  assert.doesNotMatch(runtimeMigration, /CREATE ROLE|tcms_app_runtime/);
+  assert.doesNotMatch(integrationMigration, /GRANT tcms_app_runtime|tcms_app_runtime TO/);
 });

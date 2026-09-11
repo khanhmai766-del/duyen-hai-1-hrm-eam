@@ -121,9 +121,6 @@ ON tcms.contract_item_daily_logs FOR INSERT WITH CHECK (
   )
 );
 
-GRANT SELECT, INSERT, UPDATE ON tcms.contract_item_checklist_items TO tcms_app_runtime;
-GRANT SELECT, INSERT ON tcms.contract_item_daily_logs TO tcms_app_runtime;
-
 INSERT INTO tcms.schema_migrations (version)
 VALUES ('005_contract_item_tracking');
 

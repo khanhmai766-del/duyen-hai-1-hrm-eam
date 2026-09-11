@@ -25,7 +25,7 @@ Dùng phiên đăng nhập website qua `requireUser()`, kiểm tra tài khoản 
 - SQL tích hợp khởi tạo liên kết cho các ADMIN đang hoạt động, với vai trò SYSTEM_ADMIN và CONTRACT_MANAGER toàn phân hệ. Các tài khoản khác được người quản trị cấp quyền cụ thể, không tự nhận quyền xem tất cả hợp đồng.
 - Quyết định giám sát đã ban hành/còn hiệu lực có thể cấp phạm vi SUPERVISOR khi người đó chưa có vai trò khác. Nếu đã có vai trò khác, cấp phạm vi tường minh trong Nhân sự và phân quyền; không tự cộng các phạm vi làm vai trò mạnh hơn lan sang hợp đồng khác.
 - Phiên website không được coi là đã xác thực SSO MFA. Việc lưu thay đổi trạng thái hợp đồng dùng phiên website và quyền CONTRACT_MANAGER trong phạm vi hợp đồng. Các kiểm tra MFA của chức năng xuất/lưu trữ nhạy cảm gốc vẫn giữ nguyên.
-- Tất cả SQL nghiệp vụ chạy trong transaction với `SET LOCAL ROLE tcms_app_runtime`; role này không được là superuser hay BYPASSRLS. Không dùng quyền owner để đọc/ghi nghiệp vụ.
+- Tất cả SQL nghiệp vụ chạy trong transaction bằng kết nối database hiện có của website. Kết nối phải không phải superuser và không có `BYPASSRLS`; mọi bảng nghiệp vụ bật `FORCE ROW LEVEL SECURITY` để chủ bảng cũng chịu chính sách RLS.
 
 ## Khởi tạo dữ liệu
 
@@ -47,7 +47,7 @@ npm run tcms:migrate -- --apply
 
 Script dùng `TCMS_MIGRATION_DATABASE_URL_FILE`, hoặc `TCMS_MIGRATION_DATABASE_URL`, sau cùng là `DATABASE_URL` của website. Chạy trên DB có `public."User"`, bằng role được phép tạo schema/role/extension. Script khóa chống chạy đồng thời, bỏ qua migration đã ghi nhận và dừng khi có lỗi. Mỗi migration có transaction riêng; khi lỗi, các migration đã hoàn tất được giữ lại để có thể tiếp tục. Script không build, deploy, reload hay ghi dữ liệu nghiệp vụ mẫu.
 
-Kết nối runtime dùng `TCMS_DATABASE_URL_FILE`, hoặc `TCMS_DATABASE_URL`, sau cùng là `DATABASE_URL`. Nếu dùng role kết nối khác role chạy migration, DBA cần cấp membership `tcms_app_runtime` cho role kết nối đó. Cấu hình TLS theo môi trường; `TCMS_DB_SSL=require` bật kiểm tra chứng thư. Lần tích hợp đầu nên dùng cùng DB của website.
+Kết nối runtime dùng `TCMS_DATABASE_URL_FILE`, hoặc `TCMS_DATABASE_URL`, sau cùng là `DATABASE_URL`. Không cần tạo PostgreSQL role riêng; tài khoản kết nối hiện tại phải là role thường, không có quyền superuser/BYPASSRLS. Cấu hình TLS theo môi trường; `TCMS_DB_SSL=require` bật kiểm tra chứng thư. Lần tích hợp đầu nên dùng cùng DB của website.
 
 ## Khóa mã hóa và dịch vụ tùy chọn
 

@@ -56,6 +56,5 @@ CREATE POLICY milestones_select ON tcms.milestones FOR SELECT USING(tcms.has_per
 CREATE POLICY milestones_insert ON tcms.milestones FOR INSERT WITH CHECK(tcms.has_permission('contract.progress.update') AND tcms.can_access_contract(contract_id));
 CREATE POLICY milestones_update ON tcms.milestones FOR UPDATE USING(tcms.has_permission('contract.progress.update') AND tcms.can_access_contract(contract_id)) WITH CHECK(tcms.has_permission('contract.progress.update') AND tcms.can_access_contract(contract_id));
 
-GRANT SELECT,INSERT,UPDATE ON tcms.milestones TO tcms_app_runtime;
 INSERT INTO tcms.schema_migrations(version) VALUES('016_milestones');
 COMMIT;

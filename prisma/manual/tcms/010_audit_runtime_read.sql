@@ -8,7 +8,6 @@ END $$;
 
 -- RLS remains the authorization boundary: only audit.read.business or
 -- audit.read.security in the transaction context can see rows.
-GRANT SELECT ON tcms.audit_events TO tcms_app_runtime;
 
 INSERT INTO tcms.schema_migrations (version) VALUES ('010_audit_runtime_read');
 COMMIT;

@@ -16,12 +16,13 @@ test("migration 009 protects department writes and keeps soft-deactivation", asy
   assert.match(sql, /system\.configure permission is required/);
   assert.match(sql, /departments_write_audit/);
   assert.match(sql, /ENABLE ROW LEVEL SECURITY/);
+  assert.match(sql, /FORCE ROW LEVEL SECURITY/);
   assert.doesNotMatch(sql, /GRANT[^;]*DELETE ON tcms\.departments/i);
   assert.match(sql, /version integer NOT NULL DEFAULT 1/);
 });
 
-test("audit runtime grant is read-only and remains behind RLS", async () => {
+test("audit access remains behind RLS without a dedicated database role", async () => {
   const sql = await readFile(new URL("../../prisma/manual/tcms/010_audit_runtime_read.sql", import.meta.url), "utf8");
-  assert.match(sql, /GRANT SELECT ON tcms\.audit_events TO tcms_app_runtime/);
+  assert.doesNotMatch(sql, /tcms_app_runtime/);
   assert.doesNotMatch(sql, /GRANT[^;]*(INSERT|UPDATE|DELETE)[^;]*audit_events/i);
 });

@@ -53,5 +53,4 @@ $$;
 
 DROP POLICY documents_select_policy ON tcms.documents;
 CREATE POLICY documents_select_policy ON tcms.documents FOR SELECT USING(tcms.can_access_contract(contract_id) AND ((tcms.has_permission('document.read') AND malware_scan_status='CLEAN' AND archived_at IS NULL) OR (tcms.has_permission('document.upload') AND uploaded_by=current_setting('app.actor_id',true) AND malware_scan_status IN ('PENDING','ERROR')) OR tcms.has_permission('document.archive')));
-GRANT SELECT,INSERT,UPDATE ON tcms.documents TO tcms_app_runtime;
 INSERT INTO tcms.schema_migrations(version) VALUES('019_document_metadata_google_drive');COMMIT;
