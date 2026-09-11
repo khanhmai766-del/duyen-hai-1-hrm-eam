@@ -11,6 +11,7 @@ import { materialTicketFileBase, materialTicketReference } from "@/lib/material-
 import { normalizeText } from "@/lib/nav";
 import { consumeStock, deliveryNoteSummary, receiveIntoLot, releaseUsage, reverseTicketStock, sharedCodesOf, syncMaterialQuantity, usedLotsOfTicket } from "@/lib/material-stock-lot";
 import { parseDateInput, parseVietnamDateTimeInput } from "@/lib/utils";
+import { parseVnNumber, VN_NUMBER_HINT } from "@/lib/vn-number";
 import { linkTicketTrucks, unlinkTicketTrucks, type TruckInput } from "@/lib/chemical-inventory/ticket-link";
 import { countUsagePhotos, deleteUsagePhotos, purgeExpiredUsagePhotos } from "@/lib/material-usage-photo";
 import { deleteDeliveryPhotos, deliveryPhotoLotsOfTicket, loadDeliveryPhotoBuffer, purgeSettledLotPhotos, uploadDeliveryPhoto, MISSING_DELIVERY_PHOTO_MESSAGE } from "@/lib/material-delivery-photo";
@@ -997,8 +998,9 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         if (!t.statsAt) return fail("Bước xác nhận đề xuất chưa hoàn thành");
         const ngay = new Date(String(body.deliveryScheduledAt || ""));
         if (Number.isNaN(ngay.getTime())) return fail("Lịch giao hàng không hợp lệ");
-        const khoiLuong = Math.trunc(Number(body.deliveryQuantity));
-        if (!Number.isFinite(khoiLuong) || khoiLuong <= 0) return fail("Khối lượng giao phải lớn hơn 0");
+        const khoiLuong = parseVnNumber(body.deliveryQuantity as string | number | null | undefined);
+        if (khoiLuong === null) return fail(`Khối lượng giao không đọc được. ${VN_NUMBER_HINT}`);
+        if (khoiLuong <= 0) return fail("Khối lượng giao phải lớn hơn 0");
         const dvt = t.items[0]?.material.unit ?? "";
         const fmt = (d: Date | null) => (d ? d.toISOString().slice(0, 10) : "—");
         before = `Lịch giao: ${fmt(t.deliveryScheduledAt)}; Khối lượng giao: ${t.deliveryQuantity ?? "—"} ${dvt}`.trim();
@@ -1046,8 +1048,10 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
          * Cũng không đòi số phiếu giao hàng: luồng này không phát sinh phiếu nào.
          */
         if (!t.receivedAt || t.receivedQuantity == null) return fail("Bước xác nhận khối lượng lãnh chưa hoàn thành");
-        const value = Math.trunc(Number(body.receivedQuantity));
-        if (!Number.isFinite(value) || value <= 0) return fail("Khối lượng lãnh phải lớn hơn 0");
+        // Đọc kiểu Việt Nam và KHÔNG cắt phần lẻ — hóa chất cân theo kg lẻ.
+        const value = parseVnNumber(body.receivedQuantity as string | number | null | undefined);
+        if (value === null) return fail(`Khối lượng lãnh không đọc được. ${VN_NUMBER_HINT}`);
+        if (value <= 0) return fail("Khối lượng lãnh phải lớn hơn 0");
         const dvt = t.items[0]?.material.unit ?? "";
         before = `Khối lượng lãnh: ${t.receivedQuantity} ${dvt}`.trim();
         after = `Khối lượng lãnh: ${value} ${dvt}`.trim();
@@ -2114,8 +2118,10 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         if (!stepAllowedWithMap(await getWorkflowRoleMap(), "stats", user) && !isTechnician(user)) {
           return fail("Bạn không có quyền xác nhận đề xuất vật tư (Thống kê hoặc Kỹ thuật viên)", 403);
         }
-        const deliveryQuantity = Math.trunc(Number(body.deliveryQuantity));
-        if (!Number.isFinite(deliveryQuantity) || deliveryQuantity <= 0) return fail("Khối lượng giao phải lớn hơn 0");
+        // Đọc kiểu Việt Nam, không cắt phần lẻ: "10.000" là mười nghìn kg chứ không phải 10.
+        const deliveryQuantity = parseVnNumber(body.deliveryQuantity as string | number | null | undefined);
+        if (deliveryQuantity === null) return fail(`Khối lượng giao không đọc được. ${VN_NUMBER_HINT}`);
+        if (deliveryQuantity <= 0) return fail("Khối lượng giao phải lớn hơn 0");
         const deliveryScheduledAt = body.deliveryScheduledAt ? parseDateInput(body.deliveryScheduledAt) : null;
         if (!deliveryScheduledAt || Number.isNaN(deliveryScheduledAt.getTime())) return fail("Vui lòng chọn lịch giao hàng");
         const updated = await prisma.materialTicket.update({
@@ -2300,12 +2306,12 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
           trucks,
           { userId: user.id, chemicalItemId: String(body.chemicalItemId || "") || null }
         );
-        // Cột receivedQuantity là Int và chỉ để hiển thị nhanh trên phiếu; con số chính
-        // xác tới 4 số lẻ nằm ở ChemicalReceipt.
+        // Ghi ĐÚNG tổng khối lượng các chuyến xe (tới 4 số lẻ như ChemicalReceipt), KHÔNG làm
+        // tròn về số nguyên: trước đây 10,86 kg hiện thành 11 kg trên phiếu.
         await tx.materialTicket.update({
           where: { id: t.id },
           data: {
-            receivedQuantity: Math.round(result.totalAccepted),
+            receivedQuantity: result.totalAccepted,
             receivedAt: latestTruckDate ?? t.receivedAt,
             ...(completesNow
               ? {
@@ -2369,8 +2375,8 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
           const updated = await prisma.materialTicket.update({
             where: { id: t.id },
             data: {
-              // Cột cũ là Int; khối lượng chính xác tới 4 số lẻ nằm ở ChemicalReceipt.
-              receivedQuantity: Math.round(linkResult.totalAccepted),
+              // Đúng tổng khối lượng các chuyến xe, không làm tròn — cùng số với sổ hóa chất.
+              receivedQuantity: linkResult.totalAccepted,
               receivedAt: receivedAtFromTrucks ?? new Date(),
               receivedById: user.id,
               receivedByName,

@@ -1,4 +1,5 @@
 "use client";
+import { parseVnNumber } from "@/lib/vn-number";
 
 import { useMemo, useState } from "react";
 import { AlertTriangle, Link2, Loader2, Pencil, Plus, Trash2 } from "lucide-react";
@@ -522,9 +523,7 @@ function ReceiptDialog({
   );
 }
 
+/** Đọc số kiểu Việt Nam — "10.860" là mười nghìn tám trăm sáu mươi, "10,86" là mười phẩy tám sáu. */
 function toNum(text: string): number | null {
-  const t = text.trim().replace(",", ".");
-  if (!t) return null;
-  const n = Number(t);
-  return Number.isFinite(n) ? n : null;
+  return parseVnNumber(text);
 }

@@ -1,4 +1,5 @@
 "use client";
+import { parseVnNumber } from "@/lib/vn-number";
 
 import { useEffect, useState } from "react";
 import { CalendarDays, Lock } from "lucide-react";
@@ -66,8 +67,8 @@ export function MonthlyGrid({
   async function commitCell(row: MonthlyGridData["rows"][number], position: string, raw: string) {
     const key = cellKey(row.itemId, position);
     const stored = row.cells[position]?.quantity ?? null;
-    const text = raw.trim().replace(",", ".");
-    const value = text === "" ? null : Number(text);
+    // Kiểu Việt Nam: "10.860" là mười nghìn tám trăm sáu mươi. Không đọc được thì NaN để báo lỗi.
+    const value = raw.trim() === "" ? null : (parseVnNumber(raw) ?? NaN);
 
     if (value !== null && !Number.isFinite(value)) {
       setStates((s) => ({ ...s, [key]: "error" }));

@@ -41,6 +41,7 @@ import { useDefectHistory } from "@/hooks/useDefectHistory";
 import { usePositions } from "@/hooks/useUsers";
 import { MIN_USAGE_PHOTOS, USAGE_PHOTO_RETENTION_DAYS, requiredUsagePhotos, minRecoveryQuantity, usesHandwrittenBbnt, COMMON_MATERIAL_POSITION, displayMaterialCategory, GAS_RETURN_STATUS, isChemicalFlowTicket, isGasCylinderTicket, isOtherMaterialAdvanceTicket, isOtherMaterialCategory, isOtherMaterialTicketType, isSingleStepTicketMaterial, CHEMICAL_TICKET_TYPE, isSupplementReason, MATERIAL_CATEGORY_FILTERS, materialCategoryMatches, materialTicketBelongsToRecoveryTab, materialTicketRequiresRecovery, materialTicketAwaitsRecoveryDocSignature, SCCN_POSITIONS, SCCN_REPRESENTATIVES, RECOVERY_HANDOVER_STATUS, OTHER_MATERIAL_ADVANCE_TICKET_TYPE, OTHER_MATERIAL_GROUP, OTHER_MATERIAL_TICKET_TYPE, ticketReasonsFor, TICKET_REASONS, TICKET_REASON_OTHER, SINGLE_STEP_TICKET_TYPE, TICKET_MATERIAL_CATEGORIES, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
 import { normalizeText } from "@/lib/nav";
+import { formatVnNumber, parseVnNumber, VN_NUMBER_HINT } from "@/lib/vn-number";
 import { materialTicketAlert } from "@/lib/material-ticket-alerts";
 import { positionsMatch } from "@/lib/position-catalog";
 import {
@@ -1948,7 +1949,7 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
     ].filter(Boolean).join(" · ") },
     t.usedAt && { at: t.usedAt, who: t.usedByName, pos: t.usedByPosition, what: `Sử dụng vật tư${t.materialUserName ? ` — VHV: ${t.materialUserName}` : ""}: dùng ${t.usedQuantity ?? ""}, còn lại ${t.remainingQuantity ?? ""}` },
     t.completedAt && { at: t.completedAt, who: t.completedByName, pos: t.completedByPosition, what: t.type === SINGLE_STEP_TICKET_TYPE
-      ? `VHV xác nhận khối lượng lãnh: ${t.receivedQuantity ?? ""} ${t.items[0]?.material.unit ?? ""}`.trim()
+      ? `VHV xác nhận khối lượng lãnh: ${formatVnNumber(t.receivedQuantity)} ${t.items[0]?.material.unit ?? ""}`.trim()
       : isOtherMaterialTicketType(t.type)
       ? isOtherMaterialAdvanceTicket(t.type) ? "Hoàn thiện ĐXVT, kết thúc phiếu ứng" : "Lãnh vật tư và hoàn tất phiếu"
       : isGasCylinderTicket(t.materialCategory)
@@ -2072,7 +2073,8 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
                     {t.completionNote && <div className="done-note"><Check size={13} /> {t.completionNote}</div>}
                     {t.receivedQuantity != null && (
                       <div className="meta-line received-summary">
-                        <span>Vật tư lãnh: <b>{t.receivedQuantity} {t.items[0]?.material.unit ?? ""}</b></span>
+                        {/* Hiện đúng số lẻ (10,86 kg) theo kiểu Việt Nam, không làm tròn. */}
+                        <span>Vật tư lãnh: <b>{formatVnNumber(t.receivedQuantity)} {t.items[0]?.material.unit ?? ""}</b></span>
                         <span>Nguồn lãnh: <b className="source-badge">{currentReceiptSourceLabel}</b></span>
                         {/*
                           Hóa chất KHÔNG cộng vào tồn kho và KHÔNG trừ ERP: hàng do nhà thầu giao
@@ -2196,8 +2198,10 @@ function StepReviewDialog({ t, viewer, stepKey, onClose }: { t: MaterialTicket; 
    */
   const isChemicalStats = t.type === CHEMICAL_TICKET_TYPE || t.type === SINGLE_STEP_TICKET_TYPE;
   const [deliveryDateReview, setDeliveryDateReview] = useState(t.deliveryScheduledAt ? String(t.deliveryScheduledAt).slice(0, 10) : "");
-  const [deliveryQtyReview, setDeliveryQtyReview] = useState(t.deliveryQuantity != null ? String(t.deliveryQuantity) : "");
+  const [deliveryQtyReview, setDeliveryQtyReview] = useState(formatVnNumber(t.deliveryQuantity));
   const [receivedQuantity, setReceivedQuantity] = useState(t.receivedQuantity ?? 1);
+  // Riêng hóa chất: ô chữ đọc kiểu Việt Nam và giữ phần lẻ (10,86 kg), không ép số nguyên.
+  const [chemicalReceivedReview, setChemicalReceivedReview] = useState(formatVnNumber(t.receivedQuantity));
   const [receivedMethod, setReceivedMethod] = useState(t.deliveryNoteNumber ?? t.receivedMethod ?? "");
   /** Ngày trên tờ phiếu giao hàng. KHÁC `deliveryDateReview` phía trên — đó là LỊCH giao
    *  hàng của luồng hóa chất, hai thứ không liên quan gì nhau. */
@@ -2271,7 +2275,7 @@ function StepReviewDialog({ t, viewer, stepKey, onClose }: { t: MaterialTicket; 
       Object.assign(
         payload,
         isChemicalStats
-          ? { deliveryScheduledAt: deliveryDateReview, deliveryQuantity: Number(deliveryQtyReview) }
+          ? { deliveryScheduledAt: deliveryDateReview, deliveryQuantity: parseVnNumber(deliveryQtyReview) }
           : { proposalNumber, proposalReceiverName: proposalReceiverNameReview, proposalDate: proposalDateReview || null }
       );
     }
@@ -2279,7 +2283,7 @@ function StepReviewDialog({ t, viewer, stepKey, onClose }: { t: MaterialTicket; 
       Object.assign(
         payload,
         isChemicalStats
-          ? { receivedQuantity }
+          ? { receivedQuantity: parseVnNumber(chemicalReceivedReview) }
           : {
               receivedQuantity,
               deliveryNoteNumber: receivedMethod,
@@ -2348,7 +2352,7 @@ function StepReviewDialog({ t, viewer, stepKey, onClose }: { t: MaterialTicket; 
         </>}
         {editStep === "stats" && isChemicalStats && <>
           <label>Lịch giao hàng<input type="date" value={deliveryDateReview} disabled={!canEdit} onChange={(e) => setDeliveryDateReview(e.target.value)} /></label>
-          <label>Khối lượng giao{t.items[0]?.material.unit ? ` (${t.items[0].material.unit})` : ""}<input type="number" min={1} value={deliveryQtyReview} disabled={!canEdit} onChange={(e) => setDeliveryQtyReview(e.target.value)} /></label>
+          <label>Khối lượng giao{t.items[0]?.material.unit ? ` (${t.items[0].material.unit})` : ""}<input inputMode="decimal" placeholder="10.000" title={VN_NUMBER_HINT} value={deliveryQtyReview} disabled={!canEdit} onChange={(e) => setDeliveryQtyReview(e.target.value)} /></label>
         </>}
         {editStep === "stats" && !isChemicalStats && <>
           <div className="review-accept-grid">
@@ -2367,7 +2371,7 @@ function StepReviewDialog({ t, viewer, stepKey, onClose }: { t: MaterialTicket; 
           */
           <label>
             Khối lượng lãnh{t.items[0]?.material.unit ? ` (${t.items[0].material.unit})` : ""}
-            <input type="number" min={1} value={receivedQuantity} disabled={!canEdit} onChange={(e) => setReceivedQuantity(Number(e.target.value))} />
+            <input inputMode="decimal" placeholder="10.860" title={VN_NUMBER_HINT} value={chemicalReceivedReview} disabled={!canEdit} onChange={(e) => setChemicalReceivedReview(e.target.value)} />
           </label>
         )}
         {editStep === "receive" && !isChemicalStats && <>
@@ -3237,7 +3241,8 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
   const [lotAllocation, setLotAllocation] = useState<Record<string, number> | null>(null);
   // Luồng hóa chất: lịch giao + khối lượng giao (bước 2), khối lượng/ngày/người lãnh (bước 3).
   const [deliveryDate, setDeliveryDate] = useState(t.deliveryScheduledAt ? String(t.deliveryScheduledAt).slice(0, 10) : "");
-  const [deliveryQty, setDeliveryQty] = useState(String(t.deliveryQuantity ?? t.items[0]?.quantity ?? ""));
+  // Ô chữ đọc kiểu Việt Nam ("10.000" = mười nghìn), khởi tạo bằng đúng cách viết đó.
+  const [deliveryQty, setDeliveryQty] = useState(formatVnNumber(t.deliveryQuantity ?? t.items[0]?.quantity ?? null));
   const [receivedQty, setReceivedQty] = useState(String(t.deliveryQuantity ?? t.items[0]?.quantity ?? ""));
   const [receivedDate, setReceivedDate] = useState("");
   // Bảng chuyến xe của luồng hóa chất. Mặc định một dòng trống, ngày gợi ý theo lịch giao.
@@ -3680,11 +3685,14 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
           </div>
           <div>
             <label className="lb">Khối lượng giao *{unit ? ` (${unit})` : ""}</label>
-            <input type="number" min={1} value={deliveryQty} onChange={(e) => setDeliveryQty(e.target.value)} />
+            <input inputMode="decimal" placeholder="10.000" title={VN_NUMBER_HINT} value={deliveryQty} onChange={(e) => setDeliveryQty(e.target.value)} />
+            {deliveryQty.trim() !== "" && parseVnNumber(deliveryQty) === null && (
+              <small style={{ color: "#dc2626" }}>{VN_NUMBER_HINT}</small>
+            )}
           </div>
         </div>
-        <button className="btn primary big" disabled={act.isPending || !deliveryDate || Number(deliveryQty) <= 0}
-          onClick={() => run({ action: "stats", deliveryScheduledAt: deliveryDate, deliveryQuantity: Number(deliveryQty) }, "Đã xác nhận đề xuất, chuyển VHV xác nhận lãnh")}>
+        <button className="btn primary big" disabled={act.isPending || !deliveryDate || !((parseVnNumber(deliveryQty) ?? 0) > 0)}
+          onClick={() => run({ action: "stats", deliveryScheduledAt: deliveryDate, deliveryQuantity: parseVnNumber(deliveryQty) }, "Đã xác nhận đề xuất, chuyển VHV xác nhận lãnh")}>
           <Check size={15} /> Xác nhận đề xuất
         </button>
       </div>

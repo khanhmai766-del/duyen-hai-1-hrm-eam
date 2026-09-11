@@ -1719,7 +1719,8 @@ model MaterialTicket {
   // Hóa chất mua theo lô, giao bằng xe bồn theo hợp đồng nên phải hẹn ngày giao, khác hẳn
   // vật tư kỹ thuật lãnh thẳng tại kho.
   deliveryScheduledAt   DateTime? // lịch giao hàng
-  deliveryQuantity      Int? // khối lượng giao theo lịch
+  // Số THẬP PHÂN, không làm tròn: hóa chất cân theo kg lẻ (10,86 kg) — xem lib/vn-number.ts.
+  deliveryQuantity      Float? // khối lượng giao theo lịch
   // Bước VHV LÃNH VẬT TƯ của luồng Ứng (không tác động ERP)
   vhvReceivedQuantity   Int?
   vhvMaterialCode       String?
@@ -1727,7 +1728,9 @@ model MaterialTicket {
   vhvReceivedByPosition String?
   vhvReceivedAt         DateTime?
   // Bước NHẬN VẬT TƯ (NHAN_VAT_TU)
-  receivedQuantity      Int? // khối lượng vật tư lãnh
+  // Số THẬP PHÂN: phiếu hóa chất lấy đúng tổng khối lượng các chuyến xe, không làm tròn về số
+  // nguyên. Luồng vật tư thường (Đề xuất/Ứng) vẫn chỉ ghi số nguyên vào đây vì cộng trừ tồn lô.
+  receivedQuantity      Float? // khối lượng vật tư lãnh
   receivedMethod        String? // hình thức lãnh nhập tự do
   receiptSource         String? // ERP | EXISTING — nguồn lãnh vật tư (OUTSIDE là giá trị cũ)
   receivedById          String?

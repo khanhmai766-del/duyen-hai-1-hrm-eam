@@ -239,8 +239,9 @@ export async function syncMaterialTicketFromReceipts(tx: Tx, materialTicketId: s
       where: { id: materialTicketId },
       data: {
         chemicalReceiptIds: rows.map((row) => row.id),
-        // Cột Int chỉ để hiện nhanh trên phiếu; số chính xác tới 4 số lẻ nằm ở sổ.
-        receivedQuantity: rows.length ? Math.round(total) : null,
+        // Đúng tổng khối lượng các chuyến xe còn lại trong sổ, làm tròn 4 số lẻ như sổ — KHÔNG
+        // làm tròn về số nguyên (trước đây 10,86 kg hiện thành 11 kg trên phiếu).
+        receivedQuantity: rows.length ? Math.round(total * 10_000) / 10_000 : null,
         receivedAt: rows.length ? rows[rows.length - 1].receivedAt : null,
       },
     })

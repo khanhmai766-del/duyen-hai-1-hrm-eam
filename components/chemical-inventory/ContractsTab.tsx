@@ -1,4 +1,5 @@
 "use client";
+import { parseVnNumber } from "@/lib/vn-number";
 
 import { useState } from "react";
 import { AlertTriangle, Loader2, Pencil, Plus, Trash2 } from "lucide-react";
@@ -222,8 +223,8 @@ function ContractDialog({
     forecastDemand: contract ? String(contract.forecastDemand) : "0",
   });
 
-  const quantity = Number(form.contractQuantity.replace(",", "."));
-  const demand = Number(form.forecastDemand.replace(",", "."));
+  const quantity = parseVnNumber(form.contractQuantity) ?? NaN;
+  const demand = parseVnNumber(form.forecastDemand) ?? NaN;
   const valid = Number.isFinite(quantity) && quantity >= 0 && Number.isFinite(demand) && demand >= 0 && form.itemId;
 
   return (

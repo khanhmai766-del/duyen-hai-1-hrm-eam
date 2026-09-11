@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { parseVnNumber, VN_NUMBER_HINT } from "@/lib/vn-number";
 import { AlertTriangle, ArrowUpRight, Check, Loader2, Lock, Plus, Trash2 } from "lucide-react";
 import { MAX_VEHICLE_NUMBER_LENGTH } from "@/lib/chemical-inventory/constants";
 
@@ -35,12 +36,8 @@ export const emptyTruck = (receivedAt = ""): TruckRow => ({
   note: "",
 });
 
-const toNum = (text: string): number | null => {
-  const t = text.trim().replace(",", ".");
-  if (!t) return null;
-  const n = Number(t);
-  return Number.isFinite(n) ? n : null;
-};
+/** Đọc số kiểu Việt Nam: "10.860" là mười nghìn tám trăm sáu mươi, "10,86" là mười phẩy tám sáu. */
+const toNum = (text: string): number | null => parseVnNumber(text);
 
 /**
  * Khối lượng được công nhận của một chuyến.
@@ -56,8 +53,9 @@ export function acceptedOf(row: TruckRow): number | null {
 
 export function truckRowError(row: TruckRow): string | null {
   if (!row.receivedAt) return "Chưa chọn ngày nhập";
+  if (!row.plantWeight.trim()) return "Chưa nhập khối lượng hàng theo phiếu cân";
   const plant = toNum(row.plantWeight);
-  if (plant === null) return "Chưa nhập khối lượng hàng theo phiếu cân";
+  if (plant === null) return `Khối lượng hàng không đọc được. ${VN_NUMBER_HINT}`;
   if (plant <= 0) return "Khối lượng hàng phải lớn hơn 0";
   const plate = row.vehicleNumber.toUpperCase().replace(/[^A-Z0-9]/g, "");
   if (plate.length > MAX_VEHICLE_NUMBER_LENGTH) return `Biển số tối đa ${MAX_VEHICLE_NUMBER_LENGTH} ký tự`;
@@ -157,7 +155,8 @@ export function ChemicalTruckRows({
                       onChange={(e) => patch(row.key, "plantWeight", e.target.value)}
                       style={NUM_CELL}
                       aria-label={`Khối lượng hàng chuyến ${index + 1}`}
-                      title="Dòng “Trọng lượng hàng” trên phiếu cân xe — đã trừ bì"
+                      placeholder="10.860"
+                      title={`Dòng “Trọng lượng hàng” trên phiếu cân xe — đã trừ bì. ${VN_NUMBER_HINT}`}
                     />
                   </td>
                   <td>

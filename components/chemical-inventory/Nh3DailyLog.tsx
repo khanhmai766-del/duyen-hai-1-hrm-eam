@@ -1,4 +1,5 @@
 "use client";
+import { parseVnNumber } from "@/lib/vn-number";
 
 import { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, CheckCircle2, Loader2, Plus, Trash2, XCircle } from "lucide-react";
@@ -78,10 +79,9 @@ export function Nh3DailyLog({
   }, [row?.closingStock, selectedDay, month, itemId]);
 
   const parsedDraft = useMemo(() => {
-    const text = draft.trim().replace(",", ".");
-    if (!text) return null;
-    const n = Number(text);
-    return Number.isFinite(n) ? n : NaN;
+    if (!draft.trim()) return null;
+    // Kiểu Việt Nam: chấm tách nghìn, phẩy là phần lẻ. Không đọc được thì NaN để ô báo lỗi.
+    return parseVnNumber(draft) ?? NaN;
   }, [draft]);
 
   const draftInvalid = typeof parsedDraft === "number" && Number.isNaN(parsedDraft);
@@ -149,8 +149,8 @@ export function Nh3DailyLog({
 
   async function handleAddTruck() {
     if (!row || !itemId) return;
-    const plant = Number(truckDraft.plant.replace(",", "."));
-    const contractor = Number(truckDraft.contractor.replace(",", "."));
+    const plant = parseVnNumber(truckDraft.plant) ?? NaN;
+    const contractor = parseVnNumber(truckDraft.contractor) ?? NaN;
     if (!Number.isFinite(plant) || !Number.isFinite(contractor)) {
       toast.error("Phải nhập cả hai số cân");
       return;

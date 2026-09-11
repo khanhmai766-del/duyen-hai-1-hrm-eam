@@ -1,4 +1,5 @@
 "use client";
+import { parseVnNumber } from "@/lib/vn-number";
 
 import { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, ChevronLeft, ChevronRight, Loader2, Lock, LockOpen, Plus, Upload } from "lucide-react";
@@ -92,8 +93,7 @@ export default function ChemicalInventoryPage() {
 
   async function handleSaveGeneration() {
     if (!canManage) return;
-    const text = generationDraft.trim().replace(",", ".");
-    const value = text === "" ? null : Number(text);
+    const value = generationDraft.trim() === "" ? null : (parseVnNumber(generationDraft) ?? NaN);
     if (value !== null && !Number.isFinite(value)) {
       toast.error("Sản lượng phải là số hợp lệ");
       return;

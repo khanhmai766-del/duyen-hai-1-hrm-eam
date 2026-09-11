@@ -1,4 +1,5 @@
 import { MAX_VEHICLE_NUMBER_LENGTH } from "./constants";
+import { parseVnNumber, VN_NUMBER_HINT } from "@/lib/vn-number";
 import { normalizeInventoryPeriod } from "./normalize";
 
 /**
@@ -32,8 +33,9 @@ export function parseQuantity(
     return fail(`${fieldLabel} không được để trống`);
   }
 
-  const value = typeof raw === "number" ? raw : Number(String(raw).replace(",", "."));
-  if (!Number.isFinite(value)) return fail(`${fieldLabel} phải là số hợp lệ`);
+  // Kiểu Việt Nam: chấm tách nghìn, phẩy là phần lẻ — "10.860" là 10860 chứ không phải 10,86.
+  const value = parseVnNumber(typeof raw === "number" ? raw : String(raw));
+  if (value === null) return fail(`${fieldLabel} phải là số hợp lệ. ${VN_NUMBER_HINT}`);
   if (!options.allowNegative && value < 0) return fail(`${fieldLabel} không được âm`);
   if (Math.abs(value) >= 1e14) return fail(`${fieldLabel} vượt quá giới hạn cho phép`);
 
