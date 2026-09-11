@@ -22,6 +22,31 @@ export type BackupRow = {
   values: Array<string | number | null>;
 };
 
+function formatVietnamDateTime(value: Date) {
+  return new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Ho_Chi_Minh",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+  }).format(value).replace(",", "");
+}
+
+function backupRecoveryDocument(
+  documentNumber: string | number | null,
+  signedAt: Date | null,
+) {
+  const signedLabel = signedAt
+    ? `Kho ký trả lại: ${formatVietnamDateTime(signedAt)}`
+    : null;
+  return [documentNumber, signedLabel]
+    .filter((value): value is string | number => value !== null && value !== "")
+    .join(" · ") || null;
+}
+
 export function backupTicketRows(ticket: MaterialTicketForN8nSync, scope: "materials" | "chemicals"): BackupRow[] {
   const mapped = scope === "materials"
     ? materialTicketRowsForN8nV2(ticket)
@@ -33,11 +58,16 @@ export function backupTicketRows(ticket: MaterialTicketForN8nSync, scope: "mater
     : "A B C D G H I K L M O P Q R S T";
   return mapped.map((entry) => {
     const source = entry.row as Record<string, string | number | null>;
+    const values = columns.split(" ").map((column) => source[column] ?? null);
+    if (scope === "materials") {
+      // AB của file dự phòng: số biên bản thu hồi và thời điểm kho ký trả lại.
+      values[27] = backupRecoveryDocument(source.AG ?? null, ticket.recoveryDocSignedAt);
+    }
     return {
       syncKey: entry.syncKey,
       entityId: ticket.id,
       sourceUpdatedAt: entry.sourceUpdatedAt,
-      values: columns.split(" ").map((column) => source[column] ?? null),
+      values,
     };
   });
 }

@@ -47,7 +47,9 @@ cách nhau 1,2 giây. Xem [tài liệu HTTP Request của n8n](https://docs.n8n.
 
 Mapping vật tư giữ đúng mẫu rút gọn: N là ngày lãnh, O là lượng lãnh, P là người
 lãnh, Q là hình thức lãnh; R:W là thông tin sử dụng; X là thu hồi; Y:Z là BBNT;
-AA là số BBNT D-Office, AB là số biên bản thu hồi.
+AA là số BBNT D-Office. AB là số biên bản thu hồi; sau khi kho xác nhận đã ký trả
+lại, cột này nối thêm thời điểm theo mẫu
+`3/2026 · Kho ký trả lại: 09/09/2026 12:00:00`.
 
 Phiếu hóa chất: E:G là thông tin đề xuất, H tên vật tư, I lượng đề xuất, J mục đích,
 K người xác nhận, L lịch giao, M thông tin lãnh thực tế. Giữ cách thể hiện số lượng
