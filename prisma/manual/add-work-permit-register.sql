@@ -59,6 +59,7 @@ CREATE TABLE "WorkPermit" (
     "location" TEXT NOT NULL DEFAULT '',
     "workDate" TEXT NOT NULL,
     "issuerName" TEXT NOT NULL DEFAULT '',
+    "electricalSafetySupervisorName" TEXT NOT NULL DEFAULT '',
     "leaderName" TEXT NOT NULL DEFAULT '',
     "commanderName" TEXT NOT NULL DEFAULT '',
     "teamName" TEXT NOT NULL DEFAULT '',

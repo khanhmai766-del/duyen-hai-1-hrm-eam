@@ -45,14 +45,6 @@ function replaceParagraph(xml: string, startsWith: string, value: string) {
     return paragraph(value, p.match(/<w:pPr\b[^>]*>[\s\S]*?<\/w:pPr>/)?.[0] ?? "");
   });
 }
-function appendix(rows: SafetySelection[], number: string) {
-  const grouped = safetyPrintData(rows);
-  const cell = (text: string, width: number) => `<w:tc><w:tcPr><w:tcW w:w="${width}" w:type="dxa"/></w:tcPr>${paragraph(text)}</w:tc>`;
-  const header = `<w:tr><w:trPr><w:tblHeader/></w:trPr>${cell("STT", 600)}${cell("Biện pháp an toàn", 6400)}${cell("Đơn vị thực hiện", 2000)}</w:tr>`;
-  const measures = [...new Set([...grouped.authorization, ...grouped.execution])];
-  return paragraph(`PHỤ LỤC PHÂN CÔNG BIỆN PHÁP AN TOÀN\nKèm PCT số ${number}`, '<w:pPr><w:pageBreakBefore/></w:pPr>') + paragraph("Biện pháp dự kiến do người cấp phiếu phân công; kiểm tra thực hiện và ký xác nhận trên phiếu chính.") + `<w:tbl><w:tblPr><w:tblW w:w="9000" w:type="dxa"/><w:tblBorders><w:top w:val="single" w:sz="4"/><w:left w:val="single" w:sz="4"/><w:bottom w:val="single" w:sz="4"/><w:right w:val="single" w:sz="4"/><w:insideH w:val="single" w:sz="4"/><w:insideV w:val="single" w:sz="4"/></w:tblBorders></w:tblPr><w:tblGrid><w:gridCol w:w="600"/><w:gridCol w:w="6400"/><w:gridCol w:w="2000"/></w:tblGrid>${header}${measures.map((measure, i) => `<w:tr>${cell(String(i + 1), 600)}${cell(measure, 6400)}${cell([grouped.authorization.includes(measure) && "Đơn vị cho phép", grouped.execution.includes(measure) && "Đơn vị công tác"].filter(Boolean).join("\n"), 2000)}</w:tr>`).join("")}</w:tbl>`;
-}
-
 function plannedTime(date: Date | null) {
   if (!date) return "…… giờ …… ngày ……/……/………";
   const parts = new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Ho_Chi_Minh", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(date);
@@ -66,7 +58,7 @@ export async function createWorkPermitDocument(row: WorkPermit) {
   let xml = zip.file("word/document.xml")!.asText();
   const selected = (Array.isArray(row.safetyItems) ? row.safetyItems : []) as unknown as SafetySelection[];
   const groups = safetyPrintData(selected), number = formatPermitNumber(row);
-  xml = replaceParagraph(xml, "Số:", `Số: ${number}`);
+  xml = replaceParagraph(xml, "Số:", `Số: ${number}${!mechanical && row.registrationNumber.trim() ? `\nSố ĐKCT: ${row.registrationNumber.trim()}` : ""}`);
   if (mechanical) {
     xml = fillTable(xml, "Nhận diện mối nguy", groups.hazards.map((r, i) => [String(i + 1), r.hazard, r.measure]));
     xml = fillTable(xml, "Kiểm tra các biện pháp an toàn đơn vị cho phép", groups.authorization.map((s, i) => [String(i + 1), s, "", ""]));
@@ -82,7 +74,6 @@ export async function createWorkPermitDocument(row: WorkPermit) {
     xml = replaceParagraph(xml, "Người CHTT:", `Người CHTT: ${row.commanderName}       Chữ ký: …………… Ngày ……/……/……… Giờ …………`);
     xml = replaceParagraph(xml, "Đơn vị công tác:", `Đơn vị công tác: ${row.teamName}       Số lượng người: ${row.workerCount ?? "………"}`);
   } else {
-    xml = fillTable(xml, "Cảnh báo mối nguy hiểm", groups.hazards.map((r, i) => [String(i + 1), r.hazard, r.measure, ""]));
     xml = replaceParagraph(xml, "1.1.", `1.1. Người lãnh đạo công việc (nếu có): ${row.leaderName}`);
     xml = replaceParagraph(xml, "1.2.", `1.2. Người chỉ huy trực tiếp: ${row.commanderName}`);
     xml = replaceParagraph(xml, "1.3.", `1.3. Nhân viên đơn vị công tác: ${row.workerCount ?? "………"} người`);
@@ -90,15 +81,9 @@ export async function createWorkPermitDocument(row: WorkPermit) {
     xml = replaceParagraph(xml, "1.5.", `1.5. Nội dung công tác: ${row.content}`);
     xml = replaceParagraph(xml, "- Bắt đầu công việc:", `- Bắt đầu công việc: ${plannedTime(row.plannedStartAt)}`);
     xml = replaceParagraph(xml, "- Kết thúc công việc:", `- Kết thúc công việc: ${plannedTime(row.plannedEndAt)}`);
-    if (row.workScope) xml = fillTable(xml, "Phạm vi được phép làm việc", [["1", row.location, row.workScope]]);
     xml = replaceParagraph(xml, "Phiếu công tác cấp ngày", `Phiếu công tác cấp ngày ${row.issuedAt ? row.issuedAt.toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" }) : "…………………"}`);
     xml = replaceParagraph(xml, "Họ và tên", `Họ và tên: ${row.issuerName}    Chức vụ: ……………    Ký/xác nhận: ……………`);
-    // Không tự điền các mục xác nhận ĐÃ cắt điện/tiếp đất/kiểm tra từ kế hoạch an toàn.
-    if (selected.length) {
-      const end = xml.lastIndexOf("<w:sectPr");
-      if (end < 0) throw new Error("Mẫu Điện thiếu thiết lập trang");
-      xml = xml.slice(0, end) + appendix(selected, number) + xml.slice(end);
-    }
+    if (row.electricalSafetySupervisorName.trim()) xml = replaceParagraph(xml, "Họ và tên…………………… chức vụ", `Họ và tên: ${row.electricalSafetySupervisorName.trim()}    Chức vụ: ……………    Ký/xác nhận: ……………`);
   }
   zip.file("word/document.xml", xml);
   return zip.generate({ type: "nodebuffer", compression: "DEFLATE" });

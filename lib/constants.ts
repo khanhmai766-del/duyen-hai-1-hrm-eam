@@ -160,7 +160,7 @@ export const DEFECT_SEVERITY_CRITERIA = {
     options: [
       { id: "1a", label: "Ảnh hưởng đến hệ số đáp ứng hoặc trực tiếp đến công suất tổ máy." },
       { id: "1b", label: "Ảnh hưởng trực tiếp đến các thông số môi trường (khí thải, nước thải) hoặc áp suất nước PCCC." },
-      { id: "1c", label: "Xỉ than, xỉ tro, rò rỉ hóa chất phát tán rộng; có nguy cơ mất an toàn vận hành hoặc ảnh hưởng môi trường." },
+      { id: "1c", label: "Xì than, xì tro, rò rỉ hóa chất phát tán rộng; có nguy cơ mất an toàn vận hành hoặc ảnh hưởng môi trường." },
       { id: "1d", label: "Hư hỏng gây bất khả dụng máy phát Diesel." },
       { id: "1e", label: "Liên quan đến hệ thống bảo vệ, liên động, điều khiển chính quan trọng của tổ máy." },
       { id: "1f", label: "Phiếu yêu cầu thực hiện theo chỉ đạo của Ban Giám đốc." },
@@ -174,7 +174,7 @@ export const DEFECT_SEVERITY_CRITERIA = {
       { id: "2b", label: "Suy giảm khả năng dự phòng của thiết bị hoặc hệ thống quan trọng." },
       { id: "2c", label: "Có nguy cơ ảnh hưởng đến công suất hoặc độ khả dụng nếu không xử lý kịp thời." },
       { id: "2d", label: "Thiết bị phụ trợ quan trọng vận hành không ổn định, thông số bất thường nhưng vẫn trong giới hạn cho phép." },
-      { id: "2e", label: "Xỉ than, xỉ tro, rò rỉ hóa chất ở mức cục bộ; ảnh hưởng vệ sinh công nghiệp và có nguy cơ ảnh hưởng thiết bị lân cận." },
+      { id: "2e", label: "Xì than, xì tro, rò rỉ hóa chất ở mức cục bộ; ảnh hưởng vệ sinh công nghiệp và có nguy cơ ảnh hưởng thiết bị lân cận." },
       { id: "2f", label: "Khiếm khuyết có xu hướng lặp lại, kéo dài hoặc phát triển xấu hơn." },
       { id: "2g", label: "Ảnh hưởng trực tiếp suất hao nhiệt (SHN) hoặc các lỗi PCCC không thuộc Mức 1." },
     ],

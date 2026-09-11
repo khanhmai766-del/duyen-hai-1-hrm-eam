@@ -52,7 +52,7 @@ export interface PermitInput {
   kind: PermitKind; year: number; number: string; position: string; unit: keyof typeof PERMIT_UNITS;
   content: string; location: string; workDate: string;
   issuerUserId?: string | null; commanderPersonId?: string | null;
-  issuerName: string; leaderName: string; commanderName: string; teamName: string;
+  issuerName: string; electricalSafetySupervisorName: string; leaderName: string; commanderName: string; teamName: string;
   workerCount: number | null; authorizerName: string;
   teamType: "INTERNAL" | "CONTRACTOR";
   members: PermitMember[];
@@ -72,7 +72,7 @@ export const PERMIT_FIELD_LABELS: Record<string, string> = {
   registrationNumber: "Số ĐKCT", workScope: "Phạm vi công tác", plannedStartAt: "Dự kiến bắt đầu", plannedEndAt: "Dự kiến kết thúc", disciplines: "Chuyên môn",
   safetyItems: "Mối nguy và biện pháp an toàn", format: "Hình thức phiếu", workType: "Phân loại công việc (KH/ĐX/SC)", kind: "Loại PCT", year: "Năm cấp số", number: "Số PCT", position: "Cương vị", status: "Trạng thái", unit: "Tổ máy",
   content: "Nội dung công việc", location: "Thiết bị / vị trí", workDate: "Ngày thực hiện",
-  issuerName: "Người cấp PCT", leaderName: "Người lãnh đạo công việc", commanderName: "Người chỉ huy trực tiếp",
+  issuerName: "Người cấp PCT", electricalSafetySupervisorName: "Người giám sát an toàn điện", leaderName: "Người lãnh đạo công việc", commanderName: "Người chỉ huy trực tiếp",
   teamName: "Đơn vị công tác", workerCount: "Số nhân viên", authorizerName: "Người cho phép làm việc",
   issuedAt: "Thời điểm cấp", authorizedAt: "Lần đầu cho phép làm việc", closedAt: "Thời điểm đóng PCT",
   result: "Kết quả công việc", note: "Ghi chú", statusReason: "Lý do tạm dừng / hủy", repairRequestNumber: "Số SYC",

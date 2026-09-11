@@ -17,6 +17,10 @@ export function parseSafetyItem(body: Record<string, unknown>) {
 
 /** Sao chép nội dung đã chọn lên phiếu; không đọc động danh mục khi xem/in phiếu cũ. */
 export async function resolvePermitSafety(tx: Prisma.TransactionClient, body: Record<string, unknown>, before?: { safetyItems: Prisma.JsonValue; kind: string }) {
+  if (body.kind === "ELECTRICAL") {
+    if (Array.isArray(body.safetyItems) && body.safetyItems.length) throw fail("PCT Điện tạm thời không điền sẵn mối nguy và biện pháp an toàn");
+    return [];
+  }
   if (body.safetyItems === undefined) {
     if (before && body.kind !== before.kind && Array.isArray(before.safetyItems) && before.safetyItems.length) throw fail("Vui lòng bỏ biện pháp cũ trước khi đổi loại PCT");
     body = { ...body, safetyItems: before?.safetyItems ?? [] };

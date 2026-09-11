@@ -67,7 +67,7 @@ export function parsePermit(body: Record<string, unknown>, status: PermitStatus)
     commanderPersonId: permitText(body, "commanderPersonId", 100) || null,
     members: parsePermitMembers(body.members),
     content: permitText(body, "content", 5000), location: permitText(body, "location", 500),
-    issuerName: permitText(body, "issuerName"), leaderName: permitText(body, "leaderName"),
+    issuerName: permitText(body, "issuerName"), electricalSafetySupervisorName: permitText(body, "electricalSafetySupervisorName"), leaderName: permitText(body, "leaderName"),
     commanderName: permitText(body, "commanderName"), teamName: permitText(body, "teamName"),
     authorizerName: permitText(body, "authorizerName"), result: permitText(body, "result", 5000),
     note: permitText(body, "note", 5000), statusReason: permitText(body, "statusReason", 2000),
@@ -90,7 +90,7 @@ export function parsePermit(body: Record<string, unknown>, status: PermitStatus)
   if (data.issuedAt && Number(new Intl.DateTimeFormat("en", { year: "numeric", timeZone: "Asia/Ho_Chi_Minh" }).format(data.issuedAt)) !== year) throw fail("Năm cấp số phải khớp năm của thời điểm cấp phiếu");
   if (data.authorizedAt && (!data.issuedAt || data.authorizedAt < data.issuedAt)) throw fail("Thời điểm cho phép làm việc phải từ thời điểm cấp trở đi");
   if (data.closedAt && (!data.authorizedAt || data.closedAt < data.authorizedAt)) throw fail("Thời điểm đóng phải từ thời điểm cho phép làm việc trở đi");
-  return { ...data, searchText: normalizeText([number, formatPermitNumber({ number, year }), data.position, data.content, data.location, data.issuerName, data.commanderName, data.leaderName, data.authorizerName, data.teamName, data.repairRequestNumber, data.registrationNumber, data.workScope, data.note].join(" ")) };
+  return { ...data, searchText: normalizeText([number, formatPermitNumber({ number, year }), data.position, data.content, data.location, data.issuerName, data.electricalSafetySupervisorName, data.commanderName, data.leaderName, data.authorizerName, data.teamName, data.repairRequestNumber, data.registrationNumber, data.workScope, data.note].join(" ")) };
 }
 export function permitFilters(
   req: Request,

@@ -108,7 +108,7 @@ Tối ưu 10/09/2026: response danh sách chỉ select trường hiển thị, d
 ## Phụ lục mối nguy – biện pháp an toàn (local)
 
 - Hai mục cạnh sổ Cơ/Điện quản lý **cặp** mối nguy–biện pháp. Danh mục Cơ gồm Cơ–Nhiệt–Hóa, tách riêng Điện. Tìm không dấu, 10 mục/trang, thêm/sửa/ngừng sử dụng với quyền ghi PCT.
-- Chỉ PCT **giấy** có `safetyItems`. Người cấp chọn cặp rồi phân công `forAuthorization` (đơn vị cho phép), `forExecution` (đơn vị công tác), hoặc cả hai. Danh mục không tự phân công. Nháp có thể chưa phân công; khi ghi đã cấp, mỗi cặp đã chọn cần ít nhất một đơn vị.
+- Chỉ PCT **Cơ – Nhiệt – Hóa bằng giấy** có `safetyItems`. Người cấp chọn cặp rồi phân công `forAuthorization` (đơn vị cho phép), `forExecution` (đơn vị công tác), hoặc cả hai. Khi thêm vào phiếu, giao cho đơn vị công tác được chọn sẵn và người cấp có thể đổi. Nháp có thể chưa phân công; khi ghi đã cấp, mỗi cặp đã chọn cần ít nhất một đơn vị.
 - Có thể sửa câu chữ trên phiếu, bổ sung cặp riêng, bỏ cặp và đổi thứ tự. Không bắt buộc có cặp để tiếp tục quản lý các phiếu cũ. Đổi Cơ/Điện hoặc đổi sang điện tử sẽ hỏi trước khi bỏ các lựa chọn trên form; API kiểm tra loại và hình thức độc lập với UI.
 - Snapshot JSON lưu nội dung và phân công ngay trên phiếu, có trong lịch sử. Sửa/ngừng sử dụng danh mục không làm đổi phiếu cũ; nguồn ngừng sử dụng không được chọn mới. API cập nhật thiếu trường mới giữ nguyên snapshot.
 - Danh sách PCT và Excel không tải thêm snapshot an toàn; chi tiết mới đọc nội dung. Tối đa 100 cặp/phiếu, mối nguy 1.000 ký tự và biện pháp 5.000 ký tự.
@@ -117,7 +117,7 @@ Tối ưu 10/09/2026: response danh sách chỉ select trường hiển thị, d
 
 ### Điền mẫu Word
 
-`GET /api/work-permits/[id]/document` chỉ cho phiếu giấy đã cấp, không xuất nháp/hủy. Dùng mẫu Word người dùng cung cấp tại `templates/work-permit-mechanical.docx` và `templates/work-permit-electrical.docx`.
+`GET /api/work-permits/[id]/document` chỉ cho phiếu giấy đã cấp, không xuất nháp/hủy. Dùng mẫu Word người dùng cung cấp tại `templates/work-permit-mechanical.docx` và `templates/work-permit-electrical.docx`. PCT Điện chỉ điền số PCT, số ĐKCT khi có, mục 1.1–1.6, ngày cấp, người cấp và tên người giám sát an toàn điện khi có; mục 1.7 trở đi giữ trống để ghi tay, không tạo phụ lục biện pháp an toàn.
 
 - Cơ–Nhiệt–Hóa: phần A chứa các cặp; B/C lấy biện pháp theo phân công, gộp nội dung trùng nguyên văn trong từng nhóm. Tự thêm dòng vượt số dòng mẫu và giữ các ô đánh dấu/ghi chú trống.
 - Điện: cặp mối nguy–biện pháp vào 2.5; phân công ở phụ lục riêng. Không tự điền các xác nhận đã cắt điện, tiếp đất hoặc đã thực hiện biện pháp từ lựa chọn dự kiến.
@@ -126,7 +126,8 @@ Tối ưu 10/09/2026: response danh sách chỉ select trường hiển thị, d
 
 ### Bổ sung thông tin cấp phiếu giấy
 
-- `registrationNumber`: số ĐKCT, tối đa 200 ký tự, chấp nhận mã đầy đủ hoặc chữ (ví dụ “điện trực tiếp”). Tùy chọn; chuỗi trắng chuẩn hóa thành rỗng. Mẫu Cơ chỉ hiện dòng “Số ĐK: …” khi có giá trị, không lấy số SYC thay thế. Không tự ghép hậu tố/năm vào ĐKCT.
+- `registrationNumber`: số ĐKCT, tối đa 200 ký tự, chấp nhận mã đầy đủ hoặc chữ (ví dụ “điện trực tiếp”). Tùy chọn; chuỗi trắng chuẩn hóa thành rỗng. Mẫu Cơ hiện dòng “Số ĐK: …”; mẫu Điện thêm dòng “Số ĐKCT: …” dưới số PCT khi có giá trị. Không lấy số SYC thay thế và không tự ghép hậu tố/năm vào ĐKCT.
+- `electricalSafetySupervisorName`: tên Người giám sát an toàn điện, tùy chọn và chỉ hiển thị khi nhập PCT Điện giấy.
 - `workScope`: phạm vi công tác riêng, tối đa 5.000 ký tự, không suy diễn từ địa điểm.
 - `plannedStartAt` / `plannedEndAt`: ngày giờ dự kiến, tùy chọn, hiển thị và in theo giờ Việt Nam. Nếu có cả hai thì kết thúc không trước bắt đầu. Độc lập với mốc cấp/cho phép/kết thúc thực tế; có thể dự kiến qua ngày hoặc năm mới.
 - `disciplines`: chọn nhiều chuyên môn Thủy/Cơ/Nhiệt/Hóa cho sổ Cơ – Nhiệt – Hóa; mặc định chưa chọn, không tự suy từ tên sổ. Mẫu đánh dấu `[X]` đúng các lựa chọn. Không cho gửi chuyên môn này sang sổ Điện.

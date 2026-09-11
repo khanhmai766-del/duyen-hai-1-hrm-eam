@@ -1579,6 +1579,7 @@ model WorkPermit {
   location String @default("")
   workDate String
   issuerName String @default("")
+  electricalSafetySupervisorName String @default("")
   issuerUserId String?
   commanderPersonId String?
   leaderName String @default("")
