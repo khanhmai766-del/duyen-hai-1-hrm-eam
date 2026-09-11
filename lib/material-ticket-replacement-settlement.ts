@@ -1,5 +1,5 @@
 import type { Prisma } from "@prisma/client";
-import { addMonths, isSupplementReason } from "@/lib/constants";
+import { addMonths, isChemicalWorkflowCategory, isLubricantCategory, isSupplementReason } from "@/lib/constants";
 import { fail } from "@/lib/api";
 import { buildReplacementLogData } from "@/lib/material-replacement-log";
 import { deliveryNoteSummary, usedLotsOfTicket } from "@/lib/material-stock-lot";
@@ -49,6 +49,10 @@ export function replacementTargetKey(point: {
   return `${point.materialId}|system:${normalizeText(point.system ?? "")}|location:${normalizeText(point.location ?? "")}`;
 }
 
+/**
+ * Cách chia CŨ, giữ cho vật tư ĐẾM ĐƯỢC (lõi lọc, bi nghiền…): chia theo trọng số kế hoạch ra
+ * SỐ NGUYÊN, phần dư dồn vào điểm đầu — không có nửa lõi lọc.
+ */
 function allocateUsedQuantity(total: number, weights: number[]) {
   const safeTotal = Math.max(0, Math.round(total));
   if (weights.length === 0) return [];
@@ -59,6 +63,43 @@ function allocateUsedQuantity(total: number, weights: number[]) {
   const values = safeWeights.map((weight) => Math.floor((safeTotal * weight) / sum));
   values[0] += safeTotal - values.reduce((value, quantity) => value + quantity, 0);
   return values;
+}
+
+/**
+ * Loại vật tư CHIA ĐỀU khối lượng thực dùng theo số thiết bị: dầu bôi trơn và hóa chất — đo
+ * bằng kg/lít nên số lẻ có nghĩa, và điểm dầu thường khai định mức 0 (châm theo thực tế) nên
+ * cách chia theo trọng số kế hoạch không dùng được. Vật tư khác giữ cách chia cũ.
+ */
+export function splitsUsageEvenly(materialCategory: string | null | undefined) {
+  return isLubricantCategory(materialCategory) || isChemicalWorkflowCategory(materialCategory);
+}
+
+/** Làm tròn 2 chữ số thập phân — mức chính xác của khối lượng ghi vào lịch sử thay thế. */
+export function roundUsedQuantity(value: number) {
+  return Math.round((value + Number.EPSILON) * 100) / 100;
+}
+
+/**
+ * CHIA ĐỀU khối lượng thực dùng của một phiếu cho các thiết bị được gắn ở phần đề xuất.
+ *
+ * Mỗi thiết bị nhận cùng một phần = tổng thực dùng / tổng số thiết bị, làm tròn 2 chữ số;
+ * một điểm có `deviceCount` thiết bị thì nhận `deviceCount` phần.
+ *
+ * Bản cũ chia THEO TRỌNG SỐ KẾ HOẠCH (`quantity × deviceCount`) và dồn phần dư vào điểm đầu
+ * tiên. Điểm dầu bôi trơn thường khai `quantity = 0` (chỉ châm theo thực tế), nên mọi trọng số
+ * bằng 0 và TOÀN BỘ khối lượng rơi vào điểm đầu: phiếu 220 kg cho 6 trạm phun dầu ghi ra
+ * 220 / 0 / 0 / 0 / 0 / 0 — đo được trên phiếu VT-21 tháng 08/2026.
+ *
+ * Làm tròn từng phần nên tổng các dòng có thể lệch tổng phiếu vài phần trăm đơn vị
+ * (36,67 × 6 = 220,02). Cố ý chấp nhận: dồn phần lệch vào một thiết bị là lại sinh ra đúng
+ * cảnh "cùng một phiếu mà mỗi thiết bị một số" cần sửa.
+ */
+export function splitUsedQuantityByDevices(total: number, deviceCounts: number[]) {
+  if (deviceCounts.length === 0) return [];
+  const counts = deviceCounts.map((count) => Math.max(1, Math.round(count || 1)));
+  const totalDevices = counts.reduce((sum, count) => sum + count, 0);
+  const perDevice = roundUsedQuantity(Math.max(0, total) / totalDevices);
+  return counts.map((count) => roundUsedQuantity(perDevice * count));
 }
 
 async function findTrackingPoint(tx: Prisma.TransactionClient, source: SettlementPoint) {
@@ -135,6 +176,7 @@ export async function recordSettledTicketReplacements(
     select: {
       id: true,
       usedQuantity: true,
+      materialCategory: true,
       workEndedAt: true,
       completedAt: true,
       usedAt: true,
@@ -249,10 +291,17 @@ export async function recordSettledTicketReplacements(
     return { logged: 1, renewed: 0, released: 0 };
   }
 
+  // Trọng số KẾ HOẠCH: luôn dùng cho cột `quantity` (số kế hoạch) của dòng lịch sử, và dùng để
+  // chia khối lượng thực dùng cho vật tư đếm được. Dầu/hóa chất thì chia đều theo số thiết bị.
   const weights = ticket.replacementLinks.map((link) =>
     link.plannedQuantity ?? Math.max(0, link.replacement.quantity * Math.max(1, link.replacement.deviceCount)),
   );
-  const allocated = allocateUsedQuantity(usedQuantity, weights);
+  const allocated = splitsUsageEvenly(ticket.materialCategory)
+    ? splitUsedQuantityByDevices(
+        usedQuantity,
+        ticket.replacementLinks.map((link) => link.replacement.deviceCount),
+      )
+    : allocateUsedQuantity(usedQuantity, weights);
   const replacedAt = workDoneAt;
   if (!replacedAt) {
     throw fail("Phiếu thiếu thời gian hoàn thành công việc nên chưa thể chốt lịch sử thay thế", 409);
@@ -292,7 +341,7 @@ export async function recordSettledTicketReplacements(
     const usedForLink = allocated[index] ?? 0;
     const merged = groups.get(groupKey);
     if (merged) {
-      merged.usedQuantity += usedForLink;
+      merged.usedQuantity = roundUsedQuantity(merged.usedQuantity + usedForLink);
       if (plannedQuantity !== null) {
         merged.plannedQuantity = (merged.plannedQuantity ?? 0) + plannedQuantity;
       }

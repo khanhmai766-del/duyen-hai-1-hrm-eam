@@ -588,7 +588,10 @@ model MaterialReplacementLog {
   // của điểm). `usedQuantity` mới là khối lượng đã tiêu thụ thật, và là con số DUY NHẤT
   // được dùng để tính luỹ kế sử dụng cho biểu dự toán năm QLVT.20.
   ticketId           String? // phiếu vật tư đã ghi dòng này; null = dòng do SYC hoặc nhập tay
-  usedQuantity       Int?
+  // Số THẬP PHÂN (2 chữ số) chứ không phải số nguyên: một phiếu gắn nhiều thiết bị thì khối
+  // lượng thực dùng được CHIA ĐỀU theo số thiết bị (220 kg / 6 trạm = 36,67 kg mỗi trạm) —
+  // xem `splitUsedQuantityByDevices` trong lib/material-ticket-replacement-settlement.ts.
+  usedQuantity       Float?
   // Vật tư dùng cho việc PHÁT SINH ngoài lịch (phiếu không gắn điểm thay thế nào).
   //
   // Phải là cột riêng chứ không suy từ `replacementId = null`: dòng ĐỊNH KỲ cũng có
