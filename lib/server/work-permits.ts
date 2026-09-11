@@ -1,14 +1,15 @@
 import { Prisma } from "@prisma/client";
 import { fail, handle } from "@/lib/api";
 import { normalizeText } from "@/lib/nav";
-import { formatPermitNumber, PERMIT_FORMATS, defaultPermitFormat, PERMIT_KINDS, PERMIT_WORK_TYPES, PERMIT_STATUSES, PERMIT_UNITS, type PermitStatus } from "@/lib/work-permits";
+import { OPERATION_POSITION_TITLES } from "@/lib/positions";
+import { formatPermitNumber, PERMIT_DISCIPLINES, PERMIT_FORMATS, defaultPermitFormat, PERMIT_KINDS, PERMIT_WORK_TYPES, PERMIT_STATUSES, PERMIT_UNITS, type PermitStatus } from "@/lib/work-permits";
 
 export function permitHandle(fn: () => Promise<Response>) {
   return handle(async () => {
     try { return await fn(); } catch (e) {
       if (e instanceof Prisma.PrismaClientKnownRequestError) {
         if (e.code === "P2002" && String(e.meta?.modelName ?? "").includes("WorkPermitSession")) return fail("CHTT hoặc PCT đang có một lần làm việc chưa kết thúc. Vui lòng tải lại để kiểm tra.", 409);
-        if (e.code === "P2002") return fail("Số PCT đã tồn tại trong loại và năm này, kể cả phiếu đã hủy.", 409);
+        if (e.code === "P2002") return fail("Số PCT đang được sử dụng trong loại và năm này.", 409);
         if (e.code === "P2021" || e.code === "P2022") return fail("Sổ cấp PCT chưa được khởi tạo. Vui lòng liên hệ quản trị để mở sổ.", 503);
       }
       throw e;
@@ -52,9 +53,16 @@ export function parsePermit(body: Record<string, unknown>, status: PermitStatus)
   const format = permitText(body, "format", 20) || defaultPermitFormat(teamType);
   if (!Object.hasOwn(PERMIT_FORMATS, format)) throw fail("Hình thức phiếu phải là PCT giấy hoặc PCT điện tử");
   const workType = permitText(body, "workType", 20) || null;
-  if (workType && !Object.hasOwn(PERMIT_WORK_TYPES, workType)) throw fail("Phân loại công việc phải là Kế hoạch (KH) hoặc Đột xuất (ĐX)");
+  if (workType && !Object.hasOwn(PERMIT_WORK_TYPES, workType)) throw fail("Phân loại công việc phải là Kế hoạch (KH), Đột xuất (ĐX) hoặc Sự cố (SC)");
+  const position = permitText(body, "position");
+  if (position && !OPERATION_POSITION_TITLES.some(value => value === position)) throw fail("Cương vị không có trong danh mục của phân xưởng");
+  const disciplines = body.disciplines ?? [];
+  if (!Array.isArray(disciplines) || disciplines.length > 4 || disciplines.some(v => typeof v !== "string" || !Object.hasOwn(PERMIT_DISCIPLINES, v)) || new Set(disciplines).size !== disciplines.length) throw fail("Chuyên môn phải thuộc Thủy, Cơ, Nhiệt hoặc Hóa và không được lặp");
+  if (kind !== "MECHANICAL" && disciplines.length) throw fail("Chuyên môn Thủy/Cơ/Nhiệt/Hóa chỉ áp dụng cho sổ Cơ – Nhiệt – Hóa");
   const data = {
-    format, workType, kind, unit, year, number, workDate, workerCount: count, teamType,
+    registrationNumber: permitText(body, "registrationNumber", 200), workScope: permitText(body, "workScope", 5000),
+    plannedStartAt: permitInstant(body, "plannedStartAt"), plannedEndAt: permitInstant(body, "plannedEndAt"), disciplines: disciplines as string[],
+    format, workType, kind, unit, year, number, position, workDate, workerCount: count, teamType,
     issuerUserId: permitText(body, "issuerUserId", 100) || null,
     commanderPersonId: permitText(body, "commanderPersonId", 100) || null,
     members: parsePermitMembers(body.members),
@@ -66,6 +74,7 @@ export function parsePermit(body: Record<string, unknown>, status: PermitStatus)
     repairRequestNumber: permitText(body, "repairRequestNumber", 100),
     issuedAt: permitInstant(body, "issuedAt"), authorizedAt: permitInstant(body, "authorizedAt"), closedAt: permitInstant(body, "closedAt"),
   };
+  if (data.plannedStartAt && data.plannedEndAt && data.plannedEndAt < data.plannedStartAt) throw fail("Thời gian dự kiến kết thúc phải từ thời gian dự kiến bắt đầu trở đi");
   if (teamType === "CONTRACTOR") {
     data.members = data.members.filter(member => !member.personId || member.personId !== data.commanderPersonId);
     data.workerCount = data.commanderName ? 1 + data.members.length : null;
@@ -81,15 +90,19 @@ export function parsePermit(body: Record<string, unknown>, status: PermitStatus)
   if (data.issuedAt && Number(new Intl.DateTimeFormat("en", { year: "numeric", timeZone: "Asia/Ho_Chi_Minh" }).format(data.issuedAt)) !== year) throw fail("Năm cấp số phải khớp năm của thời điểm cấp phiếu");
   if (data.authorizedAt && (!data.issuedAt || data.authorizedAt < data.issuedAt)) throw fail("Thời điểm cho phép làm việc phải từ thời điểm cấp trở đi");
   if (data.closedAt && (!data.authorizedAt || data.closedAt < data.authorizedAt)) throw fail("Thời điểm đóng phải từ thời điểm cho phép làm việc trở đi");
-  return { ...data, searchText: normalizeText([number, formatPermitNumber({ number, year }), data.content, data.location, data.issuerName, data.commanderName, data.leaderName, data.authorizerName, data.teamName, data.repairRequestNumber, data.note].join(" ")) };
+  return { ...data, searchText: normalizeText([number, formatPermitNumber({ number, year }), data.position, data.content, data.location, data.issuerName, data.commanderName, data.leaderName, data.authorizerName, data.teamName, data.repairRequestNumber, data.registrationNumber, data.workScope, data.note].join(" ")) };
 }
-export function permitFilters(req: Request): Prisma.WorkPermitWhereInput {
+export function permitFilters(
+  req: Request,
+  options: { includeClosedByDefault?: boolean } = {}
+): Prisma.WorkPermitWhereInput {
   const p = new URL(req.url).searchParams;
   const kind = p.get("kind") || "MECHANICAL", status = p.get("status") || "";
   if (!Object.hasOwn(PERMIT_KINDS, kind)) throw fail("Loại PCT không hợp lệ");
   if (status && status !== "OPEN" && !Object.hasOwn(PERMIT_STATUSES, status)) throw fail("Trạng thái không hợp lệ");
-  const unit = p.get("unit") || "", from = p.get("from") || "", to = p.get("to") || "";
+  const unit = p.get("unit") || "", position = p.get("position") || "", from = p.get("from") || "", to = p.get("to") || "";
   if (unit && !Object.hasOwn(PERMIT_UNITS, unit)) throw fail("Tổ máy không hợp lệ");
+  if (position && !OPERATION_POSITION_TITLES.some(value => value === position)) throw fail("Cương vị không hợp lệ");
   if ((from && !isPermitDay(from)) || (to && !isPermitDay(to)) || (from && to && from > to)) throw fail("Khoảng ngày không hợp lệ");
   const teamType = p.get("teamType") || "";
   if (teamType && !["INTERNAL", "CONTRACTOR"].includes(teamType)) throw fail("Loại đơn vị không hợp lệ");
@@ -97,8 +110,10 @@ export function permitFilters(req: Request): Prisma.WorkPermitWhereInput {
   if (workType && workType !== "UNCLASSIFIED" && !Object.hasOwn(PERMIT_WORK_TYPES, workType)) throw fail("Phân loại công việc không hợp lệ");
   const q = p.get("q") || "";
   if (q.length > 200) throw fail("Từ khóa quá dài");
-  return { kind, ...(workType ? { workType: workType === "UNCLASSIFIED" ? null : workType } : {}), ...(teamType ? { teamType } : {}), ...(unit ? { unit } : {}),
-    ...(status ? { status: status === "OPEN" ? { notIn: ["CLOSED", "CANCELLED"] } : status } : {}),
+  return { kind, ...(workType ? { workType: workType === "UNCLASSIFIED" ? null : workType } : {}), ...(teamType ? { teamType } : {}), ...(unit ? { unit } : {}), ...(position ? { position } : {}),
+    ...(status
+      ? { status: status === "OPEN" ? { notIn: ["CLOSED", "CANCELLED"] } : status }
+      : { status: options.includeClosedByDefault ? { not: "CANCELLED" } : { notIn: ["CLOSED", "CANCELLED"] } }),
     ...(from || to ? { workDate: { ...(from ? { gte: from } : {}), ...(to ? { lte: to } : {}) } } : {}),
     ...(q.trim() ? { OR: [{ searchText: { contains: permitSearchTerm(q) } }, { sessions: { some: { searchText: { contains: permitSearchTerm(q) } } } }] } : {}),
   };

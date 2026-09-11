@@ -13,6 +13,7 @@
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev",
     "db:seed": "tsx prisma/seed.ts",
+    "seed:work-permit-safety": "tsx scripts/seed-work-permit-safety.ts",
     "db:studio": "prisma studio",
     "db:reset-equipment-tree": "node scripts/reset-equipment-tree.mjs",
     "import:equipment-tree": "node scripts/import-equipment-tree.mjs",

@@ -15,8 +15,9 @@ export async function resolvePermitIdentities(
   const issuerUserId = before && before.status !== "DRAFT" ? before.issuerUserId : user.id;
   const commanderPersonId = permitText(body, "commanderPersonId", 100) || null;
   if (!commanderPersonId) {
-    // Cho lưu nháp chưa chọn CHTT; khi cấp thực tế phải chọn danh bạ.
-    if (body.status !== "DRAFT") throw fail("Vui lòng chọn CHTT từ danh sách nhà thầu trước khi cấp phiếu");
+    // Nháp có thể hủy trực tiếp trước khi chọn CHTT; khi cấp thực tế phải chọn danh bạ.
+    const cancellingDraft = body.status === "CANCELLED" && before?.status === "DRAFT";
+    if (body.status !== "DRAFT" && !cancellingDraft) throw fail("Vui lòng chọn CHTT từ danh sách nhà thầu trước khi cấp phiếu");
     return { ...body, issuerName, issuerUserId, commanderPersonId: null, commanderName: "" };
   }
   await tx.$queryRaw`SELECT "id" FROM "WorkPermitPerson" WHERE "id" = ${commanderPersonId} FOR UPDATE`;

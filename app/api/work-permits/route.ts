@@ -1,3 +1,4 @@
+import { resolvePermitSafety } from "@/lib/server/work-permit-safety";
 import { prisma } from "@/lib/prisma";
 import { audit, fail, ok, requireRole, requireUser } from "@/lib/api";
 import { formatPermitNumber, PERMIT_PAGE_SIZE, PERMIT_WRITE_ROLES } from "@/lib/work-permits";
@@ -27,7 +28,7 @@ export async function POST(req: Request) {
     if (body.status !== "ISSUED" && body.status !== "DRAFT") return fail("Phiếu mới phải ở trạng thái Nháp hoặc Đã cấp");
     const row = await prisma.$transaction(async tx => {
       const data = parsePermit(await resolvePermitIdentities(tx, body, user), status);
-      const row = await tx.workPermit.create({ data: { ...data, status, createdById: user.id, createdByName: user.name ?? "" } });
+      const row = await tx.workPermit.create({ data: { ...data, safetyItems: permitSnapshot(await resolvePermitSafety(tx, body)), status, createdById: user.id, createdByName: user.name ?? "" } });
       await tx.workPermitHistory.create({ data: { permitId: row.id, actorId: user.id, actorName: user.name ?? "", action: "Tạo phiếu", after: permitSnapshot(row) } });
       return row;
     });

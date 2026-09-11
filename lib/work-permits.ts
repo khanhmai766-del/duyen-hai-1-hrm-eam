@@ -1,3 +1,4 @@
+import { safetySummary, type SafetySelection } from "@/lib/work-permit-safety";
 export const PERMIT_PAGE_SIZE = 10;
 /** Ghép số thuần theo mẫu chung Cơ/Điện; số đầy đủ hoặc mã cũ giữ nguyên. */
 export function formatPermitNumber(row: { number: string; year: number }): string {
@@ -12,8 +13,12 @@ export function effectivePermitFormat(row: { format?: string | null; teamType: s
   return row.format === "PAPER" || row.format === "ELECTRONIC" ? row.format : defaultPermitFormat(row.teamType);
 }
 export const PERMIT_KINDS = { MECHANICAL: "Cơ – Nhiệt – Hóa", ELECTRICAL: "Điện" } as const;
-export const PERMIT_WORK_TYPES = { PLANNED: "Kế hoạch (KH)", UNPLANNED: "Đột xuất (ĐX)" } as const;
-export const PERMIT_WORK_TYPE_CODES = { PLANNED: "KH", UNPLANNED: "ĐX" } as const;
+export const PERMIT_WORK_TYPES = {
+  PLANNED: "Kế hoạch (KH)",
+  UNPLANNED: "Đột xuất (ĐX)",
+  INCIDENT: "Sự cố (SC)",
+} as const;
+export const PERMIT_WORK_TYPE_CODES = { PLANNED: "KH", UNPLANNED: "ĐX", INCIDENT: "SC" } as const;
 export type PermitWorkType = keyof typeof PERMIT_WORK_TYPES;
 export const PERMIT_STATUSES = {
   DRAFT: "Nháp", ISSUED: "Đã cấp", ACTIVE: "Đang thực hiện",
@@ -33,10 +38,18 @@ export const CONTRACTOR_PERMIT_TRANSITIONS: Record<PermitStatus, readonly Permit
   WAITING: ["CLOSED", "CANCELLED"], CLOSED: [], CANCELLED: [],
 };
 export const PERMIT_WRITE_ROLES = ["ADMIN", "MANAGER", "SUPERVISOR"];
+export const PERMIT_DISCIPLINES = { HYDRO: "Thủy", MECHANICAL: "Cơ", THERMAL: "Nhiệt", CHEMICAL: "Hóa" } as const;
+export type PermitDiscipline = keyof typeof PERMIT_DISCIPLINES;
 export interface PermitInput {
+  registrationNumber?: string;
+  workScope?: string;
+  plannedStartAt?: string | null;
+  plannedEndAt?: string | null;
+  disciplines?: PermitDiscipline[];
+  safetyItems?: SafetySelection[];
   format?: PermitFormatValue | null;
   workType: PermitWorkType | null;
-  kind: PermitKind; year: number; number: string; unit: keyof typeof PERMIT_UNITS;
+  kind: PermitKind; year: number; number: string; position: string; unit: keyof typeof PERMIT_UNITS;
   content: string; location: string; workDate: string;
   issuerUserId?: string | null; commanderPersonId?: string | null;
   issuerName: string; leaderName: string; commanderName: string; teamName: string;
@@ -47,7 +60,7 @@ export interface PermitInput {
   result: string; note: string; statusReason: string; repairRequestNumber: string;
 }
 export interface PermitRow extends PermitInput {
-  id: string; status: PermitStatus; version: number;
+  id: string; status: PermitStatus; progress: number | null; version: number;
   createdById: string; createdByName: string; createdAt: string; updatedAt: string;
   sessions?: PermitSession[];
 }
@@ -56,7 +69,8 @@ export interface PermitHistory {
   before: Record<string, unknown> | null; after: Record<string, unknown>;
 }
 export const PERMIT_FIELD_LABELS: Record<string, string> = {
-  format: "Hình thức phiếu", workType: "Phân loại công việc (KH/ĐX)", kind: "Loại PCT", year: "Năm cấp số", number: "Số PCT", status: "Trạng thái", unit: "Tổ máy",
+  registrationNumber: "Số ĐKCT", workScope: "Phạm vi công tác", plannedStartAt: "Dự kiến bắt đầu", plannedEndAt: "Dự kiến kết thúc", disciplines: "Chuyên môn",
+  safetyItems: "Mối nguy và biện pháp an toàn", format: "Hình thức phiếu", workType: "Phân loại công việc (KH/ĐX/SC)", kind: "Loại PCT", year: "Năm cấp số", number: "Số PCT", position: "Cương vị", status: "Trạng thái", unit: "Tổ máy",
   content: "Nội dung công việc", location: "Thiết bị / vị trí", workDate: "Ngày thực hiện",
   issuerName: "Người cấp PCT", leaderName: "Người lãnh đạo công việc", commanderName: "Người chỉ huy trực tiếp",
   teamName: "Đơn vị công tác", workerCount: "Số nhân viên", authorizerName: "Người cho phép làm việc",
@@ -66,6 +80,8 @@ export const PERMIT_FIELD_LABELS: Record<string, string> = {
 };
 export function permitValue(key: string, value: unknown): string {
   if (value === null || value === undefined || value === "") return "—";
+  if (key === "disciplines" && Array.isArray(value)) return value.map(v => PERMIT_DISCIPLINES[v as PermitDiscipline] ?? v).join(" / ") || "—";
+  if (key === "safetyItems") return safetySummary(value);
   if (key === "format") return PERMIT_FORMATS[value as PermitFormatValue] ?? String(value);
   if (key === "status") return PERMIT_STATUSES[value as PermitStatus] ?? String(value);
   if (key === "workType") return PERMIT_WORK_TYPES[value as PermitWorkType] ?? String(value);
@@ -73,7 +89,7 @@ export function permitValue(key: string, value: unknown): string {
   if (key === "unit") return PERMIT_UNITS[value as keyof typeof PERMIT_UNITS] ?? String(value);
   if (key === "teamType") return value === "CONTRACTOR" ? "Nhà thầu" : "Nội bộ";
   if (key === "members" && Array.isArray(value)) return value.map(p => [p.code, p.name, p.company].filter(Boolean).join(" · ")).join("\n") || "—";
-  if (["issuedAt", "authorizedAt", "closedAt"].includes(key)) return new Date(String(value)).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" });
+  if (["issuedAt", "authorizedAt", "closedAt", "plannedStartAt", "plannedEndAt"].includes(key)) return new Date(String(value)).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" });
   if (key === "workDate") return String(value).split("-").reverse().join("/");
   return String(value);
 }
@@ -90,8 +106,8 @@ export interface PermitSession {
   id: string; permitId: string; commanderId: string; commanderCode: string;
   commanderName: string; company: string; members: PermitMember[]; workerCount: number;
   openedAt: string; endedAt: string | null; authorizerName: string;
-  endConfirmedByName: string; endNote: string; createdByName: string; endedByName: string | null;
+  endConfirmedByName: string; endNote: string; progress: number | null; createdByName: string; endedByName: string | null;
 }
 export type PermitHistorySummary = Pick<PermitHistory, "id" | "actorName" | "action" | "createdAt">;
-export type PermitListRow = Pick<PermitRow, "id" | "number" | "year" | "kind" | "format" | "workType" | "workDate" | "content" | "location" | "unit" | "issuerName" | "commanderName" | "teamName" | "teamType" | "workerCount" | "authorizerName" | "status" | "repairRequestNumber"> & { sessions: Array<Pick<PermitSession, "commanderName" | "company" | "authorizerName">> };
+export type PermitListRow = Pick<PermitRow, "id" | "number" | "year" | "kind" | "format" | "workType" | "workDate" | "content" | "location" | "position" | "unit" | "issuerName" | "commanderName" | "teamName" | "teamType" | "workerCount" | "authorizerName" | "status" | "progress" | "repairRequestNumber"> & { sessions: Array<Pick<PermitSession, "commanderName" | "company" | "authorizerName">> };
 export interface PermitDetailRow extends PermitRow { history: PermitHistorySummary[]; sessions: PermitSession[]; _count: { sessions: number; history: number } }

@@ -1,0 +1,226 @@
+[
+  {
+    "id": "pct-safety-1331ca7ad85a18970caa",
+    "kind": "MECHANICAL",
+    "hazard": "Chấn thương về cơ khí;",
+    "measure": "Trang bị bảo hộ lao động phù hợp chống chấn thương cơ khí",
+    "source": "PCT PHA HÓA CHẤT.doc | PCT LƯỚI QUAY RÁC 2A 111042025.doc | PCT XỬ LÝ KHIẾM KHUYẾT ỐNG LÒ S2 29042026.doc"
+  },
+  {
+    "id": "pct-safety-bdb1d67de1f6e929a104",
+    "kind": "MECHANICAL",
+    "hazard": "Tiếp xúc hóa chất",
+    "measure": "Trang bị bảo hộ lao động phù hợp khi làm việc với hóa chất (găng tay chống hóa chất, mặt nạ phòng độc,…)",
+    "source": "PCT PHA HÓA CHẤT.doc"
+  },
+  {
+    "id": "pct-safety-14c0e7361b0029abcd96",
+    "kind": "MECHANICAL",
+    "hazard": "Công thái học;",
+    "measure": "Giảm thời giờ làm việc, thay đổi người, tăng thời gian nghỉ giữa giờ",
+    "source": "PCT PHA HÓA CHẤT.doc | PCT LƯỚI QUAY RÁC 2A 111042025.doc | PCT XỬ LÝ KHIẾM KHUYẾT ỐNG LÒ S2 29042026.doc"
+  },
+  {
+    "id": "pct-safety-ee7801e802e38015b6c3",
+    "kind": "MECHANICAL",
+    "hazard": "Cháy, nổ;",
+    "measure": "Không để vật dể cháy nổ gần phạm vi công tác, trang bị phương tiện PCCC đầy đủ, sẵn sàng",
+    "source": "PCT PHA HÓA CHẤT.doc"
+  },
+  {
+    "id": "pct-safety-8eb8877ddb2d7d5dfc04",
+    "kind": "MECHANICAL",
+    "hazard": "Trượt ngã",
+    "measure": "Trang bị giày bảo hộ chống trượt",
+    "source": "PCT PHA HÓA CHẤT.doc | PCT LƯỚI QUAY RÁC 2A 111042025.doc"
+  },
+  {
+    "id": "pct-safety-5d408ca2d58ff73f1c31",
+    "kind": "MECHANICAL",
+    "hazard": "Thiết bị đang vận hành",
+    "measure": "Giữ khoảng cách an toàn với thiết bị đang vận hành xung quanh",
+    "source": "PCT PHA HÓA CHẤT.doc"
+  },
+  {
+    "id": "pct-safety-493c9eb646e45eb1d13e",
+    "kind": "MECHANICAL",
+    "hazard": "Điện giật do rò, chạm, chập vào các bộ phận dẫn điện;",
+    "measure": "- Sử dụng dây điện nguồn có 2 lớp cách điện; - Các dụng cụ cầm tay phải được kiểm tra định kỳ mỗi 6 tháng và phải có tem kiểm tra còn hiệu lực;",
+    "source": "PCT LƯỚI QUAY RÁC 2A 111042025.doc"
+  },
+  {
+    "id": "pct-safety-f6de98adc211e934450e",
+    "kind": "MECHANICAL",
+    "hazard": "Cháy, nổ;",
+    "measure": "Không để vật dể cháy nổ gần phạm vi công tác, che chắn khi hàn, cắt, trang bị phương tiện PCCC đầy đủ, sẵn sàng",
+    "source": "PCT LƯỚI QUAY RÁC 2A 111042025.doc | PCT XỬ LÝ KHIẾM KHUYẾT ỐNG LÒ S2 29042026.doc"
+  },
+  {
+    "id": "pct-safety-fa44f81d0b3fd3c828d1",
+    "kind": "MECHANICAL",
+    "hazard": "Vật nặng rơi, va đập trong quá trình nâng, di chuyển;",
+    "measure": "- Phải sử dụng dây lai dắt trong suốt quá trình nâng; - Phải có người đánh tín hiệu; - Phải làm rào chắn, và đặt biển cảnh báo",
+    "source": "PCT LƯỚI QUAY RÁC 2A 111042025.doc"
+  },
+  {
+    "id": "pct-safety-2140e0609e99e717c8f5",
+    "kind": "MECHANICAL",
+    "hazard": "Đổ, lật, nghiêng thiết bị nâng.",
+    "measure": "- Phải sử dụng thiết bị nâng đã được kiểm định; - Người vận hành thiết bị nâng phải được đào tạo cấp chứng chỉ liên quan; - Người đánh tín hiệu phải được huấn luyện; - Tuyệt đối tuân thủ quy tắc vận hành thiết bị nâng",
+    "source": "PCT LƯỚI QUAY RÁC 2A 111042025.doc"
+  },
+  {
+    "id": "pct-safety-a5fb4d4c74b9e714b6c4",
+    "kind": "MECHANICAL",
+    "hazard": "Người hoặc vật bị cuốn vào bộ phận chuyển động gây tai nạn hoặc sự cố thiết bị;",
+    "measure": "Cô lập thiết bị trước khi công tác",
+    "source": "PCT LƯỚI QUAY RÁC 2A 111042025.doc"
+  },
+  {
+    "id": "pct-safety-af4957217b4183926e3a",
+    "kind": "MECHANICAL",
+    "hazard": "Bộ phận, vật liệu gây va đập hoặc văng bắn vào người.",
+    "measure": "Cô lập thiết bị trước khi công tác",
+    "source": "PCT LƯỚI QUAY RÁC 2A 111042025.doc"
+  },
+  {
+    "id": "pct-safety-7f6a63b602c0134529a2",
+    "kind": "MECHANICAL",
+    "hazard": "Áp suất",
+    "measure": "Cô lập thiết bị trước khi thao tác",
+    "source": "PCT LƯỚI QUAY RÁC 2A 111042025.doc"
+  },
+  {
+    "id": "pct-safety-d76b5e4c4e917a3efed4",
+    "kind": "MECHANICAL",
+    "hazard": "Hố nước sâu",
+    "measure": "Giữ khoảng cách an toàn với hố nước sâu",
+    "source": "PCT LƯỚI QUAY RÁC 2A 111042025.doc"
+  },
+  {
+    "id": "pct-safety-d8b8bad6b2b6b6a83f66",
+    "kind": "MECHANICAL",
+    "hazard": "Khí, bụi độc hại;",
+    "measure": "Sử dụng khẩu trang, mặt nạ phòng bụi",
+    "source": "PCT LƯỚI QUAY RÁC 2A 111042025.doc"
+  },
+  {
+    "id": "pct-safety-f96d7fb76c1b5084b08f",
+    "kind": "MECHANICAL",
+    "hazard": "Điện giật do rò, chạm, chập vào các bộ phận dẫn điện;",
+    "measure": "Sử dụng dây dẫn điện có 2 lớp cách điện. Các thiết bị cầm tay, máy hàn đều phải được kiểm tra định kỳ",
+    "source": "PCT XỬ LÝ KHIẾM KHUYẾT ỐNG LÒ S2 29042026.doc"
+  },
+  {
+    "id": "pct-safety-b5c9e2025e7c5b2cc15f",
+    "kind": "MECHANICAL",
+    "hazard": "Bức xạ có hại do hồ quang điện;",
+    "measure": "Trang bị kính bảo hộ lao động phù hợp khi hàn cắt",
+    "source": "PCT XỬ LÝ KHIẾM KHUYẾT ỐNG LÒ S2 29042026.doc"
+  },
+  {
+    "id": "pct-safety-9ca411151a1260c2a7ab",
+    "kind": "MECHANICAL",
+    "hazard": "Khí, bụi độc hại;",
+    "measure": "Sử dụng mặt nạ phòng độc",
+    "source": "PCT XỬ LÝ KHIẾM KHUYẾT ỐNG LÒ S2 29042026.doc"
+  },
+  {
+    "id": "pct-safety-7ef2571813217039d1ff",
+    "kind": "MECHANICAL",
+    "hazard": "Bỏng do hạt kim loại nóng chảy, kim loại có nhiệt độ cao;",
+    "measure": "Trang bị bảo hộ lao động phù hợp chống bỏng khi hàn cắt",
+    "source": "PCT XỬ LÝ KHIẾM KHUYẾT ỐNG LÒ S2 29042026.doc"
+  },
+  {
+    "id": "pct-safety-a79e3041d0e1ca27d7c2",
+    "kind": "MECHANICAL",
+    "hazard": "Bỏng (nhận diện thiết bị cầm tay)",
+    "measure": "Trang bị bảo hộ lao động phù hợp chống bỏng khi sử dụng thiết bị cầm tay",
+    "source": "PCT XỬ LÝ KHIẾM KHUYẾT ỐNG LÒ S2 29042026.doc"
+  },
+  {
+    "id": "pct-safety-ff5e5235e2e52b783222",
+    "kind": "MECHANICAL",
+    "hazard": "Điện giật",
+    "measure": "Sử dụng dây điện nguồn có 2 lớp cách điện; Các dụng cụ cầm tay phải được kiểm tra định kỳ mỗi 6 tháng và phải có tem kiểm tra còn hiệu lực;",
+    "source": "PCT XỬ LÝ KHIẾM KHUYẾT ỐNG LÒ S2 29042026.doc"
+  },
+  {
+    "id": "pct-safety-73a7eeae018f60ee052f",
+    "kind": "MECHANICAL",
+    "hazard": "Trượt ngã",
+    "measure": "Trang bị giày bảo hộ chống trượt phù hợp",
+    "source": "PCT XỬ LÝ KHIẾM KHUYẾT ỐNG LÒ S2 29042026.doc"
+  },
+  {
+    "id": "pct-safety-d7d14cddefd1c7a6bdcd",
+    "kind": "MECHANICAL",
+    "hazard": "Ngã cao;",
+    "measure": "Làm việc trên cao bắt buộc phải đeo dây an toàn, dù thời gian làm việc rất ngắn",
+    "source": "PCT XỬ LÝ KHIẾM KHUYẾT ỐNG LÒ S2 29042026.doc"
+  },
+  {
+    "id": "pct-safety-8dec0d4784682292b7db",
+    "kind": "MECHANICAL",
+    "hazard": "Rơi thiết bị, dụng cụ, vật liệu xuống;",
+    "measure": "Không đưa dụng cụ, vật liệu lên cao hoặc từ trên cao xuống bằng cách tung, ném. Để dụng cụ làm việc vào chỗ chắc chắn hoặc làm móc treo vào vị trí cố định, sao cho khi va đập mạnh không rơi xuống phía dưới (mặt đất, mặt bằng, sàn thao tác).",
+    "source": "PCT XỬ LÝ KHIẾM KHUYẾT ỐNG LÒ S2 29042026.doc"
+  },
+  {
+    "id": "pct-safety-3b459d4965f6ff7f91bf",
+    "kind": "MECHANICAL",
+    "hazard": "Trượt đổ thang, sập giàn giáo;",
+    "measure": "Sử dụng giàn giáo đã qua kiểm định, và người bắt dựng phải được huấn luyện và cấp chứng chỉ đầy đủ trước khi thực hiện công việc;",
+    "source": "PCT XỬ LÝ KHIẾM KHUYẾT ỐNG LÒ S2 29042026.doc"
+  },
+  {
+    "id": "pct-safety-11a541f17e7bf04e6707",
+    "kind": "MECHANICAL",
+    "hazard": "Thiếu ôxy;",
+    "measure": "Duy trì thông gió, ngoài cửa manhole phải treo biển không gian hạn chế cấm vào.",
+    "source": "PCT XỬ LÝ KHIẾM KHUYẾT ỐNG LÒ S2 29042026.doc"
+  },
+  {
+    "id": "pct-safety-8ddade530d36e06bbb3b",
+    "kind": "MECHANICAL",
+    "hazard": "Xuất hiện khí độc, hóa chất độc hại;",
+    "measure": "Kiểm tra không còn khí độc trước khi thực hiện công việc, đo kiểm liên tục trong suốt quá trình làm việc;",
+    "source": "PCT XỬ LÝ KHIẾM KHUYẾT ỐNG LÒ S2 29042026.doc"
+  },
+  {
+    "id": "pct-safety-3880b2344616a69c69a2",
+    "kind": "MECHANICAL",
+    "hazard": "Nguy cơ cháy nổ;",
+    "measure": "Người lao động Được huấn luyện, bồi dưỡng nghiệp vụ phòng cháy chữa cháy và được cấp giấy chứng nhận huấn luyện nghiệp vụ phòng cháy và chữa cháy, Sử dụng đầy đủ các PTBVCN: mặt nạ có kính hàn, quần áo, mũ, găng tay bằng vật liệu khó cháy, cách điện và chịu được các tác động cơ học;",
+    "source": "PCT XỬ LÝ KHIẾM KHUYẾT ỐNG LÒ S2 29042026.doc"
+  },
+  {
+    "id": "pct-safety-8abd772356921c05c80e",
+    "kind": "MECHANICAL",
+    "hazard": "Khói bụi;",
+    "measure": "Thông gió, trang bị mặt nạ;",
+    "source": "PCT XỬ LÝ KHIẾM KHUYẾT ỐNG LÒ S2 29042026.doc"
+  },
+  {
+    "id": "pct-safety-6e7160c85b02af99c1e8",
+    "kind": "MECHANICAL",
+    "hazard": "Thiếu ánh sáng;",
+    "measure": "Sử dụng đèn chiếu sáng: Việc chiếu sáng làm việc trong buồng đốt, đường khói phải dùng điện áp an toàn, chỉ được dùng điện áp dưới 36 VAC qua biến áp cách ly hoặc điện áp dưới 48 VDC;",
+    "source": "PCT XỬ LÝ KHIẾM KHUYẾT ỐNG LÒ S2 29042026.doc"
+  },
+  {
+    "id": "pct-safety-b0c56b40b93c95a3607c",
+    "kind": "MECHANICAL",
+    "hazard": "Tiếng ồn vượt ngưỡng cho phép;",
+    "measure": "Sử dụng bịt tai chống ồn",
+    "source": "PCT XỬ LÝ KHIẾM KHUYẾT ỐNG LÒ S2 29042026.doc"
+  },
+  {
+    "id": "pct-safety-48567d12046e7fe9a15f",
+    "kind": "MECHANICAL",
+    "hazard": "Bị chặn mất lối thoát;",
+    "measure": "Phải có người canh gác bên ngoài trong suốt quá trình làm việc",
+    "source": "PCT XỬ LÝ KHIẾM KHUYẾT ỐNG LÒ S2 29042026.doc"
+  }
+]

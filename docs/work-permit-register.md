@@ -5,14 +5,16 @@
 ## Sổ cấp PCT chung
 
 - Hai sổ Cơ – Nhiệt – Hóa và Điện, nhập số thực tế, không tự cấp số. Số thuần được hiển thị theo mẫu chung `{số}/{năm}/VH1-NĐDH` trong bảng, tiêu đề chi tiết, các lần làm việc, cảnh báo và Excel. Form xem trước số đầy đủ ngay khi nhập. Số đã đầy đủ/mã cũ giữ nguyên, không ghép đuôi hai lần; dữ liệu số gốc không bị ghi lại.
-- Cột STT trong mẫu giấy ghi KH (kế hoạch) hoặc ĐX (đột xuất), không phải số thứ tự dòng. Form, bảng, bộ lọc và cột đầu Excel dùng phân loại này. KH/ĐX không bắt buộc ở mọi trạng thái, kể cả Đã cấp. Phiếu cũ giữ null, không tự gán loại.
+- Cột STT trong mẫu giấy ghi KH (kế hoạch), ĐX (đột xuất) hoặc SC (sự cố), không phải số thứ tự dòng. Form, bảng, bộ lọc và cột đầu Excel dùng phân loại này. KH/ĐX/SC không bắt buộc ở mọi trạng thái, kể cả Đã cấp. Phiếu cũ giữ null, không tự gán loại.
 - Nháp là lưu tạm, chưa ghi nhận cấp phiếu. Form có chỉ dẫn để chọn Đã cấp khi nhập phiếu đã cấp thực tế.
-- Số chuẩn hóa thành chữ hoa, bỏ khoảng trắng, duy nhất theo loại + năm. Phiếu hủy giữ số.
+- Số chuẩn hóa thành chữ hoa, bỏ khoảng trắng, duy nhất theo loại + năm đối với phiếu chưa hủy. Phiếu hủy giữ nguyên số trong lịch sử nhưng giải phóng số để cấp lại. Khi ghi phiếu mới hoặc sửa phiếu nháp, form chỉ truy vấn số lớn nhất dạng số của các phiếu chưa hủy trong đúng sổ Cơ/Điện và năm đang chọn, rồi gợi ý số kế tiếp để điền nhanh; mã phi số không tham gia tính. Đây là gợi ý tại thời điểm tải, số trùng vẫn được chặn khi lưu.
+- Danh sách mặc định không lấy phiếu đã đóng và phiếu đã hủy; hai trạng thái này chỉ xuất hiện trên website khi người dùng chọn riêng bộ lọc tương ứng. Excel vẫn lấy phiếu đã đóng và luôn loại phiếu hủy, kể cả khi bộ lọc hiện tại đang chọn `Đã hủy`.
 - Phiếu đã cấp không đổi số, năm, loại sổ hoặc loại đơn vị. Phiếu đóng/hủy khóa sửa; không có thao tác xóa.
 - Thông tin sổ giấy, tổ máy, thiết bị/vị trí, ngày giờ Việt Nam, kết quả, ghi chú và danh sách nhân viên.
 - Danh sách chính phân trang ở server, 10 phiếu/trang.
 - Tìm kiếm không phân biệt dấu; lọc loại, trạng thái, tổ máy, nội bộ/nhà thầu và khoảng ngày thực hiện. Tìm thêm CHTT, mã người, đơn vị và nhân viên trong các lần làm việc.
 - Chọn SYC bằng API khiếm khuyết hiện có, giữ phạm vi xem của API đó. Sao chép số SYC, công việc và thiết bị vào PCT; chưa ghi ngược số PCT/trạng thái vào SYC.
+- PCT có thể chọn một cương vị nghiệp vụ hoặc để `Tất cả cương vị` (mặc định). Danh sách sổ có bộ lọc cương vị; cương vị đã lưu hiện cùng tổ máy/vị trí và trong chi tiết. Khi chọn SYC, API chỉ ưu tiên SYC khớp cương vị lên đầu trước khi phân trang, không lọc bỏ cương vị khác; tìm kiếm vẫn tra được toàn bộ SYC trong phạm vi người dùng được phép xem. Sổ Excel giữ nguyên cấu trúc, không thêm cột cương vị.
 - Excel xuất kết quả lọc, tối đa 10.000 phiếu: chỉ một sheet Sổ cấp PCT; chi tiết các lần làm việc tra cứu trên website. Có cấu hình in ngang/lặp tiêu đề.
 - Mọi tài khoản đăng nhập được tra cứu/xuất sổ. ADMIN, MANAGER, SUPERVISOR được ghi phiếu, quản lý nhân sự và ghi nhận mở/kết thúc.
 - Với nhà thầu, người cấp lấy từ tài khoản đăng nhập ở phía server khi tạo/cấp từ nháp, không nhận tên hoặc mã người cấp do client gửi. Sau khi đã cấp, giữ nguyên người cấp dù người khác cập nhật. Phiếu nội bộ giữ cách ghi nhận cũ; người cho phép/xác nhận từng lần vẫn nhập theo thực tế.
@@ -29,7 +31,8 @@
 
 1. Ghi cấp phiếu: trạng thái Đã cấp, chưa giữ CHTT.
 2. Mở lần làm việc: chọn CHTT từ danh sách nhà thầu, nhập giờ thực tế, chọn người cho phép. CHTT tự được tính là người công tác; danh sách nhân viên bổ sung được để trống, không bắt nhập số nhân viên. Tổng người ghi nhận là CHTT + nhân viên bổ sung, loại CHTT trùng trong danh sách. Phiếu chuyển Đang thực hiện.
-3. Kết thúc lần làm việc: nhập giờ kết thúc thực tế, người xác nhận, ghi chú. Giải phóng CHTT, PCT chuyển Chờ làm tiếp.
+3. Kết thúc lần làm việc: nhập giờ kết thúc thực tế, người xác nhận, tiến độ lũy kế và ghi chú. Tiến độ bắt buộc là số nguyên từ 0–100%, được lưu theo lần làm việc và cập nhật lên PCT. Giải phóng CHTT, PCT chuyển Chờ làm tiếp.
+   Trên website, tiến độ mới nhất hiển thị ngay dưới trạng thái ở danh sách và chi tiết; lần kết thúc sau mặc định theo giá trị gần nhất để người dùng điều chỉnh. Sổ Excel giữ nguyên cấu trúc và không bổ sung tiến độ.
 4. Khi đang làm, nút Bàn giao / đổi CHTT cho chọn người mới, giờ bàn giao và người xác nhận từ nhân sự website. Giao dịch khóa PCT và hai CHTT theo thứ tự cố định, kiểm tra người mới rảnh, kết thúc lần cũ rồi mở lần mới cùng thời điểm, giữ trạng thái ACTIVE. Nếu lỗi hoặc xung đột, toàn bộ giao dịch hoàn tác.
 5. Có thể mở lần tiếp theo, hoặc đóng PCT khi toàn bộ công việc hoàn tất. Khi có lần đang mở, không được sửa/đóng/hủy PCT để vượt qua kiểm tra.
 
@@ -101,3 +104,33 @@ Cập nhật 10/09/2026: Loại đơn vị và Hình thức cấp phiếu đặt
 Chi tiết phiếu mặc định chỉ tải 2 lần làm việc và 2 tiêu đề cập nhật mới nhất cùng tổng số. Xem thêm tải từng trang 10 mục phía server; Thu gọn độc lập. Nội dung before/after của từng cập nhật chỉ tải khi mở mục đó. Các trang gắn phiên bản phiếu để tránh ghép lịch sử khác thời điểm.
 
 Tối ưu 10/09/2026: response danh sách chỉ select trường hiển thị, danh bạ loại truy vấn CHTT trùng, danh sách công ty DISTINCT tại SQL. 233 kiểm tra API/DB đạt, gồm phân trang lịch sử dài, snapshot theo nhu cầu, phân trang/tìm không dấu nhân sự, phân trang sổ, năm xuất Excel, dùng lại số ở năm sau và không xuất cột Trạng thái. Type-check chưa sạch do các lỗi TBYCNN ngoài phần PCT.
+
+## Phụ lục mối nguy – biện pháp an toàn (local)
+
+- Hai mục cạnh sổ Cơ/Điện quản lý **cặp** mối nguy–biện pháp. Danh mục Cơ gồm Cơ–Nhiệt–Hóa, tách riêng Điện. Tìm không dấu, 10 mục/trang, thêm/sửa/ngừng sử dụng với quyền ghi PCT.
+- Chỉ PCT **giấy** có `safetyItems`. Người cấp chọn cặp rồi phân công `forAuthorization` (đơn vị cho phép), `forExecution` (đơn vị công tác), hoặc cả hai. Danh mục không tự phân công. Nháp có thể chưa phân công; khi ghi đã cấp, mỗi cặp đã chọn cần ít nhất một đơn vị.
+- Có thể sửa câu chữ trên phiếu, bổ sung cặp riêng, bỏ cặp và đổi thứ tự. Không bắt buộc có cặp để tiếp tục quản lý các phiếu cũ. Đổi Cơ/Điện hoặc đổi sang điện tử sẽ hỏi trước khi bỏ các lựa chọn trên form; API kiểm tra loại và hình thức độc lập với UI.
+- Snapshot JSON lưu nội dung và phân công ngay trên phiếu, có trong lịch sử. Sửa/ngừng sử dụng danh mục không làm đổi phiếu cũ; nguồn ngừng sử dụng không được chọn mới. API cập nhật thiếu trường mới giữ nguyên snapshot.
+- Danh sách PCT và Excel không tải thêm snapshot an toàn; chi tiết mới đọc nội dung. Tối đa 100 cặp/phiếu, mối nguy 1.000 ký tự và biện pháp 5.000 ký tự.
+- `data/work-permit-safety-samples.json`: 32 cặp trích từ phần A của ba phiếu Pha hóa chất, Lưới quay rác 2A và Xử lý khiếm khuyết ống lò S2 do người dùng cung cấp. Chỉ gộp cặp trùng nội dung, giữ biến thể và ghi nguồn. Không suy diễn quy định hay bổ sung nội dung kỹ thuật từ bên ngoài. Phần B/C độc lập trong tài liệu không đưa thành danh mục riêng.
+- `prisma/manual/add-work-permit-safety.sql` thêm một bảng danh mục và cột JSON trên WorkPermit. `npm run seed:work-permit-safety` thêm thiếu theo ID cố định và không ghi đè mục đã chỉnh. Với DB ngoài local phải truyền rõ `-- --allow-remote`; chỉ dùng khi đã được cho phép đồng bộ dữ liệu lên môi trường đó.
+
+### Điền mẫu Word
+
+`GET /api/work-permits/[id]/document` chỉ cho phiếu giấy đã cấp, không xuất nháp/hủy. Dùng mẫu Word người dùng cung cấp tại `templates/work-permit-mechanical.docx` và `templates/work-permit-electrical.docx`.
+
+- Cơ–Nhiệt–Hóa: phần A chứa các cặp; B/C lấy biện pháp theo phân công, gộp nội dung trùng nguyên văn trong từng nhóm. Tự thêm dòng vượt số dòng mẫu và giữ các ô đánh dấu/ghi chú trống.
+- Điện: cặp mối nguy–biện pháp vào 2.5; phân công ở phụ lục riêng. Không tự điền các xác nhận đã cắt điện, tiếp đất hoặc đã thực hiện biện pháp từ lựa chọn dự kiến.
+- Điền số phiếu, công việc, vị trí và thông tin nhân sự tương ứng có trong sổ. Các thông tin chưa quản lý (chức vụ, bậc ATĐ…) và chữ ký vẫn để trống, cần hoàn thiện trước khi dùng. Không suy diễn thời gian công tác từ ngày ghi sổ.
+- Kiểm tra tự động: snapshot, phân quyền, phân trang, danh mục tách loại, giấy/điện tử, phân công, cấu trúc Word và phiếu 20 cặp. Chưa có LibreOffice để kiểm tra bố cục in trực quan tại môi trường local này.
+
+### Bổ sung thông tin cấp phiếu giấy
+
+- `registrationNumber`: số ĐKCT, tối đa 200 ký tự, chấp nhận mã đầy đủ hoặc chữ (ví dụ “điện trực tiếp”). Tùy chọn; chuỗi trắng chuẩn hóa thành rỗng. Mẫu Cơ chỉ hiện dòng “Số ĐK: …” khi có giá trị, không lấy số SYC thay thế. Không tự ghép hậu tố/năm vào ĐKCT.
+- `workScope`: phạm vi công tác riêng, tối đa 5.000 ký tự, không suy diễn từ địa điểm.
+- `plannedStartAt` / `plannedEndAt`: ngày giờ dự kiến, tùy chọn, hiển thị và in theo giờ Việt Nam. Nếu có cả hai thì kết thúc không trước bắt đầu. Độc lập với mốc cấp/cho phép/kết thúc thực tế; có thể dự kiến qua ngày hoặc năm mới.
+- `disciplines`: chọn nhiều chuyên môn Thủy/Cơ/Nhiệt/Hóa cho sổ Cơ – Nhiệt – Hóa; mặc định chưa chọn, không tự suy từ tên sổ. Mẫu đánh dấu `[X]` đúng các lựa chọn. Không cho gửi chuyên môn này sang sổ Điện.
+- Form PCT giấy có nhóm thông tin điền mẫu. ĐKCT và chuyên môn dành cho mẫu Cơ; thời gian kế hoạch và phạm vi cũng điền vào các vị trí tương ứng của mẫu Điện.
+- Chi tiết và lịch sử hiển thị các trường mới; tìm kiếm PCT bao gồm ĐKCT/phạm vi trên phiếu đã lưu. API danh sách/Excel giữ danh sách cột hiện có. Client cập nhật thiếu trường mới giữ nguyên dữ liệu cũ, nhưng gửi rỗng/null cho phép xóa thông tin tùy chọn.
+- SQL bổ sung local: `prisma/manual/add-work-permit-paper-fields.sql`. Không áp dụng toàn schema hoặc thao tác server.
+- 90 kiểm tra API/DB và Word cho phần an toàn + thông tin giấy; kiểm tra ĐKCT trống/có chữ, chuyên môn, ngày giờ, giữ dữ liệu khi cập nhật thiếu trường, phân công và phân quyền. XML các file Word thử được kiểm tra cấu trúc; chưa có công cụ render bố cục in.

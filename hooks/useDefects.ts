@@ -95,6 +95,8 @@ export interface DefectListParams {
   mappedUnit?: string;
   requestType?: string;
   position?: string;
+  /** Chỉ ưu tiên thứ tự hiển thị, không lọc bỏ SYC của cương vị khác. */
+  priorityPosition?: string;
   mapping?: string;
   status?: string;
   severity?: string;

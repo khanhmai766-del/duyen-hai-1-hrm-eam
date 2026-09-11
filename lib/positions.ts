@@ -51,6 +51,16 @@ export function announcementPositionsMatch(
   return positionsMatch(left, right);
 }
 
+/** Đưa cương vị ưu tiên lên trước nhưng không loại các cương vị còn lại. */
+export function comparePositionPriority(
+  left?: string | null,
+  right?: string | null,
+  priority?: string | null
+) {
+  if (!priority) return 0;
+  return Number(announcementPositionsMatch(right, priority)) - Number(announcementPositionsMatch(left, priority));
+}
+
 /**
  * Quan hệ xem giữa hai cương vị theo sơ đồ ca trực. Là luật phân cấp gốc dùng cho
  * TOÀN BỘ phiếu khiếm khuyết (đã gắn hay chưa gắn thiết bị) — gọi qua

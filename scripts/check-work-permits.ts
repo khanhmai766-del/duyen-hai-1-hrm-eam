@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import { parsePermit, permitFilters, parsePermitMembers, permitInstant } from "../lib/server/work-permits";
 import { readSessionOpen, validateSessionTime } from "../lib/server/work-permit-sessions";
 import { parsePermitPerson } from "../lib/server/work-permit-people";
-import { formatPermitNumber, type PermitStatus } from "../lib/work-permits";
+import { formatPermitNumber, PERMIT_WORK_TYPE_CODES, type PermitStatus } from "../lib/work-permits";
+import { comparePositionPriority } from "../lib/positions";
 
 const base = {
   workType: "PLANNED", kind: "MECHANICAL", unit: "S1", year: 2026, number: "  pct-001  ", workDate: "2026-09-07",
@@ -23,6 +24,10 @@ valid({ issuedAt: null, commanderName: "", issuerName: "", workerCount: null }, 
 invalid({ workType: "KH" }, "ISSUED");
 valid({ workType: null }, "ISSUED");
 valid({ workType: "UNPLANNED" }, "ISSUED");
+valid({ workType: "INCIDENT" }, "ISSUED");
+assert.equal(PERMIT_WORK_TYPE_CODES.INCIDENT, "SC"); checked++;
+assert.ok(comparePositionPriority("Máy trưởng", "Lò trưởng S1", "Lò trưởng") > 0); checked++;
+assert.equal(comparePositionPriority("Máy trưởng", "Lò trưởng S1", ""), 0); checked++;
 valid({ workType: null, issuedAt: null }, "DRAFT");
 invalid({ workDate: "2026-02-30" }, "ISSUED");
 invalid({ kind: "toString" }, "ISSUED");
@@ -43,7 +48,10 @@ valid({ authorizedAt: "2026-09-07T09:00:00+07:00", closedAt: "2026-09-07T10:00:0
 invalid({ authorizedAt: "2026-09-07T09:00:00+07:00", statusReason: "" }, "PAUSED");
 invalid({ statusReason: "" }, "CANCELLED");
 valid({ statusReason: "Không thực hiện" }, "CANCELLED");
-assert.deepEqual(permitFilters(new Request("http://localhost/api/work-permits?kind=ELECTRICAL&q=Nguyễn&teamType=CONTRACTOR")), { kind: "ELECTRICAL", teamType: "CONTRACTOR", OR: [{ searchText: { contains: "nguyen" } }, { sessions: { some: { searchText: { contains: "nguyen" } } } }] });
+assert.deepEqual(permitFilters(new Request("http://localhost/api/work-permits?kind=ELECTRICAL&q=Nguyễn&teamType=CONTRACTOR")), { kind: "ELECTRICAL", teamType: "CONTRACTOR", status: { notIn: ["CLOSED", "CANCELLED"] }, OR: [{ searchText: { contains: "nguyen" } }, { sessions: { some: { searchText: { contains: "nguyen" } } } }] });
+assert.deepEqual(permitFilters(new Request("http://localhost/api/work-permits?kind=ELECTRICAL&status=CANCELLED")), { kind: "ELECTRICAL", status: "CANCELLED" });
+assert.deepEqual(permitFilters(new Request("http://localhost/api/work-permits?kind=ELECTRICAL&position=Lò%20trưởng")), { kind: "ELECTRICAL", position: "Lò trưởng", status: { notIn: ["CLOSED", "CANCELLED"] } });
+assert.deepEqual(permitFilters(new Request("http://localhost/api/work-permits?kind=ELECTRICAL"), { includeClosedByDefault: true }), { kind: "ELECTRICAL", status: { not: "CANCELLED" } });
 assert.throws(() => permitFilters(new Request("http://localhost/api/work-permits?from=2026-10-01&to=2026-09-01")), e => e instanceof Response && e.status === 400);
 function checkInvalid(fn: () => unknown) {
   checked++;

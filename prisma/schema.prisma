@@ -1525,6 +1525,7 @@ model WorkPermitSession {
   authorizerName String
   endConfirmedByName String @default("")
   endNote String @default("")
+  progress Int?
   searchText String @default("")
   createdById String
   createdByName String
@@ -1537,15 +1538,39 @@ model WorkPermitSession {
   @@index([commanderId, openedAt, endedAt])
 }
 
+/// Danh mục cặp mối nguy – biện pháp; người cấp phân công đơn vị trên từng PCT giấy.
+model WorkPermitSafetyMeasure {
+  id String @id @default(cuid())
+  kind String
+  hazard String @default("")
+  measure String
+  source String @default("")
+  isActive Boolean @default(true)
+  searchText String
+  version Int @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([kind, isActive])
+}
+
 /// Sổ ghi nhận cấp PCT; không thay thế việc cho phép làm việc trên phiếu chính thức.
 model WorkPermit {
+  registrationNumber String @default("")
+  workScope String @default("")
+  plannedStartAt DateTime?
+  plannedEndAt DateTime?
+  disciplines String[] @default([])
+  safetyItems Json @default("[]")
   id String @id @default(cuid())
   format String? // PAPER / ELECTRONIC; null với phiếu cũ chưa ghi riêng.
-  workType String? // PLANNED = KH, UNPLANNED = ĐX; phiếu cũ chưa phân loại để null.
+  workType String? // PLANNED = KH, UNPLANNED = ĐX, INCIDENT = SC; phiếu cũ chưa phân loại để null.
   kind String
   year Int
   number String
+  position String @default("") // Cương vị nghiệp vụ; rỗng = tất cả cương vị.
   status String @default("DRAFT")
+  progress Int?
   unit String
   content String
   location String @default("")
@@ -1576,8 +1601,10 @@ model WorkPermit {
   history WorkPermitHistory[]
   sessions WorkPermitSession[]
 
-  @@unique([kind, year, number])
+  // Chỉ số duy nhất có điều kiện cho kind/year/number nằm trong SQL thủ công;
+  // status CANCELLED được phép trùng để số đã hủy có thể cấp lại.
   @@index([kind, workDate])
+  @@index([kind, position, workDate])
   @@index([status, workDate])
 }
 

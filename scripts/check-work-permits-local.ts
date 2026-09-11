@@ -55,11 +55,11 @@ async function detail(id: string) {
 const epoch = Math.floor((Date.now() - 48 * 3600000) / 60000) * 60000;
 const at = (minutes: number) => new Date(epoch + minutes * 60000).toISOString();
 const workDate = new Date(epoch + 7 * 3600000).toISOString().slice(0, 10);
-const base = { workType: "PLANNED", kind: "MECHANICAL", year: Number(workDate.slice(0, 4)), unit: "S1", content: `${prefix} Bảo dưỡng bơm`, location: "Bơm thử", workDate, issuerName: "Người cấp thử", leaderName: "Người lãnh đạo thử", commanderName: "CHTT dự kiến", teamName: "Nhà thầu thử", commanderPersonId: "", teamType: "CONTRACTOR", members: [], workerCount: 2, authorizerName: "", issuedAt: at(0), authorizedAt: null, closedAt: null, result: "", note: "Fixture kiểm thử local", statusReason: "", repairRequestNumber: "", status: "ISSUED" };
+const base = { workType: "PLANNED", kind: "MECHANICAL", year: Number(workDate.slice(0, 4)), position: "Lò trưởng", unit: "S1", content: `${prefix} Bảo dưỡng bơm`, location: "Bơm thử", workDate, issuerName: "Người cấp thử", leaderName: "Người lãnh đạo thử", commanderName: "CHTT dự kiến", teamName: "Nhà thầu thử", commanderPersonId: "", teamType: "CONTRACTOR", members: [], workerCount: 2, authorizerName: "", issuedAt: at(0), authorizedAt: null, closedAt: null, result: "", note: "Fixture kiểm thử local", statusReason: "", repairRequestNumber: "", status: "ISSUED" };
 async function createPermit(suffix: string, patch: Record<string, unknown> = {}) { const r = await request("/api/work-permits", "POST", { ...base, number: `${prefix}_${suffix}`, ...patch }); expect(r, 200, `Tạo phiếu ${suffix}`); return r.data; }
 async function person(suffix: string, patch: Record<string, unknown> = {}) { const r = await request("/api/work-permits/people", "POST", { code: `${prefix}_${suffix}`, name: `${prefix} ${suffix}`, company: "Nhà thầu thử", canCommand: true, isActive: true, ...patch }); expect(r, 200, `Thêm nhân sự ${suffix}`); return r.data; }
 async function open(permit: any, commander: any, minute: number, patch: Record<string, unknown> = {}) { return request(`/api/work-permits/${permit.id}/sessions`, "POST", { action: "open", version: permit.version, commanderId: commander.id, openedAt: at(minute), authorizerName: "Người cho phép thử", workerCount: 2, members: [], ...patch }); }
-async function end(permitId: string, sessionId: string, minute: number) { const p = await detail(permitId); return request(`/api/work-permits/${permitId}/sessions`, "POST", { action: "end", version: p.version, sessionId, endedAt: at(minute), endConfirmedByName: "Người kết thúc thử", endNote: "Kết thúc dữ liệu thử" }); }
+async function end(permitId: string, sessionId: string, minute: number, progress: number = 35) { const p = await detail(permitId); return request(`/api/work-permits/${permitId}/sessions`, "POST", { action: "end", version: p.version, sessionId, endedAt: at(minute), endConfirmedByName: "Người kết thúc thử", endNote: "Kết thúc dữ liệu thử", progress }); }
 async function update(id: string, patch: Record<string, unknown>, expected: number) { const p = await detail(id); const r = await request(`/api/work-permits/${id}`, "PUT", { ...p, ...patch }); expect(r, expected, "Cập nhật phiếu"); return r; }
 
 async function main() {
@@ -70,14 +70,44 @@ async function main() {
     expect(await request("/api/work-permits", "GET", undefined, viewerCookies), 200, "Viewer tra cứu");
     expect(await request("/api/work-permits", "POST", base, viewerCookies), 403, "Viewer không tạo phiếu");
     expect(await request("/api/work-permits/people", "POST", {}, viewerCookies), 403, "Viewer không sửa danh bạ");
+    const allSyc = await request("/api/defects?section=co&limit=10"); expect(allSyc, 200, "Đọc SYC không ưu tiên cương vị");
+    const preferredSyc = await request("/api/defects?section=co&priorityPosition=L%C3%B2%20tr%C6%B0%E1%BB%9Fng&limit=10"); expect(preferredSyc, 200, "Ưu tiên SYC theo cương vị");
+    assert.equal(preferredSyc.meta.total, allSyc.meta.total); checks++;
     const a = await person("A"), b = await person("B"), member = await person("NV", { canCommand: false }), inactive = await person("OFF", { isActive: false });
     base.commanderPersonId = a.id;
+    expect(await request("/api/work-permits/number-suggestion?kind=INVALID&year=2026"), 400, "Từ chối gợi ý sai loại sổ");
+    expect(await request("/api/work-permits/number-suggestion?kind=MECHANICAL&year=0"), 400, "Từ chối gợi ý sai năm");
+    const beforeNumberSuggestion = await request(`/api/work-permits/number-suggestion?kind=MECHANICAL&year=${base.year}`, "GET", undefined, viewerCookies);
+    expect(beforeNumberSuggestion, 200, "Viewer xem gợi ý số PCT");
+    const numericPermitNumber = (BigInt(beforeNumberSuggestion.data.highest ?? "0") + BigInt(100)).toString();
+    const numericDraft = await request("/api/work-permits", "POST", { ...base, number: numericPermitNumber, status: "DRAFT", issuedAt: null, commanderPersonId: "" });
+    expect(numericDraft, 200, "Tạo số thuần để kiểm tra gợi ý");
+    const afterNumberSuggestion = await request(`/api/work-permits/number-suggestion?kind=MECHANICAL&year=${base.year}`);
+    expect(afterNumberSuggestion, 200, "Lấy số cao nhất sau khi lưu nháp");
+    assert.equal(afterNumberSuggestion.data.highest, numericPermitNumber);
+    assert.equal(afterNumberSuggestion.data.suggested, (BigInt(numericPermitNumber) + BigInt(1)).toString());
+    checks += 2;
+    await update(numericDraft.data.id, { status: "CANCELLED", statusReason: "Hủy để thử cấp lại số" }, 200);
+    const hiddenCancelledNumber = await request(`/api/work-permits?kind=MECHANICAL&q=${numericPermitNumber}`);
+    expect(hiddenCancelledNumber, 200, "Danh sách mặc định ẩn phiếu hủy"); assert.equal(hiddenCancelledNumber.data.length, 0); checks++;
+    const visibleCancelledNumber = await request(`/api/work-permits?kind=MECHANICAL&q=${numericPermitNumber}&status=CANCELLED`);
+    expect(visibleCancelledNumber, 200, "Bộ lọc Đã hủy hiện phiếu hủy"); assert.equal(visibleCancelledNumber.data[0].id, numericDraft.data.id); checks++;
+    const cancelledExport = await fetch(`${origin}/api/work-permits/export?kind=MECHANICAL&q=${numericPermitNumber}&status=CANCELLED`, { headers: { Cookie: cookiesHeader(writerCookies) } });
+    assert.equal(cancelledExport.status, 200); checks++;
+    const cancelledWorkbook = new ExcelJS.Workbook(); await cancelledWorkbook.xlsx.load(await cancelledExport.arrayBuffer());
+    assert.equal(cancelledWorkbook.worksheets[0].rowCount, 3); checks++;
+    const afterCancelSuggestion = await request(`/api/work-permits/number-suggestion?kind=MECHANICAL&year=${base.year}`);
+    expect(afterCancelSuggestion, 200, "Gợi ý bỏ qua số của phiếu hủy");
+    assert.equal(afterCancelSuggestion.data.highest, beforeNumberSuggestion.data.highest);
+    assert.equal(afterCancelSuggestion.data.suggested, beforeNumberSuggestion.data.suggested);
+    checks += 2;
+    expect(await request("/api/work-permits", "POST", { ...base, number: numericPermitNumber, status: "DRAFT", issuedAt: null, commanderPersonId: "" }), 200, "Cấp lại số của phiếu hủy");
     expect(await request("/api/work-permits", "POST", { ...base, number: `${prefix}_NO_CHTT`, commanderPersonId: "" }), 400, "Cấp nhà thầu phải chọn CHTT");
     for (const commanderPersonId of [member.id, inactive.id, "missing-person"]) {
       expect(await request("/api/work-permits", "POST", { ...base, number: `${prefix}_BAD_CHTT`, commanderPersonId }), 400, "Từ chối CHTT không hợp lệ");
     }
     expect(await request("/api/work-permits/people", "POST", { ...a, code: a.code.toLowerCase() }), 409, "Mã người trùng");
-    const co = await createPermit("SAME"), dien = await createPermit("SAME", { kind: "ELECTRICAL", workType: "UNPLANNED" }), internal = await createPermit("INTERNAL", { teamType: "INTERNAL" });
+    const co = await createPermit("SAME"), dien = await createPermit("SAME", { kind: "ELECTRICAL", workType: "UNPLANNED" }), incident = await createPermit("INCIDENT", { workType: "INCIDENT" }), internal = await createPermit("INTERNAL", { teamType: "INTERNAL" });
     assert.equal(co.issuerName, `${prefix} MANAGER`); assert.equal(co.issuerUserId, userIds[0]);
     assert.equal(co.commanderName, a.name); assert.equal(co.commanderPersonId, a.id); checks += 4;
     const draft = await createPermit("DRAFT", { status: "DRAFT", issuedAt: null, commanderPersonId: "", commanderName: "Tên không được chọn" });
@@ -98,8 +128,11 @@ async function main() {
     assert.equal(contractorElectronic.format, "ELECTRONIC"); checks++;
     expect(await request("/api/work-permits", "POST", { ...base, number: `${prefix}_BAD_FORMAT`, format: "INVALID" }), 400, "Từ chối hình thức sai");
     const planned = await request(`/api/work-permits?kind=MECHANICAL&q=${prefix}&workType=PLANNED`); expect(planned, 200, "Lọc phiếu kế hoạch"); assert.ok(planned.data.every((p: any) => p.workType === "PLANNED")); checks++;
+    const positioned = await request(`/api/work-permits?kind=MECHANICAL&q=${prefix}&position=${encodeURIComponent(base.position)}`); expect(positioned, 200, "Lọc PCT theo cương vị"); assert.ok(positioned.data.length > 0 && positioned.data.every((p: any) => p.position === base.position)); checks++;
+    expect(await request("/api/work-permits", "POST", { ...base, number: `${prefix}_BAD_POSITION`, position: "Cương vị không tồn tại" }), 400, "Từ chối cương vị ngoài danh mục");
     const unplanned = await request(`/api/work-permits?kind=ELECTRICAL&q=${prefix}&workType=UNPLANNED`); expect(unplanned, 200, "Lọc phiếu đột xuất"); assert.equal(unplanned.data[0].id, dien.id); checks++;
-    expect(await request("/api/work-permits", "POST", { ...base, number: `${prefix}_MISSING`, workType: null }), 200, "Phiếu đã cấp cho phép để trống KH/ĐX");
+    const incidents = await request(`/api/work-permits?kind=MECHANICAL&q=${prefix}&workType=INCIDENT`); expect(incidents, 200, "Lọc phiếu sự cố"); assert.equal(incidents.data[0].id, incident.id); checks++;
+    expect(await request("/api/work-permits", "POST", { ...base, number: `${prefix}_MISSING`, workType: null }), 200, "Phiếu đã cấp cho phép để trống KH/ĐX/SC");
     expect(await request("/api/work-permits", "POST", { ...base, number: co.number }), 409, "Trùng số cùng sổ");
     expect(await open(internal, a, 60), 400, "Không áp dụng lần làm việc cho nội bộ");
     expect(await request(`/api/work-permits/${co.id}/sessions`, "POST", { action: "open" }, viewerCookies), 403, "Viewer không mở lần làm việc");
@@ -120,8 +153,12 @@ async function main() {
     await update(winner.id, { note: "Không được sửa khi đang mở" }, 409);
     await update(winner.id, { status: "CLOSED", closedAt: at(70), result: "Đã xong" }, 409);
     expect(await end(winner.id, current.id, 59), 400, "Kết thúc trước khi mở");
-    expect(await end(winner.id, current.id, 120), 200, "Kết thúc lần làm việc");
-    assert.equal((await detail(winner.id)).status, "WAITING"); checks++;
+    expect(await end(winner.id, current.id, 120, -1), 400, "Từ chối tiến độ âm");
+    expect(await end(winner.id, current.id, 120, 101), 400, "Từ chối tiến độ trên 100%");
+    expect(await end(winner.id, current.id, 120, 1.5), 400, "Từ chối tiến độ không nguyên");
+    expect(await end(winner.id, current.id, 120, 5), 200, "Kết thúc lần làm việc và ghi tiến độ");
+    const progressed = await detail(winner.id);
+    assert.equal(progressed.status, "WAITING"); assert.equal(progressed.progress, 5); assert.equal(progressed.sessions[0].progress, 5); checks += 3;
     expect(await end(winner.id, current.id, 121), 409, "Kết thúc hai lần bị chặn");
     expect(await open(await detail(loser.id), a, 119), 409, "Trùng khoảng thời gian lịch sử");
     const second = await open(await detail(loser.id), a, 120, { workerCount: 99, members: [{ personId: member.id, name: "Tên gửi giả", code: "GIẢ", company: "GIẢ" }] });
@@ -145,10 +182,14 @@ async function main() {
     assert.equal((await detail(winner.id)).sessions.find((s: any) => s.id === current.id).commanderName, a.name); checks++;
     await update(winner.id, { status: "CLOSED", result: "Hoàn tất", closedAt: at(1499) }, 400);
     await update(winner.id, { status: "CLOSED", result: "Hoàn tất", closedAt: at(1500) }, 200);
+    const hiddenClosed = await request(`/api/work-permits?kind=${winner.kind}&q=${encodeURIComponent(winner.number)}`);
+    expect(hiddenClosed, 200, "Danh sách mặc định ẩn phiếu đã đóng"); assert.ok(hiddenClosed.data.every((p: any) => p.id !== winner.id)); checks++;
+    const visibleClosed = await request(`/api/work-permits?kind=${winner.kind}&q=${encodeURIComponent(winner.number)}&status=CLOSED`);
+    expect(visibleClosed, 200, "Bộ lọc Đã đóng hiện phiếu đã đóng"); assert.equal(visibleClosed.data[0].id, winner.id); checks++;
     await update(winner.id, { note: "Sửa sau khi đóng" }, 409);
     expect(await open(await detail(winner.id), a, 1600), 409, "Không mở lại PCT đã đóng");
     await update(loser.id, { status: "CANCELLED", statusReason: "Kết thúc thử nghiệm" }, 200);
-    expect(await request("/api/work-permits", "POST", { ...base, kind: loser.kind, number: loser.number }), 409, "Phiếu hủy vẫn giữ số");
+    expect(await request("/api/work-permits", "POST", { ...base, kind: loser.kind, number: loser.number }), 200, "Phiếu hủy giải phóng số để cấp lại");
     await update(internal.id, { status: "ACTIVE", authorizedAt: at(60), authorizerName: "Cho phép nội bộ" }, 200);
     await update(internal.id, { status: "PAUSED", statusReason: "Tạm dừng" }, 200);
     await update(internal.id, { status: "ACTIVE" }, 200);
@@ -222,8 +263,11 @@ async function main() {
     assert.equal(pageResponse.status, 200); assert.match(await pageResponse.text(), /Sổ cấp phiếu công tác/); checks += 2;
     const exporter = await fetch(`${origin}/api/work-permits/export?kind=${winner.kind}&q=${prefix}`, { headers: { Cookie: cookiesHeader(writerCookies) } }); assert.equal(exporter.status, 200); checks++;
     const workbook = new ExcelJS.Workbook(); await workbook.xlsx.load(await exporter.arrayBuffer());
-    assert.equal(workbook.worksheets[0].getCell("A3").value, "STT (KH/ĐX)"); assert.equal(workbook.worksheets[0].getCell("A4").value, winner.kind === "MECHANICAL" ? "KH" : "ĐX"); checks += 2;
-    assert.equal(workbook.worksheets.length, 1); assert.equal(workbook.worksheets[0].name, "Sổ cấp PCT"); assert.equal(workbook.worksheets[0].getCell("O3").value, "Loại đơn vị"); assert.ok(!(workbook.worksheets[0].getRow(3).values as unknown[]).includes("Trạng thái")); checks += 4;
+    assert.equal(workbook.worksheets[0].getCell("A3").value, "STT (KH/ĐX/SC)"); assert.equal(workbook.worksheets[0].getCell("A4").value, winner.kind === "MECHANICAL" ? "KH" : "ĐX"); checks += 2;
+    assert.equal(workbook.worksheets.length, 1); assert.equal(workbook.worksheets[0].name, "Sổ cấp PCT"); assert.equal(workbook.worksheets[0].getCell("O3").value, "Loại đơn vị"); assert.ok(!(workbook.worksheets[0].getRow(3).values as unknown[]).includes("Trạng thái")); assert.ok(!(workbook.worksheets[0].getRow(3).values as unknown[]).includes("Tiến độ")); assert.ok(!(workbook.worksheets[0].getRow(3).values as unknown[]).includes("Cương vị")); checks += 6;
+    const incidentExport = await fetch(`${origin}/api/work-permits/export?kind=MECHANICAL&q=${prefix}&workType=INCIDENT`, { headers: { Cookie: cookiesHeader(writerCookies) } }); assert.equal(incidentExport.status, 200); checks++;
+    const incidentWorkbook = new ExcelJS.Workbook(); await incidentWorkbook.xlsx.load(await incidentExport.arrayBuffer());
+    assert.equal(incidentWorkbook.worksheets[0].getCell("A3").value, "STT (KH/ĐX/SC)"); assert.equal(incidentWorkbook.worksheets[0].getCell("A4").value, "SC"); checks += 2;
     console.log(`Đạt ${checks} kiểm tra API/DB: phân quyền, vòng đời, đồng thời, thời gian, lịch sử, danh sách nhân viên và Excel.`);
   } finally {
     const own = await db.workPermit.findMany({ where: { createdById: { in: userIds } }, select: { id: true } });

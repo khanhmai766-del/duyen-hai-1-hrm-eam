@@ -3,15 +3,26 @@ import { useMutation, useQuery, useQueryClient, useInfiniteQuery } from "@tansta
 import { apiDownload, apiGet, apiMutate } from "@/lib/fetcher";
 import type { PermitHistory, PermitListRow, PermitDetailRow, PermitPerson, PermitRow, PermitStatus, PermitSession } from "@/lib/work-permits";
 export interface PermitMeta { total: number; page: number; pageSize: number; counts: Partial<Record<PermitStatus, number>>; canWrite: boolean }
-export function useWorkPermits(filters: string) {
-  return useQuery({ queryKey: ["work-permits", filters], queryFn: () => apiGet<PermitListRow[]>(`/api/work-permits?${filters}`) as Promise<{ data: PermitListRow[]; meta: PermitMeta }> });
+export interface PermitNumberSuggestion { highest: string | null; suggested: string | null }
+export function useWorkPermits(filters: string, enabled = true) {
+  return useQuery({ queryKey: ["work-permits", filters], enabled, queryFn: () => apiGet<PermitListRow[]>(`/api/work-permits?${filters}`) as Promise<{ data: PermitListRow[]; meta: PermitMeta }> });
 }
 export function useWorkPermit(id?: string) {
   return useQuery({ queryKey: ["work-permit", id], queryFn: () => apiGet<PermitDetailRow>(`/api/work-permits/${id}`), enabled: Boolean(id) });
 }
 export function useSaveWorkPermit() {
   const qc = useQueryClient();
-  return useMutation({ mutationFn: ({ id, body }: { id?: string; body: unknown }) => apiMutate<PermitRow>(`/api/work-permits${id ? `/${id}` : ""}`, id ? "PUT" : "POST", body), onSuccess: () => { qc.invalidateQueries({ queryKey: ["work-permits"] }); qc.invalidateQueries({ queryKey: ["work-permit"] }); qc.invalidateQueries({ queryKey: ["work-permit-people"] }); } });
+  return useMutation({ mutationFn: ({ id, body }: { id?: string; body: unknown }) => apiMutate<PermitRow>(`/api/work-permits${id ? `/${id}` : ""}`, id ? "PUT" : "POST", body), onSuccess: () => { qc.invalidateQueries({ queryKey: ["work-permits"] }); qc.invalidateQueries({ queryKey: ["work-permit"] }); qc.invalidateQueries({ queryKey: ["work-permit-people"] }); qc.invalidateQueries({ queryKey: ["work-permit-number-suggestion"] }); } });
+}
+export function usePermitNumberSuggestion(kind: string, year: number, enabled = true) {
+  const validYear = Number.isInteger(year) && year >= 2000 && year <= 2100;
+  const query = new URLSearchParams({ kind, year: String(year) });
+  return useQuery({
+    queryKey: ["work-permit-number-suggestion", kind, year],
+    enabled: enabled && Boolean(kind) && validYear,
+    staleTime: 0,
+    queryFn: () => apiGet<PermitNumberSuggestion>(`/api/work-permits/number-suggestion?${query}`),
+  });
 }
 export function useExportWorkPermits() {
   return useMutation({ mutationFn: (filters: string) => apiDownload(`/api/work-permits/export?${filters}`) });

@@ -19,6 +19,7 @@ import { normalizeText } from "@/lib/nav";
 import {
   announcementPositionLabel,
   announcementPositionsMatch,
+  comparePositionPriority,
 } from "@/lib/positions";
 import {
   canViewPosition,
@@ -297,6 +298,8 @@ export async function GET(req: NextRequest) {
         }
       : null;
     const position = params.get("position")?.trim();
+    const priorityPosition = params.get("priorityPosition")?.trim();
+    if (priorityPosition && priorityPosition.length > 200) return fail("Cương vị ưu tiên không hợp lệ");
     const mapping = params.get("mapping")?.trim();
     const status = params.get("status")?.trim();
     const severity = params.get("severity")?.trim();
@@ -507,6 +510,10 @@ export async function GET(req: NextRequest) {
         return candidateSearchText(item).includes(query);
       })
       .sort((a, b) => {
+        if (priorityPosition) {
+          const priorityDifference = comparePositionPriority(a.system, b.system, priorityPosition);
+          if (priorityDifference !== 0) return priorityDifference;
+        }
         if (upgradeCandidate) {
           const reminderDifference = b.reminderCount - a.reminderCount;
           if (reminderDifference !== 0) return reminderDifference;

@@ -59,13 +59,15 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       const endedAt = permitInstant(body, "endedAt");
       const endConfirmedByName = permitText(body, "endConfirmedByName");
       const endNote = permitText(body, "endNote", 2000);
+      const progress = Number(body.progress);
       if (!sessionId || !endedAt || !endConfirmedByName) throw fail("Vui lòng nhập lần làm việc, thời điểm kết thúc và người xác nhận kết thúc");
+      if (body.progress === "" || body.progress === null || body.progress === undefined || !Number.isInteger(progress) || progress < 0 || progress > 100) throw fail("Tiến độ phải là số nguyên từ 0 đến 100%");
       const session = await tx.workPermitSession.findFirst({ where: { id: sessionId, permitId: permit.id } });
       if (!session || session.endedAt || permit.status !== "ACTIVE") throw fail("Lần làm việc không còn mở. Vui lòng tải lại phiếu.", 409);
       if (session.commanderId) await tx.$queryRaw`SELECT "id" FROM "WorkPermitPerson" WHERE "id" = ${session.commanderId} FOR UPDATE`;
       validateSessionTime(endedAt, session.openedAt);
-      const afterSession = await tx.workPermitSession.update({ where: { id: session.id }, data: { endedAt, endConfirmedByName, endNote, endedById: user.id, endedByName: user.name ?? "" } });
-      const after = await tx.workPermit.update({ where: { id: permit.id }, data: { status: "WAITING", version: { increment: 1 } } });
+      const afterSession = await tx.workPermitSession.update({ where: { id: session.id }, data: { endedAt, endConfirmedByName, endNote, progress, endedById: user.id, endedByName: user.name ?? "" } });
+      const after = await tx.workPermit.update({ where: { id: permit.id }, data: { status: "WAITING", progress, version: { increment: 1 } } });
       await tx.workPermitHistory.create({ data: { permitId: permit.id, actorId: user.id, actorName: user.name ?? "", action: `Kết thúc lần làm việc · CHTT ${session.commanderName} (${session.commanderCode})`, before: permitSnapshot({ ...permit, session }), after: permitSnapshot({ ...after, session: afterSession }) } });
       return afterSession;
     });

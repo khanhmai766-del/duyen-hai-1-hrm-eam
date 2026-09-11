@@ -32,6 +32,7 @@ CREATE TABLE "WorkPermitSession" (
     "authorizerName" TEXT NOT NULL,
     "endConfirmedByName" TEXT NOT NULL DEFAULT '',
     "endNote" TEXT NOT NULL DEFAULT '',
+    "progress" INTEGER,
     "searchText" TEXT NOT NULL DEFAULT '',
     "createdById" TEXT NOT NULL,
     "createdByName" TEXT NOT NULL,
@@ -50,7 +51,9 @@ CREATE TABLE "WorkPermit" (
     "kind" TEXT NOT NULL,
     "year" INTEGER NOT NULL,
     "number" TEXT NOT NULL,
+    "position" TEXT NOT NULL DEFAULT '',
     "status" TEXT NOT NULL DEFAULT 'DRAFT',
+    "progress" INTEGER,
     "unit" TEXT NOT NULL,
     "content" TEXT NOT NULL,
     "location" TEXT NOT NULL DEFAULT '',
@@ -106,11 +109,14 @@ CREATE INDEX "WorkPermitSession_commanderId_openedAt_endedAt_idx" ON "WorkPermit
 -- CreateIndex
 CREATE INDEX "WorkPermit_kind_workDate_idx" ON "WorkPermit"("kind", "workDate");
 
+CREATE INDEX "WorkPermit_kind_position_workDate_idx" ON "WorkPermit"("kind", "position", "workDate");
+
 -- CreateIndex
 CREATE INDEX "WorkPermit_status_workDate_idx" ON "WorkPermit"("status", "workDate");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "WorkPermit_kind_year_number_key" ON "WorkPermit"("kind", "year", "number");
+CREATE UNIQUE INDEX "WorkPermit_kind_year_number_key"
+  ON "WorkPermit"("kind", "year", "number") WHERE "status" <> 'CANCELLED';
 
 -- CreateIndex
 CREATE INDEX "WorkPermitHistory_permitId_createdAt_idx" ON "WorkPermitHistory"("permitId", "createdAt");
@@ -133,5 +139,9 @@ CREATE UNIQUE INDEX "WorkPermitSession_one_open_commander"
   ON "WorkPermitSession" ("commanderId") WHERE "endedAt" IS NULL;
 ALTER TABLE "WorkPermitSession" ADD CONSTRAINT "WorkPermitSession_time_order"
   CHECK ("endedAt" IS NULL OR "endedAt" >= "openedAt");
+ALTER TABLE "WorkPermitSession" ADD CONSTRAINT "WorkPermitSession_progress_range"
+  CHECK ("progress" IS NULL OR ("progress" >= 0 AND "progress" <= 100));
+ALTER TABLE "WorkPermit" ADD CONSTRAINT "WorkPermit_progress_range"
+  CHECK ("progress" IS NULL OR ("progress" >= 0 AND "progress" <= 100));
 
 COMMIT;
