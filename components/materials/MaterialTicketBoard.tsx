@@ -1984,12 +1984,20 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
 	            // hồi (bước Sử dụng), cái kia là kho chưa ký trả lại TỜ BIÊN BẢN (bước Trả phiếu).
 	            const recoveryPending = s.key === "SU_DUNG_VAT_TU" && !!t.usedAt && materialTicketRequiresRecovery(t) && !t.recoveryReturnedAt;
 	            const docSignaturePending = s.key === RECOVERY_HANDOVER_STATUS && materialTicketAwaitsRecoveryDocSignature(t);
-	            const reviewable = done || (t.type === "UNG" && s.key === "CHO_HOAN_THIEN" && !!t.bbktNumber);
+	            /* Ô "Thống Kê xác nhận ĐXVT" gom HAI PHA: pha 1 chọn mã vật tư + nhập số phiếu,
+	               pha 2 xác nhận VHV nhận phiếu. Số phiếu do kho cấp, gõ nhầm là chuyện thường,
+	               nên pha 2 vẫn phải mở được hộp Xem lại để sửa — ô lúc này còn là bước HIỆN TẠI
+	               (chưa `done`) nên luật cũ khoá cứng, không còn đường sửa ngoài việc chờ hết phiếu. */
+	            const proposalNumberEditable = s.key === "CHO_PHIEU__XUAT_KHO" && cur
+	              && t.status === "CHO_XAC_NHAN_PHAT" && !!t.proposalNumber;
+	            const reviewable = done || proposalNumberEditable || (t.type === "UNG" && s.key === "CHO_HOAN_THIEN" && !!t.bbktNumber);
 	            const waitingForRepairRequest = t.type === "DE_XUAT" && t.status === "CHO_PHIEU_YCSC" && cur;
 	            const caption = waitingForRepairRequest
 	              ? "Cần tạo hoặc gắn SYC để tiếp tục"
 	              : t.type === "DE_XUAT" && t.status === "CHO_THONG_KE_XUAT_BIEN_BAN" && s.key === "CHO_NGHIEM_THU"
 	              ? "Thống kê · Chờ xuất BBNT D-Office"
+	              : proposalNumberEditable
+	              ? "Sửa số phiếu ĐXVT"
 	              : s.key === "CHO_PHIEU__XUAT_KHO" && t.proposalReceiverName
 	              ? "Xem lại"
 	              : `${s.who}${reviewable ? " · Xem lại" : ""}`;
@@ -2361,7 +2369,13 @@ function StepReviewDialog({ t, viewer, stepKey, onClose }: { t: MaterialTicket; 
               <input type="date" value={proposalDateReview} disabled={!canEdit} onChange={(e) => setProposalDateReview(e.target.value)} />
             </label>
           </div>
-          {t.type !== "UNG" && <label>Tên VHV nhận phiếu ĐXVT<input value={proposalReceiverNameReview} disabled={!canEdit} onChange={(e) => setProposalReceiverNameReview(e.target.value)} /></label>}
+          {/* Phiếu đang CHỜ chính bước xác nhận VHV nhận phiếu thì không mở ô tên ở đây:
+              gõ vào đó chỉ ghi tên vào phiếu mà không chuyển bước, phiếu sẽ mang tên người
+              nhận trong khi bước vẫn còn treo. Lúc đó hộp này chỉ để sửa lại số/ngày phiếu. */}
+          {t.type !== "UNG" && t.status !== "CHO_XAC_NHAN_PHAT" && <label>Tên VHV nhận phiếu ĐXVT<input value={proposalReceiverNameReview} disabled={!canEdit} onChange={(e) => setProposalReceiverNameReview(e.target.value)} /></label>}
+          {t.status === "CHO_XAC_NHAN_PHAT" && (
+            <p className="note"><FileText size={14} /><span>Sửa lại số/ngày phiếu ĐXVT nếu nhập sai. Tên VHV nhận phiếu được nhập ở chính bước xác nhận.</span></p>
+          )}
         </>}
         {editStep === "receive" && isChemicalStats && (
           /*
@@ -2556,7 +2570,7 @@ function StepReviewDialog({ t, viewer, stepKey, onClose }: { t: MaterialTicket; 
             </span>
           )}
           <button className="btn ghost" onClick={onClose}>Đóng</button>
-          {canEdit && <button className="btn primary" disabled={act.isPending || missingUsagePhotos || (editStep === "confirm" && !reason.trim()) || (editStep === "accept" && (!pctNumber.trim() || !chiHuyName.trim() || !completionNote.trim() || !workStartedAt || !workEndedAt)) || (editStep === "statsExport" && (!sccnRepresentativeReview || !sccnPositionReview)) || (editStep === "settle" && !bbntDoNumberReview.trim()) || (editStep === "recoveryDoc" && !docSentDateReview)} onClick={save}>{act.isPending ? <Loader2 className="spin" size={14} /> : <Pencil size={14} />} Lưu chỉnh sửa</button>}
+          {canEdit && <button className="btn primary" disabled={act.isPending || missingUsagePhotos || (editStep === "confirm" && !reason.trim()) || (editStep === "stats" && !isChemicalStats && !proposalNumber.trim()) || (editStep === "accept" && (!pctNumber.trim() || !chiHuyName.trim() || !completionNote.trim() || !workStartedAt || !workEndedAt)) || (editStep === "statsExport" && (!sccnRepresentativeReview || !sccnPositionReview)) || (editStep === "settle" && !bbntDoNumberReview.trim()) || (editStep === "recoveryDoc" && !docSentDateReview)} onClick={save}>{act.isPending ? <Loader2 className="spin" size={14} /> : <Pencil size={14} />} Lưu chỉnh sửa</button>}
         </div>
       </div>
     </div>
