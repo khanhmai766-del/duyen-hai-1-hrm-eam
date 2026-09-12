@@ -124,10 +124,11 @@ import { POSITION_CATALOG, positionLabelOf } from "@/lib/position-catalog";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 
 const ALL = "__all__";
-/* Số cột của SỔ CHÍNH: nút "+" · Tên · Cương vị · Danh mục · Tổ máy · Mã hiệu · KKS ·
-   Chu kỳ · KĐ gần nhất · KĐ tiếp theo · Tình trạng. Bảng dụng cụ bỏ BA cột (Danh mục,
-   Tổ máy, KKS) và thay bằng bộ cột của biểu mẫu nó — xem `colCount` trong TbycnnPage. */
-const MAIN_COL_COUNT = 11;
+/* Số cột của SỔ CHÍNH: nút "+" · Tên · Cương vị · Danh mục · Tổ máy · Mã hiệu · Chu kỳ ·
+   KĐ gần nhất · KĐ tiếp theo · Tình trạng. Bảng dụng cụ bỏ HAI cột (Danh mục, Tổ máy) và
+   thay bằng bộ cột của biểu mẫu nó — xem `colCount` trong TbycnnPage.
+   KKS đã rời bảng từ 2026-09-12, nay chỉ hiện trong khối chi tiết của nút "+". */
+const MAIN_COL_COUNT = 10;
 /** Khoá tab của sổ chính. Ba tab còn lại lấy khoá từ TBYCNN_TOOL_TABS. */
 const MAIN_TAB = "MAIN";
 
@@ -407,8 +408,8 @@ export default function TbycnnPage() {
     };
   }, [activeTool, toolTableColumns]);
 
-  /** Số cột thân bảng: bảng dụng cụ bỏ Danh mục + KKS, thêm bộ cột của biểu mẫu nó. */
-  const colCount = activeTool ? MAIN_COL_COUNT - 3 + toolTableColumns.length : MAIN_COL_COUNT;
+  /** Số cột thân bảng: bảng dụng cụ bỏ Danh mục + Tổ máy, thêm bộ cột của biểu mẫu nó. */
+  const colCount = activeTool ? MAIN_COL_COUNT - 2 + toolTableColumns.length : MAIN_COL_COUNT;
   const canManage = Boolean(data?.canManage);
   const period = data?.period;
   const itemCreationEnabled = Boolean(period?.allowItemCreation) && !period?.isClosed && canManage;
@@ -1430,11 +1431,7 @@ export default function TbycnnPage() {
                       />
                     </TableHead>
                   ))
-                ) : (
-                  <TableHead className={cn(TH_NAVY, "w-[140px]")}>
-                    <SortHeader label="KKS" sortKey="kks" sort={sort} onSort={toggleSort} align="left" wrap={Boolean(activeTool)} />
-                  </TableHead>
-                )}
+                ) : null}
                 <TableHead
                   className={cn(TH_NAVY, !activeTool && "w-[85px]")}
                   style={toolWidths ? { width: toolWidths.shared.chuKyThu } : undefined}
@@ -1621,20 +1618,7 @@ export default function TbycnnPage() {
                             </TableCell>
                           );
                         })
-                      ) : (
-                        <TableCell className={cn(TD_TALL, "font-mono text-[11px]", dirty("kks"))}>
-                          {editable ? (
-                            <EditableCell
-                              value={row.kks}
-                              wrap
-                              align="left"
-                              onSave={(v) => setDraftValue(saved, "kks", v.trim() || null)}
-                            />
-                          ) : (
-                            row.kks ?? "—"
-                          )}
-                        </TableCell>
-                      )}
+                      ) : null}
                       <TableCell className={cn(TD_TALL, "text-center", dirty("chuKyThu"))}>
                         {editable ? (
                           <EditableCell
@@ -1759,6 +1743,21 @@ export default function TbycnnPage() {
                                 row.soLuongKhaDung ?? "—"
                               )}
                             </DetailField>
+                            {/* KKS chuyển từ cột ngoài bảng vào đây (2026-09-12): mã dài, phần
+                                lớn dòng là "Không có KKS", nên ngoài bảng nó ăn 140px mà gần
+                                như không nói gì. Đặt SAU "Khả dụng" chứ không sớm hơn: chen
+                                vào trước là "Số lượng" hết đứng đúng trên "Khả dụng". */}
+                            <DetailField label="KKS">
+                              {editable ? (
+                                <EditableCell
+                                  value={row.kks}
+                                  wrap
+                                  onSave={(v) => setDraftValue(saved, "kks", v.trim() || null)}
+                                />
+                              ) : (
+                                <span className="font-mono text-[11px]">{row.kks ?? "—"}</span>
+                              )}
+                            </DetailField>
                             {/* Số BBKĐ và Chữ ký đi cùng hàng: cùng là dấu vết xác nhận của
                                 lượt kiểm định — số biên bản do đơn vị kiểm định cấp, chữ ký do
                                 cương vị phụ trách đóng sau khi đi kiểm tra. */}
@@ -1773,7 +1772,11 @@ export default function TbycnnPage() {
                                 row.soBbkd ?? "—"
                               )}
                             </DetailField>
-                            <DetailField label="Chữ ký" span={2}>
+                            {/* span 1 (trước là 2): hàng này nay có ba ô — KKS, Số BBKĐ, Chữ ký.
+                                Để span 2 thì ô chữ ký không đủ chỗ ở cột cuối và bị đẩy xuống
+                                hàng riêng, chừa một lỗ trống giữa khối. Chữ ký xếp DỌC (ảnh,
+                                tên, ngày ký) nên một cột vẫn đủ rộng. */}
+                            <DetailField label="Chữ ký">
                               <SignatureStamp signature={saved.signature} />
                             </DetailField>
                             {/* Ở bảng dụng cụ, "Nghiệm thu sau khi sửa chữa" đứng NGAY CẠNH
