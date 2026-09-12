@@ -22,6 +22,7 @@ import {
   Zap,
 } from "lucide-react";
 import { toast } from "sonner";
+import { ImageLightbox } from "@/components/shared/image-lightbox";
 import { PageHeader } from "@/components/shared/page-header";
 /*
   Khuôn bảng dùng chung của PCCC / TBYCNN (thanh công cụ số dòng + tìm kiếm, đầu bảng
@@ -220,6 +221,11 @@ function PointCell({ item, type }: { item: GroundingItem; type: GroundingType })
       <StatusPill status={point.status} />
     </span>
   );
+}
+
+/** Gom URL ảnh của MỌI hạng mục thuộc một khu vực, theo đúng thứ tự Tiếp địa → Chống sét. */
+function itemPhotoUrls(item: GroundingItem) {
+  return item.points.flatMap((point) => point.attachments.map((a) => a.url));
 }
 
 function countPhotos(item: GroundingItem) {
@@ -971,6 +977,9 @@ export default function GroundingLightningPage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(PCCC_PAGE_SIZES[0]);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  // Ảnh đang xem trong hộp phóng to — { urls, index } chứ không chỉ index, vì mỗi khu
+  // vực có một danh sách ảnh riêng.
+  const [lightbox, setLightbox] = useState<{ urls: string[]; index: number } | null>(null);
   /*
     CHẾ ĐỘ SỬA BẢNG — cùng khuôn với sổ TBYCNN và trang PCCC.
 
@@ -1131,6 +1140,7 @@ export default function GroundingLightningPage() {
       <div className="pointer-events-none absolute -right-10 -top-12 -z-10 size-72 rounded-full bg-cyan-200/20 blur-3xl" />
       <PageHeader
         title="TIẾP ĐỊA & CHỐNG SÉT"
+        description="Kiểm tra định kỳ V2, thứ 7 hằng tuần"
         mobileTitle="TIẾP ĐỊA & CHỐNG SÉT"
       >
         <>
@@ -1459,10 +1469,17 @@ export default function GroundingLightningPage() {
                           vực nào đã có ảnh hiện trường. */}
                       <TableCell className={cn(TD_ROW, "text-center")}>
                         {photoCount > 0 ? (
-                          <span className="inline-flex items-center gap-1 font-semibold text-cyan-700">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setLightbox({ urls: itemPhotoUrls(item), index: 0 })
+                            }
+                            className="inline-flex items-center gap-1 font-semibold text-cyan-700 underline-offset-2 hover:underline"
+                            title="Xem ảnh đã lưu"
+                          >
                             <Camera className="size-3.5" />
                             {photoCount}
-                          </span>
+                          </button>
                         ) : (
                           <span className="text-slate-300">—</span>
                         )}
@@ -1649,6 +1666,15 @@ export default function GroundingLightningPage() {
       {history && (
         <HistoryDialog item={history} onClose={() => setHistory(null)} />
       )}
+      <ImageLightbox
+        images={lightbox?.urls ?? []}
+        index={lightbox?.index ?? null}
+        onIndexChange={(index) =>
+          setLightbox((old) => (old ? { ...old, index } : old))
+        }
+        onClose={() => setLightbox(null)}
+        alt="Ảnh khiếm khuyết"
+      />
     </div>
   );
 }
