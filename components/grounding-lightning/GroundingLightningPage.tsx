@@ -49,6 +49,14 @@ import {
 } from "@/components/pccc/pccc-table-card";
 import { Button } from "@/components/ui/button";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -77,7 +85,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { cn } from "@/lib/utils";
+import { cn, initials } from "@/lib/utils";
 import { POSITION_CATALOG } from "@/lib/position-catalog";
 import {
   GROUNDING_STATUS_LABEL,
@@ -103,8 +111,11 @@ import {
 
 const CONTROL =
   "h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-ink outline-none transition focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100 dark:border-slate-700 dark:bg-slate-900";
-/** Số cột của bảng — dùng cho `colSpan` của dòng rỗng và dòng chi tiết. */
-const TABLE_COLUMNS = 9;
+/*
+  Số cột của bảng. Cột “Thao tác” chỉ hiện ở chế độ Sửa bảng (xem `tableEditing`) nên
+  `colSpan` của dòng rỗng và dòng chi tiết phải đếm theo, không thể là một hằng số.
+*/
+const BASE_TABLE_COLUMNS = 8;
 /*
   Khoá sắp xếp “giữ nguyên thứ tự máy chủ trả về” (cương vị → khu vực). Bảng này là sổ
   hiện trường: người đi kiểm tra đi theo đúng thứ tự đó, nên nó phải là mặc định và
@@ -166,6 +177,28 @@ function StatusPill({ status }: { status: GroundingStatus }) {
   );
 }
 
+/**
+ * Ảnh đại diện người xác nhận. Không có ảnh thì hiện chữ cái đầu trên nền xanh — cùng lối
+ * với cột "Người cập nhật" của Lịch sử sửa chữa, để hai bảng nhận ra nhau.
+ */
+function InspectorAvatar({
+  name,
+  avatarUrl,
+}: {
+  name: string;
+  avatarUrl?: string | null;
+}) {
+  return (
+    <span className="flex size-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-navy text-[10px] font-bold text-white ring-1 ring-border">
+      {avatarUrl ? (
+        <img src={avatarUrl} alt={name} className="h-full w-full object-cover" />
+      ) : (
+        initials(name)
+      )}
+    </span>
+  );
+}
+
 /** Chip tổ máy — cùng lối trình bày với cột "Tổ máy" của sổ TBYCNN. */
 function MachineChip({ machine }: { machine: string }) {
   return (
@@ -204,9 +237,7 @@ type RowActionContext = {
   canManage: boolean;
   canCatalog: boolean;
   canDelete: boolean;
-  signPending: boolean;
   onInspect: (item: GroundingItem) => void;
-  onSign: (item: GroundingItem) => void;
   onHistory: (item: GroundingItem) => void;
   onEdit: (item: GroundingItem) => void;
   onRemove: (item: GroundingItem) => void;
@@ -229,17 +260,8 @@ function RowActions({ item, ctx }: { item: GroundingItem; ctx: RowActionContext 
           Kiểm tra
         </Button>
       )}
-      {ctx.canManage && (
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={() => ctx.onSign(item)}
-          disabled={ctx.signPending}
-        >
-          <Save />
-          Xác nhận
-        </Button>
-      )}
+      {/* KHÔNG còn nút "Xác nhận" trên từng dòng: việc đó nay do nút Lưu trên thanh
+          tiêu đề làm một lượt cho mọi dòng vừa sửa trong lượt Sửa bảng này. */}
       <Button
         size="icon"
         variant="ghost"
@@ -559,15 +581,26 @@ function Field({
 
 function InspectionDialog({
   item,
+  onSaved,
   onClose,
 }: {
   item: GroundingItem | null;
+  /** Báo lên trang là khu vực này vừa ghi kết quả — nút Lưu sẽ xác nhận đúng các dòng đó. */
+  onSaved?: (id: string) => void;
   onClose: () => void;
 }) {
   const update = useUpdateGroundingItem();
   const upload = useUploadGroundingImage();
   const removeImage = useDeleteGroundingImage();
   const [note, setNote] = useState(item?.note ?? "");
+  /*
+    Ảnh vừa xoá trong lượt mở hộp thoại này.
+
+    `item` là ẢNH CHỤP lấy lúc bấm "Kiểm tra", không tự tươi lại khi danh sách được nạp
+    lại — nên xoá ảnh xong thì ảnh cũ vẫn còn nằm đó và ô "còn chỗ cho ảnh" vẫn báo hết
+    chỗ, đúng cảnh người dùng gặp khi tải nhầm ảnh rồi muốn tải lại ngay.
+  */
+  const [removedImageIds, setRemovedImageIds] = useState<string[]>([]);
   const [results, setResults] = useState(
     () =>
       Object.fromEntries(
@@ -604,6 +637,7 @@ function InspectionDialog({
             file,
           });
       toast.success("Đã lưu kết quả kiểm tra");
+      onSaved?.(item.id);
       onClose();
     } catch (error) {
       toast.error(
@@ -624,6 +658,11 @@ function InspectionDialog({
         <div className="space-y-4">
           {item.points.map((point) => {
             const value = results[point.type];
+            const attachments = point.attachments.filter(
+              (image) => !removedImageIds.includes(image.id),
+            );
+            // Còn chỗ cho ảnh không? Ảnh đã lưu và ảnh đang chờ tải cùng tranh MỘT chỗ.
+            const imageSlotFree = attachments.length + value.files.length === 0;
             return (
               <section
                 key={point.id}
@@ -697,30 +736,41 @@ function InspectionDialog({
                 </div>
                 {value.status === "DEFECT" && (
                   <div className="mt-3">
-                    <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-dashed border-cyan-400 bg-white px-3 py-2 text-sm font-semibold text-cyan-800">
-                      <ImagePlus className="size-4" />
-                      Thêm hình ảnh
-                      <input
-                        type="file"
-                        accept="image/jpeg,image/png,image/webp,image/gif"
-                        multiple
-                        className="hidden"
-                        onChange={(e) =>
-                          setResults({
-                            ...results,
-                            [point.type]: {
-                              ...value,
-                              files: [
-                                ...value.files,
-                                ...Array.from(e.target.files ?? []),
-                              ],
-                            },
-                          })
-                        }
-                      />
-                    </label>
+                    {/*
+                      MỘT ảnh cho mỗi hạng mục. Hết chỗ thì giấu hẳn nút chọn thay vì để
+                      nó xám: nút xám không nói được vì sao bấm không ăn, còn dòng chữ
+                      dưới đây chỉ thẳng việc phải làm là gỡ ảnh cũ đi.
+                      Đếm CẢ ảnh đã lưu lẫn ảnh đang chờ tải — ảnh chờ cũng sẽ chiếm chỗ đó
+                      ngay khi bấm Lưu, cho chọn thêm chỉ để máy chủ chặn là mất công.
+                    */}
+                    {imageSlotFree ? (
+                      <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-dashed border-cyan-400 bg-white px-3 py-2 text-sm font-semibold text-cyan-800">
+                        <ImagePlus className="size-4" />
+                        Thêm hình ảnh
+                        <input
+                          type="file"
+                          accept="image/jpeg,image/png,image/webp,image/gif"
+                          className="hidden"
+                          onChange={(e) => {
+                            const picked = e.target.files?.[0];
+                            // Dọn ô chọn tệp: không dọn thì gỡ ảnh ra rồi chọn LẠI ĐÚNG
+                            // tệp đó sẽ không kích hoạt onChange, trông như nút hỏng.
+                            e.target.value = "";
+                            if (!picked) return;
+                            setResults({
+                              ...results,
+                              [point.type]: { ...value, files: [picked] },
+                            });
+                          }}
+                        />
+                      </label>
+                    ) : (
+                      <p className="text-xs text-slate-500">
+                        Mỗi hạng mục chỉ lưu <b>1 hình ảnh</b>. Gỡ ảnh hiện có nếu muốn thay ảnh khác.
+                      </p>
+                    )}
                     <div className="mt-2 flex flex-wrap gap-2">
-                      {point.attachments.map((image) => (
+                      {attachments.map((image) => (
                         <div key={image.id} className="group relative">
                           <a href={image.url} target="_blank" rel="noreferrer">
                             <img
@@ -737,7 +787,8 @@ function InspectionDialog({
                                 return;
                               try {
                                 await removeImage.mutateAsync(image.id);
-                                toast.success("Đã xoá ảnh");
+                                setRemovedImageIds((old) => [...old, image.id]);
+                                toast.success("Đã xoá ảnh — có thể tải ảnh khác");
                               } catch (error) {
                                 toast.error(
                                   error instanceof Error
@@ -752,19 +803,39 @@ function InspectionDialog({
                           </button>
                         </div>
                       ))}
+                      {/* Ảnh CHƯA tải lên: gỡ ngay tại chỗ, không phải huỷ cả hộp thoại
+                          rồi mở lại — chọn nhầm tệp là chuyện thường. */}
                       {value.files.map((file, index) => (
                         <span
                           key={`${file.name}-${index}`}
-                          className="inline-flex h-20 max-w-40 items-center gap-2 rounded-xl border bg-white px-3 text-xs"
+                          className="relative inline-flex h-20 max-w-40 items-center gap-2 rounded-xl border bg-white px-3 text-xs"
                         >
-                          <Camera className="size-4 text-cyan-700" />
-                          <span className="truncate">{file.name}</span>
+                          <Camera className="size-4 shrink-0 text-cyan-700" />
+                          <span className="truncate" title={file.name}>
+                            {file.name}
+                          </span>
+                          <button
+                            type="button"
+                            title="Gỡ ảnh chưa tải lên"
+                            onClick={() =>
+                              setResults({
+                                ...results,
+                                [point.type]: {
+                                  ...value,
+                                  files: value.files.filter((_, i) => i !== index),
+                                },
+                              })
+                            }
+                            className="absolute -right-1 -top-1 grid size-6 place-items-center rounded-full bg-slate-600 text-white shadow"
+                          >
+                            <X className="size-3.5" />
+                          </button>
                         </span>
                       ))}
                     </div>
                     <p className="mt-2 text-xs text-rose-700">
-                      Chuyển hạng mục sang “Bình thường” sẽ xóa toàn bộ ảnh của
-                      hạng mục này khỏi S3 khi lưu.
+                      Chuyển hạng mục sang “Bình thường” sẽ xóa ảnh của hạng mục
+                      này khỏi S3 khi lưu.
                     </p>
                   </div>
                 )}
@@ -900,6 +971,20 @@ export default function GroundingLightningPage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(PCCC_PAGE_SIZES[0]);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  /*
+    CHẾ ĐỘ SỬA BẢNG — cùng khuôn với sổ TBYCNN và trang PCCC.
+
+    Xem thường thì cột "Thao tác" không hiện: nó rộng 320px và hầu hết thời gian người ta
+    vào đây chỉ để ĐỌC. Bật Sửa bảng mới mở cột đó ra, đồng thời cặp Huỷ / Lưu thay chỗ
+    nút Chỉnh sửa.
+
+    `touchedIds` là các khu vực đã ghi kết quả kiểm tra TRONG lượt này — đúng và chỉ những
+    dòng đó được nút Lưu xác nhận. Cố ý không ký cả 202 dòng đang chờ: đây là sổ an toàn,
+    ký một dòng chưa ai đi kiểm tra là ghi nhận khống.
+  */
+  const [tableEditing, setTableEditing] = useState(false);
+  const [touchedIds, setTouchedIds] = useState<string[]>([]);
+  const tableColumns = BASE_TABLE_COLUMNS + (tableEditing ? 1 : 0);
   const toggleSort = (key: string) =>
     setSort((old) =>
       old.key === key
@@ -987,17 +1072,6 @@ export default function GroundingLightningPage() {
     }),
     [items],
   );
-  const doSign = async (item: GroundingItem) => {
-    if (!confirm(`Xác nhận đã kiểm tra “${item.areaEquipment}”?`)) return;
-    try {
-      await sign.mutateAsync(item.id);
-      toast.success("Đã xác nhận kiểm tra");
-    } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "Không xác nhận được",
-      );
-    }
-  };
   const doDelete = async (item: GroundingItem) => {
     if (
       !confirm(
@@ -1016,12 +1090,41 @@ export default function GroundingLightningPage() {
     canManage,
     canCatalog,
     canDelete,
-    signPending: sign.isPending,
     onInspect: setInspection,
-    onSign: doSign,
     onHistory: setHistory,
     onEdit: (item) => setCatalog({ open: true, item }),
     onRemove: doDelete,
+  };
+  const beginEdit = () => {
+    setTouchedIds([]);
+    setTableEditing(true);
+  };
+  /*
+    Huỷ chỉ ĐÓNG chế độ sửa, KHÔNG hoàn tác kết quả đã ghi: hộp "Kiểm tra" lưu thẳng vào
+    CSDL ngay lúc bấm (nó còn tải ảnh lên S3), nên không có bản nháp nào để bỏ đi. Thứ
+    Huỷ bỏ qua là bước XÁC NHẬN — dòng vừa sửa ở lại trạng thái chờ xác nhận.
+  */
+  const cancelEdit = () => {
+    setTouchedIds([]);
+    setTableEditing(false);
+  };
+  const saveEdits = async () => {
+    if (touchedIds.length === 0) {
+      setTableEditing(false);
+      return;
+    }
+    try {
+      // Tuần tự chứ không song song: mỗi lượt ký là một request ghi, bắn 200 request cùng
+      // lúc là tự làm nghẽn chính mình và lỗi giữa chừng thì không biết đã ký tới đâu.
+      for (const id of touchedIds) await sign.mutateAsync(id);
+      toast.success(`Đã xác nhận ${touchedIds.length} khu vực/thiết bị`);
+      setTouchedIds([]);
+      setTableEditing(false);
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Không xác nhận được",
+      );
+    }
   };
   return (
     <div className="relative min-h-[calc(100vh-7rem)] space-y-5 pb-10">
@@ -1031,6 +1134,54 @@ export default function GroundingLightningPage() {
         mobileTitle="TIẾP ĐỊA & CHỐNG SÉT"
       >
         <>
+          {/* Một cửa "Chỉnh sửa" như sổ TBYCNN và trang PCCC; đang mở khoá thì đổi thành
+              cặp Huỷ / Lưu. */}
+          {canManage &&
+            (tableEditing ? (
+              <>
+                <Button
+                  variant="outline"
+                  size="toolbar"
+                  onClick={cancelEdit}
+                  disabled={sign.isPending}
+                >
+                  Huỷ
+                </Button>
+                <Button size="toolbar" onClick={saveEdits} disabled={sign.isPending}>
+                  <Save className={cn("mr-1.5 size-4", sign.isPending && "animate-pulse")} />
+                  {sign.isPending
+                    ? "Đang lưu…"
+                    : touchedIds.length > 0
+                      ? `Lưu ${touchedIds.length} dòng`
+                      : "Lưu"}
+                </Button>
+              </>
+            ) : (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="soft" size="toolbar" className="group">
+                    <Pencil className="mr-1.5 size-4 text-sky-600" />
+                    Chỉnh sửa
+                    <ChevronDown className="ml-1 size-3.5 text-slate-400 transition-transform duration-200 group-data-[state=open]:rotate-180" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-[268px]">
+                  <DropdownMenuLabel className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
+                    Tiếp địa &amp; chống sét
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onSelect={beginEdit} className="gap-2">
+                    <Pencil className="size-4 text-sky-600" />
+                    <span className="min-w-0">
+                      <span className="block font-medium">Sửa bảng</span>
+                      <span className="block text-[11px] text-muted-foreground">
+                        Mở cột thao tác, xác nhận một lượt khi bấm Lưu
+                      </span>
+                    </span>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ))}
           {/* Bộ lọc gom vào MỘT nút, bấm mới sổ bảng chọn — cùng khuôn với trang PCCC và
               sổ TBYCNN, và trả lại chiều cao cho bảng thay vì một hàng ô lọc luôn chiếm
               chỗ dù hầu hết thời gian không dùng tới. */}
@@ -1215,7 +1366,10 @@ export default function GroundingLightningPage() {
         }
       >
         <div className="hidden md:block">
-          <Table className="min-w-[1480px]" wrapperClassName={TABLE_SCROLLER}>
+          <Table
+            className={tableEditing ? "min-w-[1520px]" : "min-w-[1200px]"}
+            wrapperClassName={TABLE_SCROLLER}
+          >
             <TableHeader>
               <TableRow className={TR_HEAD}>
                 <TableHead className={cn(TH_NAVY, TH_EXPAND)} />
@@ -1244,18 +1398,20 @@ export default function GroundingLightningPage() {
                 <TableHead className={cn(TH_NAVY, "w-[90px]")}>
                   <PlainHeader label="Hình ảnh" />
                 </TableHead>
-                <TableHead className={cn(TH_NAVY, "w-[160px]")}>
+                <TableHead className={cn(TH_NAVY, "w-[200px]")}>
                   <SortHeader label="Người xác nhận" sortKey="signed" sort={sort} onSort={toggleSort} />
                 </TableHead>
-                <TableHead className={cn(TH_NAVY, "w-[320px]")}>
-                  <PlainHeader label="Thao tác" />
-                </TableHead>
+                {tableEditing && (
+                  <TableHead className={cn(TH_NAVY, "w-[320px]")}>
+                    <PlainHeader label="Thao tác" />
+                  </TableHead>
+                )}
               </TableRow>
             </TableHeader>
             <TableBody>
               {pageRows.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={TABLE_COLUMNS} className="py-14 text-center">
+                  <TableCell colSpan={tableColumns} className="py-14 text-center">
                     <RadioTower className="mx-auto mb-3 size-10 text-slate-300" />
                     <b className="text-ink">Chưa có dữ liệu phù hợp</b>
                     <p className="mt-1 text-sm text-muted-foreground">
@@ -1266,7 +1422,12 @@ export default function GroundingLightningPage() {
               )}
               {pageRows.map((item, index) => {
                 const expanded = expandedId === item.id;
-                const rowBg = rowBackground({ index, expanded });
+                // Dòng vừa ghi kết quả trong lượt này tô vàng — nhìn một cái là biết bấm
+                // Lưu sẽ xác nhận những dòng nào, không phải nhớ mình vừa bấm ở đâu.
+                const touched = touchedIds.includes(item.id);
+                const rowBg = touched
+                  ? "bg-amber-50"
+                  : rowBackground({ index, expanded });
                 const photoCount = countPhotos(item);
                 const defectPoints = item.points.filter((point) => point.defectDescription);
                 return (
@@ -1308,30 +1469,45 @@ export default function GroundingLightningPage() {
                       </TableCell>
                       <TableCell className={cn(TD_ROW, "text-center")}>
                         {item.latestInspection ? (
-                          <>
-                            <b className="block whitespace-nowrap">
-                              {item.latestInspection.inspectorName}
-                            </b>
-                            <span className="text-[11px] text-muted-foreground">
-                              {fmtDate(item.latestInspection.signedAt)}
-                            </span>
-                            {item.needsSignature && (
-                              <span className="mt-0.5 block text-[11px] font-bold text-amber-700">
-                                Cần xác nhận lại
+                          <span
+                            className="flex items-center gap-2 text-left"
+                            title={`${item.latestInspection.inspectorName}${
+                              item.latestInspection.inspectorPosition
+                                ? ` · ${item.latestInspection.inspectorPosition}`
+                                : ""
+                            } · ${fmtDate(item.latestInspection.signedAt)}`}
+                          >
+                            <InspectorAvatar
+                              name={item.latestInspection.inspectorName}
+                              avatarUrl={item.latestInspection.inspectorAvatarUrl}
+                            />
+                            <span className="min-w-0 leading-tight">
+                              <b className="block truncate">
+                                {item.latestInspection.inspectorName}
+                              </b>
+                              <span className="block text-[11px] text-muted-foreground">
+                                {fmtDate(item.latestInspection.signedAt)}
                               </span>
-                            )}
-                          </>
+                              {item.needsSignature && (
+                                <span className="block text-[11px] font-bold text-amber-700">
+                                  Cần xác nhận lại
+                                </span>
+                              )}
+                            </span>
+                          </span>
                         ) : (
                           <span className="text-muted-foreground">Chưa xác nhận</span>
                         )}
                       </TableCell>
-                      <TableCell className={cn(TD_ROW, "text-center")}>
-                        <RowActions item={item} ctx={rowActions} />
-                      </TableCell>
+                      {tableEditing && (
+                        <TableCell className={cn(TD_ROW, "text-center")}>
+                          <RowActions item={item} ctx={rowActions} />
+                        </TableCell>
+                      )}
                     </TableRow>
                     {expanded && (
                       <TableRow className="hover:bg-transparent">
-                        <TableCell colSpan={TABLE_COLUMNS} className="bg-slate-50/80 p-0">
+                        <TableCell colSpan={tableColumns} className="bg-slate-50/80 p-0">
                           <DetailPanel>
                             <DetailField label="Cương vị">{item.position || "—"}</DetailField>
                             <DetailField label="Tổ máy">{machineLabel(item.machine)}</DetailField>
@@ -1423,9 +1599,11 @@ export default function GroundingLightningPage() {
                   </div>
                 ))}
               </div>
-              <div className="mt-3 flex flex-wrap gap-2">
-                <RowActions item={item} ctx={rowActions} />
-              </div>
+              {tableEditing && (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <RowActions item={item} ctx={rowActions} />
+                </div>
+              )}
             </article>
           ))}
           {pageRows.length === 0 && (
@@ -1462,6 +1640,9 @@ export default function GroundingLightningPage() {
         <InspectionDialog
           key={inspection.id}
           item={inspection}
+          onSaved={(id) =>
+            setTouchedIds((old) => (old.includes(id) ? old : [...old, id]))
+          }
           onClose={() => setInspection(null)}
         />
       )}
