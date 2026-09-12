@@ -180,6 +180,15 @@ export async function uploadBufferToS3({
 }: UploadBufferParams) {
   const ext = extensionFromFilename(filename) || extensionFromContentType(contentType);
   const key = makeKey(folder, ext);
+  if (!hasS3Config()) {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error("Thiếu cấu hình S3; production không được phép lưu ảnh xuống ổ đĩa local");
+    }
+    const target = localObjectPath(key);
+    await mkdir(path.dirname(target), { recursive: true });
+    await writeFile(target, buffer);
+    return { key, url: s3ProxyUrl(key) };
+  }
   await s3Client().send(
     new PutObjectCommand({
       Bucket: bucket(),
@@ -271,7 +280,7 @@ export function keyFromPublicUrl(url: string | null | undefined) {
 export async function deleteFromS3(url: string | null | undefined) {
   const key = keyFromPublicUrl(url);
   if (!key) return;
-  await s3Client().send(new DeleteObjectCommand({ Bucket: bucket(), Key: key }));
+  await deleteS3ObjectByKey(key);
 }
 
 export async function deleteS3ObjectByKey(key: string) {

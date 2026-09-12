@@ -46,7 +46,7 @@ const PRIMARY_PATHS = ["/hr", "/defects", "/devices/scan", "/replacement-procedu
  */
 const MOBILE_MORE_PATHS: Record<string, "ALL" | readonly string[]> = {
   "Quản lý người dùng": ["/", "/notifications"],
-  "Quản lý thiết bị": ["/repair-history", "/pccc", "/documents/archive"],
+  "Quản lý thiết bị": ["/repair-history", "/pccc", "/grounding-lightning", "/documents/archive"],
   "QUẢN LÝ VẬT TƯ": "ALL",
   "QUẢN LÝ TÀI LIỆU SỐ": "ALL",
   "TIỆN ÍCH": ["/tien-ich/phan-tich-dau", "/api/model-control/open"],

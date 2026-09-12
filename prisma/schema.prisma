@@ -2503,6 +2503,99 @@ model PcccHoseReelComponent {
 }
 
 // ============================================================================
+// KIỂM TRA HỆ THỐNG TIẾP ĐỊA & CHỐNG SÉT
+// Một thiết bị có 1..2 điểm kiểm tra con (LIGHTNING / GROUNDING). Mỗi lần xác nhận
+// tạo bản chụp tài khoản, họ tên, cương vị và kết quả; trạng thái/ảnh hiện hành nằm ở Point.
+// ============================================================================
+
+model GroundingLightningItem {
+  id            String @id @default(cuid())
+  stt           Float?
+  areaEquipment String
+  position      String?
+  positionCode  String?
+  machine       String @default("COMMON")
+  note          String?
+  sourceKey     String? @unique
+  sourceSheet   String?
+  sourceRow     Int?
+  createdById   String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  points      GroundingLightningPoint[]
+  inspections GroundingLightningInspection[]
+
+  @@index([positionCode, machine])
+  @@index([areaEquipment])
+  @@map("grounding_lightning_items")
+}
+
+model GroundingLightningPoint {
+  id                String @id @default(cuid())
+  itemId            String
+  item              GroundingLightningItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  type              String
+  status            String @default("UNCHECKED")
+  defectDescription String?
+  updatedAt         DateTime @updatedAt
+
+  attachments GroundingLightningAttachment[]
+
+  @@unique([itemId, type])
+  @@index([type, status])
+  @@map("grounding_lightning_points")
+}
+
+model GroundingLightningAttachment {
+  id           String @id @default(cuid())
+  pointId      String
+  point        GroundingLightningPoint @relation(fields: [pointId], references: [id], onDelete: Cascade)
+  s3Key        String @unique
+  originalName String?
+  mimeType     String?
+  bytes        Int?
+  uploadedById String?
+  createdAt    DateTime @default(now())
+
+  @@index([pointId])
+  @@map("grounding_lightning_attachments")
+}
+
+model GroundingLightningInspection {
+  id                String @id @default(cuid())
+  itemId            String
+  item              GroundingLightningItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  note              String?
+  inspectedById     String
+  inspectorName     String
+  inspectorPosition String?
+  signatureKey      String // Giá trị tương thích dữ liệu cũ; lượt mới lưu USER_CONFIRMATION, không dùng ảnh chữ ký.
+  signedAt          DateTime @default(now())
+
+  results GroundingLightningInspectionResult[]
+
+  @@index([itemId, signedAt])
+  @@index([inspectedById])
+  @@map("grounding_lightning_inspections")
+}
+
+model GroundingLightningInspectionResult {
+  id                String @id @default(cuid())
+  inspectionId      String
+  inspection        GroundingLightningInspection @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
+  type              String
+  status            String
+  defectDescription String?
+  // Chỉ là dấu vết ảnh lúc xác nhận. Khi chuyển sang Bình thường, object S3 bị xoá
+  // đúng yêu cầu; lịch sử vẫn giữ mô tả bằng chữ.
+  imageKeys String[]
+
+  @@unique([inspectionId, type])
+  @@map("grounding_lightning_inspection_results")
+}
+
+// ============================================================================
 // TỒN KHO HÓA CHẤT — sổ theo dõi hóa chất & nhiên liệu của Phân xưởng Vận hành 1
 //
 // KHÔNG dùng chung Material/MaterialStockLot: các model đó lưu Int và phục vụ

@@ -29,6 +29,7 @@ import {
   Zap,
   Gauge,
   HardHat,
+  RadioTower,
 } from "lucide-react";
 import { effectiveUserPosition, type PositionCarrier } from "@/lib/current-position";
 
@@ -122,6 +123,13 @@ export const NAV_SECTIONS: NavSection[] = [
         icon: FlameKindling,
         permissionIds: ["pccc-view"],
         keywords: "pccc phong chay chua chay binh chua chay bcc tu chua chay tcc foam co2 diesel fm200 ron lang phun ngam cuon ong an toan",
+      },
+      {
+        label: "Tiếp địa & chống sét",
+        href: "/grounding-lightning",
+        icon: RadioTower,
+        permissionIds: ["grounding-lightning-view"],
+        keywords: "tiep dia chong set lightning grounding kiem tra an toan dien",
       },
       {
         label: "Thiết bị YCNN về ATLĐ",
