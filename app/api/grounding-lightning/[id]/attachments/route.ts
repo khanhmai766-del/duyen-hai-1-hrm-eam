@@ -48,6 +48,15 @@ export async function POST(
     await assertGroundingScope(user, point.item);
     if (point.status !== "DEFECT")
       return fail("Chỉ bổ sung ảnh khi hạng mục đang có khiếm khuyết");
+    /*
+     * MỘT ảnh cho mỗi hạng mục. Chặn TRƯỚC khi đẩy lên S3 — chặn sau là đã có một object
+     * nằm lại trên S3 mà không dòng nào trong CSDL trỏ tới, không ai dọn được nữa.
+     */
+    const existing = await prisma.groundingLightningAttachment.count({
+      where: { pointId: point.id },
+    });
+    if (existing > 0)
+      return fail("Mỗi hạng mục chỉ lưu 1 ảnh — hãy xoá ảnh hiện có rồi tải ảnh khác");
 
     const uploaded = await uploadImageBufferToS3({
       buffer: Buffer.from(await file.arrayBuffer()),
