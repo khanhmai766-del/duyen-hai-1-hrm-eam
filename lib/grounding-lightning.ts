@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { normalizePosition } from "@/lib/pccc-position";
 import { isUnrestrictedEquipmentPosition } from "@/lib/position-system-scopes";
 import { hasPermissionLevel } from "@/lib/rbac-guard";
-import { s3ProxyUrl } from "@/lib/s3";
+import { publicUserRef, s3ProxyUrl } from "@/lib/s3";
 import {
   GROUNDING_STATUSES,
   GROUNDING_TYPES,
@@ -126,6 +126,11 @@ export async function assertGroundingScope(
  * KB sẽ làm tràn cookie phiên — xem lib/auth.ts), mà đây lại là avatar của NGƯỜI KHÁC chứ
  * không phải người đang xem. Bảng có vài trăm dòng nhưng chỉ vài chục người ký, nên gom
  * id lại hỏi MỘT lượt thay vì kèm `include` vào từng dòng.
+ *
+ * PHẢI qua `publicUserRef`, không trả thẳng cột `avatarUrl`: ảnh đại diện nay lưu trên S3
+ * (cột `avatarKey`), `avatarUrl` thô chỉ còn là base64 CŨ hoặc rỗng — trả thẳng cột đó ra
+ * là avatar của cả trăm người mới đổi ảnh biến mất, chỉ còn thấy chữ cái đầu (đúng lỗi
+ * người dùng thấy: mọi hàng đều hiện "TL"/"HÂ" dù họ đã có ảnh thật trên hồ sơ).
  */
 export async function groundingInspectorAvatars(items: any[]) {
   const ids = Array.from(
@@ -138,9 +143,11 @@ export async function groundingInspectorAvatars(items: any[]) {
   if (ids.length === 0) return new Map<string, string | null>();
   const users = await prisma.user.findMany({
     where: { id: { in: ids } },
-    select: { id: true, avatarUrl: true },
+    select: { id: true, avatarUrl: true, avatarKey: true },
   });
-  return new Map(users.map((user) => [user.id, user.avatarUrl]));
+  return new Map(
+    users.map((user) => [user.id, publicUserRef(user).avatarUrl]),
+  );
 }
 
 export function serializeGroundingItem(
