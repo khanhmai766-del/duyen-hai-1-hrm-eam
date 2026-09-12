@@ -1542,31 +1542,31 @@ export default function GroundingLightningPage() {
                 return (
                   <Fragment key={item.id}>
                     <TableRow className={cn(rowBg, ROW_HOVER)}>
-                      <TableCell className={cn(TD_EXPAND, rowBg)}>
+                      <TableCell className={cn(TD_EXPAND, "py-2", rowBg)}>
                         <RowExpander
                           expanded={expanded}
                           onToggle={() => setExpandedId(expanded ? null : item.id)}
                         />
                       </TableCell>
-                      <TableCell className={cn(TD_ROW, "whitespace-nowrap text-center font-medium")}>
+                      <TableCell className={cn(TD_ROW, "py-2", "whitespace-nowrap text-center font-medium")}>
                         {item.position || "—"}
                       </TableCell>
-                      <TableCell className={cn(TD_ROW, "font-semibold text-ink")}>
+                      <TableCell className={cn(TD_ROW, "py-2", "font-semibold text-ink")}>
                         {item.areaEquipment}
                       </TableCell>
-                      <TableCell className={cn(TD_ROW, "text-center")}>
+                      <TableCell className={cn(TD_ROW, "py-2", "text-center")}>
                         <MachineChip machine={item.machine} />
                       </TableCell>
-                      <TableCell className={cn(TD_ROW, "text-center")}>
+                      <TableCell className={cn(TD_ROW, "py-2", "text-center")}>
                         <PointCell item={item} type="GROUNDING" />
                       </TableCell>
-                      <TableCell className={cn(TD_ROW, "text-center")}>
+                      <TableCell className={cn(TD_ROW, "py-2", "text-center")}>
                         <PointCell item={item} type="LIGHTNING" />
                       </TableCell>
                       {/* Ghi chú đã rời khỏi bảng (xem khối chi tiết của nút "+"), nhưng số
                           ảnh thì ở lại: đây là cột người ta dò theo chiều dọc để biết khu
                           vực nào đã có ảnh hiện trường. */}
-                      <TableCell className={cn(TD_ROW, "text-center")}>
+                      <TableCell className={cn(TD_ROW, "py-2", "text-center")}>
                         {photoCount > 0 ? (
                           <button
                             type="button"
@@ -1583,7 +1583,7 @@ export default function GroundingLightningPage() {
                           <span className="text-slate-300">—</span>
                         )}
                       </TableCell>
-                      <TableCell className={cn(TD_ROW, "text-center")}>
+                      <TableCell className={cn(TD_ROW, "py-2", "text-center")}>
                         {item.latestInspection ? (
                           <span
                             className="flex items-center gap-2 text-left"
@@ -1616,7 +1616,7 @@ export default function GroundingLightningPage() {
                         )}
                       </TableCell>
                       {tableEditing && (
-                        <TableCell className={cn(TD_ROW, "text-center")}>
+                        <TableCell className={cn(TD_ROW, "py-2", "text-center")}>
                           <RowActions item={item} ctx={rowActions} />
                         </TableCell>
                       )}
