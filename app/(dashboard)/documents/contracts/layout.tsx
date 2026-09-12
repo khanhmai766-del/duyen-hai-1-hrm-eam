@@ -2,7 +2,6 @@ import { ContractStoreProvider } from "@/lib/tcms/components/contracts/contract-
 import { requireUser } from "@/lib/api";
 import { hasPermissionLevel } from "@/lib/rbac-guard";
 import { ContractNavigation } from "@/lib/tcms/components/layout/contract-navigation";
-export const metadata = { title: "Quản lý hợp đồng" };
 export const dynamic = "force-dynamic";
 export default async function ContractLayout({ children }: { children: React.ReactNode }) {
   const user = await requireUser();
