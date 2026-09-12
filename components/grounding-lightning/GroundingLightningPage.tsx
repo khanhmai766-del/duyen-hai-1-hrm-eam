@@ -104,7 +104,7 @@ import {
 const CONTROL =
   "h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-ink outline-none transition focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100 dark:border-slate-700 dark:bg-slate-900";
 /** Số cột của bảng — dùng cho `colSpan` của dòng rỗng và dòng chi tiết. */
-const TABLE_COLUMNS = 9;
+const TABLE_COLUMNS = 10;
 /*
   Khoá sắp xếp “giữ nguyên thứ tự máy chủ trả về” (cương vị → khu vực). Bảng này là sổ
   hiện trường: người đi kiểm tra đi theo đúng thứ tự đó, nên nó phải là mặc định và
@@ -219,7 +219,10 @@ type RowActionContext = {
  */
 function RowActions({ item, ctx }: { item: GroundingItem; ctx: RowActionContext }) {
   return (
-    <div className="flex flex-wrap items-center justify-center gap-1">
+    // Trong BẢNG thì không cho gãy dòng: năm nút xếp ba tầng làm hàng cao 113px, gấp ba
+    // mọi hàng khác — đúng thứ việc dựng lại bảng định dẹp đi; cột Thao tác đã đủ rộng.
+    // Trên điện thoại thì ngược lại, phải cho xuống dòng kẻo tràn khỏi bề ngang màn hình.
+    <div className="flex flex-wrap items-center justify-center gap-1 md:flex-nowrap">
       {ctx.canManage && (
         <Button size="sm" variant="soft" onClick={() => ctx.onInspect(item)}>
           <ShieldCheck />
@@ -1025,7 +1028,6 @@ export default function GroundingLightningPage() {
       <div className="pointer-events-none absolute -right-10 -top-12 -z-10 size-72 rounded-full bg-cyan-200/20 blur-3xl" />
       <PageHeader
         title="TIẾP ĐỊA & CHỐNG SÉT"
-        description="Kiểm tra theo từng điểm áp dụng, lưu ảnh khiếm khuyết trên S3 và ghi nhận người xác nhận từng lượt."
         mobileTitle="TIẾP ĐỊA & CHỐNG SÉT"
       >
         <>
@@ -1213,7 +1215,7 @@ export default function GroundingLightningPage() {
         }
       >
         <div className="hidden md:block">
-          <Table className="min-w-[1240px]" wrapperClassName={TABLE_SCROLLER}>
+          <Table className="min-w-[1700px]" wrapperClassName={TABLE_SCROLLER}>
             <TableHeader>
               <TableRow className={TR_HEAD}>
                 <TableHead className={cn(TH_NAVY, TH_EXPAND)} />
@@ -1240,12 +1242,15 @@ export default function GroundingLightningPage() {
                   <SortHeader label="Chống sét" sortKey="LIGHTNING" sort={sort} onSort={toggleSort} />
                 </TableHead>
                 <TableHead className={cn(TH_NAVY, "w-[220px]")}>
-                  <PlainHeader label="Ghi chú · Hình ảnh" align="left" />
+                  <PlainHeader label="Ghi chú" align="left" />
+                </TableHead>
+                <TableHead className={cn(TH_NAVY, "w-[90px]")}>
+                  <PlainHeader label="Hình ảnh" />
                 </TableHead>
                 <TableHead className={cn(TH_NAVY, "w-[160px]")}>
                   <SortHeader label="Người xác nhận" sortKey="signed" sort={sort} onSort={toggleSort} />
                 </TableHead>
-                <TableHead className={cn(TH_NAVY, "w-[190px]")}>
+                <TableHead className={cn(TH_NAVY, "w-[320px]")}>
                   <PlainHeader label="Thao tác" />
                 </TableHead>
               </TableRow>
@@ -1290,20 +1295,25 @@ export default function GroundingLightningPage() {
                       <TableCell className={cn(TD_ROW, "text-center")}>
                         <PointCell item={item} type="LIGHTNING" />
                       </TableCell>
-                      {/* Ghi chú và mô tả khiếm khuyết thường dài vài dòng — cắt còn một dòng
-                          ở đây, bản đầy đủ nằm trong khối chi tiết của nút "+". */}
+                      {/* Ghi chú thường dài vài dòng — cắt còn một dòng ở đây, bản đầy đủ
+                          nằm trong khối chi tiết của nút "+". */}
                       <TableCell className={cn(TD_ROW, "text-slate-600")}>
-                        <div className="flex items-center gap-2">
-                          <span className="min-w-0 flex-1 truncate" title={item.note || undefined}>
-                            {item.note || "—"}
+                        <span className="block truncate" title={item.note || undefined}>
+                          {item.note || "—"}
+                        </span>
+                      </TableCell>
+                      {/* Ảnh đứng cột RIÊNG chứ không nép vào cuối ô ghi chú: ghi chú dài
+                          là con số ảnh bị đẩy khuất, mà đây lại là cột người ta dò theo
+                          chiều dọc để biết khu vực nào đã có ảnh hiện trường. */}
+                      <TableCell className={cn(TD_ROW, "text-center")}>
+                        {photoCount > 0 ? (
+                          <span className="inline-flex items-center gap-1 font-semibold text-cyan-700">
+                            <Camera className="size-3.5" />
+                            {photoCount}
                           </span>
-                          {photoCount > 0 && (
-                            <span className="inline-flex shrink-0 items-center gap-1 font-semibold text-cyan-700">
-                              <Camera className="size-3.5" />
-                              {photoCount}
-                            </span>
-                          )}
-                        </div>
+                        ) : (
+                          <span className="text-slate-300">—</span>
+                        )}
                       </TableCell>
                       <TableCell className={cn(TD_ROW, "text-center")}>
                         {item.latestInspection ? (
