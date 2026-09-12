@@ -6,6 +6,7 @@ import {
   AlertTriangle,
   Camera,
   CheckCircle2,
+  ChevronDown,
   Clock3,
   FileClock,
   Filter,
@@ -55,6 +56,19 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -67,6 +81,7 @@ import { cn } from "@/lib/utils";
 import { POSITION_CATALOG } from "@/lib/position-catalog";
 import {
   GROUNDING_STATUS_LABEL,
+  GROUNDING_TYPES,
   GROUNDING_TYPE_LABEL,
   type GroundingStatus,
   type GroundingType,
@@ -139,7 +154,9 @@ function StatusPill({ status }: { status: GroundingStatus }) {
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold",
+        // `whitespace-nowrap`: trong ô bảng hẹp, “Bình thường” gãy đôi dòng làm cả hàng
+        // cao gấp đôi, đúng thứ bảng mới vừa dẹp đi được.
+        "inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-1 text-xs font-semibold",
         config.className,
       )}
     >
@@ -886,9 +903,26 @@ export default function GroundingLightningPage() {
         ? { key, dir: old.dir === "asc" ? "desc" : "asc" }
         : { key, dir: "asc" },
     );
-  const hasFilter = Object.entries(filters).some(
-    ([key, value]) => (key === "q" ? value.trim() !== "" : value !== "ALL"),
-  );
+  /*
+    Số ô lọc đang bật — hiện thành huy hiệu trên nút "Bộ lọc" để biết bảng đang bị cắt bớt
+    mà không phải mở bảng chọn ra xem. Ô tìm kiếm KHÔNG tính vào đây: nó nằm ngay trên thanh
+    công cụ của bảng, người dùng luôn nhìn thấy chữ mình vừa gõ.
+  */
+  const activeFilterCount = [
+    filters.positionCode,
+    filters.machine,
+    filters.type,
+    filters.status,
+  ].filter((value) => value !== "ALL").length;
+  const hasFilter = filters.q.trim() !== "" || activeFilterCount > 0;
+  const clearFilters = () =>
+    setFilters({
+      q: "",
+      positionCode: "ALL",
+      machine: "ALL",
+      type: "ALL",
+      status: "ALL",
+    });
   /*
     Sắp xếp Ở CLIENT: máy chủ trả về toàn bộ danh mục (vài trăm dòng) trong một lượt, khác
     sổ PCCC/TBYCNN hàng nghìn dòng phải phân trang từ máy chủ. Giữ nguyên thứ tự gốc khi
@@ -995,6 +1029,133 @@ export default function GroundingLightningPage() {
         mobileTitle="TIẾP ĐỊA & CHỐNG SÉT"
       >
         <>
+          {/* Bộ lọc gom vào MỘT nút, bấm mới sổ bảng chọn — cùng khuôn với trang PCCC và
+              sổ TBYCNN, và trả lại chiều cao cho bảng thay vì một hàng ô lọc luôn chiếm
+              chỗ dù hầu hết thời gian không dùng tới. */}
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                type="button"
+                variant="soft"
+                size="toolbar"
+                className="group min-w-[112px] justify-between"
+              >
+                <span className="flex items-center gap-2">
+                  <Filter className="h-4 w-4 text-sky-600" />
+                  Bộ lọc
+                  {activeFilterCount > 0 && (
+                    <span className="grid size-5 place-items-center rounded-full bg-accent text-[10px] font-bold text-white">
+                      {activeFilterCount}
+                    </span>
+                  )}
+                </span>
+                <ChevronDown className="h-3.5 w-3.5 text-slate-400 transition-transform duration-200 group-data-[state=open]:rotate-180" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent
+              align="end"
+              sideOffset={8}
+              className="w-[min(30rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border-slate-200/90 bg-white p-0 shadow-[0_22px_55px_rgba(15,23,42,0.18)]"
+            >
+              <div className="flex items-center justify-between gap-3 border-b border-sky-100 bg-[linear-gradient(135deg,#f8fbff_0%,#edf7ff_58%,#f0fdfa_100%)] px-4 py-3.5">
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-sky-700">
+                    Lọc nội dung bảng
+                  </p>
+                  <p className="mt-0.5 text-sm font-bold text-slate-900">
+                    Tiếp địa &amp; chống sét
+                  </p>
+                </div>
+                {hasFilter && (
+                  <Button type="button" variant="ghost" size="sm" onClick={clearFilters}>
+                    <X className="mr-1.5 size-3.5" />
+                    Xoá lọc
+                  </Button>
+                )}
+              </div>
+              <div className="grid gap-3 p-4 sm:grid-cols-2">
+                <div className="grid gap-1.5">
+                  <Label className="text-xs font-semibold text-slate-600">Cương vị</Label>
+                  <Select
+                    value={filters.positionCode}
+                    onValueChange={(value) =>
+                      setFilters({ ...filters, positionCode: value })
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Cương vị" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ALL">Tất cả cương vị</SelectItem>
+                      {positions.map((p: any) => (
+                        <SelectItem key={p.code} value={p.code}>
+                          {p.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid gap-1.5">
+                  <Label className="text-xs font-semibold text-slate-600">Tổ máy</Label>
+                  <Select
+                    value={filters.machine}
+                    onValueChange={(value) => setFilters({ ...filters, machine: value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Tổ máy" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {MACHINES.map((m) => (
+                        <SelectItem key={m.value} value={m.value}>
+                          {m.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid gap-1.5">
+                  <Label className="text-xs font-semibold text-slate-600">
+                    Loại kiểm tra
+                  </Label>
+                  <Select
+                    value={filters.type}
+                    onValueChange={(value) => setFilters({ ...filters, type: value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Loại kiểm tra" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ALL">Mọi loại kiểm tra</SelectItem>
+                      {GROUNDING_TYPES.map((type) => (
+                        <SelectItem key={type} value={type}>
+                          {GROUNDING_TYPE_LABEL[type]}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid gap-1.5">
+                  <Label className="text-xs font-semibold text-slate-600">Kết quả</Label>
+                  <Select
+                    value={filters.status}
+                    onValueChange={(value) => setFilters({ ...filters, status: value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Kết quả" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ALL">Mọi kết quả</SelectItem>
+                      {Object.entries(GROUNDING_STATUS_LABEL).map(([key, label]) => (
+                        <SelectItem key={key} value={key}>
+                          {label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </PopoverContent>
+          </Popover>
           {canCatalog && (
             <Button
               size="toolbar"
@@ -1032,64 +1193,6 @@ export default function GroundingLightningPage() {
           tone="bg-amber-500"
         />
       </div>
-      <section className="rounded-2xl border border-slate-200/80 bg-white/90 p-3 shadow-sm dark:border-slate-700 dark:bg-slate-900/90">
-        <div className="mb-2 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.14em] text-slate-500">
-          <Filter className="size-4" />
-          Bộ lọc hiện trường
-        </div>
-        {/* Ô tìm kiếm đã dọn sang thanh công cụ của bảng — để hai ô tìm cạnh nhau thì
-            người dùng phải đoán ô nào lọc cái gì. */}
-        <div className="grid gap-2 md:grid-cols-4">
-          <select
-            className={CONTROL}
-            value={filters.positionCode}
-            onChange={(e) =>
-              setFilters({ ...filters, positionCode: e.target.value })
-            }
-          >
-            <option value="ALL">Tất cả cương vị</option>
-            {positions.map((p: any) => (
-              <option key={p.code} value={p.code}>
-                {p.label}
-              </option>
-            ))}
-          </select>
-          <select
-            className={CONTROL}
-            value={filters.machine}
-            onChange={(e) =>
-              setFilters({ ...filters, machine: e.target.value })
-            }
-          >
-            {MACHINES.map((m) => (
-              <option key={m.value} value={m.value}>
-                {m.label}
-              </option>
-            ))}
-          </select>
-          <select
-            className={CONTROL}
-            value={filters.type}
-            onChange={(e) => setFilters({ ...filters, type: e.target.value })}
-          >
-            <option value="ALL">Mọi loại kiểm tra</option>
-            <option value="LIGHTNING">Chống sét</option>
-            <option value="GROUNDING">Tiếp địa</option>
-          </select>
-          <select
-            className={CONTROL}
-            value={filters.status}
-            onChange={(e) => setFilters({ ...filters, status: e.target.value })}
-          >
-            <option value="ALL">Mọi kết quả</option>
-            {Object.entries(GROUNDING_STATUS_LABEL).map(([key, label]) => (
-              <option key={key} value={key}>
-                {label}
-              </option>
-            ))}
-          </select>
-        </div>
-      </section>
       <PcccTableCard
         pageSize={pageSize}
         onPageSizeChange={setPageSize}
