@@ -1268,6 +1268,7 @@ export default function GroundingLightningPage() {
                 const expanded = expandedId === item.id;
                 const rowBg = rowBackground({ index, expanded });
                 const photoCount = countPhotos(item);
+                const defectPoints = item.points.filter((point) => point.defectDescription);
                 return (
                   <Fragment key={item.id}>
                     <TableRow className={cn(rowBg, ROW_HOVER)}>
@@ -1335,28 +1336,23 @@ export default function GroundingLightningPage() {
                             <DetailField label="Cương vị">{item.position || "—"}</DetailField>
                             <DetailField label="Tổ máy">{machineLabel(item.machine)}</DetailField>
                             <DetailField label="Cập nhật">{fmtDate(item.updatedAt)}</DetailField>
-                            {item.points.map((point) => (
-                              <DetailField
-                                key={point.id}
-                                label={GROUNDING_TYPE_LABEL[point.type]}
-                                span="full"
-                              >
-                                <div className="flex flex-wrap items-center gap-2">
-                                  <StatusPill status={point.status} />
-                                  {point.attachments.length > 0 && (
-                                    <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-cyan-700">
-                                      <Camera className="size-3.5" />
-                                      {point.attachments.length} ảnh
-                                    </span>
-                                  )}
+                            {/*
+                              KHÔNG lặp lại hai chip kết quả ở đây: cột "Tiếp địa" và "Chống
+                              sét" trên bảng đã nói đúng thứ đó, ngay trên dòng vừa bấm mở.
+                              Chỉ giữ phần MÔ TẢ khiếm khuyết — thứ không hiện ở đâu khác
+                              trong bảng (trên dòng nó chỉ là chú giải khi rê chuột).
+                            */}
+                            {defectPoints.length > 0 && (
+                              <DetailField label="Khiếm khuyết" span="full">
+                                <div className="space-y-1">
+                                  {defectPoints.map((point) => (
+                                    <p key={point.id} className="whitespace-pre-line text-rose-700">
+                                      <b>{GROUNDING_TYPE_LABEL[point.type]}</b> — {point.defectDescription}
+                                    </p>
+                                  ))}
                                 </div>
-                                {point.defectDescription && (
-                                  <p className="mt-1 whitespace-pre-line text-rose-700">
-                                    {point.defectDescription}
-                                  </p>
-                                )}
                               </DetailField>
-                            ))}
+                            )}
                             <DetailField label="Ghi chú" span="full">
                               {item.note ? (
                                 <span className="whitespace-pre-line">{item.note}</span>
