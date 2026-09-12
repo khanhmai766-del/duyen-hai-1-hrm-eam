@@ -14,6 +14,7 @@ import {
   isGroundingMachine,
   isGroundingStatus,
   isGroundingType,
+  groundingInspectorAvatars,
   serializeGroundingItem,
 } from "@/lib/grounding-lightning";
 import { deleteS3ObjectByKey } from "@/lib/s3";
@@ -216,7 +217,7 @@ export async function PATCH(
       },
     );
     return ok(
-      serializeGroundingItem(updated),
+      serializeGroundingItem(updated, await groundingInspectorAvatars([updated])),
       cleanup.some((result) => result.status === "rejected")
         ? { warning: "Có ảnh chưa xoá được khỏi S3" }
         : undefined,

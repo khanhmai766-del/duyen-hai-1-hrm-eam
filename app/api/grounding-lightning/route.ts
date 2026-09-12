@@ -15,6 +15,7 @@ import {
   groundingScopeWithPermissions,
   isGroundingMachine,
   isGroundingType,
+  groundingInspectorAvatars,
   serializeGroundingItem,
 } from "@/lib/grounding-lightning";
 import { isPositionCode, positionLabelOf } from "@/lib/position-catalog";
@@ -101,12 +102,16 @@ export async function GET(req: NextRequest) {
         orderBy: { position: "asc" },
       }),
     ]);
-    return ok(items.map(serializeGroundingItem), {
-      positions: positionRows
-        .filter((row) => row.positionCode)
-        .map((row) => ({ code: row.positionCode, label: row.position })),
-      scope,
-    });
+    const avatars = await groundingInspectorAvatars(items);
+    return ok(
+      items.map((item) => serializeGroundingItem(item, avatars)),
+      {
+        positions: positionRows
+          .filter((row) => row.positionCode)
+          .map((row) => ({ code: row.positionCode, label: row.position })),
+        scope,
+      },
+    );
   });
 }
 

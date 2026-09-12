@@ -27,6 +27,8 @@ export type GroundingInspection = {
   note: string | null;
   inspectorName: string;
   inspectorPosition: string | null;
+  /** Ảnh đại diện của người ký, máy chủ tra thêm — không có trong phiên đăng nhập. */
+  inspectorAvatarUrl: string | null;
   signedAt: string;
   results: Array<{
     id: string;

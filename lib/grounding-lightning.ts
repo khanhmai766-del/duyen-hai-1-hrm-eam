@@ -1,4 +1,5 @@
 import { fail } from "@/lib/api";
+import { prisma } from "@/lib/prisma";
 import { normalizePosition } from "@/lib/pccc-position";
 import { isUnrestrictedEquipmentPosition } from "@/lib/position-system-scopes";
 import { hasPermissionLevel } from "@/lib/rbac-guard";
@@ -103,7 +104,34 @@ export async function assertGroundingScope(
 }
 
 /** Đổi S3 key ảnh khiếm khuyết thành URL proxy và xác định dòng đã thay đổi kể từ lần xác nhận gần nhất. */
-export function serializeGroundingItem(item: any) {
+/**
+ * Ảnh đại diện của những người đã xác nhận, tra theo `inspectedById`.
+ *
+ * KHÔNG lấy được từ phiên đăng nhập: `avatarUrl` cố ý nằm ngoài JWT (ảnh base64 vài chục
+ * KB sẽ làm tràn cookie phiên — xem lib/auth.ts), mà đây lại là avatar của NGƯỜI KHÁC chứ
+ * không phải người đang xem. Bảng có vài trăm dòng nhưng chỉ vài chục người ký, nên gom
+ * id lại hỏi MỘT lượt thay vì kèm `include` vào từng dòng.
+ */
+export async function groundingInspectorAvatars(items: any[]) {
+  const ids = Array.from(
+    new Set(
+      items
+        .map((item) => item.inspections?.[0]?.inspectedById)
+        .filter((id): id is string => Boolean(id)),
+    ),
+  );
+  if (ids.length === 0) return new Map<string, string | null>();
+  const users = await prisma.user.findMany({
+    where: { id: { in: ids } },
+    select: { id: true, avatarUrl: true },
+  });
+  return new Map(users.map((user) => [user.id, user.avatarUrl]));
+}
+
+export function serializeGroundingItem(
+  item: any,
+  avatars?: Map<string, string | null>,
+) {
   const latestInspection = item.inspections?.[0] ?? null;
   const timestamps = [
     new Date(item.updatedAt).getTime(),
@@ -129,7 +157,13 @@ export function serializeGroundingItem(item: any) {
         ),
       })),
     })),
-    latestInspection,
+    latestInspection: latestInspection
+      ? {
+          ...latestInspection,
+          inspectorAvatarUrl:
+            avatars?.get(latestInspection.inspectedById) ?? null,
+        }
+      : null,
     needsSignature:
       !latestInspection ||
       new Date(latestInspection.signedAt).getTime() < Math.max(...timestamps),
