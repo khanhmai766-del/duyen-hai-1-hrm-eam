@@ -90,6 +90,21 @@ export async function groundingScopeWithPermissions(user: GroundingUser) {
     : base;
 }
 
+/**
+ * "Toàn quyền" trên sổ Tiếp địa & chống sét — ADMIN/MANAGER/SUPERVISOR theo vai trò, hoặc
+ * Quản đốc/Phó quản đốc/Kỹ thuật viên/Trưởng ca theo cương vị đang làm việc (xem
+ * groundingScope), hoặc bất kỳ ai được Quản trị nâng riêng một trong bốn quyền
+ * grounding-lightning-* lên manage/full.
+ *
+ * MỘT nguồn duy nhất cho cả bốn việc xem/sửa/thêm/XOÁ, thay vì rải điều kiện cương vị
+ * "Kỹ thuật viên"/"Quản đốc"/"Trưởng ca" vào từng route: đổi danh sách cương vị toàn quyền
+ * (UNRESTRICTED_EQUIPMENT_POSITION_KEYS trong lib/position-system-scopes.ts) chỉ cần sửa
+ * một chỗ, mọi hành vi xem/sửa/thêm/xoá tự động theo — không có route nào lệch định nghĩa.
+ */
+export async function groundingHasFullControl(user: GroundingUser) {
+  return (await groundingScopeWithPermissions(user)).all;
+}
+
 export async function assertGroundingScope(
   user: GroundingUser,
   item: { positionCode?: string | null },

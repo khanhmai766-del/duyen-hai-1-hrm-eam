@@ -11,6 +11,8 @@ import { requirePermissionLevel } from "@/lib/rbac-guard";
 import {
   GROUNDING_PERMISSIONS,
   assertGroundingScope,
+  groundingHasFullControl,
+  groundingScopeWithPermissions,
   isGroundingMachine,
   isGroundingStatus,
   isGroundingType,
@@ -51,16 +53,31 @@ export async function PATCH(
       "machine",
       "types",
     ].some((key) => key in body);
-    await requirePermissionLevel(
-      user,
-      editsCatalog
-        ? GROUNDING_PERMISSIONS.catalog
-        : GROUNDING_PERMISSIONS.manage,
-      editsCatalog ? ["manage", "full"] : ["personal", "manage", "full"],
-      editsCatalog
-        ? "Không đủ quyền sửa danh mục kiểm tra"
-        : "Không đủ quyền cập nhật kết quả kiểm tra",
-    );
+    // Tính PHẠM VI trước — cùng lý do với route tạo mới (xem chú thích ở đó): bốn nhóm
+    // "toàn quyền" bỏ qua thẳng cổng RBAC bên dưới, vì "Kỹ thuật viên"/"Trưởng ca" không
+    // phân biệt được bằng vai trò.
+    const scope = await groundingScopeWithPermissions(user);
+    if (!scope.all) {
+      await requirePermissionLevel(
+        user,
+        editsCatalog
+          ? GROUNDING_PERMISSIONS.catalog
+          : GROUNDING_PERMISSIONS.manage,
+        ["personal", "manage", "full"],
+        editsCatalog
+          ? "Không đủ quyền sửa danh mục kiểm tra"
+          : "Không đủ quyền cập nhật kết quả kiểm tra",
+      );
+      /*
+       * Người bị giới hạn phạm vi cương vị không được đổi `positionCode` của một dòng —
+       * dù `assertGroundingScope` ở trên đã xác nhận dòng NÀY đang thuộc đúng cương vị họ
+       * quản lý, đổi positionCode là chuyển nó SANG cương vị khác, một việc chỉ nhóm
+       * toàn quyền mới được làm.
+       */
+      if (editsCatalog && "positionCode" in body) {
+        return fail("Không được đổi cương vị quản lý khi đang giới hạn phạm vi cương vị", 403);
+      }
+    }
 
     const data: Record<string, unknown> = { updatedAt: new Date() };
     if ("note" in body) data.note = String(body.note ?? "").trim() || null;
@@ -118,13 +135,10 @@ export async function PATCH(
     const removedPoints = current.points.filter(
       (point) => !requestedTypes.includes(point.type as any),
     );
-    if (removedPoints.length) {
-      await requirePermissionLevel(
-        user,
-        GROUNDING_PERMISSIONS.delete,
-        ["manage", "full"],
-        "Không đủ quyền xoá loại kiểm tra khỏi thiết bị",
-      );
+    // Xoá (kể cả một LOẠI kiểm tra khỏi thiết bị, không riêng xoá cả dòng) chỉ dành cho
+    // nhóm toàn quyền — không có mức "personal" nào cho việc xoá, xem groundingHasFullControl.
+    if (removedPoints.length && !scope.all) {
+      return fail("Không đủ quyền xoá loại kiểm tra khỏi thiết bị", 403);
     }
     const addedTypes = requestedTypes.filter(
       (pointType) => !current.points.some((point) => point.type === pointType),
@@ -231,12 +245,12 @@ export async function DELETE(
 ) {
   return handle(async () => {
     const user = await requireUser();
-    await requirePermissionLevel(
-      user,
-      GROUNDING_PERMISSIONS.delete,
-      ["manage", "full"],
-      "Không đủ quyền xoá thiết bị khỏi danh mục kiểm tra",
-    );
+    // Xoá cả dòng: chỉ nhóm toàn quyền — không có mức "personal" nào cho việc xoá, nên
+    // không cần rào thêm theo cương vị của item (khác PATCH/POST, ở đó "personal" còn
+    // hợp lệ với đúng cương vị của mình).
+    if (!(await groundingHasFullControl(user))) {
+      return fail("Không đủ quyền xoá thiết bị khỏi danh mục kiểm tra", 403);
+    }
     const current = await prisma.groundingLightningItem.findUnique({
       where: { id: params.id },
       include: {
@@ -245,7 +259,6 @@ export async function DELETE(
       },
     });
     if (!current) return fail("Không tìm thấy khu vực/thiết bị", 404);
-    await assertGroundingScope(user, current);
     const keys = current.points.flatMap((point) =>
       point.attachments.map((attachment) => attachment.s3Key),
     );

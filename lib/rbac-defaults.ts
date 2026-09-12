@@ -73,8 +73,22 @@ export const DEFAULT_RBAC_MATRIX: Record<string, Partial<Record<string, RbacLeve
   "pccc-close-period": { ADMIN: "full", MANAGER: "manage", SUPERVISOR: "none", TECHNICIAN: "none", VIEWER: "none" },
   "grounding-lightning-view": { ADMIN: "full", MANAGER: "read", SUPERVISOR: "read", TECHNICIAN: "read", VIEWER: "read" },
   "grounding-lightning-manage": { ADMIN: "full", MANAGER: "manage", SUPERVISOR: "manage", TECHNICIAN: "personal", VIEWER: "none" },
-  "grounding-lightning-catalog": { ADMIN: "full", MANAGER: "manage", SUPERVISOR: "none", TECHNICIAN: "none", VIEWER: "none" },
-  "grounding-lightning-delete": { ADMIN: "full", MANAGER: "none", SUPERVISOR: "none", TECHNICIAN: "none", VIEWER: "none" },
+  // TECHNICIAN "personal" (2026-09-12): người giữ một cương vị vận hành cụ thể (VHV) được
+  // THÊM MỚI khu vực/thiết bị và sửa danh mục (đổi tên, tổ máy, loại kiểm tra) — nhưng chỉ
+  // trong PHẠM VI CƯƠNG VỊ họ đang quản lý, ép ở server bằng groundingScopeWithPermissions
+  // (xem app/api/grounding-lightning/route.ts và [id]/route.ts): không đổi được cương vị
+  // quản lý của một dòng, không tạo được dòng cho cương vị khác.
+  //
+  // Bốn nhóm "TOÀN QUYỀN" (xem, sửa, thêm, XOÁ không giới hạn cương vị) là ADMIN/MANAGER/
+  // SUPERVISOR theo vai trò, cộng Quản đốc/Phó quản đốc/Kỹ thuật viên/Trưởng ca theo CƯƠNG
+  // VỊ đang làm việc — hai hàng dưới chỉ khớp được BA nhóm đầu (theo vai trò); "Kỹ thuật
+  // viên" thường mang role TECHNICIAN giống mọi VHV khác nên RBAC theo vai trò không phân
+  // biệt được, phải xét ở SERVER qua groundingScope().all (xem `scope.all` trong route
+  // thay vì rải điều kiện cương vị vào từng dòng RBAC). SUPERVISOR có "manage" ở đây dù
+  // scope.all đã đúng cho họ — giữ để bảng phân quyền trong /admin/roles không hiện "Không
+  // đủ quyền" gây hiểu lầm khi admin đọc lại.
+  "grounding-lightning-catalog": { ADMIN: "full", MANAGER: "manage", SUPERVISOR: "manage", TECHNICIAN: "personal", VIEWER: "none" },
+  "grounding-lightning-delete": { ADMIN: "full", MANAGER: "manage", SUPERVISOR: "manage", TECHNICIAN: "none", VIEWER: "none" },
   // TBYCNN (thiết bị yêu cầu nghiêm ngặt về ATLĐ): mở xem cho mọi vai trò như PCCC —
   // đây là hồ sơ an toàn, ai cũng cần tra hạn kiểm định. Ghi thì siết hơn PCCC: dữ liệu
   // kiểm định do đơn vị kiểm định cấp, không phải ai trực ca cũng sửa được.

@@ -357,6 +357,11 @@ type CatalogForm = {
   types: GroundingType[];
   note: string;
 };
+/** Phạm vi cương vị của người đang mở hộp thoại — trả về nguyên văn từ API (xem
+ *  groundingScopeWithPermissions ở máy chủ), KHÔNG suy từ danh sách `positions` trong
+ *  meta: danh sách đó chỉ liệt kê cương vị ĐÃ CÓ SẴN dữ liệu, một người vừa được giao
+ *  cương vị mới toanh (chưa ai khai báo khu vực nào) sẽ thấy danh sách đó rỗng. */
+type GroundingScope = { all: boolean; positionCode: string | null };
 const EMPTY_FORM: CatalogForm = {
   areaEquipment: "",
   positionCode: "",
@@ -370,14 +375,21 @@ function CatalogDialog({
   onOpenChange,
   item,
   canDelete,
+  scope,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   item: GroundingItem | null;
   canDelete: boolean;
+  /** null = chưa tải kịp phạm vi; xử lý như bị giới hạn (khoá ô) cho an toàn. */
+  scope: GroundingScope | null;
 }) {
   const create = useCreateGroundingItem();
   const update = useUpdateGroundingItem();
+  // Bị giới hạn phạm vi thì KHÔNG được đổi cương vị của dòng đã có, và dòng MỚI phải tạo
+  // đúng cương vị của mình — máy chủ chặn cả hai việc này, ở đây chỉ khoá ô cho khỏi bấm
+  // nhầm rồi nhận lỗi 403.
+  const positionLocked = !scope?.all;
   const initial = item
     ? {
         areaEquipment: item.areaEquipment,
@@ -386,7 +398,7 @@ function CatalogDialog({
         types: item.points.map((point) => point.type),
         note: item.note ?? "",
       }
-    : EMPTY_FORM;
+    : { ...EMPTY_FORM, positionCode: positionLocked ? (scope?.positionCode ?? "") : "" };
   const [form, setForm] = useState<CatalogForm>(initial);
   const areaOptions = useGroundingAreaOptions(form.positionCode, form.machine);
   const normalizedArea = form.areaEquipment
@@ -465,8 +477,14 @@ function CatalogDialog({
           </Field>
           <Field label="Cương vị" span>
             <select
-              className={CONTROL}
+              className={cn(CONTROL, positionLocked && "cursor-not-allowed bg-slate-50 text-slate-400")}
               value={form.positionCode}
+              disabled={positionLocked}
+              title={
+                positionLocked
+                  ? "Bạn chỉ thêm/sửa được thiết bị thuộc cương vị đang quản lý"
+                  : undefined
+              }
               onChange={(e) =>
                 setForm({ ...form, positionCode: e.target.value })
               }
@@ -478,6 +496,11 @@ function CatalogDialog({
                 </option>
               ))}
             </select>
+            {positionLocked && (
+              <p className="mt-1 text-xs text-muted-foreground">
+                Chỉ thêm/sửa được thiết bị thuộc cương vị đang quản lý.
+              </p>
+            )}
           </Field>
           <Field label="Khu vực/thiết bị" span>
             <input
@@ -959,13 +982,6 @@ function HistoryDialog({
 
 export default function GroundingLightningPage() {
   const { can } = useRbacAccess();
-  const canManage = can("grounding-lightning-manage", [
-    "personal",
-    "manage",
-    "full",
-  ]);
-  const canCatalog = can("grounding-lightning-catalog", ["manage", "full"]);
-  const canDelete = can("grounding-lightning-delete", ["manage", "full"]);
   const [filters, setFilters] = useState<GroundingFilters>({
     q: "",
     positionCode: "ALL",
@@ -976,6 +992,27 @@ export default function GroundingLightningPage() {
   const query = useGroundingItems(filters);
   const items = useMemo(() => query.data?.data ?? [], [query.data?.data]);
   const positions = query.data?.meta?.positions ?? [];
+  const scope: GroundingScope | null = query.data?.meta?.scope ?? null;
+  /*
+   * Ba cờ quyền đều CỘNG THÊM `scope?.all` bên cạnh RBAC theo vai trò (`can(...)`), không
+   * chỉ riêng canDelete: "Kỹ thuật viên"/"Quản đốc"/"Phó quản đốc"/"Trưởng ca" thường mang
+   * role TECHNICIAN/SUPERVISOR giống nhiều vị trí khác, RBAC theo vai trò không phân biệt
+   * được — chỉ `scope.all` (máy chủ trả về, xem groundingScope) mới biết dựa vào CƯƠNG VỊ.
+   * Với ba nhóm "toàn quyền" đã có RBAC role-default đúng sẵn (ADMIN/MANAGER/SUPERVISOR),
+   * `scope?.all` chỉ là lưới an toàn thứ hai — không đổi hành vi của họ, chỉ khớp thêm
+   * đúng nhóm cương vị mà RBAC theo vai trò không nhìn thấy được.
+   */
+  const canManage =
+    can("grounding-lightning-manage", ["personal", "manage", "full"]) ||
+    Boolean(scope?.all);
+  // "personal" mở từ 2026-09-12: người giữ một cương vị được thêm/sửa danh mục TRONG
+  // PHẠM VI cương vị đó — máy chủ và CatalogDialog cùng khoá ô Cương vị khi phạm vi
+  // không phải "toàn phân xưởng" (xem prop `scope` của CatalogDialog).
+  const canCatalog =
+    can("grounding-lightning-catalog", ["personal", "manage", "full"]) ||
+    Boolean(scope?.all);
+  const canDelete =
+    can("grounding-lightning-delete", ["manage", "full"]) || Boolean(scope?.all);
   const [catalog, setCatalog] = useState<{
     open: boolean;
     item: GroundingItem | null;
@@ -1713,6 +1750,7 @@ export default function GroundingLightningPage() {
           onOpenChange={(open) => setCatalog((old) => ({ ...old, open }))}
           item={catalog.item}
           canDelete={canDelete}
+          scope={scope}
         />
       )}
       {inspection && (

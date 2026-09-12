@@ -118,12 +118,24 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    await requirePermissionLevel(
-      user,
-      GROUNDING_PERMISSIONS.catalog,
-      ["manage", "full"],
-      "Không đủ quyền thêm danh mục kiểm tra",
-    );
+    /*
+     * Tính PHẠM VI trước rồi mới xét quyền theo vai trò — không đảo ngược thứ tự này.
+     * Bốn nhóm "toàn quyền" (ADMIN/MANAGER/SUPERVISOR theo vai trò, Quản đốc/Phó quản
+     * đốc/Kỹ thuật viên/Trưởng ca theo cương vị) bỏ qua thẳng cổng RBAC catalog bên dưới:
+     * "Kỹ thuật viên" thường mang role TECHNICIAN giống mọi VHV khác, RBAC theo vai trò
+     * (bảng grounding-lightning-catalog) không phân biệt được — chỉ groundingScope() mới
+     * biết dựa vào CƯƠNG VỊ. Người bị giới hạn phạm vi (scope.all === false) vẫn phải qua
+     * cổng RBAC như cũ: "personal" cho thêm trong đúng cương vị mình quản lý.
+     */
+    const scope = await groundingScopeWithPermissions(user);
+    if (!scope.all) {
+      await requirePermissionLevel(
+        user,
+        GROUNDING_PERMISSIONS.catalog,
+        ["personal", "manage", "full"],
+        "Không đủ quyền thêm danh mục kiểm tra",
+      );
+    }
     const body = (await req.json()) as Record<string, unknown>;
     const areaEquipment = String(body.areaEquipment ?? "").trim();
     const positionCode = String(body.positionCode ?? "").trim();
@@ -137,6 +149,11 @@ export async function POST(req: NextRequest) {
     if (!isPositionCode(positionCode))
       return fail("Chọn đúng cương vị quản lý");
     if (!types.length) return fail("Chọn ít nhất một loại kiểm tra");
+    // Chặn tại đây, KHÔNG chỉ ẩn nút ở giao diện: người giữ cương vị A gọi thẳng API vẫn
+    // không tạo được thiết bị cho cương vị B — đúng ranh giới "cương vị mình quản lý".
+    if (!scope.all && positionCode !== scope.positionCode) {
+      return fail("Chỉ được thêm thiết bị thuộc cương vị đang làm việc", 403);
+    }
     const duplicate = await prisma.groundingLightningItem.findFirst({
       where: {
         positionCode,
