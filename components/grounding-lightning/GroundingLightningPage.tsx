@@ -23,7 +23,9 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { ImageLightbox } from "@/components/shared/image-lightbox";
+import { StatCard } from "@/components/shared/stat-card";
 import { PageHeader } from "@/components/shared/page-header";
+import { Badge } from "@/components/ui/badge";
 /*
   Khuôn bảng dùng chung của PCCC / TBYCNN (thanh công cụ số dòng + tìm kiếm, đầu bảng
   xanh EVN có sắp xếp, nút "+" mở khối chi tiết, chân bảng đếm bản ghi + phân trang).
@@ -122,6 +124,8 @@ const BASE_TABLE_COLUMNS = 8;
   hiện trường: người đi kiểm tra đi theo đúng thứ tự đó, nên nó phải là mặc định và
   phải quay lại được sau khi trót sắp theo cột khác.
 */
+/** Bốn thẻ KPI đầu trang — bấm để lọc bảng theo đúng thứ thẻ đang đếm. */
+type GroundingKpi = "normal" | "defect" | "unsigned";
 const SOURCE_ORDER = "source";
 const DEFAULT_SORT: SortState = { key: SOURCE_ORDER, dir: "asc" };
 const MACHINES = [
@@ -200,12 +204,22 @@ function InspectorAvatar({
   );
 }
 
-/** Chip tổ máy — cùng lối trình bày với cột "Tổ máy" của sổ TBYCNN. */
+/**
+ * Chip tổ máy — GIỐNG HỆT MachineBadge của sổ TBYCNN (components/tbycnn/TbycnnPage.tsx):
+ * S1 xanh dương nhạt, S2 tím nhạt, Common chỉ là chữ xám không viền. Hai sổ cùng nói về
+ * tổ máy nên phải cùng một ngôn ngữ màu, đổi một nơi mà quên nơi kia là gieo lẫn lộn.
+ */
 function MachineChip({ machine }: { machine: string }) {
+  if (machine === "COMMON") return <span className="text-[11px] text-muted-foreground">Common</span>;
   return (
-    <span className="inline-flex items-center rounded-md border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[11px] font-semibold text-slate-600">
-      {machine === "COMMON" ? "Common" : machine}
-    </span>
+    <Badge
+      className={cn(
+        "border-transparent font-mono",
+        machine === "S1" ? "bg-sky-100 text-sky-800" : "bg-violet-100 text-violet-800"
+      )}
+    >
+      {machine}
+    </Badge>
   );
 }
 
@@ -303,39 +317,36 @@ function RowActions({ item, ctx }: { item: GroundingItem; ctx: RowActionContext 
   );
 }
 
-function Metric({
-  icon: Icon,
-  label,
-  value,
-  tone,
+/**
+ * Khung bấm được của một thẻ KPI — CHÉP NGUYÊN từ TbycnnPage.tsx (hàm ở đó không export,
+ * mỗi trang tự giữ một bản). Bọc quanh `StatCard` dùng chung (components/shared/stat-card)
+ * — cùng một thẻ gradient bóng kính + hoạ tiết nền đang chạy ở Dashboard, HR, sổ TBYCNN —
+ * để bốn thẻ ở đây nhìn ra ngay là "cùng hệ thống", không phải một góc tự vẽ riêng.
+ */
+function KpiCard({
+  active,
+  onClick,
+  children,
 }: {
-  icon: typeof Zap;
-  label: string;
-  value: number;
-  tone: string;
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
 }) {
   return (
-    <div className="relative overflow-hidden rounded-2xl border border-white/70 bg-white/85 p-4 shadow-[0_14px_40px_rgba(15,39,64,0.08)] backdrop-blur dark:border-slate-700 dark:bg-slate-900/80">
-      <div className={cn("absolute inset-y-0 left-0 w-1", tone)} />
-      <div className="flex items-center gap-3">
-        <span
-          className={cn(
-            "grid size-10 place-items-center rounded-xl text-white shadow-sm",
-            tone,
-          )}
-        >
-          <Icon className="size-5" />
-        </span>
-        <div>
-          <div className="text-2xl font-black tracking-tight text-ink">
-            {value}
-          </div>
-          <div className="text-xs font-medium text-muted-foreground">
-            {label}
-          </div>
-        </div>
-      </div>
-    </div>
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={cn(
+        "group/kpi block w-full rounded-xl text-left transition-all duration-200",
+        "hover:-translate-y-0.5 hover:shadow-lg hover:shadow-slate-900/10",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2",
+        // Thẻ đang được dùng làm bộ lọc: viền đậm để biết bảng bên dưới đang cắt theo thẻ nào.
+        active && "ring-2 ring-accent ring-offset-2"
+      )}
+    >
+      {children}
+    </button>
   );
 }
 
@@ -977,6 +988,27 @@ export default function GroundingLightningPage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(PCCC_PAGE_SIZES[0]);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  /*
+    Bấm thẻ KPI lọc bảng — nhưng KHÔNG tái dùng `filters.status` (bộ lọc "Kết quả" của
+    hộp Bộ lọc): filter đó khớp "CÓ MỘT hạng mục mang trạng thái X" (server dùng
+    `points: { some: { status } }`), còn thẻ "Hoàn toàn bình thường" đếm khu vực có
+    TOÀN BỘ hạng mục là NORMAL — hai phép khớp khác hẳn nhau. "Chờ xác nhận" lại dựa vào
+    `needsSignature`, thứ không tồn tại trong bộ lọc server. Lọc thêm một lớp Ở CLIENT
+    trên chính `items` đã tải, giữ ý nghĩa đúng như số đang hiện trên từng thẻ.
+  */
+  const [activeKpi, setActiveKpi] = useState<GroundingKpi | null>(null);
+  const toggleKpi = (kpi: GroundingKpi) =>
+    setActiveKpi((old) => (old === kpi ? null : kpi));
+  const matchesKpi = (item: GroundingItem, kpi: GroundingKpi) => {
+    switch (kpi) {
+      case "normal":
+        return item.points.every((point) => point.status === "NORMAL");
+      case "defect":
+        return item.points.some((point) => point.status === "DEFECT");
+      case "unsigned":
+        return item.needsSignature;
+    }
+  };
   // Ảnh đang xem trong hộp phóng to — { urls, index } chứ không chỉ index, vì mỗi khu
   // vực có một danh sách ảnh riêng.
   const [lightbox, setLightbox] = useState<{ urls: string[]; index: number } | null>(null);
@@ -1011,8 +1043,8 @@ export default function GroundingLightningPage() {
     filters.type,
     filters.status,
   ].filter((value) => value !== "ALL").length;
-  const hasFilter = filters.q.trim() !== "" || activeFilterCount > 0;
-  const clearFilters = () =>
+  const hasFilter = filters.q.trim() !== "" || activeFilterCount > 0 || activeKpi !== null;
+  const clearFilters = () => {
     setFilters({
       q: "",
       positionCode: "ALL",
@@ -1020,13 +1052,19 @@ export default function GroundingLightningPage() {
       type: "ALL",
       status: "ALL",
     });
+    setActiveKpi(null);
+  };
   /*
     Sắp xếp Ở CLIENT: máy chủ trả về toàn bộ danh mục (vài trăm dòng) trong một lượt, khác
     sổ PCCC/TBYCNN hàng nghìn dòng phải phân trang từ máy chủ. Giữ nguyên thứ tự gốc khi
     chưa chọn cột nào để sổ vẫn chạy theo tuyến đi hiện trường.
   */
+  const kpiFiltered = useMemo(
+    () => (activeKpi ? items.filter((item) => matchesKpi(item, activeKpi)) : items),
+    [items, activeKpi],
+  );
   const sorted = useMemo(() => {
-    if (sort.key === SOURCE_ORDER) return items;
+    if (sort.key === SOURCE_ORDER) return kpiFiltered;
     const dir = sort.dir === "asc" ? 1 : -1;
     const text = (value?: string | null) => (value || "").toLocaleLowerCase("vi-VN");
     const statusRank = (item: GroundingItem, type: GroundingType) => {
@@ -1034,7 +1072,7 @@ export default function GroundingLightningPage() {
       // Khu vực không khai loại này xuống cuối ở CẢ HAI chiều, không lẫn vào nhóm có dữ liệu.
       return point ? STATUS_RANK[point.status] : 99;
     };
-    return [...items].sort((a, b) => {
+    return [...kpiFiltered].sort((a, b) => {
       switch (sort.key) {
         case "position":
           return text(a.position).localeCompare(text(b.position), "vi") * dir;
@@ -1058,7 +1096,7 @@ export default function GroundingLightningPage() {
           return 0;
       }
     });
-  }, [items, sort]);
+  }, [kpiFiltered, sort]);
   const pageCount = Math.max(1, Math.ceil(sorted.length / pageSize));
   const pageRows = useMemo(
     () => sorted.slice((page - 1) * pageSize, page * pageSize),
@@ -1067,7 +1105,7 @@ export default function GroundingLightningPage() {
   // Đổi bộ lọc / cách sắp xếp / cỡ trang thì trang hiện tại không còn nghĩa gì.
   useEffect(() => {
     setPage(1);
-  }, [filters, sort, pageSize]);
+  }, [filters, sort, pageSize, activeKpi]);
   const metrics = useMemo(
     () => ({
       total: items.length,
@@ -1331,30 +1369,54 @@ export default function GroundingLightningPage() {
         </>
       </PageHeader>
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Metric
-          icon={RadioTower}
-          label="Khu vực/thiết bị"
-          value={metrics.total}
-          tone="bg-slate-700"
-        />
-        <Metric
-          icon={CheckCircle2}
-          label="Hoàn toàn bình thường"
-          value={metrics.normal}
-          tone="bg-emerald-600"
-        />
-        <Metric
-          icon={AlertTriangle}
-          label="Có khiếm khuyết"
-          value={metrics.defect}
-          tone="bg-rose-600"
-        />
-        <Metric
-          icon={FileClock}
-          label="Chờ xác nhận"
-          value={metrics.unsigned}
-          tone="bg-amber-500"
-        />
+        {/* Thẻ Tổng KHÔNG lọc theo giá trị riêng — bấm nó để BỎ lọc KPI đang chọn, cùng
+            việc active=true khi chưa chọn thẻ nào, cho biết "đang xem tất cả". Bốn tông
+            màu — navy/green/red/amber — và bốn hoạ tiết — grid/dots/hazard/ticks — lấy
+            đúng bộ đang dùng ở sổ TBYCNN, cùng ngôn ngữ hình ảnh cho cả hai sổ thiết bị. */}
+        <KpiCard active={activeKpi === null} onClick={() => setActiveKpi(null)}>
+          <StatCard
+            compact
+            labelTop
+            texture="grid"
+            label="Khu vực/thiết bị"
+            value={metrics.total}
+            icon={RadioTower}
+            tint="navy"
+          />
+        </KpiCard>
+        <KpiCard active={activeKpi === "normal"} onClick={() => toggleKpi("normal")}>
+          <StatCard
+            compact
+            labelTop
+            texture="dots"
+            label="Hoàn toàn bình thường"
+            value={metrics.normal}
+            icon={CheckCircle2}
+            tint="green"
+          />
+        </KpiCard>
+        <KpiCard active={activeKpi === "defect"} onClick={() => toggleKpi("defect")}>
+          <StatCard
+            compact
+            labelTop
+            texture="hazard"
+            label="Có khiếm khuyết"
+            value={metrics.defect}
+            icon={AlertTriangle}
+            tint="red"
+          />
+        </KpiCard>
+        <KpiCard active={activeKpi === "unsigned"} onClick={() => toggleKpi("unsigned")}>
+          <StatCard
+            compact
+            labelTop
+            texture="ticks"
+            label="Chờ xác nhận"
+            value={metrics.unsigned}
+            icon={FileClock}
+            tint="amber"
+          />
+        </KpiCard>
       </div>
       <PcccTableCard
         pageSize={pageSize}
