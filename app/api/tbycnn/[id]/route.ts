@@ -6,8 +6,6 @@ import {
   computeDefaultKdTiepTheo,
   parseVNDate,
   suyKhaDungTuKetQua,
-  TBYCNN_FILLABLE_WHEN_EMPTY,
-  trimOrNull,
   validateSoLuong,
 } from "@/lib/tbycnn";
 import {
@@ -52,13 +50,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
 
     const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
     const data = operationalData(body);
-
-    // Mã hiệu / KKS: cho BỔ SUNG khi đang trống, không cho sửa đè giá trị đã có.
-    for (const field of TBYCNN_FILLABLE_WHEN_EMPTY) {
-      if (!(field in body)) continue;
-      if (String(existing[field] ?? "").trim()) continue;
-      Object.assign(data, { [field]: trimOrNull(body[field]) });
-    }
+    const soLuongSauSua = "soLuong" in data ? data.soLuong ?? null : existing.soLuong;
 
     /*
      * Đổi "Kết quả" thì kéo theo hai ô số lượng khả dụng — trừ khi người dùng tự đặt
@@ -69,14 +61,15 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
      * biên bản nói ba kiểu khác nhau về cùng một cái thang.
      */
     if ("ketQuaThu" in data && !("soLuongKhaDung" in data) && !("soLuongKhongKhaDung" in data)) {
-      const suy = suyKhaDungTuKetQua(data.ketQuaThu, existing.soLuong);
+      const suy = suyKhaDungTuKetQua(data.ketQuaThu, soLuongSauSua);
       if (suy) Object.assign(data, suy);
     }
 
     const khaDung = "soLuongKhaDung" in data ? data.soLuongKhaDung ?? null : existing.soLuongKhaDung;
     const khongKhaDung =
       "soLuongKhongKhaDung" in data ? data.soLuongKhongKhaDung ?? null : existing.soLuongKhongKhaDung;
-    const error = validateSoLuong(existing.soLuong, khaDung, khongKhaDung);
+    // Số lượng nay sửa được — soi con số MỚI, xem chú thích cùng chỗ ở route bulk.
+    const error = validateSoLuong(soLuongSauSua, khaDung, khongKhaDung);
     if (error) throw fail(error, 400);
 
     // Xoá trắng "KĐ tiếp theo" thì tự tính lại = KĐ gần nhất + chu kỳ thử (mục 6.4 bản cũ).

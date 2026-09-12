@@ -5,8 +5,6 @@ import {
   computeDefaultKdTiepTheo,
   parseVNDate,
   suyKhaDungTuKetQua,
-  TBYCNN_FILLABLE_WHEN_EMPTY,
-  trimOrNull,
   validateSoLuong,
 } from "@/lib/tbycnn";
 import {
@@ -77,13 +75,9 @@ export async function POST(req: NextRequest) {
       }
 
       const data = operationalData(update);
-      // Mã hiệu / KKS: cho BỔ SUNG khi đang trống, không cho sửa đè giá trị đã có.
-      for (const field of TBYCNN_FILLABLE_WHEN_EMPTY) {
-        if (!(field in update)) continue;
-        if (String(existing[field] ?? "").trim()) continue;
-        Object.assign(data, { [field]: trimOrNull(update[field]) });
-      }
       if (Object.keys(data).length === 0) continue;
+
+      const soLuongSauSua = "soLuong" in data ? data.soLuong ?? null : existing.soLuong;
 
       /*
        * Đổi "Kết quả" thì kéo theo hai ô số lượng khả dụng — trừ khi người dùng tự đặt
@@ -94,14 +88,16 @@ export async function POST(req: NextRequest) {
        * biên bản nói ba kiểu khác nhau về cùng một cái thang.
        */
       if ("ketQuaThu" in data && !("soLuongKhaDung" in data) && !("soLuongKhongKhaDung" in data)) {
-        const suy = suyKhaDungTuKetQua(data.ketQuaThu, existing.soLuong);
+        const suy = suyKhaDungTuKetQua(data.ketQuaThu, soLuongSauSua);
         if (suy) Object.assign(data, suy);
       }
 
       const khaDung = "soLuongKhaDung" in data ? data.soLuongKhaDung ?? null : existing.soLuongKhaDung;
       const khongKhaDung =
         "soLuongKhongKhaDung" in data ? data.soLuongKhongKhaDung ?? null : existing.soLuongKhongKhaDung;
-      const error = validateSoLuong(existing.soLuong, khaDung, khongKhaDung);
+      // Số lượng nay SỬA ĐƯỢC, nên ràng buộc "khả dụng + không khả dụng = số lượng" phải
+      // soi con số MỚI; lấy `existing.soLuong` là chặn oan đúng lượt vừa sửa số lượng.
+      const error = validateSoLuong(soLuongSauSua, khaDung, khongKhaDung);
       if (error) throw fail(`"${existing.tenThietBi}": ${error}`, 400);
 
       // Xoá trắng "KĐ tiếp theo" thì tự tính lại = KĐ gần nhất + chu kỳ thử (mục 6.4 bản cũ).

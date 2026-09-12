@@ -1531,9 +1531,25 @@ export default function TbycnnPage() {
                               {markedDelete ? <X className="size-3.5" /> : <Trash2 className="size-3.5" />}
                             </button>
                           )}
-                          <span className={cn("min-w-0", markedDelete && "text-rose-700 line-through")}>
-                            {row.tenThietBi}
-                          </span>
+                          {/* Tên thiết bị sửa được từ 2026-09-12. Là cột NOT NULL và là thứ
+                              mọi biên bản gọi tên dòng này, nên gõ trắng thì giữ nguyên tên cũ
+                              thay vì ghi chuỗi rỗng — server cũng bỏ qua giá trị rỗng. */}
+                          {editable ? (
+                            <span className="min-w-0 flex-1">
+                              <EditableCell
+                                value={row.tenThietBi}
+                                wrap
+                                align="left"
+                                onSave={(v) =>
+                                  v.trim() && setDraftValue(saved, "tenThietBi", v.trim())
+                                }
+                              />
+                            </span>
+                          ) : (
+                            <span className={cn("min-w-0", markedDelete && "text-rose-700 line-through")}>
+                              {row.tenThietBi}
+                            </span>
+                          )}
                         </span>
                       </TableCell>
                       {/* Nhãn CHUẨN theo danh mục chức danh của hệ thống, không phải chuỗi
@@ -1547,7 +1563,18 @@ export default function TbycnnPage() {
                           <MachineBadge machine={row.machine} />
                         </TableCell>
                       )}
-                      <TableCell className={cn(TD_TALL, "break-words")}>{row.maHieu ?? "—"}</TableCell>
+                      <TableCell className={cn(TD_TALL, "break-words", dirty("maHieu"))}>
+                        {editable ? (
+                          <EditableCell
+                            value={row.maHieu}
+                            wrap
+                            align="left"
+                            onSave={(v) => setDraftValue(saved, "maHieu", v.trim() || null)}
+                          />
+                        ) : (
+                          row.maHieu ?? "—"
+                        )}
+                      </TableCell>
                       {activeTool ? (
                         toolTableColumns.map((col) => {
                           const value = row[col.key];
@@ -1595,7 +1622,18 @@ export default function TbycnnPage() {
                           );
                         })
                       ) : (
-                        <TableCell className={cn(TD_TALL, "font-mono text-[11px]")}>{row.kks ?? "—"}</TableCell>
+                        <TableCell className={cn(TD_TALL, "font-mono text-[11px]", dirty("kks"))}>
+                          {editable ? (
+                            <EditableCell
+                              value={row.kks}
+                              wrap
+                              align="left"
+                              onSave={(v) => setDraftValue(saved, "kks", v.trim() || null)}
+                            />
+                          ) : (
+                            row.kks ?? "—"
+                          )}
+                        </TableCell>
                       )}
                       <TableCell className={cn(TD_TALL, "text-center", dirty("chuKyThu"))}>
                         {editable ? (
@@ -1641,17 +1679,46 @@ export default function TbycnnPage() {
                       <TableRow className="hover:bg-transparent">
                         <TableCell colSpan={colCount} className="bg-slate-50/80 p-0">
                           <DetailPanel>
-                            {/* Hai trường đầu là thông tin GỐC theo hồ sơ nhà máy — chỉ đọc
-                                kể cả khi đang mở khoá bảng (xem lib/tbycnn.ts).
-                                KHÔNG hiện "Chức danh quản lý": giá trị của nó ("ESP S1") chính
+                            {/* KHÔNG hiện "Chức danh quản lý": giá trị của nó ("ESP S1") chính
                                 là hai cột Cương vị quản lý + Tổ máy đã có sẵn trên bảng. Trường
                                 vẫn lưu trong DB và vẫn nằm trong file Excel xuất ra. */}
-                            <DetailField label="Vị trí">{row.viTri ?? "—"}</DetailField>
-                            <DetailField label="Đơn vị quản lý">{row.donViQuanLy ?? "—"}</DetailField>
+                            <DetailField label="Vị trí">
+                              {editable ? (
+                                <EditableCell
+                                  value={row.viTri}
+                                  wrap
+                                  onSave={(v) => setDraftValue(saved, "viTri", v.trim() || null)}
+                                />
+                              ) : (
+                                row.viTri ?? "—"
+                              )}
+                            </DetailField>
+                            <DetailField label="Đơn vị quản lý">
+                              {editable ? (
+                                <EditableCell
+                                  value={row.donViQuanLy}
+                                  wrap
+                                  onSave={(v) => setDraftValue(saved, "donViQuanLy", v.trim() || null)}
+                                />
+                              ) : (
+                                row.donViQuanLy ?? "—"
+                              )}
+                            </DetailField>
                             {/* Số lượng đứng ngay TRÊN "Khả dụng" (cùng cột 3) để soi nhanh
-                                ràng buộc khả dụng + không khả dụng = số lượng. Là thông tin
-                                gốc theo hồ sơ nhà máy nên chỉ đọc, kể cả khi mở khoá bảng. */}
-                            <DetailField label="Số lượng">{row.soLuong ?? "—"}</DetailField>
+                                ràng buộc khả dụng + không khả dụng = số lượng — nay cả ba ô
+                                đều sửa được nên càng cần đứng cạnh nhau: server chặn lượt lưu
+                                nếu tổng hai ô dưới không khớp ô này. */}
+                            <DetailField label="Số lượng">
+                              {editable ? (
+                                <EditableCell
+                                  value={row.soLuong}
+                                  type="number"
+                                  onSave={(v) => setDraftValue(saved, "soLuong", v.trim() === "" ? null : Number(v))}
+                                />
+                              ) : (
+                                row.soLuong ?? "—"
+                              )}
+                            </DetailField>
                             {/* Đơn vị kiểm định KHÔNG span 2 nữa: để nguyên thì nửa phải của ô
                                 bỏ trống, đẩy "Không khả dụng" xuống đứng một mình cả một hàng. */}
                             <DetailField label="Đơn vị kiểm định">
@@ -1714,11 +1781,31 @@ export default function TbycnnPage() {
                                 khỏi cột trên bảng vì gần như luôn trống, nhưng vẫn còn trong
                                 bản Excel và bản in — biểu mẫu giấy có cột này. */}
                             <DetailField label="Thông số kỹ thuật" span={activeTool ? 2 : "full"}>
-                              <span className="whitespace-pre-line">{row.thongSoKyThuat ?? "—"}</span>
+                              {editable ? (
+                                <EditableCell
+                                  value={row.thongSoKyThuat}
+                                  wrap
+                                  onSave={(v) => setDraftValue(saved, "thongSoKyThuat", v.trim() || null)}
+                                />
+                              ) : (
+                                <span className="whitespace-pre-line">{row.thongSoKyThuat ?? "—"}</span>
+                              )}
                             </DetailField>
                             {activeTool && (
                               <DetailField label="Nghiệm thu sau khi sửa chữa">
-                                <span className="whitespace-pre-line">{row.nghiemThuSauSuaChua ?? "—"}</span>
+                                {/* Vốn đã nằm trong TBYCNN_EDITABLE_ON_EDIT từ đầu nhưng lại vẽ
+                                    chỉ-đọc — server nhận mà giao diện không có chỗ gõ. */}
+                                {editable ? (
+                                  <EditableCell
+                                    value={row.nghiemThuSauSuaChua}
+                                    wrap
+                                    onSave={(v) =>
+                                      setDraftValue(saved, "nghiemThuSauSuaChua", v.trim() || null)
+                                    }
+                                  />
+                                ) : (
+                                  <span className="whitespace-pre-line">{row.nghiemThuSauSuaChua ?? "—"}</span>
+                                )}
                               </DetailField>
                             )}
                             <DetailField label="Khiếm khuyết" span={2}>

@@ -192,6 +192,14 @@ type OperationalInput = {
 
 /** Giá trị thuần (không phải Prisma update-operation) để dùng chung cho create và update. */
 export type TbycnnOperationalData = {
+  // Thông tin gốc của thiết bị — mở cho sửa từ 2026-09-12, xem TBYCNN_EDITABLE_ON_EDIT.
+  tenThietBi?: string;
+  soLuong?: number | null;
+  maHieu?: string | null;
+  kks?: string | null;
+  thongSoKyThuat?: string | null;
+  viTri?: string | null;
+  donViQuanLy?: string | null;
   chuKyThu?: number | null;
   soBbkd?: string | null;
   donViKd?: string | null;
@@ -219,6 +227,21 @@ export type TbycnnOperationalData = {
  */
 export function operationalData(body: OperationalInput) {
   const data: TbycnnOperationalData = {};
+  /*
+    `tenThietBi` là cột NOT NULL và là thứ mọi biên bản/bộ lọc gọi tên dòng này — gõ trắng
+    rồi lưu thì sổ có một dòng không tên. Bỏ qua giá trị rỗng thay vì ghi chuỗi trắng;
+    giao diện cũng chặn sẵn, đây là hàng rào cuối.
+  */
+  if ("tenThietBi" in body) {
+    const ten = String(body.tenThietBi ?? "").trim();
+    if (ten) data.tenThietBi = ten;
+  }
+  if ("soLuong" in body) data.soLuong = toIntOrNull(body.soLuong);
+  if ("maHieu" in body) data.maHieu = trimOrNull(body.maHieu);
+  if ("kks" in body) data.kks = trimOrNull(body.kks);
+  if ("thongSoKyThuat" in body) data.thongSoKyThuat = trimOrNull(body.thongSoKyThuat);
+  if ("viTri" in body) data.viTri = trimOrNull(body.viTri);
+  if ("donViQuanLy" in body) data.donViQuanLy = trimOrNull(body.donViQuanLy);
   if ("chuKyThu" in body) data.chuKyThu = toNumberOrNull(body.chuKyThu);
   if ("soBbkd" in body) data.soBbkd = trimOrNull(body.soBbkd);
   if ("donViKd" in body) data.donViKd = trimOrNull(body.donViKd);

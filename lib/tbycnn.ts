@@ -232,12 +232,33 @@ export function romanOf(value: number): string {
 
 // ------------------------------------------------------- khoá trường khi sửa
 /**
- * Các trường LUÔN được sửa dù thiết bị đã có sẵn — thông tin "vận hành", cần cập nhật
- * định kỳ. Các trường còn lại (tên, mã hiệu, vị trí…) là thông tin gốc theo hồ sơ nhà
- * máy nên bị khoá khi SỬA, chỉ mở khi THÊM MỚI. Riêng `maHieu`/`kks` cho bổ sung nếu
- * đang trống. Quy tắc bê nguyên mục 6.6 của bản cũ và được cưỡng chế ở API.
+ * Các trường sửa được ở chế độ "Sửa bảng".
+ *
+ * TRƯỚC 2026-09-12 danh sách này chỉ gồm nhóm "vận hành" (kiểm định, khiếm khuyết, ghi
+ * chú…); nhóm thông tin gốc theo hồ sơ nhà máy (tên thiết bị, số lượng, mã hiệu, KKS,
+ * thông số kỹ thuật, vị trí, đơn vị quản lý) bị khoá, chỉ nhập được lúc THÊM MỚI — bê
+ * nguyên mục 6.6 của bản HTML cũ. Thực tế sổ có dòng sai tên, sai vị trí từ file nguồn
+ * mà không đường nào sửa ngoài việc xoá đi khai lại, nên người dùng yêu cầu mở hết.
+ *
+ * VẪN KHOÁ, cố ý không đưa vào đây: `khuVuc`/`cuongVi`/`cuongViCode`/`machine` (trục
+ * PHÂN QUYỀN — sửa là dòng nhảy sang cương vị khác, một chiều, người sửa mất luôn quyền
+ * ghi dòng đó) và `nhom`/`danhMuc`/`nhomSo`/`tt` (trục GOM NHÓM và thứ tự sổ). Chúng
+ * không phải "nội dung" của thiết bị mà là chỗ đứng của nó trong sổ; đổi chỗ đứng là
+ * việc của màn Thêm/Chuyển, không phải của một ô gõ tay giữa bảng.
+ *
+ * Danh sách được cưỡng chế ở API: xem `operationalData` (lib/tbycnn-service.ts) — nơi
+ * duy nhất dựng dữ liệu ghi, trường nào không có ở đó thì có gửi lên cũng bị bỏ qua.
  */
 export const TBYCNN_EDITABLE_ON_EDIT = [
+  // -- Thông tin gốc của thiết bị (mở khoá từ 2026-09-12) --
+  "tenThietBi",
+  "soLuong",
+  "maHieu",
+  "kks",
+  "thongSoKyThuat",
+  "viTri",
+  "donViQuanLy",
+  // -- Thông tin kiểm định / vận hành --
   "chuKyThu",
   "kdGanNhatText",
   "kdTiepTheoText",
@@ -285,15 +306,13 @@ export function suyKhaDungTuKetQua(
   return { soLuongKhaDung: dat ? 1 : 0, soLuongKhongKhaDung: dat ? 0 : 1 };
 }
 
-/** Bổ sung được khi đang trống, dù các trường gốc khác đã khoá. */
-export const TBYCNN_FILLABLE_WHEN_EMPTY = ["maHieu", "kks"] as const;
-
-export function fieldLockedOnEdit(field: string, current: unknown) {
-  if ((TBYCNN_EDITABLE_ON_EDIT as readonly string[]).includes(field)) return false;
-  if ((TBYCNN_FILLABLE_WHEN_EMPTY as readonly string[]).includes(field)) {
-    return String(current ?? "").trim().length > 0;
-  }
-  return true;
+/**
+ * `maHieu` / `kks` trước đây chỉ BỔ SUNG được khi đang trống. Nay hai trường này nằm hẳn
+ * trong `TBYCNN_EDITABLE_ON_EDIT` nên danh sách riêng không còn việc gì để làm — giữ lại
+ * một mảng rỗng chỉ để hai route phải nhớ mà bỏ qua, nên xoá hẳn.
+ */
+export function fieldLockedOnEdit(field: string) {
+  return !(TBYCNN_EDITABLE_ON_EDIT as readonly string[]).includes(field);
 }
 
 // ------------------------------------------------------------------------ cột
