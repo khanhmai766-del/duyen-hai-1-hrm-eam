@@ -104,7 +104,7 @@ import {
 const CONTROL =
   "h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-ink outline-none transition focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100 dark:border-slate-700 dark:bg-slate-900";
 /** Số cột của bảng — dùng cho `colSpan` của dòng rỗng và dòng chi tiết. */
-const TABLE_COLUMNS = 10;
+const TABLE_COLUMNS = 9;
 /*
   Khoá sắp xếp “giữ nguyên thứ tự máy chủ trả về” (cương vị → khu vực). Bảng này là sổ
   hiện trường: người đi kiểm tra đi theo đúng thứ tự đó, nên nó phải là mặc định và
@@ -1215,7 +1215,7 @@ export default function GroundingLightningPage() {
         }
       >
         <div className="hidden md:block">
-          <Table className="min-w-[1700px]" wrapperClassName={TABLE_SCROLLER}>
+          <Table className="min-w-[1480px]" wrapperClassName={TABLE_SCROLLER}>
             <TableHeader>
               <TableRow className={TR_HEAD}>
                 <TableHead className={cn(TH_NAVY, TH_EXPAND)} />
@@ -1240,9 +1240,6 @@ export default function GroundingLightningPage() {
                 </TableHead>
                 <TableHead className={cn(TH_NAVY, "w-[170px]")}>
                   <SortHeader label="Chống sét" sortKey="LIGHTNING" sort={sort} onSort={toggleSort} />
-                </TableHead>
-                <TableHead className={cn(TH_NAVY, "w-[220px]")}>
-                  <PlainHeader label="Ghi chú" align="left" />
                 </TableHead>
                 <TableHead className={cn(TH_NAVY, "w-[90px]")}>
                   <PlainHeader label="Hình ảnh" />
@@ -1295,16 +1292,9 @@ export default function GroundingLightningPage() {
                       <TableCell className={cn(TD_ROW, "text-center")}>
                         <PointCell item={item} type="LIGHTNING" />
                       </TableCell>
-                      {/* Ghi chú thường dài vài dòng — cắt còn một dòng ở đây, bản đầy đủ
-                          nằm trong khối chi tiết của nút "+". */}
-                      <TableCell className={cn(TD_ROW, "text-slate-600")}>
-                        <span className="block truncate" title={item.note || undefined}>
-                          {item.note || "—"}
-                        </span>
-                      </TableCell>
-                      {/* Ảnh đứng cột RIÊNG chứ không nép vào cuối ô ghi chú: ghi chú dài
-                          là con số ảnh bị đẩy khuất, mà đây lại là cột người ta dò theo
-                          chiều dọc để biết khu vực nào đã có ảnh hiện trường. */}
+                      {/* Ghi chú đã rời khỏi bảng (xem khối chi tiết của nút "+"), nhưng số
+                          ảnh thì ở lại: đây là cột người ta dò theo chiều dọc để biết khu
+                          vực nào đã có ảnh hiện trường. */}
                       <TableCell className={cn(TD_ROW, "text-center")}>
                         {photoCount > 0 ? (
                           <span className="inline-flex items-center gap-1 font-semibold text-cyan-700">
