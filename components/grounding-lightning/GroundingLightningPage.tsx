@@ -1,7 +1,7 @@
 "use client";
 /* eslint-disable @next/next/no-img-element -- ảnh riêng tư được phục vụ qua proxy S3 của ứng dụng */
 
-import { useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   Camera,
@@ -22,6 +22,30 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/shared/page-header";
+/*
+  Khuôn bảng dùng chung của PCCC / TBYCNN (thanh công cụ số dòng + tìm kiếm, đầu bảng
+  xanh EVN có sắp xếp, nút "+" mở khối chi tiết, chân bảng đếm bản ghi + phân trang).
+  Tên thư mục là `pccc` vì đó là bảng đầu tiên dùng nó, nhưng đây là bộ dùng chung —
+  TbycnnPage cũng nhập từ đây.
+*/
+import {
+  DetailField,
+  DetailPanel,
+  PcccTableCard,
+  PlainHeader,
+  ROW_HOVER,
+  RowExpander,
+  SortHeader,
+  TABLE_SCROLLER,
+  TD_EXPAND,
+  TD_ROW,
+  TH_EXPAND,
+  TH_NAVY,
+  TR_HEAD,
+  PCCC_PAGE_SIZES,
+  rowBackground,
+  type SortState,
+} from "@/components/pccc/pccc-table-card";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -31,6 +55,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import { POSITION_CATALOG } from "@/lib/position-catalog";
 import {
@@ -56,6 +88,15 @@ import {
 
 const CONTROL =
   "h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-ink outline-none transition focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100 dark:border-slate-700 dark:bg-slate-900";
+/** Số cột của bảng — dùng cho `colSpan` của dòng rỗng và dòng chi tiết. */
+const TABLE_COLUMNS = 9;
+/*
+  Khoá sắp xếp “giữ nguyên thứ tự máy chủ trả về” (cương vị → khu vực). Bảng này là sổ
+  hiện trường: người đi kiểm tra đi theo đúng thứ tự đó, nên nó phải là mặc định và
+  phải quay lại được sau khi trót sắp theo cột khác.
+*/
+const SOURCE_ORDER = "source";
+const DEFAULT_SORT: SortState = { key: SOURCE_ORDER, dir: "asc" };
 const MACHINES = [
   { value: "ALL", label: "Tất cả tổ máy" },
   { value: "S1", label: "Tổ máy 1" },
@@ -105,6 +146,112 @@ function StatusPill({ status }: { status: GroundingStatus }) {
       <Icon className="size-3.5" />
       {config.label}
     </span>
+  );
+}
+
+/** Chip tổ máy — cùng lối trình bày với cột "Tổ máy" của sổ TBYCNN. */
+function MachineChip({ machine }: { machine: string }) {
+  return (
+    <span className="inline-flex items-center rounded-md border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[11px] font-semibold text-slate-600">
+      {machine === "COMMON" ? "Common" : machine}
+    </span>
+  );
+}
+
+/**
+ * Ô kết quả của MỘT loại kiểm tra. Khu vực không khai loại đó thì để gạch ngang chứ
+ * không bỏ trống — ô trống đọc ra là "quên nhập", gạch ngang là "không áp dụng".
+ */
+function PointCell({ item, type }: { item: GroundingItem; type: GroundingType }) {
+  const point = item.points.find((p) => p.type === type);
+  if (!point) return <span className="text-slate-300">—</span>;
+  return (
+    <span title={point.defectDescription || undefined}>
+      <StatusPill status={point.status} />
+    </span>
+  );
+}
+
+function countPhotos(item: GroundingItem) {
+  return item.points.reduce((total, point) => total + point.attachments.length, 0);
+}
+
+/** Thứ hạng để sắp xếp cột kết quả: hỏng lên trước, rồi chưa kiểm tra, rồi bình thường. */
+const STATUS_RANK: Record<GroundingStatus, number> = {
+  DEFECT: 0,
+  UNCHECKED: 1,
+  NORMAL: 2,
+};
+
+type RowActionContext = {
+  canManage: boolean;
+  canCatalog: boolean;
+  canDelete: boolean;
+  signPending: boolean;
+  onInspect: (item: GroundingItem) => void;
+  onSign: (item: GroundingItem) => void;
+  onHistory: (item: GroundingItem) => void;
+  onEdit: (item: GroundingItem) => void;
+  onRemove: (item: GroundingItem) => void;
+};
+
+/**
+ * Cụm nút của một dòng, dùng chung cho cả bảng (máy tính) lẫn thẻ (điện thoại) — trước
+ * đây hai chỗ chép tay riêng nên quyền của nút Sửa và nút Xoá bị đổi chỗ cho nhau ở bản
+ * bảng. Mốc đúng là phía máy chủ: sửa danh mục cần quyền `catalog`, xoá cần quyền `delete`.
+ */
+function RowActions({ item, ctx }: { item: GroundingItem; ctx: RowActionContext }) {
+  return (
+    <div className="flex flex-wrap items-center justify-center gap-1">
+      {ctx.canManage && (
+        <Button size="sm" variant="soft" onClick={() => ctx.onInspect(item)}>
+          <ShieldCheck />
+          Kiểm tra
+        </Button>
+      )}
+      {ctx.canManage && (
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => ctx.onSign(item)}
+          disabled={ctx.signPending}
+        >
+          <Save />
+          Xác nhận
+        </Button>
+      )}
+      <Button
+        size="icon"
+        variant="ghost"
+        title="Lịch sử"
+        className="size-8"
+        onClick={() => ctx.onHistory(item)}
+      >
+        <History />
+      </Button>
+      {ctx.canCatalog && (
+        <Button
+          size="icon"
+          variant="ghost"
+          title="Sửa danh mục"
+          className="size-8"
+          onClick={() => ctx.onEdit(item)}
+        >
+          <Pencil />
+        </Button>
+      )}
+      {ctx.canDelete && (
+        <Button
+          size="icon"
+          variant="ghost"
+          title="Xoá"
+          className="size-8 text-rose-600"
+          onClick={() => ctx.onRemove(item)}
+        >
+          <Trash2 />
+        </Button>
+      )}
+    </div>
   );
 }
 
@@ -729,6 +876,67 @@ export default function GroundingLightningPage() {
   const [history, setHistory] = useState<GroundingItem | null>(null);
   const removeItem = useDeleteGroundingItem();
   const sign = useSignGroundingItem();
+  const [sort, setSort] = useState<SortState>(DEFAULT_SORT);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(PCCC_PAGE_SIZES[0]);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const toggleSort = (key: string) =>
+    setSort((old) =>
+      old.key === key
+        ? { key, dir: old.dir === "asc" ? "desc" : "asc" }
+        : { key, dir: "asc" },
+    );
+  const hasFilter = Object.entries(filters).some(
+    ([key, value]) => (key === "q" ? value.trim() !== "" : value !== "ALL"),
+  );
+  /*
+    Sắp xếp Ở CLIENT: máy chủ trả về toàn bộ danh mục (vài trăm dòng) trong một lượt, khác
+    sổ PCCC/TBYCNN hàng nghìn dòng phải phân trang từ máy chủ. Giữ nguyên thứ tự gốc khi
+    chưa chọn cột nào để sổ vẫn chạy theo tuyến đi hiện trường.
+  */
+  const sorted = useMemo(() => {
+    if (sort.key === SOURCE_ORDER) return items;
+    const dir = sort.dir === "asc" ? 1 : -1;
+    const text = (value?: string | null) => (value || "").toLocaleLowerCase("vi-VN");
+    const statusRank = (item: GroundingItem, type: GroundingType) => {
+      const point = item.points.find((p) => p.type === type);
+      // Khu vực không khai loại này xuống cuối ở CẢ HAI chiều, không lẫn vào nhóm có dữ liệu.
+      return point ? STATUS_RANK[point.status] : 99;
+    };
+    return [...items].sort((a, b) => {
+      switch (sort.key) {
+        case "position":
+          return text(a.position).localeCompare(text(b.position), "vi") * dir;
+        case "area":
+          return a.areaEquipment.localeCompare(b.areaEquipment, "vi") * dir;
+        case "machine":
+          return a.machine.localeCompare(b.machine, "vi") * dir;
+        case "GROUNDING":
+        case "LIGHTNING":
+          return (
+            (statusRank(a, sort.key) - statusRank(b, sort.key)) * dir ||
+            a.areaEquipment.localeCompare(b.areaEquipment, "vi")
+          );
+        case "signed": {
+          // Chưa xác nhận là thứ cần nhìn thấy nhất — cho đứng đầu ở chiều tăng dần.
+          const at = a.latestInspection?.signedAt ?? "";
+          const bt = b.latestInspection?.signedAt ?? "";
+          return at.localeCompare(bt) * dir;
+        }
+        default:
+          return 0;
+      }
+    });
+  }, [items, sort]);
+  const pageCount = Math.max(1, Math.ceil(sorted.length / pageSize));
+  const pageRows = useMemo(
+    () => sorted.slice((page - 1) * pageSize, page * pageSize),
+    [sorted, page, pageSize],
+  );
+  // Đổi bộ lọc / cách sắp xếp / cỡ trang thì trang hiện tại không còn nghĩa gì.
+  useEffect(() => {
+    setPage(1);
+  }, [filters, sort, pageSize]);
   const metrics = useMemo(
     () => ({
       total: items.length,
@@ -767,13 +975,24 @@ export default function GroundingLightningPage() {
       toast.error(error instanceof Error ? error.message : "Không xoá được");
     }
   };
+  const rowActions: RowActionContext = {
+    canManage,
+    canCatalog,
+    canDelete,
+    signPending: sign.isPending,
+    onInspect: setInspection,
+    onSign: doSign,
+    onHistory: setHistory,
+    onEdit: (item) => setCatalog({ open: true, item }),
+    onRemove: doDelete,
+  };
   return (
     <div className="relative min-h-[calc(100vh-7rem)] space-y-5 pb-10">
       <div className="pointer-events-none absolute -right-10 -top-12 -z-10 size-72 rounded-full bg-cyan-200/20 blur-3xl" />
       <PageHeader
-        title="Tiếp địa & chống sét"
+        title="TIẾP ĐỊA & CHỐNG SÉT"
         description="Kiểm tra theo từng điểm áp dụng, lưu ảnh khiếm khuyết trên S3 và ghi nhận người xác nhận từng lượt."
-        mobileTitle="Tiếp địa & chống sét"
+        mobileTitle="TIẾP ĐỊA & CHỐNG SÉT"
       >
         <>
           {canCatalog && (
@@ -818,13 +1037,9 @@ export default function GroundingLightningPage() {
           <Filter className="size-4" />
           Bộ lọc hiện trường
         </div>
-        <div className="grid gap-2 md:grid-cols-5">
-          <input
-            className={CONTROL}
-            value={filters.q}
-            onChange={(e) => setFilters({ ...filters, q: e.target.value })}
-            placeholder="Tìm khu vực, thiết bị…"
-          />
+        {/* Ô tìm kiếm đã dọn sang thanh công cụ của bảng — để hai ô tìm cạnh nhau thì
+            người dùng phải đoán ô nào lọc cái gì. */}
+        <div className="grid gap-2 md:grid-cols-4">
           <select
             className={CONTROL}
             value={filters.positionCode}
@@ -875,173 +1090,217 @@ export default function GroundingLightningPage() {
           </select>
         </div>
       </section>
-      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_20px_55px_rgba(15,39,64,0.08)] dark:border-slate-700 dark:bg-slate-900">
-        <div className="hidden overflow-x-auto md:block">
-          <table className="w-full min-w-[1120px] border-collapse text-sm">
-            <thead className="bg-[linear-gradient(110deg,#0f2944,#0d5668)] text-white">
-              <tr>
-                {[
-                  "Cương vị",
-                  "Khu vực/thiết bị",
-                  "Loại kiểm tra",
-                  "Kết quả",
-                  "Ghi chú · Hình ảnh",
-                  "Người xác nhận",
-                  "Thao tác",
-                ].map((h) => (
-                  <th
-                    key={h}
-                    className="px-3 py-3 text-left text-xs font-bold uppercase tracking-wide"
-                  >
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((item) => (
-                <tr
-                  key={item.id}
-                  className="border-t border-slate-100 align-top hover:bg-cyan-50/30"
-                >
-                  <td className="px-3 py-4">
-                    <b className="block text-ink">{item.position || "—"}</b>
-                    <span className="text-xs text-muted-foreground">
-                      {machineLabel(item.machine)}
-                    </span>
-                  </td>
-                  <td className="max-w-64 px-3 py-4 font-semibold text-ink">
-                    {item.areaEquipment}
-                  </td>
-                  <td className="px-3 py-4">
-                    <div className="space-y-3">
-                      {item.points.map((p) => (
-                        <div key={p.id} className="h-12 font-semibold">
-                          {GROUNDING_TYPE_LABEL[p.type]}
-                        </div>
-                      ))}
-                    </div>
-                  </td>
-                  <td className="px-3 py-4">
-                    <div className="space-y-3">
-                      {item.points.map((p) => (
-                        <div key={p.id} className="min-h-12">
-                          <StatusPill status={p.status} />
-                          {p.defectDescription && (
-                            <p className="mt-1 max-w-72 whitespace-pre-line text-xs text-rose-700">
-                              {p.defectDescription}
-                            </p>
+      <PcccTableCard
+        pageSize={pageSize}
+        onPageSizeChange={setPageSize}
+        search={filters.q}
+        onSearchChange={(value) => setFilters({ ...filters, q: value })}
+        searchPlaceholder="Tìm khu vực, thiết bị, khiếm khuyết…"
+        page={page}
+        pageCount={pageCount}
+        total={sorted.length}
+        filtered={hasFilter}
+        onPageChange={setPage}
+        toolbarExtra={
+          sort.key !== SOURCE_ORDER ? (
+            <Button variant="ghost" size="sm" onClick={() => setSort(DEFAULT_SORT)}>
+              Về thứ tự hồ sơ gốc
+            </Button>
+          ) : null
+        }
+      >
+        <div className="hidden md:block">
+          <Table className="min-w-[1240px]" wrapperClassName={TABLE_SCROLLER}>
+            <TableHeader>
+              <TableRow className={TR_HEAD}>
+                <TableHead className={cn(TH_NAVY, TH_EXPAND)} />
+                <TableHead className={cn(TH_NAVY, "w-[150px]")}>
+                  <SortHeader label="Cương vị" sortKey="position" sort={sort} onSort={toggleSort} />
+                </TableHead>
+                {/* Cột định danh căn TRÁI: đây là chữ để đọc, không phải giá trị để dóng cột. */}
+                <TableHead className={cn(TH_NAVY, "w-[260px]")}>
+                  <SortHeader label="Khu vực/thiết bị" sortKey="area" sort={sort} onSort={toggleSort} align="left" />
+                </TableHead>
+                <TableHead className={cn(TH_NAVY, "w-[110px]")}>
+                  <SortHeader label="Tổ máy" sortKey="machine" sort={sort} onSort={toggleSort} />
+                </TableHead>
+                {/*
+                  Hai loại kiểm tra tách thành HAI CỘT thay vì xếp chồng trong một ô: mỗi khu
+                  vực chỉ còn một dòng cao bằng mọi dòng khác (bản cũ mỗi dòng cao gấp ba, xem
+                  được 4 khu vực một màn hình), và đọc dọc được theo từng loại — lướt một cột
+                  là thấy ngay chỗ nào tiếp địa đang hỏng.
+                */}
+                <TableHead className={cn(TH_NAVY, "w-[170px]")}>
+                  <SortHeader label="Tiếp địa" sortKey="GROUNDING" sort={sort} onSort={toggleSort} />
+                </TableHead>
+                <TableHead className={cn(TH_NAVY, "w-[170px]")}>
+                  <SortHeader label="Chống sét" sortKey="LIGHTNING" sort={sort} onSort={toggleSort} />
+                </TableHead>
+                <TableHead className={cn(TH_NAVY, "w-[220px]")}>
+                  <PlainHeader label="Ghi chú · Hình ảnh" align="left" />
+                </TableHead>
+                <TableHead className={cn(TH_NAVY, "w-[160px]")}>
+                  <SortHeader label="Người xác nhận" sortKey="signed" sort={sort} onSort={toggleSort} />
+                </TableHead>
+                <TableHead className={cn(TH_NAVY, "w-[190px]")}>
+                  <PlainHeader label="Thao tác" />
+                </TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {pageRows.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={TABLE_COLUMNS} className="py-14 text-center">
+                    <RadioTower className="mx-auto mb-3 size-10 text-slate-300" />
+                    <b className="text-ink">Chưa có dữ liệu phù hợp</b>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      Thêm khu vực/thiết bị mới hoặc thay đổi bộ lọc.
+                    </p>
+                  </TableCell>
+                </TableRow>
+              )}
+              {pageRows.map((item, index) => {
+                const expanded = expandedId === item.id;
+                const rowBg = rowBackground({ index, expanded });
+                const photoCount = countPhotos(item);
+                return (
+                  <Fragment key={item.id}>
+                    <TableRow className={cn(rowBg, ROW_HOVER)}>
+                      <TableCell className={cn(TD_EXPAND, rowBg)}>
+                        <RowExpander
+                          expanded={expanded}
+                          onToggle={() => setExpandedId(expanded ? null : item.id)}
+                        />
+                      </TableCell>
+                      <TableCell className={cn(TD_ROW, "whitespace-nowrap text-center font-medium")}>
+                        {item.position || "—"}
+                      </TableCell>
+                      <TableCell className={cn(TD_ROW, "font-semibold text-ink")}>
+                        {item.areaEquipment}
+                      </TableCell>
+                      <TableCell className={cn(TD_ROW, "text-center")}>
+                        <MachineChip machine={item.machine} />
+                      </TableCell>
+                      <TableCell className={cn(TD_ROW, "text-center")}>
+                        <PointCell item={item} type="GROUNDING" />
+                      </TableCell>
+                      <TableCell className={cn(TD_ROW, "text-center")}>
+                        <PointCell item={item} type="LIGHTNING" />
+                      </TableCell>
+                      {/* Ghi chú và mô tả khiếm khuyết thường dài vài dòng — cắt còn một dòng
+                          ở đây, bản đầy đủ nằm trong khối chi tiết của nút "+". */}
+                      <TableCell className={cn(TD_ROW, "text-slate-600")}>
+                        <div className="flex items-center gap-2">
+                          <span className="min-w-0 flex-1 truncate" title={item.note || undefined}>
+                            {item.note || "—"}
+                          </span>
+                          {photoCount > 0 && (
+                            <span className="inline-flex shrink-0 items-center gap-1 font-semibold text-cyan-700">
+                              <Camera className="size-3.5" />
+                              {photoCount}
+                            </span>
                           )}
                         </div>
-                      ))}
-                    </div>
-                  </td>
-                  <td className="max-w-64 px-3 py-4">
-                    <p className="text-xs text-slate-600">{item.note || "—"}</p>
-                    {item.points.some((p) => p.attachments.length) && (
-                      <div className="mt-2 flex items-center gap-1 text-xs font-semibold text-cyan-700">
-                        <Camera className="size-4" />
-                        {item.points.reduce(
-                          (n, p) => n + p.attachments.length,
-                          0,
-                        )}{" "}
-                        ảnh
-                      </div>
-                    )}
-                  </td>
-                  <td className="px-3 py-4">
-                    {item.latestInspection ? (
-                      <div className="min-w-32">
-                        <b className="block text-xs">
-                          {item.latestInspection.inspectorName}
-                        </b>
-                        <span className="text-[11px] text-muted-foreground">
-                          {fmtDate(item.latestInspection.signedAt)}
-                        </span>
-                        {item.needsSignature && (
-                          <span className="mt-1 block text-[11px] font-bold text-amber-700">
-                            Có thay đổi, cần xác nhận lại
-                          </span>
+                      </TableCell>
+                      <TableCell className={cn(TD_ROW, "text-center")}>
+                        {item.latestInspection ? (
+                          <>
+                            <b className="block whitespace-nowrap">
+                              {item.latestInspection.inspectorName}
+                            </b>
+                            <span className="text-[11px] text-muted-foreground">
+                              {fmtDate(item.latestInspection.signedAt)}
+                            </span>
+                            {item.needsSignature && (
+                              <span className="mt-0.5 block text-[11px] font-bold text-amber-700">
+                                Cần xác nhận lại
+                              </span>
+                            )}
+                          </>
+                        ) : (
+                          <span className="text-muted-foreground">Chưa xác nhận</span>
                         )}
-                      </div>
-                    ) : (
-                      <span className="text-xs text-muted-foreground">
-                        Chưa xác nhận
-                      </span>
+                      </TableCell>
+                      <TableCell className={cn(TD_ROW, "text-center")}>
+                        <RowActions item={item} ctx={rowActions} />
+                      </TableCell>
+                    </TableRow>
+                    {expanded && (
+                      <TableRow className="hover:bg-transparent">
+                        <TableCell colSpan={TABLE_COLUMNS} className="bg-slate-50/80 p-0">
+                          <DetailPanel>
+                            <DetailField label="Cương vị">{item.position || "—"}</DetailField>
+                            <DetailField label="Tổ máy">{machineLabel(item.machine)}</DetailField>
+                            <DetailField label="Cập nhật">{fmtDate(item.updatedAt)}</DetailField>
+                            {item.points.map((point) => (
+                              <DetailField
+                                key={point.id}
+                                label={GROUNDING_TYPE_LABEL[point.type]}
+                                span="full"
+                              >
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <StatusPill status={point.status} />
+                                  {point.attachments.length > 0 && (
+                                    <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-cyan-700">
+                                      <Camera className="size-3.5" />
+                                      {point.attachments.length} ảnh
+                                    </span>
+                                  )}
+                                </div>
+                                {point.defectDescription && (
+                                  <p className="mt-1 whitespace-pre-line text-rose-700">
+                                    {point.defectDescription}
+                                  </p>
+                                )}
+                              </DetailField>
+                            ))}
+                            <DetailField label="Ghi chú" span="full">
+                              {item.note ? (
+                                <span className="whitespace-pre-line">{item.note}</span>
+                              ) : (
+                                "—"
+                              )}
+                            </DetailField>
+                            <DetailField label="Xác nhận" span="full">
+                              {item.latestInspection ? (
+                                <>
+                                  <b>{item.latestInspection.inspectorName}</b>
+                                  {item.latestInspection.inspectorPosition
+                                    ? ` · ${item.latestInspection.inspectorPosition}`
+                                    : ""}{" "}
+                                  · {fmtDate(item.latestInspection.signedAt)}
+                                  {item.needsSignature && (
+                                    <span className="ml-2 font-bold text-amber-700">
+                                      Có thay đổi sau lần xác nhận, cần xác nhận lại
+                                    </span>
+                                  )}
+                                </>
+                              ) : (
+                                "Chưa có lần xác nhận nào"
+                              )}
+                            </DetailField>
+                          </DetailPanel>
+                        </TableCell>
+                      </TableRow>
                     )}
-                  </td>
-                  <td className="px-3 py-4">
-                    <div className="flex min-w-32 flex-wrap gap-1">
-                      {canManage && (
-                        <Button
-                          size="sm"
-                          variant="soft"
-                          onClick={() => setInspection(item)}
-                        >
-                          <ShieldCheck />
-                          Kiểm tra
-                        </Button>
-                      )}
-                      {canManage && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => doSign(item)}
-                          disabled={sign.isPending}
-                        >
-                          <Save />
-                          Xác nhận
-                        </Button>
-                      )}
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        title="Lịch sử"
-                        className="size-8"
-                        onClick={() => setHistory(item)}
-                      >
-                        <History />
-                      </Button>
-                      {canDelete && (
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          title="Sửa danh mục"
-                          className="size-8"
-                          onClick={() => setCatalog({ open: true, item })}
-                        >
-                          <Pencil />
-                        </Button>
-                      )}
-                      {canCatalog && (
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          title="Xoá"
-                          className="size-8 text-rose-600"
-                          onClick={() => doDelete(item)}
-                        >
-                          <Trash2 />
-                        </Button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                  </Fragment>
+                );
+              })}
+            </TableBody>
+          </Table>
         </div>
+        {/* Điện thoại: giữ dạng THẺ của riêng trang này thay vì mượn CSS thu gọn bảng của
+            PCCC — bộ CSS đó ẩn mọi cột từ thứ 5 trở đi, tức nuốt luôn hai ô kết quả lẫn cụm
+            nút thao tác, đúng những thứ người đi hiện trường cần nhất. */}
         <div className="divide-y md:hidden">
-          {items.map((item) => (
+          {pageRows.map((item) => (
             <article key={item.id} className="p-4">
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <span className="text-xs font-bold text-cyan-700">
                     {item.position} · {machineLabel(item.machine)}
                   </span>
-                  <h3 className="mt-1 font-bold text-ink">
-                    {item.areaEquipment}
-                  </h3>
+                  <h3 className="mt-1 font-bold text-ink">{item.areaEquipment}</h3>
                 </div>
                 {item.needsSignature && (
                   <span
@@ -1066,53 +1325,19 @@ export default function GroundingLightningPage() {
                 ))}
               </div>
               <div className="mt-3 flex flex-wrap gap-2">
-                {canManage && (
-                  <Button size="sm" onClick={() => setInspection(item)}>
-                    <ShieldCheck />
-                    Kiểm tra
-                  </Button>
-                )}
-                {canManage && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => doSign(item)}
-                  >
-                    Xác nhận
-                  </Button>
-                )}
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => setHistory(item)}
-                >
-                  <History />
-                  Lịch sử
-                </Button>
-                {canCatalog && (
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => setCatalog({ open: true, item })}
-                  >
-                    <Pencil />
-                    Sửa
-                  </Button>
-                )}
-                {canDelete && (
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="text-rose-600"
-                    onClick={() => doDelete(item)}
-                  >
-                    <Trash2 />
-                    Xoá
-                  </Button>
-                )}
+                <RowActions item={item} ctx={rowActions} />
               </div>
             </article>
           ))}
+          {pageRows.length === 0 && (
+            <div className="py-16 text-center">
+              <RadioTower className="mx-auto mb-3 size-10 text-slate-300" />
+              <b className="text-ink">Chưa có dữ liệu phù hợp</b>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Thêm khu vực/thiết bị mới hoặc thay đổi bộ lọc.
+              </p>
+            </div>
+          )}
         </div>
         {query.isLoading && (
           <div className="py-16 text-center text-sm text-muted-foreground">
@@ -1124,16 +1349,7 @@ export default function GroundingLightningPage() {
             {query.error.message}
           </div>
         )}
-        {!query.isLoading && !query.isError && !items.length && (
-          <div className="py-16 text-center">
-            <RadioTower className="mx-auto mb-3 size-10 text-slate-300" />
-            <b className="text-ink">Chưa có dữ liệu phù hợp</b>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Thêm khu vực/thiết bị mới hoặc thay đổi bộ lọc.
-            </p>
-          </div>
-        )}
-      </section>
+      </PcccTableCard>
       {catalog.open && (
         <CatalogDialog
           key={`${catalog.item?.id ?? "new"}-${catalog.open}`}
