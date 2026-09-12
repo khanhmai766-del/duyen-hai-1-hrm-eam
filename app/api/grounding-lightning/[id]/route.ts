@@ -73,8 +73,19 @@ export async function PATCH(
        * dù `assertGroundingScope` ở trên đã xác nhận dòng NÀY đang thuộc đúng cương vị họ
        * quản lý, đổi positionCode là chuyển nó SANG cương vị khác, một việc chỉ nhóm
        * toàn quyền mới được làm.
+       *
+       * SO SÁNH GIÁ TRỊ, không chỉ xét "có mặt trong body": CatalogDialog luôn gửi
+       * NGUYÊN form khi lưu (kể cả positionCode không đổi — nó là ô chọn có sẵn giá trị,
+       * không phải ô rời để trống), nên `"positionCode" in body` LUÔN đúng ở mọi lượt lưu
+       * qua hộp "Sửa danh mục". Xét theo "có mặt" chặn nhầm CẢ lượt chỉ sửa ghi chú/khu
+       * vực — đúng lỗi 403 trong ảnh chụp màn hình 2026-09-12, chặn mọi người bị giới hạn
+       * phạm vi lưu bất cứ gì qua hộp này.
        */
-      if (editsCatalog && "positionCode" in body) {
+      if (
+        editsCatalog &&
+        "positionCode" in body &&
+        String(body.positionCode ?? "") !== (current.positionCode ?? "")
+      ) {
         return fail("Không được đổi cương vị quản lý khi đang giới hạn phạm vi cương vị", 403);
       }
     }
