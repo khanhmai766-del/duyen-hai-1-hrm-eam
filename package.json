@@ -87,12 +87,12 @@
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "recharts": "^2.13.0",
-    "sharp": "^0.33.5",
+    "sharp": "^0.35.4",
     "sonner": "^1.5.0",
     "tailwind-merge": "^2.5.4",
     "tailwindcss-animate": "^1.0.7",
     "tesseract.js": "^7.0.0",
-    "xlsx": "^0.18.5",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
     "yauzl": "^3.4.0",
     "zod": "^4.6.2"
   },
@@ -116,5 +116,9 @@
     "tailwindcss": "^3.4.14",
     "tsx": "^4.19.1",
     "typescript": "^5.6.3"
+  },
+  "overrides": {
+    "uuid": "^11.1.1",
+    "xmldom": "npm:@xmldom/xmldom@^0.8.15"
   }
 }
