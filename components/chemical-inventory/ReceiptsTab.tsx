@@ -339,6 +339,14 @@ function ReceiptDialog({
   const contractor = toNum(form.contractorWeight);
   const accepted = plant !== null && contractor !== null ? Math.min(plant, contractor) : (plant ?? contractor);
   const onlyOneWeight = (plant === null) !== (contractor === null);
+  /*
+    Phiếu sinh từ PHIẾU VẬT TƯ vốn dĩ chỉ có MỘT tờ phiếu cân của nhà máy — không
+    thiếu gì cả. `truckWarnings()` (lib/chemical-inventory/receipts.ts) đã cố ý không
+    gắn cờ MISSING_WEIGHT cho nguồn này, và lúc TẠO từ phiếu vật tư cũng không đòi ghi
+    chú. Đòi ở màn sửa là tự mâu thuẫn, lại chặn đúng lúc người dùng vào điền nốt biển
+    số mà hệ thống đang gắn cờ MISSING_VEHICLE để nhắc. Máy chủ nới cùng một luật.
+  */
+  const needsNote = onlyOneWeight && receipt?.source !== "MATERIAL_TICKET";
   const periodOfDate = form.receivedAt.slice(0, 7);
   const movesPeriod = periodOfDate !== month;
   const pending = create.isPending || update.isPending;
@@ -491,14 +499,14 @@ function ReceiptDialog({
             </span>
           </div>
 
-          {onlyOneWeight && (
+          {needsNote && (
             <p className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
               Chỉ có một số cân nên không đối chứng được — bắt buộc ghi chú lý do.
             </p>
           )}
 
           <div>
-            <Label htmlFor="ci-note">Ghi chú{onlyOneWeight && " (bắt buộc)"}</Label>
+            <Label htmlFor="ci-note">Ghi chú{needsNote && " (bắt buộc)"}</Label>
             <Textarea
               id="ci-note"
               value={form.note}
@@ -513,7 +521,7 @@ function ReceiptDialog({
           <Button variant="outline" onClick={onClose} disabled={pending}>
             Hủy
           </Button>
-          <Button onClick={() => void submit()} disabled={pending || accepted === null || (onlyOneWeight && !form.note.trim())}>
+          <Button onClick={() => void submit()} disabled={pending || accepted === null || (needsNote && !form.note.trim())}>
             {pending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Lưu
           </Button>

@@ -107,7 +107,14 @@ export type ReceiptInput = {
  * Cố tình KHÔNG nhận `acceptedWeight` và `periodKey` từ client — hai giá trị đó
  * server tự tính từ hai số cân và từ `receivedAt`.
  */
-export function validateReceiptInput(payload: Record<string, unknown>): ValidationResult<ReceiptInput> {
+export function validateReceiptInput(
+  payload: Record<string, unknown>,
+  /**
+   * Nguồn của phiếu ĐANG SỬA (bỏ trống khi tạo mới — phiếu gõ tay luôn là MANUAL).
+   * Chỉ dùng để miễn đòi hỏi ghi chú cho phiếu sinh từ phiếu vật tư, xem bên dưới.
+   */
+  options?: { source?: string | null }
+): ValidationResult<ReceiptInput> {
   const itemId = String(payload.itemId ?? "").trim();
   if (!itemId) return fail("Chưa chọn mặt hàng");
 
@@ -128,8 +135,18 @@ export function validateReceiptInput(payload: Record<string, unknown>): Validati
   if (!vehicle.ok) return vehicle;
 
   const note = String(payload.note ?? "").trim() || null;
-  // Chỉ một số cân thì khối lượng công nhận không đối chứng được — bắt ghi chú lý do.
-  if ((plant.value === null) !== (contractor.value === null) && !note) {
+  /*
+   * Chỉ một số cân thì khối lượng công nhận không đối chứng được — bắt ghi chú lý do.
+   *
+   * TRỪ phiếu sinh từ PHIẾU VẬT TƯ: ở bước lãnh, VHV chỉ cầm MỘT tờ phiếu cân của nhà
+   * máy, không có số thứ hai để đối chứng. `truckWarnings()` (receipts.ts) đã cố ý
+   * không gắn cờ MISSING_WEIGHT cho nguồn này với đúng lý do đó, và `linkTicketTrucks()`
+   * cũng cố ý không đòi ghi chú khi tạo. Giữ đòi hỏi ở đây là tự mâu thuẫn: hệ thống
+   * vừa bảo "không thiếu gì cả", vừa chặn không cho sửa — kể cả khi người dùng chỉ vào
+   * điền nốt biển số mà chính nó đang gắn cờ MISSING_VEHICLE để nhắc.
+   */
+  const fromMaterialTicket = options?.source === "MATERIAL_TICKET";
+  if (!fromMaterialTicket && (plant.value === null) !== (contractor.value === null) && !note) {
     return fail("Chỉ có một số cân — phải ghi chú lý do trước khi lưu");
   }
 

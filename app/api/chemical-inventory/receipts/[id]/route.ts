@@ -16,16 +16,20 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     await requirePermissionLevel(user, CHEMICAL_PERMISSION_ID, [...WRITE_LEVELS], "Không đủ quyền sửa phiếu nhập hóa chất");
 
     const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
-    const input = validateReceiptInput(body);
-    if (!input.ok) throw fail(input.error, 400);
 
+    // Đọc bản ghi TRƯỚC khi kiểm tra: `source` quyết định có đòi ghi chú lý do hay
+    // không khi phiếu chỉ có một số cân (xem validateReceiptInput).
+    //
     // Mức cá nhân phải được phép trên CẢ phiếu hiện tại lẫn cương vị đích. Nếu chỉ
     // kiểm payload, người dùng có thể lấy id phiếu nơi khác rồi đổi nó về cương vị mình.
     const existing = await prisma.chemicalReceipt.findUnique({
       where: { id: params.id },
-      select: { receivingPosition: true },
+      select: { receivingPosition: true, source: true },
     });
     if (!existing) throw fail("Không tìm thấy phiếu nhập", 404);
+
+    const input = validateReceiptInput(body, { source: existing.source });
+    if (!input.ok) throw fail(input.error, 400);
     const level = await effectiveLevel(user);
     const scopedLevel = level === "read" || level === "none" ? "personal" : level;
     assertPositionScope(user, existing.receivingPosition ?? "", scopedLevel);
