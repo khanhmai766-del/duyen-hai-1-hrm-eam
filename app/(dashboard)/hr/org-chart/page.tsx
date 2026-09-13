@@ -128,6 +128,12 @@ function realtimeShift(now: Date = new Date()): { date: string; shiftType: strin
   return { date: localDate(d), shiftType: "NIGHT" };
 }
 
+// Địa chỉ gốc của trình duyệt cho link/QR sơ đồ công khai. Server (và lượt hydrate) nhận "" rồi client
+// vẽ lại với origin thật — đúng như useEffect cũ, nhưng không cần setState trong effect.
+const subscribeNothing = () => () => {};
+const getBrowserOrigin = () => window.location.origin;
+const getServerOrigin = () => "";
+
 export default function OrgChartPage() {
   const initial = realtimeShift();
   const [date, setDate] = React.useState(initial.date);
@@ -158,7 +164,7 @@ export default function OrgChartPage() {
   const [approveOpen, setApproveOpen] = React.useState(false);
   const [lockTarget, setLockTarget] = React.useState<boolean | null>(null);
   const [shareOpen, setShareOpen] = React.useState(false);
-  const [origin, setOrigin] = React.useState("");
+  const origin = React.useSyncExternalStore(subscribeNothing, getBrowserOrigin, getServerOrigin);
   const recall = useRecallCheckIn();
   const attendanceLock = useSetAttendanceLock();
   const rbac = useRbacAccess();
@@ -170,10 +176,6 @@ export default function OrgChartPage() {
     const timer = window.setTimeout(() => setCheckInSuccessMessage(""), 5000);
     return () => window.clearTimeout(timer);
   }, [checkInSuccessMessage]);
-
-  React.useEffect(() => {
-    setOrigin(window.location.origin);
-  }, []);
 
   function showCheckInSuccessMessage() {
     setCheckInSuccessMessage(randomCheckInSuccessMessage(shiftType));
@@ -586,14 +588,17 @@ function CheckInDialog({
   const [swapNote, setSwapNote] = React.useState("");
 
   // Ưu tiên cương vị của người thao tác; chỉ rơi về ghế đầu tiên khi không khớp.
-  React.useEffect(() => {
+  // Chỉnh lúc render; khoá null để lần render đầu cũng nạp như effect cũ.
+  const [formSyncKey, setFormSyncKey] = React.useState<{ open: boolean; preferredPosition: string } | null>(null);
+  if (!formSyncKey || formSyncKey.open !== open || formSyncKey.preferredPosition !== preferredPosition) {
+    setFormSyncKey({ open, preferredPosition });
     if (open) {
       setPosition(preferredPosition);
       setHours(8);
       setSwap(false);
       setSwapNote("");
     }
-  }, [open, preferredPosition]);
+  }
 
   const dateLabel = date.split("-").reverse().join("-"); // YYYY-MM-DD → DD-MM-YYYY
   const caLabel = `${SHIFT_TYPE[shiftType as keyof typeof SHIFT_TYPE]?.label ?? ""} ${dateLabel}`.trim();

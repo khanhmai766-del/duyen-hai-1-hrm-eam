@@ -176,20 +176,23 @@ export default function AdminDayBoard() {
   const dl = deadlineFor(selDate);
   const dlLabel = dl.toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" });
 
-  React.useEffect(() => {
+  // Cố ý theo ID: chỉ nạp lại form khi đổi ngày hoặc đổi bản đăng ký. Theo cả object thì mỗi lần
+  // danh sách tải lại (object mới) form bị ghi đè, xoá mất ghi chú người dùng đang gõ.
+  // Chỉnh lúc render; khoá null để lần render đầu cũng nạp như effect cũ.
+  const formResetKey = JSON.stringify([selDate, myDayReg?.id ?? null, rejectedMyReg?.id ?? null]);
+  const [formResetSeen, setFormResetSeen] = React.useState<string | null>(null);
+  if (formResetSeen !== formResetKey) {
+    setFormResetSeen(formResetKey);
     setActionPanel(null);
     setActionText("");
     if (rejectedMyReg && !myDayReg) {
       setNote(rejectedMyReg.note ?? "");
       setSessionKey(PERIOD_TO_SESSION[normalizeHcPeriod(rejectedMyReg.group.period)]);
-      return;
+    } else {
+      setNote("");
+      setSessionKey("CA_NGAY");
     }
-    setNote("");
-    setSessionKey("CA_NGAY");
-    // Cố ý theo ID: chỉ nạp lại form khi đổi ngày hoặc đổi bản đăng ký. Theo cả object thì mỗi lần
-    // danh sách tải lại (object mới) form bị ghi đè, xoá mất ghi chú người dùng đang gõ.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selDate, myDayReg?.id, rejectedMyReg?.id]);
+  }
 
   const moveDateRange = (days: -1 | 1) => {
     const nextStart = addDaysIso(rangeStart, days);
@@ -642,9 +645,11 @@ function RegistrationArchiveDialog({
   const groups = React.useMemo(() => archiveGroups(filtered), [filtered]);
   const hasValidRange = from <= to;
 
-  React.useEffect(() => {
+  const [searchOpenSeen, setSearchOpenSeen] = React.useState(open);
+  if (searchOpenSeen !== open) {
+    setSearchOpenSeen(open);
     if (!open) setSearch("");
-  }, [open]);
+  }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

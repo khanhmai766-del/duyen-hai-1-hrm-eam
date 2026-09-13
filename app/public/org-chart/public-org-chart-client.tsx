@@ -70,6 +70,9 @@ export function PublicOrgChartClient() {
   }, [selectedDate, selectedShiftType]);
 
   React.useEffect(() => {
+    // Đồng bộ với hệ thống ngoài (API công khai, hỏi lại mỗi 30s) — đúng việc của effect, không phải
+    // state suy ra được lúc render (refresh() xoá lỗi cũ lúc bắt đầu tải rồi ghi dữ liệu khi có kết quả).
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void refresh(true);
     const timer = window.setInterval(() => void refresh(true), 30_000);
     return () => window.clearInterval(timer);

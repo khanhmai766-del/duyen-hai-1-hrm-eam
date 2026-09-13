@@ -662,13 +662,17 @@ function GroupDialog({
   const [hours, setHours] = React.useState(8);
   const [period, setPeriod] = React.useState<ManagedGroupPeriod>("FULL_DAY");
 
-  React.useEffect(() => {
-    if (!open) return;
-    setContent(group?.content ?? "");
-    setHours(group?.hours ?? 8);
-    const current = normalizeHcPeriod(group?.period);
-    setPeriod(MANAGED_GROUP_PERIODS.some((item) => item.value === current) ? current : "FULL_DAY");
-  }, [open, group]);
+  // Mở hộp thoại (hoặc đổi nhóm) thì nạp lại form — chỉnh lúc render. Khoá null để lần render đầu cũng xét.
+  const [formSyncKey, setFormSyncKey] = React.useState<{ open: boolean; group: HcGroup | undefined } | null>(null);
+  if (!formSyncKey || formSyncKey.open !== open || formSyncKey.group !== group) {
+    setFormSyncKey({ open, group });
+    if (open) {
+      setContent(group?.content ?? "");
+      setHours(group?.hours ?? 8);
+      const current = normalizeHcPeriod(group?.period);
+      setPeriod(MANAGED_GROUP_PERIODS.some((item) => item.value === current) ? current : "FULL_DAY");
+    }
+  }
 
   const dateLabel = date.split("-").reverse().join("-");
   const cleanContent = content.trim();
@@ -754,14 +758,18 @@ function SelfAdministrativeCheckInDialog({
     [groups, myId]
   );
 
-  React.useEffect(() => {
-    if (!open) return;
-    const current = myCheckIn
-      ? HC_SELF_PERIODS.find((p) => myCheckIn.group.content === `Hành chính - ${p.label}`)
-      : undefined;
-    setPeriod(current?.value ?? "FULL_DAY");
-    setWorkNote(myCheckIn?.member.note ?? "");
-  }, [open, myCheckIn]);
+  // (myCheckIn là useMemo — cùng object giữa các lần render, so bằng !== an toàn.)
+  const [formSyncKey, setFormSyncKey] = React.useState<{ open: boolean; myCheckIn: typeof myCheckIn } | null>(null);
+  if (!formSyncKey || formSyncKey.open !== open || formSyncKey.myCheckIn !== myCheckIn) {
+    setFormSyncKey({ open, myCheckIn });
+    if (open) {
+      const current = myCheckIn
+        ? HC_SELF_PERIODS.find((p) => myCheckIn.group.content === `Hành chính - ${p.label}`)
+        : undefined;
+      setPeriod(current?.value ?? "FULL_DAY");
+      setWorkNote(myCheckIn?.member.note ?? "");
+    }
+  }
 
   async function save() {
     try {
@@ -847,10 +855,11 @@ function CheckInDialog({
   const checkIn = useHcCheckIn();
   const [hours, setHours] = React.useState(group.hours);
 
-  React.useEffect(() => {
-    if (!open) return;
-    setHours(group.hours);
-  }, [open, group.hours]);
+  const [hoursSyncKey, setHoursSyncKey] = React.useState({ open, hours: group.hours });
+  if (hoursSyncKey.open !== open || hoursSyncKey.hours !== group.hours) {
+    setHoursSyncKey({ open, hours: group.hours });
+    if (open) setHours(group.hours);
+  }
 
   async function save() {
     try {

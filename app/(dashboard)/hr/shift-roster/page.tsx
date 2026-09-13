@@ -168,9 +168,13 @@ export default function ShiftRosterPage() {
   const [editValue, setEditValue] = React.useState("");
   const [editNote, setEditNote] = React.useState("");
 
-  React.useEffect(() => {
+  // URL đổi (back/forward, link) thì theo tham số ?view — chỉnh lúc render. searchParams của Next giữ
+  // nguyên object tới khi URL đổi nên so !== an toàn; giá trị đầu đã lấy từ URL ở useState.
+  const [viewSearchParams, setViewSearchParams] = React.useState(searchParams);
+  if (viewSearchParams !== searchParams) {
+    setViewSearchParams(searchParams);
     setView(searchParams.get("view") === "timesheet" ? "timesheet" : "roster");
-  }, [searchParams]);
+  }
 
   function changeView(nextView: View) {
     setView(nextView);
@@ -245,13 +249,19 @@ export default function ShiftRosterPage() {
   const timesheetLastShown = Math.min(timesheetPage * timesheetPageSize, rows.length);
   const pagedRows = rows.slice((timesheetPage - 1) * timesheetPageSize, timesheetPage * timesheetPageSize);
 
-  React.useEffect(() => {
+  // Đổi tháng / cương vị / ô tìm / chế độ xem thì về trang 1; số trang đổi thì kéo trang về trong
+  // [1, số trang]. Chỉnh lúc render, khoá null để lần render đầu cũng chạy như effect cũ.
+  const timesheetResetKey = JSON.stringify([monthStr, posFilter, employeeFilter, view]);
+  const [timesheetResetSeen, setTimesheetResetSeen] = React.useState<string | null>(null);
+  if (timesheetResetSeen !== timesheetResetKey) {
+    setTimesheetResetSeen(timesheetResetKey);
     setTimesheetPage(1);
-  }, [monthStr, posFilter, employeeFilter, view]);
-
-  React.useEffect(() => {
+  }
+  const [timesheetClampTotal, setTimesheetClampTotal] = React.useState<number | null>(null);
+  if (timesheetClampTotal !== timesheetTotalPages) {
+    setTimesheetClampTotal(timesheetTotalPages);
     setTimesheetPage((current) => Math.min(Math.max(1, current), timesheetTotalPages));
-  }, [timesheetTotalPages]);
+  }
 
   function calculatedCellValue(entries: TimesheetEntry[], hc?: { hours: number; content: string; note?: string | null }) {
     return [
