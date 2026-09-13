@@ -7,7 +7,8 @@ import { isDefectSyncEventEnabled } from "@/lib/defect-two-way-sync";
 
 export const dynamic = "force-dynamic";
 
-export async function POST(req: NextRequest, { params }: { params: { eventId: string } }) {
+export async function POST(req: NextRequest, props: { params: Promise<{ eventId: string }> }) {
+  const params = await props.params;
   return handle(async () => {
     if (!verifyDefectOutboxToken(req.headers.get("authorization"))) {
       return fail("Không có quyền lập kế hoạch ghi Sheet", 401);

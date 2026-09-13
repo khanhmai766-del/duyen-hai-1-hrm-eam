@@ -34,7 +34,8 @@ const EDITABLE: FieldSpec = {
 // PATCH /api/pccc/cabinets/<id>
 // body: { ...trường định danh, components?: [{ groupLabel, status, checked }] }
 // Một nhóm được phép tích NHIỀU trạng thái cùng lúc (quy tắc có chủ đích).
-export async function PATCH(req: Request, { params }: { params: { id: string } }) {
+export async function PATCH(req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   return handle(async () => {
     const user = await requireUser();
     const scope = await resolvePcccWriteScope(user, undefined, "CABINET");

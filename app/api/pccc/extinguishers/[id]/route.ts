@@ -48,7 +48,8 @@ function computeDenHan(ngaySx: Date | null, namSuDung: number | null) {
 }
 
 // PATCH /api/pccc/extinguishers/<id> -> sửa 1 bình; mọi thay đổi đều xoá chữ ký của dòng
-export async function PATCH(req: Request, { params }: { params: { id: string } }) {
+export async function PATCH(req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   return handle(async () => {
     const user = await requireUser();
     const scope = await resolvePcccWriteScope(user);

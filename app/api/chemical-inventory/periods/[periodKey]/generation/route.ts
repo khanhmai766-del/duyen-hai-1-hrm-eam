@@ -17,7 +17,8 @@ export const dynamic = "force-dynamic";
  * Sản lượng điện S1+S2 của tháng — mẫu số để tính suất hao đầu cực (kg/MWh).
  * Nhập tay mỗi tháng một lần; hệ thống hiện chưa có nguồn nào cấp sẵn con số này.
  */
-export async function PUT(req: NextRequest, { params }: { params: { periodKey: string } }) {
+export async function PUT(req: NextRequest, props: { params: Promise<{ periodKey: string }> }) {
+  const params = await props.params;
   return handle(async () => {
     const user = await requireUser();
     // Đây là mẫu số dùng chung cho S1+S2, không thuộc riêng cương vị nào nên mức

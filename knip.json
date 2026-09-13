@@ -3,7 +3,7 @@
   "next": true,
   "entry": [
     "app/**/{page,layout,route,loading,error,not-found,template,default}.{ts,tsx}",
-    "middleware.ts",
+    "proxy.ts",
     "prisma/seed.ts",
     "scripts/**/*.{ts,mjs}",
     "components/ui/**"

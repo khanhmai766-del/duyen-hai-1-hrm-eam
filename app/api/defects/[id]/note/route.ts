@@ -6,7 +6,8 @@ import { resolveEquipmentAccessForUser } from "@/lib/server-access";
 import { enqueueDefectSyncEvent } from "@/lib/defect-sync-outbox";
 import { isDefectSyncFeatureEnabled } from "@/lib/defect-two-way-sync";
 
-export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   return handle(async () => {
     const user = await requireUser();
     const [canManage, canClose] = await Promise.all([

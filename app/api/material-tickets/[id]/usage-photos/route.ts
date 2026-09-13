@@ -111,7 +111,8 @@ async function loadTicket(id: string): Promise<TicketRow> {
 }
 
 /** GET — ba ô ảnh của phiếu, kèm nhãn để giao diện không phải tự chế lại. */
-export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(_req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   return handle(async () => {
     await requireUser();
     const t = await loadTicket(params.id);
@@ -126,7 +127,8 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
  * Nén hai lần là cố ý: bản thu nhỏ ở trình duyệt chỉ để payload đừng quá nặng, còn
  * kích thước và định dạng cuối phải do máy chủ quyết, không tin dữ liệu gửi lên.
  */
-export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
+export async function PUT(req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   return handle(async () => {
     const user = await requireUser();
     const t = await loadTicket(params.id);
@@ -166,7 +168,8 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
 }
 
 /** DELETE ?slot=before|after|spec — gỡ một ô ảnh. */
-export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   return handle(async () => {
     const user = await requireUser();
     const t = await loadTicket(params.id);

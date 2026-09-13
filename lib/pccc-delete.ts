@@ -41,7 +41,9 @@ export function pcccDeleteHandler<Row extends { id: string; cuongViCode?: string
   /** Mô tả dòng cho nhật ký — xoá xong không tra lại được nữa. */
   label(row: Row): string;
 }) {
-  return async function DELETE(_req: Request, { params }: { params: { id: string } }) {
+  return async function DELETE(_req: Request, props: { params: Promise<{ id: string }> }) {
+    // Next 15+ params là Promise — đọc params.id đồng bộ trên Next 16 là undefined.
+    const params = await props.params;
     return handle(async () => {
       const user = await requireUser();
       const scope = await resolvePcccWriteScope(user, cfg.denyMessage, cfg.scopeTable);

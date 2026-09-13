@@ -16,7 +16,8 @@ function isReopenStatus(value: string): value is ReopenStatus {
 }
 
 /** Rút một phiếu khỏi hàng chờ chốt và đưa lại về danh sách Khiếm khuyết. */
-export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   return handle(async () => {
     const user = await requireUser();
     await requirePermissionLevel(

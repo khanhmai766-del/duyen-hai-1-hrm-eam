@@ -34,10 +34,8 @@ const includeItem = {
   },
 };
 
-export async function PATCH(
-  req: Request,
-  { params }: { params: { id: string } },
-) {
+export async function PATCH(req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   return handle(async () => {
     const user = await requireUser();
     const current = await prisma.groundingLightningItem.findUnique({
@@ -250,10 +248,8 @@ export async function PATCH(
   });
 }
 
-export async function DELETE(
-  _req: Request,
-  { params }: { params: { id: string } },
-) {
+export async function DELETE(_req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   return handle(async () => {
     const user = await requireUser();
     // Xoá cả dòng: chỉ nhóm toàn quyền — không có mức "personal" nào cho việc xoá, nên

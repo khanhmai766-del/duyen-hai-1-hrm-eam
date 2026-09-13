@@ -10,7 +10,8 @@ import { assertPositionScope, effectiveLevel, MANAGE_LEVELS, WRITE_LEVELS } from
 export const dynamic = "force-dynamic";
 
 /** PUT /api/chemical-inventory/receipts/[id] — sửa một chuyến xe. */
-export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
+export async function PUT(req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   return handle(async () => {
     const user = await requireUser();
     await requirePermissionLevel(user, CHEMICAL_PERMISSION_ID, [...WRITE_LEVELS], "Không đủ quyền sửa phiếu nhập hóa chất");
@@ -53,7 +54,8 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
  * DELETE /api/chemical-inventory/receipts/[id]
  * Cần mức `manage`. Phiếu sinh từ phiếu vật tư thì bị chặn — phải hủy phiếu gốc.
  */
-export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(_req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   return handle(async () => {
     const user = await requireUser();
     await requirePermissionLevel(user, CHEMICAL_PERMISSION_ID, [...MANAGE_LEVELS], "Không đủ quyền xóa phiếu nhập hóa chất");

@@ -264,7 +264,8 @@ async function findEquipmentRecord(seq: string, requestedMachine?: string | null
   };
 }
 
-export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   return handle(async () => {
     const user = await requireUser();
     await requireDeviceView(user);
@@ -290,7 +291,8 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
   });
 }
 
-export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
+export async function PUT(req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   return handle(async () => {
     const user = await requireUser();
     await requireDeviceManage(user, "Bạn không có quyền cập nhật thiết bị");
@@ -366,7 +368,8 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
   });
 }
 
-export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(_req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   return handle(async () => {
     const user = await requireUser();
     await requireDeviceDelete(user);

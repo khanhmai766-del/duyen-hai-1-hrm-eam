@@ -13,7 +13,8 @@ export const dynamic = "force-dynamic";
 // chủ đích của cấp quản trị chứ không phải một ô tick nằm sẵn lúc sửa bảng hằng ngày.
 //
 // Lưu THEO KỲ để kỳ mới luôn trở về trạng thái khoá, không kế thừa cửa mở của tháng trước.
-export async function POST(req: Request, { params }: { params: { id: string } }) {
+export async function POST(req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   return handle(async () => {
     const user = await requireUser();
     await requirePermissionLevel(

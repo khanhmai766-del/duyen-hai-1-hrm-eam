@@ -14,10 +14,8 @@ import {
 } from "@/lib/grounding-lightning";
 import { deleteS3ObjectByKey } from "@/lib/s3";
 
-export async function DELETE(
-  _req: Request,
-  { params }: { params: { id: string } },
-) {
+export async function DELETE(_req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   return handle(async () => {
     const user = await requireUser();
     await requirePermissionLevel(

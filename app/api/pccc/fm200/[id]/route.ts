@@ -51,7 +51,8 @@ function sanitizeValues(input: unknown, labels: string[], current: Record<string
 }
 
 // PATCH /api/pccc/fm200/<id> -> sửa 1 bảng FM200 (ký 1 lần cho cả bảng, không theo bình)
-export async function PATCH(req: Request, { params }: { params: { id: string } }) {
+export async function PATCH(req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   return handle(async () => {
     const user = await requireUser();
     const scope = await resolvePcccWriteScope(user);

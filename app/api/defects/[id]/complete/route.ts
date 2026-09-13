@@ -27,7 +27,8 @@ const HISTORY_INCLUDE = {
  * Sheet) chỉ tạo bản nháp chờ 14 ngày để n8n tiếp tục nhận dữ liệu sửa chữa.
  * Chỉ dữ liệu thủ công cũ, không tham gia hai chiều, được ghi lịch sử ngay.
  */
-export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   return handle(async () => {
     const user = await requireUser();
     await requirePermissionLevel(user, "defect-close", ["manage", "full"], "Không đủ quyền hoàn thành phiếu khiếm khuyết");
@@ -239,7 +240,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   });
 }
 
-export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
+export async function PUT(req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   return handle(async () => {
     const user = await requireUser();
     await requirePermissionLevel(

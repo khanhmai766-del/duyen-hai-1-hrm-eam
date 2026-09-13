@@ -4,7 +4,8 @@ import { effectivePermitFormat } from "@/lib/work-permits";
 import { permitHandle } from "@/lib/server/work-permits";
 import { createWorkPermitDocument } from "@/lib/server/work-permit-document";
 export const dynamic = "force-dynamic";
-export async function GET(_req: Request, { params }: { params: { id: string } }) {
+export async function GET(_req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   return permitHandle(async () => {
     await requireUser();
     const row = await prisma.workPermit.findUnique({ where: { id: params.id } });

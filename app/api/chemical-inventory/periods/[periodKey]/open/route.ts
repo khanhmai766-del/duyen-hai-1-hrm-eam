@@ -19,7 +19,8 @@ export const dynamic = "force-dynamic";
  *
  * Kỳ đã tồn tại thì trả về luôn, không báo lỗi (thao tác vô hại, gọi lại được).
  */
-export async function POST(_req: NextRequest, { params }: { params: { periodKey: string } }) {
+export async function POST(_req: NextRequest, props: { params: Promise<{ periodKey: string }> }) {
+  const params = await props.params;
   return handle(async () => {
     const user = await requireUser();
     await requirePermissionLevel(user, CHEMICAL_PERMISSION_ID, [...MANAGE_LEVELS], "Không đủ quyền mở kỳ tồn kho");

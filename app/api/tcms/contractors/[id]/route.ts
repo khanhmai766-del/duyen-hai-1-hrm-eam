@@ -6,7 +6,7 @@ import { getRequestContext } from "@/lib/tcms/server/http/request-context";
 import { parseContractorInput,parseContractorVersion } from "@/lib/tcms/server/master-data/contractor-service";
 import { PostgresContractorRepository } from "@/lib/tcms/server/master-data/postgres-contractor-repository";
 
-async function PATCHHandler(request:Request,{params}:{params: {id:string}}) {
+async function PATCHHandler(request:Request,{ params }: { params: Promise<{id:string}> }) {
   try {
     const context=await getRequestContext(request); const permissions=permissionsForRoles(context.principal.roles);
     if(!context.principal.active||!permissions.has("contract.identity.update")) throw new Error("ACCESS_DENIED");

@@ -5,7 +5,8 @@ import { audit, fail, ok, requireUser } from "@/lib/api";
 import { permitBody, permitHandle, permitInstant, permitSnapshot, permitText } from "@/lib/server/work-permits";
 import { assertCommanderFree, readSessionOpen, resolveSessionMembers, validateSessionTime } from "@/lib/server/work-permit-sessions";
 export const dynamic = "force-dynamic";
-export async function POST(req: Request, { params }: { params: { id: string } }) {
+export async function POST(req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   return permitHandle(async () => {
     const user = await requireUser(); await requirePermitExecute(user);
     const body = await permitBody(req);

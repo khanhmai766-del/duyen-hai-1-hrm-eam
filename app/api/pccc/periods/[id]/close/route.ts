@@ -6,7 +6,8 @@ import { PCCC_PERMISSION } from "@/lib/pccc-service";
 export const dynamic = "force-dynamic";
 
 // POST /api/pccc/periods/<id>/close -> chốt kỳ (chuyển sang chỉ đọc); gọi lại để mở
-export async function POST(_req: Request, { params }: { params: { id: string } }) {
+export async function POST(_req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   return handle(async () => {
     const user = await requireUser();
     await requirePermissionLevel(user, PCCC_PERMISSION.close, ["manage", "full"], "Không đủ quyền chốt kỳ");

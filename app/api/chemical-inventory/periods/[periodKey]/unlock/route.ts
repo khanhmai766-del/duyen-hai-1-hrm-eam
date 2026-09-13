@@ -17,7 +17,8 @@ export const dynamic = "force-dynamic";
  * liệu quyết toán, không nên nằm trong tay mức quản lý thông thường.
  * Bắt buộc ghi lý do để nhật ký audit có ngữ cảnh.
  */
-export async function POST(req: NextRequest, { params }: { params: { periodKey: string } }) {
+export async function POST(req: NextRequest, props: { params: Promise<{ periodKey: string }> }) {
+  const params = await props.params;
   return handle(async () => {
     const user = await requireUser();
     await requirePermissionLevel(user, CHEMICAL_PERMISSION_ID, [...FULL_LEVELS], "Không đủ quyền mở khóa sổ tồn kho");

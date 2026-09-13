@@ -34,7 +34,8 @@ async function assertCanEditLog(user: Awaited<ReturnType<typeof requireUser>>, i
   return log;
 }
 
-export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
+export async function PUT(req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   return handle(async () => {
     const user = await requireUser();
     await assertCanEditLog(user, params.id, ["manage", "full"]);
@@ -131,7 +132,8 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
   });
 }
 
-export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(_req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   return handle(async () => {
     const user = await requireUser();
     await assertCanEditLog(user, params.id, ["manage", "full"]);

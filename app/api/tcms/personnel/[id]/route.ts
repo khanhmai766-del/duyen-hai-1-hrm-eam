@@ -7,7 +7,7 @@ import { getRequestContext } from "@/lib/tcms/server/http/request-context";
 import { parsePersonnelVersion, parseUpdatePersonnelInput } from "@/lib/tcms/server/master-data/personnel-service";
 import { PostgresPersonnelRepository } from "@/lib/tcms/server/master-data/postgres-personnel-repository";
 
-async function PATCHHandler(request: Request, { params }: { params: { id: string } }) {
+async function PATCHHandler(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const context = await getRequestContext(request);
     const permissions = permissionsForRoles(context.principal.roles);

@@ -116,7 +116,8 @@ async function controlData(id: string) {
   };
 }
 
-export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(_req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   return handle(async () => {
     const user = await requireUser();
     await requirePermissionLevel(user, "defect-two-way-sync", ["manage", "full"], "Không đủ quyền đối chiếu STT phiếu");
@@ -124,7 +125,8 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
   });
 }
 
-export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
+export async function PUT(req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   return handle(async () => {
     const user = await requireUser();
     await requirePermissionLevel(user, "defect-two-way-sync", ["manage", "full"], "Không đủ quyền điều chỉnh STT phiếu");

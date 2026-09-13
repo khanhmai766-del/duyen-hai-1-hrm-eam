@@ -8,7 +8,7 @@ import { apiError } from "@/lib/tcms/server/http/api-response";
 import { getRequestContext } from "@/lib/tcms/server/http/request-context";
 import { parseContractItemImportRequest } from "@/lib/tcms/server/pdf/contract-item-import";
 
-async function POSTHandler(request: Request, { params }: { params: { id: string } }) {
+async function POSTHandler(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const context = await getRequestContext(request);
     const { id } = await params;

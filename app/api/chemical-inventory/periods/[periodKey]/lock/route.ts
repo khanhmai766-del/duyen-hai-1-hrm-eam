@@ -20,7 +20,8 @@ export const dynamic = "force-dynamic";
  * tế xem quy trình thật diễn ra thế nào rồi mới quyết. Cột `status` đã sẵn sàng để
  * bật quy tắc đó sau mà không phải migrate.
  */
-export async function POST(req: NextRequest, { params }: { params: { periodKey: string } }) {
+export async function POST(req: NextRequest, props: { params: Promise<{ periodKey: string }> }) {
+  const params = await props.params;
   return handle(async () => {
     const user = await requireUser();
     await requirePermissionLevel(user, CHEMICAL_PERMISSION_ID, [...MANAGE_LEVELS], "Không đủ quyền khóa sổ tồn kho");

@@ -12,13 +12,14 @@ export const dynamic = "force-dynamic";
  * Middleware buộc đăng nhập trước khi tới đây; mã còn hiệu lực được chuyển thẳng
  * sang hồ sơ đầy đủ, nên không còn trang thông tin thiết bị công khai.
  */
-export default async function LegacyEquipmentQrPage({
-  params,
-  searchParams,
-}: {
-  params: { seq: string };
-  searchParams: { machine?: string };
-}) {
+export default async function LegacyEquipmentQrPage(
+  props: {
+    params: Promise<{ seq: string }>;
+    searchParams: Promise<{ machine?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
+  const params = await props.params;
   const displayedSeq = decodeURIComponent(params.seq);
   const seq = canonicalSeq(displayedSeq);
   const requestedMachine = normalizeQrMachine(searchParams.machine)

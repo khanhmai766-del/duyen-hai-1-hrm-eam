@@ -5,7 +5,7 @@ import { parseContractInput, requireContractPermission } from "@/lib/tcms/server
 import { PostgresContractRepository } from "@/lib/tcms/server/contracts/postgres-contract-repository";
 import { withSecurityTransaction } from "@/lib/tcms/server/db/security-transaction";
 
-async function GETHandler(request: Request, { params }: { params: { id: string } }) {
+async function GETHandler(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const context = await getRequestContext(request);
     const { id } = await params;
@@ -16,7 +16,7 @@ async function GETHandler(request: Request, { params }: { params: { id: string }
   } catch (error) { return apiError(error); }
 }
 
-async function PUTHandler(request: Request, { params }: { params: { id: string } }) {
+async function PUTHandler(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const context = await getRequestContext(request);
     const { id } = await params;

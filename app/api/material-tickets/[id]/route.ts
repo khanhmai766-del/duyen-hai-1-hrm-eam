@@ -349,7 +349,8 @@ async function refreshExistingDocuments(
 }
 
 // GET /api/material-tickets/[id]
-export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(_req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   return handle(async () => {
     await requireUser();
     const t = await getTicket(params.id);
@@ -360,7 +361,8 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
 
 // DELETE /api/material-tickets/[id] — Xóa phiếu. Quản trị / cương vị được phân quyền "Sửa/Xoá phiếu"
 // (khi chưa cấu hình: người tạo phiếu như cũ).
-export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(_req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   return handle(async () => {
     const user = await requireUser();
     const t = await getTicket(params.id);
@@ -486,7 +488,8 @@ const parseTicketDate = (value: unknown) => {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 };
 
-export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
+export async function PUT(req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   return handle(async () => {
     const user = await requireUser();
     const body = await req.json();

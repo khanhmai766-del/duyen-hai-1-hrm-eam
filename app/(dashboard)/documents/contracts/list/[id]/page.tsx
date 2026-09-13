@@ -1,4 +1,5 @@
 "use client";
+import { use } from "react";
 
 import Link from "next/link";
 
@@ -16,7 +17,7 @@ import {
 import type { Contract, ContractStatus } from "@/lib/tcms/types/contract";
 
 type ContractDetailPageProps = {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 };
 
 const statusLabels: Record<ContractStatus, string> = {
@@ -185,9 +186,8 @@ function ContractDetailState({
   );
 }
 
-export default function ContractDetailPage({
-  params,
-}: ContractDetailPageProps) {
+export default function ContractDetailPage(props: ContractDetailPageProps) {
+  const params = use(props.params);
   const { id } = params;
   const { ready, getContract, refresh, canEdit, error } = useContracts();
   const contract = getContract(id);

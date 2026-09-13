@@ -7,7 +7,7 @@ import { PostgresContractRepository } from "@/lib/tcms/server/contracts/postgres
 import { PostgresContractStructureRepository } from "@/lib/tcms/server/contracts/postgres-contract-structure-repository";
 import { withSecurityTransaction } from "@/lib/tcms/server/db/security-transaction";
 
-type Params = { params: { id: string; scopeId: string } };
+type Params = { params: Promise<{ id: string; scopeId: string }> };
 
 async function PATCHHandler(request: Request, { params }: Params) {
   try {

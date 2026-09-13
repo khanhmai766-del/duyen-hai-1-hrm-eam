@@ -34,7 +34,8 @@ async function isPostClosed(id: string): Promise<boolean> {
 /**
  * PUT: ghim/bỏ ghim (chỉ Admin), đóng chủ đề, hoặc sửa nội dung chủ đề.
  */
-export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
+export async function PUT(req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   return handle(async () => {
     const user = await requireUser();
     const body = await req.json();
@@ -91,7 +92,8 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
   });
 }
 
-export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(_req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   return handle(async () => {
     const user = await requireUser();
     const authorId = await getPostAuthor(params.id);

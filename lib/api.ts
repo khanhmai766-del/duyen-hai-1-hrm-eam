@@ -57,7 +57,8 @@ export async function requireUser() {
   if (!dbUser?.isActive || dbUser.lockedAt) throw fail("Tài khoản không hợp lệ", 401);
   const currentPosition = effectiveUserPosition(dbUser) ?? undefined;
   const effectiveRole =
-    dbUser.role === "ADMIN" && !adminModeEnabled(cookies().get(ADMIN_MODE_COOKIE)?.value)
+    // Next 15+ cookies() trả về Promise — gọi đồng bộ trên Next 16 là TypeError ở MỌI API.
+    dbUser.role === "ADMIN" && !adminModeEnabled((await cookies()).get(ADMIN_MODE_COOKIE)?.value)
       ? "MANAGER"
       : dbUser.role;
   return {

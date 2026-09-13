@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-PowerPlant EAM — an HRM & Equipment Asset Management system for the Duyên Hải 1 thermal power plant (Vận hành 1). Next.js 14 App Router, TypeScript (strict), Prisma + PostgreSQL, NextAuth v5, Tailwind + shadcn/ui, TanStack Query. **The entire UI and all user-facing strings (including API error messages) are in Vietnamese** — match that when adding features.
+PowerPlant EAM — an HRM & Equipment Asset Management system for the Duyên Hải 1 thermal power plant (Vận hành 1). Next.js 16 App Router (React 19), TypeScript (strict), Prisma + PostgreSQL, NextAuth v5, Tailwind + shadcn/ui, TanStack Query. **The entire UI and all user-facing strings (including API error messages) are in Vietnamese** — match that when adding features.
 
 ## Commands
 
@@ -13,7 +13,7 @@ npm run db:push      # Sync prisma/schema.prisma → DB (no migrations used loca
 npm run db:seed      # Seed demo data (tsx prisma/seed.ts)
 npm run db:studio    # Prisma Studio
 npm run build        # prisma generate + next build
-npm run lint         # next lint (eslint)
+npm run lint         # eslint . (ESLint 9 flat config — Next 16 bỏ `next lint`)
 ```
 
 There is no test suite. To type-check, run `npx tsc --noEmit`.
@@ -55,7 +55,7 @@ All handlers follow the same shape using helpers in `lib/api.ts`:
 `lib/fetcher.ts` (`apiGet` / `apiMutate`) unwraps the envelope and throws `Error(json.error)` on failure. UI never calls `fetch` directly — it uses TanStack Query hooks in `hooks/` (e.g. `useUsers`, `useDevices`). Mutations invalidate query keys (`["users"]`, etc.) on success. Toasts via `sonner`.
 
 ### Auth & access control (two layers)
-- `middleware.ts` is a lightweight edge guard: it only checks for the presence of a NextAuth session cookie and redirects to `/login`. It does **not** do role checks. Public prefixes: `/login`, `/api/auth`, `/api/webauthn`, `/videos`, `/public`.
+- `proxy.ts` (Next 16 renamed `middleware.ts` → `proxy.ts`) is a lightweight guard: it only checks for the presence of a NextAuth session cookie and redirects to `/login`. It does **not** do role checks. Public prefixes: `/login`, `/api/auth`, `/api/webauthn`, `/videos`, `/public`.
 - Real RBAC is enforced **server-side in each route/page** via `auth()` + `requireRole`. See the README RBAC matrix for the policy.
 - `lib/auth.ts`: NextAuth v5, JWT session strategy. The JWT/session carries only `id, role, position, employeeId, name, email`. **`avatarUrl` is deliberately excluded from the token** — avatars are large base64 data URLs and would overflow the session cookie. Fetch avatar/signature from the DB (`/api/users` or `/api/me`) where needed.
 - Two credential paths in `authorize()`: email+password (bcrypt), and a WebAuthn `biometricToken` (passwordless), validated via `lib/webauthn.ts`.

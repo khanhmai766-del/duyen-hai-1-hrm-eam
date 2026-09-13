@@ -9,7 +9,7 @@ import { getRequestContext } from "@/lib/tcms/server/http/request-context";
 
 async function PUTHandler(
   request: Request,
-  { params }: { params: { id: string; itemId: string; checklistItemId: string } },
+  { params }: { params: Promise<{ id: string; itemId: string; checklistItemId: string }> },
 ) {
   try {
     const context = await getRequestContext(request);

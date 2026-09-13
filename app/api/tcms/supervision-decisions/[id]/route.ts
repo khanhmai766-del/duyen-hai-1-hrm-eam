@@ -7,7 +7,7 @@ import { withSecurityTransaction } from "@/lib/tcms/server/db/security-transacti
 import { apiError } from "@/lib/tcms/server/http/api-response";
 import { getRequestContext } from "@/lib/tcms/server/http/request-context";
 
-async function PATCHHandler(request:Request,{params}:{params: {id:string}}) {
+async function PATCHHandler(request:Request,{ params }: { params: Promise<{id:string}> }) {
   try {
     const context=await getRequestContext(request); const {id}=await params;
     const body=await request.json(); const input=parseSupervisionDecisionInput(body.decision);

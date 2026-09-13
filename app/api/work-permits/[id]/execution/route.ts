@@ -6,7 +6,8 @@ import { parsePermit, permitBody, permitHandle, permitSnapshot } from "@/lib/ser
 import { formatPermitNumber, PERMIT_STATUSES, PERMIT_TRANSITIONS, CONTRACTOR_PERMIT_TRANSITIONS, type PermitStatus } from "@/lib/work-permits";
 
 export const dynamic = "force-dynamic";
-export async function POST(req: Request, { params }: { params: { id: string } }) {
+export async function POST(req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   return permitHandle(async () => {
     const user = await requireUser();
     await requirePermitExecute(user);

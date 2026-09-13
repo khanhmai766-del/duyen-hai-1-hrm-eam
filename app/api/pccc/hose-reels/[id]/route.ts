@@ -34,7 +34,8 @@ const EDITABLE: FieldSpec = {
 //
 // Quy tắc ô tích và cách suy tình trạng tổng thể DÙNG CHUNG với tủ chữa cháy — từ
 // 2026-08-19 cả hai bảng đều hai mức Đạt/Không đạt theo TB 5100.
-export async function PATCH(req: Request, { params }: { params: { id: string } }) {
+export async function PATCH(req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   return handle(async () => {
     const user = await requireUser();
     const scope = await resolvePcccWriteScope(user, undefined, "HOSE_REEL");

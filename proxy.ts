@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { getToken } from "next-auth/jwt";
 
-// Lightweight edge guard: checks for the NextAuth session cookie and redirects
+// Lightweight guard (Next 16 "proxy", trước là middleware.ts; chạy Node runtime): checks for the NextAuth session cookie and redirects
 // unauthenticated users to /login. Fine-grained RBAC is enforced server-side in
 // each route handler / page via auth().
 const SESSION_COOKIES = [
@@ -15,7 +15,7 @@ const SESSION_COOKIES = [
 const PUBLIC_PATHS = ["/login", "/api/auth", "/api/webauthn", "/api/public", "/api/integrations/n8n", "/videos", "/public"];
 const AUTHENTICATED_PUBLIC_PATHS = ["/public/equipment", "/public/devices"];
 
-export async function middleware(req: NextRequest) {
+export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
   const requiresAuthentication = AUTHENTICATED_PUBLIC_PATHS.some((p) => pathname.startsWith(p));

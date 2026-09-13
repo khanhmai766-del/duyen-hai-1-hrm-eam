@@ -15,7 +15,8 @@ export const dynamic = "force-dynamic";
  * thêm — nếu không cộng lại, phiếu đang giữ 5 lít sẽ tưởng lô đó đã hết và không cho sửa
  * phân bổ về đúng chỗ cũ.
  */
-export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(_req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   return handle(async () => {
     await requireUser();
     const ticket = await prisma.materialTicket.findUnique({

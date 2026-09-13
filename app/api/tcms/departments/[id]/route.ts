@@ -6,7 +6,7 @@ import { withSecurityTransaction } from "@/lib/tcms/server/db/security-transacti
 import { parseDepartmentInput, parseDepartmentVersion } from "@/lib/tcms/server/master-data/department-service";
 import { PostgresDepartmentRepository } from "@/lib/tcms/server/master-data/postgres-department-repository";
 
-async function PATCHHandler(request: Request, { params }: { params: { id: string } }) {
+async function PATCHHandler(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const context = await getRequestContext(request);
     const permissions = permissionsForRoles(context.principal.roles);

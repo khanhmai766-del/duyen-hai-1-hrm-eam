@@ -30,7 +30,8 @@ const EDITABLE: FieldSpec = {
 };
 
 // PATCH /api/pccc/fire-control-cabinets/<id>
-export async function PATCH(req: Request, { params }: { params: { id: string } }) {
+export async function PATCH(req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   return handle(async () => {
     const user = await requireUser();
     const scope = await resolvePcccWriteScope(user, undefined, "FIRE_CONTROL_CABINET");

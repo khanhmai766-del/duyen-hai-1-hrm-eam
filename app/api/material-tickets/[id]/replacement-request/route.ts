@@ -16,7 +16,8 @@ export const dynamic = "force-dynamic";
  * Cổng vật tư (app/api/defects/route.ts) mới là nơi chặn thật. Ở đây chỉ trả dữ liệu và cho
  * biết phiếu đã đủ điều kiện chưa, để giao diện hiện đúng trạng thái nút.
  */
-export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(_req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   return handle(async () => {
     await requireUser();
 

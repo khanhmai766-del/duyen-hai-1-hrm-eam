@@ -7,7 +7,7 @@ import { PostgresContractRepository } from "@/lib/tcms/server/contracts/postgres
 import { PostgresContractItemRepository } from "@/lib/tcms/server/contracts/postgres-contract-item-repository";
 import { withSecurityTransaction } from "@/lib/tcms/server/db/security-transaction";
 
-async function PUTHandler(request: Request, { params }: { params: { id: string; itemId: string } }) {
+async function PUTHandler(request: Request, { params }: { params: Promise<{ id: string; itemId: string }> }) {
   try {
     const context=await getRequestContext(request); const {id,itemId}=await params;
     const body=await request.json() as {item?:unknown;expectedVersion?:unknown}; const input=parseContractItemInput(body.item);

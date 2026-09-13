@@ -6,10 +6,8 @@ import {
   assertGroundingScope,
 } from "@/lib/grounding-lightning";
 
-export async function GET(
-  _req: Request,
-  { params }: { params: { id: string } },
-) {
+export async function GET(_req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   return handle(async () => {
     const user = await requireUser();
     await requirePermissionLevel(user, GROUNDING_PERMISSIONS.view, [

@@ -19,7 +19,8 @@ export const dynamic = "force-dynamic";
  * CHỈ nhận `quantity` của từng ô. Tồn đầu, tổng nhập và lượng sử dụng đều là số dẫn
  * xuất — có gửi lên cũng bị bỏ qua.
  */
-export async function PUT(req: NextRequest, { params }: { params: { periodKey: string } }) {
+export async function PUT(req: NextRequest, props: { params: Promise<{ periodKey: string }> }) {
+  const params = await props.params;
   return handle(async () => {
     const user = await requireUser();
     await requirePermissionLevel(user, CHEMICAL_PERMISSION_ID, [...WRITE_LEVELS], "Không đủ quyền sửa tồn kho hóa chất");

@@ -35,7 +35,8 @@ const EDITABLE: FieldSpec = {
 // Dùng LẠI nguyên applyTccToggle/deriveCabinetStatus của tủ chữa cháy: cùng một
 // quy tắc ô tích (một nhóm tích được nhiều khiếm khuyết cùng lúc, chỉ ô đầu và ô
 // cuối loại trừ nhau) và cùng cách suy tình trạng tổng thể.
-export async function PATCH(req: Request, { params }: { params: { id: string } }) {
+export async function PATCH(req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   return handle(async () => {
     const user = await requireUser();
     const scope = await resolvePcccWriteScope(user, undefined, "ALARM_BUTTON");

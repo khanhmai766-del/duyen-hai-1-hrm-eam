@@ -32,7 +32,8 @@ const EDITABLE: FieldSpec = {
 };
 
 // PATCH /api/pccc/bulks/<id> -> sửa 1 bồn; % còn lại và tình trạng là dẫn xuất
-export async function PATCH(req: Request, { params }: { params: { id: string } }) {
+export async function PATCH(req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   return handle(async () => {
     const user = await requireUser();
     const scope = await resolvePcccWriteScope(user);

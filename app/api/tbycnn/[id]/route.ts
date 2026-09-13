@@ -29,7 +29,8 @@ export const dynamic = "force-dynamic";
  * máy bị bỏ qua kể cả khi client gửi lên — trừ Mã hiệu/KKS đang trống thì cho bổ sung.
  * Khoá ở giao diện là chưa đủ vì người dùng gọi thẳng API được.
  */
-export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
+export async function PUT(req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   return handle(async () => {
     const user = await requireUser();
     await requirePermissionLevel(
@@ -103,7 +104,8 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
  * trị bật công tắc "Xoá thiết bị" của kỳ thì mọi dòng xoá được, kể cả dòng gốc theo hồ sơ
  * nhà máy — vẫn phải đúng phạm vi cương vị của người xoá.
  */
-export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(_req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   return handle(async () => {
     const user = await requireUser();
     await requirePermissionLevel(

@@ -3,7 +3,8 @@ import { fail, ok, requireUser } from "@/lib/api";
 import { permitHandle } from "@/lib/server/work-permits";
 import { historySummarySelect } from "@/lib/server/work-permit-selects";
 export const dynamic = "force-dynamic";
-export async function GET(req: Request, { params }: { params: { id: string } }) {
+export async function GET(req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   return permitHandle(async () => {
     await requireUser();
     const query = new URL(req.url).searchParams;

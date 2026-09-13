@@ -7,7 +7,8 @@ import { annualPlanNameKey } from "@/lib/material-annual-plan-import";
 export const dynamic = "force-dynamic";
 
 /** PUT — sửa cột H, cột J và người đề xuất của một dòng nhu cầu tháng. */
-export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
+export async function PUT(req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   return handle(async () => {
     const user = await requireUser();
     await requirePermissionLevel(user, "material-manage", ["manage", "full"], "Không đủ quyền sửa nhu cầu vật tư");
@@ -41,7 +42,8 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
   });
 }
 
-export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(_req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   return handle(async () => {
     const user = await requireUser();
     await requirePermissionLevel(user, "material-manage", ["manage", "full"], "Không đủ quyền xoá nhu cầu vật tư");

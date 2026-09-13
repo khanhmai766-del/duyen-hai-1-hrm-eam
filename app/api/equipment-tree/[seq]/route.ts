@@ -15,7 +15,8 @@ import { invalidateDeviceListCache } from "@/lib/device-list-cache";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(req: NextRequest, { params }: { params: { seq: string } }) {
+export async function GET(req: NextRequest, props: { params: Promise<{ seq: string }> }) {
+  const params = await props.params;
   return handle(async () => {
     const user = await requireUser();
     await requireDeviceView(user);
@@ -72,7 +73,8 @@ export async function GET(req: NextRequest, { params }: { params: { seq: string 
 }
 
 /** Lưu tên/KKS riêng cho đúng hình chiếu S1 hoặc S2; cấu trúc cây vẫn dùng chung. */
-export async function PUT(req: NextRequest, { params }: { params: { seq: string } }) {
+export async function PUT(req: NextRequest, props: { params: Promise<{ seq: string }> }) {
+  const params = await props.params;
   return handle(async () => {
     const user = await requireUser();
     await requireDeviceManage(user, "Bạn không có quyền cập nhật thông tin thiết bị");

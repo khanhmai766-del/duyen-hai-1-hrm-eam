@@ -6,7 +6,7 @@ import { withSecurityTransaction } from "@/lib/tcms/server/db/security-transacti
 import { apiError } from "@/lib/tcms/server/http/api-response";
 import { getRequestContext } from "@/lib/tcms/server/http/request-context";
 
-async function GETHandler(request: Request, { params }: { params: { id: string; itemId: string } }) {
+async function GETHandler(request: Request, { params }: { params: Promise<{ id: string; itemId: string }> }) {
   try {
     const context = await getRequestContext(request);
     const { id, itemId } = await params;

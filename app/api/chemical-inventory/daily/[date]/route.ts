@@ -20,7 +20,8 @@ export const dynamic = "force-dynamic";
  *
  * Kỳ được suy từ chính `date`, không lấy từ body.
  */
-export async function PUT(req: NextRequest, { params }: { params: { date: string } }) {
+export async function PUT(req: NextRequest, props: { params: Promise<{ date: string }> }) {
+  const params = await props.params;
   return handle(async () => {
     const user = await requireUser();
     await requirePermissionLevel(user, CHEMICAL_PERMISSION_ID, [...WRITE_LEVELS], "Không đủ quyền ghi nhật ký hóa chất");

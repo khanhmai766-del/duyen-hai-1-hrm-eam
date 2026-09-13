@@ -4,7 +4,8 @@ import { audit, fail, ok, requireUser } from "@/lib/api";
 import { permitBody, permitHandle } from "@/lib/server/work-permits";
 import { parsePermitPerson } from "@/lib/server/work-permit-people";
 export const dynamic = "force-dynamic";
-export async function PUT(req: Request, { params }: { params: { id: string } }) {
+export async function PUT(req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   return permitHandle(async () => {
     const user = await requireUser(); await requirePermitIssue(user);
     const body = await permitBody(req); const data = parsePermitPerson(body);

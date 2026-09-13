@@ -8,7 +8,8 @@ import {
 
 export const dynamic = "force-dynamic";
 
-export async function POST(req: NextRequest, { params }: { params: { runId: string } }) {
+export async function POST(req: NextRequest, props: { params: Promise<{ runId: string }> }) {
+  const params = await props.params;
   return handle(async () => {
     if (!verifyN8nDefectToken(req.headers.get("authorization"))) {
       return fail("Không có quyền đồng bộ", 401);

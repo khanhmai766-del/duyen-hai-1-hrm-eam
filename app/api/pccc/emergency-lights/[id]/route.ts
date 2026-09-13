@@ -38,7 +38,8 @@ const EDITABLE: FieldSpec = {
 };
 
 // PATCH /api/pccc/emergency-lights/<id>
-export async function PATCH(req: Request, { params }: { params: { id: string } }) {
+export async function PATCH(req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   return handle(async () => {
     const user = await requireUser();
     const scope = await resolvePcccWriteScope(user, undefined, "EMERGENCY_LIGHT");

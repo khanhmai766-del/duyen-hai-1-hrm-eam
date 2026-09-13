@@ -16,7 +16,8 @@ export const dynamic = "force-dynamic";
  * Cố ý KHÔNG đi qua `/api/chemical-inventory/receipts`: cửa đó đòi quyền giữ sổ hóa
  * chất, mà VHV ghi xe thì thường không có. Ở đây quyền xem là quyền xem phiếu.
  */
-export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(_req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   return handle(async () => {
     const user = await requireUser();
     const ticket = await prisma.materialTicket.findUnique({

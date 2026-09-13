@@ -11,7 +11,8 @@ async function safeUser<T extends { passwordHash?: string; avatarUrl?: string | 
   return userWithSignedMedia(safe);
 }
 
-export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(_req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   return handle(async () => {
     const user = await requireUser();
     await requireUserAdminReadAccess(user);

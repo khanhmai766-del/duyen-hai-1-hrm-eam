@@ -8,14 +8,16 @@ import { parsePermit, permitBody, permitHandle, permitSnapshot } from "@/lib/ser
 import { resolvePermitIdentities } from "@/lib/server/work-permit-identities";
 import { historySummarySelect } from "@/lib/server/work-permit-selects";
 export const dynamic = "force-dynamic";
-export async function GET(_req: Request, { params }: { params: { id: string } }) {
+export async function GET(_req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   return permitHandle(async () => {
     const user = await requireUser();
     const row = await prisma.workPermit.findUnique({ where: { id: params.id }, include: { sessions: { take: 2, orderBy: [{ openedAt: "desc" }, { id: "desc" }] }, history: { take: 2, select: historySummarySelect, orderBy: [{ createdAt: "desc" }, { id: "desc" }] }, _count: { select: { sessions: true, history: true } } } });
     return row ? ok(row, await permitCapabilities(user)) : fail("Không tìm thấy PCT", 404);
   });
 }
-export async function PUT(req: Request, { params }: { params: { id: string } }) {
+export async function PUT(req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   return permitHandle(async () => {
     const user = await requireUser(); await requirePermitIssue(user);
     const body = await permitBody(req);

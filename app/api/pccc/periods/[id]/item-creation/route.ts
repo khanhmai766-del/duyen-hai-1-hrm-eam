@@ -8,7 +8,8 @@ export const dynamic = "force-dynamic";
 // POST /api/pccc/periods/<id>/item-creation { enabled }
 // Công tắc chỉ dành cho cấp quản lý và được lưu theo kỳ để kỳ mới luôn trở về trạng
 // thái khoá an toàn, không vô tình kế thừa cửa thêm thiết bị của tháng trước.
-export async function POST(req: Request, { params }: { params: { id: string } }) {
+export async function POST(req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   return handle(async () => {
     const user = await requireUser();
     await requirePermissionLevel(

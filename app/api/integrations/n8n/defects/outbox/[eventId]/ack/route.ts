@@ -5,7 +5,8 @@ import { verifyDefectOutboxToken } from "@/lib/defect-sync-outbox";
 
 export const dynamic = "force-dynamic";
 
-export async function POST(req: NextRequest, { params }: { params: { eventId: string } }) {
+export async function POST(req: NextRequest, props: { params: Promise<{ eventId: string }> }) {
+  const params = await props.params;
   return handle(async () => {
     if (!verifyDefectOutboxToken(req.headers.get("authorization"))) {
       return fail("Không có quyền xác nhận đồng bộ", 401);

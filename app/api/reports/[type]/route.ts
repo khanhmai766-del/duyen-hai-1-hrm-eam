@@ -15,7 +15,8 @@ async function getLeafEquipmentCount() {
   return nodes.filter((node) => (index.childrenOf.get(node.seq) ?? []).length === 0).length;
 }
 
-export async function GET(req: NextRequest, { params }: { params: { type: string } }) {
+export async function GET(req: NextRequest, props: { params: Promise<{ type: string }> }) {
+  const params = await props.params;
   return handle(async () => {
     const user = await requireUser();
     const access = await resolveEquipmentAccessForUser(user);
