@@ -18,6 +18,8 @@ npm run lint         # next lint (eslint)
 
 There is no test suite. To type-check, run `npx tsc --noEmit`.
 
+**Production deploy:** never run `npm run build`, `npm install` or `pm2 restart` by hand in `/var/www/dh1-app` — an in-place build wipes the live `.next` and users get 500s for 2–3 minutes. Deploy only with `scripts/deploy-server.sh` (builds in a separate dir inside a mount namespace, then swaps). See `docs/huong-dan-deploy-production.md`.
+
 `npm run dev` (via `scripts/dev.mjs`) auto-starts the embedded Postgres on port 5433 if nothing is listening there, then runs `next dev`. The preview harness runs `npm run dev -- -p 3030`. You usually do **not** need a separate `db:start` terminal.
 
 ## Local database (embedded Postgres)

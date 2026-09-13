@@ -6,6 +6,8 @@
 #   ./scripts/deploy-server.sh --sql prisma/sql/tbycnn-init.sql --sql prisma/sql/abc.sql
 #   ./scripts/deploy-server.sh --dry-run          # xem sẽ làm gì, không đụng gì
 #   ./scripts/deploy-server.sh --rollback         # quay lại bản build trước
+#   Hướng dẫn từng bước + sự cố: docs/huong-dan-deploy-production.md
+#   ĐỪNG chạy `npm run build` tay trên server — nó ghi đè .next đang chạy (xem nguyên tắc 2).
 #
 # Gom đúng thứ tự bắt buộc của docs/deploy-equipment-tree.md:
 #   sao lưu DB → pull → SQL → build RA THƯ MỤC RIÊNG → đổi sang → reload → smoke test → dọn bản cũ
@@ -71,7 +73,8 @@ BUILDS_DIR=.next-builds
 PM2_ACTION=${PM2_ACTION:-reload}
 
 BRANCH=main
-KEEP=2
+# Số bản build cũ giữ lại để --rollback (ngoài bản đang chạy). Mỗi bản đã bỏ cache chỉ ~35MB.
+KEEP=3
 DRY_RUN=0
 DO_ROLLBACK=0
 SKIP_BACKUP=0
@@ -85,7 +88,7 @@ while [[ $# -gt 0 ]]; do
     --dry-run) DRY_RUN=1; shift ;;
     --rollback) DO_ROLLBACK=1; shift ;;
     --no-backup) SKIP_BACKUP=1; shift ;;
-    -h|--help) sed -n '2,11p' "${BASH_SOURCE[0]}"; exit 0 ;;
+    -h|--help) sed -n '2,13p' "${BASH_SOURCE[0]}"; exit 0 ;;
     *) echo "Tham số lạ: $1" >&2; exit 2 ;;
   esac
 done

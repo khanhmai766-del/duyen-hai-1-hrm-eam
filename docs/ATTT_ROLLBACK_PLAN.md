@@ -24,7 +24,7 @@ Tai lieu nay dung lam bang chung kiem soat ATTT theo CS-ATTT-KTAT-21, muc A.8.25
    git log -1 --oneline
    ```
 
-2. Chay kiem tra toi thieu truoc khi trien khai:
+2. Chay kiem tra toi thieu truoc khi trien khai (tren MAY DEV, khong chay tren server Production):
 
    ```bash
    npx tsc --noEmit
@@ -33,7 +33,8 @@ Tai lieu nay dung lam bang chung kiem soat ATTT theo CS-ATTT-KTAT-21, muc A.8.25
 
 3. Ghi nhan thong tin thay doi vao mau o muc 7 cua tai lieu nay hoac vao issue/ho so release noi bo.
 
-4. Trien khai len moi truong dich theo quy trinh van hanh hien hanh.
+4. Trien khai len moi truong dich theo quy trinh van hanh hien hanh. Production: chi dung
+   `./scripts/deploy-server.sh`, theo `docs/huong-dan-deploy-production.md`.
 
 5. Kiem tra sau trien khai:
 
@@ -107,16 +108,18 @@ Sau rollback database phai kiem tra:
 
 Chi dung khi Production dang loi va can khoi phuc nhanh.
 
+KHONG chay `npm run build` / `pm2 restart` bang tay tren server: build tai cho xoa `.next` dang
+chay, nguoi dung bi loi 500 trong 2-3 phut (xac nhan 13/09/2026). Server giu san 3 ban build
+truoc; rollback chi doi ten thu muc + `pm2 reload`, xong trong vai giay:
+
 ```bash
-git fetch origin main
-git checkout main
-git pull origin main
-npm install
-npm run build
-pm2 restart <ten-ung-dung>
+cd /var/www/dh1-app
+./scripts/deploy-server.sh --rollback --dry-run   # xem se dua ban nao vao
+./scripts/deploy-server.sh --rollback             # chay lai lan nua la ve lai ban vua go
 ```
 
-Neu server khong dung PM2, thay lenh restart bang co che dang dung thuc te, vi du systemd, Docker Compose hoac pipeline CI/CD.
+Neu can dua mot commit revert len Production: push commit do len `main`, sau do chay
+`./scripts/deploy-server.sh`. Chi tiet va xu ly su co: `docs/huong-dan-deploy-production.md`.
 
 ## 7. Mau ghi nhan rollback cho tung lan thay doi
 

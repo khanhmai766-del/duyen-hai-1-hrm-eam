@@ -1,5 +1,10 @@
 # Runbook deploy: Cây thiết bị mới (fullCode + lazy-load + phương án S2)
 
+> ⚠️ **Runbook lịch sử (deploy 2026-07-23).** Từ 13/09/2026 KHÔNG làm theo bước 4 (`npm run build`)
+> và bước 7 (`pm2 restart`) bằng tay trên server — build tại chỗ làm người dùng lỗi 500 trong 2–3 phút.
+> Deploy bằng `./scripts/deploy-server.sh` (SQL truyền qua `--sql`), xem
+> [huong-dan-deploy-production.md](huong-dan-deploy-production.md).
+
 > Áp dụng cho production (VPS `/var/www/dh1-app`, pm2 `dh1-app`, DB `192.168.45.81/dh1db`).
 > **Chạy ngoài giờ.** Toàn bộ SQL đều additive/an toàn chạy lại — KHÔNG dùng `prisma db push` trên prod.
 

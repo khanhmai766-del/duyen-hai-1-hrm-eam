@@ -1,0 +1,219 @@
+# Hướng dẫn deploy production — duyenhai1.vn
+
+Áp dụng từ 13/09/2026 (commit `0274e87`). Server: `ssh -p 38791 root@103.42.56.80`, app ở
+`/var/www/dh1-app`, chạy bằng pm2 tên `dh1-app`.
+
+**Một câu tóm tắt:** trên server chỉ deploy bằng `./scripts/deploy-server.sh`. Script build ra thư
+mục riêng rồi mới đổi sang, nên người đang dùng web chỉ bị gián đoạn khoảng 1 giây.
+
+---
+
+## 0. Những lệnh KHÔNG được chạy tay trong `/var/www/dh1-app`
+
+| Lệnh | Hậu quả | Làm thay bằng |
+|---|---|---|
+| `npm run build`, `npx next build` | Xoá sạch `.next` đang chạy rồi dựng lại tại chỗ. Trong 2–3 phút đó mọi người dùng bị lỗi 500 `Cannot find module .next/server/…` (đã xảy ra 3 lần ngày 13/09: lưu tiếp địa, n8n chốt lịch sử khiếm khuyết…) | `./scripts/deploy-server.sh` |
+| `git pull` rồi `pm2 reload`/`pm2 restart` (không build) | Mã nguồn mới chạy với bản build cũ, lệch nhau, lỗi khó đoán | `./scripts/deploy-server.sh` |
+| `npm install` khi web đang chạy | Ghi đè `node_modules` dưới chân app | Script tự chạy khi `package.json`/lock thay đổi |
+| `rm -rf .next`, xoá/sửa tay trong `.next` hay `.next-builds/` | Mất bản đang chạy hoặc mất bản để quay lại | `./scripts/deploy-server.sh --rollback` |
+| Sửa code trực tiếp trên server | Lần deploy sau bị chặn (cây làm việc bẩn), hoặc bị ghi đè mất | Sửa trên máy dev → commit → push |
+
+Chạy `npm run build` **trên máy dev** thì hoàn toàn bình thường — cấm là cấm trên server.
+
+---
+
+## 1. Trên máy dev
+
+1. Kiểm tra: `npx tsc --noEmit` và `npm run build` (trên máy dev).
+2. Commit rồi `git push origin main`.
+3. Nếu bản này **thêm bảng/cột** trong DB: chuẩn bị file SQL (thường ở `prisma/manual/` hoặc
+   `prisma/sql/`) và ghi lại đường dẫn — lúc deploy phải truyền từng file bằng `--sql`.
+
+## 2. Vào server
+
+```bash
+ssh -p 38791 root@103.42.56.80
+cd /var/www/dh1-app
+```
+
+## 3. Kiểm tra trước khi deploy (bắt buộc, khoảng 1 phút)
+
+```bash
+git status --short --untracked-files=no   # phải TRỐNG (riêng package-lock.json thì script tự trả về)
+git log --oneline -1                      # bản đang chạy
+git fetch origin
+git log --oneline HEAD..origin/main       # các commit SẮP LÊN — đọc kỹ từng dòng
+./scripts/deploy-server.sh --dry-run      # xem trước mọi bước, KHÔNG thay đổi gì
+```
+
+- Danh sách commit sắp lên có commit của người khác mà mình không biết → **hỏi trước**, đừng deploy
+  thay người khác.
+- `--dry-run` phải đi hết tới dòng `✔ DEPLOY XONG`. Dừng ở đâu thì đọc thông báo ở đó (xem mục 6).
+
+## 4. Deploy
+
+Server không có `tmux`/`screen`, nên **luôn chạy nền** — rớt SSH giữa chừng thì deploy vẫn chạy
+tiếp, không bị cắt ngang:
+
+```bash
+LOG=/root/deploy-$(date +%F-%H%M).log
+setsid nohup ./scripts/deploy-server.sh > "$LOG" 2>&1 < /dev/null &
+tail -f "$LOG"        # Ctrl+C chỉ thoát xem log — deploy vẫn chạy
+```
+
+Có file SQL thì thêm `--sql` cho **từng** file, đúng thứ tự cần chạy:
+
+```bash
+setsid nohup ./scripts/deploy-server.sh --sql prisma/manual/them-cot-abc.sql > "$LOG" 2>&1 < /dev/null &
+```
+
+### Các tuỳ chọn
+
+| Tuỳ chọn | Ý nghĩa |
+|---|---|
+| `--dry-run` | In ra sẽ làm gì, không thay đổi gì |
+| `--sql <file>` | Chạy file SQL trước khi đổi sang bản mới (lặp lại cho nhiều file) |
+| `--no-backup` | Bỏ sao lưu DB. **Chỉ dùng** khi bản deploy không có SQL và sao lưu đang hỏng |
+| `--keep <n>` | Số bản cũ giữ để quay lại (mặc định **3**) |
+| `--branch <nhánh>` | Deploy nhánh khác `main` (hầu như không dùng) |
+| `--rollback` | Quay lại bản build trước (mục 7) |
+
+### Script làm gì và mất bao lâu
+
+| Bước | Việc | Thời gian | Web |
+|---|---|---|---|
+| Kiểm tra | Cây làm việc sạch, vai trò sao lưu, đĩa, pm2 | ~5 giây | Bình thường |
+| 1/7 | Sao lưu DB (vai trò `dh1_backup`) → `/root/backup-dh1db-<ngày>-truoc-<sha>.sql.gz` | ~5 giây | Bình thường |
+| 2/7 | `git pull` (+ `npm install` nếu phụ thuộc đổi) | vài giây – vài phút | Bình thường* |
+| 3/7 | Chạy các file `--sql` | tuỳ file | Bình thường |
+| 4/7 | Tạo `.next-builds/<sha>-<giờ>`, chép cache build | ~5–10 giây | Bình thường |
+| 5/7 | **Build trong thư mục riêng** — app đang chạy không bị đụng | ~2–3 phút | Bình thường |
+| 6/7 | Đổi thư mục (vài mili-giây) + `pm2 reload` + tự kiểm tra | ~10 giây | **Gián đoạn ~1 giây** |
+| 7/7 | Dọn bản cũ, giữ 3 bản gần nhất | ~1 giây | Bình thường |
+
+\* `npm install` vẫn ghi đè `node_modules` tại chỗ — chỉ xảy ra khi `package.json`/lock thay đổi.
+
+Thành công khi dòng cuối log là: `✔ DEPLOY XONG — dh1-app đang chạy <sha>`.
+
+## 5. Kiểm tra sau deploy
+
+```bash
+pm2 describe dh1-app | grep -E "status|restarts|node.js version"      # online
+curl -s -o /dev/null -w "%{http_code}\n" https://duyenhai1.vn/login  # 200
+tail -n 30 /root/.pm2/logs/dh1-app-error.log                          # không có lỗi mới
+# Lỗi 5xx trong 10 phút gần nhất (không in ra gì là tốt):
+awk -v t="$(date -u -d '-10 min' +%d/%b/%Y:%H:%M)" '$4>"["t && $9>=500' /var/log/nginx/access.log
+```
+
+Sau đó mở web, đăng nhập, vào đúng trang vừa sửa để xem tận mắt.
+
+## 6. Khi có sự cố
+
+| Tình huống | Trạng thái web | Làm gì |
+|---|---|---|
+| Script dừng ở **KIỂM TRA** (cây bẩn, đĩa đầy, pm2…) | Chưa bị đụng | Xử lý đúng thông báo, chạy lại |
+| **Vai trò sao lưu** không đăng nhập được | Chưa bị đụng | Xem `docs/deploy-backup-role.md`. Chỉ dùng `--no-backup` nếu bản này không có SQL |
+| **BUILD GÃY** | Vẫn chạy bản cũ, không ảnh hưởng | Server đã pull mã mới nhưng chưa dùng. Sửa lỗi trên máy dev → push → deploy lại. Muốn server khớp bản đang chạy: `git reset --hard <sha cũ>` (script in sẵn sha) |
+| **Tự kiểm tra sau reload thất bại** / web lỗi sau deploy | Đang chạy bản mới bị lỗi | `./scripts/deploy-server.sh --rollback` |
+| Rớt SSH khi chạy **không** có `setsid nohup` | Tuỳ lúc bị cắt | Xem mục 6.1 |
+| **Lỡ tay** chạy `npm run build` trong `/var/www/dh1-app` | Lỗi 500 trong lúc build | Xem mục 6.2 |
+
+### 6.1. Deploy bị cắt ngang giữa chừng
+
+```bash
+cd /var/www/dh1-app
+cat .next/BUILD_ID .next/.deploy-sha        # bản đang chạy
+ls -la .next-builds/                         # thư mục <sha>-<giờ> mới nhất là bản đang build dở
+pm2 describe dh1-app | grep status
+```
+
+- Bị cắt **trước bước 6** → `.next` vẫn là bản cũ, web không sao. Xoá thư mục build dở
+  (`rm -rf .next-builds/<sha>-<giờ>` — đúng thư mục **không có** file `BUILD_ID`) rồi deploy lại.
+- Bị cắt **trong bước 6** (hiếm, cửa sổ vài mili-giây): nếu **không còn** `.next` → đưa bản vừa cất
+  về: `mv -T .next-builds/<sha-cũ>-truoc-<sha-mới>-<giờ> .next && pm2 reload dh1-app`.
+
+### 6.2. Lỡ chạy `npm run build` tay
+
+1. **Đừng chạy thêm lệnh nào khác**, đừng Ctrl+C giữa chừng nếu build đã chạy được một lúc.
+2. Build **thành công** → chạy ngay `pm2 reload dh1-app` (tiến trình đang chạy phải nạp lại bản vừa
+   build).
+3. Build **gãy** → `.next` đã hỏng, web đang lỗi → `./scripts/deploy-server.sh --rollback` để đưa
+   bản build tốt gần nhất vào.
+4. Lần deploy sau vẫn dùng script như bình thường.
+
+## 7. Quay lại bản trước (rollback)
+
+```bash
+cd /var/www/dh1-app
+cat .next/.deploy-sha                                      # bản đang chạy
+ls -1dt .next-builds/*/ .next.rollback-*/ 2>/dev/null      # các bản quay lại được, MỚI NHẤT TRƯỚC
+./scripts/deploy-server.sh --rollback --dry-run            # xem sẽ đưa bản nào vào
+./scripts/deploy-server.sh --rollback
+```
+
+- Rollback chỉ **đổi tên thư mục** + `pm2 reload`, xong trong vài giây.
+- Chạy `--rollback` thêm lần nữa là **về lại** bản vừa gỡ.
+- Rollback chỉ lùi **mã nguồn**, KHÔNG lùi DB. Cần lùi DB (nạp lại file `/root/backup-dh1db-…sql.gz`)
+  là việc lớn — hỏi quản trị, không tự làm.
+- Server giữ **3 bản** gần nhất (đã bỏ cache, mỗi bản ~35MB).
+
+---
+
+## Phụ lục A — Script thực chất chạy những lệnh gì
+
+> Chỉ để **hiểu** hoặc dùng khi chính script bị hỏng. Bình thường LUÔN dùng script — gõ tay rất dễ
+> bỏ sót bước, nhất là quên `unshare` ở bước 5 là quay lại lỗi build tại chỗ.
+
+```bash
+cd /var/www/dh1-app
+APP=/var/www/dh1-app
+SHA_CU=$(git rev-parse --short HEAD)
+
+# 1. Sao lưu DB bằng vai trò dh1_backup (mật khẩu trong ~/.pgpass) — chỉ nhận khi có dòng kết thúc
+DUMP=/root/backup-dh1db-$(date +%F-%H%M)-truoc-$SHA_CU.sql.gz
+URL=$(grep -m1 '^DATABASE_URL=' .env | sed 's/^DATABASE_URL=//; s/^"//; s/"$//; s/?.*$//' \
+      | sed -E 's#^(postgres(ql)?://)[^@/]*@#\1dh1_backup@#')
+pg_dump -w "$URL" | gzip > "$DUMP.partial" \
+  && gzip -dc "$DUMP.partial" | tail -n 5 | grep -q "dump complete" \
+  && mv "$DUMP.partial" "$DUMP" && echo "Sao lưu OK: $DUMP"
+
+# 2. Lấy code (+ cài phụ thuộc nếu đổi)
+git pull origin main
+SHA_MOI=$(git rev-parse --short HEAD)
+git diff --quiet "$SHA_CU" "$SHA_MOI" -- package.json package-lock.json || npm install
+
+# 3. SQL (nếu có) — từng file
+# npx prisma db execute --file prisma/manual/<file>.sql --schema prisma/schema.prisma
+
+# 4. Thư mục build riêng + chép cache build
+MOI=.next-builds/$SHA_MOI-$(date +%Y%m%d-%H%M%S)
+mkdir -p "$MOI/cache" && cp -a .next/cache/webpack "$MOI/cache/"
+
+# 5. BUILD TRONG NAMESPACE — dòng quan trọng nhất, KHÔNG được bỏ `unshare … mount --bind`
+unshare --mount --propagation private -- bash -c \
+  'mount --bind "$1" "$2/.next" && cd "$2" && npm run build' _ "$APP/$MOI" "$APP"
+test -f "$MOI/BUILD_ID" && echo "BUILD OK" || echo "BUILD GÃY — dừng lại, xoá $MOI"
+echo "$SHA_MOI" > "$MOI/.deploy-sha"
+(cd "$MOI" && find static -type f) > "$MOI/.static-own"
+
+# 6. Chép static của bản đang chạy sang (tab đang mở không vỡ), rồi ĐỔI + RELOAD liền một dòng
+[ -f .next/.static-own ] && tar -C .next -cf - -T .next/.static-own | tar -C "$MOI" --skip-old-files -xf -
+CU=.next-builds/$SHA_CU-truoc-$SHA_MOI-$(date +%Y%m%d-%H%M%S)
+mv -T .next "$CU" && mv -T "$MOI" .next && touch "$CU" && pm2 reload dh1-app
+# Nếu lệnh mv thứ hai báo lỗi: mv -T "$CU" .next   (trả bản cũ về chỗ)
+
+# 7. Dọn bản cũ: để lượt deploy bằng script kế tiếp tự làm (giữ 3 bản, bỏ cache, giữ mtime).
+```
+
+## Phụ lục B — Vì sao lại làm như vậy
+
+- **Build trong mount namespace:** `.next-builds/<sha>-<giờ>` được gắn đè lên `.next` *chỉ với tiến
+  trình build*. Build thấy một `.next` trống để ghi, còn app đang chạy vẫn thấy `.next` cũ. Build
+  gãy thì chỉ cần xoá thư mục kia.
+- **Đổi bằng `mv`, không bằng symlink hay `distDir` khác:** bản build chứa đường dẫn tuyệt đối
+  `/var/www/dh1-app/.next/…`, và `next build` tự sửa `tsconfig.json` theo tên `distDir` — nên cả lúc
+  build lẫn lúc chạy đều phải đúng tên `.next`.
+- **Còn gián đoạn ~1 giây:** pm2 chạy 1 tiến trình (fork) để giữ cache trong bộ nhớ; `reload` ở chế
+  độ này là tắt rồi bật lại.
+- Kiểm chứng ngày 13/09/2026: diễn tập 236/236 lượt gọi web thành công trong lúc build; lần deploy
+  thật đầu tiên 524/528 lượt thành công — 4 lượt hỏng đều rơi đúng 1 giây pm2 khởi động lại.
