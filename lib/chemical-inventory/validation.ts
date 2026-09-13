@@ -134,6 +134,19 @@ export function validateReceiptInput(
   const vehicle = parseVehicleNumber(payload.vehicleNumber);
   if (!vehicle.ok) return vehicle;
 
+  const fromMaterialTicket = options?.source === "MATERIAL_TICKET";
+  /*
+   * Phiếu sinh từ PHIẾU VẬT TƯ bắt buộc có biển số (2026-09-13) — cùng luật với bước VHV
+   * xác nhận khối lượng lãnh (linkTicketTrucks). Không chặn ở đây thì xác nhận xong vẫn
+   * vào tab Phiếu nhập xoá trắng được, luật ở bước lãnh thành vô nghĩa.
+   *
+   * Phiếu gõ tay (MANUAL) và nhập từ sổ Excel (SHEET_IMPORT) vẫn được để trống: sổ gốc
+   * có dòng chỉ ghi tắt vài chữ số cuối, hoặc không ghi.
+   */
+  if (fromMaterialTicket && !vehicle.value) {
+    return fail("Phiếu nhập sinh từ phiếu vật tư bắt buộc có biển số xe");
+  }
+
   const note = String(payload.note ?? "").trim() || null;
   /*
    * Chỉ một số cân thì khối lượng công nhận không đối chứng được — bắt ghi chú lý do.
@@ -145,7 +158,6 @@ export function validateReceiptInput(
    * vừa bảo "không thiếu gì cả", vừa chặn không cho sửa — kể cả khi người dùng chỉ vào
    * điền nốt biển số mà chính nó đang gắn cờ MISSING_VEHICLE để nhắc.
    */
-  const fromMaterialTicket = options?.source === "MATERIAL_TICKET";
   if (!fromMaterialTicket && (plant.value === null) !== (contractor.value === null) && !note) {
     return fail("Chỉ có một số cân — phải ghi chú lý do trước khi lưu");
   }

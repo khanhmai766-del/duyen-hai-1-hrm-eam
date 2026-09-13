@@ -347,6 +347,10 @@ function ReceiptDialog({
     số mà hệ thống đang gắn cờ MISSING_VEHICLE để nhắc. Máy chủ nới cùng một luật.
   */
   const needsNote = onlyOneWeight && receipt?.source !== "MATERIAL_TICKET";
+  // Phiếu sinh từ phiếu vật tư bắt buộc có biển số — cùng luật bước xác nhận lãnh; máy chủ
+  // chặn lại ở validateReceiptInput. Phiếu gõ tay / nhập từ Excel vẫn để trống được.
+  const needsPlate = receipt?.source === "MATERIAL_TICKET";
+  const plateMissing = needsPlate && !form.vehicleNumber.replace(/[^A-Za-z0-9]/g, "");
   const periodOfDate = form.receivedAt.slice(0, 7);
   const movesPeriod = periodOfDate !== month;
   const pending = create.isPending || update.isPending;
@@ -432,7 +436,7 @@ function ReceiptDialog({
 
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
-              <Label htmlFor="ci-plate">Biển số xe</Label>
+              <Label htmlFor="ci-plate">Biển số xe{needsPlate && " *"}</Label>
               <Input
                 id="ci-plate"
                 value={form.vehicleNumber}
@@ -441,9 +445,15 @@ function ReceiptDialog({
                 onChange={(e) => setForm((f) => ({ ...f, vehicleNumber: e.target.value }))}
                 className="mt-1 tabular-nums"
               />
-              <span className="mt-1 block text-[11px] text-muted-foreground">
-                Tối đa {MAX_VEHICLE_NUMBER_LENGTH} ký tự sau khi bỏ dấu gạch và dấu chấm.
-              </span>
+              {plateMissing ? (
+                <span className="mt-1 block text-[11px] text-red-600">
+                  Phiếu sinh từ phiếu vật tư bắt buộc có biển số xe.
+                </span>
+              ) : (
+                <span className="mt-1 block text-[11px] text-muted-foreground">
+                  Tối đa {MAX_VEHICLE_NUMBER_LENGTH} ký tự sau khi bỏ dấu gạch và dấu chấm.
+                </span>
+              )}
             </div>
             <div>
               <Label htmlFor="ci-position">Cương vị nhận</Label>
@@ -521,7 +531,7 @@ function ReceiptDialog({
           <Button variant="outline" onClick={onClose} disabled={pending}>
             Hủy
           </Button>
-          <Button onClick={() => void submit()} disabled={pending || accepted === null || (needsNote && !form.note.trim())}>
+          <Button onClick={() => void submit()} disabled={pending || accepted === null || (needsNote && !form.note.trim()) || plateMissing}>
             {pending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Lưu
           </Button>
