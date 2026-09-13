@@ -26,6 +26,8 @@ export function BroadcastModal() {
 
   React.useEffect(() => {
     try {
+      // Đọc sessionStorage (hệ thống ngoài) sau khi mount — server không có, đọc lúc render sẽ lệch hydrate.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setDismissedKey(sessionStorage.getItem(STORAGE_KEY) ?? "");
     } catch {
       /* sessionStorage không khả dụng */

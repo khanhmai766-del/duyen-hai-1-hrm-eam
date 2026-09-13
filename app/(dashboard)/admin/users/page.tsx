@@ -219,17 +219,27 @@ export default function AdminUsersPage() {
   const systemAuditRows = (systemAudit.data?.data ?? []).slice(0, 100);
   const systemAuditMeta = systemAudit.data?.meta as AuditMeta | null;
 
-  React.useEffect(() => {
+  // Đổi lọc / cỡ trang thì về trang 1; số trang đổi thì kéo trang về trong [1, số trang].
+  // Chỉnh lúc render thay cho useEffect; khoá theo nội dung (chuỗi JSON).
+  const userPageResetKey = JSON.stringify([debouncedSearch, positionFilter, pageSize]);
+  const [userPageResetSeen, setUserPageResetSeen] = React.useState(userPageResetKey);
+  if (userPageResetSeen !== userPageResetKey) {
+    setUserPageResetSeen(userPageResetKey);
     setPage(1);
-  }, [debouncedSearch, positionFilter, pageSize]);
+  }
 
-  React.useEffect(() => {
+  const auditPageResetKey = JSON.stringify([debouncedAuditSearch, debouncedAuditAction, auditFrom, auditTo, auditTab]);
+  const [auditPageResetSeen, setAuditPageResetSeen] = React.useState(auditPageResetKey);
+  if (auditPageResetSeen !== auditPageResetKey) {
+    setAuditPageResetSeen(auditPageResetKey);
     setAuditPage(1);
-  }, [debouncedAuditSearch, debouncedAuditAction, auditFrom, auditTo, auditTab]);
+  }
 
-  React.useEffect(() => {
+  const [pageClampTotal, setPageClampTotal] = React.useState(totalPages);
+  if (pageClampTotal !== totalPages) {
+    setPageClampTotal(totalPages);
     setPage((current) => Math.min(Math.max(1, current), totalPages));
-  }, [totalPages]);
+  }
 
   if (session && !canOpenPage && !rbac.isLoading) {
     return (
@@ -1174,7 +1184,11 @@ function EditUserDialog({ target, onClose }: { target: SafeUser | null; onClose:
   const activeTarget = detail.data?.data ?? target;
   const [form, setForm] = React.useState<any>(null);
 
-  React.useEffect(() => {
+  // Người dùng đang sửa (chi tiết từ server, hoặc dòng bảng khi chưa tải xong) đổi thì nạp lại form —
+  // chỉnh lúc render. Khoá null để lần render đầu cũng nạp như effect cũ.
+  const [formSyncedTarget, setFormSyncedTarget] = React.useState<{ target: typeof activeTarget } | null>(null);
+  if (!formSyncedTarget || formSyncedTarget.target !== activeTarget) {
+    setFormSyncedTarget({ target: activeTarget });
     if (activeTarget)
       setForm({
         name: activeTarget.name,
@@ -1193,7 +1207,7 @@ function EditUserDialog({ target, onClose }: { target: SafeUser | null; onClose:
         accessMode: activeTarget.accessMode ?? "NORMAL",
       });
     else setForm(null);
-  }, [activeTarget]);
+  }
 
   async function save() {
     if (!target || !form) return;

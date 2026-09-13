@@ -259,12 +259,15 @@ function TimelineDialog({
   const [find, setFind] = React.useState("");
   const bodyRef = React.useRef<HTMLDivElement>(null);
 
-  React.useEffect(() => {
+  // Mở hộp (hoặc danh sách cột đổi — useMemo) thì về cột đầu và xoá ô tìm — chỉnh lúc render.
+  const [tabSyncKey, setTabSyncKey] = React.useState({ open, tabs });
+  if (tabSyncKey.open !== open || tabSyncKey.tabs !== tabs) {
+    setTabSyncKey({ open, tabs });
     if (open) {
       setTab(tabs[0]);
       setFind("");
     }
-  }, [open, tabs]);
+  }
 
   const needle = find.trim().toLowerCase();
   const inTab = items.filter((i) => i.section === tab);

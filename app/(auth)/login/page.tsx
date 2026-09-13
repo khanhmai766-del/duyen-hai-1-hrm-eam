@@ -11,6 +11,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { LoginBackground } from "@/components/auth/login-background";
 
+// Trình duyệt có WebAuthn không — server (và lượt hydrate) nhận false, client vẽ lại với giá trị thật.
+const subscribeNothing = () => () => {};
+const getBiometricSupported = () => !!window.PublicKeyCredential;
+const getServerBiometricSupported = () => false;
+
 export default function LoginPage() {
   return (
     <React.Suspense fallback={null}>
@@ -30,7 +35,7 @@ function LoginInner() {
   const [passwordVisible, setPasswordVisible] = React.useState(false);
   const [loading, setLoading] = React.useState(false);
   const [biometricLoading, setBiometricLoading] = React.useState(false);
-  const [biometricSupported, setBiometricSupported] = React.useState(false);
+  const biometricSupported = React.useSyncExternalStore(subscribeNothing, getBiometricSupported, getServerBiometricSupported);
   const [stats, setStats] = React.useState<{ devices: number; users: number; materials: number } | null>(null);
   const [loginError, setLoginError] = React.useState("");
   const passwordRef = React.useRef<HTMLInputElement>(null);
@@ -54,10 +59,6 @@ function LoginInner() {
       .then((j) => { if (alive && j?.data) setStats(j.data); })
       .catch(() => {});
     return () => { alive = false; };
-  }, []);
-
-  React.useEffect(() => {
-    setBiometricSupported(typeof window !== "undefined" && !!window.PublicKeyCredential);
   }, []);
 
   React.useEffect(() => {

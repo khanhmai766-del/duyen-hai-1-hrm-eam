@@ -929,13 +929,19 @@ export default function RolesPage() {
     note: "",
   });
 
-  React.useEffect(() => {
-    const config = rbacQuery.data?.data;
-    if (!config) return;
-    setPermissions(normalizeMergedRoleMatrix(mergeDefaultPermissions(config.permissions ?? [])));
-    setCustomRoles(config.roles ?? []);
-    setUserOverrides(migrateDevicePermissionOverrides(config.userOverrides ?? []));
-  }, [rbacQuery.data]);
+  // Cấu hình RBAC từ server về (data useQuery — giữ nguyên object giữa các lần render) thì nạp vào bản
+  // nháp — chỉnh lúc render. Khoá null để dữ liệu đã có sẵn trong cache lúc mount cũng được nạp.
+  const rbacData = rbacQuery.data;
+  const [rbacSynced, setRbacSynced] = React.useState<{ data: typeof rbacData } | null>(null);
+  if (!rbacSynced || rbacSynced.data !== rbacData) {
+    setRbacSynced({ data: rbacData });
+    const config = rbacData?.data;
+    if (config) {
+      setPermissions(normalizeMergedRoleMatrix(mergeDefaultPermissions(config.permissions ?? [])));
+      setCustomRoles(config.roles ?? []);
+      setUserOverrides(migrateDevicePermissionOverrides(config.userOverrides ?? []));
+    }
+  }
 
   const roleColumns = React.useMemo(() => [...SYSTEM_ROLE_COLUMNS, ...customRoles], [customRoles]);
   const matrixRoleColumns = React.useMemo(() => [...MATRIX_SYSTEM_ROLE_COLUMNS, ...customRoles], [customRoles]);

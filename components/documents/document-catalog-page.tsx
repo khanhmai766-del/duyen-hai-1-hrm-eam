@@ -370,18 +370,28 @@ export function DocumentCatalogPage({
     ...(hasProcedureValidity ? [procedureTypeFilter] : []),
   ].filter((value) => value !== ALL_FILTER).length;
 
-  React.useEffect(() => {
+  // Đổi danh mục / bộ lọc / ô tìm thì thu dòng mở và về trang 1 — chỉnh lúc render, khoá theo nội dung;
+  // null để lần render đầu cũng chạy như effect cũ.
+  const listResetKey = JSON.stringify([category, q, historyTableLayout, yearFilter, tagFilter, procedureTypeFilter, positionFilter, blockFilter]);
+  const [listResetSeen, setListResetSeen] = React.useState<string | null>(null);
+  if (listResetSeen !== listResetKey) {
+    setListResetSeen(listResetKey);
     setExpandedId(null);
     setPageIndex(1);
-  }, [category, q, historyTableLayout, yearFilter, tagFilter, procedureTypeFilter, positionFilter, blockFilter]);
+  }
 
-  React.useEffect(() => {
+  // Danh sách năm đổi thì năm đang lọc không còn hợp lệ về năm đầu (không có trường năm thì bỏ lọc).
+  // Khoá theo NỘI DUNG danh sách năm; null để lần render đầu cũng chọn năm như effect cũ.
+  const yearOptionsKey = JSON.stringify([hasYearField, yearOptions]);
+  const [yearOptionsSeen, setYearOptionsSeen] = React.useState<string | null>(null);
+  if (yearOptionsSeen !== yearOptionsKey) {
+    setYearOptionsSeen(yearOptionsKey);
     if (!hasYearField) {
       setYearFilter("");
-      return;
+    } else {
+      setYearFilter((current) => (current && yearOptions.includes(current) ? current : yearOptions[0] ?? ""));
     }
-    setYearFilter((current) => (current && yearOptions.includes(current) ? current : yearOptions[0] ?? ""));
-  }, [hasYearField, yearOptions]);
+  }
 
   const rows = React.useMemo(() => {
     const source = docs.data?.data ?? [];
@@ -519,9 +529,11 @@ export function DocumentCatalogPage({
     attachmentLabel,
   ]);
 
-  React.useEffect(() => {
+  const [pageClampCount, setPageClampCount] = React.useState(pageCount);
+  if (pageClampCount !== pageCount) {
+    setPageClampCount(pageCount);
     setPageIndex((current) => Math.min(current, pageCount));
-  }, [pageCount]);
+  }
 
   function openCreate() {
     setEditing(null);

@@ -107,23 +107,31 @@ export function PositionSystemScopeCard({ isAdmin }: { isAdmin: boolean }) {
     return { roots: folderRoots, childrenOf: folderChildren, parentOf: strictParentOf };
   }, [equipmentNodes]);
 
-  React.useEffect(() => setExpanded(new Set()), [treeScope]);
+  // Đổi tổ máy thì thu gọn cây — chỉnh lúc render.
+  const [expandedTreeScope, setExpandedTreeScope] = React.useState(treeScope);
+  if (expandedTreeScope !== treeScope) {
+    setExpandedTreeScope(treeScope);
+    setExpanded(new Set());
+  }
 
-  React.useEffect(() => {
-    if (!positions.length) return;
-    if (!position || !positions.includes(position)) {
-      setPosition(positions[0]);
-    }
-  }, [position, positions]);
+  // Cương vị chưa chọn / không còn trong danh sách thì chọn cương vị đầu — điều kiện tự tắt sau khi đặt.
+  if (positions.length && (!position || !positions.includes(position))) {
+    setPosition(positions[0]);
+  }
 
-  React.useEffect(() => {
-    if (!position) return;
-    const next = new Map<string, NodeAccess>();
-    for (const scope of scopesForPosition(scopes, position)) {
-      next.set(scope.systemSeq, normalizeScopeAccess(scope.access));
+  // Đổi cương vị hoặc dữ liệu phạm vi (useMemo) thì nạp lại bản nháp quyền — chỉnh lúc render.
+  // Khoá null để lần render đầu cũng xét như effect cũ.
+  const [grantsSyncKey, setGrantsSyncKey] = React.useState<{ position: string; scopes: typeof scopes } | null>(null);
+  if (!grantsSyncKey || grantsSyncKey.position !== position || grantsSyncKey.scopes !== scopes) {
+    setGrantsSyncKey({ position, scopes });
+    if (position) {
+      const next = new Map<string, NodeAccess>();
+      for (const scope of scopesForPosition(scopes, position)) {
+        next.set(scope.systemSeq, normalizeScopeAccess(scope.access));
+      }
+      setGrants(next);
     }
-    setGrants(next);
-  }, [position, scopes]);
+  }
 
   // Quyền kế thừa từ tổ tiên gần nhất có gán tường minh.
   const inheritedAccess = React.useCallback(

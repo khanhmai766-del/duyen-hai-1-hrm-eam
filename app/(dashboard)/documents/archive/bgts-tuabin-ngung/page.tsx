@@ -117,13 +117,19 @@ export default function BgtsTuabinNgungPage() {
   const canSave = rbac.can("archive-grid-separation", ["manage", "full"]);
   const isAdmin = session?.user?.role === "ADMIN";
 
-  React.useEffect(() => {
-    if (!query.data) return;
-    setRows(mergeBgtsRows(query.data.rows));
-    setDayShiftSigner(query.data.record?.dayShiftSigner ?? "");
-    setMiddleShiftSigner(query.data.record?.middleShiftSigner ?? "");
-    setNightShiftSigner(query.data.record?.nightShiftSigner ?? "");
-  }, [query.data]);
+  // Dữ liệu biên bản (useQuery — giữ nguyên object) đổi thì nạp lại bảng và người ký — chỉnh lúc render.
+  // Khoá null để dữ liệu đã có trong cache lúc mount cũng được nạp như effect cũ.
+  const bgtsData = query.data;
+  const [bgtsSynced, setBgtsSynced] = React.useState<{ data: typeof bgtsData } | null>(null);
+  if (!bgtsSynced || bgtsSynced.data !== bgtsData) {
+    setBgtsSynced({ data: bgtsData });
+    if (bgtsData) {
+      setRows(mergeBgtsRows(bgtsData.rows));
+      setDayShiftSigner(bgtsData.record?.dayShiftSigner ?? "");
+      setMiddleShiftSigner(bgtsData.record?.middleShiftSigner ?? "");
+      setNightShiftSigner(bgtsData.record?.nightShiftSigner ?? "");
+    }
+  }
 
   const enteredRows = React.useMemo(() => rows.filter(rowHasData).length, [rows]);
   const enteredCells = React.useMemo(

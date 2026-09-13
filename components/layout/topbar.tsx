@@ -171,9 +171,13 @@ export function Topbar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
   const navSections = React.useMemo(() => navSectionsForPosition(positionCarrier), [positionCarrier]);
   const statisticsNavRestricted = isStatisticsPosition(positionCarrier);
 
-  React.useEffect(() => {
+  // Tài khoản bị buộc đổi mật khẩu thì mở hộp đổi mật khẩu — chỉnh lúc render; khoá null để lần render đầu
+  // cũng xét như effect cũ.
+  const [forcePasswordSeen, setForcePasswordSeen] = React.useState<boolean | null>(null);
+  if (forcePasswordSeen !== forcePasswordChange) {
+    setForcePasswordSeen(forcePasswordChange);
     if (forcePasswordChange) setPasswordOpen(true);
-  }, [forcePasswordChange]);
+  }
 
   // Quick-launch shortcuts (app grid) — top-level nav respecting admin-only.
   const quickLinks = React.useMemo(
@@ -200,6 +204,8 @@ export function Topbar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
   React.useEffect(() => {
     try {
       const raw = localStorage.getItem("repl-alert-acked");
+      // Đọc localStorage (hệ thống ngoài) sau khi mount — server không có, đọc lúc render sẽ lệch hydrate.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       if (raw) setAckedReplKeys(new Set(JSON.parse(raw) as string[]));
     } catch {
       // bỏ qua nếu localStorage không khả dụng
@@ -697,7 +703,10 @@ function ChangePasswordDialog({ open, onOpenChange, forced }: { open: boolean; o
   const [confirmPasswordVisible, setConfirmPasswordVisible] = React.useState(false);
   const [loading, setLoading] = React.useState(false);
 
-  React.useEffect(() => {
+  // Đóng hộp thì xoá sạch các ô mật khẩu — chỉnh lúc render.
+  const [fieldsOpen, setFieldsOpen] = React.useState(open);
+  if (fieldsOpen !== open) {
+    setFieldsOpen(open);
     if (!open) {
       setCurrentPassword("");
       setNewPassword("");
@@ -706,7 +715,7 @@ function ChangePasswordDialog({ open, onOpenChange, forced }: { open: boolean; o
       setConfirmPasswordVisible(false);
       setLoading(false);
     }
-  }, [open]);
+  }
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();

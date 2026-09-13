@@ -3,6 +3,11 @@
 import * as React from "react";
 import { Moon, Sun } from "lucide-react";
 
+// mounted: server (và lượt hydrate) nhận false, client vẽ lại với true — markup hai bên y hệt, không cần effect.
+const subscribeNothing = () => () => {};
+const getMountedClient = () => true;
+const getMountedServer = () => false;
+
 /**
  * Light/dark toggle. The initial `dark` class is set pre-hydration by the
  * no-FOUC script in the root layout; this button just flips it and persists the
@@ -10,13 +15,10 @@ import { Moon, Sun } from "lucide-react";
  * keep the server/client markup identical (no hydration mismatch).
  */
 export function ThemeToggle() {
-  const [dark, setDark] = React.useState(false);
-  const [mounted, setMounted] = React.useState(false);
-
-  React.useEffect(() => {
-    setMounted(true);
-    setDark(document.documentElement.classList.contains("dark"));
-  }, []);
+  const mounted = React.useSyncExternalStore(subscribeNothing, getMountedClient, getMountedServer);
+  // Chưa bấm thì theo lớp "dark" mà script chống nháy đã đặt sẵn (chỉ đọc khi đã mount); bấm rồi theo state.
+  const [darkChoice, setDark] = React.useState<boolean | null>(null);
+  const dark = darkChoice ?? (mounted && document.documentElement.classList.contains("dark"));
 
   function toggle() {
     const el = document.documentElement;

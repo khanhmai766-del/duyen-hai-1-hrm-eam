@@ -799,8 +799,14 @@ function WeatherCard() {
   const backdrops = place.data?.images?.length ? place.data.images : FALLBACK_BACKDROPS;
 
   const [bg, setBg] = React.useState(0);
+  // Bộ ảnh đổi thì chạy lại từ ảnh đầu — chỉnh lúc render (backdrops là data của query hoặc hằng số,
+  // giữ nguyên object giữa các lần render); hẹn giờ chuyển ảnh vẫn là việc của effect.
+  const [bgBackdrops, setBgBackdrops] = React.useState(backdrops);
+  if (bgBackdrops !== backdrops) {
+    setBgBackdrops(backdrops);
+    setBg(0);
+  }
   React.useEffect(() => {
-    setBg(0); // restart slideshow when the set of photos changes
     if (backdrops.length < 2) return;
     const t = setInterval(() => setBg((i) => (i + 1) % backdrops.length), 8000);
     return () => clearInterval(t);
@@ -1634,9 +1640,12 @@ function OperationInfoCard({ canCreate, canManage }: { canCreate: boolean; canMa
   );
   const activeMobileIndex = upcomingEvents.length ? mobileSlide.current % upcomingEvents.length : 0;
 
-  React.useEffect(() => {
+  // Số sự kiện đổi thì về slide đầu — chỉnh lúc render.
+  const [mobileSlideCount, setMobileSlideCount] = React.useState(upcomingEvents.length);
+  if (mobileSlideCount !== upcomingEvents.length) {
+    setMobileSlideCount(upcomingEvents.length);
     setMobileSlide({ current: 0, previous: null, cycle: 0 });
-  }, [upcomingEvents.length]);
+  }
 
   React.useEffect(() => {
     if (upcomingEvents.length < 2 || mobilePaused) return;

@@ -70,10 +70,10 @@ function ReportsPageContent() {
   const totalSystemDevices = dashboardData?.totalSystemDevices ?? 0;
   const isLoading = dashboardQuery.isLoading && !dashboardData;
 
-  React.useEffect(() => {
-    if (systemPositionFilter === "ALL") return;
-    if (!dashboardPositionOptions.includes(systemPositionFilter)) setSystemPositionFilter("ALL");
-  }, [dashboardPositionOptions, systemPositionFilter]);
+  // Cương vị đang lọc không còn trong danh sách thì về "Tất cả" — chỉnh lúc render, điều kiện tự tắt.
+  if (systemPositionFilter !== "ALL" && !dashboardPositionOptions.includes(systemPositionFilter)) {
+    setSystemPositionFilter("ALL");
+  }
 
   const dashboard = React.useMemo(() => {
     const currentYear = dashboardData?.currentYear ?? new Date().getFullYear();

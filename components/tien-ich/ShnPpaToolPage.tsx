@@ -152,6 +152,8 @@ export default function ShnPpaToolPage({ isAdmin }: { isAdmin: boolean }) {
     catch (error) { toast.error(error instanceof Error ? error.message : "Không tải được phiên bản HTML"); }
   }, [isAdmin]);
 
+  // Tải lịch sử từ API khi mở trang — đồng bộ hệ thống ngoài, đúng việc của effect.
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { void loadHistory(); }, [loadHistory]);
 
   useEffect(() => { unsavedRef.current = hasUnsavedData; }, [hasUnsavedData]);

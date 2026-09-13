@@ -464,12 +464,15 @@ function ImportDialog({
   const [text, setText] = React.useState(initialText);
   const [parsed, setParsed] = React.useState<TimelineParseResult | null>(null);
 
-  React.useEffect(() => {
+  // Mở hộp (hoặc đổi nội dung gốc) thì nạp lại — chỉnh lúc render; giá trị đầu đã nạp ở useState.
+  const [textSyncKey, setTextSyncKey] = React.useState({ open, initialText });
+  if (textSyncKey.open !== open || textSyncKey.initialText !== initialText) {
+    setTextSyncKey({ open, initialText });
     if (open) {
       setText(initialText);
       setParsed(null);
     }
-  }, [open, initialText]);
+  }
 
   function run() {
     if (!text.trim()) return toast.error("Chưa có nội dung để bóc tách");

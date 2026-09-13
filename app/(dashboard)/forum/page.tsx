@@ -163,16 +163,35 @@ export default function ForumPage() {
     return () => window.cancelAnimationFrame(frame);
   }, [composeOpen, editingPost]);
 
-  React.useEffect(() => {
-    if (!linkedPostId) return;
-    const openTarget = posts.data?.data?.find((post) => post.id === linkedPostId);
-    const closedTarget = closedPosts.data?.data?.find((post) => post.id === linkedPostId);
-    if (!openTarget && !closedTarget) return;
-    setCategory("ALL");
-    setQ("");
-    setShowClosedBox(Boolean(closedTarget));
-    if (linkedReplyId) setExpandedReplies((state) => ({ ...state, [linkedPostId]: true }));
-  }, [closedPosts.data, linkedPostId, linkedReplyId, posts.data]);
+  // Link tới bài/bình luận: bỏ lọc, mở đúng hộp bài và bung bình luận — chỉnh lúc render, khoá đúng các
+  // giá trị effect cũ theo dõi (data useQuery giữ nguyên object); null để lần render đầu cũng xét.
+  const openPostsData = posts.data;
+  const closedPostsData = closedPosts.data;
+  const [linkedPostKey, setLinkedPostKey] = React.useState<{
+    openPostsData: typeof openPostsData;
+    closedPostsData: typeof closedPostsData;
+    linkedPostId: string | null;
+    linkedReplyId: string | null;
+  } | null>(null);
+  if (
+    !linkedPostKey ||
+    linkedPostKey.openPostsData !== openPostsData ||
+    linkedPostKey.closedPostsData !== closedPostsData ||
+    linkedPostKey.linkedPostId !== linkedPostId ||
+    linkedPostKey.linkedReplyId !== linkedReplyId
+  ) {
+    setLinkedPostKey({ openPostsData, closedPostsData, linkedPostId, linkedReplyId });
+    if (linkedPostId) {
+      const openTarget = openPostsData?.data?.find((post) => post.id === linkedPostId);
+      const closedTarget = closedPostsData?.data?.find((post) => post.id === linkedPostId);
+      if (openTarget || closedTarget) {
+        setCategory("ALL");
+        setQ("");
+        setShowClosedBox(Boolean(closedTarget));
+        if (linkedReplyId) setExpandedReplies((state) => ({ ...state, [linkedPostId]: true }));
+      }
+    }
+  }
 
   React.useEffect(() => {
     if (!linkedPostId || !rows.some((post) => post.id === linkedPostId)) return;

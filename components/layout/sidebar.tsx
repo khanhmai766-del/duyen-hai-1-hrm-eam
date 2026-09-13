@@ -74,6 +74,9 @@ export function Sidebar({ onNavigate, collapsed = false }: { onNavigate?: () => 
 
   const [now, setNow] = React.useState<Date | null>(null);
   React.useEffect(() => {
+    // Đồng hồ là hệ thống ngoài: chỉ đọc sau khi mount (server không biết giờ trình duyệt → tránh lệch
+    // hydrate) rồi cập nhật mỗi 30s — đúng việc của effect.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setNow(new Date());
     const t = setInterval(() => setNow(new Date()), 1000 * 30);
     return () => clearInterval(t);
@@ -287,9 +290,12 @@ function NavEntry({ item, onNavigate, collapsed = false }: { item: NavItem; onNa
   const active = pathActive(pathname, item.href, item.exact) || childActive;
   const [open, setOpen] = React.useState(childActive);
 
-  React.useEffect(() => {
+  // Vào trang con thì tự bung nhóm — chỉnh lúc render; giá trị đầu đã xét ở useState.
+  const [openChildActive, setOpenChildActive] = React.useState(childActive);
+  if (openChildActive !== childActive) {
+    setOpenChildActive(childActive);
     if (childActive) setOpen(true);
-  }, [childActive]);
+  }
 
   if (collapsed) {
     const href = hasChildren ? item.children![0].href : item.href;

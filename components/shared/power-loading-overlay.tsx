@@ -19,12 +19,11 @@ export function PowerLoadingOverlay({
 }: PowerLoadingOverlayProps) {
   const [visible, setVisible] = React.useState(false);
 
-  React.useEffect(() => {
-    if (!active) {
-      setVisible(false);
-      return;
-    }
+  // Hết tải thì ẩn ngay lúc render (điều kiện tự tắt); còn tải thì hẹn giờ mới hiện — việc của effect.
+  if (!active && visible) setVisible(false);
 
+  React.useEffect(() => {
+    if (!active) return;
     const timer = window.setTimeout(() => setVisible(true), delayMs);
     return () => window.clearTimeout(timer);
   }, [active, delayMs]);

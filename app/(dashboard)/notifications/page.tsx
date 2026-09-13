@@ -168,9 +168,13 @@ const PostCard = React.memo(function PostCard({
   onShowReaders,
 }: PostCardProps) {
   const [expanded, setExpanded] = React.useState(linkedAnnouncementId === a.id);
-  React.useEffect(() => {
+  // Link tới đúng mệnh lệnh này thì mở rộng thẻ — chỉnh lúc render; giá trị đầu đã xét ở useState.
+  const expandLinkKey = JSON.stringify([a.id, linkedAnnouncementId]);
+  const [expandLinkSeen, setExpandLinkSeen] = React.useState(expandLinkKey);
+  if (expandLinkSeen !== expandLinkKey) {
+    setExpandLinkSeen(expandLinkKey);
     if (linkedAnnouncementId === a.id) setExpanded(true);
-  }, [a.id, linkedAnnouncementId]);
+  }
 
   const { readCount, total, readByMe, allRead } = React.useMemo(() => {
     const targetUsers = activeUsers.filter((u) => isAnnouncementTargetForPosition(a.classification, effectiveUserPosition(u)));
@@ -473,34 +477,55 @@ export default function NotificationsPage() {
   const firstShown = sortedFiltered.length ? (page - 1) * ORDERS_PER_PAGE + 1 : 0;
   const lastShown = Math.min(page * ORDERS_PER_PAGE, sortedFiltered.length);
   const pagedAnnouncements = sortedFiltered.slice((page - 1) * ORDERS_PER_PAGE, page * ORDERS_PER_PAGE);
-  React.useEffect(() => {
+  // Đổi lọc thì về trang 1; số trang đổi thì kéo trang về trang cuối hợp lệ. Chỉnh lúc render.
+  const pageResetKey = JSON.stringify([yearFilter, positionFilter, debouncedSearch, showInvalidArchive]);
+  const [pageResetSeen, setPageResetSeen] = React.useState(pageResetKey);
+  if (pageResetSeen !== pageResetKey) {
+    setPageResetSeen(pageResetKey);
     setPage(1);
-  }, [yearFilter, positionFilter, debouncedSearch, showInvalidArchive]);
-  React.useEffect(() => {
+  }
+  const [pageClampTotal, setPageClampTotal] = React.useState(totalPages);
+  if (pageClampTotal !== totalPages) {
+    setPageClampTotal(totalPages);
     setPage((current) => Math.min(current, totalPages));
-  }, [totalPages]);
-  React.useEffect(() => {
-    if (!linkedAnnouncementId || annLoading) return;
-    const target = announcements.find((item) => item.id === linkedAnnouncementId);
-    if (!target) {
-      // Mệnh lệnh deep-link có thể thuộc năm khác — mở rộng bộ lọc ra tất cả các năm.
-      setYearFilter((current) => (current === "ALL" ? current : "ALL"));
-      return;
+  }
+  // Deep-link: nới bộ lọc để thấy mệnh lệnh — chỉnh lúc render, khoá đúng các giá trị effect cũ theo dõi
+  // (announcements là useMemo); null để lần render đầu cũng xét.
+  const [deepLinkKey, setDeepLinkKey] = React.useState<{
+    announcements: typeof announcements;
+    annLoading: boolean;
+    linkedAnnouncementId: string | null;
+  } | null>(null);
+  if (
+    !deepLinkKey ||
+    deepLinkKey.announcements !== announcements ||
+    deepLinkKey.annLoading !== annLoading ||
+    deepLinkKey.linkedAnnouncementId !== linkedAnnouncementId
+  ) {
+    setDeepLinkKey({ announcements, annLoading, linkedAnnouncementId });
+    if (linkedAnnouncementId && !annLoading) {
+      const target = announcements.find((item) => item.id === linkedAnnouncementId);
+      if (!target) {
+        // Mệnh lệnh deep-link có thể thuộc năm khác — mở rộng bộ lọc ra tất cả các năm.
+        setYearFilter((current) => (current === "ALL" ? current : "ALL"));
+      } else {
+        setYearFilter("ALL");
+        setPositionFilter("ALL");
+        setSearch("");
+        setShowInvalidArchive(isArchivedInvalidAnnouncement(target));
+      }
     }
-    setYearFilter("ALL");
-    setPositionFilter("ALL");
-    setSearch("");
-    setShowInvalidArchive(isArchivedInvalidAnnouncement(target));
-  }, [announcements, annLoading, linkedAnnouncementId]);
-  React.useEffect(() => {
-    if (!linkedAnnouncementId) return;
+  }
+  // Deep-link: về đúng trang chứa mệnh lệnh — chỉnh lúc render (điều kiện tự tắt); cuộn tới thẻ là việc
+  // của effect bên dưới (requestAnimationFrame + DOM).
+  const linkedTargetPage = (() => {
+    if (!linkedAnnouncementId) return null;
     const targetIndex = sortedFiltered.findIndex((item) => item.id === linkedAnnouncementId);
-    if (targetIndex < 0) return;
-    const targetPage = Math.floor(targetIndex / ORDERS_PER_PAGE) + 1;
-    if (page !== targetPage) {
-      setPage(targetPage);
-      return;
-    }
+    return targetIndex < 0 ? null : Math.floor(targetIndex / ORDERS_PER_PAGE) + 1;
+  })();
+  if (linkedTargetPage !== null && page !== linkedTargetPage) setPage(linkedTargetPage);
+  React.useEffect(() => {
+    if (!linkedAnnouncementId || linkedTargetPage === null || page !== linkedTargetPage) return;
     const frame = window.requestAnimationFrame(() => {
       const target = document.getElementById(`announcement-${linkedAnnouncementId}`);
       const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -508,7 +533,7 @@ export default function NotificationsPage() {
       target?.focus({ preventScroll: true });
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [linkedAnnouncementId, page, sortedFiltered]);
+  }, [linkedAnnouncementId, linkedTargetPage, page]);
   const isOrder = form.category === "ORDER";
   const noun = isOrder ? "mệnh lệnh" : "thông báo";
 

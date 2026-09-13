@@ -84,9 +84,8 @@ export function AnnualBackupExport<T>({
   }, [rows, dateAccessor, yearAccessor, yearOptions]);
   const [year, setYear] = React.useState(() => years[0] ?? new Date().getFullYear());
 
-  React.useEffect(() => {
-    if (years.length && !years.includes(year)) setYear(years[0]);
-  }, [year, years]);
+  // Năm đang chọn không còn trong danh sách thì về năm đầu — chỉnh lúc render, điều kiện tự tắt sau khi đặt.
+  if (years.length && !years.includes(year)) setYear(years[0]);
 
   const annualRows = React.useMemo(
     () => rows.filter((row) => toYear(yearAccessor ? yearAccessor(row) : dateAccessor(row)) === year),

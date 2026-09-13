@@ -110,11 +110,10 @@ export default function ArchiveDocumentsPage() {
       }),
     [rbac, canSeeOilSootTabs]
   );
-  React.useEffect(() => {
-    if (visibleTabs.length && !visibleTabs.some((item) => item.key === activeTab)) {
-      setActiveTab(visibleTabs[0].key);
-    }
-  }, [activeTab, visibleTabs]);
+  // Tab đang chọn không còn quyền xem thì về tab đầu tiên — chỉnh lúc render, điều kiện tự tắt sau khi đặt.
+  if (visibleTabs.length && !visibleTabs.some((item) => item.key === activeTab)) {
+    setActiveTab(visibleTabs[0].key);
+  }
   const activeConfig = visibleTabs.find((item) => item.key === activeTab) ?? visibleTabs[0] ?? ARCHIVE_TABS[0];
   const usesArchiveTimelineLayout =
     activeTab === "BOILER_CALIBRATION" ||
