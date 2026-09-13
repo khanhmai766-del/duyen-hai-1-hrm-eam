@@ -2398,30 +2398,16 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
           return ok({ ...updated, chemicalLink: linkResult });
         }
 
-        // Không gửi bảng xe: giữ nguyên đường cũ để phiếu đang dở không bị kẹt.
-        const receivedQuantity = Math.trunc(Number(body.receivedQuantity));
-        if (!Number.isFinite(receivedQuantity) || receivedQuantity <= 0) return fail("Khối lượng lãnh phải lớn hơn 0");
-        const receivedAt = body.receivedAt ? parseDateInput(body.receivedAt) : null;
-        if (!receivedAt || Number.isNaN(receivedAt.getTime())) return fail("Vui lòng chọn ngày lãnh");
-        const updated = await prisma.materialTicket.update({
-          where: { id: t.id },
-          data: {
-            receivedQuantity,
-            receivedAt,
-            receivedById: user.id,
-            receivedByName,
-            receivedByPosition: user.position ?? null,
-            status: "HOAN_TAT",
-            completedAt: new Date(),
-            completedById: user.id,
-            completedByName: receivedByName,
-            completedByPosition: user.position ?? null,
-          },
-          include: ITEM_INCLUDE,
-        });
-        await audit(user.id, "MT_RECEIVE", "MaterialTicket", t.id,
-          `${materialTicketReference(t)}: Xác nhận lãnh hóa chất ${receivedQuantity} ngày ${receivedAt.toLocaleDateString("vi-VN")} — ${receivedByName}; hoàn tất phiếu`);
-        return ok(updated);
+        /*
+         * Không gửi bảng xe thì KHÔNG hoàn tất được nữa (2026-09-13).
+         *
+         * Nhánh cũ "giữ đường cũ để phiếu đang dở không bị kẹt" hoàn tất phiếu chỉ với
+         * khối lượng + ngày — không chuyến xe nào, không biển số — tức lách thẳng qua luật
+         * biển số bắt buộc ở linkTicketTrucks. Giao diện hiện hành luôn gửi bảng xe (nút
+         * "Xác nhận lãnh và hoàn tất" trong MaterialTicketBoard) nên đóng nhánh này không
+         * làm kẹt phiếu nào; chỉ còn chặn request gọi thẳng API.
+         */
+        return fail("Vui lòng nhập bảng chuyến xe (ngày nhập, biển số, khối lượng) trước khi xác nhận lãnh", 400);
       }
 
       // PHA 2 luồng Ứng: Phiếu ĐXVT đã xuất ở pha 1. Lúc này chỉ chốt số ĐXVT,

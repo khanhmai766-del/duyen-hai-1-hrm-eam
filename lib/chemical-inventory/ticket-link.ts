@@ -164,6 +164,15 @@ export async function linkTicketTrucks(
     const note = String(truck.note ?? "").trim() || null;
 
     const vehicleNumber = normalizeVehicleNumber(truck.vehicleNumber);
+    /*
+     * Biển số BẮT BUỘC từ 2026-09-13 — cả NH3 (action chemicalTrucks) lẫn hóa chất
+     * thường (action receive) đều ghi xe qua đúng hàm này, nên chặn một chỗ là phủ hết.
+     * Trước đây trống thì lặng lẽ lưu null, rồi sổ tồn kho gắn cờ MISSING_VEHICLE mà
+     * không ai quay lại điền (gặp thật: phiếu NaOH 32% ngày 08/09/2026).
+     */
+    if (!vehicleNumber) {
+      throw fail(`${label}: chưa nhập biển số xe`, 400);
+    }
 
     // Trùng ngay trong chính bảng vừa nhập: chặn ở đây cho thông báo dễ hiểu, thay vì
     // để khóa duy nhất của DB ném ra lỗi ràng buộc khó đọc.

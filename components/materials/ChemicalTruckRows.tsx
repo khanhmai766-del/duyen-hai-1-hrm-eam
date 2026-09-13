@@ -53,12 +53,18 @@ export function acceptedOf(row: TruckRow): number | null {
 
 export function truckRowError(row: TruckRow): string | null {
   if (!row.receivedAt) return "Chưa chọn ngày nhập";
+  /*
+    Biển số BẮT BUỘC từ 2026-09-13, cho cả NH3 lẫn hóa chất thường (dùng chung hàm này).
+    Kiểm theo đúng thứ tự cột trên bảng (ngày → biển số → khối lượng) để dòng báo lỗi
+    chỉ vào ô người dùng gặp trước. Máy chủ chặn lại ở linkTicketTrucks.
+  */
+  const plate = row.vehicleNumber.toUpperCase().replace(/[^A-Z0-9]/g, "");
+  if (!plate) return "Chưa nhập biển số xe";
+  if (plate.length > MAX_VEHICLE_NUMBER_LENGTH) return `Biển số tối đa ${MAX_VEHICLE_NUMBER_LENGTH} ký tự`;
   if (!row.plantWeight.trim()) return "Chưa nhập khối lượng hàng theo phiếu cân";
   const plant = toNum(row.plantWeight);
   if (plant === null) return `Khối lượng hàng không đọc được. ${VN_NUMBER_HINT}`;
   if (plant <= 0) return "Khối lượng hàng phải lớn hơn 0";
-  const plate = row.vehicleNumber.toUpperCase().replace(/[^A-Z0-9]/g, "");
-  if (plate.length > MAX_VEHICLE_NUMBER_LENGTH) return `Biển số tối đa ${MAX_VEHICLE_NUMBER_LENGTH} ký tự`;
   return null;
 }
 
@@ -114,7 +120,7 @@ export function ChemicalTruckRows({
             <tr>
               <th style={{ ...HEAD, width: 26 }}>#</th>
               <th style={{ ...HEAD, minWidth: 132 }}>Ngày nhập *</th>
-              <th style={{ ...HEAD, minWidth: 116 }}>Biển số xe</th>
+              <th style={{ ...HEAD, minWidth: 116 }}>Biển số xe *</th>
               <th style={{ ...HEAD, minWidth: 132, textAlign: "right" }}>Khối lượng hàng *</th>
               <th style={{ ...HEAD, width: 32 }} />
             </tr>
