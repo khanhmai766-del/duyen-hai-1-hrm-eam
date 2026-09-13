@@ -314,7 +314,7 @@ export function ReplacementsPageContent({ only }: { only?: TabKey } = {}) {
   const del = useDeleteReplacement();
   const delLog = useDeleteReplacementLog();
   const all = React.useMemo(() => data?.data ?? [], [data?.data]);
-  const configuredFocusPointRef = React.useRef<string | null>(null);
+  const [configuredFocusPoint, setConfiguredFocusPoint] = React.useState<string | null>(null);
   const linkedDeviceOf = (p: { device: ReplacementDevice | null; material: { deviceMaterials?: Array<{ device: ReplacementDevice }> } }) =>
     p.device ?? p.material.deviceMaterials?.[0]?.device ?? null;
   // Lọc theo tổ máy của vật tư (vật tư nằm ở tab S1/S2/COMMON nào trong Danh mục).
@@ -356,22 +356,23 @@ export function ReplacementsPageContent({ only }: { only?: TabKey } = {}) {
   // Lọc theo loại vật tư (khớp cả tên biến thể cũ, như tab Danh mục vật tư).
   const matchCategory = (category: string | null | undefined) =>
     replacementCategoryMatches(category, categoryFilter);
-  React.useEffect(() => {
-    if (only || !requestedPointId || configuredFocusPointRef.current === requestedPointId) return;
+  // Mở từ link ?pointId: chuyển sang tab trạng thái với bộ lọc chứa điểm đó, đúng một lần cho mỗi điểm.
+  // Chỉnh lúc render (cờ là state thay cho ref) để không vẽ một nhịp bộ lọc cũ.
+  if (!only && requestedPointId && configuredFocusPoint !== requestedPointId) {
     const point = all.find((candidate) => candidate.id === requestedPointId);
-    if (!point) return;
-
-    const matchedCategory = CATEGORY_FILTERS.find((candidate) =>
-      replacementCategoryMatches(point.material.category, candidate)
-    );
-    configuredFocusPointRef.current = requestedPointId;
-    setTab("status");
-    setMachineFilter(point.material.machine ?? point.machine ?? "COMMON");
-    setPositionFilter("ALL");
-    setCategoryFilter(matchedCategory ?? "ALL");
-    setSearchQ("");
-    setDebouncedSearchQ("");
-  }, [all, only, requestedPointId]);
+    if (point) {
+      const matchedCategory = CATEGORY_FILTERS.find((candidate) =>
+        replacementCategoryMatches(point.material.category, candidate)
+      );
+      setConfiguredFocusPoint(requestedPointId);
+      setTab("status");
+      setMachineFilter(point.material.machine ?? point.machine ?? "COMMON");
+      setPositionFilter("ALL");
+      setCategoryFilter(matchedCategory ?? "ALL");
+      setSearchQ("");
+      setDebouncedSearchQ("");
+    }
+  }
   const byCategory = byPosition.filter((p) => matchCategory(p.material.category));
   const actualStatusPoints: ReplacementStatusPoint[] = byCategory.map((point) => {
     const device = linkedDeviceOf(point);
@@ -527,9 +528,21 @@ export function ReplacementsPageContent({ only }: { only?: TabKey } = {}) {
     ...sortedFilteredLogs.map((log) => ({ kind: "history" as const, log })),
   ], [filteredPendingSettlements, sortedFilteredLogs]);
   const historyTotalPages = Math.max(1, Math.ceil(combinedHistoryRows.length / historyPageSize));
-  React.useEffect(() => {
+  // Đổi bộ lọc / sắp xếp / cỡ trang lịch sử thì về trang 1 — chỉnh lúc render (mọi giá trị là state).
+  const [historyResetKey, setHistoryResetKey] = React.useState({ historyFromMonth, historyToMonth, machineFilter, positionFilter, categoryFilter, searchQ, historyPageSize, historySort });
+  if (
+    historyResetKey.historyFromMonth !== historyFromMonth ||
+    historyResetKey.historyToMonth !== historyToMonth ||
+    historyResetKey.machineFilter !== machineFilter ||
+    historyResetKey.positionFilter !== positionFilter ||
+    historyResetKey.categoryFilter !== categoryFilter ||
+    historyResetKey.searchQ !== searchQ ||
+    historyResetKey.historyPageSize !== historyPageSize ||
+    historyResetKey.historySort !== historySort
+  ) {
+    setHistoryResetKey({ historyFromMonth, historyToMonth, machineFilter, positionFilter, categoryFilter, searchQ, historyPageSize, historySort });
     setHistoryPage(1);
-  }, [historyFromMonth, historyToMonth, machineFilter, positionFilter, categoryFilter, searchQ, historyPageSize, historySort]);
+  }
   const historySafePage = Math.min(historyPage, historyTotalPages);
   const pagedHistoryRows = combinedHistoryRows.slice((historySafePage - 1) * historyPageSize, historySafePage * historyPageSize);
   const historyFirstShown = combinedHistoryRows.length ? (historySafePage - 1) * historyPageSize + 1 : 0;
@@ -1564,21 +1577,25 @@ function ReplacementLogEditDialog({ log, onClose }: { log: ReplacementLogItem | 
     return list;
   }, [deviceOptions?.data?.options, deviceSeq, deviceName, machine]);
 
-  React.useEffect(() => {
-    if (!log) return;
-    setReplacedAt(formatDateInput(log.replacedAt));
-    setQuantity(log.quantity != null ? String(log.quantity) : "");
-    setNote(log.note ?? "");
-    setMachine(log.machine ?? "");
-    setPosition(log.managingPosition ?? "");
-    setCategory(log.materialCategory ?? "");
-    setMaterialName(log.materialNameLabel ?? "");
-    setUnitLabel(log.unitLabel ?? "");
-    setPctNumber(normalizePctNumber(log.pctNumber));
-    setSourceNote(log.sourceNote ?? "");
-    setDeviceSeq(log.deviceSeq ?? "");
-    setDeviceName(log.deviceLabel ?? "");
-  }, [log]);
+  // Mở sửa bản ghi khác thì nạp lại form — chỉnh lúc render. Khoá null để lần render đầu cũng nạp.
+  const [formSyncedLog, setFormSyncedLog] = React.useState<{ log: ReplacementLogItem | null } | null>(null);
+  if (!formSyncedLog || formSyncedLog.log !== log) {
+    setFormSyncedLog({ log });
+    if (log) {
+      setReplacedAt(formatDateInput(log.replacedAt));
+      setQuantity(log.quantity != null ? String(log.quantity) : "");
+      setNote(log.note ?? "");
+      setMachine(log.machine ?? "");
+      setPosition(log.managingPosition ?? "");
+      setCategory(log.materialCategory ?? "");
+      setMaterialName(log.materialNameLabel ?? "");
+      setUnitLabel(log.unitLabel ?? "");
+      setPctNumber(normalizePctNumber(log.pctNumber));
+      setSourceNote(log.sourceNote ?? "");
+      setDeviceSeq(log.deviceSeq ?? "");
+      setDeviceName(log.deviceLabel ?? "");
+    }
+  }
 
   async function submit() {
     if (!log) return;

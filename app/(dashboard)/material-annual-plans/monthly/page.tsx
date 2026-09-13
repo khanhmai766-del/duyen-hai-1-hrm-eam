@@ -86,11 +86,21 @@ function MonthlyReportContent() {
     return [...groups].map(([group, rows]) => ({ group, rows }));
   }, [pageRows]);
 
-  React.useEffect(() => setPage(1), [pageSize, periodKey, query, selectedGroup]);
-  React.useEffect(() => {
+  // Đổi kỳ / ô tìm / nhóm / cỡ trang thì về trang 1; số dòng đổi thì kéo trang về trang cuối hợp lệ.
+  // Chỉnh lúc render thay cho useEffect; khoá theo nội dung (chuỗi JSON).
+  const pageResetKey = JSON.stringify([pageSize, periodKey, query, selectedGroup]);
+  const [pageResetSeen, setPageResetSeen] = React.useState(pageResetKey);
+  if (pageResetSeen !== pageResetKey) {
+    setPageResetSeen(pageResetKey);
+    setPage(1);
+  }
+  const pageClampKey = JSON.stringify([filteredRows.length, pageSize]);
+  const [pageClampSeen, setPageClampSeen] = React.useState(pageClampKey);
+  if (pageClampSeen !== pageClampKey) {
+    setPageClampSeen(pageClampKey);
     const lastPage = Math.max(1, Math.ceil(filteredRows.length / pageSize));
     setPage((current) => Math.min(current, lastPage));
-  }, [filteredRows.length, pageSize]);
+  }
 
   return (
     <div className="space-y-3">

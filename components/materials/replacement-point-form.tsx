@@ -84,13 +84,19 @@ export function ReplacementPointForm({
       : { ...current, managingPosition, deviceId: "", system: "" });
   }
 
-  React.useEffect(() => {
-    const parent = parentQuery.data?.data;
-    if (!selectedParentSeq || !parent || parent.seq !== selectedParentSeq) return;
-    setForm((current) => current.system === parent.name
-      ? current
-      : { ...current, system: parent.name });
-  }, [parentQuery.data, selectedParentSeq]);
+  // Node cha tải về thì ghi tên hệ thống — chỉ khi dữ liệu node cha / mã cha đổi (người dùng tự sửa ô thì
+  // không đè). data của useQuery giữ nguyên object giữa các lần render. Khoá null như effect cũ.
+  const parentData = parentQuery.data;
+  const [parentSyncKey, setParentSyncKey] = React.useState<{ data: typeof parentData; selectedParentSeq: string | null } | null>(null);
+  if (!parentSyncKey || parentSyncKey.data !== parentData || parentSyncKey.selectedParentSeq !== selectedParentSeq) {
+    setParentSyncKey({ data: parentData, selectedParentSeq });
+    const parent = parentData?.data;
+    if (selectedParentSeq && parent && parent.seq === selectedParentSeq) {
+      setForm((current) => current.system === parent.name
+        ? current
+        : { ...current, system: parent.name });
+    }
+  }
 
   function recompute(next: typeof form) {
     const base = next.lastReplacedAt ? new Date(next.lastReplacedAt) : new Date();

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo } from "react";
 import {
   Flame, Wrench, Check, X, Save, FileSpreadsheet,
   Droplet, Factory, Search, RotateCcw, Loader2, StickyNote,
@@ -67,7 +67,12 @@ export default function OilGunBoard() {
   // Ghi chú chung của sơ đồ theo tổ máy — đồng bộ theo dữ liệu tải/khi đổi tổ máy.
   const savedNote = data?.note ?? "";
   const [noteDraft, setNoteDraft] = useState("");
-  useEffect(() => { setNoteDraft(savedNote); }, [savedNote, machine]);
+  // Chỉnh lúc render; khoá null để lần render đầu cũng nạp như effect cũ.
+  const [noteSyncKey, setNoteSyncKey] = useState<{ savedNote: string; machine: string } | null>(null);
+  if (!noteSyncKey || noteSyncKey.savedNote !== savedNote || noteSyncKey.machine !== machine) {
+    setNoteSyncKey({ savedNote, machine });
+    setNoteDraft(savedNote);
+  }
 
   async function saveNote() {
     if (!canManageOilGuns) { toast.error("Không đủ quyền cập nhật ghi chú vòi dầu"); return; }

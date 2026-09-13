@@ -174,10 +174,13 @@ function AllMaterialsTab({ category, canManage }: { category: GroupingCategory; 
   const firstItem = filtered.length ? (page - 1) * pageSize + 1 : 0;
   const lastItem = Math.min(page * pageSize, filtered.length);
 
-  useEffect(() => setPage(1), [search, statusFilter]);
-  useEffect(() => {
-    if (page > totalPages) setPage(totalPages);
-  }, [page, totalPages]);
+  // Đổi ô tìm / trạng thái thì về trang 1; trang vượt số trang thì lùi về trang cuối. Chỉnh lúc render.
+  const [pageResetKey, setPageResetKey] = useState({ search, statusFilter });
+  if (pageResetKey.search !== search || pageResetKey.statusFilter !== statusFilter) {
+    setPageResetKey({ search, statusFilter });
+    setPage(1);
+  }
+  if (page > totalPages) setPage(totalPages);
 
   const save = async () => {
     if (!edit) return;

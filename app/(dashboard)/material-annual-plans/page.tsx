@@ -71,14 +71,22 @@ function MaterialAnnualPlansContent() {
     [page, pageSize, rows],
   );
 
-  React.useEffect(() => setPage(1), [groupFilter, pageSize, query, routeFilter, year]);
-  React.useEffect(() => {
-    if (groupFilter !== "ALL" && !groupOptions.includes(groupFilter)) setGroupFilter("ALL");
-  }, [groupFilter, groupOptions]);
-  React.useEffect(() => {
+  // Đổi năm / luồng / nhóm / ô tìm / cỡ trang thì về trang 1; nhóm đang lọc không còn thì về "Tất cả";
+  // số dòng đổi thì kéo trang về trang cuối hợp lệ. Chỉnh lúc render thay cho useEffect.
+  const pageResetKey = JSON.stringify([groupFilter, pageSize, query, routeFilter, year]);
+  const [pageResetSeen, setPageResetSeen] = React.useState(pageResetKey);
+  if (pageResetSeen !== pageResetKey) {
+    setPageResetSeen(pageResetKey);
+    setPage(1);
+  }
+  if (groupFilter !== "ALL" && !groupOptions.includes(groupFilter)) setGroupFilter("ALL");
+  const pageClampKey = JSON.stringify([pageSize, rows.length]);
+  const [pageClampSeen, setPageClampSeen] = React.useState(pageClampKey);
+  if (pageClampSeen !== pageClampKey) {
+    setPageClampSeen(pageClampKey);
     const lastPage = Math.max(1, Math.ceil(rows.length / pageSize));
     setPage((current) => Math.min(current, lastPage));
-  }, [pageSize, rows.length]);
+  }
 
   return <div className="space-y-5">
     <PageHeader

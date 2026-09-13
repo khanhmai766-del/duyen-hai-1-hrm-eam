@@ -253,19 +253,28 @@ function MaterialsPageContent() {
     });
   }
 
-  React.useEffect(() => {
+  // Link đổi ?search / ?category thì nạp lại ô tìm / loại — chỉnh lúc render; giá trị đầu đã lấy từ URL
+  // ở useState nên lần render đầu không cần làm gì.
+  const [searchParamSeen, setSearchParamSeen] = React.useState(searchParam);
+  if (searchParamSeen !== searchParam) {
+    setSearchParamSeen(searchParam);
     if (searchParam) setQ(searchParam);
-  }, [searchParam]);
+  }
 
-  React.useEffect(() => {
+  const [categoryParamSeen, setCategoryParamSeen] = React.useState(categoryParam);
+  if (categoryParamSeen !== categoryParam) {
+    setCategoryParamSeen(categoryParam);
     const nextCategory = categoryFilterFromParam(categoryParam);
     if (nextCategory) setCategoryFilter(nextCategory);
-  }, [categoryParam]);
+  }
 
   React.useEffect(() => {
     if (!trackId) return;
     const m = (data?.data ?? []).find((x) => x.id === trackId);
     if (m) {
+      // Mở theo dõi thay thế từ link ?track rồi gỡ tham số khỏi URL — router.replace là tác dụng phụ
+      // (điều hướng) nên phải nằm trong effect; tắt cảnh báo đúng dòng này.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setReplMaterial(m);
       router.replace(mayParam ? `/materials?may=${mayParam}` : "/materials", { scroll: false });
     }
@@ -311,14 +320,13 @@ function MaterialsPageContent() {
     return positions.sort(compareNatural);
   }, [data?.data]);
 
-  React.useEffect(() => {
-    if (
-      positionFilter !== "ALL" &&
-      !managingPositionOptions.some((position) => positionsMatch(position, positionFilter))
-    ) {
-      setPositionFilter("ALL");
-    }
-  }, [managingPositionOptions, positionFilter]);
+  // Cương vị đang lọc không còn trong danh sách thì về "Tất cả" — chỉnh lúc render, điều kiện tự tắt.
+  if (
+    positionFilter !== "ALL" &&
+    !managingPositionOptions.some((position) => positionsMatch(position, positionFilter))
+  ) {
+    setPositionFilter("ALL");
+  }
 
   const materialMatchesPosition = React.useCallback(
     (m: MaterialWithDevices) =>
@@ -432,28 +440,39 @@ function MaterialsPageContent() {
   const selectedErpCodeSet = React.useMemo(() => new Set(selectedErpKey ? selectedErpKey.split("|") : []), [selectedErpKey]);
   const selectedErpGroups = erpGroups.filter((group) => group.erpCodes.some((code) => selectedErpCodeSet.has(code)));
   const selectedErpStock = erpStockByGroupedCodes(selectedErpCodes);
-  React.useEffect(() => {
+  // Đóng hộp sửa thì xoá ô tìm mã ERP; danh sách hiển thị đổi thì bỏ chọn các dòng đã khuất.
+  // Chỉnh lúc render thay cho useEffect (edit là state, visibleKey là chuỗi ID).
+  const [erpSearchEdit, setErpSearchEdit] = React.useState(edit);
+  if (erpSearchEdit !== edit) {
+    setErpSearchEdit(edit);
     if (!edit) setErpSearch("");
-  }, [edit]);
-  React.useEffect(() => {
+  }
+  const [selectedVisibleKey, setSelectedVisibleKey] = React.useState(visibleKey);
+  if (selectedVisibleKey !== visibleKey) {
+    setSelectedVisibleKey(visibleKey);
     const visible = new Set(visibleKey ? visibleKey.split(",") : []);
     setSelected((prev) => {
       const next = new Set([...prev].filter((id) => visible.has(id)));
       return next.size === prev.size ? prev : next;
     });
-  }, [visibleKey]);
+  }
 
   // Phân trang danh mục vật tư (theo phong cách bảng khiếm khuyết).
   const totalPages = Math.max(1, Math.ceil(materials.length / pageSize));
   const firstShown = materials.length ? (page - 1) * pageSize + 1 : 0;
   const lastShown = Math.min(page * pageSize, materials.length);
   const pagedMaterials = materials.slice((page - 1) * pageSize, page * pageSize);
-  React.useEffect(() => {
+  // Số trang đổi thì kéo trang về trong [1, số trang]; danh sách hoặc cỡ trang đổi thì về trang 1.
+  const [pageClampTotal, setPageClampTotal] = React.useState(totalPages);
+  if (pageClampTotal !== totalPages) {
+    setPageClampTotal(totalPages);
     setPage((p) => Math.min(Math.max(1, p), totalPages));
-  }, [totalPages]);
-  React.useEffect(() => {
+  }
+  const [pageResetKey, setPageResetKey] = React.useState({ visibleKey, pageSize });
+  if (pageResetKey.visibleKey !== visibleKey || pageResetKey.pageSize !== pageSize) {
+    setPageResetKey({ visibleKey, pageSize });
     setPage(1);
-  }, [visibleKey, pageSize]);
+  }
 
   const allChecked = materials.length > 0 && materials.every((m) => selected.has(m.id));
   const someChecked = selected.size > 0 && !allChecked;
