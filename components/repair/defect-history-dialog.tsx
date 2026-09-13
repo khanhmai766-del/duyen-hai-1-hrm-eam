@@ -47,9 +47,12 @@ export function DefectHistoryDialog({
   const positions = usePositions().filter(isSelectableManagingPosition);
   const [form, setForm] = React.useState({ ...EMPTY });
 
-  React.useEffect(() => {
-    if (!open) return;
-    setForm(
+  // Mở hộp thoại (hoặc đổi bản ghi đang sửa) thì nạp lại form — chỉnh lúc render.
+  // Khoá null để lần render đầu cũng xét như effect cũ.
+  const [formSyncKey, setFormSyncKey] = React.useState<{ open: boolean; record: DefectHistoryItem | null | undefined } | null>(null);
+  if (!formSyncKey || formSyncKey.open !== open || formSyncKey.record !== record) {
+    setFormSyncKey({ open, record });
+    if (open) setForm(
       record
         ? {
             unit: record.unit ?? "",
@@ -65,7 +68,7 @@ export function DefectHistoryDialog({
           }
         : { ...EMPTY }
     );
-  }, [open, record]);
+  }
 
   function set<K extends keyof typeof form>(k: K, v: (typeof form)[K]) {
     setForm((f) => ({ ...f, [k]: v }));

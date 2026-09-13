@@ -48,6 +48,16 @@ function toDateInput(v: Date | string | null | undefined): string {
   return formatDateInput(v);
 }
 
+/** Ngày hôm nay theo giờ Việt Nam (dd/mm/yyyy) cho ghi chú mặc định của phiếu mới. */
+function vnTodayLabel(): string {
+  return new Intl.DateTimeFormat("vi-VN", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    timeZone: "Asia/Ho_Chi_Minh",
+  }).format(new Date());
+}
+
 const NONE = "__none__";
 const YES_NO_OPTIONS = ["Có", "Không"] as const;
 const MATERIAL_REQUEST_TYPES = ["Cơ", "Điện"] as const;
@@ -239,12 +249,12 @@ export function DefectForm({
   React.useEffect(() => {
     onDeviceHistoryVisibilityChange?.(showDeviceHistory && Boolean(form.device));
   }, [form.device, onDeviceHistoryVisibilityChange, showDeviceHistory]);
-  const defaultPositionResolvedRef = React.useRef(Boolean(form.system));
+  const [defaultPositionResolved, setDefaultPositionResolved] = React.useState(Boolean(form.system));
   const [mappingScope, setMappingScope] = React.useState<TreeScope>(initialMappedUnit);
-  React.useEffect(() => {
-    const allowed = allowedMappedUnits(form.unit);
-    if (!allowed.includes(mappingScope)) setMappingScope(allowed[0]);
-  }, [form.unit, mappingScope]);
+  // Phạm vi cây không còn hợp lệ với tổ máy thì về phạm vi đầu tiên — chỉnh lúc render; điều kiện
+  // tự tắt ngay sau khi đặt (allowedMappedUnits không bao giờ trả mảng rỗng).
+  const allowedMappingScopes = allowedMappedUnits(form.unit);
+  if (!allowedMappingScopes.includes(mappingScope)) setMappingScope(allowedMappingScopes[0]);
   function set<K extends keyof typeof form>(k: K, v: (typeof form)[K]) {
     setForm((f) => ({ ...f, [k]: v }));
   }
@@ -297,29 +307,21 @@ export function DefectForm({
 
   // Phiếu mới tự chọn cương vị theo hồ sơ người lập: chức vụ chính → phụ 1 → phụ 2.
   // Chỉ áp dụng một lần để không ghi đè lựa chọn thủ công của người dùng.
-  React.useEffect(() => {
-    if (isEdit || defaultPositionResolvedRef.current) return;
-    if (sessionStatus === "loading" || usersQuery.isLoading) return;
-
+  // (Cờ "đã xét" là state thay cho ref để đọc được lúc render; chọn tay ở setSystem cũng bật cờ.)
+  if (!isEdit && !defaultPositionResolved && sessionStatus !== "loading" && !usersQuery.isLoading) {
     const matchedPosition = userPositionCandidates
       .map((candidate) =>
         positions.find((position) => positionsMatch(position, candidate))
       )
       .find((position): position is string => Boolean(position));
 
-    defaultPositionResolvedRef.current = true;
-    if (!matchedPosition) return;
-    setForm((current) =>
-      current.system ? current : { ...current, system: matchedPosition }
-    );
-  }, [
-    form.unit,
-    isEdit,
-    positions,
-    sessionStatus,
-    userPositionCandidates,
-    usersQuery.isLoading,
-  ]);
+    setDefaultPositionResolved(true);
+    if (matchedPosition) {
+      setForm((current) =>
+        current.system ? current : { ...current, system: matchedPosition }
+      );
+    }
+  }
   // Chọn tổ máy vẫn giữ cương vị hiện tại vì mọi tổ máy dùng chung danh sách
   // cương vị; chỉ thiết bị phải xóa do mỗi tổ máy ánh xạ vào một cây khác nhau.
   // Mỗi tổ máy ánh xạ vào một CÂY thiết bị riêng (S1/S2 = nhánh 1,2,3,7; COMMON = nhánh 5,6)
@@ -342,7 +344,7 @@ export function DefectForm({
   const selectedDeviceQuery = useEquipmentNode(form.device || null, form.mappedDeviceUnit);
   const selectedSystemQuery = useEquipmentNode(form.deviceSystemSeq || null, form.mappedDeviceUnit);
   const automaticContentSuffixRef = React.useRef<string | null>(null);
-  const defaultNoteAppliedRef = React.useRef(false);
+  const [defaultNoteApplied, setDefaultNoteApplied] = React.useState(false);
 
   // Phiếu mới: KKS là hậu tố ở cuối, textarea vẫn sửa tự do. Khi đổi thiết bị,
   // chỉ thay đúng hậu tố do hệ thống đã thêm và giữ nguyên phần mô tả người dùng gõ.
@@ -374,33 +376,32 @@ export function DefectForm({
 
   // Chỉ điền một lần cho phiếu tạo mới; người dùng có thể sửa/xóa sau đó và dữ liệu
   // cũ ở màn hình chỉnh sửa không bao giờ bị ghi đè.
-  React.useEffect(() => {
-    if (isEdit || isSynced || defaultNoteAppliedRef.current || sessionStatus === "loading") return;
-    const operatorName = session?.user?.name?.trim();
-    if (!operatorName) return;
-    defaultNoteAppliedRef.current = true;
-    const today = new Intl.DateTimeFormat("vi-VN", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      timeZone: "Asia/Ho_Chi_Minh",
-    }).format(new Date());
+  const defaultNoteOperator = session?.user?.name?.trim();
+  if (!isEdit && !isSynced && !defaultNoteApplied && sessionStatus !== "loading" && defaultNoteOperator) {
+    setDefaultNoteApplied(true);
+    const today = vnTodayLabel();
     setForm((current) => current.note
       ? current
-      : { ...current, note: `${operatorName} cập nhật ngày ${today}` });
-  }, [isEdit, isSynced, session?.user?.name, sessionStatus]);
+      : { ...current, note: `${defaultNoteOperator} cập nhật ngày ${today}` });
+  }
 
-  React.useEffect(() => {
-    if (form.requestType === "Môi Trường") return;
-    const deviceName = selectedDeviceQuery.data?.data.name;
-    if (!deviceName) return;
-    setForm((current) => (current.sourceDeviceRaw ? current : { ...current, sourceDeviceRaw: deviceName }));
-  }, [form.requestType, selectedDeviceQuery.data]);
-  React.useEffect(() => {
-    const systemName = selectedSystemQuery.data?.data.name;
-    if (!systemName || form.deviceSystem === systemName) return;
-    setForm((current) => ({ ...current, deviceSystem: systemName }));
-  }, [form.deviceSystem, selectedSystemQuery.data]);
+  // Ô "thiết bị (nguồn)" trống thì điền tên thiết bị đã chọn — chỉ khi loại yêu cầu hoặc dữ liệu thiết bị
+  // đổi (người dùng tự xoá ô thì không điền lại). data của useQuery giữ nguyên object giữa các lần render
+  // nên so !== an toàn. Khoá null để lần render đầu cũng xét như effect cũ.
+  const selectedDeviceData = selectedDeviceQuery.data;
+  const [sourceDeviceSeen, setSourceDeviceSeen] = React.useState<{ requestType: string; data: typeof selectedDeviceData } | null>(null);
+  if (!sourceDeviceSeen || sourceDeviceSeen.requestType !== form.requestType || sourceDeviceSeen.data !== selectedDeviceData) {
+    setSourceDeviceSeen({ requestType: form.requestType, data: selectedDeviceData });
+    const deviceName = selectedDeviceData?.data.name;
+    if (form.requestType !== "Môi Trường" && deviceName) {
+      setForm((current) => (current.sourceDeviceRaw ? current : { ...current, sourceDeviceRaw: deviceName }));
+    }
+  }
+  // Hệ thống luôn khớp tên của mã hệ thống đã chọn — điều kiện tự tắt sau khi đặt.
+  const selectedSystemName = selectedSystemQuery.data?.data.name;
+  if (selectedSystemName && form.deviceSystem !== selectedSystemName) {
+    setForm((current) => ({ ...current, deviceSystem: selectedSystemName }));
+  }
 
   function selectRequestType(requestType: string) {
     const selectedDeviceName = selectedDeviceQuery.data?.data.name ?? "";
@@ -423,7 +424,7 @@ export function DefectForm({
   }
 
   function setSystem(v: string) {
-    defaultPositionResolvedRef.current = true;
+    setDefaultPositionResolved(true);
     const next = v === NONE ? "" : v;
     set("system", next);
   }

@@ -50,7 +50,11 @@ export function CompleteDefectDialog({
   // Đường dự phòng cho hồ sơ SYC cũ không có phiếu vật tư. Hồ sơ có phiếu sẽ chốt
   // khối lượng thực dùng và gia hạn chu kỳ tại bước quyết toán phiếu.
   const [recordReplacement, setRecordReplacement] = React.useState(true);
-  React.useEffect(() => { setRecordReplacement(true); }, [defect?.id]);
+  const [recordReplacementDefectId, setRecordReplacementDefectId] = React.useState(defect?.id);
+  if (recordReplacementDefectId !== defect?.id) {
+    setRecordReplacementDefectId(defect?.id);
+    setRecordReplacement(true);
+  }
   const hasSheetSourceData = defect?.sourceType === "GOOGLE_SHEETS";
   const pendingDays = defectResultStatusOf(
     editingPending ? form.result : defect?.repairResultRaw
@@ -58,7 +62,10 @@ export function CompleteDefectDialog({
 
   // Dùng dữ liệu Sửa chữa từ Sheet để điền sẵn các trường tương ứng. Đây chỉ
   // là giá trị ban đầu; Vận hành vẫn được chỉnh sửa trước khi ghi lịch sử.
-  React.useEffect(() => {
+  // Nạp lại khi đổi phiếu (prop defect) — chỉnh lúc render. Khoá null để lần render đầu cũng nạp.
+  const [formSyncedDefect, setFormSyncedDefect] = React.useState<{ defect: DefectItem | null } | null>(null);
+  if (!formSyncedDefect || formSyncedDefect.defect !== defect) {
+    setFormSyncedDefect({ defect });
     if (defect) {
       setForm({
         workOrderNumber: defect.pendingHistory?.workOrderNumber
@@ -79,7 +86,7 @@ export function CompleteDefectDialog({
         note: defect.note ?? "",
       });
     }
-  }, [defect]);
+  }
 
   async function submit() {
     if (!defect) return;

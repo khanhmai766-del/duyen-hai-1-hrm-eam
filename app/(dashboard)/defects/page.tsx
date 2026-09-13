@@ -378,11 +378,14 @@ export default function DefectsPage() {
   const [requestFilter, setRequestFilter] = React.useState(requestFromUrl || defaultRequestTypeOf(section));
   // Điều hướng sang phần kia (sidebar đổi query param) phải kéo bộ lọc về mặc định
   // của phần mới, vì "Cơ" không tồn tại bên Điện và ngược lại.
-  React.useEffect(() => {
+  // Chỉnh ngay lúc render (không đợi effect) để không gọi API một lượt với bộ lọc của phần cũ.
+  const [requestFilterSection, setRequestFilterSection] = React.useState(section);
+  if (requestFilterSection !== section) {
+    setRequestFilterSection(section);
     setRequestFilter((current) =>
       isRequestTypeInSection(section, current) ? current : defaultRequestTypeOf(section)
     );
-  }, [section]);
+  }
   const [positionFilter, setPositionFilter] = React.useState(positionFromUrl || "ALL");
   const [statusFilter, setStatusFilter] = React.useState(statusFromUrl || "ALL");
   const [severityFilter, setSeverityFilter] = React.useState(severityFromUrl || "ALL");
@@ -436,9 +439,13 @@ export default function DefectsPage() {
   const firstShown = total ? (page - 1) * pageSize + 1 : 0;
   const lastShown = Math.min(page * pageSize, total);
   const deviceDisplayName = pagedDefects.find((item) => item.deviceSeq === deviceSeqFilter)?.node?.name;
-  React.useEffect(() => {
+  // Số trang đổi thì kéo trang hiện tại về trong [1, totalPages] — chỉnh lúc render.
+  // Khoá null để lần render đầu cũng kéo, giữ đúng hành vi effect cũ (chạy cả lúc mount).
+  const [pageClampTotal, setPageClampTotal] = React.useState<number | null>(null);
+  if (pageClampTotal !== totalPages) {
+    setPageClampTotal(totalPages);
     setPage((p) => Math.min(Math.max(1, p), totalPages));
-  }, [totalPages]);
+  }
 
   React.useEffect(() => {
     const query = new URLSearchParams();
@@ -568,9 +575,11 @@ export default function DefectsPage() {
   const [detailLoadingId, setDetailLoadingId] = React.useState<string | null>(null);
   const [mobileShiftSummaryExpanded, setMobileShiftSummaryExpanded] = React.useState(false);
 
-  React.useEffect(() => {
+  const [mobileSummarySection, setMobileSummarySection] = React.useState(section);
+  if (mobileSummarySection !== section) {
+    setMobileSummarySection(section);
     setMobileShiftSummaryExpanded(false);
-  }, [section]);
+  }
 
   function openCreate() {
     setEditTarget(null);
@@ -600,10 +609,15 @@ export default function DefectsPage() {
     const detail = await loadDefectDetail(d.id);
     if (detail) setCompleteTarget(detail);
   }
-  React.useEffect(() => {
+  // Đổi bộ lọc / ô tìm / cỡ trang thì thu dòng đang mở và về trang 1 — chỉnh lúc render.
+  // Khoá theo NỘI DUNG (chuỗi JSON); null để lần render đầu cũng chạy như effect cũ.
+  const listResetKey = JSON.stringify([deviceSeqFilter, unitFilter, requestFilter, positionFilter, statusFilter, severityFilter, repairResultFilter, mismatchOnly, upgradeCandidatesOnly, repeatedRepairOnly, tableSearch, pageSize]);
+  const [listResetSeen, setListResetSeen] = React.useState<string | null>(null);
+  if (listResetSeen !== listResetKey) {
+    setListResetSeen(listResetKey);
     setExpandedId(null);
     setPage(1);
-  }, [deviceSeqFilter, unitFilter, requestFilter, positionFilter, statusFilter, severityFilter, repairResultFilter, mismatchOnly, upgradeCandidatesOnly, repeatedRepairOnly, tableSearch, pageSize]);
+  }
 
   return (
     <div className="space-y-6">
@@ -1587,9 +1601,12 @@ function SeverityUpgradeDialog({
   const [criteria, setCriteria] = React.useState<string[]>(["2a"]);
   const options = DEFECT_SEVERITY_CRITERIA["2"].options;
 
-  React.useEffect(() => {
+  // Mở hộp thoại cho phiếu khác thì chọn lại tiêu chí mặc định — chỉnh lúc render.
+  const [criteriaTarget, setCriteriaTarget] = React.useState(target);
+  if (criteriaTarget !== target) {
+    setCriteriaTarget(target);
     if (target) setCriteria(["2a"]);
-  }, [target]);
+  }
 
   function toggleCriterion(id: string) {
     setCriteria((current) =>

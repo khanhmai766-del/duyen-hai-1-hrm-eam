@@ -157,13 +157,26 @@ export function DefectHistoryTab({ role }: { role?: string }) {
   const visibleRows = rows;
   const totalRows = Number(data?.meta?.total ?? 0);
   const totalPages = Math.max(1, Number(data?.meta?.totalPages ?? 1));
-  React.useEffect(() => {
+  // Số trang đổi thì kéo trang về trong [1, totalPages]; đổi bộ lọc thì về trang 1 và thu dòng mở.
+  // Chỉnh lúc render thay cho useEffect. filters/sort là state — cùng object giữa các lần render.
+  const [pageClampTotal, setPageClampTotal] = React.useState(totalPages);
+  if (pageClampTotal !== totalPages) {
+    setPageClampTotal(totalPages);
     setPage((p) => Math.min(Math.max(1, p), totalPages));
-  }, [totalPages]);
-  React.useEffect(() => {
+  }
+  const [pageResetKey, setPageResetKey] = React.useState({ filters, statusFilter, requestTypeFilter, deferredSearch, pageSize, sort });
+  if (
+    pageResetKey.filters !== filters ||
+    pageResetKey.statusFilter !== statusFilter ||
+    pageResetKey.requestTypeFilter !== requestTypeFilter ||
+    pageResetKey.deferredSearch !== deferredSearch ||
+    pageResetKey.pageSize !== pageSize ||
+    pageResetKey.sort !== sort
+  ) {
+    setPageResetKey({ filters, statusFilter, requestTypeFilter, deferredSearch, pageSize, sort });
     setPage(1);
     setExpandedId(null);
-  }, [filters, statusFilter, requestTypeFilter, deferredSearch, pageSize, sort]);
+  }
 
   const pagedRows = visibleRows;
   const firstShown = totalRows ? (page - 1) * pageSize + 1 : 0;
