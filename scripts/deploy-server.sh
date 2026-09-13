@@ -89,6 +89,15 @@ db_url() {
   grep -m1 '^DATABASE_URL=' .env | sed 's/^DATABASE_URL=//; s/^"//; s/"$//; s/?.*$//'
 }
 
+# Chuỗi kết nối cho SAO LƯU: cùng host/port/DB với app nhưng đăng nhập bằng vai trò
+# `dh1_backup` (chỉ đọc, BYPASSRLS), mật khẩu lấy từ ~/.pgpass. KHÔNG dùng tài khoản của app
+# được: mọi bảng TCMS bật FORCE ROW LEVEL SECURITY nên pg_dump bằng tài khoản đó hỏng giữa
+# chừng ở tcms.acceptances. Cách dựng vai trò: docs/deploy-backup-role.md.
+BACKUP_ROLE=${BACKUP_ROLE:-dh1_backup}
+backup_db_url() {
+  db_url | sed -E "s#^(postgres(ql)?://)[^@/]*@#\1${BACKUP_ROLE}@#"
+}
+
 newest_rollbacks() { ls -1dt .next.rollback-* 2>/dev/null || true; }
 
 # ---------------------------------------------------------------- rollback
@@ -144,6 +153,18 @@ if [[ -n "$DIRTY" ]]; then
   die "Có thay đổi chưa commit trên server. Xử lý xong rồi hãy deploy."
 fi
 
+# Sao lưu không chạy được thì phải lộ ra NGAY ĐÂY, trước khi pull — đừng để tới bước 1.
+if [[ $SKIP_BACKUP == 0 ]]; then
+  command -v pg_dump >/dev/null || die "Không có pg_dump trên server."
+  BACKUP_CHECK=$(PGCONNECT_TIMEOUT=10 psql -w -XAt "$(backup_db_url)" \
+    -c "select format('%s %s', current_user, case when rolbypassrls then 'bypassrls' else 'no-bypassrls' end) from pg_roles where rolname = current_user" 2>&1) \
+    || die "Vai trò sao lưu '$BACKUP_ROLE' chưa đăng nhập được: $BACKUP_CHECK
+    Dựng theo docs/deploy-backup-role.md, hoặc chạy --no-backup nếu bản này không đụng DB."
+  [[ "$BACKUP_CHECK" == "$BACKUP_ROLE bypassrls" ]] \
+    || die "Vai trò sao lưu phải là '$BACKUP_ROLE' có BYPASSRLS, nhận được: '$BACKUP_CHECK'"
+  ok "Vai trò sao lưu $BACKUP_ROLE đăng nhập được, có BYPASSRLS"
+fi
+
 FREE_GB=$(df -BG --output=avail / | tail -1 | tr -dc '0-9')
 [[ $FREE_GB -ge 6 ]] || die "Đĩa chỉ còn ${FREE_GB}GB — build cần ít nhất 6GB. Chạy --keep 1 hoặc dọn bớt."
 ok "Đĩa còn ${FREE_GB}GB · pm2 '$PM2_NAME' đang chạy · cây làm việc sạch"
@@ -169,12 +190,24 @@ fi
 if [[ $SKIP_BACKUP == 1 ]]; then
   warn "Bỏ qua sao lưu DB (--no-backup)."
 else
-  step "1/7 · SAO LƯU DATABASE"
+  step "1/7 · SAO LƯU DATABASE (vai trò $BACKUP_ROLE)"
   DUMP="$BACKUP_DIR/backup-dh1db-$(date +%F-%H%M)-truoc-$OLD_SHA.sql.gz"
-  run "pg_dump \"\$(db_url)\" | gzip > '$DUMP'"
-  if [[ $DRY_RUN == 0 ]]; then
-    gzip -t "$DUMP" || die "Bản dump hỏng — DỪNG, không deploy khi chưa có bản lưu tốt."
-    ok "$DUMP ($(du -h "$DUMP" | cut -f1))"
+  if [[ $DRY_RUN == 1 ]]; then
+    echo "  [dry-run] pg_dump (vai trò $BACKUP_ROLE) | gzip > $DUMP"
+  else
+    # Ghi ra .partial rồi mới đổi tên: pg_dump hỏng giữa chừng vẫn để lại một file gzip HỢP
+    # LỆ (gzip -t báo ok) mang tên y như bản tốt — gặp 2026-09-13, 11MB mà thiếu cả TCMS.
+    if ! pg_dump -w "$(backup_db_url)" | gzip > "$DUMP.partial"; then
+      rm -f -- "$DUMP.partial"
+      die "pg_dump hỏng — DỪNG, không deploy khi chưa có bản lưu tốt."
+    fi
+    # pg_dump chỉ ghi dòng kết thúc khi chạy tới cuối — đó mới là bằng chứng bản lưu đủ.
+    if ! gzip -dc "$DUMP.partial" | tail -n 5 | grep -q "PostgreSQL database dump complete"; then
+      rm -f -- "$DUMP.partial"
+      die "Bản dump thiếu dòng kết thúc — DỪNG, không deploy khi chưa có bản lưu tốt."
+    fi
+    mv -- "$DUMP.partial" "$DUMP"
+    ok "$DUMP ($(du -h "$DUMP" | cut -f1), $(gzip -dc "$DUMP" | grep -c '^COPY tcms\.') bảng TCMS)"
   fi
 fi
 
