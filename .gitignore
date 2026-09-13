@@ -1,5 +1,8 @@
 node_modules
 .next
+# Bản build dựng riêng / cất để rollback của scripts/deploy-server.sh (chỉ có trên server)
+/.next-builds/
+/.next.rollback-*/
 out
 build
 .env

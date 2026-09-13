@@ -8,20 +8,32 @@
 #   ./scripts/deploy-server.sh --rollback         # quay lại bản build trước
 #
 # Gom đúng thứ tự bắt buộc của docs/deploy-equipment-tree.md:
-#   sao lưu DB → pull → SQL → chụp bản đang chạy → build → restart → smoke test → dọn bản cũ
+#   sao lưu DB → pull → SQL → build RA THƯ MỤC RIÊNG → đổi sang → reload → smoke test → dọn bản cũ
 #
-# BA NGUYÊN TẮC nằm sau cách viết script này:
+# BỐN NGUYÊN TẮC nằm sau cách viết script này:
 #
 #   1. SQL KHÔNG TỰ ĐỘNG CHẠY HẾT. `prisma/sql/` có cả file một lần dùng và file XOÁ dữ
 #      liệu (purge-*, remove-*, drop-*). Quét cả thư mục rồi chạy tuốt là có ngày xoá nhầm
 #      bảng thật. Vì vậy phải liệt kê tường minh từng file bằng --sql.
 #
-#   2. BUILD HỎNG PHẢI KHÔI PHỤC ĐƯỢC. `next build` xoá sạch .next rồi mới dựng lại; build
-#      gãy giữa chừng là .next hỏng, lần restart sau app chết. Nên chụp .next TRƯỚC khi
-#      build, build gãy thì trả lại ngay.
+#   2. BUILD KHÔNG ĐƯỢC ĐỤNG VÀO .next ĐANG CHẠY. `next build` xoá sạch .next rồi dựng lại
+#      mất 2–3 phút; request nào rơi vào khoảng đó ăn 500 "Cannot find module .next/server/…"
+#      (cả 3 lượt deploy ngày 2026-09-13 đều dính: lưu tiếp địa, n8n chốt lịch sử…). Nên build
+#      trong một MOUNT NAMESPACE riêng: thư mục `.next-builds/<sha>-<giờ>` được bind-mount đè
+#      lên `.next` CHỈ với tiến trình build — nó thấy .next mới tinh, còn app đang chạy vẫn
+#      thấy .next cũ. Build gãy thì xoá thư mục đó là xong, app không hề bị ảnh hưởng.
 #
-#   3. BẢN CHỤP BỎ `.next/cache`. Cache webpack chiếm ~700MB/1.8GB mà rollback không cần
-#      tới — chính nó làm 12 bản cũ ngốn 20GB đĩa.
+#   3. ĐỔI BẰNG `mv`, KHÔNG BẰNG SYMLINK HAY distDir KHÁC. Bản build chứa đường dẫn tuyệt đối
+#      (/var/www/dh1-app/.next/…), và next build tự sửa tsconfig.json theo tên distDir. Nên
+#      build lẫn chạy đều phải đúng tên `.next`: build xong thì 2 lệnh mv (vài mili-giây) đưa
+#      bản mới vào chỗ `.next`, cất bản cũ sang `.next-builds/`, rồi reload NGAY. Rollback cũng
+#      chỉ là đổi tên ngược lại — không phải copy.
+#
+#   4. BẢN CŨ GIỮ LẠI BỎ `cache`. Cache webpack (~900MB) chỉ cần lúc build — chính nó từng làm
+#      12 bản cũ ngốn 20GB đĩa. Bản build mới được chép cache của bản đang chạy để build nhanh.
+#
+# CÒN LẠI (chưa khử được): `npm install` (chỉ khi package.json/lock đổi) và `prisma generate`
+# vẫn ghi đè node_modules tại chỗ; và pm2 chạy fork 1 instance nên reload vẫn gián đoạn vài giây.
 #
 set -Eeuo pipefail
 
@@ -48,6 +60,7 @@ APP_DIR=$(pwd)
 PM2_NAME=${PM2_NAME:-dh1-app}
 APP_URL=${APP_URL:-http://localhost:3000}
 BACKUP_DIR=${BACKUP_DIR:-/root}
+BUILDS_DIR=.next-builds
 # `reload` thay cho `restart` để hạn chế gián đoạn.
 #
 # NÓI THẲNG GIỚI HẠN: pm2 chỉ thật sự reload không-downtime khi chạy CLUSTER mode. App này
@@ -72,7 +85,7 @@ while [[ $# -gt 0 ]]; do
     --dry-run) DRY_RUN=1; shift ;;
     --rollback) DO_ROLLBACK=1; shift ;;
     --no-backup) SKIP_BACKUP=1; shift ;;
-    -h|--help) sed -n '2,20p' "${BASH_SOURCE[0]}"; exit 0 ;;
+    -h|--help) sed -n '2,11p' "${BASH_SOURCE[0]}"; exit 0 ;;
     *) echo "Tham số lạ: $1" >&2; exit 2 ;;
   esac
 done
@@ -98,20 +111,57 @@ backup_db_url() {
   db_url | sed -E "s#^(postgres(ql)?://)[^@/]*@#\1${BACKUP_ROLE}@#"
 }
 
-newest_rollbacks() { ls -1dt .next.rollback-* 2>/dev/null || true; }
+# Các bản build có thể quay lại, mới nhất trước: `.next-builds/*` và `.next.rollback-*`
+# (kiểu chụp cũ trước 2026-09-13 — vẫn là thư mục .next đầy đủ nên đổi tên vào là chạy).
+previous_builds() {
+  local items=()
+  shopt -s nullglob
+  items=("$BUILDS_DIR"/*/ .next.rollback-*/)
+  shopt -u nullglob
+  ((${#items[@]})) || return 0
+  ls -1dt "${items[@]}" | sed 's#/$##'
+}
+
+# Bản build này là của commit nào (ghi trong .deploy-sha; bản kiểu cũ thì lấy theo tên).
+build_label() {
+  if [[ -f "$1/.deploy-sha" ]]; then cat "$1/.deploy-sha"; else basename "$1"; fi
+}
+
+# Đưa bản build $1 vào chỗ .next, cất .next hiện tại sang $2. Hai lệnh mv trên cùng ổ đĩa chỉ
+# mất vài mili-giây — ngay sau đó PHẢI reload, để tiến trình cũ không nạp lẫn file của bản mới.
+swap_in() {
+  local incoming=$1 park=$2
+  # Kiểm bản đưa vào TRƯỚC khi đụng .next — dời .next đi rồi mới phát hiện bản kia hỏng là
+  # để app không có .next trong lúc trả về.
+  [[ -f "$incoming/BUILD_ID" ]] || die "$incoming không phải bản build hợp lệ (thiếu BUILD_ID) — .next giữ nguyên."
+  mkdir -p "$BUILDS_DIR"
+  mv -T -- .next "$park" || die "Không cất được .next sang $park — chưa đổi gì, app vẫn chạy bản cũ."
+  if ! mv -T -- "$incoming" .next; then
+    mv -T -- "$park" .next
+    die "Không đưa được $incoming vào .next — đã trả bản cũ về chỗ."
+  fi
+  # mv không đổi mtime của thư mục; chạm vào để bản vừa cất đứng đầu danh sách --rollback.
+  touch -- "$park"
+}
 
 # ---------------------------------------------------------------- rollback
 if [[ $DO_ROLLBACK == 1 ]]; then
   step "QUAY LẠI BẢN BUILD TRƯỚC"
-  SNAP=$(newest_rollbacks | head -1)
-  [[ -n "$SNAP" ]] || die "Không còn bản .next.rollback-* nào để quay lại."
-  warn "Sẽ thay .next hiện tại bằng: $SNAP"
+  [[ -d .next && ! -L .next ]] || die ".next phải là thư mục thật (xem nguyên tắc 3)."
+  SNAP=$(previous_builds | head -1)
+  [[ -n "$SNAP" ]] || die "Không còn bản build cũ nào trong $BUILDS_DIR/ hay .next.rollback-* để quay lại."
+  PARK="$BUILDS_DIR/truoc-rollback-$(date +%Y%m%d-%H%M%S)"
+  warn "Sẽ đưa $SNAP ($(build_label "$SNAP")) vào thay .next hiện tại ($(build_label .next))."
   warn "LƯU Ý: chỉ quay lại MÃ NGUỒN. Thay đổi đã ghi vào DB thì không tự lùi —"
   warn "muốn lùi cả DB phải nạp lại bản dump trong $BACKUP_DIR."
-  run "rm -rf .next.before-rollback && mv .next .next.before-rollback"
-  run "cp -r '$SNAP' .next"
+  if [[ $DRY_RUN == 1 ]]; then
+    echo "  [dry-run] mv .next → $PARK; mv $SNAP → .next"
+  else
+    [[ -f .next/.deploy-sha ]] || git rev-parse --short HEAD > .next/.deploy-sha
+    swap_in "$SNAP" "$PARK"
+  fi
   run "pm2 $PM2_ACTION $PM2_NAME --update-env >/dev/null"
-  ok "Đã quay lại $SNAP và restart."
+  ok "Đã quay lại $SNAP và nạp lại app. Bản vừa gỡ cất ở $PARK — chạy --rollback lần nữa là về lại nó."
   exit 0
 fi
 
@@ -120,6 +170,11 @@ step "KIỂM TRA TRƯỚC KHI DEPLOY"
 [[ -f .env ]] || die "Không thấy .env trong $APP_DIR"
 [[ -f package.json ]] || die "Không thấy package.json — chạy sai thư mục?"
 command -v pm2 >/dev/null || die "Không có pm2"
+
+# Build tách thư mục cần mount namespace — chỉ root làm được (xem nguyên tắc 2).
+[[ $(id -u) == 0 ]] || die "Phải chạy bằng root: build ra thư mục riêng cần unshare/mount."
+command -v unshare >/dev/null || die "Không có unshare (gói util-linux) — cần để build ra thư mục riêng."
+[[ ! -L .next ]] || die ".next đang là symlink — script cần .next là thư mục thật (xem nguyên tắc 3)."
 
 # Build dưới Node khác bản đang chạy thật là tạo ra .next "trông như ổn" nhưng lệch runtime.
 # Chỉ cảnh báo chứ không chặn — lượt deploy khẩn cấp không nên kẹt vì chuyện này.
@@ -233,37 +288,62 @@ if [[ ${#SQL_FILES[@]} -gt 0 ]]; then
   done
 fi
 
-# ---------------------------------------------------------------- 4. chụp bản đang chạy
-step "4/7 · CHỤP BẢN ĐANG CHẠY ĐỂ ROLLBACK"
-SNAP=".next.rollback-$OLD_SHA"
-if [[ -d .next ]]; then
-  run "rm -rf '$SNAP'"
-  run "cp -r .next '$SNAP'"
-  # Cache webpack không cần cho rollback mà chiếm ~40% dung lượng — chính là thủ phạm
-  # khiến 12 bản cũ ngốn 20GB.
-  run "rm -rf '$SNAP/cache'"
-  [[ $DRY_RUN == 1 ]] || ok "$SNAP ($(du -sh "$SNAP" | cut -f1), đã bỏ cache)"
-else
-  warn "Chưa có .next để chụp (lần build đầu?)"
+# ---------------------------------------------------------------- 4. thư mục build riêng
+step "4/7 · CHUẨN BỊ THƯ MỤC BUILD RIÊNG"
+NEW_BUILD="$BUILDS_DIR/$NEW_SHA-$(date +%Y%m%d-%H%M%S)"
+run "mkdir -p '$NEW_BUILD/cache'"
+# Chép cache webpack của bản đang chạy: không có nó build lâu gấp đôi, cả site chậm theo.
+if [[ -d .next/cache/webpack ]]; then
+  run "cp -a .next/cache/webpack '$NEW_BUILD/cache/'"
 fi
+[[ $DRY_RUN == 1 ]] || ok "$NEW_BUILD (đã chép cache webpack: $(du -sh "$NEW_BUILD/cache" | cut -f1))"
 
 # ---------------------------------------------------------------- 5. build
-step "5/7 · BUILD"
+step "5/7 · BUILD VÀO $NEW_BUILD — app đang chạy KHÔNG bị đụng"
+# Trong namespace riêng, $NEW_BUILD được bind-mount ĐÈ lên .next: next build thấy một .next mới
+# tinh và ghi vào đó; mọi tiến trình khác — gồm app đang phục vụ — vẫn thấy .next cũ. Mount chỉ
+# sống cùng namespace nên tự biến mất khi build xong hay bị giết, không để lại gì.
+build_isolated() {
+  unshare --mount --propagation private -- bash -c \
+    'mount --bind "$1" "$2/.next" && cd "$2" && npm run build' _ "$APP_DIR/$NEW_BUILD" "$APP_DIR"
+}
 if [[ $DRY_RUN == 1 ]]; then
-  echo "  [dry-run] npm run build"
-elif npm run build; then
-  ok "Build thành công"
+  echo "  [dry-run] unshare --mount … mount --bind $NEW_BUILD .next && npm run build"
+elif build_isolated; then
+  [[ -f "$NEW_BUILD/BUILD_ID" ]] || die "Build báo thành công nhưng $NEW_BUILD không có BUILD_ID — dừng, app vẫn chạy bản cũ."
+  echo "$NEW_SHA" > "$NEW_BUILD/.deploy-sha"
+  # Danh sách file static DO CHÍNH BẢN NÀY sinh ra — lượt deploy sau chỉ chép đúng những file này
+  # sang bản kế tiếp (xem bước 6), nên static không phình qua nhiều thế hệ.
+  (cd "$NEW_BUILD" && find static -type f) > "$NEW_BUILD/.static-own"
+  ok "Build thành công (BUILD_ID $(cat "$NEW_BUILD/BUILD_ID")) — app vẫn đang chạy bản cũ"
 else
-  warn "BUILD GÃY — trả .next về bản cũ, app giữ nguyên như trước khi deploy."
-  if [[ -d "$SNAP" ]]; then
-    rm -rf .next && cp -r "$SNAP" .next
-    warn "Đã khôi phục .next từ $SNAP. Mã nguồn đang ở $NEW_SHA — chạy 'git reset --hard $OLD_SHA' nếu muốn lùi hẳn."
-  fi
+  rm -rf -- "$NEW_BUILD"
+  warn "BUILD GÃY — đã xoá $NEW_BUILD. App KHÔNG bị ảnh hưởng, vẫn chạy bản cũ."
+  warn "Mã nguồn đang ở $NEW_SHA — chạy 'git reset --hard $OLD_SHA' nếu muốn lùi hẳn."
   die "Dừng deploy. Sửa lỗi build rồi chạy lại."
 fi
 
-# ---------------------------------------------------------------- 6. restart + smoke test
-step "6/7 · NẠP LẠI ỨNG DỤNG & KIỂM TRA"
+# ---------------------------------------------------------------- 6. đổi sang + reload + smoke test
+step "6/7 · ĐỔI SANG BẢN MỚI, NẠP LẠI & KIỂM TRA"
+PARK="$BUILDS_DIR/$OLD_SHA-truoc-$NEW_SHA-$(date +%Y%m%d-%H%M%S)"
+if [[ $DRY_RUN == 1 ]]; then
+  echo "  [dry-run] chép static của bản đang chạy sang bản mới; mv .next → $PARK; mv $NEW_BUILD → .next"
+else
+  # Tab mở từ trước vẫn xin chunk JS của bản đang chạy — chép static của nó sang bản mới (không
+  # đè file trùng tên) để các tab đó không vỡ khi chuyển trang, cho tới lúc người dùng tải lại.
+  # Chỉ chép file bản đang chạy TỰ SINH (.static-own); chép cả thư mục thì chunk thừa kế từ các
+  # lần trước cũng đi theo và static phình mãi. Bản build kiểu cũ chưa có danh sách thì chép hết.
+  if [[ -f .next/.static-own ]]; then
+    tar -C .next -cf - -T .next/.static-own | tar -C "$NEW_BUILD" --skip-old-files -xf - \
+      || warn "Không chép được static cũ — tab đang mở có thể phải tải lại trang."
+  else
+    cp -an .next/static/. "$NEW_BUILD/static/" 2>/dev/null \
+      || warn "Không chép được static cũ — tab đang mở có thể phải tải lại trang."
+  fi
+  [[ -f .next/.deploy-sha ]] || echo "$OLD_SHA" > .next/.deploy-sha
+  swap_in "$NEW_BUILD" "$PARK"
+  ok "Đã đổi: .next = bản $NEW_SHA · bản $OLD_SHA cất ở $PARK"
+fi
 run "pm2 $PM2_ACTION '$PM2_NAME' --update-env >/dev/null"
 if [[ $DRY_RUN == 0 ]]; then
   sleep 8
@@ -280,16 +360,33 @@ if [[ $DRY_RUN == 0 ]]; then
 fi
 
 # ---------------------------------------------------------------- 7. dọn bản cũ
-step "7/7 · DỌN BẢN BUILD CŨ (giữ $KEEP bản mới nhất)"
-mapfile -t SNAPS < <(newest_rollbacks)
-if [[ ${#SNAPS[@]} -le $KEEP ]]; then
-  ok "Có ${#SNAPS[@]} bản, chưa cần dọn"
-else
-  for old in "${SNAPS[@]:$KEEP}"; do
-    run "rm -rf '$old'"
-    ok "đã xoá $old"
+step "7/7 · DỌN BẢN BUILD CŨ (giữ $KEEP bản gần nhất để --rollback)"
+# Giữ $KEEP bản gần nhất (bỏ cache — rollback không cần mà mỗi bản ~900MB, nguyên tắc 4), xoá
+# phần còn lại. Bỏ cache phải GIỮ NGUYÊN mtime của thư mục: --rollback chọn bản theo mtime, mà
+# xoá thư mục con là mtime nhảy lên — bản cũ hơn vọt lên đầu và rollback về nhầm bản.
+prune_builds() {
+  local olds=() i b m
+  mapfile -t olds < <(previous_builds)
+  if [[ ${#olds[@]} -eq 0 ]]; then
+    ok "Chưa có bản cũ nào"
+    return 0
+  fi
+  for i in "${!olds[@]}"; do
+    b=${olds[$i]}
+    if (( i < KEEP )); then
+      if [[ -d "$b/cache" ]]; then
+        m=$(stat -c %Y "$b")
+        run "rm -rf '$b/cache'"
+        run "touch -m -d '@$m' '$b'"
+      fi
+      ok "giữ $b ($(build_label "$b"))"
+    else
+      run "rm -rf '$b'"
+      ok "đã xoá $b"
+    fi
   done
-fi
+}
+prune_builds
 [[ $DRY_RUN == 1 ]] || df -h / | tail -1 | awk '{print "  Đĩa: dùng " $3 " / trống " $4 " (" $5 ")"}'
 
 printf '\n\033[1;32m✔ DEPLOY XONG — %s đang chạy %s\033[0m\n' "$PM2_NAME" "$NEW_SHA"
