@@ -192,15 +192,25 @@ export function EquipmentTreePicker({
   );
 
   // Đổi phạm vi (tổ máy) → nhánh đã tải thuộc cây cũ, phải bỏ đi để không trộn 2 cây.
-  React.useEffect(() => {
+  // Chỉnh lúc render: không vẽ một nhịp trộn nhánh cây cũ với phạm vi mới.
+  const [treeScopeKey, setTreeScopeKey] = React.useState({ permissionScope, positionScope, scope });
+  if (
+    treeScopeKey.permissionScope !== permissionScope ||
+    treeScopeKey.positionScope !== positionScope ||
+    treeScopeKey.scope !== scope
+  ) {
+    setTreeScopeKey({ permissionScope, positionScope, scope });
     setChildrenBySeq(new Map());
     setExpanded(new Set());
     setSearch("");
-  }, [permissionScope, positionScope, scope]);
+  }
 
   // rootSeq hiện ít dùng nhưng vẫn được hỗ trợ mà không quay lại tải toàn bộ cây.
   React.useEffect(() => {
     if (!open || !rootSeq || childrenBySeq.has(rootSeq)) return;
+    // Tải nhánh con từ API khi mở — đồng bộ với hệ thống ngoài, đúng việc của effect (ensureChildren
+    // bật cờ "đang tải" rồi ghi kết quả khi API trả về), không phải state suy ra được lúc render.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void ensureChildren(rootSeq);
   }, [childrenBySeq, ensureChildren, open, rootSeq]);
 

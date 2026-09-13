@@ -27,7 +27,11 @@ export function EquipmentCardEditDialog({
   const update = useUpdateEquipmentNode();
 
   const [form, setForm] = React.useState({ attachedInfo: "", documentUrl: "", imageUrl: "" });
-  React.useEffect(() => {
+  // Dữ liệu node (useQuery — giữ nguyên object giữa các lần render) đổi thì nạp lại form — chỉnh lúc
+  // render. Khoá null để node đã có sẵn trong cache lúc mount cũng được nạp như effect cũ.
+  const [formSyncedNode, setFormSyncedNode] = React.useState<{ node: typeof node } | null>(null);
+  if (!formSyncedNode || formSyncedNode.node !== node) {
+    setFormSyncedNode({ node });
     if (node) {
       setForm({
         attachedInfo: node.attachedInfo ?? "",
@@ -35,7 +39,7 @@ export function EquipmentCardEditDialog({
         imageUrl: node.imageUrl ?? "",
       });
     }
-  }, [node]);
+  }
 
   async function save() {
     if (!seq) return;

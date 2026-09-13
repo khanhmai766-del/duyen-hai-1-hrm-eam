@@ -127,11 +127,22 @@ export function DeviceForm({
 
   // Chỉ tải ĐÚNG node cha để lấy tên, thay vì kéo cả cây ~22k node (3,5 MB) như trước.
   const parentNodeQuery = useEquipmentNode(!isEdit && initialParentSeq ? initialParentSeq : null, scope);
-  React.useEffect(() => {
-    const parentName = parentNodeQuery.data?.data?.name;
-    if (isEdit || !initialParentSeq || !parentName) return;
-    setForm((current) => (current.system ? current : { ...current, system: parentName }));
-  }, [parentNodeQuery.data, initialParentSeq, isEdit]);
+  // Tên node cha tải về thì điền "hệ thống" nếu ô đang trống — chỉ khi dữ liệu node cha đổi (người dùng tự
+  // xoá ô thì không điền lại). data của useQuery giữ nguyên object giữa các lần render. Khoá null như effect cũ.
+  const parentNodeData = parentNodeQuery.data;
+  const [parentNameSeen, setParentNameSeen] = React.useState<{ data: typeof parentNodeData; initialParentSeq: typeof initialParentSeq; isEdit: boolean } | null>(null);
+  if (
+    !parentNameSeen ||
+    parentNameSeen.data !== parentNodeData ||
+    parentNameSeen.initialParentSeq !== initialParentSeq ||
+    parentNameSeen.isEdit !== isEdit
+  ) {
+    setParentNameSeen({ data: parentNodeData, initialParentSeq, isEdit });
+    const parentName = parentNodeData?.data?.name;
+    if (!isEdit && initialParentSeq && parentName) {
+      setForm((current) => (current.system ? current : { ...current, system: parentName }));
+    }
+  }
 
   /** Đổi phạm vi: giữ cha nếu vẫn thuộc nhóm nhánh mới, ngược lại bỏ chọn. */
   function changeScope(next: TreeScope) {

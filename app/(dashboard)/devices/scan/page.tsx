@@ -35,11 +35,16 @@ function DeviceScanner() {
 
   React.useEffect(() => stopScanner, [stopScanner]);
 
-  React.useEffect(() => {
-    if (searchParams.get("error") !== "qr-inactive") return;
-    setState("error");
-    setMessage("Mã QR đã bị vô hiệu hóa hoặc không còn tồn tại");
-  }, [searchParams]);
+  // Link quét báo mã QR vô hiệu thì hiện lỗi — chỉnh lúc render. Khoá null để lần render đầu cũng xét
+  // như effect cũ (effect tự bật camera bên dưới đọc thẳng searchParams nên thứ tự không đổi gì).
+  const [scanSearchParams, setScanSearchParams] = React.useState<typeof searchParams | null>(null);
+  if (scanSearchParams !== searchParams) {
+    setScanSearchParams(searchParams);
+    if (searchParams.get("error") === "qr-inactive") {
+      setState("error");
+      setMessage("Mã QR đã bị vô hiệu hóa hoặc không còn tồn tại");
+    }
+  }
 
   const resolveValue = React.useCallback(async (value: string) => {
     if (resolvingRef.current) return;

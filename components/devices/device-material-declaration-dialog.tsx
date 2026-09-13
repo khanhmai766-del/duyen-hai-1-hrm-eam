@@ -102,31 +102,52 @@ export function DeviceMaterialDeclarationDialog({
   const [note, setNote] = React.useState("");
   const [recoveryOnSupplement, setRecoveryOnSupplement] = React.useState(false);
 
-  React.useEffect(() => {
-    if (!open) return;
-    const declarationCategory = declaration?.material.category;
-    setCategory(
-      MATERIAL_CATEGORIES.find((candidate) => materialCategoryMatches(declarationCategory, candidate))
-      ?? declarationCategory
-      ?? ""
-    );
-    setMachineMode("CURRENT");
-    setMaterialId(declaration?.material.id ?? "");
-    setSearch("");
-    setQuantity(String(declaration?.quantity ?? 1));
-    setDeviceCount(String(declaration?.deviceCount ?? 1));
-    setIntervalMonths(String(declaration?.intervalMonths ?? 0));
-    setIntervalNote(declaration?.intervalNote ?? "");
-    setLastReplacedAt("");
-    setManagingPosition(positionLabelOf(declaration?.managingPosition ?? device.managingPosition));
-    setNote(declaration?.note ?? "");
-    setRecoveryOnSupplement(declaration?.recoveryOnSupplement === true);
-  }, [open, declaration, device.managingPosition, machine]);
+  // Mở hộp thoại (hoặc đổi khai báo / thiết bị / tổ máy) thì nạp lại form — chỉnh lúc render.
+  // Khoá null để lần render đầu cũng xét như effect cũ.
+  const [formSyncKey, setFormSyncKey] = React.useState<{
+    open: boolean;
+    declaration: typeof declaration;
+    managingPosition: string | null;
+    machine: string;
+  } | null>(null);
+  if (
+    !formSyncKey ||
+    formSyncKey.open !== open ||
+    formSyncKey.declaration !== declaration ||
+    formSyncKey.managingPosition !== device.managingPosition ||
+    formSyncKey.machine !== machine
+  ) {
+    setFormSyncKey({ open, declaration, managingPosition: device.managingPosition, machine });
+    if (open) {
+      const declarationCategory = declaration?.material.category;
+      setCategory(
+        MATERIAL_CATEGORIES.find((candidate) => materialCategoryMatches(declarationCategory, candidate))
+        ?? declarationCategory
+        ?? ""
+      );
+      setMachineMode("CURRENT");
+      setMaterialId(declaration?.material.id ?? "");
+      setSearch("");
+      setQuantity(String(declaration?.quantity ?? 1));
+      setDeviceCount(String(declaration?.deviceCount ?? 1));
+      setIntervalMonths(String(declaration?.intervalMonths ?? 0));
+      setIntervalNote(declaration?.intervalNote ?? "");
+      setLastReplacedAt("");
+      setManagingPosition(positionLabelOf(declaration?.managingPosition ?? device.managingPosition));
+      setNote(declaration?.note ?? "");
+      setRecoveryOnSupplement(declaration?.recoveryOnSupplement === true);
+    }
+  }
 
-  React.useEffect(() => {
-    if (!categories.length) return;
-    setCategory((current) => (categories.includes(current) ? current : categories[0]));
-  }, [categories]);
+  // Danh sách loại (useMemo) đổi thì loại đang chọn không còn trong danh sách về loại đầu tiên.
+  // Khoá null: lúc mount effect cũ cũng kéo ô loại rỗng về loại đầu tiên.
+  const [categoriesSeen, setCategoriesSeen] = React.useState<typeof categories | null>(null);
+  if (categoriesSeen !== categories) {
+    setCategoriesSeen(categories);
+    if (categories.length) {
+      setCategory((current) => (categories.includes(current) ? current : categories[0]));
+    }
+  }
 
   const filteredMaterials = React.useMemo(() => {
     const query = normalizeText(search);

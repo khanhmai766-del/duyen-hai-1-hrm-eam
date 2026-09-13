@@ -127,10 +127,13 @@ function DevicesPageContent() {
     router.replace(`/devices?${sp.toString()}`);
   }, [params, requestedView, router, view]);
 
-  React.useEffect(() => {
+  // URL đổi (link, back/forward) thì nạp lại ô tìm — chỉnh lúc render; giá trị đầu đã lấy từ URL ở useState.
+  const [qSyncedUrl, setQSyncedUrl] = React.useState(urlQ);
+  if (qSyncedUrl !== urlQ) {
+    setQSyncedUrl(urlQ);
     setQ(urlQ);
     setDebouncedQ(urlQ);
-  }, [urlQ]);
+  }
 
   React.useEffect(() => {
     const t = setTimeout(() => setDebouncedQ(q), 300);
@@ -399,12 +402,18 @@ function SystemLeafCardView({ rows, selectedSystemName }: { rows: SystemTreeRow[
   const firstShown = rows.length ? (page - 1) * pageSize + 1 : 0;
   const lastShown = Math.min(page * pageSize, rows.length);
   const pagedRows = rows.slice((page - 1) * pageSize, page * pageSize);
-  React.useEffect(() => {
+  // Số trang đổi thì kéo trang về trong [1, số trang]; danh sách (prop rows) hoặc cỡ trang đổi thì về trang 1.
+  // Chỉnh lúc render thay cho useEffect.
+  const [pageClampTotal, setPageClampTotal] = React.useState(totalPages);
+  if (pageClampTotal !== totalPages) {
+    setPageClampTotal(totalPages);
     setPage((current) => Math.min(Math.max(1, current), totalPages));
-  }, [totalPages]);
-  React.useEffect(() => {
+  }
+  const [pageResetKey, setPageResetKey] = React.useState({ rows, pageSize });
+  if (pageResetKey.rows !== rows || pageResetKey.pageSize !== pageSize) {
+    setPageResetKey({ rows, pageSize });
     setPage(1);
-  }, [rows, pageSize]);
+  }
   if (rows.length === 0) {
     return (
       <EmptyState
@@ -506,13 +515,18 @@ function SystemTreeTableView({ rows, selectedSystemName }: { rows: SystemTreeRow
   const lastShown = Math.min(page * pageSize, rows.length);
   const pagedRows = rows.slice((page - 1) * pageSize, page * pageSize);
 
-  React.useEffect(() => {
+  // Số trang đổi thì kéo trang về trong [1, số trang]; danh sách (prop rows) hoặc cỡ trang đổi thì về trang 1.
+  // Chỉnh lúc render thay cho useEffect.
+  const [pageClampTotal, setPageClampTotal] = React.useState(totalPages);
+  if (pageClampTotal !== totalPages) {
+    setPageClampTotal(totalPages);
     setPage((current) => Math.min(Math.max(1, current), totalPages));
-  }, [totalPages]);
-
-  React.useEffect(() => {
+  }
+  const [pageResetKey, setPageResetKey] = React.useState({ rows, pageSize });
+  if (pageResetKey.rows !== rows || pageResetKey.pageSize !== pageSize) {
+    setPageResetKey({ rows, pageSize });
     setPage(1);
-  }, [rows, pageSize]);
+  }
 
   return (
     <Card className="overflow-hidden">
@@ -648,19 +662,22 @@ function TableView({
   const lastShown = Math.min(page * pageSize, filteredDevices.length);
   const pagedDevices = filteredDevices.slice((page - 1) * pageSize, page * pageSize);
 
-  React.useEffect(() => {
+  // Số trang đổi thì kéo trang về trong [1, số trang]; danh sách đã lọc (useMemo) hoặc cỡ trang đổi thì về trang 1.
+  // Chỉnh lúc render thay cho useEffect.
+  const [pageClampTotal, setPageClampTotal] = React.useState(totalPages);
+  if (pageClampTotal !== totalPages) {
+    setPageClampTotal(totalPages);
     setPage((current) => Math.min(Math.max(1, current), totalPages));
-  }, [totalPages]);
-
-  React.useEffect(() => {
+  }
+  const [pageResetKey, setPageResetKey] = React.useState({ filteredDevices, pageSize });
+  if (pageResetKey.filteredDevices !== filteredDevices || pageResetKey.pageSize !== pageSize) {
+    setPageResetKey({ filteredDevices, pageSize });
     setPage(1);
-  }, [filteredDevices, pageSize]);
-
-  React.useEffect(() => {
-    if (positionFilter !== "ALL" && !positionOptions.includes(positionFilter)) {
-      setPositionFilter("ALL");
-    }
-  }, [positionFilter, positionOptions]);
+  }
+  // Cương vị đang lọc không còn trong danh sách thì về "Tất cả" — điều kiện tự tắt ngay sau khi đặt.
+  if (positionFilter !== "ALL" && !positionOptions.includes(positionFilter)) {
+    setPositionFilter("ALL");
+  }
 
   return (
     <Card className="overflow-hidden">
@@ -849,12 +866,18 @@ function DetailView({
   const firstShown = devices.length ? (page - 1) * pageSize + 1 : 0;
   const lastShown = Math.min(page * pageSize, devices.length);
   const pagedDevices = devices.slice((page - 1) * pageSize, page * pageSize);
-  React.useEffect(() => {
+  // Số trang đổi thì kéo trang về trong [1, số trang]; danh sách (prop devices) hoặc cỡ trang đổi thì về trang 1.
+  // Chỉnh lúc render thay cho useEffect.
+  const [pageClampTotal, setPageClampTotal] = React.useState(totalPages);
+  if (pageClampTotal !== totalPages) {
+    setPageClampTotal(totalPages);
     setPage((current) => Math.min(Math.max(1, current), totalPages));
-  }, [totalPages]);
-  React.useEffect(() => {
+  }
+  const [pageResetKey, setPageResetKey] = React.useState({ devices, pageSize });
+  if (pageResetKey.devices !== devices || pageResetKey.pageSize !== pageSize) {
+    setPageResetKey({ devices, pageSize });
     setPage(1);
-  }, [devices, pageSize]);
+  }
 
   if (devices.length === 0) {
     return (
