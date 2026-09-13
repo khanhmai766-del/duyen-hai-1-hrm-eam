@@ -64,9 +64,22 @@ export async function GET(req: NextRequest) {
         : (body as unknown as ReadableStream);
 
     const contentType = object.ContentType || "application/octet-stream";
+    /*
+     * Ảnh tiếp địa & chống sét nằm dưới khoá DUY NHẤT mỗi lần tải (makeKey = thời điểm +
+     * UUID; thay ảnh là khoá khác, ảnh cũ bị xoá) — nội dung tại một khoá không bao giờ
+     * đổi. Lớp lưu trữ đã khai báo `immutable` ngay lúc ghi (DEFAULT_CACHE_CONTROL) nhưng
+     * proxy lại ép xuống 5 phút, nên cứ quá 5 phút là trình duyệt tải lại nguyên tấm ảnh
+     * qua Node → MinIO, kể cả khi mở lại đúng tấm vừa xem.
+     *
+     * Chỉ mở cho thư mục này: hai nơi ghi vào nó (route tải ảnh và
+     * scripts/import-grounding-lightning.ts) đều đi qua uploadImageBufferToS3 nên chắc
+     * chắn là khoá mới. Các thư mục khác chưa rà hết người ghi nên giữ nguyên 5 phút.
+     * `private` để proxy/CDN dùng chung không giữ lại ảnh vốn phải đăng nhập mới xem.
+     */
+    const immutableImage = key.startsWith("grounding-lightning/") && contentType.startsWith("image/");
     const headers: Record<string, string> = {
       "Content-Type": contentType,
-      "Cache-Control": "private, max-age=300",
+      "Cache-Control": immutableImage ? "private, max-age=31536000, immutable" : "private, max-age=300",
     };
     if (contentType === DOCX_MIME) {
       const keyFileName = key.split("/").pop() || "tai-lieu.docx";

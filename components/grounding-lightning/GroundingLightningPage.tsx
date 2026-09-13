@@ -196,7 +196,13 @@ function InspectorAvatar({
   return (
     <span className="flex size-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-navy text-[10px] font-bold text-white ring-1 ring-border">
       {avatarUrl ? (
-        <img src={avatarUrl} alt={name} className="h-full w-full object-cover" />
+        <img
+          src={avatarUrl}
+          alt={name}
+          loading="lazy"
+          decoding="async"
+          className="h-full w-full object-cover"
+        />
       ) : (
         initials(name)
       )}
@@ -816,6 +822,8 @@ function InspectionDialog({
                             <img
                               src={image.url}
                               alt={image.originalName ?? "Ảnh khiếm khuyết"}
+                              loading="lazy"
+                              decoding="async"
                               className="h-20 w-24 rounded-xl border bg-white object-cover"
                             />
                           </a>
@@ -980,6 +988,16 @@ function HistoryDialog({
   );
 }
 
+/** Nhả giá trị sau khi người dùng ngừng gõ `delay` ms — cùng quy ước MaterialTicketBoard. */
+function useDebounced<T>(value: T, delay = 350) {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const timer = setTimeout(() => setDebounced(value), delay);
+    return () => clearTimeout(timer);
+  }, [value, delay]);
+  return debounced;
+}
+
 export default function GroundingLightningPage() {
   const { can } = useRbacAccess();
   const [filters, setFilters] = useState<GroundingFilters>({
@@ -989,7 +1007,20 @@ export default function GroundingLightningPage() {
     type: "ALL",
     status: "ALL",
   });
-  const query = useGroundingItems(filters);
+  /*
+    Chữ trong ô tìm kiếm KHÔNG đi thẳng vào khoá truy vấn nữa. Trước đây mỗi phím gõ đổi
+    `filters.q` → khoá mới → một request tải lại TOÀN BỘ danh mục (kèm điểm kiểm tra, ảnh,
+    lượt xác nhận, tra avatar) — gõ "Phòng Điện" là mười request, và chỉ kết quả của phím
+    cuối là có ích. Ô nhập vẫn phản hồi tức thì theo `searchText`; truy vấn chỉ chạy khi
+    ngừng gõ 350 ms.
+  */
+  const [searchText, setSearchText] = useState("");
+  const debouncedSearch = useDebounced(searchText.trim(), 350);
+  const queryFilters = useMemo(
+    () => ({ ...filters, q: debouncedSearch }),
+    [filters, debouncedSearch],
+  );
+  const query = useGroundingItems(queryFilters);
   const items = useMemo(() => query.data?.data ?? [], [query.data?.data]);
   const positions = query.data?.meta?.positions ?? [];
   const scope: GroundingScope | null = query.data?.meta?.scope ?? null;
@@ -1080,7 +1111,7 @@ export default function GroundingLightningPage() {
     filters.type,
     filters.status,
   ].filter((value) => value !== "ALL").length;
-  const hasFilter = filters.q.trim() !== "" || activeFilterCount > 0 || activeKpi !== null;
+  const hasFilter = searchText.trim() !== "" || activeFilterCount > 0 || activeKpi !== null;
   const clearFilters = () => {
     setFilters({
       q: "",
@@ -1090,6 +1121,7 @@ export default function GroundingLightningPage() {
       status: "ALL",
     });
     setActiveKpi(null);
+    setSearchText("");
   };
   /*
     Sắp xếp Ở CLIENT: máy chủ trả về toàn bộ danh mục (vài trăm dòng) trong một lượt, khác
@@ -1142,7 +1174,7 @@ export default function GroundingLightningPage() {
   // Đổi bộ lọc / cách sắp xếp / cỡ trang thì trang hiện tại không còn nghĩa gì.
   useEffect(() => {
     setPage(1);
-  }, [filters, sort, pageSize, activeKpi]);
+  }, [filters, debouncedSearch, sort, pageSize, activeKpi]);
   const metrics = useMemo(
     () => ({
       total: items.length,
@@ -1458,8 +1490,8 @@ export default function GroundingLightningPage() {
       <PcccTableCard
         pageSize={pageSize}
         onPageSizeChange={setPageSize}
-        search={filters.q}
-        onSearchChange={(value) => setFilters({ ...filters, q: value })}
+        search={searchText}
+        onSearchChange={setSearchText}
         searchPlaceholder="Tìm khu vực, thiết bị, khiếm khuyết…"
         page={page}
         pageCount={pageCount}

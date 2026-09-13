@@ -1,6 +1,11 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { apiGet, apiMutate, apiUpload } from "@/lib/fetcher";
 import type {
   GroundingStatus,
@@ -73,6 +78,14 @@ export function useGroundingItems(filters: GroundingFilters) {
         `/api/grounding-lightning?${queryString(filters)}`,
       ),
     staleTime: 15_000,
+    /*
+     * Giữ danh sách CŨ trên bảng trong lúc tải kết quả cho bộ lọc/từ khoá MỚI.
+     *
+     * Bộ lọc nằm trong queryKey nên mỗi lần đổi là một khoá chưa có dữ liệu: không có
+     * dòng này thì `data` về undefined, bảng rơi xuống 0 dòng và nháy dòng "Chưa có dữ
+     * liệu phù hợp" rồi mới hiện lại — đúng cảm giác giật khi gõ tìm kiếm hay đổi bộ lọc.
+     */
+    placeholderData: keepPreviousData,
   });
 }
 
