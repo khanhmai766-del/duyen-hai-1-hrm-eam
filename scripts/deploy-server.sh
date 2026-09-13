@@ -111,6 +111,16 @@ step "KIỂM TRA TRƯỚC KHI DEPLOY"
 [[ -f .env ]] || die "Không thấy .env trong $APP_DIR"
 [[ -f package.json ]] || die "Không thấy package.json — chạy sai thư mục?"
 command -v pm2 >/dev/null || die "Không có pm2"
+
+# Build dưới Node khác bản đang chạy thật là tạo ra .next "trông như ổn" nhưng lệch runtime.
+# Chỉ cảnh báo chứ không chặn — lượt deploy khẩn cấp không nên kẹt vì chuyện này.
+if [[ -f .nvmrc ]]; then
+  WANT_NODE=$(tr -dc '0-9' < .nvmrc)
+  HAVE_NODE=$(node -p 'process.versions.node.split(".")[0]')
+  if [[ "$WANT_NODE" != "$HAVE_NODE" ]]; then
+    warn "Node trên server là $(node -v) nhưng .nvmrc yêu cầu $WANT_NODE — kiểm tra lại trước khi build."
+  fi
+fi
 pm2 describe "$PM2_NAME" >/dev/null 2>&1 || die "pm2 không có tiến trình '$PM2_NAME'"
 
 for f in "${SQL_FILES[@]:-}"; do

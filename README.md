@@ -31,7 +31,7 @@ and reporting.
 
 ## Prerequisites
 
-- Node.js 18.18+ (tested on Node 20/24)
+- Node.js 24 (see `.nvmrc`; production runs 24.x since 2026-09-13)
 - A PostgreSQL 13+ database — **or** use the bundled zero-install DB below.
 
 ## Quick start (zero-install database)
