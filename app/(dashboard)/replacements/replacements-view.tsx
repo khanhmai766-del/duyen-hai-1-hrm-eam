@@ -1196,6 +1196,8 @@ export function ReplacementsPageContent({ only }: { only?: TabKey } = {}) {
                         <div className="flex items-start justify-between gap-3">
                           <div className="flex min-w-0 flex-wrap items-center gap-1.5">
                             {pctNumber ? (
+                              // focusHistoryPct chỉ ghi ref BÊN TRONG hàm click, không đọc ref lúc render — React Compiler báo nhầm.
+                              // eslint-disable-next-line react-hooks/refs
                               <button type="button" onClick={() => focusHistoryPct(l)} className="rounded-full bg-sky-50 px-2.5 py-1 font-mono text-[10px] font-bold text-[#00558F]">PCT/LCT {pctNumber}</button>
                             ) : <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-semibold text-slate-500">Chưa có PCT/LCT</span>}
                             {l.imported && <span className="rounded-full bg-amber-50 px-2 py-1 text-[9px] font-bold uppercase text-amber-700">Lưu trữ</span>}
@@ -1334,6 +1336,8 @@ export function ReplacementsPageContent({ only }: { only?: TabKey } = {}) {
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
+                              // Ghi ref trong hàm click, không phải lúc render — React Compiler báo nhầm.
+                              // eslint-disable-next-line react-hooks/refs
                               focusHistoryPct(l);
                             }}
                             title="Lọc theo số PCT/LCT và mở chi tiết lịch sử thay thế"

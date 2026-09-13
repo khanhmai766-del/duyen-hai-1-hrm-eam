@@ -111,6 +111,8 @@ function DeviceQrPageContent() {
       ) : (
         <div className="qr-print-sheet flex w-full max-w-md flex-col items-center rounded-2xl border border-border bg-white p-10 text-center shadow-sm">
           <div className="qr-print-brand mb-4 flex items-center gap-2 text-navy">
+            {/* Trang IN tem QR: ảnh tĩnh 28px cần <img> thuần cho CSS in; images.unoptimized nên next/image không tối ưu gì thêm. */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/brand/4.png" alt="Logo EVN" className="qr-print-logo h-7 w-7 object-contain" />
             <span className="text-base font-bold">Duyen Hai 1 Thermal Power Plant</span>
           </div>

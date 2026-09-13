@@ -397,7 +397,9 @@ function EmptyState({ hasItems, filter, days }: { hasItems: boolean; filter: Sta
  *  xanh = đã có. Ba ô đọc bên dưới giữ đúng các cột của LIMS. */
 function FailureCard({ item, index }: { item: OilAnalysisFailureItem; index: number }) {
   const pending = isPending(item);
-  const isNew = Date.now() - new Date(item.firstSeenAt).getTime() < NEW_BADGE_WINDOW_MS;
+  // Chốt thời điểm một lần lúc thẻ xuất hiện — nhãn "mới" tính theo giờ, không cần cập nhật từng render.
+  const [mountedAt] = useState(() => Date.now());
+  const isNew = mountedAt - new Date(item.firstSeenAt).getTime() < NEW_BADGE_WINDOW_MS;
 
   return (
     <article

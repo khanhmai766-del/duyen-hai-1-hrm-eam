@@ -71,6 +71,8 @@ export function IdleLogout() {
         const result = await signOut({ callbackUrl: "/login?reason=timeout", redirect: false });
         window.location.assign(result?.url ?? "/login?reason=timeout");
       } catch {
+        // Cố ý tải lại TOÀN TRANG (không dùng router): xoá sạch state/cache phía client của phiên cũ.
+        // eslint-disable-next-line @next/next/no-location-assign-relative-destination
         window.location.assign("/login?reason=timeout");
       }
     }

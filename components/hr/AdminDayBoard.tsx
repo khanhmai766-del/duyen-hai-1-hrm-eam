@@ -186,6 +186,9 @@ export default function AdminDayBoard() {
     }
     setNote("");
     setSessionKey("CA_NGAY");
+    // Cố ý theo ID: chỉ nạp lại form khi đổi ngày hoặc đổi bản đăng ký. Theo cả object thì mỗi lần
+    // danh sách tải lại (object mới) form bị ghi đè, xoá mất ghi chú người dùng đang gõ.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selDate, myDayReg?.id, rejectedMyReg?.id]);
 
   const moveDateRange = (days: -1 | 1) => {

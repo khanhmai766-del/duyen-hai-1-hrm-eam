@@ -427,7 +427,9 @@ function MaterialsPageContent() {
     ).includes(erpSearchText);
   });
   const selectedErpCodes = edit ? materialErpCodes(edit) : [];
-  const selectedErpCodeSet = React.useMemo(() => new Set(selectedErpCodes), [selectedErpCodes.join("|")]);
+  // Khoá theo CHUỖI mã (mảng mã tạo mới mỗi render) — mã ERP không chứa "|".
+  const selectedErpKey = selectedErpCodes.join("|");
+  const selectedErpCodeSet = React.useMemo(() => new Set(selectedErpKey ? selectedErpKey.split("|") : []), [selectedErpKey]);
   const selectedErpGroups = erpGroups.filter((group) => group.erpCodes.some((code) => selectedErpCodeSet.has(code)));
   const selectedErpStock = erpStockByGroupedCodes(selectedErpCodes);
   React.useEffect(() => {

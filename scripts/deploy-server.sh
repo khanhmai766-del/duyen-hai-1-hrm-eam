@@ -393,6 +393,40 @@ prune_builds() {
   done
 }
 prune_builds
+
+# Sao lưu DB trước mỗi lượt deploy (~10MB/bản) và log deploy trước đây KHÔNG ai xoá — đến
+# 2026-09-13 đã có 27 bản. LUÔN giữ KEEP_DUMPS bản gần nhất; bản ngoài số đó chỉ xoá khi cũ hơn
+# MAX_AGE ngày — một ngày deploy dồn dập (13/09 có 8 lượt) không được đẩy mất lịch sử 2 tuần.
+# Bản dở (.INCOMPLETE) không dùng được nên xoá luôn. Chỉ đụng đúng mẫu tên script sinh ra.
+KEEP_DUMPS=${KEEP_DUMPS:-10}
+DUMP_MAX_AGE_DAYS=${DUMP_MAX_AGE_DAYS:-14}
+KEEP_DEPLOY_LOGS=${KEEP_DEPLOY_LOGS:-20}
+# prune_files <nhãn> <số giữ> <số ngày tối đa, 0 = không xét tuổi> <mẫu…>
+prune_files() {
+  local label=$1 keep=$2 max_age=$3; shift 3
+  local files=() i removed=0
+  mapfile -t files < <(ls -1t "$@" 2>/dev/null | grep -v INCOMPLETE)
+  for i in "${!files[@]}"; do
+    (( i < keep )) && continue
+    if (( max_age > 0 )) && [[ -z "$(find "${files[$i]}" -maxdepth 0 -mtime +"$max_age" 2>/dev/null)" ]]; then
+      continue
+    fi
+    run "rm -f -- '${files[$i]}'"
+    removed=$(( removed + 1 ))
+  done
+  ok "$label: ${#files[@]} bản, xoá $removed (giữ $keep mới nhất$( (( max_age > 0 )) && echo " + mọi bản trong $max_age ngày"))"
+}
+for f in "$BACKUP_DIR"/backup-dh1db-*-truoc-*.INCOMPLETE*.sql.gz; do
+  [[ -e "$f" ]] && run "rm -f -- '$f'" && ok "xoá bản dump dở $(basename "$f")"
+done
+prune_files "Sao lưu DB trước deploy" "$KEEP_DUMPS" "$DUMP_MAX_AGE_DAYS" "$BACKUP_DIR"/backup-dh1db-????-??-??-????-truoc-*.sql.gz
+prune_files "Log deploy" "$KEEP_DEPLOY_LOGS" 0 "$BACKUP_DIR"/deploy-*.log
+
+# Cache npm chỉ lớn lên qua các lượt `npm install` — quá 2GB thì dọn (lượt cài sau tải lại gói).
+if [[ -d "$HOME/.npm" ]] && (( $(du -sm "$HOME/.npm" | cut -f1) > 2048 )); then
+  run "npm cache clean --force >/dev/null 2>&1"
+  ok "Cache npm vượt 2GB — đã dọn"
+fi
 [[ $DRY_RUN == 1 ]] || df -h / | tail -1 | awk '{print "  Đĩa: dùng " $3 " / trống " $4 " (" $5 ")"}'
 
 printf '\n\033[1;32m✔ DEPLOY XONG — %s đang chạy %s\033[0m\n' "$PM2_NAME" "$NEW_SHA"

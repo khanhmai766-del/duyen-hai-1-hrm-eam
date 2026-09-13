@@ -157,6 +157,46 @@ ls -1dt .next-builds/*/ .next.rollback-*/ 2>/dev/null      # các bản quay l�
   là việc lớn — hỏi quản trị, không tự làm.
 - Server giữ **3 bản** gần nhất (đã bỏ cache, mỗi bản ~35MB).
 
+## 8. Dung lượng server — thứ gì tự dọn, thứ gì phải tự quyết
+
+Ổ đĩa từng bị ăn dần mà không ai thấy (18 bản chụp `.next` 20GB, 27 bản sao lưu DB, journald 2.8GB,
+cache npm 3.1GB — đo 13/09/2026). Nay có ba lớp chặn:
+
+| Thứ tích luỹ | Ai dọn | Quy tắc |
+|---|---|---|
+| Bản build để rollback `.next-builds/` | `deploy-server.sh` mỗi lượt deploy | Giữ 3 bản gần nhất, bỏ cache |
+| Sao lưu DB `/root/backup-dh1db-<ngày>-truoc-<sha>.sql.gz` | deploy + chốt chặn hằng tuần | **Luôn giữ 10 bản mới nhất**; bản ngoài số đó chỉ xoá khi **cũ hơn 14 ngày**; bản dở `.INCOMPLETE` xoá luôn |
+| Log deploy `/root/deploy-*.log` | deploy + chốt chặn hằng tuần | Giữ 20 file |
+| Cache npm `/root/.npm` | deploy + chốt chặn hằng tuần | Quá 2GB thì dọn |
+| Journald (log hệ thống) | systemd | Tối đa 500MB, giữ 1 tháng (`/etc/systemd/journald.conf.d/dh1-limit.conf`) |
+| Log pm2 `/root/.pm2/logs` | logrotate | Xoay hằng tuần, giữ 8 bản nén (`/etc/logrotate.d/dh1-pm2`) |
+| Gói `.deb` apt đã tải | chốt chặn hằng tuần | `apt-get clean` |
+
+**Chốt chặn hằng tuần** `dh1-disk-guard.timer` chạy `scripts/server-disk-guard.sh` lúc 03:37 sáng thứ Hai
+(giờ VN). Nếu ổ còn dưới **15GB**, nó liệt kê thư mục lớn nhất và báo **failed** (không tự xoá gì thêm):
+
+```bash
+systemctl list-timers dh1-disk-guard.timer           # lần chạy kế tiếp
+journalctl -u dh1-disk-guard.service -n 30           # kết quả lần chạy gần nhất
+systemctl --failed                                   # có dh1-disk-guard = ổ sắp đầy
+/var/www/dh1-app/scripts/server-disk-guard.sh --dry-run   # xem sẽ dọn gì, không xoá
+```
+
+**KHÔNG tự dọn — người vận hành phải quyết:** dump tạo tay (`/root/*.sql` không theo mẫu tên trên), thư mục
+bản cũ sau nâng cấp (`/var/www/dh1-app-node20`, `dh1-app-next14`, `dh1-pct-release-*`), file trong `/tmp`.
+Nguyên tắc: **ai tạo thư mục/bản sao tạm thì dọn ngay khi xong việc**, đừng để lại "phòng khi cần".
+
+Cài lại trên máy mới (một lần):
+
+```bash
+cd /var/www/dh1-app
+mkdir -p /etc/systemd/journald.conf.d
+cp scripts/systemd/journald-dh1-limit.conf /etc/systemd/journald.conf.d/dh1-limit.conf && systemctl restart systemd-journald
+cp scripts/systemd/logrotate-dh1-pm2 /etc/logrotate.d/dh1-pm2
+cp scripts/systemd/dh1-disk-guard.service scripts/systemd/dh1-disk-guard.timer /etc/systemd/system/
+systemctl daemon-reload && systemctl enable --now dh1-disk-guard.timer
+```
+
 ---
 
 ## Phụ lục A — Script thực chất chạy những lệnh gì

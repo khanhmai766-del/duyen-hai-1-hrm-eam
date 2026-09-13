@@ -196,7 +196,8 @@ export default function ShiftRosterPage() {
     });
     return m;
   }, [timesheet.data]);
-  function buildHcMap() {
+  // Dòng 3: toàn bộ công hành chính đã duyệt, kể cả tự chấm và theo nhóm.
+  const hcMap = React.useMemo(() => {
     const grouped = new Map<string, Array<{ hours: number; content: string; note: string | null; period: string | null }>>();
     (timesheet.data?.data?.hcEntries ?? []).forEach((e) => {
       const k = `${e.userId}:${e.day}`;
@@ -216,10 +217,7 @@ export default function ShiftRosterPage() {
       });
     });
     return m;
-  }
-
-  // Dòng 3: toàn bộ công hành chính đã duyệt, kể cả tự chấm và theo nhóm.
-  const hcMap = React.useMemo(() => buildHcMap(), [timesheet.data, tsMap]);
+  }, [timesheet.data, tsMap]);
 
   const daysInMonth = new Date(month.year, month.month + 1, 0).getDate();
   const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);

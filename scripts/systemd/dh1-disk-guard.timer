@@ -1,0 +1,12 @@
+# Chạy mỗi thứ Hai 03:37 giờ VN (= Chủ nhật 20:37 UTC — systemd 249 trên VPS chưa hỗ trợ hậu tố múi giờ).
+# Tránh 16:45/17:05 UTC (chuyển kỳ PCCC/TBYCNN) và các phút :00/:15/:30/:45 (n8n chốt lịch sử).
+[Unit]
+Description=DH1 — chốt chặn dung lượng hằng tuần
+
+[Timer]
+OnCalendar=Sun *-*-* 20:37:00
+Persistent=true
+RandomizedDelaySec=120
+
+[Install]
+WantedBy=timers.target

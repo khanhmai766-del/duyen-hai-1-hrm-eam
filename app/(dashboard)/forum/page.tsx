@@ -137,7 +137,7 @@ export default function ForumPage() {
   const createReply = useCreateForumReply();
   const deletePost = useDeleteForumPost();
   const deleteReply = useDeleteForumReply();
-  const rows = posts.data?.data ?? [];
+  const rows = React.useMemo(() => posts.data?.data ?? [], [posts.data?.data]);
   const closedCount = closedPosts.data?.data?.length ?? 0;
   const positionOptions = React.useMemo(() => announcementShiftRosterPositionOptions(), []);
 
@@ -689,7 +689,7 @@ function ForumPostCard({
   const [editLinks, setEditLinks] = React.useState("");
   const [collapsedReplyThreads, setCollapsedReplyThreads] = React.useState<Record<string, boolean>>({});
   const [expandedReplyBodies, setExpandedReplyBodies] = React.useState<Record<string, boolean>>({});
-  const replies = repliesQuery.data?.data ?? [];
+  const replies = React.useMemo(() => repliesQuery.data?.data ?? [], [repliesQuery.data?.data]);
   const replyTree = React.useMemo(() => buildReplyTree(replies), [replies]);
   const likeCount = post.likeCount ?? 0;
   const replyCount = post.replyCount ?? 0;

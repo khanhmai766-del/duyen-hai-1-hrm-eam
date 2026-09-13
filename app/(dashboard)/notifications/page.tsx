@@ -420,28 +420,30 @@ export default function NotificationsPage() {
   }
 
   // Dep là mutateAsync (ổn định trong TanStack v5) — không dùng cả object mutation vì nó đổi identity mỗi render.
+  const markReadAsync = markRead.mutateAsync;
   const confirmRead = React.useCallback(
     async (a: Announcement) => {
       try {
-        await markRead.mutateAsync(a.id);
+        await markReadAsync(a.id);
         toast.success("Đã xác nhận đọc");
       } catch (e) {
         toast.error((e as Error).message);
       }
     },
-    [markRead.mutateAsync]
+    [markReadAsync]
   );
 
   const archivedBulletins = React.useMemo(() => bulletins.filter(isArchivedInvalidAnnouncement), [bulletins]);
   const activeBulletins = React.useMemo(() => bulletins.filter((a) => !isArchivedInvalidAnnouncement(a)), [bulletins]);
   const currentBulletins = showInvalidArchive ? archivedBulletins : activeBulletins;
   // Dropdown năm: server trả danh sách năm có dữ liệu qua meta (không phụ thuộc năm đang tải).
+  const metaYearsRaw = annData?.meta?.years;
   const years = React.useMemo(() => {
-    const metaYears: number[] = Array.isArray(annData?.meta?.years) ? annData.meta.years : [];
+    const metaYears: number[] = Array.isArray(metaYearsRaw) ? metaYearsRaw : [];
     return Array.from(new Set([currentYear, ...metaYears]))
       .filter((year) => !Number.isNaN(year))
       .sort((x, y) => y - x);
-  }, [annData?.meta?.years, currentYear]);
+  }, [metaYearsRaw, currentYear]);
   const nq = normalizeText(debouncedSearch.trim());
   const filtered = React.useMemo(
     () =>
@@ -624,28 +626,30 @@ export default function NotificationsPage() {
     }
   }
 
+  const invalidateAsync = invalidate.mutateAsync;
   const markIneffective = React.useCallback(
     async (a: Announcement) => {
       try {
-        await invalidate.mutateAsync(a.id);
+        await invalidateAsync(a.id);
         toast.success("Đã đánh dấu mệnh lệnh không còn hiệu lực");
       } catch (e) {
         toast.error((e as Error).message);
       }
     },
-    [invalidate.mutateAsync]
+    [invalidateAsync]
   );
 
+  const restoreAsync = restore.mutateAsync;
   const restoreOrder = React.useCallback(
     async (a: Announcement) => {
       try {
-        await restore.mutateAsync(a.id);
+        await restoreAsync(a.id);
         toast.success("Đã khôi phục mệnh lệnh");
       } catch (e) {
         toast.error((e as Error).message);
       }
     },
-    [restore.mutateAsync]
+    [restoreAsync]
   );
 
   return (

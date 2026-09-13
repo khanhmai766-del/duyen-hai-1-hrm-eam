@@ -153,7 +153,7 @@ function AllMaterialsTab({ category, canManage }: { category: GroupingCategory; 
   const { data, isLoading } = useAllGroupedErpMaterials(category);
   const updateMaterial = useUpdateGroupedErpStock();
   const deleteMaterials = useDeletePendingGroupedErpMaterials();
-  const items = data?.data ?? [];
+  const items = useMemo(() => data?.data ?? [], [data?.data]);
   const [search, setSearch] = useState("");
   const [edit, setEdit] = useState<ErpMaterialItem | null>(null);
   const [deleting, setDeleting] = useState<ErpMaterialItem | null>(null);
@@ -1160,8 +1160,8 @@ function PendingTab({ category }: { category: GroupingCategory }) {
   const sync = useOilGroupingSync();
   const confirm = useOilGroupingConfirm();
   const deletePending = useDeletePendingGroupedErpMaterials();
-  const items = data?.data.items ?? [];
-  const oilTypes = data?.data.oilTypes ?? [];
+  const items = useMemo(() => data?.data.items ?? [], [data?.data.items]);
+  const oilTypes = useMemo(() => data?.data.oilTypes ?? [], [data?.data.oilTypes]);
 
   const [checked, setChecked] = useState<Set<string>>(new Set());
   const [deletingIds, setDeletingIds] = useState<string[] | null>(null);

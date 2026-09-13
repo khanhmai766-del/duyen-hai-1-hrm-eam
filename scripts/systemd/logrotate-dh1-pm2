@@ -1,0 +1,14 @@
+# Xoay vòng log pm2 của dh1-app — pm2 không tự xoay (chưa cài pm2-logrotate).
+# Cài: cp scripts/systemd/logrotate-dh1-pm2 /etc/logrotate.d/dh1-pm2 && logrotate -d /etc/logrotate.d/dh1-pm2
+# copytruncate: pm2 giữ file mở suốt, không thể đổi tên rồi báo mở lại như nginx.
+/root/.pm2/logs/*.log {
+    weekly
+    rotate 8
+    maxsize 50M
+    compress
+    delaycompress
+    missingok
+    notifempty
+    copytruncate
+    su root root
+}

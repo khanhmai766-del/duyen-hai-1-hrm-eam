@@ -3339,6 +3339,9 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
       deviceSeq: item.deviceSeq ?? "",
       quantity: Math.max(1, item.replacementQuantity ?? 1),
     })));
+    // Cố ý không theo t.items: replacementSourceKey đã tóm đúng phần items quyết định dòng thay thế;
+    // theo cả mảng thì mỗi lần phiếu tải lại (mảng mới) các dòng người dùng đang nhập bị reset.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [t.status, replacementSourceKey]);
 
   React.useEffect(() => {

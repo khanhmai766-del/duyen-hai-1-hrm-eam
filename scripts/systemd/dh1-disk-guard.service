@@ -1,0 +1,14 @@
+# Chốt chặn dung lượng hằng tuần — xem scripts/server-disk-guard.sh.
+# Cài: cp scripts/systemd/dh1-disk-guard.* /etc/systemd/system/ && systemctl daemon-reload
+#      && systemctl enable --now dh1-disk-guard.timer
+# Xem:  journalctl -u dh1-disk-guard.service
+# Service "failed" (exit 2) nghĩa là ổ còn < 15GB — kiểm bằng: systemctl --failed
+[Unit]
+Description=DH1 — dọn tích luỹ dung lượng (sao lưu DB, log, cache) và cảnh báo ổ đầy
+
+[Service]
+Type=oneshot
+Environment=HOME=/root
+ExecStart=/var/www/dh1-app/scripts/server-disk-guard.sh
+Nice=10
+IOSchedulingClass=idle

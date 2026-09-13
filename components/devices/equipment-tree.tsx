@@ -483,6 +483,8 @@ function TreeScopeBody({
   }, [searchActive, searchResults, roots, expanded, childrenBySeq, loadingSeqs]);
 
   const scrollRef = React.useRef<HTMLDivElement>(null);
+  // TanStack Virtual trả về hàm không memo được — React Compiler bỏ qua component này (dự án không bật compiler).
+  // eslint-disable-next-line react-hooks/incompatible-library
   const rowVirtualizer = useVirtualizer({
     count: flatRows.length,
     getScrollElement: () => scrollRef.current,

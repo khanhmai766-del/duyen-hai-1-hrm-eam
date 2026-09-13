@@ -155,6 +155,7 @@ function PersistentHorizontalScroll({ children }: { children: React.ReactNode })
     setScrollLeft(clamped);
   }, []);
 
+  const tableScrollId = React.useId();
   const maximumScrollLeft = Math.max(0, geometry.contentWidth - geometry.viewportWidth);
   const trackInset = 44;
   const trackWidth = Math.max(0, geometry.width - trackInset * 2);
@@ -170,6 +171,7 @@ function PersistentHorizontalScroll({ children }: { children: React.ReactNode })
     <>
       <div
         ref={tableScrollRef}
+        id={tableScrollId}
         className="overflow-x-auto"
         onScroll={(event) => {
           setScrollLeft(event.currentTarget.scrollLeft);
@@ -180,6 +182,7 @@ function PersistentHorizontalScroll({ children }: { children: React.ReactNode })
       {geometry.visible && typeof document !== "undefined" && createPortal(
         <div
           role="scrollbar"
+          aria-controls={tableScrollId}
           aria-label="Thanh cuộn ngang của danh sách khiếm khuyết"
           aria-orientation="horizontal"
           aria-valuemin={0}
@@ -494,7 +497,8 @@ export default function DefectsPage() {
 
   // Chip "Đang lọc": chỉ gắn nút × khi bấm vào THỰC SỰ đổi được gì đó. Tổ máy và Yêu cầu
   // luôn phải có một giá trị nên khi đang ở mặc định (S1 / Cơ) chúng chỉ là chip ngữ cảnh.
-  const activeFilterChips = React.useMemo<ActiveChip[]>(() => {
+  // Vài chip, tính lại mỗi render là rẻ — bỏ useMemo (React Compiler không giữ được memo tay ở đây).
+  const activeFilterChips: ActiveChip[] = (() => {
     const chips: ActiveChip[] = [
       {
         key: "unit",
@@ -540,7 +544,7 @@ export default function DefectsPage() {
       chips.push({ key: "search", label: "Tìm", value: tableSearch.trim(), onClear: () => setTableSearch("") });
     }
     return chips;
-  }, [unitFilter, requestFilter, positionFilter, severityFilter, statusFilter, repairResultFilter, tableSearch]);
+  })();
 
   const chuaXuLy = data?.meta?.kpi?.chuaXuLy ?? 0;
   const coPct = data?.meta?.kpi?.coPct ?? 0;

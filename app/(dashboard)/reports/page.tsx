@@ -66,7 +66,7 @@ function ReportsPageContent() {
     to: to || undefined,
   });
   const dashboardData = dashboardQuery.data?.data;
-  const dashboardPositionOptions = dashboardData?.positions ?? [];
+  const dashboardPositionOptions = React.useMemo(() => dashboardData?.positions ?? [], [dashboardData?.positions]);
   const totalSystemDevices = dashboardData?.totalSystemDevices ?? 0;
   const isLoading = dashboardQuery.isLoading && !dashboardData;
 
