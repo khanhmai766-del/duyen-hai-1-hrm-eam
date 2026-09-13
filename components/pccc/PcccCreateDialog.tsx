@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Plus, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -43,7 +43,12 @@ export function PcccCreateDialog({ open, onOpenChange, kind, period, positions, 
 }) {
   const initial = useMemo<Form>(() => ({ cuongViCode: defaultPosition === "ALL" ? "" : defaultPosition ?? "", machine: defaultMachine === "ALL" ? "COMMON" : defaultMachine, sl: "1", dvt: kind === "EXTINGUISHER" ? "Bình" : kind === "CABINET" ? "Tủ" : "%", chungLoai: CHUNG_LOAI_OPTIONS[0], loaiVan: VALVE_LOAI_OPTIONS[0], loai: lightLoai, ten: "Bồn Foam", panelKey: "KICH_TU", binhLabels: "1, 2, 3, 4" }), [defaultMachine, defaultPosition, kind, lightLoai]);
   const [form, setForm] = useState<Form>(initial);
-  useEffect(() => { if (open) setForm(initial); }, [open, initial]);
+  // Mở hộp thoại (hoặc mặc định đổi trong lúc đang mở) thì nạp lại form — chỉnh lúc render.
+  const [formSyncKey, setFormSyncKey] = useState({ open, initial });
+  if (formSyncKey.open !== open || formSyncKey.initial !== initial) {
+    setFormSyncKey({ open, initial });
+    if (open) setForm(initial);
+  }
   const set = (key: string) => (event: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => setForm((prev) => ({ ...prev, [key]: event.target.value }));
 
   return (

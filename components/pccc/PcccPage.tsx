@@ -514,11 +514,14 @@ export default function PcccPage() {
   }, [dirtyCount]);
 
   // Không bắn request theo từng phím khi nhiều người cùng tìm tủ để thêm cuộn vòi.
+  // Đóng hộp thoại thì xoá ngay từ khoá đã debounce (chỉnh lúc render); đang mở thì debounce 300ms.
+  const [cvccAddOpenSeen, setCvccAddOpenSeen] = useState(cvccAddOpen);
+  if (cvccAddOpenSeen !== cvccAddOpen) {
+    setCvccAddOpenSeen(cvccAddOpen);
+    if (!cvccAddOpen) setCvccCabinetSearchDebounced("");
+  }
   useEffect(() => {
-    if (!cvccAddOpen) {
-      setCvccCabinetSearchDebounced("");
-      return;
-    }
+    if (!cvccAddOpen) return;
     const timer = window.setTimeout(() => setCvccCabinetSearchDebounced(cvccCabinetSearch.trim()), 300);
     return () => window.clearTimeout(timer);
   }, [cvccAddOpen, cvccCabinetSearch]);

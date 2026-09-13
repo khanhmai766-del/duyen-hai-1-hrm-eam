@@ -13,7 +13,7 @@
 // 2. Chia ba khối (nhận dạng · kiểm định · tình trạng) đúng ba khối của model. Biểu mẫu
 //    này 15 ô — dồn thành một lưới phẳng thì không đọc được ô nào thuộc phần nào.
 // =====================================================================
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Plus, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -104,9 +104,12 @@ export function TbycnnCreateDialog({
     };
   }, [defaultMachine, defaultPositionCode, positions]);
   const [form, setForm] = useState(initial);
-  useEffect(() => {
+  // Mở hộp thoại (hoặc mặc định đổi trong lúc đang mở) thì nạp lại form — chỉnh lúc render.
+  const [formSyncKey, setFormSyncKey] = useState({ open, initial });
+  if (formSyncKey.open !== open || formSyncKey.initial !== initial) {
+    setFormSyncKey({ open, initial });
     if (open) setForm(initial);
-  }, [open, initial]);
+  }
 
   const set =
     (key: string) =>

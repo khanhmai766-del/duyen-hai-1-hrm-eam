@@ -14,7 +14,7 @@
 // gộp không còn đúng nữa (mỗi trang cắt ngang một nhóm); danh mục thành MỘT CỘT
 // sắp xếp/lọc được, tra cứu nhanh hơn hẳn cách cuộn tìm khối.
 // =====================================================================
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
   AlertTriangle,
@@ -546,18 +546,31 @@ export default function TbycnnPage() {
 
   // Đổi bộ lọc / sắp xếp / số dòng thì về trang 1: giữ trang cũ rất dễ rơi vào trang
   // không còn dòng nào và bảng trông như bị rỗng.
-  useEffect(() => {
+  const [pageResetKey, setPageResetKey] = useState({ search, cuongViCode, machine, danhMuc, status, kd, sort, pageSize });
+  if (
+    pageResetKey.search !== search ||
+    pageResetKey.cuongViCode !== cuongViCode ||
+    pageResetKey.machine !== machine ||
+    pageResetKey.danhMuc !== danhMuc ||
+    pageResetKey.status !== status ||
+    pageResetKey.kd !== kd ||
+    pageResetKey.sort !== sort ||
+    pageResetKey.pageSize !== pageSize
+  ) {
+    setPageResetKey({ search, cuongViCode, machine, danhMuc, status, kd, sort, pageSize });
     setPage(1);
-  }, [search, cuongViCode, machine, danhMuc, status, kd, sort, pageSize]);
+  }
 
   /* Đổi bảng thì bỏ lọc danh mục và thu gọn dòng đang mở: bảng dụng cụ chỉ có MỘT danh
      mục nên ô lọc đó vô nghĩa, mà để nguyên giá trị cũ là bảng ra rỗng không rõ vì sao. */
-  useEffect(() => {
+  const [tabSeen, setTabSeen] = useState(tab);
+  if (tabSeen !== tab) {
+    setTabSeen(tab);
     setDanhMuc(ALL);
     setMachine(ALL);
     setExpandedId(null);
     setPage(1);
-  }, [tab]);
+  }
 
   // Số ô lọc đang bật — hiện thành huy hiệu trên nút "Bộ lọc" để biết bảng đang bị
   // cắt bớt mà không phải mở bảng chọn ra xem. Ô tìm kiếm KHÔNG tính vào đây: nó nằm

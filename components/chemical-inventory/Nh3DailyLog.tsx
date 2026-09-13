@@ -1,7 +1,7 @@
 "use client";
 import { parseVnNumber } from "@/lib/vn-number";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { AlertTriangle, CheckCircle2, Loader2, Plus, Trash2, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -73,10 +73,15 @@ export function Nh3DailyLog({
   const unit = data ? UNIT_LABELS[data.item.displayUnit ?? data.item.baseUnit] : "";
   const toDisplay = (v: number | null) => (v === null ? null : v / factor);
 
-  useEffect(() => {
-    setDraft(row?.closingStock === null || row?.closingStock === undefined ? "" : String(toDisplay(row.closingStock)));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [row?.closingStock, selectedDay, month, itemId]);
+  // Bản nháp tồn cuối ngày: nạp lại từ server khi đổi mặt hàng/tháng/ngày hoặc số trên server đổi
+  // (cố ý KHÔNG theo đơn vị hiển thị — giữ đúng hành vi cũ). Khoá null để lần render đầu cũng nạp.
+  const closingStock = row?.closingStock;
+  const draftKey = `${itemId ?? ""}|${month}|${selectedDay}|${closingStock ?? ""}`;
+  const [draftSyncedKey, setDraftSyncedKey] = useState<string | null>(null);
+  if (draftSyncedKey !== draftKey) {
+    setDraftSyncedKey(draftKey);
+    setDraft(closingStock === null || closingStock === undefined ? "" : String(toDisplay(closingStock)));
+  }
 
   const parsedDraft = useMemo(() => {
     if (!draft.trim()) return null;

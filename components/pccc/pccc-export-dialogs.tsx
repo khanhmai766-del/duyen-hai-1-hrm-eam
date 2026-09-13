@@ -6,7 +6,7 @@
 // Trước đây "Xuất Excel" xuất luôn sheet của tab đang mở và "Xuất PDF" in luôn cả sáu
 // nhóm, nên muốn một quyển sổ chỉ có bình chữa cháy thì phải in hết rồi bỏ bớt giấy.
 // =====================================================================
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -127,12 +127,15 @@ function usePickState(open: boolean, defaultPeriod: string) {
   const [period, setPeriod] = useState(defaultPeriod);
   const [all, setAll] = useState(true);
   const [picked, setPicked] = useState<Set<string>>(new Set());
-  useEffect(() => {
-    if (!open) return;
-    setPeriod(defaultPeriod);
-    setAll(true);
-    setPicked(new Set());
-  }, [open, defaultPeriod]);
+  const [syncKey, setSyncKey] = useState({ open, defaultPeriod });
+  if (syncKey.open !== open || syncKey.defaultPeriod !== defaultPeriod) {
+    setSyncKey({ open, defaultPeriod });
+    if (open) {
+      setPeriod(defaultPeriod);
+      setAll(true);
+      setPicked(new Set());
+    }
+  }
   return { period, setPeriod, all, setAll, picked, setPicked };
 }
 
@@ -208,12 +211,14 @@ export function PcccBookExportDialog({
   const [cuongVi, setCuongVi] = useState(defaultPosition);
   // "" = in cả ba tổ máy, giữ đúng hành vi trước khi có bộ lọc này.
   const [machine, setMachine] = useState("");
-  useEffect(() => {
+  const [positionSyncKey, setPositionSyncKey] = useState({ open, defaultPosition });
+  if (positionSyncKey.open !== open || positionSyncKey.defaultPosition !== defaultPosition) {
+    setPositionSyncKey({ open, defaultPosition });
     if (open) {
       setCuongVi(defaultPosition);
       setMachine("");
     }
-  }, [open, defaultPosition]);
+  }
 
   const groups = useMemo(
     () => BOOK_GROUP_CHOICES.filter((g) => st.all || st.picked.has(g.key)).flatMap((g) => g.keys),

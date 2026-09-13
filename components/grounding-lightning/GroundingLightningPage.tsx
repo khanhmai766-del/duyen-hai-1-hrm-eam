@@ -1172,9 +1172,18 @@ export default function GroundingLightningPage() {
     [sorted, page, pageSize],
   );
   // Đổi bộ lọc / cách sắp xếp / cỡ trang thì trang hiện tại không còn nghĩa gì.
-  useEffect(() => {
+  // (filters/sort/activeKpi là state — cùng object giữa các lần render, so bằng !== an toàn.)
+  const [pageResetKey, setPageResetKey] = useState({ filters, debouncedSearch, sort, pageSize, activeKpi });
+  if (
+    pageResetKey.filters !== filters ||
+    pageResetKey.debouncedSearch !== debouncedSearch ||
+    pageResetKey.sort !== sort ||
+    pageResetKey.pageSize !== pageSize ||
+    pageResetKey.activeKpi !== activeKpi
+  ) {
+    setPageResetKey({ filters, debouncedSearch, sort, pageSize, activeKpi });
     setPage(1);
-  }, [filters, debouncedSearch, sort, pageSize, activeKpi]);
+  }
   const metrics = useMemo(
     () => ({
       total: items.length,

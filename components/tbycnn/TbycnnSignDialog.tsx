@@ -4,7 +4,7 @@
 // Số liệu lấy từ SERVER (bản xem trước), không đoán ở client: người bấm phải thấy đúng
 // bao nhiêu dòng sắp bị ghi tên mình vào, bao nhiêu dòng đang ký đè lên chữ ký cũ, và
 // phạm vi cương vị nào. Cùng khuôn với hộp thoại ký của PCCC.
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { AlertTriangle, Loader2, PenLine } from "lucide-react";
 import Link from "next/link";
 import {
@@ -48,11 +48,19 @@ export function TbycnnSignDialog({
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [showList, setShowList] = useState(false);
 
-  useEffect(() => {
-    if (!preview) return;
-    setPicked(new Set(preview.rows.filter((r) => !r.signed).map((r) => r.id)));
-    setShowList(false);
-  }, [preview]);
+  // So theo NỘI DUNG bản xem trước chứ không theo object: cha có tải lại (object mới, nội dung y hệt)
+  // cũng không xoá mất các dòng người ký đang tick, và không thể render vô hạn.
+  const previewKey = preview
+    ? `${preview.periodLabel}|${preview.scopeLabel}|${preview.total}|${preview.rows.map((r) => `${r.id}:${r.signed ? 1 : 0}`).join(",")}`
+    : null;
+  const [previewSeenKey, setPreviewSeenKey] = useState<string | null>(null);
+  if (previewKey !== previewSeenKey) {
+    setPreviewSeenKey(previewKey);
+    if (preview) {
+      setPicked(new Set(preview.rows.filter((r) => !r.signed).map((r) => r.id)));
+      setShowList(false);
+    }
+  }
 
   const total = preview?.total ?? 0;
   // Danh sách bị cắt bớt (kỳ quá lớn) thì không tick chọn được — ký toàn bộ phạm vi.

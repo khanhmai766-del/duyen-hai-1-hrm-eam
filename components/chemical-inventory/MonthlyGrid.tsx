@@ -1,7 +1,7 @@
 "use client";
 import { parseVnNumber } from "@/lib/vn-number";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { CalendarDays, Lock } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -47,11 +47,13 @@ export function MonthlyGrid({
   const canWrite = level === "personal" || level === "manage" || level === "full";
 
   // Đổi tháng thì bỏ hết bản nháp — nếu không, số của tháng cũ sẽ hiện đè lên tháng mới.
-  useEffect(() => {
+  const [draftsMonth, setDraftsMonth] = useState(month);
+  if (draftsMonth !== month) {
+    setDraftsMonth(month);
     setDrafts({});
     setStates({});
     setErrors({});
-  }, [month]);
+  }
 
   function cellKey(itemId: string, position: string) {
     return `${itemId}|${position}`;

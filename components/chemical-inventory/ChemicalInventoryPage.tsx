@@ -1,7 +1,7 @@
 "use client";
 import { parseVnNumber } from "@/lib/vn-number";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { AlertTriangle, ChevronLeft, ChevronRight, Loader2, Lock, LockOpen, Plus, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -74,13 +74,18 @@ export default function ChemicalInventoryPage() {
   // Mặt hàng theo dõi hằng ngày — hiện chỉ NH3, nhưng không hardcode mã.
   const dailyItems = useMemo(() => (meta?.items ?? []).filter((i) => i.trackingMode === "DAILY"), [meta]);
 
-  useEffect(() => {
-    if (!dailyItemId && dailyItems.length > 0) setDailyItemId(dailyItems[0].id);
-  }, [dailyItems, dailyItemId]);
+  // Chưa chọn mặt hàng theo dõi ngày thì lấy mặt hàng đầu tiên. Chỉnh ngay lúc render (điều kiện tự
+  // tắt sau khi đặt) thay cho useEffect — không vẽ một khung rỗng rồi mới nhảy.
+  if (!dailyItemId && dailyItems.length > 0) setDailyItemId(dailyItems[0].id);
 
-  useEffect(() => {
-    setGenerationDraft(grid?.period.generationMwh === null || grid?.period.generationMwh === undefined ? "" : String(grid.period.generationMwh));
-  }, [grid?.period.generationMwh, month]);
+  // Ô sản lượng điện là bản nháp sửa được: nạp lại từ server khi đổi tháng hoặc số trên server đổi.
+  // Khoá null ban đầu để lần render đầu cũng nạp (giống useEffect chạy lúc mount).
+  const generationMwh = grid?.period.generationMwh;
+  const [generationSynced, setGenerationSynced] = useState<{ month: string; generationMwh: number | null | undefined } | null>(null);
+  if (!generationSynced || generationSynced.month !== month || generationSynced.generationMwh !== generationMwh) {
+    setGenerationSynced({ month, generationMwh });
+    setGenerationDraft(generationMwh === null || generationMwh === undefined ? "" : String(generationMwh));
+  }
 
   async function handleOpenPeriod() {
     try {
