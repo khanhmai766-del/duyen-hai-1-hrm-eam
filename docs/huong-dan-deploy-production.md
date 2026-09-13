@@ -122,7 +122,7 @@ Sau đó mở web, đăng nhập, vào đúng trang vừa sửa để xem tận 
 
 ```bash
 cd /var/www/dh1-app
-cat .next/BUILD_ID .next/.deploy-sha        # bản đang chạy
+echo "BUILD_ID $(cat .next/BUILD_ID) | commit $(cat .next/.deploy-sha)"   # bản đang chạy
 ls -la .next-builds/                         # thư mục <sha>-<giờ> mới nhất là bản đang build dở
 pm2 describe dh1-app | grep status
 ```
