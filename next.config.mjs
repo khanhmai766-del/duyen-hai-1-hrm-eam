@@ -1,6 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // Next 16.3 `next dev` tự chèn khối "nextjs-agent-rules" vào AGENTS.md mỗi lần chạy. AGENTS.md
+  // là hướng dẫn nhóm tự viết cho Codex — không để công cụ ghi đè (và làm bẩn cây làm việc).
+  agentRules: false,
   // Next 15+ đổi tên từ experimental.serverComponentsExternalPackages.
   serverExternalPackages: ["pg", "pdf-parse", "@napi-rs/canvas", "tesseract.js", "tesseract.js-core", "@tesseract.js-data/eng", "@tesseract.js-data/vie"],
   // TẮT bộ tối ưu ảnh `/_next/image` (2026-09-13). Next 14 còn lỗ hổng RCE trong Image
