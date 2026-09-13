@@ -33,7 +33,15 @@ export async function middleware(req: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  const token = await getToken({ req, secret: process.env.AUTH_SECRET });
+  // `secureCookie` phải khớp tên cookie đang có. Mặc định getToken chỉ đọc "authjs.session-token",
+  // còn trên production (https) Auth.js đặt "__Secure-authjs.session-token" — thiếu tham số này thì
+  // token luôn rỗng và đoạn chặn DEFECT_READ_ONLY bên dưới không bao giờ chạy (lỗi tới 2026-09-13).
+  // Dựa vào cookie có mặt, không dựa vào giao thức của URL: sau nginx, request tới app là http.
+  const token = await getToken({
+    req,
+    secret: process.env.AUTH_SECRET,
+    secureCookie: req.cookies.has("__Secure-authjs.session-token"),
+  });
   if (token?.accessMode === "DEFECT_READ_ONLY") {
     const isAllowedPage = pathname === "/defects" || pathname.startsWith("/defects/") || pathname === "/devices/scan" || pathname === "/account" || requiresAuthentication;
     const isAllowedApi =
