@@ -327,12 +327,12 @@ export default function MaterialTicketBoard({
   const waitDays = useMemo(() => new Map(tickets.map((t) => [t.id, waitDaysOf(t)])), [tickets]);
 
   // Lần tải đầu: có việc chờ mình → mặc định tab "Đến lượt bạn", không thì "Tất cả".
-  const defaultFilterApplied = React.useRef(false);
-  React.useEffect(() => {
-    if (defaultFilterApplied.current || !data) return;
-    defaultFilterApplied.current = true;
+  // Chỉnh lúc render (cờ là state thay cho ref để đọc được): không vẽ một nhịp tab "Đến lượt bạn" rỗng.
+  const [defaultFilterApplied, setDefaultFilterApplied] = useState(false);
+  if (!defaultFilterApplied && data) {
+    setDefaultFilterApplied(true);
     if (myTurn.length === 0) setFilter("ALL");
-  }, [data, myTurn.length]);
+  }
 
   const searchText = normalizeText(searchQ);
   const shown = useMemo(() => {
@@ -381,14 +381,20 @@ export default function MaterialTicketBoard({
     : "";
   const openTicketStatus = openTicket ? STATUS[openTicket.status] ?? { label: openTicket.status, c: C.soft } : null;
 
-  React.useEffect(() => {
+  // Đổi bộ lọc / tháng / ô tìm thì về trang 1 và đóng phiếu đang mở; số trang đổi thì kéo trang về
+  // trong số trang. Chỉnh lúc render; khoá theo NỘI DUNG (chuỗi JSON), null để lần render đầu cũng chạy.
+  const listResetKey = JSON.stringify([filter, materialCategoryFilter, monthFilter, searchText, typeFilter, unitFilter]);
+  const [listResetSeen, setListResetSeen] = useState<string | null>(null);
+  if (listResetSeen !== listResetKey) {
+    setListResetSeen(listResetKey);
     setListPage(1);
     setOpenId(null);
-  }, [filter, materialCategoryFilter, monthFilter, searchText, typeFilter, unitFilter]);
-
-  React.useEffect(() => {
+  }
+  const [listClampTotal, setListClampTotal] = useState(totalPages);
+  if (listClampTotal !== totalPages) {
+    setListClampTotal(totalPages);
     setListPage((page) => Math.min(page, totalPages));
-  }, [totalPages]);
+  }
 
   React.useEffect(() => {
     if (!openId) return;
@@ -995,12 +1001,10 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
   // Hóa chất / chai khí chỉ có lý do Nhập hoặc Khác — đổi loại vật tư mà lý do cũ không còn
   // hợp lệ thì xoá luôn, tránh gửi lên máy chủ một lý do đã bị khoá.
   const reasonOptions = useMemo(() => ticketReasonsFor(category), [category]);
-  React.useEffect(() => {
-    if (reasonChoice && !reasonOptions.includes(reasonChoice)) {
-      setReasonChoice("");
-      setReasonDetail("");
-    }
-  }, [reasonOptions, reasonChoice]);
+  if (reasonChoice && !reasonOptions.includes(reasonChoice)) {
+    setReasonChoice("");
+    setReasonDetail("");
+  }
 
   const { data: opts } = useTicketOptions(true); // lấy danh sách cương vị
   const create = useCreateTicket();
@@ -1056,50 +1060,48 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
 
   // Bộ chọn nhanh Đề xuất / Ứng của kho "Vật tư khác" chỉ dành cho cương vị Chung.
   // Chai khí có cương vị phải để Trưởng ca/Trưởng kíp chọn luồng ở bước xác nhận.
-  React.useEffect(() => {
-    if (assigned !== COMMON_MATERIAL_POSITION && type !== "DE_XUAT") setType("DE_XUAT");
-  }, [assigned, type]);
+  // Các kiểm tra dưới đây chỉnh lúc render: điều kiện tự tắt ngay sau khi đặt.
+  if (assigned !== COMMON_MATERIAL_POSITION && type !== "DE_XUAT") setType("DE_XUAT");
 
-  React.useEffect(() => {
-    if (!materialCards.length) {
-      if (selectedMaterialId) setSelectedMaterialId("");
-      if (selectedErpCode) setSelectedErpCode("");
-      if (replacementDeviceSeqs.length) setReplacementDeviceSeqs([]);
-      if (replacementSystems.length) setReplacementSystems([]);
-      return;
-    }
-    if (!materialCards.some((m) => m.id === selectedMaterialId)) {
-      setSelectedMaterialId(materialCards[0].id);
-      setReplacementDeviceSeqs([]);
-      setReplacementSystems([]);
-    }
-  }, [materialCards, replacementDeviceSeqs.length, replacementSystems.length, selectedMaterialId, selectedErpCode]);
+  if (!materialCards.length) {
+    if (selectedMaterialId) setSelectedMaterialId("");
+    if (selectedErpCode) setSelectedErpCode("");
+    if (replacementDeviceSeqs.length) setReplacementDeviceSeqs([]);
+    if (replacementSystems.length) setReplacementSystems([]);
+  } else if (!materialCards.some((m) => m.id === selectedMaterialId)) {
+    setSelectedMaterialId(materialCards[0].id);
+    setReplacementDeviceSeqs([]);
+    setReplacementSystems([]);
+  }
 
-  React.useEffect(() => {
+  // Danh sách hệ thống (useMemo) đổi thì bỏ các hệ thống không còn hợp lệ — chỉnh lúc render, khoá theo
+  // chính object danh sách như effect cũ.
+  const [systemOptionsSeen, setSystemOptionsSeen] = useState(replacementSystemOptions);
+  if (systemOptionsSeen !== replacementSystemOptions) {
+    setSystemOptionsSeen(replacementSystemOptions);
     const validSystems = new Set(replacementSystemOptions);
     setReplacementSystems((current) => {
       const next = current.filter((system) => validSystems.has(system));
       return next.length === current.length ? current : next;
     });
-  }, [replacementSystemOptions]);
+  }
 
-  React.useEffect(() => {
-    if (!selectedErpOptions.length) {
-      if (selectedErpCode) setSelectedErpCode("");
-      return;
-    }
-    if (!selectedErpOptions.some((item) => item.code === selectedErpCode)) {
-      setSelectedErpCode(selectedErpOptions[0].code);
-    }
-  }, [selectedErpCode, selectedErpOptions]);
+  if (!selectedErpOptions.length) {
+    if (selectedErpCode) setSelectedErpCode("");
+  } else if (!selectedErpOptions.some((item) => item.code === selectedErpCode)) {
+    setSelectedErpCode(selectedErpOptions[0].code);
+  }
 
-  React.useEffect(() => {
+  // Danh sách thiết bị (useMemo) đổi thì bỏ các điểm thay thế không còn hợp lệ — khoá theo object danh sách.
+  const [deviceOptionsSeen, setDeviceOptionsSeen] = useState(availableDeviceOptions);
+  if (deviceOptionsSeen !== availableDeviceOptions) {
+    setDeviceOptionsSeen(availableDeviceOptions);
     const validKeys = new Set(availableDeviceOptions.map((device) => device.seq));
     setReplacementDeviceSeqs((current) => {
       const next = current.filter((key) => validKeys.has(key));
       return next.length === current.length ? current : next;
     });
-  }, [availableDeviceOptions]);
+  }
 
   function selectUnit(nextUnit: string) {
     setUnit(nextUnit);
@@ -1384,9 +1386,8 @@ export function WorkflowRolesDialog({ onClose }: { onClose: () => void }) {
   const positions = usePositions();
   const [roles, setRoles] = useState<WorkflowRoleMap | null>(null);
 
-  React.useEffect(() => {
-    if (data?.data && !roles) setRoles(data.data);
-  }, [data, roles]);
+  // Bản nháp vai trò lấy từ server một lần khi dữ liệu về — chỉnh lúc render, điều kiện tự tắt sau khi đặt.
+  if (data?.data && !roles) setRoles(data.data);
 
   const [query, setQuery] = useState("");
   const [onlyAssigned, setOnlyAssigned] = useState(false);
@@ -1548,12 +1549,10 @@ function EditDialog({ t, onClose }: { t: MaterialTicket; onClose: () => void }) 
   // Hóa chất / chai khí chỉ có lý do Nhập hoặc Khác — đổi loại vật tư mà lý do cũ không còn
   // hợp lệ thì xoá luôn, tránh gửi lên máy chủ một lý do đã bị khoá.
   const reasonOptions = useMemo(() => ticketReasonsFor(category), [category]);
-  React.useEffect(() => {
-    if (reasonChoice && !reasonOptions.includes(reasonChoice)) {
-      setReasonChoice("");
-      setReasonDetail("");
-    }
-  }, [reasonOptions, reasonChoice]);
+  if (reasonChoice && !reasonOptions.includes(reasonChoice)) {
+    setReasonChoice("");
+    setReasonDetail("");
+  }
 
   const [replacementDeviceSeqs, setReplacementDeviceSeqs] = useState<string[]>(() => {
     const storedKeys = t.items[0]?.replacementPointKeys ?? [];
@@ -1603,32 +1602,27 @@ function EditDialog({ t, onClose }: { t: MaterialTicket; onClose: () => void }) 
     [selectedMaterial]
   );
 
-  React.useEffect(() => {
-    if (!canEditProposalDetails || !opts) return;
+  // Chỉnh lúc render: điều kiện tự tắt ngay sau khi đặt (chờ có danh mục opts như effect cũ).
+  if (canEditProposalDetails && opts) {
     if (!materialCards.length) {
       if (selectedMaterialId) setSelectedMaterialId("");
       if (selectedErpCode) setSelectedErpCode("");
       if (replacementDeviceSeqs.length) setReplacementDeviceSeqs([]);
       if (replacementSystems.length) setReplacementSystems([]);
-      return;
-    }
-    if (!materialCards.some((m) => m.id === selectedMaterialId)) {
+    } else if (!materialCards.some((m) => m.id === selectedMaterialId)) {
       setSelectedMaterialId(materialCards[0].id);
       setReplacementDeviceSeqs([]);
       setReplacementSystems([]);
     }
-  }, [canEditProposalDetails, materialCards, opts, replacementDeviceSeqs.length, replacementSystems.length, selectedErpCode, selectedMaterialId]);
+  }
 
-  React.useEffect(() => {
-    if (!canEditErpCode || !opts) return;
+  if (canEditErpCode && opts) {
     if (!selectedErpOptions.length) {
       if (selectedErpCode) setSelectedErpCode("");
-      return;
-    }
-    if (!selectedErpOptions.some((item) => item.code === selectedErpCode)) {
+    } else if (!selectedErpOptions.some((item) => item.code === selectedErpCode)) {
       setSelectedErpCode(selectedErpOptions[0].code);
     }
-  }, [canEditErpCode, opts, selectedErpCode, selectedErpOptions]);
+  }
 
   React.useEffect(() => {
     if (initialSystemsApplied.current || !availableDeviceOptions.length) return;
@@ -1642,26 +1636,48 @@ function EditDialog({ t, onClose }: { t: MaterialTicket; onClose: () => void }) 
     )));
   }, [availableDeviceOptions, replacementDeviceSeqs]);
 
-  React.useEffect(() => {
+  // Danh sách hệ thống (useMemo) đổi thì bỏ các hệ thống không còn hợp lệ — chỉnh lúc render, khoá theo
+  // chính object danh sách như effect cũ.
+  const [systemOptionsSeen, setSystemOptionsSeen] = useState(replacementSystemOptions);
+  if (systemOptionsSeen !== replacementSystemOptions) {
+    setSystemOptionsSeen(replacementSystemOptions);
     const validSystems = new Set(replacementSystemOptions);
     setReplacementSystems((current) => {
       const next = current.filter((system) => validSystems.has(system));
       return next.length === current.length ? current : next;
     });
-  }, [replacementSystemOptions]);
+  }
 
-  React.useEffect(() => {
-    if (!canEditProposalDetails || !opts) return;
-    if (!selectedMaterial) {
-      if (replacementDeviceSeqs.length) setReplacementDeviceSeqs([]);
-      return;
+  // Bỏ điểm thay thế không còn hợp lệ khi danh sách thiết bị / vật tư / số điểm đổi — chỉnh lúc render,
+  // khoá đúng các giá trị effect cũ theo dõi; null để lần render đầu cũng xét như effect cũ.
+  const [deviceFilterKey, setDeviceFilterKey] = useState<{
+    availableDeviceOptions: typeof availableDeviceOptions;
+    canEditProposalDetails: boolean;
+    opts: typeof opts;
+    deviceCount: number;
+    selectedMaterial: typeof selectedMaterial;
+  } | null>(null);
+  if (
+    !deviceFilterKey ||
+    deviceFilterKey.availableDeviceOptions !== availableDeviceOptions ||
+    deviceFilterKey.canEditProposalDetails !== canEditProposalDetails ||
+    deviceFilterKey.opts !== opts ||
+    deviceFilterKey.deviceCount !== replacementDeviceSeqs.length ||
+    deviceFilterKey.selectedMaterial !== selectedMaterial
+  ) {
+    setDeviceFilterKey({ availableDeviceOptions, canEditProposalDetails, opts, deviceCount: replacementDeviceSeqs.length, selectedMaterial });
+    if (canEditProposalDetails && opts) {
+      if (!selectedMaterial) {
+        if (replacementDeviceSeqs.length) setReplacementDeviceSeqs([]);
+      } else {
+        const validKeys = new Set(availableDeviceOptions.map((device) => device.seq));
+        setReplacementDeviceSeqs((current) => {
+          const next = current.filter((key) => validKeys.has(key));
+          return next.length === current.length ? current : next;
+        });
+      }
     }
-    const validKeys = new Set(availableDeviceOptions.map((device) => device.seq));
-    setReplacementDeviceSeqs((current) => {
-      const next = current.filter((key) => validKeys.has(key));
-      return next.length === current.length ? current : next;
-    });
-  }, [availableDeviceOptions, canEditProposalDetails, opts, replacementDeviceSeqs.length, selectedMaterial]);
+  }
 
   function selectUnit(nextUnit: string) {
     setUnit(nextUnit);
@@ -2267,12 +2283,17 @@ function StepReviewDialog({ t, viewer, stepKey, onClose }: { t: MaterialTicket; 
    * Chỉ đồng bộ khi GIÁ TRỊ ĐÃ LƯU đổi (null → có ngày, hoặc lần sửa trước vừa lưu xong),
    * nên chữ người dùng đang gõ dở không bị đạp; sửa rồi bấm Lưu mới ghi thay đổi.
    */
-  React.useEffect(() => {
+  // (Chỉnh lúc render, khoá theo chuỗi ngày đã lưu; giá trị đầu đã nạp ở useState.)
+  const [docSentSaved, setDocSentSaved] = useState(t.recoveryDocSentAt);
+  if (docSentSaved !== t.recoveryDocSentAt) {
+    setDocSentSaved(t.recoveryDocSentAt);
     setDocSentDateReview(dateInputValue(t.recoveryDocSentAt));
-  }, [t.recoveryDocSentAt]);
-  React.useEffect(() => {
+  }
+  const [docSignedSaved, setDocSignedSaved] = useState(t.recoveryDocSignedAt);
+  if (docSignedSaved !== t.recoveryDocSignedAt) {
+    setDocSignedSaved(t.recoveryDocSignedAt);
     setDocSignedDateReview(dateInputValue(t.recoveryDocSignedAt));
-  }, [t.recoveryDocSignedAt]);
+  }
 
   const label = flowOf(t).find((step) => step.key === stepKey)?.label ?? "Chi tiết bước";
   async function save() {
@@ -3310,47 +3331,60 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
   );
   const replacementSourceKey = t.items.map((item) => item.id).join("|");
 
-  React.useEffect(() => {
+  // Các ô nhập theo phiếu/bước — chỉnh lúc render thay cho useEffect. Khoá chuỗi; null để lần render đầu
+  // cũng chạy như effect cũ (kể cả việc xoá ô BBKT lúc mở).
+  const stepInputsKey = JSON.stringify([t.id, t.status]);
+  const [stepInputsSeen, setStepInputsSeen] = useState<string | null>(null);
+  if (stepInputsSeen !== stepInputsKey) {
+    setStepInputsSeen(stepInputsKey);
     setProposalNumberInput("");
     setBbktNumberInput("");
-  }, [t.id, t.status]);
+  }
 
-  React.useEffect(() => {
+  const bbntDoKey = JSON.stringify([t.id, t.bbntDoNumber]);
+  const [bbntDoSeen, setBbntDoSeen] = useState<string | null>(null);
+  if (bbntDoSeen !== bbntDoKey) {
+    setBbntDoSeen(bbntDoKey);
     setBbntDoNumberInput(t.bbntDoNumber ?? "");
     setSettlementConfirmed(false);
-  }, [t.id, t.bbntDoNumber]);
+  }
 
-  React.useEffect(() => {
-    if (
-      t.type === "CHUA_CHON"
-      && t.status === "CHO_XAC_NHAN"
-      && proposalFlowAvailable === false
-      && workflowType === "DE_XUAT"
-    ) {
-      setWorkflowType("UNG");
+  // Hết tồn kho ERP thì luồng Đề xuất không chọn được — tự chuyển sang Ứng (điều kiện tự tắt sau khi đặt).
+  if (
+    t.type === "CHUA_CHON"
+    && t.status === "CHO_XAC_NHAN"
+    && proposalFlowAvailable === false
+    && workflowType === "DE_XUAT"
+  ) {
+    setWorkflowType("UNG");
+  }
+
+  // Cố ý không theo t.items: replacementSourceKey đã tóm đúng phần items quyết định dòng thay thế;
+  // theo cả mảng thì mỗi lần phiếu tải lại (mảng mới) các dòng người dùng đang nhập bị reset.
+  const replacementRowsKey = JSON.stringify([t.status, replacementSourceKey]);
+  const [replacementRowsSeen, setReplacementRowsSeen] = useState<string | null>(null);
+  if (replacementRowsSeen !== replacementRowsKey) {
+    setReplacementRowsSeen(replacementRowsKey);
+    if (t.status === "CHO_NHAP_LIEU_THAY_THE") {
+      setReplacementRows(t.items.map((item, index) => ({
+        key: `${item.id}-${index}`,
+        itemId: item.id,
+        deviceSeq: item.deviceSeq ?? "",
+        quantity: Math.max(1, item.replacementQuantity ?? 1),
+      })));
     }
-  }, [proposalFlowAvailable, t.status, t.type, workflowType]);
-
-  React.useEffect(() => {
-    if (t.status !== "CHO_NHAP_LIEU_THAY_THE") return;
-    setReplacementRows(t.items.map((item, index) => ({
-      key: `${item.id}-${index}`,
-      itemId: item.id,
-      deviceSeq: item.deviceSeq ?? "",
-      quantity: Math.max(1, item.replacementQuantity ?? 1),
-    })));
-    // Cố ý không theo t.items: replacementSourceKey đã tóm đúng phần items quyết định dòng thay thế;
-    // theo cả mảng thì mỗi lần phiếu tải lại (mảng mới) các dòng người dùng đang nhập bị reset.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [t.status, replacementSourceKey]);
+  }
 
   React.useEffect(() => {
     if (!needItems) return;
+    // Đọc rồi XOÁ nháp trong sessionStorage là tác dụng phụ với hệ thống ngoài — phải nằm trong effect
+    // (render phải thuần, StrictMode còn render 2 lần), nên giữ effect và tắt cảnh báo đúng chỗ này.
     try {
       const raw = sessionStorage.getItem(`material-ticket-draft:${t.id}`);
       if (!raw) {
         const firstItem = t.items[0];
         if (firstItem?.materialId) {
+          // eslint-disable-next-line react-hooks/set-state-in-effect
           setItems([{
             materialId: firstItem.materialId,
             erpCode: firstItem.erpCode ?? "",
