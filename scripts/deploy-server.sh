@@ -295,11 +295,14 @@ fi
 step "4/7 · CHUẨN BỊ THƯ MỤC BUILD RIÊNG"
 NEW_BUILD="$BUILDS_DIR/$NEW_SHA-$(date +%Y%m%d-%H%M%S)"
 run "mkdir -p '$NEW_BUILD/cache'"
-# Chép cache webpack của bản đang chạy: không có nó build lâu gấp đôi, cả site chậm theo.
-if [[ -d .next/cache/webpack ]]; then
-  run "cp -a .next/cache/webpack '$NEW_BUILD/cache/'"
-fi
-[[ $DRY_RUN == 1 ]] || ok "$NEW_BUILD (đã chép cache webpack: $(du -sh "$NEW_BUILD/cache" | cut -f1))"
+# Chép cache build của bản đang chạy: không có nó build lâu hơn, cả site chậm theo. Next 14 dùng
+# cache/webpack, Next 16 (Turbopack) dùng cache/turbopack — chép cái nào đang có.
+for c in webpack turbopack; do
+  if [[ -d ".next/cache/$c" ]]; then
+    run "cp -a '.next/cache/$c' '$NEW_BUILD/cache/'"
+  fi
+done
+[[ $DRY_RUN == 1 ]] || ok "$NEW_BUILD (đã chép cache build: $(du -sh "$NEW_BUILD/cache" | cut -f1))"
 
 # ---------------------------------------------------------------- 5. build
 step "5/7 · BUILD VÀO $NEW_BUILD — app đang chạy KHÔNG bị đụng"
