@@ -374,6 +374,18 @@ export function useChemicalImportHistory() {
   });
 }
 
+/**
+ * Xóa một dòng lịch sử đồng bộ. Chỉ là nhật ký — số liệu tồn kho không đổi nên chỉ làm mới
+ * danh sách lịch sử, không đụng các tab khác.
+ */
+export function useDeleteChemicalImportBatch() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => apiMutate<{ id: string }>(`/api/chemical-inventory/import/history/${id}`, "DELETE"),
+    onSuccess: () => qc.invalidateQueries({ queryKey: chemicalKeys.importHistory() }),
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Phiếu nhập
 // ---------------------------------------------------------------------------
