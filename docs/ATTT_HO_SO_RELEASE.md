@@ -1,7 +1,8 @@
-# Ho so release: nang cap Node 24 / Next.js 16 / React 19 (13–14/09/2026)
+# Ho so release ATTT — nang cap Node 24 / Next.js 16 / React 19 (13–14/09/2026) va ke hoach Prisma
 
-Ho so dien theo mau `docs/ATTT_RELEASE_CHECKLIST.md` cho tung bac cua dot nang cap. Ke hoach rollback chi tiet:
-`docs/ATTT_ROLLBACK_PLAN.md` muc 8. Bang chung dependency: `docs/ATTT_DEPENDENCY_CHECK.md` muc 3 va `reports/`.
+Ho so dien theo mau `docs/ATTT_CHINH_SACH.md` Phan C cho tung bac cua dot nang cap. Ke hoach rollback chi tiet:
+`docs/ATTT_CHINH_SACH.md` muc D.8. Bang chung dependency: `docs/ATTT_CHINH_SACH.md` muc A.3 va `reports/`.
+Dot tiep theo (chua thuc hien): nang cap Prisma — muc 7.
 
 Thong tin chung cho ca dot:
 
@@ -242,4 +243,85 @@ Bang chung dependency sau dot nang cap (2026-09-14): `reports/npm-audit-local-om
 - Kiem tra suc khoe va xoa cac ban lui (Node 20, Next 14) sau 2026-09-15 — can phe duyet.
 - Chu du an kiem 3 tai khoan chi xem tren Production.
 - Giam loi lech phien ban sau deploy (router state header, Server Action).
-- Theo doi next-auth v5 ban on dinh; lap ke hoach nang Prisma 5.22 → 6/7; theo doi React #418.
+- Theo doi next-auth v5 ban on dinh; nang cap Prisma theo muc 7; theo doi React #418.
+
+---
+
+## 7. Ke hoach dot tiep theo: nang cap Prisma ORM 5.22 → 6 → 7 (CHUA THUC HIEN)
+
+Trang thai: ke hoach da duoc chu du an duyet ghi nhan ngay 2026-09-14; chi bat dau khi da don ban lui Node 20/Next 14 va
+co lenh cua chu du an. Moi bac dien ho so theo `docs/ATTT_CHINH_SACH.md` Phan C truoc khi len Production.
+
+### 7.1. Hien trang (kiem ngay 2026-09-14)
+
+| Hang muc | Gia tri |
+| --- | --- |
+| Phien ban | `prisma` / `@prisma/client` 5.22.0, generator `prisma-client-js`, 99 model |
+| Moi truong | Node 24, TypeScript 5.9.3, package CommonJS, tsconfig `module: esnext` + `moduleResolution: bundler` |
+| Database | PostgreSQL 16 (Production, may DB rieng), embedded PostgreSQL (Dev) |
+| Muc dung API (app/lib; script tinh rieng) | `$transaction` 120 (+40 trong script); SQL tho `$queryRaw`/`$executeRaw` va ban `Unsafe` 168 lan o 56 file (+10 trong script); `Prisma.Decimal` 14; `PrismaClientKnownRequestError` 4 |
+| Middleware | 1 `$use` trong `lib/prisma.ts` (xoa cache danh sach khiem khuyet khi ghi Defect/DefectRelatedDevice/DefectHistory) |
+| Noi tao PrismaClient | `lib/prisma.ts` + 2 file seed trong `prisma/` + 54 script + 4 script `scripts/verify`; 2 script dung tuy chon `datasources` (`import-equipment.mjs`, `push-to-server.mjs`) |
+| Chuoi ket noi Production | `DATABASE_URL` co tham so rieng cua Prisma: `schema`, `connection_limit`, `pool_timeout`; khong SSL (mang noi bo) |
+| Truy cap pg truc tiep | Module TCMS dung `pg` Pool rieng (`max: 5`) |
+| CLI trong van hanh | `scripts/deploy-server.sh` ap SQL bang `npx prisma db execute --file ... --schema prisma/schema.prisma` |
+| Dac thu schema | 4 index `ops: raw("text_pattern_ops")`; khong co quan he nhieu-nhieu ngam (`ForumReply` la quan he cha-con tuong minh); khong dung kieu `Bytes`, `NotFoundError`, fullTextSearch |
+| Ban muc tieu | 6.19.3 (6.x moi nhat) va 7.10.x. Khong dung 8.0.0 (dang RC, npm tam gan nhan `latest`) |
+
+### 7.2. Bac P1 — Prisma 5.22 → 6.19.3 (rui ro thap, uoc tinh nua ngay)
+
+Thay doi pha vo cua Prisma 6 doi chieu voi du an (theo huong dan nang cap chinh thuc):
+
+| Thay doi | Anh huong |
+| --- | --- |
+| Toi thieu Node 18.18/20.9/22.11, TypeScript 5.1 | Dat (Node 24, TS 5.9.3) |
+| Quan he nhieu-nhieu ngam tren PostgreSQL doi unique index thanh primary key (can migration) | Khong co quan he ngam — khong can migration |
+| `Bytes`: Buffer → Uint8Array | Khong dung |
+| Bo `NotFoundError` | Khong dung (da dung `PrismaClientKnownRequestError`) |
+| Doi ten preview `fullTextSearch` | Khong dung |
+| Ten model cam `async`/`await`/`using` | Kiem lai khi lam |
+
+Viec lam:
+
+1. Nhanh rieng; nang `prisma`, `@prisma/client` len 6.19.3; `npx prisma generate`.
+2. Chuyen `$use` trong `lib/prisma.ts` sang `$extends` (query extension) ngay o bac nay — Prisma 7 bo `$use`. Kiem ca 16
+   duong ghi khiem khuyet (form, dong bo hai chieu, outbox n8n, gop lich su) van xoa cache, ke ca trong `$transaction`.
+3. Kiem tra: `npx tsc --noEmit`, `npm run lint`, `npm run build`; crawl 55 trang so moc (`scripts/verify`); chay cac route
+   co SQL tho (khiem khuyet, vat tu, PCCC, TBYCNN, ho so hoa chat); do toc do bang `scripts/bench-vat-tu.ts` truoc/sau;
+   `prisma migrate diff` tren DB dev khong phat sinh thay doi ngoai 4 index `text_pattern_ops` da biet.
+4. Chu du an kiem tay tren localhost → deploy bang `./scripts/deploy-server.sh` (script tu `npm install` + `prisma generate`).
+5. Rollback: `git revert` + deploy (cai lai 5.22). Khong dung `--rollback` don thuan vi `node_modules` da doi.
+
+### 7.3. Bac P2 — Prisma 6.19.3 → 7.10.x (rui ro trung binh, uoc tinh 1–2 ngay)
+
+Thay doi pha vo cua Prisma 7 doi chieu voi du an (theo huong dan nang cap chinh thuc):
+
+| Thay doi | Anh huong va cach xu ly |
+| --- | --- |
+| Toi thieu Node 20.19 / 22.12 / 24, TypeScript 5.4 | Dat |
+| Generator `prisma-client-js` bi deprecated (van chay, van sinh vao `@prisma/client`) | GIU `prisma-client-js`: 88 file app/lib (va 59 script) import `@prisma/client` giu nguyen, khong phai chuyen du an sang ESM. Chuyen generator `prisma-client` (output rieng) de dot sau |
+| Bat buoc driver adapter | Them `@prisma/adapter-pg` (dung lai `pg` 8.23 da co); `lib/prisma.ts` tao client voi adapter |
+| Adapter dung cau hinh pool cua `pg`, khong hieu tham so URL cua Prisma | RUI RO LON NHAT: Production dang dung `schema`, `connection_limit`, `pool_timeout`. Phai khai tuong minh pool `max`, timeout ket noi va schema cua adapter; kiem tong ket noi (Prisma + TCMS `max: 5`) so voi `max_connections` cua PostgreSQL |
+| `prisma.config.ts` la cau hinh chinh; URL chuyen ra khoi `schema.prisma`; khong tu nap `.env` | Tao `prisma.config.ts` (schema, datasource, seed), nap `.env` bang dotenv; bo `prisma.seed` trong `package.json` |
+| Bo `$use` | Da chuyen sang `$extends` o P1 |
+| Moi `new PrismaClient()` phai co adapter | Tao helper dung chung cho script; 2 script dung `datasources` doi sang adapter voi connection string rieng. De xuat bo cac script mot lan da cu (theo lan sua cuoi: 7 file 06/2026, 12 file 07/2026) thay vi sua het — can chu du an duyet danh sach |
+| CLI: `db execute` bo `--schema`/`--url`; `migrate diff` bo `--from-url`/`--to-url`; `db push`/`migrate dev` khong tu generate; bo `--skip-generate` | Sua `scripts/deploy-server.sh` (buoc `--sql`), `CLAUDE.md`, `AGENTS.md`, `docs/huong-dan-deploy-production.md`, `docs/ATTT_CHINH_SACH.md` muc D.5, `docs/n8n-defect-sync/README.md`; them `prisma generate` vao quy trinh dev sau `db push` |
+| Khong con Rust query engine | Het loi `EPERM` khoa `query_engine-windows.dll.node` khi generate tren Windows (cap nhat CLAUDE.md). Phai do lai hieu nang: API nang cham ro ret thi dung |
+| SSL chat hon | DB noi bo khong dung SSL — ghi nhan, kiem khi bat SSL sau nay |
+
+Viec lam va kiem tra:
+
+1. Nhanh rieng; nang 7.10.x + `@prisma/adapter-pg`; cac thay doi o bang tren.
+2. Kiem tra nhu P1 (tsc, lint, build, crawl so moc, route SQL tho, bench) + kiem so ket noi DB khi tai.
+3. Dien tap tren moi truong UAT: chu du an tao database `dh1db_uat` khoi phuc tu ban sao luu moi nhat tren may DB,
+   chay ban build P2 tro vao do (lap luon khoang trong "chua co UAT" o `docs/ATTT_CHINH_SACH.md` muc B.4).
+4. Trien khai: build san thu muc rieng va doi thu muc nhu dot Next 16 (giu ban 6.19.3 de lui trong vai giay), hoac
+   deploy thuong kem ke hoach `git revert` ve 6.19.3. Deploy P2 co sua `deploy-server.sh` → chay ban script moi theo
+   huong dan tu chay ban tu origin/main (`DEPLOY_SELF_COPY`).
+
+### 7.4. Tieu chi dung va rollback
+
+- Dung o bat ky buoc nao neu: crawl khac moc; loi SQL tho; mat xoa cache khiem khuyet; API nang cham hon ro ret sau khi do;
+  so ket noi DB vuot nguong; error log co loi Prisma moi sau deploy.
+- Rollback P1: `git revert` + deploy. Rollback P2: doi thu muc ve ban 6.19.3 (neu dung cach doi thu muc) hoac `git revert` + deploy.
+- Khong doi schema DB trong ca hai bac; ban sao luu DB tu dong truoc moi lan deploy van ap dung.

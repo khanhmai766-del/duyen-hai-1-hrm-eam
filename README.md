@@ -12,7 +12,7 @@ and reporting.
 | Runtime    | Node.js 24 (`engines` `>=24 <25`, `.nvmrc`)           |
 | Framework  | Next.js 16 (App Router, Turbopack, TypeScript strict) |
 | UI library | React 19                                              |
-| Database   | PostgreSQL + Prisma ORM 5                             |
+| Database   | PostgreSQL + Prisma ORM 5.22 (lộ trình lên 6/7 bên dưới) |
 | Auth       | Auth.js / NextAuth v5 (credentials + passkey, JWT)    |
 | Styling    | Tailwind CSS + shadcn/ui                              |
 | State      | TanStack Query (server state)                         |
@@ -22,7 +22,7 @@ and reporting.
 | Lint       | ESLint 9 flat config + eslint-config-next 16          |
 
 Upgraded on 2026-09-13 from Node 20 / Next.js 14 / React 18 — change records, rollback steps and
-test evidence: `docs/ATTT_RELEASE_NANG_CAP_2026-09.md`.
+test evidence: `docs/ATTT_HO_SO_RELEASE.md`.
 
 ## Features
 
@@ -98,13 +98,77 @@ npm run dev
 Never run `npm run build`, `npm install` or `pm2 restart` by hand in `/var/www/dh1-app` — an in-place
 build wipes the live `.next`. Deploy only with `scripts/deploy-server.sh` (DB backup → build in a
 separate directory → swap → `pm2 reload`, keeps 3 builds for `--rollback`). Step-by-step guide:
-`docs/huong-dan-deploy-production.md`. Change control and rollback plans: `docs/ATTT_*.md`.
+`docs/huong-dan-deploy-production.md`. Change control and rollback plans: `docs/ATTT_CHINH_SACH.md`.
 
 ## Upgrade / regression verification
 
 `scripts/verify/` holds the tools used for the Node 24 / Next 16 / React 19 upgrade: a 55-page crawl
 compared before/after, a hydration-mismatch check, and image-optimizer checks. They only run against
 a local build and the local dev database (they refuse production). See `scripts/verify/README.md`.
+
+## Tài liệu
+
+Mục lục mọi tài liệu còn dùng (gộp lại ngày 14/09/2026 — các file cũ đã gộp/xoá vẫn xem được trong lịch sử Git).
+
+| Tài liệu | Nội dung |
+| --- | --- |
+| `docs/huong-dan-deploy-production.md` | Cách deploy bằng `deploy-server.sh`, xử lý sự cố, rollback, dung lượng server. Phụ lục C: dựng vai trò sao lưu `dh1_backup`. Phụ lục D: ràng buộc hạ tầng (pm2 fork, gzip, pool DB) |
+| `docs/ATTT_CHINH_SACH.md` | Chính sách ATTT (CS-ATTT-KTAT-21) gộp một file: A kiểm tra dependency · B tách môi trường + yêu cầu phần mềm · C checklist trước deploy · D kế hoạch rollback · E dữ liệu test |
+| `docs/ATTT_HO_SO_RELEASE.md` | Hồ sơ đã điền của đợt nâng cấp Node 24 / Next 16 / React 19 (bậc 1, 2a, 2b, 3 và các đợt sau) + kế hoạch nâng Prisma (mục 7) |
+| `reports/npm-audit-*.json` | Bằng chứng `npm audit` (máy dev và production). `reports/verify/` là kết quả chạy kiểm thử, không commit |
+| `scripts/verify/README.md` | Bộ kiểm thử nâng cấp: crawl so mốc, hydrate, ảnh — chỉ chạy local |
+| `docs/pccc.md` | Sổ theo dõi PCCC theo kỳ tháng (module mẫu cho các sổ an toàn) |
+| `docs/tbycnn.md` | Sổ thiết bị yêu cầu nghiêm ngặt về ATLĐ (giai đoạn 1) |
+| `docs/work-permit-register.md` | Sổ đăng ký phiếu công tác: dữ liệu, API, Word/Excel, kết quả tối ưu tải 10/09/2026 |
+| `docs/ton-kho-hoa-chat-spec.md` | Đặc tả tồn kho hoá chất |
+| `docs/contract-integration.md` | Tích hợp quản lý hợp đồng TCMS (schema `tcms`, RLS) |
+| `docs/n8n-defect-sync/` | Đồng bộ khiếm khuyết hai chiều qua n8n: `README.md`, `BACKUP_RESTORE.md`, `TWO_WAY_COPY_TEST.md`, các workflow JSON |
+| `docs/n8n-material-sync/` | Đồng bộ vật tư/hoá chất qua n8n: `README.md`, `README-backup.md`, các workflow JSON |
+| `chrome-extension/qlvt-sync/README.md` | Extension đọc QLVT/LIMS — các bẫy kỹ thuật cần biết trước khi sửa |
+| `public/material-procedures/huong-dan-quan-ly-vat-tu.pdf` | Hướng dẫn quản lý vật tư, mở từ trang Quy trình thay thế |
+| `CLAUDE.md` / `AGENTS.md` | Quy ước code, kiến trúc, bẫy môi trường dev cho trợ lý lập trình |
+
+## Lộ trình nâng Prisma (chưa thực hiện)
+
+Kế hoạch chi tiết, tiêu chí dừng và rollback: `docs/ATTT_HO_SO_RELEASE.md` mục 7. Chỉ bắt đầu sau khi dọn bản
+lùi Node 20/Next 14 và có lệnh của chủ dự án.
+
+| Bậc | Phạm vi | Rủi ro | Việc chính |
+| --- | --- | --- | --- |
+| P1 | 5.22 → 6.19.3 | Thấp (~nửa ngày) | Các thay đổi phá vỡ của v6 không đụng dự án; chuyển `$use` trong `lib/prisma.ts` sang `$extends`; kiểm tsc/lint/build/crawl, route SQL thô, bench vật tư |
+| P2 | 6.19.3 → 7.10.x | Trung bình (1–2 ngày) | Giữ generator `prisma-client-js`; thêm `@prisma/adapter-pg` và `prisma.config.ts`; khai pool/schema tường minh vì adapter bỏ qua `connection_limit`/`pool_timeout`/`schema` trong URL; sửa lệnh `db execute --schema` ở `deploy-server.sh` và tài liệu; diễn tập trên DB UAT khôi phục từ bản sao lưu |
+
+Không làm lúc này: Prisma 8 (đang RC), generator `prisma-client` mới.
+
+## Thư mục lưu trữ — phân quyền và backup theo năm
+
+Trang `/documents/archive` (gộp từ ghi chú 16/06/2026, đã cập nhật theo code 14/09/2026). Quyền mặc định lấy từ
+`lib/rbac-defaults.ts`; ADMIN chỉnh lại được trên trang Phân quyền, cấu hình lưu ở bảng `RbacConfig`.
+
+| Quyền | ADMIN | MANAGER | SUPERVISOR | TECHNICIAN | VIEWER |
+| --- | :---: | :---: | :---: | :---: | :---: |
+| `archive-read` — tra cứu chung | Xem | Xem | Xem | Xem | Xem |
+| `archive-grid-separation` — tab Tách lưới (và BGTS tuabin ngừng) | Toàn quyền | Quản lý | Quản lý | Quản lý | Xem |
+| `archive-startup-data` — tab Khởi động | Toàn quyền | Quản lý | Quản lý | Quản lý | Xem |
+| `archive-boiler-calibration` — tab Hiệu chỉnh lò | Toàn quyền | Quản lý | Quản lý | Quản lý | Xem |
+| `archive-oil-gun-data` — tab Vòi dầu | Toàn quyền | Quản lý | Quản lý | Quản lý | Xem |
+| `archive-create-delete` — thêm/xoá hồ sơ trong danh mục | Toàn quyền | Không | Không | Không | Không |
+| `archive-edit` — sửa hồ sơ đã ghi | Quản lý | Quản lý | Quản lý | Quản lý | Xem |
+| `archive-backup` — thanh backup năm (khi không có quyền riêng theo tab) | Toàn quyền | Không | Không | Không | Không |
+
+- **Tab dữ liệu:** Tách lưới (sự cố / có kế hoạch; nguyên nhân, tiến trình dạng dòng thời gian, link xử lý), Khởi động
+  (sau sự cố / có kế hoạch; tiến trình dạng dòng thời gian), Hiệu chỉnh lò (nội dung, tối đa 2 ảnh biên bản, người cập
+  nhật), Vòi dầu (chỉ hiện cho ADMIN hoặc chức vụ được phép). Lọc chung theo từ khoá, tổ máy S1 (xanh lá)/S2 (cam), năm
+  (từ 2024). Quyền `archive-major-repair`, `archive-soot-blower-data` đã bỏ.
+- **Backup:** thanh backup (chọn năm, Excel, PDF) chỉ hiện khi có quyền **Toàn quyền** ở quyền của tab đang xem (mặc
+  định chỉ ADMIN). Xuất tất cả bản ghi của năm trong tab, không chỉ trang đang hiển thị. File:
+  `backup-du-lieu-tach-luoi-<năm>.xlsx`, `backup-du-lieu-khoi-dong-<năm>.xlsx`, `backup-du-lieu-hieu-chinh-lo-<năm>.xlsx`,
+  `backup-du-lieu-voi-dau-<năm>.xlsx`; PDF mở trang in A4 ngang.
+- **Lưu giữ (quy tắc đề xuất):** hệ thống chỉ tạo file để tải về, không tự lưu trên server. Backup mỗi năm một lần sau
+  khi chốt dữ liệu, giữ tối thiểu 5 năm (lâu dài với sự cố lớn, khởi động bất thường, biên bản hiệu chỉnh quan trọng),
+  lưu song song Excel + PDF theo cấu trúc `Backup/<năm>/Du-lieu-tach-luoi/` … trong kho tài liệu nội bộ.
+- **API `/api/rbac`:** GET cho ADMIN hoặc người có `rbac-manage` Toàn quyền / `user-manage` Quản lý trở lên; PUT cần
+  `rbac-manage` Toàn quyền. Vai trò hệ thống của user đổi qua `/api/users`.
 
 ## Project structure
 
@@ -128,7 +192,7 @@ hooks/       useDevices, useRepair, useShifts, useMaterials, useUsers
 prisma/      schema.prisma, seed.ts
 scripts/     deploy-server.sh, server-disk-guard.sh, verify/ (upgrade checks)
 proxy.ts     Session-cookie guard (Next 16 name for middleware.ts)
-docs/        Deploy guide, ATTT (information security) controls, module specs
+docs/        Deploy guide, ATTT (information security) controls, module specs — see "Tài liệu"
 reports/     npm audit evidence (JSON)
 types/       shared types + NextAuth augmentation
 ```

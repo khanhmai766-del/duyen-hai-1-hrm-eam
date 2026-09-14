@@ -9,7 +9,7 @@
 #   Hướng dẫn từng bước + sự cố: docs/huong-dan-deploy-production.md
 #   ĐỪNG chạy `npm run build` tay trên server — nó ghi đè .next đang chạy (xem nguyên tắc 2).
 #
-# Gom đúng thứ tự bắt buộc của docs/deploy-equipment-tree.md:
+# Gom đúng thứ tự bắt buộc (rút từ runbook cây thiết bị 07/2026 — docs/huong-dan-deploy-production.md phụ lục D):
 #   sao lưu DB → pull → SQL → build RA THƯ MỤC RIÊNG → đổi sang → reload → smoke test → dọn bản cũ
 #
 # BỐN NGUYÊN TẮC nằm sau cách viết script này:
@@ -67,7 +67,7 @@ BUILDS_DIR=.next-builds
 #
 # NÓI THẲNG GIỚI HẠN: pm2 chỉ thật sự reload không-downtime khi chạy CLUSTER mode. App này
 # chạy FORK mode (1 instance — cố ý, vì cache node/index/access là in-process, xem
-# docs/deploy-equipment-tree.md), mà ở fork mode `reload` rơi về đúng hành vi của
+# docs/huong-dan-deploy-production.md phụ lục D), mà ở fork mode `reload` rơi về đúng hành vi của
 # `restart`. Vẫn để `reload` vì nó không hại gì và đúng ý muốn giảm gián đoạn; muốn
 # downtime bằng 0 thật thì phải chuyển sang cluster, việc đó lại phá cache in-process.
 PM2_ACTION=${PM2_ACTION:-reload}
@@ -108,7 +108,7 @@ db_url() {
 # Chuỗi kết nối cho SAO LƯU: cùng host/port/DB với app nhưng đăng nhập bằng vai trò
 # `dh1_backup` (chỉ đọc, BYPASSRLS), mật khẩu lấy từ ~/.pgpass. KHÔNG dùng tài khoản của app
 # được: mọi bảng TCMS bật FORCE ROW LEVEL SECURITY nên pg_dump bằng tài khoản đó hỏng giữa
-# chừng ở tcms.acceptances. Cách dựng vai trò: docs/deploy-backup-role.md.
+# chừng ở tcms.acceptances. Cách dựng vai trò: docs/huong-dan-deploy-production.md phụ lục C.
 BACKUP_ROLE=${BACKUP_ROLE:-dh1_backup}
 backup_db_url() {
   db_url | sed -E "s#^(postgres(ql)?://)[^@/]*@#\1${BACKUP_ROLE}@#"
@@ -217,7 +217,7 @@ if [[ $SKIP_BACKUP == 0 ]]; then
   BACKUP_CHECK=$(PGCONNECT_TIMEOUT=10 psql -w -XAt "$(backup_db_url)" \
     -c "select format('%s %s', current_user, case when rolbypassrls then 'bypassrls' else 'no-bypassrls' end) from pg_roles where rolname = current_user" 2>&1) \
     || die "Vai trò sao lưu '$BACKUP_ROLE' chưa đăng nhập được: $BACKUP_CHECK
-    Dựng theo docs/deploy-backup-role.md, hoặc chạy --no-backup nếu bản này không đụng DB."
+    Dựng theo docs/huong-dan-deploy-production.md phụ lục C, hoặc chạy --no-backup nếu bản này không đụng DB."
   [[ "$BACKUP_CHECK" == "$BACKUP_ROLE bypassrls" ]] \
     || die "Vai trò sao lưu phải là '$BACKUP_ROLE' có BYPASSRLS, nhận được: '$BACKUP_CHECK'"
   ok "Vai trò sao lưu $BACKUP_ROLE đăng nhập được, có BYPASSRLS"
