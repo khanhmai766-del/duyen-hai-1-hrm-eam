@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import * as React from "react";
 import { signIn } from "next-auth/react";
 import Link from "next/link";
@@ -206,10 +207,13 @@ function LoginInner() {
         <div className="relative z-10">
           <div className="login-logo-stage" aria-label="EVNGENCO1 - Công ty Nhiệt điện Duyên Hải">
             <div className="login-logo-card">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
+              <Image
                 src="/brand/1234.png"
                 alt="EVNGENCO1 — Công ty Nhiệt điện Duyên Hải"
+                width={595}
+                height={420}
+                sizes="194px"
+                loading="eager"
                 className="login-logo-mark"
               />
             </div>
@@ -245,12 +249,14 @@ function LoginInner() {
       {/* Form panel */}
       <div className="relative flex min-h-dvh items-center justify-center overflow-hidden bg-warmwhite px-4 py-8 pb-16 sm:px-6 sm:py-10 sm:pb-16 lg:p-6">
         {/* Decorative brand motif, bottom-right */}
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
+        <Image
           src="/brand/12345.png"
           alt=""
           aria-hidden="true"
-          className="pointer-events-none absolute -bottom-8 -right-14 w-52 select-none opacity-45 sm:-bottom-6 sm:-right-6 sm:w-80 sm:opacity-70 lg:w-[22rem]"
+          width={521}
+          height={479}
+          sizes="(min-width: 1024px) 352px, (min-width: 640px) 320px, 208px"
+          className="pointer-events-none absolute -bottom-8 -right-14 h-auto w-52 select-none opacity-45 sm:-bottom-6 sm:-right-6 sm:w-80 sm:opacity-70 lg:w-[22rem]"
         />
         {/* Footer */}
         <p className="absolute bottom-3 left-0 right-0 z-10 text-center text-xs text-muted-foreground sm:bottom-5">
@@ -261,10 +267,13 @@ function LoginInner() {
           <div className="mb-4 flex justify-center sm:mb-7 lg:hidden">
             <div className="login-logo-stage login-logo-stage-mobile" aria-label="EVNGENCO1 - Công ty Nhiệt điện Duyên Hải">
               <div className="login-logo-card">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
+                <Image
                   src="/brand/1234.png"
                   alt="EVNGENCO1 — Công ty Nhiệt điện Duyên Hải"
+                  width={595}
+                  height={420}
+                  sizes="194px"
+                  loading="eager"
                   className="login-logo-mark"
                 />
               </div>

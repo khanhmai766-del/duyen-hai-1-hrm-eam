@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import * as React from "react";
 import Link from "next/link";
 import { CalendarDays, UserCheck, Network, Users, ArrowRight, Phone, PhoneCall, ChevronRight, Sunrise, Sunset, Moon, CalendarPlus } from "lucide-react";
@@ -233,12 +234,13 @@ function HrLinkCard({
     <Card className={cn("relative h-full overflow-hidden transition-shadow hover:shadow-md", minHeightClass, cover && "border-0 text-white")}>
       {cover && (
         <>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={item.cover}
+          <Image
+            src={item.cover as string}
             alt=""
             aria-hidden
-            className="absolute inset-0 h-full w-full select-none object-cover transition-transform duration-500 group-hover:scale-105"
+            fill
+            sizes="(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
+            className="select-none object-cover transition-transform duration-500 group-hover:scale-105"
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/45 to-black/25" />
         </>
@@ -259,12 +261,13 @@ function ShiftOverviewCard({ shiftType }: { shiftType: ShiftTypeKey }) {
   const Icon = SHIFT_ICON[shiftType];
   return (
     <Card className="group relative h-full min-h-[132px] overflow-hidden border-0 text-white transition-shadow hover:shadow-md">
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
+      <Image
         src={SHIFT_BG[shiftType]}
         alt=""
         aria-hidden
-        className="absolute inset-0 h-full w-full select-none object-cover transition-transform duration-500 group-hover:scale-105"
+        fill
+        sizes="(min-width: 1024px) 25vw, (min-width: 640px) 50vw, 100vw"
+        className="select-none object-cover transition-transform duration-500 group-hover:scale-105"
       />
       <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/45 to-black/25" />
       <CardContent className="relative p-4 [text-shadow:0_1px_6px_rgba(0,0,0,0.6)]">
