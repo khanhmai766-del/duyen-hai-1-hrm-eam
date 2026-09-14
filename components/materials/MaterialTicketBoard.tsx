@@ -2671,7 +2671,9 @@ function LotAllocationPicker({
       )}
 
       <Dialog open={Boolean(previewLot)} onOpenChange={(open) => !open && setPreviewLot(null)}>
-        <DialogContent className="max-w-4xl overflow-hidden p-0">
+        {/* z-[80]: bảng này nằm TRONG hộp chi tiết phiếu (.ticket-detail-layer z-index 60), còn
+            Dialog mặc định z-50 và gắn thẳng vào body — để nguyên thì ảnh mở ra nằm khuất phía sau. */}
+        <DialogContent overlayClassName="z-[80]" className="z-[80] max-w-4xl overflow-hidden p-0">
           <DialogHeader className="border-b border-slate-200 bg-slate-50 px-5 py-4 text-left">
             <DialogTitle>Ảnh phiếu xuất kho liên 3</DialogTitle>
             <p className="text-xs text-slate-500">Phiếu giao hàng: <b className="text-slate-700">{previewLot?.label}</b></p>

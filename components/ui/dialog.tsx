@@ -27,10 +27,18 @@ DialogOverlay.displayName = DialogPrimitive.Overlay.displayName;
 
 const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
-  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
->(({ className, children, ...props }, ref) => (
+  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> & {
+    /**
+     * Lớp phủ nền nằm trong DialogContent nên không có đường nào khác để đổi lớp của nó.
+     * Cần khi hộp thoại mở TỪ BÊN TRONG một khung tự dựng có z-index cao hơn z-50 mặc định
+     * (vd hộp chi tiết phiếu vật tư z-index 60): phải nâng cả lớp phủ lẫn nội dung, không thì
+     * hộp thoại mở ra nhưng nằm khuất phía sau.
+     */
+    overlayClassName?: string;
+  }
+>(({ className, overlayClassName, children, ...props }, ref) => (
   <DialogPortal>
-    <DialogOverlay />
+    <DialogOverlay className={overlayClassName} />
     <DialogPrimitive.Content
       ref={ref}
       className={cn(
