@@ -60,7 +60,7 @@ BỐI CẢNH ĐÃ ĐỐI CHIẾU TRÊN CODE (nhánh main, 24.08.2026) — dùng 
    - Đổi schema: sửa prisma/schema.prisma → TẮT dev server → npx prisma generate (Windows
      khoá query_engine DLL nếu server còn chạy) → viết SQL additive
      (ALTER TABLE ... ADD COLUMN IF NOT EXISTS) vào prisma/manual/, KHÔNG chạy db:push.
-   - Không có test suite. Kiểm tra bằng npx tsc --noEmit + npx next lint + npm run build.
+   - Không có test suite. Kiểm tra bằng npx tsc --noEmit + npm run lint + npm run build.
    - DB local chỉ có dữ liệu demo (12 ErpMaterial, 24 Material) — dữ liệu vật tư thật nằm
      trên prod. Đừng kết luận "không có dữ liệu" khi truy vấn local ra rỗng.
 ```

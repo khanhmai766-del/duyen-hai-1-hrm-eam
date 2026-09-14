@@ -51,3 +51,6 @@ scripts/data/equipment-dedupe-backup-*.json
 
 # Local contract encryption key
 .secrets/
+
+# Kết quả chạy scripts/verify (crawl, hydration, ảnh) — chỉ dùng tạm, không lưu vào git
+reports/verify/
