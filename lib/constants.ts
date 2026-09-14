@@ -391,24 +391,44 @@ export const USAGE_PHOTO_FULL_SET_SINCE = new Date("2026-09-08T17:00:00.000Z");
  *
  * Chưa qua bước Sử dụng (`usedAt` rỗng) → đang xác nhận bây giờ → phải đủ ba.
  */
-export function requiredUsagePhotos(ticket: { usedAt?: Date | string | null }): number {
+export function requiredUsagePhotos(ticket: { usedAt?: Date | string | null; materialCategory?: string | null }): number {
+  // Bi nghiền chỉ có hai ô và luôn đòi đủ hai — phiếu cũ cũng vậy, ngưỡng 2/3 ngày trước
+  // quy về đúng hai ô này.
+  if (isGrindingBallCategory(ticket.materialCategory)) return GRINDING_BALL_USAGE_PHOTOS;
   if (!ticket.usedAt) return MIN_USAGE_PHOTOS;
   const usedAt = new Date(ticket.usedAt);
   if (Number.isNaN(usedAt.getTime())) return MIN_USAGE_PHOTOS;
   return usedAt < USAGE_PHOTO_FULL_SET_SINCE ? LEGACY_MIN_USAGE_PHOTOS : MIN_USAGE_PHOTOS;
 }
 
-export function missingUsagePhotoMessage(required = MIN_USAGE_PHOTOS) {
-  return required >= MIN_USAGE_PHOTOS
-    ? "Vui lòng tải đủ 3 ảnh hiện trường trước khi xác nhận"
-    : `Vui lòng tải tối thiểu ${required} trên 3 ảnh hiện trường trước khi xác nhận`;
+/**
+ * Bi nghiền chỉ cần HAI ảnh: màn hình DCS MILL OVERVIEW trước và sau khi bổ sung bi
+ * (yêu cầu PXVH1 14/09/2026). Châm bi không thay chi tiết nào nên không có "ảnh thông số" —
+ * bắt ô thứ ba là bắt chụp bừa. Mẫu BBNT D-Office của bi cũng chỉ còn hai ô ảnh.
+ */
+export const GRINDING_BALL_USAGE_PHOTOS = 2;
+
+/** Nhận diện bi nghiền — nhãn trên PHIẾU là "Bi nghiền", trong Danh mục là "Bi Nghiền Than". */
+export function isGrindingBallCategory(materialCategory: string | null | undefined): boolean {
+  const value = (materialCategory ?? "").trim().toLowerCase();
+  return value === "bi nghiền" || value === "bi nghiền than";
+}
+
+/** Tổng số ô ảnh hiện trường theo loại vật tư: bi nghiền 2, còn lại 3. */
+export function usagePhotoTotal(materialCategory: string | null | undefined): number {
+  return isGrindingBallCategory(materialCategory) ? GRINDING_BALL_USAGE_PHOTOS : MIN_USAGE_PHOTOS;
+}
+
+export function missingUsagePhotoMessage(required = MIN_USAGE_PHOTOS, total = MIN_USAGE_PHOTOS) {
+  return required >= total
+    ? `Vui lòng tải đủ ${total} ảnh hiện trường trước khi xác nhận`
+    : `Vui lòng tải tối thiểu ${required} trên ${total} ảnh hiện trường trước khi xác nhận`;
 }
 
 export const MISSING_USAGE_PHOTO_MESSAGE = missingUsagePhotoMessage();
 
 export function usesHandwrittenBbnt(materialCategory: string | null | undefined): boolean {
-  const value = (materialCategory ?? "").trim().toLowerCase();
-  return value === "bi nghiền" || value === "bi nghiền than";
+  return isGrindingBallCategory(materialCategory);
 }
 
 export function isGasCylinderCategory(category: string | null | undefined): boolean {

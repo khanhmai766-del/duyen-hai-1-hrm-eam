@@ -18,7 +18,7 @@ import { deleteDeliveryPhotos, deliveryPhotoLotsOfTicket, loadDeliveryPhotoBuffe
 import { keyFromPublicUrl } from "@/lib/s3";
 import { syncTicketReplacementLinks, type LinkablePoint } from "@/lib/material-ticket-replacement-link";
 import { pointLabelOf, resolveMaterialRequest } from "@/lib/defect-material-request";
-import { MIN_USAGE_PHOTOS, MISSING_USAGE_PHOTO_MESSAGE, missingUsagePhotoMessage, requiredUsagePhotos, usesHandwrittenBbnt, CHEMICAL_TICKET_TYPE, COMMON_MATERIAL_POSITION, GAS_RETURN_STATUS, isChemicalFlowTicket, isGasCylinderCategory, isGasCylinderTicket, isOtherMaterialAdvanceTicket, isOtherMaterialTicketType, materialTicketRequiresRecovery, minRecoveryQuantity, SCCN_POSITIONS, SCCN_REPRESENTATIVES, RECOVERY_HANDOVER_STATUS, statusAfterMaterialDocuments, OTHER_MATERIAL_ADVANCE_TICKET_TYPE, OTHER_MATERIAL_TICKET_TYPE, recoveryRequiredForReason, SINGLE_STEP_TICKET_TYPE, ticketReasonAllowed, TICKET_MATERIAL_CATEGORIES, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
+import { missingUsagePhotoMessage, requiredUsagePhotos, usagePhotoTotal, usesHandwrittenBbnt, CHEMICAL_TICKET_TYPE, COMMON_MATERIAL_POSITION, GAS_RETURN_STATUS, isChemicalFlowTicket, isGasCylinderCategory, isGasCylinderTicket, isOtherMaterialAdvanceTicket, isOtherMaterialTicketType, materialTicketRequiresRecovery, minRecoveryQuantity, SCCN_POSITIONS, SCCN_REPRESENTATIVES, RECOVERY_HANDOVER_STATUS, statusAfterMaterialDocuments, OTHER_MATERIAL_ADVANCE_TICKET_TYPE, OTHER_MATERIAL_TICKET_TYPE, recoveryRequiredForReason, SINGLE_STEP_TICKET_TYPE, ticketReasonAllowed, TICKET_MATERIAL_CATEGORIES, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
 import { positionLabelOf, positionsMatch } from "@/lib/position-catalog";
 import { replacementPointDisplayLabel, replacementPointSelectionKey } from "@/lib/material-replacement-display";
 import { receiveOtherMaterial } from "@/lib/other-material-stock";
@@ -1143,7 +1143,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
          * nổi một ô nào khác của bước đó nữa.
          */
         const requiredPhotos = requiredUsagePhotos(t);
-        if (countUsagePhotos(t) < requiredPhotos) return fail(missingUsagePhotoMessage(requiredPhotos));
+        if (countUsagePhotos(t) < requiredPhotos) return fail(missingUsagePhotoMessage(requiredPhotos, usagePhotoTotal(t.materialCategory)));
         // Ngưỡng nhỏ nhất theo vật tư: dầu EA Ultra Plus cho phép 0 (xem minRecoveryQuantity).
         // Viết theo ngưỡng chứ không phải `!recoveryQuantity` — số 0 rơi vào nhánh falsy nên
         // cách viết cũ chặn luôn cả trường hợp hợp lệ.
@@ -2693,8 +2693,10 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
       if (!Number.isFinite(usedQuantity) || usedQuantity <= 0) return fail("Khối lượng vật tư sử dụng phải lớn hơn 0");
       if (!materialUserName) return fail("Vui lòng nhập tên VHV sử dụng vật tư");
       // Ảnh hiện trường là bằng chứng đi kèm biên bản — thiếu thì không cho qua bước.
-      // Ở đây LUÔN đòi đủ ba: phiếu đang qua bước ngay bây giờ nên không thuộc diện được tha.
-      if (countUsagePhotos(t) < MIN_USAGE_PHOTOS) return fail(MISSING_USAGE_PHOTO_MESSAGE);
+      // Ở đây LUÔN đòi đủ mọi ô của loại vật tư (bi nghiền 2, còn lại 3): phiếu đang qua bước
+      // ngay bây giờ nên không thuộc diện được tha.
+      const photoTotal = usagePhotoTotal(t.materialCategory);
+      if (countUsagePhotos(t) < photoTotal) return fail(missingUsagePhotoMessage(photoTotal, photoTotal));
 
       const item = t.items[0];
       if (!item) return fail("Phiếu chưa có vật tư");

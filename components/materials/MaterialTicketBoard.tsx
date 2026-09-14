@@ -39,7 +39,7 @@ import { DefectForm } from "@/components/defects/defect-form";
 import { useDefects, type DefectItem } from "@/hooks/useDefects";
 import { useDefectHistory } from "@/hooks/useDefectHistory";
 import { usePositions } from "@/hooks/useUsers";
-import { MIN_USAGE_PHOTOS, USAGE_PHOTO_RETENTION_DAYS, requiredUsagePhotos, minRecoveryQuantity, usesHandwrittenBbnt, COMMON_MATERIAL_POSITION, displayMaterialCategory, GAS_RETURN_STATUS, isChemicalFlowTicket, isGasCylinderTicket, isOtherMaterialAdvanceTicket, isOtherMaterialCategory, isOtherMaterialTicketType, isSingleStepTicketMaterial, CHEMICAL_TICKET_TYPE, isSupplementReason, MATERIAL_CATEGORY_FILTERS, materialCategoryMatches, materialTicketBelongsToRecoveryTab, materialTicketRequiresRecovery, materialTicketAwaitsRecoveryDocSignature, SCCN_POSITIONS, SCCN_REPRESENTATIVES, RECOVERY_HANDOVER_STATUS, OTHER_MATERIAL_ADVANCE_TICKET_TYPE, OTHER_MATERIAL_GROUP, OTHER_MATERIAL_TICKET_TYPE, ticketReasonsFor, TICKET_REASONS, TICKET_REASON_OTHER, SINGLE_STEP_TICKET_TYPE, TICKET_MATERIAL_CATEGORIES, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
+import { usagePhotoTotal, USAGE_PHOTO_RETENTION_DAYS, requiredUsagePhotos, minRecoveryQuantity, usesHandwrittenBbnt, COMMON_MATERIAL_POSITION, displayMaterialCategory, GAS_RETURN_STATUS, isChemicalFlowTicket, isGasCylinderTicket, isOtherMaterialAdvanceTicket, isOtherMaterialCategory, isOtherMaterialTicketType, isSingleStepTicketMaterial, CHEMICAL_TICKET_TYPE, isSupplementReason, MATERIAL_CATEGORY_FILTERS, materialCategoryMatches, materialTicketBelongsToRecoveryTab, materialTicketRequiresRecovery, materialTicketAwaitsRecoveryDocSignature, SCCN_POSITIONS, SCCN_REPRESENTATIVES, RECOVERY_HANDOVER_STATUS, OTHER_MATERIAL_ADVANCE_TICKET_TYPE, OTHER_MATERIAL_GROUP, OTHER_MATERIAL_TICKET_TYPE, ticketReasonsFor, TICKET_REASONS, TICKET_REASON_OTHER, SINGLE_STEP_TICKET_TYPE, TICKET_MATERIAL_CATEGORIES, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
 import { normalizeText } from "@/lib/nav";
 import { formatVnNumber, parseVnNumber, VN_NUMBER_HINT } from "@/lib/vn-number";
 import { materialTicketAlert } from "@/lib/material-ticket-alerts";
@@ -2260,6 +2260,8 @@ function StepReviewDialog({ t, viewer, stepKey, onClose }: { t: MaterialTicket; 
   /* Ngưỡng ảnh CỦA CHÍNH PHIẾU: phiếu qua bước hồi luật còn 2/3 được tha, không thì mở
      hộp Xem lại ra là nút Lưu xám vĩnh viễn. Cùng luật với máy chủ. */
   const requiredPhotos = requiredUsagePhotos(t);
+  // Tổng số ô theo loại vật tư: bi nghiền 2 (DCS MILL OVERVIEW), còn lại 3.
+  const photoTotal = usagePhotoTotal(t.materialCategory);
   const missingUsagePhotos = editStep === "use" && usagePhotoCount < requiredPhotos;
   const [workStartedAt, setWorkStartedAt] = useState(datetimeLocalValue(t.workStartedAt));
   const [workEndedAt, setWorkEndedAt] = useState(datetimeLocalValue(t.workEndedAt));
@@ -2511,8 +2513,8 @@ function StepReviewDialog({ t, viewer, stepKey, onClose }: { t: MaterialTicket; 
                   {/* Ảnh nay sống thêm vài ngày sau quyết toán, nên câu cảnh báo phải nói đúng
                       tình trạng THẬT của phiếu này chứ không hù dọa chung chung. */}
                   {usagePhotoCount > 0
-                    ? `Phiếu đã quyết toán. Ba ảnh hiện trường còn trên kho tệp (${usagePhotoCount}/3) nên bản in lại vẫn có ảnh; quá ${USAGE_PHOTO_RETENTION_DAYS} ngày kể từ lúc quyết toán thì ảnh bị dọn và in lại sẽ mất ảnh.`
-                    : `Phiếu đã quyết toán quá ${USAGE_PHOTO_RETENTION_DAYS} ngày nên 3 ảnh hiện trường đã bị dọn. Bản in lại sẽ ghi đè đúng tệp đang treo trên phiếu và KHÔNG còn ảnh.`}
+                    ? `Phiếu đã quyết toán. Ảnh hiện trường còn trên kho tệp (${usagePhotoCount}/${photoTotal}) nên bản in lại vẫn có ảnh; quá ${USAGE_PHOTO_RETENTION_DAYS} ngày kể từ lúc quyết toán thì ảnh bị dọn và in lại sẽ mất ảnh.`
+                    : `Phiếu đã quyết toán quá ${USAGE_PHOTO_RETENTION_DAYS} ngày nên ${photoTotal} ảnh hiện trường đã bị dọn. Bản in lại sẽ ghi đè đúng tệp đang treo trên phiếu và KHÔNG còn ảnh.`}
                   {" Không tick thì chỉ sửa dữ liệu, tệp cũ giữ nguyên."}
                 </small>
               </span>
@@ -2587,7 +2589,7 @@ function StepReviewDialog({ t, viewer, stepKey, onClose }: { t: MaterialTicket; 
         <div className="frm-f">
           {missingUsagePhotos && (
             <span className="note" style={{ marginRight: "auto" }}>
-              <AlertTriangle size={13} /> Cần {requiredPhotos >= MIN_USAGE_PHOTOS ? "chụp đủ 3" : `tối thiểu ${requiredPhotos} trên 3`} ảnh hiện trường (còn thiếu {requiredPhotos - usagePhotoCount}).
+              <AlertTriangle size={13} /> Cần {requiredPhotos >= photoTotal ? `chụp đủ ${photoTotal}` : `tối thiểu ${requiredPhotos} trên ${photoTotal}`} ảnh hiện trường (còn thiếu {requiredPhotos - usagePhotoCount}).
             </span>
           )}
           <button className="btn ghost" onClick={onClose}>Đóng</button>
@@ -3268,6 +3270,8 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
   // Đủ 2/3 ảnh mới cho qua bước sử dụng vật tư. Máy chủ cũng chặn — đây chỉ để người
   // dùng biết trước lý do nút mờ, thay vì bấm rồi nhận thông báo lỗi.
   const usagePhotos = useTicketUsagePhotos(t.id, acts.includes("use"));
+  // Bi nghiền chỉ 2 ô (DCS MILL OVERVIEW trước/sau), loại khác 3 — cùng luật với máy chủ.
+  const photoTotal = usagePhotoTotal(t.materialCategory);
   const usagePhotoCount = (usagePhotos.data ?? []).filter((photo) => photo.url).length;
   const [pct, setPct] = useState("");
   const [chiHuy, setChiHuy] = useState("");
@@ -4319,10 +4323,10 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
           <div className="warnbox"><AlertTriangle size={15} /> Số lượng vật tư sử dụng đã nhập vượt số lượng hiện có. Hiện còn {stock} {unit}; vui lòng nhập lại số lượng.</div>
         )}
         {quantityExceedsReceived && <div className="warnbox"><AlertTriangle size={15} /> Số lượng sử dụng vượt số lượng đã nhận từ Hiện có ({received} {unit}).</div>}
-        {usagePhotoCount < MIN_USAGE_PHOTOS && (
-          <div className="warnbox"><AlertTriangle size={15} /> Phải chụp đủ 3 ảnh hiện trường mới xác nhận được (còn thiếu {MIN_USAGE_PHOTOS - usagePhotoCount} ảnh).</div>
+        {usagePhotoCount < photoTotal && (
+          <div className="warnbox"><AlertTriangle size={15} /> Phải chụp đủ {photoTotal} ảnh hiện trường mới xác nhận được (còn thiếu {photoTotal - usagePhotoCount} ảnh).</div>
         )}
-        <button className="btn primary big" disabled={!materialUserNameInput.trim() || qty <= 0 || usagePhotoCount < MIN_USAGE_PHOTOS || quantityExceedsStock || quantityExceedsReceived || (recoveryRequired && (!Number.isFinite(recoveryQuantity) || recoveryQuantity < minRecovery)) || act.isPending}
+        <button className="btn primary big" disabled={!materialUserNameInput.trim() || qty <= 0 || usagePhotoCount < photoTotal || quantityExceedsStock || quantityExceedsReceived || (recoveryRequired && (!Number.isFinite(recoveryQuantity) || recoveryQuantity < minRecovery)) || act.isPending}
           onClick={() => run({ action: "use", materialUserName: materialUserNameInput.trim(), usedQuantity: qty, ...(recoveryRequired ? { recoveryQuantity, recoveryReturned } : {}) }, "Đã xác nhận sử dụng vật tư")}>
           {act.isPending ? <Loader2 className="spin" size={15} /> : <Check size={15} />} Xác nhận
         </button>

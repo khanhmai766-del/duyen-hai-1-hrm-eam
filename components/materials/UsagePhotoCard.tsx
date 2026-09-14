@@ -100,6 +100,8 @@ export function UsagePhotoCard({ ticketId, canEdit }: { ticketId: string; canEdi
   const [busySlot, setBusySlot] = useState<string | null>(null);
 
   const rows = photos.data ?? [];
+  // Số ô do máy chủ quyết theo loại vật tư: bi nghiền 2 (DCS MILL OVERVIEW), còn lại 3.
+  const total = rows.length || 3;
 
   async function pick(slot: string, file: File) {
     if (!file.type.startsWith("image/")) return toast.error("Vui lòng chọn tệp ảnh");
@@ -148,8 +150,8 @@ export function UsagePhotoCard({ ticketId, canEdit }: { ticketId: string; canEdi
       >
         <Info size={13} style={{ marginTop: 2, flexShrink: 0 }} />
         <span>
-          Ba ảnh này được chèn thẳng vào bảng <b>Hình ảnh quá trình công tác</b> của biên bản
-          BBNT D-Office, đúng thứ tự dưới đây. Bắt buộc <b>chụp đủ cả 3 ảnh</b> mới xác nhận được.
+          {total === 2 ? "Hai" : "Ba"} ảnh này được chèn thẳng vào bảng <b>Hình ảnh quá trình công tác</b> của biên bản
+          BBNT D-Office, đúng thứ tự dưới đây. Bắt buộc <b>chụp đủ cả {total} ảnh</b> mới xác nhận được.
         </span>
       </div>
 
