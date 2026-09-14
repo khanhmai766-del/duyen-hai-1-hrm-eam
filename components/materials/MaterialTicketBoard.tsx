@@ -4790,8 +4790,12 @@ const CSS = `
 .d.cur{background:${C.accent};box-shadow:0 0 0 3px ${C.accent}30;}
 .st{font-size:11.5px;font-weight:700;padding:5px 10px;border-radius:9px;text-align:center;white-space:nowrap;}
 .status-stack{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;min-width:0;width:100%;text-align:center;}
-.status-stack .st{display:inline-block;max-width:100%;box-sizing:border-box;}
-.status-stack .status-secondary{display:block;max-width:100%;padding:0 2px;font-size:10.5px;font-weight:700;line-height:1.25;color:${C.warn};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+/* Cờ trạng thái XUỐNG DÒNG trong khung thay vì tràn ra ngoài: .st gốc để nowrap, cột Trạng thái
+   chỉ ~176–190px mà nhãn dài nhất ("Chờ Thống Kê xác nhận ĐXVT" + chấm "đến lượt bạn", "Đã lãnh vật
+   tư · Chờ xử lý SYC") cần ~230px. text-wrap:balance chia hai dòng đều nhau; không nới cột để bảng
+   khỏi phải cuộn ngang thêm. Dòng phụ cũng xuống dòng — cắt "…" là mất đúng chữ cần đọc. */
+.status-stack .st{display:inline-block;max-width:100%;box-sizing:border-box;white-space:normal;line-height:1.3;overflow-wrap:anywhere;text-wrap:balance;}
+.status-stack .status-secondary{display:block;max-width:100%;padding:0 2px;font-size:10.5px;font-weight:700;line-height:1.25;color:${C.warn};white-space:normal;overflow-wrap:anywhere;text-wrap:balance;}
 .empty{padding:40px;text-align:center;color:${C.soft};display:flex;gap:8px;align-items:center;justify-content:center;}
 .spin{animation:mtwspin 1s linear infinite;}@keyframes mtwspin{to{transform:rotate(360deg);}}
 .ovl{position:fixed;inset:0;background:rgba(15,23,42,.38);z-index:40;}
