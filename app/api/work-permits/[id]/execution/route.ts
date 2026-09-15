@@ -19,6 +19,7 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
       if (!before) throw fail("Không tìm thấy PCT", 404);
       if (["DRAFT", "CLOSED", "CANCELLED"].includes(before.status)) throw fail("Chỉ thực hiện phiếu đã cấp và chưa đóng hoặc hủy", 409);
       if (body.version !== before.version) throw fail("Phiếu đã thay đổi. Vui lòng tải lại trước khi thao tác.", 409);
+      if (before.teamType === "INTERNAL" && (body.status !== "CLOSED" || Object.keys(body).some(key => !["version", "status", "closedAt", "result"].includes(key)))) throw fail("PCT nội bộ chỉ ghi nhận đóng trong sổ, không quản lý cho phép hoặc tiến độ", 400);
       const status = String(body.status ?? before.status) as PermitStatus;
       if (status !== before.status) {
         const transitions = before.teamType === "CONTRACTOR" ? CONTRACTOR_PERMIT_TRANSITIONS : PERMIT_TRANSITIONS;

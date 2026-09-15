@@ -10,6 +10,9 @@ function comparable(key: string, value: unknown) {
   return typeof value === "string" ? value.trim() : value;
 }
 export function permitIssueUpdateNeedsExecution(before: Record<string, unknown>, after: Record<string, unknown>) {
+  if (after.teamType === "INTERNAL" || before.teamType === "INTERNAL") {
+    return ["authorizerName", "authorizedAt", "progress"].some(key => key in after && comparable(key, before[key]) !== comparable(key, after[key]));
+  }
   return PERMIT_EXECUTION_FIELDS.some(key => key in after && comparable(key, before[key]) !== comparable(key, after[key]))
     || (after.status !== before.status && PERMIT_EXECUTION_STATUSES.includes(after.status as typeof PERMIT_EXECUTION_STATUSES[number]));
 }

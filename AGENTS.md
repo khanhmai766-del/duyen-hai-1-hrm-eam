@@ -4,6 +4,16 @@ This file provides guidance to Codex (Codex.ai/code) when working with code in t
 
 PowerPlant EAM — an HRM & Equipment Asset Management system for the Duyên Hải 1 thermal power plant (Vận hành 1). Next.js 16 App Router (React 19), TypeScript (strict), Prisma + PostgreSQL, NextAuth v5, Tailwind + shadcn/ui, TanStack Query. **The entire UI and all user-facing strings (including API error messages) are in Vietnamese** — match that when adding features.
 
+## Phạm vi thao tác và phê duyệt
+
+- Với yêu cầu **kiểm tra, rà soát, chẩn đoán hoặc giải thích**: chỉ đọc, kiểm tra và báo cáo kết quả. Không tự sửa mã nguồn nếu người dùng chưa yêu cầu sửa.
+- Với yêu cầu **sửa hoặc thay đổi**: chỉ thực hiện thay đổi cục bộ trong phạm vi được yêu cầu và có thể chạy các kiểm tra không phá huỷ như lint hoặc type-check.
+- **Chỉ commit và push khi người dùng yêu cầu rõ ràng “đẩy lên GitHub”. Chỉ chạy build khi người dùng yêu cầu rõ ràng “build”.** Yêu cầu sửa mã nguồn không mặc nhiên bao gồm hai thao tác này.
+- Quyền thực hiện từng bước là độc lập: yêu cầu đẩy GitHub hoặc build không mặc nhiên cho phép deploy, reload/restart dịch vụ, thay đổi cơ sở dữ liệu hay thực hiện thao tác ghi khác trên hệ thống bên ngoài. Chỉ thực hiện từng thao tác khi người dùng yêu cầu rõ ràng thao tác đó trong cuộc hội thoại hiện tại.
+- Khi được phép nạp bản mới cho dịch vụ, **chỉ dùng `reload`**. Không chạy `restart` nếu người dùng chưa yêu cầu hoặc cho phép rõ ràng thao tác `restart`.
+- Yêu cầu kết nối SSH hoặc kiểm tra server chỉ cho phép truy cập/kiểm tra trong phạm vi được nêu; **không mặc nhiên cho phép triển khai**.
+- Nếu yêu cầu có thể hiểu theo nhiều mức thao tác, dừng ở mức an toàn hơn và hỏi người dùng trước khi mở rộng phạm vi.
+
 ## Commands
 
 ```bash

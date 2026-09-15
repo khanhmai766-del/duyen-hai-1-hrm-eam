@@ -50,6 +50,7 @@ export async function proxy(req: NextRequest) {
       (pathname === "/api/me" || pathname.startsWith("/api/me/")) ||
       pathname === "/api/auth/logout-audit" ||
       pathname === "/api/rbac/me" ||
+      pathname.startsWith("/api/ai") ||
       (req.method === "POST" && pathname === "/api/device-qr/resolve") ||
       (req.method === "GET" && (
         pathname === "/api/defects" ||

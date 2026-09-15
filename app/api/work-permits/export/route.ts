@@ -2,7 +2,7 @@ import ExcelJS from "exceljs";
 import { prisma } from "@/lib/prisma";
 import { fail, requireUser } from "@/lib/api";
 import { formatPermitNumber, PERMIT_FORMATS, effectivePermitFormat, PERMIT_KINDS, PERMIT_WORK_TYPE_CODES, PERMIT_UNITS, permitValue, type PermitKind, type PermitWorkType } from "@/lib/work-permits";
-import { permitFilters, permitHandle } from "@/lib/server/work-permits";
+import { permitExportFilters, permitHandle } from "@/lib/server/work-permits";
 export const dynamic = "force-dynamic";
 export async function GET(req: Request) {
   return permitHandle(async () => {
@@ -11,7 +11,7 @@ export async function GET(req: Request) {
     const yearText = params.get("year");
     const year = yearText === null ? null : Number(yearText);
     if (year !== null && (!/^\d{4}$/.test(yearText!) || year < 2000 || year > 2100)) return fail("Năm xuất sổ phải từ 2000 đến 2100");
-    const where = { ...permitFilters(req, { includeClosedByDefault: true }), ...(year !== null ? { year } : {}), NOT: { status: "CANCELLED" } };
+    const where = { ...permitExportFilters(req), ...(year !== null ? { year } : {}) };
     // Chỉ lấy cột ghi sổ, không lấy danh sách nhân viên, searchText, định danh hay lịch sử.
     const rows = await prisma.workPermit.findMany({ where, select: {
       workType: true, number: true, year: true, content: true, workDate: true,

@@ -1,6 +1,6 @@
 /** Kiểm tra quy tắc sổ PCT, không kết nối hay ghi cơ sở dữ liệu. */
 import assert from "node:assert/strict";
-import { parsePermit, permitFilters, parsePermitMembers, permitInstant } from "../lib/server/work-permits";
+import { parsePermit, permitFilters, permitExportFilters, parsePermitMembers, permitInstant } from "../lib/server/work-permits";
 import { readSessionOpen, validateSessionTime } from "../lib/server/work-permit-sessions";
 import { parsePermitPerson } from "../lib/server/work-permit-people";
 import { formatPermitNumber, PERMIT_WORK_TYPE_CODES, type PermitStatus } from "../lib/work-permits";
@@ -13,13 +13,25 @@ const base = {
   issuedAt: "2026-09-07T08:00:00+07:00", authorizedAt: null, closedAt: null,
 };
 let checked = 0;
+for (const status of ["", "DRAFT", "CANCELLED", "CLOSED", "OPEN"]) {
+  const where = permitExportFilters(new Request(`http://localhost/api/work-permits/export?kind=ELECTRICAL&status=${status}`));
+  assert.deepEqual(where.NOT, { status: { in: ["DRAFT", "CANCELLED"] } });
+  assert.deepEqual(where.status, status ? status === "OPEN" ? { notIn: ["CLOSED", "CANCELLED"] } : status : { not: "CANCELLED" });
+  assert.equal(where.kind, "ELECTRICAL");
+  checked++;
+}
 function valid(patch: Record<string, unknown>, status: PermitStatus) { checked++; return parsePermit({ ...base, ...patch }, status); }
 function invalid(patch: Record<string, unknown>, status: PermitStatus) {
   checked++;
   assert.throws(() => parsePermit({ ...base, ...patch }, status), e => e instanceof Response && e.status === 400);
 }
 assert.equal(valid({}, "ISSUED").number, "PCT-001");
+assert.equal(valid({ format: "ELECTRONIC", nkvhPctId: "21C6A1D6-5E7C-41AD-AE4A-5B91AB934B6D" }, "ISSUED").nkvhPctId, "21c6a1d6-5e7c-41ad-ae4a-5b91ab934b6d");
+assert.equal(valid({ format: "PAPER", nkvhPctId: "21c6a1d6-5e7c-41ad-ae4a-5b91ab934b6d" }, "ISSUED").nkvhPctId, null);
+invalid({ format: "ELECTRONIC", nkvhPctId: "khong-hop-le" }, "ISSUED");
 assert.match(valid({}, "ISSUED").searchText, /bao duong bom/);
+assert.equal(valid({ defectId: "syc-01", repairRequestNumber: "12/2026" }, "ISSUED").defectId, "syc-01");
+invalid({ defectId: 123 }, "ISSUED");
 valid({ issuedAt: null, commanderName: "", issuerName: "", workerCount: null }, "DRAFT");
 invalid({ workType: "KH" }, "ISSUED");
 valid({ workType: null }, "ISSUED");
@@ -39,11 +51,12 @@ invalid({ issuerName: " " }, "ISSUED");
 invalid({ issuedAt: null }, "ISSUED");
 invalid({ issuedAt: "2026-09-07T08:00" }, "ISSUED");
 invalid({ authorizedAt: "2026-09-07T07:00:00+07:00" }, "ACTIVE");
-invalid({ authorizedAt: null }, "ACTIVE");
-invalid({ authorizedAt: "2026-09-07T09:00:00+07:00", authorizerName: "" }, "ACTIVE");
+invalid({ teamType: "CONTRACTOR", authorizedAt: null }, "ACTIVE");
+invalid({ teamType: "CONTRACTOR", authorizedAt: "2026-09-07T09:00:00+07:00", authorizerName: "" }, "ACTIVE");
 valid({ authorizedAt: "2026-09-07T09:00:00+07:00" }, "ACTIVE");
 invalid({ authorizedAt: "2026-09-07T09:00:00+07:00", closedAt: "2026-09-07T08:00:00+07:00", result: "Đã xong" }, "CLOSED");
-invalid({ authorizedAt: "2026-09-07T09:00:00+07:00", closedAt: "2026-09-07T10:00:00+07:00", result: "" }, "CLOSED");
+invalid({ teamType: "CONTRACTOR", authorizedAt: "2026-09-07T09:00:00+07:00", closedAt: "2026-09-07T10:00:00+07:00", result: "" }, "CLOSED");
+valid({ authorizerName: "", authorizedAt: null, closedAt: "2026-09-07T10:00:00+07:00", result: "" }, "CLOSED");
 valid({ authorizedAt: "2026-09-07T09:00:00+07:00", closedAt: "2026-09-07T10:00:00+07:00", result: "Đã xong" }, "CLOSED");
 invalid({ authorizedAt: "2026-09-07T09:00:00+07:00", statusReason: "" }, "PAUSED");
 invalid({ statusReason: "" }, "CANCELLED");

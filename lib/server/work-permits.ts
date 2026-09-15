@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { fail, handle } from "@/lib/api";
 import { normalizeText } from "@/lib/nav";
+import { NKVH_UUID } from "@/lib/nkvh-pct";
 import { OPERATION_POSITION_TITLES } from "@/lib/positions";
 import { formatPermitNumber, PERMIT_DISCIPLINES, PERMIT_FORMATS, defaultPermitFormat, PERMIT_KINDS, PERMIT_WORK_TYPES, PERMIT_STATUSES, PERMIT_UNITS, type PermitStatus } from "@/lib/work-permits";
 
@@ -52,6 +53,8 @@ export function parsePermit(body: Record<string, unknown>, status: PermitStatus)
   if (!["INTERNAL", "CONTRACTOR"].includes(teamType)) throw fail("Loại đơn vị không hợp lệ");
   const format = permitText(body, "format", 20) || defaultPermitFormat(teamType);
   if (!Object.hasOwn(PERMIT_FORMATS, format)) throw fail("Hình thức phiếu phải là PCT giấy hoặc PCT điện tử");
+  const nkvhPctId = permitText(body, "nkvhPctId", 36) || null;
+  if (nkvhPctId && !NKVH_UUID.test(nkvhPctId)) throw fail("ID phiếu NKVH không hợp lệ");
   const workType = permitText(body, "workType", 20) || null;
   if (workType && !Object.hasOwn(PERMIT_WORK_TYPES, workType)) throw fail("Phân loại công việc phải là Kế hoạch (KH), Đột xuất (ĐX) hoặc Sự cố (SC)");
   const position = permitText(body, "position");
@@ -63,6 +66,7 @@ export function parsePermit(body: Record<string, unknown>, status: PermitStatus)
     registrationNumber: permitText(body, "registrationNumber", 200), workScope: permitText(body, "workScope", 5000),
     plannedStartAt: permitInstant(body, "plannedStartAt"), plannedEndAt: permitInstant(body, "plannedEndAt"), disciplines: disciplines as string[],
     format, workType, kind, unit, year, number, position, workDate, workerCount: count, teamType,
+    nkvhPctId: format === "ELECTRONIC" ? nkvhPctId?.toLowerCase() ?? null : null,
     issuerUserId: permitText(body, "issuerUserId", 100) || null,
     commanderPersonId: permitText(body, "commanderPersonId", 100) || null,
     members: parsePermitMembers(body.members),
@@ -71,6 +75,7 @@ export function parsePermit(body: Record<string, unknown>, status: PermitStatus)
     commanderName: permitText(body, "commanderName"), teamName: permitText(body, "teamName"),
     authorizerName: permitText(body, "authorizerName"), result: permitText(body, "result", 5000),
     note: permitText(body, "note", 5000), statusReason: permitText(body, "statusReason", 2000),
+    defectId: permitText(body, "defectId", 100) || null,
     repairRequestNumber: permitText(body, "repairRequestNumber", 100),
     issuedAt: permitInstant(body, "issuedAt"), authorizedAt: permitInstant(body, "authorizedAt"), closedAt: permitInstant(body, "closedAt"),
   };
@@ -81,16 +86,42 @@ export function parsePermit(body: Record<string, unknown>, status: PermitStatus)
   } else if (data.members.length) data.workerCount = data.members.length;
   if (!data.content) throw fail("Vui lòng nhập nội dung công việc");
   if (["ISSUED", "ACTIVE", "PAUSED", "WAITING", "CLOSED"].includes(status) && (!data.issuerName || !data.issuedAt || !data.commanderName || !data.teamName || (teamType !== "CONTRACTOR" && !data.workerCount))) throw fail("Để ghi cấp phiếu, cần người cấp, thời điểm cấp, chỉ huy trực tiếp, đơn vị và số nhân viên");
-  if (["ACTIVE", "PAUSED", "WAITING", "CLOSED"].includes(status) && (!data.authorizerName || !data.authorizedAt)) throw fail("Vui lòng ghi người và thời điểm cho phép làm việc");
+  if (teamType === "CONTRACTOR" && ["ACTIVE", "PAUSED", "WAITING", "CLOSED"].includes(status) && (!data.authorizerName || !data.authorizedAt)) throw fail("Vui lòng ghi người và thời điểm cho phép làm việc");
   if (["PAUSED", "CANCELLED"].includes(status) && !data.statusReason) throw fail("Vui lòng nhập lý do tạm dừng hoặc hủy phiếu");
-  if (status === "CLOSED" && (!data.result || !data.closedAt)) throw fail("Vui lòng nhập kết quả và thời điểm đóng phiếu");
+  if (status === "CLOSED" && (!data.closedAt || (teamType === "CONTRACTOR" && !data.result))) throw fail("Vui lòng nhập thông tin và thời điểm đóng phiếu");
   if (status === "DRAFT" && (data.issuedAt || data.authorizedAt || data.closedAt)) throw fail("Phiếu nháp chưa ghi thời điểm cấp hoặc thực hiện");
-  if (status === "ISSUED" && data.authorizedAt) throw fail("Chọn Đang thực hiện khi ghi nhận thời điểm cho phép làm việc");
+  if (teamType === "CONTRACTOR" && status === "ISSUED" && data.authorizedAt) throw fail("Chọn Đang thực hiện khi ghi nhận thời điểm cho phép làm việc");
   if (status !== "CLOSED" && data.closedAt) throw fail("Chỉ ghi thời điểm đóng khi chọn Đã đóng");
   if (data.issuedAt && Number(new Intl.DateTimeFormat("en", { year: "numeric", timeZone: "Asia/Ho_Chi_Minh" }).format(data.issuedAt)) !== year) throw fail("Năm cấp số phải khớp năm của thời điểm cấp phiếu");
   if (data.authorizedAt && (!data.issuedAt || data.authorizedAt < data.issuedAt)) throw fail("Thời điểm cho phép làm việc phải từ thời điểm cấp trở đi");
-  if (data.closedAt && (!data.authorizedAt || data.closedAt < data.authorizedAt)) throw fail("Thời điểm đóng phải từ thời điểm cho phép làm việc trở đi");
+  const earliestClose = teamType === "CONTRACTOR" ? data.authorizedAt : data.issuedAt;
+  if (data.closedAt && (!earliestClose || data.closedAt < earliestClose)) throw fail("Thời điểm đóng phải từ thời điểm cấp / cho phép làm việc trở đi");
+  if (data.closedAt && data.authorizedAt && data.closedAt < data.authorizedAt) throw fail("Thời điểm đóng không được trước thời điểm cho phép đã ghi nhận");
   return { ...data, searchText: normalizeText([number, formatPermitNumber({ number, year }), data.position, data.content, data.location, data.issuerName, data.electricalSafetySupervisorName, data.commanderName, data.leaderName, data.authorizerName, data.teamName, data.repairRequestNumber, data.registrationNumber, data.workScope, data.note].join(" ")) };
+}
+
+/**
+ * `defectId` là nguồn sự thật của liên kết PCT ↔ SYC. Khi có liên kết, số SYC
+ * được lấy từ SYC khi tạo/đổi liên kết. Cập nhật giữ nguyên liên kết thì giữ
+ * snapshot cũ, không phụ thuộc SYC còn tồn tại hay đã hủy.
+ */
+export async function resolvePermitDefectLink(
+  tx: Prisma.TransactionClient,
+  body: Record<string, unknown>,
+  before?: { defectId: string | null; repairRequestNumber: string }
+) {
+  const defectId = permitText(body, "defectId", 100) || null;
+  if (before && defectId && defectId === before.defectId) {
+    return { ...body, defectId, repairRequestNumber: before.repairRequestNumber };
+  }
+  if (!defectId) return { ...body, defectId: null, repairRequestNumber: permitText(body, "repairRequestNumber", 100) };
+  const defect = await tx.defect.findUnique({
+    where: { id: defectId },
+    select: { id: true, requestNumber: true, cancelledAt: true },
+  });
+  if (!defect || defect.cancelledAt) throw fail("SYC đã chọn không còn hiệu lực");
+  if (!defect.requestNumber?.trim()) throw fail("SYC đã chọn chưa được cấp số");
+  return { ...body, defectId: defect.id, repairRequestNumber: defect.requestNumber.trim() };
 }
 export function permitFilters(
   req: Request,
@@ -117,6 +148,10 @@ export function permitFilters(
     ...(from || to ? { workDate: { ...(from ? { gte: from } : {}), ...(to ? { lte: to } : {}) } } : {}),
     ...(q.trim() ? { OR: [{ searchText: { contains: permitSearchTerm(q) } }, { sessions: { some: { searchText: { contains: permitSearchTerm(q) } } } }] } : {}),
   };
+}
+/** Sổ cấp chỉ xuất phiếu đã cấp; bộ lọc không được đưa lại nháp hoặc phiếu hủy. */
+export function permitExportFilters(req: Request): Prisma.WorkPermitWhereInput {
+  return { ...permitFilters(req, { includeClosedByDefault: true }), NOT: { status: { in: ["DRAFT", "CANCELLED"] } } };
 }
 export function permitSnapshot(value: unknown): Prisma.InputJsonValue {
   return JSON.parse(JSON.stringify(value));

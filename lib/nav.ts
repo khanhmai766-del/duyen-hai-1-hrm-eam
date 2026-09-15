@@ -107,14 +107,15 @@ export const NAV_SECTIONS: NavSection[] = [
       { label: "Dashboard", href: "/reports", icon: BarChart3, keywords: "report bao cao thong ke analytics dashboard thiet bi" },
       { label: "Thông tin thiết bị", href: "/devices", icon: Cpu, permissionIds: ["device-view"], keywords: "device thiet bi may moc esp fgd boiler turbine" },
       {
-        // Hai phần bám đúng hai Google Sheet nguồn (sheet Cơ và sheet Điện).
+        // Hai sheet khiếm khuyết và sổ PCT liên kết với SYC.
         label: "Khiếm khuyết thiết bị",
         href: "/defects?phan=co",
         icon: ShieldAlert,
-        keywords: "defect su co fault khiem khuyet co dien",
+        keywords: "defect su co fault khiem khuyet co dien pct phieu cong tac",
         children: [
           { label: "Sheet Cơ - Hóa", href: "/defects?phan=co", icon: Wrench, keywords: "khiem khuyet co hoa syc sheet co moi truong hoa" },
           { label: "Sheet Điện", href: "/defects?phan=dien", icon: Zap, keywords: "khiem khuyet dien syc sheet dien moi truong" },
+          { label: "Sổ cấp phiếu công tác", href: "/work-permits", icon: ClipboardList, keywords: "pct phieu cong tac co nhiet hoa dien cap phieu giao ca" },
         ],
       },
       { label: "Lịch sử sửa chữa", href: "/repair-history", icon: Wrench, keywords: "repair sua chua bao tri history khiem khuyet" },
@@ -217,7 +218,6 @@ export const NAV_SECTIONS: NavSection[] = [
     title: "QUẢN LÝ TÀI LIỆU SỐ",
     items: [
       { label: "Quản lý hợp đồng", href: "/documents/contracts", icon: FileSignature, permissionIds: ["contract-access"], keywords: "quan ly hop dong nha thau tien do nghiem thu" },
-      { label: "Sổ cấp phiếu công tác", href: "/work-permits", icon: ClipboardList, keywords: "pct phieu cong tac co nhiet hoa dien cap phieu giao ca" },
       { label: "Danh mục quy trình", href: "/documents/procedures", icon: ListChecks, keywords: "danh muc quy trinh van hanh procedure sop tai lieu so" },
       { label: "Sơ đồ P&ID", href: "/documents/pid", icon: Workflow, keywords: "danh muc so do pid p&id ban ve tai lieu ky thuat" },
       { label: "Forum kỹ thuật", href: "/forum", icon: MessagesSquare, keywords: "forum dien dan trao doi ky thuat tai lieu quy trinh so do ban ve" },

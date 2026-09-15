@@ -5,14 +5,22 @@ import type { PermitHistory, PermitListRow, PermitDetailRow, PermitPerson, Permi
 export interface PermitMeta { total: number; page: number; pageSize: number; counts: Partial<Record<PermitStatus, number>>; canIssue: boolean; canExecute: boolean }
 export interface PermitNumberSuggestion { highest: string | null; suggested: string | null }
 export function useWorkPermits(filters: string, enabled = true) {
-  return useQuery({ queryKey: ["work-permits", filters], enabled, queryFn: () => apiGet<PermitListRow[]>(`/api/work-permits?${filters}`) as Promise<{ data: PermitListRow[]; meta: PermitMeta }> });
+  return useQuery({ queryKey: ["work-permits", filters], enabled, refetchInterval: 60_000, queryFn: () => apiGet<PermitListRow[]>(`/api/work-permits?${filters}`) as Promise<{ data: PermitListRow[]; meta: PermitMeta }> });
 }
 export function useWorkPermit(id?: string) {
   return useQuery({ queryKey: ["work-permit", id], queryFn: () => apiGet<PermitDetailRow>(`/api/work-permits/${id}`), enabled: Boolean(id) });
 }
 export function useSaveWorkPermit() {
   const qc = useQueryClient();
-  return useMutation({ mutationFn: ({ id, body }: { id?: string; body: unknown }) => apiMutate<PermitRow>(`/api/work-permits${id ? `/${id}` : ""}`, id ? "PUT" : "POST", body), onSuccess: () => { qc.invalidateQueries({ queryKey: ["work-permits"] }); qc.invalidateQueries({ queryKey: ["work-permit"] }); qc.invalidateQueries({ queryKey: ["work-permit-people"] }); qc.invalidateQueries({ queryKey: ["work-permit-number-suggestion"] }); } });
+  return useMutation({ mutationFn: ({ id, body }: { id?: string; body: unknown }) => apiMutate<PermitRow>(`/api/work-permits${id ? `/${id}` : ""}`, id ? "PUT" : "POST", body), onSuccess: () => { qc.invalidateQueries({ queryKey: ["work-permits"] }); qc.invalidateQueries({ queryKey: ["work-permit"] }); qc.invalidateQueries({ queryKey: ["defect"] }); qc.invalidateQueries({ queryKey: ["work-permit-people"] }); qc.invalidateQueries({ queryKey: ["work-permit-number-suggestion"] }); } });
+}
+export function useSaveNkvhPermitLink(id: string) {
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: (body: { version: number; nkvhPctId: string | null }) => apiMutate<PermitRow>(`/api/work-permits/${id}/nkvh-link`, "PATCH", body), onSuccess: () => {
+    qc.invalidateQueries({ queryKey: ["work-permits"] });
+    qc.invalidateQueries({ queryKey: ["work-permit"] });
+    qc.invalidateQueries({ queryKey: ["defect"] });
+  } });
 }
 export function usePermitNumberSuggestion(kind: string, year: number, enabled = true) {
   const validYear = Number.isInteger(year) && year >= 2000 && year <= 2100;

@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiMutate } from "@/lib/fetcher";
 import type { Defect, DefectSyncRun, DefectSyncSetting } from "@prisma/client";
 import type { DefectSyncHealth } from "@/lib/defect-sync-health";
+import type { DefectLinkedWorkPermit } from "@/lib/work-permits";
 
 export interface DefectSyncTrafficMetrics {
   todayTotal: number;
@@ -84,6 +85,8 @@ export interface DefectItem extends Defect {
     content: string | null;
     result: string | null;
   } | null;
+  /** Các PCT đã cấp trong Sổ cấp PCT và được gắn trực tiếp với SYC này. */
+  workPermits?: DefectLinkedWorkPermit[];
 }
 
 export interface DefectListParams {

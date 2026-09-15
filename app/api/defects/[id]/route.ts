@@ -72,8 +72,30 @@ export async function GET(_req: NextRequest, props: { params: Promise<{ id: stri
       return fail("Cương vị của bạn không có quyền xem phiếu khiếm khuyết này", 403);
     }
 
+    // Chỉ hiện những PCT đã thực sự cấp số và chưa hủy. Một SYC có thể được
+    // nhiều PCT Cơ/Điện sử dụng nên giữ toàn bộ danh sách theo ngày cấp.
+    const workPermits = await prisma.workPermit.findMany({
+      where: {
+        defectId: defect.id,
+        issuedAt: { not: null },
+        status: { not: "CANCELLED" },
+      },
+      select: {
+        id: true,
+        number: true,
+        year: true,
+        kind: true,
+        format: true,
+        nkvhPctId: true,
+        teamType: true,
+        workDate: true,
+      },
+      orderBy: [{ workDate: "desc" }, { createdAt: "desc" }],
+    });
+
     return ok({
       ...defect,
+      workPermits,
       createdBy: publicUserRef(defect.createdBy),
       // Ảnh lưu URL S3 gốc; bucket không mở đọc ẩn danh nên phải trả về đường proxy,
       // nếu không thẻ <img> nhận 403 và hiện ảnh vỡ (xem lib/s3.ts publicFileRef).

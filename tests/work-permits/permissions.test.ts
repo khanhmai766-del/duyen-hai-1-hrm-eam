@@ -16,7 +16,7 @@ function load(file: string, imports: Record<string, unknown>) {
   }, loaded, loaded.exports);
   return loaded.exports;
 }
-function harness(canIssue: boolean, canExecute: boolean) {
+function harness(canIssue: boolean, canExecute: boolean, teamType = "CONTRACTOR") {
   const user = { id: "operator", role: "TECHNICIAN", name: "Người vận hành" };
   const fail = (message: string, status = 400) => Response.json({ data: null, error: message }, { status });
   const granted = (id: string) => id === policy.PERMIT_ISSUE_PERMISSION ? canIssue : id === policy.PERMIT_EXECUTE_PERMISSION ? canExecute : false;
@@ -28,7 +28,7 @@ function harness(canIssue: boolean, canExecute: boolean) {
     },
   });
   let writes = 0;
-  const before = { id: "permit-1", version: 3, status: "ACTIVE", teamType: "INTERNAL", kind: "MECHANICAL", year: 2026, number: "1", content: "Công việc đã cấp", authorizerName: "Người cho phép", authorizedAt: new Date("2026-09-11T01:00:00Z"), closedAt: null, result: "", statusReason: "", progress: 20 };
+  const before = { id: "permit-1", version: 3, status: "ACTIVE", teamType, kind: "MECHANICAL", year: 2026, number: "1", content: "Công việc đã cấp", authorizerName: "Người cho phép", authorizedAt: new Date("2026-09-11T01:00:00Z"), closedAt: null, result: "", statusReason: "", progress: 20 };
   const api = { requireUser: async () => user, fail, ok: (data: unknown) => Response.json({ data, error: null }), audit: async () => {} };
   const tx = { $queryRaw: async () => [], workPermit: { findUnique: async () => before, update: async ({ data }: any) => { writes++; return { ...before, ...data }; } }, workPermitHistory: { create: async () => {} } };
   const server = {
@@ -37,7 +37,7 @@ function harness(canIssue: boolean, canExecute: boolean) {
     permitSnapshot: (value: unknown) => JSON.parse(JSON.stringify(value)),
     parsePermit: (value: any) => ({ ...value, authorizedAt: value.authorizedAt ? new Date(value.authorizedAt) : null, closedAt: value.closedAt ? new Date(value.closedAt) : null, searchText: "" }),
   };
-  const imports = { "@/lib/api": api, "@/lib/server/work-permit-permissions": permissions, "@/lib/work-permit-permissions": policy, "@/lib/work-permits": permits, "@/lib/server/work-permits": server, "@/lib/prisma": { prisma: { $transaction: (fn: any) => fn(tx) } }, "@/lib/server/work-permit-safety": {}, "@/lib/server/work-permit-identities": {}, "@/lib/server/work-permit-selects": {}, "@/lib/nav": {}, "@/lib/server/work-permit-sessions": {} };
+  const imports = { "@/lib/server/work-permit-auto-close-runner": { startInternalPermitAutoClose: () => {} }, "@/lib/api": api, "@/lib/server/work-permit-permissions": permissions, "@/lib/work-permit-permissions": policy, "@/lib/work-permits": permits, "@/lib/server/work-permits": server, "@/lib/prisma": { prisma: { $transaction: (fn: any) => fn(tx) } }, "@/lib/server/work-permit-safety": {}, "@/lib/server/work-permit-identities": {}, "@/lib/server/work-permit-selects": {}, "@/lib/nav": {}, "@/lib/server/work-permit-sessions": {} };
   return { permissions, before, writes: () => writes, route: (file: string) => load(file, imports) };
 }
 const request = (body: unknown) => new Request("http://localhost/api/work-permits/permit-1/execution", { method: "POST", body: JSON.stringify(body), headers: { "content-type": "application/json" } });
@@ -80,4 +80,19 @@ test("permission checks distinguish issue fields from execution changes and norm
   assert.equal(policy.permitIssueUpdateNeedsExecution(before, { authorizedAt: "2026-09-11T08:00:00+07:00" }), false);
   for (const body of [{ authorizedAt: null }, { authorizerName: "Khác" }, { result: "Xong" }, { progress: 90 }, { status: "CLOSED" }]) assert.equal(policy.permitIssueUpdateNeedsExecution(before, body), true);
   assert.equal(policy.permitIssueUpdateNeedsExecution(before, { status: "CANCELLED" }), false);
+});
+test("nội bộ: người thực hiện chỉ ghi nhận đóng, không ghi cho phép/tiến độ", async () => {
+  const h = harness(false, true, "INTERNAL");
+  h.before.status = "ISSUED";
+  const route = h.route("app/api/work-permits/[id]/execution/route.ts");
+  const good = await route.POST(request({ version: 3, status: "CLOSED", closedAt: "2026-09-12T01:00:00Z", result: "" }), context);
+  assert.equal(good.status, 200);
+  for (const body of [{ version: 3, progress: 50 }, { version: 3, status: "ACTIVE" }, { version: 3, status: "CLOSED", authorizerName: "Khác" }]) assert.equal((await route.POST(request(body), context)).status, 400);
+  assert.equal(h.writes(), 1);
+});
+test("nội bộ: ghi nhận đóng/kết quả bằng quyền cấp, nhà thầu vẫn cần quyền thực hiện", () => {
+  assert.equal(policy.permitIssueUpdateNeedsExecution({ teamType: "INTERNAL", status: "ISSUED" }, { status: "CLOSED", closedAt: "2026-09-12", result: "Xong" }), false);
+  assert.equal(policy.permitIssueUpdateNeedsExecution({ teamType: "CONTRACTOR", status: "WAITING" }, { status: "CLOSED" }), true);
+  assert.deepEqual(permits.PERMIT_TRANSITIONS.ISSUED, ["CLOSED", "CANCELLED"]);
+  assert.deepEqual(permits.CONTRACTOR_PERMIT_TRANSITIONS.ISSUED, ["CANCELLED"]);
 });

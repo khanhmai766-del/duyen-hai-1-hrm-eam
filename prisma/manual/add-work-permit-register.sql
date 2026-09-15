@@ -73,6 +73,8 @@ CREATE TABLE "WorkPermit" (
     "result" TEXT NOT NULL DEFAULT '',
     "note" TEXT NOT NULL DEFAULT '',
     "statusReason" TEXT NOT NULL DEFAULT '',
+    "defectId" TEXT,
+    "nkvhPctId" UUID,
     "repairRequestNumber" TEXT NOT NULL DEFAULT '',
     "searchText" TEXT NOT NULL DEFAULT '',
     "createdById" TEXT NOT NULL,
@@ -114,6 +116,8 @@ CREATE INDEX "WorkPermit_kind_position_workDate_idx" ON "WorkPermit"("kind", "po
 
 -- CreateIndex
 CREATE INDEX "WorkPermit_status_workDate_idx" ON "WorkPermit"("status", "workDate");
+
+CREATE INDEX "WorkPermit_defectId_idx" ON "WorkPermit"("defectId");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "WorkPermit_kind_year_number_key"

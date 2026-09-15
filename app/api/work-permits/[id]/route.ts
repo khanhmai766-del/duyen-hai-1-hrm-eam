@@ -4,7 +4,7 @@ import { resolvePermitSafety } from "@/lib/server/work-permit-safety";
 import { prisma } from "@/lib/prisma";
 import { audit, fail, ok, requireUser } from "@/lib/api";
 import { formatPermitNumber, PERMIT_STATUSES, PERMIT_TRANSITIONS, CONTRACTOR_PERMIT_TRANSITIONS, type PermitStatus } from "@/lib/work-permits";
-import { parsePermit, permitBody, permitHandle, permitSnapshot } from "@/lib/server/work-permits";
+import { parsePermit, permitBody, permitHandle, permitSnapshot, resolvePermitDefectLink } from "@/lib/server/work-permits";
 import { resolvePermitIdentities } from "@/lib/server/work-permit-identities";
 import { historySummarySelect } from "@/lib/server/work-permit-selects";
 export const dynamic = "force-dynamic";
@@ -31,8 +31,14 @@ export async function PUT(req: Request, props: { params: Promise<{ id: string }>
       if (before.status === "PAUSED" && body.status !== "CANCELLED" && body.statusReason !== undefined && body.statusReason !== before.statusReason) await requirePermitExecute(user);
       if (["CLOSED", "CANCELLED"].includes(before.status)) throw fail("Phiếu đã đóng hoặc hủy được khóa để giữ lịch sử", 409);
       if (body.version !== before.version) throw fail("Phiếu đã được người khác cập nhật. Đóng cửa sổ và tải lại trước khi sửa.", 409);
-      const data = parsePermit(await resolvePermitIdentities(tx, { ...body, format: body.format ?? before.format,
+      const linkedBody = await resolvePermitDefectLink(tx, {
+        ...body,
+        defectId: body.defectId === undefined ? before.defectId : body.defectId,
+        repairRequestNumber: body.repairRequestNumber === undefined ? before.repairRequestNumber : body.repairRequestNumber,
+      }, before);
+      const data = parsePermit(await resolvePermitIdentities(tx, { ...linkedBody, format: body.format ?? before.format,
         position: body.position === undefined ? before.position : body.position,
+        nkvhPctId: body.nkvhPctId === undefined ? before.nkvhPctId : body.nkvhPctId,
         registrationNumber: body.registrationNumber === undefined ? before.registrationNumber : body.registrationNumber,
         electricalSafetySupervisorName: body.electricalSafetySupervisorName === undefined ? before.electricalSafetySupervisorName : body.electricalSafetySupervisorName,
         workScope: body.workScope === undefined ? before.workScope : body.workScope,
@@ -41,6 +47,7 @@ export async function PUT(req: Request, props: { params: Promise<{ id: string }>
         plannedEndAt: body.plannedEndAt === undefined ? before.plannedEndAt?.toISOString() ?? null : body.plannedEndAt,
       }, user, before), status);
       if (permitIssueUpdateNeedsExecution(before, data)) await requirePermitExecute(user);
+      if (before.teamType === "INTERNAL" && (data.authorizerName !== before.authorizerName || (data.authorizedAt?.getTime() ?? null) !== (before.authorizedAt?.getTime() ?? null) || (body.progress !== undefined && body.progress !== before.progress))) throw fail("PCT nội bộ không quản lý bước cho phép hoặc tiến độ; dữ liệu cũ được giữ nguyên");
       if (body.progress !== undefined && body.progress !== before.progress && (typeof body.progress !== "number" || !Number.isInteger(body.progress) || body.progress < 0 || body.progress > 100 || !["ACTIVE", "PAUSED", "WAITING"].includes(before.status))) throw fail("Chỉ cập nhật tiến độ từ 0 đến 100% cho phiếu đã vào làm việc");
       if (status !== before.status && !(before.teamType === "CONTRACTOR" ? CONTRACTOR_PERMIT_TRANSITIONS : PERMIT_TRANSITIONS)[before.status as PermitStatus]?.includes(status)) throw fail("Không thể chuyển sang trạng thái này", 409);
       if (before.status !== "DRAFT" && (data.kind !== before.kind || data.year !== before.year || data.number !== before.number)) throw fail("Không được đổi loại, số hoặc năm của phiếu đã cấp", 409);

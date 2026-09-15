@@ -316,6 +316,13 @@ const DEFAULT_PERMISSIONS: PermissionRow[] = [
     matrix: { ADMIN: "full", MANAGER: "none", SUPERVISOR: "none", TECHNICIAN: "none", VIEWER: "none" },
   },
   {
+    id: "ai-chat",
+    group: "Trợ lý AI",
+    feature: "Tra cứu dữ liệu bằng chatbox AI",
+    note: "Cho phép sử dụng trợ lý AI chỉ đọc. Kết quả vẫn bị giới hạn theo quyền xem khiếm khuyết, vật tư, cương vị và cây thiết bị của từng người.",
+    matrix: { ADMIN: "read", MANAGER: "read", SUPERVISOR: "read", TECHNICIAN: "read", VIEWER: "read" },
+  },
+  {
     id: "device-view",
     group: "Thiết bị",
     feature: "Xem thông tin thiết bị",

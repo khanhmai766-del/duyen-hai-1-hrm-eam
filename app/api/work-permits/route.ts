@@ -4,13 +4,16 @@ import { resolvePermitSafety } from "@/lib/server/work-permit-safety";
 import { prisma } from "@/lib/prisma";
 import { audit, fail, ok, requireUser } from "@/lib/api";
 import { formatPermitNumber, PERMIT_PAGE_SIZE } from "@/lib/work-permits";
-import { parsePermit, permitBody, permitFilters, permitHandle, permitSnapshot } from "@/lib/server/work-permits";
+import { parsePermit, permitBody, permitFilters, permitHandle, permitSnapshot, resolvePermitDefectLink } from "@/lib/server/work-permits";
 import { resolvePermitIdentities } from "@/lib/server/work-permit-identities";
 import { permitListSelect } from "@/lib/server/work-permit-selects";
+import { startInternalPermitAutoClose } from "@/lib/server/work-permit-auto-close-runner";
 export const dynamic = "force-dynamic";
 export async function GET(req: Request) {
   return permitHandle(async () => {
     const user = await requireUser();
+    // Bảo đảm tác vụ được bật cả khi thêm instrumentation trong phiên next dev đang chạy.
+    startInternalPermitAutoClose();
     const where = permitFilters(req);
     const page = Number(new URL(req.url).searchParams.get("page") || 1);
     if (!Number.isInteger(page) || page < 1 || page > 100000) return fail("Trang không hợp lệ");
@@ -31,7 +34,8 @@ export async function POST(req: Request) {
     const status = body.status === "ISSUED" ? "ISSUED" : "DRAFT";
     if (body.status !== "ISSUED" && body.status !== "DRAFT") return fail("Phiếu mới phải ở trạng thái Nháp hoặc Đã cấp");
     const row = await prisma.$transaction(async tx => {
-      const data = parsePermit(await resolvePermitIdentities(tx, body, user), status);
+      const linkedBody = await resolvePermitDefectLink(tx, body);
+      const data = parsePermit(await resolvePermitIdentities(tx, linkedBody, user), status);
       const row = await tx.workPermit.create({ data: { ...data, safetyItems: permitSnapshot(await resolvePermitSafety(tx, body)), status, createdById: user.id, createdByName: user.name ?? "" } });
       await tx.workPermitHistory.create({ data: { permitId: row.id, actorId: user.id, actorName: user.name ?? "", action: "Tạo phiếu", after: permitSnapshot(row) } });
       return row;

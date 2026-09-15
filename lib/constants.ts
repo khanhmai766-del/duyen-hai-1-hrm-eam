@@ -231,6 +231,23 @@ export const DEFECT_CONDITION_ORDER = ["A", "B"] as const;
 // mà lấy theo từng phần Cơ/Điện — xem lib/defect-section.ts.
 export const DEFECT_REQUEST_TYPES = ["Cơ", "Điện", "Môi Trường", "Hóa", "Hành Chính IT", "Khác"] as const;
 
+/**
+ * Trang danh sách Phiếu công tác trên NKVH (mạng nội bộ, cần đăng nhập NKVH).
+ * Link chi tiết dùng id_pct (UUID), không suy ra từ số PCT.
+ * Đổi giao thức/địa chỉ tại đây khi NKVH chuyển sang HTTPS.
+ */
+export const NKVH_PCT_PAGES = {
+  TCNH: {
+    label: "PCT T-C-N-H",
+    url: "http://nkvh.tpcduyenhai.com.vn/nkvh/pages/pct/pctc?path=RjA3LjAyLUFhQmJDY0RkRWVGZkdnSGhGZklpOTg3NjU0MzIx",
+  },
+  DIEN: {
+    label: "PCT điện",
+    url: "http://nkvh.tpcduyenhai.com.vn/nkvh/pages/pct/pctd?path=RjA3LjAxLUFhQmJDY0RkRWVGZkdnSGhGZklpOTg3NjU0MzIx",
+  },
+} as const;
+export type NkvhPctKind = keyof typeof NKVH_PCT_PAGES;
+
 /** Khối quản lý — suy ra từ cương vị quản lý theo quy tắc nghiệp vụ. */
 export const EQUIPMENT_BLOCKS = ["Khối Lò Hơi", "Khối Turbine", "Khối BOP", "Khối Điện", "Khối I&C"] as const;
 const BLOCK_LO_POSITIONS = ["lò trưởng", "lò phó", "máy nghiền", "thải xỉ", "esp", "fgd"];

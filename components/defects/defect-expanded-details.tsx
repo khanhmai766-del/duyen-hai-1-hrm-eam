@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import {
   useDefect,
   useDefectRequestNumberControl,
@@ -13,14 +14,18 @@ import {
   defectSeverityCriteriaLabels,
 } from "@/lib/constants";
 import { ImageLightbox } from "@/components/shared/image-lightbox";
+import { NkvhPermitLink } from "@/components/work-permits/nkvh-link";
+import { NkvhLinkDialog } from "@/components/work-permits/nkvh-link-dialog";
+import { PERMIT_ISSUE_PERMISSION, PERMIT_EXECUTE_PERMISSION } from "@/lib/work-permit-permissions";
 import { parseScope, scopeCode } from "@/lib/equipment-units";
 import { cn, formatDate } from "@/lib/utils";
 import { useRbacAccess } from "@/hooks/useRbacAccess";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
-import { ArrowRightLeft, ChevronDown, Loader2 } from "lucide-react";
+import { ArrowRightLeft, ChevronDown, ExternalLink, FileText, Link2, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { effectivePermitFormat, formatPermitNumber, type DefectLinkedWorkPermit } from "@/lib/work-permits";
 
 /**
  * Khối chi tiết 3 bảng của một phiếu khiếm khuyết: Thông tin Vận hành, Theo dõi
@@ -104,6 +109,7 @@ export function DefectExpandedDetails({ defect }: { defect: DefectItem }) {
             label="Điều kiện thực hiện"
             value={DEFECT_CONDITION[defect.condition as keyof typeof DEFECT_CONDITION] || defect.condition || "—"}
           />
+          <WorkPermitsLine permits={defect.workPermits ?? []} />
           <DetailLine label="Ảnh hưởng PCCC" value={defect.fireSafetyImpact || "—"} />
           <DetailLine label="Môi trường, ATVSLĐ" value={defect.environmentSafetyImpact || "—"} />
           <DetailLine label="Ngày nhắc gần nhất" value={defect.lastRemindedAt ? formatDate(defect.lastRemindedAt) : "—"} />
@@ -321,6 +327,32 @@ function DetailLine({ label, value, multiline = false }: { label: string; value:
       <div className={cn("min-w-0 text-[13px] leading-5 text-ink sm:text-[13px]", multiline ? "whitespace-pre-wrap break-words" : "truncate")} title={!multiline ? value : undefined}>
         {value}
       </div>
+    </div>
+  );
+}
+
+function WorkPermitsLine({ permits }: { permits: DefectLinkedWorkPermit[] }) {
+  const { can } = useRbacAccess();
+  const canEditLink = can(PERMIT_ISSUE_PERMISSION, ["personal", "manage", "full"]) || can(PERMIT_EXECUTE_PERMISSION, ["personal", "manage", "full"]);
+  const [selected, setSelected] = React.useState<DefectLinkedWorkPermit | null>(null);
+  return (
+    <div className="grid items-start gap-0.5 border-b border-slate-100 pb-2 last:border-b-0 last:pb-0 sm:grid-cols-[132px_minmax(0,1fr)] sm:gap-3 sm:border-b-0 sm:pb-0">
+      <div className="text-[10.5px] font-bold uppercase tracking-wide text-slate-500 sm:whitespace-nowrap sm:text-[13px] sm:normal-case sm:tracking-normal sm:text-ink">Số PCT/LCT:</div>
+      <div className="flex min-w-0 flex-wrap gap-1.5 text-[13px] leading-5 text-ink">
+        {permits.length === 0 ? "—" : permits.map((permit) => {
+          const number = formatPermitNumber(permit);
+          const electronic = effectivePermitFormat(permit) === "ELECTRONIC";
+          const className = electronic
+            ? "inline-flex max-w-full min-w-0 items-center gap-1.5 rounded-md border border-sky-200 bg-sky-50 px-2 py-1 text-sky-800 transition-colors hover:border-sky-300 hover:bg-sky-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
+            : "inline-flex max-w-full min-w-0 items-center gap-1.5 rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-amber-900 transition-colors hover:border-amber-300 hover:bg-amber-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500";
+          const content = <><span className="min-w-0 break-all font-mono text-xs font-semibold leading-4">{number}</span><span className="shrink-0 whitespace-nowrap text-[10px] font-medium opacity-70">{electronic ? "Điện tử" : "Giấy"}</span>{electronic ? <ExternalLink className="h-3 w-3 shrink-0" /> : <FileText className="h-3 w-3 shrink-0" />}</>;
+          if (electronic) {
+            return <div key={permit.id} className="inline-flex max-w-full min-w-0 items-center gap-1"><NkvhPermitLink className={className} kind={permit.kind} id={permit.nkvhPctId} number={number}>{content}</NkvhPermitLink>{canEditLink && <button type="button" className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-sky-700 transition-colors hover:bg-sky-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500" title={`${permit.nkvhPctId ? "Thay" : "Gắn"} link NKVH cho PCT ${number}`} aria-label={`${permit.nkvhPctId ? "Thay" : "Gắn"} link NKVH cho PCT ${number}`} onClick={() => setSelected(permit)}><Link2 className="h-3.5 w-3.5" /></button>}</div>;
+          }
+          return <Link key={permit.id} className={className} href={`/work-permits?kind=${permit.kind}&permitId=${encodeURIComponent(permit.id)}`} title={`Mở PCT giấy ${number} trong Sổ cấp PCT`}>{content}</Link>;
+        })}
+      </div>
+      {selected && <NkvhLinkDialog permitId={selected.id} number={formatPermitNumber(selected)} onClose={() => setSelected(null)} />}
     </div>
   );
 }

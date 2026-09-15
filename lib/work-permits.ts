@@ -28,8 +28,9 @@ export type PermitKind = keyof typeof PERMIT_KINDS;
 export type PermitStatus = keyof typeof PERMIT_STATUSES;
 export const PERMIT_UNITS = { S1: "Tổ máy S1", S2: "Tổ máy S2", COMMON: "Dùng chung" } as const;
 export const PERMIT_TRANSITIONS: Record<PermitStatus, readonly PermitStatus[]> = {
-  DRAFT: ["ISSUED", "CANCELLED"], ISSUED: ["ACTIVE", "CANCELLED"],
-  ACTIVE: ["PAUSED", "CLOSED"], PAUSED: ["ACTIVE", "CLOSED", "CANCELLED"], WAITING: [],
+  DRAFT: ["ISSUED", "CANCELLED"], ISSUED: ["CLOSED", "CANCELLED"],
+  // Phiếu nội bộ cũ ở trạng thái thực hiện vẫn được chốt/hủy, không mở thêm vòng thực hiện.
+  ACTIVE: ["CLOSED", "CANCELLED"], PAUSED: ["CLOSED", "CANCELLED"], WAITING: ["CLOSED", "CANCELLED"],
   CLOSED: [], CANCELLED: [],
 };
 // ACTIVE/WAITING của nhà thầu chỉ do API mở/kết thúc lần làm việc thay đổi.
@@ -56,7 +57,10 @@ export interface PermitInput {
   teamType: "INTERNAL" | "CONTRACTOR";
   members: PermitMember[];
   issuedAt: string | null; authorizedAt: string | null; closedAt: string | null;
-  result: string; note: string; statusReason: string; repairRequestNumber: string;
+  result: string; note: string; statusReason: string;
+  defectId?: string | null;
+  nkvhPctId?: string | null;
+  repairRequestNumber: string;
 }
 export interface PermitRow extends PermitInput {
   id: string; status: PermitStatus; progress: number | null; version: number;
@@ -68,6 +72,7 @@ export interface PermitHistory {
   before: Record<string, unknown> | null; after: Record<string, unknown>;
 }
 export const PERMIT_FIELD_LABELS: Record<string, string> = {
+  nkvhPctId: "ID liên kết NKVH",
   registrationNumber: "Số ĐKCT", workScope: "Phạm vi công tác", plannedStartAt: "Dự kiến bắt đầu", plannedEndAt: "Dự kiến kết thúc", disciplines: "Chuyên môn",
   safetyItems: "Mối nguy và biện pháp an toàn", format: "Hình thức phiếu", workType: "Phân loại công việc (KH/ĐX/SC)", kind: "Loại PCT", year: "Năm cấp số", number: "Số PCT", position: "Cương vị", status: "Trạng thái", unit: "Tổ máy",
   content: "Nội dung công việc", location: "Thiết bị / vị trí", workDate: "Ngày thực hiện",
@@ -108,5 +113,16 @@ export interface PermitSession {
   endConfirmedByName: string; endNote: string; progress: number | null; createdByName: string; endedByName: string | null;
 }
 export type PermitHistorySummary = Pick<PermitHistory, "id" | "actorName" | "action" | "createdAt">;
-export type PermitListRow = Pick<PermitRow, "id" | "number" | "year" | "kind" | "format" | "workType" | "workDate" | "content" | "location" | "position" | "unit" | "issuerName" | "commanderName" | "teamName" | "teamType" | "workerCount" | "authorizerName" | "status" | "progress" | "repairRequestNumber"> & { sessions: Array<Pick<PermitSession, "commanderName" | "company" | "authorizerName">> };
+export type PermitListRow = Pick<PermitRow, "id" | "number" | "year" | "kind" | "format" | "workType" | "workDate" | "content" | "location" | "position" | "unit" | "issuerName" | "commanderName" | "teamName" | "teamType" | "workerCount" | "authorizerName" | "status" | "progress" | "repairRequestNumber" | "nkvhPctId"> & { sessions: Array<Pick<PermitSession, "commanderName" | "company" | "authorizerName">> };
 export interface PermitDetailRow extends PermitRow { history: PermitHistorySummary[]; sessions: PermitSession[]; _count: { sessions: number; history: number } }
+
+export interface DefectLinkedWorkPermit {
+  nkvhPctId?: string | null;
+  id: string;
+  number: string;
+  year: number;
+  kind: PermitKind;
+  format: PermitFormatValue | null;
+  teamType: "INTERNAL" | "CONTRACTOR";
+  workDate: string;
+}

@@ -10,6 +10,7 @@ import { Topbar } from "./topbar";
 import { MobileBottomNav } from "./mobile-bottom-nav";
 import { BroadcastModal } from "@/components/shared/broadcast-modal";
 import { PowerLoadingOverlay } from "@/components/shared/power-loading-overlay";
+import { AiChatbox } from "@/components/ai/ai-chatbox";
 import { pathAllowedForPosition } from "@/lib/nav";
 import { cn } from "@/lib/utils";
 
@@ -81,6 +82,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <BroadcastModal />
       <PageScrollButtons />
       <PowerLoadingOverlay active={loadingCount > 0} />
+      <AiChatbox />
     </div>
   );
 }

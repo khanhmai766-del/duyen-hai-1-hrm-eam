@@ -56,10 +56,41 @@ model User {
   forumReplyLikes         ForumReplyLike[]         @relation("ForumReplyLikeUser")
   shnPpaRecords           ShnPpaRecord[]
   shnPpaToolVersions      ShnPpaToolVersion[]
+  aiConversations         AiConversation[]
 
   @@index([position])
   @@index([role])
   @@index([isActive])
+}
+
+// Hội thoại trợ lý AI chỉ phục vụ tra cứu. Mỗi phiên tự hết hạn sau 14 ngày;
+// tác vụ dọn được chạy cơ hội khi người dùng mở/gửi chat, không phụ thuộc n8n.
+model AiConversation {
+  id        String   @id @default(cuid())
+  userId    String
+  title     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  expiresAt DateTime
+
+  user     User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages AiMessage[]
+
+  @@index([userId, updatedAt(sort: Desc)])
+  @@index([expiresAt])
+}
+
+model AiMessage {
+  id             String   @id @default(cuid())
+  conversationId String
+  role           String // USER | ASSISTANT
+  content        String   @db.Text
+  citations      Json?
+  createdAt      DateTime @default(now())
+
+  conversation AiConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
 }
 
 // Ảnh chụp kết quả tiện ích SHN/PPA; không lưu file Excel gốc.
@@ -1559,6 +1590,7 @@ model WorkPermitSafetyMeasure {
 
 /// Sổ ghi nhận cấp PCT; không thay thế việc cho phép làm việc trên phiếu chính thức.
 model WorkPermit {
+  nkvhPctId String? @db.Uuid // Chỉ lưu UUID; URL được ghép từ cấu hình NKVH chung.
   registrationNumber String @default("")
   workScope String @default("")
   plannedStartAt DateTime?
@@ -1595,6 +1627,7 @@ model WorkPermit {
   result String @default("")
   note String @default("")
   statusReason String @default("")
+  defectId String? // SYC được chọn khi cấp phiếu; liên kết mềm để giữ hồ sơ khi SYC được lưu trữ/xóa.
   repairRequestNumber String @default("")
   searchText String @default("")
   createdById String
@@ -1610,6 +1643,7 @@ model WorkPermit {
   @@index([kind, workDate])
   @@index([kind, position, workDate])
   @@index([status, workDate])
+  @@index([defectId])
 }
 
 model WorkPermitHistory {

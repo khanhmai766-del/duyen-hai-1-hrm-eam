@@ -1,34 +1,54 @@
 # Sổ cấp phiếu công tác
 
-Đường dẫn: `/work-permits`, mục **Quản lý tài liệu số → Sổ cấp phiếu công tác** (máy tính và menu Thêm trên điện thoại).
+Đường dẫn: `/work-permits`, mục **Quản lý thiết bị → Khiếm khuyết thiết bị → Sổ cấp phiếu công tác** trên menu đầy đủ. Bảng chọn của nút **Khiếm khuyết** trên thanh điều hướng mobile chỉ có **Cơ – Hóa** và **Điện**, không hiển thị Sổ cấp PCT.
+
+## Liên kết NKVH cho phiếu điện tử
+
+- Form có ô **Link chi tiết phiếu NKVH** không bắt buộc, nhận HTTP/HTTPS đúng host và loại Cơ/Điện. Chỉ lưu `nkvhPctId` dạng UUID; đường dẫn được ghép từ cấu hình chung `NKVH_PCT_PAGES`.
+- Khi đã có link, giao diện thu gọn thành **Đã liên kết NKVH**, với **Mở phiếu / Thay link / Gỡ**; chỉ mở ô URL khi gắn hoặc thay link.
+- Trong **Theo dõi Vận hành**, người có quyền Cấp phiếu hoặc Thực hiện phiếu thấy nút liên kết nhỏ cạnh từng PCT điện tử. Bấm nút mở hộp gắn/thay link riêng cho PCT đó, tải quyền/trạng thái/phiên bản hiện tại trước khi cập nhật. Bấm số PCT vẫn chỉ mở NKVH; PCT giấy không có nút gắn link.
+- Chi tiết PCT có thao tác cập nhật liên kết độc lập cho người có quyền **Cấp phiếu** hoặc **Thực hiện phiếu**. API `PATCH /api/work-permits/[id]/nkvh-link` chỉ nhận UUID và phiên bản; không cho sửa số, trạng thái, SYC hay thông tin cấp phiếu. Kiểm tra phiên bản, khóa giao dịch, ghi lịch sử/audit. PCT giấy, đã đóng hoặc hủy không được cập nhật link.
+- Có ID: bấm số PCT trong sổ hoặc Theo dõi Vận hành mở đúng đường dẫn chi tiết đã gắn. Người nhập phải đối chiếu số trên NKVH; website không xác minh nội dung phiếu hay suy UUID từ số PCT.
+- Chưa có ID: bấm số PCT sao chép số đầy đủ và mở danh sách NKVH; người dùng dán vào ô tìm kiếm. Nếu clipboard bị chặn, thông báo yêu cầu nhập số thủ công, liên kết vẫn mở.
+- PCT giấy và trường PCT/LCT của Sửa chữa không thay đổi. Phiếu cũ mặc định chưa có ID; không tự gắn link vào dữ liệu cũ.
+- Cần áp SQL bổ sung `prisma/manual/add-work-permit-nkvh-id.sql` trước khi nạp mã mới trên môi trường khác, sau khi được phép thay đổi database. Local đã áp cột này, không chạy đồng bộ toàn bộ schema.
 
 ## Sổ cấp PCT chung
+
+### Luồng nội bộ và nhà thầu
+
+- **Nội bộ (điện tử hoặc giấy):** Nháp → Đã cấp → Đã đóng, có thể hủy từ phiếu chưa đóng. Không bắt buộc bước cho phép, không tạo lần làm việc hay quản lý tiến độ. Người có quyền Cấp phiếu ghi nhận đóng trong form; người có quyền Thực hiện phiếu dùng nút **Ghi nhận đóng phiếu**. Đóng thủ công cần thời điểm đóng không trước thời điểm cấp; kết quả không bắt buộc. Dữ liệu cho phép/tiến độ cũ giữ lại, không cho tạo vòng thực hiện mới.
+- **Tự đóng nội bộ:** chỉ phiếu `teamType=INTERNAL`, đã cấp, còn mở, gắn đúng `defectId`; SYC phải còn tồn tại, không hủy, đang Đã xử lý và có `completedAt` đủ 24 giờ. Áp dụng cả giấy lẫn điện tử. SYC mở lại trước hạn thì không đóng; nháp/đóng/hủy/không có SYC/mốc hoàn thành không bị tác động. Nếu SYC mở lại sau khi PCT đã đóng, PCT không tự mở lại.
+- Tác vụ nền được đăng ký qua `instrumentation.ts`, kiểm tra mỗi phút khi tiến trình Next.js Node đang chạy; khởi động có lượt kiểm tra bù phiếu quá hạn. Khóa SYC/PCT trong giao dịch, ghi lịch sử **Hệ thống — Tự đóng theo SYC đã xử lý đủ 24 giờ**, không ghi lặp. Thời điểm đóng ghi mốc hoàn thành + 24 giờ (không trước thời điểm cấp/cho phép cũ). Tác vụ không truy cập NKVH và không xác minh trạng thái phiếu ngoài website. Danh sách sổ tự tải lại mỗi phút.
+- **Nhà thầu:** giữ đầy đủ Nháp → Đã cấp → Đang thực hiện → Chờ làm tiếp → Đã đóng; mở lại lần làm việc, bàn giao CHTT, kết thúc lần cuối trước đóng. Không tự đóng theo SYC, dù có liên kết SYC.
+- Không cần thêm cột hoặc thay đổi database cho luồng này. `scripts/check-work-permits-auto-close-local.ts` kiểm tra PostgreSQL local trong giao dịch hoàn tác, không để lại mẫu.
 
 - Hai sổ Cơ – Nhiệt – Hóa và Điện, nhập số thực tế, không tự cấp số. Số thuần được hiển thị theo mẫu chung `{số}/{năm}/VH1-NĐDH` trong bảng, tiêu đề chi tiết, các lần làm việc, cảnh báo và Excel. Form xem trước số đầy đủ ngay khi nhập. Số đã đầy đủ/mã cũ giữ nguyên, không ghép đuôi hai lần; dữ liệu số gốc không bị ghi lại.
 - Cột STT trong mẫu giấy ghi KH (kế hoạch), ĐX (đột xuất) hoặc SC (sự cố), không phải số thứ tự dòng. Form, bảng, bộ lọc và cột đầu Excel dùng phân loại này. KH/ĐX/SC không bắt buộc ở mọi trạng thái, kể cả Đã cấp. Phiếu cũ giữ null, không tự gán loại.
 - Nháp là lưu tạm, chưa ghi nhận cấp phiếu. Form có chỉ dẫn để chọn Đã cấp khi nhập phiếu đã cấp thực tế.
 - Số chuẩn hóa thành chữ hoa, bỏ khoảng trắng, duy nhất theo loại + năm đối với phiếu chưa hủy. Phiếu hủy giữ nguyên số trong lịch sử nhưng giải phóng số để cấp lại. Khi ghi phiếu mới hoặc sửa phiếu nháp, form chỉ truy vấn số lớn nhất dạng số của các phiếu chưa hủy trong đúng sổ Cơ/Điện và năm đang chọn, rồi gợi ý số kế tiếp để điền nhanh; mã phi số không tham gia tính. Đây là gợi ý tại thời điểm tải, số trùng vẫn được chặn khi lưu.
-- Danh sách mặc định không lấy phiếu đã đóng và phiếu đã hủy; hai trạng thái này chỉ xuất hiện trên website khi người dùng chọn riêng bộ lọc tương ứng. Excel vẫn lấy phiếu đã đóng và luôn loại phiếu hủy, kể cả khi bộ lọc hiện tại đang chọn `Đã hủy`.
+- Danh sách mặc định không lấy phiếu đã đóng và phiếu đã hủy; hai trạng thái này chỉ xuất hiện trên website khi người dùng chọn riêng bộ lọc tương ứng. Excel mặc định lấy cả phiếu đã đóng và luôn loại **Nháp / Đã hủy**, kể cả khi chọn riêng một trong hai trạng thái này (file chỉ có tiêu đề nếu không còn phiếu phù hợp). Các bộ lọc khác vẫn được giữ nguyên.
 - Phiếu đã cấp không đổi số, năm, loại sổ hoặc loại đơn vị. Phiếu đóng/hủy khóa sửa; không có thao tác xóa.
 - Thông tin sổ giấy, tổ máy, thiết bị/vị trí, ngày giờ Việt Nam, kết quả, ghi chú và danh sách nhân viên.
 - Danh sách chính phân trang ở server, 10 phiếu/trang.
 - Tìm kiếm không phân biệt dấu; lọc loại, trạng thái, tổ máy, nội bộ/nhà thầu và khoảng ngày thực hiện. Tìm thêm CHTT, mã người, đơn vị và nhân viên trong các lần làm việc.
-- Chọn SYC bằng API khiếm khuyết hiện có, giữ phạm vi xem của API đó. Sao chép số SYC, công việc và thiết bị vào PCT; chưa ghi ngược số PCT/trạng thái vào SYC.
+- Chọn SYC bằng API khiếm khuyết hiện có, giữ phạm vi xem của API đó. PCT lưu `defectId` làm liên kết mềm ổn định và giữ số SYC trong `repairRequestNumber`; việc nhập tay lại số SYC sẽ gỡ liên kết để tránh gắn nhầm. Chi tiết khiếm khuyết đọc các PCT đã cấp, chưa hủy theo `defectId` và hiển thị ở hàng **Số PCT/LCT** trong **Theo dõi Vận hành**. Trường Số PCT/LCT thuộc **Nội dung Sửa chữa** vẫn là dữ liệu độc lập từ nguồn sửa chữa.
 - PCT có thể chọn một cương vị nghiệp vụ hoặc để `Tất cả cương vị` (mặc định). Danh sách sổ có bộ lọc cương vị; cương vị đã lưu hiện cùng tổ máy/vị trí và trong chi tiết. Khi chọn SYC, API chỉ ưu tiên SYC khớp cương vị lên đầu trước khi phân trang, không lọc bỏ cương vị khác; tìm kiếm vẫn tra được toàn bộ SYC trong phạm vi người dùng được phép xem. Sổ Excel giữ nguyên cấu trúc, không thêm cột cương vị.
 - Excel xuất kết quả lọc, tối đa 10.000 phiếu: chỉ một sheet Sổ cấp PCT; chi tiết các lần làm việc tra cứu trên website. Có cấu hình in ngang/lặp tiêu đề.
 - Mọi tài khoản đăng nhập được tra cứu/xuất sổ. Hai quyền ghi độc lập được cấu hình ở **Quản trị → Phân quyền → Tài liệu số**:
   - **Sổ cấp PCT — Cấp phiếu** (`work-permit-issue`): tạo/cấp, sửa nội dung cấp và hủy phiếu; quản lý danh bạ nhà thầu, danh mục biện pháp an toàn.
   - **Sổ cấp PCT — Thực hiện phiếu** (`work-permit-execute`): cho phép/mở/kết thúc lần làm việc, bàn giao CHTT, tạm dừng, cập nhật tiến độ/kết quả và đóng phiếu.
 - Mức Cá nhân/Quản lý/Toàn quyền của từng quyền cho phép thực hiện nhóm thao tác tương ứng, không giới hạn theo người tạo phiếu. Chỉ đọc/Không có không cho phép ghi. Khi chưa cấu hình, ADMIN, MANAGER, SUPERVISOR giữ hai quyền ghi như trước; TECHNICIAN/VIEWER chưa có quyền ghi. Việc cấp riêng từng người dùng cơ chế phân quyền bổ sung hiện có; quyền bổ sung không thu hồi quyền đã được hưởng từ nhóm vai trò.
-- API cấp/sửa kiểm tra quyền Cấp phiếu; nếu sửa cả trường thực hiện phải có thêm quyền Thực hiện phiếu. API thực hiện riêng chỉ nhận trạng thái, thời điểm/người cho phép, kết quả, lý do và tiến độ; không cho sửa nội dung cấp hay hủy phiếu. API các lần làm việc kiểm tra quyền Thực hiện phiếu. Quyền hợp đồng độc lập với cả hai quyền PCT.
+- API cấp/sửa kiểm tra quyền Cấp phiếu; trường thực hiện nhà thầu cần thêm quyền Thực hiện phiếu. Nội bộ được ghi nhận đóng bằng quyền Cấp phiếu, không yêu cầu quyền Thực hiện phiếu. API thực hiện riêng với nội bộ chỉ nhận phiên bản, trạng thái Đã đóng, thời điểm đóng và kết quả; không cho thay đổi thông tin cấp, bước cho phép hay tiến độ. Với nhà thầu, API giữ luật thực hiện cũ. API các lần làm việc kiểm tra quyền Thực hiện phiếu. Quyền hợp đồng độc lập với cả hai quyền PCT.
 - Không cần thay đổi schema/DB cho việc tách hai quyền. Đã kiểm tra TypeScript và 6 bài kiểm tra quyền với session/DB giả, không ghi dữ liệu thật.
 - Với nhà thầu, người cấp lấy từ tài khoản đăng nhập ở phía server khi tạo/cấp từ nháp, không nhận tên hoặc mã người cấp do client gửi. Sau khi đã cấp, giữ nguyên người cấp dù người khác cập nhật. Phiếu nội bộ giữ cách ghi nhận cũ; người cho phép/xác nhận từng lần vẫn nhập theo thực tế.
 - CHTT nhà thầu chọn từ danh bạ đang hoạt động, có quyền CHTT; lưu định danh và tên tại thời điểm cấp. Nháp có thể chưa chọn. Không suy đoán định danh từ tên của phiếu cũ. Mở lần đầu điền sẵn CHTT đã chọn; những lần sau gợi ý CHTT lần trước, vẫn được đổi và kiểm tra xung đột ở server.
 - Người cho phép và người xác nhận kết thúc chọn từ nhân sự website đang hoạt động qua API nhẹ, tìm không dấu và phân trang 20 người ngay tại DB; chỉ trả id/tên/mã/chức vụ/đơn vị. Áp dụng khi mở/kết thúc lần nhà thầu và ở ô người cho phép của phiếu nội bộ; lưu tên theo cấu trúc hiện có.
-- Cột Số PCT / ngày hiện số phiếu, nhãn PCT giấy / PCT điện tử theo hình thức đã chọn và ngày thực hiện, bỏ dòng năm cấp số lặp lại. Nhãn hình thức cũng hiển thị trong form và chi tiết; không biểu thị đã có chức năng in hay tích hợp NKVH. Năm vẫn giữ trong dữ liệu/form để kiểm tra trùng số.
+- Cột Số PCT / ngày hiện số phiếu, nhãn PCT giấy / PCT điện tử theo hình thức đã chọn và ngày thực hiện, bỏ dòng năm cấp số lặp lại. Bấm số/ngày của PCT điện tử mở link chi tiết nếu đã gắn ID; nếu chưa có ID thì sao chép số và mở danh sách PCT Cơ/Điện trên NKVH. PCT giấy mở chi tiết phiếu trong Sổ cấp PCT. Hàng Số PCT/LCT ở Theo dõi Vận hành dùng cùng luồng. Năm vẫn giữ trong dữ liệu/form để kiểm tra trùng số.
 - Hình thức cấp phiếu lưu riêng (`format`: PAPER/ELECTRONIC), chọn được trong form. Khi chọn loại đơn vị, mặc định nhà thầu là giấy, nội bộ là điện tử; có thể đổi, kể cả nội bộ dùng giấy khi hệ thống điện tử lỗi. Phiếu cũ chưa có hình thức riêng (`null`) hiển thị theo mặc định loại đơn vị, được ghi rõ khi cập nhật. Xuất Excel có cột Hình thức phiếu, không có cột Trạng thái. Hộp xuất cho chọn toàn bộ sổ Cơ/Điện theo năm cấp số (bỏ các bộ lọc bên ngoài) hoặc theo bộ lọc hiện tại. Số PCT được phép lặp sang năm mới; không tự tăng/cấp số. Không thay đổi quy tắc phiên làm việc chỉ áp dụng cho nhà thầu.
 - Phiếu mới mặc định nhà thầu; lãnh đạo/nhân viên nằm trong mục bổ sung để ưu tiên thao tác chọn CHTT.
 - Nhật ký trước/sau lưu cùng giao dịch với phiếu. Kiểm tra phiên bản để chống ghi đè.
+- SQL bổ sung cột/chỉ mục: `prisma/manual/add-work-permit-defect-link.sql`. Không tự ghép dữ liệu cũ theo số SYC vì số có thể trùng hoặc tái sử dụng; chỉ gắn sau khi rà soát đúng phiếu. Khi cập nhật PCT mà liên kết không đổi, giữ định danh và số SYC snapshot, kể cả SYC đã hủy/xóa; chỉ tạo/đổi liên kết mới kiểm tra SYC còn hiệu lực.
 
 ## Chỉ nhà thầu: các lần làm việc
 
