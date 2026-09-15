@@ -1,4 +1,6 @@
+import Image from "next/image";
 import { cn } from "@/lib/utils";
+import { isOptimizableImage } from "@/lib/optimizable-image";
 import { ArrowDownRight, ArrowUpRight, ArrowRight, type LucideIcon } from "lucide-react";
 
 interface StatCardProps {
@@ -57,13 +59,26 @@ export function StatCard({ label, value, icon: Icon, tint = "navy", trend, hint,
     >
       {cover && (
         <>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={bgCover}
-            alt=""
-            aria-hidden
-            className="absolute inset-0 h-full w-full select-none object-cover transition-transform duration-500 group-hover:scale-105"
-          />
+          {isOptimizableImage(bgCover) ? (
+            // Ảnh bìa tĩnh (0,1–1 MB) → WebP đúng cỡ thẻ qua /_next/image.
+            <Image
+              src={bgCover}
+              alt=""
+              aria-hidden
+              fill
+              sizes="(min-width: 1024px) 25vw, (min-width: 640px) 50vw, 100vw"
+              className="select-none object-cover transition-transform duration-500 group-hover:scale-105"
+            />
+          ) : (
+            // Đuôi lạ (.jfif…) bộ tối ưu không nhận → giữ <img>.
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={bgCover}
+              alt=""
+              aria-hidden
+              className="absolute inset-0 h-full w-full select-none object-cover transition-transform duration-500 group-hover:scale-105"
+            />
+          )}
           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/45 to-black/25" />
         </>
       )}

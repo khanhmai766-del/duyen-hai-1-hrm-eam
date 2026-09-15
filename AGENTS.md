@@ -73,6 +73,8 @@ All handlers follow the same shape using helpers in `lib/api.ts`:
 ### Images & signatures
 Profile photos (`User.avatarUrl`), signatures (`User.signatureUrl`), device images, defect/announcement attachments are stored **inline as base64 data URLs** in Postgres text columns (client-side downscaled before save, e.g. avatars to 256×256). There is no object storage / upload endpoint for these.
 
+Static images in `public/brand`, `public/chucvu`, `public/icons3d` (`.png/.jpg/.jpeg/.webp`) go through `next/image` → `/_next/image` (WebP, right size; e.g. a 2.2 MB backdrop becomes ~150 KB). `next.config.mjs` locks the optimizer to exactly those `localPatterns` — no query strings, `remotePatterns` empty, no SVG, quality 75 only, trimmed size list. Use `isOptimizableImage()` from `lib/optimizable-image.ts` when a `src` may be external (Wikimedia photos in the weather card) or an odd extension (`.jfif` is served as octet-stream and rejected) — those stay plain `<img>`. Never add a `"**"` hostname. The QR print page keeps `<img>` on purpose.
+
 ### Self-service vs admin edits
 `/api/me` (PUT) lets any logged-in user edit their own `avatarUrl / signatureUrl / phone / email / employeeId`; only ADMIN may additionally change `name / position / department / role`. `/api/users` is the ADMIN-only CRUD for all users. The account page (`app/(dashboard)/account`) uses `/api/me`; `app/(dashboard)/admin/users` uses `/api/users`.
 

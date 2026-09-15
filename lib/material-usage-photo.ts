@@ -1,7 +1,7 @@
 import sharp from "sharp";
 import { uploadS3Object, deleteS3ObjectByKey, s3ProxyUrl, getS3ObjectBuffer } from "@/lib/s3";
 import { vietnamDatePath } from "@/lib/material-document-name";
-import { MIN_USAGE_PHOTOS, USAGE_PHOTO_RETENTION_DAYS } from "@/lib/constants";
+import { isGrindingBallCategory, MIN_USAGE_PHOTOS, USAGE_PHOTO_RETENTION_DAYS } from "@/lib/constants";
 import type { PrismaClient } from "@prisma/client";
 
 /**
@@ -28,6 +28,27 @@ export const USAGE_PHOTO_LABELS: Record<UsagePhotoSlot, { title: string; hint: s
   spec: { title: "Hình 3", hint: "Thông số thiết bị hoặc vật tư thay thế — chụp cận cảnh, lấy đầy khung" },
 };
 
+/**
+ * Bi nghiền chỉ có HAI ô, chụp màn hình DCS — xem `GRINDING_BALL_USAGE_PHOTOS` ở lib/constants.ts.
+ * Dùng lại cột của ô 1, 2; ô "spec" không dùng. Phiếu bi cũ lỡ có ảnh ô 3 thì ảnh đó bị bỏ qua
+ * (không đếm, không chèn BBNT) và tự dọn theo hạn giữ ảnh như mọi ảnh khác.
+ */
+const GRINDING_BALL_SLOTS: readonly UsagePhotoSlot[] = ["before", "after"];
+const GRINDING_BALL_LABELS: Partial<Record<UsagePhotoSlot, { title: string; hint: string }>> = {
+  before: { title: "Hình 1", hint: "Hình ảnh DCS MILL OVERVIEW TRƯỚC khi bổ sung bi" },
+  after: { title: "Hình 2", hint: "Hình ảnh DCS MILL OVERVIEW SAU khi bổ sung bi" },
+};
+
+/** Các ô ảnh của một phiếu theo loại vật tư, đúng thứ tự ô trong BBNT. */
+export function usagePhotoSlotsFor(materialCategory: string | null | undefined): readonly UsagePhotoSlot[] {
+  return isGrindingBallCategory(materialCategory) ? GRINDING_BALL_SLOTS : USAGE_PHOTO_SLOTS;
+}
+
+/** Nhãn một ô ảnh theo loại vật tư. */
+export function usagePhotoLabelFor(slot: UsagePhotoSlot, materialCategory: string | null | undefined) {
+  return (isGrindingBallCategory(materialCategory) && GRINDING_BALL_LABELS[slot]) || USAGE_PHOTO_LABELS[slot];
+}
+
 /** Cột lưu khóa S3 tương ứng từng vị trí ảnh. */
 export const USAGE_PHOTO_COLUMNS: Record<UsagePhotoSlot, "usagePhotoBeforeKey" | "usagePhotoAfterKey" | "usagePhotoSpecKey"> = {
   before: "usagePhotoBeforeKey",
@@ -35,13 +56,14 @@ export const USAGE_PHOTO_COLUMNS: Record<UsagePhotoSlot, "usagePhotoBeforeKey" |
   spec: "usagePhotoSpecKey",
 };
 
-/** Đếm số ô đã có ảnh trên một phiếu. */
+/** Đếm số ô đã có ảnh trên một phiếu — chỉ tính các ô thuộc loại vật tư của phiếu. */
 export function countUsagePhotos(t: {
+  materialCategory?: string | null;
   usagePhotoBeforeKey?: string | null;
   usagePhotoAfterKey?: string | null;
   usagePhotoSpecKey?: string | null;
 }) {
-  return [t.usagePhotoBeforeKey, t.usagePhotoAfterKey, t.usagePhotoSpecKey].filter(Boolean).length;
+  return usagePhotoSlotsFor(t.materialCategory).filter((slot) => Boolean(t[USAGE_PHOTO_COLUMNS[slot]])).length;
 }
 
 export function isUsagePhotoSlot(value: unknown): value is UsagePhotoSlot {

@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import * as React from "react";
 import Link from "next/link";
 import { CalendarDays, UserCheck, Network, Users, ArrowRight, Phone, PhoneCall, ChevronRight, Sunrise, Sunset, Moon, CalendarPlus } from "lucide-react";
@@ -207,7 +208,10 @@ export default function HrOverviewPage() {
               Không tìm thấy nhân sự phù hợp.
             </div>
           ) : (
-            <div className="grid max-h-[70vh] grid-cols-1 gap-3 overflow-y-auto pr-1 sm:grid-cols-2 lg:grid-cols-3">
+            // auto-rows-max: hàng luôn cao ĐÚNG bằng thẻ. Lưới có max-h + cuộn, còn thẻ có overflow-hidden
+            // và sm:min-h-0 → trình duyệt được phép co mọi hàng cho vừa khung; 172 người = 58 hàng dồn vào
+            // 70vh, thẻ bị ép còn ~26px, che mất tên và số điện thoại (chỉ còn dòng chức vụ).
+            <div className="grid max-h-[70vh] auto-rows-max grid-cols-1 gap-3 overflow-y-auto pr-1 sm:grid-cols-2 lg:grid-cols-3">
               {filtered.map((u) => (
                 <PersonCard key={u.id} u={u} />
               ))}
@@ -233,12 +237,13 @@ function HrLinkCard({
     <Card className={cn("relative h-full overflow-hidden transition-shadow hover:shadow-md", minHeightClass, cover && "border-0 text-white")}>
       {cover && (
         <>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={item.cover}
+          <Image
+            src={item.cover as string}
             alt=""
             aria-hidden
-            className="absolute inset-0 h-full w-full select-none object-cover transition-transform duration-500 group-hover:scale-105"
+            fill
+            sizes="(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
+            className="select-none object-cover transition-transform duration-500 group-hover:scale-105"
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/45 to-black/25" />
         </>
@@ -259,12 +264,13 @@ function ShiftOverviewCard({ shiftType }: { shiftType: ShiftTypeKey }) {
   const Icon = SHIFT_ICON[shiftType];
   return (
     <Card className="group relative h-full min-h-[132px] overflow-hidden border-0 text-white transition-shadow hover:shadow-md">
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
+      <Image
         src={SHIFT_BG[shiftType]}
         alt=""
         aria-hidden
-        className="absolute inset-0 h-full w-full select-none object-cover transition-transform duration-500 group-hover:scale-105"
+        fill
+        sizes="(min-width: 1024px) 25vw, (min-width: 640px) 50vw, 100vw"
+        className="select-none object-cover transition-transform duration-500 group-hover:scale-105"
       />
       <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/45 to-black/25" />
       <CardContent className="relative p-4 [text-shadow:0_1px_6px_rgba(0,0,0,0.6)]">
@@ -314,7 +320,7 @@ function PersonCard({ u }: { u: SafeUser }) {
             <Phone className="h-3.5 w-3.5 shrink-0" />
             <span className="truncate font-mono tracking-wide sm:font-sans sm:tracking-normal">{formatStaffPhone(u.phone)}</span>
           </span>
-          {u.department && <span className="truncate text-[10px] text-slate-400 sm:hidden">· {u.department}</span>}
+          {u.department && <span className="truncate text-[10px] text-slate-400 sm:text-xs sm:text-muted-foreground">· {u.department}</span>}
         </div>
       </div>
       {u.phone && (

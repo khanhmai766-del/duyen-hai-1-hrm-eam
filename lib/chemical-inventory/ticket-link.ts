@@ -216,14 +216,30 @@ export async function linkTicketTrucks(
   return { receiptIds, created, linked, totalAccepted: Math.round(totalAccepted * 10_000) / 10_000, messages };
 }
 
-/** Gỡ toàn bộ liên kết khi phiếu bị hủy hoặc xóa. */
-export async function unlinkTicketTrucks(tx: Tx, ticketId: string, receiptIds: string[]) {
+/**
+ * Gỡ toàn bộ liên kết khi phiếu bị hủy hoặc xóa. Trả về số dòng bị XÓA HẲN khỏi sổ.
+ *
+ * Mặc định dòng do chính phiếu tạo (source MATERIAL_TICKET) bị xóa hẳn — đúng cho phiếu LẬP NHẦM,
+ * không thì sổ còn "số ma" trỏ vào phiếu không tồn tại.
+ *
+ * `keepTicketRows`: phiếu đã HOÀN TẤT / ĐÃ QUYẾT TOÁN. Chuyến xe đó là hàng về thật, đã tính vào tồn
+ * kho và hợp đồng; xóa hồ sơ phiếu khỏi website không được làm thủng sổ hóa chất — chỉ tháo liên
+ * kết, cùng cách đợt dọn tự động theo quý (lib/material-retention.ts). Sổ hóa chất có nhịp lưu trữ
+ * riêng (theo năm, giữ tháng 12).
+ */
+export async function unlinkTicketTrucks(
+  tx: Tx,
+  ticketId: string,
+  receiptIds: string[],
+  options: { keepTicketRows?: boolean } = {}
+) {
   if (receiptIds.length === 0) return 0;
   const rows = await tx.chemicalReceipt.findMany({ where: { id: { in: receiptIds } } });
   let removed = 0;
   for (const row of rows) {
-    // Dòng do phiếu tạo thì xóa hẳn; dòng vốn có từ nhật ký ngày thì chỉ tháo liên kết.
-    if (row.source === "MATERIAL_TICKET") {
+    // Dòng do phiếu tạo thì xóa hẳn (trừ phiếu đã xong); dòng vốn có từ nhật ký ngày / nhập Excel
+    // thì luôn chỉ tháo liên kết.
+    if (row.source === "MATERIAL_TICKET" && !options.keepTicketRows) {
       await tx.chemicalReceipt.delete({ where: { id: row.id } });
       removed += 1;
     } else {

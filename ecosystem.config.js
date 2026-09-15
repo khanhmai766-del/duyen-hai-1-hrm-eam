@@ -16,7 +16,7 @@ module.exports = {
       script: "npm",
       args: "start",
       // FORK một instance là cố ý, KHÔNG chuyển sang cluster: cache node/index/quyền truy
-      // cập nằm trong bộ nhớ tiến trình (xem docs/deploy-equipment-tree.md) — hai instance
+      // cập nằm trong bộ nhớ tiến trình (xem docs/huong-dan-deploy-production.md phụ lục D) — hai instance
       // là hai bản cache lệch nhau.
       exec_mode: "fork",
       instances: 1,

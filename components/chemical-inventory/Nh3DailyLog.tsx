@@ -1,5 +1,4 @@
 "use client";
-import { parseVnNumber } from "@/lib/vn-number";
 
 import { useMemo, useState } from "react";
 import { AlertTriangle, CheckCircle2, Loader2, Plus, Trash2, XCircle } from "lucide-react";
@@ -20,6 +19,7 @@ import {
 } from "@/hooks/useChemicalInventory";
 import { UNIT_LABELS } from "@/lib/chemical-inventory/constants";
 import { positionsMatch } from "@/lib/position-catalog";
+import { formatVnNumber, parseVnNumber, VN_NUMBER_HINT } from "@/lib/vn-number";
 import { fmt, periodLabel, warningLabel } from "./shared";
 
 /**
@@ -36,6 +36,34 @@ import { fmt, periodLabel, warningLabel } from "./shared";
  */
 
 const DAY_MS = 86_400_000;
+
+/**
+ * Số tồn nạp sẵn vào ô nhập phải viết ĐÚNG KIỂU VIỆT NAM như lúc người trực gõ (phẩy là phần lẻ,
+ * chấm tách nghìn) — `parseVnNumber` đọc lại được. Bản cũ dùng `String(số)` ra "127.682", đọc lại
+ * thành 127.682 tấn nên ô "Đã dùng" hiện −127.538,629 (14/09/2026).
+ * Giữ 7 số lẻ: server lưu kg làm tròn 4 số lẻ (`roundToStorage`), đổi sang tấn không mất số nào.
+ */
+function toInputText(value: number | null) {
+  return value === null ? "" : formatVnNumber(value, 7);
+}
+
+/**
+ * Ô khối lượng theo TẤN (tồn 24h, số cân xe): một dấu chấm HOẶC một dấu phẩy đều là phần lẻ —
+ * "127.682" và "127,682" cùng là 127,682 tấn (yêu cầu người trực 14/09/2026). Bồn chỉ 220 tấn nên
+ * không ai gõ hàng nghìn tấn; hiểu "127.682" thành 127 nghìn tấn làm lượng đã dùng âm hàng triệu.
+ * Có cả chấm lẫn phẩy ("1.234,5") hoặc nhiều dấu chấm thì vẫn đọc theo kiểu Việt Nam.
+ * Ô theo kg (mặt hàng không đổi sang tấn) KHÔNG dùng hàm này — ở đó "10.860" là mười nghìn kg.
+ */
+function parseTonInput(text: string): number | null {
+  const t = text.replace(/\s/g, "");
+  if (/^-?\d+([.,]\d+)?$/.test(t)) {
+    const value = Number(t.replace(",", "."));
+    return Number.isFinite(value) ? value : null;
+  }
+  return parseVnNumber(t);
+}
+
+const TON_INPUT_HINT = "gõ dấu phẩy hoặc dấu chấm cho phần lẻ, vd 127,682 hoặc 127.682";
 
 export function Nh3DailyLog({
   month,
@@ -80,17 +108,24 @@ export function Nh3DailyLog({
   const [draftSyncedKey, setDraftSyncedKey] = useState<string | null>(null);
   if (draftSyncedKey !== draftKey) {
     setDraftSyncedKey(draftKey);
-    setDraft(closingStock === null || closingStock === undefined ? "" : String(toDisplay(closingStock)));
+    setDraft(closingStock === null || closingStock === undefined ? "" : toInputText(toDisplay(closingStock)));
   }
 
   const parsedDraft = useMemo(() => {
     if (!draft.trim()) return null;
-    // Kiểu Việt Nam: chấm tách nghìn, phẩy là phần lẻ. Không đọc được thì NaN để ô báo lỗi.
-    return parseVnNumber(draft) ?? NaN;
-  }, [draft]);
+    // Theo tấn: chấm hay phẩy đều là phần lẻ (parseTonInput); theo kg: kiểu Việt Nam.
+    // Không đọc được thì NaN để ô báo lỗi.
+    return (factor === 1000 ? parseTonInput(draft) : parseVnNumber(draft)) ?? NaN;
+  }, [draft, factor]);
 
   const draftInvalid = typeof parsedDraft === "number" && Number.isNaN(parsedDraft);
-  const dirty = row ? String(toDisplay(row.closingStock) ?? "") !== draft.trim() : false;
+  // So SỐ chứ không so chuỗi: "127,682" và "127,6820" là cùng một tồn, không bật nút Lưu.
+  const savedDisplay = row ? toDisplay(row.closingStock) : null;
+  const dirty = row
+    ? parsedDraft === null
+      ? savedDisplay !== null
+      : savedDisplay === null || Number.isNaN(parsedDraft) || Math.abs(parsedDraft - savedDisplay) > 1e-9
+    : false;
 
   /**
    * Lượng đã dùng hiện ngay khi gõ, chưa cần lưu — người trực thấy số âm là biết
@@ -154,10 +189,11 @@ export function Nh3DailyLog({
 
   async function handleAddTruck() {
     if (!row || !itemId) return;
-    const plant = parseVnNumber(truckDraft.plant) ?? NaN;
-    const contractor = parseVnNumber(truckDraft.contractor) ?? NaN;
+    const parseInput = factor === 1000 ? parseTonInput : parseVnNumber;
+    const plant = parseInput(truckDraft.plant) ?? NaN;
+    const contractor = parseInput(truckDraft.contractor) ?? NaN;
     if (!Number.isFinite(plant) || !Number.isFinite(contractor)) {
-      toast.error("Phải nhập cả hai số cân");
+      toast.error(`Phải nhập cả hai số cân — ${factor === 1000 ? TON_INPUT_HINT : VN_NUMBER_HINT}`);
       return;
     }
     try {
@@ -255,12 +291,15 @@ export function Nh3DailyLog({
             </Field>
             <Operator>+</Operator>
             <Field label="Nhập trong ngày">
-              <ReadonlyBox value={fmt(toDisplay(row?.importedToday ?? null))} />
+              {/* Ngày không có xe: server trả null (chưa có chuyến), công thức vốn đã tính là 0 —
+                  hiện 0 thay cho "—" để người trực không tưởng thiếu số. */}
+              <ReadonlyBox value={row ? fmt(toDisplay(row.importedToday ?? 0)) : "—"} />
             </Field>
             <Operator>−</Operator>
             <Field label="Tồn 24h00">
               <Input
                 inputMode="decimal"
+                placeholder="vd 127,682"
                 value={draft}
                 disabled={!editable}
                 onChange={(e) => setDraft(e.target.value)}
@@ -285,7 +324,7 @@ export function Nh3DailyLog({
             </div>
           </div>
 
-          {draftInvalid && <p className="mt-2 text-sm text-red-600">Tồn 24h phải là số hợp lệ.</p>}
+          {draftInvalid && <p className="mt-2 text-sm text-red-600">Tồn 24h phải là số — {factor === 1000 ? TON_INPUT_HINT : VN_NUMBER_HINT}.</p>}
 
           <p className="mt-3 text-xs text-muted-foreground">
             Tồn đầu ngày lấy tự động từ tồn 24h ngày trước. Lượng nhập cộng từ các chuyến xe bên dưới.
@@ -408,7 +447,7 @@ export function Nh3DailyLog({
                 aria-label="Biển số xe"
               />
               <Input
-                placeholder={`Cân nhà máy (${unit})`}
+                placeholder={`Cân nhà máy (${unit}), vd 20,98`}
                 inputMode="decimal"
                 value={truckDraft.plant}
                 onChange={(e) => setTruckDraft((s) => ({ ...s, plant: e.target.value }))}
@@ -416,7 +455,7 @@ export function Nh3DailyLog({
                 aria-label="Khối lượng cân nhà máy"
               />
               <Input
-                placeholder={`Cân nhà thầu (${unit})`}
+                placeholder={`Cân nhà thầu (${unit}), vd 20,98`}
                 inputMode="decimal"
                 value={truckDraft.contractor}
                 onChange={(e) => setTruckDraft((s) => ({ ...s, contractor: e.target.value }))}

@@ -160,3 +160,18 @@ Tối ưu 10/09/2026: response danh sách chỉ select trường hiển thị, d
 - Chi tiết và lịch sử hiển thị các trường mới; tìm kiếm PCT bao gồm ĐKCT/phạm vi trên phiếu đã lưu. API danh sách/Excel giữ danh sách cột hiện có. Client cập nhật thiếu trường mới giữ nguyên dữ liệu cũ, nhưng gửi rỗng/null cho phép xóa thông tin tùy chọn.
 - SQL bổ sung local: `prisma/manual/add-work-permit-paper-fields.sql`. Không áp dụng toàn schema hoặc thao tác server.
 - 90 kiểm tra API/DB và Word cho phần an toàn + thông tin giấy; kiểm tra ĐKCT trống/có chữ, chuyên môn, ngày giờ, giữ dữ liệu khi cập nhật thiếu trường, phân công và phân quyền. XML các file Word thử được kiểm tra cấu trúc; chưa có công cụ render bố cục in.
+
+## Rà soát và tối ưu tải dữ liệu — 10/09/2026
+
+Gộp từ `docs/work-permit-data-review.md` ngày 14/09/2026 (bản đầy đủ gồm hiện trạng trước tối ưu: xem lịch sử Git). Phạm vi đo: DB local, không phải benchmark production.
+
+Kết quả sau tối ưu (JSON UTF-8 trước nén, không tính envelope HTTP):
+
+- Danh sách 3 PCT: 3.441 → 1.426 byte (giảm khoảng 59%).
+- Phiếu có 4 lần làm việc/7 cập nhật: lần tải đầu 27.559 → 2.598 byte (giảm khoảng 91%); trước đó riêng lịch sử chiếm ~83%.
+- Danh sách chỉ lấy trường hiển thị, 10 phiếu/trang. Chi tiết chỉ 2 phiên + 2 tiêu đề lịch sử và tổng; tải thêm theo trang 10, nội dung trước/sau tải riêng khi mở; truy vấn lịch sử kiểm tra phiên bản để không ghép trang bị thay đổi.
+- Picker nhân sự dùng SQL 20 người/trang, tìm tiếng Việt không dấu ở server, chỉ 5 trường; form nhà thầu không tải `useUsers` toàn bộ.
+- Danh bạ bỏ truy vấn CHTT trùng, chỉ select trường dùng; polling 30 giây chỉ trong picker. Danh sách công ty dùng DISTINCT tại SQL và cache client ngắn.
+- Excel chỉ select các cột ghi sổ, một sheet, bỏ cột Trạng thái; cho xuất toàn bộ sổ theo năm hoặc theo bộ lọc đang xem; giữ giới hạn 10.000 phiếu để bảo vệ bộ nhớ.
+
+Còn cần đo trên quy mô thực tế (chưa thêm schema/index): cache thống kê theo bộ lọc, index tìm chuỗi/JSON (đo EXPLAIN trước), streaming Excel ở ngưỡng 10.000 phiếu, bảng liên kết nhân sự–phiên thay cho tìm trong JSON members. Chưa kết luận hiệu năng production.

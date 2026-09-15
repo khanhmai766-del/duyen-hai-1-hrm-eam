@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -47,6 +48,7 @@ import { normalizeText } from "@/lib/nav";
 import { formatDateInput, initials, cn, parseDateInput } from "@/lib/utils";
 import { weatherScene, PLANT_LOCATION } from "@/lib/weather";
 import { positionImage } from "@/lib/position-image";
+import { isOptimizableImage } from "@/lib/optimizable-image";
 import { useMyDashboard, useWeather, useUserLocation, usePlaceInfo, useOperations, useCreateOperation, useUpdateOperation, useDeleteOperation, useSafeOperations, useUpdateSafeOperation, type MyDashboard, type OperationEvent } from "@/hooks/useDashboard";
 import { useCurrentPosition } from "@/hooks/useCurrentPosition";
 import { useRbacAccess } from "@/hooks/useRbacAccess";
@@ -671,8 +673,8 @@ function DutyPositionCard({
         onKeyDown={handleAttendanceKeyDown}
         className={cn("relative h-full min-h-[230px] overflow-hidden border-0 text-white", attendanceCardClassName)}
       >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={img} alt="" className="absolute inset-0 h-full w-full object-cover" />
+        {/* Ảnh màn hình điều khiển theo cương vị (0,3–1,7 MB PNG) → WebP đúng cỡ thẻ. */}
+        <Image src={img} alt="" fill sizes="(min-width: 1280px) 25vw, (min-width: 768px) 50vw, 100vw" className="object-cover" />
         <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/35 to-black/10" />
         <div className="absolute right-3 top-3 flex flex-col items-end gap-1.5">
           {dutyDate && (
@@ -720,8 +722,7 @@ function DutyPositionCard({
         onKeyDown={handleAttendanceKeyDown}
         className={cn("relative h-full min-h-[230px] overflow-hidden border-0 text-white", attendanceCardClassName)}
       >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/chucvu/cham-cong-hanh-chinh.jpg" alt="" className="absolute inset-0 h-full w-full object-cover" />
+        <Image src="/chucvu/cham-cong-hanh-chinh.jpg" alt="" fill sizes="(min-width: 1280px) 25vw, (min-width: 768px) 50vw, 100vw" className="object-cover" />
         <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/35 to-black/10" />
         <div className="absolute right-3 top-3">
           <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/90 px-2.5 py-1 text-[11px] font-semibold text-white backdrop-blur">
@@ -815,19 +816,35 @@ function WeatherCard() {
   return (
     <Card className="group relative h-full overflow-hidden border-0 text-white transition-shadow duration-300 hover:shadow-md">
       {/* Cross-fading location photos */}
-      {backdrops.map((src, i) => (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          key={src}
-          src={src}
-          alt=""
-          aria-hidden
-          className={cn(
-            "absolute inset-0 h-full w-full select-none object-cover object-top transition-[opacity,transform] duration-1000 group-hover:scale-105",
-            i === bg ? "opacity-100" : "opacity-0"
-          )}
-        />
-      ))}
+      {backdrops.map((src, i) =>
+        isOptimizableImage(src) ? (
+          // Ảnh dự phòng nội bộ (1–2 MB) → WebP đúng cỡ thẻ; ảnh Wikimedia (domain ngoài) giữ <img>.
+          <Image
+            key={src}
+            src={src}
+            alt=""
+            aria-hidden
+            fill
+            sizes="(min-width: 1280px) 33vw, (min-width: 768px) 50vw, 100vw"
+            className={cn(
+              "select-none object-cover object-top transition-[opacity,transform] duration-1000 group-hover:scale-105",
+              i === bg ? "opacity-100" : "opacity-0"
+            )}
+          />
+        ) : (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            key={src}
+            src={src}
+            alt=""
+            aria-hidden
+            className={cn(
+              "absolute inset-0 h-full w-full select-none object-cover object-top transition-[opacity,transform] duration-1000 group-hover:scale-105",
+              i === bg ? "opacity-100" : "opacity-0"
+            )}
+          />
+        )
+      )}
       {/* Dark gradient so the white text stays legible over any photo */}
       <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/45 to-black/25" />
       <CardContent className="relative flex h-full flex-col justify-between p-5">
@@ -1362,11 +1379,12 @@ function SafeOperationProcessStrip({ expanded, onToggle }: { expanded: boolean; 
       </button>
       {/* Ảnh nền dây chuyền + tiêu đề overlay lên trên */}
       <div className="relative h-[120px] w-full overflow-hidden sm:h-[148px] lg:h-[172px]">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
+        <Image
           src="/brand/safe-operation-bg.png"
           alt="Sơ đồ dây chuyền nhà máy nhiệt điện Duyên Hải 1: nhiên liệu, lò hơi, tuabin, điện năng"
-          className="absolute inset-0 h-full w-full object-cover object-center"
+          fill
+          sizes="100vw"
+          className="object-cover object-center"
         />
         {/* Lớp phủ sáng phía trên giúp chữ tiêu đề nổi rõ, dễ đọc */}
         <div className="pointer-events-none absolute inset-x-0 top-0 h-2/3 bg-gradient-to-b from-white via-white/70 to-transparent" />

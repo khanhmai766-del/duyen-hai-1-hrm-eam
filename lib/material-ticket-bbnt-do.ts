@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { generateBbntDoDoc, resolveSignatureBuffer, type BbntDoItem } from "@/lib/bbnt-do-doc";
+import { isGrindingBallCategory } from "@/lib/constants";
 import { materialTicketFileBase } from "@/lib/material-ticket-sequence";
 import { normalizeText } from "@/lib/nav";
 import { deliveryNoteSummary, usedLotsOfTicket } from "@/lib/material-stock-lot";
@@ -102,7 +103,8 @@ export async function buildBbntDoDocument(
     resolveSignatureBuffer(defaultQuanDoc),
     loadUsagePhotoBuffer(t.usagePhotoBeforeKey),
     loadUsagePhotoBuffer(t.usagePhotoAfterKey),
-    loadUsagePhotoBuffer(t.usagePhotoSpecKey),
+    // Bi nghiền chỉ có hai ô ảnh (mẫu bi đã bỏ cột thứ ba) — ảnh ô 3 cũ còn sót thì không chèn.
+    isGrindingBallCategory(t.materialCategory) ? Promise.resolve(null) : loadUsagePhotoBuffer(t.usagePhotoSpecKey),
   ]);
   return generateBbntDoDoc({
     fileBaseName: materialTicketFileBase(t),

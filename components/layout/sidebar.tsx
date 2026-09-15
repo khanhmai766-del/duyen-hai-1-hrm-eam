@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import * as React from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
@@ -111,8 +112,7 @@ export function Sidebar({ onNavigate, collapsed = false }: { onNavigate?: () => 
         >
           {!collapsed && <span className="absolute inset-x-0 top-0 h-1/2 bg-white/12" />}
           <span className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white shadow-[inset_0_1px_0_rgba(255,255,255,0.95),0_10px_20px_-12px_rgba(15,23,42,0.75)] ring-1 ring-white/70 dark:bg-slate-950 dark:ring-sky-300/30">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/brand/4.png" alt="EVNGENCO1" className="h-8 w-8 object-contain" />
+            <Image src="/brand/4.png" alt="EVNGENCO1" width={32} height={32} className="h-8 w-8 object-contain" />
           </span>
           {!collapsed && (
             <>

@@ -112,7 +112,7 @@ Sau đó mở web, đăng nhập, vào đúng trang vừa sửa để xem tận 
 | Tình huống | Trạng thái web | Làm gì |
 |---|---|---|
 | Script dừng ở **KIỂM TRA** (cây bẩn, đĩa đầy, pm2…) | Chưa bị đụng | Xử lý đúng thông báo, chạy lại |
-| **Vai trò sao lưu** không đăng nhập được | Chưa bị đụng | Xem `docs/deploy-backup-role.md`. Chỉ dùng `--no-backup` nếu bản này không có SQL |
+| **Vai trò sao lưu** không đăng nhập được | Chưa bị đụng | Xem **Phụ lục C** (dựng vai trò `dh1_backup`). Chỉ dùng `--no-backup` nếu bản này không có SQL |
 | **BUILD GÃY** | Vẫn chạy bản cũ, không ảnh hưởng | Server đã pull mã mới nhưng chưa dùng. Sửa lỗi trên máy dev → push → deploy lại. Muốn server khớp bản đang chạy: `git reset --hard <sha cũ>` (script in sẵn sha) |
 | **Tự kiểm tra sau reload thất bại** / web lỗi sau deploy | Đang chạy bản mới bị lỗi | `./scripts/deploy-server.sh --rollback` |
 | Rớt SSH khi chạy **không** có `setsid nohup` | Tuỳ lúc bị cắt | Xem mục 6.1 |
@@ -257,3 +257,89 @@ mv -T .next "$CU" && mv -T "$MOI" .next && touch "$CU" && pm2 reload dh1-app
   độ này là tắt rồi bật lại.
 - Kiểm chứng ngày 13/09/2026: diễn tập 236/236 lượt gọi web thành công trong lúc build; lần deploy
   thật đầu tiên 524/528 lượt thành công — 4 lượt hỏng đều rơi đúng 1 giây pm2 khởi động lại.
+
+## Phụ lục C — Vai trò sao lưu `dh1_backup`
+
+`scripts/deploy-server.sh` sao lưu DB trước mỗi lượt deploy bằng vai trò riêng `dh1_backup`
+(chỉ đọc, `BYPASSRLS`), **không** bằng tài khoản của website. (Gộp từ `docs/deploy-backup-role.md` ngày 14/09/2026.)
+
+### Vì sao cần vai trò riêng
+
+Mọi bảng TCMS bật `FORCE ROW LEVEL SECURITY`, và tài khoản của website cố ý **không** có
+`BYPASSRLS` (xem `docs/contract-integration.md`). `pg_dump` bằng tài khoản đó hỏng giữa chừng ở
+`tcms.acceptances` — gặp 2026-09-13, để lại file gzip 11MB trông hợp lệ nhưng thiếu dữ liệu.
+
+`dh1_backup` chỉ đọc được (`pg_read_all_data` + `default_transaction_read_only`), và chỉ script
+sao lưu dùng. Website vẫn chạy bằng tài khoản cũ, vẫn chịu RLS như thiết kế.
+
+### Dựng một lần (người quản trị tự chạy — không đưa mật khẩu cho ai)
+
+**Bước 1 — trên máy app (103.42.56.80): sinh mật khẩu, ghi `~/.pgpass`**
+
+```bash
+PW=$(openssl rand -hex 24)
+umask 077
+printf '192.168.45.81:5432:dh1db:dh1_backup:%s\n' "$PW" >> ~/.pgpass
+chmod 600 ~/.pgpass
+echo "Mật khẩu (dán vào bước 2 rồi xoá khỏi màn hình): $PW"
+unset PW
+```
+
+Mật khẩu hex nên không vướng ký tự `:` hay `\` — hai ký tự `.pgpass` phải escape.
+
+**Bước 2 — trên máy DB (103.42.56.81): tạo vai trò, mở pg_hba**
+
+```bash
+sudo -u postgres psql -v ON_ERROR_STOP=1 <<'SQL'
+DO $$BEGIN
+  IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'dh1_backup') THEN
+    CREATE ROLE dh1_backup LOGIN;
+  END IF;
+END$$;
+ALTER ROLE dh1_backup LOGIN BYPASSRLS NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION;
+ALTER ROLE dh1_backup SET default_transaction_read_only = on;
+GRANT CONNECT ON DATABASE dh1db TO dh1_backup;
+GRANT pg_read_all_data TO dh1_backup;
+SQL
+
+# Gõ (dán) mật khẩu ở bước 1 — hỏi hai lần, màn hình không hiện ký tự.
+sudo -u postgres psql -c '\password dh1_backup'
+
+HBA=/etc/postgresql/16/main/pg_hba.conf
+grep -q dh1_backup "$HBA" || echo "host dh1db dh1_backup 192.168.45.80/32 scram-sha-256" >> "$HBA"
+systemctl reload postgresql@16-main
+```
+
+**Bước 3 — trên máy app: kiểm tra**
+
+```bash
+psql -w "postgresql://dh1_backup@192.168.45.81:5432/dh1db" -XAtc \
+  "select format('%s bypassrls=%s', current_user, rolbypassrls) from pg_roles where rolname = current_user"
+# Phải in: dh1_backup bypassrls=t
+
+cd /var/www/dh1-app && ./scripts/deploy-server.sh --dry-run
+# Phải có dòng: ✓ Vai trò sao lưu dh1_backup đăng nhập được, có BYPASSRLS
+```
+
+### Gỡ bỏ
+
+Trên máy DB: xoá dòng `dh1_backup` trong `pg_hba.conf`, `systemctl reload postgresql@16-main`,
+rồi `sudo -u postgres psql -c 'DROP ROLE dh1_backup'`. Trên máy app: xoá dòng tương ứng trong
+`~/.pgpass`.
+
+## Phụ lục D — Ràng buộc hạ tầng từ đợt cây thiết bị (23/07/2026)
+
+Rút từ runbook lịch sử `docs/deploy-equipment-tree.md` (đã gộp và xoá ngày 14/09/2026; các bước build/restart tay
+trong đó đã bị thay bằng `deploy-server.sh`, bản đầy đủ xem lịch sử Git).
+
+- **pm2 giữ 1 tiến trình (fork), không chuyển cluster:** cache cây thiết bị (node/index/quyền truy cập) nằm trong
+  bộ nhớ tiến trình — nhiều instance thì xoá cache ở một instance không lan sang instance khác.
+- **nginx bật gzip cho `application/json`** (giảm payload ~10 lần cho các form còn tải cây đầy đủ). Kiểm tra:
+  `curl -H "Accept-Encoding: gzip" -sI https://duyenhai1.vn/api/equipment-tree | grep -i content-encoding`.
+- `DATABASE_URL` giữ `connection_limit=10&pool_timeout=20`.
+- Không dùng `prisma db push` trên production — SQL additive truyền qua `./scripts/deploy-server.sh --sql`.
+- Số đo khi đó (22.708 node): `/api/equipment-tree/roots` · `/children` 1–2 ms; tìm không dấu ~10 ms;
+  cây đầy đủ (chỉ export và form cũ) 220 ms DB + ~3 MB JSON (~300 KB gzip), cache server 60 s.
+- Việc còn ghi nhận: picker cây thiết bị/form khiếm khuyết/thẻ phân quyền còn tải cây đầy đủ (kế hoạch chuyển
+  lazy theo cương vị); `/api/devices` trả ~20k lá cần phân trang phía server; nối `machine` (S1/S2/COMMON) vào luồng
+  ghi vật tư/QR; file Excel nguồn búa gõ (DH1.S1.1.13.2) còn 720 dòng cũ — sửa file nguồn trước khi nhập lại.

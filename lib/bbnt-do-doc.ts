@@ -441,8 +441,11 @@ function patchSccnRepresentativeTokens(documentXml: string) {
   return patched;
 }
 
-/** Sinh file Word BBNT DO đã điền dữ liệu, upload MinIO, trả về { key, url }. */
-export async function generateBbntDoDoc(d: BbntDoData): Promise<{ key: string; url: string }> {
+/**
+ * Dựng file Word BBNT DO đã điền dữ liệu, CHƯA tải lên kho — tách riêng để kiểm thử mẫu
+ * (số ô ảnh, chú thích) ngay trên máy dev mà không cần kết nối S3.
+ */
+export async function renderBbntDoDocx(d: BbntDoData): Promise<Buffer> {
   const tplPath = path.join(
     process.cwd(),
     "templates",
@@ -584,7 +587,13 @@ export async function generateBbntDoDoc(d: BbntDoData): Promise<{ key: string; u
     anhThongSo: photos.anhThongSo ? photos.anhThongSo.toString("base64") : "",
   });
 
-  const buf = doc.getZip().generate({ type: "nodebuffer", compression: "DEFLATE" }) as Buffer;
+  return doc.getZip().generate({ type: "nodebuffer", compression: "DEFLATE" }) as Buffer;
+}
+
+/** Sinh file Word BBNT DO đã điền dữ liệu, upload MinIO, trả về { key, url }. */
+export async function generateBbntDoDoc(d: BbntDoData): Promise<{ key: string; url: string }> {
+  const issuedAt = d.issuedAt ?? new Date();
+  const buf = await renderBbntDoDocx({ ...d, issuedAt });
 
   const fileName = bbntDoFileName(d.items.map((item) => item.deviceName), issuedAt);
   // Cây thư mục Năm/Tháng/Ngày — xem chú thích ở lib/bbthvt-doc.ts.

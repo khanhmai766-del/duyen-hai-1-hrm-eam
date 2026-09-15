@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import * as React from "react";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
@@ -353,8 +354,7 @@ function Field({ icon, tint, label, value }: { icon: string; tint: string; label
         )}
       >
         {/* Microsoft Fluent 3D emoji */}
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={`/icons3d/${icon}.png`} alt="" className="h-8 w-8 object-contain drop-shadow-sm" />
+        <Image src={`/icons3d/${icon}.png`} alt="" width={32} height={32} className="h-8 w-8 object-contain drop-shadow-sm" />
       </span>
       <div className="min-w-0">
         <div className="text-xs text-muted-foreground">{label}</div>

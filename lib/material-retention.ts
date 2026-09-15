@@ -114,7 +114,16 @@ export function isTicketMonthExpired(sequenceMonth: string, now = new Date()) {
 
 export type PurgeCounts = Record<string, number>;
 
-/** 1. Sổ tồn kho hóa chất: xoá kỳ + số đọc tồn + phiếu nhập của tháng 01..11 các năm cũ. */
+/**
+ * 1. Sổ tồn kho hóa chất: xoá kỳ + số đọc tồn + phiếu nhập của tháng 01..11 các năm cũ.
+ *
+ * Phiếu vật tư quý 4 (tháng 10–12) còn sống tới 1/2 năm sau, nên đợt dọn tháng 1 này có thể xoá
+ * chuyến xe mà phiếu tháng 10–11 vẫn đang trỏ tới. Cùng giao dịch, bỏ các id đã chết khỏi
+ * `chemicalReceiptIds` của phiếu — không thì phiếu hiện "đã ghi N chuyến vào sổ" với chuyến không
+ * còn. CỐ Ý không gọi `syncMaterialTicketFromReceipts`: hàm đó dựng lại cả số "đã lãnh" và ngày
+ * nhận từ các chuyến còn lại, tức là xoá trắng số liệu lịch sử của phiếu đã xong. Ở đây chỉ dọn
+ * con trỏ, số liệu phiếu giữ nguyên.
+ */
 export async function purgeChemicalInventory(prisma: Db, now = new Date()): Promise<PurgeCounts> {
   const periods = await prisma.chemicalInventoryPeriod.findMany({
     where: { periodKey: expiredPeriodKeyWhere(now) },
@@ -135,12 +144,40 @@ export async function purgeChemicalInventory(prisma: Db, now = new Date()): Prom
   // sản lượng hợp đồng cũ; phần "đã nhận" của năm đó đương nhiên không còn ý nghĩa sau khi
   // phiếu nhập bị dọn.
   const receipts = receiptKeys.length
-    ? await prisma.chemicalReceipt.deleteMany({ where: { periodKey: { in: receiptKeys } } })
-    : { count: 0 };
+    ? await prisma.$transaction(async (tx) => {
+        const linked = await tx.chemicalReceipt.findMany({
+          where: { periodKey: { in: receiptKeys }, materialTicketId: { not: null } },
+          select: { id: true, materialTicketId: true },
+        });
+        const deleted = await tx.chemicalReceipt.deleteMany({ where: { periodKey: { in: receiptKeys } } });
+
+        const deadByTicket = new Map<string, Set<string>>();
+        for (const row of linked) {
+          const set = deadByTicket.get(row.materialTicketId!) ?? new Set<string>();
+          set.add(row.id);
+          deadByTicket.set(row.materialTicketId!, set);
+        }
+        let ticketsCleaned = 0;
+        for (const [ticketId, deadIds] of deadByTicket) {
+          // Phiếu có thể đã bị đợt dọn theo quý xoá trước — khi đó không còn gì để sửa.
+          const ticket = await tx.materialTicket.findUnique({ where: { id: ticketId }, select: { chemicalReceiptIds: true } });
+          if (!ticket) continue;
+          const next = ticket.chemicalReceiptIds.filter((id) => !deadIds.has(id));
+          if (next.length === ticket.chemicalReceiptIds.length) continue;
+          await tx.materialTicket.update({ where: { id: ticketId }, data: { chemicalReceiptIds: next } });
+          ticketsCleaned += 1;
+        }
+        return { count: deleted.count, ticketsCleaned };
+      })
+    : { count: 0, ticketsCleaned: 0 };
   const removed = keys.length
     ? await prisma.chemicalInventoryPeriod.deleteMany({ where: { periodKey: { in: keys } } })
     : { count: 0 };
-  return { chemicalPeriods: removed.count, chemicalReceipts: receipts.count };
+  return {
+    chemicalPeriods: removed.count,
+    chemicalReceipts: receipts.count,
+    ...(receipts.ticketsCleaned > 0 ? { ticketReceiptLinksCleaned: receipts.ticketsCleaned } : {}),
+  };
 }
 
 /**

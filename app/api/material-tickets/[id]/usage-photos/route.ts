@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { audit, fail, handle, ok, requireUser } from "@/lib/api";
+import { usagePhotoTotal } from "@/lib/constants";
 import { getWorkflowRoleMap, stepAllowedWithMap } from "@/lib/material-workflow";
 import { positionsMatch } from "@/lib/position-catalog";
 import { s3ProxyUrl } from "@/lib/s3";
@@ -10,10 +11,9 @@ import {
   deleteUsagePhotos,
   isUsagePhotoSlot,
   uploadUsagePhoto,
+  usagePhotoLabelFor,
+  usagePhotoSlotsFor,
   USAGE_PHOTO_COLUMNS,
-  USAGE_PHOTO_LABELS,
-  USAGE_PHOTO_SLOTS,
-  MIN_USAGE_PHOTOS,
   type UsagePhotoSlot,
 } from "@/lib/material-usage-photo";
 
@@ -24,6 +24,7 @@ const TICKET_SELECT = {
   status: true,
   settledAt: true,
   assignedPosition: true,
+  materialCategory: true,
   docUrl: true,
   usagePhotoBeforeKey: true,
   usagePhotoAfterKey: true,
@@ -35,18 +36,20 @@ type TicketRow = {
   status: string;
   settledAt: Date | null;
   assignedPosition: string;
+  materialCategory: string | null;
   docUrl: string | null;
   usagePhotoBeforeKey: string | null;
   usagePhotoAfterKey: string | null;
   usagePhotoSpecKey: string | null;
 };
 
+/** Các ô ảnh theo LOẠI VẬT TƯ của phiếu: bi nghiền 2 ô (DCS MILL OVERVIEW), còn lại 3 ô. */
 function photoPayload(t: TicketRow) {
-  return USAGE_PHOTO_SLOTS.map((slot) => {
+  return usagePhotoSlotsFor(t.materialCategory).map((slot) => {
     const key = t[USAGE_PHOTO_COLUMNS[slot]];
     return {
       slot,
-      ...USAGE_PHOTO_LABELS[slot],
+      ...usagePhotoLabelFor(slot, t.materialCategory),
       key,
       // Bucket không mở đọc ẩn danh — thẻ <img> phải đi qua proxy, xem lib/s3.ts.
       url: key ? s3ProxyUrl(key) : null,
@@ -110,13 +113,13 @@ async function loadTicket(id: string): Promise<TicketRow> {
   return t;
 }
 
-/** GET — ba ô ảnh của phiếu, kèm nhãn để giao diện không phải tự chế lại. */
+/** GET — các ô ảnh của phiếu, kèm nhãn để giao diện không phải tự chế lại. */
 export async function GET(_req: NextRequest, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
   return handle(async () => {
     await requireUser();
     const t = await loadTicket(params.id);
-    return ok({ photos: photoPayload(t), minRequired: MIN_USAGE_PHOTOS, filled: countUsagePhotos(t) });
+    return ok({ photos: photoPayload(t), minRequired: usagePhotoTotal(t.materialCategory), filled: countUsagePhotos(t) });
   });
 }
 
@@ -138,6 +141,10 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
     const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
     const slot = body.slot;
     if (!isUsagePhotoSlot(slot)) return fail("Vị trí ảnh không hợp lệ");
+    // Bi nghiền không có ô thứ ba — gọi thẳng API cũng không tải được ảnh vào ô đó.
+    if (!usagePhotoSlotsFor(t.materialCategory).includes(slot)) {
+      return fail("Phiếu bi nghiền chỉ có 2 ảnh: DCS MILL OVERVIEW trước và sau khi bổ sung bi");
+    }
     const dataUrl = String(body.dataUrl || "");
     if (!dataUrl) return fail("Chưa chọn ảnh");
 
@@ -157,9 +164,10 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
 
     await refreshBbntDoAfterPhotoChange(t.id, Boolean(t.docUrl));
 
+    const label = usagePhotoLabelFor(slot, t.materialCategory);
     await audit(
       user.id, "MT_USAGE_PHOTO", "MaterialTicket", t.id,
-      `${USAGE_PHOTO_LABELS[slot].title} (${USAGE_PHOTO_LABELS[slot].hint}): tải lên ${Math.round(uploaded.bytes / 1024)} KB` +
+      `${label.title} (${label.hint}): tải lên ${Math.round(uploaded.bytes / 1024)} KB` +
         (t.docUrl ? "; cập nhật lại BBNT D-Office" : "")
     );
 
@@ -167,7 +175,11 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
   });
 }
 
-/** DELETE ?slot=before|after|spec — gỡ một ô ảnh. */
+/**
+ * DELETE ?slot=before|after|spec — gỡ một ô ảnh.
+ *
+ * Không chặn ô ngoài loại vật tư như PUT: gỡ ảnh ô 3 cũ còn sót trên phiếu bi là dọn dẹp, vô hại.
+ */
 export async function DELETE(req: NextRequest, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
   return handle(async () => {
@@ -186,7 +198,7 @@ export async function DELETE(req: NextRequest, props: { params: Promise<{ id: st
     await prisma.materialTicket.update({ where: { id: t.id }, data: { [column]: null } });
     await deleteUsagePhotos([key]);
     await refreshBbntDoAfterPhotoChange(t.id, Boolean(t.docUrl));
-    await audit(user.id, "MT_USAGE_PHOTO", "MaterialTicket", t.id, `${USAGE_PHOTO_LABELS[slot].title}: đã gỡ ảnh`);
+    await audit(user.id, "MT_USAGE_PHOTO", "MaterialTicket", t.id, `${usagePhotoLabelFor(slot, t.materialCategory).title}: đã gỡ ảnh`);
 
     return ok({ photos: photoPayload(await loadTicket(t.id)) });
   });

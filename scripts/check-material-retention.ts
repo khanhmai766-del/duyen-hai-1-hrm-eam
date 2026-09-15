@@ -46,6 +46,18 @@ async function main() {
     : 0;
   console.log(`  Tịnh kho hóa chất : ${periodKeys.length} kỳ, ${readings} dòng tồn, ${receipts} phiếu nhập`);
   if (periodKeys.length) console.log(`      kỳ: ${periodKeys.join(", ")}`);
+  const linkedReceipts = receiptKeys.length
+    ? await prisma.chemicalReceipt.findMany({
+        where: { periodKey: { in: receiptKeys }, materialTicketId: { not: null } },
+        select: { materialTicketId: true },
+      })
+    : [];
+  if (linkedReceipts.length) {
+    const ticketCount = new Set(linkedReceipts.map((r) => r.materialTicketId)).size;
+    console.log(
+      `      trong đó ${linkedReceipts.length} phiếu nhập đang gắn ${ticketCount} phiếu vật tư — phiếu vật tư GIỮ NGUYÊN số đã lãnh, chỉ bỏ id chuyến xe đã dọn`
+    );
+  }
 
   const keepFrom = Number(new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Ho_Chi_Minh", year: "numeric" }).format(now)) - 1;
   const plans = await prisma.materialAnnualPlan.count({ where: { year: { lt: keepFrom } } });
