@@ -2,8 +2,8 @@
 
 Workflow chỉ đọc dữ liệu mà người đang đăng nhập được phép xem. Website xác thực
 NextAuth, phát capability token sống 2 phút; n8n dùng token đó khi gọi bốn API tool.
-Gemini không được kết nối trực tiếp PostgreSQL. Nội dung câu hỏi, tối đa 10 tin nhắn
-gần nhất và các trường văn bản tối thiểu do tool trả về được gửi qua n8n tới Google
+Gemini không được kết nối trực tiếp PostgreSQL. Nội dung câu hỏi, tối đa 6 tin nhắn
+gần nhất (mỗi tin tối đa 400 ký tự) và các trường văn bản tối thiểu do tool trả về được gửi qua n8n tới Google
 Gemini API (và Groq khi Gemini lỗi). Ảnh, avatar, tệp đính kèm và toàn bộ bảng dữ liệu
 không được gửi đi.
 
@@ -28,9 +28,10 @@ Trình duyệt ──POST /api/ai/chat──▶ Website ──webhook (streaming
 - **Hàng đợi**: 3 câu hỏi chạy cùng lúc, tối đa 8 câu bắt đầu mỗi phút; ai tới sau chờ theo thứ
   tự (được báo "còn N người phía trước"), tối đa 60 giây, thay vì nhận lỗi 429.
 - **Ngân sách token**: tối đa 6 lần gọi tool mỗi câu hỏi; mỗi kết quả tool chỉ gửi `facts` đã bỏ
-  trường rỗng, chuỗi cắt còn 200 ký tự, cả kết quả không quá ~6.000 ký tự (≈ 3.000 token) — dư
-  thì cắt bớt dòng và dặn mô hình đề nghị người dùng lọc hẹp hơn. Lịch sử hội thoại gửi kèm cắt
-  mỗi tin còn 600 ký tự.
+  trường rỗng, chuỗi cắt còn 200 ký tự, cả kết quả không quá ~4.500 ký tự (≈ 1.500–1.800 token) —
+  dư thì cắt bớt dòng và dặn mô hình đề nghị người dùng lọc hẹp hơn. Lịch sử hội thoại gửi kèm chỉ
+  6 tin gần nhất, mỗi tin 400 ký tự. Mức này đặt theo trần 8.000 token/phút (cộng dồn mọi lượt gọi)
+  của model dự phòng Groq miễn phí.
 - **Tự thử lại**: Gemini/Groq báo 429/503 hoặc không kết nối được n8n mà CHƯA phát chữ nào
   thì website tự thử lại sau 2 giây rồi 5 giây. Đã hiện chữ thì không thử lại.
 - Website vẫn hiểu phản hồi JSON kiểu cũ (`{answer, citations, suggestions}`), nên có thể
@@ -104,11 +105,11 @@ Thứ tự bắt buộc: **triển khai website trước**, rồi mới đổi w
 kiểu cũ lẫn streaming; website cũ không hiểu streaming.
 
 1. Tạo credential **Groq - DH1 Chatbox** (Credentials → Add → Groq API) bằng key miễn phí từ
-   console.groq.com. Không dán key vào chat hay file. Model dự phòng mẫu là
-   `meta-llama/llama-4-scout-17b-16e-instruct` (hạn mức token/phút và token/ngày của gói miễn phí
-   rộng nhất trong các model gọi được tool); đối chiếu trang console.groq.com/settings/limits
-   vì Groq có thể đổi hạn mức — model không còn trong danh sách thì chọn
-   `llama-3.3-70b-versatile`.
+   console.groq.com. Không dán key vào chat hay file. Model dự phòng là `openai/gpt-oss-120b`
+   (theo trang console.groq.com/settings/limits ngày 15/09/2026: 30 lượt/phút, 1.000 lượt/ngày,
+   8.000 token/phút, 200.000 token/ngày). Không chọn `groq/compound*` (chỉ chạy công cụ có sẵn
+   của Groq, không gọi được tool của website), `allam-2-7b`, `*prompt-guard*`, `*safeguard*`.
+   Thay thế được: `qwen/qwen3.8-27b` (cùng hạn mức) nếu gpt-oss-120b bị gỡ.
 2. Import `workflow-production.json` bằng **Import from File** thành workflow mới.
 3. Chọn credential cho: Webhook AI Chat, bốn tool, Xóa hội thoại quá 14 ngày, Google Gemini
    Chat Model, Groq dự phòng. Kiểm tra model Gemini đúng model credential được phép dùng
@@ -147,7 +148,7 @@ X-AI-Capability: <token-do-website-ky>
 - `POST /api/integrations/n8n/ai/cleanup` — chỉ cần Bearer token.
 
 Mỗi API tính lại quyền cương vị/cây thiết bị từ database, không tin role hoặc phạm vi do mô
-hình gửi. Kết quả tối đa 20 dòng và ~6.000 ký tự, mỗi dòng gồm `sourceType, sourceId, title,
+hình gửi. Kết quả tối đa 20 dòng và ~4.500 ký tự, mỗi dòng gồm `sourceType, sourceId, title,
 occurredAt, facts` (không có URL, ảnh, avatar hay tệp đính kèm); cắt bớt dòng thì kèm `omitted`. Quá 6 lần gọi trong một câu
 hỏi thì tool trả danh sách rỗng kèm lời nhắc trả lời bằng dữ liệu đã có.
 

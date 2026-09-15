@@ -49,8 +49,12 @@ const aiChatQueue = createAiChatQueue({
   maxPerWindow: envNumber("AI_CHAT_MAX_PER_MINUTE", 8, 1, 60),
   timeoutMs: 60_000,
 });
-/** Mỗi tin nhắn cũ gửi kèm làm ngữ cảnh chỉ cần ý chính — câu trả lời dài là token phải trả lại mỗi vòng. */
-const HISTORY_MESSAGE_LIMIT = 600;
+/**
+ * Ngữ cảnh hội thoại gửi kèm: 3 cặp hỏi–đáp gần nhất, mỗi tin 400 ký tự là đủ ý chính. Lịch sử
+ * được gửi lại ở MỌI vòng suy luận nên tốn token gấp nhiều lần — Groq dự phòng chỉ 8.000 token/phút.
+ */
+const HISTORY_MESSAGES_FOR_MODEL = 6;
+const HISTORY_MESSAGE_LIMIT = 400;
 /** nginx của website cắt kết nối im lặng quá 60 giây (proxy_read_timeout). */
 const PING_INTERVAL_MS = 15_000;
 /** Chỉ thử lại khi CHƯA phát chữ nào — đã hiện nửa câu thì thử lại sẽ ra câu khác. */
@@ -303,7 +307,7 @@ export async function POST(req: NextRequest) {
           question,
           conversationId: conversation?.id ?? randomUUID(),
           isNewConversation: !conversation,
-          history: [...(conversation?.messages ?? [])].reverse().map((message) => ({
+          history: [...(conversation?.messages ?? [])].reverse().slice(-HISTORY_MESSAGES_FOR_MODEL).map((message) => ({
             role: message.role,
             content: message.content.length > HISTORY_MESSAGE_LIMIT
               ? `${message.content.slice(0, HISTORY_MESSAGE_LIMIT)}…`

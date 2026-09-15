@@ -2,12 +2,13 @@
  * NGÂN SÁCH TOKEN cho kết quả công cụ AI.
  *
  * Kết quả công cụ đi thẳng vào ngữ cảnh của mô hình và được gửi lại ở mọi vòng suy luận sau đó.
- * Gói miễn phí giới hạn token mỗi phút (Groq có model chỉ 6.000 token/phút): 20 phiếu khiếm
- * khuyết kèm bản ghi thô là đủ vượt trần — Groq từ chối, Gemini thì cạn quota nhanh.
+ * Model dự phòng Groq miễn phí (openai/gpt-oss-120b) chỉ có 8.000 token/phút, tính CỘNG DỒN mọi
+ * lượt gọi trong phút: một câu hỏi tra cứu 2 lần gửi mô hình 3 lượt, lượt sau mang lại cả prompt,
+ * lịch sử và mọi kết quả công cụ trước đó. 20 phiếu khiếm khuyết kèm bản ghi thô là vượt trần ngay.
  *
- * Tiếng Việt có dấu tốn khoảng 2–2,5 ký tự cho một token, nên 6.000 ký tự ≈ 2.500–3.000 token.
+ * Tiếng Việt có dấu tốn khoảng 2,5–3 ký tự cho một token, nên 4.500 ký tự ≈ 1.500–1.800 token.
  */
-export const AI_TOOL_RESULT_CHAR_BUDGET = 6_000;
+export const AI_TOOL_RESULT_CHAR_BUDGET = 4_500;
 export const AI_TOOL_TEXT_LIMIT = 200;
 
 /** Chỉ giữ trường CÓ GIÁ TRỊ, ngày về ISO, chuỗi dài cắt còn `AI_TOOL_TEXT_LIMIT` ký tự. */
