@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { audit, fail, handle, ok, requireUser } from "@/lib/api";
 import { hasAssignedPermissionLevel } from "@/lib/rbac-permissions";
 import { createAiCapability } from "@/lib/ai-auth";
+import { decodeAiWebhookResponse } from "@/lib/ai-webhook-response";
 import {
   AI_CHAT_HISTORY_LIMIT,
   AI_CHAT_MAX_QUESTION_LENGTH,
@@ -91,17 +92,12 @@ export async function POST(req: NextRequest) {
         signal: AbortSignal.any([req.signal, AbortSignal.timeout(timeoutMs())]),
       });
       const raw = await response.text();
-      let payload: Record<string, unknown>;
-      try {
-        payload = JSON.parse(raw) as Record<string, unknown>;
-      } catch {
-        console.error("[ai chat] n8n trả dữ liệu không phải JSON", response.status);
-        return fail("Trợ lý AI trả dữ liệu không hợp lệ", 502);
+      const decoded = decodeAiWebhookResponse(raw, response.status);
+      if (!decoded.ok) {
+        console.error("[ai chat] phản hồi lỗi từ n8n", response.status, decoded.status);
+        return fail(decoded.message, decoded.status);
       }
-      if (!response.ok) {
-        console.error("[ai chat] n8n từ chối yêu cầu", response.status, String(payload.error ?? ""));
-        return fail("Trợ lý AI tạm thời không phản hồi. Vui lòng thử lại sau", 502);
-      }
+      const { payload } = decoded;
       const answer = String(payload.answer ?? payload.output ?? "").trim();
       if (!answer) return fail("Trợ lý AI chưa tạo được câu trả lời", 502);
       const citations = sanitizeAiCitations(payload.citations ?? payload.sources, conversationId);
