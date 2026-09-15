@@ -377,6 +377,7 @@ export async function DELETE(_req: NextRequest, props: { params: Promise<{ id: s
     // Phiếu đã quyết toán cũng là hồ sơ lịch sử dù còn nán lại bước trả phiếu thu hồi.
     const preserveCompletedSheetRow = t.status === "HOAN_TAT" || Boolean(t.settledAt);
     const deletedMaterials = [...new Map(t.items.map((item) => [item.material.code, item.material])).values()];
+    let removedChemicalTrucks = 0;
     await prisma.$transaction(async (tx) => {
       // Chặn thao tác tạo/xóa đồng thời trong lúc dồn STT để không phát sinh
       // số trùng hoặc khoảng trống giữa các phiếu.
@@ -405,12 +406,17 @@ export async function DELETE(_req: NextRequest, props: { params: Promise<{ id: s
         }
         await tx.materialStockMovement.deleteMany({ where: { ticketId: t.id } });
       }
-      // Gỡ các chuyến xe hóa chất phiếu này đã ghi sang sổ tồn kho. Bỏ qua bước này
-      // thì sổ hóa chất còn lại những chuyến trỏ vào một phiếu không còn tồn tại —
-      // đúng loại "số ma" mà đoạn hoàn kho phía trên sinh ra để tránh.
-      // Chuyến vốn có từ nhật ký ngày chỉ bị THÁO liên kết, không bị xóa.
+      // Gỡ các chuyến xe hóa chất phiếu này đã ghi sang sổ tồn kho.
+      //  - Phiếu DANG DỞ (thường là lập nhầm): chuyến do phiếu tạo bị xóa theo — bỏ qua thì sổ hóa
+      //    chất còn những chuyến trỏ vào phiếu không còn tồn tại, đúng loại "số ma" đoạn hoàn kho
+      //    phía trên sinh ra để tránh.
+      //  - Phiếu HOÀN TẤT / ĐÃ QUYẾT TOÁN: chỉ THÁO liên kết. Hàng đã về thật, đã tính vào tồn kho và
+      //    hợp đồng; xóa hồ sơ phiếu không được làm thủng sổ hóa chất (cùng cách đợt dọn theo quý).
+      // Chuyến vốn có từ nhật ký ngày / nhập Excel luôn chỉ bị THÁO liên kết.
       if (t.chemicalReceiptIds.length > 0) {
-        await unlinkTicketTrucks(tx, t.id, t.chemicalReceiptIds);
+        removedChemicalTrucks = await unlinkTicketTrucks(tx, t.id, t.chemicalReceiptIds, {
+          keepTicketRows: preserveCompletedSheetRow,
+        });
       }
       // Chỉ phiếu chưa hoàn tất mới phát lệnh xóa Sheet. Phiếu hoàn tất không
       // tạo tombstone nên dòng đã đồng bộ tiếp tục được giữ làm hồ sơ lịch sử.
@@ -460,7 +466,12 @@ export async function DELETE(_req: NextRequest, props: { params: Promise<{ id: s
       "MT_DELETE",
       "MaterialTicket",
       t.id,
-      `${materialTicketReference(t)}: xóa phiếu${preserveCompletedSheetRow ? "; giữ hồ sơ trên Sheet" : ""}`,
+      `${materialTicketReference(t)}: xóa phiếu${preserveCompletedSheetRow ? "; giữ hồ sơ trên Sheet" : ""}` +
+        (t.chemicalReceiptIds.length === 0
+          ? ""
+          : removedChemicalTrucks > 0
+            ? `; xóa ${removedChemicalTrucks} chuyến xe khỏi sổ hóa chất`
+            : `; giữ ${t.chemicalReceiptIds.length} chuyến xe trong sổ hóa chất (chỉ tháo liên kết)`),
     );
     return ok({
       id: t.id,
