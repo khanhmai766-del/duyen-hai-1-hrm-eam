@@ -208,7 +208,10 @@ export default function HrOverviewPage() {
               Không tìm thấy nhân sự phù hợp.
             </div>
           ) : (
-            <div className="grid max-h-[70vh] grid-cols-1 gap-3 overflow-y-auto pr-1 sm:grid-cols-2 lg:grid-cols-3">
+            // auto-rows-max: hàng luôn cao ĐÚNG bằng thẻ. Lưới có max-h + cuộn, còn thẻ có overflow-hidden
+            // và sm:min-h-0 → trình duyệt được phép co mọi hàng cho vừa khung; 172 người = 58 hàng dồn vào
+            // 70vh, thẻ bị ép còn ~26px, che mất tên và số điện thoại (chỉ còn dòng chức vụ).
+            <div className="grid max-h-[70vh] auto-rows-max grid-cols-1 gap-3 overflow-y-auto pr-1 sm:grid-cols-2 lg:grid-cols-3">
               {filtered.map((u) => (
                 <PersonCard key={u.id} u={u} />
               ))}
@@ -317,7 +320,7 @@ function PersonCard({ u }: { u: SafeUser }) {
             <Phone className="h-3.5 w-3.5 shrink-0" />
             <span className="truncate font-mono tracking-wide sm:font-sans sm:tracking-normal">{formatStaffPhone(u.phone)}</span>
           </span>
-          {u.department && <span className="truncate text-[10px] text-slate-400 sm:hidden">· {u.department}</span>}
+          {u.department && <span className="truncate text-[10px] text-slate-400 sm:text-xs sm:text-muted-foreground">· {u.department}</span>}
         </div>
       </div>
       {u.phone && (
