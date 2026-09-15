@@ -5,23 +5,61 @@ import { equipmentSeqWhere, resolveEquipmentAccessForUser } from "@/lib/server-a
 import { getCachedEquipmentNodeList } from "@/lib/equipment-node-cache";
 import { canViewPosition, resolvePositionViewScope } from "@/lib/position-data-scope";
 import { canViewMaterialReplacement } from "@/lib/material-replacement-access";
-import { createAiCitationProof } from "@/lib/ai-auth";
+import { normalizeAiCitation } from "@/lib/ai-chat";
+import { compactAiFacts as facts, fitAiToolItems } from "@/lib/ai-tool-budget";
+import {
+  AI_MAX_TOOL_CALLS,
+  claimAiToolCall,
+  recordAiCitations,
+  type AiToolName,
+} from "@/lib/ai-request-registry";
 
 export type AiToolUser = Awaited<ReturnType<typeof import("@/lib/ai-auth").requireAiToolUser>>;
 
 const MAX_RESULTS = 20;
 
-export function sealAiToolResult<T extends { items?: Array<Record<string, unknown>> }>(user: AiToolUser, result: T) {
+/** Đọc thân yêu cầu của công cụ; body hỏng/không phải object thì coi như rỗng thay vì lỗi 500. */
+export async function readAiToolInput(req: Request): Promise<Record<string, unknown>> {
+  const body: unknown = await req.json().catch(() => null);
+  return body && typeof body === "object" && !Array.isArray(body) ? (body as Record<string, unknown>) : {};
+}
+
+/**
+ * Chạy một công cụ AI qua các rào của lượt hỏi (xem lib/ai-request-registry.ts và
+ * lib/ai-tool-budget.ts): giới hạn số lần gọi, phát tiến trình, cắt kết quả vừa ngân sách token
+ * và ghi lại nguồn phía máy chủ.
+ *
+ * Kết quả gửi cho mô hình BỎ `url` (nguồn do website tự gắn, mô hình không cần thấy đường dẫn
+ * nên cũng không bịa link) và `summary` (trùng với `facts`). Chỉ những dòng mô hình THẬT SỰ
+ * nhận được mới được ghi làm nguồn đối chiếu.
+ */
+export async function runAiTool<T extends { items?: Array<Record<string, unknown>> }>(
+  user: AiToolUser,
+  tool: AiToolName,
+  run: () => Promise<T>
+) {
+  const owner = { userId: user.id, conversationId: user.conversationId };
+  if (user.requestId && !claimAiToolCall(user.requestId, owner, tool).allowed) {
+    return {
+      items: [],
+      message: `Đã dùng hết ${AI_MAX_TOOL_CALLS} lần tra cứu cho câu hỏi này. Hãy trả lời dựa trên dữ liệu đã có, hoặc đề nghị người dùng hỏi cụ thể hơn.`,
+    };
+  }
+  const result = await run();
+  const rows = result.items ?? [];
+  const fitted = fitAiToolItems(rows.map((item) => Object.fromEntries(
+    Object.entries(item).filter(([key]) => key !== "url" && key !== "summary")
+  )));
+  if (user.requestId) {
+    recordAiCitations(user.requestId, owner, rows.slice(0, fitted.items.length).flatMap((item) => normalizeAiCitation(item) ?? []));
+  }
   return {
     ...result,
-    items: result.items?.map((item) => ({
-      ...item,
-      proof: createAiCitationProof(user.conversationId, {
-        sourceType: String(item.sourceType ?? ""),
-        sourceId: String(item.sourceId ?? ""),
-        url: String(item.url ?? ""),
-      }),
-    })) ?? [],
+    items: fitted.items,
+    ...(fitted.omitted > 0 ? {
+      omitted: fitted.omitted,
+      message: `Còn ${fitted.omitted} kết quả không gửi kèm vì giới hạn độ dài. Nói rõ điều này và đề nghị người dùng lọc hẹp hơn (tổ máy, khoảng thời gian, trạng thái).`,
+    } : {}),
   };
 }
 
@@ -82,7 +120,7 @@ export async function aiSearchDevices(user: AiToolUser, input: Record<string, un
       summary: [node.seq, node.kks ? `KKS ${node.kks}` : null].filter(Boolean).join(" · "),
       occurredAt: null,
       url: deviceUrl(node.seq, selectedMachine),
-      data: { deviceSeq: node.seq, name: node.name, kks: node.kks ?? null, machine: selectedMachine },
+      facts: facts({ deviceSeq: node.seq, name: node.name, kks: node.kks, machine: selectedMachine }),
     }));
   return { items, ambiguous: items.length > 1 };
 }
@@ -144,7 +182,7 @@ export async function aiSearchDefects(user: AiToolUser, input: Record<string, un
       summary: [row.status, row.severity ? `Mức ${row.severity}` : null, row.content].filter(Boolean).join(" · "),
       occurredAt: row.detectedAt?.toISOString() ?? null,
       url: `/defects?q=${encodeURIComponent(row.requestNumber ?? row.id)}`,
-      data: row,
+      facts: facts({ unit: row.unit, status: row.status, severity: row.severity, requestType: row.requestType, requestNumber: row.requestNumber, device: row.node?.name ?? row.device, deviceSeq: row.deviceSeq, system: row.system, content: row.content, detectedAt: row.detectedAt, repairOrderNumber: row.repairOrderNumberRaw, repairSolution: row.repairSolutionRaw, repairPlan: row.repairPlanRaw, repairUnit: row.repairUnitRaw, repairResult: row.repairResultRaw, repairPerformedBy: row.repairPerformedByRaw, repairStartedAt: row.repairStartedAt, repairPerformedContent: row.repairPerformedContentRaw, awaitingMaterial: row.postRepairAwaitingMaterial }),
     }));
   return { items, hasMore: rows.length > items.length };
 }
@@ -217,7 +255,7 @@ export async function aiGetDeviceHistory(user: AiToolUser, input: Record<string,
       summary: [row.defectContent, row.content, row.result].filter(Boolean).join(" · "),
       occurredAt: row.performedAt.toISOString(),
       url: `/repair-history?search=${encodeURIComponent(row.requestNumber ?? row.workOrderNumber ?? row.id)}`,
-      data: row,
+      facts: facts({ unit: row.unit, requestNumber: row.requestNumber, workOrderNumber: row.workOrderNumber, requestType: row.requestType, performedAt: row.performedAt, defectContent: row.defectContent, content: row.content, result: row.result }),
     })),
     ...repairs.map((row) => ({
       sourceType: "REPAIR" as const,
@@ -226,7 +264,7 @@ export async function aiGetDeviceHistory(user: AiToolUser, input: Record<string,
       summary: [row.status, row.description, row.result].filter(Boolean).join(" · "),
       occurredAt: row.startedAt.toISOString(),
       url: `/repair-history/${encodeURIComponent(deviceSeq)}`,
-      data: row,
+      facts: facts({ machine: row.machine, status: row.status, priority: row.priority, startedAt: row.startedAt, completedAt: row.completedAt, description: row.description, symptom: row.symptom, cause: row.cause, action: row.action, result: row.result, downtime: row.downtime }),
     })),
     ...replacements.filter((row) => canViewMaterialReplacement(access, {
       deviceSeq: row.deviceSeq ?? row.replacement?.deviceSeq,
@@ -244,7 +282,7 @@ export async function aiGetDeviceHistory(user: AiToolUser, input: Record<string,
       ].filter((value) => value !== null && value !== undefined && value !== "").join(" · "),
       occurredAt: row.replacedAt.toISOString(),
       url: `/replacement-history?q=${encodeURIComponent(row.requestNumber ?? deviceSeq)}`,
-      data: row,
+      facts: facts({ material: row.material?.name ?? row.materialNameLabel, materialCode: row.material?.code, device: row.deviceLabel ?? row.deviceSeq, machine: row.machine, replacedAt: row.replacedAt, usedQuantity: row.usedQuantity, plannedQuantity: row.quantity, unit: row.unitLabel ?? row.material?.unit, requestNumber: row.requestNumber, pctNumber: row.pctNumber, intervalMonths: row.intervalMonths, note: row.note }),
     })),
   ].sort((left, right) => String(right.occurredAt).localeCompare(String(left.occurredAt))).slice(0, perType);
   return { items, hasMore: histories.length + repairs.length + replacements.length > items.length };
@@ -300,7 +338,7 @@ export async function aiSearchMaterialReplacements(user: AiToolUser, input: Reco
     summary: [row.deviceLabel ?? row.deviceSeq, row.usedQuantity ?? row.quantity, row.unitLabel ?? row.material?.unit, row.requestNumber].filter((value) => value !== null && value !== undefined && value !== "").join(" · "),
     occurredAt: row.replacedAt.toISOString(),
     url: `/replacement-history?q=${encodeURIComponent(row.requestNumber ?? row.deviceSeq ?? row.id)}`,
-    data: row,
+    facts: facts({ material: row.material?.name ?? row.materialNameLabel, materialCode: row.material?.code, device: row.deviceLabel ?? row.deviceSeq, machine: row.machine, replacedAt: row.replacedAt, usedQuantity: row.usedQuantity, plannedQuantity: row.quantity, unit: row.unitLabel ?? row.material?.unit, requestNumber: row.requestNumber, pctNumber: row.pctNumber, bbntDoNumber: row.bbntDoNumber, unplanned: row.unplanned, intervalMonths: row.intervalMonths, note: row.note }),
   }));
 
   const due = text(input.due, 20).toUpperCase();
@@ -332,7 +370,7 @@ export async function aiSearchMaterialReplacements(user: AiToolUser, input: Reco
       summary: [row.device?.name ?? row.location ?? row.deviceSeq, row.nextDueAt.toISOString()].filter(Boolean).join(" · "),
       occurredAt: row.nextDueAt.toISOString(),
       url: `/replacement-history?q=${encodeURIComponent(row.deviceSeq ?? row.material.code)}`,
-      data: row,
+      facts: facts({ material: row.material.name, materialCode: row.material.code, device: row.device?.name ?? row.location ?? row.deviceSeq, machine: row.machine, system: row.system, managingPosition: row.managingPosition, intervalMonths: row.intervalMonths, intervalNote: row.intervalNote, lastReplacedAt: row.lastReplacedAt, nextDueAt: row.nextDueAt }),
     }));
   }
   return { items: [...dueItems, ...items].slice(0, take), hasMore: rows.length > items.length };

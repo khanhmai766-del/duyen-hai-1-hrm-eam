@@ -1,19 +1,46 @@
-# Chatbox AI tra cứu Vận hành 1
+# Chatbox AI tra cứu Vận hành 1 (DH1 OPS INSIGHT)
 
 Workflow chỉ đọc dữ liệu mà người đang đăng nhập được phép xem. Website xác thực
 NextAuth, phát capability token sống 2 phút; n8n dùng token đó khi gọi bốn API tool.
-Gemini không được kết nối trực tiếp PostgreSQL. Theo phương án đã chọn, nội dung câu
-hỏi, tối đa 10 tin nhắn gần nhất và các trường văn bản tối thiểu do tool trả về sẽ được
-gửi qua n8n tới Google Gemini API. Ảnh, avatar, tệp đính kèm và toàn bộ bảng dữ liệu
+Gemini không được kết nối trực tiếp PostgreSQL. Nội dung câu hỏi, tối đa 10 tin nhắn
+gần nhất và các trường văn bản tối thiểu do tool trả về được gửi qua n8n tới Google
+Gemini API (và Groq khi Gemini lỗi). Ảnh, avatar, tệp đính kèm và toàn bộ bảng dữ liệu
 không được gửi đi.
 
-## 1. Tạo bí mật
+## 0. Luồng một câu hỏi
+
+```text
+Trình duyệt ──POST /api/ai/chat──▶ Website ──webhook (streaming)──▶ n8n Agent ──▶ Gemini (dự phòng: Groq)
+     ▲  NDJSON: status/tool/delta/done/error      │                        │
+     └────────────────────────────────────────────┘◀── json-lines ────────┘
+                                                   ▲
+                      n8n gọi tool ───────────────▶│ /api/integrations/n8n/ai/tools/*
+```
+
+- **Streaming**: webhook ở chế độ `streaming`, Agent bật `enableStreaming`; website chuyển
+  từng đoạn chữ về trình duyệt ngay khi mô hình sinh ra.
+- **Tiến trình thật**: capability mang mã lượt hỏi (`rid`). Khi n8n gọi tool, website biết
+  ngay và hiện "Đang tìm thiết bị…", "Đang tra cứu khiếm khuyết…".
+- **Nguồn đối chiếu do website tự gom** từ kết quả tool đã trả về — mô hình không phải chép
+  lại URL/chữ ký nữa (bản cũ hay chép sai nên mất nguồn). Tối đa 8 nguồn mỗi câu.
+- **Ghép hai gói miễn phí**: Gemini miễn phí là model chính; khi Gemini báo lỗi/hết lượt,
+  Agent tự chuyển sang Groq miễn phí (Enable Fallback Model).
+- **Hàng đợi**: 3 câu hỏi chạy cùng lúc, tối đa 8 câu bắt đầu mỗi phút; ai tới sau chờ theo thứ
+  tự (được báo "còn N người phía trước"), tối đa 60 giây, thay vì nhận lỗi 429.
+- **Ngân sách token**: tối đa 6 lần gọi tool mỗi câu hỏi; mỗi kết quả tool chỉ gửi `facts` đã bỏ
+  trường rỗng, chuỗi cắt còn 200 ký tự, cả kết quả không quá ~6.000 ký tự (≈ 3.000 token) — dư
+  thì cắt bớt dòng và dặn mô hình đề nghị người dùng lọc hẹp hơn. Lịch sử hội thoại gửi kèm cắt
+  mỗi tin còn 600 ký tự.
+- **Tự thử lại**: Gemini/Groq báo 429/503 hoặc không kết nối được n8n mà CHƯA phát chữ nào
+  thì website tự thử lại sau 2 giây rồi 5 giây. Đã hiện chữ thì không thử lại.
+- Website vẫn hiểu phản hồi JSON kiểu cũ (`{answer, citations, suggestions}`), nên có thể
+  triển khai website trước rồi mới đổi workflow.
+
+## 1. Bí mật và biến môi trường
 
 Người vận hành tự tạo ba chuỗi khác nhau, mỗi chuỗi tối thiểu 32 byte:
 
 ```bash
-openssl rand -hex 32
-openssl rand -hex 32
 openssl rand -hex 32
 ```
 
@@ -26,90 +53,92 @@ N8N_AI_CHAT_WEBHOOK_URL=https://n8n.example.com/webhook/ai-chat-dh1
 N8N_AI_CHAT_TOKEN=<token-webhook>
 N8N_AI_TOOL_TOKEN=<token-tool>
 AI_CAPABILITY_SECRET=<secret-ky-capability>
-AI_CHAT_TIMEOUT_MS=45000
+# Tuỳ chọn:
+AI_CHAT_TIMEOUT_MS=45000        # không nhận được byte nào từ n8n quá lâu thì dừng (35–90 giây)
+AI_CHAT_MAX_CONCURRENT=3        # số câu hỏi gọi n8n cùng lúc (1–10)
+AI_CHAT_MAX_PER_MINUTE=8        # số câu hỏi được bắt đầu mỗi phút (1–60)
 ```
 
-n8n dùng **hai credential Header Auth**, không đọc `$env`:
+`AI_CHAT_TIMEOUT_MS` nay là thời gian **im lặng** tối đa (n8n phát keepalive mỗi 30 giây khi
+streaming), không còn là thời gian của cả câu. Cả lượt hỏi, kể cả thử lại, bị chặn ở 110 giây —
+dưới hạn 120 giây của capability.
 
-| Tên credential | Header Name | Header Value | Node sử dụng |
+n8n dùng credential, không đọc `$env`:
+
+| Credential | Loại | Giá trị | Node sử dụng |
 | --- | --- | --- | --- |
-| DH1 AI Webhook Auth | Authorization | `Bearer <token-webhook>` | Webhook AI Chat |
-| DH1 AI Tool Auth | Authorization | `Bearer <token-tool>` | Bốn API tool và Xóa hội thoại quá 14 ngày |
+| DH1 AI Webhook Auth | Header Auth | `Authorization: Bearer <token-webhook>` | Webhook AI Chat |
+| DH1 AI Tool Auth | Header Auth | `Authorization: Bearer <token-tool>` | Bốn tool và Xóa hội thoại quá 14 ngày |
+| Gemini - DH1 Chatbox | Google Gemini (PaLM) API | API key Google AI Studio | Google Gemini Chat Model |
+| Groq - DH1 Chatbox | Groq API | API key tạo tại console.groq.com (gói miễn phí) | Groq dự phòng |
 
-Phải có một dấu cách sau `Bearer`; thay phần `<...>` bằng token thật khớp website.
-Header Auth là loại credential `httpHeaderAuth`. Với Webhook chọn Authentication =
-Header Auth. Với các node HTTP chọn Authentication = Generic Credential Type,
-Generic Auth Type = Header Auth, rồi chọn DH1 AI Tool Auth.
+URL đích được đặt cố định `https://duyenhai1.vn` trong các node HTTP; mô hình không được chọn
+host đích. Nếu đổi tên miền, cập nhật cả năm URL.
 
-`AI_CAPABILITY_SECRET` chỉ nằm trên website. Không ghi token vào Code node, header
-thường hoặc file workflow. URL đích được đặt cố định `https://duyenhai1.vn` trong các
-node HTTP; nếu đổi tên miền, cập nhật cả năm URL. Mô hình không được chọn host đích.
+### DNS trong container n8n
 
-Không cần các biến chatbox trong container n8n hoặc thay đổi
-`N8N_BLOCK_ENV_ACCESS_IN_NODE`. Có thể giữ nguyên các biến đã thêm nhưng workflow mới
-không dùng chúng. Không cần nạp lại container n8n cho thay đổi workflow này.
+Container n8n từng lỗi phân giải `duyenhai1.vn` từng lúc (tool báo `EAI_AGAIN`, mô hình trả lời
+"không tìm thấy dữ liệu"). Cách sửa là trỏ tên miền về máy chủ ngay trong container, trong
+`/opt/n8n/compose.yml` dưới service n8n:
+
+```yaml
+    extra_hosts:
+      - "duyenhai1.vn:host-gateway"
+```
+
+Rồi `docker compose -f /opt/n8n/compose.yml up -d n8n` ngoài giờ cao điểm. nginx của website
+nghe `0.0.0.0:443` nên chứng chỉ TLS vẫn hợp lệ khi đi qua địa chỉ gateway.
 
 ## 2. Đồng bộ schema
-
-Áp dụng đúng migration sau theo quy trình database của môi trường đích:
 
 ```text
 prisma/migrations/20260914120000_add_ai_chat/migration.sql
 ```
 
-Migration chỉ tạo `AiConversation`, `AiMessage`, index và khóa ngoại. Không sửa dữ liệu
-nghiệp vụ hiện có. Hội thoại được gia hạn 14 ngày sau mỗi câu trả lời thành công và
-workflow dọn chạy lúc 02:10 mỗi ngày.
+Migration chỉ tạo `AiConversation`, `AiMessage`, index và khóa ngoại. Hội thoại được gia hạn
+14 ngày sau mỗi câu trả lời thành công; workflow dọn chạy lúc 02:10 mỗi ngày.
 
-## 3. Import workflow
+## 3. Nâng cấp workflow
 
-1. Import `workflow-production.json` bằng **Import from File**.
-2. Chọn DH1 AI Webhook Auth cho Webhook; chọn DH1 AI Tool Auth cho bốn tool và node
-   dọn hội thoại. Mở node **Google Gemini Chat Model**, chọn credential Gemini API
-   đã tạo trên n8n và model đang sử dụng. Không tạo lại hoặc xóa credential Gemini cũ.
-3. Chọn model Gemini đang được credential cho phép. Bản mẫu dùng
-   `models/gemini-2.5-flash`; có thể đổi model mà không sửa website.
-4. Kiểm tra từ n8n truy cập được `https://duyenhai1.vn` qua HTTPS.
-5. Khi thay workflow cũ, giữ bản cũ để quay lui. Chuẩn bị đủ credential cho bản mới,
-   rồi unpublish bản cũ trước khi Publish bản mới để không trùng POST webhook path.
-   Thử câu hỏi từ website. Test URL chỉ dùng khi website được cấu hình URL kiểm thử;
-   mở URL trực tiếp trên trình duyệt không phải kiểm thử vì request cần POST và token.
-6. Sao chép Production URL vào `N8N_AI_CHAT_WEBHOOK_URL` của website.
+Thứ tự bắt buộc: **triển khai website trước**, rồi mới đổi workflow. Website mới hiểu cả JSON
+kiểu cũ lẫn streaming; website cũ không hiểu streaming.
 
-Workflow được giao ở trạng thái `active: false`; import không tự chạy và không có
-credential thật trong JSON.
+1. Tạo credential **Groq - DH1 Chatbox** (Credentials → Add → Groq API) bằng key miễn phí từ
+   console.groq.com. Không dán key vào chat hay file. Model dự phòng mẫu là
+   `meta-llama/llama-4-scout-17b-16e-instruct` (hạn mức token/phút và token/ngày của gói miễn phí
+   rộng nhất trong các model gọi được tool); đối chiếu trang console.groq.com/settings/limits
+   vì Groq có thể đổi hạn mức — model không còn trong danh sách thì chọn
+   `llama-3.3-70b-versatile`.
+2. Import `workflow-production.json` bằng **Import from File** thành workflow mới.
+3. Chọn credential cho: Webhook AI Chat, bốn tool, Xóa hội thoại quá 14 ngày, Google Gemini
+   Chat Model, Groq dự phòng. Kiểm tra model Gemini đúng model credential được phép dùng
+   (bản mẫu `models/gemini-3.8-flash`).
+4. Unpublish workflow cũ rồi Publish workflow mới (không để hai workflow trùng path
+   `ai-chat-dh1`). Giữ bản cũ ở trạng thái tắt để quay lui.
+5. Hỏi thử trên website: chữ phải hiện dần, có dòng trạng thái khi tra cứu, nguồn đối chiếu
+   hiện dưới câu trả lời.
 
-Settings của bản mẫu không lưu dữ liệu execution thành công, thất bại, thủ công
-hoặc tiến trình. Chỉ website lưu hội thoại thành công trong 14 ngày. Bản mới không
-tự xóa các execution của bản cũ; không xóa dữ liệu lịch sử nếu chưa được phê duyệt.
+Chưa có key Groq: xoá node **Groq dự phòng** và tắt **Enable Fallback Model** trong Agent, phần
+còn lại vẫn chạy (chỉ mất lớp dự phòng).
 
-### Trả lỗi dịch vụ AI
+Settings không lưu dữ liệu execution thành công, thất bại, thủ công hoặc tiến trình.
 
-Các node Xác thực và chuẩn hóa, Trợ lý AI VH1 và Chuẩn hóa câu trả lời dùng
-On Error = Continue (using error output). Output lỗi nối vào Chuẩn hóa lỗi AI,
-rồi Trả lỗi JSON về website. Nhánh thành công giữ nguyên.
+### Nhánh lỗi
 
-Nhánh lỗi chỉ trả mã và thông báo an toàn: `AI_PROVIDER_UNAVAILABLE` (HTTP 503),
-`AI_PROVIDER_RATE_LIMITED` (HTTP 429) hoặc `AI_WORKFLOW_FAILED` (HTTP 502). Không trả
-câu hỏi, capability, key hay lỗi thô. Website kiểm tra lỗi trước transaction lưu
-hội thoại, kể cả webhook trả nhầm HTTP 200 với body lỗi. Lỗi 503 không còn hiển thị
-thành lỗi JSON không hợp lệ. Việc này không khắc phục tình trạng quá tải của Google.
+`Xác thực và chuẩn hóa` và `Trợ lý AI VH1` dùng On Error = Continue (using error output) →
+`Chuẩn hóa lỗi AI` → `Trả lỗi về website` (Respond to Webhook 1.5, bật streaming). Nhánh lỗi chỉ
+trả mã: `AI_PROVIDER_UNAVAILABLE`, `AI_PROVIDER_RATE_LIMITED` hoặc `AI_WORKFLOW_FAILED`. Mô tả
+lỗi thô n8n tự phát trong luồng chỉ được website dùng để phân loại, không hiển thị, không ghi log.
 
-Để sửa workflow đang chạy mà giữ credential/model đã chọn, cập nhật prompt theo
-bản mẫu, thêm hai node xử lý lỗi và các kết nối error output nêu trên rồi Publish
-lại. Phần API website cũng cần được triển khai mới theo quy trình đã phê duyệt;
-chỉ Publish workflow không cập nhật mã nguồn website.
+Lỗi của MỘT lần gọi tool (mạng, hết hạn capability) không làm hỏng câu hỏi: mô hình vẫn trả
+lời tiếp với dữ liệu còn lại.
 
 ## 4. API tool
-
-Các request tool bắt buộc có cả hai header:
 
 ```http
 Authorization: Bearer N8N_AI_TOOL_TOKEN
 X-AI-Capability: <token-do-website-ky>
 ```
-
-Endpoint:
 
 - `POST /api/integrations/n8n/ai/tools/search-devices`
 - `POST /api/integrations/n8n/ai/tools/search-defects`
@@ -117,23 +146,39 @@ Endpoint:
 - `POST /api/integrations/n8n/ai/tools/material-replacements`
 - `POST /api/integrations/n8n/ai/cleanup` — chỉ cần Bearer token.
 
-Mỗi API tính lại quyền cương vị/cây thiết bị từ database, không tin role hoặc phạm vi
-do mô hình gửi. Kết quả tối đa 20 dòng và không trả ảnh/avatar/tệp đính kèm.
+Mỗi API tính lại quyền cương vị/cây thiết bị từ database, không tin role hoặc phạm vi do mô
+hình gửi. Kết quả tối đa 20 dòng và ~6.000 ký tự, mỗi dòng gồm `sourceType, sourceId, title,
+occurredAt, facts` (không có URL, ảnh, avatar hay tệp đính kèm); cắt bớt dòng thì kèm `omitted`. Quá 6 lần gọi trong một câu
+hỏi thì tool trả danh sách rỗng kèm lời nhắc trả lời bằng dữ liệu đã có.
 
-## 5. Kiểm thử chấp nhận
+## 5. Thử trên máy dev không cần n8n
+
+```bash
+node scripts/mock-n8n-ai-chat.mjs
+# terminal khác (giá trị giả, chỉ dùng cho dev):
+N8N_AI_CHAT_WEBHOOK_URL=http://127.0.0.1:5679/webhook/ai-chat-dh1 N8N_AI_CHAT_TOKEN=dev-webhook-token \
+N8N_AI_TOOL_TOKEN=dev-tool-token AI_CAPABILITY_SECRET=dev-capability-secret-0123456789abcdef \
+npm run dev -- -p 3030
+```
+
+n8n giả lập nói đúng giao thức streaming và gọi thật tool "Tìm thiết bị". Câu hỏi có
+"lỗi 429"/"lỗi 503" giả lập nhà cung cấp AI báo lỗi để xem tự thử lại và thông báo lỗi.
+
+Kiểm thử tự động: `npx tsx --test tests/ai/*.test.ts`.
+
+## 6. Kiểm thử chấp nhận
 
 - Tài khoản bị tắt quyền `ai-chat` không thấy nút và API trả 403.
 - Người dùng chỉ nhận dữ liệu trong phạm vi cây thiết bị và cương vị của mình.
-- ADMIN tắt chế độ quản trị vẫn dùng đúng vai trò hiệu lực tại lúc đặt câu hỏi.
 - Tên thiết bị mơ hồ làm AI hỏi lại, không tự chọn.
 - Tool không trả dữ liệu thì AI nói rõ không tìm thấy.
 - Webhook thiếu/sai token bị từ chối trước khi chạy Code hoặc Gemini.
-- Toàn bộ workflow không còn `$env`; không cần mở quyền đọc biến môi trường.
-- Câu lỗi/timeout không xuất hiện trong lịch sử.
-- Citation chỉ chứa đường dẫn nội bộ hợp lệ.
+- Chữ hiện dần; bấm Dừng thì dừng ngay, câu dở dang không được lưu.
+- Câu lỗi/timeout không xuất hiện trong lịch sử; trên màn hình câu hỏi vẫn còn, kèm Thử lại.
+- Nguồn đối chiếu chỉ chứa đường dẫn nội bộ hợp lệ.
 - Hội thoại quá hạn bị xóa bởi lịch 02:10.
 
-## 6. Quyền RBAC
+## 7. Quyền RBAC
 
-Quyền mới là `ai-chat`, mặc định `read` cho mọi vai trò. Quản trị viên có thể đổi về
-`none` theo vai trò hoặc ghi đè cho từng tài khoản tại trang ma trận phân quyền.
+Quyền `ai-chat`, mặc định `read` cho mọi vai trò. Quản trị viên có thể đổi về `none` theo vai
+trò hoặc ghi đè cho từng tài khoản tại trang ma trận phân quyền.

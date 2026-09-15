@@ -12,6 +12,8 @@ export type AiCapability = {
   role: string;
   systemRole: string;
   position: string | null;
+  /** Mã của lượt hỏi (xem lib/ai-request-registry.ts). Tuỳ chọn để capability cũ vẫn hợp lệ. */
+  rid?: string;
   iat: number;
   exp: number;
 };
@@ -38,6 +40,7 @@ export function createAiCapability(input: {
   role: string;
   systemRole?: string | null;
   position?: string | null;
+  requestId?: string;
 }) {
   const now = Math.floor(Date.now() / 1000);
   const capability: AiCapability = {
@@ -46,6 +49,7 @@ export function createAiCapability(input: {
     role: input.role,
     systemRole: input.systemRole ?? input.role,
     position: input.position?.trim() || null,
+    ...(input.requestId ? { rid: input.requestId } : {}),
     iat: now,
     exp: now + CAPABILITY_TTL_SECONDS,
   };
@@ -79,7 +83,8 @@ export function verifyAiCapability(token: string | null | undefined): AiCapabili
     if (
       !parsed.sub || !parsed.conversationId || !parsed.role || !parsed.systemRole ||
       !Number.isInteger(parsed.iat) || !Number.isInteger(parsed.exp) ||
-      parsed.exp! < now || parsed.iat! > now + 30 || parsed.exp! - parsed.iat! > CAPABILITY_TTL_SECONDS
+      parsed.exp! < now || parsed.iat! > now + 30 || parsed.exp! - parsed.iat! > CAPABILITY_TTL_SECONDS ||
+      (parsed.rid !== undefined && (typeof parsed.rid !== "string" || !parsed.rid || parsed.rid.length > 100))
     ) {
       throw new Error("invalid payload");
     }
@@ -139,6 +144,7 @@ export async function requireAiToolUser(req: NextRequest) {
     currentPosition: capability.position,
     position: capability.position ?? dbUser.currentPosition ?? dbUser.position,
     conversationId: capability.conversationId,
+    requestId: capability.rid ?? null,
   };
   if (!(await hasAssignedPermissionLevel(toolUser, "ai-chat", ["read", "personal", "manage", "full"]))) {
     throw fail("Tài khoản không còn quyền sử dụng trợ lý AI", 403);

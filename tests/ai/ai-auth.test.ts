@@ -23,6 +23,16 @@ test("capability hợp lệ giữ đúng phạm vi đã ký", () => {
   assert.equal(result.position, "VHV Lò S1");
 });
 
+test("capability mang mã lượt hỏi để website nối lượt gọi công cụ với câu hỏi", () => {
+  const token = createAiCapability({
+    userId: "user-1",
+    conversationId: "conversation-1",
+    role: "VIEWER",
+    requestId: "request-1",
+  });
+  assert.equal(verifyAiCapability(token).rid, "request-1");
+});
+
 test("capability bị sửa bị từ chối", () => {
   const token = createAiCapability({
     userId: "user-1",
