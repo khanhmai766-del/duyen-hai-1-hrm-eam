@@ -19,6 +19,7 @@ import {
   type AiConversationSummary,
 } from "@/hooks/useAiChat";
 import { AiMarkdown } from "@/components/ai/ai-markdown";
+import { Mascot } from "@/components/ai/page-mascot";
 import { AI_ASK_EVENT, type AiAskEntity, type AiAskRequest } from "@/lib/ai-ask";
 import type { AiPageContext } from "@/lib/ai-chat";
 import { normalizeText } from "@/lib/nav";
@@ -62,6 +63,24 @@ const STARTER_GROUPS: Array<{ label: string; icon: LucideIcon; items: Starter[] 
   },
 ];
 
+/**
+ * LỜI DẪN CỦA MASCOT. Ba câu, mỗi câu một hoàn cảnh — sửa chữ ở ngay đây.
+ *
+ * Cố ý KHÔNG để bong bóng nằm thường trực: một dòng chữ đứng mãi ở góc màn hình là thứ người
+ * dùng phải học cách bỏ qua. Nó chỉ bật khi có lý do, rồi tự tắt.
+ */
+const MASCOT_LINES = {
+  /** Lúc mới vào trang, hiện vài giây rồi tắt. `{ten}` thay bằng tên người đăng nhập. */
+  greeting: "Chào {ten}. Mình là DH1 INSIGHT, trợ lý tra cứu vận hành",
+  /** Khi rê chuột vào mascot. */
+  hover: "Hỏi tôi về khiếm khuyết, thiết bị, ca trực…",
+  /** Khi trợ lý đang chạy mà khung chat đang đóng. */
+  busy: "Đang tra cứu, chờ chút nhé…",
+};
+/** Lời chào xuất hiện sau chừng này và tự tắt sau GREETING_MS. */
+const GREETING_DELAY_MS = 1_200;
+const GREETING_MS = 2_500;
+
 export function AiChatbox() {
   const rbac = useRbacAccess();
   if (rbac.isLoading || !rbac.can("ai-chat", ["read", "personal", "manage", "full"])) return null;
@@ -90,6 +109,8 @@ function AiChatPanel() {
    * lượt render thừa nào.
    */
   const [entity, setEntity] = React.useState<{ path: string; value: AiAskEntity } | null>(null);
+  const [greeted, setGreeted] = React.useState(false);
+  const [hovered, setHovered] = React.useState(false);
   const pageContext = React.useMemo<AiPageContext>(
     () => ({ path: pathname, ...(entity?.path === pathname ? entity.value : {}) }),
     [pathname, entity]
@@ -107,6 +128,16 @@ function AiChatPanel() {
   React.useEffect(() => {
     if (open && view === "chat") focusInput();
   }, [open, view, focusInput]);
+
+  // Chào một lần mỗi lần tải trang: mở chatbox rồi đóng lại không làm nó chào lại từ đầu.
+  React.useEffect(() => {
+    const show = window.setTimeout(() => setGreeted(true), GREETING_DELAY_MS);
+    const hide = window.setTimeout(() => setGreeted(false), GREETING_DELAY_MS + GREETING_MS);
+    return () => {
+      window.clearTimeout(show);
+      window.clearTimeout(hide);
+    };
+  }, []);
 
   React.useEffect(() => {
     if (!open) return;
@@ -193,21 +224,49 @@ function AiChatPanel() {
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setOpen((value) => !value)}
-        aria-label={open ? "Đóng trợ lý AI" : "Mở trợ lý AI DH1 OPS INSIGHT"}
-        aria-expanded={open}
-        className={cn(
-          "fixed bottom-[calc(5.6rem+env(safe-area-inset-bottom))] right-4 z-40 grid h-12 w-12 place-items-center rounded-full bg-navy text-white shadow-lg shadow-navy/25 transition hover:bg-[#28507f] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-electric focus-visible:ring-offset-2 md:bottom-6 md:right-6",
-          open && "max-sm:hidden"
-        )}
-      >
-        {open ? <X className="h-5 w-5" /> : <Sparkles className="h-5 w-5" />}
-        {!open && chat.busy && (
-          <span className="absolute right-0 top-0 h-3 w-3 animate-pulse rounded-full bg-electric ring-2 ring-white" />
-        )}
-      </button>
+      {/*
+        Mascot TỰ là một <button>, nên khi mở khung chat phải đổi hẳn sang nút X tròn chứ không
+        bọc cái này trong cái kia — button lồng button là HTML không hợp lệ.
+      */}
+      {open ? (
+        <button
+          type="button"
+          onClick={() => setOpen(false)}
+          aria-label="Đóng trợ lý AI"
+          aria-expanded
+          className="fixed bottom-[calc(5.6rem+env(safe-area-inset-bottom))] right-4 z-40 grid h-12 w-12 place-items-center rounded-full bg-navy text-white shadow-lg shadow-navy/25 transition hover:bg-[#28507f] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-electric focus-visible:ring-offset-2 max-sm:hidden md:bottom-6 md:right-6"
+        >
+          <X className="h-5 w-5" />
+        </button>
+      ) : (
+        <span
+          className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] right-2 z-40 block md:bottom-2 md:right-4"
+          onMouseEnter={() => setHovered(true)}
+          onMouseLeave={() => setHovered(false)}
+        >
+          <MascotBubble
+            text={chat.busy
+              ? MASCOT_LINES.busy
+              : hovered
+                ? MASCOT_LINES.hover
+                : greeted
+                  ? MASCOT_LINES.greeting.replace("{ten}", firstName || "bạn")
+                  : null}
+          />
+          <Mascot
+            directions="/mascots/dh1-directions.webp"
+            reactions="/mascots/dh1-reactions.webp"
+            size={104}
+            onClick={() => setOpen(true)}
+            ariaLabel="Mở trợ lý AI DH1 OPS INSIGHT"
+            label="trợ lý AI"
+            className="rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-electric"
+          />
+          {chat.busy && (
+            <span className="pointer-events-none absolute right-2 top-3 h-3 w-3 animate-pulse rounded-full bg-electric ring-2 ring-white" />
+          )}
+        </span>
+      )}
 
       <section
         aria-label="Trợ lý AI DH1 OPS INSIGHT"
@@ -364,6 +423,39 @@ function AiChatPanel() {
         )}
       </section>
     </>
+  );
+}
+
+/**
+ * Bong bóng thoại bên trái mascot.
+ *
+ * `pointer-events-none` là bắt buộc: bong bóng phủ lên vùng bấm của mascot, để nó ăn chuột thì
+ * người dùng bấm vào chữ mà chatbox không mở. `aria-hidden` vì nút mascot đã có nhãn riêng —
+ * đọc cả hai là trình đọc màn hình nói thừa.
+ */
+function MascotBubble({ text }: { text: string | null }) {
+  // Giữ lại câu cũ trong lúc mờ dần, nếu không chữ biến mất trước rồi khung rỗng mới trôi đi.
+  // Chỉnh state NGAY TRONG RENDER (mẫu "adjusting state when a prop changes" của React) chứ
+  // không qua effect: effect chạy sau khi vẽ nên sẽ thấy một khung hình chữ cũ chớp lại.
+  const [shown, setShown] = React.useState(text);
+  const [seen, setSeen] = React.useState(text);
+  if (text && text !== seen) {
+    setSeen(text);
+    setShown(text);
+  }
+
+  return (
+    <span
+      aria-hidden
+      className={cn(
+        "pointer-events-none absolute right-full top-1/2 mr-1 w-max max-w-[min(15rem,45vw)] -translate-y-1/2 rounded-2xl rounded-br-md",
+        "bg-navy px-3 py-1.5 text-[12px] font-medium leading-5 text-white shadow-lg shadow-navy/25",
+        "transition-[opacity,transform] duration-200 motion-reduce:transition-none",
+        text ? "translate-x-0 opacity-100" : "translate-x-1 opacity-0"
+      )}
+    >
+      {shown}
+    </span>
   );
 }
 

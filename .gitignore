@@ -54,3 +54,7 @@ scripts/data/equipment-dedupe-backup-*.json
 
 # Kết quả chạy scripts/verify (crawl, hydration, ảnh) — chỉ dùng tạm, không lưu vào git
 reports/verify/
+
+# Ảnh gốc 2048x2048 của mascot (~11MB). Bản dựng đã nằm ở public/mascots/*.webp;
+# giữ nguồn ngoài git cho nhẹ, cần vẽ lại thì chạy skill page-mascot.
+characters/
