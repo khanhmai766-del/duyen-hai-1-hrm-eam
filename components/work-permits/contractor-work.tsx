@@ -1,13 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Plus, Users, X, Play, Square, Pencil } from "lucide-react";
+import { Plus, Users, X, Play, Square, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { PermitCompanyPicker } from "@/components/work-permits/company-picker";
 import { PermitEmployeePicker } from "@/components/work-permits/employee-picker";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
-import { usePermitPeople, useSavePermitPerson, usePermitSessionAction, usePermitActivity } from "@/hooks/useWorkPermits";
+import { useDeletePermitPerson, usePermitPeople, useSavePermitPerson, usePermitSessionAction, usePermitActivity } from "@/hooks/useWorkPermits";
 import { formatPermitNumber, PERMIT_KINDS } from "@/lib/work-permits";
 import type { PermitDetailRow, PermitMember, PermitPerson, PermitSession } from "@/lib/work-permits";
 
@@ -23,11 +23,17 @@ export function PermitPeopleDirectory({ onClose, onPick, onPickMany, existingMem
   const [page, setPage] = useState(1);
   const [editing, setEditing] = useState<PermitPerson | "new" | null>(null);
   const [selected, setSelected] = useState<PermitPerson[]>([]);
+  const remove = useDeletePermitPerson();
   const alreadyAdded = (person: PermitPerson) => existingMembers.some(member => member.personId === person.id || Boolean(member.code && member.code.normalize("NFC").trim().toUpperCase() === person.code.normalize("NFC").trim().toUpperCase()));
   const capacity = Math.max(0, 200 - existingMembers.length);
   function toggle(person: PermitPerson) {
     if (alreadyAdded(person)) return;
     setSelected(previous => previous.some(p => p.id === person.id) ? previous.filter(p => p.id !== person.id) : previous.length < capacity ? [...previous, person] : previous);
+  }
+  async function removePerson(person: PermitPerson) {
+    if (!window.confirm(`Xóa ${person.name} (${person.code}) khỏi danh sách nhân sự nhà thầu?\n\nNếu người này đã xuất hiện trên PCT, hệ thống sẽ giữ hồ sơ và hướng dẫn chuyển sang ngừng hoạt động.`)) return;
+    try { await remove.mutateAsync({ id: person.id, version: person.version }); toast.success("Đã xóa nhân sự nhà thầu"); }
+    catch (error) { toast.error(error instanceof Error ? error.message : "Không thể xóa hồ sơ"); }
   }
   useEffect(() => { const timer = setTimeout(() => { setSearch(q); setPage(1); }, 300); return () => clearTimeout(timer); }, [q]);
   const query = usePermitPeople({ q: search, page, active: Boolean(onPick || onPickMany), commander: commandersOnly, polling: Boolean(onPick || onPickMany) });
@@ -42,7 +48,7 @@ export function PermitPeopleDirectory({ onClose, onPick, onPickMany, existingMem
       {query.isPending ? <p role="status">Đang tải danh sách…</p> : query.isError ? <p role="alert" className="text-red-700">{query.error.message}</p> : <div className="space-y-2">
         {query.data?.data.map(p => <div key={p.id} className="flex items-center justify-between gap-3 rounded-lg border border-border p-3">
           <div><b>{p.name}</b><p className="text-sm text-muted-foreground">{p.code} · {p.company}</p><p className="text-xs text-muted-foreground">{p.canCommand ? "CHTT / nhân viên công tác" : "Nhân viên công tác"}{!p.isActive ? " · Ngừng hoạt động" : ""}</p>{p.activeWorks?.map(work => <p key={work.sessionId} className="mt-1 text-xs font-medium text-amber-700 dark:text-amber-300">Đang làm PCT {formatPermitNumber(work.permit)} · {PERMIT_KINDS[work.permit.kind]} · {work.role === "CHTT" ? "CHTT" : "Nhân viên công tác"} · từ {fmt(work.openedAt)}</p>)}</div>
-          <div className="flex gap-2">{onPickMany && <label className="flex cursor-pointer items-center gap-2 whitespace-nowrap text-sm"><input type="checkbox" aria-label={`Chọn ${p.name} · ${p.code}`} checked={alreadyAdded(p) || selected.some(person => person.id === p.id)} disabled={alreadyAdded(p) || (!selected.some(person => person.id === p.id) && selected.length >= capacity)} onChange={() => toggle(p)} />{alreadyAdded(p) ? "Đã có" : "Chọn"}</label>}{onPick && <Button type="button" size="sm" onClick={() => onPick(p)}>Chọn</Button>}{!onPickMany && query.data?.meta.canWrite && <Button size="sm" variant="outline" aria-label={`Sửa hồ sơ ${p.name}`} onClick={() => setEditing(p)}><Pencil /></Button>}</div>
+          <div className="flex gap-2">{onPickMany && <label className="flex cursor-pointer items-center gap-2 whitespace-nowrap text-sm"><input type="checkbox" aria-label={`Chọn ${p.name} · ${p.code}`} checked={alreadyAdded(p) || selected.some(person => person.id === p.id)} disabled={alreadyAdded(p) || (!selected.some(person => person.id === p.id) && selected.length >= capacity)} onChange={() => toggle(p)} />{alreadyAdded(p) ? "Đã có" : "Chọn"}</label>}{onPick && <Button type="button" size="sm" onClick={() => onPick(p)}>Chọn</Button>}{!onPickMany && query.data?.meta.canWrite && <Button size="sm" variant="outline" aria-label={`Sửa hồ sơ ${p.name}`} onClick={() => setEditing(p)}><Pencil /></Button>}{!onPick && !onPickMany && query.data?.meta.canWrite && <Button size="sm" variant="outline" className="text-red-700 hover:text-red-800" disabled={remove.isPending} aria-label={`Xóa hồ sơ ${p.name}`} onClick={() => void removePerson(p)}><Trash2 /></Button>}</div>
         </div>)}
         {!query.data?.data.length && <p className="py-8 text-center text-muted-foreground">Chưa có nhân sự phù hợp.</p>}
       </div>}
@@ -67,10 +73,10 @@ function PersonEditor({ initial, onClose }: { initial?: PermitPerson; onClose: (
   }
   return <Dialog open onOpenChange={v => { if (!v && !save.isPending) onClose(); }}><DialogContent>
     <DialogTitle>{initial ? "Cập nhật nhân sự nhà thầu" : "Thêm nhân sự nhà thầu"}</DialogTitle>
-    <DialogDescription>Tìm hồ sơ có sẵn trước khi thêm. Số thẻ an toàn được giữ cố định; một người cần dùng cùng hồ sơ khi đổi đơn vị.</DialogDescription>
+    <DialogDescription>Tìm hồ sơ có sẵn trước khi thêm. Có thể cập nhật số thẻ, họ tên, nhà thầu và vai trò khi thông tin thực tế thay đổi.</DialogDescription>
     <form onSubmit={submit}><fieldset disabled={save.isPending} className="space-y-4">
-      {(["code", "name"] as const).map(key => <label key={key} className="block space-y-1 text-sm"><span>{({ code: "Số thẻ an toàn *", name: "Họ tên *", company: "Nhà thầu *" })[key]}</span><input className={control} value={form[key]} disabled={key === "code" && Boolean(initial)} required maxLength={key === "code" ? 80 : 200} onChange={e => setForm({ ...form, [key]: e.target.value })} /></label>)}
-      <p className="text-xs text-muted-foreground">Nhập số thẻ an toàn thực tế, ví dụ 1052/NĐDH/TATĐ, để dùng khi điền mẫu PCT sau này.</p>
+      {(["code", "name"] as const).map(key => <label key={key} className="block space-y-1 text-sm"><span>{({ code: "Số thẻ an toàn *", name: "Họ tên *", company: "Nhà thầu *" })[key]}</span><input className={control} value={form[key]} required maxLength={key === "code" ? 80 : 200} onChange={e => setForm({ ...form, [key]: e.target.value })} /></label>)}
+      <p className="text-xs text-muted-foreground">Có thể sửa số thẻ, họ tên, nhà thầu và vai trò. Các PCT đã ghi vẫn giữ nguyên thông tin tại thời điểm thực hiện.</p>
       <PermitCompanyPicker value={form.company} onChange={company => setForm(prev => ({ ...prev, company }))} />
       <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.canCommand} onChange={e => setForm({ ...form, canCommand: e.target.checked })} />Có trong danh sách CHTT nhà thầu</label>
       <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.isActive} onChange={e => setForm({ ...form, isActive: e.target.checked })} />Đang hoạt động</label>

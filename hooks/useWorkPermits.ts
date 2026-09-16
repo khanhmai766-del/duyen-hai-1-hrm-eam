@@ -14,6 +14,14 @@ export function useSaveWorkPermit() {
   const qc = useQueryClient();
   return useMutation({ mutationFn: ({ id, body }: { id?: string; body: unknown }) => apiMutate<PermitRow>(`/api/work-permits${id ? `/${id}` : ""}`, id ? "PUT" : "POST", body), onSuccess: () => { qc.invalidateQueries({ queryKey: ["work-permits"] }); qc.invalidateQueries({ queryKey: ["work-permit"] }); qc.invalidateQueries({ queryKey: ["defect"] }); qc.invalidateQueries({ queryKey: ["work-permit-people"] }); qc.invalidateQueries({ queryKey: ["work-permit-number-suggestion"] }); } });
 }
+export function useCancelDraftWorkPermit() {
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: ({ id, version }: { id: string; version: number }) => apiMutate<PermitRow>(`/api/work-permits/${id}/cancel`, "POST", { version }), onSuccess: () => {
+    qc.invalidateQueries({ queryKey: ["work-permits"] });
+    qc.invalidateQueries({ queryKey: ["work-permit"] });
+    qc.invalidateQueries({ queryKey: ["work-permit-number-suggestion"] });
+  } });
+}
 export function useSaveNkvhPermitLink(id: string) {
   const qc = useQueryClient();
   return useMutation({ mutationFn: (body: { version: number; nkvhPctId: string | null }) => apiMutate<PermitRow>(`/api/work-permits/${id}/nkvh-link`, "PATCH", body), onSuccess: () => {
@@ -43,6 +51,13 @@ export function usePermitPeople(params: { q?: string; page?: number; active?: bo
 export function useSavePermitPerson() {
   const qc = useQueryClient();
   return useMutation({ mutationFn: ({ id, body }: { id?: string; body: unknown }) => apiMutate<PermitPerson>(`/api/work-permits/people${id ? `/${id}` : ""}`, id ? "PUT" : "POST", body), onSuccess: () => { qc.invalidateQueries({ queryKey: ["work-permit-people"] }); qc.invalidateQueries({ queryKey: ["work-permit-companies"] }); } });
+}
+export function useDeletePermitPerson() {
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: ({ id, version }: { id: string; version: number }) => apiMutate<{ id: string }>(`/api/work-permits/people/${id}`, "DELETE", { version }), onSuccess: () => {
+    qc.invalidateQueries({ queryKey: ["work-permit-people"] });
+    qc.invalidateQueries({ queryKey: ["work-permit-companies"] });
+  } });
 }
 export function usePermitSessionAction(permitId: string) {
   const qc = useQueryClient();

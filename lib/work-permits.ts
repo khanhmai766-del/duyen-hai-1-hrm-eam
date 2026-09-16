@@ -98,7 +98,7 @@ export function permitValue(key: string, value: unknown): string {
   return String(value);
 }
 
-/** code lưu số thẻ an toàn thực tế; giữ khóa API để tương thích dữ liệu đã có. */
+/** code lưu số thẻ an toàn thực tế; personId là khóa ổn định khi số thẻ được chỉnh sửa. */
 export interface PermitMember { personId?: string; code: string; name: string; company: string }
 export interface PermitPerson {
   id: string; code: string; name: string; company: string;
