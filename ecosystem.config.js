@@ -13,18 +13,28 @@ module.exports = {
     {
       name: "dh1-app",
       cwd: "/var/www/dh1-app",
-      script: "npm",
+      // Chạy THẲNG `next`, KHÔNG qua `npm start` (package.json: `start` chỉ là `next start`).
+      // Qua npm thì pm2 canh tiến trình vỏ `npm` (~76MB) còn `next-server` là tiến trình con
+      // pm2 không thấy — `max_memory_restart` bên dưới đo nhầm vỏ npm nên KHÔNG BAO GIỜ kích
+      // hoạt dù next-server rò tới cạn máy (phát hiện 16/09/2026). Bỏ npm còn bớt ~76MB RAM.
+      script: "node_modules/next/dist/bin/next",
       args: "start",
+      interpreter: "node",
       // FORK một instance là cố ý, KHÔNG chuyển sang cluster: cache node/index/quyền truy
       // cập nằm trong bộ nhớ tiến trình (xem docs/huong-dan-deploy-production.md phụ lục D) — hai instance
-      // là hai bản cache lệch nhau.
+      // là hai bản cache lệch nhau. Cũng vì thế: tác vụ nền trong instrumentation.ts (tự đóng
+      // PCT mỗi phút) chỉ được chạy ở ĐÚNG MỘT tiến trình.
       exec_mode: "fork",
       instances: 1,
-      // Tiến trình thường ~400MB; ngưỡng này chỉ để cứu khi rò bộ nhớ.
+      // Đo 16/09/2026: next-server ~730MB RSS lúc bình thường. Heap bị chặn 1024MB bởi
+      // NODE_OPTIONS nên vượt 1200MB RSS là đang rò — ngưỡng chỉ để cứu khi đó.
       max_memory_restart: "1200M",
       env: {
         NODE_ENV: "production",
         PORT: 3000,
+        // Trước đây biến này chỉ tồn tại trong bản lưu pm2 trên server, không có trong file —
+        // dựng lại từ file là mất chặn heap mà không ai biết.
+        NODE_OPTIONS: "--max-old-space-size=1024",
       },
     },
   ],
