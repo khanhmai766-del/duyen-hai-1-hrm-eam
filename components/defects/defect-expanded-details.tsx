@@ -13,6 +13,7 @@ import {
   DEFECT_SEVERITY,
   defectSeverityCriteriaLabels,
 } from "@/lib/constants";
+import { AskAiButton } from "@/components/ai/ask-ai-button";
 import { ImageLightbox } from "@/components/shared/image-lightbox";
 import { NkvhPermitLink } from "@/components/work-permits/nkvh-link";
 import { NkvhLinkDialog } from "@/components/work-permits/nkvh-link-dialog";
@@ -189,6 +190,14 @@ export function DefectExpandedDetails({ defect }: { defect: DefectItem }) {
             </>
           )}
         </div>
+      </div>
+
+      {/* Hỏi AI ngay tại phiếu: trợ lý nhận sẵn số yêu cầu và thiết bị nên không phải đoán lại. */}
+      <div className="flex justify-end lg:col-span-2 xl:col-span-3">
+        <AskAiButton
+          question={`Thiết bị ${defect.node?.name ?? defect.device ?? "này"} từng có khiếm khuyết tương tự phiếu ${defect.requestNumber || "đang xem"} chưa, xử lý thế nào?`}
+          entity={{ entityType: "DEFECT", entityId: defect.id, label: [defect.requestNumber, defect.node?.name ?? defect.device].filter(Boolean).join(" — ") }}
+        />
       </div>
     </div>
   );

@@ -2,15 +2,31 @@ import { prisma } from "@/lib/prisma";
 import { verifyAiCitationProof } from "@/lib/ai-auth";
 
 export const AI_CHAT_RETENTION_DAYS = 14;
+/**
+ * Số liệu chất lượng sống lâu hơn hội thoại (14 ngày) vì dùng để so tháng này với tháng trước.
+ * Bảng chỉ có số, không có nội dung câu hỏi (xem `AiTurnLog` trong prisma/schema.prisma).
+ */
+export const AI_TURN_LOG_RETENTION_DAYS = 180;
 export const AI_CHAT_MAX_QUESTION_LENGTH = 2_000;
 export const AI_CHAT_HISTORY_LIMIT = 10;
 
 export type AiCitation = {
-  sourceType: "DEVICE" | "DEFECT" | "DEFECT_HISTORY" | "REPAIR" | "MATERIAL_REPLACEMENT";
+  sourceType: "DEVICE" | "DEFECT" | "DEFECT_HISTORY" | "REPAIR" | "MATERIAL_REPLACEMENT" | "ANNOUNCEMENT" | "SHIFT";
   sourceId: string;
   title: string;
   url: string;
   occurredAt?: string | null;
+};
+
+/**
+ * TRANG NGƯỜI DÙNG ĐANG ĐỨNG khi đặt câu hỏi. Gửi kèm sang n8n để mô hình không phải đoán
+ * "thiết bị này" là thiết bị nào — nhờ đó bớt hẳn một lượt gọi công cụ "Tìm thiết bị".
+ */
+export type AiPageContext = {
+  path: string;
+  entityType?: AiCitation["sourceType"];
+  entityId?: string;
+  label?: string;
 };
 
 export function aiConversationExpiry(from = new Date()) {
@@ -18,9 +34,9 @@ export function aiConversationExpiry(from = new Date()) {
 }
 
 const ALLOWED_CITATION_TYPES = new Set<AiCitation["sourceType"]>([
-  "DEVICE", "DEFECT", "DEFECT_HISTORY", "REPAIR", "MATERIAL_REPLACEMENT",
+  "DEVICE", "DEFECT", "DEFECT_HISTORY", "REPAIR", "MATERIAL_REPLACEMENT", "ANNOUNCEMENT", "SHIFT",
 ]);
-const ALLOWED_CITATION_PATHS = /^\/(devices|defects|repair-history|replacement-history)(\/|\?|$)/;
+const ALLOWED_CITATION_PATHS = /^\/(devices|defects|repair-history|replacement-history|notifications|hr)(\/|\?|$)/;
 
 /**
  * Chuẩn hoá MỘT nguồn trích dẫn: đúng loại, có id + tiêu đề, và chỉ trỏ vào đường dẫn NỘI BỘ
@@ -53,8 +69,39 @@ export function sanitizeAiCitations(value: unknown, conversationId: string): AiC
   }).slice(0, 20);
 }
 
+/**
+ * Chuẩn hoá ngữ cảnh trang do TRÌNH DUYỆT gửi lên — coi như dữ liệu người dùng nhập, không
+ * tin được: chỉ nhận đường dẫn NỘI BỘ (một dấu "/" đầu, không phải "//host") và loại thực thể
+ * nằm trong danh sách cho phép. Nhãn bị cắt ngắn vì đi thẳng vào ngữ cảnh của mô hình.
+ */
+export function sanitizeAiPageContext(raw: unknown): AiPageContext | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const input = raw as Record<string, unknown>;
+  const path = String(input.path ?? "").trim().slice(0, 300);
+  if (!path.startsWith("/") || path.startsWith("//")) return null;
+  const entityType = String(input.entityType ?? "") as AiCitation["sourceType"];
+  const entityId = String(input.entityId ?? "").trim().slice(0, 200);
+  const label = String(input.label ?? "").replace(/\s+/g, " ").trim().slice(0, 120);
+  return {
+    path,
+    ...(ALLOWED_CITATION_TYPES.has(entityType) ? { entityType } : {}),
+    ...(entityId ? { entityId } : {}),
+    ...(label ? { label } : {}),
+  };
+}
+
+/** Đường dẫn để GHI SỐ LIỆU: bỏ query và hash để không lưu từ khoá tìm kiếm của người dùng. */
+export function aiPagePathForLog(page: AiPageContext | null) {
+  return page ? page.path.split(/[?#]/)[0]!.slice(0, 200) : null;
+}
+
 export function cleanupExpiredAiConversations() {
   void prisma.aiConversation.deleteMany({ where: { expiresAt: { lt: new Date() } } }).catch((error) => {
     console.error("[ai chat cleanup]", error);
   });
+}
+
+export function cleanupExpiredAiTurnLogs() {
+  const before = new Date(Date.now() - AI_TURN_LOG_RETENTION_DAYS * 24 * 60 * 60 * 1000);
+  return prisma.aiTurnLog.deleteMany({ where: { createdAt: { lt: before } } });
 }

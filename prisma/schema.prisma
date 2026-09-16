@@ -81,16 +81,53 @@ model AiConversation {
 }
 
 model AiMessage {
-  id             String   @id @default(cuid())
+  id             String    @id @default(cuid())
   conversationId String
   role           String // USER | ASSISTANT
-  content        String   @db.Text
+  content        String    @db.Text
   citations      Json?
-  createdAt      DateTime @default(now())
+  /// 1 = hữu ích, -1 = chưa đúng, null = chưa đánh giá. Chỉ có ở tin ASSISTANT.
+  rating         Int?
+  ratedAt        DateTime?
+  createdAt      DateTime  @default(now())
 
   conversation AiConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 
   @@index([conversationId, createdAt])
+}
+
+/// MỘT DÒNG CHO MỖI LƯỢT HỎI AI, KỂ CẢ LƯỢT THẤT BẠI.
+///
+/// Hội thoại chỉ sống 14 ngày và lượt hỏi lỗi thì không có `AiMessage` nào cả — nên số liệu
+/// chất lượng (tỉ lệ lỗi, độ trễ, số câu không có nguồn, đánh giá của người dùng) phải nằm
+/// ngoài hai bảng kia. Cố ý KHÔNG có khoá ngoại, giống `DefectHistory`: hội thoại bị xoá thì
+/// số liệu vẫn còn. Không lưu nội dung câu hỏi, chỉ lưu độ dài.
+model AiTurnLog {
+  id             String   @id @default(cuid())
+  userId         String
+  conversationId String
+  /// Id của tin ASSISTANT đã lưu (nếu lượt hỏi thành công) — chuỗi thường, không FK.
+  messageId      String?
+  /// OK | ERROR | STOPPED
+  status         String
+  /// Mã lỗi của lib/ai-webhook-response.ts khi status = ERROR.
+  errorCode      String?
+  latencyMs      Int
+  toolCalls      Int      @default(0)
+  citationCount  Int      @default(0)
+  answerChars    Int      @default(0)
+  questionChars  Int      @default(0)
+  /// Số lần website tự thử lại trong lượt hỏi này.
+  retries        Int      @default(0)
+  /// Người dùng đang đứng ở trang nào khi hỏi (đường dẫn nội bộ, không kèm tham số nhạy cảm).
+  pagePath       String?
+  /// Bản sao đánh giá của người dùng, giữ lại sau khi hội thoại hết hạn.
+  rating         Int?
+  createdAt      DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([status, createdAt])
+  @@index([userId, createdAt])
 }
 
 // Ảnh chụp kết quả tiện ích SHN/PPA; không lưu file Excel gốc.

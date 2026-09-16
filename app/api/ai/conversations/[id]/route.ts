@@ -18,7 +18,7 @@ export async function GET(_: NextRequest, context: { params: Promise<{ id: strin
       where: { id, userId: user.id, expiresAt: { gt: new Date() } },
       select: {
         id: true, title: true, createdAt: true, updatedAt: true, expiresAt: true,
-        messages: { orderBy: { createdAt: "asc" }, select: { id: true, role: true, content: true, citations: true, createdAt: true } },
+        messages: { orderBy: { createdAt: "asc" }, select: { id: true, role: true, content: true, citations: true, rating: true, createdAt: true } },
       },
     });
     if (!conversation) return fail("Không tìm thấy cuộc hội thoại hoặc hội thoại đã hết hạn", 404);

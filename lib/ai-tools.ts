@@ -6,6 +6,8 @@ import { getCachedEquipmentNodeList } from "@/lib/equipment-node-cache";
 import { canViewPosition, resolvePositionViewScope } from "@/lib/position-data-scope";
 import { canViewMaterialReplacement } from "@/lib/material-replacement-access";
 import { normalizeAiCitation } from "@/lib/ai-chat";
+import { SHIFT_TYPE, SHIFT_TYPE_ORDER, type ShiftTypeKey } from "@/lib/constants";
+import { dateRange as dayRange } from "@/lib/utils";
 import { compactAiFacts as facts, fitAiToolItems } from "@/lib/ai-tool-budget";
 import {
   AI_MAX_TOOL_CALLS,
@@ -374,4 +376,187 @@ export async function aiSearchMaterialReplacements(user: AiToolUser, input: Reco
     }));
   }
   return { items: [...dueItems, ...items].slice(0, take), hasMore: rows.length > items.length };
+}
+
+
+/** Một ca trực chiếm nhiều chỗ hơn một dòng khiếm khuyết, nên trần thấp hơn các công cụ khác. */
+const MAX_SHIFTS = 10;
+
+function shiftTypeKey(value: unknown): ShiftTypeKey | null {
+  const normalized = text(value, 20).toUpperCase();
+  return normalized in SHIFT_TYPE ? (normalized as ShiftTypeKey) : null;
+}
+
+/**
+ * Ngày của ca trực dưới dạng dd/mm/yyyy giờ Việt Nam.
+ *
+ * `Shift.date` được ghi ở NỬA ĐÊM GIỜ MÁY CHỦ (xem `dateRange` trong lib/utils.ts): production
+ * chạy UTC nên là 00:00Z, máy dev Việt Nam thì là 17:00Z hôm trước. Quy về múi giờ VN cho ra
+ * đúng ngày ở cả hai nơi, còn `slice(0, 10)` trên chuỗi ISO thì lệch một ngày trên máy dev.
+ */
+function vnDateLabel(value: Date) {
+  return value.toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "Asia/Ho_Chi_Minh" });
+}
+
+/**
+ * LỊCH TRỰC CA — ai trực ca nào, ngày nào, ở cương vị nào.
+ *
+ * Phạm vi bằng đúng `GET /api/shifts`: mọi tài khoản đăng nhập đều xem được sơ đồ ca trực, nên
+ * công cụ không rào thêm. Chỉ trả TÊN + CƯƠNG VỊ, không trả điện thoại, ảnh, chữ ký hay điểm
+ * danh — điểm danh là dữ liệu nhân sự, không thuộc phạm vi tra cứu vận hành.
+ */
+export async function aiGetShiftSchedule(user: AiToolUser, input: Record<string, unknown>) {
+  const rawLimit = Number(input.limit);
+  const take = Math.min(MAX_SHIFTS, Math.max(1, Number.isInteger(rawLimit) ? rawLimit : 3));
+  const anchor = date(input.date);
+  const from = date(input.from) ?? anchor;
+  const to = date(input.to, true) ?? anchor;
+  const window = {
+    gte: dayRange(from ?? to ?? new Date()).start,
+    lte: dayRange(to ?? from ?? new Date()).end,
+  };
+  const wantedType = shiftTypeKey(input.shiftType);
+  const unit = text(input.unit, 60);
+  // "tôi" = người đang hỏi; mô hình không biết id tài khoản nên chỉ cần truyền person="tôi".
+  const rawPerson = text(input.person, 120);
+  const person = /^(toi|minh|ban than)$/.test(normalizeText(rawPerson)) ? (user.name ?? "") : rawPerson;
+  // Lọc người TRONG BỘ NHỚ chứ không bằng `contains` của Postgres: tên tiếng Việt phải so sau khi
+  // bỏ dấu (normalizeText), nếu không thì "Khanh" không khớp "Khánh".
+  const personNeedle = normalizeText(person).length >= 2 ? normalizeText(person) : "";
+
+  const shifts = await prisma.shift.findMany({
+    where: {
+      date: window,
+      ...(wantedType ? { shiftType: wantedType } : {}),
+      ...(unit ? { unit: { contains: unit, mode: "insensitive" } } : {}),
+    },
+    orderBy: [{ date: "asc" }],
+    // Lọc người diễn ra sau khi đọc, nên phải lấy dư mới đủ kết quả.
+    take: personNeedle ? MAX_SHIFTS * 6 : take * 3,
+    select: {
+      id: true,
+      date: true,
+      shiftType: true,
+      unit: true,
+      assignments: {
+        orderBy: { positionLabel: "asc" },
+        select: { positionLabel: true, user: { select: { name: true } } },
+      },
+    },
+  });
+
+  const matched = shifts
+    .map((shift) => ({
+      shift,
+      staff: shift.assignments
+        .filter((assignment) => assignment.user?.name)
+        .map((assignment) => `${assignment.positionLabel}: ${assignment.user.name}`),
+    }))
+    .filter(({ staff }) => !personNeedle || staff.some((line) => normalizeText(line).includes(personNeedle)))
+    .sort((left, right) =>
+      left.shift.date.getTime() - right.shift.date.getTime() ||
+      SHIFT_TYPE_ORDER.indexOf(left.shift.shiftType as ShiftTypeKey) - SHIFT_TYPE_ORDER.indexOf(right.shift.shiftType as ShiftTypeKey));
+
+  const items = matched.slice(0, take).map(({ shift, staff }) => ({
+    sourceType: "SHIFT" as const,
+    sourceId: shift.id,
+    title: `Ca ${SHIFT_TYPE[shift.shiftType as ShiftTypeKey]?.label ?? shift.shiftType} ${vnDateLabel(shift.date)} — ${shift.unit}`,
+    summary: `${staff.length} người trực`,
+    occurredAt: shift.date.toISOString(),
+    url: "/hr",
+    facts: {
+      ...facts({
+        date: vnDateLabel(shift.date),
+        shift: SHIFT_TYPE[shift.shiftType as ShiftTypeKey]?.label ?? shift.shiftType,
+        unit: shift.unit,
+        staffCount: staff.length,
+      }),
+      // Mảng KHÔNG bị compactAiFacts cắt còn 200 ký tự như chuỗi — cả kíp phải tới được mô hình.
+      staff: staff.slice(0, 30),
+    },
+  }));
+
+  return {
+    items,
+    ...(items.length === 0 ? {
+      message: personNeedle
+        ? "Không thấy người này trong sơ đồ ca trực của khoảng ngày đã hỏi"
+        : "Không có ca trực nào khớp điều kiện trong khoảng ngày đã hỏi",
+    } : {}),
+    hasMore: matched.length > items.length,
+  };
+}
+
+const ANNOUNCEMENT_CATEGORY_LABEL: Record<string, string> = {
+  BULLETIN: "Bảng tin nội bộ",
+  ORDER: "Mệnh lệnh sản xuất",
+};
+
+/**
+ * THÔNG BÁO NỘI BỘ & MỆNH LỆNH SẢN XUẤT.
+ *
+ * Phạm vi bằng đúng `GET /api/announcements`: mọi tài khoản đăng nhập đều đọc được. Mệnh lệnh
+ * đã hết hiệu lực (`invalidatedAt`) bị loại trừ mặc định — trả lời bằng mệnh lệnh đã huỷ là sai
+ * nghiệp vụ; muốn tra cứu thì mô hình phải hỏi rõ (`includeInvalidated`).
+ */
+export async function aiSearchAnnouncements(user: AiToolUser, input: Record<string, unknown>) {
+  void user;
+  const query = text(input.query);
+  const rawCategory = text(input.category, 20).toUpperCase();
+  const category = rawCategory in ANNOUNCEMENT_CATEGORY_LABEL ? rawCategory : null;
+  const range = dateRange(input);
+  const includeInvalidated = input.includeInvalidated === true || text(input.includeInvalidated, 10) === "true";
+  const take = limitOf(input.limit);
+
+  const rows = await prisma.announcement.findMany({
+    where: {
+      ...(category ? { category } : {}),
+      ...(includeInvalidated ? {} : { invalidatedAt: null }),
+      ...(range ? { OR: [{ issuedAt: range }, { issuedAt: null, createdAt: range }] } : {}),
+      ...(query ? {
+        AND: [{ OR: [
+          { title: { contains: query, mode: "insensitive" } },
+          { body: { contains: query, mode: "insensitive" } },
+          { classification: { contains: query, mode: "insensitive" } },
+          { orderedBy: { contains: query, mode: "insensitive" } },
+        ] }],
+      } : {}),
+    },
+    orderBy: [{ pinned: "desc" }, { issuedAt: "desc" }, { createdAt: "desc" }],
+    take,
+    select: {
+      id: true, category: true, classification: true, stt: true, title: true, body: true,
+      pinned: true, orderedBy: true, issuedAt: true, invalidatedAt: true, createdAt: true,
+      createdBy: { select: { name: true } },
+    },
+  });
+
+  const items = rows.map((row) => ({
+    sourceType: "ANNOUNCEMENT" as const,
+    sourceId: row.id,
+    title: [ANNOUNCEMENT_CATEGORY_LABEL[row.category] ?? row.category, row.title].join(" — "),
+    summary: [row.classification, row.orderedBy ? `Theo lệnh ${row.orderedBy}` : null].filter(Boolean).join(" · "),
+    occurredAt: (row.issuedAt ?? row.createdAt).toISOString(),
+    url: `/notifications?announcementId=${encodeURIComponent(row.id)}`,
+    facts: facts({
+      category: ANNOUNCEMENT_CATEGORY_LABEL[row.category] ?? row.category,
+      classification: row.classification,
+      stt: row.stt,
+      title: row.title,
+      // Thân mệnh lệnh bị cắt còn 200 ký tự như mọi trường văn bản; mô hình phải dẫn người dùng
+      // sang trang gốc khi cần đọc đủ.
+      body: row.body,
+      orderedBy: row.orderedBy,
+      issuedAt: row.issuedAt ?? row.createdAt,
+      pinned: row.pinned,
+      invalidatedAt: row.invalidatedAt,
+      createdBy: row.createdBy?.name,
+    }),
+  }));
+
+  return {
+    items,
+    ...(items.length === 0 ? { message: "Không có thông báo hoặc mệnh lệnh nào khớp điều kiện" } : {}),
+    hasMore: rows.length >= take,
+  };
 }

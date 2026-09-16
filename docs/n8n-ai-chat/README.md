@@ -1,7 +1,7 @@
 # Chatbox AI tra cứu Vận hành 1 (DH1 OPS INSIGHT)
 
 Workflow chỉ đọc dữ liệu mà người đang đăng nhập được phép xem. Website xác thực
-NextAuth, phát capability token sống 2 phút; n8n dùng token đó khi gọi bốn API tool.
+NextAuth, phát capability token sống 2 phút; n8n dùng token đó khi gọi sáu API tool.
 Gemini không được kết nối trực tiếp PostgreSQL. Nội dung câu hỏi, tối đa 6 tin nhắn
 gần nhất (mỗi tin tối đa 400 ký tự) và các trường văn bản tối thiểu do tool trả về được gửi qua n8n tới Google
 Gemini API (và Groq khi Gemini lỗi). Ảnh, avatar, tệp đính kèm và toàn bộ bảng dữ liệu
@@ -25,6 +25,12 @@ Trình duyệt ──POST /api/ai/chat──▶ Website ──webhook (streaming
   lại URL/chữ ký nữa (bản cũ hay chép sai nên mất nguồn). Tối đa 8 nguồn mỗi câu.
 - **Ghép hai gói miễn phí**: Gemini miễn phí là model chính; khi Gemini báo lỗi/hết lượt,
   Agent tự chuyển sang Groq miễn phí (Enable Fallback Model).
+- **Ngữ cảnh trang**: nút "Hỏi AI" trên trang thiết bị / phiếu khiếm khuyết gửi kèm
+  `page = { path, entityType, entityId, label }`. Mô hình dùng thẳng `entityId` làm `deviceSeq`
+  nên BỚT HẲN một lượt gọi "Tìm thiết bị" cho mỗi câu — vừa nhanh hơn vừa hết cảnh trả lời
+  nhầm thiết bị trùng tên. Xem `lib/ai-ask.ts` và `components/ai/ask-ai-button.tsx`.
+- **Đo chất lượng**: mỗi lượt hỏi ghi một dòng `AiTurnLog` (kể cả lượt lỗi và lượt bị bấm Dừng),
+  người dùng chấm hữu ích / chưa đúng ngay dưới câu trả lời. Xem mục 8.
 - **Hàng đợi**: 3 câu hỏi chạy cùng lúc, tối đa 8 câu bắt đầu mỗi phút; ai tới sau chờ theo thứ
   tự (được báo "còn N người phía trước"), tối đa 60 giây, thay vì nhận lỗi 429.
 - **Ngân sách token**: tối đa 6 lần gọi tool mỗi câu hỏi; mỗi kết quả tool chỉ gửi `facts` đã bỏ
@@ -69,12 +75,12 @@ n8n dùng credential, không đọc `$env`:
 | Credential | Loại | Giá trị | Node sử dụng |
 | --- | --- | --- | --- |
 | DH1 AI Webhook Auth | Header Auth | `Authorization: Bearer <token-webhook>` | Webhook AI Chat |
-| DH1 AI Tool Auth | Header Auth | `Authorization: Bearer <token-tool>` | Bốn tool và Xóa hội thoại quá 14 ngày |
+| DH1 AI Tool Auth | Header Auth | `Authorization: Bearer <token-tool>` | Sáu tool và Xóa hội thoại quá 14 ngày |
 | Gemini - DH1 Chatbox | Google Gemini (PaLM) API | API key Google AI Studio | Google Gemini Chat Model |
 | Groq - DH1 Chatbox | Groq API | API key tạo tại console.groq.com (gói miễn phí) | Groq dự phòng |
 
 URL đích được đặt cố định `https://duyenhai1.vn` trong các node HTTP; mô hình không được chọn
-host đích. Nếu đổi tên miền, cập nhật cả năm URL.
+host đích. Nếu đổi tên miền, cập nhật cả bảy URL.
 
 ### DNS trong container n8n
 
@@ -111,9 +117,10 @@ kiểu cũ lẫn streaming; website cũ không hiểu streaming.
    của Groq, không gọi được tool của website), `allam-2-7b`, `*prompt-guard*`, `*safeguard*`.
    Thay thế được: `qwen/qwen3.8-27b` (cùng hạn mức) nếu gpt-oss-120b bị gỡ.
 2. Import `workflow-production.json` bằng **Import from File** thành workflow mới.
-3. Chọn credential cho: Webhook AI Chat, bốn tool, Xóa hội thoại quá 14 ngày, Google Gemini
-   Chat Model, Groq dự phòng. Kiểm tra model Gemini đúng model credential được phép dùng
-   (bản mẫu `models/gemini-3.8-flash`).
+3. Chọn credential cho: Webhook AI Chat, SÁU tool (gồm hai tool mới **Lịch trực ca** và
+   **Thông báo, mệnh lệnh**), Xóa hội thoại quá 14 ngày, Google Gemini Chat Model, Groq dự
+   phòng. Kiểm tra model Gemini đúng model credential được phép dùng (bản mẫu
+   `models/gemini-3.8-flash`).
 4. Unpublish workflow cũ rồi Publish workflow mới (không để hai workflow trùng path
    `ai-chat-dh1`). Giữ bản cũ ở trạng thái tắt để quay lui.
 5. Hỏi thử trên website: chữ phải hiện dần, có dòng trạng thái khi tra cứu, nguồn đối chiếu
@@ -145,7 +152,20 @@ X-AI-Capability: <token-do-website-ky>
 - `POST /api/integrations/n8n/ai/tools/search-defects`
 - `POST /api/integrations/n8n/ai/tools/device-history`
 - `POST /api/integrations/n8n/ai/tools/material-replacements`
+- `POST /api/integrations/n8n/ai/tools/shift-schedule`
+- `POST /api/integrations/n8n/ai/tools/search-announcements`
 - `POST /api/integrations/n8n/ai/cleanup` — chỉ cần Bearer token.
+
+Hai công cụ thêm ngày 16/09/2026 lấy phạm vi bằng ĐÚNG màn hình tương ứng, không rào thêm và
+cũng không nới ra:
+
+| Công cụ | Phạm vi | Cố ý KHÔNG trả |
+| --- | --- | --- |
+| `shift-schedule` | như `GET /api/shifts`: mọi tài khoản đăng nhập xem được sơ đồ ca trực | điện thoại, ảnh, chữ ký, dữ liệu điểm danh |
+| `search-announcements` | như `GET /api/announcements`: mọi tài khoản đăng nhập đọc được | mệnh lệnh đã hết hiệu lực, trừ khi hỏi rõ |
+
+Danh sách người trực đi trong `facts.staff` dưới dạng MẢNG chứ không phải chuỗi: `compactAiFacts`
+cắt mọi chuỗi còn 200 ký tự, một kíp 15 người sẽ mất nửa cuối.
 
 Mỗi API tính lại quyền cương vị/cây thiết bị từ database, không tin role hoặc phạm vi do mô
 hình gửi. Kết quả tối đa 20 dòng và ~4.500 ký tự, mỗi dòng gồm `sourceType, sourceId, title,
@@ -178,8 +198,38 @@ Kiểm thử tự động: `npx tsx --test tests/ai/*.test.ts`.
 - Câu lỗi/timeout không xuất hiện trong lịch sử; trên màn hình câu hỏi vẫn còn, kèm Thử lại.
 - Nguồn đối chiếu chỉ chứa đường dẫn nội bộ hợp lệ.
 - Hội thoại quá hạn bị xóa bởi lịch 02:10.
+- Mở một thiết bị rồi bấm "Hỏi AI": trợ lý trả lời đúng thiết bị đó mà KHÔNG hiện bước
+  "Đang tìm thiết bị".
+- Hỏi "hôm nay ai trực ca": trả đủ kíp, có nguồn đối chiếu trỏ về `/hr`.
+- Hỏi mệnh lệnh sản xuất: không nhắc tới mệnh lệnh đã đánh dấu hết hiệu lực.
+- Câu trả lời không tra được dữ liệu nào hiện dòng cảnh báo "không kèm nguồn đối chiếu".
+- Bấm hữu ích / chưa đúng rồi mở lại hội thoại từ lịch sử: nút vẫn giữ trạng thái đã chấm.
+- Tài khoản `ai-chat` mức `read` vào `/admin/ai` bị chặn; mức `manage` thì xem được.
 
 ## 7. Quyền RBAC
 
 Quyền `ai-chat`, mặc định `read` cho mọi vai trò. Quản trị viên có thể đổi về `none` theo vai
 trò hoặc ghi đè cho từng tài khoản tại trang ma trận phân quyền.
+
+Mức `manage`/`full` của cùng quyền đó mở thêm trang số liệu `/admin/ai`.
+
+## 8. Đo chất lượng
+
+Hội thoại tự xoá sau 14 ngày và lượt hỏi lỗi thì không sinh `AiMessage` nào, nên số liệu nằm ở
+bảng riêng `AiTurnLog` — FK-free như `DefectHistory`, sống 180 ngày, **không lưu nội dung câu
+hỏi**, chỉ lưu độ dài, độ trễ, số lượt tra cứu, số nguồn, mã lỗi và đường dẫn trang (đã bỏ query
+string). Đồng bộ schema:
+
+```text
+prisma/migrations/20260916090000_add_ai_chat_metrics/migration.sql
+```
+
+- **Người dùng chấm** hữu ích / chưa đúng ngay dưới câu trả lời (`PUT /api/ai/messages/:id/rating`).
+  Đánh giá ghi cả vào `AiMessage.rating` (để nút giữ trạng thái khi mở lại hội thoại) lẫn
+  `AiTurnLog.rating` (để số liệu còn sau khi hội thoại hết hạn).
+- **Bấm "Chưa đúng" là chia sẻ cặp hỏi–đáp đó cho quản trị** — chatbox nói rõ điều này ngay dưới
+  nút. Trang `/admin/ai` chỉ hiện những cặp đã bị chấm chưa đúng, không hiện hội thoại nào khác.
+- **Câu trả lời không có nguồn đối chiếu** được đánh dấu ngay trong chatbox và đếm riêng trên
+  trang số liệu: đó là chỉ số quan trọng nhất, vì nó đo đúng cái khó thấy nhất — trợ lý trả lời
+  chay chứ không dựa trên bản ghi nào của nhà máy.
+- Dọn số liệu quá 180 ngày: `cleanupExpiredAiTurnLogs()` trong `lib/ai-chat.ts`.

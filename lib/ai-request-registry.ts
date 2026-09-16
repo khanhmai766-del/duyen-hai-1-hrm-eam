@@ -20,13 +20,21 @@ import type { AiCitation } from "@/lib/ai-chat";
  * cùng tiến trình. pm2 chạy fork 1 instance (xem docs/huong-dan-deploy-production.md phụ lục D)
  * nên bộ nhớ tiến trình là đủ; reload giữa chừng thì lượt hỏi đó hỏng như mọi request khác.
  */
-export type AiToolName = "search-devices" | "search-defects" | "device-history" | "material-replacements";
+export type AiToolName =
+  | "search-devices"
+  | "search-defects"
+  | "device-history"
+  | "material-replacements"
+  | "shift-schedule"
+  | "search-announcements";
 
 export const AI_TOOL_LABELS: Record<AiToolName, string> = {
   "search-devices": "Đang tìm thiết bị",
   "search-defects": "Đang tra cứu khiếm khuyết",
   "device-history": "Đang đọc lịch sử thiết bị",
   "material-replacements": "Đang tra cứu thay vật tư",
+  "shift-schedule": "Đang xem lịch trực ca",
+  "search-announcements": "Đang đọc thông báo, mệnh lệnh",
 };
 
 /** Số lần gọi công cụ tối đa cho MỘT câu hỏi — quá mức này là mô hình đang lặp. */
@@ -109,6 +117,12 @@ export function claimAiToolCall(
     }
   }
   return { allowed: true, tracked: true };
+}
+
+/** Số lượt gọi công cụ ĐÃ ĐƯỢC PHÉP của lượt hỏi — đọc trước `closeAiRequest` để ghi số liệu. */
+export function aiRequestToolCalls(requestId: string) {
+  const entry = store.get(requestId);
+  return entry ? Math.min(entry.toolCalls, AI_MAX_TOOL_CALLS) : 0;
 }
 
 export function recordAiCitations(

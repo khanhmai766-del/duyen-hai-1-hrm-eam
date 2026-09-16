@@ -114,6 +114,9 @@ export async function requireAiToolUser(req: NextRequest) {
     where: { id: capability.sub },
     select: {
       id: true,
+      // Tên dùng cho công cụ lịch trực ca giải nghĩa person="tôi"; website vẫn gửi tên sang n8n
+      // trong mọi câu hỏi nên đây không phải dữ liệu mới bị lộ.
+      name: true,
       role: true,
       accessMode: true,
       position: true,

@@ -2,12 +2,13 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 import {
-  ArrowUp, Check, ChevronLeft, Copy, Cpu, History, Maximize2, Minimize2, Package,
-  RotateCcw, Search, Sparkles, Square, SquarePen, Trash2, TriangleAlert, X,
-  type LucideIcon,
+  ArrowUp, Check, ChevronLeft, Copy, Cpu, History, Maximize2, Minimize2, Megaphone, Package,
+  RotateCcw, Search, Sparkles, Square, SquarePen, ThumbsDown, ThumbsUp, Trash2, TriangleAlert,
+  Users, X, type LucideIcon,
 } from "lucide-react";
 import { useRbacAccess } from "@/hooks/useRbacAccess";
 import {
@@ -18,6 +19,8 @@ import {
   type AiConversationSummary,
 } from "@/hooks/useAiChat";
 import { AiMarkdown } from "@/components/ai/ai-markdown";
+import { AI_ASK_EVENT, type AiAskEntity, type AiAskRequest } from "@/lib/ai-ask";
+import type { AiPageContext } from "@/lib/ai-chat";
 import { normalizeText } from "@/lib/nav";
 import { cn } from "@/lib/utils";
 
@@ -44,6 +47,19 @@ const STARTER_GROUPS: Array<{ label: string; icon: LucideIcon; items: Starter[] 
     icon: Package,
     items: [{ text: "Vật tư nào sắp đến hạn thay trong 45 ngày tới?", send: true }],
   },
+  {
+    label: "Ca trực",
+    icon: Users,
+    items: [
+      { text: "Hôm nay ai trực ca?", send: true },
+      { text: "Tuần này tôi trực những ca nào?", send: true },
+    ],
+  },
+  {
+    label: "Mệnh lệnh",
+    icon: Megaphone,
+    items: [{ text: "Có mệnh lệnh sản xuất nào còn hiệu lực không?", send: true }],
+  },
 ];
 
 export function AiChatbox() {
@@ -58,6 +74,7 @@ function isPhone() {
 
 function AiChatPanel() {
   const { data: session } = useSession();
+  const pathname = usePathname();
   const chat = useAiChat();
   const [open, setOpen] = React.useState(false);
   const [view, setView] = React.useState<"chat" | "history">("chat");
@@ -66,6 +83,17 @@ function AiChatPanel() {
   const scrollRef = React.useRef<HTMLDivElement>(null);
   const inputRef = React.useRef<HTMLTextAreaElement>(null);
   const stickToBottom = React.useRef(true);
+  /**
+   * Thực thể người dùng đang xem, do nút "Hỏi AI" của trang gửi sang. Nhớ kèm ĐƯỜNG DẪN lúc bấm
+   * để tự hết hiệu lực khi người dùng sang trang khác — hỏi tiếp về một thiết bị đã rời màn hình
+   * gần như luôn là hiểu nhầm ngữ cảnh. Buộc theo đường dẫn thay vì xoá bằng effect thì không có
+   * lượt render thừa nào.
+   */
+  const [entity, setEntity] = React.useState<{ path: string; value: AiAskEntity } | null>(null);
+  const pageContext = React.useMemo<AiPageContext>(
+    () => ({ path: pathname, ...(entity?.path === pathname ? entity.value : {}) }),
+    [pathname, entity]
+  );
 
   const firstName = session?.user?.name?.trim().split(/\s+/).pop() ?? "";
   const position = session?.user?.currentPosition || session?.user?.position || "";
@@ -96,6 +124,33 @@ function AiChatPanel() {
     if (container && stickToBottom.current) container.scrollTop = container.scrollHeight;
   }, [chat.messages, view]);
 
+  // Nút "Hỏi AI" của các trang nghiệp vụ (xem lib/ai-ask.ts). Bộ nghe gắn MỘT lần và gọi qua ref:
+  // gắn lại theo dependency sẽ tháo/lắp listener ở mọi khung hình trong lúc câu trả lời đang chảy.
+  const handleAsk = (request: AiAskRequest) => {
+    if (!request?.question?.trim()) return;
+    const path = window.location.pathname;
+    if (request.entity) setEntity({ path, value: request.entity });
+    setOpen(true);
+    setView("chat");
+    if (request.send) {
+      send(request.question, { path, ...(request.entity ?? {}) });
+      return;
+    }
+    setDraft(request.question);
+    focusInput();
+  };
+
+  const onAskRef = React.useRef(handleAsk);
+  React.useEffect(() => {
+    onAskRef.current = handleAsk;
+  });
+
+  React.useEffect(() => {
+    const listener = (event: Event) => onAskRef.current((event as CustomEvent<AiAskRequest>).detail);
+    window.addEventListener(AI_ASK_EVENT, listener);
+    return () => window.removeEventListener(AI_ASK_EVENT, listener);
+  }, []);
+
   React.useEffect(() => {
     const input = inputRef.current;
     if (!input) return;
@@ -103,10 +158,10 @@ function AiChatPanel() {
     input.style.height = `${Math.min(input.scrollHeight, 160)}px`;
   }, [draft]);
 
-  function send(text = draft) {
+  function send(text = draft, page: AiPageContext = pageContext) {
     if (!text.trim() || chat.busy) return;
     stickToBottom.current = true;
-    void chat.ask(text);
+    void chat.ask(text, { page });
     setDraft("");
   }
 
@@ -240,6 +295,9 @@ function AiChatPanel() {
                         busy={chat.busy}
                         isLast={message.id === lastAssistantId}
                         onRetry={() => chat.retry(message.id)}
+                        onRate={(value) => {
+                          void chat.rate(message.id, value).catch((error: Error) => toast.error(error.message));
+                        }}
                         onEdit={() => {
                           setDraft(message.question ?? "");
                           inputRef.current?.focus();
@@ -264,7 +322,7 @@ function AiChatPanel() {
                     rows={1}
                     maxLength={MAX_QUESTION}
                     aria-label="Câu hỏi cho trợ lý AI"
-                    placeholder="Hỏi về khiếm khuyết, thiết bị, vật tư…"
+                    placeholder="Hỏi về khiếm khuyết, thiết bị, vật tư, ca trực…"
                     onChange={(event) => setDraft(event.target.value)}
                     onKeyDown={(event) => {
                       // isComposing: đang gõ Telex/VNI thì Enter là chốt chữ, không phải gửi.
@@ -333,7 +391,7 @@ function EmptyState({ firstName, position, onPick }: { firstName: string; positi
     <div className="my-auto py-2">
       <p className="text-lg font-semibold text-slate-900 dark:text-white">{firstName ? `Chào ${firstName},` : "Xin chào,"}</p>
       <p className="mt-1 text-[13px] leading-6 text-slate-500 dark:text-slate-400">
-        Hỏi về khiếm khuyết, lịch sử sửa chữa hay vật tư thay thế. Trợ lý chỉ đọc dữ liệu
+        Hỏi về khiếm khuyết, lịch sử sửa chữa, vật tư thay thế, lịch trực ca hay mệnh lệnh sản xuất. Trợ lý chỉ đọc dữ liệu
         {position ? <> cương vị <span className="font-medium text-slate-700 dark:text-slate-200">{position}</span></> : " bạn"} được phép xem và luôn dẫn nguồn để đối chiếu.
       </p>
       <div className="mt-6 space-y-4">
@@ -387,7 +445,7 @@ function PendingStatus({ message }: { message: AiChatMessage }) {
 }
 
 function AssistantMessage({
-  message, busy, isLast, onRetry, onEdit, onAsk, onNavigate,
+  message, busy, isLast, onRetry, onEdit, onAsk, onRate, onNavigate,
 }: {
   message: AiChatMessage;
   busy: boolean;
@@ -395,6 +453,7 @@ function AssistantMessage({
   onRetry: () => void;
   onEdit: () => void;
   onAsk: (text: string) => void;
+  onRate: (value: 1 | -1) => void;
   onNavigate: () => void;
 }) {
   const citations = message.citations ?? [];
@@ -446,6 +505,18 @@ function AssistantMessage({
         <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">Không lưu được vào lịch sử hội thoại.</p>
       )}
 
+      {/*
+        Không có nguồn nghĩa là câu trả lời KHÔNG dựa trên bản ghi nào của nhà máy — hoặc công
+        cụ không tìm ra gì, hoặc mô hình trả lời chay. Bản cũ chỉ ẩn khối nguồn đi, người đọc
+        không phân biệt được hai trường hợp đó với câu trả lời có dẫn chứng.
+      */}
+      {message.state === "done" && !!message.content && citations.length === 0 && (
+        <p className="mt-3 flex items-start gap-1.5 text-[11px] leading-5 text-amber-700 dark:text-amber-300">
+          <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          Câu trả lời này không kèm nguồn đối chiếu — hãy kiểm tra hồ sơ gốc trước khi dùng.
+        </p>
+      )}
+
       {citations.length > 0 && (
         <div className="mt-3">
           <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-slate-400">Nguồn đối chiếu</p>
@@ -469,9 +540,22 @@ function AssistantMessage({
       )}
 
       {message.state === "done" && message.content && (
-        <div className="mt-2 flex items-center gap-1 transition sm:opacity-0 sm:focus-within:opacity-100 sm:group-hover:opacity-100">
+        <div
+          className={cn(
+            "mt-2 flex items-center gap-1 transition",
+            // Câu mới nhất luôn hiện nút để còn ai đó bấm đánh giá; câu cũ chỉ hiện khi rê chuột.
+            !isLast && "sm:opacity-0 sm:focus-within:opacity-100 sm:group-hover:opacity-100"
+          )}
+        >
           <CopyButton text={message.content} />
+          {!!message.messageId && <RatingButtons rating={message.rating ?? null} onRate={onRate} />}
         </div>
+      )}
+
+      {message.rating === -1 && (
+        <p className="mt-1 text-[11px] text-slate-400">
+          Đã gửi câu hỏi và câu trả lời này cho quản trị rà soát.
+        </p>
       )}
 
       {isLast && message.state === "done" && !!message.suggestions?.length && (
@@ -490,6 +574,38 @@ function AssistantMessage({
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * Đánh giá câu trả lời. Bấm lại nút đang chọn là bỏ đánh giá.
+ *
+ * Đây là tín hiệu chất lượng DUY NHẤT gắn được với một câu trả lời cụ thể — số lần tra cứu hay
+ * độ trễ không cho biết câu trả lời có đúng hay không. Trang số liệu ở /admin/ai đọc đúng con số này.
+ */
+function RatingButtons({ rating, onRate }: { rating: number | null; onRate: (value: 1 | -1) => void }) {
+  const button = (value: 1 | -1, Icon: LucideIcon, label: string, title: string) => (
+    <button
+      type="button"
+      onClick={() => onRate(value)}
+      aria-label={label}
+      aria-pressed={rating === value}
+      title={title}
+      className={cn(
+        "grid h-7 w-7 place-items-center rounded-md transition hover:bg-slate-100 dark:hover:bg-slate-800",
+        rating === value
+          ? value === 1 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"
+          : "text-slate-400 hover:text-slate-700 dark:hover:text-white"
+      )}
+    >
+      <Icon className="h-3.5 w-3.5" />
+    </button>
+  );
+  return (
+    <>
+      {button(1, ThumbsUp, "Câu trả lời hữu ích", "Hữu ích")}
+      {button(-1, ThumbsDown, "Câu trả lời chưa đúng", "Chưa đúng — gửi câu hỏi này cho quản trị rà soát")}
+    </>
   );
 }
 

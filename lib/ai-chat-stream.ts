@@ -1,4 +1,4 @@
-import type { AiCitation } from "@/lib/ai-chat";
+import type { AiCitation, AiPageContext } from "@/lib/ai-chat";
 
 /**
  * Sự kiện website phát cho trình duyệt trong MỘT lượt hỏi AI — mỗi dòng một JSON
@@ -12,6 +12,8 @@ export type AiChatStreamEvent =
   | {
       type: "done";
       conversationId: string;
+      /** Id tin trả lời đã lưu, dùng để gửi đánh giá. `null` khi không lưu được vào lịch sử. */
+      messageId: string | null;
       answer: string;
       citations: AiCitation[];
       suggestions: string[];
@@ -36,7 +38,7 @@ export class AiChatRequestError extends Error {
  * của streaming.
  */
 export async function streamAiChat(
-  body: { question: string; conversationId: string | null },
+  body: { question: string; conversationId: string | null; page?: AiPageContext | null },
   onEvent: (event: AiChatStreamEvent) => void,
   signal: AbortSignal
 ) {

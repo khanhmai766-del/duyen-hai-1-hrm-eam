@@ -7,6 +7,7 @@ import { useSession } from "next-auth/react";
 import { QRCodeSVG } from "qrcode.react";
 import { toast } from "sonner";
 import { AlertTriangle, ArrowLeft, Download, Pencil, Trash2, FileText, Package, UserCog, ExternalLink, QrCode, Loader2, Plus, PackagePlus, Cpu, Wrench, PackageCheck, CheckCircle2, ImageIcon, type LucideIcon } from "lucide-react";
+import { AskAiButton } from "@/components/ai/ask-ai-button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -175,6 +176,12 @@ function DeviceDetailPageContent() {
                 </SelectContent>
               </Select>
             </div>
+            <AskAiButton
+              variant="toolbar"
+              label="Hỏi AI"
+              question={`Lịch sử sửa chữa và khiếm khuyết của thiết bị ${device.name} (${device.id})?`}
+              entity={{ entityType: "DEVICE", entityId: device.id, label: device.name }}
+            />
             <Button variant="outline" size="toolbar" onClick={() => setQrOpen(true)}>
               <QrCode className="h-4 w-4" /> Mã QR
             </Button>

@@ -35,14 +35,15 @@ const workflow = JSON.parse(workflowText) as {
 const byName = (name: string) => workflow.nodes.find(node => node.name === name)!;
 const agent = workflow.nodes.find(node => node.type.endsWith(".agent"))!;
 
-test("workflow không đọc môi trường, không mang credential và bắt buộc Header Auth ở cả sáu đầu kết nối", () => {
+test("workflow không đọc môi trường, không mang credential và bắt buộc Header Auth ở cả tám đầu kết nối", () => {
   assert.equal(workflowText.includes("$env"), false);
   assert.equal(workflow.active, false);
   assert.equal(workflow.nodes.some(node => node.credentials), false);
   const webhook = workflow.nodes.find(node => node.type === "n8n-nodes-base.webhook")!;
   assert.equal(webhook.parameters.authentication, "headerAuth");
   const outbound = workflow.nodes.filter(node => node.parameters.url);
-  assert.equal(outbound.length, 5);
+  // Sáu công cụ tra cứu + node dọn hội thoại hàng ngày.
+  assert.equal(outbound.length, 7);
   for (const node of outbound) {
     assert.equal(node.parameters.authentication, "genericCredentialType");
     assert.equal(node.parameters.genericAuthType, "httpHeaderAuth");
@@ -96,6 +97,20 @@ test("Agent có mô hình dự phòng, giới hạn vòng lặp và không tự 
   assert.notEqual(agent.retryOnFail, true);
 });
 
+test("sáu công cụ tra cứu đều nối vào Agent và trỏ đúng endpoint của website", () => {
+  const tools = Object.entries(workflow.connections)
+    .filter(([, outputs]) => (outputs.ai_tool ?? []).flat().some(target => target.node === agent.name))
+    .map(([source]) => source);
+  assert.deepEqual(tools.sort(), [
+    "Lịch sử thiết bị", "Lịch trực ca", "Thông báo, mệnh lệnh",
+    "Tìm thiết bị", "Tra cứu khiếm khuyết", "Tra cứu thay vật tư",
+  ].sort());
+  for (const [name, slug] of [["Lịch trực ca", "shift-schedule"], ["Thông báo, mệnh lệnh", "search-announcements"]] as const) {
+    assert.equal(byName(name).parameters.url, `https://duyenhai1.vn/api/integrations/n8n/ai/tools/${slug}`);
+    assert.equal(byName(name).type, "n8n-nodes-base.httpRequestTool");
+  }
+});
+
 function normalize(body: unknown) {
   const jsCode = byName("Xác thực và chuẩn hóa").parameters.jsCode!;
   return runInNewContext(`(function () { ${jsCode} })()`, {
@@ -113,6 +128,27 @@ test("chuẩn hóa chỉ giữ dữ liệu cần thiết, không nhận URL/toke
     question: "Tìm thiết bị", capability: "signed-capability", conversationId: "conversation",
     history: [{ role: "USER", content: "Câu trước" }],
   } }]);
+});
+
+test("chuẩn hóa giữ ngữ cảnh trang nội bộ và loại đường dẫn trỏ ra ngoài", () => {
+  const base = { question: "Thiết bị này hỏng gì", capability: "signed", conversationId: "conversation" };
+  const kept = normalize({ ...base, page: { path: "/devices/S1.01", entityType: "DEVICE", entityId: "S1.01", label: "Quạt khói A", thua: "bỏ" } });
+  assert.deepEqual(JSON.parse(JSON.stringify(kept))[0].json.page, {
+    path: "/devices/S1.01", entityType: "DEVICE", entityId: "S1.01", label: "Quạt khói A",
+  });
+  for (const page of [{ path: "//evil.example/x" }, { path: "https://evil.example" }, { path: "" }, "chuỗi"]) {
+    assert.equal(JSON.parse(JSON.stringify(normalize({ ...base, page })))[0].json.page, undefined);
+  }
+});
+
+test("prompt mang ngữ cảnh trang khi có, và bỏ hẳn khi không có", () => {
+  const expression = agent.parameters.text!;
+  const run = (json: Record<string, unknown>) => runInNewContext(expression.slice(3, -2), {
+    $json: json,
+    $now: { setZone: () => ({ toFormat: () => "2026-09-15" }) },
+  });
+  assert.match(run({ question: "x", history: [], page: { path: "/devices/S1.01", entityId: "S1.01" } }), /NGƯỜI DÙNG ĐANG XEM.*S1\.01/);
+  assert.equal(/NGƯỜI DÙNG ĐANG XEM/.test(run({ question: "x", history: [] })), false);
 });
 
 test("chuẩn hóa từ chối request thiếu capability hoặc câu hỏi quá dài", () => {

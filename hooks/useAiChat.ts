@@ -3,7 +3,7 @@
 import * as React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiMutate } from "@/lib/fetcher";
-import type { AiCitation } from "@/lib/ai-chat";
+import type { AiCitation, AiPageContext } from "@/lib/ai-chat";
 import { streamAiChat } from "@/lib/ai-chat-stream";
 
 export const AI_CONVERSATIONS_KEY = ["ai-conversations"] as const;
@@ -19,7 +19,7 @@ export type AiConversationSummary = {
 type AiConversationDetail = {
   id: string;
   title: string | null;
-  messages: Array<{ id: string; role: string; content: string; citations: unknown; createdAt: string }>;
+  messages: Array<{ id: string; role: string; content: string; citations: unknown; rating: number | null; createdAt: string }>;
 };
 
 export type AiChatMessage = {
@@ -36,6 +36,12 @@ export type AiChatMessage = {
   suggestions?: string[];
   error?: string;
   unsaved?: boolean;
+  /** Id tin nhắn phía máy chủ — chỉ có khi đã lưu; thiếu id thì không gửi đánh giá được. */
+  messageId?: string | null;
+  /** 1 = hữu ích, -1 = chưa đúng. */
+  rating?: number | null;
+  /** Trang người dùng đang đứng lúc hỏi; giữ lại để bấm "Thử lại" gửi đúng ngữ cảnh cũ. */
+  page?: AiPageContext | null;
 };
 
 function uid() {
@@ -76,6 +82,13 @@ export function useAiChat() {
   const controllerRef = React.useRef<AbortController | null>(null);
   const conversationRef = React.useRef<string | null>(null);
   const busyRef = React.useRef(false);
+  // Bản mới nhất của danh sách tin nhắn cho `rate` đọc: `rate` chỉ chạy từ sự kiện bấm nút, nên
+  // cập nhật trong effect là đủ sớm, mà không phải tạo lại hàm mỗi khi có thêm một mẩu chữ.
+  const messagesRef = React.useRef<AiChatMessage[]>([]);
+
+  React.useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
 
   const patch = React.useCallback(
     (id: string, update: Partial<AiChatMessage> | ((message: AiChatMessage) => Partial<AiChatMessage>)) => {
@@ -86,9 +99,14 @@ export function useAiChat() {
     []
   );
 
-  const ask = React.useCallback(async (rawQuestion: string, retryOf?: string) => {
+  const ask = React.useCallback(async (
+    rawQuestion: string,
+    options?: { retryOf?: string; page?: AiPageContext | null }
+  ) => {
     const question = rawQuestion.trim();
     if (!question || busyRef.current) return;
+    const retryOf = options?.retryOf;
+    const page = options?.page ?? null;
     busyRef.current = true;
     setBusy(true);
     const controller = new AbortController();
@@ -102,13 +120,14 @@ export function useAiChat() {
       question,
       toolCalls: 0,
       startedAt: Date.now(),
+      page,
     };
     setMessages((list) => retryOf
       ? [...list.filter((message) => message.id !== retryOf), pending]
       : [...list, { id: uid(), role: "USER", content: question }, pending]);
 
     try {
-      await streamAiChat({ question, conversationId: conversationRef.current }, (event) => {
+      await streamAiChat({ question, conversationId: conversationRef.current, page }, (event) => {
         switch (event.type) {
           case "status":
             patch(assistantId, { statusLabel: event.label });
@@ -132,6 +151,8 @@ export function useAiChat() {
               suggestions: event.suggestions,
               statusLabel: undefined,
               unsaved: !event.saved,
+              messageId: event.messageId,
+              rating: null,
             });
             break;
           case "error":
@@ -160,8 +181,28 @@ export function useAiChat() {
 
   const retry = React.useCallback((assistantId: string) => {
     const failed = messages.find((message) => message.id === assistantId);
-    if (failed?.question) void ask(failed.question, assistantId);
+    if (failed?.question) void ask(failed.question, { retryOf: assistantId, page: failed.page });
   }, [ask, messages]);
+
+  /**
+   * Chấm một câu trả lời. Bấm lại đúng nút đang chọn là bỏ đánh giá.
+   *
+   * Cập nhật lạc quan rồi hoàn tác nếu máy chủ từ chối — đánh giá là thao tác phụ, không đáng
+   * bắt người dùng chờ vòng quay.
+   */
+  const rate = React.useCallback(async (localId: string, value: 1 | -1) => {
+    const message = messagesRef.current.find((item) => item.id === localId);
+    if (!message?.messageId) return;
+    const previous = message.rating ?? null;
+    const next = previous === value ? 0 : value;
+    patch(localId, { rating: next === 0 ? null : next });
+    try {
+      await apiMutate(`/api/ai/messages/${encodeURIComponent(message.messageId)}/rating`, "PUT", { rating: next });
+    } catch (cause) {
+      patch(localId, { rating: previous });
+      throw cause;
+    }
+  }, [patch]);
 
   const stop = React.useCallback(() => controllerRef.current?.abort(), []);
 
@@ -189,6 +230,8 @@ export function useAiChat() {
             content: message.content,
             state: "done",
             citations: Array.isArray(message.citations) ? message.citations as AiCitation[] : [],
+            messageId: message.id,
+            rating: message.rating,
           }));
     } catch (cause) {
       setLoadError((cause as Error).message);
@@ -197,5 +240,5 @@ export function useAiChat() {
     }
   }, []);
 
-  return { conversationId, messages, busy, loadingConversation, loadError, ask, retry, stop, reset, openConversation };
+  return { conversationId, messages, busy, loadingConversation, loadError, ask, retry, rate, stop, reset, openConversation };
 }

@@ -10,6 +10,7 @@ import { AiQueueTimeoutError, createAiChatQueue } from "@/lib/ai-chat-queue";
 import {
   AI_MAX_CITATIONS,
   aiRequestCitations,
+  aiRequestToolCalls,
   closeAiRequest,
   openAiRequest,
   subscribeAiRequest,
@@ -19,9 +20,12 @@ import {
   AI_CHAT_HISTORY_LIMIT,
   AI_CHAT_MAX_QUESTION_LENGTH,
   aiConversationExpiry,
+  aiPagePathForLog,
   cleanupExpiredAiConversations,
   sanitizeAiCitations,
+  sanitizeAiPageContext,
   type AiCitation,
+  type AiPageContext,
 } from "@/lib/ai-chat";
 
 export const runtime = "nodejs";
@@ -110,13 +114,53 @@ type ChatContext = {
   conversationId: string;
   isNewConversation: boolean;
   history: Array<{ role: string; content: string }>;
+  page: AiPageContext | null;
   webhookUrl: string;
   webhookToken: string;
   send: (event: AiChatStreamEvent) => void;
   signal: AbortSignal;
 };
 
-type AttemptOutcome = { result: AiRelayResult; streamedChars: number; citations: AiCitation[] };
+type AttemptOutcome = { result: AiRelayResult; streamedChars: number; citations: AiCitation[]; toolCalls: number };
+
+/**
+ * MỘT DÒNG SỐ LIỆU CHO MỖI LƯỢT HỎI, kể cả lượt lỗi hoặc bị người dùng bấm Dừng.
+ *
+ * Không có bảng này thì lượt hỏi thất bại chỉ còn trong `console.error`, và câu trả lời không
+ * có nguồn đối chiếu (dấu hiệu mô hình trả lời chay) không ai đếm được. Ghi hỏng thì bỏ qua —
+ * số liệu không bao giờ được làm hỏng câu trả lời đã hiện cho người dùng.
+ */
+async function logAiTurn(ctx: ChatContext, entry: {
+  status: "OK" | "ERROR" | "STOPPED";
+  startedAt: number;
+  errorCode?: string | null;
+  messageId?: string | null;
+  toolCalls?: number;
+  citationCount?: number;
+  answerChars?: number;
+  retries?: number;
+}) {
+  try {
+    await prisma.aiTurnLog.create({
+      data: {
+        userId: ctx.user.id,
+        conversationId: ctx.conversationId,
+        messageId: entry.messageId ?? null,
+        status: entry.status,
+        errorCode: entry.errorCode ?? null,
+        latencyMs: Math.max(0, Date.now() - entry.startedAt),
+        toolCalls: entry.toolCalls ?? 0,
+        citationCount: entry.citationCount ?? 0,
+        answerChars: entry.answerChars ?? 0,
+        questionChars: ctx.question.length,
+        retries: entry.retries ?? 0,
+        pagePath: aiPagePathForLog(ctx.page),
+      },
+    });
+  } catch (error) {
+    console.error("[ai chat] không ghi được số liệu lượt hỏi", error);
+  }
+}
 
 async function runAttempt(ctx: ChatContext, startedAt: number): Promise<AttemptOutcome> {
   const requestId = randomUUID();
@@ -144,6 +188,7 @@ async function runAttempt(ctx: ChatContext, startedAt: number): Promise<AttemptO
         }),
         history: ctx.history,
         user: { name: ctx.user.name, position: ctx.user.currentPosition ?? ctx.user.position ?? null },
+        ...(ctx.page ? { page: ctx.page } : {}),
       }),
       signal: AbortSignal.any([ctx.signal, deadline]),
     });
@@ -151,12 +196,15 @@ async function runAttempt(ctx: ChatContext, startedAt: number): Promise<AttemptO
       streamedChars += text.length;
       ctx.send({ type: "delta", text });
     }, { idleMs: IDLE_TIMEOUT_MS });
-    return { result, streamedChars, citations: result.ok ? aiRequestCitations(requestId, result.answer) : [] };
+    // Đọc TRƯỚC `finally`: `closeAiRequest` xoá sổ theo dõi cùng với số lượt công cụ đã gọi.
+    const toolCalls = aiRequestToolCalls(requestId);
+    return { result, streamedChars, toolCalls, citations: result.ok ? aiRequestCitations(requestId, result.answer) : [] };
   } catch (error) {
+    const toolCalls = aiRequestToolCalls(requestId);
     if (ctx.signal.aborted) throw error;
     const code: AiErrorCode = deadline.aborted ? "AI_TIMEOUT" : "AI_CONNECTION_FAILED";
     if (code === "AI_CONNECTION_FAILED") console.error("[ai chat] không gọi được n8n:", (error as Error)?.message);
-    return { result: { ok: false, code }, streamedChars, citations: [] };
+    return { result: { ok: false, code }, streamedChars, toolCalls, citations: [] };
   } finally {
     unsubscribe();
     closeAiRequest(requestId);
@@ -174,6 +222,9 @@ async function saveAndFinish(ctx: ChatContext, outcome: AttemptOutcome & { resul
     : [];
   const now = new Date();
   const expiresAt = aiConversationExpiry(now);
+  // Id đặt sẵn thay vì để Prisma sinh: trình duyệt cần id của tin trả lời NGAY trong sự kiện
+  // "done" để gửi đánh giá hữu ích / chưa đúng, mà `createMany` thì không trả id về.
+  const messageId = randomUUID();
   let saved = true;
   try {
     await prisma.$transaction(async (tx) => {
@@ -186,7 +237,7 @@ async function saveAndFinish(ctx: ChatContext, outcome: AttemptOutcome & { resul
         data: [
           // Lệch 1 ms để câu hỏi luôn đứng trước câu trả lời khi sắp theo thời điểm tạo.
           { conversationId: ctx.conversationId, role: "USER", content: ctx.question, createdAt: new Date(now.getTime() - 1) },
-          { conversationId: ctx.conversationId, role: "ASSISTANT", content: answer, citations, createdAt: now },
+          { id: messageId, conversationId: ctx.conversationId, role: "ASSISTANT", content: answer, citations, createdAt: now },
         ],
       });
     });
@@ -199,16 +250,22 @@ async function saveAndFinish(ctx: ChatContext, outcome: AttemptOutcome & { resul
   ctx.send({
     type: "done",
     conversationId: ctx.conversationId,
+    messageId: saved ? messageId : null,
     answer,
     citations,
     suggestions,
     expiresAt: expiresAt.toISOString(),
     saved,
   });
+  return { messageId: saved ? messageId : null, citationCount: citations.length, answerChars: answer.length };
 }
 
 async function answerQuestion(ctx: ChatContext) {
+  // Tính từ đây chứ không từ lúc gọi n8n: thời gian chờ hàng đợi cũng là thời gian người dùng ngồi đợi.
+  const turnStartedAt = Date.now();
   ctx.send({ type: "meta", conversationId: ctx.conversationId });
+  let toolCalls = 0;
+  let retries = 0;
   let release: () => void;
   try {
     release = await aiChatQueue.acquire(ctx.signal, (position) => ctx.send({
@@ -216,18 +273,25 @@ async function answerQuestion(ctx: ChatContext) {
       label: position <= 1 ? "Đang chờ lượt, bạn là người kế tiếp" : `Đang chờ lượt, còn ${position - 1} người phía trước`,
     }));
   } catch (error) {
-    if (ctx.signal.aborted) return;
+    if (ctx.signal.aborted) {
+      await logAiTurn(ctx, { status: "STOPPED", startedAt: turnStartedAt });
+      return;
+    }
     if (!(error instanceof AiQueueTimeoutError)) throw error;
     ctx.send(errorEvent("AI_BUSY"));
+    await logAiTurn(ctx, { status: "ERROR", errorCode: "AI_BUSY", startedAt: turnStartedAt });
     return;
   }
   const startedAt = Date.now();
   try {
     for (let attempt = 0; ; attempt += 1) {
+      retries = attempt;
       ctx.send({ type: "status", label: attempt === 0 ? "Đang phân tích câu hỏi" : "Đang thử lại" });
       const outcome = await runAttempt(ctx, startedAt);
+      toolCalls += outcome.toolCalls;
       if (outcome.result.ok) {
-        await saveAndFinish(ctx, outcome as AttemptOutcome & { result: { ok: true } });
+        const finished = await saveAndFinish(ctx, outcome as AttemptOutcome & { result: { ok: true } });
+        await logAiTurn(ctx, { status: "OK", startedAt: turnStartedAt, toolCalls, retries, ...finished });
         return;
       }
       const { code } = outcome.result;
@@ -237,6 +301,10 @@ async function answerQuestion(ctx: ChatContext) {
       if (!canRetry) {
         console.error(`[ai chat] thất bại ${code} sau ${attempt + 1} lần`);
         ctx.send(errorEvent(code, outcome.streamedChars > 0));
+        await logAiTurn(ctx, {
+          status: "ERROR", errorCode: code, startedAt: turnStartedAt,
+          toolCalls, retries, answerChars: outcome.streamedChars,
+        });
         return;
       }
       ctx.send({
@@ -247,6 +315,11 @@ async function answerQuestion(ctx: ChatContext) {
       });
       await sleep(delay, ctx.signal);
     }
+  } catch (error) {
+    // Người dùng bấm Dừng hoặc đóng tab: vẫn ghi lại lượt hỏi, vì tỉ lệ bị bỏ dở là dấu hiệu
+    // câu trả lời quá chậm hoặc đi sai hướng.
+    if (!ctx.signal.aborted) throw error;
+    await logAiTurn(ctx, { status: "STOPPED", startedAt: turnStartedAt, toolCalls, retries });
   } finally {
     release();
   }
@@ -265,6 +338,7 @@ export async function POST(req: NextRequest) {
     if (activeUsers.has(user.id)) return fail("Một câu hỏi khác của bạn đang được xử lý", 409);
 
     cleanupExpiredAiConversations();
+    const page = sanitizeAiPageContext(body?.page);
     const requestedConversationId = String(body?.conversationId ?? "").trim();
     const conversation = requestedConversationId
       ? await prisma.aiConversation.findFirst({
@@ -313,6 +387,7 @@ export async function POST(req: NextRequest) {
               ? `${message.content.slice(0, HISTORY_MESSAGE_LIMIT)}…`
               : message.content,
           })),
+          page,
           webhookUrl,
           webhookToken,
           send,
