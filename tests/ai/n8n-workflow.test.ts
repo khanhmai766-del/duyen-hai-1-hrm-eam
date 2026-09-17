@@ -33,7 +33,23 @@ const workflow = JSON.parse(workflowText) as {
 };
 
 const byName = (name: string) => workflow.nodes.find(node => node.name === name)!;
-const agent = workflow.nodes.find(node => node.type.endsWith(".agent"))!;
+const agent = byName("Trợ lý AI VH1");
+/** Tầng 3: chỉ chạy khi cả Gemini lẫn Groq của Agent chính cùng báo 429/503. */
+const backupAgent = byName("Trợ lý AI VH1 - tầng 3");
+
+function languageModelsOf(agentName: string) {
+  return Object.entries(workflow.connections)
+    .flatMap(([source, outputs]) => (outputs.ai_languageModel ?? []).flat().map(target => ({ source, ...target })))
+    .filter(target => target.node === agentName)
+    .sort((left, right) => left.index - right.index);
+}
+
+function toolsOf(agentName: string) {
+  return Object.entries(workflow.connections)
+    .filter(([, outputs]) => (outputs.ai_tool ?? []).flat().some(target => target.node === agentName))
+    .map(([source]) => source)
+    .sort();
+}
 
 test("workflow không đọc môi trường, không mang credential và bắt buộc Header Auth ở cả tám đầu kết nối", () => {
   assert.equal(workflowText.includes("$env"), false);
@@ -75,6 +91,7 @@ test("câu trả lời được stream: webhook 2.1 streaming, Agent bật strea
   assert.equal(webhook.parameters.responseMode, "streaming");
   assert.ok(webhook.typeVersion >= 2.1);
   assert.equal(agent.parameters.options?.enableStreaming, true);
+  assert.equal(backupAgent.parameters.options?.enableStreaming, true);
   const respond = byName("Trả lỗi về website");
   assert.ok(respond.typeVersion >= 1.5);
   assert.equal(respond.parameters.options?.enableStreaming, true);
@@ -85,10 +102,7 @@ test("câu trả lời được stream: webhook 2.1 streaming, Agent bật strea
 
 test("Agent có mô hình dự phòng, giới hạn vòng lặp và không tự thử lại cả lượt", () => {
   assert.equal(agent.parameters.needsFallback, true);
-  const models = Object.entries(workflow.connections)
-    .flatMap(([source, outputs]) => (outputs.ai_languageModel ?? []).flat().map(target => ({ source, ...target })))
-    .filter(target => target.node === agent.name)
-    .sort((left, right) => left.index - right.index);
+  const models = languageModelsOf(agent.name);
   assert.deepEqual(models.map(model => model.index), [0, 1]);
   assert.match(byName(models[0].source).type, /lmChatGoogleGemini$/);
   assert.match(byName(models[1].source).type, /lmChatGroq$/);
@@ -97,14 +111,30 @@ test("Agent có mô hình dự phòng, giới hạn vòng lặp và không tự 
   assert.notEqual(agent.retryOnFail, true);
 });
 
-test("sáu công cụ tra cứu đều nối vào Agent và trỏ đúng endpoint của website", () => {
-  const tools = Object.entries(workflow.connections)
-    .filter(([, outputs]) => (outputs.ai_tool ?? []).flat().some(target => target.node === agent.name))
-    .map(([source]) => source);
-  assert.deepEqual(tools.sort(), [
+test("tầng 3 là bản sao Agent chính chạy Cerebras: cùng prompt, cùng quy tắc, một model, không fallback", () => {
+  // Sửa system message/prompt ở một Agent mà quên Agent kia là tầng 3 trả lời theo luật cũ đúng
+  // lúc hệ thống đang sự cố — khoá bằng so sánh nguyên khối.
+  const { needsFallback: _primary, ...primaryParameters } = agent.parameters;
+  const { needsFallback: backupFallback, ...backupParameters } = backupAgent.parameters;
+  assert.deepEqual(backupParameters, primaryParameters);
+  assert.equal(backupFallback, false);
+  assert.equal(backupAgent.type, agent.type);
+  assert.notEqual(backupAgent.retryOnFail, true);
+
+  const models = languageModelsOf(backupAgent.name);
+  assert.equal(models.length, 1);
+  const cerebras = byName(models[0].source) as WorkflowNode & { parameters: { model?: { value?: string } } };
+  assert.match(cerebras.type, /lmChatOpenAi$/);
+  assert.equal(cerebras.parameters.model?.value, "gpt-oss-120b");
+});
+
+test("sáu công cụ tra cứu đều nối vào CẢ HAI Agent và trỏ đúng endpoint của website", () => {
+  const expected = [
     "Lịch sử thiết bị", "Lịch trực ca", "Thông báo, mệnh lệnh",
     "Tìm thiết bị", "Tra cứu khiếm khuyết", "Tra cứu thay vật tư",
-  ].sort());
+  ].sort();
+  assert.deepEqual(toolsOf(agent.name), expected);
+  assert.deepEqual(toolsOf(backupAgent.name), expected);
   for (const [name, slug] of [["Lịch trực ca", "shift-schedule"], ["Thông báo, mệnh lệnh", "search-announcements"]] as const) {
     assert.equal(byName(name).parameters.url, `https://duyenhai1.vn/api/integrations/n8n/ai/tools/${slug}`);
     assert.equal(byName(name).type, "n8n-nodes-base.httpRequestTool");
@@ -168,12 +198,47 @@ test("prompt trong file import là biểu thức JavaScript hợp lệ và mang 
 });
 
 test("các node xử lý đưa lỗi tới nhánh trả lỗi, output thành công của Agent để trống", () => {
-  for (const name of ["Xác thực và chuẩn hóa", "Trợ lý AI VH1"]) {
+  for (const name of ["Xác thực và chuẩn hóa", agent.name, backupAgent.name]) {
     assert.equal(byName(name).onError, "continueErrorOutput");
     assert.equal(workflow.connections[name].main[1][0].node, "Chuẩn hóa lỗi AI");
   }
-  assert.deepEqual(workflow.connections["Trợ lý AI VH1"].main[0], []);
-  assert.equal(workflow.connections["Chuẩn hóa lỗi AI"].main[0][0].node, "Trả lỗi về website");
+  for (const name of [agent.name, backupAgent.name]) assert.deepEqual(workflow.connections[name].main[0], []);
+  assert.equal(workflow.connections["Chuẩn hóa lỗi AI"].main[0][0].node, "Còn tầng 3?");
+  const gate = workflow.connections["Còn tầng 3?"].main;
+  assert.equal(gate[0][0].node, "Lấy lại câu hỏi");
+  assert.equal(gate[1][0].node, "Trả lỗi về website");
+  assert.equal(workflow.connections["Lấy lại câu hỏi"].main[0][0].node, backupAgent.name);
+});
+
+test("chỉ lỗi quá tải/hết lượt của Agent chính mới chuyển tầng 3, và chỉ một lần", () => {
+  const gate = byName("Còn tầng 3?").parameters as unknown as {
+    conditions: { conditions: Array<{ leftValue: string; operator: { type: string; operation: string } }> };
+  };
+  const [condition] = gate.conditions.conditions;
+  assert.deepEqual(condition.operator, { type: "boolean", operation: "true", singleValue: true });
+  const decide = (code: string, backupRan: boolean) => runInNewContext(condition.leftValue.slice(3, -2), {
+    $json: { code },
+    $: (name: string) => {
+      assert.equal(name, backupAgent.name);
+      return { isExecuted: backupRan };
+    },
+  });
+  assert.equal(decide("AI_PROVIDER_UNAVAILABLE", false), true);
+  assert.equal(decide("AI_PROVIDER_RATE_LIMITED", false), true);
+  // Lỗi thật (bug, dữ liệu sai) không được che bằng cách hỏi lại model khác.
+  assert.equal(decide("AI_WORKFLOW_FAILED", false), false);
+  // Tầng 3 cũng hỏng: quay về nhánh lỗi lần hai thì phải trả lỗi, không lặp vô hạn.
+  assert.equal(decide("AI_PROVIDER_RATE_LIMITED", true), false);
+
+  const restore = byName("Lấy lại câu hỏi").parameters.jsCode!;
+  const normalized = { question: "Câu hỏi", capability: "signed", conversationId: "c", history: [] };
+  const output = runInNewContext(`(function () { ${restore} })()`, {
+    $: (name: string) => {
+      assert.equal(name, "Xác thực và chuẩn hóa");
+      return { first: () => ({ json: normalized }) };
+    },
+  });
+  assert.deepEqual(JSON.parse(JSON.stringify(output)), [{ json: normalized }]);
 });
 
 test("nhánh lỗi phân loại 503/429 và không làm lộ input hoặc bí mật", () => {

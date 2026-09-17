@@ -16,8 +16,8 @@ const ERROR_LABELS: Record<string, string> = {
   AI_BUSY: "Hàng đợi đầy, người dùng phải chờ quá lâu",
   AI_TIMEOUT: "Quá hạn chờ n8n",
   AI_CONNECTION_FAILED: "Không gọi được n8n",
-  AI_PROVIDER_UNAVAILABLE: "Gemini/Groq báo quá tải (503)",
-  AI_PROVIDER_RATE_LIMITED: "Gemini/Groq hết lượt (429)",
+  AI_PROVIDER_UNAVAILABLE: "Gemini/Groq/Cerebras báo quá tải (503)",
+  AI_PROVIDER_RATE_LIMITED: "Gemini/Groq/Cerebras hết lượt (429)",
   AI_WORKFLOW_FAILED: "Workflow n8n lỗi",
 };
 

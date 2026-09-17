@@ -50,10 +50,13 @@ function record(value: unknown): Record<string, unknown> {
 }
 
 export function parseWorkflowForEval(workflow: WorkflowFile): EvalWorkflow {
-  const agent = workflow.nodes.find((node) => node.type.endsWith(".agent"));
-  if (!agent) throw new Error("Workflow không có node Agent");
   const gemini = workflow.nodes.find((node) => /lmChatGoogleGemini$/.test(node.type));
   if (!gemini) throw new Error("Workflow không có node Google Gemini — bộ chấm chỉ mô phỏng model chính");
+  // Workflow có HAI Agent (chính + tầng 3 Cerebras, cùng prompt/công cụ). Bộ chấm đo Agent
+  // chính: là Agent mà model Gemini nối vào, không phải Agent nào đứng đầu mảng nodes.
+  const agentName = workflow.connections[gemini.name]?.ai_languageModel?.flat()[0]?.node;
+  const agent = workflow.nodes.find((node) => node.name === agentName && node.type.endsWith(".agent"));
+  if (!agent) throw new Error("Không tìm thấy Agent mà model Gemini nối vào");
 
   // Chỉ lấy công cụ THẬT SỰ nối vào Agent — node HTTP thừa trên canvas không được tính.
   const connected = new Set(

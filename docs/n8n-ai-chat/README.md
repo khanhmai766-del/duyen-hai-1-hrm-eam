@@ -4,13 +4,14 @@ Workflow chỉ đọc dữ liệu mà người đang đăng nhập được phé
 NextAuth, phát capability token sống 2 phút; n8n dùng token đó khi gọi sáu API tool.
 Gemini không được kết nối trực tiếp PostgreSQL. Nội dung câu hỏi, tối đa 6 tin nhắn
 gần nhất (mỗi tin tối đa 400 ký tự) và các trường văn bản tối thiểu do tool trả về được gửi qua n8n tới Google
-Gemini API (và Groq khi Gemini lỗi). Ảnh, avatar, tệp đính kèm và toàn bộ bảng dữ liệu
+Gemini API (và Groq khi Gemini lỗi; Cerebras khi cả hai cùng quá tải/hết lượt — ATTT duyệt
+17/09/2026). Ảnh, avatar, tệp đính kèm và toàn bộ bảng dữ liệu
 không được gửi đi.
 
 ## 0. Luồng một câu hỏi
 
 ```text
-Trình duyệt ──POST /api/ai/chat──▶ Website ──webhook (streaming)──▶ n8n Agent ──▶ Gemini (dự phòng: Groq)
+Trình duyệt ──POST /api/ai/chat──▶ Website ──webhook (streaming)──▶ n8n Agent ──▶ Gemini (dự phòng: Groq → Cerebras)
      ▲  NDJSON: status/tool/delta/done/error      │                        │
      └────────────────────────────────────────────┘◀── json-lines ────────┘
                                                    ▲
@@ -23,8 +24,9 @@ Trình duyệt ──POST /api/ai/chat──▶ Website ──webhook (streaming
   ngay và hiện "Đang tìm thiết bị…", "Đang tra cứu khiếm khuyết…".
 - **Nguồn đối chiếu do website tự gom** từ kết quả tool đã trả về — mô hình không phải chép
   lại URL/chữ ký nữa (bản cũ hay chép sai nên mất nguồn). Tối đa 8 nguồn mỗi câu.
-- **Ghép hai gói miễn phí**: Gemini miễn phí là model chính; khi Gemini báo lỗi/hết lượt,
-  Agent tự chuyển sang Groq miễn phí (Enable Fallback Model).
+- **Ghép ba gói miễn phí**: Gemini miễn phí là model chính; khi Gemini báo lỗi/hết lượt,
+  Agent tự chuyển sang Groq miễn phí (Enable Fallback Model). Agent của n8n chỉ nhận MỘT model
+  dự phòng, nên tầng 3 là Agent thứ hai chạy Cerebras — xem "Tầng 3: Cerebras" ở mục 3.
 - **Ngữ cảnh trang**: nút "Hỏi AI" trên trang thiết bị / phiếu khiếm khuyết gửi kèm
   `page = { path, entityType, entityId, label }`. Mô hình dùng thẳng `entityId` làm `deviceSeq`
   nên BỚT HẲN một lượt gọi "Tìm thiết bị" cho mỗi câu — vừa nhanh hơn vừa hết cảnh trả lời
@@ -78,6 +80,7 @@ n8n dùng credential, không đọc `$env`:
 | DH1 AI Tool Auth | Header Auth | `Authorization: Bearer <token-tool>` | Sáu tool và Xóa hội thoại quá 14 ngày |
 | Gemini - DH1 Chatbox | Google Gemini (PaLM) API | API key Google AI Studio | Google Gemini Chat Model |
 | Groq - DH1 Chatbox | Groq API | API key tạo tại console.groq.com (gói miễn phí) | Groq dự phòng |
+| Cerebras - DH1 Chatbox | OpenAI | API key tạo tại cloud.cerebras.ai (gói miễn phí), **Base URL** `https://api.cerebras.ai/v1` | Cerebras tầng 3 |
 
 URL đích được đặt cố định `https://duyenhai1.vn` trong các node HTTP; mô hình không được chọn
 host đích. Nếu đổi tên miền, cập nhật cả bảy URL.
@@ -119,7 +122,7 @@ kiểu cũ lẫn streaming; website cũ không hiểu streaming.
 2. Import `workflow-production.json` bằng **Import from File** thành workflow mới.
 3. Chọn credential cho: Webhook AI Chat, SÁU tool (gồm hai tool mới **Lịch trực ca** và
    **Thông báo, mệnh lệnh**), Xóa hội thoại quá 14 ngày, Google Gemini Chat Model, Groq dự
-   phòng. Kiểm tra model Gemini đúng model credential được phép dùng (bản mẫu
+   phòng, Cerebras tầng 3. Kiểm tra model Gemini đúng model credential được phép dùng (bản mẫu
    `models/gemini-3.8-flash`).
 4. Unpublish workflow cũ rồi Publish workflow mới (không để hai workflow trùng path
    `ai-chat-dh1`). Giữ bản cũ ở trạng thái tắt để quay lui.
@@ -129,12 +132,42 @@ kiểu cũ lẫn streaming; website cũ không hiểu streaming.
 Chưa có key Groq: xoá node **Groq dự phòng** và tắt **Enable Fallback Model** trong Agent, phần
 còn lại vẫn chạy (chỉ mất lớp dự phòng).
 
+### Tầng 3: Cerebras
+
+Credential **Cerebras - DH1 Chatbox** tạo bằng loại **OpenAI** (tên hiển thị trong danh sách credential của n8n; Cerebras dùng cùng giao thức
+OpenAI): dán key từ cloud.cerebras.ai, đổi **Base URL** thành `https://api.cerebras.ai/v1`. Model
+`gpt-oss-120b` — CÙNG model với Groq dự phòng, nên hành vi đã được đo qua Groq; chỉ khác hạ tầng
+(Google → Groq → Cerebras, ba công ty khác nhau). Gói miễn phí theo
+inference-docs.cerebras.ai/support/rate-limits ngày 17/09/2026: **5 lượt/phút**, 30.000 token/phút,
+1.000.000 token/ngày.
+
+Luồng: Agent chính hỏng → `Chuẩn hóa lỗi AI` → cổng **Còn tầng 3?**. Chỉ khi mã là
+`AI_PROVIDER_UNAVAILABLE`/`AI_PROVIDER_RATE_LIMITED` (tức Gemini VÀ Groq đều đã thử) và tầng 3 CHƯA
+chạy → **Lấy lại câu hỏi** (nhánh lỗi chỉ còn mã lỗi; node này lấy lại đầu vào đã chuẩn hóa) →
+**Trợ lý AI VH1 - tầng 3**. Tầng 3 cũng lỗi thì quay về `Chuẩn hóa lỗi AI`, cổng thấy tầng 3 đã chạy
+nên trả lỗi thẳng về website. `AI_WORKFLOW_FAILED` (lỗi thật, dữ liệu sai) KHÔNG chuyển tầng — đổi
+model không sửa được bug mà chỉ che nó.
+
+Giới hạn cần biết:
+
+- **5 lượt/phút** là trần thấp nhất trong ba tầng: một câu cần 3–4 vòng tra cứu có thể tự chạm trần,
+  hai người hỏi cùng lúc lúc sự cố gần như chắc chắn chạm. Tầng 3 giữ chatbox không chết hẳn, không
+  gánh được tải thường ngày.
+- Tầng 3 dùng CHUNG ngân sách 6 lần gọi tool của lượt hỏi: Agent chính đã tra vài lần rồi mới hỏng
+  thì tầng 3 còn ít lượt hơn.
+- Agent chính hỏng GIỮA LÚC đang phát chữ (hiếm — quá tải thường báo ngay lượt gọi đầu) thì câu trả
+  lời tầng 3 nối tiếp sau phần chữ dở.
+- Hai Agent phải giống hệt nhau trừ `needsFallback`: sửa system message/prompt thì sửa CẢ HAI, thêm
+  tool thì nối vào CẢ HAI — `tests/ai/n8n-workflow.test.ts` đỏ nếu lệch.
+- Chưa có key Cerebras: xoá bốn node **Còn tầng 3?**, **Lấy lại câu hỏi**, **Trợ lý AI VH1 - tầng 3**,
+  **Cerebras tầng 3**, rồi nối `Chuẩn hóa lỗi AI` thẳng vào `Trả lỗi về website` như trước.
+
 Settings không lưu dữ liệu execution thành công, thất bại, thủ công hoặc tiến trình.
 
 ### Nhánh lỗi
 
-`Xác thực và chuẩn hóa` và `Trợ lý AI VH1` dùng On Error = Continue (using error output) →
-`Chuẩn hóa lỗi AI` → `Trả lỗi về website` (Respond to Webhook 1.5, bật streaming). Nhánh lỗi chỉ
+`Xác thực và chuẩn hóa`, `Trợ lý AI VH1` và `Trợ lý AI VH1 - tầng 3` dùng On Error = Continue
+(using error output) → `Chuẩn hóa lỗi AI` → `Còn tầng 3?` (xem Tầng 3 ở trên) → `Trả lỗi về website` (Respond to Webhook 1.5, bật streaming). Nhánh lỗi chỉ
 trả mã: `AI_PROVIDER_UNAVAILABLE`, `AI_PROVIDER_RATE_LIMITED` hoặc `AI_WORKFLOW_FAILED`. Mô tả
 lỗi thô n8n tự phát trong luồng chỉ được website dùng để phân loại, không hiển thị, không ghi log.
 
