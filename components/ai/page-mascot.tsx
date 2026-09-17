@@ -7,10 +7,13 @@
  * thuộc gì thêm — thêm một gói bên thứ ba vào hệ thống nhà máy không đáng, nhất là khi vừa gỡ
  * three.js đi để cho nhẹ.
  *
- * KHÁC BẢN GỐC ĐÚNG HAI CHỖ, để nút mở chatbox không phải lồng button trong button:
+ * KHÁC BẢN GỐC — cập nhật skill về sau thì chép lại file và áp lại các chỗ này:
  *   1. thêm prop `onClick` — chạy KÈM hiệu ứng boop, không thay thế nó;
- *   2. thêm prop `ariaLabel` — ghi đè nhãn "Boop the …" bằng nhãn thật của nút.
- * Cập nhật skill về sau thì chép lại file và áp lại đúng hai chỗ này.
+ *   2. thêm prop `ariaLabel` — ghi đè nhãn "Boop the …" bằng nhãn thật của nút;
+ *   3. dùng ĐỦ 9 biểu cảm (bản gốc chỉ dùng 5): tên ô đặt theo đúng hình đã vẽ của dh1, bấm bỏ
+ *      bước "blink" (ô 0 vẽ mặt cười híp mắt, trùng với tim/lấp lánh nên trông như lặp), thêm
+ *      biểu cảm nền `bashful` (rê chuột lâu) và `sleepy` (không thao tác 60 giây), và hai biểu
+ *      cảm do chatbox kích hoạt qua `thinking` / `celebrate`.
  *
  * Nhân vật: hai sheet 3×3 ở public/mascots/dh1-*.webp, dựng từ characters/dh1/ bằng
  * `python <skill>/scripts/mascot.py dh1 --skip-generate`.
@@ -30,12 +33,14 @@ const DIRECTIONS = [
   'down-right',
 ] as const
 
+// Thứ tự ô của sheet 3×3. Tên theo HÌNH ĐÃ VẼ của dh1, không theo prompt gốc: ô 0 là mặt cười
+// híp mắt (không phải chớp mắt), ô 4 là mắt ngôi sao (không phải nháy mắt).
 const REACTIONS = [
-  'blink',
+  'smile',
   'heart',
   'sparkle',
   'surprised',
-  'wink',
+  'starstruck',
   'bashful',
   'sleepy',
   'dizzy',
@@ -61,12 +66,21 @@ const HYSTERESIS = 0.12
 const DEAD_ZONE = 70
 
 const PAYOFFS: Reaction[] = ['heart', 'sparkle', 'delighted']
-const BOOP_PAYOFF = 120
-const BOOP_END = 560
+const BOOP_END = 700
 const SQUASH_MS = 420
 const DIZZY_AFTER = 4
 const DIZZY_WINDOW = 1600
 const DIZZY_END = 1100
+/** Rê chuột lên mascot lâu chừng này thì ngượng. */
+const BASHFUL_AFTER = 1500
+/** Không động chuột, bàn phím, cuộn, chạm chừng này thì ngủ gật; thao tác lại là tỉnh. */
+const SLEEPY_AFTER = 60_000
+/** Mặt ngạc nhiên khi mascot hiện ra lúc trợ lý đang tra cứu. */
+const SURPRISED_MS = 1600
+/** Mặt mắt sao khi có câu trả lời trong lúc khung chat đóng. */
+const STARSTRUCK_MS = 2600
+/** Biểu cảm chào lại khi đóng chat, mascot hiện ra. */
+const WELCOME_BACK_MS = 900
 
 const SQUASH: Keyframe[] = [
   { transform: 'scale(1, 1)', easing: 'ease-in' },
@@ -105,17 +119,95 @@ export type MascotProps = {
   onClick?: () => void
   /** Ghi đè nhãn cho trình đọc màn hình; mặc định là "Boop the {label}". */
   ariaLabel?: string
+  /** Đang tra cứu: lúc mascot hiện ra (hoặc bắt đầu tra cứu) thì ngạc nhiên một nhịp. */
+  thinking?: boolean
+  /** Tăng lên mỗi khi có câu trả lời mới trong lúc khung chat đóng → mặt mắt sao. */
+  celebrate?: number
+  /** Tăng lên mỗi khi trợ lý trả lời LỖI trong lúc khung chat đóng → mặt chóng mặt. */
+  oops?: number
 }
 
+/**
+ * Số lần mascot đã hiện trong lần tải trang này. Bấm mascot là mở khung chat và mascot bị gỡ khỏi
+ * trang ngay, nên tim/lấp lánh sau cú bấm gần như không kịp thấy — chúng được chiếu lúc mascot HIỆN
+ * LẠI sau khi đóng chat. Lần hiện đầu tiên đã có bong bóng chào nên không chiếu.
+ */
+let appearances = 0
+
 export function Mascot(props: MascotProps) {
-  const { directions, reactions, size = 140, className, label = 'mascot', onClick, ariaLabel } = props
+  const { directions, reactions, size = 140, className, label = 'mascot', onClick, ariaLabel, thinking = false, celebrate = 0, oops = 0 } = props
 
   const buttonRef = useRef<HTMLButtonElement>(null)
   const squashRef = useRef<HTMLSpanElement>(null)
   const timersRef = useRef<number[]>([])
   const boopsRef = useRef({ count: 0, at: 0 })
   const [direction, setDirection] = useState<Direction>('center')
+  // Biểu cảm có thời hạn (bấm, chóng mặt, ngạc nhiên, mắt sao) luôn thắng biểu cảm nền.
   const [reaction, setReaction] = useState<Reaction | null>(null)
+  const [pointerInside, setPointerInside] = useState(false)
+  const [bashful, setBashful] = useState(false)
+  const [sleeping, setSleeping] = useState(false)
+  const shown: Reaction | null = reaction ?? (bashful ? 'bashful' : sleeping ? 'sleepy' : null)
+
+  // Hiện biểu cảm trong một khoảng rồi thôi — dùng chung hàng hẹn giờ với boop để cái sau huỷ cái trước.
+  const flash = (next: Reaction, ms: number) => {
+    timersRef.current.forEach(window.clearTimeout)
+    timersRef.current = [window.setTimeout(() => setReaction(null), ms)]
+    setReaction(next)
+  }
+  const flashRef = useRef(flash)
+  useEffect(() => {
+    flashRef.current = flash
+  })
+
+  // Lúc hiện ra: đang tra cứu thì ngạc nhiên; không thì chào lại bằng tim → lấp lánh → vui sướng.
+  useEffect(() => {
+    const seen = appearances++
+    if (thinking) return
+    if (seen > 0) flashRef.current(PAYOFFS[(seen - 1) % PAYOFFS.length], WELCOME_BACK_MS)
+    // Chỉ chạy lúc gắn; thay đổi `thinking` về sau do effect dưới lo.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  useEffect(() => {
+    if (thinking) flashRef.current('surprised', SURPRISED_MS)
+  }, [thinking])
+
+  // Bỏ qua giá trị lúc gắn: mascot hiện lại sau khi đóng chat không được phản ứng với câu trả lời cũ.
+  const celebratedRef = useRef(celebrate)
+  useEffect(() => {
+    if (celebrate === celebratedRef.current) return
+    celebratedRef.current = celebrate
+    flashRef.current('starstruck', STARSTRUCK_MS)
+  }, [celebrate])
+
+  const oopsRef = useRef(oops)
+  useEffect(() => {
+    if (oops === oopsRef.current) return
+    oopsRef.current = oops
+    flashRef.current('dizzy', DIZZY_END)
+  }, [oops])
+
+  useEffect(() => {
+    if (!pointerInside) return
+    const timer = window.setTimeout(() => setBashful(true), BASHFUL_AFTER)
+    return () => window.clearTimeout(timer)
+  }, [pointerInside])
+
+  useEffect(() => {
+    let timer = window.setTimeout(() => setSleeping(true), SLEEPY_AFTER)
+    const wake = () => {
+      window.clearTimeout(timer)
+      setSleeping(false)
+      timer = window.setTimeout(() => setSleeping(true), SLEEPY_AFTER)
+    }
+    const events = ['pointermove', 'pointerdown', 'keydown', 'scroll', 'touchstart'] as const
+    events.forEach((name) => window.addEventListener(name, wake, { passive: true }))
+    return () => {
+      window.clearTimeout(timer)
+      events.forEach((name) => window.removeEventListener(name, wake))
+    }
+  }, [])
 
   useEffect(() => {
     if (!window.matchMedia('(hover: hover) and (pointer: fine)').matches) {
@@ -189,8 +281,8 @@ export function Mascot(props: MascotProps) {
       setReaction('dizzy')
       later(DIZZY_END, null)
     } else {
-      setReaction('blink')
-      later(BOOP_PAYOFF, PAYOFFS[(boops.count - 1) % PAYOFFS.length])
+      // Không còn bước "blink": ô đó vẽ cùng mặt cười híp mắt với tim/lấp lánh nên trông như lặp.
+      setReaction(PAYOFFS[(boops.count - 1) % PAYOFFS.length])
       later(BOOP_END, null)
     }
 
@@ -211,6 +303,13 @@ export function Mascot(props: MascotProps) {
       onClick={() => {
         boop();
         onClick?.();
+      }}
+      onPointerEnter={(event) => {
+        if (event.pointerType === 'mouse') setPointerInside(true)
+      }}
+      onPointerLeave={() => {
+        setPointerInside(false)
+        setBashful(false)
       }}
       aria-label={ariaLabel ?? `Boop the ${label}`}
       className={className}
@@ -237,7 +336,7 @@ export function Mascot(props: MascotProps) {
             ...layer,
             backgroundImage: `url(${directions})`,
             ...cell(DIRECTIONS.indexOf(direction)),
-            opacity: reaction ? 0 : 1,
+            opacity: shown ? 0 : 1,
           }}
         />
         {/* Always mounted so the sheet is fetched up front, never on the first click. */}
@@ -245,8 +344,8 @@ export function Mascot(props: MascotProps) {
           style={{
             ...layer,
             backgroundImage: `url(${reactions})`,
-            ...cell(REACTIONS.indexOf(reaction ?? 'blink')),
-            opacity: reaction ? 1 : 0,
+            ...cell(REACTIONS.indexOf(shown ?? 'smile')),
+            opacity: shown ? 1 : 0,
           }}
         />
       </span>

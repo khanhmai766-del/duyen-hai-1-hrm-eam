@@ -133,6 +133,19 @@ function AiChatPanel() {
   const [entity, setEntity] = React.useState<{ path: string; value: AiAskEntity } | null>(null);
   const [greeted, setGreeted] = React.useState(false);
   const [hovered, setHovered] = React.useState(false);
+  // Đếm câu trả lời xong / lỗi trong lúc khung chat ĐÓNG — mascot đổi biểu cảm để báo cho người dùng.
+  const [celebrate, setCelebrate] = React.useState(0);
+  const [oops, setOops] = React.useState(0);
+  // Chỉnh state lúc render khi `busy` đổi (so với giá trị trước), không dùng effect.
+  const [prevBusy, setPrevBusy] = React.useState(chat.busy);
+  if (prevBusy !== chat.busy) {
+    setPrevBusy(chat.busy);
+    const last = chat.messages[chat.messages.length - 1];
+    if (prevBusy && !open && last?.role === "ASSISTANT") {
+      if (last.state === "done") setCelebrate((value) => value + 1);
+      else if (last.state === "error") setOops((value) => value + 1);
+    }
+  }
   const pageContext = React.useMemo<AiPageContext>(
     () => ({ path: pathname, ...(entity?.path === pathname ? entity.value : {}) }),
     [pathname, entity]
@@ -279,6 +292,9 @@ function AiChatPanel() {
             directions="/mascots/dh1-directions.webp"
             reactions="/mascots/dh1-reactions.webp"
             size={104}
+            thinking={chat.busy}
+            celebrate={celebrate}
+            oops={oops}
             onClick={() => setOpen(true)}
             ariaLabel="Mở trợ lý AI DH1 OPS INSIGHT"
             label="trợ lý AI"
