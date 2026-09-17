@@ -6,8 +6,8 @@ import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 import {
-  ArrowUp, Check, ChevronLeft, Copy, Cpu, History, Maximize2, Minimize2, Megaphone, Package,
-  RotateCcw, Search, Sparkles, Square, SquarePen, ThumbsDown, ThumbsUp, Trash2, TriangleAlert,
+  ArrowUp, BookOpen, Check, ChevronLeft, Copy, History, Maximize2, Minimize2, Package,
+  RotateCcw, Search, ShieldCheck, Sparkles, Square, SquarePen, ThumbsDown, ThumbsUp, Trash2, TriangleAlert,
   Users, X, type LucideIcon,
 } from "lucide-react";
 import { useRbacAccess } from "@/hooks/useRbacAccess";
@@ -27,26 +27,46 @@ import { cn } from "@/lib/utils";
 
 const MAX_QUESTION = 2_000;
 
-type Starter = { text: string; send: boolean };
+type Starter = {
+  text: string;
+  send: boolean;
+  /** Quyền đọc của trang mà công cụ trả lời câu này dùng — thiếu quyền thì ẩn câu gợi ý. */
+  permission?: string;
+};
 
+/**
+ * CÂU HỎI GỢI Ý. Mỗi câu (trừ câu điền dở) đã thử trên production 17/09/2026 bằng đúng công cụ trợ lý
+ * gọi và đều ra dữ liệu. Đổi câu thì thử lại: câu gợi ý trả "không có dữ liệu" (vd mệnh lệnh còn hiệu
+ * lực lúc không có mệnh lệnh nào) hoặc hỏi thứ không công cụ nào lọc được (vd "thiết bị tôi quản lý")
+ * làm người dùng mất tin ngay lần đầu.
+ */
 const STARTER_GROUPS: Array<{ label: string; icon: LucideIcon; items: Starter[] }> = [
   {
     label: "Khiếm khuyết",
     icon: TriangleAlert,
     items: [
-      { text: "Khiếm khuyết chưa xử lý của thiết bị tôi quản lý?", send: true },
+      { text: "Khiếm khuyết tổ máy S1 chưa xử lý", send: true },
       { text: "Khiếm khuyết mức 1 và 2 phát sinh trong 7 ngày qua", send: true },
     ],
   },
   {
-    label: "Thiết bị",
-    icon: Cpu,
-    items: [{ text: "Lịch sử sửa chữa của thiết bị ", send: false }],
+    label: "Thiết bị & an toàn",
+    icon: ShieldCheck,
+    items: [
+      { text: "Bình chữa cháy nào đang không đạt hoặc quá hạn thay thế?", send: true, permission: "pccc-view" },
+      { text: "Thiết bị YCNN nào quá hạn hoặc sắp đến hạn kiểm định?", send: true, permission: "tbycnn-view" },
+      { text: "Tiếp địa chống sét nào đang có khiếm khuyết?", send: true, permission: "grounding-lightning-view" },
+      { text: "Lịch sử sửa chữa của thiết bị ", send: false },
+    ],
   },
   {
     label: "Vật tư",
     icon: Package,
-    items: [{ text: "Vật tư nào sắp đến hạn thay trong 45 ngày tới?", send: true }],
+    items: [
+      { text: "Vật tư nào sắp đến hạn thay trong 45 ngày tới?", send: true },
+      { text: "Những phiếu đề xuất vật tư nào chưa hoàn tất?", send: true },
+      { text: "Tồn NH3 tháng này là bao nhiêu?", send: true, permission: "chemical-inventory-manage" },
+    ],
   },
   {
     label: "Ca trực",
@@ -57,9 +77,11 @@ const STARTER_GROUPS: Array<{ label: string; icon: LucideIcon; items: Starter[] 
     ],
   },
   {
-    label: "Mệnh lệnh",
-    icon: Megaphone,
-    items: [{ text: "Có mệnh lệnh sản xuất nào còn hiệu lực không?", send: true }],
+    label: "Hướng dẫn",
+    icon: BookOpen,
+    items: [
+      { text: "Mức độ khiếm khuyết 1–4 được phân loại theo tiêu chí nào?", send: true, permission: "ai-chat-tailieu-thiet-bi" },
+    ],
   },
 ];
 
@@ -479,15 +501,26 @@ function IconButton({
 }
 
 function EmptyState({ firstName, position, onPick }: { firstName: string; position: string; onPick: (starter: Starter) => void }) {
+  const { data: session } = useSession();
+  const rbac = useRbacAccess();
+  const defectOnly = session?.user?.accessMode === "DEFECT_READ_ONLY";
+  // Ẩn câu gợi ý người dùng không có quyền xem — bấm vào chỉ nhận "không có quyền" là gợi ý hỏng.
+  const groups = STARTER_GROUPS
+    .filter((group) => !defectOnly || group.label === "Khiếm khuyết")
+    .map((group) => ({
+      ...group,
+      items: group.items.filter((starter) => !starter.permission || rbac.can(starter.permission, ["read", "personal", "manage", "full"])),
+    }))
+    .filter((group) => group.items.length > 0);
   return (
     <div className="my-auto py-2">
       <p className="text-lg font-semibold text-slate-900 dark:text-white">{firstName ? `Chào ${firstName},` : "Xin chào,"}</p>
       <p className="mt-1 text-[13px] leading-6 text-slate-500 dark:text-slate-400">
-        Hỏi về khiếm khuyết, lịch sử sửa chữa, vật tư thay thế, lịch trực ca hay mệnh lệnh sản xuất. Trợ lý chỉ đọc dữ liệu
+        Hỏi về khiếm khuyết, thiết bị, sổ PCCC · TBYCNN · tiếp địa, phiếu công tác, vật tư, hóa chất, lịch trực ca hay cách dùng web. Trợ lý chỉ đọc dữ liệu
         {position ? <> cương vị <span className="font-medium text-slate-700 dark:text-slate-200">{position}</span></> : " bạn"} được phép xem và luôn dẫn nguồn để đối chiếu.
       </p>
       <div className="mt-6 space-y-4">
-        {STARTER_GROUPS.map((group) => (
+        {groups.map((group) => (
           <div key={group.label}>
             <p className="mb-1.5 flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-slate-400">
               <group.icon className="h-3.5 w-3.5" />
