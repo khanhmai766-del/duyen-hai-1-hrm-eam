@@ -51,6 +51,16 @@ function plannedTime(date: Date | null) {
   const get = (type: string) => parts.find(p => p.type === type)?.value ?? "";
   return `${get("hour")} giờ ${get("minute")} ngày ${get("day")}/${get("month")}/${get("year")}`;
 }
+function signatureMoment(date: Date | null) {
+  if (!date) return "Ngày ……/……/……… Giờ ……h……";
+  const parts = new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Ho_Chi_Minh", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(date);
+  const get = (type: string) => parts.find(p => p.type === type)?.value ?? "";
+  return `Ngày ${get("day")}/${get("month")}/${get("year")} Giờ ${get("hour")}h${get("minute")}`;
+}
+function ensureNoTemplateTags(xml: string) {
+  const tags = [...plain(xml).matchAll(/\{\{([^{}]+)\}\}/g)].map(match => match[1].trim());
+  if (tags.length) throw new Error(`Mẫu PCT còn thẻ chưa được điền: ${[...new Set(tags)].join(", ")}`);
+}
 
 export async function createWorkPermitDocument(row: WorkPermit) {
   const mechanical = row.kind === "MECHANICAL";
@@ -69,9 +79,10 @@ export async function createWorkPermitDocument(row: WorkPermit) {
     xml = replaceParagraph(xml, "Phạm vi:", `Phạm vi: ${row.workScope || "……………………………………………………"}`);
     xml = replaceParagraph(xml, "[  ] Thủy", Object.entries(PERMIT_DISCIPLINES).map(([key, label]) => `[${row.disciplines.includes(key) ? "X" : "  "}] ${label}`).join("        "));
     xml = replaceParagraph(xml, "Thời gian:", `Thời gian: Từ ${plannedTime(row.plannedStartAt)} đến ${plannedTime(row.plannedEndAt)}`);
-    const issue = row.issuedAt ? new Intl.DateTimeFormat("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", dateStyle: "short", timeStyle: "short" }).format(row.issuedAt) : "…………………";
-    xml = replaceParagraph(xml, "Người cấp phiếu:", `Người cấp phiếu: ${row.issuerName}       Chữ ký: ……………       Ngày giờ cấp: ${issue}`);
-    xml = replaceParagraph(xml, "Người CHTT:", `Người CHTT: ${row.commanderName}       Chữ ký: …………… Ngày ……/……/……… Giờ …………`);
+    const authorizationMoment = signatureMoment(row.authorizedAt);
+    xml = replaceParagraph(xml, "Người cấp phiếu:", `Người cấp phiếu: ${row.issuerName || "……………………"}       Chữ ký: ……………       ${signatureMoment(row.issuedAt)}`);
+    xml = replaceParagraph(xml, "Người cho phép:", `Người cho phép: ${row.authorizerName || "……………………"}       Chữ ký: ……………       ${authorizationMoment}`);
+    xml = replaceParagraph(xml, "Người CHTT:", `Người CHTT: ${row.commanderName || "……………………"}       Chữ ký: ……………       ${authorizationMoment}`);
     xml = replaceParagraph(xml, "Đơn vị công tác:", `Đơn vị công tác: ${row.teamName}       Số lượng người: ${row.workerCount ?? "………"}`);
   } else {
     xml = replaceParagraph(xml, "1.1.", `1.1. Người lãnh đạo công việc (nếu có): ${row.leaderName}`);
@@ -85,6 +96,7 @@ export async function createWorkPermitDocument(row: WorkPermit) {
     xml = replaceParagraph(xml, "Họ và tên", `Họ và tên: ${row.issuerName}    Chức vụ: ……………    Ký/xác nhận: ……………`);
     if (row.electricalSafetySupervisorName.trim()) xml = replaceParagraph(xml, "Họ và tên…………………… chức vụ", `Họ và tên: ${row.electricalSafetySupervisorName.trim()}    Chức vụ: ……………    Ký/xác nhận: ……………`);
   }
+  ensureNoTemplateTags(xml);
   zip.file("word/document.xml", xml);
   return zip.generate({ type: "nodebuffer", compression: "DEFLATE" });
 }
