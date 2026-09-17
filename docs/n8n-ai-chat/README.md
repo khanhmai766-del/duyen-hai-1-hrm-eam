@@ -233,3 +233,47 @@ prisma/migrations/20260916090000_add_ai_chat_metrics/migration.sql
   trang số liệu: đó là chỉ số quan trọng nhất, vì nó đo đúng cái khó thấy nhất — trợ lý trả lời
   chay chứ không dựa trên bản ghi nào của nhà máy.
 - Dọn số liệu quá 180 ngày: `cleanupExpiredAiTurnLogs()` trong `lib/ai-chat.ts`.
+
+## 9. Chấm bộ câu hỏi chuẩn
+
+49 câu hỏi ở `tests/ai/eval/questions.json` chấm **hành vi** của trợ lý — gọi đúng công cụ nào,
+có/không có nguồn, trả lời / hỏi lại / từ chối — chứ không chấm nội dung, nên chạy trên DB dev vẫn có
+nghĩa. Mỗi câu ghi rõ nó kiểm gì trong trường `why`. Cấu trúc file được khoá bằng
+`tests/ai/eval-questions.test.ts`.
+
+```bash
+npm run ai:eval -- --dry-run                        # KHÔNG gọi Gemini: kiểm cấu hình + chạy thử 1 công cụ
+npm run ai:eval                                     # chạy cả bộ
+npm run ai:eval -- --only shift,page-context-001    # chỉ nhóm / câu này
+npm run ai:eval -- --email lotruong.s1@powerplant.vn  # đo đúng phạm vi một cương vị
+```
+
+**Cần một key Gemini RIÊNG**: tạo ở Google AI Studio trong một project khác project của chatbox
+production, rồi thêm `AI_EVAL_GEMINI_API_KEY=...` vào `.env` máy dev. Script từ chối chạy nếu không
+có key này, và từ chối nếu nó trùng `GEMINI_API_KEY` — để lượt chấm không ăn hạn mức của người dùng
+thật. Gói miễn phí vẫn chạy được: gặp 429 script tự chờ và thử lại, hết lượt thử thì đánh dấu câu đó
+"không chấm" chứ không tính là trượt. Mặc định nghỉ 4 giây giữa các câu (`--delay-ms`).
+
+Cách hoạt động — `scripts/ai-eval/`: đọc model, system message, prompt, 6 công cụ và trần số vòng
+**thẳng từ `workflow-production.json`** (sửa workflow là bộ chấm tự theo), gọi Gemini REST, còn công
+cụ chạy ngay trong tiến trình bằng đúng các hàm website dùng (`runAiTool` — cùng phân quyền, cùng
+ngân sách token, cùng cách gom nguồn). Không đi qua n8n vì các node công cụ gọi cứng
+`https://duyenhai1.vn`, chạy từ dev sẽ đọc dữ liệu production.
+
+Rào an toàn: chỉ chạy với DB dev local (`scripts/verify/_safety.mjs`, đúng điều B.3 chính sách
+ATTT); dừng nếu tài khoản chấm **không thấy thiết bị nào** — trên DB dev hiện các cương vị
+*Trưởng kíp Lò - Máy* và *Vận hành viên* thấy 0 thiết bị vì thiếu cấu hình phạm vi, chấm bằng tài
+khoản đó sẽ ra "trượt" hàng loạt mà không nói gì về chất lượng. Mặc định dùng tài khoản ADMIN ở chế
+độ quản trị (thấy toàn bộ).
+
+Đọc kết quả:
+
+- **Điểm hiện tại** chỉ tính câu `targetPhase: 0`. Năm câu hỏi cách dùng web (`targetPhase: 2`) là
+  khoảng trống đã biết, báo riêng.
+- **Hành vi** (trả lời / hỏi lại / từ chối) chỉ là đoán bằng heuristic — người phải soát lại trong
+  file chi tiết `reports/verify/ai-eval-*.json` (thư mục đã gitignore; có kèm câu trả lời, tức có dữ
+  liệu từ DB dev).
+- Bộ chấm đo **model + prompt**, không phải bản sao từng byte của n8n: n8n bọc thêm lời dẫn của agent
+  LangChain quanh system message. Mỗi câu hỏi độc lập, không mang lịch sử hội thoại.
+- Dòng chi phí là ước theo giá trả phí Gemini 3.8 Flash; chạy gói miễn phí thì không mất tiền, nhưng
+  số token đo được là thật.
