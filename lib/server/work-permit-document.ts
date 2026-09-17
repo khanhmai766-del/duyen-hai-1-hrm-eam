@@ -6,17 +6,25 @@ import { formatPermitNumber, PERMIT_DISCIPLINES } from "@/lib/work-permits";
 import { safetyPrintData, type SafetySelection } from "@/lib/work-permit-safety";
 
 const escape = (s: string) => s.replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;" }[c]!));
+const DEFAULT_RUN_PROPERTIES = '<w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:eastAsia="Times New Roman"/><w:sz w:val="24"/><w:szCs w:val="24"/></w:rPr>';
 function plain(xml: string) { return [...xml.matchAll(/<w:t\b[^>]*>([\s\S]*?)<\/w:t>/g)].map(m => m[1]).join(""); }
-function paragraph(text: string, properties = "") {
-  return `<w:p>${properties}<w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:eastAsia="Times New Roman"/><w:sz w:val="24"/></w:rPr>${text.split("\n").map((line, i) => `${i ? "<w:br/>" : ""}<w:t xml:space="preserve">${escape(line)}</w:t>`).join("")}</w:r></w:p>`;
+function firstTag(xml: string, tag: "pPr" | "rPr" | "tcPr") { return xml.match(new RegExp(`<w:${tag}\\b[^>]*>[\\s\\S]*?<\\/w:${tag}>`))?.[0] ?? ""; }
+function normalizedRunProperties(properties: string) {
+  if (!properties) return DEFAULT_RUN_PROPERTIES;
+  if (/<w:rFonts\b/.test(properties)) return properties;
+  return properties.replace(/<w:rPr\b[^>]*>/, '$&<w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:eastAsia="Times New Roman"/>');
+}
+function paragraph(text: string, properties = "", runProperties = DEFAULT_RUN_PROPERTIES) {
+  return `<w:p>${properties}<w:r>${normalizedRunProperties(runProperties)}${text.split("\n").map((line, i) => `${i ? "<w:br/>" : ""}<w:t xml:space="preserve">${escape(line)}</w:t>`).join("")}</w:r></w:p>`;
 }
 /** Clone the original row's cell geometry, permitting long safety text to wrap. */
 function fillRow(template: string, values: string[]) {
   let index = 0;
-  const row = template.replace(/<w:trHeight\b[^>]*\/>/g, "").replace(/<w:tblHeader\b[^>]*\/>/g, "");
+  let row = template.replace(/<w:trHeight\b[^>]*\/>/g, "").replace(/<w:tblHeader\b[^>]*\/>/g, "");
+  if (!row.includes("<w:cantSplit")) row = row.includes("</w:trPr>") ? row.replace("</w:trPr>", "<w:cantSplit/></w:trPr>") : row.replace(/(<w:tr\b[^>]*>)/, "$1<w:trPr><w:cantSplit/></w:trPr>");
   const result = row.replace(/<w:tc\b[^>]*>[\s\S]*?<\/w:tc>/g, cell => {
-    const properties = cell.match(/<w:tcPr\b[^>]*>[\s\S]*?<\/w:tcPr>/)?.[0] ?? "";
-    return `<w:tc>${properties}${paragraph(values[index++] ?? "")}</w:tc>`;
+    const value = values[index++] ?? "";
+    return `<w:tc>${firstTag(cell, "tcPr")}${paragraph(value, firstTag(cell, "pPr"), firstTag(cell, "rPr"))}</w:tc>`;
   });
   if (index !== values.length) throw new Error("Số cột của mẫu PCT không khớp. Vui lòng kiểm tra lại mẫu.");
   return result;
@@ -29,10 +37,10 @@ function fillTable(xml: string, header: string, values: string[][]) {
     matches++;
     if (!rows[1]) throw new Error("Mẫu PCT thiếu dòng bảng an toàn");
     const first = table.indexOf(rows[0]), last = table.lastIndexOf(rows[rows.length - 1]) + rows[rows.length - 1].length;
-    const count = Math.max(values.length, rows.length - 1);
-    const cols = [...rows[1].matchAll(/<w:tc\b/g)].length;
+    // Các bảng an toàn chỉ in đúng các mục người dùng đã chọn/phân công.
+    // STT được sinh lại độc lập từ 1 theo số hàng có nội dung của từng bảng.
     const headerRow = rows[0].includes("w:tblHeader") ? rows[0] : (rows[0].includes("</w:trPr>") ? rows[0].replace("</w:trPr>", "<w:tblHeader/></w:trPr>") : rows[0].replace(/(<w:tr\b[^>]*>)/, "$1<w:trPr><w:tblHeader/></w:trPr>"));
-    return table.slice(0, first) + headerRow + Array.from({ length: count }, (_, i) => fillRow(rows[1], values[i] ?? [String(i + 1), ...Array(cols - 1).fill("")])).join("") + table.slice(last);
+    return table.slice(0, first) + headerRow + values.map((value, index) => fillRow(rows[1], [String(index + 1), ...value])).join("") + table.slice(last);
   });
   if (matches !== 1) throw new Error(`Không xác định được bảng ${header} trong mẫu PCT`);
   return result;
@@ -42,7 +50,7 @@ function replaceParagraph(xml: string, startsWith: string, value: string) {
   return xml.replace(/<w:p\b[^>]*>[\s\S]*?<\/w:p>/g, p => {
     if (done || !plain(p).trim().startsWith(startsWith)) return p;
     done = true;
-    return paragraph(value, p.match(/<w:pPr\b[^>]*>[\s\S]*?<\/w:pPr>/)?.[0] ?? "");
+    return paragraph(value, firstTag(p, "pPr"), firstTag(p, "rPr"));
   });
 }
 function plannedTime(date: Date | null) {
@@ -70,9 +78,9 @@ export async function createWorkPermitDocument(row: WorkPermit) {
   const groups = safetyPrintData(selected), number = formatPermitNumber(row);
   xml = replaceParagraph(xml, "Số:", `Số: ${number}${!mechanical && row.registrationNumber.trim() ? `\nSố ĐKCT: ${row.registrationNumber.trim()}` : ""}`);
   if (mechanical) {
-    xml = fillTable(xml, "Nhận diện mối nguy", groups.hazards.map((r, i) => [String(i + 1), r.hazard, r.measure]));
-    xml = fillTable(xml, "Kiểm tra các biện pháp an toàn đơn vị cho phép", groups.authorization.map((s, i) => [String(i + 1), s, "", ""]));
-    xml = fillTable(xml, "Kiểm tra các biện pháp an toàn đơn vị công tác", groups.execution.map((s, i) => [String(i + 1), s, "", ""]));
+    xml = fillTable(xml, "Nhận diện mối nguy", groups.hazards.map(r => [r.hazard, r.measure]));
+    xml = fillTable(xml, "Kiểm tra các biện pháp an toàn đơn vị cho phép", groups.authorization.map(s => [s, "", ""]));
+    xml = fillTable(xml, "Kiểm tra các biện pháp an toàn đơn vị công tác", groups.execution.map(s => [s, "", ""]));
     xml = replaceParagraph(xml, "Địa điểm:", `Địa điểm: ${row.location}`);
     xml = replaceParagraph(xml, "Nội dung:", `Nội dung: ${row.content}`);
     xml = replaceParagraph(xml, "Số ĐK:", row.registrationNumber.trim() ? `Số ĐK: ${row.registrationNumber.trim()}` : "");

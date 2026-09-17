@@ -18,6 +18,13 @@ const userIds: string[] = [];
 let checks = 0;
 const writerCookies = new Map<string, string>(), viewerCookies = new Map<string, string>();
 function cookiesHeader(cookies: Map<string, string>) { return [...cookies].map(([k, v]) => `${k}=${v}`).join("; "); }
+function tableSerials(table: string) {
+  const rows = table.match(/<w:tr\b[^>]*>[\s\S]*?<\/w:tr>/g) ?? [];
+  return rows.slice(1).map(row => {
+    const firstCell = row.match(/<w:tc\b[^>]*>[\s\S]*?<\/w:tc>/)?.[0] ?? "";
+    return [...firstCell.matchAll(/<w:t\b[^>]*>([\s\S]*?)<\/w:t>/g)].map(match => match[1]).join("");
+  });
+}
 async function request(path: string, method = "GET", body?: unknown, cookies = writerCookies) {
   const response = await fetch(origin + path, { method, redirect: "manual", headers: { Cookie: cookiesHeader(cookies), ...(body ? { "Content-Type": "application/json" } : {}) }, body: body ? JSON.stringify(body) : undefined });
   const text = await response.text(); let json: any;
@@ -102,10 +109,24 @@ async function main() {
     const doc = await download(created.data.id), xml = doc.zip.file("word/document.xml")!.asText();
     const tables = xml.match(/<w:tbl\b[^>]*>[\s\S]*?<\/w:tbl>/g)!;
     const a = tables.find(t => t.includes("Nhận diện mối nguy"))!, b = tables.find(t => t.includes("đơn vị cho phép"))!, c = tables.find(t => t.includes("đơn vị công tác"))!;
+    assert.equal((a.match(/<w:tr\b/g) ?? []).length, split.hazards.length + 1, "Phần A chỉ có hàng đã chọn");
+    assert.equal((b.match(/<w:tr\b/g) ?? []).length, split.authorization.length + 1, "Phần B chỉ có hàng được phân công");
+    assert.equal((c.match(/<w:tr\b/g) ?? []).length, split.execution.length + 1, "Phần C chỉ có hàng được phân công");
+    assert.deepEqual(tableSerials(a), ["1", "2", "3", "4"], "STT Phần A tự sinh liên tục");
+    assert.deepEqual(tableSerials(b), ["1", "2"], "STT Phần B tự sinh lại từ 1");
+    assert.deepEqual(tableSerials(c), ["1", "2"], "STT Phần C tự sinh lại từ 1");
+    const firstBodyRow = (a.match(/<w:tr\b[^>]*>[\s\S]*?<\/w:tr>/g) ?? [])[1] ?? "";
+    const firstBodyCells = firstBodyRow.match(/<w:tc\b[^>]*>[\s\S]*?<\/w:tc>/g) ?? [];
+    assert.ok(firstBodyRow.includes("<w:cantSplit"), "Không tách một dòng nội dung qua hai trang");
+    assert.ok(firstBodyCells[0]?.includes('<w:jc w:val="center"'), "STT giữ căn giữa của mẫu Word");
+    assert.ok(firstBodyCells[1]?.includes('<w:jc w:val="left"'), "Nội dung giữ căn trái của mẫu Word");
+    assert.ok(firstBodyCells[1]?.includes('<w:sz w:val="24"'), "Nội dung giữ cỡ chữ 12 pt của mẫu Word");
+    assert.ok(xml.includes('<w:pgSz w:w="11907" w:h="16840"'), "Giữ khổ A4 dọc của mẫu Word");
+    assert.ok(xml.includes('<w:pgMar w:top="1134" w:right="1134" w:bottom="1134" w:left="1134"'), "Giữ lề trang 2 cm của mẫu Word");
     assert.ok(a.includes("Biện pháp chỉ công tác") && a.includes("Biện pháp cả hai"));
     assert.ok(b.includes("Biện pháp cả hai") && !b.includes("Biện pháp chỉ công tác"));
     assert.ok(c.includes("Biện pháp cả hai") && c.includes("Biện pháp chỉ công tác") && !c.includes("Rào chắn"));
-    assert.ok(xml.includes("&amp;") && xml.includes("&lt;XML&gt;")); assert.ok(!xml.includes("Đã thay đổi trong danh mục")); checks += 5;
+    assert.ok(xml.includes("&amp;") && xml.includes("&lt;XML&gt;")); assert.ok(!xml.includes("Đã thay đổi trong danh mục")); checks += 17;
     const bodyText = xml.replace(/<[^>]+>/g, "");
     assert.ok(bodyText.includes("Số ĐK: 2609/2026/ĐK-SCCN")); assert.ok(bodyText.includes("Phạm vi: Phạm vi độc lập &amp; &lt;kiểm tra&gt;"));
     assert.ok(bodyText.includes("13 giờ 20 ngày 10/09/2026") && bodyText.includes("17 giờ 45 ngày 12/09/2026"));
