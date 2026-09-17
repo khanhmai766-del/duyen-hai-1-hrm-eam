@@ -32,7 +32,7 @@ function run(partial: Partial<EvalRun>): EvalRun {
 const called = (...tools: string[]) => tools.map((tool) => ({ tool, args: {}, items: 1 }));
 const question = (id: string) => questions.find((q) => q.id === id)!;
 
-test("đọc đúng workflow: model, trần vòng, và ĐỦ 6 công cụ trùng tên công cụ website", () => {
+test("đọc đúng workflow: model, trần vòng, và ĐỦ công cụ trùng tên công cụ website", () => {
   assert.equal(workflow.model, "gemini-3.8-flash");
   // Bộ chấm chỉ gọi được Gemini nên đọc Agent tầng 3 (Gemini); prompt/công cụ giống Agent chính.
   assert.equal(workflow.maxIterations, 8);
@@ -114,7 +114,7 @@ test("tổng hợp: điểm hiện tại bỏ qua câu hết hạn mức và kho
   const results: EvalResult[] = [
     { question: question("defect-001"), run: run({ toolCalls: called("search-defects"), citations: [{ sourceType: "DEFECT", sourceId: "1" }], usage: { prompt: 3000, output: 200, thoughts: 800, cached: 0 } }) },
     { question: question("defect-002"), run: run({ status: "RATE_LIMITED" }) },
-    { question: question("website-help-001"), run: run({}) },
+    { question: question("website-help-004"), run: run({}) },
   ].map((r) => ({ ...r, score: scoreQuestion(r.question, r.run) }));
 
   const summary = summarize(results);
@@ -122,7 +122,7 @@ test("tổng hợp: điểm hiện tại bỏ qua câu hết hạn mức và kho
   assert.equal(summary.rateLimited, 1);
   assert.equal(summary.current.questions, 1, "chỉ defect-001 được tính vào điểm hiện tại");
   assert.equal(summary.current.passRate, 1);
-  assert.deepEqual(summary.knownGaps.map((g) => g.id), ["website-help-001"]);
+  assert.deepEqual(summary.knownGaps.map((g) => g.id), ["website-help-004"]);
 });
 
 test("ước chi phí: suy nghĩ tính giá output, phần cache tính giá cache", () => {

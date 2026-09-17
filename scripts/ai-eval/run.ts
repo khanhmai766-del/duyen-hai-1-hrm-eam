@@ -142,6 +142,7 @@ async function main() {
     "material-replacements": tools.aiSearchMaterialReplacements,
     "shift-schedule": tools.aiGetShiftSchedule,
     "search-announcements": tools.aiSearchAnnouncements,
+    "search-knowledge-base": tools.aiSearchKnowledgeBase,
   };
   const missing = workflow.tools.filter((t) => !implementations[t.slug]).map((t) => t.slug);
   if (missing.length) fail(`workflow có công cụ website chưa có hàm tương ứng: ${missing.join(", ")}`);

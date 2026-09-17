@@ -1,7 +1,7 @@
 # Chatbox AI tra cứu Vận hành 1 (DH1 OPS INSIGHT)
 
 Workflow chỉ đọc dữ liệu mà người đang đăng nhập được phép xem. Website xác thực
-NextAuth, phát capability token sống 2 phút; n8n dùng token đó khi gọi sáu API tool.
+NextAuth, phát capability token sống 2 phút; n8n dùng token đó khi gọi bảy API tool.
 Mô hình không được kết nối trực tiếp PostgreSQL. Nội dung câu hỏi, tối đa 6 tin nhắn
 gần nhất (mỗi tin tối đa 400 ký tự) và các trường văn bản tối thiểu do tool trả về được gửi qua n8n tới
 **VietAPI** (`api.vietapi.tech`, tầng 1 GLM và tầng 2 DeepSeek) và **Google Gemini API** (tầng 3,
@@ -69,6 +69,8 @@ AI_CAPABILITY_SECRET=<secret-ky-capability>
 AI_CHAT_TIMEOUT_MS=45000        # không nhận được byte nào từ n8n quá lâu thì dừng (35–90 giây)
 AI_CHAT_MAX_CONCURRENT=3        # số câu hỏi gọi n8n cùng lúc (1–10)
 AI_CHAT_MAX_PER_MINUTE=8        # số câu hỏi được bắt đầu mỗi phút (1–60)
+# Tra cứu tài liệu (RAG, mục 10) — key Gemini riêng cho embedding, KHÔNG dùng GEMINI_API_KEY (TCMS):
+AI_KB_EMBEDDING_GEMINI_API_KEY=<key-google-ai-studio>
 ```
 
 `AI_CHAT_TIMEOUT_MS` nay là thời gian **im lặng** tối đa (n8n phát keepalive mỗi 30 giây khi
@@ -80,12 +82,12 @@ n8n dùng credential, không đọc `$env`:
 | Credential | Loại | Giá trị | Node sử dụng |
 | --- | --- | --- | --- |
 | DH1 AI Webhook Auth | Header Auth | `Authorization: Bearer <token-webhook>` | Webhook AI Chat |
-| DH1 AI Tool Auth | Header Auth | `Authorization: Bearer <token-tool>` | Sáu tool và Xóa hội thoại quá 14 ngày |
+| DH1 AI Tool Auth | Header Auth | `Authorization: Bearer <token-tool>` | Bảy tool và Xóa hội thoại quá 14 ngày |
 | VietAPI - DH1 Chatbox | OpenAI | API key vietapi.tech, **Base URL** `https://api.vietapi.tech/v1`, Allowed domains chỉ `api.vietapi.tech` | GLM chính, DeepSeek dự phòng |
 | Gemini - DH1 Chatbox | Google Gemini (PaLM) API | API key Google AI Studio (gói miễn phí) | Gemini tầng 3 |
 
 URL đích được đặt cố định `https://duyenhai1.vn` trong các node HTTP; mô hình không được chọn
-host đích. Nếu đổi tên miền, cập nhật cả bảy URL.
+host đích. Nếu đổi tên miền, cập nhật cả tám URL.
 
 ### DNS trong container n8n
 
@@ -119,7 +121,7 @@ kiểu cũ lẫn streaming; website cũ không hiểu streaming.
    `https://api.vietapi.tech/v1`, **Allowed HTTP Request Domains** chỉ `api.vietapi.tech`. Không dán
    key vào chat hay file.
 2. Import `workflow-production.json` bằng **Import from File** thành workflow mới.
-3. Chọn credential cho: Webhook AI Chat, SÁU tool, Xóa hội thoại quá 14 ngày, **GLM chính** và
+3. Chọn credential cho: Webhook AI Chat, BẢY tool, Xóa hội thoại quá 14 ngày, **GLM chính** và
    **DeepSeek dự phòng** (VietAPI), **Gemini tầng 3** (Gemini). Kiểm tra model Gemini đúng model
    credential được phép dùng (bản mẫu `models/gemini-3.8-flash`).
 4. Unpublish workflow cũ rồi Publish workflow mới (không để hai workflow trùng path
@@ -190,6 +192,7 @@ X-AI-Capability: <token-do-website-ky>
 - `POST /api/integrations/n8n/ai/tools/material-replacements`
 - `POST /api/integrations/n8n/ai/tools/shift-schedule`
 - `POST /api/integrations/n8n/ai/tools/search-announcements`
+- `POST /api/integrations/n8n/ai/tools/search-knowledge-base` — tra tài liệu hướng dẫn (mục 10).
 - `POST /api/integrations/n8n/ai/cleanup` — chỉ cần Bearer token.
 
 Hai công cụ thêm ngày 16/09/2026 lấy phạm vi bằng ĐÚNG màn hình tương ứng, không rào thêm và
@@ -272,7 +275,7 @@ prisma/migrations/20260916090000_add_ai_chat_metrics/migration.sql
 
 ## 9. Chấm bộ câu hỏi chuẩn
 
-49 câu hỏi ở `tests/ai/eval/questions.json` chấm **hành vi** của trợ lý — gọi đúng công cụ nào,
+54 câu hỏi ở `tests/ai/eval/questions.json` chấm **hành vi** của trợ lý — gọi đúng công cụ nào,
 có/không có nguồn, trả lời / hỏi lại / từ chối — chứ không chấm nội dung, nên chạy trên DB dev vẫn có
 nghĩa. Mỗi câu ghi rõ nó kiểm gì trong trường `why`. Cấu trúc file được khoá bằng
 `tests/ai/eval-questions.test.ts`.
@@ -313,3 +316,50 @@ khoản đó sẽ ra "trượt" hàng loạt mà không nói gì về chất lư
   LangChain quanh system message. Mỗi câu hỏi độc lập, không mang lịch sử hội thoại.
 - Dòng chi phí là ước theo giá trả phí Gemini 3.8 Flash; chạy gói miễn phí thì không mất tiền, nhưng
   số token đo được là thật.
+
+## 10. Tra cứu tài liệu (RAG)
+
+Công cụ thứ bảy `search-knowledge-base` (node **Tra cứu tài liệu**, nối vào CẢ HAI Agent) trả lời câu hỏi
+CÁCH LÀM / QUY TRÌNH / cách dùng web từ kho tài liệu đã nạp — quy tắc 12 trong system message.
+
+| Nhóm | Quyền | Nguồn |
+| --- | --- | --- |
+| `vat-tu` Quy trình vật tư | `ai-chat-tailieu-vat-tu` | `public/material-procedures/*.pdf` (khai trong `ai-knowledge-source/sources.json`) |
+| `pccc` Sổ thiết bị PCCC | `ai-chat-tailieu-pccc` | `ai-knowledge-source/pccc/` |
+| `tbycnn` Sổ thiết bị TBYCNN | `ai-chat-tailieu-tbycnn` | `ai-knowledge-source/tbycnn/` |
+| `an-toan` Sổ cấp phiếu công tác | `ai-chat-tailieu-an-toan` | `ai-knowledge-source/an-toan/` |
+
+Quyền mặc định: mọi vai trò trừ VIEWER; chỉnh ở màn hình phân quyền, nhóm **Trợ lý AI**. Công cụ tính
+lại quyền mỗi lần gọi và lọc nhóm TRƯỚC khi xếp hạng, nên đoạn ngoài quyền không bao giờ tới mô hình.
+Nguồn đối chiếu trỏ `/tai-lieu/<id>` — trang kiểm cùng quyền, không có quyền thì 404.
+
+**Nội dung ba nhóm pccc / tbycnn / an-toan là tài liệu MÔ TẢ MODULE WEB** (soạn 17/09/2026 từ
+`docs/pccc.md`, `docs/tbycnn.md`, `docs/work-permit-register.md` vì tệp nguồn gốc không còn), không
+phải phương án chữa cháy, quy trình kiểm định hay quy định an toàn lao động chính thức — đầu mỗi tệp ghi
+rõ điều này. Không có tài liệu quy trình vận hành thiết bị: không soạn thay vì không có nguồn thật.
+
+Cách hoạt động:
+
+- **Không dùng pgvector** — Postgres dev (embedded) và production (16.14) đều chưa cài. Vector
+  `gemini-embedding-001` 768 chiều lưu `DOUBLE PRECISION[]` (`AiKnowledgeChunk`), website tải toàn bộ
+  vào bộ nhớ (cache 5 phút) và so cosine trong Node: 61 đoạn, dưới 5 ms. Kho vượt vài chục nghìn đoạn
+  mới đáng cài pgvector.
+- Chia đoạn ~900 ký tự (trần 1.400), mang tiêu đề mục markdown, chồng mép 150 ký tự trong cùng mục.
+  Đoạn trích gửi mô hình tối đa 1.000 ký tự, tối đa 4 đoạn và 2 đoạn mỗi tài liệu, điểm cosine ≥ 0,66
+  (đo 17/09/2026: câu có đáp án 0,68–0,78, câu không liên quan 0,57–0,64 — nạp thêm tài liệu thì đo lại
+  `AI_KNOWLEDGE_MIN_SCORE`).
+- Thiếu `AI_KB_EMBEDDING_GEMINI_API_KEY` thì công cụ trả lời "chưa được cấu hình", không lỗi 500.
+
+Nạp tài liệu (sau khi áp `prisma/migrations/20260917100000_add_ai_knowledge/migration.sql`):
+
+```bash
+npm run ai:knowledge-ingest -- --dry-run   # đọc + chia đoạn, không gọi Gemini, không ghi DB
+npm run ai:knowledge-ingest                # nạp tài liệu mới/đã đổi (DB không phải localhost thì thêm --yes)
+npm run ai:knowledge-ingest -- --prune     # xoá tài liệu không còn tệp nguồn
+```
+
+Nạp lại chỉ gọi Gemini cho tài liệu đổi nội dung (băm nội dung + model + phiên bản bộ chia đoạn).
+Thêm tài liệu: thả `.md`/`.txt`/`.pdf` vào `ai-knowledge-source/<nhóm>/` rồi chạy lại. PDF scan không
+có lớp chữ sẽ bị bỏ qua (chưa OCR). Nhóm mới phải thêm vào `AI_KNOWLEDGE_CATEGORIES`
+(`lib/ai-knowledge.ts`), `lib/rbac-defaults.ts` và màn hình phân quyền.
+

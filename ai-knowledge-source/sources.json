@@ -1,0 +1,17 @@
+{
+  "$comment": "Tệp nguồn NẰM NGOÀI ai-knowledge-source/ (PDF đã công khai trong public/). Tệp trong ai-knowledge-source/<nhóm>/ được tự quét, không cần khai ở đây. Nạp: npm run ai:knowledge-ingest",
+  "files": [
+    {
+      "path": "public/material-procedures/huong-dan-quan-ly-vat-tu.pdf",
+      "category": "vat-tu",
+      "title": "Hướng dẫn sử dụng phần Quản lý vật tư",
+      "publicUrl": "/material-procedures/huong-dan-quan-ly-vat-tu.pdf"
+    },
+    {
+      "path": "public/material-procedures/luu-do-thuc-hien-vat-tu-vh1.pdf",
+      "category": "vat-tu",
+      "title": "Tờ trình phương án lập kế hoạch và lãnh vật tư Phân xưởng Vận hành 1",
+      "publicUrl": "/material-procedures/luu-do-thuc-hien-vat-tu-vh1.pdf"
+    }
+  ]
+}

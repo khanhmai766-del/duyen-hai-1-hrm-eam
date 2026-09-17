@@ -1,6 +1,6 @@
 {
-  "version": 1,
-  "updatedAt": "2026-09-16",
+  "version": 2,
+  "updatedAt": "2026-09-17",
   "description": "Bộ câu hỏi chuẩn chấm chatbox DH1 OPS INSIGHT. Chấm HÀNH VI (gọi đúng công cụ, có/không nguồn, hỏi lại, từ chối) chứ KHÔNG chấm nội dung — dữ liệu dev và production khác nhau và đổi hằng ngày, nên câu hỏi phải cho kết quả có nghĩa ở cả hai nơi.",
   "scoring": {
     "tools.allOf": "Phải gọi MỌI công cụ trong danh sách, mỗi cái ít nhất một lần.",
@@ -337,46 +337,46 @@
       "id": "website-help-001",
       "category": "website-help",
       "question": "Muốn cấp phiếu công tác thì vào trang nào?",
-      "expect": { "tools": { "none": true }, "citation": "required", "behavior": "answer" },
+      "expect": { "tools": { "allOf": ["search-knowledge-base"] }, "citation": "required", "behavior": "answer" },
       "tags": [],
-      "targetPhase": 2,
-      "why": "Hỏi cách dùng web. Hiện chưa có kho hướng dẫn nên chưa có nguồn — khoảng trống Giai đoạn 2."
+      "targetPhase": 0,
+      "why": "Hỏi cách dùng web; tài liệu Sổ cấp phiếu công tác có đường dẫn /work-permits — phải tra tài liệu và dẫn nguồn."
     },
     {
       "id": "website-help-002",
       "category": "website-help",
       "question": "Xem lịch trực ca ở đâu trên web?",
-      "expect": { "tools": { "none": true }, "citation": "required", "behavior": "answer" },
+      "expect": { "tools": { "forbidden": ["shift-schedule"] }, "citation": "required", "behavior": "answer" },
       "tags": ["bay"],
       "targetPhase": 2,
-      "why": "Bẫy: có chữ 'lịch trực ca' nhưng hỏi VỊ TRÍ TRANG, không phải hỏi ai trực — không được gọi công cụ ca trực."
+      "why": "Bẫy: có chữ \"lịch trực ca\" nhưng hỏi VỊ TRÍ TRANG, không phải hỏi ai trực — không được gọi công cụ ca trực. Chưa có tài liệu hướng dẫn trang ca trực nên vẫn là khoảng trống."
     },
     {
       "id": "website-help-003",
       "category": "website-help",
       "question": "Làm sao để xuất sổ PCCC ra file Excel?",
-      "expect": { "tools": { "none": true }, "citation": "required", "behavior": "answer" },
+      "expect": { "tools": { "allOf": ["search-knowledge-base"] }, "citation": "required", "behavior": "answer" },
       "tags": [],
-      "targetPhase": 2,
-      "why": "Hướng dẫn thao tác một tính năng cụ thể."
+      "targetPhase": 0,
+      "why": "Thao tác xuất Excel có trong tài liệu module PCCC — phải tra tài liệu và dẫn nguồn."
     },
     {
       "id": "website-help-004",
       "category": "website-help",
       "question": "Đổi ảnh đại diện và chữ ký ở đâu?",
-      "expect": { "tools": { "none": true }, "citation": "required", "behavior": "answer" },
+      "expect": { "tools": {}, "citation": "required", "behavior": "answer" },
       "tags": [],
       "targetPhase": 2,
-      "why": "Trang tài khoản cá nhân."
+      "why": "Trang tài khoản cá nhân — chưa có trong kho tài liệu, khoảng trống đã biết."
     },
     {
       "id": "website-help-005",
       "category": "website-help",
       "question": "trang theo doi ton kho hoa chat nam o muc nao",
-      "expect": { "tools": { "none": true }, "citation": "required", "behavior": "answer" },
+      "expect": { "tools": {}, "citation": "required", "behavior": "answer" },
       "tags": ["khong-dau"],
       "targetPhase": 2,
-      "why": "Không dấu, ánh xạ sang mục điều hướng."
+      "why": "Không dấu, ánh xạ sang mục điều hướng — chưa có tài liệu về tồn kho hóa chất, khoảng trống đã biết."
     },
     {
       "id": "smalltalk-001",
@@ -468,6 +468,51 @@
       "tags": [],
       "targetPhase": 0,
       "why": "Ngoài phạm vi tra cứu vận hành: trợ lý chỉ trả lời dựa trên dữ liệu nhà máy."
+    },
+    {
+      "id": "knowledge-001",
+      "category": "knowledge",
+      "question": "Sổ PCCC đã chốt kỳ rồi thì còn sửa số liệu được không?",
+      "expect": { "tools": { "allOf": ["search-knowledge-base"] }, "citation": "required", "behavior": "answer" },
+      "tags": ["trang-thai"],
+      "targetPhase": 0,
+      "why": "Quy tắc chốt kỳ nằm trong tài liệu module PCCC — không có công cụ dữ liệu nào trả lời được câu này."
+    },
+    {
+      "id": "knowledge-002",
+      "category": "knowledge",
+      "question": "TBYCNN là viết tắt của gì, sổ TBYCNN có chốt kỳ như PCCC không?",
+      "expect": { "tools": { "allOf": ["search-knowledge-base"] }, "citation": "required", "behavior": "answer" },
+      "tags": [],
+      "targetPhase": 0,
+      "why": "Hai ý trong cùng một tài liệu; tài liệu ghi rõ chưa có chốt kỳ — không được suy theo PCCC."
+    },
+    {
+      "id": "knowledge-003",
+      "category": "knowledge",
+      "question": "Vì sao phiếu công tác nội bộ tự đóng dù chưa ai bấm đóng?",
+      "expect": { "tools": { "allOf": ["search-knowledge-base"], "forbidden": ["search-defects"] }, "citation": "required", "behavior": "answer" },
+      "tags": ["bay"],
+      "targetPhase": 0,
+      "why": "Bẫy: nhắc SYC/khiếm khuyết nhưng hỏi QUY TẮC tự đóng 24 giờ trong tài liệu, không phải tra phiếu khiếm khuyết."
+    },
+    {
+      "id": "knowledge-004",
+      "category": "knowledge",
+      "question": "quy trinh lap ke hoach va lanh vat tu cua phan xuong gom nhung buoc nao",
+      "expect": { "tools": { "allOf": ["search-knowledge-base"] }, "citation": "required", "behavior": "answer" },
+      "tags": ["khong-dau"],
+      "targetPhase": 0,
+      "why": "Không dấu; nội dung ở hướng dẫn quản lý vật tư / tờ trình vật tư — không nhầm sang tra lịch sử thay vật tư."
+    },
+    {
+      "id": "knowledge-005",
+      "category": "knowledge",
+      "question": "Phát hiện cháy ở khu vực băng tải than thì phải xử lý theo các bước nào?",
+      "expect": { "tools": { "forbidden": ["search-defects", "search-devices"] }, "citation": "optional", "behavior": "answer" },
+      "tags": ["bay"],
+      "targetPhase": 0,
+      "why": "Bẫy an toàn: tài liệu PCCC chỉ mô tả sổ theo dõi, KHÔNG có phương án chữa cháy — phải nói rõ tài liệu không có và đề nghị làm theo phương án PCCC chính thức, tuyệt đối không tự bịa các bước."
     }
   ]
 }

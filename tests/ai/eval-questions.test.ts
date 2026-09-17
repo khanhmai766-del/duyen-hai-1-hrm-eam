@@ -30,7 +30,7 @@ type Question = {
 
 const CATEGORIES = [
   "defect", "device-history", "device-ambiguous", "page-context", "material",
-  "shift", "announcement", "website-help", "smalltalk", "out-of-scope",
+  "shift", "announcement", "website-help", "knowledge", "smalltalk", "out-of-scope",
 ] as const;
 const TAGS = new Set(["khong-dau", "ngay-tuong-doi", "so-yeu-cau", "kks", "to-may", "trang-thai", "muc-do", "tong-hop", "bay"]);
 const TOOLS = new Set(Object.keys(AI_TOOL_LABELS));

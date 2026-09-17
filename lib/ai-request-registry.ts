@@ -26,7 +26,8 @@ export type AiToolName =
   | "device-history"
   | "material-replacements"
   | "shift-schedule"
-  | "search-announcements";
+  | "search-announcements"
+  | "search-knowledge-base";
 
 export const AI_TOOL_LABELS: Record<AiToolName, string> = {
   "search-devices": "Đang tìm thiết bị",
@@ -35,6 +36,7 @@ export const AI_TOOL_LABELS: Record<AiToolName, string> = {
   "material-replacements": "Đang tra cứu thay vật tư",
   "shift-schedule": "Đang xem lịch trực ca",
   "search-announcements": "Đang đọc thông báo, mệnh lệnh",
+  "search-knowledge-base": "Đang tra cứu tài liệu hướng dẫn",
 };
 
 /** Số lần gọi công cụ tối đa cho MỘT câu hỏi — quá mức này là mô hình đang lặp. */

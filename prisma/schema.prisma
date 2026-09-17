@@ -63,6 +63,44 @@ model User {
   @@index([isActive])
 }
 
+// Kho tài liệu cho trợ lý AI tra cứu (RAG). Nạp bằng `npm run ai:knowledge-ingest` từ
+// ai-knowledge-source/ và public/material-procedures/. Phân quyền theo `category`: quyền
+// `ai-chat-tailieu-<category>` (lib/ai-knowledge.ts). Vector lưu dạng mảng số thực, so khớp trong
+// Node — kho vài trăm đoạn không cần pgvector (cả DB dev lẫn production đều chưa cài).
+model AiKnowledgeDocument {
+  id             String   @id @default(cuid())
+  category       String
+  /// Đường dẫn tương đối của tệp nguồn — khoá để nạp lại không nhân bản.
+  sourcePath     String   @unique
+  title          String
+  /// Đường dẫn tới tệp gốc nếu tệp nằm trong public/ (PDF), để trang xem tài liệu mở bản gốc.
+  publicUrl      String?
+  /// Băm nội dung + model embedding + phiên bản bộ chia đoạn: trùng thì bỏ qua khi nạp lại.
+  contentHash    String
+  embeddingModel String
+  content        String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  chunks AiKnowledgeChunk[]
+
+  @@index([category])
+}
+
+model AiKnowledgeChunk {
+  id         String  @id @default(cuid())
+  documentId String
+  chunkIndex Int
+  heading    String?
+  content    String
+  /// Vector đã chuẩn hoá độ dài 1 nên cosine = tích vô hướng.
+  embedding  Float[]
+
+  document AiKnowledgeDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@unique([documentId, chunkIndex])
+}
+
 // Hội thoại trợ lý AI chỉ phục vụ tra cứu. Mỗi phiên tự hết hạn sau 14 ngày;
 // tác vụ dọn được chạy cơ hội khi người dùng mở/gửi chat, không phụ thuộc n8n.
 model AiConversation {

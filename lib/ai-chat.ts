@@ -11,7 +11,7 @@ export const AI_CHAT_MAX_QUESTION_LENGTH = 2_000;
 export const AI_CHAT_HISTORY_LIMIT = 10;
 
 export type AiCitation = {
-  sourceType: "DEVICE" | "DEFECT" | "DEFECT_HISTORY" | "REPAIR" | "MATERIAL_REPLACEMENT" | "ANNOUNCEMENT" | "SHIFT";
+  sourceType: "DEVICE" | "DEFECT" | "DEFECT_HISTORY" | "REPAIR" | "MATERIAL_REPLACEMENT" | "ANNOUNCEMENT" | "SHIFT" | "DOCUMENT";
   sourceId: string;
   title: string;
   url: string;
@@ -34,9 +34,9 @@ export function aiConversationExpiry(from = new Date()) {
 }
 
 const ALLOWED_CITATION_TYPES = new Set<AiCitation["sourceType"]>([
-  "DEVICE", "DEFECT", "DEFECT_HISTORY", "REPAIR", "MATERIAL_REPLACEMENT", "ANNOUNCEMENT", "SHIFT",
+  "DEVICE", "DEFECT", "DEFECT_HISTORY", "REPAIR", "MATERIAL_REPLACEMENT", "ANNOUNCEMENT", "SHIFT", "DOCUMENT",
 ]);
-const ALLOWED_CITATION_PATHS = /^\/(devices|defects|repair-history|replacement-history|notifications|hr)(\/|\?|$)/;
+const ALLOWED_CITATION_PATHS = /^\/(devices|defects|repair-history|replacement-history|notifications|hr|tai-lieu)(\/|\?|$)/;
 
 /**
  * Chuẩn hoá MỘT nguồn trích dẫn: đúng loại, có id + tiêu đề, và chỉ trỏ vào đường dẫn NỘI BỘ

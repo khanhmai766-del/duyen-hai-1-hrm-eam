@@ -51,15 +51,15 @@ function toolsOf(agentName: string) {
     .sort();
 }
 
-test("workflow không đọc môi trường, không mang credential và bắt buộc Header Auth ở cả tám đầu kết nối", () => {
+test("workflow không đọc môi trường, không mang credential và bắt buộc Header Auth ở cả chín đầu kết nối", () => {
   assert.equal(workflowText.includes("$env"), false);
   assert.equal(workflow.active, false);
   assert.equal(workflow.nodes.some(node => node.credentials), false);
   const webhook = workflow.nodes.find(node => node.type === "n8n-nodes-base.webhook")!;
   assert.equal(webhook.parameters.authentication, "headerAuth");
   const outbound = workflow.nodes.filter(node => node.parameters.url);
-  // Sáu công cụ tra cứu + node dọn hội thoại hàng ngày.
-  assert.equal(outbound.length, 7);
+  // Bảy công cụ tra cứu + node dọn hội thoại hàng ngày.
+  assert.equal(outbound.length, 8);
   for (const node of outbound) {
     assert.equal(node.parameters.authentication, "genericCredentialType");
     assert.equal(node.parameters.genericAuthType, "httpHeaderAuth");
@@ -141,14 +141,14 @@ test("model nào cũng đi qua node có credential riêng, không nhét key hay 
   }
 });
 
-test("sáu công cụ tra cứu đều nối vào CẢ HAI Agent và trỏ đúng endpoint của website", () => {
+test("bảy công cụ tra cứu đều nối vào CẢ HAI Agent và trỏ đúng endpoint của website", () => {
   const expected = [
     "Lịch sử thiết bị", "Lịch trực ca", "Thông báo, mệnh lệnh",
-    "Tìm thiết bị", "Tra cứu khiếm khuyết", "Tra cứu thay vật tư",
+    "Tìm thiết bị", "Tra cứu khiếm khuyết", "Tra cứu thay vật tư", "Tra cứu tài liệu",
   ].sort();
   assert.deepEqual(toolsOf(agent.name), expected);
   assert.deepEqual(toolsOf(backupAgent.name), expected);
-  for (const [name, slug] of [["Lịch trực ca", "shift-schedule"], ["Thông báo, mệnh lệnh", "search-announcements"]] as const) {
+  for (const [name, slug] of [["Lịch trực ca", "shift-schedule"], ["Thông báo, mệnh lệnh", "search-announcements"], ["Tra cứu tài liệu", "search-knowledge-base"]] as const) {
     assert.equal(byName(name).parameters.url, `https://duyenhai1.vn/api/integrations/n8n/ai/tools/${slug}`);
     assert.equal(byName(name).type, "n8n-nodes-base.httpRequestTool");
   }

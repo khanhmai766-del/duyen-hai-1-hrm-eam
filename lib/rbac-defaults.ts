@@ -13,6 +13,12 @@ export const DEFAULT_RBAC_MATRIX: Record<string, Partial<Record<string, RbacLeve
   "system_audit_log:view": { ADMIN: "read", MANAGER: "none", SUPERVISOR: "none", TECHNICIAN: "none", VIEWER: "none" },
   "broadcast-manage": { ADMIN: "full", MANAGER: "none", SUPERVISOR: "none", TECHNICIAN: "none", VIEWER: "none" },
   "ai-chat": { ADMIN: "read", MANAGER: "read", SUPERVISOR: "read", TECHNICIAN: "read", VIEWER: "read" },
+  // Nhóm tài liệu trợ lý AI được tra cứu (lib/ai-knowledge.ts). Mỗi nhóm một quyền để admin tắt riêng
+  // từng nhóm; mặc định mọi vai trò trừ VIEWER.
+  "ai-chat-tailieu-vat-tu": { ADMIN: "read", MANAGER: "read", SUPERVISOR: "read", TECHNICIAN: "read", VIEWER: "none" },
+  "ai-chat-tailieu-pccc": { ADMIN: "read", MANAGER: "read", SUPERVISOR: "read", TECHNICIAN: "read", VIEWER: "none" },
+  "ai-chat-tailieu-tbycnn": { ADMIN: "read", MANAGER: "read", SUPERVISOR: "read", TECHNICIAN: "read", VIEWER: "none" },
+  "ai-chat-tailieu-an-toan": { ADMIN: "read", MANAGER: "read", SUPERVISOR: "read", TECHNICIAN: "read", VIEWER: "none" },
   "device-view": { ADMIN: "full", MANAGER: "read", SUPERVISOR: "read", TECHNICIAN: "read", VIEWER: "read" },
   "device-manage": { ADMIN: "full", MANAGER: "none", SUPERVISOR: "none", TECHNICIAN: "none", VIEWER: "none" },
   "device-delete": { ADMIN: "full", MANAGER: "none", SUPERVISOR: "none", TECHNICIAN: "none", VIEWER: "none" },

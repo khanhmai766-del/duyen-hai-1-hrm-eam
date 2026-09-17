@@ -10,6 +10,14 @@ import { SHIFT_TYPE, SHIFT_TYPE_ORDER, type ShiftTypeKey } from "@/lib/constants
 import { dateRange as dayRange } from "@/lib/utils";
 import { compactAiFacts as facts, fitAiToolItems } from "@/lib/ai-tool-budget";
 import {
+  AI_KNOWLEDGE_CATEGORIES,
+  clipKnowledgeExcerpt,
+  isAiKnowledgeCategory,
+  rankKnowledgeChunks,
+} from "@/lib/ai-knowledge";
+import { allowedAiKnowledgeCategories, getAiKnowledgeChunks } from "@/lib/ai-knowledge-store";
+import { AiEmbeddingNotConfiguredError, embedTexts } from "@/lib/ai-embedding";
+import {
   AI_MAX_TOOL_CALLS,
   claimAiToolCall,
   recordAiCitations,
@@ -558,5 +566,68 @@ export async function aiSearchAnnouncements(user: AiToolUser, input: Record<stri
     items,
     ...(items.length === 0 ? { message: "Không có thông báo hoặc mệnh lệnh nào khớp điều kiện" } : {}),
     hasMore: rows.length >= take,
+  };
+}
+
+/**
+ * TRA CỨU TÀI LIỆU HƯỚNG DẪN (RAG) — xem lib/ai-knowledge.ts.
+ *
+ * Phạm vi: chỉ nhóm tài liệu người hỏi có quyền `ai-chat-tailieu-<nhóm>`, tính lại từ ma trận quyền
+ * mỗi lần gọi; lọc quyền xảy ra TRƯỚC khi xếp hạng nên đoạn ngoài quyền không bao giờ tới mô hình.
+ * Đoạn trích dài tới 1.000 ký tự (không qua `facts()` cắt còn 200) vì nội dung chính là câu chữ.
+ */
+export async function aiSearchKnowledgeBase(user: AiToolUser, input: Record<string, unknown>) {
+  const query = text(input.query, 500);
+  if (normalizeText(query).length < 3) {
+    return { items: [], message: "Cần nêu nội dung muốn tra trong tài liệu (ít nhất 3 ký tự)" };
+  }
+  const allowed = await allowedAiKnowledgeCategories(user);
+  if (!allowed.length) {
+    return { items: [], message: "Người dùng chưa được cấp quyền đọc nhóm tài liệu nào — không tra cứu được tài liệu" };
+  }
+  const requested = text(input.category, 40).toLowerCase();
+  const categories = requested && isAiKnowledgeCategory(requested) ? allowed.filter((category) => category === requested) : allowed;
+  if (!categories.length) {
+    return { items: [], message: "Người dùng không có quyền đọc nhóm tài liệu này" };
+  }
+
+  const chunks = await getAiKnowledgeChunks();
+  if (!chunks.length) return { items: [], message: "Kho tài liệu chưa được nạp" };
+
+  let vector: number[];
+  try {
+    [vector] = await embedTexts([query], "RETRIEVAL_QUERY", { timeoutMs: 15_000 });
+  } catch (error) {
+    // Thiếu key là lỗi cấu hình máy chủ, không phải lỗi của câu hỏi: báo để mô hình nói rõ thay vì
+    // để route trả 500 rồi mô hình đoán "không có tài liệu".
+    if (error instanceof AiEmbeddingNotConfiguredError) {
+      return { items: [], message: "Chức năng tra cứu tài liệu chưa được cấu hình trên máy chủ" };
+    }
+    throw error;
+  }
+
+  const ranked = rankKnowledgeChunks(vector, chunks, { categories: new Set<string>(categories) });
+  const items = ranked.map(({ chunk, score }) => {
+    const group = AI_KNOWLEDGE_CATEGORIES[chunk.category as keyof typeof AI_KNOWLEDGE_CATEGORIES] ?? chunk.category;
+    return {
+      sourceType: "DOCUMENT" as const,
+      sourceId: chunk.documentId,
+      title: `${group} — ${chunk.title}`,
+      url: `/tai-lieu/${encodeURIComponent(chunk.documentId)}`,
+      facts: {
+        group,
+        document: chunk.title,
+        ...(chunk.heading ? { section: chunk.heading } : {}),
+        excerpt: clipKnowledgeExcerpt(chunk.content),
+        relevance: Math.round(score * 100) / 100,
+      },
+    };
+  });
+
+  return {
+    items,
+    ...(items.length === 0 ? {
+      message: "Không có đoạn tài liệu nào đủ liên quan trong các nhóm tài liệu người dùng được đọc",
+    } : {}),
   };
 }
