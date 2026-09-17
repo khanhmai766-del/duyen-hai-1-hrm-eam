@@ -35,5 +35,5 @@ test("mỗi công cụ có nhãn tiến trình tiếng Việt để hiện trong
   for (const [tool, label] of Object.entries(AI_TOOL_LABELS)) {
     assert.ok(label.startsWith("Đang "), `${tool} thiếu nhãn tiến trình`);
   }
-  assert.equal(Object.keys(AI_TOOL_LABELS).length, 7);
+  assert.equal(Object.keys(AI_TOOL_LABELS).length, 14);
 });

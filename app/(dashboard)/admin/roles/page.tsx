@@ -351,6 +351,13 @@ const DEFAULT_PERMISSIONS: PermissionRow[] = [
     matrix: { ADMIN: "read", MANAGER: "read", SUPERVISOR: "read", TECHNICIAN: "read", VIEWER: "none" },
   },
   {
+    id: "ai-chat-tailieu-thiet-bi",
+    group: "Trợ lý AI",
+    feature: "Tra cứu tài liệu: Quản lý thiết bị",
+    note: "Trợ lý AI được đọc hỏi–đáp cách dùng các trang Thông tin thiết bị, Khiếm khuyết, Lịch sử sửa chữa, Tiếp địa & chống sét và Thư mục lưu trữ (kể cả tiêu chí mức độ khiếm khuyết đang cài trên web).",
+    matrix: { ADMIN: "read", MANAGER: "read", SUPERVISOR: "read", TECHNICIAN: "read", VIEWER: "none" },
+  },
+  {
     id: "device-view",
     group: "Thiết bị",
     feature: "Xem thông tin thiết bị",

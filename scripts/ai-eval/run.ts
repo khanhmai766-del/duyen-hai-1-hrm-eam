@@ -131,6 +131,7 @@ async function main() {
 
   const { prisma } = await import("@/lib/prisma");
   const tools = await import("@/lib/ai-tools");
+  const opsTools = await import("@/lib/ai-tools-ops");
   const registry = await import("@/lib/ai-request-registry");
   const { effectiveUserPosition } = await import("@/lib/current-position");
   const { hasAssignedPermissionLevel } = await import("@/lib/rbac-permissions");
@@ -143,6 +144,13 @@ async function main() {
     "shift-schedule": tools.aiGetShiftSchedule,
     "search-announcements": tools.aiSearchAnnouncements,
     "search-knowledge-base": tools.aiSearchKnowledgeBase,
+    "search-work-permits": opsTools.aiSearchWorkPermits,
+    "safety-registers": opsTools.aiSearchSafetyRegisters,
+    "search-materials": opsTools.aiSearchMaterials,
+    "material-tickets": opsTools.aiSearchMaterialTickets,
+    "material-plans": opsTools.aiMaterialPlans,
+    "chemical-inventory": opsTools.aiChemicalInventory,
+    "search-archive": opsTools.aiSearchArchive,
   };
   const missing = workflow.tools.filter((t) => !implementations[t.slug]).map((t) => t.slug);
   if (missing.length) fail(`workflow có công cụ website chưa có hàm tương ứng: ${missing.join(", ")}`);

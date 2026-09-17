@@ -193,6 +193,13 @@ X-AI-Capability: <token-do-website-ky>
 - `POST /api/integrations/n8n/ai/tools/shift-schedule`
 - `POST /api/integrations/n8n/ai/tools/search-announcements`
 - `POST /api/integrations/n8n/ai/tools/search-knowledge-base` — tra tài liệu hướng dẫn (mục 10).
+- `POST /api/integrations/n8n/ai/tools/search-work-permits`
+- `POST /api/integrations/n8n/ai/tools/safety-registers`
+- `POST /api/integrations/n8n/ai/tools/search-materials`
+- `POST /api/integrations/n8n/ai/tools/material-tickets`
+- `POST /api/integrations/n8n/ai/tools/material-plans`
+- `POST /api/integrations/n8n/ai/tools/chemical-inventory`
+- `POST /api/integrations/n8n/ai/tools/search-archive`
 - `POST /api/integrations/n8n/ai/cleanup` — chỉ cần Bearer token.
 
 Hai công cụ thêm ngày 16/09/2026 lấy phạm vi bằng ĐÚNG màn hình tương ứng, không rào thêm và
@@ -202,6 +209,26 @@ cũng không nới ra:
 | --- | --- | --- |
 | `shift-schedule` | như `GET /api/shifts`: mọi tài khoản đăng nhập xem được sơ đồ ca trực | điện thoại, ảnh, chữ ký, dữ liệu điểm danh |
 | `search-announcements` | như `GET /api/announcements`: mọi tài khoản đăng nhập đọc được | mệnh lệnh đã hết hiệu lực, trừ khi hỏi rõ |
+
+Bảy công cụ thêm ngày 17/09/2026 phủ phân hệ **Quản lý thiết bị** và **Quản lý vật tư**
+(`lib/ai-tools-ops.ts`). Gộp theo nhóm nghiệp vụ thay vì một công cụ mỗi trang — mỗi công cụ thêm là
+thêm mô tả vào prompt của mọi lượt hỏi và thêm cơ hội mô hình chọn nhầm. Phạm vi gọi lại CHÍNH hàm
+quyền của route trang tương ứng; tài khoản `DEFECT_READ_ONLY` bị từ chối ở cả bảy (proxy.ts cũng chặn
+các API đó). Dashboard thiết bị cố ý không có công cụ — số liệu của nó là tổng hợp khiếm khuyết.
+
+| Công cụ | Trang | Phạm vi (giống route) |
+| --- | --- | --- |
+| `search-work-permits` | Sổ cấp PCT | như `GET /api/work-permits`: mọi tài khoản đăng nhập; mặc định bỏ phiếu đã hủy |
+| `safety-registers` (`register` = PCCC / TBYCNN / GROUNDING) | `/pccc`, `/tbycnn`, `/grounding-lightning` | `pccc-view` + `resolvePcccViewScope` (ba kiểu phạm vi bình/tủ/bồn như `summary`), `tbycnn-view` + `resolveTbycnnViewScope`, `grounding-lightning-view` + `groundingScopeWithPermissions`. Không có `query`/`attention` thì chỉ trả số lượng |
+| `search-materials` (`source` = MATERIAL / ERP) | Danh mục VH1, Vật tư theo ERP | `material-manage` (tồn theo lô như `stock-lots`), `erp-material-manage` |
+| `material-tickets` | Theo dõi vật tư | như `GET /api/material-tickets`: mọi tài khoản đăng nhập |
+| `material-plans` | Kế hoạch năm, Nhu cầu tháng | `material-manage`; có `period` thì đọc biểu tháng |
+| `chemical-inventory` | Tịnh kho hóa chất | `chemical-inventory-manage`, cùng `getMonthlyGrid` |
+| `search-archive` | Thư mục lưu trữ | quyền `archive-*` từng nhóm; Dữ liệu vòi dầu chặn theo chức vụ (`assertOilSootAccess`) |
+
+⚠️ `scopeWhere` của PCCC trả `{ OR: [...] }` khi người xem là cấp giám sát — mọi điều kiện lọc thêm phải
+ghép bằng `AND: [...]`, spread một khoá `OR` khác vào cùng object là âm thầm GHI ĐÈ phạm vi (đã suýt lọt
+khi viết bộ lọc `attention`).
 
 Danh sách người trực đi trong `facts.staff` dưới dạng MẢNG chứ không phải chuỗi: `compactAiFacts`
 cắt mọi chuỗi còn 200 ký tự, một kíp 15 người sẽ mất nửa cuối.
@@ -328,26 +355,32 @@ CÁCH LÀM / QUY TRÌNH / cách dùng web từ kho tài liệu đã nạp — qu
 | `pccc` Sổ thiết bị PCCC | `ai-chat-tailieu-pccc` | `ai-knowledge-source/pccc/` |
 | `tbycnn` Sổ thiết bị TBYCNN | `ai-chat-tailieu-tbycnn` | `ai-knowledge-source/tbycnn/` |
 | `an-toan` Sổ cấp phiếu công tác | `ai-chat-tailieu-an-toan` | `ai-knowledge-source/an-toan/` |
+| `thiet-bi` Quản lý thiết bị | `ai-chat-tailieu-thiet-bi` | `ai-knowledge-source/thiet-bi/` |
 
 Quyền mặc định: mọi vai trò trừ VIEWER; chỉnh ở màn hình phân quyền, nhóm **Trợ lý AI**. Công cụ tính
 lại quyền mỗi lần gọi và lọc nhóm TRƯỚC khi xếp hạng, nên đoạn ngoài quyền không bao giờ tới mô hình.
 Nguồn đối chiếu trỏ `/tai-lieu/<id>` — trang kiểm cùng quyền, không có quyền thì 404.
 
-**Nội dung ba nhóm pccc / tbycnn / an-toan là tài liệu MÔ TẢ MODULE WEB** (soạn 17/09/2026 từ
-`docs/pccc.md`, `docs/tbycnn.md`, `docs/work-permit-register.md` vì tệp nguồn gốc không còn), không
-phải phương án chữa cháy, quy trình kiểm định hay quy định an toàn lao động chính thức — đầu mỗi tệp ghi
-rõ điều này. Không có tài liệu quy trình vận hành thiết bị: không soạn thay vì không có nguồn thật.
+**Nội dung các tệp `.md` trong `ai-knowledge-source/` là hỏi – đáp MÔ TẢ CÁCH DÙNG WEB** (soạn
+17/09/2026), không phải phương án chữa cháy, quy trình kiểm định hay quy định an toàn lao động chính
+thức — đầu mỗi tệp ghi rõ điều này. Không có tài liệu quy trình vận hành thiết bị: không soạn thay vì
+không có nguồn thật. Mỗi câu trả lời đã đối chiếu với CODE chứ không chép từ `docs/*.md`: docs lệch code ở
+nhiều chỗ (vd `docs/pccc.md` còn ghi "xem không giới hạn" và "manage/full ghi mọi cương vị"; `docs/tbycnn.md`
+còn ghi "chưa chốt kỳ" và "ghi cần `tbycnn-manage`" — code đều đã đổi). Đổi luật trên web thì sửa luôn
+tệp hỏi – đáp tương ứng rồi nạp lại, nếu không trợ lý trả lời theo luật cũ.
 
 Cách hoạt động:
 
-- **Không dùng pgvector** — Postgres dev (embedded) và production (16.14) đều chưa cài. Vector
-  `gemini-embedding-001` 768 chiều lưu `DOUBLE PRECISION[]` (`AiKnowledgeChunk`), website tải toàn bộ
-  vào bộ nhớ (cache 5 phút) và so cosine trong Node: 61 đoạn, dưới 5 ms. Kho vượt vài chục nghìn đoạn
-  mới đáng cài pgvector.
+- **Code chưa dùng pgvector.** Production đã cài extension `vector` 0.8.6 trong `dh1db` từ 17/09/2026
+  (gói `postgresql-16-pgvector`, không khởi động lại PostgreSQL), nhưng Postgres dev (embedded) không
+  có nên đổi sang phải giữ đường dự phòng. Hiện vector `gemini-embedding-001` 768 chiều lưu
+  `DOUBLE PRECISION[]` (`AiKnowledgeChunk`), website tải toàn bộ vào bộ nhớ (cache 5 phút) và so cosine
+  trong Node: 128 đoạn, dưới 5 ms. Kho lên vài nghìn đoạn mới đáng chuyển truy vấn sang pgvector.
 - Chia đoạn ~900 ký tự (trần 1.400), mang tiêu đề mục markdown, chồng mép 150 ký tự trong cùng mục.
-  Đoạn trích gửi mô hình tối đa 1.000 ký tự, tối đa 4 đoạn và 2 đoạn mỗi tài liệu, điểm cosine ≥ 0,66
-  (đo 17/09/2026: câu có đáp án 0,68–0,78, câu không liên quan 0,57–0,64 — nạp thêm tài liệu thì đo lại
-  `AI_KNOWLEDGE_MIN_SCORE`).
+  Đoạn trích gửi mô hình tối đa 1.000 ký tự, tối đa 4 đoạn và 2 đoạn mỗi tài liệu, điểm cosine ≥ 0,69
+  (đo lại 17/09/2026 trên 128 đoạn: câu có đáp án 0,71–0,83, câu không liên quan 0,58–0,67, câu bẫy an
+  toàn 0,59–0,66; ngưỡng cũ 0,66 đo trên 61 đoạn để lọt câu không liên quan — kho lớn thì điểm nền tăng,
+  nạp thêm tài liệu thì đo lại `AI_KNOWLEDGE_MIN_SCORE`).
 - Thiếu `AI_KB_EMBEDDING_GEMINI_API_KEY` thì công cụ trả lời "chưa được cấu hình", không lỗi 500.
 
 Nạp tài liệu (sau khi áp `prisma/migrations/20260917100000_add_ai_knowledge/migration.sql`):

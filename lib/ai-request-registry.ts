@@ -27,7 +27,14 @@ export type AiToolName =
   | "material-replacements"
   | "shift-schedule"
   | "search-announcements"
-  | "search-knowledge-base";
+  | "search-knowledge-base"
+  | "search-work-permits"
+  | "safety-registers"
+  | "search-materials"
+  | "material-tickets"
+  | "material-plans"
+  | "chemical-inventory"
+  | "search-archive";
 
 export const AI_TOOL_LABELS: Record<AiToolName, string> = {
   "search-devices": "Đang tìm thiết bị",
@@ -37,6 +44,13 @@ export const AI_TOOL_LABELS: Record<AiToolName, string> = {
   "shift-schedule": "Đang xem lịch trực ca",
   "search-announcements": "Đang đọc thông báo, mệnh lệnh",
   "search-knowledge-base": "Đang tra cứu tài liệu hướng dẫn",
+  "search-work-permits": "Đang tra cứu phiếu công tác",
+  "safety-registers": "Đang đọc sổ PCCC, TBYCNN, tiếp địa",
+  "search-materials": "Đang tra cứu vật tư, tồn kho",
+  "material-tickets": "Đang tra cứu phiếu vật tư",
+  "material-plans": "Đang đọc kế hoạch, nhu cầu vật tư",
+  "chemical-inventory": "Đang đọc tồn kho hóa chất",
+  "search-archive": "Đang tra thư mục lưu trữ",
 };
 
 /** Số lần gọi công cụ tối đa cho MỘT câu hỏi — quá mức này là mô hình đang lặp. */

@@ -11,7 +11,10 @@ export const AI_CHAT_MAX_QUESTION_LENGTH = 2_000;
 export const AI_CHAT_HISTORY_LIMIT = 10;
 
 export type AiCitation = {
-  sourceType: "DEVICE" | "DEFECT" | "DEFECT_HISTORY" | "REPAIR" | "MATERIAL_REPLACEMENT" | "ANNOUNCEMENT" | "SHIFT" | "DOCUMENT";
+  sourceType:
+    | "DEVICE" | "DEFECT" | "DEFECT_HISTORY" | "REPAIR" | "MATERIAL_REPLACEMENT" | "ANNOUNCEMENT" | "SHIFT" | "DOCUMENT"
+    | "WORK_PERMIT" | "PCCC" | "TBYCNN" | "GROUNDING" | "MATERIAL" | "ERP_MATERIAL" | "MATERIAL_TICKET"
+    | "MATERIAL_PLAN" | "CHEMICAL" | "ARCHIVE";
   sourceId: string;
   title: string;
   url: string;
@@ -35,8 +38,10 @@ export function aiConversationExpiry(from = new Date()) {
 
 const ALLOWED_CITATION_TYPES = new Set<AiCitation["sourceType"]>([
   "DEVICE", "DEFECT", "DEFECT_HISTORY", "REPAIR", "MATERIAL_REPLACEMENT", "ANNOUNCEMENT", "SHIFT", "DOCUMENT",
+  "WORK_PERMIT", "PCCC", "TBYCNN", "GROUNDING", "MATERIAL", "ERP_MATERIAL", "MATERIAL_TICKET", "MATERIAL_PLAN",
+  "CHEMICAL", "ARCHIVE",
 ]);
-const ALLOWED_CITATION_PATHS = /^\/(devices|defects|repair-history|replacement-history|notifications|hr|tai-lieu)(\/|\?|$)/;
+const ALLOWED_CITATION_PATHS = /^\/(devices|defects|repair-history|replacement-history|notifications|hr|tai-lieu|work-permits|pccc|tbycnn|grounding-lightning|materials|vat-tu\/loai-dau|replacement-procedures|material-annual-plans|chemical-inventory|documents\/archive)(\/|\?|$)/;
 
 /**
  * Chuẩn hoá MỘT nguồn trích dẫn: đúng loại, có id + tiêu đề, và chỉ trỏ vào đường dẫn NỘI BỘ

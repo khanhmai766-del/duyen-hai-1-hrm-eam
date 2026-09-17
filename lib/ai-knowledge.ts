@@ -14,6 +14,7 @@ export const AI_KNOWLEDGE_CATEGORIES = {
   pccc: "Sổ thiết bị PCCC",
   tbycnn: "Sổ thiết bị TBYCNN",
   "an-toan": "Sổ cấp phiếu công tác",
+  "thiet-bi": "Quản lý thiết bị",
 } as const;
 
 export type AiKnowledgeCategory = keyof typeof AI_KNOWLEDGE_CATEGORIES;
@@ -171,12 +172,14 @@ export type AiKnowledgeSearchChunk = {
 };
 
 /**
- * Điểm cosine tối thiểu để coi là liên quan. Đo 17/09/2026 trên kho 61 đoạn (gemini-embedding-001,
- * 768 chiều): đoạn khớp nhất của 7 câu CÓ đáp án đạt 0,681–0,775; của 4 câu không liên quan (đổi
- * ảnh đại diện, ai trực ca, khiếm khuyết S1, thời tiết) chỉ 0,573–0,639; câu bẫy "các bước chữa
- * cháy" 0,625. Ngưỡng nằm giữa khe đó. Khe hẹp — nạp thêm nhiều tài liệu thì đo lại.
+ * Điểm cosine tối thiểu để coi là liên quan (gemini-embedding-001, 768 chiều). Đo lại 17/09/2026
+ * sau khi kho lên 128 đoạn (thêm các tệp hỏi – đáp): đoạn khớp nhất của 14 câu CÓ đáp án đạt
+ * 0,712–0,831; của 4 câu không liên quan (đổi ảnh đại diện, ai trực ca, khiếm khuyết S1, thời tiết)
+ * 0,584–0,668; 4 câu bẫy an toàn (các bước chữa cháy, quy chuẩn kiểm định, cắt điện 6kV) 0,593–0,659.
+ * Ngưỡng cũ 0,66 (đo trên 61 đoạn) để lọt câu "ai đang trực ca" — kho lớn thì điểm nền cao lên.
+ * Khe hẹp — nạp thêm nhiều tài liệu thì đo lại.
  */
-export const AI_KNOWLEDGE_MIN_SCORE = 0.66;
+export const AI_KNOWLEDGE_MIN_SCORE = 0.69;
 export const AI_KNOWLEDGE_MAX_RESULTS = 4;
 /** Tối đa 2 đoạn mỗi tài liệu, để một tài liệu dài không chiếm hết chỗ của tài liệu khác. */
 export const AI_KNOWLEDGE_MAX_PER_DOCUMENT = 2;

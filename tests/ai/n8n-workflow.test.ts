@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import test from "node:test";
 import { runInNewContext } from "node:vm";
+import { AI_TOOL_LABELS } from "../../lib/ai-request-registry";
 
 type WorkflowNode = {
   name: string;
@@ -58,8 +59,8 @@ test("workflow không đọc môi trường, không mang credential và bắt bu
   const webhook = workflow.nodes.find(node => node.type === "n8n-nodes-base.webhook")!;
   assert.equal(webhook.parameters.authentication, "headerAuth");
   const outbound = workflow.nodes.filter(node => node.parameters.url);
-  // Bảy công cụ tra cứu + node dọn hội thoại hàng ngày.
-  assert.equal(outbound.length, 8);
+  // Mười bốn công cụ tra cứu + node dọn hội thoại hàng ngày.
+  assert.equal(outbound.length, 15);
   for (const node of outbound) {
     assert.equal(node.parameters.authentication, "genericCredentialType");
     assert.equal(node.parameters.genericAuthType, "httpHeaderAuth");
@@ -141,17 +142,27 @@ test("model nào cũng đi qua node có credential riêng, không nhét key hay 
   }
 });
 
-test("bảy công cụ tra cứu đều nối vào CẢ HAI Agent và trỏ đúng endpoint của website", () => {
+test("mười bốn công cụ tra cứu đều nối vào CẢ HAI Agent và trỏ đúng endpoint có thật của website", () => {
   const expected = [
     "Lịch sử thiết bị", "Lịch trực ca", "Thông báo, mệnh lệnh",
     "Tìm thiết bị", "Tra cứu khiếm khuyết", "Tra cứu thay vật tư", "Tra cứu tài liệu",
+    "Tra cứu phiếu công tác", "Sổ PCCC, TBYCNN, tiếp địa", "Tra cứu vật tư, tồn kho", "Theo dõi phiếu vật tư",
+    "Kế hoạch, nhu cầu vật tư", "Tồn kho hóa chất", "Thư mục lưu trữ",
   ].sort();
   assert.deepEqual(toolsOf(agent.name), expected);
   assert.deepEqual(toolsOf(backupAgent.name), expected);
-  for (const [name, slug] of [["Lịch trực ca", "shift-schedule"], ["Thông báo, mệnh lệnh", "search-announcements"], ["Tra cứu tài liệu", "search-knowledge-base"]] as const) {
-    assert.equal(byName(name).parameters.url, `https://duyenhai1.vn/api/integrations/n8n/ai/tools/${slug}`);
-    assert.equal(byName(name).type, "n8n-nodes-base.httpRequestTool");
-  }
+  // Mỗi công cụ trỏ vào một slug đã đăng ký (nhãn tiến trình + đếm lượt) và có route thật.
+  const slugs = expected.map((name) => {
+    const node = byName(name);
+    assert.equal(node.type, "n8n-nodes-base.httpRequestTool");
+    const prefix = "https://duyenhai1.vn/api/integrations/n8n/ai/tools/";
+    const url = String(node.parameters.url);
+    const match = url.startsWith(prefix) && /^[a-z-]+$/.test(url.slice(prefix.length)) ? [url, url.slice(prefix.length)] : null;
+    assert.ok(match, `${name}: URL công cụ sai dạng`);
+    assert.ok(existsSync(new URL(`../../app/api/integrations/n8n/ai/tools/${match[1]}/route.ts`, import.meta.url)), `${name}: thiếu route`);
+    return match[1];
+  });
+  assert.deepEqual(slugs.sort(), Object.keys(AI_TOOL_LABELS).sort());
 });
 
 function normalize(body: unknown) {

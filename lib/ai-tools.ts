@@ -73,12 +73,12 @@ export async function runAiTool<T extends { items?: Array<Record<string, unknown
   };
 }
 
-function limitOf(value: unknown) {
+export function limitOf(value: unknown) {
   const parsed = Number(value);
   return Number.isInteger(parsed) ? Math.min(MAX_RESULTS, Math.max(1, parsed)) : 10;
 }
 
-function text(value: unknown, max = 300) {
+export function text(value: unknown, max = 300) {
   return String(value ?? "").trim().slice(0, max);
 }
 
@@ -89,13 +89,13 @@ function date(value: unknown, endOfDay = false) {
   return Number.isFinite(parsed.getTime()) ? parsed : null;
 }
 
-function dateRange(input: Record<string, unknown>) {
+export function dateRange(input: Record<string, unknown>) {
   const from = date(input.from);
   const to = date(input.to, true);
   return from || to ? { ...(from ? { gte: from } : {}), ...(to ? { lte: to } : {}) } : undefined;
 }
 
-function machine(value: unknown) {
+export function machine(value: unknown) {
   const normalized = text(value, 10).toUpperCase();
   return ["S1", "S2", "COMMON"].includes(normalized) ? normalized : null;
 }
