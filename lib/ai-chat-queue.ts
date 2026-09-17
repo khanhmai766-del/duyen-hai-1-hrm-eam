@@ -13,8 +13,8 @@ export type AiChatQueueOptions = {
 /**
  * Hàng đợi lượt gọi trợ lý AI — vào trước ra trước.
  *
- * Gói miễn phí giới hạn cả số lượt gọi mô hình mỗi phút (Gemini Flash ~10, Groq ~30). Một câu hỏi
- * tốn 2–3 lượt gọi mô hình, nên giờ cao điểm mà cho mọi câu hỏi chạy ngay là cùng nhận 429.
+ * Nhà cung cấp giới hạn số lượt gọi mô hình mỗi phút (Gemini Flash miễn phí ở tầng 3 ~10). Một câu
+ * hỏi tốn 2–3 lượt gọi mô hình, nên giờ cao điểm mà cho mọi câu hỏi chạy ngay là cùng nhận 429.
  * Hàng đợi giữ hai rào: số câu hỏi chạy đồng thời và số câu hỏi bắt đầu trong mỗi phút; ai tới
  * sau thì chờ vài giây (được báo vị trí) thay vì ăn lỗi.
  *

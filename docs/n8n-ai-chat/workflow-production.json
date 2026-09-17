@@ -65,28 +65,11 @@
       "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
       "typeVersion": 1,
       "position": [
-        -400,
-        240
+        768,
+        40
       ],
       "id": "4a47c35a-8242-42b2-9b22-412916642024",
-      "name": "Google Gemini Chat Model"
-    },
-    {
-      "parameters": {
-        "model": "openai/gpt-oss-120b",
-        "options": {
-          "maxTokensToSample": 1500,
-          "temperature": 0.1
-        }
-      },
-      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
-      "typeVersion": 1,
-      "position": [
-        -248,
-        240
-      ],
-      "id": "5b0f3c1e-2d7a-4f0b-9a55-3c9f6f1d2e84",
-      "name": "Groq dự phòng"
+      "name": "Gemini tầng 3"
     },
     {
       "parameters": {
@@ -507,7 +490,7 @@
           "conditions": [
             {
               "id": "3c6d1f0e-7a52-4b8e-9d41-2f5a8c0b6e17",
-              "leftValue": "={{ ['AI_PROVIDER_UNAVAILABLE', 'AI_PROVIDER_RATE_LIMITED'].includes($json.code) && !$('Trợ lý AI VH1 - tầng 3').isExecuted }}",
+              "leftValue": "={{ $('Trợ lý AI VH1').isExecuted && !$('Trợ lý AI VH1 - tầng 3').isExecuted }}",
               "rightValue": "",
               "operator": {
                 "type": "boolean",
@@ -568,21 +551,42 @@
         "model": {
           "__rl": true,
           "mode": "id",
-          "value": "gpt-oss-120b"
+          "value": "glm-5.2"
         },
         "options": {
-          "maxTokens": 1500,
+          "maxTokens": 4096,
           "temperature": 0.1
         }
       },
       "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
       "typeVersion": 1.2,
       "position": [
-        768,
-        40
+        -400,
+        240
       ],
-      "id": "7d3b9f2e-4a6c-4e1b-9c8d-1e5a7f3b2c68",
-      "name": "Cerebras tầng 3"
+      "id": "6b1d3e5f-7a9c-4b2d-8e4f-1a3c5e7b9d02",
+      "name": "GLM chính"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "id",
+          "value": "deepseek-v4.1-flash"
+        },
+        "options": {
+          "maxTokens": 4096,
+          "temperature": 0.1
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        -248,
+        240
+      ],
+      "id": "8c2e4f6a-9b1d-4c3e-9f5a-2b4d6f8a0c13",
+      "name": "DeepSeek dự phòng"
     }
   ],
   "connections": {
@@ -634,28 +638,6 @@
             "node": "Còn tầng 3?",
             "type": "main",
             "index": 0
-          }
-        ]
-      ]
-    },
-    "Google Gemini Chat Model": {
-      "ai_languageModel": [
-        [
-          {
-            "node": "Trợ lý AI VH1",
-            "type": "ai_languageModel",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Groq dự phòng": {
-      "ai_languageModel": [
-        [
-          {
-            "node": "Trợ lý AI VH1",
-            "type": "ai_languageModel",
-            "index": 1
           }
         ]
       ]
@@ -808,13 +790,35 @@
         ]
       ]
     },
-    "Cerebras tầng 3": {
+    "Gemini tầng 3": {
       "ai_languageModel": [
         [
           {
             "node": "Trợ lý AI VH1 - tầng 3",
             "type": "ai_languageModel",
             "index": 0
+          }
+        ]
+      ]
+    },
+    "GLM chính": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Trợ lý AI VH1",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DeepSeek dự phòng": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Trợ lý AI VH1",
+            "type": "ai_languageModel",
+            "index": 1
           }
         ]
       ]

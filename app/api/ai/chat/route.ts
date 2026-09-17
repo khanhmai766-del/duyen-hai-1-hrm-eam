@@ -45,8 +45,8 @@ const IDLE_TIMEOUT_MS = envNumber("AI_CHAT_TIMEOUT_MS", 45_000, 35_000, 90_000);
 const TOTAL_TIMEOUT_MS = 110_000;
 /**
  * Hàng đợi (lib/ai-chat-queue.ts): gói miễn phí giới hạn lượt gọi mô hình mỗi phút, một câu hỏi
- * tốn 2–3 lượt. Mặc định 3 câu chạy cùng lúc, 8 câu bắt đầu mỗi phút — Gemini gánh phần đầu,
- * phần vượt 429 chuyển sang Groq dự phòng; ai tới sau chờ tối đa 60 giây.
+ * tốn 2–3 lượt. Mặc định 3 câu chạy cùng lúc, 8 câu bắt đầu mỗi phút — GLM gánh phần đầu, lỗi
+ * thì DeepSeek rồi Gemini tầng 3 (xem docs/n8n-ai-chat/README.md); ai tới sau chờ tối đa 60 giây.
  */
 const aiChatQueue = createAiChatQueue({
   maxConcurrent: envNumber("AI_CHAT_MAX_CONCURRENT", 3, 1, 10),
@@ -55,7 +55,7 @@ const aiChatQueue = createAiChatQueue({
 });
 /**
  * Ngữ cảnh hội thoại gửi kèm: 3 cặp hỏi–đáp gần nhất, mỗi tin 400 ký tự là đủ ý chính. Lịch sử
- * được gửi lại ở MỌI vòng suy luận nên tốn token gấp nhiều lần — Groq dự phòng chỉ 8.000 token/phút.
+ * được gửi lại ở MỌI vòng suy luận nên tốn token (tức tiền) gấp nhiều lần.
  */
 const HISTORY_MESSAGES_FOR_MODEL = 6;
 const HISTORY_MESSAGE_LIMIT = 400;

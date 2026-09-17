@@ -34,7 +34,7 @@ const workflow = JSON.parse(workflowText) as {
 
 const byName = (name: string) => workflow.nodes.find(node => node.name === name)!;
 const agent = byName("Trợ lý AI VH1");
-/** Tầng 3: chỉ chạy khi cả Gemini lẫn Groq của Agent chính cùng báo 429/503. */
+/** Tầng 3 (Gemini): chạy khi Agent chính (GLM → DeepSeek qua VietAPI) hỏng. */
 const backupAgent = byName("Trợ lý AI VH1 - tầng 3");
 
 function languageModelsOf(agentName: string) {
@@ -104,14 +104,19 @@ test("Agent có mô hình dự phòng, giới hạn vòng lặp và không tự 
   assert.equal(agent.parameters.needsFallback, true);
   const models = languageModelsOf(agent.name);
   assert.deepEqual(models.map(model => model.index), [0, 1]);
-  assert.match(byName(models[0].source).type, /lmChatGoogleGemini$/);
-  assert.match(byName(models[1].source).type, /lmChatGroq$/);
+  // Tầng 1 GLM, tầng 2 DeepSeek — cùng đi qua VietAPI bằng node OpenAI Chat Model.
+  const modelIds = models.map(model => {
+    const node = byName(model.source) as WorkflowNode & { parameters: { model?: { value?: string } } };
+    assert.match(node.type, /lmChatOpenAi$/);
+    return node.parameters.model?.value;
+  });
+  assert.deepEqual(modelIds, ["glm-5.2", "deepseek-v4.1-flash"]);
   const maxIterations = Number(agent.parameters.options?.maxIterations);
   assert.ok(maxIterations >= 4 && maxIterations <= 10);
   assert.notEqual(agent.retryOnFail, true);
 });
 
-test("tầng 3 là bản sao Agent chính chạy Cerebras: cùng prompt, cùng quy tắc, một model, không fallback", () => {
+test("tầng 3 là bản sao Agent chính chạy Gemini: cùng prompt, cùng quy tắc, một model, không fallback", () => {
   // Sửa system message/prompt ở một Agent mà quên Agent kia là tầng 3 trả lời theo luật cũ đúng
   // lúc hệ thống đang sự cố — khoá bằng so sánh nguyên khối.
   const { needsFallback: _primary, ...primaryParameters } = agent.parameters;
@@ -123,9 +128,17 @@ test("tầng 3 là bản sao Agent chính chạy Cerebras: cùng prompt, cùng q
 
   const models = languageModelsOf(backupAgent.name);
   assert.equal(models.length, 1);
-  const cerebras = byName(models[0].source) as WorkflowNode & { parameters: { model?: { value?: string } } };
-  assert.match(cerebras.type, /lmChatOpenAi$/);
-  assert.equal(cerebras.parameters.model?.value, "gpt-oss-120b");
+  // Khác nhà cung cấp với tầng 1–2: VietAPI sập thì Google vẫn trả lời được.
+  assert.match(byName(models[0].source).type, /lmChatGoogleGemini$/);
+});
+
+test("model nào cũng đi qua node có credential riêng, không nhét key hay URL nhà cung cấp vào JSON", () => {
+  const models = [...languageModelsOf(agent.name), ...languageModelsOf(backupAgent.name)].map(model => byName(model.source));
+  assert.equal(models.length, 3);
+  for (const node of models) {
+    assert.equal(node.credentials, undefined);
+    assert.equal(/vietapi|api_key|apiKey|baseURL/i.test(JSON.stringify(node.parameters)), false);
+  }
 });
 
 test("sáu công cụ tra cứu đều nối vào CẢ HAI Agent và trỏ đúng endpoint của website", () => {
@@ -210,25 +223,29 @@ test("các node xử lý đưa lỗi tới nhánh trả lỗi, output thành cô
   assert.equal(workflow.connections["Lấy lại câu hỏi"].main[0][0].node, backupAgent.name);
 });
 
-test("chỉ lỗi quá tải/hết lượt của Agent chính mới chuyển tầng 3, và chỉ một lần", () => {
+test("mọi lỗi của Agent chính đều chuyển tầng 3, lỗi đầu vào thì không, và chỉ một lần", () => {
   const gate = byName("Còn tầng 3?").parameters as unknown as {
     conditions: { conditions: Array<{ leftValue: string; operator: { type: string; operation: string } }> };
   };
   const [condition] = gate.conditions.conditions;
   assert.deepEqual(condition.operator, { type: "boolean", operation: "true", singleValue: true });
-  const decide = (code: string, backupRan: boolean) => runInNewContext(condition.leftValue.slice(3, -2), {
+  const decide = (code: string, primaryRan: boolean, backupRan: boolean) => runInNewContext(condition.leftValue.slice(3, -2), {
     $json: { code },
     $: (name: string) => {
+      if (name === agent.name) return { isExecuted: primaryRan };
       assert.equal(name, backupAgent.name);
       return { isExecuted: backupRan };
     },
   });
-  assert.equal(decide("AI_PROVIDER_UNAVAILABLE", false), true);
-  assert.equal(decide("AI_PROVIDER_RATE_LIMITED", false), true);
-  // Lỗi thật (bug, dữ liệu sai) không được che bằng cách hỏi lại model khác.
-  assert.equal(decide("AI_WORKFLOW_FAILED", false), false);
+  // Tầng 1–2 cùng qua VietAPI: sập, khoá key (401), hết credit (402), 5xx đều ra
+  // AI_WORKFLOW_FAILED — rẽ theo mã lỗi thì Gemini không bao giờ được gọi.
+  assert.equal(decide("AI_PROVIDER_UNAVAILABLE", true, false), true);
+  assert.equal(decide("AI_PROVIDER_RATE_LIMITED", true, false), true);
+  assert.equal(decide("AI_WORKFLOW_FAILED", true, false), true);
+  // Lỗi ở bước xác thực đầu vào: Agent chính chưa chạy, đổi model không sửa được.
+  assert.equal(decide("AI_WORKFLOW_FAILED", false, false), false);
   // Tầng 3 cũng hỏng: quay về nhánh lỗi lần hai thì phải trả lỗi, không lặp vô hạn.
-  assert.equal(decide("AI_PROVIDER_RATE_LIMITED", true), false);
+  assert.equal(decide("AI_PROVIDER_RATE_LIMITED", true, true), false);
 
   const restore = byName("Lấy lại câu hỏi").parameters.jsCode!;
   const normalized = { question: "Câu hỏi", capability: "signed", conversationId: "c", history: [] };

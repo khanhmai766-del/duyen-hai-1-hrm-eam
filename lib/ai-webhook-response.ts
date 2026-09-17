@@ -70,7 +70,7 @@ export function decodeAiWebhookResponse(raw: string, httpStatus: number): Result
 }
 
 /**
- * Phân loại mô tả lỗi THÔ của nhà cung cấp (Gemini/Groq) thành mã an toàn. Chuỗi thô có thể
+ * Phân loại mô tả lỗi THÔ của nhà cung cấp (VietAPI/Gemini) thành mã an toàn. Chuỗi thô có thể
  * chứa chi tiết nội bộ nên chỉ dùng để phân loại, không bao giờ hiển thị hay ghi log nguyên văn.
  */
 export function classifyAiProviderError(details: string): AiErrorCode {

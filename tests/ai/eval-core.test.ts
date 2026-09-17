@@ -34,7 +34,7 @@ const question = (id: string) => questions.find((q) => q.id === id)!;
 
 test("đọc đúng workflow: model, trần vòng, và ĐỦ 6 công cụ trùng tên công cụ website", () => {
   assert.equal(workflow.model, "gemini-3.8-flash");
-  // Có thêm Agent tầng 3 (Cerebras) — bộ chấm vẫn phải đọc Agent chính, trần vòng của nó.
+  // Bộ chấm chỉ gọi được Gemini nên đọc Agent tầng 3 (Gemini); prompt/công cụ giống Agent chính.
   assert.equal(workflow.maxIterations, 8);
   assert.ok(workflow.systemMessage.includes("DH1 OPS INSIGHT"));
   assert.deepEqual(workflow.tools.map((t) => t.slug).sort(), Object.keys(AI_TOOL_LABELS).sort());

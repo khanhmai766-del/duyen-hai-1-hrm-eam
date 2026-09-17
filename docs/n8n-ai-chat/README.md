@@ -2,16 +2,19 @@
 
 Workflow chỉ đọc dữ liệu mà người đang đăng nhập được phép xem. Website xác thực
 NextAuth, phát capability token sống 2 phút; n8n dùng token đó khi gọi sáu API tool.
-Gemini không được kết nối trực tiếp PostgreSQL. Nội dung câu hỏi, tối đa 6 tin nhắn
-gần nhất (mỗi tin tối đa 400 ký tự) và các trường văn bản tối thiểu do tool trả về được gửi qua n8n tới Google
-Gemini API (và Groq khi Gemini lỗi; Cerebras khi cả hai cùng quá tải/hết lượt — ATTT duyệt
-17/09/2026). Ảnh, avatar, tệp đính kèm và toàn bộ bảng dữ liệu
-không được gửi đi.
+Mô hình không được kết nối trực tiếp PostgreSQL. Nội dung câu hỏi, tối đa 6 tin nhắn
+gần nhất (mỗi tin tối đa 400 ký tự) và các trường văn bản tối thiểu do tool trả về được gửi qua n8n tới
+**VietAPI** (`api.vietapi.tech`, tầng 1 GLM và tầng 2 DeepSeek) và **Google Gemini API** (tầng 3,
+khi VietAPI hỏng). Ảnh, avatar, tệp đính kèm và toàn bộ bảng dữ liệu không được gửi đi.
+
+> VietAPI là bên trung gian bán lại (hộ kinh doanh, không SLA, không công bố nguồn model, log API
+> giữ tối đa 24 giờ). Chọn ngày 17/09/2026 vì giá; cần ATTT duyệt vì MỌI câu hỏi thường ngày đi qua
+> đây, không chỉ lúc sự cố. Tầng 3 Gemini chính hãng là lớp giữ chatbox khi VietAPI ngừng.
 
 ## 0. Luồng một câu hỏi
 
 ```text
-Trình duyệt ──POST /api/ai/chat──▶ Website ──webhook (streaming)──▶ n8n Agent ──▶ Gemini (dự phòng: Groq → Cerebras)
+Trình duyệt ──POST /api/ai/chat──▶ Website ──webhook (streaming)──▶ n8n Agent ──▶ GLM (dự phòng: DeepSeek → Gemini)
      ▲  NDJSON: status/tool/delta/done/error      │                        │
      └────────────────────────────────────────────┘◀── json-lines ────────┘
                                                    ▲
@@ -24,9 +27,9 @@ Trình duyệt ──POST /api/ai/chat──▶ Website ──webhook (streaming
   ngay và hiện "Đang tìm thiết bị…", "Đang tra cứu khiếm khuyết…".
 - **Nguồn đối chiếu do website tự gom** từ kết quả tool đã trả về — mô hình không phải chép
   lại URL/chữ ký nữa (bản cũ hay chép sai nên mất nguồn). Tối đa 8 nguồn mỗi câu.
-- **Ghép ba gói miễn phí**: Gemini miễn phí là model chính; khi Gemini báo lỗi/hết lượt,
-  Agent tự chuyển sang Groq miễn phí (Enable Fallback Model). Agent của n8n chỉ nhận MỘT model
-  dự phòng, nên tầng 3 là Agent thứ hai chạy Cerebras — xem "Tầng 3: Cerebras" ở mục 3.
+- **Ba tầng model**: `glm-5.2` (VietAPI) là model chính; lỗi thì Agent tự chuyển sang
+  `deepseek-v4.1-flash` (VietAPI, Enable Fallback Model). Agent của n8n chỉ nhận MỘT model dự phòng,
+  nên tầng 3 là Agent thứ hai chạy Gemini miễn phí — xem "Ba tầng model" ở mục 3.
 - **Ngữ cảnh trang**: nút "Hỏi AI" trên trang thiết bị / phiếu khiếm khuyết gửi kèm
   `page = { path, entityType, entityId, label }`. Mô hình dùng thẳng `entityId` làm `deviceSeq`
   nên BỚT HẲN một lượt gọi "Tìm thiết bị" cho mỗi câu — vừa nhanh hơn vừa hết cảnh trả lời
@@ -38,9 +41,9 @@ Trình duyệt ──POST /api/ai/chat──▶ Website ──webhook (streaming
 - **Ngân sách token**: tối đa 6 lần gọi tool mỗi câu hỏi; mỗi kết quả tool chỉ gửi `facts` đã bỏ
   trường rỗng, chuỗi cắt còn 200 ký tự, cả kết quả không quá ~4.500 ký tự (≈ 1.500–1.800 token) —
   dư thì cắt bớt dòng và dặn mô hình đề nghị người dùng lọc hẹp hơn. Lịch sử hội thoại gửi kèm chỉ
-  6 tin gần nhất, mỗi tin 400 ký tự. Mức này đặt theo trần 8.000 token/phút (cộng dồn mọi lượt gọi)
-  của model dự phòng Groq miễn phí.
-- **Tự thử lại**: Gemini/Groq báo 429/503 hoặc không kết nối được n8n mà CHƯA phát chữ nào
+  6 tin gần nhất, mỗi tin 400 ký tự. Mức này đặt từ thời Groq dự phòng (8.000 token/phút); giữ lại
+  vì mỗi ký tự bị gửi lại ở mọi vòng suy luận — tức bị tính tiền nhiều lần ở VietAPI.
+- **Tự thử lại**: nhà cung cấp AI báo 429/503 hoặc không kết nối được n8n mà CHƯA phát chữ nào
   thì website tự thử lại sau 2 giây rồi 5 giây. Đã hiện chữ thì không thử lại.
 - Website vẫn hiểu phản hồi JSON kiểu cũ (`{answer, citations, suggestions}`), nên có thể
   triển khai website trước rồi mới đổi workflow.
@@ -78,9 +81,8 @@ n8n dùng credential, không đọc `$env`:
 | --- | --- | --- | --- |
 | DH1 AI Webhook Auth | Header Auth | `Authorization: Bearer <token-webhook>` | Webhook AI Chat |
 | DH1 AI Tool Auth | Header Auth | `Authorization: Bearer <token-tool>` | Sáu tool và Xóa hội thoại quá 14 ngày |
-| Gemini - DH1 Chatbox | Google Gemini (PaLM) API | API key Google AI Studio | Google Gemini Chat Model |
-| Groq - DH1 Chatbox | Groq API | API key tạo tại console.groq.com (gói miễn phí) | Groq dự phòng |
-| Cerebras - DH1 Chatbox | OpenAI | API key tạo tại cloud.cerebras.ai (gói miễn phí), **Base URL** `https://api.cerebras.ai/v1` | Cerebras tầng 3 |
+| VietAPI - DH1 Chatbox | OpenAI | API key vietapi.tech, **Base URL** `https://api.vietapi.tech/v1`, Allowed domains chỉ `api.vietapi.tech` | GLM chính, DeepSeek dự phòng |
+| Gemini - DH1 Chatbox | Google Gemini (PaLM) API | API key Google AI Studio (gói miễn phí) | Gemini tầng 3 |
 
 URL đích được đặt cố định `https://duyenhai1.vn` trong các node HTTP; mô hình không được chọn
 host đích. Nếu đổi tên miền, cập nhật cả bảy URL.
@@ -113,61 +115,62 @@ Migration chỉ tạo `AiConversation`, `AiMessage`, index và khóa ngoại. H�
 Thứ tự bắt buộc: **triển khai website trước**, rồi mới đổi workflow. Website mới hiểu cả JSON
 kiểu cũ lẫn streaming; website cũ không hiểu streaming.
 
-1. Tạo credential **Groq - DH1 Chatbox** (Credentials → Add → Groq API) bằng key miễn phí từ
-   console.groq.com. Không dán key vào chat hay file. Model dự phòng là `openai/gpt-oss-120b`
-   (theo trang console.groq.com/settings/limits ngày 15/09/2026: 30 lượt/phút, 1.000 lượt/ngày,
-   8.000 token/phút, 200.000 token/ngày). Không chọn `groq/compound*` (chỉ chạy công cụ có sẵn
-   của Groq, không gọi được tool của website), `allam-2-7b`, `*prompt-guard*`, `*safeguard*`.
-   Thay thế được: `qwen/qwen3.8-27b` (cùng hạn mức) nếu gpt-oss-120b bị gỡ.
+1. Tạo credential **VietAPI - DH1 Chatbox** (Credentials → Add → **OpenAI**): dán key, **Base URL**
+   `https://api.vietapi.tech/v1`, **Allowed HTTP Request Domains** chỉ `api.vietapi.tech`. Không dán
+   key vào chat hay file.
 2. Import `workflow-production.json` bằng **Import from File** thành workflow mới.
-3. Chọn credential cho: Webhook AI Chat, SÁU tool (gồm hai tool mới **Lịch trực ca** và
-   **Thông báo, mệnh lệnh**), Xóa hội thoại quá 14 ngày, Google Gemini Chat Model, Groq dự
-   phòng, Cerebras tầng 3. Kiểm tra model Gemini đúng model credential được phép dùng (bản mẫu
-   `models/gemini-3.8-flash`).
+3. Chọn credential cho: Webhook AI Chat, SÁU tool, Xóa hội thoại quá 14 ngày, **GLM chính** và
+   **DeepSeek dự phòng** (VietAPI), **Gemini tầng 3** (Gemini). Kiểm tra model Gemini đúng model
+   credential được phép dùng (bản mẫu `models/gemini-3.8-flash`).
 4. Unpublish workflow cũ rồi Publish workflow mới (không để hai workflow trùng path
    `ai-chat-dh1`). Giữ bản cũ ở trạng thái tắt để quay lui.
 5. Hỏi thử trên website: chữ phải hiện dần, có dòng trạng thái khi tra cứu, nguồn đối chiếu
    hiện dưới câu trả lời.
 
-Chưa có key Groq: xoá node **Groq dự phòng** và tắt **Enable Fallback Model** trong Agent, phần
-còn lại vẫn chạy (chỉ mất lớp dự phòng).
+### Ba tầng model
 
-### Tầng 3: Cerebras
+| Tầng | Node | Model | Nguồn | Giá |
+| --- | --- | --- | --- | --- |
+| 1 | GLM chính | `glm-5.2` | VietAPI | 0,3 credit / 1 triệu token (1 credit = 1.000đ) |
+| 2 | DeepSeek dự phòng | `deepseek-v4.1-flash` | VietAPI | 0,8 credit / 1 triệu token |
+| 3 | Gemini tầng 3 | `models/gemini-3.8-flash` | Google, gói miễn phí | 0 |
 
-Credential **Cerebras - DH1 Chatbox** tạo bằng loại **OpenAI** (tên hiển thị trong danh sách credential của n8n; Cerebras dùng cùng giao thức
-OpenAI): dán key từ cloud.cerebras.ai, đổi **Base URL** thành `https://api.cerebras.ai/v1`. Model
-`gpt-oss-120b` — CÙNG model với Groq dự phòng, nên hành vi đã được đo qua Groq; chỉ khác hạ tầng
-(Google → Groq → Cerebras, ba công ty khác nhau). Gói miễn phí theo
-inference-docs.cerebras.ai/support/rate-limits ngày 17/09/2026: **5 lượt/phút**, 30.000 token/phút,
-1.000.000 token/ngày.
+Đã thử trong n8n ngày 17/09/2026 (workflow thử có công cụ giả, đi hết vòng gọi công cụ → trả lời):
+`glm-5.2`, `deepseek-v4.1-flash`, `deepseek-v4-flash` đều gọi đúng công cụ và trả đúng mã. Cả GLM-5.x
+lẫn DeepSeek V4 là model SUY NGHĨ và theo tài liệu hãng phải được gửi lại `reasoning_content` khi gọi
+tool — Agent của n8n không gửi (issue n8n #29119: DeepSeek chính hãng báo 400). Qua VietAPI thì chạy;
+nếu một ngày tầng 1–2 bắt đầu lỗi 400 nhắc `reasoning_content`, nguyên nhân ở đây. Phần suy nghĩ tính
+vào `maxTokens`, nên hai node đặt 4.096 (Groq cũ 1.500 sẽ cắt cụt câu trả lời).
 
-Luồng: Agent chính hỏng → `Chuẩn hóa lỗi AI` → cổng **Còn tầng 3?**. Chỉ khi mã là
-`AI_PROVIDER_UNAVAILABLE`/`AI_PROVIDER_RATE_LIMITED` (tức Gemini VÀ Groq đều đã thử) và tầng 3 CHƯA
-chạy → **Lấy lại câu hỏi** (nhánh lỗi chỉ còn mã lỗi; node này lấy lại đầu vào đã chuẩn hóa) →
-**Trợ lý AI VH1 - tầng 3**. Tầng 3 cũng lỗi thì quay về `Chuẩn hóa lỗi AI`, cổng thấy tầng 3 đã chạy
-nên trả lỗi thẳng về website. `AI_WORKFLOW_FAILED` (lỗi thật, dữ liệu sai) KHÔNG chuyển tầng — đổi
-model không sửa được bug mà chỉ che nó.
+Luồng: Agent chính (GLM → DeepSeek) hỏng → `Chuẩn hóa lỗi AI` → cổng **Còn tầng 3?**: Agent chính ĐÃ
+chạy và tầng 3 CHƯA chạy → **Lấy lại câu hỏi** (nhánh lỗi chỉ còn mã lỗi; node này lấy lại đầu vào đã
+chuẩn hóa) → **Trợ lý AI VH1 - tầng 3**. Tầng 3 cũng lỗi thì quay về `Chuẩn hóa lỗi AI`, cổng thấy tầng
+3 đã chạy nên trả lỗi thẳng về website. Lỗi ở bước `Xác thực và chuẩn hóa` (Agent chính chưa chạy)
+không chuyển tầng.
+
+Vì sao rẽ theo NGUỒN lỗi chứ không theo mã 429/503: tầng 1 và 2 cùng đi qua VietAPI. VietAPI sập, khoá
+key (401), hết credit (402) hay lỗi 5xx đều ra `AI_WORKFLOW_FAILED` — rẽ theo mã thì đúng lúc cần nhất,
+Gemini không bao giờ được gọi.
 
 Giới hạn cần biết:
 
-- **5 lượt/phút** là trần thấp nhất trong ba tầng: một câu cần 3–4 vòng tra cứu có thể tự chạm trần,
-  hai người hỏi cùng lúc lúc sự cố gần như chắc chắn chạm. Tầng 3 giữ chatbox không chết hẳn, không
-  gánh được tải thường ngày.
+- **Hỏng im lặng**: tầng 3 trả lời bình thường nên người dùng và trang `/admin/ai` không thấy VietAPI
+  đang hỏng. Theo dõi số dư và trạng thái ở trang VietAPI; câu trả lời chậm/khác giọng thường ngày là
+  dấu hiệu đang chạy Gemini.
+- **Gemini miễn phí ~10 lượt gọi/phút**: tầng 3 đỡ được chatbox lúc sự cố, không gánh nổi giờ cao điểm.
 - Tầng 3 dùng CHUNG ngân sách 6 lần gọi tool của lượt hỏi: Agent chính đã tra vài lần rồi mới hỏng
   thì tầng 3 còn ít lượt hơn.
-- Agent chính hỏng GIỮA LÚC đang phát chữ (hiếm — quá tải thường báo ngay lượt gọi đầu) thì câu trả
-  lời tầng 3 nối tiếp sau phần chữ dở.
+- Agent chính hỏng GIỮA LÚC đang phát chữ (hiếm) thì câu trả lời tầng 3 nối tiếp sau phần chữ dở.
 - Hai Agent phải giống hệt nhau trừ `needsFallback`: sửa system message/prompt thì sửa CẢ HAI, thêm
   tool thì nối vào CẢ HAI — `tests/ai/n8n-workflow.test.ts` đỏ nếu lệch.
-- Chưa có key Cerebras: xoá bốn node **Còn tầng 3?**, **Lấy lại câu hỏi**, **Trợ lý AI VH1 - tầng 3**,
-  **Cerebras tầng 3**, rồi nối `Chuẩn hóa lỗi AI` thẳng vào `Trả lỗi về website` như trước.
+- Bộ chấm `npm run ai:eval` mới gọi được Gemini REST nên đang đo **tầng 3**, chưa đo GLM/DeepSeek.
 
 Settings không lưu dữ liệu execution thành công, thất bại, thủ công hoặc tiến trình.
 
 ### Nhánh lỗi
 
 `Xác thực và chuẩn hóa`, `Trợ lý AI VH1` và `Trợ lý AI VH1 - tầng 3` dùng On Error = Continue
-(using error output) → `Chuẩn hóa lỗi AI` → `Còn tầng 3?` (xem Tầng 3 ở trên) → `Trả lỗi về website` (Respond to Webhook 1.5, bật streaming). Nhánh lỗi chỉ
+(using error output) → `Chuẩn hóa lỗi AI` → `Còn tầng 3?` (xem Ba tầng model ở trên) → `Trả lỗi về website` (Respond to Webhook 1.5, bật streaming). Nhánh lỗi chỉ
 trả mã: `AI_PROVIDER_UNAVAILABLE`, `AI_PROVIDER_RATE_LIMITED` hoặc `AI_WORKFLOW_FAILED`. Mô tả
 lỗi thô n8n tự phát trong luồng chỉ được website dùng để phân loại, không hiển thị, không ghi log.
 
