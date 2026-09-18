@@ -10,6 +10,7 @@
 
 /** Nhóm tài liệu. Mỗi nhóm một quyền riêng `ai-chat-tailieu-<nhóm>` (lib/rbac-defaults.ts). */
 export const AI_KNOWLEDGE_CATEGORIES = {
+  "quy-trinh": "Danh mục quy trình",
   "vat-tu": "Quy trình vật tư",
   pccc: "Sổ thiết bị PCCC",
   tbycnn: "Sổ thiết bị TBYCNN",

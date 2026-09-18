@@ -1,0 +1,169 @@
+{
+  "name": "Đồng bộ tài liệu quy trình từ Google Drive",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "document-sync-manual",
+      "name": "Chạy thủ công",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [-820, 20]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 15 2 * * *"
+            }
+          ]
+        }
+      },
+      "id": "document-sync-schedule",
+      "name": "Đối soát 02 giờ 15",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [-820, 180]
+    },
+    {
+      "parameters": {
+        "url": "https://duyenhai1.vn/api/integrations/n8n/documents",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "limit", "value": "500" }
+          ]
+        },
+        "options": { "timeout": 30000 }
+      },
+      "id": "document-sync-fetch-catalog",
+      "name": "Đọc danh mục website",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [-580, 100],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "parameters": {
+        "jsCode": "const response = $input.first().json;\nif (response.meta?.hasMore) throw new Error('Danh mục vượt 500 tài liệu; cần bật phân trang trước khi đồng bộ');\nconst rows = Array.isArray(response.data) ? response.data : [];\nreturn rows.flatMap((row) => {\n  const folderId = String(row.driveFolderId ?? '').trim();\n  if (!folderId) return [];\n  return [{ json: {\n    documentId: row.id,\n    title: row.title,\n    decisionNumber: row.decisionNumber ?? '',\n    driveFolderId: folderId,\n  } }];\n});"
+      },
+      "id": "document-sync-prepare-folders",
+      "name": "Chuẩn bị thư mục",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-340, 100]
+    },
+    {
+      "parameters": {
+        "url": "https://www.googleapis.com/drive/v3/files",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "q",
+              "value": "={{ \"'\" + $json.driveFolderId + \"' in parents and trashed = false\" }}"
+            },
+            {
+              "name": "fields",
+              "value": "files(id,name,mimeType,modifiedTime,md5Checksum,webViewLink,trashed,parents)"
+            },
+            { "name": "orderBy", "value": "modifiedTime desc" },
+            { "name": "pageSize", "value": "1000" },
+            { "name": "supportsAllDrives", "value": "true" },
+            { "name": "includeItemsFromAllDrives", "value": "true" }
+          ]
+        },
+        "options": { "timeout": 30000 }
+      },
+      "id": "document-sync-list-drive-files",
+      "name": "Đọc file trong thư mục Drive",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [-80, 100],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const sources = $('Chuẩn bị thư mục').all();\nconst responses = $input.all();\nconst clean = (value) => String(value ?? '').normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').toLowerCase();\nreturn responses.map((response, index) => {\n  const source = sources[index]?.json ?? {};\n  const error = response.json.error ?? response.json.message;\n  if (error) {\n    const message = typeof error === 'string' ? error : JSON.stringify(error);\n    const denied = /403|forbidden|permission|quyen/i.test(message);\n    return { json: { documentId: source.documentId, driveFolderId: source.driveFolderId, syncStatus: denied ? 'ACCESS_DENIED' : 'ERROR', syncError: message.slice(0, 1000) } };\n  }\n  const files = Array.isArray(response.json.files) ? response.json.files : [];\n  const pdfs = files.filter((file) => file.mimeType === 'application/pdf' && !file.trashed);\n  if (pdfs.length === 0) return { json: { documentId: source.documentId, driveFolderId: source.driveFolderId, syncStatus: 'MISSING', syncError: 'Thư mục không có file PDF' } };\n  let selected = pdfs.length === 1 ? pdfs[0] : null;\n  if (!selected) {\n    const decisionToken = String(source.decisionNumber ?? '').match(/\\d{3,}/)?.[0] ?? '';\n    const byDecision = decisionToken ? pdfs.filter((file) => clean(file.name).includes(decisionToken)) : [];\n    if (byDecision.length === 1) selected = byDecision[0];\n  }\n  if (!selected) {\n    const official = pdfs.filter((file) => /(^|[ _.-])(chinh[_ -]?thuc|hieu[_ -]?luc)([ _.-]|$)/i.test(clean(file.name)));\n    if (official.length === 1) selected = official[0];\n  }\n  if (!selected) return { json: { documentId: source.documentId, driveFolderId: source.driveFolderId, syncStatus: 'NEEDS_REVIEW', syncError: `Có ${pdfs.length} file PDF, chưa xác định chắc chắn file chính` } };\n  return { json: {\n    documentId: source.documentId,\n    driveFolderId: source.driveFolderId,\n    driveFileId: selected.id,\n    driveFileName: selected.name,\n    driveMimeType: selected.mimeType,\n    driveModifiedTime: selected.modifiedTime,\n    driveChecksum: selected.md5Checksum ?? null,\n    syncStatus: 'SYNCED',\n    syncError: null,\n  } };\n});"
+      },
+      "id": "document-sync-pick-primary",
+      "name": "Chọn PDF chính",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [180, 100]
+    },
+    {
+      "parameters": {
+        "jsCode": "const rows = $input.all().map((item) => item.json);\nconst batches = [];\nfor (let index = 0; index < rows.length; index += 100) batches.push({ json: { documents: rows.slice(index, index + 100) } });\nreturn batches;"
+      },
+      "id": "document-sync-batch",
+      "name": "Chia batch 100 tài liệu",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 100]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://duyenhai1.vn/api/integrations/n8n/documents",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": { "timeout": 30000 }
+      },
+      "id": "document-sync-write-metadata",
+      "name": "Ghi metadata về website",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [700, 100],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    }
+  ],
+  "connections": {
+    "Chạy thủ công": {
+      "main": [[{ "node": "Đọc danh mục website", "type": "main", "index": 0 }]]
+    },
+    "Đối soát 02 giờ 15": {
+      "main": [[{ "node": "Đọc danh mục website", "type": "main", "index": 0 }]]
+    },
+    "Đọc danh mục website": {
+      "main": [[{ "node": "Chuẩn bị thư mục", "type": "main", "index": 0 }]]
+    },
+    "Chuẩn bị thư mục": {
+      "main": [[{ "node": "Đọc file trong thư mục Drive", "type": "main", "index": 0 }]]
+    },
+    "Đọc file trong thư mục Drive": {
+      "main": [[{ "node": "Chọn PDF chính", "type": "main", "index": 0 }]]
+    },
+    "Chọn PDF chính": {
+      "main": [[{ "node": "Chia batch 100 tài liệu", "type": "main", "index": 0 }]]
+    },
+    "Chia batch 100 tài liệu": {
+      "main": [[{ "node": "Ghi metadata về website", "type": "main", "index": 0 }]]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Ho_Chi_Minh",
+    "saveDataSuccessExecution": "none",
+    "saveManualExecutions": false
+  },
+  "active": false,
+  "meta": { "templateCredsSetupCompleted": false },
+  "tags": []
+}

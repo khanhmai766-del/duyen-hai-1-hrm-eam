@@ -1284,12 +1284,30 @@ model DigitalDocument {
   timelineJson     String?
   note             String?
   attachmentUrls   String?
+  // Đồng bộ Google Drive: giữ documentUrl cũ để tương thích, đồng thời tách riêng
+  // thư mục hồ sơ và file chính để nút "Xem PDF" không phải mở cả thư mục.
+  driveFolderId    String?
+  driveFileId      String?
+  driveFileName    String?
+  driveMimeType    String?
+  driveModifiedAt  DateTime?
+  driveWebViewLink String?
+  driveChecksum    String?
+  driveSyncStatus  String?
+  driveSyncError   String?
+  driveLastSyncedAt DateTime?
+  aiIndexedAt      DateTime?
+  aiIndexVersion   String?
+  aiIndexError     String?
   createdById      String?
   updatedById      String?
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @default(now())
 
   @@index([category, updatedAt(sort: Desc)])
+  @@index([driveFolderId])
+  @@index([driveFileId])
+  @@index([driveSyncStatus])
 }
 
 // Cấu hình ma trận phân quyền (RBAC) do ADMIN chỉnh trong /admin/roles. Bảng được

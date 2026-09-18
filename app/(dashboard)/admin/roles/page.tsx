@@ -323,6 +323,13 @@ const DEFAULT_PERMISSIONS: PermissionRow[] = [
     matrix: { ADMIN: "read", MANAGER: "read", SUPERVISOR: "read", TECHNICIAN: "read", VIEWER: "read" },
   },
   {
+    id: "ai-chat-tailieu-quy-trinh",
+    group: "Trợ lý AI",
+    feature: "Tra cứu tài liệu: Danh mục quy trình",
+    note: "Trợ lý AI được đọc nội dung các file PDF chính thức đã đồng bộ từ Danh mục quy trình. Không có quyền thì trợ lý không thấy nhóm tài liệu này.",
+    matrix: { ADMIN: "read", MANAGER: "read", SUPERVISOR: "read", TECHNICIAN: "read", VIEWER: "none" },
+  },
+  {
     id: "ai-chat-tailieu-vat-tu",
     group: "Trợ lý AI",
     feature: "Tra cứu tài liệu: Quy trình vật tư",

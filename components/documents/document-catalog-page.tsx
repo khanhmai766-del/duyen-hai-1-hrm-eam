@@ -3,7 +3,7 @@
 import * as React from "react";
 import { useSession } from "next-auth/react";
 import * as XLSX from "xlsx";
-import { ChevronDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ExternalLink, FileSpreadsheet, FileText, ListFilter, Loader2, Minus, Pencil, Plus, RotateCcw, Search, Trash2, Upload, X } from "lucide-react";
+import { AlertCircle, ChevronDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ExternalLink, FileSpreadsheet, FileText, FolderOpen, ListFilter, Loader2, Minus, Pencil, Plus, RotateCcw, Search, Sparkles, Trash2, Upload, X } from "lucide-react";
 import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { EmptyState } from "@/components/shared/empty-state";
@@ -38,6 +38,7 @@ import {
 import { EQUIPMENT_BLOCKS, blockForPosition, isSelectableManagingPosition } from "@/lib/constants";
 import { archiveCategoryPermissionId } from "@/lib/archive-permissions";
 import { normalizeText } from "@/lib/nav";
+import { googleDriveFolderViewUrl, parseGoogleDriveTarget } from "@/lib/google-drive-document";
 import { announcementPositionLabel, announcementPositionOptions } from "@/lib/positions";
 import { cn, formatDate, formatDateTime } from "@/lib/utils";
 import { SeparationTimelineView } from "@/components/documents/separation-timeline-view";
@@ -1172,21 +1173,8 @@ export function DocumentCatalogPage({
                     <TableCell className={cn(wideNameNarrowLinkLayout && "align-top")}>
                       {contentMode === "text" ? (
                         <span className={cn("block max-w-[420px] whitespace-pre-wrap text-sm text-ink", wideNameNarrowLinkLayout && "max-w-full")}>{item.documentUrl}</span>
-                      ) : !item.documentUrl ? (
-                        <span className="text-muted-foreground">—</span>
                       ) : (
-                        <a
-                          href={item.documentUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className={cn(
-                            "inline-flex max-w-[360px] items-center gap-2 truncate text-sm font-medium text-accent hover:underline",
-                            wideNameNarrowLinkLayout && "max-w-full"
-                          )}
-                        >
-                          <ExternalLink className="h-4 w-4 shrink-0" />
-                          <span className="truncate">{item.documentUrl}</span>
-                        </a>
+                        <DocumentSourceLinks item={item} compact />
                       )}
                     </TableCell>
                   )}
@@ -1277,21 +1265,7 @@ export function DocumentCatalogPage({
                           <DetailField label="Người cập nhật" value={rowUser?.name} />
                           {hasProgressField && (
                             <DetailField label={linkLabel}>
-                              {item.documentUrl ? (
-                                <a
-                                  href={item.documentUrl}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  title={item.documentUrl}
-                                  onClick={(event) => event.stopPropagation()}
-                                  className="inline-flex items-center gap-1.5 font-medium text-[#00558F] hover:underline"
-                                >
-                                  {linkDisplayName(item.documentUrl)}
-                                  <ExternalLink className="h-3.5 w-3.5 shrink-0" />
-                                </a>
-                              ) : (
-                                <span className="text-muted-foreground">—</span>
-                              )}
+                              <DocumentSourceLinks item={item} />
                             </DetailField>
                           )}
                         </div>
@@ -1337,20 +1311,7 @@ export function DocumentCatalogPage({
                             <span className="font-semibold">{linkLabel}:</span>
                             {contentMode === "text" ? (
                               <span className="whitespace-pre-wrap">{item.documentUrl || "—"}</span>
-                            ) : item.documentUrl ? (
-                              <a
-                                href={item.documentUrl}
-                                target="_blank"
-                                rel="noreferrer"
-                                onClick={(event) => event.stopPropagation()}
-                                className="inline-flex max-w-[520px] items-center gap-2 truncate text-sm font-medium text-accent hover:underline"
-                              >
-                                <ExternalLink className="h-4 w-4 shrink-0" />
-                                <span className="truncate">{item.documentUrl}</span>
-                              </a>
-                            ) : (
-                              <span>—</span>
-                            )}
+                            ) : <DocumentSourceLinks item={item} />}
                           </div>
                         )}
                         {hasNoteField && (
@@ -2174,6 +2135,108 @@ function DetailNote({ label, text }: { label?: string; text?: string | null }) {
     <div className="mt-3.5 rounded-lg border border-border bg-white px-3.5 py-3">
       <div className="mb-1 font-mono text-[10.5px] uppercase tracking-[0.14em] text-muted-foreground">{label}</div>
       <p className="whitespace-pre-wrap text-[13.5px] leading-[1.65] text-ink">{text || "—"}</p>
+    </div>
+  );
+}
+
+function driveSyncLabel(status: string | null | undefined) {
+  if (status === "NEEDS_REVIEW") return "Cần chọn PDF";
+  if (status === "MISSING") return "Không tìm thấy PDF";
+  if (status === "ACCESS_DENIED") return "Mất quyền Drive";
+  if (status === "ERROR") return "Lỗi đồng bộ";
+  return "Chờ đồng bộ";
+}
+
+/** Tách rõ file chính và thư mục hồ sơ; không còn in nguyên URL dài trong bảng. */
+function DocumentSourceLinks({ item, compact = false }: { item: DigitalDocument; compact?: boolean }) {
+  const legacy = parseGoogleDriveTarget(item.documentUrl);
+  const hasSyncedFile = item.driveSyncStatus === "SYNCED" && Boolean(item.driveFileId);
+  const hasLegacyFile = legacy.kind === "FILE" || legacy.kind === "GOOGLE_DOCUMENT";
+  const hasFile = hasSyncedFile || hasLegacyFile;
+  const folderId = item.driveFolderId || (legacy.kind === "FOLDER" ? legacy.id : null);
+  let folderUrl: string | null = null;
+  try {
+    folderUrl = folderId ? googleDriveFolderViewUrl(folderId) : null;
+  } catch {
+    folderUrl = null;
+  }
+
+  if (!hasFile && !folderUrl && !item.driveSyncStatus) {
+    if (!item.documentUrl) return <span className="text-muted-foreground">—</span>;
+    return (
+      <a
+        href={item.documentUrl}
+        target="_blank"
+        rel="noreferrer"
+        onClick={(event) => event.stopPropagation()}
+        className="inline-flex max-w-full items-center gap-1.5 truncate text-sm font-medium text-accent hover:underline"
+      >
+        <ExternalLink className="h-3.5 w-3.5 shrink-0" />
+        <span className="truncate">{linkDisplayName(item.documentUrl)}</span>
+      </a>
+    );
+  }
+
+  const fileLabel = item.driveMimeType === "application/pdf" || /\.pdf$/i.test(item.driveFileName ?? "") ? "Xem PDF" : "Xem tài liệu";
+  return (
+    <div className={cn("flex flex-wrap items-center gap-1.5", compact && "max-w-[290px]")}>
+      {hasFile && (
+        <a
+          href={`/api/documents/${encodeURIComponent(item.id)}/open`}
+          target="_blank"
+          rel="noreferrer"
+          onClick={(event) => event.stopPropagation()}
+          title={item.driveFileName || fileLabel}
+          className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-[#00558F] px-2.5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-[#004873] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0A84D6]/30"
+        >
+          <FileText className="h-3.5 w-3.5" />
+          {fileLabel}
+        </a>
+      )}
+      {folderUrl && (
+        <a
+          href={folderUrl}
+          target="_blank"
+          rel="noreferrer"
+          onClick={(event) => event.stopPropagation()}
+          className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-700 shadow-sm transition-colors hover:border-slate-300 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-300"
+        >
+          <FolderOpen className="h-3.5 w-3.5 text-amber-600" />
+          Mở thư mục
+        </a>
+      )}
+      {!hasFile && (
+        <span
+          title={item.driveSyncError || undefined}
+          className={cn(
+            "inline-flex h-7 items-center gap-1 rounded-full px-2 text-[11px] font-semibold ring-1",
+            item.driveSyncStatus === "ERROR" || item.driveSyncStatus === "MISSING" || item.driveSyncStatus === "ACCESS_DENIED"
+              ? "bg-red-50 text-red-700 ring-red-200"
+              : item.driveSyncStatus === "NEEDS_REVIEW"
+                ? "bg-amber-50 text-amber-700 ring-amber-200"
+                : "bg-slate-50 text-slate-600 ring-slate-200"
+          )}
+        >
+          <AlertCircle className="h-3 w-3" />
+          {driveSyncLabel(item.driveSyncStatus)}
+        </span>
+      )}
+      {hasSyncedFile && (
+        <span
+          title={item.aiIndexError || (item.aiIndexedAt ? `Lập chỉ mục ${formatDateTime(item.aiIndexedAt)}` : "Đang chờ workflow AI xử lý")}
+          className={cn(
+            "inline-flex h-7 items-center gap-1 rounded-full px-2 text-[11px] font-semibold ring-1",
+            item.aiIndexError
+              ? "bg-red-50 text-red-700 ring-red-200"
+              : item.aiIndexedAt
+                ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
+                : "bg-slate-50 text-slate-600 ring-slate-200"
+          )}
+        >
+          <Sparkles className="h-3 w-3" />
+          {item.aiIndexError ? "AI lỗi" : item.aiIndexedAt ? "Đã nạp AI" : "Chờ AI"}
+        </span>
+      )}
     </div>
   );
 }

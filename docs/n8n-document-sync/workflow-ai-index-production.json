@@ -1,0 +1,127 @@
+{
+  "name": "Lập chỉ mục AI cho tài liệu quy trình Drive",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "document-ai-manual",
+      "name": "Chạy thủ công",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [-760, 20]
+    },
+    {
+      "parameters": {
+        "rule": { "interval": [{ "field": "cronExpression", "expression": "0 0 3 * * *" }] }
+      },
+      "id": "document-ai-schedule",
+      "name": "Lập chỉ mục lúc 03 giờ",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [-760, 180]
+    },
+    {
+      "parameters": {
+        "url": "https://duyenhai1.vn/api/integrations/n8n/documents",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": { "parameters": [{ "name": "limit", "value": "500" }] },
+        "options": { "timeout": 30000 }
+      },
+      "id": "document-ai-fetch-catalog",
+      "name": "Đọc trạng thái tài liệu",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [-520, 100],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "parameters": {
+        "jsCode": "const response = $input.first().json;\nif (response.meta?.hasMore) throw new Error('Danh mục vượt 500 tài liệu; cần bật phân trang trước khi lập chỉ mục');\nconst rows = Array.isArray(response.data) ? response.data : [];\nreturn rows.filter((row) => row.driveSyncStatus === 'SYNCED' && row.driveFileId && row.aiIndexVersion !== row.desiredAiIndexVersion).map((row) => ({ json: { documentId: row.id, title: row.title, driveFileId: row.driveFileId, driveFileName: row.driveFileName, desiredAiIndexVersion: row.desiredAiIndexVersion } }));"
+      },
+      "id": "document-ai-filter",
+      "name": "Chỉ lấy PDF cần cập nhật",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-280, 100]
+    },
+    {
+      "parameters": { "batchSize": 1, "options": {} },
+      "id": "document-ai-loop",
+      "name": "Xử lý từng PDF",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [-40, 100]
+    },
+    {
+      "parameters": {
+        "url": "={{ 'https://www.googleapis.com/drive/v3/files/' + encodeURIComponent($json.driveFileId) }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
+        "sendQuery": true,
+        "queryParameters": { "parameters": [
+          { "name": "alt", "value": "media" },
+          { "name": "supportsAllDrives", "value": "true" }
+        ] },
+        "options": { "timeout": 300000, "response": { "response": { "responseFormat": "file", "outputPropertyName": "data" } } }
+      },
+      "id": "document-ai-download",
+      "name": "Tải một PDF từ Drive",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [220, 180],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://duyenhai1.vn/api/integrations/n8n/documents/index",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": { "parameters": [
+          { "name": "documentId", "value": "={{ $('Xử lý từng PDF').item.json.documentId }}" },
+          { "name": "fileId", "value": "={{ $('Xử lý từng PDF').item.json.driveFileId }}" }
+        ] },
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "Content-Type", "value": "application/pdf" }] },
+        "sendBody": true,
+        "contentType": "binaryData",
+        "inputDataFieldName": "data",
+        "options": { "timeout": 300000 }
+      },
+      "id": "document-ai-index",
+      "name": "Gửi PDF để lập chỉ mục",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [480, 180],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 10000,
+      "onError": "continueRegularOutput"
+    }
+  ],
+  "connections": {
+    "Chạy thủ công": { "main": [[{ "node": "Đọc trạng thái tài liệu", "type": "main", "index": 0 }]] },
+    "Lập chỉ mục lúc 03 giờ": { "main": [[{ "node": "Đọc trạng thái tài liệu", "type": "main", "index": 0 }]] },
+    "Đọc trạng thái tài liệu": { "main": [[{ "node": "Chỉ lấy PDF cần cập nhật", "type": "main", "index": 0 }]] },
+    "Chỉ lấy PDF cần cập nhật": { "main": [[{ "node": "Xử lý từng PDF", "type": "main", "index": 0 }]] },
+    "Xử lý từng PDF": { "main": [[], [{ "node": "Tải một PDF từ Drive", "type": "main", "index": 0 }]] },
+    "Tải một PDF từ Drive": { "main": [[{ "node": "Gửi PDF để lập chỉ mục", "type": "main", "index": 0 }]] },
+    "Gửi PDF để lập chỉ mục": { "main": [[{ "node": "Xử lý từng PDF", "type": "main", "index": 0 }]] }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Ho_Chi_Minh",
+    "saveDataSuccessExecution": "none",
+    "saveManualExecutions": false
+  },
+  "active": false,
+  "meta": { "templateCredsSetupCompleted": false },
+  "tags": []
+}

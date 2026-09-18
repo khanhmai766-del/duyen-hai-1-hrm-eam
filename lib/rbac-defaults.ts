@@ -15,6 +15,7 @@ export const DEFAULT_RBAC_MATRIX: Record<string, Partial<Record<string, RbacLeve
   "ai-chat": { ADMIN: "read", MANAGER: "read", SUPERVISOR: "read", TECHNICIAN: "read", VIEWER: "read" },
   // Nhóm tài liệu trợ lý AI được tra cứu (lib/ai-knowledge.ts). Mỗi nhóm một quyền để admin tắt riêng
   // từng nhóm; mặc định mọi vai trò trừ VIEWER.
+  "ai-chat-tailieu-quy-trinh": { ADMIN: "read", MANAGER: "read", SUPERVISOR: "read", TECHNICIAN: "read", VIEWER: "none" },
   "ai-chat-tailieu-vat-tu": { ADMIN: "read", MANAGER: "read", SUPERVISOR: "read", TECHNICIAN: "read", VIEWER: "none" },
   "ai-chat-tailieu-pccc": { ADMIN: "read", MANAGER: "read", SUPERVISOR: "read", TECHNICIAN: "read", VIEWER: "none" },
   "ai-chat-tailieu-tbycnn": { ADMIN: "read", MANAGER: "read", SUPERVISOR: "read", TECHNICIAN: "read", VIEWER: "none" },
