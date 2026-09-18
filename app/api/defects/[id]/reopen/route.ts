@@ -7,6 +7,7 @@ import { isDefectSyncFeatureEnabled } from "@/lib/defect-two-way-sync";
 import { prisma } from "@/lib/prisma";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
 import { resolveEquipmentAccessForUser } from "@/lib/server-access";
+import { notifyLevelOneDefectChange } from "@/lib/defect-telegram-alert";
 
 const REOPEN_STATUSES = ["CHUA_XU_LY", "CO_PCT", "CHO_VAT_TU", "CHO_NGUNG_MAY"] as const;
 type ReopenStatus = (typeof REOPEN_STATUSES)[number];
@@ -106,6 +107,11 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
         `${defect.requestNumber ?? "Không có số yêu cầu"} · Đưa về ${DEFECT_STATUS[targetStatus].label}`
       )
     );
+    await notifyLevelOneDefectChange({
+      defectId: result.updated.id,
+      before: defect,
+      actorName: user.name,
+    });
 
     return ok({
       id: result.updated.id,

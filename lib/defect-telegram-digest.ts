@@ -6,6 +6,7 @@ import { formatVietnamDate, vietnamDayKey, vietnamDayWindow } from "@/lib/vietna
 const SHIFT_NEW_MAX_ITEMS = 15;
 const SHIFT_COMPLETED_MAX_ITEMS = 12;
 const LEVEL_ONE_MAX_ITEMS = 20;
+const WEEKLY_OLDEST_MAX_ITEMS = 5;
 const HOUR_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * HOUR_MS;
 
@@ -19,6 +20,7 @@ const DEFECT_DIGEST_SELECT = {
   content: true,
   system: true,
   device: true,
+  sourceDeviceRaw: true,
   detectedAt: true,
   completedAt: true,
   createdAt: true,
@@ -106,9 +108,13 @@ export function latestCompletedDefectShift(now: Date = new Date()) {
   return completed;
 }
 
-function defectLine(defect: DigestDefect, options?: { includeStatus?: boolean; includeAge?: boolean; now?: Date }) {
+function defectAgeMs(defect: DigestDefect, now: Date) {
+  return Math.max(0, now.getTime() - (defect.detectedAt ?? defect.createdAt).getTime());
+}
+
+function defectLine(defect: DigestDefect, options?: { includeStatus?: boolean; includeAge?: boolean; highlightAge?: boolean; now?: Date }) {
   const identity = text(defect.requestNumber, "Chưa có số YC");
-  const device = text(defect.node?.name ?? defect.device, "Chưa gắn thiết bị");
+  const device = text(defect.node?.name ?? defect.sourceDeviceRaw ?? defect.device, "Chưa gắn thiết bị");
   const parts = [
     `<b>${escapeTelegramHtml(identity)}</b> · ${escapeTelegramHtml(defect.unit)}`,
     defect.severity ? `Mức ${escapeTelegramHtml(defect.severity)}` : null,
@@ -116,13 +122,20 @@ function defectLine(defect: DigestDefect, options?: { includeStatus?: boolean; i
       ? escapeTelegramHtml(defect.postRepairAwaitingMaterial ? "Chờ vật tư sau xử lý" : statusLabel(defect.status))
       : null,
   ].filter(Boolean).join(" · ");
-  const detected = defect.detectedAt ?? defect.createdAt;
+  const ageMs = defectAgeMs(defect, options?.now ?? new Date());
   const age = options?.includeAge
-    ? ` · tồn ${Math.max(0, Math.floor(((options.now ?? new Date()).getTime() - detected.getTime()) / DAY_MS))} ngày`
+    ? ` · tồn ${Math.floor(ageMs / DAY_MS)} ngày`
+    : "";
+  const ageWarning = options?.highlightAge
+    ? ageMs > 7 * DAY_MS
+      ? " · 🔴 QUÁ 7 NGÀY"
+      : ageMs > DAY_MS
+        ? " · ⚠️ QUÁ 24 GIỜ"
+        : ""
     : "";
   return [
     parts,
-    `Thiết bị: ${escapeTelegramHtml(device)}${age}`,
+    `Thiết bị: ${escapeTelegramHtml(device)}${age}${ageWarning}`,
     `Nội dung: ${escapeTelegramHtml(shorten(defect.content))}`,
   ].join("\n");
 }
@@ -218,14 +231,18 @@ export async function buildShiftDefectDigest(now: Date = new Date()) {
 export async function buildLevelOneDefectDigest(now: Date = new Date()) {
   const rows = await loadLevelOneDefects();
   const shown = rows.slice(0, LEVEL_ONE_MAX_ITEMS);
+  const olderThanOneDay = rows.filter((row) => defectAgeMs(row, now) > DAY_MS).length;
+  const olderThanSevenDays = rows.filter((row) => defectAgeMs(row, now) > 7 * DAY_MS).length;
   const lines = [
     "🚨 <b>KHIẾM KHUYẾT MỨC 1 CÒN TỒN ĐỌNG</b>",
     `Thời điểm: 07:00 ngày ${escapeTelegramHtml(formatVietnamDate(now))}`,
     `Tổng cộng: <b>${rows.length} phiếu</b>`,
+    `⚠️ Tồn trên 24 giờ: <b>${olderThanOneDay}</b>`,
+    `🔴 Tồn trên 7 ngày: <b>${olderThanSevenDays}</b>`,
   ];
   if (shown.length > 0) {
     lines.push("", ...shown.map((row, index) =>
-      `${index + 1}. ${defectLine(row, { includeStatus: true, includeAge: true, now })}`
+      `${index + 1}. ${defectLine(row, { includeStatus: true, includeAge: true, highlightAge: true, now })}`
     ));
     if (rows.length > shown.length) lines.push("", `… và ${rows.length - shown.length} phiếu Mức 1 khác.`);
   } else {
@@ -233,6 +250,89 @@ export async function buildLevelOneDefectDigest(now: Date = new Date()) {
   }
   lines.push("", `<a href="${escapeTelegramHtml(`${appUrl()}/defects?severity=1`)}">Xem khiếm khuyết Mức 1</a>`);
   return { message: lines.join("\n"), count: rows.length, periodKey: vietnamDayKey(now) };
+}
+
+function previousVietnamWeekWindow(now: Date) {
+  const todayStart = vietnamDayWindow(now).start;
+  const local = new Date(now.getTime() + 7 * HOUR_MS);
+  const daysSinceMonday = (local.getUTCDay() + 6) % 7;
+  const end = new Date(todayStart.getTime() - daysSinceMonday * DAY_MS);
+  return { start: new Date(end.getTime() - 7 * DAY_MS), end };
+}
+
+export async function buildWeeklyDefectDigest(now: Date = new Date()) {
+  const week = previousVietnamWeekWindow(now);
+  const [created, completed, outstanding] = await Promise.all([
+    prisma.defect.findMany({
+      where: {
+        detectedAt: { gte: week.start, lt: week.end },
+        cancelledAt: null,
+        syncState: { not: "MISSING" },
+      },
+      select: DEFECT_DIGEST_SELECT,
+    }),
+    prisma.defect.count({
+      where: {
+        status: "DA_XU_LY",
+        completedAt: { gte: week.start, lt: week.end },
+        cancelledAt: null,
+      },
+    }),
+    prisma.defect.findMany({
+      where: {
+        cancelledAt: null,
+        syncState: "ACTIVE",
+        OR: [
+          { status: { not: "DA_XU_LY" } },
+          { postRepairAwaitingMaterial: true },
+        ],
+      },
+      select: DEFECT_DIGEST_SELECT,
+      orderBy: [{ detectedAt: { sort: "asc", nulls: "last" } }, { createdAt: "asc" }],
+    }),
+  ]);
+  const deviceCounts = new Map<string, number>();
+  for (const row of created) {
+    const device = text(row.node?.name ?? row.sourceDeviceRaw ?? row.device, "Chưa gắn thiết bị");
+    deviceCounts.set(device, (deviceCounts.get(device) ?? 0) + 1);
+  }
+  const topDevices = [...deviceCounts.entries()]
+    .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0], "vi"))
+    .slice(0, 3);
+  const levelOneCount = outstanding.filter((row) => row.severity === "1").length;
+  const oldest = outstanding.slice(0, WEEKLY_OLDEST_MAX_ITEMS);
+  const lines = [
+    "📊 <b>BÁO CÁO KHIẾM KHUYẾT TUẦN</b>",
+    `Thời gian: ${escapeTelegramHtml(formatVietnamDate(week.start))} – ${escapeTelegramHtml(formatVietnamDate(new Date(week.end.getTime() - 1)))}`,
+    "",
+    `🆕 Phát sinh trong tuần: <b>${created.length} phiếu</b>`,
+    `✅ Đã xử lý trong tuần: <b>${completed} phiếu</b>`,
+    `📌 Tổng còn tồn hiện tại: <b>${outstanding.length} phiếu</b>`,
+    `🚨 Mức 1 còn tồn: <b>${levelOneCount} phiếu</b>`,
+    "",
+    "<b>Thiết bị phát sinh nhiều khiếm khuyết nhất:</b>",
+    ...(topDevices.length > 0
+      ? topDevices.map(([device, count], index) => `${index + 1}. ${escapeTelegramHtml(device)}: <b>${count}</b> phiếu`)
+      : ["Không có khiếm khuyết phát sinh trong tuần."]),
+    "",
+    "<b>Khiếm khuyết tồn lâu nhất:</b>",
+  ];
+  if (oldest.length > 0) {
+    lines.push(...oldest.map((row, index) =>
+      `${index + 1}. ${defectLine(row, { includeStatus: true, includeAge: true, now })}`
+    ));
+  } else {
+    lines.push("Không còn khiếm khuyết tồn đọng.");
+  }
+  lines.push("", `<a href="${escapeTelegramHtml(`${appUrl()}/reports`)}">Xem báo cáo trên hệ thống</a>`);
+  return {
+    message: lines.join("\n"),
+    createdCount: created.length,
+    completedCount: completed,
+    outstandingCount: outstanding.length,
+    levelOneCount,
+    periodKey: vietnamDayKey(week.start),
+  };
 }
 
 export async function runShiftDefectDigest(params?: { now?: Date; dryRun?: boolean }) {
@@ -251,6 +351,18 @@ export async function runLevelOneDefectDigest(params?: { now?: Date; dryRun?: bo
   const digest = await buildLevelOneDefectDigest(params?.now);
   const delivery = await deliverTelegramNotification({
     type: "DEFECT_LEVEL_ONE_DIGEST",
+    periodKey: digest.periodKey,
+    message: digest.message,
+    dryRun: params?.dryRun,
+    now: params?.now,
+  });
+  return { ...digest, delivery };
+}
+
+export async function runWeeklyDefectDigest(params?: { now?: Date; dryRun?: boolean }) {
+  const digest = await buildWeeklyDefectDigest(params?.now);
+  const delivery = await deliverTelegramNotification({
+    type: "DEFECT_WEEKLY_DIGEST",
     periodKey: digest.periodKey,
     message: digest.message,
     dryRun: params?.dryRun,

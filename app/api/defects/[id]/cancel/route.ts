@@ -12,6 +12,7 @@ import {
   moTaGoPhieuVatTu,
   revertMaterialRequestReplacements,
 } from "@/lib/defect-material-request";
+import { notifyLevelOneDefectChange } from "@/lib/defect-telegram-alert";
 
 const INCLUDE = {
   createdBy: { select: { id: true, name: true, position: true, avatarUrl: true, avatarKey: true } },
@@ -130,6 +131,11 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
         ].filter(Boolean).join(" · ")
       )
     );
+    await notifyLevelOneDefectChange({
+      defectId: defect.id,
+      before: existing,
+      actorName: user.name,
+    });
     return ok({ ...defect, createdBy: publicUserRef(defect.createdBy) });
   });
 }

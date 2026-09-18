@@ -1,10 +1,12 @@
 # Thông báo vận hành qua Telegram
 
-Bot Telegram gửi ba loại thông báo:
+Bot Telegram gửi các loại thông báo:
 
 - kiểm tra lỗi đồng bộ mỗi 5 phút, cảnh báo sau 30 phút và báo phục hồi;
+- gửi ngay khi phát sinh/nâng lên Mức 1 hoặc khi Mức 1 đổi trạng thái quan trọng;
 - 06:00, 14:00 và 22:00: khiếm khuyết phát sinh và đã xử lý trong ca vừa kết thúc;
-- 07:00: khiếm khuyết Mức 1 còn tồn đọng.
+- 07:00: khiếm khuyết Mức 1 còn tồn đọng, đánh dấu tồn trên 24 giờ và 7 ngày;
+- 07:15 thứ Hai: tổng hợp tuần trước.
 
 Ba ca được tính theo giờ Việt Nam: ca sáng 06:00–14:00, ca chiều
 14:00–22:00 và ca đêm 22:00–06:00 ngày kế tiếp. Truy vấn dùng khoảng
@@ -36,10 +38,10 @@ POST /api/internal/telegram-jobs
 Authorization: Bearer TELEGRAM_JOB_TOKEN
 Content-Type: application/json
 
-{"job":"shift"}
+{"job":"weekly"}
 ```
 
-`job` nhận `monitor`, `shift`, `level-one`. Thêm `"dryRun":true` để xem nội
+`job` nhận `monitor`, `shift`, `level-one`, `weekly`. Thêm `"dryRun":true` để xem nội
 dung mà không gửi và không ghi nhật ký `SENT`.
 
 ## API báo trạng thái đồng bộ
@@ -75,6 +77,7 @@ Không đưa token lên command line. Dùng script đọc `.env`:
 cd /var/www/dh1-app
 node scripts/run-telegram-job.mjs shift --dry-run
 node scripts/run-telegram-job.mjs level-one --dry-run
+node scripts/run-telegram-job.mjs weekly --dry-run
 node scripts/run-telegram-job.mjs monitor --dry-run
 ```
 
@@ -94,6 +97,7 @@ cp scripts/systemd/dh1-telegram@.service \
    scripts/systemd/dh1-telegram-monitor.timer \
    scripts/systemd/dh1-telegram-shift.timer \
    scripts/systemd/dh1-telegram-level-one.timer \
+   scripts/systemd/dh1-telegram-weekly.timer \
    /etc/systemd/system/
 systemctl disable --now \
   dh1-telegram-morning.timer \
@@ -102,7 +106,8 @@ systemctl daemon-reload
 systemctl enable --now \
   dh1-telegram-monitor.timer \
   dh1-telegram-shift.timer \
-  dh1-telegram-level-one.timer
+  dh1-telegram-level-one.timer \
+  dh1-telegram-weekly.timer
 ```
 
 Kiểm tra:

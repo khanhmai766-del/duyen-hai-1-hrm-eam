@@ -40,6 +40,7 @@ import { isDefectSyncFeatureEnabled } from "@/lib/defect-two-way-sync";
 import { defectResultStatusOf } from "@/lib/defect-result-status";
 import { resolveMaterialRequest, type ResolvedMaterialRequest } from "@/lib/defect-material-request";
 import { defectAuditReference } from "@/lib/defect-audit";
+import { notifyLevelOneDefectChange } from "@/lib/defect-telegram-alert";
 import { DEFECT_SECTIONS, type DefectSectionKey } from "@/lib/defect-section";
 import { N8N_DEFECT_SOURCE_SPREADSHEET_IDS } from "@/lib/defect-n8n-sync";
 
@@ -930,6 +931,11 @@ export async function POST(req: NextRequest) {
           )
         : auditDetailWithPosition(user, defectAuditReference("Tạo phiếu", defect))
     );
+    await notifyLevelOneDefectChange({
+      defectId: defect.id,
+      before: null,
+      actorName: user.name,
+    });
     return ok({ ...defect, createdBy: publicUserRef(defect.createdBy) });
   });
 }

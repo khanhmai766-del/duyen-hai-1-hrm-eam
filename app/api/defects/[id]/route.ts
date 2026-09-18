@@ -25,6 +25,7 @@ import {
 } from "@/lib/defect-device-mapping";
 import { isDefectSyncFeatureEnabled } from "@/lib/defect-two-way-sync";
 import { defectAuditReference } from "@/lib/defect-audit";
+import { notifyLevelOneDefectChange } from "@/lib/defect-telegram-alert";
 
 // Tầng 4: avatar trong payload đi qua publicUserRef (proxy theo key) — không chở base64.
 const INCLUDE = {
@@ -421,6 +422,11 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
         defect.id,
         auditDetailWithPosition(user, defectAuditReference("Cập nhật phiếu", defect))
       );
+      await notifyLevelOneDefectChange({
+        defectId: defect.id,
+        before: existing,
+        actorName: user.name,
+      });
       return ok({
       ...defect,
       createdBy: publicUserRef(defect.createdBy),
@@ -559,6 +565,11 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
       defect.id,
       auditDetailWithPosition(user, defectAuditReference("Cập nhật phiếu", defect))
     );
+    await notifyLevelOneDefectChange({
+      defectId: defect.id,
+      before: existing,
+      actorName: user.name,
+    });
     return ok({
       ...defect,
       createdBy: publicUserRef(defect.createdBy),

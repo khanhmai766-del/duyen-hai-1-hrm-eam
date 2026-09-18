@@ -1,0 +1,11 @@
+# VPS dùng UTC: thứ Hai 00:15 UTC = thứ Hai 07:15 tại Việt Nam.
+[Unit]
+Description=DH1 — báo cáo khiếm khuyết tuần qua Telegram
+
+[Timer]
+OnCalendar=Mon *-*-* 00:15:00
+Persistent=true
+Unit=dh1-telegram@weekly.service
+
+[Install]
+WantedBy=timers.target

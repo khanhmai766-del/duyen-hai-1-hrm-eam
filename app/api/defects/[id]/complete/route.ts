@@ -9,6 +9,7 @@ import { enqueueDefectSyncEvent } from "@/lib/defect-sync-outbox";
 import { defectResultStatusOf } from "@/lib/defect-result-status";
 import { recordMaterialRequestReplacements } from "@/lib/defect-material-request";
 import { isDefectSyncFeatureEnabled } from "@/lib/defect-two-way-sync";
+import { notifyLevelOneDefectChange } from "@/lib/defect-telegram-alert";
 
 const HISTORY_PENDING_DAYS = 14;
 const HISTORY_COMPLETED_PENDING_DAYS = 4;
@@ -148,6 +149,11 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
         defect.id,
         auditDetailWithPosition(user, `Chờ chốt lịch sử đến ${finalizeAt.toISOString()}`)
       );
+      await notifyLevelOneDefectChange({
+        defectId: defect.id,
+        before: defect,
+        actorName: user.name,
+      });
       return ok({
         pending: true,
         startedAt: pending.startedAt,
@@ -228,6 +234,11 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
     });
 
     await audit(user.id, "COMPLETE_DEFECT", "Defect", defect.id, auditDetailWithPosition(user, defect.requestNumber));
+    await notifyLevelOneDefectChange({
+      defectId: defect.id,
+      before: defect,
+      actorName: user.name,
+    });
 
     const imageCleanupResults = await Promise.allSettled(originalImages.map((url) => deleteFromS3(url)));
     for (const cleanupResult of imageCleanupResults) {

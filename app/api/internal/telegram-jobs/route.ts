@@ -1,13 +1,13 @@
 import type { NextRequest } from "next/server";
 import { fail, handle, ok } from "@/lib/api";
-import { runLevelOneDefectDigest, runShiftDefectDigest } from "@/lib/defect-telegram-digest";
+import { runLevelOneDefectDigest, runShiftDefectDigest, runWeeklyDefectDigest } from "@/lib/defect-telegram-digest";
 import { verifyBearerToken } from "@/lib/server-token";
 import { runSyncMonitorJob } from "@/lib/sync-monitor";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-const JOBS = ["monitor", "shift", "level-one"] as const;
+const JOBS = ["monitor", "shift", "level-one", "weekly"] as const;
 type TelegramJob = (typeof JOBS)[number];
 
 export async function POST(req: NextRequest) {
@@ -23,7 +23,9 @@ export async function POST(req: NextRequest) {
       ? await runShiftDefectDigest({ dryRun })
       : job === "level-one"
         ? await runLevelOneDefectDigest({ dryRun })
-        : await runSyncMonitorJob({ dryRun });
+        : job === "weekly"
+          ? await runWeeklyDefectDigest({ dryRun })
+          : await runSyncMonitorJob({ dryRun });
     return ok({ job, dryRun, result });
   });
 }

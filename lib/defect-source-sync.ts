@@ -6,6 +6,7 @@ import { defectResultStatusOf } from "@/lib/defect-result-status";
 import { positionCodeOf } from "@/lib/position-catalog";
 import { reminderSummaryOf } from "@/lib/defect-reminder";
 import { equivalentSourceSheetNames } from "@/lib/defect-request-number";
+import { notifyLevelOneDefectChange } from "@/lib/defect-telegram-alert";
 
 export type DefectSourceRecord = {
   sourceSpreadsheetId: string;
@@ -697,6 +698,34 @@ export async function upsertPreparedDefectRecords(params: {
         finalizeAt: { gt: expeditedFinalizeAt },
       },
       data: { finalizeAt: expeditedFinalizeAt },
+    });
+  }
+
+  // So sánh snapshot trước/sau để cảnh báo cả phiếu mới và thay đổi Mức 1 đi
+  // từ Google Sheet. Hàm gửi tự bắt lỗi nên Telegram không làm hỏng lượt đồng bộ.
+  const beforeById = new Map(
+    [...existingRows, ...requestNumberCandidateRows].map((row) => [row.id, row])
+  );
+  const updatedIds = Array.from(new Set(updates.map((item) => item.id)));
+  const createdSourceKeys = creates
+    .map((item) => typeof item.sourceKey === "string" ? item.sourceKey : null)
+    .filter((value): value is string => Boolean(value));
+  const alertRows = updatedIds.length > 0 || createdSourceKeys.length > 0
+    ? await prisma.defect.findMany({
+        where: {
+          OR: [
+            ...(updatedIds.length > 0 ? [{ id: { in: updatedIds } }] : []),
+            ...(createdSourceKeys.length > 0 ? [{ sourceKey: { in: createdSourceKeys } }] : []),
+          ],
+        },
+        select: { id: true },
+      })
+    : [];
+  for (const row of alertRows) {
+    await notifyLevelOneDefectChange({
+      defectId: row.id,
+      before: beforeById.get(row.id) ?? null,
+      actorName: "Đồng bộ Google Sheet",
     });
   }
 
