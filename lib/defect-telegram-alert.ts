@@ -107,7 +107,7 @@ export async function notifyLevelOneDefectChange(params: {
       `Thiết bị: ${escapeTelegramHtml(device)}`,
       `Trạng thái: ${escapeTelegramHtml(after.postRepairAwaitingMaterial ? "Chờ vật tư sau xử lý" : statusLabel(after.status))}`,
       `Nội dung: ${escapeTelegramHtml(shorten(after.content))}`,
-      `Thời gian: ${escapeTelegramHtml(formatVietnamDateTime(after.updatedAt))}`,
+      `Đồng bộ lúc: ${escapeTelegramHtml(formatVietnamDateTime(after.updatedAt))}`,
       params.actorName ? `Nguồn cập nhật: ${escapeTelegramHtml(params.actorName)}` : null,
       `Ghi nhận: ${escapeTelegramHtml(transition.detail)}`,
       "",

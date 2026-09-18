@@ -142,14 +142,19 @@ function defectLine(defect: DigestDefect, options?: { includeStatus?: boolean; i
 
 async function loadShiftDefects(start: Date, end: Date) {
   return Promise.all([
+    // "Phát sinh trong ca" phải dựa vào createdAt (lúc hệ thống thực sự ghi
+    // nhận phiếu, dù đồng bộ từ Sheet hay tạo trên web) chứ không phải
+    // detectedAt — detectedAt chỉ là NGÀY lấy từ Sheet (không có giờ), luôn
+    // được chuẩn hoá về ~7h sáng giờ VN nên không bao giờ rơi vào khung ca
+    // chiều/ca đêm, khiến hai ca đó luôn báo 0 phiếu dù thực tế có phát sinh.
     prisma.defect.findMany({
       where: {
-        detectedAt: { gte: start, lt: end },
+        createdAt: { gte: start, lt: end },
         cancelledAt: null,
         syncState: { not: "MISSING" },
       },
       select: DEFECT_DIGEST_SELECT,
-      orderBy: [{ detectedAt: "desc" }, { id: "asc" }],
+      orderBy: [{ createdAt: "desc" }, { id: "asc" }],
     }),
     prisma.defect.findMany({
       where: {
@@ -192,7 +197,7 @@ export async function buildShiftDefectDigest(now: Date = new Date()) {
   const [created, completed] = await loadShiftDefects(window.start, window.end);
   created.sort((a, b) =>
     severityRank(a.severity) - severityRank(b.severity)
-    || (b.detectedAt?.getTime() ?? b.createdAt.getTime()) - (a.detectedAt?.getTime() ?? a.createdAt.getTime())
+    || b.createdAt.getTime() - a.createdAt.getTime()
   );
   const shownCreated = created.slice(0, SHIFT_NEW_MAX_ITEMS);
   const shownCompleted = completed.slice(0, SHIFT_COMPLETED_MAX_ITEMS);
