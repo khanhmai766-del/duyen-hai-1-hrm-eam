@@ -960,12 +960,16 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
       // Khóa bước KHÁC khóa phân quyền: hai bước cuối đều do Thống kê làm nhưng nội dung sửa
       // khác hẳn nhau, nên "statsExport" mượn quyền "stats" chứ không gộp làm một.
       const permissionByStep = {
-        confirm: "confirm", stats: "stats", receive: "receive", use: "use", accept: "accept",
+        confirm: "confirm", vhvReceive: "vhvReceive", stats: "stats", receive: "receive", use: "use", accept: "accept",
         statsExport: "stats", recoveryDoc: "recoveryReturn", settle: "settle",
       } as const;
       const permission = permissionByStep[step as keyof typeof permissionByStep];
       if (!permission) return fail("Bước chỉnh sửa không hợp lệ");
-      if (!stepAllowedWithMap(await getWorkflowRoleMap(), permission, user))
+      const workflowRoleMap = await getWorkflowRoleMap();
+      const canEditStep = step === "vhvReceive"
+        ? assignedOrConfiguredStep(workflowRoleMap, "vhvReceive", user, isAssignedPosition(user, t))
+        : stepAllowedWithMap(workflowRoleMap, permission, user);
+      if (!canEditStep)
         return fail("Bạn không có quyền chỉnh sửa bước này (Quản trị phân quyền ở mục Phân quyền quy trình)", 403);
       let before = "";
       let after = "";
@@ -975,7 +979,60 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
          "statsExport" bên dưới, chỗ duy nhất đặt cờ này. */
       let reissueBbntDo = false;
 
-      if (step === "confirm") {
+      if (step === "vhvReceive") {
+        if (t.type !== "UNG" || !t.vhvReceivedAt || t.vhvReceivedQuantity == null) {
+          return fail("Bước VHV lãnh vật tư chưa hoàn thành");
+        }
+        const value = Math.trunc(Number(body.quantity));
+        const vhvReceivedByName = String(body.vhvReceivedByName || "").trim();
+        if (!Number.isFinite(value) || value <= 0) return fail("Số lượng vật tư đã lãnh phải lớn hơn 0");
+        if (!vhvReceivedByName) return fail("Vui lòng nhập tên VHV lãnh vật tư");
+        const item = t.items[0];
+        if (!item) return fail("Phiếu chưa có vật tư");
+
+        const finalQuantityConfirmed = t.receivedQuantity != null;
+        const usedQuantity = t.usedQuantity ?? 0;
+        if (!finalQuantityConfirmed && value < usedQuantity) {
+          return fail(`Không thể giảm số lượng VHV lãnh thấp hơn số lượng đã sử dụng (${usedQuantity} ${item.material.unit})`);
+        }
+        const delta = value - t.vhvReceivedQuantity;
+        before = `VHV lãnh ${t.vhvReceivedQuantity} ${item.material.unit}; người lãnh: ${t.vhvReceivedByName || "—"}`;
+        after = `VHV lãnh ${value} ${item.material.unit}; người lãnh: ${vhvReceivedByName}`;
+
+        up = await prisma.$transaction(async (tx) => {
+          // Khi Thống kê chưa chốt số cuối, vhvReceivedQuantity chính là số đã đưa vào lô
+          // và tồn Hiện có. Sau khi đã có receivedQuantity, tổng lô đã được bù về số chốt;
+          // sửa lại dấu vết VHV lúc đó tuyệt đối không được cộng/trừ kho lần thứ hai.
+          if (!finalQuantityConfirmed && delta) {
+            try {
+              await receiveIntoLot(tx, {
+                materialCode: item.material.code,
+                stockUnit: lotStockUnit(item.material.category, t.unit),
+                quantity: delta,
+                ticketId: t.id,
+                erpCode: item.erpCode,
+              });
+            } catch (error) {
+              throw fail((error as Error).message);
+            }
+            await syncMaterialQuantity(
+              tx,
+              item.material.code,
+              sharedCodesOf(item.material),
+              stockSyncOptions(item.material.category, t.unit),
+            );
+          }
+          return tx.materialTicket.update({
+            where: { id: t.id },
+            data: {
+              vhvReceivedQuantity: value,
+              vhvReceivedByName,
+              ...(!finalQuantityConfirmed ? { remainingQuantity: value - usedQuantity } : {}),
+            },
+            include: ITEM_INCLUDE,
+          });
+        });
+      } else if (step === "confirm") {
         if (!t.confirmedAt) return fail("Bước Trưởng ca/Trưởng kíp xác nhận chưa hoàn thành");
         const value = String(body.bbktNumber || "").trim();
         const reason = String(body.note || "").trim();
@@ -1380,6 +1437,11 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
       // Các file còn lại (nếu đã tồn tại) được tạo lại từ dữ liệu vừa lưu.
       const skipRefreshedInStep = step === "accept"
         ? new Set<keyof ExportedDocumentUrls>(["bbktDocUrl", "docUrl", "recoveryDocUrl"])
+        // Dữ liệu ở đây là dấu vết VHV lãnh ban đầu. Sau khi Thống kê chốt, chứng từ dùng
+        // receivedQuantity/receivedByName; in lại các tệp vì sửa dấu vết này vừa thừa vừa có
+        // nguy cơ làm mất ảnh hiện trường đã hết thời hạn lưu.
+        : step === "vhvReceive"
+        ? new Set<keyof ExportedDocumentUrls>(["proposalDocUrl", "bbktDocUrl", "recoveryDocUrl", "docUrl"])
         // Đại diện SCCN chỉ xuất hiện trên BBNT D-Office; ĐXVT, BBNT ký tay và BBTHVT không
         // mang tên người đó nên in lại chúng là ghi đè vô cớ lên tệp đã phát hành.
         : step === "statsExport"

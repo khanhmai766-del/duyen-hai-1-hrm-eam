@@ -2,17 +2,23 @@ import type { Prisma, WorkPermit } from "@prisma/client";
 import { fail } from "@/lib/api";
 import { permitText } from "@/lib/server/work-permits";
 
-/** Ghi nhận người cấp thật từ phiên đăng nhập; CHTT nhà thầu từ danh bạ dùng chung. */
+/** Điền sẵn người cấp từ phiên đăng nhập (cho phép sửa); CHTT nhà thầu từ danh bạ dùng chung. */
 export async function resolvePermitIdentities(
   tx: Prisma.TransactionClient,
   body: Record<string, unknown>,
   user: { id: string; name?: string | null },
   before?: WorkPermit,
 ) {
-  if (body.teamType !== "CONTRACTOR") return { ...body, issuerUserId: null, commanderPersonId: null };
-  // Người sửa phiếu đã cấp không trở thành người cấp mới. Phiếu cũ giữ nguyên tên.
-  const issuerName = before && before.status !== "DRAFT" ? before.issuerName : user.name ?? "";
-  const issuerUserId = before && before.status !== "DRAFT" ? before.issuerUserId : user.id;
+  // Mặc định giao diện điền người cấp theo tài khoản đăng nhập, nhưng cho phép sửa lại theo
+  // người cấp thực tế. `issuerUserId` chỉ neo khi tên vẫn là người thao tác; nếu nhập một tên
+  // khác thì để null, tránh gắn sai ID tài khoản. Mọi lần sửa vẫn có actor trong History/Audit.
+  const issuerName = permitText(body, "issuerName") || user.name?.trim() || "";
+  const issuerUserId = before && before.status !== "DRAFT" && issuerName === before.issuerName
+    ? before.issuerUserId
+    : issuerName === user.name?.trim() ? user.id : null;
+  if (body.teamType !== "CONTRACTOR") {
+    return { ...body, issuerName, issuerUserId, commanderPersonId: null };
+  }
   const commanderPersonId = permitText(body, "commanderPersonId", 100) || null;
   if (!commanderPersonId) {
     // Nháp có thể hủy trực tiếp trước khi chọn CHTT; khi cấp thực tế phải chọn danh bạ.

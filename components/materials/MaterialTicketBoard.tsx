@@ -2006,7 +2006,12 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
 	               (chưa `done`) nên luật cũ khoá cứng, không còn đường sửa ngoài việc chờ hết phiếu. */
 	            const proposalNumberEditable = s.key === "CHO_PHIEU__XUAT_KHO" && cur
 	              && t.status === "CHO_XAC_NHAN_PHAT" && !!t.proposalNumber;
-	            const reviewable = done || proposalNumberEditable || (t.type === "UNG" && s.key === "CHO_HOAN_THIEN" && !!t.bbktNumber);
+	            // Sau khi VHV xác nhận, phiếu thường còn đứng ở trạng thái CHO_PHIEU_YCSC
+	            // và `flowStatusKey` vẫn quy về chính ô này. Vì vậy ô chưa được coi là `done`,
+	            // nhưng dữ liệu lãnh đã tồn tại và phải mở được để sửa ngay.
+	            const vhvReceiveEditable = s.key === "VHV_LANH_VAT_TU" && !!t.vhvReceivedAt;
+	            const reviewable = done || proposalNumberEditable || vhvReceiveEditable
+	              || (t.type === "UNG" && s.key === "CHO_HOAN_THIEN" && !!t.bbktNumber);
 	            const waitingForRepairRequest = t.type === "DE_XUAT" && t.status === "CHO_PHIEU_YCSC" && cur;
 	            const caption = waitingForRepairRequest
 	              ? "Cần tạo hoặc gắn SYC để tiếp tục"
@@ -2189,6 +2194,7 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
 const STEP_EDIT = {
   CHO_XAC_NHAN: { step: "confirm", permission: "confirm" },
   CHO_THONG_KE: { step: "confirm", permission: "confirm" },
+  VHV_LANH_VAT_TU: { step: "vhvReceive", permission: "vhvReceive" },
   CHO_PHIEU__XUAT_KHO: { step: "stats", permission: "stats" },
   CHO_XAC_NHAN_PHAT: { step: "stats", permission: "stats" },
   NHAN_VAT_TU: { step: "receive", permission: "receive" },
@@ -2207,13 +2213,24 @@ function StepReviewDialog({ t, viewer, stepKey, onClose }: { t: MaterialTicket; 
    * ĐXVT) đều do Thống kê làm nhưng sửa hai nhóm dữ liệu không liên quan gì nhau.
    */
   const stepEdit = STEP_EDIT[stepKey as keyof typeof STEP_EDIT] ?? null;
-  const permission: keyof NonNullable<TicketViewer["steps"]> | null = stepEdit?.permission ?? null;
-  const canEdit = !!permission && !!viewer?.steps?.[permission];
   const editStep = stepEdit?.step ?? null;
+  const permission: keyof NonNullable<TicketViewer["steps"]> | null = stepEdit?.permission ?? null;
+  // Bước VHV lãnh dùng luật riêng: cương vị được giao phiếu luôn thao tác được, cấu hình
+  // phân quyền chỉ mở thêm người làm hộ. Không thể chỉ đọc `steps.vhvReceive`, vì khi bước
+  // đã được cấu hình cho quản lý thì chính VHV cầm phiếu có thể không nằm trong danh sách đó.
+  const canEdit = editStep === "vhvReceive"
+    ? Boolean(viewer && (
+        viewer.isAdmin
+        || samePosition(viewer.position, t.assignedPosition)
+        || (viewer.steps?.vhvReceiveConfigured && viewer.steps.vhvReceive)
+      ))
+    : !!permission && !!viewer?.steps?.[permission];
   const [proposalNumber, setProposalNumber] = useState(t.proposalNumber ?? "");
   const [proposalReceiverNameReview, setProposalReceiverNameReview] = useState(t.proposalReceiverName ?? "");
   /** Ngày ghi trên tờ phiếu ĐXVT — in vào ô "ngày ……" của BBNT D-Office. */
   const [proposalDateReview, setProposalDateReview] = useState(() => dateInputValue(t.proposalDate));
+  const [vhvReceivedQuantityReview, setVhvReceivedQuantityReview] = useState(t.vhvReceivedQuantity ?? 1);
+  const [vhvReceivedByNameReview, setVhvReceivedByNameReview] = useState(t.vhvReceivedByName ?? "");
   /*
    * Phiếu thuộc luồng hóa chất? Dùng cho CẢ HAI bước mà hộp Xem lại rẽ nhánh:
    *   • "stats"   chốt lịch giao hàng + khối lượng giao, không phải số phiếu ĐXVT
@@ -2302,6 +2319,10 @@ function StepReviewDialog({ t, viewer, stepKey, onClose }: { t: MaterialTicket; 
     if (!editStep) return;
     const payload: Record<string, unknown> = { action: "editStep", step: editStep };
     if (editStep === "confirm") Object.assign(payload, { note: reason.trim(), bbktNumber });
+    if (editStep === "vhvReceive") Object.assign(payload, {
+      quantity: vhvReceivedQuantityReview,
+      vhvReceivedByName: vhvReceivedByNameReview.trim(),
+    });
     if (editStep === "stats") {
       Object.assign(
         payload,
@@ -2354,7 +2375,8 @@ function StepReviewDialog({ t, viewer, stepKey, onClose }: { t: MaterialTicket; 
       // Hai bước cuối không đụng tới biên bản (trừ khi chủ động chọn in lại BBNT D-Office),
       // nên đừng hứa "đã cập nhật biên bản đã xuất" cho một tệp không hề được ghi lại.
       toast.success(
-        editStep === "recoveryDoc" ? "Đã lưu ngày của bước trả phiếu vật tư thu hồi"
+        editStep === "vhvReceive" ? "Đã cập nhật thông tin VHV lãnh vật tư"
+        : editStep === "recoveryDoc" ? "Đã lưu ngày của bước trả phiếu vật tư thu hồi"
         : editStep === "settle" ? "Đã lưu số BBNT DO và đồng bộ sang lịch sử thay thế"
         : editStep === "statsExport" ? (t.settledAt && !reissueBbntDo
             ? "Đã lưu đại diện SCCN; giữ nguyên tệp BBNT D-Office đã phát hành"
@@ -2380,6 +2402,21 @@ function StepReviewDialog({ t, viewer, stepKey, onClose }: { t: MaterialTicket; 
           <label>Số lượng đã xác nhận<input value={`${t.items[0]?.quantity ?? 0} ${t.items[0]?.material.unit ?? ""}`} disabled /></label>
           <label>Lý do *<input value={reason} disabled={!canEdit} onChange={(e) => setReason(e.target.value)} placeholder="Nhập lý do thay thế vật tư" /></label>
           <label>Số biên bản kiểm tra (nếu có)<input value={bbktNumber} disabled={!canEdit} onChange={(e) => setBbktNumber(e.target.value)} placeholder="Chưa nhập số biên bản kiểm tra (ngày dd/mm/yyyy)" /></label>
+        </>}
+        {editStep === "vhvReceive" && <>
+          <div className="review-accept-grid">
+            <label>Số lượng VHV đã lãnh ({t.items[0]?.material.unit ?? ""}) *
+              <input type="number" min={1} value={vhvReceivedQuantityReview} disabled={!canEdit} onChange={(e) => setVhvReceivedQuantityReview(Number(e.target.value))} />
+            </label>
+            <label>Tên VHV lãnh vật tư *
+              <input value={vhvReceivedByNameReview} disabled={!canEdit} onChange={(e) => setVhvReceivedByNameReview(e.target.value)} placeholder="Nhập tên VHV lãnh vật tư" />
+            </label>
+          </div>
+          <p className="hint">
+            {t.receivedQuantity == null
+              ? "Số lượng chênh lệch sẽ được cập nhật vào tồn Hiện có. Không thể giảm thấp hơn phần vật tư đã sử dụng."
+              : "Thống kê đã chốt số lượng lãnh cuối cùng. Lần sửa này chỉ cập nhật thông tin bước VHV, không thay đổi tồn Hiện có hoặc ERP."}
+          </p>
         </>}
         {editStep === "stats" && isChemicalStats && <>
           <label>Lịch giao hàng<input type="date" value={deliveryDateReview} disabled={!canEdit} onChange={(e) => setDeliveryDateReview(e.target.value)} /></label>
@@ -2593,7 +2630,7 @@ function StepReviewDialog({ t, viewer, stepKey, onClose }: { t: MaterialTicket; 
             </span>
           )}
           <button className="btn ghost" onClick={onClose}>Đóng</button>
-          {canEdit && <button className="btn primary" disabled={act.isPending || missingUsagePhotos || (editStep === "confirm" && !reason.trim()) || (editStep === "stats" && !isChemicalStats && !proposalNumber.trim()) || (editStep === "accept" && (!pctNumber.trim() || !chiHuyName.trim() || !completionNote.trim() || !workStartedAt || !workEndedAt)) || (editStep === "statsExport" && (!sccnRepresentativeReview || !sccnPositionReview)) || (editStep === "settle" && !bbntDoNumberReview.trim()) || (editStep === "recoveryDoc" && !docSentDateReview)} onClick={save}>{act.isPending ? <Loader2 className="spin" size={14} /> : <Pencil size={14} />} Lưu chỉnh sửa</button>}
+          {canEdit && <button className="btn primary" disabled={act.isPending || missingUsagePhotos || (editStep === "confirm" && !reason.trim()) || (editStep === "vhvReceive" && (!Number.isFinite(vhvReceivedQuantityReview) || vhvReceivedQuantityReview <= 0 || !vhvReceivedByNameReview.trim())) || (editStep === "stats" && !isChemicalStats && !proposalNumber.trim()) || (editStep === "accept" && (!pctNumber.trim() || !chiHuyName.trim() || !completionNote.trim() || !workStartedAt || !workEndedAt)) || (editStep === "statsExport" && (!sccnRepresentativeReview || !sccnPositionReview)) || (editStep === "settle" && !bbntDoNumberReview.trim()) || (editStep === "recoveryDoc" && !docSentDateReview)} onClick={save}>{act.isPending ? <Loader2 className="spin" size={14} /> : <Pencil size={14} />} Lưu chỉnh sửa</button>}
         </div>
       </div>
     </div>

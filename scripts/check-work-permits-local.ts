@@ -107,18 +107,18 @@ async function main() {
       expect(await request("/api/work-permits", "POST", { ...base, number: `${prefix}_BAD_CHTT`, commanderPersonId }), 400, "Từ chối CHTT không hợp lệ");
     }
     expect(await request("/api/work-permits/people", "POST", { ...a, code: a.code.toLowerCase() }), 409, "Mã người trùng");
-    const co = await createPermit("SAME"), dien = await createPermit("SAME", { kind: "ELECTRICAL", workType: "UNPLANNED" }), incident = await createPermit("INCIDENT", { workType: "INCIDENT" }), internal = await createPermit("INTERNAL", { teamType: "INTERNAL" });
+    const co = await createPermit("SAME", { issuerName: "" }), dien = await createPermit("SAME", { kind: "ELECTRICAL", workType: "UNPLANNED" }), incident = await createPermit("INCIDENT", { workType: "INCIDENT" }), internal = await createPermit("INTERNAL", { teamType: "INTERNAL" });
     assert.equal(co.issuerName, `${prefix} MANAGER`); assert.equal(co.issuerUserId, userIds[0]);
     assert.equal(co.commanderName, a.name); assert.equal(co.commanderPersonId, a.id); checks += 4;
     const draft = await createPermit("DRAFT", { status: "DRAFT", issuedAt: null, commanderPersonId: "", commanderName: "Tên không được chọn" });
     assert.equal(draft.commanderName, ""); checks++;
     await update(draft.id, { status: "ISSUED", issuedAt: at(0), commanderPersonId: b.id, issuerUserId: "FAKE", issuerName: "Tên cấp giả", commanderName: "CHTT giả" }, 200);
     const issuedDraft = await detail(draft.id);
-    assert.equal(issuedDraft.issuerUserId, userIds[0]); assert.equal(issuedDraft.commanderName, b.name); checks += 2;
+    assert.equal(issuedDraft.issuerUserId, null); assert.equal(issuedDraft.issuerName, "Tên cấp giả"); assert.equal(issuedDraft.commanderName, b.name); checks += 3;
     const writerTwo = new Map<string, string>(); await login("MANAGER", writerTwo);
     const editIdentity = await request(`/api/work-permits/${issuedDraft.id}`, "PUT", { ...issuedDraft, issuerUserId: userIds[2], issuerName: "Đổi người cấp", commanderName: "Đổi tên giả" }, writerTwo);
     expect(editIdentity, 200, "Người khác cập nhật phiếu đã cấp");
-    assert.equal(editIdentity.data.issuerUserId, userIds[0]); assert.equal(editIdentity.data.issuerName, issuedDraft.issuerName); assert.equal(editIdentity.data.commanderName, b.name); checks += 3;
+    assert.equal(editIdentity.data.issuerUserId, null); assert.equal(editIdentity.data.issuerName, "Đổi người cấp"); assert.equal(editIdentity.data.commanderName, b.name); checks += 3;
     assert.equal(co.format, "PAPER"); assert.equal(internal.format, "ELECTRONIC"); checks += 2;
     const internalPaper = await createPermit("INTERNAL_PAPER", { teamType: "INTERNAL", format: "PAPER" });
     assert.equal((await detail(internalPaper.id)).format, "PAPER"); checks++;
