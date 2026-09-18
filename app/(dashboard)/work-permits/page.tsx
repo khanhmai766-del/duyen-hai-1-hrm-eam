@@ -295,6 +295,39 @@ function SycPicker({ kind, position, onClose, onPick }: { kind: PermitKind; posi
   const list = useDefects({ section: kind === "MECHANICAL" ? "co" : "dien", q: search, priorityPosition: position, page, limit: 10 });
   return <Dialog open onOpenChange={v => { if (!v) onClose(); }}><DialogContent className="max-w-2xl"><DialogTitle>Chọn SYC sửa chữa</DialogTitle><DialogDescription>{position ? `Ưu tiên SYC của cương vị ${position}. Tìm kiếm vẫn trả cả SYC thuộc cương vị khác.` : "Đang hiển thị SYC của tất cả cương vị."} Thông tin được sao chép vào sổ PCT để đối chiếu.</DialogDescription><input aria-label="Tìm SYC" className={control} placeholder="Tìm số SYC, nội dung, thiết bị, cương vị…" value={q} onChange={e => setQ(e.target.value)} />{list.isError ? <p role="alert">{list.error.message}</p> : list.isPending ? <p>Đang tải SYC…</p> : <div className="space-y-2">{list.data?.data.map(d => { const preferred = Boolean(position && announcementPositionsMatch(d.system, position)); return <button disabled={!d.requestNumber || list.isFetching} className={`w-full rounded-lg border p-3 text-left hover:bg-muted disabled:opacity-50 ${preferred ? "border-blue-300 bg-blue-50/60" : "border-border"}`} key={d.id} onClick={() => onPick(d)}><div className="flex flex-wrap items-center justify-between gap-2"><b>{d.requestNumber || "Chưa cấp số"} · {d.unit}</b>{preferred && <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-800">Đúng cương vị ưu tiên</span>}</div><p className="line-clamp-2 text-sm">{d.content || "Chưa có nội dung"}</p><p className="text-xs text-muted-foreground">{d.system || "Chưa ghi cương vị"} · {d.deviceSeq} · {d.node?.name || d.sourceDeviceRaw || d.device}</p></button>; })}{!list.data?.data.length && <p className="p-4 text-center">Không tìm thấy SYC phù hợp.</p>}</div>}<div className="flex justify-end gap-2"><Button variant="outline" disabled={page <= 1 || list.isFetching} onClick={() => setPage(page - 1)}>Trước</Button><Button variant="outline" disabled={!list.data || page >= list.data.meta.totalPages || list.isFetching} onClick={() => setPage(page + 1)}>Sau</Button></div></DialogContent></Dialog>;
 }
+/**
+ * Chi tiết phiếu gom trường theo NHÓM thay vì đổ phẳng toàn bộ PERMIT_FIELD_LABELS: một phiếu có
+ * hơn 20 trường, liệt kê phẳng thì người tra phải đọc hết mới thấy ô mình cần. `content` không nằm
+ * trong nhóm nào vì được in ngay đầu hộp; `number`/`year`/`status`/`format` đã nằm ở tiêu đề và chip.
+ */
+const PERMIT_DETAIL_GROUPS: Array<{ title: string; keys: string[] }> = [
+  { title: "Công việc", keys: ["location", "workScope", "unit", "position", "workDate", "workType", "kind", "disciplines", "repairRequestNumber", "registrationNumber"] },
+  { title: "Nhân sự", keys: ["issuerName", "commanderName", "teamName", "teamType", "workerCount", "leaderName", "electricalSafetySupervisorName", "authorizerName", "members"] },
+  { title: "Mốc thời gian và kết quả", keys: ["plannedStartAt", "plannedEndAt", "issuedAt", "authorizedAt", "closedAt", "result", "statusReason", "note"] },
+];
+const PERMIT_DETAIL_WIDE = new Set(["workScope", "result", "note", "statusReason", "members"]);
+
+function PermitDetailFields({ row }: { row: PermitRow }) {
+  const [showEmpty, setShowEmpty] = useState(false);
+  const shown = (key: string) => {
+    if (row.teamType !== "CONTRACTOR" && ["authorizerName", "authorizedAt", "workerCount", "members"].includes(key) && !row[key as keyof PermitRow]) return false;
+    return key in PERMIT_FIELD_LABELS;
+  };
+  const filled = (key: string) => permitValue(key, key === "format" ? effectivePermitFormat(row) : row[key as keyof PermitRow]) !== "—";
+  const groups = PERMIT_DETAIL_GROUPS.map(group => ({ ...group, keys: group.keys.filter(key => shown(key) && (showEmpty || filled(key))) })).filter(group => group.keys.length);
+  const emptyCount = PERMIT_DETAIL_GROUPS.flatMap(group => group.keys).filter(key => shown(key) && !filled(key)).length;
+  return <div className="space-y-3">
+    {groups.map(group => <section key={group.title}>
+      <h4 className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{group.title}</h4>
+      <dl className="grid grid-cols-1 gap-x-6 gap-y-1.5 rounded-lg border border-border px-3 py-2.5 sm:grid-cols-2">{group.keys.map(key => <div key={key} className={`flex flex-col gap-0.5 border-b border-border/60 py-1 last:border-0 sm:flex-row sm:items-baseline sm:gap-3 ${PERMIT_DETAIL_WIDE.has(key) ? "sm:col-span-2" : ""}`}>
+        <dt className="shrink-0 text-xs text-muted-foreground sm:w-44">{PERMIT_FIELD_LABELS[key]}</dt>
+        <dd className={`min-w-0 whitespace-pre-wrap break-words text-[13px] ${filled(key) ? "font-medium text-foreground" : "text-muted-foreground"}`}>{permitValue(key, row[key as keyof PermitRow])}</dd>
+      </div>)}</dl>
+    </section>)}
+    {emptyCount > 0 && <Button type="button" size="sm" variant="ghost" className="h-7 px-2 text-xs text-muted-foreground" onClick={() => setShowEmpty(value => !value)}>{showEmpty ? "Ẩn ô chưa ghi" : `Hiện ${emptyCount} ô chưa ghi`}</Button>}
+  </div>;
+}
+
 function PermitDetail({ id, canIssue: listCanIssue, canExecute: listCanExecute, onClose, onEdit }: { id: string; canIssue: boolean; canExecute: boolean; onClose: () => void; onEdit: (r: PermitRow) => void }) {
   const query = useWorkPermit(id);
   const [executing, setExecuting] = useState(false); const row = query.data?.data;
@@ -313,5 +346,28 @@ function PermitDetail({ id, canIssue: listCanIssue, canExecute: listCanExecute, 
       const a = document.createElement("a"); a.href = url; a.download = file.filename; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch (e) { toast.error(e instanceof Error ? e.message : "Không thể tải mẫu phiếu"); }
   }
-  return <Dialog open onOpenChange={v => { if (!v && !cancelDraft.isPending) onClose(); }}><DialogContent className="max-w-3xl"><DialogTitle>{row ? `Phiếu công tác ${formatPermitNumber(row)}` : "Chi tiết phiếu công tác"}</DialogTitle><DialogDescription>Thông tin ghi sổ và lịch sử thay đổi của phiếu.</DialogDescription>{query.isError ? <p role="alert">{query.error.message}</p> : !row ? <p>Đang tải phiếu…</p> : <><div className="flex flex-wrap items-center justify-between gap-3"><div><div className="flex flex-wrap items-center gap-2"><Status value={row.status} /><PermitFormat permit={row} /></div>{row.teamType === "CONTRACTOR" && <PermitProgress value={row.progress} />}</div><div className="flex flex-wrap items-center gap-2">{effectivePermitFormat(row) === "PAPER" && <Button variant="outline" disabled={documentExport.isPending || ["DRAFT", "CANCELLED"].includes(row.status)} onClick={downloadTemplate}><Download />{documentExport.isPending ? "Đang điền mẫu…" : "Tải mẫu PCT giấy (Word)"}</Button>}{canIssue && row.status === "DRAFT" && <Button variant="destructive" disabled={cancelDraft.isPending} onClick={() => void cancelDraftNow(row)}>{cancelDraft.isPending ? "Đang hủy…" : "Hủy nháp"}</Button>}{canIssue && !["CLOSED", "CANCELLED"].includes(row.status) && !(row.teamType === "CONTRACTOR" && row.status === "ACTIVE") && <Button onClick={() => onEdit(row)}>Chỉnh sửa / cấp phiếu<ArrowRight /></Button>}</div></div>{effectivePermitFormat(row) === "PAPER" && <p className="text-xs text-muted-foreground">{["DRAFT", "CANCELLED"].includes(row.status) ? `Cấp phiếu (chuyển trạng thái "Đã cấp") trước khi tải mẫu Word.` : "Mẫu điền theo thông tin đã lưu và phân công biện pháp. Các ô kiểm tra, chữ ký và thông tin chưa ghi được để trống để hoàn thiện."}</p>}{effectivePermitFormat(row) === "ELECTRONIC" && <NkvhLinkPanel key={`${row.id}-${row.version}-nkvh`} permit={row} canEdit={canIssue || canExecute} />}<ContractorSessions key={`${row.id}-${row.version}-sessions`} permit={row} canExecute={canExecute} />{canExecute && !["DRAFT", "CLOSED", "CANCELLED"].includes(row.status) && !(row.teamType === "CONTRACTOR" && row.status === "ISSUED") && <Button variant="outline" onClick={() => setExecuting(true)}>{row.teamType === "INTERNAL" ? "Ghi nhận đóng phiếu" : "Thực hiện / cập nhật tiến độ"}</Button>}{executing && canExecute && <PermitExecutionDialog key={row.version} permit={row} onClose={() => setExecuting(false)} />}<dl className="grid gap-4 rounded-xl border border-border p-4 sm:grid-cols-2">{Object.entries(PERMIT_FIELD_LABELS).filter(([key]) => !["status", "number", "year", "safetyItems", "nkvhPctId"].includes(key) && (row.teamType === "CONTRACTOR" || !["authorizerName", "authorizedAt", "workerCount", "members"].includes(key) || !!row[key as keyof PermitRow])).map(([key, label]) => <div key={key} className={["content", "result", "note", "statusReason", "workScope"].includes(key) ? "sm:col-span-2" : ""}><dt className="text-xs text-muted-foreground">{label}</dt><dd className="mt-1 whitespace-pre-wrap break-words text-sm font-medium">{permitValue(key, key === "format" ? effectivePermitFormat(row) : row[key as keyof PermitRow])}</dd></div>)}</dl>{effectivePermitFormat(row) === "PAPER" && <PermitSafetyReadOnly value={row.safetyItems ?? []} />}<PermitHistoryPanel key={`${row.id}-${row.version}-history`} permit={row} /></>}</DialogContent></Dialog>;
+  const paper = row ? effectivePermitFormat(row) === "PAPER" : false;
+  const summary = "flex cursor-pointer list-none items-center justify-between gap-2 rounded-lg border border-border px-3 py-2 text-[13px] font-semibold marker:hidden hover:bg-muted/40";
+  return <Dialog open onOpenChange={v => { if (!v && !cancelDraft.isPending) onClose(); }}><DialogContent className="max-w-3xl">
+    <DialogTitle className="text-base">{row ? `Phiếu công tác ${formatPermitNumber(row)}` : "Chi tiết phiếu công tác"}</DialogTitle>
+    <DialogDescription className="sr-only">Thông tin ghi sổ và lịch sử thay đổi của phiếu.</DialogDescription>
+    {query.isError ? <p role="alert">{query.error.message}</p> : !row ? <p>Đang tải phiếu…</p> : <div className="space-y-4">
+      <div className="flex flex-wrap items-start justify-between gap-2 border-b border-border pb-3">
+        <div className="flex flex-wrap items-center gap-2"><Status value={row.status} /><PermitFormat permit={row} /><span className="text-xs text-muted-foreground">{PERMIT_KINDS[row.kind]} · {PERMIT_UNITS[row.unit]}{row.position ? ` · ${row.position}` : ""} · {permitValue("workDate", row.workDate)}</span>{row.teamType === "CONTRACTOR" && <PermitProgress value={row.progress} />}</div>
+        <div className="flex flex-wrap items-center gap-2">
+          {paper && <Button size="sm" variant="outline" className="h-8 text-xs" disabled={documentExport.isPending || ["DRAFT", "CANCELLED"].includes(row.status)} title={["DRAFT", "CANCELLED"].includes(row.status) ? "Cấp phiếu trước khi tải mẫu Word" : "Mẫu điền theo thông tin đã lưu; ô kiểm tra và chữ ký để trống"} onClick={downloadTemplate}><Download />{documentExport.isPending ? "Đang điền mẫu…" : "Mẫu Word"}</Button>}
+          {canExecute && !["DRAFT", "CLOSED", "CANCELLED"].includes(row.status) && !(row.teamType === "CONTRACTOR" && row.status === "ISSUED") && <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => setExecuting(true)}>{row.teamType === "INTERNAL" ? "Ghi nhận đóng phiếu" : "Cập nhật tiến độ"}</Button>}
+          {canIssue && row.status === "DRAFT" && <Button size="sm" variant="destructive" className="h-8 text-xs" disabled={cancelDraft.isPending} onClick={() => void cancelDraftNow(row)}>{cancelDraft.isPending ? "Đang hủy…" : "Hủy nháp"}</Button>}
+          {canIssue && !["CLOSED", "CANCELLED"].includes(row.status) && !(row.teamType === "CONTRACTOR" && row.status === "ACTIVE") && <Button size="sm" className="h-8 text-xs" onClick={() => onEdit(row)}>Chỉnh sửa / cấp phiếu<ArrowRight /></Button>}
+        </div>
+      </div>
+      <div><p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{PERMIT_FIELD_LABELS.content}</p><p className="mt-0.5 whitespace-pre-wrap break-words text-sm font-semibold leading-5 text-foreground">{row.content || "—"}</p>{row.location && <p className="mt-0.5 text-xs text-muted-foreground">{PERMIT_FIELD_LABELS.location}: {row.location}</p>}</div>
+      {!paper && <NkvhLinkPanel key={`${row.id}-${row.version}-nkvh`} permit={row} canEdit={canIssue || canExecute} />}
+      <ContractorSessions key={`${row.id}-${row.version}-sessions`} permit={row} canExecute={canExecute} />
+      {executing && canExecute && <PermitExecutionDialog key={row.version} permit={row} onClose={() => setExecuting(false)} />}
+      <PermitDetailFields row={row} />
+      {paper && <details className="group"><summary className={summary}><span>Mối nguy và biện pháp an toàn ({row.safetyItems?.length ?? 0})</span><ChevronRight className="h-4 w-4 shrink-0 transition-transform group-open:rotate-90" /></summary><div className="mt-2 [&>section]:rounded-none [&>section]:border-0 [&>section]:p-0 [&>section>h3]:hidden"><PermitSafetyReadOnly value={row.safetyItems ?? []} /></div></details>}
+      <details className="group"><summary className={summary}><span>Lịch sử cập nhật ({row._count.history})</span><ChevronRight className="h-4 w-4 shrink-0 transition-transform group-open:rotate-90" /></summary><div className="mt-2 [&>section>h3]:hidden"><PermitHistoryPanel key={`${row.id}-${row.version}-history`} permit={row} /></div></details>
+    </div>}
+  </DialogContent></Dialog>;
 }
