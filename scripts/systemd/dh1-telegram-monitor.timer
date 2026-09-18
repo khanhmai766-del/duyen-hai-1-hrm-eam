@@ -1,0 +1,11 @@
+# Kiểm tra mỗi 5 phút. Endpoint có idempotency nên hai lần chạy không gửi trùng.
+[Unit]
+Description=DH1 — kiểm tra cảnh báo đồng bộ qua Telegram
+
+[Timer]
+OnCalendar=*-*-* *:00/5:00
+Persistent=true
+Unit=dh1-telegram@monitor.service
+
+[Install]
+WantedBy=timers.target

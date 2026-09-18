@@ -12,7 +12,18 @@ const SESSION_COOKIES = [
   "__Secure-next-auth.session-token",
 ];
 
-const PUBLIC_PATHS = ["/login", "/api/auth", "/api/webauthn", "/api/public", "/api/integrations/n8n", "/videos", "/public"];
+const PUBLIC_PATHS = [
+  "/login",
+  "/api/auth",
+  "/api/webauthn",
+  "/api/public",
+  "/api/integrations/n8n",
+  // Hai endpoint máy-máy này không dùng cookie; mỗi route tự kiểm bearer token riêng.
+  "/api/integrations/sync-monitor",
+  "/api/internal/telegram-jobs",
+  "/videos",
+  "/public",
+];
 const AUTHENTICATED_PUBLIC_PATHS = ["/public/equipment", "/public/devices"];
 
 export async function proxy(req: NextRequest) {

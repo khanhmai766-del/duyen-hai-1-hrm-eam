@@ -1125,6 +1125,48 @@ model DefectSyncOutbox {
   @@index([defectId, createdAt])
 }
 
+// Trạng thái tổng quát của các luồng đồng bộ để cảnh báo chủ động qua Telegram.
+// Các luồng khiếm khuyết được đối chiếu trực tiếp từ DefectSyncRun/Outbox; các
+// worker khác có thể báo trạng thái qua API integrations/sync-monitor.
+model SyncMonitor {
+  key                     String    @id
+  name                    String
+  enabled                 Boolean   @default(true)
+  expectedIntervalMinutes Int       @default(0)
+  alertAfterMinutes       Int       @default(30)
+  status                  String    @default("UNKNOWN") // UNKNOWN | RUNNING | SUCCESS | FAILED
+  lastStartedAt           DateTime?
+  lastSuccessAt           DateTime?
+  lastFailedAt            DateTime?
+  lastError               String?
+  incidentStartedAt       DateTime?
+  alertedAt               DateTime?
+  lastReminderAt          DateTime?
+  recoveredAt             DateTime?
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
+
+  @@index([enabled, status])
+}
+
+// Nhật ký idempotency theo loại thông báo + kỳ báo cáo + nơi nhận. Khóa duy
+// nhất ngăn systemd chạy bù hoặc hai request đồng thời gửi trùng một bản tin.
+model TelegramNotificationLog {
+  id           String    @id @default(cuid())
+  type         String
+  periodKey    String
+  chatId       String
+  status       String    @default("PENDING") // PENDING | SENT | FAILED
+  attemptCount Int       @default(0)
+  error        String?
+  attemptedAt  DateTime  @default(now())
+  sentAt       DateTime?
+  updatedAt    DateTime  @updatedAt
+
+  @@unique([type, periodKey, chatId])
+  @@index([status, attemptedAt])
+}
+
 // Snapshot danh sách thiết bị liên quan khi phiếu được chuyển sang lịch sử.
 model DefectHistoryRelatedDevice {
   historyId  String

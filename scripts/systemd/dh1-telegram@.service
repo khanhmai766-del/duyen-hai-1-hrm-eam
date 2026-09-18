@@ -1,0 +1,13 @@
+[Unit]
+Description=DH1 — tác vụ Telegram %i
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/var/www/dh1-app
+Environment=HOME=/root
+ExecStart=/usr/bin/node /var/www/dh1-app/scripts/run-telegram-job.mjs %i
+NoNewPrivileges=true
+PrivateTmp=true
+Nice=5
