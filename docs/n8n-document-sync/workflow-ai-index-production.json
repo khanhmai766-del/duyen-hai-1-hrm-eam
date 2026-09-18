@@ -11,10 +11,13 @@
     },
     {
       "parameters": {
-        "rule": { "interval": [{ "field": "cronExpression", "expression": "0 0 3 * * *" }] }
+        "rule": { "interval": [
+          { "field": "cronExpression", "expression": "0 5-55/5 14 * * *" },
+          { "field": "cronExpression", "expression": "0 0-40/5 15 * * *" }
+        ] }
       },
       "id": "document-ai-schedule",
-      "name": "Lập chỉ mục lúc 03 giờ",
+      "name": "Lập chỉ mục 20 PDF mỗi ngày",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
       "position": [-760, 180]
@@ -39,7 +42,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const response = $input.first().json;\nif (response.meta?.hasMore) throw new Error('Danh mục vượt 500 tài liệu; cần bật phân trang trước khi lập chỉ mục');\nconst rows = Array.isArray(response.data) ? response.data : [];\nreturn rows.filter((row) => row.driveSyncStatus === 'SYNCED' && row.driveFileId && row.aiIndexVersion !== row.desiredAiIndexVersion).map((row) => ({ json: { documentId: row.id, title: row.title, driveFileId: row.driveFileId, driveFileName: row.driveFileName, desiredAiIndexVersion: row.desiredAiIndexVersion } }));"
+        "jsCode": "const response = $input.first().json;\nif (response.meta?.hasMore) throw new Error('Danh mục vượt 500 tài liệu; cần bật phân trang trước khi lập chỉ mục');\nconst rows = Array.isArray(response.data) ? response.data : [];\nconst candidates = rows.filter((row) => row.driveSyncStatus === 'SYNCED' && row.driveFileId && row.aiIndexVersion !== row.desiredAiIndexVersion);\ncandidates.sort((left, right) => Number(Boolean(left.aiIndexError)) - Number(Boolean(right.aiIndexError)));\nreturn candidates.slice(0, 1).map((row) => ({ json: { documentId: row.id, title: row.title, driveFileId: row.driveFileId, driveFileName: row.driveFileName, desiredAiIndexVersion: row.desiredAiIndexVersion } }));"
       },
       "id": "document-ai-filter",
       "name": "Chỉ lấy PDF cần cập nhật",
@@ -99,20 +102,28 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.4,
       "position": [480, 180],
-      "retryOnFail": true,
-      "maxTries": 3,
-      "waitBetweenTries": 10000,
       "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "await new Promise((resolve) => setTimeout(resolve, 30000));\nreturn $input.all();"
+      },
+      "id": "document-ai-throttle",
+      "name": "Giãn nhịp Gemini 30 giây",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [720, 180]
     }
   ],
   "connections": {
     "Chạy thủ công": { "main": [[{ "node": "Đọc trạng thái tài liệu", "type": "main", "index": 0 }]] },
-    "Lập chỉ mục lúc 03 giờ": { "main": [[{ "node": "Đọc trạng thái tài liệu", "type": "main", "index": 0 }]] },
+    "Lập chỉ mục 20 PDF mỗi ngày": { "main": [[{ "node": "Đọc trạng thái tài liệu", "type": "main", "index": 0 }]] },
     "Đọc trạng thái tài liệu": { "main": [[{ "node": "Chỉ lấy PDF cần cập nhật", "type": "main", "index": 0 }]] },
     "Chỉ lấy PDF cần cập nhật": { "main": [[{ "node": "Xử lý từng PDF", "type": "main", "index": 0 }]] },
     "Xử lý từng PDF": { "main": [[], [{ "node": "Tải một PDF từ Drive", "type": "main", "index": 0 }]] },
     "Tải một PDF từ Drive": { "main": [[{ "node": "Gửi PDF để lập chỉ mục", "type": "main", "index": 0 }]] },
-    "Gửi PDF để lập chỉ mục": { "main": [[{ "node": "Xử lý từng PDF", "type": "main", "index": 0 }]] }
+    "Gửi PDF để lập chỉ mục": { "main": [[{ "node": "Giãn nhịp Gemini 30 giây", "type": "main", "index": 0 }]] },
+    "Giãn nhịp Gemini 30 giây": { "main": [[{ "node": "Xử lý từng PDF", "type": "main", "index": 0 }]] }
   },
   "pinData": {},
   "settings": {
