@@ -3,8 +3,12 @@
 Bot Telegram gửi ba loại thông báo:
 
 - kiểm tra lỗi đồng bộ mỗi 5 phút, cảnh báo sau 30 phút và báo phục hồi;
-- 06:30: khiếm khuyết phát sinh ngày hôm trước;
-- 19:00: khiếm khuyết đã xử lý trong ngày và Mức 1 còn tồn đọng.
+- 06:00, 14:00 và 22:00: khiếm khuyết phát sinh và đã xử lý trong ca vừa kết thúc;
+- 07:00: khiếm khuyết Mức 1 còn tồn đọng.
+
+Ba ca được tính theo giờ Việt Nam: ca sáng 06:00–14:00, ca chiều
+14:00–22:00 và ca đêm 22:00–06:00 ngày kế tiếp. Truy vấn dùng khoảng
+`[đầu ca, cuối ca)` để phiếu tại thời điểm giao ca chỉ thuộc đúng một ca.
 
 Mọi mốc ngày nghiệp vụ dùng `Asia/Ho_Chi_Minh`. Timer production dùng UTC vì
 systemd 249 trên VPS chưa hỗ trợ hậu tố múi giờ trong `OnCalendar`.
@@ -18,8 +22,6 @@ TELEGRAM_CHAT_IDS="123456789"
 TELEGRAM_TIMEZONE="Asia/Ho_Chi_Minh"
 TELEGRAM_SYNC_ALERT_AFTER_MINUTES="30"
 TELEGRAM_SYNC_REMINDER_MINUTES="240"
-TELEGRAM_MORNING_REPORT_TIME="06:30"
-TELEGRAM_EVENING_REPORT_TIME="19:00"
 TELEGRAM_JOB_TOKEN="token-rieng-cua-systemd"
 SYNC_MONITOR_REPORT_TOKEN="token-rieng-de-worker-bao-trang-thai"
 ```
@@ -34,10 +36,10 @@ POST /api/internal/telegram-jobs
 Authorization: Bearer TELEGRAM_JOB_TOKEN
 Content-Type: application/json
 
-{"job":"monitor"}
+{"job":"shift"}
 ```
 
-`job` nhận `monitor`, `morning`, `evening`. Thêm `"dryRun":true` để xem nội
+`job` nhận `monitor`, `shift`, `level-one`. Thêm `"dryRun":true` để xem nội
 dung mà không gửi và không ghi nhật ký `SENT`.
 
 ## API báo trạng thái đồng bộ
@@ -71,14 +73,14 @@ Không đưa token lên command line. Dùng script đọc `.env`:
 
 ```bash
 cd /var/www/dh1-app
-node scripts/run-telegram-job.mjs morning --dry-run
-node scripts/run-telegram-job.mjs evening --dry-run
+node scripts/run-telegram-job.mjs shift --dry-run
+node scripts/run-telegram-job.mjs level-one --dry-run
 node scripts/run-telegram-job.mjs monitor --dry-run
 ```
 
 Khóa `(type, periodKey, chatId)` trong `TelegramNotificationLog` ngăn chạy lại
-cùng bản tin trong ngày. Muốn xem trước nội dung, gọi API với `dryRun`; không xóa
-nhật ký production để ép gửi lại.
+cùng bản tin trong một ca hoặc cùng báo cáo Mức 1 trong ngày. Muốn xem trước nội
+dung, gọi API với `dryRun`; không xóa nhật ký production để ép gửi lại.
 
 Sau khi kết quả xem trước đúng, bỏ `--dry-run` ở đúng một tác vụ cần gửi thử.
 
@@ -90,14 +92,17 @@ Chỉ thực hiện sau khi code và SQL đã deploy thành công:
 cd /var/www/dh1-app
 cp scripts/systemd/dh1-telegram@.service \
    scripts/systemd/dh1-telegram-monitor.timer \
-   scripts/systemd/dh1-telegram-morning.timer \
-   scripts/systemd/dh1-telegram-evening.timer \
+   scripts/systemd/dh1-telegram-shift.timer \
+   scripts/systemd/dh1-telegram-level-one.timer \
    /etc/systemd/system/
+systemctl disable --now \
+  dh1-telegram-morning.timer \
+  dh1-telegram-evening.timer
 systemctl daemon-reload
 systemctl enable --now \
   dh1-telegram-monitor.timer \
-  dh1-telegram-morning.timer \
-  dh1-telegram-evening.timer
+  dh1-telegram-shift.timer \
+  dh1-telegram-level-one.timer
 ```
 
 Kiểm tra:

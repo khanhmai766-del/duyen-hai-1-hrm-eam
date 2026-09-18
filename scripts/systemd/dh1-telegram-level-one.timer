@@ -1,0 +1,11 @@
+# VPS dùng UTC: 00:00 UTC = 07:00 tại Việt Nam.
+[Unit]
+Description=DH1 — khiếm khuyết Mức 1 tồn đọng qua Telegram
+
+[Timer]
+OnCalendar=*-*-* 00:00:00
+Persistent=true
+Unit=dh1-telegram@level-one.service
+
+[Install]
+WantedBy=timers.target

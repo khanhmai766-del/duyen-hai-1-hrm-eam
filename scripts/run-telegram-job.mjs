@@ -2,11 +2,11 @@
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 
-const jobs = new Set(["monitor", "morning", "evening"]);
+const jobs = new Set(["monitor", "shift", "level-one"]);
 const job = String(process.argv[2] ?? "").trim().toLowerCase();
 const dryRun = process.argv.includes("--dry-run");
 if (!jobs.has(job)) {
-  console.error("Cách dùng: node scripts/run-telegram-job.mjs <monitor|morning|evening> [--dry-run]");
+  console.error("Cách dùng: node scripts/run-telegram-job.mjs <monitor|shift|level-one> [--dry-run]");
   process.exit(2);
 }
 
