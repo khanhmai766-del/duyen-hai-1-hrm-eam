@@ -7,6 +7,7 @@ import { requirePermissionLevel } from "@/lib/rbac-guard";
 import { archiveCategoryPermissionId } from "@/lib/archive-permissions";
 import { OIL_SOOT_GATED_CATEGORIES } from "@/lib/oil-soot-access";
 import { assertOilSootAccess } from "@/lib/server-access";
+import { parseDocumentDriveCandidates } from "@/lib/document-drive-candidates";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -162,6 +163,8 @@ export async function GET(req: NextRequest) {
           d."driveModifiedAt",
           d."driveWebViewLink",
           d."driveChecksum",
+          d."driveCandidateFiles",
+          d."driveManualFileId",
           d."driveSyncStatus",
           d."driveSyncError",
           d."driveLastSyncedAt",
@@ -203,6 +206,7 @@ export async function GET(req: NextRequest) {
 
     const data = (items as Array<Record<string, unknown>>).map((item) => ({
       ...item,
+      driveCandidateFiles: parseDocumentDriveCandidates(item.driveCandidateFiles),
       createdBy: item.createdBy
         ? publicUserRef(item.createdBy as { avatarUrl?: string | null; avatarKey?: string | null })
         : null,

@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { parseGoogleDriveTarget } from "@/lib/google-drive-document";
 import { parseDocumentDriveSyncRecord, verifyN8nDocumentSyncToken } from "@/lib/document-drive-sync";
 import { buildDocumentAiIndexVersion } from "@/lib/document-ai-index";
+import { parseDocumentDriveCandidates } from "@/lib/document-drive-candidates";
 
 export const dynamic = "force-dynamic";
 
@@ -16,6 +17,7 @@ export async function GET(req: NextRequest) {
     const rows = await prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(`
       SELECT id, title, "decisionNumber", "documentUrl", "driveFolderId", "driveFileId",
              "driveFileName", "driveMimeType", "driveModifiedAt", "driveChecksum",
+             "driveCandidateFiles", "driveManualFileId",
              "driveSyncStatus", "driveSyncError", "driveLastSyncedAt",
              "aiIndexedAt", "aiIndexVersion", "aiIndexError"
       FROM "DigitalDocument"
@@ -31,6 +33,7 @@ export async function GET(req: NextRequest) {
       return {
         ...row,
         driveFolderId: row.driveFolderId ?? (source.kind === "FOLDER" ? source.id : null),
+        driveCandidateFiles: parseDocumentDriveCandidates(row.driveCandidateFiles),
         legacyTargetKind: source.kind,
         desiredAiIndexVersion: buildDocumentAiIndexVersion({
           driveChecksum: typeof row.driveChecksum === "string" ? row.driveChecksum : null,
@@ -65,6 +68,7 @@ export async function POST(req: NextRequest) {
               "driveModifiedAt" = CASE WHEN ${record.driveSyncStatus} = 'ERROR' THEN "driveModifiedAt" ELSE ${record.driveModifiedAt} END,
               "driveWebViewLink" = CASE WHEN ${record.driveSyncStatus} = 'ERROR' THEN "driveWebViewLink" ELSE ${record.driveWebViewLink} END,
               "driveChecksum" = CASE WHEN ${record.driveSyncStatus} = 'ERROR' THEN "driveChecksum" ELSE ${record.driveChecksum} END,
+              "driveCandidateFiles" = CASE WHEN ${record.driveSyncStatus} = 'ERROR' THEN "driveCandidateFiles" ELSE ${JSON.stringify(record.driveCandidateFiles)} END,
               "driveSyncStatus" = ${record.driveSyncStatus},
               "driveSyncError" = ${record.driveSyncError},
               "driveLastSyncedAt" = CURRENT_TIMESTAMP

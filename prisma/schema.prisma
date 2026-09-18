@@ -1266,47 +1266,52 @@ model HcCheckIn {
 // SQL trong app/api/documents/route.ts (ensureDigitalDocumentTable); khai báo ở
 // đây để db push không đề nghị xoá. attachmentUrls lưu JSON (mảng data URL) dạng text.
 model DigitalDocument {
-  id               String    @id
-  category         String
-  title            String
-  decisionNumber   String?
-  issueDate        DateTime?
-  documentUrl      String
-  managingPosition String?
-  managementBlock  String?
-  procedureType    String?
-  reason           String?
+  id                  String    @id
+  category            String
+  title               String
+  decisionNumber      String?
+  issueDate           DateTime?
+  documentUrl         String
+  managingPosition    String?
+  managementBlock     String?
+  procedureType       String?
+  reason              String?
   // Tiến trình tách lưới / khởi động dạng văn bản tự do. KHÔNG bao giờ xoá kể cả
   // sau khi đã bóc tách — đây là bản gốc để đối chiếu khi parser hiểu sai.
-  progress         String?
+  progress            String?
   // Bản đã bóc tách của `progress`: JSON các mốc thời gian có cấu trúc, do người
   // dùng soát và xác nhận một lần. Rỗng = chưa bóc tách, giao diện hiện văn bản thô.
-  timelineJson     String?
-  note             String?
-  attachmentUrls   String?
+  timelineJson        String?
+  note                String?
+  attachmentUrls      String?
   // Đồng bộ Google Drive: giữ documentUrl cũ để tương thích, đồng thời tách riêng
   // thư mục hồ sơ và file chính để nút "Xem PDF" không phải mở cả thư mục.
-  driveFolderId    String?
-  driveFileId      String?
-  driveFileName    String?
-  driveMimeType    String?
-  driveModifiedAt  DateTime?
-  driveWebViewLink String?
-  driveChecksum    String?
-  driveSyncStatus  String?
-  driveSyncError   String?
-  driveLastSyncedAt DateTime?
-  aiIndexedAt      DateTime?
-  aiIndexVersion   String?
-  aiIndexError     String?
-  createdById      String?
-  updatedById      String?
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @default(now())
+  driveFolderId       String?
+  driveFileId         String?
+  driveFileName       String?
+  driveMimeType       String?
+  driveModifiedAt     DateTime?
+  driveWebViewLink    String?
+  driveChecksum       String?
+  // PDF do workflow tìm thấy trong thư mục và file được người quản lý chọn thủ công.
+  // Danh sách ứng viên lưu JSON dạng text để giữ tương thích với bảng raw-SQL hiện hữu.
+  driveCandidateFiles String?
+  driveManualFileId   String?
+  driveSyncStatus     String?
+  driveSyncError      String?
+  driveLastSyncedAt   DateTime?
+  aiIndexedAt         DateTime?
+  aiIndexVersion      String?
+  aiIndexError        String?
+  createdById         String?
+  updatedById         String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @default(now())
 
   @@index([category, updatedAt(sort: Desc)])
   @@index([driveFolderId])
   @@index([driveFileId])
+  @@index([driveManualFileId])
   @@index([driveSyncStatus])
 }
 
@@ -1664,44 +1669,44 @@ model MaterialStockMovement {
 
 /// Danh bạ người của nhà thầu: mã người dùng chung giữa cả hai sổ PCT.
 model WorkPermitPerson {
-  id String @id @default(cuid())
-  code String @unique
-  name String
-  company String
-  canCommand Boolean @default(false)
-  isActive Boolean @default(true)
+  id         String              @id @default(cuid())
+  code       String              @unique
+  name       String
+  company    String
+  canCommand Boolean             @default(false)
+  isActive   Boolean             @default(true)
   searchText String
-  version Int @default(1)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  sessions WorkPermitSession[]
+  version    Int                 @default(1)
+  createdAt  DateTime            @default(now())
+  updatedAt  DateTime            @updatedAt
+  sessions   WorkPermitSession[]
 }
 
 /// Một PCT có nhiều lần cho phép/kết thúc công tác. Kết thúc lần làm việc không đóng PCT.
 model WorkPermitSession {
-  id String @id @default(cuid())
-  permitId String
-  permit WorkPermit @relation(fields: [permitId], references: [id], onDelete: Restrict)
-  commanderId String
-  commander WorkPermitPerson @relation(fields: [commanderId], references: [id], onDelete: Restrict)
-  commanderCode String @default("")
-  commanderName String
-  company String
-  members Json
-  workerCount Int
-  openedAt DateTime
-  endedAt DateTime?
-  authorizerName String
-  endConfirmedByName String @default("")
-  endNote String @default("")
-  progress Int?
-  searchText String @default("")
-  createdById String
-  createdByName String
-  endedById String?
-  endedByName String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id                 String           @id @default(cuid())
+  permitId           String
+  permit             WorkPermit       @relation(fields: [permitId], references: [id], onDelete: Restrict)
+  commanderId        String
+  commander          WorkPermitPerson @relation(fields: [commanderId], references: [id], onDelete: Restrict)
+  commanderCode      String           @default("")
+  commanderName      String
+  company            String
+  members            Json
+  workerCount        Int
+  openedAt           DateTime
+  endedAt            DateTime?
+  authorizerName     String
+  endConfirmedByName String           @default("")
+  endNote            String           @default("")
+  progress           Int?
+  searchText         String           @default("")
+  createdById        String
+  createdByName      String
+  endedById          String?
+  endedByName        String?
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
 
   @@index([permitId, openedAt])
   @@index([commanderId, openedAt, endedAt])
@@ -1709,69 +1714,69 @@ model WorkPermitSession {
 
 /// Danh mục cặp mối nguy – biện pháp; người cấp phân công đơn vị trên từng PCT giấy.
 model WorkPermitSafetyMeasure {
-  id String @id @default(cuid())
-  kind String
-  hazard String @default("")
-  measure String
-  source String @default("")
-  isActive Boolean @default(true)
+  id         String   @id @default(cuid())
+  kind       String
+  hazard     String   @default("")
+  measure    String
+  source     String   @default("")
+  isActive   Boolean  @default(true)
   searchText String
-  version Int @default(1)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  version    Int      @default(1)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
   @@index([kind, isActive])
 }
 
 /// Sổ ghi nhận cấp PCT; không thay thế việc cho phép làm việc trên phiếu chính thức.
 model WorkPermit {
-  nkvhPctId String? @db.Uuid // Chỉ lưu UUID; URL được ghép từ cấu hình NKVH chung.
-  registrationNumber String @default("")
-  workScope String @default("")
-  plannedStartAt DateTime?
-  plannedEndAt DateTime?
-  disciplines String[] @default([])
-  safetyItems Json @default("[]")
-  id String @id @default(cuid())
-  format String? // PAPER / ELECTRONIC; null với phiếu cũ chưa ghi riêng.
-  workType String? // PLANNED = KH, UNPLANNED = ĐX, INCIDENT = SC; phiếu cũ chưa phân loại để null.
-  kind String
-  year Int
-  number String
-  position String @default("") // Cương vị nghiệp vụ; rỗng = tất cả cương vị.
-  status String @default("DRAFT")
-  progress Int?
-  unit String
-  content String
-  location String @default("")
-  workDate String
-  issuerName String @default("")
-  electricalSafetySupervisorName String @default("")
-  issuerUserId String?
-  commanderPersonId String?
-  leaderName String @default("")
-  commanderName String @default("")
-  teamName String @default("")
-  teamType String @default("INTERNAL")
-  members Json @default("[]")
-  workerCount Int?
-  authorizerName String @default("")
-  issuedAt DateTime?
-  authorizedAt DateTime?
-  closedAt DateTime?
-  result String @default("")
-  note String @default("")
-  statusReason String @default("")
-  defectId String? // SYC được chọn khi cấp phiếu; liên kết mềm để giữ hồ sơ khi SYC được lưu trữ/xóa.
-  repairRequestNumber String @default("")
-  searchText String @default("")
-  createdById String
-  createdByName String
-  version Int @default(1)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  history WorkPermitHistory[]
-  sessions WorkPermitSession[]
+  nkvhPctId                      String?             @db.Uuid // Chỉ lưu UUID; URL được ghép từ cấu hình NKVH chung.
+  registrationNumber             String              @default("")
+  workScope                      String              @default("")
+  plannedStartAt                 DateTime?
+  plannedEndAt                   DateTime?
+  disciplines                    String[]            @default([])
+  safetyItems                    Json                @default("[]")
+  id                             String              @id @default(cuid())
+  format                         String? // PAPER / ELECTRONIC; null với phiếu cũ chưa ghi riêng.
+  workType                       String? // PLANNED = KH, UNPLANNED = ĐX, INCIDENT = SC; phiếu cũ chưa phân loại để null.
+  kind                           String
+  year                           Int
+  number                         String
+  position                       String              @default("") // Cương vị nghiệp vụ; rỗng = tất cả cương vị.
+  status                         String              @default("DRAFT")
+  progress                       Int?
+  unit                           String
+  content                        String
+  location                       String              @default("")
+  workDate                       String
+  issuerName                     String              @default("")
+  electricalSafetySupervisorName String              @default("")
+  issuerUserId                   String?
+  commanderPersonId              String?
+  leaderName                     String              @default("")
+  commanderName                  String              @default("")
+  teamName                       String              @default("")
+  teamType                       String              @default("INTERNAL")
+  members                        Json                @default("[]")
+  workerCount                    Int?
+  authorizerName                 String              @default("")
+  issuedAt                       DateTime?
+  authorizedAt                   DateTime?
+  closedAt                       DateTime?
+  result                         String              @default("")
+  note                           String              @default("")
+  statusReason                   String              @default("")
+  defectId                       String? // SYC được chọn khi cấp phiếu; liên kết mềm để giữ hồ sơ khi SYC được lưu trữ/xóa.
+  repairRequestNumber            String              @default("")
+  searchText                     String              @default("")
+  createdById                    String
+  createdByName                  String
+  version                        Int                 @default(1)
+  createdAt                      DateTime            @default(now())
+  updatedAt                      DateTime            @updatedAt
+  history                        WorkPermitHistory[]
+  sessions                       WorkPermitSession[]
 
   // Chỉ số duy nhất có điều kiện cho kind/year/number nằm trong SQL thủ công;
   // status CANCELLED được phép trùng để số đã hủy có thể cấp lại.
@@ -1782,15 +1787,15 @@ model WorkPermit {
 }
 
 model WorkPermitHistory {
-  id String @id @default(cuid())
-  permitId String
-  permit WorkPermit @relation(fields: [permitId], references: [id], onDelete: Restrict)
-  actorId String
+  id        String     @id @default(cuid())
+  permitId  String
+  permit    WorkPermit @relation(fields: [permitId], references: [id], onDelete: Restrict)
+  actorId   String
   actorName String
-  action String
-  before Json?
-  after Json
-  createdAt DateTime @default(now())
+  action    String
+  before    Json?
+  after     Json
+  createdAt DateTime   @default(now())
 
   @@index([permitId, createdAt])
 }
@@ -1840,12 +1845,12 @@ model MaterialTicket {
   // xe chỉ tồn tại trong ChemicalReceipt — ở đây chỉ giữ con trỏ, không giữ bản sao.
   chemicalReceiptIds   String[]  @default([])
 
-  recoveryRequired           Boolean? // có vật tư thu hồi hay không
-  recoveryQuantity           Int?
-  recoveryReturnedAt         DateTime?
-  recoveryDocUrl             String? // biên bản vật tư thu hồi (bổ sung khi có mẫu)
-  recoveryDocNo              Int? // số văn bản BBTHVT đã cấp — giữ nguyên khi xuất lại biên bản
-  recoveryDocNoYear          Int? // năm cấp số văn bản (dãy số reset mỗi năm)
+  recoveryRequired            Boolean? // có vật tư thu hồi hay không
+  recoveryQuantity            Int?
+  recoveryReturnedAt          DateTime?
+  recoveryDocUrl              String? // biên bản vật tư thu hồi (bổ sung khi có mẫu)
+  recoveryDocNo               Int? // số văn bản BBTHVT đã cấp — giữ nguyên khi xuất lại biên bản
+  recoveryDocNoYear           Int? // năm cấp số văn bản (dãy số reset mỗi năm)
   // BƯỚC TRẢ PHIẾU VẬT TƯ THU HỒI (CHO_TRA_PHIEU_THU_HOI) — đứng ngay TRƯỚC Quyết toán.
   //
   // Theo dõi TỜ BIÊN BẢN, không phải hiện vật: `recoveryReturnedAt` ở trên là VHV khai đã
@@ -1861,14 +1866,14 @@ model MaterialTicket {
   recoveryDocSignedById       String?
   recoveryDocSignedByName     String? // người nhận lại biên bản đã ký
   recoveryDocSignedByPosition String?
-  workStartedAt              DateTime? // thời gian ghi vào BBNT DO
-  workEndedAt                DateTime?
-  sccnRepresentativeName     String? // đại diện đơn vị sửa chữa cơ nhiệt in trên BBNT D-Office
-  sccnRepresentativePosition String? // chức vụ đại diện SCCN tại thời điểm xuất biên bản
-  bbntDoNumber               String? // số BBNT D-Office nhập tại bước quyết toán
-  settledAt                  DateTime? // Thống kê xác nhận đã quyết toán
-  settledByName              String?
-  rejectedReason             String?
+  workStartedAt               DateTime? // thời gian ghi vào BBNT DO
+  workEndedAt                 DateTime?
+  sccnRepresentativeName      String? // đại diện đơn vị sửa chữa cơ nhiệt in trên BBNT D-Office
+  sccnRepresentativePosition  String? // chức vụ đại diện SCCN tại thời điểm xuất biên bản
+  bbntDoNumber                String? // số BBNT D-Office nhập tại bước quyết toán
+  settledAt                   DateTime? // Thống kê xác nhận đã quyết toán
+  settledByName               String?
+  rejectedReason              String?
 
   // dấu vết từng bước: id + tên hiển thị (đóng băng tại thời điểm thao tác)
   createdById           String
@@ -2678,14 +2683,14 @@ model PcccHoseReelComponent {
 // ============================================================================
 
 model GroundingLightningItem {
-  id            String @id @default(cuid())
+  id            String   @id @default(cuid())
   stt           Float?
   areaEquipment String
   position      String?
   positionCode  String?
-  machine       String @default("COMMON")
+  machine       String   @default("COMMON")
   note          String?
-  sourceKey     String? @unique
+  sourceKey     String?  @unique
   sourceSheet   String?
   sourceRow     Int?
   createdById   String?
@@ -2701,13 +2706,13 @@ model GroundingLightningItem {
 }
 
 model GroundingLightningPoint {
-  id                String @id @default(cuid())
+  id                String                 @id @default(cuid())
   itemId            String
   item              GroundingLightningItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
   type              String
-  status            String @default("UNCHECKED")
+  status            String                 @default("UNCHECKED")
   defectDescription String?
-  updatedAt         DateTime @updatedAt
+  updatedAt         DateTime               @updatedAt
 
   attachments GroundingLightningAttachment[]
 
@@ -2717,22 +2722,22 @@ model GroundingLightningPoint {
 }
 
 model GroundingLightningAttachment {
-  id           String @id @default(cuid())
+  id           String                  @id @default(cuid())
   pointId      String
   point        GroundingLightningPoint @relation(fields: [pointId], references: [id], onDelete: Cascade)
-  s3Key        String @unique
+  s3Key        String                  @unique
   originalName String?
   mimeType     String?
   bytes        Int?
   uploadedById String?
-  createdAt    DateTime @default(now())
+  createdAt    DateTime                @default(now())
 
   @@index([pointId])
   @@map("grounding_lightning_attachments")
 }
 
 model GroundingLightningInspection {
-  id                String @id @default(cuid())
+  id                String                 @id @default(cuid())
   itemId            String
   item              GroundingLightningItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
   note              String?
@@ -2740,7 +2745,7 @@ model GroundingLightningInspection {
   inspectorName     String
   inspectorPosition String?
   signatureKey      String // Giá trị tương thích dữ liệu cũ; lượt mới lưu USER_CONFIRMATION, không dùng ảnh chữ ký.
-  signedAt          DateTime @default(now())
+  signedAt          DateTime               @default(now())
 
   results GroundingLightningInspectionResult[]
 
@@ -2750,7 +2755,7 @@ model GroundingLightningInspection {
 }
 
 model GroundingLightningInspectionResult {
-  id                String @id @default(cuid())
+  id                String                       @id @default(cuid())
   inspectionId      String
   inspection        GroundingLightningInspection @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
   type              String
@@ -2758,7 +2763,7 @@ model GroundingLightningInspectionResult {
   defectDescription String?
   // Chỉ là dấu vết ảnh lúc xác nhận. Khi chuyển sang Bình thường, object S3 bị xoá
   // đúng yêu cầu; lịch sử vẫn giữ mô tả bằng chữ.
-  imageKeys String[]
+  imageKeys         String[]
 
   @@unique([inspectionId, type])
   @@map("grounding_lightning_inspection_results")
@@ -3095,13 +3100,13 @@ model TbycnnEquipment {
   // Trước đây phải nhét vào `thongSoKyThuat` và `ghiChu` dưới dạng chuỗi ghép — không lọc,
   // không sắp xếp, không đối chiếu được với bản giấy. Xem TBYCNN_TOOL_TABS ở lib/tbycnn.ts.
   // Cột nào không thuộc bảng của dòng đó thì để null, KHÔNG dùng lại cho ý nghĩa khác.
-  taiTrongThuKg   Float? // tải trọng thử (kg) — thang di động, dây đai
-  thoiGianThuPhut Int? // thời gian thử (phút) — thang di động
+  taiTrongThuKg       Float? // tải trọng thử (kg) — thang di động, dây đai
+  thoiGianThuPhut     Int? // thời gian thử (phút) — thang di động
   /// "Qua sử dụng" / "Dây mới" — cột Tình trạng của bảng dây đai. KHÁC hẳn cột "Tình trạng"
   /// suy từ soLuongKhaDung/soLuongKhongKhaDung; đừng gộp hai thứ này.
-  tinhTrangSuDung String?
-  kiemTraBangMat  String? // "Bình thường"… — dụng cụ điện cầm tay
-  cachDienMOhm    Float? // trị số đo cách điện (MΩ) — dụng cụ điện cầm tay
+  tinhTrangSuDung     String?
+  kiemTraBangMat      String? // "Bình thường"… — dụng cụ điện cầm tay
+  cachDienMOhm        Float? // trị số đo cách điện (MΩ) — dụng cụ điện cầm tay
   /// Cột "Kết quả" (thang, dây đai) và "Đánh giá" (dụng cụ điện) — cùng một ý nghĩa nên
   /// dùng chung một cột: "Đạt", "Không", "Không đạt – Thay bằng dây mới #1"…
   ketQuaThu           String?

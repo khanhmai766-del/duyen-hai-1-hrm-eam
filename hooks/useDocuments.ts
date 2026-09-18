@@ -19,6 +19,16 @@ export interface DigitalDocumentUser {
   avatarUrl: string | null;
 }
 
+export interface DocumentDriveCandidate {
+  id: string;
+  name: string;
+  mimeType: "application/pdf";
+  modifiedTime: string | null;
+  md5Checksum: string | null;
+  webViewLink: string;
+  size: number | null;
+}
+
 export interface DigitalDocument {
   id: string;
   category: DocumentCategory;
@@ -33,6 +43,8 @@ export interface DigitalDocument {
   driveModifiedAt: string | null;
   driveWebViewLink: string | null;
   driveChecksum: string | null;
+  driveCandidateFiles: DocumentDriveCandidate[];
+  driveManualFileId: string | null;
   driveSyncStatus: string | null;
   driveSyncError: string | null;
   driveLastSyncedAt: string | null;
@@ -94,5 +106,18 @@ export function useDeleteDocument() {
     mutationFn: ({ id, category }: { id: string; category: DocumentCategory }) =>
       apiMutate<{ id: string }>(`/api/documents?id=${id}&category=${category}`, "DELETE"),
     onSuccess: (_, variables) => qc.invalidateQueries({ queryKey: ["documents", variables.category] }),
+  });
+}
+
+export function useSelectDocumentDriveFile() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ documentId, fileId }: { documentId: string; fileId: string }) =>
+      apiMutate<{ documentId: string; driveFileId: string; driveFileName: string; driveSyncStatus: "SYNCED" }>(
+        `/api/documents/${encodeURIComponent(documentId)}/select-drive-file`,
+        "PUT",
+        { fileId },
+      ),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["documents", "PROCEDURE"] }),
   });
 }

@@ -3,7 +3,7 @@
 import * as React from "react";
 import { useSession } from "next-auth/react";
 import * as XLSX from "xlsx";
-import { AlertCircle, ChevronDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ExternalLink, FileSpreadsheet, FileText, FolderOpen, ListFilter, Loader2, Minus, Pencil, Plus, RotateCcw, Search, Sparkles, Trash2, Upload, X } from "lucide-react";
+import { AlertCircle, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ExternalLink, FileCheck2, FileSpreadsheet, FileText, FolderOpen, ListFilter, Loader2, Minus, Pencil, Plus, RotateCcw, Search, Sparkles, Trash2, Upload, X } from "lucide-react";
 import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { EmptyState } from "@/components/shared/empty-state";
@@ -33,6 +33,7 @@ import {
   type DocumentCategory,
   useDeleteDocument,
   useDocuments,
+  useSelectDocumentDriveFile,
   useUpsertDocument,
 } from "@/hooks/useDocuments";
 import { EQUIPMENT_BLOCKS, blockForPosition, isSelectableManagingPosition } from "@/lib/constants";
@@ -305,6 +306,7 @@ export function DocumentCatalogPage({
   const [formOpen, setFormOpen] = React.useState(false);
   const [editing, setEditing] = React.useState<DigitalDocument | null>(null);
   const [deleteTarget, setDeleteTarget] = React.useState<DigitalDocument | null>(null);
+  const [pdfSelectionTarget, setPdfSelectionTarget] = React.useState<DigitalDocument | null>(null);
   const [form, setForm] = React.useState<DocumentForm>(EMPTY_FORM);
   const [positionFilter, setPositionFilter] = React.useState(ALL_FILTER);
   const [blockFilter, setBlockFilter] = React.useState(ALL_FILTER);
@@ -1174,7 +1176,12 @@ export function DocumentCatalogPage({
                       {contentMode === "text" ? (
                         <span className={cn("block max-w-[420px] whitespace-pre-wrap text-sm text-ink", wideNameNarrowLinkLayout && "max-w-full")}>{item.documentUrl}</span>
                       ) : (
-                        <DocumentSourceLinks item={item} compact />
+                        <DocumentSourceLinks
+                          item={item}
+                          compact
+                          canSelectPdf={category === "PROCEDURE" && canEdit}
+                          onSelectPdf={setPdfSelectionTarget}
+                        />
                       )}
                     </TableCell>
                   )}
@@ -1265,7 +1272,11 @@ export function DocumentCatalogPage({
                           <DetailField label="Người cập nhật" value={rowUser?.name} />
                           {hasProgressField && (
                             <DetailField label={linkLabel}>
-                              <DocumentSourceLinks item={item} />
+                              <DocumentSourceLinks
+                                item={item}
+                                canSelectPdf={category === "PROCEDURE" && canEdit}
+                                onSelectPdf={setPdfSelectionTarget}
+                              />
                             </DetailField>
                           )}
                         </div>
@@ -1311,7 +1322,13 @@ export function DocumentCatalogPage({
                             <span className="font-semibold">{linkLabel}:</span>
                             {contentMode === "text" ? (
                               <span className="whitespace-pre-wrap">{item.documentUrl || "—"}</span>
-                            ) : <DocumentSourceLinks item={item} />}
+                            ) : (
+                              <DocumentSourceLinks
+                                item={item}
+                                canSelectPdf={category === "PROCEDURE" && canEdit}
+                                onSelectPdf={setPdfSelectionTarget}
+                              />
+                            )}
                           </div>
                         )}
                         {hasNoteField && (
@@ -1827,6 +1844,11 @@ export function DocumentCatalogPage({
         </DialogContent>
       </Dialog>
 
+      <DrivePdfPickerDialog
+        target={pdfSelectionTarget}
+        onClose={() => setPdfSelectionTarget(null)}
+      />
+
       <ConfirmDialog
         open={!!deleteTarget}
         onOpenChange={(open) => !open && setDeleteTarget(null)}
@@ -2148,7 +2170,17 @@ function driveSyncLabel(status: string | null | undefined) {
 }
 
 /** Tách rõ file chính và thư mục hồ sơ; không còn in nguyên URL dài trong bảng. */
-function DocumentSourceLinks({ item, compact = false }: { item: DigitalDocument; compact?: boolean }) {
+function DocumentSourceLinks({
+  item,
+  compact = false,
+  canSelectPdf = false,
+  onSelectPdf,
+}: {
+  item: DigitalDocument;
+  compact?: boolean;
+  canSelectPdf?: boolean;
+  onSelectPdf?: (item: DigitalDocument) => void;
+}) {
   const legacy = parseGoogleDriveTarget(item.documentUrl);
   const hasSyncedFile = item.driveSyncStatus === "SYNCED" && Boolean(item.driveFileId);
   const hasLegacyFile = legacy.kind === "FILE" || legacy.kind === "GOOGLE_DOCUMENT";
@@ -2205,7 +2237,20 @@ function DocumentSourceLinks({ item, compact = false }: { item: DigitalDocument;
           Mở thư mục
         </a>
       )}
-      {!hasFile && (
+      {!hasFile && item.driveSyncStatus === "NEEDS_REVIEW" && canSelectPdf && onSelectPdf ? (
+        <button
+          type="button"
+          title={item.driveSyncError || "Chọn PDF chính thức"}
+          onClick={(event) => {
+            event.stopPropagation();
+            onSelectPdf(item);
+          }}
+          className="inline-flex h-7 items-center gap-1 rounded-full bg-amber-50 px-2 text-[11px] font-semibold text-amber-700 ring-1 ring-amber-200 transition hover:bg-amber-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+        >
+          <AlertCircle className="h-3 w-3" />
+          Cần chọn PDF
+        </button>
+      ) : !hasFile && (
         <span
           title={item.driveSyncError || undefined}
           className={cn(
@@ -2237,8 +2282,160 @@ function DocumentSourceLinks({ item, compact = false }: { item: DigitalDocument;
           {item.aiIndexError ? "AI lỗi" : item.aiIndexedAt ? "Đã nạp AI" : "Chờ AI"}
         </span>
       )}
+      {hasSyncedFile && item.driveManualFileId && canSelectPdf && onSelectPdf ? (
+        <button
+          type="button"
+          title="PDF chính đã được xác nhận. Bấm để chọn lại."
+          onClick={(event) => {
+            event.stopPropagation();
+            onSelectPdf(item);
+          }}
+          className="inline-flex h-7 items-center gap-1 rounded-full bg-sky-50 px-2 text-[11px] font-semibold text-sky-700 ring-1 ring-sky-200 transition hover:bg-sky-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
+        >
+          <FileCheck2 className="h-3 w-3" />
+          Đã chọn · Đổi PDF
+        </button>
+      ) : hasSyncedFile && item.driveManualFileId ? (
+        <span
+          title="PDF chính đã được người quản lý xác nhận"
+          className="inline-flex h-7 items-center gap-1 rounded-full bg-sky-50 px-2 text-[11px] font-semibold text-sky-700 ring-1 ring-sky-200"
+        >
+          <FileCheck2 className="h-3 w-3" />
+          Đã chọn
+        </span>
+      ) : null}
     </div>
   );
+}
+
+function DrivePdfPickerDialog({ target, onClose }: { target: DigitalDocument | null; onClose: () => void }) {
+  const selectFile = useSelectDocumentDriveFile();
+  const [selectedId, setSelectedId] = React.useState("");
+  const targetKey = target ? `${target.id}:${target.driveManualFileId ?? ""}:${target.driveFileId ?? ""}` : "";
+  const [seenTargetKey, setSeenTargetKey] = React.useState("");
+  if (targetKey !== seenTargetKey) {
+    setSeenTargetKey(targetKey);
+    const current = target?.driveManualFileId || target?.driveFileId || "";
+    setSelectedId((target?.driveCandidateFiles ?? []).some((file) => file.id === current) ? current : "");
+  }
+
+  const candidates = target?.driveCandidateFiles ?? [];
+  let folderUrl: string | null = null;
+  if (target) {
+    const legacy = parseGoogleDriveTarget(target.documentUrl);
+    const folderId = target.driveFolderId || (legacy.kind === "FOLDER" ? legacy.id : null);
+    try {
+      folderUrl = folderId ? googleDriveFolderViewUrl(folderId) : null;
+    } catch {
+      folderUrl = null;
+    }
+  }
+
+  async function confirmSelection() {
+    if (!target || !selectedId) return;
+    try {
+      const result = await selectFile.mutateAsync({ documentId: target.id, fileId: selectedId });
+      toast.success(`Đã chọn PDF chính: ${result.driveFileName}`);
+      onClose();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Không thể chọn PDF chính");
+    }
+  }
+
+  return (
+    <Dialog open={Boolean(target)} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-h-[88vh] overflow-hidden p-0 sm:max-w-2xl">
+        <DialogHeader className="border-b border-amber-100 bg-[linear-gradient(135deg,#fffaf0_0%,#fff7df_55%,#f0f9ff_100%)] px-6 py-5 text-left">
+          <div className="flex items-start gap-3">
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-white text-amber-600 shadow-sm ring-1 ring-amber-200">
+              <FileCheck2 className="h-5 w-5" />
+            </span>
+            <div className="min-w-0">
+              <DialogTitle>Chọn PDF chính thức</DialogTitle>
+              <p className="mt-1 line-clamp-2 text-xs leading-5 text-slate-600">{target?.title}</p>
+            </div>
+          </div>
+        </DialogHeader>
+
+        <div className="overflow-y-auto px-6 py-5">
+          <div className="mb-4 flex flex-col gap-2 rounded-xl border border-amber-200 bg-amber-50/70 px-4 py-3 text-xs leading-5 text-amber-900 sm:flex-row sm:items-center sm:justify-between">
+            <span>Chọn đúng bản đã ban hành. Lựa chọn này được giữ nguyên ở những lần đồng bộ sau.</span>
+            {folderUrl && (
+              <a href={folderUrl} target="_blank" rel="noreferrer" className="inline-flex shrink-0 items-center gap-1.5 font-semibold text-amber-800 hover:underline">
+                <FolderOpen className="h-3.5 w-3.5" /> Mở thư mục
+              </a>
+            )}
+          </div>
+
+          {candidates.length ? (
+            <div className="space-y-2.5">
+              {candidates.map((file) => {
+                const selected = selectedId === file.id;
+                return (
+                  <div
+                    key={file.id}
+                    className={cn(
+                      "flex items-center gap-2 rounded-xl border bg-white p-2 transition",
+                      selected ? "border-[#0A84D6] shadow-[0_0_0_3px_rgba(10,132,214,0.10)]" : "border-slate-200 hover:border-sky-200",
+                    )}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => setSelectedId(file.id)}
+                      className="flex min-w-0 flex-1 items-center gap-3 rounded-lg px-2 py-2.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-300"
+                    >
+                      <span className={cn(
+                        "grid h-5 w-5 shrink-0 place-items-center rounded-full border",
+                        selected ? "border-[#0A84D6] bg-[#0A84D6] text-white" : "border-slate-300 bg-white",
+                      )}>
+                        {selected && <Check className="h-3.5 w-3.5" />}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block break-words text-sm font-semibold leading-5 text-slate-800">{file.name}</span>
+                        <span className="mt-1 block text-[11px] text-slate-500">
+                          {file.modifiedTime ? `Cập nhật ${formatDateTime(file.modifiedTime)}` : "Chưa có ngày cập nhật"}
+                          {file.size !== null ? ` · ${formatDriveFileSize(file.size)}` : ""}
+                        </span>
+                      </span>
+                    </button>
+                    <a
+                      href={file.webViewLink}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 px-3 text-xs font-semibold text-slate-600 hover:border-sky-200 hover:bg-sky-50 hover:text-sky-700"
+                    >
+                      <ExternalLink className="h-3.5 w-3.5" />
+                      <span className="hidden sm:inline">Xem</span>
+                    </a>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-5 py-8 text-center">
+              <AlertCircle className="mx-auto h-6 w-6 text-amber-500" />
+              <p className="mt-2 text-sm font-semibold text-slate-800">Chưa có danh sách PDF để chọn</p>
+              <p className="mt-1 text-xs leading-5 text-slate-500">Hãy chạy lại workflow đồng bộ Drive; danh sách PDF sẽ xuất hiện tại đây.</p>
+            </div>
+          )}
+        </div>
+
+        <DialogFooter className="border-t border-slate-100 bg-slate-50/80 px-6 py-4">
+          <Button type="button" variant="outline" onClick={onClose}>Hủy</Button>
+          <Button type="button" onClick={confirmSelection} disabled={!selectedId || selectFile.isPending}>
+            {selectFile.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileCheck2 className="h-4 w-4" />}
+            Xác nhận PDF chính
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function formatDriveFileSize(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toLocaleString("vi-VN", { maximumFractionDigits: 1 })} MB`;
 }
 
 /** Tên gọi dễ đọc cho đường dẫn, thay vì dán nguyên URL dài. */

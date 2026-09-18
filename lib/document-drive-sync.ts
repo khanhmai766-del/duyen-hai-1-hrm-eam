@@ -1,5 +1,6 @@
 import { googleDriveFileViewUrl, normalizeGoogleDriveId } from "@/lib/google-drive-document";
 import { verifyBearerToken } from "@/lib/server-token";
+import { parseDocumentDriveCandidates, type DocumentDriveCandidate } from "@/lib/document-drive-candidates";
 
 export const DOCUMENT_DRIVE_SYNC_STATUSES = [
   "PENDING",
@@ -21,6 +22,7 @@ export type DocumentDriveSyncRecord = {
   driveModifiedAt: Date | null;
   driveWebViewLink: string | null;
   driveChecksum: string | null;
+  driveCandidateFiles: DocumentDriveCandidate[];
   driveSyncStatus: DocumentDriveSyncStatus;
   driveSyncError: string | null;
 };
@@ -63,6 +65,7 @@ export function parseDocumentDriveSyncRecord(value: unknown): DocumentDriveSyncR
     driveModifiedAt: parseDate(input.driveModifiedTime),
     driveWebViewLink: driveFileId ? googleDriveFileViewUrl(driveFileId) : null,
     driveChecksum: limitedText(input.driveChecksum, 200),
+    driveCandidateFiles: parseDocumentDriveCandidates(input.candidateFiles),
     driveSyncStatus: status as DocumentDriveSyncStatus,
     driveSyncError: limitedText(input.syncError, 1_000),
   };

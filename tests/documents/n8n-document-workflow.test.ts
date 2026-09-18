@@ -23,6 +23,8 @@ test("workflow có đủ hai đầu API, Google Drive và quy tắc không chọ
   const selection = JSON.stringify(nodes.get("Chọn PDF chính"));
   assert.match(selection, /NEEDS_REVIEW/);
   assert.match(selection, /application\/pdf/);
+  assert.match(selection, /candidateFiles/);
+  assert.match(selection, /driveManualFileId/);
   assert.doesNotMatch(selection, /sort\([^)]*modifiedTime/);
 });
 

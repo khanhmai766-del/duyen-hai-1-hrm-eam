@@ -28,6 +28,10 @@ trực tiếp vào JSON workflow.
 - Nếu không, chỉ một file có nhãn `CHINH_THUC` hoặc `HIEU_LUC`: chọn file đó.
 - Các trường hợp còn lại chuyển `NEEDS_REVIEW`, không chọn theo file mới nhất để tránh
   đưa nhầm bản dự thảo/phụ lục vào AI.
+- Với `NEEDS_REVIEW`, workflow lưu danh sách PDF ứng viên. Người có quyền quản lý quy
+  trình bấm `Cần chọn PDF` trên website, xem trước và xác nhận file chính. Lựa chọn thủ
+  công được giữ ở các lần đối soát sau; nếu file bị chuyển/xóa, trạng thái quay lại
+  `NEEDS_REVIEW` để chọn lại.
 
 ## API
 
@@ -64,8 +68,9 @@ Content-Type: application/json
 - Execution thành công không lưu dữ liệu để tránh tăng ổ cứng.
 - Nếu danh mục vượt 500 bản ghi, workflow dừng rõ ràng thay vì âm thầm bỏ sót;
   khi đó cần nâng workflow sang vòng phân trang.
-- Workflow AI chạy lúc 03:00 và xử lý batch 1 file để giới hạn RAM. Các lần sau chỉ tải
-  lại tài liệu có checksum hoặc ngày sửa đổi mới.
+- Workflow AI xử lý tối đa 20 PDF/ngày từ 14:05 đến 15:40, mỗi PDF cách nhau 5 phút để
+  giữ an toàn cho quota Gemini. Tài liệu chưa từng lỗi được ưu tiên trước; các lần sau
+  chỉ tải lại tài liệu có checksum hoặc ngày sửa đổi mới.
 - Nếu một PDF lỗi, thông báo được lưu vào `aiIndexError`; workflow tiếp tục tài liệu kế tiếp.
 
 ## Rollback
