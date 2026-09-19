@@ -43,11 +43,28 @@ export async function readAiToolInput(req: Request): Promise<Record<string, unkn
  * nên cũng không bịa link) và `summary` (trùng với `facts`). Chỉ những dòng mô hình THẬT SỰ
  * nhận được mới được ghi làm nguồn đối chiếu.
  */
+/**
+ * Tài khoản CHỈ TRA CỨU KHIẾM KHUYẾT (`accessMode = DEFECT_READ_ONLY`) trên web chỉ mở được trang
+ * khiếm khuyết (proxy.ts). Trợ lý phải giữ đúng phạm vi đó: chỉ ba công cụ phục vụ tra khiếm khuyết
+ * được chạy. Chặn ở ĐÂY — cổng chung của mọi công cụ — chứ không trông vào từng công cụ tự nhớ chặn:
+ * lịch trực ca và thông báo từng lọt vì thiếu dòng kiểm tra, và công cụ thêm sau này mặc định bị chặn.
+ */
+export const AI_DEFECT_READ_ONLY_TOOLS: ReadonlySet<AiToolName> = new Set(["search-devices", "search-defects", "device-history"]);
+/** Nguồn trích dẫn tài khoản chỉ tra khiếm khuyết mở được — trang khác proxy.ts đều chuyển về /defects. */
+const DEFECT_READ_ONLY_CITATION = /^\/defects(\/|\?|$)/;
+
 export async function runAiTool<T extends { items?: Array<Record<string, unknown>> }>(
   user: AiToolUser,
   tool: AiToolName,
   run: () => Promise<T>
 ) {
+  const defectOnly = user.accessMode === "DEFECT_READ_ONLY";
+  if (defectOnly && !AI_DEFECT_READ_ONLY_TOOLS.has(tool)) {
+    return {
+      items: [],
+      message: "Tài khoản này chỉ được tra cứu khiếm khuyết thiết bị. Không tra dữ liệu này; nói rõ với người dùng rằng tài khoản chỉ được hỏi về khiếm khuyết.",
+    };
+  }
   const owner = { userId: user.id, conversationId: user.conversationId };
   if (user.requestId && !claimAiToolCall(user.requestId, owner, tool).allowed) {
     return {
@@ -61,7 +78,9 @@ export async function runAiTool<T extends { items?: Array<Record<string, unknown
     Object.entries(item).filter(([key]) => key !== "url" && key !== "summary")
   )));
   if (user.requestId) {
-    recordAiCitations(user.requestId, owner, rows.slice(0, fitted.items.length).flatMap((item) => normalizeAiCitation(item) ?? []));
+    recordAiCitations(user.requestId, owner, rows.slice(0, fitted.items.length)
+      .flatMap((item) => normalizeAiCitation(item) ?? [])
+      .filter((citation) => !defectOnly || DEFECT_READ_ONLY_CITATION.test(citation.url)));
   }
   return {
     ...result,
