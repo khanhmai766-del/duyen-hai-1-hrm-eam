@@ -65,7 +65,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         )}
       >
         <Topbar onToggleSidebar={() => setCollapsed((c) => !c)} />
-        <main className="flex-1 p-4 pb-[calc(7rem+env(safe-area-inset-bottom))] md:p-6 md:pb-[calc(7rem+env(safe-area-inset-bottom))] lg:p-8 lg:pb-8 animate-fade-in">
+        {/* Chừa đáy trang cao hơn mascot trợ lý AI (104px, cố định góc phải dưới) ở MỌI cỡ màn hình:
+            desktop từng chỉ có pb-8 nên phân trang cuối các bảng luôn nằm dưới mascot dù cuộn hết cỡ. */}
+        <main className="flex-1 p-4 pb-[calc(7rem+env(safe-area-inset-bottom))] md:p-6 md:pb-[calc(7rem+env(safe-area-inset-bottom))] lg:p-8 lg:pb-32 animate-fade-in">
           {blockedByPosition ? (
             <div className="rounded-xl border border-amber-200 bg-amber-50 p-5 text-sm font-medium text-amber-800 shadow-sm">
               Chức vụ Thống kê chỉ được truy cập các mục Quản lý người dùng và Quản lý vật tư.

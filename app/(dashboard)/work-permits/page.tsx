@@ -119,7 +119,7 @@ export default function WorkPermitsPage() {
     setNewPermit({ kind: selectedKind, teamType: issueChoice });
     setIssueChoice(null);
   }
-  return <div className="mx-auto max-w-[1600px] space-y-4 pb-24 font-sans text-[13px] md:pb-28">
+  return <div className="mx-auto max-w-[1600px] space-y-4 font-sans text-[13px]">
     <header className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
       <div className="min-w-0">
         {/* Cùng cỡ/đậm/màu với tiêu đề của mọi trang khác (components/shared/page-header.tsx), chỉ thêm in hoa. */}
