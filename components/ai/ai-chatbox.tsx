@@ -4,7 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { toast, useSonner, type ToastT } from "sonner";
+import { toast, type ToastT } from "sonner";
 import {
   ArrowUp, BookOpen, Check, CheckCircle2, ChevronLeft, CircleAlert, Info, Loader2, Copy, History, Maximize2, Minimize2, Package,
   RotateCcw, Search, ShieldCheck, Sparkles, Square, SquarePen, ThumbsDown, ThumbsUp, Trash2, TriangleAlert,
@@ -20,6 +20,7 @@ import {
 } from "@/hooks/useAiChat";
 import { AiMarkdown } from "@/components/ai/ai-markdown";
 import { Mascot, type MascotReaction } from "@/components/ai/page-mascot";
+import { useMirroredToasts } from "@/components/ai/toast-mirror";
 import { AI_ASK_EVENT, type AiAskEntity, type AiAskRequest } from "@/lib/ai-ask";
 import type { AiPageContext } from "@/lib/ai-chat";
 import { normalizeText } from "@/lib/nav";
@@ -107,19 +108,34 @@ const GREETING_MS = 2_500;
 
 export function AiChatbox() {
   const rbac = useRbacAccess();
-  if (rbac.isLoading || !rbac.can("ai-chat", ["read", "personal", "manage", "full"])) return null;
-  return <AiChatPanel />;
+  const { status } = useSession();
+  const [open, setOpen] = React.useState(false);
+  // Phiên còn đang tải thì truy vấn quyền chưa chạy (rbac.isLoading = false) — vẫn tính là đang tải.
+  const loading = status === "loading" || rbac.isLoading;
+  const allowed = !loading && rbac.can("ai-chat", ["read", "personal", "manage", "full"]);
+  // THÔNG BÁO TOAST DO MASCOT ĐỌC. Mascot đứng đúng góc phải dưới — chỗ khung sonner hiện — nên
+  // hai thứ đè lên nhau. Ẩn khung sonner (cờ trên <html>, xem app/globals.css) khi mascot đang hiện,
+  // và CẢ LÚC ĐANG TẢI QUYỀN: nếu không, thông báo phát ngay khi vào trang (vd "Đăng nhập thành công")
+  // lóe ở góc rồi mất khi mascot gắn xong. Tải xong mà không có quyền trợ lý thì trả lại khung sonner —
+  // Toaster vẫn chạy ngầm nên thông báo còn hạn hiện tiếp, không mất.
+  const hideSonner = loading || (allowed && !open);
+  React.useEffect(() => {
+    const root = document.documentElement;
+    root.toggleAttribute("data-mascot-toasts", hideSonner);
+    return () => root.removeAttribute("data-mascot-toasts");
+  }, [hideSonner]);
+  if (!allowed) return null;
+  return <AiChatPanel open={open} setOpen={setOpen} />;
 }
 
 function isPhone() {
   return typeof window !== "undefined" && window.matchMedia("(max-width: 639px)").matches;
 }
 
-function AiChatPanel() {
+function AiChatPanel({ open, setOpen }: { open: boolean; setOpen: (open: boolean) => void }) {
   const { data: session } = useSession();
   const pathname = usePathname();
   const chat = useAiChat();
-  const [open, setOpen] = React.useState(false);
   const [view, setView] = React.useState<"chat" | "history">("chat");
   const [expanded, setExpanded] = React.useState(false);
   const [draft, setDraft] = React.useState("");
@@ -138,21 +154,10 @@ function AiChatPanel() {
   // Đếm câu trả lời xong / lỗi trong lúc khung chat ĐÓNG — mascot đổi biểu cảm để báo cho người dùng.
   const [celebrate, setCelebrate] = React.useState(0);
   const [oops, setOops] = React.useState(0);
-  // THÔNG BÁO TOAST DO MASCOT ĐỌC. Mascot đứng đúng góc phải dưới — chỗ khung sonner hiện — nên
-  // hai thứ đè lên nhau. Khi mascot đang hiện (chat đóng) thì ẩn khung sonner bằng cờ trên <html>
-  // (app/globals.css) và cho mascot nói thông báo mới nhất; mở chat thì trả lại khung sonner. Người
-  // không có quyền trợ lý AI không có mascot, cờ không bật, thông báo hiện như cũ.
-  const { toasts } = useSonner();
+  // Mascot nói thông báo mới nhất (cờ ẩn khung sonner do AiChatbox bật). Đọc từ bản sao ở gốc chứ
+  // không gọi useSonner() tại đây — xem components/ai/toast-mirror.tsx.
+  const toasts = useMirroredToasts();
   const notice = open ? null : toasts[0] ?? null;
-  React.useEffect(() => {
-    const root = document.documentElement;
-    if (open) {
-      root.removeAttribute("data-mascot-toasts");
-      return;
-    }
-    root.setAttribute("data-mascot-toasts", "");
-    return () => root.removeAttribute("data-mascot-toasts");
-  }, [open]);
   const noticeCue = notice && notice.type !== "loading"
     ? { id: notice.id, reaction: TOAST_REACTION[notice.type ?? "default"] ?? "smile", ms: 1_800 }
     : null;
@@ -204,7 +209,7 @@ function AiChatPanel() {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [open, view]);
+  }, [open, view, setOpen]);
 
   React.useEffect(() => {
     const container = scrollRef.current;
