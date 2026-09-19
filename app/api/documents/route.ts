@@ -8,6 +8,7 @@ import { archiveCategoryPermissionId } from "@/lib/archive-permissions";
 import { OIL_SOOT_GATED_CATEGORIES } from "@/lib/oil-soot-access";
 import { assertOilSootAccess } from "@/lib/server-access";
 import { parseDocumentDriveCandidates } from "@/lib/document-drive-candidates";
+import { normalizeExternalDocumentUrl } from "@/lib/google-drive-document";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -232,6 +233,9 @@ export async function POST(req: NextRequest) {
     payload.attachmentUrls = await maybeUploadDataUrlList(payload.attachmentUrls, "digital-documents/attachments", "document-image");
     if (!payload.title) return fail("Vui lòng nhập tên tài liệu");
     if (!OPTIONAL_DOCUMENT_URL_CATEGORIES.has(category) && !payload.documentUrl) return fail("Vui lòng nhập nội dung hoặc link tài liệu");
+    if (category === "PROCEDURE" && !normalizeExternalDocumentUrl(payload.documentUrl)) {
+      return fail("Link tài liệu phải bắt đầu bằng http:// hoặc https://");
+    }
 
     const id = randomUUID();
     const rows = await prisma.$queryRawUnsafe(
@@ -281,6 +285,9 @@ export async function PUT(req: NextRequest) {
     payload.attachmentUrls = await maybeUploadDataUrlList(payload.attachmentUrls, "digital-documents/attachments", "document-image");
     if (!payload.title) return fail("Vui lòng nhập tên tài liệu");
     if (!OPTIONAL_DOCUMENT_URL_CATEGORIES.has(category) && !payload.documentUrl) return fail("Vui lòng nhập nội dung hoặc link tài liệu");
+    if (category === "PROCEDURE" && !normalizeExternalDocumentUrl(payload.documentUrl)) {
+      return fail("Link tài liệu phải bắt đầu bằng http:// hoặc https://");
+    }
 
     const rows = await prisma.$queryRawUnsafe(
       `

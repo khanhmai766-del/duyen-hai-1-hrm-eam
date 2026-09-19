@@ -39,7 +39,7 @@ import {
 import { EQUIPMENT_BLOCKS, blockForPosition, isSelectableManagingPosition } from "@/lib/constants";
 import { archiveCategoryPermissionId } from "@/lib/archive-permissions";
 import { normalizeText } from "@/lib/nav";
-import { googleDriveFolderViewUrl, parseGoogleDriveTarget } from "@/lib/google-drive-document";
+import { googleDriveFolderViewUrl, normalizeExternalDocumentUrl, parseGoogleDriveTarget } from "@/lib/google-drive-document";
 import { announcementPositionLabel, announcementPositionOptions } from "@/lib/positions";
 import { cn, formatDate, formatDateTime } from "@/lib/utils";
 import { SeparationTimelineView } from "@/components/documents/separation-timeline-view";
@@ -660,6 +660,10 @@ export function DocumentCatalogPage({
   }
 
   async function submit() {
+    if (contentMode === "link" && form.documentUrl.trim() && !normalizeExternalDocumentUrl(form.documentUrl)) {
+      toast.error("Link tài liệu phải bắt đầu bằng http:// hoặc https://");
+      return;
+    }
     try {
       await upsert.mutateAsync({
         id: editing?.id,
@@ -1981,6 +1985,10 @@ function parseProcedureImportRows(rows: Array<Array<string | number | Date | nul
       errors.push(`Dòng ${line}: thiếu link tài liệu`);
       return;
     }
+    if (!normalizeExternalDocumentUrl(documentUrl)) {
+      errors.push(`Dòng ${line}: link tài liệu không hợp lệ (phải bắt đầu bằng http:// hoặc https://)`);
+      return;
+    }
     if (cellString(rawIssueDate) && !issueDate) {
       errors.push(`Dòng ${line}: ngày ban hành không hợp lệ`);
       return;
@@ -2182,6 +2190,7 @@ function DocumentSourceLinks({
   onSelectPdf?: (item: DigitalDocument) => void;
 }) {
   const legacy = parseGoogleDriveTarget(item.documentUrl);
+  const externalUrl = normalizeExternalDocumentUrl(item.documentUrl);
   const hasSyncedFile = item.driveSyncStatus === "SYNCED" && Boolean(item.driveFileId);
   const hasLegacyFile = legacy.kind === "FILE" || legacy.kind === "GOOGLE_DOCUMENT";
   const hasFile = hasSyncedFile || hasLegacyFile;
@@ -2195,9 +2204,20 @@ function DocumentSourceLinks({
 
   if (!hasFile && !folderUrl && !item.driveSyncStatus) {
     if (!item.documentUrl) return <span className="text-muted-foreground">—</span>;
+    if (!externalUrl) {
+      return (
+        <span
+          title={`Giá trị hiện tại: ${item.documentUrl}`}
+          className="inline-flex h-7 items-center gap-1 rounded-full bg-red-50 px-2 text-[11px] font-semibold text-red-700 ring-1 ring-red-200"
+        >
+          <AlertCircle className="h-3 w-3" />
+          Liên kết không hợp lệ
+        </span>
+      );
+    }
     return (
       <a
-        href={item.documentUrl}
+        href={externalUrl}
         target="_blank"
         rel="noreferrer"
         onClick={(event) => event.stopPropagation()}
