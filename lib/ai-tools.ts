@@ -589,6 +589,89 @@ export async function aiSearchAnnouncements(user: AiToolUser, input: Record<stri
 }
 
 /**
+ * MỆNH LỆNH SẢN XUẤT — dùng riêng cho Agent để không trộn với bảng tin nội bộ.
+ * Việc lọc hiệu lực, khoảng ngày và nội dung vẫn dùng chung một nguồn nghiệp vụ với trang Thông báo.
+ */
+export function aiSearchProductionOrders(user: AiToolUser, input: Record<string, unknown>) {
+  return aiSearchAnnouncements(user, { ...input, category: "ORDER" });
+}
+
+/**
+ * DANH BẠ NỘI BỘ — chỉ trả các trường liên hệ mà `/api/users?summary=1` đã công bố cho tài khoản
+ * đăng nhập. Không trả vai trò, quyền, trạng thái khoá, ảnh, chữ ký hoặc dữ liệu xác thực.
+ */
+export async function aiSearchUsers(user: AiToolUser, input: Record<string, unknown>) {
+  const rawQuery = text(input.query, 160);
+  const normalizedQuery = normalizeText(rawQuery);
+  const asksForSelf = /^(toi|minh|ban than|chinh toi|chinh minh)$/.test(normalizedQuery);
+  if (!asksForSelf && normalizedQuery.length < 2) {
+    return { items: [], message: "Cần nhập họ tên, mã nhân viên, email, số điện thoại, cương vị hoặc đơn vị cần tra cứu" };
+  }
+
+  const take = Math.min(10, limitOf(input.limit));
+  const rows = await prisma.user.findMany({
+    where: { isActive: true, ...(asksForSelf ? { id: user.id } : {}) },
+    orderBy: [{ name: "asc" }],
+    select: {
+      id: true,
+      name: true,
+      employeeId: true,
+      email: true,
+      workEmail: true,
+      username: true,
+      phone: true,
+      position: true,
+      secondaryPosition: true,
+      secondaryPosition2: true,
+      currentPosition: true,
+      department: true,
+    },
+  });
+
+  const matched = rows.filter((row) => {
+    if (asksForSelf) return true;
+    return [
+      row.name,
+      row.employeeId,
+      row.email,
+      row.workEmail,
+      row.username,
+      row.phone,
+      row.position,
+      row.secondaryPosition,
+      row.secondaryPosition2,
+      row.currentPosition,
+      row.department,
+    ].some((value) => normalizeText(value ?? "").includes(normalizedQuery));
+  });
+
+  const items = matched.slice(0, take).map((row) => {
+    const secondaryPositions = [row.secondaryPosition, row.secondaryPosition2].filter(Boolean);
+    const primaryPosition = row.currentPosition || row.position;
+    return {
+      title: row.name,
+      summary: [primaryPosition, row.department].filter(Boolean).join(" · "),
+      facts: facts({
+        name: row.name,
+        phone: row.phone,
+        workEmail: row.workEmail,
+        accountEmail: row.email,
+        position: row.position,
+        currentPosition: row.currentPosition,
+        secondaryPositions,
+        department: row.department,
+      }),
+    };
+  });
+
+  return {
+    items,
+    ...(items.length === 0 ? { message: "Không tìm thấy nhân sự đang hoạt động phù hợp với thông tin đã hỏi" } : {}),
+    hasMore: matched.length > items.length,
+  };
+}
+
+/**
  * TRA CỨU TÀI LIỆU HƯỚNG DẪN (RAG) — xem lib/ai-knowledge.ts.
  *
  * Phạm vi: chỉ nhóm tài liệu người hỏi có quyền `ai-chat-tailieu-<nhóm>`, tính lại từ ma trận quyền

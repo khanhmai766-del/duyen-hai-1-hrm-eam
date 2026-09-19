@@ -143,6 +143,8 @@ async function main() {
     "material-replacements": tools.aiSearchMaterialReplacements,
     "shift-schedule": tools.aiGetShiftSchedule,
     "search-announcements": tools.aiSearchAnnouncements,
+    "search-production-orders": tools.aiSearchProductionOrders,
+    "search-users": tools.aiSearchUsers,
     "search-knowledge-base": tools.aiSearchKnowledgeBase,
     "search-work-permits": opsTools.aiSearchWorkPermits,
     "safety-registers": opsTools.aiSearchSafetyRegisters,

@@ -82,12 +82,12 @@ n8n dùng credential, không đọc `$env`:
 | Credential | Loại | Giá trị | Node sử dụng |
 | --- | --- | --- | --- |
 | DH1 AI Webhook Auth | Header Auth | `Authorization: Bearer <token-webhook>` | Webhook AI Chat |
-| DH1 AI Tool Auth | Header Auth | `Authorization: Bearer <token-tool>` | Bảy tool và Xóa hội thoại quá 14 ngày |
+| DH1 AI Tool Auth | Header Auth | `Authorization: Bearer <token-tool>` | 16 công cụ tra cứu và Xóa hội thoại quá 14 ngày |
 | VietAPI - DH1 Chatbox | OpenAI | API key vietapi.tech, **Base URL** `https://api.vietapi.tech/v1`, Allowed domains chỉ `api.vietapi.tech` | GLM chính, DeepSeek dự phòng |
 | Gemini - DH1 Chatbox | Google Gemini (PaLM) API | API key Google AI Studio (gói miễn phí) | Gemini tầng 3 |
 
 URL đích được đặt cố định `https://duyenhai1.vn` trong các node HTTP; mô hình không được chọn
-host đích. Nếu đổi tên miền, cập nhật cả tám URL.
+host đích. Nếu đổi tên miền, cập nhật toàn bộ URL công cụ trong workflow.
 
 ### DNS trong container n8n
 
@@ -192,6 +192,8 @@ X-AI-Capability: <token-do-website-ky>
 - `POST /api/integrations/n8n/ai/tools/material-replacements`
 - `POST /api/integrations/n8n/ai/tools/shift-schedule`
 - `POST /api/integrations/n8n/ai/tools/search-announcements`
+- `POST /api/integrations/n8n/ai/tools/search-production-orders` — chỉ tra mệnh lệnh sản xuất, mặc định còn hiệu lực.
+- `POST /api/integrations/n8n/ai/tools/search-users` — danh bạ nhân sự đang hoạt động, chỉ trả trường liên hệ cơ bản.
 - `POST /api/integrations/n8n/ai/tools/search-knowledge-base` — tra tài liệu hướng dẫn (mục 10).
 - `POST /api/integrations/n8n/ai/tools/search-work-permits`
 - `POST /api/integrations/n8n/ai/tools/safety-registers`
@@ -209,6 +211,8 @@ cũng không nới ra:
 | --- | --- | --- |
 | `shift-schedule` | như `GET /api/shifts`: mọi tài khoản đăng nhập xem được sơ đồ ca trực | điện thoại, ảnh, chữ ký, dữ liệu điểm danh |
 | `search-announcements` | như `GET /api/announcements`: mọi tài khoản đăng nhập đọc được | mệnh lệnh đã hết hiệu lực, trừ khi hỏi rõ |
+| `search-production-orders` | như `search-announcements` nhưng luôn giới hạn loại mệnh lệnh sản xuất | mệnh lệnh đã hết hiệu lực, trừ khi hỏi rõ |
+| `search-users` | danh bạ tài khoản đang hoạt động; tài khoản chỉ-tra-khiếm-khuyết bị chặn ở cổng chung | mật khẩu, quyền, trạng thái khoá, ảnh, chữ ký và dữ liệu xác thực |
 
 Bảy công cụ thêm ngày 17/09/2026 phủ phân hệ **Quản lý thiết bị** và **Quản lý vật tư**
 (`lib/ai-tools-ops.ts`). Gộp theo nhóm nghiệp vụ thay vì một công cụ mỗi trang — mỗi công cụ thêm là
@@ -395,4 +399,3 @@ Nạp lại chỉ gọi Gemini cho tài liệu đổi nội dung (băm nội dun
 Thêm tài liệu: thả `.md`/`.txt`/`.pdf` vào `ai-knowledge-source/<nhóm>/` rồi chạy lại. PDF scan không
 có lớp chữ sẽ bị bỏ qua (chưa OCR). Nhóm mới phải thêm vào `AI_KNOWLEDGE_CATEGORIES`
 (`lib/ai-knowledge.ts`), `lib/rbac-defaults.ts` và màn hình phân quyền.
-

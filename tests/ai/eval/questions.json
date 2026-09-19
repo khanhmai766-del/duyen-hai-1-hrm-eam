@@ -298,10 +298,19 @@
       "why": "Không dấu và không dấu hỏi."
     },
     {
+      "id": "shift-006",
+      "category": "shift",
+      "question": "Cho tôi số điện thoại, Gmail và cương vị của Mai Đoàn Kim Khánh",
+      "expect": { "tools": { "allOf": ["search-users"] }, "citation": "optional", "behavior": "answer" },
+      "tags": [],
+      "targetPhase": 0,
+      "why": "Tra danh bạ nhân sự theo họ tên, không gọi lịch trực ca dù câu hỏi có cương vị."
+    },
+    {
       "id": "announcement-001",
       "category": "announcement",
       "question": "Có mệnh lệnh sản xuất nào còn hiệu lực không?",
-      "expect": { "tools": { "allOf": ["search-announcements"] }, "citation": "optional", "behavior": "answer" },
+      "expect": { "tools": { "allOf": ["search-production-orders"] }, "citation": "optional", "behavior": "answer" },
       "tags": [],
       "targetPhase": 0,
       "why": "Câu gợi ý có sẵn trong chatbox."
@@ -319,7 +328,7 @@
       "id": "announcement-003",
       "category": "announcement",
       "question": "Mệnh lệnh nào liên quan đến an toàn vệ sinh lao động?",
-      "expect": { "tools": { "allOf": ["search-announcements"] }, "citation": "optional", "behavior": "answer" },
+      "expect": { "tools": { "allOf": ["search-production-orders"] }, "citation": "optional", "behavior": "answer" },
       "tags": [],
       "targetPhase": 0,
       "why": "Tìm theo phân loại/nội dung."
@@ -328,7 +337,7 @@
       "id": "announcement-004",
       "category": "announcement",
       "question": "Liệt kê cả những mệnh lệnh đã hết hiệu lực trong tháng trước",
-      "expect": { "tools": { "allOf": ["search-announcements"] }, "citation": "optional", "behavior": "answer" },
+      "expect": { "tools": { "allOf": ["search-production-orders"] }, "citation": "optional", "behavior": "answer" },
       "tags": ["ngay-tuong-doi"],
       "targetPhase": 0,
       "why": "Hỏi rõ mệnh lệnh hết hiệu lực thì phải bật includeInvalidated."

@@ -52,15 +52,15 @@ function toolsOf(agentName: string) {
     .sort();
 }
 
-test("workflow không đọc môi trường, không mang credential và bắt buộc Header Auth ở cả chín đầu kết nối", () => {
+test("workflow không đọc môi trường, không mang credential và bắt buộc Header Auth ở mọi đầu kết nối", () => {
   assert.equal(workflowText.includes("$env"), false);
   assert.equal(workflow.active, false);
   assert.equal(workflow.nodes.some(node => node.credentials), false);
   const webhook = workflow.nodes.find(node => node.type === "n8n-nodes-base.webhook")!;
   assert.equal(webhook.parameters.authentication, "headerAuth");
   const outbound = workflow.nodes.filter(node => node.parameters.url);
-  // Mười bốn công cụ tra cứu + node dọn hội thoại hàng ngày.
-  assert.equal(outbound.length, 15);
+  // Mười sáu công cụ tra cứu + node dọn hội thoại hàng ngày.
+  assert.equal(outbound.length, 17);
   for (const node of outbound) {
     assert.equal(node.parameters.authentication, "genericCredentialType");
     assert.equal(node.parameters.genericAuthType, "httpHeaderAuth");
@@ -142,12 +142,13 @@ test("model nào cũng đi qua node có credential riêng, không nhét key hay 
   }
 });
 
-test("mười bốn công cụ tra cứu đều nối vào CẢ HAI Agent và trỏ đúng endpoint có thật của website", () => {
+test("mười sáu công cụ tra cứu đều nối vào CẢ HAI Agent và trỏ đúng endpoint có thật của website", () => {
   const expected = [
     "Lịch sử thiết bị", "Lịch trực ca", "Thông báo, mệnh lệnh",
     "Tìm thiết bị", "Tra cứu khiếm khuyết", "Tra cứu thay vật tư", "Tra cứu tài liệu",
     "Tra cứu phiếu công tác", "Sổ PCCC, TBYCNN, tiếp địa", "Tra cứu vật tư, tồn kho", "Theo dõi phiếu vật tư",
     "Kế hoạch, nhu cầu vật tư", "Tồn kho hóa chất", "Thư mục lưu trữ",
+    "Tra cứu mệnh lệnh sản xuất", "Tra cứu danh bạ nhân sự",
   ].sort();
   assert.deepEqual(toolsOf(agent.name), expected);
   assert.deepEqual(toolsOf(backupAgent.name), expected);

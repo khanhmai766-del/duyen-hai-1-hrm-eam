@@ -27,6 +27,8 @@ export type AiToolName =
   | "material-replacements"
   | "shift-schedule"
   | "search-announcements"
+  | "search-production-orders"
+  | "search-users"
   | "search-knowledge-base"
   | "search-work-permits"
   | "safety-registers"
@@ -43,6 +45,8 @@ export const AI_TOOL_LABELS: Record<AiToolName, string> = {
   "material-replacements": "Đang tra cứu thay vật tư",
   "shift-schedule": "Đang xem lịch trực ca",
   "search-announcements": "Đang đọc thông báo, mệnh lệnh",
+  "search-production-orders": "Đang tra cứu mệnh lệnh sản xuất",
+  "search-users": "Đang tra cứu danh bạ nhân sự",
   "search-knowledge-base": "Đang tra cứu tài liệu hướng dẫn",
   "search-work-permits": "Đang tra cứu phiếu công tác",
   "safety-registers": "Đang đọc sổ PCCC, TBYCNN, tiếp địa",
