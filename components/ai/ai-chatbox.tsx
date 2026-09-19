@@ -21,6 +21,7 @@ import {
 import { AiMarkdown } from "@/components/ai/ai-markdown";
 import { Mascot, type MascotReaction } from "@/components/ai/page-mascot";
 import { useMirroredToasts } from "@/components/ai/toast-mirror";
+import { clearJustLoggedIn, peekJustLoggedIn } from "@/lib/login-greeting";
 import { AI_ASK_EVENT, type AiAskEntity, type AiAskRequest } from "@/lib/ai-ask";
 import type { AiPageContext } from "@/lib/ai-chat";
 import { normalizeText } from "@/lib/nav";
@@ -95,6 +96,8 @@ const STARTER_GROUPS: Array<{ label: string; icon: LucideIcon; items: Starter[] 
 const MASCOT_LINES = {
   /** Lúc mới vào trang, hiện vài giây rồi tắt. `{ten}` thay bằng tên người đăng nhập. */
   greeting: "Chào {ten}. Mình là DH1 INSIGHT, trợ lý tra cứu vận hành",
+  /** Lời chào ngay sau khi đăng nhập — thay cho thông báo "Đăng nhập thành công". */
+  loginGreeting: "Chào {ten}, bạn đã đăng nhập thành công. Mình là DH1 INSIGHT, trợ lý hỗ trợ tra cứu thông tin vận hành",
   /** Khi rê chuột vào mascot. */
   hover: "Hỏi tôi về khiếm khuyết, thiết bị, ca trực…",
   /** Khi rê chuột — tài khoản chỉ tra cứu khiếm khuyết. */
@@ -105,6 +108,10 @@ const MASCOT_LINES = {
 /** Lời chào xuất hiện sau chừng này và tự tắt sau GREETING_MS. */
 const GREETING_DELAY_MS = 1_200;
 const GREETING_MS = 2_500;
+/** Mặt vui sướng lúc chào sau đăng nhập. */
+const LOGIN_CUE = { id: "login-greeting", reaction: "delighted" as const, ms: 2_400 };
+/** Câu chào sau đăng nhập dài gấp đôi nên hiện lâu hơn. */
+const LOGIN_GREETING_MS = 5_000;
 
 export function AiChatbox() {
   const rbac = useRbacAccess();
@@ -124,6 +131,13 @@ export function AiChatbox() {
     root.toggleAttribute("data-mascot-toasts", hideSonner);
     return () => root.removeAttribute("data-mascot-toasts");
   }, [hideSonner]);
+  // Trang đăng nhập không phát toast nữa — mascot chào thay. Người không có quyền trợ lý thì không có
+  // mascot, nên phát lại toast "Đăng nhập thành công" để họ vẫn có xác nhận.
+  React.useEffect(() => {
+    if (loading || allowed || !peekJustLoggedIn()) return;
+    clearJustLoggedIn();
+    toast.success("Đăng nhập thành công");
+  }, [loading, allowed]);
   if (!allowed) return null;
   return <AiChatPanel open={open} setOpen={setOpen} />;
 }
@@ -190,15 +204,18 @@ function AiChatPanel({ open, setOpen }: { open: boolean; setOpen: (open: boolean
     if (open && view === "chat") focusInput();
   }, [open, view, focusInput]);
 
-  // Chào một lần mỗi lần tải trang: mở chatbox rồi đóng lại không làm nó chào lại từ đầu.
+  // Chào một lần mỗi lần tải trang: mở chatbox rồi đóng lại không làm nó chào lại từ đầu. Vừa đăng
+  // nhập thì chào bằng câu báo đăng nhập thành công (thay toast của trang đăng nhập), hiện lâu hơn.
+  const [justLoggedIn] = React.useState(peekJustLoggedIn);
   React.useEffect(() => {
+    if (justLoggedIn) clearJustLoggedIn();
     const show = window.setTimeout(() => setGreeted(true), GREETING_DELAY_MS);
-    const hide = window.setTimeout(() => setGreeted(false), GREETING_DELAY_MS + GREETING_MS);
+    const hide = window.setTimeout(() => setGreeted(false), GREETING_DELAY_MS + (justLoggedIn ? LOGIN_GREETING_MS : GREETING_MS));
     return () => {
       window.clearTimeout(show);
       window.clearTimeout(hide);
     };
-  }, []);
+  }, [justLoggedIn]);
 
   React.useEffect(() => {
     if (!open) return;
@@ -312,7 +329,7 @@ function AiChatPanel({ open, setOpen }: { open: boolean; setOpen: (open: boolean
               : hovered
                 ? (session?.user?.accessMode === "DEFECT_READ_ONLY" ? MASCOT_LINES.hoverDefectOnly : MASCOT_LINES.hover)
                 : greeted
-                  ? MASCOT_LINES.greeting.replace("{ten}", firstName || "bạn")
+                  ? (justLoggedIn ? MASCOT_LINES.loginGreeting : MASCOT_LINES.greeting).replace("{ten}", firstName || "bạn")
                   : null}
           />
           <Mascot
@@ -322,7 +339,7 @@ function AiChatPanel({ open, setOpen }: { open: boolean; setOpen: (open: boolean
             thinking={chat.busy}
             celebrate={celebrate}
             oops={oops}
-            cue={noticeCue}
+            cue={noticeCue ?? (justLoggedIn && greeted ? LOGIN_CUE : null)}
             onClick={() => setOpen(true)}
             ariaLabel="Mở trợ lý AI DH1 OPS INSIGHT"
             label="trợ lý AI"

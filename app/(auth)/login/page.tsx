@@ -6,6 +6,7 @@ import { signIn } from "next-auth/react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
+import { markJustLoggedIn } from "@/lib/login-greeting";
 import { Cpu, ExternalLink, Fingerprint, Loader2, Network, ScanFace, ShieldCheck, Smartphone, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -86,7 +87,8 @@ function LoginInner() {
         window.setTimeout(() => passwordRef.current?.focus(), 0);
         return;
       }
-      toast.success("Đăng nhập thành công");
+      // Mascot trợ lý chào thay cho toast (lib/login-greeting.ts); không có mascot thì chatbox tự phát lại toast.
+      markJustLoggedIn();
       try {
         localStorage.setItem("pp:last-activity", String(Date.now()));
       } catch {
@@ -184,7 +186,7 @@ function LoginInner() {
         redirect: false,
       });
       if (res?.error) throw new Error("Không tạo được phiên đăng nhập");
-      toast.success("Đăng nhập bằng Passkey thành công");
+      markJustLoggedIn();
       try {
         localStorage.setItem("pp:last-activity", String(Date.now()));
       } catch {
