@@ -514,9 +514,15 @@ export async function aiGetShiftSchedule(user: AiToolUser, input: Record<string,
   };
 }
 
+/**
+ * Trang /notifications ("Mệnh lệnh sản xuất") hiển thị MỌI dòng Announcement KHÔNG thuộc loại
+ * `ORDER` (`announcements.filter(a => a.category !== "ORDER")`) — tức dữ liệu lưu `BULLETIN` CHÍNH LÀ
+ * mệnh lệnh sản xuất người dùng thấy. Loại `ORDER` không hiện ở đâu trên web (production: 0 dòng).
+ * Bản trước gán `BULLETIN` = "Bảng tin nội bộ" và lọc mệnh lệnh theo `ORDER`, nên hỏi mệnh lệnh luôn
+ * nhận "không tìm thấy" (19/09/2026). Công cụ nay bám đúng tập trang đang hiển thị.
+ */
 const ANNOUNCEMENT_CATEGORY_LABEL: Record<string, string> = {
-  BULLETIN: "Bảng tin nội bộ",
-  ORDER: "Mệnh lệnh sản xuất",
+  BULLETIN: "Mệnh lệnh sản xuất",
 };
 
 /**
@@ -529,15 +535,15 @@ const ANNOUNCEMENT_CATEGORY_LABEL: Record<string, string> = {
 export async function aiSearchAnnouncements(user: AiToolUser, input: Record<string, unknown>) {
   void user;
   const query = text(input.query);
-  const rawCategory = text(input.category, 20).toUpperCase();
-  const category = rawCategory in ANNOUNCEMENT_CATEGORY_LABEL ? rawCategory : null;
+  // Bỏ qua `category` mô hình gửi (workflow còn mô tả BULLETIN/ORDER kiểu cũ): trả đúng tập trang
+  // "Mệnh lệnh sản xuất" hiển thị — mọi loại trừ ORDER. Xem ANNOUNCEMENT_CATEGORY_LABEL.
   const range = dateRange(input);
   const includeInvalidated = input.includeInvalidated === true || text(input.includeInvalidated, 10) === "true";
   const take = limitOf(input.limit);
 
   const rows = await prisma.announcement.findMany({
     where: {
-      ...(category ? { category } : {}),
+      category: { not: "ORDER" },
       ...(includeInvalidated ? {} : { invalidatedAt: null }),
       ...(range ? { OR: [{ issuedAt: range }, { issuedAt: null, createdAt: range }] } : {}),
       ...(query ? {
@@ -589,11 +595,12 @@ export async function aiSearchAnnouncements(user: AiToolUser, input: Record<stri
 }
 
 /**
- * MỆNH LỆNH SẢN XUẤT — dùng riêng cho Agent để không trộn với bảng tin nội bộ.
- * Việc lọc hiệu lực, khoảng ngày và nội dung vẫn dùng chung một nguồn nghiệp vụ với trang Thông báo.
+ * MỆNH LỆNH SẢN XUẤT — tên công cụ riêng để mô hình dễ chọn đúng khi câu hỏi nói "mệnh lệnh". Trên web
+ * không có bảng tin tách riêng: trang "Mệnh lệnh sản xuất" chính là toàn bộ dữ liệu Announcement (trừ
+ * loại ORDER không hiển thị), nên dùng chung đúng một nguồn với "Thông báo, mệnh lệnh".
  */
 export function aiSearchProductionOrders(user: AiToolUser, input: Record<string, unknown>) {
-  return aiSearchAnnouncements(user, { ...input, category: "ORDER" });
+  return aiSearchAnnouncements(user, input);
 }
 
 /**

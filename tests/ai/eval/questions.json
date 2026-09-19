@@ -322,7 +322,7 @@
       "expect": { "tools": { "allOf": ["search-announcements"] }, "citation": "optional", "behavior": "answer" },
       "tags": [],
       "targetPhase": 0,
-      "why": "Phải lọc category=BULLETIN, không lẫn mệnh lệnh."
+      "why": "Trên web bảng tin chính là trang Mệnh lệnh sản xuất (mọi dòng trừ loại ORDER) — công cụ phải trả dữ liệu, không trả rỗng."
     },
     {
       "id": "announcement-003",
