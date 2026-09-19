@@ -49,6 +49,7 @@ const REACTIONS = [
 
 type Direction = (typeof DIRECTIONS)[number]
 type Reaction = (typeof REACTIONS)[number]
+export type MascotReaction = Reaction
 
 // Clockwise from the right, matching atan2 with y pointing down.
 const CLOCKWISE: Direction[] = [
@@ -125,6 +126,8 @@ export type MascotProps = {
   celebrate?: number
   /** Tăng lên mỗi khi trợ lý trả lời LỖI trong lúc khung chat đóng → mặt chóng mặt. */
   oops?: number
+  /** Đổi `id` là hiện `reaction` trong `ms` (mặc định 1,6 giây) — dùng khi mascot đọc thông báo toast. */
+  cue?: { id: string | number; reaction: Reaction; ms?: number } | null
 }
 
 /**
@@ -135,7 +138,7 @@ export type MascotProps = {
 let appearances = 0
 
 export function Mascot(props: MascotProps) {
-  const { directions, reactions, size = 140, className, label = 'mascot', onClick, ariaLabel, thinking = false, celebrate = 0, oops = 0 } = props
+  const { directions, reactions, size = 140, className, label = 'mascot', onClick, ariaLabel, thinking = false, celebrate = 0, oops = 0, cue = null } = props
 
   const buttonRef = useRef<HTMLButtonElement>(null)
   const squashRef = useRef<HTMLSpanElement>(null)
@@ -187,6 +190,17 @@ export function Mascot(props: MascotProps) {
     oopsRef.current = oops
     flashRef.current('dizzy', DIZZY_END)
   }, [oops])
+
+  const cueId = cue?.id ?? null
+  const cueRef = useRef(cue)
+  useEffect(() => {
+    cueRef.current = cue
+  })
+  useEffect(() => {
+    const current = cueRef.current
+    if (cueId === null || !current) return
+    flashRef.current(current.reaction, current.ms ?? SURPRISED_MS)
+  }, [cueId])
 
   useEffect(() => {
     if (!pointerInside) return

@@ -4,9 +4,9 @@ import * as React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { toast } from "sonner";
+import { toast, useSonner, type ToastT } from "sonner";
 import {
-  ArrowUp, BookOpen, Check, ChevronLeft, Copy, History, Maximize2, Minimize2, Package,
+  ArrowUp, BookOpen, Check, CheckCircle2, ChevronLeft, CircleAlert, Info, Loader2, Copy, History, Maximize2, Minimize2, Package,
   RotateCcw, Search, ShieldCheck, Sparkles, Square, SquarePen, ThumbsDown, ThumbsUp, Trash2, TriangleAlert,
   Users, X, type LucideIcon,
 } from "lucide-react";
@@ -19,7 +19,7 @@ import {
   type AiConversationSummary,
 } from "@/hooks/useAiChat";
 import { AiMarkdown } from "@/components/ai/ai-markdown";
-import { Mascot } from "@/components/ai/page-mascot";
+import { Mascot, type MascotReaction } from "@/components/ai/page-mascot";
 import { AI_ASK_EVENT, type AiAskEntity, type AiAskRequest } from "@/lib/ai-ask";
 import type { AiPageContext } from "@/lib/ai-chat";
 import { normalizeText } from "@/lib/nav";
@@ -86,7 +86,7 @@ const STARTER_GROUPS: Array<{ label: string; icon: LucideIcon; items: Starter[] 
 ];
 
 /**
- * LỜI DẪN CỦA MASCOT. Ba câu, mỗi câu một hoàn cảnh — sửa chữ ở ngay đây.
+ * LỜI DẪN CỦA MASCOT. Mỗi câu một hoàn cảnh — sửa chữ ở ngay đây.
  *
  * Cố ý KHÔNG để bong bóng nằm thường trực: một dòng chữ đứng mãi ở góc màn hình là thứ người
  * dùng phải học cách bỏ qua. Nó chỉ bật khi có lý do, rồi tự tắt.
@@ -96,6 +96,8 @@ const MASCOT_LINES = {
   greeting: "Chào {ten}. Mình là DH1 INSIGHT, trợ lý tra cứu vận hành",
   /** Khi rê chuột vào mascot. */
   hover: "Hỏi tôi về khiếm khuyết, thiết bị, ca trực…",
+  /** Khi rê chuột — tài khoản chỉ tra cứu khiếm khuyết. */
+  hoverDefectOnly: "Hỏi tôi về khiếm khuyết thiết bị…",
   /** Khi trợ lý đang chạy mà khung chat đang đóng. */
   busy: "Đang tra cứu, chờ chút nhé…",
 };
@@ -136,6 +138,25 @@ function AiChatPanel() {
   // Đếm câu trả lời xong / lỗi trong lúc khung chat ĐÓNG — mascot đổi biểu cảm để báo cho người dùng.
   const [celebrate, setCelebrate] = React.useState(0);
   const [oops, setOops] = React.useState(0);
+  // THÔNG BÁO TOAST DO MASCOT ĐỌC. Mascot đứng đúng góc phải dưới — chỗ khung sonner hiện — nên
+  // hai thứ đè lên nhau. Khi mascot đang hiện (chat đóng) thì ẩn khung sonner bằng cờ trên <html>
+  // (app/globals.css) và cho mascot nói thông báo mới nhất; mở chat thì trả lại khung sonner. Người
+  // không có quyền trợ lý AI không có mascot, cờ không bật, thông báo hiện như cũ.
+  const { toasts } = useSonner();
+  const notice = open ? null : toasts[0] ?? null;
+  React.useEffect(() => {
+    const root = document.documentElement;
+    if (open) {
+      root.removeAttribute("data-mascot-toasts");
+      return;
+    }
+    root.setAttribute("data-mascot-toasts", "");
+    return () => root.removeAttribute("data-mascot-toasts");
+  }, [open]);
+  const noticeCue = notice && notice.type !== "loading"
+    ? { id: notice.id, reaction: TOAST_REACTION[notice.type ?? "default"] ?? "smile", ms: 1_800 }
+    : null;
+
   // Chỉnh state lúc render khi `busy` đổi (so với giá trị trước), không dùng effect.
   const [prevBusy, setPrevBusy] = React.useState(chat.busy);
   if (prevBusy !== chat.busy) {
@@ -279,11 +300,12 @@ function AiChatPanel() {
           onMouseEnter={() => setHovered(true)}
           onMouseLeave={() => setHovered(false)}
         >
+          <MascotToastBubble notice={notice} more={Math.max(0, toasts.length - 1)} />
           <MascotBubble
-            text={chat.busy
+            text={notice ? null : chat.busy
               ? MASCOT_LINES.busy
               : hovered
-                ? MASCOT_LINES.hover
+                ? (session?.user?.accessMode === "DEFECT_READ_ONLY" ? MASCOT_LINES.hoverDefectOnly : MASCOT_LINES.hover)
                 : greeted
                   ? MASCOT_LINES.greeting.replace("{ten}", firstName || "bạn")
                   : null}
@@ -295,6 +317,7 @@ function AiChatPanel() {
             thinking={chat.busy}
             celebrate={celebrate}
             oops={oops}
+            cue={noticeCue}
             onClick={() => setOpen(true)}
             ariaLabel="Mở trợ lý AI DH1 OPS INSIGHT"
             label="trợ lý AI"
@@ -497,6 +520,72 @@ function MascotBubble({ text }: { text: string | null }) {
   );
 }
 
+/** Biểu cảm mascot theo loại thông báo. */
+const TOAST_REACTION: Record<string, MascotReaction> = {
+  success: "delighted",
+  error: "dizzy",
+  warning: "surprised",
+  info: "smile",
+  default: "smile",
+};
+
+const TOAST_TONE: Record<string, { box: string; icon: LucideIcon }> = {
+  success: { box: "bg-emerald-600 shadow-emerald-900/25", icon: CheckCircle2 },
+  error: { box: "bg-red-600 shadow-red-900/25", icon: CircleAlert },
+  warning: { box: "bg-amber-500 shadow-amber-900/25", icon: TriangleAlert },
+  loading: { box: "bg-navy shadow-navy/25", icon: Loader2 },
+  default: { box: "bg-navy shadow-navy/25", icon: Info },
+};
+
+function toastText(value: ToastT["title"] | ToastT["description"]) {
+  return typeof value === "function" ? value() : value;
+}
+
+/**
+ * Bong bóng thông báo của mascot — thay chỗ khung sonner (xem AiChatPanel). Bấm vào là tắt thông báo.
+ * Có `role` để trình đọc màn hình vẫn đọc: khung sonner bị ẩn bằng visibility nên không còn được đọc.
+ */
+function MascotToastBubble({ notice, more }: { notice: ToastT | null; more: number }) {
+  const [shown, setShown] = React.useState(notice);
+  const [seen, setSeen] = React.useState(notice?.id ?? null);
+  if (notice && notice.id !== seen) {
+    setSeen(notice.id);
+    setShown(notice);
+  } else if (notice && notice !== shown) {
+    // Cùng id nhưng nội dung đổi (vd toast.loading → toast.success cùng id).
+    setShown(notice);
+  }
+  const tone = TOAST_TONE[shown?.type ?? "default"] ?? TOAST_TONE.default;
+  const Icon = tone.icon;
+  const title = shown ? toastText(shown.title) : null;
+  const description = shown ? toastText(shown.description) : null;
+
+  return (
+    <button
+      type="button"
+      role={shown?.type === "error" ? "alert" : "status"}
+      aria-live={shown?.type === "error" ? "assertive" : "polite"}
+      tabIndex={notice ? 0 : -1}
+      title="Bấm để tắt thông báo"
+      onClick={() => { if (notice) toast.dismiss(notice.id); }}
+      className={cn(
+        "absolute right-full top-1/2 mr-1 flex w-max max-w-[min(20rem,70vw)] -translate-y-1/2 items-start gap-2 rounded-2xl rounded-br-md",
+        "px-3 py-2 text-left text-[12px] font-medium leading-5 text-white shadow-lg",
+        "transition-[opacity,transform] duration-200 motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-electric",
+        tone.box,
+        notice ? "pointer-events-auto cursor-pointer translate-x-0 opacity-100" : "pointer-events-none translate-x-1 opacity-0"
+      )}
+    >
+      <Icon className={cn("mt-0.5 h-4 w-4 shrink-0", shown?.type === "loading" && "animate-spin")} aria-hidden />
+      <span className="min-w-0">
+        <span className="block break-words">{title}</span>
+        {description ? <span className="mt-0.5 block break-words text-[11px] font-normal text-white/85">{description}</span> : null}
+        {more > 0 ? <span className="mt-0.5 block text-[10px] font-normal text-white/75">+{more} thông báo khác</span> : null}
+      </span>
+    </button>
+  );
+}
+
 function IconButton({
   label, onClick, className, children,
 }: { label: string; onClick: () => void; className?: string; children: React.ReactNode }) {
@@ -532,7 +621,9 @@ function EmptyState({ firstName, position, onPick }: { firstName: string; positi
     <div className="my-auto py-2">
       <p className="text-lg font-semibold text-slate-900 dark:text-white">{firstName ? `Chào ${firstName},` : "Xin chào,"}</p>
       <p className="mt-1 text-[13px] leading-6 text-slate-500 dark:text-slate-400">
-        Hỏi về khiếm khuyết, thiết bị, sổ PCCC · TBYCNN · tiếp địa, phiếu công tác, vật tư, hóa chất, lịch trực ca hay cách dùng web. Trợ lý chỉ đọc dữ liệu
+        {defectOnly
+          ? "Tài khoản của bạn chỉ được tra cứu khiếm khuyết thiết bị: hỏi về phiếu khiếm khuyết, trạng thái xử lý và lịch sử khiếm khuyết của thiết bị. Trợ lý chỉ đọc dữ liệu"
+          : "Hỏi về khiếm khuyết, thiết bị, sổ PCCC · TBYCNN · tiếp địa, phiếu công tác, vật tư, hóa chất, lịch trực ca hay cách dùng web. Trợ lý chỉ đọc dữ liệu"}
         {position ? <> cương vị <span className="font-medium text-slate-700 dark:text-slate-200">{position}</span></> : " bạn"} được phép xem và luôn dẫn nguồn để đối chiếu.
       </p>
       <div className="mt-6 space-y-4">

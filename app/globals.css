@@ -741,3 +741,10 @@
     font-size: 8pt !important;
   }
 }
+
+/* Mascot trợ lý AI đọc thông báo toast thay cho khung sonner khi nó đang hiện (components/ai/ai-chatbox.tsx
+   bật cờ này). Chỉ ẨN chứ không gỡ: Toaster vẫn phải chạy để đếm giờ tự tắt từng thông báo. */
+html[data-mascot-toasts] [data-sonner-toaster] {
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
