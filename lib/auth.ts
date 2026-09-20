@@ -39,6 +39,29 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   // updateAge để phiên "trượt" làm mới khi người dùng còn đang thao tác (xem refetchInterval ở SessionProvider).
   session: { strategy: "jwt", maxAge: 30 * 60, updateAge: 5 * 60 },
   trustHost: true,
+  // NextAuth ném `CredentialsSignin` mỗi lần `authorize()` trả null — tức MỖI LẦN ai đó gõ
+  // sai mật khẩu. Logger mặc định in kèm ~20 dòng stack trace vô nghĩa (toàn khung
+  // next-server đã minify), dồn thành ~140 MB `dh1-app-error-0.log` mỗi ngày trên
+  // production (đo 20/09/2026) và làm trôi mất lỗi thật khi cần tra cứu.
+  // Lần đăng nhập hỏng ĐÃ được ghi đúng chỗ: `User.failedLoginAttempts` + `lockedAt`
+  // (xem MAX_FAILED_LOGIN_ATTEMPTS trong authorize bên dưới) — đó mới là dấu vết tra được
+  // bằng SQL. Dòng console chỉ cần đủ để nhận ra đang bị dò mật khẩu hàng loạt.
+  // MỌI lỗi khác giữ nguyên stack, không được nuốt.
+  logger: {
+    error(error) {
+      // PHẢI đọc `.type`, KHÔNG được đọc `.name`. Bản production bị minify nên
+      // `name = this.constructor.name` rút thành một ký tự (thực đo trong .next:
+      // `class _ extends f{...}_.type="CredentialsSignin"`). `.type` là chuỗi hằng
+      // nên sống sót — chính logger mặc định của @auth/core cũng đọc `.type`.
+      // Dùng nhầm `.name` thì bộ lọc này chạy đúng ở dev và vô tác dụng trên server.
+      const type = (error as { type?: string } | undefined)?.type ?? error?.name;
+      if (type === "CredentialsSignin") {
+        console.warn("[auth] Đăng nhập thất bại: sai thông tin đăng nhập.");
+        return;
+      }
+      console.error(error);
+    },
+  },
   pages: {
     signIn: "/login",
   },
