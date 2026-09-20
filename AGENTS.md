@@ -1,6 +1,6 @@
 # AGENTS.md
 
-This file provides guidance to Codex (Codex.ai/code) when working with code in this repository.
+**Nguồn duy nhất** cho mọi công cụ AI làm việc trên repo này (Codex đọc `AGENTS.md`; `CLAUDE.md` chỉ trỏ về đây bằng `@AGENTS.md`). Sửa hướng dẫn thì sửa tệp này — đừng chép sang tệp khác.
 
 PowerPlant EAM — an HRM & Equipment Asset Management system for the Duyên Hải 1 thermal power plant (Vận hành 1). Next.js 16 App Router (React 19), TypeScript (strict), Prisma + PostgreSQL, NextAuth v5, Tailwind + shadcn/ui, TanStack Query. **The entire UI and all user-facing strings (including API error messages) are in Vietnamese** — match that when adding features.
 
@@ -13,6 +13,19 @@ PowerPlant EAM — an HRM & Equipment Asset Management system for the Duyên H�
 - Khi được phép nạp bản mới cho dịch vụ, **chỉ dùng `reload`**. Không chạy `restart` nếu người dùng chưa yêu cầu hoặc cho phép rõ ràng thao tác `restart`.
 - Yêu cầu kết nối SSH hoặc kiểm tra server chỉ cho phép truy cập/kiểm tra trong phạm vi được nêu; **không mặc nhiên cho phép triển khai**.
 - Nếu yêu cầu có thể hiểu theo nhiều mức thao tác, dừng ở mức an toàn hơn và hỏi người dùng trước khi mở rộng phạm vi.
+
+## Cấu hình công cụ AI trong repo
+
+| Đường dẫn | Vai trò |
+|---|---|
+| `AGENTS.md` | **Nguồn duy nhất** của hướng dẫn này. Codex đọc trực tiếp. |
+| `CLAUDE.md` | Chỉ một dòng `@AGENTS.md`. Không đặt nội dung vào đây. |
+| `.claude/skills/`, `.claude/agents/` | **Nguồn** của skill/agent. Chỉ thêm/sửa ở đây. |
+| `.agents/` | Bản sao tự sinh cho Codex — **đã gitignore**. Sinh lại bằng `npm run sync:skills`. |
+| `.codex/agents/` | Bản `.toml` riêng của Codex, viết tay. |
+| `.claude/settings.local.json` | Cấu hình theo máy, đã gitignore. |
+
+Sau khi clone repo, chạy `npm run sync:skills` một lần để dựng `.agents/`.
 
 ## Commands
 
@@ -75,11 +88,21 @@ Profile photos (`User.avatarUrl`), signatures (`User.signatureUrl`), device imag
 
 Static images in `public/brand`, `public/chucvu`, `public/icons3d` (`.png/.jpg/.jpeg/.webp`) go through `next/image` → `/_next/image` (WebP, right size; e.g. a 2.2 MB backdrop becomes ~150 KB). `next.config.mjs` locks the optimizer to exactly those `localPatterns` — no query strings, `remotePatterns` empty, no SVG, quality 75 only, trimmed size list. Use `isOptimizableImage()` from `lib/optimizable-image.ts` when a `src` may be external (Wikimedia photos in the weather card) or an odd extension (`.jfif` is served as octet-stream and rejected) — those stay plain `<img>`. Never add a `"**"` hostname. The QR print page keeps `<img>` on purpose.
 
+### External read-only syncs via the Chrome extension (`chrome-extension/qlvt-sync`)
+Two EVN internal systems are read through a single MV3 extension: the web page posts a same-origin message → `bridge-app.js` → `background.js` finds/opens the source tab → a per-source content script reads data **inside the already-logged-in tab** and returns rows. Cookies never leave the source tab; nothing is ever written back to the source system.
+- **QLVT** (`bridge-qlvt.js`) → `POST /api/vat-tu/oil-grouping/stock-import`. Easy case: QLVT exposes a JSON web service, one request returns all inventory.
+- **LIMS** (`bridge-lims.js` in ISOLATED world + `bridge-lims-page.js` in MAIN world) → `POST /api/lims/oil-analysis/import`, surfaced at `/tien-ich/phan-tich-dau` (nav section **TIỆN ÍCH**). LIMS is a stateful JSF/PrimeFaces app with **no API**, so the MAIN-world bridge drives PrimeFaces widgets and scrapes the result table while the isolated bridge owns `chrome.runtime` messaging. Read `chrome-extension/qlvt-sync/README.md` before touching it — it records the non-obvious traps (only developer-named widget ids are stable, LIMS's own column filters break its paginator, `pfAjaxComplete` is the only reliable "AJAX done" signal, and `đ`→`d` folding is mandatory or the `Đơn vị`/`Đánh giá` headers never match).
+
+When adding a JS file to the extension, also add it to the file list in `chrome-extension/scripts/package-store.mjs`, or the Web Store package ships broken.
+
 ### Self-service vs admin edits
 `/api/me` (PUT) lets any logged-in user edit their own `avatarUrl / signatureUrl / phone / email / employeeId`; only ADMIN may additionally change `name / position / department / role`. `/api/users` is the ADMIN-only CRUD for all users. The account page (`app/(dashboard)/account`) uses `/api/me`; `app/(dashboard)/admin/users` uses `/api/users`.
 
 ### Domain model (`prisma/schema.prisma`)
 Single source of truth; richer than the README. Core entities: `User` (role enum ADMIN/SUPERVISOR/TECHNICIAN/VIEWER) + `WebAuthnCredential`; shift/attendance (`Shift`, `ShiftAssignment`, `CheckIn`, `ShiftHandover`, `HcGroup`/`HcCheckIn` for admin attendance); equipment (`Device`, `RepairLog`, `Material`, `DeviceMaterial`, `MaterialReplacement`/`MaterialReplacementLog`); defects (`Defect`, `DefectHistory` — history is intentionally FK-free so defect tickets can be hidden/purged while history persists); content (`Announcement`/`AnnouncementRead`, `ForumPost`/`ForumReply`, `OperationEvent`); `AuditLog`. `@/*` path alias maps to the repo root.
+
+### Periodic safety registers (PCCC, TBYCNN)
+Two modules share one shape: a **period** row per month plus equipment rows scoped to it, positions normalized against `lib/position-catalog.ts` (label without unit suffix + `PositionCode` + `machine`), server-side xlsx export via exceljs, and writes blocked once the period is closed. PCCC (`pccc_*`, `docs/pccc.md`) is the mature one; TBYCNN — thiết bị yêu cầu nghiêm ngặt về ATLĐ (`tbycnn_*`, `docs/tbycnn.md`) was ported from a standalone localStorage HTML app and is at phase 1 (no period rollover yet). Copy the PCCC patterns when extending either.
 
 ### Shared conventions
 - `lib/constants.ts` holds enum→label maps and ordering (`ROLES`, `REPAIR_STATUS`, `DEFECT_*`, `SHIFT_TYPE`, …) plus shift-window/date helpers — reuse these instead of hardcoding Vietnamese labels.

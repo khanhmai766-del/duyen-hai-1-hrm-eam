@@ -9,6 +9,10 @@ import path from "path";
 
 const root = process.cwd();
 
+// Thư mục sinh tự động — không mirror sang .agents, nếu không mỗi lần chạy skill
+// (ui-ux-pro-max có script Python) lại đẻ ra bytecode khác nhau ở hai bên.
+const SKIP = new Set(["__pycache__", ".pytest_cache", "node_modules", ".venv"]);
+
 /** Mirror một thư mục con (skills/agents) từ .claude sang .agents. */
 function mirror(folder, { required }) {
   const source = path.join(root, ".claude", folder);
@@ -45,7 +49,11 @@ function mirror(folder, { required }) {
 
   // Copy đè từng mục từ nguồn sang đích
   for (const name of sourceNames) {
-    cpSync(path.join(source, name), path.join(target, name), { recursive: true, force: true });
+    cpSync(path.join(source, name), path.join(target, name), {
+      recursive: true,
+      force: true,
+      filter: (from) => !SKIP.has(path.basename(from)),
+    });
     console.log(`✓ Đồng bộ ${folder}: ${name}`);
   }
   console.log(`Xong — ${sourceNames.length} mục trong .agents/${folder} khớp với .claude/${folder}.`);

@@ -11,6 +11,7 @@
     "build": "prisma generate && next build",
     "start": "next start",
     "lint": "eslint .",
+    "sync:skills": "node scripts/sync-skills.mjs",
     "postinstall": "prisma generate",
     "db:start": "node scripts/pg.mjs",
     "db:push": "prisma db push",

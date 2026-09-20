@@ -24,7 +24,7 @@ Import chỉ qua **upload file `.xlsx`**.
 
 ## 1. KHẢO SÁT BẮT BUỘC TRƯỚC KHI CODE
 
-1. Đọc `CLAUDE.md` — tuân thủ toàn bộ convention.
+1. Đọc `AGENTS.md` (nguồn hướng dẫn duy nhất; `CLAUDE.md` chỉ trỏ về đó) — tuân thủ toàn bộ convention.
 2. Repo có `.codegraph/` → dùng `codegraph_explore` trước khi grep/đọc lan man.
 3. Đọc các file mẫu (đã xác nhận tồn tại):
    - `prisma/schema.prisma`, `lib/api.ts`, `lib/fetcher.ts`, `lib/rbac-guard.ts`,

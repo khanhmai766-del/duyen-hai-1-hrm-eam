@@ -30,6 +30,9 @@ public/videos/*
 # Cấu hình Claude theo máy (không chia sẻ)
 .claude/settings.local.json
 
+# .agents/ là BẢN SAO tự sinh của .claude/{skills,agents} cho Codex — nguồn là .claude/.
+# Không commit bản sao; sau khi clone thì chạy: npm run sync:skills
+/.agents/
 
 # Artifact tạm từ công cụ chạy thử (Codex): log dev-server, output test, video frames
 /codex-*.err
