@@ -3,7 +3,7 @@
 # DEPLOY PRODUCTION — chạy TRÊN SERVER (VPS /var/www/dh1-app, pm2 dh1-app).
 #
 #   cd /var/www/dh1-app && ./scripts/deploy-server.sh
-#   ./scripts/deploy-server.sh --sql prisma/sql/tbycnn-init.sql --sql prisma/sql/abc.sql
+#   ./scripts/deploy-server.sh --sql prisma/manual/tbycnn-init.sql --sql prisma/manual/abc.sql
 #   ./scripts/deploy-server.sh --dry-run          # xem sẽ làm gì, không đụng gì
 #   ./scripts/deploy-server.sh --rollback         # quay lại bản build trước
 #   Hướng dẫn từng bước + sự cố: docs/huong-dan-deploy-production.md
@@ -14,7 +14,7 @@
 #
 # BỐN NGUYÊN TẮC nằm sau cách viết script này:
 #
-#   1. SQL KHÔNG TỰ ĐỘNG CHẠY HẾT. `prisma/sql/` có cả file một lần dùng và file XOÁ dữ
+#   1. SQL KHÔNG TỰ ĐỘNG CHẠY HẾT. `prisma/manual/` có cả file một lần dùng và file XOÁ dữ
 #      liệu (purge-*, remove-*, drop-*). Quét cả thư mục rồi chạy tuốt là có ngày xoá nhầm
 #      bảng thật. Vì vậy phải liệt kê tường minh từng file bằng --sql.
 #

@@ -26,8 +26,8 @@ Chạy `npm run build` **trên máy dev** thì hoàn toàn bình thường — c
 
 1. Kiểm tra: `npx tsc --noEmit` và `npm run build` (trên máy dev).
 2. Commit rồi `git push origin main`.
-3. Nếu bản này **thêm bảng/cột** trong DB: chuẩn bị file SQL (thường ở `prisma/manual/` hoặc
-   `prisma/sql/`) và ghi lại đường dẫn — lúc deploy phải truyền từng file bằng `--sql`.
+3. Nếu bản này **thêm bảng/cột** trong DB: đặt file SQL vào `prisma/manual/` (nơi duy nhất
+   chứa SQL thủ công) và ghi lại đường dẫn — lúc deploy phải truyền từng file bằng `--sql`.
 
 ## 2. Vào server
 

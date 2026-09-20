@@ -56,7 +56,7 @@ Tạo bảng trên DB mới: **không** dùng `npm run db:push` (DB dev còn b�
 của nhánh khác, push sẽ đòi drop). Chạy SQL đã lọc sẵn:
 
 ```bash
-npx prisma db execute --file prisma/sql/tbycnn-init.sql --schema prisma/schema.prisma
+npx prisma db execute --file prisma/manual/tbycnn-init.sql --schema prisma/schema.prisma
 ```
 
 ## 3. Quy tắc nghiệp vụ (`lib/tbycnn.ts` — client và server dùng chung)

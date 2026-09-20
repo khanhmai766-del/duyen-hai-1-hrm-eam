@@ -119,7 +119,7 @@ npm run check:pccc -- T08.2026
    `ShiftStaffing*` đang tồn tại trong DB nhưng không có trong schema, và bảng
    `oil_analysis_failures` thì có trong schema mà chưa có trong DB.
    → Vì vậy module PCCC được tạo bằng SQL riêng, chỉ CREATE:
-   `npx prisma db execute --file scripts/sql/pccc_init.sql --schema prisma/schema.prisma`.
+   `npx prisma db execute --file prisma/manual/pccc_init.sql --schema prisma/schema.prisma`.
    Cần xử lý phần lệch pha kia riêng, đừng `db push` bừa.
 3. **FM200: giữ trong phạm vi, nhập trực tiếp trên web (đã chốt).** Không file Excel
    nào trên máy còn bảng FM200 — Google Sheet và `Quản lý BCC và TCC (1).xlsx` chỉ có
@@ -384,7 +384,7 @@ còn tên và thời điểm ký.
 Cần chạy khi triển khai:
 
 ```bash
-npx prisma db execute --file scripts/sql/pccc_signature_image.sql --schema prisma/schema.prisma
+npx prisma db execute --file prisma/manual/pccc_signature_image.sql --schema prisma/schema.prisma
 ```
 
 `POST /api/pccc/signatures/bulk` với `preview: true` **không ghi gì**, chỉ trả số liệu để
@@ -511,7 +511,7 @@ rule trên bucket.
 DB dev đang lệch pha với `schema.prisma` (mục 4.2) nên cột mới thêm bằng SQL riêng:
 
 ```bash
-npx prisma db execute --file scripts/sql/pccc_archive.sql --schema prisma/schema.prisma
+npx prisma db execute --file prisma/manual/pccc_archive.sql --schema prisma/schema.prisma
 ```
 
 Và **phải điền S3 thật** trong `.env` (`S3_ENDPOINT/S3_BUCKET/S3_ACCESS_KEY/S3_SECRET_KEY`).

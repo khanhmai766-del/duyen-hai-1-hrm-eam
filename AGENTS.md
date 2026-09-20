@@ -59,9 +59,13 @@ There is no test suite. To type-check, run `npx tsc --noEmit`.
 2. **Stop the dev/preview server before `prisma generate` on Windows** — otherwise the running app locks `query_engine-windows.dll.node` and generate fails with `EPERM`.
 3. `npm run db:push` syncs the *entire* schema and will try to **drop tables present in the DB but absent from `schema.prisma`** (it warns about data loss and refuses without `--accept-data-loss`). The dev DB can contain such out-of-schema tables from other branches. To add a single column safely without dropping anything, apply targeted SQL instead, e.g.:
    ```bash
-   npx prisma db execute --file <file.sql> --schema prisma/schema.prisma
+   npx prisma db execute --file prisma/manual/<file>.sql --schema prisma/schema.prisma
    # ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "newCol" TEXT;
    ```
+   **`prisma/manual/` là nơi duy nhất chứa SQL thủ công** (trước đây rải ở `prisma/*.sql`,
+   `prisma/sql/`, `scripts/sql/` — đã gộp 9/2026). Đừng tạo thư mục SQL mới; đọc
+   `prisma/manual/README.md` trước khi thêm file, nhất là mục cảnh báo file xoá dữ liệu
+   và thư mục con `tcms/` mà test đọc theo tên.
 4. Verifying through the live preview writes to the **real dev database** (there is no separate test DB) — avoid destructive form-driving tests on real records; prefer isolated API round-trips, or restore data after.
 
 ## Architecture

@@ -18,6 +18,9 @@ prisma/dev.db
 public/uploads
 .local-storage
 
+# Bản sao lưu sổ PCCC xuất trước khi xoá kỳ — giữ trên đĩa, không đưa vào Git
+/exports/PCCC-*.xlsx
+
 # Dữ liệu export người dùng/nhân sự không đưa vào Git
 users_export*.json
 *_users_export*.json

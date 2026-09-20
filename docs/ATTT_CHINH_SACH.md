@@ -411,7 +411,7 @@ hong giua chung. Huong dan tao vai tro: `docs/huong-dan-deploy-production.md` ph
 Mau rollback database:
 
 ```bash
-npx prisma db execute --file scripts/sql/<rollback-file>.sql --schema prisma/schema.prisma
+npx prisma db execute --file prisma/manual/<rollback-file>.sql --schema prisma/schema.prisma
 ```
 
 Sau rollback database phai kiem tra:
