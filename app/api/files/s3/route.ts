@@ -72,7 +72,7 @@ export async function GET(req: NextRequest) {
      * qua Node → MinIO, kể cả khi mở lại đúng tấm vừa xem.
      *
      * Chỉ mở cho thư mục này: hai nơi ghi vào nó (route tải ảnh và
-     * scripts/import-grounding-lightning.ts) đều đi qua uploadImageBufferToS3 nên chắc
+     * scripts/import/grounding-lightning.ts) đều đi qua uploadImageBufferToS3 nên chắc
      * chắn là khoá mới. Các thư mục khác chưa rà hết người ghi nên giữ nguyên 5 phút.
      * `private` để proxy/CDN dùng chung không giữ lại ảnh vốn phải đăng nhập mới xem.
      */

@@ -287,7 +287,7 @@ Viec lam:
 2. Chuyen `$use` trong `lib/prisma.ts` sang `$extends` (query extension) ngay o bac nay — Prisma 7 bo `$use`. Kiem ca 16
    duong ghi khiem khuyet (form, dong bo hai chieu, outbox n8n, gop lich su) van xoa cache, ke ca trong `$transaction`.
 3. Kiem tra: `npx tsc --noEmit`, `npm run lint`, `npm run build`; crawl 55 trang so moc (`scripts/verify`); chay cac route
-   co SQL tho (khiem khuyet, vat tu, PCCC, TBYCNN, ho so hoa chat); do toc do bang `scripts/bench-vat-tu.ts` truoc/sau;
+   co SQL tho (khiem khuyet, vat tu, PCCC, TBYCNN, ho so hoa chat); do toc do bang `scripts/check/bench-vat-tu.ts` truoc/sau;
    `prisma migrate diff` tren DB dev khong phat sinh thay doi ngoai 4 index `text_pattern_ops` da biet.
 4. Chu du an kiem tay tren localhost → deploy bang `./scripts/deploy-server.sh` (script tu `npm install` + `prisma generate`).
 5. Rollback: `git revert` + deploy (cai lai 5.22). Khong dung `--rollback` don thuan vi `node_modules` da doi.

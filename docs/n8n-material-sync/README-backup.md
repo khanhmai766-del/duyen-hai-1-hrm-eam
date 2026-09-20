@@ -109,8 +109,8 @@ một gói bị lỗi có thể tiếp tục đối chiếu từ dữ liệu đ�
 ## Kiểm tra cục bộ
 
 ```bash
-node scripts/generate-material-backup-workflows.mjs
-npx tsx scripts/check-material-backup-sync.ts
+node scripts/build/material-backup-workflows.mjs
+npx tsx scripts/check/material-backup-sync.ts
 ```
 
 Script kiểm tra dùng dữ liệu mô phỏng, không truy cập DB/n8n/Google Sheet. Kiểm tra

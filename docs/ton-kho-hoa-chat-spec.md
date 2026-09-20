@@ -875,7 +875,7 @@ Chỉ dùng `apiGet` / `apiMutate`. Toast tiếng Việt qua `sonner`.
    npx prisma db execute --file prisma/manual/add-chemical-inventory.sql --schema prisma/schema.prisma
    ```
    File này **bắt buộc phải có** — trên production `prisma migrate deploy` không dùng được (P3005).
-6. Seed 16 mặt hàng bằng **`scripts/seed-chemical-inventory.ts`** (`npm run seed:chemical`),
+6. Seed 16 mặt hàng bằng **`scripts/import/seed-chemical-inventory.ts`** (`npm run seed:chemical`),
    idempotent (`upsert` theo `code`).
    ⚠️ **KHÔNG gắn vào `prisma/seed.ts`** — file đó mở đầu bằng một loạt `deleteMany()` xoá sạch
    `User` / `Material` / `Shift`; gắn vào là mỗi lần ai chạy `npm run db:seed` sẽ mất dữ liệu thật.
@@ -1041,7 +1041,7 @@ Sau mỗi pha: `npx tsc --noEmit` sạch và báo cáo ngắn trước khi sang 
 | Pha | Nội dung | Tiêu chí xong |
 |---|---|---|
 | **1** ✅ | Schema + `prisma/manual/add-chemical-inventory.sql` + seed 16 mặt hàng + hàm tính thuần | **XONG 2026-08-20**: 6 model · 16 mặt hàng · 39/39 phép kiểm (`npm run check:chemical`) |
-| **2** ✅ | `importer.ts` + `import-commit.ts` + `scripts/import-chemical-inventory.ts` | **XONG 2026-08-20**: 0 lỗi · 215 phiếu (213 từ tab phiếu + 2 dựng từ cột N) · 161 bản đọc · 9 kỳ · 5 hợp đồng. Đối soát 6 hóa chất: 4 khớp tuyệt đối, 2 lệch ≤ 6 g do sheet cộng tay, **0 ô lệch thật**. Chạy lại lần hai: 0 dòng mới (idempotent) |
+| **2** ✅ | `importer.ts` + `import-commit.ts` + `scripts/import/chemical-inventory.ts` | **XONG 2026-08-20**: 0 lỗi · 215 phiếu (213 từ tab phiếu + 2 dựng từ cột N) · 161 bản đọc · 9 kỳ · 5 hợp đồng. Đối soát 6 hóa chất: 4 khớp tuyệt đối, 2 lệch ≤ 6 g do sheet cộng tay, **0 ô lệch thật**. Chạy lại lần hai: 0 dòng mới (idempotent) |
 | **3** ✅ | API + hooks + audit (RBAC tạm) | **XONG 2026-08-20**: 16 route · 5 module dịch vụ · 20 hook · 51/51 phép kiểm round-trip (`npm run check:chemical-api`). **Còn treo: phân quyền chi tiết — phải hỏi lại người dùng trước khi chạy dữ liệu thật** |
 | **4** ✅ | Frontend: nhật ký NH3 + lưới tháng + 5 tab còn lại + nav | **XONG 2026-08-20**: 8 component + 1 route + mục nav. `tsc`/`eslint` sạch, `next build` OK (trang 23,5 kB) |
 | **5** ✅ | Bảng nhiều dòng xe ở bước lãnh của `MaterialTicket` (mục 7.3) | **XONG 2026-08-21**: cột `chemicalReceiptIds` · `lib/chemical-inventory/ticket-link.ts` · bảng nhiều dòng xe ở bước lãnh · hành động `chemicalTrucks` cho phiếu NH3 đã hoàn tất · gỡ liên kết khi xóa phiếu · 28/28 phép kiểm (`npm run check:chemical-link`) |

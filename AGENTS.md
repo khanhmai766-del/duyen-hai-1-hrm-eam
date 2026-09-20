@@ -41,6 +41,8 @@ npm run lint         # eslint . (ESLint 9 flat config — Next 16 bỏ `next lin
 
 There is no test suite. To type-check, run `npx tsc --noEmit`.
 
+`scripts/` chia theo việc script làm với dữ liệu: `import/` (nạp vào DB), `check/` (chỉ đọc), `data-ops/` (sửa dữ liệu — nguy hiểm), `build/` (sinh mẫu .docx/workflow), `ai/`, `verify/`. Vài tệp buộc phải ở gốc vì systemd/tài liệu gọi theo đường dẫn tuyệt đối — xem `scripts/README.md` trước khi dời tệp nào.
+
 **Production deploy:** never run `npm run build`, `npm install` or `pm2 restart` by hand in `/var/www/dh1-app` — an in-place build wipes the live `.next` and users get 500s for 2–3 minutes. Deploy only with `scripts/deploy-server.sh` (builds in a separate dir inside a mount namespace, then swaps). See `docs/huong-dan-deploy-production.md`.
 
 `npm run dev` (via `scripts/dev.mjs`) auto-starts the embedded Postgres on port 5433 if nothing is listening there, then runs `next dev`. The preview harness runs `npm run dev -- -p 3030`. You usually do **not** need a separate `db:start` terminal.

@@ -21,7 +21,7 @@
 - **Tự đóng nội bộ:** chỉ phiếu `teamType=INTERNAL`, đã cấp, còn mở, gắn đúng `defectId`; SYC phải còn tồn tại, không hủy, đang Đã xử lý và có `completedAt` đủ 24 giờ. Áp dụng cả giấy lẫn điện tử. SYC mở lại trước hạn thì không đóng; nháp/đóng/hủy/không có SYC/mốc hoàn thành không bị tác động. Nếu SYC mở lại sau khi PCT đã đóng, PCT không tự mở lại.
 - Tác vụ nền được đăng ký qua `instrumentation.ts`, kiểm tra mỗi phút khi tiến trình Next.js Node đang chạy; khởi động có lượt kiểm tra bù phiếu quá hạn. Khóa SYC/PCT trong giao dịch, ghi lịch sử **Hệ thống — Tự đóng theo SYC đã xử lý đủ 24 giờ**, không ghi lặp. Thời điểm đóng ghi mốc hoàn thành + 24 giờ (không trước thời điểm cấp/cho phép cũ). Tác vụ không truy cập NKVH và không xác minh trạng thái phiếu ngoài website. Danh sách sổ tự tải lại mỗi phút.
 - **Nhà thầu:** giữ đầy đủ Nháp → Đã cấp → Đang thực hiện → Chờ làm tiếp → Đã đóng; mở lại lần làm việc, bàn giao CHTT, kết thúc lần cuối trước đóng. Không tự đóng theo SYC, dù có liên kết SYC.
-- Không cần thêm cột hoặc thay đổi database cho luồng này. `scripts/check-work-permits-auto-close-local.ts` kiểm tra PostgreSQL local trong giao dịch hoàn tác, không để lại mẫu.
+- Không cần thêm cột hoặc thay đổi database cho luồng này. `scripts/check/work-permits-auto-close-local.ts` kiểm tra PostgreSQL local trong giao dịch hoàn tác, không để lại mẫu.
 
 - Hai sổ Cơ – Nhiệt – Hóa và Điện, nhập số thực tế, không tự cấp số. Số thuần được hiển thị theo mẫu chung `{số}/{năm}/VH1-NĐDH` trong bảng, tiêu đề chi tiết, các lần làm việc, cảnh báo và Excel. Form xem trước số đầy đủ ngay khi nhập. Số đã đầy đủ/mã cũ giữ nguyên, không ghép đuôi hai lần; dữ liệu số gốc không bị ghi lại.
 - Cột STT trong mẫu giấy ghi KH (kế hoạch), ĐX (đột xuất) hoặc SC (sự cố), không phải số thứ tự dòng. Form, bảng, bộ lọc và cột đầu Excel dùng phân loại này. KH/ĐX/SC không bắt buộc ở mọi trạng thái, kể cả Đã cấp. Phiếu cũ giữ null, không tự gán loại.
@@ -101,7 +101,7 @@ SQL chạy một lần trong giao dịch, tạo `WorkPermit`, `WorkPermitHistory
 ## Kiểm tra
 
 ```sh
-npx tsx scripts/check-work-permits.ts
+npx tsx scripts/check/work-permits.ts
 npx tsc --noEmit --incremental false
 ```
 
@@ -119,7 +119,7 @@ Chạy lại kiểm thử tích hợp **chỉ khi được phép tạo/dọn d�
 # Terminal 1: không gửi bản sao audit thử lên S3, giữ địa chỉ xác thực ở local.
 AUDIT_LOG_S3_ENABLED=false AUTH_URL=http://localhost:3030 NEXTAUTH_URL=http://localhost:3030 npm run dev:next -- -p 3030
 # Terminal 2: tự tạo và dọn fixture riêng; không dùng tài khoản/hồ sơ thật.
-npx tsx scripts/check-work-permits-local.ts
+npx tsx scripts/check/work-permits-local.ts
 ```
 
 Build, đẩy GitHub, cập nhật server và reload chỉ thực hiện khi được yêu cầu.

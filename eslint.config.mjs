@@ -13,7 +13,7 @@ export default defineConfig([
     "**/.next-builds/",
     "**/node_modules/",
     "prisma/generated/",
-    "scripts/perf-audit.mjs",
+    "scripts/check/perf-audit.mjs",
     // Thư mục nháp của phiên làm việc — không phải mã nguồn dự án (xem .gitignore).
     "tmp/",
   ]),

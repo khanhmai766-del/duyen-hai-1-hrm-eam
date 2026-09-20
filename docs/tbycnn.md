@@ -82,7 +82,7 @@ ngã về không**: mệnh đề `NOT EXISTS (… chuKyThu > 6)` chốt điều 
 năm", nên chạy lại lần hai không đổi dòng nào và không thể có trạng thái nửa năm nửa tháng.
 
 Đổi kèm: nhãn cột ở bảng (`Chu kỳ (tháng)`), file Excel và bản in PDF (`Chu kỳ thử
-(tháng)`), và `scripts/import-tbycnn.ts` (tệp nguồn vẫn ghi năm → nhân 12 lúc nạp, chạy
+(tháng)`), và `scripts/import/tbycnn.ts` (tệp nguồn vẫn ghi năm → nhân 12 lúc nạp, chạy
 lại script không kéo dữ liệu về đơn vị cũ).
 
 Trên biểu mẫu thêm thiết bị: **Kiểm định gần nhất** là ô lịch (`<input type="date">`,
@@ -420,7 +420,7 @@ Ba bảng dụng cụ, ba biểu mẫu biên bản riêng, bám đúng bản m�
 | Dây đeo an toàn | `templates/bbkt-day-dai-an-toan.docx` | thử tải tĩnh + động; 9 cột; có trang ảnh |
 | Dụng cụ điện cầm tay | `templates/bbkt-dung-cu-dien-cam-tay.docx` | đo cách điện; 11 cột, đầu bảng HAI TẦNG; có trang ảnh |
 
-Khuôn giống hệt BBNT/BBTHVT của module vật tư: `scripts/build-tbycnn-bbkt-templates.mjs`
+Khuôn giống hệt BBNT/BBTHVT của module vật tư: `scripts/build/tbycnn-bbkt-templates.mjs`
 sinh mẫu `.docx` có token `{{...}}`, `lib/tbycnn-bbkt-doc.ts` điền bằng docxtemplater,
 `POST /api/tbycnn/export-bbkt` trả tệp về. Phần chữ đổi theo đợt (thành phần kiểm tra,
 giờ, địa điểm) hỏi qua hộp thoại, điền sẵn theo `BBKT_FORMS` ở `lib/tbycnn-bbkt.ts`.

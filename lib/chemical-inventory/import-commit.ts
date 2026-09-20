@@ -84,7 +84,7 @@ export async function commitImportPlan(
 
   if (missing.length > 0) {
     throw new Error(
-      `Danh mục thiếu các mặt hàng: ${missing.join(", ")}. Chạy scripts/seed-chemical-inventory.ts trước.`
+      `Danh mục thiếu các mặt hàng: ${missing.join(", ")}. Chạy scripts/import/seed-chemical-inventory.ts trước.`
     );
   }
 

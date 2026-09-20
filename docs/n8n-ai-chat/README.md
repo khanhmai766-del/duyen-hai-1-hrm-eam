@@ -245,7 +245,7 @@ hỏi thì tool trả danh sách rỗng kèm lời nhắc trả lời bằng d�
 ## 5. Thử trên máy dev không cần n8n
 
 ```bash
-node scripts/mock-n8n-ai-chat.mjs
+node scripts/ai/mock-n8n-ai-chat.mjs
 # terminal khác (giá trị giả, chỉ dùng cho dev):
 N8N_AI_CHAT_WEBHOOK_URL=http://127.0.0.1:5679/webhook/ai-chat-dh1 N8N_AI_CHAT_TOKEN=dev-webhook-token \
 N8N_AI_TOOL_TOKEN=dev-tool-token AI_CAPABILITY_SECRET=dev-capability-secret-0123456789abcdef \
@@ -324,7 +324,7 @@ có key này, và từ chối nếu nó trùng `GEMINI_API_KEY` — để lượ
 thật. Gói miễn phí vẫn chạy được: gặp 429 script tự chờ và thử lại, hết lượt thử thì đánh dấu câu đó
 "không chấm" chứ không tính là trượt. Mặc định nghỉ 4 giây giữa các câu (`--delay-ms`).
 
-Cách hoạt động — `scripts/ai-eval/`: đọc model, system message, prompt, 6 công cụ và trần số vòng
+Cách hoạt động — `scripts/ai/eval/`: đọc model, system message, prompt, 6 công cụ và trần số vòng
 **thẳng từ `workflow-production.json`** (sửa workflow là bộ chấm tự theo), gọi Gemini REST, còn công
 cụ chạy ngay trong tiến trình bằng đúng các hàm website dùng (`runAiTool` — cùng phân quyền, cùng
 ngân sách token, cùng cách gom nguồn). Không đi qua n8n vì các node công cụ gọi cứng

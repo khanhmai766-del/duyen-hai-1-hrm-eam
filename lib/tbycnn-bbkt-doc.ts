@@ -1,7 +1,7 @@
 /**
  * Dựng BIÊN BẢN KIỂM TRA ĐỊNH KỲ (BBKT) dụng cụ ATLĐ dưới dạng .docx.
  *
- * Điền `templates/bbkt-*.docx` (sinh bằng scripts/build-tbycnn-bbkt-templates.mjs) bằng
+ * Điền `templates/bbkt-*.docx` (sinh bằng scripts/build/tbycnn-bbkt-templates.mjs) bằng
  * docxtemplater, cùng khuôn với BBNT / BBTHVT / ĐXVT của module vật tư.
  *
  * BẢNG PHỤ LỤC LUÔN DỰNG LẠI TỪ SỔ, không chép cứng: sửa số liệu trên web rồi xuất lại

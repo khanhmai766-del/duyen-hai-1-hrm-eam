@@ -275,7 +275,7 @@ export async function consumeStock(
         `Số lượng hiện có không đủ, còn thiếu ${shortfall}` +
           ` (mã ${materialCode}: cần ${quantity}, tồn theo lô ${con}).` +
           ` Nếu màn hình vẫn báo còn hàng thì số tồn chưa được gắn với lô nào —` +
-          ` chạy scripts/backfill-opening-stock-lots.mjs để dựng lô tồn đầu kỳ.`
+          ` chạy scripts/data-ops/backfill-opening-stock-lots.mjs để dựng lô tồn đầu kỳ.`
       );
     }
     plan = allocation;

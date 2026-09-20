@@ -14,7 +14,7 @@ import {
   type EvalQuestion,
   type EvalResult,
   type EvalRun,
-} from "../../scripts/ai-eval/core";
+} from "../../scripts/ai/eval/core";
 
 /** Lõi bộ chấm — kiểm bằng CHÍNH file workflow thật, không gọi Gemini lượt nào. */
 

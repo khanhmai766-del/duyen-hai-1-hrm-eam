@@ -7,7 +7,7 @@
  *   • Dụng cụ điện cầm tay   — kiểm tra bằng mắt + đo cách điện
  *
  * Phần CHỮ CỐ ĐỊNH (căn cứ, phương pháp, kiến nghị, khối ký, ghi chú) nằm sẵn trong tệp
- * `templates/bbkt-*.docx` do `scripts/build-tbycnn-bbkt-templates.mjs` sinh ra. Tệp này
+ * `templates/bbkt-*.docx` do `scripts/build/tbycnn-bbkt-templates.mjs` sinh ra. Tệp này
  * chỉ giữ phần THAY ĐỔI THEO TỪNG ĐỢT để giao diện điền sẵn và máy chủ dựng lại — dùng
  * chung client/server nên hai nơi không thể lệch nhau.
  *

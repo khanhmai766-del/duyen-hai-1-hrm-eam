@@ -3271,7 +3271,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
       /*
        * Dọn ảnh của các phiếu quyết toán ĐÃ QUÁ HẠN GIỮ. Gắn vào chính lượt quyết toán vì
        * đây là nhịp có tần suất vừa phải và luôn có lượt kế tiếp; bộ hẹn giờ trên máy chủ
-       * (scripts/purge-usage-photos.ts) là đường dự phòng cho những tuần không ai quyết toán.
+       * (scripts/data-ops/purge-usage-photos.ts) là đường dự phòng cho những tuần không ai quyết toán.
        * Hỏng thì bỏ qua — dọn tệp không được phép làm hỏng một lượt quyết toán đã ghi xong.
        */
       const purged = await purgeExpiredUsagePhotos(prisma).catch(() => ({ tickets: 0, removed: 0 }));
