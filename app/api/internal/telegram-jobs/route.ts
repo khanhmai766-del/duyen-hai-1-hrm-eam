@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 import { fail, handle, ok } from "@/lib/api";
 import { runLevelOneDefectDigest, runShiftDefectDigest, runWeeklyDefectDigest } from "@/lib/defect-telegram-digest";
+import { runMaterialTicketAttentionDigest } from "@/lib/material-ticket-telegram-digest";
 import { verifyBearerToken } from "@/lib/server-token";
 import { runSyncMonitorJob } from "@/lib/sync-monitor";
 
@@ -22,7 +23,10 @@ export async function POST(req: NextRequest) {
     const result = job === "shift"
       ? await runShiftDefectDigest({ dryRun })
       : job === "level-one"
-        ? await runLevelOneDefectDigest({ dryRun })
+        ? {
+            defects: await runLevelOneDefectDigest({ dryRun }),
+            materialTickets: await runMaterialTicketAttentionDigest({ dryRun }),
+          }
         : job === "weekly"
           ? await runWeeklyDefectDigest({ dryRun })
           : await runSyncMonitorJob({ dryRun });

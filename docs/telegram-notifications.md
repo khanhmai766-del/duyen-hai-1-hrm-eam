@@ -4,16 +4,36 @@ Bot Telegram gửi các loại thông báo:
 
 - kiểm tra lỗi đồng bộ mỗi 5 phút, cảnh báo sau 30 phút và báo phục hồi;
 - gửi ngay khi phát sinh/nâng lên Mức 1 hoặc khi Mức 1 đổi trạng thái quan trọng;
-- 06:00, 14:00 và 22:00: khiếm khuyết phát sinh và đã xử lý trong ca vừa kết thúc;
-- 07:00: khiếm khuyết Mức 1 còn tồn đọng, đánh dấu tồn trên 24 giờ và 7 ngày;
+- gửi ngay khi phiếu vật tư (theo dõi vật tư) qua một bước bất kỳ trong quy trình
+  (tạo phiếu, đề xuất, xác nhận, lãnh, sử dụng, nghiệm thu, … tới quyết toán);
+- 06:00, 14:00 và 22:00: khiếm khuyết phát sinh/đã xử lý trong ca vừa kết thúc,
+  kèm phiếu vật tư mới tạo trong ca;
+- 07:00: khiếm khuyết Mức 1 còn tồn đọng (đánh dấu tồn trên 24 giờ và 7 ngày) và
+  phiếu vật tư cần chú ý (cảnh báo trễ hạn, chưa đem/chưa nhận lại biên bản thu hồi);
 - 07:15 thứ Hai: tổng hợp tuần trước.
 
 Ba ca được tính theo giờ Việt Nam: ca sáng 06:00–14:00, ca chiều
 14:00–22:00 và ca đêm 22:00–06:00 ngày kế tiếp. Truy vấn dùng khoảng
 `[đầu ca, cuối ca)` để phiếu tại thời điểm giao ca chỉ thuộc đúng một ca.
+Phiếu khiếm khuyết/vật tư "phát sinh trong ca" tính theo `createdAt` (giờ hệ
+thống thực sự ghi nhận), không dùng ngày phát hiện theo Sheet (không có giờ).
 
 Mọi mốc ngày nghiệp vụ dùng `Asia/Ho_Chi_Minh`. Timer production dùng UTC vì
 systemd 249 trên VPS chưa hỗ trợ hậu tố múi giờ trong `OnCalendar`.
+
+## Cảnh báo theo từng bước của phiếu vật tư
+
+`notifyMaterialTicketStep()` (`lib/material-ticket-telegram-alert.ts`) gửi 1
+tin ngay sau khi một action của `PUT /api/material-tickets/[id]` (hoặc tạo
+phiếu mới) chạy thành công — action nào không đổi trạng thái thực sự (`editInfo`,
+`editStep`) thì không gửi. Không cần cấu hình thêm; dùng chung
+`TELEGRAM_ALERT_ENABLED`/`TELEGRAM_CHAT_IDS` với khiếm khuyết.
+
+`buildMaterialTicketAttentionDigest()` (`lib/material-ticket-telegram-digest.ts`)
+chạy trong cùng job `level-one` (07:00), gửi thành tin riêng, tái dùng nguyên
+logic cảnh báo đã có trên bảng theo dõi vật tư: `materialTicketAlert()` (trễ hạn
+2 ngày làm việc), `materialTicketNeedsRecoveryHandover()` và
+`materialTicketAwaitsRecoveryDocSignature()` (hai chặng trả phiếu vật tư thu hồi).
 
 ## Biến môi trường
 

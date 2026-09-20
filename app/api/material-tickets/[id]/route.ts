@@ -24,6 +24,7 @@ import { replacementPointDisplayLabel, replacementPointSelectionKey } from "@/li
 import { receiveOtherMaterial } from "@/lib/other-material-stock";
 import { recordSettledTicketReplacements } from "@/lib/material-ticket-replacement-settlement";
 import { invalidateMaterialAnnualPlanCache } from "@/lib/material-annual-plan-cache";
+import { notifyMaterialTicketStep } from "@/lib/material-ticket-telegram-alert";
 
 export const dynamic = "force-dynamic";
 
@@ -611,6 +612,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
       });
       await audit(user.id, "MT_OTHER_ADVANCE_RECEIVE", "MaterialTicket", t.id,
         `${materialTicketReference(t)}: lãnh ứng ${t.items.length} vật tư từ ${receiptSourceLabel(receiptSource)}; đã cộng Hiện có`);
+      await notifyMaterialTicketStep({ ticketId: t.id, action, actorName: user.name });
       return ok(updated);
     }
 
@@ -679,6 +681,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
       });
       await audit(user.id, "MT_OTHER_ADVANCE_APPROVE", "MaterialTicket", t.id,
         `${materialTicketReference(t)}: hoàn thiện ĐXVT ${proposalNumber}, phiếu giao hàng ${deliveryNoteNumber}; không thay đổi tồn kho`);
+      await notifyMaterialTicketStep({ ticketId: t.id, action, actorName: user.name });
       return ok(updated);
     }
 
@@ -736,6 +739,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
         });
       });
       await audit(user.id, "MT_OTHER_APPROVE", "MaterialTicket", t.id, `${materialTicketReference(t)}: xác nhận ${t.items.length} mã ERP, số phiếu ${proposalNumber}`);
+      await notifyMaterialTicketStep({ ticketId: t.id, action, actorName: user.name });
       return ok(updated);
     }
 
@@ -805,6 +809,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
         });
       });
       await audit(user.id, "MT_OTHER_RECEIVE", "MaterialTicket", t.id, `${materialTicketReference(t)}: lãnh ${t.items.length} vật tư, phiếu giao hàng ${deliveryNoteNumber}; đã cộng Hiện có`);
+      await notifyMaterialTicketStep({ ticketId: t.id, action, actorName: user.name });
       return ok(updated);
     }
 
@@ -1608,6 +1613,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
       if (!up) return fail("Không tìm thấy phiếu sau khi gắn SYC", 404);
       await audit(user.id, "MT_LINK_DEFECT", "MaterialTicket", t.id,
         `${materialTicketReference(t)}: gắn số yêu cầu sửa chữa ${defect.requestNumber}`);
+      await notifyMaterialTicketStep({ ticketId: t.id, action, actorName: user.name });
       return ok(up);
     }
 
@@ -1726,6 +1732,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
 
       const up = await prisma.materialTicket.findUnique({ where: { id: t.id }, include: ITEM_INCLUDE });
       if (!up) return fail("Không tìm thấy phiếu sau khi gắn SYC", 404);
+      await notifyMaterialTicketStep({ ticketId: t.id, action, actorName: user.name });
       return ok(up);
     }
 
@@ -1752,6 +1759,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
       });
       await audit(user.id, "MT_SKIP_DEFECT", "MaterialTicket", t.id,
         `${materialTicketReference(t)}: VHV xác nhận tự thực hiện, không phát sinh SYC sửa chữa`);
+      await notifyMaterialTicketStep({ ticketId: t.id, action, actorName: user.name });
       return ok(up);
     }
 
@@ -1851,6 +1859,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
         });
       });
       await audit(user.id, "MT_PROPOSE", "MaterialTicket", t.id, `${materialTicketReference(t)}: gửi đề xuất`);
+      await notifyMaterialTicketStep({ ticketId: t.id, action, actorName: user.name });
       return ok(up);
     }
 
@@ -1876,6 +1885,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
         });
         await audit(user.id, "MT_CONFIRM", "MaterialTicket", t.id,
           `${materialTicketReference(t)}: Xác nhận bồn/thiết bị đủ điều kiện nhận hóa chất`);
+        await notifyMaterialTicketStep({ ticketId: t.id, action, actorName: user.name });
         return ok(up);
       }
       if (!["DE_XUAT", "CHUA_CHON"].includes(t.type) || t.status !== "CHO_XAC_NHAN") return fail("Phiếu không ở bước Trưởng ca/Trưởng kíp xử lý");
@@ -1944,6 +1954,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
         });
       });
       await audit(user.id, "MT_CONFIRM", "MaterialTicket", t.id, `${materialTicketReference(t)}: chọn luồng ${workflowType}`);
+      await notifyMaterialTicketStep({ ticketId: t.id, action, actorName: user.name });
       return ok(up);
     }
 
@@ -1972,6 +1983,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
         include: ITEM_INCLUDE,
       });
       await audit(user.id, "MT_RECEIVE_EXISTING", "MaterialTicket", t.id, `${materialTicketReference(t)}: nhận ${quantity} từ Hiện có, chưa trừ tồn`);
+      await notifyMaterialTicketStep({ ticketId: t.id, action, actorName: user.name });
       return ok(up);
     }
 
@@ -2023,6 +2035,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
       });
       if (!up) return fail("Bước VHV lãnh vật tư đã được xác nhận trước đó");
       await audit(user.id, "MT_VHV_RECEIVE", "MaterialTicket", t.id, `${materialTicketReference(t)}: VHV lãnh ${quantity}${vhvReceivedByName ? ` — ${vhvReceivedByName}` : ""}; Hiện có ${item.material.quantity} → ${item.material.quantity + quantity}; ERP không đổi`);
+      await notifyMaterialTicketStep({ ticketId: t.id, action, actorName: user.name });
       return ok(up);
     }
 
@@ -2039,6 +2052,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
         include: ITEM_INCLUDE,
       });
       await audit(user.id, "MT_REJECT", "MaterialTicket", t.id, `${materialTicketReference(t)}: từ chối — ${reason}`);
+      await notifyMaterialTicketStep({ ticketId: t.id, action, actorName: user.name });
       return ok(up);
     }
 
@@ -2129,6 +2143,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
         t.id,
         `${materialTicketReference(t)}: xác nhận mã ${erpCode}${t.type === "UNG" ? `, khối lượng lãnh ${receivedQuantity}, ${receiptSourceLabel(receiptSource)}` : ""}; xuất Phiếu ĐXVT (QLVT.12)`,
       );
+      await notifyMaterialTicketStep({ ticketId: t.id, action, actorName: user.name });
       return ok(up);
     }
 
@@ -2183,6 +2198,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
       });
       await audit(user.id, "MT_STATS_EXPORT_BBNT_DO", "MaterialTicket", t.id,
         `${materialTicketReference(t)}: xuất BBNT D-Office; chuyển ${nextStatus === RECOVERY_HANDOVER_STATUS ? "Trả phiếu vật tư thu hồi" : "Quyết toán"}`);
+      await notifyMaterialTicketStep({ ticketId: t.id, action, actorName: user.name });
       return ok(up);
     }
 
@@ -2215,6 +2231,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
         });
         await audit(user.id, "MT_STATS", "MaterialTicket", t.id,
           `${materialTicketReference(t)}: Xác nhận đề xuất hóa chất — giao ${deliveryQuantity} ngày ${deliveryScheduledAt.toLocaleDateString("vi-VN")}`);
+        await notifyMaterialTicketStep({ ticketId: t.id, action, actorName: user.name });
         return ok(updated);
       }
       if (!["DE_XUAT", "UNG"].includes(t.type) || !["CHO_THONG_KE", "CHO_PHIEU__XUAT_KHO", "CHO_XAC_NHAN_PHAT"].includes(t.status)) return fail("Phiếu không ở bước Thống Kê xác nhận ĐXVT");
@@ -2280,6 +2297,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
           });
         });
         await audit(user.id, "MT_STATS", "MaterialTicket", t.id, `${materialTicketReference(t)}: Xác nhận số phiếu ĐXVT: ${num}${proposalDate ? ` ngày ${proposalDate.toLocaleDateString("vi-VN")}` : ""}${erpCode ? `; mã vật tư ${erpCode}` : ""}`);
+        await notifyMaterialTicketStep({ ticketId: t.id, action, actorName: user.name });
         return ok(up);
       }
 
@@ -2297,6 +2315,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
         include: ITEM_INCLUDE,
       });
       await audit(user.id, "MT_STATS", "MaterialTicket", t.id, `${materialTicketReference(t)}: Xác nhận ĐXVT: ${num}${t.type === "UNG" ? "; đã xác nhận trả phiếu" : proposalReceiverName ? `; VHV nhận phiếu ${proposalReceiverName}` : ""}`);
+      await notifyMaterialTicketStep({ ticketId: t.id, action, actorName: user.name });
       return ok(up);
     }
 
@@ -2360,6 +2379,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
         const removed = await prisma.$transaction((tx) => unlinkTicketTrucks(tx, t.id, t.chemicalReceiptIds));
         await audit(user.id, "MT_CHEMICAL_TRUCKS", "MaterialTicket", t.id,
           `${materialTicketReference(t)}: gỡ toàn bộ chuyến xe khỏi sổ hóa chất (${removed} dòng bị xóa)`);
+        await notifyMaterialTicketStep({ ticketId: t.id, action, actorName: user.name });
         return ok(await getTicket(t.id));
       }
 
@@ -2411,6 +2431,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
         `(${linkResult.created} mới, ${linkResult.linked} gắn vào bản ghi có sẵn)` +
         (completesNow ? "; hoàn tất phiếu" : ""));
 
+      await notifyMaterialTicketStep({ ticketId: t.id, action, actorName: user.name });
       return ok({ ...(await getTicket(t.id)), chemicalLink: linkResult });
     }
 
@@ -2471,6 +2492,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
             `tổng ${linkResult.totalAccepted} — ${receivedByName}; ` +
             `${linkResult.created} chuyến ghi mới, ${linkResult.linked} chuyến gắn vào bản ghi có sẵn; hoàn tất phiếu`);
 
+          await notifyMaterialTicketStep({ ticketId: t.id, action, actorName: user.name });
           return ok({ ...updated, chemicalLink: linkResult });
         }
 
@@ -2518,6 +2540,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
           });
           await audit(user.id, "MT_ADVANCE_RETRY_RECOVERY_DOC", "MaterialTicket", t.id,
             `${materialTicketReference(t)}: xuất lại BBTHVT từ số giao hàng và ảnh liên 3 đã lưu`);
+          await notifyMaterialTicketStep({ ticketId: t.id, action, actorName: user.name });
           return ok(recovered);
         }
         const item = t.items[0];
@@ -2623,6 +2646,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
         }
         await audit(user.id, "MT_ADVANCE_CONFIRM_DOCUMENTS", "MaterialTicket", t.id,
           `${materialTicketReference(t)}: xác nhận số ĐXVT ${proposalNumber}, số giao hàng ${deliveryNoteNumber}, ảnh liên 3${up.recoveryDocUrl ? "; xuất BBTHVT" : ""}`);
+        await notifyMaterialTicketStep({ ticketId: t.id, action, actorName: user.name });
         return ok(up);
       }
 
@@ -2740,6 +2764,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
         user.id, "MT_RECEIVE", "MaterialTicket", t.id,
         `${materialTicketReference(t)}: ${receiptSourceLabel(receiptSource)} ${receivedQuantity} (${receivedMethod}) — Hiện có ${item.material.code}: ${before} → ${before + materialIncrement}; ERP ${erpCode}: ${erpBefore} → ${erpAfter}${uploadedPhoto ? "; đính kèm ảnh phiếu xuất kho liên 3" : ""}; chờ ra SYC sửa chữa`
       );
+      await notifyMaterialTicketStep({ ticketId: t.id, action, actorName: user.name });
       return ok(responseTicket);
     }
 
@@ -2827,6 +2852,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
         user.id, "MT_USE", "MaterialTicket", t.id,
         `${materialTicketReference(t)}: VHV sử dụng ${materialUserName}; lãnh ${received}, dùng ${usedQuantity}, còn lại ${remaining} — tồn kho ${mat.code}: ${mat.quantity} → ${newQty}`
       );
+      await notifyMaterialTicketStep({ ticketId: t.id, action, actorName: user.name });
       return ok(up);
     }
 
@@ -2906,6 +2932,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
       });
       await audit(user.id, "MT_RETURN", "MaterialTicket", t.id,
         `${materialTicketReference(t)}: Xác nhận trả ${returnedQuantity} ${unitLabel} ngày ${returnedAt.toLocaleDateString("vi-VN")} — ${returnedByName}; Hiện có ${mat.code}: ${mat.quantity} → ${mat.quantity - returnedQuantity}; hoàn tất phiếu`);
+      await notifyMaterialTicketStep({ ticketId: t.id, action, actorName: user.name });
       return ok(up);
     }
 
@@ -3029,6 +3056,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
         });
       });
       await audit(user.id, "MT_ACCEPT", "MaterialTicket", t.id, `${materialTicketReference(t)}: nghiệm thu với mã ERP ${erpCode}${documents.bbkt ? ", xuất BBNT ký tay" : ""}${documents.recovery ? ", xuất Biên bản vật tư thu hồi" : ""}, ${t.type === "UNG" ? "chuyển Thống kê xác nhận ĐXVT; BBTHVT chờ ảnh liên 3" : t.type === "DE_XUAT" ? "chuyển Thống kê xuất BBNT D-Office" : t.type === "SU_DUNG_HIEN_CO" ? "chuyển Thống kê xác nhận mã vật tư" : "chờ Thống kê quyết toán"}`);
+      await notifyMaterialTicketStep({ ticketId: t.id, action, actorName: user.name });
       return ok(up);
     }
 
@@ -3108,6 +3136,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
         `${materialTicketReference(t)}: xác nhận mã ${erpCode}${exportsBbntDo ? ", xuất BBNT D-Office" : ""}, ` +
           `chuyển ${statusAfterMaterialDocuments(t) === RECOVERY_HANDOVER_STATUS ? "Trả phiếu vật tư thu hồi" : "Quyết toán"}`,
       );
+      await notifyMaterialTicketStep({ ticketId: t.id, action, actorName: user.name });
       return ok(up);
     }
 
@@ -3170,6 +3199,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
         await audit(user.id, "MT_RECOVERY_DOC_SENT", "MaterialTicket", t.id,
           `${materialTicketReference(t)}: đã đem Biên bản vật tư thu hồi sang kho ngày ${now.toLocaleDateString("vi-VN")} — ${actor.name}; ` +
           `${t.settledAt ? "hoàn tất phiếu" : "chuyển Quyết toán"}, chờ kho ký trả lại biên bản`);
+        await notifyMaterialTicketStep({ ticketId: t.id, action, actorName: user.name });
         return ok(up);
       }
 
@@ -3192,6 +3222,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
       });
       await audit(user.id, "MT_RECOVERY_DOC_SIGNED", "MaterialTicket", t.id,
         `${materialTicketReference(t)}: kho đã ký và trả lại Biên bản vật tư thu hồi ngày ${now.toLocaleDateString("vi-VN")} — ${actor.name}`);
+      await notifyMaterialTicketStep({ ticketId: t.id, action, actorName: user.name });
       return ok(up);
     }
 
@@ -3264,6 +3295,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
           (purged.removed ? `; dọn ${purged.removed} ảnh hiện trường của ${purged.tickets} phiếu quá hạn giữ` : "") +
           (removedDeliveryPhotos ? `; xóa ${removedDeliveryPhotos} ảnh phiếu xuất kho liên 3 của lô đã dùng hết` : "")
       );
+      await notifyMaterialTicketStep({ ticketId: t.id, action, actorName: user.name });
       return ok(up);
     }
 

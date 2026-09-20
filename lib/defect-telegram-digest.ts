@@ -2,9 +2,11 @@ import { DEFECT_STATUS, type DefectStatusKey } from "@/lib/constants";
 import { prisma } from "@/lib/prisma";
 import { deliverTelegramNotification, escapeTelegramHtml } from "@/lib/telegram";
 import { formatVietnamDate, vietnamDayKey, vietnamDayWindow } from "@/lib/vietnam-time";
+import { materialTicketReference } from "@/lib/material-ticket-sequence";
 
 const SHIFT_NEW_MAX_ITEMS = 15;
 const SHIFT_COMPLETED_MAX_ITEMS = 12;
+const SHIFT_MATERIAL_MAX_ITEMS = 15;
 const LEVEL_ONE_MAX_ITEMS = 20;
 const WEEKLY_OLDEST_MAX_ITEMS = 5;
 const HOUR_MS = 60 * 60 * 1000;
@@ -168,6 +170,21 @@ async function loadShiftDefects(start: Date, end: Date) {
   ]);
 }
 
+function loadShiftMaterialTickets(start: Date, end: Date) {
+  return prisma.materialTicket.findMany({
+    where: { createdAt: { gte: start, lt: end } },
+    select: {
+      sequenceMonth: true,
+      sequenceNumber: true,
+      sequenceScope: true,
+      unit: true,
+      assignedPosition: true,
+      materialCategory: true,
+    },
+    orderBy: [{ createdAt: "desc" }],
+  });
+}
+
 async function loadLevelOneDefects() {
   return prisma.defect.findMany({
     where: {
@@ -194,7 +211,10 @@ function summaryBySeverity(rows: DigestDefect[]) {
 
 export async function buildShiftDefectDigest(now: Date = new Date()) {
   const window = latestCompletedDefectShift(now);
-  const [created, completed] = await loadShiftDefects(window.start, window.end);
+  const [[created, completed], materialTickets] = await Promise.all([
+    loadShiftDefects(window.start, window.end),
+    loadShiftMaterialTickets(window.start, window.end),
+  ]);
   created.sort((a, b) =>
     severityRank(a.severity) - severityRank(b.severity)
     || b.createdAt.getTime() - a.createdAt.getTime()
@@ -221,11 +241,24 @@ export async function buildShiftDefectDigest(now: Date = new Date()) {
   } else {
     lines.push("Không có phiếu được đánh dấu đã xử lý trong ca.");
   }
+  const shownMaterialTickets = materialTickets.slice(0, SHIFT_MATERIAL_MAX_ITEMS);
+  lines.push("", `📦 <b>Phiếu vật tư mới tạo trong ca: ${materialTickets.length} phiếu</b>`);
+  if (shownMaterialTickets.length > 0) {
+    lines.push(...shownMaterialTickets.map((ticket, index) =>
+      `${index + 1}. ${escapeTelegramHtml(materialTicketReference(ticket))} · ${escapeTelegramHtml(ticket.unit)} · ${escapeTelegramHtml(ticket.materialCategory ?? ticket.assignedPosition)} · ${escapeTelegramHtml(ticket.assignedPosition)}`
+    ));
+    if (materialTickets.length > shownMaterialTickets.length) {
+      lines.push(`… và ${materialTickets.length - shownMaterialTickets.length} phiếu khác.`);
+    }
+  } else {
+    lines.push("Không có phiếu vật tư mới tạo trong ca.");
+  }
   lines.push("", `<a href="${escapeTelegramHtml(`${appUrl()}/defects`)}">Xem danh sách trên hệ thống</a>`);
   return {
     message: lines.join("\n"),
     createdCount: created.length,
     completedCount: completed.length,
+    materialTicketCount: materialTickets.length,
     periodKey: `${vietnamDayKey(window.start)}:${window.shift}`,
     shift: window.shift,
     start: window.start,

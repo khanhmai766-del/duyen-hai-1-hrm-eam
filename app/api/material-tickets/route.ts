@@ -24,6 +24,7 @@ import {
 } from "@/lib/material-ticket-sequence";
 import { replacementPointDisplayLabel, replacementPointSelectionKey } from "@/lib/material-replacement-display";
 import { syncTicketReplacementLinks, type LinkablePoint } from "@/lib/material-ticket-replacement-link";
+import { notifyMaterialTicketStep } from "@/lib/material-ticket-telegram-alert";
 
 export const dynamic = "force-dynamic";
 
@@ -335,6 +336,7 @@ export async function POST(req: NextRequest) {
       });
       await audit(user.id, workflowType === "UNG" ? "CREATE_OTHER_MATERIAL_ADVANCE_TICKET" : "CREATE_OTHER_MATERIAL_TICKET", "MaterialTicket", ticket.id,
         `${materialTicketReference(ticket)}: luồng ${workflowType === "UNG" ? "Ứng" : "Đề xuất"}, ${requestedItems.length} vật tư, ${assignedPosition}, ${unit}`);
+      await notifyMaterialTicketStep({ ticketId: ticket.id, action: "create", actorName: user.name });
       return ok(ticket);
     }
     // Hóa chất luôn đi thẳng luồng Đề xuất — nghiệp vụ này không có Ứng lẫn Sử dụng hiện có
@@ -463,6 +465,7 @@ export async function POST(req: NextRequest) {
     const workflowLabel = type === SINGLE_STEP_TICKET_TYPE ? "luồng NH3 rút gọn" : type === CHEMICAL_TICKET_TYPE ? "luồng hóa chất" : type === "DE_XUAT" ? "luồng Đề xuất" : "chưa chọn luồng";
     await audit(user.id, "CREATE_MATERIAL_TICKET", "MaterialTicket", ticket.id,
       `${materialTicketReference(ticket)} (${workflowLabel}, ${unit}) — giao: ${assignedPosition}, loại: ${materialCategory}, vật tư: ${selectedMaterial!.name}, số lượng đề xuất: ${proposedQuantity}, thiết bị: ${replacementDeviceLabels.join(", ")}`);
+    await notifyMaterialTicketStep({ ticketId: ticket.id, action: "create", actorName: user.name });
     return ok(ticket);
   });
 }
