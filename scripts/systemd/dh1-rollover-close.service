@@ -1,0 +1,16 @@
+[Unit]
+Description=DH1 - chot ky so PCCC va TBYCNN (23:45 gio Viet Nam)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/var/www/dh1-app
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+# Dau "-" = BO QUA ma thoat khac 0.
+# Timer chay HANG NGAY vi cron/systemd deu khong dien ta duoc "ngay cuoi thang";
+# chinh script tu chan, va no thoat 1 vao cac ngay KHONG phai cuoi thang. Do la
+# truong hop BINH THUONG hang ngay, khong phai loi — neu khong bo qua thi unit
+# bao failed 29/30 ngay va che mat loi that.
+ExecStart=-/usr/bin/npm run --silent tbycnn:rollover -- --close-now
+ExecStart=-/usr/bin/npm run --silent pccc:rollover -- --close-now

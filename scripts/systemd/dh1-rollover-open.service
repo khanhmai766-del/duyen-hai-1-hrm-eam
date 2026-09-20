@@ -1,0 +1,13 @@
+[Unit]
+Description=DH1 - mo ky moi so PCCC va TBYCNN (00:05 gio Viet Nam ngay 1)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/var/www/dh1-app
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+# KHONG bo qua loi o day: lenh nay idempotent, thang chua sang thi khong sinh gi
+# va van thoat 0. Thoat khac 0 tuc la co su co that, phai hien trong systemctl.
+ExecStart=/usr/bin/npm run --silent tbycnn:rollover
+ExecStart=/usr/bin/npm run --silent pccc:rollover

@@ -1,0 +1,11 @@
+[Unit]
+Description=Hen gio chot ky PCCC/TBYCNN - 16:45 UTC = 23:45 gio Viet Nam
+
+[Timer]
+# May chu chay UTC. systemd 249 chua ho tro hau to mui gio trong OnCalendar,
+# nen phai quy doi tay: 23:45 VN (UTC+7) = 16:45 UTC CUNG NGAY.
+OnCalendar=*-*-* 16:45:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

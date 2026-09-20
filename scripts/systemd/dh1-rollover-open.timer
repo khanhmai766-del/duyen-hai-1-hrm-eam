@@ -1,0 +1,11 @@
+[Unit]
+Description=Hen gio mo ky moi PCCC/TBYCNN - 17:05 UTC = 00:05 gio Viet Nam ngay hom sau
+
+[Timer]
+# 00:05 VN ngay 01 = 17:05 UTC ngay CUOI CUNG cua thang truoc. Chay hang ngay,
+# script idempotent nen cac ngay khac khong sinh gi.
+OnCalendar=*-*-* 17:05:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

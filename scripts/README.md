@@ -12,7 +12,7 @@ vì đó là câu hỏi hay gặp nhất khi tìm: "cái này chỉ đọc hay n
 | `ai/` | Chatbox: nạp tri thức, chạy eval, mock n8n | Tuỳ script |
 | `verify/` | Crawl/so sánh trang sau khi sửa giao diện | Chỉ dev |
 | `data/` | Tệp dữ liệu đầu vào cho `import/` | — |
-| `systemd/` | Unit + timer cài lên server | — |
+| `systemd/` | Unit + timer cài lên server — **đọc `systemd/README.md`**, chúng KHÔNG đi theo `git pull` | — |
 
 ## Tệp để ở gốc — có lý do, đừng dời vào thư mục con
 
