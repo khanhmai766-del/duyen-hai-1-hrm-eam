@@ -137,7 +137,7 @@ Tối ưu 10/09/2026: response danh sách chỉ select trường hiển thị, d
 - Có thể sửa câu chữ trên phiếu, bổ sung cặp riêng, bỏ cặp và đổi thứ tự. Không bắt buộc có cặp để tiếp tục quản lý các phiếu cũ. Đổi Cơ/Điện hoặc đổi sang điện tử sẽ hỏi trước khi bỏ các lựa chọn trên form; API kiểm tra loại và hình thức độc lập với UI.
 - Snapshot JSON lưu nội dung và phân công ngay trên phiếu, có trong lịch sử. Sửa/ngừng sử dụng danh mục không làm đổi phiếu cũ; nguồn ngừng sử dụng không được chọn mới. API cập nhật thiếu trường mới giữ nguyên snapshot.
 - Danh sách PCT và Excel không tải thêm snapshot an toàn; chi tiết mới đọc nội dung. Tối đa 100 cặp/phiếu, mối nguy 1.000 ký tự và biện pháp 5.000 ký tự.
-- `data/work-permit-safety-samples.json`: 32 cặp trích từ phần A của ba phiếu Pha hóa chất, Lưới quay rác 2A và Xử lý khiếm khuyết ống lò S2 do người dùng cung cấp. Chỉ gộp cặp trùng nội dung, giữ biến thể và ghi nguồn. Không suy diễn quy định hay bổ sung nội dung kỹ thuật từ bên ngoài. Phần B/C độc lập trong tài liệu không đưa thành danh mục riêng.
+- `scripts/data/work-permit-safety-samples.json`: 32 cặp trích từ phần A của ba phiếu Pha hóa chất, Lưới quay rác 2A và Xử lý khiếm khuyết ống lò S2 do người dùng cung cấp. Chỉ gộp cặp trùng nội dung, giữ biến thể và ghi nguồn. Không suy diễn quy định hay bổ sung nội dung kỹ thuật từ bên ngoài. Phần B/C độc lập trong tài liệu không đưa thành danh mục riêng.
 - `prisma/manual/add-work-permit-safety.sql` thêm một bảng danh mục và cột JSON trên WorkPermit. `npm run seed:work-permit-safety` thêm thiếu theo ID cố định và không ghi đè mục đã chỉnh. Với DB ngoài local phải truyền rõ `-- --allow-remote`; chỉ dùng khi đã được cho phép đồng bộ dữ liệu lên môi trường đó.
 
 ### Điền mẫu Word

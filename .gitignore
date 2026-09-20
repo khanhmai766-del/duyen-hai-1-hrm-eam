@@ -30,14 +30,12 @@ public/videos/*
 # Cấu hình Claude theo máy (không chia sẻ)
 .claude/settings.local.json
 
+
 # Artifact tạm từ công cụ chạy thử (Codex): log dev-server, output test, video frames
 /codex-*.err
 /codex-*.txt
 /.codex-video-frames/
 /.codex-shdc-*/
-
-# Bản sao lưu do script dedupe thiết bị sinh ra (không đưa vào git)
-scripts/data/equipment-dedupe-backup-*.json
 
 # Index cuc bo cua CodeGraph (khong dua vao git)
 /.codegraph/
@@ -52,8 +50,15 @@ scripts/data/equipment-dedupe-backup-*.json
 # Local contract encryption key
 .secrets/
 
-# Kết quả chạy scripts/verify (crawl, hydration, ảnh) — chỉ dùng tạm, không lưu vào git
-reports/verify/
+# Thư mục nháp của phiên làm việc (ảnh chụp, docx/pdf dựng thử) — không đưa vào git
+/tmp/
+
+# Cache bytecode Python do script của skill ui-ux-pro-max sinh ra
+__pycache__/
+*.pyc
+
+# Toàn bộ reports/ là kết quả chạy công cụ (scripts/verify, npm audit) — không lưu vào git
+/reports/
 
 # Ảnh gốc 2048x2048 của mascot (~11MB). Bản dựng đã nằm ở public/mascots/*.webp;
 # giữ nguồn ngoài git cho nhẹ, cần vẽ lại thì chạy skill page-mascot.

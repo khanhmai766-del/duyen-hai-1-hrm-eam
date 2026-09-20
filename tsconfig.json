@@ -37,6 +37,7 @@
   ],
   "exclude": [
     "node_modules",
-    "duyen-hai-1-hrm-eam"
+    "duyen-hai-1-hrm-eam",
+    "tmp"
   ]
 }

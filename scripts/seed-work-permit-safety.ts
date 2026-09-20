@@ -1,7 +1,7 @@
 /** Chỉ thêm nội dung trích từ 3 phiếu người dùng cung cấp; không ghi đè danh mục đã sửa. */
 import { loadEnvConfig } from "@next/env";
 import { PrismaClient } from "@prisma/client";
-import samples from "@/data/work-permit-safety-samples.json";
+import samples from "@/scripts/data/work-permit-safety-samples.json";
 import { normalizeText } from "@/lib/nav";
 loadEnvConfig(process.cwd());
 const url = new URL(process.env.DATABASE_URL ?? "");

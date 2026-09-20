@@ -14,6 +14,8 @@ export default defineConfig([
     "**/node_modules/",
     "prisma/generated/",
     "scripts/perf-audit.mjs",
+    // Thư mục nháp của phiên làm việc — không phải mã nguồn dự án (xem .gitignore).
+    "tmp/",
   ]),
   ...nextCoreWebVitals,
   {
