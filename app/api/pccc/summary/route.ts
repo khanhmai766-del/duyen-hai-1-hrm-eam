@@ -54,7 +54,6 @@ export async function GET(req: NextRequest) {
       alarmButtons,
       valves,
       lights,
-      hoseReels,
       cuongViList,
       signatureCount,
     ] = await Promise.all([
@@ -84,15 +83,20 @@ export async function GET(req: NextRequest) {
         where: { periodId: period.id, ...scopeBcc },
         select: { loai: true, tinhTrang: true },
       }),
-      // Cuộn vòi là danh mục con của tủ nên đi theo ĐÚNG phạm vi của tủ.
-      prisma.pcccHoseReel.findMany({
-        where: { periodId: period.id, ...scopeTcc },
-        // Khoá tủ cha cần cho phần RON: gom các cuộn của cùng một tủ để tính ở CẤP TỦ.
-        select: { tinhTrangTongThe: true, components: true, cabinetId: true },
-      }),
       cuongViListOf(period.id, viewScope),
       prisma.pcccSignature.count({ where: { periodId: period.id } }),
     ]);
+
+    // Cuộn vòi là danh mục con của tủ. Lấy theo khoá tủ cha ĐÃ QUA BỘ LỌC thay vì
+    // lọc độc lập bằng cương vị/tổ máy lặp lại trên dòng cuộn vòi; như vậy bảng con,
+    // tổng ron và danh sách tủ luôn dùng đúng cùng một phạm vi dữ liệu.
+    const cabinetIds = cabinets.map((cabinet) => cabinet.id);
+    const hoseReels = cabinetIds.length
+      ? await prisma.pcccHoseReel.findMany({
+          where: { periodId: period.id, cabinetId: { in: cabinetIds } },
+          select: { tinhTrangTongThe: true, components: true, cabinetId: true },
+        })
+      : [];
 
     return ok(
       {

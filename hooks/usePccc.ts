@@ -201,6 +201,7 @@ export interface PcccSummary {
       tongRon: number;
       dayDu: number;
       thieuRon: number;
+      chuaCapNhat: number;
       thieuRonTheoNhom: Record<string, number>;
     }[];
   };

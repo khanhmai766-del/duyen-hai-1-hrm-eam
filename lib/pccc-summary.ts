@@ -242,16 +242,16 @@ export function summarizeCabinets(input: CabinetRow[], hoseReels: HoseReelRonRow
  *
  * ĐẾM THEO TỦ: mỗi tủ đúng 3 ron — lăng phun 2, ngàm 1. Cuộn ống KHÔNG tính vào ron
  * (sheet có dòng riêng "Cuộn ống chữa cháy DN50/DN65"). DN50 ứng với tủ INDOOR, DN65
- * ứng với tủ OUTDOOR. Công thức này tái tạo ĐÚNG số của sheet gốc: INDOOR 619 khả dụng
- * / 4 thiếu, OUTDOOR 106 / 4.
+ * ứng với tủ OUTDOOR. Ba nhóm `dayDu`, `thieuRon`, `chuaCapNhat` luôn loại trừ nhau và
+ * cộng lại đúng tổng số vị trí ron; dữ liệu chưa tích không bị ẩn khỏi tổng quan.
  *
  * NGUỒN ĐỌC ĐÃ ĐỔI (2026-08-18) nhưng CÁCH ĐẾM THÌ KHÔNG: lăng phun chuyển hẳn xuống
  * bảng cuộn vòi nên phải đọc từ đó, còn ngàm vẫn ở bảng tủ. Tủ ngoài trời có hai cuộn
  * vòi, nhưng vẫn chỉ tính 2 ron lăng phun CHO CẢ TỦ chứ không nhân đôi — nghiệp vụ chốt
  * 2026-08-19 là giữ nguyên cách đếm theo tủ của sheet gốc.
  *
- * Gộp trạng thái nhiều cuộn của cùng một tủ bằng phép HOẶC: tủ có bất kỳ cuộn nào tích
- * "Thiếu ron" thì tính là tủ thiếu ron. Lúc sinh dữ liệu các cuộn của cùng một tủ mang
+ * Gộp trạng thái nhiều cuộn của cùng một tủ theo thứ tự ưu tiên: "Thiếu ron" → "Khả dụng"
+ * → "Chưa cập nhật". Lúc sinh dữ liệu các cuộn của cùng một tủ mang
  * y hệt trạng thái chép từ tủ cha, nên phép này tái tạo đúng số cũ; về sau người dùng
  * sửa từng cuộn lệch nhau thì "có một chỗ thiếu là tủ thiếu" vẫn là cách đọc đúng.
  */
@@ -265,6 +265,8 @@ export type RonSummaryRow = {
   dayDu: number;
   /** Ron ở tủ có tích "Thiếu ron" — khớp cột "HƯ HỎNG 1 PHẦN" của sheet. */
   thieuRon: number;
+  /** Vị trí ron chưa được tích "Khả dụng" hoặc "Thiếu ron". */
+  chuaCapNhat: number;
   /** Chi tiết theo nhóm linh kiện (đã nhân trọng số), để soi nhanh chỗ nào hụt. */
   thieuRonTheoNhom: Record<string, number>;
 };
@@ -293,18 +295,27 @@ export function summarizeRon(cabinets: CabinetRow[], hoseReels: HoseReelRonRow[]
     const list = cabinets.filter((c) => cabinetKind(c.ten) === loaiTu);
     const thieuRonTheoNhom: Record<string, number> = { "LĂNG PHUN": 0, "NGÀM": 0 };
     let dayDu = 0;
+    let chuaCapNhat = 0;
 
     for (const cab of list) {
       // NGÀM — vẫn nằm ở bảng tủ.
       const wNgam = RON_WEIGHTS["NGÀM"];
-      if (ticked(cab.components, "NGÀM", RON_STATUS_OK)) dayDu += wNgam;
-      if (ticked(cab.components, "NGÀM", RON_STATUS_MISSING)) thieuRonTheoNhom["NGÀM"] += wNgam;
+      const ngamThieu = ticked(cab.components, "NGÀM", RON_STATUS_MISSING);
+      const ngamDayDu = ticked(cab.components, "NGÀM", RON_STATUS_OK);
+      if (ngamThieu) thieuRonTheoNhom["NGÀM"] += wNgam;
+      else if (ngamDayDu) dayDu += wNgam;
+      else chuaCapNhat += wNgam;
 
       // LĂNG PHUN — đọc ở bảng cuộn vòi, gộp các cuộn của tủ này bằng phép HOẶC.
       const reels = reelsByCabinet.get(cab.id ?? "") ?? [];
       const wLang = RON_WEIGHTS["LĂNG PHUN"];
-      if (reels.some((c) => ticked(c, "LĂNG PHUN", RON_STATUS_OK))) dayDu += wLang;
-      if (reels.some((c) => ticked(c, "LĂNG PHUN", RON_STATUS_MISSING))) thieuRonTheoNhom["LĂNG PHUN"] += wLang;
+      const langThieu = reels.some((c) => ticked(c, "LĂNG PHUN", RON_STATUS_MISSING));
+      const langDayDu = reels.some((c) => ticked(c, "LĂNG PHUN", RON_STATUS_OK));
+      // Một tủ có thể có nhiều cuộn vòi. Nếu dữ liệu giữa các cuộn xung đột thì
+      // "Thiếu ron" phải thắng, không được cộng cùng một vị trí vào cả hai cột.
+      if (langThieu) thieuRonTheoNhom["LĂNG PHUN"] += wLang;
+      else if (langDayDu) dayDu += wLang;
+      else chuaCapNhat += wLang;
     }
 
     return {
@@ -314,6 +325,7 @@ export function summarizeRon(cabinets: CabinetRow[], hoseReels: HoseReelRonRow[]
       tongRon: list.length * RON_PER_CABINET,
       dayDu,
       thieuRon: thieuRonTheoNhom["LĂNG PHUN"] + thieuRonTheoNhom["NGÀM"],
+      chuaCapNhat,
       thieuRonTheoNhom,
     };
   });

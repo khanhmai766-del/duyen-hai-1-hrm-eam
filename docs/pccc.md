@@ -80,10 +80,11 @@ phải số nhập tay** như từng kết luận nhầm — bản web demo có 
   Cuộn ống **không** tính vào ron (sheet có dòng riêng "Cuộn ống chữa cháy DN50/DN65").
 - `dayDu` = 2×(lăng phun tích "Khả dụng") + 1×(ngàm tích "Khả dụng")
 - `thieuRon` = 2×(lăng phun tích "Thiếu ron") + 1×(ngàm tích "Thiếu ron")
+- `chuaCapNhat` = các vị trí chưa tích một trong hai trạng thái trên
 - `DN50 ↔ tủ INDOOR`, `DN65 ↔ tủ OUTDOOR`
 
-Kiểm chứng T09.2026: INDOOR 213 tủ → 639 vị trí, **619 đầy đủ / 4 thiếu**;
-OUTDOOR 41 tủ → 123 vị trí, **106 / 4**. Đúng từng số của sheet.
+Nếu nhiều cuộn của cùng một tủ có dữ liệu xung đột thì `Thiếu ron` được ưu tiên hơn
+`Khả dụng`. Vì vậy `dayDu + thieuRon + chuaCapNhat = tongRon` ở mọi phạm vi lọc.
 
 Hằng số ở `RON_WEIGHTS` (`lib/pccc-status.ts`), tổng hợp ở `summarizeRon()`
 (`lib/pccc-summary.ts`).

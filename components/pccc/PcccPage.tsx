@@ -1201,9 +1201,15 @@ export default function PcccPage() {
       return;
     }
     if (target.bang === "TCC") {
+      if (target.loaiTu) {
+        setLoaiTu(target.loaiTu);
+        const ron = s?.tcc.ron.find((row) => row.loaiTu === target.loaiTu);
+        toast.success(`Đang lọc ${ron?.soTu ?? ""} tủ ${target.loaiTu} của ron ${ron?.loaiRon ?? ""}`);
+        return;
+      }
       // Thẻ đếm Ô LINH KIỆN hỏng nặng, còn bảng thì mỗi dòng là một TỦ — nên lọc theo
       // tình trạng tổng thể, tức đúng những tủ sinh ra các ô hỏng nặng đó.
-      setTinhTrang(target.tinhTrang);
+      setTinhTrang(target.tinhTrang ?? "ALL");
       toast.success("Đang lọc các tủ bất khả dụng (có linh kiện hỏng nặng)");
       return;
     }
@@ -1292,7 +1298,9 @@ export default function PcccPage() {
     setLoaiTu("ALL");
     setLoaiVan("ALL");
     setTinhTrangCvcc("ALL");
+    setHeThongTuDk("ALL");
     setQuaHan(false);
+    setQ("");
     setPage(1);
   }
 
@@ -1303,6 +1311,8 @@ export default function PcccPage() {
     tinhTrang !== "ALL" ||
     chungLoai !== "ALL" ||
     loaiTu !== "ALL" ||
+    loaiVan !== "ALL" ||
+    tinhTrangCvcc !== "ALL" ||
     heThongTuDk !== "ALL" ||
     giamSat !== "ALL" ||
     quaHan ||

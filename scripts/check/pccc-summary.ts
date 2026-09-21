@@ -36,7 +36,11 @@ async function main() {
   );
 
   const cabinets = await p.pcccCabinet.findMany({ where: { periodId: period.id }, include: { components: true } });
-  const c = summarizeCabinets(cabinets);
+  const hoseReels = await p.pcccHoseReel.findMany({
+    where: { periodId: period.id, cabinetId: { in: cabinets.map((cabinet) => cabinet.id) } },
+    select: { cabinetId: true, components: true },
+  });
+  const c = summarizeCabinets(cabinets, hoseReels);
   console.log("=== II. TỦ CHỮA CHÁY ===");
   console.table(
     c.rows.map((r) => ({
@@ -58,6 +62,7 @@ async function main() {
       "Tổng vị trí ron": r.tongRon,
       "Đầy đủ": r.dayDu,
       "Thiếu ron": r.thieuRon,
+      "Chưa cập nhật": r.chuaCapNhat,
       "Chi tiết thiếu": JSON.stringify(r.thieuRonTheoNhom),
     }))
   );

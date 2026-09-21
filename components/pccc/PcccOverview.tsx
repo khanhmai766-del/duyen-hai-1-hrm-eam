@@ -58,7 +58,7 @@ function SectionTitle({ index, title, note }: { index: string; title: string; no
  */
 export type PcccOverviewDrill =
   | { bang: "BCC"; tinhTrang?: string; quaHan?: boolean }
-  | { bang: "TCC"; tinhTrang: string }
+  | { bang: "TCC"; tinhTrang?: string; loaiTu?: "INDOOR" | "OUTDOOR" }
   /** Bảng con nằm dưới tab Tủ chữa cháy — lọc bằng ô riêng của nó. */
   | { bang: "CVCC"; tinhTrang: string }
   | { bang: "NNBC"; tinhTrang: string }
@@ -196,10 +196,17 @@ export function PcccOverview({ summary, onDrill }: { summary: PcccSummary; onDri
           {/* Ron: công thức mới, tính từ ô ☑ thay cho 2 dòng nhập tay của sheet cũ */}
           <div className="grid gap-3 sm:grid-cols-2">
             {summary.tcc.ron.map((r) => (
-              <div key={r.loaiRon} className="rounded-xl border border-slate-200 bg-white p-3.5">
+              <button
+                key={r.loaiRon}
+                type="button"
+                disabled={!onDrill}
+                onClick={drill({ bang: "TCC", loaiTu: r.loaiTu })}
+                className="w-full rounded-xl border border-slate-200 bg-white p-3.5 text-left transition hover:border-sky-300 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 disabled:cursor-default disabled:hover:border-slate-200 disabled:hover:shadow-none"
+                aria-label={`Mở danh sách tủ ${r.loaiTu} của ron ${r.loaiRon}`}
+              >
                 <div className="flex items-center justify-between">
                   <p className="text-sm font-bold text-navy">Ron chữa cháy {r.loaiRon}</p>
-                  <StatusBadge status={r.thieuRon === 0 ? "Đạt" : "Không đạt"} />
+                  <StatusBadge status={r.thieuRon > 0 ? "Không đạt" : r.chuaCapNhat > 0 ? "Chưa cập nhật" : "Đạt"} />
                 </div>
                 <p className="mt-0.5 text-[11px] text-muted-foreground">
                   {r.loaiTu} · {r.soTu} tủ × 3 ron (lăng phun 2 + ngàm 1) = {r.tongRon} ron
@@ -214,6 +221,9 @@ export function PcccOverview({ summary, onDrill }: { summary: PcccSummary; onDri
                   <span className="text-rose-700">
                     Thiếu ron <b className="tabular-nums">{r.thieuRon}</b>
                   </span>
+                  <span className="text-slate-500">
+                    Chưa cập nhật <b className="tabular-nums">{r.chuaCapNhat}</b>
+                  </span>
                   {Object.entries(r.thieuRonTheoNhom)
                     .filter(([, n]) => n > 0)
                     .map(([g, n]) => (
@@ -222,7 +232,7 @@ export function PcccOverview({ summary, onDrill }: { summary: PcccSummary; onDri
                       </span>
                     ))}
                 </div>
-              </div>
+              </button>
             ))}
           </div>
           </div>
