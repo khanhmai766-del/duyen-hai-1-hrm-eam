@@ -1,4 +1,6 @@
 import { DEFECT_STATUS, type DefectStatusKey } from "@/lib/constants";
+import { outstandingDefectWhere } from "@/lib/defect-active-where";
+import { DEFECT_RESOLVED_AUDIT_ACTION } from "@/lib/defect-audit";
 import { prisma } from "@/lib/prisma";
 import { deliverTelegramNotification, escapeTelegramHtml } from "@/lib/telegram";
 import { formatVietnamDate, vietnamDayKey, vietnamDayWindow } from "@/lib/vietnam-time";
@@ -142,6 +144,45 @@ function defectLine(defect: DigestDefect, options?: { includeStatus?: boolean; i
   ].join("\n");
 }
 
+/**
+ * Id các phiếu website chuyển từ trạng thái khác sang Đã xử lý trong [start, end), lần chuyển
+ * gần nhất xếp trước. Không dùng completedAt vì trường này còn bị ghi lại khi VHV xác nhận
+ * lưu lịch sử phiếu đã ở Đã xử lý sẵn (đợt dọn tồn 14/09 làm số tuần đó phình lên 550).
+ */
+async function defectIdsResolvedOnWebsite(start: Date, end: Date) {
+  const rows = await prisma.auditLog.findMany({
+    where: {
+      action: DEFECT_RESOLVED_AUDIT_ACTION,
+      entity: "Defect",
+      entityId: { not: null },
+      createdAt: { gte: start, lt: end },
+    },
+    select: { entityId: true },
+    orderBy: { createdAt: "desc" },
+  });
+  return [...new Set(rows.flatMap((row) => (row.entityId ? [row.entityId] : [])))];
+}
+
+/** Chỉ tính phiếu hiện vẫn ở Đã xử lý; phiếu bị mở lại hoặc hủy sau đó không tính. */
+async function loadDefectsResolvedOnWebsite(start: Date, end: Date) {
+  const ids = await defectIdsResolvedOnWebsite(start, end);
+  if (ids.length === 0) return [];
+  const rows = await prisma.defect.findMany({
+    where: { id: { in: ids }, status: "DA_XU_LY", cancelledAt: null },
+    select: DEFECT_DIGEST_SELECT,
+  });
+  const order = new Map(ids.map((id, index) => [id, index]));
+  return rows.sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
+}
+
+async function countDefectsResolvedOnWebsite(start: Date, end: Date) {
+  const ids = await defectIdsResolvedOnWebsite(start, end);
+  if (ids.length === 0) return 0;
+  return prisma.defect.count({
+    where: { id: { in: ids }, status: "DA_XU_LY", cancelledAt: null },
+  });
+}
+
 async function loadShiftDefects(start: Date, end: Date) {
   return Promise.all([
     // "Phát sinh trong ca" phải dựa vào createdAt (lúc hệ thống thực sự ghi
@@ -158,15 +199,7 @@ async function loadShiftDefects(start: Date, end: Date) {
       select: DEFECT_DIGEST_SELECT,
       orderBy: [{ createdAt: "desc" }, { id: "asc" }],
     }),
-    prisma.defect.findMany({
-      where: {
-        status: "DA_XU_LY",
-        completedAt: { gte: start, lt: end },
-        cancelledAt: null,
-      },
-      select: DEFECT_DIGEST_SELECT,
-      orderBy: [{ completedAt: "desc" }, { id: "asc" }],
-    }),
+    loadDefectsResolvedOnWebsite(start, end),
   ]);
 }
 
@@ -309,26 +342,20 @@ export async function buildWeeklyDefectDigest(now: Date = new Date()) {
       },
       select: DEFECT_DIGEST_SELECT,
     }),
-    prisma.defect.count({
-      where: {
-        status: "DA_XU_LY",
-        completedAt: { gte: week.start, lt: week.end },
-        cancelledAt: null,
-      },
-    }),
+    countDefectsResolvedOnWebsite(week.start, week.end),
+    // Tồn = phiếu còn hiện trên trang Khiếm khuyết (dùng chung bộ lọc với web),
+    // nhưng không tính phiếu đã xử lý bình thường còn lưu 14 ngày để xem lại.
+    // Phiếu đã xử lý nhưng còn đánh dấu chờ vật tư vẫn là tồn đọng thực tế.
     prisma.defect.findMany({
-      where: {
-        cancelledAt: null,
-        syncState: "ACTIVE",
-        OR: [
-          { status: { not: "DA_XU_LY" } },
-          { postRepairAwaitingMaterial: true },
-        ],
-      },
+      where: outstandingDefectWhere(now),
       select: DEFECT_DIGEST_SELECT,
       orderBy: [{ detectedAt: { sort: "asc", nulls: "last" } }, { createdAt: "asc" }],
     }),
   ]);
+  // Dòng riêng, là một phần của tổng tồn.
+  const awaitingMaterialCount = outstanding.filter(
+    (row) => row.status === "CHO_VAT_TU" || row.postRepairAwaitingMaterial
+  ).length;
   const deviceCounts = new Map<string, number>();
   for (const row of created) {
     const device = text(row.node?.name ?? row.sourceDeviceRaw ?? row.device, "Chưa gắn thiết bị");
@@ -346,6 +373,7 @@ export async function buildWeeklyDefectDigest(now: Date = new Date()) {
     `🆕 Phát sinh trong tuần: <b>${created.length} phiếu</b>`,
     `✅ Đã xử lý trong tuần: <b>${completed} phiếu</b>`,
     `📌 Tổng còn tồn hiện tại: <b>${outstanding.length} phiếu</b>`,
+    `📦 Trong đó chờ vật tư: <b>${awaitingMaterialCount} phiếu</b>`,
     `🚨 Mức 1 còn tồn: <b>${levelOneCount} phiếu</b>`,
     "",
     "<b>Thiết bị phát sinh nhiều khiếm khuyết nhất:</b>",
@@ -368,6 +396,7 @@ export async function buildWeeklyDefectDigest(now: Date = new Date()) {
     createdCount: created.length,
     completedCount: completed,
     outstandingCount: outstanding.length,
+    awaitingMaterialCount,
     levelOneCount,
     periodKey: vietnamDayKey(week.start),
   };

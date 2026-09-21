@@ -1,3 +1,9 @@
+/**
+ * Action nhật ký ghi khi website chuyển phiếu sang Đã xử lý (xem lib/defect-resolved-audit.ts).
+ * Báo cáo tuần đếm "Đã xử lý trong tuần" theo action này.
+ */
+export const DEFECT_RESOLVED_AUDIT_ACTION = "DEFECT_RESOLVED";
+
 type DefectAuditReference = {
   requestType?: string | null;
   requestNumber?: string | null;

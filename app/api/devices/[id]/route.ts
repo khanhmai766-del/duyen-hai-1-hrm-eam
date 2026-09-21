@@ -26,6 +26,7 @@ import { MAX_EQUIPMENT_DEPTH, canonicalSeq, machinesOf, s2Code, s2Kks, type Equi
 import { deviceQrValue } from "@/lib/device-qr";
 import { resolvePositionViewScope } from "@/lib/position-data-scope";
 import { canViewMaterialReplacement } from "@/lib/material-replacement-access";
+import { outstandingDefectWhere } from "@/lib/defect-active-where";
 
 export const dynamic = "force-dynamic";
 
@@ -158,8 +159,7 @@ async function findEquipmentRecord(seq: string, requestedMachine?: string | null
     prisma.deviceQrCard.findFirst({ where: { deviceSeq: node.seq, machine }, select: { id: true, createdAt: true } }),
     prisma.defect.findMany({
       where: {
-        status: { not: "DA_XU_LY" },
-        ...mappedDeviceWhere,
+        AND: [outstandingDefectWhere(), mappedDeviceWhere],
       },
       orderBy: [{ severity: "asc" }, { detectedAt: "desc" }, { createdAt: "desc" }],
       select: {
@@ -169,6 +169,7 @@ async function findEquipmentRecord(seq: string, requestedMachine?: string | null
         severityCriteria: true,
         content: true,
         status: true,
+        postRepairAwaitingMaterial: true,
         requestType: true,
         requestNumber: true,
         detectedAt: true,

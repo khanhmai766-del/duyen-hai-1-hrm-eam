@@ -10,6 +10,7 @@ import { defectResultStatusOf } from "@/lib/defect-result-status";
 import { recordMaterialRequestReplacements } from "@/lib/defect-material-request";
 import { isDefectSyncFeatureEnabled } from "@/lib/defect-two-way-sync";
 import { notifyLevelOneDefectChange } from "@/lib/defect-telegram-alert";
+import { auditDefectResolved } from "@/lib/defect-resolved-audit";
 
 const HISTORY_PENDING_DAYS = 14;
 const HISTORY_COMPLETED_PENDING_DAYS = 4;
@@ -125,6 +126,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
           extra: sheetOrigin ? { writeScope: "SHEET_ORIGIN_LIMITED" } : undefined,
         });
         if (!syncEvent) throw new Error("DEFECT_HISTORY_SYNC_NOT_QUEUED");
+        await auditDefectResolved(tx, user, defect, defect.status);
         if (shouldRecordReplacement) {
           await recordMaterialRequestReplacements(tx, {
             defectId: defect.id,
@@ -217,6 +219,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
       if (defect.websiteCreated) {
         await enqueueDefectSyncEvent(tx, { defect: updatedDefect, eventType: "UPDATE" });
       }
+      await auditDefectResolved(tx, user, defect, defect.status);
       if (shouldRecordReplacement) {
         // Phải truyền `defect` y như nhánh chờ chốt ở trên: thiếu nó thì dòng lịch sử
         // thay thế mất cả defectId lẫn requestNumber — cột "Số yêu cầu" tụt về "Ghi thủ
