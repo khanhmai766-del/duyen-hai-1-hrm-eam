@@ -859,7 +859,7 @@ model Defect {
   cancelledAt                DateTime? // VHV hủy phiếu; không xóa vật lý để giữ liên kết đồng bộ hai chiều
   cancelledById              String? // Snapshot ID người hủy, không FK
   cancelledByName            String? // Snapshot tên người hủy
-  requestNumberReleasedAt    DateTime? // STT hủy trong cửa sổ 6 giờ được trả lại kho sau khi Sheet ACK
+  requestNumberReleasedAt    DateTime? // STT hủy sớm được trả lại kho sau khi Sheet ACK và giữ đến lúc tái cấp
   requestNumberReusedAt      DateTime? // STT đã được một phiếu mới nhận lại
   requestNumberReusedById    String? // Snapshot ID phiếu mới nhận lại STT, không FK
   requestNumberReuseEligible Boolean   @default(false) // Chỉ phiếu hủy sau khi triển khai cơ chế mới được tái sử dụng STT
@@ -1084,14 +1084,15 @@ model DefectSyncSeen {
 // giai đoạn phát triển sau; hiện tại luồng đồng bộ chỉ đọc một chiều Sheet → DB.
 // Bảng chỉ có một dòng duy nhất (id cố định "singleton"), mặc định tắt.
 model DefectSyncSetting {
-  id                     String   @id @default("singleton")
-  twoWaySyncEnabled      Boolean  @default(false)
-  operationUpdateEnabled Boolean  @default(true)
-  websiteCreateEnabled   Boolean  @default(false)
-  websiteRemindEnabled   Boolean  @default(false)
-  updatedAt              DateTime @updatedAt
-  updatedById            String?
-  updatedByName          String?
+  id                          String   @id @default("singleton")
+  twoWaySyncEnabled           Boolean  @default(false)
+  operationUpdateEnabled      Boolean  @default(true)
+  websiteCreateEnabled        Boolean  @default(false)
+  websiteRemindEnabled        Boolean  @default(false)
+  requestNumberReuseCutoverAt DateTime @default(now()) // Chỉ tái sử dụng STT được trả từ lần triển khai chính sách hiện tại
+  updatedAt                   DateTime @updatedAt
+  updatedById                 String?
+  updatedByName               String?
 }
 
 // Bộ cấp STT phiếu khiếm khuyết theo năm phát hiện và loại phiếu. Cơ/Điện có

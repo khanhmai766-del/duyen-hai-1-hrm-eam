@@ -124,18 +124,24 @@ export async function allocateDefectRequestNumber(
   const sheetName = scope.sheetName.trim();
   if (!sequenceType || !spreadsheetId || !sheetName) throw new Error("Thông tin cấp số yêu cầu không hợp lệ");
   await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`defect-request-number:${year}:${sequenceType}:${spreadsheetId}:${sheetName}`}, 0))::text AS "lock"`;
+  const reusePolicy = await tx.defectSyncSetting.upsert({
+    where: { id: "singleton" },
+    create: { id: "singleton" },
+    update: {},
+    select: { requestNumberReuseCutoverAt: true },
+  });
   const isEnvironment = sequenceType === "Môi Trường";
   const pattern = isEnvironment ? "^QT[0-9]+/[0-9]{4}$" : "^[0-9]+/[0-9]{4}$";
   const prefix = isEnvironment ? "^QT" : "^";
   const now = new Date();
-  const cutoff = new Date(now.getTime() - 6 * 60 * 60 * 1000);
+  const cutoverAt = reusePolicy.requestNumberReuseCutoverAt;
   const equivalentSheetNames = equivalentSourceSheetNames(sequenceType, sheetName);
   const cancelledRows = await tx.$queryRaw<Array<{ id: string; requestNumber: string }>>`
     SELECT "id", "requestNumber" FROM "Defect"
     WHERE "requestNumberReuseEligible" = true
       AND "cancelledAt" IS NOT NULL AND "syncState" = 'CONFIRMED'
       AND "requestNumberReleasedAt" IS NOT NULL AND "requestNumberReusedAt" IS NULL
-      AND "createdAt" >= ${cutoff} AND "createdAt" <= ${now}
+      AND "requestNumberReleasedAt" >= ${cutoverAt} AND "requestNumberReleasedAt" <= ${now}
       AND "cancelledAt" <= "createdAt" + INTERVAL '6 hours'
       AND "requestType" = ${sequenceType}
       AND "sourceSpreadsheetId" = ${spreadsheetId}
@@ -158,7 +164,7 @@ export async function allocateDefectRequestNumber(
     SELECT DISTINCT event."payload"->>'previousRequestNumber' AS "requestNumber"
     FROM "DefectSyncOutbox" AS event
     WHERE event."status" = 'SUCCESS'
-      AND event."createdAt" >= ${cutoff} AND event."createdAt" <= ${now}
+      AND event."createdAt" >= ${cutoverAt} AND event."createdAt" <= ${now}
       AND event."payload"->>'requestType' = ${sequenceType}
       AND event."payload"->>'sourceSpreadsheetId' = ${spreadsheetId}
       AND event."payload"->>'sourceSheetName' IN (${Prisma.join(equivalentSheetNames)})

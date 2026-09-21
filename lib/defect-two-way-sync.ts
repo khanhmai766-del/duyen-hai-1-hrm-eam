@@ -107,16 +107,16 @@ export async function getDefectSyncTrafficMetrics() {
 
 export async function getReusableCancelledDefectNumbers() {
   const now = new Date();
-  const cutoff = new Date(now.getTime() - 6 * 60 * 60 * 1000);
+  const setting = await getDefectTwoWaySyncSetting();
+  const cutoverAt = setting.requestNumberReuseCutoverAt;
   const [cancelledRows, renumberEvents] = await Promise.all([
     prisma.defect.findMany({
       where: {
         requestNumberReuseEligible: true,
         cancelledAt: { not: null },
         syncState: "CONFIRMED",
-        requestNumberReleasedAt: { not: null },
         requestNumberReusedAt: null,
-        createdAt: { gte: cutoff, lte: now },
+        requestNumberReleasedAt: { gte: cutoverAt, lte: now },
       },
       select: {
         id: true,
@@ -130,7 +130,7 @@ export async function getReusableCancelledDefectNumbers() {
       },
     }),
     prisma.defectSyncOutbox.findMany({
-      where: { status: "SUCCESS", createdAt: { gte: cutoff, lte: now } },
+      where: { status: "SUCCESS", createdAt: { gte: cutoverAt, lte: now } },
       select: { id: true, payload: true, createdAt: true, completedAt: true },
     }),
   ]);
