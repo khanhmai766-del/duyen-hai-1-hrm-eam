@@ -69,22 +69,45 @@ export async function extractPdfPreview(data: Buffer): Promise<PdfExtraction> {
     if (hasUsefulPdfText(text, pageCount)) return { source: "text", pageCount, text, textLength: text.length };
 
     const screenshots = await parser.getScreenshot({ desiredWidth: OCR_WIDTH, imageBuffer: true, imageDataUrl: false });
-    const worker = await createWorker([...TESSERACT_LANGS], OEM.LSTM_ONLY, {
-      langPath: await tessdataDir(),
-      cacheMethod: "none",
-      gzip: true,
+    // `errorHandler` KHÔNG phải tuỳ chọn trang trí. tesseract.js phát lỗi worker bằng
+    // `throw` ngay trong callback onMessage (createWorker.js dòng 216) — ngoài mọi promise,
+    // nên `try/catch` quanh `await` KHÔNG bắt được: Node nâng thành uncaughtException,
+    // route chết giữa chừng và khối catch ghi `aiIndexError` không bao giờ chạy tới. Hậu
+    // quả đã thấy trên production: tài liệu hỏng vì OCR trông y hệt tài liệu chưa tới lượt,
+    // không cách nào phân biệt (xem scripts/check/document-ai-index.ts).
+    //
+    // Nhưng truyền errorHandler suông thì chỉ đổi crash thành TREO: nhánh `throw` bị bỏ qua
+    // (dòng 214) mà `workerResReject` lại chỉ chạy khi `action === "load"`, nên nhiều lỗi
+    // không có promise nào settle — đã dựng lại được bằng langPath trỏ vào thư mục không
+    // tồn tại: tiến trình treo vô hạn. Treo còn tệ hơn crash vì n8n chỉ thấy timeout.
+    // Nên errorHandler phải CHỦ ĐỘNG reject, và mọi lệnh OCR đều chạy đua với tín hiệu đó.
+    let signalWorkerError!: (error: Error) => void;
+    const workerError = new Promise<never>((_, reject) => {
+      signalWorkerError = reject;
     });
+    // Luôn có một người nghe, kẻo lần lỗi nào không ai đua cùng sẽ thành unhandledRejection.
+    workerError.catch(() => undefined);
+
+    const worker = await Promise.race([
+      createWorker([...TESSERACT_LANGS], OEM.LSTM_ONLY, {
+        langPath: await tessdataDir(),
+        cacheMethod: "none",
+        gzip: true,
+        errorHandler: (message: unknown) => signalWorkerError(new Error(`Worker OCR lỗi: ${message}`)),
+      }),
+      workerError,
+    ]);
     try {
       const pages: string[] = [];
       for (const page of screenshots.pages) {
-        const result = await worker.recognize(Buffer.from(page.data));
+        const result = await Promise.race([worker.recognize(Buffer.from(page.data)), workerError]);
         const pageText = normalizePdfText(result.data.text ?? "");
         if (pageText) pages.push(`--- Trang ${page.pageNumber}/${pageCount} ---\n${pageText}`);
       }
       const ocrText = normalizePdfText(pages.join("\n\n"));
       return { source: "ocr", pageCount, text: ocrText, textLength: ocrText.length };
     } finally {
-      await worker.terminate();
+      await worker.terminate().catch(() => undefined);
     }
   } finally {
     await parser.destroy();
