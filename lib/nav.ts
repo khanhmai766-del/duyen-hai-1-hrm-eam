@@ -27,6 +27,7 @@ import {
   FlameKindling,
   MonitorCog,
   Calculator,
+  FileSpreadsheet,
   CalendarRange,
   Zap,
   Gauge,
@@ -73,6 +74,8 @@ export const MODEL_CONTROL_ALLOWED_POSITION_KEYWORDS = [
 
 export const QDU_TOOL_URL =
   "https://docs.google.com/spreadsheets/d/1ntWvK0kx6Z9zlITa7kIegYXNzAZd00xDZ9oimdZMqX8/edit?usp=sharing";
+export const ASH_SLAG_LOG_URL =
+  "https://docs.google.com/spreadsheets/d/1RyWmVWOuJTaQov2Eg7Y-ZxxWhez66RK5XY7seO4ppfE/edit?gid=0#gid=0";
 export const QDU_TOOL_ALLOWED_POSITION_KEYWORDS = [
   "trưởng ca",
   "kỹ thuật viên",
@@ -255,6 +258,13 @@ export const NAV_SECTIONS: NavSection[] = [
         external: true,
         allowedPositionKeywords: QDU_TOOL_ALLOWED_POSITION_KEYWORDS,
         keywords: "cong cu tinh qdu google sheets bang tinh",
+      },
+      {
+        label: "Sổ theo dõi tro xỉ",
+        href: ASH_SLAG_LOG_URL,
+        icon: FileSpreadsheet,
+        external: true,
+        keywords: "so theo doi tro xi google sheets nhat ky ash slag",
       },
     ],
   },
