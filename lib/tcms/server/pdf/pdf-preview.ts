@@ -1,8 +1,9 @@
-import { readFile } from "node:fs/promises";
+import { copyFile, mkdir, stat } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { getData } from "pdf-parse/worker";
 import { PDFParse } from "pdf-parse";
-import { createWorker, OEM, type Lang } from "tesseract.js";
+import { createWorker, OEM } from "tesseract.js";
 
 PDFParse.setWorker(getData());
 
@@ -20,16 +21,43 @@ export function hasUsefulPdfText(text: string, pageCount: number) {
   return usefulCharacters >= Math.max(120, pageCount * 80);
 }
 
-async function localLanguages(): Promise<Lang[]> {
-  const languageFiles = [
-    ["vie", join(process.cwd(), "node_modules", "@tesseract.js-data", "vie", "4.0.0_best_int", "vie.traineddata.gz")],
-    ["eng", join(process.cwd(), "node_modules", "@tesseract.js-data", "eng", "4.0.0_best_int", "eng.traineddata.gz")],
-  ] as const;
-  return Promise.all(
-    languageFiles.map(async ([code, languageFile]) => {
-      return { code, data: new Uint8Array(await readFile(/* turbopackIgnore: true */ languageFile)) };
+const TESSERACT_LANGS = ["vie", "eng"] as const;
+const TESSDATA_VERSION = "4.0.0_best_int";
+
+/**
+ * KHÔNG truyền mảng `{ code, data }` cho createWorker, dù index.d.ts công bố đúng kiểu đó.
+ * tesseract.js 7.0.0 có lỗi ở `initialize` (worker-script/index.js dòng 238):
+ *
+ *     _langs.map((l) => ((typeof l === 'string') ? l : l.data)).join('+')
+ *                                                   ^^^^^^ đáng lẽ l.code
+ *
+ * Nó lấy DỮ LIỆU làm TÊN ngôn ngữ, nên tên ngôn ngữ thành cả mảng byte của tệp .gz.
+ * Tesseract báo `Failed loading language '31,139,8,...'` (31,139,8 là magic gzip) rồi in
+ * nguyên mảng ra log. Đo trên production 20/09/2026: ~5,8 MB MỖI DÒNG, 45 dòng ngốn
+ * 262 MB, kèm 48 uncaughtException làm pm2 restart liên tục. 7.0.0 là bản mới nhất —
+ * chưa có bản vá để nâng lên.
+ *
+ * Nhánh truyền MÃ dạng chuỗi không dính lỗi (chuỗi đi thẳng qua `map`), nhưng nó đọc tệp
+ * theo `langPath` — mà `langPath` chỉ nhận MỘT thư mục, trong khi hai gói dữ liệu nằm ở
+ * hai thư mục khác nhau. Nên gom bản sao vào một chỗ; chép một lần rồi dùng lại.
+ *
+ * Bỏ hàm này và quay lại `{ code, data }` khi tesseract.js vá dòng 238.
+ */
+async function tessdataDir() {
+  const dir = join(tmpdir(), `dh1-tessdata-${TESSDATA_VERSION}`);
+  await mkdir(dir, { recursive: true });
+  await Promise.all(
+    TESSERACT_LANGS.map(async (code) => {
+      const name = `${code}.traineddata.gz`;
+      const source = join(process.cwd(), "node_modules", "@tesseract.js-data", code, TESSDATA_VERSION, name);
+      const target = join(dir, name);
+      // So kích thước thay vì chỉ kiểm tồn tại: bản chép dở dang (đầy đĩa, tiến trình bị
+      // giết giữa chừng) vẫn tồn tại nhưng hỏng, và lỗi đó rất khó lần ra.
+      const [sourceStat, targetStat] = await Promise.all([stat(source), stat(target).catch(() => null)]);
+      if (targetStat?.size !== sourceStat.size) await copyFile(source, target);
     }),
   );
+  return dir;
 }
 
 export async function extractPdfPreview(data: Buffer): Promise<PdfExtraction> {
@@ -41,7 +69,11 @@ export async function extractPdfPreview(data: Buffer): Promise<PdfExtraction> {
     if (hasUsefulPdfText(text, pageCount)) return { source: "text", pageCount, text, textLength: text.length };
 
     const screenshots = await parser.getScreenshot({ desiredWidth: OCR_WIDTH, imageBuffer: true, imageDataUrl: false });
-    const worker = await createWorker(await localLanguages(), OEM.LSTM_ONLY, { cacheMethod: "none" });
+    const worker = await createWorker([...TESSERACT_LANGS], OEM.LSTM_ONLY, {
+      langPath: await tessdataDir(),
+      cacheMethod: "none",
+      gzip: true,
+    });
     try {
       const pages: string[] = [];
       for (const page of screenshots.pages) {
