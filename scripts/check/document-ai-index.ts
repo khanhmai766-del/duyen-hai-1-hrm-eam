@@ -39,10 +39,15 @@ const GROUPS = [
 type Group = (typeof GROUPS)[number][0];
 
 /**
- * Dấu hiệu lỗi do OCR. Hai nhóm:
- *  - thông điệp 422 của route khi trích xuất ra rỗng — đây là dấu hiệu THƯỜNG GẶP nhất
- *    của PDF quét, vì OCR hỏng nên không cứu được trang ảnh;
- *  - lỗi ném thẳng từ tesseract.js.
+ * Dấu hiệu lỗi do OCR. Ba nhóm:
+ *  - thông điệp 422 của route khi trích xuất ra rỗng — dấu hiệu của PDF quét không cứu được;
+ *  - lỗi ném thẳng từ tesseract.js;
+ *  - "worker ocr lỗi" — thông điệp do lib/tcms/server/pdf/pdf-preview.ts tự đặt.
+ *
+ * LƯU Ý LỊCH SỬ: trước 21/09/2026 nhóm này LUÔN bằng 0 dù OCR hỏng liên tục, vì lỗi
+ * tesseract là uncaughtException nên khối catch ghi `aiIndexError` không chạy tới —
+ * tài liệu hỏng lẫn hết vào CHUA_NAP. Nay pdf-preview.ts đã bắt được (errorHandler +
+ * Promise.race), nên từ đây nhóm này mới phản ánh đúng thực tế.
  */
 const OCR_MARKERS = [
   "không trích xuất được nội dung chữ",
@@ -177,6 +182,41 @@ async function main() {
     const count = results.filter((row) => row.group === group).length;
     if (count === 0) continue;
     console.log(`  ${String(count).padStart(4)}  ${group.padEnd(15)} ${label}`);
+  }
+
+  // Nhịp nạp theo ngày: phân biệt 'workflow đang chạy, chỉ là chậm' với 'workflow đã dừng'.
+  // Ngày hôm nay bằng 0 mà hàng đợi còn dài là dấu hiệu nó chết chứ không phải đang xếp hàng.
+  const indexedByDay = new Map<string, number>();
+  for (const row of results) {
+    const at = row.document.aiIndexedAt;
+    if (!at) continue;
+    const day = at.toISOString().slice(0, 10);
+    indexedByDay.set(day, (indexedByDay.get(day) ?? 0) + 1);
+  }
+  if (indexedByDay.size > 0) {
+    console.log("\n--- Nhịp nạp thành công theo ngày ---");
+    for (const [day, count] of [...indexedByDay].sort().slice(-7)) {
+      console.log(`  ${day}  ${String(count).padStart(4)}`);
+    }
+  }
+
+  // CHUA_DONG_BO không tự khỏi theo thời gian: MISSING là Drive không có file, NEEDS_REVIEW
+  // là chờ người chọn. Gộp chung một con số sẽ che mất phần cần người vào làm tay.
+  const unsynced = results.filter((row) => row.group === "CHUA_DONG_BO");
+  if (unsynced.length > 0) {
+    const byStatus = new Map<string, number>();
+    for (const row of unsynced) {
+      const status = row.document.driveSyncStatus ?? "(chưa thử đồng bộ)";
+      byStatus.set(status, (byStatus.get(status) ?? 0) + 1);
+    }
+    console.log("\n--- CHUA_DONG_BO chia theo trạng thái Drive ---");
+    for (const [status, count] of [...byStatus].sort((a, b) => b[1] - a[1])) {
+      console.log(`  ${String(count).padStart(4)}  ${status}`);
+    }
+    const needsHuman = (byStatus.get("MISSING") ?? 0) + (byStatus.get("NEEDS_REVIEW") ?? 0);
+    if (needsHuman > 0) {
+      console.log(`  → ${needsHuman} tài liệu cần người vào Drive xử lý, workflow không tự khỏi.`);
+    }
   }
 
   for (const [group, label] of GROUPS) {
