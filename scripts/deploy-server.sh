@@ -201,11 +201,21 @@ done
 # viết lại nó (thêm cờ "dev" cho các gói nhị phân theo nền tảng) mà không đổi phiên bản
 # gói nào. Đó là rác của chính bước npm install ở deploy TRƯỚC — chặn vì nó thì lần deploy
 # nào cũng chặn. Trả file về bản gốc rồi đi tiếp.
+LOCKFILE_RESTORED=0
 if ! git diff --quiet -- package-lock.json; then
   warn "package-lock.json bị npm viết lại (rác nền tảng) — trả về bản trong git."
   run "git checkout -- package-lock.json"
+  LOCKFILE_RESTORED=1
 fi
 DIRTY=$(git status --porcelain --untracked-files=no)
+# Ở --dry-run, `run` mới chỉ IN lệnh checkout chứ chưa chạy, nên lockfile vẫn bẩn tại đây.
+# Mà npm viết lại nó sau MỖI lần deploy (xem ghi chú ngay trên), nghĩa là không loại ra thì
+# --dry-run KHÔNG BAO GIỜ qua nổi bước này — trong khi docs/huong-dan-deploy-production.md
+# mục 3 bắt buộc chạy --dry-run tới hết trước mỗi lần deploy. Chỉ loại đúng lockfile, và chỉ
+# khi bản chạy thật sẽ trả nó về: mọi sửa tay khác vẫn phải chặn.
+if [[ $DRY_RUN == 1 && $LOCKFILE_RESTORED == 1 ]]; then
+  DIRTY=$(git status --porcelain --untracked-files=no -- ':(exclude)package-lock.json')
+fi
 if [[ -n "$DIRTY" ]]; then
   echo "$DIRTY" | sed 's/^/    /'
   die "Có thay đổi chưa commit trên server. Xử lý xong rồi hãy deploy."
