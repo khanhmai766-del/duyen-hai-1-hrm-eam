@@ -73,6 +73,47 @@ Content-Type: application/json
   chỉ tải lại tài liệu có checksum hoặc ngày sửa đổi mới.
 - Nếu một PDF lỗi, thông báo được lưu vào `aiIndexError`; workflow tiếp tục tài liệu kế tiếp.
 
+## Đối chiếu tài liệu ↔ vector
+
+```bash
+npm run check:document-ai              # bảng tổng hợp + danh sách cần nạp lại
+npm run check:document-ai -- --json    # JSON để nạp ngược vào n8n
+npm run check:document-ai -- --chi-tiet
+```
+
+**Chạy trên server.** DB thật nằm trong mạng nội bộ; chạy ở máy dev sẽ trỏ vào Postgres
+nhúng cổng 5433 và ra 0 dòng — đó không có nghĩa là không có vấn đề.
+
+Script **chỉ đọc**, không nạp lại giúp: mỗi tài liệu là một lượt gọi embedding Gemini, nên
+việc bấm nút để bạn quyết. Nó in sẵn câu `UPDATE ... SET "aiIndexVersion" = NULL` để lần
+chạy workflow kế tiếp coi các tài liệu đó là mới.
+
+Các nhóm nó phân loại:
+
+| Nhóm | Nghĩa |
+|---|---|
+| `OCR_HONG` | PDF quét, trích xuất ra rỗng — xem mục dưới |
+| `LOI_KHAC` | Có `aiIndexError` vì lý do khác |
+| `CHUA_NAP` | Chưa có bản ghi tri thức nào |
+| `RONG` | Có bản ghi nhưng 0 đoạn |
+| `VECTOR_HONG` | Có đoạn nhưng vector rỗng |
+| `LECH_PHIEN_BAN` | File Drive đã đổi sau lần nạp |
+| `CHUA_DONG_BO` | Chưa đồng bộ được PDF — chưa tới lượt nạp AI |
+
+Nó cũng cảnh báo **bản ghi tri thức mồ côi**: `sourcePath` trỏ tới tài liệu đã bị xoá.
+Chatbot vẫn trích dẫn được từ chúng nhưng người dùng bấm vào thì không mở ra gì.
+
+### Vì sao cần đối chiếu (9/2026)
+
+OCR cho PDF quét **chưa bao giờ chạy được** trên production: tesseract.js 7.0.0 lấy dữ
+liệu làm tên ngôn ngữ (chi tiết trong `lib/tcms/server/pdf/pdf-preview.ts`). Mọi PDF
+không có lớp text đều trích ra rỗng nên **không sinh vector nào**, và mỗi lần lỗi còn
+bơm ~5,8 MB vào log. Sau khi bản vá lên, những tài liệu đó cần nạp lại — script này chỉ
+ra đúng chúng.
+
+Nhớ nhịp **20 PDF/ngày** ở trên: xoá dấu phiên bản cho 100 tài liệu thì mất 5 ngày, không
+phải workflow bị treo.
+
 ## Rollback
 
 Các cột mới đều nullable và `documentUrl` không bị thay đổi. Tắt workflow là website

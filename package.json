@@ -30,6 +30,7 @@
     "merge:grounding-lightning": "tsx scripts/data-ops/merge-grounding-lightning-items.ts",
     "import:tbycnn": "tsx scripts/import/tbycnn.ts",
     "check:tbycnn": "tsx scripts/check/tbycnn.ts",
+    "check:document-ai": "tsx scripts/check/document-ai-index.ts",
     "import:chemical": "tsx scripts/import/chemical-inventory.ts",
     "seed:chemical": "tsx scripts/import/seed-chemical-inventory.ts",
     "check:chemical-link": "tsx scripts/check/chemical-ticket-link.ts",
