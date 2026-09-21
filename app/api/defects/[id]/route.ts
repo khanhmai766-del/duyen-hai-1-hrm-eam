@@ -25,6 +25,7 @@ import {
 } from "@/lib/defect-device-mapping";
 import { isDefectSyncFeatureEnabled } from "@/lib/defect-two-way-sync";
 import { defectAuditReference } from "@/lib/defect-audit";
+import { auditDefectResolved } from "@/lib/defect-resolved-audit";
 import { notifyLevelOneDefectChange } from "@/lib/defect-telegram-alert";
 
 // Tầng 4: avatar trong payload đi qua publicUserRef (proxy theo key) — không chở base64.
@@ -402,6 +403,9 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
             await revertMaterialRequestReplacements(tx, { defectId: updated.id });
           }
         }
+        if (status === "DA_XU_LY") {
+          await auditDefectResolved(tx, user, updated, existing.status);
+        }
         return updated;
       });
       if (images) {
@@ -547,6 +551,9 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
         include: INCLUDE,
       });
       await enqueueDefectSyncEvent(tx, { defect: updated, eventType: "UPDATE" });
+      if (nextStatus === "DA_XU_LY") {
+        await auditDefectResolved(tx, user, updated, existing.status);
+      }
       return updated;
     });
     if (images) {

@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getOrSetDefectListCache } from "@/lib/defect-list-cache";
+import { activeDefectWhere } from "@/lib/defect-active-where";
 import { ok, fail, requireUser, handle, audit, auditDetailWithPosition } from "@/lib/api";
 import { assertSeqEditable, equipmentSeqWhere, resolveEquipmentAccessForUser } from "@/lib/server-access";
 import { normalizeImpactValue } from "@/lib/defect-impact-fields";
@@ -164,44 +165,6 @@ const PAGE_SELECT = {
     orderBy: { createdAt: "asc" as const },
   },
 } satisfies Prisma.DefectSelect;
-
-function activeDefectWhere(): Prisma.DefectWhereInput {
-  const completedCutoff = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
-  return {
-    AND: [{
-      // Đã xác nhận lưu lịch sử thì phiếu chuyển hẳn sang trang Lịch sử sửa
-      // chữa (hiện ở đó với trạng thái Chờ chốt), không còn nằm ở bảng Khiếm
-      // khuyết nữa để tránh một phiếu xuất hiện ở hai nơi.
-      pendingHistory: { is: null },
-    }, {
-      // Phiếu hủy chỉ còn ở Tồn đọng trong lúc chờ ACK ghi ngược lên Sheet.
-      OR: [
-        { cancelledAt: null },
-        { syncState: { not: "CONFIRMED" } },
-      ],
-    }, {
-      OR: [
-      {
-        sourceType: "GOOGLE_SHEETS",
-        syncState: { not: "CONFIRMED" },
-      },
-      {
-        sourceType: { not: "GOOGLE_SHEETS" },
-        status: { not: "DA_XU_LY" },
-      },
-      // Phiếu còn chờ vật tư phải ở lại Tồn đọng cho đến khi VHV bỏ đánh dấu.
-      { status: "DA_XU_LY", postRepairAwaitingMaterial: true },
-      // Phiếu đã xử lý bình thường ở lại 14 ngày để VHV có thể xem lại.
-      {
-        sourceType: { not: "GOOGLE_SHEETS" },
-        status: "DA_XU_LY",
-        postRepairAwaitingMaterial: false,
-        completedAt: { gte: completedCutoff },
-      },
-      ],
-    }],
-  };
-}
 
 function parseDefectRequestNumber(value: string | null) {
   const match = value?.trim().match(/^(\d+)\/(\d{4})$/);

@@ -1,5 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import { DEFECT_REQUEST_TYPES, daysUntilDue, replacementDueStatus } from "@/lib/constants";
+import { activeDefectWhere, isOutstandingDefect } from "@/lib/defect-active-where";
 import { getCachedEquipmentNodeList, getEquipmentTreeIndexFor } from "@/lib/equipment-node-cache";
 import { normalizeText } from "@/lib/nav";
 import { positionsMatch } from "@/lib/position-catalog";
@@ -51,23 +52,6 @@ const CACHE_TTL_MS = 60_000;
 const CACHE_MAX_ENTRIES = 32;
 const dashboardCache = new Map<string, CacheEntry>();
 const dashboardInFlight = new Map<string, Promise<EquipmentDashboardData>>();
-
-function activeDefectWhere(now: Date): Prisma.DefectWhereInput {
-  const completedCutoff = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
-  return {
-    OR: [
-      { sourceType: "GOOGLE_SHEETS", syncState: { not: "CONFIRMED" } },
-      { sourceType: { not: "GOOGLE_SHEETS" }, status: { not: "DA_XU_LY" } },
-      { status: "DA_XU_LY", postRepairAwaitingMaterial: true },
-      {
-        sourceType: { not: "GOOGLE_SHEETS" },
-        status: "DA_XU_LY",
-        postRepairAwaitingMaterial: false,
-        completedAt: { gte: completedCutoff },
-      },
-    ],
-  };
-}
 
 function validDateFilter(value?: string) {
   if (!value) return undefined;
@@ -278,6 +262,7 @@ async function buildEquipmentDashboard(
           status: true,
           severity: true,
           requestType: true,
+          postRepairAwaitingMaterial: true,
           detectedAt: true,
           createdAt: true,
           sourceType: true,
@@ -349,7 +334,7 @@ async function buildEquipmentDashboard(
         return false;
       });
 
-  const openDefects = defects.filter((defect) => defect.status !== "DA_XU_LY");
+  const openDefects = defects.filter(isOutstandingDefect);
   const urgentDefects = openDefects.filter(
     (defect) => defect.severity === "1" || defect.severity === "2"
   );
@@ -489,11 +474,15 @@ async function buildEquipmentDashboard(
     },
     {
       name: "Chờ vật tư",
-      value: visibleDefects.filter((defect) => defect.status === "CHO_VAT_TU").length,
+      value: visibleDefects.filter(
+        (defect) => defect.status === "CHO_VAT_TU" || defect.postRepairAwaitingMaterial
+      ).length,
     },
     {
       name: "Đã xử lý",
-      value: visibleDefects.filter((defect) => defect.status === "DA_XU_LY").length,
+      value: visibleDefects.filter(
+        (defect) => defect.status === "DA_XU_LY" && !defect.postRepairAwaitingMaterial
+      ).length,
     },
   ].filter((row) => row.value > 0);
 
