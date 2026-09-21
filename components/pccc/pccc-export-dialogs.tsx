@@ -194,6 +194,7 @@ export function PcccBookExportDialog({
   periods,
   defaultPeriod,
   positions,
+  allowAllPositions,
   defaultPosition,
   busy,
   onExport,
@@ -203,6 +204,7 @@ export function PcccBookExportDialog({
   periods: string[];
   defaultPeriod: string;
   positions: { code: string; label: string }[];
+  allowAllPositions: boolean;
   defaultPosition: string;
   busy: boolean;
   onExport: (periodLabel: string, cuongVi: string, groups: string[], machine: string) => void;
@@ -241,6 +243,7 @@ export function PcccBookExportDialog({
           <div className={SECTION}>
             <Label className={SECTION_TITLE}>Chọn cương vị quản lý</Label>
             <select className={SELECT} value={cuongVi} onChange={(e) => setCuongVi(e.target.value)}>
+              {allowAllPositions && positions.length > 1 && <option value="ALL">Tất cả cương vị</option>}
               {positions.map((p) => (
                 <option key={p.code} value={p.code}>
                   {p.label}

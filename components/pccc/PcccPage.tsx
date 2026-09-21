@@ -1334,12 +1334,10 @@ export default function PcccPage() {
 
   /** Tháng chọn được trong hộp thoại xuất file = đúng các kỳ còn nằm trong cơ sở dữ liệu. */
   const periodLabels = periods.map((p) => p.label);
-  /**
-   * Cương vị chọn được khi xuất sổ theo dõi. Sổ là sổ CỦA MỘT cương vị, có ô chữ ký của
-   * đúng người phụ trách — gộp mọi cương vị vào một quyển thì không biết ai ký vào đâu,
-   * nên danh sách này không có mục "Tất cả" như ô lọc.
-   */
+  /** Cương vị chọn được khi xuất sổ; hộp thoại tự thêm lựa chọn gộp tất cả vào một PDF. */
   const bookPositions = cuongViList.filter((p) => p.code);
+  /** Route xuất tổng hợp dùng phạm vi PCCC chung; không dùng quyền nới riêng của bảng Tủ. */
+  const canExportAllBookPositions = bccQuery.data?.meta?.writeScope?.all === true;
   // Bốn bảng có cột Người giám sát; lấy THEO TAB vì danh sách đã cắt theo phạm vi xem
   // của chính bảng đó — lấy của tab khác là bày ra cấp giám sát không có trong bảng.
   const giamSatList: PositionOption[] =
@@ -2270,6 +2268,7 @@ export default function PcccPage() {
         periods={periodLabels}
         defaultPeriod={effectiveLabel}
         positions={bookPositions}
+        allowAllPositions={canExportAllBookPositions}
         defaultPosition={bookStatus?.positionCode ?? cuongVi ?? bookPositions[0]?.code ?? ""}
         busy={downloading}
         onExport={(periodLabel, code, groups, machine) => void previewBook({ period: periodLabel, cuongVi: code, groups, machine })}

@@ -1,7 +1,8 @@
 import type { NextRequest } from "next/server";
+import { PDFDocument } from "pdf-lib";
 import { audit, auditDetailWithPosition, fail, handle, requireUser } from "@/lib/api";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
-import { PCCC_PERMISSION, pcccPositionCodesOf, pcccWriteScopeOf, resolvePeriod } from "@/lib/pccc-service";
+import { PCCC_PERMISSION, cuongViListOf, pcccPositionCodesOf, pcccWriteScopeOf, resolvePeriod } from "@/lib/pccc-service";
 import { loadSignatureImages } from "@/lib/pccc-archive";
 import {
   BOOK_GROUPS,
@@ -12,14 +13,16 @@ import {
   loadBookData,
   normalizeBookMachine,
   type BookGroupKey,
+  type BookRow,
 } from "@/lib/pccc-so-theo-doi";
 import { buildPcccBookPdf } from "@/lib/pccc-so-theo-doi-pdf";
 import { fcdFileNameOf, fcdKeyOf, fcdStatusOf, loadFcdReport } from "@/lib/pccc-fcd-report";
 import { buildPcccFcdPdf } from "@/lib/pccc-fcd-pdf";
-import { positionLabelOf } from "@/lib/position-catalog";
+import { positionLabelOf, type PositionCode } from "@/lib/position-catalog";
 import { uploadS3Object } from "@/lib/s3";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 300;
 
 /** Nhãn tổ máy in lên bìa sổ — giữ đúng chữ dùng trên giao diện PCCC. */
 const MACHINE_LABELS: Record<string, string> = { S1: "Tổ máy 1", S2: "Tổ máy 2", COMMON: "Common" };
@@ -38,8 +41,8 @@ function pdfHeaders(fileName: string, preview: boolean): HeadersInit {
 
 /**
  * GET /api/pccc/so-theo-doi/export?period=&cuongVi=&preview=1
- * Dựng "Sổ theo dõi phương tiện PCCC" (Mẫu số 01) của MỘT cương vị, LƯU LÊN S3 rồi trả
- * luôn tệp về cho trình duyệt tải xuống.
+ * Dựng "Sổ theo dõi phương tiện PCCC" (Mẫu số 01) của một cương vị hoặc toàn bộ cương
+ * vị, LƯU LÊN S3 rồi trả luôn tệp về cho trình duyệt tải xuống.
  *
  * `preview=1` = BẢN NHÁP để người dùng xem qua trước khi chốt: dựng đúng cùng một PDF
  * nhưng KHÔNG đẩy lên S3 và KHÔNG ghi nhật ký. Xem trước là một thao tác đọc — soi thử
@@ -87,13 +90,6 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    const scope = await pcccWriteScopeOf(user);
-    const positionCode = bookPositionOf(scope, sp.get("cuongVi"), pcccPositionCodesOf(user)[0]);
-    const status = await bookStatusOf(period.id, positionCode);
-    if (!positionCode || !status.ready) {
-      return fail(status.reason ?? "Chưa đủ điều kiện xuất sổ theo dõi", 409);
-    }
-
     // ?groups=BCC,TCC — chọn nhóm thiết bị đưa vào sổ. Bỏ trống = in đủ sáu nhóm.
     // Lọc theo DANH MỤC chuẩn chứ không tin chuỗi client gửi lên, để một tham số bịa
     // không lọt xuống truy vấn.
@@ -105,35 +101,109 @@ export async function GET(req: NextRequest) {
     const machine = normalizeBookMachine(sp.get("machine"));
     const machineLabel = machine ? MACHINE_LABELS[machine] : null;
 
-    const { rows } = await loadBookData(period.id, positionCode, groups, machine);
-    if (!rows.length) {
+    const scope = await pcccWriteScopeOf(user);
+    const exportAllPositions = sp.get("cuongVi")?.trim().toUpperCase() === "ALL";
+    if (exportAllPositions && !scope.all) {
+      return fail("Chỉ tài khoản được quản lý toàn bộ dữ liệu PCCC mới có thể xuất tất cả cương vị", 403);
+    }
+
+    const singlePosition = exportAllPositions
+      ? null
+      : bookPositionOf(scope, sp.get("cuongVi"), pcccPositionCodesOf(user)[0]);
+    const positionCodes: PositionCode[] = exportAllPositions
+      ? (await cuongViListOf(period.id)).map((position) => position.code as PositionCode)
+      : singlePosition
+        ? [singlePosition]
+        : [];
+
+    if (!positionCodes.length) {
+      return fail("Không tìm thấy cương vị phù hợp để xuất sổ theo dõi", 409);
+    }
+
+    const statuses = await Promise.all(
+      positionCodes.map(async (positionCode) => ({ positionCode, status: await bookStatusOf(period.id, positionCode) }))
+    );
+    if (!exportAllPositions && !statuses[0].status.ready) {
+      return fail(statuses[0].status.reason ?? "Chưa đủ điều kiện xuất sổ theo dõi", 409);
+    }
+    // Danh sách cương vị lấy từ toàn bộ module còn có thể chứa cương vị chỉ quản lý bảng
+    // Foam/CO2/Diesel/FM200. Bảng đó xuất riêng, nên không đưa cương vị không có dòng Bảng II
+    // vào PDF tổng hợp và cũng không coi đó là lỗi.
+    const applicable = statuses.filter(({ status }) => status.groups.some((group) => group.total > 0));
+    const notReady = applicable.filter(({ status }) => !status.ready);
+    if (notReady.length) {
+      const details = notReady
+        .slice(0, 4)
+        .map(({ status }) => `${status.positionLabel ?? "Cương vị chưa xác định"}: ${status.reason ?? "chưa đủ điều kiện"}`)
+        .join("; ");
+      const remaining = notReady.length > 4 ? `; và ${notReady.length - 4} cương vị khác` : "";
+      return fail(`Chưa thể xuất tất cả cương vị. ${details}${remaining}`, 409);
+    }
+
+    const books: Array<{ positionCode: PositionCode; positionLabel: string; rows: BookRow[] }> = [];
+    const merged = exportAllPositions ? await PDFDocument.create() : null;
+    let singlePdf: Buffer | null = null;
+    for (const { positionCode } of applicable) {
+      const { rows } = await loadBookData(period.id, positionCode, groups, machine);
+      // Khi chỉ chọn một vài nhóm hoặc một tổ máy, có cương vị hợp lệ nhưng không có dòng
+      // thuộc phạm vi đó. PDF tổng hợp bỏ qua cương vị này thay vì sinh một quyển rỗng.
+      if (!rows.length) continue;
+      const signatureImages = await loadSignatureImages(rows.map((row) => row.signatureKey));
+      const pdf = await buildPcccBookPdf({
+        periodLabel: period.label,
+        positionLabel: positionLabelOf(positionCode),
+        machineLabel,
+        rows,
+        signatureImages,
+      });
+      if (merged) {
+        // Ghép ngay rồi thả buffer quyển con ở vòng lặp kế tiếp: xuất toàn bộ có thể gồm
+        // hàng nghìn thiết bị, giữ đồng thời mọi PDF con sẽ làm RAM tăng vọt không cần thiết.
+        const source = await PDFDocument.load(pdf);
+        const pages = await merged.copyPages(source, source.getPageIndices());
+        pages.forEach((page) => merged.addPage(page));
+      } else {
+        singlePdf = pdf;
+      }
+      books.push({
+        positionCode,
+        positionLabel: positionLabelOf(positionCode),
+        rows,
+      });
+    }
+
+    if (!books.length) {
       return fail(
         machine
-          ? `Nhóm thiết bị đã chọn không có dòng nào ở cương vị này thuộc ${machineLabel}`
-          : "Nhóm thiết bị đã chọn không có dòng nào ở cương vị này",
+          ? `Nhóm thiết bị đã chọn không có dòng nào thuộc ${machineLabel}`
+          : "Nhóm thiết bị đã chọn không có dòng nào để xuất",
         409
       );
     }
-    const signatureImages = await loadSignatureImages(rows.map((r) => r.signatureKey));
-    const buffer = await buildPcccBookPdf({
-      periodLabel: period.label,
-      positionLabel: positionLabelOf(positionCode),
-      machineLabel,
-      rows,
-      signatureImages,
-    });
 
-    const key = bookKeyOf(period.label, positionCode, machine);
-    const fileName = bookFileNameOf(period.label, positionCode, machine);
+    let buffer: Buffer;
+    if (merged) {
+      merged.setTitle(`So theo doi phuong tien PCCC - Tat ca cuong vi - ${period.label}`);
+      buffer = Buffer.from(await merged.save());
+    } else {
+      // Có ít nhất một `books` sau cửa kiểm tra trên nên nhánh đơn luôn đã dựng `singlePdf`.
+      buffer = singlePdf as Buffer;
+    }
+
+    const archiveCode = exportAllPositions ? "ALL" : books[0].positionCode;
+    const key = bookKeyOf(period.label, archiveCode, machine);
+    const fileName = bookFileNameOf(period.label, archiveCode, machine);
     if (!preview) {
       await uploadS3Object({ key, body: buffer, contentType: "application/pdf", originalName: fileName });
 
+      const totalRows = books.reduce((sum, book) => sum + book.rows.length, 0);
+      const scopeLabel = exportAllPositions ? `Tất cả cương vị (${books.length})` : books[0].positionLabel;
       await audit(
         user.id,
         "EXPORT_PCCC_BOOK",
         "PcccPeriod",
         period.id,
-        auditDetailWithPosition(user, `Xuất sổ theo dõi PCCC ${period.label} · ${positionLabelOf(positionCode)}${machineLabel ? ` · ${machineLabel}` : ""} · ${rows.length} thiết bị`)
+        auditDetailWithPosition(user, `Xuất sổ theo dõi PCCC ${period.label} · ${scopeLabel}${machineLabel ? ` · ${machineLabel}` : ""} · ${totalRows} thiết bị`)
       );
     }
 
