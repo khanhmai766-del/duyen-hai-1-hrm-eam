@@ -37,7 +37,8 @@ function harness(canIssue: boolean, canExecute: boolean, teamType = "CONTRACTOR"
     permitSnapshot: (value: unknown) => JSON.parse(JSON.stringify(value)),
     parsePermit: (value: any) => ({ ...value, authorizedAt: value.authorizedAt ? new Date(value.authorizedAt) : null, closedAt: value.closedAt ? new Date(value.closedAt) : null, searchText: "" }),
   };
-  const imports = { "@/lib/server/work-permit-auto-close-runner": { startInternalPermitAutoClose: () => {} }, "@/lib/api": api, "@/lib/server/work-permit-permissions": permissions, "@/lib/work-permit-permissions": policy, "@/lib/work-permits": permits, "@/lib/server/work-permits": server, "@/lib/prisma": { prisma: { $transaction: (fn: any) => fn(tx) } }, "@/lib/server/work-permit-safety": {}, "@/lib/server/work-permit-identities": {}, "@/lib/server/work-permit-selects": {}, "@/lib/nav": {}, "@/lib/server/work-permit-sessions": {} };
+  const prisma = { $transaction: (fn: any) => fn(tx) };
+  const imports = { "@/lib/server/work-permit-auto-close-runner": { startInternalPermitAutoClose: () => {} }, "@/lib/api": api, "@/lib/server/work-permit-permissions": permissions, "@/lib/server/work-permit-number-reservations": {}, "@/lib/work-permit-permissions": policy, "@/lib/work-permits": permits, "@/lib/server/work-permits": server, "@/lib/prisma": { prisma }, "@/lib/server/work-permit-prisma": { workPermitPrisma: prisma }, "@/lib/server/work-permit-safety": {}, "@/lib/server/work-permit-identities": {}, "@/lib/server/work-permit-selects": {}, "@/lib/nav": {}, "@/lib/server/work-permit-sessions": {} };
   return { permissions, before, writes: () => writes, route: (file: string) => load(file, imports) };
 }
 const request = (body: unknown) => new Request("http://localhost/api/work-permits/permit-1/execution", { method: "POST", body: JSON.stringify(body), headers: { "content-type": "application/json" } });

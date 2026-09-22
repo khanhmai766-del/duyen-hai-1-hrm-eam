@@ -1,13 +1,15 @@
 import { permitIssueUpdateNeedsExecution } from "@/lib/work-permit-permissions";
 import { requirePermitIssue, requirePermitExecute, permitCapabilities } from "@/lib/server/work-permit-permissions";
 import { resolvePermitSafety } from "@/lib/server/work-permit-safety";
-import { prisma } from "@/lib/prisma";
+import { workPermitPrisma as prisma } from "@/lib/server/work-permit-prisma";
 import { audit, fail, ok, requireUser } from "@/lib/api";
-import { formatPermitNumber, PERMIT_PAGE_SIZE } from "@/lib/work-permits";
+import { defaultPermitFormat, formatPermitNumber, PERMIT_PAGE_SIZE } from "@/lib/work-permits";
 import { parsePermit, permitBody, permitFilters, permitHandle, permitSnapshot, resolvePermitDefectLink } from "@/lib/server/work-permits";
 import { resolvePermitIdentities } from "@/lib/server/work-permit-identities";
 import { permitListSelect } from "@/lib/server/work-permit-selects";
 import { startInternalPermitAutoClose } from "@/lib/server/work-permit-auto-close-runner";
+import { consumePermitNumberReservation } from "@/lib/server/work-permit-number-reservations";
+import type { PermitKind } from "@/lib/work-permits";
 export const dynamic = "force-dynamic";
 export async function GET(req: Request) {
   return permitHandle(async () => {
@@ -31,12 +33,18 @@ export async function POST(req: Request) {
     const body = await permitBody(req);
     if (permitIssueUpdateNeedsExecution({}, body)) await requirePermitExecute(user);
     if (body.progress !== undefined && body.progress !== null) return fail("Chưa được cập nhật tiến độ khi tạo phiếu");
-    const status = body.status === "ISSUED" ? "ISSUED" : "DRAFT";
-    if (body.status !== "ISSUED" && body.status !== "DRAFT") return fail("Phiếu mới phải ở trạng thái Nháp hoặc Đã cấp");
+    const status = "ISSUED";
+    if (body.status !== "ISSUED") return fail("Phiếu mới phải được lưu ở trạng thái Đã cấp");
     const row = await prisma.$transaction(async tx => {
       const linkedBody = await resolvePermitDefectLink(tx, body);
       const data = parsePermit(await resolvePermitIdentities(tx, linkedBody, user), status);
+      if (data.format !== defaultPermitFormat(data.teamType)) {
+        throw fail("PCT nhà thầu dùng phiếu giấy; PCT nội bộ dùng phiếu điện tử");
+      }
       const row = await tx.workPermit.create({ data: { ...data, safetyItems: permitSnapshot(await resolvePermitSafety(tx, body)), status, createdById: user.id, createdByName: user.name ?? "" } });
+      await consumePermitNumberReservation(tx, { reservationId: body.reservationId, kind: data.kind as PermitKind,
+        year: data.year, number: data.number, teamType: data.teamType, userId: user.id, userName: user.name ?? "",
+        isAdmin: user.role === "ADMIN", permitId: row.id });
       await tx.workPermitHistory.create({ data: { permitId: row.id, actorId: user.id, actorName: user.name ?? "", action: "Tạo phiếu", after: permitSnapshot(row) } });
       return row;
     });

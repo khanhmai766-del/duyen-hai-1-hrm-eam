@@ -1,18 +1,20 @@
 import { permitIssueUpdateNeedsExecution } from "@/lib/work-permit-permissions";
 import { requirePermitIssue, requirePermitExecute, permitCapabilities } from "@/lib/server/work-permit-permissions";
 import { resolvePermitSafety } from "@/lib/server/work-permit-safety";
-import { prisma } from "@/lib/prisma";
+import { workPermitPrisma as prisma } from "@/lib/server/work-permit-prisma";
 import { audit, fail, ok, requireUser } from "@/lib/api";
-import { formatPermitNumber, PERMIT_STATUSES, PERMIT_TRANSITIONS, CONTRACTOR_PERMIT_TRANSITIONS, type PermitStatus } from "@/lib/work-permits";
+import { defaultPermitFormat, formatPermitNumber, PERMIT_STATUSES, PERMIT_TRANSITIONS, CONTRACTOR_PERMIT_TRANSITIONS, type PermitStatus } from "@/lib/work-permits";
 import { parsePermit, permitBody, permitHandle, permitSnapshot, resolvePermitDefectLink } from "@/lib/server/work-permits";
 import { resolvePermitIdentities } from "@/lib/server/work-permit-identities";
 import { historySummarySelect } from "@/lib/server/work-permit-selects";
+import { consumePermitNumberReservation } from "@/lib/server/work-permit-number-reservations";
+import type { PermitKind } from "@/lib/work-permits";
 export const dynamic = "force-dynamic";
 export async function GET(_req: Request, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
   return permitHandle(async () => {
     const user = await requireUser();
-    const row = await prisma.workPermit.findUnique({ where: { id: params.id }, include: { sessions: { take: 2, orderBy: [{ openedAt: "desc" }, { id: "desc" }] }, history: { take: 2, select: historySummarySelect, orderBy: [{ createdAt: "desc" }, { id: "desc" }] }, attachments: { select: { id: true, permitId: true, originalName: true, mimeType: true, bytes: true, createdAt: true }, orderBy: { createdAt: "asc" } }, _count: { select: { sessions: true, history: true } } } });
+    const row = await prisma.workPermit.findUnique({ where: { id: params.id }, include: { sessions: { take: 2, orderBy: [{ openedAt: "desc" }, { id: "desc" }] }, history: { take: 2, select: historySummarySelect, orderBy: [{ createdAt: "desc" }, { id: "desc" }] }, _count: { select: { sessions: true, history: true } } } });
     return row ? ok(row, await permitCapabilities(user)) : fail("Không tìm thấy PCT", 404);
   });
 }
@@ -42,23 +44,21 @@ export async function PUT(req: Request, props: { params: Promise<{ id: string }>
         registrationNumber: body.registrationNumber === undefined ? before.registrationNumber : body.registrationNumber,
         managingUnit: body.managingUnit === undefined ? before.managingUnit : body.managingUnit,
         plantName: body.plantName === undefined ? before.plantName : body.plantName,
-        equipmentItems: body.equipmentItems === undefined ? before.equipmentItems : body.equipmentItems,
+        sourceClassification: body.sourceClassification === undefined ? before.sourceClassification : body.sourceClassification,
         electricalSafetySupervisorName: body.electricalSafetySupervisorName === undefined ? before.electricalSafetySupervisorName : body.electricalSafetySupervisorName,
         workScope: body.workScope === undefined ? before.workScope : body.workScope,
         disciplines: body.disciplines === undefined ? before.disciplines : body.disciplines,
         plannedStartAt: body.plannedStartAt === undefined ? before.plannedStartAt?.toISOString() ?? null : body.plannedStartAt,
         plannedEndAt: body.plannedEndAt === undefined ? before.plannedEndAt?.toISOString() ?? null : body.plannedEndAt,
       }, user, before), status);
+      if (data.kind !== before.kind || data.teamType !== before.teamType || data.format !== (before.format ?? defaultPermitFormat(before.teamType))) {
+        throw fail("Không thể đổi loại PCT, loại đơn vị hoặc hình thức của phiếu đã tạo", 409);
+      }
       if (permitIssueUpdateNeedsExecution(before, data)) await requirePermitExecute(user);
       if (before.teamType === "INTERNAL" && (data.authorizerName !== before.authorizerName || (data.authorizedAt?.getTime() ?? null) !== (before.authorizedAt?.getTime() ?? null) || (body.progress !== undefined && body.progress !== before.progress))) throw fail("PCT nội bộ không quản lý bước cho phép hoặc tiến độ; dữ liệu cũ được giữ nguyên");
       if (body.progress !== undefined && body.progress !== before.progress && (typeof body.progress !== "number" || !Number.isInteger(body.progress) || body.progress < 0 || body.progress > 100 || !["ACTIVE", "PAUSED", "WAITING"].includes(before.status))) throw fail("Chỉ cập nhật tiến độ từ 0 đến 100% cho phiếu đã vào làm việc");
       if (status !== before.status && !(before.teamType === "CONTRACTOR" ? CONTRACTOR_PERMIT_TRANSITIONS : PERMIT_TRANSITIONS)[before.status as PermitStatus]?.includes(status)) throw fail("Không thể chuyển sang trạng thái này", 409);
       if (before.status !== "DRAFT" && (data.kind !== before.kind || data.year !== before.year || data.number !== before.number)) throw fail("Không được đổi loại, số hoặc năm của phiếu đã cấp", 409);
-      if ((data.kind !== "MECHANICAL" || data.format !== "PAPER") &&
-          (data.kind !== before.kind || data.format !== before.format) &&
-          await tx.workPermitAttachment.count({ where: { permitId: before.id } })) {
-        throw fail("Hãy xóa tệp đính kèm trước khi đổi loại hoặc hình thức PCT", 409);
-      }
       if (before.issuedAt && !data.issuedAt || before.authorizedAt && !data.authorizedAt) throw fail("Không được xóa mốc cấp hoặc cho phép làm việc đã ghi nhận", 409);
       if (before.status !== "DRAFT" && data.teamType !== before.teamType) throw fail("Không được đổi loại đơn vị của phiếu đã cấp", 409);
       if (before.teamType === "CONTRACTOR") {
@@ -72,6 +72,20 @@ export async function PUT(req: Request, props: { params: Promise<{ id: string }>
       const saved = await tx.workPermit.updateMany({ where: { id: params.id, version: before.version }, data: { ...data, ...(body.progress !== undefined ? { progress: body.progress as number | null } : {}), safetyItems: permitSnapshot(await resolvePermitSafety(tx, { ...body, format: data.format, teamType: data.teamType }, before)), status, version: { increment: 1 } } });
       if (saved.count !== 1) throw fail("Phiếu vừa được cập nhật ở phiên khác. Vui lòng tải lại.", 409);
       const after = await tx.workPermit.findUniqueOrThrow({ where: { id: params.id } });
+      if (before.status === "DRAFT" && status === "ISSUED") {
+        await consumePermitNumberReservation(tx, { reservationId: body.reservationId, kind: data.kind as PermitKind,
+          year: data.year, number: data.number, teamType: data.teamType, userId: user.id, userName: user.name ?? "",
+          isAdmin: user.role === "ADMIN", permitId: after.id });
+      }
+      if (status === "CANCELLED" && before.status !== "CANCELLED") {
+        const reservation = await tx.workPermitNumberReservation.findUnique({ where: { permitId: after.id } });
+        if (reservation?.status === "ISSUED") {
+          await tx.workPermitNumberReservation.update({ where: { id: reservation.id },
+            data: { status: "CANCELLED", cancelledAt: new Date(), cancelledById: user.id, cancelReason: data.statusReason } });
+          await tx.workPermitNumberReservationHistory.create({ data: { reservationId: reservation.id, action: "CANCELLED",
+            actorId: user.id, actorName: user.name ?? "", permitId: after.id, note: data.statusReason } });
+        }
+      }
       await tx.workPermitHistory.create({ data: { permitId: after.id, actorId: user.id, actorName: user.name ?? "", action: status === before.status ? "Cập nhật thông tin" : `Chuyển sang ${PERMIT_STATUSES[status]}`, before: permitSnapshot(before), after: permitSnapshot(after) } });
       return after;
     });

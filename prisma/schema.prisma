@@ -1735,7 +1735,6 @@ model WorkPermit {
   registrationNumber             String              @default("")
   managingUnit                   String              @default("Phân xưởng Vận hành 1")
   plantName                      String              @default("Duyên Hải 1")
-  equipmentItems                 Json                @default("[]")
   workScope                      String              @default("")
   plannedStartAt                 DateTime?
   plannedEndAt                   DateTime?
@@ -1744,6 +1743,7 @@ model WorkPermit {
   id                             String              @id @default(cuid())
   format                         String? // PAPER / ELECTRONIC; null với phiếu cũ chưa ghi riêng.
   workType                       String? // PLANNED = KH, UNPLANNED = ĐX, INCIDENT = SC; phiếu cũ chưa phân loại để null.
+  sourceClassification           String? // Phân loại trên PCT giấy: PLANNED, OFF_PLAN, UNEXPECTED; phiếu cũ để null.
   kind                           String
   year                           Int
   number                         String
@@ -1781,7 +1781,6 @@ model WorkPermit {
   updatedAt                      DateTime            @updatedAt
   history                        WorkPermitHistory[]
   sessions                       WorkPermitSession[]
-  attachments                    WorkPermitAttachment[]
 
   // Chỉ số duy nhất có điều kiện cho kind/year/number nằm trong SQL thủ công;
   // status CANCELLED được phép trùng để số đã hủy có thể cấp lại.
@@ -1791,18 +1790,65 @@ model WorkPermit {
   @@index([defectId])
 }
 
-model WorkPermitAttachment {
-  id           String     @id @default(cuid())
-  permitId     String
-  s3Key        String     @unique
-  originalName String
-  mimeType     String
-  bytes        Int
-  uploadedById String
-  createdAt    DateTime   @default(now())
-  permit       WorkPermit @relation(fields: [permitId], references: [id], onDelete: Cascade)
+model WorkPermitNumberBaseline {
+  kind        String
+  year        Int
+  number      String
+  version     Int      @default(1)
+  updatedById String
+  updatedAt   DateTime @updatedAt
 
-  @@index([permitId, createdAt])
+  @@id([kind, year])
+}
+
+model WorkPermitNumberBaselineHistory {
+  id          String   @id @default(cuid())
+  kind        String
+  year        Int
+  before      String?
+  after       String
+  reason      String
+  actorId     String
+  actorName   String
+  createdAt   DateTime @default(now())
+
+  @@index([kind, year, createdAt])
+}
+
+model WorkPermitNumberReservation {
+  id              String    @id @default(cuid())
+  kind            String
+  year            Int
+  number          String
+  teamType        String
+  status          String    @default("RESERVED") // RESERVED | ISSUED | CANCELLED
+  ownerId         String
+  ownerName       String
+  permitId        String?   @unique
+  reusedPermitId  String?
+  issuedAt        DateTime?
+  cancelReason    String?
+  cancelledById   String?
+  cancelledAt     DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  // Partial unique index (RESERVED/ISSUED) is created by prisma/manual SQL.
+  @@index([kind, year, createdAt])
+  @@index([ownerId, status])
+}
+
+model WorkPermitNumberReservationHistory {
+  id            String   @id @default(cuid())
+  reservationId String
+  action        String
+  actorId       String
+  actorName     String
+  permitId      String?
+  note          String?
+  createdAt     DateTime @default(now())
+
+  @@index([reservationId, createdAt])
 }
 
 model WorkPermitHistory {
