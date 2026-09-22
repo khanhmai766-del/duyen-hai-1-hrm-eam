@@ -40,7 +40,7 @@ export function MechanicalPaperInfo({ form, issued, numberField, onChange, onPic
       </div>
     </section>
 
-    <section className={section}><h3 className={title}>Địa điểm và nội dung công việc</h3><div className="space-y-4">
+    <section className={section}><h3 className={title}>Phần A. Cấp phiếu công tác</h3><div className="space-y-4">
       <fieldset className="rounded-lg border border-slate-200 p-3 dark:border-border">
         <legend className="px-1 text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-muted-foreground">Chuyên môn trên PCT</legend>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
