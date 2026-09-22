@@ -1,4 +1,5 @@
 import { safetySummary, type SafetySelection } from "@/lib/work-permit-safety";
+import type { PermitAttachment, PermitEquipmentItem } from "@/lib/work-permit-source-fields";
 export const PERMIT_PAGE_SIZE = 10;
 /** Ghép số thuần theo mẫu chung Cơ/Điện; số đầy đủ hoặc mã cũ giữ nguyên. */
 export function formatPermitNumber(row: { number: string; year: number }): string {
@@ -41,6 +42,9 @@ export const CONTRACTOR_PERMIT_TRANSITIONS: Record<PermitStatus, readonly Permit
 export const PERMIT_DISCIPLINES = { HYDRO: "Thủy", MECHANICAL: "Cơ", THERMAL: "Nhiệt", CHEMICAL: "Hóa" } as const;
 export type PermitDiscipline = keyof typeof PERMIT_DISCIPLINES;
 export interface PermitInput {
+  managingUnit?: string;
+  plantName?: string;
+  equipmentItems?: PermitEquipmentItem[];
   registrationNumber?: string;
   workScope?: string;
   plannedStartAt?: string | null;
@@ -66,12 +70,14 @@ export interface PermitRow extends PermitInput {
   id: string; status: PermitStatus; progress: number | null; version: number;
   createdById: string; createdByName: string; createdAt: string; updatedAt: string;
   sessions?: PermitSession[];
+  attachments?: PermitAttachment[];
 }
 export interface PermitHistory {
   id: string; actorName: string; action: string; createdAt: string;
   before: Record<string, unknown> | null; after: Record<string, unknown>;
 }
 export const PERMIT_FIELD_LABELS: Record<string, string> = {
+  managingUnit: "Đơn vị QLVH", plantName: "Nhà máy", equipmentItems: "Thiết bị công tác",
   nkvhPctId: "ID liên kết NKVH",
   registrationNumber: "Số ĐKCT", workScope: "Phạm vi công tác", plannedStartAt: "Dự kiến bắt đầu", plannedEndAt: "Dự kiến kết thúc", disciplines: "Chuyên môn",
   safetyItems: "Mối nguy và biện pháp an toàn", format: "Hình thức phiếu", workType: "Phân loại công việc (KH/ĐX/SC)", kind: "Loại PCT", year: "Năm cấp số", number: "Số PCT", position: "Cương vị", status: "Trạng thái", unit: "Tổ máy",
@@ -93,6 +99,7 @@ export function permitValue(key: string, value: unknown): string {
   if (key === "unit") return PERMIT_UNITS[value as keyof typeof PERMIT_UNITS] ?? String(value);
   if (key === "teamType") return value === "CONTRACTOR" ? "Nhà thầu" : "Nội bộ";
   if (key === "members" && Array.isArray(value)) return value.map(p => [p.code, p.name, p.company].filter(Boolean).join(" · ")).join("\n") || "—";
+  if (key === "equipmentItems" && Array.isArray(value)) return value.map((item: PermitEquipmentItem) => [item.code, item.name, item.kks, item.technicalSpec].filter(Boolean).join(" · ")).join("\n") || "—";
   if (["issuedAt", "authorizedAt", "closedAt", "plannedStartAt", "plannedEndAt"].includes(key)) return new Date(String(value)).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" });
   if (key === "workDate") return String(value).split("-").reverse().join("/");
   return String(value);
@@ -114,7 +121,7 @@ export interface PermitSession {
 }
 export type PermitHistorySummary = Pick<PermitHistory, "id" | "actorName" | "action" | "createdAt">;
 export type PermitListRow = Pick<PermitRow, "id" | "number" | "year" | "kind" | "format" | "workType" | "workDate" | "content" | "location" | "position" | "unit" | "issuerName" | "commanderName" | "teamName" | "teamType" | "workerCount" | "authorizerName" | "status" | "progress" | "repairRequestNumber" | "nkvhPctId"> & { sessions: Array<Pick<PermitSession, "commanderName" | "company" | "authorizerName">> };
-export interface PermitDetailRow extends PermitRow { history: PermitHistorySummary[]; sessions: PermitSession[]; _count: { sessions: number; history: number } }
+export interface PermitDetailRow extends PermitRow { history: PermitHistorySummary[]; sessions: PermitSession[]; attachments: PermitAttachment[]; _count: { sessions: number; history: number } }
 
 export interface DefectLinkedWorkPermit {
   nkvhPctId?: string | null;

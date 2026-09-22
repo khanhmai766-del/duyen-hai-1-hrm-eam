@@ -5,6 +5,9 @@ node_modules
 /.next.rollback-*/
 out
 build
+!/scripts/build/
+/scripts/build/*
+!/scripts/build/docx-to-print-html.py
 .env
 .env*.local
 *.log
@@ -36,6 +39,13 @@ public/videos/*
 # .agents/ là BẢN SAO tự sinh của .claude/{skills,agents} cho Codex — nguồn là .claude/.
 # Không commit bản sao; sau khi clone thì chạy: npm run sync:skills
 /.agents/
+
+# Bản clone và môi trường Python cục bộ của các skill (cài lại bằng install.ps1)
+/.claude/skills/markitdown/.upstream/
+/.claude/skills/paddleocr/.upstream/
+/.claude/skills/paddleocr/.bootstrap/
+/.claude/skills/paddleocr/.python/
+/.claude/skills/paddleocr/.venv/
 
 # Artifact tạm từ công cụ chạy thử (Codex): log dev-server, output test, video frames
 /codex-*.err

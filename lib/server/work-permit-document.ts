@@ -4,6 +4,7 @@ import PizZip from "pizzip";
 import type { WorkPermit } from "@prisma/client";
 import { formatPermitNumber, PERMIT_DISCIPLINES } from "@/lib/work-permits";
 import { safetyPrintData, type SafetySelection } from "@/lib/work-permit-safety";
+import { assertPrintFilled, fillPrintTable, loadPrintTemplate, replacePrintParagraph } from "@/lib/print-html";
 
 const escape = (s: string) => s.replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;" }[c]!));
 const DEFAULT_RUN_PROPERTIES = '<w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:eastAsia="Times New Roman"/><w:sz w:val="24"/><w:szCs w:val="24"/></w:rPr>';
@@ -107,4 +108,42 @@ export async function createWorkPermitDocument(row: WorkPermit) {
   ensureNoTemplateTags(xml);
   zip.file("word/document.xml", xml);
   return zip.generate({ type: "nodebuffer", compression: "DEFLATE" });
+}
+
+export async function createWorkPermitHtml(row: WorkPermit) {
+  const mechanical = row.kind === "MECHANICAL";
+  let html = await loadPrintTemplate(mechanical ? "work-permit-mechanical.html" : "work-permit-electrical.html");
+  if (mechanical) html = html.replace('<body class="work-permit-mechanical">', '<body class="work-permit-mechanical filled">');
+  const selected = (Array.isArray(row.safetyItems) ? row.safetyItems : []) as unknown as SafetySelection[];
+  const groups = safetyPrintData(selected);
+  const replace = (prefix: string, value: string) => { html = replacePrintParagraph(html, prefix, value); };
+  replace("Số:", `Số: ${formatPermitNumber(row)}${!mechanical && row.registrationNumber.trim() ? `\nSố ĐKCT: ${row.registrationNumber.trim()}` : ""}`);
+  if (mechanical) {
+    html = fillPrintTable(html, "Nhận diện mối nguy", groups.hazards.map((item) => [item.hazard, item.measure]));
+    html = fillPrintTable(html, "Kiểm tra các biện pháp an toàn đơn vị cho phép", groups.authorization.map((item) => [item, "", ""]));
+    html = fillPrintTable(html, "Kiểm tra các biện pháp an toàn đơn vị công tác", groups.execution.map((item) => [item, "", ""]));
+    replace("Địa điểm:", `Địa điểm: ${row.location}`);
+    replace("Nội dung:", `Nội dung: ${row.content}`);
+    replace("Số ĐK:", row.registrationNumber.trim() ? `Số ĐK: ${row.registrationNumber.trim()}` : "");
+    replace("Phạm vi:", `Phạm vi: ${row.workScope || "……………………………………………………"}`);
+    replace("[  ] Thủy", Object.entries(PERMIT_DISCIPLINES).map(([key, label]) => `[${row.disciplines.includes(key) ? "X" : "  "}] ${label}`).join("        "));
+    replace("Thời gian:", `Thời gian: Từ ${plannedTime(row.plannedStartAt)} đến ${plannedTime(row.plannedEndAt)}`);
+    const authorizationMoment = signatureMoment(row.authorizedAt);
+    replace("Người cấp phiếu:", `Người cấp phiếu: ${row.issuerName || "……………………"}       Chữ ký: ……………       ${signatureMoment(row.issuedAt)}`);
+    replace("Người cho phép:", `Người cho phép: ${row.authorizerName || "……………………"}       Chữ ký: ……………       ${authorizationMoment}`);
+    replace("Người CHTT:", `Người CHTT: ${row.commanderName || "……………………"}       Chữ ký: ……………       ${authorizationMoment}`);
+    replace("Đơn vị công tác:", `Đơn vị công tác: ${row.teamName}       Số lượng người: ${row.workerCount ?? "………"}`);
+  } else {
+    replace("1.1.", `1.1. Người lãnh đạo công việc (nếu có): ${row.leaderName}`);
+    replace("1.2.", `1.2. Người chỉ huy trực tiếp: ${row.commanderName}`);
+    replace("1.3.", `1.3. Nhân viên đơn vị công tác: ${row.workerCount ?? "………"} người`);
+    replace("1.4.", `1.4. Địa điểm công tác: ${row.location}`);
+    replace("1.5.", `1.5. Nội dung công tác: ${row.content}`);
+    replace("- Bắt đầu công việc:", `- Bắt đầu công việc: ${plannedTime(row.plannedStartAt)}`);
+    replace("- Kết thúc công việc:", `- Kết thúc công việc: ${plannedTime(row.plannedEndAt)}`);
+    replace("Phiếu công tác cấp ngày", `Phiếu công tác cấp ngày ${row.issuedAt ? row.issuedAt.toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" }) : "…………………"}`);
+    replace("Họ và tên", `Họ và tên: ${row.issuerName}    Chức vụ: ……………    Ký/xác nhận: ……………`);
+    if (row.electricalSafetySupervisorName.trim()) replace("Họ và tên…………………… chức vụ", `Họ và tên: ${row.electricalSafetySupervisorName.trim()}    Chức vụ: ……………    Ký/xác nhận: ……………`);
+  }
+  return assertPrintFilled(html);
 }

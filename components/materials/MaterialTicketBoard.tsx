@@ -2021,6 +2021,9 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
 	              ? "Sửa số phiếu ĐXVT"
 	              : s.key === "CHO_PHIEU__XUAT_KHO" && t.proposalReceiverName
 	              ? "Xem lại"
+	              : s.key === "NHAN_TU_HIEN_CO" && reviewable && viewer?.steps?.receive
+	                && (viewer.isAdmin || samePosition(viewer.position, t.assignedPosition))
+	              ? `${s.who} · Chỉnh sửa`
 	              : `${s.who}${reviewable ? " · Xem lại" : ""}`;
 	            const pendingMark = recoveryPending || docSignaturePending;
 	            return (
@@ -2129,6 +2132,7 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
                         {t.materialUserName && <>VHV sử dụng: <b>{t.materialUserName}</b> · </>}Đã sử dụng: <b>{t.usedQuantity} {t.items[0]?.material.unit ?? ""}</b>
                         {(t.remainingQuantity ?? 0) !== 0 && <> · Lấy ra chưa dùng đến: <b>{t.remainingQuantity} {t.items[0]?.material.unit ?? ""}</b></>}
                         {` — kho đã trừ ${t.usedQuantity} ${t.items[0]?.material.unit ?? ""}`}
+                        {t.lastSupplementDate && <> · Ngày bổ sung gần nhất: <b>{fmtDay(t.lastSupplementDate)}</b></>}
                       </div>
                     )}
                   </div>
@@ -2198,6 +2202,7 @@ const STEP_EDIT = {
   CHO_PHIEU__XUAT_KHO: { step: "stats", permission: "stats" },
   CHO_XAC_NHAN_PHAT: { step: "stats", permission: "stats" },
   NHAN_VAT_TU: { step: "receive", permission: "receive" },
+  NHAN_TU_HIEN_CO: { step: "receiveExisting", permission: "receive" },
   SU_DUNG_VAT_TU: { step: "use", permission: "use" },
   CHO_NGHIEM_THU: { step: "accept", permission: "accept" },
   CHO_THONG_KE_XUAT_BIEN_BAN: { step: "statsExport", permission: "stats" },
@@ -2224,7 +2229,9 @@ function StepReviewDialog({ t, viewer, stepKey, onClose }: { t: MaterialTicket; 
         || samePosition(viewer.position, t.assignedPosition)
         || (viewer.steps?.vhvReceiveConfigured && viewer.steps.vhvReceive)
       ))
-    : !!permission && !!viewer?.steps?.[permission];
+    : editStep === "receiveExisting"
+      ? Boolean(viewer?.steps?.receive && (viewer.isAdmin || samePosition(viewer.position, t.assignedPosition)))
+      : !!permission && !!viewer?.steps?.[permission];
   const [proposalNumber, setProposalNumber] = useState(t.proposalNumber ?? "");
   const [proposalReceiverNameReview, setProposalReceiverNameReview] = useState(t.proposalReceiverName ?? "");
   /** Ngày ghi trên tờ phiếu ĐXVT — in vào ô "ngày ……" của BBNT D-Office. */
@@ -2257,6 +2264,7 @@ function StepReviewDialog({ t, viewer, stepKey, onClose }: { t: MaterialTicket; 
       ?.deliveryPhotoUrl ?? null;
   const [usedQuantity, setUsedQuantity] = useState(t.usedQuantity ?? 1);
   const [materialUserName, setMaterialUserName] = useState(t.materialUserName ?? "");
+  const [lastSupplementDateReview, setLastSupplementDateReview] = useState(() => dateInputValue(t.lastSupplementDate));
   // Ngưỡng thu hồi nhỏ nhất theo vật tư — dầu EA Ultra Plus cho phép 0, xem
   // `minRecoveryQuantity`. Dùng cho cả giá trị mặc định, thuộc tính min của ô nhập và
   // điều kiện tắt nút lưu, để ba chỗ không lệch nhau.
@@ -2345,9 +2353,11 @@ function StepReviewDialog({ t, viewer, stepKey, onClose }: { t: MaterialTicket; 
             }
       );
     }
+    if (editStep === "receiveExisting") Object.assign(payload, { receivedQuantity });
     if (editStep === "use") Object.assign(payload, {
       usedQuantity,
       materialUserName: materialUserName.trim(),
+      lastSupplementDate: lastSupplementDateReview || null,
       ...(materialTicketRequiresRecovery(t) ? { recoveryQuantity, recoveryReturned } : {}),
     });
     if (editStep === "accept") Object.assign(payload, {
@@ -2376,6 +2386,8 @@ function StepReviewDialog({ t, viewer, stepKey, onClose }: { t: MaterialTicket; 
       // nên đừng hứa "đã cập nhật biên bản đã xuất" cho một tệp không hề được ghi lại.
       toast.success(
         editStep === "vhvReceive" ? "Đã cập nhật thông tin VHV lãnh vật tư"
+        : editStep === "receiveExisting" && t.settledAt ? "Đã sửa khối lượng lãnh từ Hiện có; giữ nguyên biên bản đã phát hành"
+        : editStep === "receiveExisting" ? "Đã sửa khối lượng lãnh từ Hiện có"
         : editStep === "recoveryDoc" ? "Đã lưu ngày của bước trả phiếu vật tư thu hồi"
         : editStep === "settle" ? "Đã lưu số BBNT DO và đồng bộ sang lịch sử thay thế"
         : editStep === "statsExport" ? (t.settledAt && !reissueBbntDo
@@ -2448,6 +2460,12 @@ function StepReviewDialog({ t, viewer, stepKey, onClose }: { t: MaterialTicket; 
             <input inputMode="decimal" placeholder="10.860" title={VN_NUMBER_HINT} value={chemicalReceivedReview} disabled={!canEdit} onChange={(e) => setChemicalReceivedReview(e.target.value)} />
           </label>
         )}
+        {editStep === "receiveExisting" && <>
+          <label>Khối lượng đã lãnh{t.items[0]?.material.unit ? ` (${t.items[0].material.unit})` : ""}
+            <input type="number" min={Math.max(1, t.usedQuantity ?? 0)} step={1} value={receivedQuantity} disabled={!canEdit} onChange={(e) => setReceivedQuantity(Number(e.target.value))} />
+          </label>
+          <p className="hint">Nguồn: Lấy từ Hiện có. Kho chỉ trừ ở bước xác nhận sử dụng{t.usedQuantity != null ? `; đã dùng ${t.usedQuantity} ${t.items[0]?.material.unit ?? ""}` : ""}.{t.settledAt ? " Biên bản đã phát hành được giữ nguyên." : ""}</p>
+        </>}
         {editStep === "receive" && !isChemicalStats && <>
           <label>Khối lượng lãnh<input type="number" min={1} value={receivedQuantity} disabled={!canEdit} onChange={(e) => setReceivedQuantity(Number(e.target.value))} /></label>
           <div className={`review-receive-row ${t.type !== "UNG" ? "single" : ""}`}>
@@ -2480,7 +2498,9 @@ function StepReviewDialog({ t, viewer, stepKey, onClose }: { t: MaterialTicket; 
           <div className="review-use-grid">
             <label>Tên VHV sử dụng vật tư<input value={materialUserName} disabled={!canEdit} onChange={(e) => setMaterialUserName(e.target.value)} placeholder="Nhập tên VHV sử dụng vật tư" /></label>
             <label>Số lượng sử dụng ({t.items[0]?.material.unit ?? ""})<input type="number" min={1} value={usedQuantity} disabled={!canEdit} onChange={(e) => setUsedQuantity(Number(e.target.value))} /></label>
+            <label>Ngày bổ sung gần nhất<input type="date" value={lastSupplementDateReview} disabled={!canEdit} onChange={(e) => setLastSupplementDateReview(e.target.value)} /></label>
           </div>
+          <p className="hint">Ngày này được điền vào cột Ghi chú của BBNT D-Office.</p>
           <UsagePhotoCard ticketId={t.id} canEdit={canEdit} />
           {materialTicketRequiresRecovery(t) && (
             <div className="review-recovery-grid">
@@ -2630,7 +2650,7 @@ function StepReviewDialog({ t, viewer, stepKey, onClose }: { t: MaterialTicket; 
             </span>
           )}
           <button className="btn ghost" onClick={onClose}>Đóng</button>
-          {canEdit && <button className="btn primary" disabled={act.isPending || missingUsagePhotos || (editStep === "confirm" && !reason.trim()) || (editStep === "vhvReceive" && (!Number.isFinite(vhvReceivedQuantityReview) || vhvReceivedQuantityReview <= 0 || !vhvReceivedByNameReview.trim())) || (editStep === "stats" && !isChemicalStats && !proposalNumber.trim()) || (editStep === "accept" && (!pctNumber.trim() || !chiHuyName.trim() || !completionNote.trim() || !workStartedAt || !workEndedAt)) || (editStep === "statsExport" && (!sccnRepresentativeReview || !sccnPositionReview)) || (editStep === "settle" && !bbntDoNumberReview.trim()) || (editStep === "recoveryDoc" && !docSentDateReview)} onClick={save}>{act.isPending ? <Loader2 className="spin" size={14} /> : <Pencil size={14} />} Lưu chỉnh sửa</button>}
+          {canEdit && <button className="btn primary" disabled={act.isPending || missingUsagePhotos || (editStep === "receiveExisting" && (!Number.isInteger(receivedQuantity) || receivedQuantity < Math.max(1, t.usedQuantity ?? 0))) || (editStep === "confirm" && !reason.trim()) || (editStep === "vhvReceive" && (!Number.isFinite(vhvReceivedQuantityReview) || vhvReceivedQuantityReview <= 0 || !vhvReceivedByNameReview.trim())) || (editStep === "stats" && !isChemicalStats && !proposalNumber.trim()) || (editStep === "accept" && (!pctNumber.trim() || !chiHuyName.trim() || !completionNote.trim() || !workStartedAt || !workEndedAt)) || (editStep === "statsExport" && (!sccnRepresentativeReview || !sccnPositionReview)) || (editStep === "settle" && !bbntDoNumberReview.trim()) || (editStep === "recoveryDoc" && !docSentDateReview)} onClick={save}>{act.isPending ? <Loader2 className="spin" size={14} /> : <Pencil size={14} />} Lưu chỉnh sửa</button>}
         </div>
       </div>
     </div>
@@ -3306,6 +3326,7 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
   const [bbktNumberInput, setBbktNumberInput] = useState(t.bbktNumber ?? "");
   const [confirmReasonInput, setConfirmReasonInput] = useState(t.proposalNote ?? ""); // Lý do — bước Xác nhận yêu cầu (lưu vào proposalNote)
   const [materialUserNameInput, setMaterialUserNameInput] = useState(t.materialUserName ?? "");
+  const [lastSupplementDateInput, setLastSupplementDateInput] = useState(() => dateInputValue(t.lastSupplementDate));
   // Đủ 2/3 ảnh mới cho qua bước sử dụng vật tư. Máy chủ cũng chặn — đây chỉ để người
   // dùng biết trước lý do nút mờ, thay vì bấm rồi nhận thông báo lỗi.
   const usagePhotos = useTicketUsagePhotos(t.id, acts.includes("use"));
@@ -4338,6 +4359,9 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
 	          <label className="field">Khối lượng vật tư sử dụng{unit ? ` (${unit})` : ""} *
 	            <input type="number" min={1} max={stock} value={qty} onChange={(e) => setQty(Math.max(1, Math.trunc(Number(e.target.value)) || 1))} />
 	          </label>
+	          <label className="field">Ngày bổ sung gần nhất
+	            <input type="date" value={lastSupplementDateInput} onChange={(e) => setLastSupplementDateInput(e.target.value)} />
+	          </label>
 	        </div>
         {/* Ảnh không bắt buộc: thiếu ảnh thì ô tương ứng trong BBNT để trống, không chặn bước. */}
         <UsagePhotoCard ticketId={t.id} canEdit />
@@ -4366,7 +4390,7 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
           <div className="warnbox"><AlertTriangle size={15} /> Phải chụp đủ {photoTotal} ảnh hiện trường mới xác nhận được (còn thiếu {photoTotal - usagePhotoCount} ảnh).</div>
         )}
         <button className="btn primary big" disabled={!materialUserNameInput.trim() || qty <= 0 || usagePhotoCount < photoTotal || quantityExceedsStock || quantityExceedsReceived || (recoveryRequired && (!Number.isFinite(recoveryQuantity) || recoveryQuantity < minRecovery)) || act.isPending}
-          onClick={() => run({ action: "use", materialUserName: materialUserNameInput.trim(), usedQuantity: qty, ...(recoveryRequired ? { recoveryQuantity, recoveryReturned } : {}) }, "Đã xác nhận sử dụng vật tư")}>
+	          onClick={() => run({ action: "use", materialUserName: materialUserNameInput.trim(), usedQuantity: qty, lastSupplementDate: lastSupplementDateInput || null, ...(recoveryRequired ? { recoveryQuantity, recoveryReturned } : {}) }, "Đã xác nhận sử dụng vật tư")}>
           {act.isPending ? <Loader2 className="spin" size={15} /> : <Check size={15} />} Xác nhận
         </button>
       </div>
@@ -4655,7 +4679,8 @@ const CSS = `
 .review-receive-toggle button{height:40px;min-width:0;padding:0 12px;font-size:12px;line-height:1.2;white-space:nowrap;}
 .review-delivery-field{gap:6px;min-width:0;}
 .review-delivery-field input{height:40px;margin:0;}
-.review-use-grid,.review-accept-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-items:end;min-width:0;}
+.review-use-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;align-items:end;min-width:0;}
+.review-accept-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-items:end;min-width:0;}
 .review-recovery-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(280px,1.08fr);gap:12px;align-items:stretch;min-width:0;}
 .review-recovery-grid>label{min-width:0;}
 .review-recovery-quantity{display:flex;flex-direction:column;justify-content:flex-end;gap:6px;line-height:1.35;}
@@ -5149,7 +5174,7 @@ const CSS = `
 .accept-two-grid.one-col{grid-template-columns:minmax(0,1fr);}
 .accept-note-grid{align-items:start;}
 .accept-note-grid .field textarea{margin-top:6px;width:100%;}
-.use-field-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-items:end;}
+.use-field-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;align-items:end;}
 .use-field-grid .field{min-width:0;margin:0!important;}
 .use-field-grid .field input{height:42px;margin-top:6px;}
 .recovery-quantity-row{display:grid;grid-template-columns:minmax(220px,.75fr) minmax(0,1.25fr);gap:12px;align-items:end;}

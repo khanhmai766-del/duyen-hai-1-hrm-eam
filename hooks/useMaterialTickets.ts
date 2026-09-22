@@ -99,6 +99,7 @@ export interface MaterialTicket {
   receivedByPosition: string | null;
   receivedAt: string | null;
   usedQuantity: number | null;
+  lastSupplementDate: string | null;
   remainingQuantity: number | null;
   materialUserName: string | null;
   usedByName: string | null;

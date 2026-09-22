@@ -130,6 +130,7 @@ export async function buildBbntDoDocument(
     workEndedAt: overrides?.workEndedAt ?? t.workEndedAt,
     receivedQuantity: overrides?.receivedQuantity ?? t.receivedQuantity,
     usedQuantity: t.usedQuantity,
+    lastSupplementDate: t.lastSupplementDate,
     recoveryQuantity: t.recoveryQuantity,
     recoveryReturned: Boolean(t.recoveryReturnedAt),
     items,

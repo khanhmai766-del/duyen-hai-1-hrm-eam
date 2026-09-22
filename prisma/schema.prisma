@@ -1733,6 +1733,9 @@ model WorkPermitSafetyMeasure {
 model WorkPermit {
   nkvhPctId                      String?             @db.Uuid // Chỉ lưu UUID; URL được ghép từ cấu hình NKVH chung.
   registrationNumber             String              @default("")
+  managingUnit                   String              @default("Phân xưởng Vận hành 1")
+  plantName                      String              @default("Duyên Hải 1")
+  equipmentItems                 Json                @default("[]")
   workScope                      String              @default("")
   plannedStartAt                 DateTime?
   plannedEndAt                   DateTime?
@@ -1778,6 +1781,7 @@ model WorkPermit {
   updatedAt                      DateTime            @updatedAt
   history                        WorkPermitHistory[]
   sessions                       WorkPermitSession[]
+  attachments                    WorkPermitAttachment[]
 
   // Chỉ số duy nhất có điều kiện cho kind/year/number nằm trong SQL thủ công;
   // status CANCELLED được phép trùng để số đã hủy có thể cấp lại.
@@ -1785,6 +1789,20 @@ model WorkPermit {
   @@index([kind, position, workDate])
   @@index([status, workDate])
   @@index([defectId])
+}
+
+model WorkPermitAttachment {
+  id           String     @id @default(cuid())
+  permitId     String
+  s3Key        String     @unique
+  originalName String
+  mimeType     String
+  bytes        Int
+  uploadedById String
+  createdAt    DateTime   @default(now())
+  permit       WorkPermit @relation(fields: [permitId], references: [id], onDelete: Cascade)
+
+  @@index([permitId, createdAt])
 }
 
 model WorkPermitHistory {
@@ -1915,6 +1933,7 @@ model MaterialTicket {
   receivedAt            DateTime?
   // Bước SỬ DỤNG VẬT TƯ (SU_DUNG_VAT_TU)
   usedQuantity          Int? // khối lượng vật tư sử dụng
+  lastSupplementDate    DateTime? @db.Date // ngày thay/bổ sung gần nhất, in ở cột Ghi chú của BBNT D-Office
   remainingQuantity     Int? // còn lại = lãnh − dùng (âm = dùng vượt phần lãnh, trừ vào tồn kho)
   materialUserName      String? // tên VHV trực tiếp sử dụng vật tư
   // Ba ảnh hiện trường chèn vào BBNT D-Office, lưu KHÓA S3 chứ không phải base64

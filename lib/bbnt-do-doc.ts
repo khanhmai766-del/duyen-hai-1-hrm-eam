@@ -89,6 +89,7 @@ export interface BbntDoData {
   workEndedAt?: Date | string | null;
   receivedQuantity?: number | null; // khối lượng lĩnh
   usedQuantity?: number | null; // khối lượng sử dụng
+  lastSupplementDate?: Date | string | null; // ngày thay/bổ sung gần nhất ở cột Ghi chú
   recoveryQuantity?: number | null; // khối lượng thu hồi
   recoveryReturned?: boolean; // đã hoàn trả vật tư thu hồi
   issuedAt?: Date; // ngày bổ sung (trùng BBNT ký tay); mặc định: thời điểm xuất
@@ -441,6 +442,67 @@ function patchSccnRepresentativeTokens(documentXml: string) {
   return patched;
 }
 
+/** Hai mẫu dầu/lõi lọc có ô ngày viết tay ở cột Ghi chú; Word chia chữ và dấu chấm
+ * thành nhiều run. Thay phần chấm bằng một tag, giữ nguyên phần nhãn và định dạng ô. */
+function patchLastSupplementDateNote(documentXml: string, replacement = "{{lastSupplementDate}}") {
+  const marker = documentXml.indexOf("Ngày thay/ bổ sung gần");
+  if (marker < 0) return documentXml;
+  const cellStarts = [...documentXml.matchAll(/<w:tc(?:>|\s[^>]*>)/g)];
+  const cellStart = cellStarts.findLast(match => (match.index ?? -1) <= marker)?.index;
+  const cellEnd = documentXml.indexOf("</w:tc>", marker);
+  if (cellStart === undefined || cellEnd < 0) return documentXml;
+  const cell = documentXml.slice(cellStart, cellEnd);
+  const runs = [...cell.matchAll(/<w:t(?:\s[^>]*)?>([\s\S]*?)<\/w:t>/g)];
+  const plain = runs.map(run => run[1]).join("");
+  const label = /Ngày thay\/\s*bổ sung gần nhất\s*:/i.exec(plain);
+  if (!label) return documentXml;
+  const blankStart = label.index + label[0].length;
+  if (plain.slice(blankStart) === replacement) return documentXml;
+  if (!/^[\s.…/\d-]*$/.test(plain.slice(blankStart))) return documentXml;
+  let offset = 0;
+  let inserted = false;
+  const edits: Array<{ start: number; end: number; replacement: string }> = [];
+  for (const run of runs) {
+    const start = offset;
+    offset += run[1].length;
+    if (offset <= blankStart) continue;
+    const before = start < blankStart ? run[1].slice(0, blankStart - start) : "";
+    const runText = `${before}${inserted ? "" : replacement}`;
+    inserted = true;
+    edits.push({ start: run.index!, end: run.index! + run[0].length,
+      replacement: `<w:t xml:space="preserve">${runText}</w:t>` });
+  }
+  if (!inserted) return documentXml;
+  let patched = cell;
+  for (const edit of edits.reverse()) {
+    patched = patched.slice(0, edit.start) + edit.replacement + patched.slice(edit.end);
+  }
+  return documentXml.slice(0, cellStart) + patched + documentXml.slice(cellEnd);
+}
+
+/** Cập nhật riêng ô ngày trên BBNT đã phát hành, giữ nguyên ảnh và nội dung khác trong DOCX. */
+export function replaceBbntDoLastSupplementDate(original: Buffer, date: Date | null) {
+  const zip = new PizZip(original);
+  const xml = zip.file("word/document.xml")?.asText();
+  if (!xml) throw new Error("BBNT D-Office không có nội dung Word hợp lệ");
+  const patched = patchLastSupplementDateNote(xml, vnDate(date) || "…/…/…");
+  if (patched === xml) return null;
+  zip.file("word/document.xml", patched);
+  return zip.generate({ type: "nodebuffer", compression: "DEFLATE" }) as Buffer;
+}
+
+export async function updateBbntDoLastSupplementDate(key: string, date: Date | null) {
+  const original = await getS3ObjectBuffer(key);
+  const patched = replaceBbntDoLastSupplementDate(original, date);
+  if (!patched) return false;
+  await uploadS3Object({
+    key,
+    body: patched,
+    contentType: DOCX_MIME,
+  });
+  return true;
+}
+
 /**
  * Dựng file Word BBNT DO đã điền dữ liệu, CHƯA tải lên kho — tách riêng để kiểm thử mẫu
  * (số ô ảnh, chú thích) ngay trên máy dev mà không cần kết nối S3.
@@ -463,6 +525,7 @@ export async function renderBbntDoDocx(d: BbntDoData): Promise<Buffer> {
       "{{quanDocName}}"
     );
     documentXml = patchSccnRepresentativeTokens(documentXml);
+    documentXml = patchLastSupplementDateNote(documentXml);
     documentXml = patchDateBlankAfter(documentXml, "{{proposalNumber}}", "{{proposalDate}}");
     documentXml = patchDateBlankAfter(documentXml, "{{deliveryNote}}", "{{deliveryNoteDate}}");
     documentXml = patchBbktDateBlank(documentXml, Boolean(String(d.bbktNumber ?? "").trim()));
@@ -550,6 +613,7 @@ export async function renderBbntDoDocx(d: BbntDoData): Promise<Buffer> {
     deliveryNote: d.deliveryNoteNumber || "(không)",
     // Chưa nhập ngày thì in lại ô chấm y như bản mẫu để còn điền tay.
     deliveryNoteDate: vnDate(d.deliveryNoteDate) || "……",
+    lastSupplementDate: vnDate(d.lastSupplementDate) || "…/…/…",
     sccnRepresentativeName: d.sccnRepresentativeName || "",
     sccnRepresentativePosition: d.sccnRepresentativePosition || "",
     // Thẻ viết hoa của ô chữ ký — xem sccnSignatureTitle ở đầu tệp.

@@ -132,6 +132,18 @@ Tối ưu 10/09/2026: response danh sách chỉ select trường hiển thị, d
 
 ## Phụ lục mối nguy – biện pháp an toàn (local)
 
+### Bố cục cấp phiếu Cơ – Nhiệt – Hóa bằng giấy
+
+Wizard 4 bước giữ nguyên; bước Thông tin gom các mục trên phiếu nguồn: đơn vị QLVH, nhà máy, đơn vị công tác, số ĐKCT, tổ máy, SYC, chuyên môn, thiết bị, địa điểm, nội dung, phạm vi và thời gian dự kiến. Đơn vị QLVH và nhà máy mặc định lần lượt là “Phân xưởng Vận hành 1” và “Duyên Hải 1”, có thể sửa. Thiết bị chọn từ cây hoặc nhập tay, lưu snapshot mã/tên/KKS/thông số để danh mục đổi sau này không sửa phiếu cũ. Tối đa 30 dòng thiết bị.
+
+Bước Mẫu giấy cho xem bảng A gồm mối nguy và biện pháp; bảng B/C tự tạo từ cờ phân công của bảng A, không có nguồn dữ liệu độc lập. Word và HTML tiếp tục dùng mẫu in gốc; trường không có chỗ trong mẫu chỉ hiện ở chi tiết website.
+
+Phiếu Cơ giấy cho đính kèm tối đa 10 tệp PDF, DOCX, JPG, PNG hoặc WEBP, mỗi tệp tối đa 15 MB. Tệp nằm trong S3 theo khóa `work-permits/<id>/...`; bảng `WorkPermitAttachment` chỉ giữ metadata. Route đọc tệp kiểm tra đăng nhập và định danh phiếu/tệp, route thêm/xóa yêu cầu quyền Cấp phiếu, trạng thái chưa khóa và phiên bản hiện hành. Tệp được chọn ở wizard sẽ tải lên sau khi lưu nháp; chỉ chuyển sang Đã cấp khi tải hết tệp. Nếu tải lỗi, bản nháp và các tệp đã tải thành công vẫn tồn tại để thử lại.
+
+Schema mới cần `prisma/manual/add-work-permit-source-fields.sql` trên môi trường đã có sổ PCT. **Chưa tự chạy SQL này trên CSDL**; chỉ thực hiện khi có yêu cầu áp dụng riêng. Sau khi áp dụng, phiếu cũ nhận mặc định hai đơn vị và danh sách thiết bị rỗng.
+
+### Danh mục an toàn
+
 - Hai mục cạnh sổ Cơ/Điện quản lý **cặp** mối nguy–biện pháp. Danh mục Cơ gồm Cơ–Nhiệt–Hóa, tách riêng Điện. Tìm không dấu, 10 mục/trang, thêm/sửa/ngừng sử dụng với quyền ghi PCT.
 - Chỉ PCT **Cơ – Nhiệt – Hóa bằng giấy** có `safetyItems`. Người cấp chọn cặp rồi phân công `forAuthorization` (đơn vị cho phép), `forExecution` (đơn vị công tác), hoặc cả hai. Khi thêm vào phiếu, giao cho đơn vị công tác được chọn sẵn và người cấp có thể đổi. Nháp có thể chưa phân công; khi ghi đã cấp, mỗi cặp đã chọn cần ít nhất một đơn vị.
 - Có thể sửa câu chữ trên phiếu, bổ sung cặp riêng, bỏ cặp và đổi thứ tự. Không bắt buộc có cặp để tiếp tục quản lý các phiếu cũ. Đổi Cơ/Điện hoặc đổi sang điện tử sẽ hỏi trước khi bỏ các lựa chọn trên form; API kiểm tra loại và hình thức độc lập với UI.

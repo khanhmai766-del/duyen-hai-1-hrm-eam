@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { buildBbntDoDocument, deliveryNoteForDocuments, getTicket, ITEM_INCLUDE, type FullTicket } from "@/lib/material-ticket-bbnt-do";
 import { ok, fail, requireUser, handle, audit } from "@/lib/api";
 import { isShiftLeader, isTechnician, getPositionScopes, getWorkflowRoleMap, isMaterialTicketExtraAssignedPosition, stepAllowedWithMap, assignedOrConfiguredStep } from "@/lib/material-workflow";
-import { resolveSignatureBuffer } from "@/lib/bbnt-do-doc";
+import { resolveSignatureBuffer, updateBbntDoLastSupplementDate } from "@/lib/bbnt-do-doc";
 import { generateBbntDoc, type BbntItem } from "@/lib/bbnt-doc";
 import { generateBbthvtDoc } from "@/lib/bbthvt-doc";
 import { generateDxvtDoc } from "@/lib/dxvt-doc";
@@ -24,6 +24,7 @@ import { replacementPointDisplayLabel, replacementPointSelectionKey } from "@/li
 import { receiveOtherMaterial } from "@/lib/other-material-stock";
 import { recordSettledTicketReplacements } from "@/lib/material-ticket-replacement-settlement";
 import { invalidateMaterialAnnualPlanCache } from "@/lib/material-annual-plan-cache";
+import { existingReceiptEditError } from "@/lib/material-receive-existing";
 import { notifyMaterialTicketStep } from "@/lib/material-ticket-telegram-alert";
 
 export const dynamic = "force-dynamic";
@@ -500,6 +501,16 @@ const parseTicketDate = (value: unknown) => {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 };
 
+/** Ngày lịch thuần túy: giữ nguyên dd/mm/yyyy giữa máy chủ UTC và giờ Việt Nam. */
+function parseLastSupplementDate(value: unknown): Date | null | undefined {
+  if (value === undefined) return undefined;
+  if (value === null || value === "") return null;
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) throw fail("Ngày bổ sung gần nhất không hợp lệ");
+  const date = new Date(`${value}T00:00:00.000Z`);
+  if (Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== value) throw fail("Ngày bổ sung gần nhất không hợp lệ");
+  return date;
+}
+
 export async function PUT(req: NextRequest, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
   return handle(async () => {
@@ -965,14 +976,17 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
       // Khóa bước KHÁC khóa phân quyền: hai bước cuối đều do Thống kê làm nhưng nội dung sửa
       // khác hẳn nhau, nên "statsExport" mượn quyền "stats" chứ không gộp làm một.
       const permissionByStep = {
-        confirm: "confirm", vhvReceive: "vhvReceive", stats: "stats", receive: "receive", use: "use", accept: "accept",
+        confirm: "confirm", vhvReceive: "vhvReceive", stats: "stats", receive: "receive", receiveExisting: "receive", use: "use", accept: "accept",
         statsExport: "stats", recoveryDoc: "recoveryReturn", settle: "settle",
       } as const;
       const permission = permissionByStep[step as keyof typeof permissionByStep];
       if (!permission) return fail("Bước chỉnh sửa không hợp lệ");
+      if (step === "receive" && t.type === "SU_DUNG_HIEN_CO") return fail("Luồng Hiện có phải chỉnh sửa bằng bước nhận từ Hiện có", 400);
       const workflowRoleMap = await getWorkflowRoleMap();
       const canEditStep = step === "vhvReceive"
         ? assignedOrConfiguredStep(workflowRoleMap, "vhvReceive", user, isAssignedPosition(user, t))
+        : step === "receiveExisting"
+          ? stepAllowedWithMap(workflowRoleMap, "receive", user) && (user.role === "ADMIN" || isAssignedPosition(user, t))
         : stepAllowedWithMap(workflowRoleMap, permission, user);
       if (!canEditStep)
         return fail("Bạn không có quyền chỉnh sửa bước này (Quản trị phân quyền ở mục Phân quyền quy trình)", 403);
@@ -1111,6 +1125,26 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
           },
           include: ITEM_INCLUDE,
         });
+      } else if (step === "receiveExisting") {
+        if (t.type !== "SU_DUNG_HIEN_CO" || !t.receivedAt || t.receivedQuantity == null) {
+          return fail("Bước nhận vật tư từ Hiện có chưa hoàn thành");
+        }
+        const item = t.items[0];
+        if (!item) return fail("Phiếu chưa có vật tư");
+        const value = Number(body.receivedQuantity);
+        const used = t.usedQuantity ?? 0;
+        const available = await prisma.material.findUnique({ where: { id: item.materialId }, select: { quantity: true } });
+        if (!available) return fail("Không tìm thấy vật tư trong danh mục", 404);
+        const error = existingReceiptEditError({ quantity: value, previous: t.receivedQuantity, used, available: available.quantity, unit: item.material.unit });
+        if (error) return fail(error);
+        before = `Lãnh từ Hiện có: ${t.receivedQuantity} ${item.material.unit}`;
+        after = `Lãnh từ Hiện có: ${value} ${item.material.unit}`;
+        // Luồng này chỉ trừ kho ở bước Sử dụng; sửa số lãnh không cộng/trừ lô hay tồn ERP.
+        up = await prisma.materialTicket.update({
+          where: { id: t.id },
+          data: { receivedQuantity: value, remainingQuantity: value - used },
+          include: ITEM_INCLUDE,
+        });
       } else if (step === "receive" && isChemicalSequenceTicket(t.type)) {
         /*
          * HÓA CHẤT — sửa lại khối lượng lãnh mà KHÔNG đụng tồn kho lẫn ERP.
@@ -1142,8 +1176,9 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
         const method = String(body.deliveryNoteNumber || body.receivedMethod || "").trim();
         const editedDeliveryDate = parseTicketDate(body.deliveryNoteDate);
         const receiptSource = t.type === "UNG" ? normalizeReceiptSource(body.receiptSource) : "ERP";
-        if (value <= 0 || !method) return fail("Khối lượng lãnh hoặc số phiếu giao hàng không hợp lệ");
+        if (!Number.isFinite(value) || value <= 0 || !method) return fail("Khối lượng lãnh hoặc số phiếu giao hàng không hợp lệ");
         const item = t.items[0]; if (!item) return fail("Phiếu chưa có vật tư");
+        if (value < (t.usedQuantity ?? 0)) return fail(`Không thể giảm khối lượng lãnh thấp hơn khối lượng đã sử dụng (${t.usedQuantity} ${item.material.unit})`);
         const delta = value - t.receivedQuantity;
         const erpCode = item.erpCode || item.material.code;
         const erpRows = await prisma.$queryRaw<Array<{ erpStock: number }>>`SELECT "erpStock" FROM "ErpMaterial" WHERE "code" = ${erpCode} LIMIT 1`;
@@ -1196,6 +1231,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
         if (!t.usedAt || t.usedQuantity == null) return fail("Bước sử dụng vật tư chưa hoàn thành");
         const value = Math.trunc(Number(body.usedQuantity));
         const materialUserName = String(body.materialUserName || "").trim();
+        const lastSupplementDate = parseLastSupplementDate(body.lastSupplementDate);
         // Có thu hồi hay không dùng snapshot đã chốt từ lý do và cấu hình điểm dùng vật tư.
         // Giao diện chỉ gửi số lượng để điền BBTHVT, không cho bật/tắt thu hồi tại bước này.
         const recoveryRequired = materialTicketRequiresRecovery(t);
@@ -1239,8 +1275,8 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
         const recoveryDoc = recoveryRequired && recoveryCanBeExported && t.completedAt && !t.recoveryDocUrl
           ? await buildRecoveryDocument(t, { recoveryQuantity })
           : null;
-        before = `Dùng ${t.usedQuantity}; thu hồi ${t.recoveryRequired ? `${t.recoveryQuantity ?? 0}${t.recoveryReturnedAt ? " (đã trả)" : " (chưa trả)"}` : "không"}`;
-        after = `Dùng ${value}; thu hồi ${recoveryRequired ? `${recoveryQuantity}${recoveryReturned ? " (đã trả)" : " (chưa trả)"}` : "không"}`;
+        before = `Dùng ${t.usedQuantity}; ngày bổ sung gần nhất ${t.lastSupplementDate?.toISOString().slice(0, 10) ?? "—"}; thu hồi ${t.recoveryRequired ? `${t.recoveryQuantity ?? 0}${t.recoveryReturnedAt ? " (đã trả)" : " (chưa trả)"}` : "không"}`;
+        after = `Dùng ${value}; ngày bổ sung gần nhất ${(lastSupplementDate === undefined ? t.lastSupplementDate : lastSupplementDate)?.toISOString().slice(0, 10) ?? "—"}; thu hồi ${recoveryRequired ? `${recoveryQuantity}${recoveryReturned ? " (đã trả)" : " (chưa trả)"}` : "không"}`;
         up = await prisma.$transaction(async (tx) => {
           if (delta) {
             // Chia lại từ đầu theo số dùng mới: trả hết phần cũ về lô rồi cấp lại, không cộng dồn.
@@ -1257,6 +1293,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
               usedQuantity: value,
               remainingQuantity: (t.receivedQuantity ?? 0) - value,
               materialUserName,
+              ...(lastSupplementDate === undefined ? {} : { lastSupplementDate }),
               recoveryRequired,
               // Chai khí không có BBTHVT, nhưng recoveryQuantity/recoveryReturnedAt lại là nơi
               // lưu số vỏ đã trả — sửa lại bước Sử dụng thì không được xoá dấu vết bước Trả.
@@ -1460,13 +1497,20 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
         // bị xóa nên in lại là mất ảnh.
         // Ngày/người trả kho không nằm trên bất kỳ biên bản nào — không có gì để in lại, mà
         // phiếu ở bước này thì ảnh hiện trường có thể đã bị xóa (quyết toán), in lại là mất ảnh.
-        : step === "settle" || step === "recoveryDoc"
+        : step === "settle" || step === "recoveryDoc" || (step === "receiveExisting" && !!t.settledAt)
         ? new Set<keyof ExportedDocumentUrls>(["proposalDocUrl", "bbktDocUrl", "recoveryDocUrl", "docUrl"])
+        : step === "use" && !!t.settledAt
+          // Sau quyết toán, ảnh hiện trường có thể đã bị dọn. Chỉ sửa ô ngày trong file cũ.
+          ? new Set<keyof ExportedDocumentUrls>(["proposalDocUrl", "bbktDocUrl", "recoveryDocUrl", "docUrl"])
         : step === "use" && !t.completedAt
           // Không tái tạo liên kết BBTHVT cũ trước khi phiếu hoàn tất bước Nghiệm thu.
           ? new Set<keyof ExportedDocumentUrls>(["recoveryDocUrl"])
           : new Set<keyof ExportedDocumentUrls>();
       up = await refreshExistingDocuments(t, up, user, skipRefreshedInStep);
+      if (step === "use" && t.settledAt && t.docUrl && up.lastSupplementDate?.getTime() !== t.lastSupplementDate?.getTime()) {
+        const key = keyFromPublicUrl(t.docUrl);
+        if (key) await updateBbntDoLastSupplementDate(key, up.lastSupplementDate);
+      }
       if (recoveryDocumentCreatedAfterEdit) {
         await audit(
           user.id,
@@ -2782,6 +2826,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
       const recoveryReturned = recoveryRequired && body.recoveryReturned === true;
       const usedQuantity = Math.trunc(Number(body.usedQuantity));
       const materialUserName = String(body.materialUserName || "").trim();
+      const lastSupplementDate = parseLastSupplementDate(body.lastSupplementDate);
       const minRecovery = minRecoveryQuantity(t);
       if (recoveryRequired && (recoveryQuantity == null || !Number.isFinite(recoveryQuantity) || recoveryQuantity < minRecovery)) {
         return fail(minRecovery === 0
@@ -2842,6 +2887,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
             // Biên bản vật tư thu hồi.
             recoveryDocUrl: null,
             usedQuantity, remainingQuantity: remaining, materialUserName,
+            lastSupplementDate: lastSupplementDate ?? null,
             usedById: user.id, usedByName: user.name ?? "",
             usedByPosition: user.position ?? null, usedAt: new Date(),
           },

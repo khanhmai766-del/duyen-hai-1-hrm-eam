@@ -12,7 +12,7 @@ export async function GET(_req: Request, props: { params: Promise<{ id: string }
   const params = await props.params;
   return permitHandle(async () => {
     const user = await requireUser();
-    const row = await prisma.workPermit.findUnique({ where: { id: params.id }, include: { sessions: { take: 2, orderBy: [{ openedAt: "desc" }, { id: "desc" }] }, history: { take: 2, select: historySummarySelect, orderBy: [{ createdAt: "desc" }, { id: "desc" }] }, _count: { select: { sessions: true, history: true } } } });
+    const row = await prisma.workPermit.findUnique({ where: { id: params.id }, include: { sessions: { take: 2, orderBy: [{ openedAt: "desc" }, { id: "desc" }] }, history: { take: 2, select: historySummarySelect, orderBy: [{ createdAt: "desc" }, { id: "desc" }] }, attachments: { select: { id: true, permitId: true, originalName: true, mimeType: true, bytes: true, createdAt: true }, orderBy: { createdAt: "asc" } }, _count: { select: { sessions: true, history: true } } } });
     return row ? ok(row, await permitCapabilities(user)) : fail("Không tìm thấy PCT", 404);
   });
 }
@@ -40,6 +40,9 @@ export async function PUT(req: Request, props: { params: Promise<{ id: string }>
         position: body.position === undefined ? before.position : body.position,
         nkvhPctId: body.nkvhPctId === undefined ? before.nkvhPctId : body.nkvhPctId,
         registrationNumber: body.registrationNumber === undefined ? before.registrationNumber : body.registrationNumber,
+        managingUnit: body.managingUnit === undefined ? before.managingUnit : body.managingUnit,
+        plantName: body.plantName === undefined ? before.plantName : body.plantName,
+        equipmentItems: body.equipmentItems === undefined ? before.equipmentItems : body.equipmentItems,
         electricalSafetySupervisorName: body.electricalSafetySupervisorName === undefined ? before.electricalSafetySupervisorName : body.electricalSafetySupervisorName,
         workScope: body.workScope === undefined ? before.workScope : body.workScope,
         disciplines: body.disciplines === undefined ? before.disciplines : body.disciplines,
@@ -51,6 +54,11 @@ export async function PUT(req: Request, props: { params: Promise<{ id: string }>
       if (body.progress !== undefined && body.progress !== before.progress && (typeof body.progress !== "number" || !Number.isInteger(body.progress) || body.progress < 0 || body.progress > 100 || !["ACTIVE", "PAUSED", "WAITING"].includes(before.status))) throw fail("Chỉ cập nhật tiến độ từ 0 đến 100% cho phiếu đã vào làm việc");
       if (status !== before.status && !(before.teamType === "CONTRACTOR" ? CONTRACTOR_PERMIT_TRANSITIONS : PERMIT_TRANSITIONS)[before.status as PermitStatus]?.includes(status)) throw fail("Không thể chuyển sang trạng thái này", 409);
       if (before.status !== "DRAFT" && (data.kind !== before.kind || data.year !== before.year || data.number !== before.number)) throw fail("Không được đổi loại, số hoặc năm của phiếu đã cấp", 409);
+      if ((data.kind !== "MECHANICAL" || data.format !== "PAPER") &&
+          (data.kind !== before.kind || data.format !== before.format) &&
+          await tx.workPermitAttachment.count({ where: { permitId: before.id } })) {
+        throw fail("Hãy xóa tệp đính kèm trước khi đổi loại hoặc hình thức PCT", 409);
+      }
       if (before.issuedAt && !data.issuedAt || before.authorizedAt && !data.authorizedAt) throw fail("Không được xóa mốc cấp hoặc cho phép làm việc đã ghi nhận", 409);
       if (before.status !== "DRAFT" && data.teamType !== before.teamType) throw fail("Không được đổi loại đơn vị của phiếu đã cấp", 409);
       if (before.teamType === "CONTRACTOR") {

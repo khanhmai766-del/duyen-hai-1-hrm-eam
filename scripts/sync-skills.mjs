@@ -11,7 +11,7 @@ const root = process.cwd();
 
 // Thư mục sinh tự động — không mirror sang .agents, nếu không mỗi lần chạy skill
 // (ui-ux-pro-max có script Python) lại đẻ ra bytecode khác nhau ở hai bên.
-const SKIP = new Set(["__pycache__", ".pytest_cache", "node_modules", ".venv"]);
+const SKIP = new Set(["__pycache__", ".pytest_cache", "node_modules", ".venv", ".upstream", ".bootstrap", ".python"]);
 
 /** Mirror một thư mục con (skills/agents) từ .claude sang .agents. */
 function mirror(folder, { required }) {

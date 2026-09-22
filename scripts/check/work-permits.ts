@@ -1,10 +1,12 @@
 /** Kiểm tra quy tắc sổ PCT, không kết nối hay ghi cơ sở dữ liệu. */
 import assert from "node:assert/strict";
-import { parsePermit, permitFilters, permitExportFilters, parsePermitMembers, permitInstant } from "../../lib/server/work-permits";
+import { parsePermit, permitFilters, permitExportFilters, parsePermitMembers, parsePermitEquipment, permitInstant } from "../../lib/server/work-permits";
 import { readSessionOpen, validateSessionTime } from "../../lib/server/work-permit-sessions";
 import { parsePermitPerson } from "../../lib/server/work-permit-people";
 import { formatPermitNumber, PERMIT_WORK_TYPE_CODES, type PermitStatus } from "../../lib/work-permits";
 import { comparePositionPriority } from "../../lib/positions";
+import { safetyPrintData } from "../../lib/work-permit-safety";
+import { DEFAULT_PERMIT_MANAGING_UNIT, DEFAULT_PERMIT_PLANT } from "../../lib/work-permit-source-fields";
 
 const base = {
   workType: "PLANNED", kind: "MECHANICAL", unit: "S1", year: 2026, number: "  pct-001  ", workDate: "2026-09-07",
@@ -30,6 +32,24 @@ assert.equal(valid({ format: "ELECTRONIC", nkvhPctId: "21C6A1D6-5E7C-41AD-AE4A-5
 assert.equal(valid({ format: "PAPER", nkvhPctId: "21c6a1d6-5e7c-41ad-ae4a-5b91ab934b6d" }, "ISSUED").nkvhPctId, null);
 invalid({ format: "ELECTRONIC", nkvhPctId: "khong-hop-le" }, "ISSUED");
 assert.match(valid({}, "ISSUED").searchText, /bao duong bom/);
+assert.equal(valid({}, "ISSUED").managingUnit, DEFAULT_PERMIT_MANAGING_UNIT);
+assert.equal(valid({}, "ISSUED").plantName, DEFAULT_PERMIT_PLANT);
+const equipment = [{ sourceSeq: "DH1.S1.2", code: "DH1.S1.2", name: "Van hơi", kks: "10ABC", technicalSpec: "DN100" }];
+assert.deepEqual(valid({ equipmentItems: equipment, plantName: "Duyên Hải 1" }, "ISSUED").equipmentItems, equipment);
+assert.match(valid({ equipmentItems: equipment }, "ISSUED").searchText, /10abc/);
+assert.deepEqual(parsePermitEquipment([{ code: "VT-01", name: "Bơm khác", kks: "", technicalSpec: "" }]), [{ code: "VT-01", name: "Bơm khác", kks: "", technicalSpec: "" }]);
+checked += 2;
+invalid({ equipmentItems: [{ code: "", name: "" }] }, "ISSUED");
+invalid({ equipmentItems: [equipment[0], equipment[0]] }, "ISSUED");
+invalid({ equipmentItems: Array(31).fill(equipment[0]) }, "ISSUED");
+const assigned = safetyPrintData([
+  { hazard: "Bỏng", measure: "Đeo găng", forAuthorization: false, forExecution: true },
+  { hazard: "Nóng", measure: "Đeo găng", forAuthorization: true, forExecution: true },
+]);
+assert.equal(assigned.hazards.length, 2);
+assert.deepEqual(assigned.authorization, ["Đeo găng"]);
+assert.deepEqual(assigned.execution, ["Đeo găng"]);
+checked += 3;
 assert.equal(valid({ defectId: "syc-01", repairRequestNumber: "12/2026" }, "ISSUED").defectId, "syc-01");
 invalid({ defectId: 123 }, "ISSUED");
 valid({ issuedAt: null, commanderName: "", issuerName: "", workerCount: null }, "DRAFT");

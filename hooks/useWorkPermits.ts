@@ -1,6 +1,7 @@
 "use client";
 import { useMutation, useQuery, useQueryClient, useInfiniteQuery } from "@tanstack/react-query";
-import { apiDownload, apiGet, apiMutate } from "@/lib/fetcher";
+import { apiDownload, apiGet, apiMutate, apiUpload } from "@/lib/fetcher";
+import type { PermitAttachment } from "@/lib/work-permit-source-fields";
 import type { PermitHistory, PermitListRow, PermitDetailRow, PermitPerson, PermitRow, PermitStatus, PermitSession } from "@/lib/work-permits";
 export interface PermitMeta { total: number; page: number; pageSize: number; counts: Partial<Record<PermitStatus, number>>; canIssue: boolean; canExecute: boolean }
 export interface PermitNumberSuggestion { highest: string | null; suggested: string | null }
@@ -13,6 +14,19 @@ export function useWorkPermit(id?: string) {
 export function useSaveWorkPermit() {
   const qc = useQueryClient();
   return useMutation({ mutationFn: ({ id, body }: { id?: string; body: unknown }) => apiMutate<PermitRow>(`/api/work-permits${id ? `/${id}` : ""}`, id ? "PUT" : "POST", body), onSuccess: () => { qc.invalidateQueries({ queryKey: ["work-permits"] }); qc.invalidateQueries({ queryKey: ["work-permit"] }); qc.invalidateQueries({ queryKey: ["defect"] }); qc.invalidateQueries({ queryKey: ["work-permit-people"] }); qc.invalidateQueries({ queryKey: ["work-permit-number-suggestion"] }); } });
+}
+export function useUploadPermitAttachment() {
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: ({ id, version, file }: { id: string; version: number; file: File }) => {
+    const form = new FormData(); form.set("version", String(version)); form.set("file", file);
+    return apiUpload<{ attachment: PermitAttachment; version: number }>(`/api/work-permits/${id}/attachments`, form);
+  }, onSuccess: (_data, vars) => { qc.invalidateQueries({ queryKey: ["work-permit", vars.id] }); qc.invalidateQueries({ queryKey: ["work-permits"] }); } });
+}
+export function useDeletePermitAttachment() {
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: ({ id, attachmentId, version }: { id: string; attachmentId: string; version: number }) =>
+    apiMutate<{ id: string; version: number; cleanupFailed: boolean }>(`/api/work-permits/${id}/attachments/${attachmentId}`, "DELETE", { version }),
+  onSuccess: (_data, vars) => { qc.invalidateQueries({ queryKey: ["work-permit", vars.id] }); qc.invalidateQueries({ queryKey: ["work-permits"] }); } });
 }
 export function useCancelDraftWorkPermit() {
   const qc = useQueryClient();

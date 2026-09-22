@@ -3,6 +3,7 @@ import { fail, handle } from "@/lib/api";
 import { normalizeText } from "@/lib/nav";
 import { NKVH_UUID } from "@/lib/nkvh-pct";
 import { OPERATION_POSITION_TITLES } from "@/lib/positions";
+import { DEFAULT_PERMIT_MANAGING_UNIT, DEFAULT_PERMIT_PLANT, PERMIT_MAX_EQUIPMENT, type PermitEquipmentItem } from "@/lib/work-permit-source-fields";
 import { formatPermitNumber, PERMIT_DISCIPLINES, PERMIT_FORMATS, defaultPermitFormat, PERMIT_KINDS, PERMIT_WORK_TYPES, PERMIT_STATUSES, PERMIT_UNITS, type PermitStatus } from "@/lib/work-permits";
 
 export function permitHandle(fn: () => Promise<Response>) {
@@ -41,6 +42,25 @@ export function permitInstant(body: Record<string, unknown>, key: string) {
   if (Number.isNaN(date.getTime())) throw fail("Ngày giờ không hợp lệ");
   return date;
 }
+export function parsePermitEquipment(value: unknown): PermitEquipmentItem[] {
+  if (value === undefined || value === null) return [];
+  if (!Array.isArray(value) || value.length > PERMIT_MAX_EQUIPMENT) throw fail(`Chỉ được chọn tối đa ${PERMIT_MAX_EQUIPMENT} thiết bị`);
+  const seen = new Set<string>();
+  return value.map((item) => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) throw fail("Dòng thiết bị không hợp lệ");
+    const row = item as Record<string, unknown>;
+    const sourceSeq = permitText(row, "sourceSeq", 100);
+    const code = permitText(row, "code", 120);
+    const name = permitText(row, "name", 300);
+    const kks = permitText(row, "kks", 120);
+    const technicalSpec = permitText(row, "technicalSpec", 1000);
+    if (!code && !name) throw fail("Thiết bị phải có mã hoặc tên");
+    const identity = sourceSeq || `${code.toLocaleLowerCase("vi-VN")}|${name.toLocaleLowerCase("vi-VN")}`;
+    if (seen.has(identity)) throw fail("Thiết bị bị chọn trùng trên phiếu");
+    seen.add(identity);
+    return { ...(sourceSeq ? { sourceSeq } : {}), code, name, kks, technicalSpec };
+  });
+}
 export function parsePermit(body: Record<string, unknown>, status: PermitStatus) {
   const kind = permitText(body, "kind"), unit = permitText(body, "unit"), workDate = permitText(body, "workDate");
   if (!Object.hasOwn(PERMIT_KINDS, kind) || !Object.hasOwn(PERMIT_UNITS, unit)) throw fail("Loại PCT hoặc tổ máy không hợp lệ");
@@ -63,6 +83,9 @@ export function parsePermit(body: Record<string, unknown>, status: PermitStatus)
   if (!Array.isArray(disciplines) || disciplines.length > 4 || disciplines.some(v => typeof v !== "string" || !Object.hasOwn(PERMIT_DISCIPLINES, v)) || new Set(disciplines).size !== disciplines.length) throw fail("Chuyên môn phải thuộc Thủy, Cơ, Nhiệt hoặc Hóa và không được lặp");
   if (kind !== "MECHANICAL" && disciplines.length) throw fail("Chuyên môn Thủy/Cơ/Nhiệt/Hóa chỉ áp dụng cho sổ Cơ – Nhiệt – Hóa");
   const data = {
+    managingUnit: permitText(body, "managingUnit", 200) || DEFAULT_PERMIT_MANAGING_UNIT,
+    plantName: permitText(body, "plantName", 200) || DEFAULT_PERMIT_PLANT,
+    equipmentItems: parsePermitEquipment(body.equipmentItems),
     registrationNumber: permitText(body, "registrationNumber", 200), workScope: permitText(body, "workScope", 5000),
     plannedStartAt: permitInstant(body, "plannedStartAt"), plannedEndAt: permitInstant(body, "plannedEndAt"), disciplines: disciplines as string[],
     format, workType, kind, unit, year, number, position, workDate, workerCount: count, teamType,
@@ -97,7 +120,7 @@ export function parsePermit(body: Record<string, unknown>, status: PermitStatus)
   const earliestClose = teamType === "CONTRACTOR" ? data.authorizedAt : data.issuedAt;
   if (data.closedAt && (!earliestClose || data.closedAt < earliestClose)) throw fail("Thời điểm đóng phải từ thời điểm cấp / cho phép làm việc trở đi");
   if (data.closedAt && data.authorizedAt && data.closedAt < data.authorizedAt) throw fail("Thời điểm đóng không được trước thời điểm cho phép đã ghi nhận");
-  return { ...data, searchText: normalizeText([number, formatPermitNumber({ number, year }), data.position, data.content, data.location, data.issuerName, data.electricalSafetySupervisorName, data.commanderName, data.leaderName, data.authorizerName, data.teamName, data.repairRequestNumber, data.registrationNumber, data.workScope, data.note].join(" ")) };
+  return { ...data, searchText: normalizeText([number, formatPermitNumber({ number, year }), data.position, data.content, data.location, data.issuerName, data.electricalSafetySupervisorName, data.commanderName, data.leaderName, data.authorizerName, data.teamName, data.repairRequestNumber, data.registrationNumber, data.workScope, data.managingUnit, data.plantName, ...data.equipmentItems.flatMap(item => [item.code, item.name, item.kks]), data.note].join(" ")) };
 }
 
 /**
