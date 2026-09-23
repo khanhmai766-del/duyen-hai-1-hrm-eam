@@ -1,7 +1,7 @@
 "use client";
 import { useMutation, useQuery, useQueryClient, useInfiniteQuery } from "@tanstack/react-query";
 import { apiDownload, apiGet, apiMutate } from "@/lib/fetcher";
-import type { PermitHistory, PermitListRow, PermitDetailRow, PermitPerson, PermitRow, PermitStatus, PermitSession } from "@/lib/work-permits";
+import type { PermitHistory, PermitKind, PermitListRow, PermitDetailRow, PermitPerson, PermitRow, PermitStatus, PermitSession } from "@/lib/work-permits";
 export interface PermitMeta { total: number; page: number; pageSize: number; counts: Partial<Record<PermitStatus, number>>; canIssue: boolean; canExecute: boolean }
 export interface PermitNumberSuggestion { configured: boolean; baseline: string | null; highest: string | null; suggested: string | null }
 export interface PermitNumberReservation {
@@ -32,6 +32,12 @@ export function useCancelDraftWorkPermit() {
     qc.invalidateQueries({ queryKey: ["work-permit"] });
     qc.invalidateQueries({ queryKey: ["work-permit-number-suggestion"] });
   } });
+}
+/** Tên CHTT / lãnh đạo công việc đã từng ghi trên PCT nội bộ của sổ — để gợi ý khi cấp phiếu sau.
+ *  Khoá nằm dưới ["work-permits"] nên lưu phiếu xong (invalidate ["work-permits"]) là danh sách tự làm mới. */
+export function usePermitNameSuggestions(kind: PermitKind, enabled: boolean) {
+  return useQuery({ queryKey: ["work-permits", "name-suggestions", kind], enabled, staleTime: 60_000,
+    queryFn: () => apiGet<{ commanders: string[]; leaders: string[] }>(`/api/work-permits/name-suggestions?kind=${kind}`) });
 }
 /** Quản trị xoá hẳn một PCT (bắt buộc lý do). */
 export function useDeleteWorkPermit() {
