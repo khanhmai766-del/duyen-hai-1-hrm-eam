@@ -7,7 +7,7 @@ import { defaultPermitFormat, formatPermitNumber, PERMIT_STATUSES, PERMIT_TRANSI
 import { parsePermit, permitBody, permitHandle, permitSnapshot, resolvePermitDefectLink } from "@/lib/server/work-permits";
 import { resolvePermitIdentities } from "@/lib/server/work-permit-identities";
 import { historySummarySelect } from "@/lib/server/work-permit-selects";
-import { consumePermitNumberReservation } from "@/lib/server/work-permit-number-reservations";
+import { consumePermitNumberReservation, teamTypeLabel } from "@/lib/server/work-permit-number-reservations";
 import type { PermitKind } from "@/lib/work-permits";
 export const dynamic = "force-dynamic";
 export async function GET(_req: Request, props: { params: Promise<{ id: string }> }) {
@@ -51,8 +51,22 @@ export async function PUT(req: Request, props: { params: Promise<{ id: string }>
         plannedStartAt: body.plannedStartAt === undefined ? before.plannedStartAt?.toISOString() ?? null : body.plannedStartAt,
         plannedEndAt: body.plannedEndAt === undefined ? before.plannedEndAt?.toISOString() ?? null : body.plannedEndAt,
       }, user, before), status);
-      if (data.kind !== before.kind || data.teamType !== before.teamType || data.format !== (before.format ?? defaultPermitFormat(before.teamType))) {
-        throw fail("Không thể đổi loại PCT, loại đơn vị hoặc hình thức của phiếu đã tạo", 409);
+      /*
+       * Đổi LOẠI ĐƠN VỊ (nội bộ · điện tử ⇄ nhà thầu · giấy) giữ nguyên số: số thuộc về sổ, không
+       * thuộc loại đơn vị. Chỉ cho khi chưa có gì không đảo ngược được — phiếu mới ở "Đã cấp" (hoặc
+       * nháp), chưa cho phép làm việc và chưa từng mở lần làm việc. Quá mốc đó thì hồ sơ đã có chữ
+       * ký theo loại cũ; muốn sửa phải để quản trị xoá phiếu rồi cấp lại.
+       * Hình thức luôn đi theo loại đơn vị; đổi sổ (Cơ ↔ Điện) thì không bao giờ được.
+       */
+      const teamTypeChanged = data.teamType !== before.teamType;
+      if (data.kind !== before.kind) throw fail("Không thể đổi loại PCT (sổ Cơ/Điện) của phiếu đã tạo", 409);
+      if (teamTypeChanged) {
+        if (!["DRAFT", "ISSUED"].includes(before.status) || status !== before.status) throw fail("Chỉ đổi loại phiếu khi phiếu đang ở trạng thái Đã cấp và không đổi trạng thái cùng lúc", 409);
+        if (before.authorizedAt) throw fail("Phiếu đã được cho phép làm việc — không đổi loại phiếu được nữa", 409);
+        if (await tx.workPermitSession.count({ where: { permitId: before.id } })) throw fail("Phiếu đã có lần làm việc — không đổi loại phiếu được nữa", 409);
+        if (data.format !== defaultPermitFormat(data.teamType)) throw fail("PCT nhà thầu dùng phiếu giấy; PCT nội bộ dùng phiếu điện tử");
+      } else if (data.format !== (before.format ?? defaultPermitFormat(before.teamType))) {
+        throw fail("Không thể đổi hình thức của phiếu đã tạo", 409);
       }
       if (permitIssueUpdateNeedsExecution(before, data)) await requirePermitExecute(user);
       if (before.teamType === "INTERNAL" && (data.authorizerName !== before.authorizerName || (data.authorizedAt?.getTime() ?? null) !== (before.authorizedAt?.getTime() ?? null) || (body.progress !== undefined && body.progress !== before.progress))) throw fail("PCT nội bộ không quản lý bước cho phép hoặc tiến độ; dữ liệu cũ được giữ nguyên");
@@ -60,8 +74,7 @@ export async function PUT(req: Request, props: { params: Promise<{ id: string }>
       if (status !== before.status && !(before.teamType === "CONTRACTOR" ? CONTRACTOR_PERMIT_TRANSITIONS : PERMIT_TRANSITIONS)[before.status as PermitStatus]?.includes(status)) throw fail("Không thể chuyển sang trạng thái này", 409);
       if (before.status !== "DRAFT" && (data.kind !== before.kind || data.year !== before.year || data.number !== before.number)) throw fail("Không được đổi loại, số hoặc năm của phiếu đã cấp", 409);
       if (before.issuedAt && !data.issuedAt || before.authorizedAt && !data.authorizedAt) throw fail("Không được xóa mốc cấp hoặc cho phép làm việc đã ghi nhận", 409);
-      if (before.status !== "DRAFT" && data.teamType !== before.teamType) throw fail("Không được đổi loại đơn vị của phiếu đã cấp", 409);
-      if (before.teamType === "CONTRACTOR") {
+      if (before.teamType === "CONTRACTOR" && !teamTypeChanged) {
         if ((before.authorizedAt?.getTime() ?? null) !== (data.authorizedAt?.getTime() ?? null)) throw fail("Thời điểm cho phép làm việc được ghi qua từng lần làm việc", 409);
         const live = await tx.workPermitSession.findFirst({ where: { permitId: before.id, endedAt: null } });
         if (live) throw fail("Cần kết thúc lần làm việc đang mở trước khi sửa hoặc đóng/hủy PCT", 409);
@@ -77,6 +90,15 @@ export async function PUT(req: Request, props: { params: Promise<{ id: string }>
           year: data.year, number: data.number, teamType: data.teamType, userId: user.id, userName: user.name ?? "",
           isAdmin: user.role === "ADMIN", permitId: after.id });
       }
+      if (teamTypeChanged && before.status !== "DRAFT") {
+        // Lượt giữ số đã gắn phiếu cũng mang loại đơn vị — cập nhật cho khớp để tra cứu số không lệch.
+        const reservation = await tx.workPermitNumberReservation.findUnique({ where: { permitId: after.id } });
+        if (reservation) {
+          await tx.workPermitNumberReservation.update({ where: { id: reservation.id }, data: { teamType: data.teamType } });
+          await tx.workPermitNumberReservationHistory.create({ data: { reservationId: reservation.id, action: "TEAM_TYPE_CHANGED",
+            actorId: user.id, actorName: user.name ?? "", permitId: after.id, note: `${teamTypeLabel(before.teamType)} → ${teamTypeLabel(data.teamType)}` } });
+        }
+      }
       if (status === "CANCELLED" && before.status !== "CANCELLED") {
         const reservation = await tx.workPermitNumberReservation.findUnique({ where: { permitId: after.id } });
         if (reservation?.status === "ISSUED") {
@@ -86,7 +108,7 @@ export async function PUT(req: Request, props: { params: Promise<{ id: string }>
             actorId: user.id, actorName: user.name ?? "", permitId: after.id, note: data.statusReason } });
         }
       }
-      await tx.workPermitHistory.create({ data: { permitId: after.id, actorId: user.id, actorName: user.name ?? "", action: status === before.status ? "Cập nhật thông tin" : `Chuyển sang ${PERMIT_STATUSES[status]}`, before: permitSnapshot(before), after: permitSnapshot(after) } });
+      await tx.workPermitHistory.create({ data: { permitId: after.id, actorId: user.id, actorName: user.name ?? "", action: teamTypeChanged ? `Đổi loại phiếu: ${teamTypeLabel(before.teamType)} → ${teamTypeLabel(data.teamType)}` : status === before.status ? "Cập nhật thông tin" : `Chuyển sang ${PERMIT_STATUSES[status]}`, before: permitSnapshot(before), after: permitSnapshot(after) } });
       return after;
     });
     await audit(user.id, "UPDATE_WORK_PERMIT", "WorkPermit", row.id, `Cập nhật PCT ${formatPermitNumber(row)}: ${PERMIT_STATUSES[status]}`);

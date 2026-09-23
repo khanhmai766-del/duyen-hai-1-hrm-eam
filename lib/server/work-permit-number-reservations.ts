@@ -19,6 +19,10 @@ export function canonicalPermitNumber(value: unknown): string {
 
 type Tx = Prisma.TransactionClient;
 
+export function teamTypeLabel(teamType: string) {
+  return teamType === "CONTRACTOR" ? "Nhà thầu · PCT giấy" : "Nội bộ · PCT điện tử";
+}
+
 export async function lockPermitNumberScope(tx: Tx, kind: PermitKind, year: number) {
   const rows = await tx.$queryRaw<Array<{ number: string }>>`
     SELECT "number" FROM "WorkPermitNumberBaseline"
@@ -109,14 +113,19 @@ export async function consumePermitNumberReservation(tx: Tx, input: {
   const reservation = await tx.workPermitNumberReservation.findUnique({ where: { id: input.reservationId } });
   if (!reservation || reservation.status !== "RESERVED") throw fail("Lượt lấy số PCT không còn hiệu lực", 409);
   if (reservation.ownerId !== input.userId && !input.isAdmin) throw fail("Bạn không được dùng số PCT do người khác lấy", 403);
-  if (reservation.kind !== input.kind || reservation.year !== input.year || reservation.number !== canonicalPermitNumber(input.number) || reservation.teamType !== input.teamType) {
-    throw fail("Số, loại phiếu hoặc năm đã khác lượt lấy số", 409);
+  // Số thuộc về SỔ (loại PCT + năm), không thuộc loại đơn vị: lấy số 15 cho phiếu nội bộ rồi mới
+  // phát hiện đúng ra là phiếu nhà thầu thì vẫn dùng chính số 15 — chỉ ghi lại loại đơn vị mới.
+  // Đổi sổ (Cơ ↔ Điện) hay năm thì KHÔNG được, vì đó là dãy số khác.
+  if (reservation.kind !== input.kind || reservation.year !== input.year || reservation.number !== canonicalPermitNumber(input.number)) {
+    throw fail("Số, loại PCT hoặc năm đã khác lượt lấy số", 409);
   }
+  const teamTypeChanged = reservation.teamType !== input.teamType;
   if (await activePermitNumberExists(tx, input.kind, input.year, reservation.number, input.permitId)) {
     throw fail("Số PCT đang được sử dụng trong loại và năm này.", 409);
   }
-  const saved = await tx.workPermitNumberReservation.update({ where: { id: reservation.id }, data: { status: "ISSUED", permitId: input.permitId, issuedAt: new Date() } });
+  const saved = await tx.workPermitNumberReservation.update({ where: { id: reservation.id }, data: { status: "ISSUED", permitId: input.permitId, issuedAt: new Date(), teamType: input.teamType } });
   await tx.workPermitNumberReservationHistory.create({ data: { reservationId: reservation.id, action: "ISSUED",
-    actorId: input.userId, actorName: input.userName, permitId: input.permitId } });
+    actorId: input.userId, actorName: input.userName, permitId: input.permitId,
+    note: teamTypeChanged ? `Đổi loại phiếu khi cấp: ${teamTypeLabel(reservation.teamType)} → ${teamTypeLabel(input.teamType)}` : null } });
   return saved;
 }
