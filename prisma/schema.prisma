@@ -1688,6 +1688,16 @@ model WorkPermitPerson {
   sessions   WorkPermitSession[]
 }
 
+/// Danh sách ĐƠN VỊ nhà thầu. Hồ sơ người vẫn ghi tên đơn vị bằng chữ (`WorkPermitPerson.company`,
+/// không FK) như trước; bảng này chỉ để giữ được đơn vị VỪA TẠO chưa có người nào. Danh sách hiển
+/// thị = hợp của bảng này và các tên đơn vị đang có trên hồ sơ người.
+model WorkPermitCompany {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
 /// Một PCT có nhiều lần cho phép/kết thúc công tác. Kết thúc lần làm việc không đóng PCT.
 model WorkPermitSession {
   id                 String           @id @default(cuid())

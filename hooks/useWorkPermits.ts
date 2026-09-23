@@ -114,12 +114,26 @@ export function usePermitCompanies() {
   return useQuery({ queryKey: ["work-permit-companies"], staleTime: 60000, queryFn: () => apiGet<string[]>("/api/work-permits/companies") });
 }
 export interface PermitCompanySummary { company: string; total: number; commanders: number; active: number }
+function invalidateCompanies(qc: ReturnType<typeof useQueryClient>) {
+  qc.invalidateQueries({ queryKey: ["work-permit-companies"] });
+  qc.invalidateQueries({ queryKey: ["work-permit-people"] });
+}
+/** Thêm một đơn vị nhà thầu (chưa cần có nhân sự). */
+export function useCreatePermitCompany() {
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: (name: string) => apiMutate<{ id: string; name: string }>("/api/work-permits/companies", "POST", { name }), onSuccess: () => invalidateCompanies(qc) });
+}
+/** Xoá đơn vị CHƯA có nhân sự. */
+export function useDeletePermitCompany() {
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: (name: string) => apiMutate<{ name: string }>(`/api/work-permits/companies?name=${encodeURIComponent(name)}`, "DELETE"), onSuccess: () => invalidateCompanies(qc) });
+}
 /** Đổi tên một đơn vị nhà thầu (sửa `company` của mọi hồ sơ nhân sự thuộc đơn vị đó). */
 export function useRenamePermitCompany() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (body: { from: string; to: string }) => apiMutate<{ from: string; to: string; updated: number; merged: number }>("/api/work-permits/companies", "PUT", body),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["work-permit-companies"] }); qc.invalidateQueries({ queryKey: ["work-permit-people"] }); },
+    onSuccess: () => invalidateCompanies(qc),
   });
 }
 /** Bảng đơn vị nhà thầu kèm sĩ số và số CHTT — dùng cho tab "Nhân sự nhà thầu". */

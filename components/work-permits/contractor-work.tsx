@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useEffect, useState } from "react";
-import { Plus, Users, X, Play, Square, Pencil, Trash2 } from "lucide-react";
+import { Plus, Users, UserPlus, X, Play, Square, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { PermitCompanyPicker } from "@/components/work-permits/company-picker";
 import { PermitEmployeePicker } from "@/components/work-permits/employee-picker";
@@ -11,7 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { PlainHeader, ROW_HOVER, RowExpander, rowBackground, TD_EXPAND, TD_ROW, TH_EXPAND, TH_NAVY, TR_HEAD } from "@/components/pccc/pccc-table-card";
 import { cn } from "@/lib/utils";
 import { normalizeText } from "@/lib/nav";
-import { useDeletePermitPerson, usePermitCompanySummary, usePermitPeople, useRenamePermitCompany, useSavePermitPerson, usePermitSessionAction, usePermitActivity } from "@/hooks/useWorkPermits";
+import { useCreatePermitCompany, useDeletePermitCompany, useDeletePermitPerson, usePermitCompanySummary, usePermitPeople, useRenamePermitCompany, useSavePermitPerson, usePermitSessionAction, usePermitActivity } from "@/hooks/useWorkPermits";
 import { formatPermitNumber, PERMIT_KINDS } from "@/lib/work-permits";
 import type { PermitDetailRow, PermitMember, PermitPerson, PermitSession } from "@/lib/work-permits";
 
@@ -25,27 +25,40 @@ const fmt = (v: string) => new Date(v).toLocaleString("vi-VN", { timeZone: "Asia
  * Danh bạ phẳng vài trăm người không trả lời được câu hỏi người dùng thực sự hỏi ("đơn vị này có
  * ai, có đủ CHTT không"). Xếp theo đơn vị thì hai con số sĩ số / số CHTT nằm ngay trên bảng, còn
  * thông tin từng người chỉ hiện khi mở đúng đơn vị cần tra.
+ *
+ * Luồng nhập: "Thêm đơn vị" ở đầu trang → mỗi dòng đơn vị có nút "Thêm nhân sự" điền sẵn đơn vị.
+ * Thêm xong thì dòng đơn vị tự bung ra để thấy ngay người vừa thêm.
  */
 export function PermitCompanyDirectory() {
   const [q, setQ] = useState("");
   const [openCompany, setOpenCompany] = useState<string | null>(null);
-  const [editing, setEditing] = useState<PermitPerson | "new" | null>(null);
-  const [renaming, setRenaming] = useState<string | null>(null);
+  const [editing, setEditing] = useState<PermitPerson | null>(null);
+  const [addingPersonTo, setAddingPersonTo] = useState<string | null>(null);
+  const [companyForm, setCompanyForm] = useState<{ mode: "create" } | { mode: "rename"; company: string } | null>(null);
   const remove = useDeletePermitPerson();
+  const removeCompany = useDeletePermitCompany();
   const companies = usePermitCompanySummary();
   // Chỉ gọi danh sách người khi có đơn vị đang mở; `limit: 200` để không phải phân trang trong khối bung.
   const people = usePermitPeople({ company: openCompany ?? "", limit: 200, enabled: Boolean(openCompany) });
   const canWrite = companies.data?.meta.canWrite ?? false;
   const rows = (companies.data?.data ?? []).filter(row => !q.trim() || normalizeText(row.company).includes(normalizeText(q)));
+  const colCount = canWrite ? 6 : 5;
   async function removePerson(person: PermitPerson) {
     if (!window.confirm(`Xóa ${person.name} (${person.code}) khỏi danh sách nhân sự nhà thầu?\n\nNếu người này đã xuất hiện trên PCT, hệ thống sẽ giữ hồ sơ và hướng dẫn chuyển sang ngừng hoạt động.`)) return;
     try { await remove.mutateAsync({ id: person.id, version: person.version }); toast.success("Đã xóa nhân sự nhà thầu"); }
     catch (error) { toast.error(error instanceof Error ? error.message : "Không thể xóa hồ sơ"); }
   }
+  async function deleteCompany(company: string) {
+    if (!window.confirm(`Xóa đơn vị "${company}"? Đơn vị chưa có nhân sự nào.`)) return;
+    try { await removeCompany.mutateAsync(company); toast.success("Đã xóa đơn vị nhà thầu"); if (openCompany === company) setOpenCompany(null); }
+    catch (error) { toast.error(error instanceof Error ? error.message : "Không thể xóa đơn vị"); }
+  }
+  // Nút trong dòng không được làm bung/đóng dòng.
+  const act = (event: React.MouseEvent, run: () => void) => { event.stopPropagation(); run(); };
   return <section className="space-y-4">
     <div className="flex flex-wrap items-start justify-between gap-3">
-      <div><h2 className="flex items-center gap-2 text-base font-semibold"><Users size={18} />Đơn vị nhà thầu</h2><p className="mt-0.5 text-xs text-muted-foreground">Bấm một đơn vị để xem danh sách nhân sự và CHTT của đơn vị đó. Mỗi người dùng chung một hồ sơ giữa hai sổ Cơ và Điện.</p></div>
-      {canWrite && <Button type="button" size="sm" className="h-9 text-xs" onClick={() => setEditing("new")}><Plus />Thêm người</Button>}
+      <div><h2 className="flex items-center gap-2 text-base font-semibold"><Users size={18} />Đơn vị nhà thầu</h2><p className="mt-0.5 text-xs text-muted-foreground">Thêm đơn vị trước, rồi thêm nhân sự và CHTT ngay trên dòng của đơn vị đó. Bấm một dòng để xem danh sách người.</p></div>
+      {canWrite && <Button type="button" size="sm" className="h-9 text-xs" onClick={() => setCompanyForm({ mode: "create" })}><Plus />Thêm đơn vị</Button>}
     </div>
     <div className="overflow-hidden rounded-xl border border-border bg-card">
       <div className="flex flex-col gap-3 border-b border-border bg-muted/25 px-4 py-3 md:flex-row md:items-center md:justify-between">
@@ -57,15 +70,15 @@ export function PermitCompanyDirectory() {
       </div>
       {companies.isPending ? <p role="status" className="p-6 text-sm">Đang tải danh sách đơn vị…</p>
         : companies.isError ? <p role="alert" className="p-6 text-red-700">{companies.error.message}</p>
-        : !rows.length ? <p className="p-8 text-center text-sm text-muted-foreground">{q.trim() ? "Không có đơn vị nào khớp từ khóa." : "Chưa có nhân sự nhà thầu nào được ghi nhận."}</p>
-        : <Table className="min-w-[620px]">
+        : !rows.length ? <p className="p-8 text-center text-sm text-muted-foreground">{q.trim() ? "Không có đơn vị nào khớp từ khóa." : "Chưa có đơn vị nhà thầu nào. Bấm “Thêm đơn vị” để bắt đầu."}</p>
+        : <Table className="min-w-[720px]">
           <TableHeader><TableRow className={TR_HEAD}>
             <TableHead className={cn(TH_NAVY, TH_EXPAND)} />
-            <TableHead className={TH_NAVY}><PlainHeader label="STT" /></TableHead>
+            <TableHead className={cn(TH_NAVY, "w-16")}><PlainHeader label="STT" /></TableHead>
             <TableHead className={TH_NAVY}><PlainHeader label="Tên đơn vị" align="left" /></TableHead>
-            <TableHead className={TH_NAVY}><PlainHeader label="Số lượng nhân viên" /></TableHead>
-            <TableHead className={TH_NAVY}><PlainHeader label="Số lượng CHTT" /></TableHead>
-            {canWrite && <TableHead className={TH_NAVY}><PlainHeader label="Thao tác" /></TableHead>}
+            <TableHead className={cn(TH_NAVY, "w-40")}><PlainHeader label="Số lượng nhân viên" /></TableHead>
+            <TableHead className={cn(TH_NAVY, "w-36")}><PlainHeader label="Số lượng CHTT" /></TableHead>
+            {canWrite && <TableHead className={cn(TH_NAVY, "w-56")}><PlainHeader label="Thao tác" /></TableHead>}
           </TableRow></TableHeader>
           <TableBody>{rows.map((row, index) => {
             const expanded = openCompany === row.company;
@@ -77,66 +90,100 @@ export function PermitCompanyDirectory() {
                 <TableCell className={cn(TD_ROW, "py-2.5 font-semibold text-ink")}>{row.company}{row.active < row.total && <span className="ml-2 text-[11px] font-medium text-amber-700">{row.total - row.active} ngừng hoạt động</span>}</TableCell>
                 <TableCell className={cn(TD_ROW, "py-2.5 text-center tabular-nums")}>{row.total}</TableCell>
                 <TableCell className={cn(TD_ROW, "py-2.5 text-center tabular-nums")}>{row.commanders ? <span className="font-semibold text-emerald-700">{row.commanders}</span> : <span className="text-amber-700">0</span>}</TableCell>
-                {canWrite && <TableCell className={cn(TD_ROW, "py-2.5 text-center")}>
-                  <Button type="button" size="sm" variant="outline" className="h-8 px-2" aria-label={`Sửa tên đơn vị ${row.company}`} title="Sửa tên đơn vị nhà thầu" onClick={e => { e.stopPropagation(); setRenaming(row.company); }}><Pencil size={14} /></Button>
+                {canWrite && <TableCell className={cn(TD_ROW, "py-2.5")}>
+                  <div className="flex items-center justify-center gap-1.5">
+                    <Button type="button" size="sm" className="h-8 px-2.5 text-xs" title="Thêm nhân sự / CHTT cho đơn vị này" onClick={e => act(e, () => setAddingPersonTo(row.company))}><UserPlus size={14} />Thêm nhân sự</Button>
+                    <Button type="button" size="sm" variant="outline" className="h-8 px-2" aria-label={`Sửa tên đơn vị ${row.company}`} title="Sửa tên đơn vị" onClick={e => act(e, () => setCompanyForm({ mode: "rename", company: row.company }))}><Pencil size={14} /></Button>
+                    {row.total === 0 && <Button type="button" size="sm" variant="outline" className="h-8 px-2 text-red-700 hover:text-red-800" disabled={removeCompany.isPending} aria-label={`Xóa đơn vị ${row.company}`} title="Xóa đơn vị chưa có nhân sự" onClick={e => act(e, () => void deleteCompany(row.company))}><Trash2 size={14} /></Button>}
+                  </div>
                 </TableCell>}
               </TableRow>
-              {expanded && <TableRow className="hover:bg-transparent"><TableCell colSpan={canWrite ? 6 : 5} className="border-b border-slate-100 bg-slate-50/80 p-0">
+              {expanded && <TableRow className="hover:bg-transparent"><TableCell colSpan={colCount} className="border-b border-slate-100 bg-slate-50/80 p-0">
                 <div className="border-l-[3px] border-[#00558F] px-4 py-3">
                   {people.isPending ? <p role="status" className="text-sm text-muted-foreground">Đang tải nhân sự…</p>
                     : people.isError ? <p role="alert" className="text-sm text-red-700">{people.error.message}</p>
-                    : !people.data?.data.length ? <p className="text-sm text-muted-foreground">Đơn vị này chưa có hồ sơ nhân sự.</p>
-                    : <ul className="grid gap-2 lg:grid-cols-2">{people.data.data.map(person => <li key={person.id} className="flex items-start justify-between gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2">
-                      <div className="min-w-0">
-                        <p className="flex flex-wrap items-center gap-2 text-[13px] font-semibold text-ink">{person.name}{person.canCommand && <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10.5px] font-semibold uppercase tracking-wide text-emerald-700">CHTT</span>}{!person.isActive && <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10.5px] font-semibold uppercase tracking-wide text-amber-700">Ngừng hoạt động</span>}</p>
-                        <p className="mt-0.5 text-xs text-slate-600">Số thẻ an toàn: <span className="font-medium text-ink">{person.code}</span></p>
-                        <p className="text-xs text-slate-600">SĐT: {person.phone ? <a className="font-medium text-blue-700 underline" href={`tel:${person.phone.replace(/[^+\d]/g, "")}`} onClick={e => e.stopPropagation()}>{person.phone}</a> : <span className="text-muted-foreground">Chưa có</span>}</p>
-                        {person.activeWorks?.map(work => <p key={work.sessionId} className="mt-1 text-[11px] font-medium text-amber-700">Đang làm PCT {formatPermitNumber(work.permit)} · {PERMIT_KINDS[work.permit.kind]} · {work.role === "CHTT" ? "CHTT" : "Nhân viên công tác"} · từ {fmt(work.openedAt)}</p>)}
-                      </div>
-                      {canWrite && <div className="flex shrink-0 gap-1">
-                        <Button type="button" size="sm" variant="outline" className="h-8 px-2" aria-label={`Sửa hồ sơ ${person.name}`} onClick={() => setEditing(person)}><Pencil size={14} /></Button>
-                        <Button type="button" size="sm" variant="outline" className="h-8 px-2 text-red-700 hover:text-red-800" disabled={remove.isPending} aria-label={`Xóa hồ sơ ${person.name}`} onClick={() => void removePerson(person)}><Trash2 size={14} /></Button>
-                      </div>}
-                    </li>)}</ul>}
+                    : !people.data?.data.length ? <p className="text-sm text-muted-foreground">Đơn vị này chưa có nhân sự.{canWrite ? " Bấm “Thêm nhân sự” trên dòng đơn vị để thêm." : ""}</p>
+                    : <CompanyPeopleTable people={people.data.data} canWrite={canWrite} removing={remove.isPending} onEdit={setEditing} onRemove={person => void removePerson(person)} />}
                 </div>
               </TableCell></TableRow>}
             </Fragment>;
           })}</TableBody>
         </Table>}
     </div>
-    {editing && <PersonEditor initial={editing === "new" ? undefined : editing} onClose={() => setEditing(null)} />}
-    {renaming !== null && <CompanyEditor company={renaming} onClose={() => setRenaming(null)} />}
+    {editing && <PersonEditor initial={editing} onClose={() => setEditing(null)} />}
+    {addingPersonTo !== null && <PersonEditor presetCompany={addingPersonTo} onClose={() => setAddingPersonTo(null)} onSaved={() => setOpenCompany(addingPersonTo)} />}
+    {companyForm && <CompanyEditor company={companyForm.mode === "rename" ? companyForm.company : undefined} onClose={() => setCompanyForm(null)} onSaved={name => setOpenCompany(name)} />}
   </section>;
 }
 
+/** Danh sách người của một đơn vị, mỗi người một dòng: Họ tên · Số thẻ an toàn · SĐT · Vai trò. */
+function CompanyPeopleTable({ people, canWrite, removing, onEdit, onRemove }: { people: PermitPerson[]; canWrite: boolean; removing: boolean; onEdit: (person: PermitPerson) => void; onRemove: (person: PermitPerson) => void }) {
+  const th = "px-3 py-2 text-left text-[10.5px] font-semibold uppercase tracking-wider text-slate-500";
+  return <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+    <table className="w-full min-w-[640px] text-[12px]">
+      <thead className="border-b border-slate-200 bg-slate-50"><tr>
+        <th className={cn(th, "w-12 text-center")}>STT</th><th className={th}>Họ tên</th><th className={th}>Số thẻ an toàn</th><th className={th}>SĐT liên hệ</th><th className={th}>Vai trò</th>{canWrite && <th className={cn(th, "w-24 text-center")}>Thao tác</th>}
+      </tr></thead>
+      <tbody>{people.map((person, index) => <tr key={person.id} className="border-b border-slate-100 align-top last:border-0">
+        <td className="px-3 py-2 text-center tabular-nums text-slate-500">{index + 1}</td>
+        <td className="px-3 py-2">
+          <span className="font-semibold text-ink">{person.name}</span>
+          {person.activeWorks?.map(work => <p key={work.sessionId} className="mt-0.5 text-[11px] font-medium text-amber-700">Đang làm PCT {formatPermitNumber(work.permit)} · {PERMIT_KINDS[work.permit.kind]} · {work.role === "CHTT" ? "CHTT" : "Nhân viên công tác"} · từ {fmt(work.openedAt)}</p>)}
+        </td>
+        <td className="px-3 py-2 font-medium text-ink">{person.code}</td>
+        <td className="px-3 py-2">{person.phone ? <a className="font-medium text-blue-700 underline" href={`tel:${person.phone.replace(/[^+\d]/g, "")}`}>{person.phone}</a> : <span className="text-muted-foreground">Chưa có</span>}</td>
+        <td className="px-3 py-2"><div className="flex flex-wrap gap-1">
+          {person.canCommand ? <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10.5px] font-semibold uppercase tracking-wide text-emerald-700">CHTT</span> : <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10.5px] font-semibold uppercase tracking-wide text-slate-600">Nhân viên</span>}
+          {!person.isActive && <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10.5px] font-semibold uppercase tracking-wide text-amber-700">Ngừng hoạt động</span>}
+        </div></td>
+        {canWrite && <td className="px-3 py-2"><div className="flex justify-center gap-1">
+          <Button type="button" size="sm" variant="outline" className="h-7 px-2" aria-label={`Sửa hồ sơ ${person.name}`} onClick={() => onEdit(person)}><Pencil size={13} /></Button>
+          <Button type="button" size="sm" variant="outline" className="h-7 px-2 text-red-700 hover:text-red-800" disabled={removing} aria-label={`Xóa hồ sơ ${person.name}`} onClick={() => onRemove(person)}><Trash2 size={13} /></Button>
+        </div></td>}
+      </tr>)}</tbody>
+    </table>
+  </div>;
+}
+
 /**
- * Sửa tên một đơn vị nhà thầu. Đơn vị không có bảng riêng — nó là chữ trên từng hồ sơ người —
- * nên đây là một lượt sửa hàng loạt; đổi sang tên đã có tức là GỘP hai đơn vị, cũng là cách
- * duy nhất để dọn các bản ghi gõ sai. PCT đã ghi giữ nguyên tên tại thời điểm thực hiện.
+ * Thêm mới hoặc sửa tên một đơn vị nhà thầu. Sửa tên là một lượt sửa hàng loạt trên hồ sơ người;
+ * đổi sang tên đã có tức là GỘP hai đơn vị, cũng là cách duy nhất để dọn các bản ghi gõ sai.
+ * PCT đã ghi giữ nguyên tên tại thời điểm thực hiện.
  */
-function CompanyEditor({ company, onClose }: { company: string; onClose: () => void }) {
-  const [name, setName] = useState(company);
+function CompanyEditor({ company, onClose, onSaved }: { company?: string; onClose: () => void; onSaved?: (name: string) => void }) {
+  const [name, setName] = useState(company ?? "");
   const rename = useRenamePermitCompany();
+  const create = useCreatePermitCompany();
   const companies = usePermitCompanySummary();
-  const willMerge = companies.data?.data.some(row => row.company !== company && row.company === name.trim()) ?? false;
+  const pending = rename.isPending || create.isPending;
+  const exists = companies.data?.data.some(row => row.company !== company && row.company === name.trim()) ?? false;
   async function submit(event: React.FormEvent) {
     event.preventDefault(); event.stopPropagation();
     const next = name.trim();
-    if (!next || next === company) { onClose(); return; }
-    if (willMerge && !window.confirm(`Đơn vị "${next}" đã có sẵn. Toàn bộ nhân sự của "${company}" sẽ được gộp vào đơn vị đó. Tiếp tục?`)) return;
+    if (!next) return;
     try {
-      const result = await rename.mutateAsync({ from: company, to: next });
-      toast.success(`Đã cập nhật ${result.updated} hồ sơ sang đơn vị "${next}"`);
+      if (company === undefined) {
+        await create.mutateAsync(next);
+        toast.success(`Đã thêm đơn vị "${next}"`);
+      } else {
+        if (next === company) { onClose(); return; }
+        if (exists && !window.confirm(`Đơn vị "${next}" đã có sẵn. Toàn bộ nhân sự của "${company}" sẽ được gộp vào đơn vị đó. Tiếp tục?`)) return;
+        const result = await rename.mutateAsync({ from: company, to: next });
+        toast.success(`Đã cập nhật đơn vị "${next}" (${result.updated} hồ sơ nhân sự)`);
+      }
+      onSaved?.(next);
       onClose();
-    } catch (error) { toast.error(error instanceof Error ? error.message : "Không thể đổi tên đơn vị"); }
+    } catch (error) { toast.error(error instanceof Error ? error.message : "Không thể lưu đơn vị"); }
   }
-  return <Dialog open onOpenChange={v => { if (!v && !rename.isPending) onClose(); }}><DialogContent>
-    <DialogTitle>Sửa đơn vị nhà thầu</DialogTitle>
-    <DialogDescription>Tên mới được áp cho mọi hồ sơ nhân sự của đơn vị này. Các PCT đã ghi giữ nguyên tên đơn vị tại thời điểm thực hiện.</DialogDescription>
-    <form onSubmit={submit}><fieldset disabled={rename.isPending} className="space-y-4">
-      <label className="block space-y-1 text-sm"><span>Tên đơn vị *</span><input className={control} value={name} required maxLength={200} onChange={e => setName(e.target.value)} /></label>
-      {willMerge && <p className="rounded-lg bg-amber-50 p-3 text-xs text-amber-900">Đơn vị này đã tồn tại — lưu sẽ GỘP toàn bộ nhân sự của &ldquo;{company}&rdquo; vào đó.</p>}
-      <div className="flex justify-end gap-2"><Button type="button" variant="outline" onClick={onClose}>Để sau</Button><Button type="submit" disabled={rename.isPending}>{rename.isPending ? "Đang lưu…" : "Lưu tên đơn vị"}</Button></div>
+  return <Dialog open onOpenChange={v => { if (!v && !pending) onClose(); }}><DialogContent>
+    <DialogTitle>{company === undefined ? "Thêm đơn vị nhà thầu" : "Sửa đơn vị nhà thầu"}</DialogTitle>
+    <DialogDescription>{company === undefined ? "Thêm đơn vị trước, sau đó bấm “Thêm nhân sự” trên dòng của đơn vị để khai báo từng người." : "Tên mới được áp cho mọi hồ sơ nhân sự của đơn vị này. Các PCT đã ghi giữ nguyên tên đơn vị tại thời điểm thực hiện."}</DialogDescription>
+    <form onSubmit={submit}><fieldset disabled={pending} className="space-y-4">
+      <label className="block space-y-1 text-sm"><span>Tên đơn vị *</span><input className={control} value={name} required autoFocus maxLength={200} onChange={e => setName(e.target.value)} placeholder="Ví dụ: Công ty CP Cơ điện Miền Nam" /></label>
+      {exists && (company === undefined
+        ? <p className="rounded-lg bg-amber-50 p-3 text-xs text-amber-900">Đơn vị này đã có trong danh sách.</p>
+        : <p className="rounded-lg bg-amber-50 p-3 text-xs text-amber-900">Đơn vị này đã tồn tại — lưu sẽ GỘP toàn bộ nhân sự của &ldquo;{company}&rdquo; vào đó.</p>)}
+      <div className="flex justify-end gap-2"><Button type="button" variant="outline" onClick={onClose}>Để sau</Button><Button type="submit" disabled={pending || (company === undefined && exists)}>{pending ? "Đang lưu…" : company === undefined ? "Thêm đơn vị" : "Lưu tên đơn vị"}</Button></div>
     </fieldset></form>
   </DialogContent></Dialog>;
 }
@@ -195,21 +242,26 @@ export function PermitPeopleDirectory({ onClose, onPick, onPickMany, existingMem
   </Dialog>;
 }
 
-function PersonEditor({ initial, onClose }: { initial?: PermitPerson; onClose: () => void }) {
-  const [form, setForm] = useState(initial ?? { code: "", name: "", company: "", phone: "", canCommand: false, isActive: true });
+/**
+ * Thêm/sửa hồ sơ một người. Mở từ nút "Thêm nhân sự" trên dòng đơn vị thì `presetCompany` điền
+ * sẵn và KHOÁ đơn vị — người dùng đã chọn đơn vị bằng chính dòng họ bấm, hỏi lại là thừa. Mặc định
+ * đánh dấu CHTT vì nhập theo đơn vị chủ yếu là để khai báo danh sách CHTT nhà thầu cung cấp.
+ */
+function PersonEditor({ initial, presetCompany, onClose, onSaved }: { initial?: PermitPerson; presetCompany?: string; onClose: () => void; onSaved?: () => void }) {
+  const [form, setForm] = useState(initial ?? { code: "", name: "", company: presetCompany ?? "", phone: "", canCommand: presetCompany !== undefined, isActive: true });
   const save = useSavePermitPerson();
   async function submit(e: React.FormEvent) {
     e.preventDefault(); e.stopPropagation();
-    try { await save.mutateAsync({ id: initial?.id, body: form }); toast.success("Đã lưu hồ sơ nhân sự nhà thầu"); onClose(); }
+    try { await save.mutateAsync({ id: initial?.id, body: form }); toast.success("Đã lưu hồ sơ nhân sự nhà thầu"); onSaved?.(); onClose(); }
     catch (error) { toast.error(error instanceof Error ? error.message : "Không thể lưu hồ sơ"); }
   }
   return <Dialog open onOpenChange={v => { if (!v && !save.isPending) onClose(); }}><DialogContent>
-    <DialogTitle>{initial ? "Cập nhật nhân sự nhà thầu" : "Thêm nhân sự nhà thầu"}</DialogTitle>
+    <DialogTitle>{initial ? "Cập nhật nhân sự nhà thầu" : presetCompany ? `Thêm nhân sự · ${presetCompany}` : "Thêm nhân sự nhà thầu"}</DialogTitle>
     <DialogDescription>Tìm hồ sơ có sẵn trước khi thêm. Có thể cập nhật số thẻ, họ tên, nhà thầu và vai trò khi thông tin thực tế thay đổi.</DialogDescription>
     <form onSubmit={submit}><fieldset disabled={save.isPending} className="space-y-4">
       {(["code", "name"] as const).map(key => <label key={key} className="block space-y-1 text-sm"><span>{({ code: "Số thẻ an toàn *", name: "Họ tên *", company: "Nhà thầu *" })[key]}</span><input className={control} value={form[key]} required maxLength={key === "code" ? 80 : 200} onChange={e => setForm({ ...form, [key]: e.target.value })} /></label>)}
       <p className="text-xs text-muted-foreground">Có thể sửa số thẻ, họ tên, nhà thầu và vai trò. Các PCT đã ghi vẫn giữ nguyên thông tin tại thời điểm thực hiện.</p>
-      <PermitCompanyPicker value={form.company} onChange={company => setForm(prev => ({ ...prev, company }))} />
+      {presetCompany !== undefined ? <p className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm">Đơn vị: <strong>{presetCompany}</strong></p> : <PermitCompanyPicker value={form.company} onChange={company => setForm(prev => ({ ...prev, company }))} />}
       <label className="block space-y-1 text-sm"><span>SĐT liên hệ</span><input className={control} type="tel" inputMode="tel" maxLength={40} value={form.phone ?? ""} onChange={e => setForm({ ...form, phone: e.target.value })} placeholder="Ví dụ: 0912 345 678" /><span className="block text-xs text-muted-foreground">Không bắt buộc; dùng để gọi khi cần liên hệ đơn vị công tác.</span></label>
       <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.canCommand} onChange={e => setForm({ ...form, canCommand: e.target.checked })} />Có trong danh sách CHTT nhà thầu</label>
       <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.isActive} onChange={e => setForm({ ...form, isActive: e.target.checked })} />Đang hoạt động</label>
