@@ -1719,7 +1719,6 @@ model WorkPermitSafetyMeasure {
   kind       String
   hazard     String   @default("")
   measure    String
-  source     String   @default("")
   isActive   Boolean  @default(true)
   searchText String
   version    Int      @default(1)

@@ -22,3 +22,20 @@ export async function PUT(req: Request, props: { params: Promise<{ id: string }>
     return ok(result.after);
   });
 }
+/**
+ * Xóa hẳn một cặp mối nguy – biện pháp khỏi danh mục (mục nhập trùng hoặc không còn phù hợp).
+ * Phiếu đã ghi KHÔNG bị ảnh hưởng: nội dung đã được sao lên phiếu, chỉ còn `sourceId` trỏ về
+ * mục đã xóa và `resolvePermitSafety` chấp nhận trường hợp này. Muốn giữ lịch sử thì dùng
+ * "ngừng sử dụng" thay vì xóa.
+ */
+export async function DELETE(_req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
+  return permitHandle(async () => {
+    const user = await requireUser(); await requirePermitIssue(user);
+    const before = await prisma.workPermitSafetyMeasure.findUnique({ where: { id: params.id } });
+    if (!before) throw fail("Không tìm thấy biện pháp an toàn", 404);
+    await prisma.workPermitSafetyMeasure.delete({ where: { id: params.id } });
+    await audit(user.id, "DELETE_PERMIT_SAFETY", "WorkPermitSafetyMeasure", params.id, JSON.stringify(before));
+    return ok({ id: params.id });
+  });
+}

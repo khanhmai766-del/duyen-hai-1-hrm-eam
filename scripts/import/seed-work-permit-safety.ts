@@ -9,7 +9,7 @@ const local = ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname) && url.
 if (!local && !process.argv.includes("--allow-remote")) throw new Error("Chỉ đồng bộ DB ngoài local khi truyền rõ --allow-remote");
 const db = new PrismaClient();
 async function main() {
-  const result = await db.workPermitSafetyMeasure.createMany({ data: samples.map(row => ({ ...row, searchText: normalizeText([row.hazard, row.measure, row.source].join(" ")) })), skipDuplicates: true });
+  const result = await db.workPermitSafetyMeasure.createMany({ data: samples.map(({ source: _source, ...row }) => ({ ...row, searchText: normalizeText([row.hazard, row.measure].join(" ")) })), skipDuplicates: true });
   console.log(`Đã bổ sung ${result.count}/${samples.length} mục an toàn Cơ – Nhiệt – Hóa còn thiếu. Các mục đã có được giữ nguyên; danh mục Điện giữ riêng.`);
 }
 main().catch(e => { console.error(e); process.exitCode = 1; }).finally(() => db.$disconnect());

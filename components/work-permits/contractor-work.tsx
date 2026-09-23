@@ -15,8 +15,12 @@ const control = "min-h-10 w-full rounded-lg border border-input bg-background px
 const vnNow = () => new Date(Date.now() + 7 * 3600000).toISOString().slice(0, 16);
 const fmt = (v: string) => new Date(v).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" });
 
-export function PermitPeopleDirectory({ onClose, onPick, onPickMany, existingMembers = [], commandersOnly = false }: {
-  onClose: () => void; onPick?: (p: PermitPerson) => void; onPickMany?: (people: PermitPerson[]) => void; existingMembers?: PermitMember[]; commandersOnly?: boolean;
+/**
+ * Cùng một danh sách nhân sự nhà thầu dùng cho hai chỗ: hộp thoại chọn người khi cấp phiếu, và
+ * tab "Nhân sự nhà thầu" nhúng thẳng trong sổ PCT (`inline`) — tab thì không có nút đóng.
+ */
+export function PermitPeopleDirectory({ onClose, onPick, onPickMany, existingMembers = [], commandersOnly = false, inline = false }: {
+  onClose?: () => void; onPick?: (p: PermitPerson) => void; onPickMany?: (people: PermitPerson[]) => void; existingMembers?: PermitMember[]; commandersOnly?: boolean; inline?: boolean;
 }) {
   const [q, setQ] = useState("");
   const [search, setSearch] = useState("");
@@ -37,10 +41,9 @@ export function PermitPeopleDirectory({ onClose, onPick, onPickMany, existingMem
   }
   useEffect(() => { const timer = setTimeout(() => { setSearch(q); setPage(1); }, 300); return () => clearTimeout(timer); }, [q]);
   const query = usePermitPeople({ q: search, page, active: Boolean(onPick || onPickMany), commander: commandersOnly, polling: Boolean(onPick || onPickMany) });
-  return <Dialog open onOpenChange={v => { if (!v) onClose(); }}>
-    <DialogContent className="max-w-3xl">
-      <DialogTitle>{commandersOnly ? "Chọn CHTT nhà thầu" : onPickMany ? "Chọn nhân viên công tác" : "Danh sách nhân sự nhà thầu"}</DialogTitle>
-      <DialogDescription>{onPickMany ? "Đánh dấu nhiều nhân viên rồi bấm Thêm người đã chọn. Lựa chọn được giữ khi tìm kiếm hoặc chuyển trang; tối đa 200 nhân viên trong danh sách công tác." : "Mỗi người dùng một hồ sơ và số thẻ an toàn thống nhất giữa hai sổ Cơ và Điện. Đánh dấu CHTT cho người thuộc danh sách được cung cấp."}</DialogDescription>
+  const heading = commandersOnly ? "Chọn CHTT nhà thầu" : onPickMany ? "Chọn nhân viên công tác" : "Danh sách nhân sự nhà thầu";
+  const description = onPickMany ? "Đánh dấu nhiều nhân viên rồi bấm Thêm người đã chọn. Lựa chọn được giữ khi tìm kiếm hoặc chuyển trang; tối đa 200 nhân viên trong danh sách công tác." : "Mỗi người dùng một hồ sơ và số thẻ an toàn thống nhất giữa hai sổ Cơ và Điện. Đánh dấu CHTT cho người thuộc danh sách được cung cấp.";
+  const body = <>
       <div className="flex flex-wrap gap-2">
         <input className={`${control} flex-1`} aria-label="Tìm nhân sự nhà thầu" placeholder="Số thẻ an toàn, họ tên, đơn vị nhà thầu…" value={q} maxLength={200} onKeyDown={e => { if (e.key === "Enter") e.preventDefault(); }} onChange={e => setQ(e.target.value)} />
         {query.data?.meta.canWrite && <Button type="button" onClick={() => setEditing("new")}><Plus />Thêm người</Button>}
@@ -56,9 +59,19 @@ export function PermitPeopleDirectory({ onClose, onPick, onPickMany, existingMem
       {onPickMany && <div className="space-y-3 border-t border-border pt-3">
         <p aria-live="polite" className="text-sm font-medium">Đã chọn thêm {selected.length} người · Danh sách hiện có {existingMembers.length} người</p>
         {selected.length > 0 && <div className="flex max-h-28 flex-wrap gap-2 overflow-y-auto">{selected.map(person => <Button key={person.id} type="button" size="sm" variant="outline" aria-label={`Bỏ chọn ${person.name} · ${person.code}`} onClick={() => toggle(person)}>{person.name}<X size={14} /></Button>)}</div>}
-        <div className="flex justify-end gap-2"><Button type="button" variant="outline" onClick={onClose}>Để sau</Button><Button type="button" disabled={!selected.length} onClick={() => onPickMany(selected)}>Thêm {selected.length || ""} người đã chọn</Button></div>
+        <div className="flex justify-end gap-2"><Button type="button" variant="outline" onClick={() => onClose?.()}>Để sau</Button><Button type="button" disabled={!selected.length} onClick={() => onPickMany(selected)}>Thêm {selected.length || ""} người đã chọn</Button></div>
       </div>}
       {editing && <PersonEditor initial={editing === "new" ? undefined : editing} onClose={() => setEditing(null)} />}
+  </>;
+  if (inline) return <section className="space-y-3 rounded-xl border border-border bg-card p-4 shadow-sm sm:p-5">
+    <div><h2 className="text-base font-bold text-foreground">{heading}</h2><p className="mt-1 text-sm text-muted-foreground">{description}</p></div>
+    {body}
+  </section>;
+  return <Dialog open onOpenChange={v => { if (!v) onClose?.(); }}>
+    <DialogContent className="max-w-3xl">
+      <DialogTitle>{heading}</DialogTitle>
+      <DialogDescription>{description}</DialogDescription>
+      {body}
     </DialogContent>
   </Dialog>;
 }

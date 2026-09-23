@@ -167,7 +167,9 @@ export function DetailPanel({ children }: { children: React.ReactNode }) {
   );
 }
 
-function Pager({ page, totalPages, onGo }: { page: number; totalPages: number; onGo: (p: number) => void }) {
+/** Dải số trang của bảng PCCC. Dùng lại ở bảng nào muốn chân bảng giống hệt (vd. danh mục
+ *  biện pháp an toàn PCT), kể cả khi bảng đó không dùng trọn `PcccTableCard`. */
+export function Pager({ page, totalPages, onGo }: { page: number; totalPages: number; onGo: (p: number) => void }) {
   const items: Array<number | "gap"> = [];
   for (let i = 1; i <= totalPages; i++) {
     if (i === 1 || i === totalPages || Math.abs(i - page) <= 1) items.push(i);

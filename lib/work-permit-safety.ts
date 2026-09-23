@@ -1,6 +1,8 @@
 import type { PermitKind } from "@/lib/work-permits";
 
 export const SAFETY_PAGE_SIZE = 10;
+/** Các mức "hiển thị N dòng" của danh mục an toàn; giá trị nào khác đều bị API từ chối. */
+export const SAFETY_PAGE_SIZES = [10, 25, 50, 100];
 export const SAFETY_MAX_ROWS = 100;
 export interface SafetySelection {
   sourceId?: string;
@@ -11,7 +13,7 @@ export interface SafetySelection {
 }
 export interface SafetyItem {
   id: string; kind: PermitKind;
-  hazard: string; measure: string; source: string;
+  hazard: string; measure: string;
   isActive: boolean; version: number;
 }
 export function safetySummary(value: unknown): string {

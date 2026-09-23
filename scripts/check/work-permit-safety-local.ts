@@ -55,7 +55,7 @@ async function main() {
   try {
     await login("MANAGER", writerCookies); await login("VIEWER", viewerCookies);
     const seed = await request("/api/work-permits/safety?kind=MECHANICAL"); expect(seed, 200, "Đọc danh mục Cơ"); assert.equal(seed.data.length, 10); checks++;
-    const blank = { kind: "MECHANICAL", hazard: `${prefix} Hố sâu & <nguy hiểm>`, measure: "Rào chắn & cảnh báo <khu vực>", source: prefix, isActive: true };
+    const blank = { kind: "MECHANICAL", hazard: `${prefix} Hố sâu & <nguy hiểm>`, measure: "Rào chắn & cảnh báo <khu vực>", isActive: true };
     expect(await request("/api/work-permits/safety", "POST", blank, viewerCookies), 403, "Chặn người xem sửa danh mục");
     expect(await request("/api/work-permits/safety", "POST", { ...blank, hazard: "" }), 400, "Bắt buộc cặp đủ nội dung");
     expect(await request("/api/work-permits/safety", "POST", { ...blank, kind: "OTHER" }), 400, "Kiểm tra loại danh mục");

@@ -9,10 +9,10 @@ export function parseSafetyItem(body: Record<string, unknown>) {
   const kind = permitText(body, "kind");
   if (!Object.hasOwn(PERMIT_KINDS, kind)) throw fail("Loại PCT không hợp lệ");
   const hazard = permitText(body, "hazard", 1000);
-  const measure = permitText(body, "measure", 5000), source = permitText(body, "source", 500);
+  const measure = permitText(body, "measure", 5000);
   if (!measure || !hazard) throw fail("Vui lòng nhập đủ mối nguy và biện pháp an toàn");
   if (body.isActive !== undefined && typeof body.isActive !== "boolean") throw fail("Trạng thái biện pháp không hợp lệ");
-  return { kind, hazard, measure, source, isActive: body.isActive !== false, searchText: normalizeText([hazard, measure, source].join(" ")) };
+  return { kind, hazard, measure, isActive: body.isActive !== false, searchText: normalizeText([hazard, measure].join(" ")) };
 }
 
 /** Sao chép nội dung đã chọn lên phiếu; không đọc động danh mục khi xem/in phiếu cũ. */
@@ -44,8 +44,12 @@ export async function resolvePermitSafety(tx: Prisma.TransactionClient, body: Re
   for (const row of rows) {
     if (!row.sourceId) continue;
     const source = sources.find(s => s.id === row.sourceId);
-    if (!source || source.kind !== body.kind) throw fail("Biện pháp không thuộc loại PCT đã chọn. Vui lòng chọn lại.");
-    if (!source.isActive && !previous.some(s => s.sourceId === row.sourceId)) throw fail("Biện pháp vừa ngừng sử dụng. Vui lòng chọn lại.", 409);
+    // Biện pháp có thể bị XOÁ khỏi danh mục sau khi phiếu đã ghi. Nội dung đã sao lên phiếu
+    // vẫn còn nên phiếu cũ phải lưu lại được; chỉ chặn khi lượt lưu này mới thêm nó vào.
+    const kept = previous.some(s => s.sourceId === row.sourceId);
+    if (!source) { if (!kept) throw fail("Biện pháp đã bị xóa khỏi danh mục. Vui lòng chọn lại."); continue; }
+    if (source.kind !== body.kind) throw fail("Biện pháp không thuộc loại PCT đã chọn. Vui lòng chọn lại.");
+    if (!source.isActive && !kept) throw fail("Biện pháp vừa ngừng sử dụng. Vui lòng chọn lại.", 409);
   }
   return rows;
 }
