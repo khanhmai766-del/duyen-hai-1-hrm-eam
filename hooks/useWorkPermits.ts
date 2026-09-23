@@ -114,6 +114,14 @@ export function usePermitCompanies() {
   return useQuery({ queryKey: ["work-permit-companies"], staleTime: 60000, queryFn: () => apiGet<string[]>("/api/work-permits/companies") });
 }
 export interface PermitCompanySummary { company: string; total: number; commanders: number; active: number }
+/** Đổi tên một đơn vị nhà thầu (sửa `company` của mọi hồ sơ nhân sự thuộc đơn vị đó). */
+export function useRenamePermitCompany() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { from: string; to: string }) => apiMutate<{ from: string; to: string; updated: number; merged: number }>("/api/work-permits/companies", "PUT", body),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["work-permit-companies"] }); qc.invalidateQueries({ queryKey: ["work-permit-people"] }); },
+  });
+}
 /** Bảng đơn vị nhà thầu kèm sĩ số và số CHTT — dùng cho tab "Nhân sự nhà thầu". */
 export function usePermitCompanySummary() {
   return useQuery({ queryKey: ["work-permit-companies", "summary"], staleTime: 30000, queryFn: () => apiGet<PermitCompanySummary[]>("/api/work-permits/companies?summary=1") as Promise<{ data: PermitCompanySummary[]; meta: { canWrite: boolean } }> });

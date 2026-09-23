@@ -11,7 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { PlainHeader, ROW_HOVER, RowExpander, rowBackground, TD_EXPAND, TD_ROW, TH_EXPAND, TH_NAVY, TR_HEAD } from "@/components/pccc/pccc-table-card";
 import { cn } from "@/lib/utils";
 import { normalizeText } from "@/lib/nav";
-import { useDeletePermitPerson, usePermitCompanySummary, usePermitPeople, useSavePermitPerson, usePermitSessionAction, usePermitActivity } from "@/hooks/useWorkPermits";
+import { useDeletePermitPerson, usePermitCompanySummary, usePermitPeople, useRenamePermitCompany, useSavePermitPerson, usePermitSessionAction, usePermitActivity } from "@/hooks/useWorkPermits";
 import { formatPermitNumber, PERMIT_KINDS } from "@/lib/work-permits";
 import type { PermitDetailRow, PermitMember, PermitPerson, PermitSession } from "@/lib/work-permits";
 
@@ -30,6 +30,7 @@ export function PermitCompanyDirectory() {
   const [q, setQ] = useState("");
   const [openCompany, setOpenCompany] = useState<string | null>(null);
   const [editing, setEditing] = useState<PermitPerson | "new" | null>(null);
+  const [renaming, setRenaming] = useState<string | null>(null);
   const remove = useDeletePermitPerson();
   const companies = usePermitCompanySummary();
   // Chỉ gọi danh sách người khi có đơn vị đang mở; `limit: 200` để không phải phân trang trong khối bung.
@@ -64,6 +65,7 @@ export function PermitCompanyDirectory() {
             <TableHead className={TH_NAVY}><PlainHeader label="Tên đơn vị" align="left" /></TableHead>
             <TableHead className={TH_NAVY}><PlainHeader label="Số lượng nhân viên" /></TableHead>
             <TableHead className={TH_NAVY}><PlainHeader label="Số lượng CHTT" /></TableHead>
+            {canWrite && <TableHead className={TH_NAVY}><PlainHeader label="Thao tác" /></TableHead>}
           </TableRow></TableHeader>
           <TableBody>{rows.map((row, index) => {
             const expanded = openCompany === row.company;
@@ -75,8 +77,11 @@ export function PermitCompanyDirectory() {
                 <TableCell className={cn(TD_ROW, "py-2.5 font-semibold text-ink")}>{row.company}{row.active < row.total && <span className="ml-2 text-[11px] font-medium text-amber-700">{row.total - row.active} ngừng hoạt động</span>}</TableCell>
                 <TableCell className={cn(TD_ROW, "py-2.5 text-center tabular-nums")}>{row.total}</TableCell>
                 <TableCell className={cn(TD_ROW, "py-2.5 text-center tabular-nums")}>{row.commanders ? <span className="font-semibold text-emerald-700">{row.commanders}</span> : <span className="text-amber-700">0</span>}</TableCell>
+                {canWrite && <TableCell className={cn(TD_ROW, "py-2.5 text-center")}>
+                  <Button type="button" size="sm" variant="outline" className="h-8 px-2" aria-label={`Sửa tên đơn vị ${row.company}`} title="Sửa tên đơn vị nhà thầu" onClick={e => { e.stopPropagation(); setRenaming(row.company); }}><Pencil size={14} /></Button>
+                </TableCell>}
               </TableRow>
-              {expanded && <TableRow className="hover:bg-transparent"><TableCell colSpan={5} className="border-b border-slate-100 bg-slate-50/80 p-0">
+              {expanded && <TableRow className="hover:bg-transparent"><TableCell colSpan={canWrite ? 6 : 5} className="border-b border-slate-100 bg-slate-50/80 p-0">
                 <div className="border-l-[3px] border-[#00558F] px-4 py-3">
                   {people.isPending ? <p role="status" className="text-sm text-muted-foreground">Đang tải nhân sự…</p>
                     : people.isError ? <p role="alert" className="text-sm text-red-700">{people.error.message}</p>
@@ -100,7 +105,40 @@ export function PermitCompanyDirectory() {
         </Table>}
     </div>
     {editing && <PersonEditor initial={editing === "new" ? undefined : editing} onClose={() => setEditing(null)} />}
+    {renaming !== null && <CompanyEditor company={renaming} onClose={() => setRenaming(null)} />}
   </section>;
+}
+
+/**
+ * Sửa tên một đơn vị nhà thầu. Đơn vị không có bảng riêng — nó là chữ trên từng hồ sơ người —
+ * nên đây là một lượt sửa hàng loạt; đổi sang tên đã có tức là GỘP hai đơn vị, cũng là cách
+ * duy nhất để dọn các bản ghi gõ sai. PCT đã ghi giữ nguyên tên tại thời điểm thực hiện.
+ */
+function CompanyEditor({ company, onClose }: { company: string; onClose: () => void }) {
+  const [name, setName] = useState(company);
+  const rename = useRenamePermitCompany();
+  const companies = usePermitCompanySummary();
+  const willMerge = companies.data?.data.some(row => row.company !== company && row.company === name.trim()) ?? false;
+  async function submit(event: React.FormEvent) {
+    event.preventDefault(); event.stopPropagation();
+    const next = name.trim();
+    if (!next || next === company) { onClose(); return; }
+    if (willMerge && !window.confirm(`Đơn vị "${next}" đã có sẵn. Toàn bộ nhân sự của "${company}" sẽ được gộp vào đơn vị đó. Tiếp tục?`)) return;
+    try {
+      const result = await rename.mutateAsync({ from: company, to: next });
+      toast.success(`Đã cập nhật ${result.updated} hồ sơ sang đơn vị "${next}"`);
+      onClose();
+    } catch (error) { toast.error(error instanceof Error ? error.message : "Không thể đổi tên đơn vị"); }
+  }
+  return <Dialog open onOpenChange={v => { if (!v && !rename.isPending) onClose(); }}><DialogContent>
+    <DialogTitle>Sửa đơn vị nhà thầu</DialogTitle>
+    <DialogDescription>Tên mới được áp cho mọi hồ sơ nhân sự của đơn vị này. Các PCT đã ghi giữ nguyên tên đơn vị tại thời điểm thực hiện.</DialogDescription>
+    <form onSubmit={submit}><fieldset disabled={rename.isPending} className="space-y-4">
+      <label className="block space-y-1 text-sm"><span>Tên đơn vị *</span><input className={control} value={name} required maxLength={200} onChange={e => setName(e.target.value)} /></label>
+      {willMerge && <p className="rounded-lg bg-amber-50 p-3 text-xs text-amber-900">Đơn vị này đã tồn tại — lưu sẽ GỘP toàn bộ nhân sự của &ldquo;{company}&rdquo; vào đó.</p>}
+      <div className="flex justify-end gap-2"><Button type="button" variant="outline" onClick={onClose}>Để sau</Button><Button type="submit" disabled={rename.isPending}>{rename.isPending ? "Đang lưu…" : "Lưu tên đơn vị"}</Button></div>
+    </fieldset></form>
+  </DialogContent></Dialog>;
 }
 
 /** Hộp thoại danh bạ nhân sự nhà thầu: chọn CHTT, chọn nhân viên công tác, hoặc tra cứu nhanh. */
