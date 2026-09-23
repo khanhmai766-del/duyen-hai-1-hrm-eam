@@ -628,6 +628,10 @@ model MaterialReplacement {
   samplingOnly         Boolean   @default(false)
   // Khi chọn lý do "Bổ sung", điểm này vẫn phải lập biên bản vật tư thu hồi.
   recoveryOnSupplement Boolean   @default(false)
+  // Đứng NGOÀI quy tắc "một đồng hồ đếm ngày trên mỗi thiết bị": bật cho thiết bị thật sự
+  // dùng hai loại khác chức năng (dầu hộp số + dầu thuỷ lực, lọc thô + lọc tinh), khi đó
+  // mỗi loại được theo dõi riêng. Xem materialTrackingGroup() ở lib/constants.ts.
+  separateTracking     Boolean   @default(false)
   lastReplacedAt       DateTime? // lần thay gần nhất (user nhập)
   nextDueAt            DateTime // ngày đến hạn kế tiếp
   note                 String?
@@ -1674,6 +1678,7 @@ model WorkPermitPerson {
   code       String              @unique
   name       String
   company    String
+  phone      String              @default("") // SĐT liên hệ; để trống nếu nhà thầu không cung cấp.
   canCommand Boolean             @default(false)
   isActive   Boolean             @default(true)
   searchText String

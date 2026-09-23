@@ -22,6 +22,12 @@ export interface MaterialReplacementPoint {
   /** Theo O&M chỉ lấy mẫu/theo dõi/châm bổ sung, không thay thế định kỳ. */
   samplingOnly?: boolean;
   recoveryOnSupplement?: boolean;
+  /** Dòng khai báo này đứng ngoài quy tắc "một đồng hồ đếm ngày mỗi thiết bị". */
+  separateTracking?: boolean;
+  /** Thiết bị đang được đếm ngày ở vật tư khác cùng nhóm thay thế (server tính). */
+  trackedElsewhere?: { pointId: string; materialId: string; materialName: string } | null;
+  /** Vật tư khác cùng nhóm cũng khai thiết bị này nhưng CHƯA có điểm — để nhắc trước khi tạo. */
+  sharedDeviceMaterials?: string[];
   lastReplacedAt: string | Date | null;
   nextDueAt: string | Date;
   note: string | null;
@@ -102,6 +108,7 @@ export type MaterialReplacementInput = {
   intervalNote?: string | null;
   lastReplacedAt?: string | null;
   recoveryOnSupplement?: boolean;
+  separateTracking?: boolean;
 };
 
 export type MaterialInput = Partial<Material> & {

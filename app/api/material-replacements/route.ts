@@ -8,7 +8,7 @@ import {
 } from "@/lib/server-access";
 import { getCachedEquipmentNodeFull } from "@/lib/equipment-node-cache";
 import { assertSeqsInScope } from "@/lib/equipment-tree-scope";
-import { replacementDueStatus } from "@/lib/constants";
+import { materialTrackingGroup, replacementDueStatus } from "@/lib/constants";
 import { EQUIPMENT_DEVICE_SELECT, equipmentNodeToDevice } from "@/lib/equipment-device";
 import { normalizeText } from "@/lib/nav";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
@@ -189,9 +189,10 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
 
     const materialId = String(body.materialId || "").trim();
-    const material = await prisma.material.findUnique({ where: { id: materialId }, select: { id: true, code: true, machine: true } });
+    const material = await prisma.material.findUnique({ where: { id: materialId }, select: { id: true, code: true, machine: true, category: true } });
     if (!material) return fail("Không tìm thấy vật tư", 404);
 
+    const materialCategory = material.category;
     const deviceSeq = String(body.deviceSeq ?? body.deviceId ?? "").trim() || null;
     const system = String(body.system ?? "").trim() || null;
     const location = String(body.location ?? "").trim() || null;
@@ -258,13 +259,40 @@ export async function POST(req: NextRequest) {
           logs: { none: {} },
         },
         orderBy: { createdAt: "asc" },
-        select: { id: true, deviceCount: true, recoveryOnSupplement: true },
+        select: { id: true, deviceCount: true, recoveryOnSupplement: true, separateTracking: true },
       });
       if (!declaration) {
         throw fail(
           "Không tìm thấy dòng khai báo thiết bị tương ứng trong Danh mục vật tư. Vui lòng cập nhật danh mục trước khi thêm điểm theo dõi.",
           400
         );
+      }
+
+      /*
+       * Quy tắc MỘT ĐỒNG HỒ mỗi (thiết bị + tổ máy + nhóm vật tư thay thế lẫn nhau). Trước đây
+       * chỉ có gợi ý trên giao diện Danh mục vật tư, nên vẫn tạo được đồng hồ thứ hai qua hộp
+       * "Thêm thiết bị theo dõi" hàng loạt hoặc gọi thẳng API — hai cảnh báo đến hạn cho cùng
+       * một lần thay. Dòng khai báo bật `separateTracking` (thiết bị dùng hai loại khác chức
+       * năng) đứng ngoài quy tắc này.
+       */
+      const group = materialTrackingGroup(materialCategory);
+      if (group && deviceSeq && !declaration.separateTracking) {
+        const running = await tx.materialReplacement.findFirst({
+          where: {
+            deviceSeq,
+            machine: material.machine,
+            isActive: true,
+            separateTracking: false,
+            materialId: { not: materialId },
+          },
+          select: { id: true, material: { select: { name: true, category: true } } },
+        });
+        if (running && materialTrackingGroup(running.material.category) === group) {
+          throw fail(
+            `Thiết bị này đang được theo dõi ở "${running.material.name}" — mỗi thiết bị chỉ giữ một điểm đếm ngày cho cùng một lần thay. Nếu thiết bị thật sự dùng hai loại khác chức năng, bật "Theo dõi riêng" ở dòng khai báo trước khi thêm điểm.`,
+            409
+          );
+        }
       }
 
       const limit = Math.max(1, declaration.deviceCount);

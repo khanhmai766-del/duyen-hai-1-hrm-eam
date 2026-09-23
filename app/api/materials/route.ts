@@ -2,7 +2,7 @@ import type { NextRequest } from "next/server";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, requireRole, handle, audit, auditDetailWithPosition } from "@/lib/api";
-import { addMonths, DEFECT_UNITS, isGasCylinderCategory, roundStock } from "@/lib/constants";
+import { addMonths, DEFECT_UNITS, isGasCylinderCategory, materialTrackingGroup, roundStock } from "@/lib/constants";
 import { EQUIPMENT_DEVICE_SELECT, equipmentNodeToDevice } from "@/lib/equipment-device";
 import { resolveEquipmentAccessForUser } from "@/lib/server-access";
 import { materialCatalogAccessWhere } from "@/lib/material-catalog-access";
@@ -165,6 +165,7 @@ type ReplacementInput = {
   quantity?: unknown;
   lastReplacedAt?: string | null;
   recoveryOnSupplement?: unknown;
+  separateTracking?: unknown; // đứng ngoài quy tắc một đồng hồ mỗi thiết bị
 };
 
 /** Dựng dữ liệu tạo một điểm thay thế từ payload form (kèm tính ngày đến hạn). */
@@ -189,6 +190,7 @@ function buildReplacementCreate(entry: ReplacementInput, userId: string, default
     intervalMonths,
     intervalNote: entry.intervalNote?.trim() || null,
     recoveryOnSupplement: entry.recoveryOnSupplement === true,
+    separateTracking: entry.separateTracking === true,
     lastReplacedAt,
     nextDueAt: addMonths(lastReplacedAt ?? new Date(), intervalMonths),
     createdById: userId,
@@ -444,10 +446,56 @@ export async function GET(req: NextRequest) {
         if (!list.includes(row.machine)) list.push(row.machine);
       } else machinesByCode.set(row.code, [row.machine]);
     }
-    const data = materials.map((material) => ({
-      ...mapMaterial(material, documents.get(material.id), parentNameBySeq),
-      machines: machinesByCode.get(material.code) ?? [material.machine],
-    }));
+    /**
+     * QUY TẮC MỘT ĐỒNG HỒ: mỗi (thiết bị + tổ máy + nhóm vật tư thay thế lẫn nhau) chỉ nên có
+     * MỘT điểm đếm ngày. Tính ở đây thay vì ở client vì client chỉ thấy phần danh mục đã tải
+     * (lọc theo tab tổ máy, theo cương vị, theo ô tìm kiếm) — điểm nằm ngoài tầm đó vẫn phải
+     * được tính, nếu không người dùng lại mở đồng hồ thứ hai cho cùng một lần thay.
+     *
+     * Tổ máy nằm trong khoá vì cây S2 chỉ là HÌNH CHIẾU của cây S1: cùng một `seq` đại diện
+     * thiết bị của cả hai tổ máy, thiếu `machine` thì điểm của tổ máy kia bị báo nhầm là trùng.
+     */
+    const pointDeviceSeqs = Array.from(new Set(
+      materials.flatMap((material) => material.replacements.map((r) => r.deviceSeq).filter((seq): seq is string => Boolean(seq)))
+    ));
+    const siblingPoints = pointDeviceSeqs.length
+      ? await prisma.materialReplacement.findMany({
+          where: { deviceSeq: { in: pointDeviceSeqs }, separateTracking: false },
+          select: { id: true, deviceSeq: true, machine: true, isActive: true, intervalMonths: true, materialId: true, material: { select: { name: true, category: true } } },
+        })
+      : [];
+    const trackingInfoByPoint = new Map<string, { trackedElsewhere: { pointId: string; materialId: string; materialName: string } | null; sharedDeviceMaterials: string[] }>();
+    for (const material of materials) {
+      const group = materialTrackingGroup(material.category);
+      for (const replacement of material.replacements) {
+        if (!group || !replacement.deviceSeq || replacement.separateTracking) continue;
+        const siblings = siblingPoints.filter((row) =>
+          row.deviceSeq === replacement.deviceSeq
+          && row.machine === replacement.machine
+          && row.materialId !== material.id
+          && materialTrackingGroup(row.material.category) === group
+        );
+        const running = siblings.find((row) => row.isActive);
+        trackingInfoByPoint.set(replacement.id, {
+          trackedElsewhere: running ? { pointId: running.id, materialId: running.materialId, materialName: running.material.name } : null,
+          // Vật tư anh em MỚI CHỈ KHAI BÁO (chưa có đồng hồ): để giao diện nhắc trước rằng
+          // tạo điểm ở đây sẽ khoá các vật tư kia — đỡ phải sửa sau khi đã tạo nhầm.
+          sharedDeviceMaterials: Array.from(new Set(siblings.filter((row) => !row.isActive).map((row) => row.material.name))),
+        });
+      }
+    }
+    const data = materials.map((material) => {
+      const mapped = mapMaterial(material, documents.get(material.id), parentNameBySeq);
+      return {
+        ...mapped,
+        replacements: mapped.replacements.map((replacement) => ({
+          ...replacement,
+          trackedElsewhere: trackingInfoByPoint.get(replacement.id)?.trackedElsewhere ?? null,
+          sharedDeviceMaterials: trackingInfoByPoint.get(replacement.id)?.sharedDeviceMaterials ?? [],
+        })),
+        machines: machinesByCode.get(material.code) ?? [material.machine],
+      };
+    });
     return ok(data, {
       total: data.length,
       equipmentScopeApplied: access.hasExplicitScopes && !fullCatalogView,

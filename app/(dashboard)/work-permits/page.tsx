@@ -4,7 +4,7 @@ import { useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { ArrowRight, Building2, Check, CheckCircle2, ChevronLeft, ChevronRight, CircleAlert, ClipboardList, Download, ExternalLink, FileText, Filter, HardHat, Plus, RefreshCw, RotateCcw, Search, ShieldCheck, SlidersHorizontal, UsersRound, Wrench, Zap, Clock } from "lucide-react";
 import { toast } from "sonner";
-import { ContractorSessions, PermitMembersEditor, PermitPeopleDirectory } from "@/components/work-permits/contractor-work";
+import { ContractorSessions, PermitCompanyDirectory, PermitMembersEditor, PermitPeopleDirectory } from "@/components/work-permits/contractor-work";
 import { PermitSafetyCatalog, PermitSafetySelection, PermitSafetyReadOnly } from "@/components/work-permits/safety";
 import { MechanicalPaperInfo } from "@/components/work-permits/mechanical-paper-info";
 import { useExportPermitTemplate } from "@/hooks/useWorkPermitSafety";
@@ -139,7 +139,7 @@ export default function WorkPermitsPage() {
     </header>
     <nav className="-mx-1 flex gap-1 overflow-x-auto border-b border-border px-1" aria-label="Sổ PCT, biện pháp an toàn Cơ và nhân sự nhà thầu">{tabs.map(tab => { const active = tab.people ? peopleTab : !peopleTab && kind === tab.key && safetyTab === tab.safety; const Icon = tab.icon; return <button key={tab.label} type="button" aria-pressed={active} onClick={() => { if (!tab.people) setKind(tab.key); setSafetyTab(tab.safety); setPeopleTab(tab.people); setPage(1); }} className={`-mb-px inline-flex shrink-0 cursor-pointer items-center gap-2 border-b-2 px-3.5 py-2.5 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${active ? "border-blue-700 text-blue-700 dark:border-blue-400 dark:text-blue-300" : "border-transparent text-muted-foreground hover:text-foreground"}`}><Icon className="h-4 w-4" />{tab.label}</button>; })}</nav>
     {bookTab && meta?.canIssue && Boolean(kindReservations.length) && <section className="rounded-xl border border-amber-200 bg-amber-50/70 p-3 sm:p-4"><h2 className="flex items-center gap-2 text-sm font-bold text-amber-950"><Clock size={16} />Số đã lấy, chưa lưu phiếu · {PERMIT_KINDS[kind]}</h2><p className="mt-1 text-xs text-amber-800">Số vẫn được giữ khi đóng biểu mẫu. Tiếp tục cấp phiếu hoặc hủy lượt lấy số có lý do. Chỉ hiển thị lượt giữ số của sổ đang xem.</p><div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">{kindReservations.map(item => <div key={item.id} className="rounded-lg border border-amber-200 bg-white p-3"><p className="font-semibold text-slate-900">{formatPermitNumber(item)} · {PERMIT_KINDS[item.kind as PermitKind]}</p><p className="mt-1 text-xs text-slate-600">{item.teamType === "INTERNAL" ? "Nội bộ · PCT điện tử" : "Nhà thầu · PCT giấy"} · {item.ownerName || "Người cấp"}</p><div className="mt-3 flex gap-2"><Button size="sm" className="h-8" onClick={() => { setKind(item.kind as PermitKind); setEditor(null); setNewPermit({ kind: item.kind as PermitKind, teamType: item.teamType, reservation: item }); }}>Tiếp tục cấp phiếu</Button><Button size="sm" variant="outline" className="h-8" onClick={() => { setCancelReservationTarget(item); setCancelReservationReason(""); }}>Hủy lượt lấy</Button></div></div>)}</div></section>}
-    {peopleTab ? <PermitPeopleDirectory inline /> : safetyTab ? <PermitSafetyCatalog key={kind} kind={kind} /> : <>
+    {peopleTab ? <PermitCompanyDirectory /> : safetyTab ? <PermitSafetyCatalog key={kind} kind={kind} /> : <>
     <section className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
       <div className="grid grid-cols-2 border-b border-border sm:grid-cols-4 sm:divide-x sm:divide-border">{statusCards.map(card => { const active = status === card.value; return <button key={card.value} type="button" title={card.note} onClick={() => { setStatus(active ? "" : card.value); setPage(1); }} aria-pressed={active} className={`relative flex cursor-pointer items-center justify-between gap-3 px-4 py-2.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 ${active ? "bg-blue-50/70 dark:bg-blue-950/30" : "hover:bg-muted/40"}`}><span className="flex min-w-0 items-center gap-2"><span className={`h-2 w-2 shrink-0 rounded-full ${card.tone}`} /><span className={`truncate text-xs font-medium ${active ? "text-blue-800 dark:text-blue-200" : "text-muted-foreground"}`}>{card.title}</span></span><strong className="text-lg font-bold leading-none tabular-nums text-foreground">{meta ? card.count : "—"}</strong>{active && <span className="absolute inset-x-0 bottom-0 h-0.5 bg-blue-700" />}</button>; })}</div>
       <div className="border-b border-border px-4 py-3">
@@ -452,12 +452,15 @@ function PermitDetailFields({ row }: { row: PermitRow }) {
   const filled = (key: string) => permitValue(key, key === "format" ? effectivePermitFormat(row) : row[key as keyof PermitRow]) !== "—";
   const groups = PERMIT_DETAIL_GROUPS.map(group => ({ ...group, keys: group.keys.filter(key => shown(key) && (showEmpty || filled(key))) })).filter(group => group.keys.length);
   const emptyCount = PERMIT_DETAIL_GROUPS.flatMap(group => group.keys).filter(key => shown(key) && !filled(key)).length;
-  return <div className="space-y-3">
-    {groups.map(group => <section key={group.title}>
-      <h4 className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{group.title}</h4>
-      <dl className="grid grid-cols-1 gap-x-6 gap-y-1.5 rounded-lg border border-border px-3 py-2.5 sm:grid-cols-2">{group.keys.map(key => <div key={key} className={`flex flex-col gap-0.5 border-b border-border/60 py-1 last:border-0 sm:flex-row sm:items-baseline sm:gap-3 ${PERMIT_DETAIL_WIDE.has(key) ? "sm:col-span-2" : ""}`}>
-        <dt className="shrink-0 text-xs text-muted-foreground sm:w-44">{PERMIT_FIELD_LABELS[key]}</dt>
-        <dd className={`min-w-0 whitespace-pre-wrap break-words text-[13px] ${filled(key) ? "font-medium text-foreground" : "text-muted-foreground"}`}>{permitValue(key, row[key as keyof PermitRow])}</dd>
+  /* Nhãn đứng trong CỘT RỘNG CỐ ĐỊNH (lối trình bày của khối chi tiết PCCC/TBYCNN): để nhãn tự
+     co thì mỗi dòng có một điểm bắt đầu giá trị khác nhau, cả khối nhìn răng cưa. Bỏ luôn vạch
+     kẻ từng dòng — khoảng trắng đủ tách dòng, ít nét hơn thì dễ dò hơn. */
+  return <div className="space-y-4">
+    {groups.map(group => <section key={group.title} className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+      <h4 className="border-b border-border bg-muted/25 px-4 py-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{group.title}</h4>
+      <dl className="grid grid-cols-1 gap-x-10 gap-y-3 px-4 py-3.5 sm:grid-cols-2">{group.keys.map(key => <div key={key} className={`grid min-w-0 grid-cols-[104px_minmax(0,1fr)] items-baseline gap-x-3 sm:grid-cols-[136px_minmax(0,1fr)] ${PERMIT_DETAIL_WIDE.has(key) ? "sm:col-span-2" : ""}`}>
+        <dt className="text-[10.5px] font-semibold uppercase leading-tight tracking-[0.03em] text-slate-500 dark:text-muted-foreground">{PERMIT_FIELD_LABELS[key]}</dt>
+        <dd className={`min-w-0 whitespace-pre-wrap break-words text-[13px] leading-[1.5] ${filled(key) ? "font-medium text-foreground" : "text-muted-foreground"}`}>{permitValue(key, row[key as keyof PermitRow])}</dd>
       </div>)}</dl>
     </section>)}
     {emptyCount > 0 && <Button type="button" size="sm" variant="ghost" className="h-7 px-2 text-xs text-muted-foreground" onClick={() => setShowEmpty(value => !value)}>{showEmpty ? "Ẩn ô chưa ghi" : `Hiện ${emptyCount} ô chưa ghi`}</Button>}
@@ -484,21 +487,35 @@ function PermitDetail({ id, canIssue: listCanIssue, canExecute: listCanExecute, 
   }
   const paper = row ? effectivePermitFormat(row) === "PAPER" : false;
   const summary = "flex cursor-pointer list-none items-center justify-between gap-2 rounded-lg border border-border px-3 py-2 text-[13px] font-semibold marker:hidden hover:bg-muted/40";
-  return <Dialog open onOpenChange={v => { if (!v && !cancelDraft.isPending) onClose(); }}><DialogContent className="max-w-3xl">
-    <DialogTitle className="text-base">{row ? `Phiếu công tác ${formatPermitNumber(row)}` : "Chi tiết phiếu công tác"}</DialogTitle>
-    <DialogDescription className="sr-only">Thông tin ghi sổ và lịch sử thay đổi của phiếu.</DialogDescription>
-    {query.isError ? <p role="alert">{query.error.message}</p> : !row ? <p>Đang tải phiếu…</p> : <div className="space-y-4">
-      <div className="flex flex-wrap items-start justify-between gap-2 border-b border-border pb-3">
-        <div className="flex flex-wrap items-center gap-2"><Status value={row.status} /><PermitFormat permit={row} /><span className="text-xs text-muted-foreground">{PERMIT_KINDS[row.kind]} · {PERMIT_UNITS[row.unit]}{row.position ? ` · ${row.position}` : ""} · {permitValue("workDate", row.workDate)}</span>{row.teamType === "CONTRACTOR" && <PermitProgress value={row.progress} />}</div>
-        <div className="flex flex-wrap items-center gap-2">
+  /* Hộp chi tiết chia ba tầng như biểu mẫu cấp phiếu: đầu hộp cố định (số phiếu · trạng thái ·
+     hành động), thân cuộn riêng, nên cuộn xuống lịch sử vẫn thấy số phiếu và nút thao tác. */
+  return <Dialog open onOpenChange={v => { if (!v && !cancelDraft.isPending) onClose(); }}><DialogContent className="flex max-h-[92dvh] max-w-3xl flex-col gap-0 overflow-hidden p-0">
+    <div className="shrink-0 border-b border-border bg-muted/25 px-5 py-4 pr-12">
+      <DialogTitle className="text-base tracking-[-0.01em] sm:text-lg">{row ? `Phiếu công tác ${formatPermitNumber(row)}` : "Chi tiết phiếu công tác"}</DialogTitle>
+      <DialogDescription className="sr-only">Thông tin ghi sổ và lịch sử thay đổi của phiếu.</DialogDescription>
+      {row && <>
+        <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1.5">
+          <Status value={row.status} /><PermitFormat permit={row} />
+          <span className="text-xs text-muted-foreground">{PERMIT_KINDS[row.kind]} · {PERMIT_UNITS[row.unit]}{row.position ? ` · ${row.position}` : ""} · {permitValue("workDate", row.workDate)}</span>
+          {row.teamType === "CONTRACTOR" && <PermitProgress value={row.progress} />}
+        </div>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
           {paper && !["DRAFT", "CANCELLED"].includes(row.status) && <Button asChild size="sm" className="h-8 text-xs"><a href={`/api/work-permits/${encodeURIComponent(row.id)}/document?format=html`} target="_blank" rel="noopener noreferrer">Xem và in HTML</a></Button>}
           {paper && <Button size="sm" variant="outline" className="h-8 text-xs" disabled={documentExport.isPending || ["DRAFT", "CANCELLED"].includes(row.status)} title={["DRAFT", "CANCELLED"].includes(row.status) ? "Cấp phiếu trước khi tải mẫu Word" : "Mẫu điền theo thông tin đã lưu; ô kiểm tra và chữ ký để trống"} onClick={downloadTemplate}><Download />{documentExport.isPending ? "Đang điền mẫu…" : "Xuất Word"}</Button>}
           {canExecute && !["DRAFT", "CLOSED", "CANCELLED"].includes(row.status) && !(row.teamType === "CONTRACTOR" && row.status === "ISSUED") && <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => setExecuting(true)}>{row.teamType === "INTERNAL" ? "Ghi nhận đóng phiếu" : "Cập nhật tiến độ"}</Button>}
           {canIssue && row.status === "DRAFT" && <Button size="sm" variant="destructive" className="h-8 text-xs" disabled={cancelDraft.isPending} onClick={() => void cancelDraftNow(row)}>{cancelDraft.isPending ? "Đang hủy…" : "Hủy nháp"}</Button>}
           {canIssue && !["CLOSED", "CANCELLED"].includes(row.status) && !(row.teamType === "CONTRACTOR" && row.status === "ACTIVE") && <Button size="sm" className="h-8 text-xs" onClick={() => onEdit(row)}>Chỉnh sửa / cấp phiếu<ArrowRight /></Button>}
         </div>
+      </>}
+    </div>
+    <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+    {query.isError ? <p role="alert" className="text-red-700">{query.error.message}</p> : !row ? <p role="status">Đang tải phiếu…</p> : <div className="space-y-4">
+      {/* Nội dung công việc là thứ người tra đọc đầu tiên: cho nó một khối riêng, chữ to hơn phần còn lại. */}
+      <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+        <p className="text-[10.5px] font-semibold uppercase tracking-[0.03em] text-slate-500 dark:text-muted-foreground">{PERMIT_FIELD_LABELS.content}</p>
+        <p className="mt-1 whitespace-pre-wrap break-words text-[15px] font-semibold leading-6 text-foreground">{row.content || "—"}</p>
+        {row.location && <p className="mt-1.5 text-xs text-muted-foreground">{PERMIT_FIELD_LABELS.location}: <span className="font-medium text-foreground">{row.location}</span></p>}
       </div>
-      <div><p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{PERMIT_FIELD_LABELS.content}</p><p className="mt-0.5 whitespace-pre-wrap break-words text-sm font-semibold leading-5 text-foreground">{row.content || "—"}</p>{row.location && <p className="mt-0.5 text-xs text-muted-foreground">{PERMIT_FIELD_LABELS.location}: {row.location}</p>}</div>
       {!paper && <NkvhLinkPanel key={`${row.id}-${row.version}-nkvh`} permit={row} canEdit={canIssue || canExecute} />}
       <ContractorSessions key={`${row.id}-${row.version}-sessions`} permit={row} canExecute={canExecute} />
       {executing && canExecute && <PermitExecutionDialog key={row.version} permit={row} onClose={() => setExecuting(false)} />}
@@ -506,5 +523,6 @@ function PermitDetail({ id, canIssue: listCanIssue, canExecute: listCanExecute, 
       {paper && <details className="group"><summary className={summary}><span>Mối nguy và biện pháp an toàn ({row.safetyItems?.length ?? 0})</span><ChevronRight className="h-4 w-4 shrink-0 transition-transform group-open:rotate-90" /></summary><div className="mt-2 [&>section]:rounded-none [&>section]:border-0 [&>section]:p-0 [&>section>h3]:hidden"><PermitSafetyReadOnly value={row.safetyItems ?? []} /></div></details>}
       <details className="group"><summary className={summary}><span>Lịch sử cập nhật ({row._count.history})</span><ChevronRight className="h-4 w-4 shrink-0 transition-transform group-open:rotate-90" /></summary><div className="mt-2 [&>section>h3]:hidden"><PermitHistoryPanel key={`${row.id}-${row.version}-history`} permit={row} /></div></details>
     </div>}
+    </div>
   </DialogContent></Dialog>;
 }

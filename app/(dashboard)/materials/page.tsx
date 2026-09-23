@@ -151,34 +151,6 @@ function MaterialsPageContent() {
   // ?track= (từ chuông thông báo) thì tải toàn bộ vì vật tư có thể ở tab khác.
   const { data, isLoading } = useMaterials(trackId ? {} : { machine: machineTab });
 
-  /**
-   * Thiết bị nào ĐANG có điểm theo dõi, và ở vật tư nào — tra theo `deviceSeq`.
-   *
-   * Hai loại vật tư thay thế lẫn nhau (ví dụ dầu hộp số GX220 và L-CKD 220 cùng cấp
-   * ISO VG 220) được khai báo cho CÙNG một tập thiết bị. Nhưng mỗi thiết bị chỉ có MỘT
-   * chu kỳ thay thật, nên chỉ được có MỘT điểm đếm ngày. Tạo điểm ở cả hai vật tư là hai
-   * đồng hồ cho cùng một lần thay: hai cảnh báo đến hạn, dự toán cộng đôi, dễ ra SYC trùng.
-   *
-   * Gom từ `data.data` (đã lọc theo tổ máy ở server) chứ không từ danh sách đang hiển thị,
-   * để bắt được cả điểm nằm ở vật tư đang bị bộ lọc/ô tìm kiếm giấu đi.
-   */
-  const diemDangChayTheoThietBi = React.useMemo(() => {
-    const map = new Map<string, Array<{ materialId: string; materialName: string; category: string | null; pointId: string }>>();
-    for (const material of data?.data ?? []) {
-      for (const point of material.replacements ?? []) {
-        if (!point.isActive || !point.deviceSeq) continue;
-        const list = map.get(point.deviceSeq) ?? [];
-        list.push({
-          materialId: material.id,
-          materialName: material.name,
-          category: material.category ?? null,
-          pointId: point.id,
-        });
-        map.set(point.deviceSeq, list);
-      }
-    }
-    return map;
-  }, [data?.data]);
   const erpMaterials = (erpMaterialsQuery.data?.data ?? []) as Array<{
     id: string;
     code: string;
@@ -593,6 +565,7 @@ function MaterialsPageContent() {
         intervalNote: r.intervalNote,
         lastReplacedAt: typeof r.lastReplacedAt === "string" ? r.lastReplacedAt : null,
         recoveryOnSupplement: r.recoveryOnSupplement === true,
+        separateTracking: r.separateTracking === true,
       }));
   }
 
@@ -638,6 +611,9 @@ function MaterialsPageContent() {
           intervalMonths: row.intervalMonths,
           intervalNote: row.intervalNote,
           lastReplacedAt: typeof row.lastReplacedAt === "string" ? row.lastReplacedAt : null,
+          // PUT dựng lại toàn bộ dòng khai báo, nên phải chép lại mọi cờ — bỏ sót là mất cờ.
+          recoveryOnSupplement: row.recoveryOnSupplement === true,
+          separateTracking: row.separateTracking === true,
         }));
       await upsert.mutateAsync({ id: deletingDetails.id, replacements: remainingRows });
       toast.success(`Đã xóa ${selectedDetailIds.size} dòng chi tiết điểm thay thế`);
@@ -685,6 +661,9 @@ function MaterialsPageContent() {
           intervalMonths: row.intervalMonths,
           intervalNote: row.intervalNote,
           lastReplacedAt: typeof row.lastReplacedAt === "string" ? row.lastReplacedAt : null,
+          // PUT dựng lại toàn bộ dòng khai báo, nên phải chép lại mọi cờ — bỏ sót là mất cờ.
+          recoveryOnSupplement: row.recoveryOnSupplement === true,
+          separateTracking: row.separateTracking === true,
         }));
       const addedRows = rows.map((row) => ({
         deviceSeq: row.deviceSeq ?? null,
@@ -1028,7 +1007,6 @@ function MaterialsPageContent() {
                         selectedItems={materialRequestSelection}
                         onSelectedItemsChange={setMaterialRequestSelection}
                         onOpenTracking={() => setReplMaterial(m)}
-                        diemDangChayTheoThietBi={diemDangChayTheoThietBi}
                       />
                       {trackingMaterial?.id === m.id && (
                         <InlineTrackingEditor
@@ -1215,7 +1193,6 @@ function MaterialsPageContent() {
                           selectedItems={materialRequestSelection}
                           onSelectedItemsChange={setMaterialRequestSelection}
                           onOpenTracking={() => setReplMaterial(m)}
-                          diemDangChayTheoThietBi={diemDangChayTheoThietBi}
                         />
                         {trackingMaterial?.id === m.id && (
                           <InlineTrackingEditor
@@ -2367,15 +2344,12 @@ function MaterialExpandedDetails({
   selectedItems,
   onSelectedItemsChange,
   onOpenTracking,
-  diemDangChayTheoThietBi,
 }: {
   m: MaterialWithDevices;
   positionFilter?: string;
   selectedItems: MaterialRequestSelection[];
   onSelectedItemsChange: React.Dispatch<React.SetStateAction<MaterialRequestSelection[]>>;
   onOpenTracking?: () => void;
-  /** deviceSeq → các điểm đang chạy trên thiết bị đó, gom từ MỌI vật tư. */
-  diemDangChayTheoThietBi?: Map<string, Array<{ materialId: string; materialName: string; category: string | null; pointId: string }>>;
 }) {
   const points = React.useMemo(
     () =>
@@ -2649,14 +2623,14 @@ function MaterialExpandedDetails({
                     : "Thêm điểm theo dõi thời gian thay thế cho thiết bị này";
               const selectable = canSelect(p);
               const checked = selectedIds.includes(p.id);
-              /* Điểm đang chạy trên CÙNG thiết bị nhưng thuộc vật tư KHÁC cùng loại —
-                 tức một loại dùng thay cho loại này được. Chỉ xét khi có `deviceSeq`:
-                 điểm khai báo ở mức hệ thống không đại diện một thiết bị cụ thể nào. */
-              const diemVatTuTuongDuong = p.deviceSeq && m.category
-                ? (diemDangChayTheoThietBi?.get(p.deviceSeq) ?? []).find(
-                    (x) => x.materialId !== m.id && materialCategoryMatches(x.category, m.category as string),
-                  )
-                : undefined;
+              /* Thiết bị này đã có đồng hồ đếm ngày ở một vật tư dùng thay cho nhau được.
+                 SERVER tính (xem quy tắc một đồng hồ ở app/api/materials/route.ts): client chỉ
+                 thấy phần danh mục đã tải theo tab tổ máy và cương vị, tự tính ở đây thì bỏ sót
+                 đúng những điểm nằm ngoài tầm nhìn — và không phân biệt được S1 với S2. */
+              const diemVatTuTuongDuong = p.trackedElsewhere ?? undefined;
+              // Vật tư khác cũng khai thiết bị này nhưng CHƯA ai tạo đồng hồ: nhắc trước để
+              // người dùng biết tạo ở đây là khoá các vật tư kia, khỏi phải sửa sau.
+              const vatTuAnhEmChuaTheoDoi = p.sharedDeviceMaterials ?? [];
               return (
                 <tr key={p.id} className={cn("border-b border-border/50 last:border-0 hover:bg-muted/20", checked && "bg-accent/5")}>
                   <td className="px-2 py-2.5 text-center">
@@ -2708,7 +2682,7 @@ function MaterialExpandedDetails({
                          thứ hai cho cùng một lần thay — nhìn thấy nút thì phản xạ là bấm. */
                       <Link
                         href={`/replacements?tab=status&pointId=${encodeURIComponent(diemVatTuTuongDuong.pointId)}`}
-                        title={`Thiết bị này đang được theo dõi ở "${diemVatTuTuongDuong.materialName}" — mỗi thiết bị chỉ nên có một điểm đếm ngày. Bấm để xem điểm đó.`}
+                        title={`Thiết bị này đang được theo dõi ở "${diemVatTuTuongDuong.materialName}" — mỗi thiết bị chỉ giữ một điểm đếm ngày. Bấm để xem điểm đó.`}
                         className="inline-flex max-w-full items-center justify-center gap-1 whitespace-nowrap rounded-lg border border-slate-300 bg-slate-50 px-2 py-1.5 text-[11px] font-semibold text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-800"
                       >
                         <Activity className="h-3.5 w-3.5 shrink-0" />
@@ -2734,10 +2708,12 @@ function MaterialExpandedDetails({
                         type="button"
                         disabled={createPoint.isPending || p.intervalMonths === 0}
                         onClick={() => openTracking(p)}
-                        title={trackingTitle}
+                        title={vatTuAnhEmChuaTheoDoi.length ? `${trackingTitle}. Thiết bị này còn được khai ở ${vatTuAnhEmChuaTheoDoi.join(", ")} — tạo điểm ở đây thì các vật tư đó chuyển sang "Ở vật tư khác".` : trackingTitle}
                         className="inline-flex max-w-full items-center justify-center gap-1 whitespace-nowrap rounded-lg bg-accent px-2 py-1.5 text-[11px] font-semibold text-white shadow-sm transition-colors hover:bg-accent/90 disabled:opacity-50"
                       >
                         <Plus className="h-3.5 w-3.5" /> {trackingLabel}
+                        {/* Dấu hiệu sớm: thiết bị còn được khai ở vật tư khác cùng nhóm thay thế. */}
+                        {vatTuAnhEmChuaTheoDoi.length > 0 && <Link2 className="h-3 w-3 shrink-0 opacity-80" />}
                       </button>
                     )}
                   </td>

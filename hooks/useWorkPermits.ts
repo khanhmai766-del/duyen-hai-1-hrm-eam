@@ -89,9 +89,10 @@ export function useExportWorkPermits() {
   return useMutation({ mutationFn: (filters: string) => apiDownload(`/api/work-permits/export?${filters}`) });
 }
 
-export function usePermitPeople(params: { q?: string; page?: number; active?: boolean; commander?: boolean; polling?: boolean }) {
-  const query = new URLSearchParams({ q: params.q ?? "", page: String(params.page ?? 1), active: params.active ? "1" : "0", commander: params.commander ? "1" : "0" });
-  return useQuery({ queryKey: ["work-permit-people", query.toString()], refetchInterval: params.polling ? 30000 : false, queryFn: () => apiGet<PermitPerson[]>(`/api/work-permits/people?${query}`) as Promise<{ data: PermitPerson[]; meta: { total: number; canWrite: boolean } }> });
+export function usePermitPeople(params: { q?: string; page?: number; active?: boolean; commander?: boolean; polling?: boolean; company?: string; limit?: 25 | 200; enabled?: boolean }) {
+  const query = new URLSearchParams({ q: params.q ?? "", page: String(params.page ?? 1), active: params.active ? "1" : "0", commander: params.commander ? "1" : "0",
+    ...(params.company ? { company: params.company } : {}), ...(params.limit ? { limit: String(params.limit) } : {}) });
+  return useQuery({ queryKey: ["work-permit-people", query.toString()], enabled: params.enabled ?? true, refetchInterval: params.polling ? 30000 : false, queryFn: () => apiGet<PermitPerson[]>(`/api/work-permits/people?${query}`) as Promise<{ data: PermitPerson[]; meta: { total: number; pageSize: number; canWrite: boolean } }> });
 }
 export function useSavePermitPerson() {
   const qc = useQueryClient();
@@ -111,6 +112,11 @@ export function usePermitSessionAction(permitId: string) {
 
 export function usePermitCompanies() {
   return useQuery({ queryKey: ["work-permit-companies"], staleTime: 60000, queryFn: () => apiGet<string[]>("/api/work-permits/companies") });
+}
+export interface PermitCompanySummary { company: string; total: number; commanders: number; active: number }
+/** Bảng đơn vị nhà thầu kèm sĩ số và số CHTT — dùng cho tab "Nhân sự nhà thầu". */
+export function usePermitCompanySummary() {
+  return useQuery({ queryKey: ["work-permit-companies", "summary"], staleTime: 30000, queryFn: () => apiGet<PermitCompanySummary[]>("/api/work-permits/companies?summary=1") as Promise<{ data: PermitCompanySummary[]; meta: { canWrite: boolean } }> });
 }
 
 export function usePermitActivity<T>(id: string, type: "sessions" | "history", version: number, enabled: boolean) {

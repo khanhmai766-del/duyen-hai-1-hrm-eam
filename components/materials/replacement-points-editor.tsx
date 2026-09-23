@@ -123,6 +123,19 @@ export function ReplacementPointsEditor({
               <Trash2 className="h-4 w-4" />
             </Button>
           </div>
+          <label className="flex cursor-pointer items-start gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-800">
+            <input
+              type="checkbox"
+              className="mt-0.5 h-4 w-4 accent-slate-600"
+              checked={row.separateTracking === true}
+              onChange={(e) => update(i, { separateTracking: e.target.checked })}
+            />
+            <span>
+              <b className="block">Theo dõi riêng, không gộp với vật tư khác</b>
+              Mặc định mỗi thiết bị chỉ giữ MỘT điểm đếm ngày cho cả các loại dầu/lọc thay thế lẫn nhau.
+              Chỉ bật khi thiết bị dùng hai loại KHÁC CHỨC NĂNG (dầu hộp số + dầu thuỷ lực, lọc thô + lọc tinh).
+            </span>
+          </label>
           <label className="flex cursor-pointer items-start gap-2 rounded-md border border-amber-200 bg-amber-50/60 px-3 py-2 text-xs text-amber-950">
             <input
               type="checkbox"

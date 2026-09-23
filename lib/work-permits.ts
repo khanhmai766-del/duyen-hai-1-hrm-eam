@@ -112,7 +112,7 @@ export function permitValue(key: string, value: unknown): string {
 /** code lưu số thẻ an toàn thực tế; personId là khóa ổn định khi số thẻ được chỉnh sửa. */
 export interface PermitMember { personId?: string; code: string; name: string; company: string }
 export interface PermitPerson {
-  id: string; code: string; name: string; company: string;
+  id: string; code: string; name: string; company: string; phone: string;
   canCommand: boolean; isActive: boolean; version: number;
   activeWorks?: Array<{ sessionId: string; role: "CHTT" | "MEMBER"; openedAt: string; permit: { id: string; number: string; year: number; kind: PermitKind } }>;
   activeWork?: { openedAt: string; permit: { number: string; year: number; kind: PermitKind } } | null;

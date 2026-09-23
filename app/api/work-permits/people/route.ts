@@ -10,10 +10,13 @@ export async function GET(req: Request) {
     const user = await requireUser();
     const p = new URL(req.url).searchParams, q = p.get("q") ?? "";
     const page = Number(p.get("page") || 1);
-    if (q.length > 200 || !Number.isInteger(page) || page < 1 || page > 100000) return fail("Bộ lọc danh bạ không hợp lệ");
-    const where = { searchText: { contains: permitSearchTerm(q) }, ...(p.get("active") === "1" ? { isActive: true } : {}), ...(p.get("commander") === "1" ? { canCommand: true } : {}) };
+    const company = p.get("company") ?? "";
+    // Bảng đơn vị bung ra cả danh sách người của đơn vị đó nên cho lấy nhiều hơn một trang 25.
+    const pageSize = p.get("limit") === "200" ? 200 : 25;
+    if (q.length > 200 || company.length > 200 || !Number.isInteger(page) || page < 1 || page > 100000) return fail("Bộ lọc danh bạ không hợp lệ");
+    const where = { searchText: { contains: permitSearchTerm(q) }, ...(company ? { company } : {}), ...(p.get("active") === "1" ? { isActive: true } : {}), ...(p.get("commander") === "1" ? { canCommand: true } : {}) };
     const [rows, total] = await prisma.$transaction([
-      prisma.workPermitPerson.findMany({ where, select: { id: true, code: true, name: true, company: true, canCommand: true, isActive: true, version: true }, orderBy: [{ name: "asc" }, { code: "asc" }], skip: (page - 1) * 25, take: 25 }),
+      prisma.workPermitPerson.findMany({ where, select: { id: true, code: true, name: true, company: true, phone: true, canCommand: true, isActive: true, version: true }, orderBy: [{ canCommand: "desc" }, { name: "asc" }, { code: "asc" }], skip: (page - 1) * pageSize, take: pageSize }),
       prisma.workPermitPerson.count({ where }),
     ]);
     const activeSessions = rows.length ? await prisma.workPermitSession.findMany({
@@ -32,7 +35,7 @@ export async function GET(req: Request) {
         if (!member || typeof member !== "object" || Array.isArray(member)) return false;
         return member.personId ? member.personId === person.id : member.code === person.code;
       }))).map(session => ({ sessionId: session.id, role: session.commanderId === person.id ? "CHTT" : "MEMBER", openedAt: session.openedAt, permit: session.permit })),
-    })), { total, canWrite: (await permitCapabilities(user)).canIssue });
+    })), { total, pageSize, canWrite: (await permitCapabilities(user)).canIssue });
   });
 }
 export async function POST(req: Request) {

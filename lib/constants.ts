@@ -470,6 +470,26 @@ export function materialCategoryMatches(value: string | null | undefined, target
   );
 }
 
+/**
+ * NHÓM VẬT TƯ THAY THẾ LẪN NHAU — cơ sở của quy tắc "một thiết bị chỉ một đồng hồ đếm ngày".
+ *
+ * Một thiết bị thường được khai cả hai ba loại dầu tương đương (Shell Omala S2 GX220 và
+ * Sinopec L-CKD 220 cùng cấp ISO VG 220) để lãnh được loại nào còn tồn kho. Nhưng lần thay
+ * là MỘT, nên chỉ được một điểm đếm ngày; tạo ở cả hai vật tư là hai cảnh báo đến hạn, dự
+ * toán cộng đôi và dễ ra SYC trùng.
+ *
+ * Chỉ áp cho dầu và lõi lọc — hai nhóm mà thực tế có hàng thay thế lẫn nhau. Các loại khác
+ * (hóa chất, bi nghiền, chai khí) trả về null tức không áp quy tắc.
+ *
+ * Thiết bị thật sự dùng hai loại KHÁC CHỨC NĂNG (dầu hộp số + dầu thuỷ lực, lọc thô + lọc
+ * tinh) là ngoại lệ: dòng khai báo đó bật `separateTracking` để đứng ngoài quy tắc.
+ */
+export function materialTrackingGroup(category: string | null | undefined): string | null {
+  if (materialCategoryMatches(category, "Dầu bôi trơn")) return "DAU";
+  if (category === "Lõi lọc dầu" || category === "Lọc dầu") return "LOC";
+  return null;
+}
+
 /** Loại vật tư luôn thuộc phần Cơ — SYC thay thế của các loại này mặc định ghi
  *  vào Sheet Cơ, người lập vẫn đổi lại được nếu cần. */
 export const MECHANICAL_MATERIAL_CATEGORIES = ["Dầu bôi trơn", "Lõi lọc dầu", "Bi Nghiền Than"] as const;

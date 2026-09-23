@@ -9,7 +9,7 @@ import {
 import { assertSeqsInScope } from "@/lib/equipment-tree-scope";
 import { getCachedEquipmentNodeFull } from "@/lib/equipment-node-cache";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
-import { DEFECT_UNITS, MATERIAL_CATEGORIES, addMonths } from "@/lib/constants";
+import { DEFECT_UNITS, MATERIAL_CATEGORIES, addMonths, materialTrackingGroup } from "@/lib/constants";
 import { parseDateInput } from "@/lib/utils";
 import { positionCodeOf, positionsMatch } from "@/lib/position-catalog";
 import { canEditMaterialReplacement } from "@/lib/material-replacement-access";
@@ -144,6 +144,30 @@ export async function POST(req: NextRequest) {
       note: String(body.note ?? "").trim() || null,
       recoveryOnSupplement: body.recoveryOnSupplement === true,
     };
+
+    /*
+     * Cùng quy tắc MỘT ĐỒNG HỒ với Danh mục vật tư (xem materialTrackingGroup): khai báo kèm
+     * "Lần thay gần nhất" sẽ mở luôn điểm đếm ngày, nên phải chặn ở đây nữa — nếu không đây là
+     * lối vòng tạo đồng hồ thứ hai cho cùng một lần thay. Khai báo KHÔNG kèm ngày thì vẫn cho,
+     * vì thiết bị dùng vật tư này là chuyện có thật, chỉ là không mở thêm đồng hồ.
+     */
+    if (lastReplacedAt) {
+      for (const machine of machines) {
+        const material = materialByMachine.get(machine)!;
+        const group = materialTrackingGroup(material.category);
+        if (!group) continue;
+        const running = await prisma.materialReplacement.findFirst({
+          where: { deviceSeq, machine, isActive: true, separateTracking: false, materialId: { not: material.id } },
+          select: { material: { select: { name: true, category: true } } },
+        });
+        if (running && materialTrackingGroup(running.material.category) === group) {
+          return fail(
+            `Thiết bị này đang được theo dõi ở "${running.material.name}" tại ${machine} — mỗi thiết bị chỉ giữ một điểm đếm ngày. Để trống "Lần thay gần nhất" nếu chỉ cần khai báo, hoặc bật "Theo dõi riêng" cho dòng khai báo ở Danh mục vật tư khi thiết bị dùng hai loại khác chức năng.`,
+            409
+          );
+        }
+      }
+    }
 
     const points = await prisma.$transaction(async (tx) => {
       const declarations: Array<{ id: string }> = [];
