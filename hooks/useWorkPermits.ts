@@ -33,6 +33,16 @@ export function useCancelDraftWorkPermit() {
     qc.invalidateQueries({ queryKey: ["work-permit-number-suggestion"] });
   } });
 }
+/** Quản trị xoá hẳn một PCT (bắt buộc lý do). */
+export function useDeleteWorkPermit() {
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: ({ id, version, reason }: { id: string; version: number; reason: string }) => apiMutate<{ id: string }>(`/api/work-permits/${id}`, "DELETE", { version, reason }), onSuccess: () => {
+    qc.invalidateQueries({ queryKey: ["work-permits"] });
+    qc.invalidateQueries({ queryKey: ["work-permit"] });
+    qc.invalidateQueries({ queryKey: ["work-permit-number-suggestion"] });
+    qc.invalidateQueries({ queryKey: ["work-permit-number-reservations"] });
+  } });
+}
 export function useSaveNkvhPermitLink(id: string) {
   const qc = useQueryClient();
   return useMutation({ mutationFn: (body: { version: number; nkvhPctId: string | null }) => apiMutate<PermitRow>(`/api/work-permits/${id}/nkvh-link`, "PATCH", body), onSuccess: () => {

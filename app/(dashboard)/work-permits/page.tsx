@@ -2,7 +2,7 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { ArrowRight, Building2, Check, CheckCircle2, ChevronLeft, ChevronRight, CircleAlert, ClipboardList, Download, ExternalLink, FileText, Filter, HardHat, Plus, RefreshCw, RotateCcw, Search, ShieldCheck, SlidersHorizontal, UsersRound, Wrench, Zap, Clock } from "lucide-react";
+import { ArrowRight, Building2, Check, CheckCircle2, ChevronLeft, ChevronRight, CircleAlert, ClipboardList, Download, ExternalLink, FileText, Filter, HardHat, Plus, RefreshCw, RotateCcw, Search, ShieldCheck, SlidersHorizontal, Trash2, UsersRound, Wrench, Zap, Clock } from "lucide-react";
 import { toast } from "sonner";
 import { ContractorSessions, PermitCompanyDirectory, PermitMembersEditor, PermitPeopleDirectory } from "@/components/work-permits/contractor-work";
 import { PermitSafetyCatalog, PermitSafetySelection, PermitSafetyReadOnly } from "@/components/work-permits/safety";
@@ -12,7 +12,7 @@ import { PermitExecutionDialog } from "@/components/work-permits/execution";
 import { PermitHistoryPanel } from "@/components/work-permits/history";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { useCancelDraftWorkPermit, useWorkPermits, useWorkPermit, useSaveWorkPermit, useExportWorkPermits, usePermitNumberSuggestion, usePermitNumberAvailability, usePermitNumberReservations, useTakePermitNumber, useCancelPermitNumberReservation, usePermitNumberBaselines, useSetPermitNumberBaseline, type PermitNumberReservation } from "@/hooks/useWorkPermits";
+import { useCancelDraftWorkPermit, useDeleteWorkPermit, useWorkPermits, useWorkPermit, useSaveWorkPermit, useExportWorkPermits, usePermitNumberSuggestion, usePermitNumberAvailability, usePermitNumberReservations, useTakePermitNumber, useCancelPermitNumberReservation, usePermitNumberBaselines, useSetPermitNumberBaseline, type PermitNumberReservation } from "@/hooks/useWorkPermits";
 import { useUsers } from "@/hooks/useUsers";
 import { useDefects, type DefectItem } from "@/hooks/useDefects";
 import { announcementPositionsMatch, OPERATION_POSITION_TITLES } from "@/lib/positions";
@@ -486,6 +486,20 @@ function PermitDetail({ id, canIssue: listCanIssue, canExecute: listCanExecute, 
   const canExecute = query.data?.meta?.canExecute ?? listCanExecute;
   const documentExport = useExportPermitTemplate();
   const cancelDraft = useCancelDraftWorkPermit();
+  // Xoá hẳn phiếu là lối can thiệp của QUẢN TRỊ; server kiểm lại vai trò (requireRole ADMIN).
+  const { data: detailSession } = useSession();
+  const isAdmin = detailSession?.user?.role === "ADMIN";
+  const deletePermit = useDeleteWorkPermit();
+  const [deleting, setDeleting] = useState(false);
+  const [deleteReason, setDeleteReason] = useState("");
+  async function deleteNow(row: PermitRow) {
+    try {
+      await deletePermit.mutateAsync({ id: row.id, version: row.version, reason: deleteReason.trim() });
+      toast.success(`Đã xoá PCT ${formatPermitNumber(row)}`);
+      setDeleting(false);
+      onClose();
+    } catch (error) { toast.error(error instanceof Error ? error.message : "Không thể xoá PCT"); }
+  }
   async function cancelDraftNow(row: PermitRow) {
     if (!window.confirm("Hủy PCT nháp này? Phiếu sẽ được hủy ngay cả khi chưa có CHTT hoặc còn thiếu thông tin.")) return;
     try { await cancelDraft.mutateAsync({ id: row.id, version: row.version }); toast.success("Đã hủy PCT nháp"); }
@@ -517,6 +531,7 @@ function PermitDetail({ id, canIssue: listCanIssue, canExecute: listCanExecute, 
           {canExecute && !["DRAFT", "CLOSED", "CANCELLED"].includes(row.status) && !(row.teamType === "CONTRACTOR" && row.status === "ISSUED") && <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => setExecuting(true)}>{row.teamType === "INTERNAL" ? "Ghi nhận đóng phiếu" : "Cập nhật tiến độ"}</Button>}
           {canIssue && row.status === "DRAFT" && <Button size="sm" variant="destructive" className="h-8 text-xs" disabled={cancelDraft.isPending} onClick={() => void cancelDraftNow(row)}>{cancelDraft.isPending ? "Đang hủy…" : "Hủy nháp"}</Button>}
           {canIssue && !["CLOSED", "CANCELLED"].includes(row.status) && !(row.teamType === "CONTRACTOR" && row.status === "ACTIVE") && <Button size="sm" className="h-8 text-xs" onClick={() => onEdit(row)}>Chỉnh sửa / cấp phiếu<ArrowRight /></Button>}
+          {isAdmin && <Button size="sm" variant="outline" className="h-8 border-red-200 text-xs text-red-700 hover:bg-red-50 hover:text-red-800" onClick={() => { setDeleteReason(""); setDeleting(true); }}><Trash2 />Xóa PCT</Button>}
         </div>
       </>}
     </div>
@@ -536,5 +551,11 @@ function PermitDetail({ id, canIssue: listCanIssue, canExecute: listCanExecute, 
       <details className="group"><summary className={summary}><span>Lịch sử cập nhật ({row._count.history})</span><ChevronRight className="h-4 w-4 shrink-0 transition-transform group-open:rotate-90" /></summary><div className="mt-2 [&>section>h3]:hidden"><PermitHistoryPanel key={`${row.id}-${row.version}-history`} permit={row} /></div></details>
     </div>}
     </div>
+    {deleting && row && <Dialog open onOpenChange={v => { if (!v && !deletePermit.isPending) setDeleting(false); }}><DialogContent className="max-w-md">
+      <DialogTitle>Xóa PCT {formatPermitNumber(row)}?</DialogTitle>
+      <DialogDescription>Phiếu, các lần làm việc và lịch sử cập nhật sẽ bị xoá khỏi sổ. Nhật ký hệ thống vẫn lưu bản chụp đầy đủ kèm lý do; số phiếu được trả về để cấp lại theo luồng “cấp lại số đã hủy”. Nếu chỉ cần ghi nhận phiếu không thực hiện, hãy chuyển trạng thái “Đã hủy” thay vì xoá.</DialogDescription>
+      <label className="block space-y-1.5 text-sm"><span className="font-medium">Lý do xoá *</span><textarea className={control} rows={3} maxLength={2000} value={deleteReason} autoFocus onChange={e => setDeleteReason(e.target.value)} placeholder="Ví dụ: nhập trùng với PCT 895/2026, ghi nhầm sổ Điện…" /></label>
+      <div className="flex justify-end gap-2"><Button type="button" variant="outline" disabled={deletePermit.isPending} onClick={() => setDeleting(false)}>Để sau</Button><Button type="button" variant="destructive" disabled={deletePermit.isPending || deleteReason.trim().length < 5} onClick={() => void deleteNow(row)}>{deletePermit.isPending ? "Đang xoá…" : "Xóa hẳn PCT"}</Button></div>
+    </DialogContent></Dialog>}
   </DialogContent></Dialog>;
 }

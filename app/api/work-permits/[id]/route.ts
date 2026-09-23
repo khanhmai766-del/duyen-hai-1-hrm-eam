@@ -2,7 +2,7 @@ import { permitIssueUpdateNeedsExecution } from "@/lib/work-permit-permissions";
 import { requirePermitIssue, requirePermitExecute, permitCapabilities } from "@/lib/server/work-permit-permissions";
 import { resolvePermitSafety } from "@/lib/server/work-permit-safety";
 import { workPermitPrisma as prisma } from "@/lib/server/work-permit-prisma";
-import { audit, fail, ok, requireUser } from "@/lib/api";
+import { audit, fail, ok, requireRole, requireUser } from "@/lib/api";
 import { defaultPermitFormat, formatPermitNumber, PERMIT_STATUSES, PERMIT_TRANSITIONS, CONTRACTOR_PERMIT_TRANSITIONS, type PermitStatus } from "@/lib/work-permits";
 import { parsePermit, permitBody, permitHandle, permitSnapshot, resolvePermitDefectLink } from "@/lib/server/work-permits";
 import { resolvePermitIdentities } from "@/lib/server/work-permit-identities";
@@ -91,5 +91,45 @@ export async function PUT(req: Request, props: { params: Promise<{ id: string }>
     });
     await audit(user.id, "UPDATE_WORK_PERMIT", "WorkPermit", row.id, `Cập nhật PCT ${formatPermitNumber(row)}: ${PERMIT_STATUSES[status]}`);
     return ok(row);
+  });
+}
+
+/**
+ * XOÁ HẲN một PCT — lối can thiệp của QUẢN TRỊ khi phiếu ghi sai không sửa được (nhập nhầm sổ,
+ * trùng phiếu…). Người cấp phiếu thường KHÔNG có quyền này: phiếu sai thì hủy (vẫn giữ trong sổ).
+ *
+ * Xoá cả các lần làm việc và lịch sử của phiếu (FK Restrict nên phải xoá trước). Không mất dấu:
+ * AuditLog giữ bản chụp đầy đủ phiếu + lần làm việc + lý do. Lượt giữ số gắn với phiếu chuyển sang
+ * CANCELLED kèm lý do, nên số này được cấp lại theo đúng luồng "cấp lại số đã hủy".
+ */
+export async function DELETE(req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
+  return permitHandle(async () => {
+    const user = await requireUser();
+    requireRole(user, ["ADMIN"]);
+    const body = await permitBody(req);
+    const reason = typeof body.reason === "string" ? body.reason.trim() : "";
+    if (reason.length < 5 || reason.length > 2000) return fail("Cần nhập lý do xoá phiếu (5 – 2.000 ký tự)");
+    const removed = await prisma.$transaction(async tx => {
+      await tx.$queryRaw`SELECT "id" FROM "WorkPermit" WHERE "id" = ${params.id} FOR UPDATE`;
+      const before = await tx.workPermit.findUnique({ where: { id: params.id }, include: { sessions: true } });
+      if (!before) throw fail("Không tìm thấy PCT", 404);
+      if (body.version !== before.version) throw fail("Phiếu vừa được cập nhật ở phiên khác. Tải lại rồi thử xoá lại.", 409);
+      await tx.workPermitSession.deleteMany({ where: { permitId: before.id } });
+      const history = await tx.workPermitHistory.deleteMany({ where: { permitId: before.id } });
+      const reservations = await tx.workPermitNumberReservation.findMany({ where: { permitId: before.id, status: { not: "CANCELLED" } }, select: { id: true } });
+      for (const reservation of reservations) {
+        await tx.workPermitNumberReservation.update({ where: { id: reservation.id }, data: { status: "CANCELLED", cancelReason: `Quản trị xoá PCT: ${reason}`, cancelledById: user.id, cancelledAt: new Date() } });
+        await tx.workPermitNumberReservationHistory.create({ data: { reservationId: reservation.id, action: "PERMIT_DELETED", actorId: user.id, actorName: user.name ?? "", permitId: before.id, note: reason } });
+      }
+      await tx.workPermit.delete({ where: { id: before.id } });
+      return { before, historyCount: history.count };
+    });
+    const { before } = removed;
+    await audit(user.id, "DELETE_WORK_PERMIT", "WorkPermit", before.id, JSON.stringify({
+      message: `Quản trị xoá PCT ${formatPermitNumber(before)}: ${reason}`,
+      reason, historyCount: removed.historyCount, permit: permitSnapshot(before),
+    }));
+    return ok({ id: before.id });
   });
 }
