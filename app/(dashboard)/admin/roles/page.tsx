@@ -595,8 +595,8 @@ const DEFAULT_PERMISSIONS: PermissionRow[] = [
   {
     id: "archive-oil-gun-data",
     group: "Tài liệu số",
-    feature: "Lưu trữ - dữ liệu vòi dầu",
-    note: "Phân quyền riêng cho tab Dữ liệu vòi dầu, bao gồm cập nhật trạng thái/khiếm khuyết vòi dầu.",
+    feature: "Lưu trữ - dữ liệu vòi dầu, vòi thổi bụi",
+    note: "Phân quyền riêng cho tab Dữ liệu vòi dầu và tab Vòi thổi bụi, bao gồm cập nhật trạng thái/khiếm khuyết vòi dầu và vòi thổi bụi.",
     matrix: { ADMIN: "full", SUPERVISOR: "manage", TECHNICIAN: "manage", VIEWER: "read" },
   },
   {

@@ -2,11 +2,12 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { Droplet, Flame, TrendingUp, Unplug } from "lucide-react";
+import { Droplet, Flame, TrendingUp, Unplug, Wind } from "lucide-react";
 import { DocumentCatalogPage } from "@/components/documents/document-catalog-page";
 import { Button } from "@/components/ui/button";
 import { useSession } from "next-auth/react";
 import OilGunBoard from "@/components/oil-guns/OilGunBoard";
+import SootBlowerBoard from "@/components/soot-blowers/SootBlowerBoard";
 import type { DocumentCategory } from "@/hooks/useDocuments";
 import { useRbacAccess } from "@/hooks/useRbacAccess";
 import { useCurrentPosition } from "@/hooks/useCurrentPosition";
@@ -14,10 +15,14 @@ import { OIL_SOOT_GATED_CATEGORIES, positionAllowsOilSoot } from "@/lib/oil-soot
 import { archiveCategoryPermissionId } from "@/lib/archive-permissions";
 import { cn } from "@/lib/utils";
 
-// Hai nhóm "Sửa chữa lớn" và "Dữ liệu vòi thổi bụi" đã bỏ khỏi giao diện.
-// Dữ liệu cũ trong DB vẫn còn nguyên, API và phân quyền vẫn nhận hai nhóm này.
+// Hai nhóm hồ sơ "Sửa chữa lớn" và "Dữ liệu vòi thổi bụi" (link thư mục) đã bỏ khỏi giao diện.
+// Tab "Vòi thổi bụi" hiện nay là sơ đồ khiếm khuyết (SOOT_BLOWER_BOARD), không phải nhóm hồ sơ:
+// nó không có danh mục riêng mà mượn OIL_GUN_DATA cho khung trang và dùng chung phân quyền vòi đốt.
+type ArchiveTabKey =
+  | Extract<DocumentCategory, "GRID_SEPARATION" | "STARTUP_DATA" | "BOILER_CALIBRATION" | "OIL_GUN_DATA">
+  | "SOOT_BLOWER_BOARD";
 type ArchiveTab = {
-  key: Extract<DocumentCategory, "GRID_SEPARATION" | "STARTUP_DATA" | "BOILER_CALIBRATION" | "OIL_GUN_DATA">;
+  key: ArchiveTabKey;
   label: string;
   icon: React.ElementType;
   description: string;
@@ -58,7 +63,20 @@ const ARCHIVE_TABS: ArchiveTab[] = [
     emptyTitle: "Chưa có dữ liệu vòi dầu",
     emptyDescription: "Admin có thể thêm tên thư mục và link dữ liệu vòi dầu tại đây.",
   },
+  {
+    key: "SOOT_BLOWER_BOARD",
+    label: "Vòi thổi bụi",
+    icon: Wind,
+    description: "Sơ đồ khả dụng và khiếm khuyết vòi thổi bụi theo màn DCS SOOT BLOW",
+    emptyTitle: "Chưa có dữ liệu vòi thổi bụi",
+    emptyDescription: "Chọn một vòi trên sơ đồ để ghi nhận khiếm khuyết.",
+  },
 ];
+// Hai tab sơ đồ (không phải danh sách hồ sơ): gác theo chức vụ, thay khung bảng bằng sơ đồ.
+const BOARD_TABS: Partial<Record<ArchiveTabKey, React.ReactNode>> = {
+  OIL_GUN_DATA: <OilGunBoard />,
+  SOOT_BLOWER_BOARD: <SootBlowerBoard />,
+};
 const UNIT_TAGS = [
   { label: "S1", value: "S1" },
   { label: "S2", value: "S2" },
@@ -82,11 +100,12 @@ const ARCHIVE_YEAR_OPTIONS = Array.from(
   { length: Math.max(1, CURRENT_YEAR - ARCHIVE_START_YEAR + 1) },
   (_, index) => String(CURRENT_YEAR - index)
 );
-const BACKUP_FILENAME_PREFIX: Record<ArchiveTab["key"], string> = {
+const BACKUP_FILENAME_PREFIX: Record<ArchiveTabKey, string> = {
   GRID_SEPARATION: "backup-du-lieu-tach-luoi",
   STARTUP_DATA: "backup-du-lieu-khoi-dong",
   BOILER_CALIBRATION: "backup-du-lieu-hieu-chinh-lo",
   OIL_GUN_DATA: "backup-du-lieu-voi-dau",
+  SOOT_BLOWER_BOARD: "backup-du-lieu-voi-dau",
 };
 
 export default function ArchiveDocumentsPage() {
@@ -94,17 +113,17 @@ export default function ArchiveDocumentsPage() {
   const { data: session } = useSession();
   const isAdmin = session?.user?.role === "ADMIN";
   const currentPosition = useCurrentPosition();
-  // Được xem tab vòi đốt nếu: ADMIN, hoặc có ít nhất một chức vụ (chính hoặc phụ)
+  // Được xem tab vòi đốt / vòi thổi bụi nếu: ADMIN, hoặc có ít nhất một chức vụ (chính hoặc phụ)
   // nằm trong danh sách cho phép.
   const canSeeOilSootTabs = React.useMemo(
     () => isAdmin || positionAllowsOilSoot(currentPosition.options),
     [isAdmin, currentPosition.options]
   );
-  const [activeTab, setActiveTab] = React.useState<ArchiveTab["key"]>("GRID_SEPARATION");
+  const [activeTab, setActiveTab] = React.useState<ArchiveTabKey>("GRID_SEPARATION");
   const visibleTabs = React.useMemo(
     () =>
       ARCHIVE_TABS.filter((item) => {
-        if (OIL_SOOT_GATED_CATEGORIES.has(item.key)) return canSeeOilSootTabs;
+        if (item.key in BOARD_TABS || OIL_SOOT_GATED_CATEGORIES.has(item.key)) return canSeeOilSootTabs;
         const permissionId = archiveCategoryPermissionId(item.key);
         return permissionId ? rbac.can(permissionId, ["read", "personal", "manage", "full"]) : true;
       }),
@@ -115,6 +134,9 @@ export default function ArchiveDocumentsPage() {
     setActiveTab(visibleTabs[0].key);
   }
   const activeConfig = visibleTabs.find((item) => item.key === activeTab) ?? visibleTabs[0] ?? ARCHIVE_TABS[0];
+  const boardContent = BOARD_TABS[activeTab];
+  // Tab sơ đồ vòi thổi bụi không có nhóm hồ sơ riêng → khung trang dùng OIL_GUN_DATA (toolbar đã ẩn).
+  const category: DocumentCategory = activeTab === "SOOT_BLOWER_BOARD" ? "OIL_GUN_DATA" : activeTab;
   const usesArchiveTimelineLayout =
     activeTab === "BOILER_CALIBRATION" ||
     activeTab === "GRID_SEPARATION" ||
@@ -132,7 +154,7 @@ export default function ArchiveDocumentsPage() {
   return (
     <DocumentCatalogPage
       key={activeTab}
-      category={activeTab}
+      category={category}
       title="THƯ MỤC LƯU TRỮ"
       description="Lưu trữ đường dẫn dữ liệu phục vụ tra cứu và tổng hợp vận hành"
       nameLabel="Tên thư mục"
@@ -210,9 +232,9 @@ export default function ArchiveDocumentsPage() {
       historyTableLayout={usesArchiveTimelineLayout}
       showPaginationFooter={activeTab === "GRID_SEPARATION" || activeTab === "STARTUP_DATA"}
       allowStaffEdit
-      showAnnualBackupExport={activeTab !== "OIL_GUN_DATA"}
-      customContent={activeTab === "OIL_GUN_DATA" ? <OilGunBoard /> : undefined}
-      hideToolbar={activeTab === "OIL_GUN_DATA"}
+      showAnnualBackupExport={!boardContent}
+      customContent={boardContent}
+      hideToolbar={Boolean(boardContent)}
       backupSubtitle={`Báo cáo backup ${activeConfig.label.toLowerCase()} theo năm`}
       backupFilenamePrefix={BACKUP_FILENAME_PREFIX[activeTab]}
       beforeTagFilter={

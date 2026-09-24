@@ -1513,6 +1513,38 @@ model OilGunNote {
   updatedAt DateTime @default(now()) @updatedAt
 }
 
+// Vòi thổi bụi (sơ đồ DCS SOOT BLOW) — 1 dòng/vòi/tổ máy, tạo lúc cập nhật lần đầu.
+// Danh mục 98 tag cố định trong lib/soot-blower-layout.ts; vòi chưa có dòng = khả dụng.
+model SootBlower {
+  id        String   @id @default(cuid())
+  machine   String // "S1" | "S2"
+  tag       String // "IR15", "IK03", "IKEL07", "AH01"...
+  status    String   @default("available") // available | unavailable
+  updatedBy String?
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+
+  @@unique([machine, tag])
+}
+
+// Khiếm khuyết vòi thổi bụi theo đơn vị xử lý (SCĐ/SCCN). Đóng (resolvedAt) thì
+// thành lịch sử sửa chữa. Không FK tới SootBlower để ghi nhận không phụ thuộc thứ tự tạo.
+model SootBlowerDefect {
+  id          String    @id @default(cuid())
+  machine     String
+  tag         String
+  dept        String // "SCĐ" | "SCCN"
+  description String
+  reportedBy  String? // "Người ghi nhận / Ca" nhập tay
+  createdById String?
+  createdAt   DateTime  @default(now())
+  resolvedAt  DateTime?
+  resolvedBy  String?
+
+  @@index([machine, tag])
+  @@index([machine, resolvedAt])
+}
+
 // BGTS Tuabin ngừng: bảng ghi thông số DCS theo ngày, dùng trong Thư mục lưu trữ
 // > Dữ liệu tách lưới > BGTS Tuabin Ngừng. API tạo/đồng bộ bảng bằng raw SQL để
 // bổ sung an toàn trên DB dev hiện có; khai báo ở đây để db push không đề nghị xoá.
