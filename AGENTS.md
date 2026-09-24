@@ -101,6 +101,9 @@ Two EVN internal systems are read through a single MV3 extension: the web page p
 
 When adding a JS file to the extension, also add it to the file list in `chrome-extension/scripts/package-store.mjs`, or the Web Store package ships broken.
 
+### NKVH permit-number extension (`chrome-extension/nkvh-pct`)
+A **separate** extension, and unlike `qlvt-sync` it **writes one field on the source page**. On an NKVH PCT page (`pctc_ct` / `pctd_ct`, internal electronic permits only), "Lấy số PCT" posts the page's content to `POST /api/work-permits/nkvh-claim` (logic in `lib/server/work-permit-nkvh-claim.ts`). The server takes the next number of that book through the same reservation path as the register's own button, writes the permit with `nkvhPctId`, and returns the number. The extension then fills NKVH's "Số phiếu" field; **it never clicks Save on NKVH**. One `id_pct` maps to one number (idempotent under the book's number lock). Permits written this way may lack CHTT/worker count (`parsePermit(..., { allowIncompleteIssue: true })`) and show "Cần bổ sung" in the register. Read `chrome-extension/nkvh-pct/README.md` before touching the DOM readers. It is packaged by its own `chrome-extension/scripts/package-nkvh-pct.mjs` (fixed `FILES` list — add new JS files there). The privacy page is `app/public/nkvh-pct-privacy`, and the Edge Add-ons listing is in `chrome-extension/store-listing/nkvh-pct/`.
+
 ### Self-service vs admin edits
 `/api/me` (PUT) lets any logged-in user edit their own `avatarUrl / signatureUrl / phone / email / employeeId`; only ADMIN may additionally change `name / position / department / role`. `/api/users` is the ADMIN-only CRUD for all users. The account page (`app/(dashboard)/account`) uses `/api/me`; `app/(dashboard)/admin/users` uses `/api/users`.
 

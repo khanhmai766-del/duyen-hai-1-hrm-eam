@@ -42,7 +42,12 @@ export function permitInstant(body: Record<string, unknown>, key: string) {
   if (Number.isNaN(date.getTime())) throw fail("Ngày giờ không hợp lệ");
   return date;
 }
-export function parsePermit(body: Record<string, unknown>, status: PermitStatus) {
+/**
+ * `allowIncompleteIssue` chỉ dành cho phiếu nội bộ lấy số từ tiện ích NKVH: lúc bấm lấy số, trang NKVH
+ * có thể chưa có CHTT/số nhân viên (PCT T-C-N-H khai CHTT ở bước sau). Phiếu vẫn vào sổ ở trạng thái
+ * Đã cấp và hiện nhãn "Cần bổ sung"; mọi lần sửa sau đó đi qua kiểm tra đầy đủ như bình thường.
+ */
+export function parsePermit(body: Record<string, unknown>, status: PermitStatus, options: { allowIncompleteIssue?: boolean } = {}) {
   const kind = permitText(body, "kind"), unit = permitText(body, "unit"), workDate = permitText(body, "workDate");
   if (!Object.hasOwn(PERMIT_KINDS, kind) || !Object.hasOwn(PERMIT_UNITS, unit)) throw fail("Loại PCT hoặc tổ máy không hợp lệ");
   const year = Number(body.year), number = permitText(body, "number", 80).toUpperCase().replace(/\s+/g, "");
@@ -90,7 +95,7 @@ export function parsePermit(body: Record<string, unknown>, status: PermitStatus)
     data.workerCount = data.commanderName ? 1 + data.members.length : null;
   } else if (data.members.length) data.workerCount = data.members.length;
   if (!data.content) throw fail("Vui lòng nhập nội dung công việc");
-  if (["ISSUED", "ACTIVE", "PAUSED", "WAITING", "CLOSED"].includes(status) && (!data.issuerName || !data.issuedAt || !data.commanderName || !data.teamName || (teamType !== "CONTRACTOR" && !data.workerCount))) throw fail("Để ghi cấp phiếu, cần người cấp, thời điểm cấp, chỉ huy trực tiếp, đơn vị và số nhân viên");
+  if (["ISSUED", "ACTIVE", "PAUSED", "WAITING", "CLOSED"].includes(status) && !options.allowIncompleteIssue && (!data.issuerName || !data.issuedAt || !data.commanderName || !data.teamName || (teamType !== "CONTRACTOR" && !data.workerCount))) throw fail("Để ghi cấp phiếu, cần người cấp, thời điểm cấp, chỉ huy trực tiếp, đơn vị và số nhân viên");
   if (teamType === "CONTRACTOR" && ["ACTIVE", "PAUSED", "WAITING", "CLOSED"].includes(status) && (!data.authorizerName || !data.authorizedAt)) throw fail("Vui lòng ghi người và thời điểm cho phép làm việc");
   if (["PAUSED", "CANCELLED"].includes(status) && !data.statusReason) throw fail("Vui lòng nhập lý do tạm dừng hoặc hủy phiếu");
   if (status === "CLOSED" && (!data.closedAt || (teamType === "CONTRACTOR" && !data.result))) throw fail("Vui lòng nhập thông tin và thời điểm đóng phiếu");

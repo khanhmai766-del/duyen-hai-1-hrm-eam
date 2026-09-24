@@ -1,0 +1,37 @@
+{
+  "manifest_version": 3,
+  "name": "Cấp số PCT NKVH - PXVH1",
+  "version": "1.0.0",
+  "description": "Lấy số PCT nội bộ từ sổ PXVH1 ngay trên trang phiếu NKVH và đồng bộ nội dung phiếu về sổ.",
+  "homepage_url": "https://duyenhai1.vn/public/nkvh-pct-privacy",
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
+  "permissions": ["storage"],
+  "host_permissions": [
+    "http://nkvh.tpcduyenhai.com.vn/*",
+    "https://duyenhai1.vn/*",
+    "http://localhost:3000/*",
+    "http://localhost:3030/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "Cấp số PCT NKVH",
+    "default_popup": "popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "http://nkvh.tpcduyenhai.com.vn/nkvh/pages/pct/pctc_ct*",
+        "http://nkvh.tpcduyenhai.com.vn/nkvh/pages/pct/pctd_ct*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
