@@ -1,8 +1,9 @@
 // Thử (rồi HOÀN TÁC) luồng tiện ích Cấp số PCT NKVH trên DB dev: lấy số, bấm lại không tốn số,
-// đồng bộ nội dung, phiếu giấy lấy sau nhảy qua số đã cấp. Không để lại dữ liệu.
+// đồng bộ nội dung, phiếu giấy lấy sau nhảy qua số đã cấp, báo hủy rồi cấp lại đúng số cũ.
+// Không để lại dữ liệu.
 //   npx tsx scripts/verify/thu-nkvh-claim.ts
 import { PrismaClient } from "@prisma/client";
-import { claimNkvhPermit, parseNkvhPage, syncNkvhPermit } from "@/lib/server/work-permit-nkvh-claim";
+import { cancelNkvhPermit, claimNkvhPermit, parseNkvhPage, reissuableNkvhNumbers, syncNkvhPermit } from "@/lib/server/work-permit-nkvh-claim";
 import { reservePermitNumber } from "@/lib/server/work-permit-number-reservations";
 
 const db = new PrismaClient();
@@ -49,6 +50,30 @@ async function main() {
           console.log(`5) ${label}: ✗ lẽ ra phải bị chặn`);
         } catch (e) { console.log(`5) ${label}: chặn đúng →`, (await (e as Response).json()).error); }
       }
+
+      // Phiếu ra sai: NKVH hủy rồi tạo lại phiếu mới (id_pct khác) mang lại đúng số cũ.
+      const NEW_PCT = "99999999-8888-4777-8666-555555555555";
+      const errorOf = async (run: () => Promise<unknown>) => {
+        try { await run(); return "✗ lẽ ra phải bị chặn"; } catch (e) { return `chặn đúng → ${(await (e as Response).json()).error}`; }
+      };
+      console.log("6) cấp lại số khi sổ chưa hủy:", await errorOf(() => claimNkvhPermit(tx, user, { kind: "MECHANICAL", nkvhPctId: NEW_PCT,
+        page: parseNkvhPage(tcnh, "MECHANICAL"), unit: "S1", position: "Lò phó", reissueNumber: first.number })));
+      const cancelled = await cancelNkvhPermit(tx, user, { kind: "MECHANICAL", nkvhPctId: PCT, reason: "hủy phiếu cấp sai NV cho phép" });
+      const cancelledRow = await tx.workPermit.findUniqueOrThrow({ where: { id: cancelled.id } });
+      console.log("7) báo hủy:", cancelled.formatted, cancelledRow.status, "|", cancelledRow.statusReason);
+      const twice = await cancelNkvhPermit(tx, user, { kind: "MECHANICAL", nkvhPctId: PCT, reason: "x" });
+      console.log("   bấm lại:", twice.id === cancelled.id ? "✓ trả lại phiếu đã hủy" : "✗");
+      const list = await reissuableNkvhNumbers(tx, "MECHANICAL", year);
+      console.log("8) danh sách chờ cấp lại có số cũ:", list.some(i => i.number === first.number) ? "✓" : "✗", list.find(i => i.number === first.number)?.registrationNumber);
+      const reissued = await claimNkvhPermit(tx, user, { kind: "MECHANICAL", nkvhPctId: NEW_PCT, page: parseNkvhPage(tcnh, "MECHANICAL"),
+        unit: "S1", position: "Lò phó", reissueNumber: first.number });
+      console.log("9) cấp lại:", reissued.formatted, reissued.number === first.number ? "✓ đúng số cũ" : "✗ KHÁC SỐ", "| reissued:", reissued.reissued);
+      console.log("   hết trong danh sách:", (await reissuableNkvhNumbers(tx, "MECHANICAL", year)).some(i => i.number === first.number) ? "✗ vẫn còn" : "✓");
+      console.log("10) cấp lại lần hai cùng số:", await errorOf(() => claimNkvhPermit(tx, user, { kind: "MECHANICAL", nkvhPctId: "77777777-8888-4777-8666-555555555555",
+        page: parseNkvhPage(tcnh, "MECHANICAL"), unit: "S1", position: "Lò phó", reissueNumber: first.number })));
+      console.log("11) cấp lại số chưa từng hủy:", await errorOf(() => claimNkvhPermit(tx, user, { kind: "MECHANICAL", nkvhPctId: "66666666-8888-4777-8666-555555555555",
+        page: parseNkvhPage(tcnh, "MECHANICAL"), unit: "S1", position: "Lò phó", reissueNumber: paper.number })));
+      console.log("12) báo hủy phiếu không có trên sổ:", await errorOf(() => cancelNkvhPermit(tx, user, { kind: "MECHANICAL", nkvhPctId: "55555555-8888-4777-8666-555555555555", reason: "" })));
       throw new Error("HOAN_TAC");
     }, { timeout: 30000 });
   } catch (e) {

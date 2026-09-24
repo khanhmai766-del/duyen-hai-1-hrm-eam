@@ -36,7 +36,9 @@ async function callApi({ method, path, body }) {
   } catch {
     return { ok: false, message: `Không kết nối được ${base}. Kiểm tra mạng rồi thử lại.` };
   }
-  if (response.status === 401) {
+  // Chưa đăng nhập: proxy.ts chuyển hướng API sang /login (fetch tự theo, nhận trang HTML 200).
+  const toLogin = response.redirected && new URL(response.url).pathname.startsWith("/login");
+  if (response.status === 401 || toLogin) {
     return { ok: false, status: 401, message: `Chưa đăng nhập ${base.replace(/^https?:\/\//, "")} trên trình duyệt này. Hãy mở trang, đăng nhập rồi bấm lại.` };
   }
   let json = null;
