@@ -1,6 +1,6 @@
 import type { Prisma } from "@prisma/client";
 export const permitListSelect = {
-  id: true, number: true, year: true, kind: true, format: true, workType: true, nkvhPctId: true,
+  id: true, number: true, year: true, kind: true, format: true, workType: true, sourceClassification: true, nkvhPctId: true,
   workDate: true, content: true, location: true, position: true, unit: true, issuerName: true,
   commanderName: true, teamName: true, teamType: true, workerCount: true,
   authorizerName: true, status: true, progress: true, repairRequestNumber: true,

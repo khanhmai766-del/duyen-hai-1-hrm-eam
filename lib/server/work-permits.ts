@@ -4,7 +4,7 @@ import { normalizeText } from "@/lib/nav";
 import { NKVH_UUID } from "@/lib/nkvh-pct";
 import { OPERATION_POSITION_TITLES } from "@/lib/positions";
 import { DEFAULT_PERMIT_MANAGING_UNIT, DEFAULT_PERMIT_PLANT } from "@/lib/work-permit-source-fields";
-import { formatPermitNumber, PERMIT_DISCIPLINES, PERMIT_FORMATS, defaultPermitFormat, PERMIT_KINDS, PERMIT_SOURCE_CLASSIFICATIONS, PERMIT_WORK_TYPES, PERMIT_STATUSES, PERMIT_UNITS, type PermitStatus } from "@/lib/work-permits";
+import { formatPermitNumber, PERMIT_DISCIPLINES, PERMIT_FORMATS, defaultPermitFormat, PERMIT_KINDS, PERMIT_SOURCE_CLASSIFICATIONS, PERMIT_WORK_TYPES, PERMIT_STATUSES, PERMIT_UNITS, SOURCE_CLASSIFICATION_WORK_TYPE, effectiveWorkType, type PermitStatus } from "@/lib/work-permits";
 
 export function permitHandle(fn: () => Promise<Response>) {
   return handle(async () => {
@@ -61,10 +61,11 @@ export function parsePermit(body: Record<string, unknown>, status: PermitStatus,
   if (!Object.hasOwn(PERMIT_FORMATS, format)) throw fail("Hình thức phiếu phải là PCT giấy hoặc PCT điện tử");
   const nkvhPctId = permitText(body, "nkvhPctId", 36) || null;
   if (nkvhPctId && !NKVH_UUID.test(nkvhPctId)) throw fail("ID phiếu NKVH không hợp lệ");
-  const workType = permitText(body, "workType", 20) || null;
-  if (workType && !Object.hasOwn(PERMIT_WORK_TYPES, workType)) throw fail("Phân loại công việc phải là Kế hoạch (KH), Đột xuất (ĐX) hoặc Sự cố (SC)");
   const sourceClassification = permitText(body, "sourceClassification", 20) || null;
   if (sourceClassification && !Object.hasOwn(PERMIT_SOURCE_CLASSIFICATIONS, sourceClassification)) throw fail("Phân loại trên phiếu phải là Kế hoạch, Ngoài kế hoạch hoặc Đột xuất");
+  // Tick Phân loại trên phiếu thì KH/ĐX lấy theo đó (xem SOURCE_CLASSIFICATION_WORK_TYPE).
+  const workType = effectiveWorkType({ sourceClassification, workType: permitText(body, "workType", 20) || null });
+  if (workType && !Object.hasOwn(PERMIT_WORK_TYPES, workType)) throw fail("Phân loại công việc phải là Kế hoạch (KH), Đột xuất (ĐX) hoặc Sự cố (SC)");
   const position = permitText(body, "position");
   if (position && !OPERATION_POSITION_TITLES.some(value => value === position)) throw fail("Cương vị không có trong danh mục của phân xưởng");
   const disciplines = body.disciplines ?? [];
@@ -151,7 +152,11 @@ export function permitFilters(
   if (workType && workType !== "UNCLASSIFIED" && !Object.hasOwn(PERMIT_WORK_TYPES, workType)) throw fail("Phân loại công việc không hợp lệ");
   const q = p.get("q") || "";
   if (q.length > 200) throw fail("Từ khóa quá dài");
-  return { kind, ...(workType ? { workType: workType === "UNCLASSIFIED" ? null : workType } : {}), ...(teamType ? { teamType } : {}), ...(unit ? { unit } : {}), ...(position ? { position } : {}),
+  const derivedClasses = Object.entries(SOURCE_CLASSIFICATION_WORK_TYPE).filter(([, value]) => value === workType).map(([key]) => key);
+  const workTypeWhere: Prisma.WorkPermitWhereInput | null = !workType ? null
+    : workType === "UNCLASSIFIED" ? { workType: null, sourceClassification: null }
+      : { OR: [{ workType }, ...(derivedClasses.length ? [{ workType: null, sourceClassification: { in: derivedClasses } }] : [])] };
+  return { kind, ...(workTypeWhere ? { AND: [workTypeWhere] } : {}), ...(teamType ? { teamType } : {}), ...(unit ? { unit } : {}), ...(position ? { position } : {}),
     ...(status
       ? { status: status === "OPEN" ? { notIn: ["CLOSED", "CANCELLED"] } : status }
       : { status: options.includeClosedByDefault ? { not: "CANCELLED" } : { notIn: ["CLOSED", "CANCELLED"] } }),

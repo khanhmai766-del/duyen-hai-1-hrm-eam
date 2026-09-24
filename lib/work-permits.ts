@@ -26,6 +26,17 @@ export const PERMIT_SOURCE_CLASSIFICATIONS = {
   UNEXPECTED: "Đột xuất",
 } as const;
 export type PermitSourceClassification = keyof typeof PERMIT_SOURCE_CLASSIFICATIONS;
+/**
+ * Ô "Phân loại" trên phiếu (Kế hoạch / Ngoài kế hoạch / Đột xuất) quyết định ký hiệu KH/ĐX ở cột Loại
+ * và bộ lọc KH/ĐX/SC: Kế hoạch → KH; Ngoài kế hoạch và Đột xuất đều là việc ngoài kế hoạch → ĐX.
+ * Sự cố (SC) không có trên mẫu phiếu nên không suy ra từ đây.
+ */
+export const SOURCE_CLASSIFICATION_WORK_TYPE = { PLANNED: "PLANNED", OFF_PLAN: "UNPLANNED", UNEXPECTED: "UNPLANNED" } as const;
+/** Phân loại KH/ĐX/SC để hiển thị: ưu tiên ô Phân loại trên phiếu, phiếu không có ô này dùng workType đã lưu. */
+export function effectiveWorkType(row: { workType?: string | null; sourceClassification?: string | null }): PermitWorkType | null {
+  const derived = row.sourceClassification ? SOURCE_CLASSIFICATION_WORK_TYPE[row.sourceClassification as PermitSourceClassification] : undefined;
+  return derived ?? (row.workType as PermitWorkType | null | undefined) ?? null;
+}
 export const PERMIT_STATUSES = {
   DRAFT: "Nháp", ISSUED: "Đã cấp", ACTIVE: "Đang thực hiện",
   PAUSED: "Tạm dừng", WAITING: "Chờ làm tiếp", CLOSED: "Đã đóng", CANCELLED: "Đã hủy",
@@ -124,7 +135,7 @@ export interface PermitSession {
   endConfirmedByName: string; endNote: string; progress: number | null; createdByName: string; endedByName: string | null;
 }
 export type PermitHistorySummary = Pick<PermitHistory, "id" | "actorName" | "action" | "createdAt">;
-export type PermitListRow = Pick<PermitRow, "id" | "number" | "year" | "kind" | "format" | "workType" | "workDate" | "content" | "location" | "position" | "unit" | "issuerName" | "commanderName" | "teamName" | "teamType" | "workerCount" | "authorizerName" | "status" | "progress" | "repairRequestNumber" | "nkvhPctId"> & { sessions: Array<Pick<PermitSession, "commanderName" | "company" | "authorizerName">> };
+export type PermitListRow = Pick<PermitRow, "id" | "number" | "year" | "kind" | "format" | "workType" | "workDate" | "content" | "location" | "position" | "unit" | "issuerName" | "commanderName" | "teamName" | "teamType" | "workerCount" | "authorizerName" | "status" | "progress" | "repairRequestNumber" | "nkvhPctId" | "sourceClassification"> & { sessions: Array<Pick<PermitSession, "commanderName" | "company" | "authorizerName">> };
 export interface PermitDetailRow extends PermitRow { history: PermitHistorySummary[]; sessions: PermitSession[]; _count: { sessions: number; history: number } }
 
 export interface DefectLinkedWorkPermit {
