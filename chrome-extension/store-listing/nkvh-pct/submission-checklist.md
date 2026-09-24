@@ -1,4 +1,4 @@
-# Danh sách trước khi nộp Edge Add-ons – Cấp số PCT NKVH 1.0.0
+# Danh sách trước khi nộp Edge Add-ons – Cấp số PCT NKVH 1.0.1
 
 ## Phê duyệt và tài khoản
 
@@ -10,7 +10,7 @@
 - [ ] Commit, push và deploy: trang https://duyenhai1.vn/public/nkvh-pct-privacy phải mở được **khi chưa đăng nhập**.
 - [ ] API `/api/work-permits/nkvh-claim` đã có trên production (cùng lượt deploy trên).
 - [ ] Đã đặt mốc sổ giấy năm hiện tại cho **cả sổ Cơ và sổ Điện** trên production.
-- [x] Chạy `node chrome-extension/scripts/package-nkvh-pct.mjs` → `chrome-extension/dist/nkvh-pct-store-v1.0.0.zip`.
+- [x] Chạy `node chrome-extension/scripts/package-nkvh-pct.mjs` → `chrome-extension/dist/nkvh-pct-store-v1.0.1.zip`.
 - [x] Gói không chứa quyền hoặc URL localhost.
 - [ ] Cài thử **chính file ZIP** (giải nén ra thư mục rồi Load unpacked), không chỉ thư mục mã nguồn.
 - [ ] Thử trên NKVH thật, sổ Điện và sổ T-C-N-H: lấy số, bấm lại (không tốn số), điền số, đồng bộ về sổ; không bấm Lưu trên NKVH khi thử.

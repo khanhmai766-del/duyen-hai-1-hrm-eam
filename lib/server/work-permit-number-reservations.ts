@@ -58,48 +58,26 @@ export async function activePermitNumberExists(tx: Tx, kind: PermitKind, year: n
   return rows.length > 0;
 }
 
+/**
+ * Giữ số TIẾP THEO của sổ (loại + năm). Số đã hủy bị bỏ luôn, không bao giờ cấp lại: mốc cao nhất
+ * tính cả phiếu/lượt giữ đã hủy nên dãy số chỉ đi tới. Phiếu giấy hủy vẫn nằm trong sổ ở trạng thái
+ * Hủy; phiếu điện tử hủy thì NKVH đã lưu.
+ */
 export async function reservePermitNumber(tx: Tx, input: {
-  kind: PermitKind; year: number; teamType: "INTERNAL" | "CONTRACTOR";
-  requestedNumber?: string; reissueAcknowledged?: boolean; ownerId: string; ownerName: string;
+  kind: PermitKind; year: number; teamType: "INTERNAL" | "CONTRACTOR"; ownerId: string; ownerName: string;
 }) {
   const baseline = await lockPermitNumberScope(tx, input.kind, input.year);
   const highest = await permitNumberHighWater(tx, input.kind, input.year);
-  const next = (BigInt(baseline) > BigInt(highest) ? BigInt(baseline) : BigInt(highest)) + BigInt(1);
-  const number = input.requestedNumber ? canonicalPermitNumber(input.requestedNumber) : next.toString();
+  const number = ((BigInt(baseline) > BigInt(highest) ? BigInt(baseline) : BigInt(highest)) + BigInt(1)).toString();
   if (number.length > 80) throw fail("Dãy số PCT đã vượt quá giới hạn", 409);
-  const oldCancelledRows = await tx.$queryRaw<Array<{ id: string }>>`
-    SELECT "id" FROM "WorkPermit"
-    WHERE "kind" = ${input.kind} AND "year" = ${input.year} AND "status" = 'CANCELLED'
-      AND "number" ~ '^[0-9]+$' AND "number"::numeric = ${number}::numeric
-    ORDER BY "createdAt" DESC LIMIT 1
-  `;
-  const oldCancelled = oldCancelledRows[0];
-  const cancelledReservation = await tx.workPermitNumberReservation.findFirst({
-    where: { kind: input.kind, year: input.year, number, status: "CANCELLED" }, select: { id: true },
-  });
-  if (input.requestedNumber && !oldCancelled && !cancelledReservation) {
-    throw fail("Chỉ được nhập số PCT đã hủy để cấp lại; hãy dùng nút Lấy số PCT để lấy số tiếp theo", 409);
-  }
-  if (BigInt(number) <= BigInt(baseline) && !oldCancelled && !cancelledReservation) {
-    throw fail("Số PCT không vượt mốc sổ giấy và không có hồ sơ hủy để cấp lại", 409);
-  }
-  if (input.requestedNumber && (oldCancelled || cancelledReservation) && !input.reissueAcknowledged) {
-    throw fail("Hãy xem hồ sơ đã hủy và xác nhận cấp lại số PCT", 409);
-  }
   if (await activePermitNumberExists(tx, input.kind, input.year, number)) {
     throw fail("Số PCT đang được sử dụng trong loại và năm này.", 409);
   }
-  const existing = await tx.workPermitNumberReservation.findFirst({
-    where: { kind: input.kind, year: input.year, number, status: { in: ["RESERVED", "ISSUED"] } }, select: { id: true },
-  });
-  if (existing) throw fail("Số PCT đã được người khác lấy. Vui lòng lấy số tiếp theo.", 409);
   const reservation = await tx.workPermitNumberReservation.create({ data: {
-    kind: input.kind, year: input.year, number, teamType: input.teamType,
-    ownerId: input.ownerId, ownerName: input.ownerName, reusedPermitId: oldCancelled?.id ?? null,
+    kind: input.kind, year: input.year, number, teamType: input.teamType, ownerId: input.ownerId, ownerName: input.ownerName,
   } });
   await tx.workPermitNumberReservationHistory.create({ data: {
     reservationId: reservation.id, action: "RESERVED", actorId: input.ownerId, actorName: input.ownerName,
-    note: oldCancelled ? `Cấp lại số của phiếu đã hủy ${oldCancelled.id}` : null,
   } });
   return reservation;
 }

@@ -3,7 +3,7 @@
 // Gắn nút "Lấy số PCT" ngay cạnh ô Số phiếu. Bấm → hỏi Tổ máy + Cương vị → sổ PXVH1 cấp số tiếp
 // theo và ghi phiếu nội bộ vào sổ theo nội dung NKVH đang hiện → điền số vào ô Số phiếu. Tiện ích
 // KHÔNG BAO GIỜ bấm Lưu trên NKVH: VHV kiểm tra rồi tự lưu.
-// Trang phiếu đã hủy chỉ hiện "Báo hủy về sổ"; phiếu tạo lại được chọn "Cấp lại số" của phiếu đã hủy.
+// Trang phiếu đã hủy chỉ hiện "Báo hủy về sổ"; số đã hủy bị bỏ, phiếu tạo lại lấy số mới.
 //
 // Cách tìm ô trên trang (xem README): chỉ tin các id do lập trình viên NKVH đặt (txtSoPhieu, city2,
 // pngLoaiPhieu, id_endDateKH, dtThietBi); id tự sinh j_idtNNN khác nhau giữa hai sổ và có thể đổi
@@ -15,7 +15,7 @@
   const API = "/api/work-permits/nkvh-claim";
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(PCT_ID)) return;
 
-  const state = { loading: true, permit: null, cancelledPermit: null, reissuable: [], reissue: null, positions: [], units: {}, panel: false, unit: null, position: null, busy: false, message: "", tone: "info" };
+  const state = { loading: true, permit: null, cancelledPermit: null, positions: [], units: {}, panel: false, unit: null, position: null, busy: false, message: "", tone: "info" };
 
   // ---------- Đọc trang NKVH ----------
   const fold = (value) => String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "")
@@ -41,12 +41,6 @@
     const span = [...(form()?.querySelectorAll("span") || [])].find((el) => outsideDialog(el) && /^phieu da huy/.test(fold(el.textContent)));
     if (!span) return null;
     return span.textContent.replace(/\s+/g, " ").trim().match(/L[ýy]\s*do\s*:\s*(.*)$/i)?.[1].trim() || "";
-  }
-
-  /** Số VHV đã tự gõ vào ô Số phiếu ("4306/2026/VH1-NĐDH" → "4306"), nếu trùng một số đã hủy chờ cấp lại. */
-  function typedReissue() {
-    const digits = numberInput()?.value.trim().match(/^0*(\d+)/)?.[1];
-    return digits ? state.reissuable.find((item) => item.number === digits) || null : null;
   }
 
   function currentStep() {
@@ -149,7 +143,6 @@
     if (result.ok) {
       state.permit = result.data.permit;
       state.cancelledPermit = result.data.cancelledPermit || null;
-      state.reissuable = result.data.reissuable || [];
       state.positions = result.data.positions || [];
       state.units = result.data.units || {};
       state.message = "";
@@ -165,35 +158,24 @@
     const input = numberInput();
     if (currentStep() !== 1) return say("Hãy mở bước B1 (Cấp phiếu) rồi bấm lại.", "error");
     if (input?.readOnly || input?.disabled) return say("Ô Số phiếu đang bị khoá trên NKVH, không điền được.", "error");
-    // VHV đã tự gõ lại số của phiếu vừa hủy (nếp "hủy rồi cấp lại cùng số" của NKVH) → ghi đúng số đó.
-    const typed = typedReissue();
-    if (input?.value.trim() && !typed) return say(`Ô Số phiếu đã có “${input.value.trim()}”. Nếu muốn lấy số từ sổ PXVH1, hãy xoá ô này rồi bấm lại.`, "error");
-    state.reissue = typed ? typed.number : defaultReissue();
+    if (input?.value.trim()) return say(`Ô Số phiếu đã có “${input.value.trim()}”. Nếu muốn lấy số từ sổ PXVH1, hãy xoá ô này rồi bấm lại.`, "error");
     state.panel = true; state.message = ""; render();
   }
 
-  /** Chọn sẵn "cấp lại số" khi có phiếu đã hủy cùng số ĐKCT — tức đang tạo lại đúng phiếu ra sai. */
-  function defaultReissue() {
-    const dkct = fold(readPage().registrationNumber);
-    return (dkct && state.reissuable.find((item) => fold(item.registrationNumber) === dkct)?.number) || "";
-  }
-
-  async function claim(unit, position, reissue) {
+  async function claim(unit, position) {
     const page = readPage();
     if (page.step !== 1) return say("Hãy mở bước B1 (Cấp phiếu) rồi bấm lại.", "error");
     if (!unit || !position) return say("Vui lòng chọn Tổ máy và Cương vị.", "error");
     state.busy = true; render();
     try { await chrome.storage.local.set({ lastPosition: position }); } catch { /* chỉ là ghi nhớ tiện lợi */ }
-    const result = await api("POST", API, { mode: "claim", kind: KIND, nkvhPctId: PCT_ID, unit, position, page, reissueNumber: reissue || undefined });
+    const result = await api("POST", API, { mode: "claim", kind: KIND, nkvhPctId: PCT_ID, unit, position, page });
     state.busy = false;
     if (!result.ok) return say(result.message, "error");
     state.permit = result.data; state.panel = false;
     fillNumber(result.data.formatted);
-    say(!result.data.created
-      ? `Phiếu này đã có số ${result.data.formatted} trên sổ — đã điền lại vào ô Số phiếu.`
-      : result.data.reissued
-        ? `Đã cấp lại số ${result.data.formatted} (số của phiếu đã hủy) và điền vào ô Số phiếu. Kiểm tra lại rồi bấm Lưu trên NKVH.`
-        : `Đã lấy số ${result.data.formatted} và điền vào ô Số phiếu. Kiểm tra lại rồi bấm Lưu trên NKVH.`, "success");
+    say(result.data.created
+      ? `Đã lấy số ${result.data.formatted} và điền vào ô Số phiếu. Kiểm tra lại rồi bấm Lưu trên NKVH.`
+      : `Phiếu này đã có số ${result.data.formatted} trên sổ — đã điền lại vào ô Số phiếu.`, "success");
   }
 
   async function reportCancel() {
@@ -205,7 +187,7 @@
     state.busy = false;
     if (!result.ok) return say(result.message, "error");
     state.permit = null; state.cancelledPermit = result.data;
-    say(`Đã hủy phiếu ${result.data.formatted} trên sổ. Khi tạo lại phiếu trên NKVH, chọn “Cấp lại số ${result.data.number}”.`, "success");
+    say(`Đã hủy phiếu ${result.data.formatted} trên sổ. Số này bị bỏ; phiếu tạo lại trên NKVH bấm Lấy số PCT để lấy số mới.`, "success");
   }
 
   async function sync() {
@@ -249,21 +231,11 @@
     else chrome.storage.local.get("lastPosition").then(({ lastPosition }) => {
       if (lastPosition && state.positions.includes(lastPosition) && state.position === null) positionSelect.value = state.position = lastPosition;
     }).catch(() => undefined);
-    // Có số đã hủy chờ cấp lại → cho chọn "Cấp lại số X" thay vì số mới (NKVH tạo lại phiếu ra sai bằng đúng số cũ).
-    const reissueSelect = state.reissuable.length ? h("select", {
-      style: "margin:0 0 6px 4px;padding:2px;max-width:520px;font:12px Verdana,Arial,sans-serif;",
-      onchange: () => { state.reissue = reissueSelect.value; render(); },
-    }, [h("option", { value: "", textContent: "Lấy số mới (số tiếp theo)" }), ...state.reissuable.map((item) => h("option", {
-      value: item.number,
-      textContent: `Cấp lại số ${item.number} (phiếu đã hủy)${item.registrationNumber ? ` · ĐKCT ${item.registrationNumber}` : ""} · ${item.content.slice(0, 60)}`,
-    }))]) : null;
-    if (reissueSelect) reissueSelect.value = state.reissue || "";
     return h("div", { style: "margin-top:6px;padding:8px 10px;border:1px solid #bfdbfe;border-radius:6px;background:#eff6ff;" }, [
       h("div", { style: "margin-bottom:6px;color:#1e3a8a;", textContent: `Lấy số PCT ${KIND === "ELECTRICAL" ? "Điện" : "Cơ – Nhiệt – Hóa"} từ sổ PXVH1 · phiếu nội bộ điện tử` }),
-      reissueSelect && h("div", {}, [h("label", { textContent: "Số PCT" }), reissueSelect]),
       h("label", { textContent: "Tổ máy*" }), unitSelect,
       h("label", { textContent: "Cương vị*" }), positionSelect,
-      button(state.busy ? "Đang lấy số…" : state.reissue ? "Cấp lại số & điền" : "Lấy số & điền", () => claim(unitSelect.value, positionSelect.value, state.reissue)),
+      button(state.busy ? "Đang lấy số…" : "Lấy số & điền", () => claim(unitSelect.value, positionSelect.value)),
       button("Đóng", () => { state.panel = false; render(); }, true),
       h("div", { style: "margin-top:6px;color:#475569;", textContent: "CHTT, số nhân viên và SYC còn thiếu sẽ hiện “Cần bổ sung” trên sổ để khai sau." }),
     ]);
@@ -276,11 +248,6 @@
     if (!root) {
       root = h("div", { id: TOOLBAR_ID, style: "margin-top:4px;font:12px Verdana,Geneva,Arial,sans-serif;" });
       input.insertAdjacentElement("afterend", root);
-    }
-    // Gõ tay số vào ô Số phiếu → đổi nhãn nút ngay ("Ghi phiếu cấp lại số …").
-    if (!input.dataset.pxvh1) {
-      input.dataset.pxvh1 = "1";
-      input.addEventListener("input", () => { if (!state.panel) render(); });
     }
     const parts = [h("strong", { textContent: "Sổ PXVH1: ", style: "color:#1e3a8a;" })];
     const cancelled = cancelNotice() !== null;
@@ -301,8 +268,7 @@
       parts.push(button(state.busy ? "Đang đồng bộ…" : "Đồng bộ về sổ", sync, true));
     } else if (state.positions.length) {
       parts.push(h("span", { textContent: "chưa có số" }));
-      const typed = typedReissue();
-      if (!state.panel) parts.push(button(typed ? `Ghi phiếu cấp lại số ${typed.number} vào sổ` : "Lấy số PCT", openPanel));
+      if (!state.panel) parts.push(button("Lấy số PCT", openPanel));
     } else {
       parts.push(button("Thử lại", load, true));
     }

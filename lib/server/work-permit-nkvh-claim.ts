@@ -6,7 +6,7 @@ import { OPERATION_POSITION_TITLES } from "@/lib/positions";
 import { DEFAULT_INTERNAL_TEAM_NAME } from "@/lib/work-permit-source-fields";
 import { CONTRACTOR_PERMIT_TRANSITIONS, formatPermitNumber, PERMIT_DISCIPLINES, PERMIT_KINDS, PERMIT_TRANSITIONS, PERMIT_UNITS, type PermitKind, type PermitStatus } from "@/lib/work-permits";
 import { parsePermit, permitSnapshot } from "@/lib/server/work-permits";
-import { activePermitNumberExists, canonicalPermitNumber, consumePermitNumberReservation, lockPermitNumberScope, reservePermitNumber } from "@/lib/server/work-permit-number-reservations";
+import { consumePermitNumberReservation, lockPermitNumberScope, reservePermitNumber } from "@/lib/server/work-permit-number-reservations";
 
 /*
  * Cầu nối tiện ích "Cấp số PCT NKVH" (chrome-extension/nkvh-pct) — CHỈ cho PCT nội bộ điện tử.
@@ -20,12 +20,9 @@ import { activePermitNumberExists, canonicalPermitNumber, consumePermitNumberRes
  * Việc kiểm tra "đã có số chưa" chạy sau khi khoá dãy số của sổ, nên hai lần bấm đồng thời không thể
  * cùng lấy số. Không có chỉ mục duy nhất trên nkvhPctId nên khoá này là hàng rào duy nhất.
  *
- * Phiếu ra sai: NKVH hủy phiếu cũ rồi tạo phiếu mới MANG LẠI ĐÚNG SỐ CŨ (vd. 4306 có một dòng "Hủy"
- * và một dòng "Đã cấp phiếu"). Sổ đi theo đúng nếp đó:
- *  1. Trang phiếu đã hủy trên NKVH → "Báo hủy về sổ" (cancelNkvhPermit): phiếu sổ chuyển Hủy, lý do
- *     lấy nguyên dòng "Phiếu đã hủy. Lý do: …" của NKVH.
- *  2. Phiếu mới → "Cấp lại số đã hủy" (claim kèm reissueNumber): đi qua reservePermitNumber với
- *     requestedNumber như nút "Cấp lại số đã hủy" trên sổ, nên không thể cấp trùng số đang dùng.
+ * Phiếu ra sai: trang phiếu đã hủy trên NKVH → "Báo hủy về sổ" (cancelNkvhPermit): phiếu sổ chuyển
+ * Hủy, lý do lấy nguyên dòng "Phiếu đã hủy. Lý do: …" của NKVH. Số đó bị bỏ; phiếu tạo lại trên NKVH
+ * lấy số mới như mọi phiếu khác.
  */
 const CLASSIFICATIONS: Record<string, "PLANNED" | "OFF_PLAN" | "UNEXPECTED"> = {
   "PLCT.PL.001": "PLANNED", "PLCT.PL.002": "OFF_PLAN", "PLCT.PL.003": "UNEXPECTED",
@@ -121,36 +118,8 @@ export function nkvhClaimResult(row: Pick<WorkPermit, "id" | "number" | "year" |
   return { id: row.id, number: row.number, year: row.year, status: row.status, formatted: formatPermitNumber(row), created };
 }
 
-export function currentPermitYear(now = new Date()) {
-  return vnParts(now).year;
-}
-
-/**
- * Số đã hủy của sổ mà CHƯA được cấp lại (không có phiếu còn hiệu lực hay lượt giữ số nào mang số đó)
- * — danh sách để VHV chọn "Cấp lại số" khi tạo lại phiếu trên NKVH. Mới hủy xếp trước.
- */
-export async function reissuableNkvhNumbers(db: Pick<Tx, "$queryRaw">, kind: PermitKind, year: number, limit = 15) {
-  const rows = await db.$queryRaw<Array<{ number: string; registrationNumber: string; content: string; statusReason: string; nkvhPctId: string | null; updatedAt: Date }>>`
-    SELECT DISTINCT ON (p."number"::numeric) p."number", p."registrationNumber", p."content", p."statusReason", p."nkvhPctId"::text AS "nkvhPctId", p."updatedAt"
-    FROM "WorkPermit" p
-    WHERE p."kind" = ${kind} AND p."year" = ${year} AND p."status" = 'CANCELLED' AND p."number" ~ '^[0-9]+$'
-      AND NOT EXISTS (SELECT 1 FROM "WorkPermit" a WHERE a."kind" = p."kind" AND a."year" = p."year"
-        AND a."status" NOT IN ('DRAFT', 'CANCELLED') AND a."number" ~ '^[0-9]+$' AND a."number"::numeric = p."number"::numeric)
-      AND NOT EXISTS (SELECT 1 FROM "WorkPermitNumberReservation" r WHERE r."kind" = p."kind" AND r."year" = p."year"
-        AND r."status" IN ('RESERVED', 'ISSUED') AND r."number" ~ '^[0-9]+$' AND r."number"::numeric = p."number"::numeric)
-    ORDER BY p."number"::numeric, p."updatedAt" DESC
-  `;
-  return rows.sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime()).slice(0, limit).map(row => ({
-    number: row.number, formatted: formatPermitNumber({ number: row.number, year }),
-    registrationNumber: row.registrationNumber, content: row.content.replace(/\s+/g, " ").slice(0, 160),
-    reason: row.statusReason, nkvhPctId: row.nkvhPctId,
-  }));
-}
-
 /** Lấy số cho phiếu NKVH (hoặc trả lại số đã lấy). Gọi trong một giao dịch. */
-export async function claimNkvhPermit(tx: Tx, user: Actor, input: {
-  kind: PermitKind; nkvhPctId: string; page: NkvhPage; unit: unknown; position: unknown; reissueNumber?: unknown;
-}, now = new Date()) {
+export async function claimNkvhPermit(tx: Tx, user: Actor, input: { kind: PermitKind; nkvhPctId: string; page: NkvhPage; unit: unknown; position: unknown }, now = new Date()) {
   const { kind, nkvhPctId, page } = input;
   const unit = typeof input.unit === "string" && Object.hasOwn(PERMIT_UNITS, input.unit) ? input.unit : "";
   if (!unit) throw fail("Vui lòng chọn tổ máy");
@@ -166,14 +135,8 @@ export async function claimNkvhPermit(tx: Tx, user: Actor, input: {
     where: { kind, nkvhPctId, status: { not: "CANCELLED" } }, orderBy: { createdAt: "desc" },
     select: { id: true, number: true, year: true, status: true },
   });
-  if (existing) return { ...nkvhClaimResult(existing, false), reissued: false };
-  const reissue = input.reissueNumber === undefined || input.reissueNumber === null || input.reissueNumber === ""
-    ? null : canonicalPermitNumber(String(input.reissueNumber));
-  if (reissue && await activePermitNumberExists(tx, kind, year, reissue)) {
-    throw fail(`Số ${formatPermitNumber({ number: reissue, year })} trên sổ vẫn là phiếu chưa hủy. Mở phiếu cũ trên NKVH, bấm "Báo hủy về sổ" rồi quay lại cấp lại số.`, 409);
-  }
-  const reservation = await reservePermitNumber(tx, { kind, year, teamType: "INTERNAL", ownerId: user.id, ownerName: user.name ?? "",
-    ...(reissue ? { requestedNumber: reissue, reissueAcknowledged: true } : {}) });
+  if (existing) return nkvhClaimResult(existing, false);
+  const reservation = await reservePermitNumber(tx, { kind, year, teamType: "INTERNAL", ownerId: user.id, ownerName: user.name ?? "" });
   const issuerName = page.issuerName || user.name?.trim() || "";
   const data = parsePermit({
     ...pageFields(page, kind), kind, year, number: reservation.number, unit, position,
@@ -183,13 +146,13 @@ export async function claimNkvhPermit(tx: Tx, user: Actor, input: {
   const row = await tx.workPermit.create({ data: { ...data, status: "ISSUED", createdById: user.id, createdByName: user.name ?? "" } });
   await consumePermitNumberReservation(tx, { reservationId: reservation.id, kind, year, number: reservation.number,
     teamType: "INTERNAL", userId: user.id, userName: user.name ?? "", isAdmin: user.role === "ADMIN", permitId: row.id });
-  await tx.workPermitHistory.create({ data: { permitId: row.id, actorId: user.id, actorName: user.name ?? "", action: reissue ? "Tạo phiếu từ NKVH (cấp lại số đã hủy)" : "Tạo phiếu từ NKVH", after: permitSnapshot(row) } });
-  return { ...nkvhClaimResult(row, true), reissued: Boolean(reissue) };
+  await tx.workPermitHistory.create({ data: { permitId: row.id, actorId: user.id, actorName: user.name ?? "", action: "Tạo phiếu từ NKVH", after: permitSnapshot(row) } });
+  return nkvhClaimResult(row, true);
 }
 
 /**
  * Phiếu đã hủy trên NKVH → hủy phiếu tương ứng trên sổ, lý do lấy theo NKVH. Gọi lại khi sổ đã hủy
- * thì trả về phiếu đó (bấm hai lần không lỗi). Số của phiếu trở thành "số đã hủy" để cấp lại.
+ * thì trả về phiếu đó (bấm hai lần không lỗi). Số của phiếu bị bỏ, không cấp lại.
  */
 export async function cancelNkvhPermit(tx: Tx, user: Actor, input: { kind: PermitKind; nkvhPctId: string; reason: unknown }) {
   const { kind, nkvhPctId } = input;

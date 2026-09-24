@@ -1,4 +1,4 @@
-# Notes for certification – Cấp số PCT NKVH 1.0.0
+# Notes for certification – Cấp số PCT NKVH 1.0.1
 
 Dán nguyên phần dưới vào ô **Notes for certification** khi bấm Submit.
 (Đội duyệt của Microsoft đọc tiếng Anh nên để tiếng Anh.)

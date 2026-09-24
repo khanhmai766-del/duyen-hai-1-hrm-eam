@@ -13,7 +13,7 @@ import { PermitExecutionDialog } from "@/components/work-permits/execution";
 import { PermitHistoryPanel } from "@/components/work-permits/history";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { useCancelDraftWorkPermit, useDeleteWorkPermit, usePermitNameSuggestions, useWorkPermits, useWorkPermit, useSaveWorkPermit, useExportWorkPermits, usePermitNumberSuggestion, usePermitNumberAvailability, usePermitNumberReservations, useTakePermitNumber, useCancelPermitNumberReservation, usePermitNumberBaselines, useSetPermitNumberBaseline, type PermitNumberReservation } from "@/hooks/useWorkPermits";
+import { useCancelDraftWorkPermit, useDeleteWorkPermit, usePermitNameSuggestions, useWorkPermits, useWorkPermit, useSaveWorkPermit, useExportWorkPermits, usePermitNumberSuggestion, usePermitNumberReservations, useTakePermitNumber, useCancelPermitNumberReservation, usePermitNumberBaselines, useSetPermitNumberBaseline, type PermitNumberReservation } from "@/hooks/useWorkPermits";
 import { useUsers } from "@/hooks/useUsers";
 import { useDefects, type DefectItem } from "@/hooks/useDefects";
 import { announcementPositionsMatch, OPERATION_POSITION_TITLES } from "@/lib/positions";
@@ -279,7 +279,6 @@ function PermitEditor({ initial, kind, presetTeamType, initialReservation, onClo
   try { nkvhId = parseNkvhPctLink(nkvhLink, form.kind); } catch (error) { nkvhError = error instanceof Error ? error.message : "Link NKVH không hợp lệ"; }
   const [status, setStatus] = useState<PermitStatus>(initial?.status ?? "ISSUED");
   const [reservation, setReservation] = useState<PermitNumberReservation | null>(initialReservation ?? null);
-  const [reissueAcknowledged, setReissueAcknowledged] = useState(false);
   const takeNumber = useTakePermitNumber();
   const [pickSyc, setPickSyc] = useState(false); const [pickSafety, setPickSafety] = useState(false); const save = useSaveWorkPermit();
   const cancelDraft = useCancelDraftWorkPermit();
@@ -307,7 +306,6 @@ function PermitEditor({ initial, kind, presetTeamType, initialReservation, onClo
     toast.info(`Đã chuyển sang ${next === "CONTRACTOR" ? "phiếu nhà thầu · PCT giấy" : "phiếu nội bộ · PCT điện tử"} — số PCT giữ nguyên. Kiểm tra lại bước Nhân sự trước khi lưu.`);
   }
   const numberSuggestion = usePermitNumberSuggestion(form.kind, form.year, numberEditable);
-  const numberAvailability = usePermitNumberAvailability(form.kind, form.year, form.number.trim(), numberEditable && Boolean(form.number.trim()));
   const issuerDisplay = issuerNameOverride || session?.user?.name || "";
   const users = useUsers({ enabled: form.teamType === "INTERNAL" }); const namesId = useId();
   // PCT nội bộ: CHTT và lãnh đạo công việc là người bên phân xưởng sửa chữa, không phải tài khoản
@@ -317,7 +315,6 @@ function PermitEditor({ initial, kind, presetTeamType, initialReservation, onClo
   const commandersId = useId(); const leadersId = useId();
   const nameListFor = (key: keyof PermitInput) => internal && key === "commanderName" ? commandersId : internal && key === "leaderName" ? leadersId : key.endsWith("Name") && key !== "teamName" ? namesId : undefined;
   const formRef = useRef<HTMLFormElement>(null);
-  const numberInputRef = useRef<HTMLInputElement>(null);
   const [activeStep, setActiveStep] = useState<PermitEditorStepKey>("info");
   const paper = effectivePermitFormat(form) === "PAPER";
   const steps = useMemo<PermitEditorStepKey[]>(() => ["info", ...(paper ? ["paper" as const] : []), "people", "status"], [paper]);
@@ -329,7 +326,6 @@ function PermitEditor({ initial, kind, presetTeamType, initialReservation, onClo
     if (key === "issuedAt" && numberEditable && value) {
       const year = Number(e.target.value.slice(0, 4));
       setForm(prev => ({ ...prev, issuedAt: value, year, number: year === prev.year ? prev.number : "" }));
-      if (year !== form.year) setReissueAcknowledged(false);
     } else set(key, value);
   }} /></label>;
   const issued = ["ISSUED", "ACTIVE", "PAUSED", "WAITING", "CLOSED"].includes(status);
@@ -388,18 +384,9 @@ function PermitEditor({ initial, kind, presetTeamType, initialReservation, onClo
   }
   async function confirmNumber() {
     if (reservation) return;
-    if (form.number.trim()) {
-      if (numberAvailability.isPending || numberAvailability.isError || !numberAvailability.data?.data.eligible) {
-        toast.error("Số nhập tay chưa khả dụng. Vui lòng kiểm tra lại trước khi lấy số."); return;
-      }
-      const availability = numberAvailability.data.data;
-      if ((availability.cancelledPermits.length > 0 || availability.cancelledReservation) && !reissueAcknowledged) {
-        toast.error("Hãy xem lịch sử số đã hủy và xác nhận cấp lại."); return;
-      }
-    }
     try {
-      const result = await takeNumber.mutateAsync({ kind: form.kind, year: form.year, teamType: form.teamType,
-        ...(form.number.trim() ? { number: form.number.trim(), reissueAcknowledged } : {}) });
+      // Luôn lấy số tiếp theo của sổ; số đã hủy bị bỏ, không cấp lại.
+      const result = await takeNumber.mutateAsync({ kind: form.kind, year: form.year, teamType: form.teamType });
       setReservation(result);
       set("number", result.number);
       toast.success(`Đã lấy số PCT ${formatPermitNumber(result)}. Số được giữ đến khi lưu; chọn nhầm loại phiếu thì đổi ngay ở đầu biểu mẫu.`);
@@ -424,17 +411,8 @@ function PermitEditor({ initial, kind, presetTeamType, initialReservation, onClo
           toast.error("Số đã lấy bị xung đột với hồ sơ khác. Hãy báo quản trị kiểm tra và hủy lượt lấy số này.");
           return;
         }
-        const refreshed = await numberSuggestion.refetch();
-        const suggested = refreshed.data?.data.suggested;
-        toast.error(suggested
-          ? `${DUPLICATE_PERMIT_NUMBER_ERROR} Gợi ý mới: ${suggested}.`
-          : `${DUPLICATE_PERMIT_NUMBER_ERROR} Vui lòng nhập một số khác.`);
-        // Chờ React dựng lại bước Thông tin rồi chọn toàn bộ số cũ để người dùng có thể
-        // gõ đè ngay hoặc bấm nút Điền số gợi ý mới bên dưới.
-        requestAnimationFrame(() => requestAnimationFrame(() => {
-          numberInputRef.current?.focus();
-          numberInputRef.current?.select();
-        }));
+        void numberSuggestion.refetch();
+        toast.error(`${DUPLICATE_PERMIT_NUMBER_ERROR} Bấm Lấy số PCT để lấy số tiếp theo.`);
         return;
       }
       toast.error(message);
@@ -450,15 +428,14 @@ function PermitEditor({ initial, kind, presetTeamType, initialReservation, onClo
   </div>;
   const numberAction = reservation ? <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-[11px] font-medium leading-4 text-emerald-800 lg:whitespace-nowrap" aria-live="polite">Đã giữ số {formatPermitNumber(reservation)}. Số được giữ nếu đóng biểu mẫu.</p> : numberEditable ? <div className="flex flex-wrap items-center gap-2 rounded-lg bg-sky-50 px-2.5 py-2 text-[11px] text-sky-950 lg:flex-nowrap" aria-live="polite">
     {numberSuggestion.isPending ? <span className="min-w-0 flex-1">Đang tải số dự kiến…</span> : numberSuggestion.isError ? <span className="min-w-0 flex-1">Chưa lấy được số dự kiến.</span> : !numberSuggestion.data?.data.configured ? <span className="min-w-0 flex-1 lg:whitespace-nowrap">Chưa thiết lập mốc sổ giấy năm {form.year}.</span> : <span className="min-w-0 flex-1 lg:whitespace-nowrap">Số dự kiến: <strong className="tabular-nums">{numberSuggestion.data.data.suggested}</strong> · Chốt khi bấm lấy số.</span>}
-    <Button type="button" size="sm" className="h-8 shrink-0 bg-blue-700 hover:bg-blue-800" disabled={takeNumber.isPending || !numberSuggestion.data?.data.configured} onClick={() => void confirmNumber()}>{takeNumber.isPending ? "Đang lấy số…" : form.number.trim() ? `Xác nhận lấy số ${form.number.trim()}` : "Lấy số PCT"}</Button>
+    <Button type="button" size="sm" className="h-8 shrink-0 bg-blue-700 hover:bg-blue-800" disabled={takeNumber.isPending || !numberSuggestion.data?.data.configured} onClick={() => void confirmNumber()}>{takeNumber.isPending ? "Đang lấy số…" : "Lấy số PCT"}</Button>
   </div> : null;
   const numberField = <div className="min-w-0 space-y-1.5 text-sm">
     <label className="block font-medium" htmlFor="permit-number">Số PCT *</label>
     <div className="flex min-h-10 w-full items-center rounded-lg border border-input bg-background shadow-sm focus-within:border-blue-500 focus-within:ring-4 focus-within:ring-blue-500/10">
-      <input id="permit-number" ref={numberInputRef} className="min-w-0 flex-1 bg-transparent px-3 py-2 text-[13px] outline-none disabled:cursor-not-allowed" aria-invalid={!form.number.trim()} aria-label="Số thứ tự PCT" inputMode="numeric" maxLength={80} value={form.number} disabled={!numberEditable} onChange={e => { set("number", e.target.value); setReissueAcknowledged(false); }} placeholder={numberEditable ? "Để trống để lấy số tiếp theo" : undefined} />
+      <input id="permit-number" className="min-w-0 flex-1 bg-transparent px-3 py-2 text-[13px] outline-none disabled:cursor-not-allowed" aria-invalid={!form.number.trim()} aria-label="Số thứ tự PCT" inputMode="numeric" maxLength={80} value={form.number} readOnly disabled={!numberEditable} placeholder={numberEditable ? "Bấm Lấy số PCT" : undefined} />
       {(!form.number.trim() || /^\d+$/.test(form.number.trim())) && <span className="shrink-0 border-l border-input px-2 text-xs font-semibold tabular-nums text-muted-foreground sm:px-3">/{form.year}/VH1-NĐDH</span>}
     </div>
-    {numberEditable && form.number.trim() && <div className="rounded-lg border border-slate-200 p-2.5 text-xs">{numberAvailability.isPending ? "Đang kiểm tra số nhập tay…" : numberAvailability.isError ? "Không thể kiểm tra số nhập tay." : numberAvailability.data?.data.active ? <span className="text-red-700">Số này đã được lấy hoặc cấp.</span> : !numberAvailability.data?.data.eligible ? <span className="text-amber-800">Số này chưa đủ điều kiện để lấy.</span> : <span className="text-emerald-700">Số này có thể lấy.</span>}{numberAvailability.data?.data.cancelledPermits.map(old => <p key={old.id} className="mt-2"><a className="font-medium text-blue-700 underline" href={`/work-permits?permitId=${old.id}`} target="_blank" rel="noopener noreferrer">Xem phiếu đã hủy {formatPermitNumber({ number: old.number, year: form.year })}</a> · {old.content}</p>)}{(Boolean(numberAvailability.data?.data.cancelledPermits.length) || numberAvailability.data?.data.cancelledReservation) && <label className="mt-2 flex items-start gap-2 font-medium"><input type="checkbox" checked={reissueAcknowledged} onChange={e => setReissueAcknowledged(e.target.checked)} />Tôi đã kiểm tra lịch sử và xác nhận cấp lại số đã hủy.</label>}</div>}
   </div>;
   return <Dialog open onOpenChange={v => { if (!v && !busy) onClose(); }}><DialogContent className="left-0 top-0 flex h-[100dvh] max-h-[100dvh] w-full max-w-full translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden border-0 p-0 font-sans text-[13px] sm:left-[50%] sm:top-[50%] sm:h-[min(92dvh,900px)] sm:max-h-[900px] sm:w-[min(96vw,1180px)] sm:max-w-[1180px] sm:translate-x-[-50%] sm:translate-y-[-50%] sm:rounded-2xl sm:border">
     <div className="shrink-0 border-b border-border bg-background px-4 py-4 pr-14 sm:px-6 sm:py-5 sm:pr-14"><div className="flex flex-wrap items-start justify-between gap-3"><div><DialogTitle className="text-lg tracking-[-0.01em] sm:text-xl">{initial ? `Cập nhật PCT ${formatPermitNumber(initial)}` : `Cấp phiếu ${form.teamType === "INTERNAL" ? "nội bộ" : "nhà thầu"} · ${PERMIT_KINDS[form.kind]}`}</DialogTitle><DialogDescription className="mt-1 max-w-2xl text-[13px] leading-5">Nhập theo phiếu thực tế. Người cấp phiếu được điền sẵn theo tài khoản thao tác và có thể sửa lại khi cần.</DialogDescription>{canSwitchType && <div className="mt-3 inline-flex rounded-lg border border-border bg-muted/30 p-0.5" role="radiogroup" aria-label="Loại phiếu">{(["INTERNAL", "CONTRACTOR"] as const).map(type => <button key={type} type="button" role="radio" aria-checked={form.teamType === type} disabled={busy} onClick={() => switchTeamType(type)} className={`rounded-md px-3 py-1.5 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${form.teamType === type ? "bg-white text-blue-800 shadow-sm dark:bg-background dark:text-blue-200" : "text-muted-foreground hover:text-foreground"}`}>{type === "INTERNAL" ? "Nội bộ · PCT điện tử" : "Nhà thầu · PCT giấy"}</button>)}</div>}</div><div className="flex items-center gap-2"><PermitFormat permit={form} /><Status value={status} /></div></div></div>

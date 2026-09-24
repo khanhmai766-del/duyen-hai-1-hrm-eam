@@ -122,7 +122,7 @@ export async function PUT(req: Request, props: { params: Promise<{ id: string }>
  *
  * Xoá cả các lần làm việc và lịch sử của phiếu (FK Restrict nên phải xoá trước). Không mất dấu:
  * AuditLog giữ bản chụp đầy đủ phiếu + lần làm việc + lý do. Lượt giữ số gắn với phiếu chuyển sang
- * CANCELLED kèm lý do, nên số này được cấp lại theo đúng luồng "cấp lại số đã hủy".
+ * CANCELLED kèm lý do; số đó bị bỏ, không cấp lại.
  */
 export async function DELETE(req: Request, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;

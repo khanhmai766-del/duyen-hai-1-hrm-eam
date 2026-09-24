@@ -1,10 +1,10 @@
-# Nội dung nộp Microsoft Edge Add-ons – Cấp số PCT NKVH 1.0.0
+# Nội dung nộp Microsoft Edge Add-ons – Cấp số PCT NKVH 1.0.1
 
 Chép từng mục vào ô tương ứng trong Partner Center.
 
 ## Packages
 
-Tải lên: `chrome-extension/dist/nkvh-pct-store-v1.0.0.zip`
+Tải lên: `chrome-extension/dist/nkvh-pct-store-v1.0.1.zip`
 (tạo bằng `node chrome-extension/scripts/package-nkvh-pct.mjs`).
 
 ## Availability

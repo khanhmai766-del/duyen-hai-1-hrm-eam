@@ -28,25 +28,17 @@ thể bị cấp trùng số.
   giấy lấy sau luôn nhảy qua số đã cấp cho NKVH.
 - Một phiếu NKVH (`id_pct` trên địa chỉ trang) chỉ nhận **một** số. Bấm lại hoặc tải lại trang thì
   nhận lại đúng số cũ. Hàng rào chống trùng là khoá dãy số của sổ; `nkvhPctId` không có chỉ mục duy nhất.
-- Ô Số phiếu trên NKVH đã có chữ thì tiện ích không ghi đè — trừ khi đó là số của một phiếu đã hủy
-  đang chờ cấp lại (xem mục dưới).
+- Ô Số phiếu trên NKVH đã có chữ thì tiện ích không ghi đè.
 - Đơn vị công tác trên NKVH là đơn vị ngoài (mã dạng UUID, ví dụ *Thiết bị Sài Gòn*) thì tiện ích từ
   chối lấy số.
 
-## Phiếu ra sai: hủy rồi cấp lại cùng số
+## Phiếu ra sai: báo hủy về sổ, số bị bỏ
 
-NKVH xử lý phiếu ra sai bằng cách hủy phiếu cũ rồi tạo phiếu mới **mang lại đúng số cũ** (danh sách
-có hai dòng cùng số: một "Hủy", một "Đã cấp phiếu"). Tiện ích đi theo đúng nếp đó:
+Mở trang phiếu đã hủy trên NKVH → thanh công cụ hiện **Báo hủy về sổ**. Phiếu trên sổ chuyển Hủy, lý
+do ghi "Hủy trên NKVH: <lý do NKVH>". Trang đã hủy không bao giờ hiện Lấy số hay Đồng bộ.
 
-1. Mở trang phiếu đã hủy trên NKVH → thanh công cụ hiện **Báo hủy về sổ**. Phiếu trên sổ chuyển Hủy,
-   lý do ghi "Hủy trên NKVH: <lý do NKVH>". Trang đã hủy không bao giờ hiện Lấy số hay Đồng bộ.
-2. Tạo phiếu mới, bấm **Lấy số PCT** → khung chọn có thêm ô **Số PCT**: "Lấy số mới" hoặc "Cấp lại số X
-   (phiếu đã hủy)". Có phiếu đã hủy cùng số ĐKCT thì chọn sẵn cấp lại số đó.
-3. VHV đã tự gõ số cũ vào ô Số phiếu → nút đổi thành **Ghi phiếu cấp lại số X vào sổ**.
-
-Cấp lại đi qua `reservePermitNumber` với `requestedNumber` (như nút cấp lại trên sổ), nên chỉ cấp được
-số đã hủy và chưa có phiếu nào dùng lại. Nếu phiếu cũ trên sổ chưa hủy thì server báo phải "Báo hủy về
-sổ" trước — tiện ích không tự hủy phiếu cũ vì phiếu mới không mang lý do hủy.
+**Số đã hủy bị bỏ luôn, không cấp lại** — cho cả sổ (phiếu giấy lẫn điện tử). Phiếu tạo lại trên NKVH
+bấm Lấy số PCT như mọi phiếu khác và nhận số tiếp theo.
 
 Trang đã hủy nhận ra qua dòng `<span style="color:red">Phiếu đã hủy. Lý do: …</span>` phía trên ô Số
 phiếu. Trên trang đã ký/đã hủy, CHTT in thành chữ (`1052 - Nguyễn Quốc Thái`) thay cho ô chọn; tiện ích

@@ -4,7 +4,7 @@ import { OPERATION_POSITION_TITLES } from "@/lib/positions";
 import { PERMIT_UNITS } from "@/lib/work-permits";
 import { permitBody, permitHandle } from "@/lib/server/work-permits";
 import { requirePermitIssue } from "@/lib/server/work-permit-permissions";
-import { cancelNkvhPermit, claimNkvhPermit, currentPermitYear, nkvhClaimResult, parseNkvhPage, parseNkvhScope, reissuableNkvhNumbers, syncNkvhPermit } from "@/lib/server/work-permit-nkvh-claim";
+import { cancelNkvhPermit, claimNkvhPermit, nkvhClaimResult, parseNkvhPage, parseNkvhScope, syncNkvhPermit } from "@/lib/server/work-permit-nkvh-claim";
 export const dynamic = "force-dynamic";
 
 /** API của tiện ích "Cấp số PCT NKVH" (chrome-extension/nkvh-pct) — nghiệp vụ ở lib/server/work-permit-nkvh-claim.ts. */
@@ -20,7 +20,6 @@ export async function GET(req: Request) {
     return ok({
       permit: permit ? nkvhClaimResult(permit, false) : null,
       cancelledPermit: cancelled ? nkvhClaimResult(cancelled, false) : null,
-      reissuable: permit ? [] : await reissuableNkvhNumbers(prisma, kind, currentPermitYear()),
       positions: OPERATION_POSITION_TITLES, units: PERMIT_UNITS, userName: user.name ?? "",
     });
   });
@@ -42,8 +41,8 @@ export async function POST(req: Request) {
       await audit(user.id, "SYNC_WORK_PERMIT_NKVH", "WorkPermit", result.id, `Đồng bộ PCT ${result.formatted} từ NKVH`);
       return ok(result);
     }
-    const result = await prisma.$transaction(tx => claimNkvhPermit(tx, user, { kind, nkvhPctId, page, unit: body.unit, position: body.position, reissueNumber: body.reissueNumber }));
-    if (result.created) await audit(user.id, "CREATE_WORK_PERMIT", "WorkPermit", result.id, `Tạo PCT ${result.formatted} từ NKVH (tiện ích${result.reissued ? ", cấp lại số đã hủy" : ""})`);
+    const result = await prisma.$transaction(tx => claimNkvhPermit(tx, user, { kind, nkvhPctId, page, unit: body.unit, position: body.position }));
+    if (result.created) await audit(user.id, "CREATE_WORK_PERMIT", "WorkPermit", result.id, `Tạo PCT ${result.formatted} từ NKVH (tiện ích)`);
     return ok(result);
   });
 }
