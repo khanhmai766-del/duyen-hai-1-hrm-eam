@@ -113,11 +113,11 @@ function plannedTime(date: Date | null) {
   const t = timeParts(date);
   return `${t.hour} giờ ${t.minute} ngày ${t.day}/${t.month}/${t.year}`;
 }
-/** Mẫu Điện mục 1.6: "ngày …. Giờ: …". */
+/** Mẫu Điện mục 1.6: "ngày 25/09/2026. Thời gian: 2 giờ 36 phút" (giờ bỏ số 0 đầu, phút giữ 2 chữ số). */
 function plannedDayHour(date: Date | null) {
-  if (!date) return "ngày ……/……/………. Giờ: ……h……";
+  if (!date) return "ngày ……/……/………. Thời gian: …… giờ …… phút";
   const t = timeParts(date);
-  return `ngày ${t.day}/${t.month}/${t.year}. Giờ: ${t.hour}h${t.minute}`;
+  return `ngày ${t.day}/${t.month}/${t.year}. Thời gian: ${Number(t.hour)} giờ ${t.minute} phút`;
 }
 function signatureMoment(date: Date | null) {
   if (!date) return "Ngày ……/……/……… Giờ ……h……";

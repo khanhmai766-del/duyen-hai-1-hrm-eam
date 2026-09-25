@@ -1,6 +1,6 @@
 "use client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { apiDownload, apiGet, apiMutate } from "@/lib/fetcher";
+import { apiGet, apiMutate } from "@/lib/fetcher";
 import type { PermitKind } from "@/lib/work-permits";
 import type { SafetyItem } from "@/lib/work-permit-safety";
 export function usePermitSafety(params: { kind: PermitKind; q: string; page: number; active: string; pageSize: number }) {
@@ -17,7 +17,4 @@ export function useDeletePermitSafety() {
   const qc = useQueryClient();
   return useMutation({ mutationFn: (id: string) => apiMutate<{ id: string }>(`/api/work-permits/safety/${id}`, "DELETE"),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["permit-safety"] }) });
-}
-export function useExportPermitTemplate() {
-  return useMutation({ mutationFn: (id: string) => apiDownload(`/api/work-permits/${id}/document`) });
 }

@@ -1,9 +1,9 @@
 // Thử (rồi HOÀN TÁC) luồng tiện ích Cấp số PCT NKVH trên DB dev: lấy số, bấm lại không tốn số,
-// đồng bộ nội dung, phiếu giấy lấy sau nhảy qua số đã cấp, báo hủy về sổ (số hủy bị bỏ).
+// đồng bộ nội dung, phiếu giấy lấy sau nhảy qua số đã cấp, báo dừng (Tạm dừng, giữ số), báo hủy về sổ (số hủy bị bỏ).
 // Không để lại dữ liệu.
 //   npx tsx scripts/verify/thu-nkvh-claim.ts
 import { PrismaClient } from "@prisma/client";
-import { cancelNkvhPermit, claimNkvhPermit, parseNkvhPage, syncNkvhPermit } from "@/lib/server/work-permit-nkvh-claim";
+import { cancelNkvhPermit, claimNkvhPermit, parseNkvhPage, stopNkvhPermit, syncNkvhPermit } from "@/lib/server/work-permit-nkvh-claim";
 import { reservePermitNumber } from "@/lib/server/work-permit-number-reservations";
 
 const db = new PrismaClient();
@@ -43,10 +43,11 @@ async function main() {
 
       for (const [label, input] of [
         ["thiếu cương vị", { unit: "S1", position: "" }], ["đơn vị ngoài", { unit: "S1", position: "Lò phó", teamCode: "2686f012-546a-48f0-b10b-91e728144357" }],
+        ["phiếu PXVH2 (QLVH VH3)", { unit: "S1", position: "Lò phó", qlvhCode: "VH3" }],
       ] as const) {
         try {
           await claimNkvhPermit(tx, user, { kind: "MECHANICAL", nkvhPctId: "11111111-2222-3333-4444-555555555555",
-            page: parseNkvhPage({ ...tcnh, teamCode: "teamCode" in input ? input.teamCode : "PCN" }, "MECHANICAL"), unit: input.unit, position: input.position });
+            page: parseNkvhPage({ ...tcnh, teamCode: "teamCode" in input ? input.teamCode : "PCN", qlvhCode: "qlvhCode" in input ? input.qlvhCode : "VH" }, "MECHANICAL"), unit: input.unit, position: input.position });
           console.log(`5) ${label}: ✗ lẽ ra phải bị chặn`);
         } catch (e) { console.log(`5) ${label}: chặn đúng →`, (await (e as Response).json()).error); }
       }
@@ -55,6 +56,16 @@ async function main() {
       const errorOf = async (run: () => Promise<unknown>) => {
         try { await run(); return "✗ lẽ ra phải bị chặn"; } catch (e) { return `chặn đúng → ${(await (e as Response).json()).error}`; }
       };
+      // Dừng trên NKVH (sự cố thiết bị / tai nạn lao động) → sổ Tạm dừng, số GIỮ; bấm lại không lỗi.
+      const stopped = await stopNkvhPermit(tx, user, { kind: "MECHANICAL", nkvhPctId: PCT, reason: "Sự cố rò hơi đường ống" });
+      const stoppedRow = await tx.workPermit.findUniqueOrThrow({ where: { id: stopped.id } });
+      console.log("5b) báo dừng:", stopped.formatted, stoppedRow.status, "|", stoppedRow.statusReason, stopped.number === first.number ? "✓ giữ số" : "✗ ĐỔI SỐ");
+      const stoppedAgain = await stopNkvhPermit(tx, user, { kind: "MECHANICAL", nkvhPctId: PCT, reason: "bấm lại" });
+      console.log("    bấm lại:", stoppedAgain.status, stoppedAgain.id === stopped.id ? "✓ cùng phiếu, không lỗi" : "✗");
+      const reserved = await tx.workPermitNumberReservation.findUnique({ where: { permitId: stopped.id } });
+      console.log("    lượt giữ số:", reserved?.status ?? "(không có)", reserved?.status === "CANCELLED" ? "✗ SỐ BỊ BỎ" : "✓ số không bị bỏ");
+
+      // Phiếu đang Tạm dừng vẫn hủy được (PAUSED → CANCELLED).
       const cancelled = await cancelNkvhPermit(tx, user, { kind: "MECHANICAL", nkvhPctId: PCT, reason: "hủy phiếu cấp sai NV cho phép" });
       const cancelledRow = await tx.workPermit.findUniqueOrThrow({ where: { id: cancelled.id } });
       console.log("6) báo hủy:", cancelled.formatted, cancelledRow.status, "|", cancelledRow.statusReason);

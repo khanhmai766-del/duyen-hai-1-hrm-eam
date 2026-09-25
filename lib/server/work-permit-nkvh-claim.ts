@@ -30,7 +30,7 @@ const CLASSIFICATIONS: Record<string, "PLANNED" | "OFF_PLAN" | "UNEXPECTED"> = {
 const TEAM_CODES: Record<string, string> = { PCN: DEFAULT_INTERNAL_TEAM_NAME.MECHANICAL, DTD: DEFAULT_INTERNAL_TEAM_NAME.ELECTRICAL };
 
 export type NkvhPage = {
-  registrationNumber: string; teamCode: string; teamLabel: string; classification: string; disciplines: string[];
+  registrationNumber: string; teamCode: string; teamLabel: string; qlvhCode: string; classification: string; disciplines: string[];
   location: string; content: string; workScope: string; plannedStartAt: string | null; plannedEndAt: string | null;
   commanderName: string; leaderName: string; workerCount: number | null; issuerName: string;
 };
@@ -76,7 +76,7 @@ export function parseNkvhPage(raw: unknown, kind: PermitKind): NkvhPage {
     : [];
   const count = Number(page.workerCount);
   return {
-    registrationNumber: text(page.registrationNumber, 200), teamCode: text(page.teamCode, 60), teamLabel: text(page.teamLabel, 200),
+    registrationNumber: text(page.registrationNumber, 200), teamCode: text(page.teamCode, 60), teamLabel: text(page.teamLabel, 200), qlvhCode: text(page.qlvhCode, 60),
     classification: text(page.classification, 40), disciplines,
     location: multiline(page.location, 500), content: multiline(page.content, 5000), workScope: multiline(page.workScope, 5000),
     plannedStartAt: nkvhInstant(page.plannedStartAt), plannedEndAt: nkvhInstant(page.plannedEndAt),
@@ -109,6 +109,29 @@ function pageFields(page: NkvhPage, kind: PermitKind) {
   return fields;
 }
 
+/**
+ * Phiếu bị DỪNG trên NKVH (đang thực hiện thì xảy ra sự cố thiết bị / tai nạn lao động) → phiếu sổ
+ * chuyển Tạm dừng, lý do "Dừng trên NKVH: …". KHÁC hủy: công việc đã diễn ra nên số được GIỮ, không
+ * bỏ. Không ghi Đóng vì Đóng hiểu là làm xong bình thường. Sau đó sổ vẫn Đóng/Hủy được như mọi phiếu
+ * nội bộ (PAUSED → CLOSED/CANCELLED). Gọi lại khi sổ đã Tạm dừng thì trả về phiếu đó (bấm hai lần không lỗi).
+ */
+export async function stopNkvhPermit(tx: Tx, user: Actor, input: { kind: PermitKind; nkvhPctId: string; reason: unknown }) {
+  const { kind, nkvhPctId } = input;
+  const found = await tx.workPermit.findFirst({ where: { kind, nkvhPctId, status: { not: "CANCELLED" } }, orderBy: { createdAt: "desc" }, select: { id: true } });
+  if (!found) throw fail("Phiếu NKVH này chưa có trên sổ PXVH1 (hoặc đã hủy) — không có gì để dừng", 404);
+  await tx.$queryRaw`SELECT "id" FROM "WorkPermit" WHERE "id" = ${found.id} FOR UPDATE`;
+  const before = await tx.workPermit.findUniqueOrThrow({ where: { id: found.id } });
+  if (before.status === "PAUSED") return nkvhClaimResult(before, false);
+  if (!["ISSUED", "ACTIVE", "WAITING"].includes(before.status)) {
+    throw fail(`Phiếu ${formatPermitNumber(before)} trên sổ đang ở trạng thái không dừng được. Liên hệ quản trị nếu cần sửa.`, 409);
+  }
+  const reason = text(input.reason, 500);
+  const statusReason = `Dừng trên NKVH${reason ? `: ${reason}` : ""}`;
+  const after = await tx.workPermit.update({ where: { id: before.id }, data: { status: "PAUSED", statusReason, version: { increment: 1 } } });
+  await tx.workPermitHistory.create({ data: { permitId: after.id, actorId: user.id, actorName: user.name ?? "", action: "Dừng theo NKVH", before: permitSnapshot(before), after: permitSnapshot(after) } });
+  return nkvhClaimResult(after, false);
+}
+
 /** Đưa hàng DB về dạng body để chạy lại parsePermit (tính lại searchText, kiểm tra ràng buộc). */
 function rowBody(row: WorkPermit): Record<string, unknown> {
   return Object.fromEntries(Object.entries(row).map(([key, value]) => [key, value instanceof Date ? value.toISOString() : value ?? ""]));
@@ -126,6 +149,11 @@ export async function claimNkvhPermit(tx: Tx, user: Actor, input: { kind: Permit
   const position = text(input.position, 200);
   if (!OPERATION_POSITION_TITLES.some(value => value === position)) throw fail("Vui lòng chọn cương vị");
   if (!page.content) throw fail("Trang NKVH chưa có nội dung công tác. Hãy mở phiếu ở bước B1.");
+  // Đơn vị QLVH trên NKVH: "VH" = PXVH1. Phiếu của phân xưởng khác (VH3 = PXVH2…) không cấp số sổ PXVH1.
+  // Tiện ích bản cũ không gửi qlvhCode (chuỗi rỗng) → không chặn, giữ nguyên hành vi cũ.
+  if (page.qlvhCode && page.qlvhCode !== "VH") {
+    throw fail("Phiếu này thuộc phân xưởng khác trên NKVH (Đơn vị QLVH không phải Phân xưởng Vận hành 1). Sổ PXVH1 không cấp số cho phiếu này.");
+  }
   if (TEAM_CODES[page.teamCode] === undefined && /^[0-9a-f-]{36}$/i.test(page.teamCode)) {
     throw fail("Đơn vị công tác trên NKVH là đơn vị ngoài. Tiện ích chỉ lấy số cho PCT nội bộ; phiếu nhà thầu lấy số trên sổ PCT giấy.");
   }

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Cấp số PCT NKVH - PXVH1",
-  "version": "1.0.1",
+  "version": "1.0.3",
   "description": "Lấy số PCT nội bộ từ sổ PXVH1 ngay trên trang phiếu NKVH và đồng bộ nội dung phiếu về sổ.",
   "homepage_url": "https://duyenhai1.vn/public/nkvh-pct-privacy",
   "icons": {

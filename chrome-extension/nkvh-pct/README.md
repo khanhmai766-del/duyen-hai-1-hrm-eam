@@ -28,14 +28,43 @@ thể bị cấp trùng số.
   giấy lấy sau luôn nhảy qua số đã cấp cho NKVH.
 - Một phiếu NKVH (`id_pct` trên địa chỉ trang) chỉ nhận **một** số. Bấm lại hoặc tải lại trang thì
   nhận lại đúng số cũ. Hàng rào chống trùng là khoá dãy số của sổ; `nkvhPctId` không có chỉ mục duy nhất.
-- Ô Số phiếu trên NKVH đã có chữ thì tiện ích không ghi đè.
+- Ô Số phiếu trên NKVH đã có chữ thì tiện ích không ghi đè — trừ **số NKVH tự sinh** dạng
+  `2392/2026/NĐDH-VH1` (đuôi `/NĐDH-VH…`, khác dạng sổ `…/VH1-NĐDH`): tiện ích hỏi xác nhận rồi thay
+  bằng số của sổ.
 - Đơn vị công tác trên NKVH là đơn vị ngoài (mã dạng UUID, ví dụ *Thiết bị Sài Gòn*) thì tiện ích từ
   chối lấy số.
 
+## Chỉ phiếu của PXVH1
+
+Ô **Đơn vị QLVH** của phiếu NKVH mang mã do NKVH đặt: `VH` = Phân xưởng Vận hành 1, `VH3` = Phân
+xưởng Vận hành 2 (số phiếu dạng `…/VH2-NĐDH`). Phiếu không phải `VH` → tiện ích chỉ hiện "phiếu của
+<phân xưởng> — không thuộc sổ PXVH1", **không gọi sổ**, không lấy số / báo hủy / báo dừng. Server cũng
+chặn lấy số khi `qlvhCode` khác `VH` (tiện ích bản cũ không gửi mã này → không bị chặn).
+
 ## Phiếu ra sai: báo hủy về sổ, số bị bỏ
 
-Mở trang phiếu đã hủy trên NKVH → thanh công cụ hiện **Báo hủy về sổ**. Phiếu trên sổ chuyển Hủy, lý
-do ghi "Hủy trên NKVH: <lý do NKVH>". Trang đã hủy không bao giờ hiện Lấy số hay Đồng bộ.
+**Tự động (từ 1.0.2):** bấm **Hủy phiếu** trên NKVH → hộp "Xác nhận hủy phiếu" có thêm dòng nhắc
+*"Sổ PXVH1: bấm Lưu thì phiếu … trên sổ được hủy theo"*. VHV nhập lý do, bấm **Lưu** của NKVH; khi
+NKVH hủy xong (dòng đỏ "Phiếu đã hủy" xuất hiện) tiện ích tự hủy phiếu trên sổ, không hỏi lại.
+
+- Tiện ích chỉ **nghe** cú bấm Lưu trong hộp `#formContent:dlgHuyPhieu` (id do lập trình viên NKVH đặt)
+  và ghi lý do vào `sessionStorage` theo `id_pct`, sống 10 phút — nên NKVH vẽ lại form hay tải lại cả
+  trang đều nhận được. Không bao giờ tự bấm nút của NKVH.
+- NKVH từ chối (thiếu lý do…) → không có dòng đỏ → không làm gì.
+- Gọi sổ lỗi (mất mạng, hết phiên) → báo lỗi, nút **Báo hủy về sổ** vẫn còn để bấm lại.
+- **Dừng phiếu** (từ 1.0.3) — PCT đang thực hiện thì xảy ra sự cố thiết bị / tai nạn lao động: dùng
+  chung hộp thoại (tiêu đề "Xác nhận dừng phiếu", ô "Lý do dừng", tham số ẩn `kieuHuy=1`). Sổ ghi phiếu
+  **Tạm dừng**, lý do "Dừng trên NKVH: …", **số vẫn giữ** (công việc đã diễn ra — khác hủy). Không ghi
+  Đóng vì Đóng hiểu là làm xong bình thường. Sau đó sổ vẫn Đóng/Hủy được phiếu này.
+  - Trang đã dừng (đã kiểm trên mẫu thật) in `<span style="color:red">Phiếu đã dừng. Lý do: … .</span>`
+    phía trên ô Số phiếu — NKVH thêm " ." cuối lý do, tiện ích cắt đi. Không thấy dòng đỏ sau 4 giây
+    kể từ lúc Lưu (có lý do) → thanh tiện ích hiện nút dự phòng **Báo dừng về sổ** / **Không phải**.
+  - Tiện ích chỉ báo thành công khi sổ trả về Tạm dừng — máy chủ sổ bản cũ (chưa có mode `stop`) sẽ
+    báo "chưa hỗ trợ báo dừng" thay vì báo nhầm. **Phải deploy máy chủ trước khi phát hành tiện ích.**
+
+**Thủ công:** mở trang phiếu đã hủy trên NKVH (hủy trước khi có bản 1.0.2) → thanh công cụ hiện
+**Báo hủy về sổ**. Phiếu trên sổ chuyển Hủy, lý do ghi "Hủy trên NKVH: <lý do NKVH>". Trang đã hủy
+không bao giờ hiện Lấy số hay Đồng bộ.
 
 **Số đã hủy bị bỏ luôn, không cấp lại** — cho cả sổ (phiếu giấy lẫn điện tử). Phiếu tạo lại trên NKVH
 bấm Lấy số PCT như mọi phiếu khác và nhận số tiếp theo.
@@ -54,7 +83,7 @@ NKVH là ứng dụng JSF/PrimeFaces, không có API. Tiện ích đọc DOM c�
 | Phân loại | radio `name="formContent:city2"` → `PLCT.PL.001/002/003` |
 | Chuyên môn (T-C-N-H) | các ô tick trong `#formContent:pngLoaiPhieu` |
 | Thời gian | `#formContent:id_endDateKH_input` và ô lịch cùng hàng |
-| Số ĐKCT, Đơn vị công tác, CHTT, Lãnh đạo, Số NV, Người cấp | theo **nhãn chữ** của ô bên trái |
+| Số ĐKCT, Đơn vị QLVH, Đơn vị công tác, CHTT, Lãnh đạo, Số NV, Người cấp | theo **nhãn chữ** của ô bên trái |
 | Địa điểm, Nội dung, Phạm vi | ô `textarea` đầu tiên sau dòng nhãn |
 
 - Id tự sinh dạng `j_idtNNN` **khác nhau** giữa sổ Điện và sổ T-C-N-H, và có thể đổi khi NKVH sửa
