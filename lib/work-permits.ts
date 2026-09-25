@@ -125,6 +125,9 @@ export interface PermitMember { personId?: string; code: string; name: string; c
 export interface PermitPerson {
   id: string; code: string; name: string; company: string; phone: string;
   canCommand: boolean; isActive: boolean; version: number;
+  /** Thông tin thẻ ra vào cổng & ATVSLĐ (đồng bộ từ Google Sheets); ảnh qua proxy S3. */
+  birthYear?: string; jobTitle?: string; workPackage?: string; workPosition?: string; workArea?: string;
+  trainingResult?: string; trainedAt?: string | null; cardIssuedAt?: string | null; cardExpiresAt?: string | null; photoUrl?: string | null;
   activeWorks?: Array<{ sessionId: string; role: "CHTT" | "MEMBER"; openedAt: string; permit: { id: string; number: string; year: number; kind: PermitKind } }>;
   activeWork?: { openedAt: string; permit: { number: string; year: number; kind: PermitKind } } | null;
 }

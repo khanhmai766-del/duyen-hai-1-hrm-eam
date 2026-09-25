@@ -20,7 +20,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const [mobileOpen, setMobileOpen] = React.useState(false);
   const [collapsed, setCollapsed] = React.useState(false);
-  const loadingCount = useIsFetching() + useIsMutating();
+  // Tác vụ có tiến độ riêng (đồng bộ Google Sheets…) gắn meta.background: không bật lớp chờ toàn trang, kẻo che mất hộp tiến độ.
+  const loadingCount = useIsFetching() + useIsMutating({ predicate: mutation => mutation.options.meta?.background !== true });
   const positionCarrier = React.useMemo(
     () => ({
       position: session?.user?.position,

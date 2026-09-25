@@ -102,6 +102,24 @@ export function usePermitPeople(params: { q?: string; page?: number; active?: bo
     ...(params.company ? { company: params.company } : {}), ...(params.limit ? { limit: String(params.limit) } : {}) });
   return useQuery({ queryKey: ["work-permit-people", query.toString()], enabled: params.enabled ?? true, refetchInterval: params.polling ? 30000 : false, queryFn: () => apiGet<PermitPerson[]>(`/api/work-permits/people?${query}`) as Promise<{ data: PermitPerson[]; meta: { total: number; pageSize: number; canWrite: boolean } }> });
 }
+/** Tra một thẻ vừa quét (link QR hoặc số thẻ) — gọi thẳng, không cache: mỗi lượt quét phải là dữ liệu mới. */
+export async function lookupPermitCard(q: string) {
+  return (await apiGet<{ code: string; person: PermitPerson | null }>(`/api/work-permits/people/card?q=${encodeURIComponent(q)}`)).data;
+}
+export interface PermitPeopleSyncResult {
+  total: number; created: number; updated: number; skipped: number; skippedSamples: string[];
+  skippedTabs: Array<{ tab: string; rows: number }>; moved: string[]; movedCount: number;
+  photos: Array<{ code: string; source: string }>;
+}
+export function useSyncPermitPeople() {
+  const qc = useQueryClient();
+  // meta.background: hộp đồng bộ có thanh tiến độ riêng — không bật lớp chờ toàn trang (AppShell).
+  const list = useMutation({ meta: { background: true }, mutationFn: () => apiMutate<PermitPeopleSyncResult>("/api/work-permits/people/sync", "POST", { step: "list" }) });
+  const photos = useMutation({ meta: { background: true }, mutationFn: (jobs: Array<{ code: string; source: string }>) =>
+    apiMutate<{ results: Array<{ code: string; ok: boolean; error?: string }> }>("/api/work-permits/people/sync", "POST", { step: "photos", jobs }) });
+  const refresh = () => { qc.invalidateQueries({ queryKey: ["work-permit-people"] }); qc.invalidateQueries({ queryKey: ["work-permit-companies"] }); };
+  return { list, photos, refresh };
+}
 export function useSavePermitPerson() {
   const qc = useQueryClient();
   return useMutation({ mutationFn: ({ id, body }: { id?: string; body: unknown }) => apiMutate<PermitPerson>(`/api/work-permits/people${id ? `/${id}` : ""}`, id ? "PUT" : "POST", body), onSuccess: () => { qc.invalidateQueries({ queryKey: ["work-permit-people"] }); qc.invalidateQueries({ queryKey: ["work-permit-companies"] }); } });

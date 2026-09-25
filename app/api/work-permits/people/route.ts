@@ -3,7 +3,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { audit, fail, ok, requireUser } from "@/lib/api";
 import { permitBody, permitHandle, permitSearchTerm } from "@/lib/server/work-permits";
-import { parsePermitPerson } from "@/lib/server/work-permit-people";
+import { parsePermitPerson, personCardSelect, withPhotoUrl } from "@/lib/server/work-permit-people";
 export const dynamic = "force-dynamic";
 export async function GET(req: Request) {
   return permitHandle(async () => {
@@ -16,7 +16,7 @@ export async function GET(req: Request) {
     if (q.length > 200 || company.length > 200 || !Number.isInteger(page) || page < 1 || page > 100000) return fail("Bộ lọc danh bạ không hợp lệ");
     const where = { searchText: { contains: permitSearchTerm(q) }, ...(company ? { company } : {}), ...(p.get("active") === "1" ? { isActive: true } : {}), ...(p.get("commander") === "1" ? { canCommand: true } : {}) };
     const [rows, total] = await prisma.$transaction([
-      prisma.workPermitPerson.findMany({ where, select: { id: true, code: true, name: true, company: true, phone: true, canCommand: true, isActive: true, version: true }, orderBy: [{ canCommand: "desc" }, { name: "asc" }, { code: "asc" }], skip: (page - 1) * pageSize, take: pageSize }),
+      prisma.workPermitPerson.findMany({ where, select: { id: true, code: true, name: true, company: true, phone: true, canCommand: true, isActive: true, version: true, ...personCardSelect }, orderBy: [{ canCommand: "desc" }, { name: "asc" }, { code: "asc" }], skip: (page - 1) * pageSize, take: pageSize }),
       prisma.workPermitPerson.count({ where }),
     ]);
     const activeSessions = rows.length ? await prisma.workPermitSession.findMany({
@@ -30,7 +30,7 @@ export async function GET(req: Request) {
       select: { id: true, commanderId: true, members: true, openedAt: true, permit: { select: { id: true, number: true, year: true, kind: true } } },
       orderBy: { openedAt: "asc" },
     }) : [];
-    return ok(rows.map(person => ({ ...person, activeWork: activeSessions.find(session => session.commanderId === person.id) ? { openedAt: activeSessions.find(session => session.commanderId === person.id)!.openedAt, permit: activeSessions.find(session => session.commanderId === person.id)!.permit } : null,
+    return ok(rows.map(person => ({ ...withPhotoUrl(person), activeWork: activeSessions.find(session => session.commanderId === person.id) ? { openedAt: activeSessions.find(session => session.commanderId === person.id)!.openedAt, permit: activeSessions.find(session => session.commanderId === person.id)!.permit } : null,
       activeWorks: activeSessions.filter(session => session.commanderId === person.id || (Array.isArray(session.members) && session.members.some(member => {
         if (!member || typeof member !== "object" || Array.isArray(member)) return false;
         return member.personId ? member.personId === person.id : member.code === person.code;

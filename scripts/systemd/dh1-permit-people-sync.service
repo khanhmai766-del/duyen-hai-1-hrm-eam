@@ -1,0 +1,12 @@
+[Unit]
+Description=DH1 - dong bo nhan su nha thau tu Google Sheets the ra vao cong
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/var/www/dh1-app
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+# Idempotent; thoat khac 0 = loi that (Google khong tra loi, sai ma khoa...) -> hien trong systemctl.
+ExecStart=/usr/bin/npm run --silent import:permit-people
+TimeoutStartSec=30min

@@ -32,6 +32,7 @@ systemd 249 trên server **chưa hỗ trợ hậu tố múi giờ trong `OnCalen
 | `dh1-telegram-level-one` | `*-*-* 00:00` | 07:00 hằng ngày | `run-telegram-job.mjs level-one` |
 | `dh1-telegram-weekly` | `Mon *-*-* 00:15` | 07:15 thứ Hai | `run-telegram-job.mjs weekly` |
 | `dh1-disk-guard` | `Sun *-*-* 20:37` | 03:37 thứ Hai | `server-disk-guard.sh` |
+| `dh1-permit-people-sync` | `*-*-* 17:00` | 00:00 hằng đêm | `npm run import:permit-people` (thẻ nhà thầu từ Google Sheets) |
 
 ## Vì sao timer rollover chạy HẰNG NGÀY
 

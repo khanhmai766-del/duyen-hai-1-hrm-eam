@@ -1713,6 +1713,20 @@ model WorkPermitPerson {
   phone      String              @default("") // SĐT liên hệ; để trống nếu nhà thầu không cung cấp.
   canCommand Boolean             @default(false)
   isActive   Boolean             @default(true)
+  /// Thông tin thẻ ra vào cổng & ATVSLĐ, đồng bộ từ Google Sheets (lib/server/work-permit-people-sync.ts).
+  birthYear      String    @default("")
+  jobTitle       String    @default("")
+  workPackage    String    @default("")
+  workPosition   String    @default("")
+  workArea       String    @default("")
+  trainingResult String    @default("")
+  trainedAt      DateTime?
+  cardIssuedAt   DateTime?
+  cardExpiresAt  DateTime?
+  /// Ảnh 3x4 đã nén (WebP) trên S3; photoSource = dấu vết nguồn ảnh trong sheet để khỏi tải lại khi không đổi.
+  photoKey       String?
+  photoSource    String    @default("")
+  sheetSyncedAt  DateTime?
   searchText String
   version    Int                 @default(1)
   createdAt  DateTime            @default(now())
