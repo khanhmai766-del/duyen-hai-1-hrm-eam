@@ -41,8 +41,8 @@ export function PermitCompanyDirectory() {
   // Chỉ gọi danh sách người khi có đơn vị đang mở; `limit: 200` để không phải phân trang trong khối bung.
   const people = usePermitPeople({ company: openCompany ?? "", limit: 200, enabled: Boolean(openCompany) });
   const canWrite = companies.data?.meta.canWrite ?? false;
-  const rows = (companies.data?.data ?? []).filter(row => !q.trim() || normalizeText(row.company).includes(normalizeText(q)));
-  const colCount = canWrite ? 6 : 5;
+  const rows = (companies.data?.data ?? []).filter(row => !q.trim() || normalizeText(`${row.code} ${row.company}`).includes(normalizeText(q)));
+  const colCount = canWrite ? 7 : 6;
   async function removePerson(person: PermitPerson) {
     if (!window.confirm(`Xóa ${person.name} (${person.code}) khỏi danh sách nhân sự nhà thầu?\n\nNếu người này đã xuất hiện trên PCT, hệ thống sẽ giữ hồ sơ và hướng dẫn chuyển sang ngừng hoạt động.`)) return;
     try { await remove.mutateAsync({ id: person.id, version: person.version }); toast.success("Đã xóa nhân sự nhà thầu"); }
@@ -65,7 +65,7 @@ export function PermitCompanyDirectory() {
         <p className="text-sm text-muted-foreground"><strong className="font-semibold text-foreground">{rows.length}</strong> đơn vị · <strong className="font-semibold text-foreground">{rows.reduce((sum, row) => sum + row.total, 0)}</strong> người</p>
         <div className="flex w-full items-center gap-2 md:w-auto">
           <span className="hidden text-sm text-muted-foreground md:inline">Tìm kiếm:</span>
-          <input className="h-9 w-full rounded-xl border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring md:w-72" aria-label="Tìm đơn vị nhà thầu" placeholder="Tên đơn vị nhà thầu…" value={q} maxLength={200} onChange={e => setQ(e.target.value)} />
+          <input className="h-9 w-full rounded-xl border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring md:w-72" aria-label="Tìm đơn vị nhà thầu" placeholder="Mã hoặc tên đơn vị nhà thầu…" value={q} maxLength={200} onChange={e => setQ(e.target.value)} />
         </div>
       </div>
       {companies.isPending ? <p role="status" className="p-6 text-sm">Đang tải danh sách đơn vị…</p>
@@ -75,6 +75,7 @@ export function PermitCompanyDirectory() {
           <TableHeader><TableRow className={TR_HEAD}>
             <TableHead className={cn(TH_NAVY, TH_EXPAND)} />
             <TableHead className={cn(TH_NAVY, "w-16")}><PlainHeader label="STT" /></TableHead>
+            <TableHead className={cn(TH_NAVY, "w-32")}><PlainHeader label="Mã đơn vị" /></TableHead>
             <TableHead className={TH_NAVY}><PlainHeader label="Tên đơn vị" align="left" /></TableHead>
             <TableHead className={cn(TH_NAVY, "w-40")}><PlainHeader label="Số lượng nhân viên" /></TableHead>
             <TableHead className={cn(TH_NAVY, "w-36")}><PlainHeader label="Số lượng CHTT" /></TableHead>
@@ -87,13 +88,14 @@ export function PermitCompanyDirectory() {
               <TableRow className={cn(rowBg, ROW_HOVER, "cursor-pointer")} onClick={() => setOpenCompany(expanded ? null : row.company)}>
                 <TableCell className={cn(TD_EXPAND, "py-2.5")}><RowExpander expanded={expanded} onToggle={() => setOpenCompany(expanded ? null : row.company)} /></TableCell>
                 <TableCell className={cn(TD_ROW, "py-2.5 text-center tabular-nums text-slate-500")}>{index + 1}</TableCell>
+                <TableCell className={cn(TD_ROW, "py-2.5 text-center font-semibold tracking-wide text-blue-800")}>{row.code || <span className="font-normal text-slate-400">—</span>}</TableCell>
                 <TableCell className={cn(TD_ROW, "py-2.5 font-semibold text-ink")}>{row.company}{row.active < row.total && <span className="ml-2 text-[11px] font-medium text-amber-700">{row.total - row.active} ngừng hoạt động</span>}</TableCell>
                 <TableCell className={cn(TD_ROW, "py-2.5 text-center tabular-nums")}>{row.total}</TableCell>
                 <TableCell className={cn(TD_ROW, "py-2.5 text-center tabular-nums")}>{row.commanders ? <span className="font-semibold text-emerald-700">{row.commanders}</span> : <span className="text-amber-700">0</span>}</TableCell>
                 {canWrite && <TableCell className={cn(TD_ROW, "py-2.5")}>
                   <div className="flex items-center justify-center gap-1.5">
                     <Button type="button" size="sm" className="h-8 px-2.5 text-xs" title="Thêm nhân sự / CHTT cho đơn vị này" onClick={e => act(e, () => setAddingPersonTo(row.company))}><UserPlus size={14} />Thêm nhân sự</Button>
-                    <Button type="button" size="sm" variant="outline" className="h-8 px-2" aria-label={`Sửa tên đơn vị ${row.company}`} title="Sửa tên đơn vị" onClick={e => act(e, () => setCompanyForm({ mode: "rename", company: row.company }))}><Pencil size={14} /></Button>
+                    <Button type="button" size="sm" variant="outline" className="h-8 px-2" aria-label={`Sửa đơn vị ${row.company}`} title="Sửa tên / mã đơn vị" onClick={e => act(e, () => setCompanyForm({ mode: "rename", company: row.company }))}><Pencil size={14} /></Button>
                     {row.total === 0 && <Button type="button" size="sm" variant="outline" className="h-8 px-2 text-red-700 hover:text-red-800" disabled={removeCompany.isPending} aria-label={`Xóa đơn vị ${row.company}`} title="Xóa đơn vị chưa có nhân sự" onClick={e => act(e, () => void deleteCompany(row.company))}><Trash2 size={14} /></Button>}
                   </div>
                 </TableCell>}
@@ -151,25 +153,27 @@ function CompanyPeopleTable({ people, canWrite, removing, onEdit, onRemove }: { 
  * PCT đã ghi giữ nguyên tên tại thời điểm thực hiện.
  */
 function CompanyEditor({ company, onClose, onSaved }: { company?: string; onClose: () => void; onSaved?: (name: string) => void }) {
-  const [name, setName] = useState(company ?? "");
   const rename = useRenamePermitCompany();
   const create = useCreatePermitCompany();
   const companies = usePermitCompanySummary();
+  const currentCode = companies.data?.data.find(row => row.company === company)?.code ?? "";
+  const [name, setName] = useState(company ?? "");
+  const [code, setCode] = useState(currentCode);
   const pending = rename.isPending || create.isPending;
   const exists = companies.data?.data.some(row => row.company !== company && row.company === name.trim()) ?? false;
   async function submit(event: React.FormEvent) {
     event.preventDefault(); event.stopPropagation();
-    const next = name.trim();
+    const next = name.trim(), nextCode = code.trim().toUpperCase();
     if (!next) return;
     try {
       if (company === undefined) {
-        await create.mutateAsync(next);
+        await create.mutateAsync({ name: next, code: nextCode });
         toast.success(`Đã thêm đơn vị "${next}"`);
       } else {
-        if (next === company) { onClose(); return; }
+        if (next === company && nextCode === currentCode) { onClose(); return; }
         if (exists && !window.confirm(`Đơn vị "${next}" đã có sẵn. Toàn bộ nhân sự của "${company}" sẽ được gộp vào đơn vị đó. Tiếp tục?`)) return;
-        const result = await rename.mutateAsync({ from: company, to: next });
-        toast.success(`Đã cập nhật đơn vị "${next}" (${result.updated} hồ sơ nhân sự)`);
+        const result = await rename.mutateAsync({ from: company, to: next, code: nextCode });
+        toast.success(next === company ? `Đã cập nhật mã đơn vị "${next}"` : `Đã cập nhật đơn vị "${next}" (${result.updated} hồ sơ nhân sự)`);
       }
       onSaved?.(next);
       onClose();
@@ -180,10 +184,11 @@ function CompanyEditor({ company, onClose, onSaved }: { company?: string; onClos
     <DialogDescription>{company === undefined ? "Thêm đơn vị trước, sau đó bấm “Thêm nhân sự” trên dòng của đơn vị để khai báo từng người." : "Tên mới được áp cho mọi hồ sơ nhân sự của đơn vị này. Các PCT đã ghi giữ nguyên tên đơn vị tại thời điểm thực hiện."}</DialogDescription>
     <form onSubmit={submit}><fieldset disabled={pending} className="space-y-4">
       <label className="block space-y-1 text-sm"><span>Tên đơn vị *</span><input className={control} value={name} required autoFocus maxLength={200} onChange={e => setName(e.target.value)} placeholder="Ví dụ: Công ty CP Cơ điện Miền Nam" /></label>
+      <label className="block space-y-1 text-sm"><span>Mã đơn vị</span><input className={cn(control, "uppercase")} value={code} maxLength={30} onChange={e => setCode(e.target.value)} placeholder="Tên gọi tắt, ví dụ: VTTBCN" /><span className="block text-xs text-muted-foreground">Tên gọi tắt để nhận ra đơn vị nhanh; không trùng với đơn vị khác.</span></label>
       {exists && (company === undefined
         ? <p className="rounded-lg bg-amber-50 p-3 text-xs text-amber-900">Đơn vị này đã có trong danh sách.</p>
         : <p className="rounded-lg bg-amber-50 p-3 text-xs text-amber-900">Đơn vị này đã tồn tại — lưu sẽ GỘP toàn bộ nhân sự của &ldquo;{company}&rdquo; vào đó.</p>)}
-      <div className="flex justify-end gap-2"><Button type="button" variant="outline" onClick={onClose}>Để sau</Button><Button type="submit" disabled={pending || (company === undefined && exists)}>{pending ? "Đang lưu…" : company === undefined ? "Thêm đơn vị" : "Lưu tên đơn vị"}</Button></div>
+      <div className="flex justify-end gap-2"><Button type="button" variant="outline" onClick={onClose}>Để sau</Button><Button type="submit" disabled={pending || (company === undefined && exists)}>{pending ? "Đang lưu…" : company === undefined ? "Thêm đơn vị" : "Lưu đơn vị"}</Button></div>
     </fieldset></form>
   </DialogContent></Dialog>;
 }

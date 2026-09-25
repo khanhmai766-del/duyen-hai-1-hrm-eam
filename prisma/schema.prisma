@@ -1726,6 +1726,8 @@ model WorkPermitPerson {
 model WorkPermitCompany {
   id        String   @id @default(cuid())
   name      String   @unique
+  /// Mã đơn vị (tên gọi tắt), chữ hoa; rỗng = chưa khai. Không trùng giữa các đơn vị (kiểm ở API).
+  code      String   @default("")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -1801,6 +1803,8 @@ model WorkPermit {
   location                       String              @default("")
   workDate                       String
   issuerName                     String              @default("")
+  /// Chức vụ người cấp phiếu, in vào dòng "Họ và tên … Chức vụ …" dưới "Người cấp phiếu" (mẫu PCT Điện).
+  issuerPosition                 String              @default("")
   electricalSafetySupervisorName String              @default("")
   issuerUserId                   String?
   commanderPersonId              String?

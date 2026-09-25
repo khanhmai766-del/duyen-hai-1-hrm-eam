@@ -10,6 +10,7 @@ import { permitListSelect } from "@/lib/server/work-permit-selects";
 import { startInternalPermitAutoClose } from "@/lib/server/work-permit-auto-close-runner";
 import { consumePermitNumberReservation } from "@/lib/server/work-permit-number-reservations";
 import type { PermitKind } from "@/lib/work-permits";
+import { syncPermitDocument } from "@/lib/server/work-permit-document-store";
 export const dynamic = "force-dynamic";
 export async function GET(req: Request) {
   return permitHandle(async () => {
@@ -49,6 +50,7 @@ export async function POST(req: Request) {
       return row;
     });
     await audit(user.id, "CREATE_WORK_PERMIT", "WorkPermit", row.id, `Tạo PCT ${formatPermitNumber(row)}`);
+    await syncPermitDocument(row);
     return ok(row);
   });
 }

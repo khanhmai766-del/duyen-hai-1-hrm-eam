@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { audit, fail, ok, requireUser } from "@/lib/api";
 import { permitBody, permitHandle, permitInstant, permitSnapshot, permitText } from "@/lib/server/work-permits";
 import { assertCommanderFree, readSessionOpen, resolveSessionMembers, validateSessionTime } from "@/lib/server/work-permit-sessions";
+import { syncPermitDocument } from "@/lib/server/work-permit-document-store";
 export const dynamic = "force-dynamic";
 export async function POST(req: Request, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
@@ -73,6 +74,8 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
       return afterSession;
     });
     await audit(user.id, body.action === "handoff" ? "HANDOFF_WORK_PERMIT_SESSION" : body.action === "open" ? "OPEN_WORK_PERMIT_SESSION" : "END_WORK_PERMIT_SESSION", "WorkPermit", params.id, `${body.action === "handoff" ? "Bàn giao" : body.action === "open" ? "Mở" : "Kết thúc"} lần làm việc ${result.id}: ${result.commanderName}`);
+    // Mở/bàn giao lần làm việc ghi người cho phép + thời điểm cho phép — có trên mẫu Cơ.
+    if (body.action !== "end") await syncPermitDocument(await prisma.workPermit.findUnique({ where: { id: params.id } }));
     return ok(result);
   });
 }

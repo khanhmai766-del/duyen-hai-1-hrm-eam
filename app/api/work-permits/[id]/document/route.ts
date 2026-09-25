@@ -4,6 +4,7 @@ import { effectivePermitFormat } from "@/lib/work-permits";
 import { permitHandle } from "@/lib/server/work-permits";
 import { createWorkPermitDocument, createWorkPermitHtml } from "@/lib/server/work-permit-document";
 import { printHtmlResponse } from "@/lib/print-html";
+import { permitDocumentBaseName } from "@/lib/server/work-permit-document-store";
 export const dynamic = "force-dynamic";
 export async function GET(req: Request, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
@@ -13,7 +14,7 @@ export async function GET(req: Request, props: { params: Promise<{ id: string }>
     if (!row) return fail("Không tìm thấy PCT", 404);
     if (effectivePermitFormat(row) !== "PAPER") return fail("Chỉ xuất mẫu cho PCT giấy");
     if (row.status === "DRAFT" || row.status === "CANCELLED") return fail("Chỉ tải mẫu cho phiếu đã cấp và chưa hủy");
-    const base = `PCT-${row.kind === "MECHANICAL" ? "Co" : "Dien"}-${row.year}-${row.number.replace(/[^a-zA-Z0-9_-]/g, "_")}`;
+    const base = permitDocumentBaseName(row);
     if (new URL(req.url).searchParams.get("format") === "html") {
       return printHtmlResponse(await createWorkPermitHtml(row), base);
     }

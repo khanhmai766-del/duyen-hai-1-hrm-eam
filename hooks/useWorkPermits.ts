@@ -121,7 +121,7 @@ export function usePermitSessionAction(permitId: string) {
 export function usePermitCompanies() {
   return useQuery({ queryKey: ["work-permit-companies"], staleTime: 60000, queryFn: () => apiGet<string[]>("/api/work-permits/companies") });
 }
-export interface PermitCompanySummary { company: string; total: number; commanders: number; active: number }
+export interface PermitCompanySummary { company: string; code: string; total: number; commanders: number; active: number }
 function invalidateCompanies(qc: ReturnType<typeof useQueryClient>) {
   qc.invalidateQueries({ queryKey: ["work-permit-companies"] });
   qc.invalidateQueries({ queryKey: ["work-permit-people"] });
@@ -129,7 +129,7 @@ function invalidateCompanies(qc: ReturnType<typeof useQueryClient>) {
 /** Thêm một đơn vị nhà thầu (chưa cần có nhân sự). */
 export function useCreatePermitCompany() {
   const qc = useQueryClient();
-  return useMutation({ mutationFn: (name: string) => apiMutate<{ id: string; name: string }>("/api/work-permits/companies", "POST", { name }), onSuccess: () => invalidateCompanies(qc) });
+  return useMutation({ mutationFn: (body: { name: string; code: string }) => apiMutate<{ id: string; name: string; code: string }>("/api/work-permits/companies", "POST", body), onSuccess: () => invalidateCompanies(qc) });
 }
 /** Xoá đơn vị CHƯA có nhân sự. */
 export function useDeletePermitCompany() {
@@ -140,7 +140,7 @@ export function useDeletePermitCompany() {
 export function useRenamePermitCompany() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: { from: string; to: string }) => apiMutate<{ from: string; to: string; updated: number; merged: number }>("/api/work-permits/companies", "PUT", body),
+    mutationFn: (body: { from: string; to: string; code?: string }) => apiMutate<{ from: string; to: string; updated: number; merged: number }>("/api/work-permits/companies", "PUT", body),
     onSuccess: () => invalidateCompanies(qc),
   });
 }

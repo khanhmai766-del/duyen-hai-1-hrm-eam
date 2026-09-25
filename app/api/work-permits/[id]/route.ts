@@ -9,6 +9,7 @@ import { resolvePermitIdentities } from "@/lib/server/work-permit-identities";
 import { historySummarySelect } from "@/lib/server/work-permit-selects";
 import { consumePermitNumberReservation, teamTypeLabel } from "@/lib/server/work-permit-number-reservations";
 import type { PermitKind } from "@/lib/work-permits";
+import { syncPermitDocument } from "@/lib/server/work-permit-document-store";
 export const dynamic = "force-dynamic";
 export async function GET(_req: Request, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
@@ -25,10 +26,12 @@ export async function PUT(req: Request, props: { params: Promise<{ id: string }>
     const body = await permitBody(req);
     const status = String(body.status) as PermitStatus;
     if (!Object.hasOwn(PERMIT_STATUSES, status)) return fail("Trạng thái không hợp lệ");
+    let previous: Awaited<ReturnType<typeof prisma.workPermit.findUnique>> = null;
     const row = await prisma.$transaction(async tx => {
       await tx.$queryRaw`SELECT "id" FROM "WorkPermit" WHERE "id" = ${params.id} FOR UPDATE`;
       const before = await tx.workPermit.findUnique({ where: { id: params.id } });
       if (!before) throw fail("Không tìm thấy PCT", 404);
+      previous = before;
       if (permitIssueUpdateNeedsExecution(before, body)) await requirePermitExecute(user);
       if (before.status === "PAUSED" && body.status !== "CANCELLED" && body.statusReason !== undefined && body.statusReason !== before.statusReason) await requirePermitExecute(user);
       if (["CLOSED", "CANCELLED"].includes(before.status)) throw fail("Phiếu đã đóng hoặc hủy được khóa để giữ lịch sử", 409);
@@ -112,6 +115,7 @@ export async function PUT(req: Request, props: { params: Promise<{ id: string }>
       return after;
     });
     await audit(user.id, "UPDATE_WORK_PERMIT", "WorkPermit", row.id, `Cập nhật PCT ${formatPermitNumber(row)}: ${PERMIT_STATUSES[status]}`);
+    await syncPermitDocument(row, previous);
     return ok(row);
   });
 }
@@ -152,6 +156,7 @@ export async function DELETE(req: Request, props: { params: Promise<{ id: string
       message: `Quản trị xoá PCT ${formatPermitNumber(before)}: ${reason}`,
       reason, historyCount: removed.historyCount, permit: permitSnapshot(before),
     }));
+    await syncPermitDocument(null, before);
     return ok({ id: before.id });
   });
 }
