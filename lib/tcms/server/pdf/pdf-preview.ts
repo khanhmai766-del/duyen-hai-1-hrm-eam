@@ -1,13 +1,12 @@
-import { copyFile, mkdir, stat } from "node:fs/promises";
+import { spawn, type ChildProcess } from "node:child_process";
+import { createHash } from "node:crypto";
+import { mkdir, mkdtemp, readdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { getData } from "pdf-parse/worker";
 import { PDFParse } from "pdf-parse";
-import { createWorker, OEM } from "tesseract.js";
 
 PDFParse.setWorker(getData());
-
-const OCR_WIDTH = 1800;
 
 export type PdfExtraction = { source: "text" | "ocr"; pageCount: number; text: string; textLength: number };
 
@@ -21,95 +20,116 @@ export function hasUsefulPdfText(text: string, pageCount: number) {
   return usefulCharacters >= Math.max(120, pageCount * 80);
 }
 
-const TESSERACT_LANGS = ["vie", "eng"] as const;
-const TESSDATA_VERSION = "4.0.0_best_int";
+// Bản chữ OCR được cache theo băm nội dung PDF: n8n thử lại tài liệu lỗi (vd Gemini 429 ở bước
+// embedding sau OCR) mỗi 5 phút — không cache thì mỗi lần thử lại OCR cả tài liệu từ đầu.
+// Đổi OCR_CACHE_VERSION khi đổi cách OCR (độ rộng ảnh, gói ngôn ngữ) để bỏ cache cũ.
+const OCR_CACHE_VERSION = "v1-1800-vie+eng-best_int";
+const OCR_CACHE_DIR = join(tmpdir(), "dh1-pdf-ocr-cache");
+const OCR_CACHE_MAX_AGE_MS = 30 * 24 * 3600_000;
+// Tính theo trang cho tài liệu dài, có trần để tiến trình con treo vẫn bị dọn.
+const OCR_TIMEOUT_BASE_MS = 60_000;
+const OCR_TIMEOUT_PER_PAGE_MS = 30_000;
+const OCR_TIMEOUT_MAX_MS = 30 * 60_000;
+const OCR_CHILD_HEAP_MB = 512;
+const OCR_STDOUT_MAX = 32 * 1024 * 1024;
+
+function ocrCacheFile(data: Buffer) {
+  const hash = createHash("sha256").update(OCR_CACHE_VERSION).update(data).digest("hex");
+  return join(OCR_CACHE_DIR, `${hash}.txt`);
+}
+
+async function readOcrCache(file: string) {
+  return readFile(file, "utf8").catch(() => null);
+}
+
+async function writeOcrCache(file: string, text: string) {
+  try {
+    await mkdir(OCR_CACHE_DIR, { recursive: true });
+    const temp = `${file}.${process.pid}.${Date.now()}.tmp`;
+    await writeFile(temp, text, "utf8");
+    await rename(temp, file);
+    // Dọn cache quá hạn ngay lúc ghi — ít tệp, không cần lịch riêng.
+    const now = Date.now();
+    for (const name of await readdir(OCR_CACHE_DIR)) {
+      const path = join(OCR_CACHE_DIR, name);
+      const info = await stat(path).catch(() => null);
+      if (info && now - info.mtimeMs > OCR_CACHE_MAX_AGE_MS) await rm(path, { force: true });
+    }
+  } catch {
+    // Cache chỉ để tiết kiệm lần sau; ghi hỏng không được làm hỏng lượt OCR đã xong.
+  }
+}
+
+// Mỗi lúc chỉ MỘT tiến trình OCR: hai tài liệu scan cùng lúc là gấp đôi vài trăm MB trên máy 4 GB.
+let ocrQueue: Promise<unknown> = Promise.resolve();
+function runExclusive<T>(task: () => Promise<T>): Promise<T> {
+  const run = ocrQueue.then(task, task);
+  ocrQueue = run.catch(() => undefined);
+  return run;
+}
 
 /**
- * KHÔNG truyền mảng `{ code, data }` cho createWorker, dù index.d.ts công bố đúng kiểu đó.
- * tesseract.js 7.0.0 có lỗi ở `initialize` (worker-script/index.js dòng 238):
- *
- *     _langs.map((l) => ((typeof l === 'string') ? l : l.data)).join('+')
- *                                                   ^^^^^^ đáng lẽ l.code
- *
- * Nó lấy DỮ LIỆU làm TÊN ngôn ngữ, nên tên ngôn ngữ thành cả mảng byte của tệp .gz.
- * Tesseract báo `Failed loading language '31,139,8,...'` (31,139,8 là magic gzip) rồi in
- * nguyên mảng ra log. Đo trên production 20/09/2026: ~5,8 MB MỖI DÒNG, 45 dòng ngốn
- * 262 MB, kèm 48 uncaughtException làm pm2 restart liên tục. 7.0.0 là bản mới nhất —
- * chưa có bản vá để nâng lên.
- *
- * Nhánh truyền MÃ dạng chuỗi không dính lỗi (chuỗi đi thẳng qua `map`), nhưng nó đọc tệp
- * theo `langPath` — mà `langPath` chỉ nhận MỘT thư mục, trong khi hai gói dữ liệu nằm ở
- * hai thư mục khác nhau. Nên gom bản sao vào một chỗ; chép một lần rồi dùng lại.
- *
- * Bỏ hàm này và quay lại `{ code, data }` khi tesseract.js vá dòng 238.
+ * OCR trong tiến trình con `scripts/ai/pdf-ocr-child.mjs` (lý do ở đầu tệp đó): bộ nhớ native của
+ * tesseract/dựng ảnh trả về hệ điều hành khi con thoát, next-server không phình theo từng tài liệu.
  */
-async function tessdataDir() {
-  const dir = join(tmpdir(), `dh1-tessdata-${TESSDATA_VERSION}`);
-  await mkdir(dir, { recursive: true });
-  await Promise.all(
-    TESSERACT_LANGS.map(async (code) => {
-      const name = `${code}.traineddata.gz`;
-      const source = join(process.cwd(), "node_modules", "@tesseract.js-data", code, TESSDATA_VERSION, name);
-      const target = join(dir, name);
-      // So kích thước thay vì chỉ kiểm tồn tại: bản chép dở dang (đầy đĩa, tiến trình bị
-      // giết giữa chừng) vẫn tồn tại nhưng hỏng, và lỗi đó rất khó lần ra.
-      const [sourceStat, targetStat] = await Promise.all([stat(source), stat(target).catch(() => null)]);
-      if (targetStat?.size !== sourceStat.size) await copyFile(source, target);
-    }),
-  );
-  return dir;
+function ocrInChildProcess(data: Buffer, pageCount: number) {
+  return runExclusive(async () => {
+    const workDir = await mkdtemp(join(tmpdir(), "dh1-pdf-ocr-"));
+    try {
+      const pdfPath = join(workDir, "input.pdf");
+      await writeFile(pdfPath, data);
+      const script = join(process.cwd(), "scripts", "ai", "pdf-ocr-child.mjs");
+      const timeoutMs = Math.min(OCR_TIMEOUT_MAX_MS, OCR_TIMEOUT_BASE_MS + pageCount * OCR_TIMEOUT_PER_PAGE_MS);
+      return await new Promise<string>((resolve, reject) => {
+        const child: ChildProcess = spawn(process.execPath, [`--max-old-space-size=${OCR_CHILD_HEAP_MB}`, script, pdfPath, String(pageCount)], {
+          cwd: process.cwd(),
+          // Chỉ biến cần cho Node; không chuyển bí mật của app (DATABASE_URL, khoá API) sang tiến trình con.
+          env: { NODE_ENV: process.env.NODE_ENV, PATH: process.env.PATH ?? "", HOME: process.env.HOME ?? "", TMPDIR: process.env.TMPDIR ?? "", TEMP: process.env.TEMP ?? "", TMP: process.env.TMP ?? "", SystemRoot: process.env.SystemRoot ?? "" },
+          stdio: ["ignore", "pipe", "pipe"],
+          windowsHide: true,
+        });
+        let stdout = "";
+        let stderr = "";
+        const timer = setTimeout(() => { child.kill("SIGKILL"); reject(new Error(`OCR quá ${Math.round(timeoutMs / 60_000)} phút, đã dừng`)); }, timeoutMs);
+        child.stdout!.setEncoding("utf8").on("data", (chunk: string) => {
+          stdout += chunk;
+          if (stdout.length > OCR_STDOUT_MAX) { child.kill("SIGKILL"); reject(new Error("Kết quả OCR vượt giới hạn")); }
+        });
+        // Chỉ giữ đuôi ngắn: tesseract.js từng in cả mảng byte 5,8 MB mỗi dòng ra log.
+        child.stderr!.setEncoding("utf8").on("data", (chunk: string) => { stderr = (stderr + chunk).slice(-2000); });
+        child.on("error", (error) => { clearTimeout(timer); reject(error); });
+        child.on("close", (code) => {
+          clearTimeout(timer);
+          const line = stdout.trim().split("\n").pop() ?? "";
+          let parsed: { text?: unknown; error?: unknown } | null = null;
+          try { parsed = JSON.parse(line); } catch { parsed = null; }
+          if (code === 0 && typeof parsed?.text === "string") return resolve(parsed.text);
+          const detail = typeof parsed?.error === "string" ? parsed.error : stderr.trim().split("\n").pop() || `mã thoát ${code}`;
+          reject(new Error(detail.startsWith("Worker OCR lỗi") ? detail : `OCR lỗi: ${detail}`));
+        });
+      });
+    } finally {
+      await rm(workDir, { recursive: true, force: true }).catch(() => undefined);
+    }
+  });
 }
 
 export async function extractPdfPreview(data: Buffer): Promise<PdfExtraction> {
   const parser = new PDFParse({ data });
+  let pageCount: number;
   try {
     const extracted = await parser.getText();
-    const pageCount = extracted.total;
+    pageCount = extracted.total;
     const text = normalizePdfText(extracted.text ?? "");
     if (hasUsefulPdfText(text, pageCount)) return { source: "text", pageCount, text, textLength: text.length };
-
-    const screenshots = await parser.getScreenshot({ desiredWidth: OCR_WIDTH, imageBuffer: true, imageDataUrl: false });
-    // `errorHandler` KHÔNG phải tuỳ chọn trang trí. tesseract.js phát lỗi worker bằng
-    // `throw` ngay trong callback onMessage (createWorker.js dòng 216) — ngoài mọi promise,
-    // nên `try/catch` quanh `await` KHÔNG bắt được: Node nâng thành uncaughtException,
-    // route chết giữa chừng và khối catch ghi `aiIndexError` không bao giờ chạy tới. Hậu
-    // quả đã thấy trên production: tài liệu hỏng vì OCR trông y hệt tài liệu chưa tới lượt,
-    // không cách nào phân biệt (xem scripts/check/document-ai-index.ts).
-    //
-    // Nhưng truyền errorHandler suông thì chỉ đổi crash thành TREO: nhánh `throw` bị bỏ qua
-    // (dòng 214) mà `workerResReject` lại chỉ chạy khi `action === "load"`, nên nhiều lỗi
-    // không có promise nào settle — đã dựng lại được bằng langPath trỏ vào thư mục không
-    // tồn tại: tiến trình treo vô hạn. Treo còn tệ hơn crash vì n8n chỉ thấy timeout.
-    // Nên errorHandler phải CHỦ ĐỘNG reject, và mọi lệnh OCR đều chạy đua với tín hiệu đó.
-    let signalWorkerError!: (error: Error) => void;
-    const workerError = new Promise<never>((_, reject) => {
-      signalWorkerError = reject;
-    });
-    // Luôn có một người nghe, kẻo lần lỗi nào không ai đua cùng sẽ thành unhandledRejection.
-    workerError.catch(() => undefined);
-
-    const worker = await Promise.race([
-      createWorker([...TESSERACT_LANGS], OEM.LSTM_ONLY, {
-        langPath: await tessdataDir(),
-        cacheMethod: "none",
-        gzip: true,
-        errorHandler: (message: unknown) => signalWorkerError(new Error(`Worker OCR lỗi: ${message}`)),
-      }),
-      workerError,
-    ]);
-    try {
-      const pages: string[] = [];
-      for (const page of screenshots.pages) {
-        const result = await Promise.race([worker.recognize(Buffer.from(page.data)), workerError]);
-        const pageText = normalizePdfText(result.data.text ?? "");
-        if (pageText) pages.push(`--- Trang ${page.pageNumber}/${pageCount} ---\n${pageText}`);
-      }
-      const ocrText = normalizePdfText(pages.join("\n\n"));
-      return { source: "ocr", pageCount, text: ocrText, textLength: ocrText.length };
-    } finally {
-      await worker.terminate().catch(() => undefined);
-    }
   } finally {
+    // Đóng trước khi OCR: tiến trình con tự mở PDF, không giữ bản thứ hai trong next-server suốt lượt OCR.
     await parser.destroy();
   }
+
+  const cacheFile = ocrCacheFile(data);
+  const cached = await readOcrCache(cacheFile);
+  const ocrText = cached ?? await ocrInChildProcess(data, pageCount);
+  if (cached === null) await writeOcrCache(cacheFile, ocrText);
+  return { source: "ocr", pageCount, text: ocrText, textLength: ocrText.length };
 }
