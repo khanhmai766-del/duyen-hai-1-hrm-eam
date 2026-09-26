@@ -318,6 +318,7 @@ function AiChatPanel({ open, setOpen }: { open: boolean; setOpen: (open: boolean
         </button>
       ) : (
         <span
+          data-ui-overlay="mascot"
           className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] right-2 z-40 block md:bottom-2 md:right-4"
           onMouseEnter={() => setHovered(true)}
           onMouseLeave={() => setHovered(false)}
