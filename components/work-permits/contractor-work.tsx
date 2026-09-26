@@ -1,7 +1,8 @@
 "use client";
 
 import { Fragment, useEffect, useRef, useState } from "react";
-import { Plus, Users, UserPlus, X, Play, Square, Pencil, Trash2, ScanLine, RefreshCw } from "lucide-react";
+import Link from "next/link";
+import { Plus, Users, UserPlus, X, Play, Square, Pencil, Trash2, ScanLine, RefreshCw, MonitorPlay } from "lucide-react";
 import { toast } from "sonner";
 import { PermitCompanyPicker } from "@/components/work-permits/company-picker";
 import { PermitEmployeePicker } from "@/components/work-permits/employee-picker";
@@ -318,18 +319,40 @@ export function PermitMembersEditor({ members, onChange, commander, scan }: {
   </div>;
 }
 
-export function ContractorSessions({ permit, canExecute }: { permit: PermitDetailRow; canExecute: boolean }) {
+/** Đường dẫn màn hình làm việc (toàn trang) của một PCT nhà thầu. */
+export const permitWorkHref = (id: string) => `/work-permits/${encodeURIComponent(id)}/lam-viec`;
+
+/**
+ * Popup phiếu chỉ giữ MỘT dòng trạng thái lần làm việc + nút mở màn hình làm việc: theo dõi vào/ra
+ * (quét thẻ, đếm người, bàn giao, kết thúc) cần cả màn hình, không nhét vừa hộp chi tiết.
+ */
+export function ContractorWorkSummary({ permit }: { permit: PermitDetailRow }) {
+  if (permit.teamType !== "CONTRACTOR" || ["DRAFT", "CANCELLED"].includes(permit.status)) return null;
+  const live = permit.sessions.find(s => !s.endedAt);
+  const inside = live ? 1 + live.members.filter(m => (m.personId ? m.personId !== live.commanderId : m.code !== live.commanderCode) && attendanceInside(m)).length : 0;
+  const last = permit.sessions[0];
+  return <section className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border p-4 ${live ? "border-emerald-300 bg-emerald-50/60 dark:bg-emerald-950/20" : "border-sky-200 bg-sky-50/40 dark:bg-sky-950/20"}`}>
+    <div className="min-w-0 space-y-0.5">
+      <p className="text-sm font-semibold">{live ? <><span className="mr-1.5 inline-block h-2 w-2 rounded-full bg-emerald-500 align-middle" aria-hidden />Đang làm việc · {inside} người trong khu vực</> : permit._count.sessions ? `Đã có ${permit._count.sessions} lần làm việc · hiện không có lần đang mở` : "Chưa mở lần làm việc"}</p>
+      <p className="text-xs text-muted-foreground">{live ? `CHTT ${live.commanderName} · từ ${fmt(live.openedAt)}` : last?.endedAt ? `Lần gần nhất kết thúc ${fmt(last.endedAt)}` : "Cho phép làm việc, quét thẻ vào/ra và kết thúc trên màn hình làm việc."}</p>
+    </div>
+    <Button asChild className="shrink-0"><Link href={permitWorkHref(permit.id)}><MonitorPlay />Mở màn hình làm việc</Link></Button>
+  </section>;
+}
+
+/** Lịch sử các lần làm việc; `historyOnly` (màn hình làm việc) chỉ liệt kê lần đã kết thúc — lần đang mở có khối riêng ở trên. */
+export function ContractorSessions({ permit, canExecute, historyOnly = false }: { permit: PermitDetailRow; canExecute: boolean; historyOnly?: boolean }) {
   const [showAllSessions, setShowAllSessions] = useState(false);
   const [action, setAction] = useState<"open" | PermitSession | null>(null);
   const [handoff, setHandoff] = useState(false);
   const older = usePermitActivity<PermitSession>(permit.id, "sessions", permit.version, showAllSessions && permit.teamType === "CONTRACTOR");
-  const visibleSessions = [...permit.sessions, ...(showAllSessions ? older.data?.pages.flatMap(page => page.data) ?? [] : [])];
+  const visibleSessions = [...permit.sessions, ...(showAllSessions ? older.data?.pages.flatMap(page => page.data) ?? [] : [])].filter(s => !historyOnly || s.endedAt);
   if (permit.teamType !== "CONTRACTOR") return null;
   const live = permit.sessions.find(s => !s.endedAt);
   return <section className="space-y-3 rounded-xl border border-sky-200 bg-sky-50/40 p-4 dark:bg-sky-950/20">
-    <div className="flex flex-wrap items-center justify-between gap-3"><h3 className="font-semibold">Các lần làm việc của nhà thầu</h3>{canExecute && !live && ["ISSUED", "WAITING"].includes(permit.status) && <Button onClick={() => { setHandoff(false); setAction("open"); }}><Play />Cho phép / mở lần làm việc</Button>}</div>
-    <p className="text-sm text-muted-foreground">Mỗi lần lưu riêng CHTT, nhân viên và thời gian. Kết thúc lần làm việc giải phóng CHTT để làm phiếu khác; PCT vẫn giữ để tiếp tục lần sau.</p>
-    {!permit.sessions.length && <p className="rounded-lg bg-background p-3 text-sm">Chưa ghi nhận lần làm việc. Phiếu phải được cấp trước khi mở lần đầu.</p>}
+    <div className="flex flex-wrap items-center justify-between gap-3"><h3 className="font-semibold">{historyOnly ? "Các lần làm việc đã kết thúc" : "Các lần làm việc của nhà thầu"}</h3>{!historyOnly && canExecute && !live && ["ISSUED", "WAITING"].includes(permit.status) && <Button onClick={() => { setHandoff(false); setAction("open"); }}><Play />Cho phép / mở lần làm việc</Button>}</div>
+    {!historyOnly && <p className="text-sm text-muted-foreground">Mỗi lần lưu riêng CHTT, nhân viên và thời gian. Kết thúc lần làm việc giải phóng CHTT để làm phiếu khác; PCT vẫn giữ để tiếp tục lần sau.</p>}
+    {!visibleSessions.length && <p className="rounded-lg bg-background p-3 text-sm">{historyOnly ? "Chưa có lần làm việc nào kết thúc." : "Chưa ghi nhận lần làm việc. Phiếu phải được cấp trước khi mở lần đầu."}</p>}
     {visibleSessions.map(s => <article key={s.id} className={`space-y-2 rounded-lg border bg-background p-3 ${s.endedAt ? "border-border" : "border-emerald-400"}`}>
       <div className="flex flex-wrap items-start justify-between gap-2"><div><b>{s.commanderName} · {s.commanderCode}</b><p className="text-sm text-muted-foreground">{s.company}</p></div>{!s.endedAt && canExecute && <div className="flex flex-wrap gap-2"><Button variant="outline" onClick={() => { setHandoff(true); setAction(s); }}>Bàn giao / đổi CHTT</Button><Button variant="outline" onClick={() => { setHandoff(false); setAction(s); }}><Square />Kết thúc lần làm việc</Button></div>}</div>
       <p className="text-sm"><strong>{fmt(s.openedAt)}</strong> → {s.endedAt ? fmt(s.endedAt) : <strong className="text-emerald-700">Đang làm · chưa kết thúc</strong>}</p>
@@ -347,7 +370,7 @@ export function ContractorSessions({ permit, canExecute }: { permit: PermitDetai
   </section>;
 }
 
-function SessionEditor({ permit, session, handoff = false, onClose }: { permit: PermitDetailRow; session?: PermitSession; handoff?: boolean; onClose: () => void }) {
+export function SessionEditor({ permit, session, handoff = false, onClose }: { permit: PermitDetailRow; session?: PermitSession; handoff?: boolean; onClose: () => void }) {
   const ending = Boolean(session) && !handoff;
   const [person, setPerson] = useState<Pick<PermitPerson, "id" | "name" | "code" | "company"> | null>(() => {
     if (handoff) return null;

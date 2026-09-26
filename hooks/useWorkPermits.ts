@@ -18,8 +18,19 @@ export interface PermitNumberBaselineRow {
 export function useWorkPermits(filters: string, enabled = true) {
   return useQuery({ queryKey: ["work-permits", filters], enabled, refetchInterval: 60_000, queryFn: () => apiGet<PermitListRow[]>(`/api/work-permits?${filters}`) as Promise<{ data: PermitListRow[]; meta: PermitMeta }> });
 }
-export function useWorkPermit(id?: string) {
-  return useQuery({ queryKey: ["work-permit", id], queryFn: () => apiGet<PermitDetailRow>(`/api/work-permits/${id}`), enabled: Boolean(id) });
+export interface PermitLiveSession {
+  id: string; commanderId: string; commanderCode: string; commanderName: string; company: string; openedAt: string; authorizerName: string;
+  permit: Pick<PermitRow, "id" | "number" | "year" | "kind" | "unit" | "content" | "location" | "position" | "teamName" | "progress">;
+  /** Nhân viên bổ sung (không kể CHTT) · đang trong khu vực · chưa quét lần nào. */
+  workers: number; inside: number; waiting: number;
+}
+/** Bảng "Đang làm việc": khoá nằm dưới ["work-permits"] nên mọi thao tác mở/kết thúc lần làm việc đều làm mới nó. */
+export function usePermitLiveSessions(enabled = true) {
+  return useQuery({ queryKey: ["work-permits", "live"], enabled, refetchInterval: 15_000, queryFn: () => apiGet<PermitLiveSession[]>("/api/work-permits/live-sessions") as Promise<{ data: PermitLiveSession[]; meta: { canExecute: boolean } }> });
+}
+/** `refetchMs`: màn hình làm việc tự làm mới để nhiều máy (cổng quét, phòng điều khiển) cùng thấy số người trong khu vực. */
+export function useWorkPermit(id?: string, refetchMs?: number) {
+  return useQuery({ queryKey: ["work-permit", id], queryFn: () => apiGet<PermitDetailRow>(`/api/work-permits/${id}`), enabled: Boolean(id), refetchInterval: refetchMs ?? false });
 }
 export function useSaveWorkPermit() {
   const qc = useQueryClient();
@@ -146,7 +157,7 @@ export function usePermitAttendance(permitId: string) {
   return useMutation({ meta: { background: true },
     mutationFn: (body: { sessionId: string; direction: "auto" | "in" | "out"; personId?: string; index?: number; name?: string }) =>
       apiMutate<PermitAttendanceResult>(`/api/work-permits/${permitId}/sessions/attendance`, "POST", body),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["work-permit"] }); qc.invalidateQueries({ queryKey: ["work-permit-people"] }); } });
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["work-permit"] }); qc.invalidateQueries({ queryKey: ["work-permits", "live"] }); qc.invalidateQueries({ queryKey: ["work-permit-people"] }); } });
 }
 
 export function usePermitCompanies() {
