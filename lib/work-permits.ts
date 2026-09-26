@@ -43,7 +43,7 @@ export const PERMIT_STATUSES = {
 } as const;
 export type PermitKind = keyof typeof PERMIT_KINDS;
 export type PermitStatus = keyof typeof PERMIT_STATUSES;
-export const PERMIT_UNITS = { S1: "Tổ máy S1", S2: "Tổ máy S2", COMMON: "Dùng chung" } as const;
+export const PERMIT_UNITS = { S1: "Tổ máy S1", S2: "Tổ máy S2", COMMON: "COMMON" } as const;
 export const PERMIT_TRANSITIONS: Record<PermitStatus, readonly PermitStatus[]> = {
   DRAFT: ["ISSUED", "CANCELLED"], ISSUED: ["CLOSED", "CANCELLED"],
   // Phiếu nội bộ cũ ở trạng thái thực hiện vẫn được chốt/hủy, không mở thêm vòng thực hiện.
@@ -121,7 +121,11 @@ export function permitValue(key: string, value: unknown): string {
 }
 
 /** code lưu số thẻ an toàn thực tế; personId là khóa ổn định khi số thẻ được chỉnh sửa. */
-export interface PermitMember { personId?: string; code: string; name: string; company: string }
+export interface PermitMember {
+  personId?: string; code: string; name: string; company: string;
+  /** Chỉ có ở thành viên của LẦN LÀM VIỆC: các lượt vào/ra vị trí (lib/work-permit-attendance.ts). */
+  attendance?: Array<{ in: string; out: string | null }>;
+}
 export interface PermitPerson {
   id: string; code: string; name: string; company: string; phone: string;
   canCommand: boolean; isActive: boolean; version: number;

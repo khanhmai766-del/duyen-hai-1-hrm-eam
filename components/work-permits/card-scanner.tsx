@@ -19,9 +19,11 @@ import { formatPermitNumber, type PermitMember, type PermitPerson } from "@/lib/
  */
 
 type Tone = "ok" | "warn" | "block" | "info";
+/** Kết quả một lượt cho vào / vào–ra; `added` = VÀO (tính vào bộ đếm), `out` = RA. */
+export type ScanOutcome = { tone: Tone; detail: string; added?: boolean; out?: boolean };
 type Scan = {
   id: number; code: string; tone: Tone; title: string; detail: string;
-  person?: PermitPerson; reasons?: string[]; pending?: boolean; notFound?: boolean; added?: boolean;
+  person?: PermitPerson; reasons?: string[]; pending?: boolean; notFound?: boolean; added?: boolean; out?: boolean;
 };
 
 const REPEAT_MS = 2500;
@@ -63,7 +65,7 @@ function cameraErrorMessage(error: unknown) {
   return "Không mở được camera. Dùng đầu đọc QR hoặc nhập số thẻ ở ô bên dưới.";
 }
 
-export function PermitCardScanner({ unit, companies, existing, permitId, onAdd, onClose }: {
+export function PermitCardScanner({ unit, companies, existing, permitId, onAdd, onExisting, title = "Quét thẻ vào làm việc", onClose }: {
   /** Đơn vị công tác của phiếu (tên hiển thị và đơn vị gán khi thêm nhanh). */
   unit: string;
   /** Các tên đơn vị được chấp nhận: đơn vị ghi trên phiếu + đơn vị hiện tại của CHTT. */
@@ -71,7 +73,11 @@ export function PermitCardScanner({ unit, companies, existing, permitId, onAdd, 
   /** Người đã có trong lần làm việc (kể cả CHTT) — quét lại báo "đã có". */
   existing: PermitMember[];
   permitId: string;
-  onAdd: (member: PermitMember) => boolean;
+  /** Cho người mới vào: trả true/false (thêm vào danh sách trên form) hoặc kết quả từ API (lần làm việc đang mở). */
+  onAdd: (member: PermitMember) => boolean | Promise<ScanOutcome>;
+  /** Có thì người ĐÃ có trong lần làm việc được ghi VÀO/RA thay vì chỉ báo "đã có". */
+  onExisting?: (person: PermitPerson) => Promise<ScanOutcome>;
+  title?: string;
   onClose: () => void;
 }) {
   const [scans, setScans] = useState<Scan[]>([]);
@@ -93,6 +99,7 @@ export function PermitCardScanner({ unit, companies, existing, permitId, onAdd, 
   const blockedRef = useRef(blocked);
   blockedRef.current = blocked;
   const addedCount = scans.filter(s => s.added).length;
+  const outCount = scans.filter(s => s.out).length;
 
   const push = useCallback((scan: Omit<Scan, "id">) => {
     setScans(list => [{ ...scan, id: ++idRef.current }, ...list].slice(0, 30));
@@ -102,7 +109,15 @@ export function PermitCardScanner({ unit, companies, existing, permitId, onAdd, 
   const isExisting = useCallback((person: Pick<PermitPerson, "id" | "code">) => existingRef.current.some(m =>
     m.personId === person.id || Boolean(m.code && m.code.normalize("NFC").trim().toUpperCase() === person.code)), []);
 
-  const admit = useCallback((person: PermitPerson) => onAdd({ personId: person.id, code: person.code, name: person.name, company: person.company }), [onAdd]);
+  const admit = useCallback(async (person: PermitPerson): Promise<ScanOutcome> => {
+    try {
+      const result = await onAdd({ personId: person.id, code: person.code, name: person.name, company: person.company });
+      if (typeof result !== "boolean") return result;
+      return result ? { tone: "ok", detail: "Đúng đơn vị — đã cho vào.", added: true } : { tone: "block", detail: "Danh sách đã đủ 200 người." };
+    } catch (error) {
+      return { tone: "block", detail: error instanceof Error ? error.message : "Không ghi nhận được, quét lại." };
+    }
+  }, [onAdd]);
 
   const handle = useCallback(async (raw: string) => {
     // Đang chờ quyết định (cảnh báo / thêm nhanh) thì bỏ qua lượt quét mới, kẻo đè mất thẻ đang chờ.
@@ -116,7 +131,11 @@ export function PermitCardScanner({ unit, companies, existing, permitId, onAdd, 
     try {
       const { person } = await lookupPermitCard(code);
       if (!person) return push({ code, tone: "warn", title: `Thẻ ${code} chưa có trong danh bạ`, detail: `Nhập họ tên để thêm nhanh vào đơn vị ${unit}.`, notFound: true });
-      if (isExisting(person)) return push({ code, tone: "info", person, title: person.name, detail: "Đã có trong danh sách lần làm việc này." });
+      if (isExisting(person)) {
+        if (!onExisting) return push({ code, tone: "info", person, title: person.name, detail: "Đã có trong danh sách lần làm việc này." });
+        try { return push({ code, person, title: person.name, ...await onExisting(person) }); }
+        catch (error) { return push({ code, person, title: person.name, tone: "block", detail: error instanceof Error ? error.message : "Không ghi nhận được, quét lại." }); }
+      }
       if (!person.isActive) return push({ code, tone: "block", person, title: person.name, detail: "Hồ sơ đang NGỪNG HOẠT ĐỘNG trong danh bạ — không cho vào." });
       if (!companies.some(company => sameCompany(company, person.company))) {
         return push({ code, tone: "block", person, title: person.name, detail: `Thuộc đơn vị “${person.company}”, KHÔNG PHẢI đơn vị công tác của phiếu (“${unit}”). Không cho vào.` });
@@ -127,14 +146,13 @@ export function PermitCardScanner({ unit, companies, existing, permitId, onAdd, 
         if (work.permit.id !== permitId) reasons.push(`Đang ghi ${work.role === "CHTT" ? "là CHTT" : "làm việc"} ở PCT ${formatPermitNumber(work.permit)} (chưa kết thúc).`);
       }
       if (reasons.length) return push({ code, tone: "warn", person, title: person.name, detail: "Cần người cho phép quyết định.", reasons, pending: true });
-      const added = admit(person);
-      push({ code, tone: added ? "ok" : "block", person, title: person.name, detail: added ? "Đúng đơn vị — đã cho vào." : "Danh sách đã đủ 200 người.", added });
+      push({ code, person, title: person.name, ...await admit(person) });
     } catch (error) {
       push({ code, tone: "block", title: `Không tra được thẻ ${code}`, detail: error instanceof Error ? error.message : "Lỗi kết nối, quét lại." });
     } finally {
       busyRef.current = false;
     }
-  }, [admit, companies, isExisting, permitId, push, unit]);
+  }, [admit, companies, isExisting, onExisting, permitId, push, unit]);
 
   const handleRef = useRef(handle);
   handleRef.current = handle;
@@ -176,24 +194,26 @@ export function PermitCardScanner({ unit, companies, existing, permitId, onAdd, 
   // Mở hộp quét = thao tác chủ động → bật camera ngay (máy không có camera vẫn dùng ô nhập được).
   useEffect(() => { void startCamera(); return () => stopCamera(); }, [startCamera, stopCamera]);
 
-  function decide(allow: boolean) {
+  async function decide(allow: boolean) {
     if (!current?.person) return;
-    const added = allow ? admit(current.person) : false;
-    setScans(list => list.map(s => s.id === current.id ? { ...s, pending: false, added, tone: added ? "ok" : "block", detail: added ? "Người cho phép đã quyết định cho vào." : allow ? "Danh sách đã đủ 200 người." : "Không cho vào." } : s));
-    beep(added);
+    const id = current.id;
+    const result: ScanOutcome = allow ? await admit(current.person) : { tone: "block", detail: "Không cho vào." };
+    setScans(list => list.map(s => s.id === id ? { ...s, pending: false, ...result, detail: allow && result.added ? "Người cho phép đã quyết định cho vào." : result.detail } : s));
+    beep(result.tone === "ok");
   }
 
   async function quickAdd(e: React.FormEvent) {
     e.preventDefault();
     if (!current?.notFound || !quickName.trim()) return;
+    const id = current.id;
     try {
       const person = await savePerson.mutateAsync({ body: { code: current.code, name: quickName.trim(), company: unit, phone: "", canCommand: false, isActive: true } });
-      const added = admit(person);
-      setScans(list => list.map(s => s.id === current.id ? { ...s, notFound: false, person, title: person.name, tone: added ? "ok" : "block", added, detail: added ? `Đã thêm vào danh bạ ${unit} và cho vào.` : "Danh sách đã đủ 200 người." } : s));
+      const result = await admit(person);
+      setScans(list => list.map(s => s.id === id ? { ...s, notFound: false, person, title: person.name, ...result, detail: result.added ? `Đã thêm vào danh bạ ${unit} và cho vào.` : result.detail } : s));
       setQuickName("");
-      beep(added);
+      beep(result.tone === "ok");
     } catch (error) {
-      setScans(list => list.map(s => s.id === current.id ? { ...s, detail: error instanceof Error ? error.message : "Không thêm được hồ sơ" } : s));
+      setScans(list => list.map(s => s.id === id ? { ...s, detail: error instanceof Error ? error.message : "Không thêm được hồ sơ" } : s));
       beep(false);
     }
   }
@@ -206,7 +226,7 @@ export function PermitCardScanner({ unit, companies, existing, permitId, onAdd, 
   return <Dialog open onOpenChange={v => { if (!v) onClose(); }}>
     <DialogContent className="flex max-h-[94dvh] max-w-2xl flex-col gap-3 overflow-hidden">
       <div className="pr-8">
-        <DialogTitle>Quét thẻ vào làm việc</DialogTitle>
+        <DialogTitle>{title}</DialogTitle>
         <DialogDescription>Đơn vị công tác: <b className="text-foreground">{unit}</b> · Chỉ nhân viên đúng đơn vị này được cho vào.</DialogDescription>
       </div>
 
@@ -254,13 +274,13 @@ export function PermitCardScanner({ unit, companies, existing, permitId, onAdd, 
         {scans.length > 1 && <div className="space-y-1">
           <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Các thẻ vừa quét</p>
           {scans.slice(1).map(scan => <div key={scan.id} className="flex items-center gap-2 rounded-lg border border-border px-2.5 py-1.5 text-sm">
-            <ToneIcon tone={scan.tone} /><span className="min-w-0 flex-1 truncate"><b>{scan.title}</b> · {scan.code}</span><span className="shrink-0 text-xs text-muted-foreground">{scan.added ? "Đã vào" : scan.tone === "info" ? "Đã có" : scan.pending || scan.notFound ? "Chờ xử lý" : "Không vào"}</span>
+            <ToneIcon tone={scan.tone} /><span className="min-w-0 flex-1 truncate"><b>{scan.title}</b> · {scan.code}</span><span className="shrink-0 text-xs text-muted-foreground">{scan.added ? "Vào" : scan.out ? "Ra" : scan.tone === "info" ? "Đã có" : scan.pending || scan.notFound ? "Chờ xử lý" : "Không vào"}</span>
           </div>)}
         </div>}
       </div>
 
       <div className="flex items-center justify-between gap-2 border-t border-border pt-3">
-        <p className="text-sm">Đã cho vào <b>{addedCount}</b> người trong lượt quét này</p>
+        <p className="text-sm">Lượt quét này: vào <b>{addedCount}</b>{onExisting ? <> · ra <b>{outCount}</b></> : " người"}</p>
         <Button type="button" onClick={onClose}><X />Xong</Button>
       </div>
     </DialogContent>

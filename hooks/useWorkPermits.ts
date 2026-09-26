@@ -136,6 +136,19 @@ export function usePermitSessionAction(permitId: string) {
   return useMutation({ mutationFn: (body: unknown) => apiMutate<PermitSession>(`/api/work-permits/${permitId}/sessions`, "POST", body), onSuccess: () => { qc.invalidateQueries({ queryKey: ["work-permits"] }); qc.invalidateQueries({ queryKey: ["work-permit"] }); qc.invalidateQueries({ queryKey: ["work-permit-people"] }); } });
 }
 
+export interface PermitAttendanceResult {
+  outcome: "IN" | "OUT" | "ADDED" | "ALREADY_IN" | "TOO_SOON"; at: string; inside: number; total: number;
+  member: { personId?: string; code: string; name: string; company: string };
+}
+/** Quét VÀO/RA trong lần làm việc đang mở. Làm mới chi tiết phiếu sau mỗi lượt để danh sách luôn đúng. */
+export function usePermitAttendance(permitId: string) {
+  const qc = useQueryClient();
+  return useMutation({ meta: { background: true },
+    mutationFn: (body: { sessionId: string; direction: "auto" | "in" | "out"; personId?: string; index?: number; name?: string }) =>
+      apiMutate<PermitAttendanceResult>(`/api/work-permits/${permitId}/sessions/attendance`, "POST", body),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["work-permit"] }); qc.invalidateQueries({ queryKey: ["work-permit-people"] }); } });
+}
+
 export function usePermitCompanies() {
   return useQuery({ queryKey: ["work-permit-companies"], staleTime: 60000, queryFn: () => apiGet<string[]>("/api/work-permits/companies") });
 }

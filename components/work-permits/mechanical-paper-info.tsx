@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
+import { usePermitCompanySummary } from "@/hooks/useWorkPermits";
 import { OPERATION_POSITION_TITLES } from "@/lib/positions";
 import { PERMIT_DISCIPLINES, PERMIT_SOURCE_CLASSIFICATIONS, PERMIT_UNITS, type PermitDiscipline, type PermitInput, type PermitSourceClassification } from "@/lib/work-permits";
 
@@ -19,13 +20,27 @@ export function MechanicalPaperInfo({ form, issued, numberField, onChange, onPic
 }) {
   const field = (key: "managingUnit" | "teamName" | "registrationNumber" | "location", fieldLabel: string, required = false) =>
     <label className={label}><span className="font-medium">{fieldLabel}{required ? " *" : ""}</span><input className={control} required={required} maxLength={key === "location" ? 500 : 200} value={String(form[key] ?? "")} onChange={event => onChange(key, event.target.value)} /></label>;
+  const contractor = form.teamType === "CONTRACTOR";
+  // Phiếu nhà thầu: chọn đúng tên đơn vị trong danh bạ để quét thẻ/lọc nhân sự khớp đơn vị của phiếu.
+  const companies = usePermitCompanySummary();
+  const companyRows = companies.data?.data ?? [];
+  const teamField = contractor
+    ? <label className={label}><span className="font-medium">Đơn vị công tác{issued ? " *" : ""}</span>
+      <select className={control} required={issued} value={form.teamName} onChange={event => onChange("teamName", event.target.value)}>
+        <option value="">{companies.isPending ? "Đang tải đơn vị nhà thầu…" : "Chọn đơn vị nhà thầu"}</option>
+        {form.teamName && !companyRows.some(row => row.company === form.teamName) && <option value={form.teamName}>{form.teamName}</option>}
+        {companyRows.map(row => <option key={row.company} value={row.company}>{row.code ? `${row.code} · ${row.company}` : row.company}</option>)}
+      </select>
+      {companies.isError && <span role="alert" className="block text-xs text-red-700">{companies.error.message}</span>}
+    </label>
+    : field("teamName", "Đơn vị công tác", issued);
 
   return <div className="space-y-4">
     <section className={section}><h3 className={title}>Thông tin chung trên phiếu</h3>
       <div className="grid gap-4 md:grid-cols-2">
         {field("registrationNumber", "Số phiếu ĐKCT")}
         {numberField}
-        {field("teamName", "Đơn vị công tác", issued)}
+        {teamField}
         {field("managingUnit", "Đơn vị QLVH", true)}
         <fieldset className="rounded-lg border border-slate-200 px-3 pb-3 pt-1 md:col-span-2 dark:border-border">
           <legend className="px-1 text-[13px] font-medium">Phân loại</legend>

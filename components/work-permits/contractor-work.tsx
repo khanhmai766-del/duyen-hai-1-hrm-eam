@@ -7,6 +7,8 @@ import { PermitCompanyPicker } from "@/components/work-permits/company-picker";
 import { PermitEmployeePicker } from "@/components/work-permits/employee-picker";
 import { PermitCardScanner } from "@/components/work-permits/card-scanner";
 import { PeopleSyncDialog } from "@/components/work-permits/people-sync";
+import { SessionAttendance } from "@/components/work-permits/session-attendance";
+import { attendanceInside } from "@/lib/work-permit-attendance";
 import { cardExpired } from "@/lib/work-permit-card";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
@@ -332,6 +334,7 @@ export function ContractorSessions({ permit, canExecute }: { permit: PermitDetai
       <div className="flex flex-wrap items-start justify-between gap-2"><div><b>{s.commanderName} · {s.commanderCode}</b><p className="text-sm text-muted-foreground">{s.company}</p></div>{!s.endedAt && canExecute && <div className="flex flex-wrap gap-2"><Button variant="outline" onClick={() => { setHandoff(true); setAction(s); }}>Bàn giao / đổi CHTT</Button><Button variant="outline" onClick={() => { setHandoff(false); setAction(s); }}><Square />Kết thúc lần làm việc</Button></div>}</div>
       <p className="text-sm"><strong>{fmt(s.openedAt)}</strong> → {s.endedAt ? fmt(s.endedAt) : <strong className="text-emerald-700">Đang làm · chưa kết thúc</strong>}</p>
       <p className="text-sm">Người cho phép: {s.authorizerName} · CHTT và {s.members.filter(m => m.personId ? m.personId !== s.commanderId : m.code !== s.commanderCode).length} nhân viên bổ sung</p>
+      <SessionAttendance permit={permit} session={s} canExecute={canExecute} />
       {s.endedAt && <p className="text-sm">Xác nhận kết thúc: {s.endConfirmedByName}{s.progress != null ? ` · Tiến độ ${s.progress}%` : ""}{s.endNote ? ` · ${s.endNote}` : ""}</p>}
       <details className="text-sm"><summary className="cursor-pointer">Nhân viên và thông tin ghi nhận</summary><div className="mt-2 space-y-1">{s.members.length ? s.members.map((m, i) => <p key={i}>{i + 1}. {[m.name, m.code, m.company].filter(Boolean).join(" · ")}</p>) : <p>Chưa bổ sung danh sách chi tiết.</p>}<p className="pt-2 text-xs text-muted-foreground">Người nhập mở: {s.createdByName}{s.endedByName ? ` · Người nhập kết thúc: ${s.endedByName}` : ""}</p></div></details>
     </article>)}
@@ -360,12 +363,15 @@ function SessionEditor({ permit, session, handoff = false, onClose }: { permit: 
   const [members, setMembers] = useState<PermitMember[]>(permit.sessions[0]?.members ?? permit.members ?? []);
   const additionalMembers = members.filter(m => !person || (m.personId ? m.personId !== person.id : !person.code || m.code !== person.code));
   const [error, setError] = useState("");
+  // Kết thúc khi còn người trong khu vực: phải xác nhận đã kiểm đếm → ghi RA cho họ lúc kết thúc (server cũng chặn).
+  const stillInside = ending && session ? session.members.filter(attendanceInside) : [];
+  const [exitAll, setExitAll] = useState(false);
   const save = usePermitSessionAction(permit.id);
   async function submit(e: React.FormEvent) {
     e.preventDefault(); e.stopPropagation(); setError("");
     const timestamp = `${at}:00+07:00`;
     const body = ending && session
-      ? { action: "end", version: permit.version, sessionId: session.id, endedAt: timestamp, endConfirmedByName: name, endNote: note, progress: Number(progress) }
+      ? { action: "end", version: permit.version, sessionId: session.id, endedAt: timestamp, endConfirmedByName: name, endNote: note, progress: Number(progress), exitAll }
       : { action: handoff ? "handoff" : "open", sessionId: session?.id, endNote: note, version: permit.version, commanderId: person?.id, openedAt: timestamp, authorizerName: name, members: additionalMembers };
     try { await save.mutateAsync(body); toast.success(handoff ? "Đã bàn giao sang CHTT mới, giữ lịch sử và thời điểm bàn giao" : ending ? "Đã kết thúc lần làm việc; CHTT được giải phóng, PCT chờ làm tiếp" : "Đã mở lần làm việc và ghi nhận CHTT đang thực hiện"); onClose(); }
     catch (e) { setError(e instanceof Error ? e.message : "Không thể ghi nhận lần làm việc"); }
@@ -381,8 +387,14 @@ function SessionEditor({ permit, session, handoff = false, onClose }: { permit: 
       {!ending && <><p className="rounded-lg bg-sky-50 p-3 text-sm text-sky-950">CHTT tự được tính vào người công tác. Tổng: {person ? 1 + additionalMembers.length : additionalMembers.length} người.</p><PermitMembersEditor members={additionalMembers} onChange={setMembers} commander={person ? { personId: person.id, name: person.name, code: person.code, company: person.company } : undefined}
         scan={{ unit: permit.teamName, companies: [permit.teamName, person?.company ?? ""].filter(Boolean), permitId: permit.id }} /></>}
       {(ending || handoff) && <label className="block space-y-1 text-sm"><span>{handoff ? "Ghi chú bàn giao" : "Ghi chú kết thúc lần làm việc"}</span><textarea className={control} rows={3} maxLength={2000} value={note} onChange={e => setNote(e.target.value)} /></label>}
+      {stillInside.length > 0 && <div className="space-y-2 rounded-lg border-2 border-amber-300 bg-amber-50 p-3 text-sm text-amber-950">
+        <p className="font-semibold">Còn {stillInside.length} người chưa rút khỏi vị trí làm việc:</p>
+        <p className="max-h-24 overflow-y-auto">{stillInside.map(m => m.name).join(" · ")}</p>
+        <label className="flex items-start gap-2 font-medium"><input type="checkbox" className="mt-0.5 h-4 w-4 accent-amber-600" checked={exitAll} onChange={e => setExitAll(e.target.checked)} />Đã kiểm đếm đủ người rời vị trí — ghi RA cho {stillInside.length} người này lúc kết thúc</label>
+        <p className="text-xs">Hoặc đóng hộp này, quét ra từng người ở mục “Quét vào / ra” rồi kết thúc.</p>
+      </div>}
       {error && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</p>}
-      <div className="flex justify-end gap-2"><Button type="button" variant="outline" onClick={onClose}>Để sau</Button><Button type="submit" disabled={save.isPending || !name || (ending && progress === "") || (!ending && (!person || (handoff && person.id === session?.commanderId)))}>{save.isPending ? "Đang ghi nhận…" : handoff ? "Xác nhận bàn giao CHTT" : ending ? "Ghi nhận kết thúc lần làm việc" : "Ghi nhận cho phép làm việc"}</Button></div>
+      <div className="flex justify-end gap-2"><Button type="button" variant="outline" onClick={onClose}>Để sau</Button><Button type="submit" disabled={save.isPending || !name || (ending && progress === "") || (stillInside.length > 0 && !exitAll) || (!ending && (!person || (handoff && person.id === session?.commanderId)))}>{save.isPending ? "Đang ghi nhận…" : handoff ? "Xác nhận bàn giao CHTT" : ending ? "Ghi nhận kết thúc lần làm việc" : "Ghi nhận cho phép làm việc"}</Button></div>
     </fieldset></form>
     {picking && <PermitPeopleDirectory commandersOnly company={permit.teamName || undefined} onClose={() => setPicking(false)} onPick={p => { setPerson(p); setPicking(false); }} />}
   </DialogContent></Dialog>;

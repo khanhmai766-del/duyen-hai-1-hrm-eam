@@ -5,6 +5,7 @@ import { audit, fail, ok, requireUser } from "@/lib/api";
 import { permitBody, permitHandle, permitInstant, permitSnapshot, permitText } from "@/lib/server/work-permits";
 import { assertCommanderFree, readSessionOpen, resolveSessionMembers, validateSessionTime } from "@/lib/server/work-permit-sessions";
 import { sameCompany } from "@/lib/work-permit-card";
+import { closeInsideVisits, membersInside, withEntry } from "@/lib/server/work-permit-attendance";
 import { syncPermitDocument } from "@/lib/server/work-permit-document-store";
 export const dynamic = "force-dynamic";
 export async function POST(req: Request, props: { params: Promise<{ id: string }> }) {
@@ -47,12 +48,13 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
         if (foreign) throw fail(`${foreign.name} (${foreign.code}) thuộc đơn vị “${foreign.company}”, không phải đơn vị công tác của phiếu (“${permit.teamName}”). Chỉ cho nhân viên đúng đơn vị vào làm việc.`);
         const handoffNote = handoff ? permitText(body, "endNote", 2000) : "";
         if (oldSession) await tx.workPermitSession.update({ where: { id: oldSession.id }, data: {
-          endedAt: input.openedAt, endConfirmedByName: input.authorizerName,
+          endedAt: input.openedAt, endConfirmedByName: input.authorizerName, members: permitSnapshot(closeInsideVisits(oldSession.members, input.openedAt)),
           endNote: `Bàn giao CHTT cho ${person.name}. ${handoffNote}`.trim(), endedById: user.id, endedByName: user.name ?? "",
         } });
         const session = await tx.workPermitSession.create({ data: {
           permitId: permit.id, commanderId: person.id, commanderCode: person.code, commanderName: person.name, company: person.company,
-          members: permitSnapshot(members), workerCount: 1 + members.length, openedAt: input.openedAt, authorizerName: input.authorizerName,
+          // Người được cho vào lúc mở/bàn giao: lượt VÀO đầu tiên = thời điểm cho phép.
+          members: permitSnapshot(members.map(member => withEntry(member, input.openedAt))), workerCount: 1 + members.length, openedAt: input.openedAt, authorizerName: input.authorizerName,
           searchText: normalizeText([person.code, person.name, person.company, input.authorizerName, ...members.map(m => `${m.code} ${m.name} ${m.company}`)].join(" ")),
           createdById: user.id, createdByName: user.name ?? "",
         } });
@@ -74,7 +76,14 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
       if (!session || session.endedAt || permit.status !== "ACTIVE") throw fail("Lần làm việc không còn mở. Vui lòng tải lại phiếu.", 409);
       if (session.commanderId) await tx.$queryRaw`SELECT "id" FROM "WorkPermitPerson" WHERE "id" = ${session.commanderId} FOR UPDATE`;
       validateSessionTime(endedAt, session.openedAt);
-      const afterSession = await tx.workPermitSession.update({ where: { id: session.id }, data: { endedAt, endConfirmedByName, endNote, progress, endedById: user.id, endedByName: user.name ?? "" } });
+      const inside = membersInside(session.members);
+      if (inside.length && body.exitAll !== true) {
+        throw fail(`Còn ${inside.length} người chưa rút khỏi vị trí làm việc: ${inside.map(m => m.name).slice(0, 10).join(", ")}${inside.length > 10 ? "…" : ""}. Kiểm đếm đủ người rồi xác nhận ghi ra cho họ, hoặc quét ra từng người trước khi kết thúc.`, 409);
+      }
+      const afterSession = await tx.workPermitSession.update({ where: { id: session.id }, data: {
+        endedAt, endConfirmedByName, endNote, progress, endedById: user.id, endedByName: user.name ?? "",
+        ...(inside.length ? { members: permitSnapshot(closeInsideVisits(session.members, endedAt)) } : {}),
+      } });
       const after = await tx.workPermit.update({ where: { id: permit.id }, data: { status: "WAITING", progress, version: { increment: 1 } } });
       await tx.workPermitHistory.create({ data: { permitId: permit.id, actorId: user.id, actorName: user.name ?? "", action: `Kết thúc lần làm việc · CHTT ${session.commanderName} (${session.commanderCode})`, before: permitSnapshot({ ...permit, session }), after: permitSnapshot({ ...after, session: afterSession }) } });
       return afterSession;
