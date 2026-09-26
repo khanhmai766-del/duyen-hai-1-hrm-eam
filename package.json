@@ -12,6 +12,8 @@
     "start": "next start",
     "lint": "eslint .",
     "sync:skills": "node scripts/sync-skills.mjs",
+    "verify:ui": "node scripts/verify/ui-shots.mjs",
+    "verify:ui-session": "node scripts/verify/ui-session.mjs",
     "postinstall": "prisma generate",
     "db:start": "node scripts/pg.mjs",
     "db:push": "prisma db push",

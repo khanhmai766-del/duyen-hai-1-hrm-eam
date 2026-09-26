@@ -12,6 +12,7 @@ framework, thư viện hay sửa hàng loạt sau chạy lại được. Repo kh
 | `ssr-probe.mjs` | Xem HTML server-render có chữ phụ thuộc giờ/phiên không (điều tra #418) | Có |
 | `image-check.mjs` | Kiểm bộ tối ưu ảnh `/_next/image`: ảnh hợp lệ ra WebP, yêu cầu ngoài khoá bị chặn | Không — chạy được cả với site thật |
 | `image-page-check.mjs` | Trang thật có ảnh vỡ không, ảnh có đi qua `/_next/image` không | Có |
+| `ui-shots.mjs` (+ `ui-presets.mjs`) | Chụp trang ở khổ điện thoại → máy tính, soi trang cuộn ngang, phần tử lòi mép, nút < 32px, chữ bị cắt | Có |
 
 ## Quy tắc an toàn (bắt buộc)
 
@@ -63,6 +64,24 @@ MSYS_NO_PATHCONV=1 node scripts/verify/ssr-probe.mjs http://127.0.0.1:3031 /
 
 Bài học đợt 09/2026: lỗi #418 chỉ bắt được 1 lần, không tái hiện. **Đừng** "sửa" bằng cách truyền phiên server vào
 `SessionProvider` — đã thử, lỗi tăng từ 0/12 lên 3/12 do `app/(dashboard)/loading.tsx` làm trang hydrate sau khung app.
+
+## Kiểm tra giao diện điện thoại / máy tính (`ui-shots.mjs`)
+
+```bash
+npm run dev -- -p 3030                                   # terminal khác
+MSYS_NO_PATHCONV=1 npm run verify:ui -- /work-permits /defects          # mặc định 360, 390, 1280px
+MSYS_NO_PATHCONV=1 npm run verify:ui -- --preset=pct-lam-viec --widths=360,1280
+```
+
+- Ảnh + `report.json` ở `reports/verify/ui-<thời điểm>/`. Mỗi tuyến × khổ: `-full.png` (cả trang) và `-p0.png`…
+  (khung nhìn khi cuộn, `--parts=N`). **Ảnh cả trang đặt sai phần tử `fixed`/`sticky`** (thanh điều hướng đáy, nút
+  dính đáy) — đánh giá chúng trên ảnh `-pN`.
+- LỖI (mã thoát 1): trang cuộn ngang, lỗi JS, API ≥ 500. CẢNH BÁO: lòi mép phải ngoài vùng cuộn ngang có chủ đích,
+  nút/ô bấm < 32px trên điện thoại, chữ bị cắt không có dấu …, API 4xx, `console.error`.
+- Linh vật chatbot (`[data-ui-overlay]`) được ẩn khi soi và chụp vì nó đè nội dung; `--keep-mascot` để giữ.
+- `--preset=` dựng trạng thái hiếm trên DB dev (vd lần làm việc đang mở 12 người) bằng **giả lập trong trình duyệt**
+  (`page.route`) — không ghi DB. Thêm preset trong `ui-presets.mjs`; `prepare` chỉ được SELECT.
+- Không có Chromium của Playwright thì tự dùng Edge (`channel: "msedge"`).
 
 ## Kiểm tra ảnh
 
