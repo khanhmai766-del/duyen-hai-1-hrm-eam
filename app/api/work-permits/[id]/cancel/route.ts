@@ -1,3 +1,4 @@
+import { requirePermitVisible } from "@/lib/server/work-permit-scope";
 import { requirePermitIssuer } from "@/lib/server/work-permit-permissions";
 import { prisma } from "@/lib/prisma";
 import { audit, fail, ok, requireUser } from "@/lib/api";
@@ -17,6 +18,7 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
   const params = await props.params;
   return permitHandle(async () => {
     const user = await requireUser(); requirePermitIssuer(user);
+    await requirePermitVisible(user, params.id);
     const body = await permitBody(req);
     const reasonInput = permitText(body, "reason", 2000);
     const { row, draft } = await prisma.$transaction(async tx => {

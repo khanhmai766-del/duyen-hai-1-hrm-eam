@@ -1,3 +1,4 @@
+import { requirePermitVisible } from "@/lib/server/work-permit-scope";
 import { prisma } from "@/lib/prisma";
 import { audit, fail, ok, requireUser } from "@/lib/api";
 import { permitCapabilities } from "@/lib/server/work-permit-permissions";
@@ -9,6 +10,7 @@ export const dynamic = "force-dynamic";
 export async function PATCH(req: Request, props: { params: Promise<{ id: string }> }) {
   return permitHandle(async () => {
     const user = await requireUser();
+    await requirePermitVisible(user, (await props.params).id);
     const caps = await permitCapabilities(user);
     if (!caps.canIssue && !caps.canExecute) return fail("Bạn không có quyền cập nhật liên kết NKVH", 403);
     const body = await permitBody(req);

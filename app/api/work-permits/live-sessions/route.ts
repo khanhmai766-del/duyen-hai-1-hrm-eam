@@ -1,3 +1,4 @@
+import { permitPositionVisible, permitScopeOf } from "@/lib/server/work-permit-scope";
 import { prisma } from "@/lib/prisma";
 import { ok, requireUser } from "@/lib/api";
 import { permitCapabilities } from "@/lib/server/work-permit-permissions";
@@ -26,7 +27,8 @@ export async function GET() {
       }),
       permitCapabilities(user),
     ]);
-    const data = sessions.map(({ members, permit, ...session }) => {
+    const scope = await permitScopeOf(user);
+    const data = sessions.filter(session => permitPositionVisible(session.permit.position, scope)).map(({ members, permit, ...session }) => {
       const list = (Array.isArray(members) ? members : []) as Member[];
       // CHTT luôn có mặt suốt lần làm việc, không quét — tính riêng, cộng 1 ở phía hiển thị.
       const workers = list.filter(m => m.personId ? m.personId !== session.commanderId : m.code !== session.commanderCode);

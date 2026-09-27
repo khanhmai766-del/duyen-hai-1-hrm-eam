@@ -1,3 +1,4 @@
+import { requirePermitVisible } from "@/lib/server/work-permit-scope";
 import { requirePermitExecute } from "@/lib/server/work-permit-permissions";
 import { normalizeText } from "@/lib/nav";
 import { prisma } from "@/lib/prisma";
@@ -12,6 +13,7 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
   const params = await props.params;
   return permitHandle(async () => {
     const user = await requireUser(); await requirePermitExecute(user);
+    await requirePermitVisible(user, params.id);
     const body = await permitBody(req);
     if (!["open", "end", "handoff"].includes(String(body.action))) return fail("Thao tác lần làm việc không hợp lệ");
     const result = await prisma.$transaction(async tx => {

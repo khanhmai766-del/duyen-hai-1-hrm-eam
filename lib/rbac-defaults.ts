@@ -58,6 +58,8 @@ export const DEFAULT_RBAC_MATRIX: Record<string, Partial<Record<string, RbacLeve
   "device-public-qr": { ADMIN: "read", MANAGER: "read", SUPERVISOR: "read", TECHNICIAN: "read", VIEWER: "read" },
   "work-permit-issue": { ADMIN: "full", MANAGER: "manage", SUPERVISOR: "manage", TECHNICIAN: "none", VIEWER: "none" },
   "work-permit-execute": { ADMIN: "full", MANAGER: "manage", SUPERVISOR: "manage", TECHNICIAN: "none", VIEWER: "none" },
+  // Phạm vi XEM PCT theo cương vị — mức Đọc chỉ thấy cương vị đang làm việc + cấp dưới; manage/full xem tất cả.
+  "work-permit-view": { ADMIN: "full", MANAGER: "full", SUPERVISOR: "manage", TECHNICIAN: "read", VIEWER: "read" },
   "contract-access": { ADMIN: "full", MANAGER: "read", SUPERVISOR: "read", TECHNICIAN: "read", VIEWER: "read" },
   "document-procedure": { ADMIN: "full", MANAGER: "read", SUPERVISOR: "read", TECHNICIAN: "read", VIEWER: "read" },
   "document-pid": { ADMIN: "full", MANAGER: "read", SUPERVISOR: "read", TECHNICIAN: "read", VIEWER: "read" },

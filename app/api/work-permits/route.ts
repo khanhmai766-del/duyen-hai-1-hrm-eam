@@ -1,3 +1,5 @@
+import { permitPositionWhere, permitScopeOf, requirePermitPositionAllowed } from "@/lib/server/work-permit-scope";
+import { positionViewScopeMeta } from "@/lib/position-data-scope";
 import { permitIssueUpdateNeedsExecution } from "@/lib/work-permit-permissions";
 import { requirePermitIssuer, requirePermitExecute, permitCapabilities } from "@/lib/server/work-permit-permissions";
 import { resolvePermitSafety } from "@/lib/server/work-permit-safety";
@@ -17,21 +19,25 @@ export async function GET(req: Request) {
     const user = await requireUser();
     // Bảo đảm tác vụ được bật cả khi thêm instrumentation trong phiên next dev đang chạy.
     startInternalPermitAutoClose();
-    const where = permitFilters(req);
+    // Phạm vi cương vị (lib/server/work-permit-scope.ts): chỉ phiếu của cương vị đang làm việc + cấp dưới + phiếu chung.
+    const scope = await permitScopeOf(user);
+    const scopeWhere = await permitPositionWhere(scope);
+    const where = scopeWhere ? { AND: [permitFilters(req), scopeWhere] } : permitFilters(req);
     const page = Number(new URL(req.url).searchParams.get("page") || 1);
     if (!Number.isInteger(page) || page < 1 || page > 100000) return fail("Trang không hợp lệ");
     const [rows, total, groups] = await prisma.$transaction([
       prisma.workPermit.findMany({ where, select: permitListSelect, orderBy: [{ workDate: "desc" }, { createdAt: "desc" }, { id: "desc" }], skip: (page - 1) * PERMIT_PAGE_SIZE, take: PERMIT_PAGE_SIZE }),
       prisma.workPermit.count({ where }),
-      prisma.workPermit.groupBy({ by: ["status"], orderBy: { status: "asc" }, where: { ...where, status: undefined }, _count: true }),
+      prisma.workPermit.groupBy({ by: ["status"], orderBy: { status: "asc" }, where: scopeWhere ? { AND: [{ ...permitFilters(req), status: undefined }, scopeWhere] } : { ...permitFilters(req), status: undefined }, _count: true }),
     ]);
-    return ok(rows, { total, page, pageSize: PERMIT_PAGE_SIZE, counts: Object.fromEntries(groups.map(g => [g.status, g._count])), ...await permitCapabilities(user) });
+    return ok(rows, { total, page, pageSize: PERMIT_PAGE_SIZE, counts: Object.fromEntries(groups.map(g => [g.status, g._count])), ...await permitCapabilities(user), positionScope: positionViewScopeMeta(scope) });
   });
 }
 export async function POST(req: Request) {
   return permitHandle(async () => {
     const user = await requireUser(); requirePermitIssuer(user);
     const body = await permitBody(req);
+    await requirePermitPositionAllowed(user, body.position);
     if (permitIssueUpdateNeedsExecution({}, body)) await requirePermitExecute(user);
     if (body.progress !== undefined && body.progress !== null) return fail("Chưa được cập nhật tiến độ khi tạo phiếu");
     const status = "ISSUED";

@@ -3,7 +3,6 @@
 import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { usePermitCompanySummary } from "@/hooks/useWorkPermits";
-import { OPERATION_POSITION_TITLES } from "@/lib/positions";
 import { PERMIT_DISCIPLINES, PERMIT_SOURCE_CLASSIFICATIONS, PERMIT_UNITS, type PermitDiscipline, type PermitInput, type PermitSourceClassification } from "@/lib/work-permits";
 
 const control = "min-h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-[13px] shadow-sm focus:border-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-500/10";
@@ -11,8 +10,10 @@ const label = "block space-y-1.5 text-[13px]";
 const section = "rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-border dark:bg-background sm:p-5";
 const title = "mb-4 border-b border-slate-200 pb-2 text-sm font-bold text-slate-900 dark:border-border dark:text-foreground";
 
-export function MechanicalPaperInfo({ form, issued, numberField, onChange, onPickSyc }: {
+export function MechanicalPaperInfo({ form, issued, numberField, positionOptions, onChange, onPickSyc }: {
   form: PermitInput;
+  /** Cương vị người cấp được chọn (phạm vi cương vị của sổ PCT). */
+  positionOptions: string[];
   issued: boolean;
   numberField: ReactNode;
   onChange: <K extends keyof PermitInput>(key: K, value: PermitInput[K]) => void;
@@ -51,7 +52,7 @@ export function MechanicalPaperInfo({ form, issued, numberField, onChange, onPic
         <label className={label}><span className="font-medium">Tổ máy *</span><select className={control} value={form.unit} onChange={event => onChange("unit", event.target.value as PermitInput["unit"])}>{Object.entries(PERMIT_UNITS).map(([key, value]) => <option key={key} value={key}>{value}</option>)}</select></label>
         <label className={label}><span className="font-medium">Ngày thực hiện *</span><input className={control} required type="date" value={form.workDate} onChange={event => onChange("workDate", event.target.value)} /></label>
         <div className={label}><span className="font-medium">Số SYC</span><div className="flex gap-2"><input className={control} maxLength={100} value={form.repairRequestNumber} onChange={event => { onChange("repairRequestNumber", event.target.value); onChange("defectId", null); }} /><Button type="button" variant="outline" className="shrink-0" onClick={onPickSyc}>Chọn SYC</Button></div><p className="text-xs text-muted-foreground">Chọn SYC để tạo liên kết; số nhập tay chỉ để đối chiếu.</p></div>
-        <label className={label}><span className="font-medium">Cương vị</span><select className={control} value={form.position} onChange={event => onChange("position", event.target.value)}><option value="">Tất cả cương vị</option>{OPERATION_POSITION_TITLES.map(value => <option key={value} value={value}>{value}</option>)}</select><span className="block text-xs text-muted-foreground">Dùng để ghi cương vị trên phiếu.</span></label>
+        <label className={label}><span className="font-medium">Cương vị</span><select className={control} value={form.position} onChange={event => onChange("position", event.target.value)}><option value="">Tất cả cương vị</option>{form.position && !positionOptions.includes(form.position) && <option value={form.position}>{form.position}</option>}{positionOptions.map(value => <option key={value} value={value}>{value}</option>)}</select><span className="block text-xs text-muted-foreground">Dùng để ghi cương vị trên phiếu.</span></label>
       </div>
     </section>
 

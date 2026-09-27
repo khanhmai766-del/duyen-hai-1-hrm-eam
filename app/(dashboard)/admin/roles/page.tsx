@@ -544,6 +544,16 @@ const DEFAULT_PERMISSIONS: PermissionRow[] = [
     matrix: { ADMIN: "full", MANAGER: "manage", SUPERVISOR: "manage", TECHNICIAN: "none", VIEWER: "none" },
   },
   {
+    id: "work-permit-view",
+    group: "Tài liệu số",
+    feature: "Sổ cấp PCT — Phạm vi xem theo cương vị",
+    note:
+      "Mức Đọc/Cá nhân CHỈ thấy (và thao tác) PCT của cương vị ĐANG LÀM VIỆC — người kiêm nhiệm chuyển cương vị ở trang Tài khoản — " +
+      "kèm cương vị cấp dưới theo sơ đồ ca trực. PCT để “Tất cả cương vị” thì ai cũng thấy. Mức Quản lý/Toàn quyền xem mọi PCT; " +
+      "Quản đốc, Phó QĐ, KTV, Trưởng ca luôn xem tất cả.",
+    matrix: { ADMIN: "full", MANAGER: "full", SUPERVISOR: "manage", TECHNICIAN: "read", VIEWER: "read" },
+  },
+  {
     id: "contract-access",
     group: "Tài liệu số",
     feature: "Quản lý hợp đồng",

@@ -1,3 +1,4 @@
+import { requirePermitPositionAllowed, requirePermitVisible } from "@/lib/server/work-permit-scope";
 import { permitIssueUpdateNeedsExecution } from "@/lib/work-permit-permissions";
 import { requirePermitIssue, requirePermitIssuer, requirePermitExecute, permitCapabilities } from "@/lib/server/work-permit-permissions";
 import { resolvePermitSafety } from "@/lib/server/work-permit-safety";
@@ -15,6 +16,7 @@ export async function GET(_req: Request, props: { params: Promise<{ id: string }
   const params = await props.params;
   return permitHandle(async () => {
     const user = await requireUser();
+    await requirePermitVisible(user, params.id);
     const row = await prisma.workPermit.findUnique({ where: { id: params.id }, include: { sessions: { take: 2, orderBy: [{ openedAt: "desc" }, { id: "desc" }] }, history: { take: 2, select: historySummarySelect, orderBy: [{ createdAt: "desc" }, { id: "desc" }] }, _count: { select: { sessions: true, history: true } } } });
     return row ? ok(row, await permitCapabilities(user)) : fail("Không tìm thấy PCT", 404);
   });
@@ -23,7 +25,9 @@ export async function PUT(req: Request, props: { params: Promise<{ id: string }>
   const params = await props.params;
   return permitHandle(async () => {
     const user = await requireUser(); await requirePermitIssue(user);
+    await requirePermitVisible(user, params.id);
     const body = await permitBody(req);
+    if (body.position !== undefined) await requirePermitPositionAllowed(user, body.position);
     const status = String(body.status) as PermitStatus;
     if (!Object.hasOwn(PERMIT_STATUSES, status)) return fail("Trạng thái không hợp lệ");
     // Cấp (nháp → Đã cấp) và hủy là việc của nhóm cố định (lib/work-permit-issuers.ts); sửa thông tin thì theo requirePermitIssue.

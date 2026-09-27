@@ -1,3 +1,4 @@
+import { permitPositionWhere, permitScopeOf } from "@/lib/server/work-permit-scope";
 import ExcelJS from "exceljs";
 import { prisma } from "@/lib/prisma";
 import { fail, requireUser } from "@/lib/api";
@@ -6,12 +7,14 @@ import { permitExportFilters, permitHandle } from "@/lib/server/work-permits";
 export const dynamic = "force-dynamic";
 export async function GET(req: Request) {
   return permitHandle(async () => {
-    await requireUser();
+    const user = await requireUser();
+    const scopeWhere = await permitPositionWhere(await permitScopeOf(user));
     const params = new URL(req.url).searchParams;
     const yearText = params.get("year");
     const year = yearText === null ? null : Number(yearText);
     if (year !== null && (!/^\d{4}$/.test(yearText!) || year < 2000 || year > 2100)) return fail("Năm xuất sổ phải từ 2000 đến 2100");
-    const where = { ...permitExportFilters(req), ...(year !== null ? { year } : {}) };
+    const baseWhere = { ...permitExportFilters(req), ...(year !== null ? { year } : {}) };
+    const where = scopeWhere ? { AND: [baseWhere, scopeWhere] } : baseWhere;
     // Chỉ lấy cột ghi sổ, không lấy danh sách nhân viên, searchText, định danh hay lịch sử.
     const rows = await prisma.workPermit.findMany({ where, select: {
       workType: true, number: true, year: true, content: true, workDate: true,

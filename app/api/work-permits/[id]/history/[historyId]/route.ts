@@ -1,3 +1,4 @@
+import { requirePermitVisible } from "@/lib/server/work-permit-scope";
 import { prisma } from "@/lib/prisma";
 import { fail, ok, requireUser } from "@/lib/api";
 import { permitHandle } from "@/lib/server/work-permits";
@@ -8,7 +9,8 @@ export async function GET(
 ) {
   const params = await props.params;
   return permitHandle(async () => {
-    await requireUser();
+    const user = await requireUser();
+    await requirePermitVisible(user, params.id);
     const row = await prisma.workPermitHistory.findFirst({ where: { id: params.historyId, permitId: params.id }, select: { id: true, actorName: true, action: true, createdAt: true, before: true, after: true } });
     return row ? ok(row) : fail("Không tìm thấy cập nhật của phiếu này", 404);
   });

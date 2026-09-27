@@ -1,3 +1,4 @@
+import { permitPositionWhere, permitScopeOf } from "@/lib/server/work-permit-scope";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { normalizeText } from "@/lib/nav";
@@ -91,8 +92,7 @@ const insensitive = (value: string) => ({ contains: value, mode: "insensitive" a
 // ───────────────────────────── Phiếu công tác ─────────────────────────────
 
 /**
- * SỔ CẤP PHIẾU CÔNG TÁC. Phạm vi bằng `GET /api/work-permits`: mọi tài khoản đăng nhập xem được
- * cả hai sổ. Mặc định bỏ phiếu ĐÃ HỦY; `status=OPEN` là phiếu chưa đóng như bộ lọc mặc định của trang.
+ * SỔ CẤP PHIẾU CÔNG TÁC. Phạm vi bằng `GET /api/work-permits`: cả hai sổ, lọc theo cương vị đang làm việc. Mặc định bỏ phiếu ĐÃ HỦY; `status=OPEN` là phiếu chưa đóng như bộ lọc mặc định của trang.
  */
 export async function aiSearchWorkPermits(user: AiToolUser, input: Record<string, unknown>): Promise<ToolResult> {
   const blocked = defectOnly(user);
@@ -120,8 +120,10 @@ export async function aiSearchWorkPermits(user: AiToolUser, input: Record<string
       { repairRequestNumber: insensitive(query) },
     ] } : {}),
   };
+  // Cùng phạm vi cương vị với sổ PCT (lib/server/work-permit-scope.ts) — trợ lý không được lộ phiếu cương vị khác.
+  const scopeWhere = await permitPositionWhere(await permitScopeOf(user));
   const rows = await prisma.workPermit.findMany({
-    where,
+    where: scopeWhere ? { AND: [where, scopeWhere] } : where,
     orderBy: [{ workDate: "desc" }, { createdAt: "desc" }],
     take: take + 1,
     select: {

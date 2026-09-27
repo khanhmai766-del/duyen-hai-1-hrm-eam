@@ -48,6 +48,8 @@ export const POSITION_SCOPE_PERMISSION = {
   replacement: "replacement-view",
   // PCCC đã có sẵn quyền xem riêng từ trước, không phải đẻ thêm.
   pccc: "pccc-view",
+  // Sổ cấp PCT: phiếu để trống cương vị là phiếu chung (lib/server/work-permit-scope.ts).
+  workPermit: "work-permit-view",
 } as const;
 
 export type PositionScopeArea = keyof typeof POSITION_SCOPE_PERMISSION;

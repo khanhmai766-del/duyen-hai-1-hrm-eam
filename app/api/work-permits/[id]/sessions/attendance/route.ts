@@ -1,3 +1,4 @@
+import { requirePermitVisible } from "@/lib/server/work-permit-scope";
 import { prisma } from "@/lib/prisma";
 import { fail, ok, requireUser } from "@/lib/api";
 import { requirePermitExecute } from "@/lib/server/work-permit-permissions";
@@ -13,6 +14,7 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
   const params = await props.params;
   return permitHandle(async () => {
     const user = await requireUser(); await requirePermitExecute(user);
+    await requirePermitVisible(user, params.id);
     const body = await permitBody(req);
     const direction = body.direction;
     if (direction !== "auto" && direction !== "in" && direction !== "out") return fail("Hướng vào/ra không hợp lệ");

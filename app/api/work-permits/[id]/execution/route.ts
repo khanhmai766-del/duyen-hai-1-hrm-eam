@@ -1,3 +1,4 @@
+import { requirePermitVisible } from "@/lib/server/work-permit-scope";
 import { prisma } from "@/lib/prisma";
 import { audit, fail, ok, requireUser } from "@/lib/api";
 import { requirePermitExecute } from "@/lib/server/work-permit-permissions";
@@ -10,6 +11,7 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
   const params = await props.params;
   return permitHandle(async () => {
     const user = await requireUser();
+    await requirePermitVisible(user, params.id);
     await requirePermitExecute(user);
     const body = await permitBody(req);
     if (!isPermitExecutionInput(body)) return fail("Thao tác thực hiện không được thay đổi thông tin cấp phiếu", 403);

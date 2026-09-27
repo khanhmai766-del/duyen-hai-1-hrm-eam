@@ -1,5 +1,5 @@
 import { safetySummary, type SafetySelection } from "@/lib/work-permit-safety";
-export const PERMIT_PAGE_SIZE = 10;
+export const PERMIT_PAGE_SIZE = 25;
 /** Ghép số thuần theo mẫu chung Cơ/Điện; số đầy đủ hoặc mã cũ giữ nguyên. */
 export function formatPermitNumber(row: { number: string; year: number }): string {
   const number = row.number.trim().toUpperCase().replace(/\s+/g, "");

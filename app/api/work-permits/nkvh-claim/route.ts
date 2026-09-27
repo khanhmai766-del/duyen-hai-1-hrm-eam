@@ -1,3 +1,4 @@
+import { permitPositionVisible, permitScopeOf, requirePermitPositionAllowed } from "@/lib/server/work-permit-scope";
 import { workPermitPrisma as prisma } from "@/lib/server/work-permit-prisma";
 import { audit, ok, requireUser } from "@/lib/api";
 import { OPERATION_POSITION_TITLES } from "@/lib/positions";
@@ -13,6 +14,7 @@ export async function GET(req: Request) {
     const user = await requireUser(); requirePermitIssuer(user);
     const params = new URL(req.url).searchParams;
     const { kind, nkvhPctId } = parseNkvhScope({ kind: params.get("kind"), nkvhPctId: params.get("nkvhPctId") });
+    const scope = await permitScopeOf(user);
     const select = { id: true, number: true, year: true, status: true } as const;
     const permit = await prisma.workPermit.findFirst({ where: { kind, nkvhPctId, status: { not: "CANCELLED" } }, orderBy: { createdAt: "desc" }, select });
     // Phiếu sổ đã hủy của chính id_pct này — để trang NKVH đã hủy biết đã báo hủy rồi.
@@ -20,7 +22,7 @@ export async function GET(req: Request) {
     return ok({
       permit: permit ? nkvhClaimResult(permit, false) : null,
       cancelledPermit: cancelled ? nkvhClaimResult(cancelled, false) : null,
-      positions: OPERATION_POSITION_TITLES, units: PERMIT_UNITS, userName: user.name ?? "",
+      positions: OPERATION_POSITION_TITLES.filter(position => permitPositionVisible(position, scope)), units: PERMIT_UNITS, userName: user.name ?? "",
     });
   });
 }
@@ -46,6 +48,7 @@ export async function POST(req: Request) {
       await audit(user.id, "SYNC_WORK_PERMIT_NKVH", "WorkPermit", result.id, `Đồng bộ PCT ${result.formatted} từ NKVH`);
       return ok(result);
     }
+    await requirePermitPositionAllowed(user, body.position);
     const result = await prisma.$transaction(tx => claimNkvhPermit(tx, user, { kind, nkvhPctId, page, unit: body.unit, position: body.position }));
     if (result.created) await audit(user.id, "CREATE_WORK_PERMIT", "WorkPermit", result.id, `Tạo PCT ${result.formatted} từ NKVH (tiện ích)`);
     return ok(result);

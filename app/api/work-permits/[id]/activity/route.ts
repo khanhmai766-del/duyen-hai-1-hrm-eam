@@ -1,3 +1,4 @@
+import { requirePermitVisible } from "@/lib/server/work-permit-scope";
 import { prisma } from "@/lib/prisma";
 import { fail, ok, requireUser } from "@/lib/api";
 import { permitHandle } from "@/lib/server/work-permits";
@@ -6,7 +7,8 @@ export const dynamic = "force-dynamic";
 export async function GET(req: Request, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
   return permitHandle(async () => {
-    await requireUser();
+    const user = await requireUser();
+    await requirePermitVisible(user, params.id);
     const query = new URL(req.url).searchParams;
     const type = query.get("type"), offset = Number(query.get("offset") ?? 2);
     const version = Number(query.get("version"));
