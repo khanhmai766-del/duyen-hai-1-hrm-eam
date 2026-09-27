@@ -22,11 +22,10 @@ export function PermitLiveBoard() {
   const query = usePermitLiveSessions();
   const rows = query.data?.data ?? [];
   const canExecute = Boolean(query.data?.meta?.canExecute);
-  const people = rows.reduce((sum, row) => sum + 1 + row.inside, 0);
 
   return <section className="space-y-3">
     <div className="flex flex-wrap items-center justify-between gap-2">
-      <p className="text-sm text-muted-foreground">{query.isPending ? "Đang tải…" : rows.length ? <><b className="text-foreground">{rows.length}</b> lần làm việc đang mở · <b className="text-emerald-700">{people}</b> người trong khu vực (kèm CHTT) · tự làm mới mỗi 15 giây</> : "Không có nhà thầu nào đang làm việc."}</p>
+      <p className="text-sm text-muted-foreground">{query.isPending ? "Đang tải…" : rows.length ? null : "Không có nhà thầu nào đang làm việc."}</p>
       <Button type="button" variant="outline" size="sm" className="h-8 text-xs" disabled={query.isFetching} onClick={() => void query.refetch()}><RefreshCw className={query.isFetching ? "animate-spin" : undefined} />Làm mới</Button>
     </div>
     {query.isError && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">{query.error.message}</p>}

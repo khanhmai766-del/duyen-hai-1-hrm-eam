@@ -2,7 +2,8 @@
 
 import { Fragment, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Plus, Users, UserPlus, X, Play, Square, Pencil, Trash2, ScanLine, RefreshCw, MonitorPlay } from "lucide-react";
+import { useSession } from "next-auth/react";
+import { Plus, Users, UserPlus, X, Play, Square, Pencil, Trash2, ScanLine, RefreshCw, MonitorPlay, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { PermitCompanyPicker } from "@/components/work-permits/company-picker";
 import { PermitEmployeePicker } from "@/components/work-permits/employee-picker";
@@ -65,20 +66,46 @@ export function PermitCompanyDirectory() {
   return <section className="space-y-4">
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div><h2 className="flex items-center gap-2 text-base font-semibold"><Users size={18} />Đơn vị nhà thầu</h2><p className="mt-0.5 text-xs text-muted-foreground">Thêm đơn vị trước, rồi thêm nhân sự và CHTT ngay trên dòng của đơn vị đó. Bấm một dòng để xem danh sách người.</p></div>
-      {canWrite && <div className="flex flex-wrap gap-2"><Button type="button" size="sm" variant="outline" className="h-9 text-xs" title="Lấy họ tên, số thẻ, hạn thẻ, huấn luyện và ảnh từ bảng quản lý thẻ ra vào cổng" onClick={() => setSyncing(true)}><RefreshCw />Đồng bộ từ Google Sheets</Button><Button type="button" size="sm" className="h-9 text-xs" onClick={() => setCompanyForm({ mode: "create" })}><Plus />Thêm đơn vị</Button></div>}
+      {canWrite && <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto"><Button type="button" size="sm" variant="outline" className="h-10 text-xs sm:h-9" title="Lấy họ tên, số thẻ, hạn thẻ, huấn luyện và ảnh từ bảng quản lý thẻ ra vào cổng" onClick={() => setSyncing(true)}><RefreshCw /><span className="sm:hidden">Đồng bộ Sheets</span><span className="hidden sm:inline">Đồng bộ từ Google Sheets</span></Button><Button type="button" size="sm" className="h-10 text-xs sm:h-9" onClick={() => setCompanyForm({ mode: "create" })}><Plus />Thêm đơn vị</Button></div>}
     </div>
     <div className="overflow-hidden rounded-xl border border-border bg-card">
       <div className="flex flex-col gap-3 border-b border-border bg-muted/25 px-4 py-3 md:flex-row md:items-center md:justify-between">
         <p className="text-sm text-muted-foreground"><strong className="font-semibold text-foreground">{rows.length}</strong> đơn vị · <strong className="font-semibold text-foreground">{rows.reduce((sum, row) => sum + row.total, 0)}</strong> người</p>
         <div className="flex w-full items-center gap-2 md:w-auto">
           <span className="hidden text-sm text-muted-foreground md:inline">Tìm kiếm:</span>
-          <input className="h-9 w-full rounded-xl border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring md:w-72" aria-label="Tìm đơn vị nhà thầu" placeholder="Mã hoặc tên đơn vị nhà thầu…" value={q} maxLength={200} onChange={e => setQ(e.target.value)} />
+          <input type="search" className="h-10 w-full rounded-xl border border-input bg-background px-3 text-base focus:outline-none sm:h-9 sm:text-sm focus:ring-2 focus:ring-ring md:w-72" aria-label="Tìm đơn vị nhà thầu" placeholder="Mã hoặc tên đơn vị nhà thầu…" value={q} maxLength={200} onChange={e => setQ(e.target.value)} />
         </div>
       </div>
       {companies.isPending ? <p role="status" className="p-6 text-sm">Đang tải danh sách đơn vị…</p>
         : companies.isError ? <p role="alert" className="p-6 text-red-700">{companies.error.message}</p>
         : !rows.length ? <p className="p-8 text-center text-sm text-muted-foreground">{q.trim() ? "Không có đơn vị nào khớp từ khóa." : "Chưa có đơn vị nhà thầu nào. Bấm “Thêm đơn vị” để bắt đầu."}</p>
-        : <Table className="min-w-[720px]">
+        : <>
+        {/* Điện thoại: mỗi đơn vị một thẻ (bảng 7 cột làm tên đơn vị gãy 4–5 dòng và cắt cột số lượng). */}
+        <div className="divide-y divide-border md:hidden">{rows.map(row => {
+          const expanded = openCompany === row.company;
+          const toggle = () => setOpenCompany(expanded ? null : row.company);
+          return <article key={row.company} className={expanded ? "bg-sky-50/70 dark:bg-sky-950/20" : undefined}>
+            <button type="button" aria-expanded={expanded} onClick={toggle} className="flex w-full items-start gap-3 px-4 pb-2 pt-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500">
+              <span className="min-w-0 flex-1">
+                <span className="flex flex-wrap items-center gap-x-2 gap-y-1">{row.code && <span className="rounded-md bg-blue-50 px-1.5 py-0.5 text-xs font-bold tracking-wide text-blue-800 dark:bg-blue-950/40 dark:text-blue-200">{row.code}</span>}<span className="text-[15px] font-semibold leading-5 text-ink">{row.company}</span></span>
+                <span className="mt-1 block text-xs text-muted-foreground"><b className="text-foreground">{row.total}</b> người · CHTT <b className={row.commanders ? "text-emerald-700" : "text-amber-700"}>{row.commanders}</b>{row.active < row.total && <span className="text-amber-700"> · {row.total - row.active} ngừng hoạt động</span>}</span>
+              </span>
+              <ChevronDown className={`mt-0.5 h-5 w-5 shrink-0 text-muted-foreground transition-transform ${expanded ? "rotate-180" : ""}`} />
+            </button>
+            {canWrite && <div className="flex gap-2 px-4 pb-3">
+              <Button type="button" size="sm" className="h-10 flex-1 text-xs" onClick={() => setAddingPersonTo(row.company)}><UserPlus size={16} />Thêm nhân sự</Button>
+              <Button type="button" size="sm" variant="outline" className="h-10 w-10 px-0" aria-label={`Sửa đơn vị ${row.company}`} onClick={() => setCompanyForm({ mode: "rename", company: row.company })}><Pencil size={16} /></Button>
+              {row.total === 0 && <Button type="button" size="sm" variant="outline" className="h-10 w-10 px-0 text-red-700 hover:text-red-800" disabled={removeCompany.isPending} aria-label={`Xóa đơn vị ${row.company}`} onClick={() => void deleteCompany(row.company)}><Trash2 size={16} /></Button>}
+            </div>}
+            {expanded && <div className="border-t border-sky-100 px-4 pb-4 pt-3 dark:border-sky-900">
+              {people.isPending ? <p role="status" className="text-sm text-muted-foreground">Đang tải nhân sự…</p>
+                : people.isError ? <p role="alert" className="text-sm text-red-700">{people.error.message}</p>
+                : !people.data?.data.length ? <p className="text-sm text-muted-foreground">Đơn vị này chưa có nhân sự.</p>
+                : <CompanyPeopleTable people={people.data.data} canWrite={canWrite} removing={remove.isPending} onEdit={setEditing} onRemove={person => void removePerson(person)} />}
+            </div>}
+          </article>;
+        })}</div>
+        <Table className="hidden min-w-[720px] md:table">
           <TableHeader><TableRow className={TR_HEAD}>
             <TableHead className={cn(TH_NAVY, TH_EXPAND)} />
             <TableHead className={cn(TH_NAVY, "w-16")}><PlainHeader label="STT" /></TableHead>
@@ -117,7 +144,7 @@ export function PermitCompanyDirectory() {
               </TableCell></TableRow>}
             </Fragment>;
           })}</TableBody>
-        </Table>}
+        </Table></>}
     </div>
     {editing && <PersonEditor initial={editing} onClose={() => setEditing(null)} />}
     {addingPersonTo !== null && <PersonEditor presetCompany={addingPersonTo} onClose={() => setAddingPersonTo(null)} onSaved={() => setOpenCompany(addingPersonTo)} />}
@@ -129,7 +156,27 @@ export function PermitCompanyDirectory() {
 /** Danh sách người của một đơn vị, mỗi người một dòng: Họ tên · Số thẻ an toàn · SĐT · Vai trò. */
 function CompanyPeopleTable({ people, canWrite, removing, onEdit, onRemove }: { people: PermitPerson[]; canWrite: boolean; removing: boolean; onEdit: (person: PermitPerson) => void; onRemove: (person: PermitPerson) => void }) {
   const th = "px-3 py-2 text-left text-[10.5px] font-semibold uppercase tracking-wider text-slate-500";
-  return <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+  const role = (person: PermitPerson) => <>
+    {person.canCommand ? <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10.5px] font-semibold uppercase tracking-wide text-emerald-700">CHTT</span> : <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10.5px] font-semibold uppercase tracking-wide text-slate-600">Nhân viên</span>}
+    {!person.isActive && <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10.5px] font-semibold uppercase tracking-wide text-amber-700">Ngừng hoạt động</span>}
+  </>;
+  const works = (person: PermitPerson) => person.activeWorks?.map(work => <p key={work.sessionId} className="mt-0.5 text-[11px] font-medium text-amber-700">Đang làm PCT {formatPermitNumber(work.permit)} · {PERMIT_KINDS[work.permit.kind]} · {work.role === "CHTT" ? "CHTT" : "Nhân viên công tác"} · từ {fmt(work.openedAt)}</p>);
+  const tel = (phone: string) => `tel:${phone.replace(/[^+\d]/g, "")}`;
+  return <>
+  {/* Điện thoại: mỗi người một thẻ — tên, số thẻ, SĐT bấm gọi, vai trò, nút sửa/xoá 40px. */}
+  <div className="space-y-2 md:hidden">{people.map(person => <div key={person.id} className="flex items-start gap-2 rounded-lg border border-slate-200 bg-white p-3 dark:border-border dark:bg-background">
+    <div className="min-w-0 flex-1">
+      <p className="text-[15px] font-semibold leading-5 text-ink">{person.name}</p>
+      <p className="mt-0.5 text-xs text-muted-foreground">{person.code}{person.phone ? <> · <a className="font-medium text-blue-700 underline" href={tel(person.phone)}>{person.phone}</a></> : null}</p>
+      <div className="mt-1.5 flex flex-wrap gap-1">{role(person)}</div>
+      {works(person)}
+    </div>
+    {canWrite && <div className="flex shrink-0 gap-1.5">
+      <Button type="button" size="sm" variant="outline" className="h-10 w-10 px-0" aria-label={`Sửa hồ sơ ${person.name}`} onClick={() => onEdit(person)}><Pencil size={16} /></Button>
+      <Button type="button" size="sm" variant="outline" className="h-10 w-10 px-0 text-red-700 hover:text-red-800" disabled={removing} aria-label={`Xóa hồ sơ ${person.name}`} onClick={() => onRemove(person)}><Trash2 size={16} /></Button>
+    </div>}
+  </div>)}</div>
+  <div className="hidden overflow-x-auto rounded-lg border border-slate-200 bg-white md:block">
     <table className="w-full min-w-[640px] text-[12px]">
       <thead className="border-b border-slate-200 bg-slate-50"><tr>
         <th className={cn(th, "w-12 text-center")}>STT</th><th className={th}>Họ tên</th><th className={th}>Số thẻ an toàn</th><th className={th}>SĐT liên hệ</th><th className={th}>Vai trò</th>{canWrite && <th className={cn(th, "w-24 text-center")}>Thao tác</th>}
@@ -138,21 +185,19 @@ function CompanyPeopleTable({ people, canWrite, removing, onEdit, onRemove }: { 
         <td className="px-3 py-2 text-center tabular-nums text-slate-500">{index + 1}</td>
         <td className="px-3 py-2">
           <span className="font-semibold text-ink">{person.name}</span>
-          {person.activeWorks?.map(work => <p key={work.sessionId} className="mt-0.5 text-[11px] font-medium text-amber-700">Đang làm PCT {formatPermitNumber(work.permit)} · {PERMIT_KINDS[work.permit.kind]} · {work.role === "CHTT" ? "CHTT" : "Nhân viên công tác"} · từ {fmt(work.openedAt)}</p>)}
+          {works(person)}
         </td>
         <td className="px-3 py-2 font-medium text-ink">{person.code}</td>
-        <td className="px-3 py-2">{person.phone ? <a className="font-medium text-blue-700 underline" href={`tel:${person.phone.replace(/[^+\d]/g, "")}`}>{person.phone}</a> : <span className="text-muted-foreground">Chưa có</span>}</td>
-        <td className="px-3 py-2"><div className="flex flex-wrap gap-1">
-          {person.canCommand ? <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10.5px] font-semibold uppercase tracking-wide text-emerald-700">CHTT</span> : <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10.5px] font-semibold uppercase tracking-wide text-slate-600">Nhân viên</span>}
-          {!person.isActive && <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10.5px] font-semibold uppercase tracking-wide text-amber-700">Ngừng hoạt động</span>}
-        </div></td>
+        <td className="px-3 py-2">{person.phone ? <a className="font-medium text-blue-700 underline" href={tel(person.phone)}>{person.phone}</a> : <span className="text-muted-foreground">Chưa có</span>}</td>
+        <td className="px-3 py-2"><div className="flex flex-wrap gap-1">{role(person)}</div></td>
         {canWrite && <td className="px-3 py-2"><div className="flex justify-center gap-1">
           <Button type="button" size="sm" variant="outline" className="h-7 px-2" aria-label={`Sửa hồ sơ ${person.name}`} onClick={() => onEdit(person)}><Pencil size={13} /></Button>
           <Button type="button" size="sm" variant="outline" className="h-7 px-2 text-red-700 hover:text-red-800" disabled={removing} aria-label={`Xóa hồ sơ ${person.name}`} onClick={() => onRemove(person)}><Trash2 size={13} /></Button>
         </div></td>}
       </tr>)}</tbody>
     </table>
-  </div>;
+  </div>
+  </>;
 }
 
 /**
@@ -380,7 +425,11 @@ export function SessionEditor({ permit, session, handoff = false, onClose }: { p
   });
   const [picking, setPicking] = useState(false);
   const [at, setAt] = useState(vnNow());
-  const [name, setName] = useState("");
+  // Mở lần làm việc: người cho phép mặc định là tài khoản đang thao tác (vẫn chọn lại được). Suy ra thay vì
+  // useState(tên) vì phiên có thể tải xong SAU khi hộp mở.
+  const { data: authSession } = useSession();
+  const [nameOverride, setName] = useState<string | null>(null);
+  const name = nameOverride ?? (!session && !handoff ? authSession?.user?.name ?? "" : "");
   const [note, setNote] = useState("");
   const [progress, setProgress] = useState(String(permit.progress ?? 0));
   const [members, setMembers] = useState<PermitMember[]>(permit.sessions[0]?.members ?? permit.members ?? []);
@@ -401,9 +450,9 @@ export function SessionEditor({ permit, session, handoff = false, onClose }: { p
   }
   return <Dialog open onOpenChange={v => { if (!v && !save.isPending) onClose(); }}><DialogContent className="max-w-3xl">
     <DialogTitle>{handoff ? "Bàn giao / đổi CHTT" : ending ? "Kết thúc lần làm việc" : "Cho phép / mở lần làm việc"} · PCT {formatPermitNumber(permit)}</DialogTitle>
-    <DialogDescription>{handoff ? "Chọn CHTT mới và thời điểm bàn giao thực tế. Hệ thống kết thúc lần cũ, mở lần mới cùng thời điểm trong một lần lưu; nếu CHTT mới đang bận, việc bàn giao không được thực hiện." : ending ? "Ghi thời điểm kết thúc thực tế. Thao tác này không đóng toàn bộ PCT." : "CHTT phải có trong danh sách nhà thầu và không trùng thời gian làm việc trên PCT khác, kể cả khác sổ Cơ/Điện."}</DialogDescription>
+    <DialogDescription>{handoff ? "Chọn CHTT mới và thời điểm bàn giao thực tế. Hệ thống kết thúc lần cũ, mở lần mới cùng thời điểm trong một lần lưu; nếu CHTT mới đang bận, việc bàn giao không được thực hiện." : ending ? "Ghi thời điểm kết thúc thực tế. Thao tác này không đóng toàn bộ PCT." : "CHTT phải có trong danh sách nhà thầu, không trùng thời gian làm việc trên PCT khác, kể cả Cơ/Điện."}</DialogDescription>
     <form onSubmit={submit}><fieldset disabled={save.isPending} className="space-y-4">
-      {!ending && <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border p-3"><Button type="button" variant="outline" onClick={() => setPicking(true)}>Chọn CHTT nhà thầu *</Button><span className="text-sm">{person ? `${person.name} · ${person.code} · ${person.company}` : "Chưa chọn CHTT"}</span></div>}
+      {!ending && <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border p-3"><Button type="button" variant="outline" onClick={() => setPicking(true)}>Chọn CHTT nhà thầu *</Button><span className="text-sm">{person ? [person.name, person.code, person.company].filter(Boolean).join(" · ") : "Chưa chọn CHTT"}</span></div>}
       {session && <p className="text-sm">CHTT: <b>{session.commanderName}</b> · Mở lúc {fmt(session.openedAt)}</p>}
       <div className="grid gap-4 sm:grid-cols-2"><label className="space-y-1 text-sm"><span>{handoff ? "Thời điểm bàn giao" : ending ? "Thời điểm kết thúc" : "Thời điểm cho phép"} (giờ Việt Nam) *</span><input className={control} type="datetime-local" value={at} required onChange={e => setAt(e.target.value)} /></label><PermitEmployeePicker label={handoff ? "Người xác nhận bàn giao" : ending ? "Người xác nhận kết thúc" : "Người cho phép làm việc"} value={name} onChange={setName} required /></div>
       {ending && <label className="block space-y-2 text-sm"><span className="font-medium">Tiến độ công việc *</span><div className="flex items-center gap-4 rounded-lg border border-border p-3"><input className="h-2 flex-1 cursor-pointer accent-blue-700" type="range" min={0} max={100} step={1} value={progress} onChange={e => setProgress(e.target.value)} /><div className="relative w-28"><input className={`${control} pr-8 text-right tabular-nums`} type="number" min={0} max={100} step={1} required value={progress} onChange={e => setProgress(e.target.value)} /><span className="pointer-events-none absolute right-3 top-2.5 text-muted-foreground">%</span></div></div><p className="text-xs text-muted-foreground">Ghi tiến độ lũy kế của toàn bộ công việc tại thời điểm kết thúc lần này.</p></label>}
