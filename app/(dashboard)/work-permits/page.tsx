@@ -3,7 +3,7 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Activity, ArrowRight, Building2, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, CircleAlert, ClipboardList, Download, ExternalLink, FileText, Filter, HardHat, Plus, RefreshCw, RotateCcw, Search, ShieldCheck, SlidersHorizontal, Trash2, UsersRound, Wrench, Zap, Clock } from "lucide-react";
+import { Activity, ArrowRight, Ban, Building2, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, CircleAlert, ClipboardList, Download, ExternalLink, FileText, Filter, HardHat, Plus, RefreshCw, RotateCcw, Search, ShieldCheck, SlidersHorizontal, UsersRound, Wrench, Zap, Clock } from "lucide-react";
 import { toast } from "sonner";
 import { PermitLiveBoard } from "@/components/work-permits/live-board";
 import { ContractorWorkSummary, PermitCompanyDirectory, PermitMembersEditor, PermitPeopleDirectory } from "@/components/work-permits/contractor-work";
@@ -16,7 +16,7 @@ import { PermitDocumentPreview } from "@/components/work-permits/document-previe
 import { apiDownload, apiDownloadPost } from "@/lib/fetcher";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { usePermitLiveSessions, useCancelDraftWorkPermit, useDeleteWorkPermit, usePermitNameSuggestions, useWorkPermits, useWorkPermit, useSaveWorkPermit, useExportWorkPermits, usePermitNumberSuggestion, usePermitNumberReservations, useTakePermitNumber, useCancelPermitNumberReservation, usePermitNumberBaselines, useSetPermitNumberBaseline, type PermitNumberReservation } from "@/hooks/useWorkPermits";
+import { usePermitLiveSessions, useCancelDraftWorkPermit, usePermitNameSuggestions, useWorkPermits, useWorkPermit, useSaveWorkPermit, useExportWorkPermits, usePermitNumberSuggestion, usePermitNumberReservations, useTakePermitNumber, useCancelPermitNumberReservation, usePermitNumberBaselines, useSetPermitNumberBaseline, type PermitNumberReservation } from "@/hooks/useWorkPermits";
 import { useUsers } from "@/hooks/useUsers";
 import { useDefects, type DefectItem } from "@/hooks/useDefects";
 import { announcementPositionsMatch, OPERATION_POSITION_TITLES } from "@/lib/positions";
@@ -123,7 +123,7 @@ export default function WorkPermitsPage() {
   const liveSessions = usePermitLiveSessions();
   const query = useWorkPermits(filters, bookTab); const exporting = useExportWorkPermits();
   const rows = query.data?.data ?? []; const meta = query.data?.meta;
-  const reservations = usePermitNumberReservations(Boolean(meta?.canIssue));
+  const reservations = usePermitNumberReservations(Boolean(meta?.canIssueNew));
   // Sổ Cơ và sổ Điện là hai dãy số riêng: lượt giữ số của sổ này không được hiện ở tab kia.
   const kindReservations = (reservations.data?.data ?? []).filter(item => item.kind === kind);
   const cancelReservation = useCancelPermitNumberReservation();
@@ -146,6 +146,7 @@ export default function WorkPermitsPage() {
     { title: "Đang thực hiện", count: counts.ACTIVE ?? 0, value: "ACTIVE", note: "Đã cho phép làm việc", tone: "bg-emerald-500" },
     { title: "Chờ làm tiếp", count: counts.WAITING ?? 0, value: "WAITING", note: "Nhà thầu đã kết thúc lần làm việc", tone: "bg-amber-500" },
     { title: "Đã đóng", count: counts.CLOSED ?? 0, value: "CLOSED", note: "Đã ghi kết quả công việc", tone: "bg-slate-500" },
+    { title: "Đã hủy", count: counts.CANCELLED ?? 0, value: "CANCELLED", note: "Phiếu hủy vẫn giữ trong sổ kèm lý do", tone: "bg-red-500" },
   ];
   const secondaryFilterCount = [teamType, from, to].filter(Boolean).length;
   const [moreFilters, setMoreFilters] = useState(false);
@@ -183,7 +184,7 @@ export default function WorkPermitsPage() {
         <h1 className="text-xl font-bold uppercase tracking-tight text-ink min-[380px]:text-2xl">Sổ cấp phiếu công tác</h1>
       </div>
       {/* Tab "Đang làm việc" là màn theo dõi, không cần Hướng dẫn; trên điện thoại hàng nút khi đó trống nên ẩn luôn cả hàng. */}
-      <div className={`flex-wrap gap-2 ${liveTab ? "hidden md:flex" : "flex"}`}>{!liveTab && <PermitGuideButton />}{pageSession?.user?.role === "ADMIN" &&<Button variant="outline" size="sm" className="hidden h-9 text-xs md:inline-flex" onClick={() => setBaselineOpen(true)}>Mốc sổ giấy</Button>}<Button variant="outline" size="sm" className="hidden h-9 text-xs md:inline-flex" onClick={() => setExportOpen(true)} disabled={!bookTab || !meta || exporting.isPending || query.isError}><Download />{exporting.isPending ? "Đang xuất…" : "Xuất Excel"}</Button>{bookTab && meta?.canIssue && <>{/* Điện thoại: gom hai nút thành một "Cấp phiếu" → chọn Nội bộ / Nhà thầu, khỏi chiếm hai hàng đầu trang. */}<DropdownMenu><DropdownMenuTrigger asChild><Button size="sm" className="h-9 bg-blue-800 text-xs hover:bg-blue-900 md:hidden"><Plus />Cấp phiếu<ChevronDown className="opacity-80" /></Button></DropdownMenuTrigger><DropdownMenuContent align="end" className="w-64 p-1.5"><DropdownMenuItem className="min-h-12 cursor-pointer gap-3 rounded-md px-3" onSelect={() => startNewPermit("INTERNAL")}><Building2 className="h-5 w-5 shrink-0 text-blue-800" /><span><span className="block text-sm font-semibold">Cấp phiếu nội bộ</span><span className="block text-xs text-muted-foreground">PCT điện tử</span></span></DropdownMenuItem><DropdownMenuItem className="min-h-12 cursor-pointer gap-3 rounded-md px-3" onSelect={() => startNewPermit("CONTRACTOR")}><HardHat className="h-5 w-5 shrink-0 text-cyan-700" /><span><span className="block text-sm font-semibold">Cấp phiếu nhà thầu</span><span className="block text-xs text-muted-foreground">PCT giấy</span></span></DropdownMenuItem></DropdownMenuContent></DropdownMenu><Button size="sm" className="hidden h-9 bg-blue-800 text-xs hover:bg-blue-900 md:inline-flex" onClick={() => startNewPermit("INTERNAL")}><Building2 />Cấp phiếu nội bộ</Button><Button size="sm" className="hidden h-9 bg-cyan-700 text-xs hover:bg-cyan-800 md:inline-flex" onClick={() => startNewPermit("CONTRACTOR")}><HardHat />Cấp phiếu nhà thầu</Button></>}</div>
+      <div className={`flex-wrap gap-2 ${liveTab ? "hidden md:flex" : "flex"}`}>{!liveTab && <PermitGuideButton />}{pageSession?.user?.role === "ADMIN" &&<Button variant="outline" size="sm" className="hidden h-9 text-xs md:inline-flex" onClick={() => setBaselineOpen(true)}>Mốc sổ giấy</Button>}<Button variant="outline" size="sm" className="hidden h-9 text-xs md:inline-flex" onClick={() => setExportOpen(true)} disabled={!bookTab || !meta || exporting.isPending || query.isError}><Download />{exporting.isPending ? "Đang xuất…" : "Xuất Excel"}</Button>{bookTab && meta?.canIssueNew && <>{/* Điện thoại: gom hai nút thành một "Cấp phiếu" → chọn Nội bộ / Nhà thầu, khỏi chiếm hai hàng đầu trang. */}<DropdownMenu><DropdownMenuTrigger asChild><Button size="sm" className="h-9 bg-blue-800 text-xs hover:bg-blue-900 md:hidden"><Plus />Cấp phiếu<ChevronDown className="opacity-80" /></Button></DropdownMenuTrigger><DropdownMenuContent align="end" className="w-64 p-1.5"><DropdownMenuItem className="min-h-12 cursor-pointer gap-3 rounded-md px-3" onSelect={() => startNewPermit("INTERNAL")}><Building2 className="h-5 w-5 shrink-0 text-blue-800" /><span><span className="block text-sm font-semibold">Cấp phiếu nội bộ</span><span className="block text-xs text-muted-foreground">PCT điện tử</span></span></DropdownMenuItem><DropdownMenuItem className="min-h-12 cursor-pointer gap-3 rounded-md px-3" onSelect={() => startNewPermit("CONTRACTOR")}><HardHat className="h-5 w-5 shrink-0 text-cyan-700" /><span><span className="block text-sm font-semibold">Cấp phiếu nhà thầu</span><span className="block text-xs text-muted-foreground">PCT giấy</span></span></DropdownMenuItem></DropdownMenuContent></DropdownMenu><Button size="sm" className="hidden h-9 bg-blue-800 text-xs hover:bg-blue-900 md:inline-flex" onClick={() => startNewPermit("INTERNAL")}><Building2 />Cấp phiếu nội bộ</Button><Button size="sm" className="hidden h-9 bg-cyan-700 text-xs hover:bg-cyan-800 md:inline-flex" onClick={() => startNewPermit("CONTRACTOR")}><HardHat />Cấp phiếu nhà thầu</Button></>}</div>
     </header>
     {/* Điện thoại: một nút ghi mục đang xem → bấm chọn trong đủ 5 mục (thanh tab 5 mục phải vuốt ngang mới thấy hết). */}
     <DropdownMenu><DropdownMenuTrigger asChild><button type="button" aria-label={`Đang xem: ${currentSection.label}. Bấm để chuyển mục`} className={`flex h-12 w-full items-center gap-3 rounded-xl border bg-card px-4 text-left shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 md:hidden ${currentSection.live ? "border-emerald-300" : "border-blue-200"}`}>
@@ -198,11 +199,11 @@ export default function WorkPermitsPage() {
         {section.active && <Check className="h-4 w-4 shrink-0" />}
       </DropdownMenuItem>; })}</DropdownMenuContent></DropdownMenu>
     <nav className="-mx-1 hidden gap-1 overflow-x-auto border-b border-border px-1 md:flex" aria-label="Sổ PCT, biện pháp an toàn Cơ và nhân sự nhà thầu">{sections.map(section => { const Icon = section.icon; return <button key={section.id} type="button" aria-pressed={section.active} onClick={section.select} className={`-mb-px inline-flex shrink-0 cursor-pointer items-center gap-2 border-b-2 px-3.5 py-2.5 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${section.active ? section.live ? "border-emerald-600 text-emerald-700 dark:border-emerald-400 dark:text-emerald-300" : "border-blue-700 text-blue-700 dark:border-blue-400 dark:text-blue-300" : "border-transparent text-muted-foreground hover:text-foreground"}`}><Icon className="h-4 w-4" />{section.label}{section.count > 0 && <span className="rounded-full bg-emerald-600 px-1.5 py-px text-[11px] font-bold leading-4 text-white">{section.count}</span>}</button>; })}</nav>
-    {bookTab && meta?.canIssue && Boolean(kindReservations.length) && <section className="rounded-xl border border-amber-200 bg-amber-50/70 p-3 sm:p-4"><h2 className="flex items-center gap-2 text-sm font-bold text-amber-950"><Clock size={16} />Số đã lấy, chưa lưu phiếu · {PERMIT_KINDS[kind]}</h2><p className="mt-1 text-xs text-amber-800">Số vẫn được giữ khi đóng biểu mẫu. Bấm Tiếp tục để hoàn tất; chọn nhầm loại phiếu (nội bộ/nhà thầu) thì đổi ngay trong biểu mẫu, vẫn giữ nguyên số. Chỉ hiển thị lượt giữ số của sổ đang xem.</p>{/* Thẻ CO THEO NỘI DUNG (không kéo giãn cho đầy cột) và nút luôn nằm cùng hàng với thông tin,
+    {bookTab && meta?.canIssueNew && Boolean(kindReservations.length) && <section className="rounded-xl border border-amber-200 bg-amber-50/70 p-3 sm:p-4"><h2 className="flex items-center gap-2 text-sm font-bold text-amber-950"><Clock size={16} />Số đã lấy, chưa lưu phiếu · {PERMIT_KINDS[kind]}</h2><p className="mt-1 text-xs text-amber-800">Số vẫn được giữ khi đóng biểu mẫu. Bấm Tiếp tục để hoàn tất; chọn nhầm loại phiếu (nội bộ/nhà thầu) thì đổi ngay trong biểu mẫu, vẫn giữ nguyên số. Chỉ hiển thị lượt giữ số của sổ đang xem.</p>{/* Thẻ CO THEO NỘI DUNG (không kéo giãn cho đầy cột) và nút luôn nằm cùng hàng với thông tin,
     nên không còn khoảng trắng trong thẻ; các thẻ nối tiếp nhau rồi tự xuống dòng khi hết chỗ. */}<div className="mt-3 flex flex-wrap gap-2">{kindReservations.map(item => <div key={item.id} className="flex w-full flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border border-amber-200 bg-white px-3 py-2 sm:w-auto"><div className="min-w-0 flex-1 basis-48 sm:flex-none sm:basis-auto"><p className="flex flex-wrap items-center gap-x-2 gap-y-1 font-semibold text-slate-900"><span className="whitespace-nowrap">{formatPermitNumber(item)}</span><span className={`rounded-md px-1.5 py-0.5 text-[11px] font-semibold ${item.teamType === "INTERNAL" ? "bg-sky-50 text-sky-800" : "bg-amber-100 text-amber-900"}`}>{item.teamType === "INTERNAL" ? "Nội bộ" : "Nhà thầu"}</span></p><p className="mt-0.5 truncate whitespace-nowrap text-xs text-slate-600">{item.teamType === "INTERNAL" ? "PCT điện tử" : "PCT giấy"} · {item.ownerName || "Người cấp"}</p></div><div className="flex shrink-0 gap-2"><Button size="sm" className="h-9 px-3 text-xs sm:h-7 sm:px-2.5" title="Tiếp tục cấp phiếu với số này" onClick={() => { setKind(item.kind as PermitKind); setEditor(null); setNewPermit({ kind: item.kind as PermitKind, teamType: item.teamType, reservation: item }); }}>Tiếp tục</Button>{pageSession?.user?.role === "ADMIN" && <Button size="sm" variant="outline" className="h-9 px-3 text-xs sm:h-7 sm:px-2.5" title="Hủy lượt lấy số — chỉ quản trị, dùng khi lấy nhầm sổ Cơ/Điện" onClick={() => { setCancelReservationTarget(item); setCancelReservationReason(""); }}>Hủy lượt</Button>}</div></div>)}</div></section>}
     {liveTab ? <PermitLiveBoard /> : peopleTab ? <PermitCompanyDirectory /> : safetyTab ? <PermitSafetyCatalog key={kind} kind={kind} /> : <>
     <section className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
-      <div className="grid grid-cols-2 border-b border-border sm:grid-cols-4 sm:divide-x sm:divide-border">{statusCards.map(card => { const active = status === card.value; return <button key={card.value} type="button" title={card.note} onClick={() => { setStatus(active ? "" : card.value); setPage(1); }} aria-pressed={active} className={`relative flex cursor-pointer items-center justify-between gap-3 px-4 py-2.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 ${active ? "bg-blue-50/70 dark:bg-blue-950/30" : "hover:bg-muted/40"}`}><span className="flex min-w-0 items-center gap-2"><span className={`h-2 w-2 shrink-0 rounded-full ${card.tone}`} /><span className={`truncate text-xs font-medium ${active ? "text-blue-800 dark:text-blue-200" : "text-muted-foreground"}`}>{card.title}</span></span><strong className="text-lg font-bold leading-none tabular-nums text-foreground">{meta ? card.count : "—"}</strong>{active && <span className="absolute inset-x-0 bottom-0 h-0.5 bg-blue-700" />}</button>; })}</div>
+      <div className="grid grid-cols-2 border-b border-border sm:grid-cols-5 sm:divide-x sm:divide-border">{statusCards.map(card => { const active = status === card.value; return <button key={card.value} type="button" title={card.note} onClick={() => { setStatus(active ? "" : card.value); setPage(1); }} aria-pressed={active} className={`relative flex cursor-pointer items-center justify-between gap-3 px-4 py-2.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 ${active ? "bg-blue-50/70 dark:bg-blue-950/30" : "hover:bg-muted/40"}`}><span className="flex min-w-0 items-center gap-2"><span className={`h-2 w-2 shrink-0 rounded-full ${card.tone}`} /><span className={`truncate text-xs font-medium ${active ? "text-blue-800 dark:text-blue-200" : "text-muted-foreground"}`}>{card.title}</span></span><strong className="text-lg font-bold leading-none tabular-nums text-foreground">{meta ? card.count : "—"}</strong>{active && <span className="absolute inset-x-0 bottom-0 h-0.5 bg-blue-700" />}</button>; })}</div>
       <div className="border-b border-border px-4 py-3">
         <div className="flex items-center gap-2 lg:hidden"><div className="relative flex-1"><Search size={15} className="pointer-events-none absolute left-2.5 top-2.5 text-muted-foreground" /><input aria-label="Tìm kiếm phiếu công tác" className={`${filterControl} pl-8`} value={q} onChange={e => setQ(e.target.value)} placeholder="Số phiếu, ĐKCT, SYC, công việc, người…" maxLength={200} /></div><Button size="sm" variant="outline" className="h-9 shrink-0" aria-expanded={filtersOpen} onClick={() => setFiltersOpen(value => !value)}><Filter size={14} />{activeFilterCount > 0 ? `Lọc (${activeFilterCount})` : "Lọc"}</Button></div>
         <div className={`${filtersOpen ? "mt-3 grid" : "hidden"} gap-2.5 sm:grid-cols-2 lg:mt-0 lg:grid lg:grid-cols-[minmax(240px,1fr)_repeat(4,minmax(140px,170px))_auto] lg:items-end`}>
@@ -268,7 +269,7 @@ export default function WorkPermitsPage() {
     {cancelReservationTarget && <Dialog open onOpenChange={open => { if (!open) setCancelReservationTarget(null); }}><DialogContent><DialogTitle>Hủy lượt lấy số {formatPermitNumber(cancelReservationTarget)}</DialogTitle><DialogDescription>Số sẽ không tự xuất hiện lại ở nút lấy số tiếp theo. Lịch sử lượt lấy vẫn được giữ.</DialogDescription><label className="block space-y-1.5 text-sm"><span className="font-medium">Lý do hủy *</span><textarea className={control} rows={3} maxLength={2000} value={cancelReservationReason} onChange={e => setCancelReservationReason(e.target.value)} /></label><Button variant="destructive" disabled={!cancelReservationReason.trim() || cancelReservation.isPending} onClick={async () => { try { await cancelReservation.mutateAsync({ id: cancelReservationTarget.id, reason: cancelReservationReason }); toast.success("Đã hủy lượt lấy số"); setCancelReservationTarget(null); } catch (error) { toast.error(error instanceof Error ? error.message : "Không thể hủy lượt lấy số"); } }}>Xác nhận hủy</Button></DialogContent></Dialog>}
     {baselineOpen && <PermitNumberBaselineDialog onClose={() => setBaselineOpen(false)} />}
     {(editor || newPermit) && <PermitEditor initial={editor ?? undefined} kind={newPermit?.kind ?? editor?.kind ?? kind} presetTeamType={newPermit?.teamType} initialReservation={newPermit?.reservation} onClose={() => { setEditor(null); setNewPermit(null); }} onSaved={row => { setEditor(null); setNewPermit(null); if (row.teamType === "CONTRACTOR" && row.status === "ISSUED") setDetail(row.id); }} />}
-    {detail && <PermitDetail key={detail} id={detail} canIssue={meta?.canIssue ?? false} canExecute={meta?.canExecute ?? false} onClose={() => setDetail(undefined)} onEdit={row => { setDetail(undefined); setNewPermit(null); setEditor(row); }} />}
+    {detail && <PermitDetail key={detail} id={detail} canIssue={meta?.canIssue ?? false} canIssueNew={meta?.canIssueNew ?? false} canExecute={meta?.canExecute ?? false} onClose={() => setDetail(undefined)} onEdit={row => { setDetail(undefined); setNewPermit(null); setEditor(row); }} />}
   </div>;
 }
 
@@ -590,25 +591,25 @@ function PermitDetailFields({ row }: { row: PermitRow }) {
   </div>;
 }
 
-function PermitDetail({ id, canIssue: listCanIssue, canExecute: listCanExecute, onClose, onEdit }: { id: string; canIssue: boolean; canExecute: boolean; onClose: () => void; onEdit: (r: PermitRow) => void }) {
+function PermitDetail({ id, canIssue: listCanIssue, canIssueNew: listCanIssueNew, canExecute: listCanExecute, onClose, onEdit }: { id: string; canIssue: boolean; canIssueNew: boolean; canExecute: boolean; onClose: () => void; onEdit: (r: PermitRow) => void }) {
   const query = useWorkPermit(id);
   const [executing, setExecuting] = useState(false); const [previewing, setPreviewing] = useState(false); const row = query.data?.data;
   const canIssue = query.data?.meta?.canIssue ?? listCanIssue;
+  // Cấp phiếu nháp / hủy phiếu: chỉ nhóm cố định (lib/work-permit-issuers.ts); sửa thông tin theo canIssue.
+  const canIssueNew = query.data?.meta?.canIssueNew ?? listCanIssueNew;
   const canExecute = query.data?.meta?.canExecute ?? listCanExecute;
   const cancelDraft = useCancelDraftWorkPermit();
-  // Xoá hẳn phiếu là lối can thiệp của QUẢN TRỊ; server kiểm lại vai trò (requireRole ADMIN).
-  const { data: detailSession } = useSession();
-  const isAdmin = detailSession?.user?.role === "ADMIN";
-  const deletePermit = useDeleteWorkPermit();
-  const [deleting, setDeleting] = useState(false);
-  const [deleteReason, setDeleteReason] = useState("");
-  async function deleteNow(row: PermitRow) {
+  // Hủy PCT: phiếu KHÔNG bị xoá — vẫn trong sổ ở trạng thái "Đã hủy" kèm lý do; số phiếu bị bỏ, không cấp lại.
+  const [cancelling, setCancelling] = useState(false);
+  const [cancelReason, setCancelReason] = useState("");
+  const canCancel = (row: PermitRow) => row.status !== "DRAFT"
+    && (row.teamType === "CONTRACTOR" ? CONTRACTOR_PERMIT_TRANSITIONS : PERMIT_TRANSITIONS)[row.status].includes("CANCELLED");
+  async function cancelNow(row: PermitRow) {
     try {
-      await deletePermit.mutateAsync({ id: row.id, version: row.version, reason: deleteReason.trim() });
-      toast.success(`Đã xoá PCT ${formatPermitNumber(row)}`);
-      setDeleting(false);
-      onClose();
-    } catch (error) { toast.error(error instanceof Error ? error.message : "Không thể xoá PCT"); }
+      await cancelDraft.mutateAsync({ id: row.id, version: row.version, reason: cancelReason.trim() });
+      toast.success(`Đã hủy PCT ${formatPermitNumber(row)} — phiếu vẫn giữ trong sổ`);
+      setCancelling(false);
+    } catch (error) { toast.error(error instanceof Error ? error.message : "Không thể hủy PCT"); }
   }
   async function cancelDraftNow(row: PermitRow) {
     if (!window.confirm("Hủy PCT nháp này? Phiếu sẽ được hủy ngay cả khi chưa có CHTT hoặc còn thiếu thông tin.")) return;
@@ -632,14 +633,15 @@ function PermitDetail({ id, canIssue: listCanIssue, canExecute: listCanExecute, 
         <div className="mt-3 flex flex-wrap items-center gap-2">
           {paper && !["DRAFT", "CANCELLED"].includes(row.status) && <Button size="sm" className="h-8 text-xs" onClick={() => setPreviewing(true)}><FileText />Xem và in</Button>}
           {canExecute && !["DRAFT", "CLOSED", "CANCELLED"].includes(row.status) && !(row.teamType === "CONTRACTOR" && row.status === "ISSUED") && <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => setExecuting(true)}>{row.teamType === "INTERNAL" ? "Ghi nhận đóng phiếu" : "Cập nhật tiến độ"}</Button>}
-          {canIssue && row.status === "DRAFT" && <Button size="sm" variant="destructive" className="h-8 text-xs" disabled={cancelDraft.isPending} onClick={() => void cancelDraftNow(row)}>{cancelDraft.isPending ? "Đang hủy…" : "Hủy nháp"}</Button>}
-          {canIssue && !["CLOSED", "CANCELLED"].includes(row.status) && !(row.teamType === "CONTRACTOR" && row.status === "ACTIVE") && <Button size="sm" className="h-8 text-xs" onClick={() => onEdit(row)}>Chỉnh sửa / cấp phiếu<ArrowRight /></Button>}
-          {isAdmin && <Button size="sm" variant="outline" className="h-8 border-red-200 text-xs text-red-700 hover:bg-red-50 hover:text-red-800" onClick={() => { setDeleteReason(""); setDeleting(true); }}><Trash2 />Xóa PCT</Button>}
+          {canIssueNew && row.status === "DRAFT" && <Button size="sm" variant="destructive" className="h-8 text-xs" disabled={cancelDraft.isPending} onClick={() => void cancelDraftNow(row)}>{cancelDraft.isPending ? "Đang hủy…" : "Hủy nháp"}</Button>}
+          {(row.status === "DRAFT" ? canIssueNew : canIssue) && !["CLOSED", "CANCELLED"].includes(row.status) && !(row.teamType === "CONTRACTOR" && row.status === "ACTIVE") && <Button size="sm" className="h-8 text-xs" onClick={() => onEdit(row)}>Chỉnh sửa / cấp phiếu<ArrowRight /></Button>}
+          {canIssueNew && canCancel(row) && <Button size="sm" variant="outline" className="h-8 border-red-200 text-xs text-red-700 hover:bg-red-50 hover:text-red-800" onClick={() => { setCancelReason(""); setCancelling(true); }}><Ban />Hủy PCT</Button>}
         </div>
       </>}
     </div>
     <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
     {query.isError ? <p role="alert" className="text-red-700">{query.error.message}</p> : !row ? <p role="status">Đang tải phiếu…</p> : <div className="space-y-4">
+      {row.status === "CANCELLED" && <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900 dark:border-red-900 dark:bg-red-950/30 dark:text-red-200"><b>PCT đã hủy.</b>{row.statusReason ? ` Lý do: ${row.statusReason}` : ""}</p>}
       {/* Nội dung công việc là thứ người tra đọc đầu tiên: cho nó một khối riêng, chữ to hơn phần còn lại. */}
       <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
         <p className="text-[10.5px] font-semibold uppercase tracking-[0.03em] text-slate-500 dark:text-muted-foreground">{PERMIT_FIELD_LABELS.content}</p>
@@ -655,11 +657,11 @@ function PermitDetail({ id, canIssue: listCanIssue, canExecute: listCanExecute, 
       <details className="group"><summary className={summary}><span>Lịch sử cập nhật ({row._count.history})</span><ChevronRight className="h-4 w-4 shrink-0 transition-transform group-open:rotate-90" /></summary><div className="mt-2 [&>section>h3]:hidden"><PermitHistoryPanel key={`${row.id}-${row.version}-history`} permit={row} /></div></details>
     </div>}
     </div>
-    {deleting && row && <Dialog open onOpenChange={v => { if (!v && !deletePermit.isPending) setDeleting(false); }}><DialogContent className="max-w-md">
-      <DialogTitle>Xóa PCT {formatPermitNumber(row)}?</DialogTitle>
-      <DialogDescription>Phiếu, các lần làm việc và lịch sử cập nhật sẽ bị xoá khỏi sổ. Nhật ký hệ thống vẫn lưu bản chụp đầy đủ kèm lý do; số phiếu được trả về để cấp lại theo luồng “cấp lại số đã hủy”. Nếu chỉ cần ghi nhận phiếu không thực hiện, hãy chuyển trạng thái “Đã hủy” thay vì xoá.</DialogDescription>
-      <label className="block space-y-1.5 text-sm"><span className="font-medium">Lý do xoá *</span><textarea className={control} rows={3} maxLength={2000} value={deleteReason} autoFocus onChange={e => setDeleteReason(e.target.value)} placeholder="Ví dụ: nhập trùng với PCT 895/2026, ghi nhầm sổ Điện…" /></label>
-      <div className="flex justify-end gap-2"><Button type="button" variant="outline" disabled={deletePermit.isPending} onClick={() => setDeleting(false)}>Để sau</Button><Button type="button" variant="destructive" disabled={deletePermit.isPending || deleteReason.trim().length < 5} onClick={() => void deleteNow(row)}>{deletePermit.isPending ? "Đang xoá…" : "Xóa hẳn PCT"}</Button></div>
+    {cancelling && row && <Dialog open onOpenChange={v => { if (!v && !cancelDraft.isPending) setCancelling(false); }}><DialogContent className="max-w-md">
+      <DialogTitle>Hủy PCT {formatPermitNumber(row)}?</DialogTitle>
+      <DialogDescription>Phiếu không bị xoá: vẫn nằm trong sổ ở trạng thái “Đã hủy” kèm lý do và lịch sử. Số phiếu này bị bỏ, không cấp lại. Không thể hoàn tác.</DialogDescription>
+      <label className="block space-y-1.5 text-sm"><span className="font-medium">Lý do hủy *</span><textarea className={control} rows={3} maxLength={2000} value={cancelReason} autoFocus onChange={e => setCancelReason(e.target.value)} placeholder="Ví dụ: thay đổi kế hoạch, không thực hiện công việc…" /></label>
+      <div className="flex justify-end gap-2"><Button type="button" variant="outline" disabled={cancelDraft.isPending} onClick={() => setCancelling(false)}>Để sau</Button><Button type="button" variant="destructive" disabled={cancelDraft.isPending || cancelReason.trim().length < 5} onClick={() => void cancelNow(row)}>{cancelDraft.isPending ? "Đang hủy…" : "Hủy PCT"}</Button></div>
     </DialogContent></Dialog>}
   </DialogContent></Dialog>;
 }

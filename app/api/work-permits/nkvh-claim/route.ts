@@ -3,14 +3,14 @@ import { audit, ok, requireUser } from "@/lib/api";
 import { OPERATION_POSITION_TITLES } from "@/lib/positions";
 import { PERMIT_UNITS } from "@/lib/work-permits";
 import { permitBody, permitHandle } from "@/lib/server/work-permits";
-import { requirePermitIssue } from "@/lib/server/work-permit-permissions";
+import { requirePermitIssuer } from "@/lib/server/work-permit-permissions";
 import { cancelNkvhPermit, claimNkvhPermit, nkvhClaimResult, parseNkvhPage, parseNkvhScope, stopNkvhPermit, syncNkvhPermit } from "@/lib/server/work-permit-nkvh-claim";
 export const dynamic = "force-dynamic";
 
 /** API của tiện ích "Cấp số PCT NKVH" (chrome-extension/nkvh-pct) — nghiệp vụ ở lib/server/work-permit-nkvh-claim.ts. */
 export async function GET(req: Request) {
   return permitHandle(async () => {
-    const user = await requireUser(); await requirePermitIssue(user);
+    const user = await requireUser(); requirePermitIssuer(user);
     const params = new URL(req.url).searchParams;
     const { kind, nkvhPctId } = parseNkvhScope({ kind: params.get("kind"), nkvhPctId: params.get("nkvhPctId") });
     const select = { id: true, number: true, year: true, status: true } as const;
@@ -27,7 +27,7 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   return permitHandle(async () => {
-    const user = await requireUser(); await requirePermitIssue(user);
+    const user = await requireUser(); requirePermitIssuer(user);
     const body = await permitBody(req);
     const { kind, nkvhPctId } = parseNkvhScope(body);
     if (body.mode === "cancel") {

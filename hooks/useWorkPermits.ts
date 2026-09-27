@@ -2,7 +2,7 @@
 import { useMutation, useQuery, useQueryClient, useInfiniteQuery } from "@tanstack/react-query";
 import { apiDownload, apiGet, apiMutate } from "@/lib/fetcher";
 import type { PermitHistory, PermitKind, PermitListRow, PermitDetailRow, PermitPerson, PermitRow, PermitStatus, PermitSession } from "@/lib/work-permits";
-export interface PermitMeta { total: number; page: number; pageSize: number; counts: Partial<Record<PermitStatus, number>>; canIssue: boolean; canExecute: boolean }
+export interface PermitMeta { total: number; page: number; pageSize: number; counts: Partial<Record<PermitStatus, number>>; canIssue: boolean; canIssueNew: boolean; canExecute: boolean }
 export interface PermitNumberSuggestion { configured: boolean; baseline: string | null; highest: string | null; suggested: string | null }
 export interface PermitNumberReservation {
   id: string; kind: string; year: number; number: string; teamType: "INTERNAL" | "CONTRACTOR";
@@ -38,7 +38,8 @@ export function useSaveWorkPermit() {
 }
 export function useCancelDraftWorkPermit() {
   const qc = useQueryClient();
-  return useMutation({ mutationFn: ({ id, version }: { id: string; version: number }) => apiMutate<PermitRow>(`/api/work-permits/${id}/cancel`, "POST", { version }), onSuccess: () => {
+  // Hủy nháp (không cần lý do) và hủy PCT đã cấp (bắt buộc lý do) dùng chung /cancel.
+  return useMutation({ mutationFn: ({ id, version, reason }: { id: string; version: number; reason?: string }) => apiMutate<PermitRow>(`/api/work-permits/${id}/cancel`, "POST", { version, reason }), onSuccess: () => {
     qc.invalidateQueries({ queryKey: ["work-permits"] });
     qc.invalidateQueries({ queryKey: ["work-permit"] });
     qc.invalidateQueries({ queryKey: ["work-permit-number-suggestion"] });
@@ -51,15 +52,6 @@ export function usePermitNameSuggestions(kind: PermitKind, enabled: boolean) {
     queryFn: () => apiGet<{ commanders: string[]; leaders: string[] }>(`/api/work-permits/name-suggestions?kind=${kind}`) });
 }
 /** Quản trị xoá hẳn một PCT (bắt buộc lý do). */
-export function useDeleteWorkPermit() {
-  const qc = useQueryClient();
-  return useMutation({ mutationFn: ({ id, version, reason }: { id: string; version: number; reason: string }) => apiMutate<{ id: string }>(`/api/work-permits/${id}`, "DELETE", { version, reason }), onSuccess: () => {
-    qc.invalidateQueries({ queryKey: ["work-permits"] });
-    qc.invalidateQueries({ queryKey: ["work-permit"] });
-    qc.invalidateQueries({ queryKey: ["work-permit-number-suggestion"] });
-    qc.invalidateQueries({ queryKey: ["work-permit-number-reservations"] });
-  } });
-}
 export function useSaveNkvhPermitLink(id: string) {
   const qc = useQueryClient();
   return useMutation({ mutationFn: (body: { version: number; nkvhPctId: string | null }) => apiMutate<PermitRow>(`/api/work-permits/${id}/nkvh-link`, "PATCH", body), onSuccess: () => {

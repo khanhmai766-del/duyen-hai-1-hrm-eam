@@ -1,6 +1,6 @@
 import { audit, fail, ok, requireUser } from "@/lib/api";
 import { workPermitPrisma as prisma } from "@/lib/server/work-permit-prisma";
-import { requirePermitIssue } from "@/lib/server/work-permit-permissions";
+import { requirePermitIssue, requirePermitIssuer } from "@/lib/server/work-permit-permissions";
 import { permitNumberScope, reservePermitNumber } from "@/lib/server/work-permit-number-reservations";
 import { permitBody, permitHandle } from "@/lib/server/work-permits";
 
@@ -19,7 +19,7 @@ export async function GET() {
 
 export async function POST(req: Request) {
   return permitHandle(async () => {
-    const user = await requireUser(); await requirePermitIssue(user);
+    const user = await requireUser(); requirePermitIssuer(user);
     const body = await permitBody(req);
     const { kind, year } = permitNumberScope(body.kind, body.year);
     if (body.teamType !== "INTERNAL" && body.teamType !== "CONTRACTOR") return fail("Loại đơn vị không hợp lệ", 400);

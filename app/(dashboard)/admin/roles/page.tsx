@@ -533,7 +533,7 @@ const DEFAULT_PERMISSIONS: PermissionRow[] = [
     id: "work-permit-issue",
     group: "Tài liệu số",
     feature: "Sổ cấp PCT — Cấp phiếu",
-    note: "Tạo, cấp, chỉnh sửa thông tin và hủy phiếu; quản lý danh bạ nhà thầu và danh mục biện pháp an toàn. Không bao gồm cho phép làm việc hoặc cập nhật thực hiện.",
+    note: "Chỉnh sửa thông tin phiếu; quản lý danh bạ nhà thầu và danh mục biện pháp an toàn. CẤP PHIẾU MỚI và HỦY PHIẾU không theo ô này: cố định cho Quản trị, Quản lý, Kỹ thuật viên, Trưởng ca và cương vị Trưởng ca, Trưởng kíp lò máy, Trưởng kíp điện. Không bao gồm cho phép làm việc hoặc cập nhật thực hiện.",
     matrix: { ADMIN: "full", MANAGER: "manage", SUPERVISOR: "manage", TECHNICIAN: "none", VIEWER: "none" },
   },
   {

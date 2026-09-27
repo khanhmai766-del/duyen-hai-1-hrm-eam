@@ -1,5 +1,5 @@
 import { permitIssueUpdateNeedsExecution } from "@/lib/work-permit-permissions";
-import { requirePermitIssue, requirePermitExecute, permitCapabilities } from "@/lib/server/work-permit-permissions";
+import { requirePermitIssuer, requirePermitExecute, permitCapabilities } from "@/lib/server/work-permit-permissions";
 import { resolvePermitSafety } from "@/lib/server/work-permit-safety";
 import { workPermitPrisma as prisma } from "@/lib/server/work-permit-prisma";
 import { audit, fail, ok, requireUser } from "@/lib/api";
@@ -30,7 +30,7 @@ export async function GET(req: Request) {
 }
 export async function POST(req: Request) {
   return permitHandle(async () => {
-    const user = await requireUser(); await requirePermitIssue(user);
+    const user = await requireUser(); requirePermitIssuer(user);
     const body = await permitBody(req);
     if (permitIssueUpdateNeedsExecution({}, body)) await requirePermitExecute(user);
     if (body.progress !== undefined && body.progress !== null) return fail("Chưa được cập nhật tiến độ khi tạo phiếu");
