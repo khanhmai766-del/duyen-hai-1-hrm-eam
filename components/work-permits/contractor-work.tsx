@@ -361,6 +361,12 @@ export function PermitMembersEditor({ members, onChange, commander, scan }: {
 }) {
   const [picking, setPicking] = useState(false);
   const [scanning, setScanning] = useState(false);
+  // Dòng gọn cần mã đơn vị (tên gọi tắt) + tình trạng huấn luyện ATVSLĐ — lấy từ danh bạ của đơn vị trên phiếu.
+  const companyCodes = usePermitCompanySummary();
+  const codeOf = (company: string) => companyCodes.data?.data.find(row => row.company === company)?.code || "";
+  const unitName = scan?.unit || members.find(m => m.personId)?.company || "";
+  const unitPeople = usePermitPeople({ company: unitName, limit: 200, enabled: Boolean(unitName) && members.some(m => m.personId) });
+  const personOf = (id?: string) => id ? unitPeople.data?.data.find(person => person.id === id) : undefined;
   // Máy quét thêm từng người liên tiếp nhanh hơn một lần render → cộng dồn trên bản mới nhất, không trên props cũ.
   const latest = useRef(members);
   useEffect(() => { latest.current = members; }, [members]);
@@ -381,7 +387,29 @@ export function PermitMembersEditor({ members, onChange, commander, scan }: {
   return <div className="space-y-3 rounded-lg border border-border p-3">
     <div className="flex flex-wrap items-center justify-between gap-2"><h4 className="text-sm font-semibold">Nhân viên công tác bổ sung (nếu có) · {members.length} người</h4><div className="flex flex-wrap gap-2">{scan && <Button size="sm" type="button" disabled={members.length >= 200} onClick={() => setScanning(true)}><ScanLine />Quét thẻ</Button>}<Button size="sm" variant="outline" type="button" disabled={members.length >= 200} onClick={() => setPicking(true)}><Users />Chọn từ danh sách</Button><Button size="sm" variant="outline" type="button" disabled={members.length >= 200} onClick={() => onChange([...members, { code: "", name: "", company: "" }])}><Plus />Nhập tên</Button></div></div>
     <p className="text-xs text-muted-foreground">CHTT đã được tính là người công tác, không cần chọn lại. Chỉ thêm người đi cùng nếu cần; có thể để trống.</p>
-    {members.map((m, i) => <div key={m.personId ?? i} className="flex items-start gap-2"><div className="grid flex-1 gap-2 sm:grid-cols-3">{(["code", "name", "company"] as const).map(key => <input key={key} className={control} required={key === "name"} maxLength={key === "code" ? 80 : 200} readOnly={Boolean(m.personId)} aria-label={`${({ code: "Số thẻ an toàn", name: "Họ tên", company: "Đơn vị" })[key]} nhân viên ${i + 1}`} placeholder={({ code: "Số thẻ an toàn (nếu có)", name: "Họ tên *", company: "Đơn vị" })[key]} value={m[key]} onChange={e => onChange(members.map((p, index) => index === i ? { ...p, [key]: e.target.value } : p))} />)}</div><Button type="button" variant="ghost" size="icon" aria-label={`Bỏ nhân viên ${i + 1}`} onClick={() => onChange(members.filter((_, index) => index !== i))}><X /></Button></div>)}
+    {members.length > 0 && <div className="divide-y divide-border overflow-hidden rounded-lg border border-border">{members.map((m, i) => {
+      const remove = <Button type="button" variant="ghost" size="icon" className="h-9 w-9 shrink-0" aria-label={`Bỏ ${m.name || `nhân viên ${i + 1}`}`} onClick={() => onChange(members.filter((_, index) => index !== i))}><X /></Button>;
+      // Người nhập tay (không có hồ sơ danh bạ) vẫn cần ô để gõ họ tên / đơn vị.
+      if (!m.personId) return <div key={i} className="flex items-start gap-2 bg-background p-2">
+        <div className="grid flex-1 gap-2 sm:grid-cols-3">{(["name", "company", "code"] as const).map(key => <input key={key} className={control} required={key === "name"} maxLength={key === "code" ? 80 : 200} aria-label={`${({ code: "Số thẻ an toàn", name: "Họ tên", company: "Đơn vị" })[key]} nhân viên ${i + 1}`} placeholder={({ code: "Số thẻ (nếu có)", name: "Họ tên *", company: "Đơn vị" })[key]} value={m[key]} onChange={e => onChange(members.map((p, index) => index === i ? { ...p, [key]: e.target.value } : p))} />)}</div>{remove}
+      </div>;
+      // Người từ danh bạ / quét thẻ: một dòng — họ tên · mã đơn vị · đã huấn luyện ATVSLĐ.
+      const person = personOf(m.personId);
+      const trained = person ? Boolean(person.trainedAt) || /đạt|đã huấn luyện/i.test(person.trainingResult ?? "") : null;
+      const unitCode = codeOf(m.company);
+      return <div key={m.personId} className="flex items-center gap-2.5 bg-background py-1.5 pl-3 pr-1">
+        <span className="w-5 shrink-0 text-right text-xs tabular-nums text-muted-foreground">{i + 1}</span>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-semibold leading-5">{m.name}</p>
+          <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
+            <span className="max-w-[10rem] truncate rounded bg-blue-50 px-1.5 py-px text-[11px] font-bold tracking-wide text-blue-800 dark:bg-blue-950/40 dark:text-blue-200" title={m.company}>{unitCode || m.company}</span>
+            {trained === true && <span className="rounded bg-emerald-50 px-1.5 py-px text-[11px] font-semibold text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300" title={person?.trainingResult || undefined}>✓ Đã HL ATVSLĐ{person?.trainedAt ? ` · ${new Date(person.trainedAt).toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })}` : ""}</span>}
+            {trained === false && <span className="rounded bg-amber-50 px-1.5 py-px text-[11px] font-semibold text-amber-800">Chưa có HL ATVSLĐ</span>}
+          </div>
+        </div>
+        {remove}
+      </div>;
+    })}</div>}
     {picking && <PermitPeopleDirectory onClose={() => setPicking(false)} onPickMany={add} existingMembers={commander ? [...members, commander] : members} company={scan?.unit} />}
     {scanning && scan && <PermitCardScanner unit={scan.unit} companies={scan.companies} permitId={scan.permitId} existing={commander ? [...members, commander] : members} onAdd={addOne} onClose={() => setScanning(false)} />}
   </div>;

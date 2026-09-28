@@ -40,7 +40,7 @@ export function parseCardQr(raw: string) {
   }
   const code = normalizeCardCode(text);
   // Nhận cả HỌ TÊN (có khoảng trắng) — QR của người chưa được cấp thẻ; server tra tiếp bằng cardlessCode().
-  return /^[\p{L}\p{N}][\p{L}\p{N} \/._-]{0,119}$/u.test(code) ? code : "";
+  return /^[\p{L}\p{N}][\p{L}\p{N} \/._()'-]{0,119}$/u.test(code) ? code : "";
 }
 
 /** Ngày hôm nay theo giờ Việt Nam dạng YYYY-MM-DD (so ngày hết hạn không lệch múi giờ). */

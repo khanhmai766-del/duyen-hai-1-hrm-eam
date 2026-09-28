@@ -5,7 +5,7 @@ import { Camera, CameraOff, CheckCircle2, CircleAlert, CircleX, UserPlus, X } fr
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { lookupPermitCard, useSavePermitPerson } from "@/hooks/useWorkPermits";
-import { cardExpired, parseCardQr, sameCompany } from "@/lib/work-permit-card";
+import { cardExpired, cardlessCode, isCardlessCode, parseCardQr, sameCompany } from "@/lib/work-permit-card";
 import { formatPermitNumber, type PermitMember, type PermitPerson } from "@/lib/work-permits";
 
 /*
@@ -51,6 +51,28 @@ const TONE_BOX: Record<Tone, string> = {
   block: "border-red-300 bg-red-50 text-red-950",
   info: "border-slate-300 bg-slate-50 text-slate-900",
 };
+const TONE_BAR: Record<Tone, string> = {
+  ok: "bg-emerald-600 text-white",
+  warn: "bg-amber-500 text-white",
+  block: "bg-red-600 text-white",
+  info: "bg-slate-600 text-white",
+};
+/** Chữ trên dải trạng thái của thẻ kết quả. */
+function statusLabel(scan: Scan) {
+  if (scan.notFound) return "Chưa có trong danh bạ";
+  if (scan.pending) return "Cần người cho phép quyết định";
+  if (scan.added) return "Được vào";
+  if (scan.out) return "Đã ra";
+  if (scan.tone === "info") return "Đã có trong lần làm việc";
+  if (scan.tone === "block") return "Không cho vào";
+  return "Hợp lệ";
+}
+/** Người chưa được cấp thẻ (mã tạm HL-…, hoặc QR mang họ tên) không có số thẻ để hiện. */
+function cardNumberOf(scan: Scan) {
+  const code = scan.person?.code ?? scan.code;
+  return isCardlessCode(code) || /\s/.test(code) ? null : code;
+}
+
 function ToneIcon({ tone }: { tone: Tone }) {
   if (tone === "ok") return <CheckCircle2 className="shrink-0 text-emerald-600" size={18} />;
   if (tone === "block") return <CircleX className="shrink-0 text-red-600" size={18} />;
@@ -203,11 +225,13 @@ export function PermitCardScanner({ unit, companies, existing, permitId, onAdd, 
   }
 
   async function quickAdd(e: React.FormEvent) {
-    e.preventDefault();
+    e.preventDefault(); e.stopPropagation();
     if (!current?.notFound || !quickName.trim()) return;
     const id = current.id;
     try {
-      const person = await savePerson.mutateAsync({ body: { code: current.code, name: quickName.trim(), company: unit, phone: "", canCommand: false, isActive: true } });
+      // QR của người chưa được cấp thẻ mang họ tên → lưu mã tạm HL-… (lib/work-permit-card.ts), không lưu họ tên vào ô số thẻ.
+      const code = /\s/.test(current.code) ? cardlessCode(current.code) : current.code;
+      const person = await savePerson.mutateAsync({ body: { code, name: quickName.trim(), company: unit, phone: "", canCommand: false, isActive: true } });
       const result = await admit(person);
       setScans(list => list.map(s => s.id === id ? { ...s, notFound: false, person, title: person.name, ...result, detail: result.added ? `Đã thêm vào danh bạ ${unit} và cho vào.` : result.detail } : s));
       setQuickName("");
@@ -227,45 +251,74 @@ export function PermitCardScanner({ unit, companies, existing, permitId, onAdd, 
     <DialogContent className="flex max-h-[94dvh] max-w-2xl flex-col gap-3 overflow-hidden">
       <div className="pr-8">
         <DialogTitle>{title}</DialogTitle>
-        <DialogDescription>Đơn vị công tác: <b className="text-foreground">{unit}</b> · Chỉ nhân viên đúng đơn vị này được cho vào.</DialogDescription>
+        <DialogDescription className="line-clamp-2">Đơn vị công tác: <b className="text-foreground">{unit}</b><span className="hidden sm:inline"> · Chỉ nhân viên đúng đơn vị này được cho vào.</span></DialogDescription>
       </div>
 
       <div className="relative overflow-hidden rounded-lg bg-slate-900">
-        <video ref={videoRef} muted playsInline autoPlay className={`aspect-video w-full object-cover ${camera === "on" ? "" : "opacity-30"}`} />
+        {/* Điện thoại: 4:3 (cao hơn 16:9) để mã QR chiếm nhiều điểm ảnh hơn; màn rộng giữ 16:9. */}
+        <video ref={videoRef} muted playsInline autoPlay className={`aspect-[4/3] max-h-[48dvh] w-full object-cover sm:aspect-video ${camera === "on" ? "" : "opacity-30"}`} />
         {camera !== "on" && <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 p-4 text-center text-sm text-white">
           <p>{camera === "starting" ? "Đang mở camera…" : camera === "error" ? cameraMessage : "Camera đang tắt"}</p>
           {camera !== "starting" && <Button type="button" size="sm" variant="secondary" onClick={() => void startCamera()}><Camera />Mở camera</Button>}
         </div>}
         {camera === "on" && <>
-          <div className="pointer-events-none absolute inset-[18%] rounded-xl border-2 border-white/70" />
+          {/* Khung ngắm 4 góc + vùng tối xung quanh — như ứng dụng quét chuyên dụng. */}
+          <div className="pointer-events-none absolute inset-[14%] rounded-2xl shadow-[0_0_0_9999px_rgba(15,23,42,0.35)]">
+            {["left-0 top-0 border-l-4 border-t-4 rounded-tl-2xl", "right-0 top-0 border-r-4 border-t-4 rounded-tr-2xl", "bottom-0 left-0 border-b-4 border-l-4 rounded-bl-2xl", "bottom-0 right-0 border-b-4 border-r-4 rounded-br-2xl"]
+              .map(corner => <span key={corner} className={`absolute h-8 w-8 border-white ${corner}`} />)}
+          </div>
+          <p className="pointer-events-none absolute inset-x-0 bottom-2 text-center text-xs font-medium text-white/90 drop-shadow">Đưa mã QR trên thẻ vào khung</p>
           <Button type="button" size="sm" variant="secondary" className="absolute right-2 top-2 h-8" onClick={stopCamera}><CameraOff />Tắt</Button>
         </>}
       </div>
 
-      <form className="flex gap-2" onSubmit={e => { e.preventDefault(); const value = manual; setManual(""); lastRef.current = { code: "", at: 0 }; void handle(value); }}>
+      {/* stopPropagation: hộp quét nằm trong <form> "Cho phép / mở lần làm việc" (portal vẫn nổi bọt theo cây React) —
+          đầu đọc QR gõ Enter từng tự gửi luôn form ngoài. */}
+      <form className="flex gap-2" onSubmit={e => { e.preventDefault(); e.stopPropagation(); const value = manual; setManual(""); lastRef.current = { code: "", at: 0 }; void handle(value); }}>
         <input className="min-h-10 flex-1 rounded-lg border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring" value={manual} maxLength={500}
           onChange={e => setManual(e.target.value)} placeholder="Đầu đọc QR / nhập số thẻ rồi Enter" aria-label="Số thẻ hoặc nội dung mã QR" />
         <Button type="submit" variant="outline" disabled={!manual.trim()}>Tra thẻ</Button>
       </form>
 
       <div className="min-h-0 flex-1 space-y-2 overflow-y-auto">
-        {current ? <div className={`rounded-xl border-2 p-3 ${TONE_BOX[current.tone]}`} aria-live="assertive">
-          <div className="flex gap-3">
+        {current ? <div className={`overflow-hidden rounded-xl border-2 ${TONE_BOX[current.tone]}`} aria-live="assertive">
+          <div className={`flex items-center gap-2 px-3 py-1.5 text-xs font-bold uppercase tracking-wide ${TONE_BAR[current.tone]}`}>
+            <span className="min-w-0 flex-1 truncate">{statusLabel(current)}</span>
+          </div>
+          <div className="flex gap-3 p-3">
             {current.person?.photoUrl
               // eslint-disable-next-line @next/next/no-img-element
-              ? <img src={current.person.photoUrl} alt={`Ảnh ${current.person.name}`} className="h-32 w-24 shrink-0 rounded-md border border-white object-cover shadow" />
-              : <div className="flex h-32 w-24 shrink-0 items-center justify-center rounded-md bg-white/70 text-3xl text-slate-400">👤</div>}
-            <div className="min-w-0 flex-1 space-y-1">
-              <p className="flex items-center gap-1.5 text-lg font-bold leading-tight"><ToneIcon tone={current.tone} />{current.title}</p>
-              <p className="text-sm">Số thẻ <b>{current.code}</b>{current.person ? ` · ${current.person.company}` : ""}</p>
-              {current.person && <p className="text-xs opacity-80">{[current.person.jobTitle, current.person.birthYear && `NS ${current.person.birthYear}`, current.person.cardExpiresAt && `Thẻ HSD ${vnDate(current.person.cardExpiresAt)}`, current.person.trainingResult && `HL: ${current.person.trainingResult}`].filter(Boolean).join(" · ")}</p>}
-              <p className="text-sm font-medium">{current.detail}</p>
-              {current.reasons?.map(reason => <p key={reason} className="text-sm font-semibold">⚠ {reason}</p>)}
+              ? <img src={current.person.photoUrl} alt={`Ảnh ${current.person.name}`} className="h-[6.75rem] w-20 shrink-0 rounded-lg border-2 border-white object-cover shadow-md" />
+              : <div className="flex h-[6.75rem] w-20 shrink-0 items-center justify-center rounded-lg border-2 border-white bg-white/80 text-3xl text-slate-300 shadow-sm">👤</div>}
+            <div className="min-w-0 flex-1">
+              <p className="flex items-start gap-1.5 text-lg font-bold leading-6"><ToneIcon tone={current.tone} /><span className="min-w-0 break-words">{current.title}</span></p>
+              {current.person && <p className="mt-0.5 line-clamp-2 text-xs font-medium opacity-80">{current.person.company}</p>}
+              {(() => {
+                const person = current.person;
+                const card = cardNumberOf(current);
+                const expired = cardExpired(person?.cardExpiresAt);
+                const rows: Array<[string, React.ReactNode]> = [
+                  ["Số thẻ", card ? <b>{card}</b> : <span className="font-semibold text-amber-700">Chưa cấp thẻ</span>],
+                  ...(person?.jobTitle ? [["Chức vụ", person.jobTitle] as [string, React.ReactNode]] : []),
+                  ...(person?.birthYear ? [["Năm sinh", person.birthYear] as [string, React.ReactNode]] : []),
+                  ...(person?.cardExpiresAt ? [["Hạn thẻ", <span key="hsd" className={expired ? "font-bold text-red-700" : "font-semibold text-emerald-700"}>{vnDate(person.cardExpiresAt)}{expired ? " · hết hạn" : ""}</span>] as [string, React.ReactNode]] : []),
+                  ...(person?.trainingResult ? [["Huấn luyện", person.trainingResult] as [string, React.ReactNode]] : []),
+                ];
+                // Không tra ra hồ sơ: chỉ hiện mã vừa quét, không bày "Số thẻ: Chưa cấp thẻ" gây hiểu nhầm.
+                if (!person) return <p className="mt-2 break-words text-[13px]"><span className="text-xs opacity-70">Mã quét </span><b>{current.code}</b></p>;
+                return <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-[13px] leading-5">
+                  {rows.map(([label, value]) => <div key={label} className="contents"><dt className="text-xs leading-5 opacity-70">{label}</dt><dd className="min-w-0 break-words">{value}</dd></div>)}
+                </dl>;
+              })()}
             </div>
           </div>
-          {current.pending && <div className="mt-3 flex gap-2"><Button type="button" className="flex-1 bg-amber-600 hover:bg-amber-700" onClick={() => decide(true)}>Vẫn cho vào</Button><Button type="button" variant="outline" className="flex-1" onClick={() => decide(false)}>Không cho vào</Button></div>}
-          {current.notFound && <form className="mt-3 flex flex-wrap gap-2" onSubmit={quickAdd}>
-            <input autoFocus className="min-h-10 min-w-0 flex-1 rounded-lg border border-input bg-background px-3 text-sm text-foreground" value={quickName} maxLength={200} onChange={e => setQuickName(e.target.value)} placeholder="Họ tên theo thẻ *" aria-label="Họ tên nhân viên" />
+          <div className="space-y-1 border-t border-black/10 bg-white/50 px-3 py-2">
+            <p className="text-sm font-medium">{current.detail}</p>
+            {current.reasons?.map(reason => <p key={reason} className="text-sm font-semibold">⚠ {reason}</p>)}
+          </div>
+          {current.pending && <div className="flex gap-2 px-3 pb-3"><Button type="button" className="flex-1 bg-amber-600 hover:bg-amber-700" onClick={() => decide(true)}>Vẫn cho vào</Button><Button type="button" variant="outline" className="flex-1" onClick={() => decide(false)}>Không cho vào</Button></div>}
+          {current.notFound && <form className="grid grid-cols-2 gap-2 px-3 pb-3" onSubmit={quickAdd}>
+            <input autoFocus className="col-span-2 min-h-10 min-w-0 rounded-lg border border-input bg-background px-3 text-sm text-foreground" value={quickName} maxLength={200} onChange={e => setQuickName(e.target.value)} placeholder="Họ tên theo thẻ *" aria-label="Họ tên nhân viên" />
             <Button type="submit" disabled={!quickName.trim() || savePerson.isPending}><UserPlus />{savePerson.isPending ? "Đang thêm…" : "Thêm & cho vào"}</Button>
             <Button type="button" variant="outline" onClick={skipCurrent}>Bỏ qua</Button>
           </form>}
@@ -274,7 +327,7 @@ export function PermitCardScanner({ unit, companies, existing, permitId, onAdd, 
         {scans.length > 1 && <div className="space-y-1">
           <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Các thẻ vừa quét</p>
           {scans.slice(1).map(scan => <div key={scan.id} className="flex items-center gap-2 rounded-lg border border-border px-2.5 py-1.5 text-sm">
-            <ToneIcon tone={scan.tone} /><span className="min-w-0 flex-1 truncate"><b>{scan.title}</b> · {scan.code}</span><span className="shrink-0 text-xs text-muted-foreground">{scan.added ? "Vào" : scan.out ? "Ra" : scan.tone === "info" ? "Đã có" : scan.pending || scan.notFound ? "Chờ xử lý" : "Không vào"}</span>
+            <ToneIcon tone={scan.tone} /><span className="min-w-0 flex-1 truncate"><b>{scan.title}</b> · {cardNumberOf(scan) ?? "Chưa cấp thẻ"}</span><span className="shrink-0 text-xs text-muted-foreground">{scan.added ? "Vào" : scan.out ? "Ra" : scan.tone === "info" ? "Đã có" : scan.pending || scan.notFound ? "Chờ xử lý" : "Không vào"}</span>
           </div>)}
         </div>}
       </div>
