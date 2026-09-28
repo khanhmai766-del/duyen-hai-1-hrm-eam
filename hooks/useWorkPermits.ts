@@ -112,13 +112,13 @@ export async function lookupPermitCard(q: string) {
 export interface PermitPeopleSyncResult {
   total: number; created: number; updated: number; skipped: number; skippedSamples: string[];
   skippedTabs: Array<{ tab: string; rows: number }>; moved: string[]; movedCount: number;
-  photos: Array<{ code: string; source: string }>;
+  photos: Array<{ code: string; source: string; lookup?: string }>;
 }
 export function useSyncPermitPeople() {
   const qc = useQueryClient();
   // meta.background: hộp đồng bộ có thanh tiến độ riêng — không bật lớp chờ toàn trang (AppShell).
   const list = useMutation({ meta: { background: true }, mutationFn: () => apiMutate<PermitPeopleSyncResult>("/api/work-permits/people/sync", "POST", { step: "list" }) });
-  const photos = useMutation({ meta: { background: true }, mutationFn: (jobs: Array<{ code: string; source: string }>) =>
+  const photos = useMutation({ meta: { background: true }, mutationFn: (jobs: Array<{ code: string; source: string; lookup?: string }>) =>
     apiMutate<{ results: Array<{ code: string; ok: boolean; error?: string }> }>("/api/work-permits/people/sync", "POST", { step: "photos", jobs }) });
   const refresh = () => { qc.invalidateQueries({ queryKey: ["work-permit-people"] }); qc.invalidateQueries({ queryKey: ["work-permit-companies"] }); };
   return { list, photos, refresh };

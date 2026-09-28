@@ -2,7 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { fail, ok, requireUser } from "@/lib/api";
 import { permitHandle } from "@/lib/server/work-permits";
 import { personCardSelect, withPhotoUrl } from "@/lib/server/work-permit-people";
-import { parseCardQr } from "@/lib/work-permit-card";
+import { cardlessCode, isCardlessCode, parseCardQr } from "@/lib/work-permit-card";
 export const dynamic = "force-dynamic";
 
 /**
@@ -14,9 +14,10 @@ export async function GET(req: Request) {
     await requireUser();
     const code = parseCardQr(new URL(req.url).searchParams.get("q") ?? "");
     if (!code) return fail("Không đọc được số thẻ từ mã QR");
-    const person = await prisma.workPermitPerson.findUnique({ where: { code }, select: {
-      id: true, code: true, name: true, company: true, phone: true, canCommand: true, isActive: true, version: true, ...personCardSelect,
-    } });
+    const select = { id: true, code: true, name: true, company: true, phone: true, canCommand: true, isActive: true, version: true, ...personCardSelect } as const;
+    // QR người chưa có thẻ mang họ tên → thử tiếp mã tạm HL-… (lib/work-permit-card.ts).
+    const person = await prisma.workPermitPerson.findUnique({ where: { code }, select })
+      ?? (isCardlessCode(code) ? null : await prisma.workPermitPerson.findUnique({ where: { code: cardlessCode(code) }, select }));
     if (!person) return ok({ code, person: null });
     const sessions = await prisma.workPermitSession.findMany({
       where: { endedAt: null, OR: [

@@ -4,7 +4,7 @@ import { fail } from "@/lib/api";
 import { normalizeText } from "@/lib/nav";
 import { prisma } from "@/lib/prisma";
 import { uploadS3Object } from "@/lib/s3";
-import { normalizeCardCode } from "@/lib/work-permit-card";
+import { normalizeCardCode, cardlessCode, isCardlessCode } from "@/lib/work-permit-card";
 
 /*
  * Đồng bộ danh bạ nhân sự nhà thầu từ Google Sheets "thẻ ra vào cổng & ATVSLĐ" (phương án B).
@@ -24,7 +24,8 @@ export type SheetRow = {
   sheet?: string; soThe?: unknown; hoTen?: unknown; namSinh?: unknown; sdt?: unknown; donVi?: unknown; goiThau?: unknown;
   chucVu?: unknown; viTri?: unknown; khuVuc?: unknown; ketQuaHL?: unknown; ngayHL?: unknown; ngayCap?: unknown; ngayHetHan?: unknown; photo?: unknown;
 };
-export type PhotoJob = { code: string; source: string };
+/** `lookup`: giá trị gửi Apps Script để tìm ảnh — số thẻ, hoặc họ tên với người chưa có thẻ. */
+export type PhotoJob = { code: string; source: string; lookup?: string };
 
 const PHOTO_WIDTH = 360;
 const PHOTO_HEIGHT = 480;
@@ -90,12 +91,14 @@ export async function syncPeopleList() {
   const unitOf = await unitByTab();
   const skipped: string[] = [];
   const skippedTabs = new Map<string, number>();
-  const byCode = new Map<string, Prisma.WorkPermitPersonCreateInput & { photoRef: string; tab: string }>();
+  const byCode = new Map<string, Prisma.WorkPermitPersonCreateInput & { photoRef: string; tab: string; lookup: string }>();
   for (const row of rows) {
     const tab = str(row.sheet);
-    const code = normalizeCardCode(str(row.soThe, 80));
+    const card = normalizeCardCode(str(row.soThe, 80));
     const name = str(row.hoTen);
-    if (!code && !name) continue;
+    if (!card && !name) continue;
+    // Chưa có số thẻ (mới huấn luyện, cột K) → mã tạm theo họ tên, như QR bảng thẻ đang in (?id=<họ tên>).
+    const code = card || cardlessCode(name);
     const company = unitOf(tab);
     if (!company) { skippedTabs.set(tab || "(không tên)", (skippedTabs.get(tab || "(không tên)") ?? 0) + 1); continue; }
     if (!/^[\p{L}\p{N}][\p{L}\p{N}\/._-]{0,79}$/u.test(code) || !name) {
@@ -112,24 +115,34 @@ export async function syncPeopleList() {
       workPosition: str(row.viTri, 300), workArea: str(row.khuVuc, 300), trainingResult: str(row.ketQuaHL),
       trainedAt: sheetDate(row.ngayHL), cardIssuedAt: sheetDate(row.ngayCap), cardExpiresAt: sheetDate(row.ngayHetHan),
       searchText: normalizeText([code, name, company, phone].join(" ")), sheetSyncedAt: new Date(),
-      photoRef: str(row.photo, 2000),
+      photoRef: str(row.photo, 2000), lookup: card || name,
     });
   }
-  const existing = new Map((await prisma.workPermitPerson.findMany({ where: { code: { in: [...byCode.keys()] } }, select: { code: true, phone: true, company: true, photoKey: true, photoSource: true } })).map(p => [p.code, p]));
+  // Người vừa được cấp thẻ: hồ sơ cũ mang mã tạm HL-… theo họ tên → đổi mã sang số thẻ trên CHÍNH hồ sơ đó
+  // (giữ lịch sử lần làm việc, vai trò CHTT), chỉ khi cùng đơn vị và số thẻ chưa có hồ sơ riêng.
+  const upgrades = new Map([...byCode.values()].filter(p => !isCardlessCode(p.code)).map(p => [cardlessCode(p.name), p.code]));
+  const existingRows = await prisma.workPermitPerson.findMany({ where: { code: { in: [...byCode.keys(), ...upgrades.keys()] } }, select: { code: true, phone: true, company: true, photoKey: true, photoSource: true } });
+  const existing = new Map(existingRows.map(p => [p.code, p]));
+  const renameFrom = new Map<string, string>();
+  for (const [temp, real] of upgrades) {
+    const old = existing.get(temp);
+    if (old && !existing.has(real) && !byCode.has(temp) && old.company === byCode.get(real)?.company) { renameFrom.set(real, temp); existing.set(real, old); }
+  }
   let created = 0, updated = 0;
   const moved: string[] = [];
   const photos: PhotoJob[] = [];
   const entries = [...byCode.values()];
   for (let i = 0; i < entries.length; i += 100) {
-    await prisma.$transaction(entries.slice(i, i + 100).map(({ photoRef, tab, ...data }) => {
+    await prisma.$transaction(entries.slice(i, i + 100).map(({ photoRef, tab, lookup, ...data }) => {
       const before = existing.get(data.code);
+      const fromCode = renameFrom.get(data.code) ?? data.code;
       if (before && before.company !== data.company) moved.push(`${data.name} (${data.code}): ${before.company} → ${data.company} (tab ${tab})`);
-      if (photoRef && (!before?.photoKey || before.photoSource !== photoRef)) photos.push({ code: data.code, source: photoRef });
+      if (photoRef && (!before?.photoKey || before.photoSource !== photoRef)) photos.push({ code: data.code, source: photoRef, lookup });
       if (!before) { created++; return prisma.workPermitPerson.create({ data: { ...data, canCommand: false, isActive: true } }); }
       updated++;
       // Sheet để trống SĐT thì giữ SĐT đã nhập trên sổ; vai trò CHTT/"đang hoạt động" không đụng tới.
       const phone = data.phone || before.phone;
-      return prisma.workPermitPerson.update({ where: { code: data.code }, data: {
+      return prisma.workPermitPerson.update({ where: { code: fromCode }, data: {
         ...data, phone, searchText: normalizeText([data.code, data.name, data.company, phone].join(" ")), version: { increment: 1 },
       } });
     }));
@@ -149,7 +162,8 @@ export async function syncPeoplePhotos(jobs: PhotoJob[]) {
   const results = await Promise.all(jobs.map(async job => {
     const code = normalizeCardCode(str(job?.code, 80));
     try {
-      const photo = await callSheet<{ contentType?: string; base64?: string }>({ format: "photo", id: code }, 45_000);
+      // Người chưa có thẻ: Apps Script tìm ảnh theo họ tên (syncPhotoOf_ so cả cột C).
+      const photo = await callSheet<{ contentType?: string; base64?: string }>({ format: "photo", id: str(job?.lookup, 200) || code }, 45_000);
       if (!photo.base64) throw new Error("Sheet không có ảnh cho số thẻ này");
       // Ảnh 3x4 để so mặt: thu về tối đa 360x480, WebP q72 (~20–50 KB), xoay theo EXIF.
       const body = await sharp(Buffer.from(photo.base64, "base64")).rotate()

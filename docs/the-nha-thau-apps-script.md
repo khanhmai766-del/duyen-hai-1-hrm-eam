@@ -7,7 +7,10 @@ ATVSLĐ**: họ tên, đơn vị, số thẻ, hạn thẻ, huấn luyện và �
 - Nút: tab **Đơn vị nhà thầu → Đồng bộ từ Google Sheets** (người có quyền cấp PCT).
 - Code phía sổ: `lib/server/work-permit-people-sync.ts`, API `app/api/work-permits/people/sync`.
 - Ảnh được nén còn tối đa 360×480 WebP (~20–50 KB) và lưu S3 tại `work-permit-people/photos/<số thẻ>.webp`.
-- Số thẻ trên sheet (cột L) là khoá: trùng `WorkPermitPerson.code`. QR trên thẻ là link web app
+- Số thẻ trên sheet (cột L) là khoá: trùng `WorkPermitPerson.code`. **Người đã huấn luyện (cột K) nhưng chưa có
+  số thẻ** cũng được đồng bộ (28/09/2026) — cùng điều kiện tạo mã QR của bảng (họ tên C + ngày HL K hoặc số thẻ L).
+  Sổ lưu họ bằng mã tạm `HL-<HỌ-TÊN-KHÔNG-DẤU>` (`cardlessCode`, lib/work-permit-card.ts) vì QR in `?id=<họ tên>`;
+  khi cột L có số thẻ, lần đồng bộ sau đổi mã tạm thành số thẻ trên chính hồ sơ đó (cùng đơn vị). QR trên thẻ là link web app
   `…/exec?id=<số thẻ>` — sổ đọc tham số `id`, **không phải in lại thẻ**.
 - **Khoá gài đơn vị: tên TAB = Mã đơn vị trên sổ** (so không phân biệt hoa thường/dấu). Nhân sự của tab
   `VATCO` vào đúng đơn vị có Mã đơn vị `VATCO`. Tab không khớp mã nào (Dashboard, MẪU, nhà thầu chưa đặt
@@ -62,19 +65,29 @@ function syncPhotoRef_(v) {
 
 // Cột như doGet: B KQ huấn luyện, C họ tên, D năm sinh, E SĐT, F đơn vị, G gói thầu, H chức vụ,
 // I vị trí, J khu vực, K ngày huấn luyện, L số thẻ, M ngày cấp, N ngày hết hạn, O ảnh.
+// Cùng điều kiện với mã QR ở cột P: có HỌ TÊN (cột C) VÀ (có NGÀY HUẤN LUYỆN cột K HOẶC có SỐ THẺ cột L).
+// Người chưa được cấp thẻ vẫn được đồng bộ (soThe để trống) — sổ PCT lưu họ bằng mã tạm theo họ tên,
+// khớp QR đang in `?id=<họ tên>`; khi cột L có số thẻ, lần đồng bộ sau tự đổi sang số thẻ.
 function syncListRows_() {
   var out = [];
   SpreadsheetApp.getActiveSpreadsheet().getSheets().forEach(function (sheet) {
-    sheet.getDataRange().getValues().forEach(function (r) {
+    if (sheet.getName().toUpperCase() === "DASHBOARD") return;
+    var range = sheet.getDataRange(), values = range.getValues(), startRow = range.getRow();
+    for (var i = 0; i < values.length; i++) {
+      if (startRow + i <= 2) continue; // 2 dòng tiêu đề, như khi tạo mã QR
+      var r = values[i];
+      var hoTen = r[2] ? String(r[2]).trim() : '';
+      var ngayHL = r[10] ? String(r[10]).trim() : '';
       var soThe = r[11] ? String(r[11]).trim() : '';
-      if (!soThe || soThe.indexOf('Số thẻ') >= 0) return;
+      if (!hoTen || hoTen.indexOf('Họ tên') >= 0 || soThe.indexOf('Số thẻ') >= 0) continue;
+      if (!ngayHL && !soThe) continue;
       out.push({
-        sheet: sheet.getName(), ketQuaHL: r[1], hoTen: r[2],
+        sheet: sheet.getName(), ketQuaHL: r[1], hoTen: hoTen,
         namSinh: r[3] instanceof Date ? r[3].getFullYear() : r[3], sdt: r[4], donVi: r[5], goiThau: r[6],
         chucVu: r[7], viTri: r[8], khuVuc: r[9], ngayHL: syncDate_(r[10]), soThe: soThe,
         ngayCap: syncDate_(r[12]), ngayHetHan: syncDate_(r[13]), photo: syncPhotoRef_(r[14])
       });
-    });
+    }
   });
   return out;
 }

@@ -7,6 +7,20 @@
  * thẻ. Đầu đọc USB/nhập tay có thể đưa số thẻ trơn ("1234/DH") nên cũng nhận.
  */
 
+import { normalizeText } from "@/lib/nav";
+
+/**
+ * Người ĐÃ HUẤN LUYỆN nhưng CHƯA ĐƯỢC CẤP THẺ (sheet có họ tên cột C + ngày huấn luyện cột K, cột L trống):
+ * bảng thẻ in QR với `?id=<họ tên>`. Sổ lưu họ bằng MÃ TẠM suy ra từ họ tên — "Nguyễn Văn A" → "HL-NGUYEN-VAN-A" —
+ * nên quét QR họ tên là tra được. Khi sheet ghi số thẻ, lần đồng bộ sau đổi mã tạm thành số thẻ trên chính hồ sơ.
+ */
+export const CARDLESS_PREFIX = "HL-";
+export function cardlessCode(name: string) {
+  const slug = normalizeText(name).toUpperCase().replace(/[^A-Z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  return slug ? `${CARDLESS_PREFIX}${slug}`.slice(0, 80) : "";
+}
+export const isCardlessCode = (code: string) => code.startsWith(CARDLESS_PREFIX);
+
 /** Chuẩn hoá số thẻ giống parsePermitPerson: NFC, bỏ khoảng trắng hai đầu, chữ hoa. */
 export function normalizeCardCode(value: string) {
   return value.normalize("NFC").trim().toUpperCase();
@@ -25,7 +39,8 @@ export function parseCardQr(raw: string) {
     }
   }
   const code = normalizeCardCode(text);
-  return /^[\p{L}\p{N}][\p{L}\p{N}\/._-]{0,79}$/u.test(code) ? code : "";
+  // Nhận cả HỌ TÊN (có khoảng trắng) — QR của người chưa được cấp thẻ; server tra tiếp bằng cardlessCode().
+  return /^[\p{L}\p{N}][\p{L}\p{N} \/._-]{0,119}$/u.test(code) ? code : "";
 }
 
 /** Ngày hôm nay theo giờ Việt Nam dạng YYYY-MM-DD (so ngày hết hạn không lệch múi giờ). */
