@@ -26,15 +26,16 @@ module.exports = {
       // PCT mỗi phút) chỉ được chạy ở ĐÚNG MỘT tiến trình.
       exec_mode: "fork",
       instances: 1,
-      // Đo 16/09/2026: next-server ~730MB RSS lúc bình thường. Heap bị chặn 1024MB bởi
-      // NODE_OPTIONS nên vượt 1200MB RSS là đang rò — ngưỡng chỉ để cứu khi đó.
-      max_memory_restart: "1200M",
+      // VPS nâng 3,8GB → 8GB (28/09/2026). Trước đó ngưỡng 1200M làm web tự khởi động lại (502 vài
+      // giây) gần như mỗi ngày. Nay heap 2048MB + phần native (sharp, arena glibc…) thì RSS
+      // vượt 2500MB mới là bất thường — ngưỡng chỉ để cứu khi rò thật, không phải lịch thường.
+      max_memory_restart: "2500M",
       env: {
         NODE_ENV: "production",
         PORT: 3000,
         // Trước đây biến này chỉ tồn tại trong bản lưu pm2 trên server, không có trong file —
         // dựng lại từ file là mất chặn heap mà không ai biết.
-        NODE_OPTIONS: "--max-old-space-size=1024",
+        NODE_OPTIONS: "--max-old-space-size=2048",
       },
     },
   ],
