@@ -2812,6 +2812,77 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
       return ok(responseTicket);
     }
 
+    // TC/TK kiểm tra bộ ảnh ở đầu bước Nghiệm thu. Chỉ sau khi ảnh đạt mới mở phần
+    // nhập nội dung nghiệm thu; ảnh không đạt trả về giao diện Sử dụng để VHV thay ảnh.
+    if (action === "approveUsagePhotos" || action === "rejectUsagePhotos") {
+      if (!["DE_XUAT", "UNG", "SU_DUNG_HIEN_CO"].includes(t.type) || t.status !== "CHO_NGHIEM_THU") {
+        return fail("Phiếu không ở bước kiểm tra ảnh nghiệm thu");
+      }
+      if (!stepAllowedWithMap(await getWorkflowRoleMap(), "accept", user)) {
+        return fail("Bạn không có quyền kiểm tra ảnh nghiệm thu (Quản trị phân quyền ở mục Phân quyền quy trình)", 403);
+      }
+      const photoTotal = usagePhotoTotal(t.materialCategory);
+      if (countUsagePhotos(t) < photoTotal) return fail(missingUsagePhotoMessage(photoTotal, photoTotal));
+
+      const approved = action === "approveUsagePhotos";
+      const up = await prisma.materialTicket.update({
+        where: { id: t.id },
+        data: {
+          status: approved ? "CHO_NGHIEM_THU" : "SU_DUNG_VAT_TU",
+          usagePhotoReviewStatus: approved ? "APPROVED" : "REJECTED",
+          usagePhotoReviewedAt: new Date(),
+          usagePhotoReviewedById: user.id,
+          usagePhotoReviewedByName: user.name ?? "",
+          usagePhotoReviewedPosition: user.position ?? null,
+        },
+        include: ITEM_INCLUDE,
+      });
+      await audit(
+        user.id,
+        approved ? "MT_USAGE_PHOTOS_APPROVE" : "MT_USAGE_PHOTOS_REJECT",
+        "MaterialTicket",
+        t.id,
+        approved
+          ? `${materialTicketReference(t)}: TC/TK xác nhận ảnh hiện trường đạt yêu cầu; tiếp tục nghiệm thu`
+          : `${materialTicketReference(t)}: TC/TK xác nhận ảnh hiện trường chưa đạt; trả VHV tải lại ảnh`,
+      );
+      await notifyMaterialTicketStep({ ticketId: t.id, action, actorName: user.name });
+      return ok(up);
+    }
+
+    // VHV gửi lại ảnh sau khi TC/TK trả. Không nhận lại số lượng và tuyệt đối không đụng
+    // tồn kho/phân bổ lô: action `use` lần đầu đã chốt các dữ liệu đó.
+    if (action === "resubmitUsagePhotos") {
+      if (!["DE_XUAT", "UNG", "SU_DUNG_HIEN_CO"].includes(t.type)
+        || t.status !== "SU_DUNG_VAT_TU"
+        || !t.usedAt
+        || t.usagePhotoReviewStatus !== "REJECTED") {
+        return fail("Phiếu không ở trạng thái cần bổ sung ảnh");
+      }
+      if (!stepAllowedWithMap(await getWorkflowRoleMap(), "use", user)) {
+        return fail("Bạn không có quyền ở bước Sử dụng vật tư (Quản trị phân quyền ở mục Phân quyền quy trình)", 403);
+      }
+      { const err = assignedPositionError(user, t); if (err) return err; }
+      const photoTotal = usagePhotoTotal(t.materialCategory);
+      if (countUsagePhotos(t) < photoTotal) return fail(missingUsagePhotoMessage(photoTotal, photoTotal));
+      const up = await prisma.materialTicket.update({
+        where: { id: t.id },
+        data: {
+          status: "CHO_NGHIEM_THU",
+          usagePhotoReviewStatus: "PENDING",
+          usagePhotoReviewedAt: null,
+          usagePhotoReviewedById: null,
+          usagePhotoReviewedByName: null,
+          usagePhotoReviewedPosition: null,
+        },
+        include: ITEM_INCLUDE,
+      });
+      await audit(user.id, "MT_USAGE_PHOTOS_RESUBMIT", "MaterialTicket", t.id,
+        `${materialTicketReference(t)}: VHV đã tải lại ảnh hiện trường; gửi TC/TK kiểm tra lại`);
+      await notifyMaterialTicketStep({ ticketId: t.id, action, actorName: user.name });
+      return ok(up);
+    }
+
     // B2'' — SỬ DỤNG VẬT TƯ: PCT/LCT + chỉ huy + nội dung + khối lượng dùng.
     // Tồn kho đã cộng khối lượng lãnh ở bước Nhận vật tư; bước này trừ khối lượng dùng.
     if (action === "use") {
@@ -2880,6 +2951,13 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
           data: {
             // Chai khí bỏ nghiệm thu và quyết toán — dùng xong là tới bước trả vỏ chai.
             status: isGasCylinderTicket(t.materialCategory) ? GAS_RETURN_STATUS : "CHO_NGHIEM_THU",
+            // Chai khí không qua Nghiệm thu; các luồng còn lại phải được TC/TK duyệt ảnh
+            // trước khi phần nhập nghiệm thu được mở.
+            usagePhotoReviewStatus: isGasCylinderTicket(t.materialCategory) ? null : "PENDING",
+            usagePhotoReviewedAt: null,
+            usagePhotoReviewedById: null,
+            usagePhotoReviewedByName: null,
+            usagePhotoReviewedPosition: null,
             recoveryRequired, recoveryQuantity,
             // VHV xác nhận trực tiếp việc đã trả vật tư thu hồi cho kho tại bước này.
             recoveryReturnedAt: recoveryReturned ? new Date() : null,
@@ -2987,6 +3065,9 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
       if (!["DE_XUAT", "UNG", "SU_DUNG_HIEN_CO"].includes(t.type) || t.status !== "CHO_NGHIEM_THU") return fail("Phiếu không ở bước Nghiệm thu");
       if (!stepAllowedWithMap(await getWorkflowRoleMap(), "accept", user))
         return fail("Bạn không có quyền nghiệm thu (Quản trị phân quyền ở mục Phân quyền quy trình)", 403);
+      if (t.usagePhotoReviewStatus !== "APPROVED") {
+        return fail("Vui lòng xác nhận hình ảnh hiện trường đạt yêu cầu trước khi nghiệm thu", 409);
+      }
       // PCT/chỉ huy/nội dung đã nhập ở bước SỬ DỤNG VẬT TƯ; phiếu cũ (trước khi có
       // bước này) vẫn nhận từ form nghiệm thu để tương thích.
       const note = String(body.completionNote || "").trim();

@@ -1,14 +1,16 @@
 "use client";
 
 import * as React from "react";
-import { Megaphone, MessageSquareText, type LucideIcon } from "lucide-react";
+import { Images, Megaphone, MessageSquareText, type LucideIcon } from "lucide-react";
 import { useSession } from "next-auth/react";
+import { useQuery } from "@tanstack/react-query";
 import { useAnnouncements } from "@/hooks/useAnnouncements";
 import { useCurrentPosition } from "@/hooks/useCurrentPosition";
 import { useForumPosts } from "@/hooks/useForum";
 import { mustConfirmAnnouncementRead } from "@/lib/announcement-read";
 import { announcementTargetLabel } from "@/lib/announcement-targets";
 import { forumPostTargetsPosition, forumTargetPositionsLabel } from "@/lib/forum-targets";
+import { apiGet } from "@/lib/fetcher";
 
 const FORUM_NOTICE_READ_KEY = "pp:forum-notices-read";
 
@@ -40,6 +42,15 @@ export interface Notice {
   date?: string;
 }
 
+type MaterialPhotoReviewTask = {
+  id: string;
+  reference: string;
+  unit: string;
+  assignedPosition: string;
+  materialCategory: string | null;
+  date: string;
+};
+
 /**
  * Builds the "Vận hành" alert feed for the topbar bell: mệnh lệnh sản xuất
  * chưa xác nhận đọc và chủ đề Forum được gửi tới cương vị hiện tại.
@@ -50,6 +61,13 @@ export function useNotifications() {
   const { position: myPosition } = useCurrentPosition();
   const announcements = useAnnouncements();
   const forumPosts = useForumPosts({ category: "ALL", withReplyMeta: true });
+  const photoReviewTasks = useQuery({
+    queryKey: ["material-photo-review-tasks"],
+    queryFn: async () => (await apiGet<MaterialPhotoReviewTask[]>("/api/material-tickets/photo-review-tasks")).data,
+    refetchInterval: 60_000,
+    refetchIntervalInBackground: false,
+    staleTime: 30_000,
+  });
   const [ackedForumIds, setAckedForumIds] = React.useState<Set<string>>(() => new Set());
 
   React.useEffect(() => {
@@ -63,7 +81,17 @@ export function useNotifications() {
     };
   }, []);
 
-  const loading = announcements.isLoading || forumPosts.isLoading;
+  const loading = announcements.isLoading || forumPosts.isLoading || photoReviewTasks.isLoading;
+
+  const materialPhotoNotices: Notice[] = (photoReviewTasks.data ?? []).map((ticket) => ({
+    id: `material-photo-${ticket.id}`,
+    icon: Images,
+    tone: "amber",
+    title: `${ticket.reference}: Chờ kiểm tra ảnh`,
+    desc: `${ticket.unit} · ${ticket.assignedPosition}${ticket.materialCategory ? ` · ${ticket.materialCategory}` : ""}`,
+    href: "/replacement-procedures",
+    date: ticket.date,
+  }));
 
   const announcementNotices: Notice[] = (announcements.data?.data ?? [])
     .filter((a) => !a.invalidatedAt)
@@ -130,7 +158,7 @@ export function useNotifications() {
       date: post.latestReply!.createdAt,
     }));
 
-  const notices = [...announcementNotices, ...forumReplyNotices, ...forumPostNotices].sort((x, y) => {
+  const notices = [...materialPhotoNotices, ...announcementNotices, ...forumReplyNotices, ...forumPostNotices].sort((x, y) => {
     return +new Date(y.date ?? 0) - +new Date(x.date ?? 0);
   });
 

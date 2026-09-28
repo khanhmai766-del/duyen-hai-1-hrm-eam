@@ -29,6 +29,7 @@ const TICKET_SELECT = {
   usagePhotoBeforeKey: true,
   usagePhotoAfterKey: true,
   usagePhotoSpecKey: true,
+  usagePhotoReviewStatus: true,
 } as const;
 
 type TicketRow = {
@@ -41,6 +42,7 @@ type TicketRow = {
   usagePhotoBeforeKey: string | null;
   usagePhotoAfterKey: string | null;
   usagePhotoSpecKey: string | null;
+  usagePhotoReviewStatus: string | null;
 };
 
 /** Các ô ảnh theo LOẠI VẬT TƯ của phiếu: bi nghiền 2 ô (DCS MILL OVERVIEW), còn lại 3 ô. */
@@ -83,6 +85,9 @@ async function requireUsagePhotoEditor(
  */
 function requireNotSettled(t: TicketRow) {
   if (t.settledAt) throw fail("Phiếu đã quyết toán — ảnh hiện trường chỉ còn để xem lại, không sửa được", 409);
+  if (t.usagePhotoReviewStatus === "APPROVED") {
+    throw fail("Ảnh đã được Trưởng ca/Trưởng kíp xác nhận đạt yêu cầu — không thể thay đổi", 409);
+  }
 }
 
 /**

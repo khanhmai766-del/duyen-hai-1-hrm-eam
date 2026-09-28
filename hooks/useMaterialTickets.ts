@@ -102,6 +102,11 @@ export interface MaterialTicket {
   lastSupplementDate: string | null;
   remainingQuantity: number | null;
   materialUserName: string | null;
+  /** PENDING: chờ TC/TK xem; APPROVED: được nghiệm thu; REJECTED: VHV phải thay ảnh. */
+  usagePhotoReviewStatus: "PENDING" | "APPROVED" | "REJECTED" | null;
+  usagePhotoReviewedAt: string | null;
+  usagePhotoReviewedByName: string | null;
+  usagePhotoReviewedPosition: string | null;
   usedByName: string | null;
   usedByPosition: string | null;
   usedAt: string | null;
@@ -282,6 +287,7 @@ export function useCreateTicket() {
       apiMutate<MaterialTicket>("/api/material-tickets", "POST", body),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["material-tickets"] });
+      qc.invalidateQueries({ queryKey: ["material-photo-review-tasks"] });
       qc.invalidateQueries({ queryKey: ["material-ticket-options"] });
       qc.invalidateQueries({ queryKey: ["materials"] });
       qc.invalidateQueries({ queryKey: ["oil-stock"] });
@@ -298,6 +304,7 @@ export function useTicketAction(id: string | null) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["material-tickets"] });
       if (id) qc.invalidateQueries({ queryKey: ["ticket-replacement-request", id] });
+      qc.invalidateQueries({ queryKey: ["material-photo-review-tasks"] });
       qc.invalidateQueries({ queryKey: ["material-ticket-options"] });
       qc.invalidateQueries({ queryKey: ["materials"] });
       qc.invalidateQueries({ queryKey: ["oil-stock"] });
@@ -390,8 +397,14 @@ export function actionsFor(t: MaterialTicket, v: TicketViewer | null): string[] 
         ? canVhvReceive
         : (canOperateAssigned && (v.steps?.receive ?? v.isShiftLeader))
     )) a.push("createRepairRequest");
-    if (t.status === "SU_DUNG_VAT_TU" && canOperateAssigned && (v.steps?.use ?? v.isShiftLeader)) a.push("use");
-    if (t.status === "CHO_NGHIEM_THU" && (v.steps?.accept ?? v.isShiftLeader)) a.push("accept");
+    if (t.status === "SU_DUNG_VAT_TU" && canOperateAssigned && (v.steps?.use ?? v.isShiftLeader)) {
+      // TC/TK trả ảnh thì chỉ mở lại phần ảnh; không chạy action `use` lần hai vì lần đầu
+      // đã trừ kho và ghi phân bổ lô.
+      a.push(t.usedAt && t.usagePhotoReviewStatus === "REJECTED" ? "resubmitUsagePhotos" : "use");
+    }
+    if (t.status === "CHO_NGHIEM_THU" && (v.steps?.accept ?? v.isShiftLeader)) {
+      a.push(t.usagePhotoReviewStatus === "APPROVED" ? "accept" : "reviewUsagePhotos");
+    }
     // Chai khí: bước cuối là xác nhận trả vỏ chai, không nghiệm thu và không quyết toán.
     if (t.status === GAS_RETURN_STATUS && (canOperateAssigned || configuredGrant(v.steps?.return, v.steps?.returnConfigured))) a.push("returnItems");
     if (t.status === "CHO_THONG_KE_XUAT_BIEN_BAN" && v.steps?.stats) a.push("statsExportDocuments");

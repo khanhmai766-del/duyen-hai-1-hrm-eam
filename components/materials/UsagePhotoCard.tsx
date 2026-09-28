@@ -22,12 +22,14 @@ function PhotoSlot({
   disabled,
   onPick,
   onClear,
+  onPreview,
   busy,
 }: {
   photo: TicketUsagePhoto;
   disabled: boolean;
   onPick: (file: File) => void;
   onClear: () => void;
+  onPreview: () => void;
   busy: boolean;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -41,12 +43,19 @@ function PhotoSlot({
 
       {photo.url ? (
         <div style={{ position: "relative" }}>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={photo.url}
-            alt={photo.hint}
-            style={{ width: "100%", height: 116, objectFit: "cover", borderRadius: 8, border: "1px solid #e2e8f0" }}
-          />
+          <button
+            type="button"
+            onClick={onPreview}
+            aria-label={`Xem lớn ${photo.title}`}
+            style={{ display: "block", width: "100%", padding: 0, border: 0, background: "transparent", cursor: "zoom-in" }}
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={photo.url}
+              alt={photo.hint}
+              style={{ display: "block", width: "100%", height: 116, objectFit: "cover", borderRadius: 8, border: "1px solid #e2e8f0" }}
+            />
+          </button>
           {!disabled && (
             <button
               type="button"
@@ -98,6 +107,7 @@ export function UsagePhotoCard({ ticketId, canEdit }: { ticketId: string; canEdi
   const photos = useTicketUsagePhotos(ticketId, true);
   const setPhoto = useSetTicketUsagePhoto(ticketId);
   const [busySlot, setBusySlot] = useState<string | null>(null);
+  const [previewPhoto, setPreviewPhoto] = useState<TicketUsagePhoto | null>(null);
 
   const rows = photos.data ?? [];
   // Số ô do máy chủ quyết theo loại vật tư: bi nghiền 2 (DCS MILL OVERVIEW), còn lại 3.
@@ -167,8 +177,46 @@ export function UsagePhotoCard({ ticketId, canEdit }: { ticketId: string; canEdi
               busy={busySlot === photo.slot}
               onPick={(file) => void pick(photo.slot, file)}
               onClear={() => void clear(photo.slot)}
+              onPreview={() => setPreviewPhoto(photo)}
             />
           ))}
+        </div>
+      )}
+
+      {previewPhoto?.url && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Xem lớn ${previewPhoto.title}`}
+          onClick={() => setPreviewPhoto(null)}
+          style={{
+            position: "fixed", inset: 0, zIndex: 1000, padding: 16, background: "rgba(15, 23, 42, 0.88)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+          }}
+        >
+          <div onClick={(event) => event.stopPropagation()} style={{ position: "relative", maxWidth: 1100, width: "100%" }}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={previewPhoto.url}
+              alt={previewPhoto.hint}
+              style={{ display: "block", width: "100%", maxHeight: "calc(100vh - 80px)", objectFit: "contain", borderRadius: 10 }}
+            />
+            <button
+              type="button"
+              onClick={() => setPreviewPhoto(null)}
+              aria-label="Đóng ảnh xem lớn"
+              style={{
+                position: "absolute", top: -12, right: -8, width: 34, height: 34, borderRadius: 999,
+                border: "2px solid #fff", background: "#0f172a", color: "#fff", cursor: "pointer",
+                display: "flex", alignItems: "center", justifyContent: "center",
+              }}
+            >
+              <X size={18} />
+            </button>
+            <div style={{ marginTop: 8, color: "#fff", textAlign: "center", fontSize: 13, fontWeight: 700 }}>
+              {previewPhoto.title} — {previewPhoto.hint}
+            </div>
+          </div>
         </div>
       )}
     </div>

@@ -604,7 +604,11 @@ export default function MaterialTicketBoard({
         </div>
         {isLoading && <div className="empty"><Loader2 className="spin" size={18} /> Đang tải…</div>}
 	        {!isLoading && visibleTickets.map((t) => {
-	          const baseMeta = t.type === SINGLE_STEP_TICKET_TYPE && t.status === "NHAN_VAT_TU"
+	          const baseMeta = t.status === "SU_DUNG_VAT_TU" && t.usagePhotoReviewStatus === "REJECTED"
+            ? { label: "Cần bổ sung ảnh", c: C.bad }
+            : t.status === "CHO_NGHIEM_THU" && t.usagePhotoReviewStatus !== "APPROVED"
+            ? { label: "Chờ TC/TK kiểm tra ảnh", c: C.warn }
+            : t.type === SINGLE_STEP_TICKET_TYPE && t.status === "NHAN_VAT_TU"
             ? { label: "Chờ VHV xác nhận khối lượng lãnh", c: "#7c3aed" }
 		            : t.type === CHEMICAL_TICKET_TYPE && t.status === "CHO_XAC_NHAN"
 		            ? { label: "Chờ xác nhận bồn/thiết bị", c: "#7c3aed" }
@@ -1964,6 +1968,12 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
       (t.deliveryNoteNumber ?? t.receivedMethod) ? `Phiếu giao hàng ${t.deliveryNoteNumber ?? t.receivedMethod}` : "",
     ].filter(Boolean).join(" · ") },
     t.usedAt && { at: t.usedAt, who: t.usedByName, pos: t.usedByPosition, what: `Sử dụng vật tư${t.materialUserName ? ` — VHV: ${t.materialUserName}` : ""}: dùng ${t.usedQuantity ?? ""}, còn lại ${t.remainingQuantity ?? ""}` },
+    t.usagePhotoReviewStatus === "APPROVED" && t.usagePhotoReviewedAt && {
+      at: t.usagePhotoReviewedAt,
+      who: t.usagePhotoReviewedByName,
+      pos: t.usagePhotoReviewedPosition,
+      what: "Xác nhận ảnh hiện trường đạt yêu cầu",
+    },
     t.completedAt && { at: t.completedAt, who: t.completedByName, pos: t.completedByPosition, what: t.type === SINGLE_STEP_TICKET_TYPE
       ? `VHV xác nhận khối lượng lãnh: ${formatVnNumber(t.receivedQuantity)} ${t.items[0]?.material.unit ?? ""}`.trim()
       : isOtherMaterialTicketType(t.type)
@@ -3327,9 +3337,12 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
   const [confirmReasonInput, setConfirmReasonInput] = useState(t.proposalNote ?? ""); // Lý do — bước Xác nhận yêu cầu (lưu vào proposalNote)
   const [materialUserNameInput, setMaterialUserNameInput] = useState(t.materialUserName ?? "");
   const [lastSupplementDateInput, setLastSupplementDateInput] = useState(() => dateInputValue(t.lastSupplementDate));
-  // Đủ 2/3 ảnh mới cho qua bước sử dụng vật tư. Máy chủ cũng chặn — đây chỉ để người
+  // Đủ số ảnh quy định mới cho qua bước sử dụng vật tư. Máy chủ cũng chặn — đây chỉ để người
   // dùng biết trước lý do nút mờ, thay vì bấm rồi nhận thông báo lỗi.
-  const usagePhotos = useTicketUsagePhotos(t.id, acts.includes("use"));
+  const usagePhotos = useTicketUsagePhotos(
+    t.id,
+    acts.includes("use") || acts.includes("reviewUsagePhotos") || acts.includes("resubmitUsagePhotos"),
+  );
   // Bi nghiền chỉ 2 ô (DCS MILL OVERVIEW trước/sau), loại khác 3 — cùng luật với máy chủ.
   const photoTotal = usagePhotoTotal(t.materialCategory);
   const usagePhotoCount = (usagePhotos.data ?? []).filter((photo) => photo.url).length;
@@ -3485,8 +3498,12 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
       NHAN_TU_HIEN_CO: `Cương vị được giao "${t.assignedPosition}" nhận vật tư từ Hiện có`,
       NHAN_VAT_TU: "Người được phân quyền Xác nhận vật tư lãnh",
       CHO_PHIEU_YCSC: "Người được phân quyền ra SYC sửa chữa từ phiếu vật tư",
-      SU_DUNG_VAT_TU: "Người được phân quyền Xác nhận vật tư sử dụng",
-      CHO_NGHIEM_THU: "Người được phân quyền Nghiệm thu",
+      SU_DUNG_VAT_TU: t.usedAt && t.usagePhotoReviewStatus === "REJECTED"
+        ? `Cương vị VHV được giao "${t.assignedPosition}" bổ sung ảnh`
+        : "Người được phân quyền Xác nhận vật tư sử dụng",
+      CHO_NGHIEM_THU: t.usagePhotoReviewStatus === "APPROVED"
+        ? "Người được phân quyền Nghiệm thu"
+        : "Trưởng ca/Trưởng kíp kiểm tra ảnh hiện trường",
       CHO_TRA_VO: "Người được phân quyền Xác nhận trả (chai khí)",
       CHO_NHAP_LIEU: `Người được phân quyền trong cương vị "${t.assignedPosition}"`,
       CHO_NHAP_LIEU_THAY_THE: `Người được phân quyền trong cương vị "${t.assignedPosition}"`,
@@ -3505,6 +3522,62 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Thao tác thất bại");
     }
+  }
+
+  if (acts.includes("reviewUsagePhotos")) {
+    return (
+      <div className="act">
+        <div className="note">
+          <Check size={15} />
+          <span><b>Kiểm tra hình ảnh hiện trường</b><small>Ảnh phải đạt yêu cầu trước khi nhập nội dung nghiệm thu và xuất biên bản.</small></span>
+        </div>
+        <UsagePhotoCard ticketId={t.id} canEdit={false} />
+        {usagePhotoCount < photoTotal && (
+          <div className="warnbox"><AlertTriangle size={15} /> Phiếu chưa đủ {photoTotal} ảnh hiện trường.</div>
+        )}
+        <div className="frm-f">
+          <button
+            type="button"
+            className="btn ghost"
+            disabled={act.isPending}
+            onClick={() => run({ action: "rejectUsagePhotos" }, "Đã trả VHV bổ sung ảnh")}
+          >
+            <X size={15} /> Ảnh chưa đạt — trả VHV bổ sung
+          </button>
+          <button
+            type="button"
+            className="btn primary"
+            disabled={act.isPending || usagePhotoCount < photoTotal}
+            onClick={() => run({ action: "approveUsagePhotos" }, "Đã xác nhận ảnh đạt yêu cầu")}
+          >
+            {act.isPending ? <Loader2 className="spin" size={15} /> : <Check size={15} />} Ảnh đạt yêu cầu — tiếp tục nghiệm thu
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (acts.includes("resubmitUsagePhotos")) {
+    return (
+      <div className="act">
+        <div className="warnbox">
+          <AlertTriangle size={15} />
+          TC/TK xác nhận ảnh chưa đạt yêu cầu. Vui lòng thay ảnh theo nội dung đã trao đổi; số lượng sử dụng và dữ liệu kho đã được khóa, không cần nhập lại.
+        </div>
+        <UsagePhotoCard ticketId={t.id} canEdit />
+        {usagePhotoCount < photoTotal && (
+          <div className="warnbox"><AlertTriangle size={15} /> Phải tải đủ {photoTotal} ảnh mới gửi lại được.</div>
+        )}
+        <button
+          type="button"
+          className="btn primary big"
+          disabled={act.isPending || usagePhotoCount < photoTotal}
+          onClick={() => run({ action: "resubmitUsagePhotos" }, "Đã gửi lại ảnh cho TC/TK kiểm tra")}
+        >
+          {act.isPending ? <Loader2 className="spin" size={15} /> : <Check size={15} />} Gửi lại ảnh để nghiệm thu
+        </button>
+      </div>
+    );
   }
 
   const edit = (i: number, k: string, v: unknown) =>
@@ -4363,7 +4436,7 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
 	            <input type="date" value={lastSupplementDateInput} onChange={(e) => setLastSupplementDateInput(e.target.value)} />
 	          </label>
 	        </div>
-        {/* Ảnh không bắt buộc: thiếu ảnh thì ô tương ứng trong BBNT để trống, không chặn bước. */}
+        {/* Ảnh bắt buộc và sẽ được TC/TK kiểm tra ở đầu bước Nghiệm thu. */}
         <UsagePhotoCard ticketId={t.id} canEdit />
         {recoveryRequired && (
           <div className="recovery-quantity-row">
@@ -4390,8 +4463,8 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
           <div className="warnbox"><AlertTriangle size={15} /> Phải chụp đủ {photoTotal} ảnh hiện trường mới xác nhận được (còn thiếu {photoTotal - usagePhotoCount} ảnh).</div>
         )}
         <button className="btn primary big" disabled={!materialUserNameInput.trim() || qty <= 0 || usagePhotoCount < photoTotal || quantityExceedsStock || quantityExceedsReceived || (recoveryRequired && (!Number.isFinite(recoveryQuantity) || recoveryQuantity < minRecovery)) || act.isPending}
-	          onClick={() => run({ action: "use", materialUserName: materialUserNameInput.trim(), usedQuantity: qty, lastSupplementDate: lastSupplementDateInput || null, ...(recoveryRequired ? { recoveryQuantity, recoveryReturned } : {}) }, "Đã xác nhận sử dụng vật tư")}>
-          {act.isPending ? <Loader2 className="spin" size={15} /> : <Check size={15} />} Xác nhận
+	          onClick={() => run({ action: "use", materialUserName: materialUserNameInput.trim(), usedQuantity: qty, lastSupplementDate: lastSupplementDateInput || null, ...(recoveryRequired ? { recoveryQuantity, recoveryReturned } : {}) }, "Đã xác nhận sử dụng và gửi ảnh chờ TC/TK kiểm tra")}>
+          {act.isPending ? <Loader2 className="spin" size={15} /> : <Check size={15} />} Xác nhận và gửi kiểm tra ảnh
         </button>
       </div>
     );

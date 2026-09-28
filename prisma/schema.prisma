@@ -2052,6 +2052,13 @@ model MaterialTicket {
   usagePhotoBeforeKey   String? // Hình 1 — thiết bị TRƯỚC khi thay thế/bổ sung
   usagePhotoAfterKey    String? // Hình 2 — thiết bị SAU khi thay thế/bổ sung
   usagePhotoSpecKey     String? // Hình 3 — thông số thiết bị hoặc vật tư thay thế
+  // Cổng kiểm tra ảnh ở đầu bước Nghiệm thu. PENDING: chờ TC/TK xem; APPROVED: được
+  // phép nghiệm thu; REJECTED: trả VHV thay ảnh rồi gửi lại, KHÔNG chạy lại nghiệp vụ kho.
+  usagePhotoReviewStatus     String?
+  usagePhotoReviewedAt       DateTime?
+  usagePhotoReviewedById     String?
+  usagePhotoReviewedByName   String?
+  usagePhotoReviewedPosition String?
   usedById              String?
   usedByName            String?
   usedByPosition        String?
