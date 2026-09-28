@@ -153,11 +153,35 @@ export function PermitCompanyDirectory() {
   </section>;
 }
 
+/**
+ * Công tắc vai trò ngay trên danh sách: trượt sang phải = CHTT, sang trái = Nhân viên. Lưu ngay (PUT hồ sơ với
+ * đúng dữ liệu hiện có + `canCommand` mới), không phải mở hộp sửa. Đổi vai trò không đụng PCT đã ghi.
+ */
+function RoleSwitch({ person }: { person: PermitPerson }) {
+  const save = useSavePermitPerson();
+  const on = person.canCommand;
+  async function toggle() {
+    try {
+      await save.mutateAsync({ id: person.id, body: { code: person.code, name: person.name, company: person.company, phone: person.phone ?? "",
+        canCommand: !on, isActive: person.isActive, version: person.version } });
+      toast.success(`${person.name}: ${on ? "chuyển về Nhân viên" : "chuyển thành CHTT"}`);
+    } catch (error) { toast.error(error instanceof Error ? error.message : "Không đổi được vai trò"); }
+  }
+  return <button type="button" role="switch" aria-checked={on} aria-label={`Vai trò của ${person.name}: ${on ? "CHTT" : "Nhân viên"}. Bấm để đổi`}
+    disabled={save.isPending} onClick={() => void toggle()} title={on ? "Bấm để chuyển về Nhân viên" : "Bấm để chuyển thành CHTT"}
+    className="group inline-flex min-h-8 cursor-pointer items-center gap-2 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:cursor-wait disabled:opacity-60">
+    <span className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${on ? "bg-emerald-500" : "bg-slate-300 dark:bg-slate-600"}`}>
+      <span className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${on ? "translate-x-5" : "translate-x-0"}`} />
+    </span>
+    <span className={`w-[4.5rem] text-left text-[11px] font-semibold uppercase tracking-wide ${on ? "text-emerald-700" : "text-slate-600 dark:text-slate-300"}`}>{on ? "CHTT" : "Nhân viên"}</span>
+  </button>;
+}
+
 /** Danh sách người của một đơn vị, mỗi người một dòng: Họ tên · Số thẻ an toàn · SĐT · Vai trò. */
 function CompanyPeopleTable({ people, canWrite, removing, onEdit, onRemove }: { people: PermitPerson[]; canWrite: boolean; removing: boolean; onEdit: (person: PermitPerson) => void; onRemove: (person: PermitPerson) => void }) {
   const th = "px-3 py-2 text-left text-[10.5px] font-semibold uppercase tracking-wider text-slate-500";
   const role = (person: PermitPerson) => <>
-    {person.canCommand ? <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10.5px] font-semibold uppercase tracking-wide text-emerald-700">CHTT</span> : <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10.5px] font-semibold uppercase tracking-wide text-slate-600">Nhân viên</span>}
+    {canWrite ? <RoleSwitch person={person} /> : person.canCommand ? <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10.5px] font-semibold uppercase tracking-wide text-emerald-700">CHTT</span> : <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10.5px] font-semibold uppercase tracking-wide text-slate-600">Nhân viên</span>}
     {!person.isActive && <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10.5px] font-semibold uppercase tracking-wide text-amber-700">Ngừng hoạt động</span>}
   </>;
   const works = (person: PermitPerson) => person.activeWorks?.map(work => <p key={work.sessionId} className="mt-0.5 text-[11px] font-medium text-amber-700">Đang làm PCT {formatPermitNumber(work.permit)} · {PERMIT_KINDS[work.permit.kind]} · {work.role === "CHTT" ? "CHTT" : "Nhân viên công tác"} · từ {fmt(work.openedAt)}</p>);
@@ -168,7 +192,7 @@ function CompanyPeopleTable({ people, canWrite, removing, onEdit, onRemove }: { 
     <div className="min-w-0 flex-1">
       <p className="text-[15px] font-semibold leading-5 text-ink">{person.name}</p>
       <p className="mt-0.5 text-xs text-muted-foreground">{person.code}{person.phone ? <> · <a className="font-medium text-blue-700 underline" href={tel(person.phone)}>{person.phone}</a></> : null}</p>
-      <div className="mt-1.5 flex flex-wrap gap-1">{role(person)}</div>
+      <div className="mt-1.5 flex flex-wrap items-center gap-1.5">{role(person)}</div>
       {works(person)}
     </div>
     {canWrite && <div className="flex shrink-0 gap-1.5">
@@ -189,7 +213,7 @@ function CompanyPeopleTable({ people, canWrite, removing, onEdit, onRemove }: { 
         </td>
         <td className="px-3 py-2 font-medium text-ink">{person.code}</td>
         <td className="px-3 py-2">{person.phone ? <a className="font-medium text-blue-700 underline" href={tel(person.phone)}>{person.phone}</a> : <span className="text-muted-foreground">Chưa có</span>}</td>
-        <td className="px-3 py-2"><div className="flex flex-wrap gap-1">{role(person)}</div></td>
+        <td className="px-3 py-2"><div className="flex flex-wrap items-center gap-1.5">{role(person)}</div></td>
         {canWrite && <td className="px-3 py-2"><div className="flex justify-center gap-1">
           <Button type="button" size="sm" variant="outline" className="h-7 px-2" aria-label={`Sửa hồ sơ ${person.name}`} onClick={() => onEdit(person)}><Pencil size={13} /></Button>
           <Button type="button" size="sm" variant="outline" className="h-7 px-2 text-red-700 hover:text-red-800" disabled={removing} aria-label={`Xóa hồ sơ ${person.name}`} onClick={() => onRemove(person)}><Trash2 size={13} /></Button>
@@ -318,13 +342,12 @@ function PersonEditor({ initial, presetCompany, onClose, onSaved }: { initial?: 
   }
   return <Dialog open onOpenChange={v => { if (!v && !save.isPending) onClose(); }}><DialogContent>
     <DialogTitle>{initial ? "Cập nhật nhân sự nhà thầu" : presetCompany ? `Thêm nhân sự · ${presetCompany}` : "Thêm nhân sự nhà thầu"}</DialogTitle>
-    <DialogDescription>Tìm hồ sơ có sẵn trước khi thêm. Có thể cập nhật số thẻ, họ tên, nhà thầu và vai trò khi thông tin thực tế thay đổi.</DialogDescription>
+    <DialogDescription>Tìm hồ sơ có sẵn trước khi thêm. Có thể cập nhật số thẻ, họ tên và nhà thầu khi thông tin thực tế thay đổi.</DialogDescription>
     <form onSubmit={submit}><fieldset disabled={save.isPending} className="space-y-4">
       {(["code", "name"] as const).map(key => <label key={key} className="block space-y-1 text-sm"><span>{({ code: "Số thẻ an toàn *", name: "Họ tên *", company: "Nhà thầu *" })[key]}</span><input className={control} value={form[key]} required maxLength={key === "code" ? 80 : 200} onChange={e => setForm({ ...form, [key]: e.target.value })} /></label>)}
-      <p className="text-xs text-muted-foreground">Có thể sửa số thẻ, họ tên, nhà thầu và vai trò. Các PCT đã ghi vẫn giữ nguyên thông tin tại thời điểm thực hiện.</p>
+      <p className="text-xs text-muted-foreground">Có thể sửa số thẻ, họ tên và nhà thầu; vai trò CHTT / Nhân viên gạt ở cột Vai trò. Các PCT đã ghi vẫn giữ nguyên thông tin tại thời điểm thực hiện.</p>
       {presetCompany !== undefined ? <p className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm">Đơn vị: <strong>{presetCompany}</strong></p> : <PermitCompanyPicker value={form.company} onChange={company => setForm(prev => ({ ...prev, company }))} />}
       <label className="block space-y-1 text-sm"><span>SĐT liên hệ</span><input className={control} type="tel" inputMode="tel" maxLength={40} value={form.phone ?? ""} onChange={e => setForm({ ...form, phone: e.target.value })} placeholder="Ví dụ: 0912 345 678" /><span className="block text-xs text-muted-foreground">Không bắt buộc; dùng để gọi khi cần liên hệ đơn vị công tác.</span></label>
-      <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.canCommand} onChange={e => setForm({ ...form, canCommand: e.target.checked })} />Có trong danh sách CHTT nhà thầu</label>
       <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.isActive} onChange={e => setForm({ ...form, isActive: e.target.checked })} />Đang hoạt động</label>
       <div className="flex justify-end gap-2"><Button type="button" variant="outline" onClick={onClose}>Để sau</Button><Button disabled={save.isPending}>{save.isPending ? "Đang lưu…" : "Lưu hồ sơ"}</Button></div>
     </fieldset></form>
