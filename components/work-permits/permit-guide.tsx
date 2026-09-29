@@ -62,10 +62,18 @@ const SECTIONS: GuideSection[] = [
   },
   {
     key: "internal",
-    label: "PCT nội bộ · điện tử",
+    label: "PCT nội bộ",
     icon: Building2,
-    intro: "Phiếu điện tử cho đơn vị sửa chữa nội bộ được lấy số ngay trên NKVH bằng tiện ích. Tiện ích đồng thời ghi phiếu về đúng sổ PXVH1 và không tự bấm Lưu trên NKVH.",
+    intro: "Đơn vị nội bộ có thể cấp PCT điện tử trên NKVH hoặc PCT giấy trực tiếp trên sổ. Tiện ích chỉ dùng cho PCT điện tử và không tự bấm Lưu trên NKVH.",
     steps: [
+      {
+        title: "Chọn hình thức",
+        where: "Cấp phiếu nội bộ → hộp chọn hình thức",
+        points: [
+          "Chọn PCT điện tử để lấy số và đồng bộ từ NKVH.",
+          "Chọn PCT giấy để khai mẫu giấy, lấy số trực tiếp trên website và in phiếu.",
+        ],
+      },
       {
         title: "Mở phiếu NKVH",
         where: "NKVH → tạo PCT từ ĐKCT → mở phiếu ở bước B1",
@@ -106,7 +114,7 @@ const SECTIONS: GuideSection[] = [
         ],
       },
     ],
-    note: "Phiếu nhà thầu giấy vẫn lấy số trực tiếp trên Sổ PCT. Ghi nhận đóng phiếu trên sổ KHÔNG đóng phiếu trên NKVH — thủ tục trên NKVH vẫn làm như thường lệ.",
+    note: "PCT nội bộ giấy và PCT nhà thầu giấy lấy số trực tiếp trên Sổ PCT. Ghi nhận đóng phiếu trên sổ KHÔNG đóng phiếu trên NKVH — thủ tục trên NKVH vẫn làm như thường lệ.",
   },
   {
     key: "contractor",
@@ -180,11 +188,11 @@ const SECTIONS: GuideSection[] = [
         points: ["Mở lại biểu mẫu với đúng số đã giữ, khai tiếp rồi lưu."],
       },
       {
-        title: "Chọn nhầm nội bộ / nhà thầu",
-        where: "Công tắc Nội bộ · PCT điện tử ⇄ Nhà thầu · PCT giấy ở đầu biểu mẫu",
+        title: "Chọn nhầm giấy / điện tử nội bộ",
+        where: "Công tắc Nội bộ · PCT điện tử ⇄ Nội bộ · PCT giấy ở đầu biểu mẫu",
         points: [
-          "Số PCT giữ nguyên; phần nhân sự và mẫu giấy của loại cũ được xoá để khai lại.",
-          "Phiếu đã cấp chỉ đổi được khi còn Đã cấp, chưa cho phép làm việc và chưa có lần làm việc nào.",
+          "Đổi hình thức trước khi lưu; nội dung đã nhập và số PCT đã lấy vẫn được giữ.",
+          "PCT giấy mở thêm phần mẫu giấy và biện pháp an toàn; PCT điện tử dùng liên kết NKVH.",
         ],
       },
       {

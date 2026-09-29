@@ -5,7 +5,7 @@ import { requirePermitIssuer, requirePermitExecute, permitCapabilities } from "@
 import { resolvePermitSafety } from "@/lib/server/work-permit-safety";
 import { workPermitPrisma as prisma } from "@/lib/server/work-permit-prisma";
 import { audit, fail, ok, requireUser } from "@/lib/api";
-import { defaultPermitFormat, formatPermitNumber, PERMIT_PAGE_SIZE } from "@/lib/work-permits";
+import { formatPermitNumber, PERMIT_PAGE_SIZE } from "@/lib/work-permits";
 import { parsePermit, permitBody, permitFilters, permitHandle, permitSnapshot, resolvePermitDefectLink } from "@/lib/server/work-permits";
 import { resolvePermitIdentities } from "@/lib/server/work-permit-identities";
 import { permitListSelect } from "@/lib/server/work-permit-selects";
@@ -55,9 +55,7 @@ export async function POST(req: Request) {
     const row = await prisma.$transaction(async tx => {
       const linkedBody = await resolvePermitDefectLink(tx, body);
       const data = parsePermit(await resolvePermitIdentities(tx, linkedBody, user), status);
-      if (data.format !== defaultPermitFormat(data.teamType)) {
-        throw fail("PCT nhà thầu dùng phiếu giấy; PCT nội bộ dùng phiếu điện tử");
-      }
+      if (data.teamType === "CONTRACTOR" && data.format !== "PAPER") throw fail("PCT nhà thầu chỉ sử dụng phiếu giấy");
       const row = await tx.workPermit.create({ data: { ...data, safetyItems: permitSnapshot(await resolvePermitSafety(tx, body)), status, createdById: user.id, createdByName: user.name ?? "" } });
       await consumePermitNumberReservation(tx, { reservationId: body.reservationId, kind: data.kind as PermitKind,
         year: data.year, number: data.number, teamType: data.teamType, userId: user.id, userName: user.name ?? "",

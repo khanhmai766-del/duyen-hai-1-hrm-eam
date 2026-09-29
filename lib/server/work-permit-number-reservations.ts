@@ -20,7 +20,7 @@ export function canonicalPermitNumber(value: unknown): string {
 type Tx = Prisma.TransactionClient;
 
 export function teamTypeLabel(teamType: string) {
-  return teamType === "CONTRACTOR" ? "Nhà thầu · PCT giấy" : "Nội bộ · PCT điện tử";
+  return teamType === "CONTRACTOR" ? "Nhà thầu · PCT giấy" : "Nội bộ";
 }
 
 export async function lockPermitNumberScope(tx: Tx, kind: PermitKind, year: number) {
