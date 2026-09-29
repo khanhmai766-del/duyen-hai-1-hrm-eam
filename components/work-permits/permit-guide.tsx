@@ -117,7 +117,10 @@ const SECTIONS: GuideSection[] = [
       {
         title: "Mở biểu mẫu",
         where: "Sổ PCT → chọn tab sổ → Cấp phiếu nhà thầu",
-        points: ["CHTT nhà thầu phải có sẵn trong tab Nhân sự nhà thầu (xem phần Danh mục dùng chung)."],
+        points: [
+          "CHTT nhà thầu phải có sẵn trong tab Nhân sự nhà thầu (xem phần Danh mục dùng chung).",
+          "Để cấp nhanh công việc tương tự: mở PCT giấy ở trạng thái Đã cấp hoặc Đã đóng, bấm Sao chép tạo PCT mới. Nội dung, nhân sự và biện pháp được giữ; số PCT, ĐKCT/SYC, thời gian và trạng thái được đặt lại.",
+        ],
       },
       {
         title: "Khai thông tin & lấy số",
