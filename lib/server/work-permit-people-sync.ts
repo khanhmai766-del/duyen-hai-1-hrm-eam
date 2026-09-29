@@ -39,20 +39,27 @@ function sheetConfig() {
   return { url, token };
 }
 
-async function callSheet<T>(params: Record<string, string>, timeoutMs: number): Promise<T> {
+/**
+ * `notJson`: thông báo khi web app trả thứ không phải JSON. Lấy danh sách lỗi kiểu này thường là web app chưa có
+ * chế độ JSON; còn lấy ảnh thì danh sách đã chạy được nên đó là trang lỗi tạm thời của Google.
+ */
+async function callSheet<T>(params: Record<string, string>, timeoutMs: number, notJson: string): Promise<T> {
   const { url, token } = sheetConfig();
   const target = `${url}${url.includes("?") ? "&" : "?"}${new URLSearchParams({ ...params, token })}`;
   let res: Response;
+  let text: string;
   try {
     res = await fetch(target, { redirect: "follow", cache: "no-store", signal: AbortSignal.timeout(timeoutMs) });
-  } catch {
-    throw fail("Không kết nối được Google Sheets (quá thời gian hoặc mất mạng). Thử lại sau.", 502);
+    text = await res.text();
+  } catch (error) {
+    if (error instanceof Error && error.name === "TimeoutError") {
+      throw fail(`Google Sheets không phản hồi sau ${Math.round(timeoutMs / 1000)} giây (Google đang chậm). Thử lại sau.`, 504);
+    }
+    throw fail("Không kết nối được Google Sheets (lỗi mạng). Thử lại sau.", 502);
   }
-  const text = await res.text();
   let json: { ok?: boolean; error?: string } & T;
   try { json = JSON.parse(text); } catch {
-    // Web app chưa thêm chế độ JSON (trả trang HTML thẻ) hoặc chưa cấp quyền "Anyone".
-    throw fail("Google Sheets không trả dữ liệu JSON. Kiểm tra đã thêm đoạn code đồng bộ vào Apps Script và triển khai lại web app.", 502);
+    throw fail(`${notJson} (HTTP ${res.status})`, 502);
   }
   if (!json.ok) throw fail(json.error === "token" ? "Mã khoá đồng bộ Google Sheets không khớp (PERMIT_CARD_SHEET_TOKEN)." : `Google Sheets báo lỗi: ${json.error ?? "không rõ"}`, 502);
   return json;
@@ -86,7 +93,8 @@ async function unitByTab() {
 }
 
 export async function syncPeopleList() {
-  const { rows } = await callSheet<{ rows: SheetRow[] }>({ format: "json" }, 90_000);
+  const { rows } = await callSheet<{ rows: SheetRow[] }>({ format: "json" }, 90_000,
+    "Google Sheets không trả dữ liệu JSON. Kiểm tra đã thêm đoạn code đồng bộ vào Apps Script và triển khai lại web app");
   if (!Array.isArray(rows)) throw fail("Dữ liệu Google Sheets không đúng định dạng (thiếu rows)", 502);
   const unitOf = await unitByTab();
   const skipped: string[] = [];
@@ -163,7 +171,8 @@ export async function syncPeoplePhotos(jobs: PhotoJob[]) {
     const code = normalizeCardCode(str(job?.code, 80));
     try {
       // Người chưa có thẻ: Apps Script tìm ảnh theo họ tên (syncPhotoOf_ so cả cột C).
-      const photo = await callSheet<{ contentType?: string; base64?: string }>({ format: "photo", id: str(job?.lookup, 200) || code }, 45_000);
+      const photo = await callSheet<{ contentType?: string; base64?: string }>({ format: "photo", id: str(job?.lookup, 200) || code }, 45_000,
+        "Google tạm thời trả trang lỗi thay cho ảnh. Đồng bộ lại sau để tải tiếp");
       if (!photo.base64) throw new Error("Sheet không có ảnh cho số thẻ này");
       // Ảnh 3x4 để so mặt: thu về tối đa 360x480, WebP q72 (~20–50 KB), xoay theo EXIF.
       const body = await sharp(Buffer.from(photo.base64, "base64")).rotate()

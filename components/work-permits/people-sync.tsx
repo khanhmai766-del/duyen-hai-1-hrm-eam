@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { useSyncPermitPeople, type PermitPeopleSyncResult } from "@/hooks/useWorkPermits";
 
-const PHOTO_BATCH = 6;
+const PHOTO_BATCH = 5;
 
 /**
  * Đồng bộ danh bạ nhân sự nhà thầu từ Google Sheets thẻ ra vào cổng: một lượt lấy danh sách (chữ), rồi
