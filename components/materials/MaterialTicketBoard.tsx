@@ -2020,13 +2020,18 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
 	            // và `flowStatusKey` vẫn quy về chính ô này. Vì vậy ô chưa được coi là `done`,
 	            // nhưng dữ liệu lãnh đã tồn tại và phải mở được để sửa ngay.
 	            const vhvReceiveEditable = s.key === "VHV_LANH_VAT_TU" && !!t.vhvReceivedAt;
-	            const reviewable = done || proposalNumberEditable || vhvReceiveEditable
+	            // Luồng Đề xuất không có ô riêng cho bước Thống kê xuất BBNT: trạng thái đó quy về ô
+	            // Nghiệm thu (xem flowStatusKey) nên ô chưa `done`. Nghiệm thu đã lưu thì vẫn phải
+	            // mở được để người nghiệm thu xem lại/sửa trong lúc chờ Thống kê.
+	            const acceptanceEditable = t.type === "DE_XUAT" && t.status === "CHO_THONG_KE_XUAT_BIEN_BAN"
+	              && s.key === "CHO_NGHIEM_THU" && !!t.completedAt;
+	            const reviewable = done || proposalNumberEditable || vhvReceiveEditable || acceptanceEditable
 	              || (t.type === "UNG" && s.key === "CHO_HOAN_THIEN" && !!t.bbktNumber);
 	            const waitingForRepairRequest = t.type === "DE_XUAT" && t.status === "CHO_PHIEU_YCSC" && cur;
 	            const caption = waitingForRepairRequest
 	              ? "Cần tạo hoặc gắn SYC để tiếp tục"
 	              : t.type === "DE_XUAT" && t.status === "CHO_THONG_KE_XUAT_BIEN_BAN" && s.key === "CHO_NGHIEM_THU"
-	              ? "Thống kê · Chờ xuất BBNT D-Office"
+	              ? `Thống kê · Chờ xuất BBNT D-Office${acceptanceEditable ? " · Xem lại" : ""}`
 	              : proposalNumberEditable
 	              ? "Sửa số phiếu ĐXVT"
 	              : s.key === "CHO_PHIEU__XUAT_KHO" && t.proposalReceiverName
@@ -4754,6 +4759,7 @@ const CSS = `
 .review-delivery-field input{height:40px;margin:0;}
 .review-use-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;align-items:end;min-width:0;}
 .review-accept-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-items:end;min-width:0;}
+.frm textarea{display:block;font:inherit;line-height:1.45;resize:vertical;min-height:76px;}
 .review-recovery-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(280px,1.08fr);gap:12px;align-items:stretch;min-width:0;}
 .review-recovery-grid>label{min-width:0;}
 .review-recovery-quantity{display:flex;flex-direction:column;justify-content:flex-end;gap:6px;line-height:1.35;}
@@ -4969,7 +4975,7 @@ const CSS = `
    thay vì gãy 3+1 trông như xếp hỏng. */
 .edit-field-grid .reason-field-wide{grid-column:1 / -1;}
 .qty-field input{text-align:center;font-weight:800;color:${C.navy};}
-.frm input,.frm select,.act input,.act select,.act textarea,.frm-item select,.frm-item input{border:1.5px solid ${C.line};border-radius:10px;padding:10px 12px;font-size:13px;outline:0;width:100%;background:#fff;}
+.frm input,.frm select,.frm textarea,.act input,.act select,.act textarea,.frm-item select,.frm-item input{border:1.5px solid ${C.line};border-radius:10px;padding:10px 12px;font-size:13px;outline:0;width:100%;background:#fff;}
 .cats{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
 .cats button{padding:10px;border-radius:10px;border:1.5px solid ${C.line};background:#fff;font-weight:600;font-size:13px;cursor:pointer;color:#64748b;transition:.15s;}
 .cats button.on{border-color:${C.accent};background:${C.accent}10;color:${C.accent};}
@@ -5044,7 +5050,7 @@ const CSS = `
 .device-selected-list>span>svg{flex:0 0 auto;}
 .device-selected-list>span>button{width:16px;height:16px;display:inline-flex;align-items:center;justify-content:center;flex:0 0 16px;border:0;border-radius:50%;background:#dbeafe;color:#1e40af;cursor:pointer;padding:0;}
 .device-selected-list>span>button:hover{background:#bfdbfe;}
-.frm input:focus,.act input:focus,.act textarea:focus{border-color:${C.accent};}
+.frm input:focus,.frm textarea:focus,.act input:focus,.act textarea:focus{border-color:${C.accent};}
 .seg2{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;}
 .seg2 button{padding:10px;border-radius:10px;border:1.5px solid ${C.line};background:#fff;font-weight:600;cursor:pointer;color:#64748b;}
 .seg2 button.on{border-color:${C.navy};background:${C.navy};color:#fff;}
