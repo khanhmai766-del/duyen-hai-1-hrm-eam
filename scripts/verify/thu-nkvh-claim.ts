@@ -3,7 +3,7 @@
 // Không để lại dữ liệu.
 //   npx tsx scripts/verify/thu-nkvh-claim.ts
 import { PrismaClient } from "@prisma/client";
-import { cancelNkvhPermit, claimNkvhPermit, parseNkvhPage, stopNkvhPermit, syncNkvhPermit } from "@/lib/server/work-permit-nkvh-claim";
+import { cancelNkvhPermit, claimNkvhPermit, importExistingNkvhPermit, parseNkvhPage, stopNkvhPermit, syncNkvhPermit } from "@/lib/server/work-permit-nkvh-claim";
 import { reservePermitNumber } from "@/lib/server/work-permit-number-reservations";
 
 const db = new PrismaClient();
@@ -40,6 +40,31 @@ async function main() {
 
       const paper = await reservePermitNumber(tx, { kind: "MECHANICAL", year, teamType: "CONTRACTOR", ownerId: "thu", ownerName: "Thu" });
       console.log("4) phiếu giấy lấy sau:", paper.number, BigInt(paper.number) > BigInt(first.number) ? "✓ nhảy qua số NKVH" : "✗ TRÙNG/NHỎ HƠN");
+
+      const importedNumber = (BigInt(paper.number) + BigInt(1)).toString();
+      const imported = await importExistingNkvhPermit(tx, user, { kind: "MECHANICAL",
+        nkvhPctId: "22222222-3333-4444-8555-666666666666", page: parseNkvhPage(tcnh, "MECHANICAL"),
+        unit: "S1", position: "Lò phó", formattedNumber: `${importedNumber}/${year}/VH1-NĐDH` });
+      console.log("4b) nhận số đã cấp trên NKVH:", imported.formatted,
+        imported.number === importedNumber ? "✓ đúng số, không lấy số mới" : "✗ SAI SỐ");
+      await tx.workPermit.update({ where: { id: imported.id }, data: { nkvhPctId: null } });
+      const relinked = await importExistingNkvhPermit(tx, user, { kind: "MECHANICAL",
+        nkvhPctId: "23232323-3434-4545-8666-676767676767", page: parseNkvhPage({ ...tcnh, content: "Nội dung đồng bộ lại" }, "MECHANICAL"),
+        unit: "S1", position: "Lò phó", formattedNumber: `${importedNumber}/${year}/VH1-NĐDH` });
+      console.log("    số đã có trên sổ nhưng thiếu link:", relinked.id === imported.id && !relinked.created
+        ? "✓ gắn vào hồ sơ cũ" : "✗ TẠO TRÙNG HỒ SƠ");
+      try {
+        await importExistingNkvhPermit(tx, user, { kind: "MECHANICAL",
+          nkvhPctId: "33333333-4444-4555-8666-777777777777", page: parseNkvhPage(tcnh, "MECHANICAL"),
+          unit: "S1", position: "Lò phó", formattedNumber: `${importedNumber}/${year}/VH1-NĐDH` });
+        console.log("    trùng số với phiếu NKVH khác: ✗ lẽ ra phải bị chặn");
+      } catch (e) { console.log("    trùng số với phiếu NKVH khác: chặn đúng →", (await (e as Response).json()).error); }
+      try {
+        await importExistingNkvhPermit(tx, user, { kind: "MECHANICAL",
+          nkvhPctId: "44444444-5555-4666-8777-888888888888", page: parseNkvhPage(tcnh, "MECHANICAL"),
+          unit: "S1", position: "Lò phó", formattedNumber: `${BigInt(importedNumber) + BigInt(2)}/${year}/VH1-NĐDH` });
+        console.log("    số nhảy vượt dãy: ✗ lẽ ra phải bị chặn");
+      } catch (e) { console.log("    số nhảy vượt dãy: chặn đúng →", (await (e as Response).json()).error); }
 
       for (const [label, input] of [
         ["thiếu cương vị", { unit: "S1", position: "" }], ["đơn vị ngoài", { unit: "S1", position: "Lò phó", teamCode: "2686f012-546a-48f0-b10b-91e728144357" }],

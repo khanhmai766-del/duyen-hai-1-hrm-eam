@@ -78,6 +78,7 @@ const SECTIONS: GuideSection[] = [
           "Kiểm tra Tổ máy mà tiện ích nhận diện, chọn Cương vị, rồi bấm Lấy số & điền.",
           "Sổ PXVH1 cấp số tiếp theo của đúng sổ Cơ hoặc Điện, ghi phiếu vào sổ và điền số vào NKVH.",
           "Một phiếu NKVH chỉ nhận một số; bấm lại vẫn trả về đúng số đã cấp.",
+          "Nếu NKVH đã có số dạng …/VH1-NĐDH nhưng sổ chưa có liên kết, bấm Đồng bộ số hiện có; hệ thống dùng đúng số đó và tự chặn mọi xung đột.",
         ],
       },
       {

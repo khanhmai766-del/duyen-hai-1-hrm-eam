@@ -5,6 +5,7 @@ thay cho việc chạy qua duyenhai1.vn lấy số rồi quay lại NKVH gõ tay
 
 Tiện ích này tách riêng khỏi tiện ích *Đồng bộ QLVT & LIMS* và chỉ xin quyền vào NKVH và duyenhai1.vn.
 Phiếu nhà thầu (PCT giấy) vẫn lấy số trên sổ duyenhai1.vn như cũ.
+Tiện ích nhận trang NKVH trên cả HTTP và HTTPS; sau khi cài hoặc cập nhật phải tải lại tab NKVH.
 
 ## Luồng sử dụng
 
@@ -15,6 +16,11 @@ Phiếu nhà thầu (PCT giấy) vẫn lấy số trên sổ duyenhai1.vn như c
    Tiện ích điền số vào ô Số phiếu.
 4. VHV kiểm tra rồi **tự bấm Lưu trên NKVH**. Tiện ích không bao giờ tự lưu.
 5. Nếu sửa nội dung trên NKVH hoặc khai thêm CHTT, phạm vi…, bấm **Đồng bộ về sổ** (ở bước B1).
+
+Nếu phiếu đã có số đúng dạng sổ PXVH1 (`…/VH1-NĐDH`) nhưng chưa có hồ sơ liên kết trên website,
+thanh tiện ích hiện **Đồng bộ số hiện có**. Người dùng xác nhận Tổ máy/Cương vị rồi đồng bộ đúng số
+đó về sổ; tiện ích không lấy số mới. Máy chủ tự chặn số trùng, số đã hủy, số thuộc phiếu NKVH khác
+hoặc số vượt quá lượt kế tiếp của dãy hiện tại.
 
 CHTT, số nhân viên hoặc SYC còn thiếu thì phiếu hiện nhãn **Cần bổ sung** trên sổ. Khi sửa phiếu
 trên sổ, các mục này bắt buộc khai đủ như phiếu tạo tay.

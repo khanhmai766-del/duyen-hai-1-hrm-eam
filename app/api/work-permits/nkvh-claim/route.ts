@@ -5,7 +5,7 @@ import { OPERATION_POSITION_TITLES } from "@/lib/positions";
 import { PERMIT_UNITS } from "@/lib/work-permits";
 import { permitBody, permitHandle } from "@/lib/server/work-permits";
 import { requirePermitIssuer } from "@/lib/server/work-permit-permissions";
-import { cancelNkvhPermit, claimNkvhPermit, nkvhClaimResult, parseNkvhPage, parseNkvhScope, stopNkvhPermit, syncNkvhPermit } from "@/lib/server/work-permit-nkvh-claim";
+import { cancelNkvhPermit, claimNkvhPermit, importExistingNkvhPermit, nkvhClaimResult, parseNkvhPage, parseNkvhScope, stopNkvhPermit, syncNkvhPermit } from "@/lib/server/work-permit-nkvh-claim";
 export const dynamic = "force-dynamic";
 
 /** API của tiện ích "Cấp số PCT NKVH" (chrome-extension/nkvh-pct) — nghiệp vụ ở lib/server/work-permit-nkvh-claim.ts. */
@@ -49,6 +49,13 @@ export async function POST(req: Request) {
       return ok(result);
     }
     await requirePermitPositionAllowed(user, body.position);
+    if (body.mode === "import_existing") {
+      const result = await prisma.$transaction(tx => importExistingNkvhPermit(tx, user, {
+        kind, nkvhPctId, page, unit: body.unit, position: body.position, formattedNumber: body.formattedNumber,
+      }));
+      await audit(user.id, "SYNC_WORK_PERMIT_NKVH", "WorkPermit", result.id, `Nhận PCT đã cấp số ${result.formatted} từ NKVH`);
+      return ok(result);
+    }
     const result = await prisma.$transaction(tx => claimNkvhPermit(tx, user, { kind, nkvhPctId, page, unit: body.unit, position: body.position }));
     if (result.created) await audit(user.id, "CREATE_WORK_PERMIT", "WorkPermit", result.id, `Tạo PCT ${result.formatted} từ NKVH (tiện ích)`);
     return ok(result);

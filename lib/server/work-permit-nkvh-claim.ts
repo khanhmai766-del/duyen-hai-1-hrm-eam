@@ -6,7 +6,7 @@ import { OPERATION_POSITION_TITLES } from "@/lib/positions";
 import { DEFAULT_INTERNAL_TEAM_NAME } from "@/lib/work-permit-source-fields";
 import { CONTRACTOR_PERMIT_TRANSITIONS, formatPermitNumber, PERMIT_DISCIPLINES, PERMIT_KINDS, PERMIT_TRANSITIONS, PERMIT_UNITS, type PermitKind, type PermitStatus } from "@/lib/work-permits";
 import { parsePermit, permitSnapshot } from "@/lib/server/work-permits";
-import { consumePermitNumberReservation, lockPermitNumberScope, reservePermitNumber } from "@/lib/server/work-permit-number-reservations";
+import { canonicalPermitNumber, consumePermitNumberReservation, lockPermitNumberScope, permitNumberHighWater, reservePermitNumber } from "@/lib/server/work-permit-number-reservations";
 
 /*
  * Cầu nối tiện ích "Cấp số PCT NKVH" (chrome-extension/nkvh-pct) — CHỈ cho PCT nội bộ điện tử.
@@ -60,6 +60,14 @@ function vnParts(date: Date) {
   return { day, year: Number(day.slice(0, 4)) };
 }
 
+/** Chỉ nhận số chính thức của sổ PXVH1; không nhận số NKVH tự sinh dạng …/NĐDH-VH1. */
+export function parseExistingNkvhPermitNumber(value: unknown) {
+  const normalized = text(value, 160).toUpperCase().replace(/\s+/g, "");
+  const match = normalized.match(/^([0-9]{1,80})\/(20[0-9]{2})\/VH1-N[ĐD]DH$/u);
+  if (!match) throw fail("Số trên NKVH không đúng dạng số sổ PXVH1 (ví dụ 1234/2026/VH1-NĐDH)", 400);
+  return { number: canonicalPermitNumber(match[1]), year: Number(match[2]) };
+}
+
 export function parseNkvhScope(body: Record<string, unknown>) {
   const kind = typeof body.kind === "string" && Object.hasOwn(PERMIT_KINDS, body.kind) ? body.kind as PermitKind : null;
   if (!kind) throw fail("Không xác định được sổ Cơ – Nhiệt – Hóa hay Điện từ trang NKVH");
@@ -109,6 +117,21 @@ function pageFields(page: NkvhPage, kind: PermitKind) {
   return fields;
 }
 
+function validateNkvhIssueInput(kind: PermitKind, page: NkvhPage, input: { unit: unknown; position: unknown }) {
+  const unit = typeof input.unit === "string" && Object.hasOwn(PERMIT_UNITS, input.unit) ? input.unit : "";
+  if (!unit) throw fail("Vui lòng chọn tổ máy");
+  const position = text(input.position, 200);
+  if (!OPERATION_POSITION_TITLES.some(value => value === position)) throw fail("Vui lòng chọn cương vị");
+  if (!page.content) throw fail("Trang NKVH chưa có nội dung công tác. Hãy mở phiếu ở bước B1.");
+  if (page.qlvhCode && page.qlvhCode !== "VH") {
+    throw fail("Phiếu này thuộc phân xưởng khác trên NKVH (Đơn vị QLVH không phải Phân xưởng Vận hành 1). Sổ PXVH1 không nhận phiếu này.");
+  }
+  if (TEAM_CODES[page.teamCode] === undefined && /^[0-9a-f-]{36}$/i.test(page.teamCode)) {
+    throw fail("Đơn vị công tác trên NKVH là đơn vị ngoài. Tiện ích chỉ dùng cho PCT nội bộ; phiếu nhà thầu lấy số trên sổ PCT giấy.");
+  }
+  return { unit, position };
+}
+
 /**
  * Phiếu bị DỪNG trên NKVH (đang thực hiện thì xảy ra sự cố thiết bị / tai nạn lao động) → phiếu sổ
  * chuyển Tạm dừng, lý do "Dừng trên NKVH: …". KHÁC hủy: công việc đã diễn ra nên số được GIỮ, không
@@ -144,19 +167,7 @@ export function nkvhClaimResult(row: Pick<WorkPermit, "id" | "number" | "year" |
 /** Lấy số cho phiếu NKVH (hoặc trả lại số đã lấy). Gọi trong một giao dịch. */
 export async function claimNkvhPermit(tx: Tx, user: Actor, input: { kind: PermitKind; nkvhPctId: string; page: NkvhPage; unit: unknown; position: unknown }, now = new Date()) {
   const { kind, nkvhPctId, page } = input;
-  const unit = typeof input.unit === "string" && Object.hasOwn(PERMIT_UNITS, input.unit) ? input.unit : "";
-  if (!unit) throw fail("Vui lòng chọn tổ máy");
-  const position = text(input.position, 200);
-  if (!OPERATION_POSITION_TITLES.some(value => value === position)) throw fail("Vui lòng chọn cương vị");
-  if (!page.content) throw fail("Trang NKVH chưa có nội dung công tác. Hãy mở phiếu ở bước B1.");
-  // Đơn vị QLVH trên NKVH: "VH" = PXVH1. Phiếu của phân xưởng khác (VH3 = PXVH2…) không cấp số sổ PXVH1.
-  // Tiện ích bản cũ không gửi qlvhCode (chuỗi rỗng) → không chặn, giữ nguyên hành vi cũ.
-  if (page.qlvhCode && page.qlvhCode !== "VH") {
-    throw fail("Phiếu này thuộc phân xưởng khác trên NKVH (Đơn vị QLVH không phải Phân xưởng Vận hành 1). Sổ PXVH1 không cấp số cho phiếu này.");
-  }
-  if (TEAM_CODES[page.teamCode] === undefined && /^[0-9a-f-]{36}$/i.test(page.teamCode)) {
-    throw fail("Đơn vị công tác trên NKVH là đơn vị ngoài. Tiện ích chỉ lấy số cho PCT nội bộ; phiếu nhà thầu lấy số trên sổ PCT giấy.");
-  }
+  const { unit, position } = validateNkvhIssueInput(kind, page, input);
   const { day: today, year } = vnParts(now);
   await lockPermitNumberScope(tx, kind, year);
   const existing = await tx.workPermit.findFirst({
@@ -175,6 +186,91 @@ export async function claimNkvhPermit(tx: Tx, user: Actor, input: { kind: Permit
   await consumePermitNumberReservation(tx, { reservationId: reservation.id, kind, year, number: reservation.number,
     teamType: "INTERNAL", userId: user.id, userName: user.name ?? "", isAdmin: user.role === "ADMIN", permitId: row.id });
   await tx.workPermitHistory.create({ data: { permitId: row.id, actorId: user.id, actorName: user.name ?? "", action: "Tạo phiếu từ NKVH", after: permitSnapshot(row) } });
+  return nkvhClaimResult(row, true);
+}
+
+/**
+ * Khôi phục phiếu đã được cấp số chính thức trên NKVH nhưng chưa có/ chưa gắn với sổ PXVH1.
+ * Không sinh số mới: dùng đúng số đang hiện, dưới khóa dãy số và chỉ khi không xung đột.
+ */
+export async function importExistingNkvhPermit(tx: Tx, user: Actor, input: {
+  kind: PermitKind; nkvhPctId: string; page: NkvhPage; unit: unknown; position: unknown; formattedNumber: unknown;
+}, now = new Date()) {
+  const { kind, nkvhPctId, page } = input;
+  const { unit, position } = validateNkvhIssueInput(kind, page, input);
+  const parsed = parseExistingNkvhPermitNumber(input.formattedNumber);
+  const current = vnParts(now);
+  if (parsed.year !== current.year) throw fail("Chỉ đồng bộ số PCT của năm hiện tại. Phiếu năm cũ cần quản trị đối chiếu trước.", 409);
+
+  const baseline = await lockPermitNumberScope(tx, kind, parsed.year);
+  const byNkvh = await tx.workPermit.findFirst({
+    where: { kind, nkvhPctId, status: { not: "CANCELLED" } }, orderBy: { createdAt: "desc" },
+    select: { id: true, number: true, year: true, status: true },
+  });
+  if (byNkvh) return nkvhClaimResult(byNkvh, false);
+
+  const matching = await tx.$queryRaw<Array<{ id: string }>>`
+    SELECT "id" FROM "WorkPermit"
+    WHERE "kind" = ${kind} AND "year" = ${parsed.year} AND "status" <> 'CANCELLED'
+      AND "number" ~ '^[0-9]+$' AND "number"::numeric = ${parsed.number}::numeric
+    FOR UPDATE
+  `;
+  if (matching.length > 1) throw fail("Số PCT này đang có nhiều hồ sơ cũ trên sổ. Quản trị cần đối chiếu trước khi gắn NKVH.", 409);
+  if (matching.length === 1) {
+    const before = await tx.workPermit.findUniqueOrThrow({ where: { id: matching[0].id } });
+    if (before.nkvhPctId && before.nkvhPctId !== nkvhPctId) throw fail("Số PCT này đã liên kết với một phiếu NKVH khác.", 409);
+    if (["DRAFT", "CLOSED"].includes(before.status)) throw fail(`Phiếu ${formatPermitNumber(before)} trên sổ đang ở trạng thái không thể đồng bộ tự động.`, 409);
+    const data = parsePermit({ ...rowBody(before), ...pageFields(page, kind), nkvhPctId }, before.status as PermitStatus, { allowIncompleteIssue: true });
+    const after = await tx.workPermit.update({ where: { id: before.id }, data: {
+      nkvhPctId, registrationNumber: data.registrationNumber, teamName: data.teamName,
+      sourceClassification: data.sourceClassification, workType: data.workType, content: data.content,
+      location: data.location, workScope: data.workScope, disciplines: data.disciplines,
+      plannedStartAt: data.plannedStartAt, plannedEndAt: data.plannedEndAt,
+      commanderName: data.commanderName, leaderName: data.leaderName, workerCount: data.workerCount,
+      searchText: data.searchText, version: { increment: 1 },
+    } });
+    await tx.workPermitHistory.create({ data: { permitId: after.id, actorId: user.id, actorName: user.name ?? "",
+      action: "Gắn và đồng bộ phiếu NKVH đã cấp số", before: permitSnapshot(before), after: permitSnapshot(after) } });
+    return nkvhClaimResult(after, false);
+  }
+
+  const highWater = await permitNumberHighWater(tx, kind, parsed.year);
+  const floor = BigInt(baseline) > BigInt(highWater) ? BigInt(baseline) : BigInt(highWater);
+  if (BigInt(parsed.number) > floor + BigInt(1)) {
+    throw fail(`Số ${parsed.number} vượt quá số tiếp theo dự kiến ${floor + BigInt(1)}. Quản trị cần đối chiếu mốc sổ trước.`, 409);
+  }
+  const cancelled = await tx.workPermitNumberReservation.findFirst({
+    where: { kind, year: parsed.year, number: parsed.number, status: "CANCELLED" }, select: { id: true },
+  });
+  if (cancelled) throw fail("Số PCT này đã có lượt cấp bị hủy trên sổ. Quản trị cần đối chiếu trước khi dùng lại.", 409);
+
+  let reservation = await tx.workPermitNumberReservation.findFirst({
+    where: { kind, year: parsed.year, number: parsed.number, status: { in: ["RESERVED", "ISSUED"] } },
+    orderBy: { createdAt: "desc" },
+  });
+  if (reservation?.status === "ISSUED") throw fail("Số PCT này đã có lượt cấp trên sổ nhưng thiếu hồ sơ liên kết. Quản trị cần đối chiếu.", 409);
+  if (reservation && reservation.ownerId !== user.id && user.role !== "ADMIN") {
+    throw fail(`Số PCT này đang được ${reservation.ownerName || "người khác"} giữ. Người đã lấy số hoặc quản trị cần thực hiện đồng bộ.`, 409);
+  }
+  if (!reservation) {
+    reservation = await tx.workPermitNumberReservation.create({ data: {
+      kind, year: parsed.year, number: parsed.number, teamType: "INTERNAL", ownerId: user.id, ownerName: user.name ?? "",
+    } });
+    await tx.workPermitNumberReservationHistory.create({ data: { reservationId: reservation.id, action: "RESERVED",
+      actorId: user.id, actorName: user.name ?? "", note: "Nhận số đã cấp trên NKVH để đồng bộ về sổ" } });
+  }
+
+  const issuerName = page.issuerName || user.name?.trim() || "";
+  const data = parsePermit({
+    ...pageFields(page, kind), kind, year: parsed.year, number: parsed.number, unit, position,
+    workDate: page.plannedStartAt?.slice(0, 10) ?? current.day, teamType: "INTERNAL", format: "ELECTRONIC", nkvhPctId,
+    issuerName, issuerUserId: issuerName === user.name?.trim() ? user.id : "", issuedAt: now.toISOString(),
+  }, "ISSUED", { allowIncompleteIssue: true });
+  const row = await tx.workPermit.create({ data: { ...data, status: "ISSUED", createdById: user.id, createdByName: user.name ?? "" } });
+  await consumePermitNumberReservation(tx, { reservationId: reservation.id, kind, year: parsed.year, number: parsed.number,
+    teamType: "INTERNAL", userId: user.id, userName: user.name ?? "", isAdmin: user.role === "ADMIN", permitId: row.id });
+  await tx.workPermitHistory.create({ data: { permitId: row.id, actorId: user.id, actorName: user.name ?? "",
+    action: "Nhập phiếu đã cấp số từ NKVH", after: permitSnapshot(row) } });
   return nkvhClaimResult(row, true);
 }
 

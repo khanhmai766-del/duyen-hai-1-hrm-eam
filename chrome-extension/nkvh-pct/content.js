@@ -15,7 +15,7 @@
   const API = "/api/work-permits/nkvh-claim";
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(PCT_ID)) return;
 
-  const state = { loading: true, permit: null, cancelledPermit: null, positions: [], units: {}, panel: false, unit: null, position: null, busy: false, message: "", tone: "info" };
+  const state = { loading: true, permit: null, cancelledPermit: null, positions: [], units: {}, panel: false, importNumber: null, unit: null, position: null, busy: false, message: "", tone: "info" };
 
   // ---------- Đọc trang NKVH ----------
   const fold = (value) => String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "")
@@ -66,6 +66,8 @@
 
   /** Số NKVH tự sinh ("2392/2026/NĐDH-VH1") — khác dạng số của sổ ("1234/2026/VH1-NĐDH"). */
   const isNkvhAutoNumber = (value) => /^\d+\/\d{4}\/nddh-vh\d*$/.test(fold(value));
+  /** Số chính thức đã được cấp theo sổ PXVH1; có thể nhận lại về sổ khi hồ sơ web bị thiếu. */
+  const isPxvh1Number = (value) => /^\d+\/20\d{2}\/vh1-nddh$/.test(fold(value).replace(/\s+/g, ""));
 
   // ---------- Hộp thoại Hủy/Dừng phiếu của NKVH ----------
   // NKVH dùng CHUNG hộp #formContent:dlgHuyPhieu cho "Hủy phiếu" (phiếu ra sai) và "Dừng phiếu" (đang
@@ -280,7 +282,14 @@
     // Số NKVH tự sinh thì cho thay thẳng (có hỏi); số khác (gõ tay theo dạng sổ…) vẫn không ghi đè.
     if (current && !isNkvhAutoNumber(current)) return say(`Ô Số phiếu đã có “${current}”. Nếu muốn lấy số từ sổ PXVH1, hãy xoá ô này rồi bấm lại.`, "error");
     if (current && !confirm(`Ô Số phiếu đang có số NKVH tự sinh “${current}”.\nLấy số từ sổ PXVH1 sẽ thay số này. Tiếp tục?`)) return;
-    state.panel = true; state.message = ""; render();
+    state.panel = true; state.importNumber = null; state.message = ""; render();
+  }
+
+  function openImportPanel() {
+    const current = numberInput()?.value.trim() || "";
+    if (currentStep() !== 1) return say("Hãy mở bước B1 (Cấp phiếu) rồi bấm lại.", "error");
+    if (!isPxvh1Number(current)) return say("Số hiện có không đúng dạng số sổ PXVH1.", "error");
+    state.panel = true; state.importNumber = current; state.message = ""; render();
   }
 
   async function claim(unit, position) {
@@ -297,6 +306,22 @@
     say(result.data.created
       ? `Đã lấy số ${result.data.formatted} và điền vào ô Số phiếu. Kiểm tra lại rồi bấm Lưu trên NKVH.`
       : `Phiếu này đã có số ${result.data.formatted} trên sổ — đã điền lại vào ô Số phiếu.`, "success");
+  }
+
+  async function importExisting(unit, position) {
+    const page = readPage();
+    const formattedNumber = state.importNumber || numberInput()?.value.trim() || "";
+    if (page.step !== 1) return say("Hãy mở bước B1 (Cấp phiếu) rồi bấm lại.", "error");
+    if (!unit || !position) return say("Vui lòng chọn Tổ máy và Cương vị.", "error");
+    if (!isPxvh1Number(formattedNumber)) return say("Số hiện có không đúng dạng số sổ PXVH1.", "error");
+    if (!confirm(`Đồng bộ phiếu ${formattedNumber} đang có trên NKVH về sổ PXVH1?\n\nTiện ích không cấp số mới. Máy chủ sẽ từ chối nếu số này bị trùng, đã hủy hoặc không khớp dãy số.`)) return;
+    state.busy = true; render();
+    try { await chrome.storage.local.set({ lastPosition: position }); } catch { /* chỉ là ghi nhớ tiện lợi */ }
+    const result = await api("POST", API, { mode: "import_existing", kind: KIND, nkvhPctId: PCT_ID, unit, position, formattedNumber, page });
+    state.busy = false;
+    if (!result.ok) return say(result.message, "error");
+    state.permit = result.data; state.panel = false; state.importNumber = null;
+    say(`Đã đồng bộ phiếu ${result.data.formatted} từ NKVH về sổ PXVH1.`, "success");
   }
 
   /** `auto`: VHV vừa xác nhận hủy trên NKVH nên không hỏi lại; lỗi thì nút "Báo hủy về sổ" vẫn còn để bấm lại. */
@@ -360,6 +385,7 @@
 
   function panel() {
     const page = readPage();
+    const importing = Boolean(state.importNumber);
     const unitSelect = h("select", { style: "margin:0 10px 0 4px;padding:2px;font:12px Verdana,Arial,sans-serif;", onchange: () => { state.unit = unitSelect.value; } },
       [h("option", { value: "", textContent: "— Chọn —" }), ...Object.entries(state.units).map(([value, label]) => h("option", { value, textContent: label }))]);
     unitSelect.value = state.unit ?? guessUnit(page);
@@ -370,12 +396,17 @@
       if (lastPosition && state.positions.includes(lastPosition) && state.position === null) positionSelect.value = state.position = lastPosition;
     }).catch(() => undefined);
     return h("div", { style: "margin-top:6px;padding:8px 10px;border:1px solid #bfdbfe;border-radius:6px;background:#eff6ff;" }, [
-      h("div", { style: "margin-bottom:6px;color:#1e3a8a;", textContent: `Lấy số PCT ${KIND === "ELECTRICAL" ? "Điện" : "Cơ – Nhiệt – Hóa"} từ sổ PXVH1 · phiếu nội bộ điện tử` }),
+      h("div", { style: "margin-bottom:6px;color:#1e3a8a;", textContent: importing
+        ? `Đồng bộ số ${state.importNumber} đang có trên NKVH về sổ PXVH1`
+        : `Lấy số PCT ${KIND === "ELECTRICAL" ? "Điện" : "Cơ – Nhiệt – Hóa"} từ sổ PXVH1 · phiếu nội bộ điện tử` }),
       h("label", { textContent: "Tổ máy*" }), unitSelect,
       h("label", { textContent: "Cương vị*" }), positionSelect,
-      button(state.busy ? "Đang lấy số…" : "Lấy số & điền", () => claim(unitSelect.value, positionSelect.value)),
-      button("Đóng", () => { state.panel = false; render(); }, true),
-      h("div", { style: "margin-top:6px;color:#475569;", textContent: "CHTT, số nhân viên và SYC còn thiếu sẽ hiện “Cần bổ sung” trên sổ để khai sau." }),
+      button(state.busy ? "Đang xử lý…" : importing ? "Đồng bộ về sổ" : "Lấy số & điền",
+        () => importing ? importExisting(unitSelect.value, positionSelect.value) : claim(unitSelect.value, positionSelect.value)),
+      button("Đóng", () => { state.panel = false; state.importNumber = null; render(); }, true),
+      h("div", { style: "margin-top:6px;color:#475569;", textContent: importing
+        ? "Không tạo số mới. Số trùng, số đã hủy hoặc số vượt dãy hiện tại sẽ bị máy chủ chặn."
+        : "CHTT, số nhân viên và SYC còn thiếu sẽ hiện “Cần bổ sung” trên sổ để khai sau." }),
     ]);
   }
 
@@ -416,8 +447,14 @@
       if (input.value.trim() !== state.permit.formatted) parts.push(button("Điền số", () => { fillNumber(state.permit.formatted); say("Đã điền số. Kiểm tra lại rồi bấm Lưu trên NKVH.", "success"); }));
       parts.push(button(state.busy ? "Đang đồng bộ…" : "Đồng bộ về sổ", sync, true));
     } else if (state.positions.length) {
-      parts.push(h("span", { textContent: "chưa có số" }));
-      if (!state.panel) parts.push(button("Lấy số PCT", openPanel));
+      const current = input.value.trim();
+      if (isPxvh1Number(current)) {
+        parts.push(h("span", { textContent: `${current} · chưa có trên sổ`, style: "font-weight:bold;" }));
+        if (!state.panel) parts.push(button("Đồng bộ số hiện có", openImportPanel));
+      } else {
+        parts.push(h("span", { textContent: "chưa có số" }));
+        if (!state.panel) parts.push(button("Lấy số PCT", openPanel));
+      }
     } else {
       parts.push(button("Thử lại", load, true));
     }
