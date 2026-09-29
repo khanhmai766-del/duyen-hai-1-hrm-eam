@@ -7,6 +7,8 @@ ATVSLĐ**: họ tên, đơn vị, số thẻ, hạn thẻ, huấn luyện và �
 - Nút: tab **Đơn vị nhà thầu → Đồng bộ từ Google Sheets** (người có quyền cấp PCT).
 - Code phía sổ: `lib/server/work-permit-people-sync.ts`, API `app/api/work-permits/people/sync`.
 - Ảnh được nén còn tối đa 360×480 WebP (~20–50 KB) và lưu S3 tại `work-permit-people/photos/<số thẻ>.webp`.
+- **Ảnh chỉ tải một lần** với ảnh chèn trong ô: người đã có ảnh trên sổ thì lượt đồng bộ sau bỏ qua (content URL của
+  Google đổi sau vài giờ nên không dùng để phát hiện ảnh mới). Ảnh dạng link cố định vẫn tải lại khi link đổi.
 - Số thẻ trên sheet (cột L) là khoá: trùng `WorkPermitPerson.code`. **Người đã huấn luyện (cột K) nhưng chưa có
   số thẻ** cũng được đồng bộ (28/09/2026) — cùng điều kiện tạo mã QR của bảng (họ tên C + ngày HL K hoặc số thẻ L).
   Sổ lưu họ bằng mã tạm `HL-<HỌ-TÊN-KHÔNG-DẤU>` (`cardlessCode`, lib/work-permit-card.ts) vì QR in `?id=<họ tên>`;
@@ -56,7 +58,9 @@ function syncDate_(v) {
   return v ? String(v) : '';
 }
 
-// Dấu vết ảnh (cột O): link thì lấy link; ảnh chèn trong ô thì lấy content URL. Sổ chỉ tải lại ảnh khi dấu vết đổi.
+// Dấu vết ảnh (cột O): link thì lấy link; ảnh chèn trong ô thì lấy content URL.
+// Content URL do Google cấp lại sau vài giờ nên sổ KHÔNG dựa vào nó: ảnh chèn trong ô chỉ tải cho người chưa có ảnh;
+// link cố định thì tải lại khi link đổi.
 function syncPhotoRef_(v) {
   if (typeof v === 'string' && /^https?:\/\//.test(v)) return v;
   if (v && typeof v.getContentUrl === 'function') { try { return v.getContentUrl() || 'cell'; } catch (x) { return 'cell'; } }
@@ -92,14 +96,17 @@ function syncListRows_() {
   return out;
 }
 
-// Ảnh của MỘT số thẻ → base64 (sổ tự nén rồi lưu S3).
+// Ảnh của MỘT người → base64 (sổ tự nén rồi lưu S3). `id` là số thẻ (cột L), hoặc HỌ TÊN (cột C) với người
+// chưa được cấp thẻ — sổ gửi họ tên cho những người này.
 function syncPhotoOf_(id) {
+  var key = id.toUpperCase();
   var sheets = SpreadsheetApp.getActiveSpreadsheet().getSheets();
   for (var s = 0; s < sheets.length; s++) {
     var range = sheets[s].getDataRange(), values = range.getValues();
     for (var i = 0; i < values.length; i++) {
       var card = values[i][11] ? String(values[i][11]).trim() : '';
-      if (!card || card.toUpperCase() !== id.toUpperCase()) continue;
+      var name = values[i][2] ? String(values[i][2]).trim() : '';
+      if (card ? card.toUpperCase() !== key : name.toUpperCase() !== key) continue;
       var v = sheets[s].getRange(range.getRow() + i, 15).getValue(), blob = null;
       if (typeof v === 'string' && /^https?:\/\//.test(v)) {
         var driveId = v.indexOf('drive.google.com') >= 0 ? (v.match(/[-\w]{25,}/) || [])[0] : null;
@@ -113,7 +120,7 @@ function syncPhotoOf_(id) {
       return { ok: true, contentType: blob.getContentType() || 'image/jpeg', base64: Utilities.base64Encode(blob.getBytes()) };
     }
   }
-  return { ok: false, error: 'Không tìm thấy số thẻ ' + id };
+  return { ok: false, error: 'Không tìm thấy số thẻ hoặc họ tên ' + id };
 }
 ```
 

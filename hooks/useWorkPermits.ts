@@ -110,16 +110,18 @@ export function usePermitPeople(params: { q?: string; page?: number; active?: bo
 export async function lookupPermitCard(q: string) {
   return (await apiGet<{ code: string; person: PermitPerson | null }>(`/api/work-permits/people/card?q=${encodeURIComponent(q)}`)).data;
 }
+/** Việc tải ảnh do máy chủ ký ở bước list — chuyển nguyên văn sang bước photos, không sửa. */
+export type PermitPhotoJob = { code: string; source: string; exp: number; sig: string };
 export interface PermitPeopleSyncResult {
   total: number; created: number; updated: number; skipped: number; skippedSamples: string[];
   skippedTabs: Array<{ tab: string; rows: number }>; moved: string[]; movedCount: number;
-  photos: Array<{ code: string; source: string; lookup?: string }>;
+  photos: PermitPhotoJob[];
 }
 export function useSyncPermitPeople() {
   const qc = useQueryClient();
   // meta.background: hộp đồng bộ có thanh tiến độ riêng — không bật lớp chờ toàn trang (AppShell).
   const list = useMutation({ meta: { background: true }, mutationFn: () => apiMutate<PermitPeopleSyncResult>("/api/work-permits/people/sync", "POST", { step: "list" }) });
-  const photos = useMutation({ meta: { background: true }, mutationFn: (jobs: Array<{ code: string; source: string; lookup?: string }>) =>
+  const photos = useMutation({ meta: { background: true }, mutationFn: (jobs: PermitPhotoJob[]) =>
     apiMutate<{ results: Array<{ code: string; ok: boolean; error?: string }> }>("/api/work-permits/people/sync", "POST", { step: "photos", jobs }) });
   const refresh = () => { qc.invalidateQueries({ queryKey: ["work-permit-people"] }); qc.invalidateQueries({ queryKey: ["work-permit-companies"] }); };
   return { list, photos, refresh };

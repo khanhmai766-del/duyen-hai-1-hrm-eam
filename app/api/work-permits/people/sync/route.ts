@@ -1,7 +1,7 @@
 import { audit, fail, ok, requireUser } from "@/lib/api";
 import { requirePermitIssue } from "@/lib/server/work-permit-permissions";
 import { permitBody, permitHandle } from "@/lib/server/work-permits";
-import { syncPeopleList, syncPeoplePhotos, type PhotoJob } from "@/lib/server/work-permit-people-sync";
+import { syncPeopleList, syncPeoplePhotos } from "@/lib/server/work-permit-people-sync";
 export const dynamic = "force-dynamic";
 
 /**
@@ -18,7 +18,7 @@ export async function POST(req: Request) {
         `Đồng bộ Google Sheets: ${result.total} người (${result.created} mới, ${result.updated} cập nhật, ${result.skipped} bỏ qua), ${result.photos.length} ảnh cần tải`);
       return ok(result);
     }
-    if (body.step === "photos") return ok(await syncPeoplePhotos(body.jobs as PhotoJob[]));
+    if (body.step === "photos") return ok(await syncPeoplePhotos(body.jobs));
     return fail("Bước đồng bộ không hợp lệ");
   });
 }

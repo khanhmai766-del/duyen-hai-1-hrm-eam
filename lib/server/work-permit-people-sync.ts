@@ -1,3 +1,4 @@
+import { createHmac, timingSafeEqual } from "node:crypto";
 import sharp from "sharp";
 import type { Prisma } from "@prisma/client";
 import { fail } from "@/lib/api";
@@ -24,13 +25,36 @@ export type SheetRow = {
   sheet?: string; soThe?: unknown; hoTen?: unknown; namSinh?: unknown; sdt?: unknown; donVi?: unknown; goiThau?: unknown;
   chucVu?: unknown; viTri?: unknown; khuVuc?: unknown; ketQuaHL?: unknown; ngayHL?: unknown; ngayCap?: unknown; ngayHetHan?: unknown; photo?: unknown;
 };
-/** `lookup`: giá trị gửi Apps Script để tìm ảnh — số thẻ, hoặc họ tên với người chưa có thẻ. */
-export type PhotoJob = { code: string; source: string; lookup?: string };
+/**
+ * Một ảnh cần tải, do bước list tạo và KÝ; trình duyệt chỉ chuyển nguyên văn sang bước photos. `source` là dấu
+ * vết ảnh trong sheet (lưu vào photoSource để lần sau biết ảnh có đổi không), `exp` là hạn chữ ký (ms).
+ */
+export type PhotoJob = { code: string; source: string; exp: number; sig: string };
 
 const PHOTO_WIDTH = 360;
 const PHOTO_HEIGHT = 480;
 const PHOTO_QUALITY = 72;
 const MAX_PHOTO_BATCH = 8;
+/** Chữ ký sống đủ cho một lượt đồng bộ vài trăm ảnh; hết hạn thì bấm đồng bộ lại. */
+const PHOTO_JOB_TTL_MS = 60 * 60_000;
+
+function photoJobSignature(code: string, source: string, exp: number) {
+  const secret = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET;
+  if (!secret) throw fail("Máy chủ chưa cấu hình AUTH_SECRET", 503);
+  return createHmac("sha256", secret).update(`work-permit-photo
+${code}
+${source}
+${exp}`).digest("base64url");
+}
+function signPhotoJob(code: string, source: string, exp: number): PhotoJob {
+  return { code, source, exp, sig: photoJobSignature(code, source, exp) };
+}
+function photoJobValid(job: PhotoJob) {
+  if (typeof job.sig !== "string" || !Number.isFinite(job.exp) || job.exp < Date.now()) return false;
+  const expected = Buffer.from(photoJobSignature(job.code, job.source, job.exp));
+  const received = Buffer.from(job.sig);
+  return expected.length === received.length && timingSafeEqual(expected, received);
+}
 
 function sheetConfig() {
   const url = process.env.PERMIT_CARD_SHEET_URL?.trim();
@@ -92,6 +116,18 @@ async function unitByTab() {
   return (tab: string) => byCode.get(normalizeText(tab)) ?? null;
 }
 
+/**
+ * Ảnh chèn trong ô: Apps Script chỉ trả được content URL `…googleusercontent.com/sheetsz/…` (hoặc "cell"), mà Google
+ * cấp lại URL này sau vài giờ dù ảnh không đổi (đo 29/09: 83/83 dấu vết lệch so với lượt đồng bộ sáng cùng ngày) →
+ * so dấu vết thì lượt nào cũng tải lại cả trăm ảnh. Nên người ĐÃ CÓ ẢNH thì bỏ qua ảnh chèn trong ô; link cố định
+ * (Drive / http gõ vào ô) vẫn so dấu vết để thay ảnh khi link đổi.
+ */
+const isRotatingPhotoRef = (ref: string) => ref === "cell" || /googleusercontent\.com\/sheetsz\//.test(ref);
+function photoNeedsFetch(before: { photoKey: string | null; photoSource: string } | undefined, ref: string) {
+  if (!before?.photoKey) return true;
+  return !isRotatingPhotoRef(ref) && before.photoSource !== ref;
+}
+
 export async function syncPeopleList() {
   const { rows } = await callSheet<{ rows: SheetRow[] }>({ format: "json" }, 90_000,
     "Google Sheets không trả dữ liệu JSON. Kiểm tra đã thêm đoạn code đồng bộ vào Apps Script và triển khai lại web app");
@@ -99,7 +135,7 @@ export async function syncPeopleList() {
   const unitOf = await unitByTab();
   const skipped: string[] = [];
   const skippedTabs = new Map<string, number>();
-  const byCode = new Map<string, Prisma.WorkPermitPersonCreateInput & { photoRef: string; tab: string; lookup: string }>();
+  const byCode = new Map<string, Prisma.WorkPermitPersonCreateInput & { photoRef: string; tab: string }>();
   for (const row of rows) {
     const tab = str(row.sheet);
     const card = normalizeCardCode(str(row.soThe, 80));
@@ -123,7 +159,7 @@ export async function syncPeopleList() {
       workPosition: str(row.viTri, 300), workArea: str(row.khuVuc, 300), trainingResult: str(row.ketQuaHL),
       trainedAt: sheetDate(row.ngayHL), cardIssuedAt: sheetDate(row.ngayCap), cardExpiresAt: sheetDate(row.ngayHetHan),
       searchText: normalizeText([code, name, company, phone].join(" ")), sheetSyncedAt: new Date(),
-      photoRef: str(row.photo, 2000), lookup: card || name,
+      photoRef: str(row.photo, 2000),
     });
   }
   // Người vừa được cấp thẻ: hồ sơ cũ mang mã tạm HL-… theo họ tên → đổi mã sang số thẻ trên CHÍNH hồ sơ đó
@@ -139,13 +175,14 @@ export async function syncPeopleList() {
   let created = 0, updated = 0;
   const moved: string[] = [];
   const photos: PhotoJob[] = [];
+  const photoExp = Date.now() + PHOTO_JOB_TTL_MS;
   const entries = [...byCode.values()];
   for (let i = 0; i < entries.length; i += 100) {
-    await prisma.$transaction(entries.slice(i, i + 100).map(({ photoRef, tab, lookup, ...data }) => {
+    await prisma.$transaction(entries.slice(i, i + 100).map(({ photoRef, tab, ...data }) => {
       const before = existing.get(data.code);
       const fromCode = renameFrom.get(data.code) ?? data.code;
       if (before && before.company !== data.company) moved.push(`${data.name} (${data.code}): ${before.company} → ${data.company} (tab ${tab})`);
-      if (photoRef && (!before?.photoKey || before.photoSource !== photoRef)) photos.push({ code: data.code, source: photoRef, lookup });
+      if (photoRef && photoNeedsFetch(before, photoRef)) photos.push(signPhotoJob(data.code, photoRef, photoExp));
       if (!before) { created++; return prisma.workPermitPerson.create({ data: { ...data, canCommand: false, isActive: true } }); }
       updated++;
       // Sheet để trống SĐT thì giữ SĐT đã nhập trên sổ; vai trò CHTT/"đang hoạt động" không đụng tới.
@@ -164,14 +201,27 @@ export async function syncPeopleList() {
 
 const photoKeyOf = (code: string) => `work-permit-people/photos/${code.replace(/[^\p{L}\p{N}._-]+/gu, "_")}.webp`;
 
-/** Tải + nén ảnh một nhóm người (≤ MAX_PHOTO_BATCH). Lỗi từng người không làm hỏng cả nhóm. */
-export async function syncPeoplePhotos(jobs: PhotoJob[]) {
-  if (!Array.isArray(jobs) || jobs.length > MAX_PHOTO_BATCH) throw fail(`Mỗi đợt tải tối đa ${MAX_PHOTO_BATCH} ảnh`);
+/**
+ * Tải + nén ảnh một nhóm người (≤ MAX_PHOTO_BATCH). Lỗi từng người không làm hỏng cả nhóm.
+ * Chỉ nhận việc do bước list ký (không sửa được số thẻ / dấu vết ảnh), rồi TỰ TRA hồ sơ theo số thẻ trong DB
+ * để quyết định hỏi Apps Script bằng gì — ảnh luôn thuộc đúng người, trình duyệt không chỉ định được.
+ */
+export async function syncPeoplePhotos(input: unknown) {
+  if (!Array.isArray(input) || input.length > MAX_PHOTO_BATCH) throw fail(`Mỗi đợt tải tối đa ${MAX_PHOTO_BATCH} ảnh`);
+  const jobs = input.map(item => {
+    const job = item && typeof item === "object" ? item as Partial<PhotoJob> : {};
+    return { code: str(job.code, 80), source: str(job.source, 2000), exp: Number(job.exp), sig: String(job.sig ?? "") };
+  });
+  if (jobs.some(job => !photoJobValid(job))) throw fail("Danh sách ảnh không hợp lệ hoặc đã hết hạn. Bấm đồng bộ lại.", 400);
+  const people = await prisma.workPermitPerson.findMany({ where: { code: { in: jobs.map(job => job.code) } }, select: { code: true, name: true } });
+  const nameOf = new Map(people.map(person => [person.code, person.name]));
   const results = await Promise.all(jobs.map(async job => {
-    const code = normalizeCardCode(str(job?.code, 80));
+    const code = job.code;
     try {
-      // Người chưa có thẻ: Apps Script tìm ảnh theo họ tên (syncPhotoOf_ so cả cột C).
-      const photo = await callSheet<{ contentType?: string; base64?: string }>({ format: "photo", id: str(job?.lookup, 200) || code }, 45_000,
+      const name = nameOf.get(code);
+      if (name === undefined) throw new Error("Không còn hồ sơ của số thẻ này trên sổ");
+      // Người chưa có thẻ (mã tạm HL-…): Apps Script tìm ảnh theo họ tên ở cột C; còn lại theo số thẻ.
+      const photo = await callSheet<{ contentType?: string; base64?: string }>({ format: "photo", id: isCardlessCode(code) ? name : code }, 45_000,
         "Google tạm thời trả trang lỗi thay cho ảnh. Đồng bộ lại sau để tải tiếp");
       if (!photo.base64) throw new Error("Sheet không có ảnh cho số thẻ này");
       // Ảnh 3x4 để so mặt: thu về tối đa 360x480, WebP q72 (~20–50 KB), xoay theo EXIF.
@@ -179,7 +229,7 @@ export async function syncPeoplePhotos(jobs: PhotoJob[]) {
         .resize({ width: PHOTO_WIDTH, height: PHOTO_HEIGHT, fit: "inside", withoutEnlargement: true })
         .webp({ quality: PHOTO_QUALITY }).toBuffer();
       const key = await uploadS3Object({ key: photoKeyOf(code), body, contentType: "image/webp", originalName: `${code}.webp` });
-      await prisma.workPermitPerson.update({ where: { code }, data: { photoKey: key, photoSource: str(job.source, 2000) } });
+      await prisma.workPermitPerson.update({ where: { code }, data: { photoKey: key, photoSource: job.source } });
       return { code, ok: true as const, size: body.length };
     } catch (error) {
       const message = error instanceof Response ? ((await error.json().catch(() => null))?.error ?? "Lỗi tải ảnh") : error instanceof Error ? error.message : "Lỗi tải ảnh";

@@ -180,7 +180,7 @@ export default function WorkPermitsPage() {
     catch (e) { toast.error(e instanceof Error ? e.message : "Không thể xuất sổ"); }
   }
   const statusCards = [
-    { title: "Phiếu chưa đóng", count: openCount, value: "OPEN", scope: "", note: "Nháp, đã cấp, đang làm và tạm dừng", tone: "bg-blue-600" },
+    { title: "Chưa đóng", count: openCount, value: "OPEN", scope: "", note: "Nháp, đã cấp, đang làm và tạm dừng", tone: "bg-blue-600" },
     { title: "Đang thực hiện", count: counts.ACTIVE ?? 0, value: "ACTIVE", scope: "", note: "Đã cho phép làm việc", tone: "bg-emerald-500" },
     { title: "Chờ làm tiếp", count: counts.WAITING ?? 0, value: "WAITING", scope: "", note: "Nhà thầu đã kết thúc lần làm việc", tone: "bg-amber-500" },
     { title: "Đã đóng", count: counts.CLOSED ?? 0, value: "CLOSED", scope: "", note: "Đã ghi kết quả công việc", tone: "bg-slate-500" },

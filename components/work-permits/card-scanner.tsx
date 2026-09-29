@@ -109,6 +109,9 @@ export function PermitCardScanner({ unit, companies, existing, permitId, onAdd, 
   const [cameraMessage, setCameraMessage] = useState("");
   const videoRef = useRef<HTMLVideoElement>(null);
   const controlsRef = useRef<{ stop: () => void } | null>(null);
+  // Mỗi lần bật/tắt camera tăng số lượt; lượt bật đang chờ (xin quyền, tải thư viện QR) thấy lượt đã đổi thì tự
+  // tắt luồng của nó — kẻo đóng hộp quét lúc camera đang khởi động để lại camera/vòng quét chạy ngầm.
+  const cameraRunRef = useRef(0);
   const lastRef = useRef<{ code: string; at: number }>({ code: "", at: 0 });
   const existingRef = useRef(existing);
   existingRef.current = existing;
@@ -180,6 +183,7 @@ export function PermitCardScanner({ unit, companies, existing, permitId, onAdd, 
   handleRef.current = handle;
 
   const stopCamera = useCallback(() => {
+    cameraRunRef.current++;
     controlsRef.current?.stop();
     controlsRef.current = null;
     const video = videoRef.current;
@@ -190,24 +194,31 @@ export function PermitCardScanner({ unit, companies, existing, permitId, onAdd, 
 
   const startCamera = useCallback(async () => {
     if (!navigator.mediaDevices?.getUserMedia) { setCamera("error"); setCameraMessage("Trình duyệt không hỗ trợ camera. Dùng đầu đọc QR hoặc nhập số thẻ."); return; }
+    const run = ++cameraRunRef.current;
+    const stale = () => run !== cameraRunRef.current;
     setCamera("starting");
     let stream: MediaStream | null = null;
     try {
       stream = await navigator.mediaDevices.getUserMedia({ audio: false, video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } } });
+      if (stale()) { stream.getTracks().forEach(track => track.stop()); return; }
       const video = videoRef.current;
       if (!video) throw new Error("Không có khung camera");
       video.srcObject = stream;
       await video.play();
       const { BrowserQRCodeReader } = await import("@zxing/browser");
+      if (stale()) { stream.getTracks().forEach(track => track.stop()); return; }
       const reader = new BrowserQRCodeReader(undefined, { delayBetweenScanAttempts: 100, delayBetweenScanSuccess: 600 });
-      controlsRef.current = await reader.decodeFromStream(stream, video, result => {
+      const controls = await reader.decodeFromStream(stream, video, result => {
         const text = result?.getText();
         if (text) void handleRef.current(text);
       });
+      if (stale()) { controls.stop(); stream.getTracks().forEach(track => track.stop()); return; }
+      controlsRef.current = controls;
       stream = null;
       setCamera("on");
     } catch (error) {
       stream?.getTracks().forEach(track => track.stop());
+      if (stale()) return;
       setCamera("error");
       setCameraMessage(cameraErrorMessage(error));
     }
