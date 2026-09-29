@@ -66,7 +66,9 @@ NKVH hủy xong (dòng đỏ "Phiếu đã hủy" xuất hiện) tiện ích t�
 **Báo hủy về sổ**. Phiếu trên sổ chuyển Hủy, lý do ghi "Hủy trên NKVH: <lý do NKVH>". Trang đã hủy
 không bao giờ hiện Lấy số hay Đồng bộ.
 
-**Số đã hủy bị bỏ luôn, không cấp lại** — cho cả sổ (phiếu giấy lẫn điện tử). Phiếu tạo lại trên NKVH
+**Số đã hủy được bỏ qua theo mặc định** — cho cả sổ (phiếu giấy lẫn điện tử). Nếu đó là số kế tiếp
+hợp lệ và thực tế chưa sử dụng, quản trị có thể mở **Mốc sổ giấy** trên sổ PXVH1 và bấm
+**Đặt lại để cấp số**; lịch sử phiếu hủy vẫn được giữ. Nếu không đặt lại, phiếu tạo mới trên NKVH
 bấm Lấy số PCT như mọi phiếu khác và nhận số tiếp theo.
 
 Trang đã hủy nhận ra qua dòng `<span style="color:red">Phiếu đã hủy. Lý do: …</span>` phía trên ô Số
@@ -92,7 +94,21 @@ NKVH là ứng dụng JSF/PrimeFaces, không có API. Tiện ích đọc DOM c�
 - Trang chỉ vẽ nội dung của bước đang xem, nên lấy số và đồng bộ chỉ chạy ở **B1**.
 - Khi chuyển bước, PrimeFaces vẽ lại `formContent`; thanh công cụ được gắn lại qua MutationObserver.
 
-## Cài đặt thử
+## Cài đặt
+
+### Bản dùng chính thức
+
+1. Đăng nhập duyenhai1.vn → **Sổ PCT** → **Hướng dẫn** → **Cài tiện ích NKVH**.
+2. Bấm **Tải tiện ích Cấp số PCT NKVH**, giải nén ZIP vào một thư mục cố định.
+3. Mở `chrome://extensions` (Chrome) hoặc `edge://extensions` (Edge), bật **Developer mode** →
+   **Load unpacked** → chọn thư mục vừa giải nén (thư mục chứa `manifest.json`).
+4. Không xóa hoặc di chuyển thư mục sau khi cài. Khi có bản mới, tải lại ZIP, giải nén đè vào thư mục
+   cũ và bấm **Reload** trên trang quản lý tiện ích.
+
+Chrome/Edge không cho website tự cài tiện ích ngoài Store; người dùng bắt buộc xác nhận bằng
+**Load unpacked** một lần trên mỗi máy.
+
+### Thử trên localhost
 
 1. `chrome://extensions` → bật **Developer mode** → **Load unpacked** → chọn thư mục `chrome-extension/nkvh-pct`.
 2. Đăng nhập duyenhai1.vn trên cùng trình duyệt.
@@ -103,14 +119,12 @@ Service worker gọi API `/api/work-permits/nkvh-claim` kèm cookie đăng nhậ
 duyệt, dựa vào quyền host để cookie SameSite=Lax được gửi. Nếu báo "Chưa đăng nhập" dù đã đăng nhập,
 kiểm tra điểm này trước.
 
-## Đóng gói và phát hành
+## Đóng gói kiểm tra
 
 - `node chrome-extension/scripts/package-nkvh-pct.mjs` → `chrome-extension/dist/nkvh-pct-store-v<version>.zip`.
-  Bản trong gói đã bỏ quyền localhost, nên ô chọn máy chủ trong cửa sổ tiện ích chỉ còn duyenhai1.vn.
-- **Thêm tệp JS mới thì phải thêm vào danh sách `FILES` trong kịch bản**, kẻo gói nộp kho thiếu tệp.
-- Nội dung nộp kho Edge Add-ons: `chrome-extension/store-listing/nkvh-pct/`.
-  Logo 300×300: `chrome-extension/store-assets/nkvh-pct/`.
-  Trang chính sách: `app/public/nkvh-pct-privacy`.
+  Bản trong gói đã bỏ quyền localhost, giống gói tải trực tiếp từ website.
+- **Thêm tệp JS mới thì phải thêm vào danh sách `FILES` trong kịch bản và
+  `lib/server/nkvh-pct-extension-package.ts`**, nếu không gói tải từ website có thể thiếu tệp.
 
 ## Kiểm tra phía server
 

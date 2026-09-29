@@ -32,15 +32,28 @@ export async function lockPermitNumberScope(tx: Tx, kind: PermitKind, year: numb
   return rows[0].number;
 }
 
-export async function permitNumberHighWater(tx: Tx, kind: PermitKind, year: number): Promise<string> {
+export async function permitNumberHighWater(
+  tx: Tx,
+  kind: PermitKind,
+  year: number,
+  options: { ignoreCancelledNumber?: string } = {}
+): Promise<string> {
+  const ignoreCancelledNumber = options.ignoreCancelledNumber ?? null;
   const rows = await tx.$queryRaw<Array<{ highest: string | null }>>`
     SELECT max("number"::numeric)::text AS "highest" FROM (
       SELECT "number" FROM "WorkPermit"
       WHERE "kind" = ${kind} AND "year" = ${year}
-        AND "status" <> 'DRAFT' AND "number" ~ '^[0-9]+$'
+        AND "status" NOT IN ('DRAFT', 'CANCELLED') AND "number" ~ '^[0-9]+$'
       UNION ALL
       SELECT "number" FROM "WorkPermitNumberReservation"
       WHERE "kind" = ${kind} AND "year" = ${year}
+        AND "status" IN ('RESERVED', 'ISSUED', 'CANCELLED')
+        AND NOT (
+          ${ignoreCancelledNumber}::text IS NOT NULL
+          AND "status" = 'CANCELLED'
+          AND "number" ~ '^[0-9]+$'
+          AND "number"::numeric = ${ignoreCancelledNumber}::numeric
+        )
     ) AS used_numbers
   `;
   return rows[0]?.highest ?? "0";
@@ -59,9 +72,8 @@ export async function activePermitNumberExists(tx: Tx, kind: PermitKind, year: n
 }
 
 /**
- * Giữ số TIẾP THEO của sổ (loại + năm). Số đã hủy bị bỏ luôn, không bao giờ cấp lại: mốc cao nhất
- * tính cả phiếu/lượt giữ đã hủy nên dãy số chỉ đi tới. Phiếu giấy hủy vẫn nằm trong sổ ở trạng thái
- * Hủy; phiếu điện tử hủy thì NKVH đã lưu.
+ * Giữ số TIẾP THEO của sổ (loại + năm). Lượt giữ đã hủy vẫn chặn số theo mặc định; quản trị chỉ
+ * giải phóng đúng số hủy kế tiếp tại "Mốc sổ giấy". Phiếu hủy và toàn bộ lịch sử vẫn được giữ.
  */
 export async function reservePermitNumber(tx: Tx, input: {
   kind: PermitKind; year: number; teamType: "INTERNAL" | "CONTRACTOR"; ownerId: string; ownerName: string;
@@ -102,6 +114,16 @@ export async function consumePermitNumberReservation(tx: Tx, input: {
     throw fail("Số PCT đang được sử dụng trong loại và năm này.", 409);
   }
   const saved = await tx.workPermitNumberReservation.update({ where: { id: reservation.id }, data: { status: "ISSUED", permitId: input.permitId, issuedAt: new Date(), teamType: input.teamType } });
+  const released = await tx.workPermitNumberReservation.findMany({ where: {
+    kind: input.kind, year: input.year, number: reservation.number, status: "RELEASED", reusedPermitId: null,
+  }, select: { id: true } });
+  if (released.length) {
+    await tx.workPermitNumberReservation.updateMany({ where: { id: { in: released.map(item => item.id) } }, data: { reusedPermitId: input.permitId } });
+    await Promise.all(released.map(item => tx.workPermitNumberReservationHistory.create({ data: {
+      reservationId: item.id, action: "REUSED", actorId: input.userId, actorName: input.userName,
+      permitId: input.permitId, note: `Số ${reservation.number}/${input.year} đã được cấp lại`,
+    } })));
+  }
   await tx.workPermitNumberReservationHistory.create({ data: { reservationId: reservation.id, action: "ISSUED",
     actorId: input.userId, actorName: input.userName, permitId: input.permitId,
     note: teamTypeChanged ? `Đổi loại phiếu khi cấp: ${teamTypeLabel(reservation.teamType)} → ${teamTypeLabel(input.teamType)}` : null } });

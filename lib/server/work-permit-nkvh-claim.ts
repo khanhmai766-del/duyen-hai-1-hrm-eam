@@ -180,7 +180,7 @@ export async function claimNkvhPermit(tx: Tx, user: Actor, input: { kind: Permit
 
 /**
  * Phiếu đã hủy trên NKVH → hủy phiếu tương ứng trên sổ, lý do lấy theo NKVH. Gọi lại khi sổ đã hủy
- * thì trả về phiếu đó (bấm hai lần không lỗi). Số của phiếu bị bỏ, không cấp lại.
+ * thì trả về phiếu đó (bấm hai lần không lỗi). Số mặc định bị bỏ; quản trị có thể đặt lại từ Mốc sổ giấy.
  */
 export async function cancelNkvhPermit(tx: Tx, user: Actor, input: { kind: PermitKind; nkvhPctId: string; reason: unknown }) {
   const { kind, nkvhPctId } = input;

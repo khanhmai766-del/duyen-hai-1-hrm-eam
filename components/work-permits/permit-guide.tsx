@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { AlertTriangle, BookOpen, Building2, ChevronRight, HardHat, Library, type LucideIcon } from "lucide-react";
+import { AlertTriangle, BookOpen, Building2, ChevronRight, Download, HardHat, Library, Puzzle, type LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
@@ -18,51 +18,83 @@ type GuideSection = { key: string; label: string; icon: LucideIcon; intro: strin
 
 const SECTIONS: GuideSection[] = [
   {
+    key: "extension",
+    label: "Cài tiện ích NKVH",
+    icon: Puzzle,
+    intro: "Cài tiện ích Cấp số PCT NKVH – PXVH1 để lấy số ngay tại bước B1 trên NKVH. Gói tải từ website là bản dùng chính thức và không có quyền kết nối localhost.",
+    steps: [
+      {
+        title: "Tải và giải nén",
+        where: "Bấm Tải tiện ích bên dưới",
+        points: [
+          "Giải nén tệp ZIP vào một thư mục cố định, ví dụ Tài liệu\\Cap-so-PCT-NKVH.",
+          "Không xóa hoặc di chuyển thư mục này sau khi cài, vì trình duyệt sẽ tiếp tục đọc tiện ích tại đó.",
+        ],
+      },
+      {
+        title: "Mở trang quản lý tiện ích",
+        where: "Chrome: chrome://extensions · Edge: edge://extensions",
+        points: ["Dán địa chỉ phù hợp vào thanh địa chỉ của trình duyệt, sau đó bật Chế độ dành cho nhà phát triển (Developer mode)."],
+      },
+      {
+        title: "Cài thư mục đã giải nén",
+        where: "Tải tiện ích đã giải nén (Load unpacked)",
+        points: [
+          "Chọn đúng thư mục vừa giải nén — bên trong phải nhìn thấy tệp manifest.json.",
+          "Ghim biểu tượng Cấp số PCT NKVH – PXVH1 lên thanh công cụ để dễ kiểm tra trạng thái đăng nhập.",
+        ],
+      },
+      {
+        title: "Đăng nhập và sử dụng",
+        where: "duyenhai1.vn → đăng nhập · NKVH → mở PCT tại bước B1",
+        points: [
+          "Phải đăng nhập duyenhai1.vn trên cùng trình duyệt đang mở NKVH.",
+          "Dưới ô Số phiếu sẽ xuất hiện khung Sổ PXVH1 và nút Lấy số PCT.",
+        ],
+      },
+      {
+        title: "Cập nhật bản mới",
+        where: "Tải lại gói trên website → chrome://extensions hoặc edge://extensions",
+        points: ["Giải nén đè vào thư mục cũ, sau đó bấm nút Tải lại (Reload) trên thẻ tiện ích."],
+      },
+    ],
+    note: "Chrome và Edge không cho website tự cài tiện ích ngoài Store. Vì vậy, sau khi bấm tải vẫn cần giải nén và chọn Tải tiện ích đã giải nén một lần trên từng máy.",
+  },
+  {
     key: "internal",
     label: "PCT nội bộ · điện tử",
     icon: Building2,
-    intro: "Phiếu cho đơn vị sửa chữa nội bộ. Khai số và nội dung trên sổ này trước, sau đó cấp phiếu trên NKVH theo đúng nội dung đã khai.",
+    intro: "Phiếu điện tử cho đơn vị sửa chữa nội bộ được lấy số ngay trên NKVH bằng tiện ích. Tiện ích đồng thời ghi phiếu về đúng sổ PXVH1 và không tự bấm Lưu trên NKVH.",
     steps: [
       {
-        title: "Mở biểu mẫu",
-        where: "Sổ PCT → chọn tab sổ Cơ – Nhiệt – Hóa hoặc Điện → Cấp phiếu nội bộ",
-        points: ["Phiếu được ghi vào đúng sổ của tab đang mở — kiểm tra tab trước khi bấm."],
+        title: "Mở phiếu NKVH",
+        where: "NKVH → tạo PCT từ ĐKCT → mở phiếu ở bước B1",
+        points: ["NKVH điền sẵn nội dung theo ĐKCT. Tiện ích chỉ lấy số khi phiếu đang ở bước B1 và thuộc PXVH1."],
       },
       {
-        title: "Khai thông tin & lấy số",
-        where: "Bước 1 · Thông tin",
+        title: "Lấy số PCT",
+        where: "Khung Sổ PXVH1 dưới ô Số phiếu → Lấy số PCT",
         points: [
-          "Chọn Cương vị trước: hộp Chọn SYC sẽ lọc sẵn SYC của cương vị đó.",
-          "Bấm Lấy số PCT. Số được giữ lại kể cả khi đóng biểu mẫu (xem mục Số đã lấy, chưa lưu phiếu).",
-          "Điền Tổ máy, Ngày thực hiện, Số SYC (bấm Chọn SYC để liên kết), Thiết bị / vị trí, Nội dung công việc.",
+          "Kiểm tra Tổ máy mà tiện ích nhận diện, chọn Cương vị, rồi bấm Lấy số & điền.",
+          "Sổ PXVH1 cấp số tiếp theo của đúng sổ Cơ hoặc Điện, ghi phiếu vào sổ và điền số vào NKVH.",
+          "Một phiếu NKVH chỉ nhận một số; bấm lại vẫn trả về đúng số đã cấp.",
         ],
       },
       {
-        title: "Khai nhân sự",
-        where: "Bước 2 · Nhân sự",
+        title: "Kiểm tra và lưu NKVH",
+        where: "Trên phiếu NKVH",
         points: [
-          "Người cấp PCT điền sẵn theo tài khoản; sửa nếu người cấp thực tế khác.",
-          "Người chỉ huy trực tiếp, Người lãnh đạo công việc: gõ tên — ô gợi ý các tên đã dùng ở phiếu trước.",
-          "Đơn vị công tác điền sẵn (PXSC Cơ nhiệt / PXSC Điện tự động), sửa nếu khác. Nhập Số nhân viên.",
+          "Kiểm tra số và nội dung, sau đó tự bấm Lưu trên NKVH. Tiện ích không bao giờ tự lưu.",
+          "Không gõ tay số vào NKVH vì sổ PXVH1 sẽ không biết số đó đã được sử dụng.",
         ],
       },
       {
-        title: "Lưu vào sổ",
-        where: "Bước 3 · Trạng thái → Lưu",
-        points: ["Phiếu lưu ở trạng thái Đã cấp, số PCT chính thức gắn vào phiếu."],
-      },
-      {
-        title: "Cấp phiếu trên NKVH",
-        where: "Trong danh sách, bấm số PCT (Sao chép số & mở NKVH)",
+        title: "Bổ sung hoặc đồng bộ",
+        where: "NKVH bước B1 → Đồng bộ về sổ · hoặc Sổ PCT → mở dòng phiếu",
         points: [
-          "Số PCT được sao chép và trang NKVH đúng sổ được mở sẵn.",
-          "Cấp phiếu trên NKVH theo đúng nội dung vừa khai ở sổ này.",
+          "Nếu sửa nội dung hoặc khai thêm CHTT, phạm vi… trên NKVH, bấm Đồng bộ về sổ.",
+          "Phiếu thiếu CHTT, số nhân viên hoặc SYC sẽ có nhãn Cần bổ sung; có thể mở dòng phiếu trên sổ để khai đủ.",
         ],
-      },
-      {
-        title: "Gắn link NKVH",
-        where: "Bấm dòng phiếu → khung Liên kết NKVH → Gắn link NKVH",
-        points: ["Dán link chi tiết phiếu trên NKVH. Từ đó bấm số PCT là mở đúng phiếu NKVH."],
       },
       {
         title: "Đóng phiếu",
@@ -73,7 +105,7 @@ const SECTIONS: GuideSection[] = [
         ],
       },
     ],
-    note: "Ghi nhận đóng phiếu trên sổ này KHÔNG đóng phiếu trên NKVH — thủ tục trên NKVH vẫn làm như thường lệ.",
+    note: "Phiếu nhà thầu giấy vẫn lấy số trực tiếp trên Sổ PCT. Ghi nhận đóng phiếu trên sổ KHÔNG đóng phiếu trên NKVH — thủ tục trên NKVH vẫn làm như thường lệ.",
   },
   {
     key: "contractor",
@@ -162,7 +194,7 @@ const SECTIONS: GuideSection[] = [
       {
         title: "Phiếu không thực hiện",
         where: "Chỉnh sửa / cấp phiếu → Bước Trạng thái → Đã hủy",
-        points: ["Ghi lý do hủy. Phiếu vẫn nằm trong sổ để đối chiếu."],
+        points: ["Ghi lý do hủy. Phiếu vẫn nằm trong sổ để đối chiếu và số được bỏ qua theo mặc định."],
       },
       {
         title: "Báo quản trị",
@@ -199,7 +231,10 @@ const SECTIONS: GuideSection[] = [
       {
         title: "Mốc sổ giấy",
         where: "Nút Mốc sổ giấy (quản trị)",
-        points: ["Đặt số bắt đầu của từng sổ theo năm. Chưa đặt mốc thì chưa lấy được số PCT."],
+        points: [
+          "Đặt số bắt đầu của từng sổ theo năm. Chưa đặt mốc thì chưa lấy được số PCT.",
+          "Nếu số vừa hủy là số kế tiếp hợp lệ, quản trị có thể bấm Đặt lại để cấp số để đưa số đó vào lượt cấp tiếp theo; lịch sử phiếu hủy vẫn được giữ.",
+        ],
       },
     ],
   },
@@ -235,6 +270,11 @@ function PermitGuideDialog({ onClose }: { onClose: () => void }) {
       </div>
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4" role="tabpanel">
         <p className="text-sm leading-6 text-foreground">{section.intro}</p>
+        {section.key === "extension" && <Button asChild className="w-full sm:w-auto">
+          <a href="/api/work-permits/nkvh-extension" download>
+            <Download className="h-4 w-4" />Tải tiện ích Cấp số PCT NKVH
+          </a>
+        </Button>}
         {/* Lưu đồ: chỉ tên bước, nhìn một lượt là thấy thứ tự; chi tiết nằm ở các thẻ bên dưới. */}
         <ol className="flex flex-wrap items-center gap-y-2 rounded-xl border border-border bg-muted/25 px-3 py-3" aria-label="Lưu đồ các bước">
           {section.steps.map((step, index) => <li key={step.title} className="flex items-center">

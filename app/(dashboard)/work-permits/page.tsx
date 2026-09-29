@@ -295,6 +295,7 @@ function PermitNumberBaselineDialog({ onClose }: { onClose: () => void }) {
   const [year, setYear] = useState(Number(vietnamNow().slice(0, 4)));
   const [kind, setKind] = useState<PermitKind>("MECHANICAL");
   const [numberEdit, setNumberEdit] = useState<{ scope: string; value: string } | null>(null);
+  const [reuseEdit, setReuseEdit] = useState<{ scope: string; number: string } | null>(null);
   const [reason, setReason] = useState("");
   const [historyOpen, setHistoryOpen] = useState(false);
   const query = usePermitNumberBaselines(year, Number.isInteger(year) && year >= 2000 && year <= 2100);
@@ -302,13 +303,16 @@ function PermitNumberBaselineDialog({ onClose }: { onClose: () => void }) {
   const row = query.data?.data.find(item => item.kind === kind);
   const scope = `${kind}:${year}`;
   const number = numberEdit?.scope === scope ? numberEdit.value : row?.baseline?.number ?? "";
-  return <Dialog open onOpenChange={open => { if (!open) onClose(); }}><DialogContent className="sm:max-w-xl"><DialogTitle>Mốc số PCT theo sổ giấy</DialogTitle><DialogDescription>Mỗi loại PCT có dãy riêng theo năm. Nhập 0 khi mở sổ năm mới; mọi điều chỉnh đều lưu lý do và lịch sử.</DialogDescription>
-    <div className="grid gap-3 sm:grid-cols-2"><label className="space-y-1.5 text-sm"><span className="font-medium">Loại PCT</span><select className={control} value={kind} onChange={e => { setKind(e.target.value as PermitKind); setReason(""); }}>{Object.entries(PERMIT_KINDS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><label className="space-y-1.5 text-sm"><span className="font-medium">Năm</span><input className={control} type="number" min={2000} max={2100} value={year} onChange={e => { setYear(Number(e.target.value)); setReason(""); }} /></label></div>
+  const reuseNumber = reuseEdit?.scope === scope ? reuseEdit.number : null;
+  return <Dialog open onOpenChange={open => { if (!open) onClose(); }}><DialogContent className="sm:max-w-xl"><DialogTitle>Mốc số PCT theo sổ giấy</DialogTitle><DialogDescription>Mỗi loại PCT có dãy riêng theo năm. Nhập 0 khi mở sổ năm mới; mọi điều chỉnh và lần cho phép cấp lại số hủy đều lưu lý do, người thao tác và lịch sử.</DialogDescription>
+    <div className="grid gap-3 sm:grid-cols-2"><label className="space-y-1.5 text-sm"><span className="font-medium">Loại PCT</span><select className={control} value={kind} onChange={e => { setKind(e.target.value as PermitKind); setReason(""); setReuseEdit(null); }}>{Object.entries(PERMIT_KINDS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><label className="space-y-1.5 text-sm"><span className="font-medium">Năm</span><input className={control} type="number" min={2000} max={2100} value={year} onChange={e => { setYear(Number(e.target.value)); setReason(""); setReuseEdit(null); }} /></label></div>
     {query.isPending ? <p className="text-sm text-muted-foreground">Đang tải mốc sổ giấy…</p> : query.isError ? <p className="text-sm text-red-700">Không thể tải mốc sổ giấy.</p> : <p className="rounded-lg bg-sky-50 p-3 text-sm text-sky-950">Số cao nhất đã lấy/cấp: <strong>{row?.highest ?? "0"}</strong> · Số tiếp theo dự kiến: <strong>{row?.suggested ?? "Chưa cấu hình"}</strong></p>}
     {Boolean(row?.legacyDuplicates.length) && <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-950"><p className="font-semibold">Có số trùng trong hồ sơ cũ cần rà soát:</p>{row?.legacyDuplicates.map(item => <p key={item.number} className="mt-1">Số {item.number}: {item.permitIds.map((id, index) => <span key={id}>{index > 0 ? ", " : ""}<a className="underline" href={`/work-permits?permitId=${id}`} target="_blank" rel="noopener noreferrer">Phiếu {index + 1}</a></span>)}</p>)}</div>}
-    <label className="space-y-1.5 text-sm"><span className="font-medium">Mốc sổ giấy *</span><input className={control} inputMode="numeric" pattern="[0-9]*" value={number} maxLength={80} onChange={e => setNumberEdit({ scope, value: e.target.value })} placeholder="Ví dụ: 896 hoặc 0" /></label>
+    {row?.reusableCancelledNumber && <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950"><p><strong>Số {row.reusableCancelledNumber} đã hủy</strong> có thể được cấp lại vì chưa có số đang sử dụng đứng sau nó.</p><Button type="button" size="sm" variant="outline" className="mt-2 h-8 border-amber-400 bg-white text-xs hover:bg-amber-100" onClick={() => { setNumberEdit({ scope, value: (BigInt(row.reusableCancelledNumber!) - BigInt(1)).toString() }); setReuseEdit({ scope, number: row.reusableCancelledNumber! }); }}>Đặt lại để cấp số {row.reusableCancelledNumber}</Button></div>}
+    {reuseNumber && <p className="rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">Sau khi lưu, lượt lấy số tiếp theo sẽ được phép dùng lại số <strong>{reuseNumber}</strong>. Phiếu đã hủy và lịch sử cũ vẫn được giữ nguyên.</p>}
+    <label className="space-y-1.5 text-sm"><span className="font-medium">Mốc sổ giấy *</span><input className={control} inputMode="numeric" pattern="[0-9]*" value={number} maxLength={80} onChange={e => { setNumberEdit({ scope, value: e.target.value }); setReuseEdit(null); }} placeholder="Ví dụ: 896 hoặc 0" /></label>
     <label className="space-y-1.5 text-sm"><span className="font-medium">Lý do thiết lập / điều chỉnh *</span><textarea className={control} rows={2} maxLength={2000} value={reason} onChange={e => setReason(e.target.value)} /></label>
-    <Button disabled={save.isPending || !/^[0-9]+$/.test(number) || !reason.trim()} onClick={async () => { try { await save.mutateAsync({ kind, year, number, reason, version: row?.baseline?.version }); toast.success("Đã lưu mốc sổ giấy"); setReason(""); setNumberEdit(null); } catch (error) { toast.error(error instanceof Error ? error.message : "Không thể lưu mốc sổ giấy"); } }}>{save.isPending ? "Đang lưu…" : "Lưu mốc sổ giấy"}</Button>
+    <Button disabled={save.isPending || !/^[0-9]+$/.test(number) || !reason.trim()} onClick={async () => { try { await save.mutateAsync({ kind, year, number, reason, version: row?.baseline?.version, ...(reuseNumber ? { reuseCancelledNumber: reuseNumber } : {}) }); toast.success(reuseNumber ? `Đã cho phép cấp lại số PCT ${reuseNumber}` : "Đã lưu mốc sổ giấy"); setReason(""); setNumberEdit(null); setReuseEdit(null); } catch (error) { toast.error(error instanceof Error ? error.message : "Không thể lưu mốc sổ giấy"); } }}>{save.isPending ? "Đang lưu…" : reuseNumber ? `Lưu và cho phép cấp lại số ${reuseNumber}` : "Lưu mốc sổ giấy"}</Button>
     {Boolean(row?.history.length) && <PermitBaselineHistory items={row!.history} open={historyOpen} onToggle={() => setHistoryOpen(value => !value)} />}
   </DialogContent></Dialog>;
 }
@@ -456,7 +460,7 @@ function PermitEditor({ initial, kind, presetTeamType, presetContractorScope, in
   async function confirmNumber() {
     if (reservation) return;
     try {
-      // Luôn lấy số tiếp theo của sổ; số đã hủy bị bỏ, không cấp lại.
+      // Luôn lấy số tiếp theo của sổ; số hủy chỉ được dùng lại khi quản trị đặt lại trong Mốc sổ giấy.
       const result = await takeNumber.mutateAsync({ kind: form.kind, year: form.year, teamType: form.teamType });
       setReservation(result);
       set("number", result.number);
@@ -622,7 +626,7 @@ function PermitDetail({ id, canIssue: listCanIssue, canIssueNew: listCanIssueNew
   const canIssueNew = query.data?.meta?.canIssueNew ?? listCanIssueNew;
   const canExecute = query.data?.meta?.canExecute ?? listCanExecute;
   const cancelDraft = useCancelDraftWorkPermit();
-  // Hủy PCT: phiếu KHÔNG bị xoá — vẫn trong sổ ở trạng thái "Đã hủy" kèm lý do; số phiếu bị bỏ, không cấp lại.
+  // Hủy PCT: phiếu KHÔNG bị xoá — vẫn trong sổ ở trạng thái "Đã hủy" kèm lý do; số mặc định bị bỏ.
   const [cancelling, setCancelling] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
   const canCancel = (row: PermitRow) => row.status !== "DRAFT"
@@ -682,7 +686,7 @@ function PermitDetail({ id, canIssue: listCanIssue, canIssueNew: listCanIssueNew
     </div>
     {cancelling && row && <Dialog open onOpenChange={v => { if (!v && !cancelDraft.isPending) setCancelling(false); }}><DialogContent className="max-w-md">
       <DialogTitle>Hủy PCT {formatPermitNumber(row)}?</DialogTitle>
-      <DialogDescription>Phiếu không bị xoá: vẫn nằm trong sổ ở trạng thái “Đã hủy” kèm lý do và lịch sử. Số phiếu này bị bỏ, không cấp lại. Không thể hoàn tác.</DialogDescription>
+      <DialogDescription>Phiếu không bị xoá: vẫn nằm trong sổ ở trạng thái “Đã hủy” kèm lý do và lịch sử. Số phiếu mặc định bị bỏ; quản trị chỉ có thể cho phép cấp lại từ “Mốc sổ giấy”. Không thể khôi phục chính phiếu đã hủy.</DialogDescription>
       <label className="block space-y-1.5 text-sm"><span className="font-medium">Lý do hủy *</span><textarea className={control} rows={3} maxLength={2000} value={cancelReason} autoFocus onChange={e => setCancelReason(e.target.value)} placeholder="Ví dụ: thay đổi kế hoạch, không thực hiện công việc…" /></label>
       <div className="flex justify-end gap-2"><Button type="button" variant="outline" disabled={cancelDraft.isPending} onClick={() => setCancelling(false)}>Để sau</Button><Button type="button" variant="destructive" disabled={cancelDraft.isPending || cancelReason.trim().length < 5} onClick={() => void cancelNow(row)}>{cancelDraft.isPending ? "Đang hủy…" : "Hủy PCT"}</Button></div>
     </DialogContent></Dialog>}

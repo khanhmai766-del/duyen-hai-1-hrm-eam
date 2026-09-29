@@ -23,8 +23,8 @@ export async function POST(req: Request) {
     const body = await permitBody(req);
     const { kind, year } = permitNumberScope(body.kind, body.year);
     if (body.teamType !== "INTERNAL" && body.teamType !== "CONTRACTOR") return fail("Loại đơn vị không hợp lệ", 400);
-    // Số đã hủy không cấp lại: luôn lấy số tiếp theo, không nhận số nhập tay.
-    if (body.number !== undefined && body.number !== null && body.number !== "") return fail("Số PCT chỉ lấy bằng nút Lấy số PCT; số đã hủy không cấp lại", 400);
+    // Không nhận số nhập tay; số hủy chỉ được giải phóng trước đó bởi quản trị trong Mốc sổ giấy.
+    if (body.number !== undefined && body.number !== null && body.number !== "") return fail("Số PCT chỉ lấy bằng nút Lấy số PCT", 400);
     const row = await prisma.$transaction(tx => reservePermitNumber(tx, {
       kind, year, teamType: body.teamType as "INTERNAL" | "CONTRACTOR", ownerId: user.id, ownerName: user.name ?? "",
     }));

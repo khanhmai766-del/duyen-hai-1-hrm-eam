@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 /**
  * Hủy PCT — thao tác vòng đời riêng, không đòi dữ liệu biểu mẫu (phiếu nháp hay phiếu cấp từ tiện ích NKVH
  * có thể còn thiếu thông tin). Phiếu hủy KHÔNG bị xoá: vẫn nằm trong sổ ở trạng thái "Đã hủy" kèm lý do,
- * file Word trên S3 giữ nguyên làm hồ sơ; số phiếu bị bỏ, không cấp lại (giống hủy qua PUT).
+ * file Word trên S3 giữ nguyên làm hồ sơ; số mặc định bị bỏ, chỉ quản trị mới có thể cho phép cấp lại.
  * Nháp: lý do tuỳ chọn. Phiếu đã cấp: bắt buộc lý do, theo bảng chuyển trạng thái của loại đơn vị;
  * nhà thầu đang có lần làm việc mở thì phải kết thúc trước.
  */
@@ -42,7 +42,7 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
       });
       if (saved.count !== 1) throw fail("Phiếu vừa được cập nhật ở phiên khác. Vui lòng tải lại.", 409);
       const after = await tx.workPermit.findUniqueOrThrow({ where: { id: before.id } });
-      // Số của phiếu đã cấp bị bỏ, không vào kho cấp lại (commit 910bae1).
+      // Số của phiếu đã cấp mặc định bị bỏ; chỉ thao tác Mốc sổ giấy mới giải phóng được.
       const reservation = await tx.workPermitNumberReservation.findUnique({ where: { permitId: after.id } });
       if (reservation?.status === "ISSUED") {
         await tx.workPermitNumberReservation.update({ where: { id: reservation.id },

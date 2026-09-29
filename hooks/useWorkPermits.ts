@@ -11,6 +11,7 @@ export interface PermitNumberReservation {
 }
 export interface PermitNumberBaselineRow {
   kind: string; year: number; highest: string; suggested: string | null;
+  reusableCancelledNumber: string | null;
   baseline: { number: string; version: number; updatedAt: string } | null;
   history: Array<{ id: string; before: string | null; after: string; reason: string; actorName: string; createdAt: string }>;
   legacyDuplicates: Array<{ number: string; permitIds: string[] }>;
@@ -92,7 +93,7 @@ export function usePermitNumberBaselines(year: number, enabled: boolean) {
 }
 export function useSetPermitNumberBaseline() {
   const qc = useQueryClient();
-  return useMutation({ mutationFn: (body: { kind: string; year: number; number: string; reason: string; version?: number }) =>
+  return useMutation({ mutationFn: (body: { kind: string; year: number; number: string; reason: string; version?: number; reuseCancelledNumber?: string }) =>
     apiMutate("/api/work-permits/number-baselines", "PUT", body),
   onSuccess: () => { qc.invalidateQueries({ queryKey: ["work-permit-number-baselines"] }); qc.invalidateQueries({ queryKey: ["work-permit-number-suggestion"] }); } });
 }
