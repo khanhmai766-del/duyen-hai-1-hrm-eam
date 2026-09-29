@@ -6,6 +6,7 @@ thay cho việc chạy qua duyenhai1.vn lấy số rồi quay lại NKVH gõ tay
 Tiện ích này tách riêng khỏi tiện ích *Đồng bộ QLVT & LIMS* và chỉ xin quyền vào NKVH và duyenhai1.vn.
 Phiếu nhà thầu (PCT giấy) vẫn lấy số trên sổ duyenhai1.vn như cũ.
 Tiện ích nhận trang NKVH trên cả HTTP và HTTPS; sau khi cài hoặc cập nhật phải tải lại tab NKVH.
+Từ bản 1.0.5, nút thao tác tự cập nhật ngay khi người dùng xoá hoặc sửa ô **Số phiếu** trên NKVH.
 
 ## Luồng sử dụng
 

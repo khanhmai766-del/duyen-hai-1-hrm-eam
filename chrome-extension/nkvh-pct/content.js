@@ -120,6 +120,15 @@
     renderDialogNote();
   }, true);
 
+  // Người dùng có thể xoá/sửa số ngay trong ô NKVH mà không làm thay đổi cấu trúc DOM, nên
+  // MutationObserver không biết để vẽ lại nút. Nghe trực tiếp input/change để đổi ngay giữa:
+  // Lấy số PCT (phiếu mới) · Điền số (đã có trên sổ) · Đồng bộ số hiện có.
+  const rerenderOnNumberChange = (event) => {
+    if (event.target instanceof Element && event.target.id === "formContent:txtSoPhieu") render();
+  };
+  document.addEventListener("input", rerenderOnNumberChange, true);
+  document.addEventListener("change", rerenderOnNumberChange, true);
+
   /** Dòng nhắc trong hộp Hủy/Dừng phiếu: VHV biết trước sổ PXVH1 sẽ làm gì khi bấm Lưu. */
   function renderDialogNote() {
     const content = cancelDialog()?.querySelector(".ui-dialog-content");
