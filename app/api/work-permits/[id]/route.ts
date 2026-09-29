@@ -52,6 +52,7 @@ export async function PUT(req: Request, props: { params: Promise<{ id: string }>
       }, before);
       const data = parsePermit(await resolvePermitIdentities(tx, { ...linkedBody, format: body.format ?? before.format,
         position: body.position === undefined ? before.position : body.position,
+        contractorScope: body.contractorScope === undefined ? before.contractorScope : body.contractorScope,
         nkvhPctId: body.nkvhPctId === undefined ? before.nkvhPctId : body.nkvhPctId,
         registrationNumber: body.registrationNumber === undefined ? before.registrationNumber : body.registrationNumber,
         managingUnit: body.managingUnit === undefined ? before.managingUnit : body.managingUnit,

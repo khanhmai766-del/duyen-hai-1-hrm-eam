@@ -4,7 +4,7 @@ import { normalizeText } from "@/lib/nav";
 import { NKVH_UUID } from "@/lib/nkvh-pct";
 import { OPERATION_POSITION_TITLES } from "@/lib/positions";
 import { DEFAULT_PERMIT_MANAGING_UNIT, DEFAULT_PERMIT_PLANT } from "@/lib/work-permit-source-fields";
-import { formatPermitNumber, PERMIT_DISCIPLINES, PERMIT_FORMATS, defaultPermitFormat, PERMIT_KINDS, PERMIT_SOURCE_CLASSIFICATIONS, PERMIT_WORK_TYPES, PERMIT_STATUSES, PERMIT_UNITS, SOURCE_CLASSIFICATION_WORK_TYPE, effectiveWorkType, type PermitStatus } from "@/lib/work-permits";
+import { formatPermitNumber, PERMIT_CONTRACTOR_SCOPES, PERMIT_DISCIPLINES, PERMIT_FORMATS, defaultPermitFormat, PERMIT_KINDS, PERMIT_SOURCE_CLASSIFICATIONS, PERMIT_WORK_TYPES, PERMIT_STATUSES, PERMIT_UNITS, SOURCE_CLASSIFICATION_WORK_TYPE, effectiveWorkType, type PermitStatus } from "@/lib/work-permits";
 
 export function permitHandle(fn: () => Promise<Response>) {
   return handle(async () => {
@@ -57,6 +57,9 @@ export function parsePermit(body: Record<string, unknown>, status: PermitStatus,
   if (body.teamType !== "CONTRACTOR" && count !== null && (!Number.isInteger(count) || count < 1 || count > 10000)) throw fail("Số nhân viên phải là số nguyên từ 1 đến 10.000");
   const teamType = permitText(body, "teamType");
   if (!["INTERNAL", "CONTRACTOR"].includes(teamType)) throw fail("Loại đơn vị không hợp lệ");
+  const contractorScopeInput = permitText(body, "contractorScope", 20) || null;
+  if (teamType === "CONTRACTOR" && (!contractorScopeInput || !Object.hasOwn(PERMIT_CONTRACTOR_SCOPES, contractorScopeInput))) throw fail("Vui lòng chọn phiếu nhà thầu SCTX hoặc Đại tu");
+  const contractorScope = teamType === "CONTRACTOR" ? contractorScopeInput : null;
   const format = permitText(body, "format", 20) || defaultPermitFormat(teamType);
   if (!Object.hasOwn(PERMIT_FORMATS, format)) throw fail("Hình thức phiếu phải là PCT giấy hoặc PCT điện tử");
   const nkvhPctId = permitText(body, "nkvhPctId", 36) || null;
@@ -76,7 +79,7 @@ export function parsePermit(body: Record<string, unknown>, status: PermitStatus,
     plantName: permitText(body, "plantName", 200) || DEFAULT_PERMIT_PLANT,
     registrationNumber: permitText(body, "registrationNumber", 200), workScope: permitText(body, "workScope", 5000),
     plannedStartAt: permitInstant(body, "plannedStartAt"), plannedEndAt: permitInstant(body, "plannedEndAt"), disciplines: disciplines as string[],
-    format, workType, sourceClassification, kind, unit, year, number, position, workDate, workerCount: count, teamType,
+    format, workType, sourceClassification, kind, unit, year, number, position, workDate, workerCount: count, teamType, contractorScope,
     nkvhPctId: format === "ELECTRONIC" ? nkvhPctId?.toLowerCase() ?? null : null,
     issuerUserId: permitText(body, "issuerUserId", 100) || null,
     commanderPersonId: permitText(body, "commanderPersonId", 100) || null,
@@ -148,6 +151,8 @@ export function permitFilters(
   if ((from && !isPermitDay(from)) || (to && !isPermitDay(to)) || (from && to && from > to)) throw fail("Khoảng ngày không hợp lệ");
   const teamType = p.get("teamType") || "";
   if (teamType && !["INTERNAL", "CONTRACTOR"].includes(teamType)) throw fail("Loại đơn vị không hợp lệ");
+  const contractorScope = p.get("contractorScope") || "";
+  if (contractorScope && !Object.hasOwn(PERMIT_CONTRACTOR_SCOPES, contractorScope)) throw fail("Nhóm phiếu nhà thầu không hợp lệ");
   const workType = p.get("workType") || "";
   if (workType && workType !== "UNCLASSIFIED" && !Object.hasOwn(PERMIT_WORK_TYPES, workType)) throw fail("Phân loại công việc không hợp lệ");
   const q = p.get("q") || "";
@@ -156,10 +161,16 @@ export function permitFilters(
   const workTypeWhere: Prisma.WorkPermitWhereInput | null = !workType ? null
     : workType === "UNCLASSIFIED" ? { workType: null, sourceClassification: null }
       : { OR: [{ workType }, ...(derivedClasses.length ? [{ workType: null, sourceClassification: { in: derivedClasses } }] : [])] };
-  return { kind, ...(workTypeWhere ? { AND: [workTypeWhere] } : {}), ...(teamType ? { teamType } : {}), ...(unit ? { unit } : {}), ...(position ? { position } : {}),
+  const contractorScopeWhere: Prisma.WorkPermitWhereInput | null = !contractorScope ? null
+    : contractorScope === "SCTX"
+      ? { teamType: "CONTRACTOR", OR: [{ contractorScope: "SCTX" }, { contractorScope: null }] }
+      : { teamType: "CONTRACTOR", contractorScope };
+  const and = [workTypeWhere, contractorScopeWhere].filter(Boolean) as Prisma.WorkPermitWhereInput[];
+  return { kind, ...(and.length ? { AND: and } : {}), ...(teamType ? { teamType } : {}), ...(unit ? { unit } : {}), ...(position ? { position } : {}),
     ...(status
       ? { status: status === "OPEN" ? { notIn: ["CLOSED", "CANCELLED"] } : status }
-      : { status: options.includeClosedByDefault ? { not: "CANCELLED" } : { notIn: ["CLOSED", "CANCELLED"] } }),
+      : contractorScope ? {}
+        : { status: options.includeClosedByDefault ? { not: "CANCELLED" } : { notIn: ["CLOSED", "CANCELLED"] } }),
     ...(from || to ? { workDate: { ...(from ? { gte: from } : {}), ...(to ? { lte: to } : {}) } } : {}),
     ...(q.trim() ? { OR: [{ searchText: { contains: permitSearchTerm(q) } }, { sessions: { some: { searchText: { contains: permitSearchTerm(q) } } } }] } : {}),
   };

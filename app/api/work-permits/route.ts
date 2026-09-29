@@ -25,12 +25,22 @@ export async function GET(req: Request) {
     const where = scopeWhere ? { AND: [permitFilters(req), scopeWhere] } : permitFilters(req);
     const page = Number(new URL(req.url).searchParams.get("page") || 1);
     if (!Number.isInteger(page) || page < 1 || page > 100000) return fail("Trang không hợp lệ");
-    const [rows, total, groups] = await prisma.$transaction([
+    const filtered = permitFilters(req);
+    const countBase = { ...filtered, status: undefined };
+    const countWhere = scopeWhere ? { AND: [countBase, scopeWhere] } : countBase;
+    const overhaulUrl = new URL(req.url);
+    overhaulUrl.searchParams.delete("status");
+    overhaulUrl.searchParams.delete("teamType");
+    overhaulUrl.searchParams.delete("contractorScope");
+    const overhaulBase = { ...permitFilters(new Request(overhaulUrl)), status: undefined, teamType: "CONTRACTOR", contractorScope: "OVERHAUL" };
+    const overhaulWhere = scopeWhere ? { AND: [overhaulBase, scopeWhere] } : overhaulBase;
+    const [rows, total, groups, overhaulCount] = await prisma.$transaction([
       prisma.workPermit.findMany({ where, select: permitListSelect, orderBy: [{ workDate: "desc" }, { createdAt: "desc" }, { id: "desc" }], skip: (page - 1) * PERMIT_PAGE_SIZE, take: PERMIT_PAGE_SIZE }),
       prisma.workPermit.count({ where }),
-      prisma.workPermit.groupBy({ by: ["status"], orderBy: { status: "asc" }, where: scopeWhere ? { AND: [{ ...permitFilters(req), status: undefined }, scopeWhere] } : { ...permitFilters(req), status: undefined }, _count: true }),
+      prisma.workPermit.groupBy({ by: ["status"], orderBy: { status: "asc" }, where: countWhere, _count: true }),
+      prisma.workPermit.count({ where: overhaulWhere }),
     ]);
-    return ok(rows, { total, page, pageSize: PERMIT_PAGE_SIZE, counts: Object.fromEntries(groups.map(g => [g.status, g._count])), ...await permitCapabilities(user), positionScope: positionViewScopeMeta(scope) });
+    return ok(rows, { total, page, pageSize: PERMIT_PAGE_SIZE, counts: Object.fromEntries(groups.map(g => [g.status, g._count])), overhaulCount, ...await permitCapabilities(user), positionScope: positionViewScopeMeta(scope) });
   });
 }
 export async function POST(req: Request) {

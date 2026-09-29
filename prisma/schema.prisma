@@ -1826,6 +1826,7 @@ model WorkPermit {
   commanderName                  String              @default("")
   teamName                       String              @default("")
   teamType                       String              @default("INTERNAL")
+  contractorScope                String? // SCTX / OVERHAUL; null với phiếu nội bộ.
   members                        Json                @default("[]")
   workerCount                    Int?
   authorizerName                 String              @default("")
@@ -1851,6 +1852,7 @@ model WorkPermit {
   @@index([kind, workDate])
   @@index([kind, position, workDate])
   @@index([status, workDate])
+  @@index([kind, contractorScope, workDate])
   @@index([defectId])
 }
 

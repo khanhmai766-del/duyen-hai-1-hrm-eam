@@ -20,6 +20,8 @@ export const PERMIT_WORK_TYPES = {
 } as const;
 export const PERMIT_WORK_TYPE_CODES = { PLANNED: "KH", UNPLANNED: "ĐX", INCIDENT: "SC" } as const;
 export type PermitWorkType = keyof typeof PERMIT_WORK_TYPES;
+export const PERMIT_CONTRACTOR_SCOPES = { SCTX: "SCTX", OVERHAUL: "Đại tu" } as const;
+export type PermitContractorScope = keyof typeof PERMIT_CONTRACTOR_SCOPES;
 export const PERMIT_SOURCE_CLASSIFICATIONS = {
   PLANNED: "Kế hoạch",
   OFF_PLAN: "Ngoài kế hoạch",
@@ -75,6 +77,7 @@ export interface PermitInput {
   issuerName: string; issuerPosition?: string; electricalSafetySupervisorName: string; leaderName: string; commanderName: string; teamName: string;
   workerCount: number | null; authorizerName: string;
   teamType: "INTERNAL" | "CONTRACTOR";
+  contractorScope: PermitContractorScope | null;
   members: PermitMember[];
   issuedAt: string | null; authorizedAt: string | null; closedAt: string | null;
   result: string; note: string; statusReason: string;
@@ -101,7 +104,7 @@ export const PERMIT_FIELD_LABELS: Record<string, string> = {
   teamName: "Đơn vị công tác", workerCount: "Số nhân viên", authorizerName: "Người cho phép làm việc",
   issuedAt: "Thời điểm cấp", authorizedAt: "Lần đầu cho phép làm việc", closedAt: "Thời điểm đóng PCT",
   result: "Kết quả công việc", note: "Ghi chú", statusReason: "Lý do tạm dừng / hủy", repairRequestNumber: "Số SYC",
-  teamType: "Loại đơn vị", members: "Danh sách nhân viên công tác",
+  teamType: "Loại đơn vị", contractorScope: "Nhóm phiếu nhà thầu", members: "Danh sách nhân viên công tác",
 };
 export function permitValue(key: string, value: unknown): string {
   if (value === null || value === undefined || value === "") return "—";
@@ -114,6 +117,7 @@ export function permitValue(key: string, value: unknown): string {
   if (key === "kind") return PERMIT_KINDS[value as PermitKind] ?? String(value);
   if (key === "unit") return PERMIT_UNITS[value as keyof typeof PERMIT_UNITS] ?? String(value);
   if (key === "teamType") return value === "CONTRACTOR" ? "Nhà thầu" : "Nội bộ";
+  if (key === "contractorScope") return PERMIT_CONTRACTOR_SCOPES[value as PermitContractorScope] ?? String(value);
   if (key === "members" && Array.isArray(value)) return value.map(p => [p.code, p.name, p.company].filter(Boolean).join(" · ")).join("\n") || "—";
   if (["issuedAt", "authorizedAt", "closedAt", "plannedStartAt", "plannedEndAt"].includes(key)) return new Date(String(value)).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" });
   if (key === "workDate") return String(value).split("-").reverse().join("/");
@@ -142,7 +146,7 @@ export interface PermitSession {
   endConfirmedByName: string; endNote: string; progress: number | null; createdByName: string; endedByName: string | null;
 }
 export type PermitHistorySummary = Pick<PermitHistory, "id" | "actorName" | "action" | "createdAt">;
-export type PermitListRow = Pick<PermitRow, "id" | "number" | "year" | "kind" | "format" | "workType" | "workDate" | "content" | "location" | "position" | "unit" | "issuerName" | "commanderName" | "teamName" | "teamType" | "workerCount" | "authorizerName" | "status" | "progress" | "repairRequestNumber" | "nkvhPctId" | "sourceClassification"> & { sessions: Array<Pick<PermitSession, "commanderName" | "company" | "authorizerName">> };
+export type PermitListRow = Pick<PermitRow, "id" | "number" | "year" | "kind" | "format" | "workType" | "workDate" | "content" | "location" | "position" | "unit" | "issuerName" | "commanderName" | "teamName" | "teamType" | "contractorScope" | "workerCount" | "authorizerName" | "status" | "progress" | "repairRequestNumber" | "nkvhPctId" | "sourceClassification"> & { sessions: Array<Pick<PermitSession, "commanderName" | "company" | "authorizerName">> };
 export interface PermitDetailRow extends PermitRow { history: PermitHistorySummary[]; sessions: PermitSession[]; _count: { sessions: number; history: number } }
 
 export interface DefectLinkedWorkPermit {
