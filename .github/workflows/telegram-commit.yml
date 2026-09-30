@@ -1,0 +1,103 @@
+# Gửi thông báo Telegram mỗi khi có commit mới được đẩy lên nhánh main.
+#
+# Cần 2 secret trong Settings → Secrets and variables → Actions:
+#   TELEGRAM_BOT_TOKEN  — token bot (có thể dùng chung bot của app)
+#   TELEGRAM_CHAT_ID    — ID nhóm nhận thông báo commit (số âm, dạng -100...)
+#
+# Lưu ý: KHÔNG thêm ID nhóm commit vào TELEGRAM_CHAT_IDS trên server, nếu không
+# nhóm này sẽ nhận luôn báo khiếm khuyết / phiếu vật tư của app.
+
+name: Thông báo commit lên Telegram
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Gửi tin nhắn
+        env:
+          TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          COMMITS: ${{ toJson(github.event.commits) }}
+          COMPARE_URL: ${{ github.event.compare }}
+          PUSHER: ${{ github.event.pusher.name }}
+          BRANCH: ${{ github.ref_name }}
+        run: |
+          if [ -z "$TOKEN" ] || [ -z "$CHAT_ID" ]; then
+            echo "Chưa cấu hình TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID — bỏ qua."
+            exit 0
+          fi
+
+          TOTAL=$(printf '%s' "$COMMITS" | jq 'length')
+          if [ "$TOTAL" -eq 0 ]; then
+            echo "Không có commit mới (force-push hoặc xoá nhánh) — bỏ qua."
+            exit 0
+          fi
+
+          send() {
+            local response
+            response=$(curl -sS -X POST "https://api.telegram.org/bot${TOKEN}/sendMessage" \
+              --data-urlencode "chat_id=${CHAT_ID}" \
+              --data-urlencode "text=$1" \
+              -d disable_web_page_preview=true)
+            if [ "$(printf '%s' "$response" | jq -r '.ok')" != "true" ]; then
+              echo "Telegram từ chối gửi: $(printf '%s' "$response" | jq -r '.description')"
+              exit 1
+            fi
+            sleep 1
+          }
+
+          # Mỗi commit thành một khối: tiêu đề, người commit, phần mô tả (bỏ dòng
+          # Co-Authored-By/Signed-off-by) và danh sách file đổi (tối đa 15).
+          # Mỗi khối in trên một dòng dưới dạng chuỗi JSON để giữ nguyên xuống dòng.
+          BLOCKS=$(printf '%s' "$COMMITS" | jq -c '
+            .[-20:][]
+            | (.message | gsub("\r"; "") | split("\n")) as $lines
+            | ($lines[1:]
+                | map(select(test("^(Co-Authored-By|Signed-off-by):"; "i") | not))
+                | join("\n") | gsub("^\\s+|\\s+$"; "")) as $body
+            | ([(.added // [])[] | "+ " + .]
+               + [(.modified // [])[] | "~ " + .]
+               + [(.removed // [])[] | "− " + .]) as $files
+            | "🔹 \($lines[0])\n👤 \(.author.name) · \(.id[0:7])"
+              + (if $body != "" then "\n\n\($body)" else "" end)
+              + (if ($files | length) > 0 then
+                  "\n\n📄 \($files | length) file:\n" + ($files[0:15] | join("\n"))
+                  + (if ($files | length) > 15 then "\n… và \(($files | length) - 15) file khác" else "" end)
+                 else "" end)
+            | .[0:3000]')
+
+          HEADER="🚀 ${TOTAL} commit mới trên ${BRANCH} (đẩy bởi ${PUSHER})"
+          if [ "$TOTAL" -gt 20 ]; then
+            HEADER="${HEADER}"$'\n'"(chỉ hiện 20 commit mới nhất, bỏ qua $((TOTAL - 20)) commit cũ hơn)"
+          fi
+
+          # Gộp các khối vào tin nhắn; vượt ~3800 ký tự thì gửi và bắt đầu tin mới
+          # (giới hạn Telegram là 4096, chừa chỗ cho emoji tính 2 ký tự).
+          LIMIT=3800
+          MSG="$HEADER"
+          while IFS= read -r line; do
+            block=$(printf '%s' "$line" | jq -r '.')
+            if [ $(( ${#MSG} + ${#block} + 2 )) -gt "$LIMIT" ]; then
+              send "$MSG"
+              MSG="$block"
+            else
+              MSG="${MSG}"$'\n\n'"${block}"
+            fi
+          done <<< "$BLOCKS"
+
+          if [ $(( ${#MSG} + ${#COMPARE_URL} + 3 )) -gt "$LIMIT" ]; then
+            send "$MSG"
+            MSG="🔗 $COMPARE_URL"
+          else
+            MSG="${MSG}"$'\n\n'"🔗 ${COMPARE_URL}"
+          fi
+          send "$MSG"
+          echo "Đã gửi thông báo Telegram."
