@@ -1,3 +1,4 @@
+import { parseOverhaulItems } from "@/lib/server/work-permit-overhaul";
 import { permitPositionWhere, permitScopeOf, requirePermitPositionAllowed } from "@/lib/server/work-permit-scope";
 import { positionViewScopeMeta } from "@/lib/position-data-scope";
 import { permitIssueUpdateNeedsExecution } from "@/lib/work-permit-permissions";
@@ -56,7 +57,8 @@ export async function POST(req: Request) {
       const linkedBody = await resolvePermitDefectLink(tx, body);
       const data = parsePermit(await resolvePermitIdentities(tx, linkedBody, user), status);
       if (data.teamType === "CONTRACTOR" && data.format !== "PAPER") throw fail("PCT nhà thầu chỉ sử dụng phiếu giấy");
-      const row = await tx.workPermit.create({ data: { ...data, safetyItems: permitSnapshot(await resolvePermitSafety(tx, body)), status, createdById: user.id, createdByName: user.name ?? "" } });
+      const overhaulItems = parseOverhaulItems(body.overhaulItems, data);
+      const row = await tx.workPermit.create({ data: { ...data, ...(overhaulItems !== undefined ? { overhaulItems } : {}), safetyItems: permitSnapshot(await resolvePermitSafety(tx, body)), status, createdById: user.id, createdByName: user.name ?? "" } });
       await consumePermitNumberReservation(tx, { reservationId: body.reservationId, kind: data.kind as PermitKind,
         year: data.year, number: data.number, teamType: data.teamType, userId: user.id, userName: user.name ?? "",
         isAdmin: user.role === "ADMIN", permitId: row.id });

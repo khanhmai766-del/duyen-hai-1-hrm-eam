@@ -1737,6 +1737,39 @@ model WorkPermitPerson {
 /// Danh sách ĐƠN VỊ nhà thầu. Hồ sơ người vẫn ghi tên đơn vị bằng chữ (`WorkPermitPerson.company`,
 /// không FK) như trước; bảng này chỉ để giữ được đơn vị VỪA TẠO chưa có người nào. Danh sách hiển
 /// thị = hợp của bảng này và các tên đơn vị đang có trên hồ sơ người.
+/// Hạng mục đại tu đồng bộ từ 4 file Google Sheets tiến độ đại tu (Lò / Turbine / Điện / CI) — xem
+/// lib/server/work-permit-overhaul-sync.ts và docs/dai-tu-apps-script.md. Dùng để gợi ý nội dung PCT nhà thầu · Đại tu.
+model WorkPermitOverhaulItem {
+  id             String   @id @default(cuid())
+  /// File nguồn: LO / TURBINE / DIEN / CI.
+  source         String
+  /// Tên tab, dạng "<Cương vị> - Cơ" / "<Cương vị> - Điện".
+  sheet          String
+  sheetRow       Int      @default(0)
+  /// MECHANICAL (tab "- Cơ") / ELECTRICAL (tab "- Điện") — khớp WorkPermit.kind.
+  kind           String
+  /// Cương vị lấy từ tên tab, chuẩn hoá theo lib/position-catalog.ts; code rỗng = không khớp danh mục.
+  positionTitle  String   @default("")
+  positionCode   String   @default("")
+  code           String
+  device         String   @default("")
+  content        String   @default("")
+  method         String   @default("")
+  /// Mã nhà thầu (cột "Nhà thầu"), đã chuẩn hoá bằng normalizeText để khớp WorkPermitCompany.code.
+  contractorCode String   @default("")
+  contractor     String   @default("")
+  percent        String   @default("")
+  status         String   @default("")
+  /// false = hàng đã biến khỏi Sheet ở lần đồng bộ gần nhất (giữ lại, không xoá).
+  isActive       Boolean  @default(true)
+  syncedAt       DateTime @default(now())
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([source, sheet, code])
+  @@index([kind, contractorCode, positionCode])
+}
+
 model WorkPermitCompany {
   id        String   @id @default(cuid())
   name      String   @unique
@@ -1827,6 +1860,9 @@ model WorkPermit {
   teamName                       String              @default("")
   teamType                       String              @default("INTERNAL")
   contractorScope                String? // SCTX / OVERHAUL; null với phiếu nội bộ.
+  /// Hạng mục đại tu đã chọn khi cấp (chỉ phiếu nhà thầu · Đại tu): ảnh chụp [{code, device, content, method, source, sheet}]
+  /// lúc cấp — Sheet tiến độ sửa sau đó KHÔNG làm đổi phụ lục của phiếu đã in. null = không có.
+  overhaulItems                  Json?
   members                        Json                @default("[]")
   workerCount                    Int?
   authorizerName                 String              @default("")

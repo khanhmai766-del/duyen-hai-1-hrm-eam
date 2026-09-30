@@ -1,4 +1,5 @@
 import { safetySummary, type SafetySelection } from "@/lib/work-permit-safety";
+import { overhaulItemsOf, type OverhaulItemSnapshot } from "@/lib/work-permit-overhaul";
 export const PERMIT_PAGE_SIZE = 25;
 /** Ghép số thuần theo mẫu chung Cơ/Điện; số đầy đủ hoặc mã cũ giữ nguyên. */
 export function formatPermitNumber(row: { number: string; year: number }): string {
@@ -78,6 +79,8 @@ export interface PermitInput {
   workerCount: number | null; authorizerName: string;
   teamType: "INTERNAL" | "CONTRACTOR";
   contractorScope: PermitContractorScope | null;
+  /** Hạng mục đại tu đã chọn (chỉ phiếu nhà thầu · Đại tu) — lib/work-permit-overhaul.ts. */
+  overhaulItems?: OverhaulItemSnapshot[] | null;
   members: PermitMember[];
   issuedAt: string | null; authorizedAt: string | null; closedAt: string | null;
   result: string; note: string; statusReason: string;
@@ -104,7 +107,7 @@ export const PERMIT_FIELD_LABELS: Record<string, string> = {
   teamName: "Đơn vị công tác", workerCount: "Số nhân viên", authorizerName: "Người cho phép làm việc",
   issuedAt: "Thời điểm cấp", authorizedAt: "Lần đầu cho phép làm việc", closedAt: "Thời điểm đóng PCT",
   result: "Kết quả công việc", note: "Ghi chú", statusReason: "Lý do tạm dừng / hủy", repairRequestNumber: "Số SYC",
-  teamType: "Loại đơn vị", contractorScope: "Nhóm phiếu nhà thầu", members: "Danh sách nhân viên công tác",
+  teamType: "Loại đơn vị", contractorScope: "Nhóm phiếu nhà thầu", overhaulItems: "Hạng mục đại tu", members: "Danh sách nhân viên công tác",
 };
 export function permitValue(key: string, value: unknown): string {
   if (value === null || value === undefined || value === "") return "—";
@@ -118,6 +121,7 @@ export function permitValue(key: string, value: unknown): string {
   if (key === "unit") return PERMIT_UNITS[value as keyof typeof PERMIT_UNITS] ?? String(value);
   if (key === "teamType") return value === "CONTRACTOR" ? "Nhà thầu" : "Nội bộ";
   if (key === "contractorScope") return PERMIT_CONTRACTOR_SCOPES[value as PermitContractorScope] ?? String(value);
+  if (key === "overhaulItems") return overhaulItemsOf(value).map(item => item.code).join(", ") || "—";
   if (key === "members" && Array.isArray(value)) return value.map(p => [p.code, p.name, p.company].filter(Boolean).join(" · ")).join("\n") || "—";
   if (["issuedAt", "authorizedAt", "closedAt", "plannedStartAt", "plannedEndAt"].includes(key)) return new Date(String(value)).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" });
   if (key === "workDate") return String(value).split("-").reverse().join("/");

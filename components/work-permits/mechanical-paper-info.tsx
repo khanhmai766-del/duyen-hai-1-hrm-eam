@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { usePermitCompanySummary } from "@/hooks/useWorkPermits";
+import { OverhaulContentField } from "@/components/work-permits/overhaul-item-picker";
 import { PERMIT_DISCIPLINES, PERMIT_SOURCE_CLASSIFICATIONS, PERMIT_UNITS, type PermitDiscipline, type PermitInput, type PermitSourceClassification } from "@/lib/work-permits";
 
 const control = "min-h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-[13px] shadow-sm focus:border-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-500/10";
@@ -65,6 +66,7 @@ export function MechanicalPaperInfo({ form, issued, numberField, positionOptions
       </fieldset>
       {field("location", "Địa điểm công tác")}
       <label className={label}><span className="font-medium">Nội dung công việc *</span><textarea className={control} rows={3} required maxLength={5000} value={form.content} onChange={event => onChange("content", event.target.value)} /></label>
+      <OverhaulContentField form={form} onApply={(items, content) => { onChange("overhaulItems", items); if (content !== null) onChange("content", content); }} />
       <label className={label}><span className="font-medium">Phạm vi công tác</span><textarea className={control} rows={2} maxLength={5000} value={form.workScope ?? ""} onChange={event => onChange("workScope", event.target.value)} /></label>
       <div className="grid gap-4 md:grid-cols-2">{(["plannedStartAt", "plannedEndAt"] as const).map(key => <label key={key} className={label}><span className="font-medium">{key === "plannedStartAt" ? "Bắt đầu công việc" : "Kết thúc công việc"} dự kiến</span><input className={control} type="datetime-local" value={form[key] ? new Date(new Date(form[key]!).getTime() + 7 * 3600000).toISOString().slice(0, 16) : ""} onChange={event => onChange(key, event.target.value ? `${event.target.value}:00+07:00` : null)} /></label>)}</div>
     </div></section>

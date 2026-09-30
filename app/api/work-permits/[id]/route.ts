@@ -1,3 +1,4 @@
+import { parseOverhaulItems } from "@/lib/server/work-permit-overhaul";
 import { requirePermitPositionAllowed, requirePermitVisible } from "@/lib/server/work-permit-scope";
 import { permitIssueUpdateNeedsExecution } from "@/lib/work-permit-permissions";
 import { requirePermitIssue, requirePermitIssuer, requirePermitExecute, permitCapabilities } from "@/lib/server/work-permit-permissions";
@@ -95,7 +96,9 @@ export async function PUT(req: Request, props: { params: Promise<{ id: string }>
         if (status === "CLOSED" && (!last?.endedAt || !data.closedAt || data.closedAt < last.endedAt)) throw fail("Thời điểm đóng PCT phải từ thời điểm kết thúc lần làm việc cuối trở đi");
         if (last && data.issuedAt && before.authorizedAt && data.issuedAt > before.authorizedAt) throw fail("Thời điểm cấp không được sau lần cho phép làm việc đầu tiên");
       }
-      const saved = await tx.workPermit.updateMany({ where: { id: params.id, version: before.version }, data: { ...data, ...(body.progress !== undefined ? { progress: body.progress as number | null } : {}), safetyItems: permitSnapshot(await resolvePermitSafety(tx, { ...body, format: data.format, teamType: data.teamType }, before)), status, version: { increment: 1 } } });
+      // Không gửi overhaulItems = giữ nguyên; phiếu rời nhóm Đại tu thì parseOverhaulItems trả DbNull để xoá.
+      const overhaulItems = parseOverhaulItems(body.overhaulItems === undefined ? before.overhaulItems ?? undefined : body.overhaulItems, data);
+      const saved = await tx.workPermit.updateMany({ where: { id: params.id, version: before.version }, data: { ...data, ...(overhaulItems !== undefined ? { overhaulItems } : {}), ...(body.progress !== undefined ? { progress: body.progress as number | null } : {}), safetyItems: permitSnapshot(await resolvePermitSafety(tx, { ...body, format: data.format, teamType: data.teamType }, before)), status, version: { increment: 1 } } });
       if (saved.count !== 1) throw fail("Phiếu vừa được cập nhật ở phiên khác. Vui lòng tải lại.", 409);
       const after = await tx.workPermit.findUniqueOrThrow({ where: { id: params.id } });
       if (before.status === "DRAFT" && status === "ISSUED") {

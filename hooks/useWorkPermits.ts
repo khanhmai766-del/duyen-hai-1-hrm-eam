@@ -1,6 +1,7 @@
 "use client";
 import { useMutation, useQuery, useQueryClient, useInfiniteQuery } from "@tanstack/react-query";
 import { apiDownload, apiGet, apiMutate } from "@/lib/fetcher";
+import type { OverhaulItemOption } from "@/lib/work-permit-overhaul";
 import type { PermitHistory, PermitKind, PermitListRow, PermitDetailRow, PermitPerson, PermitRow, PermitStatus, PermitSession } from "@/lib/work-permits";
 export interface PermitMeta { total: number; page: number; pageSize: number; counts: Partial<Record<PermitStatus, number>>; overhaulCount: number; canIssue: boolean; canIssueNew: boolean; canExecute: boolean; positionScope?: { all: boolean; codes: string[]; labels: string[] } }
 export interface PermitNumberSuggestion { configured: boolean; baseline: string | null; highest: string | null; suggested: string | null }
@@ -210,4 +211,28 @@ export function useExecuteWorkPermit(id: string) {
     qc.invalidateQueries({ queryKey: ["work-permit"] });
     qc.invalidateQueries({ queryKey: ["work-permit-people"] });
   } });
+}
+
+export interface OverhaulItemsResult {
+  items: OverhaulItemOption[];
+  syncedAt: string | null;
+  contractorCode: string | null;
+  /** Vì sao không có gợi ý: chưa chọn đơn vị ("company") hoặc đơn vị chưa khai mã viết tắt ("companyCode"). */
+  reason: "company" | "companyCode" | null;
+}
+export interface OverhaulSyncResult {
+  syncedAt: string;
+  sources: Array<{ source: string; label: string; configured: boolean; rows: number; created: number; updated: number; deactivated: number; unmatchedTabs: string[]; error?: string }>;
+}
+/** Hạng mục đại tu gợi ý cho PCT nhà thầu · Đại tu (đã đồng bộ từ Google Sheets tiến độ). */
+export function useOverhaulItems(params: { kind: PermitKind; company: string; position: string }, enabled: boolean) {
+  const search = new URLSearchParams({ kind: params.kind, company: params.company, position: params.position }).toString();
+  return useQuery({ queryKey: ["work-permit-overhaul-items", search], enabled, staleTime: 60_000,
+    queryFn: async () => (await apiGet<OverhaulItemsResult>(`/api/work-permits/overhaul-items?${search}`)).data });
+}
+export function useSyncOverhaulItems() {
+  const qc = useQueryClient();
+  return useMutation({ meta: { background: true },
+    mutationFn: () => apiMutate<OverhaulSyncResult>("/api/work-permits/overhaul-items/sync", "POST"),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["work-permit-overhaul-items"] }) });
 }
