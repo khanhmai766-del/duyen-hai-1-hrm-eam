@@ -1,7 +1,7 @@
 "use client";
 import { useMutation, useQuery, useQueryClient, useInfiniteQuery } from "@tanstack/react-query";
 import { apiDownload, apiGet, apiMutate } from "@/lib/fetcher";
-import type { OverhaulItemOption } from "@/lib/work-permit-overhaul";
+import type { OverhaulItemOption, OverhaulScheduleLink } from "@/lib/work-permit-overhaul";
 import type { PermitHistory, PermitKind, PermitListRow, PermitDetailRow, PermitPerson, PermitRow, PermitStatus, PermitSession } from "@/lib/work-permits";
 export interface PermitMeta { total: number; page: number; pageSize: number; counts: Partial<Record<PermitStatus, number>>; overhaulCount: number; canIssue: boolean; canIssueNew: boolean; canExecute: boolean; positionScope?: { all: boolean; codes: string[]; labels: string[] } }
 export interface PermitNumberSuggestion { configured: boolean; baseline: string | null; highest: string | null; suggested: string | null }
@@ -235,4 +235,14 @@ export function useSyncOverhaulItems() {
   return useMutation({ meta: { background: true },
     mutationFn: () => apiMutate<OverhaulSyncResult>("/api/work-permits/overhaul-items/sync", "POST"),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["work-permit-overhaul-items"] }) });
+}
+/** 4 link Google Sheets tiến độ đại tu (mục "Tiến độ đại tu" của sổ PCT). */
+export function useOverhaulSchedules() {
+  return useQuery({ queryKey: ["work-permit-overhaul-schedules"], staleTime: 60_000,
+    queryFn: () => apiGet<OverhaulScheduleLink[]>("/api/work-permits/overhaul-schedules") as Promise<{ data: OverhaulScheduleLink[]; meta: { canWrite: boolean } }> });
+}
+export function useSaveOverhaulSchedule() {
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: (body: { id: string; title: string; url: string }) => apiMutate<OverhaulScheduleLink>("/api/work-permits/overhaul-schedules", "PUT", body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["work-permit-overhaul-schedules"] }) });
 }
