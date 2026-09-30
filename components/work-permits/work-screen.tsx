@@ -27,26 +27,28 @@ export function PermitWorkScreen({ id }: { id: string }) {
   const [action, setAction] = useState<{ kind: "open" } | { kind: "handoff" | "end"; session: PermitSession } | null>(null);
   const permit = query.data?.data;
   const canExecute = Boolean(query.data?.meta?.canExecute);
-  // `?scan=1` / `?end=1` từ bảng Đang làm việc: bật đúng hộp MỘT lần rồi xoá tham số, tải lại trang không bật lại.
+  // `?open=1` từ QR PCT Đại tu; `?scan=1` / `?end=1` từ QR hoặc bảng Đang làm việc:
+  // bật đúng hộp MỘT lần rồi xoá tham số, tải lại trang không bật lại.
   const searchParams = useSearchParams();
   const router = useRouter();
-  const [initialIntent] = useState(() => searchParams.get("scan") === "1" ? "scan" : searchParams.get("end") === "1" ? "end" : null);
+  const [initialIntent] = useState(() => searchParams.get("open") === "1" ? "open" : searchParams.get("scan") === "1" ? "scan" : searchParams.get("end") === "1" ? "end" : null);
   const intent = useRef(initialIntent);
   const autoScan = initialIntent === "scan";
   const liveSession = permit?.sessions.find(s => !s.endedAt);
+  const canOpen = Boolean(permit && canExecute && !liveSession && ["ISSUED", "WAITING"].includes(permit.status));
   useEffect(() => {
     if (!permit || !intent.current) return;
     if (intent.current === "end" && liveSession && canExecute) setAction({ kind: "end", session: liveSession });
+    if (intent.current === "open" && canOpen) setAction({ kind: "open" });
     intent.current = null;
     router.replace(`/work-permits/${encodeURIComponent(id)}/lam-viec`, { scroll: false });
-  }, [permit, liveSession, canExecute, id, router]);
+  }, [permit, liveSession, canExecute, canOpen, id, router]);
   const back = <Button asChild variant="ghost" size="sm" className="-ml-2 h-8 px-2 text-xs"><Link href={`/work-permits?permitId=${encodeURIComponent(id)}`}><ArrowLeft />Về sổ PCT</Link></Button>;
 
   if (query.isError) return <div className="mx-auto max-w-4xl space-y-3">{back}<p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">{query.error.message}</p></div>;
   if (!permit) return <div className="mx-auto max-w-4xl space-y-3">{back}<p role="status" className="text-sm text-muted-foreground">Đang tải phiếu…</p></div>;
 
   const live = liveSession;
-  const canOpen = canExecute && !live && ["ISSUED", "WAITING"].includes(permit.status);
   // Không thêm lề ngang: <main> của AppShell đã có p-4 (điện thoại) / p-6 / p-8.
   return <div className="mx-auto max-w-4xl space-y-4">
     <header className="space-y-2">

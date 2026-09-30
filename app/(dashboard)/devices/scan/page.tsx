@@ -53,14 +53,14 @@ function DeviceScanner() {
     setMessage("Đã nhận mã — đang kiểm tra quyền và dữ liệu thiết bị...");
     stopScanner();
     try {
-      const result = await apiMutate<{ url: string; legacy: boolean }>("/api/device-qr/resolve", "POST", { value });
+      const result = await apiMutate<{ type: "DEVICE" | "WORK_PERMIT"; url: string; legacy: boolean }>("/api/device-qr/resolve", "POST", { value });
       navigator.vibrate?.(90);
-      toast.success("Đã nhận diện thiết bị");
+      toast.success(result.type === "WORK_PERMIT" ? "Đã nhận diện PCT Đại tu" : "Đã nhận diện thiết bị");
       router.push(result.url);
     } catch (error) {
       resolvingRef.current = false;
       setState("error");
-      setMessage(error instanceof Error ? error.message : "Không đọc được mã QR thiết bị");
+      setMessage(error instanceof Error ? error.message : "Không đọc được mã QR");
     }
   }, [router, stopScanner]);
 
@@ -201,8 +201,8 @@ function DeviceScanner() {
           <div className="relative flex flex-col justify-between gap-6 p-5 sm:p-7 lg:border-l lg:border-white/10">
             <div>
               <span className="inline-flex items-center gap-2 rounded-full border border-sky-300/25 bg-sky-300/10 px-3 py-1 text-xs font-black uppercase tracking-[0.16em] text-sky-200"><ShieldCheck className="h-4 w-4" /> Đã đăng nhập</span>
-              <h1 className="mt-4 text-3xl font-black leading-tight">Quét QR<br /><span className="text-amber-300">thiết bị hiện trường</span></h1>
-              <p className="mt-3 text-sm leading-6 text-slate-300">Kết quả mở hồ sơ đầy đủ theo quyền cương vị: khiếm khuyết, sửa chữa, vật tư và lịch thay thế.</p>
+              <h1 className="mt-4 text-3xl font-black leading-tight">Quét QR<br /><span className="text-amber-300">tại hiện trường</span></h1>
+              <p className="mt-3 text-sm leading-6 text-slate-300">Quét mã thiết bị để mở hồ sơ hoặc mã PCT Đại tu để vào thẳng bước cho phép làm việc.</p>
             </div>
             <div className="space-y-3">
               <Button onClick={startScanner} disabled={active} className="min-h-12 w-full rounded-xl bg-amber-400 text-base font-black text-[#071a2d] shadow-lg shadow-amber-500/20 hover:bg-amber-300">
@@ -218,7 +218,7 @@ function DeviceScanner() {
           </div>
         </div>
       </section>
-      <p className="px-2 text-center text-xs leading-5 text-muted-foreground">Camera cần HTTPS và quyền truy cập từ trình duyệt. Mã QR đã gỡ sẽ không thể mở hồ sơ.</p>
+      <p className="px-2 text-center text-xs leading-5 text-muted-foreground">Camera cần HTTPS và quyền truy cập từ trình duyệt. Mọi kết quả vẫn được kiểm tra theo quyền tài khoản đang đăng nhập.</p>
     </div>
   );
 }

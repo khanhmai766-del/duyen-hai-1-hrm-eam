@@ -1,11 +1,14 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import PizZip from "pizzip";
+import sharp from "sharp";
+import { BarcodeFormat, EncodeHintType, QRCodeWriter } from "@zxing/library";
 import { prisma } from "@/lib/prisma";
 import type { WorkPermit } from "@prisma/client";
-import { formatPermitNumber, PERMIT_DISCIPLINES } from "@/lib/work-permits";
+import { formatPermitNumber, PERMIT_DISCIPLINES, PERMIT_UNITS } from "@/lib/work-permits";
 import { safetyPrintData, type SafetySelection } from "@/lib/work-permit-safety";
 import { assertPrintFilled, fillPrintTable, loadPrintTemplate, replacePrintParagraph } from "@/lib/print-html";
+import { workPermitQrValue } from "@/lib/work-permit-qr";
 
 const escape = (s: string) => s.replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;" }[c]!));
 const DEFAULT_RUN_PROPERTIES = '<w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:eastAsia="Times New Roman"/><w:sz w:val="24"/><w:szCs w:val="24"/></w:rPr>';
@@ -128,7 +131,84 @@ function ensureNoTemplateTags(xml: string) {
   if (tags.length) throw new Error(`Mẫu PCT còn thẻ chưa được điền: ${[...new Set(tags)].join(", ")}`);
 }
 
-export async function createWorkPermitDocument(row: WorkPermit) {
+const QR_SIZE_EMU = 1_440_000; // 4 cm; vừa khung camera điện thoại khi cầm trang A4 ở khoảng cách gần.
+const QR_RELATIONSHIP_ID = "rIdWorkPermitQr";
+const QR_MEDIA_PATH = "word/media/work-permit-qr.png";
+
+function hasOverhaulQrPage(row: WorkPermit) {
+  return Boolean(row.id) && row.teamType === "CONTRACTOR" && row.contractorScope === "OVERHAUL";
+}
+
+async function workPermitQrPng(row: WorkPermit, qrOrigin?: string) {
+  const value = workPermitQrValue(row.id, qrOrigin);
+  const hints = new Map<EncodeHintType, unknown>();
+  hints.set(EncodeHintType.MARGIN, 4);
+  const matrix = new QRCodeWriter().encode(value, BarcodeFormat.QR_CODE, 0, 0, hints);
+  let pathData = "";
+  for (let y = 0; y < matrix.getHeight(); y++) {
+    for (let x = 0; x < matrix.getWidth(); x++) if (matrix.get(x, y)) pathData += `M${x} ${y}h1v1h-1z`;
+  }
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${matrix.getWidth()} ${matrix.getHeight()}" shape-rendering="crispEdges"><rect width="100%" height="100%" fill="#fff"/><path d="${pathData}" fill="#000"/></svg>`;
+  return sharp(Buffer.from(svg)).resize(600, 600, { kernel: "nearest" }).png().toBuffer();
+}
+
+function qrTextParagraph(text: string, options: { bold?: boolean; size?: number; before?: number; after?: number } = {}) {
+  const size = options.size ?? 24;
+  return `<w:p><w:pPr><w:spacing w:before="${options.before ?? 80}" w:after="${options.after ?? 80}"/><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:eastAsia="Times New Roman"/>${options.bold ? "<w:b/>" : ""}<w:sz w:val="${size}"/><w:szCs w:val="${size}"/></w:rPr><w:t xml:space="preserve">${escape(text)}</w:t></w:r></w:p>`;
+}
+
+function qrImageParagraph() {
+  return `<w:p><w:pPr><w:spacing w:before="180" w:after="180"/><w:jc w:val="center"/></w:pPr><w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent cx="${QR_SIZE_EMU}" cy="${QR_SIZE_EMU}"/><wp:effectExtent l="0" t="0" r="0" b="0"/><wp:docPr id="9001" name="Mã QR PCT Đại tu"/><wp:cNvGraphicFramePr><a:graphicFrameLocks noChangeAspect="1"/></wp:cNvGraphicFramePr><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic><pic:nvPicPr><pic:cNvPr id="0" name="work-permit-qr.png"/><pic:cNvPicPr/></pic:nvPicPr><pic:blipFill><a:blip r:embed="${QR_RELATIONSHIP_ID}"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill><pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${QR_SIZE_EMU}" cy="${QR_SIZE_EMU}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>`;
+}
+
+async function appendOverhaulQrPage(zip: PizZip, xml: string, row: WorkPermit, qrOrigin?: string) {
+  const png = await workPermitQrPng(row, qrOrigin);
+  zip.file(QR_MEDIA_PATH, png);
+  const relationshipsPath = "word/_rels/document.xml.rels";
+  let relationships = zip.file(relationshipsPath)?.asText();
+  if (!relationships) throw new Error("Mẫu PCT thiếu quan hệ tài liệu Word");
+  relationships = relationships.replace("</Relationships>", `<Relationship Id="${QR_RELATIONSHIP_ID}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/work-permit-qr.png"/></Relationships>`);
+  zip.file(relationshipsPath, relationships);
+  const contentTypesPath = "[Content_Types].xml";
+  let contentTypes = zip.file(contentTypesPath)?.asText();
+  if (!contentTypes) throw new Error("Mẫu PCT thiếu khai báo kiểu nội dung");
+  if (!/<Default\b[^>]*Extension="png"/i.test(contentTypes)) {
+    contentTypes = contentTypes.replace("</Types>", '<Default Extension="png" ContentType="image/png"/></Types>');
+    zip.file(contentTypesPath, contentTypes);
+  }
+  if (!xml.includes('xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"')) {
+    xml = xml.replace("<w:document ", '<w:document xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture" ');
+  }
+  const unit = PERMIT_UNITS[row.unit as keyof typeof PERMIT_UNITS] ?? row.unit;
+  const planned = row.plannedStartAt || row.plannedEndAt
+    ? `Thời gian dự kiến: ${row.plannedStartAt ? plannedDayHour(row.plannedStartAt) : "chưa ghi"} — ${row.plannedEndAt ? plannedDayHour(row.plannedEndAt) : "chưa ghi"}`
+    : "";
+  const page = [
+    '<w:p><w:r><w:br w:type="page"/></w:r></w:p>',
+    qrTextParagraph("MÃ QR PCT ĐẠI TU", { bold: true, size: 36, before: 200, after: 120 }),
+    qrImageParagraph(),
+    qrTextParagraph(`PCT ${formatPermitNumber(row)}`, { bold: true, size: 32, after: 160 }),
+    qrTextParagraph(`Nội dung công việc: ${row.content || "—"}`, { bold: true, size: 26 }),
+    qrTextParagraph(`Thiết bị / vị trí: ${row.location || "—"}`),
+    qrTextParagraph(`Đơn vị nhà thầu: ${row.teamName || "—"}`),
+    row.workScope ? qrTextParagraph(`Phạm vi công tác: ${row.workScope}`, { after: 60 }) : "",
+    planned ? qrTextParagraph(planned, { after: 160 }) : "",
+    qrTextParagraph("Quét bằng chức năng Quét QR trên duyenhai1.vn để mở bước cho phép làm việc.", { bold: true, size: 22, before: 180 }),
+    qrTextParagraph(unit, { size: 20, before: 40 }),
+  ].join("");
+  const withPage = xml.replace(/(<w:sectPr\b[\s\S]*?<\/w:sectPr>\s*<\/w:body>)/, `${page}$1`);
+  if (withPage === xml) throw new Error("Không chèn được trang QR vào cuối mẫu PCT");
+  return withPage;
+}
+
+async function overhaulQrHtml(row: WorkPermit, qrOrigin?: string) {
+  const png = await workPermitQrPng(row, qrOrigin);
+  const unit = PERMIT_UNITS[row.unit as keyof typeof PERMIT_UNITS] ?? row.unit;
+  const line = (label: string, value: string) => `<p style="margin:8px 0;font-size:12pt"><strong>${escape(label)}:</strong> ${escape(value || "—")}</p>`;
+  return `<section style="box-sizing:border-box;break-before:page;page-break-before:always;min-height:257mm;padding:22mm 20mm;text-align:center;font-family:'Times New Roman',serif;color:#111"><h1 style="margin:0 0 14px;font-size:18pt">MÃ QR PCT ĐẠI TU</h1><img alt="Mã QR PCT Đại tu" src="data:image/png;base64,${png.toString("base64")}" style="display:block;width:4cm;height:4cm;margin:0 auto 14px"/><h2 style="margin:0 0 18px;font-size:16pt">PCT ${escape(formatPermitNumber(row))}</h2>${line("Nội dung công việc", row.content)}${line("Thiết bị / vị trí", row.location)}${line("Đơn vị nhà thầu", row.teamName)}${row.workScope ? line("Phạm vi công tác", row.workScope) : ""}${row.plannedStartAt || row.plannedEndAt ? line("Thời gian dự kiến", `${row.plannedStartAt ? plannedDayHour(row.plannedStartAt) : "chưa ghi"} — ${row.plannedEndAt ? plannedDayHour(row.plannedEndAt) : "chưa ghi"}`) : ""}<p style="margin:22px 0 0;font-size:11pt;font-weight:bold">Quét bằng chức năng Quét QR trên duyenhai1.vn để mở bước cho phép làm việc.</p><p style="margin:8px 0 0;font-size:10pt">${escape(unit)}</p></section>`;
+}
+
+export async function createWorkPermitDocument(row: WorkPermit, qrOrigin?: string) {
   const mechanical = row.kind === "MECHANICAL";
   const zip = new PizZip(await fs.readFile(path.join(process.cwd(), "templates", mechanical ? "work-permit-mechanical.docx" : "work-permit-electrical.docx")));
   let xml = zip.file("word/document.xml")!.asText();
@@ -171,11 +251,12 @@ export async function createWorkPermitDocument(row: WorkPermit) {
     if (row.electricalSafetySupervisorName.trim()) xml = replaceParagraphAfter(xml, "Người giám sát an toàn điện", "Họ và tên", `Họ và tên: ${row.electricalSafetySupervisorName.trim()}    Chức vụ: …………………    Ký/xác nhận: ……………`);
   }
   ensureNoTemplateTags(xml);
+  if (hasOverhaulQrPage(row)) xml = await appendOverhaulQrPage(zip, xml, row, qrOrigin);
   zip.file("word/document.xml", xml);
   return zip.generate({ type: "nodebuffer", compression: "DEFLATE" });
 }
 
-export async function createWorkPermitHtml(row: WorkPermit) {
+export async function createWorkPermitHtml(row: WorkPermit, qrOrigin?: string) {
   const mechanical = row.kind === "MECHANICAL";
   let html = await loadPrintTemplate(mechanical ? "work-permit-mechanical.html" : "work-permit-electrical.html");
   if (mechanical) html = html.replace('<body class="work-permit-mechanical">', '<body class="work-permit-mechanical filled">');
@@ -210,5 +291,7 @@ export async function createWorkPermitHtml(row: WorkPermit) {
     replace("Họ và tên", `Họ và tên: ${row.issuerName}    Chức vụ: ……………    Ký/xác nhận: ……………`);
     if (row.electricalSafetySupervisorName.trim()) replace("Họ và tên:………… .chức vụ", `Họ và tên: ${row.electricalSafetySupervisorName.trim()}    Chức vụ: ……………    Ký/xác nhận: ……………`);
   }
-  return assertPrintFilled(html);
+  html = assertPrintFilled(html);
+  if (hasOverhaulQrPage(row)) html = html.replace("</body>", `${await overhaulQrHtml(row, qrOrigin)}</body>`);
+  return html;
 }

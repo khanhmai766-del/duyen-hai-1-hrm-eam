@@ -7,6 +7,7 @@ import { useSession } from "next-auth/react";
 import {
   CalendarDays,
   ChevronRight,
+  ClipboardList,
   Grid3X3,
   MoreHorizontal,
   Package,
@@ -37,7 +38,7 @@ import {
 import { cn } from "@/lib/utils";
 
 const NAV_ACCESS_LEVELS = ["read", "personal", "manage", "full"] as const;
-const PRIMARY_PATHS = ["/hr", "/defects", "/devices/scan", "/replacement-procedures"];
+const PRIMARY_PATHS = ["/hr", "/defects", "/work-permits", "/devices/scan", "/replacement-procedures"];
 
 /**
  * Tab "Thêm" trên mobile là danh sách thao tác nhanh, không phải bản sao toàn bộ
@@ -169,7 +170,7 @@ export function MobileBottomNav({ onOpenAllMenu }: { onOpenAllMenu: () => void }
           <BottomButton
             label="Khiếm khuyết"
             icon={ShieldAlert}
-            active={defectOpen || routeMatches(pathname, "/defects")}
+            active={defectOpen || routeMatches(pathname, "/defects") || routeMatches(pathname, "/work-permits")}
             onClick={() => setDefectOpen(true)}
           />
           <Link
@@ -201,8 +202,8 @@ export function MobileBottomNav({ onOpenAllMenu }: { onOpenAllMenu: () => void }
       <Dialog open={defectOpen} onOpenChange={setDefectOpen}>
         <MobileSheet>
           <DialogHeader>
-            <DialogTitle>Chọn nhóm khiếm khuyết</DialogTitle>
-            <DialogDescription>Mở danh sách khiếm khuyết theo đúng chuyên ngành.</DialogDescription>
+            <DialogTitle>Truy cập nhanh</DialogTitle>
+            <DialogDescription>Mở khiếm khuyết theo chuyên ngành hoặc sổ cấp phiếu công tác.</DialogDescription>
           </DialogHeader>
           <div className="grid gap-3 pt-2 sm:grid-cols-2">
             <DialogClose asChild>
@@ -225,6 +226,16 @@ export function MobileBottomNav({ onOpenAllMenu }: { onOpenAllMenu: () => void }
                 <ChevronRight className="h-5 w-5" />
               </Link>
             </DialogClose>
+            {!readOnlyDefects && <DialogClose asChild>
+              <Link
+                href="/work-permits"
+                className="flex min-h-20 items-center gap-4 rounded-2xl border border-indigo-200 bg-indigo-50 p-4 text-indigo-950 transition-colors active:bg-indigo-100 dark:border-indigo-800 dark:bg-indigo-950/40 dark:text-indigo-100"
+              >
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-indigo-600 text-white"><ClipboardList className="h-5 w-5" /></span>
+                <span className="min-w-0 flex-1"><span className="block font-bold">Sổ cấp PCT</span><span className="text-xs opacity-70">Cấp và theo dõi phiếu công tác</span></span>
+                <ChevronRight className="h-5 w-5" />
+              </Link>
+            </DialogClose>}
           </div>
         </MobileSheet>
       </Dialog>

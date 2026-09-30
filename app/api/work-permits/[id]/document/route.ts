@@ -17,10 +17,11 @@ export async function GET(req: Request, props: { params: Promise<{ id: string }>
     if (effectivePermitFormat(row) !== "PAPER") return fail("Chỉ xuất mẫu cho PCT giấy");
     if (row.status === "DRAFT" || row.status === "CANCELLED") return fail("Chỉ tải mẫu cho phiếu đã cấp và chưa hủy");
     const base = permitDocumentBaseName(row);
+    const qrOrigin = new URL(req.url).origin;
     if (new URL(req.url).searchParams.get("format") === "html") {
-      return printHtmlResponse(await createWorkPermitHtml(row), base);
+      return printHtmlResponse(await createWorkPermitHtml(row, qrOrigin), base);
     }
-    const buffer = await createWorkPermitDocument(row);
+    const buffer = await createWorkPermitDocument(row, qrOrigin);
     return new Response(new Uint8Array(buffer), { headers: { "Content-Type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "Content-Disposition": `attachment; filename="${base}.docx"`, "Cache-Control": "private, no-store" } });
   });
 }

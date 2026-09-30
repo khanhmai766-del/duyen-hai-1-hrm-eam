@@ -23,7 +23,7 @@ export async function POST(req: Request) {
     const data = parsePermit({ ...body, number, issuerName }, status === "DRAFT" ? "ISSUED" : status, { allowIncompleteIssue: true });
     if (effectivePermitFormat(data) !== "PAPER") return fail("Chỉ xem trước mẫu cho PCT giấy");
     const safetyItems = await resolvePermitSafety(prisma, { ...body, status: "DRAFT", format: data.format, teamType: data.teamType });
-    const buffer = await createWorkPermitDocument({ ...data, safetyItems } as unknown as WorkPermit);
+    const buffer = await createWorkPermitDocument({ ...data, safetyItems } as unknown as WorkPermit, new URL(req.url).origin);
     return new Response(new Uint8Array(buffer), { headers: { "Content-Type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "Content-Disposition": `attachment; filename="PCT-xem-truoc.docx"`, "Cache-Control": "private, no-store" } });
   });
 }

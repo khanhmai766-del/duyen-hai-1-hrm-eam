@@ -126,6 +126,13 @@ export default function WorkPermitsPage() {
   const [detail, setDetail] = useState<string | undefined>(() => searchParams.get("permitId") || undefined);
   const searchRef = useRef<HTMLInputElement>(null);
   useEffect(() => { const timer = setTimeout(() => { setSearch(q); setPage(1); }, 300); return () => clearTimeout(timer); }, [q]);
+  // Ghi loại sổ đang xem vào URL để tải lại trang vẫn ở đúng PCT Cơ/PCT Điện.
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    if (url.searchParams.get("kind") === kind) return;
+    url.searchParams.set("kind", kind);
+    window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
+  }, [kind]);
   useEffect(() => {
     const focusSearch = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
