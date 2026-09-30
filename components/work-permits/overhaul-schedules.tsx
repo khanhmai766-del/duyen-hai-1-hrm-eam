@@ -36,7 +36,7 @@ export function OverhaulScheduleLinks() {
         : <>
           {/* Điện thoại: mỗi file một thẻ. */}
           <div className="divide-y divide-border md:hidden">{rows.map((row, index) => <article key={row.id} className="flex items-center gap-3 px-4 py-3">
-            <span className="w-6 shrink-0 text-center text-sm tabular-nums text-slate-500">{index + 1}</span>
+            <span className="w-6 shrink-0 text-center text-sm tabular-nums text-slate-500">{index}</span>
             <span className="min-w-0 flex-1">
               <span className="block text-[15px] font-semibold leading-5 text-ink">{row.title}</span>
               <span className={cn("mt-0.5 block truncate text-xs", row.url ? "text-muted-foreground" : "text-amber-700")}>{row.url ? shortUrl(row.url) : "Chưa có link sheet"}</span>
@@ -51,7 +51,8 @@ export function OverhaulScheduleLinks() {
               <TableHead className={cn(TH_NAVY, "w-40")}><PlainHeader label="Thao tác" /></TableHead>
             </TableRow></TableHeader>
             <TableBody>{rows.map((row, index) => <TableRow key={row.id} className={cn(rowBackground({ index }), ROW_HOVER)}>
-              <TableCell className={cn(TD_ROW, "py-2.5 text-center tabular-nums text-slate-500")}>{index + 1}</TableCell>
+              {/* STT đánh từ 0: dòng 0 là file lọc dữ liệu hạng mục thô (OVERHAUL_SCHEDULE_DEFAULTS). */}
+              <TableCell className={cn(TD_ROW, "py-2.5 text-center tabular-nums text-slate-500")}>{index}</TableCell>
               <TableCell className={cn(TD_ROW, "py-2.5 font-semibold text-ink")}>{row.title}</TableCell>
               <TableCell className={cn(TD_ROW, "max-w-0 py-2.5")}>
                 {row.url

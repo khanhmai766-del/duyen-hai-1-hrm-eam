@@ -1,6 +1,5 @@
-import { audit, fail, ok, requireUser } from "@/lib/api";
+import { audit, fail, ok, requireRole, requireUser } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
-import { permitCapabilities, requirePermitIssue } from "@/lib/server/work-permit-permissions";
 import { permitBody, permitHandle } from "@/lib/server/work-permits";
 import {
   OVERHAUL_SCHEDULE_CONFIG_KEY, OVERHAUL_SCHEDULE_DEFAULTS, OVERHAUL_SCHEDULE_TITLE_MAX, overhaulScheduleUrlError,
@@ -33,14 +32,15 @@ function merged(stored: Stored): OverhaulScheduleLink[] {
 export async function GET() {
   return permitHandle(async () => {
     const user = await requireUser();
-    return ok(merged(await readStored()), { canWrite: (await permitCapabilities(user)).canIssue });
+    // Chỉ Quản trị sửa được link (file tiến độ dùng chung của cả phân xưởng); người khác chỉ xem và mở.
+    return ok(merged(await readStored()), { canWrite: user.role === "ADMIN" });
   });
 }
 
-/** PUT { id, title, url } — sửa tiêu đề cột Theo dõi và/hoặc link sheet của một dòng. */
+/** PUT { id, title, url } — sửa tiêu đề cột Theo dõi và/hoặc link sheet của một dòng. Chỉ Quản trị. */
 export async function PUT(req: Request) {
   return permitHandle(async () => {
-    const user = await requireUser(); await requirePermitIssue(user);
+    const user = await requireUser(); requireRole(user, ["ADMIN"]);
     const body = await permitBody(req);
     const id = String(body.id ?? "") as OverhaulScheduleId;
     if (!OVERHAUL_SCHEDULE_DEFAULTS.some(item => item.id === id)) return fail("Dòng tiến độ không hợp lệ");

@@ -64,6 +64,8 @@ export function overhaulContentText(items: Pick<OverhaulItemSnapshot, "code" | "
  */
 export const OVERHAUL_SCHEDULE_CONFIG_KEY = "work-permit-overhaul-schedules";
 export const OVERHAUL_SCHEDULE_DEFAULTS = [
+  // STT 0 (đứng đầu, đánh số từ 0): file lọc dữ liệu hạng mục thô, nguồn chung cho các file tiến độ bên dưới.
+  { id: "RAW_FILTER", title: "Lọc dữ liệu hạng mục thô", url: "" },
   { id: "BOILER", title: "Tiến độ Lò hơi", url: "https://docs.google.com/spreadsheets/d/1iQhTAx2QveGGpgZWCzuZh6-4Fcuaz4ju7J7xQLC39fs/edit?gid=2093533043#gid=2093533043" },
   { id: "TURBINE", title: "Tiến độ Turbine", url: "" },
   { id: "GENERATOR", title: "Tiến độ Máy phát", url: "" },
