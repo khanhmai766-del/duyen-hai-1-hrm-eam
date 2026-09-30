@@ -5,7 +5,7 @@ import { OPERATION_POSITION_TITLES } from "@/lib/positions";
 import { PERMIT_UNITS } from "@/lib/work-permits";
 import { permitBody, permitHandle } from "@/lib/server/work-permits";
 import { requirePermitIssuer } from "@/lib/server/work-permit-permissions";
-import { cancelNkvhPermit, claimNkvhPermit, importExistingNkvhPermit, nkvhClaimResult, parseNkvhPage, parseNkvhScope, stopNkvhPermit, syncNkvhPermit } from "@/lib/server/work-permit-nkvh-claim";
+import { cancelNkvhPermit, claimNkvhPermit, closeNkvhPermit, importExistingNkvhPermit, nkvhClaimResult, parseNkvhKind, parseNkvhPage, parseNkvhScope, stopNkvhPermit, syncNkvhPermit } from "@/lib/server/work-permit-nkvh-claim";
 export const dynamic = "force-dynamic";
 
 /** API của tiện ích "Cấp số PCT NKVH" (chrome-extension/nkvh-pct) — nghiệp vụ ở lib/server/work-permit-nkvh-claim.ts. */
@@ -31,6 +31,15 @@ export async function POST(req: Request) {
   return permitHandle(async () => {
     const user = await requireUser(); requirePermitIssuer(user);
     const body = await permitBody(req);
+    if (body.mode === "close") {
+      const kind = parseNkvhKind(body.kind);
+      const result = await prisma.$transaction(tx => closeNkvhPermit(tx, user, {
+        kind, nkvhPctId: body.nkvhPctId, formattedNumber: body.formattedNumber,
+        sourceStatus: body.sourceStatus, closedAt: body.closedAt,
+      }));
+      if (result.changed) await audit(user.id, "UPDATE_WORK_PERMIT", "WorkPermit", result.id, `Đóng PCT ${result.formatted} theo NKVH`);
+      return ok(result);
+    }
     const { kind, nkvhPctId } = parseNkvhScope(body);
     if (body.mode === "cancel") {
       const result = await prisma.$transaction(tx => cancelNkvhPermit(tx, user, { kind, nkvhPctId, reason: body.reason }));

@@ -68,12 +68,66 @@ export function parseExistingNkvhPermitNumber(value: unknown) {
   return { number: canonicalPermitNumber(match[1]), year: Number(match[2]) };
 }
 
-export function parseNkvhScope(body: Record<string, unknown>) {
-  const kind = typeof body.kind === "string" && Object.hasOwn(PERMIT_KINDS, body.kind) ? body.kind as PermitKind : null;
+export function parseNkvhKind(value: unknown) {
+  const kind = typeof value === "string" && Object.hasOwn(PERMIT_KINDS, value) ? value as PermitKind : null;
   if (!kind) throw fail("Không xác định được sổ Cơ – Nhiệt – Hóa hay Điện từ trang NKVH");
+  return kind;
+}
+
+export function parseNkvhScope(body: Record<string, unknown>) {
+  const kind = parseNkvhKind(body.kind);
   const nkvhPctId = typeof body.nkvhPctId === "string" && NKVH_UUID.test(body.nkvhPctId) ? body.nkvhPctId.toLowerCase() : null;
   if (!nkvhPctId) throw fail("Trang NKVH chưa có mã phiếu (id_pct). Hãy mở phiếu từ danh sách PCT trên NKVH.");
   return { kind, nkvhPctId };
+}
+
+/**
+ * NKVH đã kết thúc bình thường: T-C-N-H hiển thị "Khóa phiếu", Điện hiển thị "Hoàn thành".
+ * Có thể gọi bằng id_pct ở trang chi tiết hoặc số PCT ở trang danh sách. Trường hợp theo số chỉ nhận
+ * đúng một PCT nội bộ điện tử đã có liên kết NKVH, tránh đóng nhầm phiếu giấy hoặc hồ sơ trùng cũ.
+ */
+export async function closeNkvhPermit(tx: Tx, user: Actor, input: {
+  kind: PermitKind; nkvhPctId?: unknown; formattedNumber?: unknown; sourceStatus?: unknown; closedAt?: unknown;
+}, now = new Date()) {
+  const nkvhPctId = typeof input.nkvhPctId === "string" && NKVH_UUID.test(input.nkvhPctId)
+    ? input.nkvhPctId.toLowerCase() : null;
+  const number = nkvhPctId ? null : parseExistingNkvhPermitNumber(input.formattedNumber);
+  const candidates = await tx.workPermit.findMany({
+    where: {
+      kind: input.kind,
+      teamType: "INTERNAL",
+      OR: [{ format: "ELECTRONIC" }, { format: null }],
+      ...(nkvhPctId ? { nkvhPctId } : { nkvhPctId: { not: null }, year: number!.year, number: number!.number }),
+    },
+    orderBy: { createdAt: "desc" },
+    take: 2,
+    select: { id: true },
+  });
+  if (candidates.length === 0) throw fail("Phiếu NKVH này chưa có liên kết trên sổ PXVH1 — không có gì để đóng", 404);
+  if (candidates.length > 1) throw fail("Số PCT này đang có nhiều hồ sơ liên kết NKVH. Quản trị cần đối chiếu trước khi đóng.", 409);
+
+  await tx.$queryRaw`SELECT "id" FROM "WorkPermit" WHERE "id" = ${candidates[0].id} FOR UPDATE`;
+  const before = await tx.workPermit.findUniqueOrThrow({ where: { id: candidates[0].id } });
+  if (before.status === "CLOSED") return { ...nkvhClaimResult(before, false), changed: false };
+  if (!["ISSUED", "ACTIVE", "PAUSED", "WAITING"].includes(before.status)) {
+    throw fail(`Phiếu ${formatPermitNumber(before)} trên sổ đang ở trạng thái không thể đóng theo NKVH.`, 409);
+  }
+
+  const suppliedAt = nkvhInstant(input.closedAt);
+  const parsedAt = suppliedAt ? new Date(suppliedAt) : now;
+  // Dữ liệu DOM chỉ là gợi ý; thời điểm đóng không được trước lúc cấp hoặc ở tương lai.
+  const validAt = Number.isFinite(parsedAt.getTime()) && parsedAt <= new Date(now.getTime() + 5 * 60 * 1000)
+    && (!before.issuedAt || parsedAt >= before.issuedAt);
+  const closedAt = validAt ? parsedAt : now;
+  const sourceStatus = text(input.sourceStatus, 80) || (input.kind === "ELECTRICAL" ? "Hoàn thành" : "Khóa phiếu");
+  const after = await tx.workPermit.update({ where: { id: before.id }, data: {
+    status: "CLOSED", closedAt, version: { increment: 1 },
+  } });
+  await tx.workPermitHistory.create({ data: {
+    permitId: after.id, actorId: user.id, actorName: user.name ?? "",
+    action: `Đóng theo NKVH (${sourceStatus})`, before: permitSnapshot(before), after: permitSnapshot(after),
+  } });
+  return { ...nkvhClaimResult(after, false), changed: true };
 }
 
 export function parseNkvhPage(raw: unknown, kind: PermitKind): NkvhPage {

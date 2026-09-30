@@ -22,7 +22,7 @@ for (const script of manifest.content_scripts ?? []) {
 }
 
 // Danh sách tệp cố định: thêm tệp JS mới vào tiện ích thì phải thêm vào đây, kẻo gói nộp kho thiếu tệp.
-const FILES = ["background.js", "content.js", "popup.html", "popup.js", ...[16, 32, 48, 128].map((size) => `icons/icon-${size}.png`)];
+const FILES = ["background.js", "content.js", "list.js", "popup.html", "popup.js", ...[16, 32, 48, 128].map((size) => `icons/icon-${size}.png`)];
 
 const zip = new JSZip();
 zip.file("manifest.json", `${JSON.stringify(manifest, null, 2)}\n`);

@@ -3,7 +3,7 @@
 // Không để lại dữ liệu.
 //   npx tsx scripts/verify/thu-nkvh-claim.ts
 import { PrismaClient } from "@prisma/client";
-import { cancelNkvhPermit, claimNkvhPermit, importExistingNkvhPermit, parseNkvhPage, stopNkvhPermit, syncNkvhPermit } from "@/lib/server/work-permit-nkvh-claim";
+import { cancelNkvhPermit, claimNkvhPermit, closeNkvhPermit, importExistingNkvhPermit, parseNkvhPage, stopNkvhPermit, syncNkvhPermit } from "@/lib/server/work-permit-nkvh-claim";
 import { reservePermitNumber } from "@/lib/server/work-permit-number-reservations";
 
 const db = new PrismaClient();
@@ -90,12 +90,26 @@ async function main() {
       const reserved = await tx.workPermitNumberReservation.findUnique({ where: { permitId: stopped.id } });
       console.log("    lượt giữ số:", reserved?.status ?? "(không có)", reserved?.status === "CANCELLED" ? "✗ SỐ BỊ BỎ" : "✓ số không bị bỏ");
 
+      // B5 T-C-N-H / B8 Điện hoàn thành → tự đóng; gọi lại không ghi thêm lịch sử.
+      const historyBeforeClose = await tx.workPermitHistory.count({ where: { permitId: stopped.id } });
+      const closed = await closeNkvhPermit(tx, user, { kind: "MECHANICAL", nkvhPctId: PCT, sourceStatus: "Khóa phiếu" });
+      const closedRow = await tx.workPermit.findUniqueOrThrow({ where: { id: closed.id } });
+      const closedAgain = await closeNkvhPermit(tx, user, { kind: "MECHANICAL", formattedNumber: closed.formatted, sourceStatus: "Khóa phiếu" });
+      const historyAfterClose = await tx.workPermitHistory.count({ where: { permitId: stopped.id } });
+      console.log("5c) tự đóng theo NKVH:", closedRow.status, closedRow.closedAt?.toISOString(),
+        closedAgain.id === closed.id && historyAfterClose === historyBeforeClose + 1 ? "✓ lặp lại an toàn" : "✗ ghi trùng");
+
+      // Dùng phiếu khác để kiểm tra Tạm dừng → Hủy; phiếu đã đóng không được hủy.
+      const cancelPct = "77777777-8888-4999-8aaa-bbbbbbbbbbbb";
+      const cancelClaim = await claimNkvhPermit(tx, user, { kind: "MECHANICAL", nkvhPctId: cancelPct,
+        page: parseNkvhPage(tcnh, "MECHANICAL"), unit: "S1", position: "Lò phó" });
+      await stopNkvhPermit(tx, user, { kind: "MECHANICAL", nkvhPctId: cancelPct, reason: "Dừng để thử hủy" });
       // Phiếu đang Tạm dừng vẫn hủy được (PAUSED → CANCELLED).
-      const cancelled = await cancelNkvhPermit(tx, user, { kind: "MECHANICAL", nkvhPctId: PCT, reason: "hủy phiếu cấp sai NV cho phép" });
+      const cancelled = await cancelNkvhPermit(tx, user, { kind: "MECHANICAL", nkvhPctId: cancelPct, reason: "hủy phiếu cấp sai NV cho phép" });
       const cancelledRow = await tx.workPermit.findUniqueOrThrow({ where: { id: cancelled.id } });
       console.log("6) báo hủy:", cancelled.formatted, cancelledRow.status, "|", cancelledRow.statusReason);
-      const twice = await cancelNkvhPermit(tx, user, { kind: "MECHANICAL", nkvhPctId: PCT, reason: "x" });
-      console.log("   bấm lại:", twice.id === cancelled.id ? "✓ trả lại phiếu đã hủy" : "✗");
+      const twice = await cancelNkvhPermit(tx, user, { kind: "MECHANICAL", nkvhPctId: cancelPct, reason: "x" });
+      console.log("   bấm lại:", twice.id === cancelled.id && cancelClaim.id === cancelled.id ? "✓ trả lại phiếu đã hủy" : "✗");
       const redo = await claimNkvhPermit(tx, user, { kind: "MECHANICAL", nkvhPctId: "99999999-8888-4777-8666-555555555555",
         page: parseNkvhPage(tcnh, "MECHANICAL"), unit: "S1", position: "Lò phó" });
       console.log("7) phiếu tạo lại:", redo.formatted, BigInt(redo.number) > BigInt(paper.number) ? "✓ số mới, bỏ số đã hủy" : "✗ DÙNG LẠI SỐ");

@@ -7,6 +7,8 @@ Tiện ích này tách riêng khỏi tiện ích *Đồng bộ QLVT & LIMS* và 
 Phiếu nhà thầu (PCT giấy) vẫn lấy số trên sổ duyenhai1.vn như cũ.
 Tiện ích nhận trang NKVH trên cả HTTP và HTTPS; sau khi cài hoặc cập nhật phải tải lại tab NKVH.
 Từ bản 1.0.5, nút thao tác tự cập nhật ngay khi người dùng xoá hoặc sửa ô **Số phiếu** trên NKVH.
+Từ bản 1.0.6, trạng thái kết thúc được tự đồng bộ về sổ: PCT T-C-N-H **Khóa phiếu**, PCT Điện
+**Hoàn thành** → sổ PXVH1 **Đã đóng**.
 
 ## Luồng sử dụng
 
@@ -17,6 +19,19 @@ Từ bản 1.0.5, nút thao tác tự cập nhật ngay khi người dùng xoá 
    Tiện ích điền số vào ô Số phiếu.
 4. VHV kiểm tra rồi **tự bấm Lưu trên NKVH**. Tiện ích không bao giờ tự lưu.
 5. Nếu sửa nội dung trên NKVH hoặc khai thêm CHTT, phạm vi…, bấm **Đồng bộ về sổ** (ở bước B1).
+
+## Tự đồng bộ đóng phiếu
+
+- **Trang chi tiết:** NKVH luôn mở ở B1, nhưng tiện ích đọc màu hoàn thành của nút bước cuối bên trái
+  mà không cần chuyển bước: B5 *Khóa phiếu công tác* của PCT T-C-N-H hoặc B8 *Hoàn thành phiếu* của
+  PCT Điện. Khi bước cuối đã hoàn thành, phiếu liên kết trên sổ tự chuyển **Đã đóng**.
+- **Trang danh sách:** tiện ích quét các dòng đang hiển thị có đúng số dạng `…/VH1-NĐDH` và trạng thái
+  *Khóa phiếu* / *Hoàn thành*. Server chỉ đóng PCT nội bộ điện tử đã liên kết NKVH; phiếu giấy, số
+  không liên kết hoặc trạng thái khác không bị tác động.
+- Gọi lại là an toàn: phiếu đã đóng chỉ được trả lại, không ghi lịch sử trùng. Tiện ích không bấm nút,
+  không ký và không thay đổi trạng thái trên NKVH.
+- Nếu người dùng đang xem bước cuối, thời điểm ký NKVH được ghi làm thời điểm đóng. Nếu trang đang ở
+  B1 và nội dung bước cuối chưa được NKVH vẽ, hệ thống dùng thời điểm nhận đồng bộ.
 
 Nếu phiếu đã có số đúng dạng sổ PXVH1 (`…/VH1-NĐDH`) nhưng chưa có hồ sơ liên kết trên website,
 thanh tiện ích hiện **Đồng bộ số hiện có**. Người dùng xác nhận Tổ máy/Cương vị rồi đồng bộ đúng số

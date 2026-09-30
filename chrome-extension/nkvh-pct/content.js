@@ -15,7 +15,7 @@
   const API = "/api/work-permits/nkvh-claim";
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(PCT_ID)) return;
 
-  const state = { loading: true, permit: null, cancelledPermit: null, positions: [], units: {}, panel: false, importNumber: null, unit: null, position: null, busy: false, message: "", tone: "info" };
+  const state = { loading: true, permit: null, cancelledPermit: null, positions: [], units: {}, panel: false, importNumber: null, unit: null, position: null, busy: false, closeAttempted: false, message: "", tone: "info" };
 
   // ---------- Đọc trang NKVH ----------
   const fold = (value) => String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "")
@@ -161,6 +161,41 @@
     const reason = notice.reason || pending.reason;
     if (notice.action === "cancel") reportCancel({ auto: true, reason });
     else if (state.permit.status !== "PAUSED") reportStop({ auto: true, reason });
+  }
+
+  /**
+   * Dù trang mở mặc định ở B1, nút bước cuối bên trái vẫn phản ánh trạng thái thật bằng màu xanh.
+   * PCT T-C-N-H kết thúc ở B5 "Khóa phiếu công tác"; PCT Điện kết thúc ở B8 "Hoàn thành phiếu".
+   */
+  function finalStepCompleted() {
+    const expected = KIND === "ELECTRICAL" ? /^b8:\s*hoan thanh phieu$/ : /^b5:\s*khoa phieu cong tac$/;
+    const controls = [...document.querySelectorAll("button, a, [role=button], .ui-button, input[type=button]")];
+    const control = controls.find((el) => expected.test(fold(el.value || el.textContent)));
+    if (!control) return false;
+    const colored = [control, ...control.querySelectorAll("*")].some((el) => {
+      const style = getComputedStyle(el);
+      const match = style.backgroundColor.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+      if (!match) return /success/.test(String(el.className || "").toLowerCase());
+      const [, red, green, blue] = match.map(Number);
+      return green >= 120 && green > red * 1.25 && green > blue * 1.15;
+    });
+    return colored;
+  }
+
+  /** Nếu đang xem đúng bước cuối, lấy giờ ký thật; ở B1 thì server dùng thời điểm đồng bộ. */
+  function completedAtOnPage() {
+    const value = form()?.textContent.replace(/\s+/g, " ") || "";
+    const pattern = KIND === "ELECTRICAL"
+      ? /Đã kiểm tra hoàn thành Phiếu công tác ngày\s+(\d{2}\/\d{2}\/\d{4}\s+\d{2}:\d{2}:\d{2})/i
+      : /Đã ký EVNCA lúc\s+(\d{2}\/\d{2}\/\d{4}\s+\d{2}:\d{2}:\d{2})/i;
+    return value.match(pattern)?.[1] || "";
+  }
+
+  function maybeAutoClose() {
+    if (foreignQlvh() || state.loading || state.busy || state.closeAttempted || !state.permit) return;
+    if (["CLOSED", "CANCELLED"].includes(state.permit.status) || pageNotice() || !finalStepCompleted()) return;
+    state.closeAttempted = true;
+    reportClose();
   }
 
   /** Đã Lưu "Dừng phiếu" quá PROMPT_DELAY mà chưa thấy dòng đỏ → cần VHV xác nhận một chạm. */
@@ -362,6 +397,21 @@
     say(`${options.auto ? "Đã tự ghi" : "Đã ghi"} phiếu ${result.data.formatted} trên sổ PXVH1 là Tạm dừng (dừng trên NKVH). Số PCT vẫn giữ.`, "success");
   }
 
+  /** B5/B8 đã xanh trên NKVH → tự đóng bản ghi tương ứng trên sổ, không tác động ngược NKVH. */
+  async function reportClose() {
+    if (!state.permit) return;
+    const sourceStatus = KIND === "ELECTRICAL" ? "Hoàn thành" : "Khóa phiếu";
+    state.busy = true; render();
+    const result = await api("POST", API, {
+      mode: "close", kind: KIND, nkvhPctId: PCT_ID, sourceStatus, closedAt: completedAtOnPage(),
+    });
+    state.busy = false;
+    if (!result.ok) return say(`NKVH đã ${sourceStatus.toLowerCase()} nhưng chưa tự đóng được phiếu trên sổ: ${result.message}. Tải lại trang để thử lại.`, "error");
+    if (result.data?.status !== "CLOSED") return say("Sổ PXVH1 chưa hỗ trợ tự đóng theo NKVH. Báo quản trị cập nhật máy chủ rồi tải lại trang.", "error");
+    state.permit = result.data;
+    say(`Đã tự đóng phiếu ${result.data.formatted} trên sổ PXVH1 theo trạng thái “${sourceStatus}” của NKVH.`, "success");
+  }
+
   async function sync() {
     const page = readPage();
     if (page.step !== 1) return say("Hãy mở bước B1 (Cấp phiếu) để đồng bộ nội dung phiếu.", "error");
@@ -453,8 +503,9 @@
     } else if (state.permit) {
       parts.push(h("span", { textContent: state.permit.formatted, style: "font-weight:bold;" }));
       if (state.permit.status === "PAUSED") parts.push(h("span", { textContent: " · Tạm dừng trên sổ" }));
+      if (state.permit.status === "CLOSED") parts.push(h("span", { textContent: " · Đã đóng trên sổ" }));
       if (input.value.trim() !== state.permit.formatted) parts.push(button("Điền số", () => { fillNumber(state.permit.formatted); say("Đã điền số. Kiểm tra lại rồi bấm Lưu trên NKVH.", "success"); }));
-      parts.push(button(state.busy ? "Đang đồng bộ…" : "Đồng bộ về sổ", sync, true));
+      if (state.permit.status !== "CLOSED") parts.push(button(state.busy ? "Đang đồng bộ…" : "Đồng bộ về sổ", sync, true));
     } else if (state.positions.length) {
       const current = input.value.trim();
       if (isPxvh1Number(current)) {
@@ -489,8 +540,9 @@
       if (numberInput() && !document.getElementById(TOOLBAR_ID)) render();
       renderDialogNote();
       maybeAutoReport();
+      maybeAutoClose();
     });
   }).observe(document.body, { childList: true, subtree: true });
 
-  load().then(maybeAutoReport);
+  load().then(() => { maybeAutoReport(); maybeAutoClose(); });
 })();

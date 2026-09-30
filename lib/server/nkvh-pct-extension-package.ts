@@ -9,6 +9,7 @@ const EXTENSION_ROOT = path.join(process.cwd(), "chrome-extension", "nkvh-pct");
 const FILES = [
   "background.js",
   "content.js",
+  "list.js",
   "popup.html",
   "popup.js",
   "icons/icon-16.png",

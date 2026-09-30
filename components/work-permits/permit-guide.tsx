@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { AlertTriangle, BookOpen, Building2, ChevronRight, Download, HardHat, Library, Puzzle, type LucideIcon } from "lucide-react";
+import { AlertTriangle, Building2, ChevronRight, Download, HardHat, Library, Puzzle, type LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
@@ -21,7 +21,7 @@ const SECTIONS: GuideSection[] = [
     key: "extension",
     label: "Cài tiện ích NKVH",
     icon: Puzzle,
-    intro: "Cài tiện ích Cấp số PCT NKVH – PXVH1 để lấy số ngay tại bước B1 trên NKVH. Gói tải từ website là bản dùng chính thức và không có quyền kết nối localhost.",
+    intro: "Cài tiện ích Cấp số PCT NKVH – PXVH1 để lấy số tại bước B1, đồng bộ nội dung và tự ghi nhận đóng phiếu theo trạng thái trên NKVH. Gói tải từ website là bản dùng chính thức và không có quyền kết nối localhost.",
     steps: [
       {
         title: "Tải và giải nén",
@@ -50,6 +50,8 @@ const SECTIONS: GuideSection[] = [
         points: [
           "Phải đăng nhập duyenhai1.vn trên cùng trình duyệt đang mở NKVH.",
           "Dưới ô Số phiếu sẽ xuất hiện khung Sổ PXVH1 và nút Lấy số PCT.",
+          "Tiện ích tự ghi nhận Đã đóng trên sổ khi PCT T-C-N-H đã Khóa phiếu hoặc PCT Điện đã Hoàn thành; không cần chuyển đến bước cuối hay bấm đồng bộ.",
+          "Ở trang danh sách NKVH, các dòng Khóa phiếu / Hoàn thành đang hiển thị cũng được tự đối chiếu và đồng bộ về sổ.",
         ],
       },
       {
@@ -106,10 +108,12 @@ const SECTIONS: GuideSection[] = [
         ],
       },
       {
-        title: "Đóng phiếu",
-        where: "Bấm dòng phiếu → Ghi nhận đóng phiếu",
+        title: "Kết thúc trên NKVH",
+        where: "PCT T-C-N-H: B5 Khóa phiếu · PCT Điện: B8 Hoàn thành phiếu",
         points: [
-          "Chọn Đã đóng, ghi thời điểm đóng (kết quả không bắt buộc).",
+          "Tiện ích tự chuyển phiếu liên kết trên sổ thành Đã đóng khi nhận biết bước cuối đã hoàn thành, kể cả khi trang chi tiết đang mở ở B1.",
+          "Nếu đang mở trang danh sách, tiện ích tự đối chiếu các dòng Khóa phiếu / Hoàn thành đang hiển thị. Gọi lại nhiều lần không tạo lịch sử trùng.",
+          "Nếu tiện ích chưa hoạt động, có thể mở dòng phiếu trên sổ → Ghi nhận đóng phiếu để ghi thủ công.",
           "Phiếu gắn SYC đã xử lý đủ 24 giờ sẽ tự đóng trong sổ.",
         ],
       },
@@ -255,7 +259,7 @@ const SECTIONS: GuideSection[] = [
 export function PermitGuideButton() {
   const [open, setOpen] = useState(false);
   return <>
-    <Button variant="outline" size="sm" className="h-9 text-xs" onClick={() => setOpen(true)}><BookOpen />Hướng dẫn</Button>
+    <Button variant="outline" size="sm" className="h-9 text-xs" onClick={() => setOpen(true)}><Puzzle />Tiện ích</Button>
     {open && <PermitGuideDialog onClose={() => setOpen(false)} />}
   </>;
 }
@@ -266,9 +270,9 @@ function PermitGuideDialog({ onClose }: { onClose: () => void }) {
   return <Dialog open onOpenChange={v => { if (!v) onClose(); }}>
     <DialogContent className="flex max-h-[92dvh] max-w-4xl flex-col gap-0 overflow-hidden p-0">
       <div className="shrink-0 border-b border-border px-5 py-4 pr-12">
-        <DialogTitle className="text-lg">Hướng dẫn cấp phiếu công tác</DialogTitle>
-        <DialogDescription className="mt-1 text-[13px]">Làm theo thứ tự các bước. Dòng chữ xanh dưới mỗi bước cho biết bấm ở đâu — tên nút, tên mục ghi đúng như trên màn hình.</DialogDescription>
-        <div className="mt-3 flex gap-1 overflow-x-auto" role="tablist" aria-label="Phần hướng dẫn">
+        <DialogTitle className="text-lg">Tiện ích và hướng dẫn cấp phiếu công tác</DialogTitle>
+        <DialogDescription className="mt-1 text-[13px]">Cài tiện ích NKVH tại mục đầu tiên; các mục còn lại hướng dẫn đúng theo thao tác thực tế trên màn hình.</DialogDescription>
+        <div className="mt-3 flex gap-1 overflow-x-auto" role="tablist" aria-label="Tiện ích và hướng dẫn">
           {SECTIONS.map(item => {
             const Icon = item.icon;
             const selected = item.key === section.key;
