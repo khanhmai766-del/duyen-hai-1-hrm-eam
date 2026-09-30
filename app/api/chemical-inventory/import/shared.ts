@@ -1,5 +1,6 @@
 import type { NextRequest } from "next/server";
 import { fail } from "@/lib/api";
+import { inspectUpload, OFFICE_OPEN_XML_KINDS } from "@/lib/upload-guard";
 import type { ImportPlan } from "@/lib/chemical-inventory/importer";
 
 /**
@@ -26,7 +27,9 @@ export async function readUploadedWorkbook(req: NextRequest) {
     throw fail(`Tệp vượt quá ${Math.round(MAX_UPLOAD_BYTES / 1024 / 1024)} MB`, 413);
   }
 
-  return { buffer: Buffer.from(await file.arrayBuffer()), fileName: file.name, form };
+  const buffer = Buffer.from(await file.arrayBuffer());
+  await inspectUpload(buffer, { fileName: file.name, kinds: OFFICE_OPEN_XML_KINDS, label: "Excel (.xlsx)" });
+  return { buffer, fileName: file.name, form };
 }
 
 /**

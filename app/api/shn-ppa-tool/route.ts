@@ -4,6 +4,7 @@ import path from "path";
 import { NextRequest } from "next/server";
 import { audit, fail, handle, ok, requireRole, requireUser } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
+import { inspectUpload } from "@/lib/upload-guard";
 
 export const dynamic = "force-dynamic";
 
@@ -34,6 +35,7 @@ export async function POST(request: NextRequest) {
     if (!file.name.toLowerCase().endsWith(".html")) return fail("Chỉ chấp nhận file có đuôi .html");
     if (file.size < 100 || file.size > MAX_HTML_BYTES) return fail("File HTML phải nhỏ hơn 2 MB");
     const content = await file.text();
+    await inspectUpload(Buffer.from(content, "utf8"), { fileName: file.name });
     if (!/<html[\s>]/i.test(content) || !/<script[\s>]/i.test(content)) {
       return fail("File không có cấu trúc HTML hợp lệ");
     }

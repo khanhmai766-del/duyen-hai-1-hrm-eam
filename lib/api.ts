@@ -5,6 +5,7 @@ import { writeActivityLog } from "@/lib/activity-log";
 import { effectiveUserPosition } from "@/lib/current-position";
 import { prisma } from "@/lib/prisma";
 import { ADMIN_MODE_COOKIE, adminModeEnabled } from "@/lib/admin-mode";
+import { UploadRejectedError } from "@/lib/upload-guard";
 
 let userPositionColumnsReady = false;
 
@@ -95,6 +96,8 @@ export function auditDetailWithPosition(
 export function handle(fn: () => Promise<Response>): Promise<Response> {
   return fn().catch((e) => {
     if (e instanceof Response) return e;
+    // Tệp tải lên bị từ chối (sai định dạng thật / có mã độc / máy quét không phản hồi).
+    if (e instanceof UploadRejectedError) return fail(e.message, e.status);
     console.error(e);
     return fail("Lỗi máy chủ", 500);
   });

@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, handle, audit, requireRole } from "@/lib/api";
 import { deleteFromS3, keyFromPublicUrl, s3ProxyUrl, uploadBufferToS3 } from "@/lib/s3";
+import { inspectUpload } from "@/lib/upload-guard";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -48,6 +49,7 @@ export async function POST(req: NextRequest) {
     if (file.size > 25 * 1024 * 1024) return fail("Tệp vượt quá 25MB");
 
     const bytes = Buffer.from(await file.arrayBuffer());
+    await inspectUpload(bytes, { fileName: file.name, kinds: ["pdf"], label: "PDF" });
     const previous = await readMeta();
     // Dùng chung thư mục với lịch trực ca (xem app/api/roster-schedule/route.ts).
     const uploaded = await uploadBufferToS3({

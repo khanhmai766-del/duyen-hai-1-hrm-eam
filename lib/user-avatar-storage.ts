@@ -1,3 +1,4 @@
+import { inspectUpload } from "@/lib/upload-guard";
 import { safeEmployeeCode, uploadImageBufferToS3, uploadS3Object } from "@/lib/s3";
 
 const AVATAR_DATA_URL_RE = /^data:([^;,]+);base64,(.+)$/;
@@ -56,9 +57,12 @@ export async function signatureUpdate(value: unknown, employeeId: string) {
   const ext = imageExtensionForMime(mimeType, "Chữ ký số");
   const code = safeEmployeeCode(employeeId);
   const key = `signatures/${code}.${ext}`;
+  const body = Buffer.from(match[2], "base64");
+  // Chữ ký lưu nguyên bản, không qua sharp — kiểm nội dung là ảnh thật + quét virus.
+  await inspectUpload(body, { fileName: "chữ ký số", kinds: ["png", "jpeg", "webp"], label: "ảnh PNG/JPG/WEBP" });
   await uploadS3Object({
     key,
-    body: Buffer.from(match[2], "base64"),
+    body,
     contentType: mimeType,
     originalName: `${code}.${ext}`,
   });

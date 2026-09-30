@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 import { ok, fail, requireUser, requireRole, handle, audit } from "@/lib/api";
 import { uploadBufferToS3, uploadImageBufferToS3 } from "@/lib/s3";
+import { inspectUpload } from "@/lib/upload-guard";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
 
 export const runtime = "nodejs";
@@ -33,6 +34,7 @@ export async function POST(req: NextRequest) {
       if (file.size > 25 * 1024 * 1024) return fail("Tệp PDF vượt quá 25MB");
 
       const bytes = Buffer.from(await file.arrayBuffer());
+      await inspectUpload(bytes, { fileName: file.name, kinds: ["pdf"], label: "PDF" });
       const uploaded = await uploadBufferToS3({
         buffer: bytes,
         contentType: "application/pdf",

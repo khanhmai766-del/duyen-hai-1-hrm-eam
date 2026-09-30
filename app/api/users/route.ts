@@ -1,5 +1,4 @@
 import type { NextRequest } from "next/server";
-import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, handle, audit } from "@/lib/api";
 import { requestAuditMeta } from "@/lib/activity-log";
@@ -10,6 +9,7 @@ import { effectiveUserPosition, isValidCurrentPosition } from "@/lib/current-pos
 import { getOrSetUserSummaryCache, invalidateUserSummaryCache } from "@/lib/user-summary-cache";
 import { hasPermissionLevel, requirePermissionLevel } from "@/lib/rbac-guard";
 import { requireUserAdminReadAccess } from "@/lib/user-admin-access";
+import { hashPassword } from "@/lib/password-hash";
 
 export const dynamic = "force-dynamic";
 const PERMANENT_DELETE_CONFIRMATION = "xác nhận xóa";
@@ -143,7 +143,7 @@ export async function POST(req: NextRequest) {
         signatureKey: body.signatureKey || null,
         ...avatarData,
         ...signatureData,
-        passwordHash: await bcrypt.hash(password, 10),
+        passwordHash: await hashPassword(password),
         mustChangePassword: password === DEFAULT_PASSWORD,
         passwordChangedAt: new Date(),
       },
@@ -180,7 +180,7 @@ export async function PUT(req: NextRequest) {
       const updated = await prisma.user.update({
         where: { id: body.id },
         data: {
-          passwordHash: await bcrypt.hash(newPassword, 10),
+          passwordHash: await hashPassword(newPassword),
           mustChangePassword: true,
           passwordChangedAt: new Date(),
           failedLoginAttempts: 0,

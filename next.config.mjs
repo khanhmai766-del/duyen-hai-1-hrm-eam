@@ -5,7 +5,7 @@ const nextConfig = {
   // là hướng dẫn nhóm tự viết cho Codex — không để công cụ ghi đè (và làm bẩn cây làm việc).
   agentRules: false,
   // Next 15+ đổi tên từ experimental.serverComponentsExternalPackages.
-  serverExternalPackages: ["pg", "pdf-parse", "@napi-rs/canvas", "tesseract.js", "tesseract.js-core", "@tesseract.js-data/eng", "@tesseract.js-data/vie"],
+  serverExternalPackages: ["pg", "@node-rs/argon2", "pdf-parse", "@napi-rs/canvas", "tesseract.js", "tesseract.js-core", "@tesseract.js-data/eng", "@tesseract.js-data/vie"],
   // BẬT LẠI bộ tối ưu ảnh `/_next/image` (2026-09-14). Tắt ngày 13/09 vì Next 14 còn lỗ hổng RCE
   // trong Image Optimization API (vá từ 15.5.24); nay đã chạy Next 16.3.5. Khoá chặt để không bị
   // lợi dụng làm tốn CPU/đĩa hay làm proxy tải ảnh ngoài:

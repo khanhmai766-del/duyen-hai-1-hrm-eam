@@ -1,5 +1,6 @@
 import crypto from "crypto";
 import type { NextRequest } from "next/server";
+import { authSecret } from "@/lib/auth-secret";
 
 const CHALLENGE_TTL_MS = 5 * 60 * 1000;
 const LOGIN_TOKEN_TTL_MS = 60 * 1000;
@@ -152,7 +153,10 @@ function signPayload(payload: object) {
 function readSignedPayload<T>(value: string | undefined) {
   if (!value) return null;
   const [body, sig] = value.split(".");
-  if (!body || !sig || hmac(body) !== sig) return null;
+  if (!body || !sig) return null;
+  const received = Buffer.from(sig);
+  const expected = Buffer.from(hmac(body));
+  if (received.length !== expected.length || !crypto.timingSafeEqual(received, expected)) return null;
   try {
     return JSON.parse(fromBase64url(body).toString("utf8")) as T;
   } catch {
@@ -164,9 +168,6 @@ function hmac(body: string) {
   return base64url(crypto.createHmac("sha256", authSecret()).update(body).digest());
 }
 
-function authSecret() {
-  return process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET || "dev-passkey-secret";
-}
 
 function coseEc2ToJwk(cose: Map<unknown, unknown>) {
   const x = cose.get(-2);

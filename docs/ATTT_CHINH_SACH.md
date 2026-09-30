@@ -10,6 +10,7 @@ Ho so thuc hien (release, rollback, bang chung kiem tra) nam o `docs/ATTT_HO_SO_
 | C | Checklist ATTT truoc khi trien khai | A.8.25, A.8.32 |
 | D | Ke hoach rollback khi thay doi phan mem | A.8.25 |
 | E | Chinh sach du lieu test va file export | A.8.29, A.8.28 |
+| F | Lap trinh an toan: xac thuc, ma hoa, tep tai len | A.8.26 |
 
 ---
 
@@ -651,3 +652,44 @@ Noi luu tru:
 Thoi han luu:
 Nguoi phe duyet:
 ```
+
+---
+
+# Phan F — Lap trinh an toan: xac thuc, ma hoa, tep tai len (A.8.26)
+
+Trien khai ngay 2026-09-30 theo checklist kiem tra ung dung muc 5, 6; muc 4 de lai dot sau.
+
+## F.1. Xac thuc (muc 4) — de lai dot sau
+
+MFA cho Admin va ket noi AD/LDAP **chua trien khai** (da lam thu tren may dev ngay 2026-09-30, tach ra de lam sau).
+Hien trang: tai khoan noi bo, khoa tai khoan sau 5 lan sai (ke ca qua route dang ky Passkey), Passkey bat buoc
+xac minh sinh trac/PIN, het phien sau 30 phut khong thao tac.
+
+## F.2. Ma hoa (muc 5)
+
+| Muc dich | Thuat toan |
+| --- | --- |
+| Bam mat khau | Argon2id (m=19 MiB, t=2, p=1 — muc OWASP). Hash bcrypt cu tu bam lai khi dang nhap dung (`lib/password-hash.ts`) |
+| Truong du lieu hop dong TCMS | AES-256-GCM, IV ngau nhien 12 byte |
+| Phien dang nhap (NextAuth) | JWE A256CBC-HS512 |
+| Token Passkey, token webhook | HMAC-SHA256, so sanh thoi gian hang dinh |
+| Passkey | ECDSA P-256 (ES256 — thuat toan chuan WebAuthn, tuong duong Ed25519) |
+
+- Bo khoa du phong co dinh `dev-passkey-secret`: thieu `AUTH_SECRET` thi ung dung bao loi, khong am tham dung khoa yeu (`lib/auth-secret.ts`).
+
+## F.3. An toan tep tai len (muc 6)
+
+- Moi tep nguoi dung tai len (anh, PDF, Excel, ZIP, CSV, HTML, anh dang data URL) di qua `lib/upload-guard.ts`:
+  1. Kiem dinh dang that theo chu ky nhi phan dau tep — khong tin MIME/duoi tep trinh duyet gui.
+  2. Quet ma doc bang ClamAV (lenh INSTREAM toi clamd). Da cau hinh ma clamd khong phan hoi → tu choi tep (fail-closed). Phat hien ma doc → tu choi, ghi log `[virus-scan] CHAN`.
+- Anh luon duoc ma hoa lai (sharp → WebP/JPEG), xoa du lieu nhung.
+- **Cai dat tren server** (chua thuc hien):
+  ```bash
+  apt install clamav-daemon clamav-freshclam
+  # /etc/clamav/clamd.conf: StreamMaxLength 100M
+  systemctl enable --now clamav-freshclam clamav-daemon
+  # .env cua app: CLAMAV_SOCKET=/run/clamav/clamd.ctl  → reload pm2
+  ```
+  clamd ton ~1–1.5 GB RAM (co so du lieu chu ky). Chua cau hinh `CLAMAV_*` thi chi kiem dinh dang, log canh bao mot lan.
+- Kiem tra sau khi bat: tai tep EICAR (`X5O!P%@AP[4\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*`, luu thanh `.pdf` sau dong `%PDF-1.4`) len muc Menh lenh san xuat → phai bao "phat hien ma doc".
+

@@ -1,6 +1,6 @@
 import { PrismaClient, Role } from "@prisma/client";
-import bcrypt from "bcryptjs";
 import { passwordPolicyMessage } from "../../lib/password-policy";
+import { hashPassword } from "../../lib/password-hash";
 
 const CONFIRM_ENV = "ADMIN_RESET_CONFIRM";
 const CONFIRM_VALUE = "RESET_ADMIN";
@@ -169,7 +169,7 @@ async function main() {
   const updated = await prisma.user.update({
     where: { id: user.id },
     data: {
-      passwordHash: await bcrypt.hash(password, 10),
+      passwordHash: await hashPassword(password),
       mustChangePassword: true,
       passwordChangedAt: new Date(),
       failedLoginAttempts: 0,

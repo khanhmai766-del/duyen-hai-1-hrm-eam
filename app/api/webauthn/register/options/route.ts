@@ -1,23 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
-import bcrypt from "bcryptjs";
-import { prisma } from "@/lib/prisma";
 import { createChallengeCookie, rpIdFromRequest } from "@/lib/webauthn";
+import { checkPassword, findLoginUser, recordLoginFailure, recordLoginSuccess } from "@/lib/login-credentials";
 
 export async function POST(req: NextRequest) {
   const { email: rawLogin, password } = await req.json();
   const login = typeof rawLogin === "string" ? rawLogin.trim() : "";
   if (!login || !password) return NextResponse.json({ error: "Thiếu email/user hoặc mật khẩu" }, { status: 400 });
 
-  // passwordHash ở đây là CẦN THIẾT (bcrypt.compare bên dưới), nhưng chỉ lấy đúng
-  // các trường dùng tới thay vì cả bản ghi — route nằm dưới prefix công khai
-  // /api/webauthn nên càng ít dữ liệu nhạy cảm đi qua đây càng tốt.
-  const user = await prisma.user.findFirst({
-    where: { OR: [{ email: login.toLowerCase() }, { username: login }] },
-    select: { id: true, email: true, name: true, isActive: true, passwordHash: true },
-  });
-  if (!user || !user.isActive) return NextResponse.json({ error: "Tài khoản không hợp lệ" }, { status: 401 });
-  const valid = await bcrypt.compare(password, user.passwordHash);
-  if (!valid) return NextResponse.json({ error: "Mật khẩu không đúng" }, { status: 401 });
+  // Route nằm dưới prefix công khai /api/webauthn: kiểm mật khẩu qua cùng đường với form
+  // đăng nhập để lần sai ở đây cũng bị đếm và khóa tài khoản (trước đây không đếm → dò
+  // mật khẩu không giới hạn qua route này).
+  const user = await findLoginUser(login);
+  if (!user || !user.isActive || user.lockedAt) return NextResponse.json({ error: "Tài khoản không hợp lệ" }, { status: 401 });
+  if (!(await checkPassword(user, String(password)))) {
+    await recordLoginFailure(user);
+    return NextResponse.json({ error: "Mật khẩu không đúng" }, { status: 401 });
+  }
+  await recordLoginSuccess(user, String(password));
 
   const { payload, value } = createChallengeCookie({ purpose: "register", email: user.email, userId: user.id });
   const response = NextResponse.json({

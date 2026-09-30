@@ -3,6 +3,7 @@ import yauzl, { type Entry } from "yauzl";
 import { prisma } from "@/lib/prisma";
 import { audit } from "@/lib/api";
 import { fileExtension, safeEmployeeCode, uploadImageBufferToS3, uploadS3Object } from "@/lib/s3";
+import { inspectUpload } from "@/lib/upload-guard";
 
 type MediaKind = "avatar" | "signature";
 
@@ -144,6 +145,8 @@ async function uploadForUser(kind: MediaKind, employeeCode: string, fileName: st
       })).key
     : keyFor(kind, code, ext);
   if (kind === "signature") {
+    // Chữ ký lưu NGUYÊN bản (không qua sharp như ảnh đại diện) nên phải kiểm nội dung + quét virus.
+    await inspectUpload(buffer, { fileName, kinds: ext === "pdf" ? ["pdf"] : ["png", "jpeg"], label: ext === "pdf" ? "PDF" : "ảnh PNG/JPG" });
     await uploadS3Object({ key, body: buffer, contentType: mimeType || contentType(ext), originalName: fileName });
   }
   await prisma.user.update({
@@ -175,6 +178,8 @@ export async function uploadUserMediaZip(form: FormData, actorId: string, kind: 
   if (file.size > maxZipBytes()) throw new Error(`File zip vượt quá ${Number(process.env.USER_UPLOAD_MAX_ZIP_MB ?? 100)}MB`);
 
   const zipBuffer = Buffer.from(await file.arrayBuffer());
+  // clamd quét cả các tệp bên trong gói ZIP; từng ảnh/chữ ký sau đó còn được kiểm riêng.
+  await inspectUpload(zipBuffer, { fileName: file.name, kinds: ["zip"], label: "ZIP" });
   const entries = await zipFromBuffer(zipBuffer);
   const errors: Array<{ file: string; reason: string }> = [];
   let success = 0;

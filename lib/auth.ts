@@ -1,12 +1,11 @@
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
-import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { readLoginToken } from "@/lib/webauthn";
 import { isDefaultPassword, isPasswordExpired } from "@/lib/password-policy";
 import { effectiveUserPosition } from "@/lib/current-position";
-import { MAX_FAILED_LOGIN_ATTEMPTS } from "@/lib/login-security";
 import { writeActivityLog } from "@/lib/activity-log";
+import { checkPassword, findLoginUser, recordLoginFailure, recordLoginSuccess } from "@/lib/login-credentials";
 
 let loginLockColumnsReady = false;
 
@@ -105,30 +104,16 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           };
         }
 
-        const user = await prisma.user.findFirst({
-          where: { OR: [{ email: login.toLowerCase() }, { username: login }] },
-        });
+        const user = await findLoginUser(login);
         if (!user || !user.isActive || user.lockedAt) return null;
         if (!password) return null;
 
-        const valid = await bcrypt.compare(password, user.passwordHash);
-        if (!valid) {
-          const failedLoginAttempts = user.failedLoginAttempts + 1;
-          await prisma.user.update({
-            where: { id: user.id },
-            data: {
-              failedLoginAttempts,
-              lockedAt: failedLoginAttempts >= MAX_FAILED_LOGIN_ATTEMPTS ? new Date() : null,
-            },
-          });
+        if (!(await checkPassword(user, password))) {
+          await recordLoginFailure(user);
           return null;
         }
-        if (user.failedLoginAttempts > 0) {
-          await prisma.user.update({
-            where: { id: user.id },
-            data: { failedLoginAttempts: 0, lockedAt: null },
-          });
-        }
+        // Xoá bộ đếm sai + băm lại bằng Argon2id nếu hash còn là bcrypt (lib/password-hash.ts).
+        await recordLoginSuccess(user, password);
         const mustChangePassword = user.mustChangePassword || isDefaultPassword(password) || isPasswordExpired(user.passwordChangedAt);
         if (mustChangePassword && !user.mustChangePassword) {
           await prisma.user.update({ where: { id: user.id }, data: { mustChangePassword: true } });

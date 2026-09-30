@@ -1,8 +1,8 @@
 import type { NextRequest } from "next/server";
-import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, handle, audit } from "@/lib/api";
 import { passwordPolicyMessage } from "@/lib/password-policy";
+import { hashPassword, verifyPassword } from "@/lib/password-hash";
 
 export const dynamic = "force-dynamic";
 
@@ -29,16 +29,16 @@ export async function PUT(req: NextRequest) {
     });
     if (!target) return fail("Không tìm thấy tài khoản", 404);
 
-    const valid = await bcrypt.compare(currentPassword, target.passwordHash);
+    const valid = await verifyPassword(currentPassword, target.passwordHash);
     if (!valid) return fail("Mật khẩu hiện tại không đúng", 400);
 
-    const samePassword = await bcrypt.compare(newPassword, target.passwordHash);
+    const samePassword = await verifyPassword(newPassword, target.passwordHash);
     if (samePassword) return fail("Mật khẩu mới không được trùng mật khẩu hiện tại");
 
     await prisma.user.update({
       where: { id: user.id },
       data: {
-        passwordHash: await bcrypt.hash(newPassword, 10),
+        passwordHash: await hashPassword(newPassword),
         mustChangePassword: false,
         passwordChangedAt: new Date(),
         failedLoginAttempts: 0,

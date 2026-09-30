@@ -1,5 +1,6 @@
 import sharp from "sharp";
 import { uploadS3Object, deleteS3ObjectByKey, s3ProxyUrl, getS3ObjectBuffer } from "@/lib/s3";
+import { IMAGE_KINDS, inspectUpload } from "@/lib/upload-guard";
 import { vietnamDatePath } from "@/lib/material-document-name";
 import { isGrindingBallCategory, MIN_USAGE_PHOTOS, USAGE_PHOTO_RETENTION_DAYS } from "@/lib/constants";
 import type { PrismaClient } from "@prisma/client";
@@ -97,6 +98,7 @@ const PHOTO_QUALITY_STEPS = [80, 74, 68];
  * nhưng người dùng hay kéo to ảnh trong Word cho kín ô nên cần dư pixel.
  */
 export async function compressUsagePhoto(buffer: Buffer) {
+  await inspectUpload(buffer, { fileName: "ảnh hiện trường", kinds: IMAGE_KINDS, label: "ảnh" });
   const resized = sharp(buffer)
     .rotate() // ảnh điện thoại xoay theo EXIF; không xoay lại thì nằm ngang trong Word
     .resize({ width: 1600, height: 1600, fit: "inside", withoutEnlargement: true });

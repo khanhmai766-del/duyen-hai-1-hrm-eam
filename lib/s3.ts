@@ -5,6 +5,7 @@ import { Readable } from "stream";
 import { DeleteObjectCommand, GetObjectCommand, ListObjectsV2Command, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import sharp from "sharp";
+import { IMAGE_KINDS, inspectUpload } from "@/lib/upload-guard";
 
 type ImagePreset = "avatar" | "signature" | "image" | "document-image";
 
@@ -142,11 +143,7 @@ function dataUrlToBuffer(value: string) {
   };
 }
 
-async function optimizeImage(buffer: Buffer, contentType: string, preset: ImagePreset) {
-  if (!contentType.startsWith("image/")) {
-    return { buffer, contentType, ext: extensionFromContentType(contentType) };
-  }
-
+async function optimizeImage(buffer: Buffer, preset: ImagePreset) {
   if (preset === "signature") {
     const output = await sharp(buffer)
       .resize({ width: 600, height: 240, fit: "inside", withoutEnlargement: true })
@@ -212,7 +209,11 @@ export async function uploadImageBufferToS3({
   folder: string;
   preset?: ImagePreset;
 }) {
-  const optimized = await optimizeImage(buffer, contentType, preset);
+  // Bytes phải là ảnh thật (không tin `contentType` client gửi) và qua quét virus. Trước
+  // 30/09/2026 nội dung không phải ảnh được đưa NGUYÊN lên S3 — data URL
+  // "data:application/x-msdownload;base64,..." gửi vào bất kỳ ô ảnh nào cũng được lưu.
+  await inspectUpload(buffer, { fileName: `ảnh (${contentType})`, kinds: IMAGE_KINDS, label: "ảnh" });
+  const optimized = await optimizeImage(buffer, preset);
   return uploadBufferToS3({
     buffer: optimized.buffer,
     contentType: optimized.contentType,
@@ -244,6 +245,17 @@ export async function maybeUploadDataUrl({ value, folder, preset = "image" }: Ma
     return value;
   }
   const parsed = dataUrlToBuffer(value);
+  // Ô tài liệu (preset document-image) nhận thêm PDF; mọi ô khác chỉ nhận ảnh.
+  if (preset === "document-image" && !parsed.contentType.startsWith("image/")) {
+    await inspectUpload(parsed.buffer, { fileName: "tài liệu đính kèm", kinds: ["pdf"], label: "ảnh hoặc PDF" });
+    const uploaded = await uploadBufferToS3({
+      buffer: parsed.buffer,
+      contentType: "application/pdf",
+      folder,
+      filename: "document.pdf",
+    });
+    return uploaded.url;
+  }
   const uploaded = await uploadImageBufferToS3({
     buffer: parsed.buffer,
     contentType: parsed.contentType,

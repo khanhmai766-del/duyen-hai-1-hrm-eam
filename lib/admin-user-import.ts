@@ -1,5 +1,6 @@
 import crypto from "crypto";
-import bcrypt from "bcryptjs";
+import { hashPassword } from "@/lib/password-hash";
+import { inspectUpload, OFFICE_OPEN_XML_KINDS } from "@/lib/upload-guard";
 import * as XLSX from "xlsx";
 import { prisma } from "@/lib/prisma";
 import { audit } from "@/lib/api";
@@ -203,6 +204,8 @@ export async function importUsersFromForm(form: FormData, actorId: string) {
   const preview = String(form.get("preview") ?? "false") === "true";
 
   const buffer = Buffer.from(await file.arrayBuffer());
+  // CSV là văn bản thuần, không có chữ ký nhị phân — chỉ quét virus.
+  await inspectUpload(buffer, ext === "csv" ? { fileName: file.name } : { fileName: file.name, kinds: OFFICE_OPEN_XML_KINDS, label: "Excel (.xlsx)" });
   const rows = readRows(buffer, file.name);
   if (!rows.length) throw new Error("Không có dòng dữ liệu hợp lệ trong tệp");
 
@@ -301,7 +304,7 @@ export async function importUsersFromForm(form: FormData, actorId: string) {
           secondaryPosition2: row.secondaryPosition2,
           department: row.department,
           role: row.role,
-          passwordHash: await bcrypt.hash(row.password, 10),
+          passwordHash: await hashPassword(row.password),
           mustChangePassword: row.password === "password123",
           passwordChangedAt: new Date(),
           ...(row.isActive !== undefined ? { isActive: row.isActive } : {}),

@@ -11,6 +11,7 @@ import {
 } from "@/lib/tcms/server/pdf/contract-item-import";
 import { extractPdfPreview } from "@/lib/tcms/server/pdf/pdf-preview";
 import { getContractItemPdfProvider } from "@/lib/tcms/server/pdf/provider-factory";
+import { inspectUpload, UploadRejectedError } from "@/lib/upload-guard";
 
 export const runtime = "nodejs";
 
@@ -54,6 +55,15 @@ async function POSTHandler(request: Request) {
       validatePdfSignature(data);
     } catch (error) {
       return uploadError(error) ?? apiError(error);
+    }
+    // Chữ ký %PDF- đã kiểm ở trên; ở đây chỉ quét virus trước khi đọc/gửi nội dung đi AI.
+    try {
+      await inspectUpload(data, { fileName: file.name });
+    } catch (error) {
+      if (error instanceof UploadRejectedError) {
+        return Response.json({ error: "UPLOAD_REJECTED", message: error.message }, { status: error.status });
+      }
+      throw error;
     }
 
     try {
