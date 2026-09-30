@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { canonicalPermitNumber, permitNumberScope, reservePermitNumber } from "../../lib/server/work-permit-number-reservations";
+import { canAutoReleaseLatestNumber, canonicalPermitNumber, permitNumberScope, reservePermitNumber } from "../../lib/server/work-permit-number-reservations";
 
 test("số nhập tay dùng cùng một dạng chuẩn để tránh 001 và 1 chiếm hai lượt", () => {
   assert.equal(canonicalPermitNumber(" 000897 "), "897");
@@ -34,4 +34,10 @@ test("luôn lấy số tiếp theo; số đã hủy bị bỏ, không cấp lạ
   const row = await reservePermitNumber(tx, { kind: "MECHANICAL", year: 2026, teamType: "CONTRACTOR", ownerId: "operator", ownerName: "Người cấp" });
   assert.equal(row.number, "16");
   assert.equal(created.length, 1);
+});
+
+test("chỉ tự trả lại lượt hủy khi đó là số cuối dãy", () => {
+  assert.equal(canAutoReleaseLatestNumber("15", "12", "14"), true);
+  assert.equal(canAutoReleaseLatestNumber("15", "12", "16"), false);
+  assert.equal(canAutoReleaseLatestNumber("15", "15", "14"), false);
 });

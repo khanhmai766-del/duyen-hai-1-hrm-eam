@@ -17,6 +17,15 @@ export function canonicalPermitNumber(value: unknown): string {
   return number;
 }
 
+/**
+ * Chỉ trả một số vừa hủy về dãy khi nó đúng là số kế tiếp sau mốc/số đang dùng cao nhất.
+ * Nhờ vậy người cấp có thể sửa ngay lượt lấy nhầm mà không tạo lỗ giữa dãy số đã phát hành.
+ */
+export function canAutoReleaseLatestNumber(number: string, baseline: string, highestWithoutNumber: string) {
+  const floor = BigInt(baseline) > BigInt(highestWithoutNumber) ? BigInt(baseline) : BigInt(highestWithoutNumber);
+  return BigInt(number) === floor + BigInt(1);
+}
+
 type Tx = Prisma.TransactionClient;
 
 export function teamTypeLabel(teamType: string) {

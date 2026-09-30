@@ -6,7 +6,7 @@ export interface PermitMeta { total: number; page: number; pageSize: number; cou
 export interface PermitNumberSuggestion { configured: boolean; baseline: string | null; highest: string | null; suggested: string | null }
 export interface PermitNumberReservation {
   id: string; kind: string; year: number; number: string; teamType: "INTERNAL" | "CONTRACTOR";
-  status: "RESERVED" | "ISSUED" | "CANCELLED"; ownerId: string; ownerName: string;
+  status: "RESERVED" | "ISSUED" | "CANCELLED" | "RELEASED"; ownerId: string; ownerName: string;
   permitId: string | null; reusedPermitId: string | null; createdAt: string;
 }
 export interface PermitNumberBaselineRow {
