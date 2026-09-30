@@ -59,7 +59,9 @@
       if (Date.now() - last < 60_000) continue;
       attempted.set(formattedNumber, Date.now());
       const result = await api({ mode: "close", kind: KIND, formattedNumber, sourceStatus });
-      if (result.ok && result.data?.status === "CLOSED") closed++;
+      // Phiếu đã đóng từ lần trước vẫn trả về CLOSED để gọi lặp an toàn, nhưng không được tính là
+      // vừa đồng bộ; nếu không, mỗi lần mở danh sách lại hiện thông báo đóng lại toàn bộ phiếu cũ.
+      if (result.ok && result.data?.status === "CLOSED" && result.data.changed === true) closed++;
       else if (!result.ok && result.status !== 404) notice(`Chưa đồng bộ được ${formattedNumber}: ${result.message}`, true);
     }
     if (closed) notice(`Sổ PXVH1: đã tự đồng bộ đóng ${closed} phiếu ${sourceStatus.toLowerCase()} đang hiển thị.`);
