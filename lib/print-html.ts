@@ -14,17 +14,26 @@ export function plainHtml(html: string) {
   return html.replace(/<[^>]*>/g, "").replace(/&nbsp;/g, " ").replace(/\s+/g, " ").trim();
 }
 
-/** The Word exporter replaces the first paragraph beginning with the same heading. */
-export function replacePrintParagraph(html: string, startsWith: string, value: string) {
+function replacePrintParagraphContent(html: string, startsWith: string, content: string) {
   let found = false;
   const result = html.replace(/<p\b[^>]*>[\s\S]*?<\/p>/g, (paragraph) => {
     if (found || !plainHtml(paragraph).startsWith(startsWith.replace(/\s+/g, " "))) return paragraph;
     found = true;
     const opening = paragraph.match(/^<p\b[^>]*>/)?.[0] ?? "<p>";
-    return `${opening}${escapeHtml(value).replace(/\r?\n/g, "<br>")}</p>`;
+    return `${opening}${content}</p>`;
   });
   if (!found) throw new Error(`Mẫu HTML thiếu đoạn ${startsWith}`);
   return result;
+}
+
+/** The Word exporter replaces the first paragraph beginning with the same heading. */
+export function replacePrintParagraph(html: string, startsWith: string, value: string) {
+  return replacePrintParagraphContent(html, startsWith, escapeHtml(value).replace(/\r?\n/g, "<br>"));
+}
+
+/** Chỉ dùng với markup do máy chủ tạo; dữ liệu động bên trong phải được escape trước. */
+export function replacePrintParagraphMarkup(html: string, startsWith: string, markup: string) {
+  return replacePrintParagraphContent(html, startsWith, markup);
 }
 
 export function fillPrintTable(html: string, header: string, values: string[][]) {

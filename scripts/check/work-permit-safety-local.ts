@@ -151,8 +151,8 @@ async function main() {
     const electricText = electricXml.replace(/<[^>]+>/g, "");
     assert.ok(!electricXml.includes("PHỤ LỤC PHÂN CÔNG") && !electricText.includes(first.data.hazard));
     assert.ok(electricText.includes(`Số ĐKCT: ${paperFields.registrationNumber}`));
-    assert.ok(electricText.includes("Người lãnh đạo công việc (nếu có): LĐCV điện") && electricText.includes("Người chỉ huy trực tiếp: CHTT thử"));
-    assert.ok(electricText.includes("Nhân viên đơn vị công tác: 1 người") && electricText.includes("Địa điểm công tác: Vị trí thử") && electricText.includes(`${prefix} Công việc &amp; kiểm tra &lt;XML&gt;`));
+    assert.ok(electricText.includes("Người lãnh đạo công việc (nếu có): LĐCV điện") && !electricText.includes("Người chỉ huy trực tiếp: CHTT thử"));
+    assert.ok(!electricText.includes("Nhân viên đơn vị công tác: 1 người") && electricText.includes("Địa điểm công tác: Vị trí thử") && electricText.includes(`${prefix} Công việc &amp; kiểm tra &lt;XML&gt;`));
     assert.ok(electricText.includes("13 giờ 20 ngày 10/09/2026") && electricText.includes("17 giờ 45 ngày 12/09/2026"));
     assert.ok(electricText.includes("Họ và tên: Người cấp thử") && electricText.includes("Họ và tên: GSATĐ thử"));
     assert.ok(!electricText.includes(paperFields.workScope)); checks += 7;

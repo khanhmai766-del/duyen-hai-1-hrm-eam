@@ -7,7 +7,7 @@ import { prisma } from "@/lib/prisma";
 import type { WorkPermit } from "@prisma/client";
 import { formatPermitNumber, PERMIT_DISCIPLINES, PERMIT_UNITS } from "@/lib/work-permits";
 import { safetyPrintData, type SafetySelection } from "@/lib/work-permit-safety";
-import { assertPrintFilled, fillPrintTable, loadPrintTemplate, replacePrintParagraph } from "@/lib/print-html";
+import { assertPrintFilled, escapeHtml, fillPrintTable, loadPrintTemplate, replacePrintParagraph, replacePrintParagraphMarkup } from "@/lib/print-html";
 import { workPermitQrValue } from "@/lib/work-permit-qr";
 
 const escape = (s: string) => s.replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;" }[c]!));
@@ -96,6 +96,27 @@ function disciplineParagraph(xml: string, p: string, selected: string[]) {
   const text = Object.entries(PERMIT_DISCIPLINES).map(([key, label]) => `[${selected.includes(key) ? "X" : "  "}] ${label}`).join(DISCIPLINE_GAP);
   return paragraph(text, properties, textRunProperties(p));
 }
+
+const SIGNATURE_VALUE_BLANK = "…".repeat(8);
+/** Dùng một dòng thuần như mẫu gốc; độ dài phần tên bù theo nhãn để hai dòng thẳng cột. */
+function signatureLineParagraph(p: string, label: string, name: string, moment: string) {
+  let properties = firstTag(p, "pPr").replace(/<w:tabs>[\s\S]*?<\/w:tabs>/, "").replace(/<w:jc\b[^>]*\/>/g, "");
+  properties = properties.includes("<w:rPr") ? properties.replace(/<w:rPr\b/, '<w:jc w:val="left"/>$&') : properties.replace("</w:pPr>", '<w:jc w:val="left"/></w:pPr>');
+  const runProperties = normalizedRunProperties(textRunProperties(p))
+    .replace(/<w:sz\b[^>]*\/>/g, '<w:sz w:val="22"/>')
+    .replace(/<w:szCs\b[^>]*\/>/g, '<w:szCs w:val="22"/>')
+    .replace("</w:rPr>", '<w:w w:val="85"/></w:rPr>');
+  const blankName = "…".repeat(label === "Người cho phép" ? 8 : 13);
+  const text = `${label}: ${name || blankName}   Chữ ký: ${SIGNATURE_VALUE_BLANK}   ${moment}`;
+  return paragraph(text, properties, runProperties);
+}
+
+function signatureLineHtml(label: string, name: string, moment: string) {
+  const cell = (value: string) => `<span style="white-space:nowrap">${escapeHtml(value)}</span>`;
+  const blank = (value: string) => `<span style="white-space:nowrap;border-bottom:1px dotted currentColor">${escapeHtml(value)}</span>`;
+  const [datePart, timePart = ""] = moment.split(" Giờ ");
+  return `<span style="display:grid;grid-template-columns:17.7% 26% 9.4% 8% 23% 15.9%;align-items:baseline;font-size:11pt">${cell(`${label}:`)}${blank(name)}${cell("Chữ ký:")}${blank("")}${cell(datePart)}${cell(`Giờ ${timePart}`)}</span>`;
+}
 /**
  * Như `replaceParagraph` nhưng chỉ tìm SAU đoạn mở đầu bằng `heading` — dùng cho các dòng
  * "Họ và tên…" giống nhau dưới từng mục ký (ví dụ Người giám sát an toàn điện của mẫu Điện).
@@ -123,6 +144,11 @@ function plannedDayHour(date: Date | null) {
 }
 function signatureMoment(date: Date | null) {
   if (!date) return "Ngày ……/……/……… Giờ ……h……";
+  const t = timeParts(date);
+  return `Ngày ${t.day}/${t.month}/${t.year} Giờ ${t.hour}h${t.minute}`;
+}
+function compactSignatureMoment(date: Date | null) {
+  if (!date) return "Ngày ..../..../...... Giờ ....h....";
   const t = timeParts(date);
   return `Ngày ${t.day}/${t.month}/${t.year} Giờ ${t.hour}h${t.minute}`;
 }
@@ -226,15 +252,16 @@ export async function createWorkPermitDocument(row: WorkPermit, qrOrigin?: strin
     xml = replaceParagraph(xml, "Phạm vi:", `Phạm vi: ${row.workScope || "……………………………………………………"}`);
     xml = replaceParagraph(xml, "[  ] Thủy", p => disciplineParagraph(xml, p, row.disciplines));
     xml = replaceParagraph(xml, "Thời gian:", `Thời gian: Từ ${plannedTime(row.plannedStartAt)} đến ${plannedTime(row.plannedEndAt)}`);
-    const authorizationMoment = signatureMoment(row.authorizedAt);
+    const compactAuthorizationMoment = compactSignatureMoment(row.authorizedAt);
     xml = replaceParagraph(xml, "Người cấp phiếu:", `Người cấp phiếu: ${row.issuerName || "…………"}       Chữ ký: ……………       ${signatureMoment(row.issuedAt)}`);
-    xml = replaceParagraph(xml, "Người cho phép:", `Người cho phép: ${row.authorizerName || "…………"}       Chữ ký: ……………       ${authorizationMoment}`);
-    xml = replaceParagraph(xml, "Người CHTT:", `Người CHTT: ${row.commanderName || "…………"}       Chữ ký: ……………       ${authorizationMoment}`);
-    xml = replaceParagraph(xml, "Đơn vị công tác:", `Đơn vị công tác: ${row.teamName}       Số lượng người: ${row.workerCount ?? "………"}`);
+    xml = replaceParagraph(xml, "Người cho phép:", p => signatureLineParagraph(p, "Người cho phép", row.authorizerName, compactAuthorizationMoment));
+    // Tên CHTT và số lượng người được xác nhận, ghi trực tiếp trên phiếu giấy tại hiện trường.
+    xml = replaceParagraph(xml, "Người CHTT:", p => signatureLineParagraph(p, "Người CHTT", "", compactAuthorizationMoment));
+    xml = replaceParagraph(xml, "Đơn vị công tác:", `Đơn vị công tác: ${row.teamName}       Số lượng người: …………`);
   } else {
     xml = replaceParagraph(xml, "1.1.", `1.1. Người lãnh đạo công việc (nếu có): ${row.leaderName}`);
-    xml = replaceParagraph(xml, "1.2.", `1.2. Người chỉ huy trực tiếp: ${row.commanderName}`);
-    xml = replaceParagraph(xml, "1.3.", `1.3. Nhân viên đơn vị công tác: ${row.workerCount ?? "………"} người`);
+    xml = replaceParagraph(xml, "1.2.", "1.2. Người chỉ huy trực tiếp: …………………………………………………………");
+    xml = replaceParagraph(xml, "1.3.", "1.3. Nhân viên đơn vị công tác: ………… người");
     xml = replaceParagraph(xml, "1.4.", `1.4. Địa điểm công tác: ${row.location}`);
     xml = replaceParagraph(xml, "1.5.", `1.5. Nội dung công tác: ${row.content}`);
     xml = replaceParagraph(xml, "- Bắt đầu công việc:", `- Bắt đầu công việc: ${plannedDayHour(row.plannedStartAt)}`);
@@ -246,8 +273,7 @@ export async function createWorkPermitDocument(row: WorkPermit, qrOrigin?: strin
       ? (await prisma.user.findUnique({ where: { id: row.issuerUserId }, select: { position: true } }))?.position?.trim() ?? ""
       : "");
     xml = replaceParagraphAfter(xml, "Người cấp phiếu", "Họ và tên", `Họ và tên: ${row.issuerName || "…………………"}    Chức vụ: ${issuerPosition || "…………………"}    Ký/xác nhận: ……………`);
-    // Mục 3 "Người chỉ huy trực tiếp (ký/xác nhận)": cùng người với mục 1.2 nên điền tên CHTT luôn.
-    xml = replaceParagraphAfter(xml, "Người chỉ huy trực tiếp (", "Họ và tên", `Họ và tên: ${row.commanderName || "…………………"}    Chức vụ: …………………    Ký/xác nhận: ……………`);
+    xml = replaceParagraphAfter(xml, "Người chỉ huy trực tiếp (", "Họ và tên", "Họ và tên: …………………    Chức vụ: …………………    Ký/xác nhận: ……………");
     if (row.electricalSafetySupervisorName.trim()) xml = replaceParagraphAfter(xml, "Người giám sát an toàn điện", "Họ và tên", `Họ và tên: ${row.electricalSafetySupervisorName.trim()}    Chức vụ: …………………    Ký/xác nhận: ……………`);
   }
   ensureNoTemplateTags(xml);
@@ -274,15 +300,15 @@ export async function createWorkPermitHtml(row: WorkPermit, qrOrigin?: string) {
     replace("Phạm vi:", `Phạm vi: ${row.workScope || "…………………"}`);
     replace("[  ] Thủy", Object.entries(PERMIT_DISCIPLINES).map(([key, label]) => `[${row.disciplines.includes(key) ? "X" : "  "}] ${label}`).join("        "));
     replace("Thời gian:", `Thời gian: Từ ${plannedTime(row.plannedStartAt)} đến ${plannedTime(row.plannedEndAt)}`);
-    const authorizationMoment = signatureMoment(row.authorizedAt);
+    const authorizationMoment = compactSignatureMoment(row.authorizedAt);
     replace("Người cấp phiếu:", `Người cấp phiếu: ${row.issuerName || "…………"}       .Chữ ký: ……………       ${signatureMoment(row.issuedAt)}`);
-    replace("Người cho phép:", `Người cho phép: ${row.authorizerName || "…………"}       .Chữ ký: ……………       ${authorizationMoment}`);
-    replace("Người CHTT:", `Người CHTT: ${row.commanderName || "…………"}       Chữ ký: …………       ${authorizationMoment}`);
-    replace("Đơn vị công tác:", `Đơn vị công tác: ${row.teamName}       Số lượng người: ${row.workerCount ?? "………"}`);
+    html = replacePrintParagraphMarkup(html, "Người cho phép:", signatureLineHtml("Người cho phép", row.authorizerName, authorizationMoment));
+    html = replacePrintParagraphMarkup(html, "Người CHTT:", signatureLineHtml("Người CHTT", "", authorizationMoment));
+    replace("Đơn vị công tác:", `Đơn vị công tác: ${row.teamName}       Số lượng người: …………`);
   } else {
     replace("1.1.", `1.1. Người lãnh đạo công việc (nếu có): ${row.leaderName}`);
-    replace("1.2.", `1.2. Người chỉ huy trực tiếp: ${row.commanderName}`);
-    replace("1.3.", `1.3. Nhân viên đơn vị công tác: ${row.workerCount ?? "………"} người`);
+    replace("1.2.", "1.2. Người chỉ huy trực tiếp: …………………………………………………………");
+    replace("1.3.", "1.3. Nhân viên đơn vị công tác: ………… người");
     replace("1.4.", `1.4. Địa điểm công tác: ${row.location}`);
     replace("1.5.", `1.5. Nội dung công tác: ${row.content}`);
     replace("- Bắt đầu công việc:", `- Bắt đầu công việc: ${plannedTime(row.plannedStartAt)}`);
