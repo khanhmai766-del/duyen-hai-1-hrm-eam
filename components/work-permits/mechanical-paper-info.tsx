@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
-import { usePermitCompanySummary } from "@/hooks/useWorkPermits";
+import { PermitCompanySelect } from "@/components/work-permits/company-picker";
 import { OverhaulContentField } from "@/components/work-permits/overhaul-item-picker";
 import { PERMIT_DISCIPLINES, PERMIT_SOURCE_CLASSIFICATIONS, PERMIT_UNITS, type PermitDiscipline, type PermitInput, type PermitSourceClassification } from "@/lib/work-permits";
 
@@ -11,30 +11,22 @@ const label = "block space-y-1.5 text-[13px]";
 const section = "rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-border dark:bg-background sm:p-5";
 const title = "mb-4 border-b border-slate-200 pb-2 text-sm font-bold text-slate-900 dark:border-border dark:text-foreground";
 
-export function MechanicalPaperInfo({ form, issued, numberField, positionOptions, onChange, onPickSyc }: {
+export function MechanicalPaperInfo({ form, issued, numberField, positionOptions, onChange, onCompanyChange, onPickSyc }: {
   form: PermitInput;
   /** Cương vị người cấp được chọn (phạm vi cương vị của sổ PCT). */
   positionOptions: string[];
   issued: boolean;
   numberField: ReactNode;
   onChange: <K extends keyof PermitInput>(key: K, value: PermitInput[K]) => void;
+  onCompanyChange: (company: string) => void;
   onPickSyc: () => void;
 }) {
   const field = (key: "managingUnit" | "teamName" | "registrationNumber" | "location", fieldLabel: string, required = false) =>
     <label className={label}><span className="font-medium">{fieldLabel}{required ? " *" : ""}</span><input className={control} required={required} maxLength={key === "location" ? 500 : 200} value={String(form[key] ?? "")} onChange={event => onChange(key, event.target.value)} /></label>;
   const contractor = form.teamType === "CONTRACTOR";
   // Phiếu nhà thầu: chọn đúng tên đơn vị trong danh bạ để quét thẻ/lọc nhân sự khớp đơn vị của phiếu.
-  const companies = usePermitCompanySummary();
-  const companyRows = companies.data?.data ?? [];
   const teamField = contractor
-    ? <label className={label}><span className="font-medium">Đơn vị công tác{issued ? " *" : ""}</span>
-      <select className={control} required={issued} value={form.teamName} onChange={event => onChange("teamName", event.target.value)}>
-        <option value="">{companies.isPending ? "Đang tải đơn vị nhà thầu…" : "Chọn đơn vị nhà thầu"}</option>
-        {form.teamName && !companyRows.some(row => row.company === form.teamName) && <option value={form.teamName}>{form.teamName}</option>}
-        {companyRows.map(row => <option key={row.company} value={row.company}>{row.code ? `${row.code} · ${row.company}` : row.company}</option>)}
-      </select>
-      {companies.isError && <span role="alert" className="block text-xs text-red-700">{companies.error.message}</span>}
-    </label>
+    ? <PermitCompanySelect value={form.teamName} required={issued} onChange={onCompanyChange} />
     : field("teamName", "Đơn vị công tác", issued);
 
   return <div className="space-y-4">

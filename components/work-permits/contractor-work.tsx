@@ -354,8 +354,10 @@ function PersonEditor({ initial, presetCompany, onClose, onSaved }: { initial?: 
   </DialogContent></Dialog>;
 }
 
-export function PermitMembersEditor({ members, onChange, commander, scan }: {
+export function PermitMembersEditor({ members, onChange, commander, company, scan }: {
   members: PermitMember[]; onChange: (value: PermitMember[]) => void; commander?: PermitMember;
+  /** Lọc danh sách chọn theo đơn vị trên biểu mẫu PCT, kể cả trước khi phiếu được lưu. */
+  company?: string;
   /** Có thì hiện "Quét thẻ" và lọc "Chọn từ danh sách" theo đơn vị công tác của phiếu. */
   scan?: { unit: string; companies: string[]; permitId: string };
 }) {
@@ -364,7 +366,7 @@ export function PermitMembersEditor({ members, onChange, commander, scan }: {
   // Dòng gọn cần mã đơn vị (tên gọi tắt) + tình trạng huấn luyện ATVSLĐ — lấy từ danh bạ của đơn vị trên phiếu.
   const companyCodes = usePermitCompanySummary();
   const codeOf = (company: string) => companyCodes.data?.data.find(row => row.company === company)?.code || "";
-  const unitName = scan?.unit || members.find(m => m.personId)?.company || "";
+  const unitName = company || scan?.unit || members.find(m => m.personId)?.company || "";
   const unitPeople = usePermitPeople({ company: unitName, limit: 200, enabled: Boolean(unitName) && members.some(m => m.personId) });
   const personOf = (id?: string) => id ? unitPeople.data?.data.find(person => person.id === id) : undefined;
   // Máy quét thêm từng người liên tiếp nhanh hơn một lần render → cộng dồn trên bản mới nhất, không trên props cũ.
@@ -410,7 +412,7 @@ export function PermitMembersEditor({ members, onChange, commander, scan }: {
         {remove}
       </div>;
     })}</div>}
-    {picking && <PermitPeopleDirectory onClose={() => setPicking(false)} onPickMany={add} existingMembers={commander ? [...members, commander] : members} company={scan?.unit} />}
+    {picking && <PermitPeopleDirectory onClose={() => setPicking(false)} onPickMany={add} existingMembers={commander ? [...members, commander] : members} company={company || scan?.unit} />}
     {scanning && scan && <PermitCardScanner unit={scan.unit} companies={scan.companies} permitId={scan.permitId} existing={commander ? [...members, commander] : members} onAdd={addOne} onClose={() => setScanning(false)} />}
   </div>;
 }

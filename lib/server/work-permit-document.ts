@@ -97,25 +97,34 @@ function disciplineParagraph(xml: string, p: string, selected: string[]) {
   return paragraph(text, properties, textRunProperties(p));
 }
 
-const SIGNATURE_VALUE_BLANK = "…".repeat(8);
-/** Dùng một dòng thuần như mẫu gốc; độ dài phần tên bù theo nhãn để hai dòng thẳng cột. */
+/**
+ * Ba ô không viền giữ Tên / Chữ ký / Ngày giờ trên đúng một hàng ở mọi trình đọc Word.
+ * Không nén ngang hoặc hạ cỡ chữ vì hai cách đó làm phông khác hẳn phần còn lại của mẫu.
+ */
 function signatureLineParagraph(p: string, label: string, name: string, moment: string) {
-  let properties = firstTag(p, "pPr").replace(/<w:tabs>[\s\S]*?<\/w:tabs>/, "").replace(/<w:jc\b[^>]*\/>/g, "");
-  properties = properties.includes("<w:rPr") ? properties.replace(/<w:rPr\b/, '<w:jc w:val="left"/>$&') : properties.replace("</w:pPr>", '<w:jc w:val="left"/></w:pPr>');
   const runProperties = normalizedRunProperties(textRunProperties(p))
-    .replace(/<w:sz\b[^>]*\/>/g, '<w:sz w:val="22"/>')
-    .replace(/<w:szCs\b[^>]*\/>/g, '<w:szCs w:val="22"/>')
-    .replace("</w:rPr>", '<w:w w:val="85"/></w:rPr>');
-  const blankName = "…".repeat(label === "Người cho phép" ? 8 : 13);
-  const text = `${label}: ${name || blankName}   Chữ ký: ${SIGNATURE_VALUE_BLANK}   ${moment}`;
-  return paragraph(text, properties, runProperties);
+    .replace(/<w:sz\b[^>]*\/>/g, '<w:sz w:val="24"/>')
+    .replace(/<w:szCs\b[^>]*\/>/g, '<w:szCs w:val="24"/>')
+    .replace(/<w:w\b[^>]*\/>/g, "");
+  const [datePart, timePart = ""] = moment.split(" Giờ ");
+  const run = (text: string) => `<w:r>${runProperties}<w:t xml:space="preserve">${escape(text)}</w:t></w:r>`;
+  const spacing = firstTag(p, "pPr").match(/<w:spacing\b[^>]*\/>/)?.[0] ?? "";
+  const fields = [
+    { width: 4250, text: `${label}: ${name || ".".repeat(18)}` },
+    { width: 2100, text: `Chữ ký: ${".".repeat(8)}` },
+    { width: 3550, text: `${datePart} Giờ ${timePart}` },
+  ];
+  const cells = fields.map(field => `<w:tc><w:tcPr><w:tcW w:w="${field.width}" w:type="dxa"/><w:noWrap/><w:tcMar><w:top w:w="0" w:type="dxa"/><w:left w:w="30" w:type="dxa"/><w:bottom w:w="0" w:type="dxa"/><w:right w:w="30" w:type="dxa"/></w:tcMar></w:tcPr><w:p><w:pPr>${spacing}<w:jc w:val="left"/></w:pPr>${run(field.text)}</w:p></w:tc>`).join("");
+  const widths = fields.map(field => field.width);
+  const grid = widths.map(width => `<w:gridCol w:w="${width}"/>`).join("");
+  return `<w:tbl><w:tblPr><w:tblW w:w="9900" w:type="dxa"/><w:jc w:val="left"/><w:tblInd w:w="-284" w:type="dxa"/><w:tblBorders><w:top w:val="nil"/><w:left w:val="nil"/><w:bottom w:val="nil"/><w:right w:val="nil"/><w:insideH w:val="nil"/><w:insideV w:val="nil"/></w:tblBorders><w:tblLayout w:type="fixed"/><w:tblCellMar><w:top w:w="0" w:type="dxa"/><w:left w:w="0" w:type="dxa"/><w:bottom w:w="0" w:type="dxa"/><w:right w:w="0" w:type="dxa"/></w:tblCellMar></w:tblPr><w:tblGrid>${grid}</w:tblGrid><w:tr><w:trPr><w:cantSplit/></w:trPr>${cells}</w:tr></w:tbl>`;
 }
 
 function signatureLineHtml(label: string, name: string, moment: string) {
   const cell = (value: string) => `<span style="white-space:nowrap">${escapeHtml(value)}</span>`;
   const blank = (value: string) => `<span style="white-space:nowrap;border-bottom:1px dotted currentColor">${escapeHtml(value)}</span>`;
   const [datePart, timePart = ""] = moment.split(" Giờ ");
-  return `<span style="display:grid;grid-template-columns:17.7% 26% 9.4% 8% 23% 15.9%;align-items:baseline;font-size:11pt">${cell(`${label}:`)}${blank(name)}${cell("Chữ ký:")}${blank("")}${cell(datePart)}${cell(`Giờ ${timePart}`)}</span>`;
+  return `<span style="display:grid;grid-template-columns:17.7% 26% 9.4% 8% 23% 15.9%;align-items:baseline;font-size:12pt">${cell(`${label}:`)}${blank(name)}${cell("Chữ ký:")}${blank("")}${cell(datePart)}${cell(`Giờ ${timePart}`)}</span>`;
 }
 /**
  * Như `replaceParagraph` nhưng chỉ tìm SAU đoạn mở đầu bằng `heading` — dùng cho các dòng

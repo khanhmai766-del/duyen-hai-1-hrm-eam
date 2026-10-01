@@ -34,8 +34,12 @@ async function main() {
     assert.doesNotMatch(html, /Số lượng người:\s*3/);
     assert.doesNotMatch(html, /Nhân viên đơn vị công tác:\s*3 người/);
     if (kind === "MECHANICAL") {
-      assert.match(text, /Người CHTT: …{13}\s+Chữ ký: …{8}\s+Ngày/);
-      assert.equal((html.match(/grid-template-columns:17\.7% 26% 9\.4% 8% 23% 15\.9%/g) ?? []).length, 2);
+      assert.match(text, /Người CHTT: \.{18}\s*Chữ ký: \.{8}\s*Ngày/);
+      assert.doesNotMatch(xml, /<w:w\b[^>]*w:val="85"/);
+      const signatureTable = (xml.match(/<w:tbl\b[^>]*>[\s\S]*?<\/w:tbl>/g) ?? []).find(table => table.includes("Người CHTT:")) ?? "";
+      assert.match(signatureTable, /w:ascii="Times New Roman"/);
+      assert.match(signatureTable, /<w:sz w:val="24"\/>/);
+      assert.equal((html.match(/grid-template-columns:17\.7% 26% 9\.4% 8% 23% 15\.9%;align-items:baseline;font-size:12pt/g) ?? []).length, 2);
     }
   }
   console.log("Đạt kiểm tra Word và HTML cho PCT Cơ, Điện.");

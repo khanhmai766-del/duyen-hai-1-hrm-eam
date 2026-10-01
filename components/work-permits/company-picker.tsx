@@ -2,10 +2,48 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { usePermitCompanies } from "@/hooks/useWorkPermits";
+import { usePermitCompanies, usePermitCompanySummary } from "@/hooks/useWorkPermits";
 import { normalizeText } from "@/lib/nav";
 
 const control = "min-h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring";
+
+/** Bộ chọn dùng trên biểu mẫu PCT: tìm theo mã hoặc tên đơn vị, kể cả khi nhập không dấu. */
+export function PermitCompanySelect({ value, onChange, required = false, label = "Đơn vị công tác" }: {
+  value: string;
+  onChange: (company: string) => void;
+  required?: boolean;
+  label?: string;
+}) {
+  const companies = usePermitCompanySummary();
+  const [search, setSearch] = useState("");
+  const term = normalizeText(search.trim());
+  const rows = companies.data?.data ?? [];
+  const matches = rows.filter(row => row.company === value || normalizeText(`${row.code} ${row.company}`).includes(term));
+  const currentMissing = value && !matches.some(row => row.company === value);
+
+  return <div className="space-y-1.5 text-[13px]">
+    <span className="block font-medium">{label}{required ? " *" : ""}</span>
+    <input
+      type="search"
+      className={control}
+      aria-label={`Tìm ${label.toLowerCase()}`}
+      value={search}
+      maxLength={200}
+      placeholder="Tìm theo mã hoặc tên nhà thầu, có thể nhập không dấu…"
+      onChange={event => setSearch(event.target.value)}
+      onKeyDown={event => { if (event.key === "Enter") event.preventDefault(); }}
+    />
+    <select className={control} required={required} value={value} onChange={event => onChange(event.target.value)}>
+      <option value="">{companies.isPending ? "Đang tải đơn vị nhà thầu…" : "Chọn đơn vị nhà thầu"}</option>
+      {currentMissing && <option value={value}>{value}</option>}
+      {matches.map(row => <option key={row.company} value={row.company}>{row.code ? `${row.code} · ${row.company}` : row.company}</option>)}
+    </select>
+    {companies.isError
+      ? <span role="alert" className="block text-xs text-red-700">{companies.error.message}</span>
+      : !companies.isPending && !matches.length && <span className="block text-xs text-muted-foreground">Không có đơn vị phù hợp.</span>}
+  </div>;
+}
+
 export function PermitCompanyPicker({ value, onChange }: { value: string; onChange: (company: string) => void }) {
   const companies = usePermitCompanies();
   const [adding, setAdding] = useState(false);
