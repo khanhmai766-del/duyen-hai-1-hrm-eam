@@ -1754,11 +1754,11 @@ model WorkPermitPerson {
 /// Danh sách ĐƠN VỊ nhà thầu. Hồ sơ người vẫn ghi tên đơn vị bằng chữ (`WorkPermitPerson.company`,
 /// không FK) như trước; bảng này chỉ để giữ được đơn vị VỪA TẠO chưa có người nào. Danh sách hiển
 /// thị = hợp của bảng này và các tên đơn vị đang có trên hồ sơ người.
-/// Hạng mục đại tu đồng bộ từ 4 file Google Sheets tiến độ đại tu (Lò / Turbine / Điện / CI) — xem
-/// lib/server/work-permit-overhaul-sync.ts và docs/dai-tu-apps-script.md. Dùng để gợi ý nội dung PCT nhà thầu · Đại tu.
+/// Hạng mục đại tu đồng bộ từ 4 file Google Sheets tiến độ đại tu (link dòng 1–4 bảng Tiến độ đại tu) — xem
+/// lib/server/work-permit-overhaul.ts và docs/dai-tu-google-sheets.md. Dùng để gợi ý nội dung PCT nhà thầu · Đại tu.
 model WorkPermitOverhaulItem {
   id             String   @id @default(cuid())
-  /// File nguồn: LO / TURBINE / DIEN / CI.
+  /// Nguồn = dòng bảng Tiến độ đại tu: BOILER / TURBINE / GENERATOR / CI.
   source         String
   /// Tên tab, dạng "<Cương vị> - Cơ" / "<Cương vị> - Điện".
   sheet          String
@@ -1783,7 +1783,8 @@ model WorkPermitOverhaulItem {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  @@unique([source, sheet, code])
+  /// Một hạng mục = (nguồn, loại PCT, mã, cương vị) — cùng mã có ở tab nguồn "Lò- Cơ" lẫn tab cương vị thì gộp làm một.
+  @@unique([source, kind, code, positionTitle])
   @@index([kind, contractorCode, positionCode])
 }
 

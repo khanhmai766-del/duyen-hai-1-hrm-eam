@@ -1,0 +1,10 @@
+[Unit]
+Description=Hen gio dong bo hang muc dai tu - 06:00 gio Viet Nam hang ngay
+
+[Timer]
+# Server chay UTC: 23:00 UTC = 06:00 gio VN. Persistent: may tat luc do thi chay bu khi bat lai.
+OnCalendar=*-*-* 23:00:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

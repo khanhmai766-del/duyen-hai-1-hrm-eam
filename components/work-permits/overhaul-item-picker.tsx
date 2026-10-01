@@ -5,10 +5,10 @@ import { toast } from "sonner";
 import { ChevronDown, ChevronUp, ListChecks, Loader2, RefreshCw, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
-import { useOverhaulItems, useSyncOverhaulItems, type OverhaulSyncResult } from "@/hooks/useWorkPermits";
+import { useOverhaulItems, usePermitCompanySummary, useSyncOverhaulItems, type OverhaulSyncResult } from "@/hooks/useWorkPermits";
 import { normalizeText } from "@/lib/nav";
-import { compareOverhaulCodes, overhaulContentText, type OverhaulItemOption, type OverhaulItemSnapshot } from "@/lib/work-permit-overhaul";
-import type { PermitInput } from "@/lib/work-permits";
+import { compareOverhaulCodes, isOverhaulPaperPermit, overhaulContentText, type OverhaulItemOption, type OverhaulItemSnapshot } from "@/lib/work-permit-overhaul";
+import { effectivePermitFormat, type PermitInput } from "@/lib/work-permits";
 
 const keyOf = (item: Pick<OverhaulItemSnapshot, "sheet" | "code">) => `${item.sheet}\u0000${item.code}`;
 const snapshotOf = (item: OverhaulItemOption): OverhaulItemSnapshot =>
@@ -20,29 +20,31 @@ const snapshotOf = (item: OverhaulItemOption): OverhaulItemSnapshot =>
  */
 export function OverhaulContentField({ form, onApply }: {
   form: PermitInput;
-  /** `content` = null → giữ nguyên nội dung người dùng đã sửa tay. */
-  onApply: (items: OverhaulItemSnapshot[], content: string | null) => void;
+  /**
+   * `content` = null → giữ nguyên nội dung người dùng đã sửa tay. `company` khác null khi phiếu CHƯA có đơn vị công
+   * tác và người dùng chọn nhà thầu ngay trong hộp chọn (PCT Điện chọn đơn vị ở bước Nhân sự, sau bước này).
+   */
+  onApply: (items: OverhaulItemSnapshot[], content: string | null, company: string | null) => void;
 }) {
   const [open, setOpen] = useState(false);
-  if (form.teamType !== "CONTRACTOR" || form.contractorScope !== "OVERHAUL") return null;
+  if (!isOverhaulPaperPermit({ ...form, format: effectivePermitFormat(form) })) return null;
   const items = form.overhaulItems ?? [];
   // Nội dung còn đúng câu tự điền thì cập nhật theo mã; người dùng đã sửa tay thì không đè.
   const contentIsGenerated = !form.content.trim() || form.content.trim() === overhaulContentText(items);
-  const apply = (next: OverhaulItemSnapshot[]) => onApply(next, contentIsGenerated ? overhaulContentText(next) : null);
+  const apply = (next: OverhaulItemSnapshot[], company: string | null = null) => onApply(next, contentIsGenerated ? overhaulContentText(next) : null, company);
 
   return <div className="space-y-2">
     <div className="flex flex-wrap items-center gap-2">
-      <Button type="button" variant="outline" size="sm" className="h-9" disabled={!form.teamName} onClick={() => setOpen(true)}>
+      <Button type="button" variant="outline" size="sm" className="h-9" onClick={() => setOpen(true)}>
         <ListChecks />Chọn hạng mục đại tu
       </Button>
-      {!form.teamName && <span className="text-xs text-muted-foreground">Chọn đơn vị công tác để xem hạng mục của nhà thầu.</span>}
       {items.map(item => <span key={keyOf(item)} className="inline-flex h-7 items-center gap-1 rounded-full bg-violet-50 pl-2.5 pr-1 font-mono text-xs font-semibold text-violet-800 dark:bg-violet-950/40 dark:text-violet-200" title={[item.device, item.content].filter(Boolean).join(" — ")}>
         {item.code}
         <button type="button" className="flex h-6 w-6 items-center justify-center rounded-full hover:bg-violet-100 dark:hover:bg-violet-900" aria-label={`Bỏ hạng mục ${item.code}`} onClick={() => apply(items.filter(other => keyOf(other) !== keyOf(item)))}><X className="h-3.5 w-3.5" /></button>
       </span>)}
     </div>
     {items.length > 0 && <p className="text-xs text-muted-foreground">Chi tiết {items.length} hạng mục (nội dung, biện pháp thi công) in ở phụ lục kèm PCT.</p>}
-    {open && <OverhaulItemPicker form={form} selected={items} onClose={() => setOpen(false)} onConfirm={next => { apply(next); setOpen(false); }} />}
+    {open && <OverhaulItemPicker form={form} selected={items} onClose={() => setOpen(false)} onConfirm={(next, company) => { apply(next, company); setOpen(false); }} />}
   </div>;
 }
 
@@ -50,9 +52,13 @@ function OverhaulItemPicker({ form, selected, onClose, onConfirm }: {
   form: PermitInput;
   selected: OverhaulItemSnapshot[];
   onClose: () => void;
-  onConfirm: (items: OverhaulItemSnapshot[]) => void;
+  onConfirm: (items: OverhaulItemSnapshot[], company: string | null) => void;
 }) {
-  const query = useOverhaulItems({ kind: form.kind, company: form.teamName, position: form.position }, true);
+  // Nhà thầu: theo đơn vị công tác của phiếu (khoá, đổi ở form); phiếu chưa có đơn vị thì chọn ngay tại đây.
+  const lockedCompany = form.teamName.trim();
+  const [company, setCompany] = useState(lockedCompany);
+  const companies = usePermitCompanySummary();
+  const query = useOverhaulItems({ kind: form.kind, company, position: form.position }, Boolean(company));
   const sync = useSyncOverhaulItems();
   const [picked, setPicked] = useState(() => new Map(selected.map(item => [keyOf(item), item])));
   const [search, setSearch] = useState("");
@@ -85,18 +91,26 @@ function OverhaulItemPicker({ form, selected, onClose, onConfirm }: {
     }
   }
 
-  const empty = !query.isPending && !query.isError && groups.length === 0;
+  const empty = Boolean(company) && !query.isPending && !query.isError && groups.length === 0;
   return <Dialog open onOpenChange={value => { if (!value) onClose(); }}>
     <DialogContent className="flex max-h-[92dvh] w-[calc(100vw-1rem)] max-w-3xl flex-col gap-0 p-0 sm:w-full">
       <div className="space-y-3 border-b border-border px-4 pb-3 pt-4 sm:px-5">
         <div className="pr-8">
           <DialogTitle>Chọn hạng mục đại tu</DialogTitle>
           <DialogDescription className="mt-1">
-            {data?.contractorCode ? `Nhà thầu ${data.contractorCode}` : form.teamName}
-            {` · PCT ${form.kind === "MECHANICAL" ? "Cơ – Nhiệt – Hóa" : "Điện"}`}
+            {`PCT ${form.kind === "MECHANICAL" ? "Cơ – Nhiệt – Hóa" : "Điện"}`}
             {form.position ? ` · ${form.position}` : " · mọi cương vị"}
           </DialogDescription>
         </div>
+        <label className="block space-y-1 text-xs">
+          <span className="font-medium text-muted-foreground">Nhà thầu{lockedCompany ? " (theo đơn vị công tác của phiếu)" : ""}</span>
+          <select className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-500/10 disabled:opacity-80"
+            value={company} disabled={Boolean(lockedCompany)} onChange={event => setCompany(event.target.value)}>
+            <option value="">{companies.isPending ? "Đang tải đơn vị nhà thầu…" : "Chọn nhà thầu để xem hạng mục"}</option>
+            {company && !(companies.data?.data ?? []).some(row => row.company === company) && <option value={company}>{company}</option>}
+            {(companies.data?.data ?? []).map(row => <option key={row.company} value={row.company}>{row.code ? `${row.code} · ${row.company}` : row.company}</option>)}
+          </select>
+        </label>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           <label className="relative min-w-0 flex-1">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -112,7 +126,8 @@ function OverhaulItemPicker({ form, selected, onClose, onConfirm }: {
       </div>
 
       <div className="min-h-[12rem] flex-1 overflow-y-auto px-2 py-2 sm:px-3">
-        {query.isPending && <div className="flex justify-center py-10"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>}
+        {!company && <p className="px-4 py-10 text-center text-sm text-muted-foreground">Chọn nhà thầu ở trên để xem hạng mục của đơn vị đó.</p>}
+        {company && query.isPending && <div className="flex justify-center py-10"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>}
         {query.isError && <p role="alert" className="px-2 py-6 text-center text-sm text-red-700">{query.error.message}</p>}
         {empty && <p className="px-4 py-10 text-center text-sm text-muted-foreground">{emptyMessage(data?.reason ?? null, data?.contractorCode ?? null, Boolean(search.trim()))}</p>}
         {groups.map(([device, rows]) => <section key={device} className="py-1">
@@ -147,7 +162,7 @@ function OverhaulItemPicker({ form, selected, onClose, onConfirm }: {
         <span className="hidden text-sm text-muted-foreground sm:inline">Đã chọn <b className="text-foreground">{picked.size}</b> hạng mục</span>
         <div className="grid grid-cols-2 gap-2 sm:flex">
           <Button type="button" variant="outline" className="h-10" onClick={onClose}>Huỷ</Button>
-          <Button type="button" className="h-10" onClick={() => onConfirm([...picked.values()].sort((a, b) => compareOverhaulCodes(a.code, b.code)))}>Áp dụng{picked.size ? ` (${picked.size})` : ""}</Button>
+          <Button type="button" className="h-10" onClick={() => onConfirm([...picked.values()].sort((a, b) => compareOverhaulCodes(a.code, b.code)), lockedCompany ? null : company || null)}>Áp dụng{picked.size ? ` (${picked.size})` : ""}</Button>
         </div>
       </div>
     </DialogContent>
@@ -164,7 +179,10 @@ function emptyMessage(reason: "company" | "companyCode" | null, contractorCode: 
 function syncSummary(result: OverhaulSyncResult) {
   return result.sources.filter(source => source.configured).map(source => {
     if (source.error) return `${source.label}: lỗi — ${source.error}`;
-    const unmatched = source.unmatchedTabs.length ? `; tab không khớp cương vị: ${source.unmatchedTabs.join(", ")}` : "";
-    return `${source.label}: ${source.rows} hạng mục${unmatched}`;
+    const notes = [
+      source.unmatchedPositions.length ? `cương vị chưa khớp: ${source.unmatchedPositions.join(", ")}` : "",
+      source.unknownContractors.length ? `nhà thầu chưa có trong danh bạ: ${source.unknownContractors.join(", ")}` : "",
+    ].filter(Boolean).join("; ");
+    return `${source.label}: ${source.mechanical} Cơ · ${source.electrical} Điện${notes ? ` (${notes})` : ""}`;
   }).join(" · ") || "Chưa cấu hình file nào.";
 }

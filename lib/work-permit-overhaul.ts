@@ -1,8 +1,18 @@
 // Hạng mục đại tu trên PCT nhà thầu · Đại tu — phần dùng chung server/client (không import prisma).
 
-/** 4 file Google Sheets tiến độ đại tu; khoá = hậu tố biến môi trường OVERHAUL_SHEET_URL_<khoá>. */
-export const OVERHAUL_SOURCES = { LO: "Lò", TURBINE: "Turbine", DIEN: "Điện", CI: "C&I" } as const;
+/**
+ * Nguồn hạng mục = dòng 1–4 của bảng "Tiến độ đại tu" (cùng `id` với OVERHAUL_SCHEDULE_DEFAULTS); link lấy từ bảng.
+ * Dòng 0 "Lọc dữ liệu hạng mục thô" KHÔNG phải nguồn gợi ý.
+ */
+export const OVERHAUL_SOURCES = { BOILER: "Lò hơi", TURBINE: "Turbine", GENERATOR: "Máy phát", CI: "C&I" } as const;
 export type OverhaulSource = keyof typeof OVERHAUL_SOURCES;
+/** Loại PCT khi tên tab không có đuôi Cơ/Điện: file Máy phát và C&I toàn PCT Điện; Lò/Turbine bắt buộc có đuôi. */
+export const OVERHAUL_SOURCE_DEFAULT_KIND: Partial<Record<OverhaulSource, "MECHANICAL" | "ELECTRICAL">> = { GENERATOR: "ELECTRICAL", CI: "ELECTRICAL" };
+
+/** Gợi ý mã hạng mục + phụ lục chỉ dành cho PCT giấy · nhà thầu · Đại tu. */
+export function isOverhaulPaperPermit(permit: { teamType: string; contractorScope?: string | null; format?: string | null }) {
+  return permit.teamType === "CONTRACTOR" && permit.contractorScope === "OVERHAUL" && (permit.format ?? "PAPER") === "PAPER";
+}
 
 /** Ảnh chụp một hạng mục lưu trên phiếu (WorkPermit.overhaulItems) và in ra phụ lục. */
 export type OverhaulItemSnapshot = {
@@ -44,10 +54,16 @@ export function overhaulItemsOf(value: unknown): OverhaulItemSnapshot[] {
  * Câu điền sẵn vào "Nội dung công việc": chi tiết từng mã nằm ở phụ lục in kèm, trên phiếu chỉ ghi mã.
  * Cùng một thiết bị → "Đại tu <thiết bị> theo hạng mục 1.1.1, 1.1.2"; nhiều thiết bị → liệt kê mã.
  */
-/** "Van đầu vào…" → "van đầu vào…" để ghép giữa câu; giữ nguyên chữ viết tắt ("ESP 1", "IDF"). */
+/**
+ * "Van đầu vào…" / "Bơm dầu IDF" → viết thường chữ đầu để ghép giữa câu. Giữ nguyên khi từ đầu là chữ viết tắt ("ESP 1")
+ * hoặc tên viết hoa từng chữ ("Máy Phát") — hạ chữ đầu sẽ thành "máy Phát".
+ */
 function lowerFirst(text: string) {
-  const [first, second] = [...text];
-  return first && second && second === second.toLowerCase() && second !== second.toUpperCase() ? first.toLowerCase() + text.slice(first.length) : text;
+  const words = text.split(/\s+/);
+  const isAcronym = (word: string) => /\d/.test(word) || (word.length > 1 && word === word.toUpperCase() && word !== word.toLowerCase());
+  const titleCased = (word: string) => word[0] !== word[0].toLowerCase() && !isAcronym(word);
+  if (!words[0] || isAcronym(words[0]) || words.slice(1).some(titleCased)) return text;
+  return words[0][0].toLowerCase() + text.slice(1);
 }
 
 export function overhaulContentText(items: Pick<OverhaulItemSnapshot, "code" | "device">[]) {

@@ -1,0 +1,12 @@
+[Unit]
+Description=DH1 - dong bo hang muc dai tu tu Google Sheets tien do (Lo hoi, Turbine, May phat, C&I)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/var/www/dh1-app
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+# Chi DOC Google Sheets, idempotent; thoat khac 0 = loi that (chua chia se file, het han khoa...) -> hien trong systemctl.
+ExecStart=/usr/bin/npm run --silent import:overhaul-items
+TimeoutStartSec=15min

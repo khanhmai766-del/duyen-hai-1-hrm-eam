@@ -1,39 +1,37 @@
 import { audit, fail, ok, requireRole, requireUser } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 import { permitBody, permitHandle } from "@/lib/server/work-permits";
+import { mergeOverhaulSchedules as merged, readStoredOverhaulSchedules as readStored } from "@/lib/server/overhaul-schedules";
+import { permitCapabilities } from "@/lib/server/work-permit-permissions";
 import {
   OVERHAUL_SCHEDULE_CONFIG_KEY, OVERHAUL_SCHEDULE_DEFAULTS, OVERHAUL_SCHEDULE_TITLE_MAX, overhaulScheduleUrlError,
-  type OverhaulScheduleId, type OverhaulScheduleLink,
+  type OverhaulScheduleId,
 } from "@/lib/work-permit-overhaul";
 export const dynamic = "force-dynamic";
-
-type Stored = Partial<Record<OverhaulScheduleId, { title?: string; url?: string; updatedAt?: string; updatedBy?: string }>>;
-
-async function readStored(): Promise<Stored> {
-  const row = await prisma.rbacConfig.findUnique({ where: { key: OVERHAUL_SCHEDULE_CONFIG_KEY } });
-  if (!row?.value) return {};
-  try { return JSON.parse(row.value) as Stored; } catch { return {}; }
-}
-
-function merged(stored: Stored): OverhaulScheduleLink[] {
-  return OVERHAUL_SCHEDULE_DEFAULTS.map(item => {
-    const saved = stored[item.id];
-    return {
-      id: item.id,
-      title: saved?.title?.trim() || item.title,
-      url: saved?.url !== undefined ? saved.url : item.url,
-      updatedAt: saved?.updatedAt ?? null,
-      updatedBy: saved?.updatedBy ?? null,
-    };
-  });
-}
 
 /** GET — 4 link Google Sheets theo dõi tiến độ đại tu (mục "Tiến độ đại tu" của sổ PCT). */
 export async function GET() {
   return permitHandle(async () => {
     const user = await requireUser();
+    // Số hạng mục gợi ý đang có theo file + loại PCT, và lần đồng bộ gần nhất (hiện trên bảng Tiến độ đại tu).
+    const [groups, last, capabilities] = await Promise.all([
+      prisma.workPermitOverhaulItem.groupBy({ by: ["source", "kind"], where: { isActive: true }, _count: true }).catch(() => []),
+      prisma.workPermitOverhaulItem.aggregate({ _max: { syncedAt: true } }).catch(() => null),
+      permitCapabilities(user),
+    ]);
+    const items: Record<string, { mechanical: number; electrical: number }> = {};
+    for (const group of groups) {
+      const entry = (items[group.source] ??= { mechanical: 0, electrical: 0 });
+      if (group.kind === "MECHANICAL") entry.mechanical += group._count; else entry.electrical += group._count;
+    }
     // Chỉ Quản trị sửa được link (file tiến độ dùng chung của cả phân xưởng); người khác chỉ xem và mở.
-    return ok(merged(await readStored()), { canWrite: user.role === "ADMIN" });
+    // Đồng bộ hạng mục: cùng quyền với nút Đồng bộ trong hộp chọn hạng mục (người cấp/sửa phiếu).
+    return ok(merged(await readStored()), {
+      canWrite: user.role === "ADMIN",
+      canSync: capabilities.canIssue,
+      items,
+      itemsSyncedAt: last?._max.syncedAt ?? null,
+    });
   });
 }
 

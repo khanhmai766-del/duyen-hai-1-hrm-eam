@@ -58,7 +58,7 @@ export function MechanicalPaperInfo({ form, issued, numberField, positionOptions
       </fieldset>
       {field("location", "Địa điểm công tác")}
       <label className={label}><span className="font-medium">Nội dung công việc *</span><textarea className={control} rows={3} required maxLength={5000} value={form.content} onChange={event => onChange("content", event.target.value)} /></label>
-      <OverhaulContentField form={form} onApply={(items, content) => { onChange("overhaulItems", items); if (content !== null) onChange("content", content); }} />
+      <OverhaulContentField form={form} onApply={(items, content, company) => { onChange("overhaulItems", items); if (content !== null) onChange("content", content); if (company) onChange("teamName", company); }} />
       <label className={label}><span className="font-medium">Phạm vi công tác</span><textarea className={control} rows={2} maxLength={5000} value={form.workScope ?? ""} onChange={event => onChange("workScope", event.target.value)} /></label>
       <div className="grid gap-4 md:grid-cols-2">{(["plannedStartAt", "plannedEndAt"] as const).map(key => <label key={key} className={label}><span className="font-medium">{key === "plannedStartAt" ? "Bắt đầu công việc" : "Kết thúc công việc"} dự kiến</span><input className={control} type="datetime-local" value={form[key] ? new Date(new Date(form[key]!).getTime() + 7 * 3600000).toISOString().slice(0, 16) : ""} onChange={event => onChange(key, event.target.value ? `${event.target.value}:00+07:00` : null)} /></label>)}</div>
     </div></section>

@@ -222,7 +222,11 @@ export interface OverhaulItemsResult {
 }
 export interface OverhaulSyncResult {
   syncedAt: string;
-  sources: Array<{ source: string; label: string; configured: boolean; rows: number; created: number; updated: number; deactivated: number; unmatchedTabs: string[]; error?: string }>;
+  sources: Array<{
+    source: string; label: string; configured: boolean; file?: string; rows: number; mechanical: number; electrical: number;
+    created: number; updated: number; deactivated: number; tabs: string[]; skippedTabs: string[]; unmatchedPositions: string[];
+    unknownContractors: string[]; missingContractor: number; error?: string;
+  }>;
 }
 /** Hạng mục đại tu gợi ý cho PCT nhà thầu · Đại tu (đã đồng bộ từ Google Sheets tiến độ). */
 export function useOverhaulItems(params: { kind: PermitKind; company: string; position: string }, enabled: boolean) {
@@ -234,12 +238,20 @@ export function useSyncOverhaulItems() {
   const qc = useQueryClient();
   return useMutation({ meta: { background: true },
     mutationFn: () => apiMutate<OverhaulSyncResult>("/api/work-permits/overhaul-items/sync", "POST"),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["work-permit-overhaul-items"] }) });
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["work-permit-overhaul-items"] });
+      qc.invalidateQueries({ queryKey: ["work-permit-overhaul-schedules"] });
+    } });
 }
 /** 4 link Google Sheets tiến độ đại tu (mục "Tiến độ đại tu" của sổ PCT). */
 export function useOverhaulSchedules() {
   return useQuery({ queryKey: ["work-permit-overhaul-schedules"], staleTime: 60_000,
-    queryFn: () => apiGet<OverhaulScheduleLink[]>("/api/work-permits/overhaul-schedules") as Promise<{ data: OverhaulScheduleLink[]; meta: { canWrite: boolean } }> });
+    queryFn: () => apiGet<OverhaulScheduleLink[]>("/api/work-permits/overhaul-schedules") as Promise<{ data: OverhaulScheduleLink[]; meta: {
+      canWrite: boolean; canSync: boolean;
+      /** Số hạng mục gợi ý theo nguồn (BOILER/TURBINE/GENERATOR/CI). */
+      items: Record<string, { mechanical: number; electrical: number }>;
+      itemsSyncedAt: string | null;
+    } }> });
 }
 export function useSaveOverhaulSchedule() {
   const qc = useQueryClient();
