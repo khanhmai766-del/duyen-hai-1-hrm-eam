@@ -1513,6 +1513,23 @@ model OilGunNote {
   updatedAt DateTime @default(now()) @updatedAt
 }
 
+// Ảnh chụp sơ đồ vòi đốt theo NGÀY (giờ VN) để xem lại trạng thái ngày cũ — lib/server/oil-gun-snapshot.ts.
+// Mỗi lần sửa vòi/ghi chú ghi đè bản của hôm nay → bản của một ngày = trạng thái cuối ngày đó; ngày không ai sửa
+// được chụp ở lần mở trang đầu tiên. Xem ngày D = bản gần nhất có date <= D.
+model OilGunSnapshot {
+  id            String    @id @default(cuid())
+  machine       String // "S1" | "S2"
+  date          String // "YYYY-MM-DD" theo giờ Việt Nam
+  guns          Json // mảng dòng OilGun tại thời điểm chụp
+  note          String    @default("")
+  noteUpdatedBy String?
+  noteUpdatedAt DateTime?
+  capturedAt    DateTime  @default(now())
+  createdAt     DateTime  @default(now())
+
+  @@unique([machine, date])
+}
+
 // Vòi thổi bụi (sơ đồ DCS SOOT BLOW) — 1 dòng/vòi/tổ máy, tạo lúc cập nhật lần đầu.
 // Danh mục 98 tag cố định trong lib/soot-blower-layout.ts; vòi chưa có dòng = khả dụng.
 model SootBlower {

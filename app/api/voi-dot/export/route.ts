@@ -3,7 +3,8 @@
 
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireUser, handle } from "@/lib/api";
+import { requireUser, handle, fail } from "@/lib/api";
+import { findOilGunSnapshot, isSnapshotDate, vietnamDate } from "@/lib/server/oil-gun-snapshot";
 import { assertOilSootAccess } from "@/lib/server-access";
 import type { BurnerRow } from "@/lib/burner-status";
 import { buildUnitReport } from "@/lib/voi-dot/report-model";
@@ -41,13 +42,24 @@ async function loadUnit(machine: string) {
   return buildUnitReport(rows.map(toBurnerRow), machine, await getNote(machine));
 }
 
-export async function GET(_req: NextRequest) {
+/** Trạng thái cuối ngày `date` từ ảnh chụp hằng ngày (lib/server/oil-gun-snapshot.ts). */
+async function loadUnitAt(machine: string, date: string) {
+  const snapshot = await findOilGunSnapshot(machine, date);
+  if (!snapshot) throw fail(`Chưa có dữ liệu chụp của tổ máy ${machine} cho ngày ${date.split("-").reverse().join("/")}`, 404);
+  return buildUnitReport(snapshot.guns.map(toBurnerRow), machine, snapshot.note);
+}
+
+// GET /api/voi-dot/export[?date=YYYY-MM-DD] — không có date = hiện tại; có date (trước hôm nay) = cuối ngày đó.
+export async function GET(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
     await assertOilSootAccess(user); // chặn cứng theo chức vụ như các API vòi đốt khác
 
-    const units = await Promise.all(UNITS.map(loadUnit));
-    const stamp = new Date().toISOString().slice(0, 10);
+    const today = vietnamDate();
+    const date = req.nextUrl.searchParams.get("date") || today;
+    if (!isSnapshotDate(date) || date > today) throw fail("Ngày xuất không hợp lệ");
+    const units = await Promise.all(UNITS.map(machine => date === today ? loadUnit(machine) : loadUnitAt(machine, date)));
+    const stamp = date;
     const xlsx = await buildBurnerWorkbook(units);
     // Uint8Array là body hợp lệ ở runtime Node; ép BodyInit để tránh ma sát type-lib.
     return new Response(xlsx as unknown as BodyInit, {

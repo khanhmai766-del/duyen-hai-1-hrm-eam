@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, handle, audit } from "@/lib/api";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
 import { assertOilSootAccess } from "@/lib/server-access";
+import { captureOilGunSnapshot, ensureTodaySnapshot, findOilGunSnapshot, firstOilGunSnapshotDate, isSnapshotDate, vietnamDate } from "@/lib/server/oil-gun-snapshot";
 
 export const dynamic = "force-dynamic";
 
@@ -19,28 +20,60 @@ function hasDefect(g: { defectSccn?: string | null; defectScd?: string | null })
   return !!(g.defectSccn?.trim() || g.defectScd?.trim());
 }
 
-// GET /api/oil-guns?machine=S1  -> danh sách vòi của tổ máy, theo thứ tự sơ đồ
+function summarize(guns: Array<{ status: string; defectSccn?: string | null; defectScd?: string | null }>) {
+  return {
+    total: guns.length,
+    available: guns.filter((g) => g.status === "available" && !hasDefect(g)).length,
+    defective: guns.filter((g) => g.status === "available" && hasDefect(g)).length,
+    unavailable: guns.filter((g) => g.status === "unavailable").length,
+  };
+}
+
+// GET /api/oil-guns?machine=S1[&date=YYYY-MM-DD] -> danh sách vòi của tổ máy, theo thứ tự sơ đồ.
+// Có `date` (ngày trước hôm nay) → trạng thái cuối ngày đó lấy từ ảnh chụp hằng ngày (chỉ xem).
 export async function GET(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
     await assertOilSootAccess(user); // chặn cứng theo chức vụ (thay cho RBAC ở đọc)
     const machine = req.nextUrl.searchParams.get("machine") || "S1";
-    const [guns, noteRow] = await Promise.all([
+    const date = req.nextUrl.searchParams.get("date") || "";
+    const today = vietnamDate();
+    if (date && date !== today) {
+      if (!isSnapshotDate(date) || date > today) return fail("Ngày xem không hợp lệ");
+      const [snapshot, firstDate] = await Promise.all([findOilGunSnapshot(machine, date), firstOilGunSnapshotDate(machine)]);
+      if (!snapshot) {
+        return fail(firstDate
+          ? `Chưa có dữ liệu chụp cho ngày này — sơ đồ ${machine} được lưu theo ngày từ ${firstDate.split("-").reverse().join("/")}.`
+          : "Chưa có dữ liệu chụp theo ngày nào.", 404);
+      }
+      return ok(snapshot.guns, {
+        machine,
+        summary: summarize(snapshot.guns),
+        note: snapshot.note,
+        noteUpdatedBy: snapshot.noteUpdatedBy,
+        noteUpdatedAt: snapshot.noteUpdatedAt,
+        snapshot: { date, sourceDate: snapshot.date, capturedAt: snapshot.capturedAt },
+        today,
+        firstSnapshotDate: firstDate,
+      });
+    }
+    // Hôm nay chưa có bản nào → chụp ngay ở lần xem đầu tiên (ngày không ai sửa vẫn có dữ liệu). Chụp cả
+    // hai tổ máy: Excel ngày cũ xuất cả S1 lẫn S2, tổ máy chưa ai mở cũng phải có bản.
+    await Promise.all(["S1", "S2"].map(ensureTodaySnapshot));
+    const [guns, noteRow, firstDate] = await Promise.all([
       prisma.oilGun.findMany({ where: { machine }, orderBy: { position: "asc" } }),
       prisma.oilGunNote.findUnique({ where: { machine } }),
+      firstOilGunSnapshotDate(machine),
     ]);
-    const summary = {
-      total: guns.length,
-      available: guns.filter((g) => g.status === "available" && !hasDefect(g)).length,
-      defective: guns.filter((g) => g.status === "available" && hasDefect(g)).length,
-      unavailable: guns.filter((g) => g.status === "unavailable").length,
-    };
     return ok(guns, {
       machine,
-      summary,
+      summary: summarize(guns),
       note: noteRow?.note ?? "",
       noteUpdatedBy: noteRow?.updatedBy ?? null,
       noteUpdatedAt: noteRow?.updatedAt ?? null,
+      snapshot: null,
+      today,
+      firstSnapshotDate: firstDate,
     });
   });
 }
@@ -105,6 +138,7 @@ export async function PUT(req: NextRequest) {
       gun.id,
       `${machine}/${code} → ${gun.status}${hasDefect(gun) ? " (có khiếm khuyết)" : ""}`
     );
+    await captureOilGunSnapshot(machine); // bản của hôm nay = trạng thái sau lần sửa này
     return ok(gun);
   });
 }

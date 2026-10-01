@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, handle, audit } from "@/lib/api";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
 import { assertOilSootAccess } from "@/lib/server-access";
+import { captureOilGunSnapshot } from "@/lib/server/oil-gun-snapshot";
 
 export const dynamic = "force-dynamic";
 
@@ -25,6 +26,7 @@ export async function PUT(req: NextRequest) {
     });
 
     await audit(user.id, "UPDATE_OIL_GUN_NOTE", "OilGunNote", machine, `Ghi chú sơ đồ vòi dầu ${machine}`);
+    await captureOilGunSnapshot(machine); // ghi chú cũng thuộc ảnh chụp của hôm nay
     return ok(row);
   });
 }

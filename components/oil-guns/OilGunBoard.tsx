@@ -3,7 +3,7 @@
 import React, { useState, useMemo } from "react";
 import {
   Flame, Wrench, Check, X, Save, FileSpreadsheet,
-  Droplet, Factory, Search, RotateCcw, Loader2, StickyNote,
+  Droplet, Factory, Search, RotateCcw, Loader2, StickyNote, CalendarDays, History,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useOilGuns, useUpdateOilGun, useUpdateOilGunNote, type OilGun } from "@/hooks/useOilGuns";
@@ -51,6 +51,12 @@ function draftFromGun(g?: OilGun): OilGunDraft {
 }
 const LAYER_LABEL: Record<Layer, string> = { oil: "Vòi dầu", coal: "Vòi than" };
 
+/** "22:58 27/09" theo giờ Việt Nam. */
+function vnTime(iso: string) {
+  const p = Object.fromEntries(new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Ho_Chi_Minh", hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit", hour12: false }).formatToParts(new Date(iso)).map(x => [x.type, x.value]));
+  return `${p.hour}:${p.minute} ${p.day}/${p.month}`;
+}
+
 export default function OilGunBoard() {
   const [machine, setMachine] = useState("S1");
   const [query, setQuery] = useState("");
@@ -58,11 +64,16 @@ export default function OilGunBoard() {
   const [layer, setLayer] = useState<Layer>("oil"); // lớp đang xem: dầu | than
   const [draft, setDraft] = useState<OilGunDraft | null>(null);
 
-  const { data, isLoading } = useOilGuns(machine);
+  // "" = hiện tại (sửa được); "YYYY-MM-DD" = xem lại cuối ngày đó từ ảnh chụp hằng ngày (chỉ xem).
+  const [viewDate, setViewDate] = useState("");
+  const { data, isLoading, error } = useOilGuns(machine, viewDate);
   const update = useUpdateOilGun();
   const updateNote = useUpdateOilGunNote();
   const rbac = useRbacAccess();
-  const canManageOilGuns = rbac.can("archive-oil-gun-data", ["manage", "full"]);
+  const historical = Boolean(viewDate);
+  const canManageOilGuns = rbac.can("archive-oil-gun-data", ["manage", "full"]) && !historical;
+  const today = data?.today || new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Ho_Chi_Minh" });
+  const viDate = (d: string) => d.split("-").reverse().join("/");
 
   // Ghi chú chung của sơ đồ theo tổ máy — đồng bộ theo dữ liệu tải/khi đổi tổ máy.
   const savedNote = data?.note ?? "";
@@ -155,12 +166,33 @@ export default function OilGunBoard() {
               </button>
             ))}
           </div>
-          {/* Xuất cả 2 tổ máy: Content-Disposition attachment nên trình duyệt tự tải file. */}
-          <a className="ogb-btn ghost" href="/api/voi-dot/export?format=excel"><FileSpreadsheet size={15} /> Excel</a>
+          {/* Xem lại sơ đồ cuối một ngày cũ (ảnh chụp hằng ngày). Để trống / chọn hôm nay = hiện tại. */}
+          <label className="ogb-date" title="Xem lại sơ đồ cuối một ngày đã qua">
+            <CalendarDays size={15} />
+            <input type="date" aria-label="Xem sơ đồ ngày" value={viewDate || today} max={today}
+              min={data?.firstSnapshotDate ?? undefined}
+              onChange={(e) => { const v = e.target.value; setViewDate(!v || v >= today ? "" : v); closePanel(); }} />
+          </label>
+          {/* Xuất cả 2 tổ máy, theo ngày đang xem: Content-Disposition attachment nên trình duyệt tự tải file. */}
+          <a className="ogb-btn ghost" href={`/api/voi-dot/export?format=excel${viewDate ? `&date=${viewDate}` : ""}`}><FileSpreadsheet size={15} /> Excel</a>
         </div>
       </header>
 
-      <div className="ogb-stats">
+      {historical && (
+        <div className="ogb-history" role="status">
+          <History size={16} />
+          <span>
+            Đang xem sơ đồ <b>cuối ngày {viDate(viewDate)}</b> — chỉ xem.
+            {data?.snapshot && (data.snapshot.sourceDate !== viewDate
+              ? <> Không có thay đổi từ ngày {viDate(data.snapshot.sourceDate)} (ảnh chụp lúc {vnTime(data.snapshot.capturedAt)}).</>
+              : <> Ảnh chụp lúc {vnTime(data.snapshot.capturedAt)}.</>)}
+          </span>
+          <button className="ogb-btn primary sm" onClick={() => setViewDate("")}><RotateCcw size={13} /> Về hôm nay</button>
+        </div>
+      )}
+
+      {/* Ngày cũ chưa có ảnh chụp: không hiện 4 thẻ 0 (dễ hiểu nhầm sơ đồ trống). */}
+      {!error && <div className="ogb-stats">
         <Stat label={`Tổng ${LAYER_LABEL[layer].toLowerCase()}`} value={summary.total} c={C.navy} icon={<Droplet size={16} />} />
         <Stat label="Khả dụng" value={summary.available} c={C.ok} icon={<Check size={16} />} />
         <Stat label="Có khiếm khuyết" value={summary.defective} c={C.warn} icon={<Wrench size={16} />} />
@@ -169,11 +201,17 @@ export default function OilGunBoard() {
           <Search size={15} />
           <input placeholder="Tìm vòi (vd D1, A3…)" value={query} onChange={(e) => setQuery(e.target.value)} />
         </div>
-      </div>
+      </div>}
 
       <div className="ogb-board-wrap">
         {isLoading ? (
           <div className="ogb-loading"><Loader2 className="spin" size={22} /> Đang tải sơ đồ vòi đốt…</div>
+        ) : error ? (
+          <div className="ogb-empty">
+            <History size={30} />
+            <b>{error.message}</b>
+            {historical && <button className="ogb-btn primary sm" onClick={() => setViewDate("")}><RotateCcw size={13} /> Về hôm nay</button>}
+          </div>
         ) : summary.total === 0 ? (
           <div className="ogb-empty">
             <Droplet size={30} />
@@ -250,7 +288,9 @@ export default function OilGunBoard() {
 
             <div className="ogb-panel-body">
               {!canManageOilGuns && (
-                <p className="ogb-note" style={{ marginTop: 0, marginBottom: 14 }}>Bạn chỉ có quyền xem dữ liệu vòi đốt.</p>
+                <p className="ogb-note" style={{ marginTop: 0, marginBottom: 14 }}>
+                  {historical ? `Đang xem dữ liệu cuối ngày ${viDate(viewDate)} — chỉ xem. Bấm “Về hôm nay” để sửa.` : "Bạn chỉ có quyền xem dữ liệu vòi đốt."}
+                </p>
               )}
 
               {/* ===== Vòi dầu ===== */}
@@ -403,6 +443,10 @@ const CSS = `
 .ogb-btn.primary{background:${C.accent};color:#fff;border-color:${C.accent};}
 .ogb-btn.primary:hover{background:#1d4fd8;}
 .ogb-btn.primary:disabled{opacity:.55;cursor:not-allowed;}
+.ogb-date{display:inline-flex;align-items:center;gap:6px;background:#fff;border:1px solid ${C.line};border-radius:10px;padding:0 10px;height:38px;color:#475569;}
+.ogb-date input{border:0;background:transparent;font-weight:600;font-size:13px;color:${C.navy};outline:none;font-family:inherit;}
+.ogb-history{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:#eef4ff;border:1px solid #c7d7fe;color:#1e3a8a;border-radius:12px;padding:10px 14px;margin-bottom:14px;font-size:13px;}
+.ogb-history > span{flex:1 1 240px;}
 .ogb-stats{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:18px;}
 .ogb-stat{display:flex;align-items:center;gap:11px;background:#fff;border:1px solid ${C.line};border-radius:14px;padding:12px 16px;min-width:185px;flex:1 1 185px;}
 .ogb-stat-ic{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;flex-shrink:0;}

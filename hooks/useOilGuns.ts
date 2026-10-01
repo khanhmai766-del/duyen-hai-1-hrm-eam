@@ -42,17 +42,25 @@ function summarizeOilGuns(guns: OilGun[]): OilGunSummary {
   };
 }
 
-export function useOilGuns(machine: string) {
+/** Thông tin ảnh chụp khi xem ngày cũ: `sourceDate` là ngày của bản được dùng (gần nhất <= ngày xem). */
+export interface OilGunSnapshotInfo { date: string; sourceDate: string; capturedAt: string }
+
+/** `date` rỗng = hiện tại (sửa được); có ngày cũ = trạng thái cuối ngày đó từ ảnh chụp hằng ngày (chỉ xem). */
+export function useOilGuns(machine: string, date = "") {
   return useQuery({
-    queryKey: ["oil-guns", machine],
+    queryKey: ["oil-guns", machine, date],
+    retry: false,
     queryFn: async () => {
-      const res = await apiGet<OilGun[]>(`/api/oil-guns?machine=${machine}`);
+      const res = await apiGet<OilGun[]>(`/api/oil-guns?machine=${machine}${date ? `&date=${date}` : ""}`);
       return {
         guns: res.data,
         summary: res.meta?.summary as OilGunSummary | undefined,
         note: (res.meta?.note as string | undefined) ?? "",
         noteUpdatedBy: (res.meta?.noteUpdatedBy as string | null | undefined) ?? null,
         noteUpdatedAt: (res.meta?.noteUpdatedAt as string | null | undefined) ?? null,
+        snapshot: (res.meta?.snapshot as OilGunSnapshotInfo | null | undefined) ?? null,
+        today: (res.meta?.today as string | undefined) ?? "",
+        firstSnapshotDate: (res.meta?.firstSnapshotDate as string | null | undefined) ?? null,
       };
     },
   });
@@ -82,7 +90,8 @@ export function useUpdateOilGun() {
   return useMutation({
     mutationFn: (body: OilGunUpdate) => apiMutate<OilGun>("/api/oil-guns", "PUT", body),
     onSuccess: (updated, vars) => {
-      qc.setQueryData<OilGunQueryData>(["oil-guns", vars.machine], (current) => {
+      // Khoá "" = dữ liệu hiện tại (xem useOilGuns); ảnh chụp ngày cũ không đổi khi sửa.
+      qc.setQueryData<OilGunQueryData>(["oil-guns", vars.machine, ""], (current) => {
         if (!current) return current;
 
         const guns = current.guns.map((gun) => (gun.id === updated.id ? updated : gun));
