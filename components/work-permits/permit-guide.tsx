@@ -50,7 +50,7 @@ const SECTIONS: GuideSection[] = [
         points: [
           "Phải đăng nhập duyenhai1.vn trên cùng trình duyệt đang mở NKVH.",
           "Dưới ô Số phiếu sẽ xuất hiện khung Sổ PXVH1 và nút Lấy số PCT.",
-          "Tiện ích tự ghi nhận Đã đóng trên sổ khi PCT T-C-N-H đã Khóa phiếu hoặc PCT Điện đã Hoàn thành; không cần chuyển đến bước cuối hay bấm đồng bộ.",
+          "Tiện ích tự ghi nhận Kết thúc phiếu trên sổ khi PCT T-C-N-H đã Khóa phiếu hoặc PCT Điện đã Hoàn thành; không cần chuyển đến bước cuối hay bấm đồng bộ.",
           "Ở trang danh sách NKVH, các dòng Khóa phiếu / Hoàn thành đang hiển thị cũng được tự đối chiếu và đồng bộ về sổ.",
         ],
       },
@@ -111,7 +111,7 @@ const SECTIONS: GuideSection[] = [
         title: "Kết thúc trên NKVH",
         where: "PCT T-C-N-H: B5 Khóa phiếu · PCT Điện: B8 Hoàn thành phiếu",
         points: [
-          "Tiện ích tự chuyển phiếu liên kết trên sổ thành Đã đóng khi nhận biết bước cuối đã hoàn thành, kể cả khi trang chi tiết đang mở ở B1.",
+          "Tiện ích tự chuyển phiếu liên kết trên sổ thành Kết thúc phiếu khi nhận biết bước cuối đã hoàn thành, kể cả khi trang chi tiết đang mở ở B1.",
           "Nếu đang mở trang danh sách, tiện ích tự đối chiếu các dòng Khóa phiếu / Hoàn thành đang hiển thị. Gọi lại nhiều lần không tạo lịch sử trùng.",
           "Nếu tiện ích chưa hoạt động, có thể mở dòng phiếu trên sổ → Ghi nhận đóng phiếu để ghi thủ công.",
           "Phiếu gắn SYC đã xử lý đủ 24 giờ sẽ tự đóng trong sổ.",
@@ -131,7 +131,7 @@ const SECTIONS: GuideSection[] = [
         where: "Sổ PCT → chọn tab sổ → Cấp phiếu nhà thầu",
         points: [
           "CHTT nhà thầu phải có sẵn trong tab Nhân sự nhà thầu (xem phần Danh mục dùng chung).",
-          "Để cấp nhanh công việc tương tự: mở PCT giấy ở trạng thái Đã cấp hoặc Đã đóng, bấm Sao chép tạo PCT mới. Nội dung, nhân sự và biện pháp được giữ; số PCT, ĐKCT/SYC, thời gian và trạng thái được đặt lại.",
+          "Để cấp nhanh công việc tương tự: mở PCT giấy ở trạng thái Đã cấp hoặc Kết thúc phiếu, bấm Sao chép tạo PCT mới. Nội dung, nhân sự và biện pháp được giữ; số PCT, ĐKCT/SYC, thời gian và trạng thái được đặt lại.",
         ],
       },
       {
@@ -176,7 +176,7 @@ const SECTIONS: GuideSection[] = [
       {
         title: "Đóng phiếu",
         where: "Bấm dòng phiếu → Cập nhật tiến độ",
-        points: ["Sau khi kết thúc lần làm việc cuối: chọn Đã đóng, ghi Kết quả công việc và thời điểm đóng."],
+        points: ["Sau khi kết thúc lần làm việc cuối: chọn Kết thúc phiếu, ghi Kết quả công việc và thời điểm đóng."],
       },
     ],
   },

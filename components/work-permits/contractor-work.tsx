@@ -450,20 +450,27 @@ export function ContractorSessions({ permit, canExecute, historyOnly = false }: 
   return <section className="space-y-3 rounded-xl border border-sky-200 bg-sky-50/40 p-4 dark:bg-sky-950/20">
     <div className="flex flex-wrap items-center justify-between gap-3"><h3 className="font-semibold">{historyOnly ? "Các lần làm việc đã kết thúc" : "Các lần làm việc của nhà thầu"}</h3>{!historyOnly && canExecute && !live && ["ISSUED", "WAITING"].includes(permit.status) && <Button onClick={() => { setHandoff(false); setAction("open"); }}><Play />Cho phép / mở lần làm việc</Button>}</div>
     {!historyOnly && <p className="text-sm text-muted-foreground">Mỗi lần lưu riêng CHTT, nhân viên và thời gian. Kết thúc lần làm việc giải phóng CHTT để làm phiếu khác; PCT vẫn giữ để tiếp tục lần sau.</p>}
+    <details className="rounded-lg border border-border bg-background p-3">
+      <summary className="cursor-pointer text-sm font-semibold">Xem lịch sử làm việc · {Math.max(0, permit._count.sessions - (historyOnly && live ? 1 : 0))} lần</summary>
+      <div className="mt-3 space-y-3">
     {!visibleSessions.length && <p className="rounded-lg bg-background p-3 text-sm">{historyOnly ? "Chưa có lần làm việc nào kết thúc." : "Chưa ghi nhận lần làm việc. Phiếu phải được cấp trước khi mở lần đầu."}</p>}
-    {visibleSessions.map(s => <article key={s.id} className={`space-y-2 rounded-lg border bg-background p-3 ${s.endedAt ? "border-border" : "border-emerald-400"}`}>
+    {visibleSessions.map(s => <details key={s.id} className={`rounded-lg border bg-background p-3 ${s.endedAt ? "border-border" : "border-emerald-400"}`}>
+      <summary className="cursor-pointer text-sm font-semibold">{fmt(s.openedAt)} · CHTT {s.commanderName}{!s.endedAt ? " · Đang làm việc" : ""}</summary>
+      <div className="mt-3 space-y-2">
       <div className="flex flex-wrap items-start justify-between gap-2"><div><b>{s.commanderName} · {s.commanderCode}</b><p className="text-sm text-muted-foreground">{s.company}</p></div>{!s.endedAt && canExecute && <div className="flex flex-wrap gap-2"><Button variant="outline" onClick={() => { setHandoff(true); setAction(s); }}>Bàn giao / đổi CHTT</Button><Button variant="outline" onClick={() => { setHandoff(false); setAction(s); }}><Square />Kết thúc lần làm việc</Button></div>}</div>
       <p className="text-sm"><strong>{fmt(s.openedAt)}</strong> → {s.endedAt ? fmt(s.endedAt) : <strong className="text-emerald-700">Đang làm · chưa kết thúc</strong>}</p>
       <p className="text-sm">Người cho phép: {s.authorizerName} · CHTT và {s.members.filter(m => m.personId ? m.personId !== s.commanderId : m.code !== s.commanderCode).length} nhân viên bổ sung</p>
       <SessionAttendance permit={permit} session={s} canExecute={canExecute} />
       {s.endedAt && <p className="text-sm">Xác nhận kết thúc: {s.endConfirmedByName}{s.progress != null ? ` · Tiến độ ${s.progress}%` : ""}{s.endNote ? ` · ${s.endNote}` : ""}</p>}
       <details className="text-sm"><summary className="cursor-pointer">Nhân viên và thông tin ghi nhận</summary><div className="mt-2 space-y-1">{s.members.length ? s.members.map((m, i) => <p key={i}>{i + 1}. {[m.name, m.code, m.company].filter(Boolean).join(" · ")}</p>) : <p>Chưa bổ sung danh sách chi tiết.</p>}<p className="pt-2 text-xs text-muted-foreground">Người nhập mở: {s.createdByName}{s.endedByName ? ` · Người nhập kết thúc: ${s.endedByName}` : ""}</p></div></details>
-    </article>)}
+    </div></details>)}
     {showAllSessions && older.isError && <p role="alert" className="text-sm text-red-700">{older.error.message}</p>}
     {permit._count.sessions > 2 && <div className="flex flex-wrap gap-2">
       {(!showAllSessions || older.hasNextPage || older.isPending || older.isError) && <Button type="button" variant="outline" disabled={showAllSessions && older.isFetching} onClick={() => { if (!showAllSessions) setShowAllSessions(true); else if (older.isError) older.refetch(); else older.fetchNextPage(); }}>{showAllSessions && older.isFetching ? "Đang tải…" : showAllSessions && older.isError ? "Thử lại" : `Xem thêm lần làm việc (${Math.max(0, permit._count.sessions - visibleSessions.length)} còn lại)`}</Button>}
       {showAllSessions && <Button type="button" variant="ghost" onClick={() => setShowAllSessions(false)}>Thu gọn — 2 lần gần nhất</Button>}
     </div>}
+      </div>
+    </details>
     {action && <SessionEditor handoff={handoff} permit={permit} session={action === "open" ? undefined : action} onClose={() => setAction(null)} />}
   </section>;
 }
@@ -485,7 +492,9 @@ export function SessionEditor({ permit, session, handoff = false, onClose }: { p
   const name = nameOverride ?? authSession?.user?.name ?? "";
   const [note, setNote] = useState("");
   const [progress, setProgress] = useState(String(permit.progress ?? 0));
-  const [members, setMembers] = useState<PermitMember[]>(permit.sessions[0]?.members ?? permit.members ?? []);
+  // Ngày mới bắt đầu chỉ với CHTT; nhân viên phải được ghi nhận lại cho lần làm việc này.
+  // Bàn giao trong cùng ngày vẫn giữ danh sách của lần đang mở.
+  const [members, setMembers] = useState<PermitMember[]>(session?.members ?? []);
   const additionalMembers = members.filter(m => !person || (m.personId ? m.personId !== person.id : !person.code || m.code !== person.code));
   const [error, setError] = useState("");
   // Kết thúc khi còn người trong khu vực: phải xác nhận đã kiểm đếm → ghi RA cho họ lúc kết thúc (server cũng chặn).
@@ -509,7 +518,7 @@ export function SessionEditor({ permit, session, handoff = false, onClose }: { p
       {session && <p className="text-sm">CHTT: <b>{session.commanderName}</b> · Mở lúc {fmt(session.openedAt)}</p>}
       <div className="grid gap-4 sm:grid-cols-2"><label className="space-y-1 text-sm"><span>{handoff ? "Thời điểm bàn giao" : ending ? "Thời điểm kết thúc" : "Thời điểm cho phép"} (giờ Việt Nam) *</span><input className={control} type="datetime-local" value={at} required onChange={e => setAt(e.target.value)} /></label><PermitEmployeePicker label={handoff ? "Người xác nhận bàn giao" : ending ? "Người xác nhận kết thúc" : "Người cho phép làm việc"} value={name} onChange={setName} required /></div>
       {ending && <label className="block space-y-2 text-sm"><span className="font-medium">Tiến độ công việc *</span><div className="flex items-center gap-4 rounded-lg border border-border p-3"><input className="h-2 flex-1 cursor-pointer accent-blue-700" type="range" min={0} max={100} step={1} value={progress} onChange={e => setProgress(e.target.value)} /><div className="relative w-28"><input className={`${control} pr-8 text-right tabular-nums`} type="number" min={0} max={100} step={1} required value={progress} onChange={e => setProgress(e.target.value)} /><span className="pointer-events-none absolute right-3 top-2.5 text-muted-foreground">%</span></div></div><p className="text-xs text-muted-foreground">Ghi tiến độ lũy kế của toàn bộ công việc tại thời điểm kết thúc lần này.</p></label>}
-      {!ending && <><p className="rounded-lg bg-sky-50 p-3 text-sm text-sky-950">CHTT tự được tính vào người công tác. Tổng: {person ? 1 + additionalMembers.length : additionalMembers.length} người.</p><PermitMembersEditor members={additionalMembers} onChange={setMembers} commander={person ? { personId: person.id, name: person.name, code: person.code, company: person.company } : undefined}
+      {!ending && !handoff && <><p className="rounded-lg bg-sky-50 p-3 text-sm text-sky-950">CHTT tự được tính vào người công tác. Tổng: {person ? 1 + additionalMembers.length : additionalMembers.length} người.</p><PermitMembersEditor members={additionalMembers} onChange={setMembers} commander={person ? { personId: person.id, name: person.name, code: person.code, company: person.company } : undefined}
         scan={{ unit: permit.teamName, companies: [permit.teamName, person?.company ?? ""].filter(Boolean), permitId: permit.id }} /></>}
       {(ending || handoff) && <label className="block space-y-1 text-sm"><span>{handoff ? "Ghi chú bàn giao" : "Ghi chú kết thúc lần làm việc"}</span><textarea className={control} rows={3} maxLength={2000} value={note} onChange={e => setNote(e.target.value)} /></label>}
       {stillInside.length > 0 && <div className="space-y-2 rounded-lg border-2 border-amber-300 bg-amber-50 p-3 text-sm text-amber-950">

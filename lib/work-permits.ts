@@ -42,7 +42,7 @@ export function effectiveWorkType(row: { workType?: string | null; sourceClassif
 }
 export const PERMIT_STATUSES = {
   DRAFT: "Nháp", ISSUED: "Đã cấp", ACTIVE: "Đang thực hiện",
-  PAUSED: "Tạm dừng", WAITING: "Chờ làm tiếp", CLOSED: "Đã đóng", CANCELLED: "Đã hủy",
+  PAUSED: "Tạm dừng", WAITING: "Chờ làm tiếp", CLOSED: "Kết thúc phiếu", CANCELLED: "Đã hủy",
 } as const;
 export type PermitKind = keyof typeof PERMIT_KINDS;
 export type PermitStatus = keyof typeof PERMIT_STATUSES;

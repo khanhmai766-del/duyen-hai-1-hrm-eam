@@ -108,6 +108,7 @@ export function PermitCardScanner({ unit, companies, existing, permitId, onAdd, 
   const [quickName, setQuickName] = useState("");
   const [camera, setCamera] = useState<"off" | "starting" | "on" | "error">("off");
   const [cameraMessage, setCameraMessage] = useState("");
+  const dialogRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const controlsRef = useRef<{ stop: () => void } | null>(null);
   // Mỗi lần bật/tắt camera tăng số lượt; lượt bật đang chờ (xin quyền, tải thư viện QR) thấy lượt đã đổi thì tự
@@ -269,7 +270,11 @@ export function PermitCardScanner({ unit, companies, existing, permitId, onAdd, 
   }
 
   return <Dialog open onOpenChange={v => { if (!v) onClose(); }}>
-    <DialogContent className="flex h-[94dvh] max-h-[94dvh] max-w-2xl flex-col gap-3 overflow-hidden p-4 sm:p-6">
+    <DialogContent ref={dialogRef} tabIndex={-1} onOpenAutoFocus={event => {
+      // Giữ focus trong hộp quét để dùng bàn phím, nhưng không bật bàn phím ảo khi camera vừa mở.
+      event.preventDefault();
+      dialogRef.current?.focus({ preventScroll: true });
+    }} className="flex h-[94dvh] max-h-[94dvh] max-w-2xl flex-col gap-3 overflow-hidden p-4 sm:p-6">
       <div className="shrink-0 pr-8">
         <DialogTitle>{title}</DialogTitle>
         <DialogDescription className="line-clamp-2">Đơn vị công tác: <b className="text-foreground">{unit}</b><span className="hidden sm:inline"> · Chỉ nhân viên đúng đơn vị này được cho vào.</span></DialogDescription>

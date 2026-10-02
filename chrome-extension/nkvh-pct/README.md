@@ -8,7 +8,7 @@ Phiếu nhà thầu (PCT giấy) vẫn lấy số trên sổ duyenhai1.vn như c
 Tiện ích nhận trang NKVH trên cả HTTP và HTTPS; sau khi cài hoặc cập nhật phải tải lại tab NKVH.
 Từ bản 1.0.5, nút thao tác tự cập nhật ngay khi người dùng xoá hoặc sửa ô **Số phiếu** trên NKVH.
 Từ bản 1.0.6, trạng thái kết thúc được tự đồng bộ về sổ: PCT T-C-N-H **Khóa phiếu**, PCT Điện
-**Hoàn thành** → sổ PXVH1 **Đã đóng**.
+**Hoàn thành** → sổ PXVH1 **Kết thúc phiếu**.
 
 ## Luồng sử dụng
 
@@ -24,7 +24,7 @@ Từ bản 1.0.6, trạng thái kết thúc được tự đồng bộ về sổ
 
 - **Trang chi tiết:** NKVH luôn mở ở B1, nhưng tiện ích đọc màu hoàn thành của nút bước cuối bên trái
   mà không cần chuyển bước: B5 *Khóa phiếu công tác* của PCT T-C-N-H hoặc B8 *Hoàn thành phiếu* của
-  PCT Điện. Khi bước cuối đã hoàn thành, phiếu liên kết trên sổ tự chuyển **Đã đóng**.
+  PCT Điện. Khi bước cuối đã hoàn thành, phiếu liên kết trên sổ tự chuyển **Kết thúc phiếu**.
 - **Trang danh sách:** tiện ích quét các dòng đang hiển thị có đúng số dạng `…/VH1-NĐDH` và trạng thái
   *Khóa phiếu* / *Hoàn thành*. Server chỉ đóng PCT nội bộ điện tử đã liên kết NKVH; phiếu giấy, số
   không liên kết hoặc trạng thái khác không bị tác động.

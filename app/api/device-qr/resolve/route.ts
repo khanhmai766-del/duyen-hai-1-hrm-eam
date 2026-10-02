@@ -32,8 +32,8 @@ export async function POST(req: NextRequest) {
       if (!["ISSUED", "WAITING", "ACTIVE"].includes(permit.status)) {
         return fail("PCT Đại tu chưa ở trạng thái có thể cho phép làm việc", 409);
       }
-      const intent = permit.status === "ACTIVE" ? "scan=1" : "open=1";
-      return ok({ type: "WORK_PERMIT", url: `/work-permits/${encodeURIComponent(permit.id)}/lam-viec?${intent}`, legacy: false });
+      const intent = permit.status === "ACTIVE" ? "" : "?open=1";
+      return ok({ type: "WORK_PERMIT", url: `/work-permits/${encodeURIComponent(permit.id)}/lam-viec${intent}`, legacy: false });
     }
     const target = parseDeviceQrValue(body?.value);
     if (!target) return fail("Mã QR không thuộc hệ thống Vận Hành 1", 400);

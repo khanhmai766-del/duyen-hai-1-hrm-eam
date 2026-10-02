@@ -17,10 +17,10 @@
 
 ### Luồng nội bộ và nhà thầu
 
-- **Nội bộ (mặc định điện tử):** Đã cấp → Đã đóng, có thể hủy từ phiếu chưa đóng. Phiếu nháp cũ vẫn hoàn tất được sau khi lấy số. Không bắt buộc bước cho phép, không tạo lần làm việc hay quản lý tiến độ. Người có quyền Cấp phiếu ghi nhận đóng trong form; người có quyền Thực hiện phiếu dùng nút **Ghi nhận đóng phiếu**. Đóng thủ công cần thời điểm đóng không trước thời điểm cấp; kết quả không bắt buộc. Dữ liệu cho phép/tiến độ cũ giữ lại, không cho tạo vòng thực hiện mới.
+- **Nội bộ (mặc định điện tử):** Đã cấp → Kết thúc phiếu, có thể hủy từ phiếu chưa đóng. Phiếu nháp cũ vẫn hoàn tất được sau khi lấy số. Không bắt buộc bước cho phép, không tạo lần làm việc hay quản lý tiến độ. Người có quyền Cấp phiếu ghi nhận đóng trong form; người có quyền Thực hiện phiếu dùng nút **Ghi nhận đóng phiếu**. Đóng thủ công cần thời điểm đóng không trước thời điểm cấp; kết quả không bắt buộc. Dữ liệu cho phép/tiến độ cũ giữ lại, không cho tạo vòng thực hiện mới.
 - **Tự đóng nội bộ:** chỉ phiếu `teamType=INTERNAL`, đã cấp, còn mở, gắn đúng `defectId`; SYC phải còn tồn tại, không hủy, đang Đã xử lý và có `completedAt` đủ 24 giờ. Áp dụng cả giấy lẫn điện tử. SYC mở lại trước hạn thì không đóng; nháp/đóng/hủy/không có SYC/mốc hoàn thành không bị tác động. Nếu SYC mở lại sau khi PCT đã đóng, PCT không tự mở lại.
 - Tác vụ nền được đăng ký qua `instrumentation.ts`, kiểm tra mỗi phút khi tiến trình Next.js Node đang chạy; khởi động có lượt kiểm tra bù phiếu quá hạn. Khóa SYC/PCT trong giao dịch, ghi lịch sử **Hệ thống — Tự đóng theo SYC đã xử lý đủ 24 giờ**, không ghi lặp. Thời điểm đóng ghi mốc hoàn thành + 24 giờ (không trước thời điểm cấp/cho phép cũ). Tác vụ không truy cập NKVH và không xác minh trạng thái phiếu ngoài website. Danh sách sổ tự tải lại mỗi phút.
-- **Nhà thầu (mặc định giấy):** Đã cấp → Đang thực hiện → Chờ làm tiếp → Đã đóng; nháp chỉ còn ở hồ sơ cũ. Có thể mở lại lần làm việc, bàn giao CHTT, kết thúc lần cuối trước đóng. Không tự đóng theo SYC, dù có liên kết SYC.
+- **Nhà thầu (mặc định giấy):** Đã cấp → Đang thực hiện → Chờ làm tiếp → Kết thúc phiếu; nháp chỉ còn ở hồ sơ cũ. Có thể mở lại lần làm việc, bàn giao CHTT, kết thúc lần cuối trước đóng. Không tự đóng theo SYC, dù có liên kết SYC.
 - Không cần thêm cột hoặc thay đổi database cho luồng này. `scripts/check/work-permits-auto-close-local.ts` kiểm tra PostgreSQL local trong giao dịch hoàn tác, không để lại mẫu.
 
 - Hai sổ Cơ – Nhiệt – Hóa và Điện có dãy số riêng theo năm; nội bộ và nhà thầu dùng chung dãy trong cùng loại. Số thuần được hiển thị theo mẫu `{số}/{năm}/VH1-NĐDH`. Số đã đầy đủ/mã cũ giữ nguyên để tra cứu lịch sử.
@@ -41,7 +41,7 @@
   - **Sổ cấp PCT — Cấp phiếu** (`work-permit-issue`): tạo/cấp, sửa nội dung cấp và hủy phiếu; quản lý danh bạ nhà thầu, danh mục biện pháp an toàn.
   - **Sổ cấp PCT — Thực hiện phiếu** (`work-permit-execute`): cho phép/mở/kết thúc lần làm việc, bàn giao CHTT, tạm dừng, cập nhật tiến độ/kết quả và đóng phiếu.
 - Mức Cá nhân/Quản lý/Toàn quyền của từng quyền cho phép thực hiện nhóm thao tác tương ứng, không giới hạn theo người tạo phiếu. Chỉ đọc/Không có không cho phép ghi. Khi chưa cấu hình, ADMIN, MANAGER, SUPERVISOR giữ hai quyền ghi như trước; TECHNICIAN/VIEWER chưa có quyền ghi. Việc cấp riêng từng người dùng cơ chế phân quyền bổ sung hiện có; quyền bổ sung không thu hồi quyền đã được hưởng từ nhóm vai trò.
-- API cấp/sửa kiểm tra quyền Cấp phiếu; trường thực hiện nhà thầu cần thêm quyền Thực hiện phiếu. Nội bộ được ghi nhận đóng bằng quyền Cấp phiếu, không yêu cầu quyền Thực hiện phiếu. API thực hiện riêng với nội bộ chỉ nhận phiên bản, trạng thái Đã đóng, thời điểm đóng và kết quả; không cho thay đổi thông tin cấp, bước cho phép hay tiến độ. Với nhà thầu, API giữ luật thực hiện cũ. API các lần làm việc kiểm tra quyền Thực hiện phiếu. Quyền hợp đồng độc lập với cả hai quyền PCT.
+- API cấp/sửa kiểm tra quyền Cấp phiếu; trường thực hiện nhà thầu cần thêm quyền Thực hiện phiếu. Nội bộ được ghi nhận đóng bằng quyền Cấp phiếu, không yêu cầu quyền Thực hiện phiếu. API thực hiện riêng với nội bộ chỉ nhận phiên bản, trạng thái Kết thúc phiếu, thời điểm đóng và kết quả; không cho thay đổi thông tin cấp, bước cho phép hay tiến độ. Với nhà thầu, API giữ luật thực hiện cũ. API các lần làm việc kiểm tra quyền Thực hiện phiếu. Quyền hợp đồng độc lập với cả hai quyền PCT.
 - Không cần thay đổi schema/DB cho việc tách hai quyền. Đã kiểm tra TypeScript và 6 bài kiểm tra quyền với session/DB giả, không ghi dữ liệu thật.
 - Với cả phiếu nội bộ và nhà thầu, người cấp được điền sẵn từ tài khoản đăng nhập nhưng có thể sửa theo người cấp thực tế. Nếu tên được sửa khác tài khoản thao tác thì `issuerUserId` để trống để không gắn sai định danh; tài khoản thực hiện vẫn được ghi đầy đủ trong lịch sử và Audit Log. Người cho phép/xác nhận từng lần vẫn nhập theo thực tế.
 - CHTT nhà thầu chọn từ danh bạ đang hoạt động, có quyền CHTT; lưu định danh và tên tại thời điểm cấp. Nháp có thể chưa chọn. Không suy đoán định danh từ tên của phiếu cũ. Mở lần đầu điền sẵn CHTT đã chọn; những lần sau gợi ý CHTT lần trước, vẫn được đổi và kiểm tra xung đột ở server.
@@ -210,3 +210,15 @@ Các thao tác vào/ra và vòng đời lần làm việc dùng chung khóa tran
 ## Tải mã QR riêng cho phiếu đã cấp
 
 Trong **Xem và in** của PCT giấy nhà thầu, nút **Tải QR** tải ảnh PNG riêng (đen/trắng, hơn 1.000 pixel, nhãn in rộng 60 mm, phần mã QR vẫn 25 mm). Dưới mã có số PCT và toàn bộ nội dung công tác, tự xuống dòng khi dài. Tên tệp có số PCT để phân biệt khi in dán lên phiếu cũ. QR dẫn đến đúng màn hình làm việc của PCT theo ID, dùng chung với QR trên mẫu Word; dùng được cả phiếu đã cấp trước khi bổ sung QR. Không sửa hoặc tạo lại file Word đã cấp. Chỉ người có quyền xem phiếu được tải; không tải cho phiếu nháp/hủy, PCT điện tử hoặc nội bộ.
+
+## Mở PCT từ QR và focus hộp quét thẻ
+
+Quét QR PCT đại tu đang thực hiện bằng máy quét chung mở màn hình làm việc bình thường, không tự bật camera vào/ra. Phiếu chưa mở hoặc đang chờ làm tiếp vẫn gợi ý mở lần làm việc. Nút **Quét** trên bảng Đang làm việc và **Quét vào / ra** trong PCT vẫn mở camera theo thao tác của người dùng. Hộp quét không tự focus ô nhập số thẻ; chạm ô khi cần nhập tay hoặc dùng đầu đọc ngoài.
+
+## Danh sách nhân viên khi mở ngày mới
+
+Mở lần làm việc mới chỉ gợi ý CHTT từ lần trước, không lấy lại nhân viên từ ngày cũ hoặc danh sách ghi lúc cấp phiếu. Ban đầu chỉ tính một người là CHTT; quét QR hoặc chọn thêm nhân viên cho lần làm việc mới. Bàn giao CHTT trong lần đang mở vẫn giữ nhân viên và trạng thái vào/ra; danh sách ngày đã kết thúc được giữ trong lịch sử.
+
+## Thu gọn lịch sử làm việc
+
+Lịch sử làm việc mặc định đóng hoàn toàn, kể cả lần gần nhất. Bấm **Xem lịch sử làm việc** để mở danh sách, rồi bấm lần cần xem để hiện nhân viên, thời điểm, người cho phép và kết thúc. Lần đang thực hiện trên màn hình làm việc vẫn hiển thị để kiểm soát vào/ra.

@@ -503,7 +503,7 @@
     } else if (state.permit) {
       parts.push(h("span", { textContent: state.permit.formatted, style: "font-weight:bold;" }));
       if (state.permit.status === "PAUSED") parts.push(h("span", { textContent: " · Tạm dừng trên sổ" }));
-      if (state.permit.status === "CLOSED") parts.push(h("span", { textContent: " · Đã đóng trên sổ" }));
+      if (state.permit.status === "CLOSED") parts.push(h("span", { textContent: " · Kết thúc phiếu trên sổ" }));
       if (input.value.trim() !== state.permit.formatted) parts.push(button("Điền số", () => { fillNumber(state.permit.formatted); say("Đã điền số. Kiểm tra lại rồi bấm Lưu trên NKVH.", "success"); }));
       if (state.permit.status !== "CLOSED") parts.push(button(state.busy ? "Đang đồng bộ…" : "Đồng bộ về sổ", sync, true));
     } else if (state.positions.length) {

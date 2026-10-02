@@ -105,7 +105,7 @@ export function parsePermit(body: Record<string, unknown>, status: PermitStatus,
   if (status === "CLOSED" && (!data.closedAt || (teamType === "CONTRACTOR" && !data.result))) throw fail("Vui lòng nhập thông tin và thời điểm đóng phiếu");
   if (status === "DRAFT" && (data.issuedAt || data.authorizedAt || data.closedAt)) throw fail("Phiếu nháp chưa ghi thời điểm cấp hoặc thực hiện");
   if (teamType === "CONTRACTOR" && status === "ISSUED" && data.authorizedAt) throw fail("Chọn Đang thực hiện khi ghi nhận thời điểm cho phép làm việc");
-  if (status !== "CLOSED" && data.closedAt) throw fail("Chỉ ghi thời điểm đóng khi chọn Đã đóng");
+  if (status !== "CLOSED" && data.closedAt) throw fail("Chỉ ghi thời điểm đóng khi chọn Kết thúc phiếu");
   if (data.issuedAt && Number(new Intl.DateTimeFormat("en", { year: "numeric", timeZone: "Asia/Ho_Chi_Minh" }).format(data.issuedAt)) !== year) throw fail("Năm cấp số phải khớp năm của thời điểm cấp phiếu");
   if (data.authorizedAt && (!data.issuedAt || data.authorizedAt < data.issuedAt)) throw fail("Thời điểm cho phép làm việc phải từ thời điểm cấp trở đi");
   const earliestClose = teamType === "CONTRACTOR" ? data.authorizedAt : data.issuedAt;
