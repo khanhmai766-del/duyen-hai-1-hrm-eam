@@ -217,7 +217,7 @@ const SECTIONS: GuideSection[] = [
         where: "Chỉ tài khoản quản trị",
         points: [
           "Lấy nhầm sổ Cơ ↔ Điện: số không chuyển sổ được — quản trị dùng Hủy lượt để trả số.",
-          "Phiếu cần xoá hẳn (trùng phiếu, ghi nhầm sổ…): quản trị dùng Xóa PCT, bắt buộc ghi lý do.",
+          "Phiếu test cần xoá hẳn: hủy phiếu trước, sau đó quản trị mở chi tiết → Xóa PCT đã hủy, ghi lý do và xác nhận xóa vĩnh viễn. Lịch sử cấp số vẫn được giữ.",
         ],
       },
     ],

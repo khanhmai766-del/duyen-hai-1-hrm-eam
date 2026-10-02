@@ -47,6 +47,16 @@ export function useCancelDraftWorkPermit() {
     qc.invalidateQueries({ queryKey: ["work-permit-number-suggestion"] });
   } });
 }
+export function useDeleteWorkPermit() {
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: ({ id, version, reason }: { id: string; version: number; reason: string }) =>
+    apiMutate<{ id: string }>(`/api/work-permits/${id}`, "DELETE", { version, reason }), onSuccess: (_data, { id }) => {
+    qc.removeQueries({ queryKey: ["work-permit", id], exact: true });
+    for (const key of ["work-permits", "work-permit-people", "work-permit-number-suggestion", "work-permit-number-reservations", "work-permit-number-baselines", "defect"]) {
+      qc.invalidateQueries({ queryKey: [key] });
+    }
+  } });
+}
 /** Tên CHTT / lãnh đạo công việc đã từng ghi trên PCT nội bộ của sổ — để gợi ý khi cấp phiếu sau.
  *  Khoá nằm dưới ["work-permits"] nên lưu phiếu xong (invalidate ["work-permits"]) là danh sách tự làm mới. */
 export function usePermitNameSuggestions(kind: PermitKind, enabled: boolean) {

@@ -1,4 +1,5 @@
 import { requirePermitIssue } from "@/lib/server/work-permit-permissions";
+import { isCardlessCode } from "@/lib/work-permit-card";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { audit, fail, ok, requireUser } from "@/lib/api";
@@ -22,7 +23,7 @@ export async function PUT(req: Request, props: { params: Promise<{ id: string }>
         return tx.workPermitPerson.update({ where: { id: before.id }, data: { ...data, version: { increment: 1 } } });
       });
     } catch (error) {
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") throw fail("Số thẻ an toàn đã được dùng cho nhân sự khác.", 409);
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") throw fail(isCardlessCode(data.code) ? "Hồ sơ chưa có thẻ với họ tên này đã tồn tại. Hãy tìm và chọn hồ sơ đó." : "Số thẻ an toàn đã được dùng cho nhân sự khác.", 409);
       throw error;
     }
     await audit(user.id, "UPDATE_WORK_PERMIT_PERSON", "WorkPermitPerson", row.id, `Cập nhật ${row.code}: ${row.name} · ${row.company}; ${row.isActive ? "đang hoạt động" : "ngừng hoạt động"}`);

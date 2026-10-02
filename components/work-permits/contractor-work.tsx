@@ -11,7 +11,7 @@ import { PermitCardScanner } from "@/components/work-permits/card-scanner";
 import { PeopleSyncDialog } from "@/components/work-permits/people-sync";
 import { SessionAttendance } from "@/components/work-permits/session-attendance";
 import { attendanceInside } from "@/lib/work-permit-attendance";
-import { cardExpired } from "@/lib/work-permit-card";
+import { cardExpired, isCardlessCode } from "@/lib/work-permit-card";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -191,7 +191,7 @@ function CompanyPeopleTable({ people, canWrite, removing, onEdit, onRemove }: { 
   <div className="space-y-2 md:hidden">{people.map(person => <div key={person.id} className="flex items-start gap-2 rounded-lg border border-slate-200 bg-white p-3 dark:border-border dark:bg-background">
     <div className="min-w-0 flex-1">
       <p className="text-[15px] font-semibold leading-5 text-ink">{person.name}</p>
-      <p className="mt-0.5 text-xs text-muted-foreground">{person.code}{person.phone ? <> · <a className="font-medium text-blue-700 underline" href={tel(person.phone)}>{person.phone}</a></> : null}</p>
+      <p className="mt-0.5 text-xs text-muted-foreground">{isCardlessCode(person.code) ? "Chưa có thẻ" : person.code}{person.phone ? <> · <a className="font-medium text-blue-700 underline" href={tel(person.phone)}>{person.phone}</a></> : null}</p>
       <div className="mt-1.5 flex flex-wrap items-center gap-1.5">{role(person)}</div>
       {works(person)}
     </div>
@@ -211,7 +211,7 @@ function CompanyPeopleTable({ people, canWrite, removing, onEdit, onRemove }: { 
           <span className="font-semibold text-ink">{person.name}</span>
           {works(person)}
         </td>
-        <td className="px-3 py-2 font-medium text-ink">{person.code}</td>
+        <td className="px-3 py-2 font-medium text-ink">{isCardlessCode(person.code) ? "Chưa có thẻ" : person.code}</td>
         <td className="px-3 py-2">{person.phone ? <a className="font-medium text-blue-700 underline" href={tel(person.phone)}>{person.phone}</a> : <span className="text-muted-foreground">Chưa có</span>}</td>
         <td className="px-3 py-2"><div className="flex flex-wrap items-center gap-1.5">{role(person)}</div></td>
         {canWrite && <td className="px-3 py-2"><div className="flex justify-center gap-1">
@@ -333,7 +333,7 @@ export function PermitPeopleDirectory({ onClose, onPick, onPickMany, existingMem
  * đánh dấu CHTT vì nhập theo đơn vị chủ yếu là để khai báo danh sách CHTT nhà thầu cung cấp.
  */
 function PersonEditor({ initial, presetCompany, onClose, onSaved }: { initial?: PermitPerson; presetCompany?: string; onClose: () => void; onSaved?: () => void }) {
-  const [form, setForm] = useState(initial ?? { code: "", name: "", company: presetCompany ?? "", phone: "", canCommand: presetCompany !== undefined, isActive: true });
+  const [form, setForm] = useState(initial ? { ...initial, code: isCardlessCode(initial.code) ? "" : initial.code } : { code: "", name: "", company: presetCompany ?? "", phone: "", canCommand: presetCompany !== undefined, isActive: true });
   const save = useSavePermitPerson();
   async function submit(e: React.FormEvent) {
     e.preventDefault(); e.stopPropagation();
@@ -344,7 +344,7 @@ function PersonEditor({ initial, presetCompany, onClose, onSaved }: { initial?: 
     <DialogTitle>{initial ? "Cập nhật nhân sự nhà thầu" : presetCompany ? `Thêm nhân sự · ${presetCompany}` : "Thêm nhân sự nhà thầu"}</DialogTitle>
     <DialogDescription>Tìm hồ sơ có sẵn trước khi thêm. Có thể cập nhật số thẻ, họ tên và nhà thầu khi thông tin thực tế thay đổi.</DialogDescription>
     <form onSubmit={submit}><fieldset disabled={save.isPending} className="space-y-4">
-      {(["code", "name"] as const).map(key => <label key={key} className="block space-y-1 text-sm"><span>{({ code: "Số thẻ an toàn *", name: "Họ tên *", company: "Nhà thầu *" })[key]}</span><input className={control} value={form[key]} required maxLength={key === "code" ? 80 : 200} onChange={e => setForm({ ...form, [key]: e.target.value })} /></label>)}
+      {(["code", "name"] as const).map(key => <label key={key} className="block space-y-1 text-sm"><span>{({ code: "Số thẻ an toàn (không bắt buộc)", name: "Họ tên *", company: "Nhà thầu *" })[key]}</span><input className={control} value={form[key]} required={key === "name"} maxLength={key === "code" ? 80 : 200} onChange={e => setForm({ ...form, [key]: e.target.value })} /></label>)}
       <p className="text-xs text-muted-foreground">Có thể sửa số thẻ, họ tên và nhà thầu; vai trò CHTT / Nhân viên gạt ở cột Vai trò. Các PCT đã ghi vẫn giữ nguyên thông tin tại thời điểm thực hiện.</p>
       {presetCompany !== undefined ? <p className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm">Đơn vị: <strong>{presetCompany}</strong></p> : <PermitCompanyPicker value={form.company} onChange={company => setForm(prev => ({ ...prev, company }))} />}
       <label className="block space-y-1 text-sm"><span>SĐT liên hệ</span><input className={control} type="tel" inputMode="tel" maxLength={40} value={form.phone ?? ""} onChange={e => setForm({ ...form, phone: e.target.value })} placeholder="Ví dụ: 0912 345 678" /><span className="block text-xs text-muted-foreground">Không bắt buộc; dùng để gọi khi cần liên hệ đơn vị công tác.</span></label>

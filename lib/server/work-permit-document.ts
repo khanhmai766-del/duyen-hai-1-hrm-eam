@@ -9,6 +9,7 @@ import { formatPermitNumber, PERMIT_DISCIPLINES, PERMIT_UNITS } from "@/lib/work
 import { safetyPrintData, type SafetySelection } from "@/lib/work-permit-safety";
 import { assertPrintFilled, escapeHtml, fillPrintTable, loadPrintTemplate, replacePrintParagraph, replacePrintParagraphMarkup } from "@/lib/print-html";
 import { workPermitQrValue } from "@/lib/work-permit-qr";
+import { overhaulItemsOf } from "@/lib/work-permit-overhaul";
 
 const escape = (s: string) => s.replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;" }[c]!));
 const DEFAULT_RUN_PROPERTIES = '<w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:eastAsia="Times New Roman"/><w:sz w:val="24"/><w:szCs w:val="24"/></w:rPr>';
@@ -187,9 +188,33 @@ async function workPermitQrPng(row: WorkPermit, qrOrigin?: string) {
   return sharp(Buffer.from(svg)).resize(600, 600, { kernel: "nearest" }).png().toBuffer();
 }
 
-function qrTextParagraph(text: string, options: { bold?: boolean; size?: number; before?: number; after?: number } = {}) {
+function qrTextParagraph(text: string, options: { bold?: boolean; size?: number; before?: number; after?: number; align?: "center" | "left"; keepNext?: boolean } = {}) {
   const size = options.size ?? 24;
-  return `<w:p><w:pPr><w:spacing w:before="${options.before ?? 80}" w:after="${options.after ?? 80}"/><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:eastAsia="Times New Roman"/>${options.bold ? "<w:b/>" : ""}<w:sz w:val="${size}"/><w:szCs w:val="${size}"/></w:rPr><w:t xml:space="preserve">${escape(text)}</w:t></w:r></w:p>`;
+  return `<w:p><w:pPr>${options.keepNext ? "<w:keepNext/>" : ""}${options.align === "left" ? '<w:ind w:left="0" w:right="0" w:firstLine="0"/>' : ""}<w:spacing w:before="${options.before ?? 80}" w:after="${options.after ?? 80}"/><w:jc w:val="${options.align ?? "center"}"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:eastAsia="Times New Roman"/>${options.bold ? "<w:b/>" : ""}<w:sz w:val="${size}"/><w:szCs w:val="${size}"/></w:rPr><w:t xml:space="preserve">${escape(text)}</w:t></w:r></w:p>`;
+}
+
+/** Dùng đúng ảnh chụp đã lưu trên phiếu, không đọc lại biện pháp từ nguồn hạng mục. */
+function qrConstructionItems(row: WorkPermit) {
+  return overhaulItemsOf(row.overhaulItems).map(item => ({
+    title: [`Hạng mục ${item.code}`, typeof item.device === "string" ? item.device.trim() : "", typeof item.content === "string" ? item.content.trim() : ""].filter(Boolean).join(" · "),
+    lines: (typeof item.method === "string" ? item.method : "").split(/\r\n|\r|\n/).map(line => line.trim()).filter(Boolean),
+  }));
+}
+
+function qrConstructionWord(row: WorkPermit) {
+  const items = qrConstructionItems(row);
+  if (!items.length) return "";
+  return qrTextParagraph("BIỆN PHÁP THI CÔNG THEO HẠNG MỤC", { bold: true, size: 26, before: 220, after: 100, align: "left", keepNext: true })
+    + items.map(item => qrTextParagraph(item.title, { bold: true, size: 24, before: 140, after: 60, align: "left", keepNext: true })
+      + (item.lines.length ? item.lines : ["Chưa có biện pháp thi công cho hạng mục này."]).map(line =>
+        qrTextParagraph(line, { size: 24, before: 0, after: 60, align: "left" })).join("")).join("");
+}
+
+function qrConstructionHtml(row: WorkPermit) {
+  const items = qrConstructionItems(row);
+  if (!items.length) return "";
+  return `<div style="margin-top:16px;text-align:left;font-size:12pt;overflow-wrap:anywhere"><h3 style="margin:0 0 8px;font-size:13pt;break-after:avoid;page-break-after:avoid">BIỆN PHÁP THI CÔNG THEO HẠNG MỤC</h3>${items.map(item =>
+    `<h4 style="margin:10px 0 4px;font-size:12pt;break-after:avoid;page-break-after:avoid">${escape(item.title)}</h4>${(item.lines.length ? item.lines : ["Chưa có biện pháp thi công cho hạng mục này."]).map(line => `<p style="margin:0 0 4px;line-height:1.25">${escape(line)}</p>`).join("")}`).join("")}</div>`;
 }
 
 function qrImageParagraph() {
@@ -218,7 +243,9 @@ async function appendOverhaulQrPage(zip: PizZip, xml: string, row: WorkPermit, q
   const planned = row.plannedStartAt || row.plannedEndAt
     ? `Thời gian dự kiến: ${row.plannedStartAt ? plannedDayHour(row.plannedStartAt) : "chưa ghi"} — ${row.plannedEndAt ? plannedDayHour(row.plannedEndAt) : "chưa ghi"}`
     : "";
+  // Chừa một trang trống: PCT kết thúc ở trang N thì QR bắt đầu ở trang N + 2.
   const page = [
+    '<w:p><w:r><w:br w:type="page"/></w:r></w:p>',
     '<w:p><w:r><w:br w:type="page"/></w:r></w:p>',
     qrTextParagraph("MÃ QR PCT ĐẠI TU", { bold: true, size: 36, before: 200, after: 120 }),
     qrImageParagraph(),
@@ -230,6 +257,7 @@ async function appendOverhaulQrPage(zip: PizZip, xml: string, row: WorkPermit, q
     planned ? qrTextParagraph(planned, { after: 160 }) : "",
     qrTextParagraph("Quét bằng chức năng Quét QR trên duyenhai1.vn để mở bước cho phép làm việc.", { bold: true, size: 22, before: 180 }),
     qrTextParagraph(unit, { size: 20, before: 40 }),
+    qrConstructionWord(row),
   ].join("");
   const withPage = xml.replace(/(<w:sectPr\b[\s\S]*?<\/w:sectPr>\s*<\/w:body>)/, `${page}$1`);
   if (withPage === xml) throw new Error("Không chèn được trang QR vào cuối mẫu PCT");
@@ -240,7 +268,9 @@ async function overhaulQrHtml(row: WorkPermit, qrOrigin?: string) {
   const png = await workPermitQrPng(row, qrOrigin);
   const unit = PERMIT_UNITS[row.unit as keyof typeof PERMIT_UNITS] ?? row.unit;
   const line = (label: string, value: string) => `<p style="margin:8px 0;font-size:12pt"><strong>${escape(label)}:</strong> ${escape(value || "—")}</p>`;
-  return `<section style="box-sizing:border-box;break-before:page;page-break-before:always;min-height:257mm;padding:22mm 20mm;text-align:center;font-family:'Times New Roman',serif;color:#111"><h1 style="margin:0 0 14px;font-size:18pt">MÃ QR PCT ĐẠI TU</h1><img alt="Mã QR PCT Đại tu" src="data:image/png;base64,${png.toString("base64")}" style="display:block;width:4cm;height:4cm;margin:0 auto 14px"/><h2 style="margin:0 0 18px;font-size:16pt">PCT ${escape(formatPermitNumber(row))}</h2>${line("Nội dung công việc", row.content)}${line("Thiết bị / vị trí", row.location)}${line("Đơn vị nhà thầu", row.teamName)}${row.workScope ? line("Phạm vi công tác", row.workScope) : ""}${row.plannedStartAt || row.plannedEndAt ? line("Thời gian dự kiến", `${row.plannedStartAt ? plannedDayHour(row.plannedStartAt) : "chưa ghi"} — ${row.plannedEndAt ? plannedDayHour(row.plannedEndAt) : "chưa ghi"}`) : ""}<p style="margin:22px 0 0;font-size:11pt;font-weight:bold">Quét bằng chức năng Quét QR trên duyenhai1.vn để mở bước cho phép làm việc.</p><p style="margin:8px 0 0;font-size:10pt">${escape(unit)}</p></section>`;
+  // Phần tử có chiều cao để trình duyệt giữ trang trống giữa hai lần ngắt trang.
+  const blankPage = '<section aria-hidden="true" style="break-before:page;page-break-before:always;height:1px;line-height:1px">&#160;</section>';
+  return `${blankPage}<section style="box-sizing:border-box;break-before:page;page-break-before:always;min-height:257mm;padding:22mm 20mm;text-align:center;font-family:'Times New Roman',serif;color:#111"><h1 style="margin:0 0 14px;font-size:18pt">MÃ QR PCT ĐẠI TU</h1><img alt="Mã QR PCT Đại tu" src="data:image/png;base64,${png.toString("base64")}" style="display:block;width:4cm;height:4cm;margin:0 auto 14px"/><h2 style="margin:0 0 18px;font-size:16pt">PCT ${escape(formatPermitNumber(row))}</h2>${line("Nội dung công việc", row.content)}${line("Thiết bị / vị trí", row.location)}${line("Đơn vị nhà thầu", row.teamName)}${row.workScope ? line("Phạm vi công tác", row.workScope) : ""}${row.plannedStartAt || row.plannedEndAt ? line("Thời gian dự kiến", `${row.plannedStartAt ? plannedDayHour(row.plannedStartAt) : "chưa ghi"} — ${row.plannedEndAt ? plannedDayHour(row.plannedEndAt) : "chưa ghi"}`) : ""}<p style="margin:22px 0 0;font-size:11pt;font-weight:bold">Quét bằng chức năng Quét QR trên duyenhai1.vn để mở bước cho phép làm việc.</p><p style="margin:8px 0 0;font-size:10pt">${escape(unit)}</p>${qrConstructionHtml(row)}</section>`;
 }
 
 export async function createWorkPermitDocument(row: WorkPermit, qrOrigin?: string) {

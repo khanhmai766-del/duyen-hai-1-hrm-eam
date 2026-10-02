@@ -30,7 +30,7 @@
 - Tệp đính kèm không bắt buộc. Phiếu được cấp trước khi tải các tệp đã chọn; nếu tải lỗi, phiếu và số vẫn được giữ để người dùng bổ sung tệp sau.
 - Schema mới được khai báo trong `prisma/schema.prisma`; SQL nhắm đích ở `prisma/manual/add-work-permit-number-reservations.sql`. Cần áp SQL trước khi chạy mã cấp số mới trên môi trường tương ứng; không dùng `db:push` khi cơ sở dữ liệu có bảng ngoài schema.
 - Danh sách mặc định không lấy phiếu đã đóng và phiếu đã hủy; hai trạng thái này chỉ xuất hiện trên website khi người dùng chọn riêng bộ lọc tương ứng. Excel mặc định lấy cả phiếu đã đóng và luôn loại **Nháp / Đã hủy**, kể cả khi chọn riêng một trong hai trạng thái này (file chỉ có tiêu đề nếu không còn phiếu phù hợp). Các bộ lọc khác vẫn được giữ nguyên.
-- Phiếu đã cấp không đổi số, năm, loại sổ hoặc loại đơn vị. Phiếu đóng/hủy khóa sửa; không có thao tác xóa.
+- Phiếu đã cấp không đổi số, năm, loại sổ hoặc loại đơn vị. Phiếu đóng/hủy khóa sửa. ADMIN (bật chế độ quản trị) được xóa vĩnh viễn phiếu **đã hủy** từ chi tiết phiếu → **Xóa PCT đã hủy**, bắt buộc ghi lý do ít nhất 5 ký tự và xác nhận. Server kiểm tra trạng thái, phiên bản và không còn lần làm việc mở; xóa phiếu cùng các lần làm việc/lịch sử cập nhật trong một giao dịch. Giữ nhật ký quản trị và lịch sử cấp số; xóa không tự giải phóng số. File Word riêng được dọn, file đang dùng chung với phiếu cấp lại số được giữ.
 - Thông tin sổ giấy, tổ máy, thiết bị/vị trí, ngày giờ Việt Nam, kết quả, ghi chú và danh sách nhân viên.
 - Danh sách chính phân trang ở server, 10 phiếu/trang.
 - Tìm kiếm không phân biệt dấu; lọc loại, trạng thái, tổ máy, nội bộ/nhà thầu và khoảng ngày thực hiện. Tìm thêm CHTT, mã người, đơn vị và nhân viên trong các lần làm việc.
@@ -189,3 +189,9 @@ Kết quả sau tối ưu (JSON UTF-8 trước nén, không tính envelope HTTP)
 - Excel chỉ select các cột ghi sổ, một sheet, bỏ cột Trạng thái; cho xuất toàn bộ sổ theo năm hoặc theo bộ lọc đang xem; giữ giới hạn 10.000 phiếu để bảo vệ bộ nhớ.
 
 Còn cần đo trên quy mô thực tế (chưa thêm schema/index): cache thống kê theo bộ lọc, index tìm chuỗi/JSON (đo EXPLAIN trước), streaming Excel ở ngưỡng 10.000 phiếu, bảng liên kết nhân sự–phiên thay cho tìm trong JSON members. Chưa kết luận hiệu năng production.
+
+## Biện pháp thi công trên trang QR PCT đại tu
+
+- Trang QR cuối PCT giấy nhà thầu · Đại tu in thêm **Biện pháp thi công theo hạng mục**, gồm mã hạng mục, thiết bị, nội dung và từng dòng biện pháp đã lưu trong `WorkPermit.overhaulItems` khi chọn hạng mục.
+- Bản Word và HTML dùng cùng dữ liệu snapshot, không đọc lại Google Sheets khi in. Nhiều hạng mục được trình bày riêng; nội dung dài tiếp sang trang sau, giữ nguyên QR 4 cm và cỡ chữ biện pháp 12 pt.
+- Hạng mục chưa ghi biện pháp hiển thị rõ “Chưa có biện pháp thi công cho hạng mục này.” Phiếu đại tu cũ chưa chọn hạng mục giữ trang QR như trước. Phụ lục đại tu vẫn dùng riêng khi cần in bảng chi tiết.

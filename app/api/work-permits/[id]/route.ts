@@ -4,9 +4,9 @@ import { permitIssueUpdateNeedsExecution } from "@/lib/work-permit-permissions";
 import { requirePermitIssue, requirePermitIssuer, requirePermitExecute, permitCapabilities } from "@/lib/server/work-permit-permissions";
 import { resolvePermitSafety } from "@/lib/server/work-permit-safety";
 import { workPermitPrisma as prisma } from "@/lib/server/work-permit-prisma";
-import { audit, fail, ok, requireUser } from "@/lib/api";
-import { defaultPermitFormat, formatPermitNumber, PERMIT_STATUSES, PERMIT_TRANSITIONS, CONTRACTOR_PERMIT_TRANSITIONS, type PermitStatus } from "@/lib/work-permits";
-import { parsePermit, permitBody, permitHandle, permitSnapshot, resolvePermitDefectLink } from "@/lib/server/work-permits";
+import { audit, fail, ok, requireRole, requireUser } from "@/lib/api";
+import { defaultPermitFormat, effectivePermitFormat, formatPermitNumber, PERMIT_STATUSES, PERMIT_TRANSITIONS, CONTRACTOR_PERMIT_TRANSITIONS, type PermitStatus } from "@/lib/work-permits";
+import { parsePermit, permitBody, permitHandle, permitSnapshot, permitText, resolvePermitDefectLink } from "@/lib/server/work-permits";
 import { resolvePermitIdentities } from "@/lib/server/work-permit-identities";
 import { historySummarySelect } from "@/lib/server/work-permit-selects";
 import { consumePermitNumberReservation, teamTypeLabel } from "@/lib/server/work-permit-number-reservations";
@@ -19,7 +19,49 @@ export async function GET(_req: Request, props: { params: Promise<{ id: string }
     const user = await requireUser();
     await requirePermitVisible(user, params.id);
     const row = await prisma.workPermit.findUnique({ where: { id: params.id }, include: { sessions: { take: 2, orderBy: [{ openedAt: "desc" }, { id: "desc" }] }, history: { take: 2, select: historySummarySelect, orderBy: [{ createdAt: "desc" }, { id: "desc" }] }, _count: { select: { sessions: true, history: true } } } });
-    return row ? ok(row, await permitCapabilities(user)) : fail("Không tìm thấy PCT", 404);
+    return row ? ok(row, { ...await permitCapabilities(user), canDelete: user.role === "ADMIN" && user.accessMode !== "DEFECT_READ_ONLY" }) : fail("Không tìm thấy PCT", 404);
+  });
+}
+
+/** Chỉ ADMIN được xóa hẳn phiếu đã hủy; lịch sử cấp số và audit vẫn được giữ. */
+export async function DELETE(req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
+  return permitHandle(async () => {
+    const user = await requireUser(); requireRole(user, ["ADMIN"]);
+    if (user.accessMode === "DEFECT_READ_ONLY") throw fail("Tài khoản chỉ đọc không được xóa PCT", 403);
+    await requirePermitVisible(user, params.id);
+    const body = await permitBody(req);
+    const reason = permitText(body, "reason", 2000);
+    if (reason.length < 5) throw fail("Nhập lý do xóa PCT (ít nhất 5 ký tự).");
+    const removed = await prisma.$transaction(async tx => {
+      await tx.$queryRaw`SELECT "id" FROM "WorkPermit" WHERE "id" = ${params.id} FOR UPDATE`;
+      const row = await tx.workPermit.findUnique({ where: { id: params.id } });
+      if (!row) throw fail("Không tìm thấy PCT", 404);
+      if (row.status !== "CANCELLED") throw fail("Chỉ được xóa PCT đã hủy", 409);
+      if (body.version !== row.version) throw fail("Phiếu đã được người khác cập nhật. Đóng cửa sổ và tải lại trước khi xóa.", 409);
+      if (await tx.workPermitSession.count({ where: { permitId: row.id, endedAt: null } })) {
+        throw fail("Phiếu còn lần làm việc chưa kết thúc, không thể xóa", 409);
+      }
+      // File Word dùng key theo loại/năm/số: số đã cấp lại có thể đang dùng cùng file.
+      const sharedDocument = effectivePermitFormat(row) === "PAPER" && await tx.workPermit.findFirst({
+        where: { id: { not: row.id }, kind: row.kind, year: row.year, number: row.number, status: { not: "DRAFT" },
+          OR: [{ format: "PAPER" }, { format: null, teamType: "CONTRACTOR" }] }, select: { id: true },
+      });
+      const sessions = await tx.workPermitSession.deleteMany({ where: { permitId: row.id } });
+      const history = await tx.workPermitHistory.deleteMany({ where: { permitId: row.id } });
+      await tx.workPermit.delete({ where: { id: row.id } });
+      // permitId ở lịch sử cấp số là liên kết mềm: giữ ID gốc để đối chiếu audit sau khi xóa.
+      const reservations = await tx.workPermitNumberReservation.findMany({ where: { permitId: row.id }, select: { id: true } });
+      for (const reservation of reservations) {
+        await tx.workPermitNumberReservationHistory.create({ data: { reservationId: reservation.id, action: "PERMIT_DELETED",
+          actorId: user.id, actorName: user.name ?? "", permitId: row.id, note: reason } });
+      }
+      return { row, sessions: sessions.count, history: history.count, deleteDocument: !sharedDocument };
+    });
+    await audit(user.id, "DELETE_WORK_PERMIT", "WorkPermit", removed.row.id,
+      `Xóa PCT đã hủy ${formatPermitNumber(removed.row)}: ${reason} · ${removed.sessions} lần làm việc · ${removed.history} mục lịch sử`);
+    if (removed.deleteDocument) await syncPermitDocument(null, removed.row);
+    return ok({ id: removed.row.id });
   });
 }
 export async function PUT(req: Request, props: { params: Promise<{ id: string }> }) {

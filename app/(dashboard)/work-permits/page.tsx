@@ -3,7 +3,7 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Activity, BookMarked, ListChecks, ArrowRight, Ban, Building2, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, CircleAlert, ClipboardList, Copy, Download, ExternalLink, FileText, Filter, HardHat, Plus, RefreshCw, RotateCcw, Search, ShieldCheck, SlidersHorizontal, UsersRound, Wrench, Zap, Clock, CalendarRange } from "lucide-react";
+import { Activity, BookMarked, ListChecks, ArrowRight, Ban, Building2, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, CircleAlert, ClipboardList, Copy, Download, ExternalLink, FileText, Filter, HardHat, Plus, RefreshCw, RotateCcw, Search, ShieldCheck, SlidersHorizontal, UsersRound, Wrench, Zap, Clock, CalendarRange, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { PermitLiveBoard } from "@/components/work-permits/live-board";
 import { ContractorWorkSummary, PermitCompanyDirectory, PermitMembersEditor, PermitPeopleDirectory } from "@/components/work-permits/contractor-work";
@@ -19,7 +19,7 @@ import { PermitDocumentPreview } from "@/components/work-permits/document-previe
 import { apiDownload, apiDownloadPost } from "@/lib/fetcher";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { usePermitLiveSessions, usePermitPeople, useCancelDraftWorkPermit, usePermitNameSuggestions, useWorkPermits, useWorkPermit, useSaveWorkPermit, useExportWorkPermits, usePermitNumberSuggestion, usePermitNumberReservations, useTakePermitNumber, useCancelPermitNumberReservation, usePermitNumberBaselines, useSetPermitNumberBaseline, type PermitNumberReservation } from "@/hooks/useWorkPermits";
+import { usePermitLiveSessions, usePermitPeople, useCancelDraftWorkPermit, useDeleteWorkPermit, usePermitNameSuggestions, useWorkPermits, useWorkPermit, useSaveWorkPermit, useExportWorkPermits, usePermitNumberSuggestion, usePermitNumberReservations, useTakePermitNumber, useCancelPermitNumberReservation, usePermitNumberBaselines, useSetPermitNumberBaseline, type PermitNumberReservation } from "@/hooks/useWorkPermits";
 import { useUsers } from "@/hooks/useUsers";
 import { useDefects, type DefectItem } from "@/hooks/useDefects";
 import { announcementPositionsMatch } from "@/lib/positions";
@@ -702,6 +702,19 @@ function PermitDetail({ id, canIssue: listCanIssue, canIssueNew: listCanIssueNew
   const canIssueNew = query.data?.meta?.canIssueNew ?? listCanIssueNew;
   const canExecute = query.data?.meta?.canExecute ?? listCanExecute;
   const cancelDraft = useCancelDraftWorkPermit();
+  const deletePermit = useDeleteWorkPermit();
+  const [deleting, setDeleting] = useState(false);
+  const [deleteReason, setDeleteReason] = useState("");
+  const [deleteError, setDeleteError] = useState("");
+  const canDelete = query.data?.meta?.canDelete === true && row?.status === "CANCELLED";
+  async function deleteNow(row: PermitRow) {
+    setDeleteError("");
+    try {
+      await deletePermit.mutateAsync({ id: row.id, version: row.version, reason: deleteReason.trim() });
+      toast.success(`Đã xóa PCT đã hủy ${formatPermitNumber(row)}`);
+      onClose();
+    } catch (error) { setDeleteError(error instanceof Error ? error.message : "Không thể xóa PCT"); }
+  }
   // Hủy PCT: phiếu KHÔNG bị xoá — vẫn trong sổ ở trạng thái "Đã hủy" kèm lý do; số mặc định bị bỏ.
   const [cancelling, setCancelling] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
@@ -723,7 +736,7 @@ function PermitDetail({ id, canIssue: listCanIssue, canIssueNew: listCanIssueNew
   const summary = "flex cursor-pointer list-none items-center justify-between gap-2 rounded-lg border border-border px-3 py-2 text-[13px] font-semibold marker:hidden hover:bg-muted/40";
   /* Hộp chi tiết chia ba tầng như biểu mẫu cấp phiếu: đầu hộp cố định (số phiếu · trạng thái ·
      hành động), thân cuộn riêng, nên cuộn xuống lịch sử vẫn thấy số phiếu và nút thao tác. */
-  return <Dialog open onOpenChange={v => { if (!v && !cancelDraft.isPending) onClose(); }}><DialogContent className="flex max-h-[92dvh] max-w-3xl flex-col gap-0 overflow-hidden p-0">
+  return <Dialog open onOpenChange={v => { if (!v && !cancelDraft.isPending && !deletePermit.isPending) onClose(); }}><DialogContent className="flex max-h-[92dvh] max-w-3xl flex-col gap-0 overflow-hidden p-0">
     <div className="shrink-0 border-b border-border bg-muted/25 px-5 py-4 pr-12">
       <DialogTitle className="text-base tracking-[-0.01em] sm:text-lg">{row ? `Phiếu công tác ${formatPermitNumber(row)}` : "Chi tiết phiếu công tác"}</DialogTitle>
       <DialogDescription className="sr-only">Thông tin ghi sổ và lịch sử thay đổi của phiếu.</DialogDescription>
@@ -739,6 +752,7 @@ function PermitDetail({ id, canIssue: listCanIssue, canIssueNew: listCanIssueNew
           {canExecute && !["DRAFT", "CLOSED", "CANCELLED"].includes(row.status) && !(row.teamType === "CONTRACTOR" && row.status === "ISSUED") && <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => setExecuting(true)}>{row.teamType === "INTERNAL" ? "Ghi nhận đóng phiếu" : "Cập nhật tiến độ"}</Button>}
           {canIssueNew && row.status === "DRAFT" && <Button size="sm" variant="destructive" className="h-8 text-xs" disabled={cancelDraft.isPending} onClick={() => void cancelDraftNow(row)}>{cancelDraft.isPending ? "Đang hủy…" : "Hủy nháp"}</Button>}
           {(row.status === "DRAFT" ? canIssueNew : canIssue) && !["CLOSED", "CANCELLED"].includes(row.status) && !(row.teamType === "CONTRACTOR" && row.status === "ACTIVE") && <Button size="sm" className="h-8 text-xs" onClick={() => onEdit(row)}>Chỉnh sửa / cấp phiếu<ArrowRight /></Button>}
+          {canDelete && <Button type="button" size="sm" variant="destructive" className="h-10 text-xs sm:h-8" onClick={() => { setDeleteReason(""); setDeleteError(""); setDeleting(true); }}><Trash2 />Xóa PCT đã hủy</Button>}
           {canIssueNew && canCancel(row) && <Button size="sm" variant="outline" className="h-8 border-red-200 text-xs text-red-700 hover:bg-red-50 hover:text-red-800" onClick={() => { setCancelReason(""); setCancelling(true); }}><Ban />Hủy PCT</Button>}
         </div>
       </>}
@@ -761,6 +775,14 @@ function PermitDetail({ id, canIssue: listCanIssue, canIssueNew: listCanIssueNew
       <details className="group"><summary className={summary}><span>Lịch sử cập nhật ({row._count.history})</span><ChevronRight className="h-4 w-4 shrink-0 transition-transform group-open:rotate-90" /></summary><div className="mt-2 [&>section>h3]:hidden"><PermitHistoryPanel key={`${row.id}-${row.version}-history`} permit={row} /></div></details>
     </div>}
     </div>
+    {deleting && row && <Dialog open onOpenChange={v => { if (!v && !deletePermit.isPending) setDeleting(false); }}><DialogContent className="max-h-[92dvh] w-[calc(100vw-2rem)] max-w-md overflow-y-auto p-4 sm:w-full sm:p-6">
+      <DialogTitle className="pr-8">Xóa PCT đã hủy {formatPermitNumber(row)}?</DialogTitle>
+      <DialogDescription>Xóa vĩnh viễn phiếu cùng các lần làm việc và lịch sử cập nhật của phiếu. Không thể khôi phục. Nhật ký quản trị và lịch sử cấp số vẫn được giữ; thao tác này không tự trả số về sổ.</DialogDescription>
+      <p className="break-words rounded-lg bg-muted p-3 text-sm">{row.content || "Phiếu chưa ghi nội dung công việc"}</p>
+      {deleteError && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">{deleteError}</p>}
+      <label className="block space-y-1.5 text-sm"><span className="font-medium">Lý do xóa *</span><textarea className={`${control} text-base sm:text-sm`} rows={3} maxLength={2000} disabled={deletePermit.isPending} value={deleteReason} onChange={e => setDeleteReason(e.target.value)} placeholder="Ví dụ: dọn phiếu đã hủy khi test hệ thống…" /></label>
+      <div className="grid grid-cols-2 gap-2 sm:flex sm:justify-end"><Button type="button" variant="outline" disabled={deletePermit.isPending} onClick={() => setDeleting(false)}>Để sau</Button><Button type="button" variant="destructive" disabled={deletePermit.isPending || deleteReason.trim().length < 5} onClick={() => void deleteNow(row)}>{deletePermit.isPending ? "Đang xóa…" : "Xóa vĩnh viễn"}</Button></div>
+    </DialogContent></Dialog>}
     {cancelling && row && <Dialog open onOpenChange={v => { if (!v && !cancelDraft.isPending) setCancelling(false); }}><DialogContent className="max-w-md">
       <DialogTitle>Hủy PCT {formatPermitNumber(row)}?</DialogTitle>
       <DialogDescription>Phiếu không bị xoá: vẫn nằm trong sổ ở trạng thái “Đã hủy” kèm lý do và lịch sử. Số phiếu mặc định bị bỏ; quản trị chỉ có thể cho phép cấp lại từ “Mốc sổ giấy”. Không thể khôi phục chính phiếu đã hủy.</DialogDescription>

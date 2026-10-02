@@ -259,15 +259,15 @@ export function PermitCardScanner({ unit, companies, existing, permitId, onAdd, 
   }
 
   return <Dialog open onOpenChange={v => { if (!v) onClose(); }}>
-    <DialogContent className="flex max-h-[94dvh] max-w-2xl flex-col gap-3 overflow-hidden">
-      <div className="pr-8">
+    <DialogContent className="flex h-[94dvh] max-h-[94dvh] max-w-2xl flex-col gap-3 overflow-hidden p-4 sm:p-6">
+      <div className="shrink-0 pr-8">
         <DialogTitle>{title}</DialogTitle>
         <DialogDescription className="line-clamp-2">Đơn vị công tác: <b className="text-foreground">{unit}</b><span className="hidden sm:inline"> · Chỉ nhân viên đúng đơn vị này được cho vào.</span></DialogDescription>
       </div>
 
-      <div className="relative overflow-hidden rounded-lg bg-slate-900">
-        {/* Điện thoại: 4:3 (cao hơn 16:9) để mã QR chiếm nhiều điểm ảnh hơn; màn rộng giữ 16:9. */}
-        <video ref={videoRef} muted playsInline autoPlay className={`aspect-[4/3] max-h-[48dvh] w-full object-cover sm:aspect-video ${camera === "on" ? "" : "opacity-30"}`} />
+      {/* Giữ kích thước camera khi lịch sử dài lên; chỉ vùng kết quả bên dưới được cuộn. */}
+      <div className="relative aspect-[4/3] max-h-[48dvh] shrink-0 overflow-hidden rounded-lg bg-slate-900 sm:aspect-video">
+        <video ref={videoRef} muted playsInline autoPlay className={`block h-full w-full object-cover ${camera === "on" ? "" : "opacity-30"}`} />
         {camera !== "on" && <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 p-4 text-center text-sm text-white">
           <p>{camera === "starting" ? "Đang mở camera…" : camera === "error" ? cameraMessage : "Camera đang tắt"}</p>
           {camera !== "starting" && <Button type="button" size="sm" variant="secondary" onClick={() => void startCamera()}><Camera />Mở camera</Button>}
@@ -285,8 +285,8 @@ export function PermitCardScanner({ unit, companies, existing, permitId, onAdd, 
 
       {/* stopPropagation: hộp quét nằm trong <form> "Cho phép / mở lần làm việc" (portal vẫn nổi bọt theo cây React) —
           đầu đọc QR gõ Enter từng tự gửi luôn form ngoài. */}
-      <form className="flex gap-2" onSubmit={e => { e.preventDefault(); e.stopPropagation(); const value = manual; setManual(""); lastRef.current = { code: "", at: 0 }; void handle(value); }}>
-        <input className="min-h-10 flex-1 rounded-lg border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring" value={manual} maxLength={500}
+      <form className="flex shrink-0 gap-2" onSubmit={e => { e.preventDefault(); e.stopPropagation(); const value = manual; setManual(""); lastRef.current = { code: "", at: 0 }; void handle(value); }}>
+        <input className="min-h-10 min-w-0 flex-1 rounded-lg border border-input bg-background px-3 text-base focus:outline-none focus:ring-2 focus:ring-ring sm:text-sm" value={manual} maxLength={500}
           onChange={e => setManual(e.target.value)} placeholder="Đầu đọc QR / nhập số thẻ rồi Enter" aria-label="Số thẻ hoặc nội dung mã QR" />
         <Button type="submit" variant="outline" disabled={!manual.trim()}>Tra thẻ</Button>
       </form>
@@ -343,7 +343,7 @@ export function PermitCardScanner({ unit, companies, existing, permitId, onAdd, 
         </div>}
       </div>
 
-      <div className="flex items-center justify-between gap-2 border-t border-border pt-3">
+      <div className="flex shrink-0 items-center justify-between gap-2 border-t border-border pt-3">
         <p className="text-sm">Lượt quét này: vào <b>{addedCount}</b>{onExisting ? <> · ra <b>{outCount}</b></> : " người"}</p>
         <Button type="button" onClick={onClose}><X />Xong</Button>
       </div>
