@@ -22,7 +22,7 @@ export function lastVisit(member: WithAttendance) {
   const visits = member.attendance;
   return Array.isArray(visits) && visits.length ? visits[visits.length - 1] : null;
 }
-/** Quét lại cùng thẻ trong khoảng này sau khi VÀO thì không tự ghi RA (chống quét đúp / bấm nhầm). */
+/** Quét lại cùng thẻ trong khoảng này sau khi VÀO/RA thì không tự đảo trạng thái. */
 export const ATTENDANCE_MIN_STAY_MS = 60_000;
 
-export type AttendanceOutcome = "IN" | "OUT" | "ADDED" | "ALREADY_IN" | "TOO_SOON";
+export type AttendanceOutcome = "IN" | "OUT" | "ADDED" | "ALREADY_IN" | "TOO_SOON" | "TOO_SOON_AFTER_OUT";

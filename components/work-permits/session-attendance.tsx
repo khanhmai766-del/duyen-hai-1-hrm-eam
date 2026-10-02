@@ -23,6 +23,7 @@ function outcomeOf(result: PermitAttendanceResult): ScanOutcome {
     case "OUT": return { tone: "ok", detail: `RA lúc ${hhmm(result.at)} · còn ${count}.`, out: true };
     case "ALREADY_IN": return { tone: "info", detail: `Đang ở trong khu vực (vào lúc ${hhmm(result.at)}).` };
     case "TOO_SOON": return { tone: "info", detail: `Vừa vào lúc ${hhmm(result.at)} — chưa đủ 1 phút nên KHÔNG ghi ra. Người này rời vị trí thật thì quét lại sau.` };
+    case "TOO_SOON_AFTER_OUT": return { tone: "info", detail: `Vừa ra lúc ${hhmm(result.at)} — chưa đủ 1 phút nên không ghi vào lại. Nếu cần vào lại ngay, người cho phép dùng nút “Vào lại”.` };
   }
 }
 

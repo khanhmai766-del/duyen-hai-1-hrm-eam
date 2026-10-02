@@ -154,7 +154,7 @@ export function usePermitSessionAction(permitId: string) {
 }
 
 export interface PermitAttendanceResult {
-  outcome: "IN" | "OUT" | "ADDED" | "ALREADY_IN" | "TOO_SOON"; at: string; inside: number; total: number;
+  outcome: "IN" | "OUT" | "ADDED" | "ALREADY_IN" | "TOO_SOON" | "TOO_SOON_AFTER_OUT"; at: string; inside: number; total: number;
   member: { personId?: string; code: string; name: string; company: string };
 }
 /** Quét VÀO/RA trong lần làm việc đang mở. Làm mới chi tiết phiếu sau mỗi lượt để danh sách luôn đúng. */

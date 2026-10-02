@@ -8,6 +8,8 @@ import { assertCommanderFree, readSessionOpen, resolveSessionMembers, validateSe
 import { sameCompany } from "@/lib/work-permit-card";
 import { closeInsideVisits, handoffMembers, membersInside, withEntry } from "@/lib/server/work-permit-attendance";
 import { syncPermitDocument } from "@/lib/server/work-permit-document-store";
+import { assertWorkersFree, lockWorkPermitPresence } from "@/lib/server/work-permit-presence";
+import { presentMembers } from "@/lib/work-permit-presence";
 export const dynamic = "force-dynamic";
 export async function POST(req: Request, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
@@ -17,6 +19,7 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
     const body = await permitBody(req);
     if (!["open", "end", "handoff"].includes(String(body.action))) return fail("Thao tác lần làm việc không hợp lệ");
     const result = await prisma.$transaction(async tx => {
+      await lockWorkPermitPresence(tx);
       // Mọi thao tác vòng đời đều khóa phiếu trước, rồi khóa CHTT: cùng thứ tự tránh deadlock.
       await tx.$queryRaw`SELECT "id" FROM "WorkPermit" WHERE "id" = ${params.id} FOR UPDATE`;
       const permit = await tx.workPermit.findUnique({ where: { id: params.id } });
@@ -54,6 +57,7 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
         const handoffNote = handoff ? permitText(body, "endNote", 2000) : "";
         const nextMembers = oldSession ? handoffMembers(members, oldSession.members, input.openedAt)
           : members.map(member => withEntry(member, input.openedAt));
+        await assertWorkersFree(tx, [{ personId: person.id, code: person.code, name: person.name, company: person.company }, ...presentMembers(nextMembers)], permit.id);
         if (oldSession) await tx.workPermitSession.update({ where: { id: oldSession.id }, data: {
           endedAt: input.openedAt, endConfirmedByName: input.authorizerName, members: permitSnapshot(closeInsideVisits(oldSession.members, input.openedAt)),
           endNote: `Bàn giao CHTT cho ${person.name}. ${handoffNote}`.trim(), endedById: user.id, endedByName: user.name ?? "",

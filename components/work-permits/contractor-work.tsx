@@ -478,11 +478,11 @@ export function SessionEditor({ permit, session, handoff = false, onClose }: { p
   });
   const [picking, setPicking] = useState(false);
   const [at, setAt] = useState(vnNow());
-  // Mở lần làm việc: người cho phép mặc định là tài khoản đang thao tác (vẫn chọn lại được). Suy ra thay vì
+  // Mở/kết thúc/bàn giao lần làm việc: người xác nhận mặc định là tài khoản đang thao tác (vẫn chọn lại được). Suy ra thay vì
   // useState(tên) vì phiên có thể tải xong SAU khi hộp mở.
   const { data: authSession } = useSession();
   const [nameOverride, setName] = useState<string | null>(null);
-  const name = nameOverride ?? (!session && !handoff ? authSession?.user?.name ?? "" : "");
+  const name = nameOverride ?? authSession?.user?.name ?? "";
   const [note, setNote] = useState("");
   const [progress, setProgress] = useState(String(permit.progress ?? 0));
   const [members, setMembers] = useState<PermitMember[]>(permit.sessions[0]?.members ?? permit.members ?? []);

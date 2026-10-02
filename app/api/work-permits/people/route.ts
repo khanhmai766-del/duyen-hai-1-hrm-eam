@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { audit, fail, ok, requireUser } from "@/lib/api";
 import { permitBody, permitHandle, permitSearchTerm } from "@/lib/server/work-permits";
 import { parsePermitPerson, personCardSelect, withPhotoUrl } from "@/lib/server/work-permit-people";
+import { presentMembers, samePermitWorker } from "@/lib/work-permit-presence";
 export const dynamic = "force-dynamic";
 export async function GET(req: Request) {
   return permitHandle(async () => {
@@ -28,10 +29,8 @@ export async function GET(req: Request) {
       orderBy: { openedAt: "asc" },
     }) : [];
     return ok(rows.map(person => {
-      const activeWorks = activeSessions.filter(session => session.commanderId === person.id || (Array.isArray(session.members) && session.members.some(member => {
-        if (!member || typeof member !== "object" || Array.isArray(member)) return false;
-        return member.personId ? member.personId === person.id : member.code === person.code;
-      })));
+      const activeWorks = activeSessions.filter(session => session.commanderId === person.id ||
+        presentMembers(session.members).some(member => samePermitWorker(member, { personId: person.id, code: person.code, name: person.name, company: person.company })));
       const commanding = activeWorks.find(session => session.commanderId === person.id);
       return { ...withPhotoUrl(person), activeWork: commanding ? { openedAt: commanding.openedAt, permit: commanding.permit } : null,
         activeWorks: activeWorks.map(session => ({ sessionId: session.id, role: session.commanderId === person.id ? "CHTT" : "MEMBER", openedAt: session.openedAt, permit: session.permit })) };

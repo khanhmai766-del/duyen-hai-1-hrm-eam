@@ -5,6 +5,7 @@ import { ATTENDANCE_MIN_STAY_MS, attendanceInside, lastVisit, type AttendanceOut
 import { sameCompany } from "@/lib/work-permit-card";
 import type { PermitMember } from "@/lib/work-permits";
 import { permitSnapshot } from "@/lib/server/work-permits";
+import { assertWorkersFree, lockWorkPermitPresence } from "@/lib/server/work-permit-presence";
 
 /** Đọc `WorkPermitSession.members` (Json) an toàn thành mảng thành viên. */
 export function sessionMembers(value: Prisma.JsonValue): PermitMember[] {
@@ -44,7 +45,7 @@ export function closeInsideVisits(value: Prisma.JsonValue, at: Date): PermitMemb
 /**
  * Ghi một lượt quét VÀO/RA cho lần làm việc ĐANG MỞ. Khoá dòng lần làm việc nên nhiều cổng quét cùng lúc
  * vẫn đúng. Hướng:
- *  - "auto": đang trong → RA (trừ khi vừa VÀO < 1 phút → TOO_SOON); đã ra → VÀO lại; chưa có → lỗi.
+ *  - "auto": đang trong → RA; đã ra → VÀO lại; chặn đảo trạng thái trong 1 phút sau VÀO/RA; chưa có → lỗi.
  *  - "in":   chưa có → kiểm đơn vị/hoạt động rồi THÊM + VÀO; đã ra → VÀO lại; đang trong → ALREADY_IN.
  *  - "out":  đang trong → RA; còn lại → lỗi.
  * Người tìm theo `personId` (quét thẻ) hoặc `index` + `name` (nút tay cho người nhập tên không có thẻ).
@@ -52,6 +53,7 @@ export function closeInsideVisits(value: Prisma.JsonValue, at: Date): PermitMemb
 export async function recordAttendance(tx: Prisma.TransactionClient, input: {
   permitId: string; sessionId: string; direction: "auto" | "in" | "out"; personId?: string; index?: number; name?: string; now?: Date;
 }) {
+  await lockWorkPermitPresence(tx);
   const now = input.now ?? new Date();
   await tx.$queryRaw`SELECT "id" FROM "WorkPermitSession" WHERE "id" = ${input.sessionId} FOR UPDATE`;
   const session = await tx.workPermitSession.findFirst({ where: { id: input.sessionId, permitId: input.permitId }, include: { permit: { select: { teamName: true, status: true } } } });
@@ -75,6 +77,7 @@ export async function recordAttendance(tx: Prisma.TransactionClient, input: {
       throw fail(`${person.name} thuộc đơn vị “${person.company}”, không phải đơn vị công tác của phiếu (“${session.permit.teamName}”). Không cho vào.`);
     }
     member = { personId: person.id, code: person.code, name: person.name, company: person.company, attendance: [{ in: at, out: null }] };
+    await assertWorkersFree(tx, [member], input.permitId);
     members.push(member);
     outcome = "ADDED";
   } else {
@@ -92,6 +95,11 @@ export async function recordAttendance(tx: Prisma.TransactionClient, input: {
     } else if (inside) {
       return { outcome: "ALREADY_IN" as const, member, at: lastVisit(member)!.in, ...counts(members) };
     } else {
+      const last = lastVisit(member);
+      if (input.direction === "auto" && last?.out && now.getTime() - new Date(last.out).getTime() < ATTENDANCE_MIN_STAY_MS) {
+        return { outcome: "TOO_SOON_AFTER_OUT" as const, member, at: last.out, ...counts(members) };
+      }
+      await assertWorkersFree(tx, [member], input.permitId);
       visits.push({ in: at, out: null });
       outcome = "IN";
     }

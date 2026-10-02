@@ -190,8 +190,19 @@ Kết quả sau tối ưu (JSON UTF-8 trước nén, không tính envelope HTTP)
 
 Còn cần đo trên quy mô thực tế (chưa thêm schema/index): cache thống kê theo bộ lọc, index tìm chuỗi/JSON (đo EXPLAIN trước), streaming Excel ở ngưỡng 10.000 phiếu, bảng liên kết nhân sự–phiên thay cho tìm trong JSON members. Chưa kết luận hiệu năng production.
 
-## Biện pháp thi công trên trang QR PCT đại tu
+## QR trang đầu PCT đại tu
 
-- Trang QR cuối PCT giấy nhà thầu · Đại tu in thêm **Biện pháp thi công theo hạng mục**, gồm mã hạng mục, thiết bị, nội dung và từng dòng biện pháp đã lưu trong `WorkPermit.overhaulItems` khi chọn hạng mục.
-- Bản Word và HTML dùng cùng dữ liệu snapshot, không đọc lại Google Sheets khi in. Nhiều hạng mục được trình bày riêng; nội dung dài tiếp sang trang sau, giữ nguyên QR 4 cm và cỡ chữ biện pháp 12 pt.
-- Hạng mục chưa ghi biện pháp hiển thị rõ “Chưa có biện pháp thi công cho hạng mục này.” Phiếu đại tu cũ chưa chọn hạng mục giữ trang QR như trước. Phụ lục đại tu vẫn dùng riêng khi cần in bảng chi tiết.
+- PCT giấy nhà thầu · Đại tu có QR **2,5 cm ở góc dưới bên phải trang đầu**, chỉ in một lần. Word dùng chân trang đầu (`first` + `titlePg`); bản in website dùng margin box của `@page:first`, chừa lề dưới 35 mm để QR không đè nội dung. QR không cần bật tùy chọn in hình nền của trình duyệt.
+- QR dùng bản vector để in sắc nét trên website và Word hỗ trợ SVG. Word cũng có ảnh PNG dự phòng độ phân giải cao, mỗi ô QR đúng 32 pixel, chỉ có đen/trắng để tránh viền mờ.
+- PCT không tự nối trang QR riêng, trang trống hay biện pháp thi công theo hạng mục ở cuối. Việc chọn hạng mục không làm phát sinh trang biện pháp trong bản in PCT.
+- Dữ liệu biện pháp trong `WorkPermit.overhaulItems` vẫn được giữ. Khi cần, người dùng in riêng bằng nút **Phụ lục** (bảng chi tiết đại tu).
+
+## Chống quét thẻ lặp trong lần làm việc
+
+Camera chỉ nhận một lượt khi cùng mã còn trong khung. Muốn quét lại cùng thẻ, đưa mã ra khỏi khung ít nhất 1 giây; chuyển sang mã khác được nhận ngay. Server chặn quét tự động đảo trạng thái trong 60 giây sau cả VÀO và RA, không ghi thêm lịch sử khi bị chặn. Nút RA / Vào lại là thao tác chủ động, có thể dùng ngay khi cần.
+
+## Chặn nhân viên làm việc đồng thời trên nhiều PCT
+
+Server bắt buộc kiểm tra khi mở lần làm việc, bàn giao CHTT, thêm nhân viên và cho vào lại (quét hoặc nút tay). Người đang trong khu vực làm việc hoặc là CHTT của PCT khác phải ghi RA/kết thúc lần làm việc cũ trước; không có nút bỏ qua kiểm tra trùng. Người đã RA hoặc chưa ghi VÀO không chiếm chỗ. Lần làm việc cũ chưa có dữ liệu vào/ra được coi là đang làm việc đến khi ghi RA hoặc kết thúc. Đối chiếu theo hồ sơ nhân sự; người nhập tay theo mã thẻ, hoặc tên và đơn vị khi không có mã.
+
+Các thao tác vào/ra và vòng đời lần làm việc dùng chung khóa transaction trước khi đọc/ghi, tránh hai cổng cùng cho một người vào hai phiếu. Kiểm tra này không sửa dữ liệu trùng đã tồn tại.

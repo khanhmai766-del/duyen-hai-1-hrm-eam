@@ -7,13 +7,14 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/compone
 import { lookupPermitCard, useSavePermitPerson } from "@/hooks/useWorkPermits";
 import { cardExpired, cardlessCode, isCardlessCode, parseCardQr, sameCompany } from "@/lib/work-permit-card";
 import { formatPermitNumber, type PermitMember, type PermitPerson } from "@/lib/work-permits";
+import { PermitCameraScanGuard } from "@/lib/work-permit-scan-guard";
 
 /*
  * Quét thẻ ra vào cổng để thêm nhân viên vào lần làm việc — luồng một chạm cho đội đông người:
  *   mở đúng phiếu → quét → thấy ảnh + tên → đúng người, đúng đơn vị thì TỰ THÊM ngay, quét người kế tiếp.
  *
  * - Khác đơn vị công tác của phiếu, ngừng hoạt động → CHẶN (không cho thêm).
- * - Thẻ hết hạn, người đang ghi ở lần làm việc khác → CẢNH BÁO, người cho phép bấm "Vẫn cho vào"/"Không".
+ * - Đang làm việc ở PCT khác → chặn bắt buộc; thẻ hết hạn → cảnh báo người cho phép.
  * - Thẻ chưa có trong danh bạ → thêm nhanh (chỉ nhập họ tên, đơn vị khoá theo phiếu).
  * Camera quét liên tục; đầu đọc QR cắm USB (gõ như bàn phím + Enter) dùng ô nhập bên dưới.
  */
@@ -112,6 +113,7 @@ export function PermitCardScanner({ unit, companies, existing, permitId, onAdd, 
   // Mỗi lần bật/tắt camera tăng số lượt; lượt bật đang chờ (xin quyền, tải thư viện QR) thấy lượt đã đổi thì tự
   // tắt luồng của nó — kẻo đóng hộp quét lúc camera đang khởi động để lại camera/vòng quét chạy ngầm.
   const cameraRunRef = useRef(0);
+  const cameraGuardRef = useRef(new PermitCameraScanGuard());
   const lastRef = useRef<{ code: string; at: number }>({ code: "", at: 0 });
   const existingRef = useRef(existing);
   existingRef.current = existing;
@@ -167,9 +169,9 @@ export function PermitCardScanner({ unit, companies, existing, permitId, onAdd, 
       }
       const reasons: string[] = [];
       if (cardExpired(person.cardExpiresAt)) reasons.push(`Thẻ đã HẾT HẠN ngày ${vnDate(person.cardExpiresAt)}.`);
-      for (const work of person.activeWorks ?? []) {
-        if (work.permit.id !== permitId) reasons.push(`Đang ghi ${work.role === "CHTT" ? "là CHTT" : "làm việc"} ở PCT ${formatPermitNumber(work.permit)} (chưa kết thúc).`);
-      }
+      const conflict = person.activeWorks?.find(work => work.permit.id !== permitId);
+      if (conflict) return push({ code, tone: "block", person, title: person.name,
+        detail: `Đang ${conflict.role === "CHTT" ? "là CHTT" : "làm việc"} ở PCT ${formatPermitNumber(conflict.permit)}. Phải ghi RA hoặc kết thúc lần làm việc tại phiếu đó trước khi cho vào.` });
       if (reasons.length) return push({ code, tone: "warn", person, title: person.name, detail: "Cần người cho phép quyết định.", reasons, pending: true });
       push({ code, person, title: person.name, ...await admit(person) });
     } catch (error) {
@@ -184,6 +186,7 @@ export function PermitCardScanner({ unit, companies, existing, permitId, onAdd, 
 
   const stopCamera = useCallback(() => {
     cameraRunRef.current++;
+    cameraGuardRef.current.reset();
     controlsRef.current?.stop();
     controlsRef.current = null;
     const video = videoRef.current;
@@ -195,6 +198,7 @@ export function PermitCardScanner({ unit, companies, existing, permitId, onAdd, 
   const startCamera = useCallback(async () => {
     if (!navigator.mediaDevices?.getUserMedia) { setCamera("error"); setCameraMessage("Trình duyệt không hỗ trợ camera. Dùng đầu đọc QR hoặc nhập số thẻ."); return; }
     const run = ++cameraRunRef.current;
+    cameraGuardRef.current.reset();
     const stale = () => run !== cameraRunRef.current;
     setCamera("starting");
     let stream: MediaStream | null = null;
@@ -209,8 +213,14 @@ export function PermitCardScanner({ unit, companies, existing, permitId, onAdd, 
       if (stale()) { stream.getTracks().forEach(track => track.stop()); return; }
       const reader = new BrowserQRCodeReader(undefined, { delayBetweenScanAttempts: 100, delayBetweenScanSuccess: 600 });
       const controls = await reader.decodeFromStream(stream, video, result => {
+        if (stale()) return;
         const text = result?.getText();
-        if (text) void handleRef.current(text);
+        const code = text ? parseCardQr(text) ?? text.trim() : null;
+        const ready = cameraGuardRef.current.observe(code, Date.now());
+        if (text && code && ready && !busyRef.current && !blockedRef.current) {
+          cameraGuardRef.current.accept(code);
+          void handleRef.current(text);
+        }
       });
       if (stale()) { controls.stop(); stream.getTracks().forEach(track => track.stop()); return; }
       controlsRef.current = controls;
@@ -278,7 +288,7 @@ export function PermitCardScanner({ unit, companies, existing, permitId, onAdd, 
             {["left-0 top-0 border-l-4 border-t-4 rounded-tl-2xl", "right-0 top-0 border-r-4 border-t-4 rounded-tr-2xl", "bottom-0 left-0 border-b-4 border-l-4 rounded-bl-2xl", "bottom-0 right-0 border-b-4 border-r-4 rounded-br-2xl"]
               .map(corner => <span key={corner} className={`absolute h-8 w-8 border-white ${corner}`} />)}
           </div>
-          <p className="pointer-events-none absolute inset-x-0 bottom-2 text-center text-xs font-medium text-white/90 drop-shadow">Đưa mã QR trên thẻ vào khung</p>
+          <p className="pointer-events-none absolute inset-x-0 bottom-2 px-2 text-center text-xs font-medium text-white/90 drop-shadow">Mỗi thẻ một lượt — đưa mã ra khỏi khung trước khi quét lại</p>
           <Button type="button" size="sm" variant="secondary" className="absolute right-2 top-2 h-8" onClick={stopCamera}><CameraOff />Tắt</Button>
         </>}
       </div>
