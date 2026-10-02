@@ -13,6 +13,19 @@ export function sessionMembers(value: Prisma.JsonValue): PermitMember[] {
 export function withEntry(member: PermitMember, at: Date): PermitMember {
   return { ...member, attendance: [{ in: at.toISOString(), out: null }] };
 }
+/** Bàn giao chỉ ghi VÀO mới cho người đang trong khu vực hoặc mới được bổ sung.
+ * Người đã RA / chưa ghi VÀO giữ trạng thái từ DB, không tin attendance do client gửi.
+ */
+export function handoffMembers(members: PermitMember[], previous: Prisma.JsonValue, at: Date): PermitMember[] {
+  const key = (member: PermitMember) => member.personId ? `id:${member.personId}`
+    : member.code ? `code:${member.code.toUpperCase()}` : `name:${normalizeText(member.name)}|${normalizeText(member.company)}`;
+  const byKey = new Map(sessionMembers(previous).map(member => [key(member), member]));
+  return members.map(member => {
+    const old = byKey.get(key(member));
+    if (!old || attendanceInside(old)) return withEntry(member, at);
+    return { ...member, attendance: (old.attendance ?? []).map(visit => ({ ...visit })) };
+  });
+}
 export function membersInside(value: Prisma.JsonValue) {
   return sessionMembers(value).filter(attendanceInside);
 }

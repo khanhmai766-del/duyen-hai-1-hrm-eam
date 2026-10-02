@@ -6,7 +6,7 @@ import { audit, fail, ok, requireUser } from "@/lib/api";
 import { permitBody, permitHandle, permitInstant, permitSnapshot, permitText } from "@/lib/server/work-permits";
 import { assertCommanderFree, readSessionOpen, resolveSessionMembers, validateSessionTime } from "@/lib/server/work-permit-sessions";
 import { sameCompany } from "@/lib/work-permit-card";
-import { closeInsideVisits, membersInside, withEntry } from "@/lib/server/work-permit-attendance";
+import { closeInsideVisits, handoffMembers, membersInside, withEntry } from "@/lib/server/work-permit-attendance";
 import { syncPermitDocument } from "@/lib/server/work-permit-document-store";
 export const dynamic = "force-dynamic";
 export async function POST(req: Request, props: { params: Promise<{ id: string }> }) {
@@ -25,7 +25,10 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
       if (body.version !== permit.version) throw fail("Phiếu đã thay đổi. Đóng cửa sổ và tải lại trước khi thao tác.", 409);
       if (body.action === "open" || body.action === "handoff") {
         const handoff = body.action === "handoff";
-        const oldSession = handoff ? await tx.workPermitSession.findFirst({ where: { id: permitText(body, "sessionId", 100), permitId: permit.id, endedAt: null } }) : null;
+        const sessionId = handoff ? permitText(body, "sessionId", 100) : "";
+        // Quét vào/ra khóa lần làm việc: đọc sau khi khóa để giữ đúng trạng thái mới nhất khi bàn giao.
+        if (handoff) await tx.$queryRaw`SELECT "id" FROM "WorkPermitSession" WHERE "id" = ${sessionId} AND "permitId" = ${permit.id} FOR UPDATE`;
+        const oldSession = handoff ? await tx.workPermitSession.findFirst({ where: { id: sessionId, permitId: permit.id, endedAt: null } }) : null;
         if (handoff && (!oldSession || permit.status !== "ACTIVE")) throw fail("Lần làm việc không còn mở. Vui lòng tải lại phiếu.", 409);
         if ((!handoff && !["ISSUED", "WAITING"].includes(permit.status)) || !permit.issuedAt) throw fail("Chỉ mở lần làm việc cho phiếu đã cấp hoặc đang chờ làm tiếp", 409);
         const input = readSessionOpen(body);
@@ -49,14 +52,16 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
         const foreign = members.find(member => member.personId && !sameCompany(member.company, permit.teamName) && !sameCompany(member.company, person.company));
         if (foreign) throw fail(`${foreign.name} (${foreign.code}) thuộc đơn vị “${foreign.company}”, không phải đơn vị công tác của phiếu (“${permit.teamName}”). Chỉ cho nhân viên đúng đơn vị vào làm việc.`);
         const handoffNote = handoff ? permitText(body, "endNote", 2000) : "";
+        const nextMembers = oldSession ? handoffMembers(members, oldSession.members, input.openedAt)
+          : members.map(member => withEntry(member, input.openedAt));
         if (oldSession) await tx.workPermitSession.update({ where: { id: oldSession.id }, data: {
           endedAt: input.openedAt, endConfirmedByName: input.authorizerName, members: permitSnapshot(closeInsideVisits(oldSession.members, input.openedAt)),
           endNote: `Bàn giao CHTT cho ${person.name}. ${handoffNote}`.trim(), endedById: user.id, endedByName: user.name ?? "",
         } });
         const session = await tx.workPermitSession.create({ data: {
           permitId: permit.id, commanderId: person.id, commanderCode: person.code, commanderName: person.name, company: person.company,
-          // Người được cho vào lúc mở/bàn giao: lượt VÀO đầu tiên = thời điểm cho phép.
-          members: permitSnapshot(members.map(member => withEntry(member, input.openedAt))), workerCount: 1 + members.length, openedAt: input.openedAt, authorizerName: input.authorizerName,
+          // Mở mới ghi VÀO; bàn giao giữ người đã RA ở ngoài khu vực.
+          members: permitSnapshot(nextMembers), workerCount: 1 + members.length, openedAt: input.openedAt, authorizerName: input.authorizerName,
           searchText: normalizeText([person.code, person.name, person.company, input.authorizerName, ...members.map(m => `${m.code} ${m.name} ${m.company}`)].join(" ")),
           createdById: user.id, createdByName: user.name ?? "",
         } });
