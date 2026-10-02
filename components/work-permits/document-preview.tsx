@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { Download, Printer } from "lucide-react";
+import { Download, Printer, QrCode } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
@@ -66,12 +66,13 @@ function addPrintStyle(doc: Document, qrSrc?: string) {
  * Hiện PCT đã điền đúng như mẫu Word gốc ngay trong trình duyệt để rà soát rồi in.
  * Vẽ trong iframe để CSS của ứng dụng (Tailwind preflight) không làm lệch bố cục mẫu.
  */
-export function PermitDocumentPreview({ title, load, onClose }: { title: string; load: () => Promise<PermitDocumentFile>; onClose: () => void }) {
+export function PermitDocumentPreview({ title, load, loadQr, onClose }: { title: string; load: () => Promise<PermitDocumentFile>; loadQr?: () => Promise<PermitDocumentFile>; onClose: () => void }) {
   const frame = useRef<HTMLIFrameElement>(null);
   const loadRef = useRef(load);
   const [file, setFile] = useState<PermitDocumentFile | null>(null);
   const [error, setError] = useState("");
   const [ready, setReady] = useState(false);
+  const [downloadingQr, setDownloadingQr] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -100,10 +101,16 @@ export function PermitDocumentPreview({ title, load, onClose }: { title: string;
     return () => { alive = false; };
   }, [file]);
 
-  function download() {
-    if (!file) return;
-    const url = URL.createObjectURL(file.blob), a = document.createElement("a");
-    a.href = url; a.download = file.filename; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+  function saveFile(value: PermitDocumentFile) {
+    const url = URL.createObjectURL(value.blob), a = document.createElement("a");
+    a.href = url; a.download = value.filename; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+  async function downloadQr() {
+    if (!loadQr || downloadingQr) return;
+    setDownloadingQr(true);
+    try { saveFile(await loadQr()); }
+    catch (error) { toast.error(error instanceof Error ? error.message : "Không thể tải mã QR"); }
+    finally { setDownloadingQr(false); }
   }
   function print() {
     const win = frame.current?.contentWindow;
@@ -118,9 +125,10 @@ export function PermitDocumentPreview({ title, load, onClose }: { title: string;
           <DialogTitle className="truncate text-base">{title}</DialogTitle>
           <DialogDescription className="text-xs">Bản xem theo đúng mẫu Word của phiếu. Rà soát thông tin trước khi in hoặc cấp phiếu.</DialogDescription>
         </div>
-        <div className="flex gap-2">
-          <Button size="sm" variant="outline" className="h-8 text-xs" disabled={!file} onClick={download}><Download />Tải Word</Button>
-          <Button size="sm" className="h-8 text-xs" disabled={!ready} onClick={print}><Printer />In</Button>
+        <div className="flex flex-wrap gap-2">
+          <Button size="sm" variant="outline" className="h-10 text-xs sm:h-8" disabled={!file} onClick={() => { if (file) saveFile(file); }}><Download />Tải Word</Button>
+          {loadQr && <Button size="sm" variant="outline" className="h-10 text-xs sm:h-8" disabled={downloadingQr} onClick={() => void downloadQr()} title="Tải ảnh mã QR riêng để in dán lên phiếu đã cấp"><QrCode />{downloadingQr ? "Đang tải…" : "Tải QR"}</Button>}
+          <Button size="sm" className="h-10 text-xs sm:h-8" disabled={!ready} onClick={print}><Printer />In</Button>
         </div>
       </div>
       <div className="relative min-h-0 flex-1 bg-muted">

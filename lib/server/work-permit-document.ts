@@ -1,14 +1,14 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import PizZip from "pizzip";
-import sharp from "sharp";
-import { BarcodeFormat, EncodeHintType, QRCodeWriter } from "@zxing/library";
 import { prisma } from "@/lib/prisma";
 import type { WorkPermit } from "@prisma/client";
 import { formatPermitNumber, PERMIT_DISCIPLINES } from "@/lib/work-permits";
 import { safetyPrintData, type SafetySelection } from "@/lib/work-permit-safety";
 import { assertPrintFilled, escapeHtml, fillPrintTable, loadPrintTemplate, replacePrintParagraph, replacePrintParagraphMarkup } from "@/lib/print-html";
-import { workPermitQrPrintImage, workPermitQrValue } from "@/lib/work-permit-qr";
+import { workPermitQrPrintImage } from "@/lib/work-permit-qr";
+
+import { workPermitQrAssets } from "@/lib/server/work-permit-qr";
 
 const escape = (s: string) => s.replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;" }[c]!));
 const DEFAULT_RUN_PROPERTIES = '<w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:eastAsia="Times New Roman"/><w:sz w:val="24"/><w:szCs w:val="24"/></w:rPr>';
@@ -174,21 +174,6 @@ function hasOverhaulQr(row: WorkPermit) {
   return Boolean(row.id) && row.teamType === "CONTRACTOR" && row.contractorScope === "OVERHAUL";
 }
 
-async function workPermitQrAssets(row: WorkPermit, qrOrigin?: string) {
-  const value = workPermitQrValue(row.id, qrOrigin);
-  const hints = new Map<EncodeHintType, unknown>();
-  hints.set(EncodeHintType.MARGIN, 4);
-  const matrix = new QRCodeWriter().encode(value, BarcodeFormat.QR_CODE, 0, 0, hints);
-  let pathData = "";
-  for (let y = 0; y < matrix.getHeight(); y++) {
-    for (let x = 0; x < matrix.getWidth(); x++) if (matrix.get(x, y)) pathData += `M${x} ${y}h1v1h-1z`;
-  }
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="25mm" height="25mm" viewBox="0 0 ${matrix.getWidth()} ${matrix.getHeight()}" shape-rendering="crispEdges"><rect width="100%" height="100%" fill="#fff"/><path d="${pathData}" fill="#000"/></svg>`;
-  // Mỗi ô QR đúng 32 pixel: cạnh ô không có pixel xám do nội suy/co giãn.
-  const size = matrix.getWidth() * 32;
-  const rasterSvg = svg.replace('width="25mm" height="25mm"', `width="${size}" height="${size}"`);
-  return { svg, png: await sharp(Buffer.from(rasterSvg)).png().toBuffer() };
-}
 
 function qrImageParagraph() {
   return `<w:p><w:pPr><w:spacing w:before="0" w:after="0"/><w:jc w:val="right"/></w:pPr><w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent cx="${QR_SIZE_EMU}" cy="${QR_SIZE_EMU}"/><wp:effectExtent l="0" t="0" r="0" b="0"/><wp:docPr id="9001" name="Mã QR PCT Đại tu"/><wp:cNvGraphicFramePr><a:graphicFrameLocks noChangeAspect="1"/></wp:cNvGraphicFramePr><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic><pic:nvPicPr><pic:cNvPr id="0" name="work-permit-qr.png"/><pic:cNvPicPr/></pic:nvPicPr><pic:blipFill><a:blip r:embed="${QR_RELATIONSHIP_ID}"><a:extLst><a:ext uri="{96DAC541-7B7A-43D3-8B79-37D633B846F1}"><asvg:svgBlip xmlns:asvg="http://schemas.microsoft.com/office/drawing/2016/SVG/main" r:embed="rIdWorkPermitQrSvg"/></a:ext></a:extLst></a:blip><a:stretch><a:fillRect/></a:stretch></pic:blipFill><pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${QR_SIZE_EMU}" cy="${QR_SIZE_EMU}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>`;

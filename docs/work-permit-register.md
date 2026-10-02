@@ -206,3 +206,7 @@ Camera chỉ nhận một lượt khi cùng mã còn trong khung. Muốn quét l
 Server bắt buộc kiểm tra khi mở lần làm việc, bàn giao CHTT, thêm nhân viên và cho vào lại (quét hoặc nút tay). Người đang trong khu vực làm việc hoặc là CHTT của PCT khác phải ghi RA/kết thúc lần làm việc cũ trước; không có nút bỏ qua kiểm tra trùng. Người đã RA hoặc chưa ghi VÀO không chiếm chỗ. Lần làm việc cũ chưa có dữ liệu vào/ra được coi là đang làm việc đến khi ghi RA hoặc kết thúc. Đối chiếu theo hồ sơ nhân sự; người nhập tay theo mã thẻ, hoặc tên và đơn vị khi không có mã.
 
 Các thao tác vào/ra và vòng đời lần làm việc dùng chung khóa transaction trước khi đọc/ghi, tránh hai cổng cùng cho một người vào hai phiếu. Kiểm tra này không sửa dữ liệu trùng đã tồn tại.
+
+## Tải mã QR riêng cho phiếu đã cấp
+
+Trong **Xem và in** của PCT giấy nhà thầu, nút **Tải QR** tải ảnh PNG riêng (đen/trắng, hơn 1.000 pixel, nhãn in rộng 60 mm, phần mã QR vẫn 25 mm). Dưới mã có số PCT và toàn bộ nội dung công tác, tự xuống dòng khi dài. Tên tệp có số PCT để phân biệt khi in dán lên phiếu cũ. QR dẫn đến đúng màn hình làm việc của PCT theo ID, dùng chung với QR trên mẫu Word; dùng được cả phiếu đã cấp trước khi bổ sung QR. Không sửa hoặc tạo lại file Word đã cấp. Chỉ người có quyền xem phiếu được tải; không tải cho phiếu nháp/hủy, PCT điện tử hoặc nội bộ.

@@ -768,7 +768,7 @@ function PermitDetail({ id, canIssue: listCanIssue, canIssueNew: listCanIssueNew
       </div>
       {!paper && <NkvhLinkPanel key={`${row.id}-${row.version}-nkvh`} permit={row} canEdit={canIssue || canExecute} />}
       <ContractorWorkSummary permit={row} />
-      {previewing && <PermitDocumentPreview title={previewing === "appendix" ? `Phụ lục đại tu · PCT ${formatPermitNumber(row)}` : `Phiếu công tác ${formatPermitNumber(row)}`} load={() => apiDownload(`/api/work-permits/${encodeURIComponent(row.id)}/${previewing === "appendix" ? "overhaul-appendix" : "document"}`)} onClose={() => setPreviewing(false)} />}
+      {previewing && <PermitDocumentPreview title={previewing === "appendix" ? `Phụ lục đại tu · PCT ${formatPermitNumber(row)}` : `Phiếu công tác ${formatPermitNumber(row)}`} load={() => apiDownload(`/api/work-permits/${encodeURIComponent(row.id)}/${previewing === "appendix" ? "overhaul-appendix" : "document"}`)} loadQr={previewing === "permit" && row.teamType === "CONTRACTOR" ? () => apiDownload(`/api/work-permits/${encodeURIComponent(row.id)}/qr`) : undefined} onClose={() => setPreviewing(false)} />}
       {executing && canExecute && <PermitExecutionDialog key={row.version} permit={row} onClose={() => setExecuting(false)} />}
       <PermitDetailFields row={row} />
       {paper && <details className="group"><summary className={summary}><span>Mối nguy và biện pháp an toàn ({row.safetyItems?.length ?? 0})</span><ChevronRight className="h-4 w-4 shrink-0 transition-transform group-open:rotate-90" /></summary><div className="mt-2 [&>section]:rounded-none [&>section]:border-0 [&>section]:p-0 [&>section>h3]:hidden"><PermitSafetyReadOnly value={row.safetyItems ?? []} /></div></details>}
