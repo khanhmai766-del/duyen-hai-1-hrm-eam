@@ -177,7 +177,19 @@ function RoleSwitch({ person }: { person: PermitPerson }) {
   </button>;
 }
 
-/** Danh sách người của một đơn vị, mỗi người một dòng: Họ tên · Số thẻ an toàn · SĐT · Vai trò. */
+/**
+ * Ảnh thẻ 3x4 thu nhỏ. Chỉ tải khi dòng sắp lọt vào màn hình (lazy) và giải mã ngoài luồng chính; khung cố định
+ * nên bảng không nhảy khi ảnh về. Không có ảnh / ảnh lỗi → chữ cái đầu của tên.
+ */
+function PersonPhoto({ person, className }: { person: PermitPerson; className: string }) {
+  const [failed, setFailed] = useState(false);
+  const initial = person.name.trim().split(/\s+/).pop()?.[0]?.toUpperCase() ?? "?";
+  if (!person.photoUrl || failed) return <span aria-hidden className={cn(className, "flex items-center justify-center bg-slate-100 font-semibold text-slate-400 dark:bg-muted")}>{initial}</span>;
+  // eslint-disable-next-line @next/next/no-img-element -- ảnh qua proxy S3 có đăng nhập, không đi qua next/image
+  return <img src={person.photoUrl} alt={`Ảnh ${person.name}`} width={36} height={48} loading="lazy" decoding="async" className={cn(className, "object-cover")} onError={() => setFailed(true)} />;
+}
+
+/** Danh sách người của một đơn vị, mỗi người một dòng: Họ tên · Số thẻ ra vào cổng · SĐT · Vai trò. */
 function CompanyPeopleTable({ people, canWrite, removing, onEdit, onRemove }: { people: PermitPerson[]; canWrite: boolean; removing: boolean; onEdit: (person: PermitPerson) => void; onRemove: (person: PermitPerson) => void }) {
   const th = "px-3 py-2 text-left text-[10.5px] font-semibold uppercase tracking-wider text-slate-500";
   const role = (person: PermitPerson) => <>
@@ -189,6 +201,7 @@ function CompanyPeopleTable({ people, canWrite, removing, onEdit, onRemove }: { 
   return <>
   {/* Điện thoại: mỗi người một thẻ — tên, số thẻ, SĐT bấm gọi, vai trò, nút sửa/xoá 40px. */}
   <div className="space-y-2 md:hidden">{people.map(person => <div key={person.id} className="flex items-start gap-2 rounded-lg border border-slate-200 bg-white p-3 dark:border-border dark:bg-background">
+    <PersonPhoto person={person} className="h-14 w-[42px] shrink-0 rounded-md border border-slate-200 text-base dark:border-border" />
     <div className="min-w-0 flex-1">
       <p className="text-[15px] font-semibold leading-5 text-ink">{person.name}</p>
       <p className="mt-0.5 text-xs text-muted-foreground">{isCardlessCode(person.code) ? "Chưa có thẻ" : person.code}{person.phone ? <> · <a className="font-medium text-blue-700 underline" href={tel(person.phone)}>{person.phone}</a></> : null}</p>
@@ -203,10 +216,11 @@ function CompanyPeopleTable({ people, canWrite, removing, onEdit, onRemove }: { 
   <div className="hidden overflow-x-auto rounded-lg border border-slate-200 bg-white md:block">
     <table className="w-full min-w-[640px] text-[12px]">
       <thead className="border-b border-slate-200 bg-slate-50"><tr>
-        <th className={cn(th, "w-12 text-center")}>STT</th><th className={th}>Họ tên</th><th className={th}>Số thẻ an toàn</th><th className={th}>SĐT liên hệ</th><th className={th}>Vai trò</th>{canWrite && <th className={cn(th, "w-24 text-center")}>Thao tác</th>}
+        <th className={cn(th, "w-12 text-center")}>STT</th><th className={cn(th, "w-14 text-center")}>Ảnh</th><th className={th}>Họ tên</th><th className={th}>Số thẻ ra vào cổng</th><th className={th}>SĐT liên hệ</th><th className={th}>Vai trò</th>{canWrite && <th className={cn(th, "w-24 text-center")}>Thao tác</th>}
       </tr></thead>
-      <tbody>{people.map((person, index) => <tr key={person.id} className="border-b border-slate-100 align-top last:border-0">
+      <tbody>{people.map((person, index) => <tr key={person.id} className="border-b border-slate-100 align-middle last:border-0">
         <td className="px-3 py-2 text-center tabular-nums text-slate-500">{index + 1}</td>
+        <td className="px-2 py-1.5"><PersonPhoto person={person} className="mx-auto h-12 w-9 rounded-md border border-slate-200 text-sm dark:border-border" /></td>
         <td className="px-3 py-2">
           <span className="font-semibold text-ink">{person.name}</span>
           {works(person)}
@@ -296,10 +310,10 @@ export function PermitPeopleDirectory({ onClose, onPick, onPickMany, existingMem
   useEffect(() => { const timer = setTimeout(() => { setSearch(q); setPage(1); }, 300); return () => clearTimeout(timer); }, [q]);
   const query = usePermitPeople({ q: search, page, active: Boolean(onPick || onPickMany), commander: commandersOnly, polling: Boolean(onPick || onPickMany), company });
   const heading = commandersOnly ? "Chọn CHTT nhà thầu" : onPickMany ? "Chọn nhân viên công tác" : "Danh sách nhân sự nhà thầu";
-  const description = onPickMany ? "Đánh dấu nhiều nhân viên rồi bấm Thêm người đã chọn. Lựa chọn được giữ khi tìm kiếm hoặc chuyển trang; tối đa 200 nhân viên trong danh sách công tác." : "Mỗi người dùng một hồ sơ và số thẻ an toàn thống nhất giữa hai sổ Cơ và Điện. Đánh dấu CHTT cho người thuộc danh sách được cung cấp.";
+  const description = onPickMany ? "Đánh dấu nhiều nhân viên rồi bấm Thêm người đã chọn. Lựa chọn được giữ khi tìm kiếm hoặc chuyển trang; tối đa 200 nhân viên trong danh sách công tác." : "Mỗi người dùng một hồ sơ và số thẻ ra vào cổng thống nhất giữa hai sổ Cơ và Điện. Đánh dấu CHTT cho người thuộc danh sách được cung cấp.";
   const body = <>
       <div className="flex flex-wrap gap-2">
-        <input className={`${control} flex-1`} aria-label="Tìm nhân sự nhà thầu" placeholder="Số thẻ an toàn, họ tên, đơn vị nhà thầu…" value={q} maxLength={200} onKeyDown={e => { if (e.key === "Enter") e.preventDefault(); }} onChange={e => setQ(e.target.value)} />
+        <input className={`${control} flex-1`} aria-label="Tìm nhân sự nhà thầu" placeholder="Số thẻ ra vào cổng, họ tên, đơn vị nhà thầu…" value={q} maxLength={200} onKeyDown={e => { if (e.key === "Enter") e.preventDefault(); }} onChange={e => setQ(e.target.value)} />
         {query.data?.meta.canWrite && <Button type="button" onClick={() => setEditing("new")}><Plus />Thêm người</Button>}
       </div>
       {query.isPending ? <p role="status">Đang tải danh sách…</p> : query.isError ? <p role="alert" className="text-red-700">{query.error.message}</p> : <div className="space-y-2">
@@ -344,7 +358,7 @@ function PersonEditor({ initial, presetCompany, onClose, onSaved }: { initial?: 
     <DialogTitle>{initial ? "Cập nhật nhân sự nhà thầu" : presetCompany ? `Thêm nhân sự · ${presetCompany}` : "Thêm nhân sự nhà thầu"}</DialogTitle>
     <DialogDescription>Tìm hồ sơ có sẵn trước khi thêm. Có thể cập nhật số thẻ, họ tên và nhà thầu khi thông tin thực tế thay đổi.</DialogDescription>
     <form onSubmit={submit}><fieldset disabled={save.isPending} className="space-y-4">
-      {(["code", "name"] as const).map(key => <label key={key} className="block space-y-1 text-sm"><span>{({ code: "Số thẻ an toàn (không bắt buộc)", name: "Họ tên *", company: "Nhà thầu *" })[key]}</span><input className={control} value={form[key]} required={key === "name"} maxLength={key === "code" ? 80 : 200} onChange={e => setForm({ ...form, [key]: e.target.value })} /></label>)}
+      {(["code", "name"] as const).map(key => <label key={key} className="block space-y-1 text-sm"><span>{({ code: "Số thẻ ra vào cổng (không bắt buộc)", name: "Họ tên *", company: "Nhà thầu *" })[key]}</span><input className={control} value={form[key]} required={key === "name"} maxLength={key === "code" ? 80 : 200} onChange={e => setForm({ ...form, [key]: e.target.value })} /></label>)}
       <p className="text-xs text-muted-foreground">Có thể sửa số thẻ, họ tên và nhà thầu; vai trò CHTT / Nhân viên gạt ở cột Vai trò. Các PCT đã ghi vẫn giữ nguyên thông tin tại thời điểm thực hiện.</p>
       {presetCompany !== undefined ? <p className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm">Đơn vị: <strong>{presetCompany}</strong></p> : <PermitCompanyPicker value={form.company} onChange={company => setForm(prev => ({ ...prev, company }))} />}
       <label className="block space-y-1 text-sm"><span>SĐT liên hệ</span><input className={control} type="tel" inputMode="tel" maxLength={40} value={form.phone ?? ""} onChange={e => setForm({ ...form, phone: e.target.value })} placeholder="Ví dụ: 0912 345 678" /><span className="block text-xs text-muted-foreground">Không bắt buộc; dùng để gọi khi cần liên hệ đơn vị công tác.</span></label>
@@ -393,7 +407,7 @@ export function PermitMembersEditor({ members, onChange, commander, company, sca
       const remove = <Button type="button" variant="ghost" size="icon" className="h-9 w-9 shrink-0" aria-label={`Bỏ ${m.name || `nhân viên ${i + 1}`}`} onClick={() => onChange(members.filter((_, index) => index !== i))}><X /></Button>;
       // Người nhập tay (không có hồ sơ danh bạ) vẫn cần ô để gõ họ tên / đơn vị.
       if (!m.personId) return <div key={i} className="flex items-start gap-2 bg-background p-2">
-        <div className="grid flex-1 gap-2 sm:grid-cols-3">{(["name", "company", "code"] as const).map(key => <input key={key} className={control} required={key === "name"} maxLength={key === "code" ? 80 : 200} aria-label={`${({ code: "Số thẻ an toàn", name: "Họ tên", company: "Đơn vị" })[key]} nhân viên ${i + 1}`} placeholder={({ code: "Số thẻ (nếu có)", name: "Họ tên *", company: "Đơn vị" })[key]} value={m[key]} onChange={e => onChange(members.map((p, index) => index === i ? { ...p, [key]: e.target.value } : p))} />)}</div>{remove}
+        <div className="grid flex-1 gap-2 sm:grid-cols-3">{(["name", "company", "code"] as const).map(key => <input key={key} className={control} required={key === "name"} maxLength={key === "code" ? 80 : 200} aria-label={`${({ code: "Số thẻ ra vào cổng", name: "Họ tên", company: "Đơn vị" })[key]} nhân viên ${i + 1}`} placeholder={({ code: "Số thẻ (nếu có)", name: "Họ tên *", company: "Đơn vị" })[key]} value={m[key]} onChange={e => onChange(members.map((p, index) => index === i ? { ...p, [key]: e.target.value } : p))} />)}</div>{remove}
       </div>;
       // Người từ danh bạ / quét thẻ: một dòng — họ tên · mã đơn vị · đã huấn luyện ATVSLĐ.
       const person = personOf(m.personId);

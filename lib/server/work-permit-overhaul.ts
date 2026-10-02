@@ -90,6 +90,14 @@ function resolvePosition(label: string) {
   return { title: item?.label ?? line(label, 120), code: item?.code ?? "" };
 }
 
+/** Ô "Cương vị" ghi nhiều cương vị ("Máy Phó, Trợ Thủ" hoặc xuống dòng) → mỗi cương vị một bản hạng mục. */
+function resolvePositions(label: string) {
+  const parts = label.split(/[,;/+\n]+/).map(part => line(part, 120)).filter(Boolean);
+  if (parts.length <= 1) return [resolvePosition(line(label, 120))];
+  const seen = new Set<string>();
+  return parts.map(resolvePosition).filter(position => !seen.has(position.title) && !!seen.add(position.title));
+}
+
 export type OverhaulSourceResult = {
   source: OverhaulSource;
   label: string;
@@ -152,34 +160,35 @@ async function readSource(source: OverhaulSource, spreadsheetId: string, now: Da
       if (!code || !/^\d+(\.\d+)*$/.test(code)) return;
       const contractor = line(cell(row, columns.contractor), 120);
       if (!contractor) { result.missingContractor++; return; }
-      const position = resolvePosition(line(cell(row, columns.position), 120) || positionPart);
-      if (!position.code) unmatched.add(position.title);
-      const key = `${kind}\u0000${code}\u0000${normalizeText(position.title)}`;
-      const parsed: ParsedItem = {
-        source, kind, code,
-        sheet: tab.title,
-        sheetRow: header.row + 2 + i,
-        positionTitle: position.title,
-        positionCode: position.code,
-        device: line(cell(row, columns.device), 300),
-        content: multiline(cell(row, columns.content), 4000),
-        method: multiline(cell(row, columns.method), 8000),
-        contractor,
-        contractorCode: normalizeText(contractor),
-        percent: line(cell(row, columns.percent), 20),
-        status: line(cell(row, columns.status), 120),
-        isActive: true,
-        syncedAt: now,
-        hasDayColumns: header.hasDayColumns,
-      };
-      const existing = items.get(key);
-      if (!existing) { items.set(key, parsed); return; }
-      // Gộp tab nguồn + tab cương vị: điền chỗ trống, vị trí lấy tab có cột ngày.
-      for (const field of ["device", "content", "method", "percent", "status"] as const) {
-        if (!existing[field] && parsed[field]) existing[field] = parsed[field];
-      }
-      if (!existing.hasDayColumns && parsed.hasDayColumns) {
-        existing.sheet = parsed.sheet; existing.sheetRow = parsed.sheetRow; existing.hasDayColumns = true;
+      for (const position of resolvePositions(str(cell(row, columns.position), 240) || positionPart)) {
+        if (!position.code) unmatched.add(position.title);
+        const key = `${kind}\u0000${code}\u0000${normalizeText(position.title)}`;
+        const parsed: ParsedItem = {
+          source, kind, code,
+          sheet: tab.title,
+          sheetRow: header.row + 2 + i,
+          positionTitle: position.title,
+          positionCode: position.code,
+          device: line(cell(row, columns.device), 300),
+          content: multiline(cell(row, columns.content), 4000),
+          method: multiline(cell(row, columns.method), 8000),
+          contractor,
+          contractorCode: normalizeText(contractor),
+          percent: line(cell(row, columns.percent), 20),
+          status: line(cell(row, columns.status), 120),
+          isActive: true,
+          syncedAt: now,
+          hasDayColumns: header.hasDayColumns,
+        };
+        const existing = items.get(key);
+        if (!existing) { items.set(key, parsed); continue; }
+        // Gộp tab nguồn + tab cương vị: điền chỗ trống, vị trí lấy tab có cột ngày.
+        for (const field of ["device", "content", "method", "percent", "status"] as const) {
+          if (!existing[field] && parsed[field]) existing[field] = parsed[field];
+        }
+        if (!existing.hasDayColumns && parsed.hasDayColumns) {
+          existing.sheet = parsed.sheet; existing.sheetRow = parsed.sheetRow; existing.hasDayColumns = true;
+        }
       }
     });
   });

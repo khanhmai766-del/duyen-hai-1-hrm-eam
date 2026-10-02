@@ -46,7 +46,7 @@ export async function POST(req: Request) {
       await audit(user.id, "CREATE_WORK_PERMIT_PERSON", "WorkPermitPerson", row.id, `Thêm ${row.code}: ${row.name} · ${row.company}`);
       return ok(row);
     } catch (e) {
-      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") return fail(isCardlessCode(data.code) ? "Hồ sơ chưa có thẻ với họ tên này đã tồn tại. Hãy tìm và chọn hồ sơ đó." : "Số thẻ an toàn đã tồn tại. Hãy chọn hồ sơ đó để dùng chung giữa các PCT.", 409);
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") return fail(isCardlessCode(data.code) ? "Hồ sơ chưa có thẻ với họ tên này đã tồn tại. Hãy tìm và chọn hồ sơ đó." : "Số thẻ ra vào cổng đã tồn tại. Hãy chọn hồ sơ đó để dùng chung giữa các PCT.", 409);
       throw e;
     }
   });

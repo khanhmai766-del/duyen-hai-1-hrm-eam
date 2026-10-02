@@ -75,8 +75,12 @@ export async function GET(req: NextRequest) {
      * scripts/import/grounding-lightning.ts) đều đi qua uploadImageBufferToS3 nên chắc
      * chắn là khoá mới. Các thư mục khác chưa rà hết người ghi nên giữ nguyên 5 phút.
      * `private` để proxy/CDN dùng chung không giữ lại ảnh vốn phải đăng nhập mới xem.
+     *
+     * Ảnh thẻ nhân sự nhà thầu: khoá cố định theo số thẻ và bị ghi đè khi đồng bộ, nhưng URL luôn kèm
+     * `v` = băm nguồn ảnh (withPhotoUrl) — ảnh đổi thì URL đổi, nên URL có `v` giữ được lâu dài.
      */
-    const immutableImage = key.startsWith("grounding-lightning/") && contentType.startsWith("image/");
+    const versionedPersonPhoto = key.startsWith("work-permit-people/photos/") && req.nextUrl.searchParams.has("v");
+    const immutableImage = (key.startsWith("grounding-lightning/") || versionedPersonPhoto) && contentType.startsWith("image/");
     const headers: Record<string, string> = {
       "Content-Type": contentType,
       "Cache-Control": immutableImage ? "private, max-age=31536000, immutable" : "private, max-age=300",

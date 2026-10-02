@@ -232,7 +232,7 @@ const SECTIONS: GuideSection[] = [
         title: "Nhân sự nhà thầu",
         where: "Tab Nhân sự nhà thầu",
         points: [
-          "Bấm Thêm đơn vị, sau đó bấm Thêm nhân sự trên dòng của đơn vị: Họ tên, Số thẻ an toàn, SĐT, đánh dấu CHTT.",
+          "Bấm Thêm đơn vị, sau đó bấm Thêm nhân sự trên dòng của đơn vị: Họ tên, Số thẻ ra vào cổng, SĐT, đánh dấu CHTT.",
           "Bấm dòng đơn vị để xem danh sách người; bút chì để sửa tên đơn vị (đổi sang tên đã có là gộp hai đơn vị).",
         ],
       },

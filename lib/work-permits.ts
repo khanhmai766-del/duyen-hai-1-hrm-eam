@@ -128,7 +128,7 @@ export function permitValue(key: string, value: unknown): string {
   return String(value);
 }
 
-/** code lưu số thẻ an toàn thực tế; personId là khóa ổn định khi số thẻ được chỉnh sửa. */
+/** code lưu số thẻ ra vào cổng thực tế; personId là khóa ổn định khi số thẻ được chỉnh sửa. */
 export interface PermitMember {
   personId?: string; code: string; name: string; company: string;
   /** Chỉ có ở thành viên của LẦN LÀM VIỆC: các lượt vào/ra vị trí (lib/work-permit-attendance.ts). */
