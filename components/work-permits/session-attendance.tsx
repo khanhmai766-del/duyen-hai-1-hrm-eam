@@ -8,7 +8,7 @@ import { PermitCardScanner, type ScanOutcome } from "@/components/work-permits/c
 import { usePermitAttendance, type PermitAttendanceResult } from "@/hooks/useWorkPermits";
 import { attendanceInside, attendanceTracked } from "@/lib/work-permit-attendance";
 import { normalizeText } from "@/lib/nav";
-import type { PermitDetailRow, PermitMember, PermitSession } from "@/lib/work-permits";
+import { isSessionCommander, type PermitDetailRow, type PermitMember, type PermitSession } from "@/lib/work-permits";
 
 const hhmm = (iso: string) => new Date(iso).toLocaleTimeString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", hour: "2-digit", minute: "2-digit" });
 /** Giờ gọn cho điện thoại: chỉ HH:mm nếu trong hôm nay, khác ngày thì kèm ngày/tháng. */
@@ -40,10 +40,10 @@ export function SessionAttendance({ permit, session, canExecute, size = "md", au
   const attendance = usePermitAttendance(permit.id);
   const live = !session.endedAt;
   const members = useMemo(() => session.members.map((member, index) => ({ member, index }))
-    .filter(({ member }) => member.personId ? member.personId !== session.commanderId : member.code !== session.commanderCode), [session]);
+    .filter(({ member }) => !isSessionCommander(member, session)), [session]);
   const tracked = members.some(({ member }) => attendanceTracked(member));
   const insideCount = members.filter(({ member }) => attendanceInside(member)).length;
-  const commander: PermitMember = { personId: session.commanderId, code: session.commanderCode, name: session.commanderName, company: session.company };
+  const commander: PermitMember = { personId: session.commanderId ?? undefined, code: session.commanderCode, name: session.commanderName, company: session.company };
 
   async function record(body: { direction: "auto" | "in" | "out"; personId?: string; index?: number; name?: string }) {
     return outcomeOf(await attendance.mutateAsync({ sessionId: session.id, ...body }));

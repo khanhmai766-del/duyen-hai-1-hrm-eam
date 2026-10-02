@@ -1802,8 +1802,9 @@ model WorkPermitSession {
   id                 String           @id @default(cuid())
   permitId           String
   permit             WorkPermit       @relation(fields: [permitId], references: [id], onDelete: Restrict)
-  commanderId        String
-  commander          WorkPermitPerson @relation(fields: [commanderId], references: [id], onDelete: Restrict)
+  /// Trống khi quản trị đã xoá hồ sơ CHTT sau khi phiếu kết thúc — lịch sử đọc theo commanderCode/commanderName.
+  commanderId        String?
+  commander          WorkPermitPerson? @relation(fields: [commanderId], references: [id], onDelete: SetNull)
   commanderCode      String           @default("")
   commanderName      String
   company            String

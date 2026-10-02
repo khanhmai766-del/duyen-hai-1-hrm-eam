@@ -21,7 +21,7 @@ export function useWorkPermits(filters: string, enabled = true) {
   return useQuery({ queryKey: ["work-permits", filters], enabled, refetchInterval: 60_000, queryFn: () => apiGet<PermitListRow[]>(`/api/work-permits?${filters}`) as Promise<{ data: PermitListRow[]; meta: PermitMeta }> });
 }
 export interface PermitLiveSession {
-  id: string; commanderId: string; commanderCode: string; commanderName: string; company: string; openedAt: string; authorizerName: string;
+  id: string; commanderId: string | null; commanderCode: string; commanderName: string; company: string; openedAt: string; authorizerName: string;
   permit: Pick<PermitRow, "id" | "number" | "year" | "kind" | "unit" | "content" | "location" | "position" | "teamName" | "progress">;
   /** Nhân viên bổ sung (không kể CHTT) · đang trong khu vực · chưa quét lần nào. */
   workers: number; inside: number; waiting: number;

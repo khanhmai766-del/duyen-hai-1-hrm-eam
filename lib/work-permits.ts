@@ -2,6 +2,14 @@ import { safetySummary, type SafetySelection } from "@/lib/work-permit-safety";
 import { overhaulItemsOf, type OverhaulItemSnapshot } from "@/lib/work-permit-overhaul";
 export const PERMIT_PAGE_SIZE = 25;
 /** Ghép số thuần theo mẫu chung Cơ/Điện; số đầy đủ hoặc mã cũ giữ nguyên. */
+/**
+ * Người này có phải CHTT của lần làm việc không. So theo hồ sơ khi cả hai còn id; lần làm việc mà Quản trị đã xoá
+ * hồ sơ CHTT (commanderId rỗng) thì so theo số thẻ đã chụp lại.
+ */
+export function isSessionCommander(member: { personId?: string | null; code?: string | null }, session: { commanderId: string | null; commanderCode: string }) {
+  if (member.personId && session.commanderId) return member.personId === session.commanderId;
+  return Boolean(member.code) && member.code === session.commanderCode;
+}
 export function formatPermitNumber(row: { number: string; year: number }): string {
   const number = row.number.trim().toUpperCase().replace(/\s+/g, "");
   return /^\d+$/.test(number) ? `${number}/${row.year}/VH1-NĐDH` : number;
@@ -144,7 +152,7 @@ export interface PermitPerson {
   activeWork?: { openedAt: string; permit: { number: string; year: number; kind: PermitKind } } | null;
 }
 export interface PermitSession {
-  id: string; permitId: string; commanderId: string; commanderCode: string;
+  id: string; permitId: string; commanderId: string | null; commanderCode: string;
   commanderName: string; company: string; members: PermitMember[]; workerCount: number;
   openedAt: string; endedAt: string | null; authorizerName: string;
   endConfirmedByName: string; endNote: string; progress: number | null; createdByName: string; endedByName: string | null;

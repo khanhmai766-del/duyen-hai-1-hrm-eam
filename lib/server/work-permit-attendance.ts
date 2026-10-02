@@ -72,7 +72,7 @@ export async function recordAttendance(tx: Prisma.TransactionClient, input: {
     if (!person) throw fail("Không tìm thấy hồ sơ nhân sự", 404);
     if (!person.isActive) throw fail(`${person.name} đang ngừng hoạt động trong danh bạ — không cho vào.`);
     if (person.id === session.commanderId) throw fail(`${person.name} là CHTT của lần làm việc này.`);
-    const commander = await tx.workPermitPerson.findUnique({ where: { id: session.commanderId }, select: { company: true } });
+    const commander = session.commanderId ? await tx.workPermitPerson.findUnique({ where: { id: session.commanderId }, select: { company: true } }) : null;
     if (!sameCompany(person.company, session.permit.teamName) && !sameCompany(person.company, commander?.company ?? "")) {
       throw fail(`${person.name} thuộc đơn vị “${person.company}”, không phải đơn vị công tác của phiếu (“${session.permit.teamName}”). Không cho vào.`);
     }

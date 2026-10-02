@@ -19,7 +19,7 @@ import { PlainHeader, ROW_HOVER, RowExpander, rowBackground, TD_EXPAND, TD_ROW, 
 import { cn } from "@/lib/utils";
 import { normalizeText } from "@/lib/nav";
 import { useCreatePermitCompany, useDeletePermitCompany, useDeletePermitPerson, usePermitCompanySummary, usePermitPeople, useRenamePermitCompany, useSavePermitPerson, usePermitSessionAction, usePermitActivity } from "@/hooks/useWorkPermits";
-import { formatPermitNumber, PERMIT_KINDS } from "@/lib/work-permits";
+import { formatPermitNumber, isSessionCommander, PERMIT_KINDS } from "@/lib/work-permits";
 import type { PermitDetailRow, PermitMember, PermitPerson, PermitSession } from "@/lib/work-permits";
 
 const control = "min-h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-60";
@@ -52,7 +52,7 @@ export function PermitCompanyDirectory() {
   const rows = (companies.data?.data ?? []).filter(row => !q.trim() || normalizeText(`${row.code} ${row.company}`).includes(normalizeText(q)));
   const colCount = canWrite ? 7 : 6;
   async function removePerson(person: PermitPerson) {
-    if (!window.confirm(`Xóa ${person.name} (${person.code}) khỏi danh sách nhân sự nhà thầu?\n\nNếu người này đã xuất hiện trên PCT, hệ thống sẽ giữ hồ sơ và hướng dẫn chuyển sang ngừng hoạt động.`)) return;
+    if (!window.confirm(`Xóa ${person.name} (${person.code}) khỏi danh sách nhân sự nhà thầu?\n\nNgười đã tham gia PCT chỉ Quản trị xóa được, sau khi các phiếu đã kết thúc và người này đã ghi ra khỏi khu vực. PCT đã ghi vẫn giữ tên và số thẻ.`)) return;
     try { await remove.mutateAsync({ id: person.id, version: person.version }); toast.success("Đã xóa nhân sự nhà thầu"); }
     catch (error) { toast.error(error instanceof Error ? error.message : "Không thể xóa hồ sơ"); }
   }
@@ -189,7 +189,7 @@ function PersonPhoto({ person, className }: { person: PermitPerson; className: s
   return <img src={person.photoUrl} alt={`Ảnh ${person.name}`} width={36} height={48} loading="lazy" decoding="async" className={cn(className, "object-cover")} onError={() => setFailed(true)} />;
 }
 
-/** Danh sách người của một đơn vị, mỗi người một dòng: Họ tên · Số thẻ ra vào cổng · SĐT · Vai trò. */
+/** Danh sách người của một đơn vị, mỗi người một dòng: Ảnh · Họ tên · Chức vụ · SĐT · Vai trò (số thẻ ẩn — vẫn sửa được trong hồ sơ). */
 function CompanyPeopleTable({ people, canWrite, removing, onEdit, onRemove }: { people: PermitPerson[]; canWrite: boolean; removing: boolean; onEdit: (person: PermitPerson) => void; onRemove: (person: PermitPerson) => void }) {
   const th = "px-3 py-2 text-left text-[10.5px] font-semibold uppercase tracking-wider text-slate-500";
   const role = (person: PermitPerson) => <>
@@ -204,7 +204,8 @@ function CompanyPeopleTable({ people, canWrite, removing, onEdit, onRemove }: { 
     <PersonPhoto person={person} className="h-14 w-[42px] shrink-0 rounded-md border border-slate-200 text-base dark:border-border" />
     <div className="min-w-0 flex-1">
       <p className="text-[15px] font-semibold leading-5 text-ink">{person.name}</p>
-      <p className="mt-0.5 text-xs text-muted-foreground">{isCardlessCode(person.code) ? "Chưa có thẻ" : person.code}{person.phone ? <> · <a className="font-medium text-blue-700 underline" href={tel(person.phone)}>{person.phone}</a></> : null}</p>
+      {person.jobTitle?.trim() && <p className="text-xs font-medium text-slate-600 dark:text-slate-300">{person.jobTitle.trim()}</p>}
+      {person.phone && <p className="mt-0.5 text-xs"><a className="font-medium text-blue-700 underline" href={tel(person.phone)}>{person.phone}</a></p>}
       <div className="mt-1.5 flex flex-wrap items-center gap-1.5">{role(person)}</div>
       {works(person)}
     </div>
@@ -214,9 +215,9 @@ function CompanyPeopleTable({ people, canWrite, removing, onEdit, onRemove }: { 
     </div>}
   </div>)}</div>
   <div className="hidden overflow-x-auto rounded-lg border border-slate-200 bg-white md:block">
-    <table className="w-full min-w-[640px] text-[12px]">
+    <table className="w-full min-w-[680px] text-[12px]">
       <thead className="border-b border-slate-200 bg-slate-50"><tr>
-        <th className={cn(th, "w-12 text-center")}>STT</th><th className={cn(th, "w-14 text-center")}>Ảnh</th><th className={th}>Họ tên</th><th className={th}>Số thẻ ra vào cổng</th><th className={th}>SĐT liên hệ</th><th className={th}>Vai trò</th>{canWrite && <th className={cn(th, "w-24 text-center")}>Thao tác</th>}
+        <th className={cn(th, "w-12 text-center")}>STT</th><th className={cn(th, "w-14 text-center")}>Ảnh</th><th className={th}>Họ tên</th><th className={th}>Chức vụ</th><th className={th}>SĐT liên hệ</th><th className={th}>Vai trò</th>{canWrite && <th className={cn(th, "w-24 text-center")}>Thao tác</th>}
       </tr></thead>
       <tbody>{people.map((person, index) => <tr key={person.id} className="border-b border-slate-100 align-middle last:border-0">
         <td className="px-3 py-2 text-center tabular-nums text-slate-500">{index + 1}</td>
@@ -225,7 +226,7 @@ function CompanyPeopleTable({ people, canWrite, removing, onEdit, onRemove }: { 
           <span className="font-semibold text-ink">{person.name}</span>
           {works(person)}
         </td>
-        <td className="px-3 py-2 font-medium text-ink">{isCardlessCode(person.code) ? "Chưa có thẻ" : person.code}</td>
+        <td className="px-3 py-2 text-ink">{person.jobTitle?.trim() || <span className="text-muted-foreground">—</span>}</td>
         <td className="px-3 py-2">{person.phone ? <a className="font-medium text-blue-700 underline" href={tel(person.phone)}>{person.phone}</a> : <span className="text-muted-foreground">Chưa có</span>}</td>
         <td className="px-3 py-2"><div className="flex flex-wrap items-center gap-1.5">{role(person)}</div></td>
         {canWrite && <td className="px-3 py-2"><div className="flex justify-center gap-1">
@@ -303,7 +304,7 @@ export function PermitPeopleDirectory({ onClose, onPick, onPickMany, existingMem
     setSelected(previous => previous.some(p => p.id === person.id) ? previous.filter(p => p.id !== person.id) : previous.length < capacity ? [...previous, person] : previous);
   }
   async function removePerson(person: PermitPerson) {
-    if (!window.confirm(`Xóa ${person.name} (${person.code}) khỏi danh sách nhân sự nhà thầu?\n\nNếu người này đã xuất hiện trên PCT, hệ thống sẽ giữ hồ sơ và hướng dẫn chuyển sang ngừng hoạt động.`)) return;
+    if (!window.confirm(`Xóa ${person.name} (${person.code}) khỏi danh sách nhân sự nhà thầu?\n\nNgười đã tham gia PCT chỉ Quản trị xóa được, sau khi các phiếu đã kết thúc và người này đã ghi ra khỏi khu vực. PCT đã ghi vẫn giữ tên và số thẻ.`)) return;
     try { await remove.mutateAsync({ id: person.id, version: person.version }); toast.success("Đã xóa nhân sự nhà thầu"); }
     catch (error) { toast.error(error instanceof Error ? error.message : "Không thể xóa hồ sơ"); }
   }
@@ -441,7 +442,7 @@ export const permitWorkHref = (id: string) => `/work-permits/${encodeURIComponen
 export function ContractorWorkSummary({ permit }: { permit: PermitDetailRow }) {
   if (permit.teamType !== "CONTRACTOR" || ["DRAFT", "CANCELLED"].includes(permit.status)) return null;
   const live = permit.sessions.find(s => !s.endedAt);
-  const inside = live ? 1 + live.members.filter(m => (m.personId ? m.personId !== live.commanderId : m.code !== live.commanderCode) && attendanceInside(m)).length : 0;
+  const inside = live ? 1 + live.members.filter(m => !isSessionCommander(m, live) && attendanceInside(m)).length : 0;
   const last = permit.sessions[0];
   return <section className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border p-4 ${live ? "border-emerald-300 bg-emerald-50/60 dark:bg-emerald-950/20" : "border-sky-200 bg-sky-50/40 dark:bg-sky-950/20"}`}>
     <div className="min-w-0 space-y-0.5">
@@ -473,7 +474,7 @@ export function ContractorSessions({ permit, canExecute, historyOnly = false }: 
       <div className="mt-3 space-y-2">
       <div className="flex flex-wrap items-start justify-between gap-2"><div><b>{s.commanderName} · {s.commanderCode}</b><p className="text-sm text-muted-foreground">{s.company}</p></div>{!s.endedAt && canExecute && <div className="flex flex-wrap gap-2"><Button variant="outline" onClick={() => { setHandoff(true); setAction(s); }}>Bàn giao / đổi CHTT</Button><Button variant="outline" onClick={() => { setHandoff(false); setAction(s); }}><Square />Kết thúc lần làm việc</Button></div>}</div>
       <p className="text-sm"><strong>{fmt(s.openedAt)}</strong> → {s.endedAt ? fmt(s.endedAt) : <strong className="text-emerald-700">Đang làm · chưa kết thúc</strong>}</p>
-      <p className="text-sm">Người cho phép: {s.authorizerName} · CHTT và {s.members.filter(m => m.personId ? m.personId !== s.commanderId : m.code !== s.commanderCode).length} nhân viên bổ sung</p>
+      <p className="text-sm">Người cho phép: {s.authorizerName} · CHTT và {s.members.filter(m => !isSessionCommander(m, s)).length} nhân viên bổ sung</p>
       <SessionAttendance permit={permit} session={s} canExecute={canExecute} />
       {s.endedAt && <p className="text-sm">Xác nhận kết thúc: {s.endConfirmedByName}{s.progress != null ? ` · Tiến độ ${s.progress}%` : ""}{s.endNote ? ` · ${s.endNote}` : ""}</p>}
       <details className="text-sm"><summary className="cursor-pointer">Nhân viên và thông tin ghi nhận</summary><div className="mt-2 space-y-1">{s.members.length ? s.members.map((m, i) => <p key={i}>{i + 1}. {[m.name, m.code, m.company].filter(Boolean).join(" · ")}</p>) : <p>Chưa bổ sung danh sách chi tiết.</p>}<p className="pt-2 text-xs text-muted-foreground">Người nhập mở: {s.createdByName}{s.endedByName ? ` · Người nhập kết thúc: ${s.endedByName}` : ""}</p></div></details>
@@ -494,7 +495,7 @@ export function SessionEditor({ permit, session, handoff = false, onClose }: { p
   const [person, setPerson] = useState<Pick<PermitPerson, "id" | "name" | "code" | "company"> | null>(() => {
     if (handoff) return null;
     const previous = permit.sessions[0];
-    if (previous) return { id: previous.commanderId, name: previous.commanderName, code: previous.commanderCode, company: previous.company };
+    if (previous?.commanderId) return { id: previous.commanderId, name: previous.commanderName, code: previous.commanderCode, company: previous.company };
     return permit.commanderPersonId ? { id: permit.commanderPersonId, name: permit.commanderName, code: "", company: permit.teamName } : null;
   });
   const [picking, setPicking] = useState(false);
