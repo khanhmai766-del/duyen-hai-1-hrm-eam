@@ -1,0 +1,13 @@
+[Unit]
+Description=DH1 - day hang doi ket qua ngay PCT dai tu len Google Sheets tien do
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/var/www/dh1-app
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+# Ghi Google Sheets (o ngay, Nhat ky ngay, % Hoan thanh, Trang thai hien tai); hang doi chong ghi doi nen chay lai an toan.
+# Thoat khac 0 = con loi (chua chia se file, o bi khoa...) -> xem `npm run overhaul:sheet -- --status`.
+ExecStart=/usr/bin/npm run --silent overhaul:sheet
+TimeoutStartSec=10min

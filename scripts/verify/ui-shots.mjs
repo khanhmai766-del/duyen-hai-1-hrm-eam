@@ -125,6 +125,8 @@ try {
       catch (e) { shot.errors.push(`Không tải được: ${e.message.split("\n")[0]}`); }
       await page.waitForTimeout(1500);
       if (new URL(page.url()).pathname.startsWith("/login")) shot.errors.push("Bị chuyển về /login — phiên tạm không được chấp nhận");
+      // Preset có thể bấm sẵn (mở hộp, tick ô…) để chụp trạng thái chỉ có sau thao tác — chỉ thao tác giao diện, không lưu.
+      if (preset?.interact) await preset.interact(page, route).catch((e) => shot.warnings.push(`Không thao tác được: ${e.message.split("\n")[0]}`));
       if (!flag("keep-mascot")) await page.addStyleTag({ content: "[data-ui-overlay]{display:none!important}" }).catch(() => {});
       const layout = await page.evaluate(inspectLayout, { mobile });
       if (layout.horizontalScroll) shot.errors.push(`Trang cuộn ngang: rộng ${layout.scrollWidth}px trên khung ${layout.clientWidth}px`);

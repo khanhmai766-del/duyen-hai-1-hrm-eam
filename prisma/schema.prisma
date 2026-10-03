@@ -1788,6 +1788,44 @@ model WorkPermitOverhaulItem {
   @@index([kind, contractorCode, positionCode])
 }
 
+/// Hàng đợi ghi kết quả ngày của PCT đại tu về Google Sheets tiến độ (web là nguồn). Ghi trong cùng transaction với thao
+/// tác trên phiếu; lib/server/overhaul-sheet-writer.ts đẩy lên Sheet (ngay sau thao tác + timer 15 phút + job 16:00).
+model OverhaulSheetOutbox {
+  id            String    @id @default(cuid())
+  /// Chống ghi đôi: S:<sessionId>:… (kết thúc ngày) · U:<sessionId>:<ms>:… (cập nhật) · N:<permitId>:<ngày>:… (không mở ngày) · C:<permitId>:… (kết thúc phiếu).
+  dedupeKey     String    @unique
+  permitId      String
+  sessionId     String?
+  /// SESSION_END | PROGRESS (cập nhật giữa chừng) | NO_SESSION | CLOSE
+  kind          String
+  /// Nguồn (BOILER/TURBINE/GENERATOR/CI) + tab + mã hạng mục — lấy từ ảnh chụp WorkPermit.overhaulItems.
+  source        String
+  sheet         String
+  code          String
+  /// Ngày giờ Việt Nam yyyy-mm-dd — chọn cột "Ngày n · dd/mm".
+  day           String
+  /// Chữ ghi vào ô trạng thái ngày và "Trạng thái hiện tại" (OVERHAUL_DAY_STATUSES).
+  status        String
+  /// % lũy kế 0–100; null = không đổi ô "% Hoàn thành".
+  percent       Int?
+  /// Dòng nối thêm vào ô "Nhật ký ngày"; rỗng = không ghi.
+  note          String    @default("")
+  /// PENDING | PROCESSING | SUCCESS | FAILED
+  state         String    @default("PENDING")
+  attemptCount  Int       @default(0)
+  nextAttemptAt DateTime  @default(now())
+  /// Lúc một tiến trình nhận xử lý (PROCESSING); quá 10 phút coi như tiến trình đó đã chết, nhận lại được.
+  claimedAt     DateTime?
+  completedAt   DateTime?
+  lastError     String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([state, nextAttemptAt, createdAt])
+  @@index([permitId, createdAt])
+  @@index([source, sheet, code, createdAt])
+}
+
 model WorkPermitCompany {
   id        String   @id @default(cuid())
   name      String   @unique
@@ -1816,6 +1854,9 @@ model WorkPermitSession {
   endConfirmedByName String           @default("")
   endNote            String           @default("")
   progress           Int?
+  /// PCT đại tu: kết quả từng hạng mục lúc kết thúc lần làm việc —
+  /// [{ code, sheet, source, done, percent (lũy kế, null = giữ số cũ), note }]. null = phiếu không có hạng mục.
+  itemProgress       Json?
   searchText         String           @default("")
   createdById        String
   createdByName      String

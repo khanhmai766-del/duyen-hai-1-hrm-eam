@@ -1,5 +1,5 @@
 import { safetySummary, type SafetySelection } from "@/lib/work-permit-safety";
-import { overhaulItemsOf, type OverhaulItemSnapshot } from "@/lib/work-permit-overhaul";
+import { overhaulItemsOf, type OverhaulItemProgress, type OverhaulItemSnapshot } from "@/lib/work-permit-overhaul";
 export const PERMIT_PAGE_SIZE = 25;
 /** Ghép số thuần theo mẫu chung Cơ/Điện; số đầy đủ hoặc mã cũ giữ nguyên. */
 /**
@@ -13,6 +13,24 @@ export function isSessionCommander(member: { personId?: string | null; code?: st
 export function formatPermitNumber(row: { number: string; year: number }): string {
   const number = row.number.trim().toUpperCase().replace(/\s+/g, "");
   return /^\d+$/.test(number) ? `${number}/${row.year}/VH1-NĐDH` : number;
+}
+
+/** Còn ≤ ngần này ngày tới "Kết thúc công việc dự kiến" thì nhắc. */
+export const PERMIT_DEADLINE_WARN_DAYS = 2;
+export type PermitDeadline = { state: "ok" | "soon" | "overdue"; msLeft: number; label: string } | null;
+/**
+ * Hạn thực hiện của PCT nhà thầu theo "Kết thúc công việc dự kiến". Quá hạn mà công tác chưa xong thì theo quy định phải
+ * kết thúc phiếu này và cấp PCT mới (số mới) — nên server chặn mở / bàn giao lần làm việc. null = không áp dụng.
+ */
+export function permitDeadline(row: { teamType: string; status: string; plannedEndAt?: Date | string | null }, now: Date = new Date()): PermitDeadline {
+  if (row.teamType !== "CONTRACTOR" || !row.plannedEndAt || ["DRAFT", "CLOSED", "CANCELLED"].includes(row.status)) return null;
+  const msLeft = new Date(row.plannedEndAt).getTime() - now.getTime();
+  if (!Number.isFinite(msLeft)) return null;
+  if (msLeft <= 0) return { state: "overdue", msLeft, label: "Quá hạn — cần kết thúc phiếu, cấp PCT mới" };
+  if (msLeft > PERMIT_DEADLINE_WARN_DAYS * 86_400_000) return { state: "ok", msLeft, label: "" };
+  const hours = Math.ceil(msLeft / 3_600_000);
+  const days = Math.floor(hours / 24), rest = hours % 24;
+  return { state: "soon", msLeft, label: `Sắp hết hạn · còn ${days ? `${days} ngày${rest ? ` ${rest} giờ` : ""}` : `${hours} giờ`}` };
 }
 
 export const PERMIT_FORMATS = { PAPER: "PCT giấy", ELECTRONIC: "PCT điện tử" } as const;
@@ -69,6 +87,8 @@ export const CONTRACTOR_PERMIT_TRANSITIONS: Record<PermitStatus, readonly Permit
 export const PERMIT_DISCIPLINES = { HYDRO: "Thủy", MECHANICAL: "Cơ", THERMAL: "Nhiệt", CHEMICAL: "Hóa" } as const;
 export type PermitDiscipline = keyof typeof PERMIT_DISCIPLINES;
 export interface PermitInput {
+  /** Có khi đang sửa phiếu đã lưu (form dựng từ bản ghi) — server không đọc trường này từ body. */
+  id?: string;
   managingUnit?: string;
   plantName?: string;
   registrationNumber?: string;
@@ -156,10 +176,16 @@ export interface PermitSession {
   commanderName: string; company: string; members: PermitMember[]; workerCount: number;
   openedAt: string; endedAt: string | null; authorizerName: string;
   endConfirmedByName: string; endNote: string; progress: number | null; createdByName: string; endedByName: string | null;
+  /** PCT đại tu: kết quả từng hạng mục lúc kết thúc. */
+  itemProgress?: OverhaulItemProgress[] | null;
 }
 export type PermitHistorySummary = Pick<PermitHistory, "id" | "actorName" | "action" | "createdAt">;
-export type PermitListRow = Pick<PermitRow, "id" | "number" | "year" | "kind" | "format" | "workType" | "workDate" | "content" | "location" | "position" | "unit" | "issuerName" | "commanderName" | "teamName" | "teamType" | "contractorScope" | "workerCount" | "authorizerName" | "status" | "progress" | "repairRequestNumber" | "nkvhPctId" | "sourceClassification"> & { sessions: Array<Pick<PermitSession, "commanderName" | "company" | "authorizerName">> };
-export interface PermitDetailRow extends PermitRow { history: PermitHistorySummary[]; sessions: PermitSession[]; _count: { sessions: number; history: number } }
+export type PermitListRow = Pick<PermitRow, "id" | "number" | "year" | "kind" | "format" | "workType" | "workDate" | "content" | "location" | "position" | "unit" | "issuerName" | "commanderName" | "teamName" | "teamType" | "contractorScope" | "workerCount" | "authorizerName" | "status" | "progress" | "repairRequestNumber" | "nkvhPctId" | "sourceClassification" | "plannedEndAt"> & { sessions: Array<Pick<PermitSession, "commanderName" | "company" | "authorizerName">> };
+export interface PermitDetailRow extends PermitRow {
+  history: PermitHistorySummary[]; sessions: PermitSession[]; _count: { sessions: number; history: number };
+  /** PCT đại tu: % lũy kế gần nhất theo overhaulItemKey. */
+  overhaulPercents?: Record<string, number>;
+}
 
 export interface DefectLinkedWorkPermit {
   nkvhPctId?: string | null;

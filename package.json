@@ -33,6 +33,7 @@
     "import:tbycnn": "tsx scripts/import/tbycnn.ts",
     "import:permit-people": "tsx scripts/import/permit-people-sheet.ts",
     "import:overhaul-items": "tsx scripts/import/sync-overhaul-items.ts",
+    "overhaul:sheet": "tsx scripts/import/overhaul-sheet.ts",
     "check:tbycnn": "tsx scripts/check/tbycnn.ts",
     "check:document-ai": "tsx scripts/check/document-ai-index.ts",
     "import:chemical": "tsx scripts/import/chemical-inventory.ts",

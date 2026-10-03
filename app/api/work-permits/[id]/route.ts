@@ -1,4 +1,7 @@
-import { parseOverhaulItems } from "@/lib/server/work-permit-overhaul";
+import { assertOverhaulItemsConfirmed, parseOverhaulItems } from "@/lib/server/work-permit-overhaul";
+import { enqueueOverhaulClose, pushOverhaulSheetOutboxQuietly } from "@/lib/server/overhaul-sheet-writer";
+import { after as afterResponse } from "next/server";
+import { latestOverhaulPercents, overhaulItemsOf } from "@/lib/work-permit-overhaul";
 import { requirePermitPositionAllowed, requirePermitVisible } from "@/lib/server/work-permit-scope";
 import { permitIssueUpdateNeedsExecution } from "@/lib/work-permit-permissions";
 import { requirePermitIssue, requirePermitIssuer, requirePermitExecute, permitCapabilities } from "@/lib/server/work-permit-permissions";
@@ -19,7 +22,13 @@ export async function GET(_req: Request, props: { params: Promise<{ id: string }
     const user = await requireUser();
     await requirePermitVisible(user, params.id);
     const row = await prisma.workPermit.findUnique({ where: { id: params.id }, include: { sessions: { take: 2, orderBy: [{ openedAt: "desc" }, { id: "desc" }] }, history: { take: 2, select: historySummarySelect, orderBy: [{ createdAt: "desc" }, { id: "desc" }] }, _count: { select: { sessions: true, history: true } } } });
-    return row ? ok(row, { ...await permitCapabilities(user), canDelete: user.role === "ADMIN" && user.accessMode !== "DEFECT_READ_ONLY" }) : fail("Không tìm thấy PCT", 404);
+    if (!row) return fail("Không tìm thấy PCT", 404);
+    // % lũy kế gần nhất của từng hạng mục đại tu (mọi lần làm việc kể cả lần đang mở đã "Cập nhật tiến độ", không chỉ 2
+    // lần trả kèm) — điền sẵn hộp Kết thúc / Cập nhật tiến độ.
+    const overhaulPercents = overhaulItemsOf(row.overhaulItems).length
+      ? Object.fromEntries(latestOverhaulPercents(await prisma.workPermitSession.findMany({ where: { permitId: row.id }, orderBy: [{ openedAt: "desc" }, { id: "desc" }], select: { itemProgress: true } })))
+      : {};
+    return ok({ ...row, overhaulPercents }, { ...await permitCapabilities(user), canDelete: user.role === "ADMIN" && user.accessMode !== "DEFECT_READ_ONLY" });
   });
 }
 
@@ -140,6 +149,9 @@ export async function PUT(req: Request, props: { params: Promise<{ id: string }>
       }
       // Không gửi overhaulItems = giữ nguyên; phiếu rời nhóm Đại tu thì parseOverhaulItems trả DbNull để xoá.
       const overhaulItems = parseOverhaulItems(body.overhaulItems === undefined ? before.overhaulItems ?? undefined : body.overhaulItems, data);
+      // Phiếu đã cấp (hoặc vừa cấp từ nháp) thêm hạng mục đang nằm trong PCT khác: phải đã xác nhận trong hộp chọn.
+      // Nháp → cấp: so với rỗng (mọi mục coi là mới) vì lúc lưu nháp chưa kiểm.
+      if (body.overhaulItems !== undefined && !["DRAFT", "CANCELLED", "CLOSED"].includes(status)) await assertOverhaulItemsConfirmed(tx, body.overhaulItems, before.status === "DRAFT" ? null : before.overhaulItems, params.id);
       const saved = await tx.workPermit.updateMany({ where: { id: params.id, version: before.version }, data: { ...data, ...(overhaulItems !== undefined ? { overhaulItems } : {}), ...(body.progress !== undefined ? { progress: body.progress as number | null } : {}), safetyItems: permitSnapshot(await resolvePermitSafety(tx, { ...body, format: data.format, teamType: data.teamType }, before)), status, version: { increment: 1 } } });
       if (saved.count !== 1) throw fail("Phiếu vừa được cập nhật ở phiên khác. Vui lòng tải lại.", 409);
       const after = await tx.workPermit.findUniqueOrThrow({ where: { id: params.id } });
@@ -166,11 +178,13 @@ export async function PUT(req: Request, props: { params: Promise<{ id: string }>
             actorId: user.id, actorName: user.name ?? "", permitId: after.id, note: data.statusReason } });
         }
       }
+      if (status === "CLOSED" && before.status !== "CLOSED") await enqueueOverhaulClose(tx, after, after.closedAt ?? new Date());
       await tx.workPermitHistory.create({ data: { permitId: after.id, actorId: user.id, actorName: user.name ?? "", action: teamTypeChanged ? `Đổi loại phiếu: ${teamTypeLabel(before.teamType)} → ${teamTypeLabel(data.teamType)}` : status === before.status ? "Cập nhật thông tin" : `Chuyển sang ${PERMIT_STATUSES[status]}`, before: permitSnapshot(before), after: permitSnapshot(after) } });
       return after;
     });
     await audit(user.id, "UPDATE_WORK_PERMIT", "WorkPermit", row.id, `Cập nhật PCT ${formatPermitNumber(row)}: ${PERMIT_STATUSES[status]}`);
     await syncPermitDocument(row, previous);
+    if (row.status === "CLOSED" && row.contractorScope === "OVERHAUL") afterResponse(pushOverhaulSheetOutboxQuietly);
     return ok(row);
   });
 }

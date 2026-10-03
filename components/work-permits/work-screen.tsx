@@ -3,12 +3,13 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft, Play, RefreshCw, Square, UserRoundCog } from "lucide-react";
+import { ArrowLeft, ChartNoAxesColumnIncreasing, Play, RefreshCw, Square, UserRoundCog } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { ContractorSessions, SessionEditor } from "@/components/work-permits/contractor-work";
+import { canUpdateOverhaulProgress, ContractorSessions, SessionEditor } from "@/components/work-permits/contractor-work";
 import { SessionAttendance } from "@/components/work-permits/session-attendance";
 import { useWorkPermit } from "@/hooks/useWorkPermits";
-import { formatPermitNumber, PERMIT_KINDS, PERMIT_STATUSES, PERMIT_UNITS, type PermitSession } from "@/lib/work-permits";
+import { formatPermitNumber, PERMIT_KINDS, PERMIT_STATUSES, PERMIT_UNITS, permitDeadline, type PermitSession } from "@/lib/work-permits";
+import { PermitDeadlineBadge } from "@/components/work-permits/permit-deadline";
 
 const fmt = (v: string) => new Date(v).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" });
 function elapsed(from: string) {
@@ -24,7 +25,7 @@ const LIVE_REFRESH_MS = 15_000;
  */
 export function PermitWorkScreen({ id }: { id: string }) {
   const query = useWorkPermit(id, LIVE_REFRESH_MS);
-  const [action, setAction] = useState<{ kind: "open" } | { kind: "handoff" | "end"; session: PermitSession } | null>(null);
+  const [action, setAction] = useState<{ kind: "open" } | { kind: "handoff" | "end" | "progress"; session: PermitSession } | null>(null);
   const permit = query.data?.data;
   const canExecute = Boolean(query.data?.meta?.canExecute);
   // `?open=1` từ QR PCT Đại tu; `?scan=1` / `?end=1` từ QR hoặc bảng Đang làm việc:
@@ -35,7 +36,9 @@ export function PermitWorkScreen({ id }: { id: string }) {
   const intent = useRef(initialIntent);
   const autoScan = initialIntent === "scan";
   const liveSession = permit?.sessions.find(s => !s.endedAt);
-  const canOpen = Boolean(permit && canExecute && !liveSession && ["ISSUED", "WAITING"].includes(permit.status));
+  // Quá "Kết thúc công việc dự kiến": theo quy định kết thúc phiếu, cấp PCT mới — không mở / bàn giao (server cũng chặn).
+  const overdue = Boolean(permit && permitDeadline(permit)?.state === "overdue");
+  const canOpen = Boolean(permit && canExecute && !liveSession && !overdue && ["ISSUED", "WAITING"].includes(permit.status));
   useEffect(() => {
     if (!permit || !intent.current) return;
     if (intent.current === "end" && liveSession && canExecute) setAction({ kind: "end", session: liveSession });
@@ -60,6 +63,7 @@ export function PermitWorkScreen({ id }: { id: string }) {
         <h1 className="text-lg font-bold sm:text-2xl">PCT {formatPermitNumber(permit)}</h1>
         <p className="mt-1 line-clamp-3 text-[15px] font-semibold leading-6">{permit.content || "—"}</p>
         <p className="text-sm text-muted-foreground">{[permit.location, PERMIT_UNITS[permit.unit], permit.teamName].filter(Boolean).join(" · ")}</p>
+        <PermitDeadlineBadge permit={permit} className="mt-1.5" />
       </div>
     </header>
 
@@ -71,19 +75,21 @@ export function PermitWorkScreen({ id }: { id: string }) {
           <p className="text-xs text-muted-foreground sm:text-sm">Mở lúc {fmt(live.openedAt)} · Cho phép: {live.authorizerName}</p>
         </div>
         {canExecute && <div className="grid grid-cols-2 gap-2 sm:flex">
-          <Button type="button" variant="outline" className="h-10" onClick={() => setAction({ kind: "handoff", session: live })}><UserRoundCog />Bàn giao</Button>
-          <Button type="button" variant="outline" className="h-10 border-red-200 text-red-700 hover:bg-red-50 hover:text-red-800" onClick={() => setAction({ kind: "end", session: live })}><Square />Kết thúc</Button>
+          {/* PCT đại tu: cập nhật % + ghi chú từng hạng mục giữa chừng — điện thoại chiếm trọn hàng đầu. */}
+          {canUpdateOverhaulProgress(permit) && <Button type="button" variant="outline" className="col-span-2 h-10 border-violet-200 text-violet-800 hover:bg-violet-50 hover:text-violet-900 sm:order-2 sm:col-span-1 dark:border-violet-900 dark:text-violet-200" onClick={() => setAction({ kind: "progress", session: live })}><ChartNoAxesColumnIncreasing />Cập nhật tiến độ</Button>}
+          <Button type="button" variant="outline" className="h-10 sm:order-1" disabled={overdue} title={overdue ? "PCT đã quá hạn — không bàn giao, chỉ kết thúc" : undefined} onClick={() => setAction({ kind: "handoff", session: live })}><UserRoundCog />Bàn giao</Button>
+          <Button type="button" variant="outline" className="h-10 border-red-200 text-red-700 sm:order-3 hover:bg-red-50 hover:text-red-800" onClick={() => setAction({ kind: "end", session: live })}><Square />Kết thúc</Button>
         </div>}
       </div>
       <SessionAttendance permit={permit} session={live} canExecute={canExecute} size="lg" autoScan={autoScan} />
     </section> : <section className="space-y-3 rounded-2xl border border-sky-200 bg-sky-50/50 p-5 text-center dark:bg-sky-950/20">
       <p className="text-base font-semibold">Chưa có lần làm việc đang mở</p>
-      <p className="text-sm text-muted-foreground">{canOpen ? "Chọn CHTT, người cho phép và quét thẻ nhân viên để mở lần làm việc." : ["ISSUED", "WAITING"].includes(permit.status) ? "Bạn không có quyền cho phép làm việc trên phiếu này." : `Phiếu đang ở trạng thái “${PERMIT_STATUSES[permit.status]}” nên không mở được lần làm việc mới.`}</p>
+      <p className="text-sm text-muted-foreground">{canOpen ? "Chọn CHTT, người cho phép và quét thẻ nhân viên để mở lần làm việc." : overdue && ["ISSUED", "WAITING"].includes(permit.status) ? "PCT đã quá thời gian kết thúc công việc dự kiến — không mở lần làm việc mới. Kết thúc phiếu này; công tác chưa xong thì cấp PCT mới." : ["ISSUED", "WAITING"].includes(permit.status) ? "Bạn không có quyền cho phép làm việc trên phiếu này." : `Phiếu đang ở trạng thái “${PERMIT_STATUSES[permit.status]}” nên không mở được lần làm việc mới.`}</p>
       {canOpen && <Button type="button" className="h-12 w-full px-6 text-base sm:w-auto" onClick={() => setAction({ kind: "open" })}><Play />Cho phép / mở lần làm việc</Button>}
     </section>}
 
     {permit.teamType === "CONTRACTOR" && <ContractorSessions key={`${permit.id}-${permit.version}-history`} permit={permit} canExecute={canExecute} historyOnly />}
 
-    {action && <SessionEditor permit={permit} session={action.kind === "open" ? undefined : action.session} handoff={action.kind === "handoff"} onClose={() => setAction(null)} />}
+    {action && <SessionEditor permit={permit} session={action.kind === "open" ? undefined : action.session} handoff={action.kind === "handoff"} progressUpdate={action.kind === "progress"} onClose={() => setAction(null)} />}
   </div>;
 }

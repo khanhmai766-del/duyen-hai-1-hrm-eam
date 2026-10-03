@@ -11,8 +11,13 @@ import { compareOverhaulCodes, isOverhaulPaperPermit, overhaulContentText, type 
 import { effectivePermitFormat, type PermitInput } from "@/lib/work-permits";
 
 const keyOf = (item: Pick<OverhaulItemSnapshot, "sheet" | "code">) => `${item.sheet}\u0000${item.code}`;
-const snapshotOf = (item: OverhaulItemOption): OverhaulItemSnapshot =>
-  ({ code: item.code, device: item.device, content: item.content, method: item.method, source: item.source, sheet: item.sheet });
+const snapshotOf = (item: OverhaulItemOption, confirmedShared = false): OverhaulItemSnapshot =>
+  ({ code: item.code, device: item.device, content: item.content, method: item.method, source: item.source, sheet: item.sheet, ...(confirmedShared ? { confirmedShared } : {}) });
+const heldText = (item: OverhaulItemOption) => item.usedBy.map(usage => usage.number).join(", ");
+/** Hạng mục đang nằm trong PCT khác còn hiệu lực: được đưa thêm vào phiếu này nhưng phải xác nhận. */
+const confirmShared = (items: OverhaulItemOption[]) => window.confirm(items.length === 1
+  ? `Hạng mục ${items[0].code} đang nằm trong PCT số ${heldText(items[0])} (chưa huỷ / kết thúc phiếu).\n\nVẫn thêm hạng mục này vào phiếu mới?`
+  : `Các hạng mục sau đang nằm trong PCT khác chưa huỷ / kết thúc phiếu:\n${items.map(item => `• ${item.code} — PCT ${heldText(item)}`).join("\n")}\n\nVẫn thêm vào phiếu mới?`);
 
 /**
  * Nút "Chọn hạng mục đại tu" + chip mã đã chọn, đặt dưới ô Nội dung công việc của PCT nhà thầu · Đại tu.
@@ -58,7 +63,7 @@ function OverhaulItemPicker({ form, selected, onClose, onConfirm }: {
   const lockedCompany = form.teamName.trim();
   const [company, setCompany] = useState(lockedCompany);
   const companies = usePermitCompanySummary();
-  const query = useOverhaulItems({ kind: form.kind, company, position: form.position }, Boolean(company));
+  const query = useOverhaulItems({ kind: form.kind, company, position: form.position, excludePermitId: form.id }, Boolean(company));
   const sync = useSyncOverhaulItems();
   const [picked, setPicked] = useState(() => new Map(selected.map(item => [keyOf(item), item])));
   const [search, setSearch] = useState("");
@@ -76,11 +81,22 @@ function OverhaulItemPicker({ form, selected, onClose, onConfirm }: {
     return [...byDevice.entries()].sort((a, b) => compareOverhaulCodes(a[1][0].code, b[1][0].code));
   }, [data, search]);
 
-  const toggle = (item: OverhaulItemOption) => setPicked(prev => {
-    const next = new Map(prev);
-    if (next.has(keyOf(item))) next.delete(keyOf(item)); else next.set(keyOf(item), snapshotOf(item));
-    return next;
-  });
+  const toggle = (item: OverhaulItemOption) => {
+    const key = keyOf(item);
+    if (picked.has(key)) { setPicked(prev => { const next = new Map(prev); next.delete(key); return next; }); return; }
+    const shared = item.usedBy.length > 0;
+    if (shared && !confirmShared([item])) return;
+    setPicked(prev => new Map(prev).set(key, snapshotOf(item, shared)));
+  };
+  /** Áp dụng: mục đang trong PCT khác mà chưa xác nhận (chọn từ trước, vd phiếu nháp cũ) → hỏi một lần cho cả nhóm. */
+  function apply() {
+    const byKey = new Map((data?.items ?? []).map(item => [keyOf(item), item]));
+    const unconfirmed = [...picked.values()].filter(item => !item.confirmedShared).map(item => byKey.get(keyOf(item))).filter((item): item is OverhaulItemOption => Boolean(item?.usedBy.length));
+    if (unconfirmed.length && !confirmShared(unconfirmed)) return;
+    const flagged = new Set(unconfirmed.map(keyOf));
+    const items = [...picked.values()].map(item => flagged.has(keyOf(item)) ? { ...item, confirmedShared: true } : item);
+    onConfirm(items.sort((a, b) => compareOverhaulCodes(a.code, b.code)), lockedCompany ? null : company || null);
+  }
 
   async function runSync() {
     try {
@@ -136,7 +152,9 @@ function OverhaulItemPicker({ form, selected, onClose, onConfirm }: {
             const key = keyOf(item);
             const checked = picked.has(key);
             const showMethod = expanded === key;
-            return <div key={key} className={`rounded-lg px-2 py-2 ${checked ? "bg-violet-50 dark:bg-violet-950/30" : "hover:bg-slate-50 dark:hover:bg-muted/40"}`}>
+            // Đã nằm trong PCT khác còn hiệu lực: làm mờ để dễ nhận ra, vẫn chọn được sau khi xác nhận.
+            const shared = item.usedBy.length > 0 && !checked;
+            return <div key={key} className={`rounded-lg px-2 py-2 ${checked ? "bg-violet-50 dark:bg-violet-950/30" : shared ? "opacity-60 hover:opacity-100" : "hover:bg-slate-50 dark:hover:bg-muted/40"}`}>
               <label className="flex min-h-10 cursor-pointer items-start gap-3">
                 <input type="checkbox" className="mt-1 h-5 w-5 shrink-0 accent-violet-700" checked={checked} onChange={() => toggle(item)} />
                 <span className="min-w-0 flex-1">
@@ -145,6 +163,8 @@ function OverhaulItemPicker({ form, selected, onClose, onConfirm }: {
                     {item.status && <span className="text-xs text-muted-foreground">{item.status}{item.percent ? ` · ${item.percent}` : ""}</span>}
                   </span>
                   <span className="mt-0.5 block whitespace-pre-line text-sm leading-5 text-foreground">{item.content || "—"}</span>
+                  {item.usedBy.length > 0 && <span className="mt-1 block text-xs font-medium text-amber-700 dark:text-amber-300">Đã có trong PCT số {heldText(item)}</span>}
+                  {!item.usedBy.length && item.draftIn.length > 0 && <span className="mt-1 block text-xs text-amber-700 dark:text-amber-300">Đang nằm trong phiếu nháp {item.draftIn.join(", ")}</span>}
                 </span>
               </label>
               {item.method && <div className="pl-8">
@@ -162,7 +182,7 @@ function OverhaulItemPicker({ form, selected, onClose, onConfirm }: {
         <span className="hidden text-sm text-muted-foreground sm:inline">Đã chọn <b className="text-foreground">{picked.size}</b> hạng mục</span>
         <div className="grid grid-cols-2 gap-2 sm:flex">
           <Button type="button" variant="outline" className="h-10" onClick={onClose}>Huỷ</Button>
-          <Button type="button" className="h-10" onClick={() => onConfirm([...picked.values()].sort((a, b) => compareOverhaulCodes(a.code, b.code)), lockedCompany ? null : company || null)}>Áp dụng{picked.size ? ` (${picked.size})` : ""}</Button>
+          <Button type="button" className="h-10" onClick={apply}>Áp dụng{picked.size ? ` (${picked.size})` : ""}</Button>
         </div>
       </div>
     </DialogContent>

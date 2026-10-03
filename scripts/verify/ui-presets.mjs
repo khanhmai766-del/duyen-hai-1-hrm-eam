@@ -34,7 +34,62 @@ function liveBoardRows(permit, now) {
   ];
 }
 
+/**
+ * PCT nhà thầu · Đại tu giả lập: gắn 3 hạng mục thật (đọc DB) + hạn "Kết thúc công việc dự kiến". `overdue` = quá hạn và
+ * không có lần đang mở (thấy nút mở bị chặn); ngược lại còn ~30 giờ và có lần đang mở (hộp Kết thúc theo hạng mục).
+ */
+function overhaulPreset(overdue) {
+  return {
+    description: overdue ? "PCT đại tu quá hạn — chặn mở lần làm việc, nhãn đỏ" : "PCT đại tu sắp hết hạn — hộp Kết thúc đánh giá từng hạng mục",
+    async prepare({ prisma }) {
+      const permit = await prisma.workPermit.findFirst({
+        where: { teamType: "CONTRACTOR", status: { notIn: ["DRAFT", "CANCELLED"] } },
+        orderBy: { updatedAt: "desc" }, select: { id: true },
+      });
+      if (!permit) throw new Error("DB dev chưa có PCT nhà thầu nào đã cấp — cấp một phiếu nhà thầu trên dev rồi chạy lại.");
+      const items = await prisma.workPermitOverhaulItem.findMany({ where: { isActive: true, method: { not: "" } }, take: 3, orderBy: { code: "asc" },
+        select: { code: true, device: true, content: true, method: true, source: true, sheet: true } });
+      if (!items.length) throw new Error("DB dev chưa có hạng mục đại tu — bấm Đồng bộ hạng mục trước.");
+      return { permitId: permit.id, items };
+    },
+    routes: ({ permitId }) => overdue
+      ? [`/work-permits/${permitId}/lam-viec`]
+      : [`/work-permits/${permitId}/lam-viec`, `/work-permits/${permitId}/lam-viec?end=1`, `/work-permits/${permitId}/lam-viec?tien-do=1`],
+    // Hộp Kết thúc / Cập nhật tiến độ: tick hạng mục đầu + mở "Biện pháp thi công" để chụp thanh %, ô ghi chú (không lưu).
+    async interact(page, route) {
+      if (route.endsWith("?tien-do=1")) await page.getByRole("button", { name: "Cập nhật tiến độ" }).click();
+      else if (!route.endsWith("?end=1")) return;
+      const dialog = page.getByRole("dialog");
+      await dialog.locator('input[type="checkbox"]').first().check();
+      await dialog.getByRole("button", { name: "Biện pháp thi công" }).first().click();
+      await page.waitForTimeout(300);
+    },
+    async mock(context, { permitId, items }) {
+      const now = Date.now();
+      await context.route(`**/api/work-permits/${permitId}`, async (route) => {
+        const response = await route.fetch();
+        const json = await response.json();
+        if (json.data) {
+          Object.assign(json.data, {
+            contractorScope: "OVERHAUL", format: "PAPER", overhaulItems: items,
+            plannedEndAt: new Date(now + (overdue ? -3 : 30) * 3600_000).toISOString(),
+            overhaulPercents: { [`${items[0].source}\u0000${items[0].sheet}\u0000${items[0].code}`]: 30 },
+          });
+          const ended = json.data.sessions.filter((s) => s.endedAt);
+          json.data.status = overdue ? "WAITING" : "ACTIVE";
+          json.data.sessions = overdue ? ended : [liveSession(json.data, now), ...ended];
+          if (!overdue) json.data._count.sessions += 1;
+          json.meta = { ...json.meta, canExecute: true };
+        }
+        await route.fulfill({ response, json });
+      });
+    },
+  };
+}
+
 export const PRESETS = {
+  "pct-dai-tu": overhaulPreset(false),
+  "pct-dai-tu-qua-han": overhaulPreset(true),
   "pct-lam-viec": {
     description: "Màn hình làm việc PCT nhà thầu, bảng Đang làm việc, popup phiếu, hộp kết thúc — lần làm việc giả lập",
     async prepare({ prisma }) {

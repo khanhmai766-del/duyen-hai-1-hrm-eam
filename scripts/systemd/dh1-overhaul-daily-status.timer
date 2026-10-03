@@ -1,0 +1,10 @@
+[Unit]
+Description=Hen gio "Khong mo ngay thuc hien" PCT dai tu - 16:00 gio Viet Nam hang ngay
+
+[Timer]
+# Server chay UTC: 09:00 UTC = 16:00 gio VN. KHONG dat Persistent: chay bu sau 0h se roi sang ngay hom sau
+# (script tu chan truoc 16:00) — ngay bi lo thi chay tay voi --day.
+OnCalendar=*-*-* 09:00:00
+
+[Install]
+WantedBy=timers.target

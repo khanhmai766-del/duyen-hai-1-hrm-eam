@@ -5,7 +5,8 @@ import { positionCatalogItem } from "@/lib/position-catalog";
 import { prisma } from "@/lib/prisma";
 import { a1Tab, batchGetValues, columnLetter, getSpreadsheet, GoogleSheetsError, spreadsheetIdFromUrl, type SheetTab } from "@/lib/server/google-sheets";
 import { overhaulScheduleLinks } from "@/lib/server/overhaul-schedules";
-import { compareOverhaulCodes, isOverhaulPaperPermit, OVERHAUL_SOURCE_DEFAULT_KIND, OVERHAUL_SOURCES, type OverhaulItemSnapshot, type OverhaulSource } from "@/lib/work-permit-overhaul";
+import { formatPermitNumber } from "@/lib/work-permits";
+import { compareOverhaulCodes, isOverhaulPaperPermit, latestOverhaulPercents, OVERHAUL_HOLDING_STATUSES, OVERHAUL_SOURCE_DEFAULT_KIND, OVERHAUL_SOURCES, overhaulItemKey, overhaulItemsOf, type OverhaulItemProgress, type OverhaulItemSnapshot, type OverhaulItemUsage, type OverhaulSource } from "@/lib/work-permit-overhaul";
 
 /*
  * Hạng mục đại tu cho PCT nhà thầu · Đại tu.
@@ -17,8 +18,10 @@ import { compareOverhaulCodes, isOverhaulPaperPermit, OVERHAUL_SOURCE_DEFAULT_KI
  * QUY TẮC ĐỌC (theo cấu trúc file thật, 01/10/2026):
  *  - Chỉ đọc tab có hàng tiêu đề chứa ô "Mã hạng mục" + "Nội dung công việc" (trong 30 hàng đầu); bỏ tab
  *    "Tiến độ …" (tổng hợp), README; tab "Chi tiết 1–4" tự rơi vì không có tiêu đề đó.
- *  - Cương vị: cột "Cương vị" của TỪNG DÒNG; tab không có cột này (vd "CI") → lấy theo tên tab. Tên trong Sheet khác
- *    danh mục app thì ánh xạ ở POSITION_ALIASES ("Lò hơi" = Lò phó theo quyết định người dùng).
+ *  - Cương vị: cột "Cương vị" của TỪNG DÒNG; tab không có cột này (vd "CI", file Máy phát từ 03/10/2026 đã bỏ cột) → lấy
+ *    theo tên tab. Tên tab trùng nguyên một cương vị ("Trực chính điện") thì lấy cả tên, không cắt đuôi "điện". Tên trong
+ *    Sheet khác danh mục app thì ánh xạ ở POSITION_ALIASES ("Lò hơi" = Lò phó theo quyết định người dùng).
+ *  - IGNORED_TABS: tab bảng nháp đã được tách sang tab cương vị (Máy phát "Điện_1") — không đọc, kẻo một hạng mục nằm hai nơi.
  *  - Loại PCT: đuôi tên tab "- Cơ" / "-Điện" / "_Cơ"…; không có đuôi → mặc định của file (Máy phát, C&I = Điện),
  *    file Lò/Turbine mà tab không có đuôi thì bỏ tab và báo.
  *  - Dòng không có Nhà thầu bị bỏ (vd tab "Điện_1" chưa phân chia) — không gợi ý được cho ai.
@@ -32,6 +35,9 @@ const POSITION_ALIASES: Record<string, string> = {
   "ci": "C&I",
 };
 
+/** Tab không đọc (so không dấu). "Điện_1" = danh sách chưa phân chia, 46 mục đã tách sang "Máy Phó-Điện" / "Trợ thủ-Điện". */
+const IGNORED_TABS: Partial<Record<OverhaulSource, string[]>> = { GENERATOR: ["dien_1"] };
+
 const HEADER_SCAN_ROWS = 30;
 const MAX_ROWS_PER_TAB = 5000;
 const TAB_KIND = /[\s_\-–—]+(cơ|co|điện|dien)\s*$/i;
@@ -44,7 +50,7 @@ const multiline = (value: unknown, max = 8000) => str(value, max).replace(/\r\n?
 type Columns = { code: number; device: number; content: number; method: number; position: number; contractor: number; percent: number; status: number };
 
 /** Hàng tiêu đề + vị trí các cột cần đọc; null nếu tab không phải bảng hạng mục. */
-function findHeader(rows: string[][]) {
+export function findHeader(rows: string[][]) {
   for (let r = 0; r < Math.min(rows.length, HEADER_SCAN_ROWS); r++) {
     const cells = rows[r].map(cell => normalizeText(cell).replace(/\s+/g, " "));
     const at = (test: (cell: string) => boolean) => cells.findIndex(test);
@@ -78,9 +84,11 @@ export function repairDateCode(code: string) {
 }
 
 function tabKind(title: string, source: OverhaulSource) {
+  // "Trực chính điện" là tên cương vị, không phải "<cương vị> - Điện": file có loại PCT mặc định thì giữ nguyên tên.
+  const fallback = OVERHAUL_SOURCE_DEFAULT_KIND[source];
+  if (fallback && positionCatalogItem(title.trim())) return { kind: fallback, positionPart: title.trim() };
   const match = TAB_KIND.exec(title);
   if (match) return { kind: normalizeText(match[1]) === "co" ? "MECHANICAL" : "ELECTRICAL", positionPart: title.slice(0, match.index).trim() };
-  const fallback = OVERHAUL_SOURCE_DEFAULT_KIND[source];
   return fallback ? { kind: fallback, positionPart: title.trim() } : null;
 }
 
@@ -131,7 +139,7 @@ async function readSource(source: OverhaulSource, spreadsheetId: string, now: Da
   result.file = meta.title;
   const candidates = meta.tabs.filter(tab => {
     const name = normalizeText(tab.title);
-    return !name.startsWith("tien do") && name !== "readme" && tab.rowCount > 0;
+    return !name.startsWith("tien do") && name !== "readme" && tab.rowCount > 0 && !(IGNORED_TABS[source] ?? []).includes(name.trim());
   });
   const heads = await batchGetValues(spreadsheetId, candidates.map(tab => `${a1Tab(tab.title)}!A1:${columnLetter(Math.min(tab.columnCount, 40) - 1)}${HEADER_SCAN_ROWS}`));
   const tables: Array<{ tab: SheetTab; header: NonNullable<ReturnType<typeof findHeader>>; kind: string; positionPart: string }> = [];
@@ -264,7 +272,7 @@ export async function syncOverhaulItems() {
  * Hạng mục gợi ý cho form: lọc theo loại PCT, mã nhà thầu của đơn vị công tác (WorkPermitCompany.code) và
  * cương vị (bỏ trống = mọi cương vị). Đơn vị chưa khai mã → không có gợi ý (trả kèm lý do để form nói rõ).
  */
-export async function listOverhaulItems(params: { kind: string; company: string; position: string }) {
+export async function listOverhaulItems(params: { kind: string; company: string; position: string; excludePermitId?: string }) {
   const lastSync = await prisma.workPermitOverhaulItem.aggregate({ _max: { syncedAt: true } });
   const syncedAt = lastSync._max.syncedAt?.toISOString() ?? null;
   const company = params.company.trim();
@@ -281,7 +289,81 @@ export async function listOverhaulItems(params: { kind: string; company: string;
     select: { id: true, source: true, sheet: true, positionTitle: true, code: true, device: true, content: true, method: true, percent: true, status: true },
   });
   items.sort((a, b) => compareOverhaulCodes(a.code, b.code) || a.sheet.localeCompare(b.sheet, "vi"));
-  return { items, syncedAt, contractorCode: row?.code ?? null, reason: null };
+  const usage = await overhaulItemUsage(prisma, params.excludePermitId);
+  return {
+    items: items.map(item => ({ ...item, usedBy: usage.held.get(overhaulItemKey(item)) ?? [], draftIn: usage.drafts.get(overhaulItemKey(item)) ?? [] })),
+    syncedAt, contractorCode: row?.code ?? null, reason: null,
+  };
+}
+
+/**
+ * Hạng mục đang nằm trên phiếu nào. `held`: các phiếu đã cấp chưa huỷ / kết thúc phiếu (chọn lại phải xác nhận).
+ * `drafts`: phiếu nháp (chỉ để biết). Đọc mọi PCT nhà thầu · Đại tu còn mở — vài trăm phiếu mỗi đợt, trải JSON trong Node.
+ */
+export async function overhaulItemUsage(db: Prisma.TransactionClient | typeof prisma, excludePermitId?: string) {
+  const permits = await db.workPermit.findMany({
+    where: { teamType: "CONTRACTOR", contractorScope: "OVERHAUL", status: { in: ["DRAFT", ...OVERHAUL_HOLDING_STATUSES] }, overhaulItems: { not: Prisma.DbNull }, ...(excludePermitId ? { id: { not: excludePermitId } } : {}) },
+    select: { id: true, number: true, year: true, status: true, overhaulItems: true },
+    orderBy: { createdAt: "asc" },
+  });
+  const held = new Map<string, OverhaulItemUsage[]>();
+  const drafts = new Map<string, string[]>();
+  for (const permit of permits) {
+    const number = permit.number.trim() ? formatPermitNumber(permit) : "chưa có số";
+    for (const item of overhaulItemsOf(permit.overhaulItems)) {
+      const key = overhaulItemKey(item);
+      if (permit.status === "DRAFT") drafts.set(key, [...(drafts.get(key) ?? []), number]);
+      else held.set(key, [...(held.get(key) ?? []), { permitId: permit.id, number, status: permit.status }]);
+    }
+  }
+  return { held, drafts };
+}
+
+/**
+ * Hạng mục MỚI thêm vào phiếu (so với bản đã lưu) mà đang nằm trong PCT khác còn hiệu lực: được phép — hai phiếu cùng
+ * giữ một hạng mục — nhưng người cấp phải đã xác nhận trong hộp chọn (`confirmedShared` trên từng mục của request).
+ * Thiếu xác nhận (gọi API thẳng, form cũ) → 409 nêu số PCT đang giữ.
+ */
+export async function assertOverhaulItemsConfirmed(tx: Prisma.TransactionClient, requested: unknown, before: unknown, permitId?: string) {
+  const existing = new Set(overhaulItemsOf(before).map(overhaulItemKey));
+  const fresh = overhaulItemsOf(requested).filter(item => !existing.has(overhaulItemKey(item)) && item.confirmedShared !== true);
+  if (!fresh.length) return;
+  const { held } = await overhaulItemUsage(tx, permitId);
+  const taken = fresh.map(item => ({ item, usage: held.get(overhaulItemKey(item)) ?? [] })).filter(entry => entry.usage.length);
+  if (!taken.length) return;
+  const detail = taken.slice(0, 5).map(({ item, usage }) => `${item.code} (PCT ${usage.map(u => u.number).join(", ")})`).join(", ");
+  throw fail(`Hạng mục đang nằm trong PCT khác còn hiệu lực: ${detail}${taken.length > 5 ? "…" : ""}. Mở lại “Chọn hạng mục đại tu” và xác nhận nếu vẫn đưa vào phiếu này.`, 409);
+}
+
+/**
+ * Kết quả từng hạng mục khi kết thúc lần làm việc của PCT đại tu. Phải đủ mọi mã trên phiếu; mục có thực hiện cần
+ * % lũy kế 0–100 không thấp hơn lần trước; mục không thực hiện giữ % cũ. Trả kèm % chung của phiếu (trung bình).
+ */
+export function parseSessionItemProgress(value: unknown, permitItems: OverhaulItemSnapshot[], previousSessions: Array<{ itemProgress?: unknown }>) {
+  if (!Array.isArray(value)) throw fail("Vui lòng đánh giá tiến độ từng hạng mục đại tu của phiếu");
+  const previous = latestOverhaulPercents(previousSessions);
+  const sent = new Map<string, Record<string, unknown>>();
+  for (const raw of value) {
+    if (!raw || typeof raw !== "object") throw fail("Tiến độ hạng mục không hợp lệ");
+    const item = raw as Record<string, unknown>;
+    sent.set(overhaulItemKey({ source: line(item.source, 20), sheet: line(item.sheet, 120), code: line(item.code, 60) }), item);
+  }
+  const items: OverhaulItemProgress[] = permitItems.map(snapshot => {
+    const key = overhaulItemKey(snapshot);
+    const raw = sent.get(key);
+    if (!raw) throw fail(`Thiếu đánh giá hạng mục ${snapshot.code}. Tải lại phiếu rồi thử lại.`);
+    const done = raw.done === true;
+    const note = str(raw.note, 1000);
+    if (!done) return { code: snapshot.code, sheet: snapshot.sheet, source: snapshot.source, done, percent: null, note: "" };
+    const percent = Number(raw.percent);
+    if (raw.percent === null || raw.percent === "" || !Number.isInteger(percent) || percent < 0 || percent > 100) throw fail(`Tiến độ hạng mục ${snapshot.code} phải là số nguyên từ 0 đến 100%`);
+    const before = previous.get(key);
+    if (before !== undefined && percent < before) throw fail(`Tiến độ hạng mục ${snapshot.code} là lũy kế — không thấp hơn lần trước (${before}%)`);
+    return { code: snapshot.code, sheet: snapshot.sheet, source: snapshot.source, done, percent, note };
+  });
+  if (sent.size !== items.length) throw fail("Danh sách hạng mục đã thay đổi. Tải lại phiếu rồi thử lại.", 409);
+  const percents = items.map(item => item.percent ?? previous.get(overhaulItemKey(item)) ?? 0);
+  return { items, progress: Math.round(percents.reduce((sum, value) => sum + value, 0) / percents.length) };
 }
 
 const MAX_PERMIT_OVERHAUL_ITEMS = 100;

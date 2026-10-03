@@ -5,6 +5,8 @@ import { requirePermitExecute } from "@/lib/server/work-permit-permissions";
 import { isPermitExecutionInput, PERMIT_EXECUTION_STATUSES } from "@/lib/work-permit-permissions";
 import { parsePermit, permitBody, permitHandle, permitSnapshot } from "@/lib/server/work-permits";
 import { formatPermitNumber, PERMIT_STATUSES, PERMIT_TRANSITIONS, CONTRACTOR_PERMIT_TRANSITIONS, type PermitStatus } from "@/lib/work-permits";
+import { after as afterResponse } from "next/server";
+import { enqueueOverhaulClose, pushOverhaulSheetOutboxQuietly } from "@/lib/server/overhaul-sheet-writer";
 
 export const dynamic = "force-dynamic";
 export async function POST(req: Request, props: { params: Promise<{ id: string }> }) {
@@ -50,9 +52,12 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
         searchText: data.searchText, version: { increment: 1 },
       } });
       await tx.workPermitHistory.create({ data: { permitId: after.id, actorId: user.id, actorName: user.name ?? "", action: status === before.status ? "Cập nhật thực hiện / tiến độ" : `Chuyển sang ${PERMIT_STATUSES[status]}`, before: permitSnapshot(before), after: permitSnapshot(after) } });
+      // Kết thúc phiếu đại tu → "Kết thúc công tác" trên Sheet tiến độ (hạng mục được mở khoá cho PCT mới).
+      if (status === "CLOSED" && before.status !== "CLOSED") await enqueueOverhaulClose(tx, after, after.closedAt ?? new Date());
       return after;
     });
     await audit(user.id, "EXECUTE_WORK_PERMIT", "WorkPermit", row.id, `Thực hiện PCT ${formatPermitNumber(row)}`);
+    if (row.status === "CLOSED" && row.contractorScope === "OVERHAUL") afterResponse(pushOverhaulSheetOutboxQuietly);
     return ok(row);
   });
 }

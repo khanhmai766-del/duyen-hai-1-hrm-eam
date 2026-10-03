@@ -22,7 +22,15 @@ export type OverhaulItemSnapshot = {
   method: string;
   source: string;
   sheet: string;
+  /**
+   * Chỉ có trong request: người cấp đã xác nhận đưa hạng mục đang nằm trong PCT khác còn hiệu lực vào phiếu này.
+   * Không lưu vào ảnh chụp trên phiếu.
+   */
+  confirmedShared?: boolean;
 };
+
+/** Phiếu đã cấp, chưa huỷ / kết thúc phiếu đang có một hạng mục — chọn lại được nhưng phải xác nhận. */
+export type OverhaulItemUsage = { permitId: string; number: string; status: string };
 
 /** Hạng mục gợi ý do API trả về. */
 export type OverhaulItemOption = OverhaulItemSnapshot & {
@@ -30,7 +38,57 @@ export type OverhaulItemOption = OverhaulItemSnapshot & {
   positionTitle: string;
   percent: string;
   status: string;
+  /** Các phiếu đã cấp (chưa huỷ / kết thúc phiếu) đang có hạng mục này → chọn phải xác nhận. */
+  usedBy: OverhaulItemUsage[];
+  /** Phiếu NHÁP đang có hạng mục này — chỉ để biết, vẫn chọn được. */
+  draftIn: string[];
 };
+
+/** Khoá so một hạng mục giữa các phiếu: cùng file, cùng tab, cùng mã = cùng hàng trên Sheet. */
+export const overhaulItemKey = (item: Pick<OverhaulItemSnapshot, "source" | "sheet" | "code">) => `${item.source}\u0000${item.sheet}\u0000${item.code}`;
+/** Trạng thái phiếu giữ hạng mục: đã cấp tới trước khi huỷ / kết thúc phiếu. Kết thúc LẦN làm việc không trả hạng mục.
+ *  Hai phiếu cùng giữ một hạng mục được phép, nhưng phiếu sau phải xác nhận khi chọn. */
+export const OVERHAUL_HOLDING_STATUSES = ["ISSUED", "ACTIVE", "PAUSED", "WAITING"] as const;
+
+/**
+ * Chữ ghi vào ô trạng thái từng ngày và cột "Trạng thái hiện tại" của Sheet tiến độ — web là nguồn, Sheet theo web.
+ * "Chưa thực hiện" là mặc định của hạng mục chưa nằm trong PCT nào (app không ghi).
+ */
+export const OVERHAUL_DAY_STATUSES = {
+  NOT_STARTED: "Chưa thực hiện",
+  IN_PROGRESS: "Đang thực hiện",
+  SKIPPED: "Không thực hiện",
+  NOT_OPENED: "Không mở ngày thực hiện",
+  CLOSED: "Kết thúc công tác",
+} as const;
+export type OverhaulDayStatus = (typeof OVERHAUL_DAY_STATUSES)[keyof typeof OVERHAUL_DAY_STATUSES];
+
+/** Kết quả một hạng mục khi kết thúc lần làm việc (WorkPermitSession.itemProgress). */
+export type OverhaulItemProgress = Pick<OverhaulItemSnapshot, "code" | "sheet" | "source"> & {
+  /** Có thực hiện trong lần làm việc này. */
+  done: boolean;
+  /** % lũy kế 0–100 sau lần này; null khi không thực hiện (giữ % lần trước). */
+  percent: number | null;
+  note: string;
+  /** Lần "Cập nhật tiến độ" giữa chừng gần nhất của hạng mục (ISO) — trên lần làm việc đang mở. */
+  at?: string;
+};
+
+export function overhaulItemProgressOf(value: unknown): OverhaulItemProgress[] {
+  return Array.isArray(value) ? value.filter((item): item is OverhaulItemProgress => !!item && typeof item === "object" && typeof (item as OverhaulItemProgress).code === "string") : [];
+}
+
+/** % lũy kế gần nhất của từng hạng mục, đọc từ các lần làm việc đã kết thúc (mới nhất trước). */
+export function latestOverhaulPercents(sessions: Array<{ itemProgress?: unknown }>) {
+  const latest = new Map<string, number>();
+  for (const session of sessions) {
+    for (const item of overhaulItemProgressOf(session.itemProgress)) {
+      const key = overhaulItemKey(item);
+      if (item.percent !== null && !latest.has(key)) latest.set(key, item.percent);
+    }
+  }
+  return latest;
+}
 
 /** So mã hạng mục theo từng số: 1.2 < 1.10 < 2.1; phần không phải số so theo chữ. */
 export function compareOverhaulCodes(a: string, b: string) {

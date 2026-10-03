@@ -7,7 +7,7 @@ import { PERMIT_KINDS } from "@/lib/work-permits";
 export const dynamic = "force-dynamic";
 
 /**
- * GET /api/work-permits/overhaul-items?kind=&company=&position=
+ * GET /api/work-permits/overhaul-items?kind=&company=&position=&excludePermitId=
  * Hạng mục đại tu gợi ý cho form cấp PCT nhà thầu · Đại tu: lọc theo loại PCT (Cơ / Điện), mã nhà thầu của đơn vị
  * công tác và cương vị (bỏ trống = mọi cương vị). Dữ liệu đã đồng bộ từ Google Sheets (xem …/sync).
  */
@@ -20,6 +20,8 @@ export async function GET(req: Request) {
     const position = p.get("position") || "";
     if (position && !OPERATION_POSITION_TITLES.some(value => value === position)) return fail("Cương vị không hợp lệ");
     const company = (p.get("company") || "").slice(0, 200);
-    return ok(await listOverhaulItems({ kind, company, position }));
+    // Đang sửa phiếu: hạng mục của chính phiếu đó không tính là "đã có trong PCT khác".
+    const excludePermitId = (p.get("excludePermitId") || "").slice(0, 100) || undefined;
+    return ok(await listOverhaulItems({ kind, company, position, excludePermitId }));
   });
 }

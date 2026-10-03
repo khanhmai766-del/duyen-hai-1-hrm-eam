@@ -239,8 +239,8 @@ export interface OverhaulSyncResult {
   }>;
 }
 /** Hạng mục đại tu gợi ý cho PCT nhà thầu · Đại tu (đã đồng bộ từ Google Sheets tiến độ). */
-export function useOverhaulItems(params: { kind: PermitKind; company: string; position: string }, enabled: boolean) {
-  const search = new URLSearchParams({ kind: params.kind, company: params.company, position: params.position }).toString();
+export function useOverhaulItems(params: { kind: PermitKind; company: string; position: string; excludePermitId?: string }, enabled: boolean) {
+  const search = new URLSearchParams({ kind: params.kind, company: params.company, position: params.position, ...(params.excludePermitId ? { excludePermitId: params.excludePermitId } : {}) }).toString();
   return useQuery({ queryKey: ["work-permit-overhaul-items", search], enabled, staleTime: 60_000,
     queryFn: async () => (await apiGet<OverhaulItemsResult>(`/api/work-permits/overhaul-items?${search}`)).data });
 }

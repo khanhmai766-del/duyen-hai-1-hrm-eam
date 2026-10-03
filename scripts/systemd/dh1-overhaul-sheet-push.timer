@@ -1,0 +1,10 @@
+[Unit]
+Description=Hen gio day ket qua ngay PCT dai tu len Google Sheets - 15 phut/lan
+
+[Timer]
+# Web da day ngay sau khi ket thuc lan lam viec; timer chi vot hang ton (Google loi, mat mang...).
+OnCalendar=*:0/15
+Persistent=true
+
+[Install]
+WantedBy=timers.target

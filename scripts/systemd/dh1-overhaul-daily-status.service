@@ -1,0 +1,12 @@
+[Unit]
+Description=DH1 - 16:00 ghi "Khong mo ngay thuc hien" cho PCT dai tu khong mo lan lam viec trong ngay
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/var/www/dh1-app
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+# Chong ghi doi theo (PCT, ngay, hang muc). Bo lo ngay nao thi chay bu: npm run overhaul:sheet -- --daily --day yyyy-mm-dd
+ExecStart=/usr/bin/npm run --silent overhaul:sheet -- --daily
+TimeoutStartSec=15min

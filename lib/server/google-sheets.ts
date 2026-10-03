@@ -81,6 +81,10 @@ async function sheetsApi<T>(path: string, init: RequestInit = {}): Promise<T> {
   const json = await res.json().catch(() => ({})) as T & { error?: { message?: string } };
   if (res.ok) return json;
   const email = serviceAccountEmail();
+  // Ô nằm trong vùng bảo vệ: Google trả 400/403 kèm câu "protected" — khác hẳn lỗi chưa chia sẻ file.
+  if (/protected/i.test(json.error?.message ?? "")) throw new GoogleSheetsError(`Ô cần ghi nằm trong vùng bị khoá (bảo vệ) của Sheet — cấp quyền sửa vùng đó cho${email ? ` ${email}` : " tài khoản dịch vụ"}.`, 403);
+  // Vượt hạn mức gọi/phút (60 đọc + 60 ghi mỗi phút cho một service account): không phải lỗi thật, chờ rồi gọi lại.
+  if (res.status === 429) throw new GoogleSheetsError("Google Sheets đang giới hạn số lần gọi mỗi phút — sẽ tự ghi lại sau ít phút.", 429);
   if (res.status === 403) throw new GoogleSheetsError(`File chưa được chia sẻ cho tài khoản dịch vụ${email ? ` ${email}` : ""} (cần quyền Người chỉnh sửa).`, 403);
   if (res.status === 404) throw new GoogleSheetsError("Không tìm thấy file — kiểm tra lại link sheet tiến độ.", 404);
   throw new GoogleSheetsError(`Google Sheets báo lỗi ${res.status}: ${json.error?.message ?? "không rõ"}`, 502);
@@ -92,6 +96,19 @@ export function spreadsheetIdFromUrl(url: string) {
 }
 
 export type SheetTab = { title: string; sheetId: number; rowCount: number; columnCount: number };
+export type GridRange = { sheetId?: number; startRowIndex?: number; endRowIndex?: number; startColumnIndex?: number; endColumnIndex?: number };
+export type ConditionalFormat = {
+  ranges?: GridRange[];
+  booleanRule?: { condition?: { type?: string; values?: Array<{ userEnteredValue?: string }> }; format?: { backgroundColor?: object; textFormat?: { foregroundColor?: object } } };
+};
+
+/** Ô gộp + định dạng có điều kiện của từng tab (dùng cho bước chuẩn hoá Sheet). */
+export async function getSheetFormatting(id: string) {
+  const json = await sheetsApi<{ sheets: Array<{ properties: { title: string; sheetId: number }; merges?: GridRange[]; conditionalFormats?: ConditionalFormat[] }> }>(
+    `${encodeURIComponent(id)}?fields=${encodeURIComponent("sheets(properties(title,sheetId),merges,conditionalFormats)")}`
+  );
+  return new Map(json.sheets.map(sheet => [sheet.properties.title, { sheetId: sheet.properties.sheetId, merges: sheet.merges ?? [], conditionalFormats: sheet.conditionalFormats ?? [] }]));
+}
 
 export async function getSpreadsheet(id: string) {
   const json = await sheetsApi<{ properties: { title: string }; sheets: Array<{ properties: { title: string; sheetId: number; gridProperties?: { rowCount?: number; columnCount?: number } } }> }>(
@@ -108,14 +125,41 @@ export async function getSpreadsheet(id: string) {
   };
 }
 
-/** Đọc nhiều vùng một lần (giá trị hiển thị, như người dùng thấy). Trả mảng theo đúng thứ tự `ranges`. */
-export async function batchGetValues(id: string, ranges: string[]) {
+/**
+ * Đọc nhiều vùng một lần (mặc định giá trị hiển thị, như người dùng thấy; "FORMULA" = công thức gốc). Trả mảng theo
+ * đúng thứ tự `ranges`.
+ */
+export async function batchGetValues(id: string, ranges: string[], render: "FORMATTED_VALUE" | "FORMULA" = "FORMATTED_VALUE") {
   if (!ranges.length) return [] as string[][][];
   const query = ranges.map(range => `ranges=${encodeURIComponent(range)}`).join("&");
   const json = await sheetsApi<{ valueRanges?: Array<{ values?: unknown[][] }> }>(
-    `${encodeURIComponent(id)}/values:batchGet?${query}&valueRenderOption=FORMATTED_VALUE&majorDimension=ROWS`
+    `${encodeURIComponent(id)}/values:batchGet?${query}&valueRenderOption=${render}&majorDimension=ROWS`
   );
   return (json.valueRanges ?? []).map(range => (range.values ?? []).map(row => row.map(cell => (cell === null || cell === undefined ? "" : String(cell)))));
+}
+
+/**
+ * Ghi nhiều ô một lần (một lượt gọi = tất cả cùng thành công hoặc cùng lỗi). RAW: chữ ghi nguyên văn, số ghi dạng số
+ * (định dạng % của ô giữ nguyên). Ghi giá trị vào ô đang có công thức sẽ thay công thức đó.
+ */
+export async function batchUpdateValues(id: string, data: Array<{ range: string; value: string | number }>, input: "RAW" | "USER_ENTERED" = "RAW") {
+  if (!data.length) return;
+  await sheetsApi(`${encodeURIComponent(id)}/values:batchUpdate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    // USER_ENTERED: chuỗi "=…" thành công thức, theo locale của file (vi_VN: dấu ";").
+    body: JSON.stringify({ valueInputOption: input, data: data.map(item => ({ range: item.range, majorDimension: "ROWS", values: [[item.value]] })) }),
+  });
+}
+
+/** spreadsheets.batchUpdate (đổi data validation…). */
+export async function batchUpdateSpreadsheet(id: string, requests: object[]) {
+  if (!requests.length) return;
+  await sheetsApi(`${encodeURIComponent(id)}:batchUpdate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ requests }),
+  });
 }
 
 /** Tên tab trong ký hiệu vùng A1 ('Lò- Cơ'!A1:F10) — nháy đơn trong tên phải nhân đôi. */
