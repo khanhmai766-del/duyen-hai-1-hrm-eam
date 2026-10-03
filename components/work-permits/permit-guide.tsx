@@ -259,7 +259,7 @@ const SECTIONS: GuideSection[] = [
 export function PermitGuideButton() {
   const [open, setOpen] = useState(false);
   return <>
-    <Button variant="outline" size="sm" className="h-9 text-xs" onClick={() => setOpen(true)}><Puzzle />Tiện ích</Button>
+    {/* Điện thoại: ẩn nút Tiện ích (cài tiện ích trình duyệt NKVH chỉ làm trên máy tính). */}<Button variant="outline" size="sm" className="hidden h-9 text-xs md:inline-flex" onClick={() => setOpen(true)}><Puzzle />Tiện ích</Button>
     {open && <PermitGuideDialog onClose={() => setOpen(false)} />}
   </>;
 }

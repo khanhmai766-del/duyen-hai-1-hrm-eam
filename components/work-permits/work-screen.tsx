@@ -10,6 +10,7 @@ import { SessionAttendance } from "@/components/work-permits/session-attendance"
 import { useWorkPermit } from "@/hooks/useWorkPermits";
 import { formatPermitNumber, PERMIT_KINDS, PERMIT_STATUSES, PERMIT_UNITS, permitDeadline, workersStillInside, type PermitSession } from "@/lib/work-permits";
 import { PermitDeadlineBadge } from "@/components/work-permits/permit-deadline";
+import { OverhaulItemsEditButton } from "@/components/work-permits/overhaul-items-edit";
 
 const fmt = (v: string) => new Date(v).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" });
 function elapsed(from: string) {
@@ -28,6 +29,7 @@ export function PermitWorkScreen({ id }: { id: string }) {
   const [action, setAction] = useState<{ kind: "open" } | { kind: "handoff" | "end" | "progress"; session: PermitSession } | null>(null);
   const permit = query.data?.data;
   const canExecute = Boolean(query.data?.meta?.canExecute);
+  const canIssue = Boolean(query.data?.meta?.canIssue);
   // `?open=1` từ QR PCT Đại tu; `?scan=1` / `?end=1` từ QR hoặc bảng Đang làm việc:
   // bật đúng hộp MỘT lần rồi xoá tham số, tải lại trang không bật lại.
   const searchParams = useSearchParams();
@@ -61,11 +63,12 @@ export function PermitWorkScreen({ id }: { id: string }) {
         <Button type="button" variant="outline" size="sm" className="h-8 text-xs" disabled={query.isFetching} onClick={() => void query.refetch()}><RefreshCw className={query.isFetching ? "animate-spin" : undefined} />Làm mới</Button>
       </div>
       <div>
-        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Màn hình làm việc · {PERMIT_KINDS[permit.kind]} · {PERMIT_STATUSES[permit.status]}</p>
+        {/* Điện thoại: bỏ dòng nhãn và vị trí cho gọn đầu trang (người dùng chính ở hiện trường). */}
+        <p className="hidden text-xs font-semibold uppercase tracking-wide text-muted-foreground sm:block">Màn hình làm việc · {PERMIT_KINDS[permit.kind]} · {PERMIT_STATUSES[permit.status]}</p>
         <h1 className="text-lg font-bold sm:text-2xl">PCT {formatPermitNumber(permit)}</h1>
         <p className="mt-1 line-clamp-3 text-[15px] font-semibold leading-6">{permit.content || "—"}</p>
-        <p className="text-sm text-muted-foreground">{[permit.location, PERMIT_UNITS[permit.unit], permit.teamName].filter(Boolean).join(" · ")}</p>
-        <PermitDeadlineBadge permit={permit} className="mt-1.5" />
+        <p className="text-sm text-muted-foreground">{permit.location && <span className="hidden sm:inline">{permit.location} · </span>}{[PERMIT_UNITS[permit.unit], permit.teamName].filter(Boolean).join(" · ")}</p>
+        <div className="mt-1.5 flex flex-wrap items-center gap-2"><PermitDeadlineBadge permit={permit} />{(canExecute || canIssue) && <OverhaulItemsEditButton permit={permit} />}</div>
       </div>
     </header>
 

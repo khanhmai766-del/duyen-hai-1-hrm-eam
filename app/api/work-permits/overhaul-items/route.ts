@@ -1,5 +1,5 @@
 import { fail, ok, requireUser } from "@/lib/api";
-import { requirePermitIssue } from "@/lib/server/work-permit-permissions";
+import { permitCapabilities } from "@/lib/server/work-permit-permissions";
 import { permitHandle } from "@/lib/server/work-permits";
 import { listOverhaulItems } from "@/lib/server/work-permit-overhaul";
 import { OPERATION_POSITION_TITLES } from "@/lib/positions";
@@ -13,7 +13,10 @@ export const dynamic = "force-dynamic";
  */
 export async function GET(req: Request) {
   return permitHandle(async () => {
-    const user = await requireUser(); await requirePermitIssue(user);
+    const user = await requireUser();
+    // Người cấp phiếu (chọn khi cấp) hoặc người thực hiện (bổ sung hạng mục khi phiếu đang làm việc).
+    const caps = await permitCapabilities(user);
+    if (!caps.canIssue && !caps.canExecute) return fail("Bạn không có quyền xem hạng mục đại tu", 403);
     const p = new URL(req.url).searchParams;
     const kind = p.get("kind") || "";
     if (!Object.hasOwn(PERMIT_KINDS, kind)) return fail("Loại PCT không hợp lệ");

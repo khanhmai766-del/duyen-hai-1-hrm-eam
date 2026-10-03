@@ -4,7 +4,6 @@
 // đông người…) mà KHÔNG ghi gì vào DB. Thêm preset mới: một khoá trong PRESETS với `prepare` (đọc DB, chỉ SELECT),
 // `routes` và tuỳ chọn `mock`.
 
-import { buildMilestoneSchedule } from "../../lib/overhaul-milestones.ts";
 
 const minutesAgo = (now, minutes) => new Date(now - minutes * 60_000).toISOString();
 const WORKER_NAMES = ["Trần Văn Bình", "Lê Thị Cúc", "Phạm Minh Đức", "Võ Thanh Hải", "Ngô Quốc Khánh", "Đặng Văn Lâm", "Bùi Thị Mai", "Huỳnh Tấn Phát",
@@ -121,36 +120,7 @@ const overhaulTodayPreset = {
   },
 };
 
-function milestonePreset(day) {
-  return {
-    description: `Mốc SCL S2 ngày ${day} — chỉ giả lập thời gian, không ghi DB`,
-    async prepare({ prisma }) {
-      const rows = await prisma.overhaulMilestone.findMany({ where: { campaign: "S2-2026", deletedAt: null }, orderBy: [{ startDate: "asc" }, { sortOrder: "asc" }] });
-      if (!rows.length) throw new Error("Chưa có lịch SCL S2 trên DB local");
-      const items = rows.map((row) => ({ ...row, startDate: row.startDate.toISOString().slice(0, 10), endDate: row.endDate?.toISOString().slice(0, 10) ?? null, createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString() }));
-      const schedule = buildMilestoneSchedule(items, new Date(`${day}T08:00:00+07:00`));
-      return { schedule, focusedId: schedule.todayEvents[0]?.milestoneId ?? items[0].id };
-    },
-    routes: ({ focusedId }) => ["/", `/?overhaulMilestone=${encodeURIComponent(focusedId)}`, "/?milestoneUi=edit", "/?milestoneUi=bell"],
-    async mock(context, { schedule }) {
-      await context.route("**/api/overhaul-milestones", (route) => route.fulfill({ json: { data: schedule, meta: null, error: null } }));
-    },
-    async interact(page, route) {
-      if (route.endsWith("milestoneUi=edit")) {
-        await page.getByRole("button", { name: "Xem toàn bộ lịch" }).click();
-        await page.getByRole("button", { name: "Sửa mốc", exact: false }).first().click();
-      } else if (route.endsWith("milestoneUi=bell")) {
-        await page.getByRole("button", { name: "Thông báo", exact: true }).click();
-      }
-    },
-  };
-}
-
 export const PRESETS = {
-  "scl-s2": milestonePreset("2026-11-22"),
-  "scl-s2-ngay-dau": milestonePreset("2026-10-07"),
-  "scl-s2-ngay-cuoi": milestonePreset("2026-12-04"),
-  "scl-s2-het-lich": milestonePreset("2026-12-05"),
   "pct-tien-do-ngay": overhaulTodayPreset,
   "pct-dai-tu": overhaulPreset(false),
   "pct-dai-tu-qua-han": overhaulPreset(true),

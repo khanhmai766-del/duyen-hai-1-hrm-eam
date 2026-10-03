@@ -73,7 +73,7 @@ export function OverhaulDayProgress() {
       </div>
       <div>
         <h1 className="text-lg font-bold sm:text-2xl">Tiến độ trong ngày</h1>
-        <p className="text-sm text-muted-foreground">Các PCT đại tu đang có lần làm việc mở. Bung từng phiếu, tick hạng mục đã làm, ghi % lũy kế và ghi chú, rồi bấm <b>Lưu</b> một lần cho mọi phiếu. Lần làm việc vẫn tiếp tục — kết thúc trên màn hình làm việc của phiếu.</p>
+        <p className="hidden text-sm text-muted-foreground sm:block">Các PCT đại tu đang có lần làm việc mở. Bung từng phiếu, tick hạng mục đã làm, ghi % lũy kế và ghi chú, rồi bấm <b>Lưu</b> một lần cho mọi phiếu. Lần làm việc vẫn tiếp tục — kết thúc trên màn hình làm việc của phiếu.</p>
       </div>
       <input className={control} placeholder="Tìm số PCT, nội dung, nhà thầu, CHTT, mã hạng mục…" value={search} onChange={e => setSearch(e.target.value)} />
     </header>

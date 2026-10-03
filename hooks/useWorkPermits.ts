@@ -41,6 +41,12 @@ export interface OverhaulTodayRow {
 export function useOverhaulToday() {
   return useQuery({ queryKey: ["work-permits", "overhaul-today"], queryFn: () => apiGet<OverhaulTodayRow[]>("/api/work-permits/overhaul-today") as Promise<{ data: OverhaulTodayRow[]; meta: { canExecute: boolean } }> });
 }
+/** Bổ sung / bớt hạng mục đại tu của phiếu đã cấp (kể cả đang làm việc). */
+export function useSaveOverhaulItems(permitId: string) {
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: (body: { version: number; overhaulItems: OverhaulItemSnapshot[] }) => apiMutate<PermitRow>(`/api/work-permits/${permitId}/overhaul-items`, "POST", body),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["work-permits"] }); qc.invalidateQueries({ queryKey: ["work-permit"] }); qc.invalidateQueries({ queryKey: ["work-permit-overhaul-items"] }); } });
+}
 /** Ghi tiến độ một phiếu (action "progress"); màn hình gọi tuần tự cho nhiều phiếu rồi tự làm mới một lần. */
 export function useOverhaulProgressSave() {
   return useMutation({ mutationFn: ({ permitId, body }: { permitId: string; body: unknown }) => apiMutate<PermitSession>(`/api/work-permits/${permitId}/sessions`, "POST", body) });
