@@ -396,7 +396,7 @@ export function Topbar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
                     </div>
                   ) : (
                     <ul className="max-h-80 divide-y divide-border overflow-y-auto">
-                      {notices.slice(0, 6).map((n) => {
+                      {notices.map((n) => {
                         const Icon = n.icon;
                         return (
                           <li key={n.id}>
@@ -413,8 +413,8 @@ export function Topbar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
                                 <Icon className="h-4 w-4" />
                               </span>
                               <span className="min-w-0 flex-1">
-                                <span className="block truncate text-sm font-medium text-ink">{n.title}</span>
-                                <span className="block truncate text-xs text-muted-foreground">{n.desc}</span>
+                                <span className="block break-words text-sm font-medium text-ink">{n.title}</span>
+                                <span className="block break-words text-xs text-muted-foreground">{n.desc}</span>
                               </span>
                             </Link>
                           </li>

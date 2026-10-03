@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Images, Megaphone, MessageSquareText, type LucideIcon } from "lucide-react";
+import { CalendarDays, Images, Megaphone, MessageSquareText, type LucideIcon } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useQuery } from "@tanstack/react-query";
 import { useAnnouncements } from "@/hooks/useAnnouncements";
@@ -11,6 +11,7 @@ import { mustConfirmAnnouncementRead } from "@/lib/announcement-read";
 import { announcementTargetLabel } from "@/lib/announcement-targets";
 import { forumPostTargetsPosition, forumTargetPositionsLabel } from "@/lib/forum-targets";
 import { apiGet } from "@/lib/fetcher";
+import { useOverhaulMilestones } from "@/hooks/useOverhaulMilestones";
 
 const FORUM_NOTICE_READ_KEY = "pp:forum-notices-read";
 
@@ -60,6 +61,7 @@ export function useNotifications() {
   const myId = session?.user?.id;
   const { position: myPosition } = useCurrentPosition();
   const announcements = useAnnouncements();
+  const milestones = useOverhaulMilestones();
   const forumPosts = useForumPosts({ category: "ALL", withReplyMeta: true });
   const photoReviewTasks = useQuery({
     queryKey: ["material-photo-review-tasks"],
@@ -81,7 +83,13 @@ export function useNotifications() {
     };
   }, []);
 
-  const loading = announcements.isLoading || forumPosts.isLoading || photoReviewTasks.isLoading;
+  const loading = announcements.isLoading || forumPosts.isLoading || photoReviewTasks.isLoading || milestones.isLoading;
+  const milestoneNotices: Notice[] = (milestones.data?.todayEvents ?? []).map((event) => ({
+    id: `milestone-${event.id}`, icon: CalendarDays, tone: "amber",
+    title: `Mốc SCL S2 hôm nay: ${event.title}`, desc: event.label,
+    href: `/?overhaulMilestone=${encodeURIComponent(event.milestoneId)}`,
+    date: `${event.date}T00:00:00+07:00`,
+  }));
 
   const materialPhotoNotices: Notice[] = (photoReviewTasks.data ?? []).map((ticket) => ({
     id: `material-photo-${ticket.id}`,
@@ -162,7 +170,7 @@ export function useNotifications() {
     return +new Date(y.date ?? 0) - +new Date(x.date ?? 0);
   });
 
-  return { notices, loading };
+  return { notices: [...milestoneNotices, ...notices], loading };
 }
 
 export const NOTICE_TONE = {

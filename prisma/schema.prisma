@@ -1320,6 +1320,26 @@ model DigitalDocument {
   @@index([driveSyncStatus])
 }
 
+// Mốc kế hoạch SCL: ngày nhà máy, lưu lịch sử và dấu xoá để nạp lại không phục hồi mốc đã xoá.
+model OverhaulMilestone {
+  id          String    @id @default(cuid())
+  campaign    String    @default("S2-2026")
+  sourceKey   String
+  title       String
+  startDate   DateTime  @db.Date
+  endDate     DateTime? @db.Date
+  note        String?
+  sortOrder   Int       @default(0)
+  createdById String?
+  updatedById String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  @@unique([campaign, sourceKey])
+  @@index([campaign, startDate])
+}
+
 // Cấu hình ma trận phân quyền (RBAC) do ADMIN chỉnh trong /admin/roles. Bảng được
 // tạo bằng raw SQL trong app/api/rbac/route.ts; value lưu JSON cấu hình dạng text.
 model RbacConfig {

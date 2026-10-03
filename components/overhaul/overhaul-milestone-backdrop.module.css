@@ -1,0 +1,28 @@
+.backdrop { position: absolute; inset: 0; overflow: hidden; pointer-events: none; color: #4485a0; background: linear-gradient(120deg, #eff7fa 0%, #ffffff 48%, #f3f7f9 100%); }
+.grid { position: absolute; inset: 0; opacity: .2; background-image: linear-gradient(#b9d8e3 1px, transparent 1px), linear-gradient(90deg, #b9d8e3 1px, transparent 1px); background-size: 32px 32px; mask-image: linear-gradient(90deg, #000, transparent 52%); }
+.scene { position: absolute; width: min(48%, 440px); left: 1%; bottom: 0; opacity: .24; }
+.backdrop[data-animation-theme=firing] { color: #ca7836; background: linear-gradient(120deg, #fff5e9, #fff 50%, #faf7f1); }
+.backdrop[data-animation-theme=electrical] { color: #2c8d87; background: linear-gradient(120deg, #eaf7f3, #fff 50%, #f1f8f6); }
+.backdrop[data-animation-theme=isolation] { color: #747b9c; }
+.rotor, .gear, .pump { transform-box: fill-box; transform-origin: center; animation: turn 12s linear infinite; }
+.pump { animation-duration: 5s; }
+.flow { animation: flow 4s linear infinite; }
+.lift { animation: lift 5s ease-in-out infinite alternate; }
+.needle { transform-origin: 210px 79px; animation: gauge 5s ease-in-out infinite alternate; }
+.flame { transform-box: fill-box; transform-origin: center bottom; animation: flame 2.8s ease-in-out infinite alternate; }
+.power { animation: power 3s ease-in-out infinite; }
+.engine { animation: engine 1.2s ease-in-out infinite alternate; }
+.steam { animation: steam 4s ease-in-out infinite; }
+.breaker { transform-origin: 185px 96px; animation: breaker 6s ease-in-out infinite alternate; }
+.backdrop[data-running=false] * { animation-play-state: paused; }
+@keyframes turn { to { transform: rotate(360deg); } }
+@keyframes flow { to { stroke-dashoffset: -48; } }
+@keyframes lift { to { transform: translateY(-13px); } }
+@keyframes gauge { from { transform: rotate(-18deg); } to { transform: rotate(16deg); } }
+@keyframes flame { to { transform: scale(.92, 1.12); opacity: .55; } }
+@keyframes power { 50% { opacity: .3; } }
+@keyframes engine { to { transform: translateY(-1.5px); } }
+@keyframes steam { to { transform: translateY(-10px); opacity: 0; } }
+@keyframes breaker { 0%, 30% { transform: rotate(-4deg); } 70%, 100% { transform: rotate(-18deg); } }
+@media (max-width: 767px) { .scene { width: 260px; left: auto; right: -20px; opacity: .1; } .grid { opacity: .12; } }
+@media (prefers-reduced-motion: reduce) { .backdrop * { animation: none !important; } }

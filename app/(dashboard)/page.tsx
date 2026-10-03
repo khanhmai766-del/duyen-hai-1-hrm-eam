@@ -52,7 +52,9 @@ import { isOptimizableImage } from "@/lib/optimizable-image";
 import { useMyDashboard, useWeather, useUserLocation, usePlaceInfo, useOperations, useCreateOperation, useUpdateOperation, useDeleteOperation, useSafeOperations, useUpdateSafeOperation, type MyDashboard, type OperationEvent } from "@/hooks/useDashboard";
 import { useCurrentPosition } from "@/hooks/useCurrentPosition";
 import { useRbacAccess } from "@/hooks/useRbacAccess";
+import { useAdminMode } from "@/hooks/useAdminMode";
 import { toast } from "sonner";
+import { OverhaulMilestonesCard } from "@/components/overhaul/overhaul-milestones-card";
 
 /** Tracks browser connectivity via `navigator.onLine` + online/offline events.
    Starts `true` to match SSR markup, then syncs to the real value on mount. */
@@ -75,6 +77,7 @@ export default function DashboardPage() {
   const { data: session } = useSession();
   const currentPosition = useCurrentPosition();
   const rbac = useRbacAccess();
+  const [adminMode] = useAdminMode();
   const me = useMyDashboard();
 
   // Live connectivity status — online while signed in & connected, offline when
@@ -96,6 +99,10 @@ export default function DashboardPage() {
       </div>
 
       <SafeOperationCard canManage={rbac.can("operation-events", ["manage", "full"])} />
+
+      <React.Suspense fallback={<div className="h-40 animate-pulse rounded-xl bg-slate-100" />}>
+        <OverhaulMilestonesCard canManage={session?.user?.role === "ADMIN" && adminMode && rbac.can("operation-events", ["manage", "full"])} />
+      </React.Suspense>
 
       <MobileKpiGrid
         m={m}
@@ -968,7 +975,7 @@ function SafeOperationCard({ canManage }: { canManage: boolean }) {
   const { data, isLoading } = useSafeOperations();
   const updateSafeOperation = useUpdateSafeOperation();
   const events = data?.data ?? [];
-  const [mobileExpanded, setMobileExpanded] = React.useState(false);
+  const [expanded, setExpanded] = React.useState(false);
 
   const [editing, setEditing] = React.useState<EditingTarget>(null);
   const [resetTarget, setResetTarget] = React.useState<ResetTarget>(null);
@@ -1165,15 +1172,15 @@ function SafeOperationCard({ canManage }: { canManage: boolean }) {
     <Card className="overflow-hidden border-sky-200/90 bg-[#f8fcff] shadow-[0_18px_45px_rgba(14,74,140,0.10)]">
       <CardHeader className="relative overflow-hidden border-b-[3px] border-blue-800/90 p-0">
         <SafeOperationProcessStrip
-          expanded={mobileExpanded}
-          onToggle={() => setMobileExpanded((current) => !current)}
+          expanded={expanded}
+          onToggle={() => setExpanded((current) => !current)}
         />
       </CardHeader>
       <CardContent
         id="safe-operation-units"
         className={cn(
-          "gap-4 bg-[linear-gradient(180deg,#f7fcff_0%,#ffffff_42%)] p-3 sm:grid lg:grid-cols-2 lg:p-4",
-          mobileExpanded ? "grid" : "hidden"
+          "gap-4 bg-[linear-gradient(180deg,#f7fcff_0%,#ffffff_42%)] p-3 lg:grid-cols-2 lg:p-4",
+          expanded ? "grid" : "hidden"
         )}
       >
         {isLoading ? (
@@ -1367,15 +1374,14 @@ function SafeOperationProcessStrip({ expanded, onToggle }: { expanded: boolean; 
       <button
         type="button"
         onClick={onToggle}
-        className="absolute inset-0 z-20 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-sky-500 sm:hidden"
+        className="absolute right-2 top-3 z-20 flex h-10 w-10 cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-blue-200 bg-white/95 text-sm font-semibold text-blue-800 shadow-sm transition-colors hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 sm:right-5 sm:w-auto sm:px-3"
         aria-expanded={expanded}
         aria-controls="safe-operation-units"
-        aria-label={expanded ? "Thu gọn thời gian vận hành hai tổ máy" : "Xem thời gian vận hành hai tổ máy"}
+        aria-label={expanded ? "Thu gọn thời gian vận hành hai tổ máy" : "Mở rộng thời gian vận hành hai tổ máy"}
+        title={expanded ? "Thu gọn thời gian vận hành hai tổ máy" : "Mở rộng thời gian vận hành hai tổ máy"}
       >
-        <span className="sr-only">{expanded ? "Thu gọn" : "Mở rộng"}</span>
-        <span className="absolute bottom-2 right-2 grid h-7 w-7 place-items-center rounded-full border border-blue-100 bg-white/90 text-blue-800 shadow-sm backdrop-blur-sm">
-          <ChevronDown className={cn("h-4 w-4 transition-transform duration-200", expanded && "rotate-180")} aria-hidden="true" />
-        </span>
+        <span className="hidden sm:inline">{expanded ? "Thu gọn" : "Mở rộng"}</span>
+        <ChevronDown className={cn("h-4 w-4 transition-transform duration-200 motion-reduce:transition-none", expanded && "rotate-180")} aria-hidden="true" />
       </button>
       {/* Ảnh nền dây chuyền + tiêu đề overlay lên trên */}
       <div className="relative h-[120px] w-full overflow-hidden sm:h-[148px] lg:h-[172px]">
@@ -1388,13 +1394,13 @@ function SafeOperationProcessStrip({ expanded, onToggle }: { expanded: boolean; 
         />
         {/* Lớp phủ sáng phía trên giúp chữ tiêu đề nổi rõ, dễ đọc */}
         <div className="pointer-events-none absolute inset-x-0 top-0 h-2/3 bg-gradient-to-b from-white via-white/70 to-transparent" />
-        <CardTitle className="absolute inset-x-0 top-0 flex items-center gap-2 px-3 pt-3 text-[15px] font-black uppercase leading-none tracking-[-0.02em] text-blue-900 sm:gap-3 sm:px-6 sm:text-xl sm:leading-tight sm:tracking-normal lg:text-2xl">
+        <CardTitle className="absolute inset-x-0 top-0 flex items-center gap-2 pl-3 pr-14 pt-3 text-[15px] font-black uppercase leading-tight tracking-[-0.02em] text-blue-900 sm:gap-3 sm:pl-6 sm:pr-40 sm:text-xl sm:tracking-normal lg:text-2xl">
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-blue-200 bg-white/90 text-blue-800 shadow-sm sm:h-12 sm:w-12">
             <ShieldCheck className="h-5 w-5 sm:h-6 sm:w-6" />
           </span>
-          <span className="whitespace-nowrap">
+          <span>
             Thời gian vận hành an toàn
-            <span className="ml-1.5 align-middle text-[9px] font-semibold tracking-[0.08em] text-slate-500 sm:ml-2 sm:text-sm sm:tracking-wider">Safe Operation</span>
+            <span className="ml-2 hidden align-middle text-sm font-semibold tracking-wider text-slate-500 sm:inline">Safe Operation</span>
           </span>
         </CardTitle>
       </div>
