@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ChevronRight, RefreshCw, ScanLine, Square } from "lucide-react";
+import { ChevronRight, ListChecks, RefreshCw, ScanLine, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { permitWorkHref } from "@/components/work-permits/contractor-work";
 import { usePermitLiveSessions } from "@/hooks/useWorkPermits";
@@ -26,7 +26,11 @@ export function PermitLiveBoard() {
   return <section className="space-y-3">
     <div className="flex flex-wrap items-center justify-between gap-2">
       <p className="text-sm text-muted-foreground">{query.isPending ? "Đang tải…" : rows.length ? null : "Không có nhà thầu nào đang làm việc."}</p>
-      <Button type="button" variant="outline" size="sm" className="h-8 text-xs" disabled={query.isFetching} onClick={() => void query.refetch()}><RefreshCw className={query.isFetching ? "animate-spin" : undefined} />Làm mới</Button>
+      <div className="flex flex-wrap gap-2">
+        {/* Ghi tiến độ nhiều PCT đại tu một lượt (thay vì mở từng màn hình làm việc). */}
+        <Button asChild size="sm" className="h-8 bg-violet-700 text-xs hover:bg-violet-800"><Link href="/work-permits/tien-do-ngay"><ListChecks />Tiến độ trong ngày</Link></Button>
+        <Button type="button" variant="outline" size="sm" className="h-8 text-xs" disabled={query.isFetching} onClick={() => void query.refetch()}><RefreshCw className={query.isFetching ? "animate-spin" : undefined} />Làm mới</Button>
+      </div>
     </div>
     {query.isError && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">{query.error.message}</p>}
     <div className="space-y-2">

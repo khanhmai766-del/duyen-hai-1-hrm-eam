@@ -4,6 +4,8 @@
 // đông người…) mà KHÔNG ghi gì vào DB. Thêm preset mới: một khoá trong PRESETS với `prepare` (đọc DB, chỉ SELECT),
 // `routes` và tuỳ chọn `mock`.
 
+import { buildMilestoneSchedule } from "../../lib/overhaul-milestones.ts";
+
 const minutesAgo = (now, minutes) => new Date(now - minutes * 60_000).toISOString();
 const WORKER_NAMES = ["Trần Văn Bình", "Lê Thị Cúc", "Phạm Minh Đức", "Võ Thanh Hải", "Ngô Quốc Khánh", "Đặng Văn Lâm", "Bùi Thị Mai", "Huỳnh Tấn Phát",
   "Lý Gia Huy", "Mai Văn Tâm", "Tô Hoài Nam", "Châu Ngọc Ánh"];
@@ -87,7 +89,69 @@ function overhaulPreset(overdue) {
   };
 }
 
+/** Tiến độ trong ngày: 3 PCT đại tu giả lập đang làm việc (hạng mục thật đọc DB); thẻ đầu bung sẵn + tick 1 mục. */
+const overhaulTodayPreset = {
+  description: "Tiến độ trong ngày — nhiều PCT đại tu đang làm việc",
+  async prepare({ prisma }) {
+    const items = await prisma.workPermitOverhaulItem.findMany({ where: { isActive: true, method: { not: "" } }, take: 7, orderBy: { code: "asc" },
+      select: { code: true, device: true, content: true, method: true, source: true, sheet: true } });
+    if (items.length < 7) throw new Error("DB dev chưa đủ hạng mục đại tu — bấm Đồng bộ hạng mục trước.");
+    return { items };
+  },
+  routes: () => ["/work-permits/tien-do-ngay"],
+  async mock(context, { items }) {
+    const now = Date.now();
+    const permit = (i, number, content, list, extra = {}) => ({
+      id: `ui-s${i}`, commanderName: ["Nguyễn Văn A", "Lê Hoàng Phúc", "Trần Minh Tâm"][i], commanderCode: `UI-${i}`, openedAt: new Date(now - (90 + i * 40) * 60_000).toISOString(), itemProgress: null,
+      permit: { id: `ui-p${i}`, number, year: 2026, kind: i === 2 ? "ELECTRICAL" : "MECHANICAL", unit: "S2", content, location: "", position: ["Lò phó", "Máy phó", "Trực chính điện"][i], teamName: ["IDC", "NPS", "EPS"][i], version: 3, plannedEndAt: new Date(now + (i === 1 ? 30 : 120) * 3600_000).toISOString(), overhaulItems: list },
+      percents: extra,
+    });
+    const key = (it) => `${it.source}\u0000${it.sheet}\u0000${it.code}`;
+    const rows = [
+      permit(0, "3981", "Đại tu bao hơi theo hạng mục " + items.slice(0, 3).map(x => x.code).join(", "), items.slice(0, 3), { [key(items[0])]: 30 }),
+      permit(1, "3982", "Đại tu bơm chân không theo hạng mục " + items.slice(3, 5).map(x => x.code).join(", "), items.slice(3, 5)),
+      permit(2, "1204", "Thí nghiệm hệ thống kích từ theo hạng mục " + items.slice(5, 7).map(x => x.code).join(", "), items.slice(5, 7)),
+    ];
+    await context.route("**/api/work-permits/overhaul-today", (route) => route.fulfill({ json: { data: rows, meta: { canExecute: true }, error: null } }));
+  },
+  async interact(page) {
+    await page.getByRole("button", { name: /PCT 3981/ }).click();
+    await page.locator('input[type="checkbox"]').first().check();
+    await page.waitForTimeout(300);
+  },
+};
+
+function milestonePreset(day) {
+  return {
+    description: `Mốc SCL S2 ngày ${day} — chỉ giả lập thời gian, không ghi DB`,
+    async prepare({ prisma }) {
+      const rows = await prisma.overhaulMilestone.findMany({ where: { campaign: "S2-2026", deletedAt: null }, orderBy: [{ startDate: "asc" }, { sortOrder: "asc" }] });
+      if (!rows.length) throw new Error("Chưa có lịch SCL S2 trên DB local");
+      const items = rows.map((row) => ({ ...row, startDate: row.startDate.toISOString().slice(0, 10), endDate: row.endDate?.toISOString().slice(0, 10) ?? null, createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString() }));
+      const schedule = buildMilestoneSchedule(items, new Date(`${day}T08:00:00+07:00`));
+      return { schedule, focusedId: schedule.todayEvents[0]?.milestoneId ?? items[0].id };
+    },
+    routes: ({ focusedId }) => ["/", `/?overhaulMilestone=${encodeURIComponent(focusedId)}`, "/?milestoneUi=edit", "/?milestoneUi=bell"],
+    async mock(context, { schedule }) {
+      await context.route("**/api/overhaul-milestones", (route) => route.fulfill({ json: { data: schedule, meta: null, error: null } }));
+    },
+    async interact(page, route) {
+      if (route.endsWith("milestoneUi=edit")) {
+        await page.getByRole("button", { name: "Xem toàn bộ lịch" }).click();
+        await page.getByRole("button", { name: "Sửa mốc", exact: false }).first().click();
+      } else if (route.endsWith("milestoneUi=bell")) {
+        await page.getByRole("button", { name: "Thông báo", exact: true }).click();
+      }
+    },
+  };
+}
+
 export const PRESETS = {
+  "scl-s2": milestonePreset("2026-11-22"),
+  "scl-s2-ngay-dau": milestonePreset("2026-10-07"),
+  "scl-s2-ngay-cuoi": milestonePreset("2026-12-04"),
+  "scl-s2-het-lich": milestonePreset("2026-12-05"),
+  "pct-tien-do-ngay": overhaulTodayPreset,
   "pct-dai-tu": overhaulPreset(false),
   "pct-dai-tu-qua-han": overhaulPreset(true),
   "pct-lam-viec": {

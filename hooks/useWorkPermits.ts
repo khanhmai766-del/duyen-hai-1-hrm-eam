@@ -1,7 +1,7 @@
 "use client";
 import { useMutation, useQuery, useQueryClient, useInfiniteQuery } from "@tanstack/react-query";
 import { apiDownload, apiGet, apiMutate } from "@/lib/fetcher";
-import type { OverhaulItemOption, OverhaulScheduleLink } from "@/lib/work-permit-overhaul";
+import type { OverhaulItemOption, OverhaulItemProgress, OverhaulItemSnapshot, OverhaulScheduleLink } from "@/lib/work-permit-overhaul";
 import type { PermitHistory, PermitKind, PermitListRow, PermitDetailRow, PermitPerson, PermitRow, PermitStatus, PermitSession } from "@/lib/work-permits";
 export interface PermitMeta { total: number; page: number; pageSize: number; counts: Partial<Record<PermitStatus, number>>; overhaulCount: number; canIssue: boolean; canIssueNew: boolean; canExecute: boolean; positionScope?: { all: boolean; codes: string[]; labels: string[] } }
 export interface PermitNumberSuggestion { configured: boolean; baseline: string | null; highest: string | null; suggested: string | null }
@@ -29,6 +29,21 @@ export interface PermitLiveSession {
 /** Bảng "Đang làm việc": khoá nằm dưới ["work-permits"] nên mọi thao tác mở/kết thúc lần làm việc đều làm mới nó. */
 export function usePermitLiveSessions(enabled = true) {
   return useQuery({ queryKey: ["work-permits", "live"], enabled, refetchInterval: 15_000, queryFn: () => apiGet<PermitLiveSession[]>("/api/work-permits/live-sessions") as Promise<{ data: PermitLiveSession[]; meta: { canExecute: boolean } }> });
+}
+/** Một PCT đại tu đang có lần làm việc mở — màn hình "Tiến độ trong ngày". */
+export interface OverhaulTodayRow {
+  id: string; commanderName: string; commanderCode: string; openedAt: string; itemProgress: OverhaulItemProgress[] | null;
+  permit: { id: string; number: string; year: number; kind: PermitKind; unit: string; content: string; location: string; position: string; teamName: string; version: number; plannedEndAt: string | null; overhaulItems: OverhaulItemSnapshot[] };
+  /** % lũy kế gần nhất theo overhaulItemKey. */
+  percents: Record<string, number>;
+}
+/** Khoá dưới ["work-permits"]: cập nhật / kết thúc lần làm việc ở nơi khác cũng làm mới danh sách này. */
+export function useOverhaulToday() {
+  return useQuery({ queryKey: ["work-permits", "overhaul-today"], queryFn: () => apiGet<OverhaulTodayRow[]>("/api/work-permits/overhaul-today") as Promise<{ data: OverhaulTodayRow[]; meta: { canExecute: boolean } }> });
+}
+/** Ghi tiến độ một phiếu (action "progress"); màn hình gọi tuần tự cho nhiều phiếu rồi tự làm mới một lần. */
+export function useOverhaulProgressSave() {
+  return useMutation({ mutationFn: ({ permitId, body }: { permitId: string; body: unknown }) => apiMutate<PermitSession>(`/api/work-permits/${permitId}/sessions`, "POST", body) });
 }
 /** `refetchMs`: màn hình làm việc tự làm mới để nhiều máy (cổng quét, phòng điều khiển) cùng thấy số người trong khu vực. */
 export function useWorkPermit(id?: string, refetchMs?: number) {
