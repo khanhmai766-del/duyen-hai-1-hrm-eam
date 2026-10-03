@@ -1,5 +1,6 @@
 import { safetySummary, type SafetySelection } from "@/lib/work-permit-safety";
 import { overhaulItemsOf, type OverhaulItemProgress, type OverhaulItemSnapshot } from "@/lib/work-permit-overhaul";
+import { attendanceInside } from "@/lib/work-permit-attendance";
 export const PERMIT_PAGE_SIZE = 25;
 /** Ghép số thuần theo mẫu chung Cơ/Điện; số đầy đủ hoặc mã cũ giữ nguyên. */
 /**
@@ -9,6 +10,13 @@ export const PERMIT_PAGE_SIZE = 25;
 export function isSessionCommander(member: { personId?: string | null; code?: string | null }, session: { commanderId: string | null; commanderCode: string }) {
   if (member.personId && session.commanderId) return member.personId === session.commanderId;
   return Boolean(member.code) && member.code === session.commanderCode;
+}
+/**
+ * Nhân viên (KHÔNG tính CHTT) còn trong khu vực của lần làm việc. Còn người thì KHÔNG được kết thúc lần làm việc — phải
+ * quét ra từng người trước (server cũng chặn). CHTT rút ra cùng lúc kết thúc.
+ */
+export function workersStillInside<M extends { personId?: string | null; code?: string | null; attendance?: Array<{ in: string; out: string | null }> | null }>(members: M[], session: { commanderId: string | null; commanderCode: string }) {
+  return members.filter(member => attendanceInside(member) && !isSessionCommander(member, session));
 }
 export function formatPermitNumber(row: { number: string; year: number }): string {
   const number = row.number.trim().toUpperCase().replace(/\s+/g, "");

@@ -1,4 +1,5 @@
 import {
+  Vibrate,
   LayoutDashboard,
   Megaphone,
   CalendarDays,
@@ -76,6 +77,7 @@ export const QDU_TOOL_URL =
   "https://docs.google.com/spreadsheets/d/1ntWvK0kx6Z9zlITa7kIegYXNzAZd00xDZ9oimdZMqX8/edit?usp=sharing";
 export const ASH_SLAG_LOG_URL =
   "https://docs.google.com/spreadsheets/d/1RyWmVWOuJTaQov2Eg7Y-ZxxWhez66RK5XY7seO4ppfE/edit?gid=0#gid=0";
+export const VIBRATION_MONITOR_URL = "https://pxvh1.infinityfree.me/";
 export const QDU_TOOL_ALLOWED_POSITION_KEYWORDS = [
   "trưởng ca",
   "kỹ thuật viên",
@@ -265,6 +267,13 @@ export const NAV_SECTIONS: NavSection[] = [
         icon: FileSpreadsheet,
         external: true,
         keywords: "so theo doi tro xi google sheets nhat ky ash slag",
+      },
+      {
+        label: "Giám sát độ rung thiết bị",
+        href: VIBRATION_MONITOR_URL,
+        icon: Vibrate,
+        external: true,
+        keywords: "giam sat do rung thiet bi vibration rung dong co bom quat pxvh1",
       },
     ],
   },

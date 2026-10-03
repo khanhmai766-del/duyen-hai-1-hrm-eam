@@ -102,6 +102,20 @@ export type ConditionalFormat = {
   booleanRule?: { condition?: { type?: string; values?: Array<{ userEnteredValue?: string }> }; format?: { backgroundColor?: object; textFormat?: { foregroundColor?: object } } };
 };
 
+/**
+ * Danh sách thả xuống (ONE_OF_LIST) của từng ô trong mỗi vùng — mỗi vùng trả mảng theo hàng, mỗi hàng là các lựa chọn nối
+ * bằng "|" ("" = không có). Dùng để không đặt lại danh sách đã đúng (đặt lại sẽ xoá màu chip người dùng tự chỉnh).
+ */
+export async function getValidationLists(id: string, ranges: string[]) {
+  if (!ranges.length) return [] as string[][];
+  const query = ranges.map(range => `ranges=${encodeURIComponent(range)}`).join("&");
+  const json = await sheetsApi<{ sheets: Array<{ data?: Array<{ rowData?: Array<{ values?: Array<{ dataValidation?: { condition?: { values?: Array<{ userEnteredValue?: string }> } } }> }> }> }> }>(
+    `${encodeURIComponent(id)}?${query}&fields=${encodeURIComponent("sheets(data(rowData(values(dataValidation(condition(values(userEnteredValue)))))))")}`
+  );
+  // spreadsheets.get gom theo tab: mỗi vùng là một phần tử `data` của đúng tab đó, theo thứ tự vùng trong cùng tab.
+  return json.sheets.flatMap(sheet => (sheet.data ?? []).map(block => (block.rowData ?? []).map(row => (row.values?.[0]?.dataValidation?.condition?.values ?? []).map(v => v.userEnteredValue ?? "").join("|"))));
+}
+
 /** Ô gộp + định dạng có điều kiện của từng tab (dùng cho bước chuẩn hoá Sheet). */
 export async function getSheetFormatting(id: string) {
   const json = await sheetsApi<{ sheets: Array<{ properties: { title: string; sheetId: number }; merges?: GridRange[]; conditionalFormats?: ConditionalFormat[] }> }>(

@@ -1,7 +1,7 @@
 import { Prisma, type OverhaulSheetOutbox, type WorkPermit, type WorkPermitSession } from "@prisma/client";
 import { normalizeText } from "@/lib/nav";
 import { prisma } from "@/lib/prisma";
-import { a1Tab, batchGetValues, batchUpdateSpreadsheet, batchUpdateValues, columnLetter, getSheetFormatting, getSpreadsheet, GoogleSheetsError, spreadsheetIdFromUrl, type ConditionalFormat, type GridRange, type SheetTab } from "@/lib/server/google-sheets";
+import { a1Tab, batchGetValues, batchUpdateSpreadsheet, batchUpdateValues, columnLetter, getSheetFormatting, getSpreadsheet, getValidationLists, GoogleSheetsError, spreadsheetIdFromUrl, type ConditionalFormat, type GridRange, type SheetTab } from "@/lib/server/google-sheets";
 import { overhaulScheduleLinks } from "@/lib/server/overhaul-schedules";
 import { findHeader, repairDateCode } from "@/lib/server/work-permit-overhaul";
 import { OVERHAUL_DAY_STATUSES, OVERHAUL_HOLDING_STATUSES, OVERHAUL_SOURCES, overhaulItemsOf, type OverhaulItemProgress, type OverhaulSource } from "@/lib/work-permit-overhaul";
@@ -421,19 +421,21 @@ function summaryFormula(formula: string, statusLetter: string, percentLetter: st
 
 const rgb = (hex: string) => ({ red: parseInt(hex.slice(1, 3), 16) / 255, green: parseInt(hex.slice(3, 5), 16) / 255, blue: parseInt(hex.slice(5, 7), 16) / 255 });
 /** Bộ màu chung cho 5 trạng thái (cột "Trạng thái hiện tại" + ô ngày) và nhãn "Nhật ký ngày". */
+// Mỗi trạng thái một sắc rõ (nền đậm vừa + chữ đậm) — API không cho tô màu từng lựa chọn trong menu thả xuống, nên tô cả ô.
 const STATUS_COLORS: Array<[string, string, string]> = [
-  [OVERHAUL_DAY_STATUSES.NOT_STARTED, "#f0f5f8", "#63748a"],
-  [OVERHAUL_DAY_STATUSES.IN_PROGRESS, "#ffecd4", "#9a3412"],
-  [OVERHAUL_DAY_STATUSES.SKIPPED, "#fef9c3", "#854d0e"],
-  [OVERHAUL_DAY_STATUSES.NOT_OPENED, "#fee2e2", "#991b1b"],
-  [OVERHAUL_DAY_STATUSES.CLOSED, "#dcfbe7", "#156434"],
+  [OVERHAUL_DAY_STATUSES.NOT_STARTED, "#e2e8f0", "#334155"], // xám
+  [OVERHAUL_DAY_STATUSES.IN_PROGRESS, "#bfdbfe", "#1e3a8a"], // xanh dương
+  [OVERHAUL_DAY_STATUSES.SKIPPED, "#fde68a", "#78350f"], // vàng
+  [OVERHAUL_DAY_STATUSES.NOT_OPENED, "#fecaca", "#991b1b"], // đỏ
+  [OVERHAUL_DAY_STATUSES.CLOSED, "#bbf7d0", "#14532d"], // xanh lá
 ];
 const JOURNAL_LABEL = "Nhật ký ngày";
 const JOURNAL_COLOR: [string, string] = ["#fdefd6", "#af590c"];
 const STATUS_RULE_WORDS = new Set([...OLD_STATUS_WORDS, ...Object.values(OVERHAUL_DAY_STATUSES), JOURNAL_LABEL]);
 const SUMMARY_LABELS = { row2: ["TỔNG SỐ HẠNG MỤC", "ĐÃ HOÀN THÀNH", "ĐANG THỰC HIỆN", "% TIẾN ĐỘ"], start: "Ngày bắt đầu đại tu:", row4: ["Hạng mục xong", "Đang xử lý", "Tiến độ chung"] };
 const compact = (formula: string) => formula.replace(/\s+/g, "");
-const ruleSignature = (rules: ConditionalFormat[]) => rules.map(rule => `${rule.booleanRule?.condition?.values?.[0]?.userEnteredValue}:${(rule.ranges ?? []).map(r => `${r.startRowIndex}-${r.startColumnIndex}-${r.endColumnIndex}`).join(",")}`).sort().join("|");
+const hex = (color: unknown) => { const c = (color ?? {}) as { red?: number; green?: number; blue?: number }; return [c.red, c.green, c.blue].map(v => Math.round((v ?? 0) * 255)).join(","); };
+const ruleSignature = (rules: ConditionalFormat[]) => rules.map(rule => `${rule.booleanRule?.condition?.values?.[0]?.userEnteredValue}:${hex(rule.booleanRule?.format?.backgroundColor)}:${hex(rule.booleanRule?.format?.textFormat?.foregroundColor)}:${(rule.ranges ?? []).map(r => `${r.startRowIndex}-${r.startColumnIndex}-${r.endColumnIndex}`).join(",")}`).sort().join("|");
 const covers = (merge: GridRange, row: number, column: number) => (merge.startRowIndex ?? 0) <= row && row < (merge.endRowIndex ?? Infinity) && (merge.startColumnIndex ?? 0) <= column && column < (merge.endColumnIndex ?? Infinity);
 
 /**
@@ -514,7 +516,7 @@ function normaliseTab(tab: SheetTab, layout: TabLayout, raw: string[][], formatt
   const statusArea = { sheetId: tab.sheetId, startRowIndex: layout.headerRow + 1, endRowIndex: tab.rowCount, startColumnIndex: layout.statusColumn, endColumnIndex: layout.statusColumn + 1 };
   const dayArea = { sheetId: tab.sheetId, startRowIndex: layout.headerRow + 1, endRowIndex: tab.rowCount, startColumnIndex: firstDay, endColumnIndex: lastDay + 1 };
   const wanted: ConditionalFormat[] = [
-    ...STATUS_COLORS.map(([word, bg, fg]) => ({ ranges: [statusArea, dayArea], booleanRule: { condition: { type: "TEXT_EQ", values: [{ userEnteredValue: word }] }, format: { backgroundColor: rgb(bg), textFormat: { foregroundColor: rgb(fg) } } } })),
+    ...STATUS_COLORS.map(([word, bg, fg]) => ({ ranges: [statusArea, dayArea], booleanRule: { condition: { type: "TEXT_EQ", values: [{ userEnteredValue: word }] }, format: { backgroundColor: rgb(bg), textFormat: { foregroundColor: rgb(fg), bold: true } } } })),
     { ranges: [statusArea], booleanRule: { condition: { type: "TEXT_EQ", values: [{ userEnteredValue: JOURNAL_LABEL }] }, format: { backgroundColor: rgb(JOURNAL_COLOR[0]), textFormat: { foregroundColor: rgb(JOURNAL_COLOR[1]) } } } },
   ];
   const ours = rules.map((rule, index) => ({ rule, index })).filter(({ rule }) => rule.booleanRule?.condition?.type === "TEXT_EQ" && STATUS_RULE_WORDS.has(rule.booleanRule.condition.values?.[0]?.userEnteredValue ?? ""));
@@ -546,6 +548,12 @@ export async function setupOverhaulSheets(apply: boolean) {
     const values = await batchGetValues(spreadsheetId, ranges);
     const formulas = await batchGetValues(spreadsheetId, ranges, "FORMULA");
     const formatting = await getSheetFormatting(spreadsheetId);
+    // Danh sách thả xuống hiện có ở cột ngày đầu tiên từng tab — đúng rồi thì không đặt lại (giữ màu chip tự chỉnh).
+    const preLayouts = candidates.map((tab, i) => ({ tab, layout: layoutOf(values[i] ?? []) }));
+    const withDays = preLayouts.filter((x): x is { tab: SheetTab; layout: TabLayout } => typeof x.layout !== "string");
+    const lists = await getValidationLists(spreadsheetId, withDays.map(({ tab, layout }) => { const c = columnLetter(Math.min(...layout.dayColumns)); return `${a1Tab(tab.title)}!${c}1:${c}${tab.rowCount}`; }));
+    const listOf = new Map(withDays.map(({ tab }, k) => [tab.title, lists[k] ?? []]));
+    const wantedList = Object.values(OVERHAUL_DAY_STATUSES).join("|");
     const requests: object[] = [];
     const cells: Array<{ range: string; value: string }> = [];
     candidates.forEach((tab, i) => {
@@ -564,7 +572,7 @@ export async function setupOverhaulSheets(apply: boolean) {
           const word = (layout.rows[r]?.[c] ?? "").trim();
           if (OLD_STATUS_WORDS.includes(word)) { dayWords++; cells.push({ range: ref(r, c), value: OLD_DAY_WORD[word] }); }
         }
-        requests.push({ setDataValidation: {
+        if ((listOf.get(tab.title) ?? [])[r] !== wantedList) requests.push({ setDataValidation: {
           range: { sheetId: tab.sheetId, startRowIndex: r, endRowIndex: r + 1, startColumnIndex: first, endColumnIndex: last + 1 },
           rule: { condition: { type: "ONE_OF_LIST", values: Object.values(OVERHAUL_DAY_STATUSES).map(userEnteredValue => ({ userEnteredValue })) }, strict: true, showCustomUi: true },
         } });

@@ -6,7 +6,7 @@ import { audit, fail, ok, requireUser } from "@/lib/api";
 import { permitBody, permitHandle, permitInstant, permitSnapshot, permitText } from "@/lib/server/work-permits";
 import { assertCommanderFree, readSessionOpen, resolveSessionMembers, validateSessionTime } from "@/lib/server/work-permit-sessions";
 import { sameCompany } from "@/lib/work-permit-card";
-import { closeInsideVisits, handoffMembers, membersInside, withEntry } from "@/lib/server/work-permit-attendance";
+import { closeInsideVisits, handoffMembers, membersInside, sessionMembers, withEntry } from "@/lib/server/work-permit-attendance";
 import { syncPermitDocument } from "@/lib/server/work-permit-document-store";
 import { assertWorkersFree, lockWorkPermitPresence } from "@/lib/server/work-permit-presence";
 import { presentMembers } from "@/lib/work-permit-presence";
@@ -14,7 +14,7 @@ import { after as afterResponse } from "next/server";
 import { parseSessionItemProgress } from "@/lib/server/work-permit-overhaul";
 import { enqueueOverhaulProgressUpdate, enqueueOverhaulSessionEnd, overhaulProgressKey, pushOverhaulSheetOutboxQuietly, vnDay } from "@/lib/server/overhaul-sheet-writer";
 import { isOverhaulPaperPermit, overhaulItemProgressOf, overhaulItemsOf, type OverhaulItemProgress } from "@/lib/work-permit-overhaul";
-import { permitDeadline } from "@/lib/work-permits";
+import { permitDeadline, workersStillInside } from "@/lib/work-permits";
 export const dynamic = "force-dynamic";
 export async function POST(req: Request, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
@@ -124,10 +124,13 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
       const finalItems = itemResult?.items.map(item => item.done ? item : updates.get(overhaulProgressKey(item)) ?? item);
       if (session.commanderId) await tx.$queryRaw`SELECT "id" FROM "WorkPermitPerson" WHERE "id" = ${session.commanderId} FOR UPDATE`;
       validateSessionTime(endedAt, session.openedAt);
-      const inside = membersInside(session.members);
-      if (inside.length && body.exitAll !== true) {
-        throw fail(`Còn ${inside.length} người chưa rút khỏi vị trí làm việc: ${inside.map(m => m.name).slice(0, 10).join(", ")}${inside.length > 10 ? "…" : ""}. Kiểm đếm đủ người rồi xác nhận ghi ra cho họ, hoặc quét ra từng người trước khi kết thúc.`, 409);
+      // Nhân viên (trừ CHTT) phải quét ra hết mới được kết thúc — không còn lối "ghi RA hộ cho mọi người".
+      const workers = workersStillInside(sessionMembers(session.members), session);
+      if (workers.length) {
+        throw fail(`Còn ${workers.length} nhân viên chưa rút khỏi vị trí làm việc: ${workers.map(m => m.name).slice(0, 10).join(", ")}${workers.length > 10 ? "…" : ""}. Quét ra từng người ở mục “Quét vào / ra” trước khi kết thúc lần làm việc.`, 409);
       }
+      // Còn lại chỉ có thể là CHTT (nếu có trong danh sách) — ghi RA cùng lúc kết thúc.
+      const inside = membersInside(session.members);
       const afterSession = await tx.workPermitSession.update({ where: { id: session.id }, data: {
         endedAt, endConfirmedByName, endNote, progress, endedById: user.id, endedByName: user.name ?? "",
         ...(finalItems ? { itemProgress: permitSnapshot(finalItems) } : {}),

@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { canUpdateOverhaulProgress, ContractorSessions, SessionEditor } from "@/components/work-permits/contractor-work";
 import { SessionAttendance } from "@/components/work-permits/session-attendance";
 import { useWorkPermit } from "@/hooks/useWorkPermits";
-import { formatPermitNumber, PERMIT_KINDS, PERMIT_STATUSES, PERMIT_UNITS, permitDeadline, type PermitSession } from "@/lib/work-permits";
+import { formatPermitNumber, PERMIT_KINDS, PERMIT_STATUSES, PERMIT_UNITS, permitDeadline, workersStillInside, type PermitSession } from "@/lib/work-permits";
 import { PermitDeadlineBadge } from "@/components/work-permits/permit-deadline";
 
 const fmt = (v: string) => new Date(v).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" });
@@ -52,6 +52,8 @@ export function PermitWorkScreen({ id }: { id: string }) {
   if (!permit) return <div className="mx-auto max-w-4xl space-y-3">{back}<p role="status" className="text-sm text-muted-foreground">Đang tải phiếu…</p></div>;
 
   const live = liveSession;
+  // Còn nhân viên (trừ CHTT) trong khu vực → khoá nút Kết thúc tới khi quét ra hết.
+  const workersInside = live ? workersStillInside(live.members, live).length : 0;
   // Không thêm lề ngang: <main> của AppShell đã có p-4 (điện thoại) / p-6 / p-8.
   return <div className="mx-auto max-w-4xl space-y-4">
     <header className="space-y-2">
@@ -78,9 +80,10 @@ export function PermitWorkScreen({ id }: { id: string }) {
           {/* PCT đại tu: cập nhật % + ghi chú từng hạng mục giữa chừng — điện thoại chiếm trọn hàng đầu. */}
           {canUpdateOverhaulProgress(permit) && <Button type="button" variant="outline" className="col-span-2 h-10 border-violet-200 text-violet-800 hover:bg-violet-50 hover:text-violet-900 sm:order-2 sm:col-span-1 dark:border-violet-900 dark:text-violet-200" onClick={() => setAction({ kind: "progress", session: live })}><ChartNoAxesColumnIncreasing />Cập nhật tiến độ</Button>}
           <Button type="button" variant="outline" className="h-10 sm:order-1" disabled={overdue} title={overdue ? "PCT đã quá hạn — không bàn giao, chỉ kết thúc" : undefined} onClick={() => setAction({ kind: "handoff", session: live })}><UserRoundCog />Bàn giao</Button>
-          <Button type="button" variant="outline" className="h-10 border-red-200 text-red-700 sm:order-3 hover:bg-red-50 hover:text-red-800" onClick={() => setAction({ kind: "end", session: live })}><Square />Kết thúc</Button>
+          <Button type="button" variant="outline" disabled={workersInside > 0} title={workersInside ? `Còn ${workersInside} nhân viên trong khu vực — quét ra hết rồi mới kết thúc` : undefined} className="h-10 border-red-200 text-red-700 sm:order-3 hover:bg-red-50 hover:text-red-800" onClick={() => setAction({ kind: "end", session: live })}><Square />Kết thúc</Button>
         </div>}
       </div>
+      {canExecute && workersInside > 0 && <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:bg-amber-950/40 dark:text-amber-100">Còn {workersInside} nhân viên trong khu vực — quét ra hết mới bấm được Kết thúc.</p>}
       <SessionAttendance permit={permit} session={live} canExecute={canExecute} size="lg" autoScan={autoScan} />
     </section> : <section className="space-y-3 rounded-2xl border border-sky-200 bg-sky-50/50 p-5 text-center dark:bg-sky-950/20">
       <p className="text-base font-semibold">Chưa có lần làm việc đang mở</p>
