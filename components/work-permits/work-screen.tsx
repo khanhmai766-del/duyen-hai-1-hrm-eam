@@ -82,7 +82,7 @@ export function PermitWorkScreen({ id }: { id: string }) {
         {canExecute && <div className="grid grid-cols-2 gap-2 sm:flex">
           {/* PCT đại tu: cập nhật % + ghi chú từng hạng mục giữa chừng — điện thoại chiếm trọn hàng đầu. */}
           {canUpdateOverhaulProgress(permit) && <Button type="button" variant="outline" className="col-span-2 h-10 border-violet-200 text-violet-800 hover:bg-violet-50 hover:text-violet-900 sm:order-2 sm:col-span-1 dark:border-violet-900 dark:text-violet-200" onClick={() => setAction({ kind: "progress", session: live })}><ChartNoAxesColumnIncreasing />Cập nhật tiến độ</Button>}
-          <Button type="button" variant="outline" className="h-10 sm:order-1" disabled={overdue} title={overdue ? "PCT đã quá hạn — không bàn giao, chỉ kết thúc" : undefined} onClick={() => setAction({ kind: "handoff", session: live })}><UserRoundCog />Bàn giao</Button>
+          <Button type="button" variant="outline" className="h-10 sm:order-1" disabled={overdue} title={overdue ? "PCT đã quá hạn — không đổi CHTT, chỉ kết thúc" : undefined} onClick={() => setAction({ kind: "handoff", session: live })}><UserRoundCog />Đổi CHTT</Button>
           <Button type="button" variant="outline" disabled={workersInside > 0} title={workersInside ? `Còn ${workersInside} nhân viên trong khu vực — quét ra hết rồi mới kết thúc` : undefined} className="h-10 border-red-200 text-red-700 sm:order-3 hover:bg-red-50 hover:text-red-800" onClick={() => setAction({ kind: "end", session: live })}><Square />Kết thúc</Button>
         </div>}
       </div>
