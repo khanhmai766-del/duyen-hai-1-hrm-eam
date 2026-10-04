@@ -9,6 +9,9 @@
  *   npm run overhaul:sheet -- --dry                # đọc Sheet, in các ô SẼ ghi cho hàng đợi hiện tại (không ghi gì)
  *   npm run overhaul:sheet -- --setup              # xem trước việc đổi danh sách trạng thái ô ngày (không ghi)
  *   npm run overhaul:sheet -- --setup --apply      # GHI: đổi danh sách thả xuống ô ngày sang bộ trạng thái mới
+ *   npm run overhaul:sheet -- --protect --editor a@gmail.com           # xem trước khoá ô %, Trạng thái, trạng thái ngày
+ *   npm run overhaul:sheet -- --protect --editor a@gmail.com --apply   # GHI: khoá (chỉ tài khoản dịch vụ + --editor sửa được);
+ *                                                  chạy lại sau khi thêm/bớt hạng mục để khoá đúng hàng
  *
  * Chỉ ghi Sheet khi .env có OVERHAUL_SHEET_WRITE=1 (máy dev dùng chung link file thật — mặc định KHÔNG ghi).
  * Chạy lại an toàn (hàng đợi chống ghi đôi). Thoát 1 khi còn lỗi để systemctl hiện "failed".
@@ -37,6 +40,14 @@ async function main() {
       for (const cell of result.planned ?? []) console.log(`${cell.range} ← ${JSON.stringify(cell.value)}`);
       for (const error of result.errors) console.error(`  LỖI — ${error}`);
       console.log(`Xem trước: ${result.claimed} dòng chờ · ${result.written} dòng định vị được · ${result.planned?.length ?? 0} ô sẽ ghi`);
+      return;
+    }
+    if (flag("--protect")) {
+      const editors = args.flatMap((arg, i) => arg === "--editor" && args[i + 1] ? [args[i + 1]] : []);
+      const apply = flag("--apply");
+      const report = await writer.protectOverhaulSheets(apply, editors);
+      for (const line of report) console.log(line);
+      console.log(apply ? "Đã khoá các ô web ghi." : "Chỉ xem trước — thêm --apply để khoá trên Sheet.");
       return;
     }
     if (flag("--setup")) {

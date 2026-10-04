@@ -1,7 +1,7 @@
 import { Prisma, type OverhaulSheetOutbox, type WorkPermit, type WorkPermitSession } from "@prisma/client";
 import { normalizeText } from "@/lib/nav";
 import { prisma } from "@/lib/prisma";
-import { a1Tab, batchGetValues, batchUpdateSpreadsheet, batchUpdateValues, columnLetter, getSheetFormatting, getSpreadsheet, getValidationLists, GoogleSheetsError, spreadsheetIdFromUrl, type ConditionalFormat, type GridRange, type SheetTab } from "@/lib/server/google-sheets";
+import { a1Tab, batchGetValues, batchUpdateSpreadsheet, batchUpdateValues, columnLetter, getProtectedRanges, getSheetFormatting, getSpreadsheet, getValidationLists, GoogleSheetsError, serviceAccountEmail, spreadsheetIdFromUrl, type ConditionalFormat, type GridRange, type SheetTab } from "@/lib/server/google-sheets";
 import { overhaulScheduleLinks } from "@/lib/server/overhaul-schedules";
 import { findHeader, repairDateCode } from "@/lib/server/work-permit-overhaul";
 import { OVERHAUL_DAY_STATUSES, OVERHAUL_HOLDING_STATUSES, OVERHAUL_SOURCES, overhaulItemsOf, type OverhaulItemProgress, type OverhaulSource } from "@/lib/work-permit-overhaul";
@@ -190,6 +190,68 @@ function locate(layout: TabLayout, row: OverhaulSheetOutbox) {
 }
 
 // ───────────────────────────── Đẩy hàng đợi ─────────────────────────────
+
+/** Nhãn mô tả của vùng bảo vệ do app tạo — chạy lại thì xoá đúng các vùng mang nhãn này rồi dựng lại theo hàng hiện tại. */
+const PROTECT_TAG = "[dh1-web] Ô do web ghi";
+
+/**
+ * Khoá các ô web ghi đè (nghiệp vụ 04/10/2026): cột "% Hoàn thành", "Trạng thái hiện tại" (vùng dữ liệu) và ô trạng
+ * thái từng ngày ở HÀNG TRÊN mỗi hạng mục. Hàng "Nhật ký ngày" để mở — người dùng vẫn gõ ghi chú, web chỉ nối thêm.
+ * Chỉ tài khoản dịch vụ + `editorEmails` (chủ file luôn sửa được) ghi được vùng khoá.
+ * Vùng gắn theo SỐ HÀNG: thêm/bớt hạng mục, hay tab FILTER (Lò) trôi hàng → chạy lại để khoá đúng chỗ.
+ * Không đụng vùng bảo vệ do người khác tạo (chỉ liệt kê trong báo cáo). Mặc định chỉ báo; apply=true mới ghi.
+ */
+export async function protectOverhaulSheets(apply: boolean, editorEmails: string[]) {
+  const sa = serviceAccountEmail();
+  if (!sa) throw new GoogleSheetsError("Máy chủ chưa cấu hình tài khoản dịch vụ Google (GOOGLE_SA_KEY_FILE).", 503);
+  const editors = [...new Set([sa, ...editorEmails].map(email => email.trim().toLowerCase()).filter(Boolean))];
+  const links = await overhaulScheduleLinks();
+  const report: string[] = [`Người được sửa vùng khoá: ${editors.join(", ")} (+ chủ file)`];
+  for (const source of Object.keys(OVERHAUL_SOURCES) as OverhaulSource[]) {
+    const spreadsheetId = spreadsheetIdFromUrl(links.find(link => link.id === source)?.url ?? "");
+    if (!spreadsheetId) continue;
+    const meta = await getSpreadsheet(spreadsheetId);
+    const candidates = meta.tabs.filter(tab => tab.rowCount > 0);
+    const values = await batchGetValues(spreadsheetId, candidates.map(tab => `${a1Tab(tab.title)}!A1:${columnLetter(tab.columnCount - 1)}${tab.rowCount}`));
+    const existing = await getProtectedRanges(spreadsheetId);
+    const requests: object[] = [];
+    report.push(`${OVERHAUL_SOURCES[source]} · ${meta.title}`);
+    candidates.forEach((tab, i) => {
+      const ours = (existing.get(tab.title) ?? []).filter(item => item.description?.startsWith(PROTECT_TAG));
+      const others = (existing.get(tab.title) ?? []).filter(item => !item.description?.startsWith(PROTECT_TAG));
+      for (const item of ours) requests.push({ deleteProtectedRange: { protectedRangeId: item.protectedRangeId } });
+      // Tab nháp "Điện_1" (Máy phát) web không đọc/ghi — không khoá.
+      const layout = source === "GENERATOR" && normalizeText(tab.title).trim() === "dien_1" ? "tab nháp" : layoutOf(values[i] ?? []);
+      if (typeof layout === "string" || !layout.codeRow.size) {
+        if (ours.length) report.push(`  “${tab.title}”: không còn bố cục hạng mục — gỡ ${ours.length} vùng khoá cũ`);
+        return;
+      }
+      const add = (range: GridRange, what: string) => requests.push({ addProtectedRange: { protectedRange: {
+        range: { sheetId: tab.sheetId, ...range }, description: `${PROTECT_TAG} · ${what}`, warningOnly: false, editors: { users: editors },
+      } } });
+      const dataStart = layout.headerRow + 1;
+      let count = 0;
+      for (const [column, what] of [[layout.percentColumn, "% Hoàn thành"], [layout.statusColumn, "Trạng thái hiện tại"]] as const) {
+        if (column < 0) continue;
+        add({ startRowIndex: dataStart, endRowIndex: tab.rowCount, startColumnIndex: column, endColumnIndex: column + 1 }, what);
+        count++;
+      }
+      // Ô trạng thái ngày: chỉ hàng có mã (hàng trên); các hàng mã liền nhau gộp một vùng cho đỡ số vùng.
+      const first = Math.min(...layout.dayColumns), last = Math.max(...layout.dayColumns);
+      const rows = [...layout.codeRow.values()].sort((a, b) => a - b);
+      for (let k = 0; k < rows.length;) {
+        let end = k;
+        while (end + 1 < rows.length && rows[end + 1] === rows[end] + 1) end++;
+        add({ startRowIndex: rows[k], endRowIndex: rows[end] + 1, startColumnIndex: first, endColumnIndex: last + 1 }, "trạng thái ngày");
+        count++;
+        k = end + 1;
+      }
+      report.push(`  “${tab.title}”: ${layout.codeRow.size} hạng mục → ${count} vùng khoá (${columnLetter(layout.percentColumn)}, ${columnLetter(layout.statusColumn)}, ${columnLetter(first)}–${columnLetter(last)} hàng trên)${ours.length ? ` · thay ${ours.length} vùng cũ` : ""}${others.length ? ` · giữ ${others.length} vùng khoá có sẵn của người khác: ${others.map(item => item.description || `#${item.protectedRangeId}`).join("; ")}` : ""}`);
+    });
+    if (apply) for (let k = 0; k < requests.length; k += 500) await batchUpdateSpreadsheet(spreadsheetId, requests.slice(k, k + 500));
+  }
+  return report;
+}
 
 /**
  * Mốc giờ cho SQL viết tay. Cột Prisma là `timestamp(3)` KHÔNG múi giờ, lưu giờ UTC; Prisma gửi tham số Date dạng

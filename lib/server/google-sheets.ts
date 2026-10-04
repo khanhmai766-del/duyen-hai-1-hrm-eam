@@ -124,6 +124,15 @@ export async function getSheetFormatting(id: string) {
   return new Map(json.sheets.map(sheet => [sheet.properties.title, { sheetId: sheet.properties.sheetId, merges: sheet.merges ?? [], conditionalFormats: sheet.conditionalFormats ?? [] }]));
 }
 
+export type ProtectedRange = { protectedRangeId: number; description?: string; range?: GridRange; warningOnly?: boolean; editors?: { users?: string[] } };
+/** Vùng bảo vệ hiện có của từng tab (theo tên tab). */
+export async function getProtectedRanges(id: string) {
+  const json = await sheetsApi<{ sheets: Array<{ properties: { title: string }; protectedRanges?: ProtectedRange[] }> }>(
+    `${encodeURIComponent(id)}?fields=${encodeURIComponent("sheets(properties(title),protectedRanges)")}`
+  );
+  return new Map(json.sheets.map(sheet => [sheet.properties.title, sheet.protectedRanges ?? []]));
+}
+
 export async function getSpreadsheet(id: string) {
   const json = await sheetsApi<{ properties: { title: string }; sheets: Array<{ properties: { title: string; sheetId: number; gridProperties?: { rowCount?: number; columnCount?: number } } }> }>(
     `${encodeURIComponent(id)}?fields=${encodeURIComponent("properties.title,sheets.properties(title,sheetId,gridProperties(rowCount,columnCount))")}`
