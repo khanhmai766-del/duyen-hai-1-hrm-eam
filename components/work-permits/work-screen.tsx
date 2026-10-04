@@ -71,7 +71,7 @@ export function PermitWorkScreen({ id }: { id: string }) {
         <h1 className="text-lg font-bold sm:text-2xl">PCT {formatPermitNumber(permit)}</h1>
         <p className="mt-1 line-clamp-3 text-[15px] font-semibold leading-6">{permit.content || "—"}</p>
         <p className="text-sm text-muted-foreground">{permit.location && <span className="hidden sm:inline">{permit.location} · </span>}{PERMIT_UNITS[permit.unit]}{permit.teamName && <>{PERMIT_UNITS[permit.unit] && " · "}<span title={permit.teamName}>{teamCode || permit.teamName}</span></>}</p>
-        <div className="mt-1.5 flex flex-wrap items-center gap-2"><PermitDeadlineBadge permit={permit} />{(canExecute || canIssue) && <OverhaulItemsEditButton permit={permit} />}</div>
+        <div className="mt-1.5 flex flex-wrap items-center gap-2"><PermitDeadlineBadge permit={permit} />{Boolean(query.data?.meta?.canActOnPermit) && <OverhaulItemsEditButton permit={permit} />}</div>
       </div>
     </header>
 

@@ -27,6 +27,8 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
       if (!before) throw fail("Không tìm thấy PCT", 404);
       if (body.version !== before.version) throw fail("Phiếu đã được người khác cập nhật. Đóng cửa sổ và tải lại trước khi hủy.", 409);
       const draft = before.status === "DRAFT";
+      // Hủy phiếu ĐÃ CẤP: chỉ Quản trị (nghiệp vụ 04/10/2026). Hủy nháp vẫn theo nhóm cấp phiếu.
+      if (!draft && user.role !== "ADMIN") throw fail("Chỉ Quản trị được hủy phiếu công tác đã cấp", 403);
       const transitions = before.teamType === "CONTRACTOR" ? CONTRACTOR_PERMIT_TRANSITIONS : PERMIT_TRANSITIONS;
       if (!transitions[before.status as PermitStatus]?.includes("CANCELLED")) {
         throw fail(before.status === "CANCELLED" ? "PCT đã được hủy trước đó." : "PCT ở trạng thái này không hủy được.", 409);

@@ -4,7 +4,7 @@ import { after as afterResponse } from "next/server";
 import { latestOverhaulPercents, overhaulItemsOf } from "@/lib/work-permit-overhaul";
 import { requirePermitPositionAllowed, requirePermitVisible } from "@/lib/server/work-permit-scope";
 import { permitIssueUpdateNeedsExecution } from "@/lib/work-permit-permissions";
-import { requirePermitIssue, requirePermitIssuer, requirePermitExecute, permitCapabilities } from "@/lib/server/work-permit-permissions";
+import { requirePermitIssuer, requirePermitExecute, permitCapabilities, permitRowCapabilities } from "@/lib/server/work-permit-permissions";
 import { resolvePermitSafety } from "@/lib/server/work-permit-safety";
 import { workPermitPrisma as prisma } from "@/lib/server/work-permit-prisma";
 import { audit, fail, ok, requireRole, requireUser } from "@/lib/api";
@@ -28,7 +28,7 @@ export async function GET(_req: Request, props: { params: Promise<{ id: string }
     const overhaulPercents = overhaulItemsOf(row.overhaulItems).length
       ? Object.fromEntries(latestOverhaulPercents(await prisma.workPermitSession.findMany({ where: { permitId: row.id }, orderBy: [{ openedAt: "desc" }, { id: "desc" }], select: { itemProgress: true } })))
       : {};
-    return ok({ ...row, overhaulPercents }, { ...await permitCapabilities(user), canDelete: user.role === "ADMIN" && user.accessMode !== "DEFECT_READ_ONLY" });
+    return ok({ ...row, overhaulPercents }, { ...await permitCapabilities(user), ...permitRowCapabilities(user, row), canDelete: user.role === "ADMIN" && user.accessMode !== "DEFECT_READ_ONLY" });
   });
 }
 
@@ -76,7 +76,8 @@ export async function DELETE(req: Request, props: { params: Promise<{ id: string
 export async function PUT(req: Request, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
   return permitHandle(async () => {
-    const user = await requireUser(); await requirePermitIssue(user);
+    // Chỉnh sửa / cấp phiếu: chỉ nhóm cấp phiếu cố định (nghiệp vụ 04/10/2026), không nới theo RBAC "Cấp phiếu".
+    const user = await requireUser(); requirePermitIssuer(user);
     await requirePermitVisible(user, params.id);
     const body = await permitBody(req);
     if (body.position !== undefined) await requirePermitPositionAllowed(user, body.position);
@@ -85,7 +86,11 @@ export async function PUT(req: Request, props: { params: Promise<{ id: string }>
     // Cấp (nháp → Đã cấp) và hủy là việc của nhóm cố định (lib/work-permit-issuers.ts); sửa thông tin thì theo requirePermitIssue.
     if (status === "ISSUED" || status === "CANCELLED") {
       const current = await prisma.workPermit.findUnique({ where: { id: params.id }, select: { status: true } });
-      if (current && current.status !== status) requirePermitIssuer(user);
+      if (current && current.status !== status) {
+        requirePermitIssuer(user);
+        // Hủy phiếu ĐÃ CẤP: chỉ Quản trị. Hủy nháp vẫn theo nhóm cấp phiếu.
+        if (status === "CANCELLED" && current.status !== "DRAFT" && user.role !== "ADMIN") throw fail("Chỉ Quản trị được hủy phiếu công tác đã cấp", 403);
+      }
     }
     let previous: Awaited<ReturnType<typeof prisma.workPermit.findUnique>> = null;
     const row = await prisma.$transaction(async tx => {

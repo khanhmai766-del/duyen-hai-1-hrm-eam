@@ -703,6 +703,11 @@ function PermitDetail({ id, canIssue: listCanIssue, canIssueNew: listCanIssueNew
   // Cấp phiếu nháp / hủy phiếu: chỉ nhóm cố định (lib/work-permit-issuers.ts); sửa thông tin theo canIssue.
   const canIssueNew = query.data?.meta?.canIssueNew ?? listCanIssueNew;
   const canExecute = query.data?.meta?.canExecute ?? listCanExecute;
+  // Quyền theo TỪNG phiếu (server tính): Hủy PCT chỉ Quản trị; Chỉnh sửa chỉ nhóm cấp phiếu; Xem và in,
+  // Phụ lục, Bổ sung hạng mục, Cập nhật tiến độ: nhóm cấp phiếu + người đứng đúng cương vị của phiếu.
+  const canCancelPermit = Boolean(query.data?.meta?.canCancelPermit);
+  const canEditPermit = Boolean(query.data?.meta?.canEditPermit);
+  const canActOnPermit = Boolean(query.data?.meta?.canActOnPermit);
   const cancelDraft = useCancelDraftWorkPermit();
   const deletePermit = useDeleteWorkPermit();
   const [deleting, setDeleting] = useState(false);
@@ -749,13 +754,13 @@ function PermitDetail({ id, canIssue: listCanIssue, canIssueNew: listCanIssueNew
           {row.teamType === "CONTRACTOR" && <PermitProgress value={row.progress} />}
         </div>
         <div className="mt-3 flex flex-wrap items-center gap-2">
-          {paper && !["DRAFT", "CANCELLED"].includes(row.status) && <Button size="sm" className="hidden h-8 text-xs md:inline-flex" onClick={() => setPreviewing("permit")} title="In phiếu trên iPad / máy tính"><FileText />Xem và in</Button>}{paper && !["DRAFT", "CANCELLED"].includes(row.status) && row.contractorScope === "OVERHAUL" && (row.overhaulItems?.length ?? 0) > 0 && <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => setPreviewing("appendix")} title="Phụ lục mã hạng mục, nội dung và biện pháp thi công — in kèm PCT"><ListChecks />Phụ lục</Button>}{(canIssue || canExecute) && <OverhaulItemsEditButton permit={row} />}
+          {canActOnPermit && paper && !["DRAFT", "CANCELLED"].includes(row.status) && <Button size="sm" className="hidden h-8 text-xs md:inline-flex" onClick={() => setPreviewing("permit")} title="In phiếu trên iPad / máy tính"><FileText />Xem và in</Button>}{canActOnPermit && paper && !["DRAFT", "CANCELLED"].includes(row.status) && row.contractorScope === "OVERHAUL" && (row.overhaulItems?.length ?? 0) > 0 && <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => setPreviewing("appendix")} title="Phụ lục mã hạng mục, nội dung và biện pháp thi công — in kèm PCT"><ListChecks />Phụ lục</Button>}{canActOnPermit && <OverhaulItemsEditButton permit={row} />}
           {paper && canIssueNew && ["ISSUED", "CLOSED"].includes(row.status) && <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => onCopy(row)}><Copy />Sao chép tạo PCT mới</Button>}
-          {canExecute && !["DRAFT", "CLOSED", "CANCELLED"].includes(row.status) && !(row.teamType === "CONTRACTOR" && row.status === "ISSUED") && <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => setExecuting(true)}>{row.teamType === "INTERNAL" ? "Ghi nhận đóng phiếu" : "Cập nhật tiến độ"}</Button>}
+          {canActOnPermit && !["DRAFT", "CLOSED", "CANCELLED"].includes(row.status) && !(row.teamType === "CONTRACTOR" && row.status === "ISSUED") && <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => setExecuting(true)}>{row.teamType === "INTERNAL" ? "Ghi nhận đóng phiếu" : "Cập nhật tiến độ"}</Button>}
           {canIssueNew && row.status === "DRAFT" && <Button size="sm" variant="destructive" className="h-8 text-xs" disabled={cancelDraft.isPending} onClick={() => void cancelDraftNow(row)}>{cancelDraft.isPending ? "Đang hủy…" : "Hủy nháp"}</Button>}
-          {(row.status === "DRAFT" ? canIssueNew : canIssue) && !["CLOSED", "CANCELLED"].includes(row.status) && !(row.teamType === "CONTRACTOR" && row.status === "ACTIVE") && <Button size="sm" className="h-8 text-xs" onClick={() => onEdit(row)}>Chỉnh sửa / cấp phiếu<ArrowRight /></Button>}
+          {(row.status === "DRAFT" ? canIssueNew : canEditPermit) && !["CLOSED", "CANCELLED"].includes(row.status) && !(row.teamType === "CONTRACTOR" && row.status === "ACTIVE") && <Button size="sm" className="h-8 text-xs" onClick={() => onEdit(row)}>Chỉnh sửa / cấp phiếu<ArrowRight /></Button>}
           {canDelete && <Button type="button" size="sm" variant="destructive" className="h-10 text-xs sm:h-8" onClick={() => { setDeleteReason(""); setDeleteError(""); setDeleting(true); }}><Trash2 />Xóa PCT đã hủy</Button>}
-          {canIssueNew && canCancel(row) && <Button size="sm" variant="outline" className="h-8 border-red-200 text-xs text-red-700 hover:bg-red-50 hover:text-red-800" onClick={() => { setCancelReason(""); setCancelling(true); }}><Ban />Hủy PCT</Button>}
+          {canCancelPermit && canCancel(row) && <Button size="sm" variant="outline" className="h-8 border-red-200 text-xs text-red-700 hover:bg-red-50 hover:text-red-800" onClick={() => { setCancelReason(""); setCancelling(true); }}><Ban />Hủy PCT</Button>}
         </div>
       </>}
     </div>
@@ -771,7 +776,7 @@ function PermitDetail({ id, canIssue: listCanIssue, canIssueNew: listCanIssueNew
       {!paper && <NkvhLinkPanel key={`${row.id}-${row.version}-nkvh`} permit={row} canEdit={canIssue || canExecute} />}
       <ContractorWorkSummary permit={row} />
       {previewing && <PermitDocumentPreview title={previewing === "appendix" ? `Phụ lục đại tu · PCT ${formatPermitNumber(row)}` : `Phiếu công tác ${formatPermitNumber(row)}`} load={() => apiDownload(`/api/work-permits/${encodeURIComponent(row.id)}/${previewing === "appendix" ? "overhaul-appendix" : "document"}`)} loadQr={previewing === "permit" && row.teamType === "CONTRACTOR" ? () => apiDownload(`/api/work-permits/${encodeURIComponent(row.id)}/qr`) : undefined} onClose={() => setPreviewing(false)} />}
-      {executing && canExecute && <PermitExecutionDialog key={row.version} permit={row} onClose={() => setExecuting(false)} />}
+      {executing && canActOnPermit && <PermitExecutionDialog key={row.version} permit={row} onClose={() => setExecuting(false)} />}
       <PermitDetailFields row={row} />
       {paper && <details className="group"><summary className={summary}><span>Mối nguy và biện pháp an toàn ({row.safetyItems?.length ?? 0})</span><ChevronRight className="h-4 w-4 shrink-0 transition-transform group-open:rotate-90" /></summary><div className="mt-2 [&>section]:rounded-none [&>section]:border-0 [&>section]:p-0 [&>section>h3]:hidden"><PermitSafetyReadOnly value={row.safetyItems ?? []} /></div></details>}
       <details className="group"><summary className={summary}><span>Lịch sử cập nhật ({row._count.history})</span><ChevronRight className="h-4 w-4 shrink-0 transition-transform group-open:rotate-90" /></summary><div className="mt-2 [&>section>h3]:hidden"><PermitHistoryPanel key={`${row.id}-${row.version}-history`} permit={row} /></div></details>

@@ -1,7 +1,7 @@
 import { requirePermitVisible } from "@/lib/server/work-permit-scope";
 import { prisma } from "@/lib/prisma";
 import { audit, fail, ok, requireUser } from "@/lib/api";
-import { requirePermitExecute } from "@/lib/server/work-permit-permissions";
+import { requirePermitActor } from "@/lib/server/work-permit-permissions";
 import { isPermitExecutionInput, PERMIT_EXECUTION_STATUSES } from "@/lib/work-permit-permissions";
 import { parsePermit, permitBody, permitHandle, permitSnapshot } from "@/lib/server/work-permits";
 import { formatPermitNumber, PERMIT_STATUSES, PERMIT_TRANSITIONS, CONTRACTOR_PERMIT_TRANSITIONS, type PermitStatus } from "@/lib/work-permits";
@@ -14,7 +14,7 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
   return permitHandle(async () => {
     const user = await requireUser();
     await requirePermitVisible(user, params.id);
-    await requirePermitExecute(user);
+    await requirePermitActor(user, params.id);
     const body = await permitBody(req);
     if (!isPermitExecutionInput(body)) return fail("Thao tác thực hiện không được thay đổi thông tin cấp phiếu", 403);
     const row = await prisma.$transaction(async tx => {
