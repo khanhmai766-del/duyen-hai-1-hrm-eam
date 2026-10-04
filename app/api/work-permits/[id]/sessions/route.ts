@@ -100,7 +100,9 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
         // Giữ kết quả mới nhất từng hạng mục trên lần đang mở; mục không tick lần này giữ lần cập nhật trước (nếu có).
         const earlier = new Map(overhaulItemProgressOf(session.itemProgress).map(item => [overhaulProgressKey(item), item]));
         const merged: OverhaulItemProgress[] = parsed.items.map(item => item.done ? { ...item, at: at.toISOString() } : earlier.get(overhaulProgressKey(item)) ?? item);
-        const afterSession = await tx.workPermitSession.update({ where: { id: session.id }, data: { itemProgress: permitSnapshot(merged) } });
+        // Ghi chú làm việc giữ trên endNote của lần đang mở (chưa kết thúc nên endNote chưa dùng) — hộp Kết thúc /
+        // Cập nhật tiến độ sau điền sẵn để xem lại; kết thúc thì ghi đè bằng ghi chú kết thúc thật.
+        const afterSession = await tx.workPermitSession.update({ where: { id: session.id }, data: { itemProgress: permitSnapshot(merged), ...(note ? { endNote: note } : {}) } });
         await enqueueOverhaulProgressUpdate(tx, permit, session, at, parsed.items, note);
         const after = await tx.workPermit.update({ where: { id: permit.id }, data: { progress: parsed.progress, version: { increment: 1 } } });
         const summary = parsed.items.filter(item => item.done).map(item => `${item.code} ${item.percent}%`).join(", ");

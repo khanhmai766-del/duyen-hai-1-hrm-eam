@@ -519,7 +519,8 @@ export function SessionEditor({ permit, session, handoff = false, progressUpdate
   const { data: authSession } = useSession();
   const [nameOverride, setName] = useState<string | null>(null);
   const name = nameOverride ?? authSession?.user?.name ?? "";
-  const [note, setNote] = useState("");
+  // Kết thúc / Cập nhật tiến độ: điền sẵn ghi chú làm việc của lần "Cập nhật tiến độ" gần nhất (server giữ trên endNote lần đang mở).
+  const [note, setNote] = useState((ending || updating) && session && !session.endedAt ? session.endNote ?? "" : "");
   const [progress, setProgress] = useState(String(permit.progress ?? 0));
   // PCT đại tu có hạng mục: đánh giá từng hạng mục thay cho một % chung.
   const overhaulItems = (ending || updating) && isOverhaulPaperPermit(permit) ? overhaulItemsOf(permit.overhaulItems) : [];
