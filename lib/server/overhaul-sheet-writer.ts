@@ -5,6 +5,7 @@ import { a1Tab, batchGetValues, batchUpdateSpreadsheet, batchUpdateValues, colum
 import { overhaulScheduleLinks } from "@/lib/server/overhaul-schedules";
 import { findHeader, repairDateCode } from "@/lib/server/work-permit-overhaul";
 import { OVERHAUL_DAY_STATUSES, OVERHAUL_HOLDING_STATUSES, OVERHAUL_SOURCES, overhaulItemsOf, type OverhaulItemProgress, type OverhaulSource } from "@/lib/work-permit-overhaul";
+import { formatPermitNumber } from "@/lib/work-permits";
 
 /*
  * Đợt 2 đại tu — ghi kết quả ngày của PCT về Google Sheets tiến độ (web là nguồn, Sheet theo web).
@@ -14,10 +15,11 @@ import { OVERHAUL_DAY_STATUSES, OVERHAUL_HOLDING_STATUSES, OVERHAUL_SOURCES, ove
  *
  * QUY TẮC GHI (theo cấu trúc file thật, 02/10/2026 — xem docs/dai-tu-google-sheets.md):
  *  - Mỗi hạng mục = 2 hàng gộp: hàng trên có Mã, "% Hoàn thành", "Trạng thái hiện tại" và ô trạng thái từng ngày;
- *    hàng dưới là "Nhật ký ngày". Hàng tìm theo MÃ ở mỗi lần ghi (tab cương vị Lò là FILTER — số hàng có thể trôi).
+ *    hàng dưới là "Nhật ký ngày". Hàng tìm theo MÃ ở mỗi lần ghi (người dùng có thể chèn/xoá hàng).
  *  - Cột ngày tìm theo "dd/mm" trong tiêu đề "Ngày n\ndd/mm"; cột %/trạng thái theo tên tiêu đề (vị trí khác nhau giữa tab).
  *  - Không tìm thấy tab/mã/cột ngày → báo lỗi rõ, KHÔNG đoán ghi sang chỗ khác. Mã trùng hai lần trong tab cũng báo lỗi.
- *  - Nhật ký ngày NỐI THÊM dòng mới, không xoá chữ người khác đã gõ.
+ *  - Nhật ký ngày GHI ĐÈ bằng lần cập nhật mới nhất trong ngày: "PCT <số>" + xuống dòng + nội dung (từ 04/10/2026;
+ *    trước đó nối thêm dòng). Chữ người khác gõ tay trong ô ngày đó sẽ bị thay.
  *  - Ô "% Hoàn thành" / "Trạng thái hiện tại" bị ghi đè bằng giá trị (bỏ công thức cũ) — chỉ khi đây là kết quả mới nhất.
  */
 
@@ -175,7 +177,7 @@ function layoutOf(rows: string[][]): TabLayout | string {
   return { codeRow, duplicateCodes, dayColumn, duplicateDays, dayColumns, headerRow: header.row, percentColumn: header.columns.percent, statusColumn: header.columns.status, codeColumn: header.columns.code, rows };
 }
 
-/** Một hàng đợi → các ô cần ghi, hoặc câu lỗi. `journal` = nội dung hiện có của ô nhật ký (để nối thêm). */
+/** Một hàng đợi → các ô cần ghi, hoặc câu lỗi. */
 function locate(layout: TabLayout, row: OverhaulSheetOutbox) {
   if (layout.duplicateCodes.has(row.code)) return `mã ${row.code} xuất hiện nhiều lần trong tab “${row.sheet}”`;
   const r = layout.codeRow.get(row.code);
@@ -196,9 +198,9 @@ const PROTECT_TAG = "[dh1-web] Ô do web ghi";
 
 /**
  * Khoá các ô web ghi đè (nghiệp vụ 04/10/2026): cột "% Hoàn thành", "Trạng thái hiện tại" (vùng dữ liệu) và ô trạng
- * thái từng ngày ở HÀNG TRÊN mỗi hạng mục. Hàng "Nhật ký ngày" để mở — người dùng vẫn gõ ghi chú, web chỉ nối thêm.
+ * thái từng ngày ở HÀNG TRÊN mỗi hạng mục. Hàng "Nhật ký ngày" để mở — người dùng vẫn gõ được, nhưng web ghi đè ô của ngày có cập nhật.
  * Chỉ tài khoản dịch vụ + `editorEmails` (chủ file luôn sửa được) ghi được vùng khoá.
- * Vùng gắn theo SỐ HÀNG: thêm/bớt hạng mục, hay tab FILTER (Lò) trôi hàng → chạy lại để khoá đúng chỗ.
+ * Vùng gắn theo SỐ HÀNG: thêm/bớt hạng mục → chạy lại để khoá đúng chỗ.
  * Không đụng vùng bảo vệ do người khác tạo (chỉ liệt kê trong báo cáo). Mặc định chỉ báo; apply=true mới ghi.
  */
 export async function protectOverhaulSheets(apply: boolean, editorEmails: string[]) {
@@ -346,17 +348,23 @@ export async function pushOverhaulSheetOutbox(options: { limit?: number; dryRun?
       const priority = (status: string) => status === OVERHAUL_DAY_STATUSES.NOT_OPENED ? 0 : status === OVERHAUL_DAY_STATUSES.SKIPPED ? 1 : 2;
       const rank = (day: string, at: Date, status: string) => `${day}|${priority(status)}|${String(at.getTime()).padStart(15, "0")}`;
       const itemKey = (sheet: string, code: string) => `${sheet}\u0000${code}`;
-      const bestDay = new Map<string, string>(), bestStatus = new Map<string, string>(), bestPercent = new Map<string, string>();
+      const bestDay = new Map<string, string>(), bestStatus = new Map<string, string>(), bestPercent = new Map<string, string>(), bestNote = new Map<string, string>();
       const keep = (map: Map<string, string>, key: string, value: string) => { if (value >= (map.get(key) ?? "")) { map.set(key, value); return true; } return false; };
-      for (const withPercent of [false, true]) {
+      for (const pass of ["status", "percent", "note"] as const) {
         for (const item of await prisma.overhaulSheetOutbox.groupBy({
-          by: ["sheet", "code", "day", "status"], where: { source, state: "SUCCESS", sheet: { in: tabNames }, ...(withPercent ? { percent: { not: null } } : {}) }, _max: { createdAt: true },
+          by: ["sheet", "code", "day", "status"], where: { source, state: "SUCCESS", sheet: { in: tabNames },
+            ...(pass === "percent" ? { percent: { not: null } } : pass === "note" ? { note: { not: "" } } : {}) }, _max: { createdAt: true },
         })) {
           const value = rank(item.day, item._max.createdAt ?? new Date(0), item.status);
-          if (withPercent) keep(bestPercent, itemKey(item.sheet, item.code), value);
+          if (pass === "percent") keep(bestPercent, itemKey(item.sheet, item.code), value);
+          else if (pass === "note") keep(bestNote, `${itemKey(item.sheet, item.code)}\u0000${item.day}`, value);
           else { keep(bestStatus, itemKey(item.sheet, item.code), value); keep(bestDay, `${itemKey(item.sheet, item.code)}\u0000${item.day}`, value); }
         }
       }
+      // Dòng đầu ô Nhật ký ngày = số PCT của lần cập nhật.
+      const permitNumbers = new Map((await prisma.workPermit.findMany({
+        where: { id: { in: [...new Set(sourceRows.filter(row => row.note).map(row => row.permitId))] } }, select: { id: true, number: true, year: true },
+      })).map(permit => [permit.id, formatPermitNumber(permit)]));
 
       const cells = new Map<string, string | number>();
       const journal = new Map<string, string>();
@@ -373,10 +381,11 @@ export async function pushOverhaulSheetOutbox(options: { limit?: number; dryRun?
         if (keep(bestDay, `${key}\u0000${row.day}`, value)) cells.set(ref(place.r, place.column), row.status);
         if (keep(bestStatus, key, value) && layout.statusColumn >= 0) cells.set(ref(place.r, layout.statusColumn), row.status);
         if (row.percent !== null && keep(bestPercent, key, value) && layout.percentColumn >= 0) cells.set(ref(place.r, layout.percentColumn), row.percent / 100);
-        if (row.note && place.journalRow !== null) {
-          const key = ref(place.journalRow, place.column);
-          const before = journal.get(key) ?? (layout.rows[place.journalRow]?.[place.column] ?? "").trim();
-          if (!before.split("\n").includes(row.note)) journal.set(key, before ? `${before}\n${row.note}` : row.note);
+        // Nhật ký ngày GHI ĐÈ bằng lần cập nhật mới nhất của hạng mục trong ngày (nghiệp vụ 04/10/2026):
+        // "PCT <số>" rồi xuống dòng nội dung. Hàng thử lại muộn không đè nội dung mới hơn (cùng hạng như ô trạng thái).
+        if (row.note && place.journalRow !== null && keep(bestNote, `${key}\u0000${row.day}`, value)) {
+          const permit = permitNumbers.get(row.permitId);
+          journal.set(ref(place.journalRow, place.column), permit ? `PCT ${permit}\n${row.note}` : row.note);
         }
         ok.push(row);
       }
@@ -502,7 +511,7 @@ const covers = (merge: GridRange, row: number, column: number) => (merge.startRo
 
 /**
  * Chuẩn hoá một tab cho giống mọi tab khác (để web đồng bộ như nhau): tiêu đề "Ngày n" liền mạch theo ô ngày bắt đầu,
- * hàng tổng hợp 2–4 cùng nhãn + công thức (vùng mở "G7:G" — tab FILTER dài thêm vẫn đếm đủ), hàng nhật ký đủ nhãn + ô
+ * hàng tổng hợp 2–4 cùng nhãn + công thức (vùng mở "G7:G" — tab dài thêm vẫn đếm đủ), hàng nhật ký đủ nhãn + ô
  * gộp như hàng trên, ô ngày tự xuống dòng, cột % chữ tĩnh → công thức, cùng bộ màu trạng thái. Trả yêu cầu batchUpdate +
  * ô cần ghi (USER_ENTERED) + dòng báo cáo. Chỉ thêm / sửa — không xoá dữ liệu người dùng (ô gộp chỉ khi hàng dưới trống).
  */

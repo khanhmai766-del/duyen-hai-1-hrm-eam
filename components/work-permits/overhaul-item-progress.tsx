@@ -62,7 +62,7 @@ export function OverhaulItemProgressEditor({ items, previous, draft, onChange, n
   return <fieldset className="space-y-2">
     <legend className="text-sm font-medium">Tiến độ từng hạng mục * <span className="font-normal text-muted-foreground">· đã tick {doneCount}/{items.length}</span></legend>
     <p className="text-xs text-muted-foreground">{updating
-      ? "Tick hạng mục vừa thực hiện, ghi % lũy kế và nội dung đã làm. Kết quả ghi về Sheet tiến độ đại tu vào cột ngày hôm nay; lần làm việc vẫn tiếp tục."
+      ? "Tick hạng mục vừa thực hiện, ghi % lũy kế và nội dung đã làm. Kết quả ghi về Sheet tiến độ đại tu."
       : "Tick hạng mục đã thực hiện trong lần này, ghi % lũy kế và nội dung đã làm. Kết quả được ghi về Sheet tiến độ đại tu theo ngày kết thúc."}</p>
     <div className={scroll ? "max-h-[50dvh] space-y-2 overflow-y-auto pr-1" : "space-y-2"}>
       {items.map(item => {
