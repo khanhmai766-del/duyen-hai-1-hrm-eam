@@ -36,6 +36,7 @@ export interface OverhaulTodayRow {
   permit: { id: string; number: string; year: number; kind: PermitKind; unit: string; content: string; location: string; position: string; teamName: string; version: number; plannedEndAt: string | null; overhaulItems: OverhaulItemSnapshot[] };
   /** % lũy kế gần nhất theo overhaulItemKey. */
   percents: Record<string, number>;
+  notes?: Record<string, string>;
 }
 /** Khoá dưới ["work-permits"]: cập nhật / kết thúc lần làm việc ở nơi khác cũng làm mới danh sách này. */
 export function useOverhaulToday() {

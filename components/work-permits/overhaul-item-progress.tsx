@@ -8,9 +8,12 @@ export type OverhaulProgressDraft = Record<string, { done: boolean; percent: str
 
 const control = "min-h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-60";
 
-/** `preDone`: mục tick sẵn (đã "Cập nhật tiến độ" hôm nay trong lần đang mở — mở hộp Kết thúc). */
-export function initialOverhaulDraft(items: OverhaulItemSnapshot[], previous: Record<string, number>, preDone: Set<string> = new Set()): OverhaulProgressDraft {
-  return Object.fromEntries(items.map(item => [overhaulItemKey(item), { done: preDone.has(overhaulItemKey(item)), percent: String(previous[overhaulItemKey(item)] ?? 0), note: "" }]));
+/**
+ * `preDone`: mục tick sẵn (đã "Cập nhật tiến độ" hôm nay trong lần đang mở — mở hộp Kết thúc).
+ * `notes`: ghi chú lần cập nhật gần nhất — điền sẵn để người dùng xem lại rồi viết tiếp.
+ */
+export function initialOverhaulDraft(items: OverhaulItemSnapshot[], previous: Record<string, number>, preDone: Set<string> = new Set(), notes: Record<string, string> = {}): OverhaulProgressDraft {
+  return Object.fromEntries(items.map(item => [overhaulItemKey(item), { done: preDone.has(overhaulItemKey(item)), percent: String(previous[overhaulItemKey(item)] ?? 0), note: notes[overhaulItemKey(item)] ?? "" }]));
 }
 
 /** Lỗi nhập (tiếng Việt) hoặc null. `noneDone` = null: không có lựa chọn "không mục nào" (Cập nhật tiến độ). */

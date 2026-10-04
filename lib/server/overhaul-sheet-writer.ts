@@ -1,7 +1,7 @@
 import { Prisma, type OverhaulSheetOutbox, type WorkPermit, type WorkPermitSession } from "@prisma/client";
 import { normalizeText } from "@/lib/nav";
 import { prisma } from "@/lib/prisma";
-import { a1Tab, batchGetValues, batchUpdateSpreadsheet, batchUpdateValues, columnLetter, getProtectedRanges, getSheetFormatting, getSpreadsheet, getValidationLists, GoogleSheetsError, serviceAccountEmail, spreadsheetIdFromUrl, type ConditionalFormat, type GridRange, type SheetTab } from "@/lib/server/google-sheets";
+import { a1Tab, batchGetValues, batchUpdateSpreadsheet, batchUpdateValues, columnLetter, getProtectedRanges, getSheetFormatting, getSpreadsheet, getValidationGrid, GoogleSheetsError, serviceAccountEmail, spreadsheetIdFromUrl, type ConditionalFormat, type GridRange, type SheetTab } from "@/lib/server/google-sheets";
 import { overhaulScheduleLinks } from "@/lib/server/overhaul-schedules";
 import { findHeader, repairDateCode } from "@/lib/server/work-permit-overhaul";
 import { OVERHAUL_DAY_STATUSES, OVERHAUL_HOLDING_STATUSES, OVERHAUL_SOURCES, overhaulItemsOf, type OverhaulItemProgress, type OverhaulSource } from "@/lib/work-permit-overhaul";
@@ -619,12 +619,16 @@ export async function setupOverhaulSheets(apply: boolean) {
     const values = await batchGetValues(spreadsheetId, ranges);
     const formulas = await batchGetValues(spreadsheetId, ranges, "FORMULA");
     const formatting = await getSheetFormatting(spreadsheetId);
-    // Danh sách thả xuống hiện có ở cột ngày đầu tiên từng tab — đúng rồi thì không đặt lại (giữ màu chip tự chỉnh).
+    // Danh sách thả xuống hiện có của MỌI ô từ cột "Trạng thái hiện tại" tới cột ngày cuối — ô đã đúng thì không đặt lại
+    // (giữ màu chip tự chỉnh). Trước 04/10/2026 chỉ xét cột ngày đầu, nên cột Trạng thái còn danh sách cũ (Chưa làm /
+    // Đang làm / Hoàn thành) và báo "Không hợp lệ" khi web ghi "Đang thực hiện".
     const preLayouts = candidates.map((tab, i) => ({ tab, layout: layoutOf(values[i] ?? []) }));
     const withDays = preLayouts.filter((x): x is { tab: SheetTab; layout: TabLayout } => typeof x.layout !== "string");
-    const lists = await getValidationLists(spreadsheetId, withDays.map(({ tab, layout }) => { const c = columnLetter(Math.min(...layout.dayColumns)); return `${a1Tab(tab.title)}!${c}1:${c}${tab.rowCount}`; }));
-    const listOf = new Map(withDays.map(({ tab }, k) => [tab.title, lists[k] ?? []]));
+    const gridStart = (layout: TabLayout) => Math.min(...layout.dayColumns, ...(layout.statusColumn >= 0 ? [layout.statusColumn] : []));
+    const grids = await getValidationGrid(spreadsheetId, withDays.map(({ tab, layout }) => `${a1Tab(tab.title)}!${columnLetter(gridStart(layout))}1:${columnLetter(Math.max(...layout.dayColumns))}${tab.rowCount}`));
+    const gridOf = new Map(withDays.map(({ tab, layout }, k) => [tab.title, { start: gridStart(layout), rows: grids[k] ?? [] }]));
     const wantedList = Object.values(OVERHAUL_DAY_STATUSES).join("|");
+    const statusRule = { condition: { type: "ONE_OF_LIST", values: Object.values(OVERHAUL_DAY_STATUSES).map(userEnteredValue => ({ userEnteredValue })) }, strict: true, showCustomUi: true };
     const requests: object[] = [];
     const cells: Array<{ range: string; value: string }> = [];
     candidates.forEach((tab, i) => {
@@ -637,16 +641,32 @@ export async function setupOverhaulSheets(apply: boolean) {
       const first = Math.min(...columns), last = Math.max(...columns);
       const dayRange = (r: number) => `${columnLetter(first)}${r + 1}:${columnLetter(last)}${r + 1}`;
       const code = (r: number) => `${columnLetter(layout.codeColumn)}${r + 1}`;
-      let dayWords = 0, rowFormulas = 0;
+      let dayWords = 0, rowFormulas = 0, fixedLists = 0, clearedLists = 0;
+      const grid = gridOf.get(tab.title);
+      const listAt = (r: number, c: number) => grid ? grid.rows[r]?.[c - grid.start] ?? "" : "";
       for (const r of layout.codeRow.values()) {
         for (let c = first; c <= last; c++) {
           const word = (layout.rows[r]?.[c] ?? "").trim();
           if (OLD_STATUS_WORDS.includes(word)) { dayWords++; cells.push({ range: ref(r, c), value: OLD_DAY_WORD[word] }); }
         }
-        if ((listOf.get(tab.title) ?? [])[r] !== wantedList) requests.push({ setDataValidation: {
-          range: { sheetId: tab.sheetId, startRowIndex: r, endRowIndex: r + 1, startColumnIndex: first, endColumnIndex: last + 1 },
-          rule: { condition: { type: "ONE_OF_LIST", values: Object.values(OVERHAUL_DAY_STATUSES).map(userEnteredValue => ({ userEnteredValue })) }, strict: true, showCustomUi: true },
-        } });
+        // Hàng hạng mục: ô ngày + ô "Trạng thái hiện tại" dùng đúng bộ trạng thái của web.
+        let dayWrong = false;
+        for (let c = first; c <= last; c++) if (listAt(r, c) !== wantedList) dayWrong = true;
+        if (dayWrong) { fixedLists++; requests.push({ setDataValidation: {
+          range: { sheetId: tab.sheetId, startRowIndex: r, endRowIndex: r + 1, startColumnIndex: first, endColumnIndex: last + 1 }, rule: statusRule,
+        } }); }
+        if (layout.statusColumn >= 0 && listAt(r, layout.statusColumn) !== wantedList) { fixedLists++; requests.push({ setDataValidation: {
+          range: { sheetId: tab.sheetId, startRowIndex: r, endRowIndex: r + 1, startColumnIndex: layout.statusColumn, endColumnIndex: layout.statusColumn + 1 }, rule: statusRule,
+        } }); }
+        // Hàng "Nhật ký ngày" ngay dưới (ô mã trống): chữ tự do — gỡ mọi danh sách thả xuống còn dính ở cột Trạng thái / ngày.
+        const journal = r + 1;
+        if (!(layout.rows[journal]?.[layout.codeColumn] ?? "").trim() && grid) {
+          for (let c = grid.start; c <= last; c++) {
+            if (!listAt(journal, c)) continue;
+            clearedLists++;
+            requests.push({ setDataValidation: { range: { sheetId: tab.sheetId, startRowIndex: journal, endRowIndex: journal + 1, startColumnIndex: c, endColumnIndex: c + 1 } } });
+          }
+        }
         if (layout.percentColumn >= 0 && OLD_FORMULA.test(at(r, layout.percentColumn))) {
           rowFormulas++;
           cells.push({ range: ref(r, layout.percentColumn), value: `=IF(${code(r)}="";"";0)` });
@@ -680,7 +700,7 @@ export async function setupOverhaulSheets(apply: boolean) {
       requests.push(...normal.requests);
       cells.push(...normal.cells);
       const duplicates = layout.duplicateCodes.size ? ` · MÃ TRÙNG (app không ghi được): ${[...layout.duplicateCodes].slice(0, 10).join(", ")}` : "";
-      report.push(`${OVERHAUL_SOURCES[source]} · “${tab.title}”: ${layout.codeRow.size} hạng mục, cột ngày ${columnLetter(first)}–${columnLetter(last)} · ${rowFormulas} ô công thức hàng${dayWords ? ` · ${dayWords} ô ngày chữ cũ` : ""}${duplicates}${layout.duplicateDays.size ? ` · CỘT TRÙNG NGÀY ${[...layout.duplicateDays].join(", ")}` : ""}${normal.notes.length ? ` · chuẩn hoá: ${normal.notes.join(", ")}` : ""}`);
+      report.push(`${OVERHAUL_SOURCES[source]} · “${tab.title}”: ${layout.codeRow.size} hạng mục, cột ngày ${columnLetter(first)}–${columnLetter(last)} · ${rowFormulas} ô công thức hàng${dayWords ? ` · ${dayWords} ô ngày chữ cũ` : ""}${duplicates}${layout.duplicateDays.size ? ` · CỘT TRÙNG NGÀY ${[...layout.duplicateDays].join(", ")}` : ""}${fixedLists ? ` · đặt lại ${fixedLists} danh sách trạng thái` : ""}${clearedLists ? ` · gỡ ${clearedLists} danh sách ở hàng nhật ký` : ""}${normal.notes.length ? ` · chuẩn hoá: ${normal.notes.join(", ")}` : ""}`);
       for (const line of summary) report.push(`    ${line}`);
     });
     if (apply) {

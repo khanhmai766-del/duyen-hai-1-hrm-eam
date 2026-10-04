@@ -116,6 +116,16 @@ export async function getValidationLists(id: string, ranges: string[]) {
   return json.sheets.flatMap(sheet => (sheet.data ?? []).map(block => (block.rowData ?? []).map(row => (row.values?.[0]?.dataValidation?.condition?.values ?? []).map(v => v.userEnteredValue ?? "").join("|"))));
 }
 
+/** Như getValidationLists nhưng đủ MỌI ô của vùng: mỗi vùng → hàng → ô → các lựa chọn nối "|" ("" = không có). */
+export async function getValidationGrid(id: string, ranges: string[]) {
+  if (!ranges.length) return [] as string[][][];
+  const query = ranges.map(range => `ranges=${encodeURIComponent(range)}`).join("&");
+  const json = await sheetsApi<{ sheets: Array<{ data?: Array<{ rowData?: Array<{ values?: Array<{ dataValidation?: { condition?: { values?: Array<{ userEnteredValue?: string }> } } }> }> }> }> }>(
+    `${encodeURIComponent(id)}?${query}&fields=${encodeURIComponent("sheets(data(rowData(values(dataValidation(condition(values(userEnteredValue)))))))")}`
+  );
+  return json.sheets.flatMap(sheet => (sheet.data ?? []).map(block => (block.rowData ?? []).map(row => (row.values ?? []).map(cell => (cell.dataValidation?.condition?.values ?? []).map(v => v.userEnteredValue ?? "").join("|")))));
+}
+
 /** Ô gộp + định dạng có điều kiện của từng tab (dùng cho bước chuẩn hoá Sheet). */
 export async function getSheetFormatting(id: string) {
   const json = await sheetsApi<{ sheets: Array<{ properties: { title: string; sheetId: number }; merges?: GridRange[]; conditionalFormats?: ConditionalFormat[] }> }>(

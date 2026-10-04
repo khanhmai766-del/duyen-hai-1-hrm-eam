@@ -90,6 +90,18 @@ export function latestOverhaulPercents(sessions: Array<{ itemProgress?: unknown 
   return latest;
 }
 
+/** Ghi chú gần nhất (khác rỗng) của từng hạng mục — hiện lại trong ô ghi chú để xem và viết tiếp. Cùng thứ tự như trên. */
+export function latestOverhaulNotes(sessions: Array<{ itemProgress?: unknown }>) {
+  const latest = new Map<string, string>();
+  for (const session of sessions) {
+    for (const item of overhaulItemProgressOf(session.itemProgress)) {
+      const key = overhaulItemKey(item);
+      if (item.done && typeof item.note === "string" && item.note.trim() && !latest.has(key)) latest.set(key, item.note.trim());
+    }
+  }
+  return latest;
+}
+
 /** So mã hạng mục theo từng số: 1.2 < 1.10 < 2.1; phần không phải số so theo chữ. */
 export function compareOverhaulCodes(a: string, b: string) {
   const left = a.split(/[.\s]+/), right = b.split(/[.\s]+/);

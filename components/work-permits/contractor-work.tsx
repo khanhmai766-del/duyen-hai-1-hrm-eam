@@ -528,7 +528,7 @@ export function SessionEditor({ permit, session, handoff = false, progressUpdate
   const [itemDraft, setItemDraft] = useState(() => {
     const today = vnNow().slice(0, 10);
     const preDone = new Set(ending ? (session?.itemProgress ?? []).filter(item => item.done && item.at && new Date(new Date(item.at).getTime() + 7 * 3600000).toISOString().slice(0, 10) === today).map(overhaulItemKey) : []);
-    return initialOverhaulDraft(overhaulItems, previousPercents, preDone);
+    return initialOverhaulDraft(overhaulItems, previousPercents, preDone, permit.overhaulNotes);
   });
   const [noneDone, setNoneDone] = useState(false);
   const itemError = overhaulItems.length ? overhaulDraftError(overhaulItems, itemDraft, previousPercents, updating ? null : noneDone) : null;

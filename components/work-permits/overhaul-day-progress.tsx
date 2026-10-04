@@ -35,7 +35,7 @@ export function OverhaulDayProgress() {
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  const entryOf = (row: OverhaulTodayRow): Entry => entries[row.id] ?? { draft: initialOverhaulDraft(row.permit.overhaulItems, row.percents), note: "", open: false };
+  const entryOf = (row: OverhaulTodayRow): Entry => entries[row.id] ?? { draft: initialOverhaulDraft(row.permit.overhaulItems, row.percents, undefined, row.notes), note: "", open: false };
   const patch = (row: OverhaulTodayRow, change: Partial<Entry>) => setEntries(prev => ({ ...prev, [row.id]: { ...entryOf(row), ...change } }));
   const term = normalizeText(search.trim());
   const visible = rows.filter(row => !term || normalizeText(`${formatPermitNumber(row.permit)} ${row.permit.content} ${row.permit.teamName} ${row.commanderName} ${row.permit.overhaulItems.map(i => i.code).join(" ")}`).includes(term));

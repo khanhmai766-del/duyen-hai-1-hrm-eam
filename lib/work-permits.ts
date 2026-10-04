@@ -193,6 +193,8 @@ export interface PermitDetailRow extends PermitRow {
   history: PermitHistorySummary[]; sessions: PermitSession[]; _count: { sessions: number; history: number };
   /** PCT đại tu: % lũy kế gần nhất theo overhaulItemKey. */
   overhaulPercents?: Record<string, number>;
+  /** PCT đại tu: ghi chú gần nhất theo overhaulItemKey (điền sẵn ô ghi chú khi cập nhật tiếp). */
+  overhaulNotes?: Record<string, string>;
 }
 
 export interface DefectLinkedWorkPermit {

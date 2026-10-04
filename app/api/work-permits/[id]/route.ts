@@ -1,7 +1,7 @@
 import { assertOverhaulItemsConfirmed, parseOverhaulItems } from "@/lib/server/work-permit-overhaul";
 import { enqueueOverhaulClose, pushOverhaulSheetOutboxQuietly } from "@/lib/server/overhaul-sheet-writer";
 import { after as afterResponse } from "next/server";
-import { latestOverhaulPercents, overhaulItemsOf } from "@/lib/work-permit-overhaul";
+import { latestOverhaulNotes, latestOverhaulPercents, overhaulItemsOf } from "@/lib/work-permit-overhaul";
 import { requirePermitPositionAllowed, requirePermitVisible } from "@/lib/server/work-permit-scope";
 import { permitIssueUpdateNeedsExecution } from "@/lib/work-permit-permissions";
 import { requirePermitIssuer, requirePermitExecute, permitCapabilities, permitRowCapabilities } from "@/lib/server/work-permit-permissions";
@@ -25,10 +25,14 @@ export async function GET(_req: Request, props: { params: Promise<{ id: string }
     if (!row) return fail("Không tìm thấy PCT", 404);
     // % lũy kế gần nhất của từng hạng mục đại tu (mọi lần làm việc kể cả lần đang mở đã "Cập nhật tiến độ", không chỉ 2
     // lần trả kèm) — điền sẵn hộp Kết thúc / Cập nhật tiến độ.
-    const overhaulPercents = overhaulItemsOf(row.overhaulItems).length
-      ? Object.fromEntries(latestOverhaulPercents(await prisma.workPermitSession.findMany({ where: { permitId: row.id }, orderBy: [{ openedAt: "desc" }, { id: "desc" }], select: { itemProgress: true } })))
+    const overhaulSessions = overhaulItemsOf(row.overhaulItems).length
+      ? await prisma.workPermitSession.findMany({ where: { permitId: row.id }, orderBy: [{ openedAt: "desc" }, { id: "desc" }], select: { itemProgress: true } })
+      : null;
+    const overhaulNotes = overhaulSessions ? Object.fromEntries(latestOverhaulNotes(overhaulSessions)) : undefined;
+    const overhaulPercents = overhaulSessions
+      ? Object.fromEntries(latestOverhaulPercents(overhaulSessions))
       : {};
-    return ok({ ...row, overhaulPercents }, { ...await permitCapabilities(user), ...permitRowCapabilities(user, row), canDelete: user.role === "ADMIN" && user.accessMode !== "DEFECT_READ_ONLY" });
+    return ok({ ...row, overhaulPercents, overhaulNotes }, { ...await permitCapabilities(user), ...permitRowCapabilities(user, row), canDelete: user.role === "ADMIN" && user.accessMode !== "DEFECT_READ_ONLY" });
   });
 }
 

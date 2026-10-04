@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { ok, requireUser } from "@/lib/api";
 import { permitCapabilities } from "@/lib/server/work-permit-permissions";
 import { permitHandle } from "@/lib/server/work-permits";
-import { isOverhaulPaperPermit, latestOverhaulPercents, overhaulItemsOf } from "@/lib/work-permit-overhaul";
+import { isOverhaulPaperPermit, latestOverhaulNotes, latestOverhaulPercents, overhaulItemsOf } from "@/lib/work-permit-overhaul";
 export const dynamic = "force-dynamic";
 
 /**
@@ -43,6 +43,7 @@ export async function GET() {
         itemProgress,
         permit: { ...rest, plannedEndAt: rest.plannedEndAt?.toISOString() ?? null, overhaulItems: overhaulItemsOf(overhaulItems) },
         percents: Object.fromEntries(latestOverhaulPercents(history)),
+        notes: Object.fromEntries(latestOverhaulNotes(history)),
       };
     });
     return ok(data, { canExecute: capabilities.canExecute });
