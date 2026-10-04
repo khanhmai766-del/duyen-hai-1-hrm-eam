@@ -1,10 +1,11 @@
 // Thử (rồi HOÀN TÁC) luồng tiện ích Cấp số PCT NKVH trên DB dev: lấy số, bấm lại không tốn số,
-// đồng bộ nội dung, phiếu giấy lấy sau nhảy qua số đã cấp, báo dừng (Tạm dừng, giữ số), báo hủy về sổ (số hủy bị bỏ).
+// đồng bộ nội dung, phiếu giấy lấy sau nhảy qua số đã cấp, báo dừng (Tạm dừng, giữ số), báo hủy về sổ (số hủy bị bỏ),
+// chống lệch số (Sửa sổ theo NKVH + sổ ghi nhận số gõ tay — mục 9–11).
 // Không để lại dữ liệu.
 //   npx tsx scripts/verify/thu-nkvh-claim.ts
 import { PrismaClient } from "@prisma/client";
-import { cancelNkvhPermit, claimNkvhPermit, closeNkvhPermit, importExistingNkvhPermit, parseNkvhPage, stopNkvhPermit, syncNkvhPermit } from "@/lib/server/work-permit-nkvh-claim";
-import { reservePermitNumber } from "@/lib/server/work-permit-number-reservations";
+import { cancelNkvhPermit, claimNkvhPermit, closeNkvhPermit, importExistingNkvhPermit, observeNkvhNumbers, parseNkvhPage, renumberNkvhPermit, stopNkvhPermit, syncNkvhPermit } from "@/lib/server/work-permit-nkvh-claim";
+import { permitNumberHighWater, reservePermitNumber } from "@/lib/server/work-permit-number-reservations";
 
 const db = new PrismaClient();
 const user = { id: "thu-nkvh", name: "Người Thử", role: "TECHNICAL" };
@@ -114,6 +115,71 @@ async function main() {
         page: parseNkvhPage(tcnh, "MECHANICAL"), unit: "S1", position: "Lò phó" });
       console.log("7) phiếu tạo lại:", redo.formatted, BigInt(redo.number) > BigInt(paper.number) ? "✓ số mới, bỏ số đã hủy" : "✗ DÙNG LẠI SỐ");
       console.log("8) báo hủy phiếu không có trên sổ:", await errorOf(() => cancelNkvhPermit(tx, user, { kind: "MECHANICAL", nkvhPctId: "55555555-8888-4777-8666-555555555555", reason: "" })));
+
+      // ---------- Chống lệch số: dựng lại ca 4463/4464 (10/2026) ----------
+      const fmt = (n: bigint) => `${n}/${year}/VH1-NĐDH`;
+      const floorNow = async () => {
+        const base = (await tx.workPermitNumberBaseline.findFirstOrThrow({ where: { kind: "MECHANICAL", year } })).number;
+        const high = await permitNumberHighWater(tx, "MECHANICAL", year);
+        return BigInt(base) > BigInt(high) ? BigInt(base) : BigInt(high);
+      };
+      const page = parseNkvhPage(tcnh, "MECHANICAL");
+      const issue = (nkvhPctId: string, actor = user) => claimNkvhPermit(tx, actor, { kind: "MECHANICAL", nkvhPctId, page, unit: "S1", position: "Lò phó" });
+      const importAs = (nkvhPctId: string, number: bigint, actor = user) => importExistingNkvhPermit(tx, actor, { kind: "MECHANICAL", nkvhPctId, page, unit: "S1", position: "Lò phó", formattedNumber: fmt(number) });
+      const renumber = (nkvhPctId: string, number: bigint, actor = user) => renumberNkvhPermit(tx, actor, { kind: "MECHANICAL", nkvhPctId, formattedNumber: fmt(number) });
+      const user2 = { id: "thu-nkvh-2", name: "Người Thử 2", role: "TECHNICIAN" };
+      const [pctA, pctB, pctC, pctD, pctE, pctG, pctH] = ["a1", "b2", "c3", "d4", "e5", "f6", "a7"].map(p => `${p}${p}${p}${p}-1111-4222-8333-444444444444`.slice(0, 36).padEnd(36, "0"));
+
+      // Lớp 1. A gõ tay N trên NKVH (sổ không biết) → B lấy số được đúng N (lỗi cũ) → VHV sửa B thành N+1.
+      const n = (await floorNow()) + BigInt(1);
+      const b = await issue(pctB);
+      console.log("9) [lỗi cũ] B lấy số khi A đã gõ tay", fmt(n), "→", b.formatted, b.number === n.toString() ? "(tái hiện đúng: trùng số A)" : "✗");
+      const fixed = await renumber(pctB, n + BigInt(1));
+      const bRow = await tx.workPermit.findUniqueOrThrow({ where: { id: b.id } });
+      const bReservations = await tx.workPermitNumberReservation.findMany({ where: { kind: "MECHANICAL", year, number: { in: [n.toString(), (n + BigInt(1)).toString()] } }, orderBy: { number: "asc" } });
+      console.log("   Sửa sổ theo NKVH:", fixed.previous, "→", fixed.formatted,
+        bRow.number === (n + BigInt(1)).toString() && bRow.searchText.includes((n + BigInt(1)).toString()) ? "✓ phiếu + searchText đổi số" : "✗",
+        "| lượt giữ:", bReservations.map(r => `${r.number}:${r.status}${r.permitId === b.id ? "(B)" : ""}`).join(", "));
+      const again2 = await renumber(pctB, n + BigInt(1));
+      console.log("   bấm lại:", again2.changed === false ? "✓ không đổi gì" : "✗ ĐỔI LẦN NỮA");
+      const a = await importAs(pctA, n);
+      console.log("   A đồng bộ số hiện có", fmt(n), "→", a.formatted, a.number === n.toString() ? "✓ nhận lại số cũ của B" : "✗");
+      const c = await issue(pctC);
+      console.log("   lượt lấy số sau:", c.formatted, c.number === (n + BigInt(2)).toString() ? "✓ không trùng nữa" : "✗ TRÙNG/LỆCH");
+      console.log("   sửa C sang số của A:", await errorOf(() => renumber(pctC, n)));
+      console.log("   sửa C nhảy cóc:", await errorOf(() => renumber(pctC, n + BigInt(9))));
+      await closeNkvhPermit(tx, user, { kind: "MECHANICAL", nkvhPctId: pctC, sourceStatus: "Khóa phiếu" });
+      console.log("   sửa số phiếu đã Kết thúc (không phải quản trị):", await errorOf(() => renumber(pctC, n + BigInt(3))));
+
+      // Lớp 2. D, E gõ tay F+1, F+2; một số gõ nhầm F+9; kèm số đã có và số năm khác.
+      const f = await floorNow();
+      const observed = await observeNkvhNumbers(tx, user, { kind: "MECHANICAL", entries: [
+        { formattedNumber: fmt(f + BigInt(2)) }, { formattedNumber: fmt(f + BigInt(1)), nkvhPctId: pctD },
+        { formattedNumber: fmt(f + BigInt(9)) }, { formattedNumber: fmt(n) }, { formattedNumber: `${f + BigInt(3)}/${year - 1}/VH1-NĐDH` },
+      ] });
+      console.log("10) ghi nhận số gõ tay:", observed.recorded.join(", "), "| vượt dãy:", observed.ahead.map(x => `${x.formatted} (kế tiếp ${x.expected})`).join(", "),
+        observed.recorded.length === 2 && observed.ahead.length === 1 ? "✓" : "✗");
+      const reservedList = await tx.workPermitNumberReservation.count({ where: { kind: "MECHANICAL", year, status: "RESERVED", number: { in: [(f + BigInt(1)).toString(), (f + BigInt(2)).toString()] } } });
+      console.log("    không hiện ở \"Số đã lấy, chưa lưu phiếu\":", reservedList === 0 ? "✓" : "✗ HIỆN NHƯ LƯỢT GIỮ SỐ");
+      const observedAgain = await observeNkvhNumbers(tx, user, { kind: "MECHANICAL", entries: [{ formattedNumber: fmt(f + BigInt(1)) }, { formattedNumber: fmt(f + BigInt(2)) }] });
+      console.log("    gửi lại:", observedAgain.recorded.length === 0 ? "✓ không ghi trùng" : "✗ GHI TRÙNG");
+      const g = await issue(pctG);
+      console.log("    lấy số sau đó:", g.formatted, g.number === (f + BigInt(3)).toString() ? "✓ nhảy qua số gõ tay" : "✗ CẤP TRÙNG");
+      const d = await importAs(pctD, f + BigInt(1), user2);
+      const dRows = await tx.workPermitNumberReservation.findMany({ where: { kind: "MECHANICAL", year, number: (f + BigInt(1)).toString() } });
+      console.log("    người khác đồng bộ số hiện có của D:", d.formatted, dRows.length === 1 && dRows[0].status === "ISSUED" && dRows[0].permitId === d.id
+        ? "✓ dùng chính lượt OBSERVED" : `✗ ${dRows.map(r => r.status).join(",")}`);
+
+      // Hai lớp phối hợp: H lấy số F+4 nhưng trên NKVH lưu F+5 → danh sách báo F+5 → Sửa sổ theo NKVH nhận lượt OBSERVED.
+      const h = await issue(pctH);
+      const seen = await observeNkvhNumbers(tx, user, { kind: "MECHANICAL", entries: [{ formattedNumber: fmt(f + BigInt(5)), nkvhPctId: pctH }] });
+      const hFixed = await renumber(pctH, f + BigInt(5), user2);
+      const hRows = await tx.workPermitNumberReservation.findMany({ where: { kind: "MECHANICAL", year, number: (f + BigInt(5)).toString() } });
+      console.log("11) H:", h.formatted, "→ NKVH", fmt(f + BigInt(5)), "| ghi nhận:", seen.recorded.join(","), "| sửa sổ:", hFixed.formatted,
+        hRows.length === 1 && hRows[0].permitId === h.id ? "✓ dùng lượt OBSERVED" : "✗");
+      console.log("    E đồng bộ số hiện có", fmt(f + BigInt(2)), "→", (await importAs(pctE, f + BigInt(2))).formatted);
+      const next = await issue("b8b8b8b8-1111-4222-8333-444444444444");
+      console.log("    lấy số tiếp:", next.formatted, next.number === (f + BigInt(6)).toString() ? "✓" : "✗");
       throw new Error("HOAN_TAC");
     }, { timeout: 30000 });
   } catch (e) {

@@ -9,6 +9,8 @@ Tiện ích nhận trang NKVH trên cả HTTP và HTTPS; sau khi cài hoặc c�
 Từ bản 1.0.5, nút thao tác tự cập nhật ngay khi người dùng xoá hoặc sửa ô **Số phiếu** trên NKVH.
 Từ bản 1.0.6, trạng thái kết thúc được tự đồng bộ về sổ: PCT T-C-N-H **Khóa phiếu**, PCT Điện
 **Hoàn thành** → sổ PXVH1 **Kết thúc phiếu**.
+Từ bản 1.0.7, chống lệch số giữa sổ và NKVH: cảnh báo **LỆCH SỐ** + **Sửa sổ theo NKVH**, và sổ tự
+ghi nhận số gõ tay trên NKVH để không cấp trùng (xem mục *Chống lệch số*).
 
 ## Luồng sử dụng
 
@@ -43,6 +45,35 @@ trên sổ, các mục này bắt buộc khai đủ như phiếu tạo tay.
 
 **Không gõ tay số vào NKVH nữa.** Số gõ tay thì sổ không biết là đã dùng, và phiếu giấy lấy sau có
 thể bị cấp trùng số.
+
+## Chống lệch số (từ 1.0.7)
+
+Ca đã gặp (10/2026): phiếu A gõ tay 4463 trên NKVH → sổ không biết, phiếu B bấm Lấy số được 4463 →
+VHV thấy 4463 đã dùng nên sửa tay thành 4464 và lưu → sổ vẫn ghi B = 4463, bấm lại vẫn ra 4463 (một
+`id_pct` một số), và lượt lấy số sau lại cấp 4464 — trùng tiếp. Hai lớp chặn:
+
+**Lớp 1 — Lệch số trên trang chi tiết.** Sổ đã có phiếu này mà ô Số phiếu là một số dạng sổ *khác*
+→ thanh tiện ích hiện **LỆCH SỐ** (đổi ngay khi gõ, trước cả khi Lưu NKVH) với hai nút:
+- **Sửa sổ theo NKVH (số trong ô)** → mode `renumber`. Server khoá dãy số rồi chỉ nhận khi số mới
+  trống trên sổ (không phiếu nào khác, không lượt đang giữ / đã hủy) và không vượt số kế tiếp — trừ
+  số đã được lớp 2 ghi nhận. Lượt giữ số cũ chuyển `RELEASED` (số trả về dãy); phiếu NKVH đang thật sự
+  dùng số cũ bấm **Đồng bộ số hiện có** để nhận về. Phiếu đã Kết thúc trên sổ chỉ quản trị sửa được.
+- **Điền lại …** → điền lại số sổ khi chỉ là gõ nhầm.
+
+**Lớp 2 — Sổ tự biết số gõ tay** (mode `observe`, lượt giữ số trạng thái `OBSERVED`):
+- Trang danh sách: mọi số `…/VH1-NĐDH` đang hiển thị (mọi trạng thái, kèm `id_pct` nếu dòng có liên
+  kết) được gửi về sổ một lần mỗi phiên trang.
+- Trang chi tiết chưa liên kết mà ô Số phiếu *lúc mở trang* (số đã lưu) có số dạng sổ → gửi số đó.
+- Server xét tăng dần: số nằm **ngay sau** số cao nhất sổ đang biết được giữ chỗ `OBSERVED` (tính vào
+  dãy, nên Lấy số PCT lần sau nhảy qua). Số đã có / lỗ dưới dãy bỏ qua. Số **nhảy cóc** không ghi (một
+  số gõ nhầm 9999 sẽ đẩy cả dãy) — tiện ích chỉ cảnh báo để đối chiếu. Chỉ nhận số năm hiện tại.
+- `OBSERVED` không phải `RESERVED`: không hiện ở "Số đã lấy, chưa lưu phiếu", không ai "Tiếp tục" cấp
+  phiếu giấy trùng số. Khi **Đồng bộ số hiện có** hoặc **Sửa sổ theo NKVH** dùng đúng số đó, chính lượt
+  `OBSERVED` chuyển thành lượt giữ/cấp của người thao tác (ai cũng nhận được, không cần là người đã
+  thấy số).
+
+Tiện ích kiểm tra kết quả trả về: máy chủ bản cũ không biết `renumber` thì báo "chưa hỗ trợ", không
+báo nhầm là đã sửa. **Phải deploy máy chủ trước khi phát hành 1.0.7.**
 
 ## Quy tắc số
 

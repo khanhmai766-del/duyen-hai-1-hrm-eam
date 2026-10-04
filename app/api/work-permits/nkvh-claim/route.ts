@@ -5,7 +5,7 @@ import { OPERATION_POSITION_TITLES } from "@/lib/positions";
 import { PERMIT_UNITS } from "@/lib/work-permits";
 import { permitBody, permitHandle } from "@/lib/server/work-permits";
 import { requirePermitIssuer } from "@/lib/server/work-permit-permissions";
-import { cancelNkvhPermit, claimNkvhPermit, closeNkvhPermit, importExistingNkvhPermit, nkvhClaimResult, parseNkvhKind, parseNkvhPage, parseNkvhScope, stopNkvhPermit, syncNkvhPermit } from "@/lib/server/work-permit-nkvh-claim";
+import { cancelNkvhPermit, claimNkvhPermit, closeNkvhPermit, importExistingNkvhPermit, nkvhClaimResult, observeNkvhNumbers, parseNkvhKind, parseNkvhPage, parseNkvhScope, renumberNkvhPermit, stopNkvhPermit, syncNkvhPermit } from "@/lib/server/work-permit-nkvh-claim";
 export const dynamic = "force-dynamic";
 
 /** API của tiện ích "Cấp số PCT NKVH" (chrome-extension/nkvh-pct) — nghiệp vụ ở lib/server/work-permit-nkvh-claim.ts. */
@@ -40,7 +40,21 @@ export async function POST(req: Request) {
       if (result.changed) await audit(user.id, "UPDATE_WORK_PERMIT", "WorkPermit", result.id, `Đóng PCT ${result.formatted} theo NKVH`);
       return ok(result);
     }
+    if (body.mode === "observe") {
+      const kind = parseNkvhKind(body.kind);
+      const result = await prisma.$transaction(tx => observeNkvhNumbers(tx, user, { kind, entries: body.entries }));
+      if (result.recorded.length) {
+        await audit(user.id, "OBSERVE_WORK_PERMIT_NUMBER_NKVH", "WorkPermitNumberReservation", undefined,
+          `Ghi nhận số PCT đã dùng trên NKVH: ${result.recorded.join(", ")}`);
+      }
+      return ok(result);
+    }
     const { kind, nkvhPctId } = parseNkvhScope(body);
+    if (body.mode === "renumber") {
+      const result = await prisma.$transaction(tx => renumberNkvhPermit(tx, user, { kind, nkvhPctId, formattedNumber: body.formattedNumber }));
+      if (result.changed) await audit(user.id, "UPDATE_WORK_PERMIT", "WorkPermit", result.id, `Sửa số PCT theo NKVH: ${result.previous} → ${result.formatted}`);
+      return ok(result);
+    }
     if (body.mode === "cancel") {
       const result = await prisma.$transaction(tx => cancelNkvhPermit(tx, user, { kind, nkvhPctId, reason: body.reason }));
       await audit(user.id, "UPDATE_WORK_PERMIT", "WorkPermit", result.id, `Hủy PCT ${result.formatted} theo NKVH`);

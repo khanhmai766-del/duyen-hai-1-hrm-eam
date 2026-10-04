@@ -97,6 +97,7 @@ const SECTIONS: GuideSection[] = [
         points: [
           "Kiểm tra số và nội dung, sau đó tự bấm Lưu trên NKVH. Tiện ích không bao giờ tự lưu.",
           "Không gõ tay số vào NKVH vì sổ PXVH1 sẽ không biết số đó đã được sử dụng.",
+          "Nếu số sổ đưa ra đã có phiếu khác dùng trên NKVH và bạn sửa sang số khác, khung Sổ PXVH1 báo LỆCH SỐ: bấm Sửa sổ theo NKVH để sổ ghi đúng số đang có trong ô, hoặc Điền lại nếu gõ nhầm.",
         ],
       },
       {

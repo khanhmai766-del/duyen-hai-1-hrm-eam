@@ -2003,7 +2003,7 @@ model WorkPermitNumberReservation {
   year            Int
   number          String
   teamType        String
-  status          String    @default("RESERVED") // RESERVED | ISSUED | CANCELLED | RELEASED (cho phép cấp lại số hủy)
+  status          String    @default("RESERVED") // RESERVED | ISSUED | CANCELLED | RELEASED (cho phép cấp lại số hủy) | OBSERVED (số đã dùng trên NKVH, sổ chưa có hồ sơ)
   ownerId         String
   ownerName       String
   permitId        String?   @unique

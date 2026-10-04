@@ -28,6 +28,14 @@ export function canAutoReleaseLatestNumber(number: string, baseline: string, hig
 
 type Tx = Prisma.TransactionClient;
 
+/**
+ * Lượt "OBSERVED": số dạng sổ PXVH1 đã thấy trên NKVH (thường là số gõ tay) nhưng sổ chưa có hồ sơ.
+ * Tính vào dãy để lần lấy số sau nhảy qua, nhưng KHÔNG phải RESERVED — nên không hiện ở "Số đã lấy,
+ * chưa lưu phiếu" và không ai "Tiếp tục" cấp phiếu giấy trùng số được. Khi phiếu NKVH đó được nhận về
+ * sổ (Đồng bộ số hiện có / Sửa sổ theo NKVH), chính lượt này chuyển thành RESERVED/ISSUED.
+ */
+export const OBSERVED_NUMBER_STATUS = "OBSERVED";
+
 export function teamTypeLabel(teamType: string) {
   return teamType === "CONTRACTOR" ? "Nhà thầu · PCT giấy" : "Nội bộ";
 }
@@ -56,7 +64,7 @@ export async function permitNumberHighWater(
       UNION ALL
       SELECT "number" FROM "WorkPermitNumberReservation"
       WHERE "kind" = ${kind} AND "year" = ${year}
-        AND "status" IN ('RESERVED', 'ISSUED', 'CANCELLED')
+        AND "status" IN ('RESERVED', 'ISSUED', 'CANCELLED', 'OBSERVED')
         AND NOT (
           ${ignoreCancelledNumber}::text IS NOT NULL
           AND "status" = 'CANCELLED'
