@@ -31,7 +31,8 @@ export function OverhaulItemsEditButton({ permit, className }: { permit: PermitR
   </>;
 }
 
-function OverhaulItemsDialog({ permit, onClose }: { permit: PermitRow; onClose: () => void }) {
+/** Hộp chọn / bổ sung hạng mục — dùng riêng được (menu "Hạng mục" trong chi tiết PCT). */
+export function OverhaulItemsDialog({ permit, onClose }: { permit: PermitRow; onClose: () => void }) {
   const original = overhaulItemsOf(permit.overhaulItems);
   const [items, setItems] = useState<OverhaulItemSnapshot[]>(original);
   const save = useSaveOverhaulItems(permit.id);

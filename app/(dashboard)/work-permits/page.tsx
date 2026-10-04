@@ -3,7 +3,7 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Activity, BookMarked, ListChecks, ArrowRight, Ban, Building2, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, CircleAlert, ClipboardList, Copy, Download, ExternalLink, FileText, Filter, HardHat, Plus, RefreshCw, RotateCcw, Search, ShieldCheck, SlidersHorizontal, UsersRound, Wrench, Zap, Clock, CalendarRange, Trash2 } from "lucide-react";
+import { Activity, BookMarked, ListChecks, ListPlus, ArrowRight, Ban, Building2, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, CircleAlert, ClipboardList, Copy, Download, ExternalLink, FileText, Filter, HardHat, Plus, RefreshCw, RotateCcw, Search, ShieldCheck, SlidersHorizontal, UsersRound, Wrench, Zap, Clock, CalendarRange, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { PermitLiveBoard } from "@/components/work-permits/live-board";
 import { ContractorWorkSummary, PermitCompanyDirectory, PermitMembersEditor, PermitPeopleDirectory } from "@/components/work-permits/contractor-work";
@@ -12,7 +12,8 @@ import { MechanicalPaperInfo } from "@/components/work-permits/mechanical-paper-
 import { PermitCompanySelect } from "@/components/work-permits/company-picker";
 import { OverhaulContentField } from "@/components/work-permits/overhaul-item-picker";
 import { PermitDeadlineBadge } from "@/components/work-permits/permit-deadline";
-import { OverhaulItemsEditButton } from "@/components/work-permits/overhaul-items-edit";
+import { canEditOverhaulItems, OverhaulItemsDialog } from "@/components/work-permits/overhaul-items-edit";
+import { compactOverhaulContent } from "@/lib/work-permit-overhaul";
 import { OverhaulScheduleLinks } from "@/components/work-permits/overhaul-schedules";
 import { PermitGuideButton } from "@/components/work-permits/permit-guide";
 import { PermitExecutionDialog } from "@/components/work-permits/execution";
@@ -293,7 +294,7 @@ export default function WorkPermitsPage() {
         </div>
       </div>
       {query.isError ? <div role="alert" className="m-4 rounded-lg border border-red-200 bg-red-50 p-6 text-center text-red-700"><CircleAlert className="mx-auto mb-2" /><p className="font-semibold">Không thể tải sổ cấp phiếu</p><p className="mt-1 text-sm">{query.error.message}</p></div> : query.isPending ? <div className="space-y-2 p-4" role="status" aria-label="Đang tải sổ cấp phiếu">{Array.from({ length: 5 }, (_, i) => <div key={i} className="h-12 animate-pulse rounded-md bg-muted" />)}</div> : !rows.length ? <div className="px-6 py-12 text-center"><ClipboardList className="mx-auto text-muted-foreground" size={28} /><h2 className="mt-3 font-semibold">Chưa có phiếu phù hợp</h2><p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">Thay đổi bộ lọc hoặc ghi cấp phiếu mới để bắt đầu theo dõi.</p>{activeFilterCount > 0 && <Button className="mt-4" size="sm" variant="outline" onClick={resetFilters}><RotateCcw />Xóa bộ lọc</Button>}</div> : <>
-        <div className="divide-y divide-border md:hidden">{rows.map(r => <article key={r.id} tabIndex={0} aria-label={`Xem phiếu ${formatPermitNumber(r)}`} onClick={e => openRow(e, r.id)} onKeyDown={e => openRowByKey(e, r.id)} className="cursor-pointer focus-visible:bg-muted/40 focus-visible:outline-none space-y-2 px-4 py-3 transition-colors active:bg-muted/40"><div className="flex items-start justify-between gap-3"><PermitNumberCell permit={r} onOpenPaper={() => setDetail(r.id)} /><div className="flex flex-col items-end gap-1"><Status value={r.status} /><PermitDeadlineBadge permit={r} /></div></div><div className="flex flex-wrap items-center gap-1.5">{/* Điện thoại: số phiếu + trạng thái một hàng, các nhãn nhỏ xuống hàng riêng và tự xuống dòng — trước đây 4 cột một hàng làm nhãn "Cần bổ sung" bị cắt mép phải. */}<WorkTypeBadge value={effectiveWorkType(r)} /><PermitFormat permit={r} /><ContractorScopeBadge value={r.contractorScope} /><NeedsSupplement row={r} className="" /></div><div><p className="line-clamp-2 text-sm font-semibold leading-5 text-foreground">{r.content}</p><p className="mt-0.5 text-xs leading-5 text-muted-foreground">{PERMIT_UNITS[r.unit]}{r.position ? ` · ${r.position}` : ""}{r.location ? ` · ${r.location}` : ""}</p></div><div className="flex items-center justify-between gap-3 text-xs"><p className="min-w-0 truncate text-muted-foreground">Chỉ huy <span className="font-medium text-foreground">{r.sessions?.[0]?.commanderName || r.commanderName || "—"}</span> · {r.sessions?.[0]?.company || r.teamName || "—"}</p></div></article>)}</div>
+        <div className="divide-y divide-border md:hidden">{rows.map(r => <article key={r.id} tabIndex={0} aria-label={`Xem phiếu ${formatPermitNumber(r)}`} onClick={e => openRow(e, r.id)} onKeyDown={e => openRowByKey(e, r.id)} className="cursor-pointer focus-visible:bg-muted/40 focus-visible:outline-none space-y-2 px-4 py-3 transition-colors active:bg-muted/40"><div className="flex items-start justify-between gap-3"><PermitNumberCell permit={r} onOpenPaper={() => setDetail(r.id)} /><div className="flex flex-col items-end gap-1"><Status value={r.status} /><PermitDeadlineBadge permit={r} /></div></div><div className="flex flex-wrap items-center gap-1.5">{/* Điện thoại: số phiếu + trạng thái một hàng, các nhãn nhỏ xuống hàng riêng và tự xuống dòng — trước đây 4 cột một hàng làm nhãn "Cần bổ sung" bị cắt mép phải. */}<WorkTypeBadge value={effectiveWorkType(r)} /><PermitFormat permit={r} /><ContractorScopeBadge value={r.contractorScope} /><NeedsSupplement row={r} className="" /></div><div><p className="line-clamp-2 whitespace-pre-line text-sm font-semibold leading-5 text-foreground">{compactOverhaulContent(r.content)}</p><p className="mt-0.5 text-xs leading-5 text-muted-foreground">{PERMIT_UNITS[r.unit]}{r.position ? ` · ${r.position}` : ""}{r.location ? ` · ${r.location}` : ""}</p></div><div className="flex items-center justify-between gap-3 text-xs"><p className="min-w-0 truncate text-muted-foreground">Chỉ huy <span className="font-medium text-foreground">{r.sessions?.[0]?.commanderName || r.commanderName || "—"}</span> · {r.sessions?.[0]?.company || r.teamName || "—"}</p></div></article>)}</div>
         {/* Cùng khuôn bảng với sổ TBYCNN/PCCC và các tab khác của trang (đầu bảng xanh EVN, vạch xen
             kẽ, hover xanh). Bề rộng cột CỐ ĐỊNH + căn giữa theo chiều dọc: trước đây cột tự co theo
             chữ và căn trên, dòng nào có chữ phụ dài là cả hàng lệch nhau, nhìn rất rối. */}
@@ -316,7 +317,7 @@ export default function WorkPermitsPage() {
               <TableCell className={cn(TD_ROW, "py-3 text-center")}><div className="flex flex-col items-center gap-1"><WorkTypeBadge value={effectiveWorkType(r)} /><PermitFormat permit={r} /></div></TableCell>
               <TableCell className={cn(TD_ROW, "py-3")}><PermitNumberCell permit={r} onOpenPaper={() => setDetail(r.id)} /></TableCell>
               <TableCell className={cn(TD_ROW, "py-3")}>
-                <p className="truncate text-[13px] font-semibold text-ink" title={r.content}>{r.content || "—"}</p>
+                <p className="truncate text-[13px] font-semibold text-ink" title={compactOverhaulContent(r.content)}>{compactOverhaulContent(r.content).replace(/\n+/g, " ") || "—"}</p>
                 <p className="mt-0.5 truncate text-[11.5px] text-slate-500">{PERMIT_UNITS[r.unit]}{r.position ? ` · ${r.position}` : ""}{r.location ? ` · ${r.location}` : ""}{r.repairRequestNumber ? <span className="font-medium text-blue-700"> · SYC {r.repairRequestNumber}</span> : null}</p>
               </TableCell>
               <TableCell className={cn(TD_ROW, "py-3")}><span className="block truncate text-[13px] text-ink" title={r.issuerName || undefined}>{r.issuerName || <span className="text-slate-400">—</span>}</span></TableCell>
@@ -698,7 +699,7 @@ function PermitDetailFields({ row }: { row: PermitRow }) {
 
 function PermitDetail({ id, canIssue: listCanIssue, canIssueNew: listCanIssueNew, canExecute: listCanExecute, onClose, onEdit, onCopy }: { id: string; canIssue: boolean; canIssueNew: boolean; canExecute: boolean; onClose: () => void; onEdit: (r: PermitRow) => void; onCopy: (r: PermitRow) => void }) {
   const query = useWorkPermit(id);
-  const [executing, setExecuting] = useState(false); const [previewing, setPreviewing] = useState<"permit" | "appendix" | false>(false); const row = query.data?.data;
+  const [executing, setExecuting] = useState(false); const [addingItems, setAddingItems] = useState(false); const [previewing, setPreviewing] = useState<"permit" | "appendix" | false>(false); const row = query.data?.data;
   const canIssue = query.data?.meta?.canIssue ?? listCanIssue;
   // Cấp phiếu nháp / hủy phiếu: chỉ nhóm cố định (lib/work-permit-issuers.ts); sửa thông tin theo canIssue.
   const canIssueNew = query.data?.meta?.canIssueNew ?? listCanIssueNew;
@@ -740,6 +741,8 @@ function PermitDetail({ id, canIssue: listCanIssue, canIssueNew: listCanIssueNew
     catch (error) { toast.error(error instanceof Error ? error.message : "Không thể hủy PCT nháp"); }
   }
   const paper = row ? effectivePermitFormat(row) === "PAPER" : false;
+  // "Hạng mục → Chi tiết" (phụ lục in kèm): PCT giấy đại tu đã cấp, chưa hủy, có hạng mục.
+  const showItemDetail = Boolean(row && paper && !["DRAFT", "CANCELLED"].includes(row.status) && row.contractorScope === "OVERHAUL" && (row.overhaulItems?.length ?? 0) > 0);
   const summary = "flex cursor-pointer list-none items-center justify-between gap-2 rounded-lg border border-border px-3 py-2 text-[13px] font-semibold marker:hidden hover:bg-muted/40";
   /* Hộp chi tiết chia ba tầng như biểu mẫu cấp phiếu: đầu hộp cố định (số phiếu · trạng thái ·
      hành động), thân cuộn riêng, nên cuộn xuống lịch sử vẫn thấy số phiếu và nút thao tác. */
@@ -754,7 +757,7 @@ function PermitDetail({ id, canIssue: listCanIssue, canIssueNew: listCanIssueNew
           {row.teamType === "CONTRACTOR" && <PermitProgress value={row.progress} />}
         </div>
         <div className="mt-3 flex flex-wrap items-center gap-2">
-          {canActOnPermit && paper && !["DRAFT", "CANCELLED"].includes(row.status) && <Button size="sm" className="hidden h-8 text-xs md:inline-flex" onClick={() => setPreviewing("permit")} title="In phiếu trên iPad / máy tính"><FileText />Xem và in</Button>}{canActOnPermit && paper && !["DRAFT", "CANCELLED"].includes(row.status) && row.contractorScope === "OVERHAUL" && (row.overhaulItems?.length ?? 0) > 0 && <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => setPreviewing("appendix")} title="Phụ lục mã hạng mục, nội dung và biện pháp thi công — in kèm PCT"><ListChecks />Phụ lục</Button>}{canActOnPermit && <OverhaulItemsEditButton permit={row} />}
+          {canActOnPermit && paper && !["DRAFT", "CANCELLED"].includes(row.status) && <Button size="sm" className="hidden h-8 text-xs md:inline-flex" onClick={() => setPreviewing("permit")} title="In phiếu trên iPad / máy tính"><FileText />Xem và in</Button>}{/* "Hạng mục": gom Phụ lục (Chi tiết) + Bổ sung hạng mục vào một menu cho gọn hàng nút. */}{canActOnPermit && (showItemDetail || canEditOverhaulItems(row)) && <DropdownMenu><DropdownMenuTrigger asChild><Button size="sm" variant="outline" className="h-8 text-xs"><ListChecks />Hạng mục<ChevronDown className="opacity-70" /></Button></DropdownMenuTrigger><DropdownMenuContent align="start" className="w-56 p-1">{showItemDetail && <DropdownMenuItem className="min-h-10 cursor-pointer gap-2" onSelect={() => setPreviewing("appendix")}><ListChecks className="h-4 w-4" /><span><span className="block text-sm font-medium">Chi tiết</span><span className="block text-xs text-muted-foreground">Phụ lục mã, nội dung, biện pháp thi công</span></span></DropdownMenuItem>}{canEditOverhaulItems(row) && <DropdownMenuItem className="min-h-10 cursor-pointer gap-2" onSelect={() => setAddingItems(true)}><ListPlus className="h-4 w-4" /><span><span className="block text-sm font-medium">Bổ sung</span><span className="block text-xs text-muted-foreground">Thêm / bớt hạng mục của phiếu</span></span></DropdownMenuItem>}</DropdownMenuContent></DropdownMenu>}
           {paper && canIssueNew && ["ISSUED", "CLOSED"].includes(row.status) && <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => onCopy(row)}><Copy />Sao chép tạo PCT mới</Button>}
           {canActOnPermit && !["DRAFT", "CLOSED", "CANCELLED"].includes(row.status) && !(row.teamType === "CONTRACTOR" && row.status === "ISSUED") && <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => setExecuting(true)}>{row.teamType === "INTERNAL" ? "Ghi nhận đóng phiếu" : "Cập nhật tiến độ"}</Button>}
           {canIssueNew && row.status === "DRAFT" && <Button size="sm" variant="destructive" className="h-8 text-xs" disabled={cancelDraft.isPending} onClick={() => void cancelDraftNow(row)}>{cancelDraft.isPending ? "Đang hủy…" : "Hủy nháp"}</Button>}
@@ -770,12 +773,13 @@ function PermitDetail({ id, canIssue: listCanIssue, canIssueNew: listCanIssueNew
       {/* Nội dung công việc là thứ người tra đọc đầu tiên: cho nó một khối riêng, chữ to hơn phần còn lại. */}
       <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
         <p className="text-[10.5px] font-semibold uppercase tracking-[0.03em] text-slate-500 dark:text-muted-foreground">{PERMIT_FIELD_LABELS.content}</p>
-        <p className="mt-1 whitespace-pre-wrap break-words text-[15px] font-semibold leading-6 text-foreground">{row.content || "—"}</p>
+        <p className="mt-1 whitespace-pre-wrap break-words text-[15px] font-semibold leading-6 text-foreground">{compactOverhaulContent(row.content) || "—"}</p>
         {row.location && <p className="mt-1.5 text-xs text-muted-foreground">{PERMIT_FIELD_LABELS.location}: <span className="font-medium text-foreground">{row.location}</span></p>}
       </div>
       {!paper && <NkvhLinkPanel key={`${row.id}-${row.version}-nkvh`} permit={row} canEdit={canIssue || canExecute} />}
       <ContractorWorkSummary permit={row} />
       {previewing && <PermitDocumentPreview title={previewing === "appendix" ? `Phụ lục đại tu · PCT ${formatPermitNumber(row)}` : `Phiếu công tác ${formatPermitNumber(row)}`} load={() => apiDownload(`/api/work-permits/${encodeURIComponent(row.id)}/${previewing === "appendix" ? "overhaul-appendix" : "document"}`)} loadQr={previewing === "permit" && row.teamType === "CONTRACTOR" ? () => apiDownload(`/api/work-permits/${encodeURIComponent(row.id)}/qr`) : undefined} onClose={() => setPreviewing(false)} />}
+      {addingItems && canActOnPermit && <OverhaulItemsDialog permit={row} onClose={() => setAddingItems(false)} />}
       {executing && canActOnPermit && <PermitExecutionDialog key={row.version} permit={row} onClose={() => setExecuting(false)} />}
       <PermitDetailFields row={row} />
       {paper && <details className="group"><summary className={summary}><span>Mối nguy và biện pháp an toàn ({row.safetyItems?.length ?? 0})</span><ChevronRight className="h-4 w-4 shrink-0 transition-transform group-open:rotate-90" /></summary><div className="mt-2 [&>section]:rounded-none [&>section]:border-0 [&>section]:p-0 [&>section>h3]:hidden"><PermitSafetyReadOnly value={row.safetyItems ?? []} /></div></details>}

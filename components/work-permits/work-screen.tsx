@@ -11,6 +11,7 @@ import { usePermitCompanySummary, useWorkPermit } from "@/hooks/useWorkPermits";
 import { formatPermitNumber, PERMIT_KINDS, PERMIT_STATUSES, PERMIT_UNITS, permitDeadline, workersStillInside, type PermitSession } from "@/lib/work-permits";
 import { PermitDeadlineBadge } from "@/components/work-permits/permit-deadline";
 import { OverhaulItemsEditButton } from "@/components/work-permits/overhaul-items-edit";
+import { compactOverhaulContent } from "@/lib/work-permit-overhaul";
 
 const fmt = (v: string) => new Date(v).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" });
 function elapsed(from: string) {
@@ -69,7 +70,7 @@ export function PermitWorkScreen({ id }: { id: string }) {
         {/* Điện thoại: bỏ dòng nhãn và vị trí cho gọn đầu trang (người dùng chính ở hiện trường). */}
         <p className="hidden text-xs font-semibold uppercase tracking-wide text-muted-foreground sm:block">Màn hình làm việc · {PERMIT_KINDS[permit.kind]} · {PERMIT_STATUSES[permit.status]}</p>
         <h1 className="text-lg font-bold sm:text-2xl">PCT {formatPermitNumber(permit)}</h1>
-        <p className="mt-1 line-clamp-3 text-[15px] font-semibold leading-6">{permit.content || "—"}</p>
+        <p className="mt-1 line-clamp-3 whitespace-pre-line text-[15px] font-semibold leading-6">{compactOverhaulContent(permit.content) || "—"}</p>
         <p className="text-sm text-muted-foreground">{permit.location && <span className="hidden sm:inline">{permit.location} · </span>}{PERMIT_UNITS[permit.unit]}{permit.teamName && <>{PERMIT_UNITS[permit.unit] && " · "}<span title={permit.teamName}>{teamCode || permit.teamName}</span></>}</p>
         <div className="mt-1.5 flex flex-wrap items-center gap-2"><PermitDeadlineBadge permit={permit} />{Boolean(query.data?.meta?.canActOnPermit) && <OverhaulItemsEditButton permit={permit} />}</div>
       </div>

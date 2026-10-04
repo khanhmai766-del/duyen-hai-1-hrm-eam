@@ -144,6 +144,54 @@ export function overhaulContentText(items: Pick<OverhaulItemSnapshot, "code" | "
   return `Thực hiện đại tu theo hạng mục ${codes}`;
 }
 
+/** Dòng đầu khối gợi ý ("- theo mã hạng mục:"); nhận cả dạng một dòng cũ "- theo hạng mục: 1.1, 1.2". */
+const CODES_HEADER = /^\s*-\s*theo\s+(?:mã\s+)?hạng mục\s*:\s*(.*)$/iu;
+/** Dòng hạng mục trong khối: "- 1.1.2.1 - Nội dung" (người cấp có thể xoá bớt phần nội dung). */
+const CODE_ITEM = /^\s*-\s*(\d+(?:\.\d+)+)\b/u;
+const codesIn = (text: string) => text.split(/[,;\s]+/).map(code => code.trim()).filter(code => /^\d+(?:\.\d+)+$/.test(code));
+
+/** Tách nội dung thành phần người dùng gõ + mã trong khối gợi ý (khối = dòng đầu + các dòng hạng mục liền sau). */
+function splitOverhaulBlock(content: string) {
+  const lines = content.replace(/\r\n?/g, "\n").split("\n");
+  const kept: string[] = [], codes: string[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    const header = CODES_HEADER.exec(lines[i]);
+    if (!header) { kept.push(lines[i]); continue; }
+    codes.push(...codesIn(header[1]));
+    while (i + 1 < lines.length && CODE_ITEM.test(lines[i + 1])) codes.push(CODE_ITEM.exec(lines[++i])![1]);
+  }
+  return { base: kept.join("\n").trimEnd(), codes: [...new Set(codes)].sort(compareOverhaulCodes) };
+}
+
+/**
+ * Nội dung công việc + khối GỢI Ý cuối (nghiệp vụ 04/10/2026), để người cấp phiếu giữ nguyên hoặc xoá bớt cho gọn:
+ *   - theo mã hạng mục:
+ *   - 1.1.2.1 - Chuẩn bị mặt bằng, tháo bao che cách âm khối turbine
+ * Chọn lại hạng mục thì THAY cả khối; bỏ hết mã thì xoá khối; phần người dùng gõ phía trên giữ nguyên.
+ */
+export function withOverhaulCodesLine(content: string, items: Pick<OverhaulItemSnapshot, "code" | "content" | "device">[]) {
+  const { base } = splitOverhaulBlock(content);
+  if (!items.length) return base;
+  const unique = [...new Map(items.map(item => [item.code, item])).values()].sort((a, b) => compareOverhaulCodes(a.code, b.code));
+  const block = ["- theo mã hạng mục:", ...unique.map(item => {
+    const text = (item.content || item.device || "").replace(/\s+/g, " ").trim();
+    return text ? `- ${item.code} - ${text}` : `- ${item.code}`;
+  })].join("\n");
+  return base ? `${base}\n${block}` : block;
+}
+
+/**
+ * Bản GỌN để hiển thị ở danh sách sổ, chi tiết phiếu, màn hình làm việc: khối gợi ý dài thu lại còn một dòng
+ * "- theo hạng mục: 1.1.2.1, 1.1.2.2". Bản in và ô sửa vẫn dùng nội dung đầy đủ.
+ */
+export function compactOverhaulContent(content: string) {
+  if (!content || !/theo\s+(?:mã\s+)?hạng mục/iu.test(content)) return content;
+  const { base, codes } = splitOverhaulBlock(content);
+  if (!codes.length) return content;
+  const line = `- theo hạng mục: ${codes.join(", ")}`;
+  return base ? `${base}\n${line}` : line;
+}
+
 /**
  * Bảng "Tiến độ đại tu" trên sổ PCT: 4 link Google Sheets theo dõi tiến độ, sửa được tiêu đề + link
  * (lưu RbacConfig key OVERHAUL_SCHEDULE_CONFIG_KEY). Danh sách dòng cố định theo `id`; giá trị ở đây là mặc định.

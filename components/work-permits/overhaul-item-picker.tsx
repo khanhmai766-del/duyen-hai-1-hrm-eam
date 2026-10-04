@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { useOverhaulItems, usePermitCompanySummary, useSyncOverhaulItems, type OverhaulSyncResult } from "@/hooks/useWorkPermits";
 import { normalizeText } from "@/lib/nav";
-import { compareOverhaulCodes, isOverhaulPaperPermit, overhaulContentText, type OverhaulItemOption, type OverhaulItemSnapshot } from "@/lib/work-permit-overhaul";
+import { compareOverhaulCodes, isOverhaulPaperPermit, overhaulContentText, withOverhaulCodesLine, type OverhaulItemOption, type OverhaulItemSnapshot } from "@/lib/work-permit-overhaul";
 import { effectivePermitFormat, type PermitInput } from "@/lib/work-permits";
 
 const keyOf = (item: Pick<OverhaulItemSnapshot, "sheet" | "code">) => `${item.sheet}\u0000${item.code}`;
@@ -21,7 +21,7 @@ const confirmShared = (items: OverhaulItemOption[]) => window.confirm(items.leng
 
 /**
  * Nút "Chọn hạng mục đại tu" + chip mã đã chọn, đặt dưới ô Nội dung công việc của PCT nhà thầu · Đại tu.
- * Chọn xong: Nội dung được điền "Đại tu <thiết bị> theo hạng mục 1.1.1, 1.1.2"; chi tiết từng mã in ở phụ lục.
+ * Chọn xong: cuối Nội dung có khối gợi ý "- theo mã hạng mục:" + từng dòng "- <mã> - <nội dung>" (thay khối cũ); chi tiết từng mã in ở phụ lục.
  */
 export function OverhaulContentField({ form, onApply }: {
   form: PermitInput;
@@ -34,9 +34,10 @@ export function OverhaulContentField({ form, onApply }: {
   const [open, setOpen] = useState(false);
   if (!isOverhaulPaperPermit({ ...form, format: effectivePermitFormat(form) })) return null;
   const items = form.overhaulItems ?? [];
-  // Nội dung còn đúng câu tự điền thì cập nhật theo mã; người dùng đã sửa tay thì không đè.
-  const contentIsGenerated = !form.content.trim() || form.content.trim() === overhaulContentText(items);
-  const apply = (next: OverhaulItemSnapshot[], company: string | null = null) => onApply(next, contentIsGenerated ? overhaulContentText(next) : null, company);
+  // Nội dung = phần người dùng gõ + khối gợi ý mã hạng mục (thay khối cũ khi chọn lại). Câu tự điền
+  // kiểu cũ ("Đại tu … theo hạng mục …") đã chứa mã nên bỏ đi, chỉ giữ khối mới.
+  const base = form.content.trim() === overhaulContentText(items) ? "" : form.content;
+  const apply = (next: OverhaulItemSnapshot[], company: string | null = null) => onApply(next, withOverhaulCodesLine(base, next), company);
 
   return <div className="space-y-2">
     <div className="flex flex-wrap items-center gap-2">
