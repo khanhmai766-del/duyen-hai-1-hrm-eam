@@ -36,6 +36,8 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
         progress = body.progress;
       }
       const source = { ...JSON.parse(JSON.stringify(before)), ...body, status };
+      // Nút "Kết thúc phiếu" (chi tiết PCT nhà thầu) chỉ xác nhận khoá phiếu, không hỏi kết quả: còn trống thì ghi mặc định.
+      if (status === "CLOSED" && before.teamType === "CONTRACTOR" && !String(source.result ?? "").trim()) source.result = "Kết thúc phiếu";
       const data = parsePermit(source, status);
       if (before.authorizedAt && !data.authorizedAt) throw fail("Không được xóa thời điểm cho phép đã ghi nhận", 409);
       if (before.teamType === "CONTRACTOR") {
