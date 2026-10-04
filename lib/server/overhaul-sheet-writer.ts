@@ -5,7 +5,6 @@ import { a1Tab, batchGetValues, batchUpdateSpreadsheet, batchUpdateValues, colum
 import { overhaulScheduleLinks } from "@/lib/server/overhaul-schedules";
 import { findHeader, repairDateCode } from "@/lib/server/work-permit-overhaul";
 import { OVERHAUL_DAY_STATUSES, OVERHAUL_HOLDING_STATUSES, OVERHAUL_SOURCES, overhaulItemsOf, type OverhaulItemProgress, type OverhaulSource } from "@/lib/work-permit-overhaul";
-import { formatPermitNumber } from "@/lib/work-permits";
 
 /*
  * Đợt 2 đại tu — ghi kết quả ngày của PCT về Google Sheets tiến độ (web là nguồn, Sheet theo web).
@@ -18,7 +17,7 @@ import { formatPermitNumber } from "@/lib/work-permits";
  *    hàng dưới là "Nhật ký ngày". Hàng tìm theo MÃ ở mỗi lần ghi (người dùng có thể chèn/xoá hàng).
  *  - Cột ngày tìm theo "dd/mm" trong tiêu đề "Ngày n\ndd/mm"; cột %/trạng thái theo tên tiêu đề (vị trí khác nhau giữa tab).
  *  - Không tìm thấy tab/mã/cột ngày → báo lỗi rõ, KHÔNG đoán ghi sang chỗ khác. Mã trùng hai lần trong tab cũng báo lỗi.
- *  - Nhật ký ngày GHI ĐÈ bằng lần cập nhật mới nhất trong ngày: "PCT <số>" + xuống dòng + nội dung (từ 04/10/2026;
+ *  - Nhật ký ngày GHI ĐÈ bằng lần cập nhật mới nhất trong ngày: "PCT <số>/<năm>" + xuống dòng + nội dung (từ 04/10/2026;
  *    trước đó nối thêm dòng). Chữ người khác gõ tay trong ô ngày đó sẽ bị thay.
  *  - Ô "% Hoàn thành" / "Trạng thái hiện tại" bị ghi đè bằng giá trị (bỏ công thức cũ) — chỉ khi đây là kết quả mới nhất.
  */
@@ -361,10 +360,10 @@ export async function pushOverhaulSheetOutbox(options: { limit?: number; dryRun?
           else { keep(bestStatus, itemKey(item.sheet, item.code), value); keep(bestDay, `${itemKey(item.sheet, item.code)}\u0000${item.day}`, value); }
         }
       }
-      // Dòng đầu ô Nhật ký ngày = số PCT của lần cập nhật.
+      // Dòng đầu ô Nhật ký ngày = "PCT <số>/<năm>" của lần cập nhật (gọn, bỏ đuôi /VH1-NĐDH cho ô hẹp).
       const permitNumbers = new Map((await prisma.workPermit.findMany({
         where: { id: { in: [...new Set(sourceRows.filter(row => row.note).map(row => row.permitId))] } }, select: { id: true, number: true, year: true },
-      })).map(permit => [permit.id, formatPermitNumber(permit)]));
+      })).map(permit => [permit.id, `${permit.number.trim()}/${permit.year}`]));
 
       const cells = new Map<string, string | number>();
       const journal = new Map<string, string>();
@@ -580,7 +579,9 @@ function normaliseTab(tab: SheetTab, layout: TabLayout, raw: string[][], formatt
 
   // 5. Ô ngày tự xuống dòng (nhật ký nhiều dòng) — áp cả khối, chạy lại vô hại.
   const firstDay = Math.min(...layout.dayColumns), lastDay = Math.max(...layout.dayColumns);
-  requests.push({ repeatCell: { range: { sheetId: tab.sheetId, startRowIndex: layout.headerRow + 1, endRowIndex: tab.rowCount, startColumnIndex: firstDay, endColumnIndex: lastDay + 1 }, cell: { userEnteredFormat: { wrapStrategy: "WRAP", verticalAlignment: "TOP" } }, fields: "userEnteredFormat.wrapStrategy,userEnteredFormat.verticalAlignment" } });
+  requests.push({ repeatCell: { range: { sheetId: tab.sheetId, startRowIndex: layout.headerRow + 1, endRowIndex: tab.rowCount, startColumnIndex: firstDay, endColumnIndex: lastDay + 1 }, cell: { userEnteredFormat: { wrapStrategy: "WRAP", verticalAlignment: "MIDDLE" } }, fields: "userEnteredFormat.wrapStrategy,userEnteredFormat.verticalAlignment" } });
+  // Mọi ô vùng hạng mục canh dọc GIỮA (nghiệp vụ 04/10/2026) — kể cả cột mã/nội dung/%/trạng thái bên trái cột ngày.
+  if (firstDay > 0) requests.push({ repeatCell: { range: { sheetId: tab.sheetId, startRowIndex: layout.headerRow + 1, endRowIndex: tab.rowCount, startColumnIndex: 0, endColumnIndex: firstDay }, cell: { userEnteredFormat: { verticalAlignment: "MIDDLE" } }, fields: "userEnteredFormat.verticalAlignment" } });
 
   // 6. Màu trạng thái: bỏ quy tắc chữ trạng thái cũ, thêm bộ chung (cột trạng thái + ô ngày).
   const rules = formatting?.conditionalFormats ?? [];

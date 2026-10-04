@@ -33,17 +33,17 @@ Web là nguồn, Sheet theo web. Code: `lib/server/overhaul-sheet-writer.ts`; l�
 
 | Khi | Ô ngày (trạng thái) | Nhật ký ngày | % Hoàn thành / Trạng thái hiện tại |
 | --- | --- | --- | --- |
-| **Cập nhật tiến độ** giữa chừng (nút cạnh Kết thúc), hạng mục có tick | Đang thực hiện (ngày cập nhật) | ghi đè `PCT <số>` ↵ `HH:mm · CHTT: ghi chú (x%)` | % lũy kế nhập / Đang thực hiện |
-| Kết thúc lần làm việc, hạng mục **có tick** | Đang thực hiện | ghi đè `PCT <số>` ↵ `HH:mm · CHTT: ghi chú (x%)` | % lũy kế nhập / Đang thực hiện |
+| **Cập nhật tiến độ** giữa chừng (nút cạnh Kết thúc), hạng mục có tick | Đang thực hiện (ngày cập nhật) | ghi đè `PCT <số>/<năm>` ↵ `HH:mm · CHTT: ghi chú (x%)` | % lũy kế nhập / Đang thực hiện |
+| Kết thúc lần làm việc, hạng mục **có tick** | Đang thực hiện | ghi đè `PCT <số>/<năm>` ↵ `HH:mm · CHTT: ghi chú (x%)` | % lũy kế nhập / Đang thực hiện |
 | Kết thúc lần làm việc, hạng mục **không tick** | Không thực hiện (đã "Cập nhật tiến độ" cùng ngày → vẫn Đang thực hiện) | — | giữ % / Không thực hiện |
 | 16:00, PCT còn hiệu lực mà cả ngày không mở lần làm việc | Không mở ngày thực hiện | — | giữ % / Không mở ngày thực hiện |
-| Kết thúc phiếu | Kết thúc công tác | ghi đè `PCT <số>` ↵ `HH:mm · Kết thúc phiếu` | giữ % / Kết thúc công tác |
+| Kết thúc phiếu | Kết thúc công tác | ghi đè `PCT <số>/<năm>` ↵ `HH:mm · Kết thúc phiếu` | giữ % / Kết thúc công tác |
 | Hạng mục chưa nằm trong PCT nào | (mặc định) Chưa thực hiện — app không ghi | | |
 
 - Ngày = ngày giờ VN của thời điểm kết thúc. Cột ngày tìm theo `dd/mm` trong tiêu đề "Ngày n"; hàng tìm theo **mã** mỗi
   lần ghi (người dùng có thể chèn/xoá hàng; từ 04/10/2026 tab "Lò phó - Cơ" đã bỏ `INDEX(FILTER(...))` từ tab "Lò- Cơ", chuyển sang giá trị tĩnh như các file khác — bản sao công thức cũ: `/root/backup-lo-pho-co-filter-2026-10-040327.json` trên server); cột %/Trạng thái tìm theo tên tiêu đề.
 - Ghi chú hạng mục trống → Nhật ký ngày dùng ghi chú chung của lần làm việc / lần cập nhật.
-- Nhật ký ngày (từ 04/10/2026) **ghi đè** bằng lần cập nhật mới nhất của hạng mục trong ngày — dòng đầu `PCT <số>`, xuống dòng là nội dung; chữ gõ tay trong ô ngày đó bị thay. Trước đó web nối thêm dòng.
+- Nhật ký ngày (từ 04/10/2026) **ghi đè** bằng lần cập nhật mới nhất của hạng mục trong ngày — dòng đầu `PCT <số>/<năm>` (vd `PCT 4430/2026`), xuống dòng là nội dung; chữ gõ tay trong ô ngày đó bị thay. Trước đó web nối thêm dòng.
 - "Trạng thái hiện tại" và "% Hoàn thành" **bị ghi đè bằng giá trị** (bỏ công thức ở hàng đó), lấy kết quả của
   **ngày mới nhất** — chạy bù ngày cũ không đè ngày sau. Trong cùng ngày, ưu tiên: Không mở ngày thực hiện <
   Không thực hiện < có làm / kết thúc (hai PCT cùng giữ một hạng mục: phiếu không làm không đè phiếu có làm).
