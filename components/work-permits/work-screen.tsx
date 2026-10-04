@@ -7,7 +7,7 @@ import { ArrowLeft, ChartNoAxesColumnIncreasing, Play, RefreshCw, Square, UserRo
 import { Button } from "@/components/ui/button";
 import { canUpdateOverhaulProgress, ContractorSessions, SessionEditor } from "@/components/work-permits/contractor-work";
 import { SessionAttendance } from "@/components/work-permits/session-attendance";
-import { useWorkPermit } from "@/hooks/useWorkPermits";
+import { usePermitCompanySummary, useWorkPermit } from "@/hooks/useWorkPermits";
 import { formatPermitNumber, PERMIT_KINDS, PERMIT_STATUSES, PERMIT_UNITS, permitDeadline, workersStillInside, type PermitSession } from "@/lib/work-permits";
 import { PermitDeadlineBadge } from "@/components/work-permits/permit-deadline";
 import { OverhaulItemsEditButton } from "@/components/work-permits/overhaul-items-edit";
@@ -26,6 +26,7 @@ const LIVE_REFRESH_MS = 15_000;
  */
 export function PermitWorkScreen({ id }: { id: string }) {
   const query = useWorkPermit(id, LIVE_REFRESH_MS);
+  const companies = usePermitCompanySummary();
   const [action, setAction] = useState<{ kind: "open" } | { kind: "handoff" | "end" | "progress"; session: PermitSession } | null>(null);
   const permit = query.data?.data;
   const canExecute = Boolean(query.data?.meta?.canExecute);
@@ -56,6 +57,8 @@ export function PermitWorkScreen({ id }: { id: string }) {
   const live = liveSession;
   // Còn nhân viên (trừ CHTT) trong khu vực → khoá nút Kết thúc tới khi quét ra hết.
   const workersInside = live ? workersStillInside(live.members, live).length : 0;
+  // PCT nhà thầu: hiện mã đơn vị (tên gọi tắt trong danh bạ) cho gọn; đơn vị chưa khai mã thì giữ tên đầy đủ.
+  const teamCode = permit.teamType === "CONTRACTOR" ? companies.data?.data.find(row => row.company === permit.teamName)?.code || "" : "";
   // Không thêm lề ngang: <main> của AppShell đã có p-4 (điện thoại) / p-6 / p-8.
   return <div className="mx-auto max-w-4xl space-y-4">
     <header className="space-y-2">
@@ -67,7 +70,7 @@ export function PermitWorkScreen({ id }: { id: string }) {
         <p className="hidden text-xs font-semibold uppercase tracking-wide text-muted-foreground sm:block">Màn hình làm việc · {PERMIT_KINDS[permit.kind]} · {PERMIT_STATUSES[permit.status]}</p>
         <h1 className="text-lg font-bold sm:text-2xl">PCT {formatPermitNumber(permit)}</h1>
         <p className="mt-1 line-clamp-3 text-[15px] font-semibold leading-6">{permit.content || "—"}</p>
-        <p className="text-sm text-muted-foreground">{permit.location && <span className="hidden sm:inline">{permit.location} · </span>}{[PERMIT_UNITS[permit.unit], permit.teamName].filter(Boolean).join(" · ")}</p>
+        <p className="text-sm text-muted-foreground">{permit.location && <span className="hidden sm:inline">{permit.location} · </span>}{PERMIT_UNITS[permit.unit]}{permit.teamName && <>{PERMIT_UNITS[permit.unit] && " · "}<span title={permit.teamName}>{teamCode || permit.teamName}</span></>}</p>
         <div className="mt-1.5 flex flex-wrap items-center gap-2"><PermitDeadlineBadge permit={permit} />{(canExecute || canIssue) && <OverhaulItemsEditButton permit={permit} />}</div>
       </div>
     </header>

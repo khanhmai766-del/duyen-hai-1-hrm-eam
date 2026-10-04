@@ -51,7 +51,7 @@ function OverhaulItemsDialog({ permit, onClose }: { permit: PermitRow; onClose: 
   return <Dialog open onOpenChange={v => { if (!v && !save.isPending) onClose(); }}>
     <DialogContent className="max-w-2xl">
       <DialogTitle>Hạng mục đại tu · PCT {formatPermitNumber(permit)}</DialogTitle>
-      <DialogDescription>Bổ sung hạng mục cho phiếu đã cấp, kể cả khi đang làm việc. Hạng mục mới dùng ngay khi Cập nhật tiến độ / Kết thúc và được ghi về Sheet tiến độ. Chỉ bớt được hạng mục chưa ghi tiến độ. Nội dung công việc trên phiếu giấy giữ nguyên; phụ lục in kèm cập nhật theo.</DialogDescription>
+      <DialogDescription>Bổ sung hạng mục cho phiếu đã cấp, kể cả khi đang làm việc. Hạng mục mới dùng ngay khi Cập nhật tiến độ / Kết thúc.</DialogDescription>
       <div className="space-y-3">
         <OverhaulContentField form={form} onApply={next => setItems(next)} />
         {!items.length && <p className="text-sm text-muted-foreground">Chưa chọn hạng mục nào.</p>}

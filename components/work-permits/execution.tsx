@@ -3,12 +3,28 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { useExecuteWorkPermit } from "@/hooks/useWorkPermits";
+import { useExecuteWorkPermit, usePermitResults } from "@/hooks/useWorkPermits";
 import { CONTRACTOR_PERMIT_TRANSITIONS, PERMIT_STATUSES, formatPermitNumber, type PermitRow, type PermitStatus } from "@/lib/work-permits";
 import { PERMIT_EXECUTION_STATUSES } from "@/lib/work-permit-permissions";
 const inputClass = "min-h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm";
 const localTime = (value: string | null) => value ? new Date(new Date(value).getTime() + 7 * 3600000).toISOString().slice(0,16) : "";
 const vnNow = () => new Date(Date.now() + 7 * 3600000).toISOString().slice(0, 16);
+/** Kết quả đã ghi các lần trước — ô Kết quả công việc ghi đè, nên bản cũ chỉ còn trong lịch sử. */
+function PreviousResults({ permit }: { permit: PermitRow }) {
+  const query = usePermitResults(permit.id, permit.version);
+  const rows = query.data?.data ?? [];
+  if (query.isPending) return <p role="status" className="text-xs text-muted-foreground">Đang tải kết quả đã ghi…</p>;
+  if (query.isError) return <p role="alert" className="text-xs text-red-700">Không tải được kết quả đã ghi: {query.error.message}</p>;
+  if (!rows.length) return null;
+  return <div className="space-y-1.5 text-sm">
+    <p className="font-medium">Kết quả đã ghi trước đây ({rows.length})</p>
+    <ol className="max-h-56 space-y-1.5 overflow-y-auto pr-1">{rows.map(row => <li key={row.id} className="rounded-lg border border-border bg-muted/30 px-3 py-2">
+      <p className="text-xs text-muted-foreground">{new Date(row.createdAt).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })} · {row.actorName || "—"}</p>
+      <p className="mt-0.5 whitespace-pre-wrap break-words">{row.result}</p>
+    </li>)}</ol>
+  </div>;
+}
+
 export function PermitExecutionDialog({ permit, onClose }: { permit: PermitRow; onClose: () => void }) {
   const save = useExecuteWorkPermit(permit.id);
   const internal = permit.teamType === "INTERNAL";
@@ -34,6 +50,7 @@ export function PermitExecutionDialog({ permit, onClose }: { permit: PermitRow; 
     {!internal && status !== "ISSUED" && <label className="block space-y-1 text-sm">Tiến độ (%)<input className={inputClass} type="number" min={0} max={100} step={1} value={progress} onChange={e => setProgress(e.target.value)} /></label>}
     {status === "PAUSED" && <label className="block space-y-1 text-sm">Lý do tạm dừng<textarea className={inputClass} required maxLength={2000} value={reason} onChange={e => setReason(e.target.value)} /></label>}
     <label className="block space-y-1 text-sm">{internal ? "Ghi nhận kết quả (không bắt buộc)" : "Kết quả công việc"}<textarea className={inputClass} required={!internal && status === "CLOSED"} maxLength={5000} value={result} onChange={e => setResult(e.target.value)} /></label>
+    <PreviousResults permit={permit} />
     {status === "CLOSED" && <label className="block space-y-1 text-sm">Thời điểm đóng phiếu (giờ Việt Nam)<input type="datetime-local" className={inputClass} required value={closedAt} onChange={e => setClosed(e.target.value)} /></label>}
     <div className="flex justify-end gap-2"><Button variant="outline" type="button" onClick={onClose}>Để sau</Button><Button type="submit">{save.isPending ? "Đang lưu…" : "Lưu thực hiện"}</Button></div>
   </fieldset></form></DialogContent></Dialog>;

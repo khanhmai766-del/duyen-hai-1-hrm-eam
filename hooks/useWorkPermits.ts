@@ -235,6 +235,13 @@ export function usePermitEmployees(q: string, page: number, enabled: boolean) {
     queryFn: () => apiGet<Array<{ id: string; name: string; employeeId: string | null; position: string | null; department: string | null }>>(`/api/work-permits/employees?${new URLSearchParams({ q, page: String(page) })}`) as Promise<{ data: Array<{ id: string; name: string; employeeId: string | null; position: string | null; department: string | null }>; meta: { total: number } }> });
 }
 
+export interface PermitResultEntry { id: string; createdAt: string; actorName: string; result: string }
+/** Các lần ghi "Kết quả công việc" trước đây (rút từ lịch sử cập nhật của phiếu). */
+export function usePermitResults(id: string, version: number) {
+  return useQuery({ queryKey: ["work-permit", id, "results", version], staleTime: 60000,
+    queryFn: () => apiGet<PermitResultEntry[]>(`/api/work-permits/${id}/results`) });
+}
+
 export function useExecuteWorkPermit(id: string) {
   const qc = useQueryClient();
   return useMutation({ mutationFn: (body: unknown) => apiMutate<PermitRow>(`/api/work-permits/${id}/execution`, "POST", body), onSuccess: () => {
