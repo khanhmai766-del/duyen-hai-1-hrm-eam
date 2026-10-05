@@ -3,8 +3,8 @@ import { normalizeText } from "@/lib/nav";
 import { prisma } from "@/lib/prisma";
 import { a1Tab, batchGetValues, batchUpdateSpreadsheet, batchUpdateValues, columnLetter, getProtectedRanges, getSheetFormatting, getSpreadsheet, getValidationGrid, GoogleSheetsError, serviceAccountEmail, spreadsheetIdFromUrl, type ConditionalFormat, type GridRange, type SheetTab } from "@/lib/server/google-sheets";
 import { overhaulScheduleLinks } from "@/lib/server/overhaul-schedules";
-import { findHeader, repairDateCode } from "@/lib/server/work-permit-overhaul";
-import { OVERHAUL_DAY_STATUSES, OVERHAUL_HOLDING_STATUSES, OVERHAUL_SOURCES, overhaulItemsOf, type OverhaulItemProgress, type OverhaulSource } from "@/lib/work-permit-overhaul";
+import { findHeader, overhaulItemUsage, repairDateCode } from "@/lib/server/work-permit-overhaul";
+import { OVERHAUL_DAY_STATUSES, OVERHAUL_HOLDING_STATUSES, OVERHAUL_SOURCES, overhaulItemKey, overhaulItemsOf, type OverhaulItemProgress, type OverhaulSource } from "@/lib/work-permit-overhaul";
 
 /*
  * Đợt 2 đại tu — ghi kết quả ngày của PCT về Google Sheets tiến độ (web là nguồn, Sheet theo web).
@@ -17,9 +17,11 @@ import { OVERHAUL_DAY_STATUSES, OVERHAUL_HOLDING_STATUSES, OVERHAUL_SOURCES, ove
  *    hàng dưới là "Nhật ký ngày". Hàng tìm theo MÃ ở mỗi lần ghi (người dùng có thể chèn/xoá hàng).
  *  - Cột ngày tìm theo "dd/mm" trong tiêu đề "Ngày n\ndd/mm"; cột %/trạng thái theo tên tiêu đề (vị trí khác nhau giữa tab).
  *  - Không tìm thấy tab/mã/cột ngày → báo lỗi rõ, KHÔNG đoán ghi sang chỗ khác. Mã trùng hai lần trong tab cũng báo lỗi.
- *  - Nhật ký ngày GHI ĐÈ bằng lần cập nhật mới nhất trong ngày: "PCT <số>/<năm>" + xuống dòng + nội dung (từ 04/10/2026;
- *    trước đó nối thêm dòng). Chữ người khác gõ tay trong ô ngày đó sẽ bị thay.
- *  - Ô "% Hoàn thành" / "Trạng thái hiện tại" bị ghi đè bằng giá trị (bỏ công thức cũ) — chỉ khi đây là kết quả mới nhất.
+ *  - Nhật ký ngày: mỗi PCT có cập nhật trong ngày một đoạn "PCT <số>/<năm>" + xuống dòng + nội dung lần cập nhật mới nhất
+ *    của PCT đó (hạng mục phối hợp: PCT Cơ + PCT Điện cùng giữ → hai đoạn; PCT không cập nhật ngày đó không có đoạn).
+ *    Cả ô được dựng lại mỗi lần ghi — chữ người khác gõ tay trong ô ngày đó sẽ bị thay.
+ *  - Ô "Trạng thái hiện tại" bị ghi đè bằng giá trị (bỏ công thức cũ) — chỉ khi đây là kết quả mới nhất. Ô "% Hoàn thành"
+ *    là lũy kế CHUNG của hạng mục: chỉ ghi khi bằng/cao hơn số đã ghi, không bao giờ kéo lùi (hai PCT kết thúc gần nhau).
  */
 
 const MAX_ATTEMPTS = 8;
@@ -93,15 +95,44 @@ export async function enqueueOverhaulProgressUpdate(tx: Prisma.TransactionClient
 /** Khoá so hạng mục giữa itemProgress và hàng đợi. */
 export const overhaulProgressKey = itemTail;
 
-/** Kết thúc phiếu → "Kết thúc công tác" ở ngày đóng phiếu; % giữ số lần gần nhất. */
+/**
+ * Kết thúc phiếu → "Kết thúc công tác" ở ngày đóng phiếu; % giữ số lần gần nhất. Hạng mục còn nằm trong PCT khác đang
+ * hiệu lực (hạng mục phối hợp Cơ + Điện) thì bỏ qua — phần việc bên kia chưa xong; PCT giữ cuối cùng kết thúc mới ghi.
+ */
 export async function enqueueOverhaulClose(tx: Prisma.TransactionClient, permit: Pick<WorkPermit, "id" | "overhaulItems" | "contractorScope" | "teamType">, closedAt: Date) {
   if (permit.teamType !== "CONTRACTOR" || permit.contractorScope !== "OVERHAUL") return;
   const day = vnDay(closedAt);
-  await enqueue(tx, overhaulItemsOf(permit.overhaulItems).map(item => ({
+  const { held } = await overhaulItemUsage(tx, permit.id);
+  await enqueue(tx, overhaulItemsOf(permit.overhaulItems).filter(item => !held.get(overhaulItemKey(item))?.length).map(item => ({
     dedupeKey: `C:${permit.id}:${itemTail(item)}`,
     permitId: permit.id, kind: "CLOSE", source: item.source, sheet: item.sheet, code: item.code, day,
     status: OVERHAUL_DAY_STATUSES.CLOSED, percent: null, note: `${vnTime(closedAt)} · Kết thúc phiếu`,
   })));
+}
+
+/**
+ * Huỷ PCT đã cấp (nghiệp vụ 05/10/2026): hạng mục mà PCT này là phiếu giữ CUỐI CÙNG → chốt kết quả cuối đã ghi nhận như kết
+ * thúc phiếu ("Kết thúc công tác", % giữ số lần gần nhất) kèm nhật ký "PCT hủy do <lý do>". Hạng mục còn PCT khác giữ → bỏ
+ * qua (bên kia chốt khi kết thúc). Hạng mục chưa từng ghi gì lên Sheet → bỏ qua, Sheet giữ "Chưa thực hiện".
+ */
+export async function enqueueOverhaulCancel(tx: Prisma.TransactionClient, before: Pick<WorkPermit, "status">, permit: Pick<WorkPermit, "id" | "overhaulItems" | "contractorScope" | "teamType">, cancelledAt: Date, reason: string) {
+  if (permit.teamType !== "CONTRACTOR" || permit.contractorScope !== "OVERHAUL") return false;
+  if (!(OVERHAUL_HOLDING_STATUSES as readonly string[]).includes(before.status)) return false;
+  const { held } = await overhaulItemUsage(tx, permit.id);
+  const items = overhaulItemsOf(permit.overhaulItems).filter(item => !held.get(overhaulItemKey(item))?.length);
+  if (!items.length) return false;
+  const recorded = new Set((await tx.overhaulSheetOutbox.findMany({
+    where: { OR: items.map(item => ({ source: item.source, sheet: item.sheet, code: item.code })) },
+    distinct: ["source", "sheet", "code"], select: { source: true, sheet: true, code: true },
+  })).map(itemTail));
+  const day = vnDay(cancelledAt);
+  const rows = items.filter(item => recorded.has(itemTail(item))).map(item => ({
+    dedupeKey: `X:${permit.id}:${itemTail(item)}`,
+    permitId: permit.id, kind: "CANCEL", source: item.source, sheet: item.sheet, code: item.code, day,
+    status: OVERHAUL_DAY_STATUSES.CLOSED, percent: null, note: `${vnTime(cancelledAt)} · PCT hủy do ${reason.replace(/\s+/g, " ").trim()}`,
+  }));
+  await enqueue(tx, rows);
+  return rows.length > 0;
 }
 
 /**
@@ -347,26 +378,23 @@ export async function pushOverhaulSheetOutbox(options: { limit?: number; dryRun?
       const priority = (status: string) => status === OVERHAUL_DAY_STATUSES.NOT_OPENED ? 0 : status === OVERHAUL_DAY_STATUSES.SKIPPED ? 1 : 2;
       const rank = (day: string, at: Date, status: string) => `${day}|${priority(status)}|${String(at.getTime()).padStart(15, "0")}`;
       const itemKey = (sheet: string, code: string) => `${sheet}\u0000${code}`;
-      const bestDay = new Map<string, string>(), bestStatus = new Map<string, string>(), bestPercent = new Map<string, string>(), bestNote = new Map<string, string>();
+      const bestDay = new Map<string, string>(), bestStatus = new Map<string, string>();
       const keep = (map: Map<string, string>, key: string, value: string) => { if (value >= (map.get(key) ?? "")) { map.set(key, value); return true; } return false; };
-      for (const pass of ["status", "percent", "note"] as const) {
-        for (const item of await prisma.overhaulSheetOutbox.groupBy({
-          by: ["sheet", "code", "day", "status"], where: { source, state: "SUCCESS", sheet: { in: tabNames },
-            ...(pass === "percent" ? { percent: { not: null } } : pass === "note" ? { note: { not: "" } } : {}) }, _max: { createdAt: true },
-        })) {
-          const value = rank(item.day, item._max.createdAt ?? new Date(0), item.status);
-          if (pass === "percent") keep(bestPercent, itemKey(item.sheet, item.code), value);
-          else if (pass === "note") keep(bestNote, `${itemKey(item.sheet, item.code)}\u0000${item.day}`, value);
-          else { keep(bestStatus, itemKey(item.sheet, item.code), value); keep(bestDay, `${itemKey(item.sheet, item.code)}\u0000${item.day}`, value); }
-        }
+      for (const item of await prisma.overhaulSheetOutbox.groupBy({
+        by: ["sheet", "code", "day", "status"], where: { source, state: "SUCCESS", sheet: { in: tabNames } }, _max: { createdAt: true },
+      })) {
+        const value = rank(item.day, item._max.createdAt ?? new Date(0), item.status);
+        keep(bestStatus, itemKey(item.sheet, item.code), value);
+        keep(bestDay, `${itemKey(item.sheet, item.code)}\u0000${item.day}`, value);
       }
-      // Dòng đầu ô Nhật ký ngày = "PCT <số>/<năm>" của lần cập nhật (gọn, bỏ đuôi /VH1-NĐDH cho ô hẹp).
-      const permitNumbers = new Map((await prisma.workPermit.findMany({
-        where: { id: { in: [...new Set(sourceRows.filter(row => row.note).map(row => row.permitId))] } }, select: { id: true, number: true, year: true },
-      })).map(permit => [permit.id, `${permit.number.trim()}/${permit.year}`]));
+      // % lũy kế chung: số cao nhất đã ghi của hạng mục (mọi PCT) — lô này chỉ ghi khi bằng hoặc vượt lên.
+      const bestPercent = new Map((await prisma.overhaulSheetOutbox.groupBy({
+        by: ["sheet", "code"], where: { source, state: "SUCCESS", sheet: { in: tabNames }, percent: { not: null } }, _max: { percent: true },
+      })).map(item => [itemKey(item.sheet, item.code), item._max.percent ?? 0]));
 
       const cells = new Map<string, string | number>();
-      const journal = new Map<string, string>();
+      /** Ô Nhật ký ngày cần dựng lại → hạng mục + ngày. */
+      const journalCells = new Map<string, { sheet: string; code: string; day: string }>();
       const ok: OverhaulSheetOutbox[] = [];
       const bad = new Map<string, OverhaulSheetOutbox[]>();
       const ordered = [...sourceRows].sort((a, b) => rank(a.day, a.createdAt, a.status).localeCompare(rank(b.day, b.createdAt, b.status)));
@@ -379,18 +407,35 @@ export async function pushOverhaulSheetOutbox(options: { limit?: number; dryRun?
         const ref = (r: number, c: number) => `${a1Tab(row.sheet)}!${columnLetter(c)}${r + 1}`;
         if (keep(bestDay, `${key}\u0000${row.day}`, value)) cells.set(ref(place.r, place.column), row.status);
         if (keep(bestStatus, key, value) && layout.statusColumn >= 0) cells.set(ref(place.r, layout.statusColumn), row.status);
-        if (row.percent !== null && keep(bestPercent, key, value) && layout.percentColumn >= 0) cells.set(ref(place.r, layout.percentColumn), row.percent / 100);
-        // Nhật ký ngày GHI ĐÈ bằng lần cập nhật mới nhất của hạng mục trong ngày (nghiệp vụ 04/10/2026):
-        // "PCT <số>" rồi xuống dòng nội dung. Hàng thử lại muộn không đè nội dung mới hơn (cùng hạng như ô trạng thái).
-        if (row.note && place.journalRow !== null && keep(bestNote, `${key}\u0000${row.day}`, value)) {
-          const permit = permitNumbers.get(row.permitId);
-          journal.set(ref(place.journalRow, place.column), permit ? `PCT ${permit}\n${row.note}` : row.note);
+        if (row.percent !== null && row.percent >= (bestPercent.get(key) ?? 0) && layout.percentColumn >= 0) {
+          bestPercent.set(key, row.percent);
+          cells.set(ref(place.r, layout.percentColumn), row.percent / 100);
         }
+        if (row.note && place.journalRow !== null) journalCells.set(ref(place.journalRow, place.column), { sheet: row.sheet, code: row.code, day: row.day });
         ok.push(row);
       }
-      for (const [key, text] of journal) cells.set(key, text);
       for (const [error, list] of bad) await fail(error, list);
       if (!ok.length) continue;
+      // Nhật ký ngày (nghiệp vụ 05/10/2026): dựng lại cả ô từ mọi cập nhật của hạng mục trong ngày — đã ghi + lô này —
+      // mỗi PCT một đoạn nội dung mới nhất của PCT đó. Hàng thử lại muộn không đè nội dung mới hơn của cùng PCT.
+      if (journalCells.size) {
+        const targets = [...journalCells.values()];
+        const notes = await prisma.overhaulSheetOutbox.findMany({
+          where: {
+            source, note: { not: "" }, OR: [{ state: "SUCCESS" }, { id: { in: ok.filter(row => row.note).map(row => row.id) } }],
+            sheet: { in: [...new Set(targets.map(t => t.sheet))] }, code: { in: [...new Set(targets.map(t => t.code))] }, day: { in: [...new Set(targets.map(t => t.day))] },
+          },
+          select: { permitId: true, kind: true, sheet: true, code: true, day: true, note: true, createdAt: true },
+        });
+        // Dòng đầu mỗi đoạn = "PCT <số>/<năm>" (gọn, bỏ đuôi /VH1-NĐDH cho ô hẹp).
+        const permitNumbers = new Map((await prisma.workPermit.findMany({
+          where: { id: { in: [...new Set(notes.map(note => note.permitId))] } }, select: { id: true, number: true, year: true },
+        })).map(permit => [permit.id, `${permit.number.trim()}/${permit.year}`]));
+        for (const [range, target] of journalCells) {
+          const text = overhaulJournalText(notes.filter(note => note.sheet === target.sheet && note.code === target.code && note.day === target.day), permitNumbers);
+          if (text) cells.set(range, text);
+        }
+      }
       if (dryRun) { result.planned!.push(...[...cells].map(([range, value]) => ({ range, value }))); result.written += ok.length; continue; }
       await batchUpdateValues(spreadsheetId, [...cells].map(([range, value]) => ({ range, value })));
       await prisma.overhaulSheetOutbox.updateMany({ where: { id: { in: ok.map(row => row.id) } }, data: { state: "SUCCESS", completedAt: new Date(), claimedAt: null, lastError: null } });
@@ -409,6 +454,31 @@ export async function pushOverhaulSheetOutbox(options: { limit?: number; dryRun?
     }
   }
   return result;
+}
+
+/** Dòng chốt phiếu (kết thúc / huỷ) — nối SAU nội dung làm việc của PCT, không thay nó. */
+const FINAL_NOTE_KINDS = new Set(["CLOSE", "CANCEL"]);
+
+/**
+ * Nội dung ô Nhật ký ngày của MỘT hạng mục trong MỘT ngày: mỗi PCT một đoạn (nội dung làm việc mới nhất của PCT đó, rồi
+ * dòng kết thúc / huỷ phiếu nếu có), đoạn xếp theo lần đầu PCT cập nhật trong ngày, cách nhau một dòng trống. Hạng mục
+ * phối hợp → PCT Cơ và PCT Điện mỗi bên một đoạn; PCT không cập nhật ngày đó không có đoạn.
+ */
+export function overhaulJournalText(notes: Array<{ permitId: string; kind: string; note: string; createdAt: Date }>, permitNumbers: Map<string, string>) {
+  type Entry = { first: number; work?: { at: number; note: string }; final?: { at: number; note: string } };
+  const byPermit = new Map<string, Entry>();
+  for (const note of notes) {
+    const at = note.createdAt.getTime();
+    const entry = byPermit.get(note.permitId) ?? { first: at };
+    entry.first = Math.min(entry.first, at);
+    const slot = FINAL_NOTE_KINDS.has(note.kind) ? "final" : "work";
+    if (!entry[slot] || at >= entry[slot]!.at) entry[slot] = { at, note: note.note };
+    byPermit.set(note.permitId, entry);
+  }
+  return [...byPermit].sort((a, b) => a[1].first - b[1].first).map(([permitId, entry]) => {
+    const number = permitNumbers.get(permitId);
+    return [number ? `PCT ${number}` : "", entry.work?.note ?? "", entry.final?.note ?? ""].filter(Boolean).join("\n");
+  }).join("\n\n");
 }
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));

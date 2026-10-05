@@ -3,7 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { ok, requireUser } from "@/lib/api";
 import { permitCapabilities } from "@/lib/server/work-permit-permissions";
 import { permitHandle } from "@/lib/server/work-permits";
-import { isOverhaulPaperPermit, latestOverhaulNotes, latestOverhaulPercents, overhaulItemsOf } from "@/lib/work-permit-overhaul";
+import { isOverhaulPaperPermit, latestOverhaulNotes, overhaulItemKey, overhaulItemsOf } from "@/lib/work-permit-overhaul";
+import { sharedOverhaulPercents } from "@/lib/server/work-permit-overhaul";
 export const dynamic = "force-dynamic";
 
 /**
@@ -28,21 +29,24 @@ export async function GET() {
       permitScopeOf(user),
     ]);
     const visible = sessions.filter(s => permitPositionVisible(s.permit.position, scope) && isOverhaulPaperPermit(s.permit) && overhaulItemsOf(s.permit.overhaulItems).length > 0);
-    // % lũy kế gần nhất từng hạng mục: lần đang mở trước, rồi các lần đã kết thúc (mới nhất trước).
+    // Ghi chú gần nhất từng hạng mục: lần đang mở trước, rồi các lần đã kết thúc (mới nhất trước).
     const ended = visible.length ? await prisma.workPermitSession.findMany({
       where: { permitId: { in: visible.map(s => s.permit.id) }, endedAt: { not: null } },
       orderBy: { endedAt: "desc" },
       select: { permitId: true, itemProgress: true },
     }) : [];
+    // % là lũy kế CHUNG của hạng mục (PCT Cơ + PCT Điện cùng giữ hạng mục phối hợp); ghi chú vẫn riêng từng phiếu.
+    const percents = await sharedOverhaulPercents(prisma, visible.flatMap(s => overhaulItemsOf(s.permit.overhaulItems)));
     const data = visible.map(({ permit, itemProgress, ...session }) => {
       const history = [{ itemProgress }, ...ended.filter(e => e.permitId === permit.id)];
       const { overhaulItems, format: _format, teamType: _teamType, contractorScope: _scope, ...rest } = permit;
+      const items = overhaulItemsOf(overhaulItems);
       return {
         ...session,
         openedAt: session.openedAt.toISOString(),
         itemProgress,
-        permit: { ...rest, plannedEndAt: rest.plannedEndAt?.toISOString() ?? null, overhaulItems: overhaulItemsOf(overhaulItems) },
-        percents: Object.fromEntries(latestOverhaulPercents(history)),
+        permit: { ...rest, plannedEndAt: rest.plannedEndAt?.toISOString() ?? null, overhaulItems: items },
+        percents: Object.fromEntries(items.flatMap(item => { const value = percents.get(overhaulItemKey(item)); return value === undefined ? [] : [[overhaulItemKey(item), value]]; })),
         notes: Object.fromEntries(latestOverhaulNotes(history)),
       };
     });

@@ -6,7 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { a1Tab, batchGetValues, columnLetter, getSpreadsheet, GoogleSheetsError, spreadsheetIdFromUrl, type SheetTab } from "@/lib/server/google-sheets";
 import { overhaulScheduleLinks } from "@/lib/server/overhaul-schedules";
 import { formatPermitNumber } from "@/lib/work-permits";
-import { compareOverhaulCodes, isOverhaulPaperPermit, latestOverhaulPercents, OVERHAUL_HOLDING_STATUSES, OVERHAUL_SOURCE_DEFAULT_KIND, OVERHAUL_SOURCES, overhaulItemKey, overhaulItemsOf, type OverhaulItemProgress, type OverhaulItemSnapshot, type OverhaulItemUsage, type OverhaulSource } from "@/lib/work-permit-overhaul";
+import { compareOverhaulCodes, isOverhaulPaperPermit, OVERHAUL_HOLDING_STATUSES, OVERHAUL_SOURCE_DEFAULT_KIND, OVERHAUL_SOURCES, overhaulItemKey, overhaulItemProgressOf, overhaulItemsOf, type OverhaulItemProgress, type OverhaulItemSnapshot, type OverhaulItemUsage, type OverhaulSource } from "@/lib/work-permit-overhaul";
 
 /*
  * Hạng mục đại tu cho PCT nhà thầu · Đại tu.
@@ -285,8 +285,10 @@ export async function listOverhaulItems(params: { kind: string; company: string;
   const contractorCode = normalizeText(row?.code ?? "");
   if (!contractorCode) return { items: [], syncedAt, contractorCode: null, reason: "companyCode" as const };
   const positionCode = params.position ? positionCatalogItem(params.position)?.code ?? null : null;
+  // Cương vị chỉ lọc hạng mục CÙNG loại phiếu: hạng mục phối hợp (cùng nhà thầu, chia phần cơ/điện) nằm ở tab loại kia và
+  // mang cương vị bên kia — lọc theo cương vị của phiếu thì PCT Điện không bao giờ thấy hạng mục tab Cơ và ngược lại.
   const items = await prisma.workPermitOverhaulItem.findMany({
-    where: { isActive: true, contractorCode, ...(positionCode ? { positionCode } : {}) },
+    where: { isActive: true, contractorCode, ...(positionCode ? { OR: [{ kind: { not: params.kind } }, { positionCode }] } : {}) },
     select: { id: true, kind: true, source: true, sheet: true, positionTitle: true, code: true, device: true, content: true, method: true, percent: true, status: true },
   });
   const otherKind = (item: { kind: string }) => item.kind === params.kind ? 0 : 1;
@@ -338,12 +340,37 @@ export async function assertOverhaulItemsConfirmed(tx: Prisma.TransactionClient,
 }
 
 /**
- * Kết quả từng hạng mục khi kết thúc lần làm việc của PCT đại tu. Phải đủ mọi mã trên phiếu; mục có thực hiện cần
- * % lũy kế 0–100 không thấp hơn lần trước; mục không thực hiện giữ % cũ. Trả kèm % chung của phiếu (trung bình).
+ * % lũy kế CHUNG của từng hạng mục: hạng mục phối hợp nằm trong cả PCT Cơ lẫn PCT Điện (cùng nhà thầu, chia phần cơ/điện)
+ * nhưng Sheet chỉ có một ô "% Hoàn thành" — nên % là một con số chung, lấy số cao nhất đã ghi ở mọi lần làm việc (kể cả lần
+ * đang mở đã "Cập nhật tiến độ") của mọi PCT đại tu có hạng mục đó, kể cả phiếu đã kết thúc / huỷ sau khi đã ghi.
  */
-export function parseSessionItemProgress(value: unknown, permitItems: OverhaulItemSnapshot[], previousSessions: Array<{ itemProgress?: unknown }>) {
+export async function sharedOverhaulPercents(db: Prisma.TransactionClient | typeof prisma, items: OverhaulItemSnapshot[]) {
+  const latest = new Map<string, number>();
+  if (!items.length) return latest;
+  const keys = new Set(items.map(overhaulItemKey));
+  const permits = await db.workPermit.findMany({
+    where: { teamType: "CONTRACTOR", contractorScope: "OVERHAUL", OR: items.map(item => ({ overhaulItems: { array_contains: [{ source: item.source, sheet: item.sheet, code: item.code }] } })) },
+    select: { id: true },
+  });
+  if (!permits.length) return latest;
+  const sessions = await db.workPermitSession.findMany({ where: { permitId: { in: permits.map(permit => permit.id) } }, select: { itemProgress: true } });
+  for (const session of sessions) {
+    for (const item of overhaulItemProgressOf(session.itemProgress)) {
+      const key = overhaulItemKey(item);
+      if (!keys.has(key) || typeof item.percent !== "number") continue;
+      latest.set(key, Math.max(latest.get(key) ?? 0, item.percent));
+    }
+  }
+  return latest;
+}
+
+/**
+ * Kết quả từng hạng mục khi kết thúc lần làm việc của PCT đại tu. Phải đủ mọi mã trên phiếu; mục có thực hiện cần
+ * % lũy kế 0–100 không thấp hơn % chung đã ghi (`previous` — xem sharedOverhaulPercents); mục không thực hiện giữ % cũ.
+ * Trả kèm % chung của phiếu (trung bình).
+ */
+export function parseSessionItemProgress(value: unknown, permitItems: OverhaulItemSnapshot[], previous: Map<string, number>) {
   if (!Array.isArray(value)) throw fail("Vui lòng đánh giá tiến độ từng hạng mục đại tu của phiếu");
-  const previous = latestOverhaulPercents(previousSessions);
   const sent = new Map<string, Record<string, unknown>>();
   for (const raw of value) {
     if (!raw || typeof raw !== "object") throw fail("Tiến độ hạng mục không hợp lệ");
@@ -360,7 +387,7 @@ export function parseSessionItemProgress(value: unknown, permitItems: OverhaulIt
     const percent = Number(raw.percent);
     if (raw.percent === null || raw.percent === "" || !Number.isInteger(percent) || percent < 0 || percent > 100) throw fail(`Tiến độ hạng mục ${snapshot.code} phải là số nguyên từ 0 đến 100%`);
     const before = previous.get(key);
-    if (before !== undefined && percent < before) throw fail(`Tiến độ hạng mục ${snapshot.code} là lũy kế — không thấp hơn lần trước (${before}%)`);
+    if (before !== undefined && percent < before) throw fail(`Tiến độ hạng mục ${snapshot.code} là lũy kế chung (cả PCT Cơ lẫn PCT Điện cùng giữ hạng mục) — không thấp hơn ${before}% đã ghi`);
     return { code: snapshot.code, sheet: snapshot.sheet, source: snapshot.source, done, percent, note };
   });
   if (sent.size !== items.length) throw fail("Danh sách hạng mục đã thay đổi. Tải lại phiếu rồi thử lại.", 409);

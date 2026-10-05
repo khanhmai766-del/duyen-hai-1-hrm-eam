@@ -11,7 +11,7 @@ import { syncPermitDocument } from "@/lib/server/work-permit-document-store";
 import { assertWorkersFree, lockWorkPermitPresence } from "@/lib/server/work-permit-presence";
 import { presentMembers } from "@/lib/work-permit-presence";
 import { after as afterResponse } from "next/server";
-import { parseSessionItemProgress } from "@/lib/server/work-permit-overhaul";
+import { parseSessionItemProgress, sharedOverhaulPercents } from "@/lib/server/work-permit-overhaul";
 import { enqueueOverhaulProgressUpdate, enqueueOverhaulSessionEnd, overhaulProgressKey, pushOverhaulSheetOutboxQuietly, vnDay } from "@/lib/server/overhaul-sheet-writer";
 import { isOverhaulPaperPermit, overhaulItemProgressOf, overhaulItemsOf, type OverhaulItemProgress } from "@/lib/work-permit-overhaul";
 import { permitDeadline, workersStillInside } from "@/lib/work-permits";
@@ -85,15 +85,15 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
       }
       // PCT đại tu có hạng mục: đánh giá TỪNG hạng mục, % chung của phiếu = trung bình; phiếu khác giữ một % chung.
       const permitItems = isOverhaulPaperPermit(permit) ? overhaulItemsOf(permit.overhaulItems) : [];
-      // % lũy kế trước đó: lần đang mở (các lần "Cập nhật tiến độ") rồi tới các lần đã kết thúc, mới nhất trước.
-      const progressHistory = async (live: { itemProgress: unknown }) => [live, ...await tx.workPermitSession.findMany({ where: { permitId: permit.id, endedAt: { not: null } }, orderBy: { endedAt: "desc" }, select: { itemProgress: true } })];
+      // % lũy kế trước đó: CHUNG cho mọi PCT cùng giữ hạng mục (PCT Cơ + PCT Điện của hạng mục phối hợp), gồm cả lần đang mở.
+      const progressHistory = () => sharedOverhaulPercents(tx, permitItems);
 
       if (body.action === "progress") {
         // Cập nhật tiến độ giữa chừng: không kết thúc lần làm việc, chỉ ghi % + ghi chú các mục có tick về Sheet.
         const session = await tx.workPermitSession.findFirst({ where: { id: permitText(body, "sessionId", 100), permitId: permit.id } });
         if (!session || session.endedAt || permit.status !== "ACTIVE") throw fail("Lần làm việc không còn mở. Vui lòng tải lại phiếu.", 409);
         if (!permitItems.length) throw fail("Chỉ PCT nhà thầu · Đại tu có hạng mục mới cập nhật tiến độ giữa chừng");
-        const parsed = parseSessionItemProgress(body.itemProgress, permitItems, await progressHistory(session));
+        const parsed = parseSessionItemProgress(body.itemProgress, permitItems, await progressHistory());
         if (!parsed.items.some(item => item.done)) throw fail("Tick ít nhất một hạng mục đã thực hiện để cập nhật tiến độ");
         const at = new Date();
         const note = permitText(body, "note", 2000);
@@ -117,7 +117,7 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
       if (!sessionId || !endedAt || !endConfirmedByName) throw fail("Vui lòng nhập lần làm việc, thời điểm kết thúc và người xác nhận kết thúc");
       const session = await tx.workPermitSession.findFirst({ where: { id: sessionId, permitId: permit.id } });
       if (!session || session.endedAt || permit.status !== "ACTIVE") throw fail("Lần làm việc không còn mở. Vui lòng tải lại phiếu.", 409);
-      const itemResult = permitItems.length ? parseSessionItemProgress(body.itemProgress, permitItems, await progressHistory(session)) : null;
+      const itemResult = permitItems.length ? parseSessionItemProgress(body.itemProgress, permitItems, await progressHistory()) : null;
       const progress = itemResult ? itemResult.progress : Number(body.progress);
       if (!itemResult && (body.progress === "" || body.progress === null || body.progress === undefined || !Number.isInteger(progress) || progress < 0 || progress > 100)) throw fail("Tiến độ phải là số nguyên từ 0 đến 100%");
       // Mục đã "Cập nhật tiến độ" trong lần này, cùng ngày kết thúc: không tick lại vẫn tính có làm, giữ % đã cập nhật.

@@ -1,9 +1,9 @@
 import { assertNkvhLinkAvailable, lockPermitNumberScope } from "@/lib/server/work-permit-number-reservations";
 import { normalizeText } from "@/lib/nav";
-import { assertOverhaulItemsConfirmed, parseOverhaulItems } from "@/lib/server/work-permit-overhaul";
-import { enqueueOverhaulClose, pushOverhaulSheetOutboxQuietly } from "@/lib/server/overhaul-sheet-writer";
+import { assertOverhaulItemsConfirmed, parseOverhaulItems, sharedOverhaulPercents } from "@/lib/server/work-permit-overhaul";
+import { enqueueOverhaulCancel, enqueueOverhaulClose, pushOverhaulSheetOutboxQuietly } from "@/lib/server/overhaul-sheet-writer";
 import { after as afterResponse } from "next/server";
-import { latestOverhaulNotes, latestOverhaulPercents, overhaulItemsOf } from "@/lib/work-permit-overhaul";
+import { latestOverhaulNotes, overhaulItemsOf } from "@/lib/work-permit-overhaul";
 import { requirePermitPositionAllowed, requirePermitVisible } from "@/lib/server/work-permit-scope";
 import { permitIssueUpdateNeedsExecution } from "@/lib/work-permit-permissions";
 import { requirePermitIssuer, requirePermitExecute, permitCapabilities, permitRowCapabilities } from "@/lib/server/work-permit-permissions";
@@ -25,14 +25,15 @@ export async function GET(_req: Request, props: { params: Promise<{ id: string }
     await requirePermitVisible(user, params.id);
     const row = await prisma.workPermit.findUnique({ where: { id: params.id }, include: { sessions: { take: 2, orderBy: [{ openedAt: "desc" }, { id: "desc" }] }, history: { take: 2, select: historySummarySelect, orderBy: [{ createdAt: "desc" }, { id: "desc" }] }, _count: { select: { sessions: true, history: true } } } });
     if (!row) return fail("Không tìm thấy PCT", 404);
-    // % lũy kế gần nhất của từng hạng mục đại tu (mọi lần làm việc kể cả lần đang mở đã "Cập nhật tiến độ", không chỉ 2
-    // lần trả kèm) — điền sẵn hộp Kết thúc / Cập nhật tiến độ.
-    const overhaulSessions = overhaulItemsOf(row.overhaulItems).length
+    // Điền sẵn hộp Kết thúc / Cập nhật tiến độ: % lũy kế CHUNG của hạng mục (mọi PCT cùng giữ — Cơ + Điện của hạng mục
+    // phối hợp), ghi chú gần nhất của RIÊNG phiếu này (mỗi PCT một đoạn nhật ký).
+    const overhaulItems = overhaulItemsOf(row.overhaulItems);
+    const overhaulSessions = overhaulItems.length
       ? await prisma.workPermitSession.findMany({ where: { permitId: row.id }, orderBy: [{ openedAt: "desc" }, { id: "desc" }], select: { itemProgress: true } })
       : null;
     const overhaulNotes = overhaulSessions ? Object.fromEntries(latestOverhaulNotes(overhaulSessions)) : undefined;
     const overhaulPercents = overhaulSessions
-      ? Object.fromEntries(latestOverhaulPercents(overhaulSessions))
+      ? Object.fromEntries(await sharedOverhaulPercents(prisma, overhaulItems))
       : {};
     return ok({ ...row, overhaulPercents, overhaulNotes }, { ...await permitCapabilities(user), ...permitRowCapabilities(user, row), canDelete: user.role === "ADMIN" && user.accessMode !== "DEFECT_READ_ONLY" });
   });
@@ -192,6 +193,8 @@ export async function PUT(req: Request, props: { params: Promise<{ id: string }>
           await tx.workPermitNumberReservationHistory.create({ data: { reservationId: reservation.id, action: "CANCELLED",
             actorId: user.id, actorName: user.name ?? "", permitId: after.id, note: data.statusReason } });
         }
+        // PCT đại tu giữ hạng mục cuối cùng: chốt kết quả cuối lên Sheet kèm "PCT hủy do …".
+        await enqueueOverhaulCancel(tx, before, after, new Date(), after.statusReason);
       }
       if (status === "CLOSED" && before.status !== "CLOSED") await enqueueOverhaulClose(tx, after, after.closedAt ?? new Date());
       await tx.workPermitHistory.create({ data: { permitId: after.id, actorId: user.id, actorName: user.name ?? "", action: teamTypeChanged ? `Đổi loại phiếu: ${teamTypeLabel(before.teamType)} → ${teamTypeLabel(data.teamType)}` : status === before.status ? "Cập nhật thông tin" : `Chuyển sang ${PERMIT_STATUSES[status]}`, before: permitSnapshot(before), after: permitSnapshot(after) } });
@@ -199,7 +202,7 @@ export async function PUT(req: Request, props: { params: Promise<{ id: string }>
     });
     await audit(user.id, "UPDATE_WORK_PERMIT", "WorkPermit", row.id, `Cập nhật PCT ${formatPermitNumber(row)}: ${PERMIT_STATUSES[status]}`);
     await syncPermitDocument(row, previous);
-    if (row.status === "CLOSED" && row.contractorScope === "OVERHAUL") afterResponse(pushOverhaulSheetOutboxQuietly);
+    if (["CLOSED", "CANCELLED"].includes(row.status) && row.contractorScope === "OVERHAUL") afterResponse(pushOverhaulSheetOutboxQuietly);
     return ok(row);
   });
 }

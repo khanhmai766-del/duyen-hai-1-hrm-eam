@@ -1,6 +1,8 @@
 import { requirePermitVisible } from "@/lib/server/work-permit-scope";
 import { requirePermitIssuer } from "@/lib/server/work-permit-permissions";
+import { after as afterResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { enqueueOverhaulCancel, pushOverhaulSheetOutboxQuietly } from "@/lib/server/overhaul-sheet-writer";
 import { audit, fail, ok, requireUser } from "@/lib/api";
 import { permitBody, permitHandle, permitSnapshot, permitText } from "@/lib/server/work-permits";
 import { CONTRACTOR_PERMIT_TRANSITIONS, formatPermitNumber, PERMIT_TRANSITIONS, type PermitStatus } from "@/lib/work-permits";
@@ -21,7 +23,7 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
     await requirePermitVisible(user, params.id);
     const body = await permitBody(req);
     const reasonInput = permitText(body, "reason", 2000);
-    const { row, draft } = await prisma.$transaction(async tx => {
+    const { row, draft, sheetQueued } = await prisma.$transaction(async tx => {
       await tx.$queryRaw`SELECT "id" FROM "WorkPermit" WHERE "id" = ${params.id} FOR UPDATE`;
       const before = await tx.workPermit.findUnique({ where: { id: params.id } });
       if (!before) throw fail("Không tìm thấy PCT", 404);
@@ -54,9 +56,12 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
       }
       await tx.workPermitHistory.create({ data: { permitId: after.id, actorId: user.id, actorName: user.name ?? "",
         action: draft ? "Hủy phiếu nháp" : `Hủy PCT: ${reason}`, before: permitSnapshot(before), after: permitSnapshot(after) } });
-      return { row: after, draft };
+      // PCT đại tu giữ hạng mục cuối cùng: chốt kết quả cuối lên Sheet kèm "PCT hủy do …".
+      const sheetQueued = await enqueueOverhaulCancel(tx, before, after, new Date(), reason);
+      return { row: after, draft, sheetQueued };
     });
     await audit(user.id, draft ? "CANCEL_DRAFT_WORK_PERMIT" : "CANCEL_WORK_PERMIT", "WorkPermit", row.id, `Hủy PCT ${row.number ? formatPermitNumber(row) : row.id}: ${row.statusReason}`);
+    if (sheetQueued) afterResponse(pushOverhaulSheetOutboxQuietly);
     return ok(row);
   });
 }
