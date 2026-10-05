@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { a1Tab, batchGetValues, batchUpdateSpreadsheet, batchUpdateValues, columnLetter, getProtectedRanges, getSheetFormatting, getSpreadsheet, getValidationGrid, GoogleSheetsError, serviceAccountEmail, spreadsheetIdFromUrl, type ConditionalFormat, type GridRange, type SheetTab } from "@/lib/server/google-sheets";
 import { overhaulScheduleLinks } from "@/lib/server/overhaul-schedules";
 import { findHeader, overhaulItemUsage, repairDateCode } from "@/lib/server/work-permit-overhaul";
+import { overhaulJournalText, overhaulRank } from "@/lib/overhaul-progress-grid";
 import { OVERHAUL_DAY_STATUSES, OVERHAUL_HOLDING_STATUSES, OVERHAUL_SOURCES, overhaulItemKey, overhaulItemsOf, type OverhaulItemProgress, type OverhaulSource } from "@/lib/work-permit-overhaul";
 
 /*
@@ -371,12 +372,10 @@ export async function pushOverhaulSheetOutbox(options: { limit?: number; dryRun?
       tabNames.forEach(name => layouts.set(name, "không còn tab này trong file"));
       present.forEach((tab, i) => layouts.set(tab.title, layoutOf(values[i] ?? [])));
 
-      // Kết quả mới nhất đã ghi — xếp theo NGÀY, rồi MỨC ƯU TIÊN, rồi lúc xếp hàng: job 16:00 chạy bù cho ngày cũ, hay một
-      // hàng thử lại muộn, không được đè trạng thái / % của ngày sau. Ưu tiên trong cùng ngày (hai PCT có thể cùng giữ
-      // một hạng mục): "Không mở ngày thực hiện" < "Không thực hiện" < có làm / kết thúc — phiếu không làm không đè phiếu
-      // có làm. Hạng = "yyyy-mm-dd|p|ms" (so chuỗi đúng thứ tự).
-      const priority = (status: string) => status === OVERHAUL_DAY_STATUSES.NOT_OPENED ? 0 : status === OVERHAUL_DAY_STATUSES.SKIPPED ? 1 : 2;
-      const rank = (day: string, at: Date, status: string) => `${day}|${priority(status)}|${String(at.getTime()).padStart(15, "0")}`;
+      // Kết quả mới nhất đã ghi — xếp theo NGÀY, rồi MỨC ƯU TIÊN, rồi lúc xếp hàng (overhaulRank, dùng chung với trang
+      // /tien-ich/tien-do-dai-tu): job 16:00 chạy bù cho ngày cũ, hay một hàng thử lại muộn, không được đè trạng thái / %
+      // của ngày sau; trong cùng ngày phiếu không làm không đè phiếu có làm.
+      const rank = overhaulRank;
       const itemKey = (sheet: string, code: string) => `${sheet}\u0000${code}`;
       const bestDay = new Map<string, string>(), bestStatus = new Map<string, string>();
       const keep = (map: Map<string, string>, key: string, value: string) => { if (value >= (map.get(key) ?? "")) { map.set(key, value); return true; } return false; };
@@ -454,31 +453,6 @@ export async function pushOverhaulSheetOutbox(options: { limit?: number; dryRun?
     }
   }
   return result;
-}
-
-/** Dòng chốt phiếu (kết thúc / huỷ) — nối SAU nội dung làm việc của PCT, không thay nó. */
-const FINAL_NOTE_KINDS = new Set(["CLOSE", "CANCEL"]);
-
-/**
- * Nội dung ô Nhật ký ngày của MỘT hạng mục trong MỘT ngày: mỗi PCT một đoạn (nội dung làm việc mới nhất của PCT đó, rồi
- * dòng kết thúc / huỷ phiếu nếu có), đoạn xếp theo lần đầu PCT cập nhật trong ngày, cách nhau một dòng trống. Hạng mục
- * phối hợp → PCT Cơ và PCT Điện mỗi bên một đoạn; PCT không cập nhật ngày đó không có đoạn.
- */
-export function overhaulJournalText(notes: Array<{ permitId: string; kind: string; note: string; createdAt: Date }>, permitNumbers: Map<string, string>) {
-  type Entry = { first: number; work?: { at: number; note: string }; final?: { at: number; note: string } };
-  const byPermit = new Map<string, Entry>();
-  for (const note of notes) {
-    const at = note.createdAt.getTime();
-    const entry = byPermit.get(note.permitId) ?? { first: at };
-    entry.first = Math.min(entry.first, at);
-    const slot = FINAL_NOTE_KINDS.has(note.kind) ? "final" : "work";
-    if (!entry[slot] || at >= entry[slot]!.at) entry[slot] = { at, note: note.note };
-    byPermit.set(note.permitId, entry);
-  }
-  return [...byPermit].sort((a, b) => a[1].first - b[1].first).map(([permitId, entry]) => {
-    const number = permitNumbers.get(permitId);
-    return [number ? `PCT ${number}` : "", entry.work?.note ?? "", entry.final?.note ?? ""].filter(Boolean).join("\n");
-  }).join("\n\n");
 }
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));

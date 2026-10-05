@@ -50,7 +50,7 @@ const MOBILE_MORE_PATHS: Record<string, "ALL" | readonly string[]> = {
   "Quản lý thiết bị": ["/repair-history", "/pccc", "/grounding-lightning", "/documents/archive"],
   "QUẢN LÝ VẬT TƯ": "ALL",
   "QUẢN LÝ TÀI LIỆU SỐ": "ALL",
-  "TIỆN ÍCH": ["/tien-ich/phan-tich-dau", "/api/model-control/open"],
+  "TIỆN ÍCH": ["/tien-ich/tien-do-dai-tu", "/tien-ich/phan-tich-dau", "/api/model-control/open"],
 };
 
 function mobileMoreItemAllowed(sectionTitle: string, item: NavItem) {

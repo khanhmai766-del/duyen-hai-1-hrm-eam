@@ -264,6 +264,57 @@ export const PRESETS = {
   "scl-s2-ngay-dau": milestonePreset("2026-10-06"),
   "scl-s2-ngay-cuoi": milestonePreset("2026-12-03"),
   "scl-s2-het-lich": milestonePreset("2026-12-04"),
+  "tien-do-dai-tu": {
+    description: "Bảng tiến độ đại tu như Sheet — hạng mục thật (SELECT) + kết quả ngày giả lập, đồng hồ 09/10, không ghi DB",
+    async prepare({ prisma }) {
+      const first = await prisma.workPermitOverhaulItem.findFirst({ where: { isActive: true }, orderBy: [{ source: "asc" }, { sheet: "asc" }], select: { source: true, sheet: true } });
+      if (!first) throw new Error("DB dev chưa có hạng mục đại tu — bấm Đồng bộ hạng mục trước.");
+      const items = await prisma.workPermitOverhaulItem.findMany({ where: { isActive: true, ...first }, distinct: ["code"], orderBy: [{ sheetRow: "asc" }, { code: "asc" }],
+        select: { code: true, device: true, content: true, contractor: true, positionTitle: true } });
+      // Kết quả giả lập đã gộp sẵn (quy tắc gộp có test riêng ở tests/overhaul-progress-grid.test.ts): 6 hạng mục đầu có
+      // 2 PCT (Cơ 4150 + Điện 4210) cùng ghi ngày 07/10, có ngày không mở, hạng mục đầu kết thúc phiếu 09/10.
+      const co = (pct, text) => `PCT 4150/2026\n16:00 · Nguyễn Văn A: ${text} (${pct}%)`;
+      const grid = items.map((item, i) => {
+        if (i >= 6) return { ...item, percent: null, status: "Chưa thực hiện", hasPermit: false, days: {} };
+        const days = {
+          "2026-10-06": { status: "Đang thực hiện", journal: co(10 + i * 5, "tháo bao che, kiểm tra hiện trạng") },
+          "2026-10-07": { status: "Đang thực hiện", journal: `${i % 2 ? "" : `${co(30 + i * 5, "tháo cánh, vệ sinh")}\n\n`}PCT 4210/2026\n10:30 · Lê Văn B: tách cáp động lực, đo cách điện (${20 + i * 5}%)` },
+          "2026-10-08": { status: "Không mở ngày thực hiện", journal: "" },
+          ...(i === 0 ? { "2026-10-09": { status: "Kết thúc công tác", journal: "PCT 4150/2026\n09:00 · Kết thúc phiếu" } } : {}),
+        };
+        return { ...item, percent: i % 2 ? 20 + i * 5 : 30 + i * 5, status: i === 0 ? "Kết thúc công tác" : "Không mở ngày thực hiện", hasPermit: true, days };
+      });
+      return { grid };
+    },
+    routes: () => ["/tien-ich/tien-do-dai-tu", "/tien-ich/tien-do-dai-tu?ui=cell"],
+    async mock(context, { grid }) {
+      await context.clock?.install({ time: new Date("2026-10-09T08:00:00+07:00") }).catch(() => {});
+      await context.route(/\/api\/overhaul-progress\?/, (route) => route.fulfill({ json: { data: grid, meta: { syncedAt: "2026-10-05T23:00:00.000Z" }, error: null } }));
+    },
+    async interact(page, route) {
+      if (!route.endsWith("ui=cell")) return;
+      await page.locator("tbody button").first().click();
+      await page.waitForTimeout(300);
+    },
+  },
+  "tien-do-dai-tu-lon": {
+    description: "Bảng tiến độ đại tu tab lớn nhất (Máy phát · Trực phụ điện) bằng API THẬT trên DB dev, đồng hồ 01/12 — kiểm tra tải/cuộn",
+    async prepare() { return {}; },
+    routes: () => ["/tien-ich/tien-do-dai-tu", "/tien-ich/tien-do-dai-tu?ui=scroll"],
+    async mock(context) {
+      await context.clock?.install({ time: new Date("2026-12-01T08:00:00+07:00") }).catch(() => {});
+      await context.addInitScript(() => { try { localStorage.setItem("overhaul-progress:tab", JSON.stringify({ source: "GENERATOR", sheet: "Trực phụ điện" })); } catch { /* bỏ qua */ } });
+    },
+    async interact(page, route) {
+      await page.locator("tbody[data-index]").first().waitFor({ timeout: 30_000 });
+      if (!route.endsWith("ui=scroll")) return;
+      // Cuộn dọc giữa bảng: hàng ở giữa phải được vẽ, số tbody vẽ ra phải nhỏ (ảo hoá).
+      await page.evaluate(() => { const box = document.querySelector("tbody[data-index]")?.closest("div.overflow-auto"); if (box) box.scrollTop = box.scrollHeight / 2; });
+      await page.waitForTimeout(400);
+      const drawn = await page.locator("tbody[data-index]").count();
+      if (drawn > 60) throw new Error(`Ảo hoá không chạy: vẽ ${drawn} hạng mục`);
+    },
+  },
   "pct-tien-do-ngay": overhaulTodayPreset,
   "pct-dai-tu": overhaulPreset(false),
   "pct-dai-tu-qua-han": overhaulPreset(true),

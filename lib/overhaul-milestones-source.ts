@@ -41,9 +41,13 @@ const ROWS: Array<[string, number, number | null, string]> = [
   ["thu-nghiem", 57, 59, "Thử nghiệm sau đại tu"],
 ];
 
-function dayDate(day: number) {
+/** Ngày lịch yyyy-mm-dd của "Ngày đại tu n" (n = 1 → 06/10/2026). */
+export function overhaulDayDate(day: number) {
   return new Date(Date.parse(`${OVERHAUL_DAY_ONE}T00:00:00Z`) + (day - 1) * 86_400_000).toISOString().slice(0, 10);
 }
+const dayDate = overhaulDayDate;
+/** Số ngày trên bảng tiến độ (khớp cột "Ngày 1…60" của các tab Sheet). */
+export const OVERHAUL_DAY_COUNT = 60;
 
 export const S2_MILESTONES_SOURCE = ROWS.map(([key, start, end, title], index): MilestoneInput & {
   sourceKey: string; campaign: string; sortOrder: number;

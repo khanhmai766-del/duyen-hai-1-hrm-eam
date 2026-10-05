@@ -233,6 +233,13 @@ export const NAV_SECTIONS: NavSection[] = [
   {
     title: "TIỆN ÍCH",
     items: [
+      // Đợt đại tu S2 (06/10–04/12/2026) — gỡ mục này khi hết đợt.
+      {
+        label: "Tiến độ đại tu",
+        href: "/tien-ich/tien-do-dai-tu",
+        icon: CalendarRange,
+        keywords: "tien do dai tu s2 hang muc nhat ky ngay google sheet lo hoi turbine may phat c&i overhaul",
+      },
       {
         label: "So sánh SHN theo PPA",
         href: "/tien-ich/so-sanh-shn-ppa",
