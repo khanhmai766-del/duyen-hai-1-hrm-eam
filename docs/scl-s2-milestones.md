@@ -17,10 +17,15 @@ Chuyển động dừng khi phần này ra ngoài vùng nhìn, tab ẩn hoặc n
 ## Nguồn đã đối chiếu
 
 `PL2. Mốc đường găng SCL S2-DH1 2026.xls`, sheet `LH-TB S2-DH1`: 34 nội dung
-(20 mốc đơn, 14 khoảng ngày), tương ứng 48 lần nhắc. Ngày 1 là 07/10/2026.
+(20 mốc đơn, 14 khoảng ngày), tương ứng 48 lần nhắc. Ngày 1 là **06/10/2026** (file gốc
+ghi 07/10; dời sớm 1 ngày ngày 05/10/2026 cho khớp các tab tiến độ trên Google Sheets).
 Khoảng ngày lấy hai đầu ngoặc; không lấy vị trí mũi tên nối giữa nhãn làm ngày riêng.
-Dữ liệu nằm ở `lib/overhaul-milestones-source.ts`. Mốc cuối là 04/12; tiêu đề lịch
-đến 05/12 nhưng file không ghi một công việc riêng ngày đó.
+Dữ liệu nằm ở `lib/overhaul-milestones-source.ts`. Mốc cuối là 03/12; tiêu đề lịch
+đến 04/12 nhưng file không ghi một công việc riêng ngày đó.
+
+Bộ mốc đã nạp vào DB không tự đổi theo file nguồn. Dời ngày bộ đã nạp bằng
+`npx tsx scripts/data-ops/shift-overhaul-milestones.ts` (xem trước) rồi thêm `--commit`:
+chỉ dời mốc còn đúng ngày cũ của file, mốc đã sửa tay trên web để nguyên và liệt kê ra.
 
 ## Localhost
 
@@ -50,7 +55,7 @@ Script browser kiểm tra 5 ngày, bấm chuông mở đúng mốc và sửa/xo�
 bằng response giả lập, không ghi lên bộ 34 mốc.
 Preset giao diện chỉ SELECT và giả lập response theo ngày 22/11, không sửa đồng hồ
 hệ thống hay dữ liệu. Các preset `scl-s2-ngay-dau`, `scl-s2-ngay-cuoi`, `scl-s2-het-lich`
-kiểm tra ngày 07/10, 04/12 và 05/12. Ảnh nằm trong `reports/verify/` (gitignore).
+kiểm tra ngày 06/10, 03/12 và 04/12. Ảnh nằm trong `reports/verify/` (gitignore).
 
 Nút “Xem sơ đồ” cạnh “Xem toàn bộ lịch” trên trang chủ mở trực tiếp popup sơ đồ;
 đóng bằng nút X hoặc Escape. Hình sơ đồ đường găng SVG từ chính dữ liệu lịch: ô mốc đơn phía trên,

@@ -20,7 +20,7 @@ try {
   const page = await context.newPage();
   await page.clock.install({ time: new Date("2026-10-03T08:00:00+07:00") });
   const card = page.getByRole("region", { name: "Mốc tiến độ SCL S2 — 2026" });
-  for (const [date, theme] of [["2026-10-03", "maintenance"], ["2026-10-07", "isolation"], ["2026-10-16", "turbine-stop"], ["2026-10-28", "lifting"], ["2026-11-22", "diesel"], ["2026-11-29", "firing"], ["2026-12-02", "electrical"]]) {
+  for (const [date, theme] of [["2026-10-03", "maintenance"], ["2026-10-06", "isolation"], ["2026-10-15", "turbine-stop"], ["2026-10-27", "lifting"], ["2026-11-21", "diesel"], ["2026-11-28", "firing"], ["2026-12-01", "electrical"]]) {
     day = date;
     await page.goto(base);
     await card.locator(`[data-animation-theme=${theme}]`).waitFor();
@@ -28,7 +28,7 @@ try {
     await page.waitForTimeout(150);
     await card.screenshot({ path: `${out}/${date}-${theme}.png` });
   }
-  day = "2026-11-22";
+  day = "2026-11-21";
   await page.goto(base);
   await card.scrollIntoViewIfNeeded();
   await page.waitForTimeout(200);

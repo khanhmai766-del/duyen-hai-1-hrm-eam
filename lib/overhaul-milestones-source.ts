@@ -1,7 +1,9 @@
 import { OVERHAUL_CAMPAIGN, type MilestoneInput } from "./overhaul-milestones";
 
 /** Đối chiếu PL2. Mốc đường găng SCL S2-DH1 2026.xls, sheet LH-TB S2-DH1.
- * Ngày đại tu 1 = 07/10/2026. Khoảng ngày lấy hai đầu ngoặc, không lấy mũi tên giữa nhãn. */
+ * Ngày đại tu 1 = 06/10/2026 (file gốc ghi 07/10; dời sớm 1 ngày theo yêu cầu 05/10/2026 — khớp ngày bắt đầu các tab
+ * tiến độ đại tu trên Google Sheets). Khoảng ngày lấy hai đầu ngoặc, không lấy mũi tên giữa nhãn. */
+export const OVERHAUL_DAY_ONE = "2026-10-06";
 const ROWS: Array<[string, number, number | null, string]> = [
   ["tach-luoi", 1, null, "Tách lưới"],
   ["sua-ap-luc-lo", 2, null, "Sửa chữa hệ thống áp lực lò hơi và các hệ thống liên quan (APH, GGH, SCR)"],
@@ -40,7 +42,7 @@ const ROWS: Array<[string, number, number | null, string]> = [
 ];
 
 function dayDate(day: number) {
-  return new Date(Date.UTC(2026, 9, 7 + day - 1)).toISOString().slice(0, 10);
+  return new Date(Date.parse(`${OVERHAUL_DAY_ONE}T00:00:00Z`) + (day - 1) * 86_400_000).toISOString().slice(0, 10);
 }
 
 export const S2_MILESTONES_SOURCE = ROWS.map(([key, start, end, title], index): MilestoneInput & {

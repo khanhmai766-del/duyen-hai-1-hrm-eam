@@ -98,7 +98,7 @@ export function OverhaulMilestonesCard({ canManage }: { canManage: boolean }) {
           <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-sky-50 text-sky-700"><CalendarDays className="h-5 w-5" /></span>
           <div className="min-w-0">
             <h2 className="text-base font-bold text-navy sm:text-lg">{OVERHAUL_TITLE}</h2>
-            <p className="mt-0.5 text-xs text-slate-500">07/10–05/12/2026 · Lịch kế hoạch</p>
+            <p className="mt-0.5 text-xs text-slate-500">06/10–04/12/2026 · Lịch kế hoạch</p>
           </div>
         </div>
         <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto">

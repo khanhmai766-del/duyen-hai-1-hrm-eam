@@ -24,8 +24,9 @@ function lines(text: string) {
 
 // Bố trí theo ngày thực; không suy diễn quan hệ phụ thuộc từ các ngoặc trong Excel.
 function layout(items: OverhaulMilestone[]) {
-  const first = Math.min(stamp("2026-10-07"), ...items.map((item) => stamp(item.startDate)));
-  const last = Math.max(stamp("2026-12-05"), ...items.map((item) => stamp(item.endDate ?? item.startDate)));
+  // Ngày đại tu 1 = 06/10/2026; trục kéo tới ngày 60 (04/12) dù mốc cuối là ngày 59.
+  const first = Math.min(stamp("2026-10-06"), ...items.map((item) => stamp(item.startDate)));
+  const last = Math.max(stamp("2026-12-04"), ...items.map((item) => stamp(item.endDate ?? item.startDate)));
   const days = Math.round((last - first) / DAY) + 1;
   const width = PAD * 2 + days * CELL;
   const x = (date: string) => PAD + (stamp(date) - first) / DAY * CELL + CELL / 2;

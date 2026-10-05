@@ -27,7 +27,7 @@ async function main() {
     { name: "authjs.session-token", value: token, domain: base.hostname, path: "/", httpOnly: true, sameSite: "Lax" },
     { name: "pp-admin-mode", value: "1", domain: base.hostname, path: "/" },
   ]);
-  let day = "2026-11-22";
+  let day = "2026-11-21";
   let items: OverhaulMilestone[] = S2_MILESTONES_SOURCE.map((row) => ({ ...row, id: row.sourceKey, createdById: null, updatedById: null, createdAt: "2026-10-03T00:00:00Z", updatedAt: "2026-10-03T00:00:00Z" }));
   await context.route("**/api/overhaul-milestones", async (route) => {
     const method = route.request().method();
@@ -43,12 +43,12 @@ async function main() {
     } else await route.fulfill({ json: { data: buildMilestoneSchedule(items, new Date(`${day}T08:00:00+07:00`)), meta: null, error: null } });
   });
   const page = await context.newPage();
-  await page.clock.install({ time: new Date("2026-11-22T08:00:00+07:00") });
+  await page.clock.install({ time: new Date("2026-11-21T08:00:00+07:00") });
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   const card = page.getByRole("region", { name: "Mốc tiến độ SCL S2 — 2026" });
   // section có aria-label, trình duyệt ánh xạ thành region.
-  for (const [date, count] of [["2026-10-07", 2], ["2026-11-22", 3], ["2026-12-02", 2], ["2026-12-04", 2], ["2026-12-05", 0]] as const) {
+  for (const [date, count] of [["2026-10-06", 2], ["2026-11-21", 3], ["2026-12-01", 2], ["2026-12-03", 2], ["2026-12-04", 0]] as const) {
     day = date;
     await page.goto(base.origin, { waitUntil: "networkidle" });
     if (count) await card.getByText(`${count} mốc`, { exact: true }).waitFor();
@@ -58,13 +58,13 @@ async function main() {
     await page.getByRole("button", { name: "Thông báo", exact: true }).click();
     console.log(`PASS giao diện ${date}: ${count} mốc trên trang chủ và chuông`);
   }
-  day = "2026-11-22";
+  day = "2026-11-21";
   await page.reload({ waitUntil: "networkidle" });
   await page.getByRole("button", { name: "Thông báo", exact: true }).click();
   await page.getByRole("link", { name: /Mốc SCL S2 hôm nay: Nghiệm thu hệ thống Diesel khẩn/ }).click();
   const dialog = page.getByRole("dialog");
   await dialog.getByRole("button", { name: "Sửa mốc Nghiệm thu hệ thống Diesel khẩn", exact: true }).click();
-  await dialog.getByLabel("Ngày bắt đầu / ngày mốc").fill("2026-11-23");
+  await dialog.getByLabel("Ngày bắt đầu / ngày mốc").fill("2026-11-22");
   await dialog.getByRole("button", { name: "Lưu mốc", exact: true }).click();
   await dialog.getByPlaceholder("Tìm theo nội dung mốc…").waitFor();
   await dialog.getByRole("button", { name: "Đóng", exact: true }).click();
@@ -88,7 +88,7 @@ async function main() {
   mkdirSync("reports/verify/scl-s2-interaction", { recursive: true });
   await page.screenshot({ path: "reports/verify/scl-s2-interaction/bell-after-create.png" });
   await page.getByRole("button", { name: "Thông báo", exact: true }).click();
-  day = "2026-12-05";
+  day = "2026-12-04";
   await page.clock.runFor(60_001);
   await card.getByText("Hôm nay không có mốc đến ngày kế hoạch.", { exact: true }).waitFor();
   await page.getByRole("button", { name: "Thông báo", exact: true }).click();
