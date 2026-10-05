@@ -160,7 +160,7 @@ export const POSITION_CATALOG: readonly PositionCatalogItem[] = [
     code: "AIR_COMPRESSOR_OIL_HOUSE",
     label: "Khí nén - Nhà dầu",
     aliases: [
-      "Khí nén - nhà dầu 300m3",
+      "Khí nén - nhà dầu 300m3", "Khí nén – Nhà dầu HFO 300m3",
       "Khí Nén-Nhà Dầu",
       "Nhà dầu - khí nén",
       "Khí nén-Dầu 300",
@@ -192,7 +192,7 @@ export const POSITION_CATALOG: readonly PositionCatalogItem[] = [
       "VHV XLNT-ND5",
       "XLNT-ND5000M3", // cách viết trong bảng PCCC
       "XỬ LÝ NƯỚC THẢI VÀ DẦU 5000M3", // bảng FOAM+CO2+DIESEL viết đầy đủ, không viết tắt
-      "VHV XLN thải - Nhà dầu 5000m3",
+      "VHV XLN thải - Nhà dầu 5000m3", "XLN thải – Nhà dầu 5000m3",
       "25. VHV XLNT-ND5.",
     ],
     units: ["COMMON"],

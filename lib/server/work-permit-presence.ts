@@ -15,7 +15,7 @@ export async function assertWorkersFree(tx: Prisma.TransactionClient, workers: P
   const sessions = await tx.workPermitSession.findMany({
     where: { endedAt: null, permitId: { not: permitId } },
     select: { commanderId: true, commanderCode: true, commanderName: true, company: true, members: true,
-      permit: { select: { id: true, number: true, year: true, kind: true } } },
+      permit: { select: { id: true, number: true, nkvhNumber: true, year: true, kind: true } } },
   });
   for (const session of sessions) {
     const occupied: PermitMember[] = [{ personId: session.commanderId ?? undefined, code: session.commanderCode,

@@ -1,6 +1,7 @@
 import type { Prisma, WorkPermit } from "@prisma/client";
 import { fail } from "@/lib/api";
 import { permitText } from "@/lib/server/work-permits";
+import { isSctxContractorPermit } from "@/lib/work-permits";
 
 /** Điền sẵn người cấp từ phiên đăng nhập (cho phép sửa); CHTT nhà thầu từ danh bạ dùng chung. */
 export async function resolvePermitIdentities(
@@ -21,6 +22,9 @@ export async function resolvePermitIdentities(
   }
   const commanderPersonId = permitText(body, "commanderPersonId", 100) || null;
   if (!commanderPersonId) {
+    if (isSctxContractorPermit({ teamType: String(body.teamType), contractorScope: permitText(body, "contractorScope", 20) })) {
+      return { ...body, issuerName, issuerUserId, commanderPersonId: null, commanderName: permitText(body, "commanderName") };
+    }
     // Nháp có thể hủy trực tiếp trước khi chọn CHTT; khi cấp thực tế phải chọn danh bạ.
     const cancellingDraft = body.status === "CANCELLED" && before?.status === "DRAFT";
     if (body.status !== "DRAFT" && !cancellingDraft) throw fail("Vui lòng chọn CHTT từ danh sách nhà thầu trước khi cấp phiếu");

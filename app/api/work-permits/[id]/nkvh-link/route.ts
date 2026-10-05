@@ -1,3 +1,5 @@
+import { assertNkvhLinkAvailable } from "@/lib/server/work-permit-number-reservations";
+import type { PermitKind } from "@/lib/work-permits";
 import { requirePermitVisible } from "@/lib/server/work-permit-scope";
 import { prisma } from "@/lib/prisma";
 import { audit, fail, ok, requireUser } from "@/lib/api";
@@ -17,7 +19,9 @@ export async function PATCH(req: Request, props: { params: Promise<{ id: string 
     let input: ReturnType<typeof parseNkvhLinkUpdate>;
     try { input = parseNkvhLinkUpdate(body); } catch (e) { return fail(e instanceof Error ? e.message : "Dữ liệu liên kết không hợp lệ"); }
     const { id } = await props.params;
+    const scope = await prisma.workPermit.findUniqueOrThrow({ where: { id }, select: { kind: true } });
     const row = await prisma.$transaction(async tx => {
+      await assertNkvhLinkAvailable(tx, scope.kind as PermitKind, input.nkvhPctId, id);
       await tx.$queryRaw`SELECT "id" FROM "WorkPermit" WHERE "id" = ${id} FOR UPDATE`;
       const before = await tx.workPermit.findUnique({ where: { id } });
       if (!before) throw fail("Không tìm thấy PCT", 404);

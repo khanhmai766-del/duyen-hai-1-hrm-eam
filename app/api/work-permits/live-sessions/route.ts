@@ -23,7 +23,7 @@ export async function GET() {
         take: 300,
         select: {
           id: true, commanderId: true, commanderCode: true, commanderName: true, company: true, members: true, openedAt: true, authorizerName: true,
-          permit: { select: { id: true, number: true, year: true, kind: true, unit: true, content: true, location: true, position: true, teamName: true, progress: true } },
+          permit: { select: { id: true, number: true, nkvhNumber: true, year: true, kind: true, unit: true, content: true, location: true, position: true, teamName: true, progress: true } },
         },
       }),
       permitCapabilities(user),

@@ -1,7 +1,7 @@
 import { audit, fail, ok, requireUser } from "@/lib/api";
 import { workPermitPrisma as prisma } from "@/lib/server/work-permit-prisma";
 import { requirePermitIssuer } from "@/lib/server/work-permit-permissions";
-import { canAutoReleaseLatestNumber, lockPermitNumberScope, permitNumberHighWater } from "@/lib/server/work-permit-number-reservations";
+import { lockPermitNumberScope, releaseUnusedReservation } from "@/lib/server/work-permit-number-reservations";
 import { permitBody, permitHandle } from "@/lib/server/work-permits";
 
 export const dynamic = "force-dynamic";
@@ -17,25 +17,16 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
     if (!scope) return fail("Không tìm thấy lượt lấy số", 404);
     const result = await prisma.$transaction(async tx => {
       // Cùng khóa với thao tác lấy số để không có máy khác lấy số mới trong lúc đang xét trả lại số cuối dãy.
-      const baseline = await lockPermitNumberScope(tx, scope.kind as "MECHANICAL" | "ELECTRICAL", scope.year);
+      await lockPermitNumberScope(tx, scope.kind as "MECHANICAL" | "ELECTRICAL", scope.year);
       await tx.$queryRaw`SELECT "id" FROM "WorkPermitNumberReservation" WHERE "id" = ${id} FOR UPDATE`;
       const before = await tx.workPermitNumberReservation.findUnique({ where: { id } });
       if (!before) throw fail("Không tìm thấy lượt lấy số", 404);
-      if (before.status !== "RESERVED") throw fail("Chỉ được hủy số đã lấy nhưng chưa lưu cấp phiếu", 409);
+      if (before.status !== "RESERVED" && !(before.status === "REVIEW" && before.nkvhPctId && !before.permitId)) throw fail("Chỉ được hủy số đã lấy nhưng chưa lưu cấp phiếu", 409);
       if (before.ownerId !== user.id && user.role !== "ADMIN") throw fail("Bạn chỉ được hủy lượt lấy số của chính mình", 403);
-      let saved = await tx.workPermitNumberReservation.update({ where: { id }, data: {
-        status: "CANCELLED", cancelReason: reason, cancelledById: user.id, cancelledAt: new Date(),
-      } });
-      await tx.workPermitNumberReservationHistory.create({ data: { reservationId: id, action: "CANCELLED",
-        actorId: user.id, actorName: user.name ?? "", note: reason } });
-      const highestWithoutNumber = await permitNumberHighWater(tx, before.kind as "MECHANICAL" | "ELECTRICAL", before.year,
-        { ignoreCancelledNumber: before.number });
-      const released = canAutoReleaseLatestNumber(before.number, baseline, highestWithoutNumber);
-      if (released) {
-        saved = await tx.workPermitNumberReservation.update({ where: { id }, data: { status: "RELEASED" } });
-        await tx.workPermitNumberReservationHistory.create({ data: { reservationId: id, action: "RELEASED",
-          actorId: user.id, actorName: user.name ?? "", note: `Tự động trả số ${before.number}/${before.year} về dãy vì chưa có số đứng sau` } });
-      }
+      if (body.confirmUnused !== true) throw fail("Cần xác nhận số này chưa dùng trên PCT giấy hoặc NKVH.", 400);
+      await releaseUnusedReservation(tx, before, user.id, user.name ?? "", reason);
+      const saved = await tx.workPermitNumberReservation.findUniqueOrThrow({ where: { id } });
+      const released = true;
       return { row: saved, released };
     });
     await audit(user.id, "CANCEL_WORK_PERMIT_NUMBER_RESERVATION", "WorkPermitNumberReservation", id,

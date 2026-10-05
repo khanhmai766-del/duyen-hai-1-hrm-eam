@@ -1,3 +1,4 @@
+import { assertNkvhLinkAvailable, lockPermitNumberScope } from "@/lib/server/work-permit-number-reservations";
 import { assertOverhaulItemsConfirmed, parseOverhaulItems } from "@/lib/server/work-permit-overhaul";
 import { permitPositionWhere, permitScopeOf, requirePermitPositionAllowed } from "@/lib/server/work-permit-scope";
 import { positionViewScopeMeta } from "@/lib/position-data-scope";
@@ -57,13 +58,15 @@ export async function POST(req: Request) {
       const linkedBody = await resolvePermitDefectLink(tx, body);
       const data = parsePermit(await resolvePermitIdentities(tx, linkedBody, user), status);
       if (data.teamType === "CONTRACTOR" && data.format !== "PAPER") throw fail("PCT nhà thầu chỉ sử dụng phiếu giấy");
+      await assertNkvhLinkAvailable(tx, data.kind as PermitKind, data.nkvhPctId);
+      await lockPermitNumberScope(tx, data.kind as PermitKind, data.year);
       const overhaulItems = parseOverhaulItems(body.overhaulItems, data);
       // Hạng mục đang nằm trong PCT khác: được phép nếu người cấp đã xác nhận trong hộp chọn (đọc cờ trên body gốc).
       await assertOverhaulItemsConfirmed(tx, body.overhaulItems, null);
       const row = await tx.workPermit.create({ data: { ...data, ...(overhaulItems !== undefined ? { overhaulItems } : {}), safetyItems: permitSnapshot(await resolvePermitSafety(tx, body)), status, createdById: user.id, createdByName: user.name ?? "" } });
       await consumePermitNumberReservation(tx, { reservationId: body.reservationId, kind: data.kind as PermitKind,
         year: data.year, number: data.number, teamType: data.teamType, userId: user.id, userName: user.name ?? "",
-        isAdmin: user.role === "ADMIN", permitId: row.id });
+        isAdmin: user.role === "ADMIN", permitId: row.id, releasePrevious: body.releasePrevious === true });
       await tx.workPermitHistory.create({ data: { permitId: row.id, actorId: user.id, actorName: user.name ?? "", action: "Tạo phiếu", after: permitSnapshot(row) } });
       return row;
     });

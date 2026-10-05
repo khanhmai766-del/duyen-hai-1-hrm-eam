@@ -18,8 +18,9 @@ export function isSessionCommander(member: { personId?: string | null; code?: st
 export function workersStillInside<M extends { personId?: string | null; code?: string | null; attendance?: Array<{ in: string; out: string | null }> | null }>(members: M[], session: { commanderId: string | null; commanderCode: string }) {
   return members.filter(member => attendanceInside(member) && !isSessionCommander(member, session));
 }
-export function formatPermitNumber(row: { number: string; year: number }): string {
+export function formatPermitNumber(row: { number: string; year: number; nkvhNumber?: string | null }): string {
   const number = row.number.trim().toUpperCase().replace(/\s+/g, "");
+  if (row.nkvhNumber) return row.nkvhNumber;
   return /^\d+$/.test(number) ? `${number}/${row.year}/VH1-NĐDH` : number;
 }
 
@@ -57,6 +58,10 @@ export const PERMIT_WORK_TYPE_CODES = { PLANNED: "KH", UNPLANNED: "ĐX", INCIDEN
 export type PermitWorkType = keyof typeof PERMIT_WORK_TYPES;
 export const PERMIT_CONTRACTOR_SCOPES = { SCTX: "SCTX", OVERHAUL: "Đại tu" } as const;
 export type PermitContractorScope = keyof typeof PERMIT_CONTRACTOR_SCOPES;
+/** PCT nhà thầu SCTX có thể ghi nhận cấp nhanh, chưa cần danh bạ đơn vị/CHTT. */
+export function isSctxContractorPermit(row: { teamType: string; contractorScope?: string | null }): boolean {
+  return row.teamType === "CONTRACTOR" && row.contractorScope === "SCTX";
+}
 export const PERMIT_SOURCE_CLASSIFICATIONS = {
   PLANNED: "Kế hoạch",
   OFF_PLAN: "Ngoài kế hoạch",
@@ -80,7 +85,7 @@ export const PERMIT_STATUSES = {
 } as const;
 export type PermitKind = keyof typeof PERMIT_KINDS;
 export type PermitStatus = keyof typeof PERMIT_STATUSES;
-export const PERMIT_UNITS = { S1: "Tổ máy S1", S2: "Tổ máy S2", COMMON: "COMMON" } as const;
+export const PERMIT_UNITS = { S1: "Tổ máy S1", S2: "Tổ máy S2", COMMON: "Dùng chung", UNKNOWN: "Chưa xác định" } as const;
 export const PERMIT_TRANSITIONS: Record<PermitStatus, readonly PermitStatus[]> = {
   DRAFT: ["ISSUED", "CANCELLED"], ISSUED: ["CLOSED", "CANCELLED"],
   // Phiếu nội bộ cũ ở trạng thái thực hiện vẫn được chốt/hủy, không mở thêm vòng thực hiện.
@@ -121,6 +126,7 @@ export interface PermitInput {
   issuedAt: string | null; authorizedAt: string | null; closedAt: string | null;
   result: string; note: string; statusReason: string;
   defectId?: string | null;
+  nkvhNumber?: string | null;
   nkvhPctId?: string | null;
   repairRequestNumber: string;
 }
@@ -188,7 +194,7 @@ export interface PermitSession {
   itemProgress?: OverhaulItemProgress[] | null;
 }
 export type PermitHistorySummary = Pick<PermitHistory, "id" | "actorName" | "action" | "createdAt">;
-export type PermitListRow = Pick<PermitRow, "id" | "number" | "year" | "kind" | "format" | "workType" | "workDate" | "content" | "location" | "position" | "unit" | "issuerName" | "commanderName" | "teamName" | "teamType" | "contractorScope" | "workerCount" | "authorizerName" | "status" | "progress" | "repairRequestNumber" | "nkvhPctId" | "sourceClassification" | "plannedEndAt"> & { sessions: Array<Pick<PermitSession, "commanderName" | "company" | "authorizerName">> };
+export type PermitListRow = Pick<PermitRow, "id" | "number" | "year" | "kind" | "format" | "workType" | "workDate" | "content" | "location" | "position" | "unit" | "issuerName" | "commanderName" | "teamName" | "teamType" | "contractorScope" | "workerCount" | "authorizerName" | "status" | "progress" | "repairRequestNumber" | "nkvhPctId" | "nkvhNumber" | "sourceClassification" | "plannedEndAt"> & { sessions: Array<Pick<PermitSession, "commanderName" | "company" | "authorizerName">> };
 export interface PermitDetailRow extends PermitRow {
   history: PermitHistorySummary[]; sessions: PermitSession[]; _count: { sessions: number; history: number };
   /** PCT đại tu: % lũy kế gần nhất theo overhaulItemKey. */
@@ -198,6 +204,7 @@ export interface PermitDetailRow extends PermitRow {
 }
 
 export interface DefectLinkedWorkPermit {
+  nkvhNumber?: string | null;
   nkvhPctId?: string | null;
   id: string;
   number: string;

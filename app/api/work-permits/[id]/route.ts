@@ -1,3 +1,5 @@
+import { assertNkvhLinkAvailable, lockPermitNumberScope } from "@/lib/server/work-permit-number-reservations";
+import { normalizeText } from "@/lib/nav";
 import { assertOverhaulItemsConfirmed, parseOverhaulItems } from "@/lib/server/work-permit-overhaul";
 import { enqueueOverhaulClose, pushOverhaulSheetOutboxQuietly } from "@/lib/server/overhaul-sheet-writer";
 import { after as afterResponse } from "next/server";
@@ -96,8 +98,11 @@ export async function PUT(req: Request, props: { params: Promise<{ id: string }>
         if (status === "CANCELLED" && current.status !== "DRAFT" && user.role !== "ADMIN") throw fail("Chỉ Quản trị được hủy phiếu công tác đã cấp", 403);
       }
     }
+    const numberScope = await prisma.workPermit.findUniqueOrThrow({ where: { id: params.id }, select: { kind: true, year: true, nkvhPctId: true } });
     let previous: Awaited<ReturnType<typeof prisma.workPermit.findUnique>> = null;
     const row = await prisma.$transaction(async tx => {
+      await assertNkvhLinkAvailable(tx, numberScope.kind as PermitKind, typeof body.nkvhPctId === "string" ? body.nkvhPctId.toLowerCase() : numberScope.nkvhPctId, params.id);
+      await lockPermitNumberScope(tx, numberScope.kind as PermitKind, numberScope.year);
       await tx.$queryRaw`SELECT "id" FROM "WorkPermit" WHERE "id" = ${params.id} FOR UPDATE`;
       const before = await tx.workPermit.findUnique({ where: { id: params.id } });
       if (!before) throw fail("Không tìm thấy PCT", 404);
@@ -125,6 +130,7 @@ export async function PUT(req: Request, props: { params: Promise<{ id: string }>
         plannedStartAt: body.plannedStartAt === undefined ? before.plannedStartAt?.toISOString() ?? null : body.plannedStartAt,
         plannedEndAt: body.plannedEndAt === undefined ? before.plannedEndAt?.toISOString() ?? null : body.plannedEndAt,
       }, user, before), status);
+      if (before.nkvhNumber) data.searchText += ` ${normalizeText(before.nkvhNumber)}`;
       /*
        * Đổi LOẠI ĐƠN VỊ (nội bộ · điện tử ⇄ nhà thầu · giấy) giữ nguyên số: số thuộc về sổ, không
        * thuộc loại đơn vị. Chỉ cho khi chưa có gì không đảo ngược được — phiếu mới ở "Đã cấp" (hoặc

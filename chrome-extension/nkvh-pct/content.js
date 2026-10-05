@@ -18,12 +18,13 @@
   const API = "/api/work-permits/nkvh-claim";
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(PCT_ID)) return;
 
-  const state = { loading: true, permit: null, cancelledPermit: null, positions: [], units: {}, panel: false, importNumber: null, unit: null, position: null, busy: false, closeAttempted: false, observed: null, message: "", tone: "info" };
+  const state = { loading: true, permit: null, cancelledPermit: null, reservation: null, positions: [], units: {}, panel: false, importNumber: null, unit: null, position: null, busy: false, closeAttempted: false, observed: null, message: "", tone: "info" };
 
   // ---------- Đọc trang NKVH ----------
   const fold = (value) => String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "")
     .replace(/[đĐ]/g, "d").toLowerCase().replace(/\s+/g, " ").trim();
-  const form = () => document.getElementById("formContent");
+  let readingDocument = document;
+  const form = () => readingDocument.getElementById("formContent");
   const numberInput = () => document.getElementById("formContent:txtSoPhieu");
   const outsideDialog = (el) => !el.closest(".ui-dialog");
   const cells = () => [...(form()?.querySelectorAll(".ui-panelgrid-cell") || [])].filter(outsideDialog);
@@ -70,10 +71,10 @@
   /** Số NKVH tự sinh ("2392/2026/NĐDH-VH1") — khác dạng số của sổ ("1234/2026/VH1-NĐDH"). */
   const isNkvhAutoNumber = (value) => /^\d+\/\d{4}\/nddh-vh\d*$/.test(fold(value));
   /** Số chính thức đã được cấp theo sổ PXVH1; có thể nhận lại về sổ khi hồ sơ web bị thiếu. */
-  const isPxvh1Number = (value) => /^\d+\/20\d{2}\/vh1-nddh$/.test(fold(value).replace(/\s+/g, ""));
+  const isPxvh1Number = (value) => /^\d+\/20\d{2}\/(?:vh1-nddh|nddh-vh1)$/.test(fold(value).replace(/\s+/g, ""));
   /** Khoá so sánh hai số dạng sổ ("04464/2026/VH1-NDDH" = "4464/2026/VH1-NĐDH"); không đúng dạng → null. */
   function pxvh1Key(value) {
-    const match = fold(value).replace(/\s+/g, "").match(/^(\d+)\/(20\d{2})\/vh1-nddh$/);
+    const match = fold(value).replace(/\s+/g, "").match(/^(\d+)\/(20\d{2})\/(?:vh1-nddh|nddh-vh1)$/);
     return match ? `${match[1].replace(/^0+(?=\d)/, "")}/${match[2]}` : null;
   }
 
@@ -177,7 +178,7 @@
    */
   function finalStepCompleted() {
     const expected = KIND === "ELECTRICAL" ? /^b8:\s*hoan thanh phieu$/ : /^b5:\s*khoa phieu cong tac$/;
-    const controls = [...document.querySelectorAll("button, a, [role=button], .ui-button, input[type=button]")];
+    const controls = [...readingDocument.querySelectorAll("button, a, [role=button], .ui-button, input[type=button]")];
     const control = controls.find((el) => expected.test(fold(el.value || el.textContent)));
     if (!control) return false;
     const colored = [control, ...control.querySelectorAll("*")].some((el) => {
@@ -237,17 +238,17 @@
   }
 
   function plannedTimes() {
-    const end = document.getElementById("formContent:id_endDateKH_input");
+    const end = readingDocument.getElementById("formContent:id_endDateKH_input");
     const inputs = [...(end?.closest("tr")?.querySelectorAll(".ui-calendar input") || [])];
     return { start: inputs.find((input) => input !== end)?.value || "", end: end?.value || "" };
   }
 
   function readPage() {
     const areas = textareas();
-    const devices = [...document.querySelectorAll("#formContent\\:dtThietBi_data tr:not(.ui-datatable-empty-message)")]
+    const devices = [...readingDocument.querySelectorAll("#formContent\\:dtThietBi_data tr:not(.ui-datatable-empty-message)")]
       .map((row) => [...row.cells].slice(0, 2).map((cell) => cell.textContent.trim()).filter(Boolean).join(" - ")).filter(Boolean);
     const team = valueCell(/^don vi cong tac:?$/)?.querySelector("select option:checked");
-    const disciplines = [...(document.getElementById("formContent:pngLoaiPhieu")?.querySelectorAll("td") || [])]
+    const disciplines = [...(readingDocument.getElementById("formContent:pngLoaiPhieu")?.querySelectorAll("td") || [])]
       .filter((td) => td.querySelector("input[type=checkbox]")?.checked || td.querySelector(".ui-chkbox-box.ui-state-active"))
       .map((td) => td.textContent.trim());
     const times = plannedTimes();
@@ -267,6 +268,7 @@
       commanderName: selectedText(valueCell(/nguoi chi huy truc tiep/)),
       leaderName: selectedText(valueCell(/nguoi lanh dao cong viec/)),
       workerCount: valueCell(/so luong nhan vien/)?.querySelector("input")?.value.trim() || "",
+      authorizerPosition: selectedText(valueCell(/chuc danh nguoi cho phep lam viec/)),
       issuerName: valueCell(/^nguoi cap phieu:?$/)?.textContent.trim() || "",
     };
   }
@@ -310,12 +312,15 @@
   async function load() {
     if (foreignQlvh()) { state.loading = false; render(); return; }
     // Số NKVH đã LƯU (đọc trước khi người dùng kịp gõ) — chỉ số này mới được báo sổ giữ chỗ.
-    const savedNumber = numberInput()?.value.trim() || "";
     state.loading = true; render();
     const result = await api("GET", `${API}?kind=${KIND}&nkvhPctId=${PCT_ID}`);
     state.loading = false;
+    if (result.ok && result.data.protocolVersion !== 2) {
+      return say("Máy chủ chưa hỗ trợ luồng giữ số và tự đồng bộ mới. Cần cập nhật máy chủ trước khi dùng tiện ích 1.1.0.", "error");
+    }
     if (result.ok) {
       state.permit = result.data.permit;
+      state.reservation = result.data.reservation || null;
       state.cancelledPermit = result.data.cancelledPermit || null;
       state.positions = result.data.positions || [];
       state.units = result.data.units || {};
@@ -324,7 +329,8 @@
       state.message = result.message; state.tone = "error";
     }
     render();
-    if (result.ok && !state.permit && isPxvh1Number(savedNumber)) observeSavedNumber(savedNumber);
+    // Không ghi nhận số trên form mới chưa lưu; danh sách phiếu đã lưu có lớp observe riêng.
+    if (result.ok) retrySavedSync();
   }
 
   /**
@@ -332,13 +338,6 @@
    * "Lấy số PCT" của phiếu khác không cấp trùng. Không tạo phiếu trên sổ — việc đó vẫn là "Đồng bộ số
    * hiện có". Lỗi chỉ làm mất phần giữ chỗ, không chặn thao tác nào.
    */
-  async function observeSavedNumber(formattedNumber) {
-    const result = await api("POST", API, { mode: "observe", kind: KIND, entries: [{ formattedNumber, nkvhPctId: PCT_ID }] });
-    if (!result.ok || !Array.isArray(result.data?.recorded)) return;
-    state.observed = { key: pxvh1Key(formattedNumber), recorded: result.data.recorded.length > 0,
-      expected: result.data.ahead?.[0]?.expected || "" };
-    render();
-  }
 
   function say(message, tone = "info") { state.message = message; state.tone = tone; render(); }
 
@@ -363,65 +362,39 @@
   async function claim(unit, position) {
     const page = readPage();
     if (page.step !== 1) return say("Hãy mở bước B1 (Cấp phiếu) rồi bấm lại.", "error");
-    if (!unit || !position) return say("Vui lòng chọn Tổ máy và Cương vị.", "error");
+
     state.busy = true; render();
     try { await chrome.storage.local.set({ lastPosition: position }); } catch { /* chỉ là ghi nhớ tiện lợi */ }
     const result = await api("POST", API, { mode: "claim", kind: KIND, nkvhPctId: PCT_ID, unit, position, page });
     state.busy = false;
     if (!result.ok) return say(result.message, "error");
-    state.permit = result.data; state.panel = false;
+    if (result.data.status === "RESERVED") state.reservation = result.data;
+    else state.permit = result.data;
+    state.panel = false;
     fillNumber(result.data.formatted);
     say(result.data.created
-      ? `Đã lấy số ${result.data.formatted} và điền vào ô Số phiếu. Kiểm tra lại rồi bấm Lưu trên NKVH.`
+      ? `Đã giữ số ${result.data.formatted}. Bấm Lưu trên NKVH; lưu thành công sẽ tự đồng bộ về sổ.`
       : `Phiếu này đã có số ${result.data.formatted} trên sổ — đã điền lại vào ô Số phiếu.`, "success");
   }
 
   async function importExisting(unit, position) {
-    const page = readPage();
-    const formattedNumber = state.importNumber || numberInput()?.value.trim() || "";
-    if (page.step !== 1) return say("Hãy mở bước B1 (Cấp phiếu) rồi bấm lại.", "error");
-    if (!unit || !position) return say("Vui lòng chọn Tổ máy và Cương vị.", "error");
-    if (!isPxvh1Number(formattedNumber)) return say("Số hiện có không đúng dạng số sổ PXVH1.", "error");
-    if (!confirm(`Đồng bộ phiếu ${formattedNumber} đang có trên NKVH về sổ PXVH1?\n\nTiện ích không cấp số mới. Máy chủ sẽ từ chối nếu số này bị trùng, đã hủy hoặc không khớp dãy số.`)) return;
-    state.busy = true; render();
-    try { await chrome.storage.local.set({ lastPosition: position }); } catch { /* chỉ là ghi nhớ tiện lợi */ }
-    const result = await api("POST", API, { mode: "import_existing", kind: KIND, nkvhPctId: PCT_ID, unit, position, formattedNumber, page });
-    state.busy = false;
-    if (!result.ok) return say(result.message, "error");
-    state.permit = result.data; state.panel = false; state.importNumber = null;
-    say(`Đã đồng bộ phiếu ${result.data.formatted} từ NKVH về sổ PXVH1.`, "success");
+    await sync({ unit, position });
+    if (state.tone === "success") { state.panel = false; state.importNumber = null; render(); }
   }
 
   /** `auto`: VHV vừa xác nhận hủy trên NKVH nên không hỏi lại; lỗi thì nút "Báo hủy về sổ" vẫn còn để bấm lại. */
   async function reportCancel(options = {}) {
-    const reason = options.reason ?? cancelNotice();
-    if (reason === null || !state.permit) return;
-    if (!options.auto && !confirm(`Hủy phiếu ${state.permit.formatted} trên sổ PXVH1?\nLý do theo NKVH: ${reason || "(không ghi)"}`)) return;
-    state.busy = true; render();
-    const result = await api("POST", API, { mode: "cancel", kind: KIND, nkvhPctId: PCT_ID, reason });
-    state.busy = false;
-    if (!result.ok) return say(`${options.auto ? "Chưa tự hủy được phiếu trên sổ: " : ""}${result.message}${options.auto ? " — bấm Báo hủy về sổ để thử lại." : ""}`, "error");
-    state.permit = null; state.cancelledPermit = result.data;
-    say(`${options.auto ? "Đã tự hủy" : "Đã hủy"} phiếu ${result.data.formatted} trên sổ PXVH1 theo NKVH. Số này bị bỏ; phiếu tạo lại trên NKVH bấm Lấy số PCT để lấy số mới.`, "success");
+    if (!options.auto && !confirm("Đồng bộ phiếu đã hủy trên NKVH về sổ?")) return;
+    await sync({ expectStatus: "CANCELLED" });
+    if (state.tone === "success") setPending(null);
   }
 
-  /** Phiếu dừng trên NKVH → sổ Tạm dừng (số giữ). `auto`: VHV vừa xác nhận trên NKVH nên không hỏi lại. */
   async function reportStop(options = {}) {
-    if (!state.permit) return;
-    const reason = options.reason ?? (pageNotice()?.reason || pendingAction()?.reason || "");
-    if (!options.auto && !confirm(`Ghi phiếu ${state.permit.formatted} trên sổ PXVH1 là Tạm dừng?\nLý do: ${reason || "(không ghi)"}\n\nChỉ bấm khi NKVH đã lưu Dừng phiếu.`)) return;
-    state.busy = true; render();
-    const result = await api("POST", API, { mode: "stop", kind: KIND, nkvhPctId: PCT_ID, reason });
-    state.busy = false;
-    if (!result.ok) return say(`${options.auto ? "Chưa tự ghi Tạm dừng được trên sổ: " : ""}${result.message}${options.auto ? " — bấm Báo dừng về sổ để thử lại." : ""}`, "error");
-    // Máy chủ sổ bản cũ không biết mode "stop" và rơi vào nhánh lấy số (trả phiếu cũ) → không báo nhầm là đã dừng.
-    if (result.data?.status !== "PAUSED") return say("Sổ PXVH1 chưa hỗ trợ báo dừng (máy chủ chưa cập nhật). Báo quản trị cập nhật sổ rồi bấm Báo dừng về sổ lại.", "error");
-    setPending(null);
-    state.permit = result.data;
-    say(`${options.auto ? "Đã tự ghi" : "Đã ghi"} phiếu ${result.data.formatted} trên sổ PXVH1 là Tạm dừng (dừng trên NKVH). Số PCT vẫn giữ.`, "success");
+    if (!options.auto && !confirm("Đồng bộ phiếu đã dừng trên NKVH về sổ?")) return;
+    await sync({ expectStatus: "PAUSED" });
+    if (state.tone === "success") setPending(null);
   }
 
-  /** B5/B8 đã xanh trên NKVH → tự đóng bản ghi tương ứng trên sổ, không tác động ngược NKVH. */
   async function reportClose() {
     if (!state.permit) return;
     const sourceStatus = KIND === "ELECTRICAL" ? "Hoàn thành" : "Khóa phiếu";
@@ -436,39 +409,65 @@
     say(`Đã tự đóng phiếu ${result.data.formatted} trên sổ PXVH1 theo trạng thái “${sourceStatus}” của NKVH.`, "success");
   }
 
-  async function sync() {
-    const page = readPage();
-    if (page.step !== 1) return say("Hãy mở bước B1 (Cấp phiếu) để đồng bộ nội dung phiếu.", "error");
-    state.busy = true; render();
-    const result = await api("POST", API, { mode: "sync", kind: KIND, nkvhPctId: PCT_ID, page });
-    state.busy = false;
-    if (!result.ok) return say(result.message, "error");
-    state.permit = result.data;
-    say(`Đã cập nhật nội dung phiếu ${result.data.formatted} về sổ PXVH1.`, "success");
+  const SYNC_KEY = `pxvh1-nkvh-sync:${PCT_ID}`;
+  let syncRunning = false;
+  let retryTimer = null;
+  function pendingSync() {
+    try { return JSON.parse(localStorage.getItem(SYNC_KEY) || "null"); } catch { return null; }
   }
+  function keepSync(value) {
+    try { value ? localStorage.setItem(SYNC_KEY, JSON.stringify(value)) : localStorage.removeItem(SYNC_KEY); } catch { /* Hiện lỗi để người dùng mở lại và đồng bộ */ }
+  }
+  // Đọc lại trang từ NKVH, không dùng các ô người dùng đang sửa trên màn hình.
+  async function savedPayload(options = {}) {
+    let response;
+    try { response = await fetch(location.href, { credentials: "same-origin", cache: "no-store" }); }
+    catch { throw new Error("Không kết nối được NKVH để đọc lại phiếu đã lưu"); }
+    if (!response.ok || response.redirected) throw new Error("Chưa đọc lại được phiếu đã lưu. Kiểm tra phiên đăng nhập NKVH.");
+    const saved = new DOMParser().parseFromString(await response.text(), "text/html");
+    const result = window.PXVH1_NKVH_READER.read(saved, KIND);
+    if (options.expectStatus && result.sourceStatus !== options.expectStatus) throw new Error("Chưa xác nhận được trạng thái đã lưu trên NKVH. Hãy tải lại phiếu rồi thử lại.");
+    return { mode: "sync", saved: true, kind: KIND, nkvhPctId: PCT_ID, ...result,
+      unit: options.unit || guessUnit(result.page) || undefined, position: options.position || undefined };
 
-  /** Lớp 1: ô Số phiếu NKVH khác số sổ đã cấp → sửa phiếu trên sổ sang số đang có trong ô. */
-  async function renumber(formattedNumber) {
-    const permit = state.permit;
-    if (!permit || !isPxvh1Number(formattedNumber)) return;
-    if (!confirm(`Sổ PXVH1 đang ghi phiếu này là ${permit.formatted}, còn ô Số phiếu trên NKVH là ${formattedNumber}.\n\n`
-      + `Sửa phiếu trên sổ sang ${formattedNumber}?\n`
-      + `• Chỉ bấm khi ${formattedNumber} là số đúng của phiếu này trên NKVH (ví dụ ${permit.formatted} đã có phiếu khác dùng).\n`
-      + `• Số ${permit.formatted} được trả về dãy; phiếu NKVH đang thật sự dùng số đó bấm "Đồng bộ số hiện có" để nhận về sổ.\n`
-      + `• Máy chủ từ chối nếu ${formattedNumber} đang thuộc phiếu khác hoặc vượt dãy.`)) return;
-    state.busy = true; render();
-    const result = await api("POST", API, { mode: "renumber", kind: KIND, nkvhPctId: PCT_ID, formattedNumber });
-    state.busy = false;
-    if (!result.ok) return say(result.message, "error");
-    // Máy chủ bản cũ không biết mode "renumber" (rơi vào nhánh khác) → không báo nhầm là đã sửa.
-    if (!result.data?.formatted || pxvh1Key(result.data.formatted) !== pxvh1Key(formattedNumber)) {
-      return say("Sổ PXVH1 chưa hỗ trợ sửa số theo NKVH (máy chủ chưa cập nhật). Báo quản trị cập nhật sổ rồi thử lại.", "error");
-    }
-    state.permit = result.data;
-    say(result.data.changed === false
-      ? `Sổ PXVH1 đã ghi đúng số ${result.data.formatted}.`
-      : `Đã sửa sổ PXVH1: ${result.data.previous || permit.formatted} → ${result.data.formatted}. Nếu chưa lưu số này trên NKVH, hãy bấm Lưu.`, "success");
   }
+  async function sync(options = {}) {
+    if (syncRunning) return;
+    syncRunning = true; state.busy = true; render();
+    try {
+      const payload = await savedPayload(options);
+      keepSync(payload);
+      const result = await api("POST", API, payload);
+      if (!result.ok) { const error = new Error(result.message); error.status = result.status; throw error; }
+      if (!result.data?.formatted || result.data.formatted.trim() !== payload.formattedNumber.trim()) throw new Error("Máy chủ chưa ghi đúng số chính thức NKVH. Chưa xác nhận đồng bộ thành công.");
+      keepSync(null);
+      state.permit = result.data.status === "CANCELLED" ? null : result.data;
+      state.cancelledPermit = result.data.status === "CANCELLED" ? result.data : null;
+      state.reservation = null;
+      const pending = result.data.pendingReservations || [];
+      say(`Đã đồng bộ ${result.data.formatted} theo dữ liệu đã lưu trên NKVH.${pending.length ? ` Số ${pending.map(item => item.number).join(", ")} còn cần đối chiếu; mở sổ để giải phóng nếu chưa dùng.` : ""}`, "success");
+    } catch (error) {
+      say(`Chưa đồng bộ về sổ: ${error.message}. Dữ liệu đã lưu trên NKVH được giữ nguyên.`, "error");
+      if (pendingSync() && error.status !== 409 && error.status !== 400) scheduleRetry();
+      if (error.status === 400) { state.panel = true; state.importNumber = numberInput()?.value.trim() || null; }
+    } finally { syncRunning = false; state.busy = false; render(); }
+  }
+  function scheduleRetry() {
+    clearTimeout(retryTimer);
+    retryTimer = setTimeout(retrySavedSync, 30_000);
+  }
+  function retrySavedSync() {
+    if (pendingSync() && !syncRunning) sync();
+  }
+  // Chỉ MAIN-world bridge báo sau phản hồi Lưu thành công. Đọc lại NKVH trước khi gửi.
+  window.addEventListener("message", event => {
+    if (event.source !== window || event.origin !== location.origin || event.data?.type !== "PXVH1_NKVH_SAVED" || foreignQlvh()) return;
+    // Cờ cần đọc lại tồn tại qua tải trang và lỗi mạng trước khi lấy được dữ liệu.
+    keepSync({ awaitingRead: true });
+    setTimeout(() => sync(), 300);
+  });
+  window.addEventListener("online", retrySavedSync);
+  async function renumber() { await sync(); }
 
   // ---------- Giao diện gắn cạnh ô Số phiếu ----------
   function h(tag, props = {}, children = []) {
@@ -498,21 +497,25 @@
     const positionSelect = h("select", { style: "margin:0 10px 0 4px;padding:2px;max-width:240px;font:12px Verdana,Arial,sans-serif;", onchange: () => { state.position = positionSelect.value; } },
       [h("option", { value: "", textContent: "— Chọn cương vị —" }), ...state.positions.map((value) => h("option", { value, textContent: value }))]);
     if (state.position !== null) positionSelect.value = state.position;
-    else chrome.storage.local.get("lastPosition").then(({ lastPosition }) => {
+    else {
+      const selected = state.positions.find(value => fold(value) === fold(page.authorizerPosition));
+      if (selected) positionSelect.value = state.position = selected;
+    }
+    if (!page.authorizerPosition) chrome.storage.local.get("lastPosition").then(({ lastPosition }) => {
       if (lastPosition && state.positions.includes(lastPosition) && state.position === null) positionSelect.value = state.position = lastPosition;
     }).catch(() => undefined);
     return h("div", { style: "margin-top:6px;padding:8px 10px;border:1px solid #bfdbfe;border-radius:6px;background:#eff6ff;" }, [
       h("div", { style: "margin-bottom:6px;color:#1e3a8a;", textContent: importing
         ? `Đồng bộ số ${state.importNumber} đang có trên NKVH về sổ PXVH1`
         : `Lấy số PCT ${KIND === "ELECTRICAL" ? "Điện" : "Cơ – Nhiệt – Hóa"} từ sổ PXVH1 · phiếu nội bộ điện tử` }),
-      h("label", { textContent: "Tổ máy*" }), unitSelect,
-      h("label", { textContent: "Cương vị*" }), positionSelect,
+      h("label", { textContent: "Tổ máy (bổ sung sau)" }), unitSelect,
+      h("label", { textContent: "Cương vị (theo NKVH)" }), positionSelect,
       button(state.busy ? "Đang xử lý…" : importing ? "Đồng bộ về sổ" : "Lấy số & điền",
         () => importing ? importExisting(unitSelect.value, positionSelect.value) : claim(unitSelect.value, positionSelect.value)),
       button("Đóng", () => { state.panel = false; state.importNumber = null; render(); }, true),
       h("div", { style: "margin-top:6px;color:#475569;", textContent: importing
-        ? "Không tạo số mới. Số trùng, số đã hủy hoặc số vượt dãy hiện tại sẽ bị máy chủ chặn."
-        : "CHTT, số nhân viên và SYC còn thiếu sẽ hiện “Cần bổ sung” trên sổ để khai sau." }),
+        ? "Không tạo số mới. Số thuộc phiếu khác sẽ được báo để đối chiếu; không tạo thêm số."
+        : "Chỉ giữ số; chưa ghi cấp phiếu trước khi NKVH lưu thành công." }),
     ]);
   }
 
@@ -543,6 +546,7 @@
         parts.push(h("span", { textContent: `${state.cancelledPermit.formatted} · đã hủy trên sổ` }));
       } else {
         parts.push(h("span", { textContent: "phiếu đã hủy, không có trên sổ" }));
+        parts.push(button("Đồng bộ phiếu đã hủy", () => sync({ expectStatus: "CANCELLED" }), true));
       }
     } else if (notice?.action === "stop") {
       // Trang phiếu đã dừng: không lấy số hay đồng bộ nội dung, chỉ báo dừng về sổ.
@@ -558,12 +562,16 @@
       if (state.permit.status === "CLOSED") parts.push(h("span", { textContent: " · Kết thúc phiếu trên sổ" }));
       if (mismatch) {
         parts.push(h("span", { textContent: ` · LỆCH SỐ: ô Số phiếu là ${current}`, style: "font-weight:bold;color:#b91c1c;" }));
-        parts.push(button(state.busy ? "Đang sửa…" : `Sửa sổ theo NKVH (${current})`, () => renumber(current)));
+        parts.push(button(state.busy ? "Đang đồng bộ…" : "Đồng bộ số và nội dung đã lưu", () => renumber()));
         parts.push(button(`Điền lại ${state.permit.formatted}`, () => { fillNumber(state.permit.formatted); say("Đã điền lại số sổ. Kiểm tra lại rồi bấm Lưu trên NKVH.", "success"); }, true));
       } else {
         if (current !== state.permit.formatted) parts.push(button("Điền số", () => { fillNumber(state.permit.formatted); say("Đã điền số. Kiểm tra lại rồi bấm Lưu trên NKVH.", "success"); }));
-        if (state.permit.status !== "CLOSED") parts.push(button(state.busy ? "Đang đồng bộ…" : "Đồng bộ về sổ", sync, true));
+        parts.push(button(state.busy ? "Đang đồng bộ…" : "Đồng bộ về sổ", sync, true));
       }
+    } else if (state.reservation) {
+      parts.push(h("span", { textContent: `${state.reservation.formatted} · đang giữ, chưa cấp` }));
+      if (!input.value.trim()) parts.push(button("Điền số đang giữ", () => fillNumber(state.reservation.formatted)));
+      parts.push(button("Đồng bộ phiếu đã lưu", () => sync(), true));
     } else if (state.positions.length) {
       const current = input.value.trim();
       if (isPxvh1Number(current)) {
@@ -582,14 +590,14 @@
     const children = [h("div", {}, parts)];
     if (mismatch && !foreign && !notice && !state.loading) {
       children.push(h("div", { style: "margin-top:6px;padding:6px 8px;border:1px solid #fecaca;border-radius:6px;background:#fef2f2;color:#7f1d1d;", textContent:
-        `Số trên sổ và trên NKVH phải là một. Nếu ${state.permit.formatted} đã có phiếu khác dùng trên NKVH, giữ số trong ô rồi bấm “Sửa sổ theo NKVH”. Nếu gõ nhầm, bấm “Điền lại”.` }));
+        `Số trên sổ và trên NKVH phải là một. Bấm Lưu trên NKVH rồi đồng bộ để nhận đúng số và nội dung đã lưu. Không đổi dữ liệu sổ chỉ theo số đang gõ.` }));
     }
     if (prompt) children.push(h("div", { style: "margin-top:6px;padding:6px 8px;border:1px solid #fcd34d;border-radius:6px;background:#fffbeb;color:#78350f;" }, [
       h("span", { textContent: `Vừa lưu Dừng phiếu trên NKVH (lý do: ${prompt.reason})? Ghi phiếu trên sổ là Tạm dừng:` }),
       button(state.busy ? "Đang ghi…" : "Báo dừng về sổ", () => reportStop({ reason: prompt.reason })),
       button("Không phải", () => { setPending(null); render(); }, true),
     ]));
-    if (state.panel && !state.permit) children.push(panel());
+    if (state.panel) children.push(panel());
     if (state.message) children.push(h("div", { textContent: state.message, style: `margin-top:4px;color:${TONES[state.tone] || TONES.info};` }));
     root.replaceChildren(...children);
   }

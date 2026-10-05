@@ -6,8 +6,9 @@ import type { PermitHistory, PermitKind, PermitListRow, PermitDetailRow, PermitP
 export interface PermitMeta { total: number; page: number; pageSize: number; counts: Partial<Record<PermitStatus, number>>; overhaulCount: number; canIssue: boolean; canIssueNew: boolean; canExecute: boolean; positionScope?: { all: boolean; codes: string[]; labels: string[] } }
 export interface PermitNumberSuggestion { configured: boolean; baseline: string | null; highest: string | null; suggested: string | null }
 export interface PermitNumberReservation {
+  nkvhPctId?: string | null;
   id: string; kind: string; year: number; number: string; teamType: "INTERNAL" | "CONTRACTOR";
-  status: "RESERVED" | "ISSUED" | "CANCELLED" | "RELEASED" | "OBSERVED"; ownerId: string; ownerName: string;
+  status: "RESERVED" | "ISSUED" | "CANCELLED" | "RELEASED" | "OBSERVED" | "REVIEW"; ownerId: string; ownerName: string;
   permitId: string | null; reusedPermitId: string | null; createdAt: string;
 }
 export interface PermitNumberBaselineRow {
@@ -105,19 +106,19 @@ export function usePermitNumberSuggestion(kind: string, year: number, enabled = 
   });
 }
 export function usePermitNumberReservations(enabled = true) {
-  return useQuery({ queryKey: ["work-permit-number-reservations"], enabled,
+  return useQuery({ queryKey: ["work-permit-number-reservations"], enabled, refetchInterval: 5000,
     queryFn: () => apiGet<PermitNumberReservation[]>("/api/work-permits/number-reservations") });
 }
 export function useTakePermitNumber() {
   const qc = useQueryClient();
-  return useMutation({ mutationFn: (body: { kind: string; year: number; teamType: string }) =>
+  return useMutation({ mutationFn: (body: { kind: string; year: number; teamType: string; number?: string }) =>
     apiMutate<PermitNumberReservation>("/api/work-permits/number-reservations", "POST", body),
   onSuccess: () => { qc.invalidateQueries({ queryKey: ["work-permit-number-reservations"] }); qc.invalidateQueries({ queryKey: ["work-permit-number-suggestion"] }); } });
 }
 export function useCancelPermitNumberReservation() {
   const qc = useQueryClient();
   return useMutation({ mutationFn: ({ id, reason }: { id: string; reason: string }) =>
-    apiMutate<PermitNumberReservation>(`/api/work-permits/number-reservations/${id}`, "POST", { reason }),
+    apiMutate<PermitNumberReservation>(`/api/work-permits/number-reservations/${id}`, "POST", { reason, confirmUnused: true }),
   onSuccess: () => { qc.invalidateQueries({ queryKey: ["work-permit-number-reservations"] }); qc.invalidateQueries({ queryKey: ["work-permit-number-suggestion"] }); } });
 }
 export function usePermitNumberBaselines(year: number, enabled: boolean) {

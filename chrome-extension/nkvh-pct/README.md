@@ -1,185 +1,85 @@
-# Tiện ích Cấp số PCT NKVH – PXVH1
+# Cấp số và tự đồng bộ PCT NKVH – PXVH1 (1.1.0)
 
-Lấy số PCT **nội bộ điện tử** từ sổ PCT của PXVH1 (duyenhai1.vn) ngay trên trang phiếu NKVH,
-thay cho việc chạy qua duyenhai1.vn lấy số rồi quay lại NKVH gõ tay.
+Tiện ích dùng cho PCT nội bộ điện tử của PXVH1. Không tự tạo, ký hoặc bấm Lưu trên NKVH.
+Số, nội dung và trạng thái đã lưu trên NKVH là nguồn chuẩn cho hồ sơ theo dõi duyenhai1.
+PCT giấy vẫn cấp trên website và dùng chung dãy Cơ/Điện theo năm.
 
-Tiện ích này tách riêng khỏi tiện ích *Đồng bộ QLVT & LIMS* và chỉ xin quyền vào NKVH và duyenhai1.vn.
-Phiếu nhà thầu (PCT giấy) vẫn lấy số trên sổ duyenhai1.vn như cũ.
-Tiện ích nhận trang NKVH trên cả HTTP và HTTPS; sau khi cài hoặc cập nhật phải tải lại tab NKVH.
-Từ bản 1.0.5, nút thao tác tự cập nhật ngay khi người dùng xoá hoặc sửa ô **Số phiếu** trên NKVH.
-Từ bản 1.0.6, trạng thái kết thúc được tự đồng bộ về sổ: PCT T-C-N-H **Khóa phiếu**, PCT Điện
-**Hoàn thành** → sổ PXVH1 **Kết thúc phiếu**.
-Từ bản 1.0.7, chống lệch số giữa sổ và NKVH: cảnh báo **LỆCH SỐ** + **Sửa sổ theo NKVH**, và sổ tự
-ghi nhận số gõ tay trên NKVH để không cấp trùng (xem mục *Chống lệch số*).
+## Luồng mới
 
-## Luồng sử dụng
+1. Mở PCT ở B1. Nếu cần số, bấm **Lấy số PCT → Lấy số & điền**.
+2. Máy chủ chỉ tạo lượt `RESERVED` gắn `id_pct`, chưa ghi PCT Đã cấp. Bấm lại nhận cùng lượt.
+3. Hoàn thiện phiếu, có thể sửa số, rồi tự bấm **Lưu trên NKVH**.
+4. MAIN-world `saved-events.js` nghe phản hồi `pfAjaxComplete` có thông báo lưu/cấp thành công,
+   không có `validationFailed`. Nó chỉ báo sự kiện, không gọi API website.
+5. Content script đọc lại HTML từ NKVH để nhận dữ liệu đã lưu (không dùng ô đang gõ), rồi tự gửi
+   số, `id_pct`, nội dung, cương vị, trạng thái về website. Không cần bấm Đồng bộ lần nữa.
+6. Nếu API website lỗi, yêu cầu còn trong localStorage của nguồn NKVH. Thử lại sau 30 giây,
+   khi online hoặc mở lại phiếu. Xung đột 409/mapping 400 cần xử lý, không thử liên tục.
 
-1. Trên NKVH: tạo PCT từ ĐKCT, mở phiếu ở bước **B1**. NKVH đã điền sẵn nội dung theo ĐKCT.
-2. Dưới ô **Số phiếu** có dòng *Sổ PXVH1*. Bấm **Lấy số PCT**, chọn **Tổ máy** (đã chọn sẵn theo
-   địa điểm hoặc mã KKS) và **Cương vị**, rồi bấm **Lấy số & điền**.
-3. Sổ PXVH1 cấp số tiếp theo của đúng sổ Cơ/Điện và ghi phiếu vào sổ kèm liên kết NKVH.
-   Tiện ích điền số vào ô Số phiếu.
-4. VHV kiểm tra rồi **tự bấm Lưu trên NKVH**. Tiện ích không bao giờ tự lưu.
-5. Nếu sửa nội dung trên NKVH hoặc khai thêm CHTT, phạm vi…, bấm **Đồng bộ về sổ** (ở bước B1).
+Không chỉ dựa vào `id_pct` để khẳng định đã cấp. Không đồng bộ khi mới bấm Lưu, lưu bị từ chối,
+hoặc không nhận ra thông báo thành công. Trường hợp không nhận ra phản hồi: dùng nút đồng bộ
+thủ công sau khi xác nhận NKVH đã lưu. Cần kiểm tra thông báo thực tế trên cả Cơ và Điện trước phát hành.
 
-## Tự đồng bộ đóng phiếu
+## Giữ số và chống trùng
 
-- **Trang chi tiết:** NKVH luôn mở ở B1, nhưng tiện ích đọc màu hoàn thành của nút bước cuối bên trái
-  mà không cần chuyển bước: B5 *Khóa phiếu công tác* của PCT T-C-N-H hoặc B8 *Hoàn thành phiếu* của
-  PCT Điện. Khi bước cuối đã hoàn thành, phiếu liên kết trên sổ tự chuyển **Kết thúc phiếu**.
-- **Trang danh sách:** tiện ích quét các dòng đang hiển thị có đúng số dạng `…/VH1-NĐDH` và trạng thái
-  *Khóa phiếu* / *Hoàn thành*. Server chỉ đóng PCT nội bộ điện tử đã liên kết NKVH; phiếu giấy, số
-  không liên kết hoặc trạng thái khác không bị tác động.
-- Gọi lại là an toàn: phiếu đã đóng chỉ được trả lại, không ghi lịch sử trùng. Tiện ích không bấm nút,
-  không ký và không thay đổi trạng thái trên NKVH.
-- Nếu người dùng đang xem bước cuối, thời điểm ký NKVH được ghi làm thời điểm đóng. Nếu trang đang ở
-  B1 và nội dung bước cuối chưa được NKVH vẽ, hệ thống dùng thời điểm nhận đồng bộ.
+- Sổ Cơ/Điện và năm là phạm vi dãy số. Các đường ghi dùng chung khóa dãy.
+- Website có **Lấy số PCT** (tiếp theo) và **Giữ số đã nhập** (kể cả số thấp hơn mốc).
+- Số lớn nhất không phải hàng rào cấm chọn số cũ chưa dùng.
+- Phiếu NKVH đã lưu có thể nhận số người khác đang giữ, kể cả dự định cấp giấy. Lượt chuyển thành
+  ISSUED, lịch sử ghi người giữ trước; biểu mẫu cũ bị chặn. Website cập nhật lượt mỗi 5 giây.
+- Cùng `id_pct` cập nhật một hồ sơ, kể cả sửa số. Khóa advisory + unique `(kind, nkvhPctId)`
+  ngăn các đường tạo và gắn link sinh hồ sơ trùng.
+- Số đích đã thuộc phiếu khác (giấy/điện tử/phiếu hủy): báo xung đột, không ghi đè.
+- Số gõ tay đã thấy trên danh sách NKVH được ghi OBSERVED, kể cả số thấp hơn hoặc vượt dãy.
+  OBSERVED không được tiếp tục cấp giấy hoặc hủy như lượt chưa dùng.
+- Số cũ của hồ sơ đã đổi số theo NKVH chuyển REVIEW. Không tự giải phóng; người giữ đối chiếu
+  và xác nhận chưa sử dụng trước khi giải phóng.
+- Hủy lượt RESERVED/REVIEW chưa dùng → RELEASED và lưu lịch sử. Hủy phiếu đã cấp → CANCELLED;
+  quy tắc mở lại số phiếu hủy ở Mốc sổ giấy vẫn là thao tác riêng.
+- Lượt giữ cho NKVH chưa cấp vẫn xuất hiện trên website. Có thể tiếp tục cho giấy nếu chưa dùng
+  hoặc hủy lượt sau đối chiếu. Khi NKVH lưu sau đó bằng số đã cấp giấy thì báo xung đột.
 
-Nếu phiếu đã có số đúng dạng sổ PXVH1 (`…/VH1-NĐDH`) nhưng chưa có hồ sơ liên kết trên website,
-thanh tiện ích hiện **Đồng bộ số hiện có**. Người dùng xác nhận Tổ máy/Cương vị rồi đồng bộ đúng số
-đó về sổ; tiện ích không lấy số mới. Máy chủ tự chặn số trùng, số đã hủy, số thuộc phiếu NKVH khác
-hoặc số vượt quá lượt kế tiếp của dãy hiện tại.
+## Đồng bộ và đối chiếu
 
-CHTT, số nhân viên hoặc SYC còn thiếu thì phiếu hiện nhãn **Cần bổ sung** trên sổ. Khi sửa phiếu
-trên sổ, các mục này bắt buộc khai đủ như phiếu tạo tay.
+- NKVH đã có số: **Đồng bộ số hiện có** nhận dữ liệu đọc lại từ NKVH, không cấp số mới.
+- Chấp nhận hậu tố `…/VH1-NĐDH` và `…/NĐDH-VH1`; giữ nguyên số chính thức ở `WorkPermit.nkvhNumber`.
+  `number` vẫn là phần số chuẩn hóa để chống trùng cùng dãy.
+- Tổ máy không bắt buộc khi đồng bộ. Chưa xác định lưu UNKNOWN; không mặc định COMMON.
+- Cương vị đọc từ **Chức danh người cho phép làm việc**, ánh xạ theo position-catalog. Chưa khớp
+  thì mở phần chọn xác nhận; không dùng cương vị lần trước để thay giá trị NKVH.
+- Danh sách tự đối chiếu phiếu trong 48 giờ đang hiển thị, giới hạn 10 phiếu/lượt quét.
+  Không quét toàn bộ lịch sử hoặc tự điều khiển phân trang. Phiếu cũ đồng bộ thủ công.
+- Dừng/hủy/kết thúc NKVH được ghi về sổ. Phiếu hủy chưa có hồ sơ có nút nhận về ở trạng thái hủy.
+- NKVH và website vẫn có khoảng trễ: hai phiếu đã cấp trùng số phải đối chiếu.
+  Cấp ở máy chưa có tiện ích hoặc không mở danh sách có thể chưa được website biết ngay.
 
-**Không gõ tay số vào NKVH nữa.** Số gõ tay thì sổ không biết là đã dùng, và phiếu giấy lấy sau có
-thể bị cấp trùng số.
+## Cấu trúc và phát hành
 
-## Chống lệch số (từ 1.0.7)
+Cần máy chủ mới và SQL `prisma/manual/work-permit-nkvh-saved-sync.sql` trước khi phát hành tiện ích.
+SQL chỉ thêm cột/index, không sửa dữ liệu. Unique có thể từ chối nếu dữ liệu cũ trùng; dùng script
+SELECT `npx tsx scripts/check/work-permit-number-conflicts.ts` để đối chiếu trước, không tự gộp.
+Không chạy db:push để áp toàn bộ schema hoặc tự xóa hồ sơ trùng.
 
-Ca đã gặp (10/2026): phiếu A gõ tay 4463 trên NKVH → sổ không biết, phiếu B bấm Lấy số được 4463 →
-VHV thấy 4463 đã dùng nên sửa tay thành 4464 và lưu → sổ vẫn ghi B = 4463, bấm lại vẫn ra 4463 (một
-`id_pct` một số), và lượt lấy số sau lại cấp 4464 — trùng tiếp. Hai lớp chặn:
+Các file JS mới phải có trong cả `chrome-extension/scripts/package-nkvh-pct.mjs` và
+`lib/server/nkvh-pct-extension-package.ts`. Gói tải website và gói đóng sẵn cùng version 1.1.0.
 
-**Lớp 1 — Lệch số trên trang chi tiết.** Sổ đã có phiếu này mà ô Số phiếu là một số dạng sổ *khác*
-→ thanh tiện ích hiện **LỆCH SỐ** (đổi ngay khi gõ, trước cả khi Lưu NKVH) với hai nút:
-- **Sửa sổ theo NKVH (số trong ô)** → mode `renumber`. Server khoá dãy số rồi chỉ nhận khi số mới
-  trống trên sổ (không phiếu nào khác, không lượt đang giữ / đã hủy) và không vượt số kế tiếp — trừ
-  số đã được lớp 2 ghi nhận. Lượt giữ số cũ chuyển `RELEASED` (số trả về dãy); phiếu NKVH đang thật sự
-  dùng số cũ bấm **Đồng bộ số hiện có** để nhận về. Phiếu đã Kết thúc trên sổ chỉ quản trị sửa được.
-- **Điền lại …** → điền lại số sổ khi chỉ là gõ nhầm.
+Cài bằng Load unpacked Chrome/Edge; cập nhật xong Reload tiện ích và tải lại tab NKVH.
+Đóng gói thử localhost: `node chrome-extension/scripts/package-nkvh-pct.mjs --localhost`.
+Gói `chrome-extension/dist/nkvh-pct-localhost-v1.1.0.zip` mặc định gọi `http://localhost:3030`,
+có thể chọn cổng 3000 trong popup; không có quyền gọi máy chủ duyenhai1.vn.
+Giải nén, chọn thư mục bằng Load unpacked và đăng nhập localhost trên cùng trình duyệt.
+Tiện ích GET kiểm tra protocolVersion 2 để tránh dùng luồng mới với máy chủ cũ.
+Phiếu QLVH khác VH hoặc đơn vị ngoài không thuộc luồng này. Cookie không được đọc hoặc chuyển đi;
+service worker gọi website với cookie đăng nhập do trình duyệt tự gắn.
 
-**Lớp 2 — Sổ tự biết số gõ tay** (mode `observe`, lượt giữ số trạng thái `OBSERVED`):
-- Trang danh sách: mọi số `…/VH1-NĐDH` đang hiển thị (mọi trạng thái, kèm `id_pct` nếu dòng có liên
-  kết) được gửi về sổ một lần mỗi phiên trang.
-- Trang chi tiết chưa liên kết mà ô Số phiếu *lúc mở trang* (số đã lưu) có số dạng sổ → gửi số đó.
-- Server xét tăng dần: số nằm **ngay sau** số cao nhất sổ đang biết được giữ chỗ `OBSERVED` (tính vào
-  dãy, nên Lấy số PCT lần sau nhảy qua). Số đã có / lỗ dưới dãy bỏ qua. Số **nhảy cóc** không ghi (một
-  số gõ nhầm 9999 sẽ đẩy cả dãy) — tiện ích chỉ cảnh báo để đối chiếu. Chỉ nhận số năm hiện tại.
-- `OBSERVED` không phải `RESERVED`: không hiện ở "Số đã lấy, chưa lưu phiếu", không ai "Tiếp tục" cấp
-  phiếu giấy trùng số. Khi **Đồng bộ số hiện có** hoặc **Sửa sổ theo NKVH** dùng đúng số đó, chính lượt
-  `OBSERVED` chuyển thành lượt giữ/cấp của người thao tác (ai cũng nhận được, không cần là người đã
-  thấy số).
+## Kiểm tra
 
-Tiện ích kiểm tra kết quả trả về: máy chủ bản cũ không biết `renumber` thì báo "chưa hỗ trợ", không
-báo nhầm là đã sửa. **Phải deploy máy chủ trước khi phát hành 1.0.7.**
+- `npx tsx --test tests/work-permits/*.test.ts`: nghiệp vụ bằng bộ nhớ cô lập.
+- `node scripts/verify/nkvh-extension.mjs`: HTML/API giả lập, xác nhận lưu lỗi không đồng bộ,
+  đọc dữ liệu đã lưu, lưu yêu cầu khi mất mạng và gửi lại; không truy cập NKVH thật/DB.
+- `npx tsx scripts/verify/thu-nkvh-claim.ts`: DB localhost đã có cấu trúc mới,
+  một giao dịch luôn hoàn tác. Không chạy trên production.
+- `npm run verify:ui -- --preset=pct-cap-so`: biểu mẫu cấp giấy giả lập, không cấp phiếu thật.
 
-## Quy tắc số
-
-- Tiện ích dùng chung đường giữ số với nút "Lấy số PCT" trên sổ (`reservePermitNumber`), nên phiếu
-  giấy lấy sau luôn nhảy qua số đã cấp cho NKVH.
-- Một phiếu NKVH (`id_pct` trên địa chỉ trang) chỉ nhận **một** số. Bấm lại hoặc tải lại trang thì
-  nhận lại đúng số cũ. Hàng rào chống trùng là khoá dãy số của sổ; `nkvhPctId` không có chỉ mục duy nhất.
-- Ô Số phiếu trên NKVH đã có chữ thì tiện ích không ghi đè — trừ **số NKVH tự sinh** dạng
-  `2392/2026/NĐDH-VH1` (đuôi `/NĐDH-VH…`, khác dạng sổ `…/VH1-NĐDH`): tiện ích hỏi xác nhận rồi thay
-  bằng số của sổ.
-- Đơn vị công tác trên NKVH là đơn vị ngoài (mã dạng UUID, ví dụ *Thiết bị Sài Gòn*) thì tiện ích từ
-  chối lấy số.
-
-## Chỉ phiếu của PXVH1
-
-Ô **Đơn vị QLVH** của phiếu NKVH mang mã do NKVH đặt: `VH` = Phân xưởng Vận hành 1, `VH3` = Phân
-xưởng Vận hành 2 (số phiếu dạng `…/VH2-NĐDH`). Phiếu không phải `VH` → tiện ích chỉ hiện "phiếu của
-<phân xưởng> — không thuộc sổ PXVH1", **không gọi sổ**, không lấy số / báo hủy / báo dừng. Server cũng
-chặn lấy số khi `qlvhCode` khác `VH` (tiện ích bản cũ không gửi mã này → không bị chặn).
-
-## Phiếu ra sai: báo hủy về sổ, số bị bỏ
-
-**Tự động (từ 1.0.2):** bấm **Hủy phiếu** trên NKVH → hộp "Xác nhận hủy phiếu" có thêm dòng nhắc
-*"Sổ PXVH1: bấm Lưu thì phiếu … trên sổ được hủy theo"*. VHV nhập lý do, bấm **Lưu** của NKVH; khi
-NKVH hủy xong (dòng đỏ "Phiếu đã hủy" xuất hiện) tiện ích tự hủy phiếu trên sổ, không hỏi lại.
-
-- Tiện ích chỉ **nghe** cú bấm Lưu trong hộp `#formContent:dlgHuyPhieu` (id do lập trình viên NKVH đặt)
-  và ghi lý do vào `sessionStorage` theo `id_pct`, sống 10 phút — nên NKVH vẽ lại form hay tải lại cả
-  trang đều nhận được. Không bao giờ tự bấm nút của NKVH.
-- NKVH từ chối (thiếu lý do…) → không có dòng đỏ → không làm gì.
-- Gọi sổ lỗi (mất mạng, hết phiên) → báo lỗi, nút **Báo hủy về sổ** vẫn còn để bấm lại.
-- **Dừng phiếu** (từ 1.0.3) — PCT đang thực hiện thì xảy ra sự cố thiết bị / tai nạn lao động: dùng
-  chung hộp thoại (tiêu đề "Xác nhận dừng phiếu", ô "Lý do dừng", tham số ẩn `kieuHuy=1`). Sổ ghi phiếu
-  **Tạm dừng**, lý do "Dừng trên NKVH: …", **số vẫn giữ** (công việc đã diễn ra — khác hủy). Không ghi
-  Đóng vì Đóng hiểu là làm xong bình thường. Sau đó sổ vẫn Đóng/Hủy được phiếu này.
-  - Trang đã dừng (đã kiểm trên mẫu thật) in `<span style="color:red">Phiếu đã dừng. Lý do: … .</span>`
-    phía trên ô Số phiếu — NKVH thêm " ." cuối lý do, tiện ích cắt đi. Không thấy dòng đỏ sau 4 giây
-    kể từ lúc Lưu (có lý do) → thanh tiện ích hiện nút dự phòng **Báo dừng về sổ** / **Không phải**.
-  - Tiện ích chỉ báo thành công khi sổ trả về Tạm dừng — máy chủ sổ bản cũ (chưa có mode `stop`) sẽ
-    báo "chưa hỗ trợ báo dừng" thay vì báo nhầm. **Phải deploy máy chủ trước khi phát hành tiện ích.**
-
-**Thủ công:** mở trang phiếu đã hủy trên NKVH (hủy trước khi có bản 1.0.2) → thanh công cụ hiện
-**Báo hủy về sổ**. Phiếu trên sổ chuyển Hủy, lý do ghi "Hủy trên NKVH: <lý do NKVH>". Trang đã hủy
-không bao giờ hiện Lấy số hay Đồng bộ.
-
-**Số đã hủy được bỏ qua theo mặc định** — cho cả sổ (phiếu giấy lẫn điện tử). Nếu đó là số kế tiếp
-hợp lệ và thực tế chưa sử dụng, quản trị có thể mở **Mốc sổ giấy** trên sổ PXVH1 và bấm
-**Đặt lại để cấp số**; lịch sử phiếu hủy vẫn được giữ. Nếu không đặt lại, phiếu tạo mới trên NKVH
-bấm Lấy số PCT như mọi phiếu khác và nhận số tiếp theo.
-
-Trang đã hủy nhận ra qua dòng `<span style="color:red">Phiếu đã hủy. Lý do: …</span>` phía trên ô Số
-phiếu. Trên trang đã ký/đã hủy, CHTT in thành chữ (`1052 - Nguyễn Quốc Thái`) thay cho ô chọn; tiện ích
-đọc chữ của ô khi không có ô chọn.
-
-## Cách tiện ích đọc trang NKVH
-
-NKVH là ứng dụng JSF/PrimeFaces, không có API. Tiện ích đọc DOM của trang đang mở:
-
-| Dữ liệu | Cách tìm |
-| --- | --- |
-| Số phiếu | `#formContent:txtSoPhieu` (id do lập trình viên NKVH đặt, ổn định) |
-| Phân loại | radio `name="formContent:city2"` → `PLCT.PL.001/002/003` |
-| Chuyên môn (T-C-N-H) | các ô tick trong `#formContent:pngLoaiPhieu` |
-| Thời gian | `#formContent:id_endDateKH_input` và ô lịch cùng hàng |
-| Số ĐKCT, Đơn vị QLVH, Đơn vị công tác, CHTT, Lãnh đạo, Số NV, Người cấp | theo **nhãn chữ** của ô bên trái |
-| Địa điểm, Nội dung, Phạm vi | ô `textarea` đầu tiên sau dòng nhãn |
-
-- Id tự sinh dạng `j_idtNNN` **khác nhau** giữa sổ Điện và sổ T-C-N-H, và có thể đổi khi NKVH sửa
-  trang, nên không bao giờ dùng. Nhãn được so sau khi bỏ dấu và đổi `đ`→`d`.
-- Các ô nằm trong hộp thoại (`.ui-dialog`, ví dụ hộp chọn nhân viên cũng có nhãn "Đơn vị công tác:") bị bỏ qua.
-- Trang chỉ vẽ nội dung của bước đang xem, nên lấy số và đồng bộ chỉ chạy ở **B1**.
-- Khi chuyển bước, PrimeFaces vẽ lại `formContent`; thanh công cụ được gắn lại qua MutationObserver.
-
-## Cài đặt
-
-### Bản dùng chính thức
-
-1. Đăng nhập duyenhai1.vn → **Sổ PCT** → **Hướng dẫn** → **Cài tiện ích NKVH**.
-2. Bấm **Tải tiện ích Cấp số PCT NKVH**, giải nén ZIP vào một thư mục cố định.
-3. Mở `chrome://extensions` (Chrome) hoặc `edge://extensions` (Edge), bật **Developer mode** →
-   **Load unpacked** → chọn thư mục vừa giải nén (thư mục chứa `manifest.json`).
-4. Không xóa hoặc di chuyển thư mục sau khi cài. Khi có bản mới, tải lại ZIP, giải nén đè vào thư mục
-   cũ và bấm **Reload** trên trang quản lý tiện ích.
-
-Chrome/Edge không cho website tự cài tiện ích ngoài Store; người dùng bắt buộc xác nhận bằng
-**Load unpacked** một lần trên mỗi máy.
-
-### Thử trên localhost
-
-1. `chrome://extensions` → bật **Developer mode** → **Load unpacked** → chọn thư mục `chrome-extension/nkvh-pct`.
-2. Đăng nhập duyenhai1.vn trên cùng trình duyệt.
-3. Bấm biểu tượng tiện ích để chọn sổ lấy số: **localhost:3030** khi thử (không tốn số thật),
-   **duyenhai1.vn** khi dùng chính thức.
-
-Service worker gọi API `/api/work-permits/nkvh-claim` kèm cookie đăng nhập duyenhai1.vn của trình
-duyệt, dựa vào quyền host để cookie SameSite=Lax được gửi. Nếu báo "Chưa đăng nhập" dù đã đăng nhập,
-kiểm tra điểm này trước.
-
-## Đóng gói kiểm tra
-
-- `node chrome-extension/scripts/package-nkvh-pct.mjs` → `chrome-extension/dist/nkvh-pct-store-v<version>.zip`.
-  Bản trong gói đã bỏ quyền localhost, giống gói tải trực tiếp từ website.
-- **Thêm tệp JS mới thì phải thêm vào danh sách `FILES` trong kịch bản và
-  `lib/server/nkvh-pct-extension-package.ts`**, nếu không gói tải từ website có thể thiếu tệp.
-
-## Kiểm tra phía server
-
-`npx tsx scripts/verify/thu-nkvh-claim.ts` chạy thử lấy số, bấm lại, đồng bộ và phiếu giấy lấy sau
-trong một giao dịch rồi hoàn tác. Không để lại dữ liệu.
+Trước bỏ sổ ghi số thủ công: đối chiếu dữ liệu cũ, kiểm thử đồng thời trên PostgreSQL và
+kiểm thử Lưu trên NKVH thật ở cả hai loại phiếu bằng lượt được phép cấp.

@@ -34,7 +34,7 @@ export async function resolveSessionMembers(tx: Prisma.TransactionClient, member
 export async function assertCommanderFree(tx: Prisma.TransactionClient, commanderId: string, openedAt: Date) {
   const conflict = await tx.workPermitSession.findFirst({
     where: sessionOverlapWhere(commanderId, openedAt),
-    include: { permit: { select: { number: true, year: true, kind: true, content: true } } },
+    include: { permit: { select: { number: true, nkvhNumber: true, year: true, kind: true, content: true } } },
     orderBy: { openedAt: "asc" },
   });
   if (!conflict) return;

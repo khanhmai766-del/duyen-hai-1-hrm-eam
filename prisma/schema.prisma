@@ -1906,6 +1906,7 @@ model WorkPermitSafetyMeasure {
 
 /// Sổ ghi nhận cấp PCT; không thay thế việc cho phép làm việc trên phiếu chính thức.
 model WorkPermit {
+  nkvhNumber                     String? // Giữ nguyên số chính thức đã lưu trên NKVH, kể cả hậu tố.
   nkvhPctId                      String?             @db.Uuid // Chỉ lưu UUID; URL được ghép từ cấu hình NKVH chung.
   registrationNumber             String              @default("")
   managingUnit                   String              @default("Phân xưởng Vận hành 1")
@@ -1970,6 +1971,7 @@ model WorkPermit {
   @@index([status, workDate])
   @@index([kind, contractorScope, workDate])
   @@index([defectId])
+  @@unique([kind, nkvhPctId])
 }
 
 model WorkPermitNumberBaseline {
@@ -1998,12 +2000,13 @@ model WorkPermitNumberBaselineHistory {
 }
 
 model WorkPermitNumberReservation {
+  nkvhPctId       String?   @db.Uuid // Lượt giữ điện tử, chưa phải phiếu đã cấp.
   id              String    @id @default(cuid())
   kind            String
   year            Int
   number          String
   teamType        String
-  status          String    @default("RESERVED") // RESERVED | ISSUED | CANCELLED | RELEASED (cho phép cấp lại số hủy) | OBSERVED (số đã dùng trên NKVH, sổ chưa có hồ sơ)
+  status          String    @default("RESERVED") // RESERVED | ISSUED | CANCELLED | RELEASED (cho phép cấp lại số hủy) | OBSERVED (số đã dùng trên NKVH, sổ chưa có hồ sơ) | REVIEW (số cũ sau sửa cần đối chiếu)
   ownerId         String
   ownerName       String
   permitId        String?   @unique
@@ -2015,7 +2018,7 @@ model WorkPermitNumberReservation {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
-  // Partial unique index (RESERVED/ISSUED) is created by prisma/manual SQL.
+  // Partial unique index (RESERVED/ISSUED/OBSERVED/REVIEW) is created by prisma/manual SQL.
   @@index([kind, year, createdAt])
   @@index([ownerId, status])
 }

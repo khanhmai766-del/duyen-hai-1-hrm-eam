@@ -25,7 +25,7 @@ export async function GET(req: Request) {
     // 2 điều kiện JSON cho từng người (trang 200 người = 400 điều kiện).
     const activeSessions = rows.length ? await prisma.workPermitSession.findMany({
       where: { endedAt: null },
-      select: { id: true, commanderId: true, members: true, openedAt: true, permit: { select: { id: true, number: true, year: true, kind: true } } },
+      select: { id: true, commanderId: true, members: true, openedAt: true, permit: { select: { id: true, number: true, nkvhNumber: true, year: true, kind: true } } },
       orderBy: { openedAt: "asc" },
     }) : [];
     return ok(rows.map(person => {

@@ -22,7 +22,7 @@ export async function GET(req: Request) {
     if (!person) return ok({ code, person: null });
     const sessions = await prisma.workPermitSession.findMany({
       where: { endedAt: null },
-      select: { id: true, commanderId: true, members: true, openedAt: true, permit: { select: { id: true, number: true, year: true, kind: true } } },
+      select: { id: true, commanderId: true, members: true, openedAt: true, permit: { select: { id: true, number: true, nkvhNumber: true, year: true, kind: true } } },
       orderBy: { openedAt: "asc" },
     });
     return ok({ code, person: { ...withPhotoUrl(person), activeWorks: sessions.filter(s => s.commanderId === person.id || presentMembers(s.members).some(member => samePermitWorker(member, { personId: person.id, code: person.code, name: person.name, company: person.company }))).map(s => ({

@@ -28,7 +28,8 @@ test("luôn lấy số tiếp theo; số đã hủy bị bỏ, không cấp lạ
       if (sql.includes('max("number"::numeric)')) return [{ highest: "15" }];
       return [];
     },
-    workPermitNumberReservation: { create: async ({ data }: { data: Record<string, unknown> }) => { created.push(data); return { id: "r1", ...data }; } },
+    workPermit: { findFirst: async () => null },
+    workPermitNumberReservation: { findFirst: async () => null, create: async ({ data }: { data: Record<string, unknown> }) => { created.push(data); return { id: "r1", ...data }; } },
     workPermitNumberReservationHistory: { create: async () => ({}) },
   } as unknown as Parameters<typeof reservePermitNumber>[0];
   const row = await reservePermitNumber(tx, { kind: "MECHANICAL", year: 2026, teamType: "CONTRACTOR", ownerId: "operator", ownerName: "Người cấp" });

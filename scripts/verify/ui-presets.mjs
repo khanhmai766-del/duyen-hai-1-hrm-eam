@@ -153,6 +153,81 @@ function milestonePreset(day) {
 }
 
 export const PRESETS = {
+  "pct-sctx-cap-nhanh": {
+    description: "Cấp nhanh PCT nhà thầu SCTX Cơ/Điện, nhà thầu và CHTT tùy chọn — chỉ giả lập",
+    async prepare() { return {}; },
+    routes: () => ["MECHANICAL", "ELECTRICAL"].flatMap(kind => ["info", "people"].map(step => `/work-permits?kind=${kind}&uiStep=${step}`)),
+    async mock(context) {
+      const reservations = [];
+      await context.route("**/api/overhaul-milestones**", route => route.fulfill({ json: { data: [], meta: null, error: null } }));
+      await context.route("**/api/work-permits**", async route => {
+        const request = route.request();
+        const path = new URL(request.url()).pathname;
+        let data = [], meta = null;
+        if (path === "/api/work-permits") {
+          if (request.method() === "POST") throw new Error("Kịch bản chụp không cấp phiếu");
+          meta = { total: 0, page: 1, pageSize: 25, counts: {}, overhaulCount: 0, canIssue: true, canIssueNew: true, canExecute: true, positionScope: { all: true, codes: [] } };
+        } else if (path.endsWith("number-suggestion")) data = { configured: true, baseline: "4450", highest: "4454", suggested: "4455" };
+        else if (path.endsWith("number-reservations")) {
+          if (request.method() === "POST") {
+            const body = request.postDataJSON();
+            data = { id: `ui-sctx-${reservations.length}`, ...body, number: "4455", status: "RESERVED", ownerName: "Người cấp (giả lập)", createdAt: new Date().toISOString() };
+            reservations.push(data);
+          } else data = reservations;
+        } else if (path.endsWith("name-suggestions")) data = { commanders: [], leaders: [] };
+        else if (path.endsWith("live-sessions")) meta = { canExecute: true };
+        await route.fulfill({ json: { data, meta, error: null } });
+      });
+    },
+    async interact(page, route) {
+      if (page.viewportSize().width < 768) {
+        await page.getByRole("button", { name: "Cấp phiếu", exact: true }).click();
+        await page.getByRole("menuitem").filter({ hasText: "Cấp phiếu nhà thầu" }).click();
+      } else await page.getByRole("button", { name: "Nhà thầu", exact: true }).click();
+      await page.getByRole("dialog").getByRole("button").filter({ hasText: "Sửa chữa thường xuyên" }).click();
+      const dialog = page.getByRole("dialog");
+      await dialog.locator("#permit-step-info").getByRole("button", { name: "Lấy số PCT", exact: true }).click();
+      await dialog.getByText(/Đã giữ số 4455/).first().waitFor();
+      await dialog.getByLabel("Nội dung công việc", { exact: false }).fill("Kiểm tra xử lý các vòi phun nước chữa cháy làm mát bồn lưu trữ NH3 bị nghẹt");
+      if (route.includes("uiStep=info")) return;
+      await dialog.getByRole("button", { name: "Tiếp tục", exact: true }).click();
+      await dialog.getByRole("heading", { name: "Mẫu giấy và an toàn" }).waitFor();
+      await dialog.getByRole("button", { name: "Tiếp tục", exact: true }).click();
+      await dialog.getByRole("heading", { name: "Nhân sự và đơn vị công tác" }).waitFor();
+      const commander = dialog.getByLabel("Chỉ huy trực tiếp", { exact: true });
+      if (await commander.getAttribute("required") !== null) throw new Error("CHTT SCTX còn bắt buộc");
+      await dialog.getByRole("button", { name: "Tiếp tục", exact: true }).click();
+      await dialog.getByRole("heading", { name: "Xác nhận cấp phiếu" }).waitFor();
+      await dialog.getByRole("button", { name: "Quay lại", exact: true }).click();
+      await commander.fill("Nguyễn Văn Bình");
+    },
+  },
+  "pct-cap-so": {
+    description: "Biểu mẫu cấp giấy: số tiếp theo và nhập số cũ chưa dùng — chỉ giả lập",
+    async prepare() { return {}; },
+    routes: () => ["/work-permits"],
+    async mock(context) {
+      await context.route("**/api/overhaul-milestones**", route => route.fulfill({ json: { data: [], meta: null, error: null } }));
+      await context.route("**/api/work-permits**", async route => {
+        const path = new URL(route.request().url()).pathname;
+        let data = [], meta = null;
+        if (path === "/api/work-permits") meta = { total: 0, page: 1, pageSize: 30, counts: {}, overhaulCount: 0, canIssue: true, canIssueNew: true, canExecute: true, positionScope: { all: true, codes: [] } };
+        else if (path.endsWith("number-suggestion")) data = { configured: true, baseline: "4450", highest: "4454", suggested: "4455" };
+        else if (path.endsWith("name-suggestions")) data = { commanders: [], leaders: [] };
+        else if (path.endsWith("live-sessions")) meta = { canExecute: true };
+        await route.fulfill({ json: { data, meta, error: null } });
+      });
+    },
+    async interact(page) {
+      if (page.viewportSize().width < 768) {
+        await page.getByRole("button", { name: "Cấp phiếu", exact: true }).click();
+        await page.getByRole("menuitem").filter({ hasText: "Cấp phiếu nội bộ" }).click();
+      } else await page.getByRole("button", { name: "Nội bộ", exact: true }).click();
+      await page.getByRole("dialog").getByRole("button").filter({ hasText: "PCT giấy" }).click();
+      await page.getByLabel("Số thứ tự PCT").fill("4451");
+    },
+  },
+
   "scl-s2-so-do": { ...milestonePreset("2026-11-22"), routes: () => ["/", "/?milestoneUi=diagram"] },
   "scl-s2": milestonePreset("2026-11-22"),
   "scl-s2-ngay-dau": milestonePreset("2026-10-07"),

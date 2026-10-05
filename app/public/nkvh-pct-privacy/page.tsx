@@ -7,7 +7,7 @@ export const metadata: Metadata = {
   description: "Chính sách quyền riêng tư của tiện ích Cấp số PCT NKVH – PXVH1.",
 };
 
-const UPDATED_AT = "24/09/2026";
+const UPDATED_AT = "05/10/2026";
 
 const READ_FIELDS = [
   ["Mã phiếu NKVH", "Mã phiếu (id_pct) trên địa chỉ trang, dùng để nối phiếu NKVH với sổ PCT."],
@@ -53,7 +53,8 @@ export default function NkvhPctPrivacyPage() {
 
           <section>
             <h2 className="text-xl font-bold text-white">2. Dữ liệu được xử lý</h2>
-            <p className="mt-3 leading-7 text-slate-300">Các trường nêu trên chỉ được đọc từ nội dung trang phiếu NKVH đang hiển thị, và chỉ được chuyển sang duyenhai1.vn khi người dùng bấm “Lấy số PCT” hoặc “Đồng bộ về sổ”. Khi lấy số, người dùng chọn thêm tổ máy và cương vị. Tiện ích không thu thập hoặc chuyển mật khẩu, cookie, token xác thực, lịch sử duyệt web hay nội dung từ các trang khác.</p>
+            <p className="mt-3 leading-7 text-slate-300">Tiện ích đọc các trường nêu trên để giữ số khi người dùng bấm “Lấy số PCT”. Sau khi nhận biết người dùng Lưu thành công trên NKVH, tiện ích đọc lại phiếu đã lưu và tự đồng bộ về duyenhai1.vn. Người dùng cũng có thể bấm đồng bộ thủ công; các phiếu mới cấp trên danh sách đang hiển thị được đối chiếu bổ sung. Cương vị lấy theo NKVH, tổ máy có thể bổ sung sau. Tiện ích không thu thập hoặc chuyển mật khẩu, cookie, token xác thực, lịch sử duyệt web hay nội dung từ các trang khác.</p>
+            <p className="mt-3 leading-7 text-slate-300">Nếu chưa gửi được về sổ, yêu cầu đồng bộ được giữ trong bộ nhớ cục bộ của nguồn NKVH trên trình duyệt để thử lại. Yêu cầu được xóa khi đồng bộ thành công. Thông tin này không được gửi đến dịch vụ bên thứ ba.</p>
           </section>
 
           <section className="rounded-2xl border border-cyan-300/20 bg-cyan-300/[0.05] p-6">
@@ -83,7 +84,7 @@ export default function NkvhPctPrivacyPage() {
 
           <section>
             <h2 className="text-xl font-bold text-white">6. Quyền truy cập trang web</h2>
-            <p className="mt-3 leading-7 text-slate-300">Tiện ích chỉ chạy trên hai trang chi tiết phiếu công tác của nkvh.tpcduyenhai.com.vn (PCT T-C-N-H và PCT điện) để đọc nội dung phiếu và điền số phiếu. Tiện ích chỉ gọi duyenhai1.vn để lấy số và ghi phiếu vào sổ. Không có tên miền nào khác được truy cập.</p>
+            <p className="mt-3 leading-7 text-slate-300">Tiện ích chạy trên trang chi tiết và danh sách phiếu công tác của nkvh.tpcduyenhai.com.vn (PCT T-C-N-H và PCT điện). Tiện ích đọc lại phiếu trên cùng nguồn NKVH, gọi duyenhai1.vn để giữ số và đồng bộ hồ sơ vào sổ. Bản phát hành chính thức không truy cập tên miền nào khác.</p>
           </section>
 
           <section>
@@ -93,7 +94,7 @@ export default function NkvhPctPrivacyPage() {
 
           <footer className="flex flex-col gap-4 border-t border-white/10 pt-7 text-sm text-slate-400 sm:flex-row sm:items-center sm:justify-between">
             <span className="inline-flex items-center gap-2"><MousePointerClick className="h-4 w-4" /> Chỉ xử lý khi người dùng chủ động bấm</span>
-            <Link href="/login" className="font-semibold text-cyan-300 hover:text-cyan-200">Về hệ thống PXVH1 →</Link>
+            <Link href="/login" className="inline-flex min-h-10 items-center font-semibold text-cyan-300 hover:text-cyan-200">Về hệ thống PXVH1 →</Link>
           </footer>
         </div>
       </div>

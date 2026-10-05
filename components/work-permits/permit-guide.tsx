@@ -85,9 +85,9 @@ const SECTIONS: GuideSection[] = [
         title: "Lấy số PCT",
         where: "Khung Sổ PXVH1 dưới ô Số phiếu → Lấy số PCT",
         points: [
-          "Kiểm tra Tổ máy mà tiện ích nhận diện, chọn Cương vị, rồi bấm Lấy số & điền.",
-          "Sổ PXVH1 cấp số tiếp theo của đúng sổ Cơ hoặc Điện, ghi phiếu vào sổ và điền số vào NKVH.",
-          "Một phiếu NKVH chỉ nhận một số; bấm lại vẫn trả về đúng số đã cấp.",
+          "Bấm Lấy số & điền để giữ số. Tổ máy có thể bổ sung sau; cương vị lấy theo NKVH khi đồng bộ.",
+          "Sổ PXVH1 giữ số tiếp theo của đúng sổ Cơ hoặc Điện và điền vào NKVH; chưa ghi phiếu Đã cấp.",
+          "Bấm lại nhận đúng lượt đang giữ. Số thực tế sau khi Lưu trên NKVH là số chính thức.",
           "Nếu NKVH đã có số dạng …/VH1-NĐDH nhưng sổ chưa có liên kết, bấm Đồng bộ số hiện có; hệ thống dùng đúng số đó và tự chặn mọi xung đột.",
         ],
       },
@@ -95,16 +95,16 @@ const SECTIONS: GuideSection[] = [
         title: "Kiểm tra và lưu NKVH",
         where: "Trên phiếu NKVH",
         points: [
-          "Kiểm tra số và nội dung, sau đó tự bấm Lưu trên NKVH. Tiện ích không bao giờ tự lưu.",
-          "Không gõ tay số vào NKVH vì sổ PXVH1 sẽ không biết số đó đã được sử dụng.",
-          "Nếu số sổ đưa ra đã có phiếu khác dùng trên NKVH và bạn sửa sang số khác, khung Sổ PXVH1 báo LỆCH SỐ: bấm Sửa sổ theo NKVH để sổ ghi đúng số đang có trong ô, hoặc Điền lại nếu gõ nhầm.",
+          "Kiểm tra số và nội dung, rồi tự bấm Lưu trên NKVH. Lưu thành công, tiện ích tự đọc lại và đồng bộ về sổ.",
+          "Có thể sửa số trước khi Lưu. Sổ nhận đúng số đã lưu trên NKVH; số giữ ban đầu cần đối chiếu nếu không dùng.",
+          "Số đã thuộc phiếu khác sẽ được báo xung đột để đối chiếu; không tự ghi đè hoặc tạo thêm số.",
         ],
       },
       {
         title: "Bổ sung hoặc đồng bộ",
         where: "NKVH bước B1 → Đồng bộ về sổ · hoặc Sổ PCT → mở dòng phiếu",
         points: [
-          "Nếu sửa nội dung hoặc khai thêm CHTT, phạm vi… trên NKVH, bấm Đồng bộ về sổ.",
+          "Lưu trên NKVH sẽ tự đồng bộ khi tiện ích xác nhận thành công. Với phiếu cũ hoặc lần lưu chưa được nhận biết, bấm Đồng bộ về sổ để đọc lại dữ liệu đã lưu.",
           "Phiếu thiếu CHTT, số nhân viên hoặc SYC sẽ có nhãn Cần bổ sung; có thể mở dòng phiếu trên sổ để khai đủ.",
         ],
       },
@@ -131,7 +131,8 @@ const SECTIONS: GuideSection[] = [
         title: "Mở biểu mẫu",
         where: "Sổ PCT → chọn tab sổ → Cấp phiếu nhà thầu",
         points: [
-          "CHTT nhà thầu phải có sẵn trong tab Nhân sự nhà thầu (xem phần Danh mục dùng chung).",
+          "PCT SCTX có thể ghi nhận cấp nhanh: nhà thầu và CHTT không bắt buộc; tên CHTT có thể nhập trực tiếp.",
+          "PCT Đại tu cần chọn nhà thầu và CHTT có sẵn trong tab Nhân sự nhà thầu (xem phần Danh mục dùng chung).",
           "Để cấp nhanh công việc tương tự: mở PCT giấy ở trạng thái Đã cấp hoặc Kết thúc phiếu, bấm Sao chép tạo PCT mới. Nội dung, nhân sự và biện pháp được giữ; số PCT, ĐKCT/SYC, thời gian và trạng thái được đặt lại.",
         ],
       },
@@ -157,7 +158,7 @@ const SECTIONS: GuideSection[] = [
         title: "Chọn CHTT",
         where: "Bước 3 · Nhân sự",
         points: [
-          "Bấm Chọn CHTT nhà thầu — Đơn vị công tác tự lấy theo đơn vị của CHTT.",
+          "SCTX: có thể để trống CHTT, nhập tên trực tiếp hoặc chọn từ danh bạ. Đại tu: bấm Chọn CHTT nhà thầu.",
           "Lãnh đạo, nhân viên công tác bổ sung: mở mục Thông tin bổ sung (không bắt buộc).",
         ],
       },

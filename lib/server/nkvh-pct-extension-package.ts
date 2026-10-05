@@ -8,7 +8,7 @@ const EXTENSION_ROOT = path.join(process.cwd(), "chrome-extension", "nkvh-pct");
 // Khi thêm tệp JS mới cho tiện ích, cập nhật cả danh sách này và package-nkvh-pct.mjs.
 const FILES = [
   "background.js",
-  "content.js",
+  "content.js", "saved-events.js", "page-reader.js",
   "list.js",
   "popup.html",
   "popup.js",

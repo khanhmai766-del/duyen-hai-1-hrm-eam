@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { PermitCompanySelect } from "@/components/work-permits/company-picker";
 import { OverhaulContentField } from "@/components/work-permits/overhaul-item-picker";
-import { PERMIT_DISCIPLINES, PERMIT_SOURCE_CLASSIFICATIONS, PERMIT_UNITS, type PermitDiscipline, type PermitInput, type PermitSourceClassification } from "@/lib/work-permits";
+import { isSctxContractorPermit, PERMIT_DISCIPLINES, PERMIT_SOURCE_CLASSIFICATIONS, PERMIT_UNITS, type PermitDiscipline, type PermitInput, type PermitSourceClassification } from "@/lib/work-permits";
 
 const control = "min-h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-[13px] shadow-sm focus:border-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-500/10";
 const label = "block space-y-1.5 text-[13px]";
@@ -26,7 +26,7 @@ export function MechanicalPaperInfo({ form, issued, numberField, positionOptions
   const contractor = form.teamType === "CONTRACTOR";
   // Phiếu nhà thầu: chọn đúng tên đơn vị trong danh bạ để quét thẻ/lọc nhân sự khớp đơn vị của phiếu.
   const teamField = contractor
-    ? <PermitCompanySelect value={form.teamName} required={issued} onChange={onCompanyChange} />
+    ? <div className="space-y-1.5"><PermitCompanySelect value={form.teamName} required={issued && !isSctxContractorPermit(form)} onChange={onCompanyChange} />{isSctxContractorPermit(form) && <p className="text-xs text-muted-foreground">Không bắt buộc khi ghi nhận cấp PCT SCTX.</p>}</div>
     : field("teamName", "Đơn vị công tác", issued);
 
   return <div className="space-y-4">

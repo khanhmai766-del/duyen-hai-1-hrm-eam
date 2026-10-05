@@ -10,7 +10,7 @@ export async function GET() {
   return permitHandle(async () => {
     const user = await requireUser(); await requirePermitIssue(user);
     const rows = await prisma.workPermitNumberReservation.findMany({
-      where: { status: "RESERVED", ...(user.role === "ADMIN" ? {} : { ownerId: user.id }) },
+      where: { OR: [{ status: "RESERVED" }, { status: "REVIEW", nkvhPctId: { not: null }, permitId: null }], ...(user.role === "ADMIN" ? {} : { ownerId: user.id }) },
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     });
     return ok(rows);
@@ -23,10 +23,8 @@ export async function POST(req: Request) {
     const body = await permitBody(req);
     const { kind, year } = permitNumberScope(body.kind, body.year);
     if (body.teamType !== "INTERNAL" && body.teamType !== "CONTRACTOR") return fail("Loại đơn vị không hợp lệ", 400);
-    // Không nhận số nhập tay; số hủy chỉ được giải phóng trước đó bởi quản trị trong Mốc sổ giấy.
-    if (body.number !== undefined && body.number !== null && body.number !== "") return fail("Số PCT chỉ lấy bằng nút Lấy số PCT", 400);
     const row = await prisma.$transaction(tx => reservePermitNumber(tx, {
-      kind, year, teamType: body.teamType as "INTERNAL" | "CONTRACTOR", ownerId: user.id, ownerName: user.name ?? "",
+      kind, year, number: body.number, teamType: body.teamType as "INTERNAL" | "CONTRACTOR", ownerId: user.id, ownerName: user.name ?? "",
     }));
     await audit(user.id, "RESERVE_WORK_PERMIT_NUMBER", "WorkPermitNumberReservation", row.id,
       `Lấy số PCT ${row.number}/${row.year}, ${row.kind}`);

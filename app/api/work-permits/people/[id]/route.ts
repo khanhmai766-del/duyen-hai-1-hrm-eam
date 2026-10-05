@@ -56,11 +56,11 @@ export async function DELETE(req: Request, props: { params: Promise<{ id: string
       const [openPermits, sessions] = await Promise.all([
         tx.workPermit.findMany({
           where: { status: { notIn: admin ? ["CANCELLED", "CLOSED"] : ["CANCELLED"] }, ...involves },
-          select: { number: true, year: true }, take: 5,
+          select: { number: true, nkvhNumber: true, year: true }, take: 5,
         }),
         tx.workPermitSession.findMany({
           where: { OR: [{ commanderId: before.id }, { members: { array_contains: [{ personId: before.id }] } }] },
-          select: { endedAt: true, members: true, permit: { select: { number: true, year: true } } },
+          select: { endedAt: true, members: true, permit: { select: { number: true, nkvhNumber: true, year: true } } },
         }),
       ]);
       const numbers = (rows: Array<{ number: string; year: number }>) => [...new Set(rows.map(p => `${p.number}/${p.year}`))].join(", ");

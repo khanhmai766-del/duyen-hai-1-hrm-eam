@@ -4,7 +4,7 @@ import { normalizeText } from "@/lib/nav";
 import { NKVH_UUID } from "@/lib/nkvh-pct";
 import { OPERATION_POSITION_TITLES } from "@/lib/positions";
 import { DEFAULT_PERMIT_MANAGING_UNIT, DEFAULT_PERMIT_PLANT } from "@/lib/work-permit-source-fields";
-import { formatPermitNumber, PERMIT_CONTRACTOR_SCOPES, PERMIT_DISCIPLINES, PERMIT_FORMATS, defaultPermitFormat, PERMIT_KINDS, PERMIT_SOURCE_CLASSIFICATIONS, PERMIT_WORK_TYPES, PERMIT_STATUSES, PERMIT_UNITS, SOURCE_CLASSIFICATION_WORK_TYPE, effectiveWorkType, type PermitStatus } from "@/lib/work-permits";
+import { formatPermitNumber, isSctxContractorPermit, PERMIT_CONTRACTOR_SCOPES, PERMIT_DISCIPLINES, PERMIT_FORMATS, defaultPermitFormat, PERMIT_KINDS, PERMIT_SOURCE_CLASSIFICATIONS, PERMIT_WORK_TYPES, PERMIT_STATUSES, PERMIT_UNITS, SOURCE_CLASSIFICATION_WORK_TYPE, effectiveWorkType, type PermitStatus } from "@/lib/work-permits";
 
 export function permitHandle(fn: () => Promise<Response>) {
   return handle(async () => {
@@ -99,7 +99,11 @@ export function parsePermit(body: Record<string, unknown>, status: PermitStatus,
     data.workerCount = data.commanderName ? 1 + data.members.length : null;
   } else if (data.members.length) data.workerCount = data.members.length;
   if (!data.content) throw fail("Vui lòng nhập nội dung công việc");
-  if (["ISSUED", "ACTIVE", "PAUSED", "WAITING", "CLOSED"].includes(status) && !options.allowIncompleteIssue && (!data.issuerName || !data.issuedAt || !data.commanderName || !data.teamName || (teamType !== "CONTRACTOR" && !data.workerCount))) throw fail("Để ghi cấp phiếu, cần người cấp, thời điểm cấp, chỉ huy trực tiếp, đơn vị và số nhân viên");
+  const quickContractor = isSctxContractorPermit(data);
+  if (["ISSUED", "ACTIVE", "PAUSED", "WAITING", "CLOSED"].includes(status) && !options.allowIncompleteIssue) {
+    if (!data.issuerName || !data.issuedAt) throw fail("Để ghi cấp phiếu, cần người cấp và thời điểm cấp phiếu");
+    if (!quickContractor && (!data.commanderName || !data.teamName || (teamType !== "CONTRACTOR" && !data.workerCount))) throw fail("Để ghi cấp phiếu, cần chỉ huy trực tiếp, đơn vị và số nhân viên");
+  }
   if (teamType === "CONTRACTOR" && ["ACTIVE", "PAUSED", "WAITING", "CLOSED"].includes(status) && (!data.authorizerName || !data.authorizedAt)) throw fail("Vui lòng ghi người và thời điểm cho phép làm việc");
   if (["PAUSED", "CANCELLED"].includes(status) && !data.statusReason) throw fail("Vui lòng nhập lý do tạm dừng hoặc hủy phiếu");
   if (status === "CLOSED" && (!data.closedAt || (teamType === "CONTRACTOR" && !data.result))) throw fail("Vui lòng nhập thông tin và thời điểm đóng phiếu");

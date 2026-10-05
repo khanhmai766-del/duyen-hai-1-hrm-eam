@@ -17,16 +17,16 @@
   const observedNumbers = new Set();
   const warnedAhead = new Set();
   let observeFailedAt = 0;
-  const NUMBER_PATTERN = /\d{1,80}\/20\d{2}\/VH1-N[ĐD]DH/iu;
+  const NUMBER_PATTERN = /\d{1,80}\/20\d{2}\/(?:VH1-N[ĐD]DH|N[ĐD]DH-VH1)/iu;
   let scanning = false;
 
   const fold = (value) => String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "")
     .replace(/[đĐ]/g, "d").toLowerCase().replace(/\s+/g, " ").trim();
 
-  function api(body) {
+  function api(body, method = "POST", path = API) {
     return new Promise((resolve) => {
       try {
-        chrome.runtime.sendMessage({ type: "NKVH_PCT_API", method: "POST", path: API, body }, (result) => {
+        chrome.runtime.sendMessage({ type: "NKVH_PCT_API", method, path, ...(method === "POST" ? { body } : {}) }, (result) => {
           resolve(chrome.runtime.lastError || !result ? { ok: false, message: "Tiện ích vừa được cập nhật. Hãy tải lại trang NKVH." } : result);
         });
       } catch {
@@ -74,8 +74,44 @@
     if (ahead.length) {
       notice(`Sổ PXVH1: số ${ahead.map((item) => item.formatted).join(", ")} trên NKVH vượt dãy sổ (số kế tiếp của sổ là ${ahead[0].expected}). Kiểm tra lại số đã nhập trên NKVH; nếu đúng, báo quản trị đối chiếu mốc sổ.`, true);
     } else if (result.data.recorded.length) {
-      notice(`Sổ PXVH1: đã ghi nhận ${result.data.recorded.join(", ")} là số đã dùng trên NKVH (chưa có trên sổ) để không cấp trùng. Mở từng phiếu, bấm "Đồng bộ số hiện có" để đưa vào sổ.`);
+      notice(`Sổ PXVH1: đã ghi nhận ${result.data.recorded.join(", ")} là số đã dùng trên NKVH (chưa có trên sổ) để không cấp trùng. Các phiếu mới cấp đang hiển thị sẽ được tự đối chiếu; phiếu cũ có thể mở để đồng bộ.`);
     }
+  }
+
+  const reconciled = new Map();
+  let protocolChecked = false;
+  // Chỉ bù phiếu mới cấp trong 48 giờ đang hiển thị; không quét toàn bộ lịch sử.
+  async function reconcileRecent() {
+    let synced = 0, processed = 0;
+    for (const row of document.querySelectorAll("table tbody tr")) {
+      if (processed >= 10) break;
+      const date = row.textContent.match(/(\d{2})\/(\d{2})\/(20\d{2})/);
+      if (!date) continue;
+      const stamp = new Date(`${date[3]}-${date[2]}-${date[1]}T00:00:00+07:00`).getTime();
+      if (!Number.isFinite(stamp) || Date.now() - stamp > 48 * 3600_000 || stamp > Date.now()) continue;
+      const link = [...row.querySelectorAll("a[href], [onclick]")].map(el => `${el.getAttribute("href") || ""} ${el.getAttribute("onclick") || ""}`).join(" ").match(/id_pct=([0-9a-f-]{36})/i);
+      if (!link || Date.now() - (reconciled.get(link[1]) || 0) < 60_000) continue;
+      if (!protocolChecked) {
+        const version = await api(null, "GET", `${API}?kind=${KIND}&nkvhPctId=${link[1]}`);
+        if (!version.ok || version.data?.protocolVersion !== 2) { notice("Sổ PXVH1: chưa thể tự đồng bộ phiếu mới. Kiểm tra đăng nhập và cập nhật máy chủ cho tiện ích 1.1.0.", true); return; }
+        protocolChecked = true;
+      }
+      processed++;
+      reconciled.set(link[1], Date.now());
+      const detailUrl = new URL(location.href);
+      detailUrl.pathname = `/nkvh/pages/pct/${KIND === "ELECTRICAL" ? "pctd_ct" : "pctc_ct"}`;
+      detailUrl.searchParams.set("id_pct", link[1]);
+      try {
+        const response = await fetch(detailUrl.toString(), { credentials: "same-origin", cache: "no-store" });
+        if (!response.ok || response.redirected) continue;
+        const saved = new DOMParser().parseFromString(await response.text(), "text/html");
+        const payload = window.PXVH1_NKVH_READER.read(saved, KIND);
+        const result = await api({ mode: "sync", saved: true, kind: KIND, nkvhPctId: link[1].toLowerCase(), ...payload });
+        if (!result.ok) notice(`Chưa đồng bộ được ${payload.formattedNumber}: ${result.message}`, true);
+        else if (result.data.changed) synced++;
+      } catch { /* Phiếu chưa đọc được: lần quét sau thử lại, không ghi dữ liệu đoán. */ }
+    }
+    if (synced) notice(`Sổ PXVH1: đã đối chiếu và đồng bộ ${synced} phiếu mới cấp trên danh sách đang hiển thị.`);
   }
 
   function notice(message, error = false) {
@@ -95,6 +131,7 @@
     scanning = true;
     // Ghi nhận số trước khi đóng phiếu: đây là phần chặn cấp trùng, không được để lỗi đóng làm lỡ.
     try { await observe(); } catch { /* lần quét sau thử lại */ }
+    try { await reconcileRecent(); } catch { /* lần sau thử lại */ }
     let closed = 0;
     for (const formattedNumber of rowsToClose()) {
       const last = attempted.get(formattedNumber) || 0;
@@ -116,5 +153,6 @@
     timer = setTimeout(scan, 500);
   }).observe(document.body, { childList: true, subtree: true });
   document.addEventListener("visibilitychange", () => { if (!document.hidden) scan(); });
+  setInterval(scan, 60_000);
   scan();
 })();
