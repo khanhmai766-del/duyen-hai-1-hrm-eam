@@ -2006,7 +2006,7 @@ model WorkPermitNumberReservation {
   year            Int
   number          String
   teamType        String
-  status          String    @default("RESERVED") // RESERVED | ISSUED | CANCELLED | RELEASED (cho phép cấp lại số hủy) | OBSERVED (số đã dùng trên NKVH, sổ chưa có hồ sơ) | REVIEW (số cũ sau sửa cần đối chiếu)
+  status          String    @default("RESERVED") // RESERVED | ISSUED | CANCELLED | RELEASED | OBSERVED (chưa xác nhận nâng dãy) | OBSERVED_CONFIRMED | OBSERVED_IGNORED | REVIEW
   ownerId         String
   ownerName       String
   permitId        String?   @unique
@@ -2018,7 +2018,7 @@ model WorkPermitNumberReservation {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
-  // Partial unique index (RESERVED/ISSUED/OBSERVED/REVIEW) is created by prisma/manual SQL.
+  // Partial unique index (RESERVED/ISSUED/OBSERVED/OBSERVED_CONFIRMED/REVIEW) is created by prisma/manual SQL.
   @@index([kind, year, createdAt])
   @@index([ownerId, status])
 }

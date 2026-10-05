@@ -153,6 +153,37 @@ function milestonePreset(day) {
 }
 
 export const PRESETS = {
+  "pct-doi-chieu-so": {
+    description: "Số NKVH nhảy cóc và hộp xác nhận nâng dãy/bỏ số — chỉ giả lập",
+    async prepare() { return {}; },
+    routes: () => ["MECHANICAL", "ELECTRICAL"].flatMap(kind => ["list", "confirm", "ignore"].map(step => `/work-permits?kind=${kind}&reviewStep=${step}`)),
+    async mock(context) {
+      await context.route("**/api/overhaul-milestones**", route => route.fulfill({ json: { data: [], meta: null, error: null } }));
+      await context.route("**/api/work-permits**", async route => {
+        const req = route.request(), path = new URL(req.url()).pathname;
+        if (req.method() !== "GET") throw new Error("Không ghi dữ liệu khi chụp đối chiếu số");
+        let data = [], meta = null;
+        if (path === "/api/work-permits") meta = { total: 0, page: 1, pageSize: 25, counts: {}, overhaulCount: 0, canIssue: true, canIssueNew: true, canExecute: true, positionScope: { all: true, codes: [] } };
+        else if (path.endsWith("live-sessions")) meta = { canExecute: true };
+        else if (path.endsWith("number-review")) {
+          const real = await route.fetch();
+          if (real.status() !== 200) throw new Error(`API đối chiếu số dev lỗi ${real.status()}`);
+          data = { highest: "4516", suggested: "4517", total: 2, entries: [
+          { id: "mock-4836", number: "4836", status: "OBSERVED", permitId: null, nkvhPctId: null, updatedAt: "2026-10-05T09:00:50.154Z", ownerName: "Người cấp" },
+          { id: "mock-4800", number: "4800", status: "OBSERVED", permitId: "mock-saved", nkvhPctId: "11111111-2222-3333-4444-555555555555", updatedAt: "2026-10-05T09:00:50.154Z", ownerName: "Người cấp" },
+        ] }; }
+        await route.fulfill({ json: { data, meta, error: null } });
+      });
+    },
+    async interact(page, route) {
+      await page.getByRole("button", { name: "Xem 2 số", exact: true }).click();
+      if (route.endsWith("reviewStep=list")) return;
+      await page.getByRole("button", { name: route.endsWith("reviewStep=confirm") ? "Xác nhận nâng dãy" : "Bỏ ghi nhận sai", exact: true }).first().click();
+      const dialog = page.getByRole("dialog");
+      await dialog.getByRole("textbox").fill("Đã đối chiếu số phiếu và nội dung trên NKVH");
+      await dialog.getByRole("checkbox").check();
+    },
+  },
   "pct-sctx-cap-nhanh": {
     description: "Cấp nhanh PCT nhà thầu SCTX Cơ/Điện, nhà thầu và CHTT tùy chọn — chỉ giả lập",
     async prepare() { return {}; },

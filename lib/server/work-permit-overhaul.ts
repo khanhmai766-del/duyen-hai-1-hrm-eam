@@ -269,7 +269,8 @@ export async function syncOverhaulItems() {
 }
 
 /**
- * Hạng mục gợi ý cho form: lọc theo loại PCT, mã nhà thầu của đơn vị công tác (WorkPermitCompany.code) và
+ * Hạng mục gợi ý cho form: trả cả hạng mục Cơ lẫn Điện (phiếu Cơ và phiếu Điện thấy hạng mục của nhau), hạng mục
+ * cùng loại với phiếu xếp trước; lọc theo mã nhà thầu của đơn vị công tác (WorkPermitCompany.code) và
  * cương vị (bỏ trống = mọi cương vị). Đơn vị chưa khai mã → không có gợi ý (trả kèm lý do để form nói rõ).
  */
 export async function listOverhaulItems(params: { kind: string; company: string; position: string; excludePermitId?: string }) {
@@ -285,10 +286,11 @@ export async function listOverhaulItems(params: { kind: string; company: string;
   if (!contractorCode) return { items: [], syncedAt, contractorCode: null, reason: "companyCode" as const };
   const positionCode = params.position ? positionCatalogItem(params.position)?.code ?? null : null;
   const items = await prisma.workPermitOverhaulItem.findMany({
-    where: { isActive: true, kind: params.kind, contractorCode, ...(positionCode ? { positionCode } : {}) },
-    select: { id: true, source: true, sheet: true, positionTitle: true, code: true, device: true, content: true, method: true, percent: true, status: true },
+    where: { isActive: true, contractorCode, ...(positionCode ? { positionCode } : {}) },
+    select: { id: true, kind: true, source: true, sheet: true, positionTitle: true, code: true, device: true, content: true, method: true, percent: true, status: true },
   });
-  items.sort((a, b) => compareOverhaulCodes(a.code, b.code) || a.sheet.localeCompare(b.sheet, "vi"));
+  const otherKind = (item: { kind: string }) => item.kind === params.kind ? 0 : 1;
+  items.sort((a, b) => otherKind(a) - otherKind(b) || compareOverhaulCodes(a.code, b.code) || a.sheet.localeCompare(b.sheet, "vi"));
   const usage = await overhaulItemUsage(prisma, params.excludePermitId);
   return {
     items: items.map(item => ({ ...item, usedBy: usage.held.get(overhaulItemKey(item)) ?? [], draftIn: usage.drafts.get(overhaulItemKey(item)) ?? [] })),

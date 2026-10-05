@@ -1,7 +1,7 @@
 import { fail, ok, requireUser } from "@/lib/api";
 import { workPermitPrisma as prisma } from "@/lib/server/work-permit-prisma";
 import { permitHandle } from "@/lib/server/work-permits";
-import { permitNumberHighWater, permitNumberScope } from "@/lib/server/work-permit-number-reservations";
+import { nextPermitNumber, permitNumberHighWater, permitNumberScope } from "@/lib/server/work-permit-number-reservations";
 
 export const dynamic = "force-dynamic";
 
@@ -13,8 +13,7 @@ export async function GET(req: Request) {
     const result = await prisma.$transaction(async tx => {
       const baseline = await tx.workPermitNumberBaseline.findUnique({ where: { kind_year: { kind, year } } });
       const highest = await permitNumberHighWater(tx, kind, year);
-      const floor = baseline && BigInt(baseline.number) > BigInt(highest) ? BigInt(baseline.number) : BigInt(highest);
-      const suggested = (floor + BigInt(1)).toString();
+      const suggested = await nextPermitNumber(tx, kind, year, baseline?.number ?? "0", highest);
       return { configured: Boolean(baseline), baseline: baseline?.number ?? null,
         highest: highest === "0" ? null : highest, suggested: baseline && suggested.length <= 80 ? suggested : null };
     });

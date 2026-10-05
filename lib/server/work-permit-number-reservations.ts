@@ -30,11 +30,12 @@ type Tx = Prisma.TransactionClient;
 
 /**
  * Lượt "OBSERVED": số dạng sổ PXVH1 đã thấy trên NKVH (thường là số gõ tay) nhưng sổ chưa có hồ sơ.
- * Tính vào dãy để lần lấy số sau nhảy qua, nhưng KHÔNG phải RESERVED — nên không hiện ở "Số đã lấy,
- * chưa lưu phiếu" và không ai "Tiếp tục" cấp phiếu giấy trùng số được. Khi phiếu NKVH đó được nhận về
- * sổ (Đồng bộ số hiện có / Sửa sổ theo NKVH), chính lượt này chuyển thành RESERVED/ISSUED.
+ * Chặn trùng nhưng chưa nâng dãy. Phiếu NKVH đã lưu có số nhảy cóc cũng giữ trạng thái này ở lượt
+ * số, độc lập với trạng thái thật của phiếu. Người cấp phải xác nhận trước khi nâng dãy.
  */
 export const OBSERVED_NUMBER_STATUS = "OBSERVED";
+export const CONFIRMED_NUMBER_STATUS = "OBSERVED_CONFIRMED";
+export const IGNORED_NUMBER_STATUS = "OBSERVED_IGNORED";
 
 export function teamTypeLabel(teamType: string) {
   return teamType === "CONTRACTOR" ? "Nhà thầu · PCT giấy" : "Nội bộ";
@@ -58,13 +59,15 @@ export async function permitNumberHighWater(
   const ignoreCancelledNumber = options.ignoreCancelledNumber ?? null;
   const rows = await tx.$queryRaw<Array<{ highest: string | null }>>`
     SELECT max("number"::numeric)::text AS "highest" FROM (
-      SELECT "number" FROM "WorkPermit"
-      WHERE "kind" = ${kind} AND "year" = ${year}
-        AND "status" NOT IN ('DRAFT', 'CANCELLED') AND "number" ~ '^[0-9]+$'
+      SELECT p."number" FROM "WorkPermit" p
+      WHERE p."kind" = ${kind} AND p."year" = ${year}
+        AND p."status" NOT IN ('DRAFT', 'CANCELLED') AND p."number" ~ '^[0-9]+$'
+        AND NOT EXISTS (SELECT 1 FROM "WorkPermitNumberReservation" r
+          WHERE r."permitId" = p."id" AND r."status" = 'OBSERVED')
       UNION ALL
       SELECT "number" FROM "WorkPermitNumberReservation"
       WHERE "kind" = ${kind} AND "year" = ${year}
-        AND "status" IN ('RESERVED', 'ISSUED', 'CANCELLED', 'OBSERVED', 'REVIEW')
+        AND "status" IN ('RESERVED', 'ISSUED', 'CANCELLED', 'OBSERVED_CONFIRMED', 'REVIEW')
         AND NOT (
           ${ignoreCancelledNumber}::text IS NOT NULL
           AND "status" = 'CANCELLED'
@@ -74,6 +77,23 @@ export async function permitNumberHighWater(
     ) AS used_numbers
   `;
   return rows[0]?.highest ?? "0";
+}
+
+/** Bỏ qua các số đang chờ đối chiếu liên tiếp; không nhảy lên số bất thường ở xa. */
+export async function nextPermitNumber(tx: Tx, kind: PermitKind, year: number, baseline: string, highest: string) {
+  const floor = BigInt(baseline) > BigInt(highest) ? BigInt(baseline) : BigInt(highest);
+  const occupied = await tx.$queryRaw<Array<{ number: string }>>`
+    SELECT DISTINCT "number"::numeric AS value, "number"::numeric::text AS "number"
+    FROM "WorkPermitNumberReservation"
+    WHERE "kind" = ${kind} AND "year" = ${year} AND "status" = 'OBSERVED'
+      AND "number" ~ '^[0-9]+$' AND "number"::numeric > ${floor.toString()}::numeric
+    ORDER BY value`;
+  let next = floor + BigInt(1);
+  for (const row of occupied) {
+    if (BigInt(row.number) !== next) break;
+    next += BigInt(1);
+  }
+  return next.toString();
 }
 
 export async function activePermitNumberExists(tx: Tx, kind: PermitKind, year: number, number: string, excludePermitId?: string) {
@@ -97,14 +117,14 @@ export async function reservePermitNumber(tx: Tx, input: {
 }) {
   const baseline = await lockPermitNumberScope(tx, input.kind, input.year);
   const highest = await permitNumberHighWater(tx, input.kind, input.year);
-  const number = input.number !== undefined && input.number !== null && input.number !== "" ? canonicalPermitNumber(input.number) : ((BigInt(baseline) > BigInt(highest) ? BigInt(baseline) : BigInt(highest)) + BigInt(1)).toString();
+  const number = input.number !== undefined && input.number !== null && input.number !== "" ? canonicalPermitNumber(input.number) : await nextPermitNumber(tx, input.kind, input.year, baseline, highest);
   if (number.length > 80) throw fail("Dãy số PCT đã vượt quá giới hạn", 409);
   if (await activePermitNumberExists(tx, input.kind, input.year, number)) {
     throw fail("Số PCT đang được sử dụng trong loại và năm này.", 409);
   }
   await assertNumberNotCancelled(tx, input.kind, input.year, number);
   const held = await tx.workPermitNumberReservation.findFirst({ where: {
-    kind: input.kind, year: input.year, number, status: { in: ["RESERVED", "ISSUED", "CANCELLED", OBSERVED_NUMBER_STATUS, "REVIEW"] },
+    kind: input.kind, year: input.year, number, status: { in: ["RESERVED", "ISSUED", "CANCELLED", OBSERVED_NUMBER_STATUS, CONFIRMED_NUMBER_STATUS, "REVIEW"] },
   } });
   if (held) {
     if (held.status === "RESERVED" && held.ownerId === input.ownerId && (!input.nkvhPctId || !held.nkvhPctId || held.nkvhPctId === input.nkvhPctId)) return held;
@@ -142,7 +162,7 @@ export async function consumePermitNumberReservation(tx: Tx, input: {
     await assertNumberNotCancelled(tx, input.kind, input.year, target);
     if (await activePermitNumberExists(tx, input.kind, input.year, target, input.permitId)) throw fail("Số đích đã thuộc phiếu khác.", 409);
     const held = await tx.workPermitNumberReservation.findFirst({ where: {
-      kind: input.kind, year: input.year, number: target, status: { in: ["RESERVED", "ISSUED", OBSERVED_NUMBER_STATUS, "REVIEW"] },
+      kind: input.kind, year: input.year, number: target, status: { in: ["RESERVED", "ISSUED", OBSERVED_NUMBER_STATUS, CONFIRMED_NUMBER_STATUS, "REVIEW"] },
     } });
     if (held && held.status !== "RESERVED") throw fail("Số đích đã được ghi nhận sử dụng. Cần đối chiếu phiếu liên quan.", 409);
     await releaseUnusedReservation(tx, reservation, input.userId, input.userName, "Người cấp xác nhận chưa dùng số ban đầu khi đổi số");

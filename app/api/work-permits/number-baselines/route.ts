@@ -1,7 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { audit, fail, ok, requireRole, requireUser } from "@/lib/api";
 import { workPermitPrisma as prisma } from "@/lib/server/work-permit-prisma";
-import { activePermitNumberExists, canonicalPermitNumber, permitNumberHighWater, permitNumberScope } from "@/lib/server/work-permit-number-reservations";
+import { activePermitNumberExists, canonicalPermitNumber, nextPermitNumber, permitNumberHighWater, permitNumberScope } from "@/lib/server/work-permit-number-reservations";
 import { permitBody, permitHandle } from "@/lib/server/work-permits";
 import { PERMIT_KINDS, type PermitKind } from "@/lib/work-permits";
 
@@ -31,12 +31,12 @@ export async function GET(req: Request) {
           GROUP BY "number"::numeric HAVING count(*) > 1
         `),
       ]);
-      const floor = baseline && BigInt(baseline.number) > BigInt(highest) ? BigInt(baseline.number) : BigInt(highest);
+      const suggested = await nextPermitNumber(tx, kind, year, baseline?.number ?? "0", highest);
       const highestCancelled = highestCancelledRows[0]?.number ?? null;
       const withoutCancelled = highestCancelled ? await permitNumberHighWater(tx, kind, year, { ignoreCancelledNumber: highestCancelled }) : highest;
       const reuseFloor = baseline && BigInt(baseline.number) > BigInt(withoutCancelled) ? BigInt(baseline.number) : BigInt(withoutCancelled);
       const reusableCancelledNumber = highestCancelled && BigInt(highestCancelled) === reuseFloor + BigInt(1) ? highestCancelled : null;
-      return { kind, year, baseline, highest, suggested: baseline ? (floor + BigInt(1)).toString() : null,
+      return { kind, year, baseline, highest, suggested: baseline ? suggested : null,
         reusableCancelledNumber, history, legacyDuplicates };
     })));
     return ok(rows);
@@ -60,9 +60,10 @@ export async function PUT(req: Request) {
       const previous = await tx.workPermitNumberBaseline.findUnique({ where: { kind_year: { kind, year } } });
       if (previous && body.version !== previous.version) throw fail("Mốc sổ giấy đã được người khác sửa. Vui lòng tải lại.", 409);
       const active = await tx.$queryRaw<Array<{ highest: string | null }>>(Prisma.sql`
-        SELECT max("number"::numeric)::text AS "highest" FROM "WorkPermit"
-        WHERE "kind" = ${kind} AND "year" = ${year}
-          AND "status" NOT IN ('DRAFT', 'CANCELLED') AND "number" ~ '^[0-9]+$'
+        SELECT max(p."number"::numeric)::text AS "highest" FROM "WorkPermit" p
+        WHERE p."kind" = ${kind} AND p."year" = ${year}
+          AND p."status" NOT IN ('DRAFT', 'CANCELLED') AND p."number" ~ '^[0-9]+$'
+          AND NOT EXISTS (SELECT 1 FROM "WorkPermitNumberReservation" r WHERE r."permitId" = p."id" AND r."status" = 'OBSERVED')
       `);
       if (BigInt(number) < BigInt(active[0]?.highest ?? "0")) throw fail("Mốc không được thấp hơn số PCT chưa hủy cao nhất trên website", 409);
       let releasedCount = 0;

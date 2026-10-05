@@ -35,6 +35,8 @@ export type OverhaulItemUsage = { permitId: string; number: string; status: stri
 /** Hạng mục gợi ý do API trả về. */
 export type OverhaulItemOption = OverhaulItemSnapshot & {
   id: string;
+  /** Loại PCT của tab nguồn (MECHANICAL / ELECTRICAL) — picker hiện cả hai loại, đánh dấu loại khác phiếu. */
+  kind: string;
   positionTitle: string;
   percent: string;
   status: string;

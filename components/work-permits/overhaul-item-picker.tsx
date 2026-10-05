@@ -74,13 +74,18 @@ function OverhaulItemPicker({ form, selected, onClose, onConfirm }: {
   const groups = useMemo(() => {
     const term = normalizeText(search.trim());
     const rows = (data?.items ?? []).filter(item => !term || normalizeText(`${item.code} ${item.device} ${item.content}`).includes(term));
-    const byDevice = new Map<string, OverhaulItemOption[]>();
+    // Nhóm theo loại + thiết bị: hạng mục cùng loại với phiếu lên trước, loại kia (Cơ ↔ Điện) xếp sau và có nhãn.
+    const byDevice = new Map<string, { device: string; other: boolean; rows: OverhaulItemOption[] }>();
     for (const item of rows) {
       const device = item.device || "Chưa ghi thiết bị";
-      byDevice.set(device, [...(byDevice.get(device) ?? []), item]);
+      const other = item.kind !== form.kind;
+      const key = `${other ? 1 : 0}\u0000${item.kind}\u0000${device}`;
+      const group = byDevice.get(key) ?? { device, other, rows: [] };
+      group.rows.push(item);
+      byDevice.set(key, group);
     }
-    return [...byDevice.entries()].sort((a, b) => compareOverhaulCodes(a[1][0].code, b[1][0].code));
-  }, [data, search]);
+    return [...byDevice.entries()].sort((a, b) => Number(a[1].other) - Number(b[1].other) || compareOverhaulCodes(a[1].rows[0].code, b[1].rows[0].code));
+  }, [data, search, form.kind]);
 
   const toggle = (item: OverhaulItemOption) => {
     const key = keyOf(item);
@@ -115,8 +120,9 @@ function OverhaulItemPicker({ form, selected, onClose, onConfirm }: {
         <div className="pr-8">
           <DialogTitle>Chọn hạng mục đại tu</DialogTitle>
           <DialogDescription className="mt-1">
-            {`PCT ${form.kind === "MECHANICAL" ? "Cơ – Nhiệt – Hóa" : "Điện"}`}
+            {`PCT ${kindLabel(form.kind)}`}
             {form.position ? ` · ${form.position}` : " · mọi cương vị"}
+            {` · hiện cả hạng mục ${kindLabel(form.kind === "MECHANICAL" ? "ELECTRICAL" : "MECHANICAL")} (xếp sau)`}
           </DialogDescription>
         </div>
         <label className="block space-y-1 text-xs">
@@ -147,8 +153,11 @@ function OverhaulItemPicker({ form, selected, onClose, onConfirm }: {
         {company && query.isPending && <div className="flex justify-center py-10"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>}
         {query.isError && <p role="alert" className="px-2 py-6 text-center text-sm text-red-700">{query.error.message}</p>}
         {empty && <p className="px-4 py-10 text-center text-sm text-muted-foreground">{emptyMessage(data?.reason ?? null, data?.contractorCode ?? null, Boolean(search.trim()))}</p>}
-        {groups.map(([device, rows]) => <section key={device} className="py-1">
-          <h3 className="sticky top-0 z-10 bg-background/95 px-2 py-1.5 text-xs font-bold uppercase tracking-wide text-slate-600 backdrop-blur dark:text-muted-foreground">{device}</h3>
+        {groups.map(([groupKey, { device, other, rows }]) => <section key={groupKey} className="py-1">
+          <h3 className="sticky top-0 z-10 flex items-center gap-2 bg-background/95 px-2 py-1.5 text-xs font-bold uppercase tracking-wide text-slate-600 backdrop-blur dark:text-muted-foreground">
+            {other && <span className="shrink-0 rounded bg-amber-100 px-1.5 py-0.5 text-[11px] normal-case tracking-normal text-amber-800 dark:bg-amber-950/50 dark:text-amber-200">{kindLabel(rows[0].kind)}</span>}
+            <span className="min-w-0">{device}</span>
+          </h3>
           {rows.map(item => {
             const key = keyOf(item);
             const checked = picked.has(key);
@@ -190,11 +199,13 @@ function OverhaulItemPicker({ form, selected, onClose, onConfirm }: {
   </Dialog>;
 }
 
+const kindLabel = (kind: string) => kind === "MECHANICAL" ? "Cơ – Nhiệt – Hóa" : "Điện";
+
 function emptyMessage(reason: "company" | "companyCode" | null, contractorCode: string | null, searching: boolean) {
   if (reason === "company") return "Chọn đơn vị công tác để xem hạng mục.";
   if (reason === "companyCode") return "Đơn vị này chưa khai mã viết tắt (vd IDC) trong danh bạ nhà thầu — cột “Nhà thầu” trên file tiến độ khớp theo mã đó.";
   if (searching) return "Không có hạng mục khớp từ khoá.";
-  return `Chưa có hạng mục nào ghi nhà thầu ${contractorCode ?? ""} cho loại phiếu và cương vị này. Kiểm tra cột “Nhà thầu” trên file tiến độ, hoặc bấm Đồng bộ.`;
+  return `Chưa có hạng mục nào ghi nhà thầu ${contractorCode ?? ""} cho cương vị này. Kiểm tra cột “Nhà thầu” trên file tiến độ, hoặc bấm Đồng bộ.`;
 }
 
 function syncSummary(result: OverhaulSyncResult) {

@@ -8,5 +8,5 @@ CREATE UNIQUE INDEX IF NOT EXISTS "WorkPermitNumberReservation_nkvh_pending_key"
   ON "WorkPermitNumberReservation" ("kind", "nkvhPctId") WHERE "status" = 'RESERVED' AND "nkvhPctId" IS NOT NULL;
 DROP INDEX IF EXISTS "WorkPermitNumberReservation_active_number_key";
 CREATE UNIQUE INDEX "WorkPermitNumberReservation_active_number_key"
-  ON "WorkPermitNumberReservation" ("kind", "year", "number") WHERE "status" IN ('RESERVED', 'ISSUED', 'OBSERVED', 'REVIEW');
+  ON "WorkPermitNumberReservation" ("kind", "year", "number") WHERE "status" IN ('RESERVED', 'ISSUED', 'OBSERVED', 'OBSERVED_CONFIRMED', 'REVIEW');
 COMMIT;

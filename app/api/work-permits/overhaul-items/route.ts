@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 /**
  * GET /api/work-permits/overhaul-items?kind=&company=&position=&excludePermitId=
- * Hạng mục đại tu gợi ý cho form cấp PCT nhà thầu · Đại tu: lọc theo loại PCT (Cơ / Điện), mã nhà thầu của đơn vị
+ * Hạng mục đại tu gợi ý cho form cấp PCT nhà thầu · Đại tu: cả Cơ lẫn Điện (loại PCT của phiếu xếp trước), mã nhà thầu của đơn vị
  * công tác và cương vị (bỏ trống = mọi cương vị). Dữ liệu đã đồng bộ từ Google Sheets (xem …/sync).
  */
 export async function GET(req: Request) {

@@ -105,6 +105,21 @@ export function usePermitNumberSuggestion(kind: string, year: number, enabled = 
     queryFn: () => apiGet<PermitNumberSuggestion>(`/api/work-permits/number-suggestion?${query}`),
   });
 }
+
+export interface PermitNumberReviewEntry {
+  id: string; number: string; status: string; nkvhPctId: string | null; permitId: string | null; updatedAt: string; ownerName: string;
+}
+export function usePermitNumberReview(kind: PermitKind, year: number) {
+  return useQuery({ queryKey: ["work-permit-number-review", kind, year], refetchInterval: 15_000,
+    queryFn: () => apiGet<{ highest: string; suggested: string | null; total: number; entries: PermitNumberReviewEntry[] }>(`/api/work-permits/number-review?kind=${kind}&year=${year}`) });
+}
+export function useReviewPermitNumber() {
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: (body: { id: string; action: "confirm" | "ignore"; expectedStatus: string; expectedUpdatedAt: string; reason: string; sourceChecked: boolean }) =>
+    apiMutate(`/api/work-permits/number-review`, "POST", body), onSuccess: () => {
+      for (const key of ["work-permit-number-review", "work-permit-number-suggestion", "work-permit-number-reservations", "work-permit-number-baselines", "work-permits"]) qc.invalidateQueries({ queryKey: [key] });
+    } });
+}
 export function usePermitNumberReservations(enabled = true) {
   return useQuery({ queryKey: ["work-permit-number-reservations"], enabled, refetchInterval: 5000,
     queryFn: () => apiGet<PermitNumberReservation[]>("/api/work-permits/number-reservations") });

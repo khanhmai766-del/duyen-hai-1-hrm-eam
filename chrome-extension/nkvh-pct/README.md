@@ -31,7 +31,14 @@ thủ công sau khi xác nhận NKVH đã lưu. Cần kiểm tra thông báo th�
   ngăn các đường tạo và gắn link sinh hồ sơ trùng.
 - Số đích đã thuộc phiếu khác (giấy/điện tử/phiếu hủy): báo xung đột, không ghi đè.
 - Số gõ tay đã thấy trên danh sách NKVH được ghi OBSERVED, kể cả số thấp hơn hoặc vượt dãy.
-  OBSERVED không được tiếp tục cấp giấy hoặc hủy như lượt chưa dùng.
+  OBSERVED chặn cấp trùng nhưng chưa nâng dãy. Lấy số tiếp theo bỏ qua các số OBSERVED liền kề,
+  không nhảy lên một số bất thường ở xa. Các OBSERVED cũ cũng áp dụng quy tắc này.
+- Phiếu NKVH đã lưu mang số nhảy cóc vẫn đồng bộ đúng số/nội dung/trạng thái; lượt số chờ người
+  cấp xác nhận nâng dãy. Mục **Đối chiếu số NKVH** trên website cho người có quyền cấp phiếu:
+  **Xác nhận nâng dãy** hoặc **Bỏ ghi nhận sai**, bắt buộc lý do và xác nhận đã đối chiếu nguồn.
+  Không được bỏ số còn hồ sơ phiếu (kể cả đã hủy); xử lý số nguồn và đồng bộ lại trước.
+  Bỏ ghi nhận lưu OBSERVED_IGNORED và lịch sử; quét lặp cùng nguồn không tái tạo ghi nhận sai.
+- Không đổi phiên bản/cài lại tiện ích để dùng phần đối chiếu: v1.1.0 gửi cùng API như trước.
 - Số cũ của hồ sơ đã đổi số theo NKVH chuyển REVIEW. Không tự giải phóng; người giữ đối chiếu
   và xác nhận chưa sử dụng trước khi giải phóng.
 - Hủy lượt RESERVED/REVIEW chưa dùng → RELEASED và lưu lịch sử. Hủy phiếu đã cấp → CANCELLED;
@@ -56,6 +63,8 @@ thủ công sau khi xác nhận NKVH đã lưu. Cần kiểm tra thông báo th�
 ## Cấu trúc và phát hành
 
 Cần máy chủ mới và SQL `prisma/manual/work-permit-nkvh-saved-sync.sql` trước khi phát hành tiện ích.
+Bản sửa đối chiếu số cần thêm `prisma/manual/work-permit-nkvh-number-review.sql` để mở rộng index
+chống trùng cho OBSERVED_CONFIRMED; không sửa dữ liệu cũ hoặc đổi phiên bản tiện ích.
 SQL chỉ thêm cột/index, không sửa dữ liệu. Unique có thể từ chối nếu dữ liệu cũ trùng; dùng script
 SELECT `npx tsx scripts/check/work-permit-number-conflicts.ts` để đối chiếu trước, không tự gộp.
 Không chạy db:push để áp toàn bộ schema hoặc tự xóa hồ sơ trùng.
@@ -79,6 +88,9 @@ service worker gọi website với cookie đăng nhập do trình duyệt tự g
   đọc dữ liệu đã lưu, lưu yêu cầu khi mất mạng và gửi lại; không truy cập NKVH thật/DB.
 - `npx tsx scripts/verify/thu-nkvh-claim.ts`: DB localhost đã có cấu trúc mới,
   một giao dịch luôn hoàn tác. Không chạy trên production.
+- `npx tsx scripts/verify/thu-nkvh-number-review.ts`: kiểm tra Cơ/Điện, index mới, số nhảy cóc,
+  xác nhận/bỏ số và đồng bộ sửa số trong giao dịch hoàn tác cả DDL lẫn dữ liệu, chỉ localhost.
+- `npm run verify:ui -- --preset=pct-doi-chieu-so --widths=360,1280`: chụp mục đối chiếu và hai hộp xác nhận, chỉ giả lập.
 - `npm run verify:ui -- --preset=pct-cap-so`: biểu mẫu cấp giấy giả lập, không cấp phiếu thật.
 
 Trước bỏ sổ ghi số thủ công: đối chiếu dữ liệu cũ, kiểm thử đồng thời trên PostgreSQL và

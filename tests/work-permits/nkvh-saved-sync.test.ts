@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { claimNkvhPermit, importExistingNkvhPermit, parseNkvhPage, parseExistingNkvhPermitNumber } from "../../lib/server/work-permit-nkvh-claim";
 import { consumePermitNumberReservation, reservePermitNumber } from "../../lib/server/work-permit-number-reservations";
+import { reviewObservedNumber } from "../../lib/server/work-permit-number-review";
 import { formatPermitNumber } from "../../lib/work-permits";
 
 const kind = "MECHANICAL" as const;
@@ -23,6 +24,7 @@ function fixture() {
     return {
       findFirst: async ({ where }: { where: Record<string, unknown> }) => rows.find(row => match(row, where)) ?? null,
       findMany: async ({ where }: { where: Record<string, unknown> }) => rows.filter(row => match(row, where)),
+      findUniqueOrThrow: async ({ where }: { where: Record<string, unknown> }) => { const row = rows.find(row => match(row, where)); assert.ok(row); return { ...row }; },
       findUnique: async ({ where }: { where: Record<string, unknown> }) => rows.find(row => match(row, where)) ?? null,
       create: async ({ data }: { data: Record<string, unknown> }) => {
         const row = { id: `id-${++sequence}`, version: 1, status: "RESERVED", nkvhPctId: null, permitId: null, nkvhNumber: null,
@@ -48,6 +50,7 @@ function fixture() {
       }
       return [];
     },
+    workPermitNumberBaseline: { findUnique: async () => ({ number: "4450" }) },
     workPermit: table(permits), workPermitNumberReservation: table(reservations),
     workPermitHistory: { create: async ({ data }: { data: Record<string, unknown> }) => { history.push(data); return data; } },
     workPermitNumberReservationHistory: { create: async ({ data }: { data: Record<string, unknown> }) => { history.push(data); return data; } },
@@ -146,4 +149,59 @@ test("hai người lấy số đồng thời được tuần tự hóa qua khóa
   const rows = await Promise.all([take("Trưởng ca"), take("Trưởng kíp")]);
   assert.deepEqual(rows.map(row => row.number), ["4455", "4456"]);
   assert.equal(f.reservations.length, 2);
+});
+
+
+test("số NKVH nhảy cóc giữ nguyên hồ sơ nhưng chờ xác nhận nâng dãy", async () => {
+  const f = fixture();
+  const first = await importExistingNkvhPermit(f.tx, user, input("4836"), new Date("2026-10-05"));
+  assert.equal(first.sequencePending, true); assert.equal(first.number, "4836");
+  assert.equal(f.permits[0].status, "ISSUED"); assert.equal(f.permits[0].nkvhNumber, "4836/2026/VH1-NĐDH");
+  assert.equal(f.reservations[0].status, "OBSERVED"); assert.equal(f.reservations[0].permitId, first.id);
+  const again = await importExistingNkvhPermit(f.tx, user, input("4836"), new Date("2026-10-05"));
+  assert.equal(again.sequencePending, true); assert.equal(f.permits.length, 1);
+  const corrected = await importExistingNkvhPermit(f.tx, user, input("4455"), new Date("2026-10-05"));
+  assert.equal(corrected.sequencePending, false); assert.equal(corrected.id, first.id);
+  assert.equal(f.reservations[0].status, "OBSERVED"); assert.equal(f.reservations[0].permitId, null);
+});
+
+const reviewInput = (row: Record<string, unknown>, action: "confirm" | "ignore") => ({
+  id: String(row.id), action, expectedStatus: String(row.status), expectedUpdatedAt: (row.updatedAt as Date).toISOString(),
+  reason: "Đã đối chiếu phiếu nguồn NKVH", sourceChecked: true,
+});
+test("người cấp khác được xác nhận số NKVH, không cần admin hay người giữ ban đầu", async () => {
+  const f = fixture();
+  const row = { id: "seen", kind, year: 2026, number: "4836", status: "OBSERVED", updatedAt: new Date("2026-10-05"), ownerId: "other", permitId: null };
+  f.reservations.push(row);
+  const saved = await reviewObservedNumber(f.tx, user, reviewInput(row, "confirm"));
+  assert.equal(saved.status, "OBSERVED_CONFIRMED"); assert.ok(f.history.some(item => item.actorId === user.id));
+});
+test("bỏ ghi nhận sai giữ lịch sử, số đã xác nhận vẫn có thể đối chiếu lại", async () => {
+  const f = fixture();
+  const row = { id: "seen", kind, year: 2026, number: "4836", status: "OBSERVED_CONFIRMED", updatedAt: new Date("2026-10-05"), permitId: null };
+  f.reservations.push(row);
+  const saved = await reviewObservedNumber(f.tx, user, reviewInput(row, "ignore"));
+  assert.equal(saved.status, "OBSERVED_IGNORED"); assert.equal(f.reservations.length, 1); assert.equal(f.history.length, 1);
+});
+test("không bỏ số còn phiếu đã cấp, kể cả phiếu đã hủy", async () => {
+  for (const status of ["ISSUED", "CANCELLED"]) {
+    const f = fixture();
+    const row = { id: "seen", kind, year: 2026, number: "4836", status: "OBSERVED", updatedAt: new Date("2026-10-05"), permitId: null };
+    f.reservations.push(row); f.permits.push({ id: "existing", kind, year: 2026, number: "4836", status });
+    await rejected(() => reviewObservedNumber(f.tx, user, reviewInput(row, "ignore")), /còn hồ sơ/);
+    assert.equal(row.status, "OBSERVED"); assert.equal(f.history.length, 0);
+  }
+});
+test("phiếu đã đồng bộ được xác nhận nâng dãy mà không đổi trạng thái phiếu", async () => {
+  const f = fixture(); await importExistingNkvhPermit(f.tx, user, input("4836"));
+  const row = f.reservations[0];
+  const saved = await reviewObservedNumber(f.tx, user, reviewInput(row, "confirm"));
+  assert.equal(saved.status, "ISSUED"); assert.equal(f.permits[0].status, "ISSUED");
+});
+test("biểu mẫu đối chiếu cũ bị chặn sau khi trạng thái thay đổi", async () => {
+  const f = fixture();
+  const row = { id: "seen", kind, year: 2026, number: "4836", status: "OBSERVED", updatedAt: new Date("2026-10-05"), permitId: null };
+  f.reservations.push(row); const input = reviewInput(row, "ignore"); row.status = "ISSUED";
+  await rejected(() => reviewObservedNumber(f.tx, user, input), /vừa được cập nhật/);
+  assert.equal(f.history.length, 0);
 });

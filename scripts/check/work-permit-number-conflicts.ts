@@ -9,7 +9,7 @@ async function main() {
     FROM "WorkPermit" WHERE "status" NOT IN ('DRAFT', 'CANCELLED') AND "number" ~ '^[0-9]+$'
     GROUP BY "kind", "year", "number"::numeric HAVING count(*) > 1`;
   const held = await prisma.$queryRaw`SELECT "kind", "year", "number"::numeric::text AS "number", array_agg("id") AS "ids"
-    FROM "WorkPermitNumberReservation" WHERE "status" IN ('RESERVED', 'ISSUED', 'OBSERVED', 'REVIEW') AND "number" ~ '^[0-9]+$'
+    FROM "WorkPermitNumberReservation" WHERE "status" IN ('RESERVED', 'ISSUED', 'OBSERVED', 'OBSERVED_CONFIRMED', 'REVIEW') AND "number" ~ '^[0-9]+$'
     GROUP BY "kind", "year", "number"::numeric HAVING count(*) > 1`;
   console.log(JSON.stringify({ duplicateLinks: links, duplicateNumbers: numbers, duplicateReservations: held }, null, 2));
 }

@@ -6,7 +6,7 @@ import { positionCodeOf, positionLabelOf } from "@/lib/position-catalog";
 import { DEFAULT_INTERNAL_TEAM_NAME } from "@/lib/work-permit-source-fields";
 import { CONTRACTOR_PERMIT_TRANSITIONS, formatPermitNumber, PERMIT_DISCIPLINES, PERMIT_KINDS, PERMIT_TRANSITIONS, PERMIT_UNITS, type PermitKind, type PermitStatus } from "@/lib/work-permits";
 import { parsePermit, permitSnapshot } from "@/lib/server/work-permits";
-import { activePermitNumberExists, assertNumberNotCancelled, lockNkvhPermit, canonicalPermitNumber, lockPermitNumberScope, OBSERVED_NUMBER_STATUS, reservePermitNumber } from "@/lib/server/work-permit-number-reservations";
+import { activePermitNumberExists, assertNumberNotCancelled, lockNkvhPermit, canonicalPermitNumber, lockPermitNumberScope, OBSERVED_NUMBER_STATUS, CONFIRMED_NUMBER_STATUS, IGNORED_NUMBER_STATUS, permitNumberHighWater, nextPermitNumber, reservePermitNumber } from "@/lib/server/work-permit-number-reservations";
 
 /** Giữ số trước khi cấp; nhận số/nội dung/trạng thái chính thức sau khi NKVH lưu. */
 const CLASSIFICATIONS: Record<string, "PLANNED" | "OFF_PLAN" | "UNEXPECTED"> = {
@@ -198,7 +198,7 @@ export async function claimNkvhPermit(tx: Tx, user: Actor, input: { kind: Permit
   if (existing) return { ...nkvhClaimResult(existing, false), reservationId: null };
   const { year } = vnParts(now);
   await lockPermitNumberScope(tx, kind, year);
-  const observed = await tx.workPermitNumberReservation.findFirst({ where: { kind, nkvhPctId, status: OBSERVED_NUMBER_STATUS } });
+  const observed = await tx.workPermitNumberReservation.findFirst({ where: { kind, nkvhPctId, status: { in: [OBSERVED_NUMBER_STATUS, CONFIRMED_NUMBER_STATUS] } } });
   if (observed) throw fail("Phiếu đã có số được ghi nhận trên NKVH. Hãy đồng bộ phiếu đã lưu, không lấy số khác.", 409);
   const held = await tx.workPermitNumberReservation.findFirst({ where: { kind, nkvhPctId, status: "RESERVED" } });
   const reservation = held ?? await reservePermitNumber(tx, { kind, year, teamType: "INTERNAL", ownerId: user.id, ownerName: user.name ?? "", nkvhPctId });
@@ -247,8 +247,15 @@ export async function importExistingNkvhPermit(tx: Tx, user: Actor, input: {
   if (activeOwners.length) throw fail(`Số ${officialNumber} đã thuộc hồ sơ khác (${activeOwners[0].format === "PAPER" ? "PCT giấy đã cấp" : "PCT điện tử"}), người cấp: ${activeOwners[0].issuerName || "chưa rõ"}; công việc: ${text(activeOwners[0].content, 180) || "chưa rõ"}. Mở số này trên sổ để đối chiếu, không tự ghi đè.`, 409);
   if (!before || before.number !== parsed.number) await assertNumberNotCancelled(tx, kind, parsed.year, parsed.number);
   let reservation = await tx.workPermitNumberReservation.findFirst({ where: { kind, year: parsed.year, number: parsed.number,
-    status: { in: ["RESERVED", "ISSUED", "CANCELLED", OBSERVED_NUMBER_STATUS, "REVIEW"] } } });
+    status: { in: ["RESERVED", "ISSUED", "CANCELLED", OBSERVED_NUMBER_STATUS, CONFIRMED_NUMBER_STATUS, "REVIEW"] } } });
   if (reservation && ["ISSUED", "CANCELLED", "REVIEW"].includes(reservation.status) && reservation.permitId !== before?.id) throw fail("Số đã có lượt cấp hoặc đã hủy. Cần đối chiếu hồ sơ liên quan.", 409);
+  const baseline = await tx.workPermitNumberBaseline.findUnique({ where: { kind_year: { kind, year: parsed.year } } });
+  const highest = await permitNumberHighWater(tx, kind, parsed.year);
+  const expectedNext = await nextPermitNumber(tx, kind, parsed.year, baseline?.number ?? "0", highest);
+  // Một số mới nhảy cóc chưa được giữ/xác nhận không tự nâng dãy, kể cả đã có phiếu thật.
+  // OBSERVED đã gắn phiếu tiếp tục chờ xác nhận khi đồng bộ lặp.
+  const sequencePending = (reservation?.status === OBSERVED_NUMBER_STATUS && Boolean(reservation.permitId))
+    || ((!reservation || reservation.status === OBSERVED_NUMBER_STATUS) && BigInt(parsed.number) > BigInt(expectedNext));
   const position = nkvhPosition(page, input.position);
   const unit = typeof input.unit === "string" && Object.hasOwn(PERMIT_UNITS, input.unit) ? input.unit : before?.unit ?? "UNKNOWN";
   const status = (sourceStatus === "ISSUED" && before && ["ACTIVE", "WAITING", "PAUSED", "CLOSED", "CANCELLED"].includes(before.status) ? before.status : sourceStatus) as PermitStatus;
@@ -267,21 +274,26 @@ export async function importExistingNkvhPermit(tx: Tx, user: Actor, input: {
   const oldReservation = before ? await tx.workPermitNumberReservation.findUnique({ where: { permitId: before.id } }) : null;
   // Số cũ từng ghi cấp: giữ dấu vết REVIEW để không tự cấp lại cho phiếu khác.
   if (oldReservation && oldReservation.number !== parsed.number) {
-    await tx.workPermitNumberReservation.update({ where: { id: oldReservation.id }, data: { status: "REVIEW", permitId: null } });
-    await tx.workPermitNumberReservationHistory.create({ data: { reservationId: oldReservation.id, action: "REVIEW",
+    const oldStatus = oldReservation.status === OBSERVED_NUMBER_STATUS ? OBSERVED_NUMBER_STATUS : "REVIEW";
+    await tx.workPermitNumberReservation.update({ where: { id: oldReservation.id }, data: { status: oldStatus, permitId: null } });
+    await tx.workPermitNumberReservationHistory.create({ data: { reservationId: oldReservation.id, action: oldStatus,
       actorId: user.id, actorName: user.name ?? "", note: `Đổi sang ${officialNumber} theo NKVH; số cũ cần đối chiếu trước khi giải phóng` } });
   }
   const changed = !before || Object.entries({ ...data, nkvhNumber: officialNumber, status }).some(([key, value]) =>
     JSON.stringify(permitSnapshot(value)) !== JSON.stringify(permitSnapshot((before as unknown as Record<string, unknown>)[key])));
   const row = before ? changed ? await tx.workPermit.update({ where: { id: before.id }, data: { ...data, nkvhNumber: officialNumber, status, version: { increment: 1 } } }) : before
     : await tx.workPermit.create({ data: { ...data, nkvhNumber: officialNumber, status, createdById: user.id, createdByName: user.name ?? "" } });
-  const reservationStatus = status === "CANCELLED" ? "CANCELLED" : "ISSUED";
+  const reservationStatus = sequencePending ? OBSERVED_NUMBER_STATUS : status === "CANCELLED" ? "CANCELLED" : "ISSUED";
   if (!reservation) reservation = await tx.workPermitNumberReservation.create({ data: { kind, year: parsed.year, number: parsed.number,
     teamType: "INTERNAL", ownerId: user.id, ownerName: user.name ?? "", status: reservationStatus, nkvhPctId, permitId: row.id, issuedAt: now,
     ...(status === "CANCELLED" ? { cancelledAt: now, cancelReason: fields.statusReason, cancelledById: user.id } : {}) } });
-  else await tx.workPermitNumberReservation.update({ where: { id: reservation.id }, data: { status: reservationStatus, permitId: row.id,
+  else if (reservation.status !== reservationStatus || reservation.permitId !== row.id || reservation.nkvhPctId !== nkvhPctId
+    || reservation.teamType !== "INTERNAL" || !reservation.issuedAt
+    || (status === "CANCELLED" && (!reservation.cancelledAt || reservation.cancelReason !== fields.statusReason))) {
+    await tx.workPermitNumberReservation.update({ where: { id: reservation.id }, data: { status: reservationStatus, permitId: row.id,
     nkvhPctId, teamType: "INTERNAL", issuedAt: reservation.issuedAt ?? now,
     ...(status === "CANCELLED" ? { cancelledAt: now, cancelReason: fields.statusReason, cancelledById: user.id } : {}) } });
+  }
   if (changed) {
     await tx.workPermitHistory.create({ data: { permitId: row.id, actorId: user.id, actorName: user.name ?? "",
       action: "Đồng bộ số, nội dung và trạng thái đã lưu trên NKVH", ...(before ? { before: permitSnapshot(before) } : {}), after: permitSnapshot(row) } });
@@ -290,7 +302,7 @@ export async function importExistingNkvhPermit(tx: Tx, user: Actor, input: {
       note: `Nhận phiếu đã lưu trên NKVH${reservation.ownerId !== user.id ? `; hoàn tất lượt giữ của ${reservation.ownerName}` : ""}` } });
   }
   const pending = await tx.workPermitNumberReservation.findMany({ where: { kind, nkvhPctId, status: { in: ["RESERVED", "REVIEW"] }, permitId: null }, select: { id: true, number: true, year: true } });
-  return { ...nkvhClaimResult(row, !before), changed, pendingReservations: pending };
+  return { ...nkvhClaimResult(row, !before), changed, pendingReservations: pending, sequencePending };
 }
 
 function tryParsePxvh1Number(value: unknown) {
@@ -314,30 +326,38 @@ export async function observeNkvhNumbers(tx: Tx, user: Actor, input: { kind: Per
   if (!pctIds.size) return result;
 
   await lockPermitNumberScope(tx, input.kind, year);
+  const baseline = await tx.workPermitNumberBaseline.findUnique({ where: { kind_year: { kind: input.kind, year } } });
+  const highest = await permitNumberHighWater(tx, input.kind, year);
+  const expected = await nextPermitNumber(tx, input.kind, year, baseline?.number ?? "0", highest);
   const numbers = [...pctIds.keys()].map(BigInt).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
   for (const value of numbers) {
     const number = value.toString();
     if (await activePermitNumberExists(tx, input.kind, year, number)) continue;
     const held = await tx.workPermitNumberReservation.findFirst({ where: { kind: input.kind, year, number,
-      status: { in: ["RESERVED", "ISSUED", "CANCELLED", OBSERVED_NUMBER_STATUS, "REVIEW"] } } });
+      status: { in: ["RESERVED", "ISSUED", "CANCELLED", OBSERVED_NUMBER_STATUS, CONFIRMED_NUMBER_STATUS, "REVIEW"] } } });
     if (held) {
       if (held.status === "RESERVED") {
-        await tx.workPermitNumberReservation.update({ where: { id: held.id }, data: { status: OBSERVED_NUMBER_STATUS,
+        await tx.workPermitNumberReservation.update({ where: { id: held.id }, data: { status: CONFIRMED_NUMBER_STATUS,
           ...(pctIds.get(number) ? { nkvhPctId: pctIds.get(number) } : {}) } });
-        await tx.workPermitNumberReservationHistory.create({ data: { reservationId: held.id, action: OBSERVED_NUMBER_STATUS,
+        await tx.workPermitNumberReservationHistory.create({ data: { reservationId: held.id, action: CONFIRMED_NUMBER_STATUS,
           actorId: user.id, actorName: user.name ?? "", note: "Số xuất hiện trên danh sách phiếu NKVH đã lưu; chặn tiếp tục cấp giấy hoặc giải phóng lượt trước khi đồng bộ" } });
       }
+      if (held.status === OBSERVED_NUMBER_STATUS && BigInt(number) > BigInt(expected)) result.ahead.push({ formatted: formatPermitNumber({ number, year }), expected });
       continue;
     }
     const pct = pctIds.get(number);
+    const ignored = await tx.workPermitNumberReservation.findFirst({ where: { kind: input.kind, year, number, status: IGNORED_NUMBER_STATUS }, orderBy: { createdAt: "desc" } });
+    if (ignored && (!pct || ignored.nkvhPctId === pct)) continue;
     const row = await tx.workPermitNumberReservation.create({ data: {
       kind: input.kind, year, number, teamType: "INTERNAL", status: OBSERVED_NUMBER_STATUS, ownerId: user.id, ownerName: user.name ?? "",
+      ...(pct ? { nkvhPctId: pct } : {}),
     } });
     await tx.workPermitNumberReservationHistory.create({ data: { reservationId: row.id, action: OBSERVED_NUMBER_STATUS,
       actorId: user.id, actorName: user.name ?? "",
       note: `Số đã dùng trên NKVH${pct ? ` (id_pct ${pct})` : ""} nhưng sổ chưa có hồ sơ — giữ chỗ để không cấp trùng` } });
 
     result.recorded.push(formatPermitNumber({ number, year }));
+    if (BigInt(number) > BigInt(expected)) result.ahead.push({ formatted: formatPermitNumber({ number, year }), expected });
   }
   return result;
 }
