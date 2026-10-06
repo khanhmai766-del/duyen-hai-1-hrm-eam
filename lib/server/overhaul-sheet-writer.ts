@@ -228,6 +228,7 @@ function locate(layout: TabLayout, row: OverhaulSheetOutbox) {
 const PROTECT_TAG = "[dh1-web] Ô do web ghi";
 
 /**
+ * ⚠️ KHÔNG CHẠY trong đợt đại tu S2: từ 06/10/2026 cả 4 file để MỞ cho mọi người nhập tiến độ (xem unprotectOverhaulSheets).
  * Khoá các ô web ghi đè (nghiệp vụ 04/10/2026): cột "% Hoàn thành", "Trạng thái hiện tại" (vùng dữ liệu). Từ 06/10/2026
  * KHÔNG khoá ô trạng thái từng ngày nữa (cột "Ngày 1…60", từ cột H) — người dùng nhập tay được; web vẫn ghi đè ô của ngày
  * có PCT cập nhật. Hàng "Nhật ký ngày" để mở như trước.
@@ -278,15 +279,13 @@ export async function protectOverhaulSheets(apply: boolean, editorEmails: string
   return report;
 }
 
-/** Nhãn vùng khoá ô trạng thái ngày do web tạo trước 06/10/2026. */
-const DAY_PROTECT_TAG = `${PROTECT_TAG} · trạng thái ngày`;
-
 /**
- * Gỡ khoá ô trạng thái từng ngày (cột "Ngày 1…60") trên 4 file (nghiệp vụ 06/10/2026). CHỈ xoá vùng khoá web tạo với nhãn
- * "trạng thái ngày"; giữ khoá cột "% Hoàn thành" / "Trạng thái hiện tại" và mọi vùng khoá của người khác (chỉ liệt kê).
+ * Gỡ MỌI vùng khoá do web tạo (nhãn "[dh1-web] Ô do web ghi …") trên 4 file — nghiệp vụ 06/10/2026: mở cột "% Hoàn thành",
+ * "Trạng thái hiện tại" và ô trạng thái ngày cho mọi người nhập tiến độ trên Sheet (đã chạy production 06/10: gỡ 1.821 vùng
+ * ô ngày, rồi 38 vùng cột %/Trạng thái). Giữ mọi vùng khoá của người khác (vd A:E — chỉ liệt kê).
  * Không cần danh sách người sửa. Mặc định chỉ báo; apply=true mới ghi. Chạy lại vô hại.
  */
-export async function unprotectOverhaulDayCells(apply: boolean) {
+export async function unprotectOverhaulSheets(apply: boolean) {
   const links = await overhaulScheduleLinks();
   const report: string[] = [];
   for (const source of Object.keys(OVERHAUL_SOURCES) as OverhaulSource[]) {
@@ -297,11 +296,11 @@ export async function unprotectOverhaulDayCells(apply: boolean) {
     const requests: object[] = [];
     report.push(`${OVERHAUL_SOURCES[source]} · ${meta.title}`);
     for (const [title, ranges] of existing) {
-      const days = ranges.filter(item => item.description === DAY_PROTECT_TAG);
-      const keep = ranges.filter(item => item.description !== DAY_PROTECT_TAG);
-      for (const item of days) requests.push({ deleteProtectedRange: { protectedRangeId: item.protectedRangeId } });
-      if (!days.length && !keep.length) continue;
-      report.push(`  “${title}”: gỡ ${days.length} vùng khoá ô ngày${keep.length ? ` · giữ ${keep.length}: ${keep.map(item => item.description || `#${item.protectedRangeId}`).join("; ")}` : ""}`);
+      const ours = ranges.filter(item => item.description?.startsWith(PROTECT_TAG));
+      const keep = ranges.filter(item => !item.description?.startsWith(PROTECT_TAG));
+      for (const item of ours) requests.push({ deleteProtectedRange: { protectedRangeId: item.protectedRangeId } });
+      if (!ours.length && !keep.length) continue;
+      report.push(`  “${title}”: gỡ ${ours.length} vùng khoá do web tạo${keep.length ? ` · giữ ${keep.length}: ${keep.map(item => item.description || `#${item.protectedRangeId}`).join("; ")}` : ""}`);
     }
     if (apply) for (let k = 0; k < requests.length; k += 500) await batchUpdateSpreadsheet(spreadsheetId, requests.slice(k, k + 500));
   }

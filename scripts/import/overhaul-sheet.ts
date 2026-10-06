@@ -9,8 +9,8 @@
  *   npm run overhaul:sheet -- --dry                # đọc Sheet, in các ô SẼ ghi cho hàng đợi hiện tại (không ghi gì)
  *   npm run overhaul:sheet -- --setup              # xem trước việc đổi danh sách trạng thái ô ngày (không ghi)
  *   npm run overhaul:sheet -- --setup --apply      # GHI: đổi danh sách thả xuống ô ngày sang bộ trạng thái mới
- *   npm run overhaul:sheet -- --unprotect-days [--apply]           # gỡ khoá ô trạng thái ngày (cột Ngày 1…60) — 06/10/2026
- *   npm run overhaul:sheet -- --protect --editor a@gmail.com           # xem trước khoá ô %, Trạng thái (cột ngày để mở)
+ *   npm run overhaul:sheet -- --unprotect [--apply]                # gỡ MỌI vùng khoá do web tạo (cột %, Trạng thái, ô ngày) — 06/10/2026
+ *   npm run overhaul:sheet -- --protect --editor a@gmail.com           # (KHÔNG dùng trong đợt S2 — 4 file để mở) khoá cột %, Trạng thái
  *   npm run overhaul:sheet -- --protect --editor a@gmail.com --apply   # GHI: khoá (chỉ tài khoản dịch vụ + --editor sửa được);
  *                                                  chạy lại sau khi thêm/bớt hạng mục để khoá đúng hàng
  *
@@ -43,10 +43,10 @@ async function main() {
       console.log(`Xem trước: ${result.claimed} dòng chờ · ${result.written} dòng định vị được · ${result.planned?.length ?? 0} ô sẽ ghi`);
       return;
     }
-    if (flag("--unprotect-days")) {
+    if (flag("--unprotect") || flag("--unprotect-days")) {
       const apply = flag("--apply");
-      for (const line of await writer.unprotectOverhaulDayCells(apply)) console.log(line);
-      console.log(apply ? "Đã gỡ khoá ô trạng thái ngày." : "Chỉ xem trước — thêm --apply để gỡ khoá trên Sheet.");
+      for (const line of await writer.unprotectOverhaulSheets(apply)) console.log(line);
+      console.log(apply ? "Đã gỡ các vùng khoá do web tạo." : "Chỉ xem trước — thêm --apply để gỡ khoá trên Sheet.");
       return;
     }
     if (flag("--protect")) {

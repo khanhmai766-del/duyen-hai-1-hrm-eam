@@ -50,10 +50,12 @@ Web là nguồn, Sheet theo web. Code: `lib/server/overhaul-sheet-writer.ts`; l�
   ngày cũ không đè ngày sau. Trong cùng ngày, ưu tiên: Không mở ngày thực hiện < Không thực hiện < có làm / kết thúc
   (hai PCT cùng giữ một hạng mục: phiếu không làm không đè phiếu có làm). "% Hoàn thành" là lũy kế **chung** của hạng
   mục: chỉ ghi khi bằng/cao hơn số đã ghi, không kéo lùi.
-- **Vùng khoá** (`npm run overhaul:sheet -- --protect …`): chỉ khoá cột "% Hoàn thành" và "Trạng thái hiện tại". Từ
-  06/10/2026 ô trạng thái từng ngày (cột "Ngày 1…60", từ cột H) **để mở** cho nhập tay — đã gỡ bằng
-  `--unprotect-days --apply`. Ô ngày nào có PCT cập nhật thì web vẫn ghi đè; trang web `/tien-ich/tien-do-dai-tu` chỉ
-  hiện kết quả web ghi, không đọc chữ nhập tay trên Sheet.
+- **Vùng khoá: KHÔNG khoá trong đợt S2.** Từ 06/10/2026 cột "% Hoàn thành", "Trạng thái hiện tại" và ô trạng thái
+  từng ngày (cột F trở đi) **để mở** cho mọi người nhập tiến độ trên Sheet — đã gỡ toàn bộ vùng khoá do web tạo bằng
+  `npm run overhaul:sheet -- --unprotect --apply` (giữ vùng khoá A:E của người soạn file). Đừng chạy lại `--protect`.
+  Ô nào có PCT cập nhật thì web vẫn ghi đè (ô ngày, "Trạng thái hiện tại"; "% Hoàn thành" chỉ khi bằng/cao hơn số web
+  đã ghi). Trang web `/tien-ich/tien-do-dai-tu` chỉ hiện kết quả web ghi; % nhập tay trên Sheet chỉ được web đọc ở lần
+  đồng bộ hạng mục (06:00 hằng ngày) và dùng cho hạng mục web chưa ghi %.
 - Không tìm thấy tab / mã / cột ngày, hoặc mã trùng trong tab → báo lỗi, **không đoán ghi chỗ khác**; thử lại theo
   khoảng tăng dần (15 phút → 24 giờ, tối đa 8 lần) rồi `FAILED`. Xem: `npm run overhaul:sheet -- --status`.
 - Thao tác trên phiếu chỉ ghi hàng đợi `OverhaulSheetOutbox` trong cùng transaction; đẩy lên Google ngay sau khi trả
