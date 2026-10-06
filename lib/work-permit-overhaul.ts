@@ -46,6 +46,15 @@ export type OverhaulItemOption = OverhaulItemSnapshot & {
   draftIn: string[];
 };
 
+/**
+ * Mã hạng mục hợp lệ trên Sheet: số "1.2.3" hoặc hạng mục PHÁT SINH do web thêm "PS.1.3" (nghiệp vụ 06/10/2026).
+ * Ô khác (tiêu đề nhóm "I. PHẦN CƠ", "PHÁT SINH", hàng nhật ký) không phải mã.
+ */
+export const OVERHAUL_CODE_PATTERN = /^(PS\.)?\d+(\.\d+)*$/;
+/** Tiền tố + nhóm mã hạng mục phát sinh: PS.1.1, PS.1.2… (đánh số riêng từng tab). */
+export const OVERHAUL_EXTRA_PREFIX = "PS.1.";
+export const isOverhaulExtraCode = (code: string) => code.startsWith("PS.");
+
 /** Khoá so một hạng mục giữa các phiếu: cùng file, cùng tab, cùng mã = cùng hàng trên Sheet. */
 export const overhaulItemKey = (item: Pick<OverhaulItemSnapshot, "source" | "sheet" | "code">) => `${item.source}\u0000${item.sheet}\u0000${item.code}`;
 /** Trạng thái phiếu giữ hạng mục: đã cấp tới trước khi huỷ / kết thúc phiếu. Kết thúc LẦN làm việc không trả hạng mục.

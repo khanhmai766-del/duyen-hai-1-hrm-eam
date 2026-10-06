@@ -510,6 +510,18 @@ export const PRESETS = {
       await page.waitForTimeout(300);
     },
   },
+  "cap-pct-dai-tu": {
+    description: "Form cấp PCT nhà thầu · Đại tu Cơ — ô tick “Hạng mục phát sinh” khi chưa chọn hạng mục (chỉ mở form, không lưu)",
+    async prepare() { return {}; },
+    routes: () => ["/work-permits?ui=new-overhaul"],
+    async interact(page) {
+      await page.getByRole("button", { name: /^Cấp phiếu$/ }).locator("visible=true").first().click();
+      await page.getByRole("menuitem", { name: /Cấp phiếu nhà thầu/ }).or(page.getByRole("button", { name: /Cấp phiếu nhà thầu/ })).locator("visible=true").first().click();
+      await page.getByRole("dialog").getByRole("button", { name: /Đại tu/ }).first().click();
+      await page.getByRole("dialog").getByText("Hạng mục phát sinh").first().scrollIntoViewIfNeeded();
+      await page.waitForTimeout(300);
+    },
+  },
   "don-vi-nha-thau": {
     description: "Danh bạ đơn vị nhà thầu có phân loại SCTX / Đại tu / cả hai / chưa phân loại + hộp sửa đơn vị — danh sách giả lập, không ghi DB",
     async prepare() { return {}; },

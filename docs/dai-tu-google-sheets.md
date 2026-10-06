@@ -50,6 +50,14 @@ Web là nguồn, Sheet theo web. Code: `lib/server/overhaul-sheet-writer.ts`; l�
   ngày cũ không đè ngày sau. Trong cùng ngày, ưu tiên: Không mở ngày thực hiện < Không thực hiện < có làm / kết thúc
   (hai PCT cùng giữ một hạng mục: phiếu không làm không đè phiếu có làm). "% Hoàn thành" là lũy kế **chung** của hạng
   mục: chỉ ghi khi bằng/cao hơn số đã ghi, không kéo lùi.
+- **Hạng mục phát sinh (từ 06/10/2026)**: cấp PCT nhà thầu · Đại tu mà KHÔNG chọn hạng mục nào, ô tick "Hạng mục
+  phát sinh" (mặc định bật) → web tạo hạng mục mã **PS.1.x** (đánh số riêng từng tab) ở **tab cương vị** chọn theo cương
+  vị + loại PCT (tab có nhiều hạng mục nhất của cặp đó): Tên thiết bị = Địa điểm công tác, Nội dung = Nội dung công việc,
+  Nhà thầu = mã đơn vị công tác. Lưu DB ngay (`sheetRow` 0 = chưa có trên Sheet), rồi đầu mỗi lượt đẩy hàng đợi
+  (`insertPendingOverhaulExtras`) chèn 2 hàng ở CUỐI tab, dưới hàng tiêu đề **"PHÁT SINH"** (tạo một lần), chép định dạng /
+  ô gộp / danh sách thả xuống / màu trạng thái từ cặp hàng hạng mục đầu tab. Sau đó tiến độ, nhật ký, kết thúc / huỷ phiếu
+  ghi như hạng mục thường; đồng bộ 06:00 đọc lại mã PS (không ẩn hạng mục chưa kịp chèn). Chặn cấp phiếu khi: chưa chọn
+  cương vị, cương vị không có tab, đơn vị chưa khai mã, thiếu nội dung — bỏ tick nếu không muốn tạo.
 - **Vùng khoá: KHÔNG khoá trong đợt S2.** Từ 06/10/2026 cột "% Hoàn thành", "Trạng thái hiện tại" và ô trạng thái
   từng ngày (cột F trở đi) **để mở** cho mọi người nhập tiến độ trên Sheet — đã gỡ toàn bộ vùng khoá do web tạo bằng
   `npm run overhaul:sheet -- --unprotect --apply` (giữ vùng khoá A:E của người soạn file). Đừng chạy lại `--protect`.

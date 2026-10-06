@@ -6,7 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { a1Tab, batchGetValues, columnLetter, getSpreadsheet, GoogleSheetsError, spreadsheetIdFromUrl, type SheetTab } from "@/lib/server/google-sheets";
 import { overhaulScheduleLinks } from "@/lib/server/overhaul-schedules";
 import { formatPermitNumber } from "@/lib/work-permits";
-import { compareOverhaulCodes, isOverhaulPaperPermit, OVERHAUL_HOLDING_STATUSES, OVERHAUL_SOURCE_DEFAULT_KIND, OVERHAUL_SOURCES, overhaulItemKey, overhaulItemProgressOf, overhaulItemsOf, type OverhaulItemProgress, type OverhaulItemSnapshot, type OverhaulItemUsage, type OverhaulSource } from "@/lib/work-permit-overhaul";
+import { compareOverhaulCodes, isOverhaulExtraCode, isOverhaulPaperPermit, OVERHAUL_CODE_PATTERN, OVERHAUL_EXTRA_PREFIX, OVERHAUL_HOLDING_STATUSES, OVERHAUL_SOURCE_DEFAULT_KIND, OVERHAUL_SOURCES, overhaulItemKey, overhaulItemProgressOf, overhaulItemsOf, type OverhaulItemProgress, type OverhaulItemSnapshot, type OverhaulItemUsage, type OverhaulSource } from "@/lib/work-permit-overhaul";
 
 /*
  * Hạng mục đại tu cho PCT nhà thầu · Đại tu.
@@ -163,9 +163,9 @@ async function readSource(source: OverhaulSource, spreadsheetId: string, now: Da
     const { columns } = header;
     const cell = (row: string[], index: number) => (index >= 0 ? row[index] ?? "" : "");
     (bodies[t] ?? []).forEach((row, i) => {
-      const code = repairDateCode(line(cell(row, columns.code), 60));
-      // Hàng tiêu đề mục ("I. PHẦN CƠ"), hàng "Nhật ký ngày" (ô mã trống/gộp) → bỏ.
-      if (!code || !/^\d+(\.\d+)*$/.test(code)) return;
+      const code = repairDateCode(line(cell(row, columns.code), 60)).toUpperCase();
+      // Hàng tiêu đề mục ("I. PHẦN CƠ", "PHÁT SINH"), hàng "Nhật ký ngày" (ô mã trống/gộp) → bỏ.
+      if (!code || !OVERHAUL_CODE_PATTERN.test(code)) return;
       const contractor = line(cell(row, columns.contractor), 120);
       if (!contractor) { result.missingContractor++; return; }
       for (const position of resolvePositions(str(cell(row, columns.position), 240) || positionPart)) {
@@ -228,7 +228,7 @@ async function syncSource(source: OverhaulSource, url: string, now: Date, compan
 
   const keyOf = (item: { kind: string; code: string; positionTitle?: string | null }) => `${item.kind}\u0000${item.code}\u0000${normalizeText(item.positionTitle ?? "")}`;
   await prisma.$transaction(async tx => {
-    const existing = await tx.workPermitOverhaulItem.findMany({ where: { source }, select: { id: true, kind: true, code: true, positionTitle: true } });
+    const existing = await tx.workPermitOverhaulItem.findMany({ where: { source }, select: { id: true, kind: true, code: true, positionTitle: true, sheetRow: true } });
     const byKey = new Map(existing.map(item => [keyOf(item), item.id]));
     const seen = new Set<string>();
     const toCreate: Prisma.WorkPermitOverhaulItemCreateManyInput[] = [];
@@ -243,7 +243,8 @@ async function syncSource(source: OverhaulSource, url: string, now: Date, compan
       } else toCreate.push(item);
     }
     if (toCreate.length) result.created = (await tx.workPermitOverhaulItem.createMany({ data: toCreate, skipDuplicates: true })).count;
-    const gone = existing.filter(item => !seen.has(keyOf(item))).map(item => item.id);
+    // Hạng mục phát sinh web vừa tạo (sheetRow 0) chưa kịp chèn lên Sheet → chưa có trên Sheet là bình thường, giữ nguyên.
+    const gone = existing.filter(item => !seen.has(keyOf(item)) && !(isOverhaulExtraCode(item.code) && item.sheetRow === 0)).map(item => item.id);
     if (gone.length) result.deactivated = (await tx.workPermitOverhaulItem.updateMany({ where: { id: { in: gone }, isActive: true }, data: { isActive: false, syncedAt: now } })).count;
   }, { timeout: 120_000 });
   return result;
@@ -428,4 +429,48 @@ export function parseOverhaulItems(value: unknown, permit: { teamType: string; c
   if (!items.length) return Prisma.DbNull;
   items.sort((a, b) => compareOverhaulCodes(a.code, b.code));
   return items as unknown as Prisma.InputJsonValue;
+}
+
+/**
+ * Tab tiến độ của một cương vị + loại PCT: tab chứa nhiều hạng mục nhất của (loại, mã cương vị). Kèm `positionTitle` đúng
+ * như lần đồng bộ sẽ đọc lại — hạng mục phát sinh mang cùng nhãn để đồng bộ khớp khoá, không sinh bản trùng.
+ */
+export async function overhaulTabOf(db: Prisma.TransactionClient | typeof prisma, kind: string, position: string) {
+  const positionCode = position.trim() ? positionCatalogItem(position)?.code ?? "" : "";
+  if (!positionCode) return null;
+  const groups = await db.workPermitOverhaulItem.groupBy({
+    by: ["source", "sheet", "positionTitle"], where: { isActive: true, kind, positionCode, NOT: { code: { startsWith: "PS." } } }, _count: true,
+  });
+  const best = groups.sort((a, b) => b._count - a._count)[0];
+  return best ? { source: best.source, sheet: best.sheet, positionTitle: best.positionTitle, positionCode } : null;
+}
+
+/**
+ * Hạng mục PHÁT SINH (nghiệp vụ 06/10/2026): PCT nhà thầu · Đại tu cấp cho công việc chưa có trong danh sách hạng mục.
+ * Thiết bị = "Địa điểm công tác", nội dung = "Nội dung công việc" của phiếu; tab = tab cương vị theo cương vị + loại PCT;
+ * mã PS.1.x đánh số tiếp theo trong tab (khoá tư vấn theo tab để hai phiếu cấp cùng lúc không trùng số).
+ * Lưu ngay vào DB với sheetRow 0 = "chưa có trên Sheet"; bộ ghi Sheet chèn 2 hàng cuối tab dưới tiêu đề "PHÁT SINH"
+ * (insertPendingOverhaulExtras) trước khi ghi kết quả ngày. Trả ảnh chụp để gắn vào phiếu như hạng mục thường.
+ */
+export async function createOverhaulExtraItem(tx: Prisma.TransactionClient, permit: { kind: string; position: string; teamName: string; location: string; content: string }): Promise<OverhaulItemSnapshot> {
+  const tab = await overhaulTabOf(tx, permit.kind, permit.position);
+  if (!permit.position.trim()) throw fail("Chọn cương vị trên phiếu để biết ghi hạng mục phát sinh vào tab tiến độ nào");
+  if (!tab) throw fail(`Cương vị “${permit.position}” chưa có tab tiến độ đại tu cho PCT ${permit.kind === "MECHANICAL" ? "Cơ" : "Điện"} — không tạo được hạng mục phát sinh`);
+  const company = permit.teamName.trim();
+  const companyRow = company ? await tx.workPermitCompany.findUnique({ where: { name: company }, select: { code: true } }) : null;
+  if (!companyRow?.code) throw fail(company ? `Đơn vị “${company}” chưa khai mã viết tắt (vd IDC) trong danh bạ nhà thầu — cột “Nhà thầu” của hạng mục phát sinh ghi theo mã đó` : "Chọn đơn vị công tác trước khi tạo hạng mục phát sinh");
+  const content = multiline(permit.content, 4000);
+  if (!content) throw fail("Nhập nội dung công việc để ghi hạng mục phát sinh");
+  const device = line(permit.location, 300) || "Phát sinh";
+  // pg_advisory_xact_lock trả kiểu void — $queryRaw không đọc được, dùng $executeRaw.
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`overhaul-extra:${tab.source}:${tab.sheet}`}))`;
+  const used = await tx.workPermitOverhaulItem.findMany({ where: { source: tab.source, sheet: tab.sheet, code: { startsWith: OVERHAUL_EXTRA_PREFIX } }, select: { code: true } });
+  const next = 1 + Math.max(0, ...used.map(item => Number(item.code.slice(OVERHAUL_EXTRA_PREFIX.length))).filter(Number.isFinite));
+  const code = `${OVERHAUL_EXTRA_PREFIX}${next}`;
+  await tx.workPermitOverhaulItem.create({ data: {
+    source: tab.source, sheet: tab.sheet, sheetRow: 0, kind: permit.kind, positionTitle: tab.positionTitle, positionCode: tab.positionCode,
+    code, device, content, method: "", contractor: companyRow.code, contractorCode: normalizeText(companyRow.code),
+    percent: "0%", status: "Chưa thực hiện", isActive: true,
+  } });
+  return { code, device, content, method: "", source: tab.source, sheet: tab.sheet };
 }

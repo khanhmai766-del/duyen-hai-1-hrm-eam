@@ -23,8 +23,10 @@ const confirmShared = (items: OverhaulItemOption[]) => window.confirm(items.leng
  * Nút "Chọn hạng mục đại tu" + chip mã đã chọn, đặt dưới ô Nội dung công việc của PCT nhà thầu · Đại tu.
  * Chọn xong: cuối Nội dung có khối gợi ý "- theo mã hạng mục:" + từng dòng "- <mã> - <nội dung>" (thay khối cũ); chi tiết từng mã in ở phụ lục.
  */
-export function OverhaulContentField({ form, onApply }: {
+export function OverhaulContentField({ form, onApply, onExtraChange }: {
   form: PermitInput;
+  /** Phiếu MỚI (chưa lưu): bật/tắt "Hạng mục phát sinh" khi không chọn hạng mục nào. Không truyền = không hiện ô tick. */
+  onExtraChange?: (extra: boolean) => void;
   /**
    * `content` = null → giữ nguyên nội dung người dùng đã sửa tay. `company` khác null khi phiếu CHƯA có đơn vị công
    * tác và người dùng chọn nhà thầu ngay trong hộp chọn (PCT Điện chọn đơn vị ở bước Nhân sự, sau bước này).
@@ -50,6 +52,13 @@ export function OverhaulContentField({ form, onApply }: {
       </span>)}
     </div>
     {items.length > 0 && <p className="text-xs text-muted-foreground">Chi tiết {items.length} hạng mục (nội dung, biện pháp thi công) in ở phụ lục kèm PCT.</p>}
+    {/* Công việc chưa có trong danh sách hạng mục: tạo hạng mục phát sinh PS.1.x ghi lên Sheet tiến độ (06/10/2026). */}
+    {onExtraChange && !items.length && <label className={`flex cursor-pointer items-start gap-2.5 rounded-lg border p-3 text-xs leading-5 ${form.overhaulExtra ? "border-amber-300 bg-amber-50 text-amber-950 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100" : "border-border text-muted-foreground"}`}>
+      <input type="checkbox" className="mt-0.5 h-4 w-4 shrink-0 accent-amber-600" checked={Boolean(form.overhaulExtra)} onChange={event => onExtraChange(event.target.checked)} />
+      <span><b className="text-[13px] text-foreground">Hạng mục phát sinh</b> — công việc chưa có trong danh sách hạng mục. Khi cấp phiếu, web tạo mã <b>PS.1.x</b> ở cuối tab cương vị
+        {form.position ? <> “<b>{form.position}</b>”</> : " (chọn cương vị ở trên)"} của file tiến độ, dưới tiêu đề “PHÁT SINH”: <b>Tên thiết bị</b> = Địa điểm công tác,
+        <b> Nội dung</b> = Nội dung công việc, <b>Nhà thầu</b> = mã đơn vị công tác. Tiến độ, nhật ký ngày của phiếu ghi lên Sheet như hạng mục thường.</span>
+    </label>}
     {open && <OverhaulItemPicker form={form} selected={items} onClose={() => setOpen(false)} onConfirm={(next, company) => { apply(next, company); setOpen(false); }} />}
   </div>;
 }

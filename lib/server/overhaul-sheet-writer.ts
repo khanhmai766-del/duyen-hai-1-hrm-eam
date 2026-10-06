@@ -5,7 +5,7 @@ import { a1Tab, batchGetValues, batchUpdateSpreadsheet, batchUpdateValues, colum
 import { overhaulScheduleLinks } from "@/lib/server/overhaul-schedules";
 import { findHeader, overhaulItemUsage, repairDateCode } from "@/lib/server/work-permit-overhaul";
 import { overhaulJournalText, overhaulRank } from "@/lib/overhaul-progress-grid";
-import { OVERHAUL_DAY_STATUSES, OVERHAUL_HOLDING_STATUSES, OVERHAUL_SOURCES, overhaulItemKey, overhaulItemsOf, type OverhaulItemProgress, type OverhaulSource } from "@/lib/work-permit-overhaul";
+import { isOverhaulExtraCode, OVERHAUL_CODE_PATTERN, OVERHAUL_DAY_STATUSES, OVERHAUL_HOLDING_STATUSES, OVERHAUL_SOURCES, overhaulItemKey, overhaulItemsOf, type OverhaulItemProgress, type OverhaulSource } from "@/lib/work-permit-overhaul";
 
 /*
  * Đợt 2 đại tu — ghi kết quả ngày của PCT về Google Sheets tiến độ (web là nguồn, Sheet theo web).
@@ -201,8 +201,8 @@ function layoutOf(rows: string[][]): TabLayout | string {
   const codeRow = new Map<string, number>();
   const duplicateCodes = new Set<string>();
   for (let r = header.row + 1; r < rows.length; r++) {
-    const code = repairDateCode((rows[r][header.columns.code] ?? "").replace(/\s+/g, " ").trim());
-    if (!code || !/^\d+(\.\d+)*$/.test(code)) continue;
+    const code = repairDateCode((rows[r][header.columns.code] ?? "").replace(/\s+/g, " ").trim()).toUpperCase();
+    if (!code || !OVERHAUL_CODE_PATTERN.test(code)) continue;
     if (codeRow.has(code)) duplicateCodes.add(code); else codeRow.set(code, r);
   }
   return { codeRow, duplicateCodes, dayColumn, duplicateDays, dayColumns, headerRow: header.row, percentColumn: header.columns.percent, statusColumn: header.columns.status, codeColumn: header.columns.code, rows };
@@ -478,6 +478,107 @@ export async function pushOverhaulSheetOutbox(options: { limit?: number; dryRun?
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
+// ───────────────────────────── Hạng mục phát sinh (PS.1.x) ─────────────────────────────
+
+export type OverhaulExtraRow = { code: string; device: string; content: string; method: string; contractor: string; positionTitle: string };
+const EXTRA_HEADING = "PHÁT SINH";
+
+/**
+ * Chèn các hạng mục phát sinh còn thiếu vào CUỐI một tab, dưới hàng tiêu đề "PHÁT SINH" (tạo nếu chưa có) — nghiệp vụ
+ * 06/10/2026. Mỗi hạng mục 2 hàng (hàng mã + hàng "Nhật ký ngày") chép nguyên định dạng, ô gộp, danh sách thả xuống từ cặp
+ * hàng hạng mục đầu tiên của tab, rồi ghi giá trị mới (ô ngày để trống, % = 0, "Chưa thực hiện"). Mã đã có trên tab thì
+ * không chèn lại. Trả vị trí hàng (1-based) của từng mã. `rows` = giá trị hiện tại của tab (A1 → cột cuối).
+ */
+export async function insertOverhaulExtraRows(spreadsheetId: string, tab: SheetTab, rows: string[][], items: OverhaulExtraRow[]) {
+  const layout = layoutOf(rows);
+  const header = findHeader(rows);
+  if (typeof layout === "string" || !header) throw new GoogleSheetsError(`tab “${tab.title}”: ${typeof layout === "string" ? layout : "không thấy tiêu đề"}`, 422);
+  const positions = new Map<string, number>();
+  for (const item of items) { const r = layout.codeRow.get(item.code); if (r !== undefined) positions.set(item.code, r + 1); }
+  const missing = items.filter(item => !positions.has(item.code));
+  if (!missing.length) return positions;
+
+  const { columns } = header;
+  const template = Math.min(...[...layout.codeRow].filter(([code]) => !isOverhaulExtraCode(code)).map(([, r]) => r));
+  if (!Number.isFinite(template)) throw new GoogleSheetsError(`tab “${tab.title}” chưa có hạng mục nào để làm mẫu`, 422);
+  const lastColumn = Math.max(...layout.dayColumns, ...Object.values(columns));
+  let lastUsed = layout.headerRow;
+  rows.forEach((row, r) => { if (r > layout.headerRow && row.slice(0, lastColumn + 1).some(cell => String(cell ?? "").trim())) lastUsed = r; });
+  const hasHeading = rows.some((row, r) => r > layout.headerRow && normalizeText(row[columns.code] ?? "").trim() === normalizeText(EXTRA_HEADING));
+  const insertAt = Math.max(lastUsed + 1, template + 2);
+  const count = (hasHeading ? 0 : 1) + missing.length * 2;
+
+  const requests: object[] = insertAt < tab.rowCount
+    ? [{ insertDimension: { range: { sheetId: tab.sheetId, dimension: "ROWS", startIndex: insertAt, endIndex: insertAt + count }, inheritFromBefore: true } }]
+    : [{ appendDimension: { sheetId: tab.sheetId, dimension: "ROWS", length: insertAt + count - tab.rowCount } }];
+  const full = (start: number, end: number) => ({ sheetId: tab.sheetId, startRowIndex: start, endRowIndex: end, startColumnIndex: 0, endColumnIndex: lastColumn + 1 });
+  const first = insertAt + (hasHeading ? 0 : 1);
+  if (!hasHeading) requests.push({ repeatCell: { range: full(insertAt, insertAt + 1), cell: { userEnteredFormat: {
+    backgroundColor: { red: 1, green: 0.95, blue: 0.8 }, textFormat: { bold: true }, verticalAlignment: "MIDDLE",
+  } }, fields: "userEnteredFormat(backgroundColor,textFormat.bold,verticalAlignment)" } });
+  missing.forEach((_, k) => requests.push({ copyPaste: { source: full(template, template + 2), destination: full(first + 2 * k, first + 2 * k + 2), pasteType: "PASTE_NORMAL" } }));
+  await batchUpdateSpreadsheet(spreadsheetId, requests);
+
+  const ref = (r: number, c: number) => `${a1Tab(tab.title)}!${columnLetter(c)}${r + 1}`;
+  const cells: Array<{ range: string; value: string | number }> = [];
+  if (!hasHeading) {
+    cells.push({ range: ref(insertAt, columns.code), value: EXTRA_HEADING });
+    if (columns.device >= 0) cells.push({ range: ref(insertAt, columns.device), value: "Hạng mục phát sinh (web thêm khi cấp PCT Đại tu)" });
+  }
+  missing.forEach((item, k) => {
+    const r = first + 2 * k;
+    for (let c = 0; c <= lastColumn; c++) { cells.push({ range: ref(r, c), value: "" }); cells.push({ range: ref(r + 1, c), value: "" }); }
+    const set = (column: number, value: string | number) => { if (column >= 0) cells.push({ range: ref(r, column), value }); };
+    set(columns.code, item.code); set(columns.device, item.device); set(columns.content, item.content); set(columns.method, item.method);
+    set(columns.contractor, item.contractor); set(columns.position, item.positionTitle); set(columns.percent, 0);
+    set(columns.status, OVERHAUL_DAY_STATUSES.NOT_STARTED);
+    if (columns.status >= 0) cells.push({ range: ref(r + 1, columns.status), value: "Nhật ký ngày" });
+    positions.set(item.code, r + 1);
+  });
+  // Ô cuối cùng ghi đè ô trống cùng chỗ (Map giữ lần ghi sau cùng).
+  await batchUpdateValues(spreadsheetId, [...new Map(cells.map(cell => [cell.range, cell])).values()]);
+  return positions;
+}
+
+/**
+ * Chèn lên Sheet mọi hạng mục phát sinh web đã tạo mà chưa có hàng (sheetRow 0), rồi ghi lại vị trí hàng. Chạy đầu mỗi
+ * lượt đẩy hàng đợi (drainOverhaulSheetOutbox, dưới khoá đẩy) — kết quả ngày của hạng mục ghi ngay sau đó. Lỗi một tab
+ * không chặn tab khác; lượt sau (sau khi cấp phiếu, timer 15 phút) thử lại.
+ */
+export async function insertPendingOverhaulExtras() {
+  const result = { inserted: 0, errors: [] as string[] };
+  const pending = await prisma.workPermitOverhaulItem.findMany({
+    where: { isActive: true, sheetRow: 0, code: { startsWith: "PS." } },
+    select: { id: true, source: true, sheet: true, code: true, device: true, content: true, method: true, contractor: true, positionTitle: true },
+  });
+  if (!pending.length) return result;
+  const links = await overhaulScheduleLinks();
+  for (const source of [...new Set(pending.map(item => item.source))]) {
+    const label = OVERHAUL_SOURCES[source as OverhaulSource] ?? source;
+    const spreadsheetId = spreadsheetIdFromUrl(links.find(link => link.id === source)?.url ?? "");
+    if (!spreadsheetId) { result.errors.push(`${label}: bảng Tiến độ đại tu chưa có link file này`); continue; }
+    try {
+      const meta = await getSpreadsheet(spreadsheetId);
+      for (const sheet of [...new Set(pending.filter(item => item.source === source).map(item => item.sheet))]) {
+        const tab = meta.tabs.find(item => item.title === sheet);
+        if (!tab) { result.errors.push(`${label}: không còn tab “${sheet}”`); continue; }
+        const items = pending.filter(item => item.source === source && item.sheet === sheet);
+        const [rows] = await batchGetValues(spreadsheetId, [`${a1Tab(tab.title)}!A1:${columnLetter(tab.columnCount - 1)}${tab.rowCount}`]);
+        const unique = [...new Map(items.map(item => [item.code, item])).values()];
+        const positions = await insertOverhaulExtraRows(spreadsheetId, tab, rows ?? [], unique);
+        for (const item of items) {
+          const row = positions.get(item.code);
+          if (row) await prisma.workPermitOverhaulItem.update({ where: { id: item.id }, data: { sheetRow: row } });
+        }
+        result.inserted += unique.length;
+      }
+    } catch (error) {
+      result.errors.push(`${label}: chèn hạng mục phát sinh — ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+  return result;
+}
+
 /**
  * Đẩy HẾT hàng đợi, mỗi thời điểm chỉ MỘT tiến trình (khoá tư vấn Postgres theo transaction — tự nhả khi xong hoặc khi
  * tiến trình chết). Nhiều người bấm Kết thúc cùng lúc: người giữ khoá gom các dòng mới đến thành lô kế tiếp, nên số lượt
@@ -495,6 +596,13 @@ export async function drainOverhaulSheetOutbox(options: { waitForLock?: boolean;
       const [{ locked }] = await tx.$queryRaw<Array<{ locked: boolean }>>`SELECT pg_try_advisory_xact_lock(hashtext('overhaul-sheet-push')) AS locked`;
       if (!locked) return false;
       if (options.gatherMs) await sleep(options.gatherMs);
+      // Hạng mục phát sinh mới cấp phải có hàng trên Sheet TRƯỚC khi ghi kết quả ngày của nó.
+      try {
+        const extras = await insertPendingOverhaulExtras();
+        total.errors.push(...extras.errors);
+      } catch (error) {
+        total.errors.push(`Chèn hạng mục phát sinh: ${error instanceof Error ? error.message : String(error)}`);
+      }
       const deadline = Date.now() + DRAIN_MS;
       while (Date.now() < deadline) {
         const batch = await pushOverhaulSheetOutbox();

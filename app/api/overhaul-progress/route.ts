@@ -65,7 +65,7 @@ export async function GET(req: Request) {
     const [itemRows, summaryRows, windowRows, last] = await Promise.all([
       prisma.workPermitOverhaulItem.findMany({
         where: { isActive: true, source, sheet }, orderBy: [{ sheetRow: "asc" }, { code: "asc" }],
-        select: { code: true, device: true, content: true, contractor: true, positionTitle: true, percent: true },
+        select: { code: true, device: true, content: true, contractor: true, positionTitle: true, percent: true, sheetRow: true },
       }),
       // Toàn đợt, chỉ cột nhỏ: tính "Trạng thái hiện tại" + "% Hoàn thành".
       prisma.overhaulSheetOutbox.findMany({ where: { source, sheet }, select: { code: true, day: true, status: true, percent: true, createdAt: true } }),
@@ -76,9 +76,11 @@ export async function GET(req: Request) {
       }),
       prisma.workPermitOverhaulItem.aggregate({ _max: { syncedAt: true } }),
     ]);
+    // Hạng mục phát sinh vừa tạo chưa có hàng trên Sheet (sheetRow 0) → xếp cuối như vị trí sẽ chèn.
+    itemRows.sort((a, b) => (a.sheetRow || Number.MAX_SAFE_INTEGER) - (b.sheetRow || Number.MAX_SAFE_INTEGER));
     // Cùng mã ghi cho nhiều cương vị = một hàng trên Sheet → gộp, nối tên cương vị.
     const items = new Map<string, OverhaulGridItem>();
-    for (const { percent, ...row } of itemRows) {
+    for (const { percent, sheetRow: _sheetRow, ...row } of itemRows) {
       const existing = items.get(row.code);
       if (!existing) { items.set(row.code, { ...row, sheetPercent: parseSheetPercent(percent) }); continue; }
       existing.sheetPercent ??= parseSheetPercent(percent);

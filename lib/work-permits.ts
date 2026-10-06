@@ -139,6 +139,11 @@ export interface PermitInput {
   contractorScope: PermitContractorScope | null;
   /** Hạng mục đại tu đã chọn (chỉ phiếu nhà thầu · Đại tu) — lib/work-permit-overhaul.ts. */
   overhaulItems?: OverhaulItemSnapshot[] | null;
+  /**
+   * Chỉ khi CẤP PCT nhà thầu · Đại tu không chọn hạng mục nào: true = tạo hạng mục PHÁT SINH PS.1.x (thiết bị = Địa điểm,
+   * nội dung = Nội dung công việc) ở tab cương vị và ghi lên Sheet tiến độ. Không lưu trên phiếu.
+   */
+  overhaulExtra?: boolean;
   members: PermitMember[];
   issuedAt: string | null; authorizedAt: string | null; closedAt: string | null;
   result: string; note: string; statusReason: string;

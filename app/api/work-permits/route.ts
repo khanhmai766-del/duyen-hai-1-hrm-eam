@@ -1,5 +1,9 @@
 import { assertNkvhLinkAvailable, lockPermitNumberScope } from "@/lib/server/work-permit-number-reservations";
-import { assertOverhaulItemsConfirmed, parseOverhaulItems } from "@/lib/server/work-permit-overhaul";
+import { assertOverhaulItemsConfirmed, createOverhaulExtraItem, parseOverhaulItems } from "@/lib/server/work-permit-overhaul";
+import { isOverhaulExtraCode, isOverhaulPaperPermit, overhaulItemsOf } from "@/lib/work-permit-overhaul";
+import { pushOverhaulSheetOutboxQuietly } from "@/lib/server/overhaul-sheet-writer";
+import { after as afterResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { permitPositionWhere, permitScopeOf, requirePermitPositionAllowed } from "@/lib/server/work-permit-scope";
 import { positionViewScopeMeta } from "@/lib/position-data-scope";
 import { permitIssueUpdateNeedsExecution } from "@/lib/work-permit-permissions";
@@ -62,7 +66,11 @@ export async function POST(req: Request) {
       await assertContractorCompanyScope(tx, data);
       await assertNkvhLinkAvailable(tx, data.kind as PermitKind, data.nkvhPctId);
       await lockPermitNumberScope(tx, data.kind as PermitKind, data.year);
-      const overhaulItems = parseOverhaulItems(body.overhaulItems, data);
+      let overhaulItems = parseOverhaulItems(body.overhaulItems, data);
+      // PCT Đại tu chưa chọn hạng mục nào + người cấp tick "Hạng mục phát sinh" → tạo PS.1.x ở tab cương vị, ghi lên Sheet.
+      if (body.overhaulExtra === true && isOverhaulPaperPermit(data) && (overhaulItems === undefined || overhaulItems === Prisma.DbNull)) {
+        overhaulItems = [await createOverhaulExtraItem(tx, data)] as unknown as Prisma.InputJsonValue;
+      }
       // Hạng mục đang nằm trong PCT khác: được phép nếu người cấp đã xác nhận trong hộp chọn (đọc cờ trên body gốc).
       await assertOverhaulItemsConfirmed(tx, body.overhaulItems, null);
       const row = await tx.workPermit.create({ data: { ...data, ...(overhaulItems !== undefined ? { overhaulItems } : {}), safetyItems: permitSnapshot(await resolvePermitSafety(tx, body)), status, createdById: user.id, createdByName: user.name ?? "" } });
@@ -72,8 +80,11 @@ export async function POST(req: Request) {
       await tx.workPermitHistory.create({ data: { permitId: row.id, actorId: user.id, actorName: user.name ?? "", action: "Tạo phiếu", after: permitSnapshot(row) } });
       return row;
     });
-    await audit(user.id, "CREATE_WORK_PERMIT", "WorkPermit", row.id, `Tạo PCT ${formatPermitNumber(row)}`);
+    const extra = overhaulItemsOf(row.overhaulItems).find(item => isOverhaulExtraCode(item.code));
+    await audit(user.id, "CREATE_WORK_PERMIT", "WorkPermit", row.id, `Tạo PCT ${formatPermitNumber(row)}${extra ? ` · hạng mục phát sinh ${extra.code} (${extra.sheet})` : ""}`);
     await syncPermitDocument(row);
+    // Chèn hạng mục phát sinh lên Sheet ngay sau khi trả lời (lỗi Google không chặn cấp phiếu; timer 15 phút thử lại).
+    if (extra) afterResponse(pushOverhaulSheetOutboxQuietly);
     return ok(row);
   });
 }

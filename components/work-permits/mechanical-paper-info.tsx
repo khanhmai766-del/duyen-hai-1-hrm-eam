@@ -11,11 +11,13 @@ const label = "block space-y-1.5 text-[13px]";
 const section = "rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-border dark:bg-background sm:p-5";
 const title = "mb-4 border-b border-slate-200 pb-2 text-sm font-bold text-slate-900 dark:border-border dark:text-foreground";
 
-export function MechanicalPaperInfo({ form, issued, numberField, positionOptions, onChange, onCompanyChange, onPickSyc }: {
+export function MechanicalPaperInfo({ form, issued, isNew = false, numberField, positionOptions, onChange, onCompanyChange, onPickSyc }: {
   form: PermitInput;
   /** Cương vị người cấp được chọn (phạm vi cương vị của sổ PCT). */
   positionOptions: string[];
   issued: boolean;
+  /** Phiếu mới (chưa lưu): hiện ô tick “Hạng mục phát sinh” khi PCT Đại tu chưa chọn hạng mục. */
+  isNew?: boolean;
   numberField: ReactNode;
   onChange: <K extends keyof PermitInput>(key: K, value: PermitInput[K]) => void;
   onCompanyChange: (company: string) => void;
@@ -58,7 +60,7 @@ export function MechanicalPaperInfo({ form, issued, numberField, positionOptions
       </fieldset>
       {field("location", "Địa điểm công tác")}
       <label className={label}><span className="font-medium">Nội dung công việc *</span><textarea className={control} rows={3} required maxLength={5000} value={form.content} onChange={event => onChange("content", event.target.value)} /></label>
-      <OverhaulContentField form={form} onApply={(items, content, company) => { onChange("overhaulItems", items); if (content !== null) onChange("content", content); if (company) onChange("teamName", company); }} />
+      <OverhaulContentField form={form} onExtraChange={isNew ? extra => onChange("overhaulExtra", extra) : undefined} onApply={(items, content, company) => { onChange("overhaulItems", items); if (items.length) onChange("overhaulExtra", false); if (content !== null) onChange("content", content); if (company) onChange("teamName", company); }} />
       <label className={label}><span className="font-medium">Phạm vi công tác</span><textarea className={control} rows={2} maxLength={5000} value={form.workScope ?? ""} onChange={event => onChange("workScope", event.target.value)} /></label>
       <div className="grid gap-4 md:grid-cols-2">{(["plannedStartAt", "plannedEndAt"] as const).map(key => <label key={key} className={label}><span className="font-medium">{key === "plannedStartAt" ? "Bắt đầu công việc" : "Kết thúc công việc"} dự kiến</span><input className={control} type="datetime-local" value={form[key] ? new Date(new Date(form[key]!).getTime() + 7 * 3600000).toISOString().slice(0, 16) : ""} onChange={event => onChange(key, event.target.value ? `${event.target.value}:00+07:00` : null)} /></label>)}</div>
     </div></section>
