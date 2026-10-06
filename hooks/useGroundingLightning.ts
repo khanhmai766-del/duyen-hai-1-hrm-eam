@@ -66,14 +66,14 @@ export type GroundingFilters = {
   machine: string;
   type: string;
   status: string;
-  shiftType?: ShiftTypeKey | "CURRENT";
+  shiftType?: ShiftTypeKey | "CURRENT" | "ALL";
   inspectionDate?: string;
 };
 
 function queryString(filters: GroundingFilters) {
   const sp = new URLSearchParams();
   for (const [key, value] of Object.entries(filters))
-    if (value && value !== "ALL" && value !== "CURRENT") sp.set(key, value);
+    if (value && (value !== "ALL" || key === "shiftType") && value !== "CURRENT") sp.set(key, value);
   return sp.toString();
 }
 

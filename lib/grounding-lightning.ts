@@ -220,3 +220,17 @@ export function serializeGroundingSlotItem(
     canInspect: active && assignedShifts.includes(slot.shiftType),
   };
 }
+
+/** Toàn danh mục: kết quả hiện tại, tiến độ ngày theo ca được giao; chỉ xem. */
+export function serializeGroundingOverviewItem(
+  item: Parameters<typeof serializeGroundingSlotItem>[0],
+  date: string,
+  assignedShifts: ShiftTypeKey[],
+  avatars?: Parameters<typeof serializeGroundingSlotItem>[3],
+  now = new Date(),
+) {
+  const shiftType = assignedShifts[0] ?? currentGroundingSlot(now).shiftType;
+  const row = serializeGroundingSlotItem(item, { date, shiftType }, assignedShifts, avatars, now);
+  const current = serializeGroundingItem(item, avatars);
+  return { ...row, points: current.points, note: current.note, canInspect: false };
+}

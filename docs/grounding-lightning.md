@@ -15,6 +15,8 @@ Mỗi cương vị **và tổ máy** được chia thành ba tuyến cố địn
 - Thêm, đổi cương vị/tổ máy/tên hoặc xoá khu vực làm chia lại nhóm tương ứng theo danh mục mới.
 
 Trang tự mở ca hiện tại và tải lại mỗi 30 giây. Có thể chọn ngày và ca để xem số khu vực đã/chưa xác nhận.
+Nút **Tất cả thiết bị** hiển thị toàn danh mục trong phạm vi quyền, không giới hạn tuyến ca. Các thẻ tổng số/bình thường/khiếm khuyết và bộ lọc dùng kết quả hiện tại, không lấy bản chụp cũ đã ký. Tiến độ chờ xác nhận vẫn tính theo ca được giao trong ngày hiện tại. Chế độ tổng chỉ xem; chọn ca hiện tại để kiểm tra và xác nhận.
+
 Chỉ ca đang diễn ra được cập nhật kết quả, ảnh và xác nhận; máy chủ kiểm tra cả thời gian và tuyến được giao.
 Khi chuyển ca hoặc ngày, các lựa chọn xác nhận đang mở được bỏ để tránh xác nhận nhầm.
 

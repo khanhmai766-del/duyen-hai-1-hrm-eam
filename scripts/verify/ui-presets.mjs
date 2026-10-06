@@ -212,8 +212,22 @@ export const PRESETS = {
         }
       }
       if (catalog.data.some((row) => !coverage.has(row.id))) throw new Error("Có khu vực không được giao cho ca nào");
+      const overview = await get("?shiftType=ALL");
+      if (overview.meta.viewMode !== "ALL" || overview.data.length !== catalog.data.length) throw new Error("Chế độ tổng không phủ hết thiết bị");
+      if (overview.data.some((row) => row.canInspect)) throw new Error("Chế độ tổng phải chỉ xem");
+      for (const row of overview.data) {
+        const original = catalog.data.find((entry) => entry.id === row.id);
+        if (JSON.stringify(row.points) !== JSON.stringify(original.points)) throw new Error("Chế độ tổng phải dùng kết quả hiện tại");
+      }
+      const defects = await get("?shiftType=ALL&status=DEFECT");
+      const expected = catalog.data.filter((row) => row.points.some((point) => point.status === "DEFECT"));
+      if (defects.data.length !== expected.length || expected.some((row) => !defects.data.some((entry) => entry.id === row.id))) throw new Error("Tổng khiếm khuyết không khớp toàn danh mục");
+
       await page.getByRole("button", { name: "Ca sáng", exact: true }).click();
       await page.getByRole("button", { name: "Ca hiện tại", exact: true }).click();
+      await page.getByRole("button", { name: "Tất cả thiết bị", exact: true }).click();
+      await page.getByText("Đang xem toàn bộ thiết bị", { exact: false }).waitFor();
+      await page.getByRole("button", { name: /Có khiếm khuyết/ }).click();
     },
   },
   "tiep-dia-chon-nhieu": {

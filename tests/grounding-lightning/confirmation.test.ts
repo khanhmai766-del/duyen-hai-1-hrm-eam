@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { assertGroundingInspectionSlot } from "../../lib/server/grounding-inspection-schedule";
-import { serializeGroundingSlotItem } from "../../lib/grounding-lightning";
+import { serializeGroundingOverviewItem, serializeGroundingSlotItem } from "../../lib/grounding-lightning";
 
 const catalog = ["A", "B", "C"].map((areaEquipment) => ({
   id: areaEquipment, positionCode: "BOILER_DEPUTY", position: "Lò phó", machine: "S1", areaEquipment,
@@ -45,4 +45,12 @@ test("Dòng có xác nhận trong ca vẫn cần xác nhận lại khi kết qu�
   row.inspections[0].signedAt = "2026-10-06T15:00:01+07:00";
   const after = serializeGroundingSlotItem(row, slot, ["AFTERNOON"], undefined, new Date("2026-10-06T15:01:00+07:00"));
   assert.equal(after.needsSignature, false);
+});
+
+test("Toàn thiết bị giữ khiếm khuyết hiện tại dù ca cũ đã ký bình thường", () => {
+  const row = serializeGroundingOverviewItem(item(), "2026-10-06", ["MORNING"], undefined, now);
+  assert.equal(row.points[0].status, "DEFECT");
+  assert.equal(row.note, null);
+  assert.equal(row.canInspect, false);
+  assert.equal(row.needsSignature, false);
 });

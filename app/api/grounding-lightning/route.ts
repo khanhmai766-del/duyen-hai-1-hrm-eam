@@ -17,6 +17,7 @@ import {
   isGroundingType,
   groundingInspectorAvatars,
   serializeGroundingItem,
+  serializeGroundingOverviewItem,
 } from "@/lib/grounding-lightning";
 import { SHIFT_TYPE_ORDER } from "@/lib/constants";
 import { normalizeText } from "@/lib/nav";
@@ -58,7 +59,8 @@ export async function GET(req: NextRequest) {
     const now = new Date();
     const currentSlot = currentGroundingSlot(now);
     const date = sp.get("inspectionDate") ?? currentSlot.date;
-    const shiftType = sp.get("shiftType") ?? currentSlot.shiftType;
+    const allShifts = sp.get("shiftType") === "ALL";
+    const shiftType = allShifts ? currentSlot.shiftType : sp.get("shiftType") ?? currentSlot.shiftType;
     if (!isGroundingShift(shiftType)) return fail("Ca kiểm tra không hợp lệ");
     const selectedSlot = { date, shiftType };
     let dayStart: Date, dayEnd: Date;
@@ -125,11 +127,13 @@ export async function GET(req: NextRequest) {
       return true;
     };
     return ok(
-      rowsForSlot(selectedSlot).filter(matchesFilters),
+      (allShifts
+        ? items.map((item) => serializeGroundingOverviewItem(item, date, assignments.get(item.id) ?? [], avatars, now))
+        : rowsForSlot(selectedSlot)).filter(matchesFilters),
       {
         positions: positionRows.filter((row) => row.positionCode)
           .map((row) => ({ code: row.positionCode, label: row.position })),
-        scope, currentSlot, selectedSlot, shifts,
+        scope, currentSlot, selectedSlot, shifts, viewMode: allShifts ? "ALL" : "SHIFT",
         serverTime: now.toISOString(),
       },
     );

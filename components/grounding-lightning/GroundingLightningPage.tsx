@@ -1041,7 +1041,8 @@ export default function GroundingLightningPage() {
   const scope: GroundingScope | null = query.data?.meta?.scope ?? null;
   const selectedSlot: GroundingSlot | undefined = query.data?.meta?.selectedSlot;
   const currentSlot: GroundingSlot | undefined = query.data?.meta?.currentSlot;
-  const isCurrentSlot = Boolean(selectedSlot && currentSlot && sameGroundingSlot(selectedSlot, currentSlot));
+  const isOverview = query.data?.meta?.viewMode === "ALL";
+  const isCurrentSlot = !isOverview && Boolean(selectedSlot && currentSlot && sameGroundingSlot(selectedSlot, currentSlot));
   const shiftSummary: Array<{ shiftType: ShiftTypeKey; total: number; confirmed: number; pending: number }> = query.data?.meta?.shifts ?? [];
   const serverTime = query.data?.meta?.serverTime;
 
@@ -1116,7 +1117,7 @@ export default function GroundingLightningPage() {
   const [touchedIds, setTouchedIds] = useState<string[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [confirming, setConfirming] = useState(false);
-  const slotKey = selectedSlot ? `${selectedSlot.date}/${selectedSlot.shiftType}` : null;
+  const slotKey = selectedSlot ? `${isOverview ? "ALL" : "SHIFT"}/${selectedSlot.date}/${selectedSlot.shiftType}` : null;
   const [editingSlotKey, setEditingSlotKey] = useState<string | null>(null);
   if (!query.isPlaceholderData && slotKey !== editingSlotKey) {
     setEditingSlotKey(slotKey);
@@ -1535,7 +1536,7 @@ export default function GroundingLightningPage() {
               <Label htmlFor="grounding-day">Ngày kiểm tra</Label>
               <input id="grounding-day" type="date" value={selectedSlot.date}
                 className={cn(CONTROL, "w-auto text-base sm:text-sm")}
-                disabled={confirming || sign.isPending}
+                disabled={isOverview || confirming || sign.isPending}
                 onChange={(event) => setFilters((old) => ({ ...old, inspectionDate: event.target.value || undefined }))} />
               <Button variant="outline" className="h-10" disabled={confirming || sign.isPending}
                 onClick={() => setFilters((old) => ({ ...old, inspectionDate: undefined, shiftType: "CURRENT" }))}>
@@ -1543,10 +1544,15 @@ export default function GroundingLightningPage() {
               </Button>
             </div>
           </div>
+          <Button variant={isOverview ? "default" : "outline"} className="h-10 w-full sm:w-auto"
+            aria-pressed={isOverview} disabled={confirming || sign.isPending}
+            onClick={() => setFilters((old) => ({ ...old, shiftType: "ALL", inspectionDate: undefined }))}>
+            Tất cả thiết bị
+          </Button>
           <div className="grid grid-cols-3 gap-2">
             {SHIFT_TYPE_ORDER.map((shiftType) => {
               const summary = shiftSummary.find((entry) => entry.shiftType === shiftType);
-              const active = selectedSlot.shiftType === shiftType;
+              const active = !isOverview && selectedSlot.shiftType === shiftType;
               const slot = { date: selectedSlot.date, shiftType };
               const current = Boolean(currentSlot && sameGroundingSlot(slot, currentSlot));
               const ended = serverTime && groundingSlotWindow(slot).end.getTime() <= new Date(serverTime).getTime();
@@ -1570,7 +1576,8 @@ export default function GroundingLightningPage() {
               );
             })}
           </div>
-          {!isCurrentSlot && <p className="text-sm text-amber-800">Đang xem ca khác. Chỉ được cập nhật và xác nhận trong ca đang diễn ra.</p>}
+          {isOverview && <p className="text-sm text-cyan-800">Đang xem toàn bộ thiết bị trong phạm vi được phép. Số lượng và bộ lọc khiếm khuyết tổng hợp từ cả 3 ca theo kết quả hiện tại. Chọn ca hiện tại để kiểm tra và xác nhận.</p>}
+          {!isOverview && !isCurrentSlot && <p className="text-sm text-amber-800">Đang xem ca khác. Chỉ được cập nhật và xác nhận trong ca đang diễn ra.</p>}
           <p className="text-sm font-medium text-ink" aria-live="polite">
             Cả ngày: đã xác nhận {shiftSummary.reduce((total, shift) => total + shift.confirmed, 0)}/{shiftSummary.reduce((total, shift) => total + shift.total, 0)} khu vực
           </p>
