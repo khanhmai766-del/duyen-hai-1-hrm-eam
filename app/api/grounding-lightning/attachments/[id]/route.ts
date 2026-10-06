@@ -1,3 +1,4 @@
+import { requireGroundingInspectionSlot } from "@/lib/server/grounding-inspection-schedule";
 import { prisma } from "@/lib/prisma";
 import {
   audit,
@@ -30,6 +31,7 @@ export async function DELETE(_req: Request, props: { params: Promise<{ id: strin
     });
     if (!attachment) return fail("Không tìm thấy ảnh", 404);
     await assertGroundingScope(user, attachment.point.item);
+    await requireGroundingInspectionSlot(attachment.point.item);
     await prisma.$transaction([
       prisma.groundingLightningAttachment.delete({
         where: { id: attachment.id },

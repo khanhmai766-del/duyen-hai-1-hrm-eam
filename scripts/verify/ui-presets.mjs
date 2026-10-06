@@ -153,65 +153,160 @@ function milestonePreset(day) {
 }
 
 export const PRESETS = {
-  "tiep-dia-chon-nhieu": {
-    description: "Chọn nhiều vị trí bình thường; chặn vị trí chưa kiểm tra và có khiếm khuyết",
+  "tiep-dia-ca-khong-nhiem-vu": {
+    description: "Nhóm 2 khu vực: sáng/chiều mỗi ca một khu vực, đêm không có nhiệm vụ, cả ngày 1/2",
     async prepare() { return {}; },
     routes: () => ["/grounding-lightning"],
     async mock(context) {
-      const updatedAt = new Date().toISOString();
-      const items = ["NORMAL", "NORMAL", "UNCHECKED", "DEFECT"].map((status, i) => ({
-        id: `ui-grounding-${i}`, areaEquipment: ["Tiếp địa khu vực bơm nước làm mát tuần hoàn tổ máy 1", "Hệ thống chống sét nhà điều khiển trung tâm", "Tủ điện phân phối", "Khu vực bồn dầu"][i],
-        position: "Trực điện", positionCode: "TRUC_DIEN", machine: "S1", note: null,
-        updatedAt, latestInspection: null, needsSignature: true,
-        points: ["GROUNDING", "LIGHTNING"].map((type) => ({
-          id: `ui-point-${i}-${type}`, type, status, updatedAt,
-          defectDescription: status === "DEFECT" ? "Mối nối tiếp địa bị lỏng (giả lập)" : null, attachments: [],
-        })),
-      }));
+      await context.route("**/api/overhaul-milestones**", (route) => route.fulfill({ json: { data: [], meta: null, error: null } }));
+      await context.route("**/api/grounding-lightning**", (route) => {
+        if (route.request().method() !== "GET") throw new Error("Không ghi dữ liệu thật khi kiểm tra ca không có nhiệm vụ");
+        return route.fulfill({ json: { data: [], meta: {
+          positions: [], scope: { all: true, positionCode: null },
+          currentSlot: { date: "2026-10-06", shiftType: "NIGHT" }, selectedSlot: { date: "2026-10-06", shiftType: "NIGHT" },
+          serverTime: "2026-10-06T23:00:00+07:00",
+          shifts: [{ shiftType: "MORNING", total: 1, confirmed: 1, pending: 0 }, { shiftType: "AFTERNOON", total: 1, confirmed: 0, pending: 1 }, { shiftType: "NIGHT", total: 0, confirmed: 0, pending: 0 }],
+        }, error: null } });
+      });
+    },
+    async interact(page) {
+      await page.getByText("Cả ngày: đã xác nhận 1/2 khu vực", { exact: true }).waitFor();
+      const night = page.getByRole("button", { name: "Ca đêm", exact: true });
+      await night.getByText(page.viewportSize().width < 640 ? "Không có nhiệm vụ" : "Không có khu vực cần kiểm tra trong ca này", { exact: true }).waitFor();
+    },
+  },
+  "tiep-dia-ba-ca-du-lieu-local": {
+    description: "Đọc API thật trên DB local: phủ hết danh mục qua 3 ca, lọc không đổi tuyến, không ghi kết quả",
+    async prepare() { return {}; },
+    routes: () => ["/grounding-lightning"],
+    async mock(context) {
+      await context.route("**/api/overhaul-milestones**", (route) => route.fulfill({ json: { data: [], meta: null, error: null } }));
+    },
+    async interact(page) {
+      const get = async (query = "") => {
+        const response = await page.request.get(new URL(`/api/grounding-lightning${query}`, page.url()).href);
+        if (!response.ok()) throw new Error(`API trả ${response.status()}`);
+        const result = await response.json();
+        if (result.error) throw new Error(result.error);
+        return result;
+      };
+      const current = await get();
+      const date = current.meta.currentSlot.date;
+      const catalog = await get("?catalog=1");
+      if (!catalog.data.length) throw new Error("DB local cần có danh mục để kiểm tra phân ca");
+      const coverage = new Set();
+      for (const shift of ["MORNING", "AFTERNOON", "NIGHT"]) {
+        const query = `?inspectionDate=${date}&shiftType=${shift}`;
+        const slot = await get(query);
+        if (slot.meta.selectedSlot.shiftType !== shift) throw new Error("API trả nhầm ca");
+        const summary = slot.meta.shifts.find((row) => row.shiftType === shift);
+        if (slot.data.length !== summary.total || summary.confirmed + summary.pending !== summary.total) throw new Error("Tiến độ ca không khớp danh sách");
+        for (const row of slot.data) {
+          if (!row.assignedShifts.includes(shift)) throw new Error("Khu vực nằm ngoài tuyến ca");
+          if (coverage.has(row.id)) throw new Error("Một khu vực bị giao lặp giữa các ca");
+          coverage.add(row.id);
+        }
+        if (slot.data.length) {
+          const first = slot.data[0], filtered = await get(`${query}&q=${encodeURIComponent(first.areaEquipment)}`);
+          if (!filtered.data.some((row) => row.id === first.id)) throw new Error("Tìm kiếm đã làm thay đổi tuyến được giao");
+        }
+      }
+      if (catalog.data.some((row) => !coverage.has(row.id))) throw new Error("Có khu vực không được giao cho ca nào");
+      await page.getByRole("button", { name: "Ca sáng", exact: true }).click();
+      await page.getByRole("button", { name: "Ca hiện tại", exact: true }).click();
+    },
+  },
+  "tiep-dia-chon-nhieu": {
+    description: "Kiểm tra theo 3 ca; chọn nhiều vị trí, thử lại sau lỗi và khóa xác nhận ca khác",
+    async prepare() { return {}; },
+    routes: () => ["/grounding-lightning"],
+    async mock(context) {
+      const currentSlot = { date: "2026-10-06", shiftType: "AFTERNOON" };
+      const now = "2026-10-06T15:00:00+07:00";
+      const shifts = ["MORNING", "AFTERNOON", "NIGHT"];
+      const signed = [], completed = new Set();
       let failSecond = true;
-      const signed = [];
       context.groundingSigned = signed;
-      // Dữ liệu đại tu không liên quan; DB dev có thể chưa đồng bộ bảng này.
+      context.resetGrounding = () => completed.clear();
+      const makeItems = (shiftType, date) => ["NORMAL", "NORMAL", "UNCHECKED", "DEFECT"].map((status, i) => {
+        const id = shiftType === "AFTERNOON" ? `ui-grounding-${i}` : `ui-${shiftType}-${i}`;
+        const confirmed = date === currentSlot.date && (completed.has(id) || (shiftType === "MORNING" && i === 0));
+        return {
+          id, areaEquipment: ["Tiếp địa khu vực bơm nước làm mát tuần hoàn tổ máy 1", "Hệ thống chống sét nhà điều khiển trung tâm", "Tủ điện phân phối", "Khu vực bồn dầu"][i],
+          position: "Trực chính điện", positionCode: "ELECTRICAL_MAIN_OPERATOR", machine: "S1", note: null,
+          updatedAt: "2026-10-05T08:00:00+07:00", needsSignature: !confirmed,
+          assignedShifts: [shiftType], inspectionDate: date, inspectionShift: shiftType,
+          canInspect: date === currentSlot.date && shiftType === currentSlot.shiftType,
+          latestInspection: confirmed ? { id: `ui-sign-${id}`, inspectedById: "ui-inspector", inspectorName: "Người kiểm tra (giả lập)", inspectorPosition: "Trực chính điện", signedAt: shiftType === "MORNING" ? "2026-10-06T08:00:00+07:00" : now, inspectorAvatarUrl: null, results: [] } : null,
+          points: ["GROUNDING", "LIGHTNING"].map((type) => ({
+            id: `ui-point-${id}-${type}`, type, status, updatedAt: "2026-10-05T08:00:00+07:00",
+            defectDescription: status === "DEFECT" ? "Mối nối tiếp địa bị lỏng (giả lập)" : null, attachments: [],
+          })),
+        };
+      });
       await context.route("**/api/overhaul-milestones**", (route) => route.fulfill({ json: { data: [], meta: null, error: null } }));
       await context.route("**/api/grounding-lightning**", async (route) => {
-        const request = route.request();
-        if (request.method() === "POST" && new URL(request.url()).pathname.endsWith("/sign")) {
-          if (request.postDataJSON()?.normalOnly !== true) throw new Error("Phải kiểm tra lại trạng thái bình thường ở máy chủ");
-          const id = new URL(request.url()).pathname.split("/")[3];
+        const request = route.request(), url = new URL(request.url());
+        if (request.method() === "POST" && url.pathname.endsWith("/sign")) {
+          const body = request.postDataJSON();
+          if (body?.normalOnly !== true || body.inspectionDate !== currentSlot.date || body.shiftType !== currentSlot.shiftType) throw new Error("Phải gửi đúng ngày + ca và yêu cầu kiểm tra lại kết quả bình thường");
+          const id = url.pathname.split("/")[3];
           if (id === "ui-grounding-1" && failSecond) {
             failSecond = false;
             return route.fulfill({ json: { data: null, meta: null, error: "Lỗi xác nhận giả lập" } });
           }
-          signed.push(id);
+          signed.push(id); completed.add(id);
           return route.fulfill({ json: { data: { id: `ui-sign-${id}`, results: [] }, meta: null, error: null } });
         }
         if (request.method() !== "GET") throw new Error("Không ghi dữ liệu thật khi kiểm tra giao diện");
-        await route.fulfill({ json: { data: items, meta: { positions: [], scope: { all: true, positionCode: null } }, error: null } });
+        const selectedSlot = { date: url.searchParams.get("inspectionDate") || currentSlot.date, shiftType: url.searchParams.get("shiftType") || currentSlot.shiftType };
+        const summaries = shifts.map((shiftType) => {
+          const rows = makeItems(shiftType, selectedSlot.date), confirmed = rows.filter((row) => !row.needsSignature).length;
+          return { shiftType, total: rows.length, confirmed, pending: rows.length - confirmed };
+        });
+        await route.fulfill({ json: {
+          data: makeItems(selectedSlot.shiftType, selectedSlot.date),
+          meta: { positions: [{ code: "ELECTRICAL_MAIN_OPERATOR", label: "Trực chính điện" }], scope: { all: true, positionCode: null }, currentSlot, selectedSlot, shifts: summaries, serverTime: now }, error: null,
+        } });
       });
     },
     async interact(page) {
-      await page.getByRole("button", { name: "Chỉnh sửa", exact: true }).click();
+      let step = 0;
+      const click = async (name) => {
+        step += 1;
+        try { await page.getByRole("button", { name, exact: true }).click({ timeout: 10000 }); }
+        catch (error) { throw new Error(`Bước ${step}, bấm ${name}: ${error.message.replaceAll("\n", " ")}`); }
+      };
+      await click('Ca sáng');
+      await page.getByText("Đang xem ca khác. Chỉ được cập nhật và xác nhận trong ca đang diễn ra.").waitFor();
+      if (await page.getByRole("button", { name: "Chỉnh sửa", exact: true }).count()) throw new Error("Không được xác nhận ca đã kết thúc");
+      await click('Ca hiện tại');
+      await click('Chỉnh sửa');
       await page.getByRole("menuitem").filter({ hasText: "Sửa bảng" }).click();
       const checkboxes = page.getByRole("checkbox").filter({ visible: true });
-      if (await checkboxes.count() !== 4) throw new Error("Phải có 4 vị trí trong kịch bản");
+      if (await checkboxes.count() !== 4) throw new Error("Phải có 4 vị trí trong ca");
       if (await checkboxes.nth(2).isEnabled() || await checkboxes.nth(3).isEnabled()) throw new Error("Không được chọn vị trí chưa kiểm tra hoặc có khiếm khuyết");
-      await page.getByRole("button", { name: "Chọn vị trí bình thường trên trang", exact: true }).click();
-      await page.getByRole("button", { name: "Xác nhận 2 vị trí bình thường", exact: true }).waitFor();
-      if (!await checkboxes.nth(0).isChecked() || !await checkboxes.nth(1).isChecked()) throw new Error("Chưa chọn đủ 2 vị trí bình thường");
-      await page.getByRole("button", { name: "Xác nhận 2 vị trí bình thường", exact: true }).click();
+      await click('Chọn vị trí bình thường trên trang');
+      await click('Xác nhận 2 vị trí bình thường');
       await page.getByText("Đã xác nhận 1/2 vị trí. Lỗi xác nhận giả lập", { exact: true }).first().waitFor();
       if (await checkboxes.nth(0).isChecked() || !await checkboxes.nth(1).isChecked()) throw new Error("Phải bỏ chọn vị trí đã thành công và giữ vị trí bị lỗi");
-      const retry = page.getByRole("button", { name: "Xác nhận 1 vị trí bình thường", exact: true });
-      await retry.click();
-      await page.getByText("Đã xác nhận 1 vị trí bình thường", { exact: true }).first().waitFor();
-      if (page.context().groundingSigned.join(",") !== "ui-grounding-0,ui-grounding-1") throw new Error("Xác nhận lặp hoặc bỏ sót vị trí");
-      await page.getByRole("button", { name: "Chọn vị trí bình thường trên trang", exact: true }).click();
-      await page.getByRole("button", { name: "Lưu 2 dòng", exact: true }).click();
+      await click('Lưu 1 dòng');
       await page.getByRole("button", { name: "Chỉnh sửa", exact: true }).waitFor();
-      if (page.context().groundingSigned.length !== 4) throw new Error("Nút Lưu phải xác nhận các vị trí được chọn");
-      await page.getByRole("button", { name: "Chỉnh sửa", exact: true }).click();
+      if (page.context().groundingSigned.join(",") !== "ui-grounding-0,ui-grounding-1") throw new Error("Xác nhận lặp hoặc bỏ sót vị trí");
+      await page.getByRole("button", { name: "Ca chiều", exact: true }).locator("b").filter({ hasText: "2/4" }).waitFor();
+      await click('Chỉnh sửa');
       await page.getByRole("menuitem").filter({ hasText: "Sửa bảng" }).click();
-      await page.getByRole("button", { name: "Chọn vị trí bình thường trên trang", exact: true }).click();
+      if (await checkboxes.nth(0).isEnabled() || await checkboxes.nth(1).isEnabled()) throw new Error("Vị trí đã xác nhận không được chọn xác nhận lặp");
+      await click('Huỷ');
+      await click('Ca đêm');
+      await page.getByText("Đang xem ca khác. Chỉ được cập nhật và xác nhận trong ca đang diễn ra.").waitFor();
+      if (await page.getByRole("button", { name: "Chỉnh sửa", exact: true }).count()) throw new Error("Không được xác nhận ca chưa bắt đầu");
+      // Dựng lại trạng thái chưa xác nhận để ảnh thể hiện rõ ô chọn; chỉ tác động dữ liệu giả lập.
+      page.context().resetGrounding();
+      await page.reload({ waitUntil: "networkidle" });
+      await click('Chỉnh sửa');
+      await page.getByRole("menuitem").filter({ hasText: "Sửa bảng" }).click();
+      await click('Chọn vị trí bình thường trên trang');
     },
   },
   "pct-cho-nkvh": {

@@ -1,3 +1,5 @@
+import { groundingSlotWindow, inspectionInGroundingSlot, sameGroundingSlot, currentGroundingSlot, type GroundingSlot } from "@/lib/grounding-inspection-schedule";
+import type { ShiftTypeKey } from "@/lib/constants";
 import { fail } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 import { normalizePosition } from "@/lib/pccc-position";
@@ -136,7 +138,7 @@ export async function groundingInspectorAvatars(items: any[]) {
   const ids = Array.from(
     new Set(
       items
-        .map((item) => item.inspections?.[0]?.inspectedById)
+        .flatMap((item) => (item.inspections ?? []).map((inspection: any) => inspection.inspectedById))
         .filter((id): id is string => Boolean(id)),
     ),
   );
@@ -189,5 +191,32 @@ export function serializeGroundingItem(
     needsSignature:
       !latestInspection ||
       new Date(latestInspection.signedAt).getTime() < Math.max(...timestamps),
+  };
+}
+
+/** Lượt xác nhận chỉ có hiệu lực trong đúng ngày + ca, không dùng lượt của hôm trước. */
+export function serializeGroundingSlotItem(
+  item: any, slot: GroundingSlot, assignedShifts: ShiftTypeKey[],
+  avatars?: Map<string, string | null>, now = new Date(),
+) {
+  const inspections = (item.inspections ?? []).filter((entry: any) => inspectionInGroundingSlot(entry.signedAt, slot));
+  const serialized = serializeGroundingItem({ ...item, inspections }, avatars);
+  const active = sameGroundingSlot(slot, currentGroundingSlot(now));
+  const ended = groundingSlotWindow(slot).end.getTime() <= now.getTime();
+  const latest = serialized.latestInspection;
+  return {
+    ...serialized,
+    // Ca đã kết thúc hiển thị bản chụp đã ký, thay vì kết quả bị ca sau thay đổi.
+    ...(ended && latest ? {
+      note: latest.note,
+      points: latest.results.map((result: any) => ({
+        id: result.id ?? `${latest.id}-${result.type}`,
+        type: result.type, status: result.status, defectDescription: result.defectDescription,
+        updatedAt: latest.signedAt, attachments: [],
+      })),
+    } : {}),
+    needsSignature: active ? serialized.needsSignature : !latest,
+    assignedShifts, inspectionDate: slot.date, inspectionShift: slot.shiftType,
+    canInspect: active && assignedShifts.includes(slot.shiftType),
   };
 }

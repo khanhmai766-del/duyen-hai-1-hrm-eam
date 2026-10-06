@@ -1,3 +1,5 @@
+import { currentGroundingSlot, sameGroundingSlot, requestedGroundingSlot } from "@/lib/grounding-inspection-schedule";
+import { requireGroundingInspectionSlot } from "@/lib/server/grounding-inspection-schedule";
 import { prisma } from "@/lib/prisma";
 import {
   audit,
@@ -47,21 +49,29 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
     }
     // Luồng chọn nhiều vị trí phải kiểm tra lại dữ liệu hiện tại ở máy chủ.
     const body = await req.text();
-    let normalOnly = false;
-    if (body) {
-      try {
-        normalOnly = JSON.parse(body)?.normalOnly === true;
-      } catch {
-        return fail("Yêu cầu xác nhận không hợp lệ");
-      }
+    let payload: Record<string, unknown> = {};
+    let requested;
+    try {
+      payload = body ? JSON.parse(body) : {};
+      if (!payload || typeof payload !== "object" || Array.isArray(payload)) return fail("Yêu cầu xác nhận không hợp lệ");
+      requested = requestedGroundingSlot(payload);
+    } catch (error) {
+      return fail(error instanceof Error && !(error instanceof SyntaxError) ? error.message : "Yêu cầu xác nhận không hợp lệ");
     }
+    const slot = await requireGroundingInspectionSlot(item, requested);
+    const normalOnly = payload.normalOnly === true;
     if (normalOnly && item.points.some((point) => point.status !== "NORMAL")) {
       return fail("Vị trí đã chọn không còn hoàn toàn bình thường. Vui lòng kiểm tra lại kết quả", 409);
+    }
+    const signedAt = new Date();
+    if (!sameGroundingSlot(slot, currentGroundingSlot(signedAt))) {
+      return fail("Ca trực vừa thay đổi. Vui lòng tải lại danh sách trước khi xác nhận", 409);
     }
     const inspectorName = user.name ?? user.email ?? "";
     const inspection = await prisma.groundingLightningInspection.create({
       data: {
         itemId: item.id,
+        signedAt,
         note: item.note,
         inspectedById: user.id,
         inspectorName,
@@ -84,7 +94,7 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
       "CONFIRM_GROUNDING_LIGHTNING_INSPECTION",
       "GroundingLightningInspection",
       inspection.id,
-      auditDetailWithPosition(user, item.areaEquipment),
+      auditDetailWithPosition(user, `${item.areaEquipment} · Ngày ${slot.date} · Ca ${slot.shiftType}`),
       { afterData: inspection },
     );
     return ok(inspection);

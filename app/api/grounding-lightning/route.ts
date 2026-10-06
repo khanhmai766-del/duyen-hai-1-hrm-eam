@@ -18,6 +18,10 @@ import {
   groundingInspectorAvatars,
   serializeGroundingItem,
 } from "@/lib/grounding-lightning";
+import { SHIFT_TYPE_ORDER } from "@/lib/constants";
+import { normalizeText } from "@/lib/nav";
+import { assignGroundingShifts, currentGroundingSlot, groundingSlotWindow, isGroundingShift } from "@/lib/grounding-inspection-schedule";
+import { serializeGroundingSlotItem } from "@/lib/grounding-lightning";
 import { isPositionCode, positionLabelOf } from "@/lib/position-catalog";
 
 export const dynamic = "force-dynamic";
@@ -50,43 +54,38 @@ export async function GET(req: NextRequest) {
     const machine = sp.get("machine");
     const type = sp.get("type");
     const status = sp.get("status");
+    const catalogOnly = sp.get("catalog") === "1";
+    const now = new Date();
+    const currentSlot = currentGroundingSlot(now);
+    const date = sp.get("inspectionDate") ?? currentSlot.date;
+    const shiftType = sp.get("shiftType") ?? currentSlot.shiftType;
+    if (!isGroundingShift(shiftType)) return fail("Ca kiểm tra không hợp lệ");
+    const selectedSlot = { date, shiftType };
+    let dayStart: Date, dayEnd: Date;
+    try {
+      dayStart = groundingSlotWindow({ date, shiftType: "MORNING" }).start;
+      dayEnd = groundingSlotWindow({ date, shiftType: "NIGHT" }).end;
+    } catch (error) {
+      return fail(error instanceof Error ? error.message : "Ngày kiểm tra không hợp lệ");
+    }
+    // Chia tuyến từ danh mục đầy đủ của mỗi cương vị + tổ máy, trước khi tìm kiếm/lọc kết quả.
     const where: Prisma.GroundingLightningItemWhereInput = {
       ...(!scope.all
         ? { positionCode: scope.positionCode ?? "__NO_POSITION__" }
-        : positionCode && positionCode !== "ALL"
-          ? { positionCode }
-          : {}),
+        : positionCode && positionCode !== "ALL" ? { positionCode } : {}),
       ...(machine && machine !== "ALL" ? { machine } : {}),
-      ...(q
-        ? {
-            OR: [
-              { areaEquipment: { contains: q, mode: "insensitive" } },
-              { note: { contains: q, mode: "insensitive" } },
-              {
-                points: {
-                  some: {
-                    defectDescription: { contains: q, mode: "insensitive" },
-                  },
-                },
-              },
-            ],
-          }
-        : {}),
-      ...((type && type !== "ALL") || (status && status !== "ALL")
-        ? {
-            points: {
-              some: {
-                ...(type && type !== "ALL" ? { type } : {}),
-                ...(status && status !== "ALL" ? { status } : {}),
-              },
-            },
-          }
-        : {}),
     };
     const [items, positionRows] = await Promise.all([
       prisma.groundingLightningItem.findMany({
         where,
-        include: includeItem,
+        include: catalogOnly ? includeItem : {
+          ...includeItem,
+          inspections: {
+            where: { signedAt: { gte: dayStart, lt: dayEnd } },
+            orderBy: { signedAt: "desc" },
+            include: { results: { orderBy: { type: "asc" } } },
+          },
+        },
         orderBy: [
           { position: "asc" },
           { machine: "asc" },
@@ -102,14 +101,36 @@ export async function GET(req: NextRequest) {
         orderBy: { position: "asc" },
       }),
     ]);
+    if (catalogOnly) {
+      return ok(items.map((item) => serializeGroundingItem(item)), { scope });
+    }
+    const assignments = assignGroundingShifts(items);
     const avatars = await groundingInspectorAvatars(items);
+    const rowsForSlot = (slot: typeof selectedSlot) => items
+      .filter((item) => assignments.get(item.id)?.includes(slot.shiftType))
+      .map((item) => serializeGroundingSlotItem(item, slot, assignments.get(item.id) ?? [], avatars, now));
+    const shifts = SHIFT_TYPE_ORDER.map((value) => {
+      const rows = rowsForSlot({ date, shiftType: value });
+      const confirmed = rows.filter((item) => !item.needsSignature).length;
+      return { shiftType: value, total: rows.length, confirmed, pending: rows.length - confirmed };
+    });
+    const matchesFilters = (item: { areaEquipment: string; note: string | null; points: Array<{ type: string; status: string; defectDescription: string | null }> }) => {
+      if (q && ![item.areaEquipment, item.note, ...item.points.map((point) => point.defectDescription)]
+        .some((value) => normalizeText(value ?? "").includes(normalizeText(q)))) return false;
+      if ((type && type !== "ALL") || (status && status !== "ALL")) {
+        return item.points.some((point) =>
+          (!type || type === "ALL" || point.type === type) &&
+          (!status || status === "ALL" || point.status === status));
+      }
+      return true;
+    };
     return ok(
-      items.map((item) => serializeGroundingItem(item, avatars)),
+      rowsForSlot(selectedSlot).filter(matchesFilters),
       {
-        positions: positionRows
-          .filter((row) => row.positionCode)
+        positions: positionRows.filter((row) => row.positionCode)
           .map((row) => ({ code: row.positionCode, label: row.position })),
-        scope,
+        scope, currentSlot, selectedSlot, shifts,
+        serverTime: now.toISOString(),
       },
     );
   });

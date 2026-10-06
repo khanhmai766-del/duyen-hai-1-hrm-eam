@@ -1,3 +1,5 @@
+import { requestedGroundingSlot } from "@/lib/grounding-inspection-schedule";
+import { requireGroundingInspectionSlot } from "@/lib/server/grounding-inspection-schedule";
 import { prisma } from "@/lib/prisma";
 import {
   audit,
@@ -45,6 +47,12 @@ export async function PATCH(req: Request, props: { params: Promise<{ id: string 
     if (!current) return fail("Không tìm thấy khu vực/thiết bị", 404);
     await assertGroundingScope(user, current);
     const body = (await req.json()) as Record<string, unknown>;
+    if ("results" in body || ("note" in body && !["areaEquipment", "positionCode", "machine", "types"].some((key) => key in body))) {
+      let slot;
+      try { slot = requestedGroundingSlot(body); }
+      catch (error) { return fail(error instanceof Error ? error.message : "Ngày hoặc ca kiểm tra không hợp lệ"); }
+      await requireGroundingInspectionSlot(current, slot);
+    }
     const editsCatalog = [
       "areaEquipment",
       "positionCode",

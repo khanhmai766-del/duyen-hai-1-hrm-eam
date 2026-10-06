@@ -1,4 +1,5 @@
 import type { NextRequest } from "next/server";
+import { requireGroundingInspectionSlot } from "@/lib/server/grounding-inspection-schedule";
 import { prisma } from "@/lib/prisma";
 import {
   audit,
@@ -44,6 +45,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
     if (!point || point.itemId !== params.id)
       return fail("Không tìm thấy hạng mục kiểm tra", 404);
     await assertGroundingScope(user, point.item);
+    await requireGroundingInspectionSlot(point.item);
     if (point.status !== "DEFECT")
       return fail("Chỉ bổ sung ảnh khi hạng mục đang có khiếm khuyết");
     /*

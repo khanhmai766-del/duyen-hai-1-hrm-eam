@@ -7,6 +7,7 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { apiGet, apiMutate, apiUpload } from "@/lib/fetcher";
+import type { ShiftTypeKey } from "@/lib/constants";
 import type {
   GroundingStatus,
   GroundingType,
@@ -54,6 +55,10 @@ export type GroundingItem = {
   points: GroundingPoint[];
   latestInspection: GroundingInspection | null;
   needsSignature: boolean;
+  assignedShifts?: ShiftTypeKey[];
+  inspectionDate?: string;
+  inspectionShift?: ShiftTypeKey;
+  canInspect?: boolean;
 };
 export type GroundingFilters = {
   q: string;
@@ -61,12 +66,14 @@ export type GroundingFilters = {
   machine: string;
   type: string;
   status: string;
+  shiftType?: ShiftTypeKey | "CURRENT";
+  inspectionDate?: string;
 };
 
 function queryString(filters: GroundingFilters) {
   const sp = new URLSearchParams();
   for (const [key, value] of Object.entries(filters))
-    if (value && value !== "ALL") sp.set(key, value);
+    if (value && value !== "ALL" && value !== "CURRENT") sp.set(key, value);
   return sp.toString();
 }
 
@@ -78,6 +85,7 @@ export function useGroundingItems(filters: GroundingFilters) {
         `/api/grounding-lightning?${queryString(filters)}`,
       ),
     staleTime: 15_000,
+    refetchInterval: 30_000,
     /*
      * Giữ danh sách CŨ trên bảng trong lúc tải kết quả cho bộ lọc/từ khoá MỚI.
      *
@@ -94,7 +102,7 @@ export function useGroundingAreaOptions(positionCode: string, machine: string) {
     queryKey: ["grounding-lightning-area-options", positionCode, machine],
     queryFn: () =>
       apiGet<GroundingItem[]>(
-        `/api/grounding-lightning?${queryString({ q: "", positionCode, machine, type: "ALL", status: "ALL" })}`,
+        `/api/grounding-lightning?${queryString({ q: "", positionCode, machine, type: "ALL", status: "ALL" })}&catalog=1`,
       ),
     enabled: Boolean(positionCode && machine),
     staleTime: 30_000,
@@ -139,11 +147,11 @@ export function useDeleteGroundingItem() {
 export function useSignGroundingItem() {
   const invalidate = useInvalidateGrounding();
   return useMutation({
-    mutationFn: (input: string | { id: string; normalOnly: true }) =>
+    mutationFn: (input: string | { id: string; normalOnly?: true; inspectionDate?: string; shiftType?: ShiftTypeKey }) =>
       apiMutate<GroundingInspection>(
         `/api/grounding-lightning/${typeof input === "string" ? input : input.id}/sign`,
         "POST",
-        typeof input === "string" ? undefined : { normalOnly: input.normalOnly },
+        typeof input === "string" ? undefined : { normalOnly: input.normalOnly, inspectionDate: input.inspectionDate, shiftType: input.shiftType },
       ),
     onSuccess: invalidate,
   });

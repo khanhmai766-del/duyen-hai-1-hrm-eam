@@ -89,6 +89,9 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { cn, initials } from "@/lib/utils";
+import { SHIFT_TYPE, SHIFT_TYPE_ORDER, type ShiftTypeKey } from "@/lib/constants";
+import { GROUNDING_SHIFT_HOURS, GROUNDING_SHIFT_HOURS_COMPACT, currentGroundingSlot, groundingSlotWindow, sameGroundingSlot, type GroundingSlot } from "@/lib/grounding-inspection-schedule";
+import { formatVietnamDate, VIETNAM_TIME_ZONE } from "@/lib/vietnam-time";
 import { POSITION_CATALOG } from "@/lib/position-catalog";
 import {
   GROUNDING_STATUS_LABEL,
@@ -121,7 +124,7 @@ const CONTROL =
 const BASE_TABLE_COLUMNS = 8;
 
 function isNormalItem(item: GroundingItem) {
-  return item.points.length > 0 && item.points.every((point) => point.status === "NORMAL");
+  return item.canInspect !== false && item.needsSignature && item.points.length > 0 && item.points.every((point) => point.status === "NORMAL");
 }
 /*
   Khoá sắp xếp “giữ nguyên thứ tự máy chủ trả về” (cương vị → khu vực). Bảng này là sổ
@@ -146,6 +149,7 @@ function fmtDate(value?: string | null) {
   return value
     ? new Intl.DateTimeFormat("vi-VN", {
         dateStyle: "short",
+        timeZone: VIETNAM_TIME_ZONE,
         timeStyle: "short",
       }).format(new Date(value))
     : "—";
@@ -673,6 +677,8 @@ function InspectionDialog({
       const saved = await update.mutateAsync({
         id: item.id,
         note,
+        inspectionDate: item.inspectionDate,
+        shiftType: item.inspectionShift,
         results: item.points.map((point) => ({
           type: point.type,
           status: results[point.type].status,
@@ -953,6 +959,10 @@ function HistoryDialog({
                   <div className="text-xs text-muted-foreground">
                     {entry.inspectorPosition || "Không ghi cương vị"} ·{" "}
                     {fmtDate(entry.signedAt)}
+                    {(() => {
+                      const slot = currentGroundingSlot(new Date(entry.signedAt));
+                      return ` · Ca ${SHIFT_TYPE[slot.shiftType].label.toLocaleLowerCase("vi")} · Ngày ${formatVietnamDate(new Date(`${slot.date}T06:00:00+07:00`))}`;
+                    })()}
                   </div>
                 </div>
                 <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">
@@ -1010,6 +1020,7 @@ export default function GroundingLightningPage() {
     machine: "ALL",
     type: "ALL",
     status: "ALL",
+    shiftType: "CURRENT",
   });
   /*
     Chữ trong ô tìm kiếm KHÔNG đi thẳng vào khoá truy vấn nữa. Trước đây mỗi phím gõ đổi
@@ -1028,6 +1039,12 @@ export default function GroundingLightningPage() {
   const items = useMemo(() => query.data?.data ?? [], [query.data?.data]);
   const positions = query.data?.meta?.positions ?? [];
   const scope: GroundingScope | null = query.data?.meta?.scope ?? null;
+  const selectedSlot: GroundingSlot | undefined = query.data?.meta?.selectedSlot;
+  const currentSlot: GroundingSlot | undefined = query.data?.meta?.currentSlot;
+  const isCurrentSlot = Boolean(selectedSlot && currentSlot && sameGroundingSlot(selectedSlot, currentSlot));
+  const shiftSummary: Array<{ shiftType: ShiftTypeKey; total: number; confirmed: number; pending: number }> = query.data?.meta?.shifts ?? [];
+  const serverTime = query.data?.meta?.serverTime;
+
   /*
    * Ba cờ quyền đều CỘNG THÊM `scope?.all` bên cạnh RBAC theo vai trò (`can(...)`), không
    * chỉ riêng canDelete: "Kỹ thuật viên"/"Quản đốc"/"Phó quản đốc"/"Trưởng ca" thường mang
@@ -1037,9 +1054,9 @@ export default function GroundingLightningPage() {
    * `scope?.all` chỉ là lưới an toàn thứ hai — không đổi hành vi của họ, chỉ khớp thêm
    * đúng nhóm cương vị mà RBAC theo vai trò không nhìn thấy được.
    */
-  const canManage =
-    can("grounding-lightning-manage", ["personal", "manage", "full"]) ||
-    Boolean(scope?.all);
+  const canManage = isCurrentSlot && !query.isPlaceholderData && (
+    can("grounding-lightning-manage", ["personal", "manage", "full"]) || Boolean(scope?.all)
+  );
   // "personal" mở từ 2026-09-12: người giữ một cương vị được thêm/sửa danh mục TRONG
   // PHẠM VI cương vị đó — máy chủ và CatalogDialog cùng khoá ô Cương vị khi phạm vi
   // không phải "toàn phân xưởng" (xem prop `scope` của CatalogDialog).
@@ -1099,6 +1116,15 @@ export default function GroundingLightningPage() {
   const [touchedIds, setTouchedIds] = useState<string[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [confirming, setConfirming] = useState(false);
+  const slotKey = selectedSlot ? `${selectedSlot.date}/${selectedSlot.shiftType}` : null;
+  const [editingSlotKey, setEditingSlotKey] = useState<string | null>(null);
+  if (!query.isPlaceholderData && slotKey !== editingSlotKey) {
+    setEditingSlotKey(slotKey);
+    setTouchedIds([]);
+    setSelectedIds([]);
+    setTableEditing(false);
+    setInspection(null);
+  }
   const tableColumns = BASE_TABLE_COLUMNS + (tableEditing ? 2 : 0);
   const toggleSelection = (id: string) => setSelectedIds((old) =>
     old.includes(id) ? old.filter((value) => value !== id) : [...old, id],
@@ -1128,6 +1154,8 @@ export default function GroundingLightningPage() {
       machine: "ALL",
       type: "ALL",
       status: "ALL",
+      shiftType: filters.shiftType,
+      inspectionDate: filters.inspectionDate,
     });
     setActiveKpi(null);
     setSearchText("");
@@ -1192,6 +1220,10 @@ export default function GroundingLightningPage() {
   ) {
     if (pageResetKey.filters !== filters || pageResetKey.debouncedSearch !== debouncedSearch || pageResetKey.activeKpi !== activeKpi) {
       setSelectedIds([]);
+      if (pageResetKey.filters.shiftType !== filters.shiftType || pageResetKey.filters.inspectionDate !== filters.inspectionDate) {
+        setTouchedIds([]);
+        setTableEditing(false);
+      }
     }
     setPageResetKey({ filters, debouncedSearch, sort, pageSize, activeKpi });
     setPage(1);
@@ -1224,7 +1256,7 @@ export default function GroundingLightningPage() {
     }
   };
   const rowActions: RowActionContext = {
-    canManage,
+    canManage: canManage && !query.isFetching,
     canCatalog,
     canDelete,
     onInspect: setInspection,
@@ -1258,7 +1290,7 @@ export default function GroundingLightningPage() {
     let completed = 0;
     try {
       for (const id of eligibleSelectedIds) {
-        await sign.mutateAsync({ id, normalOnly: true });
+        await sign.mutateAsync({ id, normalOnly: true, inspectionDate: selectedSlot?.date, shiftType: selectedSlot?.shiftType });
         completed += 1;
         setSelectedIds((old) => old.filter((value) => value !== id));
         setTouchedIds((old) => old.filter((value) => value !== id));
@@ -1286,7 +1318,7 @@ export default function GroundingLightningPage() {
       // Tuần tự chứ không song song: mỗi lượt ký là một request ghi, bắn 200 request cùng
       // lúc là tự làm nghẽn chính mình và lỗi giữa chừng thì không biết đã ký tới đâu.
       for (const id of remainingIds) {
-        await sign.mutateAsync(id);
+        await sign.mutateAsync({ id, inspectionDate: selectedSlot?.date, shiftType: selectedSlot?.shiftType });
         setTouchedIds((old) => old.filter((value) => value !== id));
       }
       toast.success(`Đã xác nhận ${remainingIds.length} khu vực/thiết bị`);
@@ -1315,11 +1347,11 @@ export default function GroundingLightningPage() {
                   variant="outline"
                   size="toolbar"
                   onClick={cancelEdit}
-                  disabled={sign.isPending || confirming}
+                  disabled={sign.isPending || confirming || query.isFetching}
                 >
                   Huỷ
                 </Button>
-                <Button size="toolbar" onClick={saveEdits} disabled={sign.isPending || confirming}>
+                <Button size="toolbar" onClick={saveEdits} disabled={sign.isPending || confirming || query.isFetching}>
                   <Save className={cn("mr-1.5 size-4", sign.isPending && "animate-pulse")} />
                   {sign.isPending
                     ? "Đang lưu…"
@@ -1492,6 +1524,59 @@ export default function GroundingLightningPage() {
           )}
         </>
       </PageHeader>
+      {selectedSlot && (
+        <section aria-label="Lịch kiểm tra theo ca" className="space-y-3 rounded-2xl border border-slate-200 bg-white p-3 sm:p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="font-bold text-ink">Kiểm tra hằng ngày theo cương vị</h2>
+              <p className="text-sm text-muted-foreground">Mỗi ca kiểm tra và xác nhận riêng các khu vực được giao.</p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Label htmlFor="grounding-day">Ngày kiểm tra</Label>
+              <input id="grounding-day" type="date" value={selectedSlot.date}
+                className={cn(CONTROL, "w-auto text-base sm:text-sm")}
+                disabled={confirming || sign.isPending}
+                onChange={(event) => setFilters((old) => ({ ...old, inspectionDate: event.target.value || undefined }))} />
+              <Button variant="outline" className="h-10" disabled={confirming || sign.isPending}
+                onClick={() => setFilters((old) => ({ ...old, inspectionDate: undefined, shiftType: "CURRENT" }))}>
+                Ca hiện tại
+              </Button>
+            </div>
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            {SHIFT_TYPE_ORDER.map((shiftType) => {
+              const summary = shiftSummary.find((entry) => entry.shiftType === shiftType);
+              const active = selectedSlot.shiftType === shiftType;
+              const slot = { date: selectedSlot.date, shiftType };
+              const current = Boolean(currentSlot && sameGroundingSlot(slot, currentSlot));
+              const ended = serverTime && groundingSlotWindow(slot).end.getTime() <= new Date(serverTime).getTime();
+              return (
+                <button key={shiftType} type="button" aria-pressed={active}
+                  aria-label={`Ca ${SHIFT_TYPE[shiftType].label.toLocaleLowerCase("vi")}`}
+                  disabled={confirming || sign.isPending}
+                  onClick={() => setFilters((old) => ({ ...old, shiftType }))}
+                  className={cn("rounded-xl border p-2 text-left transition sm:p-3", active ? "border-cyan-500 bg-cyan-50 ring-1 ring-cyan-500" : "border-slate-200 bg-slate-50 hover:bg-slate-100")}>
+                  <span className="flex flex-wrap items-center gap-1 text-sm font-bold text-ink sm:gap-2 sm:text-base">
+                    Ca {SHIFT_TYPE[shiftType].label.toLocaleLowerCase("vi")}
+                    {current && <><span className="size-1.5 rounded-full bg-cyan-600 sm:hidden" title="Đang diễn ra" /><span className="hidden rounded-full bg-cyan-100 px-2 py-0.5 text-xs text-cyan-800 sm:inline">Đang diễn ra</span></>}
+                  </span>
+                  <span className="mt-1 block text-xs text-muted-foreground"><span className="sm:hidden">{GROUNDING_SHIFT_HOURS_COMPACT[shiftType]}</span><span className="hidden sm:inline">{GROUNDING_SHIFT_HOURS[shiftType]}</span></span>
+                  <span className="mt-2 block text-xs sm:text-sm"><span className="hidden sm:inline">Đã xác nhận </span><b className="sm:font-normal">{summary?.confirmed ?? 0}/{summary?.total ?? 0}</b><span className="sm:hidden"> đã xác nhận</span><span className="hidden sm:inline"> khu vực</span></span>
+                  <span className={cn("mt-1 block text-xs font-medium", ended && summary?.pending ? "text-rose-700" : "text-muted-foreground")}>
+                    <span className="sm:hidden">{summary?.total === 0 ? "Không có nhiệm vụ" : summary?.pending === 0 ? "Hoàn thành" : `Còn ${summary?.pending ?? 0}${ended ? " · Quá ca" : ""}`}</span>
+                    <span className="hidden sm:inline">{summary?.total === 0 ? "Không có khu vực cần kiểm tra trong ca này" : summary?.pending === 0 ? "Đã hoàn thành" : `${summary?.pending ?? 0} khu vực chưa xác nhận${ended ? " · Ca đã kết thúc" : ""}`}</span>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+          {!isCurrentSlot && <p className="text-sm text-amber-800">Đang xem ca khác. Chỉ được cập nhật và xác nhận trong ca đang diễn ra.</p>}
+          <p className="text-sm font-medium text-ink" aria-live="polite">
+            Cả ngày: đã xác nhận {shiftSummary.reduce((total, shift) => total + shift.confirmed, 0)}/{shiftSummary.reduce((total, shift) => total + shift.total, 0)} khu vực
+          </p>
+          <p className="text-xs text-muted-foreground">Mỗi khu vực được giao cho một ca trong ngày. Nhóm có ít khu vực có thể có ca không được giao nhiệm vụ.</p>
+        </section>
+      )}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {/* Thẻ Tổng KHÔNG lọc theo giá trị riêng — bấm nó để BỎ lọc KPI đang chọn, cùng
             việc active=true khi chưa chọn thẻ nào, cho biết "đang xem tất cả". Bốn tông
@@ -1635,7 +1720,7 @@ export default function GroundingLightningPage() {
                     <RadioTower className="mx-auto mb-3 size-10 text-slate-300" />
                     <b className="text-ink">Chưa có dữ liệu phù hợp</b>
                     <p className="mt-1 text-sm text-muted-foreground">
-                      Thêm khu vực/thiết bị mới hoặc thay đổi bộ lọc.
+                      Chọn ca khác hoặc thay đổi bộ lọc để xem khu vực được giao.
                     </p>
                   </TableCell>
                 </TableRow>
@@ -1839,6 +1924,13 @@ export default function GroundingLightningPage() {
                   </div>
                 ))}
               </div>
+              <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
+                <span className={cn("font-medium", item.needsSignature ? "text-amber-700" : "text-emerald-700")}>
+                  {item.needsSignature ? "Chưa xác nhận trong ca này" : "Đã xác nhận trong ca này"}
+                </span>
+                <Button variant="ghost" className="h-10" onClick={() => setHistory(item)}><History className="mr-1 size-4" />Lịch sử</Button>
+              </div>
+              {item.latestInspection && <p className="mt-1 text-xs text-muted-foreground">{item.latestInspection.inspectorName} · {fmtDate(item.latestInspection.signedAt)}</p>}
               {tableEditing && (
                 <label className="mt-3 flex min-h-10 items-center gap-3 text-sm">
                   <input type="checkbox" className="size-5 shrink-0 accent-emerald-600"
@@ -1846,7 +1938,7 @@ export default function GroundingLightningPage() {
                     checked={eligibleSelectedIds.includes(item.id)}
                     disabled={confirming || sign.isPending || query.isFetching || !isNormalItem(item)}
                     onChange={() => toggleSelection(item.id)} />
-                  {isNormalItem(item) ? "Chọn xác nhận bình thường" : "Cần cập nhật kết quả riêng"}
+                  {!item.needsSignature ? "Đã xác nhận trong ca này" : isNormalItem(item) ? "Chọn xác nhận bình thường" : "Cần cập nhật kết quả riêng"}
                 </label>
               )}
               {tableEditing && (
@@ -1861,7 +1953,7 @@ export default function GroundingLightningPage() {
               <RadioTower className="mx-auto mb-3 size-10 text-slate-300" />
               <b className="text-ink">Chưa có dữ liệu phù hợp</b>
               <p className="mt-1 text-sm text-muted-foreground">
-                Thêm khu vực/thiết bị mới hoặc thay đổi bộ lọc.
+                Chọn ca khác hoặc thay đổi bộ lọc để xem khu vực được giao.
               </p>
             </div>
           )}
