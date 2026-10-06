@@ -16,8 +16,10 @@ Chuyển động dừng khi phần này ra ngoài vùng nhìn, tab ẩn hoặc n
 
 ## Nguồn đã đối chiếu
 
-`PL2. Mốc đường găng SCL S2-DH1 2026.xls`, sheet `LH-TB S2-DH1`: 34 nội dung
-(20 mốc đơn, 14 khoảng ngày), tương ứng 48 lần nhắc. Ngày 1 là **06/10/2026** (file gốc
+`PL2. Mốc đường găng SCL S2-DH1 2026.xls`, sheet `LH-TB S2-DH1`: 34 nội dung, cộng 2 mốc theo sơ đồ cập nhật
+06/10/2026 — **Cắt điện MBA chính** 07h00 09/10 (Ngày 4) và **Đóng điện MBA chính** 17h00 10/11 (Ngày 36) — tổng
+36 nội dung (22 mốc đơn, 14 khoảng ngày), tương ứng 50 lần nhắc. Thêm mốc mới vào DB đã nạp:
+`npx tsx scripts/data-ops/add-overhaul-milestones.ts` (xem trước) rồi `--commit`. Ngày 1 là **06/10/2026** (file gốc
 ghi 07/10; dời sớm 1 ngày ngày 05/10/2026 cho khớp các tab tiến độ trên Google Sheets).
 Khoảng ngày lấy hai đầu ngoặc; không lấy vị trí mũi tên nối giữa nhãn làm ngày riêng.
 Dữ liệu nằm ở `lib/overhaul-milestones-source.ts`. Mốc cuối là 03/12; tiêu đề lịch
@@ -52,7 +54,7 @@ npm run verify:ui -- --preset=scl-s2
 
 Script API chỉ dùng tài khoản/mốc tạm trên localhost và dọn trong `finally`.
 Script browser kiểm tra 5 ngày, bấm chuông mở đúng mốc và sửa/xoá/thêm qua giao diện
-bằng response giả lập, không ghi lên bộ 34 mốc.
+bằng response giả lập, không ghi lên bộ mốc thật.
 Preset giao diện chỉ SELECT và giả lập response theo ngày 22/11, không sửa đồng hồ
 hệ thống hay dữ liệu. Các preset `scl-s2-ngay-dau`, `scl-s2-ngay-cuoi`, `scl-s2-het-lich`
 kiểm tra ngày 06/10, 03/12 và 04/12. Ảnh nằm trong `reports/verify/` (gitignore).

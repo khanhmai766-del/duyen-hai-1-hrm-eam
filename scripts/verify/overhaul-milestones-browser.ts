@@ -1,5 +1,5 @@
 /** Kiểm tra tương tác lịch/chuông trên localhost. Mốc và thời gian giả lập qua route,
- * không sửa 34 mốc thật trong DB local. Tài khoản tạm được dọn sau khi chạy. */
+ * không sửa bộ mốc thật trong DB local. Tài khoản tạm được dọn sau khi chạy. */
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { mkdirSync } from "node:fs";

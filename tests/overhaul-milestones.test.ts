@@ -8,11 +8,11 @@ const items: OverhaulMilestone[] = S2_MILESTONES_SOURCE.map((row) => ({
   createdAt: "2026-10-03T00:00:00Z", updatedAt: "2026-10-03T00:00:00Z",
 }));
 
-test("PL2 có đủ 20 mốc đơn, 14 khoảng ngày và 48 lần nhắc", () => {
-  assert.equal(items.length, 34);
-  assert.equal(new Set(items.map((item) => item.sourceKey)).size, 34);
+test("PL2 + 2 mốc MBA (06/10) đủ 22 mốc đơn, 14 khoảng ngày và 50 lần nhắc", () => {
+  assert.equal(items.length, 36);
+  assert.equal(new Set(items.map((item) => item.sourceKey)).size, 36);
   assert.equal(items.filter((item) => item.endDate).length, 14);
-  assert.equal(milestoneEvents(items, "2026-10-03").length, 48);
+  assert.equal(milestoneEvents(items, "2026-10-03").length, 50);
   assert.equal(items.find((item) => item.sourceKey.endsWith(":thao-tuabin-may-phat"))?.endDate, "2026-10-31");
   assert.equal(items.find((item) => item.sourceKey.endsWith(":co2-h2"))?.startDate, "2026-11-27");
 });

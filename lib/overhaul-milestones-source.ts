@@ -39,6 +39,9 @@ const ROWS: Array<[string, number, number | null, string]> = [
   ["flushing-nhot", 50, 52, "Flushing hệ thống nhớt bôi trơn"],
   ["co2-h2", 53, 54, "Đưa CO₂ và H₂ thông thổi máy phát"],
   ["thu-nghiem", 57, 59, "Thử nghiệm sau đại tu"],
+  // Bổ sung theo sơ đồ đường găng cập nhật 06/10/2026 (ô viền đỏ) — để cuối danh sách cho thứ tự mốc cũ không đổi.
+  ["cat-dien-mba", 4, null, "Cắt điện MBA chính lúc 07h00 (09/10/2026)"],
+  ["dong-dien-mba", 36, null, "Đóng điện MBA chính lúc 17h00 (10/11/2026)"],
 ];
 
 /** Ngày lịch yyyy-mm-dd của "Ngày đại tu n" (n = 1 → 06/10/2026). */

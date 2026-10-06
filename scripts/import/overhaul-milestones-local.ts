@@ -16,6 +16,6 @@ async function main() {
       ...row, startDate: new Date(`${row.startDate}T00:00:00Z`), endDate: row.endDate ? new Date(`${row.endDate}T00:00:00Z`) : null,
     })), skipDuplicates: true,
   });
-  console.log(`Đã thêm ${result.count}/34 mốc SCL S2 vào DB local. Mốc đã tồn tại được giữ nguyên.`);
+  console.log(`Đã thêm ${result.count}/${S2_MILESTONES_SOURCE.length} mốc SCL S2 vào DB local. Mốc đã tồn tại được giữ nguyên.`);
 }
 main().catch((error) => { console.error(error); process.exitCode = 1; }).finally(() => prisma.$disconnect());

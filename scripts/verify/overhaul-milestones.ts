@@ -8,6 +8,7 @@ import { chromium, request, type APIRequestContext } from "playwright-core";
 import { mkdirSync } from "node:fs";
 import { assertDevDatabase, assertLocalBase, loadDevEnv } from "./_safety.mjs";
 import { OVERHAUL_CAMPAIGN, buildMilestoneSchedule, type MilestoneSchedule } from "../../lib/overhaul-milestones";
+import { S2_MILESTONES_SOURCE } from "../../lib/overhaul-milestones-source";
 
 loadDevEnv();
 const base = assertLocalBase("http://localhost:3030")!;
@@ -59,8 +60,8 @@ async function main() {
       const dialog = page.getByRole("dialog");
       await dialog.getByRole("heading", { name: "Tách lưới", exact: true }).waitFor();
       assert.equal(await dialog.getByRole("button", { name: "Thêm mốc", exact: true }).count(), session.role === "ADMIN" ? 1 : 0);
-      assert.equal(await dialog.getByRole("button", { name: /^Sửa mốc / }).count(), session.role === "ADMIN" ? 34 : 0);
-      assert.equal(await dialog.getByRole("button", { name: /^Xoá mốc / }).count(), session.role === "ADMIN" ? 34 : 0);
+      assert.equal(await dialog.getByRole("button", { name: /^Sửa mốc / }).count(), session.role === "ADMIN" ? S2_MILESTONES_SOURCE.length : 0);
+      assert.equal(await dialog.getByRole("button", { name: /^Xoá mốc / }).count(), session.role === "ADMIN" ? S2_MILESTONES_SOURCE.length : 0);
       if (["ADMIN", "MANAGER"].includes(session.role)) for (const width of [360, 390, 1280]) {
         await page.setViewportSize({ width, height: 844 });
         await page.waitForTimeout(250);
