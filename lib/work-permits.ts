@@ -58,6 +58,23 @@ export const PERMIT_WORK_TYPE_CODES = { PLANNED: "KH", UNPLANNED: "ĐX", INCIDEN
 export type PermitWorkType = keyof typeof PERMIT_WORK_TYPES;
 export const PERMIT_CONTRACTOR_SCOPES = { SCTX: "SCTX", OVERHAUL: "Đại tu" } as const;
 export type PermitContractorScope = keyof typeof PERMIT_CONTRACTOR_SCOPES;
+/** Phân loại đơn vị nhà thầu (danh bạ đơn vị): được cấp PCT nhóm SCTX / Đại tu. */
+export type PermitCompanyScopes = { sctx: boolean; overhaul: boolean };
+/** Đơn vị chưa tick nhóm nào = "Chưa phân loại". */
+export const companyUnclassified = (company: PermitCompanyScopes) => !company.sctx && !company.overhaul;
+/**
+ * Đơn vị có được chọn cho PCT nhà thầu nhóm `scope` không (nghiệp vụ 06/10/2026): chưa phân loại → được cả hai nhóm
+ * (giai đoạn chuyển đổi); đã phân loại → chỉ nhóm đã tick. Không có thông tin đơn vị / nhóm → không chặn.
+ */
+export function companyAllowsScope(company: PermitCompanyScopes | null | undefined, scope: string | null | undefined) {
+  if (!company || !scope || companyUnclassified(company)) return true;
+  return scope === "OVERHAUL" ? company.overhaul : company.sctx;
+}
+/** Nhãn phân loại: "SCTX", "Đại tu", "SCTX + Đại tu", "Chưa phân loại". */
+export function companyScopeLabel(company: PermitCompanyScopes) {
+  if (companyUnclassified(company)) return "Chưa phân loại";
+  return [company.sctx && PERMIT_CONTRACTOR_SCOPES.SCTX, company.overhaul && PERMIT_CONTRACTOR_SCOPES.OVERHAUL].filter(Boolean).join(" + ");
+}
 /** PCT nhà thầu SCTX có thể ghi nhận cấp nhanh, chưa cần danh bạ đơn vị/CHTT. */
 export function isSctxContractorPermit(row: { teamType: string; contractorScope?: string | null }): boolean {
   return row.teamType === "CONTRACTOR" && row.contractorScope === "SCTX";

@@ -10,6 +10,7 @@ import { audit, fail, ok, requireUser } from "@/lib/api";
 import { formatPermitNumber, PERMIT_PAGE_SIZE } from "@/lib/work-permits";
 import { parsePermit, permitBody, permitFilters, permitHandle, permitSnapshot, resolvePermitDefectLink } from "@/lib/server/work-permits";
 import { resolvePermitIdentities } from "@/lib/server/work-permit-identities";
+import { assertContractorCompanyScope } from "@/lib/server/work-permit-company-scope";
 import { permitListSelect } from "@/lib/server/work-permit-selects";
 import { startInternalPermitAutoClose } from "@/lib/server/work-permit-auto-close-runner";
 import { consumePermitNumberReservation } from "@/lib/server/work-permit-number-reservations";
@@ -58,6 +59,7 @@ export async function POST(req: Request) {
       const linkedBody = await resolvePermitDefectLink(tx, body);
       const data = parsePermit(await resolvePermitIdentities(tx, linkedBody, user), status);
       if (data.teamType === "CONTRACTOR" && data.format !== "PAPER") throw fail("PCT nhà thầu chỉ sử dụng phiếu giấy");
+      await assertContractorCompanyScope(tx, data);
       await assertNkvhLinkAvailable(tx, data.kind as PermitKind, data.nkvhPctId);
       await lockPermitNumberScope(tx, data.kind as PermitKind, data.year);
       const overhaulItems = parseOverhaulItems(body.overhaulItems, data);

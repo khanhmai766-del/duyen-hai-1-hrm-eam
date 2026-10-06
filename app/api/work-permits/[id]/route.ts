@@ -13,6 +13,7 @@ import { audit, fail, ok, requireRole, requireUser } from "@/lib/api";
 import { defaultPermitFormat, effectivePermitFormat, formatPermitNumber, PERMIT_STATUSES, PERMIT_TRANSITIONS, CONTRACTOR_PERMIT_TRANSITIONS, type PermitStatus } from "@/lib/work-permits";
 import { parsePermit, permitBody, permitHandle, permitSnapshot, permitText, resolvePermitDefectLink } from "@/lib/server/work-permits";
 import { resolvePermitIdentities } from "@/lib/server/work-permit-identities";
+import { assertContractorCompanyScope } from "@/lib/server/work-permit-company-scope";
 import { historySummarySelect } from "@/lib/server/work-permit-selects";
 import { consumePermitNumberReservation, teamTypeLabel } from "@/lib/server/work-permit-number-reservations";
 import type { PermitKind } from "@/lib/work-permits";
@@ -133,6 +134,8 @@ export async function PUT(req: Request, props: { params: Promise<{ id: string }>
         plannedEndAt: body.plannedEndAt === undefined ? before.plannedEndAt?.toISOString() ?? null : body.plannedEndAt,
       }, user, before), status);
       if (before.nkvhNumber) data.searchText += ` ${normalizeText(before.nkvhNumber)}`;
+      // Đơn vị đã phân loại khác nhóm phiếu → chặn; chỉ kiểm khi đổi đơn vị / nhóm phiếu.
+      await assertContractorCompanyScope(tx, data, before);
       /*
        * Đổi LOẠI ĐƠN VỊ (nội bộ · điện tử ⇄ nhà thầu · giấy) giữ nguyên số: số thuộc về sổ, không
        * thuộc loại đơn vị. Chỉ cho khi chưa có gì không đảo ngược được — phiếu mới ở "Đã cấp" (hoặc

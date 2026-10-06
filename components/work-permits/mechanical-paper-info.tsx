@@ -26,7 +26,7 @@ export function MechanicalPaperInfo({ form, issued, numberField, positionOptions
   const contractor = form.teamType === "CONTRACTOR";
   // Phiếu nhà thầu: chọn đúng tên đơn vị trong danh bạ để quét thẻ/lọc nhân sự khớp đơn vị của phiếu.
   const teamField = contractor
-    ? <div className="space-y-1.5"><PermitCompanySelect value={form.teamName} required={issued && !isSctxContractorPermit(form)} onChange={onCompanyChange} />{isSctxContractorPermit(form) && <p className="text-xs text-muted-foreground">Không bắt buộc khi ghi nhận cấp PCT SCTX.</p>}</div>
+    ? <div className="space-y-1.5"><PermitCompanySelect value={form.teamName} scope={form.contractorScope} required={issued && !isSctxContractorPermit(form)} onChange={onCompanyChange} />{isSctxContractorPermit(form) && <p className="text-xs text-muted-foreground">Không bắt buộc khi ghi nhận cấp PCT SCTX.</p>}</div>
     : field("teamName", "Đơn vị công tác", issued);
 
   return <div className="space-y-4">

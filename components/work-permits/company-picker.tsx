@@ -2,24 +2,34 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { usePermitCompanies, usePermitCompanySummary } from "@/hooks/useWorkPermits";
+import { usePermitCompanies, usePermitCompanySummary, type PermitCompanySummary } from "@/hooks/useWorkPermits";
 import { normalizeText } from "@/lib/nav";
+import { companyAllowsScope, companyUnclassified } from "@/lib/work-permits";
 
 const control = "min-h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring";
 
-/** Bộ chọn dùng trên biểu mẫu PCT: tìm theo mã hoặc tên đơn vị, kể cả khi nhập không dấu. */
-export function PermitCompanySelect({ value, onChange, required = false, label = "Đơn vị công tác" }: {
+const optionLabel = (row: PermitCompanySummary) => row.code ? `${row.code} · ${row.company}` : row.company;
+
+/**
+ * Bộ chọn dùng trên biểu mẫu PCT: tìm theo mã hoặc tên đơn vị, kể cả khi nhập không dấu. `scope` (nhóm phiếu SCTX / Đại tu)
+ * → chỉ hiện đơn vị đã phân loại đúng nhóm, rồi nhóm "Chưa phân loại" ở cuối; đơn vị khác nhóm bị ẩn (máy chủ cũng chặn).
+ */
+export function PermitCompanySelect({ value, onChange, required = false, label = "Đơn vị công tác", scope }: {
   value: string;
   onChange: (company: string) => void;
   required?: boolean;
   label?: string;
+  scope?: string | null;
 }) {
   const companies = usePermitCompanySummary();
   const [search, setSearch] = useState("");
   const term = normalizeText(search.trim());
-  const rows = companies.data?.data ?? [];
+  const rows = (companies.data?.data ?? []).filter(row => companyAllowsScope(row, scope));
   const matches = rows.filter(row => row.company === value || normalizeText(`${row.code} ${row.company}`).includes(term));
+  const classified = matches.filter(row => !companyUnclassified(row)), unclassified = matches.filter(row => companyUnclassified(row));
   const currentMissing = value && !matches.some(row => row.company === value);
+  // Phiếu cũ đang ghi đơn vị mà nay đã phân loại khác nhóm: vẫn hiện để không mất giá trị, kèm nhãn.
+  const currentOther = currentMissing && (companies.data?.data ?? []).some(row => row.company === value && !companyAllowsScope(row, scope));
 
   return <div className="space-y-1.5 text-[13px]">
     <span className="block font-medium">{label}{required ? " *" : ""}</span>
@@ -35,11 +45,17 @@ export function PermitCompanySelect({ value, onChange, required = false, label =
     />
     <select className={control} required={required} value={value} onChange={event => onChange(event.target.value)}>
       <option value="">{companies.isPending ? "Đang tải đơn vị nhà thầu…" : "Chọn đơn vị nhà thầu"}</option>
-      {currentMissing && <option value={value}>{value}</option>}
-      {matches.map(row => <option key={row.company} value={row.company}>{row.code ? `${row.code} · ${row.company}` : row.company}</option>)}
+      {currentMissing && <option value={value}>{value}{currentOther ? " (khác nhóm phiếu)" : ""}</option>}
+      {scope && unclassified.length && classified.length
+        ? <>
+          <optgroup label={`Nhà thầu ${scope === "OVERHAUL" ? "Đại tu" : "SCTX"}`}>{classified.map(row => <option key={row.company} value={row.company}>{optionLabel(row)}</option>)}</optgroup>
+          <optgroup label="Chưa phân loại">{unclassified.map(row => <option key={row.company} value={row.company}>{optionLabel(row)}</option>)}</optgroup>
+        </>
+        : [...classified, ...unclassified].map(row => <option key={row.company} value={row.company}>{optionLabel(row)}</option>)}
     </select>
     {companies.isError
       ? <span role="alert" className="block text-xs text-red-700">{companies.error.message}</span>
+      : currentOther ? <span role="alert" className="block text-xs text-red-700">Đơn vị này đã phân loại khác nhóm phiếu. Phiếu mới, hoặc đổi đơn vị / nhóm phiếu, sẽ bị chặn khi lưu — hãy chọn đơn vị khác.</span>
       : !companies.isPending && !matches.length && <span className="block text-xs text-muted-foreground">Không có đơn vị phù hợp.</span>}
   </div>;
 }

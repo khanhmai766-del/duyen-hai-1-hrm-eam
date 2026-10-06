@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/compone
 import { useOverhaulItems, usePermitCompanySummary, useSyncOverhaulItems, type OverhaulSyncResult } from "@/hooks/useWorkPermits";
 import { normalizeText } from "@/lib/nav";
 import { compareOverhaulCodes, isOverhaulPaperPermit, overhaulContentText, withOverhaulCodesLine, type OverhaulItemOption, type OverhaulItemSnapshot } from "@/lib/work-permit-overhaul";
-import { effectivePermitFormat, type PermitInput } from "@/lib/work-permits";
+import { companyAllowsScope, effectivePermitFormat, type PermitInput } from "@/lib/work-permits";
 
 const keyOf = (item: Pick<OverhaulItemSnapshot, "sheet" | "code">) => `${item.sheet}\u0000${item.code}`;
 const snapshotOf = (item: OverhaulItemOption, confirmedShared = false): OverhaulItemSnapshot =>
@@ -131,7 +131,8 @@ function OverhaulItemPicker({ form, selected, onClose, onConfirm }: {
             value={company} disabled={Boolean(lockedCompany)} onChange={event => setCompany(event.target.value)}>
             <option value="">{companies.isPending ? "Đang tải đơn vị nhà thầu…" : "Chọn nhà thầu để xem hạng mục"}</option>
             {company && !(companies.data?.data ?? []).some(row => row.company === company) && <option value={company}>{company}</option>}
-            {(companies.data?.data ?? []).map(row => <option key={row.company} value={row.company}>{row.code ? `${row.code} · ${row.company}` : row.company}</option>)}
+            {/* Chỉ đơn vị được cấp PCT Đại tu (hoặc chưa phân loại) — cùng quy tắc máy chủ chặn khi lưu. */}
+            {(companies.data?.data ?? []).filter(row => companyAllowsScope(row, "OVERHAUL")).map(row => <option key={row.company} value={row.company}>{row.code ? `${row.code} · ${row.company}` : row.company}</option>)}
           </select>
         </label>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">

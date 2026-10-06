@@ -19,11 +19,11 @@ import { PlainHeader, ROW_HOVER, RowExpander, rowBackground, TD_EXPAND, TD_ROW, 
 import { cn } from "@/lib/utils";
 import { normalizeText } from "@/lib/nav";
 import { useCreatePermitCompany, useDeletePermitCompany, useDeletePermitPerson, usePermitCompanySummary, usePermitPeople, useRenamePermitCompany, useSavePermitPerson, usePermitSessionAction, usePermitActivity } from "@/hooks/useWorkPermits";
-import { formatPermitNumber, isSessionCommander, PERMIT_KINDS, permitDeadline, workersStillInside } from "@/lib/work-permits";
+import { companyUnclassified, formatPermitNumber, isSessionCommander, PERMIT_KINDS, permitDeadline, workersStillInside } from "@/lib/work-permits";
 import { isOverhaulPaperPermit, overhaulItemKey, overhaulItemsOf } from "@/lib/work-permit-overhaul";
 import { initialOverhaulDraft, OverhaulItemProgressEditor, overhaulDraftError, overhaulDraftPayload } from "@/components/work-permits/overhaul-item-progress";
 import { PermitDeadlineBadge } from "@/components/work-permits/permit-deadline";
-import type { PermitDetailRow, PermitMember, PermitPerson, PermitSession } from "@/lib/work-permits";
+import type { PermitCompanyScopes, PermitDetailRow, PermitMember, PermitPerson, PermitSession } from "@/lib/work-permits";
 
 const control = "min-h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-60";
 const vnNow = () => new Date(Date.now() + 7 * 3600000).toISOString().slice(0, 16);
@@ -90,7 +90,7 @@ export function PermitCompanyDirectory() {
           return <article key={row.company} className={expanded ? "bg-sky-50/70 dark:bg-sky-950/20" : undefined}>
             <button type="button" aria-expanded={expanded} onClick={toggle} className="flex w-full items-start gap-3 px-4 pb-2 pt-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500">
               <span className="min-w-0 flex-1">
-                <span className="flex flex-wrap items-center gap-x-2 gap-y-1">{row.code && <span className="rounded-md bg-blue-50 px-1.5 py-0.5 text-xs font-bold tracking-wide text-blue-800 dark:bg-blue-950/40 dark:text-blue-200">{row.code}</span>}<span className="text-[15px] font-semibold leading-5 text-ink">{row.company}</span></span>
+                <span className="flex flex-wrap items-center gap-x-2 gap-y-1">{row.code && <span className="rounded-md bg-blue-50 px-1.5 py-0.5 text-xs font-bold tracking-wide text-blue-800 dark:bg-blue-950/40 dark:text-blue-200">{row.code}</span>}<span className="text-[15px] font-semibold leading-5 text-ink">{row.company}</span><CompanyScopeBadge row={row} /></span>
                 <span className="mt-1 block text-xs text-muted-foreground"><b className="text-foreground">{row.total}</b> người · CHTT <b className={row.commanders ? "text-emerald-700" : "text-amber-700"}>{row.commanders}</b>{row.active < row.total && <span className="text-amber-700"> · {row.total - row.active} ngừng hoạt động</span>}</span>
               </span>
               <ChevronDown className={`mt-0.5 h-5 w-5 shrink-0 text-muted-foreground transition-transform ${expanded ? "rotate-180" : ""}`} />
@@ -126,7 +126,7 @@ export function PermitCompanyDirectory() {
                 <TableCell className={cn(TD_EXPAND, "py-2.5")}><RowExpander expanded={expanded} onToggle={() => setOpenCompany(expanded ? null : row.company)} /></TableCell>
                 <TableCell className={cn(TD_ROW, "py-2.5 text-center tabular-nums text-slate-500")}>{index + 1}</TableCell>
                 <TableCell className={cn(TD_ROW, "py-2.5 text-center font-semibold tracking-wide text-blue-800")}>{row.code || <span className="font-normal text-slate-400">—</span>}</TableCell>
-                <TableCell className={cn(TD_ROW, "py-2.5 font-semibold text-ink")}>{row.company}{row.active < row.total && <span className="ml-2 text-[11px] font-medium text-amber-700">{row.total - row.active} ngừng hoạt động</span>}</TableCell>
+                <TableCell className={cn(TD_ROW, "py-2.5 font-semibold text-ink")}>{row.company}<CompanyScopeBadge row={row} className="ml-2" />{row.active < row.total && <span className="ml-2 text-[11px] font-medium text-amber-700">{row.total - row.active} ngừng hoạt động</span>}</TableCell>
                 <TableCell className={cn(TD_ROW, "py-2.5 text-center tabular-nums")}>{row.total}</TableCell>
                 <TableCell className={cn(TD_ROW, "py-2.5 text-center tabular-nums")}>{row.commanders ? <span className="font-semibold text-emerald-700">{row.commanders}</span> : <span className="text-amber-700">0</span>}</TableCell>
                 {canWrite && <TableCell className={cn(TD_ROW, "py-2.5")}>
@@ -242,6 +242,15 @@ function CompanyPeopleTable({ people, canWrite, removing, onEdit, onRemove }: { 
   </>;
 }
 
+/** Nhãn phân loại đơn vị: SCTX (xanh ngọc) / Đại tu (tím) như nhãn nhóm phiếu; chưa phân loại để chữ xám. */
+function CompanyScopeBadge({ row, className }: { row: PermitCompanyScopes; className?: string }) {
+  if (companyUnclassified(row)) return <span className={cn("inline-block align-middle text-[11px] font-normal italic text-slate-400", className)}>Chưa phân loại</span>;
+  return <span className={cn("inline-flex gap-1 align-middle", className)}>
+    {row.sctx && <span className="rounded border border-cyan-200 bg-cyan-50 px-1.5 py-0.5 text-[11px] font-semibold text-cyan-800">SCTX</span>}
+    {row.overhaul && <span className="rounded border border-violet-200 bg-violet-50 px-1.5 py-0.5 text-[11px] font-semibold text-violet-800">Đại tu</span>}
+  </span>;
+}
+
 /**
  * Thêm mới hoặc sửa tên một đơn vị nhà thầu. Sửa tên là một lượt sửa hàng loạt trên hồ sơ người;
  * đổi sang tên đã có tức là GỘP hai đơn vị, cũng là cách duy nhất để dọn các bản ghi gõ sai.
@@ -251,9 +260,13 @@ function CompanyEditor({ company, onClose, onSaved }: { company?: string; onClos
   const rename = useRenamePermitCompany();
   const create = useCreatePermitCompany();
   const companies = usePermitCompanySummary();
-  const currentCode = companies.data?.data.find(row => row.company === company)?.code ?? "";
+  const current = companies.data?.data.find(row => row.company === company);
+  const currentCode = current?.code ?? "";
   const [name, setName] = useState(company ?? "");
   const [code, setCode] = useState(currentCode);
+  const [sctx, setSctx] = useState(current?.sctx ?? false);
+  const [overhaul, setOverhaul] = useState(current?.overhaul ?? false);
+  const scopesChanged = sctx !== (current?.sctx ?? false) || overhaul !== (current?.overhaul ?? false);
   const pending = rename.isPending || create.isPending;
   const exists = companies.data?.data.some(row => row.company !== company && row.company === name.trim()) ?? false;
   async function submit(event: React.FormEvent) {
@@ -262,13 +275,13 @@ function CompanyEditor({ company, onClose, onSaved }: { company?: string; onClos
     if (!next) return;
     try {
       if (company === undefined) {
-        await create.mutateAsync({ name: next, code: nextCode });
+        await create.mutateAsync({ name: next, code: nextCode, sctx, overhaul });
         toast.success(`Đã thêm đơn vị "${next}"`);
       } else {
-        if (next === company && nextCode === currentCode) { onClose(); return; }
+        if (next === company && nextCode === currentCode && !scopesChanged) { onClose(); return; }
         if (exists && !window.confirm(`Đơn vị "${next}" đã có sẵn. Toàn bộ nhân sự của "${company}" sẽ được gộp vào đơn vị đó. Tiếp tục?`)) return;
-        const result = await rename.mutateAsync({ from: company, to: next, code: nextCode });
-        toast.success(next === company ? `Đã cập nhật mã đơn vị "${next}"` : `Đã cập nhật đơn vị "${next}" (${result.updated} hồ sơ nhân sự)`);
+        const result = await rename.mutateAsync({ from: company, to: next, code: nextCode, sctx, overhaul });
+        toast.success(next === company ? `Đã cập nhật đơn vị "${next}"` : `Đã cập nhật đơn vị "${next}" (${result.updated} hồ sơ nhân sự)`);
       }
       onSaved?.(next);
       onClose();
@@ -280,6 +293,18 @@ function CompanyEditor({ company, onClose, onSaved }: { company?: string; onClos
     <form onSubmit={submit}><fieldset disabled={pending} className="space-y-4">
       <label className="block space-y-1 text-sm"><span>Tên đơn vị *</span><input className={control} value={name} required autoFocus maxLength={200} onChange={e => setName(e.target.value)} placeholder="Ví dụ: Công ty CP Cơ điện Miền Nam" /></label>
       <label className="block space-y-1 text-sm"><span>Mã đơn vị</span><input className={cn(control, "uppercase")} value={code} maxLength={30} onChange={e => setCode(e.target.value)} placeholder="Tên gọi tắt, ví dụ: VTTBCN" /><span className="block text-xs text-muted-foreground">Tên gọi tắt để nhận ra đơn vị nhanh; không trùng với đơn vị khác.</span></label>
+      <fieldset className="space-y-1.5 text-sm">
+        <legend className="mb-1">Được cấp PCT nhà thầu nhóm</legend>
+        <div className="flex flex-wrap gap-2">
+          {([["SCTX", sctx, setSctx], ["Đại tu", overhaul, setOverhaul]] as const).map(([label, checked, setChecked]) => (
+            <label key={label} className={cn("inline-flex min-h-10 cursor-pointer items-center gap-2 rounded-lg border px-3", checked ? "border-blue-300 bg-blue-50 text-blue-900" : "border-input")}>
+              <input type="checkbox" className="h-4 w-4 accent-blue-700" checked={checked} onChange={e => setChecked(e.target.checked)} />{label}
+            </label>
+          ))}
+        </div>
+        <span className="block text-xs text-muted-foreground">Tick cả hai nếu nhà thầu làm cả SCTX và Đại tu. Chưa tick ô nào = chưa phân loại, chọn được ở cả hai nhóm phiếu. Đã phân loại thì phiếu khác nhóm bị chặn.</span>
+        {overhaul && !code.trim() && <p className="rounded-lg bg-amber-50 p-2.5 text-xs text-amber-900">Nhà thầu Đại tu nên khai Mã đơn vị — hạng mục đại tu khớp theo mã ở cột “Nhà thầu” của file tiến độ.</p>}
+      </fieldset>
       {exists && (company === undefined
         ? <p className="rounded-lg bg-amber-50 p-3 text-xs text-amber-900">Đơn vị này đã có trong danh sách.</p>
         : <p className="rounded-lg bg-amber-50 p-3 text-xs text-amber-900">Đơn vị này đã tồn tại — lưu sẽ GỘP toàn bộ nhân sự của &ldquo;{company}&rdquo; vào đó.</p>)}

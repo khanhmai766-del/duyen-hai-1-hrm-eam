@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { audit, fail, ok, requireUser } from "@/lib/api";
 import { normalizeText } from "@/lib/nav";
+import { companyScopeLabel } from "@/lib/work-permits";
 import { permitCapabilities, requirePermitIssue } from "@/lib/server/work-permit-permissions";
 import { permitBody, permitHandle, permitText } from "@/lib/server/work-permits";
 export const dynamic = "force-dynamic";
@@ -28,6 +29,11 @@ function companyCode(body: Record<string, unknown>) {
   if (code && !/^[\p{L}\p{N}][\p{L}\p{N} ._&/-]*$/u.test(code)) throw fail("Mã đơn vị chỉ gồm chữ, số và các dấu . _ & / -");
   return code;
 }
+/** Phân loại SCTX / Đại tu: `undefined` = không gửi (giữ nguyên). */
+function companyScopes(body: Record<string, unknown>) {
+  if (body.sctx === undefined && body.overhaul === undefined) return undefined;
+  return { sctx: body.sctx === true, overhaul: body.overhaul === true };
+}
 async function assertCodeFree(code: string | undefined, exceptNames: string[]) {
   if (!code) return;
   const taken = await prisma.workPermitCompany.findFirst({ where: { code: { equals: code, mode: "insensitive" }, name: { notIn: exceptNames } }, select: { name: true } });
@@ -40,15 +46,15 @@ export async function GET(req: Request) {
     // `summary=1`: bảng đơn vị nhà thầu (mỗi dòng kèm sĩ số và số CHTT). Đếm ngay trong SQL vì
     // danh bạ có thể vài nghìn người — kéo hết về rồi đếm ở Node là phí một vòng dữ liệu.
     if (new URL(req.url).searchParams.get("summary") === "1") {
-      const rows = await prisma.$queryRawUnsafe<Array<{ company: string; code: string; total: bigint; commanders: bigint; active: bigint }>>(`
-        SELECT c.company, COALESCE(MAX(w."code"), '') AS code, COUNT(p.id) AS total,
+      const rows = await prisma.$queryRawUnsafe<Array<{ company: string; code: string; sctx: boolean; overhaul: boolean; total: bigint; commanders: bigint; active: bigint }>>(`
+        SELECT c.company, COALESCE(MAX(w."code"), '') AS code, COALESCE(BOOL_OR(w."sctx"), false) AS sctx, COALESCE(BOOL_OR(w."overhaul"), false) AS overhaul, COUNT(p.id) AS total,
                COUNT(p.id) FILTER (WHERE p."canCommand") AS commanders,
                COUNT(p.id) FILTER (WHERE p."isActive") AS active
         FROM (${COMPANY_NAMES}) c
         LEFT JOIN "WorkPermitCompany" w ON w."name" = c.company
         LEFT JOIN "WorkPermitPerson" p ON p."company" = c.company
         GROUP BY c.company ORDER BY c.company`);
-      return ok(rows.map(row => ({ company: row.company, code: row.code, total: Number(row.total), commanders: Number(row.commanders), active: Number(row.active) })), { canWrite: (await permitCapabilities(user)).canIssue });
+      return ok(rows.map(row => ({ company: row.company, code: row.code, sctx: row.sctx, overhaul: row.overhaul, total: Number(row.total), commanders: Number(row.commanders), active: Number(row.active) })), { canWrite: (await permitCapabilities(user)).canIssue });
     }
     // Lấy từ toàn bộ danh bạ, không giới hạn bởi trang nhân sự hoặc vai trò CHTT.
     const rows = await prisma.$queryRawUnsafe<Array<{ company: string }>>(`SELECT company FROM (${COMPANY_NAMES}) c ORDER BY company`);
@@ -61,12 +67,12 @@ export async function POST(req: Request) {
   return permitHandle(async () => {
     const user = await requireUser(); await requirePermitIssue(user);
     const body = await permitBody(req);
-    const name = permitText(body, "name"), code = companyCode(body) ?? "";
+    const name = permitText(body, "name"), code = companyCode(body) ?? "", scopes = companyScopes(body) ?? { sctx: false, overhaul: false };
     if (!name) return fail("Vui lòng nhập tên đơn vị nhà thầu");
     if (await companyExists(name)) return fail(`Đơn vị "${name}" đã có trong danh sách`, 409);
     await assertCodeFree(code, []);
-    const row = await prisma.workPermitCompany.create({ data: { name, code } });
-    await audit(user.id, "CREATE_WORK_PERMIT_COMPANY", "WorkPermitCompany", row.id, `Thêm đơn vị nhà thầu "${name}"${code ? ` (mã ${code})` : ""}`);
+    const row = await prisma.workPermitCompany.create({ data: { name, code, ...scopes } });
+    await audit(user.id, "CREATE_WORK_PERMIT_COMPANY", "WorkPermitCompany", row.id, `Thêm đơn vị nhà thầu "${name}"${code ? ` (mã ${code})` : ""} · ${companyScopeLabel(scopes)}`);
     return ok(row);
   });
 }
@@ -83,15 +89,16 @@ export async function PUT(req: Request) {
   return permitHandle(async () => {
     const user = await requireUser(); await requirePermitIssue(user);
     const body = await permitBody(req);
-    const from = permitText(body, "from"), to = permitText(body, "to"), code = companyCode(body);
+    const from = permitText(body, "from"), to = permitText(body, "to"), code = companyCode(body), scopes = companyScopes(body);
     if (!from || !to) return fail("Vui lòng nhập tên đơn vị cũ và tên mới");
-    if (from === to && code === undefined) return fail("Tên đơn vị mới trùng với tên hiện tại");
+    if (from === to && code === undefined && scopes === undefined) return fail("Tên đơn vị mới trùng với tên hiện tại");
     if (!(await companyExists(from))) return fail("Không tìm thấy đơn vị nhà thầu này", 404);
     await assertCodeFree(code, [from, to]);
-    // Chỉ đổi mã: đơn vị có thể chưa có dòng trong bảng (tên chỉ nằm trên hồ sơ người) nên upsert.
+    // Chỉ đổi mã / phân loại: đơn vị có thể chưa có dòng trong bảng (tên chỉ nằm trên hồ sơ người) nên upsert.
     if (from === to) {
-      await prisma.workPermitCompany.upsert({ where: { name: from }, update: { code }, create: { name: from, code } });
-      await audit(user.id, "UPDATE_WORK_PERMIT_COMPANY", "WorkPermitCompany", undefined, `Đổi mã đơn vị nhà thầu "${from}" thành "${code || "(trống)"}"`);
+      const changes = { ...(code !== undefined ? { code } : {}), ...(scopes ?? {}) };
+      await prisma.workPermitCompany.upsert({ where: { name: from }, update: changes, create: { name: from, code: code ?? "", ...(scopes ?? {}) } });
+      await audit(user.id, "UPDATE_WORK_PERMIT_COMPANY", "WorkPermitCompany", undefined, `Cập nhật đơn vị nhà thầu "${from}"${code !== undefined ? ` · mã "${code || "(trống)"}"` : ""}${scopes ? ` · ${companyScopeLabel(scopes)}` : ""}`);
       return ok({ from, to, updated: 0, merged: false });
     }
     const merged = await companyExists(to);
@@ -104,7 +111,7 @@ export async function PUT(req: Request) {
         if (source) await tx.workPermitCompany.update({ where: { id: source.id }, data: { name: to } });
         else await tx.workPermitCompany.create({ data: { name: to } });
       }
-      if (code !== undefined) await tx.workPermitCompany.update({ where: { name: to }, data: { code } });
+      if (code !== undefined || scopes) await tx.workPermitCompany.update({ where: { name: to }, data: { ...(code !== undefined ? { code } : {}), ...(scopes ?? {}) } });
       const result = await tx.workPermitPerson.updateMany({ where: { company: from }, data: { company: to } });
       // searchText có chứa tên đơn vị nên phải dựng lại, nếu không tìm theo tên mới sẽ không ra.
       const rows = await tx.workPermitPerson.findMany({ where: { company: to }, select: { id: true, code: true, name: true, company: true, phone: true } });

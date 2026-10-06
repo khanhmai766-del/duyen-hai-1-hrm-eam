@@ -339,6 +339,27 @@ export const PRESETS = {
       await page.waitForTimeout(300);
     },
   },
+  "don-vi-nha-thau": {
+    description: "Danh bạ đơn vị nhà thầu có phân loại SCTX / Đại tu / cả hai / chưa phân loại + hộp sửa đơn vị — danh sách giả lập, không ghi DB",
+    async prepare() { return {}; },
+    routes: () => ["/work-permits", "/work-permits?ui=edit"],
+    async mock(context) {
+      const rows = [
+        { company: "Công ty CP Vật tư & Thiết bị công nghiệp", code: "VATCO", sctx: true, overhaul: true, total: 42, commanders: 6, active: 40 },
+        { company: "Công ty TNHH Kỹ thuật Đại tu Miền Nam", code: "IDC", sctx: false, overhaul: true, total: 18, commanders: 3, active: 18 },
+        { company: "Công ty CP Dịch vụ Sửa chữa thường xuyên", code: "SCTXDV", sctx: true, overhaul: false, total: 9, commanders: 2, active: 9 },
+        { company: "Cty Miền Bắc", code: "", sctx: false, overhaul: false, total: 3, commanders: 0, active: 3 },
+      ];
+      await context.route(/\/api\/work-permits\/companies\?summary=1/, (route) => route.fulfill({ json: { data: rows, meta: { canWrite: true }, error: null } }));
+    },
+    async interact(page, route) {
+      const tab = page.getByRole("button", { name: "Nhân sự nhà thầu" }).first();
+      if (await tab.isVisible().catch(() => false)) await tab.click();
+      else { await page.getByRole("button", { name: /PCT Cơ|Đang làm việc/ }).first().click(); await page.getByText("Nhân sự nhà thầu").last().click(); }
+      await page.getByText("Công ty TNHH Kỹ thuật Đại tu Miền Nam").locator("visible=true").first().waitFor({ timeout: 20_000 });
+      if (route.endsWith("ui=edit")) { await page.getByRole("button", { name: "Sửa đơn vị Công ty TNHH Kỹ thuật Đại tu Miền Nam" }).locator("visible=true").first().click(); await page.waitForTimeout(300); }
+    },
+  },
   "tien-do-dai-tu-lon": {
     description: "Bảng tiến độ đại tu tab lớn nhất (Máy phát · Trực phụ điện) bằng API THẬT trên DB dev, đồng hồ 01/12 — kiểm tra tải/cuộn",
     async prepare() { return {}; },

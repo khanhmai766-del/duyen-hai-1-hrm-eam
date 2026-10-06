@@ -1851,6 +1851,10 @@ model WorkPermitCompany {
   name      String   @unique
   /// Mã đơn vị (tên gọi tắt), chữ hoa; rỗng = chưa khai. Không trùng giữa các đơn vị (kiểm ở API).
   code      String   @default("")
+  /// Phạm vi được cấp PCT nhà thầu (06/10/2026): SCTX / Đại tu; tick cả hai = làm cả hai.
+  /// Chưa tick ô nào = "Chưa phân loại" → chọn được ở cả hai nhóm (giai đoạn chuyển đổi).
+  sctx      Boolean  @default(false)
+  overhaul  Boolean  @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
