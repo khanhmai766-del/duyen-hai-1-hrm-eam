@@ -25,6 +25,9 @@ import { assignGroundingShifts, currentGroundingSlot, groundingSlotWindow, isGro
 import { serializeGroundingSlotItem } from "@/lib/grounding-lightning";
 import { isPositionCode, positionLabelOf } from "@/lib/position-catalog";
 
+import { groundingRetentionWindow } from "@/lib/grounding-retention";
+import { runGroundingRetention } from "@/lib/server/grounding-retention";
+
 export const dynamic = "force-dynamic";
 
 const includeItem = {
@@ -57,6 +60,7 @@ export async function GET(req: NextRequest) {
     const status = sp.get("status");
     const catalogOnly = sp.get("catalog") === "1";
     const now = new Date();
+    const retention = groundingRetentionWindow(now);
     const currentSlot = currentGroundingSlot(now);
     const date = sp.get("inspectionDate") ?? currentSlot.date;
     const allShifts = sp.get("shiftType") === "ALL";
@@ -70,6 +74,8 @@ export async function GET(req: NextRequest) {
     } catch (error) {
       return fail(error instanceof Error ? error.message : "Ngày kiểm tra không hợp lệ");
     }
+    if (date < retention.date) return fail("Chỉ lưu lịch sử kiểm tra trong 1 tháng 15 ngày gần nhất");
+    await runGroundingRetention(prisma, now);
     // Chia tuyến từ danh mục đầy đủ của mỗi cương vị + tổ máy, trước khi tìm kiếm/lọc kết quả.
     const where: Prisma.GroundingLightningItemWhereInput = {
       ...(!scope.all
@@ -80,7 +86,10 @@ export async function GET(req: NextRequest) {
     const [items, positionRows] = await Promise.all([
       prisma.groundingLightningItem.findMany({
         where,
-        include: catalogOnly ? includeItem : {
+        include: catalogOnly ? {
+          ...includeItem,
+          inspections: { ...includeItem.inspections, where: { signedAt: { gte: retention.cutoff } } },
+        } : {
           ...includeItem,
           inspections: {
             where: { signedAt: { gte: dayStart, lt: dayEnd } },
@@ -134,7 +143,7 @@ export async function GET(req: NextRequest) {
         positions: positionRows.filter((row) => row.positionCode)
           .map((row) => ({ code: row.positionCode, label: row.position })),
         scope, currentSlot, selectedSlot, shifts, viewMode: allShifts ? "ALL" : "SHIFT",
-        serverTime: now.toISOString(),
+        serverTime: now.toISOString(), retentionStart: retention.date,
       },
     );
   });

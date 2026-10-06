@@ -1,4 +1,6 @@
 "use client";
+
+import { GROUNDING_RETENTION_DESCRIPTION } from "@/lib/grounding-retention";
 /* eslint-disable @next/next/no-img-element -- ảnh riêng tư được phục vụ qua proxy S3 của ứng dụng */
 
 import { Fragment, useEffect, useMemo, useState } from "react";
@@ -939,7 +941,7 @@ function HistoryDialog({
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-3xl">
         <DialogHeader>
-          <DialogTitle>Lịch sử kiểm tra</DialogTitle>
+          <DialogTitle>Lịch sử kiểm tra trong 1 tháng 15 ngày</DialogTitle>
           <DialogDescription>{item.areaEquipment}</DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
@@ -1534,7 +1536,7 @@ export default function GroundingLightningPage() {
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <Label htmlFor="grounding-day">Ngày kiểm tra</Label>
-              <input id="grounding-day" type="date" value={selectedSlot.date}
+              <input id="grounding-day" type="date" value={selectedSlot.date} min={query.data?.meta?.retentionStart}
                 className={cn(CONTROL, "w-auto text-base sm:text-sm")}
                 disabled={isOverview || confirming || sign.isPending}
                 onChange={(event) => setFilters((old) => ({ ...old, inspectionDate: event.target.value || undefined }))} />
@@ -1582,6 +1584,7 @@ export default function GroundingLightningPage() {
             Cả ngày: đã xác nhận {shiftSummary.reduce((total, shift) => total + shift.confirmed, 0)}/{shiftSummary.reduce((total, shift) => total + shift.total, 0)} khu vực
           </p>
           <p className="text-xs text-muted-foreground">Mỗi khu vực được giao cho một ca trong ngày. Nhóm có ít khu vực có thể có ca không được giao nhiệm vụ.</p>
+          <p className="text-xs text-muted-foreground">{GROUNDING_RETENTION_DESCRIPTION}</p>
         </section>
       )}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">

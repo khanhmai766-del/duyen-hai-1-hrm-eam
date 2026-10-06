@@ -41,3 +41,19 @@ MSYS_NO_PATHCONV=1 npm run verify:ui -- --preset=tiep-dia-ba-ca-du-lieu-local --
 
 Preset đầu giả lập cả lượt ghi trong trình duyệt; preset sau chỉ đọc API thật trên DB local.
 Không cần đổi schema hoặc chạy SQL để dùng tính năng này.
+
+## Giữ lịch sử trong 1 tháng 15 ngày
+
+Giữ một tháng lịch cộng thêm 15 ngày lùi từ **ngày vận hành hiện tại**, theo giờ Việt Nam. Ví dụ ngày 06/10 giữ từ 22/08 lúc 06h; ngày 31/03 giữ từ 13/02 (14/02 năm nhuận). Trước 06h vẫn tính ngày vận hành hôm trước, không cắt đôi ca đêm.
+
+Khi người có quyền mở danh sách hoặc lịch sử, tự dọn tối đa mỗi giờ: xoá lượt xác nhận quá hạn, kết quả chụp của lượt đó (FK Cascade), cùng AuditLog/SystemAuditLog riêng cho tiếp địa/chống sét quá hạn. Bản production chưa có SystemAuditLog vẫn hoạt động. Lỗi dọn được ghi log; API lịch sử vẫn giới hạn trong 1 tháng 15 ngày gần nhất. Không dọn danh mục, Point hiện tại, ảnh S3 hoặc nhật ký của các phần khác.
+
+Không có người truy cập thì việc xoá vật lý chờ tới lần mở tiếp theo. Bản sao lưu DB vẫn theo chính sách sao lưu chung của server, không thay đổi trong yêu cầu này.
+
+Kiểm tra trước khi dọn thủ công (mặc định chỉ đọc):
+
+```bash
+npx tsx scripts/data-ops/grounding-retention.ts --dry-run
+# Thực sự xoá lịch sử quá hạn, chỉ chạy khi đã được yêu cầu:
+npx tsx scripts/data-ops/grounding-retention.ts --apply
+```

@@ -273,14 +273,15 @@ export const PRESETS = {
           return route.fulfill({ json: { data: { id: `ui-sign-${id}`, results: [] }, meta: null, error: null } });
         }
         if (request.method() !== "GET") throw new Error("Không ghi dữ liệu thật khi kiểm tra giao diện");
-        const selectedSlot = { date: url.searchParams.get("inspectionDate") || currentSlot.date, shiftType: url.searchParams.get("shiftType") || currentSlot.shiftType };
+        const allShifts = url.searchParams.get("shiftType") === "ALL";
+        const selectedSlot = { date: url.searchParams.get("inspectionDate") || currentSlot.date, shiftType: allShifts ? currentSlot.shiftType : url.searchParams.get("shiftType") || currentSlot.shiftType };
         const summaries = shifts.map((shiftType) => {
           const rows = makeItems(shiftType, selectedSlot.date), confirmed = rows.filter((row) => !row.needsSignature).length;
           return { shiftType, total: rows.length, confirmed, pending: rows.length - confirmed };
         });
         await route.fulfill({ json: {
-          data: makeItems(selectedSlot.shiftType, selectedSlot.date),
-          meta: { positions: [{ code: "ELECTRICAL_MAIN_OPERATOR", label: "Trực chính điện" }], scope: { all: true, positionCode: null }, currentSlot, selectedSlot, shifts: summaries, serverTime: now }, error: null,
+          data: allShifts ? shifts.flatMap((shift) => makeItems(shift, selectedSlot.date).map((row) => ({ ...row, canInspect: false }))) : makeItems(selectedSlot.shiftType, selectedSlot.date),
+          meta: { positions: [{ code: "ELECTRICAL_MAIN_OPERATOR", label: "Trực chính điện" }], scope: { all: true, positionCode: null }, currentSlot, selectedSlot, shifts: summaries, serverTime: now, viewMode: allShifts ? "ALL" : "SHIFT", retentionStart: "2026-08-22" }, error: null,
         } });
       });
     },
@@ -587,5 +588,17 @@ export const PRESETS = {
         await route.fulfill({ json: { data: liveBoardRows(permit, now), meta: { canExecute: true }, error: null } });
       });
     },
+  },
+};
+
+PRESETS["tiep-dia-luu-mot-thang"] = {
+  ...PRESETS["tiep-dia-chon-nhieu"],
+  description: "Hiển thị hạn lưu 1 tháng 15 ngày và khóa ngày quá hạn, chỉ dùng dữ liệu giả lập",
+  async interact(page) {
+    if (await page.locator("#grounding-day").getAttribute("min") !== "2026-08-22") throw new Error("Chưa giới hạn ngày theo hạn lưu");
+    await page.getByText("Lịch sử kiểm tra được lưu trong 1 tháng 15 ngày gần nhất.", { exact: false }).waitFor();
+    await page.getByRole("button", { name: "Tất cả thiết bị", exact: true }).click();
+    await page.getByText("Đang xem toàn bộ thiết bị", { exact: false }).waitFor();
+    await page.getByRole("button", { name: /Có khiếm khuyết/ }).click();
   },
 };
