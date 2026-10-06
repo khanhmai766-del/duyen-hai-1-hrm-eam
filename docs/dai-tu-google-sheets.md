@@ -43,10 +43,17 @@ Web là nguồn, Sheet theo web. Code: `lib/server/overhaul-sheet-writer.ts`; l�
 - Ngày = ngày giờ VN của thời điểm kết thúc. Cột ngày tìm theo `dd/mm` trong tiêu đề "Ngày n"; hàng tìm theo **mã** mỗi
   lần ghi (người dùng có thể chèn/xoá hàng; từ 04/10/2026 tab "Lò phó - Cơ" đã bỏ `INDEX(FILTER(...))` từ tab "Lò- Cơ", chuyển sang giá trị tĩnh như các file khác — bản sao công thức cũ: `/root/backup-lo-pho-co-filter-2026-10-040327.json` trên server); cột %/Trạng thái tìm theo tên tiêu đề.
 - Ghi chú hạng mục trống → Nhật ký ngày dùng ghi chú chung của lần làm việc / lần cập nhật.
-- Nhật ký ngày (từ 04/10/2026) **ghi đè** bằng lần cập nhật mới nhất của hạng mục trong ngày — dòng đầu `PCT <số>/<năm>` (vd `PCT 4430/2026`), xuống dòng là nội dung; chữ gõ tay trong ô ngày đó bị thay. Trước đó web nối thêm dòng.
-- "Trạng thái hiện tại" và "% Hoàn thành" **bị ghi đè bằng giá trị** (bỏ công thức ở hàng đó), lấy kết quả của
-  **ngày mới nhất** — chạy bù ngày cũ không đè ngày sau. Trong cùng ngày, ưu tiên: Không mở ngày thực hiện <
-  Không thực hiện < có làm / kết thúc (hai PCT cùng giữ một hạng mục: phiếu không làm không đè phiếu có làm).
+- Nhật ký ngày (từ 05/10/2026): ô được **dựng lại** mỗi lần ghi — mỗi PCT có cập nhật trong ngày một đoạn
+  `PCT <số>/<năm>` ↵ nội dung mới nhất của PCT đó (hạng mục phối hợp Cơ + Điện → hai đoạn); dòng kết thúc / huỷ phiếu
+  nối sau. Chữ gõ tay trong ô ngày đó bị thay. (04/10: ghi đè một đoạn; trước nữa: nối thêm dòng.)
+- "Trạng thái hiện tại" **bị ghi đè bằng giá trị** (bỏ công thức ở hàng đó), lấy kết quả của **ngày mới nhất** — chạy bù
+  ngày cũ không đè ngày sau. Trong cùng ngày, ưu tiên: Không mở ngày thực hiện < Không thực hiện < có làm / kết thúc
+  (hai PCT cùng giữ một hạng mục: phiếu không làm không đè phiếu có làm). "% Hoàn thành" là lũy kế **chung** của hạng
+  mục: chỉ ghi khi bằng/cao hơn số đã ghi, không kéo lùi.
+- **Vùng khoá** (`npm run overhaul:sheet -- --protect …`): chỉ khoá cột "% Hoàn thành" và "Trạng thái hiện tại". Từ
+  06/10/2026 ô trạng thái từng ngày (cột "Ngày 1…60", từ cột H) **để mở** cho nhập tay — đã gỡ bằng
+  `--unprotect-days --apply`. Ô ngày nào có PCT cập nhật thì web vẫn ghi đè; trang web `/tien-ich/tien-do-dai-tu` chỉ
+  hiện kết quả web ghi, không đọc chữ nhập tay trên Sheet.
 - Không tìm thấy tab / mã / cột ngày, hoặc mã trùng trong tab → báo lỗi, **không đoán ghi chỗ khác**; thử lại theo
   khoảng tăng dần (15 phút → 24 giờ, tối đa 8 lần) rồi `FAILED`. Xem: `npm run overhaul:sheet -- --status`.
 - Thao tác trên phiếu chỉ ghi hàng đợi `OverhaulSheetOutbox` trong cùng transaction; đẩy lên Google ngay sau khi trả
