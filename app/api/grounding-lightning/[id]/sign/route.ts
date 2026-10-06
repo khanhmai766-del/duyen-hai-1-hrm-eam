@@ -13,7 +13,7 @@ import {
   assertGroundingScope,
 } from "@/lib/grounding-lightning";
 
-export async function POST(_req: Request, props: { params: Promise<{ id: string }> }) {
+export async function POST(req: Request, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
   return handle(async () => {
     const user = await requireUser();
@@ -44,6 +44,19 @@ export async function POST(_req: Request, props: { params: Promise<{ id: string 
       )
     ) {
       return fail("Hạng mục có khiếm khuyết phải ghi rõ nội dung");
+    }
+    // Luồng chọn nhiều vị trí phải kiểm tra lại dữ liệu hiện tại ở máy chủ.
+    const body = await req.text();
+    let normalOnly = false;
+    if (body) {
+      try {
+        normalOnly = JSON.parse(body)?.normalOnly === true;
+      } catch {
+        return fail("Yêu cầu xác nhận không hợp lệ");
+      }
+    }
+    if (normalOnly && item.points.some((point) => point.status !== "NORMAL")) {
+      return fail("Vị trí đã chọn không còn hoàn toàn bình thường. Vui lòng kiểm tra lại kết quả", 409);
     }
     const inspectorName = user.name ?? user.email ?? "";
     const inspection = await prisma.groundingLightningInspection.create({

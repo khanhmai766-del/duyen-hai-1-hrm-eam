@@ -139,10 +139,11 @@ export function useDeleteGroundingItem() {
 export function useSignGroundingItem() {
   const invalidate = useInvalidateGrounding();
   return useMutation({
-    mutationFn: (id: string) =>
+    mutationFn: (input: string | { id: string; normalOnly: true }) =>
       apiMutate<GroundingInspection>(
-        `/api/grounding-lightning/${id}/sign`,
+        `/api/grounding-lightning/${typeof input === "string" ? input : input.id}/sign`,
         "POST",
+        typeof input === "string" ? undefined : { normalOnly: input.normalOnly },
       ),
     onSuccess: invalidate,
   });

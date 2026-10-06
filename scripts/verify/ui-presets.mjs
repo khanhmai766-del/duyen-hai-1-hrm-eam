@@ -153,6 +153,67 @@ function milestonePreset(day) {
 }
 
 export const PRESETS = {
+  "tiep-dia-chon-nhieu": {
+    description: "Chọn nhiều vị trí bình thường; chặn vị trí chưa kiểm tra và có khiếm khuyết",
+    async prepare() { return {}; },
+    routes: () => ["/grounding-lightning"],
+    async mock(context) {
+      const updatedAt = new Date().toISOString();
+      const items = ["NORMAL", "NORMAL", "UNCHECKED", "DEFECT"].map((status, i) => ({
+        id: `ui-grounding-${i}`, areaEquipment: ["Tiếp địa khu vực bơm nước làm mát tuần hoàn tổ máy 1", "Hệ thống chống sét nhà điều khiển trung tâm", "Tủ điện phân phối", "Khu vực bồn dầu"][i],
+        position: "Trực điện", positionCode: "TRUC_DIEN", machine: "S1", note: null,
+        updatedAt, latestInspection: null, needsSignature: true,
+        points: ["GROUNDING", "LIGHTNING"].map((type) => ({
+          id: `ui-point-${i}-${type}`, type, status, updatedAt,
+          defectDescription: status === "DEFECT" ? "Mối nối tiếp địa bị lỏng (giả lập)" : null, attachments: [],
+        })),
+      }));
+      let failSecond = true;
+      const signed = [];
+      context.groundingSigned = signed;
+      // Dữ liệu đại tu không liên quan; DB dev có thể chưa đồng bộ bảng này.
+      await context.route("**/api/overhaul-milestones**", (route) => route.fulfill({ json: { data: [], meta: null, error: null } }));
+      await context.route("**/api/grounding-lightning**", async (route) => {
+        const request = route.request();
+        if (request.method() === "POST" && new URL(request.url()).pathname.endsWith("/sign")) {
+          if (request.postDataJSON()?.normalOnly !== true) throw new Error("Phải kiểm tra lại trạng thái bình thường ở máy chủ");
+          const id = new URL(request.url()).pathname.split("/")[3];
+          if (id === "ui-grounding-1" && failSecond) {
+            failSecond = false;
+            return route.fulfill({ json: { data: null, meta: null, error: "Lỗi xác nhận giả lập" } });
+          }
+          signed.push(id);
+          return route.fulfill({ json: { data: { id: `ui-sign-${id}`, results: [] }, meta: null, error: null } });
+        }
+        if (request.method() !== "GET") throw new Error("Không ghi dữ liệu thật khi kiểm tra giao diện");
+        await route.fulfill({ json: { data: items, meta: { positions: [], scope: { all: true, positionCode: null } }, error: null } });
+      });
+    },
+    async interact(page) {
+      await page.getByRole("button", { name: "Chỉnh sửa", exact: true }).click();
+      await page.getByRole("menuitem").filter({ hasText: "Sửa bảng" }).click();
+      const checkboxes = page.getByRole("checkbox").filter({ visible: true });
+      if (await checkboxes.count() !== 4) throw new Error("Phải có 4 vị trí trong kịch bản");
+      if (await checkboxes.nth(2).isEnabled() || await checkboxes.nth(3).isEnabled()) throw new Error("Không được chọn vị trí chưa kiểm tra hoặc có khiếm khuyết");
+      await page.getByRole("button", { name: "Chọn vị trí bình thường trên trang", exact: true }).click();
+      await page.getByRole("button", { name: "Xác nhận 2 vị trí bình thường", exact: true }).waitFor();
+      if (!await checkboxes.nth(0).isChecked() || !await checkboxes.nth(1).isChecked()) throw new Error("Chưa chọn đủ 2 vị trí bình thường");
+      await page.getByRole("button", { name: "Xác nhận 2 vị trí bình thường", exact: true }).click();
+      await page.getByText("Đã xác nhận 1/2 vị trí. Lỗi xác nhận giả lập", { exact: true }).first().waitFor();
+      if (await checkboxes.nth(0).isChecked() || !await checkboxes.nth(1).isChecked()) throw new Error("Phải bỏ chọn vị trí đã thành công và giữ vị trí bị lỗi");
+      const retry = page.getByRole("button", { name: "Xác nhận 1 vị trí bình thường", exact: true });
+      await retry.click();
+      await page.getByText("Đã xác nhận 1 vị trí bình thường", { exact: true }).first().waitFor();
+      if (page.context().groundingSigned.join(",") !== "ui-grounding-0,ui-grounding-1") throw new Error("Xác nhận lặp hoặc bỏ sót vị trí");
+      await page.getByRole("button", { name: "Chọn vị trí bình thường trên trang", exact: true }).click();
+      await page.getByRole("button", { name: "Lưu 2 dòng", exact: true }).click();
+      await page.getByRole("button", { name: "Chỉnh sửa", exact: true }).waitFor();
+      if (page.context().groundingSigned.length !== 4) throw new Error("Nút Lưu phải xác nhận các vị trí được chọn");
+      await page.getByRole("button", { name: "Chỉnh sửa", exact: true }).click();
+      await page.getByRole("menuitem").filter({ hasText: "Sửa bảng" }).click();
+      await page.getByRole("button", { name: "Chọn vị trí bình thường trên trang", exact: true }).click();
+    },
+  },
   "pct-cho-nkvh": {
     description: "Phiếu \"Chờ NKVH lưu\" (mới lấy số / quá 2 giờ kèm lỗi đồng bộ) trên sổ và hộp chi tiết — chỉ giả lập",
     async prepare() { return {}; },

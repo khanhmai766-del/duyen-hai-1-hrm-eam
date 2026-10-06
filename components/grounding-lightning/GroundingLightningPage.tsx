@@ -119,6 +119,10 @@ const CONTROL =
   `colSpan` của dòng rỗng và dòng chi tiết phải đếm theo, không thể là một hằng số.
 */
 const BASE_TABLE_COLUMNS = 8;
+
+function isNormalItem(item: GroundingItem) {
+  return item.points.length > 0 && item.points.every((point) => point.status === "NORMAL");
+}
 /*
   Khoá sắp xếp “giữ nguyên thứ tự máy chủ trả về” (cương vị → khu vực). Bảng này là sổ
   hiện trường: người đi kiểm tra đi theo đúng thứ tự đó, nên nó phải là mặc định và
@@ -1087,13 +1091,18 @@ export default function GroundingLightningPage() {
     vào đây chỉ để ĐỌC. Bật Sửa bảng mới mở cột đó ra, đồng thời cặp Huỷ / Lưu thay chỗ
     nút Chỉnh sửa.
 
-    `touchedIds` là các khu vực đã ghi kết quả kiểm tra TRONG lượt này — đúng và chỉ những
-    dòng đó được nút Lưu xác nhận. Cố ý không ký cả 202 dòng đang chờ: đây là sổ an toàn,
-    ký một dòng chưa ai đi kiểm tra là ghi nhận khống.
+    `touchedIds` là các khu vực vừa ghi kết quả trong lượt này. `selectedIds` là các
+    vị trí bình thường được người kiểm tra chọn rõ ràng. Nút Lưu xác nhận cả hai nhóm,
+    không xác nhận tự động những dòng chưa được chọn hoặc cập nhật.
   */
   const [tableEditing, setTableEditing] = useState(false);
   const [touchedIds, setTouchedIds] = useState<string[]>([]);
-  const tableColumns = BASE_TABLE_COLUMNS + (tableEditing ? 1 : 0);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [confirming, setConfirming] = useState(false);
+  const tableColumns = BASE_TABLE_COLUMNS + (tableEditing ? 2 : 0);
+  const toggleSelection = (id: string) => setSelectedIds((old) =>
+    old.includes(id) ? old.filter((value) => value !== id) : [...old, id],
+  );
   const toggleSort = (key: string) =>
     setSort((old) =>
       old.key === key
@@ -1181,6 +1190,9 @@ export default function GroundingLightningPage() {
     pageResetKey.pageSize !== pageSize ||
     pageResetKey.activeKpi !== activeKpi
   ) {
+    if (pageResetKey.filters !== filters || pageResetKey.debouncedSearch !== debouncedSearch || pageResetKey.activeKpi !== activeKpi) {
+      setSelectedIds([]);
+    }
     setPageResetKey({ filters, debouncedSearch, sort, pageSize, activeKpi });
     setPage(1);
   }
@@ -1222,6 +1234,7 @@ export default function GroundingLightningPage() {
   };
   const beginEdit = () => {
     setTouchedIds([]);
+    setSelectedIds([]);
     setTableEditing(true);
   };
   /*
@@ -1231,18 +1244,52 @@ export default function GroundingLightningPage() {
   */
   const cancelEdit = () => {
     setTouchedIds([]);
+    setSelectedIds([]);
     setTableEditing(false);
   };
+  const normalPageIds = pageRows.filter(isNormalItem).map((item) => item.id);
+  // Chỉ giữ lựa chọn còn hiển thị trong bộ lọc và vẫn hoàn toàn bình thường.
+  const eligibleSelectedIds = selectedIds.filter((id) =>
+    sorted.some((item) => item.id === id && isNormalItem(item)),
+  );
+  const confirmSelected = async () => {
+    if (!eligibleSelectedIds.length || confirming) return false;
+    setConfirming(true);
+    let completed = 0;
+    try {
+      for (const id of eligibleSelectedIds) {
+        await sign.mutateAsync({ id, normalOnly: true });
+        completed += 1;
+        setSelectedIds((old) => old.filter((value) => value !== id));
+        setTouchedIds((old) => old.filter((value) => value !== id));
+      }
+      toast.success(`Đã xác nhận ${completed} vị trí bình thường`);
+      return true;
+    } catch (error) {
+      toast.error(`Đã xác nhận ${completed}/${eligibleSelectedIds.length} vị trí. ${
+        error instanceof Error ? error.message : "Không xác nhận được"
+      }`);
+      return false;
+    } finally {
+      setConfirming(false);
+    }
+  };
   const saveEdits = async () => {
-    if (touchedIds.length === 0) {
+    if (eligibleSelectedIds.length && !await confirmSelected()) return;
+    const remainingIds = touchedIds.filter((id) => !eligibleSelectedIds.includes(id));
+    if (remainingIds.length === 0) {
+      setSelectedIds([]);
       setTableEditing(false);
       return;
     }
     try {
       // Tuần tự chứ không song song: mỗi lượt ký là một request ghi, bắn 200 request cùng
       // lúc là tự làm nghẽn chính mình và lỗi giữa chừng thì không biết đã ký tới đâu.
-      for (const id of touchedIds) await sign.mutateAsync(id);
-      toast.success(`Đã xác nhận ${touchedIds.length} khu vực/thiết bị`);
+      for (const id of remainingIds) {
+        await sign.mutateAsync(id);
+        setTouchedIds((old) => old.filter((value) => value !== id));
+      }
+      toast.success(`Đã xác nhận ${remainingIds.length} khu vực/thiết bị`);
       setTouchedIds([]);
       setTableEditing(false);
     } catch (error) {
@@ -1253,10 +1300,9 @@ export default function GroundingLightningPage() {
   };
   return (
     <div className="relative min-h-[calc(100vh-7rem)] space-y-5 pb-10">
-      <div className="pointer-events-none absolute -right-10 -top-12 -z-10 size-72 rounded-full bg-cyan-200/20 blur-3xl" />
+      <div className="pointer-events-none absolute right-0 -top-12 -z-10 size-72 rounded-full bg-cyan-200/20 blur-3xl" />
       <PageHeader
         title="TIẾP ĐỊA & CHỐNG SÉT"
-        description="Kiểm tra định kỳ V2, thứ 7 hằng tuần"
         mobileTitle="TIẾP ĐỊA & CHỐNG SÉT"
       >
         <>
@@ -1269,16 +1315,16 @@ export default function GroundingLightningPage() {
                   variant="outline"
                   size="toolbar"
                   onClick={cancelEdit}
-                  disabled={sign.isPending}
+                  disabled={sign.isPending || confirming}
                 >
                   Huỷ
                 </Button>
-                <Button size="toolbar" onClick={saveEdits} disabled={sign.isPending}>
+                <Button size="toolbar" onClick={saveEdits} disabled={sign.isPending || confirming}>
                   <Save className={cn("mr-1.5 size-4", sign.isPending && "animate-pulse")} />
                   {sign.isPending
                     ? "Đang lưu…"
-                    : touchedIds.length > 0
-                      ? `Lưu ${touchedIds.length} dòng`
+                    : touchedIds.length + eligibleSelectedIds.length > 0
+                      ? `Lưu ${new Set([...touchedIds, ...eligibleSelectedIds]).size} dòng`
                       : "Lưu"}
                 </Button>
               </>
@@ -1496,6 +1542,29 @@ export default function GroundingLightningPage() {
           />
         </KpiCard>
       </div>
+      {tableEditing && canManage && (
+        <div className="space-y-3 rounded-xl border border-emerald-200 bg-emerald-50/60 p-3">
+          <p className="text-sm text-ink">
+            Chọn các vị trí đã kiểm tra có toàn bộ hạng mục bình thường để xác nhận cùng lúc.
+            Các vị trí chưa kiểm tra hoặc có khiếm khuyết cần cập nhật riêng.
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="outline" className="h-10" disabled={confirming || !normalPageIds.length || query.isFetching}
+              onClick={() => setSelectedIds((old) => [...new Set([...old, ...normalPageIds])])}>
+              Chọn vị trí bình thường trên trang
+            </Button>
+            <Button variant="ghost" className="h-10" disabled={confirming || !selectedIds.length}
+              onClick={() => setSelectedIds([])}>Bỏ chọn</Button>
+            <span className="text-sm font-medium" aria-live="polite">Đã chọn {eligibleSelectedIds.length} vị trí</span>
+          </div>
+          <Button className="h-14 w-full sm:h-10 sm:w-auto" onClick={confirmSelected}
+            disabled={confirming || sign.isPending || query.isFetching || !eligibleSelectedIds.length}>
+            <CheckCircle2 className="mr-2 size-4" />
+            {confirming ? "Đang xác nhận…" : `Xác nhận ${eligibleSelectedIds.length} vị trí bình thường`}
+          </Button>
+        </div>
+      )}
+      <div inert={confirming}>
       <PcccTableCard
         pageSize={pageSize}
         onPageSizeChange={setPageSize}
@@ -1523,6 +1592,7 @@ export default function GroundingLightningPage() {
             <TableHeader>
               <TableRow className={TR_HEAD}>
                 <TableHead className={cn(TH_NAVY, TH_EXPAND)} />
+                {tableEditing && <TableHead className={cn(TH_NAVY, "w-12 text-center")}>Chọn</TableHead>}
                 <TableHead className={cn(TH_NAVY, "w-[150px]")}>
                   <SortHeader label="Cương vị" sortKey="position" sort={sort} onSort={toggleSort} />
                 </TableHead>
@@ -1575,7 +1645,9 @@ export default function GroundingLightningPage() {
                 // Dòng vừa ghi kết quả trong lượt này tô vàng — nhìn một cái là biết bấm
                 // Lưu sẽ xác nhận những dòng nào, không phải nhớ mình vừa bấm ở đâu.
                 const touched = touchedIds.includes(item.id);
-                const rowBg = touched
+                const rowBg = eligibleSelectedIds.includes(item.id)
+                  ? "bg-emerald-50"
+                  : touched
                   ? "bg-amber-50"
                   : rowBackground({ index, expanded });
                 const photoCount = countPhotos(item);
@@ -1589,6 +1661,17 @@ export default function GroundingLightningPage() {
                           onToggle={() => setExpandedId(expanded ? null : item.id)}
                         />
                       </TableCell>
+                      {tableEditing && (
+                        <TableCell className={cn(TD_ROW, "py-2 text-center")}>
+                          <label className="inline-flex size-10 cursor-pointer items-center justify-center">
+                            <input type="checkbox" className="size-5 accent-emerald-600"
+                              aria-label={`Chọn ${item.areaEquipment} để xác nhận bình thường`}
+                              checked={eligibleSelectedIds.includes(item.id)}
+                              disabled={confirming || sign.isPending || query.isFetching || !isNormalItem(item)}
+                              onChange={() => toggleSelection(item.id)} />
+                          </label>
+                        </TableCell>
+                      )}
                       <TableCell className={cn(TD_ROW, "py-2", "whitespace-nowrap text-center font-medium")}>
                         {item.position || "—"}
                       </TableCell>
@@ -1726,7 +1809,7 @@ export default function GroundingLightningPage() {
             nút thao tác, đúng những thứ người đi hiện trường cần nhất. */}
         <div className="divide-y md:hidden">
           {pageRows.map((item) => (
-            <article key={item.id} className="p-4">
+            <article key={item.id} className={cn("p-4", eligibleSelectedIds.includes(item.id) && "bg-emerald-50")}>
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <span className="text-xs font-bold text-cyan-700">
@@ -1757,6 +1840,16 @@ export default function GroundingLightningPage() {
                 ))}
               </div>
               {tableEditing && (
+                <label className="mt-3 flex min-h-10 items-center gap-3 text-sm">
+                  <input type="checkbox" className="size-5 shrink-0 accent-emerald-600"
+                    aria-label={`Chọn ${item.areaEquipment} để xác nhận bình thường`}
+                    checked={eligibleSelectedIds.includes(item.id)}
+                    disabled={confirming || sign.isPending || query.isFetching || !isNormalItem(item)}
+                    onChange={() => toggleSelection(item.id)} />
+                  {isNormalItem(item) ? "Chọn xác nhận bình thường" : "Cần cập nhật kết quả riêng"}
+                </label>
+              )}
+              {tableEditing && (
                 <div className="mt-3 flex flex-wrap gap-2">
                   <RowActions item={item} ctx={rowActions} />
                 </div>
@@ -1784,6 +1877,7 @@ export default function GroundingLightningPage() {
           </div>
         )}
       </PcccTableCard>
+      </div>
       {catalog.open && (
         <CatalogDialog
           key={`${catalog.item?.id ?? "new"}-${catalog.open}`}
