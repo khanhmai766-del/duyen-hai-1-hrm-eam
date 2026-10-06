@@ -4,6 +4,7 @@ export const permitListSelect = {
   workDate: true, content: true, location: true, position: true, unit: true, issuerName: true,
   commanderName: true, teamName: true, teamType: true, contractorScope: true, workerCount: true,
   authorizerName: true, status: true, progress: true, repairRequestNumber: true, plannedEndAt: true,
+  statusReason: true, createdAt: true, createdByName: true,
   sessions: { where: { endedAt: null }, orderBy: { openedAt: "desc" }, take: 1,
     select: { commanderName: true, company: true, authorizerName: true } },
 } satisfies Prisma.WorkPermitSelect;

@@ -32,7 +32,7 @@ import { NkvhPermitLink } from "@/components/work-permits/nkvh-link";
 import { NkvhLinkEditor } from "@/components/work-permits/nkvh-link-editor";
 import { NkvhLinkPanel } from "@/components/work-permits/nkvh-link-panel";
 import { nkvhPctUrl, parseNkvhPctLink } from "@/lib/nkvh-pct";
-import { effectiveWorkType, formatPermitNumber, isSctxContractorPermit, PERMIT_CONTRACTOR_SCOPES, PERMIT_DISCIPLINES, type PermitContractorScope, type PermitDiscipline, type PermitFormatValue, PERMIT_FORMATS, PERMIT_PAGE_SIZE, defaultPermitFormat, effectivePermitFormat, PERMIT_KINDS, PERMIT_WORK_TYPES, PERMIT_WORK_TYPE_CODES, PERMIT_STATUSES, PERMIT_UNITS, PERMIT_TRANSITIONS, CONTRACTOR_PERMIT_TRANSITIONS, PERMIT_FIELD_LABELS, permitValue, type PermitWorkType, type PermitInput, type PermitKind, type PermitRow, type PermitListRow, type PermitStatus } from "@/lib/work-permits";
+import { effectiveWorkType, formatPermitNumber, isNkvhPendingPermit, isNkvhPendingStale, isSctxContractorPermit, PERMIT_CONTRACTOR_SCOPES, PERMIT_DISCIPLINES, type PermitContractorScope, type PermitDiscipline, type PermitFormatValue, PERMIT_FORMATS, PERMIT_PAGE_SIZE, defaultPermitFormat, effectivePermitFormat, PERMIT_KINDS, PERMIT_WORK_TYPES, PERMIT_WORK_TYPE_CODES, PERMIT_STATUSES, PERMIT_UNITS, PERMIT_TRANSITIONS, CONTRACTOR_PERMIT_TRANSITIONS, PERMIT_FIELD_LABELS, permitValue, type PermitWorkType, type PermitInput, type PermitKind, type PermitRow, type PermitListRow, type PermitStatus } from "@/lib/work-permits";
 import { DEFAULT_INTERNAL_TEAM_NAME, DEFAULT_PERMIT_MANAGING_UNIT, DEFAULT_PERMIT_PLANT } from "@/lib/work-permit-source-fields";
 import { SAFETY_MAX_ROWS } from "@/lib/work-permit-safety";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -57,6 +57,25 @@ function NeedsSupplement({ row, className = "mt-1" }: { row: Parameters<typeof m
   return <span title={`Còn thiếu: ${missing.join(", ")}`} className={`${className} inline-flex whitespace-nowrap rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-800 ring-1 ring-amber-200 dark:bg-amber-950/40 dark:text-amber-200`}>Cần bổ sung</span>;
 }
 function Status({ value }: { value: PermitStatus }) { return <span className={`inline-flex whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-semibold ${statusColors[value]}`}>{PERMIT_STATUSES[value]}</span>; }
+/**
+ * Trạng thái trên sổ; phiếu lấy số từ NKVH mà NKVH chưa lưu hiện "Chờ NKVH lưu" (đỏ khi quá 2 giờ) kèm lỗi
+ * đồng bộ gần nhất — để số đã lấy không bao giờ nằm im mà không ai thấy.
+ */
+function PermitStatusBadge({ row, showError = true }: { row: Pick<PermitRow, "status" | "nkvhPctId" | "statusReason" | "createdAt" | "createdByName">; showError?: boolean }) {
+  if (!isNkvhPendingPermit(row)) return <Status value={row.status} />;
+  const stale = isNkvhPendingStale(row);
+  const since = new Date(row.createdAt).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" });
+  return <span className="inline-flex flex-col items-center gap-0.5 text-center">
+    <span title={`${row.createdByName || "Người cấp"} lấy số lúc ${since}; sổ ghi Đã cấp khi phiếu được lưu trên NKVH.`} className={`inline-flex whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-semibold ${stale ? "bg-red-100 text-red-800 dark:bg-red-950/50 dark:text-red-200" : "bg-amber-100 text-amber-900 dark:bg-amber-950/50 dark:text-amber-200"}`}>Chờ NKVH lưu</span>
+    {stale && <span className="whitespace-nowrap text-[11px] font-semibold text-red-700 dark:text-red-300">quá 2 giờ</span>}
+    {showError && <NkvhPendingError row={row} className="max-w-[11rem]" />}
+  </span>;
+}
+/** Lỗi đồng bộ gần nhất của phiếu chờ NKVH lưu (máy chủ ghi khi từ chối bản đã lưu trên NKVH). */
+function NkvhPendingError({ row, className = "" }: { row: Pick<PermitRow, "status" | "nkvhPctId" | "statusReason">; className?: string }) {
+  if (!isNkvhPendingPermit(row) || !row.statusReason.startsWith("Chưa đồng bộ được")) return null;
+  return <span className={`line-clamp-2 text-[11px] leading-4 text-red-700 dark:text-red-300 ${className}`} title={row.statusReason}>{row.statusReason}</span>;
+}
 function WorkTypeBadge({ value }: { value: PermitWorkType | null }) {
   return <span title={value ? PERMIT_WORK_TYPES[value] : "Chưa phân loại"} className={`inline-flex min-w-9 justify-center rounded-md px-2 py-1 text-xs font-bold ${value === "INCIDENT" ? "bg-red-100 text-red-800" : value === "UNPLANNED" ? "bg-amber-100 text-amber-900" : value === "PLANNED" ? "bg-blue-50 text-blue-800" : "bg-muted text-muted-foreground"}`}>{value ? PERMIT_WORK_TYPE_CODES[value] : "—"}</span>;
 }
@@ -307,7 +326,7 @@ export default function WorkPermitsPage() {
         </div>
       </div>
       {query.isError ? <div role="alert" className="m-4 rounded-lg border border-red-200 bg-red-50 p-6 text-center text-red-700"><CircleAlert className="mx-auto mb-2" /><p className="font-semibold">Không thể tải sổ cấp phiếu</p><p className="mt-1 text-sm">{query.error.message}</p></div> : query.isPending ? <div className="space-y-2 p-4" role="status" aria-label="Đang tải sổ cấp phiếu">{Array.from({ length: 5 }, (_, i) => <div key={i} className="h-12 animate-pulse rounded-md bg-muted" />)}</div> : !rows.length ? <div className="px-6 py-12 text-center"><ClipboardList className="mx-auto text-muted-foreground" size={28} /><h2 className="mt-3 font-semibold">Chưa có phiếu phù hợp</h2><p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">Thay đổi bộ lọc hoặc ghi cấp phiếu mới để bắt đầu theo dõi.</p>{activeFilterCount > 0 && <Button className="mt-4" size="sm" variant="outline" onClick={resetFilters}><RotateCcw />Xóa bộ lọc</Button>}</div> : <>
-        <div className="divide-y divide-border md:hidden">{rows.map(r => <article key={r.id} tabIndex={0} aria-label={`Xem phiếu ${formatPermitNumber(r)}`} onClick={e => openRow(e, r.id)} onKeyDown={e => openRowByKey(e, r.id)} className="cursor-pointer focus-visible:bg-muted/40 focus-visible:outline-none space-y-2 px-4 py-3 transition-colors active:bg-muted/40"><div className="flex items-start justify-between gap-3"><PermitNumberCell permit={r} onOpenPaper={() => setDetail(r.id)} /><div className="flex flex-col items-end gap-1"><Status value={r.status} /><PermitDeadlineBadge permit={r} /></div></div><div className="flex flex-wrap items-center gap-1.5">{/* Điện thoại: số phiếu + trạng thái một hàng, các nhãn nhỏ xuống hàng riêng và tự xuống dòng — trước đây 4 cột một hàng làm nhãn "Cần bổ sung" bị cắt mép phải. */}<WorkTypeBadge value={effectiveWorkType(r)} /><PermitFormat permit={r} /><ContractorScopeBadge value={r.contractorScope} /><NeedsSupplement row={r} className="" /></div><div><p className="line-clamp-2 whitespace-pre-line text-sm font-semibold leading-5 text-foreground">{compactOverhaulContent(r.content)}</p><p className="mt-0.5 text-xs leading-5 text-muted-foreground">{PERMIT_UNITS[r.unit]}{r.position ? ` · ${r.position}` : ""}{r.location ? ` · ${r.location}` : ""}</p></div><div className="flex items-center justify-between gap-3 text-xs"><p className="min-w-0 truncate text-muted-foreground">Chỉ huy <span className="font-medium text-foreground">{r.sessions?.[0]?.commanderName || r.commanderName || "—"}</span> · {r.sessions?.[0]?.company || r.teamName || "—"}</p></div></article>)}</div>
+        <div className="divide-y divide-border md:hidden">{rows.map(r => <article key={r.id} tabIndex={0} aria-label={`Xem phiếu ${formatPermitNumber(r)}`} onClick={e => openRow(e, r.id)} onKeyDown={e => openRowByKey(e, r.id)} className="cursor-pointer focus-visible:bg-muted/40 focus-visible:outline-none space-y-2 px-4 py-3 transition-colors active:bg-muted/40"><div className="flex items-start justify-between gap-3"><PermitNumberCell permit={r} onOpenPaper={() => setDetail(r.id)} /><div className="flex flex-col items-end gap-1"><PermitStatusBadge row={r} showError={false} /><PermitDeadlineBadge permit={r} /></div></div><div className="flex flex-wrap items-center gap-1.5">{/* Điện thoại: số phiếu + trạng thái một hàng, các nhãn nhỏ xuống hàng riêng và tự xuống dòng — trước đây 4 cột một hàng làm nhãn "Cần bổ sung" bị cắt mép phải. */}<WorkTypeBadge value={effectiveWorkType(r)} /><PermitFormat permit={r} /><ContractorScopeBadge value={r.contractorScope} /><NeedsSupplement row={r} className="" /></div><div><p className="line-clamp-2 whitespace-pre-line text-sm font-semibold leading-5 text-foreground">{compactOverhaulContent(r.content)}</p><p className="mt-0.5 text-xs leading-5 text-muted-foreground">{PERMIT_UNITS[r.unit]}{r.position ? ` · ${r.position}` : ""}{r.location ? ` · ${r.location}` : ""}</p><NkvhPendingError row={r} className="mt-1 block" /></div><div className="flex items-center justify-between gap-3 text-xs"><p className="min-w-0 truncate text-muted-foreground">Chỉ huy <span className="font-medium text-foreground">{r.sessions?.[0]?.commanderName || r.commanderName || "—"}</span> · {r.sessions?.[0]?.company || r.teamName || "—"}</p></div></article>)}</div>
         {/* Cùng khuôn bảng với sổ TBYCNN/PCCC và các tab khác của trang (đầu bảng xanh EVN, vạch xen
             kẽ, hover xanh). Bề rộng cột CỐ ĐỊNH + căn giữa theo chiều dọc: trước đây cột tự co theo
             chữ và căn trên, dòng nào có chữ phụ dài là cả hàng lệch nhau, nhìn rất rối. */}
@@ -339,7 +358,7 @@ export default function WorkPermitsPage() {
                 <p className="mt-0.5 truncate text-[11.5px] text-slate-500">{company || "Chưa ghi đơn vị"}{r.workerCount ? ` · ${r.workerCount} người` : ""}{r.teamType === "CONTRACTOR" ? ` · ${PERMIT_CONTRACTOR_SCOPES[r.contractorScope ?? "SCTX"]}` : ""}</p>
               </TableCell>
               <TableCell className={cn(TD_ROW, "py-3")}><span className="block truncate text-[13px] text-ink">{authorizer || <span className="text-slate-400">—</span>}</span></TableCell>
-              <TableCell className={cn(TD_ROW, "py-3 text-center")}><div className="flex flex-col items-center gap-1"><Status value={r.status} /><PermitDeadlineBadge permit={r} /><NeedsSupplement row={r} />{r.teamType === "CONTRACTOR" && <PermitProgress value={r.progress} />}</div></TableCell>
+              <TableCell className={cn(TD_ROW, "py-3 text-center")}><div className="flex flex-col items-center gap-1"><PermitStatusBadge row={r} /><PermitDeadlineBadge permit={r} /><NeedsSupplement row={r} />{r.teamType === "CONTRACTOR" && <PermitProgress value={r.progress} />}</div></TableCell>
             </TableRow>;
           })}</TableBody>
         </Table>
@@ -771,8 +790,11 @@ function PermitDetail({ id, canIssue: listCanIssue, canIssueNew: listCanIssueNew
     } catch (error) { toast.error(error instanceof Error ? error.message : "Không thể hủy PCT"); }
   }
   async function cancelDraftNow(row: PermitRow) {
-    if (!window.confirm("Hủy PCT nháp này? Phiếu sẽ được hủy ngay cả khi chưa có CHTT hoặc còn thiếu thông tin.")) return;
-    try { await cancelDraft.mutateAsync({ id: row.id, version: row.version }); toast.success("Đã hủy PCT nháp"); }
+    const pending = isNkvhPendingPermit(row);
+    if (!window.confirm(pending
+      ? `Hủy phiếu chờ NKVH lưu và trả số ${formatPermitNumber(row)}?\n\nChỉ hủy khi chắc chắn số này CHƯA được lưu trên NKVH.`
+      : "Hủy PCT nháp này? Phiếu sẽ được hủy ngay cả khi chưa có CHTT hoặc còn thiếu thông tin.")) return;
+    try { await cancelDraft.mutateAsync({ id: row.id, version: row.version }); toast.success(pending ? `Đã hủy phiếu chờ và trả số ${formatPermitNumber(row)}` : "Đã hủy PCT nháp"); }
     catch (error) { toast.error(error instanceof Error ? error.message : "Không thể hủy PCT nháp"); }
   }
   const paper = row ? effectivePermitFormat(row) === "PAPER" : false;
@@ -794,10 +816,15 @@ function PermitDetail({ id, canIssue: listCanIssue, canIssueNew: listCanIssueNew
       <DialogDescription className="sr-only">Thông tin ghi sổ và lịch sử thay đổi của phiếu.</DialogDescription>
       {row && <>
         <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1.5">
-          <Status value={row.status} /><PermitDeadlineBadge permit={row} /><PermitFormat permit={row} />
+          <PermitStatusBadge row={row} showError={false} /><PermitDeadlineBadge permit={row} /><PermitFormat permit={row} />
           <span className="text-xs text-muted-foreground">{PERMIT_KINDS[row.kind]} · {PERMIT_UNITS[row.unit]}{row.position ? ` · ${row.position}` : ""} · {permitValue("workDate", row.workDate)}</span>
           {row.teamType === "CONTRACTOR" && <PermitProgress value={row.progress} />}
         </div>
+        {isNkvhPendingPermit(row) && <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-950 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100">
+          <p><b>{row.createdByName || "Người cấp"}</b> đã lấy số này từ tiện ích NKVH lúc {new Date(row.createdAt).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" })}. Sổ tự ghi <b>Đã cấp</b> khi phiếu được lưu trên NKVH — mở phiếu NKVH và bấm Lưu (hoặc “Đồng bộ số hiện có”).</p>
+          {row.statusReason.startsWith("Chưa đồng bộ được") && <p className="mt-1 font-medium text-red-700 dark:text-red-300">{row.statusReason}</p>}
+          <p className="mt-1 text-amber-800 dark:text-amber-200">Không dùng số này nữa thì bấm “Hủy phiếu chờ” để trả số.</p>
+        </div>}
         <div className="mt-3 flex flex-wrap items-center gap-2">
           {canActOnPermit && paper && !["DRAFT", "CANCELLED"].includes(row.status) && <Button size="sm" className="hidden h-8 text-xs md:inline-flex" onClick={() => setPreviewing("permit")} title="In phiếu trên iPad / máy tính"><FileText />Xem và in</Button>}{/* "Hạng mục": gom Phụ lục (Chi tiết) + Bổ sung hạng mục vào một menu cho gọn hàng nút. */}{canActOnPermit && (showItemDetail || canEditOverhaulItems(row)) && <DropdownMenu><DropdownMenuTrigger asChild><Button size="sm" variant="outline" className="h-8 text-xs"><ListChecks />Hạng mục<ChevronDown className="opacity-70" /></Button></DropdownMenuTrigger><DropdownMenuContent align="start" className="w-56 p-1">{showItemDetail && <DropdownMenuItem className="min-h-10 cursor-pointer gap-2" onSelect={() => setPreviewing("appendix")}><ListChecks className="h-4 w-4" /><span><span className="block text-sm font-medium">Chi tiết</span><span className="block text-xs text-muted-foreground">Phụ lục mã, nội dung, biện pháp thi công</span></span></DropdownMenuItem>}{canEditOverhaulItems(row) && <DropdownMenuItem className="min-h-10 cursor-pointer gap-2" onSelect={() => setAddingItems(true)}><ListPlus className="h-4 w-4" /><span><span className="block text-sm font-medium">Bổ sung</span><span className="block text-xs text-muted-foreground">Thêm / bớt hạng mục của phiếu</span></span></DropdownMenuItem>}</DropdownMenuContent></DropdownMenu>}
           {paper && canIssueNew && ["ISSUED", "CLOSED"].includes(row.status) && <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => onCopy(row)}><Copy />Sao chép tạo PCT mới</Button>}
@@ -805,8 +832,8 @@ function PermitDetail({ id, canIssue: listCanIssue, canIssueNew: listCanIssueNew
              việc cuối) — xác nhận một lần là khoá phiếu, không mở ngày làm việc được nữa; không hỏi tiến độ / ghi chú. */}
           {canActOnPermit && row.teamType === "INTERNAL" && !["DRAFT", "CLOSED", "CANCELLED"].includes(row.status) && <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => setExecuting(true)}>Ghi nhận đóng phiếu</Button>}
           {canActOnPermit && row.teamType === "CONTRACTOR" && row.status === "WAITING" && <Button size="sm" variant="outline" className="h-8 border-slate-300 text-xs" disabled={closePermit.isPending} onClick={() => void closeNow(row)}><CheckCircle2 />{closePermit.isPending ? "Đang kết thúc…" : "Kết thúc phiếu"}</Button>}
-          {canIssueNew && row.status === "DRAFT" && <Button size="sm" variant="destructive" className="h-8 text-xs" disabled={cancelDraft.isPending} onClick={() => void cancelDraftNow(row)}>{cancelDraft.isPending ? "Đang hủy…" : "Hủy nháp"}</Button>}
-          {(row.status === "DRAFT" ? canIssueNew : canEditPermit) && !["CLOSED", "CANCELLED"].includes(row.status) && !(row.teamType === "CONTRACTOR" && row.status === "ACTIVE") && <Button size="sm" className="h-8 text-xs" onClick={() => onEdit(row)}>Chỉnh sửa / cấp phiếu<ArrowRight /></Button>}
+          {canIssueNew && row.status === "DRAFT" && <Button size="sm" variant="destructive" className="h-8 text-xs" disabled={cancelDraft.isPending} onClick={() => void cancelDraftNow(row)}>{cancelDraft.isPending ? "Đang hủy…" : isNkvhPendingPermit(row) ? "Hủy phiếu chờ" : "Hủy nháp"}</Button>}
+          {(row.status === "DRAFT" ? canIssueNew : canEditPermit) && !isNkvhPendingPermit(row) && !["CLOSED", "CANCELLED"].includes(row.status) && !(row.teamType === "CONTRACTOR" && row.status === "ACTIVE") && <Button size="sm" className="h-8 text-xs" onClick={() => onEdit(row)}>Chỉnh sửa / cấp phiếu<ArrowRight /></Button>}
           {canDelete && <Button type="button" size="sm" variant="destructive" className="h-10 text-xs sm:h-8" onClick={() => { setDeleteReason(""); setDeleteError(""); setDeleting(true); }}><Trash2 />Xóa PCT đã hủy</Button>}
           {canCancelPermit && canCancel(row) && <Button size="sm" variant="outline" className="h-8 border-red-200 text-xs text-red-700 hover:bg-red-50 hover:text-red-800" onClick={() => { setCancelReason(""); setCancelling(true); }}><Ban />Hủy PCT</Button>}
         </div>

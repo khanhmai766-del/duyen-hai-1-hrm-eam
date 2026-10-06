@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { claimNkvhPermit, importExistingNkvhPermit, parseNkvhPage, parseExistingNkvhPermitNumber } from "../../lib/server/work-permit-nkvh-claim";
+import { cancelNkvhPermit, claimNkvhPermit, importExistingNkvhPermit, parseNkvhPage, parseExistingNkvhPermitNumber } from "../../lib/server/work-permit-nkvh-claim";
 import { consumePermitNumberReservation, reservePermitNumber } from "../../lib/server/work-permit-number-reservations";
 import { reviewObservedNumber } from "../../lib/server/work-permit-number-review";
 import { formatPermitNumber } from "../../lib/work-permits";
@@ -64,13 +64,40 @@ const rejected = async (run: () => Promise<unknown>, message: RegExp) => {
 };
 const input = (number = "4451") => ({ kind, nkvhPctId: pct, page, unit: "", position: "", formattedNumber: `${number}/2026/VH1-NĐDH` });
 
-test("lấy số trên NKVH chỉ giữ; bấm lại cùng lượt, chưa tạo PCT", async () => {
+test("lấy số trên NKVH giữ số + một phiếu nháp chờ NKVH lưu; bấm lại cùng lượt không tạo thêm", async () => {
   const f = fixture();
   const first = await claimNkvhPermit(f.tx, user, input(), new Date("2026-10-05"));
   const again = await claimNkvhPermit(f.tx, user, input(), new Date("2026-10-05"));
+  // Phản hồi cho tiện ích giữ nguyên dạng lượt giữ số.
   assert.equal(first.status, "RESERVED"); assert.equal(first.number, "4455"); assert.equal(again.id, first.id);
-  assert.equal(f.permits.length, 0); assert.equal(f.reservations.length, 1);
+  assert.equal(f.reservations.length, 1); assert.equal(f.permits.length, 1);
+  assert.equal(f.permits[0].status, "DRAFT"); assert.equal(f.permits[0].number, "4455"); assert.equal(f.permits[0].nkvhPctId, pct);
+  assert.equal(f.permits[0].issuedAt, null);
   assert.ok(f.queries[0].includes("pg_advisory_xact_lock"));
+});
+test("NKVH lưu xong: phiếu nháp chuyển thành Đã cấp, không tạo hồ sơ thứ hai", async () => {
+  const f = fixture();
+  await claimNkvhPermit(f.tx, user, input(), new Date("2026-10-05"));
+  const draftId = f.permits[0].id;
+  const result = await importExistingNkvhPermit(f.tx, user, input("4455"), new Date("2026-10-05T03:00:00Z"));
+  assert.equal(result.id, draftId); assert.equal(f.permits.length, 1); assert.equal(f.permits[0].status, "ISSUED");
+  assert.equal(f.reservations[0].status, "ISSUED"); assert.equal(f.reservations[0].permitId, draftId);
+  assert.equal(f.permits[0].statusReason, "");
+});
+test("chức danh lạ hoặc giờ kết thúc sớm hơn giờ bắt đầu không làm mất phiếu đã lưu", async () => {
+  const f = fixture();
+  const odd = parseNkvhPage({ content: "Thay lọc", qlvhCode: "VH", teamCode: "PCN", authorizerPosition: "Trực ban",
+    plannedStartAt: "06/10/2026 22:00", plannedEndAt: "06/10/2026 06:00" }, kind);
+  const result = await importExistingNkvhPermit(f.tx, user, { ...input(), page: odd }, new Date("2026-10-06"));
+  assert.equal(result.status, "ISSUED"); assert.equal(f.permits[0].position, ""); assert.equal(f.permits[0].plannedEndAt, null);
+  const action = String(f.history.find(row => String(row.action).startsWith("Đồng bộ"))?.action);
+  assert.match(action, /Trực ban/); assert.match(action, /giờ kết thúc dự kiến/);
+});
+test("NKVH hủy phiếu còn đang chờ lưu: hủy nháp và trả số chưa dùng", async () => {
+  const f = fixture();
+  await claimNkvhPermit(f.tx, user, input(), new Date("2026-10-05"));
+  const result = await cancelNkvhPermit(f.tx, user, { kind, nkvhPctId: pct, reason: "Lập nhầm" });
+  assert.equal(result.status, "CANCELLED"); assert.equal(f.reservations[0].status, "RELEASED"); assert.equal(f.reservations[0].permitId, f.permits[0].id);
 });
 test("số 4451 chưa dùng vẫn lấy được khi dãy đã đến 4454", async () => {
   const f = fixture();
@@ -110,8 +137,22 @@ test("nhận chính phiếu NKVH đã hủy dưới trạng thái hủy", async 
   assert.equal(result.status, "CANCELLED"); assert.equal(f.reservations[0].status, "CANCELLED");
 });
 test("giữ nguyên số chính thức kể cả hậu tố NKVH", () => {
-  assert.deepEqual(parseExistingNkvhPermitNumber("04451/2026/NĐDH-VH1"), { number: "4451", year: 2026 });
-  assert.equal(formatPermitNumber({ number: "4451", year: 2026, nkvhNumber: "04451/2026/NĐDH-VH1" }), "04451/2026/NĐDH-VH1");
+  assert.deepEqual(parseExistingNkvhPermitNumber("04451/2026/VH1-NĐDH"), { number: "4451", year: 2026 });
+  assert.equal(formatPermitNumber({ number: "4451", year: 2026, nkvhNumber: "04451/2026/VH1-NĐDH (ĐT)" }), "04451/2026/VH1-NĐDH (ĐT)");
+});
+const badNumber = async (value: string, message: RegExp) => {
+  try { parseExistingNkvhPermitNumber(value); assert.fail("Lẽ ra phải từ chối"); } catch (error) {
+    assert.ok(error instanceof Response); assert.equal(error.status, 400); assert.match((await error.json()).error, message);
+  }
+};
+test("chỉ xét phần đầu số sổ, bỏ qua ghi chú phía sau", async () => {
+  assert.deepEqual(parseExistingNkvhPermitNumber("4278/2026/VH1-NĐDH (ĐT)"), { number: "4278", year: 2026 });
+  assert.deepEqual(parseExistingNkvhPermitNumber("4278/2026/VH1-NDDH gấp"), { number: "4278", year: 2026 });
+  await badNumber("4278/2026/VH1-NĐDH2", /không đúng dạng/);
+});
+test("không nhận số NKVH tự sinh …/NĐDH-VH1", async () => {
+  await badNumber("951/2026/NĐDH-VH1", /số NKVH tự sinh/);
+  await badNumber("951/2026/NĐDH-VH1 (ĐT)", /số NKVH tự sinh/);
 });
 
 test("cấp giấy đổi sang số đang giữ bởi người khác: giải phóng số ban đầu, số đích chỉ cấp một phiếu", async () => {

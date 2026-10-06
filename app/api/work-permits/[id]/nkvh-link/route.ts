@@ -26,6 +26,7 @@ export async function PATCH(req: Request, props: { params: Promise<{ id: string 
       const before = await tx.workPermit.findUnique({ where: { id } });
       if (!before) throw fail("Không tìm thấy PCT", 404);
       if (["CLOSED", "CANCELLED"].includes(before.status)) throw fail("Phiếu đã đóng hoặc hủy được khóa để giữ lịch sử", 409);
+      if (before.status === "DRAFT" && before.nkvhPctId) throw fail("Phiếu đang chờ lưu trên NKVH — không đổi liên kết. Nếu lấy nhầm phiếu, hủy phiếu chờ rồi lấy số lại.", 409);
       if (effectivePermitFormat(before) !== "ELECTRONIC") throw fail("Chỉ gắn liên kết NKVH cho PCT điện tử");
       if (before.version !== input.version) throw fail("PCT vừa được cập nhật. Vui lòng tải lại trước khi gắn link.", 409);
       if (before.nkvhPctId === input.nkvhPctId) return before;

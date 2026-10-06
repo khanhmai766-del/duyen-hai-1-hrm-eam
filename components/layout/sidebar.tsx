@@ -5,10 +5,10 @@ import * as React from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { ChevronDown, Clock, ExternalLink, LifeBuoy, Phone, ShieldCheck } from "lucide-react";
+import { ChevronDown, Clock, ExternalLink, LifeBuoy, Phone, ShieldCheck, Star } from "lucide-react";
 import { cn, initials } from "@/lib/utils";
 import { useUsers } from "@/hooks/useUsers";
-import { navItemAllowedForPosition, navSectionsForPosition, type NavItem } from "@/lib/nav";
+import { navItemAllowedForPosition, navQuickItems, navSectionsForPosition, type NavItem } from "@/lib/nav";
 import { useRbacAccess } from "@/hooks/useRbacAccess";
 import { useAdminMode } from "@/hooks/useAdminMode";
 
@@ -30,7 +30,8 @@ function hrefActive(pathname: string, search: URLSearchParams, href: string, exa
   return Array.from(new URLSearchParams(query)).every(([key, value]) => search.get(key) === value);
 }
 
-export function Sidebar({ onNavigate, collapsed = false }: { onNavigate?: () => void; collapsed?: boolean }) {
+/** `showQuick`: nhóm "Thường dùng" chỉ cho thanh bên máy tính; ngăn kéo điện thoại đã có thanh điều hướng đáy. */
+export function Sidebar({ onNavigate, collapsed = false, showQuick = false }: { onNavigate?: () => void; collapsed?: boolean; showQuick?: boolean }) {
   const { data: session } = useSession();
   const role = session?.user?.role;
   const rbac = useRbacAccess();
@@ -72,6 +73,11 @@ export function Sidebar({ onNavigate, collapsed = false }: { onNavigate?: () => 
       }))
       .filter((section) => section.items.length > 0);
   }, [positionCarrier, readOnlyDefects]);
+
+  // Tài khoản chỉ đọc khiếm khuyết chỉ thấy các mục /defects như phần còn lại của thanh bên.
+  const quickItems = (showQuick ? navQuickItems(positionCarrier) : [])
+    .filter((item) => !readOnlyDefects || item.href.startsWith("/defects"))
+    .filter((item) => navItemAllowed(item, role, rbac.can, adminMode, positionCarrier));
 
   const [now, setNow] = React.useState<Date | null>(null);
   React.useEffect(() => {
@@ -129,6 +135,22 @@ export function Sidebar({ onNavigate, collapsed = false }: { onNavigate?: () => 
       </div>
 
       <nav className={cn("flex-1 space-y-5 overflow-y-auto py-4", collapsed ? "px-2" : "px-3")}>
+        {quickItems.length > 0 && (
+          <div>
+            {!collapsed && (
+              <div className="flex items-center gap-2 px-2 pb-2">
+                <Star className="h-3 w-3 shrink-0 fill-amber-400 text-amber-400" aria-hidden="true" />
+                <span className="shrink-0 whitespace-nowrap text-[11.5px] font-black uppercase tracking-[0.08em] text-slate-600 dark:text-slate-200">Thường dùng</span>
+                <span className="h-px flex-1 bg-gradient-to-r from-blue-100 to-transparent dark:from-slate-700" />
+              </div>
+            )}
+            <div className="space-y-1.5">
+              {quickItems.map((item) => (
+                <NavEntry key={`quick-${item.href}`} item={item} onNavigate={onNavigate} collapsed={collapsed} />
+              ))}
+            </div>
+          </div>
+        )}
         {sections.map((section, sectionIndex) => {
           const items = section.items
             .map((item) => {
@@ -140,7 +162,8 @@ export function Sidebar({ onNavigate, collapsed = false }: { onNavigate?: () => 
               return navItemAllowed(item, role, rbac.can, adminMode, positionCarrier);
             });
           if (!items.length) return null;
-          const sectionClosed = closedSections[section.title] ?? sectionIndex !== 0;
+          // Có nhóm "Thường dùng" (máy tính) thì mọi nhóm mặc định đóng; ngăn kéo điện thoại vẫn mở sẵn nhóm đầu.
+          const sectionClosed = closedSections[section.title] ?? (quickItems.length > 0 || sectionIndex !== 0);
           return (
             <div key={section.title}>
               {collapsed ? (
@@ -287,7 +310,7 @@ function NavEntry({ item, onNavigate, collapsed = false }: { item: NavItem; onNa
   const Icon = item.icon;
   const hasChildren = !!item.children?.length;
   const childActive = hasChildren && item.children!.some((c) => pathActive(pathname, c.href, c.exact));
-  const active = pathActive(pathname, item.href, item.exact) || childActive;
+  const active = (hasChildren ? pathActive(pathname, item.href, item.exact) : hrefActive(pathname, search, item.href, item.exact)) || childActive;
   const [open, setOpen] = React.useState(childActive);
 
   // Vào trang con thì tự bung nhóm — chỉnh lúc render; giá trị đầu đã xét ở useState.

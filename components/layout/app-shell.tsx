@@ -46,7 +46,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           collapsed ? "w-[76px]" : "w-[280px]"
         )}
       >
-        <Sidebar collapsed={collapsed} />
+        <Sidebar collapsed={collapsed} showQuick />
       </aside>
 
       {/* Mobile drawer */}

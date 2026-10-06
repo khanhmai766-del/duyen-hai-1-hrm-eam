@@ -68,13 +68,15 @@
   /** Nhãn phân xưởng khác nếu phiếu không thuộc PXVH1; chưa đọc được ô QLVH thì coi như của PXVH1. */
   const foreignQlvh = () => { const unit = qlvh(); return unit.code && unit.code !== OWN_QLVH ? unit.label || unit.code : null; };
 
+  // Số phiếu chỉ xét phần đầu; phần sau là ghi chú người cấp gõ thêm ("4278/2026/VH1-NĐDH (ĐT)", "… gấp").
+  const numberHead = (value) => fold(value).replace(/\s*([/-])\s*/g, "$1");
   /** Số NKVH tự sinh ("2392/2026/NĐDH-VH1") — khác dạng số của sổ ("1234/2026/VH1-NĐDH"). */
-  const isNkvhAutoNumber = (value) => /^\d+\/\d{4}\/nddh-vh\d*$/.test(fold(value));
+  const isNkvhAutoNumber = (value) => /^\d+\/\d{4}\/nddh-vh\d*(?![a-z0-9])/.test(numberHead(value));
   /** Số chính thức đã được cấp theo sổ PXVH1; có thể nhận lại về sổ khi hồ sơ web bị thiếu. */
-  const isPxvh1Number = (value) => /^\d+\/20\d{2}\/(?:vh1-nddh|nddh-vh1)$/.test(fold(value).replace(/\s+/g, ""));
-  /** Khoá so sánh hai số dạng sổ ("04464/2026/VH1-NDDH" = "4464/2026/VH1-NĐDH"); không đúng dạng → null. */
+  const isPxvh1Number = (value) => /^\d+\/20\d{2}\/(?:vh1-nddh|nddh-vh1)(?![a-z0-9])/.test(numberHead(value));
+  /** Khoá so sánh hai số dạng sổ ("04464/2026/VH1-NDDH" = "4464/2026/VH1-NĐDH (ĐT)"); không đúng dạng → null. */
   function pxvh1Key(value) {
-    const match = fold(value).replace(/\s+/g, "").match(/^(\d+)\/(20\d{2})\/(?:vh1-nddh|nddh-vh1)$/);
+    const match = numberHead(value).match(/^(\d+)\/(20\d{2})\/(?:vh1-nddh|nddh-vh1)(?![a-z0-9])/);
     return match ? `${match[1].replace(/^0+(?=\d)/, "")}/${match[2]}` : null;
   }
 
@@ -439,7 +441,7 @@
       keepSync(payload);
       const result = await api("POST", API, payload);
       if (!result.ok) { const error = new Error(result.message); error.status = result.status; throw error; }
-      if (!result.data?.formatted || result.data.formatted.trim() !== payload.formattedNumber.trim()) throw new Error("Máy chủ chưa ghi đúng số chính thức NKVH. Chưa xác nhận đồng bộ thành công.");
+      if (!result.data?.formatted || pxvh1Key(result.data.formatted) !== pxvh1Key(payload.formattedNumber)) throw new Error("Máy chủ chưa ghi đúng số chính thức NKVH. Chưa xác nhận đồng bộ thành công.");
       keepSync(null);
       state.permit = result.data.status === "CANCELLED" ? null : result.data;
       state.cancelledPermit = result.data.status === "CANCELLED" ? result.data : null;

@@ -194,7 +194,12 @@ export interface PermitSession {
   itemProgress?: OverhaulItemProgress[] | null;
 }
 export type PermitHistorySummary = Pick<PermitHistory, "id" | "actorName" | "action" | "createdAt">;
-export type PermitListRow = Pick<PermitRow, "id" | "number" | "year" | "kind" | "format" | "workType" | "workDate" | "content" | "location" | "position" | "unit" | "issuerName" | "commanderName" | "teamName" | "teamType" | "contractorScope" | "workerCount" | "authorizerName" | "status" | "progress" | "repairRequestNumber" | "nkvhPctId" | "nkvhNumber" | "sourceClassification" | "plannedEndAt"> & { sessions: Array<Pick<PermitSession, "commanderName" | "company" | "authorizerName">> };
+/** Phiếu nháp có liên kết NKVH = đã lấy số từ tiện ích, đang chờ NKVH lưu để thành Đã cấp. */
+export const isNkvhPendingPermit = (row: Pick<PermitRow, "status" | "nkvhPctId">) => row.status === "DRAFT" && Boolean(row.nkvhPctId);
+/** Chờ NKVH lưu quá lâu → sổ cảnh báo đỏ (không tự hủy: có thể phiếu đang làm dở). */
+export const NKVH_PENDING_STALE_MS = 2 * 3600_000;
+export const isNkvhPendingStale = (row: Pick<PermitRow, "createdAt">, now = Date.now()) => now - new Date(row.createdAt).getTime() > NKVH_PENDING_STALE_MS;
+export type PermitListRow = Pick<PermitRow, "id" | "number" | "year" | "kind" | "format" | "workType" | "workDate" | "content" | "location" | "position" | "unit" | "issuerName" | "commanderName" | "teamName" | "teamType" | "contractorScope" | "workerCount" | "authorizerName" | "status" | "progress" | "repairRequestNumber" | "nkvhPctId" | "nkvhNumber" | "sourceClassification" | "plannedEndAt" | "statusReason" | "createdAt" | "createdByName"> & { sessions: Array<Pick<PermitSession, "commanderName" | "company" | "authorizerName">> };
 export interface PermitDetailRow extends PermitRow {
   history: PermitHistorySummary[]; sessions: PermitSession[]; _count: { sessions: number; history: number };
   /** PCT đại tu: % lũy kế gần nhất theo overhaulItemKey. */

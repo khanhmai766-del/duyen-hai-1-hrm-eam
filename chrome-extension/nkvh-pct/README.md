@@ -7,7 +7,9 @@ PCT giấy vẫn cấp trên website và dùng chung dãy Cơ/Điện theo năm.
 ## Luồng mới
 
 1. Mở PCT ở B1. Nếu cần số, bấm **Lấy số PCT → Lấy số & điền**.
-2. Máy chủ chỉ tạo lượt `RESERVED` gắn `id_pct`, chưa ghi PCT Đã cấp. Bấm lại nhận cùng lượt.
+2. Máy chủ tạo lượt `RESERVED` gắn `id_pct` **và một phiếu nháp "Chờ NKVH lưu"** (status `DRAFT`, có
+   `nkvhPctId`) để số đã lấy luôn hiện trên sổ; chưa ghi Đã cấp. Bấm lại nhận cùng lượt, cùng nháp.
+   Phản hồi cho tiện ích giữ nguyên dạng lượt giữ số; GET/đóng/dừng bỏ qua nháp — tiện ích không cần đổi.
 3. Hoàn thiện phiếu, có thể sửa số, rồi tự bấm **Lưu trên NKVH**.
 4. MAIN-world `saved-events.js` nghe phản hồi `pfAjaxComplete` có thông báo lưu/cấp thành công,
    không có `validationFailed`. Nó chỉ báo sự kiện, không gọi API website.
@@ -31,6 +33,8 @@ thủ công sau khi xác nhận NKVH đã lưu. Cần kiểm tra thông báo th�
   ngăn các đường tạo và gắn link sinh hồ sơ trùng.
 - Số đích đã thuộc phiếu khác (giấy/điện tử/phiếu hủy): báo xung đột, không ghi đè.
 - Số gõ tay đã thấy trên danh sách NKVH được ghi OBSERVED, kể cả số thấp hơn hoặc vượt dãy.
+- Ô Số phiếu chỉ xét phần đầu `<số>/<năm>/VH1-NĐDH`; ghi chú gõ thêm phía sau ("(ĐT)", "gấp") được bỏ qua
+  ở cả tiện ích lẫn máy chủ. Số NKVH tự sinh `…/NĐDH-VH1` bị máy chủ từ chối (không thành số sổ).
   OBSERVED chặn cấp trùng nhưng chưa nâng dãy. Lấy số tiếp theo bỏ qua các số OBSERVED liền kề,
   không nhảy lên một số bất thường ở xa. Các OBSERVED cũ cũng áp dụng quy tắc này.
 - Phiếu NKVH đã lưu mang số nhảy cóc vẫn đồng bộ đúng số/nội dung/trạng thái; lượt số chờ người
@@ -41,6 +45,11 @@ thủ công sau khi xác nhận NKVH đã lưu. Cần kiểm tra thông báo th�
 - Không đổi phiên bản/cài lại tiện ích để dùng phần đối chiếu: v1.1.0 gửi cùng API như trước.
 - Số cũ của hồ sơ đã đổi số theo NKVH chuyển REVIEW. Không tự giải phóng; người giữ đối chiếu
   và xác nhận chưa sử dụng trước khi giải phóng.
+- NKVH lưu xong: đồng bộ chuyển chính phiếu nháp thành Đã cấp. Bị từ chối thì lỗi gần nhất ghi vào
+  `statusReason` của nháp (sổ hiện đỏ) và log máy chủ `[nkvh-claim]`. Chức danh không khớp danh mục hoặc
+  giờ kết thúc dự kiến sớm hơn giờ bắt đầu KHÔNG còn làm từ chối: bỏ trống ô đó, ghi chú vào lịch sử.
+- Phiếu chờ trên sổ chỉ hủy được (trả số), không sửa/cấp tay; trả lượt số cũng hủy nháp đi kèm.
+  Số đã thấy trên danh sách NKVH (OBSERVED_CONFIRMED) thì không cho hủy nháp — phải đồng bộ.
 - Hủy lượt RESERVED/REVIEW chưa dùng → RELEASED và lưu lịch sử. Hủy phiếu đã cấp → CANCELLED;
   quy tắc mở lại số phiếu hủy ở Mốc sổ giấy vẫn là thao tác riêng.
 - Lượt giữ cho NKVH chưa cấp vẫn xuất hiện trên website. Có thể tiếp tục cho giấy nếu chưa dùng
@@ -49,7 +58,8 @@ thủ công sau khi xác nhận NKVH đã lưu. Cần kiểm tra thông báo th�
 ## Đồng bộ và đối chiếu
 
 - NKVH đã có số: **Đồng bộ số hiện có** nhận dữ liệu đọc lại từ NKVH, không cấp số mới.
-- Chấp nhận hậu tố `…/VH1-NĐDH` và `…/NĐDH-VH1`; giữ nguyên số chính thức ở `WorkPermit.nkvhNumber`.
+- Chỉ nhận số sổ `…/VH1-NĐDH` (kèm ghi chú phía sau nếu có); giữ nguyên chuỗi gốc ở `WorkPermit.nkvhNumber`.
+  `…/NĐDH-VH1` là số NKVH tự điền theo bộ đếm riêng (vd 951, 952 khi sổ Điện ~4280) — máy chủ từ chối.
   `number` vẫn là phần số chuẩn hóa để chống trùng cùng dãy.
 - Tổ máy không bắt buộc khi đồng bộ. Chưa xác định lưu UNKNOWN; không mặc định COMMON.
 - Cương vị đọc từ **Chức danh người cho phép làm việc**, ánh xạ theo position-catalog. Chưa khớp

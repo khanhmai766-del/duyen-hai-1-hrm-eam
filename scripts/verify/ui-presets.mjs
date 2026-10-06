@@ -153,6 +153,48 @@ function milestonePreset(day) {
 }
 
 export const PRESETS = {
+  "pct-cho-nkvh": {
+    description: "Phiếu \"Chờ NKVH lưu\" (mới lấy số / quá 2 giờ kèm lỗi đồng bộ) trên sổ và hộp chi tiết — chỉ giả lập",
+    async prepare() { return {}; },
+    routes: () => ["/work-permits?kind=MECHANICAL", "/work-permits?kind=MECHANICAL&uiDetail=1"],
+    async mock(context) {
+      const now = Date.now(), patched = new Map();
+      const pending = (row, i) => Object.assign(row, {
+        status: "DRAFT", format: "ELECTRONIC", teamType: "INTERNAL", contractorScope: null, plannedEndAt: null, nkvhPctId: `6f92153f-cae7-4cbd-b8ba-3c7bd8c178d${i}`, nkvhNumber: null, createdByName: i ? "Lương Huệ Châu" : "Nguyễn Quang Đàm",
+        createdAt: new Date(now - (i ? 20 : 190) * 60_000).toISOString(),
+        content: i ? "Thay lọc dầu bôi trơn bơm cấp nước 1A (giả lập)" : "Vệ sinh vòi đốt dầu tổ máy S2 (giả lập)",
+        statusReason: i ? "" : "Chưa đồng bộ được lúc 08:27 06/10: Chức danh NKVH “Trực ban” chưa khớp danh mục. Vui lòng xác nhận cương vị.",
+      });
+      await context.route("**/api/work-permits**", async route => {
+        const req = route.request(), path = new URL(req.url()).pathname;
+        if (req.method() !== "GET") throw new Error("Không ghi dữ liệu khi chụp phiếu chờ NKVH");
+        if (path === "/api/work-permits") {
+          const response = await route.fetch(); const json = await response.json();
+          (json.data ?? []).slice(0, 2).forEach((row, i) => patched.set(row.id, pending(row, i)));
+          return route.fulfill({ response, json });
+        }
+        const id = path.split("/")[3];
+        if (path.split("/").length === 4 && patched.has(id)) {
+          // Chi tiết dựng từ dòng sổ (DB dev có thể thiếu bảng phụ khiến API chi tiết lỗi).
+          const row = patched.get(id);
+          const data = { managingUnit: "", plantName: "", registrationNumber: "", workScope: "", plannedStartAt: null, disciplines: [], safetyItems: [], members: [],
+            leaderName: "", issuerPosition: "", electricalSafetySupervisorName: "", issuedAt: null, authorizedAt: null, closedAt: null, result: "", note: "",
+            defectId: null, overhaulItems: null, overhaulPercents: {}, overhaulNotes: {}, version: 1, createdById: "", updatedAt: row.createdAt,
+            ...row, history: [{ id: "ui-h1", actorName: row.createdByName, action: "Lấy số từ NKVH — chờ NKVH lưu phiếu", createdAt: row.createdAt }],
+            sessions: [], _count: { sessions: 0, history: 1 } };
+          return route.fulfill({ json: { data, meta: { canIssue: true, canIssueNew: true, canExecute: false, canActOnPermit: true, canEditPermit: true, canDelete: false }, error: null } });
+        }
+        return route.continue();
+      });
+      await context.route("**/api/overhaul-milestones**", route => route.fulfill({ json: { data: [], meta: null, error: null } }));
+    },
+    async interact(page, route) {
+      if (!route.endsWith("uiDetail=1")) return;
+      await page.getByText("Vệ sinh vòi đốt dầu tổ máy S2 (giả lập)").locator("visible=true").first().click();
+      await page.getByRole("dialog").waitFor();
+      await page.waitForTimeout(300);
+    },
+  },
   "pct-doi-chieu-so": {
     description: "Số NKVH nhảy cóc và hộp xác nhận nâng dãy/bỏ số — chỉ giả lập",
     async prepare() { return {}; },

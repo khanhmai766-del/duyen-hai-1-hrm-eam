@@ -12,7 +12,7 @@ ${cell("Nội dung:", `<textarea>${content}</textarea>`)}
 ${cell("Địa điểm:", "<textarea>Bồn dầu S1</textarea>")}
 ${cell("Chức danh người cho phép làm việc:", '<select><option selected>Máy phó</option></select>')}
 <button id="formContent:save" type="button">Lưu</button></form></body></html>`;
-const official = html("4456/2026/NĐDH-VH1", "Nội dung đã lưu trên NKVH");
+const official = html("4456/2026/VH1-NĐDH (ĐT)", "Nội dung đã lưu trên NKVH");
 const browser = await chromium.launch();
 try {
   const page = await browser.newPage();
@@ -28,7 +28,7 @@ try {
         if (message.method === "GET") return callback({ ok: true, data: { protocolVersion: 2, permit: null, positions: ["Máy phó"], units: { S1: "Tổ máy S1" } } });
         window.requests.push(message.body);
         if (window.failFirst) { window.failFirst = false; return callback({ ok: false, message: "Mất mạng giả lập" }); }
-        callback({ ok: true, data: { id: "permit", status: "ISSUED", number: "4456", year: 2026, formatted: "4456/2026/NĐDH-VH1", pendingReservations: [] } });
+        callback({ ok: true, data: { id: "permit", status: "ISSUED", number: "4456", year: 2026, formatted: "4456/2026/VH1-NĐDH (ĐT)", pendingReservations: [] } });
       } },
     };
   });
@@ -44,7 +44,7 @@ try {
   await page.evaluate(() => window.pfComplete({}, { status: 200, responseXML: new DOMParser().parseFromString('<partial-response><changes><update id="messages"><![CDATA[<div class="ui-messages-info">Lưu phiếu thành công</div>]]></update></changes></partial-response>', "text/xml") }, { data: "javax.faces.source=formContent%3Asave" }));
   await page.waitForFunction(() => window.requests.length === 1);
   const payload = await page.evaluate(() => window.requests[0]);
-  assert.equal(payload.formattedNumber, "4456/2026/NĐDH-VH1");
+  assert.equal(payload.formattedNumber, "4456/2026/VH1-NĐDH (ĐT)");
   assert.equal(payload.page.content, "Nội dung đã lưu trên NKVH");
   assert.equal(payload.page.authorizerPosition, "Máy phó");
   assert.equal(payload.saved, true);
@@ -55,5 +55,11 @@ try {
   // Đọc phiếu đã hủy và đọc cương vị theo nguồn NKVH.
   const cancelled = await page.evaluate(source => window.PXVH1_NKVH_READER.read(new DOMParser().parseFromString(source, "text/html"), "MECHANICAL"), html("4451/2026/VH1-NĐDH", "Phiếu cũ", '<span style="color:red">Phiếu đã hủy. Lý do: Sai phạm vi.</span>'));
   assert.equal(cancelled.sourceStatus, "CANCELLED"); assert.equal(cancelled.sourceReason, "Sai phạm vi");
+  // Số phiếu chỉ xét phần đầu: ghi chú sau số ("(ĐT)", "gấp") vẫn đọc được, số dính thêm chữ/số thì không.
+  const readNumber = number => page.evaluate(source => { try { return window.PXVH1_NKVH_READER.read(new DOMParser().parseFromString(source, "text/html"), "MECHANICAL").formattedNumber; } catch { return null; } }, html(number, "Nội dung"));
+  assert.equal(await readNumber("4458/2026/VH1-NĐDH gấp"), "4458/2026/VH1-NĐDH gấp");
+  assert.equal(await readNumber("4458 / 2026 / VH1-NĐDH(ĐT)"), "4458 / 2026 / VH1-NĐDH(ĐT)");
+  assert.equal(await readNumber("4458/2026/VH1-NĐDH2"), null);
+  console.log("✓ Đọc được số kèm ghi chú (ĐT, gấp)");
   console.log("✓ Không đồng bộ trước lưu hoặc khi lưu lỗi; nhận đúng dữ liệu đã lưu; giữ yêu cầu mất mạng và gửi lại; đọc phiếu hủy");
 } finally { await browser.close(); }

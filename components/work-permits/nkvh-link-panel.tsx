@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { useSaveNkvhPermitLink } from "@/hooks/useWorkPermits";
 import { nkvhPctUrl, parseNkvhPctLink } from "@/lib/nkvh-pct";
-import type { PermitRow } from "@/lib/work-permits";
+import { isNkvhPendingPermit, type PermitRow } from "@/lib/work-permits";
 import { NkvhLinkEditor } from "./nkvh-link-editor";
 
 export function NkvhLinkPanel({ permit, canEdit }: { permit: PermitRow; canEdit: boolean }) {
@@ -13,7 +13,8 @@ export function NkvhLinkPanel({ permit, canEdit }: { permit: PermitRow; canEdit:
   let id: string | null = null;
   let invalid = false;
   try { id = parseNkvhPctLink(value, permit.kind); } catch { invalid = true; }
-  const editable = canEdit && !["CLOSED", "CANCELLED"].includes(permit.status);
+  // Phiếu chờ NKVH lưu: liên kết do tiện ích gắn lúc lấy số, không sửa tay (máy chủ cũng chặn).
+  const editable = canEdit && !["CLOSED", "CANCELLED"].includes(permit.status) && !isNkvhPendingPermit(permit);
   const dirty = invalid || id !== (permit.nkvhPctId ?? null);
   async function submit() {
     try {

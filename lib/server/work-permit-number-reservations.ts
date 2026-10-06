@@ -216,6 +216,14 @@ export async function releaseUnusedReservation(tx: Tx, reservation: { id: string
   const live = await tx.workPermitNumberReservation.findUnique({ where: { id: reservation.id } });
   if (!live || !["RESERVED", "REVIEW"].includes(live.status)) throw fail("Số đã cấp hoặc đã thấy sử dụng trên NKVH không được giải phóng như lượt chưa dùng.", 409);
   if (await activePermitNumberExists(tx, reservation.kind as PermitKind, reservation.year, reservation.number)) throw fail("Số giữ ban đầu đã có phiếu sử dụng, không được giải phóng.", 409);
-  await tx.workPermitNumberReservation.update({ where: { id: reservation.id }, data: { status: "RELEASED", nkvhPctId: null } });
-  await tx.workPermitNumberReservationHistory.create({ data: { reservationId: reservation.id, action: "RELEASED", actorId, actorName, note } });
+  // Lượt lấy từ NKVH có phiếu nháp "Chờ NKVH lưu" mang số này → hủy nháp cùng lúc, bỏ liên kết NKVH
+  // (NKVH lưu sau đó sẽ tạo hồ sơ mới) và gắn lượt trả số vào nháp để số được cấp lại.
+  const draft = live.nkvhPctId ? await tx.workPermit.findFirst({ where: { kind: live.kind, year: live.year, number: live.number, nkvhPctId: live.nkvhPctId, status: "DRAFT" } }) : null;
+  await tx.workPermitNumberReservation.update({ where: { id: reservation.id }, data: { status: "RELEASED", nkvhPctId: null, ...(draft ? { permitId: draft.id } : {}) } });
+  await tx.workPermitNumberReservationHistory.create({ data: { reservationId: reservation.id, action: "RELEASED", actorId, actorName, note, ...(draft ? { permitId: draft.id } : {}) } });
+  if (draft) {
+    const after = await tx.workPermit.update({ where: { id: draft.id }, data: { status: "CANCELLED", statusReason: `Trả số chưa dùng: ${note}`.slice(0, 2000), nkvhPctId: null, version: { increment: 1 } } });
+    await tx.workPermitHistory.create({ data: { permitId: draft.id, actorId, actorName, action: "Hủy phiếu chờ NKVH lưu (trả số chưa dùng)",
+      before: JSON.parse(JSON.stringify(draft)), after: JSON.parse(JSON.stringify(after)) } });
+  }
 }

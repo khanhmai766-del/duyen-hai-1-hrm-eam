@@ -111,6 +111,7 @@ export async function PUT(req: Request, props: { params: Promise<{ id: string }>
       if (permitIssueUpdateNeedsExecution(before, body)) await requirePermitExecute(user);
       if (before.status === "PAUSED" && body.status !== "CANCELLED" && body.statusReason !== undefined && body.statusReason !== before.statusReason) await requirePermitExecute(user);
       if (["CLOSED", "CANCELLED"].includes(before.status)) throw fail("Phiếu đã đóng hoặc hủy được khóa để giữ lịch sử", 409);
+      if (before.status === "DRAFT" && before.nkvhPctId) throw fail("Phiếu đang chờ lưu trên NKVH — sổ tự ghi nhận khi NKVH lưu xong. Trên sổ chỉ hủy được phiếu chờ này.", 409);
       if (body.version !== before.version) throw fail("Phiếu đã được người khác cập nhật. Đóng cửa sổ và tải lại trước khi sửa.", 409);
       const linkedBody = await resolvePermitDefectLink(tx, {
         ...body,

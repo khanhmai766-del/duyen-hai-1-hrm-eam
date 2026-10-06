@@ -286,6 +286,18 @@ export const NAV_SECTIONS: NavSection[] = [
   },
 ];
 
+/**
+ * Nhóm "Thường dùng" ở đầu thanh bên: các mục hay mở nhất, luôn hiện sẵn (không phải sổ nhóm). Chỉ khai href —
+ * nhãn, biểu tượng và quyền lấy từ chính mục gốc trong NAV_SECTIONS (mục gốc vẫn ở chỗ cũ).
+ */
+export const NAV_QUICK_HREFS = ["/defects?phan=co", "/defects?phan=dien", "/work-permits", "/replacement-procedures", "/hr"] as const;
+
+export function navQuickItems(input?: PositionCarrier | string | null): NavItem[] {
+  const all = navSectionsForPosition(input).flatMap((section) => section.items.flatMap((item) => [item, ...(item.children ?? [])]));
+  return NAV_QUICK_HREFS.map((href) => all.find((item) => item.href === href && !item.children?.length))
+    .filter((item): item is NavItem => Boolean(item));
+}
+
 const STATISTICS_ALLOWED_SECTION_KEYS = new Set(["quan ly nguoi dung", "quan ly vat tu"]);
 
 function navPathMatches(pathname: string, href: string) {

@@ -1,7 +1,8 @@
 // Đọc cùng một bản HTML đã lưu cho trang chi tiết và đối chiếu danh sách.
 (() => {
   const fold = value => String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[đĐ]/g, "d").toLowerCase().replace(/\s+/g, " ").trim();
-  const numberPattern = /^\d{1,80}\/20\d{2}\/(?:vh1-nddh|nddh-vh1)$/;
+  // Chỉ xét phần đầu "<số>/<năm>/VH1-NĐDH"; phần sau là ghi chú tuỳ phiếu ("(ĐT)", "gấp"…). Máy chủ đọc theo cùng quy tắc.
+  const numberPattern = /^\d{1,80}\/20\d{2}\/(?:vh1-nddh|nddh-vh1)(?![a-z0-9])/;
   function read(doc, kind) {
     const form = doc.getElementById("formContent");
     const cells = [...(form?.querySelectorAll(".ui-panelgrid-cell") || [])].filter(el => !el.closest(".ui-dialog"));
@@ -62,7 +63,7 @@
         return rgb && rgb[1] >= 120 && rgb[1] > rgb[0] * 1.25 && rgb[1] > rgb[2] * 1.15;
       })) sourceStatus = "CLOSED";
     }
-    if (!numberPattern.test(fold(formattedNumber).replace(/\s+/g, "")) || step !== 1 || !page.content || qlvhCode !== "VH") {
+    if (!numberPattern.test(fold(formattedNumber).replace(/\s*([/-])\s*/g, "$1")) || step !== 1 || !page.content || qlvhCode !== "VH") {
       throw new Error("Chưa đọc đủ số, nội dung và đơn vị PXVH1 từ phiếu đã lưu ở bước B1 trên NKVH.");
     }
     return { formattedNumber, page, sourceStatus, sourceReason };

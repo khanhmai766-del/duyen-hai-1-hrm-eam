@@ -5,6 +5,8 @@ import { prisma } from "@/lib/prisma";
 import { enqueueOverhaulCancel, pushOverhaulSheetOutboxQuietly } from "@/lib/server/overhaul-sheet-writer";
 import { audit, fail, ok, requireUser } from "@/lib/api";
 import { permitBody, permitHandle, permitSnapshot, permitText } from "@/lib/server/work-permits";
+import { settleNkvhDraftNumber } from "@/lib/server/work-permit-nkvh-claim";
+import { CONFIRMED_NUMBER_STATUS, OBSERVED_NUMBER_STATUS } from "@/lib/server/work-permit-number-reservations";
 import { CONTRACTOR_PERMIT_TRANSITIONS, formatPermitNumber, PERMIT_TRANSITIONS, type PermitStatus } from "@/lib/work-permits";
 
 export const dynamic = "force-dynamic";
@@ -39,10 +41,17 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
       if (before.teamType === "CONTRACTOR" && await tx.workPermitSession.count({ where: { permitId: before.id, endedAt: null } })) {
         throw fail("Nhà thầu đang có lần làm việc mở — kết thúc lần làm việc trước khi hủy PCT.", 409);
       }
-      const reason = reasonInput || before.statusReason.trim() || "Hủy phiếu nháp";
+      // Phiếu "Chờ NKVH lưu" (nháp có liên kết NKVH): số đã thấy dùng trên NKVH thì phải đồng bộ, không hủy.
+      const nkvhDraft = draft && Boolean(before.nkvhPctId);
+      if (nkvhDraft && await tx.workPermitNumberReservation.findFirst({ where: { kind: before.kind, year: before.year, number: before.number,
+        status: { in: [OBSERVED_NUMBER_STATUS, CONFIRMED_NUMBER_STATUS] } }, select: { id: true } })) {
+        throw fail("Số này đã thấy dùng trên NKVH. Mở phiếu NKVH và đồng bộ, không hủy phiếu chờ.", 409);
+      }
+      const reason = reasonInput || (nkvhDraft ? "Hủy phiếu chờ NKVH lưu" : before.statusReason.trim() || "Hủy phiếu nháp");
       const saved = await tx.workPermit.updateMany({
         where: { id: before.id, version: before.version, status: before.status },
-        data: { status: "CANCELLED", statusReason: reason, version: { increment: 1 } },
+        // Bỏ liên kết NKVH: nếu sau đó NKVH vẫn lưu phiếu thì sổ tạo hồ sơ mới, không dính vào nháp đã hủy.
+        data: { status: "CANCELLED", statusReason: reason, version: { increment: 1 }, ...(nkvhDraft ? { nkvhPctId: null } : {}) },
       });
       if (saved.count !== 1) throw fail("Phiếu vừa được cập nhật ở phiên khác. Vui lòng tải lại.", 409);
       const after = await tx.workPermit.findUniqueOrThrow({ where: { id: before.id } });
@@ -54,6 +63,7 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
         await tx.workPermitNumberReservationHistory.create({ data: { reservationId: reservation.id, action: "CANCELLED",
           actorId: user.id, actorName: user.name ?? "", permitId: after.id, note: reason } });
       }
+      if (nkvhDraft) await settleNkvhDraftNumber(tx, before, user, reason);
       await tx.workPermitHistory.create({ data: { permitId: after.id, actorId: user.id, actorName: user.name ?? "",
         action: draft ? "Hủy phiếu nháp" : `Hủy PCT: ${reason}`, before: permitSnapshot(before), after: permitSnapshot(after) } });
       // PCT đại tu giữ hạng mục cuối cùng: chốt kết quả cuối lên Sheet kèm "PCT hủy do …".
