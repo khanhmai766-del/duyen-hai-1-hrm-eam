@@ -6,7 +6,7 @@ import { after as afterResponse } from "next/server";
 import { latestOverhaulNotes, overhaulItemsOf } from "@/lib/work-permit-overhaul";
 import { requirePermitPositionAllowed, requirePermitVisible } from "@/lib/server/work-permit-scope";
 import { permitIssueUpdateNeedsExecution } from "@/lib/work-permit-permissions";
-import { requirePermitIssuer, requirePermitExecute, permitCapabilities, permitRowCapabilities } from "@/lib/server/work-permit-permissions";
+import { requirePermitCancel, requirePermitIssuer, requirePermitExecute, permitCapabilities, permitRowCapabilities } from "@/lib/server/work-permit-permissions";
 import { resolvePermitSafety } from "@/lib/server/work-permit-safety";
 import { workPermitPrisma as prisma } from "@/lib/server/work-permit-prisma";
 import { audit, fail, ok, requireRole, requireUser } from "@/lib/api";
@@ -96,8 +96,8 @@ export async function PUT(req: Request, props: { params: Promise<{ id: string }>
       const current = await prisma.workPermit.findUnique({ where: { id: params.id }, select: { status: true } });
       if (current && current.status !== status) {
         requirePermitIssuer(user);
-        // Hủy phiếu ĐÃ CẤP: chỉ Quản trị. Hủy nháp vẫn theo nhóm cấp phiếu.
-        if (status === "CANCELLED" && current.status !== "DRAFT" && user.role !== "ADMIN") throw fail("Chỉ Quản trị được hủy phiếu công tác đã cấp", 403);
+        // Hủy phiếu đã cấp: các cấp quản lý đến Trưởng kíp. Hủy nháp vẫn theo nhóm cấp phiếu.
+        if (status === "CANCELLED" && current.status !== "DRAFT") requirePermitCancel(user);
       }
     }
     const numberScope = await prisma.workPermit.findUniqueOrThrow({ where: { id: params.id }, select: { kind: true, year: true, nkvhPctId: true } });

@@ -1,13 +1,13 @@
 import { normalizeText } from "@/lib/nav";
 
 /*
- * Nhóm được CẤP PHIẾU MỚI và HỦY PHIẾU (quy định của phân xưởng, 27/09/2026) — cố định trong code, không theo
+ * Nhóm được CẤP PHIẾU MỚI và HỦY NHÁP (quy định của phân xưởng, 27/09/2026) — cố định trong code, không theo
  * ma trận RBAC "work-permit-issue":
  *   - vai trò Quản trị, Quản lý, Trưởng ca, Kỹ thuật viên;
  *   - hoặc cương vị (chính hay kiêm nhiệm) Trưởng ca, Trưởng kíp lò máy (TK Lò máy), Trưởng kíp điện.
  * Trưởng kíp trên production mang vai trò Người xem nên phải xét theo cương vị. Vai trò tuỳ chỉnh "Trưởng kíp"
  * của RBAC từng gán cả nhóm Thiết bị đo lường điều khiển — nhóm đó KHÔNG được cấp/hủy phiếu.
- * Sửa thông tin phiếu, danh bạ nhà thầu, biện pháp an toàn vẫn theo RBAC.
+ * Hủy phiếu đã cấp theo isPermitCanceller bên dưới; danh bạ nhà thầu, biện pháp an toàn vẫn theo RBAC.
  */
 export const PERMIT_ISSUER_ROLES = ["ADMIN", "MANAGER", "SUPERVISOR", "TECHNICIAN"] as const;
 const ISSUER_POSITIONS = ["truong ca", "tk lo may", "truong kip lo may", "truong kip dien", "tk dien"];
@@ -32,6 +32,12 @@ export function isPermitIssuerPosition(position?: string | null) {
 export function isPermitIssuer(user: PermitIssuerCandidate) {
   const roles = [user.role, user.systemRole];
   if (roles.some(role => (PERMIT_ISSUER_ROLES as readonly string[]).includes(role ?? ""))) return true;
+  return [user.position, user.primaryPosition, user.secondaryPosition, user.secondaryPosition2].some(isPermitIssuerPosition);
+}
+
+/** Hủy phiếu đã cấp: các cấp quản lý đến Trưởng kíp lò máy/điện (07/10/2026). */
+export function isPermitCanceller(user: PermitIssuerCandidate) {
+  if ([user.role, user.systemRole].some(role => ["ADMIN", "MANAGER", "SUPERVISOR"].includes(role ?? ""))) return true;
   return [user.position, user.primaryPosition, user.secondaryPosition, user.secondaryPosition2].some(isPermitIssuerPosition);
 }
 

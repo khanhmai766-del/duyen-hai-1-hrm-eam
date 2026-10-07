@@ -1,5 +1,5 @@
 import { requirePermitVisible } from "@/lib/server/work-permit-scope";
-import { requirePermitIssuer } from "@/lib/server/work-permit-permissions";
+import { requirePermitCancel, requirePermitIssuer } from "@/lib/server/work-permit-permissions";
 import { after as afterResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { enqueueOverhaulCancel, pushOverhaulSheetOutboxQuietly } from "@/lib/server/overhaul-sheet-writer";
@@ -31,8 +31,8 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
       if (!before) throw fail("Không tìm thấy PCT", 404);
       if (body.version !== before.version) throw fail("Phiếu đã được người khác cập nhật. Đóng cửa sổ và tải lại trước khi hủy.", 409);
       const draft = before.status === "DRAFT";
-      // Hủy phiếu ĐÃ CẤP: chỉ Quản trị (nghiệp vụ 04/10/2026). Hủy nháp vẫn theo nhóm cấp phiếu.
-      if (!draft && user.role !== "ADMIN") throw fail("Chỉ Quản trị được hủy phiếu công tác đã cấp", 403);
+      // Hủy phiếu đã cấp: các cấp quản lý đến Trưởng kíp. Hủy nháp vẫn theo nhóm cấp phiếu.
+      if (!draft) requirePermitCancel(user);
       const transitions = before.teamType === "CONTRACTOR" ? CONTRACTOR_PERMIT_TRANSITIONS : PERMIT_TRANSITIONS;
       if (!transitions[before.status as PermitStatus]?.includes("CANCELLED")) {
         throw fail(before.status === "CANCELLED" ? "PCT đã được hủy trước đó." : "PCT ở trạng thái này không hủy được.", 409);

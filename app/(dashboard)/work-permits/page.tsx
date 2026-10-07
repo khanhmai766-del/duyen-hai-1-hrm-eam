@@ -760,7 +760,7 @@ function PermitDetail({ id, canIssue: listCanIssue, canIssueNew: listCanIssueNew
   // Cấp phiếu nháp / hủy phiếu: chỉ nhóm cố định (lib/work-permit-issuers.ts); sửa thông tin theo canIssue.
   const canIssueNew = query.data?.meta?.canIssueNew ?? listCanIssueNew;
   const canExecute = query.data?.meta?.canExecute ?? listCanExecute;
-  // Quyền theo TỪNG phiếu (server tính): Hủy PCT chỉ Quản trị; Chỉnh sửa chỉ nhóm cấp phiếu; Xem và in,
+  // Quyền theo TỪNG phiếu (server tính): Hủy PCT cho các cấp quản lý đến Trưởng kíp; Chỉnh sửa chỉ nhóm cấp phiếu; Xem và in,
   // Phụ lục, Bổ sung hạng mục, Cập nhật tiến độ: nhóm cấp phiếu + người đứng đúng cương vị của phiếu.
   const canCancelPermit = Boolean(query.data?.meta?.canCancelPermit);
   const canEditPermit = Boolean(query.data?.meta?.canEditPermit);
