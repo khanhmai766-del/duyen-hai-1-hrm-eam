@@ -29,7 +29,7 @@ const STATIC = `/ /account /admin/broadcast /admin/roles /admin/users /chemical-
 /documents/pid /documents/procedures /forum /grounding-lightning /hr /hr/admin-attendance /hr/admin-registration
 /hr/check-in /hr/org-chart /hr/shift-roster /loading-preview /material-annual-plans /material-annual-plans/monthly
 /materials /notifications /pccc /public/org-chart /public/qlvt-sync-privacy /repair-history /replacement-history
-/replacement-procedures /replacements /reports /tbycnn /tien-ich/phan-tich-dau /tien-ich/so-sanh-shn-ppa
+/replacement-procedures /replacements /reports /tbycnn /tien-ich/phan-tich-dau
 /vat-tu/loai-dau /work-permits`.split(/\s+/).filter(Boolean);
 
 async function firstOrNull(fn) {

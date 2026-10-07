@@ -78,6 +78,7 @@ export const QDU_TOOL_URL =
 export const ASH_SLAG_LOG_URL =
   "https://docs.google.com/spreadsheets/d/1RyWmVWOuJTaQov2Eg7Y-ZxxWhez66RK5XY7seO4ppfE/edit?gid=0#gid=0";
 export const VIBRATION_MONITOR_URL = "https://pxvh1.infinityfree.me/";
+export const PMIS_REPORT_URL = "https://ctktkt-dashboard.vercel.app/pmis-report";
 export const QDU_TOOL_ALLOWED_POSITION_KEYWORDS = [
   "trưởng ca",
   "kỹ thuật viên",
@@ -241,10 +242,11 @@ export const NAV_SECTIONS: NavSection[] = [
         keywords: "tien do dai tu s2 hang muc nhat ky ngay google sheet lo hoi turbine may phat c&i overhaul",
       },
       {
-        label: "So sánh SHN theo PPA",
-        href: "/tien-ich/so-sanh-shn-ppa",
+        label: "Báo cáo PMIS",
+        href: PMIS_REPORT_URL,
         icon: Gauge,
-        keywords: "so sanh shn ppa suat hao nhiet dong bo google sheet dh1",
+        external: true,
+        keywords: "bao cao pmis report dashboard ctktkt",
       },
       {
         label: "Kết quả phân tích dầu",
@@ -276,11 +278,11 @@ export const NAV_SECTIONS: NavSection[] = [
         keywords: "so theo doi tro xi google sheets nhat ky ash slag",
       },
       {
-        label: "Giám sát độ rung thiết bị",
+        label: "GS thiết bị quay + báo cáo kỳ",
         href: VIBRATION_MONITOR_URL,
         icon: Vibrate,
         external: true,
-        keywords: "giam sat do rung thiet bi vibration rung dong co bom quat pxvh1",
+        keywords: "giam sat do rung thiet bi quay bao cao ky vibration rung dong co bom quat pxvh1",
       },
     ],
   },
