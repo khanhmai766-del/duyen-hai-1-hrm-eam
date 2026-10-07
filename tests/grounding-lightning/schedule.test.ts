@@ -94,3 +94,18 @@ test("Nhóm nhỏ và nhóm chỉ định hết không bị giao lặp; bỏ ch�
   const single = { ...items(1)[0], assignedShift: "NIGHT" };
   assert.deepEqual(assignGroundingShifts([single]).get(single.id), ["NIGHT"]);
 });
+
+
+test("Cửa sổ xác nhận thêm 2 tiếng ở cả 3 ca, kể cả qua năm mới", async () => {
+  const { canConfirmGroundingSlot, groundingConfirmationDeadline, previousGroundingSlot } = await import("../../lib/grounding-inspection-schedule");
+  for (const shiftType of ["MORNING", "AFTERNOON", "NIGHT"] as const) {
+    const slot = { date: "2026-12-31", shiftType };
+    const { start, end } = groundingSlotWindow(slot);
+    const deadline = groundingConfirmationDeadline(slot);
+    assert.equal(canConfirmGroundingSlot(slot, new Date(start.getTime() - 1)), false);
+    assert.equal(canConfirmGroundingSlot(slot, end), true);
+    assert.equal(canConfirmGroundingSlot(slot, new Date(deadline.getTime() - 1)), true);
+    assert.equal(canConfirmGroundingSlot(slot, deadline), false);
+    assert.deepEqual(previousGroundingSlot(end), slot);
+  }
+});

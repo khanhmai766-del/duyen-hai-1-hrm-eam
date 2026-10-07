@@ -1,19 +1,19 @@
 import { fail } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
-import { assignGroundingShifts, currentGroundingSlot, sameGroundingSlot, type GroundingScheduleItem, type GroundingSlot } from "@/lib/grounding-inspection-schedule";
+import { assignGroundingShifts, currentGroundingSlot, canConfirmGroundingSlot, type GroundingScheduleItem, type GroundingSlot } from "@/lib/grounding-inspection-schedule";
 
 /** Kiểm tra cả ca thật trên máy chủ và tuyến được giao; không tin bộ lọc/đồng hồ client. */
 export function assertGroundingInspectionSlot(
   item: GroundingScheduleItem, catalog: readonly GroundingScheduleItem[], requested?: GroundingSlot, now = new Date(),
 ) {
-  const current = currentGroundingSlot(now);
-  if (requested && !sameGroundingSlot(requested, current)) {
-    throw fail("Chỉ được cập nhật và xác nhận cho ca đang diễn ra. Vui lòng tải lại danh sách ca", 409);
+  const slot = requested ?? currentGroundingSlot(now);
+  if (!canConfirmGroundingSlot(slot, now)) {
+    throw fail("Chỉ được cập nhật và xác nhận trong ca hoặc trong 2 giờ sau khi hết ca. Vui lòng tải lại danh sách ca", 409);
   }
-  if (!assignGroundingShifts(catalog).get(item.id)?.includes(current.shiftType)) {
-    throw fail("Khu vực này không thuộc tuyến kiểm tra của ca đang diễn ra", 409);
+  if (!assignGroundingShifts(catalog).get(item.id)?.includes(slot.shiftType)) {
+    throw fail("Khu vực này không thuộc tuyến kiểm tra của ca đã chọn", 409);
   }
-  return current;
+  return slot;
 }
 
 export async function requireGroundingInspectionSlot(item: GroundingScheduleItem, requested?: GroundingSlot, now = new Date()) {

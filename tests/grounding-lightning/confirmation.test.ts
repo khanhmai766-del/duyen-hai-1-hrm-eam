@@ -24,7 +24,7 @@ const item = () => ({
 
 test("Xác nhận buổi sáng không hoàn thành buổi chiều; ca đã kết thúc giữ nguyên kết quả được ký", () => {
   const row = item();
-  const morning = serializeGroundingSlotItem(row, { date: "2026-10-06", shiftType: "MORNING" }, ["MORNING", "AFTERNOON"], undefined, now);
+  const morning = serializeGroundingSlotItem(row, { date: "2026-10-06", shiftType: "MORNING" }, ["MORNING", "AFTERNOON"], undefined, new Date("2026-10-06T16:00:00+07:00"));
   assert.equal(morning.needsSignature, false);
   assert.equal(morning.canInspect, false);
   assert.equal(morning.points[0].status, "NORMAL");
@@ -48,9 +48,32 @@ test("Dòng có xác nhận trong ca vẫn cần xác nhận lại khi kết qu�
 });
 
 test("Toàn thiết bị giữ khiếm khuyết hiện tại dù ca cũ đã ký bình thường", () => {
-  const row = serializeGroundingOverviewItem(item(), "2026-10-06", ["MORNING"], undefined, now);
+  const row = serializeGroundingOverviewItem(item(), "2026-10-06", ["MORNING"], undefined, new Date("2026-10-06T16:00:00+07:00"));
   assert.equal(row.points[0].status, "DEFECT");
   assert.equal(row.note, null);
   assert.equal(row.canInspect, false);
   assert.equal(row.needsSignature, false);
+});
+
+
+test("Xác nhận muộn phải đúng tuyến và đóng tại mốc 2 tiếng sau ca", () => {
+  const slot = { date: "2026-10-06", shiftType: "MORNING" as const };
+  assert.deepEqual(assertGroundingInspectionSlot(catalog[0], catalog, slot, now), slot);
+  assert.throws(() => assertGroundingInspectionSlot(catalog[1], catalog, slot, now), asyncResponse409);
+  assert.throws(() => assertGroundingInspectionSlot(catalog[0], catalog, slot, new Date("2026-10-06T16:00:00+07:00")), asyncResponse409);
+});
+
+test("Xác nhận muộn ca đêm thuộc ngày cũ, không hoàn thành ca sáng ngày mới", () => {
+  const signedAt = "2026-10-07T07:00:00+07:00";
+  const row = item();
+  const inspection = { ...row.inspections[0], signedAt, inspectionDate: "2026-10-06", inspectionShift: "NIGHT" };
+  row.inspections = [inspection];
+  const now = new Date(signedAt);
+  const night = serializeGroundingSlotItem(row, { date: "2026-10-06", shiftType: "NIGHT" }, ["NIGHT"], undefined, now);
+  assert.equal(night.canInspect, true);
+  assert.equal(night.needsSignature, false);
+  assert.equal(night.latestInspection?.signedAt, signedAt);
+  const morning = serializeGroundingSlotItem(row, { date: "2026-10-07", shiftType: "MORNING" }, ["MORNING"], undefined, now);
+  assert.equal(morning.latestInspection, null);
+  assert.equal(morning.needsSignature, true);
 });

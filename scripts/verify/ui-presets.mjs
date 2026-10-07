@@ -235,8 +235,9 @@ export const PRESETS = {
     async prepare() { return {}; },
     routes: () => ["/grounding-lightning"],
     async mock(context) {
-      const currentSlot = { date: "2026-10-06", shiftType: "AFTERNOON" };
-      const now = "2026-10-06T15:00:00+07:00";
+      const currentSlot = context.groundingGrace ? { date: "2026-10-07", shiftType: "MORNING" } : { date: "2026-10-06", shiftType: "AFTERNOON" };
+      const targetSlot = context.groundingGrace ? { date: "2026-10-06", shiftType: "NIGHT" } : currentSlot;
+      const now = context.groundingGrace ? "2026-10-07T07:00:00+07:00" : "2026-10-06T15:00:00+07:00";
       const shifts = ["MORNING", "AFTERNOON", "NIGHT"];
       const signed = [], completed = new Set();
       let failSecond = true, failDefect = true;
@@ -246,13 +247,13 @@ export const PRESETS = {
       context.resetGrounding = () => completed.clear();
       const makeItems = (shiftType, date) => ["NORMAL", "NORMAL", "UNCHECKED", "DEFECT"].map((status, i) => {
         const id = shiftType === "AFTERNOON" ? `ui-grounding-${i}` : `ui-${shiftType}-${i}`;
-        const confirmed = date === currentSlot.date && (completed.has(id) || (shiftType === "MORNING" && i === 0));
+        const confirmed = date === targetSlot.date && (completed.has(id) || (shiftType === "MORNING" && i === 0));
         return {
           id, areaEquipment: ["Tiếp địa khu vực bơm nước làm mát tuần hoàn tổ máy 1", "Hệ thống chống sét nhà điều khiển trung tâm", "Tủ điện phân phối", "Khu vực bồn dầu"][i],
           position: "Trực chính điện", positionCode: "ELECTRICAL_MAIN_OPERATOR", machine: "S1", note: null,
           updatedAt: "2026-10-05T08:00:00+07:00", needsSignature: !confirmed,
           assignedShifts: [shiftType], inspectionDate: date, inspectionShift: shiftType,
-          canInspect: date === currentSlot.date && shiftType === currentSlot.shiftType,
+          canInspect: (date === currentSlot.date && shiftType === currentSlot.shiftType) || (context.groundingGrace && date === targetSlot.date && shiftType === targetSlot.shiftType),
           latestInspection: confirmed ? { id: `ui-sign-${id}`, inspectedById: "ui-inspector", inspectorName: "Người kiểm tra (giả lập)", inspectorPosition: "Trực chính điện", signedAt: shiftType === "MORNING" ? "2026-10-06T08:00:00+07:00" : now, inspectorAvatarUrl: null, results: [] } : null,
           points: ["GROUNDING", "LIGHTNING"].map((type) => ({
             id: `ui-point-${id}-${type}`, type, status, updatedAt: "2026-10-05T08:00:00+07:00",
@@ -276,7 +277,7 @@ export const PRESETS = {
         if (request.method() === "POST" && url.pathname.endsWith("/sign")) {
           const body = request.postDataJSON();
           const id = url.pathname.split("/")[3];
-          if ((body?.normalOnly !== true && !edits.has(id)) || body.inspectionDate !== currentSlot.date || body.shiftType !== currentSlot.shiftType) throw new Error("Phải gửi đúng ngày + ca và chỉ xác nhận vị trí đã chọn/cập nhật");
+          if ((body?.normalOnly !== true && !edits.has(id)) || body.inspectionDate !== targetSlot.date || body.shiftType !== targetSlot.shiftType) throw new Error("Phải gửi đúng ngày + ca và chỉ xác nhận vị trí đã chọn/cập nhật");
           context.groundingEvents.push(`sign:${id}`);
           if (id === "ui-grounding-3" && failDefect) {
             failDefect = false;
@@ -309,8 +310,8 @@ export const PRESETS = {
         try { await page.getByRole("button", { name, exact: true }).click({ timeout: 10000 }); }
         catch (error) { throw new Error(`Bước ${step}, bấm ${name}: ${error.message.replaceAll("\n", " ")}`); }
       };
-      await click('Ca sáng');
-      await page.getByText("Đang xem ca khác. Chỉ được cập nhật và xác nhận trong ca đang diễn ra.").waitFor();
+      await click('Ca đêm');
+      await page.getByText("Ca này chưa bắt đầu hoặc đã hết hạn xác nhận. Được cập nhật và xác nhận trong ca và thêm 2 giờ sau khi hết ca.").waitFor();
       if (await page.getByRole("checkbox").count() || await page.getByRole("button", { name: "Kiểm tra", exact: true }).count()) throw new Error("Không được xác nhận ca đã kết thúc");
       await click('Ca hiện tại');
       const checkboxes = page.getByRole("checkbox").filter({ visible: true });
@@ -327,7 +328,7 @@ export const PRESETS = {
       await page.getByRole("button", { name: "Ca chiều", exact: true }).locator("b").filter({ hasText: "2/4" }).waitFor();
       if (await checkboxes.nth(0).isEnabled() || await checkboxes.nth(1).isEnabled()) throw new Error("Vị trí đã xác nhận không được chọn xác nhận lặp");
       await click('Ca đêm');
-      await page.getByText("Đang xem ca khác. Chỉ được cập nhật và xác nhận trong ca đang diễn ra.").waitFor();
+      await page.getByText("Ca này chưa bắt đầu hoặc đã hết hạn xác nhận. Được cập nhật và xác nhận trong ca và thêm 2 giờ sau khi hết ca.").waitFor();
       if (await page.getByRole("checkbox").count() || await page.getByRole("button", { name: "Kiểm tra", exact: true }).count()) throw new Error("Không được xác nhận ca chưa bắt đầu");
       // Dựng lại trạng thái chưa xác nhận để ảnh thể hiện rõ ô chọn; chỉ tác động dữ liệu giả lập.
       page.context().resetGrounding();
@@ -780,5 +781,30 @@ PRESETS["tiep-dia-luu-va-xac-nhan"] = {
     page.context().resetGrounding();
     await page.reload({ waitUntil: "networkidle" });
     await inspect.nth(3).click();
+  },
+};
+
+
+PRESETS["tiep-dia-xac-nhan-sau-ca"] = {
+  ...PRESETS["tiep-dia-chon-nhieu"],
+  description: "Xác nhận ca đêm ngày trước lúc 07h: gửi đúng ngày/ca, mở đến 08h, chỉ ghi giả lập",
+  async mock(context) {
+    context.groundingGrace = true;
+    await PRESETS["tiep-dia-chon-nhieu"].mock(context);
+  },
+  async interact(page) {
+    await page.getByRole("button", { name: "Ca vừa kết thúc", exact: true }).click();
+    await page.getByText("Ca đã kết thúc. Vẫn được cập nhật", { exact: false }).waitFor();
+    if (await page.locator("#grounding-day").inputValue() !== "2026-10-06") throw new Error("Ca đêm phải thuộc ngày vận hành trước");
+    if (!await page.getByRole("button", { name: "Ca đêm", exact: true }).getAttribute("aria-pressed")) throw new Error("Phải mở đúng ca đêm");
+    await page.getByRole("button", { name: "Chọn vị trí bình thường trên trang", exact: true }).click();
+    await page.getByRole("button", { name: "Xác nhận 2 vị trí bình thường", exact: true }).click();
+    await page.getByText("Đã xác nhận 2 vị trí bình thường", { exact: false }).first().waitFor();
+    const signed = page.context().groundingSigned;
+    if (signed.length !== 2 || signed.some(id => !id.startsWith("ui-NIGHT"))) throw new Error("Xác nhận phải tính cho ca đêm");
+    page.context().resetGrounding();
+    await page.reload({ waitUntil: "networkidle" });
+    await page.getByRole("button", { name: "Ca vừa kết thúc", exact: true }).click();
+    await page.getByRole("button", { name: "Chọn vị trí bình thường trên trang", exact: true }).click();
   },
 };

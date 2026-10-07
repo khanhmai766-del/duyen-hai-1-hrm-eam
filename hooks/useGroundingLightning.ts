@@ -29,6 +29,8 @@ export type GroundingPoint = {
   attachments: GroundingAttachment[];
 };
 export type GroundingInspection = {
+  inspectionDate?: string | null;
+  inspectionShift?: string | null;
   id: string;
   note: string | null;
   inspectorName: string;

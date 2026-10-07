@@ -42,6 +42,31 @@ export function groundingSlotWindow(slot: GroundingSlot) {
   return { start, end: new Date(start.getTime() + 8 * 3600000) };
 }
 
+/** Cho phép hoàn tất tuyến đến hết 2 giờ sau ca; không mở ca chưa bắt đầu. */
+export function groundingConfirmationDeadline(slot: GroundingSlot) {
+  return new Date(groundingSlotWindow(slot).end.getTime() + 2 * 3600000);
+}
+
+export function canConfirmGroundingSlot(slot: GroundingSlot, now = new Date()) {
+  return now.getTime() >= groundingSlotWindow(slot).start.getTime()
+    && now.getTime() < groundingConfirmationDeadline(slot).getTime();
+}
+
+export function previousGroundingSlot(now = new Date()): GroundingSlot {
+  const start = groundingSlotWindow(currentGroundingSlot(now)).start;
+  return currentGroundingSlot(new Date(start.getTime() - 1));
+}
+
+/** Lượt mới lưu ca được chọn; dữ liệu cũ vẫn xác định ca theo thời điểm ký. */
+export function groundingInspectionSlot(inspection: {
+  signedAt: Date | string; inspectionDate?: string | null; inspectionShift?: string | null;
+}): GroundingSlot {
+  if (inspection.inspectionDate && isGroundingShift(inspection.inspectionShift)) {
+    return { date: inspection.inspectionDate, shiftType: inspection.inspectionShift };
+  }
+  return currentGroundingSlot(new Date(inspection.signedAt));
+}
+
 export function sameGroundingSlot(a: GroundingSlot, b: GroundingSlot) {
   return a.date === b.date && a.shiftType === b.shiftType;
 }

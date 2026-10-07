@@ -21,17 +21,16 @@ Chỉ ca đang diễn ra được cập nhật kết quả, ảnh và xác nhậ
 Khi chuyển ca hoặc ngày, các lựa chọn xác nhận đang mở được bỏ để tránh xác nhận nhầm.
 
 Mỗi khu vực phải được xác nhận trong ca được giao, kể cả kết quả vẫn bình thường. Lượt xác nhận của hôm trước không hoàn thành ngày hiện tại. Ca không được giao khu vực thì không phải kiểm tra; cả ngày hoàn thành khi đã xác nhận đủ danh mục.
-Trong ca hiện tại, ô chọn và nút **Kiểm tra** hiện sẵn khi đủ quyền; không cần mở Sửa bảng. Mặc định danh sách **Chưa xác nhận**, có thể chuyển **Toàn bộ tuyến ca** để xem cả vị trí đã hoàn thành. Các thẻ tổng vẫn tính toàn tuyến ca.
+Trong ca và trong 2 giờ sau khi hết ca, ô chọn và nút **Kiểm tra** hiện sẵn khi đủ quyền; không cần mở Sửa bảng. Mặc định danh sách **Chưa xác nhận**, có thể chuyển **Toàn bộ tuyến ca** để xem cả vị trí đã hoàn thành. Các thẻ tổng vẫn tính toàn tuyến ca.
 
 Vị trí hoàn toàn bình thường: chọn từng vị trí hoặc chọn các vị trí bình thường trên trang, rồi bấm **Xác nhận N vị trí bình thường** ở thanh cuối màn hình. Chỉ chọn được vị trí chưa xác nhận; thành công được bỏ chọn/ẩn trong danh sách chờ, lỗi giữ lại để thử tiếp. Đổi ngày/ca/bộ lọc bỏ lựa chọn cũ.
 
 Vị trí có thay đổi hoặc chưa kiểm tra: bấm **Kiểm tra**, ghi đủ kết quả và nội dung khiếm khuyết, bổ sung ảnh nếu cần, rồi **Lưu và xác nhận**. Một thao tác lần lượt lưu kết quả, tải ảnh, tạo lượt xác nhận. Nút lưu luôn hiện dưới hộp thoại, phần nhập cuộn riêng trên điện thoại. Không thể xác nhận khi còn hạng mục Chưa kiểm tra hoặc khiếm khuyết thiếu nội dung. Nếu tải ảnh/ký lỗi sau khi ghi kết quả, giữ hộp thoại và báo rõ kết quả đã lưu nhưng chưa xác nhận; thử lại không tải trùng các ảnh đã thành công trong lần mở này. Đây là các request nối tiếp, không phải giao dịch nguyên tử gồm cả S3.
 
-Sửa/xoá danh mục nằm trong menu **Danh mục** riêng ở thẻ điện thoại hoặc phần chi tiết dòng trên máy tính. Chế độ tổng và ca khác chỉ xem kết quả, không có ô chọn/nút kiểm tra.
+Sửa/xoá danh mục nằm trong menu **Danh mục** riêng ở thẻ điện thoại hoặc phần chi tiết dòng trên máy tính. Chế độ tổng, ca chưa bắt đầu và ca đã hết hạn xác nhận chỉ xem kết quả, không có ô chọn/nút kiểm tra.
 
-Không đặt lại trạng thái Point hoặc xoá lịch sử vào đầu ngày. Dùng `signedAt` của Inspection để xác định ngày/ca;
-00:00–05:59 thuộc ca đêm của ngày trước. Ca đã kết thúc hiển thị kết quả/note trong bản chụp đã ký, không lấy kết quả của ca sau.
-Xác nhận trong ca hiện tại cần thực hiện lại nếu dữ liệu bị sửa sau lần ký.
+Không đặt lại trạng thái Point hoặc xoá lịch sử vào đầu ngày. Lượt mới dùng `inspectionDate`/`inspectionShift` để xác định ngày/ca, giữ `signedAt` là thời điểm ký thật. Lượt cũ dùng giờ ký; 00:00–05:59 thuộc ca đêm của ngày trước. Khi hết hạn xác nhận, hiển thị kết quả/note trong bản chụp đã ký, không lấy kết quả của ca sau.
+Trong thời gian còn cho xác nhận, cần xác nhận lại nếu dữ liệu bị sửa sau lần ký.
 
 Phân công được tính theo danh mục hiện tại, không có bảng lưu phiên bản tuyến hằng ngày. Khi danh mục thay đổi,
 các ngày được xem lại dùng phân công hiện tại; lịch sử từng lần kiểm tra vẫn giữ nguyên thời điểm/người/kết quả thực tế.
@@ -100,3 +99,10 @@ Admin đang bật chế độ quản trị có thể chọn **Ca sáng / Ca chi�
 SQL bổ sung: `prisma/manual/add-grounding-assigned-shift.sql` (chỉ thêm cột và ràng buộc giá trị). Đã áp dụng local; chưa triển khai server.
 
 Nạp ảnh có thể chạy lại: bỏ qua vị trí v2 đã có ảnh hoặc được VHV cập nhật; không ghi đè ảnh/kết quả/lượt xác nhận cũ. Ảnh ở dòng chưa có kết quả vẫn được gắn đúng hạng mục, không suy diễn kết quả từ ảnh. Nếu lỗi ảnh sau cập nhật danh mục, chạy lại cùng file và `--import-images` để tiếp tục, không tạo trùng vị trí.
+
+
+### Hoàn tất kiểm tra sau ca
+
+Cho phép cập nhật kết quả, ảnh và xác nhận tuyến được giao trong ca và thêm 2 giờ sau giờ kết thúc: ca sáng đến 16:00, ca chiều đến 00:00 hôm sau, ca đêm đến 08:00 hôm sau (giờ Việt Nam). Tại mốc hết hạn, API đóng xác nhận. Nút **Ca vừa kết thúc** mở đúng ngày vận hành và ca, kể cả ca đêm của ngày trước.
+
+Lượt mới lưu `inspectionDate` và `inspectionShift` riêng với `signedAt`: kết quả tính cho ca được chọn, thời điểm ký vẫn là thời điểm thật. Lịch sử cũ có hai cột null tiếp tục xác định ca bằng thời điểm ký. Khi triển khai phải áp dụng `prisma/manual/add-grounding-inspection-slot.sql` trước khi nạp dịch vụ mới; không cần đổi dữ liệu lịch sử.

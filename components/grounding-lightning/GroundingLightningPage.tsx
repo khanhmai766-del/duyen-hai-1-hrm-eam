@@ -92,7 +92,7 @@ import {
 } from "@/components/ui/table";
 import { cn, initials } from "@/lib/utils";
 import { SHIFT_TYPE, SHIFT_TYPE_ORDER, type ShiftTypeKey } from "@/lib/constants";
-import { GROUNDING_SHIFT_HOURS, GROUNDING_SHIFT_HOURS_COMPACT, currentGroundingSlot, groundingSlotWindow, sameGroundingSlot, type GroundingSlot } from "@/lib/grounding-inspection-schedule";
+import { GROUNDING_SHIFT_HOURS, GROUNDING_SHIFT_HOURS_COMPACT, groundingSlotWindow, sameGroundingSlot, canConfirmGroundingSlot, groundingInspectionSlot, groundingConfirmationDeadline, previousGroundingSlot, type GroundingSlot } from "@/lib/grounding-inspection-schedule";
 import { formatVietnamDate, VIETNAM_TIME_ZONE } from "@/lib/vietnam-time";
 import { POSITION_CATALOG } from "@/lib/position-catalog";
 import {
@@ -985,7 +985,7 @@ function HistoryDialog({
                     {entry.inspectorPosition || "Không ghi cương vị"} ·{" "}
                     {fmtDate(entry.signedAt)}
                     {(() => {
-                      const slot = currentGroundingSlot(new Date(entry.signedAt));
+                      const slot = groundingInspectionSlot(entry);
                       return ` · Ca ${SHIFT_TYPE[slot.shiftType].label.toLocaleLowerCase("vi")} · Ngày ${formatVietnamDate(new Date(`${slot.date}T06:00:00+07:00`))}`;
                     })()}
                   </div>
@@ -1075,7 +1075,11 @@ export default function GroundingLightningPage() {
   const canAssignShift = Boolean(query.data?.meta?.canAssignShift);
   const [shiftItem, setShiftItem] = useState<GroundingItem | null>(null);
   const isOverview = isArchived || query.data?.meta?.viewMode === "ALL";
-  const isCurrentSlot = !isOverview && Boolean(selectedSlot && currentSlot && sameGroundingSlot(selectedSlot, currentSlot));
+  const serverNow = query.data?.meta?.serverTime ? new Date(query.data.meta.serverTime) : null;
+  const isEditableSlot = !isOverview && Boolean(selectedSlot && serverNow && canConfirmGroundingSlot(selectedSlot, serverNow));
+  const previousSlot = serverNow && canConfirmGroundingSlot(previousGroundingSlot(serverNow), serverNow)
+    ? previousGroundingSlot(serverNow) : null;
+  const isGracePeriod = isEditableSlot && Boolean(selectedSlot && serverNow && groundingSlotWindow(selectedSlot).end <= serverNow);
   const shiftSummary: Array<{ shiftType: ShiftTypeKey; total: number; confirmed: number; pending: number }> = query.data?.meta?.shifts ?? [];
   const serverTime = query.data?.meta?.serverTime;
 
@@ -1088,7 +1092,7 @@ export default function GroundingLightningPage() {
    * `scope?.all` chỉ là lưới an toàn thứ hai — không đổi hành vi của họ, chỉ khớp thêm
    * đúng nhóm cương vị mà RBAC theo vai trò không nhìn thấy được.
    */
-  const canManage = isCurrentSlot && !query.isPlaceholderData && (
+  const canManage = isEditableSlot && !query.isPlaceholderData && (
     can("grounding-lightning-manage", ["personal", "manage", "full"]) || Boolean(scope?.all)
   );
   // "personal" mở từ 2026-09-12: người giữ một cương vị được thêm/sửa danh mục TRONG
@@ -1186,8 +1190,8 @@ export default function GroundingLightningPage() {
     chưa chọn cột nào để sổ vẫn chạy theo tuyến đi hiện trường.
   */
   const kpiFiltered = useMemo(
-    () => items.filter((item) => (!isCurrentSlot || !pendingOnly || item.needsSignature) && (!activeKpi || matchesKpi(item, activeKpi))),
-    [items, activeKpi, isCurrentSlot, pendingOnly],
+    () => items.filter((item) => (!isEditableSlot || !pendingOnly || item.needsSignature) && (!activeKpi || matchesKpi(item, activeKpi))),
+    [items, activeKpi, isEditableSlot, pendingOnly],
   );
   const sorted = useMemo(() => {
     if (sort.key === SOURCE_ORDER) return kpiFiltered;
@@ -1470,6 +1474,10 @@ export default function GroundingLightningPage() {
                 onClick={() => setFilters((old) => ({ ...old, inspectionDate: undefined, shiftType: "CURRENT" }))}>
                 Ca hiện tại
               </Button>
+              {previousSlot && <Button variant="outline" className="h-10" disabled={confirming || sign.isPending}
+                onClick={() => setFilters((old) => ({ ...old, inspectionDate: previousSlot.date, shiftType: previousSlot.shiftType }))}>
+                Ca vừa kết thúc
+              </Button>}
             </div>
           </div>
           <Button variant={isOverview && !isArchived ? "default" : "outline"} className="h-10 w-full sm:w-auto"
@@ -1511,7 +1519,8 @@ export default function GroundingLightningPage() {
             })}
           </div>
           {isOverview && <p className="text-sm text-cyan-800">Đang xem toàn bộ thiết bị trong phạm vi được phép. Số lượng và bộ lọc khiếm khuyết tổng hợp từ cả 3 ca theo kết quả hiện tại. Chọn ca hiện tại để kiểm tra và xác nhận.</p>}
-          {!isOverview && !isCurrentSlot && <p className="text-sm text-amber-800">Đang xem ca khác. Chỉ được cập nhật và xác nhận trong ca đang diễn ra.</p>}
+          {isGracePeriod && selectedSlot && <p className="text-sm text-amber-800">Ca đã kết thúc. Vẫn được cập nhật và xác nhận đến {groundingConfirmationDeadline(selectedSlot).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" })}. Kết quả được tính cho ca đã chọn.</p>}
+          {!isOverview && !isEditableSlot && <p className="text-sm text-amber-800">Ca này chưa bắt đầu hoặc đã hết hạn xác nhận. Được cập nhật và xác nhận trong ca và thêm 2 giờ sau khi hết ca.</p>}
           <p className="text-sm font-medium text-ink" aria-live="polite">
             Cả ngày: đã xác nhận {shiftSummary.reduce((total, shift) => total + shift.confirmed, 0)}/{shiftSummary.reduce((total, shift) => total + shift.total, 0)} khu vực
           </p>
@@ -1570,7 +1579,7 @@ export default function GroundingLightningPage() {
           />
         </KpiCard>
       </div>
-      {isCurrentSlot && <div className="flex flex-wrap gap-2" aria-label="Phạm vi tuyến ca">
+      {isEditableSlot && <div className="flex flex-wrap gap-2" aria-label="Phạm vi tuyến ca">
         <Button variant={pendingOnly ? "default" : "outline"} className="h-10" aria-pressed={pendingOnly} onClick={() => setPendingOnly(true)}>Chưa xác nhận ({metrics.unsigned})</Button>
         <Button variant={!pendingOnly ? "default" : "outline"} className="h-10" aria-pressed={!pendingOnly} onClick={() => setPendingOnly(false)}>Toàn bộ tuyến ca ({metrics.total})</Button>
       </div>}
@@ -1660,7 +1669,7 @@ export default function GroundingLightningPage() {
                 <TableRow>
                   <TableCell colSpan={tableColumns} className="py-14 text-center">
                     <RadioTower className="mx-auto mb-3 size-10 text-slate-300" />
-                    <b className="text-ink">{isCurrentSlot && pendingOnly && items.length && !metrics.unsigned ? "Đã xác nhận đủ tuyến ca" : "Chưa có dữ liệu phù hợp"}</b>
+                    <b className="text-ink">{isEditableSlot && pendingOnly && items.length && !metrics.unsigned ? "Đã xác nhận đủ tuyến ca" : "Chưa có dữ liệu phù hợp"}</b>
                     <p className="mt-1 text-sm text-muted-foreground">
                       Chọn Toàn bộ tuyến ca để xem cả vị trí đã xác nhận, hoặc thay đổi bộ lọc.
                     </p>
@@ -1901,7 +1910,7 @@ export default function GroundingLightningPage() {
           {pageRows.length === 0 && (
             <div className="py-16 text-center">
               <RadioTower className="mx-auto mb-3 size-10 text-slate-300" />
-              <b className="text-ink">{isCurrentSlot && pendingOnly && items.length && !metrics.unsigned ? "Đã xác nhận đủ tuyến ca" : "Chưa có dữ liệu phù hợp"}</b>
+              <b className="text-ink">{isEditableSlot && pendingOnly && items.length && !metrics.unsigned ? "Đã xác nhận đủ tuyến ca" : "Chưa có dữ liệu phù hợp"}</b>
               <p className="mt-1 text-sm text-muted-foreground">
                 Chọn Toàn bộ tuyến ca để xem cả vị trí đã xác nhận, hoặc thay đổi bộ lọc.
               </p>

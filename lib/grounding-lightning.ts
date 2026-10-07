@@ -1,4 +1,4 @@
-import { groundingSlotWindow, inspectionInGroundingSlot, sameGroundingSlot, currentGroundingSlot, type GroundingSlot } from "@/lib/grounding-inspection-schedule";
+import { groundingSlotWindow, groundingInspectionSlot, canConfirmGroundingSlot, sameGroundingSlot, currentGroundingSlot, type GroundingSlot } from "@/lib/grounding-inspection-schedule";
 import type { ShiftTypeKey } from "@/lib/constants";
 import { fail } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
@@ -199,15 +199,15 @@ export function serializeGroundingSlotItem(
   item: any, slot: GroundingSlot, assignedShifts: ShiftTypeKey[],
   avatars?: Map<string, string | null>, now = new Date(),
 ) {
-  const inspections = (item.inspections ?? []).filter((entry: any) => inspectionInGroundingSlot(entry.signedAt, slot));
+  const inspections = (item.inspections ?? []).filter((entry: any) => sameGroundingSlot(groundingInspectionSlot(entry), slot));
   const serialized = serializeGroundingItem({ ...item, inspections }, avatars);
-  const active = sameGroundingSlot(slot, currentGroundingSlot(now));
+  const active = canConfirmGroundingSlot(slot, now);
   const ended = groundingSlotWindow(slot).end.getTime() <= now.getTime();
   const latest = serialized.latestInspection;
   return {
     ...serialized,
     // Ca đã kết thúc hiển thị bản chụp đã ký, thay vì kết quả bị ca sau thay đổi.
-    ...(ended && latest ? {
+    ...(ended && !active && latest ? {
       note: latest.note,
       points: latest.results.map((result: any) => ({
         id: result.id ?? `${latest.id}-${result.type}`,

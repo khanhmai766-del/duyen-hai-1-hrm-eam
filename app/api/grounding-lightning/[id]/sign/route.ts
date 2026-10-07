@@ -1,4 +1,4 @@
-import { currentGroundingSlot, sameGroundingSlot, requestedGroundingSlot } from "@/lib/grounding-inspection-schedule";
+import { canConfirmGroundingSlot, requestedGroundingSlot } from "@/lib/grounding-inspection-schedule";
 import { requireGroundingInspectionSlot } from "@/lib/server/grounding-inspection-schedule";
 import { prisma } from "@/lib/prisma";
 import {
@@ -64,14 +64,16 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
       return fail("Vị trí đã chọn không còn hoàn toàn bình thường. Vui lòng kiểm tra lại kết quả", 409);
     }
     const signedAt = new Date();
-    if (!sameGroundingSlot(slot, currentGroundingSlot(signedAt))) {
-      return fail("Ca trực vừa thay đổi. Vui lòng tải lại danh sách trước khi xác nhận", 409);
+    if (!canConfirmGroundingSlot(slot, signedAt)) {
+      return fail("Đã hết thời gian xác nhận của ca này. Vui lòng tải lại danh sách", 409);
     }
     const inspectorName = user.name ?? user.email ?? "";
     const inspection = await prisma.groundingLightningInspection.create({
       data: {
         itemId: item.id,
         signedAt,
+        inspectionDate: slot.date,
+        inspectionShift: slot.shiftType,
         note: item.note,
         inspectedById: user.id,
         inspectorName,

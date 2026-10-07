@@ -2975,6 +2975,10 @@ model GroundingLightningInspection {
   signatureKey      String // Giá trị tương thích dữ liệu cũ; lượt mới lưu USER_CONFIRMATION, không dùng ảnh chữ ký.
   signedAt          DateTime               @default(now())
 
+  // Ca được xác nhận có thể kết thúc trước giờ ký tối đa 2 tiếng. Null là lịch sử cũ.
+  inspectionDate    String?
+  inspectionShift   String?
+
   results GroundingLightningInspectionResult[]
 
   @@index([itemId, signedAt])

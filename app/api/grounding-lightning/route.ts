@@ -22,7 +22,7 @@ import {
 } from "@/lib/grounding-lightning";
 import { SHIFT_TYPE_ORDER } from "@/lib/constants";
 import { normalizeText } from "@/lib/nav";
-import { assignGroundingShifts, currentGroundingSlot, groundingSlotWindow, isGroundingShift } from "@/lib/grounding-inspection-schedule";
+import { assignGroundingShifts, currentGroundingSlot, groundingSlotWindow, isGroundingShift, canConfirmGroundingSlot, previousGroundingSlot, groundingConfirmationDeadline } from "@/lib/grounding-inspection-schedule";
 import { serializeGroundingSlotItem } from "@/lib/grounding-lightning";
 import { isPositionCode, positionLabelOf } from "@/lib/position-catalog";
 
@@ -97,7 +97,10 @@ export async function GET(req: NextRequest) {
         } : {
           ...includeItem,
           inspections: {
-            where: { signedAt: { gte: dayStart, lt: dayEnd } },
+            where: { OR: [
+              { inspectionDate: date },
+              { inspectionDate: null, signedAt: { gte: dayStart, lt: dayEnd } },
+            ] },
             orderBy: { signedAt: "desc" },
             include: { results: { orderBy: { type: "asc" } } },
           },
@@ -151,6 +154,9 @@ export async function GET(req: NextRequest) {
           .map((row) => ({ code: row.positionCode, label: row.position })),
         scope, canAssignShift: user.role === "ADMIN" && !archived, currentSlot, selectedSlot, shifts, viewMode: archived ? "ARCHIVED" : allShifts ? "ALL" : "SHIFT",
         serverTime: now.toISOString(), retentionStart: retention.date,
+        canConfirmSelectedSlot: !allShifts && canConfirmGroundingSlot(selectedSlot, now),
+        confirmationDeadline: groundingConfirmationDeadline(selectedSlot).toISOString(),
+        previousSlot: canConfirmGroundingSlot(previousGroundingSlot(now), now) ? previousGroundingSlot(now) : null,
       },
     );
   });
