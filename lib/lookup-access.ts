@@ -33,13 +33,15 @@ export const LOOKUP_MODULES = [
 
 export type LookupModuleId = typeof LOOKUP_MODULES[number]["id"];
 export type LookupConfig = { users: Record<string, LookupModuleId[]> };
-export const DEFAULT_LOOKUP_MODULES: LookupModuleId[] = ["defects"];
+/** Mục mọi tài khoản tra cứu luôn xem được, không cần tick (07/10/2026: Tiến độ đại tu mở cho tất cả). */
+export const ALWAYS_LOOKUP_MODULES: LookupModuleId[] = ["overhaul"];
+export const DEFAULT_LOOKUP_MODULES: LookupModuleId[] = ["defects", ...ALWAYS_LOOKUP_MODULES];
 const moduleIds = new Set<string>(LOOKUP_MODULES.map(module => module.id));
 export function isLookupModuleId(value: unknown): value is LookupModuleId {
   return typeof value === "string" && moduleIds.has(value);
 }
 export function lookupModulesForUser(config: LookupConfig, userId: string): LookupModuleId[] {
-  return config.users[userId] ?? [...DEFAULT_LOOKUP_MODULES];
+  return [...new Set([...(config.users[userId] ?? DEFAULT_LOOKUP_MODULES), ...ALWAYS_LOOKUP_MODULES])];
 }
 export function normalizeLookupConfig(value: unknown): LookupConfig {
   const raw = value && typeof value === "object" ? (value as { users?: unknown }).users : null;
