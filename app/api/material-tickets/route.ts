@@ -14,7 +14,7 @@ import {
   recoveryReturnStepAllowed,
   stepAllowedWithMap,
 } from "@/lib/material-workflow";
-import { CHEMICAL_TICKET_TYPE, COMMON_MATERIAL_POSITION, isGasCylinderTicket, isOtherMaterialCategory, OTHER_MATERIAL_ADVANCE_TICKET_TYPE, OTHER_MATERIAL_GROUP, OTHER_MATERIAL_TICKET_TYPE, recoveryRequiredForReason, isChemicalWorkflowCategory, isSingleStepTicketMaterial, ticketReasonAllowed, SINGLE_STEP_TICKET_TYPE, TICKET_MATERIAL_CATEGORIES, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
+import { CHEMICAL_TICKET_TYPE, COMMON_MATERIAL_POSITION, isGasCylinderTicket, isOtherMaterialCategory, OTHER_MATERIAL_ADVANCE_TICKET_TYPE, OTHER_MATERIAL_GROUP, OTHER_MATERIAL_TICKET_TYPE, recoveryRequiredForReason, isChemicalFlowMaterialCode, isChemicalWorkflowCategory, isSingleStepTicketMaterial, ticketReasonAllowed, SINGLE_STEP_TICKET_TYPE, TICKET_MATERIAL_CATEGORIES, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
 import { positionLabelOf, positionsMatch } from "@/lib/position-catalog";
 import {
   isMaterialTicketMonthKey,
@@ -342,10 +342,8 @@ export async function POST(req: NextRequest) {
     // Hóa chất luôn đi thẳng luồng Đề xuất — nghiệp vụ này không có Ứng lẫn Sử dụng hiện có
     // nên không để phiếu dừng ở trạng thái chờ chọn luồng. Chai khí thì VẪN chọn luồng
     // (Đề xuất hoặc Ứng) ở bước Trưởng ca/Trưởng kíp, chỉ bỏ Sử dụng hiện có.
-    // Hóa chất / chai khí chỉ nhận lý do Nhập hoặc Khác (xem `ticketReasonsFor`).
-    if (!ticketReasonAllowed(materialCategory, proposalNote)) {
-      return fail(`Loại vật tư "${materialCategory}" chỉ chọn lý do Nhập hoặc Khác`);
-    }
+    // Hóa chất / chai khí chỉ nhận lý do Nhập hoặc Khác (xem `ticketReasonsFor`) — kiểm sau khi biết vật tư,
+    // vì dầu DO (CHEMICAL_FLOW_MATERIAL_CODES) cũng đi luồng hóa chất dù thuộc loại Dầu bôi trơn.
     let type = isChemicalWorkflowCategory(materialCategory) ? "DE_XUAT" : "CHUA_CHON";
 
     let selectedMaterial: { id: string; code: string; erpCodes: string[]; name: string; quantity: number; category: string | null; machine: string } | null = null;
@@ -373,6 +371,10 @@ export async function POST(req: NextRequest) {
     const expectedCategory = TICKET_TO_MATERIAL_CATEGORY[materialCategory] ?? materialCategory;
     if (selectedMaterial.category !== expectedCategory) return fail("Vật tư không thuộc loại vật tư đã chọn");
     if (selectedMaterial.machine !== unit) return fail("Vật tư không thuộc tổ máy đã chọn");
+    const chemicalByCode = isChemicalFlowMaterialCode(selectedMaterial.code);
+    if (!ticketReasonAllowed(materialCategory, proposalNote, chemicalByCode)) {
+      return fail(chemicalByCode ? `${selectedMaterial.name} đi luồng hóa chất — chỉ chọn lý do Nhập hoặc Khác` : `Loại vật tư "${materialCategory}" chỉ chọn lý do Nhập hoặc Khác`);
+    }
     // NH3 lỏng (xem SINGLE_STEP_TICKET_MATERIAL_CODES): lập phiếu là ĐỀ XUẤT, chưa hoàn tất.
     // Xe về rải rác 2–3 ngày sau, nên phiếu đứng ở bước VHV ghi chuyến xe — khối lượng
     // nhập thực tế, biển số và ngày nhập — ghi xong mới tính hoàn tất.
@@ -381,7 +383,7 @@ export async function POST(req: NextRequest) {
     if (singleStep) {
       type = SINGLE_STEP_TICKET_TYPE;
       nextStatus = "NHAN_VAT_TU";
-    } else if (isChemicalWorkflowCategory(materialCategory)) {
+    } else if (isChemicalWorkflowCategory(materialCategory) || chemicalByCode) {
       // Luồng hóa chất: giữ nguyên bước đầu là Trưởng ca/TK Lò máy/Trưởng kíp điện xác nhận
       // bồn và thiết bị đủ điều kiện nhận hóa chất (nextStatus mặc định CHO_XAC_NHAN).
       type = CHEMICAL_TICKET_TYPE;

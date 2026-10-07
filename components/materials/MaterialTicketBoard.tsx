@@ -39,7 +39,7 @@ import { DefectForm } from "@/components/defects/defect-form";
 import { useDefects, type DefectItem } from "@/hooks/useDefects";
 import { useDefectHistory } from "@/hooks/useDefectHistory";
 import { usePositions } from "@/hooks/useUsers";
-import { usagePhotoTotal, USAGE_PHOTO_RETENTION_DAYS, requiredUsagePhotos, minRecoveryQuantity, usesHandwrittenBbnt, COMMON_MATERIAL_POSITION, displayMaterialCategory, GAS_RETURN_STATUS, isChemicalFlowTicket, isGasCylinderTicket, isOtherMaterialAdvanceTicket, isOtherMaterialCategory, isOtherMaterialTicketType, isSingleStepTicketMaterial, CHEMICAL_TICKET_TYPE, isSupplementReason, MATERIAL_CATEGORY_FILTERS, materialCategoryMatches, materialTicketBelongsToRecoveryTab, materialTicketRequiresRecovery, materialTicketAwaitsRecoveryDocSignature, SCCN_POSITIONS, SCCN_REPRESENTATIVES, RECOVERY_HANDOVER_STATUS, OTHER_MATERIAL_ADVANCE_TICKET_TYPE, OTHER_MATERIAL_GROUP, OTHER_MATERIAL_TICKET_TYPE, ticketReasonsFor, TICKET_REASONS, TICKET_REASON_OTHER, SINGLE_STEP_TICKET_TYPE, TICKET_MATERIAL_CATEGORIES, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
+import { usagePhotoTotal, USAGE_PHOTO_RETENTION_DAYS, requiredUsagePhotos, minRecoveryQuantity, usesHandwrittenBbnt, COMMON_MATERIAL_POSITION, displayMaterialCategory, GAS_RETURN_STATUS, isChemicalFlowMaterialCode, ticketUsesChemicalFlow, isGasCylinderTicket, isOtherMaterialAdvanceTicket, isOtherMaterialCategory, isOtherMaterialTicketType, isSingleStepTicketMaterial, CHEMICAL_TICKET_TYPE, isSupplementReason, MATERIAL_CATEGORY_FILTERS, materialCategoryMatches, materialTicketBelongsToRecoveryTab, materialTicketRequiresRecovery, materialTicketAwaitsRecoveryDocSignature, SCCN_POSITIONS, SCCN_REPRESENTATIVES, RECOVERY_HANDOVER_STATUS, OTHER_MATERIAL_ADVANCE_TICKET_TYPE, OTHER_MATERIAL_GROUP, OTHER_MATERIAL_TICKET_TYPE, ticketReasonsFor, TICKET_REASONS, TICKET_REASON_OTHER, SINGLE_STEP_TICKET_TYPE, TICKET_MATERIAL_CATEGORIES, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
 import { normalizeText } from "@/lib/nav";
 import { formatVnNumber, parseVnNumber, VN_NUMBER_HINT } from "@/lib/vn-number";
 import { materialTicketAlert } from "@/lib/material-ticket-alerts";
@@ -1002,13 +1002,6 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
   const [replacementDeviceSeqs, setReplacementDeviceSeqs] = useState<string[]>([]);
   const [replacementSystems, setReplacementSystems] = useState<string[]>([]);
   const [otherItems, setOtherItems] = useState<Array<{ materialId: string; quantity: number; replacementDeviceSeqs: string[] }>>([]);
-  // Hóa chất / chai khí chỉ có lý do Nhập hoặc Khác — đổi loại vật tư mà lý do cũ không còn
-  // hợp lệ thì xoá luôn, tránh gửi lên máy chủ một lý do đã bị khoá.
-  const reasonOptions = useMemo(() => ticketReasonsFor(category), [category]);
-  if (reasonChoice && !reasonOptions.includes(reasonChoice)) {
-    setReasonChoice("");
-    setReasonDetail("");
-  }
 
   const { data: opts } = useTicketOptions(true); // lấy danh sách cương vị
   const create = useCreateTicket();
@@ -1029,6 +1022,14 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
   }, [assigned, category, materialCategoryLabel, opts?.materials, unit]);
   const isProposalType = false; // mã vật tư chỉ được chọn ở bước Trưởng ca/Trưởng kíp
   const selectedMaterial = materialCards.find((m) => m.id === selectedMaterialId) ?? null;
+  // Hóa chất / chai khí — và dầu DO (luồng hóa chất theo mã, CHEMICAL_FLOW_MATERIAL_CODES) — chỉ có lý do Nhập
+  // hoặc Khác; đổi loại / vật tư mà lý do cũ không còn hợp lệ thì xoá luôn, tránh gửi lên máy chủ một lý do đã bị khoá.
+  const chemicalByCode = isChemicalFlowMaterialCode(selectedMaterial?.code);
+  const reasonOptions = useMemo(() => ticketReasonsFor(category, chemicalByCode), [category, chemicalByCode]);
+  if (reasonChoice && !reasonOptions.includes(reasonChoice)) {
+    setReasonChoice("");
+    setReasonDetail("");
+  }
   const availableDeviceOptions = useMemo(
     () => (selectedMaterial?.devices ?? []).filter((device) => positionsMatch(device.managingPosition, assigned)),
     [assigned, selectedMaterial]
@@ -1342,6 +1343,12 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
                 sử dụng — nghiệm thu — quyết toán.
               </p>
             )}
+            {chemicalByCode && (
+              <p className="note ghinhan">
+                <FlaskConical size={13} /> {selectedMaterial?.name} nhập định kỳ vào bồn nên đi <b>luồng hóa chất</b> như các
+                hóa chất khác: lý do chỉ Nhập / Khác, số lượng đề xuất không bị chặn theo tồn ERP.
+              </p>
+            )}
             <div className="frm-f">
               <button className="btn ghost" onClick={onClose}>Hủy</button>
               <button className="btn primary"
@@ -1552,7 +1559,7 @@ function EditDialog({ t, onClose }: { t: MaterialTicket; onClose: () => void }) 
   const note = joinReason(reasonChoice, reasonDetail);
   // Hóa chất / chai khí chỉ có lý do Nhập hoặc Khác — đổi loại vật tư mà lý do cũ không còn
   // hợp lệ thì xoá luôn, tránh gửi lên máy chủ một lý do đã bị khoá.
-  const reasonOptions = useMemo(() => ticketReasonsFor(category), [category]);
+  const reasonOptions = useMemo(() => ticketReasonsFor(category, t.type === CHEMICAL_TICKET_TYPE), [category, t.type]);
   if (reasonChoice && !reasonOptions.includes(reasonChoice)) {
     setReasonChoice("");
     setReasonDetail("");
@@ -2071,7 +2078,7 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
           {t.items.length > 0 && (
             <>
             {t.items.map((it, itemIndex) => {
-              const short = !isChemicalFlowTicket(t.materialCategory)
+              const short = !ticketUsesChemicalFlow(t)
                 && ["DE_XUAT", "UNG", "SU_DUNG_HIEN_CO"].includes(t.type)
                 && it.quantity > it.material.quantity;
               return (
@@ -3396,7 +3403,7 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
     ? confirmationMaterialOption.erpCodes
     : (t.items[0]?.material.erpCodes?.length ? t.items[0].material.erpCodes : [t.items[0]?.material.code].filter(Boolean) as string[])
         .map((code) => ({ code, name: t.items[0]?.material.name ?? "—", erpStock: 0 }));
-  const isChemicalTicket = isChemicalFlowTicket(t.materialCategory);
+  const isChemicalTicket = ticketUsesChemicalFlow(t);
   const isGasTicket = isGasCylinderTicket(t.materialCategory);
   // Hóa chất: một luồng duy nhất. Chai khí: chọn Đề xuất hoặc Ứng, nhưng không có Hiện có.
   const singleFlowTicket = isChemicalTicket && !isGasTicket;

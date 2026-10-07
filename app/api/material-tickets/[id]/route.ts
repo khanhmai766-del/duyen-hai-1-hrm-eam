@@ -18,7 +18,7 @@ import { deleteDeliveryPhotos, deliveryPhotoLotsOfTicket, loadDeliveryPhotoBuffe
 import { keyFromPublicUrl } from "@/lib/s3";
 import { syncTicketReplacementLinks, type LinkablePoint } from "@/lib/material-ticket-replacement-link";
 import { pointLabelOf, resolveMaterialRequest } from "@/lib/defect-material-request";
-import { missingUsagePhotoMessage, requiredUsagePhotos, usagePhotoTotal, usesHandwrittenBbnt, CHEMICAL_TICKET_TYPE, COMMON_MATERIAL_POSITION, GAS_RETURN_STATUS, isChemicalFlowTicket, isGasCylinderCategory, isGasCylinderTicket, isOtherMaterialAdvanceTicket, isOtherMaterialTicketType, materialTicketRequiresRecovery, minRecoveryQuantity, SCCN_POSITIONS, SCCN_REPRESENTATIVES, RECOVERY_HANDOVER_STATUS, statusAfterMaterialDocuments, OTHER_MATERIAL_ADVANCE_TICKET_TYPE, OTHER_MATERIAL_TICKET_TYPE, recoveryRequiredForReason, SINGLE_STEP_TICKET_TYPE, ticketReasonAllowed, TICKET_MATERIAL_CATEGORIES, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
+import { missingUsagePhotoMessage, requiredUsagePhotos, usagePhotoTotal, usesHandwrittenBbnt, CHEMICAL_TICKET_TYPE, isChemicalFlowMaterialCode, isChemicalWorkflowCategory, ticketUsesChemicalFlow, COMMON_MATERIAL_POSITION, GAS_RETURN_STATUS, isGasCylinderCategory, isGasCylinderTicket, isOtherMaterialAdvanceTicket, isOtherMaterialTicketType, materialTicketRequiresRecovery, minRecoveryQuantity, SCCN_POSITIONS, SCCN_REPRESENTATIVES, RECOVERY_HANDOVER_STATUS, statusAfterMaterialDocuments, OTHER_MATERIAL_ADVANCE_TICKET_TYPE, OTHER_MATERIAL_TICKET_TYPE, recoveryRequiredForReason, SINGLE_STEP_TICKET_TYPE, ticketReasonAllowed, TICKET_MATERIAL_CATEGORIES, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
 import { positionLabelOf, positionsMatch } from "@/lib/position-catalog";
 import { replacementPointDisplayLabel, replacementPointSelectionKey } from "@/lib/material-replacement-display";
 import { receiveOtherMaterial } from "@/lib/other-material-stock";
@@ -879,7 +879,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
             .filter(Boolean)
         ));
         if (!proposalNote) return fail("Vui lòng nhập Ghi chú cho phiếu đề xuất");
-        if (!ticketReasonAllowed(materialCategory, proposalNote)) {
+        if (!ticketReasonAllowed(materialCategory, proposalNote, t.type === CHEMICAL_TICKET_TYPE)) {
           return fail(`Loại vật tư "${materialCategory}" chỉ chọn lý do Nhập hoặc Khác`);
         }
         if (!materialId) return fail("Vui lòng chọn tên vật tư đề xuất");
@@ -894,6 +894,10 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
         if (material.machine !== unit) return fail("Vật tư không thuộc tổ máy đã chọn");
         const expectedCategory = TICKET_TO_MATERIAL_CATEGORY[materialCategory] ?? materialCategory;
         if (material.category !== expectedCategory) return fail("Vật tư không thuộc loại vật tư đã chọn");
+        // Dầu DO đi luồng hóa chất (CHEMICAL_FLOW_MATERIAL_CODES): loại phiếu chốt lúc lập, sửa phiếu không đổi được luồng.
+        const chemicalByCode = isChemicalFlowMaterialCode(material.code);
+        if (chemicalByCode && t.type !== CHEMICAL_TICKET_TYPE) return fail("Dầu DO đi luồng hóa chất — hủy phiếu này và lập phiếu mới cho dầu DO");
+        if (t.type === CHEMICAL_TICKET_TYPE && !chemicalByCode && !isChemicalWorkflowCategory(materialCategory)) return fail("Phiếu đang đi luồng hóa chất — không đổi sang vật tư khác; hủy phiếu và lập phiếu mới");
         const allowedCodes = material.erpCodes.length ? material.erpCodes : [material.code];
         if (erpCode && !allowedCodes.includes(erpCode)) return fail("Mã vật tư không thuộc tên vật tư đã chọn");
         const replacementPoints = await prisma.materialReplacement.findMany({
@@ -1056,7 +1060,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
         const value = String(body.bbktNumber || "").trim();
         const reason = String(body.note || "").trim();
         if (!reason) return fail("Lý do không được để trống");
-        if (!ticketReasonAllowed(t.materialCategory, reason)) {
+        if (!ticketReasonAllowed(t.materialCategory, reason, t.type === CHEMICAL_TICKET_TYPE)) {
           return fail(`Loại vật tư "${t.materialCategory}" chỉ chọn lý do Nhập hoặc Khác`);
         }
         before = `Lý do: ${t.proposalNote || "—"}; Số biên bản kiểm tra: ${t.bbktNumber ?? "—"}`;
@@ -1935,7 +1939,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
       if (!["DE_XUAT", "CHUA_CHON"].includes(t.type) || t.status !== "CHO_XAC_NHAN") return fail("Phiếu không ở bước Trưởng ca/Trưởng kíp xử lý");
       if (!stepAllowedWithMap(await getWorkflowRoleMap(), "confirm", user))
         return fail("Bạn không có quyền xác nhận (Quản trị phân quyền ở mục Phân quyền quy trình)", 403);
-      const isChemicalTicket = isChemicalFlowTicket(t.materialCategory);
+      const isChemicalTicket = ticketUsesChemicalFlow(t);
       const isGasTicket = isGasCylinderTicket(t.materialCategory);
       const requestedWorkflowType = body.workflowType === "UNG" ? "UNG" : body.workflowType === "SU_DUNG_HIEN_CO" ? "SU_DUNG_HIEN_CO" : body.workflowType === "DE_XUAT" ? "DE_XUAT" : t.type;
       // Quy tắc nghiệp vụ: Hóa chất chỉ đi luồng Đề xuất. Chai khí chọn được Đề xuất hoặc
@@ -1948,7 +1952,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
       const quantity = Math.trunc(Number(body.proposedQuantity || item.quantity));
       const bbktNumber = String(body.bbktNumber || "").trim();
       const proposalNote = String(body.proposalNote || "").trim(); // Lý do — hiện ở "Ghi chú lý do" trên phiếu
-      if (!ticketReasonAllowed(t.materialCategory, proposalNote)) {
+      if (!ticketReasonAllowed(t.materialCategory, proposalNote, t.type === CHEMICAL_TICKET_TYPE)) {
         return fail(`Loại vật tư "${t.materialCategory}" chỉ chọn lý do Nhập hoặc Khác`);
       }
       if (!Number.isFinite(quantity) || quantity <= 0) return fail("Số lượng xác nhận phải lớn hơn 0");
@@ -2131,7 +2135,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
       const receiptSource = t.type === "UNG" ? normalizeReceiptSource(body.receiptSource) : "ERP";
       // Số lượng đề xuất Hóa chất không bị ràng buộc bởi tồn ERP. Việc xác nhận
       // số lượng thực lãnh ở bước sau vẫn giữ kiểm tra tồn kho để tránh âm kho.
-      if (!isChemicalFlowTicket(t.materialCategory) && receiptSource === "ERP" && erpMaterial.erpStock < receivedQuantity) {
+      if (!ticketUsesChemicalFlow(t) && receiptSource === "ERP" && erpMaterial.erpStock < receivedQuantity) {
         return fail(
           `Mã vật tư ERP "${erpCode}" chỉ còn ${erpMaterial.erpStock.toLocaleString("vi-VN")} ${item.material.unit}, không đủ khối lượng ${receivedQuantity.toLocaleString("vi-VN")} ${item.material.unit}`
         );

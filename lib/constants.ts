@@ -636,9 +636,28 @@ export function isLubricantCategory(materialCategory: string | null | undefined)
   return materialCategory === "Dầu bôi trơn";
 }
 
-/** Danh sách lý do chọn được theo loại vật tư của phiếu. */
-export function ticketReasonsFor(materialCategory: string | null | undefined): readonly string[] {
-  if (isChemicalFlowTicket(materialCategory)) return BULK_TICKET_REASONS;
+/**
+ * NGOẠI LỆ THEO MÃ (nghiệp vụ 07/10/2026): vật tư nằm ở loại khác trong danh mục nhưng đi LUỒNG HÓA CHẤT
+ * — nhập định kỳ vào bồn, lý do chỉ Nhập / Khác, không chặn theo tồn ERP, loại phiếu HOA_CHAT (số HC).
+ *   - Dầu DO (loại "Dầu bôi trơn", cả S1 / S2 / COMMON).
+ * Khoá theo MÃ ERP như NH3 lỏng (SINGLE_STEP_TICKET_MATERIAL_CODES): tên trong danh mục còn sửa được.
+ * Phiếu đã lập nhận ra qua `type === CHEMICAL_TICKET_TYPE` (phiếu không lưu mã vật tư).
+ */
+export const CHEMICAL_FLOW_MATERIAL_CODES = ["1.11.01.002.VIE.00.000"] as const;
+export function isChemicalFlowMaterialCode(materialCode: string | null | undefined): boolean {
+  return !!materialCode && (CHEMICAL_FLOW_MATERIAL_CODES as readonly string[]).includes(materialCode);
+}
+/** Phiếu ĐÃ LẬP đi luồng hóa chất: theo loại vật tư, hoặc loại phiếu hóa chất (gồm ngoại lệ theo mã như dầu DO). */
+export function ticketUsesChemicalFlow(ticket: { materialCategory?: string | null; type?: string | null }): boolean {
+  return isChemicalFlowTicket(ticket.materialCategory) || ticket.type === CHEMICAL_TICKET_TYPE;
+}
+
+/**
+ * Danh sách lý do chọn được theo loại vật tư của phiếu. `chemicalFlow`: vật tư / phiếu đi luồng hóa chất dù loại
+ * vật tư khác (xem CHEMICAL_FLOW_MATERIAL_CODES).
+ */
+export function ticketReasonsFor(materialCategory: string | null | undefined, chemicalFlow = false): readonly string[] {
+  if (chemicalFlow || isChemicalFlowTicket(materialCategory)) return BULK_TICKET_REASONS;
   if (isLubricantCategory(materialCategory)) return OIL_TICKET_REASONS;
   return TICKET_REASONS;
 }
@@ -647,10 +666,11 @@ export function ticketReasonsFor(materialCategory: string | null | undefined): r
 export function ticketReasonAllowed(
   materialCategory: string | null | undefined,
   proposalNote: string | null | undefined,
+  chemicalFlow = false,
 ): boolean {
   const raw = (proposalNote ?? "").trim();
   if (!raw) return true; // chỗ khác đã bắt buộc nhập; ở đây chỉ xét lý do có bị cấm không
-  const allowed = ticketReasonsFor(materialCategory);
+  const allowed = ticketReasonsFor(materialCategory, chemicalFlow);
   if (allowed === TICKET_REASONS) return true;
   // Phiếu cũ gõ tay không khớp lựa chọn nào thì coi như "Khác" — không chặn dữ liệu cũ.
   const choice = TICKET_REASONS.find((item) => raw === item || raw.startsWith(`${item}:`));
