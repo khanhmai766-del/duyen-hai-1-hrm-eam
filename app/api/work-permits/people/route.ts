@@ -16,7 +16,7 @@ export async function GET(req: Request) {
     // Bảng đơn vị bung ra cả danh sách người của đơn vị đó nên cho lấy nhiều hơn một trang 25.
     const pageSize = p.get("limit") === "200" ? 200 : 25;
     if (q.length > 200 || company.length > 200 || !Number.isInteger(page) || page < 1 || page > 100000) return fail("Bộ lọc danh bạ không hợp lệ");
-    const where = { searchText: { contains: permitSearchTerm(q) }, ...(company ? { company } : {}), ...(p.get("active") === "1" ? { isActive: true } : {}), ...(p.get("commander") === "1" ? { canCommand: true } : {}) };
+    const where = { searchText: { contains: permitSearchTerm(q) }, ...(company ? { company } : {}), ...(p.get("active") === "1" ? { isActive: true } : {}), ...(p.get("commander") === "1" ? { canCommand: true } : {}), ...(p.get("scope") ? { scope: p.get("scope")! } : {}) };
     const [rows, total] = await prisma.$transaction([
       prisma.workPermitPerson.findMany({ where, select: { id: true, code: true, name: true, company: true, phone: true, canCommand: true, isActive: true, version: true, ...personCardSelect }, orderBy: [{ canCommand: "desc" }, { name: "asc" }, { code: "asc" }], skip: (page - 1) * pageSize, take: pageSize }),
       prisma.workPermitPerson.count({ where }),
@@ -43,7 +43,7 @@ export async function POST(req: Request) {
     const data = parsePermitPerson(await permitBody(req));
     try {
       const row = await prisma.workPermitPerson.create({ data });
-      await audit(user.id, "CREATE_WORK_PERMIT_PERSON", "WorkPermitPerson", row.id, `Thêm ${row.code}: ${row.name} · ${row.company}`);
+      await audit(user.id, "CREATE_WORK_PERMIT_PERSON", "WorkPermitPerson", row.id, `Thêm ${row.code}: ${row.name} · ${row.company} · nhóm ${row.scope === "OVERHAUL" ? "Đại tu" : "SCTX"}`);
       return ok(row);
     } catch (e) {
       if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") return fail(isCardlessCode(data.code) ? "Hồ sơ chưa có thẻ với họ tên này đã tồn tại. Hãy tìm và chọn hồ sơ đó." : "Số thẻ ra vào cổng đã tồn tại. Hãy chọn hồ sơ đó để dùng chung giữa các PCT.", 409);

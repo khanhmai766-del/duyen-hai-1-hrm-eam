@@ -14,7 +14,7 @@ import { after as afterResponse } from "next/server";
 import { parseSessionItemProgress, sharedOverhaulPercents } from "@/lib/server/work-permit-overhaul";
 import { enqueueOverhaulProgressUpdate, enqueueOverhaulSessionEnd, overhaulProgressKey, pushOverhaulSheetOutboxQuietly, vnDay } from "@/lib/server/overhaul-sheet-writer";
 import { isOverhaulPaperPermit, overhaulItemProgressOf, overhaulItemsOf, type OverhaulItemProgress } from "@/lib/work-permit-overhaul";
-import { permitDeadline, workersStillInside } from "@/lib/work-permits";
+import { permitDeadline, personScopeError, workersStillInside } from "@/lib/work-permits";
 export const dynamic = "force-dynamic";
 export async function POST(req: Request, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
@@ -51,11 +51,14 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
         }
         const person = await tx.workPermitPerson.findUnique({ where: { id: input.commanderId } });
         if (!person?.isActive || !person.canCommand) throw fail("Người được chọn không có trong danh sách CHTT nhà thầu đang hoạt động");
+        const commanderScopeError = personScopeError(person, permit.contractorScope);
+        if (commanderScopeError) throw fail(commanderScopeError);
         const previous = await tx.workPermitSession.findFirst({ where: { permitId: permit.id, ...(oldSession ? { id: { not: oldSession.id } } : {}), OR: [{ endedAt: null }, { endedAt: { gt: input.openedAt } }] } });
         if (previous) throw fail("Thời gian trùng với một lần làm việc khác của chính PCT này", 409);
         // Khóa CHTT xuyên hai loại sổ trước khi tìm xung đột, kể cả lần đã kết thúc có giờ giao nhau.
         await assertCommanderFree(tx, person.id, input.openedAt);
-        const members = (await resolveSessionMembers(tx, input.members)).filter(member => member.personId ? member.personId !== person.id : member.code.toUpperCase() !== person.code.toUpperCase());
+        const members = (await resolveSessionMembers(tx, input.members, { permitScope: permit.contractorScope,
+          keep: new Set(oldSession ? sessionMembers(oldSession.members).flatMap(member => member.personId ? [member.personId] : []) : []) })).filter(member => member.personId ? member.personId !== person.id : member.code.toUpperCase() !== person.code.toUpperCase());
         // Chỉ nhân viên ĐÚNG đơn vị công tác của phiếu (tên đơn vị ghi lúc cấp, hoặc đơn vị hiện tại của CHTT
         // khi tên đơn vị đã đổi sau đó) — không để lẫn người của đơn vị làm phiếu khác. Người nhập tay (không
         // có hồ sơ danh bạ) không kiểm được đơn vị nên giữ như cũ.

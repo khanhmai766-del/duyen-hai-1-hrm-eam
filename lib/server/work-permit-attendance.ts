@@ -3,7 +3,7 @@ import { fail } from "@/lib/api";
 import { normalizeText } from "@/lib/nav";
 import { ATTENDANCE_MIN_STAY_MS, attendanceInside, lastVisit, type AttendanceOutcome, type AttendanceVisit } from "@/lib/work-permit-attendance";
 import { sameCompany } from "@/lib/work-permit-card";
-import type { PermitMember } from "@/lib/work-permits";
+import { personScopeError, type PermitMember } from "@/lib/work-permits";
 import { permitSnapshot } from "@/lib/server/work-permits";
 import { assertWorkersFree, lockWorkPermitPresence } from "@/lib/server/work-permit-presence";
 
@@ -56,7 +56,7 @@ export async function recordAttendance(tx: Prisma.TransactionClient, input: {
   await lockWorkPermitPresence(tx);
   const now = input.now ?? new Date();
   await tx.$queryRaw`SELECT "id" FROM "WorkPermitSession" WHERE "id" = ${input.sessionId} FOR UPDATE`;
-  const session = await tx.workPermitSession.findFirst({ where: { id: input.sessionId, permitId: input.permitId }, include: { permit: { select: { teamName: true, status: true } } } });
+  const session = await tx.workPermitSession.findFirst({ where: { id: input.sessionId, permitId: input.permitId }, include: { permit: { select: { teamName: true, status: true, contractorScope: true } } } });
   if (!session || session.endedAt) throw fail("Lần làm việc đã kết thúc hoặc không tồn tại. Tải lại phiếu.", 409);
   const members = sessionMembers(session.members);
   const index = input.personId
@@ -72,6 +72,8 @@ export async function recordAttendance(tx: Prisma.TransactionClient, input: {
     if (!person) throw fail("Không tìm thấy hồ sơ nhân sự", 404);
     if (!person.isActive) throw fail(`${person.name} đang ngừng hoạt động trong danh bạ — không cho vào.`);
     if (person.id === session.commanderId) throw fail(`${person.name} là CHTT của lần làm việc này.`);
+    const scopeError = personScopeError(person, session.permit.contractorScope);
+    if (scopeError) throw fail(scopeError);
     const commander = session.commanderId ? await tx.workPermitPerson.findUnique({ where: { id: session.commanderId }, select: { company: true } }) : null;
     if (!sameCompany(person.company, session.permit.teamName) && !sameCompany(person.company, commander?.company ?? "")) {
       throw fail(`${person.name} thuộc đơn vị “${person.company}”, không phải đơn vị công tác của phiếu (“${session.permit.teamName}”). Không cho vào.`);

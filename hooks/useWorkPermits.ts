@@ -150,9 +150,9 @@ export function useExportWorkPermits() {
   return useMutation({ mutationFn: (filters: string) => apiDownload(`/api/work-permits/export?${filters}`) });
 }
 
-export function usePermitPeople(params: { q?: string; page?: number; active?: boolean; commander?: boolean; polling?: boolean; company?: string; limit?: 25 | 200; enabled?: boolean }) {
+export function usePermitPeople(params: { q?: string; page?: number; active?: boolean; commander?: boolean; polling?: boolean; company?: string; scope?: string | null; limit?: 25 | 200; enabled?: boolean }) {
   const query = new URLSearchParams({ q: params.q ?? "", page: String(params.page ?? 1), active: params.active ? "1" : "0", commander: params.commander ? "1" : "0",
-    ...(params.company ? { company: params.company } : {}), ...(params.limit ? { limit: String(params.limit) } : {}) });
+    ...(params.company ? { company: params.company } : {}), ...(params.scope ? { scope: params.scope } : {}), ...(params.limit ? { limit: String(params.limit) } : {}) });
   return useQuery({ queryKey: ["work-permit-people", query.toString()], enabled: params.enabled ?? true, refetchInterval: params.polling ? 30000 : false, queryFn: () => apiGet<PermitPerson[]>(`/api/work-permits/people?${query}`) as Promise<{ data: PermitPerson[]; meta: { total: number; pageSize: number; canWrite: boolean } }> });
 }
 /** Tra một thẻ vừa quét (link QR hoặc số thẻ) — gọi thẳng, không cache: mỗi lượt quét phải là dữ liệu mới. */

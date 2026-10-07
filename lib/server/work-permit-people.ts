@@ -5,10 +5,11 @@ import { normalizeText } from "@/lib/nav";
 import { cardlessCode } from "@/lib/work-permit-card";
 import { s3ProxyUrl } from "@/lib/s3";
 import { permitText } from "@/lib/server/work-permits";
+import { PERMIT_CONTRACTOR_SCOPES } from "@/lib/work-permits";
 
 /** Cột thông tin thẻ (đồng bộ từ Google Sheets) trả kèm hồ sơ người. */
 export const personCardSelect = {
-  birthYear: true, jobTitle: true, workPackage: true, workPosition: true, workArea: true, trainingResult: true,
+  scope: true, birthYear: true, jobTitle: true, workPackage: true, workPosition: true, workArea: true, trainingResult: true,
   trainedAt: true, cardIssuedAt: true, cardExpiresAt: true, photoKey: true, photoSource: true,
 } as const;
 
@@ -32,5 +33,8 @@ export function parsePermitPerson(body: Record<string, unknown>) {
   // Dùng cùng mã tạm theo họ tên như danh bạ đồng bộ khi chưa được cấp thẻ.
   const personCode = code || cardlessCode(name);
   if (!personCode) throw fail("Vui lòng nhập họ tên có chữ hoặc số để lưu hồ sơ chưa có thẻ");
-  return { code: personCode, name, company, phone, canCommand: body.canCommand, isActive: body.isActive, searchText: normalizeText([personCode, name, company, phone].join(" ")) };
+  // Nhóm SCTX / Đại tu: không gửi thì giữ nhóm hiện có (sửa) hoặc nhận mặc định SCTX của DB (thêm mới).
+  const scope = body.scope === undefined ? undefined : String(body.scope);
+  if (scope !== undefined && !Object.hasOwn(PERMIT_CONTRACTOR_SCOPES, scope)) throw fail("Nhóm nhân sự không hợp lệ");
+  return { code: personCode, name, company, phone, canCommand: body.canCommand, isActive: body.isActive, ...(scope ? { scope } : {}), searchText: normalizeText([personCode, name, company, phone].join(" ")) };
 }

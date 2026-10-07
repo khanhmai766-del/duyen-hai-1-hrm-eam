@@ -6,14 +6,14 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { lookupPermitCard, useSavePermitPerson } from "@/hooks/useWorkPermits";
 import { cardExpired, cardlessCode, isCardlessCode, parseCardQr, sameCompany } from "@/lib/work-permit-card";
-import { formatPermitNumber, type PermitMember, type PermitPerson } from "@/lib/work-permits";
+import { formatPermitNumber, PERMIT_CONTRACTOR_SCOPES, personScopeError, type PermitContractorScope, type PermitMember, type PermitPerson } from "@/lib/work-permits";
 import { PermitCameraScanGuard } from "@/lib/work-permit-scan-guard";
 
 /*
  * Quét thẻ ra vào cổng để thêm nhân viên vào lần làm việc — luồng một chạm cho đội đông người:
  *   mở đúng phiếu → quét → thấy ảnh + tên → đúng người, đúng đơn vị thì TỰ THÊM ngay, quét người kế tiếp.
  *
- * - Khác đơn vị công tác của phiếu, ngừng hoạt động → CHẶN (không cho thêm).
+ * - Khác đơn vị công tác của phiếu, khác nhóm nhân sự (SCTX / Đại tu) của phiếu, ngừng hoạt động → CHẶN (không cho thêm).
  * - Đang làm việc ở PCT khác → chặn bắt buộc; thẻ hết hạn → cảnh báo người cho phép.
  * - Thẻ chưa có trong danh bạ → thêm nhanh (chỉ nhập họ tên, đơn vị khoá theo phiếu).
  * Camera quét liên tục; đầu đọc QR cắm USB (gõ như bàn phím + Enter) dùng ô nhập bên dưới.
@@ -88,11 +88,13 @@ function cameraErrorMessage(error: unknown) {
   return "Không mở được camera. Dùng đầu đọc QR hoặc nhập số thẻ ở ô bên dưới.";
 }
 
-export function PermitCardScanner({ unit, companies, existing, permitId, onAdd, onExisting, title = "Quét thẻ vào làm việc", onClose }: {
+export function PermitCardScanner({ unit, companies, scope, existing, permitId, onAdd, onExisting, title = "Quét thẻ vào làm việc", onClose }: {
   /** Đơn vị công tác của phiếu (tên hiển thị và đơn vị gán khi thêm nhanh). */
   unit: string;
   /** Các tên đơn vị được chấp nhận: đơn vị ghi trên phiếu + đơn vị hiện tại của CHTT. */
   companies: string[];
+  /** Nhóm PCT nhà thầu (SCTX / Đại tu): chỉ nhận người cùng nhóm; người thêm nhanh được gán nhóm này. */
+  scope?: PermitContractorScope | null;
   /** Người đã có trong lần làm việc (kể cả CHTT) — quét lại báo "đã có". */
   existing: PermitMember[];
   permitId: string;
@@ -168,6 +170,8 @@ export function PermitCardScanner({ unit, companies, existing, permitId, onAdd, 
       if (!companies.some(company => sameCompany(company, person.company))) {
         return push({ code, tone: "block", person, title: person.name, detail: `Thuộc đơn vị “${person.company}”, KHÔNG PHẢI đơn vị công tác của phiếu (“${unit}”). Không cho vào.` });
       }
+      const scopeError = personScopeError(person, scope);
+      if (scopeError) return push({ code, tone: "block", person, title: person.name, detail: `${scopeError} Không cho vào.` });
       const reasons: string[] = [];
       if (cardExpired(person.cardExpiresAt)) reasons.push(`Thẻ đã HẾT HẠN ngày ${vnDate(person.cardExpiresAt)}.`);
       const conflict = person.activeWorks?.find(work => work.permit.id !== permitId);
@@ -180,7 +184,7 @@ export function PermitCardScanner({ unit, companies, existing, permitId, onAdd, 
     } finally {
       busyRef.current = false;
     }
-  }, [admit, companies, isExisting, onExisting, permitId, push, unit]);
+  }, [admit, companies, isExisting, onExisting, permitId, push, scope, unit]);
 
   const handleRef = useRef(handle);
   handleRef.current = handle;
@@ -253,7 +257,7 @@ export function PermitCardScanner({ unit, companies, existing, permitId, onAdd, 
     try {
       // QR của người chưa được cấp thẻ mang họ tên → lưu mã tạm HL-… (lib/work-permit-card.ts), không lưu họ tên vào ô số thẻ.
       const code = /\s/.test(current.code) ? cardlessCode(current.code) : current.code;
-      const person = await savePerson.mutateAsync({ body: { code, name: quickName.trim(), company: unit, phone: "", canCommand: false, isActive: true } });
+      const person = await savePerson.mutateAsync({ body: { code, name: quickName.trim(), company: unit, phone: "", canCommand: false, isActive: true, scope: scope ?? "SCTX" } });
       const result = await admit(person);
       setScans(list => list.map(s => s.id === id ? { ...s, notFound: false, person, title: person.name, ...result, detail: result.added ? `Đã thêm vào danh bạ ${unit} và cho vào.` : result.detail } : s));
       setQuickName("");
@@ -277,7 +281,7 @@ export function PermitCardScanner({ unit, companies, existing, permitId, onAdd, 
     }} className="flex h-[94dvh] max-h-[94dvh] max-w-2xl flex-col gap-3 overflow-hidden p-4 sm:p-6">
       <div className="shrink-0 pr-8">
         <DialogTitle>{title}</DialogTitle>
-        <DialogDescription className="line-clamp-2">Đơn vị công tác: <b className="text-foreground">{unit}</b><span className="hidden sm:inline"> · Chỉ nhân viên đúng đơn vị này được cho vào.</span></DialogDescription>
+        <DialogDescription className="line-clamp-2">Đơn vị công tác: <b className="text-foreground">{unit}</b>{scope && <> · Nhóm <b className="text-foreground">{PERMIT_CONTRACTOR_SCOPES[scope]}</b></>}<span className="hidden sm:inline"> · Chỉ nhân viên đúng đơn vị{scope ? " và nhóm" : ""} này được cho vào.</span></DialogDescription>
       </div>
 
       {/* Giữ kích thước camera khi lịch sử dài lên; chỉ vùng kết quả bên dưới được cuộn. */}

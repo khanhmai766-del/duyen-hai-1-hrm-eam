@@ -1,7 +1,8 @@
 import type { Prisma, WorkPermit } from "@prisma/client";
 import { fail } from "@/lib/api";
 import { permitText } from "@/lib/server/work-permits";
-import { isSctxContractorPermit } from "@/lib/work-permits";
+import { isSctxContractorPermit, personScopeError } from "@/lib/work-permits";
+import { parsePermitMembers } from "@/lib/server/work-permits";
 
 /** Điền sẵn người cấp từ phiên đăng nhập (cho phép sửa); CHTT nhà thầu từ danh bạ dùng chung. */
 export async function resolvePermitIdentities(
@@ -20,6 +21,8 @@ export async function resolvePermitIdentities(
   if (body.teamType !== "CONTRACTOR") {
     return { ...body, issuerName, issuerUserId, commanderPersonId: null };
   }
+  const contractorScope = permitText(body, "contractorScope", 20) || null;
+  await assertMembersScope(tx, body.members, contractorScope, before);
   const commanderPersonId = permitText(body, "commanderPersonId", 100) || null;
   if (!commanderPersonId) {
     if (isSctxContractorPermit({ teamType: String(body.teamType), contractorScope: permitText(body, "contractorScope", 20) })) {
@@ -34,7 +37,21 @@ export async function resolvePermitIdentities(
   const person = await tx.workPermitPerson.findUnique({ where: { id: commanderPersonId } });
   const unchanged = before?.status !== "DRAFT" && before?.commanderPersonId === commanderPersonId;
   if (!person || (!unchanged && (!person.isActive || !person.canCommand))) throw fail("Người được chọn không có trong danh sách CHTT nhà thầu đang hoạt động");
+  const scopeError = unchanged && before?.contractorScope === contractorScope ? null : personScopeError(person, contractorScope);
+  if (scopeError) throw fail(scopeError);
   return { ...body, issuerName, issuerUserId, commanderPersonId,
     commanderName: unchanged ? before!.commanderName : person.name,
     teamName: unchanged ? body.teamName : person.company };
+}
+
+/** Nhân viên công tác ghi trên phiếu phải đúng nhóm SCTX / Đại tu của phiếu. Chỉ xét người mới thêm (hoặc khi đổi nhóm phiếu) — người đã ghi từ trước giữ nguyên. */
+async function assertMembersScope(tx: Prisma.TransactionClient, value: unknown, contractorScope: string | null, before?: WorkPermit) {
+  if (!contractorScope || !Array.isArray(value)) return;
+  const kept = before?.contractorScope === contractorScope && Array.isArray(before.members)
+    ? new Set((before.members as Array<{ personId?: string } | null>).flatMap(member => member?.personId ? [member.personId] : [])) : new Set<string>();
+  const ids = parsePermitMembers(value).flatMap(member => member.personId && !kept.has(member.personId) ? [member.personId] : []);
+  if (!ids.length) return;
+  const people = await tx.workPermitPerson.findMany({ where: { id: { in: ids } }, select: { name: true, scope: true } });
+  const wrong = people.map(person => personScopeError(person, contractorScope)).find(Boolean);
+  if (wrong) throw fail(wrong);
 }

@@ -1707,6 +1707,9 @@ model WorkPermitPerson {
   phone      String              @default("") // SĐT liên hệ; để trống nếu nhà thầu không cung cấp.
   canCommand Boolean             @default(false)
   isActive   Boolean             @default(true)
+  /// Nhóm nhân sự: "SCTX" | "OVERHAUL" (Đại tu). PCT nhà thầu chỉ nhận người đúng nhóm phiếu.
+  /// Đồng bộ từ Google Sheets → OVERHAUL; nhập tay / thêm nhanh → mặc định SCTX. SQL: prisma/manual/add-work-permit-person-scope.sql
+  scope      String              @default("SCTX")
   /// Thông tin thẻ ra vào cổng & ATVSLĐ, đồng bộ từ Google Sheets (lib/server/work-permit-people-sync.ts).
   birthYear      String    @default("")
   jobTitle       String    @default("")

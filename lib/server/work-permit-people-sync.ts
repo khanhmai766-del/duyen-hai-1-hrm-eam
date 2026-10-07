@@ -183,7 +183,7 @@ export async function syncPeopleList() {
       const fromCode = renameFrom.get(data.code) ?? data.code;
       if (before && before.company !== data.company) moved.push(`${data.name} (${data.code}): ${before.company} → ${data.company} (tab ${tab})`);
       if (photoRef && photoNeedsFetch(before, photoRef)) photos.push(signPhotoJob(data.code, photoRef, photoExp));
-      if (!before) { created++; return prisma.workPermitPerson.create({ data: { ...data, canCommand: false, isActive: true } }); }
+      if (!before) { created++; return prisma.workPermitPerson.create({ data: { ...data, canCommand: false, isActive: true, scope: "OVERHAUL" } }); }
       updated++;
       // Sheet để trống SĐT thì giữ SĐT đã nhập trên sổ; vai trò CHTT/"đang hoạt động" không đụng tới.
       const phone = data.phone || before.phone;

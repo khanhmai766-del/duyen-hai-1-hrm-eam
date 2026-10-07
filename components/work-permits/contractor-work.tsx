@@ -23,7 +23,7 @@ import { companyUnclassified, formatPermitNumber, isSessionCommander, PERMIT_KIN
 import { isOverhaulPaperPermit, overhaulItemKey, overhaulItemsOf } from "@/lib/work-permit-overhaul";
 import { initialOverhaulDraft, OverhaulItemProgressEditor, overhaulDraftError, overhaulDraftPayload } from "@/components/work-permits/overhaul-item-progress";
 import { PermitDeadlineBadge } from "@/components/work-permits/permit-deadline";
-import type { PermitCompanyScopes, PermitDetailRow, PermitMember, PermitPerson, PermitSession } from "@/lib/work-permits";
+import { PERMIT_CONTRACTOR_SCOPES, type PermitCompanyScopes, type PermitContractorScope, type PermitDetailRow, type PermitMember, type PermitPerson, type PermitSession } from "@/lib/work-permits";
 
 const control = "min-h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-60";
 const vnNow = () => new Date(Date.now() + 7 * 3600000).toISOString().slice(0, 16);
@@ -52,6 +52,9 @@ export function PermitCompanyDirectory() {
   // Chỉ gọi danh sách người khi có đơn vị đang mở; `limit: 200` để không phải phân trang trong khối bung.
   const people = usePermitPeople({ company: openCompany ?? "", limit: 200, enabled: Boolean(openCompany) });
   const canWrite = companies.data?.meta.canWrite ?? false;
+  // Nhóm điền sẵn khi thêm người: đơn vị chỉ làm Đại tu → Đại tu, còn lại → SCTX (sửa được trong hộp thoại).
+  const addingRow = companies.data?.data.find(row => row.company === addingPersonTo);
+  const addingScope: PermitContractorScope = addingRow?.overhaul && !addingRow.sctx ? "OVERHAUL" : "SCTX";
   // Ô tìm kiếm khớp cả NGƯỜI (họ tên, số thẻ, SĐT — nhân viên lẫn CHTT): tra máy chủ sau khi ngừng gõ,
   // rồi giữ lại các đơn vị có người khớp. Đơn vị khớp theo mã/tên thì vẫn hiện như cũ.
   const term = normalizeText(q.trim());
@@ -125,7 +128,7 @@ export function PermitCompanyDirectory() {
               {people.isPending ? <p role="status" className="text-sm text-muted-foreground">Đang tải nhân sự…</p>
                 : people.isError ? <p role="alert" className="text-sm text-red-700">{people.error.message}</p>
                 : !people.data?.data.length ? <p className="text-sm text-muted-foreground">Đơn vị này chưa có nhân sự.</p>
-                : <CompanyPeopleTable people={shownPeople(row.company, people.data.data)} canWrite={canWrite} removing={remove.isPending} onEdit={setEditing} onRemove={person => void removePerson(person)} />}
+                : <CompanyPeopleGroups people={shownPeople(row.company, people.data.data)} canWrite={canWrite} removing={remove.isPending} onEdit={setEditing} onRemove={person => void removePerson(person)} />}
             </div>}
           </article>;
         })}</div>
@@ -163,7 +166,7 @@ export function PermitCompanyDirectory() {
                   {people.isPending ? <p role="status" className="text-sm text-muted-foreground">Đang tải nhân sự…</p>
                     : people.isError ? <p role="alert" className="text-sm text-red-700">{people.error.message}</p>
                     : !people.data?.data.length ? <p className="text-sm text-muted-foreground">Đơn vị này chưa có nhân sự.{canWrite ? " Bấm “Thêm nhân sự” trên dòng đơn vị để thêm." : ""}</p>
-                    : <CompanyPeopleTable people={shownPeople(row.company, people.data.data)} canWrite={canWrite} removing={remove.isPending} onEdit={setEditing} onRemove={person => void removePerson(person)} />}
+                    : <CompanyPeopleGroups people={shownPeople(row.company, people.data.data)} canWrite={canWrite} removing={remove.isPending} onEdit={setEditing} onRemove={person => void removePerson(person)} />}
                 </div>
               </TableCell></TableRow>}
             </Fragment>;
@@ -171,7 +174,7 @@ export function PermitCompanyDirectory() {
         </Table></>}
     </div>
     {editing && <PersonEditor initial={editing} onClose={() => setEditing(null)} />}
-    {addingPersonTo !== null && <PersonEditor presetCompany={addingPersonTo} onClose={() => setAddingPersonTo(null)} onSaved={() => setOpenCompany(addingPersonTo)} />}
+    {addingPersonTo !== null && <PersonEditor presetCompany={addingPersonTo} presetScope={addingScope} onClose={() => setAddingPersonTo(null)} onSaved={() => setOpenCompany(addingPersonTo)} />}
     {syncing && <PeopleSyncDialog onClose={() => setSyncing(false)} />}
     {companyForm && <CompanyEditor company={companyForm.mode === "rename" ? companyForm.company : undefined} onClose={() => setCompanyForm(null)} onSaved={name => setOpenCompany(name)} />}
   </section>;
@@ -187,7 +190,7 @@ function RoleSwitch({ person }: { person: PermitPerson }) {
   async function toggle() {
     try {
       await save.mutateAsync({ id: person.id, body: { code: person.code, name: person.name, company: person.company, phone: person.phone ?? "",
-        canCommand: !on, isActive: person.isActive, version: person.version } });
+        canCommand: !on, isActive: person.isActive, scope: person.scope, version: person.version } });
       toast.success(`${person.name}: ${on ? "chuyển về Nhân viên" : "chuyển thành CHTT"}`);
     } catch (error) { toast.error(error instanceof Error ? error.message : "Không đổi được vai trò"); }
   }
@@ -213,8 +216,31 @@ function PersonPhoto({ person, className }: { person: PermitPerson; className: s
   return <img src={person.photoUrl} alt={`Ảnh ${person.name}`} width={36} height={48} loading="lazy" decoding="async" className={cn(className, "object-cover")} onError={() => setFailed(true)} />;
 }
 
-/** Danh sách người của một đơn vị, mỗi người một dòng: Ảnh · Họ tên · Chức vụ · SĐT · Vai trò (số thẻ ẩn — vẫn sửa được trong hồ sơ). */
-function CompanyPeopleTable({ people, canWrite, removing, onEdit, onRemove }: { people: PermitPerson[]; canWrite: boolean; removing: boolean; onEdit: (person: PermitPerson) => void; onRemove: (person: PermitPerson) => void }) {
+type CompanyPeopleProps = { people: PermitPerson[]; canWrite: boolean; removing: boolean; onEdit: (person: PermitPerson) => void; onRemove: (person: PermitPerson) => void };
+
+/**
+ * Hai nhóm nhân sự của một đơn vị, chuyển bằng 2 nút: Đại tu (đủ họ tên, ảnh, chức vụ) / SCTX (không cần ảnh).
+ * Mở mặc định nhóm Đại tu nếu có người, không thì SCTX. Hồ sơ chưa có nhóm tính là SCTX.
+ */
+function CompanyPeopleGroups({ people, ...rest }: CompanyPeopleProps) {
+  const overhaul = people.filter(person => person.scope === "OVERHAUL"), sctx = people.filter(person => person.scope !== "OVERHAUL");
+  const [picked, setPicked] = useState<PermitContractorScope | null>(null);
+  const group = picked ?? (overhaul.length || !sctx.length ? "OVERHAUL" : "SCTX");
+  const list = group === "OVERHAUL" ? overhaul : sctx;
+  return <div className="space-y-2">
+    <div role="tablist" aria-label="Nhóm nhân sự" className="inline-flex rounded-lg border border-border bg-background p-0.5">
+      {([["OVERHAUL", overhaul.length], ["SCTX", sctx.length]] as const).map(([key, count]) => <button key={key} type="button" role="tab" aria-selected={group === key} onClick={() => setPicked(key)}
+        className={cn("min-h-9 rounded-md px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500", group === key ? "bg-[#00558F] text-white" : "text-slate-600 hover:bg-muted dark:text-slate-300")}>
+        Nhân sự {PERMIT_CONTRACTOR_SCOPES[key]} <span className="tabular-nums opacity-80">({count})</span>
+      </button>)}
+    </div>
+    {list.length ? <CompanyPeopleTable {...rest} people={list} withPhoto={group === "OVERHAUL"} />
+      : <p className="text-sm text-muted-foreground">Chưa có nhân sự nhóm {PERMIT_CONTRACTOR_SCOPES[group]}.</p>}
+  </div>;
+}
+
+/** Danh sách người một nhóm, mỗi người một dòng: Ảnh (chỉ nhóm Đại tu) · Họ tên · Chức vụ · SĐT · Vai trò (số thẻ ẩn — vẫn sửa được trong hồ sơ). */
+function CompanyPeopleTable({ people, canWrite, removing, onEdit, onRemove, withPhoto }: CompanyPeopleProps & { withPhoto: boolean }) {
   const th = "px-3 py-2 text-left text-[10.5px] font-semibold uppercase tracking-wider text-slate-500";
   const role = (person: PermitPerson) => <>
     {canWrite ? <RoleSwitch person={person} /> : person.canCommand ? <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10.5px] font-semibold uppercase tracking-wide text-emerald-700">CHTT</span> : <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10.5px] font-semibold uppercase tracking-wide text-slate-600">Nhân viên</span>}
@@ -225,7 +251,7 @@ function CompanyPeopleTable({ people, canWrite, removing, onEdit, onRemove }: { 
   return <>
   {/* Điện thoại: mỗi người một thẻ — tên, số thẻ, SĐT bấm gọi, vai trò, nút sửa/xoá 40px. */}
   <div className="space-y-2 md:hidden">{people.map(person => <div key={person.id} className="flex items-start gap-2 rounded-lg border border-slate-200 bg-white p-3 dark:border-border dark:bg-background">
-    <PersonPhoto person={person} className="h-14 w-[42px] shrink-0 rounded-md border border-slate-200 text-base dark:border-border" />
+    {withPhoto && <PersonPhoto person={person} className="h-14 w-[42px] shrink-0 rounded-md border border-slate-200 text-base dark:border-border" />}
     <div className="min-w-0 flex-1">
       <p className="text-[15px] font-semibold leading-5 text-ink">{person.name}</p>
       {person.jobTitle?.trim() && <p className="text-xs font-medium text-slate-600 dark:text-slate-300">{person.jobTitle.trim()}</p>}
@@ -241,11 +267,11 @@ function CompanyPeopleTable({ people, canWrite, removing, onEdit, onRemove }: { 
   <div className="hidden overflow-x-auto rounded-lg border border-slate-200 bg-white md:block">
     <table className="w-full min-w-[680px] text-[12px]">
       <thead className="border-b border-slate-200 bg-slate-50"><tr>
-        <th className={cn(th, "w-12 text-center")}>STT</th><th className={cn(th, "w-14 text-center")}>Ảnh</th><th className={th}>Họ tên</th><th className={th}>Chức vụ</th><th className={th}>SĐT liên hệ</th><th className={th}>Vai trò</th>{canWrite && <th className={cn(th, "w-24 text-center")}>Thao tác</th>}
+        <th className={cn(th, "w-12 text-center")}>STT</th>{withPhoto && <th className={cn(th, "w-14 text-center")}>Ảnh</th>}<th className={th}>Họ tên</th><th className={th}>Chức vụ</th><th className={th}>SĐT liên hệ</th><th className={th}>Vai trò</th>{canWrite && <th className={cn(th, "w-24 text-center")}>Thao tác</th>}
       </tr></thead>
       <tbody>{people.map((person, index) => <tr key={person.id} className="border-b border-slate-100 align-middle last:border-0">
         <td className="px-3 py-2 text-center tabular-nums text-slate-500">{index + 1}</td>
-        <td className="px-2 py-1.5"><PersonPhoto person={person} className="mx-auto h-12 w-9 rounded-md border border-slate-200 text-sm dark:border-border" /></td>
+        {withPhoto && <td className="px-2 py-1.5"><PersonPhoto person={person} className="mx-auto h-12 w-9 rounded-md border border-slate-200 text-sm dark:border-border" /></td>}
         <td className="px-3 py-2">
           <span className="font-semibold text-ink">{person.name}</span>
           {works(person)}
@@ -335,10 +361,12 @@ function CompanyEditor({ company, onClose, onSaved }: { company?: string; onClos
 }
 
 /** Hộp thoại danh bạ nhân sự nhà thầu: chọn CHTT, chọn nhân viên công tác, hoặc tra cứu nhanh. */
-export function PermitPeopleDirectory({ onClose, onPick, onPickMany, existingMembers = [], commandersOnly = false, company }: {
+export function PermitPeopleDirectory({ onClose, onPick, onPickMany, existingMembers = [], commandersOnly = false, company, scope }: {
   onClose?: () => void; onPick?: (p: PermitPerson) => void; onPickMany?: (people: PermitPerson[]) => void; existingMembers?: PermitMember[]; commandersOnly?: boolean;
   /** Chỉ hiện người của đơn vị này (đơn vị công tác của phiếu) — không để chọn nhầm người đơn vị khác. */
   company?: string;
+  /** Nhóm PCT nhà thầu: chỉ hiện nhân sự đúng nhóm SCTX / Đại tu. */
+  scope?: PermitContractorScope | null;
 }) {
   const [q, setQ] = useState("");
   const [search, setSearch] = useState("");
@@ -358,7 +386,7 @@ export function PermitPeopleDirectory({ onClose, onPick, onPickMany, existingMem
     catch (error) { toast.error(error instanceof Error ? error.message : "Không thể xóa hồ sơ"); }
   }
   useEffect(() => { const timer = setTimeout(() => { setSearch(q); setPage(1); }, 300); return () => clearTimeout(timer); }, [q]);
-  const query = usePermitPeople({ q: search, page, active: Boolean(onPick || onPickMany), commander: commandersOnly, polling: Boolean(onPick || onPickMany), company });
+  const query = usePermitPeople({ q: search, page, active: Boolean(onPick || onPickMany), commander: commandersOnly, polling: Boolean(onPick || onPickMany), company, scope });
   const heading = commandersOnly ? "Chọn CHTT nhà thầu" : onPickMany ? "Chọn nhân viên công tác" : "Danh sách nhân sự nhà thầu";
   const description = onPickMany ? "Đánh dấu nhiều nhân viên rồi bấm Thêm người đã chọn. Lựa chọn được giữ khi tìm kiếm hoặc chuyển trang; tối đa 200 nhân viên trong danh sách công tác." : "Mỗi người dùng một hồ sơ và số thẻ ra vào cổng thống nhất giữa hai sổ Cơ và Điện. Đánh dấu CHTT cho người thuộc danh sách được cung cấp.";
   const body = <>
@@ -379,13 +407,13 @@ export function PermitPeopleDirectory({ onClose, onPick, onPickMany, existingMem
         {selected.length > 0 && <div className="flex max-h-28 flex-wrap gap-2 overflow-y-auto">{selected.map(person => <Button key={person.id} type="button" size="sm" variant="outline" aria-label={`Bỏ chọn ${person.name} · ${person.code}`} onClick={() => toggle(person)}>{person.name}<X size={14} /></Button>)}</div>}
         <div className="flex justify-end gap-2"><Button type="button" variant="outline" onClick={() => onClose?.()}>Để sau</Button><Button type="button" disabled={!selected.length} onClick={() => onPickMany(selected)}>Thêm {selected.length || ""} người đã chọn</Button></div>
       </div>}
-      {editing && <PersonEditor initial={editing === "new" ? undefined : editing} presetCompany={editing === "new" ? company : undefined} onClose={() => setEditing(null)} />}
+      {editing && <PersonEditor initial={editing === "new" ? undefined : editing} presetCompany={editing === "new" ? company : undefined} presetScope={scope ?? undefined} onClose={() => setEditing(null)} />}
   </>;
   return <Dialog open onOpenChange={v => { if (!v) onClose?.(); }}>
     <DialogContent className="max-w-3xl">
       <DialogTitle>{heading}</DialogTitle>
       <DialogDescription>{description}</DialogDescription>
-      {company && <p className="rounded-lg bg-sky-50 px-3 py-2 text-sm text-sky-950 dark:bg-sky-950/30 dark:text-sky-100">Chỉ hiện nhân sự của đơn vị công tác trên phiếu: <b>{company}</b></p>}
+      {company && <p className="rounded-lg bg-sky-50 px-3 py-2 text-sm text-sky-950 dark:bg-sky-950/30 dark:text-sky-100">Chỉ hiện nhân sự của đơn vị công tác trên phiếu: <b>{company}</b>{scope && <> · nhóm <b>{PERMIT_CONTRACTOR_SCOPES[scope]}</b></>}</p>}
       {body}
     </DialogContent>
   </Dialog>;
@@ -396,8 +424,8 @@ export function PermitPeopleDirectory({ onClose, onPick, onPickMany, existingMem
  * sẵn và KHOÁ đơn vị — người dùng đã chọn đơn vị bằng chính dòng họ bấm, hỏi lại là thừa. Mặc định
  * đánh dấu CHTT vì nhập theo đơn vị chủ yếu là để khai báo danh sách CHTT nhà thầu cung cấp.
  */
-function PersonEditor({ initial, presetCompany, onClose, onSaved }: { initial?: PermitPerson; presetCompany?: string; onClose: () => void; onSaved?: () => void }) {
-  const [form, setForm] = useState(initial ? { ...initial, code: isCardlessCode(initial.code) ? "" : initial.code } : { code: "", name: "", company: presetCompany ?? "", phone: "", canCommand: presetCompany !== undefined, isActive: true });
+function PersonEditor({ initial, presetCompany, presetScope, onClose, onSaved }: { initial?: PermitPerson; presetCompany?: string; presetScope?: PermitContractorScope; onClose: () => void; onSaved?: () => void }) {
+  const [form, setForm] = useState<Omit<PermitPerson, "id" | "version"> & Partial<PermitPerson>>(initial ? { ...initial, scope: initial.scope ?? "SCTX", code: isCardlessCode(initial.code) ? "" : initial.code } : { code: "", name: "", company: presetCompany ?? "", phone: "", canCommand: presetCompany !== undefined, isActive: true, scope: presetScope ?? "SCTX" });
   const save = useSavePermitPerson();
   async function submit(e: React.FormEvent) {
     e.preventDefault(); e.stopPropagation();
@@ -412,16 +440,27 @@ function PersonEditor({ initial, presetCompany, onClose, onSaved }: { initial?: 
       <p className="text-xs text-muted-foreground">Có thể sửa số thẻ, họ tên và nhà thầu; vai trò CHTT / Nhân viên gạt ở cột Vai trò. Các PCT đã ghi vẫn giữ nguyên thông tin tại thời điểm thực hiện.</p>
       {presetCompany !== undefined ? <p className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm">Đơn vị: <strong>{presetCompany}</strong></p> : <PermitCompanyPicker value={form.company} onChange={company => setForm(prev => ({ ...prev, company }))} />}
       <label className="block space-y-1 text-sm"><span>SĐT liên hệ</span><input className={control} type="tel" inputMode="tel" maxLength={40} value={form.phone ?? ""} onChange={e => setForm({ ...form, phone: e.target.value })} placeholder="Ví dụ: 0912 345 678" /><span className="block text-xs text-muted-foreground">Không bắt buộc; dùng để gọi khi cần liên hệ đơn vị công tác.</span></label>
+      <fieldset className="space-y-1.5 text-sm">
+        <legend className="mb-1">Nhóm nhân sự *</legend>
+        <div className="grid grid-cols-2 gap-2">
+          {(["OVERHAUL", "SCTX"] as const).map(key => <label key={key} className={cn("inline-flex min-h-10 cursor-pointer items-center gap-2 rounded-lg border px-3", form.scope === key ? "border-blue-300 bg-blue-50 text-blue-900" : "border-input")}>
+            <input type="radio" name="person-scope" className="h-4 w-4 accent-blue-700" checked={form.scope === key} onChange={() => setForm({ ...form, scope: key })} />{PERMIT_CONTRACTOR_SCOPES[key]}
+          </label>)}
+        </div>
+        <span className="block text-xs text-muted-foreground">Đại tu: có đủ họ tên, ảnh, chức vụ (đồng bộ từ bảng thẻ ra vào cổng). SCTX: không cần ảnh. PCT nhà thầu chỉ nhận người đúng nhóm phiếu.</span>
+      </fieldset>
       <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.isActive} onChange={e => setForm({ ...form, isActive: e.target.checked })} />Đang hoạt động</label>
       <div className="flex justify-end gap-2"><Button type="button" variant="outline" onClick={onClose}>Để sau</Button><Button disabled={save.isPending}>{save.isPending ? "Đang lưu…" : "Lưu hồ sơ"}</Button></div>
     </fieldset></form>
   </DialogContent></Dialog>;
 }
 
-export function PermitMembersEditor({ members, onChange, commander, company, scan }: {
+export function PermitMembersEditor({ members, onChange, commander, company, scope, scan }: {
   members: PermitMember[]; onChange: (value: PermitMember[]) => void; commander?: PermitMember;
   /** Lọc danh sách chọn theo đơn vị trên biểu mẫu PCT, kể cả trước khi phiếu được lưu. */
   company?: string;
+  /** Nhóm PCT nhà thầu: danh sách chọn và máy quét chỉ nhận nhân sự đúng nhóm. */
+  scope?: PermitContractorScope | null;
   /** Có thì hiện "Quét thẻ" và lọc "Chọn từ danh sách" theo đơn vị công tác của phiếu. */
   scan?: { unit: string; companies: string[]; permitId: string };
 }) {
@@ -476,8 +515,8 @@ export function PermitMembersEditor({ members, onChange, commander, company, sca
         {remove}
       </div>;
     })}</div>}
-    {picking && <PermitPeopleDirectory onClose={() => setPicking(false)} onPickMany={add} existingMembers={commander ? [...members, commander] : members} company={company || scan?.unit} />}
-    {scanning && scan && <PermitCardScanner unit={scan.unit} companies={scan.companies} permitId={scan.permitId} existing={commander ? [...members, commander] : members} onAdd={addOne} onClose={() => setScanning(false)} />}
+    {picking && <PermitPeopleDirectory onClose={() => setPicking(false)} onPickMany={add} existingMembers={commander ? [...members, commander] : members} company={company || scan?.unit} scope={scope} />}
+    {scanning && scan && <PermitCardScanner unit={scan.unit} companies={scan.companies} scope={scope} permitId={scan.permitId} existing={commander ? [...members, commander] : members} onAdd={addOne} onClose={() => setScanning(false)} />}
   </div>;
 }
 
@@ -611,7 +650,7 @@ export function SessionEditor({ permit, session, handoff = false, progressUpdate
       {overhaulItems.length > 0 && <OverhaulItemProgressEditor items={overhaulItems} previous={previousPercents} draft={itemDraft} onChange={setItemDraft} noneDone={noneDone} onNoneDone={setNoneDone} updating={updating} />}
       {ending && !overhaulItems.length && <label className="block space-y-2 text-sm"><span className="font-medium">Tiến độ công việc *</span><div className="flex items-center gap-4 rounded-lg border border-border p-3"><input className="h-2 flex-1 cursor-pointer accent-blue-700" type="range" min={0} max={100} step={1} value={progress} onChange={e => setProgress(e.target.value)} /><div className="relative w-28"><input className={`${control} pr-8 text-right tabular-nums`} type="number" min={0} max={100} step={1} required value={progress} onChange={e => setProgress(e.target.value)} /><span className="pointer-events-none absolute right-3 top-2.5 text-muted-foreground">%</span></div></div></label>}
       {!ending && !handoff && !updating && <><p className="rounded-lg bg-sky-50 p-3 text-sm text-sky-950">CHTT tự được tính vào người công tác. Tổng: {person ? 1 + additionalMembers.length : additionalMembers.length} người.</p><PermitMembersEditor members={additionalMembers} onChange={setMembers} commander={person ? { personId: person.id, name: person.name, code: person.code, company: person.company } : undefined}
-        scan={{ unit: permit.teamName, companies: [permit.teamName, person?.company ?? ""].filter(Boolean), permitId: permit.id }} /></>}
+        scope={permit.contractorScope} scan={{ unit: permit.teamName, companies: [permit.teamName, person?.company ?? ""].filter(Boolean), permitId: permit.id }} /></>}
       {(ending || handoff || updating) && <label className="block space-y-1 text-sm"><span>{updating ? "Ghi chú làm việc" : handoff ? "Ghi chú bàn giao" : "Ghi chú kết thúc lần làm việc"}</span><textarea className={control} rows={3} maxLength={2000} value={note} onChange={e => setNote(e.target.value)} /></label>}
       {stillInside.length > 0 && <div role="alert" className="space-y-2 rounded-lg border-2 border-red-300 bg-red-50 p-3 text-sm text-red-900 dark:border-red-900 dark:bg-red-950/40 dark:text-red-100">
         <p className="font-semibold">Còn {stillInside.length} nhân viên chưa rút khỏi vị trí làm việc — chưa kết thúc được:</p>
@@ -620,6 +659,6 @@ export function SessionEditor({ permit, session, handoff = false, progressUpdate
       {error && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</p>}
       <div className="flex justify-end gap-2"><Button type="button" variant="outline" onClick={onClose}>Để sau</Button><Button type="submit" disabled={save.isPending || (!updating && !name) || (ending && !overhaulItems.length && progress === "") || stillInside.length > 0 || (!ending && !updating && (!person || (handoff && person.id === session?.commanderId)))}>{save.isPending ? "Đang ghi nhận…" : updating ? "Ghi nhận tiến độ" : handoff ? "Xác nhận bàn giao CHTT" : ending ? "Ghi nhận kết thúc lần làm việc" : "Ghi nhận cho phép làm việc"}</Button></div>
     </fieldset></form>
-    {picking && <PermitPeopleDirectory commandersOnly company={permit.teamName || undefined} onClose={() => setPicking(false)} onPick={p => { setPerson(p); setPicking(false); }} />}
+    {picking && <PermitPeopleDirectory commandersOnly company={permit.teamName || undefined} scope={permit.contractorScope} onClose={() => setPicking(false)} onPick={p => { setPerson(p); setPicking(false); }} />}
   </DialogContent></Dialog>;
 }

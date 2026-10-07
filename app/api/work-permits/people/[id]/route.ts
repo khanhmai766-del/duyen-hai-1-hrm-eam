@@ -1,7 +1,7 @@
 import { requirePermitIssue } from "@/lib/server/work-permit-permissions";
 import { isCardlessCode } from "@/lib/work-permit-card";
 import { attendanceInside } from "@/lib/work-permit-attendance";
-import type { PermitMember } from "@/lib/work-permits";
+import { PERMIT_CONTRACTOR_SCOPES, type PermitContractorScope, type PermitMember } from "@/lib/work-permits";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { audit, fail, ok, requireUser } from "@/lib/api";
@@ -28,7 +28,7 @@ export async function PUT(req: Request, props: { params: Promise<{ id: string }>
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") throw fail(isCardlessCode(data.code) ? "Hồ sơ chưa có thẻ với họ tên này đã tồn tại. Hãy tìm và chọn hồ sơ đó." : "Số thẻ ra vào cổng đã được dùng cho nhân sự khác.", 409);
       throw error;
     }
-    await audit(user.id, "UPDATE_WORK_PERMIT_PERSON", "WorkPermitPerson", row.id, `Cập nhật ${row.code}: ${row.name} · ${row.company}; ${row.isActive ? "đang hoạt động" : "ngừng hoạt động"}`);
+    await audit(user.id, "UPDATE_WORK_PERMIT_PERSON", "WorkPermitPerson", row.id, `Cập nhật ${row.code}: ${row.name} · ${row.company} · nhóm ${PERMIT_CONTRACTOR_SCOPES[row.scope as PermitContractorScope] ?? row.scope}; ${row.isActive ? "đang hoạt động" : "ngừng hoạt động"}`);
     return ok(row);
   });
 }

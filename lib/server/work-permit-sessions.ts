@@ -1,6 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { fail } from "@/lib/api";
-import { formatPermitNumber, PERMIT_KINDS, type PermitMember } from "@/lib/work-permits";
+import { formatPermitNumber, PERMIT_KINDS, personScopeError, type PermitMember } from "@/lib/work-permits";
 import { parsePermitMembers, permitInstant, permitText } from "@/lib/server/work-permits";
 
 export function validateSessionTime(value: Date, lowerBound: Date, now = new Date()) {
@@ -20,7 +20,8 @@ export function readSessionOpen(body: Record<string, unknown>) {
   if (!commanderId || !authorizerName || !openedAt) throw fail("Vui lòng chọn CHTT, nhập người cho phép và thời điểm mở lần làm việc");
   return { commanderId, authorizerName, openedAt, members, workerCount };
 }
-export async function resolveSessionMembers(tx: Prisma.TransactionClient, members: PermitMember[]) {
+/** `scope`: nhóm PCT nhà thầu — người mới vào (không có trong `keep`) phải đúng nhóm. */
+export async function resolveSessionMembers(tx: Prisma.TransactionClient, members: PermitMember[], scope?: { permitScope: string | null; keep?: Set<string> }) {
   const ids = members.flatMap(m => m.personId ? [m.personId] : []);
   const people = ids.length ? await tx.workPermitPerson.findMany({ where: { id: { in: ids }, isActive: true } }) : [];
   const byId = new Map(people.map(p => [p.id, p]));
@@ -28,6 +29,8 @@ export async function resolveSessionMembers(tx: Prisma.TransactionClient, member
     if (!m.personId) return m;
     const p = byId.get(m.personId);
     if (!p) throw fail(`Nhân viên ${m.name} không còn hoạt động trong danh bạ. Vui lòng chọn lại.`);
+    const scopeError = scope && !scope.keep?.has(p.id) ? personScopeError(p, scope.permitScope) : null;
+    if (scopeError) throw fail(scopeError);
     return { personId: p.id, code: p.code, name: p.name, company: p.company };
   });
 }

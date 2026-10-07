@@ -57,7 +57,7 @@ export function SessionAttendance({ permit, session, canExecute, size = "md", au
 
   if (!live && !tracked) return null;
   const large = size === "lg";
-  const scanner = scanning && <PermitCardScanner title="Quét vào / ra vị trí làm việc" unit={permit.teamName} companies={[permit.teamName, session.company].filter(Boolean)} permitId={permit.id}
+  const scanner = scanning && <PermitCardScanner title="Quét vào / ra vị trí làm việc" unit={permit.teamName} companies={[permit.teamName, session.company].filter(Boolean)} scope={permit.contractorScope} permitId={permit.id}
     existing={[...members.map(({ member }) => member), commander]}
     onAdd={member => record({ direction: "in", personId: member.personId })}
     onExisting={async person => person.id === session.commanderId

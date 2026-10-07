@@ -58,6 +58,15 @@ export const PERMIT_WORK_TYPE_CODES = { PLANNED: "KH", UNPLANNED: "ĐX", INCIDEN
 export type PermitWorkType = keyof typeof PERMIT_WORK_TYPES;
 export const PERMIT_CONTRACTOR_SCOPES = { SCTX: "SCTX", OVERHAUL: "Đại tu" } as const;
 export type PermitContractorScope = keyof typeof PERMIT_CONTRACTOR_SCOPES;
+/**
+ * Nhân sự nhà thầu chia hai nhóm SCTX / Đại tu (07/10/2026): PCT nhà thầu nhóm nào chỉ nhận CHTT và nhân viên nhóm đó.
+ * Trả câu báo lỗi khi lệch nhóm; phiếu chưa có nhóm (phiếu cũ) hoặc hồ sơ chưa có nhóm → không chặn.
+ */
+export function personScopeError(person: { name: string; scope?: string | null }, permitScope: string | null | undefined) {
+  if (!permitScope || !person.scope || person.scope === permitScope) return null;
+  const label = (scope: string) => PERMIT_CONTRACTOR_SCOPES[scope as PermitContractorScope] ?? scope;
+  return `${person.name} thuộc nhân sự ${label(person.scope)}, không dùng cho PCT nhà thầu ${label(permitScope)}. Đổi nhóm trong hồ sơ nhân sự nếu cần.`;
+}
 /** Phân loại đơn vị nhà thầu (danh bạ đơn vị): được cấp PCT nhóm SCTX / Đại tu. */
 export type PermitCompanyScopes = { sctx: boolean; overhaul: boolean };
 /** Đơn vị chưa tick nhóm nào = "Chưa phân loại". */
@@ -201,6 +210,8 @@ export interface PermitMember {
 export interface PermitPerson {
   id: string; code: string; name: string; company: string; phone: string;
   canCommand: boolean; isActive: boolean; version: number;
+  /** Nhóm nhân sự: SCTX (không cần ảnh) / Đại tu (đủ họ tên, ảnh, chức vụ). */
+  scope?: PermitContractorScope;
   /** Thông tin thẻ ra vào cổng & ATVSLĐ (đồng bộ từ Google Sheets); ảnh qua proxy S3. */
   birthYear?: string; jobTitle?: string; workPackage?: string; workPosition?: string; workArea?: string;
   trainingResult?: string; trainedAt?: string | null; cardIssuedAt?: string | null; cardExpiresAt?: string | null; photoUrl?: string | null;
