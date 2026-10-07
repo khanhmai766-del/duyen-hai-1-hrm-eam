@@ -1343,12 +1343,6 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
                 sử dụng — nghiệm thu — quyết toán.
               </p>
             )}
-            {chemicalByCode && (
-              <p className="note ghinhan">
-                <FlaskConical size={13} /> {selectedMaterial?.name} nhập định kỳ vào bồn nên đi <b>luồng hóa chất</b> như các
-                hóa chất khác: lý do chỉ Nhập / Khác, số lượng đề xuất không bị chặn theo tồn ERP.
-              </p>
-            )}
             <div className="frm-f">
               <button className="btn ghost" onClick={onClose}>Hủy</button>
               <button className="btn primary"
