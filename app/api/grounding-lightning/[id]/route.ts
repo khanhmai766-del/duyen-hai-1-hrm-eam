@@ -1,4 +1,4 @@
-import { requestedGroundingSlot } from "@/lib/grounding-inspection-schedule";
+import { isGroundingShift, requestedGroundingSlot } from "@/lib/grounding-inspection-schedule";
 import { requireGroundingInspectionSlot } from "@/lib/server/grounding-inspection-schedule";
 import { prisma } from "@/lib/prisma";
 import {
@@ -8,6 +8,7 @@ import {
   handle,
   ok,
   requireUser,
+  requireRole,
 } from "@/lib/api";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
 import {
@@ -45,8 +46,13 @@ export async function PATCH(req: Request, props: { params: Promise<{ id: string 
       include: includeItem,
     });
     if (!current) return fail("Không tìm thấy khu vực/thiết bị", 404);
+    if (!current.isActive) return fail("Mục tổng đã được tách nhỏ, chỉ dùng để xem lịch sử", 409);
     await assertGroundingScope(user, current);
     const body = (await req.json()) as Record<string, unknown>;
+    if ("assignedShift" in body) {
+      requireRole(user, ["ADMIN"]);
+      if (body.assignedShift !== null && !isGroundingShift(body.assignedShift)) return fail("Ca chỉ định không hợp lệ");
+    }
     if ("results" in body || ("note" in body && !["areaEquipment", "positionCode", "machine", "types"].some((key) => key in body))) {
       let slot;
       try { slot = requestedGroundingSlot(body); }
@@ -58,6 +64,7 @@ export async function PATCH(req: Request, props: { params: Promise<{ id: string 
       "positionCode",
       "machine",
       "types",
+      "assignedShift",
     ].some((key) => key in body);
     // Tính PHẠM VI trước — cùng lý do với route tạo mới (xem chú thích ở đó): bốn nhóm
     // "toàn quyền" bỏ qua thẳng cổng RBAC bên dưới, vì "Kỹ thuật viên"/"Trưởng ca" không
@@ -97,6 +104,11 @@ export async function PATCH(req: Request, props: { params: Promise<{ id: string 
     }
 
     const data: Record<string, unknown> = { updatedAt: new Date() };
+    if ("assignedShift" in body) {
+      data.assignedShift = body.assignedShift;
+      // Chỉ đổi tuyến ca không phải là sửa kết quả kiểm tra.
+      if (Object.keys(body).every((key) => key === "assignedShift")) data.updatedAt = current.updatedAt;
+    }
     if ("note" in body) data.note = String(body.note ?? "").trim() || null;
     if ("areaEquipment" in body) {
       const value = String(body.areaEquipment ?? "").trim();
@@ -114,7 +126,9 @@ export async function PATCH(req: Request, props: { params: Promise<{ id: string 
       data.position = positionLabelOf(code);
     }
     if (
-      ["areaEquipment", "positionCode", "machine"].some((key) => key in body)
+      ("areaEquipment" in body && String(data.areaEquipment) !== current.areaEquipment) ||
+      ("positionCode" in body && String(data.positionCode) !== current.positionCode) ||
+      ("machine" in body && String(data.machine) !== current.machine)
     ) {
       const areaEquipment = String(data.areaEquipment ?? current.areaEquipment);
       const positionCode = String(
@@ -124,6 +138,7 @@ export async function PATCH(req: Request, props: { params: Promise<{ id: string 
       const duplicate = await prisma.groundingLightningItem.findFirst({
         where: {
           id: { not: current.id },
+          isActive: true,
           positionCode,
           machine,
           areaEquipment: { equals: areaEquipment, mode: "insensitive" },
@@ -274,6 +289,7 @@ export async function DELETE(_req: Request, props: { params: Promise<{ id: strin
       },
     });
     if (!current) return fail("Không tìm thấy khu vực/thiết bị", 404);
+    if (!current.isActive) return fail("Mục đã thay thế chỉ dùng để xem lịch sử", 409);
     const keys = current.points.flatMap((point) =>
       point.attachments.map((attachment) => attachment.s3Key),
     );

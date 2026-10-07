@@ -18,8 +18,8 @@ export function assertGroundingInspectionSlot(
 
 export async function requireGroundingInspectionSlot(item: GroundingScheduleItem, requested?: GroundingSlot, now = new Date()) {
   const catalog = await prisma.groundingLightningItem.findMany({
-    where: { positionCode: item.positionCode ?? null, machine: item.machine },
-    select: { id: true, positionCode: true, position: true, machine: true, areaEquipment: true },
+    where: { isActive: true, positionCode: item.positionCode ?? null, machine: item.machine },
+    select: { id: true, positionCode: true, position: true, machine: true, areaEquipment: true, assignedShift: true },
   });
   return assertGroundingInspectionSlot(item, catalog, requested, now);
 }

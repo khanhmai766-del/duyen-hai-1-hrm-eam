@@ -6,6 +6,7 @@ import {
   assertGroundingScope,
 } from "@/lib/grounding-lightning";
 
+import { s3ProxyUrl } from "@/lib/s3";
 import { groundingRetentionWindow } from "@/lib/grounding-retention";
 import { runGroundingRetention } from "@/lib/server/grounding-retention";
 
@@ -32,6 +33,8 @@ export async function GET(_req: Request, props: { params: Promise<{ id: string }
       orderBy: { signedAt: "desc" },
       take: 50,
     });
-    return ok(rows);
+    return ok(rows.map((row) => ({ ...row, results: row.results.map((result) => ({
+      ...result, imageUrls: result.imageKeys.map((key) => s3ProxyUrl(key, "anh-kiem-tra.webp")),
+    })) })));
   });
 }

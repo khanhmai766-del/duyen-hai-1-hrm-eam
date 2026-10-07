@@ -74,3 +74,23 @@ test("Không nhận ngày không tồn tại, ngày nhập mơ hồ hoặc ca kh
     { inspectionDate: "2026-10-06" },
   ]) assert.throws(() => requestedGroundingSlot(input));
 });
+
+test("Ca admin chỉ định được giữ cố định; phần tự động bù vào ca ít nhiệm vụ, mỗi vị trí chỉ một ca", () => {
+  const rows = items(9).map((row, i) => ({ ...row, assignedShift: i < 4 ? "MORNING" : null }));
+  const plan = assignGroundingShifts(rows);
+  assert.ok(rows.slice(0, 4).every(row => plan.get(row.id)?.[0] === "MORNING"));
+  assert.deepEqual(SHIFT_TYPE_ORDER.map(shift => rows.filter(row => plan.get(row.id)?.[0] === shift).length), [4, 3, 2]);
+  assert.ok([...plan.values()].every(shifts => shifts.length === 1));
+  const reversed = assignGroundingShifts([...rows].reverse());
+  for (const row of rows) assert.deepEqual(plan.get(row.id), reversed.get(row.id));
+});
+
+test("Nhóm nhỏ và nhóm chỉ định hết không bị giao lặp; bỏ chỉ định trả về tuyến tự động", () => {
+  const rows = items(2).map(row => ({ ...row, assignedShift: "AFTERNOON" }));
+  const plan = assignGroundingShifts(rows);
+  assert.ok(rows.every(row => plan.get(row.id)?.[0] === "AFTERNOON"));
+  const automatic = assignGroundingShifts(rows.map(row => ({ ...row, assignedShift: null })));
+  assert.deepEqual(rows.map(row => automatic.get(row.id)), [["MORNING"], ["AFTERNOON"]]);
+  const single = { ...items(1)[0], assignedShift: "NIGHT" };
+  assert.deepEqual(assignGroundingShifts([single]).get(single.id), ["NIGHT"]);
+});

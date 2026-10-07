@@ -3,7 +3,7 @@
 import { GROUNDING_RETENTION_DESCRIPTION } from "@/lib/grounding-retention";
 /* eslint-disable @next/next/no-img-element -- ảnh riêng tư được phục vụ qua proxy S3 của ứng dụng */
 
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   Camera,
@@ -118,10 +118,10 @@ import {
 } from "@/hooks/useGroundingLightning";
 
 const CONTROL =
-  "h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-ink outline-none transition focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100 dark:border-slate-700 dark:bg-slate-900";
+  "h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-base sm:text-sm text-ink outline-none transition focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100 dark:border-slate-700 dark:bg-slate-900";
 /*
-  Số cột của bảng. Cột “Thao tác” chỉ hiện ở chế độ Sửa bảng (xem `tableEditing`) nên
-  `colSpan` của dòng rỗng và dòng chi tiết phải đếm theo, không thể là một hằng số.
+  Cột chọn và thao tác kiểm tra chỉ có trong ca hiện tại khi đủ quyền.
+  Dòng rỗng và chi tiết dùng số cột tương ứng.
 */
 const BASE_TABLE_COLUMNS = 8;
 
@@ -279,58 +279,20 @@ type RowActionContext = {
   onRemove: (item: GroundingItem) => void;
 };
 
-/**
- * Cụm nút của một dòng, dùng chung cho cả bảng (máy tính) lẫn thẻ (điện thoại) — trước
- * đây hai chỗ chép tay riêng nên quyền của nút Sửa và nút Xoá bị đổi chỗ cho nhau ở bản
- * bảng. Mốc đúng là phía máy chủ: sửa danh mục cần quyền `catalog`, xoá cần quyền `delete`.
- */
 function RowActions({ item, ctx }: { item: GroundingItem; ctx: RowActionContext }) {
-  return (
-    // Trong BẢNG thì không cho gãy dòng: năm nút xếp ba tầng làm hàng cao 113px, gấp ba
-    // mọi hàng khác — đúng thứ việc dựng lại bảng định dẹp đi; cột Thao tác đã đủ rộng.
-    // Trên điện thoại thì ngược lại, phải cho xuống dòng kẻo tràn khỏi bề ngang màn hình.
-    <div className="flex flex-wrap items-center justify-center gap-1 md:flex-nowrap">
-      {ctx.canManage && (
-        <Button size="sm" variant="soft" onClick={() => ctx.onInspect(item)}>
-          <ShieldCheck />
-          Kiểm tra
-        </Button>
-      )}
-      {/* KHÔNG còn nút "Xác nhận" trên từng dòng: việc đó nay do nút Lưu trên thanh
-          tiêu đề làm một lượt cho mọi dòng vừa sửa trong lượt Sửa bảng này. */}
-      <Button
-        size="icon"
-        variant="ghost"
-        title="Lịch sử"
-        className="size-8"
-        onClick={() => ctx.onHistory(item)}
-      >
-        <History />
-      </Button>
-      {ctx.canCatalog && (
-        <Button
-          size="icon"
-          variant="ghost"
-          title="Sửa danh mục"
-          className="size-8"
-          onClick={() => ctx.onEdit(item)}
-        >
-          <Pencil />
-        </Button>
-      )}
-      {ctx.canDelete && (
-        <Button
-          size="icon"
-          variant="ghost"
-          title="Xoá"
-          className="size-8 text-rose-600"
-          onClick={() => ctx.onRemove(item)}
-        >
-          <Trash2 />
-        </Button>
-      )}
-    </div>
-  );
+  return ctx.canManage ? <Button className="h-10" variant="soft" onClick={() => ctx.onInspect(item)}><ShieldCheck />Kiểm tra</Button> : null;
+}
+
+function CatalogActions({ item, ctx }: { item: GroundingItem; ctx: RowActionContext }) {
+  if (!ctx.canCatalog && !ctx.canDelete) return null;
+  return <DropdownMenu>
+    <DropdownMenuTrigger asChild><Button variant="outline" className="h-10"><Pencil className="size-4" />Danh mục<ChevronDown className="size-4" /></Button></DropdownMenuTrigger>
+    <DropdownMenuContent align="end">
+      <DropdownMenuLabel>Quản lý danh mục</DropdownMenuLabel>
+      {ctx.canCatalog && <DropdownMenuItem onSelect={() => ctx.onEdit(item)}><Pencil className="mr-2 size-4" />Sửa danh mục</DropdownMenuItem>}
+      {ctx.canDelete && <><DropdownMenuSeparator /><DropdownMenuItem onSelect={() => ctx.onRemove(item)} className="text-rose-700"><Trash2 className="mr-2 size-4" />Xoá khỏi danh mục</DropdownMenuItem></>}
+    </DropdownMenuContent>
+  </DropdownMenu>;
 }
 
 /**
@@ -372,6 +334,7 @@ type CatalogForm = {
   machine: string;
   types: GroundingType[];
   note: string;
+  assignedShift: string;
 };
 /** Phạm vi cương vị của người đang mở hộp thoại — trả về nguyên văn từ API (xem
  *  groundingScopeWithPermissions ở máy chủ), KHÔNG suy từ danh sách `positions` trong
@@ -384,6 +347,7 @@ const EMPTY_FORM: CatalogForm = {
   machine: "COMMON",
   types: ["GROUNDING"],
   note: "",
+  assignedShift: "AUTO",
 };
 
 function CatalogDialog({
@@ -392,11 +356,13 @@ function CatalogDialog({
   item,
   canDelete,
   scope,
+  canAssignShift,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   item: GroundingItem | null;
   canDelete: boolean;
+  canAssignShift: boolean;
   /** null = chưa tải kịp phạm vi; xử lý như bị giới hạn (khoá ô) cho an toàn. */
   scope: GroundingScope | null;
 }) {
@@ -413,6 +379,7 @@ function CatalogDialog({
         machine: item.machine,
         types: item.points.map((point) => point.type),
         note: item.note ?? "",
+        assignedShift: item.assignedShift ?? "AUTO",
       }
     : { ...EMPTY_FORM, positionCode: positionLocked ? (scope?.positionCode ?? "") : "" };
   const [form, setForm] = useState<CatalogForm>(initial);
@@ -449,8 +416,10 @@ function CatalogDialog({
   };
   const submit = async () => {
     try {
-      if (item) await update.mutateAsync({ id: item.id, ...form });
-      else await create.mutateAsync(form);
+      const { assignedShift, ...fields } = form;
+      const payload = { ...fields, ...(canAssignShift ? { assignedShift: assignedShift === "AUTO" ? null : assignedShift } : {}) };
+      if (item) await update.mutateAsync({ id: item.id, ...payload });
+      else await create.mutateAsync(payload);
       toast.success(
         item
           ? "Đã cập nhật danh mục"
@@ -592,6 +561,13 @@ function CatalogDialog({
               onChange={(e) => setForm({ ...form, note: e.target.value })}
             />
           </Field>
+          {canAssignShift && <Field label="Ca kiểm tra" span>
+            <select aria-label="Ca kiểm tra" className={CONTROL} value={form.assignedShift} onChange={(e) => setForm({ ...form, assignedShift: e.target.value })}>
+              <option value="AUTO">Tự chia đều</option>
+              {SHIFT_TYPE_ORDER.map((shift) => <option key={shift} value={shift}>Ca {SHIFT_TYPE[shift].label.toLocaleLowerCase("vi")}</option>)}
+            </select>
+            <p className="mt-1 text-xs text-muted-foreground">Chỉ định ca phù hợp cho khu vực đặc thù. Các khu vực tự động được chia vào các ca còn ít nhiệm vụ hơn.</p>
+          </Field>}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
@@ -637,17 +613,17 @@ function Field({
 
 function InspectionDialog({
   item,
-  onSaved,
   onClose,
 }: {
   item: GroundingItem | null;
-  /** Báo lên trang là khu vực này vừa ghi kết quả — nút Lưu sẽ xác nhận đúng các dòng đó. */
-  onSaved?: (id: string) => void;
   onClose: () => void;
 }) {
   const update = useUpdateGroundingItem();
   const upload = useUploadGroundingImage();
   const removeImage = useDeleteGroundingImage();
+  const sign = useSignGroundingItem();
+  const [saving, setSaving] = useState(false);
+  const uploadedFiles = useRef(new Map<File, string>());
   const [note, setNote] = useState(item?.note ?? "");
   /*
     Ảnh vừa xoá trong lượt mở hộp thoại này.
@@ -675,6 +651,15 @@ function InspectionDialog({
   );
   if (!item) return null;
   const save = async () => {
+    if (saving) return;
+    if (item.points.some((point) => results[point.type].status === "UNCHECKED")) {
+      toast.error("Chọn kết quả cho tất cả hạng mục trước khi xác nhận"); return;
+    }
+    if (item.points.some((point) => results[point.type].status === "DEFECT" && !results[point.type].defectDescription.trim())) {
+      toast.error("Nhập nội dung khiếm khuyết trước khi xác nhận"); return;
+    }
+    setSaving(true);
+    let resultSaved = false;
     try {
       const saved = await update.mutateAsync({
         id: item.id,
@@ -687,33 +672,37 @@ function InspectionDialog({
           defectDescription: results[point.type].defectDescription,
         })),
       });
+      resultSaved = true;
       for (const point of saved.points)
-        for (const file of results[point.type]?.files ?? [])
-          await upload.mutateAsync({
+        for (const file of results[point.type]?.files ?? []) {
+          if (uploadedFiles.current.has(file)) continue;
+          const attachment = await upload.mutateAsync({
             itemId: item.id,
             pointId: point.id,
             file,
           });
-      toast.success("Đã lưu kết quả kiểm tra");
-      onSaved?.(item.id);
+          uploadedFiles.current.set(file, attachment.id);
+        }
+      await sign.mutateAsync({ id: item.id, inspectionDate: item.inspectionDate, shiftType: item.inspectionShift });
+      toast.success("Đã lưu và xác nhận kiểm tra");
       onClose();
     } catch (error) {
       toast.error(
-        error instanceof Error ? error.message : "Không lưu được kết quả",
+        `${resultSaved ? "Kết quả đã lưu nhưng chưa xác nhận. " : ""}${error instanceof Error ? error.message : "Không lưu được kết quả"}`,
       );
-    }
+    } finally { setSaving(false); }
   };
   return (
-    <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-3xl">
-        <DialogHeader>
+    <Dialog open onOpenChange={(open) => !open && !saving && onClose()}>
+      <DialogContent className="flex max-h-[90dvh] max-w-3xl flex-col overflow-hidden">
+        <DialogHeader className="shrink-0">
           <DialogTitle>Cập nhật kết quả kiểm tra</DialogTitle>
           <DialogDescription>
             {item.areaEquipment} · {item.position} ·{" "}
             {machineLabel(item.machine)}
           </DialogDescription>
         </DialogHeader>
-        <div className="space-y-4">
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto pr-1" inert={saving || removeImage.isPending}>
           {item.points.map((point) => {
             const value = results[point.type];
             const attachments = point.attachments.filter(
@@ -843,7 +832,7 @@ function InspectionDialog({
                             type="button"
                             title="Xoá ảnh"
                             onClick={async () => {
-                              if (!confirm("Xoá ảnh này khỏi server S3?"))
+                              if (!confirm("Xoá ảnh kiểm tra này?"))
                                 return;
                               try {
                                 await removeImage.mutateAsync(image.id);
@@ -876,16 +865,15 @@ function InspectionDialog({
                           </span>
                           <button
                             type="button"
-                            title="Gỡ ảnh chưa tải lên"
-                            onClick={() =>
-                              setResults({
-                                ...results,
-                                [point.type]: {
-                                  ...value,
-                                  files: value.files.filter((_, i) => i !== index),
-                                },
-                              })
-                            }
+                            title="Gỡ ảnh"
+                            onClick={async () => {
+                              try {
+                                const attachmentId = uploadedFiles.current.get(file);
+                                if (attachmentId) await removeImage.mutateAsync(attachmentId);
+                                uploadedFiles.current.delete(file);
+                                setResults((old) => ({ ...old, [point.type]: { ...old[point.type], files: old[point.type].files.filter((_, i) => i !== index) } }));
+                              } catch (error) { toast.error(error instanceof Error ? error.message : "Không gỡ được ảnh"); }
+                            }}
                             className="absolute -right-1 -top-1 grid size-6 place-items-center rounded-full bg-slate-600 text-white shadow"
                           >
                             <X className="size-3.5" />
@@ -894,8 +882,7 @@ function InspectionDialog({
                       ))}
                     </div>
                     <p className="mt-2 text-xs text-rose-700">
-                      Chuyển hạng mục sang “Bình thường” sẽ xóa ảnh của hạng mục
-                      này khỏi S3 khi lưu.
+                      Chuyển sang “Bình thường” sẽ xoá ảnh khi lưu.
                     </p>
                   </div>
                 )}
@@ -911,21 +898,48 @@ function InspectionDialog({
             />
           </Field>
         </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>
+        <DialogFooter className="shrink-0 border-t pt-3">
+          <Button variant="outline" onClick={onClose} disabled={saving}>
             Huỷ
           </Button>
           <Button
             onClick={save}
-            disabled={update.isPending || upload.isPending}
+            disabled={saving || removeImage.isPending}
           >
             <Save />
-            Lưu kết quả
+            {saving ? "Đang lưu và xác nhận…" : "Lưu và xác nhận"}
           </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
   );
+}
+
+function ShiftAssignmentDialog({ item, onClose }: { item: GroundingItem; onClose: () => void }) {
+  const update = useUpdateGroundingItem();
+  const [shift, setShift] = useState(item.assignedShift ?? "AUTO");
+  const save = async () => {
+    try {
+      await update.mutateAsync({ id: item.id, assignedShift: shift === "AUTO" ? null : shift });
+      toast.success("Đã cập nhật ca kiểm tra");
+      onClose();
+    } catch (error) { toast.error(error instanceof Error ? error.message : "Không lưu được ca kiểm tra"); }
+  };
+  return <Dialog open onOpenChange={(open) => !open && !update.isPending && onClose()}>
+    <DialogContent className="max-w-lg">
+      <DialogHeader><DialogTitle>Chọn ca kiểm tra</DialogTitle><DialogDescription>{item.areaEquipment}</DialogDescription></DialogHeader>
+      <div className="space-y-3">
+        <label htmlFor="grounding-assigned-shift" className="block text-sm font-semibold">Ca kiểm tra</label>
+        <select id="grounding-assigned-shift" className={CONTROL} value={shift} onChange={(e) => setShift(e.target.value)} disabled={update.isPending}>
+          <option value="AUTO">Tự chia đều</option>
+          {SHIFT_TYPE_ORDER.map((value) => <option key={value} value={value}>Ca {SHIFT_TYPE[value].label.toLocaleLowerCase("vi")} ({GROUNDING_SHIFT_HOURS[value]})</option>)}
+        </select>
+        <p className="text-sm text-muted-foreground">Khu vực này chỉ được giao cho ca đã chọn. Chọn Tự chia đều để hệ thống cân bằng với các khu vực còn lại của cùng cương vị và tổ máy.</p>
+        <p className="text-sm text-amber-800">Thay đổi áp dụng ngay và có thể đổi tuyến của các khu vực tự động. Lượt xác nhận cũ vẫn giữ trong lịch sử; khu vực chuyển sang ca khác cần xác nhận trong ca mới.</p>
+      </div>
+      <DialogFooter><Button variant="outline" onClick={onClose} disabled={update.isPending}>Huỷ</Button><Button onClick={save} disabled={update.isPending}><Save />Lưu ca kiểm tra</Button></DialogFooter>
+    </DialogContent>
+  </Dialog>;
 }
 
 function HistoryDialog({
@@ -935,16 +949,25 @@ function HistoryDialog({
   item: GroundingItem | null;
   onClose: () => void;
 }) {
-  const history = useGroundingHistory(item?.id ?? null);
+  const [viewOriginal, setViewOriginal] = useState(false);
+  const history = useGroundingHistory(viewOriginal ? item?.splitFrom?.id ?? null : item?.id ?? null);
   if (!item) return null;
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-3xl">
         <DialogHeader>
           <DialogTitle>Lịch sử kiểm tra trong 1 tháng 15 ngày</DialogTitle>
-          <DialogDescription>{item.areaEquipment}</DialogDescription>
+          <DialogDescription>{viewOriginal ? `Mục tổng trước khi tách: ${item.splitFrom?.areaEquipment}` : item.areaEquipment}</DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
+          {item.splitFrom && (
+            <div className="space-y-2 rounded-xl border border-cyan-200 bg-cyan-50 p-3">
+              <p className="text-sm text-cyan-900">Vị trí này được tách từ {item.splitFrom.areaEquipment}. Lịch sử mục tổng được giữ riêng, không tính là xác nhận cho vị trí mới.</p>
+              <Button variant="outline" className="h-auto min-h-10 whitespace-normal text-left" onClick={() => setViewOriginal((value) => !value)}>
+                {viewOriginal ? "Xem lịch sử vị trí này" : "Xem lịch sử mục tổng trước khi tách"}
+              </Button>
+            </div>
+          )}
           {history.isLoading && (
             <div className="py-8 text-center text-sm text-muted-foreground">
               Đang tải lịch sử…
@@ -978,6 +1001,11 @@ function HistoryDialog({
                       <span>{GROUNDING_TYPE_LABEL[result.type]}</span>
                       <StatusPill status={result.status} />
                     </div>
+                    {!!result.imageUrls?.length && (
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {result.imageUrls.map((url, index) => <a key={url} href={url} target="_blank" rel="noreferrer"><img src={url} alt={`Ảnh kiểm tra ${index + 1}`} className="size-20 rounded-lg border object-cover" /></a>)}
+                      </div>
+                    )}
                     {result.defectDescription && (
                       <p className="whitespace-pre-line text-sm text-rose-700">
                         {result.defectDescription}
@@ -1043,7 +1071,10 @@ export default function GroundingLightningPage() {
   const scope: GroundingScope | null = query.data?.meta?.scope ?? null;
   const selectedSlot: GroundingSlot | undefined = query.data?.meta?.selectedSlot;
   const currentSlot: GroundingSlot | undefined = query.data?.meta?.currentSlot;
-  const isOverview = query.data?.meta?.viewMode === "ALL";
+  const isArchived = query.data?.meta?.viewMode === "ARCHIVED";
+  const canAssignShift = Boolean(query.data?.meta?.canAssignShift);
+  const [shiftItem, setShiftItem] = useState<GroundingItem | null>(null);
+  const isOverview = isArchived || query.data?.meta?.viewMode === "ALL";
   const isCurrentSlot = !isOverview && Boolean(selectedSlot && currentSlot && sameGroundingSlot(selectedSlot, currentSlot));
   const shiftSummary: Array<{ shiftType: ShiftTypeKey; total: number; confirmed: number; pending: number }> = query.data?.meta?.shifts ?? [];
   const serverTime = query.data?.meta?.serverTime;
@@ -1063,11 +1094,11 @@ export default function GroundingLightningPage() {
   // "personal" mở từ 2026-09-12: người giữ một cương vị được thêm/sửa danh mục TRONG
   // PHẠM VI cương vị đó — máy chủ và CatalogDialog cùng khoá ô Cương vị khi phạm vi
   // không phải "toàn phân xưởng" (xem prop `scope` của CatalogDialog).
-  const canCatalog =
+  const canCatalog = !isArchived && (
     can("grounding-lightning-catalog", ["personal", "manage", "full"]) ||
-    Boolean(scope?.all);
-  const canDelete =
-    can("grounding-lightning-delete", ["manage", "full"]) || Boolean(scope?.all);
+    Boolean(scope?.all));
+  const canDelete = !isArchived && (
+    can("grounding-lightning-delete", ["manage", "full"]) || Boolean(scope?.all));
   const [catalog, setCatalog] = useState<{
     open: boolean;
     item: GroundingItem | null;
@@ -1088,6 +1119,7 @@ export default function GroundingLightningPage() {
     `needsSignature`, thứ không tồn tại trong bộ lọc server. Lọc thêm một lớp Ở CLIENT
     trên chính `items` đã tải, giữ ý nghĩa đúng như số đang hiện trên từng thẻ.
   */
+  const [pendingOnly, setPendingOnly] = useState(true);
   const [activeKpi, setActiveKpi] = useState<GroundingKpi | null>(null);
   const toggleKpi = (kpi: GroundingKpi) =>
     setActiveKpi((old) => (old === kpi ? null : kpi));
@@ -1104,31 +1136,16 @@ export default function GroundingLightningPage() {
   // Ảnh đang xem trong hộp phóng to — { urls, index } chứ không chỉ index, vì mỗi khu
   // vực có một danh sách ảnh riêng.
   const [lightbox, setLightbox] = useState<{ urls: string[]; index: number } | null>(null);
-  /*
-    CHẾ ĐỘ SỬA BẢNG — cùng khuôn với sổ TBYCNN và trang PCCC.
-
-    Xem thường thì cột "Thao tác" không hiện: nó rộng 320px và hầu hết thời gian người ta
-    vào đây chỉ để ĐỌC. Bật Sửa bảng mới mở cột đó ra, đồng thời cặp Huỷ / Lưu thay chỗ
-    nút Chỉnh sửa.
-
-    `touchedIds` là các khu vực vừa ghi kết quả trong lượt này. `selectedIds` là các
-    vị trí bình thường được người kiểm tra chọn rõ ràng. Nút Lưu xác nhận cả hai nhóm,
-    không xác nhận tự động những dòng chưa được chọn hoặc cập nhật.
-  */
-  const [tableEditing, setTableEditing] = useState(false);
-  const [touchedIds, setTouchedIds] = useState<string[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [confirming, setConfirming] = useState(false);
-  const slotKey = selectedSlot ? `${isOverview ? "ALL" : "SHIFT"}/${selectedSlot.date}/${selectedSlot.shiftType}` : null;
+  const slotKey = selectedSlot ? `${isArchived ? "ARCHIVED" : isOverview ? "ALL" : "SHIFT"}/${selectedSlot.date}/${selectedSlot.shiftType}` : null;
   const [editingSlotKey, setEditingSlotKey] = useState<string | null>(null);
   if (!query.isPlaceholderData && slotKey !== editingSlotKey) {
     setEditingSlotKey(slotKey);
-    setTouchedIds([]);
     setSelectedIds([]);
-    setTableEditing(false);
     setInspection(null);
   }
-  const tableColumns = BASE_TABLE_COLUMNS + (tableEditing ? 2 : 0);
+  const tableColumns = BASE_TABLE_COLUMNS + (canManage ? 2 : 0);
   const toggleSelection = (id: string) => setSelectedIds((old) =>
     old.includes(id) ? old.filter((value) => value !== id) : [...old, id],
   );
@@ -1169,8 +1186,8 @@ export default function GroundingLightningPage() {
     chưa chọn cột nào để sổ vẫn chạy theo tuyến đi hiện trường.
   */
   const kpiFiltered = useMemo(
-    () => (activeKpi ? items.filter((item) => matchesKpi(item, activeKpi)) : items),
-    [items, activeKpi],
+    () => items.filter((item) => (!isCurrentSlot || !pendingOnly || item.needsSignature) && (!activeKpi || matchesKpi(item, activeKpi))),
+    [items, activeKpi, isCurrentSlot, pendingOnly],
   );
   const sorted = useMemo(() => {
     if (sort.key === SOURCE_ORDER) return kpiFiltered;
@@ -1207,28 +1224,25 @@ export default function GroundingLightningPage() {
     });
   }, [kpiFiltered, sort]);
   const pageCount = Math.max(1, Math.ceil(sorted.length / pageSize));
+  if (page > pageCount) setPage(pageCount);
   const pageRows = useMemo(
     () => sorted.slice((page - 1) * pageSize, page * pageSize),
     [sorted, page, pageSize],
   );
   // Đổi bộ lọc / cách sắp xếp / cỡ trang thì trang hiện tại không còn nghĩa gì.
   // (filters/sort/activeKpi là state — cùng object giữa các lần render, so bằng !== an toàn.)
-  const [pageResetKey, setPageResetKey] = useState({ filters, debouncedSearch, sort, pageSize, activeKpi });
+  const [pageResetKey, setPageResetKey] = useState({ filters, debouncedSearch, sort, pageSize, activeKpi, pendingOnly });
   if (
     pageResetKey.filters !== filters ||
     pageResetKey.debouncedSearch !== debouncedSearch ||
     pageResetKey.sort !== sort ||
     pageResetKey.pageSize !== pageSize ||
-    pageResetKey.activeKpi !== activeKpi
+    pageResetKey.activeKpi !== activeKpi || pageResetKey.pendingOnly !== pendingOnly
   ) {
-    if (pageResetKey.filters !== filters || pageResetKey.debouncedSearch !== debouncedSearch || pageResetKey.activeKpi !== activeKpi) {
+    if (pageResetKey.filters !== filters || pageResetKey.debouncedSearch !== debouncedSearch || pageResetKey.activeKpi !== activeKpi || pageResetKey.pendingOnly !== pendingOnly) {
       setSelectedIds([]);
-      if (pageResetKey.filters.shiftType !== filters.shiftType || pageResetKey.filters.inspectionDate !== filters.inspectionDate) {
-        setTouchedIds([]);
-        setTableEditing(false);
-      }
     }
-    setPageResetKey({ filters, debouncedSearch, sort, pageSize, activeKpi });
+    setPageResetKey({ filters, debouncedSearch, sort, pageSize, activeKpi, pendingOnly });
     setPage(1);
   }
   const metrics = useMemo(
@@ -1267,21 +1281,6 @@ export default function GroundingLightningPage() {
     onEdit: (item) => setCatalog({ open: true, item }),
     onRemove: doDelete,
   };
-  const beginEdit = () => {
-    setTouchedIds([]);
-    setSelectedIds([]);
-    setTableEditing(true);
-  };
-  /*
-    Huỷ chỉ ĐÓNG chế độ sửa, KHÔNG hoàn tác kết quả đã ghi: hộp "Kiểm tra" lưu thẳng vào
-    CSDL ngay lúc bấm (nó còn tải ảnh lên S3), nên không có bản nháp nào để bỏ đi. Thứ
-    Huỷ bỏ qua là bước XÁC NHẬN — dòng vừa sửa ở lại trạng thái chờ xác nhận.
-  */
-  const cancelEdit = () => {
-    setTouchedIds([]);
-    setSelectedIds([]);
-    setTableEditing(false);
-  };
   const normalPageIds = pageRows.filter(isNormalItem).map((item) => item.id);
   // Chỉ giữ lựa chọn còn hiển thị trong bộ lọc và vẫn hoàn toàn bình thường.
   const eligibleSelectedIds = selectedIds.filter((id) =>
@@ -1296,7 +1295,6 @@ export default function GroundingLightningPage() {
         await sign.mutateAsync({ id, normalOnly: true, inspectionDate: selectedSlot?.date, shiftType: selectedSlot?.shiftType });
         completed += 1;
         setSelectedIds((old) => old.filter((value) => value !== id));
-        setTouchedIds((old) => old.filter((value) => value !== id));
       }
       toast.success(`Đã xác nhận ${completed} vị trí bình thường`);
       return true;
@@ -1309,86 +1307,14 @@ export default function GroundingLightningPage() {
       setConfirming(false);
     }
   };
-  const saveEdits = async () => {
-    if (eligibleSelectedIds.length && !await confirmSelected()) return;
-    const remainingIds = touchedIds.filter((id) => !eligibleSelectedIds.includes(id));
-    if (remainingIds.length === 0) {
-      setSelectedIds([]);
-      setTableEditing(false);
-      return;
-    }
-    try {
-      // Tuần tự chứ không song song: mỗi lượt ký là một request ghi, bắn 200 request cùng
-      // lúc là tự làm nghẽn chính mình và lỗi giữa chừng thì không biết đã ký tới đâu.
-      for (const id of remainingIds) {
-        await sign.mutateAsync({ id, inspectionDate: selectedSlot?.date, shiftType: selectedSlot?.shiftType });
-        setTouchedIds((old) => old.filter((value) => value !== id));
-      }
-      toast.success(`Đã xác nhận ${remainingIds.length} khu vực/thiết bị`);
-      setTouchedIds([]);
-      setTableEditing(false);
-    } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "Không xác nhận được",
-      );
-    }
-  };
   return (
-    <div className="relative min-h-[calc(100vh-7rem)] space-y-5 pb-10">
+    <div className="relative min-h-[calc(100vh-7rem)] space-y-5 pb-32">
       <div className="pointer-events-none absolute right-0 -top-12 -z-10 size-72 rounded-full bg-cyan-200/20 blur-3xl" />
       <PageHeader
         title="TIẾP ĐỊA & CHỐNG SÉT"
         mobileTitle="TIẾP ĐỊA & CHỐNG SÉT"
       >
         <>
-          {/* Một cửa "Chỉnh sửa" như sổ TBYCNN và trang PCCC; đang mở khoá thì đổi thành
-              cặp Huỷ / Lưu. */}
-          {canManage &&
-            (tableEditing ? (
-              <>
-                <Button
-                  variant="outline"
-                  size="toolbar"
-                  onClick={cancelEdit}
-                  disabled={sign.isPending || confirming || query.isFetching}
-                >
-                  Huỷ
-                </Button>
-                <Button size="toolbar" onClick={saveEdits} disabled={sign.isPending || confirming || query.isFetching}>
-                  <Save className={cn("mr-1.5 size-4", sign.isPending && "animate-pulse")} />
-                  {sign.isPending
-                    ? "Đang lưu…"
-                    : touchedIds.length + eligibleSelectedIds.length > 0
-                      ? `Lưu ${new Set([...touchedIds, ...eligibleSelectedIds]).size} dòng`
-                      : "Lưu"}
-                </Button>
-              </>
-            ) : (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="soft" size="toolbar" className="group">
-                    <Pencil className="mr-1.5 size-4 text-sky-600" />
-                    Chỉnh sửa
-                    <ChevronDown className="ml-1 size-3.5 text-slate-400 transition-transform duration-200 group-data-[state=open]:rotate-180" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-[268px]">
-                  <DropdownMenuLabel className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
-                    Tiếp địa &amp; chống sét
-                  </DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onSelect={beginEdit} className="gap-2">
-                    <Pencil className="size-4 text-sky-600" />
-                    <span className="min-w-0">
-                      <span className="block font-medium">Sửa bảng</span>
-                      <span className="block text-[11px] text-muted-foreground">
-                        Mở cột thao tác, xác nhận một lượt khi bấm Lưu
-                      </span>
-                    </span>
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            ))}
           {/* Bộ lọc gom vào MỘT nút, bấm mới sổ bảng chọn — cùng khuôn với trang PCCC và
               sổ TBYCNN, và trả lại chiều cao cho bảng thay vì một hàng ô lọc luôn chiếm
               chỗ dù hầu hết thời gian không dùng tới. */}
@@ -1531,8 +1457,8 @@ export default function GroundingLightningPage() {
         <section aria-label="Lịch kiểm tra theo ca" className="space-y-3 rounded-2xl border border-slate-200 bg-white p-3 sm:p-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <h2 className="font-bold text-ink">Kiểm tra hằng ngày theo cương vị</h2>
-              <p className="text-sm text-muted-foreground">Mỗi ca kiểm tra và xác nhận riêng các khu vực được giao.</p>
+              <h2 className="font-bold text-ink">{isArchived ? "Danh mục cũ đã thay thế" : "Kiểm tra hằng ngày theo cương vị"}</h2>
+              <p className="text-sm text-muted-foreground">{isArchived ? "Các mục này chỉ lưu lịch sử, không thuộc danh sách kiểm tra hằng ngày." : "Mỗi ca kiểm tra và xác nhận riêng các khu vực được giao."}</p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <Label htmlFor="grounding-day">Ngày kiểm tra</Label>
@@ -1546,11 +1472,17 @@ export default function GroundingLightningPage() {
               </Button>
             </div>
           </div>
-          <Button variant={isOverview ? "default" : "outline"} className="h-10 w-full sm:w-auto"
-            aria-pressed={isOverview} disabled={confirming || sign.isPending}
+          <Button variant={isOverview && !isArchived ? "default" : "outline"} className="h-10 w-full sm:w-auto"
+            aria-pressed={isOverview && !isArchived} disabled={confirming || sign.isPending}
             onClick={() => setFilters((old) => ({ ...old, shiftType: "ALL", inspectionDate: undefined }))}>
             Tất cả thiết bị
           </Button>
+          {process.env.NODE_ENV === "development" && <Button variant={isArchived ? "default" : "outline"} className="h-10 w-full sm:ml-2 sm:w-auto"
+            aria-pressed={isArchived} disabled={confirming || sign.isPending}
+            onClick={() => setFilters((old) => ({ ...old, shiftType: "ARCHIVED", inspectionDate: undefined }))}>
+            Mục cũ đã thay thế
+          </Button>}
+          {!isArchived && <>
           <div className="grid grid-cols-3 gap-2">
             {SHIFT_TYPE_ORDER.map((shiftType) => {
               const summary = shiftSummary.find((entry) => entry.shiftType === shiftType);
@@ -1584,6 +1516,7 @@ export default function GroundingLightningPage() {
             Cả ngày: đã xác nhận {shiftSummary.reduce((total, shift) => total + shift.confirmed, 0)}/{shiftSummary.reduce((total, shift) => total + shift.total, 0)} khu vực
           </p>
           <p className="text-xs text-muted-foreground">Mỗi khu vực được giao cho một ca trong ngày. Nhóm có ít khu vực có thể có ca không được giao nhiệm vụ.</p>
+          </>}
           <p className="text-xs text-muted-foreground">{GROUNDING_RETENTION_DESCRIPTION}</p>
         </section>
       )}
@@ -1630,14 +1563,18 @@ export default function GroundingLightningPage() {
             compact
             labelTop
             texture="ticks"
-            label="Chờ xác nhận"
+            label={isArchived ? "Chờ xác nhận (không áp dụng)" : "Chờ xác nhận"}
             value={metrics.unsigned}
             icon={FileClock}
             tint="amber"
           />
         </KpiCard>
       </div>
-      {tableEditing && canManage && (
+      {isCurrentSlot && <div className="flex flex-wrap gap-2" aria-label="Phạm vi tuyến ca">
+        <Button variant={pendingOnly ? "default" : "outline"} className="h-10" aria-pressed={pendingOnly} onClick={() => setPendingOnly(true)}>Chưa xác nhận ({metrics.unsigned})</Button>
+        <Button variant={!pendingOnly ? "default" : "outline"} className="h-10" aria-pressed={!pendingOnly} onClick={() => setPendingOnly(false)}>Toàn bộ tuyến ca ({metrics.total})</Button>
+      </div>}
+      {canManage && (
         <div className="space-y-3 rounded-xl border border-emerald-200 bg-emerald-50/60 p-3">
           <p className="text-sm text-ink">
             Chọn các vị trí đã kiểm tra có toàn bộ hạng mục bình thường để xác nhận cùng lúc.
@@ -1652,11 +1589,6 @@ export default function GroundingLightningPage() {
               onClick={() => setSelectedIds([])}>Bỏ chọn</Button>
             <span className="text-sm font-medium" aria-live="polite">Đã chọn {eligibleSelectedIds.length} vị trí</span>
           </div>
-          <Button className="h-14 w-full sm:h-10 sm:w-auto" onClick={confirmSelected}
-            disabled={confirming || sign.isPending || query.isFetching || !eligibleSelectedIds.length}>
-            <CheckCircle2 className="mr-2 size-4" />
-            {confirming ? "Đang xác nhận…" : `Xác nhận ${eligibleSelectedIds.length} vị trí bình thường`}
-          </Button>
         </div>
       )}
       <div inert={confirming}>
@@ -1681,13 +1613,13 @@ export default function GroundingLightningPage() {
       >
         <div className="hidden md:block">
           <Table
-            className={tableEditing ? "min-w-[1520px]" : "min-w-[1200px]"}
+            className={canManage ? "min-w-[1520px]" : "min-w-[1200px]"}
             wrapperClassName={TABLE_SCROLLER}
           >
             <TableHeader>
               <TableRow className={TR_HEAD}>
                 <TableHead className={cn(TH_NAVY, TH_EXPAND)} />
-                {tableEditing && <TableHead className={cn(TH_NAVY, "w-12 text-center")}>Chọn</TableHead>}
+                {canManage && <TableHead className={cn(TH_NAVY, "w-12 text-center")}>Chọn</TableHead>}
                 <TableHead className={cn(TH_NAVY, "w-[150px]")}>
                   <SortHeader label="Cương vị" sortKey="position" sort={sort} onSort={toggleSort} />
                 </TableHead>
@@ -1716,7 +1648,7 @@ export default function GroundingLightningPage() {
                 <TableHead className={cn(TH_NAVY, "w-[200px]")}>
                   <SortHeader label="Người xác nhận" sortKey="signed" sort={sort} onSort={toggleSort} />
                 </TableHead>
-                {tableEditing && (
+                {canManage && (
                   <TableHead className={cn(TH_NAVY, "w-[320px]")}>
                     <PlainHeader label="Thao tác" />
                   </TableHead>
@@ -1728,22 +1660,17 @@ export default function GroundingLightningPage() {
                 <TableRow>
                   <TableCell colSpan={tableColumns} className="py-14 text-center">
                     <RadioTower className="mx-auto mb-3 size-10 text-slate-300" />
-                    <b className="text-ink">Chưa có dữ liệu phù hợp</b>
+                    <b className="text-ink">{isCurrentSlot && pendingOnly && items.length && !metrics.unsigned ? "Đã xác nhận đủ tuyến ca" : "Chưa có dữ liệu phù hợp"}</b>
                     <p className="mt-1 text-sm text-muted-foreground">
-                      Chọn ca khác hoặc thay đổi bộ lọc để xem khu vực được giao.
+                      Chọn Toàn bộ tuyến ca để xem cả vị trí đã xác nhận, hoặc thay đổi bộ lọc.
                     </p>
                   </TableCell>
                 </TableRow>
               )}
               {pageRows.map((item, index) => {
                 const expanded = expandedId === item.id;
-                // Dòng vừa ghi kết quả trong lượt này tô vàng — nhìn một cái là biết bấm
-                // Lưu sẽ xác nhận những dòng nào, không phải nhớ mình vừa bấm ở đâu.
-                const touched = touchedIds.includes(item.id);
                 const rowBg = eligibleSelectedIds.includes(item.id)
                   ? "bg-emerald-50"
-                  : touched
-                  ? "bg-amber-50"
                   : rowBackground({ index, expanded });
                 const photoCount = countPhotos(item);
                 const defectPoints = item.points.filter((point) => point.defectDescription);
@@ -1756,11 +1683,11 @@ export default function GroundingLightningPage() {
                           onToggle={() => setExpandedId(expanded ? null : item.id)}
                         />
                       </TableCell>
-                      {tableEditing && (
+                      {canManage && (
                         <TableCell className={cn(TD_ROW, "py-2 text-center")}>
                           <label className="inline-flex size-10 cursor-pointer items-center justify-center">
                             <input type="checkbox" className="size-5 accent-emerald-600"
-                              aria-label={`Chọn ${item.areaEquipment} để xác nhận bình thường`}
+                              aria-label={`Chọn ${item.areaEquipment}${item.splitFrom && item.sourceRow ? ` (dòng ${item.sourceRow})` : ""} để xác nhận bình thường`}
                               checked={eligibleSelectedIds.includes(item.id)}
                               disabled={confirming || sign.isPending || query.isFetching || !isNormalItem(item)}
                               onChange={() => toggleSelection(item.id)} />
@@ -1772,6 +1699,7 @@ export default function GroundingLightningPage() {
                       </TableCell>
                       <TableCell className={cn(TD_ROW, "py-2", "font-semibold text-ink")}>
                         {item.areaEquipment}
+                        {item.sourceRow && <span className="mt-1 block text-xs font-normal text-muted-foreground">{item.splitFrom ? `${item.splitFrom.areaEquipment} · ` : ""}Dòng {item.sourceRow} · {item.sourceSheet}</span>}
                       </TableCell>
                       <TableCell className={cn(TD_ROW, "py-2", "text-center")}>
                         <MachineChip machine={item.machine} />
@@ -1834,7 +1762,7 @@ export default function GroundingLightningPage() {
                           <span className="text-muted-foreground">Chưa xác nhận</span>
                         )}
                       </TableCell>
-                      {tableEditing && (
+                      {canManage && (
                         <TableCell className={cn(TD_ROW, "py-2", "text-center")}>
                           <RowActions item={item} ctx={rowActions} />
                         </TableCell>
@@ -1889,6 +1817,14 @@ export default function GroundingLightningPage() {
                                 "Chưa có lần xác nhận nào"
                               )}
                             </DetailField>
+                            <DetailField label="Lịch sử" span="full">
+                              <Button variant="outline" className="h-10" onClick={() => setHistory(item)}><History className="mr-1 size-4" />Xem lịch sử kiểm tra</Button>
+                            </DetailField>
+                            {(canCatalog || canDelete) && <DetailField label="Danh mục" span="full"><CatalogActions item={item} ctx={rowActions} /></DetailField>}
+                            <DetailField label="Ca kiểm tra" span="full">
+                              <p>{item.assignedShift ? `Cố định: Ca ${SHIFT_TYPE[item.assignedShift].label.toLocaleLowerCase("vi")}` : "Tự chia đều"}</p>
+                              {canAssignShift && <Button variant="outline" className="mt-2 h-10" onClick={() => setShiftItem(item)}><Clock3 className="mr-1 size-4" />Chọn ca kiểm tra</Button>}
+                            </DetailField>
                           </DetailPanel>
                         </TableCell>
                       </TableRow>
@@ -1911,6 +1847,8 @@ export default function GroundingLightningPage() {
                     {item.position} · {machineLabel(item.machine)}
                   </span>
                   <h3 className="mt-1 font-bold text-ink">{item.areaEquipment}</h3>
+                  {item.sourceRow && <p className="mt-1 text-xs text-muted-foreground">{item.splitFrom ? `${item.splitFrom.areaEquipment} · ` : ""}Dòng {item.sourceRow} · {item.sourceSheet}</p>}
+                  {item.assignedShift && <p className="mt-1 text-xs font-semibold text-cyan-700">Ca cố định: {SHIFT_TYPE[item.assignedShift].label}</p>}
                 </div>
                 {item.needsSignature && (
                   <span
@@ -1939,19 +1877,21 @@ export default function GroundingLightningPage() {
                   {item.needsSignature ? "Chưa xác nhận trong ca này" : "Đã xác nhận trong ca này"}
                 </span>
                 <Button variant="ghost" className="h-10" onClick={() => setHistory(item)}><History className="mr-1 size-4" />Lịch sử</Button>
+                <CatalogActions item={item} ctx={rowActions} />
+                {canAssignShift && <Button variant="outline" className="h-10" onClick={() => setShiftItem(item)}><Clock3 className="mr-1 size-4" />Chọn ca kiểm tra</Button>}
               </div>
               {item.latestInspection && <p className="mt-1 text-xs text-muted-foreground">{item.latestInspection.inspectorName} · {fmtDate(item.latestInspection.signedAt)}</p>}
-              {tableEditing && (
+              {canManage && (
                 <label className="mt-3 flex min-h-10 items-center gap-3 text-sm">
                   <input type="checkbox" className="size-5 shrink-0 accent-emerald-600"
-                    aria-label={`Chọn ${item.areaEquipment} để xác nhận bình thường`}
+                    aria-label={`Chọn ${item.areaEquipment}${item.splitFrom && item.sourceRow ? ` (dòng ${item.sourceRow})` : ""} để xác nhận bình thường`}
                     checked={eligibleSelectedIds.includes(item.id)}
                     disabled={confirming || sign.isPending || query.isFetching || !isNormalItem(item)}
                     onChange={() => toggleSelection(item.id)} />
                   {!item.needsSignature ? "Đã xác nhận trong ca này" : isNormalItem(item) ? "Chọn xác nhận bình thường" : "Cần cập nhật kết quả riêng"}
                 </label>
               )}
-              {tableEditing && (
+              {canManage && (
                 <div className="mt-3 flex flex-wrap gap-2">
                   <RowActions item={item} ctx={rowActions} />
                 </div>
@@ -1961,9 +1901,9 @@ export default function GroundingLightningPage() {
           {pageRows.length === 0 && (
             <div className="py-16 text-center">
               <RadioTower className="mx-auto mb-3 size-10 text-slate-300" />
-              <b className="text-ink">Chưa có dữ liệu phù hợp</b>
+              <b className="text-ink">{isCurrentSlot && pendingOnly && items.length && !metrics.unsigned ? "Đã xác nhận đủ tuyến ca" : "Chưa có dữ liệu phù hợp"}</b>
               <p className="mt-1 text-sm text-muted-foreground">
-                Chọn ca khác hoặc thay đổi bộ lọc để xem khu vực được giao.
+                Chọn Toàn bộ tuyến ca để xem cả vị trí đã xác nhận, hoặc thay đổi bộ lọc.
               </p>
             </div>
           )}
@@ -1980,6 +1920,11 @@ export default function GroundingLightningPage() {
         )}
       </PcccTableCard>
       </div>
+      {canManage && eligibleSelectedIds.length > 0 && <div className="sticky bottom-[calc(5.5rem+env(safe-area-inset-bottom))] z-20 rounded-xl border border-emerald-200 bg-white p-3 shadow-lg lg:bottom-4">
+        <Button className="h-14 w-full text-base" onClick={confirmSelected} disabled={confirming || sign.isPending || query.isFetching}>
+          <CheckCircle2 className="mr-2 size-5" />{confirming ? "Đang xác nhận…" : `Xác nhận ${eligibleSelectedIds.length} vị trí bình thường`}
+        </Button>
+      </div>}
       {catalog.open && (
         <CatalogDialog
           key={`${catalog.item?.id ?? "new"}-${catalog.open}`}
@@ -1987,6 +1932,7 @@ export default function GroundingLightningPage() {
           onOpenChange={(open) => setCatalog((old) => ({ ...old, open }))}
           item={catalog.item}
           canDelete={canDelete}
+          canAssignShift={canAssignShift}
           scope={scope}
         />
       )}
@@ -1994,15 +1940,13 @@ export default function GroundingLightningPage() {
         <InspectionDialog
           key={inspection.id}
           item={inspection}
-          onSaved={(id) =>
-            setTouchedIds((old) => (old.includes(id) ? old : [...old, id]))
-          }
           onClose={() => setInspection(null)}
         />
       )}
       {history && (
         <HistoryDialog item={history} onClose={() => setHistory(null)} />
       )}
+      {shiftItem && <ShiftAssignmentDialog key={shiftItem.id} item={shiftItem} onClose={() => setShiftItem(null)} />}
       <ImageLightbox
         images={lightbox?.urls ?? []}
         index={lightbox?.index ?? null}

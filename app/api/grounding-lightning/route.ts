@@ -8,6 +8,7 @@ import {
   handle,
   ok,
   requireUser,
+  requireRole,
 } from "@/lib/api";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
 import {
@@ -31,6 +32,7 @@ import { runGroundingRetention } from "@/lib/server/grounding-retention";
 export const dynamic = "force-dynamic";
 
 const includeItem = {
+  splitFrom: { select: { id: true, areaEquipment: true } },
   points: {
     orderBy: { type: "asc" as const },
     include: { attachments: { orderBy: { createdAt: "asc" as const } } },
@@ -63,7 +65,9 @@ export async function GET(req: NextRequest) {
     const retention = groundingRetentionWindow(now);
     const currentSlot = currentGroundingSlot(now);
     const date = sp.get("inspectionDate") ?? currentSlot.date;
-    const allShifts = sp.get("shiftType") === "ALL";
+    const archived = sp.get("shiftType") === "ARCHIVED";
+    if (archived && process.env.NODE_ENV !== "development") return fail("Danh mục cũ không thuộc danh sách kiểm tra", 404);
+    const allShifts = sp.get("shiftType") === "ALL" || archived;
     const shiftType = allShifts ? currentSlot.shiftType : sp.get("shiftType") ?? currentSlot.shiftType;
     if (!isGroundingShift(shiftType)) return fail("Ca kiểm tra không hợp lệ");
     const selectedSlot = { date, shiftType };
@@ -78,6 +82,7 @@ export async function GET(req: NextRequest) {
     await runGroundingRetention(prisma, now);
     // Chia tuyến từ danh mục đầy đủ của mỗi cương vị + tổ máy, trước khi tìm kiếm/lọc kết quả.
     const where: Prisma.GroundingLightningItemWhereInput = {
+      isActive: !archived,
       ...(!scope.all
         ? { positionCode: scope.positionCode ?? "__NO_POSITION__" }
         : positionCode && positionCode !== "ALL" ? { positionCode } : {}),
@@ -86,7 +91,7 @@ export async function GET(req: NextRequest) {
     const [items, positionRows] = await Promise.all([
       prisma.groundingLightningItem.findMany({
         where,
-        include: catalogOnly ? {
+        include: catalogOnly || archived ? {
           ...includeItem,
           inspections: { ...includeItem.inspections, where: { signedAt: { gte: retention.cutoff } } },
         } : {
@@ -104,9 +109,9 @@ export async function GET(req: NextRequest) {
         ],
       }),
       prisma.groundingLightningItem.findMany({
-        where: !scope.all
+        where: { isActive: !archived, ...(!scope.all
           ? { positionCode: scope.positionCode ?? "__NO_POSITION__" }
-          : {},
+          : {}) },
         select: { positionCode: true, position: true },
         distinct: ["positionCode"],
         orderBy: { position: "asc" },
@@ -120,13 +125,13 @@ export async function GET(req: NextRequest) {
     const rowsForSlot = (slot: typeof selectedSlot) => items
       .filter((item) => assignments.get(item.id)?.includes(slot.shiftType))
       .map((item) => serializeGroundingSlotItem(item, slot, assignments.get(item.id) ?? [], avatars, now));
-    const shifts = SHIFT_TYPE_ORDER.map((value) => {
+    const shifts = archived ? [] : SHIFT_TYPE_ORDER.map((value) => {
       const rows = rowsForSlot({ date, shiftType: value });
       const confirmed = rows.filter((item) => !item.needsSignature).length;
       return { shiftType: value, total: rows.length, confirmed, pending: rows.length - confirmed };
     });
-    const matchesFilters = (item: { areaEquipment: string; note: string | null; points: Array<{ type: string; status: string; defectDescription: string | null }> }) => {
-      if (q && ![item.areaEquipment, item.note, ...item.points.map((point) => point.defectDescription)]
+    const matchesFilters = (item: { splitFrom?: { areaEquipment: string } | null; areaEquipment: string; note: string | null; points: Array<{ type: string; status: string; defectDescription: string | null }> }) => {
+      if (q && ![item.areaEquipment, item.splitFrom?.areaEquipment, item.note, ...item.points.map((point) => point.defectDescription)]
         .some((value) => normalizeText(value ?? "").includes(normalizeText(q)))) return false;
       if ((type && type !== "ALL") || (status && status !== "ALL")) {
         return item.points.some((point) =>
@@ -136,13 +141,15 @@ export async function GET(req: NextRequest) {
       return true;
     };
     return ok(
-      (allShifts
+      (archived
+        ? items.map((item) => ({ ...serializeGroundingItem(item, avatars), canInspect: false, needsSignature: false }))
+        : allShifts
         ? items.map((item) => serializeGroundingOverviewItem(item, date, assignments.get(item.id) ?? [], avatars, now))
         : rowsForSlot(selectedSlot)).filter(matchesFilters),
       {
         positions: positionRows.filter((row) => row.positionCode)
           .map((row) => ({ code: row.positionCode, label: row.position })),
-        scope, currentSlot, selectedSlot, shifts, viewMode: allShifts ? "ALL" : "SHIFT",
+        scope, canAssignShift: user.role === "ADMIN" && !archived, currentSlot, selectedSlot, shifts, viewMode: archived ? "ARCHIVED" : allShifts ? "ALL" : "SHIFT",
         serverTime: now.toISOString(), retentionStart: retention.date,
       },
     );
@@ -171,6 +178,10 @@ export async function POST(req: NextRequest) {
       );
     }
     const body = (await req.json()) as Record<string, unknown>;
+    if ("assignedShift" in body) {
+      requireRole(user, ["ADMIN"]);
+      if (body.assignedShift !== null && !isGroundingShift(body.assignedShift)) return fail("Ca chỉ định không hợp lệ");
+    }
     const areaEquipment = String(body.areaEquipment ?? "").trim();
     const positionCode = String(body.positionCode ?? "").trim();
     const machine = isGroundingMachine(body.machine) ? body.machine : "COMMON";
@@ -190,6 +201,7 @@ export async function POST(req: NextRequest) {
     }
     const duplicate = await prisma.groundingLightningItem.findFirst({
       where: {
+        isActive: true,
         positionCode,
         machine,
         areaEquipment: { equals: areaEquipment, mode: "insensitive" },
@@ -217,7 +229,7 @@ export async function POST(req: NextRequest) {
       await prisma.$transaction([
         prisma.groundingLightningItem.update({
           where: { id: duplicate.id },
-          data: { note: mergedNote },
+          data: { note: mergedNote, ...("assignedShift" in body ? { assignedShift: body.assignedShift as string | null } : {}) },
         }),
         ...addedTypes.map((pointType) =>
           prisma.groundingLightningPoint.create({
@@ -249,6 +261,7 @@ export async function POST(req: NextRequest) {
         positionCode,
         position: positionLabelOf(positionCode),
         machine,
+        ...("assignedShift" in body ? { assignedShift: body.assignedShift as string | null } : {}),
         note: String(body.note ?? "").trim() || null,
         createdById: user.id,
         points: { create: types.map((pointType) => ({ type: pointType })) },

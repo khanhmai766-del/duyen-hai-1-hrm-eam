@@ -42,10 +42,16 @@ export type GroundingInspection = {
     status: GroundingStatus;
     defectDescription: string | null;
     imageKeys: string[];
+    imageUrls?: string[];
   }>;
 };
 export type GroundingItem = {
   id: string;
+  assignedShift?: ShiftTypeKey | null;
+  isActive?: boolean;
+  sourceSheet?: string | null;
+  sourceRow?: number | null;
+  splitFrom?: { id: string; areaEquipment: string } | null;
   areaEquipment: string;
   position: string | null;
   positionCode: string | null;
@@ -66,7 +72,7 @@ export type GroundingFilters = {
   machine: string;
   type: string;
   status: string;
-  shiftType?: ShiftTypeKey | "CURRENT" | "ALL";
+  shiftType?: ShiftTypeKey | "CURRENT" | "ALL" | "ARCHIVED";
   inspectionDate?: string;
 };
 

@@ -2906,6 +2906,9 @@ model PcccHoseReelComponent {
 
 model GroundingLightningItem {
   id            String   @id @default(cuid())
+  isActive      Boolean  @default(true)
+  splitFromId   String?
+  assignedShift String?
   stt           Float?
   areaEquipment String
   position      String?
@@ -2921,8 +2924,11 @@ model GroundingLightningItem {
 
   points      GroundingLightningPoint[]
   inspections GroundingLightningInspection[]
+  splitFrom   GroundingLightningItem?  @relation("GroundingItemSplit", fields: [splitFromId], references: [id], onDelete: SetNull)
+  splitItems  GroundingLightningItem[] @relation("GroundingItemSplit")
 
   @@index([positionCode, machine])
+  @@index([splitFromId])
   @@index([areaEquipment])
   @@map("grounding_lightning_items")
 }

@@ -13,6 +13,7 @@ export type GroundingSlot = { date: string; shiftType: ShiftTypeKey };
 export type GroundingScheduleItem = {
   id: string; positionCode?: string | null; position?: string | null;
   machine: string; areaEquipment: string;
+  assignedShift?: string | null;
 };
 
 export function isGroundingShift(value: unknown): value is ShiftTypeKey {
@@ -62,10 +63,24 @@ export function assignGroundingShifts(items: readonly GroundingScheduleItem[]) {
   const assignments = new Map<string, ShiftTypeKey[]>();
   for (const group of groups.values()) {
     group.sort((a, b) => a.areaEquipment.localeCompare(b.areaEquipment, "vi") || a.id.localeCompare(b.id, "en"));
-    group.forEach((item, index) => {
-      const shiftIndex = group.length < 3 ? index : Math.floor(index * 3 / group.length);
-      const shifts: ShiftTypeKey[] = [SHIFT_TYPE_ORDER[shiftIndex]];
-      assignments.set(item.id, shifts);
+    const fixedCounts = SHIFT_TYPE_ORDER.map(() => 0);
+    const automatic = group.filter((item) => {
+      if (!isGroundingShift(item.assignedShift)) return true;
+      assignments.set(item.id, [item.assignedShift]);
+      fixedCounts[SHIFT_TYPE_ORDER.indexOf(item.assignedShift)]++;
+      return false;
+    });
+    // Tôn trọng ca cố định; phần tự động bù vào các ca ít khu vực nhất.
+    const targets = [...fixedCounts];
+    for (let i = 0; i < automatic.length; i++) {
+      const least = Math.min(...targets);
+      targets[targets.indexOf(least)]++;
+    }
+    let cursor = 0;
+    SHIFT_TYPE_ORDER.forEach((shift, index) => {
+      for (let n = fixedCounts[index]; n < targets[index]; n++) {
+        assignments.set(automatic[cursor++].id, [shift]);
+      }
     });
   }
   return assignments;
