@@ -1,14 +1,15 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { LogIn, LogOut, ScanLine, Search } from "lucide-react";
+import { LogIn, LogOut, ScanLine, Search, Users } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { PermitCardScanner, type ScanOutcome } from "@/components/work-permits/card-scanner";
+import { PermitPeopleDirectory } from "@/components/work-permits/contractor-work";
 import { usePermitAttendance, type PermitAttendanceResult } from "@/hooks/useWorkPermits";
 import { attendanceInside, attendanceTracked } from "@/lib/work-permit-attendance";
 import { normalizeText } from "@/lib/nav";
-import { isSessionCommander, type PermitDetailRow, type PermitMember, type PermitSession } from "@/lib/work-permits";
+import { isSessionCommander, type PermitDetailRow, type PermitMember, type PermitPerson, type PermitSession } from "@/lib/work-permits";
 
 const hhmm = (iso: string) => new Date(iso).toLocaleTimeString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", hour: "2-digit", minute: "2-digit" });
 /** Giờ gọn cho điện thoại: chỉ HH:mm nếu trong hôm nay, khác ngày thì kèm ngày/tháng. */
@@ -35,6 +36,9 @@ function outcomeOf(result: PermitAttendanceResult): ScanOutcome {
 export function SessionAttendance({ permit, session, canExecute, size = "md", autoScan = false }: { permit: PermitDetailRow; session: PermitSession; canExecute: boolean; size?: "md" | "lg"; autoScan?: boolean }) {
   // `autoScan`: mở từ nút "Quét" trên bảng Đang làm việc → bật máy quét ngay.
   const [scanning, setScanning] = useState(autoScan && canExecute && !session.endedAt);
+  // "Chọn từ danh sách" khi lần làm việc đang mở: người không mang thẻ / không quét được vẫn cho vào được.
+  const [picking, setPicking] = useState(false);
+  const [admitting, setAdmitting] = useState(false);
   const [filter, setFilter] = useState<"inside" | "out" | "waiting" | null>(null);
   const [query, setQuery] = useState("");
   const attendance = usePermitAttendance(permit.id);
@@ -55,6 +59,20 @@ export function SessionAttendance({ permit, session, canExecute, size = "md", au
     } catch (error) { toast.error(error instanceof Error ? error.message : "Không ghi nhận được"); }
   }
 
+  /** Cho vào lần lượt từng người đã chọn — máy chủ kiểm như quét thẻ (đúng đơn vị, đúng nhóm, không đang ở PCT khác). */
+  async function admitPicked(people: PermitPerson[]) {
+    setPicking(false); setAdmitting(true);
+    const failed: string[] = [];
+    let added = 0;
+    for (const person of people) {
+      try { if ((await record({ direction: "in", personId: person.id })).added) added++; }
+      catch (error) { failed.push(`${person.name}: ${error instanceof Error ? error.message : "không ghi nhận được"}`); }
+    }
+    setAdmitting(false);
+    if (added) toast.success(`Đã cho vào ${added} người`);
+    if (failed.length) toast.error(`Không cho vào ${failed.length} người`, { description: failed.join(" · "), duration: 12000 });
+  }
+
   if (!live && !tracked) return null;
   const large = size === "lg";
   const scanner = scanning && <PermitCardScanner title="Quét vào / ra vị trí làm việc" unit={permit.teamName} companies={[permit.teamName, session.company].filter(Boolean)} scope={permit.contractorScope} permitId={permit.id}
@@ -64,6 +82,9 @@ export function SessionAttendance({ permit, session, canExecute, size = "md", au
       ? { tone: "info", detail: "CHTT của lần làm việc — có mặt suốt lần làm việc, không cần quét." }
       : record({ direction: "auto", personId: person.id })}
     onClose={() => setScanning(false)} />;
+  const picker = picking && <PermitPeopleDirectory onClose={() => setPicking(false)} onPickMany={people => void admitPicked(people)}
+    existingMembers={[...members.map(({ member }) => member), commander]} company={permit.teamName || undefined} scope={permit.contractorScope} />;
+  const pickButton = (className: string) => <Button type="button" variant="outline" className={className} disabled={admitting} onClick={() => setPicking(true)}><Users />{admitting ? "Đang cho vào…" : "Chọn từ danh sách"}</Button>;
   const rows = members.map(({ member, index }) => {
     const inside = attendanceInside(member);
     const visits = member.attendance ?? [];
@@ -116,10 +137,11 @@ export function SessionAttendance({ permit, session, canExecute, size = "md", au
           </div>;
         })}</div> : <p className="rounded-lg bg-muted/40 p-3 text-sm text-muted-foreground">Không có người phù hợp.</p>}
       {/* Máy tính (lg) không có thanh điều hướng đáy và màn hình đủ cao: nút nằm yên bên phải, không dính đáy. */}
-      {live && canExecute && <div className="sticky bottom-[calc(5.5rem+env(safe-area-inset-bottom))] z-30 lg:static lg:flex lg:justify-end">
+      {live && canExecute && <div className="sticky bottom-[calc(5.5rem+env(safe-area-inset-bottom))] z-30 grid grid-cols-[2fr_3fr] gap-2 lg:static lg:flex lg:justify-end">
+        {pickButton("h-14 bg-background px-2 text-sm shadow-lg lg:h-11 lg:px-5 lg:shadow-sm")}
         <Button type="button" className="h-14 w-full text-base shadow-lg lg:h-11 lg:w-auto lg:px-8 lg:shadow-sm" onClick={() => setScanning(true)}><ScanLine className="!h-6 !w-6" />Quét vào / ra</Button>
       </div>}
-      {scanner}
+      {scanner}{picker}
     </div>;
   }
   return <div className="space-y-2 rounded-lg border border-border p-3">
@@ -128,9 +150,9 @@ export function SessionAttendance({ permit, session, canExecute, size = "md", au
         {live ? <>Trong khu vực: <span className="text-emerald-700">{1 + insideCount}</span>/{1 + members.length} người</> : "Vào / ra vị trí làm việc"}
         <span className="ml-1 text-xs font-normal text-muted-foreground">(kèm CHTT)</span>
       </p>
-      {live && canExecute && <Button type="button" size="sm" onClick={() => setScanning(true)}><ScanLine />Quét vào / ra</Button>}
+      {live && canExecute && <div className="flex gap-2">{pickButton("h-9 px-3 text-sm")}<Button type="button" size="sm" onClick={() => setScanning(true)}><ScanLine />Quét vào / ra</Button></div>}
     </div>
     {members.length > 0 && <div className="max-h-72 space-y-1 overflow-y-auto">{rows}</div>}
-    {scanner}
+    {scanner}{picker}
   </div>;
 }
