@@ -16,6 +16,7 @@ export const dynamic = "force-dynamic";
  * "Chỉnh sửa" phiếu, vốn bị chặn lúc đang làm việc). Chỉ đổi `overhaulItems`, không đụng thông tin khác của phiếu.
  * Hạng mục mới dùng ngay cho Cập nhật tiến độ / Kết thúc / Tiến độ trong ngày / job 16:00 — ghi Sheet qua các luồng đó.
  * Bớt: chỉ hạng mục CHƯA ghi tiến độ (đã ghi thì Sheet đã có dữ liệu của phiếu này — giữ nguyên để không lệch).
+ * Được bớt tới hết hạng mục (07/10/2026) — phiếu không còn hạng mục thì ghi tiến độ bằng % chung như phiếu thường.
  */
 export async function POST(req: Request, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
@@ -33,7 +34,6 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
       if (!["ISSUED", "ACTIVE", "WAITING", "PAUSED"].includes(before.status)) throw fail("Chỉ bổ sung hạng mục cho phiếu đã cấp, chưa kết thúc phiếu hoặc huỷ", 409);
       const parsed = parseOverhaulItems(body.overhaulItems, before);
       const next = parsed === Prisma.DbNull || parsed === undefined ? [] : overhaulItemsOf(parsed);
-      if (!next.length) throw fail("Phiếu đại tu phải còn ít nhất một hạng mục");
       const prev = overhaulItemsOf(before.overhaulItems);
       const nextKeys = new Set(next.map(overhaulItemKey));
       const removed = prev.filter(item => !nextKeys.has(overhaulItemKey(item)));

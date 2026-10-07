@@ -52,14 +52,14 @@ export function OverhaulItemsDialog({ permit, onClose }: { permit: PermitRow; on
   return <Dialog open onOpenChange={v => { if (!v && !save.isPending) onClose(); }}>
     <DialogContent className="max-w-2xl">
       <DialogTitle>Hạng mục đại tu · PCT {formatPermitNumber(permit)}</DialogTitle>
-      <DialogDescription>Bổ sung hạng mục cho phiếu đã cấp, kể cả khi đang làm việc. Hạng mục mới dùng ngay khi Cập nhật tiến độ / Kết thúc.</DialogDescription>
+      <DialogDescription>Bổ sung hoặc bớt hạng mục cho phiếu đã cấp, kể cả khi đang làm việc (bấm × trên hạng mục để bớt, bớt hết cũng được). Hạng mục đã ghi tiến độ thì không bớt được. Thay đổi dùng ngay khi Cập nhật tiến độ / Kết thúc.</DialogDescription>
       <div className="space-y-3">
         <OverhaulContentField form={form} onApply={next => setItems(next)} />
-        {!items.length && <p className="text-sm text-muted-foreground">Chưa chọn hạng mục nào.</p>}
+        {!items.length && <p className="text-sm text-muted-foreground">{original.length ? "Đã bớt hết hạng mục — lưu thì phiếu ghi tiến độ bằng % chung." : "Chưa chọn hạng mục nào."}</p>}
         {error && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</p>}
         <div className="flex justify-end gap-2">
           <Button type="button" variant="outline" onClick={onClose} disabled={save.isPending}>Huỷ</Button>
-          <Button type="button" onClick={submit} disabled={save.isPending || !changed || !items.length}>{save.isPending ? <Loader2 className="animate-spin" /> : <Save />}Lưu hạng mục</Button>
+          <Button type="button" onClick={submit} disabled={save.isPending || !changed}>{save.isPending ? <Loader2 className="animate-spin" /> : <Save />}Lưu hạng mục</Button>
         </div>
       </div>
     </DialogContent>
