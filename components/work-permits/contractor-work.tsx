@@ -52,7 +52,28 @@ export function PermitCompanyDirectory() {
   // Chỉ gọi danh sách người khi có đơn vị đang mở; `limit: 200` để không phải phân trang trong khối bung.
   const people = usePermitPeople({ company: openCompany ?? "", limit: 200, enabled: Boolean(openCompany) });
   const canWrite = companies.data?.meta.canWrite ?? false;
-  const rows = (companies.data?.data ?? []).filter(row => !q.trim() || normalizeText(`${row.code} ${row.company}`).includes(normalizeText(q)));
+  // Ô tìm kiếm khớp cả NGƯỜI (họ tên, số thẻ, SĐT — nhân viên lẫn CHTT): tra máy chủ sau khi ngừng gõ,
+  // rồi giữ lại các đơn vị có người khớp. Đơn vị khớp theo mã/tên thì vẫn hiện như cũ.
+  const term = normalizeText(q.trim());
+  const [personQ, setPersonQ] = useState("");
+  useEffect(() => { const timer = setTimeout(() => setPersonQ(q.trim()), 300); return () => clearTimeout(timer); }, [q]);
+  const personSearch = usePermitPeople({ q: personQ, limit: 200, enabled: personQ.length >= 2 });
+  const personHits = new Map<string, PermitPerson[]>();
+  if (term.length >= 2 && normalizeText(personQ) === term) for (const person of personSearch.data?.data ?? []) {
+    // searchText có cả tên đơn vị — chỉ tính người khớp theo chính họ tên / số thẻ / SĐT của họ.
+    if (!normalizeText(`${person.code} ${person.name} ${person.phone ?? ""}`).includes(term)) continue;
+    personHits.set(person.company, [...(personHits.get(person.company) ?? []), person]);
+  }
+  const companyMatches = (row: { code: string; company: string }) => !term || normalizeText(`${row.code} ${row.company}`).includes(term);
+  const rows = (companies.data?.data ?? []).filter(row => companyMatches(row) || personHits.has(row.company));
+  // Đơn vị chỉ hiện vì có người khớp → khi bung ra chỉ liệt kê đúng những người đó.
+  const shownPeople = (company: string, list: PermitPerson[]) => companyMatches({ code: "", company }) || !personHits.has(company) ? list
+    : list.filter(person => normalizeText(`${person.code} ${person.name} ${person.phone ?? ""}`).includes(term));
+  const hitLine = (row: { code: string; company: string }) => {
+    const hits = companyMatches(row) ? undefined : personHits.get(row.company);
+    if (!hits) return null;
+    return <span className="mt-1 block text-xs font-normal text-emerald-800 dark:text-emerald-300">Khớp: {hits.slice(0, 4).map(person => `${person.name}${person.canCommand ? " (CHTT)" : ""}`).join(", ")}{hits.length > 4 ? ` và ${hits.length - 4} người khác` : ""}</span>;
+  };
   const colCount = canWrite ? 7 : 6;
   async function removePerson(person: PermitPerson) {
     if (!window.confirm(`Xóa ${person.name} (${person.code}) khỏi danh sách nhân sự nhà thầu?\n\nNgười đã tham gia PCT chỉ Quản trị xóa được, sau khi các phiếu đã kết thúc và người này đã ghi ra khỏi khu vực. PCT đã ghi vẫn giữ tên và số thẻ.`)) return;
@@ -76,12 +97,12 @@ export function PermitCompanyDirectory() {
         <p className="text-sm text-muted-foreground"><strong className="font-semibold text-foreground">{rows.length}</strong> đơn vị · <strong className="font-semibold text-foreground">{rows.reduce((sum, row) => sum + row.total, 0)}</strong> người</p>
         <div className="flex w-full items-center gap-2 md:w-auto">
           <span className="hidden text-sm text-muted-foreground md:inline">Tìm kiếm:</span>
-          <input type="search" className="h-10 w-full rounded-xl border border-input bg-background px-3 text-base focus:outline-none sm:h-9 sm:text-sm focus:ring-2 focus:ring-ring md:w-72" aria-label="Tìm đơn vị nhà thầu" placeholder="Mã hoặc tên đơn vị nhà thầu…" value={q} maxLength={200} onChange={e => setQ(e.target.value)} />
+          <input type="search" className="h-10 w-full rounded-xl border border-input bg-background px-3 text-base focus:outline-none sm:h-9 sm:text-sm focus:ring-2 focus:ring-ring md:w-72" aria-label="Tìm đơn vị nhà thầu, nhân viên hoặc CHTT" placeholder="Đơn vị, họ tên, số thẻ hoặc SĐT…" value={q} maxLength={200} onChange={e => setQ(e.target.value)} />
         </div>
       </div>
       {companies.isPending ? <p role="status" className="p-6 text-sm">Đang tải danh sách đơn vị…</p>
         : companies.isError ? <p role="alert" className="p-6 text-red-700">{companies.error.message}</p>
-        : !rows.length ? <p className="p-8 text-center text-sm text-muted-foreground">{q.trim() ? "Không có đơn vị nào khớp từ khóa." : "Chưa có đơn vị nhà thầu nào. Bấm “Thêm đơn vị” để bắt đầu."}</p>
+        : !rows.length ? <p className="p-8 text-center text-sm text-muted-foreground">{q.trim() ? (personSearch.isFetching || normalizeText(personQ) !== term ? "Đang tìm…" : "Không có đơn vị hay người nào khớp từ khóa.") : "Chưa có đơn vị nhà thầu nào. Bấm “Thêm đơn vị” để bắt đầu."}</p>
         : <>
         {/* Điện thoại: mỗi đơn vị một thẻ (bảng 7 cột làm tên đơn vị gãy 4–5 dòng và cắt cột số lượng). */}
         <div className="divide-y divide-border md:hidden">{rows.map(row => {
@@ -91,7 +112,7 @@ export function PermitCompanyDirectory() {
             <button type="button" aria-expanded={expanded} onClick={toggle} className="flex w-full items-start gap-3 px-4 pb-2 pt-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500">
               <span className="min-w-0 flex-1">
                 <span className="flex flex-wrap items-center gap-x-2 gap-y-1">{row.code && <span className="rounded-md bg-blue-50 px-1.5 py-0.5 text-xs font-bold tracking-wide text-blue-800 dark:bg-blue-950/40 dark:text-blue-200">{row.code}</span>}<span className="text-[15px] font-semibold leading-5 text-ink">{row.company}</span><CompanyScopeBadge row={row} /></span>
-                <span className="mt-1 block text-xs text-muted-foreground"><b className="text-foreground">{row.total}</b> người · CHTT <b className={row.commanders ? "text-emerald-700" : "text-amber-700"}>{row.commanders}</b>{row.active < row.total && <span className="text-amber-700"> · {row.total - row.active} ngừng hoạt động</span>}</span>
+                {hitLine(row)}<span className="mt-1 block text-xs text-muted-foreground"><b className="text-foreground">{row.total}</b> người · CHTT <b className={row.commanders ? "text-emerald-700" : "text-amber-700"}>{row.commanders}</b>{row.active < row.total && <span className="text-amber-700"> · {row.total - row.active} ngừng hoạt động</span>}</span>
               </span>
               <ChevronDown className={`mt-0.5 h-5 w-5 shrink-0 text-muted-foreground transition-transform ${expanded ? "rotate-180" : ""}`} />
             </button>
@@ -104,7 +125,7 @@ export function PermitCompanyDirectory() {
               {people.isPending ? <p role="status" className="text-sm text-muted-foreground">Đang tải nhân sự…</p>
                 : people.isError ? <p role="alert" className="text-sm text-red-700">{people.error.message}</p>
                 : !people.data?.data.length ? <p className="text-sm text-muted-foreground">Đơn vị này chưa có nhân sự.</p>
-                : <CompanyPeopleTable people={people.data.data} canWrite={canWrite} removing={remove.isPending} onEdit={setEditing} onRemove={person => void removePerson(person)} />}
+                : <CompanyPeopleTable people={shownPeople(row.company, people.data.data)} canWrite={canWrite} removing={remove.isPending} onEdit={setEditing} onRemove={person => void removePerson(person)} />}
             </div>}
           </article>;
         })}</div>
@@ -126,7 +147,7 @@ export function PermitCompanyDirectory() {
                 <TableCell className={cn(TD_EXPAND, "py-2.5")}><RowExpander expanded={expanded} onToggle={() => setOpenCompany(expanded ? null : row.company)} /></TableCell>
                 <TableCell className={cn(TD_ROW, "py-2.5 text-center tabular-nums text-slate-500")}>{index + 1}</TableCell>
                 <TableCell className={cn(TD_ROW, "py-2.5 text-center font-semibold tracking-wide text-blue-800")}>{row.code || <span className="font-normal text-slate-400">—</span>}</TableCell>
-                <TableCell className={cn(TD_ROW, "py-2.5 font-semibold text-ink")}>{row.company}<CompanyScopeBadge row={row} className="ml-2" />{row.active < row.total && <span className="ml-2 text-[11px] font-medium text-amber-700">{row.total - row.active} ngừng hoạt động</span>}</TableCell>
+                <TableCell className={cn(TD_ROW, "py-2.5 font-semibold text-ink")}>{row.company}<CompanyScopeBadge row={row} className="ml-2" />{row.active < row.total && <span className="ml-2 text-[11px] font-medium text-amber-700">{row.total - row.active} ngừng hoạt động</span>}{hitLine(row)}</TableCell>
                 <TableCell className={cn(TD_ROW, "py-2.5 text-center tabular-nums")}>{row.total}</TableCell>
                 <TableCell className={cn(TD_ROW, "py-2.5 text-center tabular-nums")}>{row.commanders ? <span className="font-semibold text-emerald-700">{row.commanders}</span> : <span className="text-amber-700">0</span>}</TableCell>
                 {canWrite && <TableCell className={cn(TD_ROW, "py-2.5")}>
@@ -142,7 +163,7 @@ export function PermitCompanyDirectory() {
                   {people.isPending ? <p role="status" className="text-sm text-muted-foreground">Đang tải nhân sự…</p>
                     : people.isError ? <p role="alert" className="text-sm text-red-700">{people.error.message}</p>
                     : !people.data?.data.length ? <p className="text-sm text-muted-foreground">Đơn vị này chưa có nhân sự.{canWrite ? " Bấm “Thêm nhân sự” trên dòng đơn vị để thêm." : ""}</p>
-                    : <CompanyPeopleTable people={people.data.data} canWrite={canWrite} removing={remove.isPending} onEdit={setEditing} onRemove={person => void removePerson(person)} />}
+                    : <CompanyPeopleTable people={shownPeople(row.company, people.data.data)} canWrite={canWrite} removing={remove.isPending} onEdit={setEditing} onRemove={person => void removePerson(person)} />}
                 </div>
               </TableCell></TableRow>}
             </Fragment>;
