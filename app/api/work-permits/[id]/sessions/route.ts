@@ -12,8 +12,8 @@ import { assertWorkersFree, lockWorkPermitPresence } from "@/lib/server/work-per
 import { presentMembers } from "@/lib/work-permit-presence";
 import { after as afterResponse } from "next/server";
 import { parseSessionItemProgress, sharedOverhaulPercents } from "@/lib/server/work-permit-overhaul";
-import { enqueueOverhaulProgressUpdate, enqueueOverhaulSessionEnd, overhaulProgressKey, pushOverhaulSheetOutboxQuietly, vnDay } from "@/lib/server/overhaul-sheet-writer";
-import { isOverhaulPaperPermit, overhaulItemProgressOf, overhaulItemsOf, type OverhaulItemProgress } from "@/lib/work-permit-overhaul";
+import { enqueueOverhaulManualProgress, enqueueOverhaulProgressUpdate, enqueueOverhaulSessionEnd, overhaulProgressKey, pushOverhaulSheetOutboxQuietly, vnDay } from "@/lib/server/overhaul-sheet-writer";
+import { isOverhaulPaperPermit, OVERHAUL_DAY_STATUSES, overhaulItemProgressOf, overhaulItemsOf, type OverhaulItemProgress } from "@/lib/work-permit-overhaul";
 import { permitDeadline, personScopeError, workersStillInside } from "@/lib/work-permits";
 export const dynamic = "force-dynamic";
 export async function POST(req: Request, props: { params: Promise<{ id: string }> }) {
@@ -91,6 +91,24 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
       // % lũy kế trước đó: CHUNG cho mọi PCT cùng giữ hạng mục (PCT Cơ + PCT Điện của hạng mục phối hợp), gồm cả lần đang mở.
       const progressHistory = () => sharedOverhaulPercents(tx, permitItems);
 
+      if (body.action === "progress" && !permitText(body, "sessionId", 100)) {
+        // Cập nhật tiến độ NGOÀI lần làm việc (nghiệp vụ 07/10/2026): phiếu đã cấp / chờ làm tiếp / đã kết thúc vẫn ghi % +
+        // nhật ký về Sheet ở NGÀY CẬP NHẬT; người cập nhật chọn trạng thái (phiếu đã kết thúc gợi ý "Kết thúc công tác").
+        if (!["ISSUED", "WAITING", "CLOSED"].includes(permit.status)) throw fail("Phiếu đang có lần làm việc mở — cập nhật tiến độ trên lần làm việc đó.", 409);
+        if (!permitItems.length) throw fail("Chỉ PCT nhà thầu · Đại tu có hạng mục mới cập nhật tiến độ");
+        const sheetStatus = String(body.sheetStatus ?? "");
+        if (sheetStatus !== OVERHAUL_DAY_STATUSES.IN_PROGRESS && sheetStatus !== OVERHAUL_DAY_STATUSES.CLOSED) throw fail("Chọn trạng thái ghi lên Sheet: Đang thực hiện hoặc Kết thúc công tác");
+        const parsed = parseSessionItemProgress(body.itemProgress, permitItems, await progressHistory());
+        if (!parsed.items.some(item => item.done)) throw fail("Tick ít nhất một hạng mục đã thực hiện để cập nhật tiến độ");
+        const at = new Date();
+        const note = permitText(body, "note", 2000);
+        await enqueueOverhaulManualProgress(tx, permit, user.name ?? "", at, parsed.items, note, sheetStatus);
+        const after = await tx.workPermit.update({ where: { id: permit.id }, data: { progress: parsed.progress, version: { increment: 1 } } });
+        const summary = parsed.items.filter(item => item.done).map(item => `${item.code} ${item.percent}%`).join(", ");
+        await tx.workPermitHistory.create({ data: { permitId: permit.id, actorId: user.id, actorName: user.name ?? "", action: `Cập nhật tiến độ ngoài lần làm việc · ${sheetStatus} · ${summary}${note ? ` · ${note.slice(0, 200)}` : ""}`, before: permitSnapshot(permit), after: permitSnapshot(after) } });
+        return { id: "", commanderName: "ngoài lần làm việc", itemProgress: parsed.items };
+      }
+
       if (body.action === "progress") {
         // Cập nhật tiến độ giữa chừng: không kết thúc lần làm việc, chỉ ghi % + ghi chú các mục có tick về Sheet.
         const session = await tx.workPermitSession.findFirst({ where: { id: permitText(body, "sessionId", 100), permitId: permit.id } });
@@ -148,7 +166,7 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
     });
     const verbs: Record<string, [string, string]> = { handoff: ["HANDOFF_WORK_PERMIT_SESSION", "Bàn giao"], open: ["OPEN_WORK_PERMIT_SESSION", "Mở"], progress: ["PROGRESS_WORK_PERMIT_SESSION", "Cập nhật tiến độ"], end: ["END_WORK_PERMIT_SESSION", "Kết thúc"] };
     const [auditAction, verb] = verbs[String(body.action)];
-    await audit(user.id, auditAction, "WorkPermit", params.id, `${verb} lần làm việc ${result.id}: ${result.commanderName}`);
+    await audit(user.id, auditAction, "WorkPermit", params.id, result.id ? `${verb} lần làm việc ${result.id}: ${result.commanderName}` : `${verb} ngoài lần làm việc`);
     // Mở/bàn giao lần làm việc ghi người cho phép + thời điểm cho phép — có trên mẫu Cơ.
     if (body.action === "open" || body.action === "handoff") await syncPermitDocument(await prisma.workPermit.findUnique({ where: { id: params.id } }));
     // Kết quả ngày của PCT đại tu: đẩy lên Google Sheets sau khi đã trả lời — lỗi thì hàng đợi giữ lại cho timer.

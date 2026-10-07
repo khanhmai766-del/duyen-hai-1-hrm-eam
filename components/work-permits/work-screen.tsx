@@ -28,7 +28,7 @@ const LIVE_REFRESH_MS = 15_000;
 export function PermitWorkScreen({ id }: { id: string }) {
   const query = useWorkPermit(id, LIVE_REFRESH_MS);
   const companies = usePermitCompanySummary();
-  const [action, setAction] = useState<{ kind: "open" } | { kind: "handoff" | "end" | "progress"; session: PermitSession } | null>(null);
+  const [action, setAction] = useState<{ kind: "open" } | { kind: "handoff" | "end"; session: PermitSession } | { kind: "progress"; session?: PermitSession } | null>(null);
   const permit = query.data?.data;
   const canExecute = Boolean(query.data?.meta?.canExecute);
   const canIssue = Boolean(query.data?.meta?.canIssue);
@@ -43,6 +43,7 @@ export function PermitWorkScreen({ id }: { id: string }) {
   // Quá "Kết thúc công việc dự kiến": theo quy định kết thúc phiếu, cấp PCT mới — không mở / bàn giao (server cũng chặn).
   const overdue = Boolean(permit && permitDeadline(permit)?.state === "overdue");
   const canOpen = Boolean(permit && canExecute && !liveSession && !overdue && ["ISSUED", "WAITING"].includes(permit.status));
+  const canUpdateLater = Boolean(permit && canExecute && !liveSession && ["ISSUED", "WAITING", "CLOSED"].includes(permit.status) && canUpdateOverhaulProgress(permit));
   useEffect(() => {
     if (!permit || !intent.current) return;
     if (intent.current === "end" && liveSession && canExecute) setAction({ kind: "end", session: liveSession });
@@ -95,7 +96,11 @@ export function PermitWorkScreen({ id }: { id: string }) {
     </section> : <section className="space-y-3 rounded-2xl border border-sky-200 bg-sky-50/50 p-5 text-center dark:bg-sky-950/20">
       <p className="text-base font-semibold">Chưa có lần làm việc đang mở</p>
       <p className="text-sm text-muted-foreground">{canOpen ? "Chọn CHTT, người cho phép và quét thẻ nhân viên để mở lần làm việc." : overdue && ["ISSUED", "WAITING"].includes(permit.status) ? "PCT đã quá thời gian kết thúc công việc dự kiến — không mở lần làm việc mới. Kết thúc phiếu này; công tác chưa xong thì cấp PCT mới." : ["ISSUED", "WAITING"].includes(permit.status) ? "Bạn không có quyền cho phép làm việc trên phiếu này." : `Phiếu đang ở trạng thái “${PERMIT_STATUSES[permit.status]}” nên không mở được lần làm việc mới.`}</p>
-      {canOpen && <Button type="button" className="h-12 w-full px-6 text-base sm:w-auto" onClick={() => setAction({ kind: "open" })}><Play />Cho phép / mở lần làm việc</Button>}
+      {(canOpen || canUpdateLater) && <div className="flex flex-col justify-center gap-2 sm:flex-row">
+        {canOpen && <Button type="button" className="h-12 w-full px-6 text-base sm:w-auto" onClick={() => setAction({ kind: "open" })}><Play />Cho phép / mở lần làm việc</Button>}
+        {/* PCT đại tu không có lần đang mở (đã kết thúc ngày / kết thúc phiếu): vẫn cập nhật tiến độ ghi Sheet. */}
+        {canUpdateLater && <Button type="button" variant="outline" className="h-12 w-full border-violet-200 px-6 text-base text-violet-800 hover:bg-violet-50 hover:text-violet-900 sm:w-auto dark:border-violet-900 dark:text-violet-200" onClick={() => setAction({ kind: "progress" })}><ChartNoAxesColumnIncreasing />Cập nhật tiến độ</Button>}
+      </div>}
     </section>}
 
     {permit.teamType === "CONTRACTOR" && <ContractorSessions key={`${permit.id}-${permit.version}-history`} permit={permit} canExecute={canExecute} historyOnly />}

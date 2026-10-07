@@ -93,6 +93,22 @@ export async function enqueueOverhaulProgressUpdate(tx: Prisma.TransactionClient
   })));
 }
 
+/**
+ * Cập nhật tiến độ NGOÀI lần làm việc (phiếu đã cấp / chờ làm tiếp / đã kết thúc): mục có tick → trạng thái người cập nhật
+ * chọn (Đang thực hiện / Kết thúc công tác) + % + nhật ký ở ngày cập nhật. Không có lần làm việc nên % lũy kế đọc lại từ
+ * chính các dòng này (sharedOverhaulPercents).
+ */
+export async function enqueueOverhaulManualProgress(tx: Prisma.TransactionClient, permit: Pick<WorkPermit, "id">, actorName: string, at: Date, items: OverhaulItemProgress[], generalNote: string, status: string) {
+  const day = vnDay(at);
+  await enqueue(tx, items.filter(item => item.done).map(item => ({
+    dedupeKey: `M:${permit.id}:${at.getTime()}:${itemTail(item)}`,
+    permitId: permit.id, kind: "MANUAL",
+    source: item.source, sheet: item.sheet, code: item.code, day,
+    status, percent: item.percent,
+    note: journalLine(at, actorName, item, generalNote),
+  })));
+}
+
 /** Khoá so hạng mục giữa itemProgress và hàng đợi. */
 export const overhaulProgressKey = itemTail;
 

@@ -40,9 +40,10 @@ function liveBoardRows(permit, now) {
  * PCT nhà thầu · Đại tu giả lập: gắn 3 hạng mục thật (đọc DB) + hạn "Kết thúc công việc dự kiến". `overdue` = quá hạn và
  * không có lần đang mở (thấy nút mở bị chặn); ngược lại còn ~30 giờ và có lần đang mở (hộp Kết thúc theo hạng mục).
  */
-function overhaulPreset(overdue) {
+function overhaulPreset(overdue, closed = false) {
   return {
-    description: overdue ? "PCT đại tu quá hạn — chặn mở lần làm việc, nhãn đỏ" : "PCT đại tu sắp hết hạn — hộp Kết thúc đánh giá từng hạng mục",
+    description: closed ? "PCT đại tu đã kết thúc phiếu — vẫn Cập nhật tiến độ, chọn trạng thái ghi Sheet"
+      : overdue ? "PCT đại tu quá hạn — chặn mở lần làm việc, nhãn đỏ" : "PCT đại tu sắp hết hạn — hộp Kết thúc đánh giá từng hạng mục",
     async prepare({ prisma }) {
       const permit = await prisma.workPermit.findFirst({
         where: { teamType: "CONTRACTOR", status: { notIn: ["DRAFT", "CANCELLED"] } },
@@ -54,8 +55,8 @@ function overhaulPreset(overdue) {
       if (!items.length) throw new Error("DB dev chưa có hạng mục đại tu — bấm Đồng bộ hạng mục trước.");
       return { permitId: permit.id, items };
     },
-    routes: ({ permitId }) => overdue
-      ? [`/work-permits/${permitId}/lam-viec`]
+    routes: ({ permitId }) => overdue || closed
+      ? [`/work-permits/${permitId}/lam-viec`, ...(closed ? [`/work-permits/${permitId}/lam-viec?tien-do=1`] : [])]
       : [`/work-permits/${permitId}/lam-viec`, `/work-permits/${permitId}/lam-viec?end=1`, `/work-permits/${permitId}/lam-viec?tien-do=1`],
     // Hộp Kết thúc / Cập nhật tiến độ: tick hạng mục đầu + mở "Biện pháp thi công" để chụp thanh %, ô ghi chú (không lưu).
     async interact(page, route) {
@@ -78,9 +79,9 @@ function overhaulPreset(overdue) {
             overhaulPercents: { [`${items[0].source}\u0000${items[0].sheet}\u0000${items[0].code}`]: 30 },
           });
           const ended = json.data.sessions.filter((s) => s.endedAt);
-          json.data.status = overdue ? "WAITING" : "ACTIVE";
-          json.data.sessions = overdue ? ended : [liveSession(json.data, now), ...ended];
-          if (!overdue) json.data._count.sessions += 1;
+          json.data.status = closed ? "CLOSED" : overdue ? "WAITING" : "ACTIVE";
+          json.data.sessions = overdue || closed ? ended : [liveSession(json.data, now), ...ended];
+          if (!overdue && !closed) json.data._count.sessions += 1;
           json.meta = { ...json.meta, canExecute: true };
         }
         await route.fulfill({ response, json });
@@ -576,6 +577,7 @@ export const PRESETS = {
   "pct-tien-do-ngay": overhaulTodayPreset,
   "pct-dai-tu": overhaulPreset(false),
   "pct-dai-tu-qua-han": overhaulPreset(true),
+  "pct-dai-tu-cap-nhat-sau": overhaulPreset(false, true),
   "pct-lam-viec": {
     description: "Màn hình làm việc PCT nhà thầu, bảng Đang làm việc, popup phiếu, hộp kết thúc — lần làm việc giả lập",
     async prepare({ prisma }) {

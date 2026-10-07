@@ -355,12 +355,12 @@ export async function sharedOverhaulPercents(db: Prisma.TransactionClient | type
   });
   if (!permits.length) return latest;
   const sessions = await db.workPermitSession.findMany({ where: { permitId: { in: permits.map(permit => permit.id) } }, select: { itemProgress: true } });
-  for (const session of sessions) {
-    for (const item of overhaulItemProgressOf(session.itemProgress)) {
-      const key = overhaulItemKey(item);
-      if (!keys.has(key) || typeof item.percent !== "number") continue;
-      latest.set(key, Math.max(latest.get(key) ?? 0, item.percent));
-    }
+  // Cập nhật ngoài lần làm việc không có session — % nằm trên dòng hàng đợi Sheet kind MANUAL.
+  const manual = await db.overhaulSheetOutbox.findMany({ where: { kind: "MANUAL", permitId: { in: permits.map(permit => permit.id) }, percent: { not: null } }, select: { source: true, sheet: true, code: true, percent: true } });
+  for (const item of [...sessions.flatMap(session => overhaulItemProgressOf(session.itemProgress)), ...manual]) {
+    const key = overhaulItemKey(item);
+    if (!keys.has(key) || typeof item.percent !== "number") continue;
+    latest.set(key, Math.max(latest.get(key) ?? 0, item.percent));
   }
   return latest;
 }

@@ -1772,11 +1772,11 @@ model WorkPermitOverhaulItem {
 /// tác trên phiếu; lib/server/overhaul-sheet-writer.ts đẩy lên Sheet (ngay sau thao tác + timer 15 phút + job 16:00).
 model OverhaulSheetOutbox {
   id            String    @id @default(cuid())
-  /// Chống ghi đôi: S:<sessionId>:… (kết thúc ngày) · U:<sessionId>:<ms>:… (cập nhật) · N:<permitId>:<ngày>:… (không mở ngày) · C:<permitId>:… (kết thúc phiếu) · X:<permitId>:… (huỷ phiếu).
+  /// Chống ghi đôi: S:<sessionId>:… (kết thúc ngày) · U:<sessionId>:<ms>:… (cập nhật) · M:<permitId>:<ms>:… (cập nhật ngoài lần làm việc) · N:<permitId>:<ngày>:… (không mở ngày) · C:<permitId>:… (kết thúc phiếu) · X:<permitId>:… (huỷ phiếu).
   dedupeKey     String    @unique
   permitId      String
   sessionId     String?
-  /// SESSION_END | PROGRESS (cập nhật giữa chừng) | NO_SESSION | CLOSE | CANCEL (huỷ PCT giữ hạng mục cuối cùng)
+  /// SESSION_END | PROGRESS (cập nhật giữa chừng) | MANUAL (cập nhật ngoài lần làm việc, trạng thái do người cập nhật chọn) | NO_SESSION | CLOSE | CANCEL (huỷ PCT giữ hạng mục cuối cùng)
   kind          String
   /// Nguồn (BOILER/TURBINE/GENERATOR/CI) + tab + mã hạng mục — lấy từ ảnh chụp WorkPermit.overhaulItems.
   source        String

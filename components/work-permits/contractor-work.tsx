@@ -21,7 +21,7 @@ import { cn } from "@/lib/utils";
 import { normalizeText } from "@/lib/nav";
 import { useCreatePermitCompany, useDeletePermitCompany, useDeletePermitPerson, usePermitCompanySummary, usePermitPeople, useRenamePermitCompany, useSavePermitPerson, usePermitSessionAction, usePermitActivity } from "@/hooks/useWorkPermits";
 import { companyUnclassified, formatPermitNumber, isSessionCommander, PERMIT_KINDS, permitDeadline, workersStillInside } from "@/lib/work-permits";
-import { isOverhaulPaperPermit, overhaulItemKey, overhaulItemsOf } from "@/lib/work-permit-overhaul";
+import { isOverhaulPaperPermit, OVERHAUL_DAY_STATUSES, overhaulItemKey, overhaulItemsOf } from "@/lib/work-permit-overhaul";
 import { initialOverhaulDraft, OverhaulItemProgressEditor, overhaulDraftError, overhaulDraftPayload } from "@/components/work-permits/overhaul-item-progress";
 import { PermitDeadlineBadge } from "@/components/work-permits/permit-deadline";
 import { PERMIT_CONTRACTOR_SCOPES, type PermitCompanyScopes, type PermitContractorScope, type PermitDetailRow, type PermitMember, type PermitPerson, type PermitSession } from "@/lib/work-permits";
@@ -590,7 +590,9 @@ export function canUpdateOverhaulProgress(permit: PermitDetailRow) {
 
 export function SessionEditor({ permit, session, handoff = false, progressUpdate = false, onClose }: { permit: PermitDetailRow; session?: PermitSession; handoff?: boolean; progressUpdate?: boolean; onClose: () => void }) {
   // progressUpdate: "Cập nhật tiến độ" khi lần làm việc còn mở — giống hộp Kết thúc nhưng không có thời điểm / người xác nhận.
-  const updating = Boolean(session) && progressUpdate && !handoff;
+  // Không có `session` = cập nhật NGOÀI lần làm việc (phiếu đã cấp / chờ làm tiếp / đã kết thúc) — người cập nhật chọn trạng thái ghi Sheet.
+  const updating = progressUpdate && !handoff;
+  const offSession = updating && !session;
   const ending = Boolean(session) && !handoff && !updating;
   const [person, setPerson] = useState<Pick<PermitPerson, "id" | "name" | "code" | "company"> | null>(() => {
     if (handoff) return null;
@@ -618,6 +620,7 @@ export function SessionEditor({ permit, session, handoff = false, progressUpdate
     return initialOverhaulDraft(overhaulItems, previousPercents, preDone, permit.overhaulNotes);
   });
   const [noneDone, setNoneDone] = useState(false);
+  const [sheetStatus, setSheetStatus] = useState<string>(permit.status === "CLOSED" ? OVERHAUL_DAY_STATUSES.CLOSED : OVERHAUL_DAY_STATUSES.IN_PROGRESS);
   const itemError = overhaulItems.length ? overhaulDraftError(overhaulItems, itemDraft, previousPercents, updating ? null : noneDone) : null;
   // Ngày mới bắt đầu chỉ với CHTT; nhân viên phải được ghi nhận lại cho lần làm việc này.
   // Bàn giao trong cùng ngày vẫn giữ danh sách của lần đang mở.
@@ -631,23 +634,29 @@ export function SessionEditor({ permit, session, handoff = false, progressUpdate
     e.preventDefault(); e.stopPropagation(); setError("");
     if (itemError) { setError(itemError); return; }
     const timestamp = `${at}:00+07:00`;
-    const body = updating && session
-      ? { action: "progress", version: permit.version, sessionId: session.id, note, itemProgress: overhaulDraftPayload(overhaulItems, itemDraft) }
+    const body = updating
+      ? { action: "progress", version: permit.version, sessionId: session?.id ?? "", note, itemProgress: overhaulDraftPayload(overhaulItems, itemDraft), ...(offSession ? { sheetStatus } : {}) }
       : ending && session
       ? { action: "end", version: permit.version, sessionId: session.id, endedAt: timestamp, endConfirmedByName: name, endNote: note,
         ...(overhaulItems.length ? { itemProgress: overhaulDraftPayload(overhaulItems, itemDraft) } : { progress: Number(progress) }) }
       : { action: handoff ? "handoff" : "open", sessionId: session?.id, endNote: note, version: permit.version, commanderId: person?.id, openedAt: timestamp, authorizerName: name, members: additionalMembers };
-    try { await save.mutateAsync(body); toast.success(updating ? "Đã cập nhật tiến độ; Sheet tiến độ đại tu được ghi sau ít giây. Lần làm việc vẫn tiếp tục" : handoff ? "Đã bàn giao sang CHTT mới, giữ lịch sử và thời điểm bàn giao" : ending && overhaulItems.length ? "Đã kết thúc lần làm việc và ghi tiến độ từng hạng mục; Sheet tiến độ đại tu được cập nhật sau ít giây" : ending ? "Đã kết thúc lần làm việc; CHTT được giải phóng, PCT chờ làm tiếp" : "Đã mở lần làm việc và ghi nhận CHTT đang thực hiện"); onClose(); }
+    try { await save.mutateAsync(body); toast.success(offSession ? `Đã cập nhật tiến độ (${sheetStatus}); Sheet tiến độ đại tu được ghi sau ít giây` : updating ? "Đã cập nhật tiến độ; Sheet tiến độ đại tu được ghi sau ít giây. Lần làm việc vẫn tiếp tục" : handoff ? "Đã bàn giao sang CHTT mới, giữ lịch sử và thời điểm bàn giao" : ending && overhaulItems.length ? "Đã kết thúc lần làm việc và ghi tiến độ từng hạng mục; Sheet tiến độ đại tu được cập nhật sau ít giây" : ending ? "Đã kết thúc lần làm việc; CHTT được giải phóng, PCT chờ làm tiếp" : "Đã mở lần làm việc và ghi nhận CHTT đang thực hiện"); onClose(); }
     catch (e) { setError(e instanceof Error ? e.message : "Không thể ghi nhận lần làm việc"); }
   }
   return <Dialog open onOpenChange={v => { if (!v && !save.isPending) onClose(); }}><DialogContent className="max-w-3xl">
     <DialogTitle>{updating ? "Cập nhật tiến độ" : handoff ? "Đổi CHTT" : ending ? "Kết thúc ngày làm việc" : "Cho phép / mở lần làm việc"} · PCT {formatPermitNumber(permit)}</DialogTitle>
     {/* Hộp Kết thúc: bỏ lời dẫn cho gọn (giữ cho trình đọc màn hình). */}
-    <DialogDescription className={ending ? "sr-only" : undefined}>{updating ? "Ghi tiến độ từng hạng mục. Lần làm việc chưa kết thúc." : handoff ? "Chọn CHTT mới và thời điểm bàn giao thực tế. CHTT mới đang trong PCT khác, không được thực hiện thao tác này" : ending ? "Ghi thời điểm kết thúc thực tế. Thao tác này không đóng toàn bộ PCT." : "CHTT phải có trong danh sách nhà thầu, không trùng thời gian làm việc trên PCT khác, kể cả Cơ/Điện."}</DialogDescription>
+    <DialogDescription className={ending ? "sr-only" : undefined}>{offSession ? "Không có lần làm việc đang mở — tiến độ ghi vào ngày hôm nay trên Sheet tiến độ đại tu." : updating ? "Ghi tiến độ từng hạng mục. Lần làm việc chưa kết thúc." : handoff ? "Chọn CHTT mới và thời điểm bàn giao thực tế. CHTT mới đang trong PCT khác, không được thực hiện thao tác này" : ending ? "Ghi thời điểm kết thúc thực tế. Thao tác này không đóng toàn bộ PCT." : "CHTT phải có trong danh sách nhà thầu, không trùng thời gian làm việc trên PCT khác, kể cả Cơ/Điện."}</DialogDescription>
     <form onSubmit={submit}><fieldset disabled={save.isPending} className="space-y-4">
       {!ending && !updating && <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border p-3"><Button type="button" variant="outline" onClick={() => setPicking(true)}>Chọn CHTT nhà thầu *</Button><span className="text-sm">{person ? [person.name, person.code, person.company].filter(Boolean).join(" · ") : "Chưa chọn CHTT"}</span></div>}
       {session && <p className="text-sm">CHTT: <b>{session.commanderName}</b> · Mở lúc {fmt(session.openedAt)}</p>}
       {!updating && <div className="grid gap-4 sm:grid-cols-2"><label className="space-y-1 text-sm"><span>{handoff ? "Thời điểm bàn giao" : ending ? "Thời điểm kết thúc" : "Thời điểm cho phép"} (giờ Việt Nam) *</span><input className={control} type="datetime-local" value={at} required onChange={e => setAt(e.target.value)} /></label><PermitEmployeePicker label={handoff ? "Người xác nhận bàn giao" : ending ? "Người xác nhận kết thúc" : "Người cho phép làm việc"} value={name} onChange={setName} required /></div>}
+      {offSession && <fieldset className="space-y-2 rounded-lg border border-border p-3 text-sm"><legend className="px-1 font-medium">Trạng thái ghi lên Sheet *</legend>
+        <div className="grid gap-2 sm:grid-cols-2">{[OVERHAUL_DAY_STATUSES.IN_PROGRESS, OVERHAUL_DAY_STATUSES.CLOSED].map(value => <label key={value} className={`flex min-h-11 cursor-pointer items-center gap-2 rounded-lg border px-3 ${sheetStatus === value ? "border-blue-600 bg-blue-50 font-semibold text-blue-900 dark:bg-blue-950/40 dark:text-blue-100" : "border-border"}`}>
+          <input type="radio" name="sheetStatus" className="accent-blue-700" checked={sheetStatus === value} onChange={() => setSheetStatus(value)} /><span className="py-1.5">{value}{permit.status === "CLOSED" && value === OVERHAUL_DAY_STATUSES.CLOSED && <span className="block text-xs font-normal text-muted-foreground">Gợi ý — phiếu đã kết thúc</span>}</span>
+        </label>)}</div>
+        <p className="text-xs text-muted-foreground">Áp cho các hạng mục có tick ở dưới.</p>
+      </fieldset>}
       {overhaulItems.length > 0 && <OverhaulItemProgressEditor items={overhaulItems} previous={previousPercents} draft={itemDraft} onChange={setItemDraft} noneDone={noneDone} onNoneDone={setNoneDone} updating={updating} />}
       {ending && !overhaulItems.length && <label className="block space-y-2 text-sm"><span className="font-medium">Tiến độ công việc *</span><div className="flex items-center gap-4 rounded-lg border border-border p-3"><input className="h-2 flex-1 cursor-pointer accent-blue-700" type="range" min={0} max={100} step={1} value={progress} onChange={e => setProgress(e.target.value)} /><div className="relative w-28"><input className={`${control} pr-8 text-right tabular-nums`} type="number" min={0} max={100} step={1} required value={progress} onChange={e => setProgress(e.target.value)} /><span className="pointer-events-none absolute right-3 top-2.5 text-muted-foreground">%</span></div></div></label>}
       {!ending && !handoff && !updating && <><p className="rounded-lg bg-sky-50 p-3 text-sm text-sky-950">CHTT tự được tính vào người công tác. Tổng: {person ? 1 + additionalMembers.length : additionalMembers.length} người.</p><PermitMembersEditor members={additionalMembers} onChange={setMembers} commander={person ? { personId: person.id, name: person.name, code: person.code, company: person.company } : undefined}
