@@ -155,8 +155,8 @@ export function overhaulContentText(items: Pick<OverhaulItemSnapshot, "code" | "
   return `Thực hiện đại tu theo hạng mục ${codes}`;
 }
 
-/** Dòng đầu khối gợi ý ("- theo mã hạng mục:"); nhận cả dạng một dòng cũ "- theo hạng mục: 1.1, 1.2". */
-const CODES_HEADER = /^\s*-\s*theo\s+(?:mã\s+)?hạng mục\s*:\s*(.*)$/iu;
+/** Dòng đầu khối gợi ý ("Theo hạng mục:", 07/10/2026); nhận cả dạng cũ "- theo mã hạng mục:" và "- theo hạng mục: 1.1, 1.2". */
+const CODES_HEADER = /^\s*(?:-\s*)?theo\s+(?:mã\s+)?hạng mục\s*:\s*(.*)$/iu;
 /** Dòng hạng mục trong khối: "- 1.1.2.1 - Nội dung" (người cấp có thể xoá bớt phần nội dung). */
 const CODE_ITEM = /^\s*-\s*(\d+(?:\.\d+)+)\b/u;
 const codesIn = (text: string) => text.split(/[,;\s]+/).map(code => code.trim()).filter(code => /^\d+(?:\.\d+)+$/.test(code));
@@ -176,7 +176,7 @@ function splitOverhaulBlock(content: string) {
 
 /**
  * Nội dung công việc + khối GỢI Ý cuối (nghiệp vụ 04/10/2026), để người cấp phiếu giữ nguyên hoặc xoá bớt cho gọn:
- *   - theo mã hạng mục:
+ *   Theo hạng mục:
  *   - 1.1.2.1 - Chuẩn bị mặt bằng, tháo bao che cách âm khối turbine
  * Chọn lại hạng mục thì THAY cả khối; bỏ hết mã thì xoá khối; phần người dùng gõ phía trên giữ nguyên.
  */
@@ -184,7 +184,7 @@ export function withOverhaulCodesLine(content: string, items: Pick<OverhaulItemS
   const { base } = splitOverhaulBlock(content);
   if (!items.length) return base;
   const unique = [...new Map(items.map(item => [item.code, item])).values()].sort((a, b) => compareOverhaulCodes(a.code, b.code));
-  const block = ["- theo mã hạng mục:", ...unique.map(item => {
+  const block = ["Theo hạng mục:", ...unique.map(item => {
     const text = (item.content || item.device || "").replace(/\s+/g, " ").trim();
     return text ? `- ${item.code} - ${text}` : `- ${item.code}`;
   })].join("\n");
@@ -193,13 +193,13 @@ export function withOverhaulCodesLine(content: string, items: Pick<OverhaulItemS
 
 /**
  * Bản GỌN để hiển thị ở danh sách sổ, chi tiết phiếu, màn hình làm việc: khối gợi ý dài thu lại còn một dòng
- * "- theo hạng mục: 1.1.2.1, 1.1.2.2". Bản in và ô sửa vẫn dùng nội dung đầy đủ.
+ * "Theo hạng mục: 1.1.2.1, 1.1.2.2". Bản in và ô sửa vẫn dùng nội dung đầy đủ.
  */
 export function compactOverhaulContent(content: string) {
   if (!content || !/theo\s+(?:mã\s+)?hạng mục/iu.test(content)) return content;
   const { base, codes } = splitOverhaulBlock(content);
   if (!codes.length) return content;
-  const line = `- theo hạng mục: ${codes.join(", ")}`;
+  const line = `Theo hạng mục: ${codes.join(", ")}`;
   return base ? `${base}\n${line}` : line;
 }
 
@@ -217,7 +217,7 @@ export function overhaulJournalHeaderText(header: OverhaulJournalHeader | null |
 }
 /** Gợi ý "Số PCT - Nội dung": số gọn (bỏ đuôi /VH1-NĐDH) + nội dung một dòng, bỏ khối "theo hạng mục" dài. */
 export function overhaulJournalTitle(permit: { number: string; year: number; content: string }) {
-  const content = compactOverhaulContent(permit.content).replace(/\s+/g, " ").replace(/^-\s*/, "").trim();
+  const content = compactOverhaulContent(permit.content).split(/\r?\n/).map(line => line.replace(/\s+/g, " ").replace(/^-\s*/, "").trim()).filter(Boolean).join(" - ");
   return `${permit.number.trim()}/${permit.year}${content ? ` - ${content}` : ""}`.slice(0, OVERHAUL_JOURNAL_LIMITS.title);
 }
 

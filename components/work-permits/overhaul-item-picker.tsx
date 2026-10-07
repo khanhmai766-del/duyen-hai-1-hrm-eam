@@ -21,7 +21,7 @@ const confirmShared = (items: OverhaulItemOption[]) => window.confirm(items.leng
 
 /**
  * Nút "Chọn hạng mục đại tu" + chip mã đã chọn, đặt dưới ô Nội dung công việc của PCT nhà thầu · Đại tu.
- * Chọn xong: cuối Nội dung có khối gợi ý "- theo mã hạng mục:" + từng dòng "- <mã> - <nội dung>" (thay khối cũ); chi tiết từng mã in ở phụ lục.
+ * Chọn xong: cuối Nội dung có khối gợi ý "Theo hạng mục:" + từng dòng "- <mã> - <nội dung>" (thay khối cũ); chi tiết từng mã in ở phụ lục.
  */
 export function OverhaulContentField({ form, onApply, onExtraChange }: {
   form: PermitInput;
