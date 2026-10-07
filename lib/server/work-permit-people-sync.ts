@@ -129,7 +129,9 @@ function photoNeedsFetch(before: { photoKey: string | null; photoSource: string 
 }
 
 export async function syncPeopleList() {
-  const { rows } = await callSheet<{ rows: SheetRow[] }>({ format: "json" }, 90_000,
+  // Apps Script có lúc trả cả danh sách chậm hơn 60s. Phải nhỏ hơn proxy_read_timeout 180s của khối nginx riêng
+  // `location = /api/work-permits/people/sync` (thêm 07/10/2026) để người dùng thấy câu báo lỗi của app thay vì 504 trơn.
+  const { rows } = await callSheet<{ rows: SheetRow[] }>({ format: "json" }, 150_000,
     "Google Sheets không trả dữ liệu JSON. Kiểm tra đã thêm đoạn code đồng bộ vào Apps Script và triển khai lại web app");
   if (!Array.isArray(rows)) throw fail("Dữ liệu Google Sheets không đúng định dạng (thiếu rows)", 502);
   const unitOf = await unitByTab();
