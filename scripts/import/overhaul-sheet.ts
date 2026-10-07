@@ -10,7 +10,8 @@
  *   npm run overhaul:sheet -- --setup              # xem trước việc đổi danh sách trạng thái ô ngày (không ghi)
  *   npm run overhaul:sheet -- --setup --apply      # GHI: đổi danh sách thả xuống ô ngày sang bộ trạng thái mới
  *   npm run overhaul:sheet -- --unprotect [--apply]                # gỡ MỌI vùng khoá do web tạo (cột %, Trạng thái, ô ngày) — 06/10/2026
- *   npm run overhaul:sheet -- --protect --editor a@gmail.com           # xem trước khoá cột %, Trạng thái (đang khoá từ 06/10/2026)
+ *   npm run overhaul:sheet -- --unprotect --only "% Hoàn thành" [--apply]  # chỉ gỡ khoá cột % (mở cột F — 07/10/2026)
+ *   npm run overhaul:sheet -- --protect --editor a@gmail.com           # xem trước khoá cột Trạng thái (cột % để mở từ 07/10/2026)
  *   npm run overhaul:sheet -- --protect --editor a@gmail.com --apply   # GHI: khoá (chỉ tài khoản dịch vụ + --editor sửa được);
  *                                                  chạy lại sau khi thêm/bớt hạng mục để khoá đúng hàng
  *
@@ -45,7 +46,8 @@ async function main() {
     }
     if (flag("--unprotect") || flag("--unprotect-days")) {
       const apply = flag("--apply");
-      for (const line of await writer.unprotectOverhaulSheets(apply)) console.log(line);
+      const only = args.flatMap((arg, i) => arg === "--only" && args[i + 1] ? [args[i + 1]] : [])[0];
+      for (const line of await writer.unprotectOverhaulSheets(apply, only)) console.log(line);
       console.log(apply ? "Đã gỡ các vùng khoá do web tạo." : "Chỉ xem trước — thêm --apply để gỡ khoá trên Sheet.");
       return;
     }

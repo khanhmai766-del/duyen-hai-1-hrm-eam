@@ -58,11 +58,11 @@ Web là nguồn, Sheet theo web. Code: `lib/server/overhaul-sheet-writer.ts`; l�
   ô gộp / danh sách thả xuống / màu trạng thái từ cặp hàng hạng mục đầu tab. Sau đó tiến độ, nhật ký, kết thúc / huỷ phiếu
   ghi như hạng mục thường; đồng bộ 06:00 đọc lại mã PS (không ẩn hạng mục chưa kịp chèn). Chặn cấp phiếu khi: chưa chọn
   cương vị, cương vị không có tab, đơn vị chưa khai mã, thiếu nội dung — bỏ tick nếu không muốn tạo.
-- **Vùng khoá (cập nhật 06/10/2026 tối)**: cột **A–E** (khoá có sẵn của người soạn file) và cột **F:G** ("% Hoàn
-  thành", "Trạng thái hiện tại", từ hàng dữ liệu đầu tới hết tab — kể cả hàng PHÁT SINH chèn sau) chỉ
-  `khanh.mdk.tpcduyenhai@gmail.com` + tài khoản dịch vụ sửa được, trên 20 tab hạng mục. Cột ngày từ **H** trở đi để mở
-  cho mọi người có quyền chỉnh sửa file. Khoá lại: `npm run overhaul:sheet -- --protect --editor <email> --apply`; gỡ:
-  `--unprotect --apply`. Ô ngày nào có PCT cập nhật thì web vẫn ghi đè; trang web `/tien-ich/tien-do-dai-tu` chỉ hiện
+- **Vùng khoá (cập nhật 07/10/2026)**: cột **A–E** (khoá có sẵn của người soạn file) và cột **G** ("Trạng thái hiện
+  tại", từ hàng dữ liệu đầu tới hết tab — kể cả hàng PHÁT SINH chèn sau) chỉ `khanh.mdk.tpcduyenhai@gmail.com` + tài
+  khoản dịch vụ sửa được, trên 20 tab hạng mục. Cột **F** ("% Hoàn thành", mở từ 07/10/2026) và cột ngày từ **H** trở đi
+  để mở cho mọi người có quyền chỉnh sửa file. Khoá lại cột G: `npm run overhaul:sheet -- --protect --editor <email> --apply`
+  (không khoá cột F); chỉ gỡ khoá cột %: `--unprotect --only "% Hoàn thành" --apply`; gỡ hết: `--unprotect --apply`. Ô ngày nào có PCT cập nhật thì web vẫn ghi đè; trang web `/tien-ich/tien-do-dai-tu` chỉ hiện
   kết quả web ghi.
 - Không tìm thấy tab / mã / cột ngày, hoặc mã trùng trong tab → báo lỗi, **không đoán ghi chỗ khác**; thử lại theo
   khoảng tăng dần (15 phút → 24 giờ, tối đa 8 lần) rồi `FAILED`. Xem: `npm run overhaul:sheet -- --status`.

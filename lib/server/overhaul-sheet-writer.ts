@@ -228,8 +228,10 @@ function locate(layout: TabLayout, row: OverhaulSheetOutbox) {
 const PROTECT_TAG = "[dh1-web] Ô do web ghi";
 
 /**
- * Trạng thái hiện tại (06/10/2026 tối): ĐANG KHOÁ cột F:G mọi tab hạng mục (chủ file khanh.mdk.tpcduyenhai@gmail.com + tài
- * khoản dịch vụ), khoá A:E của người soạn file giữ nguyên; cột ngày từ H để mở. Chạy lại: `--protect --editor <email> --apply`.
+ * Trạng thái hiện tại (07/10/2026): CHỈ KHOÁ cột G "Trạng thái hiện tại" mọi tab hạng mục (chủ file khanh.mdk.tpcduyenhai@gmail.com
+ * + tài khoản dịch vụ), khoá A:E của người soạn file giữ nguyên; cột F "% Hoàn thành" và cột ngày từ H để mở cho mọi người
+ * (F mở từ 07/10/2026: 20 vùng chung "Khoá F:G" trên 4 file đã đổi thành vùng chỉ cột G, nhãn "· Trạng thái hiện tại").
+ * Chạy lại: `--protect --editor <email> --apply` (chỉ khoá G).
  * Khoá các ô web ghi đè (nghiệp vụ 04/10/2026): cột "% Hoàn thành", "Trạng thái hiện tại" (vùng dữ liệu). Từ 06/10/2026
  * KHÔNG khoá ô trạng thái từng ngày nữa (cột "Ngày 1…60", từ cột H) — người dùng nhập tay được; web vẫn ghi đè ô của ngày
  * có PCT cập nhật. Hàng "Nhật ký ngày" để mở như trước.
@@ -267,14 +269,15 @@ export async function protectOverhaulSheets(apply: boolean, editorEmails: string
       } } });
       const dataStart = layout.headerRow + 1;
       let count = 0;
-      for (const [column, what] of [[layout.percentColumn, "% Hoàn thành"], [layout.statusColumn, "Trạng thái hiện tại"]] as const) {
+      // Cột "% Hoàn thành" KHÔNG khoá nữa (nghiệp vụ 07/10/2026): mọi người nhập % trên Sheet được.
+      for (const [column, what] of [[layout.statusColumn, "Trạng thái hiện tại"]] as const) {
         if (column < 0) continue;
         // Không giới hạn hàng cuối: hàng PHÁT SINH chèn thêm sau này vẫn nằm trong vùng khoá.
         add({ startRowIndex: dataStart, startColumnIndex: column, endColumnIndex: column + 1 }, what);
         count++;
       }
       // Ô trạng thái từng ngày (cột "Ngày 1…60") KHÔNG khoá nữa (nghiệp vụ 06/10/2026): người dùng nhập tay được.
-      report.push(`  “${tab.title}”: ${layout.codeRow.size} hạng mục → ${count} vùng khoá (${columnLetter(layout.percentColumn)}, ${columnLetter(layout.statusColumn)}; cột ngày để mở)${ours.length ? ` · thay ${ours.length} vùng cũ` : ""}${others.length ? ` · giữ ${others.length} vùng khoá có sẵn của người khác: ${others.map(item => item.description || `#${item.protectedRangeId}`).join("; ")}` : ""}`);
+      report.push(`  “${tab.title}”: ${layout.codeRow.size} hạng mục → ${count} vùng khoá (${columnLetter(layout.statusColumn)}; cột % ${columnLetter(layout.percentColumn)} và cột ngày để mở)${ours.length ? ` · thay ${ours.length} vùng cũ` : ""}${others.length ? ` · giữ ${others.length} vùng khoá có sẵn của người khác: ${others.map(item => item.description || `#${item.protectedRangeId}`).join("; ")}` : ""}`);
     });
     if (apply) for (let k = 0; k < requests.length; k += 500) await batchUpdateSpreadsheet(spreadsheetId, requests.slice(k, k + 500));
   }
@@ -285,9 +288,11 @@ export async function protectOverhaulSheets(apply: boolean, editorEmails: string
  * Gỡ MỌI vùng khoá do web tạo (nhãn "[dh1-web] Ô do web ghi …") trên 4 file — nghiệp vụ 06/10/2026: mở cột "% Hoàn thành",
  * "Trạng thái hiện tại" và ô trạng thái ngày cho mọi người nhập tiến độ trên Sheet (đã chạy production 06/10: gỡ 1.821 vùng
  * ô ngày, rồi 38 vùng cột %/Trạng thái). Giữ mọi vùng khoá của người khác (vd A:E — chỉ liệt kê).
+ * `only`: chỉ gỡ vùng có nhãn cột đó (vd "% Hoàn thành" — mở cột F ngày 07/10/2026), các vùng web khác giữ nguyên.
  * Không cần danh sách người sửa. Mặc định chỉ báo; apply=true mới ghi. Chạy lại vô hại.
  */
-export async function unprotectOverhaulSheets(apply: boolean) {
+export async function unprotectOverhaulSheets(apply: boolean, only?: string) {
+  const mine = (description?: string) => Boolean(description?.startsWith(PROTECT_TAG)) && (!only || description === `${PROTECT_TAG} · ${only}`);
   const links = await overhaulScheduleLinks();
   const report: string[] = [];
   for (const source of Object.keys(OVERHAUL_SOURCES) as OverhaulSource[]) {
@@ -298,11 +303,11 @@ export async function unprotectOverhaulSheets(apply: boolean) {
     const requests: object[] = [];
     report.push(`${OVERHAUL_SOURCES[source]} · ${meta.title}`);
     for (const [title, ranges] of existing) {
-      const ours = ranges.filter(item => item.description?.startsWith(PROTECT_TAG));
-      const keep = ranges.filter(item => !item.description?.startsWith(PROTECT_TAG));
+      const ours = ranges.filter(item => mine(item.description));
+      const keep = ranges.filter(item => !mine(item.description));
       for (const item of ours) requests.push({ deleteProtectedRange: { protectedRangeId: item.protectedRangeId } });
       if (!ours.length && !keep.length) continue;
-      report.push(`  “${title}”: gỡ ${ours.length} vùng khoá do web tạo${keep.length ? ` · giữ ${keep.length}: ${keep.map(item => item.description || `#${item.protectedRangeId}`).join("; ")}` : ""}`);
+      report.push(`  “${title}”: gỡ ${ours.length} vùng khoá ${only ? `“${only}”` : "do web tạo"}${keep.length ? ` · giữ ${keep.length}: ${keep.map(item => item.description || `#${item.protectedRangeId}`).join("; ")}` : ""}`);
     }
     if (apply) for (let k = 0; k < requests.length; k += 500) await batchUpdateSpreadsheet(spreadsheetId, requests.slice(k, k + 500));
   }
