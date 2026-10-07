@@ -228,7 +228,8 @@ function locate(layout: TabLayout, row: OverhaulSheetOutbox) {
 const PROTECT_TAG = "[dh1-web] Ô do web ghi";
 
 /**
- * ⚠️ KHÔNG CHẠY trong đợt đại tu S2: từ 06/10/2026 cả 4 file để MỞ cho mọi người nhập tiến độ (xem unprotectOverhaulSheets).
+ * Trạng thái hiện tại (06/10/2026 tối): ĐANG KHOÁ cột F:G mọi tab hạng mục (chủ file khanh.mdk.tpcduyenhai@gmail.com + tài
+ * khoản dịch vụ), khoá A:E của người soạn file giữ nguyên; cột ngày từ H để mở. Chạy lại: `--protect --editor <email> --apply`.
  * Khoá các ô web ghi đè (nghiệp vụ 04/10/2026): cột "% Hoàn thành", "Trạng thái hiện tại" (vùng dữ liệu). Từ 06/10/2026
  * KHÔNG khoá ô trạng thái từng ngày nữa (cột "Ngày 1…60", từ cột H) — người dùng nhập tay được; web vẫn ghi đè ô của ngày
  * có PCT cập nhật. Hàng "Nhật ký ngày" để mở như trước.
@@ -268,7 +269,8 @@ export async function protectOverhaulSheets(apply: boolean, editorEmails: string
       let count = 0;
       for (const [column, what] of [[layout.percentColumn, "% Hoàn thành"], [layout.statusColumn, "Trạng thái hiện tại"]] as const) {
         if (column < 0) continue;
-        add({ startRowIndex: dataStart, endRowIndex: tab.rowCount, startColumnIndex: column, endColumnIndex: column + 1 }, what);
+        // Không giới hạn hàng cuối: hàng PHÁT SINH chèn thêm sau này vẫn nằm trong vùng khoá.
+        add({ startRowIndex: dataStart, startColumnIndex: column, endColumnIndex: column + 1 }, what);
         count++;
       }
       // Ô trạng thái từng ngày (cột "Ngày 1…60") KHÔNG khoá nữa (nghiệp vụ 06/10/2026): người dùng nhập tay được.

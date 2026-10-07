@@ -58,12 +58,12 @@ Web là nguồn, Sheet theo web. Code: `lib/server/overhaul-sheet-writer.ts`; l�
   ô gộp / danh sách thả xuống / màu trạng thái từ cặp hàng hạng mục đầu tab. Sau đó tiến độ, nhật ký, kết thúc / huỷ phiếu
   ghi như hạng mục thường; đồng bộ 06:00 đọc lại mã PS (không ẩn hạng mục chưa kịp chèn). Chặn cấp phiếu khi: chưa chọn
   cương vị, cương vị không có tab, đơn vị chưa khai mã, thiếu nội dung — bỏ tick nếu không muốn tạo.
-- **Vùng khoá: KHÔNG khoá trong đợt S2.** Từ 06/10/2026 cột "% Hoàn thành", "Trạng thái hiện tại" và ô trạng thái
-  từng ngày (cột F trở đi) **để mở** cho mọi người nhập tiến độ trên Sheet — đã gỡ toàn bộ vùng khoá do web tạo bằng
-  `npm run overhaul:sheet -- --unprotect --apply` (giữ vùng khoá A:E của người soạn file). Đừng chạy lại `--protect`.
-  Ô nào có PCT cập nhật thì web vẫn ghi đè (ô ngày, "Trạng thái hiện tại"; "% Hoàn thành" chỉ khi bằng/cao hơn số web
-  đã ghi). Trang web `/tien-ich/tien-do-dai-tu` chỉ hiện kết quả web ghi; % nhập tay trên Sheet chỉ được web đọc ở lần
-  đồng bộ hạng mục (06:00 hằng ngày) và dùng cho hạng mục web chưa ghi %.
+- **Vùng khoá (cập nhật 06/10/2026 tối)**: cột **A–E** (khoá có sẵn của người soạn file) và cột **F:G** ("% Hoàn
+  thành", "Trạng thái hiện tại", từ hàng dữ liệu đầu tới hết tab — kể cả hàng PHÁT SINH chèn sau) chỉ
+  `khanh.mdk.tpcduyenhai@gmail.com` + tài khoản dịch vụ sửa được, trên 20 tab hạng mục. Cột ngày từ **H** trở đi để mở
+  cho mọi người có quyền chỉnh sửa file. Khoá lại: `npm run overhaul:sheet -- --protect --editor <email> --apply`; gỡ:
+  `--unprotect --apply`. Ô ngày nào có PCT cập nhật thì web vẫn ghi đè; trang web `/tien-ich/tien-do-dai-tu` chỉ hiện
+  kết quả web ghi.
 - Không tìm thấy tab / mã / cột ngày, hoặc mã trùng trong tab → báo lỗi, **không đoán ghi chỗ khác**; thử lại theo
   khoảng tăng dần (15 phút → 24 giờ, tối đa 8 lần) rồi `FAILED`. Xem: `npm run overhaul:sheet -- --status`.
 - Thao tác trên phiếu chỉ ghi hàng đợi `OverhaulSheetOutbox` trong cùng transaction; đẩy lên Google ngay sau khi trả
