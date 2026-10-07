@@ -2,6 +2,9 @@ import type { NextRequest } from "next/server";
 import { fail, handle, requireUser } from "@/lib/api";
 import { getS3Object } from "@/lib/s3";
 import { bbntHandwrittenFileName } from "@/lib/material-document-name";
+import { prisma } from "@/lib/prisma";
+import { lookupModulesFor } from "@/lib/server/lookup-access";
+import { requireDigitalDocumentReadPermission } from "@/lib/document-read-access";
 import {
   avatarNotModified,
   avatarResponseBody,
@@ -37,9 +40,27 @@ function contentDisposition(fileName: string) {
 
 export async function GET(req: NextRequest) {
   return handle(async () => {
-    await requireUser();
+    const user = await requireUser();
     const key = req.nextUrl.searchParams.get("key")?.trim() ?? "";
     if (!validKey(key)) return fail("Key không hợp lệ", 400);
+    if (user.accessMode === "DEFECT_READ_ONLY") {
+      const modules = await lookupModulesFor(user.id);
+      const own = await prisma.user.findUnique({ where: { id: user.id }, select: { avatarKey: true, signatureKey: true } });
+      let allowed = key === own?.avatarKey || key === own?.signatureKey || key.startsWith("avatars/");
+      const folders: Array<[string, string[]]> = [
+        ["defects/", ["defects"]], ["equipment/", ["devices", "reports"]],
+        ["materials/", ["materials", "material-plans", "material-tickets"]],
+        ["material-tickets/", ["material-tickets"]], ["announcements/", ["notifications"]],
+        ["grounding-lightning/", ["grounding"]], ["pccc/", ["pccc"]], ["signatures/", ["pccc"]],
+        ["tbycnn/", ["tbycnn"]], ["work-permits/", ["work-permits"]], ["work-permit-people/", ["work-permits"]],
+      ];
+      allowed ||= folders.some(([folder, ids]) => key.startsWith(folder) && modules.some(id => ids.includes(id)));
+      if (!allowed && key.startsWith("digital-documents/")) {
+        const document = await prisma.digitalDocument.findFirst({ where: { attachmentUrls: { contains: key } }, select: { category: true } });
+        if (document) { await requireDigitalDocumentReadPermission(user, document.category); allowed = true; }
+      }
+      if (!allowed) return fail("Tài khoản tra cứu chưa được cấp quyền đọc tệp này", 403);
+    }
     const requestedFileName = req.nextUrl.searchParams.get("filename")?.trim();
     const requestedDeviceName = req.nextUrl.searchParams.get("deviceName")?.trim();
 

@@ -6,6 +6,7 @@ import { effectiveUserPosition } from "@/lib/current-position";
 import { prisma } from "@/lib/prisma";
 import { ADMIN_MODE_COOKIE, adminModeEnabled } from "@/lib/admin-mode";
 import { UploadRejectedError } from "@/lib/upload-guard";
+import { LOOKUP_ACCESS_MODE } from "@/lib/lookup-access";
 
 let userPositionColumnsReady = false;
 
@@ -59,6 +60,7 @@ export async function requireUser() {
   const currentPosition = effectiveUserPosition(dbUser) ?? undefined;
   const effectiveRole =
     // Next 15+ cookies() trả về Promise — gọi đồng bộ trên Next 16 là TypeError ở MỌI API.
+    dbUser.accessMode === LOOKUP_ACCESS_MODE ? "VIEWER" :
     dbUser.role === "ADMIN" && !adminModeEnabled((await cookies()).get(ADMIN_MODE_COOKIE)?.value)
       ? "MANAGER"
       : dbUser.role;

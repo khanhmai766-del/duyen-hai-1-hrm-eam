@@ -125,7 +125,10 @@ export async function resolvePositionViewScope(
   user: PositionCarrier,
   area: PositionScopeArea
 ): Promise<PositionViewScope> {
-  if (user.accessMode === "DEFECT_READ_ONLY" && area === "defect") return POSITION_SCOPE_ALL;
+  if (user.accessMode === "DEFECT_READ_ONLY") {
+    return await hasPermissionLevel(user, POSITION_SCOPE_PERMISSION[area], ["read"])
+      ? POSITION_SCOPE_ALL : { all: false, codes: [] };
+  }
   if (user.role === "ADMIN") return POSITION_SCOPE_ALL;
   if (await hasPermissionLevel(user, POSITION_SCOPE_PERMISSION[area], ["manage", "full"])) {
     return POSITION_SCOPE_ALL;

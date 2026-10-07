@@ -38,6 +38,10 @@ const PERMIT_BRANCH_HEADS: Partial<Record<PositionCode, PositionCode[]>> = {
 };
 
 export async function permitScopeOf(user: PermitScopeUser): Promise<PositionViewScope> {
+  if (user.accessMode === "DEFECT_READ_ONLY") {
+    if (!await hasPermissionLevel(user, POSITION_SCOPE_PERMISSION.workPermit, ["read"])) throw fail("Tài khoản chưa được cấp quyền xem sổ cấp PCT", 403);
+    return POSITION_SCOPE_ALL;
+  }
   if (user.role === "ADMIN") return POSITION_SCOPE_ALL;
   if (await hasPermissionLevel(user, POSITION_SCOPE_PERMISSION.workPermit, ["manage", "full"])) return POSITION_SCOPE_ALL;
   const active = String(user.currentPosition ?? user.primaryPosition ?? user.position ?? "").trim();

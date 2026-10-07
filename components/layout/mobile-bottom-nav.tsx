@@ -1,4 +1,5 @@
 "use client";
+import { lookupNavSections } from "@/lib/lookup-access";
 
 import * as React from "react";
 import Link from "next/link";
@@ -29,6 +30,7 @@ import {
 import { useAdminMode } from "@/hooks/useAdminMode";
 import { useRbacAccess } from "@/hooks/useRbacAccess";
 import {
+  NAV_SECTIONS,
   navItemAllowedForPosition,
   navSectionsForPosition,
   normalizeText,
@@ -91,7 +93,7 @@ function sectionTitle(section: NavSection) {
 export function MobileBottomNav({ onOpenAllMenu }: { onOpenAllMenu: () => void }) {
   const pathname = usePathname();
   const { data: session } = useSession();
-  const { can } = useRbacAccess();
+  const { can, canReadPage, lookupModules } = useRbacAccess();
   const [adminMode] = useAdminMode();
   const [defectOpen, setDefectOpen] = React.useState(false);
   const [moreOpen, setMoreOpen] = React.useState(false);
@@ -110,17 +112,16 @@ export function MobileBottomNav({ onOpenAllMenu }: { onOpenAllMenu: () => void }
   );
 
   const moreSections = React.useMemo<MoreSection[]>(() => {
-    if (readOnlyDefects) return [];
-    return navSectionsForPosition(positionCarrier)
+    return (readOnlyDefects ? lookupNavSections(NAV_SECTIONS, lookupModules) : navSectionsForPosition(positionCarrier))
       .map((section) => {
         const items = section.items.flatMap((item) => {
           if (item.children?.length) {
             return item.children.filter((child) =>
-              mobileMoreItemAllowed(section.title, child)
+              (readOnlyDefects || mobileMoreItemAllowed(section.title, child))
               && itemAllowed(child, user?.role, can, adminMode, positionCarrier)
             );
           }
-          return mobileMoreItemAllowed(section.title, item)
+          return (readOnlyDefects || mobileMoreItemAllowed(section.title, item))
             && itemAllowed(item, user?.role, can, adminMode, positionCarrier)
             ? [item]
             : [];
@@ -128,7 +129,7 @@ export function MobileBottomNav({ onOpenAllMenu }: { onOpenAllMenu: () => void }
         return { title: sectionTitle(section), items };
       })
       .filter((section) => section.items.length > 0);
-  }, [adminMode, can, positionCarrier, readOnlyDefects, user?.role]);
+  }, [adminMode, can, positionCarrier, readOnlyDefects, user?.role, lookupModules]);
 
   const filteredSections = React.useMemo(() => {
     const key = normalizeText(query);
@@ -166,9 +167,9 @@ export function MobileBottomNav({ onOpenAllMenu }: { onOpenAllMenu: () => void }
         className="no-print fixed inset-x-0 bottom-0 z-40 border-t border-slate-200/90 bg-white/95 pb-[env(safe-area-inset-bottom)] shadow-[0_-12px_30px_-18px_rgba(15,23,42,0.45)] backdrop-blur-xl dark:border-slate-700 dark:bg-slate-950/95 lg:hidden"
       >
         <div className="mx-auto grid h-[68px] max-w-lg grid-cols-5 items-end px-1">
-          <BottomLink href="/hr" label="Lịch làm việc" icon={CalendarDays} active={routeMatches(pathname, "/hr")} disabled={readOnlyDefects} />
+          <BottomLink href="/hr" label="Lịch làm việc" icon={CalendarDays} active={routeMatches(pathname, "/hr")} disabled={!canReadPage("/hr")} />
           <BottomButton
-            label="Khiếm khuyết"
+            label={readOnlyDefects ? "Tra cứu" : "Khiếm khuyết"}
             icon={ShieldAlert}
             active={defectOpen || routeMatches(pathname, "/defects") || routeMatches(pathname, "/work-permits")}
             onClick={() => setDefectOpen(true)}
@@ -193,7 +194,7 @@ export function MobileBottomNav({ onOpenAllMenu }: { onOpenAllMenu: () => void }
             label="Vật tư"
             icon={Package}
             active={routeMatches(pathname, "/replacement-procedures")}
-            disabled={readOnlyDefects}
+            disabled={!canReadPage("/replacement-procedures")}
           />
           <BottomButton label="Thêm" icon={MoreHorizontal} active={moreActive} onClick={() => setMoreOpen(true)} />
         </div>
@@ -206,7 +207,7 @@ export function MobileBottomNav({ onOpenAllMenu }: { onOpenAllMenu: () => void }
             <DialogDescription>Mở khiếm khuyết theo chuyên ngành hoặc sổ cấp phiếu công tác.</DialogDescription>
           </DialogHeader>
           <div className="grid gap-3 pt-2 sm:grid-cols-2">
-            <DialogClose asChild>
+            {canReadPage("/defects") && <DialogClose asChild>
               <Link
                 href="/defects?phan=co"
                 className="flex min-h-20 items-center gap-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-amber-950 transition-colors active:bg-amber-100 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100"
@@ -215,8 +216,8 @@ export function MobileBottomNav({ onOpenAllMenu }: { onOpenAllMenu: () => void }
                 <span className="min-w-0 flex-1"><span className="block font-bold">Cơ – Hóa</span><span className="text-xs opacity-70">Thiết bị cơ khí và hóa</span></span>
                 <ChevronRight className="h-5 w-5" />
               </Link>
-            </DialogClose>
-            <DialogClose asChild>
+            </DialogClose>}
+            {canReadPage("/defects") && <DialogClose asChild>
               <Link
                 href="/defects?phan=dien"
                 className="flex min-h-20 items-center gap-4 rounded-2xl border border-sky-200 bg-sky-50 p-4 text-sky-950 transition-colors active:bg-sky-100 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-100"
@@ -225,8 +226,8 @@ export function MobileBottomNav({ onOpenAllMenu }: { onOpenAllMenu: () => void }
                 <span className="min-w-0 flex-1"><span className="block font-bold">Điện</span><span className="text-xs opacity-70">Thiết bị và hệ thống điện</span></span>
                 <ChevronRight className="h-5 w-5" />
               </Link>
-            </DialogClose>
-            {!readOnlyDefects && <DialogClose asChild>
+            </DialogClose>}
+            {canReadPage("/work-permits") && <DialogClose asChild>
               <Link
                 href="/work-permits"
                 className="flex min-h-20 items-center gap-4 rounded-2xl border border-indigo-200 bg-indigo-50 p-4 text-indigo-950 transition-colors active:bg-indigo-100 dark:border-indigo-800 dark:bg-indigo-950/40 dark:text-indigo-100"

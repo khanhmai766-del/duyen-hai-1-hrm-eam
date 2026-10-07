@@ -81,7 +81,11 @@ export async function GET(req: NextRequest) {
           signatureKey: null as string | null,
         }));
       });
-      return ok(data);
+      return ok(user.accessMode === "DEFECT_READ_ONLY" ? data.map(account => ({
+        id: account.id, name: account.name, employeeId: account.employeeId,
+        position: account.position, secondaryPosition: account.secondaryPosition, secondaryPosition2: account.secondaryPosition2,
+        currentPosition: account.currentPosition, isActive: account.isActive, avatarUrl: account.avatarUrl,
+      })) : data);
     }
     await requireUserAdminReadAccess(user);
     const users = await prisma.user.findMany({ orderBy: { employeeId: "asc" } });

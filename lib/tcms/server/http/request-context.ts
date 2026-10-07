@@ -10,6 +10,11 @@ async function resolveRequestContext(request: Request) {
   const user = await requireUser();
   await requirePermissionLevel(user, "contract-access", ["read", "personal", "manage", "full"], "Bạn không có quyền truy cập quản lý hợp đồng.");
   const principal = await resolvePrincipal({ subject: `vh1:${user.id}`, mfaVerified: false });
+  if (user.accessMode === "DEFECT_READ_ONLY") {
+    if (!["GET", "HEAD"].includes(request.method)) throw new AuthenticationError("READ_ONLY_ACCOUNT");
+    // Giữ phạm vi hợp đồng đã được phân công, chỉ hạ quyền thao tác về VIEWER.
+    principal.roles = ["VIEWER"];
+  }
   principal.websiteSession = true;
   const canAdminister = await hasPermissionLevel(user, "contract-access", ["full"]);
   // Contract roles never grant access to website administration or invent MFA claims.

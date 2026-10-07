@@ -1,5 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { DEFAULT_RBAC_MATRIX } from "@/lib/rbac-defaults";
+import { LOOKUP_ACCESS_MODE, lookupPermissionIds } from "@/lib/lookup-access";
+import { lookupModulesFor } from "@/lib/server/lookup-access";
 
 const RBAC_CONFIG_KEY = "rbac-permissions";
 const ROLE_PROFILE_PERMISSION = "__ROLE_PROFILE__";
@@ -109,7 +111,11 @@ function satisfiesAllowedLevels(level: PermissionLevel, allowed: PermissionLevel
   return false;
 }
 
-export async function assignedPermissionLevel(user: { id?: string; role?: string }, permissionId: string): Promise<PermissionLevel> {
+export async function assignedPermissionLevel(user: { id?: string; role?: string; accessMode?: string }, permissionId: string): Promise<PermissionLevel> {
+  if (user.accessMode === LOOKUP_ACCESS_MODE) {
+    if (!user.id) return "none";
+    return lookupPermissionIds(await lookupModulesFor(user.id)).includes(permissionId) ? "read" : "none";
+  }
   if (user.role === "ADMIN") return "full";
   if (!user.id) return "none";
   const config = await readRbacConfig();
@@ -153,7 +159,12 @@ function assignedPermissionLevelFromConfig(
   return strongestPermission([roleValue, ...overrideValues]);
 }
 
-export async function assignedPermissionMap(user: { id?: string; role?: string }) {
+export async function assignedPermissionMap(user: { id?: string; role?: string; accessMode?: string }) {
+  if (user.accessMode === LOOKUP_ACCESS_MODE) {
+    const allowed = user.id ? lookupPermissionIds(await lookupModulesFor(user.id)) : [];
+    return Object.fromEntries([...new Set([...Object.keys(DEFAULT_RBAC_MATRIX), ...allowed])]
+      .map(id => [id, allowed.includes(id) ? "read" : "none"])) as Record<string, PermissionLevel>;
+  }
   const config = await readRbacConfig();
   const configPermissionIds = Array.isArray(config?.permissions) ? config.permissions.map((permission) => permission.id) : [];
   const permissionIds = Array.from(new Set([...Object.keys(DEFAULT_RBAC_MATRIX), ...configPermissionIds]));
@@ -163,7 +174,7 @@ export async function assignedPermissionMap(user: { id?: string; role?: string }
 }
 
 export async function hasAssignedPermissionLevel(
-  user: { id?: string; role?: string },
+  user: { id?: string; role?: string; accessMode?: string },
   permissionId: string,
   allowed: PermissionLevel[]
 ) {
@@ -171,10 +182,10 @@ export async function hasAssignedPermissionLevel(
   return satisfiesAllowedLevels(level, allowed);
 }
 
-export async function hasAssignedManagePermission(user: { id?: string; role?: string }, permissionId: string) {
+export async function hasAssignedManagePermission(user: { id?: string; role?: string; accessMode?: string }, permissionId: string) {
   return allowsManage(await assignedPermissionLevel(user, permissionId));
 }
 
-export async function hasAssignedPermission(user: { id?: string; role?: string }, permissionId: string) {
+export async function hasAssignedPermission(user: { id?: string; role?: string; accessMode?: string }, permissionId: string) {
   return allowsView(await assignedPermissionLevel(user, permissionId));
 }

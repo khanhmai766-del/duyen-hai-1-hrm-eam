@@ -323,7 +323,7 @@ export function PositionSystemScopeCard({ isAdmin }: { isAdmin: boolean }) {
                     onClick={() => setAccess(node.seq, opt.value)}
                     title={opt.label}
                     className={cn(
-                      "inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed",
+                      "inline-flex min-h-10 min-w-10 items-center justify-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed sm:min-h-0 sm:min-w-0",
                       opt.className
                     )}
                   >

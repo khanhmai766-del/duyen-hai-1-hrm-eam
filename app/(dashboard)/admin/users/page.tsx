@@ -315,7 +315,7 @@ export default function AdminUsersPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="QUẢN LÝ NGƯỜI DÙNG" description="Tài khoản & phân quyền hệ thống">
+      <PageHeader stacked title="QUẢN LÝ NGƯỜI DÙNG" description="Tài khoản & phân quyền hệ thống">
         <div className="relative">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
@@ -437,15 +437,15 @@ export default function AdminUsersPage() {
                         onClick={() => toggleActive(u.id, !u.isActive)}
                         disabled={!canManageUsers}
                         title={u.isActive ? "Đang hoạt động" : "Ngừng hoạt động"}
-                        className={`relative h-7 w-12 rounded-full shadow-inner ring-1 transition-all duration-300 ${
+                        className={`relative h-10 w-14 rounded-full shadow-inner ring-1 transition-all duration-300 ${
                           u.isActive
                             ? "bg-gradient-to-b from-emerald-400 to-green-600 ring-green-700/30"
                             : "bg-gradient-to-b from-slate-200 to-slate-400 ring-slate-400/40"
                         }`}
                       >
                         <span
-                          className={`absolute top-0.5 flex h-6 w-6 items-center justify-center rounded-full bg-white shadow-md ring-1 ring-black/5 transition-all duration-300 ${
-                            u.isActive ? "translate-x-[22px]" : "translate-x-0.5"
+                          className={`absolute top-2 flex h-6 w-6 items-center justify-center rounded-full bg-white shadow-md ring-1 ring-black/5 transition-all duration-300 ${
+                            u.isActive ? "translate-x-[28px]" : "translate-x-1"
                           }`}
                         >
                           <span className={`h-1.5 w-1.5 rounded-full ${u.isActive ? "bg-green-500" : "bg-slate-400"}`} />
@@ -552,7 +552,7 @@ export default function AdminUsersPage() {
           </div>
         </CardHeader>
         <CardContent className="p-0">
-          <div className="grid gap-3 border-b border-border bg-slate-50/70 p-4 md:grid-cols-2 xl:grid-cols-[minmax(240px,1fr)_220px_170px_170px_auto]">
+          <div className="grid gap-3 border-b border-border bg-slate-50/70 p-4 md:grid-cols-2 2xl:grid-cols-[minmax(0,1fr)_220px_170px_170px_auto]">
               <div className="relative">
                 <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input value={auditSearch} onChange={(event) => setAuditSearch(event.target.value)} className="bg-white pl-9" placeholder={auditTab === "activity" ? "Người dùng, đối tượng hoặc nội dung" : "Người thao tác, đối tượng, mã hoặc IP"} aria-label={auditTab === "activity" ? "Tìm kiếm nhật ký hoạt động" : "Tìm kiếm audit hệ thống"} />
@@ -666,7 +666,7 @@ export default function AdminUsersPage() {
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="NORMAL">Sử dụng bình thường</SelectItem>
-                  <SelectItem value="DEFECT_READ_ONLY">Chỉ tra cứu khiếm khuyết</SelectItem>
+                  <SelectItem value="DEFECT_READ_ONLY">Tài khoản tra cứu</SelectItem>
                 </SelectContent>
               </Select>
             </Field>
@@ -1258,7 +1258,7 @@ function EditUserDialog({ target, onClose }: { target: SafeUser | null; onClose:
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="NORMAL">Sử dụng bình thường</SelectItem>
-                  <SelectItem value="DEFECT_READ_ONLY">Chỉ tra cứu khiếm khuyết</SelectItem>
+                  <SelectItem value="DEFECT_READ_ONLY">Tài khoản tra cứu</SelectItem>
                 </SelectContent>
               </Select>
             </Field>

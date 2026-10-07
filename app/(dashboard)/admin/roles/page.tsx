@@ -42,6 +42,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { RoleBadge } from "@/components/devices/status-badge";
 import { PositionSystemScopeCard } from "@/components/admin/position-system-scope-card";
+import { LookupPermissionsDialog } from "@/components/admin/lookup-permissions-dialog";
+import { removeRoleProfile } from "@/lib/rbac-role-profile";
 import { WorkflowRolesDialog } from "@/components/materials/MaterialTicketBoard";
 import { useUpdateUser, useUsers } from "@/hooks/useUsers";
 import { useRbacAccess } from "@/hooks/useRbacAccess";
@@ -970,6 +972,8 @@ export default function RolesPage() {
   const [userOverrides, setUserOverrides] = React.useState<UserPermissionOverride[]>([]);
   const [editMode, setEditMode] = React.useState(false);
   const [workflowRolesOpen, setWorkflowRolesOpen] = React.useState(false);
+  const [lookupPermissionsOpen, setLookupPermissionsOpen] = React.useState(false);
+  const [deletingRole, setDeletingRole] = React.useState<RoleColumn | null>(null);
   const [addOpen, setAddOpen] = React.useState(false);
   const [assignOpen, setAssignOpen] = React.useState(false);
   const [assignUserOpen, setAssignUserOpen] = React.useState(false);
@@ -1197,13 +1201,37 @@ export default function RolesPage() {
 
   function resetDefaultMatrix() {
     const nextPermissions = normalizeMergedRoleMatrix(DEFAULT_PERMISSIONS);
+    const customRoleIds = new Set(customRoles.map(role => role.id));
+    const nextOverrides = userOverrides.filter(item => !item.roleId || !customRoleIds.has(item.roleId));
     setPermissions(nextPermissions);
     setCustomRoles([]);
-    saveCurrentConfig(nextPermissions, userOverrides, []);
+    setUserOverrides(nextOverrides);
+    saveCurrentConfig(nextPermissions, nextOverrides, []);
+  }
+
+  async function deleteRoleProfile() {
+    if (!deletingRole || !customRoles.some(role => role.id === deletingRole.id && role.custom)) return;
+    const nextRoles = customRoles.filter(role => role.id !== deletingRole.id);
+    const next = removeRoleProfile(deletingRole.id, permissions, userOverrides);
+    try {
+      await saveRbac.mutateAsync({ permissions: normalizeMergedRoleMatrix(next.permissions), roles: nextRoles, userOverrides: next.userOverrides });
+      setPermissions(next.permissions);
+      setUserOverrides(next.userOverrides);
+      setCustomRoles(nextRoles);
+      setAssignment(current => current.profileId === deletingRole.id ? { ...current, profileId: "" } : current);
+      setDeletingRole(null);
+    } catch { /* useMutation hiển thị lỗi, giữ hộp thoại để thử lại. */ }
   }
 
   return (
     <div className="space-y-6">
+      <LookupPermissionsDialog open={lookupPermissionsOpen} onOpenChange={setLookupPermissionsOpen} />
+      <Dialog open={Boolean(deletingRole)} onOpenChange={open => { if (!open && !saveRbac.isPending) setDeletingRole(null); }}>
+        <DialogContent className="max-w-md"><DialogHeader><DialogTitle>Xoá phân quyền “{deletingRole?.label}”?</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground">Cột của phân quyền này và {userOverrides.filter(item => item.roleId === deletingRole?.id).length} liên kết gán quyền sẽ được xoá. Các quyền riêng khác và vai trò hệ thống của tài khoản được giữ nguyên.</p>
+          <DialogFooter className="gap-2"><Button variant="outline" disabled={saveRbac.isPending} onClick={() => setDeletingRole(null)}>Huỷ</Button><Button variant="destructive" disabled={saveRbac.isPending} onClick={() => void deleteRoleProfile()}>{saveRbac.isPending ? "Đang xoá…" : "Xoá phân quyền"}</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
       <PageHeader
         title="Phân quyền (RBAC)"
         description="Ma trận quyền truy cập theo vai trò và nghiệp vụ quản lý"
@@ -1214,9 +1242,9 @@ export default function RolesPage() {
               <UserCog className="h-4 w-4" />
               Phân quyền quy trình
             </Button>
-            <Button type="button" size="toolbar" variant={editMode ? "default" : "soft"} onClick={() => setEditMode((value) => !value)}>
-              <Settings2 className="h-4 w-4" />
-              {editMode ? "Đang chỉnh" : "Chỉnh quyền"}
+            <Button type="button" size="toolbar" variant="soft" onClick={() => setLookupPermissionsOpen(true)}>
+              <Eye className="h-4 w-4" />
+              Phân quyền tra cứu
             </Button>
             <Button type="button" size="toolbar" variant="soft" onClick={() => setAddOpen(true)}>
               <Plus className="h-4 w-4" />
@@ -1252,34 +1280,13 @@ export default function RolesPage() {
                   </div>
                 </div>
                 <p className="mt-2 line-clamp-2 text-[12.5px] leading-5 text-muted-foreground">{role.desc}</p>
+                {isAdmin && role.custom && <Button type="button" variant="ghost" size="sm" className="mt-2 h-10 text-red-700 hover:text-red-800" onClick={() => setDeletingRole(role)} disabled={saveRbac.isPending}><Trash2 className="h-4 w-4" />Xoá phân quyền</Button>}
               </CardContent>
             </Card>
           ))}
         </div>
       </div>
 
-      {isAdmin && (
-        <Card className="border-sky-200/80 bg-sky-50/40">
-          <CardContent className="flex flex-col gap-3 p-4 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <div className="font-semibold text-ink">Công cụ quản trị phân quyền</div>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Quản trị viên có thể đổi cấp quyền trong ma trận, khởi tạo phân quyền mới và gán quyền cho từng user.
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Button type="button" variant="outline" onClick={resetDefaultMatrix}>
-                <RotateCcw className="h-4 w-4" />
-                Mặc định
-              </Button>
-              <Button type="button" onClick={() => saveCurrentConfig()} disabled={saveRbac.isPending}>
-                <Save className="h-4 w-4" />
-                Lưu ma trận
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
 
       <PositionSystemScopeCard isAdmin={isAdmin} />
 
@@ -1318,7 +1325,10 @@ export default function RolesPage() {
         <CardHeader className="gap-3 border-b border-border">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div>
+              <div className="flex flex-wrap items-center justify-between gap-3">
               <CardTitle>Ma trận phân quyền quản lý</CardTitle>
+
+            </div>
               <p className="mt-1 text-sm text-muted-foreground">
                 Dấu quyền phản ánh hành vi hiện tại của các màn hình và API trong hệ thống.
               </p>
@@ -1368,6 +1378,11 @@ export default function RolesPage() {
           </div>
         </CardHeader>
         <CardContent className="p-0">
+              {isAdmin && <div className="flex flex-wrap items-center justify-end gap-2 border-b border-border bg-background p-3">
+                <Button type="button" variant="outline" className="h-10" onClick={resetDefaultMatrix} disabled={saveRbac.isPending}><RotateCcw className="h-4 w-4" />Mặc định</Button>
+                <Button type="button" variant={editMode ? "default" : "outline"} className="h-10" onClick={() => setEditMode(value => !value)} disabled={saveRbac.isPending}><Settings2 className="h-4 w-4" />{editMode ? "Đang chỉnh" : "Chỉnh quyền"}</Button>
+                <Button type="button" className="h-10" onClick={() => saveCurrentConfig()} disabled={saveRbac.isPending}><Save className="h-4 w-4" />{saveRbac.isPending ? "Đang lưu…" : "Lưu ma trận"}</Button>
+              </div>}
           <div className="overflow-x-auto">
             <table className="w-full min-w-[980px] text-sm">
               <thead>

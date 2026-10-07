@@ -1,4 +1,5 @@
 import { fail } from "@/lib/api";
+import { hasPermissionLevel } from "@/lib/rbac-guard";
 import {
   buildEquipmentTreeIndex,
   type NormalizedEquipmentNode,
@@ -343,7 +344,8 @@ export async function assertSeqViewable(user: SessionUser, seq: string) {
 // Chặn cứng server: dữ liệu vòi đốt / vòi thổi bụi chỉ cho ADMIN hoặc chức vụ
 // (chính/phụ) thuộc danh sách cho phép. Đọc cả chức vụ phụ từ DB (session chỉ có
 // chức vụ chính) để khớp đúng hành vi client.
-export async function assertOilSootAccess(user: { id?: string; role?: string | null; position?: string | null }) {
+export async function assertOilSootAccess(user: { id?: string; role?: string | null; position?: string | null; accessMode?: string }) {
+  if (user.accessMode === "DEFECT_READ_ONLY" && await hasPermissionLevel({ ...user, role: user.role ?? undefined }, "archive-oil-gun-data", ["read"])) return;
   if (user.role === "ADMIN") return;
   const positions: Array<string | null | undefined> = [user.position];
   if (user.id) {

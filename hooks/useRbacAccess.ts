@@ -6,6 +6,7 @@ import { useSession } from "next-auth/react";
 import { apiGet } from "@/lib/fetcher";
 import { DEFAULT_RBAC_MATRIX, type RbacLevel } from "@/lib/rbac-defaults";
 import { useAdminMode } from "@/hooks/useAdminMode";
+import { DEFAULT_LOOKUP_MODULES, LOOKUP_ACCESS_MODE, lookupPageAllowed, lookupPermissionIds, type LookupModuleId } from "@/lib/lookup-access";
 
 const RANK: Record<RbacLevel, number> = {
   none: 0,
@@ -18,6 +19,7 @@ const RANK: Record<RbacLevel, number> = {
 type RbacMe = {
   role?: string | null;
   permissions?: Record<string, RbacLevel>;
+  lookupModules?: LookupModuleId[] | null;
 };
 
 let lastPermissionIdentity = "";
@@ -53,6 +55,8 @@ export function useRbacAccess() {
     refetchOnWindowFocus: "always",
   });
   const permissions = query.data?.data?.permissions;
+  const isLookup = user?.accessMode === LOOKUP_ACCESS_MODE;
+  const lookupModules = query.data?.data?.lookupModules ?? DEFAULT_LOOKUP_MODULES;
   const permissionSignature = React.useMemo(
     () =>
       Object.entries(permissions ?? {})
@@ -64,10 +68,12 @@ export function useRbacAccess() {
 
   React.useEffect(() => {
     if (!user?.id || !permissionSignature) return;
-    const identity = `${user.id}|${permissionSignature}`;
+    const identity = `${user.id}|${user.accessMode}|${lookupModules.join(",")}|${permissionSignature}`;
     if (lastPermissionIdentity === identity) return;
     lastPermissionIdentity = identity;
     void queryClient.invalidateQueries({ queryKey: ["materials"] });
+    void queryClient.invalidateQueries({ queryKey: ["work-permits"] });
+    void queryClient.invalidateQueries({ queryKey: ["defects"] });
     void queryClient.invalidateQueries({ queryKey: ["replacements"] });
     void queryClient.invalidateQueries({ queryKey: ["replacement-history"] });
     void queryClient.invalidateQueries({ queryKey: ["devices"] });
@@ -78,15 +84,16 @@ export function useRbacAccess() {
     void queryClient.invalidateQueries({ queryKey: ["chemical-contracts"] });
     void queryClient.invalidateQueries({ queryKey: ["chemical-inventory-annual"] });
     void queryClient.invalidateQueries({ queryKey: ["chemical-import-history"] });
-  }, [permissionSignature, queryClient, user?.id]);
+  }, [permissionSignature, queryClient, user?.id, user?.accessMode, lookupModules]);
 
   const permissionLevel = React.useCallback(
     (permissionId: string): RbacLevel => {
+      if (isLookup) return lookupPermissionIds(lookupModules).includes(permissionId) ? "read" : "none";
       if (user?.role === "ADMIN" && adminMode) return "full";
       if (!user?.id) return "none";
       return level(permissions?.[permissionId] ?? DEFAULT_RBAC_MATRIX[permissionId]?.[effectiveRole ?? ""]);
     },
-    [adminMode, effectiveRole, permissions, user?.id, user?.role]
+    [adminMode, effectiveRole, permissions, user?.id, user?.role, isLookup, lookupModules]
   );
 
   const can = React.useCallback(
@@ -94,5 +101,6 @@ export function useRbacAccess() {
     [permissionLevel]
   );
 
-  return { can, permissionLevel, isLoading: query.isLoading };
+  const canReadPage = React.useCallback((href: string) => !isLookup || lookupPageAllowed(href, lookupModules), [isLookup, lookupModules]);
+  return { can, permissionLevel, canReadPage, lookupModules, isLookup, isLoading: query.isLoading };
 }

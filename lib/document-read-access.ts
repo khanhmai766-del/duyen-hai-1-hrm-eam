@@ -3,8 +3,8 @@ import { requirePermissionLevel } from "@/lib/rbac-guard";
 import { OIL_SOOT_GATED_CATEGORIES } from "@/lib/oil-soot-access";
 import { assertOilSootAccess } from "@/lib/server-access";
 
-export async function requireDigitalDocumentReadPermission(user: { id?: string; role?: string }, category: string) {
-  if (OIL_SOOT_GATED_CATEGORIES.has(category)) {
+export async function requireDigitalDocumentReadPermission(user: { id?: string; role?: string; accessMode?: string }, category: string) {
+  if (OIL_SOOT_GATED_CATEGORIES.has(category) && user.accessMode !== "DEFECT_READ_ONLY") {
     await assertOilSootAccess(user);
     return;
   }

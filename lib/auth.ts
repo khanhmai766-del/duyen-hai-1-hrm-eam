@@ -185,7 +185,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           session.user.id = dbUser.id;
           session.user.name = dbUser.name;
           session.user.email = dbUser.email;
-          session.user.role = dbUser.role;
+          session.user.role = dbUser.accessMode === "DEFECT_READ_ONLY" ? "VIEWER" : dbUser.role;
           session.user.accessMode = dbUser.accessMode;
           session.user.position = dbUser.position ?? undefined;
           session.user.secondaryPosition = dbUser.secondaryPosition ?? undefined;

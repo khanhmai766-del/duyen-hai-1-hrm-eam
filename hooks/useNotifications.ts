@@ -1,4 +1,5 @@
 "use client";
+import { useRbacAccess } from "@/hooks/useRbacAccess";
 
 import * as React from "react";
 import { CalendarDays, Images, Megaphone, MessageSquareText, type LucideIcon } from "lucide-react";
@@ -60,11 +61,13 @@ export function useNotifications() {
   const { data: session } = useSession();
   const myId = session?.user?.id;
   const { position: myPosition } = useCurrentPosition();
-  const announcements = useAnnouncements();
-  const milestones = useOverhaulMilestones();
-  const forumPosts = useForumPosts({ category: "ALL", withReplyMeta: true });
+  const { canReadPage } = useRbacAccess();
+  const announcements = useAnnouncements(undefined, canReadPage("/notifications"));
+  const milestones = useOverhaulMilestones(canReadPage("/tien-ich/tien-do-dai-tu"));
+  const forumPosts = useForumPosts({ category: "ALL", withReplyMeta: true }, canReadPage("/forum"));
   const photoReviewTasks = useQuery({
     queryKey: ["material-photo-review-tasks"],
+    enabled: canReadPage("/replacement-procedures"),
     queryFn: async () => (await apiGet<MaterialPhotoReviewTask[]>("/api/material-tickets/photo-review-tasks")).data,
     refetchInterval: 60_000,
     refetchIntervalInBackground: false,

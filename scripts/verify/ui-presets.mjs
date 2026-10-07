@@ -614,3 +614,81 @@ PRESETS["tiep-dia-luu-mot-thang"] = {
     await page.getByRole("button", { name: /Có khiếm khuyết/ }).click();
   },
 };
+
+// Phân quyền: dữ liệu tra cứu/hồ sơ mở rộng giả lập, mọi lần lưu bị giữ trong trình duyệt.
+PRESETS["lookup-permissions"] = {
+  async prepare() { return {}; },
+  routes: () => ["/admin/roles?ui=lookup", "/admin/roles?ui=matrix", "/admin/roles?ui=delete", "/admin/users", "/documents/archive"],
+  async mock(context) {
+    await context.route("**/api/overhaul-milestones**", route => route.fulfill({ json: { data: [], meta: null, error: null } }));
+    await context.route("**/api/documents**", route => route.fulfill({ json: { data: [], meta: null, error: null } }));
+    let accounts = [
+      { id: "ui-lookup-a", name: "Tài khoản tra cứu A (giả lập)", employeeId: "UI-TC-A", email: "lookup-a@local.test", isActive: true, modules: ["defects", "work-permits"] },
+      { id: "ui-lookup-b", name: "Tài khoản tra cứu B (giả lập)", employeeId: "UI-TC-B", email: "lookup-b@local.test", isActive: true, modules: ["defects"] },
+    ];
+    const role = { id: "ui-role", label: "Hồ sơ quyền thử nghiệm", desc: "Hồ sơ giả lập để kiểm tra chức năng xoá", scope: "Thử nghiệm", accent: "from-cyan-500 to-blue-600", custom: true };
+    let roleConfig = { permissions: [], roles: [role], userOverrides: [{ id: "ui-override", userId: "ui-lookup-a", permissionId: "__ROLE_PROFILE__", roleId: role.id, value: "read" }] };
+    await context.route("**/api/lookup-permissions", async route => {
+      if (route.request().method() === "PUT") {
+        const body = route.request().postDataJSON();
+        accounts = accounts.map(account => body.userIds.includes(account.id) ? { ...account, modules: body.modules } : account);
+        return route.fulfill({ json: { data: body, meta: null, error: null } });
+      }
+      return route.fulfill({ json: { data: accounts, meta: null, error: null } });
+    });
+    await context.route("**/api/rbac", route => {
+      if (route.request().method() === "PUT") roleConfig = route.request().postDataJSON();
+      return route.fulfill({ json: { data: roleConfig, meta: null, error: null } });
+    });
+  },
+  async interact(page, route) {
+    if (route === "/admin/users" || route === "/documents/archive") return;
+    if (route.includes("ui=lookup")) {
+      await page.getByRole("button", { name: "Phân quyền tra cứu", exact: true }).click();
+      await page.getByRole("dialog").getByRole("button", { name: "Chọn tất cả", exact: true }).click();
+      await page.getByRole("dialog").getByRole("button", { name: "Bỏ chọn tất cả", exact: true }).click();
+      await page.getByRole("dialog").getByLabel("Khiếm khuyết", { exact: false }).check();
+      await page.getByRole("dialog").getByLabel("Sổ cấp PCT", { exact: false }).check();
+      await page.getByRole("dialog").getByRole("button", { name: "Lưu quyền tra cứu", exact: true }).click();
+      await page.getByRole("button", { name: "Phân quyền tra cứu", exact: true }).click();
+      if (!await page.getByRole("dialog").getByLabel("Sổ cấp PCT", { exact: false }).isChecked()) throw new Error("Quyền PCT chưa được giữ sau khi lưu giả lập");
+    } else if (route.includes("ui=delete")) {
+      await page.getByRole("button", { name: "Xoá phân quyền", exact: true }).click();
+      await page.getByRole("dialog").getByRole("button", { name: "Xoá phân quyền", exact: true }).waitFor();
+      if (route.includes("ui=delete-saved")) {
+        await page.getByRole("dialog").getByRole("button", { name: "Xoá phân quyền", exact: true }).click();
+        await page.getByRole("dialog").waitFor({ state: "hidden" });
+        if (await page.getByRole("button", { name: "Xoá phân quyền", exact: true }).count()) throw new Error("Hồ sơ quyền vẫn còn sau khi xoá giả lập");
+      }
+    } else {
+      await page.getByRole("button", { name: "Chỉnh quyền", exact: true }).click();
+      await page.getByRole("button", { name: "Lưu ma trận", exact: true }).scrollIntoViewIfNeeded();
+    }
+  },
+};
+
+PRESETS["lookup-permit-register"] = {
+  async prepare() { return {}; },
+  routes: () => ["/work-permits?kind=MECHANICAL", "/work-permits?kind=ELECTRICAL"],
+  async mock(context) {
+    await context.route("**/api/overhaul-milestones**", route => route.fulfill({ json: { data: [], meta: null, error: null } }));
+    await context.route("**/api/auth/session", async route => {
+      const response = await route.fetch();
+      const session = await response.json();
+      session.user = { ...session.user, role: "VIEWER", accessMode: "DEFECT_READ_ONLY", mustChangePassword: false };
+      await route.fulfill({ json: session });
+    });
+    await context.route("**/api/rbac/me", route => route.fulfill({ json: { data: { role: "VIEWER", permissions: { "work-permit-view": "read", "defect-view": "read" }, lookupModules: ["defects", "work-permits"] }, meta: null, error: null } }));
+    await context.route("**/api/work-permits**", async route => {
+      if (route.request().method() !== "GET") throw new Error("Kiểm tra tra cứu không được ghi dữ liệu PCT");
+      const response = await route.fetch();
+      const body = await response.json();
+      body.meta = { ...body.meta, canIssue: false, canIssueNew: false, canExecute: false, canWrite: false, canDelete: false, canCancelPermit: false, canEditPermit: false, canActOnPermit: false };
+      await route.fulfill({ response, json: body });
+    });
+  },
+  async interact(page) {
+    await page.getByRole("heading", { name: /Sổ cấp/i }).waitFor();
+    if (await page.getByRole("button", { name: "Cấp phiếu", exact: true }).count()) throw new Error("Tài khoản tra cứu còn thấy nút cấp phiếu");
+  },
+};

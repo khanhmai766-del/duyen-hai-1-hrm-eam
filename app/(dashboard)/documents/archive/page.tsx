@@ -116,8 +116,8 @@ export default function ArchiveDocumentsPage() {
   // Được xem tab vòi đốt / vòi thổi bụi nếu: ADMIN, hoặc có ít nhất một chức vụ (chính hoặc phụ)
   // nằm trong danh sách cho phép.
   const canSeeOilSootTabs = React.useMemo(
-    () => isAdmin || positionAllowsOilSoot(currentPosition.options),
-    [isAdmin, currentPosition.options]
+    () => (rbac.isLookup && rbac.lookupModules.includes("archive")) || isAdmin || positionAllowsOilSoot(currentPosition.options),
+    [isAdmin, currentPosition.options, rbac.isLookup, rbac.lookupModules]
   );
   const [activeTab, setActiveTab] = React.useState<ArchiveTabKey>("GRID_SEPARATION");
   const visibleTabs = React.useMemo(

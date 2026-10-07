@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { getToken } from "next-auth/jwt";
+import { prisma } from "@/lib/prisma";
+import { LOOKUP_ACCESS_MODE, lookupLandingPage, lookupRequestAllowed } from "@/lib/lookup-access";
+import { lookupModulesFor } from "@/lib/server/lookup-access";
 
 // Lightweight guard (Next 16 "proxy", trước là middleware.ts; chạy Node runtime): checks for the NextAuth session cookie and redirects
 // unauthenticated users to /login. Fine-grained RBAC is enforced server-side in
@@ -53,35 +56,28 @@ export async function proxy(req: NextRequest) {
     secret: process.env.AUTH_SECRET,
     secureCookie: req.cookies.has("__Secure-authjs.session-token"),
   });
-  if (token?.accessMode === "DEFECT_READ_ONLY") {
-    const isAllowedPage = pathname === "/defects" || pathname.startsWith("/defects/") || pathname === "/devices/scan" || pathname === "/account" || requiresAuthentication;
-    const isAllowedApi =
-      pathname.startsWith("/api/auth") ||
-      pathname.startsWith("/api/public") ||
-      (pathname === "/api/me" || pathname.startsWith("/api/me/")) ||
-      pathname === "/api/auth/logout-audit" ||
-      pathname === "/api/rbac/me" ||
-      pathname.startsWith("/api/ai") ||
-      (req.method === "POST" && pathname === "/api/device-qr/resolve") ||
-      (req.method === "GET" && (
-        pathname === "/api/defects" ||
-        pathname.startsWith("/api/defects/") ||
-        pathname.startsWith("/api/defect-history") ||
-        pathname.startsWith("/api/equipment-tree")
-      ));
-
-    if (pathname.startsWith("/api/") && !isAllowedApi) {
-      return NextResponse.json(
-        { data: null, meta: null, error: "Tài khoản này chỉ được tra cứu khiếm khuyết" },
-        { status: 403 }
-      );
+  // Đọc chế độ hiện tại để đổi/thu hồi quyền có hiệu lực với phiên đang mở.
+  if (token?.id) {
+    try {
+      const user = await prisma.user.findUnique({ where: { id: String(token.id) },
+        select: { id: true, accessMode: true, isActive: true, lockedAt: true } });
+      if (!user?.isActive || user.lockedAt) {
+        return NextResponse.json({ data: null, meta: null, error: "Tài khoản không hợp lệ" }, { status: 401 });
+      }
+      if (user.accessMode === LOOKUP_ACCESS_MODE) {
+        const modules = await lookupModulesFor(user.id);
+        if (!lookupRequestAllowed(req.nextUrl, req.method, modules)) {
+          if (pathname.startsWith("/api/")) return NextResponse.json(
+            { data: null, meta: null, error: "Tài khoản tra cứu chưa được cấp quyền đọc mục này hoặc không được thực hiện thao tác ghi" },
+            { status: 403 });
+          return NextResponse.redirect(new URL(lookupLandingPage(modules), req.url));
+        }
+      }
+    } catch {
+      return NextResponse.json({ data: null, meta: null, error: "Không thể kiểm tra quyền truy cập" }, { status: 503 });
     }
-    if (!pathname.startsWith("/api/") && !isAllowedPage) {
-      const url = req.nextUrl.clone();
-      url.pathname = "/defects";
-      url.search = "?phan=co";
-      return NextResponse.redirect(url);
-    }
+  } else if (token?.accessMode === LOOKUP_ACCESS_MODE) {
+    return NextResponse.json({ data: null, meta: null, error: "Tài khoản không hợp lệ" }, { status: 401 });
   }
 
   return NextResponse.next();
@@ -89,6 +85,7 @@ export async function proxy(req: NextRequest) {
 
 export const config = {
   matcher: [
+    "/api/:path*",
     "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|mp4|webm|mov|ico|woff2?)$).*)",
   ],
 };

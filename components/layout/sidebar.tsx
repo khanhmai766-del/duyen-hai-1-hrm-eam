@@ -8,9 +8,11 @@ import { useSession } from "next-auth/react";
 import { ChevronDown, Clock, ExternalLink, LifeBuoy, Phone, ShieldCheck, Star } from "lucide-react";
 import { cn, initials } from "@/lib/utils";
 import { useUsers } from "@/hooks/useUsers";
-import { navItemAllowedForPosition, navQuickItems, navSectionsForPosition, type NavItem } from "@/lib/nav";
+import { NAV_SECTIONS, navItemAllowedForPosition, navQuickItems, navSectionsForPosition, type NavItem } from "@/lib/nav";
 import { useRbacAccess } from "@/hooks/useRbacAccess";
 import { useAdminMode } from "@/hooks/useAdminMode";
+
+import { lookupLandingPage, lookupNavSections } from "@/lib/lookup-access";
 
 const NAV_ACCESS_LEVELS = ["read", "personal", "manage", "full"] as const;
 
@@ -62,21 +64,13 @@ export function Sidebar({ onNavigate, collapsed = false, showQuick = false }: { 
     ]
   );
   const sections = React.useMemo(() => {
-    const all = navSectionsForPosition(positionCarrier);
-    if (!readOnlyDefects) return all;
-    return all
-      .map((section) => ({
-        ...section,
-        items: section.items
-          .filter((item) => item.href.startsWith("/defects"))
-          .map((item) => ({ ...item, children: item.children?.filter((child) => child.href.startsWith("/defects")) })),
-      }))
-      .filter((section) => section.items.length > 0);
-  }, [positionCarrier, readOnlyDefects]);
+    if (readOnlyDefects) return lookupNavSections(NAV_SECTIONS, rbac.lookupModules);
+    return navSectionsForPosition(positionCarrier);
+  }, [positionCarrier, readOnlyDefects, rbac.lookupModules]);
 
   // Tài khoản chỉ đọc khiếm khuyết chỉ thấy các mục /defects như phần còn lại của thanh bên.
   const quickItems = (showQuick ? navQuickItems(positionCarrier) : [])
-    .filter((item) => !readOnlyDefects || item.href.startsWith("/defects"))
+    .filter((item) => rbac.canReadPage(item.href))
     .filter((item) => navItemAllowed(item, role, rbac.can, adminMode, positionCarrier));
 
   const [now, setNow] = React.useState<Date | null>(null);
@@ -105,7 +99,7 @@ export function Sidebar({ onNavigate, collapsed = false, showQuick = false }: { 
     <div className="flex h-full w-full flex-col overflow-hidden bg-[linear-gradient(180deg,#ffffff_0%,#f8fbff_58%,#fff8ed_100%)] dark:bg-[linear-gradient(180deg,#0b1220_0%,#0f172a_58%,#17120b_100%)]">
       <div className={cn("border-b border-blue-100/80 dark:border-slate-800/80", collapsed ? "p-2" : "p-3")}>
         <Link
-          href={readOnlyDefects ? "/defects?phan=co" : "/"}
+          href={readOnlyDefects ? lookupLandingPage(rbac.lookupModules) : "/"}
           prefetch={false}
           onClick={onNavigate}
           aria-label="Về trang chủ"

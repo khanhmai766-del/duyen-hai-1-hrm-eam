@@ -70,7 +70,7 @@ export interface ForumPostInput {
   targetPositions?: string[];
 }
 
-export function useForumPosts(filters: ForumFilters) {
+export function useForumPosts(filters: ForumFilters, enabled = true) {
   const params = new URLSearchParams();
   if (filters.category && filters.category !== "ALL") params.set("category", filters.category);
   if (filters.q?.trim()) params.set("q", filters.q.trim());
@@ -80,6 +80,7 @@ export function useForumPosts(filters: ForumFilters) {
   return useQuery({
     queryKey: ["forum-posts", filters],
     queryFn: () => apiGet<ForumPost[]>(`/api/forum${qs ? `?${qs}` : ""}`),
+    enabled,
     refetchInterval: 60 * 1000,
     refetchIntervalInBackground: false,
     staleTime: 30 * 1000,

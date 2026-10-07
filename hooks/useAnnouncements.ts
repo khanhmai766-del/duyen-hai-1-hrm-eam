@@ -52,7 +52,7 @@ interface AnnouncementInput {
  * Mặc định: năm hiện tại. Truyền "ALL" để tải tất cả các năm (vd theo deep-link).
  * meta.years = các năm có dữ liệu (cho dropdown lọc năm).
  */
-export function useAnnouncements(year?: string) {
+export function useAnnouncements(year?: string, enabled = true) {
   const activeYear = year ?? String(new Date().getFullYear());
   return useQuery({
     queryKey: ["announcements", activeYear],
@@ -61,6 +61,7 @@ export function useAnnouncements(year?: string) {
         activeYear === "ALL" ? "/api/announcements" : `/api/announcements?year=${activeYear}`
       ),
     staleTime: 60 * 1000,
+    enabled,
   });
 }
 

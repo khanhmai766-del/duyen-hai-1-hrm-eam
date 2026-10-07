@@ -259,9 +259,10 @@ export function useReplacements(filters: ReplacementFilters = {}, options?: { en
 }
 
 /** Cảnh báo thay thế: các điểm quá hạn hoặc sắp đến hạn (≤ 1 tháng). */
-export function useReplacementAlerts() {
+export function useReplacementAlerts(enabled = true) {
   return useQuery({
     queryKey: ["replacements", { due: "WARN" }],
+    enabled,
     queryFn: () => apiGet<ReplacementItem[]>(`/api/material-replacements?due=WARN`),
     staleTime: 5 * 60 * 1000,
     refetchInterval: 5 * 60 * 1000,

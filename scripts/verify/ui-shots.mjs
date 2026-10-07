@@ -94,10 +94,14 @@ function inspectLayout({ mobile }) {
 }
 
 const tag = Date.now();
-const user = await prisma.user.create({
+const existingAdmin = flag("existing-admin");
+const user = existingAdmin ? await prisma.user.findFirst({
+  where: { role: "ADMIN", accessMode: "NORMAL", isActive: true, lockedAt: null },
+}) : await prisma.user.create({
   data: { name: "TEST giao diện (tạm)", employeeId: `TMP-UI-${tag}`, email: `tmp-ui-${tag}@local.test`,
     passwordHash: await bcrypt.hash(randomBytes(24).toString("hex"), 10), role: "ADMIN" },
 });
+if (!user) fail("Không có tài khoản ADMIN dev đang hoạt động để dùng --existing-admin.");
 const report = { base: BASE, preset: presetName || null, widths: WIDTHS, shots: [] };
 let errorCount = 0;
 let warnCount = 0;
@@ -127,6 +131,8 @@ try {
       if (new URL(page.url()).pathname.startsWith("/login")) shot.errors.push("Bị chuyển về /login — phiên tạm không được chấp nhận");
       // Preset có thể bấm sẵn (mở hộp, tick ô…) để chụp trạng thái chỉ có sau thao tác — chỉ thao tác giao diện, không lưu.
       if (preset?.interact) await preset.interact(page, route).catch((e) => shot.warnings.push(`Không thao tác được: ${e.message.split("\n")[0]}`));
+      // Hộp thoại vừa mở còn đang chạy animation; đợi ổn định trước khi đo mép và chụp.
+      await page.waitForTimeout(300);
       if (!flag("keep-mascot")) await page.addStyleTag({ content: "[data-ui-overlay]{display:none!important}" }).catch(() => {});
       const layout = await page.evaluate(inspectLayout, { mobile });
       if (layout.horizontalScroll) shot.errors.push(`Trang cuộn ngang: rộng ${layout.scrollWidth}px trên khung ${layout.clientWidth}px`);
@@ -134,6 +140,11 @@ try {
       for (const w of layout.smallTargets) shot.warnings.push(`Nút/ô bấm nhỏ hơn 32px: ${w}`);
       for (const w of layout.clipped) shot.warnings.push(`Chữ bị cắt: ${w}`);
       const name = `${slug(route)}-${width}`;
+      if (preset?.interact) {
+        const file = path.join(OUT, `${name}-state.png`);
+        await page.screenshot({ path: file });
+        shot.files.push(file);
+      }
       const full = path.join(OUT, `${name}-full.png`);
       await page.screenshot({ path: full, fullPage: true });
       shot.files.push(full);
@@ -160,11 +171,11 @@ try {
   }
 } finally {
   await browser?.close();
-  await prisma.user.delete({ where: { id: user.id } }).catch(async () => {
+  if (!existingAdmin) await prisma.user.delete({ where: { id: user.id } }).catch(async () => {
     await prisma.user.update({ where: { id: user.id }, data: { isActive: false } }).catch(() => {});
   });
   await prisma.$disconnect();
   writeFileSync(path.join(OUT, "report.json"), JSON.stringify(report, null, 2));
-  console.log(`\nuser tạm: đã dọn · ảnh + report.json ở ${OUT}\nKẾT QUẢ: ${errorCount} lỗi · ${warnCount} cảnh báo`);
+  console.log(`\n${existingAdmin ? "Dùng phiên ADMIN dev hiện có (không tạo/xoá tài khoản)" : "user tạm: đã dọn"} · ảnh + report.json ở ${OUT}\nKẾT QUẢ: ${errorCount} lỗi · ${warnCount} cảnh báo`);
 }
 process.exit(errorCount ? 1 : 0);

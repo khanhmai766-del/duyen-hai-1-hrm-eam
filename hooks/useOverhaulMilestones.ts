@@ -4,9 +4,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiMutate } from "@/lib/fetcher";
 import type { MilestoneInput, MilestoneSchedule } from "@/lib/overhaul-milestones";
 
-export function useOverhaulMilestones() {
+export function useOverhaulMilestones(enabled = true) {
   return useQuery({
     queryKey: ["overhaul-milestones"],
+    enabled,
     queryFn: async () => (await apiGet<MilestoneSchedule>("/api/overhaul-milestones")).data,
     staleTime: 0, refetchInterval: 60_000, refetchIntervalInBackground: false, refetchOnWindowFocus: "always",
   });

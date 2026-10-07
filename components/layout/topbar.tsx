@@ -1,4 +1,5 @@
 "use client";
+import { lookupNavSections } from "@/lib/lookup-access";
 
 import * as React from "react";
 import Link from "next/link";
@@ -12,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { isStatisticsPosition, navItemAllowedForPosition, navSectionsForPosition, normalizeText } from "@/lib/nav";
+import { isStatisticsPosition, NAV_SECTIONS, navItemAllowedForPosition, navSectionsForPosition, normalizeText } from "@/lib/nav";
 import { apiMutate } from "@/lib/fetcher";
 import { passwordPolicyMessage } from "@/lib/password-policy";
 import { acknowledgeForumNotice, useNotifications, NOTICE_TONE } from "@/hooks/useNotifications";
@@ -114,10 +115,10 @@ export function Topbar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
   // Cảnh báo thay thế vật tư đã được "xem" (lưu client theo khóa id:nextDueAt).
   const [ackedReplKeys, setAckedReplKeys] = React.useState<Set<string>>(new Set());
   const { notices, loading: notifLoading } = useNotifications();
-  const { data: alertsData, isLoading: alertsLoading } = useReplacementAlerts();
+  const { data: alertsData, isLoading: alertsLoading } = useReplacementAlerts(rbac.canReadPage("/replacements"));
   // Sự kiện vận hành CHỈ nuôi nội dung tab "Nội bộ" trong chuông, không nằm trong số badge
   // (totalAlerts = notices + cảnh báo vật tư) → chỉ tải khi người dùng thực sự mở chuông.
-  const { data: opsData, isLoading: opsLoading } = useOperations(undefined, { enabled: notifOpen });
+  const { data: opsData, isLoading: opsLoading } = useOperations(undefined, { enabled: notifOpen && rbac.canReadPage("/notifications") });
   const { data: profileData } = useMeProfile();
   const profile = profileData?.data ?? null;
   // Tab Nội bộ trên chuông chỉ phản chiếu đúng các mục đang hiển thị trong
@@ -168,7 +169,7 @@ export function Topbar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
       session?.user?.secondaryPosition2,
     ]
   );
-  const navSections = React.useMemo(() => navSectionsForPosition(positionCarrier), [positionCarrier]);
+  const navSections = React.useMemo(() => rbac.isLookup ? lookupNavSections(NAV_SECTIONS, rbac.lookupModules) : navSectionsForPosition(positionCarrier), [positionCarrier, rbac.isLookup, rbac.lookupModules]);
   const statisticsNavRestricted = isStatisticsPosition(positionCarrier);
 
   // Tài khoản bị buộc đổi mật khẩu thì mở hộp đổi mật khẩu — chỉnh lúc render; khoá null để lần render đầu
