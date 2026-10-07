@@ -10,6 +10,7 @@ import { PermitEmployeePicker } from "@/components/work-permits/employee-picker"
 import { PermitCardScanner } from "@/components/work-permits/card-scanner";
 import { PeopleSyncDialog } from "@/components/work-permits/people-sync";
 import { SessionAttendance } from "@/components/work-permits/session-attendance";
+import { SessionHistoryButton } from "@/components/work-permits/session-history";
 import { attendanceInside } from "@/lib/work-permit-attendance";
 import { cardExpired, isCardlessCode } from "@/lib/work-permit-card";
 import { Button } from "@/components/ui/button";
@@ -538,7 +539,7 @@ export function ContractorWorkSummary({ permit }: { permit: PermitDetailRow }) {
       <p className="text-xs text-muted-foreground">{live ? `CHTT ${live.commanderName} · từ ${fmt(live.openedAt)}` : last?.endedAt ? `Lần gần nhất kết thúc ${fmt(last.endedAt)}` : "Cho phép làm việc, quét thẻ vào/ra và kết thúc trên màn hình làm việc."}</p>
       <PermitDeadlineBadge permit={permit} className="mt-1" />
     </div>
-    <Button asChild className="shrink-0"><Link href={permitWorkHref(permit.id)}><MonitorPlay />Mở màn hình làm việc</Link></Button>
+    <div className="flex flex-wrap gap-2"><SessionHistoryButton permit={permit} /><Button asChild className="shrink-0"><Link href={permitWorkHref(permit.id)}><MonitorPlay />Mở màn hình làm việc</Link></Button></div>
   </section>;
 }
 

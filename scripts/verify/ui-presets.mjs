@@ -613,6 +613,42 @@ export const PRESETS = {
       });
     },
   },
+  "pct-lich-su-vao-ra": {
+    description: "Popup phiếu nhà thầu → hộp Lịch sử vào/ra: 4 lần làm việc giả lập (2 lần cũ tải theo trang)",
+    prepare: (ctx) => PRESETS["pct-lam-viec"].prepare(ctx),
+    routes: ({ permitId }) => [`/work-permits?permitId=${permitId}`],
+    async mock(context, { permitId }) {
+      const day = (d, h, m) => new Date(Date.UTC(2026, 9, d, h - 7, m)).toISOString();
+      const session = (permit, n, d, people, extra = {}) => {
+        const members = WORKER_NAMES.slice(0, people).map((name, i) => ({
+          personId: `ui-p${i}`, code: `UI-${100 + i}`, name, company: permit.teamName,
+          attendance: i === people - 1 ? [] : i % 3 === 0
+            ? [{ in: day(d, 7, 35 + i), out: day(d, 11, 30) }, { in: day(d, 13, 5), out: day(d, 17, 20) }]
+            : [{ in: day(d, 7, 40 + i), out: day(d, 17, 15) }],
+        }));
+        return { id: `ui-h${n}`, permitId: permit.id, commanderId: "ui-commander", commanderCode: "UI-001", commanderName: "Nguyễn Văn A (giả lập)", company: permit.teamName,
+          members, workerCount: people + 1, openedAt: day(d, 7, 30), endedAt: day(d, 17, 35), authorizerName: "Bùi Chí Tâm (giả lập)",
+          endConfirmedByName: "Bùi Chí Tâm (giả lập)", endNote: "", progress: null, createdByName: "ui-shots", endedByName: "ui-shots", ...extra };
+      };
+      let permit = null;
+      await context.route(`**/api/work-permits/${permitId}`, async (route) => {
+        const response = await route.fetch();
+        const json = await response.json();
+        if (json.data) {
+          permit = json.data;
+          json.data.sessions = [session(permit, 4, 7, 6), session(permit, 3, 6, 4, { endNote: "Nghỉ sớm do mưa" })];
+          json.data._count.sessions = 4;
+        }
+        await route.fulfill({ response, json });
+      });
+      await context.route(`**/api/work-permits/${permitId}/activity?type=sessions**`, (route) =>
+        route.fulfill({ json: { data: [session(permit, 2, 5, 3), session(permit, 1, 4, 2)], meta: { nextOffset: null }, error: null } }));
+    },
+    async interact(page) {
+      await page.getByRole("button", { name: "Lịch sử vào/ra" }).click();
+      await page.getByText("Lần 1 ·").waitFor();
+    },
+  },
 };
 
 PRESETS["tiep-dia-luu-mot-thang"] = {
