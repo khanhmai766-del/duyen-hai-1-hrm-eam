@@ -60,16 +60,21 @@ async function enqueue(tx: Prisma.TransactionClient, rows: OutboxInput[]) {
 
 const itemTail = (item: { source: string; sheet: string; code: string }) => `${item.source}:${item.sheet}:${item.code}`;
 
-/** Dòng Nhật ký ngày: ghi chú của hạng mục, trống thì lấy ghi chú chung của lần làm việc. */
-const journalLine = (at: Date, commander: string, item: OverhaulItemProgress, generalNote: string) =>
-  `${vnTime(at)} · ${commander}: ${item.note.trim() || generalNote.trim() || "Có thực hiện"} (${item.percent ?? 0}%)`;
+/**
+ * Dòng Nhật ký ngày: ghi chú của hạng mục, trống thì lấy ghi chú chung của lần làm việc. Có `header` (form mới: "PCT số -
+ * nội dung", CHTT, NVĐV — overhaulJournalHeaderText) thì đặt nó lên đầu và dòng giờ không lặp tên CHTT.
+ */
+const journalLine = (at: Date, commander: string, item: OverhaulItemProgress, generalNote: string, header = "") => {
+  const body = `${item.note.trim() || generalNote.trim() || "Có thực hiện"} (${item.percent ?? 0}%)`;
+  return header ? `${header}\n${vnTime(at)}: ${body}` : `${vnTime(at)} · ${commander}: ${body}`;
+};
 
 /**
  * Kết thúc lần làm việc: mục có thực hiện → Đang thực hiện + % + nhật ký; mục không thực hiện → Không thực hiện.
  * `doneToday`: mục đã "Cập nhật tiến độ" trong chính lần làm việc này, cùng ngày kết thúc — không tick lại lúc kết
  * thúc vẫn là Đang thực hiện (không ghi thêm % / nhật ký).
  */
-export async function enqueueOverhaulSessionEnd(tx: Prisma.TransactionClient, permit: Pick<WorkPermit, "id">, session: Pick<WorkPermitSession, "id" | "commanderName">, endedAt: Date, items: OverhaulItemProgress[], generalNote = "", doneToday: Set<string> = new Set()) {
+export async function enqueueOverhaulSessionEnd(tx: Prisma.TransactionClient, permit: Pick<WorkPermit, "id">, session: Pick<WorkPermitSession, "id" | "commanderName">, endedAt: Date, items: OverhaulItemProgress[], generalNote = "", doneToday: Set<string> = new Set(), header = "") {
   const day = vnDay(endedAt);
   await enqueue(tx, items.map(item => ({
     dedupeKey: `S:${session.id}:${itemTail(item)}`,
@@ -77,19 +82,19 @@ export async function enqueueOverhaulSessionEnd(tx: Prisma.TransactionClient, pe
     source: item.source, sheet: item.sheet, code: item.code, day,
     status: item.done || doneToday.has(itemTail(item)) ? OVERHAUL_DAY_STATUSES.IN_PROGRESS : OVERHAUL_DAY_STATUSES.SKIPPED,
     percent: item.done ? item.percent : null,
-    note: item.done ? journalLine(endedAt, session.commanderName, item, generalNote) : "",
+    note: item.done ? journalLine(endedAt, session.commanderName, item, generalNote, header) : "",
   })));
 }
 
 /** Cập nhật tiến độ giữa chừng (lần làm việc còn mở): chỉ mục có tick → Đang thực hiện + % + nhật ký của ngày cập nhật. */
-export async function enqueueOverhaulProgressUpdate(tx: Prisma.TransactionClient, permit: Pick<WorkPermit, "id">, session: Pick<WorkPermitSession, "id" | "commanderName">, at: Date, items: OverhaulItemProgress[], generalNote = "") {
+export async function enqueueOverhaulProgressUpdate(tx: Prisma.TransactionClient, permit: Pick<WorkPermit, "id">, session: Pick<WorkPermitSession, "id" | "commanderName">, at: Date, items: OverhaulItemProgress[], generalNote = "", header = "") {
   const day = vnDay(at);
   await enqueue(tx, items.filter(item => item.done).map(item => ({
     dedupeKey: `U:${session.id}:${at.getTime()}:${itemTail(item)}`,
     permitId: permit.id, sessionId: session.id, kind: "PROGRESS",
     source: item.source, sheet: item.sheet, code: item.code, day,
     status: OVERHAUL_DAY_STATUSES.IN_PROGRESS, percent: item.percent,
-    note: journalLine(at, session.commanderName, item, generalNote),
+    note: journalLine(at, session.commanderName, item, generalNote, header),
   })));
 }
 
@@ -98,14 +103,14 @@ export async function enqueueOverhaulProgressUpdate(tx: Prisma.TransactionClient
  * chọn (Đang thực hiện / Kết thúc công tác) + % + nhật ký ở ngày cập nhật. Không có lần làm việc nên % lũy kế đọc lại từ
  * chính các dòng này (sharedOverhaulPercents).
  */
-export async function enqueueOverhaulManualProgress(tx: Prisma.TransactionClient, permit: Pick<WorkPermit, "id">, actorName: string, at: Date, items: OverhaulItemProgress[], generalNote: string, status: string) {
+export async function enqueueOverhaulManualProgress(tx: Prisma.TransactionClient, permit: Pick<WorkPermit, "id">, actorName: string, at: Date, items: OverhaulItemProgress[], generalNote: string, status: string, header = "") {
   const day = vnDay(at);
   await enqueue(tx, items.filter(item => item.done).map(item => ({
     dedupeKey: `M:${permit.id}:${at.getTime()}:${itemTail(item)}`,
     permitId: permit.id, kind: "MANUAL",
     source: item.source, sheet: item.sheet, code: item.code, day,
     status, percent: item.percent,
-    note: journalLine(at, actorName, item, generalNote),
+    note: journalLine(at, actorName, item, generalNote, header),
   })));
 }
 

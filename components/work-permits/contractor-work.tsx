@@ -21,7 +21,7 @@ import { cn } from "@/lib/utils";
 import { normalizeText } from "@/lib/nav";
 import { useCreatePermitCompany, useDeletePermitCompany, useDeletePermitPerson, usePermitCompanySummary, usePermitPeople, useRenamePermitCompany, useSavePermitPerson, usePermitSessionAction, usePermitActivity } from "@/hooks/useWorkPermits";
 import { companyUnclassified, formatPermitNumber, isSessionCommander, PERMIT_KINDS, permitDeadline, workersStillInside } from "@/lib/work-permits";
-import { isOverhaulPaperPermit, OVERHAUL_DAY_STATUSES, overhaulItemKey, overhaulItemsOf } from "@/lib/work-permit-overhaul";
+import { isOverhaulPaperPermit, OVERHAUL_DAY_STATUSES, OVERHAUL_JOURNAL_LIMITS, overhaulItemKey, overhaulItemsOf, overhaulJournalTitle, type OverhaulJournalHeader } from "@/lib/work-permit-overhaul";
 import { initialOverhaulDraft, OverhaulItemProgressEditor, overhaulDraftError, overhaulDraftPayload } from "@/components/work-permits/overhaul-item-progress";
 import { PermitDeadlineBadge } from "@/components/work-permits/permit-deadline";
 import { PERMIT_CONTRACTOR_SCOPES, type PermitCompanyScopes, type PermitContractorScope, type PermitDetailRow, type PermitMember, type PermitPerson, type PermitSession } from "@/lib/work-permits";
@@ -621,6 +621,12 @@ export function SessionEditor({ permit, session, handoff = false, progressUpdate
   });
   const [noneDone, setNoneDone] = useState(false);
   const [sheetStatus, setSheetStatus] = useState<string>(permit.status === "CLOSED" ? OVERHAUL_DAY_STATUSES.CLOSED : OVERHAUL_DAY_STATUSES.IN_PROGRESS);
+  // Đầu đoạn Nhật ký ngày trên Sheet: điền sẵn từ phiếu + lần làm việc (đang mở, hoặc lần gần nhất khi cập nhật ngoài lần làm việc).
+  const [journal, setJournal] = useState<OverhaulJournalHeader>(() => {
+    const ref = session ?? permit.sessions[0];
+    const workers = ref ? ref.members.filter(m => !isSessionCommander(m, ref)).length : permit.workerCount;
+    return { title: overhaulJournalTitle(permit), commander: ref?.commanderName ?? permit.commanderName ?? "", workers: workers == null ? "" : String(workers) };
+  });
   const itemError = overhaulItems.length ? overhaulDraftError(overhaulItems, itemDraft, previousPercents, updating ? null : noneDone) : null;
   // Ngày mới bắt đầu chỉ với CHTT; nhân viên phải được ghi nhận lại cho lần làm việc này.
   // Bàn giao trong cùng ngày vẫn giữ danh sách của lần đang mở.
@@ -635,10 +641,10 @@ export function SessionEditor({ permit, session, handoff = false, progressUpdate
     if (itemError) { setError(itemError); return; }
     const timestamp = `${at}:00+07:00`;
     const body = updating
-      ? { action: "progress", version: permit.version, sessionId: session?.id ?? "", note, itemProgress: overhaulDraftPayload(overhaulItems, itemDraft), ...(offSession ? { sheetStatus } : {}) }
+      ? { action: "progress", version: permit.version, sessionId: session?.id ?? "", note, itemProgress: overhaulDraftPayload(overhaulItems, itemDraft), journal, ...(offSession ? { sheetStatus } : {}) }
       : ending && session
       ? { action: "end", version: permit.version, sessionId: session.id, endedAt: timestamp, endConfirmedByName: name, endNote: note,
-        ...(overhaulItems.length ? { itemProgress: overhaulDraftPayload(overhaulItems, itemDraft) } : { progress: Number(progress) }) }
+        ...(overhaulItems.length ? { itemProgress: overhaulDraftPayload(overhaulItems, itemDraft), journal } : { progress: Number(progress) }) }
       : { action: handoff ? "handoff" : "open", sessionId: session?.id, endNote: note, version: permit.version, commanderId: person?.id, openedAt: timestamp, authorizerName: name, members: additionalMembers };
     try { await save.mutateAsync(body); toast.success(offSession ? `Đã cập nhật tiến độ (${sheetStatus}); Sheet tiến độ đại tu được ghi sau ít giây` : updating ? "Đã cập nhật tiến độ; Sheet tiến độ đại tu được ghi sau ít giây. Lần làm việc vẫn tiếp tục" : handoff ? "Đã bàn giao sang CHTT mới, giữ lịch sử và thời điểm bàn giao" : ending && overhaulItems.length ? "Đã kết thúc lần làm việc và ghi tiến độ từng hạng mục; Sheet tiến độ đại tu được cập nhật sau ít giây" : ending ? "Đã kết thúc lần làm việc; CHTT được giải phóng, PCT chờ làm tiếp" : "Đã mở lần làm việc và ghi nhận CHTT đang thực hiện"); onClose(); }
     catch (e) { setError(e instanceof Error ? e.message : "Không thể ghi nhận lần làm việc"); }
@@ -651,6 +657,14 @@ export function SessionEditor({ permit, session, handoff = false, progressUpdate
       {!ending && !updating && <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border p-3"><Button type="button" variant="outline" onClick={() => setPicking(true)}>Chọn CHTT nhà thầu *</Button><span className="text-sm">{person ? [person.name, person.code, person.company].filter(Boolean).join(" · ") : "Chưa chọn CHTT"}</span></div>}
       {session && <p className="text-sm">CHTT: <b>{session.commanderName}</b> · Mở lúc {fmt(session.openedAt)}</p>}
       {!updating && <div className="grid gap-4 sm:grid-cols-2"><label className="space-y-1 text-sm"><span>{handoff ? "Thời điểm bàn giao" : ending ? "Thời điểm kết thúc" : "Thời điểm cho phép"} (giờ Việt Nam) *</span><input className={control} type="datetime-local" value={at} required onChange={e => setAt(e.target.value)} /></label><PermitEmployeePicker label={handoff ? "Người xác nhận bàn giao" : ending ? "Người xác nhận kết thúc" : "Người cho phép làm việc"} value={name} onChange={setName} required /></div>}
+      {overhaulItems.length > 0 && <fieldset className="space-y-3 rounded-lg border border-border p-3 text-sm"><legend className="px-1 font-medium">Thông tin ghi Nhật ký ngày</legend>
+        <label className="block space-y-1"><span>Số PCT - Nội dung PCT</span><input className={control} maxLength={OVERHAUL_JOURNAL_LIMITS.title} value={journal.title} onChange={e => setJournal({ ...journal, title: e.target.value })} /></label>
+        <div className="grid grid-cols-[1fr_6.5rem] gap-3 sm:grid-cols-[1fr_9rem]">
+          <label className="min-w-0 space-y-1"><span>CHTT</span><input className={control} maxLength={OVERHAUL_JOURNAL_LIMITS.commander} value={journal.commander} onChange={e => setJournal({ ...journal, commander: e.target.value })} /></label>
+          <label className="space-y-1"><span>Số lượng NVĐV</span><input className={`${control} tabular-nums`} type="number" inputMode="numeric" min={0} max={9999} step={1} value={journal.workers} onChange={e => setJournal({ ...journal, workers: e.target.value })} /></label>
+        </div>
+        <p className="text-xs text-muted-foreground">Điền sẵn từ phiếu và lần làm việc — sửa nếu cần. Ghi lên đầu Nhật ký ngày, tiếp theo là nội dung thực hiện từng hạng mục.</p>
+      </fieldset>}
       {offSession && <fieldset className="space-y-2 rounded-lg border border-border p-3 text-sm"><legend className="px-1 font-medium">Trạng thái ghi lên Sheet *</legend>
         <div className="grid gap-2 sm:grid-cols-2">{[OVERHAUL_DAY_STATUSES.IN_PROGRESS, OVERHAUL_DAY_STATUSES.CLOSED].map(value => <label key={value} className={`flex min-h-11 cursor-pointer items-center gap-2 rounded-lg border px-3 ${sheetStatus === value ? "border-blue-600 bg-blue-50 font-semibold text-blue-900 dark:bg-blue-950/40 dark:text-blue-100" : "border-border"}`}>
           <input type="radio" name="sheetStatus" className="accent-blue-700" checked={sheetStatus === value} onChange={() => setSheetStatus(value)} /><span className="py-1.5">{value}{permit.status === "CLOSED" && value === OVERHAUL_DAY_STATUSES.CLOSED && <span className="block text-xs font-normal text-muted-foreground">Gợi ý — phiếu đã kết thúc</span>}</span>

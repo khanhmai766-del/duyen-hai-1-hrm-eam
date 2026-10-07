@@ -13,9 +13,23 @@ import { presentMembers } from "@/lib/work-permit-presence";
 import { after as afterResponse } from "next/server";
 import { parseSessionItemProgress, sharedOverhaulPercents } from "@/lib/server/work-permit-overhaul";
 import { enqueueOverhaulManualProgress, enqueueOverhaulProgressUpdate, enqueueOverhaulSessionEnd, overhaulProgressKey, pushOverhaulSheetOutboxQuietly, vnDay } from "@/lib/server/overhaul-sheet-writer";
-import { isOverhaulPaperPermit, OVERHAUL_DAY_STATUSES, overhaulItemProgressOf, overhaulItemsOf, type OverhaulItemProgress } from "@/lib/work-permit-overhaul";
+import { isOverhaulPaperPermit, OVERHAUL_DAY_STATUSES, OVERHAUL_JOURNAL_LIMITS, overhaulItemProgressOf, overhaulItemsOf, overhaulJournalHeaderText, type OverhaulItemProgress } from "@/lib/work-permit-overhaul";
 import { permitDeadline, personScopeError, workersStillInside } from "@/lib/work-permits";
 export const dynamic = "force-dynamic";
+
+/** Phần đầu Nhật ký ngày từ form (Số PCT - Nội dung, CHTT, NVĐV). Không gửi (màn hình cũ / Tiến độ trong ngày) → mẫu cũ. */
+function journalHeader(body: Record<string, unknown>) {
+  const raw = body.journal;
+  if (!raw || typeof raw !== "object") return "";
+  const journal = raw as Record<string, unknown>;
+  const workers = String(journal.workers ?? "").trim();
+  if (workers && !/^\d{1,4}$/.test(workers)) throw fail("Số lượng NVĐV phải là số nguyên");
+  return overhaulJournalHeaderText({
+    title: String(journal.title ?? "").slice(0, OVERHAUL_JOURNAL_LIMITS.title),
+    commander: String(journal.commander ?? "").slice(0, OVERHAUL_JOURNAL_LIMITS.commander),
+    workers,
+  });
+}
 export async function POST(req: Request, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
   return permitHandle(async () => {
@@ -102,7 +116,7 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
         if (!parsed.items.some(item => item.done)) throw fail("Tick ít nhất một hạng mục đã thực hiện để cập nhật tiến độ");
         const at = new Date();
         const note = permitText(body, "note", 2000);
-        await enqueueOverhaulManualProgress(tx, permit, user.name ?? "", at, parsed.items, note, sheetStatus);
+        await enqueueOverhaulManualProgress(tx, permit, user.name ?? "", at, parsed.items, note, sheetStatus, journalHeader(body));
         const after = await tx.workPermit.update({ where: { id: permit.id }, data: { progress: parsed.progress, version: { increment: 1 } } });
         const summary = parsed.items.filter(item => item.done).map(item => `${item.code} ${item.percent}%`).join(", ");
         await tx.workPermitHistory.create({ data: { permitId: permit.id, actorId: user.id, actorName: user.name ?? "", action: `Cập nhật tiến độ ngoài lần làm việc · ${sheetStatus} · ${summary}${note ? ` · ${note.slice(0, 200)}` : ""}`, before: permitSnapshot(permit), after: permitSnapshot(after) } });
@@ -124,7 +138,7 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
         // Ghi chú làm việc giữ trên endNote của lần đang mở (chưa kết thúc nên endNote chưa dùng) — hộp Kết thúc /
         // Cập nhật tiến độ sau điền sẵn để xem lại; kết thúc thì ghi đè bằng ghi chú kết thúc thật.
         const afterSession = await tx.workPermitSession.update({ where: { id: session.id }, data: { itemProgress: permitSnapshot(merged), ...(note ? { endNote: note } : {}) } });
-        await enqueueOverhaulProgressUpdate(tx, permit, session, at, parsed.items, note);
+        await enqueueOverhaulProgressUpdate(tx, permit, session, at, parsed.items, note, journalHeader(body));
         const after = await tx.workPermit.update({ where: { id: permit.id }, data: { progress: parsed.progress, version: { increment: 1 } } });
         const summary = parsed.items.filter(item => item.done).map(item => `${item.code} ${item.percent}%`).join(", ");
         await tx.workPermitHistory.create({ data: { permitId: permit.id, actorId: user.id, actorName: user.name ?? "", action: `Cập nhật tiến độ · ${summary}${note ? ` · ${note.slice(0, 200)}` : ""}`, before: permitSnapshot({ ...permit, session }), after: permitSnapshot({ ...after, session: afterSession }) } });
@@ -159,7 +173,7 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
         ...(finalItems ? { itemProgress: permitSnapshot(finalItems) } : {}),
         ...(inside.length ? { members: permitSnapshot(closeInsideVisits(session.members, endedAt)) } : {}),
       } });
-      if (itemResult) await enqueueOverhaulSessionEnd(tx, permit, session, endedAt, itemResult.items, endNote, doneToday);
+      if (itemResult) await enqueueOverhaulSessionEnd(tx, permit, session, endedAt, itemResult.items, endNote, doneToday, journalHeader(body));
       const after = await tx.workPermit.update({ where: { id: permit.id }, data: { status: "WAITING", progress, version: { increment: 1 } } });
       await tx.workPermitHistory.create({ data: { permitId: permit.id, actorId: user.id, actorName: user.name ?? "", action: `Kết thúc lần làm việc · CHTT ${session.commanderName} (${session.commanderCode})`, before: permitSnapshot({ ...permit, session }), after: permitSnapshot({ ...after, session: afterSession }) } });
       return afterSession;

@@ -34,7 +34,9 @@ export function overhaulJournalText(notes: Array<{ permitId: string; kind: strin
   }
   return [...byPermit].sort((a, b) => a[1].first - b[1].first).map(([permitId, entry]) => {
     const number = permitNumbers.get(permitId);
-    return [number ? `PCT ${number}` : "", entry.work?.note ?? "", entry.final?.note ?? ""].filter(Boolean).join("\n");
+    // Nội dung từ form mới đã mở đầu bằng "PCT <số> - <nội dung>" → không thêm dòng số PCT lần nữa.
+    const headed = entry.work?.note.startsWith("PCT ") ?? false;
+    return [number && !headed ? `PCT ${number}` : "", entry.work?.note ?? "", entry.final?.note ?? ""].filter(Boolean).join("\n");
   }).join("\n\n");
 }
 

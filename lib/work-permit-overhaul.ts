@@ -204,6 +204,24 @@ export function compactOverhaulContent(content: string) {
 }
 
 /**
+ * Phần đầu đoạn Nhật ký ngày của một PCT (nghiệp vụ 07/10/2026): "PCT <số> - <nội dung>", rồi "CHTT: … · NVĐV: …".
+ * Form Cập nhật tiến độ / Kết thúc ngày điền sẵn từ phiếu + lần làm việc, người dùng sửa được.
+ */
+export type OverhaulJournalHeader = { title: string; commander: string; workers: string };
+export const OVERHAUL_JOURNAL_LIMITS = { title: 300, commander: 120 } as const;
+export function overhaulJournalHeaderText(header: OverhaulJournalHeader | null | undefined) {
+  if (!header) return "";
+  const title = header.title.replace(/\s+/g, " ").trim();
+  const people = [header.commander.trim() && `CHTT: ${header.commander.trim()}`, header.workers.trim() && `NVĐV: ${header.workers.trim()}`].filter(Boolean).join(" · ");
+  return [title && `PCT ${title.replace(/^PCT\s+/iu, "")}`, people].filter(Boolean).join("\n");
+}
+/** Gợi ý "Số PCT - Nội dung": số gọn (bỏ đuôi /VH1-NĐDH) + nội dung một dòng, bỏ khối "theo hạng mục" dài. */
+export function overhaulJournalTitle(permit: { number: string; year: number; content: string }) {
+  const content = compactOverhaulContent(permit.content).replace(/\s+/g, " ").replace(/^-\s*/, "").trim();
+  return `${permit.number.trim()}/${permit.year}${content ? ` - ${content}` : ""}`.slice(0, OVERHAUL_JOURNAL_LIMITS.title);
+}
+
+/**
  * Bảng "Tiến độ đại tu" trên sổ PCT: 4 link Google Sheets theo dõi tiến độ, sửa được tiêu đề + link
  * (lưu RbacConfig key OVERHAUL_SCHEDULE_CONFIG_KEY). Danh sách dòng cố định theo `id`; giá trị ở đây là mặc định.
  */
