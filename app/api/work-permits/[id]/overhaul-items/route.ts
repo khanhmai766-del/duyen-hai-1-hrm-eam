@@ -2,7 +2,7 @@ import { after as afterResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { audit, fail, ok, requireUser } from "@/lib/api";
 import { requirePermitVisible } from "@/lib/server/work-permit-scope";
-import { requirePermitActor } from "@/lib/server/work-permit-permissions";
+import { requirePermitOverhaulItemsEditor } from "@/lib/server/work-permit-permissions";
 import { permitBody, permitHandle, permitSnapshot } from "@/lib/server/work-permits";
 import { assertOverhaulItemsConfirmed, parseOverhaulItems } from "@/lib/server/work-permit-overhaul";
 import { syncPermitDocument } from "@/lib/server/work-permit-document-store";
@@ -23,7 +23,7 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
   return permitHandle(async () => {
     const user = await requireUser();
     await requirePermitVisible(user, params.id);
-    await requirePermitActor(user, params.id);
+    requirePermitOverhaulItemsEditor(user);
     const body = await permitBody(req);
     const result = await prisma.$transaction(async tx => {
       await tx.$queryRaw`SELECT "id" FROM "WorkPermit" WHERE "id" = ${params.id} FOR UPDATE`;

@@ -68,7 +68,14 @@ export function permitRowCapabilities(user: PermitActorUser, permit: { position:
     canCancelPermit: writable && isPermitCanceller(user),
     canEditPermit: group,
     canActOnPermit: group || (writable && holdsPermitPosition(user, permit.position)),
+    // Bổ sung / chọn hạng mục đại tu (08/10/2026): mở cho MỌI tài khoản xem được phiếu, trừ tài khoản tra cứu chỉ đọc.
+    canEditOverhaulItems: writable,
   };
+}
+
+/** Bổ sung hạng mục đại tu: mọi tài khoản thấy phiếu, trừ tài khoản tra cứu chỉ đọc. Gọi SAU requirePermitVisible. */
+export function requirePermitOverhaulItemsEditor(user: PermitActorUser) {
+  if (user.accessMode === "DEFECT_READ_ONLY") throw fail("Tài khoản tra cứu chỉ đọc không bổ sung được hạng mục đại tu", 403);
 }
 
 export const PERMIT_ACTOR_DENIED = "Chỉ người đứng cương vị của phiếu, Quản trị, Quản lý, Kỹ thuật viên, Trưởng ca và Trưởng kíp được thao tác trên phiếu này";
