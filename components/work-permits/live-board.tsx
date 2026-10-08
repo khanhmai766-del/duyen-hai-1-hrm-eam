@@ -1,10 +1,12 @@
 "use client";
 
+import { useMemo, useState } from "react";
 import Link from "next/link";
-import { ChevronRight, ListChecks, RefreshCw, ScanLine, Square } from "lucide-react";
+import { ChevronRight, ListChecks, RefreshCw, ScanLine, Search, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { permitWorkHref } from "@/components/work-permits/contractor-work";
 import { usePermitLiveSessions } from "@/hooks/useWorkPermits";
+import { normalizeText } from "@/lib/nav";
 import { formatPermitNumber, PERMIT_UNITS } from "@/lib/work-permits";
 
 const hhmm = (iso: string) => new Date(iso).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" });
@@ -20,18 +22,44 @@ function elapsed(from: string) {
  */
 export function PermitLiveBoard() {
   const query = usePermitLiveSessions();
-  const rows = query.data?.data ?? [];
+  const allRows = useMemo(() => query.data?.data ?? [], [query.data]);
   const canExecute = Boolean(query.data?.meta?.canExecute);
+  // Lọc tại chỗ (dữ liệu bảng đã đủ): cương vị của phiếu + tìm theo số PCT / nội dung công việc, không phân biệt dấu.
+  const [position, setPosition] = useState("");
+  const [q, setQ] = useState("");
+  const positions = useMemo(() => {
+    const byKey = new Map<string, string>();
+    for (const row of allRows) { const label = row.permit.position?.trim(); if (label && !byKey.has(normalizeText(label))) byKey.set(normalizeText(label), label); }
+    return [...byKey.values()].sort((a, b) => a.localeCompare(b, "vi"));
+  }, [allRows]);
+  const term = normalizeText(q.trim());
+  const rows = allRows.filter(row => (!position || normalizeText(row.permit.position ?? "") === normalizeText(position))
+    && (!term || normalizeText(`${formatPermitNumber(row.permit)} ${row.permit.content ?? ""}`).includes(term)));
+  const filtered = Boolean(position || term);
 
   return <section className="space-y-3">
     <div className="flex flex-wrap items-center justify-between gap-2">
-      <p className="text-sm text-muted-foreground">{query.isPending ? "Đang tải…" : rows.length ? null : "Không có nhà thầu nào đang làm việc."}</p>
+      <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:flex-1">
+        <div className="relative min-w-0 flex-1 basis-56 sm:max-w-xs">
+          <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <input type="search" aria-label="Tìm theo số PCT hoặc nội dung công việc" placeholder="Tìm số PCT, nội dung công việc…" value={q} onChange={e => setQ(e.target.value)}
+            className="h-9 w-full rounded-lg border border-input bg-background pl-9 pr-3 text-base focus:outline-none focus:ring-2 focus:ring-ring sm:text-sm" />
+        </div>
+        <select aria-label="Lọc theo cương vị" value={position} onChange={e => setPosition(e.target.value)}
+          className="h-9 min-w-0 flex-1 basis-40 rounded-lg border border-input bg-background px-2 text-base focus:outline-none focus:ring-2 focus:ring-ring sm:max-w-[13rem] sm:flex-none sm:text-sm">
+          <option value="">Tất cả cương vị</option>
+          {positions.map(label => <option key={label} value={label}>{label}</option>)}
+        </select>
+        {filtered && <p className="text-xs text-muted-foreground">{rows.length}/{allRows.length} PCT · <button type="button" className="font-semibold text-blue-700" onClick={() => { setQ(""); setPosition(""); }}>Bỏ lọc</button></p>}
+      </div>
       <div className="flex flex-wrap gap-2">
         {/* Ghi tiến độ nhiều PCT đại tu một lượt (thay vì mở từng màn hình làm việc). */}
         <Button asChild size="sm" className="h-8 bg-violet-700 text-xs hover:bg-violet-800"><Link href="/work-permits/tien-do-ngay"><ListChecks />Tiến độ trong ngày</Link></Button>
         <Button type="button" variant="outline" size="sm" className="h-8 text-xs" disabled={query.isFetching} onClick={() => void query.refetch()}><RefreshCw className={query.isFetching ? "animate-spin" : undefined} />Làm mới</Button>
       </div>
     </div>
+    {!query.isPending && !rows.length && <p className="text-sm text-muted-foreground">{allRows.length ? "Không có PCT nào khớp bộ lọc." : "Không có nhà thầu nào đang làm việc."}</p>}
+    {query.isPending && <p className="text-sm text-muted-foreground">Đang tải…</p>}
     {query.isError && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">{query.error.message}</p>}
     <div className="space-y-2">
       {rows.map(row => {
