@@ -55,9 +55,8 @@ export function OverhaulContentField({ form, onApply, onExtraChange }: {
     {/* Công việc chưa có trong danh sách hạng mục: tạo hạng mục phát sinh PS.1.x ghi lên Sheet tiến độ (06/10/2026). */}
     {onExtraChange && !items.length && <label className={`flex cursor-pointer items-start gap-2.5 rounded-lg border p-3 text-xs leading-5 ${form.overhaulExtra ? "border-amber-300 bg-amber-50 text-amber-950 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100" : "border-border text-muted-foreground"}`}>
       <input type="checkbox" className="mt-0.5 h-4 w-4 shrink-0 accent-amber-600" checked={Boolean(form.overhaulExtra)} onChange={event => onExtraChange(event.target.checked)} />
-      <span><b className="text-[13px] text-foreground">Hạng mục phát sinh</b> — công việc chưa có trong danh sách hạng mục. Khi cấp phiếu, web tạo mã <b>PS.1.x</b> ở cuối tab cương vị
-        {form.position ? <> “<b>{form.position}</b>”</> : " (chọn cương vị ở trên)"} của file tiến độ, dưới tiêu đề “PHÁT SINH”: <b>Tên thiết bị</b> = Địa điểm công tác,
-        <b> Nội dung</b> = Nội dung công việc, <b>Nhà thầu</b> = mã đơn vị công tác. Tiến độ, nhật ký ngày của phiếu ghi lên Sheet như hạng mục thường.</span>
+      {/* Mặc định KHÔNG tick (08/10/2026). Tick → web tạo mã PS.1.x ở tab cương vị của file tiến độ, ghi tiến độ như hạng mục thường. */}
+      <span><b className="text-[13px] text-foreground">Hạng mục phát sinh</b> — công việc chưa có trong danh sách hạng mục để chọn lựa. Lựa chọn để phân loại, ghi nhận lại.</span>
     </label>}
     {open && <OverhaulItemPicker form={form} selected={items} onClose={() => setOpen(false)} onConfirm={(next, company) => { apply(next, company); setOpen(false); }} />}
   </div>;
