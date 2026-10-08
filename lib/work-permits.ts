@@ -239,6 +239,8 @@ export interface PermitDetailRow extends PermitRow {
   overhaulPercents?: Record<string, number>;
   /** PCT đại tu: ghi chú gần nhất theo overhaulItemKey (điền sẵn ô ghi chú khi cập nhật tiếp). */
   overhaulNotes?: Record<string, string>;
+  /** Phiếu chưa làm việc: phiếu cùng sổ + cương vị có nội dung gần giống (cảnh báo trùng, lib/server/work-permit-similar.ts). */
+  similarPermits?: Array<Pick<PermitRow, "id" | "number" | "year" | "status" | "content">>;
 }
 
 export interface DefectLinkedWorkPermit {

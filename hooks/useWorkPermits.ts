@@ -110,6 +110,8 @@ export function usePermitNumberSuggestion(kind: string, year: number, enabled = 
 
 export interface PermitNumberReviewEntry {
   id: string; number: string; status: string; nkvhPctId: string | null; permitId: string | null; updatedAt: string; ownerName: string;
+  /** Phiếu nháp "Chờ NKVH lưu" mang số này (lượt lấy từ NKVH chưa đồng bộ). */
+  draftPermitId?: string | null;
 }
 export function usePermitNumberReview(kind: PermitKind, year: number) {
   return useQuery({ queryKey: ["work-permit-number-review", kind, year], refetchInterval: 15_000,

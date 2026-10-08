@@ -535,6 +535,35 @@ export const PRESETS = {
       await page.waitForTimeout(300);
     },
   },
+  "pct-canh-bao-trung": {
+    description: "Chi tiết PCT có cảnh báo trùng nội dung + chuông nhắc phiếu nháp chưa đồng bộ NKVH — dữ liệu giả lập, không ghi DB",
+    prepare: (ctx) => PRESETS["pct-lam-viec"].prepare(ctx),
+    routes: ({ permitId }) => [`/work-permits?permitId=${permitId}`, `/work-permits?permitId=${permitId}&ui=bell`],
+    async mock(context, { permitId }) {
+      await context.route(`**/api/work-permits/${permitId}`, async (route) => {
+        const response = await route.fetch();
+        const json = await response.json();
+        if (json.data) {
+          json.data.status = "ISSUED";
+          json.data.similarPermits = [
+            { id: "ui-sim-1", number: "4501", year: 2026, status: "CANCELLED", content: "Kiểm tra xử lý các vòi phun nước chữa cháy làm mát các bồn lỏng" },
+            { id: "ui-sim-2", number: "4502", year: 2026, status: "ISSUED", content: "Kiểm tra xử lý các vòi phun nước chữa cháy làm mát các bồn lỏng (giả lập)" },
+          ];
+        }
+        await route.fulfill({ response, json });
+      });
+      await context.route("**/api/work-permits/pending-sync", (route) => route.fulfill({ json: { data: [
+        { id: "ui-d1", kind: "ELECTRICAL", number: "4343", year: 2026, content: "Kiểm tra bảo dưỡng động cơ 400 VAC", createdAt: new Date(Date.now() - 14 * 3600_000).toISOString(), reason: "Chưa đồng bộ được lúc 20:29 08-10: Số đã có lượt cấp hoặc đã hủy." },
+        { id: "ui-d2", kind: "ELECTRICAL", number: "4348", year: 2026, content: "Lắp đặt camera giám sát", createdAt: new Date(Date.now() - 12 * 3600_000).toISOString(), reason: "" },
+      ], meta: null, error: null } }));
+    },
+    async interact(page, route) {
+      if (!route.endsWith("ui=bell")) return;
+      await page.keyboard.press("Escape");
+      await page.getByRole("button", { name: "Thông báo", exact: true }).click();
+      await page.waitForTimeout(400);
+    },
+  },
   "dong-bo-nhan-su": {
     description: "Hộp Đồng bộ nhân sự từ Google Sheets — kết quả giả lập có bảng nhân sự mới theo đơn vị (không gọi Google, không ghi DB)",
     async prepare() { return {}; },

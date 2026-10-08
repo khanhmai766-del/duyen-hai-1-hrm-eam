@@ -14,6 +14,7 @@ import { defaultPermitFormat, effectivePermitFormat, formatPermitNumber, PERMIT_
 import { parsePermit, permitBody, permitHandle, permitSnapshot, permitText, resolvePermitDefectLink } from "@/lib/server/work-permits";
 import { resolvePermitIdentities } from "@/lib/server/work-permit-identities";
 import { assertContractorCompanyScope } from "@/lib/server/work-permit-company-scope";
+import { findSimilarPermits } from "@/lib/server/work-permit-similar";
 import { historySummarySelect } from "@/lib/server/work-permit-selects";
 import { consumePermitNumberReservation, teamTypeLabel } from "@/lib/server/work-permit-number-reservations";
 import type { PermitKind } from "@/lib/work-permits";
@@ -36,7 +37,11 @@ export async function GET(_req: Request, props: { params: Promise<{ id: string }
     const overhaulPercents = overhaulSessions
       ? Object.fromEntries(await sharedOverhaulPercents(prisma, overhaulItems))
       : {};
-    return ok({ ...row, overhaulPercents, overhaulNotes }, { ...await permitCapabilities(user), ...permitRowCapabilities(user, row), canDelete: user.role === "ADMIN" && user.accessMode !== "DEFECT_READ_ONLY" });
+    // Phiếu chưa làm việc (nháp chờ NKVH / đã cấp): cảnh báo nếu cùng sổ + cương vị có phiếu nội dung gần giống.
+    const similarPermits = ["DRAFT", "ISSUED"].includes(row.status)
+      ? (await findSimilarPermits(prisma, { kind: row.kind, position: row.position, content: row.content, excludeId: row.id })).map(({ id, number, year, status, content }) => ({ id, number, year, status, content }))
+      : [];
+    return ok({ ...row, overhaulPercents, overhaulNotes, similarPermits }, { ...await permitCapabilities(user), ...permitRowCapabilities(user, row), canDelete: user.role === "ADMIN" && user.accessMode !== "DEFECT_READ_ONLY" });
   });
 }
 
@@ -152,6 +157,13 @@ export async function PUT(req: Request, props: { params: Promise<{ id: string }>
         if (data.format !== defaultPermitFormat(data.teamType)) throw fail("PCT nhà thầu dùng phiếu giấy; PCT nội bộ dùng phiếu điện tử");
       } else if (data.format !== (before.format ?? defaultPermitFormat(before.teamType))) {
         throw fail("Không thể đổi hình thức của phiếu đã tạo", 409);
+      }
+      // Đổi NHÓM phiếu nhà thầu (SCTX ↔ Đại tu, 08/10/2026 — thay cho hủy rồi cấp lại như PCT 4319): cùng mốc với đổi loại
+      // đơn vị — chưa cho phép làm việc, chưa có lần làm việc. CHTT / nhân viên phải đúng nhóm mới (resolvePermitIdentities).
+      if (!teamTypeChanged && data.teamType === "CONTRACTOR" && (data.contractorScope ?? null) !== (before.contractorScope ?? null)) {
+        if (!["DRAFT", "ISSUED"].includes(before.status) || status !== before.status) throw fail("Chỉ đổi nhóm phiếu (SCTX / Đại tu) khi phiếu đang ở trạng thái Đã cấp và không đổi trạng thái cùng lúc", 409);
+        if (before.authorizedAt) throw fail("Phiếu đã được cho phép làm việc — không đổi nhóm phiếu được nữa", 409);
+        if (await tx.workPermitSession.count({ where: { permitId: before.id } })) throw fail("Phiếu đã có lần làm việc — không đổi nhóm phiếu được nữa", 409);
       }
       if (permitIssueUpdateNeedsExecution(before, data)) await requirePermitExecute(user);
       if (before.teamType === "INTERNAL" && (data.authorizerName !== before.authorizerName || (data.authorizedAt?.getTime() ?? null) !== (before.authorizedAt?.getTime() ?? null) || (body.progress !== undefined && body.progress !== before.progress))) throw fail("PCT nội bộ không quản lý bước cho phép hoặc tiến độ; dữ liệu cũ được giữ nguyên");

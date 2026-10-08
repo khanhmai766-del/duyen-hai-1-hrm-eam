@@ -2,7 +2,7 @@
 import { useRbacAccess } from "@/hooks/useRbacAccess";
 
 import * as React from "react";
-import { CalendarDays, Images, Megaphone, MessageSquareText, type LucideIcon } from "lucide-react";
+import { CalendarDays, FileWarning, Images, Megaphone, MessageSquareText, type LucideIcon } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useQuery } from "@tanstack/react-query";
 import { useAnnouncements } from "@/hooks/useAnnouncements";
@@ -44,6 +44,9 @@ export interface Notice {
   date?: string;
 }
 
+/** Phiếu nháp "Chờ NKVH lưu" của chính mình đã thấy trên NKVH (hoặc đồng bộ bị từ chối) mà quá 1 giờ chưa đồng bộ. */
+type PermitPendingSync = { id: string; kind: "MECHANICAL" | "ELECTRICAL"; number: string; year: number; content: string; createdAt: string; reason: string };
+
 type MaterialPhotoReviewTask = {
   id: string;
   reference: string;
@@ -72,6 +75,14 @@ export function useNotifications() {
     refetchInterval: 60_000,
     refetchIntervalInBackground: false,
     staleTime: 30_000,
+  });
+  const permitPendingSync = useQuery({
+    queryKey: ["work-permits", "pending-sync"],
+    enabled: canReadPage("/work-permits"),
+    queryFn: async () => (await apiGet<PermitPendingSync[]>("/api/work-permits/pending-sync")).data,
+    refetchInterval: 5 * 60_000,
+    refetchIntervalInBackground: false,
+    staleTime: 60_000,
   });
   const [ackedForumIds, setAckedForumIds] = React.useState<Set<string>>(() => new Set());
 
@@ -102,6 +113,16 @@ export function useNotifications() {
     desc: `${ticket.unit} · ${ticket.assignedPosition}${ticket.materialCategory ? ` · ${ticket.materialCategory}` : ""}`,
     href: "/replacement-procedures",
     date: ticket.date,
+  }));
+
+  const permitSyncNotices: Notice[] = (permitPendingSync.data ?? []).map((permit) => ({
+    id: `permit-sync-${permit.id}`,
+    icon: FileWarning,
+    tone: "red",
+    title: `PCT ${permit.kind === "ELECTRICAL" ? "Điện" : "Cơ"} ${permit.number}/${permit.year}: chưa đồng bộ từ NKVH`,
+    desc: (permit.reason || "NKVH đã lưu số này — mở phiếu trên NKVH, bấm đồng bộ của tiện ích").slice(0, 80),
+    href: `/work-permits?permitId=${encodeURIComponent(permit.id)}`,
+    date: permit.createdAt,
   }));
 
   const announcementNotices: Notice[] = (announcements.data?.data ?? [])
@@ -169,7 +190,7 @@ export function useNotifications() {
       date: post.latestReply!.createdAt,
     }));
 
-  const notices = [...materialPhotoNotices, ...announcementNotices, ...forumReplyNotices, ...forumPostNotices].sort((x, y) => {
+  const notices = [...permitSyncNotices, ...materialPhotoNotices, ...announcementNotices, ...forumReplyNotices, ...forumPostNotices].sort((x, y) => {
     return +new Date(y.date ?? 0) - +new Date(x.date ?? 0);
   });
 

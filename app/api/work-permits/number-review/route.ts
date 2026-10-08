@@ -15,9 +15,11 @@ export async function GET(req: Request) {
       const highest = await permitNumberHighWater(tx, kind, year);
       const baseline = await tx.workPermitNumberBaseline.findUnique({ where: { kind_year: { kind, year } } });
       const floor = BigInt(baseline?.number ?? "0") > BigInt(highest) ? baseline!.number : highest;
-      const entries = await tx.$queryRaw<Array<{ id: string; number: string; status: string; nkvhPctId: string | null; permitId: string | null; updatedAt: Date; ownerName: string; total: number }>>`
+      const entries = await tx.$queryRaw<Array<{ id: string; number: string; status: string; nkvhPctId: string | null; permitId: string | null; draftPermitId: string | null; updatedAt: Date; ownerName: string; total: number }>>`
         SELECT r."id", r."number", r."status", r."nkvhPctId",
           CASE WHEN EXISTS (SELECT 1 FROM "WorkPermit" p WHERE p."id" = r."permitId") THEN r."permitId" ELSE NULL END AS "permitId",
+          -- Lượt lấy từ NKVH không gắn permitId khi còn chờ: tìm phiếu nháp "Chờ NKVH lưu" mang chính số này.
+          (SELECT p."id" FROM "WorkPermit" p WHERE p."kind" = r."kind" AND p."year" = r."year" AND p."number" = r."number" AND p."status" = 'DRAFT' ORDER BY p."createdAt" DESC LIMIT 1) AS "draftPermitId",
           r."updatedAt", r."ownerName", count(*) OVER()::int AS total
         FROM "WorkPermitNumberReservation" r
         WHERE "kind" = ${kind} AND "year" = ${year} AND "number" ~ '^[0-9]+$'

@@ -280,6 +280,17 @@ export function nkvhPosition(page: NkvhPage, fallback: unknown = "") {
   return code ? positionLabelOf(code) : "";
 }
 
+/** Đầu dòng lịch sử khi đồng bộ làm phiếu đổi trạng thái: "Hủy theo NKVH: <lý do> · " … Không đổi trạng thái → rỗng. */
+export function syncTransitionLabel(before: string | null | undefined, status: string, reason: string) {
+  if (before === status) return "";
+  const why = reason ? `: ${reason.slice(0, 300)}` : "";
+  if (status === "CANCELLED") return `Hủy theo NKVH${why} · `;
+  if (status === "PAUSED") return `Dừng theo NKVH${why} · `;
+  if (status === "CLOSED") return "Đóng theo NKVH · ";
+  if (status === "ISSUED" && before === "DRAFT") return "Cấp theo NKVH (phiếu chờ NKVH lưu) · ";
+  return "";
+}
+
 /** Nhận đúng phiếu đã lưu trên NKVH. Khóa theo mã phiếu trước, khóa dãy số sau. */
 export async function importExistingNkvhPermit(tx: Tx, user: Actor, input: {
   kind: PermitKind; nkvhPctId: string; page: NkvhPage; unit: unknown; position: unknown; formattedNumber: unknown;
@@ -365,7 +376,8 @@ export async function importExistingNkvhPermit(tx: Tx, user: Actor, input: {
   }
   if (changed) {
     await tx.workPermitHistory.create({ data: { permitId: row.id, actorId: user.id, actorName: user.name ?? "",
-      action: `Đồng bộ số, nội dung và trạng thái đã lưu trên NKVH${notes.length ? ` (${notes.join("; ")})` : ""}`,
+      // Đổi trạng thái thì ghi rõ ngay đầu dòng (rà soát 08/10/2026: 7 phiếu hủy chỉ ghi "Đồng bộ…", khó tra).
+      action: `${syncTransitionLabel(before?.status, status, reason)}Đồng bộ số, nội dung và trạng thái đã lưu trên NKVH${notes.length ? ` (${notes.join("; ")})` : ""}`,
       ...(before ? { before: permitSnapshot(before) } : {}), after: permitSnapshot(row) } });
     await tx.workPermitNumberReservationHistory.create({ data: { reservationId: reservation.id, action: reservationStatus,
       actorId: user.id, actorName: user.name ?? "", permitId: row.id,

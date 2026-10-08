@@ -20,7 +20,7 @@ import { PermitGuideButton } from "@/components/work-permits/permit-guide";
 import { PermitExecutionDialog } from "@/components/work-permits/execution";
 import { PermitHistoryPanel } from "@/components/work-permits/history";
 import { PermitDocumentPreview } from "@/components/work-permits/document-preview";
-import { apiDownload, apiDownloadPost } from "@/lib/fetcher";
+import { apiDownload, apiDownloadPost, apiGet } from "@/lib/fetcher";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { usePermitLiveSessions, usePermitPeople, useCancelDraftWorkPermit, useDeleteWorkPermit, usePermitNameSuggestions, useWorkPermits, useWorkPermit, useSaveWorkPermit, useExportWorkPermits, usePermitNumberSuggestion, usePermitNumberReservations, useTakePermitNumber, useCancelPermitNumberReservation, usePermitNumberBaselines, useSetPermitNumberBaseline, useExecuteWorkPermit, type PermitNumberReservation } from "@/hooks/useWorkPermits";
@@ -155,6 +155,10 @@ export default function WorkPermitsPage() {
   const [exportMode, setExportMode] = useState<"year" | "filters">("year");
   const [exportYear, setExportYear] = useState(Number(vietnamNow().slice(0, 4)));
   const [detail, setDetail] = useState<string | undefined>(() => searchParams.get("permitId") || undefined);
+  // Đang ở sổ mà bấm link ?permitId=… (chuông thông báo, cảnh báo trùng nội dung) → mở đúng phiếu đó.
+  const permitParam = searchParams.get("permitId");
+  const [seenPermitParam, setSeenPermitParam] = useState(permitParam);
+  if (permitParam !== seenPermitParam) { setSeenPermitParam(permitParam); if (permitParam) setDetail(permitParam); }
   const searchRef = useRef<HTMLInputElement>(null);
   useEffect(() => { const timer = setTimeout(() => { setSearch(q); setPage(1); }, 300); return () => clearTimeout(timer); }, [q]);
   // Ghi loại sổ đang xem vào URL để tải lại trang vẫn ở đúng PCT Cơ/PCT Điện.
@@ -304,7 +308,7 @@ export default function WorkPermitsPage() {
 </nav>
       {/* Lối tắt phụ của sổ (không phải mục): nằm NGOÀI vùng cuộn của tab để luôn thấy ở mép phải; dưới 2xl chỉ còn biểu tượng. */}
       <div className="flex shrink-0 items-center gap-0.5 border-b border-border pb-1 pl-2">{pageSession?.user?.role === "ADMIN" &&<Button variant="ghost" size="sm" className="h-8 px-2 text-xs text-muted-foreground hover:text-foreground 2xl:px-3" title="Mốc sổ giấy" aria-label="Mốc sổ giấy" onClick={() => setBaselineOpen(true)}><BookMarked /><span className="hidden 2xl:inline">Mốc sổ giấy</span></Button>}</div></div>
-    {bookTab && meta?.canIssueNew && <PermitNumberReview key={kind} kind={kind} />}
+    {bookTab && meta?.canIssueNew && <PermitNumberReview key={kind} kind={kind} onOpenPermit={setDetail} />}
     {bookTab && meta?.canIssueNew && Boolean(kindReservations.length) && <section className="rounded-xl border border-amber-200 bg-amber-50/70 p-3 sm:p-4"><h2 className="flex items-center gap-2 text-sm font-bold text-amber-950"><Clock size={16} />Số đã lấy, chưa lưu phiếu · {PERMIT_KINDS[kind]}</h2><p className="mt-1 text-xs text-amber-800">Số vẫn được giữ khi đóng biểu mẫu. Bấm Tiếp tục để hoàn tất; với lượt nội bộ, chọn lại PCT điện tử hoặc PCT giấy khi tiếp tục. Chỉ hiển thị lượt giữ số của sổ đang xem.</p>{/* Thẻ CO THEO NỘI DUNG (không kéo giãn cho đầy cột) và nút luôn nằm cùng hàng với thông tin,
     nên không còn khoảng trắng trong thẻ; các thẻ nối tiếp nhau rồi tự xuống dòng khi hết chỗ. */}<div className="mt-3 flex flex-wrap gap-2">{kindReservations.map(item => <div key={item.id} className="flex w-full flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border border-amber-200 bg-white px-3 py-2 sm:w-auto"><div className="min-w-0 flex-1 basis-48 sm:flex-none sm:basis-auto"><p className="flex flex-wrap items-center gap-x-2 gap-y-1 font-semibold text-slate-900"><span className="whitespace-nowrap">{formatPermitNumber(item)}</span><span className={`rounded-md px-1.5 py-0.5 text-[11px] font-semibold ${item.teamType === "INTERNAL" ? "bg-sky-50 text-sky-800" : "bg-amber-100 text-amber-900"}`}>{item.teamType === "INTERNAL" ? "Nội bộ" : "Nhà thầu"}</span></p><p className="mt-0.5 truncate whitespace-nowrap text-xs text-slate-600">{item.teamType === "INTERNAL" ? "Chọn lại PCT điện tử hoặc giấy khi tiếp tục" : "PCT giấy"} · {item.ownerName || "Người cấp"}</p></div><div className="flex shrink-0 gap-2"><Button size="sm" className="h-9 px-3 text-xs sm:h-7 sm:px-2.5" disabled={item.status !== "RESERVED"} title={item.draftPermitId ? "Mở phiếu nháp chờ NKVH lưu của số này — lưu bên NKVH hoặc hoàn tất phiếu nháp; có thể hủy lượt nếu chưa dùng" : item.nkvhPctId ? "Tiếp tục trên phiếu NKVH đã lấy số; có thể hủy lượt nếu chưa dùng" : "Tiếp tục cấp phiếu với số này"} onClick={() => { setKind(item.kind as PermitKind); setEditor(null); if (item.draftPermitId) { setDetail(item.draftPermitId); return; } startNewPermit(item.teamType, item.kind as PermitKind, item); }}>{item.draftPermitId ? "Mở phiếu nháp" : "Tiếp tục"}</Button>{(item.ownerId === pageSession?.user?.id || pageSession?.user?.role === "ADMIN") && <Button size="sm" variant="outline" className="h-9 px-3 text-xs sm:h-7 sm:px-2.5" title={item.ownerId === pageSession?.user?.id ? "Hủy lượt lấy số của bạn" : "Hủy lượt lấy số của người cấp khác"} onClick={() => { setCancelReservationTarget(item); setCancelReservationReason(""); }}>Hủy lượt</Button>}</div></div>)}</div></section>}
     {overhaulTab ? <OverhaulScheduleLinks /> : liveTab ? <PermitLiveBoard /> : peopleTab ? <PermitCompanyDirectory /> : safetyTab ? <PermitSafetyCatalog key={kind} kind={kind} /> : <>
@@ -585,6 +589,13 @@ function PermitEditor({ initial, template, kind, presetTeamType, presetContracto
     if (changedNumber && !window.confirm(`Đổi số giữ ${reservation.number} sang ${form.number}? Xác nhận số ${reservation.number} chưa dùng trên bản giấy hoặc NKVH. Nếu số đích đang được giữ, phiếu lưu thành công sẽ nhận số đó.`)) return;
     const firstIssue = requiredIssues[0];
     if (firstIssue) { toast.error(`Vui lòng bổ sung: ${firstIssue.label}`); selectStep(firstIssue.step); return; }
+    // Cấp phiếu MỚI: hỏi lại nếu cùng sổ + cương vị đang có phiếu nội dung gần giống (rà soát phiếu hủy 08/10/2026).
+    // Tra lỗi thì bỏ qua — chỉ là cảnh báo, không chặn cấp phiếu.
+    if (!initial && status === "ISSUED") {
+      const similar = await apiGet<Array<{ number: string; year: number; status: PermitStatus; content: string }>>(`/api/work-permits/similar?${new URLSearchParams({ kind: form.kind, position: form.position, content: form.content })}`).then(res => res.data).catch(() => []);
+      const lines = similar.map(other => `• PCT ${formatPermitNumber(other)} (${PERMIT_STATUSES[other.status]}): ${compactOverhaulContent(other.content).replace(/\s+/g, " ").slice(0, 120)}`);
+      if (similar.length && !window.confirm(`Có thể TRÙNG nội dung với ${similar.length} PCT cùng cương vị:\n\n${lines.join("\n")}\n\nVẫn cấp phiếu này?`)) return;
+    }
     try {
       const body = { ...form, nkvhPctId: effectivePermitFormat(form) === "ELECTRONIC" ? nkvhId : null, issuerName: issuerDisplay, issuerPosition: issuerPositionDisplay, status,
         ...((!initial || initial.status === "DRAFT") && status === "ISSUED" ? { reservationId: reservation?.id, releasePrevious: Boolean(changedNumber) } : {}) };
@@ -645,6 +656,14 @@ function PermitEditor({ initial, template, kind, presetTeamType, presetContracto
                 </div>
               </div>
               {!paper && <NkvhLinkEditor kind={form.kind} value={nkvhLink} onChange={setNkvhLink} disabled={save.isPending} />}
+              {/* Đổi nhóm SCTX ↔ Đại tu cho PCT nhà thầu đã cấp, chưa cho phép làm việc (08/10/2026 — thay cho hủy rồi cấp lại). Máy chủ kiểm lại. */}
+              {initial && form.teamType === "CONTRACTOR" && ["DRAFT", "ISSUED"].includes(initial.status) && !initial.authorizedAt && !initial.sessions?.length && <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-border px-3 py-2.5 text-sm">
+                <span className="font-medium">Nhóm phiếu nhà thầu</span>
+                <div role="radiogroup" aria-label="Nhóm phiếu nhà thầu" className="inline-flex rounded-lg border border-border bg-background p-0.5">{(["SCTX", "OVERHAUL"] as const).map(value => <button key={value} type="button" role="radio" aria-checked={form.contractorScope === value} disabled={save.isPending}
+                  onClick={() => setForm(prev => prev.contractorScope === value ? prev : { ...prev, contractorScope: value, ...(value === "SCTX" ? { overhaulItems: [], overhaulExtra: false } : {}) })}
+                  className={`min-h-9 rounded-md px-3 text-sm font-medium transition-colors ${form.contractorScope === value ? "bg-[#00558F] text-white" : "text-slate-600 hover:bg-muted dark:text-slate-300"}`}>{PERMIT_CONTRACTOR_SCOPES[value]}</button>)}</div>
+                {form.contractorScope !== initial.contractorScope && <p className="w-full text-xs text-amber-800 dark:text-amber-200">Đổi nhóm phiếu: CHTT và nhân viên phải thuộc nhóm {PERMIT_CONTRACTOR_SCOPES[form.contractorScope ?? "SCTX"]} — báo lỗi thì chọn lại CHTT ở bước Nhân sự.{form.contractorScope === "SCTX" ? " Hạng mục đại tu của phiếu sẽ được bỏ." : " Chọn hạng mục đại tu ở ô Nội dung công việc."}</p>}
+              </div>}
               {/* Cương vị và Số PCT đứng chung một hàng (hai cột, căn theo mép trên) — mẫu giấy Cơ tự bố trí riêng trong MechanicalPaperInfo. */}
               {paper && form.kind === "MECHANICAL" ? <MechanicalPaperInfo form={form} issued={issued} isNew={!initial} numberField={numberField} positionOptions={positionOptions} onChange={set} onCompanyChange={changeContractorCompany} onPickSyc={() => setPickSyc(true)} /> : <div className="grid items-start gap-4 md:grid-cols-2">
                 <label className="block space-y-1.5 text-sm"><span className="block font-medium">Cương vị</span><select className={control} value={form.position} onChange={e => set("position", e.target.value)}><option value="">Tất cả cương vị</option>{form.position && !positionOptions.includes(form.position) && <option value={form.position}>{form.position}</option>}{positionOptions.map(value => <option key={value} value={value}>{value}</option>)}</select><span className="block text-xs text-muted-foreground">Không bắt buộc; dùng để ghi cương vị trên phiếu.</span></label>
@@ -846,6 +865,11 @@ function PermitDetail({ id, canIssue: listCanIssue, canIssueNew: listCanIssueNew
     <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
     {query.isError ? <p role="alert" className="text-red-700">{query.error.message}</p> : !row ? <p role="status">Đang tải phiếu…</p> : <div className="space-y-4">
       {row.status === "CANCELLED" && <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900 dark:border-red-900 dark:bg-red-950/30 dark:text-red-200"><b>PCT đã hủy.</b>{row.statusReason ? ` Lý do: ${row.statusReason}` : ""}</p>}
+      {/* Cảnh báo trùng nội dung (rà soát phiếu hủy 08/10/2026): phiếu chưa làm việc mà cùng sổ + cương vị có phiếu gần giống. */}
+      {Boolean(row.similarPermits?.length) && <div role="alert" className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100">
+        <p className="font-semibold">Có thể trùng nội dung với {row.similarPermits!.length} PCT khác cùng cương vị — kiểm tra trước khi cho làm việc:</p>
+        <ul className="mt-1.5 space-y-1">{row.similarPermits!.map(other => <li key={other.id} className="flex flex-wrap items-center gap-x-2"><a className="inline-flex min-h-9 items-center font-semibold text-blue-700 underline dark:text-blue-300" href={`/work-permits?permitId=${encodeURIComponent(other.id)}`}>PCT {formatPermitNumber(other)}</a><span className="text-xs">{PERMIT_STATUSES[other.status]}</span><span className="min-w-0 flex-1 truncate text-xs text-amber-900/80 dark:text-amber-100/80">{compactOverhaulContent(other.content)}</span></li>)}</ul>
+      </div>}
       {/* Nội dung công việc là thứ người tra đọc đầu tiên: cho nó một khối riêng, chữ to hơn phần còn lại. */}
       <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
         <p className="text-[10.5px] font-semibold uppercase tracking-[0.03em] text-slate-500 dark:text-muted-foreground">{PERMIT_FIELD_LABELS.content}</p>
