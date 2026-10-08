@@ -19,7 +19,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { PlainHeader, ROW_HOVER, RowExpander, rowBackground, TD_EXPAND, TD_ROW, TH_EXPAND, TH_NAVY, TR_HEAD } from "@/components/pccc/pccc-table-card";
 import { cn } from "@/lib/utils";
 import { normalizeText } from "@/lib/nav";
-import { useCreatePermitCompany, useDeletePermitCompany, useDeletePermitPerson, usePermitCompanySummary, usePermitPeople, useRenamePermitCompany, useSavePermitPerson, usePermitSessionAction, usePermitActivity } from "@/hooks/useWorkPermits";
+import { useCreatePermitCompany, useDeletePermitCompany, useDeletePermitPerson, usePermitCompanySummary, usePermitPeople, useRenamePermitCompany, useSavePermitPerson, usePermitSessionAction, usePermitActivity, usePermitCompanyPeople } from "@/hooks/useWorkPermits";
 import { companyUnclassified, formatPermitNumber, isSessionCommander, PERMIT_KINDS, permitDeadline, workersStillInside } from "@/lib/work-permits";
 import { isOverhaulPaperPermit, OVERHAUL_DAY_STATUSES, OVERHAUL_JOURNAL_LIMITS, overhaulItemKey, overhaulItemsOf, overhaulJournalTitle, type OverhaulJournalHeader } from "@/lib/work-permit-overhaul";
 import { initialOverhaulDraft, OverhaulItemProgressEditor, overhaulDraftError, overhaulDraftPayload } from "@/components/work-permits/overhaul-item-progress";
@@ -50,8 +50,8 @@ export function PermitCompanyDirectory() {
   const remove = useDeletePermitPerson();
   const removeCompany = useDeletePermitCompany();
   const companies = usePermitCompanySummary();
-  // Chỉ gọi danh sách người khi có đơn vị đang mở; `limit: 200` để không phải phân trang trong khối bung.
-  const people = usePermitPeople({ company: openCompany ?? "", limit: 200, enabled: Boolean(openCompany) });
+  // Chỉ gọi danh sách người khi có đơn vị đang mở; lấy ĐỦ mọi trang (đơn vị có thể trên 200 người).
+  const people = usePermitCompanyPeople(openCompany ?? "", Boolean(openCompany));
   const canWrite = companies.data?.meta.canWrite ?? false;
   // Nhóm điền sẵn khi thêm người: đơn vị chỉ làm Đại tu → Đại tu, còn lại → SCTX (sửa được trong hộp thoại).
   const addingRow = companies.data?.data.find(row => row.company === addingPersonTo);
@@ -471,7 +471,7 @@ export function PermitMembersEditor({ members, onChange, commander, company, sco
   const companyCodes = usePermitCompanySummary();
   const codeOf = (company: string) => companyCodes.data?.data.find(row => row.company === company)?.code || "";
   const unitName = company || scan?.unit || members.find(m => m.personId)?.company || "";
-  const unitPeople = usePermitPeople({ company: unitName, limit: 200, enabled: Boolean(unitName) && members.some(m => m.personId) });
+  const unitPeople = usePermitCompanyPeople(unitName, members.some(m => m.personId));
   const personOf = (id?: string) => id ? unitPeople.data?.data.find(person => person.id === id) : undefined;
   // Máy quét thêm từng người liên tiếp nhanh hơn một lần render → cộng dồn trên bản mới nhất, không trên props cũ.
   const latest = useRef(members);

@@ -155,6 +155,25 @@ export function usePermitPeople(params: { q?: string; page?: number; active?: bo
     ...(params.company ? { company: params.company } : {}), ...(params.scope ? { scope: params.scope } : {}), ...(params.limit ? { limit: String(params.limit) } : {}) });
   return useQuery({ queryKey: ["work-permit-people", query.toString()], enabled: params.enabled ?? true, refetchInterval: params.polling ? 30000 : false, queryFn: () => apiGet<PermitPerson[]>(`/api/work-permits/people?${query}`) as Promise<{ data: PermitPerson[]; meta: { total: number; pageSize: number; canWrite: boolean } }> });
 }
+/**
+ * TOÀN BỘ người của một đơn vị (bảng đơn vị bung ra, danh sách nhân viên của phiếu): máy chủ trả tối đa 200 người
+ * một trang nên lấy lần lượt tới hết. Trước 08/10/2026 chỉ lấy trang đầu — đơn vị trên 200 người (IDC 248) mất người
+ * cuối danh sách. Khoá nằm dưới ["work-permit-people"] nên thêm / sửa / xoá người vẫn làm mới.
+ */
+export function usePermitCompanyPeople(company: string, enabled = true) {
+  return useQuery({ queryKey: ["work-permit-people", "company-all", company], enabled: enabled && Boolean(company), queryFn: async () => {
+    const all: PermitPerson[] = [];
+    let meta = { total: 0, pageSize: 200, canWrite: false };
+    for (let page = 1; page <= 50; page++) {
+      const query = new URLSearchParams({ q: "", page: String(page), active: "0", commander: "0", company, limit: "200" });
+      const res = await apiGet<PermitPerson[]>(`/api/work-permits/people?${query}`) as { data: PermitPerson[]; meta: typeof meta };
+      all.push(...res.data);
+      meta = res.meta;
+      if (!res.data.length || all.length >= res.meta.total) break;
+    }
+    return { data: all, meta };
+  } });
+}
 /** Tra một thẻ vừa quét (link QR hoặc số thẻ) — gọi thẳng, không cache: mỗi lượt quét phải là dữ liệu mới. */
 export async function lookupPermitCard(q: string) {
   return (await apiGet<{ code: string; person: PermitPerson | null }>(`/api/work-permits/people/card?q=${encodeURIComponent(q)}`)).data;
