@@ -157,6 +157,16 @@ export async function consumePermitNumberReservation(tx: Tx, input: {
     throw fail("Số, loại PCT hoặc năm đã khác lượt lấy số", 409);
   }
   const target = canonicalPermitNumber(input.number);
+  // Lượt lấy số từ NKVH ("Lấy số PCT" trên tiện ích) đang gắn phiếu nháp "Chờ NKVH lưu" mang chính số này: chỉ được
+  // cấp CHÍNH phiếu nháp đó. Cấp một phiếu MỚI bằng số này sinh hai phiếu trùng số — đã xảy ra với PCT 4360/2026
+  // Điện ngày 08/10/2026 (bấm "Tiếp tục" ở khung số đã lấy rồi lưu biểu mẫu web). Đổi sang số khác (releasePrevious)
+  // vẫn được: releaseUnusedReservation hủy nháp NKVH cùng lúc.
+  if (reservation.nkvhPctId && reservation.number === target) {
+    const draft = await tx.workPermit.findFirst({ where: { kind: reservation.kind, year: reservation.year, number: reservation.number, nkvhPctId: reservation.nkvhPctId, status: "DRAFT" }, select: { id: true } });
+    if (draft && draft.id !== input.permitId) {
+      throw fail(`Số ${reservation.number}/${reservation.year} đã lấy cho một phiếu NKVH và đang có phiếu nháp "Chờ NKVH lưu". Lưu phiếu đó bên NKVH (web tự cấp theo NKVH) hoặc mở chính phiếu nháp để cấp; muốn cấp phiếu khác thì hủy lượt giữ số này trước.`, 409);
+    }
+  }
   if (reservation.number !== target) {
     if (input.releasePrevious !== true) throw fail("Cần xác nhận số giữ ban đầu chưa sử dụng trước khi đổi số.", 409);
     await assertNumberNotCancelled(tx, input.kind, input.year, target);

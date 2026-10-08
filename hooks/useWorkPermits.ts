@@ -10,6 +10,8 @@ export interface PermitNumberReservation {
   id: string; kind: string; year: number; number: string; teamType: "INTERNAL" | "CONTRACTOR";
   status: "RESERVED" | "ISSUED" | "CANCELLED" | "RELEASED" | "OBSERVED" | "REVIEW"; ownerId: string; ownerName: string;
   permitId: string | null; reusedPermitId: string | null; createdAt: string;
+  /** Lượt lấy từ NKVH: phiếu nháp "Chờ NKVH lưu" mang số này (nếu còn). */
+  draftPermitId?: string | null;
 }
 export interface PermitNumberBaselineRow {
   kind: string; year: number; highest: string; suggested: string | null;

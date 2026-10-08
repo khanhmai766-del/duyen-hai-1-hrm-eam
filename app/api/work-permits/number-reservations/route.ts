@@ -13,7 +13,14 @@ export async function GET() {
       where: { OR: [{ status: "RESERVED" }, { status: "REVIEW", nkvhPctId: { not: null }, permitId: null }], ...(user.role === "ADMIN" ? {} : { ownerId: user.id }) },
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     });
-    return ok(rows);
+    // Lượt lấy từ NKVH: kèm id phiếu nháp "Chờ NKVH lưu" mang số đó, để nút "Tiếp tục" mở chính phiếu nháp thay vì
+    // biểu mẫu cấp phiếu mới (cấp mới bằng số này = hai phiếu trùng số, xem consumePermitNumberReservation).
+    const linked = rows.filter(row => row.nkvhPctId);
+    const drafts = linked.length ? await prisma.workPermit.findMany({
+      where: { status: "DRAFT", OR: linked.map(row => ({ kind: row.kind, year: row.year, number: row.number, nkvhPctId: row.nkvhPctId })) },
+      select: { id: true, kind: true, nkvhPctId: true },
+    }) : [];
+    return ok(rows.map(row => ({ ...row, draftPermitId: row.nkvhPctId ? drafts.find(d => d.kind === row.kind && d.nkvhPctId === row.nkvhPctId)?.id ?? null : null })));
   });
 }
 
