@@ -183,6 +183,8 @@ export type PermitPhotoJob = { code: string; source: string; exp: number; sig: s
 export interface PermitPeopleSyncResult {
   total: number; created: number; updated: number; skipped: number; skippedSamples: string[];
   skippedTabs: Array<{ tab: string; rows: number }>; moved: string[]; movedCount: number;
+  /** Theo đơn vị: mã (= tên tab), tổng người trên sheet, số người mới + tên (tối đa 30). */
+  units: Array<{ code: string; company: string; total: number; created: number; createdNames: string[] }>;
   photos: PermitPhotoJob[];
 }
 export function useSyncPermitPeople() {

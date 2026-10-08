@@ -176,12 +176,18 @@ export async function syncPeopleList() {
   }
   let created = 0, updated = 0;
   const moved: string[] = [];
+  // Thống kê theo đơn vị (08/10/2026): hộp đồng bộ hiện mỗi đơn vị có bao nhiêu người MỚI (kèm tên) trên tổng số trên sheet.
+  const units = new Map<string, { code: string; company: string; total: number; created: number; createdNames: string[] }>();
   const photos: PhotoJob[] = [];
   const photoExp = Date.now() + PHOTO_JOB_TTL_MS;
   const entries = [...byCode.values()];
   for (let i = 0; i < entries.length; i += 100) {
     await prisma.$transaction(entries.slice(i, i + 100).map(({ photoRef, tab, ...data }) => {
       const before = existing.get(data.code);
+      const unit = units.get(data.company) ?? { code: tab, company: data.company, total: 0, created: 0, createdNames: [] };
+      unit.total++;
+      if (!before) { unit.created++; if (unit.createdNames.length < 30) unit.createdNames.push(`${data.name} (${data.code})`); }
+      units.set(data.company, unit);
       const fromCode = renameFrom.get(data.code) ?? data.code;
       if (before && before.company !== data.company) moved.push(`${data.name} (${data.code}): ${before.company} → ${data.company} (tab ${tab})`);
       if (photoRef && photoNeedsFetch(before, photoRef)) photos.push(signPhotoJob(data.code, photoRef, photoExp));
@@ -198,6 +204,8 @@ export async function syncPeopleList() {
     total: byCode.size, created, updated, skipped: skipped.length, skippedSamples: skipped.slice(0, 20),
     skippedTabs: [...skippedTabs].map(([tab, rows]) => ({ tab, rows })).sort((a, b) => a.tab.localeCompare(b.tab, "vi")),
     moved: moved.slice(0, 50), movedCount: moved.length, photos,
+    // Đơn vị có người mới lên đầu (nhiều nhất trước), còn lại theo mã.
+    units: [...units.values()].sort((a, b) => b.created - a.created || a.code.localeCompare(b.code, "vi")),
   };
 }
 
