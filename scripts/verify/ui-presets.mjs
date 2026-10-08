@@ -535,6 +535,33 @@ export const PRESETS = {
       await page.waitForTimeout(300);
     },
   },
+  "dong-bo-nhan-su": {
+    description: "Hộp Đồng bộ nhân sự từ Google Sheets — kết quả giả lập có bảng nhân sự mới theo đơn vị (không gọi Google, không ghi DB)",
+    async prepare() { return {}; },
+    routes: () => ["/work-permits"],
+    async mock(context) {
+      const rows = [{ company: "CTy CPĐT Phát triển Công nghiệp Sài Gòn IDC", code: "IDC", sctx: true, overhaul: true, total: 248, commanders: 43, active: 248 }];
+      await context.route(/\/api\/work-permits\/companies\?summary=1/, (route) => route.fulfill({ json: { data: rows, meta: { canWrite: true }, error: null } }));
+      const units = [
+        { code: "IDC", company: "CTy CPĐT Phát triển Công nghiệp Sài Gòn IDC", total: 251, created: 3, createdNames: ["Phạm Sơn Tùng (SGIDC/90)", "Trần Phi Sĩ (SGIDC/91)", "Nguyễn Đình Văn (SGIDC/92)"] },
+        { code: "NPS", company: "CTy Cổ Phần Sửa Chữa Nhiệt Điện Miền Bắc", total: 104, created: 1, createdNames: ["Lê Văn Hùng (NPS/120)"] },
+        { code: "EPS", company: "CTy Cổ Phần EPS", total: 37, created: 0, createdNames: [] },
+        { code: "VATCO", company: "CTy CP Vật tư & Thiết bị công nghiệp", total: 8, created: 0, createdNames: [] },
+      ];
+      await context.route("**/api/work-permits/people/sync", (route) => route.fulfill({ json: { data: {
+        total: 400, created: 4, updated: 396, skipped: 0, skippedSamples: [], skippedTabs: [{ tab: "Dashboard", rows: 12 }], moved: [], movedCount: 0, photos: [], units,
+      }, meta: null, error: null } }));
+    },
+    async interact(page) {
+      const tab = page.getByRole("button", { name: "Nhân sự nhà thầu" }).first();
+      if (await tab.isVisible().catch(() => false)) await tab.click();
+      else { await page.getByRole("button", { name: /PCT Cơ|Đang làm việc/ }).first().click(); await page.getByText("Nhân sự nhà thầu").last().click(); }
+      await page.getByRole("button", { name: /Đồng bộ (từ Google )?Sheets/ }).locator("visible=true").first().click();
+      await page.getByRole("button", { name: "Bắt đầu đồng bộ" }).click();
+      await page.getByText("+3 mới").click();
+      await page.waitForTimeout(300);
+    },
+  },
   "don-vi-nha-thau": {
     description: "Danh bạ đơn vị nhà thầu có phân loại SCTX / Đại tu / cả hai / chưa phân loại + hộp sửa đơn vị — danh sách giả lập, không ghi DB",
     async prepare() { return {}; },
