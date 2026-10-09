@@ -225,6 +225,8 @@ export interface PermitSession {
   endConfirmedByName: string; endNote: string; progress: number | null; createdByName: string; endedByName: string | null;
   /** PCT đại tu: kết quả từng hạng mục lúc kết thúc. */
   itemProgress?: OverhaulItemProgress[] | null;
+  /** Chỉ API chi tiết phiếu kèm: SĐT hiện tại trong hồ sơ CHTT (null khi hồ sơ đã xoá). */
+  commander?: { phone: string } | null;
 }
 export type PermitHistorySummary = Pick<PermitHistory, "id" | "actorName" | "action" | "createdAt">;
 /** Phiếu nháp có liên kết NKVH = đã lấy số từ tiện ích, đang chờ NKVH lưu để thành Đã cấp. */

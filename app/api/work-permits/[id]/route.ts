@@ -25,7 +25,7 @@ export async function GET(_req: Request, props: { params: Promise<{ id: string }
   return permitHandle(async () => {
     const user = await requireUser();
     await requirePermitVisible(user, params.id);
-    const row = await prisma.workPermit.findUnique({ where: { id: params.id }, include: { sessions: { take: 2, orderBy: [{ openedAt: "desc" }, { id: "desc" }] }, history: { take: 2, select: historySummarySelect, orderBy: [{ createdAt: "desc" }, { id: "desc" }] }, _count: { select: { sessions: true, history: true } } } });
+    const row = await prisma.workPermit.findUnique({ where: { id: params.id }, include: { sessions: { take: 2, orderBy: [{ openedAt: "desc" }, { id: "desc" }], include: { commander: { select: { phone: true } } } }, history: { take: 2, select: historySummarySelect, orderBy: [{ createdAt: "desc" }, { id: "desc" }] }, _count: { select: { sessions: true, history: true } } } });
     if (!row) return fail("Không tìm thấy PCT", 404);
     // Điền sẵn hộp Kết thúc / Cập nhật tiến độ: % lũy kế CHUNG của hạng mục (mọi PCT cùng giữ — Cơ + Điện của hạng mục
     // phối hợp), ghi chú gần nhất của RIÊNG phiếu này (mỗi PCT một đoạn nhật ký).

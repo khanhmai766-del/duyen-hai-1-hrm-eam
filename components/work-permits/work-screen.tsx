@@ -82,6 +82,7 @@ export function PermitWorkScreen({ id }: { id: string }) {
         <div className="min-w-0">
           <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700"><span className="mr-1.5 inline-block h-2 w-2 animate-pulse rounded-full bg-emerald-500 align-middle" aria-hidden />Đang làm việc · {elapsed(live.openedAt)}</p>
           <p className="mt-1 text-base font-bold leading-6 sm:text-lg">CHTT {live.commanderName}{live.commanderCode && <span className="ml-1.5 text-xs font-medium text-muted-foreground">{live.commanderCode}</span>}</p>
+          {live.commander?.phone && <p className="text-sm">SĐT: <a className="font-medium text-blue-700 underline dark:text-blue-400" href={`tel:${live.commander.phone.replace(/[^+\d]/g, "")}`}>{live.commander.phone}</a></p>}
           <p className="text-xs text-muted-foreground sm:text-sm">Mở lúc {fmt(live.openedAt)} · Cho phép: {live.authorizerName}</p>
         </div>
         {canExecute && <div className="grid grid-cols-2 gap-2 sm:flex">
