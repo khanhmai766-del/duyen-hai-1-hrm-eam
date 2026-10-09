@@ -153,6 +153,10 @@ export function useSetPermitNumberBaseline() {
 export function useExportWorkPermits() {
   return useMutation({ mutationFn: (filters: string) => apiDownload(`/api/work-permits/export?${filters}`) });
 }
+/** Excel nhân sự nhà thầu đang làm việc ngay lúc bấm — trang Tổng hợp + mỗi cương vị một trang tính. */
+export function useExportWorkingPeople() {
+  return useMutation({ mutationFn: () => apiDownload("/api/work-permits/live-sessions/export") });
+}
 
 export function usePermitPeople(params: { q?: string; page?: number; active?: boolean; commander?: boolean; polling?: boolean; company?: string; scope?: string | null; limit?: 25 | 200; enabled?: boolean }) {
   const query = new URLSearchParams({ q: params.q ?? "", page: String(params.page ?? 1), active: params.active ? "1" : "0", commander: params.commander ? "1" : "0",

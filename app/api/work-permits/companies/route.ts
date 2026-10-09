@@ -1,8 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import { audit, fail, ok, requireUser } from "@/lib/api";
 import { normalizeText } from "@/lib/nav";
-import { companyScopeLabel, type PermitMember } from "@/lib/work-permits";
-import { presentMembers, samePermitWorker } from "@/lib/work-permit-presence";
+import { companyScopeLabel } from "@/lib/work-permits";
+import { loadWorkingPeople } from "@/lib/server/work-permit-working";
 import { permitCapabilities, requirePermitIssue } from "@/lib/server/work-permit-permissions";
 import { permitBody, permitHandle, permitText } from "@/lib/server/work-permits";
 export const dynamic = "force-dynamic";
@@ -41,27 +41,12 @@ async function assertCodeFree(code: string | undefined, exceptNames: string[]) {
   if (taken) throw fail(`Mã "${code}" đã dùng cho đơn vị "${taken.name}"`, 409);
 }
 
-/**
- * Người đang làm việc theo đơn vị: CHTT + nhân viên còn trong khu vực (chưa quét RA) của mọi lần làm việc
- * đang mở — cùng định nghĩa với chặn một người vào hai phiếu (lib/server/work-permit-presence.ts).
- * Một người chỉ đếm một lần; đơn vị lấy theo hồ sơ hiện tại (đổi tên đơn vị vẫn khớp), không có hồ sơ thì theo chữ đã ghi.
- */
+/** Người đang làm việc theo đơn vị (định nghĩa ở lib/server/work-permit-working.ts). */
 async function workingByCompany() {
-  const sessions = await prisma.workPermitSession.findMany({ where: { endedAt: null },
-    select: { commanderId: true, commanderCode: true, commanderName: true, company: true, members: true } });
-  const workers: PermitMember[] = [];
-  for (const session of sessions) {
-    const occupied: PermitMember[] = [{ personId: session.commanderId ?? undefined, code: session.commanderCode, name: session.commanderName, company: session.company }, ...presentMembers(session.members)];
-    for (const worker of occupied) if (!workers.some(other => samePermitWorker(worker, other))) workers.push(worker);
-  }
-  const ids = workers.flatMap(worker => worker.personId ? [worker.personId] : []);
-  const current = new Map((ids.length ? await prisma.workPermitPerson.findMany({ where: { id: { in: ids } }, select: { id: true, company: true } }) : []).map(person => [person.id, person.company]));
+  const people = await loadWorkingPeople();
   const byCompany = new Map<string, number>();
-  for (const worker of workers) {
-    const company = (worker.personId && current.get(worker.personId)) || worker.company;
-    byCompany.set(company, (byCompany.get(company) ?? 0) + 1);
-  }
-  return { byCompany, total: workers.length };
+  for (const person of people) byCompany.set(person.company, (byCompany.get(person.company) ?? 0) + 1);
+  return { byCompany, total: people.length };
 }
 
 export async function GET(req: Request) {

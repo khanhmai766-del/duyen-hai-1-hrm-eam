@@ -23,7 +23,7 @@ import { PermitDocumentPreview } from "@/components/work-permits/document-previe
 import { apiDownload, apiDownloadPost, apiGet } from "@/lib/fetcher";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { usePermitLiveSessions, usePermitPeople, useCancelDraftWorkPermit, useDeleteWorkPermit, usePermitNameSuggestions, useWorkPermits, useWorkPermit, useSaveWorkPermit, useExportWorkPermits, usePermitNumberSuggestion, usePermitNumberReservations, useTakePermitNumber, useCancelPermitNumberReservation, usePermitNumberBaselines, useSetPermitNumberBaseline, useExecuteWorkPermit, type PermitNumberReservation } from "@/hooks/useWorkPermits";
+import { usePermitLiveSessions, usePermitPeople, useCancelDraftWorkPermit, useDeleteWorkPermit, usePermitNameSuggestions, useWorkPermits, useWorkPermit, useSaveWorkPermit, useExportWorkPermits, useExportWorkingPeople, usePermitNumberSuggestion, usePermitNumberReservations, useTakePermitNumber, useCancelPermitNumberReservation, usePermitNumberBaselines, useSetPermitNumberBaseline, useExecuteWorkPermit, type PermitNumberReservation } from "@/hooks/useWorkPermits";
 import { useUsers } from "@/hooks/useUsers";
 import { useDefects, type DefectItem } from "@/hooks/useDefects";
 import { announcementPositionsMatch } from "@/lib/positions";
@@ -196,7 +196,7 @@ export default function WorkPermitsPage() {
   const bookTab = !safetyTab && !peopleTab && !liveTab && !overhaulTab; // đang xem sổ PCT, không phải tab danh mục
   // Luôn tải (nhẹ, 15 giây/lần) để tab "Đang làm việc" có số đếm dù đang ở tab khác.
   const liveSessions = usePermitLiveSessions();
-  const query = useWorkPermits(filters, bookTab); const exporting = useExportWorkPermits();
+  const query = useWorkPermits(filters, bookTab); const exporting = useExportWorkPermits(); const exportingPeople = useExportWorkingPeople();
   const rows = query.data?.data ?? []; const meta = query.data?.meta;
   // Phạm vi cương vị (server): ô lọc + biểu mẫu chỉ bày cương vị được phép; phiếu mới của người bị giới hạn
   // mặc định là cương vị ĐANG LÀM VIỆC (người kiêm nhiệm: cương vị đang chọn ở trang Tài khoản).
@@ -224,11 +224,17 @@ export default function WorkPermitsPage() {
   const resetFilters = () => {
     setQ(""); setSearch(""); setStatus(""); setUnit(""); setPosition(""); setTeamType(""); setContractorScope(""); setWorkType(""); setFrom(""); setTo(""); setPage(1);
   };
+  const saveFile = (file: { blob: Blob; filename: string }) => { const url = URL.createObjectURL(file.blob); const a = document.createElement("a"); a.href = url; a.download = file.filename; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000); };
+  /** Tab Nhân sự nhà thầu: tải ngay danh sách người đang làm việc theo cương vị (không cần hộp chọn). */
+  async function exportWorkingPeople() {
+    try { saveFile(await exportingPeople.mutateAsync()); }
+    catch (e) { toast.error(e instanceof Error ? e.message : "Không thể xuất danh sách đang làm việc"); }
+  }
   async function exportBook() {
     try {
       if (exportMode === "year" && (!Number.isInteger(exportYear) || exportYear < 2000 || exportYear > 2100)) { toast.error("Nhập năm cấp số từ 2000 đến 2100"); return; }
       const exportFilters = exportMode === "year" ? new URLSearchParams({ kind, year: String(exportYear) }).toString() : filters;
-      const file = await exporting.mutateAsync(exportFilters); const url = URL.createObjectURL(file.blob); const a = document.createElement("a"); a.href = url; a.download = file.filename; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000); }
+      saveFile(await exporting.mutateAsync(exportFilters)); }
     catch (e) { toast.error(e instanceof Error ? e.message : "Không thể xuất sổ"); }
   }
   const statusCards = [
@@ -286,7 +292,8 @@ export default function WorkPermitsPage() {
       {/* Tab "Đang làm việc" là màn theo dõi, không cần mục Tiện ích; trên điện thoại hàng nút khi đó trống nên ẩn luôn cả hàng. */}
       {/* Máy tính: nút phụ (Tiện ích, Xuất Excel) và hai nút cấp phiếu cùng MỘT hàng, nút cấp phiếu ngoài cùng bên phải.
           Nhóm phụ đứng trước trong DOM để điện thoại giữ thứ tự Tiện ích → Cấp phiếu; "contents" gỡ khung nhóm trên điện thoại. */}
-      <div className={`flex-wrap gap-2 md:flex-nowrap md:items-center ${liveTab ? "hidden md:flex" : "flex"}`}><div className="contents md:flex md:flex-wrap md:gap-2 lg:justify-end">{!liveTab && <PermitGuideButton />}<Button variant="outline" size="sm" className="hidden h-9 text-xs md:inline-flex" onClick={() => setExportOpen(true)} disabled={!bookTab || !meta || exporting.isPending || query.isError}><Download />{exporting.isPending ? "Đang xuất…" : "Xuất Excel"}</Button></div>{bookTab && meta?.canIssueNew && <div className="contents md:flex md:gap-2">{/* Điện thoại: gom hai nút thành một "Cấp phiếu" → chọn Nội bộ / Nhà thầu, khỏi chiếm hai hàng đầu trang. */}<DropdownMenu><DropdownMenuTrigger asChild><Button size="sm" className="h-9 bg-blue-800 text-xs hover:bg-blue-900 md:hidden"><Plus />Cấp phiếu<ChevronDown className="opacity-80" /></Button></DropdownMenuTrigger><DropdownMenuContent align="end" className="w-64 p-1.5"><DropdownMenuItem className="min-h-12 cursor-pointer gap-3 rounded-md px-3" onSelect={() => startNewPermit("INTERNAL")}><Building2 className="h-5 w-5 shrink-0 text-blue-800" /><span><span className="block text-sm font-semibold">Cấp phiếu nội bộ</span><span className="block text-xs text-muted-foreground">PCT điện tử hoặc PCT giấy</span></span></DropdownMenuItem><DropdownMenuItem className="min-h-12 cursor-pointer gap-3 rounded-md px-3" onSelect={() => startNewPermit("CONTRACTOR")}><HardHat className="h-5 w-5 shrink-0 text-cyan-700" /><span><span className="block text-sm font-semibold">Cấp phiếu nhà thầu</span><span className="block text-xs text-muted-foreground">PCT giấy</span></span></DropdownMenuItem></DropdownMenuContent></DropdownMenu><Button size="sm" className="hidden h-9 bg-blue-800 text-xs hover:bg-blue-900 md:inline-flex" onClick={() => startNewPermit("INTERNAL")}><Building2 />Nội bộ</Button><Button size="sm" className="hidden h-9 bg-cyan-700 text-xs hover:bg-cyan-800 md:inline-flex" onClick={() => startNewPermit("CONTRACTOR")}><HardHat />Nhà thầu</Button></div>}</div>
+      <div className={`flex-wrap gap-2 md:flex-nowrap md:items-center ${liveTab ? "hidden md:flex" : "flex"}`}><div className="contents md:flex md:flex-wrap md:gap-2 lg:justify-end">{!liveTab && <PermitGuideButton />}{peopleTab ? <Button variant="outline" size="sm" className="hidden h-9 text-xs md:inline-flex" title="Nhân sự nhà thầu đang làm việc ngay lúc này — mỗi cương vị một trang tính" onClick={() => void exportWorkingPeople()} disabled={exportingPeople.isPending}><Download />{exportingPeople.isPending ? "Đang xuất…" : "Xuất Excel đang làm việc"}</Button>
+        : <Button variant="outline" size="sm" className="hidden h-9 text-xs md:inline-flex" onClick={() => setExportOpen(true)} disabled={!bookTab || !meta || exporting.isPending || query.isError}><Download />{exporting.isPending ? "Đang xuất…" : "Xuất Excel"}</Button>}</div>{bookTab && meta?.canIssueNew && <div className="contents md:flex md:gap-2">{/* Điện thoại: gom hai nút thành một "Cấp phiếu" → chọn Nội bộ / Nhà thầu, khỏi chiếm hai hàng đầu trang. */}<DropdownMenu><DropdownMenuTrigger asChild><Button size="sm" className="h-9 bg-blue-800 text-xs hover:bg-blue-900 md:hidden"><Plus />Cấp phiếu<ChevronDown className="opacity-80" /></Button></DropdownMenuTrigger><DropdownMenuContent align="end" className="w-64 p-1.5"><DropdownMenuItem className="min-h-12 cursor-pointer gap-3 rounded-md px-3" onSelect={() => startNewPermit("INTERNAL")}><Building2 className="h-5 w-5 shrink-0 text-blue-800" /><span><span className="block text-sm font-semibold">Cấp phiếu nội bộ</span><span className="block text-xs text-muted-foreground">PCT điện tử hoặc PCT giấy</span></span></DropdownMenuItem><DropdownMenuItem className="min-h-12 cursor-pointer gap-3 rounded-md px-3" onSelect={() => startNewPermit("CONTRACTOR")}><HardHat className="h-5 w-5 shrink-0 text-cyan-700" /><span><span className="block text-sm font-semibold">Cấp phiếu nhà thầu</span><span className="block text-xs text-muted-foreground">PCT giấy</span></span></DropdownMenuItem></DropdownMenuContent></DropdownMenu><Button size="sm" className="hidden h-9 bg-blue-800 text-xs hover:bg-blue-900 md:inline-flex" onClick={() => startNewPermit("INTERNAL")}><Building2 />Nội bộ</Button><Button size="sm" className="hidden h-9 bg-cyan-700 text-xs hover:bg-cyan-800 md:inline-flex" onClick={() => startNewPermit("CONTRACTOR")}><HardHat />Nhà thầu</Button></div>}</div>
     </header>
     {/* Điện thoại: một nút ghi mục đang xem → bấm chọn trong đủ 5 mục (thanh tab 5 mục phải vuốt ngang mới thấy hết). */}
     <DropdownMenu><DropdownMenuTrigger asChild><button type="button" aria-label={`Đang xem: ${currentSection.label}. Bấm để chuyển mục`} className={`flex h-12 w-full items-center gap-3 rounded-xl border bg-card px-4 text-left shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 md:hidden ${currentSection.live ? "border-emerald-300" : "border-blue-200"}`}>
