@@ -44,6 +44,18 @@ function text(value: unknown, field: string, maxLength = MAX_TEXT_LENGTH) {
   return result;
 }
 
+/**
+ * Cột mô tả (không thuộc khoá chống trùng): dài quá thì CẮT và ghi cảnh báo, không từ chối cả batch.
+ * Trước đây một ô "Ngày hoàn thành" bị ghi cả đoạn văn (SYC 2924/2025, 09/10/2026) làm hỏng lô 500 dòng
+ * và treo mọi lượt đồng bộ. Cột thuộc khoá (sourceKeyOf) vẫn dùng text() chặt — cắt sẽ đổi khoá, sinh phiếu trùng.
+ */
+function clippedText(value: unknown, field: string, maxLength: number, warn: (message: string) => void) {
+  const result = String(value ?? "").trim();
+  if (result.length <= maxLength) return result;
+  warn(`${field} dài ${result.length} ký tự, đã cắt còn ${maxLength}`);
+  return result.slice(0, maxLength);
+}
+
 function optionalInteger(value: unknown, field: string) {
   if (value === null || value === undefined || value === "") return 0;
   const result = Number(value);
@@ -77,7 +89,8 @@ export function parseN8nSources(value: unknown) {
   return sources as N8nDefectSource[];
 }
 
-export function parseN8nDefectRecords(value: unknown, source: N8nDefectSource) {
+/** `warnings` nhận cảnh báo các ô bị cắt bớt (xem clippedText). */
+export function parseN8nDefectRecords(value: unknown, source: N8nDefectSource, warnings: string[] = []) {
   if (!Array.isArray(value) || value.length === 0) throw new Error("records phải là mảng không rỗng");
   if (value.length > MAX_BATCH_SIZE) throw new Error(`Mỗi batch chỉ được tối đa ${MAX_BATCH_SIZE} dòng`);
 
@@ -101,6 +114,9 @@ export function parseN8nDefectRecords(value: unknown, source: N8nDefectSource) {
       throw new Error(`Dòng ${index + 1} thiếu STT, nội dung hoặc ngày phát hiện`);
     }
 
+    const where = `STT ${stt}${row.sourceRow ? ` (dòng ${row.sourceRow})` : ""}`;
+    const warn = (message: string) => warnings.push(`${where}: ${message}`);
+    const clip = (field: keyof DefectSourceRecord, maxLength = MAX_TEXT_LENGTH) => clippedText(row[field], field, maxLength, warn);
     const requestType = text(row.requestType, `records[${index}].requestType`, 100)
       || (source === "CO" ? "Cơ" : "Điện");
     return {
@@ -115,27 +131,27 @@ export function parseN8nDefectRecords(value: unknown, source: N8nDefectSource) {
       positionRaw: text(row.positionRaw, `records[${index}].positionRaw`, 2_000),
       content,
       detectedAtRaw,
-      shiftLeaderRaw: text(row.shiftLeaderRaw, `records[${index}].shiftLeaderRaw`, 2_000),
-      reminderRaw: text(row.reminderRaw, `records[${index}].reminderRaw`),
-      repeatedRepairRaw: text(row.repeatedRepairRaw, `records[${index}].repeatedRepairRaw`),
-      fireSafetyImpact: text(row.fireSafetyImpact, `records[${index}].fireSafetyImpact`, 500),
-      environmentSafetyImpact: text(row.environmentSafetyImpact, `records[${index}].environmentSafetyImpact`, 500),
-      severityRaw: text(row.severityRaw, `records[${index}].severityRaw`, 100),
-      conditionRaw: text(row.conditionRaw, `records[${index}].conditionRaw`, 100),
-      sourceStatusRaw: text(row.sourceStatusRaw, `records[${index}].sourceStatusRaw`, 2_000),
-      ktatReviewRaw: text(row.ktatReviewRaw, `records[${index}].ktatReviewRaw`),
-      boardDirectionRaw: text(row.boardDirectionRaw, `records[${index}].boardDirectionRaw`),
-      repairOrderNumberRaw: text(row.repairOrderNumberRaw, `records[${index}].repairOrderNumberRaw`, 2_000),
-      repairSolutionRaw: text(row.repairSolutionRaw, `records[${index}].repairSolutionRaw`),
-      repairPlanRaw: text(row.repairPlanRaw, `records[${index}].repairPlanRaw`),
-      repairUnitRaw: text(row.repairUnitRaw, `records[${index}].repairUnitRaw`, 2_000),
-      repairResultRaw: text(row.repairResultRaw, `records[${index}].repairResultRaw`),
-      repairPerformedByRaw: text(row.repairPerformedByRaw, `records[${index}].repairPerformedByRaw`, 2_000),
-      repairStartedAtRaw: text(row.repairStartedAtRaw, `records[${index}].repairStartedAtRaw`, 100),
-      completedAtRaw: text(row.completedAtRaw, `records[${index}].completedAtRaw`, 100),
-      repairPerformedContentRaw: text(row.repairPerformedContentRaw, `records[${index}].repairPerformedContentRaw`),
-      repairNoteRaw: text(row.repairNoteRaw, `records[${index}].repairNoteRaw`),
-      noteRaw: text(row.noteRaw, `records[${index}].noteRaw`),
+      shiftLeaderRaw: clip("shiftLeaderRaw", 2_000),
+      reminderRaw: clip("reminderRaw"),
+      repeatedRepairRaw: clip("repeatedRepairRaw"),
+      fireSafetyImpact: clip("fireSafetyImpact", 500),
+      environmentSafetyImpact: clip("environmentSafetyImpact", 500),
+      severityRaw: clip("severityRaw", 100),
+      conditionRaw: clip("conditionRaw", 100),
+      sourceStatusRaw: clip("sourceStatusRaw", 2_000),
+      ktatReviewRaw: clip("ktatReviewRaw"),
+      boardDirectionRaw: clip("boardDirectionRaw"),
+      repairOrderNumberRaw: clip("repairOrderNumberRaw", 2_000),
+      repairSolutionRaw: clip("repairSolutionRaw"),
+      repairPlanRaw: clip("repairPlanRaw"),
+      repairUnitRaw: clip("repairUnitRaw", 2_000),
+      repairResultRaw: clip("repairResultRaw"),
+      repairPerformedByRaw: clip("repairPerformedByRaw", 2_000),
+      repairStartedAtRaw: clip("repairStartedAtRaw", 100),
+      completedAtRaw: clip("completedAtRaw", 100),
+      repairPerformedContentRaw: clip("repairPerformedContentRaw"),
+      repairNoteRaw: clip("repairNoteRaw"),
+      noteRaw: clip("noteRaw"),
     };
   });
 }

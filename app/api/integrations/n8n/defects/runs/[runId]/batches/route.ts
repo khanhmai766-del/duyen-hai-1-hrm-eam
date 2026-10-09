@@ -20,7 +20,10 @@ export async function POST(req: NextRequest, props: { params: Promise<{ runId: s
     try {
       const body = await req.json();
       const source = parseN8nSource(body?.source);
-      const records = parseN8nDefectRecords(body?.records, source);
+      const warnings: string[] = [];
+      const records = parseN8nDefectRecords(body?.records, source, warnings);
+      // Ô quá dài đã bị cắt — batch vẫn nhận; ghi log để người quản lý Sheet sửa lại ô gốc.
+      if (warnings.length) console.warn(`[n8n defect sync] ${source} batch ${body?.batchNumber}: ${warnings.join("; ")}`);
       const result = await ingestN8nDefectBatch({
         runId: params.runId,
         source,
@@ -37,6 +40,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ runId: s
         updatedCount: result.updatedCount,
         unchangedCount: result.unchangedCount,
         confirmedSkippedCount: result.confirmedSkippedCount,
+        warnings,
       });
     } catch (error) {
       return fail(n8nDefectSyncErrorMessage(error), 409);
