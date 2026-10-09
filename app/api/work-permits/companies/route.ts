@@ -1,7 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import { audit, fail, ok, requireUser } from "@/lib/api";
 import { normalizeText } from "@/lib/nav";
-import { companyScopeLabel } from "@/lib/work-permits";
+import { companyScopeLabel, type PermitMember } from "@/lib/work-permits";
+import { presentMembers, samePermitWorker } from "@/lib/work-permit-presence";
 import { permitCapabilities, requirePermitIssue } from "@/lib/server/work-permit-permissions";
 import { permitBody, permitHandle, permitText } from "@/lib/server/work-permits";
 export const dynamic = "force-dynamic";
@@ -40,21 +41,45 @@ async function assertCodeFree(code: string | undefined, exceptNames: string[]) {
   if (taken) throw fail(`Mã "${code}" đã dùng cho đơn vị "${taken.name}"`, 409);
 }
 
+/**
+ * Người đang làm việc theo đơn vị: CHTT + nhân viên còn trong khu vực (chưa quét RA) của mọi lần làm việc
+ * đang mở — cùng định nghĩa với chặn một người vào hai phiếu (lib/server/work-permit-presence.ts).
+ * Một người chỉ đếm một lần; đơn vị lấy theo hồ sơ hiện tại (đổi tên đơn vị vẫn khớp), không có hồ sơ thì theo chữ đã ghi.
+ */
+async function workingByCompany() {
+  const sessions = await prisma.workPermitSession.findMany({ where: { endedAt: null },
+    select: { commanderId: true, commanderCode: true, commanderName: true, company: true, members: true } });
+  const workers: PermitMember[] = [];
+  for (const session of sessions) {
+    const occupied: PermitMember[] = [{ personId: session.commanderId ?? undefined, code: session.commanderCode, name: session.commanderName, company: session.company }, ...presentMembers(session.members)];
+    for (const worker of occupied) if (!workers.some(other => samePermitWorker(worker, other))) workers.push(worker);
+  }
+  const ids = workers.flatMap(worker => worker.personId ? [worker.personId] : []);
+  const current = new Map((ids.length ? await prisma.workPermitPerson.findMany({ where: { id: { in: ids } }, select: { id: true, company: true } }) : []).map(person => [person.id, person.company]));
+  const byCompany = new Map<string, number>();
+  for (const worker of workers) {
+    const company = (worker.personId && current.get(worker.personId)) || worker.company;
+    byCompany.set(company, (byCompany.get(company) ?? 0) + 1);
+  }
+  return { byCompany, total: workers.length };
+}
+
 export async function GET(req: Request) {
   return permitHandle(async () => {
     const user = await requireUser();
     // `summary=1`: bảng đơn vị nhà thầu (mỗi dòng kèm sĩ số và số CHTT). Đếm ngay trong SQL vì
     // danh bạ có thể vài nghìn người — kéo hết về rồi đếm ở Node là phí một vòng dữ liệu.
     if (new URL(req.url).searchParams.get("summary") === "1") {
-      const rows = await prisma.$queryRawUnsafe<Array<{ company: string; code: string; sctx: boolean; overhaul: boolean; total: bigint; commanders: bigint; active: bigint }>>(`
+      const [rows, working] = await Promise.all([prisma.$queryRawUnsafe<Array<{ company: string; code: string; sctx: boolean; overhaul: boolean; total: bigint; commanders: bigint; active: bigint }>>(`
         SELECT c.company, COALESCE(MAX(w."code"), '') AS code, COALESCE(BOOL_OR(w."sctx"), false) AS sctx, COALESCE(BOOL_OR(w."overhaul"), false) AS overhaul, COUNT(p.id) AS total,
                COUNT(p.id) FILTER (WHERE p."canCommand") AS commanders,
                COUNT(p.id) FILTER (WHERE p."isActive") AS active
         FROM (${COMPANY_NAMES}) c
         LEFT JOIN "WorkPermitCompany" w ON w."name" = c.company
         LEFT JOIN "WorkPermitPerson" p ON p."company" = c.company
-        GROUP BY c.company ORDER BY c.company`);
-      return ok(rows.map(row => ({ company: row.company, code: row.code, sctx: row.sctx, overhaul: row.overhaul, total: Number(row.total), commanders: Number(row.commanders), active: Number(row.active) })), { canWrite: (await permitCapabilities(user)).canIssue });
+        GROUP BY c.company ORDER BY c.company`), workingByCompany()]);
+      return ok(rows.map(row => ({ company: row.company, code: row.code, sctx: row.sctx, overhaul: row.overhaul, total: Number(row.total), commanders: Number(row.commanders), active: Number(row.active), working: working.byCompany.get(row.company) ?? 0 })),
+        { canWrite: (await permitCapabilities(user)).canIssue, working: working.total });
     }
     // Lấy từ toàn bộ danh bạ, không giới hạn bởi trang nhân sự hoặc vai trò CHTT.
     const rows = await prisma.$queryRawUnsafe<Array<{ company: string }>>(`SELECT company FROM (${COMPANY_NAMES}) c ORDER BY company`);

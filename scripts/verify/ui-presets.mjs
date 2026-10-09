@@ -597,12 +597,12 @@ export const PRESETS = {
     routes: () => ["/work-permits", "/work-permits?ui=edit"],
     async mock(context) {
       const rows = [
-        { company: "Công ty CP Vật tư & Thiết bị công nghiệp", code: "VATCO", sctx: true, overhaul: true, total: 42, commanders: 6, active: 40 },
-        { company: "Công ty TNHH Kỹ thuật Đại tu Miền Nam", code: "IDC", sctx: false, overhaul: true, total: 18, commanders: 3, active: 18 },
-        { company: "Công ty CP Dịch vụ Sửa chữa thường xuyên", code: "SCTXDV", sctx: true, overhaul: false, total: 9, commanders: 2, active: 9 },
-        { company: "Cty Miền Bắc", code: "", sctx: false, overhaul: false, total: 3, commanders: 0, active: 3 },
+        { company: "Công ty CP Vật tư & Thiết bị công nghiệp", code: "VATCO", sctx: true, overhaul: true, total: 42, commanders: 6, active: 40, working: 12 },
+        { company: "Công ty TNHH Kỹ thuật Đại tu Miền Nam", code: "IDC", sctx: false, overhaul: true, total: 18, commanders: 3, active: 18, working: 5 },
+        { company: "Công ty CP Dịch vụ Sửa chữa thường xuyên", code: "SCTXDV", sctx: true, overhaul: false, total: 9, commanders: 2, active: 9, working: 0 },
+        { company: "Cty Miền Bắc", code: "", sctx: false, overhaul: false, total: 3, commanders: 0, active: 3, working: 0 },
       ];
-      await context.route(/\/api\/work-permits\/companies\?summary=1/, (route) => route.fulfill({ json: { data: rows, meta: { canWrite: true }, error: null } }));
+      await context.route(/\/api\/work-permits\/companies\?summary=1/, (route) => route.fulfill({ json: { data: rows, meta: { canWrite: true, working: 17 }, error: null } }));
     },
     async interact(page, route) {
       const tab = page.getByRole("button", { name: "Nhân sự nhà thầu" }).first();
