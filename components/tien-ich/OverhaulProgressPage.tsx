@@ -44,6 +44,7 @@ export default function OverhaulProgressPage() {
   const [picked, setPicked] = useState<{ source: string; sheet: string } | null>(null);
   const [search, setSearch] = useState("");
   const [onlyPermit, setOnlyPermit] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<string | null>(null);
   const [opened, setOpened] = useState<Opened | null>(null);
   const [start, setStart] = useState<number | null>(null);
   const [allDays, setAllDays] = useState(false);
@@ -77,8 +78,9 @@ export default function OverhaulProgressPage() {
   const rows = useMemo(() => {
     const term = normalizeText(search.trim());
     return (grid.data?.data ?? []).filter(row => (!onlyPermit || row.hasPermit)
+      && (!statusFilter || row.status === statusFilter)
       && (!term || normalizeText(`${row.code} ${row.device} ${row.content}`).includes(term)));
-  }, [grid.data, search, onlyPermit]);
+  }, [grid.data, search, onlyPermit, statusFilter]);
 
   // Chỉ vẽ các hạng mục đang hiện trong khung cuộn (tab Trực phụ điện ~455 hạng mục).
   // TanStack Virtual trả về hàm không memo được — React Compiler bỏ qua component này (dự án không bật compiler).
@@ -104,6 +106,8 @@ export default function OverhaulProgressPage() {
   const sources = [...new Map(tabs.map(tab => [tab.source, tab.sourceLabel])).entries()];
   const sheetTabs = tabs.filter(tab => tab.source === source);
   const withPermit = (grid.data?.data ?? []).filter(row => row.hasPermit).length;
+  const statusCounts = new Map<string, number>();
+  for (const row of grid.data?.data ?? []) statusCounts.set(row.status, (statusCounts.get(row.status) ?? 0) + 1);
 
   return (
     <div className="space-y-4">
@@ -149,8 +153,15 @@ export default function OverhaulProgressPage() {
 
       {grid.data && <KpiCards rows={grid.data.data} tabLabel={sheet} />}
 
-      <div className="flex flex-wrap gap-1.5 text-[11px]">
-        {Object.entries(STATUS_STYLE).map(([label, style]) => <span key={label} className="rounded px-2 py-1 font-semibold" style={style}>{label}</span>)}
+      {/* Nhãn trạng thái = bộ lọc theo "Trạng thái hiện tại": bấm để lọc, bấm lại để bỏ. */}
+      <div className="flex flex-wrap items-center gap-1.5 text-[11px]" role="group" aria-label="Lọc theo trạng thái hiện tại">
+        {Object.entries(STATUS_STYLE).map(([label, style]) => {
+          const active = statusFilter === label;
+          return <button key={label} type="button" aria-pressed={active} onClick={() => setStatusFilter(active ? null : label)}
+            className={cn("min-h-8 rounded px-2 py-1 font-semibold transition", active && "ring-2 ring-slate-700 ring-offset-1", statusFilter && !active && "opacity-50 hover:opacity-80")}
+            style={style}>{label}{grid.data ? ` (${statusCounts.get(label) ?? 0})` : ""}</button>;
+        })}
+        {statusFilter && <button type="button" onClick={() => setStatusFilter(null)} className="min-h-8 px-2 font-medium text-muted-foreground underline">Bỏ lọc</button>}
       </div>
 
       {(tabsQuery.isPending || grid.isPending && Boolean(sheet)) && <div className="flex justify-center py-16"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>}
