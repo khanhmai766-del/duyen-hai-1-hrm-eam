@@ -1755,6 +1755,9 @@ model WorkPermitOverhaulItem {
   /// Mã nhà thầu (cột "Nhà thầu"), đã chuẩn hoá bằng normalizeText để khớp WorkPermitCompany.code.
   contractorCode String   @default("")
   contractor     String   @default("")
+  /// Mã nhà thầu KHÁC được mở thêm (chuẩn hoá như contractorCode) — trường hợp đặc biệt, vd Sinh Lộc làm giàn giáo
+  /// trong hạng mục của IDC/EPS. Chỉ ghi trên web; đồng bộ Sheet không đụng cột này. Cột Nhà thầu trên Sheet giữ nguyên.
+  sharedContractorCodes String[] @default([])
   percent        String   @default("")
   status         String   @default("")
   /// false = hàng đã biến khỏi Sheet ở lần đồng bộ gần nhất (giữ lại, không xoá).

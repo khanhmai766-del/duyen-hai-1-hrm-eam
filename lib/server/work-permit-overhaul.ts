@@ -289,14 +289,17 @@ export async function listOverhaulItems(params: { kind: string; company: string;
   // Cương vị chỉ lọc hạng mục CÙNG loại phiếu: hạng mục phối hợp (cùng nhà thầu, chia phần cơ/điện) nằm ở tab loại kia và
   // mang cương vị bên kia — lọc theo cương vị của phiếu thì PCT Điện không bao giờ thấy hạng mục tab Cơ và ngược lại.
   const items = await prisma.workPermitOverhaulItem.findMany({
-    where: { isActive: true, contractorCode, ...(positionCode ? { OR: [{ kind: { not: params.kind } }, { positionCode }] } : {}) },
-    select: { id: true, kind: true, source: true, sheet: true, positionTitle: true, code: true, device: true, content: true, method: true, percent: true, status: true },
+    // Hạng mục của chính nhà thầu + hạng mục nhà thầu khác mở thêm cho (sharedContractorCodes).
+    where: { isActive: true, AND: [{ OR: [{ contractorCode }, { sharedContractorCodes: { has: contractorCode } }] },
+      ...(positionCode ? [{ OR: [{ kind: { not: params.kind } }, { positionCode }] }] : [])] },
+    select: { id: true, kind: true, source: true, sheet: true, positionTitle: true, code: true, device: true, content: true, method: true, percent: true, status: true, contractor: true, contractorCode: true },
   });
   const otherKind = (item: { kind: string }) => item.kind === params.kind ? 0 : 1;
   items.sort((a, b) => otherKind(a) - otherKind(b) || compareOverhaulCodes(a.code, b.code) || a.sheet.localeCompare(b.sheet, "vi"));
   const usage = await overhaulItemUsage(prisma, params.excludePermitId);
   return {
-    items: items.map(item => ({ ...item, usedBy: usage.held.get(overhaulItemKey(item)) ?? [], draftIn: usage.drafts.get(overhaulItemKey(item)) ?? [] })),
+    // `sharedFrom`: hạng mục được mở từ nhà thầu khác — form ghi rõ để người cấp biết đó là hạng mục của ai.
+    items: items.map(({ contractor, contractorCode: owner, ...item }) => ({ ...item, sharedFrom: owner === contractorCode ? null : contractor, usedBy: usage.held.get(overhaulItemKey(item)) ?? [], draftIn: usage.drafts.get(overhaulItemKey(item)) ?? [] })),
     syncedAt, contractorCode: row?.code ?? null, reason: null,
   };
 }

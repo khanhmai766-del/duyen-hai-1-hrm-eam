@@ -180,6 +180,7 @@ function OverhaulItemPicker({ form, selected, onClose, onConfirm }: {
                   <span className="flex flex-wrap items-baseline gap-x-2">
                     <span className="font-mono text-sm font-bold text-violet-800 dark:text-violet-200">{item.code}</span>
                     {item.status && <span className="text-xs text-muted-foreground">{item.status}{item.percent ? ` · ${item.percent}` : ""}</span>}
+                    {item.sharedFrom && <span className="rounded bg-sky-100 px-1.5 py-0.5 text-[11px] font-semibold text-sky-800 dark:bg-sky-950/50 dark:text-sky-200" title="Hạng mục của nhà thầu khác, được mở thêm cho nhà thầu này">Hạng mục của {item.sharedFrom}</span>}
                   </span>
                   <span className="mt-0.5 block whitespace-pre-line text-sm leading-5 text-foreground">{item.content || "—"}</span>
                   {item.usedBy.length > 0 && <span className="mt-1 block text-xs font-medium text-amber-700 dark:text-amber-300">Đã có trong PCT số {heldText(item)}</span>}

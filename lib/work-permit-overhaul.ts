@@ -44,6 +44,8 @@ export type OverhaulItemOption = OverhaulItemSnapshot & {
   usedBy: OverhaulItemUsage[];
   /** Phiếu NHÁP đang có hạng mục này — chỉ để biết, vẫn chọn được. */
   draftIn: string[];
+  /** Nhà thầu gốc khi hạng mục được MỞ THÊM cho nhà thầu đang chọn (sharedContractorCodes); null = hạng mục của chính họ. */
+  sharedFrom?: string | null;
 };
 
 /**
