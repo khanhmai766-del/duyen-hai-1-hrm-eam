@@ -84,7 +84,7 @@ export function DefectUnnumberedDialog({ source, open, onOpenChange }: { source:
       <DialogContent className="flex max-h-[92dvh] max-w-3xl flex-col gap-0 overflow-hidden p-0">
         <DialogHeader className="shrink-0 space-y-1 border-b border-border bg-muted/25 px-5 py-4 pr-12 text-left">
           <DialogTitle className="text-base sm:text-lg">Dòng chưa có số — {meta?.label ?? (source === "CO" ? "Sheet Cơ - Hóa" : "Sheet Điện")}</DialogTitle>
-          <DialogDescription className="text-xs leading-5">
+          <DialogDescription className="sr-only">
             Rà cột 14 (KQ sửa chữa VH1) cho khớp “Kết quả thực hiện (SCCN)”, rồi ghi ngược lên Sheet. Không cấp số, không tạo phiếu trên web.
           </DialogDescription>
           <div className="flex flex-wrap items-center gap-2 pt-1 text-xs text-muted-foreground">
