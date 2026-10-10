@@ -6,6 +6,7 @@ import { canViewPosition, resolvePositionViewScope } from "@/lib/position-data-s
 import { N8N_DEFECT_SOURCES, type N8nDefectSource } from "@/lib/defect-n8n-sync";
 import { canSeeUnnumbered } from "@/lib/defect-unnumbered-access";
 import {
+  compareUnnumbered,
   lastUnnumberedReadAt,
   refreshUnnumberedRows,
   UNNUMBERED_SOURCES,
@@ -49,7 +50,7 @@ export async function GET(req: NextRequest) {
       lastUnnumberedReadAt(source),
       canEdit(user),
     ]);
-    const visible = rows.filter(row => canViewPosition(row.system ?? row.positionRaw, scope));
+    const visible = rows.filter(row => canViewPosition(row.system ?? row.positionRaw, scope)).sort(compareUnnumbered);
     return ok(visible, { lastReadAt, canEdit: editable, label: UNNUMBERED_SOURCES[source].label });
   });
 }

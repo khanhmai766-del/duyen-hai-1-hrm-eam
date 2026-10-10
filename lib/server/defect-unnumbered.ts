@@ -96,6 +96,19 @@ function layoutOf(rows: string[][]): Layout | string {
   return { numberedIndex, col, repairResult };
 }
 
+/** Ngày phát hiện (dd/mm/yyyy) → số để xếp cũ → mới; đọc không được thì xếp cuối. */
+function detectedDayOf(raw: string | null) {
+  const match = text(raw).match(/(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})/);
+  if (!match) return Number.POSITIVE_INFINITY;
+  const year = match[3].length === 2 ? 2000 + Number(match[3]) : Number(match[3]);
+  return Date.UTC(year, Number(match[2]) - 1, Number(match[1]));
+}
+
+/** Thứ tự hiển thị: ngày phát hiện cũ → mới, cùng ngày theo số dòng Sheet. */
+export function compareUnnumbered(a: { detectedAtRaw: string | null; sourceRow: number }, b: { detectedAtRaw: string | null; sourceRow: number }) {
+  return detectedDayOf(a.detectedAtRaw) - detectedDayOf(b.detectedAtRaw) || a.sourceRow - b.sourceRow;
+}
+
 function asStatus(value: string): UnnumberedStatus {
   return statusOf(value) as UnnumberedStatus;
 }
@@ -112,6 +125,8 @@ export function parseUnnumberedRows(spreadsheetId: string, tab: string, rows: st
     const content = cell(row, 5);
     if (cell(row, 1) || !content || /^\(\d{1,2}\)$/.test(content)) continue;
     const [unitRaw, deviceRaw, positionRaw, detectedAtRaw] = [cell(row, 2), cell(row, 3), cell(row, 4), cell(row, 6)];
+    // Nghiệp vụ chốt 10/10/2026: (1) trống, (5) có nội dung VÀ ít nhất một trong (2) tổ máy / (3) thiết bị / (4) cương vị.
+    if (!unitRaw && !deviceRaw && !positionRaw) continue;
     const base = createHash("sha256").update(JSON.stringify([spreadsheetId, tab, ...[content, detectedAtRaw, positionRaw, unitRaw, deviceRaw].map(normalizeText)])).digest("hex");
     // Hai dòng giống hệt nhau: phân biệt theo thứ tự xuất hiện (ghi vào dòng nào cũng cùng một nội dung).
     const occurrence = seen.get(base) ?? 0;
