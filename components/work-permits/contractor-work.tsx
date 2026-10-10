@@ -365,12 +365,14 @@ function CompanyEditor({ company, onClose, onSaved }: { company?: string; onClos
 }
 
 /** Hộp thoại danh bạ nhân sự nhà thầu: chọn CHTT, chọn nhân viên công tác, hoặc tra cứu nhanh. */
-export function PermitPeopleDirectory({ onClose, onPick, onPickMany, existingMembers = [], commandersOnly = false, company, scope }: {
+export function PermitPeopleDirectory({ onClose, onPick, onPickMany, existingMembers = [], commandersOnly = false, company, scope, permitId }: {
   onClose?: () => void; onPick?: (p: PermitPerson) => void; onPickMany?: (people: PermitPerson[]) => void; existingMembers?: PermitMember[]; commandersOnly?: boolean;
   /** Chỉ hiện người của đơn vị này (đơn vị công tác của phiếu) — không để chọn nhầm người đơn vị khác. */
   company?: string;
   /** Nhóm PCT nhà thầu: chỉ hiện nhân sự đúng nhóm SCTX / Đại tu. */
   scope?: PermitContractorScope | null;
+  /** Phiếu đang sửa / đang mở lần làm việc: lần làm việc của CHÍNH phiếu này không tính là bận khi chọn CHTT. */
+  permitId?: string | null;
 }) {
   const [q, setQ] = useState("");
   const [search, setSearch] = useState("");
@@ -394,6 +396,8 @@ export function PermitPeopleDirectory({ onClose, onPick, onPickMany, existingMem
   // PCT Đại tu (08/10/2026): chọn CHTT chỉ trong số người ĐÃ đánh dấu CHTT — không thêm người / sửa hồ sơ ngay tại hộp chọn.
   const pickOnly = commandersOnly && scope === "OVERHAUL";
   const canWrite = Boolean(query.data?.meta.canWrite) && !pickOnly;
+  // Chọn CHTT (10/10/2026): người đang làm việc ở PCT KHÁC (đang mở lần làm việc, là CHTT hay nhân viên) thì không chọn được.
+  const busyElsewhere = (person: PermitPerson) => commandersOnly ? (person.activeWorks ?? []).filter(work => work.permit.id !== permitId) : [];
   const heading = commandersOnly ? "Chọn CHTT nhà thầu" : onPickMany ? "Chọn nhân viên công tác" : "Danh sách nhân sự nhà thầu";
   const description = onPickMany ? "Đánh dấu nhiều nhân viên rồi bấm Thêm người đã chọn. Lựa chọn được giữ khi tìm kiếm hoặc chuyển trang; tối đa 200 nhân viên trong danh sách công tác." : "Mỗi người dùng một hồ sơ và số thẻ ra vào cổng thống nhất giữa hai sổ Cơ và Điện. Đánh dấu CHTT cho người thuộc danh sách được cung cấp.";
   const body = <>
@@ -405,7 +409,7 @@ export function PermitPeopleDirectory({ onClose, onPick, onPickMany, existingMem
       {query.isPending ? <p role="status">Đang tải danh sách…</p> : query.isError ? <p role="alert" className="text-red-700">{query.error.message}</p> : <div className="space-y-2">
         {query.data?.data.map(p => <div key={p.id} className="flex items-center justify-between gap-3 rounded-lg border border-border p-3">
           <div><b>{p.name}</b><p className="text-sm text-muted-foreground">{p.code} · {p.company}</p><p className="text-xs text-muted-foreground">{p.canCommand ? "CHTT / nhân viên công tác" : "Nhân viên công tác"}{!p.isActive ? " · Ngừng hoạt động" : ""}</p>{cardExpired(p.cardExpiresAt) && <p className="text-xs font-medium text-red-700">Thẻ ra vào hết hạn {new Date(p.cardExpiresAt!).toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })}</p>}{p.activeWorks?.map(work => <p key={work.sessionId} className="mt-1 text-xs font-medium text-amber-700 dark:text-amber-300">Đang làm PCT {formatPermitNumber(work.permit)} · {PERMIT_KINDS[work.permit.kind]} · {work.role === "CHTT" ? "CHTT" : "Nhân viên công tác"} · từ {fmt(work.openedAt)}</p>)}</div>
-          <div className="flex gap-2">{onPickMany && <label className="flex cursor-pointer items-center gap-2 whitespace-nowrap text-sm"><input type="checkbox" aria-label={`Chọn ${p.name} · ${p.code}`} checked={alreadyAdded(p) || selected.some(person => person.id === p.id)} disabled={alreadyAdded(p) || (!selected.some(person => person.id === p.id) && selected.length >= capacity)} onChange={() => toggle(p)} />{alreadyAdded(p) ? "Đã có" : "Chọn"}</label>}{onPick && <Button type="button" size="sm" onClick={() => onPick(p)}>Chọn</Button>}{!onPickMany && canWrite && <Button size="sm" variant="outline" aria-label={`Sửa hồ sơ ${p.name}`} onClick={() => setEditing(p)}><Pencil /></Button>}{!onPick && !onPickMany && query.data?.meta.canWrite && <Button size="sm" variant="outline" className="text-red-700 hover:text-red-800" disabled={remove.isPending} aria-label={`Xóa hồ sơ ${p.name}`} onClick={() => void removePerson(p)}><Trash2 /></Button>}</div>
+          <div className="flex gap-2">{onPickMany && <label className="flex cursor-pointer items-center gap-2 whitespace-nowrap text-sm"><input type="checkbox" aria-label={`Chọn ${p.name} · ${p.code}`} checked={alreadyAdded(p) || selected.some(person => person.id === p.id)} disabled={alreadyAdded(p) || (!selected.some(person => person.id === p.id) && selected.length >= capacity)} onChange={() => toggle(p)} />{alreadyAdded(p) ? "Đã có" : "Chọn"}</label>}{onPick && (busyElsewhere(p).length ? <Button type="button" size="sm" variant="outline" disabled title={`Đang làm việc ở PCT ${busyElsewhere(p).map(work => formatPermitNumber(work.permit)).join(", ")} — chỉ chọn được khi người này không còn mở PCT nào`} aria-label={`${p.name} đang làm việc ở PCT khác`}>Đang làm việc</Button> : <Button type="button" size="sm" onClick={() => onPick(p)}>Chọn</Button>)}{!onPickMany && canWrite && <Button size="sm" variant="outline" aria-label={`Sửa hồ sơ ${p.name}`} onClick={() => setEditing(p)}><Pencil /></Button>}{!onPick && !onPickMany && query.data?.meta.canWrite && <Button size="sm" variant="outline" className="text-red-700 hover:text-red-800" disabled={remove.isPending} aria-label={`Xóa hồ sơ ${p.name}`} onClick={() => void removePerson(p)}><Trash2 /></Button>}</div>
         </div>)}
         {!query.data?.data.length && <p className="py-8 text-center text-muted-foreground">Chưa có nhân sự phù hợp.</p>}
       </div>}
@@ -690,6 +694,6 @@ export function SessionEditor({ permit, session, handoff = false, progressUpdate
       {error && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</p>}
       <div className="flex justify-end gap-2"><Button type="button" variant="outline" onClick={onClose}>Để sau</Button><Button type="submit" disabled={save.isPending || (!updating && !name) || (ending && !overhaulItems.length && progress === "") || stillInside.length > 0 || (!ending && !updating && (!person || (handoff && person.id === session?.commanderId)))}>{save.isPending ? "Đang ghi nhận…" : updating ? "Ghi nhận tiến độ" : handoff ? "Xác nhận bàn giao CHTT" : ending ? "Ghi nhận kết thúc lần làm việc" : "Ghi nhận cho phép làm việc"}</Button></div>
     </fieldset></form>
-    {picking && <PermitPeopleDirectory commandersOnly company={permit.teamName || undefined} scope={permit.contractorScope} onClose={() => setPicking(false)} onPick={p => { setPerson(p); setPicking(false); }} />}
+    {picking && <PermitPeopleDirectory commandersOnly permitId={permit.id} company={permit.teamName || undefined} scope={permit.contractorScope} onClose={() => setPicking(false)} onPick={p => { setPerson(p); setPicking(false); }} />}
   </DialogContent></Dialog>;
 }

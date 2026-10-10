@@ -129,6 +129,7 @@ export async function PUT(req: Request, props: { params: Promise<{ id: string }>
         contractorScope: body.contractorScope === undefined ? before.contractorScope : body.contractorScope,
         nkvhPctId: body.nkvhPctId === undefined ? before.nkvhPctId : body.nkvhPctId,
         registrationNumber: body.registrationNumber === undefined ? before.registrationNumber : body.registrationNumber,
+        printWorkerCount: body.printWorkerCount === undefined ? before.printWorkerCount : body.printWorkerCount,
         managingUnit: body.managingUnit === undefined ? before.managingUnit : body.managingUnit,
         plantName: body.plantName === undefined ? before.plantName : body.plantName,
         sourceClassification: body.sourceClassification === undefined ? before.sourceClassification : body.sourceClassification,

@@ -486,6 +486,40 @@ export const PRESETS = {
       await commander.fill("Nguyễn Văn Bình");
     },
   },
+  "pct-chon-chtt-ban": {
+    description: "Hộp Chọn CHTT: người đang làm việc ở PCT khác bị làm mờ nút Chọn — chỉ giả lập",
+    async prepare() { return {}; },
+    routes: () => ["/work-permits?kind=MECHANICAL&uiStep=chtt"],
+    async mock(context) {
+      const base = PRESETS["pct-sctx-cap-nhanh"];
+      await base.mock(context);
+      const now = new Date().toISOString();
+      const person = (id, name, code, activeWorks = []) => ({ id, code, name, company: "Liên danh: CTy TNHH Thương Mại KT Thành Tín", phone: "", canCommand: true, isActive: true, version: 1, scope: "SCTX", cardExpiresAt: null, activeWork: null, activeWorks });
+      await context.route("**/api/work-permits/people**", route => route.fulfill({ json: { data: [
+        person("ui-c1", "Chu Ngọc Vĩnh", "TEE/36", [{ sessionId: "ui-s1", role: "CHTT", openedAt: now, permit: { id: "ui-other", number: "4549", nkvhNumber: null, year: 2026, kind: "MECHANICAL" } }]),
+        person("ui-c2", "Lê Thanh Dàn", "TEE/35"),
+      ], meta: { total: 2, pageSize: 25, canWrite: false }, error: null } }));
+    },
+    async interact(page) {
+      await PRESETS["pct-sctx-cap-nhanh"].interact(page, "people");
+      await page.getByRole("dialog").getByRole("button", { name: "Chọn CHTT từ danh bạ", exact: true }).click();
+      await page.getByRole("heading", { name: "Chọn CHTT nhà thầu" }).waitFor();
+      await page.waitForTimeout(300);
+    },
+  },
+  "pct-dien-so-nv": {
+    description: "Bước Mẫu giấy PCT Điện: ô Số lượng nhân viên đơn vị công tác cạnh Số ĐKCT — chỉ giả lập",
+    async prepare() { return {}; },
+    routes: () => ["/work-permits?kind=ELECTRICAL&uiStep=paper"],
+    mock: (context) => PRESETS["pct-sctx-cap-nhanh"].mock(context),
+    async interact(page) {
+      await PRESETS["pct-sctx-cap-nhanh"].interact(page, "uiStep=info");
+      const dialog = page.getByRole("dialog");
+      await dialog.getByRole("button", { name: "Tiếp tục", exact: true }).click();
+      await dialog.getByRole("heading", { name: "Mẫu giấy và an toàn" }).waitFor();
+      await dialog.getByLabel("Số lượng nhân viên đơn vị công tác").fill("7");
+    },
+  },
   "pct-cap-so": {
     description: "Biểu mẫu cấp giấy: số tiếp theo và nhập số cũ chưa dùng — chỉ giả lập",
     async prepare() { return {}; },

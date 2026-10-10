@@ -131,6 +131,8 @@ export interface PermitInput {
   managingUnit?: string;
   plantName?: string;
   registrationNumber?: string;
+  /** Số nhân viên đơn vị công tác ghi mục 1.3 mẫu giấy Điện — nhập tay, trống thì để chấm trên mẫu. */
+  printWorkerCount?: number | null;
   workScope?: string;
   plannedStartAt?: string | null;
   plannedEndAt?: string | null;
@@ -173,7 +175,7 @@ export interface PermitHistory {
 export const PERMIT_FIELD_LABELS: Record<string, string> = {
   managingUnit: "Đơn vị QLVH", plantName: "Nhà máy",
   nkvhPctId: "ID liên kết NKVH",
-  registrationNumber: "Số ĐKCT", workScope: "Phạm vi công tác", plannedStartAt: "Dự kiến bắt đầu", plannedEndAt: "Dự kiến kết thúc", disciplines: "Chuyên môn",
+  registrationNumber: "Số ĐKCT", printWorkerCount: "Số NV đơn vị công tác (mẫu in)", workScope: "Phạm vi công tác", plannedStartAt: "Dự kiến bắt đầu", plannedEndAt: "Dự kiến kết thúc", disciplines: "Chuyên môn",
   safetyItems: "Mối nguy và biện pháp an toàn", format: "Hình thức phiếu", workType: "Phân loại công việc (KH/ĐX/SC)", sourceClassification: "Phân loại", kind: "Loại PCT", year: "Năm cấp số", number: "Số PCT", position: "Cương vị", status: "Trạng thái", unit: "Tổ máy",
   content: "Nội dung công việc", location: "Thiết bị / vị trí", workDate: "Ngày thực hiện",
   issuerName: "Người cấp PCT", issuerPosition: "Chức vụ người cấp PCT", electricalSafetySupervisorName: "Người giám sát an toàn điện", leaderName: "Người lãnh đạo công việc", commanderName: "Người chỉ huy trực tiếp",

@@ -248,7 +248,7 @@ export async function createWorkPermitDocument(row: WorkPermit, qrOrigin?: strin
   } else {
     xml = replaceParagraph(xml, "1.1.", `1.1. Người lãnh đạo công việc (nếu có): ${row.leaderName}`);
     xml = replaceParagraph(xml, "1.2.", "1.2. Người chỉ huy trực tiếp: …………………………………………………………");
-    xml = replaceParagraph(xml, "1.3.", "1.3. Nhân viên đơn vị công tác: ………… người");
+    xml = replaceParagraph(xml, "1.3.", `1.3. Nhân viên đơn vị công tác: ${row.printWorkerCount ?? "…………"} người`);
     xml = replaceParagraph(xml, "1.4.", `1.4. Địa điểm công tác: ${row.location}`);
     xml = replaceParagraph(xml, "1.5.", `1.5. Nội dung công tác: ${row.content}`);
     xml = replaceParagraph(xml, "- Bắt đầu công việc:", `- Bắt đầu công việc: ${plannedDayHour(row.plannedStartAt)}`);
@@ -295,7 +295,7 @@ export async function createWorkPermitHtml(row: WorkPermit, qrOrigin?: string) {
   } else {
     replace("1.1.", `1.1. Người lãnh đạo công việc (nếu có): ${row.leaderName}`);
     replace("1.2.", "1.2. Người chỉ huy trực tiếp: …………………………………………………………");
-    replace("1.3.", "1.3. Nhân viên đơn vị công tác: ………… người");
+    replace("1.3.", `1.3. Nhân viên đơn vị công tác: ${row.printWorkerCount ?? "…………"} người`);
     replace("1.4.", `1.4. Địa điểm công tác: ${row.location}`);
     replace("1.5.", `1.5. Nội dung công tác: ${row.content}`);
     replace("- Bắt đầu công việc:", `- Bắt đầu công việc: ${plannedTime(row.plannedStartAt)}`);

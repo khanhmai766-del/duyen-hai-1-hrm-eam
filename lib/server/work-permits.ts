@@ -55,6 +55,8 @@ export function parsePermit(body: Record<string, unknown>, status: PermitStatus,
   if (!isPermitDay(workDate)) throw fail("Ngày thực hiện không hợp lệ");
   const count = body.workerCount === null || body.workerCount === "" || body.workerCount === undefined ? null : Number(body.workerCount);
   if (body.teamType !== "CONTRACTOR" && count !== null && (!Number.isInteger(count) || count < 1 || count > 10000)) throw fail("Số nhân viên phải là số nguyên từ 1 đến 10.000");
+  const printCount = body.printWorkerCount === null || body.printWorkerCount === "" || body.printWorkerCount === undefined ? null : Number(body.printWorkerCount);
+  if (printCount !== null && (!Number.isInteger(printCount) || printCount < 1 || printCount > 10000)) throw fail("Số lượng nhân viên đơn vị công tác phải là số nguyên từ 1 đến 10.000");
   const teamType = permitText(body, "teamType");
   if (!["INTERNAL", "CONTRACTOR"].includes(teamType)) throw fail("Loại đơn vị không hợp lệ");
   const contractorScopeInput = permitText(body, "contractorScope", 20) || null;
@@ -77,7 +79,7 @@ export function parsePermit(body: Record<string, unknown>, status: PermitStatus,
   const data = {
     managingUnit: permitText(body, "managingUnit", 200) || DEFAULT_PERMIT_MANAGING_UNIT,
     plantName: permitText(body, "plantName", 200) || DEFAULT_PERMIT_PLANT,
-    registrationNumber: permitText(body, "registrationNumber", 200), workScope: permitText(body, "workScope", 5000),
+    registrationNumber: permitText(body, "registrationNumber", 200), printWorkerCount: kind === "MECHANICAL" ? null : printCount, workScope: permitText(body, "workScope", 5000),
     plannedStartAt: permitInstant(body, "plannedStartAt"), plannedEndAt: permitInstant(body, "plannedEndAt"), disciplines: disciplines as string[],
     format, workType, sourceClassification, kind, unit, year, number, position, workDate, workerCount: count, teamType, contractorScope,
     nkvhPctId: format === "ELECTRONIC" ? nkvhPctId?.toLowerCase() ?? null : null,

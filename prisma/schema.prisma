@@ -1913,6 +1913,7 @@ model WorkPermit {
   nkvhNumber                     String? // Giữ nguyên số chính thức đã lưu trên NKVH, kể cả hậu tố.
   nkvhPctId                      String?             @db.Uuid // Chỉ lưu UUID; URL được ghép từ cấu hình NKVH chung.
   registrationNumber             String              @default("")
+  printWorkerCount               Int? // Số NV đơn vị công tác ghi mục 1.3 mẫu giấy Điện (nhập tay; khác workerCount tự tính từ danh sách)
   managingUnit                   String              @default("Phân xưởng Vận hành 1")
   plantName                      String              @default("Duyên Hải 1")
   workScope                      String              @default("")
