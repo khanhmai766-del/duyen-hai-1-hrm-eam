@@ -885,7 +885,7 @@ function PermitDetail({ id, canIssue: listCanIssue, canIssueNew: listCanIssueNew
       </div>
       {!paper && <NkvhLinkPanel key={`${row.id}-${row.version}-nkvh`} permit={row} canEdit={canIssue || canExecute} />}
       <ContractorWorkSummary permit={row} />
-      {previewing && <PermitDocumentPreview title={previewing === "appendix" ? `Phụ lục đại tu · PCT ${formatPermitNumber(row)}` : `Phiếu công tác ${formatPermitNumber(row)}`} load={() => apiDownload(`/api/work-permits/${encodeURIComponent(row.id)}/${previewing === "appendix" ? "overhaul-appendix" : "document"}`)} loadQr={previewing === "permit" && row.teamType === "CONTRACTOR" ? () => apiDownload(`/api/work-permits/${encodeURIComponent(row.id)}/qr`) : undefined} onClose={() => setPreviewing(false)} />}
+      {previewing && <PermitDocumentPreview title={previewing === "appendix" ? `Phụ lục đại tu · PCT ${formatPermitNumber(row)}` : `Phiếu công tác ${formatPermitNumber(row)}`} load={() => apiDownload(`/api/work-permits/${encodeURIComponent(row.id)}/${previewing === "appendix" ? "overhaul-appendix" : "document"}`)} loadQr={previewing === "permit" && row.teamType === "CONTRACTOR" && row.contractorScope === "OVERHAUL" ? () => apiDownload(`/api/work-permits/${encodeURIComponent(row.id)}/qr`) : undefined} onClose={() => setPreviewing(false)} />}
       {addingItems && canAddItems && <OverhaulItemsDialog permit={row} onClose={() => setAddingItems(false)} />}
       {executing && canActOnPermit && <PermitExecutionDialog key={row.version} permit={row} onClose={() => setExecuting(false)} />}
       <PermitDetailFields row={row} />

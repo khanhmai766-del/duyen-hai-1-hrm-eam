@@ -8,7 +8,7 @@ import { workPermitQrLabelPng } from "@/lib/server/work-permit-qr";
 
 export const dynamic = "force-dynamic";
 
-/** Tải QR độc lập cho cả phiếu đã cấp trước khi có QR; không tạo lại hay sửa file PCT. */
+/** Tải QR độc lập cho PCT Đại tu đã cấp (kể cả phiếu cấp trước khi có QR); không tạo lại hay sửa file PCT. */
 export async function GET(req: Request, props: { params: Promise<{ id: string }> }) {
   return permitHandle(async () => {
     const { id } = await props.params;
@@ -18,6 +18,8 @@ export async function GET(req: Request, props: { params: Promise<{ id: string }>
     if (!row) return fail("Không tìm thấy PCT", 404);
     if (row.teamType !== "CONTRACTOR" || effectivePermitFormat(row) !== "PAPER") return fail("Chỉ tải mã QR cho PCT giấy của đơn vị nhà thầu");
     if (["DRAFT", "CANCELLED"].includes(row.status)) return fail("Chỉ tải mã QR cho phiếu đã cấp và chưa hủy");
+    // PCT giấy SCTX không dùng QR quét (10/10/2026) — chỉ PCT Đại tu, cùng quy tắc mẫu in Word (hasOverhaulQr).
+    if (row.contractorScope !== "OVERHAUL") return fail("PCT nhà thầu SCTX không dùng mã QR — chỉ PCT Đại tu có mã QR để quét");
     const png = await workPermitQrLabelPng(row, new URL(req.url).origin);
     return new Response(new Uint8Array(png), { headers: {
       "Content-Type": "image/png",
