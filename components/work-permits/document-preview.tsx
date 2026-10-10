@@ -66,7 +66,8 @@ function addPrintStyle(doc: Document, qrSrc?: string) {
  * Hiện PCT đã điền đúng như mẫu Word gốc ngay trong trình duyệt để rà soát rồi in.
  * Vẽ trong iframe để CSS của ứng dụng (Tailwind preflight) không làm lệch bố cục mẫu.
  */
-export function PermitDocumentPreview({ title, load, loadQr, onClose }: { title: string; load: () => Promise<PermitDocumentFile>; loadQr?: () => Promise<PermitDocumentFile>; onClose: () => void }) {
+/** `viewOnly`: chỉ xem (Xem mẫu in trong form cập nhật — dữ liệu chưa lưu), không Tải Word / Tải QR / In. */
+export function PermitDocumentPreview({ title, load, loadQr, onClose, viewOnly = false }: { title: string; load: () => Promise<PermitDocumentFile>; loadQr?: () => Promise<PermitDocumentFile>; onClose: () => void; viewOnly?: boolean }) {
   const frame = useRef<HTMLIFrameElement>(null);
   const loadRef = useRef(load);
   const [file, setFile] = useState<PermitDocumentFile | null>(null);
@@ -123,13 +124,13 @@ export function PermitDocumentPreview({ title, load, loadQr, onClose }: { title:
       <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-3 pr-12">
         <div className="min-w-0">
           <DialogTitle className="truncate text-base">{title}</DialogTitle>
-          <DialogDescription className="text-xs">Bản xem theo đúng mẫu Word của phiếu. Rà soát thông tin trước khi in hoặc cấp phiếu.</DialogDescription>
+          <DialogDescription className="text-xs">{viewOnly ? "Chỉ để xem theo đúng mẫu Word của phiếu. Lưu phiếu rồi mở Xem và in để tải hoặc in." : "Bản xem theo đúng mẫu Word của phiếu. Rà soát thông tin trước khi in hoặc cấp phiếu."}</DialogDescription>
         </div>
-        <div className="flex flex-wrap gap-2">
+        {!viewOnly && <div className="flex flex-wrap gap-2">
           <Button size="sm" variant="outline" className="h-10 text-xs sm:h-8" disabled={!file} onClick={() => { if (file) saveFile(file); }}><Download />Tải Word</Button>
           {loadQr && <Button size="sm" variant="outline" className="h-10 text-xs sm:h-8" disabled={downloadingQr} onClick={() => void downloadQr()} title="Tải ảnh mã QR riêng để in dán lên phiếu đã cấp"><QrCode />{downloadingQr ? "Đang tải…" : "Tải QR"}</Button>}
           <Button size="sm" className="h-10 text-xs sm:h-8" disabled={!ready} onClick={print}><Printer />In</Button>
-        </div>
+        </div>}
       </div>
       <div className="relative min-h-0 flex-1 bg-muted">
         {!ready && <p className="absolute inset-0 flex items-center justify-center p-6 text-center text-sm text-muted-foreground">{error || "Đang điền mẫu…"}</p>}
