@@ -41,7 +41,7 @@ export async function GET(_req: Request, props: { params: Promise<{ id: string }
     const similarPermits = ["DRAFT", "ISSUED"].includes(row.status)
       ? (await findSimilarPermits(prisma, { kind: row.kind, position: row.position, content: row.content, excludeId: row.id })).map(({ id, number, year, status, content }) => ({ id, number, year, status, content }))
       : [];
-    return ok({ ...row, overhaulPercents, overhaulNotes, similarPermits }, { ...await permitCapabilities(user), ...permitRowCapabilities(user, row), canDelete: user.role === "ADMIN" && user.accessMode !== "DEFECT_READ_ONLY" });
+    return ok({ ...row, overhaulPercents, overhaulNotes, similarPermits }, { ...await permitCapabilities(user), ...permitRowCapabilities(user, row), canDelete: user.role === "ADMIN" && user.accessMode !== "DEFECT_READ_ONLY", canEditLivePermit: user.role === "ADMIN" && user.accessMode !== "DEFECT_READ_ONLY" });
   });
 }
 
@@ -174,7 +174,8 @@ export async function PUT(req: Request, props: { params: Promise<{ id: string }>
       if (before.teamType === "CONTRACTOR" && !teamTypeChanged) {
         if ((before.authorizedAt?.getTime() ?? null) !== (data.authorizedAt?.getTime() ?? null)) throw fail("Thời điểm cho phép làm việc được ghi qua từng lần làm việc", 409);
         const live = await tx.workPermitSession.findFirst({ where: { permitId: before.id, endedAt: null } });
-        if (live) throw fail("Cần kết thúc lần làm việc đang mở trước khi sửa hoặc đóng/hủy PCT", 409);
+        // Quản trị được sửa thông tin phiếu đang làm việc (10/10/2026) — nhưng không đổi trạng thái khi lần làm việc còn mở.
+        if (live && (user.role !== "ADMIN" || status !== before.status)) throw fail(user.role === "ADMIN" ? "Phiếu đang làm việc — chỉ sửa được thông tin, không đổi trạng thái. Kết thúc lần làm việc trước khi đóng/hủy PCT." : "Cần kết thúc lần làm việc đang mở trước khi sửa hoặc đóng/hủy PCT", 409);
         const last = await tx.workPermitSession.findFirst({ where: { permitId: before.id }, orderBy: { openedAt: "desc" } });
         if (status === "CLOSED" && (!last?.endedAt || !data.closedAt || data.closedAt < last.endedAt)) throw fail("Thời điểm đóng PCT phải từ thời điểm kết thúc lần làm việc cuối trở đi");
         if (last && data.issuedAt && before.authorizedAt && data.issuedAt > before.authorizedAt) throw fail("Thời điểm cấp không được sau lần cho phép làm việc đầu tiên");

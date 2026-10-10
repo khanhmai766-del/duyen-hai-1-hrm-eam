@@ -791,6 +791,8 @@ function PermitDetail({ id, canIssue: listCanIssue, canIssueNew: listCanIssueNew
   const canCancelPermit = Boolean(query.data?.meta?.canCancelPermit);
   const canEditPermit = Boolean(query.data?.meta?.canEditPermit);
   const canActOnPermit = Boolean(query.data?.meta?.canActOnPermit);
+  // Quản trị sửa được thông tin PCT nhà thầu đang làm việc (server chặn đổi trạng thái khi lần làm việc còn mở).
+  const canEditLivePermit = Boolean(query.data?.meta?.canEditLivePermit);
   // Bổ sung hạng mục đại tu mở cho mọi tài khoản thấy phiếu (trừ tra cứu chỉ đọc) — xem permitRowCapabilities.
   const canAddItems = Boolean(query.data?.meta?.canEditOverhaulItems) && Boolean(row && canEditOverhaulItems(row));
   const cancelDraft = useCancelDraftWorkPermit();
@@ -863,7 +865,7 @@ function PermitDetail({ id, canIssue: listCanIssue, canIssueNew: listCanIssueNew
           {canActOnPermit && row.teamType === "INTERNAL" && !["DRAFT", "CLOSED", "CANCELLED"].includes(row.status) && <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => setExecuting(true)}>Ghi nhận đóng phiếu</Button>}
           {canActOnPermit && row.teamType === "CONTRACTOR" && row.status === "WAITING" && <Button size="sm" variant="outline" className="h-8 border-slate-300 text-xs" disabled={closePermit.isPending} onClick={() => void closeNow(row)}><CheckCircle2 />{closePermit.isPending ? "Đang kết thúc…" : "Kết thúc phiếu"}</Button>}
           {canIssueNew && row.status === "DRAFT" && <Button size="sm" variant="destructive" className="h-8 text-xs" disabled={cancelDraft.isPending} onClick={() => void cancelDraftNow(row)}>{cancelDraft.isPending ? "Đang hủy…" : isNkvhPendingPermit(row) ? "Hủy phiếu chờ" : "Hủy nháp"}</Button>}
-          {(row.status === "DRAFT" ? canIssueNew : canEditPermit) && !isNkvhPendingPermit(row) && !["CLOSED", "CANCELLED"].includes(row.status) && !(row.teamType === "CONTRACTOR" && row.status === "ACTIVE") && <Button size="sm" className="h-8 text-xs" onClick={() => onEdit(row)}>Chỉnh sửa / cấp phiếu<ArrowRight /></Button>}
+          {(row.status === "DRAFT" ? canIssueNew : canEditPermit) && !isNkvhPendingPermit(row) && !["CLOSED", "CANCELLED"].includes(row.status) && !(row.teamType === "CONTRACTOR" && row.status === "ACTIVE" && !canEditLivePermit) && <Button size="sm" className="h-8 text-xs" onClick={() => onEdit(row)}>Chỉnh sửa / cấp phiếu<ArrowRight /></Button>}
           {canDelete && <Button type="button" size="sm" variant="destructive" className="h-10 text-xs sm:h-8" onClick={() => { setDeleteReason(""); setDeleteError(""); setDeleting(true); }}><Trash2 />Xóa PCT đã hủy</Button>}
           {canCancelPermit && canCancel(row) && <Button size="sm" variant="outline" className="h-8 border-red-200 text-xs text-red-700 hover:bg-red-50 hover:text-red-800" onClick={() => { setCancelReason(""); setCancelling(true); }}><Ban />Hủy PCT</Button>}
         </div>
