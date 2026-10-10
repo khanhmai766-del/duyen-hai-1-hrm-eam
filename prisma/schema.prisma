@@ -1056,6 +1056,39 @@ model DefectSyncSetting {
   updatedByName               String?
 }
 
+// Dòng khiếm khuyết CHƯA CÓ STT trên Sheet Cơ/Điện (phần lớn là dòng nhắc lại cũ) — đọc về CHỈ để rà
+// trạng thái cột 14 so với "Kết quả thực hiện (SCCN)" rồi ghi cột 14 ngược lên Sheet (10/10/2026).
+// Cố ý KHÔNG tạo Defect: không cấp số → không bao giờ sinh phiếu trùng nội dung cột 5 với phiếu đã có số.
+// Khoá = băm nội dung (không gồm số dòng — chèn dòng làm xô). Xem lib/server/defect-unnumbered.ts.
+model DefectUnnumberedRow {
+  id              String    @id @default(cuid())
+  identityHash    String    @unique
+  source          String // CO | DIEN
+  spreadsheetId   String
+  sheetName       String
+  sourceRow       Int // dòng thấy ở lượt đọc gần nhất
+  unit            String // S1 | S2 | COMMON
+  unitRaw         String?
+  deviceRaw       String?
+  positionRaw     String?
+  positionCode    String?
+  system          String?
+  content         String
+  detectedAtRaw   String?
+  reminderRaw     String?
+  sheetStatusRaw  String? // cột 14 — Ghi chú KQ sửa chữa (VH1)
+  sheetStatus     String // trạng thái suy từ cột 14
+  repairResultRaw String? // Kết quả thực hiện (SCCN)
+  suggestedStatus String? // trạng thái suy từ cột SCCN
+  mismatch        Boolean   @default(false)
+  lastReadAt      DateTime
+  updatedById     String?
+  updatedByName   String?
+  updatedAt       DateTime?
+
+  @@index([source, mismatch])
+}
+
 // Bộ cấp STT phiếu khiếm khuyết theo năm phát hiện và loại phiếu. Cơ/Điện có
 // dãy riêng, mỗi dãy bắt đầu lại từ 1 khi sang năm mới.
 model DefectRequestSequence {

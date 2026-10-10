@@ -337,6 +337,33 @@ export const PRESETS = {
       await click('Chọn vị trí bình thường trên trang');
     },
   },
+  "khiem-khuyet-dong-chua-so": {
+    description: "Nút \"Dòng chưa số\" và hộp rà cột 14 của dòng khiếm khuyết chưa có STT — chỉ giả lập",
+    async prepare() { return {}; },
+    routes: () => ["/defects?phan=co", "/defects?phan=co&uiDialog=1"],
+    async mock(context) {
+      const now = new Date().toISOString();
+      const row = (i, patch) => ({ id: `ui-u${i}`, identityHash: `ui${i}`, source: "CO", spreadsheetId: "ui", sheetName: "DH1", sourceRow: 52 + i, unit: "S1", unitRaw: "S1",
+        deviceRaw: "BỒN CO2", positionRaw: "6. Máy phó S1", positionCode: null, system: "Máy phó S1", content: "Rò khí tại vị trí tay van nạp CO2 và cân bằng áp của bồn CO2 chữa cháy bunker than (nhắc lại)",
+        detectedAtRaw: "01/01/2023", reminderRaw: "", sheetStatusRaw: "Chưa xử lý", sheetStatus: "CHUA_XU_LY", repairResultRaw: "Đã thực hiện xong ngày 12/09/2026",
+        suggestedStatus: "DA_XU_LY", mismatch: true, lastReadAt: now, updatedById: null, updatedByName: null, updatedAt: null, ...patch });
+      const rows = [
+        row(1, {}),
+        row(2, { unit: "COMMON", unitRaw: "BOP", deviceRaw: "TRẠM TUẦN HOÀN", positionRaw: "22. VHV TBTH", system: "VHV TBTH", content: "Van tay 3 ngã trước và sau bộ lọc đầu thoát bơm rửa lưới a rỉ sét không thao tác được.", sheetStatusRaw: "", repairResultRaw: "Đang thực hiện — chờ PCT", suggestedStatus: "CO_PCT" }),
+        row(3, { unitRaw: "S1", deviceRaw: "FGD S1", positionRaw: "18. FGD S1", system: "FGD S1", content: "Thay mới palang điện 5 tấn khu vực bơm hấp thụ (Nhà thầu Tín phát thực hiện)", sheetStatusRaw: "Chờ vật tư", sheetStatus: "CHO_VAT_TU", repairResultRaw: "Chờ vật tư", suggestedStatus: "CHO_VAT_TU", mismatch: false }),
+      ];
+      await context.route("**/api/defects/unnumbered**", async route => {
+        if (route.request().method() !== "GET") throw new Error("Không ghi dữ liệu khi chụp dòng chưa số");
+        await route.fulfill({ json: { data: rows, meta: { lastReadAt: now, canEdit: true, label: "Sheet Cơ - Hóa" }, error: null } });
+      });
+    },
+    async interact(page, route) {
+      if (!route.endsWith("uiDialog=1")) return;
+      await page.getByRole("button", { name: "Dòng chưa có số trên Sheet" }).click();
+      await page.getByRole("dialog").waitFor();
+      await page.waitForTimeout(400);
+    },
+  },
   "pct-cho-nkvh": {
     description: "Phiếu \"Chờ NKVH lưu\" (mới lấy số / quá 2 giờ kèm lỗi đồng bộ) trên sổ và hộp chi tiết — chỉ giả lập",
     async prepare() { return {}; },

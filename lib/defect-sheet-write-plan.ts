@@ -81,7 +81,7 @@ function yearFromSheetDate(value: unknown) {
   return match ? Number(match[1]) : null;
 }
 
-function statusLabel(status: string) {
+export function statusLabel(status: string) {
   const labels: Record<string, string> = {
     CHUA_XU_LY: "Chưa xử lý",
     CO_PCT: "Đang xử lý",

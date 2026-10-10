@@ -96,7 +96,7 @@ function parseSourceDate(value: unknown): Date | null {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
-function unitOf(value: unknown) {
+export function unitOf(value: unknown) {
   const unit = text(value).toUpperCase().replace(/\s+/g, " ");
   if (unit === "S1" || unit === "S2") return unit;
   return "COMMON";
@@ -113,7 +113,7 @@ function commonSubUnitOf(value: unknown): "BOP" | "CHUNG" | "ĐKTT" | null {
   return null;
 }
 
-function statusOf(value: unknown) {
+export function statusOf(value: unknown) {
   const normalized = normalizeText(text(value));
   if (normalized.startsWith("da xu ly") || normalized.startsWith("da xong")) return "DA_XU_LY";
   if (normalized.startsWith("dang xu ly") || normalized.startsWith("dang thuc hien")) return "CO_PCT";

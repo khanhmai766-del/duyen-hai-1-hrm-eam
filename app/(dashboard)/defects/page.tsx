@@ -8,7 +8,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ShieldAlert, Wrench, CircleSlash, CircleDashed, CirclePause, Package, Plus, X, Pencil, CircleX, CheckCircle2, BellRing, CloudOff, FileClock, FileSpreadsheet, ExternalLink, Minus, ChevronLeft, ChevronRight, ChevronDown, ChevronsLeft, ChevronsRight, Filter, Check, ArrowUp, Loader2, ClipboardList, Ban, MoreHorizontal, type LucideIcon } from "lucide-react";
+import { ShieldAlert, Wrench, CircleSlash, CircleDashed, CirclePause, Package, Plus, X, Pencil, CircleX, CheckCircle2, BellRing, CloudOff, FileClock, FileSpreadsheet, ExternalLink, ListTodo, Minus, ChevronLeft, ChevronRight, ChevronDown, ChevronsLeft, ChevronsRight, Filter, Check, ArrowUp, Loader2, ClipboardList, Ban, MoreHorizontal, type LucideIcon } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
 import { TableSkeleton } from "@/components/shared/skeletons";
@@ -20,6 +20,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { useDefectUnnumbered } from "@/hooks/useDefectUnnumbered";
+import { canSeeUnnumbered } from "@/lib/defect-unnumbered-access";
 import { defectDetailQuery, useCancelDefect, useDefect, useDefects, useDefectShiftSummary, useDefectSyncStatus, useDefectTwoWaySync, useRemindDefect, useSyncDefects, useUpdateDefect, type DefectItem } from "@/hooks/useDefects";
 import { usePositions, useUsers } from "@/hooks/useUsers";
 import {
@@ -57,6 +59,10 @@ const DEFECT_STATUS_FILTER_OPTIONS = [
 ];
 const DefectForm = dynamic(
   () => import("@/components/defects/defect-form").then((module) => module.DefectForm),
+  { ssr: false }
+);
+const DefectUnnumberedDialog = dynamic(
+  () => import("@/components/defects/defect-unnumbered-dialog").then((module) => module.DefectUnnumberedDialog),
   { ssr: false }
 );
 const CompleteDefectDialog = dynamic(
@@ -563,6 +569,12 @@ export default function DefectsPage() {
   }
 
   const [formOpen, setFormOpen] = React.useState(false);
+  // Dòng chưa có STT trên Sheet: chỉ rà cột 14 cho khớp kết quả SCCN — xem lib/server/defect-unnumbered.ts.
+  const [unnumberedOpen, setUnnumberedOpen] = React.useState(false);
+  const showUnnumbered = !readOnlyDefects && canSeeUnnumbered(session?.user?.role);
+  const unnumbered = useDefectUnnumbered(sectionConfig.source, showUnnumbered);
+  const unnumberedRows = unnumbered.data?.data ?? [];
+  const unnumberedMismatch = unnumberedRows.filter((row) => row.mismatch).length;
   const [editTarget, setEditTarget] = React.useState<DefectItem | null>(null);
   const [formHasDeviceHistory, setFormHasDeviceHistory] = React.useState(false);
   const [cancelTarget, setCancelTarget] = React.useState<DefectItem | null>(null);
@@ -648,6 +660,21 @@ export default function DefectsPage() {
             <ExternalLink className="hidden h-3.5 w-3.5 opacity-70 sm:block" aria-hidden="true" />
           </a>
         </Button>}
+        {showUnnumbered && <Button
+          variant="soft"
+          size="toolbar"
+          className="h-11 w-12 shrink-0 px-0 sm:h-9 sm:w-10 2xl:w-auto 2xl:px-3"
+          onClick={() => setUnnumberedOpen(true)}
+          aria-label="Dòng chưa có số trên Sheet"
+          title="Dòng chưa có số trên Sheet — rà trạng thái cột 14 theo kết quả SCCN"
+        >
+          <span className="relative">
+            <ListTodo className="h-5 w-5 sm:h-4 sm:w-4" />
+            {unnumberedMismatch > 0 && <span className="absolute -right-2 -top-2 min-w-4 rounded-full bg-amber-500 px-1 text-[10px] font-bold leading-4 text-white 2xl:hidden">{unnumberedMismatch}</span>}
+          </span>
+          <span className="hidden 2xl:inline">Dòng chưa số</span>
+          {unnumberedMismatch > 0 && <span className="hidden rounded-full bg-amber-100 px-1.5 text-[11px] font-bold text-amber-900 2xl:inline">{unnumberedMismatch} lệch</span>}
+        </Button>}
         {readOnlyDefects && (
           <span className="rounded-full border border-sky-200 bg-sky-50 px-3 py-1.5 text-xs font-bold text-sky-700">
             Chế độ chỉ tra cứu
@@ -688,6 +715,7 @@ export default function DefectsPage() {
           </Button>
         )}
       </PageHeader>
+      {unnumberedOpen && <DefectUnnumberedDialog source={sectionConfig.source} open={unnumberedOpen} onOpenChange={setUnnumberedOpen} />}
 
       <div className="flex flex-col gap-3 rounded-xl border border-sky-200 bg-gradient-to-r from-sky-50 via-white to-amber-50 px-4 py-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
         <div className="relative flex min-w-0 items-center gap-3 pr-9 sm:pr-0">

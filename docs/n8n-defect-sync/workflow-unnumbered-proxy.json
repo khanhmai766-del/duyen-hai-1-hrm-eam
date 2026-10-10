@@ -1,0 +1,316 @@
+{
+  "id": "DhUnnumberedProxy",
+  "name": "DH1 - Dòng khiếm khuyết chưa số — đọc/ghi Sheet (TẠM)",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "defects-unnumbered-dh1",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook",
+      "name": "Web gọi đọc/ghi",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -600,
+        0
+      ],
+      "webhookId": "6c1d2f3e-8a4b-4c5d-9e6f-a1b2c3d4e5f6",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "aqtXWwXwpZ58pFi7",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Mục tạm \"Dòng chưa số\" (lib/server/defect-unnumbered.ts): web nhờ đọc/ghi Sheet bằng tài khoản Google của n8n.\n// CHỈ cho: đọc DH1!A6:AA, ghi cột N (cột 14) của đúng 2 Sheet khiếm khuyết, giá trị thuộc 5 nhãn trạng thái.\nconst SHEETS = { CO: \"1zKRH9zhEAkCwGRl4KiaNwUlkLg9_l4WXNSBeg3FK_MA\", DIEN: \"1nPKFBr3wXfOFE4y_WACDs7cvb1ZZA-mg0mZbsIuB_lQ\" };\nconst TAB = \"DH1\";\nconst COLUMN = \"N\";\nconst LABELS = [\"Chưa xử lý\", \"Đang xử lý\", \"Chờ vật tư\", \"Chờ ngừng máy\", \"Đã xử lý xong\"];\nconst body = $json.body ?? {};\nconst bad = (error) => [{ json: { valid: false, error } }];\nconst spreadsheetId = SHEETS[body.source];\nif (!spreadsheetId) return bad(\"source phải là CO hoặc DIEN\");\nconst base = \"https://sheets.googleapis.com/v4/spreadsheets/\" + spreadsheetId;\nif (body.action === \"read\") {\n  return [{ json: { valid: true, action: \"read\", url: base + \"/values/\" + encodeURIComponent(TAB + \"!A6:AA\") + \"?majorDimension=ROWS&valueRenderOption=FORMATTED_VALUE\" } }];\n}\nif (body.action === \"write\") {\n  if (body.column !== COLUMN) return bad(\"chỉ được ghi cột \" + COLUMN);\n  const cells = Array.isArray(body.cells) ? body.cells : [];\n  if (!cells.length || cells.length > 200) return bad(\"mỗi lượt ghi 1–200 ô\");\n  for (const cell of cells) {\n    if (!Number.isInteger(cell.row) || cell.row < 7 || cell.row > 20000) return bad(\"số dòng không hợp lệ: \" + cell.row);\n    if (!LABELS.includes(cell.value)) return bad(\"giá trị không hợp lệ: \" + cell.value);\n  }\n  return [{ json: { valid: true, action: \"write\", url: base + \"/values:batchUpdate\", payload: {\n    valueInputOption: \"RAW\",\n    data: cells.map((cell) => ({ range: TAB + \"!\" + COLUMN + cell.row, majorDimension: \"ROWS\", values: [[cell.value]] })),\n  } } }];\n}\nreturn bad(\"action phải là read hoặc write\");"
+      },
+      "id": "validate",
+      "name": "Kiểm yêu cầu",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -380,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "valid",
+              "leftValue": "={{ $json.valid === true }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "valid",
+      "name": "Hợp lệ?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -160,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "is-read",
+              "leftValue": "={{ $json.action === \"read\" }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "is-read",
+      "name": "Là đọc?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        60,
+        -100
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.url }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleSheetsOAuth2Api",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "read",
+      "name": "Đọc Sheet",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        280,
+        -200
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "9OMe30YPXIQR7cIl",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.url }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleSheetsOAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.payload) }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "write",
+      "name": "Ghi cột N",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        280,
+        0
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "9OMe30YPXIQR7cIl",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const response = $json;\nconst status = Number(response.statusCode ?? 200);\nif (status >= 300) {\n  const message = response.body?.error?.message ?? (\"Google Sheets trả mã \" + status);\n  return [{ json: { ok: false, error: message, status } }];\n}\nconst action = $(\"Kiểm yêu cầu\").first().json.action;\nreturn [{ json: action === \"read\"\n  ? { ok: true, values: response.body?.values ?? [] }\n  : { ok: true, updatedCells: response.body?.totalUpdatedCells ?? 0 } }];"
+      },
+      "id": "pack",
+      "name": "Đóng gói kết quả",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        500,
+        -100
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "id": "respond-ok",
+      "name": "Trả kết quả",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        720,
+        -100
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok: false, error: $json.error } }}",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "id": "respond-bad",
+      "name": "Từ chối",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        60,
+        120
+      ]
+    }
+  ],
+  "connections": {
+    "Web gọi đọc/ghi": {
+      "main": [
+        [
+          {
+            "node": "Kiểm yêu cầu",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Kiểm yêu cầu": {
+      "main": [
+        [
+          {
+            "node": "Hợp lệ?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Hợp lệ?": {
+      "main": [
+        [
+          {
+            "node": "Là đọc?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Từ chối",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Là đọc?": {
+      "main": [
+        [
+          {
+            "node": "Đọc Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Ghi cột N",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Đọc Sheet": {
+      "main": [
+        [
+          {
+            "node": "Đóng gói kết quả",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ghi cột N": {
+      "main": [
+        [
+          {
+            "node": "Đóng gói kết quả",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Đóng gói kết quả": {
+      "main": [
+        [
+          {
+            "node": "Trả kết quả",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Ho_Chi_Minh",
+    "saveDataSuccessExecution": "none"
+  },
+  "pinData": {}
+}
