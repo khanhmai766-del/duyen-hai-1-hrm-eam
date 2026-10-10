@@ -1818,6 +1818,10 @@ model WorkPermitCompany {
   /// Chưa tick ô nào = "Chưa phân loại" → chọn được ở cả hai nhóm (giai đoạn chuyển đổi).
   sctx      Boolean  @default(false)
   overhaul  Boolean  @default(false)
+  /// Mã nhà thầu khác (chuẩn hoá normalizeText như WorkPermitOverhaulItem.contractorCode) mà đơn vị này được dùng TOÀN BỘ
+  /// hạng mục đại tu — kể cả hạng mục thêm vào Sheet sau này. Vd S3A dùng hạng mục EPS (10/10/2026). Mở lẻ từng hạng mục
+  /// thì dùng WorkPermitOverhaulItem.sharedContractorCodes.
+  overhaulItemsFrom String[] @default([])
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }

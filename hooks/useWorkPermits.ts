@@ -305,6 +305,8 @@ export interface OverhaulItemsResult {
   contractorCode: string | null;
   /** Vì sao không có gợi ý: chưa chọn đơn vị ("company") hoặc đơn vị chưa khai mã viết tắt ("companyCode"). */
   reason: "company" | "companyCode" | null;
+  /** Đơn vị dùng hạng mục của nhà thầu khác nhưng phiếu chưa có cương vị — hạng mục mượn chỉ hiện khi đúng cương vị. */
+  borrowNeedsPosition?: boolean;
 }
 export interface OverhaulSyncResult {
   syncedAt: string;

@@ -161,6 +161,7 @@ function OverhaulItemPicker({ form, selected, onClose, onConfirm }: {
         {!company && <p className="px-4 py-10 text-center text-sm text-muted-foreground">Chọn nhà thầu ở trên để xem hạng mục của đơn vị đó.</p>}
         {company && query.isPending && <div className="flex justify-center py-10"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>}
         {query.isError && <p role="alert" className="px-2 py-6 text-center text-sm text-red-700">{query.error.message}</p>}
+        {data?.borrowNeedsPosition && <p className="mx-2 mb-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:bg-amber-950/40 dark:text-amber-100">Đơn vị này dùng hạng mục của nhà thầu khác theo đúng cương vị đã phân. Chọn <b>Cương vị</b> trên phiếu để thấy các hạng mục đó.</p>}
         {empty && <p className="px-4 py-10 text-center text-sm text-muted-foreground">{emptyMessage(data?.reason ?? null, data?.contractorCode ?? null, Boolean(search.trim()))}</p>}
         {groups.map(([groupKey, { device, other, rows }]) => <section key={groupKey} className="py-1">
           <h3 className="sticky top-0 z-10 flex items-center gap-2 bg-background/95 px-2 py-1.5 text-xs font-bold uppercase tracking-wide text-slate-600 backdrop-blur dark:text-muted-foreground">

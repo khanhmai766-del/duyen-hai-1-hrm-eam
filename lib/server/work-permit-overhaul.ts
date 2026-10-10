@@ -281,17 +281,24 @@ export async function listOverhaulItems(params: { kind: string; company: string;
   if (!company) return { items: [], syncedAt, contractorCode: null, reason: "company" as const };
   const row = await prisma.workPermitCompany.findFirst({
     where: { OR: [{ name: company }, { code: { equals: company, mode: "insensitive" } }] },
-    select: { code: true },
+    select: { code: true, overhaulItemsFrom: true },
   });
   const contractorCode = normalizeText(row?.code ?? "");
   if (!contractorCode) return { items: [], syncedAt, contractorCode: null, reason: "companyCode" as const };
   const positionCode = params.position ? positionCatalogItem(params.position)?.code ?? null : null;
   // Cương vị chỉ lọc hạng mục CÙNG loại phiếu: hạng mục phối hợp (cùng nhà thầu, chia phần cơ/điện) nằm ở tab loại kia và
   // mang cương vị bên kia — lọc theo cương vị của phiếu thì PCT Điện không bao giờ thấy hạng mục tab Cơ và ngược lại.
+  const positionWhere: Prisma.WorkPermitOverhaulItemWhereInput = positionCode ? { OR: [{ kind: { not: params.kind } }, { positionCode }] } : {};
+  const borrowFrom = row?.overhaulItemsFrom ?? [];
   const items = await prisma.workPermitOverhaulItem.findMany({
-    // Hạng mục của chính nhà thầu + hạng mục nhà thầu khác mở thêm cho (sharedContractorCodes).
-    where: { isActive: true, AND: [{ OR: [{ contractorCode }, { sharedContractorCodes: { has: contractorCode } }] },
-      ...(positionCode ? [{ OR: [{ kind: { not: params.kind } }, { positionCode }] }] : [])] },
+    where: { isActive: true, OR: [
+      // Hạng mục của chính nhà thầu.
+      { AND: [{ contractorCode }, positionWhere] },
+      // Hạng mục của nhà thầu KHÁC — mở lẻ từng hạng mục (sharedContractorCodes, vd Sinh Lộc) hoặc mượn toàn bộ
+      // (WorkPermitCompany.overhaulItemsFrom, vd S3A ← EPS): RÀNG ĐÚNG cương vị đã phân trên Sheet — phiếu phải có cương vị
+      // và chỉ thấy hạng mục cùng cương vị đó (cả Cơ lẫn Điện).
+      ...(positionCode ? [{ positionCode, OR: [{ sharedContractorCodes: { has: contractorCode } }, ...(borrowFrom.length ? [{ contractorCode: { in: borrowFrom } }] : [])] }] : []),
+    ] },
     select: { id: true, kind: true, source: true, sheet: true, positionTitle: true, code: true, device: true, content: true, method: true, percent: true, status: true, contractor: true, contractorCode: true },
   });
   const otherKind = (item: { kind: string }) => item.kind === params.kind ? 0 : 1;
@@ -301,6 +308,8 @@ export async function listOverhaulItems(params: { kind: string; company: string;
     // `sharedFrom`: hạng mục được mở từ nhà thầu khác — form ghi rõ để người cấp biết đó là hạng mục của ai.
     items: items.map(({ contractor, contractorCode: owner, ...item }) => ({ ...item, sharedFrom: owner === contractorCode ? null : contractor, usedBy: usage.held.get(overhaulItemKey(item)) ?? [], draftIn: usage.drafts.get(overhaulItemKey(item)) ?? [] })),
     syncedAt, contractorCode: row?.code ?? null, reason: null,
+    // Đơn vị mượn hạng mục nhưng phiếu chưa chọn cương vị (hoặc cương vị ngoài danh mục) → form nhắc chọn cương vị.
+    borrowNeedsPosition: !positionCode && (borrowFrom.length > 0 || await prisma.workPermitOverhaulItem.count({ where: { isActive: true, sharedContractorCodes: { has: contractorCode } } }) > 0),
   };
 }
 
