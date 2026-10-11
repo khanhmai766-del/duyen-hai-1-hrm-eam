@@ -1033,3 +1033,40 @@ PRESETS["quy-trinh-loc-pdf"] = {
     await page.getByRole("option", { name: /Cần xử lý PDF/ }).waitFor({ timeout: 10_000 });
   },
 };
+
+// Thanh bên: mở một nhóm để xem icon ô màu như bảng truy cập nhanh (11/10/2026) — không ghi DB.
+PRESETS["thanh-ben-icon-mau"] = {
+  description: "Trang chủ, mở nhóm Quản lý vật tư trên thanh bên — icon ô màu cùng bảng truy cập nhanh",
+  async prepare() { return {}; },
+  routes: () => ["/"],
+  async interact(page) {
+    await page.getByRole("button", { name: /^Sổ QUẢN LÝ VẬT TƯ$/i }).first().click();
+    await page.waitForTimeout(400);
+  },
+};
+
+// Thanh nổi "Thường dùng" (11/10/2026): mặc định giữa đáy · kéo lên góc trên phải rồi tải lại (vị trí phải giữ) · thu gọn.
+PRESETS["thanh-noi-thuong-dung"] = {
+  description: "Thanh nổi Thường dùng — mặc định, kéo thả + nhớ vị trí sau khi tải lại, thu gọn — không ghi DB",
+  async prepare() { return {}; },
+  routes: () => ["/hr", "/hr?dock=keo", "/hr?dock=gon"],
+  async interact(page, route) {
+    const bar = page.getByRole("toolbar", { name: "Thường dùng" });
+    await bar.waitFor({ timeout: 20_000 });
+    if (route.endsWith("dock=keo")) {
+      const grip = page.getByRole("button", { name: "Kéo để di chuyển thanh Thường dùng" });
+      const box = await grip.boundingBox();
+      await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+      await page.mouse.down();
+      await page.mouse.move(900, 300, { steps: 12 });
+      await page.mouse.move(1100, 140, { steps: 12 });
+      await page.mouse.up();
+      await page.reload({ waitUntil: "networkidle" });
+      await bar.waitFor({ timeout: 20_000 });
+      const after = await bar.boundingBox();
+      if (!after || after.y > 300) throw new Error(`Vị trí không được nhớ sau khi tải lại (y=${after?.y})`);
+    }
+    if (route.endsWith("dock=gon")) await page.getByRole("button", { name: "Thu gọn thanh Thường dùng" }).click();
+    await page.waitForTimeout(300);
+  },
+};

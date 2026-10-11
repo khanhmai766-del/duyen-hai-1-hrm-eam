@@ -4,77 +4,19 @@ import Image from "next/image";
 import * as React from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { useSession } from "next-auth/react";
-import { ChevronDown, Clock, ExternalLink, LifeBuoy, Phone, ShieldCheck, Star } from "lucide-react";
+import { ChevronDown, Clock, ExternalLink, LifeBuoy, Phone, ShieldCheck } from "lucide-react";
 import { cn, initials } from "@/lib/utils";
-import { useUsers } from "@/hooks/useUsers";
-import { NAV_SECTIONS, navItemAllowedForPosition, navQuickItems, navSectionsForPosition, type NavItem } from "@/lib/nav";
-import { useRbacAccess } from "@/hooks/useRbacAccess";
-import { useAdminMode } from "@/hooks/useAdminMode";
-import { gridTint, launcherItems } from "@/components/layout/nav-tints";
+import { type NavItem } from "@/lib/nav";
+import { hrefActive, pathActive, useNavAccess } from "@/components/layout/use-nav-access";
+import { lookupLandingPage } from "@/lib/lookup-access";
 
-import { lookupLandingPage, lookupNavSections } from "@/lib/lookup-access";
-
-const NAV_ACCESS_LEVELS = ["read", "personal", "manage", "full"] as const;
-
-function pathActive(pathname: string, href: string, exact = false) {
-  if (href === "/") return pathname === "/";
-  const base = href.split("?")[0];
-  if (exact || href.includes("?")) return pathname === base;
-  return pathname === base || pathname.startsWith(base + "/");
-}
-
-// Active theo cả query: các mục con cùng path chỉ khác tham số (vd /materials?may=S1)
-// phải so tham số, nếu không cả nhóm sáng cùng lúc.
-function hrefActive(pathname: string, search: URLSearchParams, href: string, exact = false) {
-  if (!pathActive(pathname, href, exact)) return false;
-  const query = href.split("?")[1];
-  if (!query) return true;
-  return Array.from(new URLSearchParams(query)).every(([key, value]) => search.get(key) === value);
-}
-
-/** `showQuick`: nhóm "Thường dùng" chỉ cho thanh bên máy tính; ngăn kéo điện thoại đã có thanh điều hướng đáy. */
+/**
+ * `showQuick` = thanh bên máy tính: các nhóm mặc định đóng. Nhóm "Thường dùng" chuyển sang thanh nổi kéo thả
+ * (components/layout/quick-dock.tsx, 11/10/2026); ngăn kéo điện thoại đã có thanh điều hướng đáy.
+ */
 export function Sidebar({ onNavigate, collapsed = false, showQuick = false }: { onNavigate?: () => void; collapsed?: boolean; showQuick?: boolean }) {
-  const { data: session } = useSession();
-  const role = session?.user?.role;
-  const rbac = useRbacAccess();
-  const [adminMode] = useAdminMode();
+  const { rbac, readOnlyDefects, usersData, sections, allowed, tintOf } = useNavAccess();
   const [closedSections, setClosedSections] = React.useState<Record<string, boolean>>({});
-  const readOnlyDefects = session?.user?.accessMode === "DEFECT_READ_ONLY";
-  const { data: usersData } = useUsers({ enabled: !readOnlyDefects });
-  const currentProfile = React.useMemo(
-    () => usersData?.data?.find((user) => user.id === session?.user?.id) ?? null,
-    [session?.user?.id, usersData?.data]
-  );
-  const positionCarrier = React.useMemo(
-    () => ({
-      position: currentProfile?.position ?? session?.user?.position,
-      secondaryPosition: currentProfile?.secondaryPosition ?? session?.user?.secondaryPosition,
-      secondaryPosition2: currentProfile?.secondaryPosition2 ?? session?.user?.secondaryPosition2,
-      currentPosition: currentProfile?.currentPosition ?? session?.user?.currentPosition,
-    }),
-    [
-      currentProfile?.currentPosition,
-      currentProfile?.position,
-      currentProfile?.secondaryPosition,
-      currentProfile?.secondaryPosition2,
-      session?.user?.currentPosition,
-      session?.user?.position,
-      session?.user?.secondaryPosition,
-      session?.user?.secondaryPosition2,
-    ]
-  );
-  const sections = React.useMemo(() => {
-    if (readOnlyDefects) return lookupNavSections(NAV_SECTIONS, rbac.lookupModules);
-    return navSectionsForPosition(positionCarrier);
-  }, [positionCarrier, readOnlyDefects, rbac.lookupModules]);
-
-  // Tài khoản chỉ đọc khiếm khuyết chỉ thấy các mục /defects như phần còn lại của thanh bên.
-  const quickItems = (showQuick ? navQuickItems(positionCarrier) : [])
-    .filter((item) => rbac.canReadPage(item.href))
-    .filter((item) => navItemAllowed(item, role, rbac.can, adminMode, positionCarrier));
-  // Icon "Thường dùng" cùng màu ô với bảng truy cập nhanh (nút lưới ở thanh trên) — cùng danh sách, cùng vị trí.
-  const launcherIndex = new Map(launcherItems(sections, (item) => navItemAllowed(item, role, rbac.can, adminMode, positionCarrier)).map((item, index) => [item.href, index]));
 
   const [now, setNow] = React.useState<Date | null>(null);
   React.useEffect(() => {
@@ -132,36 +74,19 @@ export function Sidebar({ onNavigate, collapsed = false, showQuick = false }: { 
       </div>
 
       <nav className={cn("flex-1 space-y-5 overflow-y-auto py-4", collapsed ? "px-2" : "px-3")}>
-        {quickItems.length > 0 && (
-          <div>
-            {!collapsed && (
-              <div className="flex items-center gap-2 px-2 pb-2">
-                <Star className="h-3 w-3 shrink-0 fill-amber-400 text-amber-400" aria-hidden="true" />
-                <span className="shrink-0 whitespace-nowrap text-[11.5px] font-black uppercase tracking-[0.08em] text-slate-600 dark:text-slate-200">Thường dùng</span>
-                <span className="h-px flex-1 bg-gradient-to-r from-blue-100 to-transparent dark:from-slate-700" />
-              </div>
-            )}
-            <div className="space-y-1.5">
-              {quickItems.map((item) => (
-                <NavEntry key={`quick-${item.href}`} item={item} onNavigate={onNavigate} collapsed={collapsed}
-                  tint={launcherIndex.has(item.href) ? gridTint(launcherIndex.get(item.href)!) : undefined} />
-              ))}
-            </div>
-          </div>
-        )}
         {sections.map((section, sectionIndex) => {
           const items = section.items
             .map((item) => {
-              const children = item.children?.filter((child) => navItemAllowed(child, role, rbac.can, adminMode, positionCarrier));
+              const children = item.children?.filter((child) => allowed(child));
               return children ? { ...item, children } : item;
             })
             .filter((item) => {
               if (item.children) return item.children.length > 0;
-              return navItemAllowed(item, role, rbac.can, adminMode, positionCarrier);
+              return allowed(item);
             });
           if (!items.length) return null;
-          // Có nhóm "Thường dùng" (máy tính) thì mọi nhóm mặc định đóng; ngăn kéo điện thoại vẫn mở sẵn nhóm đầu.
-          const sectionClosed = closedSections[section.title] ?? (quickItems.length > 0 || sectionIndex !== 0);
+          // Máy tính: mọi nhóm mặc định đóng; ngăn kéo điện thoại vẫn mở sẵn nhóm đầu.
+          const sectionClosed = closedSections[section.title] ?? (showQuick || sectionIndex !== 0);
           return (
             <div key={section.title}>
               {collapsed ? (
@@ -198,7 +123,7 @@ export function Sidebar({ onNavigate, collapsed = false, showQuick = false }: { 
               {(!sectionClosed || collapsed) && (
                 <div className="space-y-1.5">
                   {items.map((item) => (
-                    <NavEntry key={item.href + item.label} item={item} onNavigate={onNavigate} collapsed={collapsed} />
+                    <NavEntry key={item.href + item.label} item={item} onNavigate={onNavigate} collapsed={collapsed} tintOf={tintOf} />
                   ))}
                 </div>
               )}
@@ -272,22 +197,6 @@ export function Sidebar({ onNavigate, collapsed = false, showQuick = false }: { 
   );
 }
 
-function navItemAllowed(
-  item: NavItem,
-  role: string | undefined,
-  can: ReturnType<typeof useRbacAccess>["can"],
-  adminMode: boolean,
-  position: Parameters<typeof navItemAllowedForPosition>[1]
-) {
-  if (!navItemAllowedForPosition(item, position, role)) return false;
-  if (role === "ADMIN" && adminMode) return true;
-  if (item.adminOnly) return false;
-  if (item.permissionIds?.length) {
-    return item.permissionIds.some((permissionId) => can(permissionId, [...NAV_ACCESS_LEVELS]));
-  }
-  return !item.adminOnly;
-}
-
 function PowerGridMark() {
   return (
     <span
@@ -302,12 +211,13 @@ function PowerGridMark() {
   );
 }
 
-/** `tint`: ô màu như bảng truy cập nhanh (nhóm "Thường dùng") thay cho ô trắng khi mục không đang mở. */
-function NavEntry({ item, onNavigate, collapsed = false, tint }: { item: NavItem; onNavigate?: () => void; collapsed?: boolean; tint?: string }) {
+/** `tintOf`: ô màu (components/layout/nav-tints.ts) thay cho ô trắng khi mục không đang mở (mục nhóm lấy màu mục con đầu). */
+function NavEntry({ item, onNavigate, collapsed = false, tintOf }: { item: NavItem; onNavigate?: () => void; collapsed?: boolean; tintOf?: (href: string) => string | undefined }) {
   const pathname = usePathname();
   const search = useSearchParams();
   const Icon = item.icon;
   const hasChildren = !!item.children?.length;
+  const tint = tintOf?.(hasChildren ? item.children![0].href : item.href);
   const childActive = hasChildren && item.children!.some((c) => pathActive(pathname, c.href, c.exact));
   const active = (hasChildren ? pathActive(pathname, item.href, item.exact) : hrefActive(pathname, search, item.href, item.exact)) || childActive;
   const [open, setOpen] = React.useState(childActive);
@@ -408,7 +318,9 @@ function NavEntry({ item, onNavigate, collapsed = false, tint }: { item: NavItem
             "relative flex h-8 w-8 shrink-0 items-center justify-center rounded-xl transition-all duration-200",
             childActive
               ? "bg-gradient-to-br from-blue-500 to-blue-800 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.35),0_12px_20px_-12px_rgba(30,64,175,0.95)]"
-              : "bg-white text-slate-500 shadow-[inset_0_1px_0_rgba(255,255,255,0.9),0_8px_18px_-16px_rgba(15,23,42,0.75)] ring-1 ring-blue-100 group-hover:-translate-y-0.5 group-hover:text-accent group-hover:shadow-[0_12px_22px_-16px_rgba(30,64,175,0.65)] dark:bg-slate-900 dark:text-slate-300 dark:ring-slate-700 dark:group-hover:text-sky-300"
+              : tint
+                ? cn(tint, "ring-1 ring-black/5 group-hover:-translate-y-0.5")
+                : "bg-white text-slate-500 shadow-[inset_0_1px_0_rgba(255,255,255,0.9),0_8px_18px_-16px_rgba(15,23,42,0.75)] ring-1 ring-blue-100 group-hover:-translate-y-0.5 group-hover:text-accent group-hover:shadow-[0_12px_22px_-16px_rgba(30,64,175,0.65)] dark:bg-slate-900 dark:text-slate-300 dark:ring-slate-700 dark:group-hover:text-sky-300"
           )}
         >
           <Icon className="h-[17px] w-[17px] drop-shadow-sm" />
@@ -421,6 +333,7 @@ function NavEntry({ item, onNavigate, collapsed = false, tint }: { item: NavItem
           {item.children!.map((c) => {
             const ChildIcon = c.icon;
             const cActive = hrefActive(pathname, search, c.href, c.exact);
+            const cTint = tintOf?.(c.href);
             return (
               <Link
                 key={c.href}
@@ -436,8 +349,8 @@ function NavEntry({ item, onNavigate, collapsed = false, tint }: { item: NavItem
               >
                 <span
                   className={cn(
-                    "flex h-6 w-6 shrink-0 items-center justify-center rounded-lg ring-1 ring-blue-100",
-                    cActive ? "bg-blue-600 text-white" : "bg-white text-slate-500 group-hover:text-accent dark:bg-slate-900 dark:text-slate-300 dark:ring-slate-700 dark:group-hover:text-sky-300"
+                    "flex h-6 w-6 shrink-0 items-center justify-center rounded-lg ring-1",
+                    cActive ? "bg-blue-600 text-white ring-blue-100" : cTint ? cn(cTint, "ring-black/5") : "bg-white text-slate-500 ring-blue-100 group-hover:text-accent dark:bg-slate-900 dark:text-slate-300 dark:ring-slate-700 dark:group-hover:text-sky-300"
                   )}
                 >
                   <ChildIcon className="h-3.5 w-3.5" />

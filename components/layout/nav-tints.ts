@@ -1,6 +1,7 @@
 import type { NavItem, NavSection } from "@/lib/nav";
 
-// Tông màu gradient nhẹ cho từng ô trong bảng truy cập nhanh (nút lưới ở thanh trên), gán theo vị trí của mục.
+// Tông màu ô icon của thanh bên và thanh nổi "Thường dùng", gán theo vị trí của mục (giữ đúng màu của bảng truy cập
+// nhanh ở thanh trên — bảng đã gỡ 11/10/2026).
 export const GRID_TINTS = [
   "bg-gradient-to-br from-sky-100 to-sky-200 text-sky-700",
   "bg-gradient-to-br from-violet-100 to-violet-200 text-violet-700",
@@ -21,8 +22,8 @@ export const GRID_TINTS = [
 export const gridTint = (index: number) => GRID_TINTS[index % GRID_TINTS.length];
 
 /**
- * Các mục của bảng truy cập nhanh theo đúng thứ tự hiển thị: mục có mục con → các mục con được phép, mục lẻ → chính nó.
- * Màu ô = vị trí trong danh sách này, nên nhóm "Thường dùng" ở thanh bên dùng lại hàm này để icon cùng màu với bảng.
+ * Mọi mục điều hướng được phép theo thứ tự thanh bên: mục có mục con → các mục con được phép, mục lẻ → chính nó.
+ * Màu ô = vị trí trong danh sách này — thanh bên và thanh nổi cùng dùng nên một mục luôn một màu ở cả hai nơi.
  */
 export function launcherItems(sections: NavSection[], allowed: (item: NavItem) => boolean): NavItem[] {
   return sections.flatMap((section) => section.items.flatMap((item) => {

@@ -7,7 +7,7 @@ import Image from "next/image";
 import { useSession, signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
-import { Bell, Menu, Search, CornerDownLeft, ChevronRight, LogOut, LayoutGrid, Maximize, Minimize, UserCircle, ChevronDown, Repeat, Cpu, MapPin, KeyRound, Loader2, ClipboardList, ExternalLink, ShieldCheck } from "lucide-react";
+import { Bell, Menu, Search, CornerDownLeft, ChevronRight, LogOut, Maximize, Minimize, UserCircle, ChevronDown, Repeat, Cpu, MapPin, KeyRound, Loader2, ClipboardList, ExternalLink, ShieldCheck } from "lucide-react";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -28,7 +28,6 @@ import { OPERATION_TYPE, ROLES, type RoleKey } from "@/lib/constants";
 import { cn, initials, formatDate } from "@/lib/utils";
 import { toast } from "sonner";
 import type { NavItem } from "@/lib/nav";
-import { gridTint, launcherItems } from "@/components/layout/nav-tints";
 
 const NAV_ACCESS_LEVELS = ["read", "personal", "manage", "full"] as const;
 
@@ -89,8 +88,6 @@ export function Topbar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
   const [notifOpen, setNotifOpen] = React.useState(false);
   const [notifTab, setNotifTab] = React.useState<"ops" | "repl" | "internal">("ops");
   const notifRef = React.useRef<HTMLDivElement>(null);
-  const [gridOpen, setGridOpen] = React.useState(false);
-  const gridRef = React.useRef<HTMLDivElement>(null);
   const [profileOpen, setProfileOpen] = React.useState(false);
   const [passwordOpen, setPasswordOpen] = React.useState(false);
   const forcePasswordChange = Boolean(session?.user?.mustChangePassword);
@@ -164,13 +161,6 @@ export function Topbar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
     if (forcePasswordChange) setPasswordOpen(true);
   }
 
-  // Quick-launch shortcuts (app grid) — top-level nav respecting admin-only.
-  const quickLinks = React.useMemo(
-    () =>
-      launcherItems(navSections, (item) => navItemAllowed(item, role, rbac.can, adminMode, positionCarrier))
-        .map((item) => ({ label: item.label, href: item.href, icon: item.icon, external: item.external })),
-    [adminMode, navSections, positionCarrier, rbac.can, role]
-  );
 
   function toggleFullscreen() {
     if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
@@ -232,7 +222,6 @@ export function Topbar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
     function onClickOutside(e: MouseEvent) {
       if (boxRef.current && !boxRef.current.contains(e.target as Node)) setOpen(false);
       if (notifRef.current && !notifRef.current.contains(e.target as Node)) setNotifOpen(false);
-      if (gridRef.current && !gridRef.current.contains(e.target as Node)) setGridOpen(false);
       if (profileRef.current && !profileRef.current.contains(e.target as Node)) setProfileOpen(false);
     }
     document.addEventListener("mousedown", onClickOutside);
@@ -509,42 +498,6 @@ export function Topbar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
             <span className={cn("absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full border-2 border-white", adminMode ? "bg-emerald-400" : "bg-slate-300")} />
           </button>
         )}
-
-        {/* App-grid quick launcher */}
-        <div ref={gridRef} className="relative hidden sm:block">
-          <button
-            onClick={() => setGridOpen((o) => !o)}
-            className="relative flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-violet-400 to-indigo-600 text-white shadow-lg shadow-indigo-500/30 ring-1 ring-white/50 transition-transform duration-200 before:absolute before:inset-x-1 before:top-0.5 before:h-1/3 before:rounded-t-lg before:bg-white/30 hover:scale-105 active:scale-95"
-            aria-label="Truy cập nhanh"
-          >
-            <LayoutGrid className="relative h-[18px] w-[18px] drop-shadow-sm" />
-          </button>
-          {gridOpen && (
-            <div className="absolute right-0 top-12 z-50 w-72 overflow-hidden rounded-xl border border-border bg-white p-2 shadow-lg">
-              <div className="grid grid-cols-3 gap-1.5">
-                {quickLinks.map((l, i) => {
-                  const Icon = l.icon;
-                  return (
-                    <Link
-                      key={l.href + l.label}
-                      href={l.href}
-                      prefetch={false}
-                      target={l.external ? "_blank" : undefined}
-                      rel={l.external ? "noopener noreferrer" : undefined}
-                      onClick={() => setGridOpen(false)}
-                      className="flex flex-col items-center gap-1.5 rounded-lg p-2.5 text-center transition-colors hover:bg-muted"
-                    >
-                      <span className={cn("flex h-9 w-9 items-center justify-center rounded-lg ring-1 ring-black/5", gridTint(i))}>
-                        <Icon className="h-[18px] w-[18px]" />
-                      </span>
-                      <span className="line-clamp-2 text-[11px] font-medium leading-tight text-ink">{l.label}</span>
-                    </Link>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-        </div>
 
         {/* Fullscreen toggle */}
         <button

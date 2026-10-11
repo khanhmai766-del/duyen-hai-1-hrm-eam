@@ -11,6 +11,7 @@ import { MobileBottomNav } from "./mobile-bottom-nav";
 import { BroadcastModal } from "@/components/shared/broadcast-modal";
 import { PowerLoadingOverlay } from "@/components/shared/power-loading-overlay";
 import { AiChatbox } from "@/components/ai/ai-chatbox";
+import { QuickDock } from "@/components/layout/quick-dock";
 import { pathAllowedForPosition } from "@/lib/nav";
 import { cn } from "@/lib/utils";
 
@@ -48,6 +49,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       >
         <Sidebar collapsed={collapsed} showQuick />
       </aside>
+      {/* Thanh nổi "Thường dùng" kéo thả — chỉ máy tính (tự ẩn dưới lg). */}
+      <QuickDock />
 
       {/* Mobile drawer */}
       {mobileOpen && (
