@@ -27,14 +27,14 @@ export default async function KnowledgeDocumentPage({ params }: { params: Promis
 
   return (
     <div className="mx-auto max-w-3xl space-y-4 p-4 sm:p-6">
-      <Link href="/" className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-800 dark:hover:text-slate-200">
+      <Link href="/" className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-800">
         <ArrowLeft className="h-4 w-4" /> Trang chủ
       </Link>
       <header className="space-y-1">
         <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
           {AI_KNOWLEDGE_CATEGORIES[document.category]}
         </p>
-        <h1 className="flex items-start gap-2 text-xl font-semibold text-slate-900 dark:text-slate-100">
+        <h1 className="flex items-start gap-2 text-xl font-semibold text-slate-900">
           <FileText className="mt-1 h-5 w-5 shrink-0 text-slate-400" />
           {document.title}
         </h1>
@@ -46,13 +46,13 @@ export default async function KnowledgeDocumentPage({ params }: { params: Promis
             href={document.publicUrl}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex items-center gap-1.5 text-sm font-medium text-blue-700 hover:underline dark:text-blue-400"
+            className="inline-flex items-center gap-1.5 text-sm font-medium text-blue-700 hover:underline"
           >
             Mở tệp gốc <ExternalLink className="h-3.5 w-3.5" />
           </a>
         )}
       </header>
-      <article className="whitespace-pre-wrap break-words rounded-lg border border-slate-200 bg-white p-4 text-sm leading-6 text-slate-800 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-200">
+      <article className="whitespace-pre-wrap break-words rounded-lg border border-slate-200 bg-white p-4 text-sm leading-6 text-slate-800">
         {document.content}
       </article>
     </div>

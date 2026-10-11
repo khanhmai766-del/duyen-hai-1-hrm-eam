@@ -132,13 +132,13 @@ function StatsBody({ stats }: { stats: AiStats }) {
             </p>
           ) : (
             <div className="space-y-3">
-              <div className="flex h-3 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+              <div className="flex h-3 overflow-hidden rounded-full bg-slate-100">
                 <div className="bg-emerald-500" style={{ width: `${(quality.helpful / rated) * 100}%` }} />
                 <div className="bg-red-500" style={{ width: `${(quality.unhelpful / rated) * 100}%` }} />
               </div>
               <dl className="grid grid-cols-3 gap-3 text-sm">
-                <Figure label="Hữu ích" value={String(quality.helpful)} className="text-emerald-700 dark:text-emerald-400" />
-                <Figure label="Chưa đúng" value={String(quality.unhelpful)} className="text-red-700 dark:text-red-400" />
+                <Figure label="Hữu ích" value={String(quality.helpful)} className="text-emerald-700" />
+                <Figure label="Chưa đúng" value={String(quality.unhelpful)} className="text-red-700" />
                 <Figure label="Đã chấm" value={percent(rated, totals.ok)} />
               </dl>
               <p className="text-xs text-muted-foreground">
@@ -216,7 +216,7 @@ function StatsBody({ stats }: { stats: AiStats }) {
           </p>
         ) : (
           <>
-            <p className="mb-3 flex items-start gap-1.5 text-xs text-amber-700 dark:text-amber-300">
+            <p className="mb-3 flex items-start gap-1.5 text-xs text-amber-700">
               <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
               Chỉ hiện những cặp hỏi–đáp mà chính người dùng đã bấm Chưa đúng, và chỉ trong 14 ngày hội thoại còn được lưu.
             </p>
@@ -249,7 +249,7 @@ function Tile({ label, value, hint, tone = "normal" }: {
     <Card>
       <CardContent className="p-4">
         <p className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">{label}</p>
-        <p className={cn("mt-1 text-2xl font-bold tabular-nums", tone === "warn" ? "text-amber-600 dark:text-amber-400" : "text-ink")}>
+        <p className={cn("mt-1 text-2xl font-bold tabular-nums", tone === "warn" ? "text-amber-600" : "text-ink")}>
           {value}
         </p>
         <p className="mt-1 text-xs leading-5 text-muted-foreground">{hint}</p>

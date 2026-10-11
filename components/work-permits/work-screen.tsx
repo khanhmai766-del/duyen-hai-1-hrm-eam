@@ -82,25 +82,25 @@ export function PermitWorkScreen({ id }: { id: string }) {
         <div className="min-w-0">
           <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700"><span className="mr-1.5 inline-block h-2 w-2 animate-pulse rounded-full bg-emerald-500 align-middle" aria-hidden />Đang làm việc · {elapsed(live.openedAt)}</p>
           <p className="mt-1 text-base font-bold leading-6 sm:text-lg">CHTT {live.commanderName}{live.commanderCode && <span className="ml-1.5 text-xs font-medium text-muted-foreground">{live.commanderCode}</span>}</p>
-          {live.commander?.phone && <p className="text-sm">SĐT: <a className="font-medium text-blue-700 underline dark:text-blue-400" href={`tel:${live.commander.phone.replace(/[^+\d]/g, "")}`}>{live.commander.phone}</a></p>}
+          {live.commander?.phone && <p className="text-sm">SĐT: <a className="font-medium text-blue-700 underline" href={`tel:${live.commander.phone.replace(/[^+\d]/g, "")}`}>{live.commander.phone}</a></p>}
           <p className="text-xs text-muted-foreground sm:text-sm">Mở lúc {fmt(live.openedAt)} · Cho phép: {live.authorizerName}</p>
         </div>
         {canExecute && <div className="grid grid-cols-2 gap-2 sm:flex">
           {/* PCT đại tu: cập nhật % + ghi chú từng hạng mục giữa chừng — điện thoại chiếm trọn hàng đầu. */}
-          {canUpdateOverhaulProgress(permit) && <Button type="button" variant="outline" className="col-span-2 h-10 border-violet-200 text-violet-800 hover:bg-violet-50 hover:text-violet-900 sm:order-2 sm:col-span-1 dark:border-violet-900 dark:text-violet-200" onClick={() => setAction({ kind: "progress", session: live })}><ChartNoAxesColumnIncreasing />Cập nhật tiến độ</Button>}
+          {canUpdateOverhaulProgress(permit) && <Button type="button" variant="outline" className="col-span-2 h-10 border-violet-200 text-violet-800 hover:bg-violet-50 hover:text-violet-900 sm:order-2 sm:col-span-1" onClick={() => setAction({ kind: "progress", session: live })}><ChartNoAxesColumnIncreasing />Cập nhật tiến độ</Button>}
           <Button type="button" variant="outline" className="h-10 sm:order-1" disabled={overdue} title={overdue ? "PCT đã quá hạn — không đổi CHTT, chỉ kết thúc" : undefined} onClick={() => setAction({ kind: "handoff", session: live })}><UserRoundCog />Đổi CHTT</Button>
           <Button type="button" variant="outline" disabled={workersInside > 0} title={workersInside ? `Còn ${workersInside} nhân viên trong khu vực — quét ra hết rồi mới kết thúc` : undefined} className="h-10 border-red-200 text-red-700 sm:order-3 hover:bg-red-50 hover:text-red-800" onClick={() => setAction({ kind: "end", session: live })}><Square />Kết thúc</Button>
         </div>}
       </div>
-      {canExecute && workersInside > 0 && <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:bg-amber-950/40 dark:text-amber-100">Còn {workersInside} nhân viên trong khu vực — quét ra hết mới bấm được Kết thúc.</p>}
+      {canExecute && workersInside > 0 && <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">Còn {workersInside} nhân viên trong khu vực — quét ra hết mới bấm được Kết thúc.</p>}
       <SessionAttendance permit={permit} session={live} canExecute={canExecute} size="lg" autoScan={autoScan} />
-    </section> : <section className="space-y-3 rounded-2xl border border-sky-200 bg-sky-50/50 p-5 text-center dark:bg-sky-950/20">
+    </section> : <section className="space-y-3 rounded-2xl border border-sky-200 bg-sky-50/50 p-5 text-center">
       <p className="text-base font-semibold">Chưa có lần làm việc đang mở</p>
       <p className="text-sm text-muted-foreground">{canOpen ? "Chọn CHTT, người cho phép và quét thẻ nhân viên để mở lần làm việc." : overdue && ["ISSUED", "WAITING"].includes(permit.status) ? "PCT đã quá thời gian kết thúc công việc dự kiến — không mở lần làm việc mới. Kết thúc phiếu này; công tác chưa xong thì cấp PCT mới." : ["ISSUED", "WAITING"].includes(permit.status) ? "Bạn không có quyền cho phép làm việc trên phiếu này." : `Phiếu đang ở trạng thái “${PERMIT_STATUSES[permit.status]}” nên không mở được lần làm việc mới.`}</p>
       {(canOpen || canUpdateLater) && <div className="flex flex-col justify-center gap-2 sm:flex-row">
         {canOpen && <Button type="button" className="h-12 w-full px-6 text-base sm:w-auto" onClick={() => setAction({ kind: "open" })}><Play />Cho phép / mở lần làm việc</Button>}
         {/* PCT đại tu không có lần đang mở (đã kết thúc ngày / kết thúc phiếu): vẫn cập nhật tiến độ ghi Sheet. */}
-        {canUpdateLater && <Button type="button" variant="outline" className="h-12 w-full border-violet-200 px-6 text-base text-violet-800 hover:bg-violet-50 hover:text-violet-900 sm:w-auto dark:border-violet-900 dark:text-violet-200" onClick={() => setAction({ kind: "progress" })}><ChartNoAxesColumnIncreasing />Cập nhật tiến độ</Button>}
+        {canUpdateLater && <Button type="button" variant="outline" className="h-12 w-full border-violet-200 px-6 text-base text-violet-800 hover:bg-violet-50 hover:text-violet-900 sm:w-auto" onClick={() => setAction({ kind: "progress" })}><ChartNoAxesColumnIncreasing />Cập nhật tiến độ</Button>}
       </div>}
     </section>}
 

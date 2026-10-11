@@ -77,7 +77,7 @@ export function OverhaulScheduleLinks() {
               <TableCell className={cn(TD_ROW, "py-2.5 font-semibold text-ink")}>{row.title}{itemLine(row)}</TableCell>
               <TableCell className={cn(TD_ROW, "max-w-0 py-2.5")}>
                 {row.url
-                  ? <a href={row.url} target="_blank" rel="noopener noreferrer" className="block truncate text-blue-700 hover:underline dark:text-blue-300" title={row.url}>{shortUrl(row.url)}</a>
+                  ? <a href={row.url} target="_blank" rel="noopener noreferrer" className="block truncate text-blue-700 hover:underline" title={row.url}>{shortUrl(row.url)}</a>
                   : <span className="text-amber-700">Chưa có link sheet</span>}
                 {row.updatedBy && <span className="mt-0.5 block text-[11px] text-muted-foreground">Sửa bởi {row.updatedBy}{row.updatedAt ? ` · ${new Date(row.updatedAt).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit", year: "numeric" })}` : ""}</span>}
               </TableCell>
@@ -115,7 +115,7 @@ function SyncResultDialog({ result, onClose }: { result: OverhaulSyncResult; onC
             </div>
             {source.error && <p role="alert" className="mt-1 text-xs text-red-700">{source.error}</p>}
             {source.configured && !source.error && !source.rows && <p className="mt-1 text-xs text-muted-foreground">File chưa có bảng hạng mục (cần hàng tiêu đề có “Mã hạng mục”).</p>}
-            {warnings.map(text => <p key={text} className="mt-1 flex gap-1.5 text-xs text-amber-800 dark:text-amber-300"><AlertTriangle size={13} className="mt-0.5 shrink-0" />{text}</p>)}
+            {warnings.map(text => <p key={text} className="mt-1 flex gap-1.5 text-xs text-amber-800"><AlertTriangle size={13} className="mt-0.5 shrink-0" />{text}</p>)}
           </div>;
         })}
       </div>

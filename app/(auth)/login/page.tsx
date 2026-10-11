@@ -43,7 +43,6 @@ function LoginInner() {
   const passwordRef = React.useRef<HTMLInputElement>(null);
 
   React.useEffect(() => {
-    document.documentElement.classList.remove("dark");
     // Reset cờ "đã đóng" thông báo hệ thống để mỗi lần đăng nhập đều hiển thị lại.
     try {
       sessionStorage.removeItem("broadcast-dismissed");

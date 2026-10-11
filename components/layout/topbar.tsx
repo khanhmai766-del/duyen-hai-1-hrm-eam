@@ -8,7 +8,6 @@ import { useSession, signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { Bell, Menu, Search, CornerDownLeft, ChevronRight, LogOut, Maximize, Minimize, UserCircle, ChevronDown, Repeat, Cpu, MapPin, KeyRound, Loader2, ClipboardList, ExternalLink, ShieldCheck } from "lucide-react";
-import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -513,10 +512,6 @@ export function Topbar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
           )}
         </button>
 
-        {/* Desktop/tablet giữ nút giao diện; mobile dùng logo EVN làm lối về trang chủ. */}
-        <div className="hidden sm:block">
-          <ThemeToggle />
-        </div>
         <Link
           href="/"
           prefetch={false}

@@ -46,14 +46,14 @@ export function OverhaulContentField({ form, onApply, onExtraChange }: {
       <Button type="button" variant="outline" size="sm" className="h-9" onClick={() => setOpen(true)}>
         <ListChecks />Chọn hạng mục đại tu
       </Button>
-      {items.map(item => <span key={keyOf(item)} className="inline-flex h-7 items-center gap-1 rounded-full bg-violet-50 pl-2.5 pr-1 font-mono text-xs font-semibold text-violet-800 dark:bg-violet-950/40 dark:text-violet-200" title={[item.device, item.content].filter(Boolean).join(" — ")}>
+      {items.map(item => <span key={keyOf(item)} className="inline-flex h-7 items-center gap-1 rounded-full bg-violet-50 pl-2.5 pr-1 font-mono text-xs font-semibold text-violet-800" title={[item.device, item.content].filter(Boolean).join(" — ")}>
         {item.code}
-        <button type="button" className="flex h-6 w-6 items-center justify-center rounded-full hover:bg-violet-100 dark:hover:bg-violet-900" aria-label={`Bỏ hạng mục ${item.code}`} onClick={() => apply(items.filter(other => keyOf(other) !== keyOf(item)))}><X className="h-3.5 w-3.5" /></button>
+        <button type="button" className="flex h-6 w-6 items-center justify-center rounded-full hover:bg-violet-100" aria-label={`Bỏ hạng mục ${item.code}`} onClick={() => apply(items.filter(other => keyOf(other) !== keyOf(item)))}><X className="h-3.5 w-3.5" /></button>
       </span>)}
     </div>
     {items.length > 0 && <p className="text-xs text-muted-foreground">Chi tiết {items.length} hạng mục (nội dung, biện pháp thi công) in ở phụ lục kèm PCT.</p>}
     {/* Công việc chưa có trong danh sách hạng mục: tạo hạng mục phát sinh PS.1.x ghi lên Sheet tiến độ (06/10/2026). */}
-    {onExtraChange && !items.length && <label className={`flex cursor-pointer items-start gap-2.5 rounded-lg border p-3 text-xs leading-5 ${form.overhaulExtra ? "border-amber-300 bg-amber-50 text-amber-950 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100" : "border-border text-muted-foreground"}`}>
+    {onExtraChange && !items.length && <label className={`flex cursor-pointer items-start gap-2.5 rounded-lg border p-3 text-xs leading-5 ${form.overhaulExtra ? "border-amber-300 bg-amber-50 text-amber-950" : "border-border text-muted-foreground"}`}>
       <input type="checkbox" className="mt-0.5 h-4 w-4 shrink-0 accent-amber-600" checked={Boolean(form.overhaulExtra)} onChange={event => onExtraChange(event.target.checked)} />
       {/* Mặc định KHÔNG tick (08/10/2026). Tick → web tạo mã PS.1.x ở tab cương vị của file tiến độ, ghi tiến độ như hạng mục thường. */}
       <span><b className="text-[13px] text-foreground">Hạng mục phát sinh</b> — công việc chưa có trong danh sách hạng mục để chọn lựa. Lựa chọn để phân loại, ghi nhận lại.</span>
@@ -161,11 +161,11 @@ function OverhaulItemPicker({ form, selected, onClose, onConfirm }: {
         {!company && <p className="px-4 py-10 text-center text-sm text-muted-foreground">Chọn nhà thầu ở trên để xem hạng mục của đơn vị đó.</p>}
         {company && query.isPending && <div className="flex justify-center py-10"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>}
         {query.isError && <p role="alert" className="px-2 py-6 text-center text-sm text-red-700">{query.error.message}</p>}
-        {data?.borrowNeedsPosition && <p className="mx-2 mb-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:bg-amber-950/40 dark:text-amber-100">Đơn vị này dùng hạng mục của nhà thầu khác theo đúng cương vị đã phân. Chọn <b>Cương vị</b> trên phiếu để thấy các hạng mục đó.</p>}
+        {data?.borrowNeedsPosition && <p className="mx-2 mb-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900">Đơn vị này dùng hạng mục của nhà thầu khác theo đúng cương vị đã phân. Chọn <b>Cương vị</b> trên phiếu để thấy các hạng mục đó.</p>}
         {empty && <p className="px-4 py-10 text-center text-sm text-muted-foreground">{emptyMessage(data?.reason ?? null, data?.contractorCode ?? null, Boolean(search.trim()))}</p>}
         {groups.map(([groupKey, { device, other, rows }]) => <section key={groupKey} className="py-1">
-          <h3 className="sticky top-0 z-10 flex items-center gap-2 bg-background/95 px-2 py-1.5 text-xs font-bold uppercase tracking-wide text-slate-600 backdrop-blur dark:text-muted-foreground">
-            {other && <span className="shrink-0 rounded bg-amber-100 px-1.5 py-0.5 text-[11px] normal-case tracking-normal text-amber-800 dark:bg-amber-950/50 dark:text-amber-200">{kindLabel(rows[0].kind)}</span>}
+          <h3 className="sticky top-0 z-10 flex items-center gap-2 bg-background/95 px-2 py-1.5 text-xs font-bold uppercase tracking-wide text-slate-600 backdrop-blur">
+            {other && <span className="shrink-0 rounded bg-amber-100 px-1.5 py-0.5 text-[11px] normal-case tracking-normal text-amber-800">{kindLabel(rows[0].kind)}</span>}
             <span className="min-w-0">{device}</span>
           </h3>
           {rows.map(item => {
@@ -174,25 +174,25 @@ function OverhaulItemPicker({ form, selected, onClose, onConfirm }: {
             const showMethod = expanded === key;
             // Đã nằm trong PCT khác còn hiệu lực: làm mờ để dễ nhận ra, vẫn chọn được sau khi xác nhận.
             const shared = item.usedBy.length > 0 && !checked;
-            return <div key={key} className={`rounded-lg px-2 py-2 ${checked ? "bg-violet-50 dark:bg-violet-950/30" : shared ? "opacity-60 hover:opacity-100" : "hover:bg-slate-50 dark:hover:bg-muted/40"}`}>
+            return <div key={key} className={`rounded-lg px-2 py-2 ${checked ? "bg-violet-50" : shared ? "opacity-60 hover:opacity-100" : "hover:bg-slate-50"}`}>
               <label className="flex min-h-10 cursor-pointer items-start gap-3">
                 <input type="checkbox" className="mt-1 h-5 w-5 shrink-0 accent-violet-700" checked={checked} onChange={() => toggle(item)} />
                 <span className="min-w-0 flex-1">
                   <span className="flex flex-wrap items-baseline gap-x-2">
-                    <span className="font-mono text-sm font-bold text-violet-800 dark:text-violet-200">{item.code}</span>
+                    <span className="font-mono text-sm font-bold text-violet-800">{item.code}</span>
                     {item.status && <span className="text-xs text-muted-foreground">{item.status}{item.percent ? ` · ${item.percent}` : ""}</span>}
-                    {item.sharedFrom && <span className="rounded bg-sky-100 px-1.5 py-0.5 text-[11px] font-semibold text-sky-800 dark:bg-sky-950/50 dark:text-sky-200" title="Hạng mục của nhà thầu khác, được mở thêm cho nhà thầu này">Hạng mục của {item.sharedFrom}</span>}
+                    {item.sharedFrom && <span className="rounded bg-sky-100 px-1.5 py-0.5 text-[11px] font-semibold text-sky-800" title="Hạng mục của nhà thầu khác, được mở thêm cho nhà thầu này">Hạng mục của {item.sharedFrom}</span>}
                   </span>
                   <span className="mt-0.5 block whitespace-pre-line text-sm leading-5 text-foreground">{item.content || "—"}</span>
-                  {item.usedBy.length > 0 && <span className="mt-1 block text-xs font-medium text-amber-700 dark:text-amber-300">Đã có trong PCT số {heldText(item)}</span>}
-                  {!item.usedBy.length && item.draftIn.length > 0 && <span className="mt-1 block text-xs text-amber-700 dark:text-amber-300">Đang nằm trong phiếu nháp {item.draftIn.join(", ")}</span>}
+                  {item.usedBy.length > 0 && <span className="mt-1 block text-xs font-medium text-amber-700">Đã có trong PCT số {heldText(item)}</span>}
+                  {!item.usedBy.length && item.draftIn.length > 0 && <span className="mt-1 block text-xs text-amber-700">Đang nằm trong phiếu nháp {item.draftIn.join(", ")}</span>}
                 </span>
               </label>
               {item.method && <div className="pl-8">
-                <button type="button" className="inline-flex min-h-8 items-center gap-1 text-xs font-medium text-blue-700 hover:underline dark:text-blue-300" onClick={() => setExpanded(showMethod ? null : key)}>
+                <button type="button" className="inline-flex min-h-8 items-center gap-1 text-xs font-medium text-blue-700 hover:underline" onClick={() => setExpanded(showMethod ? null : key)}>
                   {showMethod ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}Biện pháp thi công
                 </button>
-                {showMethod && <p className="mt-1 whitespace-pre-line rounded-md bg-slate-50 p-2 text-xs leading-5 text-slate-700 dark:bg-muted/40 dark:text-muted-foreground">{item.method}</p>}
+                {showMethod && <p className="mt-1 whitespace-pre-line rounded-md bg-slate-50 p-2 text-xs leading-5 text-slate-700">{item.method}</p>}
               </div>}
             </div>;
           })}

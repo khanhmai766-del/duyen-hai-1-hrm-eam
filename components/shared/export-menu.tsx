@@ -70,17 +70,17 @@ export function ExportMenu({
       <PopoverContent
         align="end"
         sideOffset={8}
-        className="w-[min(22rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border-slate-200/90 bg-white p-0 shadow-[0_22px_55px_rgba(15,23,42,0.18)] dark:border-slate-700 dark:bg-slate-900"
+        className="w-[min(22rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border-slate-200/90 bg-white p-0 shadow-[0_22px_55px_rgba(15,23,42,0.18)]"
       >
-        <div className="border-b border-sky-100 bg-[linear-gradient(135deg,#f8fbff_0%,#edf7ff_58%,#f0fdfa_100%)] px-4 py-3.5 dark:border-slate-700 dark:bg-[linear-gradient(135deg,#172033_0%,#152943_100%)]">
-          <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-sky-700 dark:text-sky-300">Xuất báo cáo</p>
-          <p className="mt-0.5 text-sm font-bold text-slate-900 dark:text-slate-50">Thiết lập file dữ liệu</p>
+        <div className="border-b border-sky-100 bg-[linear-gradient(135deg,#f8fbff_0%,#edf7ff_58%,#f0fdfa_100%)] px-4 py-3.5">
+          <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-sky-700">Xuất báo cáo</p>
+          <p className="mt-0.5 text-sm font-bold text-slate-900">Thiết lập file dữ liệu</p>
         </div>
 
         <div className="space-y-4 p-4">
           {menuActions.length > 0 && (
             <div>
-              <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">Nhập dữ liệu</p>
+              <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">Nhập dữ liệu</p>
               <div className="space-y-2">
                 {menuActions.map((action) => (
                   <button
@@ -90,15 +90,15 @@ export function ExportMenu({
                       setOpen(false);
                       action.onSelect();
                     }}
-                    className="flex w-full items-center gap-3 rounded-xl border border-sky-200 bg-sky-50/60 px-3 py-2.5 text-left transition hover:-translate-y-0.5 hover:border-sky-300 hover:bg-sky-50 hover:shadow-md dark:border-sky-500/25 dark:bg-sky-500/10"
+                    className="flex w-full items-center gap-3 rounded-xl border border-sky-200 bg-sky-50/60 px-3 py-2.5 text-left transition hover:-translate-y-0.5 hover:border-sky-300 hover:bg-sky-50 hover:shadow-md"
                   >
-                    <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-white text-sky-700 shadow-sm dark:bg-slate-800 dark:text-sky-300">
+                    <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-white text-sky-700 shadow-sm">
                       {action.icon}
                     </span>
                     <span className="min-w-0 flex-1">
-                      <span className="block text-sm font-bold text-slate-800 dark:text-slate-100">{action.label}</span>
+                      <span className="block text-sm font-bold text-slate-800">{action.label}</span>
                       {action.description && (
-                        <span className="mt-0.5 block text-[10px] text-slate-500 dark:text-slate-400">{action.description}</span>
+                        <span className="mt-0.5 block text-[10px] text-slate-500">{action.description}</span>
                       )}
                     </span>
                   </button>
@@ -108,14 +108,14 @@ export function ExportMenu({
           )}
 
           {periodControl && (
-            <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-3 dark:border-slate-700 dark:bg-slate-800/70">
+            <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-3">
               <div className="mb-2.5 flex items-start gap-2.5">
-                <span className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-sky-100 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300">
+                <span className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-sky-100 text-sky-700">
                   <CalendarRange className="h-4 w-4" />
                 </span>
                 <div>
-                  <p className="text-xs font-bold text-slate-800 dark:text-slate-100">{periodLabel}</p>
-                  <p className="mt-0.5 text-[11px] leading-4 text-slate-500 dark:text-slate-400">{periodDescription}</p>
+                  <p className="text-xs font-bold text-slate-800">{periodLabel}</p>
+                  <p className="mt-0.5 text-[11px] leading-4 text-slate-500">{periodDescription}</p>
                 </div>
               </div>
               {periodControl}
@@ -123,34 +123,34 @@ export function ExportMenu({
           )}
 
           <div>
-            <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">Định dạng file</p>
+            <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">Định dạng file</p>
             <div className="grid grid-cols-2 gap-2.5">
               <button
                 type="button"
                 onClick={() => void handleExport("excel")}
                 disabled={exporting !== null}
-                className="group/format flex min-h-16 items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50/60 px-3 text-left transition hover:-translate-y-0.5 hover:border-emerald-300 hover:bg-emerald-50 hover:shadow-md disabled:pointer-events-none disabled:opacity-60 dark:border-emerald-500/25 dark:bg-emerald-500/10"
+                className="group/format flex min-h-16 items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50/60 px-3 text-left transition hover:-translate-y-0.5 hover:border-emerald-300 hover:bg-emerald-50 hover:shadow-md disabled:pointer-events-none disabled:opacity-60"
               >
-                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-white text-emerald-600 shadow-sm dark:bg-slate-800 dark:text-emerald-400">
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-white text-emerald-600 shadow-sm">
                   {exporting === "excel" ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileSpreadsheet className="h-4 w-4" />}
                 </span>
                 <span>
-                  <span className="block text-sm font-bold text-slate-800 dark:text-slate-100">Excel</span>
-                  <span className="block text-[10px] text-slate-500 dark:text-slate-400">Tệp .xlsx</span>
+                  <span className="block text-sm font-bold text-slate-800">Excel</span>
+                  <span className="block text-[10px] text-slate-500">Tệp .xlsx</span>
                 </span>
               </button>
               <button
                 type="button"
                 onClick={() => void handleExport("pdf")}
                 disabled={exporting !== null}
-                className="group/format flex min-h-16 items-center gap-3 rounded-xl border border-amber-200 bg-amber-50/60 px-3 text-left transition hover:-translate-y-0.5 hover:border-amber-300 hover:bg-amber-50 hover:shadow-md disabled:pointer-events-none disabled:opacity-60 dark:border-amber-500/25 dark:bg-amber-500/10"
+                className="group/format flex min-h-16 items-center gap-3 rounded-xl border border-amber-200 bg-amber-50/60 px-3 text-left transition hover:-translate-y-0.5 hover:border-amber-300 hover:bg-amber-50 hover:shadow-md disabled:pointer-events-none disabled:opacity-60"
               >
-                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-white text-amber-600 shadow-sm dark:bg-slate-800 dark:text-amber-400">
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-white text-amber-600 shadow-sm">
                   {exporting === "pdf" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Printer className="h-4 w-4" />}
                 </span>
                 <span>
-                  <span className="block text-sm font-bold text-slate-800 dark:text-slate-100">PDF</span>
-                  <span className="block text-[10px] text-slate-500 dark:text-slate-400">In hoặc lưu</span>
+                  <span className="block text-sm font-bold text-slate-800">PDF</span>
+                  <span className="block text-[10px] text-slate-500">In hoặc lưu</span>
                 </span>
               </button>
             </div>

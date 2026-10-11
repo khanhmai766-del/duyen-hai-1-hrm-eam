@@ -39,11 +39,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }, [blockedByPosition, router]);
 
   return (
-    <div className="flex min-h-dvh bg-warmwhite dark:bg-background">
+    <div className="flex min-h-dvh bg-warmwhite">
       {/* Desktop sidebar — elevated above the AppShell background; collapses to an icon rail */}
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-40 hidden bg-white shadow-[6px_0_28px_-10px_rgba(15,23,42,0.22)] ring-1 ring-border/50 transition-[width] duration-300 dark:bg-card dark:shadow-[8px_0_34px_-18px_rgba(0,0,0,0.75)] lg:block",
+          "fixed inset-y-0 left-0 z-40 hidden bg-white shadow-[6px_0_28px_-10px_rgba(15,23,42,0.22)] ring-1 ring-border/50 transition-[width] duration-300 lg:block",
           collapsed ? "w-[76px]" : "w-[280px]"
         )}
       >
@@ -55,8 +55,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       {/* Mobile drawer */}
       {mobileOpen && (
         <div className="fixed inset-0 z-50 lg:hidden">
-          <div className="absolute inset-0 bg-ink/40 dark:bg-black/60" onClick={() => setMobileOpen(false)} />
-          <aside className="absolute inset-y-0 left-0 w-[280px] border-r border-border bg-white shadow-xl dark:bg-card">
+          <div className="absolute inset-0 bg-ink/40" onClick={() => setMobileOpen(false)} />
+          <aside className="absolute inset-y-0 left-0 w-[280px] border-r border-border bg-white shadow-xl">
             <Sidebar onNavigate={() => setMobileOpen(false)} />
           </aside>
         </div>
@@ -155,7 +155,7 @@ function ScrollButton({
       title={label}
       onClick={onClick}
       className={cn(
-        "flex h-11 w-11 items-center justify-center rounded-full border border-white/70 bg-gradient-to-br from-navy to-accent text-white shadow-[0_16px_34px_-18px_rgba(15,23,42,0.75)] ring-1 ring-blue-100/70 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_20px_38px_-18px_rgba(29,78,216,0.85)] focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 dark:border-slate-700 dark:ring-slate-700",
+        "flex h-11 w-11 items-center justify-center rounded-full border border-white/70 bg-gradient-to-br from-navy to-accent text-white shadow-[0_16px_34px_-18px_rgba(15,23,42,0.75)] ring-1 ring-blue-100/70 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_20px_38px_-18px_rgba(29,78,216,0.85)] focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2",
         visible ? "pointer-events-auto scale-100 opacity-100" : "pointer-events-none scale-90 opacity-0"
       )}
     >

@@ -160,7 +160,7 @@ function DeviceDetailPageContent() {
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-2 py-1 shadow-sm dark:border-white/10">
+            <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-2 py-1 shadow-sm">
               <span className="hidden pl-1 text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground sm:inline">
                 Phạm vi lý lịch
               </span>
@@ -211,7 +211,7 @@ function DeviceDetailPageContent() {
               <ManagingPositionsRow positions={device.managingPositions ?? (device.managingPosition ? [device.managingPosition] : [])} />
             </dl>
             {device.attachedInfo && (
-              <div className="mt-4 rounded-lg bg-slate-50 px-3 py-2.5 dark:bg-white/5">
+              <div className="mt-4 rounded-lg bg-slate-50 px-3 py-2.5">
                 <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground">Thông tin đính kèm</div>
                 <p className="mt-1 whitespace-pre-wrap text-[13px] leading-relaxed text-ink">{device.attachedInfo}</p>
               </div>
@@ -234,7 +234,7 @@ function DeviceDetailPageContent() {
                 {device.images.map((src, i) => (
                   <a key={i} href={src} target="_blank" rel="noopener noreferrer" className="block">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={src} alt={`Ảnh ${i + 1}`} className="aspect-square w-full rounded-lg object-cover ring-1 ring-slate-200 transition-transform hover:scale-105 dark:ring-white/10" />
+                    <img src={src} alt={`Ảnh ${i + 1}`} className="aspect-square w-full rounded-lg object-cover ring-1 ring-slate-200 transition-transform hover:scale-105" />
                   </a>
                 ))}
               </div>
@@ -262,7 +262,7 @@ function DeviceDetailPageContent() {
             <div className="grid gap-2.5">
               {device.materialDeclarations?.length ? (
                 device.materialDeclarations.slice(0, showAllDeclarations ? undefined : 4).map((item) => (
-                  <div key={item.id} className="rounded-xl border border-slate-200 bg-slate-50/50 p-3 text-sm transition-colors hover:border-blue-200 hover:bg-blue-50/40 dark:border-white/10 dark:bg-white/[0.03]">
+                  <div key={item.id} className="rounded-xl border border-slate-200 bg-slate-50/50 p-3 text-sm transition-colors hover:border-blue-200 hover:bg-blue-50/40">
                     <div className="flex items-start justify-between gap-2">
                       <div className="font-semibold leading-snug text-ink">{item.material.name}</div>
                       <MachineBadge machine={item.material.machine} />
@@ -327,7 +327,7 @@ function DeviceDetailPageContent() {
             <div className="grid gap-2.5">
               {device.materialUsage?.length ? (
                 device.materialUsage.slice(0, showAllUsage ? undefined : 3).map((item) => (
-                  <div key={item.id} className="rounded-xl border border-slate-200 bg-slate-50/50 p-3 text-sm transition-colors hover:border-emerald-200 hover:bg-emerald-50/40 dark:border-white/10 dark:bg-white/[0.03]">
+                  <div key={item.id} className="rounded-xl border border-slate-200 bg-slate-50/50 p-3 text-sm transition-colors hover:border-emerald-200 hover:bg-emerald-50/40">
                     <div className="flex items-start justify-between gap-2">
                       <div className="font-semibold leading-snug text-ink">{item.replacement.material.name}</div>
                       <MachineBadge machine={item.replacement.material.machine} />
@@ -385,8 +385,8 @@ function DeviceDetailPageContent() {
                 <ol className="relative space-y-3 pl-6 before:absolute before:inset-y-1 before:left-[5px] before:w-px before:bg-[linear-gradient(180deg,#10b981_0%,#cbd5e1_45%,transparent_100%)]">
                   {device.defectHistory.slice(0, 5).map((item) => (
                     <li key={item.id} className="relative">
-                      <span className="absolute -left-[23px] top-[15px] h-2.5 w-2.5 rounded-full bg-emerald-500 ring-4 ring-white dark:ring-[hsl(var(--card))]" />
-                      <div className="rounded-xl border border-slate-200 bg-white p-3.5 transition-colors hover:border-sky-200 hover:bg-sky-50/30 dark:border-white/10 dark:bg-white/[0.02]">
+                      <span className="absolute -left-[23px] top-[15px] h-2.5 w-2.5 rounded-full bg-emerald-500 ring-4 ring-white" />
+                      <div className="rounded-xl border border-slate-200 bg-white p-3.5 transition-colors hover:border-sky-200 hover:bg-sky-50/30">
                         <div className="flex flex-wrap items-start justify-between gap-2">
                           <p className="font-semibold leading-snug text-ink">{item.defectContent || "Chưa ghi nội dung công tác"}</p>
                           <MachineBadge machine={item.unit} />
@@ -484,7 +484,7 @@ function DeviceDetailPageContent() {
                   )}
                 </div>
               ) : (
-                <div className="flex items-center justify-center gap-2.5 rounded-xl border border-dashed border-emerald-200 bg-emerald-50/50 px-4 py-5 text-sm font-medium text-emerald-800 dark:border-emerald-400/25 dark:bg-emerald-500/10 dark:text-emerald-300">
+                <div className="flex items-center justify-center gap-2.5 rounded-xl border border-dashed border-emerald-200 bg-emerald-50/50 px-4 py-5 text-sm font-medium text-emerald-800">
                   <CheckCircle2 className="h-4 w-4 shrink-0" />
                   Thiết bị không có khiếm khuyết đang tồn đọng
                 </div>
@@ -630,15 +630,15 @@ function SectionCard({
   children: React.ReactNode;
 }) {
   const tones = {
-    navy: "bg-navy/10 text-navy dark:bg-navy/25",
-    sky: "bg-sky-50 text-sky-600 dark:bg-sky-500/15 dark:text-sky-300",
-    emerald: "bg-emerald-50 text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-300",
-    amber: "bg-amber-50 text-amber-600 dark:bg-amber-500/15 dark:text-amber-300",
-    slate: "bg-slate-100 text-slate-500 dark:bg-white/10 dark:text-slate-300",
+    navy: "bg-navy/10 text-navy",
+    sky: "bg-sky-50 text-sky-600",
+    emerald: "bg-emerald-50 text-emerald-600",
+    amber: "bg-amber-50 text-amber-600",
+    slate: "bg-slate-100 text-slate-500",
   } as const;
   return (
-    <Card className={cn("overflow-hidden border-slate-200/80 shadow-[0_12px_32px_-26px_rgba(15,23,42,0.6)] dark:border-white/10", className)}>
-      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-slate-100 px-5 py-3.5 dark:border-white/10">
+    <Card className={cn("overflow-hidden border-slate-200/80 shadow-[0_12px_32px_-26px_rgba(15,23,42,0.6)]", className)}>
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-slate-100 px-5 py-3.5">
         <div className="flex min-w-0 items-center gap-2.5">
           <span className={cn("grid h-8 w-8 shrink-0 place-items-center rounded-lg", tones[tone])}>
             <Icon className="h-4 w-4" />
@@ -647,7 +647,7 @@ function SectionCard({
             <h2 className="flex items-center gap-2 text-[15px] font-bold leading-tight text-ink">
               <span className="truncate">{title}</span>
               {count ? (
-                <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-bold tabular-nums text-amber-800 dark:bg-amber-500/20 dark:text-amber-300">
+                <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-bold tabular-nums text-amber-800">
                   {count}
                 </span>
               ) : null}
@@ -664,14 +664,14 @@ function SectionCard({
 
 /** Dấu chấm ngăn cách giữa các mục siêu dữ liệu trên một hàng. */
 function Dot() {
-  return <span aria-hidden className="text-slate-300 dark:text-white/25">·</span>;
+  return <span aria-hidden className="text-slate-300">·</span>;
 }
 
 /** Trạng thái rỗng thống nhất — trước đây mỗi mục hiển thị một kiểu chữ khác nhau. */
 function EmptyHint({ icon: Icon, children }: { icon: LucideIcon; children: React.ReactNode }) {
   return (
     <div className="flex flex-col items-center gap-2.5 py-8 text-center">
-      <span className="grid h-11 w-11 place-items-center rounded-full bg-slate-100 text-slate-400 dark:bg-white/5">
+      <span className="grid h-11 w-11 place-items-center rounded-full bg-slate-100 text-slate-400">
         <Icon className="h-5 w-5" />
       </span>
       <p className="text-[13px] text-muted-foreground">{children}</p>
@@ -696,7 +696,7 @@ function ManagingPositionsRow({ positions }: { positions: string[] }) {
             {positions.map((position) => (
               <span
                 key={position}
-                className="rounded-md bg-slate-100 px-2 py-0.5 text-[11.5px] font-semibold text-ink dark:bg-white/10"
+                className="rounded-md bg-slate-100 px-2 py-0.5 text-[11.5px] font-semibold text-ink"
                 title={position}
               >
                 {position}
@@ -711,7 +711,7 @@ function ManagingPositionsRow({ positions }: { positions: string[] }) {
 
 function Row({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
   return (
-    <div className="flex items-baseline justify-between gap-4 border-b border-slate-100 py-2.5 dark:border-white/10">
+    <div className="flex items-baseline justify-between gap-4 border-b border-slate-100 py-2.5">
       <dt className="shrink-0 text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground">{label}</dt>
       <dd className={cn("min-w-0 truncate text-right text-[13px] font-semibold text-ink", mono && "font-mono tracking-tight")}>
         {value}

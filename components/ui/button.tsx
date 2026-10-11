@@ -19,7 +19,7 @@ const buttonVariants = cva(
         // nên phải khai báo biến thể tối ngay tại đây, nếu không nền trắng sẽ chói
         // trên trang nền tối.
         soft:
-          "border border-sky-200/80 bg-[linear-gradient(135deg,#ffffff_0%,#eef7ff_100%)] font-semibold text-navy shadow-[0_8px_18px_rgba(30,64,175,0.12)] hover:border-sky-300 hover:text-accent dark:border-sky-400/25 dark:bg-[linear-gradient(135deg,hsl(222_22%_16%)_0%,hsl(217_30%_21%)_100%)] dark:shadow-[0_8px_18px_rgba(0,0,0,0.38)] dark:hover:border-sky-400/45",
+          "border border-sky-200/80 bg-[linear-gradient(135deg,#ffffff_0%,#eef7ff_100%)] font-semibold text-navy shadow-[0_8px_18px_rgba(30,64,175,0.12)] hover:border-sky-300 hover:text-accent",
         secondary: "bg-secondary text-secondary-foreground hover:bg-secondary/90",
         ghost: "hover:bg-muted hover:text-ink",
         link: "text-accent underline-offset-4 hover:underline",

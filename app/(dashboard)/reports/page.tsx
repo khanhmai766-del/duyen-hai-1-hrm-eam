@@ -508,25 +508,25 @@ function MetricCard({
   const toneClass = {
     blue: {
       card:
-        "from-blue-50 via-white to-cyan-50 ring-blue-100/80 shadow-blue-900/10 dark:from-slate-900 dark:via-blue-950/70 dark:to-cyan-950/30 dark:ring-blue-400/20",
+        "from-blue-50 via-white to-cyan-50 ring-blue-100/80 shadow-blue-900/10",
       icon: "from-blue-500 to-cyan-500 shadow-blue-500/25",
       line: "from-blue-500 via-cyan-400 to-transparent",
     },
     red: {
       card:
-        "from-rose-50 via-white to-red-50 ring-rose-100/90 shadow-rose-900/10 dark:from-slate-900 dark:via-rose-950/55 dark:to-red-950/30 dark:ring-rose-400/20",
+        "from-rose-50 via-white to-red-50 ring-rose-100/90 shadow-rose-900/10",
       icon: "from-rose-500 to-red-500 shadow-rose-500/25",
       line: "from-rose-500 via-red-400 to-transparent",
     },
     amber: {
       card:
-        "from-amber-50 via-white to-yellow-50 ring-amber-100/90 shadow-amber-900/10 dark:from-slate-900 dark:via-amber-950/55 dark:to-yellow-950/25 dark:ring-amber-300/20",
+        "from-amber-50 via-white to-yellow-50 ring-amber-100/90 shadow-amber-900/10",
       icon: "from-amber-400 to-orange-500 shadow-amber-500/25",
       line: "from-amber-400 via-orange-400 to-transparent",
     },
     green: {
       card:
-        "from-emerald-50 via-white to-teal-50 ring-emerald-100/90 shadow-emerald-900/10 dark:from-slate-900 dark:via-emerald-950/45 dark:to-teal-950/30 dark:ring-emerald-300/20",
+        "from-emerald-50 via-white to-teal-50 ring-emerald-100/90 shadow-emerald-900/10",
       icon: "from-emerald-500 to-teal-500 shadow-emerald-500/25",
       line: "from-emerald-500 via-teal-400 to-transparent",
     },
@@ -541,25 +541,25 @@ function MetricCard({
       )}
     >
       <div className={cn("absolute inset-x-0 top-0 h-1 bg-gradient-to-r", toneClass.line)} />
-      <div className="pointer-events-none absolute inset-0 opacity-[0.18] dark:opacity-[0.22]">
+      <div className="pointer-events-none absolute inset-0 opacity-[0.18]">
         <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(30,58,95,0.18)_1px,transparent_1px),linear-gradient(0deg,rgba(30,58,95,0.14)_1px,transparent_1px)] bg-[size:28px_28px]" />
         <div className="absolute inset-x-4 bottom-3 h-px bg-gradient-to-r from-transparent via-current to-transparent text-slate-400/50" />
       </div>
       <CardContent className="relative p-4">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <div className="text-[11px] font-black uppercase tracking-[0.12em] text-slate-600 dark:text-slate-300">{label}</div>
+            <div className="text-[11px] font-black uppercase tracking-[0.12em] text-slate-600">{label}</div>
             {loading ? (
-              <div className="mt-3 h-8 w-20 animate-pulse rounded bg-white/70 dark:bg-slate-700/70" />
+              <div className="mt-3 h-8 w-20 animate-pulse rounded bg-white/70" />
             ) : (
-              <div className="mt-2 text-4xl font-black leading-none text-ink dark:text-white">{value}</div>
+              <div className="mt-2 text-4xl font-black leading-none text-ink">{value}</div>
             )}
           </div>
           <div className={cn("relative flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br text-white shadow-lg ring-1 ring-white/50 before:absolute before:inset-x-1 before:top-1 before:h-1/3 before:rounded-t-xl before:bg-white/25", toneClass.icon)}>
             <Icon className="relative h-5 w-5 drop-shadow-sm" />
           </div>
         </div>
-        <div className="mt-3 text-sm font-medium text-slate-600 dark:text-slate-300">{detail}</div>
+        <div className="mt-3 text-sm font-medium text-slate-600">{detail}</div>
       </CardContent>
     </Card>
   );

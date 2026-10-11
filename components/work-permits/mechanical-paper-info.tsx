@@ -8,8 +8,8 @@ import { isSctxContractorPermit, PERMIT_DISCIPLINES, PERMIT_SOURCE_CLASSIFICATIO
 
 const control = "min-h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-[13px] shadow-sm focus:border-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-500/10";
 const label = "block space-y-1.5 text-[13px]";
-const section = "rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-border dark:bg-background sm:p-5";
-const title = "mb-4 border-b border-slate-200 pb-2 text-sm font-bold text-slate-900 dark:border-border dark:text-foreground";
+const section = "rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5";
+const title = "mb-4 border-b border-slate-200 pb-2 text-sm font-bold text-slate-900";
 
 export function MechanicalPaperInfo({ form, issued, isNew = false, numberField, positionOptions, onChange, onCompanyChange, onPickSyc }: {
   form: PermitInput;
@@ -38,10 +38,10 @@ export function MechanicalPaperInfo({ form, issued, isNew = false, numberField, 
         {numberField}
         {teamField}
         {field("managingUnit", "Đơn vị QLVH", true)}
-        <fieldset className="rounded-lg border border-slate-200 px-3 pb-3 pt-1 md:col-span-2 dark:border-border">
+        <fieldset className="rounded-lg border border-slate-200 px-3 pb-3 pt-1 md:col-span-2">
           <legend className="px-1 text-[13px] font-medium">Phân loại</legend>
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-            {Object.entries(PERMIT_SOURCE_CLASSIFICATIONS).map(([key, value]) => <label key={key} className="flex min-h-9 cursor-pointer items-center justify-center gap-2 rounded-md px-2 text-[13px] hover:bg-slate-50 dark:hover:bg-muted/50"><input type="radio" name="permit-source-classification" className="h-4 w-4 accent-blue-700" checked={form.sourceClassification === key} onChange={() => onChange("sourceClassification", key as PermitSourceClassification)} />{value}</label>)}
+            {Object.entries(PERMIT_SOURCE_CLASSIFICATIONS).map(([key, value]) => <label key={key} className="flex min-h-9 cursor-pointer items-center justify-center gap-2 rounded-md px-2 text-[13px] hover:bg-slate-50"><input type="radio" name="permit-source-classification" className="h-4 w-4 accent-blue-700" checked={form.sourceClassification === key} onChange={() => onChange("sourceClassification", key as PermitSourceClassification)} />{value}</label>)}
           </div>
         </fieldset>
         <label className={label}><span className="font-medium">Tổ máy *</span><select className={control} value={form.unit} onChange={event => onChange("unit", event.target.value as PermitInput["unit"])}>{Object.entries(PERMIT_UNITS).map(([key, value]) => <option key={key} value={key}>{value}</option>)}</select></label>
@@ -52,8 +52,8 @@ export function MechanicalPaperInfo({ form, issued, isNew = false, numberField, 
     </section>
 
     <section className={section}><h3 className={title}>Phần A. Cấp phiếu công tác</h3><div className="space-y-4">
-      <fieldset className="rounded-lg border border-slate-200 p-3 dark:border-border">
-        <legend className="px-1 text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-muted-foreground">Chuyên môn trên PCT</legend>
+      <fieldset className="rounded-lg border border-slate-200 p-3">
+        <legend className="px-1 text-xs font-semibold uppercase tracking-wide text-slate-600">Chuyên môn trên PCT</legend>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           {Object.entries(PERMIT_DISCIPLINES).map(([key, value]) => <label key={key} className="flex min-h-8 cursor-pointer items-center justify-center gap-2 text-[13px]"><input type="checkbox" className="h-4 w-4 accent-blue-700" checked={(form.disciplines ?? []).includes(key as PermitDiscipline)} onChange={event => onChange("disciplines", event.target.checked ? [...(form.disciplines ?? []), key as PermitDiscipline] : (form.disciplines ?? []).filter(item => item !== key))} />{value}</label>)}
         </div>

@@ -1,6 +1,5 @@
 "use client";
 
-import { GROUNDING_RETENTION_DESCRIPTION } from "@/lib/grounding-retention";
 /* eslint-disable @next/next/no-img-element -- ảnh riêng tư được phục vụ qua proxy S3 của ứng dụng */
 
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
@@ -118,7 +117,7 @@ import {
 } from "@/hooks/useGroundingLightning";
 
 const CONTROL =
-  "h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-base sm:text-sm text-ink outline-none transition focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100 dark:border-slate-700 dark:bg-slate-900";
+  "h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-base sm:text-sm text-ink outline-none transition focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100";
 /*
   Cột chọn và thao tác kiểm tra chỉ có trong ca hiện tại khi đủ quyền.
   Dòng rỗng và chi tiết dùng số cột tương ứng.
@@ -1462,7 +1461,7 @@ export default function GroundingLightningPage() {
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h2 className="font-bold text-ink">{isArchived ? "Danh mục cũ đã thay thế" : "Kiểm tra hằng ngày theo cương vị"}</h2>
-              <p className="text-sm text-muted-foreground">{isArchived ? "Các mục này chỉ lưu lịch sử, không thuộc danh sách kiểm tra hằng ngày." : "Mỗi ca kiểm tra và xác nhận riêng các khu vực được giao."}</p>
+              {isArchived && <p className="text-sm text-muted-foreground">Các mục này chỉ lưu lịch sử, không thuộc danh sách kiểm tra hằng ngày.</p>}
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <Label htmlFor="grounding-day">Ngày kiểm tra</Label>
@@ -1470,6 +1469,11 @@ export default function GroundingLightningPage() {
                 className={cn(CONTROL, "w-auto text-base sm:text-sm")}
                 disabled={isOverview || confirming || sign.isPending}
                 onChange={(event) => setFilters((old) => ({ ...old, inspectionDate: event.target.value || undefined }))} />
+              <Button variant={isOverview && !isArchived ? "default" : "outline"} className="h-10"
+                aria-pressed={isOverview && !isArchived} disabled={confirming || sign.isPending}
+                onClick={() => setFilters((old) => ({ ...old, shiftType: "ALL", inspectionDate: undefined }))}>
+                Tất cả thiết bị
+              </Button>
               <Button variant="outline" className="h-10" disabled={confirming || sign.isPending}
                 onClick={() => setFilters((old) => ({ ...old, inspectionDate: undefined, shiftType: "CURRENT" }))}>
                 Ca hiện tại
@@ -1480,12 +1484,7 @@ export default function GroundingLightningPage() {
               </Button>}
             </div>
           </div>
-          <Button variant={isOverview && !isArchived ? "default" : "outline"} className="h-10 w-full sm:w-auto"
-            aria-pressed={isOverview && !isArchived} disabled={confirming || sign.isPending}
-            onClick={() => setFilters((old) => ({ ...old, shiftType: "ALL", inspectionDate: undefined }))}>
-            Tất cả thiết bị
-          </Button>
-          {process.env.NODE_ENV === "development" && <Button variant={isArchived ? "default" : "outline"} className="h-10 w-full sm:ml-2 sm:w-auto"
+          {process.env.NODE_ENV === "development" && <Button variant={isArchived ? "default" : "outline"} className="h-10 w-full sm:w-auto"
             aria-pressed={isArchived} disabled={confirming || sign.isPending}
             onClick={() => setFilters((old) => ({ ...old, shiftType: "ARCHIVED", inspectionDate: undefined }))}>
             Mục cũ đã thay thế
@@ -1524,9 +1523,7 @@ export default function GroundingLightningPage() {
           <p className="text-sm font-medium text-ink" aria-live="polite">
             Cả ngày: đã xác nhận {shiftSummary.reduce((total, shift) => total + shift.confirmed, 0)}/{shiftSummary.reduce((total, shift) => total + shift.total, 0)} khu vực
           </p>
-          <p className="text-xs text-muted-foreground">Mỗi khu vực được giao cho một ca trong ngày. Nhóm có ít khu vực có thể có ca không được giao nhiệm vụ.</p>
           </>}
-          <p className="text-xs text-muted-foreground">{GROUNDING_RETENTION_DESCRIPTION}</p>
         </section>
       )}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">

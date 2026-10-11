@@ -94,7 +94,7 @@ export function OverhaulDayProgress() {
               <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm font-bold">
                 PCT {formatPermitNumber(row.permit)}
                 <span className="text-xs font-medium text-muted-foreground">{PERMIT_KINDS[row.permit.kind]}{row.permit.position ? ` · ${row.permit.position}` : ""}</span>
-                {ticked > 0 && <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[11px] font-semibold text-violet-800 dark:bg-violet-950/50 dark:text-violet-200">Đã tick {ticked}</span>}
+                {ticked > 0 && <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[11px] font-semibold text-violet-800">Đã tick {ticked}</span>}
                 <PermitDeadlineBadge permit={{ teamType: "CONTRACTOR", status: "ACTIVE", plannedEndAt: row.permit.plannedEndAt }} />
               </p>
               <p className="mt-0.5 line-clamp-2 text-sm">{row.permit.content}</p>
@@ -114,7 +114,7 @@ export function OverhaulDayProgress() {
 
     {/* Dính đáy, nằm TRÊN thanh điều hướng đáy của điện thoại (cùng mốc với tab Đang làm việc). */}
     {canExecute && rows.length > 0 && <div className="sticky bottom-[calc(5.5rem+env(safe-area-inset-bottom))] z-30 md:bottom-4">
-      <div className="flex items-center justify-between gap-3 rounded-xl border border-violet-200 bg-background/95 px-3 py-2.5 shadow-lg backdrop-blur dark:border-violet-900">
+      <div className="flex items-center justify-between gap-3 rounded-xl border border-violet-200 bg-background/95 px-3 py-2.5 shadow-lg backdrop-blur">
         <span className="min-w-0 text-sm"><ListChecks className="mr-1 inline h-4 w-4 text-violet-700" /><b>{pending.length}</b> phiếu đã tick</span>
         <Button type="button" className="h-11 shrink-0 whitespace-nowrap px-5" disabled={saving || !pending.length} onClick={saveAll}>
           {saving ? <Loader2 className="animate-spin" /> : <Save />}{saving ? "Đang lưu…" : pending.length ? `Lưu ${pending.length} phiếu` : "Lưu"}

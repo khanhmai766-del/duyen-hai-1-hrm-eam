@@ -195,7 +195,7 @@ function PersistentHorizontalScroll({ children }: { children: React.ReactNode })
           aria-valuemax={Math.round(maximumScrollLeft)}
           aria-valuenow={Math.round(scrollLeft)}
           tabIndex={0}
-          className="fixed bottom-5 z-[70] h-10 rounded-full border border-slate-300 bg-white/95 shadow-[0_6px_24px_rgba(15,23,42,0.28)] outline-none backdrop-blur-md focus-visible:ring-2 focus-visible:ring-blue-500 dark:border-slate-600 dark:bg-slate-900/95"
+          className="fixed bottom-5 z-[70] h-10 rounded-full border border-slate-300 bg-white/95 shadow-[0_6px_24px_rgba(15,23,42,0.28)] outline-none backdrop-blur-md focus-visible:ring-2 focus-visible:ring-blue-500"
           style={{ left: geometry.left, width: geometry.width }}
           title="Kéo hoặc bấm nút để xem các cột bên trái và bên phải"
           onKeyDown={(event) => {
@@ -235,7 +235,7 @@ function PersistentHorizontalScroll({ children }: { children: React.ReactNode })
         >
           <button
             type="button"
-            className="absolute left-1 top-1 flex h-8 w-8 items-center justify-center rounded-full text-slate-700 transition-colors hover:bg-slate-200 active:bg-slate-300 disabled:opacity-35 dark:text-slate-200 dark:hover:bg-slate-700"
+            className="absolute left-1 top-1 flex h-8 w-8 items-center justify-center rounded-full text-slate-700 transition-colors hover:bg-slate-200 active:bg-slate-300 disabled:opacity-35"
             aria-label="Cuộn bảng sang trái"
             disabled={scrollLeft <= 0}
             onClick={() => setHorizontalPosition(scrollLeft - Math.max(240, geometry.viewportWidth * 0.6))}
@@ -243,12 +243,12 @@ function PersistentHorizontalScroll({ children }: { children: React.ReactNode })
             <ChevronLeft className="h-5 w-5" />
           </button>
           <div
-            className="pointer-events-none absolute top-1/2 h-3 -translate-y-1/2 rounded-full bg-slate-200 ring-1 ring-inset ring-slate-300 dark:bg-slate-700 dark:ring-slate-600"
+            className="pointer-events-none absolute top-1/2 h-3 -translate-y-1/2 rounded-full bg-slate-200 ring-1 ring-inset ring-slate-300"
             style={{ left: trackInset, width: trackWidth }}
           />
           <div
             aria-hidden="true"
-            className="absolute top-1/2 h-4 -translate-y-1/2 cursor-grab touch-none rounded-full bg-blue-600 shadow-[0_1px_4px_rgba(37,99,235,0.45)] transition-colors hover:bg-blue-700 active:cursor-grabbing active:bg-blue-800 dark:bg-blue-400 dark:hover:bg-blue-300"
+            className="absolute top-1/2 h-4 -translate-y-1/2 cursor-grab touch-none rounded-full bg-blue-600 shadow-[0_1px_4px_rgba(37,99,235,0.45)] transition-colors hover:bg-blue-700 active:cursor-grabbing active:bg-blue-800"
             style={{
               left: trackInset + thumbOffset,
               width: thumbWidth,
@@ -277,7 +277,7 @@ function PersistentHorizontalScroll({ children }: { children: React.ReactNode })
           />
           <button
             type="button"
-            className="absolute right-1 top-1 flex h-8 w-8 items-center justify-center rounded-full text-slate-700 transition-colors hover:bg-slate-200 active:bg-slate-300 disabled:opacity-35 dark:text-slate-200 dark:hover:bg-slate-700"
+            className="absolute right-1 top-1 flex h-8 w-8 items-center justify-center rounded-full text-slate-700 transition-colors hover:bg-slate-200 active:bg-slate-300 disabled:opacity-35"
             aria-label="Cuộn bảng sang phải"
             disabled={scrollLeft >= maximumScrollLeft - 1}
             onClick={() => setHorizontalPosition(scrollLeft + Math.max(240, geometry.viewportWidth * 0.6))}

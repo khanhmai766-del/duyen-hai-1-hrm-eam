@@ -1624,8 +1624,8 @@ function SafeOperationUnitRow({
 /* ---- Operation info (drills) ---- */
 // Tông màu thẻ diễn tập theo ngày: sắp tới (vàng) · đúng hôm nay (xanh) · đã qua (xám).
 const EVENT_TONES = {
-  future: { card: "border-amber-300 bg-amber-50 dark:border-amber-500/40 dark:bg-amber-500/10", date: "bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-200" },
-  today: { card: "border-emerald-300 bg-emerald-50 dark:border-emerald-500/40 dark:bg-emerald-500/10", date: "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-200" },
+  future: { card: "border-amber-300 bg-amber-50", date: "bg-amber-100 text-amber-800" },
+  today: { card: "border-emerald-300 bg-emerald-50", date: "bg-emerald-100 text-emerald-800" },
   past: { card: "border-border", date: "bg-muted text-ink" },
 } as const;
 

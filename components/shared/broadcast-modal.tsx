@@ -59,7 +59,7 @@ export function BroadcastModal() {
         role="dialog"
         aria-modal="true"
         aria-labelledby="broadcast-title"
-        className="relative w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-black/5 animate-in zoom-in-95 dark:bg-card"
+        className="relative w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-black/5 animate-in zoom-in-95"
       >
         {/* Header gradient */}
         <div className="relative flex items-center gap-3 bg-gradient-to-br from-[#183a63] via-[#1264c8] to-[#00a6c8] px-5 py-4 text-white">

@@ -296,7 +296,7 @@ function PermitGuideDialog({ onClose }: { onClose: () => void }) {
         {/* Lưu đồ: chỉ tên bước, nhìn một lượt là thấy thứ tự; chi tiết nằm ở các thẻ bên dưới. */}
         <ol className="flex flex-wrap items-center gap-y-2 rounded-xl border border-border bg-muted/25 px-3 py-3" aria-label="Lưu đồ các bước">
           {section.steps.map((step, index) => <li key={step.title} className="flex items-center">
-            <span className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-slate-800 shadow-sm dark:bg-background dark:text-foreground">
+            <span className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-slate-800 shadow-sm">
               <span className="grid h-5 w-5 place-items-center rounded-full bg-[#00558F] text-[10px] font-bold text-white">{index + 1}</span>{step.title}
             </span>
             {index < section.steps.length - 1 && <ChevronRight className="mx-1 h-4 w-4 shrink-0 text-muted-foreground/60" />}
@@ -307,14 +307,14 @@ function PermitGuideDialog({ onClose }: { onClose: () => void }) {
             <span className="mt-0.5 grid h-7 w-7 place-items-center rounded-full bg-[#00558F] text-xs font-bold text-white">{index + 1}</span>
             <div className="min-w-0">
               <h3 className="text-sm font-semibold text-foreground">{step.title}</h3>
-              {step.where && <p className="mt-0.5 text-xs font-medium text-blue-800 dark:text-blue-300">{step.where}</p>}
-              <ul className="mt-1.5 list-disc space-y-1 pl-4 text-[13px] leading-5 text-slate-700 dark:text-muted-foreground">
+              {step.where && <p className="mt-0.5 text-xs font-medium text-blue-800">{step.where}</p>}
+              <ul className="mt-1.5 list-disc space-y-1 pl-4 text-[13px] leading-5 text-slate-700">
                 {step.points.map(point => <li key={point}>{point}</li>)}
               </ul>
             </div>
           </section>)}
         </div>
-        {section.note && <p className="rounded-lg bg-amber-50 p-3 text-xs leading-5 text-amber-900 dark:bg-amber-950/40 dark:text-amber-100">{section.note}</p>}
+        {section.note && <p className="rounded-lg bg-amber-50 p-3 text-xs leading-5 text-amber-900">{section.note}</p>}
       </div>
     </DialogContent>
   </Dialog>;

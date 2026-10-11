@@ -26,27 +26,6 @@
     --radius: 0.625rem;
   }
 
-  .dark {
-    --background: 222 24% 10%;
-    --foreground: 210 20% 92%;
-    --card: 222 22% 14%;
-    --card-foreground: 210 20% 92%;
-    --popover: 222 22% 14%;
-    --popover-foreground: 210 20% 92%;
-    --primary: 213 51% 25%;
-    --primary-foreground: 0 0% 100%;
-    --secondary: 33 43% 29%;
-    --secondary-foreground: 0 0% 100%;
-    --muted: 220 16% 20%;
-    --muted-foreground: 215 16% 64%;
-    --accent: 217 91% 60%;
-    --accent-foreground: 0 0% 100%;
-    --destructive: 0 72% 51%;
-    --destructive-foreground: 0 0% 100%;
-    --border: 220 14% 24%;
-    --input: 220 14% 24%;
-    --ring: 217 91% 60%;
-  }
 }
 
 @layer base {
@@ -55,9 +34,6 @@
   }
   html {
     color-scheme: light;
-  }
-  html.dark {
-    color-scheme: dark;
   }
   body {
     @apply bg-background text-foreground antialiased;
@@ -108,101 +84,6 @@
       transform: translate(-50%, -50%);
     }
   }
-  /* Smooth the light↔dark flip without animating page transitions. */
-  html.theme-ready body,
-  html.theme-ready body * {
-    transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
-  }
-  @media (prefers-reduced-motion: reduce) {
-    html.theme-ready body,
-    html.theme-ready body * {
-      transition: none;
-    }
-  }
-}
-
-/* ───────────────────────────────────────────────────────────────────────────
-   Dark-mode bridge for literal brand utilities.
-   Several components use literal brand colors (text-navy, bg-warmwhite, bg-white)
-   and Tailwind slate/gray shades directly rather than semantic tokens. Rather
-   than rewrite every file, we remap the literal utilities under `.dark` so they
-   adapt. Opacity variants (e.g. bg-white/30, bg-ink/60 scrims) are separate
-   classes and are intentionally left untouched.
-   ─────────────────────────────────────────────────────────────────────────── */
-@layer utilities {
-  .dark .text-navy {
-    color: hsl(213 55% 72%);
-  }
-  .dark .text-ink {
-    color: hsl(var(--foreground));
-  }
-  .dark .bg-warmwhite {
-    background-color: hsl(var(--background));
-  }
-  .dark .bg-white {
-    background-color: hsl(var(--card));
-  }
-  .dark .bg-white\/70 {
-    background-color: hsl(var(--card) / 0.72);
-  }
-  .dark .bg-white\/80 {
-    background-color: hsl(var(--card) / 0.82);
-  }
-  .dark .bg-white\/90,
-  .dark .bg-white\/95 {
-    background-color: hsl(var(--card) / 0.92);
-  }
-  /* Light-blue active states (sidebar items) → translucent accent on dark. */
-  .dark .bg-\[\#EFF6FF\] {
-    background-color: hsl(217 40% 22%);
-  }
-
-  /* Neutral slate/gray surfaces → dark surfaces */
-  .dark .bg-slate-50,
-  .dark .bg-slate-100,
-  .dark .bg-gray-50,
-  .dark .bg-gray-100 {
-    background-color: hsl(var(--muted));
-  }
-  .dark .bg-slate-200,
-  .dark .bg-gray-200 {
-    background-color: hsl(220 14% 26%);
-  }
-  /* Neutral slate/gray text → readable on dark */
-  .dark .text-slate-900,
-  .dark .text-slate-800,
-  .dark .text-slate-700,
-  .dark .text-gray-900,
-  .dark .text-gray-800,
-  .dark .text-gray-700 {
-    color: hsl(210 18% 88%);
-  }
-  .dark .text-slate-600,
-  .dark .text-slate-500,
-  .dark .text-gray-600,
-  .dark .text-gray-500 {
-    color: hsl(215 14% 62%);
-  }
-  .dark .text-slate-400,
-  .dark .text-gray-400 {
-    color: hsl(215 12% 52%);
-  }
-  /* Neutral slate/gray borders → dark borders */
-  .dark .border-slate-100,
-  .dark .border-slate-200,
-  .dark .border-blue-100,
-  .dark .border-gray-100,
-  .dark .border-gray-200 {
-    border-color: hsl(var(--border));
-  }
-  .dark .ring-blue-100 {
-    --tw-ring-color: hsl(var(--border));
-  }
-  .dark .ring-white\/50,
-  .dark .ring-white\/60,
-  .dark .ring-white\/70 {
-    --tw-ring-color: hsl(210 40% 96% / 0.14);
-  }
 }
 
 /* Subtle scrollbar for enterprise feel */
@@ -216,36 +97,10 @@
 ::-webkit-scrollbar-thumb:hover {
   @apply bg-slate-400;
 }
-.dark ::-webkit-scrollbar-thumb {
-  background-color: hsl(220 14% 30%);
-}
-.dark ::-webkit-scrollbar-thumb:hover {
-  background-color: hsl(217 18% 42%);
-}
 
 /* 3D bar charts: soft drop shadow on each bar for depth */
 .chart-3d .recharts-bar-rectangle path {
   filter: drop-shadow(0 6px 7px rgba(15, 23, 42, 0.22));
-}
-
-/* Recharts dark-mode: the tooltip uses inline white styles, and axis/grid
-   default to dark strokes — remap them so charts stay legible on dark. */
-.dark .recharts-default-tooltip {
-  background-color: hsl(var(--popover)) !important;
-  border-color: hsl(var(--border)) !important;
-  color: hsl(var(--popover-foreground)) !important;
-}
-.dark .recharts-tooltip-item,
-.dark .recharts-tooltip-label {
-  color: hsl(var(--popover-foreground)) !important;
-}
-.dark .recharts-cartesian-axis-tick-value tspan,
-.dark .recharts-text {
-  fill: hsl(var(--muted-foreground));
-}
-.dark .recharts-cartesian-grid line,
-.dark .recharts-cartesian-axis line {
-  stroke: hsl(var(--border));
 }
 
 /* Safety slogan ticker: floats up + fades in, holds ~6s at centre, then floats
@@ -592,11 +447,6 @@
   background-size: 100% 22px, 100% 100%;
   background-position: left bottom, left top;
   background-repeat: no-repeat, no-repeat;
-}
-
-/* Nền tối: cùng hoa văn nhưng dịu lại, kẻo trên nền sẫm nó nổi hơn cả con số. */
-.dark .kpi-tex {
-  opacity: 0.5;
 }
 
 /* Print styles for QR + reports */

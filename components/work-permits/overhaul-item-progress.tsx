@@ -73,12 +73,12 @@ export function OverhaulItemProgressEditor({ items, previous, draft, onChange, n
         const entry = draft[key] ?? { done: false, percent: "0", note: "" };
         const before = previous[key];
         const showMethod = expanded === key;
-        return <div key={key} className={`rounded-lg border p-3 ${entry.done ? "border-violet-300 bg-violet-50/60 dark:border-violet-800 dark:bg-violet-950/30" : "border-border"}`}>
+        return <div key={key} className={`rounded-lg border p-3 ${entry.done ? "border-violet-300 bg-violet-50/60" : "border-border"}`}>
           <label className="flex cursor-pointer items-start gap-3">
             <input type="checkbox" className="mt-0.5 h-5 w-5 shrink-0 accent-violet-700" checked={entry.done} onChange={e => set(key, { done: e.target.checked })} />
             <span className="min-w-0 flex-1">
               <span className="flex flex-wrap items-baseline gap-x-2">
-                <span className="font-mono text-sm font-bold text-violet-800 dark:text-violet-200">{item.code}</span>
+                <span className="font-mono text-sm font-bold text-violet-800">{item.code}</span>
                 {item.device && <span className="text-xs text-muted-foreground">{item.device}</span>}
                 <span className="text-xs text-muted-foreground">{before !== undefined ? `· lần trước ${before}%` : "· chưa có tiến độ"}</span>
               </span>
@@ -86,10 +86,10 @@ export function OverhaulItemProgressEditor({ items, previous, draft, onChange, n
             </span>
           </label>
           {item.method && <div className="pl-8">
-            <button type="button" className="inline-flex min-h-8 items-center gap-1 text-xs font-medium text-blue-700 hover:underline dark:text-blue-300" onClick={() => setExpanded(showMethod ? null : key)}>
+            <button type="button" className="inline-flex min-h-8 items-center gap-1 text-xs font-medium text-blue-700 hover:underline" onClick={() => setExpanded(showMethod ? null : key)}>
               {showMethod ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}Biện pháp thi công
             </button>
-            {showMethod && <p className="mt-1 whitespace-pre-line rounded-md bg-slate-50 p-2 text-xs leading-5 text-slate-700 dark:bg-muted/40 dark:text-muted-foreground">{item.method}</p>}
+            {showMethod && <p className="mt-1 whitespace-pre-line rounded-md bg-slate-50 p-2 text-xs leading-5 text-slate-700">{item.method}</p>}
           </div>}
           {entry.done && <div className="mt-2 space-y-2 sm:pl-8">
             <div className="flex items-center gap-3">
@@ -101,7 +101,7 @@ export function OverhaulItemProgressEditor({ items, previous, draft, onChange, n
         </div>;
       })}
     </div>
-    {!updating && doneCount === 0 && <label className="flex items-start gap-2 rounded-lg bg-amber-50 p-3 text-sm text-amber-950 dark:bg-amber-950/30 dark:text-amber-100">
+    {!updating && doneCount === 0 && <label className="flex items-start gap-2 rounded-lg bg-amber-50 p-3 text-sm text-amber-950">
       <input type="checkbox" className="mt-0.5 h-4 w-4 accent-amber-600" checked={noneDone} onChange={e => onNoneDone(e.target.checked)} />
       Không hạng mục nào được thực hiện trong lần làm việc này (Sheet ghi “Không thực hiện”)
     </label>}

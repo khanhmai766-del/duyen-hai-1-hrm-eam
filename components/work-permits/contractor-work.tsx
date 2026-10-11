@@ -76,7 +76,7 @@ export function PermitCompanyDirectory() {
   const hitLine = (row: { code: string; company: string }) => {
     const hits = companyMatches(row) ? undefined : personHits.get(row.company);
     if (!hits) return null;
-    return <span className="mt-1 block text-xs font-normal text-emerald-800 dark:text-emerald-300">Khớp: {hits.slice(0, 4).map(person => `${person.name}${person.canCommand ? " (CHTT)" : ""}`).join(", ")}{hits.length > 4 ? ` và ${hits.length - 4} người khác` : ""}</span>;
+    return <span className="mt-1 block text-xs font-normal text-emerald-800">Khớp: {hits.slice(0, 4).map(person => `${person.name}${person.canCommand ? " (CHTT)" : ""}`).join(", ")}{hits.length > 4 ? ` và ${hits.length - 4} người khác` : ""}</span>;
   };
   const colCount = canWrite ? 8 : 7;
   const workingTotal = companies.data?.meta.working ?? 0;
@@ -113,10 +113,10 @@ export function PermitCompanyDirectory() {
         <div className="divide-y divide-border md:hidden">{rows.map(row => {
           const expanded = openCompany === row.company;
           const toggle = () => setOpenCompany(expanded ? null : row.company);
-          return <article key={row.company} className={expanded ? "bg-sky-50/70 dark:bg-sky-950/20" : undefined}>
+          return <article key={row.company} className={expanded ? "bg-sky-50/70" : undefined}>
             <button type="button" aria-expanded={expanded} onClick={toggle} className="flex w-full items-start gap-3 px-4 pb-2 pt-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500">
               <span className="min-w-0 flex-1">
-                <span className="flex flex-wrap items-center gap-x-2 gap-y-1">{row.code && <span className="rounded-md bg-blue-50 px-1.5 py-0.5 text-xs font-bold tracking-wide text-blue-800 dark:bg-blue-950/40 dark:text-blue-200">{row.code}</span>}<span className="text-[15px] font-semibold leading-5 text-ink">{row.company}</span><CompanyScopeBadge row={row} /></span>
+                <span className="flex flex-wrap items-center gap-x-2 gap-y-1">{row.code && <span className="rounded-md bg-blue-50 px-1.5 py-0.5 text-xs font-bold tracking-wide text-blue-800">{row.code}</span>}<span className="text-[15px] font-semibold leading-5 text-ink">{row.company}</span><CompanyScopeBadge row={row} /></span>
                 {hitLine(row)}<span className="mt-1 block text-xs text-muted-foreground"><b className="text-foreground">{row.total}</b> người{row.working > 0 && <> · <b className="text-emerald-700">{row.working}</b> đang làm việc</>} · CHTT <b className={row.commanders ? "text-emerald-700" : "text-amber-700"}>{row.commanders}</b>{row.active < row.total && <span className="text-amber-700"> · {row.total - row.active} ngừng hoạt động</span>}</span>
               </span>
               <ChevronDown className={`mt-0.5 h-5 w-5 shrink-0 text-muted-foreground transition-transform ${expanded ? "rotate-180" : ""}`} />
@@ -126,7 +126,7 @@ export function PermitCompanyDirectory() {
               <Button type="button" size="sm" variant="outline" className="h-10 w-10 px-0" aria-label={`Sửa đơn vị ${row.company}`} onClick={() => setCompanyForm({ mode: "rename", company: row.company })}><Pencil size={16} /></Button>
               {row.total === 0 && <Button type="button" size="sm" variant="outline" className="h-10 w-10 px-0 text-red-700 hover:text-red-800" disabled={removeCompany.isPending} aria-label={`Xóa đơn vị ${row.company}`} onClick={() => void deleteCompany(row.company)}><Trash2 size={16} /></Button>}
             </div>}
-            {expanded && <div className="border-t border-sky-100 px-4 pb-4 pt-3 dark:border-sky-900">
+            {expanded && <div className="border-t border-sky-100 px-4 pb-4 pt-3">
               {people.isPending ? <p role="status" className="text-sm text-muted-foreground">Đang tải nhân sự…</p>
                 : people.isError ? <p role="alert" className="text-sm text-red-700">{people.error.message}</p>
                 : !people.data?.data.length ? <p className="text-sm text-muted-foreground">Đơn vị này chưa có nhân sự.</p>
@@ -201,10 +201,10 @@ function RoleSwitch({ person }: { person: PermitPerson }) {
   return <button type="button" role="switch" aria-checked={on} aria-label={`Vai trò của ${person.name}: ${on ? "CHTT" : "Nhân viên"}. Bấm để đổi`}
     disabled={save.isPending} onClick={() => void toggle()} title={on ? "Bấm để chuyển về Nhân viên" : "Bấm để chuyển thành CHTT"}
     className="group inline-flex min-h-8 cursor-pointer items-center gap-2 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:cursor-wait disabled:opacity-60">
-    <span className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${on ? "bg-emerald-500" : "bg-slate-300 dark:bg-slate-600"}`}>
+    <span className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${on ? "bg-emerald-500" : "bg-slate-300"}`}>
       <span className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${on ? "translate-x-5" : "translate-x-0"}`} />
     </span>
-    <span className={`w-[4.5rem] text-left text-[11px] font-semibold uppercase tracking-wide ${on ? "text-emerald-700" : "text-slate-600 dark:text-slate-300"}`}>{on ? "CHTT" : "Nhân viên"}</span>
+    <span className={`w-[4.5rem] text-left text-[11px] font-semibold uppercase tracking-wide ${on ? "text-emerald-700" : "text-slate-600"}`}>{on ? "CHTT" : "Nhân viên"}</span>
   </button>;
 }
 
@@ -215,7 +215,7 @@ function RoleSwitch({ person }: { person: PermitPerson }) {
 function PersonPhoto({ person, className }: { person: PermitPerson; className: string }) {
   const [failed, setFailed] = useState(false);
   const initial = person.name.trim().split(/\s+/).pop()?.[0]?.toUpperCase() ?? "?";
-  if (!person.photoUrl || failed) return <span aria-hidden className={cn(className, "flex items-center justify-center bg-slate-100 font-semibold text-slate-400 dark:bg-muted")}>{initial}</span>;
+  if (!person.photoUrl || failed) return <span aria-hidden className={cn(className, "flex items-center justify-center bg-slate-100 font-semibold text-slate-400")}>{initial}</span>;
   // eslint-disable-next-line @next/next/no-img-element -- ảnh qua proxy S3 có đăng nhập, không đi qua next/image
   return <img src={person.photoUrl} alt={`Ảnh ${person.name}`} width={36} height={48} loading="lazy" decoding="async" className={cn(className, "object-cover")} onError={() => setFailed(true)} />;
 }
@@ -234,7 +234,7 @@ function CompanyPeopleGroups({ people, ...rest }: CompanyPeopleProps) {
   return <div className="space-y-2">
     <div role="tablist" aria-label="Nhóm nhân sự" className="inline-flex rounded-lg border border-border bg-background p-0.5">
       {([["OVERHAUL", overhaul.length], ["SCTX", sctx.length]] as const).map(([key, count]) => <button key={key} type="button" role="tab" aria-selected={group === key} onClick={() => setPicked(key)}
-        className={cn("min-h-9 rounded-md px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500", group === key ? "bg-[#00558F] text-white" : "text-slate-600 hover:bg-muted dark:text-slate-300")}>
+        className={cn("min-h-9 rounded-md px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500", group === key ? "bg-[#00558F] text-white" : "text-slate-600 hover:bg-muted")}>
         Nhân sự {PERMIT_CONTRACTOR_SCOPES[key]} <span className="tabular-nums opacity-80">({count})</span>
       </button>)}
     </div>
@@ -254,11 +254,11 @@ function CompanyPeopleTable({ people, canWrite, removing, onEdit, onRemove, with
   const tel = (phone: string) => `tel:${phone.replace(/[^+\d]/g, "")}`;
   return <>
   {/* Điện thoại: mỗi người một thẻ — tên, số thẻ, SĐT bấm gọi, vai trò, nút sửa/xoá 40px. */}
-  <div className="space-y-2 md:hidden">{people.map(person => <div key={person.id} className="flex items-start gap-2 rounded-lg border border-slate-200 bg-white p-3 dark:border-border dark:bg-background">
-    {withPhoto && <PersonPhoto person={person} className="h-14 w-[42px] shrink-0 rounded-md border border-slate-200 text-base dark:border-border" />}
+  <div className="space-y-2 md:hidden">{people.map(person => <div key={person.id} className="flex items-start gap-2 rounded-lg border border-slate-200 bg-white p-3">
+    {withPhoto && <PersonPhoto person={person} className="h-14 w-[42px] shrink-0 rounded-md border border-slate-200 text-base" />}
     <div className="min-w-0 flex-1">
       <p className="text-[15px] font-semibold leading-5 text-ink">{person.name}</p>
-      {person.jobTitle?.trim() && <p className="text-xs font-medium text-slate-600 dark:text-slate-300">{person.jobTitle.trim()}</p>}
+      {person.jobTitle?.trim() && <p className="text-xs font-medium text-slate-600">{person.jobTitle.trim()}</p>}
       {person.phone && <p className="mt-0.5 text-xs"><a className="font-medium text-blue-700 underline" href={tel(person.phone)}>{person.phone}</a></p>}
       <div className="mt-1.5 flex flex-wrap items-center gap-1.5">{role(person)}</div>
       {works(person)}
@@ -275,7 +275,7 @@ function CompanyPeopleTable({ people, canWrite, removing, onEdit, onRemove, with
       </tr></thead>
       <tbody>{people.map((person, index) => <tr key={person.id} className="border-b border-slate-100 align-middle last:border-0">
         <td className="px-3 py-2 text-center tabular-nums text-slate-500">{index + 1}</td>
-        {withPhoto && <td className="px-2 py-1.5"><PersonPhoto person={person} className="mx-auto h-12 w-9 rounded-md border border-slate-200 text-sm dark:border-border" /></td>}
+        {withPhoto && <td className="px-2 py-1.5"><PersonPhoto person={person} className="mx-auto h-12 w-9 rounded-md border border-slate-200 text-sm" /></td>}
         <td className="px-3 py-2">
           <span className="font-semibold text-ink">{person.name}</span>
           {works(person)}
@@ -407,7 +407,7 @@ export function PermitPeopleDirectory({ onClose, onPick, onPickMany, existingMem
       {pickOnly && <p className="text-xs text-muted-foreground">PCT Đại tu chỉ chọn người đã được đánh dấu CHTT. Cần thêm CHTT thì đánh dấu ở mục <b>Nhân sự nhà thầu</b>.</p>}
       {query.isPending ? <p role="status">Đang tải danh sách…</p> : query.isError ? <p role="alert" className="text-red-700">{query.error.message}</p> : <div className="space-y-2">
         {query.data?.data.map(p => <div key={p.id} className="flex items-center justify-between gap-3 rounded-lg border border-border p-3">
-          <div><b>{p.name}</b><p className="text-sm text-muted-foreground">{p.code} · {p.company}</p><p className="text-xs text-muted-foreground">{p.canCommand ? "CHTT / nhân viên công tác" : "Nhân viên công tác"}{!p.isActive ? " · Ngừng hoạt động" : ""}</p>{cardExpired(p.cardExpiresAt) && <p className="text-xs font-medium text-red-700">Thẻ ra vào hết hạn {new Date(p.cardExpiresAt!).toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })}</p>}{p.activeWorks?.map(work => <p key={work.sessionId} className="mt-1 text-xs font-medium text-amber-700 dark:text-amber-300">Đang làm PCT {formatPermitNumber(work.permit)} · {PERMIT_KINDS[work.permit.kind]} · {work.role === "CHTT" ? "CHTT" : "Nhân viên công tác"} · từ {fmt(work.openedAt)}</p>)}</div>
+          <div><b>{p.name}</b><p className="text-sm text-muted-foreground">{p.code} · {p.company}</p><p className="text-xs text-muted-foreground">{p.canCommand ? "CHTT / nhân viên công tác" : "Nhân viên công tác"}{!p.isActive ? " · Ngừng hoạt động" : ""}</p>{cardExpired(p.cardExpiresAt) && <p className="text-xs font-medium text-red-700">Thẻ ra vào hết hạn {new Date(p.cardExpiresAt!).toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })}</p>}{p.activeWorks?.map(work => <p key={work.sessionId} className="mt-1 text-xs font-medium text-amber-700">Đang làm PCT {formatPermitNumber(work.permit)} · {PERMIT_KINDS[work.permit.kind]} · {work.role === "CHTT" ? "CHTT" : "Nhân viên công tác"} · từ {fmt(work.openedAt)}</p>)}</div>
           <div className="flex gap-2">{onPickMany && <label className="flex cursor-pointer items-center gap-2 whitespace-nowrap text-sm"><input type="checkbox" aria-label={`Chọn ${p.name} · ${p.code}`} checked={alreadyAdded(p) || selected.some(person => person.id === p.id)} disabled={alreadyAdded(p) || (!selected.some(person => person.id === p.id) && selected.length >= capacity)} onChange={() => toggle(p)} />{alreadyAdded(p) ? "Đã có" : "Chọn"}</label>}{onPick && <Button type="button" size="sm" onClick={() => onPick(p)}>Chọn</Button>}{!onPickMany && canWrite && <Button size="sm" variant="outline" aria-label={`Sửa hồ sơ ${p.name}`} onClick={() => setEditing(p)}><Pencil /></Button>}{!onPick && !onPickMany && query.data?.meta.canWrite && <Button size="sm" variant="outline" className="text-red-700 hover:text-red-800" disabled={remove.isPending} aria-label={`Xóa hồ sơ ${p.name}`} onClick={() => void removePerson(p)}><Trash2 /></Button>}</div>
         </div>)}
         {!query.data?.data.length && <p className="py-8 text-center text-muted-foreground">Chưa có nhân sự phù hợp.</p>}
@@ -424,7 +424,7 @@ export function PermitPeopleDirectory({ onClose, onPick, onPickMany, existingMem
     <DialogContent className="max-w-3xl">
       <DialogTitle>{heading}</DialogTitle>
       <DialogDescription>{description}</DialogDescription>
-      {company && <p className="rounded-lg bg-sky-50 px-3 py-2 text-sm text-sky-950 dark:bg-sky-950/30 dark:text-sky-100">Chỉ hiện nhân sự của đơn vị công tác trên phiếu: <b>{company}</b>{scope && <> · nhóm <b>{PERMIT_CONTRACTOR_SCOPES[scope]}</b></>}</p>}
+      {company && <p className="rounded-lg bg-sky-50 px-3 py-2 text-sm text-sky-950">Chỉ hiện nhân sự của đơn vị công tác trên phiếu: <b>{company}</b>{scope && <> · nhóm <b>{PERMIT_CONTRACTOR_SCOPES[scope]}</b></>}</p>}
       {body}
     </DialogContent>
   </Dialog>;
@@ -518,8 +518,8 @@ export function PermitMembersEditor({ members, onChange, commander, company, sco
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-semibold leading-5">{m.name}</p>
           <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
-            <span className="max-w-[10rem] truncate rounded bg-blue-50 px-1.5 py-px text-[11px] font-bold tracking-wide text-blue-800 dark:bg-blue-950/40 dark:text-blue-200" title={m.company}>{unitCode || m.company}</span>
-            {trained === true && <span className="rounded bg-emerald-50 px-1.5 py-px text-[11px] font-semibold text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300" title={person?.trainingResult || undefined}>✓ Đã HL ATVSLĐ{person?.trainedAt ? ` · ${new Date(person.trainedAt).toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })}` : ""}</span>}
+            <span className="max-w-[10rem] truncate rounded bg-blue-50 px-1.5 py-px text-[11px] font-bold tracking-wide text-blue-800" title={m.company}>{unitCode || m.company}</span>
+            {trained === true && <span className="rounded bg-emerald-50 px-1.5 py-px text-[11px] font-semibold text-emerald-700" title={person?.trainingResult || undefined}>✓ Đã HL ATVSLĐ{person?.trainedAt ? ` · ${new Date(person.trainedAt).toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })}` : ""}</span>}
             {trained === false && <span className="rounded bg-amber-50 px-1.5 py-px text-[11px] font-semibold text-amber-800">Chưa có HL ATVSLĐ</span>}
           </div>
         </div>
@@ -543,7 +543,7 @@ export function ContractorWorkSummary({ permit }: { permit: PermitDetailRow }) {
   const live = permit.sessions.find(s => !s.endedAt);
   const inside = live ? 1 + live.members.filter(m => !isSessionCommander(m, live) && attendanceInside(m)).length : 0;
   const last = permit.sessions[0];
-  return <section className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border p-4 ${live ? "border-emerald-300 bg-emerald-50/60 dark:bg-emerald-950/20" : "border-sky-200 bg-sky-50/40 dark:bg-sky-950/20"}`}>
+  return <section className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border p-4 ${live ? "border-emerald-300 bg-emerald-50/60" : "border-sky-200 bg-sky-50/40"}`}>
     <div className="min-w-0 space-y-0.5">
       <p className="text-sm font-semibold">{live ? <><span className="mr-1.5 inline-block h-2 w-2 rounded-full bg-emerald-500 align-middle" aria-hidden />Đang làm việc · {inside} người trong khu vực</> : permit._count.sessions ? `Đã có ${permit._count.sessions} lần làm việc · hiện không có lần đang mở` : "Chưa mở lần làm việc"}</p>
       <p className="text-xs text-muted-foreground">{live ? `CHTT ${live.commanderName} · từ ${fmt(live.openedAt)}` : last?.endedAt ? `Lần gần nhất kết thúc ${fmt(last.endedAt)}` : "Cho phép làm việc, quét thẻ vào/ra và kết thúc trên màn hình làm việc."}</p>
@@ -565,7 +565,7 @@ export function ContractorSessions({ permit, canExecute, historyOnly = false }: 
   const live = permit.sessions.find(s => !s.endedAt);
   // Quá hạn "Kết thúc công việc dự kiến": server chặn mở / bàn giao — ẩn nút, vẫn cho kết thúc lần đang mở.
   const overdue = permitDeadline(permit)?.state === "overdue";
-  return <section className="space-y-3 rounded-xl border border-sky-200 bg-sky-50/40 p-4 dark:bg-sky-950/20">
+  return <section className="space-y-3 rounded-xl border border-sky-200 bg-sky-50/40 p-4">
     <div className="flex flex-wrap items-center justify-between gap-3"><h3 className="font-semibold">{historyOnly ? "Các lần làm việc đã kết thúc" : "Các lần làm việc của nhà thầu"}</h3>{!historyOnly && canExecute && !live && !overdue && ["ISSUED", "WAITING"].includes(permit.status) && <Button onClick={() => { setHandoff(false); setUpdating(false); setAction("open"); }}><Play />Cho phép / mở lần làm việc</Button>}</div>
     {!historyOnly && <p className="text-sm text-muted-foreground">Mỗi lần lưu riêng CHTT, nhân viên và thời gian. Kết thúc lần làm việc giải phóng CHTT để làm phiếu khác; PCT vẫn giữ để tiếp tục lần sau.</p>}
     <details className="rounded-lg border border-border bg-background p-3">
@@ -676,7 +676,7 @@ export function SessionEditor({ permit, session, handoff = false, progressUpdate
         <p className="text-xs text-muted-foreground">Điền sẵn từ phiếu và lần làm việc — sửa nếu cần. Ghi lên đầu Nhật ký ngày, tiếp theo là nội dung thực hiện từng hạng mục.</p>
       </fieldset>}
       {offSession && <fieldset className="space-y-2 rounded-lg border border-border p-3 text-sm"><legend className="px-1 font-medium">Trạng thái ghi lên Sheet *</legend>
-        <div className="grid gap-2 sm:grid-cols-2">{[OVERHAUL_DAY_STATUSES.IN_PROGRESS, OVERHAUL_DAY_STATUSES.CLOSED].map(value => <label key={value} className={`flex min-h-11 cursor-pointer items-center gap-2 rounded-lg border px-3 ${sheetStatus === value ? "border-blue-600 bg-blue-50 font-semibold text-blue-900 dark:bg-blue-950/40 dark:text-blue-100" : "border-border"}`}>
+        <div className="grid gap-2 sm:grid-cols-2">{[OVERHAUL_DAY_STATUSES.IN_PROGRESS, OVERHAUL_DAY_STATUSES.CLOSED].map(value => <label key={value} className={`flex min-h-11 cursor-pointer items-center gap-2 rounded-lg border px-3 ${sheetStatus === value ? "border-blue-600 bg-blue-50 font-semibold text-blue-900" : "border-border"}`}>
           <input type="radio" name="sheetStatus" className="accent-blue-700" checked={sheetStatus === value} onChange={() => setSheetStatus(value)} /><span className="py-1.5">{value}{permit.status === "CLOSED" && value === OVERHAUL_DAY_STATUSES.CLOSED && <span className="block text-xs font-normal text-muted-foreground">Gợi ý — phiếu đã kết thúc</span>}</span>
         </label>)}</div>
         <p className="text-xs text-muted-foreground">Áp cho các hạng mục có tick ở dưới.</p>
@@ -686,7 +686,7 @@ export function SessionEditor({ permit, session, handoff = false, progressUpdate
       {!ending && !handoff && !updating && <><p className="rounded-lg bg-sky-50 p-3 text-sm text-sky-950">CHTT tự được tính vào người công tác. Tổng: {person ? 1 + additionalMembers.length : additionalMembers.length} người.</p><PermitMembersEditor members={additionalMembers} onChange={setMembers} commander={person ? { personId: person.id, name: person.name, code: person.code, company: person.company } : undefined}
         scope={permit.contractorScope} scan={{ unit: permit.teamName, companies: [permit.teamName, person?.company ?? ""].filter(Boolean), permitId: permit.id }} /></>}
       {(ending || handoff || updating) && <label className="block space-y-1 text-sm"><span>{updating ? "Ghi chú làm việc" : handoff ? "Ghi chú bàn giao" : "Ghi chú kết thúc lần làm việc"}</span><textarea className={control} rows={3} maxLength={2000} value={note} onChange={e => setNote(e.target.value)} /></label>}
-      {stillInside.length > 0 && <div role="alert" className="space-y-2 rounded-lg border-2 border-red-300 bg-red-50 p-3 text-sm text-red-900 dark:border-red-900 dark:bg-red-950/40 dark:text-red-100">
+      {stillInside.length > 0 && <div role="alert" className="space-y-2 rounded-lg border-2 border-red-300 bg-red-50 p-3 text-sm text-red-900">
         <p className="font-semibold">Còn {stillInside.length} nhân viên chưa rút khỏi vị trí làm việc — chưa kết thúc được:</p>
         <p className="max-h-24 overflow-y-auto">{stillInside.map(m => m.name).join(" · ")}</p>
       </div>}

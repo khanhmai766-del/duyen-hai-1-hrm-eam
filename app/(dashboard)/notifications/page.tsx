@@ -302,7 +302,7 @@ const PostCard = React.memo(function PostCard({
               <Check className="h-4 w-4" /> Không thuộc diện cần xác nhận đọc
             </span>
           ) : readByMe ? (
-            <span className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+            <span className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-600">
               <Check className="h-4 w-4" /> Bạn đã xác nhận đọc
             </span>
           ) : (
@@ -1091,7 +1091,7 @@ export default function NotificationsPage() {
                   Cương vị nhận lệnh: <span className="font-medium text-ink">{announcementTargetLabel(readersOf.classification)}</span>
                 </div>
                 <div>
-                  <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-emerald-600 dark:text-emerald-400">
+                  <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-emerald-600">
                     <Check className="h-4 w-4" /> Đã đọc ({trackedReads.length})
                   </div>
                   {trackedReads.length === 0 ? (
@@ -1102,7 +1102,7 @@ export default function NotificationsPage() {
                         const reader = userById.get(r.userId);
                         const readerPosition = reader ? effectiveUserPosition(reader) : null;
                         return (
-                          <li key={r.userId} className="flex items-center justify-between gap-2 rounded-md bg-emerald-50 px-3 py-1.5 text-sm dark:bg-emerald-500/10">
+                          <li key={r.userId} className="flex items-center justify-between gap-2 rounded-md bg-emerald-50 px-3 py-1.5 text-sm">
                             <span className="min-w-0 truncate">
                               <span className="font-medium text-ink">{reader?.name ?? "Người dùng"}</span>
                               {readerPosition && <span className="ml-1.5 text-xs text-muted-foreground">{readerPosition}</span>}
@@ -1119,7 +1119,7 @@ export default function NotificationsPage() {
                     <Clock className="h-4 w-4" /> Chưa đọc ({unread.length})
                   </div>
                   {unread.length === 0 ? (
-                    <p className="text-xs font-medium text-emerald-600 dark:text-emerald-400">Tất cả nhân sự đã xác nhận đọc 🎉</p>
+                    <p className="text-xs font-medium text-emerald-600">Tất cả nhân sự đã xác nhận đọc 🎉</p>
                   ) : (
                     <ul className="space-y-1">
                       {unread.map((u) => (

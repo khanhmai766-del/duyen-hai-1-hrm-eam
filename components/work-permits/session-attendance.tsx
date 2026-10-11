@@ -109,7 +109,7 @@ export function SessionAttendance({ permit, session, canExecute, size = "md", au
     const shown = members.filter(({ member }) => (!filter || state(member) === filter) && (!term || normalizeText(`${member.name} ${member.code ?? ""}`).includes(term)));
     const tiles = [
       { key: "inside" as const, value: live ? 1 + counts.inside : counts.inside, label: live ? "Trong khu vực (kèm CHTT)" : "Trong khu vực", tone: "text-emerald-700", ring: "ring-emerald-500" },
-      { key: "out" as const, value: counts.out, label: "Đã ra", tone: "text-slate-600 dark:text-slate-300", ring: "ring-slate-400" },
+      { key: "out" as const, value: counts.out, label: "Đã ra", tone: "text-slate-600", ring: "ring-slate-400" },
       { key: "waiting" as const, value: counts.waiting, label: "Chưa quét", tone: "text-amber-600", ring: "ring-amber-500" },
     ];
     return <div className="space-y-3">

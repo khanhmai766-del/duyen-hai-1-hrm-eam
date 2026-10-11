@@ -13,7 +13,7 @@ export function PermitDeadlineBadge({ permit, className }: { permit: { teamType:
   const Icon = overdue ? OctagonAlert : AlarmClock;
   return <span title={permit.plannedEndAt ? `Kết thúc công việc dự kiến: ${new Date(permit.plannedEndAt).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })}` : undefined}
     className={cn("inline-flex max-w-full items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold",
-      overdue ? "bg-red-50 text-red-700 ring-1 ring-red-200 dark:bg-red-950/40 dark:text-red-300 dark:ring-red-900" : "bg-amber-50 text-amber-800 ring-1 ring-amber-200 dark:bg-amber-950/40 dark:text-amber-200 dark:ring-amber-900", className)}>
+      overdue ? "bg-red-50 text-red-700 ring-1 ring-red-200" : "bg-amber-50 text-amber-800 ring-1 ring-amber-200", className)}>
     <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden /><span className="truncate">{deadline.label}</span>
   </span>;
 }

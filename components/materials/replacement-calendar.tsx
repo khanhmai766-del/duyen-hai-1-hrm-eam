@@ -160,8 +160,8 @@ export function ReplacementCalendar({ month, onMonthChange, points, selectedDay,
                     "relative flex min-h-[104px] flex-col items-stretch gap-1 border-border/70 p-1.5 text-left align-top transition-colors",
                     i % 7 !== 0 && "border-l",
                     i >= 7 && "border-t",
-                    inMonth ? "bg-white hover:bg-sky-50/60 dark:bg-card dark:hover:bg-slate-800/60" : "cursor-default bg-muted/20",
-                    d.getDay() === 0 && inMonth && "bg-rose-50/40 dark:bg-rose-950/10",
+                    inMonth ? "bg-white hover:bg-sky-50/60" : "cursor-default bg-muted/20",
+                    d.getDay() === 0 && inMonth && "bg-rose-50/40",
                     isSelected && "ring-2 ring-inset ring-accent"
                   )}
                 >

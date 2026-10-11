@@ -105,7 +105,7 @@ function QuickDockBar() {
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
       onPointerCancel={onPointerUp}
-      className="flex h-10 w-6 shrink-0 cursor-grab touch-none items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 active:cursor-grabbing dark:hover:bg-slate-800"
+      className="flex h-10 w-6 shrink-0 cursor-grab touch-none items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 active:cursor-grabbing"
       aria-label="Kéo để di chuyển thanh Thường dùng"
       title="Kéo để di chuyển"
     >
@@ -119,12 +119,12 @@ function QuickDockBar() {
       role="toolbar"
       aria-label="Thường dùng"
       style={position ?? { left: "calc(50% + 140px)", bottom: 20, transform: "translateX(-50%)" }}
-      className="fixed z-40 hidden items-center gap-1 rounded-2xl border border-slate-200/80 bg-white/95 p-1.5 shadow-[0_18px_40px_-18px_rgba(15,23,42,0.45)] backdrop-blur dark:border-slate-700 dark:bg-card/95 lg:flex"
+      className="fixed z-40 hidden items-center gap-1 rounded-2xl border border-slate-200/80 bg-white/95 p-1.5 shadow-[0_18px_40px_-18px_rgba(15,23,42,0.45)] backdrop-blur lg:flex"
     >
       {handle}
       {saved.collapsed ? (
         <button type="button" onClick={() => update({ ...saved, collapsed: false })}
-          className="flex h-10 items-center gap-1.5 rounded-xl px-2.5 text-[13px] font-semibold text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
+          className="flex h-10 items-center gap-1.5 rounded-xl px-2.5 text-[13px] font-semibold text-slate-700 hover:bg-slate-100"
           title="Mở thanh Thường dùng" aria-label="Mở thanh Thường dùng">
           <Star className="h-4 w-4 fill-amber-400 text-amber-400" />Thường dùng
         </button>
@@ -137,8 +137,8 @@ function QuickDockBar() {
             return (
               <Link key={item.href} href={item.href} prefetch={false} title={item.label} aria-current={active ? "page" : undefined}
                 className={cn("group flex h-10 items-center gap-2 rounded-xl px-2 pr-3 text-[13px] font-semibold leading-tight transition-colors",
-                  active ? "bg-blue-50 text-navy ring-1 ring-blue-200 dark:bg-slate-800 dark:text-sky-100 dark:ring-sky-400/30"
-                    : "text-slate-600 hover:bg-slate-100 hover:text-navy dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-sky-100")}>
+                  active ? "bg-blue-50 text-navy ring-1 ring-blue-200"
+                    : "text-slate-600 hover:bg-slate-100 hover:text-navy")}>
                 <span className={cn("flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ring-1",
                   active ? "bg-gradient-to-br from-blue-500 to-blue-800 text-white ring-blue-700/20" : cn(tint ?? "bg-white text-slate-500", "ring-black/5"))}>
                   <Icon className="h-4 w-4" />
@@ -147,16 +147,16 @@ function QuickDockBar() {
               </Link>
             );
           })}
-          <span className="mx-0.5 h-6 w-px shrink-0 bg-slate-200 dark:bg-slate-700" aria-hidden="true" />
+          <span className="mx-0.5 h-6 w-px shrink-0 bg-slate-200" aria-hidden="true" />
           {placed && (
             <button type="button" onClick={() => update({ ...saved, x: null, y: null })}
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800"
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600"
               title="Đặt lại vị trí (giữa đáy màn hình)" aria-label="Đặt lại vị trí thanh Thường dùng">
               <RotateCcw className="h-4 w-4" />
             </button>
           )}
           <button type="button" onClick={() => update({ ...saved, collapsed: true })}
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600"
             title="Thu gọn" aria-label="Thu gọn thanh Thường dùng">
             <Minus className="h-4 w-4" />
           </button>

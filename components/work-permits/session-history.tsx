@@ -49,7 +49,7 @@ function SessionCard({ session: s, order }: { session: PermitSession; order: num
   const workers = s.members.filter(m => !isSessionCommander(m, s));
   const live = !s.endedAt;
   return <section className={`overflow-hidden rounded-xl border ${live ? "border-emerald-300" : "border-border"}`}>
-    <header className={`space-y-0.5 px-3 py-2.5 ${live ? "bg-emerald-50/70 dark:bg-emerald-950/20" : "bg-muted/40"}`}>
+    <header className={`space-y-0.5 px-3 py-2.5 ${live ? "bg-emerald-50/70" : "bg-muted/40"}`}>
       <p className="flex flex-wrap items-baseline gap-x-2 text-sm font-semibold">
         <span>Lần {order} · {day(s.openedAt)}</span>
         <span className="font-normal tabular-nums text-muted-foreground">{hhmm(s.openedAt)} → {s.endedAt ? timeOn(s.endedAt, s.openedAt) : <b className="text-emerald-700">đang làm việc</b>}</span>

@@ -164,7 +164,7 @@ export function MobileBottomNav({ onOpenAllMenu }: { onOpenAllMenu: () => void }
     <>
       <nav
         aria-label="Điều hướng chính trên điện thoại"
-        className="no-print fixed inset-x-0 bottom-0 z-40 border-t border-slate-200/90 bg-white/95 pb-[env(safe-area-inset-bottom)] shadow-[0_-12px_30px_-18px_rgba(15,23,42,0.45)] backdrop-blur-xl dark:border-slate-700 dark:bg-slate-950/95 lg:hidden"
+        className="no-print fixed inset-x-0 bottom-0 z-40 border-t border-slate-200/90 bg-white/95 pb-[env(safe-area-inset-bottom)] shadow-[0_-12px_30px_-18px_rgba(15,23,42,0.45)] backdrop-blur-xl lg:hidden"
       >
         <div className="mx-auto grid h-[68px] max-w-lg grid-cols-5 items-end px-1">
           <BottomLink href="/hr" label="Lịch làm việc" icon={CalendarDays} active={routeMatches(pathname, "/hr")} disabled={!canReadPage("/hr")} />
@@ -181,13 +181,13 @@ export function MobileBottomNav({ onOpenAllMenu }: { onOpenAllMenu: () => void }
           >
             <span
               className={cn(
-                "flex h-[58px] w-[58px] -translate-y-2 items-center justify-center rounded-full border-4 border-white bg-gradient-to-br from-orange-400 to-orange-600 text-white shadow-[0_12px_28px_-8px_rgba(234,88,12,0.75)] ring-1 ring-orange-300 transition-transform active:scale-95 dark:border-slate-950",
+                "flex h-[58px] w-[58px] -translate-y-2 items-center justify-center rounded-full border-4 border-white bg-gradient-to-br from-orange-400 to-orange-600 text-white shadow-[0_12px_28px_-8px_rgba(234,88,12,0.75)] ring-1 ring-orange-300 transition-transform active:scale-95",
                 routeMatches(pathname, "/devices/scan") && "ring-4 ring-orange-200"
               )}
             >
               <ScanLine className="h-7 w-7" strokeWidth={2.4} />
             </span>
-            <span className="-mt-2 text-[11px] font-bold leading-none text-orange-700 dark:text-orange-300">Quét QR</span>
+            <span className="-mt-2 text-[11px] font-bold leading-none text-orange-700">Quét QR</span>
           </Link>
           <BottomLink
             href="/replacement-procedures"
@@ -210,7 +210,7 @@ export function MobileBottomNav({ onOpenAllMenu }: { onOpenAllMenu: () => void }
             {canReadPage("/defects") && <DialogClose asChild>
               <Link
                 href="/defects?phan=co"
-                className="flex min-h-20 items-center gap-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-amber-950 transition-colors active:bg-amber-100 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100"
+                className="flex min-h-20 items-center gap-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-amber-950 transition-colors active:bg-amber-100"
               >
                 <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-amber-500 text-white"><Wrench className="h-5 w-5" /></span>
                 <span className="min-w-0 flex-1"><span className="block font-bold">Cơ – Hóa</span><span className="text-xs opacity-70">Thiết bị cơ khí và hóa</span></span>
@@ -220,7 +220,7 @@ export function MobileBottomNav({ onOpenAllMenu }: { onOpenAllMenu: () => void }
             {canReadPage("/defects") && <DialogClose asChild>
               <Link
                 href="/defects?phan=dien"
-                className="flex min-h-20 items-center gap-4 rounded-2xl border border-sky-200 bg-sky-50 p-4 text-sky-950 transition-colors active:bg-sky-100 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-100"
+                className="flex min-h-20 items-center gap-4 rounded-2xl border border-sky-200 bg-sky-50 p-4 text-sky-950 transition-colors active:bg-sky-100"
               >
                 <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-sky-600 text-white"><Zap className="h-5 w-5" /></span>
                 <span className="min-w-0 flex-1"><span className="block font-bold">Điện</span><span className="text-xs opacity-70">Thiết bị và hệ thống điện</span></span>
@@ -230,7 +230,7 @@ export function MobileBottomNav({ onOpenAllMenu }: { onOpenAllMenu: () => void }
             {canReadPage("/work-permits") && <DialogClose asChild>
               <Link
                 href="/work-permits"
-                className="flex min-h-20 items-center gap-4 rounded-2xl border border-indigo-200 bg-indigo-50 p-4 text-indigo-950 transition-colors active:bg-indigo-100 dark:border-indigo-800 dark:bg-indigo-950/40 dark:text-indigo-100"
+                className="flex min-h-20 items-center gap-4 rounded-2xl border border-indigo-200 bg-indigo-50 p-4 text-indigo-950 transition-colors active:bg-indigo-100"
               >
                 <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-indigo-600 text-white"><ClipboardList className="h-5 w-5" /></span>
                 <span className="min-w-0 flex-1"><span className="block font-bold">Sổ cấp PCT</span><span className="text-xs opacity-70">Cấp và theo dõi phiếu công tác</span></span>
@@ -313,14 +313,14 @@ function MobileSheet({
         className
       )}
     >
-      <div className="mx-auto -mt-2 h-1.5 w-12 rounded-full bg-slate-300 dark:bg-slate-700" aria-hidden="true" />
+      <div className="mx-auto -mt-2 h-1.5 w-12 rounded-full bg-slate-300" aria-hidden="true" />
       {children}
     </DialogContent>
   );
 }
 
 function BottomLink({ href, label, icon: Icon, active, disabled = false }: { href: string; label: string; icon: typeof CalendarDays; active: boolean; disabled?: boolean }) {
-  const className = cn("flex min-h-16 flex-col items-center justify-end gap-1 pb-2 text-[10px] font-semibold transition-colors", active ? "text-accent" : "text-slate-500 dark:text-slate-400", disabled && "opacity-40 grayscale");
+  const className = cn("flex min-h-16 flex-col items-center justify-end gap-1 pb-2 text-[10px] font-semibold transition-colors", active ? "text-accent" : "text-slate-500", disabled && "opacity-40 grayscale");
   const content = <><Icon className="h-[22px] w-[22px]" strokeWidth={active ? 2.5 : 2} /><span className="max-w-[70px] truncate">{label}</span></>;
   if (disabled) return <span aria-disabled="true" title="Tài khoản chưa được cấp quyền truy cập" className={className}>{content}</span>;
   return (
@@ -330,7 +330,7 @@ function BottomLink({ href, label, icon: Icon, active, disabled = false }: { hre
 
 function BottomButton({ label, icon: Icon, active, onClick }: { label: string; icon: typeof MoreHorizontal; active: boolean; onClick: () => void }) {
   return (
-    <button type="button" onClick={onClick} aria-expanded={active} className={cn("flex min-h-16 w-full flex-col items-center justify-end gap-1 pb-2 text-[10px] font-semibold transition-colors", active ? "text-accent" : "text-slate-500 dark:text-slate-400")}>
+    <button type="button" onClick={onClick} aria-expanded={active} className={cn("flex min-h-16 w-full flex-col items-center justify-end gap-1 pb-2 text-[10px] font-semibold transition-colors", active ? "text-accent" : "text-slate-500")}>
       <Icon className="h-[22px] w-[22px]" strokeWidth={active ? 2.5 : 2} />
       <span className="max-w-[70px] truncate">{label}</span>
     </button>

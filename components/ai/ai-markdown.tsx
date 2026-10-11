@@ -67,11 +67,11 @@ export function parseAiMarkdown(text: string): Block[] {
 function renderInline(text: string) {
   return text.split(INLINE).filter(Boolean).map((part, index) => {
     if (part.length > 4 && part.startsWith("**") && part.endsWith("**")) {
-      return <strong key={index} className="font-semibold text-slate-900 dark:text-white">{part.slice(2, -2)}</strong>;
+      return <strong key={index} className="font-semibold text-slate-900">{part.slice(2, -2)}</strong>;
     }
     if (part.length > 2 && part.startsWith("`") && part.endsWith("`")) {
       return (
-        <code key={index} className="rounded bg-slate-100 px-1 py-0.5 font-mono text-[12px] text-slate-800 dark:bg-slate-800 dark:text-slate-100">
+        <code key={index} className="rounded bg-slate-100 px-1 py-0.5 font-mono text-[12px] text-slate-800">
           {part.slice(1, -1)}
         </code>
       );
@@ -87,12 +87,12 @@ function Caret() {
 export function AiMarkdown({ text, streaming = false, className }: { text: string; streaming?: boolean; className?: string }) {
   const blocks = React.useMemo(() => parseAiMarkdown(text), [text]);
   return (
-    <div className={cn("space-y-2.5 break-words text-[13px] leading-6 text-slate-700 dark:text-slate-200", className)}>
+    <div className={cn("space-y-2.5 break-words text-[13px] leading-6 text-slate-700", className)}>
       {blocks.map((block, index) => {
         const caret = streaming && index === blocks.length - 1;
         if (block.kind === "heading") {
           return (
-            <p key={index} className="pt-1 font-semibold text-slate-900 dark:text-white">
+            <p key={index} className="pt-1 font-semibold text-slate-900">
               {renderInline(block.text)}
               {caret && <Caret />}
             </p>

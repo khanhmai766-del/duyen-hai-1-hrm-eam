@@ -34,25 +34,12 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
-  themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#F8F7F4" },
-    { media: "(prefers-color-scheme: dark)", color: "#131720" },
-  ],
+  themeColor: "#F8F7F4",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="vi" className={beVietnamPro.variable} suppressHydrationWarning>
-      <head>
-        {/* Apply an explicit saved theme before first paint. Public login always
-            starts in light mode; dark mode is only available after sign-in via
-            the dashboard toggle. */}
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `(function(){try{var e=document.documentElement;var isLogin=location.pathname==='/login'||location.pathname.indexOf('/login/')===0;var d=!isLogin&&localStorage.getItem('theme')==='dark';e.classList.toggle('dark',d);requestAnimationFrame(function(){e.classList.add('theme-ready');});}catch(e){}})();`,
-          }}
-        />
-      </head>
       <body className="font-sans">
         <Providers>{children}</Providers>
       </body>

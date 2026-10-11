@@ -66,9 +66,9 @@ export function PermitLiveBoard() {
         const href = permitWorkHref(row.permit.id);
         return <article key={row.id} className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-emerald-200 bg-card p-3 shadow-sm transition-colors hover:border-emerald-400 sm:p-4">
           <Link href={href} className="flex min-w-0 flex-1 basis-72 items-start gap-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
-            <div className="w-16 shrink-0 rounded-lg bg-emerald-50 py-1.5 text-center dark:bg-emerald-950/30" title="Trong khu vực / tổng số người (kèm CHTT)">
-              <p className="tabular-nums leading-7"><span className="text-2xl font-bold text-emerald-700">{1 + row.inside}</span><span className="text-xs font-semibold text-emerald-900/70 dark:text-emerald-200/70">/{1 + row.workers}</span></p>
-              <p className="text-[10px] font-medium leading-3 text-emerald-900 dark:text-emerald-200">trong KV</p>
+            <div className="w-16 shrink-0 rounded-lg bg-emerald-50 py-1.5 text-center" title="Trong khu vực / tổng số người (kèm CHTT)">
+              <p className="tabular-nums leading-7"><span className="text-2xl font-bold text-emerald-700">{1 + row.inside}</span><span className="text-xs font-semibold text-emerald-900/70">/{1 + row.workers}</span></p>
+              <p className="text-[10px] font-medium leading-3 text-emerald-900">trong KV</p>
             </div>
             <div className="min-w-0">
               <p className="truncate text-xs font-semibold text-blue-700">PCT {formatPermitNumber(row.permit)}<span className="font-medium text-muted-foreground"> · {row.permit.kind === "ELECTRICAL" ? "Điện" : "Cơ"} · {PERMIT_UNITS[row.permit.unit]}</span></p>

@@ -356,15 +356,15 @@ function AiChatPanel({ open, setOpen }: { open: boolean; setOpen: (open: boolean
         aria-label="Trợ lý AI DH1 OPS INSIGHT"
         inert={!open}
         className={cn(
-          "fixed inset-0 z-50 flex flex-col overflow-hidden bg-white pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)] transition-[opacity,transform] duration-200 dark:bg-slate-950",
-          "sm:inset-auto sm:bottom-24 sm:right-6 sm:z-40 sm:rounded-2xl sm:p-0 sm:shadow-2xl sm:shadow-slate-900/20 sm:ring-1 sm:ring-slate-900/10 dark:sm:ring-white/10",
+          "fixed inset-0 z-50 flex flex-col overflow-hidden bg-white pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)] transition-[opacity,transform] duration-200",
+          "sm:inset-auto sm:bottom-24 sm:right-6 sm:z-40 sm:rounded-2xl sm:p-0 sm:shadow-2xl sm:shadow-slate-900/20 sm:ring-1 sm:ring-slate-900/10",
           expanded
             ? "sm:h-[min(860px,calc(100dvh-8rem))] sm:w-[min(760px,calc(100vw-3rem))]"
             : "sm:h-[min(640px,calc(100dvh-8rem))] sm:w-[420px]",
           open ? "translate-y-0 opacity-100" : "pointer-events-none translate-y-3 opacity-0"
         )}
       >
-        <header className="flex items-center gap-2 border-b border-slate-200 px-3 py-2.5 dark:border-slate-800">
+        <header className="flex items-center gap-2 border-b border-slate-200 px-3 py-2.5">
           {view === "history" ? (
             <IconButton label="Quay lại hội thoại" onClick={() => setView("chat")}>
               <ChevronLeft className="h-4 w-4" />
@@ -375,10 +375,10 @@ function AiChatPanel({ open, setOpen }: { open: boolean; setOpen: (open: boolean
             </span>
           )}
           <div className="min-w-0 flex-1">
-            <h2 className="truncate text-[13px] font-semibold tracking-wide text-slate-900 dark:text-white">
+            <h2 className="truncate text-[13px] font-semibold tracking-wide text-slate-900">
               {view === "history" ? "Hội thoại gần đây" : "DH1 OPS INSIGHT"}
             </h2>
-            <p className="truncate text-xs text-slate-500 dark:text-slate-400">
+            <p className="truncate text-xs text-slate-500">
               {view === "history" ? "Tự động xoá sau 14 ngày" : "Trợ lý tra cứu vận hành · chỉ đọc dữ liệu"}
             </p>
           </div>
@@ -418,7 +418,7 @@ function AiChatPanel({ open, setOpen }: { open: boolean; setOpen: (open: boolean
                 {chat.loadingConversation ? (
                   <ConversationSkeleton />
                 ) : chat.loadError ? (
-                  <p className="my-auto rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-[13px] text-red-800 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-200">
+                  <p className="my-auto rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-[13px] text-red-800">
                     {chat.loadError}
                   </p>
                 ) : chat.messages.length === 0 ? (
@@ -456,9 +456,9 @@ function AiChatPanel({ open, setOpen }: { open: boolean; setOpen: (open: boolean
               </div>
             </div>
 
-            <footer className="border-t border-slate-200 px-3 pb-2 pt-3 dark:border-slate-800">
+            <footer className="border-t border-slate-200 px-3 pb-2 pt-3">
               <div className={cn("mx-auto", expanded && "sm:max-w-[680px]")}>
-                <div className="flex items-end gap-2 rounded-xl border border-slate-300 bg-white py-1.5 pl-3 pr-1.5 transition focus-within:border-electric focus-within:ring-2 focus-within:ring-electric/15 dark:border-slate-700 dark:bg-slate-900">
+                <div className="flex items-end gap-2 rounded-xl border border-slate-300 bg-white py-1.5 pl-3 pr-1.5 transition focus-within:border-electric focus-within:ring-2 focus-within:ring-electric/15">
                   <textarea
                     ref={inputRef}
                     value={draft}
@@ -474,14 +474,14 @@ function AiChatPanel({ open, setOpen }: { open: boolean; setOpen: (open: boolean
                         send();
                       }
                     }}
-                    className="max-h-40 min-h-8 flex-1 resize-none bg-transparent py-1 text-[13px] leading-6 text-slate-800 outline-none placeholder:text-slate-400 dark:text-slate-100"
+                    className="max-h-40 min-h-8 flex-1 resize-none bg-transparent py-1 text-[13px] leading-6 text-slate-800 outline-none placeholder:text-slate-400"
                   />
                   {chat.busy ? (
                     <button
                       type="button"
                       onClick={chat.stop}
                       aria-label="Dừng trả lời"
-                      className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-slate-800 text-white transition hover:bg-slate-700 dark:bg-slate-200 dark:text-slate-900"
+                      className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-slate-800 text-white transition hover:bg-slate-700"
                     >
                       <Square className="h-3 w-3 fill-current" />
                     </button>
@@ -491,7 +491,7 @@ function AiChatPanel({ open, setOpen }: { open: boolean; setOpen: (open: boolean
                       onClick={() => send()}
                       disabled={!draft.trim()}
                       aria-label="Gửi câu hỏi"
-                      className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-navy text-white transition hover:bg-[#28507f] disabled:bg-slate-200 disabled:text-slate-400 dark:disabled:bg-slate-800"
+                      className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-navy text-white transition hover:bg-[#28507f] disabled:bg-slate-200 disabled:text-slate-400"
                     >
                       <ArrowUp className="h-4 w-4" />
                     </button>
@@ -619,7 +619,7 @@ function IconButton({
       aria-label={label}
       title={label}
       className={cn(
-        "grid h-8 w-8 shrink-0 place-items-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-electric dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white",
+        "grid h-8 w-8 shrink-0 place-items-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-electric",
         className
       )}
     >
@@ -642,12 +642,12 @@ function EmptyState({ firstName, position, onPick }: { firstName: string; positi
     .filter((group) => group.items.length > 0);
   return (
     <div className="my-auto py-2">
-      <p className="text-lg font-semibold text-slate-900 dark:text-white">{firstName ? `Chào ${firstName},` : "Xin chào,"}</p>
-      <p className="mt-1 text-[13px] leading-6 text-slate-500 dark:text-slate-400">
+      <p className="text-lg font-semibold text-slate-900">{firstName ? `Chào ${firstName},` : "Xin chào,"}</p>
+      <p className="mt-1 text-[13px] leading-6 text-slate-500">
         {defectOnly
           ? "Tài khoản của bạn chỉ được tra cứu khiếm khuyết thiết bị: hỏi về phiếu khiếm khuyết, trạng thái xử lý và lịch sử khiếm khuyết của thiết bị. Trợ lý chỉ đọc dữ liệu"
           : "Hỏi về khiếm khuyết, thiết bị, sổ PCCC · TBYCNN · tiếp địa, phiếu công tác, vật tư, hóa chất, lịch trực ca hay cách dùng web. Trợ lý chỉ đọc dữ liệu"}
-        {position ? <> cương vị <span className="font-medium text-slate-700 dark:text-slate-200">{position}</span></> : " bạn"} được phép xem và luôn dẫn nguồn để đối chiếu.
+        {position ? <> cương vị <span className="font-medium text-slate-700">{position}</span></> : " bạn"} được phép xem và luôn dẫn nguồn để đối chiếu.
       </p>
       <div className="mt-6 space-y-4">
         {groups.map((group) => (
@@ -662,7 +662,7 @@ function EmptyState({ firstName, position, onPick }: { firstName: string; positi
                   key={starter.text}
                   type="button"
                   onClick={() => onPick(starter)}
-                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-left text-[13px] leading-5 text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 dark:border-slate-800 dark:text-slate-200 dark:hover:bg-slate-900"
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-left text-[13px] leading-5 text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
                 >
                   {starter.send ? starter.text : `${starter.text.trim()}…`}
                 </button>
@@ -687,7 +687,7 @@ function useElapsedSeconds(startedAt: number | undefined) {
 function PendingStatus({ message }: { message: AiChatMessage }) {
   const seconds = useElapsedSeconds(message.startedAt);
   return (
-    <div className="flex items-center gap-2.5 text-[13px] text-slate-500 dark:text-slate-400" role="status" aria-live="polite">
+    <div className="flex items-center gap-2.5 text-[13px] text-slate-500" role="status" aria-live="polite">
       <span className="relative flex h-2 w-2 shrink-0">
         <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-electric/50" />
         <span className="relative inline-flex h-2 w-2 rounded-full bg-electric" />
@@ -728,8 +728,8 @@ function AssistantMessage({
       )}
 
       {message.state === "error" && (
-        <div className="mt-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 dark:border-red-900/50 dark:bg-red-950/30">
-          <p className="flex gap-2 text-[13px] leading-5 text-red-800 dark:text-red-200">
+        <div className="mt-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5">
+          <p className="flex gap-2 text-[13px] leading-5 text-red-800">
             <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" />
             {message.error}
           </p>
@@ -739,7 +739,7 @@ function AssistantMessage({
                 type="button"
                 onClick={onRetry}
                 disabled={busy}
-                className="inline-flex items-center gap-1.5 rounded-md bg-white px-2.5 py-1 text-xs font-medium text-red-800 ring-1 ring-red-200 transition hover:bg-red-100 disabled:opacity-50 dark:bg-transparent dark:text-red-200 dark:ring-red-900/60"
+                className="inline-flex items-center gap-1.5 rounded-md bg-white px-2.5 py-1 text-xs font-medium text-red-800 ring-1 ring-red-200 transition hover:bg-red-100 disabled:opacity-50"
               >
                 <RotateCcw className="h-3.5 w-3.5" />
                 Thử lại
@@ -747,7 +747,7 @@ function AssistantMessage({
               <button
                 type="button"
                 onClick={onEdit}
-                className="rounded-md px-2.5 py-1 text-xs font-medium text-red-700 transition hover:bg-red-100 dark:text-red-300 dark:hover:bg-red-950/50"
+                className="rounded-md px-2.5 py-1 text-xs font-medium text-red-700 transition hover:bg-red-100"
               >
                 Sửa câu hỏi
               </button>
@@ -757,7 +757,7 @@ function AssistantMessage({
       )}
 
       {message.unsaved && (
-        <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">Không lưu được vào lịch sử hội thoại.</p>
+        <p className="mt-2 text-xs text-amber-700">Không lưu được vào lịch sử hội thoại.</p>
       )}
 
       {/*
@@ -766,7 +766,7 @@ function AssistantMessage({
         không phân biệt được hai trường hợp đó với câu trả lời có dẫn chứng.
       */}
       {message.state === "done" && !!message.content && citations.length === 0 && (
-        <p className="mt-3 flex items-start gap-1.5 text-[11px] leading-5 text-amber-700 dark:text-amber-300">
+        <p className="mt-3 flex items-start gap-1.5 text-[11px] leading-5 text-amber-700">
           <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
           Câu trả lời này không kèm nguồn đối chiếu — hãy kiểm tra hồ sơ gốc trước khi dùng.
         </p>
@@ -782,9 +782,9 @@ function AssistantMessage({
                 href={citation.url}
                 title={citation.title}
                 onClick={onNavigate}
-                className="inline-flex max-w-full items-center gap-1.5 rounded-md border border-slate-200 bg-slate-50 py-1 pl-1 pr-2 text-xs text-slate-700 transition hover:border-electric/40 hover:bg-blue-50 hover:text-navy dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300 dark:hover:text-white"
+                className="inline-flex max-w-full items-center gap-1.5 rounded-md border border-slate-200 bg-slate-50 py-1 pl-1 pr-2 text-xs text-slate-700 transition hover:border-electric/40 hover:bg-blue-50 hover:text-navy"
               >
-                <span className="grid h-4 min-w-4 place-items-center rounded bg-white px-1 text-[10px] font-semibold text-slate-500 ring-1 ring-slate-200 dark:bg-slate-800 dark:ring-slate-700">
+                <span className="grid h-4 min-w-4 place-items-center rounded bg-white px-1 text-[10px] font-semibold text-slate-500 ring-1 ring-slate-200">
                   {index + 1}
                 </span>
                 <span className="max-w-[240px] truncate">{citation.title}</span>
@@ -821,7 +821,7 @@ function AssistantMessage({
               type="button"
               disabled={busy}
               onClick={() => onAsk(suggestion)}
-              className="rounded-full border border-slate-200 px-3 py-1 text-xs text-slate-600 transition hover:border-slate-300 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-800 dark:text-slate-300 dark:hover:bg-slate-900"
+              className="rounded-full border border-slate-200 px-3 py-1 text-xs text-slate-600 transition hover:border-slate-300 hover:bg-slate-50 disabled:opacity-50"
             >
               {suggestion}
             </button>
@@ -847,10 +847,10 @@ function RatingButtons({ rating, onRate }: { rating: number | null; onRate: (val
       aria-pressed={rating === value}
       title={title}
       className={cn(
-        "grid h-7 w-7 place-items-center rounded-md transition hover:bg-slate-100 dark:hover:bg-slate-800",
+        "grid h-7 w-7 place-items-center rounded-md transition hover:bg-slate-100",
         rating === value
-          ? value === 1 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"
-          : "text-slate-400 hover:text-slate-700 dark:hover:text-white"
+          ? value === 1 ? "text-emerald-600" : "text-red-600"
+          : "text-slate-400 hover:text-slate-700"
       )}
     >
       <Icon className="h-3.5 w-3.5" />
@@ -878,7 +878,7 @@ function CopyButton({ text }: { text: string }) {
         navigator.clipboard?.writeText(text).then(() => setCopied(true), () => toast.error("Không sao chép được câu trả lời"));
       }}
       aria-label="Sao chép câu trả lời"
-      className="inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-xs text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 dark:hover:bg-slate-800 dark:hover:text-white"
+      className="inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-xs text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"
     >
       {copied ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
       {copied ? "Đã chép" : "Sao chép"}
@@ -891,11 +891,11 @@ function ConversationSkeleton() {
     <div className="space-y-6" aria-label="Đang mở hội thoại">
       {[0, 1].map((row) => (
         <div key={row} className="space-y-3">
-          <div className="ml-auto h-9 w-2/3 animate-pulse rounded-2xl bg-slate-100 dark:bg-slate-800" />
+          <div className="ml-auto h-9 w-2/3 animate-pulse rounded-2xl bg-slate-100" />
           <div className="space-y-2">
-            <div className="h-3 w-full animate-pulse rounded bg-slate-100 dark:bg-slate-800" />
-            <div className="h-3 w-5/6 animate-pulse rounded bg-slate-100 dark:bg-slate-800" />
-            <div className="h-3 w-2/3 animate-pulse rounded bg-slate-100 dark:bg-slate-800" />
+            <div className="h-3 w-full animate-pulse rounded bg-slate-100" />
+            <div className="h-3 w-5/6 animate-pulse rounded bg-slate-100" />
+            <div className="h-3 w-2/3 animate-pulse rounded bg-slate-100" />
           </div>
         </div>
       ))}
@@ -937,24 +937,24 @@ function HistoryView({
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="px-3 pt-3">
-        <label className="flex items-center gap-2 rounded-lg border border-slate-200 px-2.5 focus-within:border-electric dark:border-slate-800">
+        <label className="flex items-center gap-2 rounded-lg border border-slate-200 px-2.5 focus-within:border-electric">
           <Search className="h-4 w-4 text-slate-400" />
           <input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             placeholder="Tìm theo tiêu đề"
             aria-label="Tìm hội thoại"
-            className="h-9 min-w-0 flex-1 bg-transparent text-[13px] text-slate-800 outline-none placeholder:text-slate-400 dark:text-slate-100"
+            className="h-9 min-w-0 flex-1 bg-transparent text-[13px] text-slate-800 outline-none placeholder:text-slate-400"
           />
         </label>
       </div>
       <div className="flex-1 overflow-y-auto px-2 py-3">
         {conversations.isLoading ? (
           <div className="space-y-2 px-1">
-            {[0, 1, 2].map((row) => <div key={row} className="h-10 animate-pulse rounded-lg bg-slate-100 dark:bg-slate-800" />)}
+            {[0, 1, 2].map((row) => <div key={row} className="h-10 animate-pulse rounded-lg bg-slate-100" />)}
           </div>
         ) : conversations.isError ? (
-          <p className="px-2 text-[13px] text-red-700 dark:text-red-300">{(conversations.error as Error).message}</p>
+          <p className="px-2 text-[13px] text-red-700">{(conversations.error as Error).message}</p>
         ) : groups.length === 0 ? (
           <p className="px-2 py-10 text-center text-[13px] text-slate-500">
             {search ? "Không có hội thoại khớp từ khoá." : "Chưa có hội thoại đã lưu."}
@@ -968,8 +968,8 @@ function HistoryView({
                   <div
                     key={conversation.id}
                     className={cn(
-                      "group flex items-center rounded-lg transition hover:bg-slate-50 dark:hover:bg-slate-900",
-                      conversation.id === activeId && "bg-slate-100 dark:bg-slate-900"
+                      "group flex items-center rounded-lg transition hover:bg-slate-50",
+                      conversation.id === activeId && "bg-slate-100"
                     )}
                   >
                     <button
@@ -977,7 +977,7 @@ function HistoryView({
                       onClick={() => onOpen(conversation.id)}
                       className="flex min-w-0 flex-1 items-baseline gap-3 px-2 py-2 text-left"
                     >
-                      <span className="min-w-0 flex-1 truncate text-[13px] text-slate-800 dark:text-slate-100">
+                      <span className="min-w-0 flex-1 truncate text-[13px] text-slate-800">
                         {conversation.title || "Tra cứu dữ liệu"}
                       </span>
                       <span className="shrink-0 text-[11px] tabular-nums text-slate-400">
@@ -1007,7 +1007,7 @@ function HistoryView({
                         onClick={() => setConfirmId(conversation.id)}
                         aria-label="Xoá hội thoại"
                         title="Xoá hội thoại"
-                        className="mr-1 grid h-8 w-8 shrink-0 place-items-center rounded-md text-slate-400 transition hover:bg-red-50 hover:text-red-600 focus-visible:opacity-100 sm:opacity-0 sm:group-hover:opacity-100 dark:hover:bg-red-950/40"
+                        className="mr-1 grid h-8 w-8 shrink-0 place-items-center rounded-md text-slate-400 transition hover:bg-red-50 hover:text-red-600 focus-visible:opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </button>

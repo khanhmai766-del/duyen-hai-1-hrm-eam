@@ -1070,7 +1070,7 @@ export function ReplacementsPageContent({ only }: { only?: TabKey } = {}) {
                       return (
                         <div
                           key={p.id}
-                          className="rounded-xl border border-border bg-white p-3 shadow-sm transition-shadow hover:shadow-md dark:bg-card"
+                          className="rounded-xl border border-border bg-white p-3 shadow-sm transition-shadow hover:shadow-md"
                           style={{
                             borderLeft: `4px solid ${machineTone.accent}`,
                             backgroundImage: `linear-gradient(90deg, ${machineTone.wash} 0, transparent 72px)`,
