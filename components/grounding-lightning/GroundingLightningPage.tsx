@@ -1580,19 +1580,6 @@ export default function GroundingLightningPage() {
           />
         </KpiCard>
       </div>
-      {canManage && (
-        <div className="space-y-3 rounded-xl border border-emerald-200 bg-emerald-50/60 p-3">
-          <p className="text-sm text-ink">
-            Chọn các vị trí đã kiểm tra có toàn bộ hạng mục bình thường để xác nhận cùng lúc.
-            Các vị trí chưa kiểm tra hoặc có khiếm khuyết cần cập nhật riêng.
-          </p>
-          <div className="flex flex-wrap items-center gap-2">
-            <Button variant="ghost" className="h-10" disabled={confirming || !selectedIds.length}
-              onClick={() => setSelectedIds([])}>Bỏ chọn</Button>
-            <span className="text-sm font-medium" aria-live="polite">Đã chọn {eligibleSelectedIds.length} vị trí</span>
-          </div>
-        </div>
-      )}
       <div inert={confirming}>
       <PcccTableCard
         pageSize={pageSize}

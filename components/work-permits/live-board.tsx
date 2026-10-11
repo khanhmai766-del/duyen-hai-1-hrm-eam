@@ -15,6 +15,13 @@ function elapsed(from: string) {
   return minutes < 60 ? `${minutes} phút` : `${Math.floor(minutes / 60)} giờ ${minutes % 60} phút`;
 }
 
+/** Danh sách nhãn không trùng (so không phân biệt dấu/hoa thường), sắp theo tiếng Việt. */
+function distinctLabels(values: (string | null | undefined)[]) {
+  const byKey = new Map<string, string>();
+  for (const value of values) { const label = value?.trim(); if (label && !byKey.has(normalizeText(label))) byKey.set(normalizeText(label), label); }
+  return [...byKey.values()].sort((a, b) => a.localeCompare(b, "vi"));
+}
+
 /**
  * Tab "Đang làm việc": mọi lần làm việc nhà thầu đang mở trên cả hai sổ, để trông nhiều nhà thầu cùng lúc
  * mà không mở từng phiếu. Bấm dòng / Quét / Kết thúc đều mở màn hình làm việc của phiếu đó
@@ -24,18 +31,17 @@ export function PermitLiveBoard() {
   const query = usePermitLiveSessions();
   const allRows = useMemo(() => query.data?.data ?? [], [query.data]);
   const canExecute = Boolean(query.data?.meta?.canExecute);
-  // Lọc tại chỗ (dữ liệu bảng đã đủ): cương vị của phiếu + tìm theo số PCT / nội dung công việc, không phân biệt dấu.
+  // Lọc tại chỗ (dữ liệu bảng đã đủ): cương vị của phiếu, nhà thầu + tìm theo số PCT / nội dung công việc, không phân biệt dấu.
   const [position, setPosition] = useState("");
+  const [company, setCompany] = useState("");
   const [q, setQ] = useState("");
-  const positions = useMemo(() => {
-    const byKey = new Map<string, string>();
-    for (const row of allRows) { const label = row.permit.position?.trim(); if (label && !byKey.has(normalizeText(label))) byKey.set(normalizeText(label), label); }
-    return [...byKey.values()].sort((a, b) => a.localeCompare(b, "vi"));
-  }, [allRows]);
+  const positions = useMemo(() => distinctLabels(allRows.map(row => row.permit.position)), [allRows]);
+  const companies = useMemo(() => distinctLabels(allRows.map(row => row.company)), [allRows]);
   const term = normalizeText(q.trim());
   const rows = allRows.filter(row => (!position || normalizeText(row.permit.position ?? "") === normalizeText(position))
+    && (!company || normalizeText(row.company ?? "") === normalizeText(company))
     && (!term || normalizeText(`${formatPermitNumber(row.permit)} ${row.permit.content ?? ""}`).includes(term)));
-  const filtered = Boolean(position || term);
+  const filtered = Boolean(position || company || term);
 
   return <section className="space-y-3">
     <div className="flex flex-wrap items-center justify-between gap-2">
@@ -50,7 +56,12 @@ export function PermitLiveBoard() {
           <option value="">Tất cả cương vị</option>
           {positions.map(label => <option key={label} value={label}>{label}</option>)}
         </select>
-        {filtered && <p className="text-xs text-muted-foreground">{rows.length}/{allRows.length} PCT · <button type="button" className="font-semibold text-blue-700" onClick={() => { setQ(""); setPosition(""); }}>Bỏ lọc</button></p>}
+        <select aria-label="Lọc theo nhà thầu" value={company} onChange={e => setCompany(e.target.value)}
+          className="h-9 min-w-0 flex-1 basis-40 rounded-lg border border-input bg-background px-2 text-base focus:outline-none focus:ring-2 focus:ring-ring sm:max-w-[16rem] sm:flex-none sm:text-sm">
+          <option value="">Tất cả nhà thầu</option>
+          {companies.map(label => <option key={label} value={label}>{label}</option>)}
+        </select>
+        {filtered && <p className="text-xs text-muted-foreground">{rows.length}/{allRows.length} PCT · <button type="button" className="font-semibold text-blue-700" onClick={() => { setQ(""); setPosition(""); setCompany(""); }}>Bỏ lọc</button></p>}
       </div>
       <div className="flex flex-wrap gap-2">
         {/* Ghi tiến độ nhiều PCT đại tu một lượt (thay vì mở từng màn hình làm việc). */}
