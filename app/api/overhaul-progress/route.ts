@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { buildOverhaulGrid, OVERHAUL_JOURNAL_PREVIEW, overhaulDayCell, parseSheetPercent, type OverhaulGridItem } from "@/lib/overhaul-progress-grid";
 import { OVERHAUL_DAY_COUNT, overhaulDayDate } from "@/lib/overhaul-milestones-source";
 import { OVERHAUL_SOURCES, type OverhaulSource } from "@/lib/work-permit-overhaul";
+import { vietnamDayKey } from "@/lib/vietnam-time";
 export const dynamic = "force-dynamic";
 
 const FIRST_DAY = overhaulDayDate(1), LAST_DAY = overhaulDayDate(OVERHAUL_DAY_COUNT);
@@ -87,7 +88,9 @@ export async function GET(req: Request) {
       if (row.positionTitle && !existing.positionTitle.split(", ").includes(row.positionTitle)) existing.positionTitle = [existing.positionTitle, row.positionTitle].filter(Boolean).join(", ");
     }
     const permitNumbers = await permitNumbersOf(windowRows.filter(row => row.note).map(row => row.permitId));
-    return ok(buildOverhaulGrid([...items.values()], windowRows, permitNumbers, { summaryRows, previewLength: OVERHAUL_JOURNAL_PREVIEW }),
+    // Ngày đã qua không có kết quả → ô "Chưa thực hiện" (như bộ ghi điền lên Sheet).
+    const windowDays = Array.from({ length: OVERHAUL_DAY_COUNT }, (_, i) => overhaulDayDate(i + 1)).filter(day => day >= from && day <= to);
+    return ok(buildOverhaulGrid([...items.values()], windowRows, permitNumbers, { summaryRows, previewLength: OVERHAUL_JOURNAL_PREVIEW, fill: { days: windowDays, today: vietnamDayKey() } }),
       { syncedAt: last._max.syncedAt?.toISOString() ?? null, source, sheet, from, to });
   });
 }

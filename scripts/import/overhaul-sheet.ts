@@ -5,6 +5,9 @@
  *   npm run overhaul:sheet                         # đẩy hàng đợi còn tồn (timer dh1-overhaul-sheet-push, 15 phút)
  *   npm run overhaul:sheet -- --daily              # 16:00: "Không mở ngày thực hiện" cho hôm nay rồi đẩy (dh1-overhaul-daily-status)
  *   npm run overhaul:sheet -- --daily --day 2026-10-06   # chạy bù một ngày đã qua
+ *   npm run overhaul:sheet -- --fill-not-started   # đếm ô ngày ĐÃ QUA còn trống sẽ điền "Chưa thực hiện" (không ghi)
+ *   npm run overhaul:sheet -- --fill-not-started --apply   # GHI ngay các ô đó (chạy bù / kiểm tra tay)
+ *                                                  Tự chạy: lượt đẩy đầu tiên sau 0 giờ (giờ VN) và lượt 16:00 --daily.
  *   npm run overhaul:sheet -- --status             # chỉ xem hàng đợi (không ghi gì)
  *   npm run overhaul:sheet -- --dry                # đọc Sheet, in các ô SẼ ghi cho hàng đợi hiện tại (không ghi gì)
  *   npm run overhaul:sheet -- --setup              # xem trước việc đổi danh sách trạng thái ô ngày (không ghi)
@@ -66,6 +69,16 @@ async function main() {
       console.log(apply ? "Đã đổi danh sách trạng thái ô ngày." : "Chỉ xem trước — thêm --apply để ghi lên Sheet.");
       return;
     }
+    if (flag("--fill-not-started")) {
+      const apply = flag("--apply");
+      if (apply && !writer.overhaulSheetWriteEnabled()) throw new Error("Chưa bật ghi Sheet (OVERHAUL_SHEET_WRITE=1 trong .env)");
+      const result = apply ? await writer.drainOverhaulSheetOutbox({ waitForLock: true, fillNotStarted: true }) : null;
+      const preview = apply ? null : await writer.fillOverhaulNotStartedDays({ apply: false });
+      if (preview) console.log(`Sẽ điền ${preview.cells} ô “Chưa thực hiện” (${preview.rows} hạng mục, ${preview.tabs} tab) — thêm --apply để ghi.`);
+      if (result) console.log(result.busy ? "Tiến trình khác đang đẩy lâu — thử lại sau." : `Đã điền ${result.filled ?? 0} ô “Chưa thực hiện”.`);
+      for (const error of [...(preview?.errors ?? []), ...(result?.errors ?? [])]) console.error(`  LỖI — ${error}`);
+      return;
+    }
     if (flag("--daily")) {
       const day = option("--day") ?? writer.vnDay(new Date());
       if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) throw new Error("--day phải dạng yyyy-mm-dd");
@@ -80,9 +93,11 @@ async function main() {
       return;
     }
     // Một tiến trình đẩy tại một thời điểm: web đang đẩy thì chờ tới lượt (hàng đợi khi đó thường đã sạch).
-    const result = await writer.drainOverhaulSheetOutbox({ waitForLock: true });
+    // Ngày vừa qua còn ô trống → "Chưa thực hiện": lượt timer đầu tiên sau 0 giờ VN (00:00–00:59) và lượt 16:00 (chạy bù).
+    const vnHourNow = new Date(Date.now() + 7 * 3600_000).getUTCHours();
+    const result = await writer.drainOverhaulSheetOutbox({ waitForLock: true, fillNotStarted: flag("--daily") || vnHourNow === 0 });
     if (result.busy) console.log("Tiến trình khác đang đẩy lâu — để lượt timer sau.");
-    console.log(`Đã ghi ${result.written} dòng hạng mục lên Sheet${result.rateLimited ? " · có lúc chạm hạn mức Google, đã chờ rồi ghi tiếp" : ""}${result.errors.length ? ` · ${result.errors.length} lỗi` : ""}`);
+    console.log(`Đã ghi ${result.written} dòng hạng mục lên Sheet${result.filled !== undefined ? ` · điền ${result.filled} ô “Chưa thực hiện”` : ""}${result.rateLimited ? " · có lúc chạm hạn mức Google, đã chờ rồi ghi tiếp" : ""}${result.errors.length ? ` · ${result.errors.length} lỗi` : ""}`);
     for (const error of result.errors) console.error(`  LỖI — ${error}`);
     if (result.errors.some(error => !/giới hạn số lần gọi/.test(error))) process.exitCode = 1;
   } catch (error) {

@@ -4,7 +4,8 @@ import { prisma } from "@/lib/prisma";
 import { a1Tab, batchGetValues, batchUpdateSpreadsheet, batchUpdateValues, columnLetter, getProtectedRanges, getSheetFormatting, getSpreadsheet, getValidationGrid, GoogleSheetsError, serviceAccountEmail, spreadsheetIdFromUrl, type ConditionalFormat, type GridRange, type SheetTab } from "@/lib/server/google-sheets";
 import { overhaulScheduleLinks } from "@/lib/server/overhaul-schedules";
 import { findHeader, overhaulItemUsage, repairDateCode } from "@/lib/server/work-permit-overhaul";
-import { overhaulJournalText, overhaulRank } from "@/lib/overhaul-progress-grid";
+import { overhaulJournalText, overhaulNotStartedFill, overhaulRank } from "@/lib/overhaul-progress-grid";
+import { OVERHAUL_DAY_COUNT, overhaulDayDate } from "@/lib/overhaul-milestones-source";
 import { isOverhaulExtraCode, OVERHAUL_CODE_PATTERN, OVERHAUL_DAY_STATUSES, OVERHAUL_HOLDING_STATUSES, OVERHAUL_SOURCES, overhaulItemKey, overhaulItemsOf, type OverhaulItemProgress, type OverhaulSource } from "@/lib/work-permit-overhaul";
 
 /*
@@ -182,6 +183,67 @@ export async function enqueueOverhaulNoSessionDay(day: string) {
   })));
   await prisma.$transaction(tx => enqueue(tx, rows));
   return { permits: permits.length, rows: rows.length };
+}
+
+/**
+ * Ngày ĐÃ QUA mà ô ngày của hạng mục còn trống → ghi "Chưa thực hiện" (nghiệp vụ 11/10/2026), mọi tab hạng mục của 4 file.
+ * Quy tắc chung với web: overhaulNotStartedFill (không điền hôm nay, không điền sau "Kết thúc công tác"). Chỉ điền ô TRỐNG —
+ * ô người dùng gõ tay hay web đã ghi giữ nguyên; ô đã có hàng đợi web (kể cả chưa đẩy) cũng bỏ qua để web ghi kết quả thật.
+ * "Trạng thái hiện tại" giữ đúng chữ đang hiện: ghi lại giá trị đó (thay công thức "ô ngày cuối" nếu có), kẻo ô vừa tự điền
+ * thành trạng thái hiện tại. Chạy lại không ghi gì thêm. Mặc định chỉ đếm; apply=true mới ghi. Gọi trong khoá đẩy hàng đợi.
+ */
+export async function fillOverhaulNotStartedDays(options: { apply: boolean; today?: string }) {
+  const today = options.today ?? vnDay(new Date());
+  const days = Array.from({ length: OVERHAUL_DAY_COUNT }, (_, i) => overhaulDayDate(i + 1)).filter(day => day < today);
+  const result = { cells: 0, rows: 0, tabs: 0, errors: [] as string[] };
+  if (!days.length) return result;
+  const links = await overhaulScheduleLinks();
+  const tabs = await prisma.workPermitOverhaulItem.findMany({ where: { isActive: true }, distinct: ["source", "sheet"], select: { source: true, sheet: true } });
+  const key = (source: string, sheet: string, code: string, day: string) => `${source} ${sheet} ${code} ${day}`;
+  const queued = new Set((await prisma.overhaulSheetOutbox.findMany({
+    where: { day: { gte: days[0], lt: today } }, distinct: ["source", "sheet", "code", "day"], select: { source: true, sheet: true, code: true, day: true },
+  })).map(row => key(row.source, row.sheet, row.code, row.day)));
+  for (const source of Object.keys(OVERHAUL_SOURCES) as OverhaulSource[]) {
+    const names = tabs.filter(tab => tab.source === source).map(tab => tab.sheet);
+    const spreadsheetId = spreadsheetIdFromUrl(links.find(link => link.id === source)?.url ?? "");
+    if (!names.length || !spreadsheetId) continue;
+    const label = OVERHAUL_SOURCES[source];
+    try {
+      const meta = await getSpreadsheet(spreadsheetId);
+      const present = names.map(name => meta.tabs.find(tab => tab.title === name)).filter((tab): tab is SheetTab => Boolean(tab));
+      const values = await batchGetValues(spreadsheetId, present.map(tab => `${a1Tab(tab.title)}!A1:${columnLetter(tab.columnCount - 1)}${tab.rowCount}`));
+      const cells: Array<{ range: string; value: string }> = [];
+      present.forEach((tab, t) => {
+        const layout = layoutOf(values[t] ?? []);
+        // Tab gộp không có cột "Ngày n" (vd "Turbine- Cơ") không có ô ngày để điền — bỏ qua, không phải lỗi.
+        if (typeof layout === "string") { if (!layout.includes("không có cột")) result.errors.push(`${label} · “${tab.title}”: ${layout}`); return; }
+        result.tabs++;
+        // Ngày có đúng một cột trên tab (cột trùng ngày bỏ qua như khi ghi kết quả).
+        const columns = days.flatMap(day => {
+          const column = layout.duplicateDays.has(dayKey(day)) ? undefined : layout.dayColumn.get(dayKey(day));
+          return column === undefined ? [] : [{ day, column }];
+        });
+        const ref = (r: number, c: number) => `${a1Tab(tab.title)}!${columnLetter(c)}${r + 1}`;
+        for (const [code, r] of layout.codeRow) {
+          if (layout.duplicateCodes.has(code)) continue;
+          const row = layout.rows[r] ?? [];
+          const fill = overhaulNotStartedFill(columns.map(c => c.day), columns.map(c => row[c.column]), today)
+            .filter(i => !queued.has(key(source, tab.title, code, columns[i].day)));
+          if (!fill.length) continue;
+          result.rows++;
+          for (const i of fill) cells.push({ range: ref(r, columns[i].column), value: OVERHAUL_DAY_STATUSES.NOT_STARTED });
+          const current = (row[layout.statusColumn] ?? "").trim();
+          if (layout.statusColumn >= 0 && current) cells.push({ range: ref(r, layout.statusColumn), value: current });
+        }
+      });
+      result.cells += cells.filter(cell => cell.value === OVERHAUL_DAY_STATUSES.NOT_STARTED).length;
+      // Từng phần ~2.000 ô / lần gọi: tab lớn (Trực phụ điện ~470 hạng mục × nhiều ngày) không vượt cỡ một yêu cầu.
+      if (options.apply) for (let i = 0; i < cells.length; i += 2000) await batchUpdateValues(spreadsheetId, cells.slice(i, i + 2000));
+    } catch (error) {
+      result.errors.push(`${label}: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+  return result;
 }
 
 // ───────────────────────────── Đọc vị trí trên Sheet ─────────────────────────────
@@ -374,7 +436,9 @@ async function postpone(rows: OverhaulSheetOutbox[], error: string) {
   } });
 }
 
-export type OverhaulPushResult = { claimed: number; written: number; retried: number; failed: number; errors: string[]; disabled?: boolean; rateLimited?: boolean; busy?: boolean; planned?: Array<{ range: string; value: string | number }> };
+export type OverhaulPushResult = { claimed: number; written: number; retried: number; failed: number; errors: string[]; disabled?: boolean; rateLimited?: boolean; busy?: boolean; planned?: Array<{ range: string; value: string | number }>;
+  /** Số ô ngày đã qua được điền "Chưa thực hiện" (chỉ khi gọi với fillNotStarted). */
+  filled?: number };
 
 /**
  * Công tắc ghi: chỉ khi OVERHAUL_SHEET_WRITE=1 (đặt trong .env production khi Sheet đã sẵn sàng). Máy dev dùng chung link
@@ -615,7 +679,7 @@ export async function insertPendingOverhaulExtras() {
  *  - không chờ (timer): bỏ qua, trả `busy`.
  * Gặp hạn mức (429): dòng được hoãn ~70 giây, người giữ khoá ngủ qua phút đó rồi đẩy tiếp — không phải đợi timer.
  */
-export async function drainOverhaulSheetOutbox(options: { waitForLock?: boolean; gatherMs?: number } = {}): Promise<OverhaulPushResult> {
+export async function drainOverhaulSheetOutbox(options: { waitForLock?: boolean; gatherMs?: number; fillNotStarted?: boolean } = {}): Promise<OverhaulPushResult> {
   const total: OverhaulPushResult = { claimed: 0, written: 0, retried: 0, failed: 0, errors: [] };
   if (!overhaulSheetWriteEnabled()) return { ...total, disabled: true };
   const waitUntil = Date.now() + (options.waitForLock ? LOCK_WAIT_MS : 0);
@@ -638,6 +702,16 @@ export async function drainOverhaulSheetOutbox(options: { waitForLock?: boolean;
         total.errors.push(...batch.errors);
         if (batch.rateLimited) { total.rateLimited = true; await sleep(RATE_LIMIT_RETRY_MS + 1_000); continue; }
         if (!batch.claimed) break;
+      }
+      // Sau khi đẩy hết kết quả thật: ngày đã qua còn trống → "Chưa thực hiện" (cùng khoá, không ghi chồng với lượt đẩy khác).
+      if (options.fillNotStarted) {
+        try {
+          const fill = await fillOverhaulNotStartedDays({ apply: true });
+          total.filled = fill.cells;
+          total.errors.push(...fill.errors.map(error => `Điền “Chưa thực hiện”: ${error}`));
+        } catch (error) {
+          total.errors.push(`Điền “Chưa thực hiện”: ${error instanceof Error ? error.message : String(error)}`);
+        }
       }
       return true;
     }, { maxWait: 10_000, timeout: DRAIN_MS + 3 * 60_000 });

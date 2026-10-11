@@ -206,8 +206,11 @@ export default function OverhaulProgressPage() {
                       const cell = row.days[day.date];
                       return (
                         <td key={day.n} className={cn("border-r border-border/70 p-0.5", day.date === today && "bg-amber-50")}>
-                          {cell && <button type="button" onClick={() => setOpened({ row, n: day.n, date: day.date })}
-                            className="block min-h-8 w-full rounded px-1 text-[11px] font-semibold leading-tight" style={STATUS_STYLE[cell.status]}>{cell.status}</button>}
+                          {/* Ô tự điền (ngày đã qua, không có kết quả): chỉ hiện chữ, không có nhật ký để mở. */}
+                          {cell && (cell.auto
+                            ? <span className="flex min-h-8 w-full items-center justify-center rounded px-1 text-center text-[11px] font-semibold leading-tight" style={STATUS_STYLE[cell.status]} title="Ngày đã qua, không có cập nhật tiến độ">{cell.status}</span>
+                            : <button type="button" onClick={() => setOpened({ row, n: day.n, date: day.date })}
+                              className="block min-h-8 w-full rounded px-1 text-[11px] font-semibold leading-tight" style={STATUS_STYLE[cell.status]}>{cell.status}</button>)}
                         </td>
                       );
                     })}

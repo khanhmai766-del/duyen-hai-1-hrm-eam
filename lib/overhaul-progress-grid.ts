@@ -12,6 +12,23 @@ export const overhaulStatusPriority = (status: string) => status === OVERHAUL_DA
 /** Hạng của một kết quả = "yyyy-mm-dd|ưu tiên|ms" (so chuỗi đúng thứ tự): ngày sau thắng, rồi ưu tiên, rồi lúc xếp hàng. */
 export const overhaulRank = (day: string, at: Date, status: string) => `${day}|${overhaulStatusPriority(status)}|${String(at.getTime()).padStart(15, "0")}`;
 
+/**
+ * Ngày ĐÃ QUA mà hạng mục không có kết quả nào → ô ngày "Chưa thực hiện" (nghiệp vụ 11/10/2026) — trên Sheet (bộ ghi điền
+ * ô trống) lẫn trên web (bảng tự hiện). `cells` = ô từng ngày theo thứ tự `days` (chuỗi rỗng / undefined = trống).
+ * Không điền: hôm nay trở đi (ngày chưa qua), và các ngày sau ô "Kết thúc công tác" gần nhất (hạng mục đã xong, trừ khi
+ * có PCT khác ghi tiếp sau đó). Trả về chỉ số các ngày cần điền.
+ */
+export function overhaulNotStartedFill(days: string[], cells: Array<string | null | undefined>, today: string) {
+  const fill: number[] = [];
+  let last = "";
+  days.forEach((day, i) => {
+    const value = (cells[i] ?? "").trim();
+    if (value) { last = value; return; }
+    if (day < today && last !== OVERHAUL_DAY_STATUSES.CLOSED) fill.push(i);
+  });
+  return fill;
+}
+
 /** Dòng chốt phiếu (kết thúc / huỷ) — nối SAU nội dung làm việc của PCT, không thay nó. */
 const FINAL_NOTE_KINDS = new Set(["CLOSE", "CANCEL"]);
 
@@ -77,8 +94,8 @@ export function overhaulKpis(rows: Array<Pick<OverhaulGridRow, "percent">>) {
     progress: total ? percents.reduce((sum, percent) => sum + percent, 0) / total : 0,
   };
 }
-/** `more` = nhật ký đã cắt gọn cho bảng; bấm ô mới tải bản đầy đủ. */
-export type OverhaulGridDay = { status: string; journal: string; more?: boolean };
+/** `more` = nhật ký đã cắt gọn cho bảng; bấm ô mới tải bản đầy đủ. `auto` = "Chưa thực hiện" tự điền cho ngày đã qua không có kết quả. */
+export type OverhaulGridDay = { status: string; journal: string; more?: boolean; auto?: boolean };
 /**
  * Độ dài nhật ký gửi kèm bảng (bản đầy đủ tải riêng khi bấm ô) — giữ dữ liệu tải về nhỏ khi nhật ký ngày càng nhiều.
  * Ô nhật ký trên bảng chỉ hiện 4 dòng ≈ 80 ký tự.
@@ -108,7 +125,7 @@ export function overhaulDayCell(dayRows: OverhaulProgressRow[], permitNumbers: M
  * nhật ký (mặc định = `rows`); `previewLength` cắt gọn nhật ký trong bảng (`more` = còn nữa, bấm ô để tải đủ).
  */
 export function buildOverhaulGrid(items: OverhaulGridItem[], rows: OverhaulProgressRow[], permitNumbers: Map<string, string>,
-  options: { summaryRows?: OverhaulSummaryRow[]; previewLength?: number } = {}): OverhaulGridRow[] {
+  options: { summaryRows?: OverhaulSummaryRow[]; previewLength?: number; fill?: { days: string[]; today: string } } = {}): OverhaulGridRow[] {
   const group = <T extends { code: string }>(list: T[]) => {
     const map = new Map<string, T[]>();
     for (const row of list) { const bucket = map.get(row.code); if (bucket) bucket.push(row); else map.set(row.code, [row]); }
@@ -130,6 +147,21 @@ export function buildOverhaulGrid(items: OverhaulGridItem[], rows: OverhaulProgr
       const cell = overhaulDayCell(dayRows, permitNumbers);
       const limit = options.previewLength;
       days[day] = limit && cell.journal.length > limit ? { ...cell, journal: `${cell.journal.slice(0, limit).trimEnd()}…`, more: true } : cell;
+    }
+    // Ngày đã qua không có kết quả → "Chưa thực hiện" (như bộ ghi điền lên Sheet). Xét cả ngày trước cửa sổ đang xem để biết
+    // hạng mục đã "Kết thúc công tác" chưa; "Trạng thái hiện tại" không đổi theo ô tự điền.
+    if (options.fill) {
+      const { days: windowDays, today } = options.fill;
+      // Trạng thái thắng của từng ngày trên toàn đợt (cùng quy tắc overhaulRank).
+      const winner = new Map<string, { rank: string; status: string }>();
+      for (const row of summary) {
+        const rank = overhaulRank(row.day, row.createdAt, row.status);
+        if (rank >= (winner.get(row.day)?.rank ?? "")) winner.set(row.day, { rank, status: row.status });
+      }
+      const before = [...winner.keys()].filter(day => day < (windowDays[0] ?? "")).sort().at(-1);
+      const all = before ? [before, ...windowDays] : windowDays;
+      const cells = all.map(day => days[day]?.status ?? winner.get(day)?.status);
+      for (const i of overhaulNotStartedFill(all, cells, today)) days[all[i]] = { status: OVERHAUL_DAY_STATUSES.NOT_STARTED, journal: "", auto: true };
     }
     // Web chưa ghi % → giữ đúng số đang có trên Sheet, để thẻ tổng hợp web và hàng tổng hợp Sheet ra cùng con số.
     return { ...item, percent: percent ?? item.sheetPercent ?? null, status, hasPermit: summary.length > 0, days };

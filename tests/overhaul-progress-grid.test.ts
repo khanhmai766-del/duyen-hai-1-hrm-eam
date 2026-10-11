@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildOverhaulGrid, overhaulJournalText, overhaulKpis, parseSheetPercent, type OverhaulProgressRow } from "../lib/overhaul-progress-grid";
+import { buildOverhaulGrid, overhaulJournalText, overhaulKpis, overhaulNotStartedFill, parseSheetPercent, type OverhaulProgressRow } from "../lib/overhaul-progress-grid";
 
 const at = (day: string, hour: number) => new Date(`${day}T${String(hour).padStart(2, "0")}:00:00+07:00`);
 const item = (code: string) => ({ code, device: "Bơm", content: `Hạng mục ${code}`, contractor: "IDC", positionTitle: "" });
@@ -95,4 +95,30 @@ test("4 thẻ KPI cùng công thức hàng tổng hợp Sheet", () => {
 
 test("Dòng không có ghi chú không tạo đoạn nhật ký", () => {
   assert.equal(overhaulJournalText([{ permitId: "co", kind: "NO_SESSION", note: "", createdAt: at("2026-10-06", 16) }], numbers), "");
+});
+
+test("Ngày đã qua còn trống → điền Chưa thực hiện; không điền hôm nay, không điền sau Kết thúc công tác", () => {
+  const days = ["2026-10-06", "2026-10-07", "2026-10-08", "2026-10-09", "2026-10-10", "2026-10-11"];
+  assert.deepEqual(overhaulNotStartedFill(days, ["", "Đang thực hiện", "", "Kết thúc công tác", "", ""], "2026-10-11"), [0, 2]);
+  // Có PCT khác ghi tiếp sau khi kết thúc → các ngày trống sau đó lại được điền.
+  assert.deepEqual(overhaulNotStartedFill(days, ["Kết thúc công tác", "", "Đang thực hiện", "", "", ""], "2026-10-11"), [3, 4]);
+  // Ô gõ tay giữ nguyên.
+  assert.deepEqual(overhaulNotStartedFill(days, ["Không thực hiện", "Không thực hiện", "", "", "", ""], "2026-10-09"), [2]);
+});
+
+test("Bảng web: ô ngày đã qua không có kết quả hiện Chưa thực hiện (tự điền), Trạng thái hiện tại không đổi", () => {
+  const rows = [row({ permitId: "co", day: "2026-10-07", status: "Không thực hiện" }, 17)];
+  const window = ["2026-10-06", "2026-10-07", "2026-10-08", "2026-10-09"];
+  const [grid] = buildOverhaulGrid([item("1.1")], rows, numbers, { fill: { days: window, today: "2026-10-09" } });
+  assert.deepEqual(grid.days["2026-10-06"], { status: "Chưa thực hiện", journal: "", auto: true });
+  assert.equal(grid.days["2026-10-07"].status, "Không thực hiện");
+  assert.equal(grid.days["2026-10-08"].auto, true);
+  assert.equal(grid.days["2026-10-09"], undefined); // hôm nay chưa qua
+  assert.equal(grid.status, "Không thực hiện");
+});
+
+test("Bảng web: cửa sổ ngày sau Kết thúc công tác không tự điền", () => {
+  const summary = [{ code: "1.1", day: "2026-10-07", status: "Kết thúc công tác", percent: 100, createdAt: at("2026-10-07", 17) }];
+  const [grid] = buildOverhaulGrid([item("1.1")], [], numbers, { summaryRows: summary, fill: { days: ["2026-10-13", "2026-10-14"], today: "2026-10-20" } });
+  assert.deepEqual(grid.days, {});
 });
