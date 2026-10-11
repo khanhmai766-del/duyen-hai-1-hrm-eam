@@ -3,7 +3,7 @@ import { fail, handle, ok } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 import { parseGoogleDriveTarget } from "@/lib/google-drive-document";
 import { parseDocumentDriveSyncRecord, verifyN8nDocumentSyncToken } from "@/lib/document-drive-sync";
-import { buildDocumentAiIndexVersion } from "@/lib/document-ai-index";
+import { aiIndexRetryAt, buildDocumentAiIndexVersion } from "@/lib/document-ai-index";
 import { parseDocumentDriveCandidates } from "@/lib/document-drive-candidates";
 
 export const dynamic = "force-dynamic";
@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
              "driveFileName", "driveMimeType", "driveModifiedAt", "driveChecksum",
              "driveCandidateFiles", "driveManualFileId",
              "driveSyncStatus", "driveSyncError", "driveLastSyncedAt",
-             "aiIndexedAt", "aiIndexVersion", "aiIndexError"
+             "aiIndexedAt", "aiIndexVersion", "aiIndexError", "aiIndexAttemptedAt"
       FROM "DigitalDocument"
       WHERE category = 'PROCEDURE' AND id > $1
       ORDER BY id ASC
@@ -28,17 +28,26 @@ export async function GET(req: NextRequest) {
 
     const hasMore = rows.length > limit;
     const nextCursor = hasMore ? String(rows[limit - 1]?.id ?? "") : null;
+    const now = Date.now();
     const page = rows.slice(0, limit).map((row) => {
       const source = parseGoogleDriveTarget(String(row.documentUrl ?? ""));
+      const desiredAiIndexVersion = buildDocumentAiIndexVersion({
+        driveChecksum: typeof row.driveChecksum === "string" ? row.driveChecksum : null,
+        driveModifiedAt: row.driveModifiedAt instanceof Date ? row.driveModifiedAt : null,
+      });
+      // Tài liệu nạp LỖI còn trong thời gian chờ (hết hạn mức → ngày mai; lỗi khác → 3 ngày): báo "không cần nạp" bằng cách
+      // trả desiredAiIndexVersion = phiên bản hiện có — workflow dh1DocumentAiIndex chỉ chọn dòng lệch phiên bản, nên khỏi
+      // sửa workflow mà tài liệu hỏng không chặn cả hàng. aiIndexRetryAt để người xem biết khi nào thử lại.
+      const retryAt = aiIndexRetryAt({ aiIndexError: row.aiIndexError as string | null, aiIndexAttemptedAt: row.aiIndexAttemptedAt as Date | null,
+        driveModifiedAt: row.driveModifiedAt as Date | null });
+      const deferred = retryAt !== null && retryAt.getTime() > now;
       return {
         ...row,
         driveFolderId: row.driveFolderId ?? (source.kind === "FOLDER" ? source.id : null),
         driveCandidateFiles: parseDocumentDriveCandidates(row.driveCandidateFiles),
         legacyTargetKind: source.kind,
-        desiredAiIndexVersion: buildDocumentAiIndexVersion({
-          driveChecksum: typeof row.driveChecksum === "string" ? row.driveChecksum : null,
-          driveModifiedAt: row.driveModifiedAt instanceof Date ? row.driveModifiedAt : null,
-        }),
+        desiredAiIndexVersion: deferred ? row.aiIndexVersion ?? null : desiredAiIndexVersion,
+        aiIndexRetryAt: deferred ? retryAt!.toISOString() : null,
       };
     });
     return ok(page, { nextCursor, hasMore });

@@ -1019,3 +1019,17 @@ PRESETS["quet-the-sai-nhom"] = {
     await page.getByText("Sai nhóm nhân sự — không cho vào").waitFor({ timeout: 20_000 });
   },
 };
+
+// Danh mục quy trình: bộ lọc "Tình trạng PDF / AI" mở sẵn (11/10/2026) — chỉ đọc DB dev.
+PRESETS["quy-trinh-loc-pdf"] = {
+  description: "Trang Danh mục quy trình, mở hộp Bộ lọc có ô Tình trạng PDF / AI và danh sách chọn — không ghi DB",
+  async prepare() { return {}; },
+  routes: () => ["/documents/procedures"],
+  async interact(page) {
+    await page.getByRole("button", { name: /Bộ lọc/ }).locator("visible=true").first().click();
+    await page.getByText("Tình trạng PDF / AI").waitFor({ timeout: 20_000 });
+    // Ô thứ 3 trong hộp lọc (Cương vị · Loại QT · Tình trạng PDF / AI · Khối).
+    await page.getByRole("dialog").getByRole("combobox").nth(2).click();
+    await page.getByRole("option", { name: /Cần xử lý PDF/ }).waitFor({ timeout: 10_000 });
+  },
+};

@@ -1298,6 +1298,8 @@ model DigitalDocument {
   aiIndexedAt         DateTime?
   aiIndexVersion      String?
   aiIndexError        String?
+  /// Lần gần nhất n8n gửi PDF để nạp AI (thành công hay lỗi) — tính thời gian chờ thử lại (lib/document-ai-index.ts aiIndexRetryAt).
+  aiIndexAttemptedAt  DateTime?
   createdById         String?
   updatedById         String?
   createdAt           DateTime  @default(now())

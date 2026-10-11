@@ -47,9 +47,6 @@ export async function POST(req: NextRequest) {
     const contentType = req.headers.get("content-type")?.split(";", 1)[0]?.trim().toLowerCase();
     if (contentType !== "application/pdf") return fail("Nội dung lập chỉ mục phải là file PDF", 415);
     const declaredSize = Number(req.headers.get("content-length") ?? 0);
-    if (Number.isFinite(declaredSize) && declaredSize > MAX_DOCUMENT_PDF_BYTES) {
-      return fail("File PDF vượt quá giới hạn 25 MB", 413);
-    }
 
     const rows = await prisma.$queryRawUnsafe<ProcedureDocument[]>(`
       SELECT id, title, "driveFileId", "driveFileName", "driveMimeType", "driveModifiedAt",
@@ -60,12 +57,23 @@ export async function POST(req: NextRequest) {
     `, documentId);
     const document = rows[0];
     if (!document) return fail("Không tìm thấy tài liệu quy trình", 404);
+    // Mọi lần từ chối từ đây đều GHI lỗi + lúc thử (11/10/2026): workflow n8n bỏ qua lỗi của bước gửi và luôn chọn tài liệu
+    // đầu hàng chưa lỗi — từ chối mà không ghi thì ngày nào cũng gửi lại đúng tài liệu đó (PCT NH3 kẹt 05–11/10/2026).
+    const reject = async (message: string, status: number) => {
+      await prisma.$executeRaw`
+        UPDATE "DigitalDocument" SET "aiIndexError" = ${message}, "aiIndexAttemptedAt" = CURRENT_TIMESTAMP WHERE id = ${document.id}
+      `.catch(() => undefined);
+      return fail(message, status);
+    };
     if (document.driveSyncStatus !== "SYNCED" || !document.driveFileId) {
-      return fail("Tài liệu chưa đồng bộ được file PDF chính", 409);
+      return reject("Tài liệu chưa đồng bộ được file PDF chính", 409);
     }
-    if (document.driveFileId !== driveFileId) return fail("File Drive không còn khớp với tài liệu", 409);
+    if (document.driveFileId !== driveFileId) return reject("File Drive không còn khớp với tài liệu", 409);
     if (document.driveMimeType && document.driveMimeType !== "application/pdf") {
-      return fail("File Drive đã đồng bộ không phải PDF", 409);
+      return reject("File Drive đã đồng bộ không phải PDF", 409);
+    }
+    if (Number.isFinite(declaredSize) && declaredSize > MAX_DOCUMENT_PDF_BYTES) {
+      return reject("File PDF vượt quá giới hạn 25 MB", 413);
     }
 
     const desiredVersion = buildDocumentAiIndexVersion(document);
@@ -74,13 +82,13 @@ export async function POST(req: NextRequest) {
     }
 
     const data = Buffer.from(await req.arrayBuffer());
-    if (!data.length) return fail("File PDF đang trống");
-    if (data.length > MAX_DOCUMENT_PDF_BYTES) return fail("File PDF vượt quá giới hạn 25 MB", 413);
+    if (!data.length) return reject("File PDF đang trống — n8n tải từ Drive về không có nội dung", 400);
+    if (data.length > MAX_DOCUMENT_PDF_BYTES) return reject("File PDF vượt quá giới hạn 25 MB", 413);
 
     try {
       const extraction = await extractPdfPreview(data);
       const prepared = prepareDocumentAiContent(extraction.text, document.title);
-      if (!prepared.chunks.length) return fail("Không trích xuất được nội dung chữ từ PDF", 422);
+      if (!prepared.chunks.length) return reject("Không trích xuất được nội dung chữ từ PDF", 422);
 
       const vectors = await embedTexts(
         prepared.chunks.map((chunk) => knowledgeEmbeddingText(document.title, chunk)),
@@ -130,7 +138,8 @@ export async function POST(req: NextRequest) {
           UPDATE "DigitalDocument"
           SET "aiIndexedAt" = CURRENT_TIMESTAMP,
               "aiIndexVersion" = ${desiredVersion},
-              "aiIndexError" = NULL
+              "aiIndexError" = NULL,
+              "aiIndexAttemptedAt" = CURRENT_TIMESTAMP
           WHERE id = ${document.id} AND "driveFileId" = ${document.driveFileId}
         `,
       ]);
@@ -148,7 +157,7 @@ export async function POST(req: NextRequest) {
       const message = safeError(error);
       await prisma.$executeRaw`
         UPDATE "DigitalDocument"
-        SET "aiIndexError" = ${message}
+        SET "aiIndexError" = ${message}, "aiIndexAttemptedAt" = CURRENT_TIMESTAMP
         WHERE id = ${document.id}
       `.catch(() => undefined);
       return fail(`Không thể lập chỉ mục tài liệu: ${message}`, 500);

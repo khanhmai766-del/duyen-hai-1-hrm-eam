@@ -311,6 +311,8 @@ export function DocumentCatalogPage({
   const [positionFilter, setPositionFilter] = React.useState(ALL_FILTER);
   const [blockFilter, setBlockFilter] = React.useState(ALL_FILTER);
   const [procedureTypeFilter, setProcedureTypeFilter] = React.useState(ALL_FILTER);
+  /** Tình trạng PDF / nạp AI (quy trình): tìm nhanh tài liệu cần người xử lý. */
+  const [pdfFilter, setPdfFilter] = React.useState<PdfFilter>(ALL_FILTER);
   const [yearFilter, setYearFilter] = React.useState("");
   const [tagFilter, setTagFilter] = React.useState(() => tagOptions[0]?.value ?? ALL_FILTER);
   const [expandedId, setExpandedId] = React.useState<string | null>(null);
@@ -370,12 +372,12 @@ export function DocumentCatalogPage({
   const documentFilterCount = [
     positionFilter,
     blockFilter,
-    ...(hasProcedureValidity ? [procedureTypeFilter] : []),
+    ...(hasProcedureValidity ? [procedureTypeFilter, pdfFilter] : []),
   ].filter((value) => value !== ALL_FILTER).length;
 
   // Đổi danh mục / bộ lọc / ô tìm thì thu dòng mở và về trang 1 — chỉnh lúc render, khoá theo nội dung;
   // null để lần render đầu cũng chạy như effect cũ.
-  const listResetKey = JSON.stringify([category, q, historyTableLayout, yearFilter, tagFilter, procedureTypeFilter, positionFilter, blockFilter]);
+  const listResetKey = JSON.stringify([category, q, historyTableLayout, yearFilter, tagFilter, procedureTypeFilter, positionFilter, blockFilter, pdfFilter]);
   const [listResetSeen, setListResetSeen] = React.useState<string | null>(null);
   if (listResetSeen !== listResetKey) {
     setListResetSeen(listResetKey);
@@ -396,6 +398,12 @@ export function DocumentCatalogPage({
     }
   }
 
+  const pdfFilterCounts = React.useMemo(() => {
+    const counts: Record<Exclude<PdfFilter, typeof ALL_FILTER>, number> = { NEEDS_PDF: 0, AI_ERROR: 0, AI_WAITING: 0, NO_PDF: 0 };
+    for (const item of docs.data?.data ?? []) { const kind = pdfFilterOf(item); if (kind) counts[kind]++; }
+    return counts;
+  }, [docs.data]);
+
   const rows = React.useMemo(() => {
     const source = docs.data?.data ?? [];
     const needle = q.trim().toLowerCase();
@@ -404,6 +412,7 @@ export function DocumentCatalogPage({
       if (hasTagField && tagFilter !== ALL_FILTER && item.decisionNumber !== tagFilter) return false;
       if (showEquipmentScope && positionFilter !== ALL_FILTER && !documentPositionMatches(item.managingPosition, positionFilter)) return false;
       if (hasProcedureValidity && procedureTypeFilter !== ALL_FILTER && normalizeProcedureType(item.procedureType) !== procedureTypeFilter) return false;
+      if (hasProcedureValidity && pdfFilter !== ALL_FILTER && pdfFilterOf(item) !== pdfFilter) return false;
       const itemBlocks = documentManagementBlocks(item);
       const itemBlock = itemBlocks.join(", ");
       if (showEquipmentScope && blockFilter !== ALL_FILTER && !itemBlocks.includes(blockFilter)) return false;
@@ -420,7 +429,7 @@ export function DocumentCatalogPage({
       if (aValidity.expired !== bValidity.expired) return aValidity.expired ? -1 : 1;
       return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
     });
-  }, [docs.data?.data, q, hasYearField, activeYearFilter, hasTagField, tagFilter, showEquipmentScope, positionFilter, procedureTypeFilter, blockFilter, hasProcedureValidity]);
+  }, [docs.data?.data, q, hasYearField, activeYearFilter, hasTagField, tagFilter, showEquipmentScope, positionFilter, procedureTypeFilter, blockFilter, hasProcedureValidity, pdfFilter]);
 
   const pageCount = Math.max(1, Math.ceil(rows.length / pageSize));
   const currentPage = Math.min(pageIndex, pageCount);
@@ -787,6 +796,22 @@ export function DocumentCatalogPage({
                     </Select>
                   </div>
                 )}
+                {hasProcedureValidity && (
+                  <div className="grid gap-1.5">
+                    <Label className="text-xs font-semibold text-slate-600">Tình trạng PDF / AI</Label>
+                    <Select value={pdfFilter} onValueChange={(value) => setPdfFilter(value as PdfFilter)}>
+                      <SelectTrigger className="h-10 w-full rounded-xl bg-white">
+                        <SelectValue placeholder="Chọn tình trạng PDF" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={ALL_FILTER}>Tất cả</SelectItem>
+                        {PDF_FILTERS.map(([value, label]) => (
+                          <SelectItem key={value} value={value}>{label} ({pdfFilterCounts[value]})</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
                 <div className="grid gap-1.5">
                   <Label className="text-xs font-semibold text-slate-600">Khối quản lý</Label>
                   <Select value={blockFilter} onValueChange={setBlockFilter}>
@@ -814,6 +839,7 @@ export function DocumentCatalogPage({
                       setPositionFilter(ALL_FILTER);
                       setProcedureTypeFilter(ALL_FILTER);
                       setBlockFilter(ALL_FILTER);
+                      setPdfFilter(ALL_FILTER);
                     }}
                   >
                     <RotateCcw className="h-3.5 w-3.5" /> Xóa lọc
@@ -2167,6 +2193,28 @@ function DetailNote({ label, text }: { label?: string; text?: string | null }) {
       <p className="whitespace-pre-wrap text-[13.5px] leading-[1.65] text-ink">{text || "—"}</p>
     </div>
   );
+}
+
+/**
+ * Bộ lọc "Tình trạng PDF / AI" (11/10/2026) — mỗi quy trình rơi vào tối đa MỘT nhóm:
+ *  - NEEDS_PDF: chưa lấy được PDF từ Drive và cần người xử lý (cần chọn PDF, mất quyền, lỗi, chưa đồng bộ lần nào);
+ *  - NO_PDF: "Không tìm thấy PDF" — thư mục chưa có file PDF, tạm để sau (không gộp vào "Cần xử lý PDF");
+ *  - AI_ERROR: đã có PDF nhưng nạp AI lỗi (workflow tự thử lại theo hạn mức);
+ *  - AI_WAITING: đã có PDF, đang chờ tới lượt nạp AI.
+ */
+type PdfFilter = typeof ALL_FILTER | "NEEDS_PDF" | "NO_PDF" | "AI_ERROR" | "AI_WAITING";
+const PDF_FILTERS: Array<[Exclude<PdfFilter, typeof ALL_FILTER>, string]> = [
+  ["NEEDS_PDF", "Cần xử lý PDF"],
+  ["AI_ERROR", "Nạp AI lỗi"],
+  ["AI_WAITING", "Chờ nạp AI"],
+  ["NO_PDF", "Không tìm thấy PDF (để sau)"],
+];
+function pdfFilterOf(item: { driveSyncStatus?: string | null; driveFileId?: string | null; aiIndexedAt?: string | Date | null; aiIndexError?: string | null }): Exclude<PdfFilter, typeof ALL_FILTER> | null {
+  if (item.driveSyncStatus === "MISSING") return "NO_PDF";
+  if (item.driveSyncStatus !== "SYNCED" || !item.driveFileId) return "NEEDS_PDF";
+  if (item.aiIndexError) return "AI_ERROR";
+  if (!item.aiIndexedAt) return "AI_WAITING";
+  return null;
 }
 
 function driveSyncLabel(status: string | null | undefined) {
