@@ -237,6 +237,7 @@ export function PcccTableCard({
   filtered,
   onPageChange,
   toolbarExtra,
+  searchExtra,
   footerNote,
   children,
 }: {
@@ -252,6 +253,8 @@ export function PcccTableCard({
   filtered?: boolean;
   onPageChange: (p: number) => void;
   toolbarExtra?: React.ReactNode;
+  /** Nút đặt ngay trước nhãn "Tìm kiếm:" ở nhóm bên phải thanh công cụ. */
+  searchExtra?: React.ReactNode;
   footerNote?: React.ReactNode;
   children: React.ReactNode;
 }) {
@@ -279,7 +282,8 @@ export function PcccTableCard({
           <span>dòng</span>
           {toolbarExtra}
         </div>
-        <div className="flex w-full items-center gap-2 md:w-auto">
+        <div className="flex w-full flex-wrap items-center gap-2 md:w-auto md:flex-nowrap">
+          {searchExtra}
           <span className="hidden text-sm text-muted-foreground md:inline">Tìm kiếm:</span>
           <div className="relative w-full md:w-60">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />

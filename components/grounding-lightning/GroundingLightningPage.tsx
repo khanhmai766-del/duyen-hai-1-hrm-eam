@@ -1318,6 +1318,10 @@ export default function GroundingLightningPage() {
         mobileTitle="TIẾP ĐỊA & CHỐNG SÉT"
       >
         <>
+          {isEditableSlot && <div className="flex flex-wrap gap-2" aria-label="Phạm vi tuyến ca">
+            <Button variant={pendingOnly ? "default" : "outline"} size="toolbar" aria-pressed={pendingOnly} onClick={() => setPendingOnly(true)}>Chưa xác nhận ({metrics.unsigned})</Button>
+            <Button variant={!pendingOnly ? "default" : "outline"} size="toolbar" aria-pressed={!pendingOnly} onClick={() => setPendingOnly(false)}>Toàn bộ tuyến ca ({metrics.total})</Button>
+          </div>}
           {/* Bộ lọc gom vào MỘT nút, bấm mới sổ bảng chọn — cùng khuôn với trang PCCC và
               sổ TBYCNN, và trả lại chiều cao cho bảng thay vì một hàng ô lọc luôn chiếm
               chỗ dù hầu hết thời gian không dùng tới. */}
@@ -1576,10 +1580,6 @@ export default function GroundingLightningPage() {
           />
         </KpiCard>
       </div>
-      {isEditableSlot && <div className="flex flex-wrap gap-2" aria-label="Phạm vi tuyến ca">
-        <Button variant={pendingOnly ? "default" : "outline"} className="h-10" aria-pressed={pendingOnly} onClick={() => setPendingOnly(true)}>Chưa xác nhận ({metrics.unsigned})</Button>
-        <Button variant={!pendingOnly ? "default" : "outline"} className="h-10" aria-pressed={!pendingOnly} onClick={() => setPendingOnly(false)}>Toàn bộ tuyến ca ({metrics.total})</Button>
-      </div>}
       {canManage && (
         <div className="space-y-3 rounded-xl border border-emerald-200 bg-emerald-50/60 p-3">
           <p className="text-sm text-ink">
@@ -1587,10 +1587,6 @@ export default function GroundingLightningPage() {
             Các vị trí chưa kiểm tra hoặc có khiếm khuyết cần cập nhật riêng.
           </p>
           <div className="flex flex-wrap items-center gap-2">
-            <Button variant="outline" className="h-10" disabled={confirming || !normalPageIds.length || query.isFetching}
-              onClick={() => setSelectedIds((old) => [...new Set([...old, ...normalPageIds])])}>
-              Chọn vị trí bình thường trên trang
-            </Button>
             <Button variant="ghost" className="h-10" disabled={confirming || !selectedIds.length}
               onClick={() => setSelectedIds([])}>Bỏ chọn</Button>
             <span className="text-sm font-medium" aria-live="polite">Đã chọn {eligibleSelectedIds.length} vị trí</span>
@@ -1609,6 +1605,12 @@ export default function GroundingLightningPage() {
         total={sorted.length}
         filtered={hasFilter}
         onPageChange={setPage}
+        searchExtra={canManage ? (
+          <Button variant="outline" className="h-10" disabled={confirming || !normalPageIds.length || query.isFetching}
+            onClick={() => setSelectedIds((old) => [...new Set([...old, ...normalPageIds])])}>
+            Chọn vị trí bình thường trên trang
+          </Button>
+        ) : null}
         toolbarExtra={
           sort.key !== SOURCE_ORDER ? (
             <Button variant="ghost" size="sm" onClick={() => setSort(DEFAULT_SORT)}>
@@ -1926,8 +1928,8 @@ export default function GroundingLightningPage() {
         )}
       </PcccTableCard>
       </div>
-      {canManage && eligibleSelectedIds.length > 0 && <div className="sticky bottom-[calc(5.5rem+env(safe-area-inset-bottom))] z-20 rounded-xl border border-emerald-200 bg-white p-3 shadow-lg lg:bottom-4">
-        <Button className="h-14 w-full text-base" onClick={confirmSelected} disabled={confirming || sign.isPending || query.isFetching}>
+      {canManage && eligibleSelectedIds.length > 0 && <div className="sticky bottom-[calc(5.5rem+env(safe-area-inset-bottom))] z-20 lg:bottom-4">
+        <Button className="h-14 w-full text-base shadow-lg" onClick={confirmSelected} disabled={confirming || sign.isPending || query.isFetching}>
           <CheckCircle2 className="mr-2 size-5" />{confirming ? "Đang xác nhận…" : `Xác nhận ${eligibleSelectedIds.length} vị trí bình thường`}
         </Button>
       </div>}
