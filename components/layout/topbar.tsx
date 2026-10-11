@@ -28,24 +28,8 @@ import { OPERATION_TYPE, ROLES, type RoleKey } from "@/lib/constants";
 import { cn, initials, formatDate } from "@/lib/utils";
 import { toast } from "sonner";
 import type { NavItem } from "@/lib/nav";
+import { gridTint, launcherItems } from "@/components/layout/nav-tints";
 
-// Tông màu gradient nhẹ cho từng ô trong bảng truy cập nhanh (gán theo chỉ số).
-const GRID_TINTS = [
-  "bg-gradient-to-br from-sky-100 to-sky-200 text-sky-700",
-  "bg-gradient-to-br from-violet-100 to-violet-200 text-violet-700",
-  "bg-gradient-to-br from-emerald-100 to-emerald-200 text-emerald-700",
-  "bg-gradient-to-br from-amber-100 to-amber-200 text-amber-700",
-  "bg-gradient-to-br from-rose-100 to-rose-200 text-rose-700",
-  "bg-gradient-to-br from-indigo-100 to-indigo-200 text-indigo-700",
-  "bg-gradient-to-br from-teal-100 to-teal-200 text-teal-700",
-  "bg-gradient-to-br from-orange-100 to-orange-200 text-orange-700",
-  "bg-gradient-to-br from-cyan-100 to-cyan-200 text-cyan-700",
-  "bg-gradient-to-br from-fuchsia-100 to-fuchsia-200 text-fuchsia-700",
-  "bg-gradient-to-br from-lime-100 to-lime-200 text-lime-700",
-  "bg-gradient-to-br from-blue-100 to-blue-200 text-blue-700",
-  "bg-gradient-to-br from-pink-100 to-pink-200 text-pink-700",
-  "bg-gradient-to-br from-purple-100 to-purple-200 text-purple-700",
-];
 const NAV_ACCESS_LEVELS = ["read", "personal", "manage", "full"] as const;
 
 /** Header mobile chỉ giữ tên lót cuối + tên để gọn mà vẫn đủ nhận diện người dùng. */
@@ -183,13 +167,8 @@ export function Topbar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
   // Quick-launch shortcuts (app grid) — top-level nav respecting admin-only.
   const quickLinks = React.useMemo(
     () =>
-      navSections.flatMap((s) =>
-        s.items.flatMap((i) => {
-          const children = i.children?.filter((child) => navItemAllowed(child, role, rbac.can, adminMode, positionCarrier));
-          if (children) return children.map((child) => ({ label: child.label, href: child.href, icon: child.icon, external: child.external }));
-          return navItemAllowed(i, role, rbac.can, adminMode, positionCarrier) ? [{ label: i.label, href: i.href, icon: i.icon, external: i.external }] : [];
-        })
-      ),
+      launcherItems(navSections, (item) => navItemAllowed(item, role, rbac.can, adminMode, positionCarrier))
+        .map((item) => ({ label: item.label, href: item.href, icon: item.icon, external: item.external })),
     [adminMode, navSections, positionCarrier, rbac.can, role]
   );
 
@@ -555,7 +534,7 @@ export function Topbar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
                       onClick={() => setGridOpen(false)}
                       className="flex flex-col items-center gap-1.5 rounded-lg p-2.5 text-center transition-colors hover:bg-muted"
                     >
-                      <span className={cn("flex h-9 w-9 items-center justify-center rounded-lg ring-1 ring-black/5", GRID_TINTS[i % GRID_TINTS.length])}>
+                      <span className={cn("flex h-9 w-9 items-center justify-center rounded-lg ring-1 ring-black/5", gridTint(i))}>
                         <Icon className="h-[18px] w-[18px]" />
                       </span>
                       <span className="line-clamp-2 text-[11px] font-medium leading-tight text-ink">{l.label}</span>

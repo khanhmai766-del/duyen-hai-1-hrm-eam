@@ -11,6 +11,7 @@ import { useUsers } from "@/hooks/useUsers";
 import { NAV_SECTIONS, navItemAllowedForPosition, navQuickItems, navSectionsForPosition, type NavItem } from "@/lib/nav";
 import { useRbacAccess } from "@/hooks/useRbacAccess";
 import { useAdminMode } from "@/hooks/useAdminMode";
+import { gridTint, launcherItems } from "@/components/layout/nav-tints";
 
 import { lookupLandingPage, lookupNavSections } from "@/lib/lookup-access";
 
@@ -72,6 +73,8 @@ export function Sidebar({ onNavigate, collapsed = false, showQuick = false }: { 
   const quickItems = (showQuick ? navQuickItems(positionCarrier) : [])
     .filter((item) => rbac.canReadPage(item.href))
     .filter((item) => navItemAllowed(item, role, rbac.can, adminMode, positionCarrier));
+  // Icon "Thường dùng" cùng màu ô với bảng truy cập nhanh (nút lưới ở thanh trên) — cùng danh sách, cùng vị trí.
+  const launcherIndex = new Map(launcherItems(sections, (item) => navItemAllowed(item, role, rbac.can, adminMode, positionCarrier)).map((item, index) => [item.href, index]));
 
   const [now, setNow] = React.useState<Date | null>(null);
   React.useEffect(() => {
@@ -140,7 +143,8 @@ export function Sidebar({ onNavigate, collapsed = false, showQuick = false }: { 
             )}
             <div className="space-y-1.5">
               {quickItems.map((item) => (
-                <NavEntry key={`quick-${item.href}`} item={item} onNavigate={onNavigate} collapsed={collapsed} />
+                <NavEntry key={`quick-${item.href}`} item={item} onNavigate={onNavigate} collapsed={collapsed}
+                  tint={launcherIndex.has(item.href) ? gridTint(launcherIndex.get(item.href)!) : undefined} />
               ))}
             </div>
           </div>
@@ -298,7 +302,8 @@ function PowerGridMark() {
   );
 }
 
-function NavEntry({ item, onNavigate, collapsed = false }: { item: NavItem; onNavigate?: () => void; collapsed?: boolean }) {
+/** `tint`: ô màu như bảng truy cập nhanh (nhóm "Thường dùng") thay cho ô trắng khi mục không đang mở. */
+function NavEntry({ item, onNavigate, collapsed = false, tint }: { item: NavItem; onNavigate?: () => void; collapsed?: boolean; tint?: string }) {
   const pathname = usePathname();
   const search = useSearchParams();
   const Icon = item.icon;
@@ -336,7 +341,9 @@ function NavEntry({ item, onNavigate, collapsed = false }: { item: NavItem; onNa
             "flex h-8 w-8 items-center justify-center rounded-xl transition-all duration-200",
             active
               ? "bg-gradient-to-br from-blue-500 to-blue-800 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.35),0_10px_18px_-10px_rgba(30,64,175,0.95)]"
-              : "bg-white text-slate-500 shadow-[inset_0_1px_0_rgba(255,255,255,0.9),0_8px_18px_-16px_rgba(15,23,42,0.75)] ring-1 ring-blue-100 group-hover:text-accent dark:bg-slate-900 dark:text-slate-300 dark:ring-slate-700 dark:group-hover:text-sky-300"
+              : tint
+                ? cn(tint, "ring-1 ring-black/5")
+                : "bg-white text-slate-500 shadow-[inset_0_1px_0_rgba(255,255,255,0.9),0_8px_18px_-16px_rgba(15,23,42,0.75)] ring-1 ring-blue-100 group-hover:text-accent dark:bg-slate-900 dark:text-slate-300 dark:ring-slate-700 dark:group-hover:text-sky-300"
           )}
         >
           <Icon className="h-[17px] w-[17px] drop-shadow-sm" />
@@ -366,7 +373,9 @@ function NavEntry({ item, onNavigate, collapsed = false }: { item: NavItem; onNa
             "relative flex h-8 w-8 shrink-0 items-center justify-center rounded-xl transition-all duration-200",
             active
               ? "bg-gradient-to-br from-blue-500 to-blue-800 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.35),0_12px_20px_-12px_rgba(30,64,175,0.95)]"
-              : "bg-white text-slate-500 shadow-[inset_0_1px_0_rgba(255,255,255,0.9),0_8px_18px_-16px_rgba(15,23,42,0.75)] ring-1 ring-blue-100 group-hover:-translate-y-0.5 group-hover:text-accent group-hover:shadow-[0_12px_22px_-16px_rgba(30,64,175,0.65)] dark:bg-slate-900 dark:text-slate-300 dark:ring-slate-700 dark:group-hover:text-sky-300"
+              : tint
+                ? cn(tint, "ring-1 ring-black/5 group-hover:-translate-y-0.5")
+                : "bg-white text-slate-500 shadow-[inset_0_1px_0_rgba(255,255,255,0.9),0_8px_18px_-16px_rgba(15,23,42,0.75)] ring-1 ring-blue-100 group-hover:-translate-y-0.5 group-hover:text-accent group-hover:shadow-[0_12px_22px_-16px_rgba(30,64,175,0.65)] dark:bg-slate-900 dark:text-slate-300 dark:ring-slate-700 dark:group-hover:text-sky-300"
           )}
         >
           <Icon className="h-[17px] w-[17px] drop-shadow-sm" />
