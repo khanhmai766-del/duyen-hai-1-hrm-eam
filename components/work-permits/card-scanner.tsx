@@ -8,6 +8,7 @@ import { lookupPermitCard, useSavePermitPerson } from "@/hooks/useWorkPermits";
 import { cardExpired, cardlessCode, isCardlessCode, parseCardQr, sameCompany } from "@/lib/work-permit-card";
 import { formatPermitNumber, PERMIT_CONTRACTOR_SCOPES, personScopeError, type PermitContractorScope, type PermitMember, type PermitPerson } from "@/lib/work-permits";
 import { PermitCameraScanGuard } from "@/lib/work-permit-scan-guard";
+import { PersonScopeBadge } from "@/components/work-permits/person-scope-badge";
 
 /*
  * Quét thẻ ra vào cổng để thêm nhân viên vào lần làm việc — luồng một chạm cho đội đông người:
@@ -25,6 +26,8 @@ export type ScanOutcome = { tone: Tone; detail: string; added?: boolean; out?: b
 type Scan = {
   id: number; code: string; tone: Tone; title: string; detail: string;
   person?: PermitPerson; reasons?: string[]; pending?: boolean; notFound?: boolean; added?: boolean; out?: boolean;
+  /** Bị chặn vì khác nhóm nhân sự (SCTX / Đại tu) của phiếu — hiện dải cảnh báo lớn, rung dài. */
+  scopeMismatch?: boolean;
 };
 
 const REPEAT_MS = 2500;
@@ -61,6 +64,7 @@ const TONE_BAR: Record<Tone, string> = {
 /** Chữ trên dải trạng thái của thẻ kết quả. */
 function statusLabel(scan: Scan) {
   if (scan.notFound) return "Chưa có trong danh bạ";
+  if (scan.scopeMismatch) return "Sai nhóm nhân sự — không cho vào";
   if (scan.pending) return "Cần người cho phép quyết định";
   if (scan.added) return "Được vào";
   if (scan.out) return "Đã ra";
@@ -171,7 +175,12 @@ export function PermitCardScanner({ unit, companies, scope, existing, permitId, 
         return push({ code, tone: "block", person, title: person.name, detail: `Thuộc đơn vị “${person.company}”, KHÔNG PHẢI đơn vị công tác của phiếu (“${unit}”). Không cho vào.` });
       }
       const scopeError = personScopeError(person, scope);
-      if (scopeError) return push({ code, tone: "block", person, title: person.name, detail: `${scopeError} Không cho vào.` });
+      if (scopeError) {
+        push({ code, tone: "block", person, title: person.name, detail: `${scopeError} Không cho vào.`, scopeMismatch: true });
+        // Sau push (push đã rung ngắn kiểu chặn): rung dài hơn lượt chặn thường — lỗi dễ lọt khi quét liên tục cả đội.
+        navigator.vibrate?.([200, 100, 200, 100, 200]);
+        return;
+      }
       const reasons: string[] = [];
       if (cardExpired(person.cardExpiresAt)) reasons.push(`Thẻ đã HẾT HẠN ngày ${vnDate(person.cardExpiresAt)}.`);
       const conflict = person.activeWorks?.find(work => work.permit.id !== permitId);
@@ -323,6 +332,7 @@ export function PermitCardScanner({ unit, companies, scope, existing, permitId, 
             <div className="min-w-0 flex-1">
               <p className="flex items-start gap-1.5 text-lg font-bold leading-6"><ToneIcon tone={current.tone} /><span className="min-w-0 break-words">{current.title}</span></p>
               {current.person && <p className="mt-0.5 line-clamp-2 text-xs font-medium opacity-80">{current.person.company}</p>}
+              {current.person && <PersonScopeBadge scope={current.person.scope} className="mt-1" />}
               {(() => {
                 const person = current.person;
                 const card = cardNumberOf(current);
@@ -342,6 +352,10 @@ export function PermitCardScanner({ unit, companies, scope, existing, permitId, 
               })()}
             </div>
           </div>
+          {current.scopeMismatch && scope && <div className="border-t-2 border-red-300 bg-red-600 px-3 py-2.5 text-center text-white">
+            <p className="text-base font-black uppercase leading-6">Nhân sự {current.person?.scope && Object.hasOwn(PERMIT_CONTRACTOR_SCOPES, current.person.scope) ? PERMIT_CONTRACTOR_SCOPES[current.person.scope as PermitContractorScope] : "chưa phân nhóm"} · Phiếu {PERMIT_CONTRACTOR_SCOPES[scope]}</p>
+            <p className="text-xs font-medium">PCT {PERMIT_CONTRACTOR_SCOPES[scope]} chỉ nhận nhân sự nhóm {PERMIT_CONTRACTOR_SCOPES[scope]}.</p>
+          </div>}
           <div className="space-y-1 border-t border-black/10 bg-white/50 px-3 py-2">
             <p className="text-sm font-medium">{current.detail}</p>
             {current.reasons?.map(reason => <p key={reason} className="text-sm font-semibold">⚠ {reason}</p>)}
@@ -357,7 +371,7 @@ export function PermitCardScanner({ unit, companies, scope, existing, permitId, 
         {scans.length > 1 && <div className="space-y-1">
           <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Các thẻ vừa quét</p>
           {scans.slice(1).map(scan => <div key={scan.id} className="flex items-center gap-2 rounded-lg border border-border px-2.5 py-1.5 text-sm">
-            <ToneIcon tone={scan.tone} /><span className="min-w-0 flex-1 truncate"><b>{scan.title}</b> · {cardNumberOf(scan) ?? "Chưa cấp thẻ"}</span><span className="shrink-0 text-xs text-muted-foreground">{scan.added ? "Vào" : scan.out ? "Ra" : scan.tone === "info" ? "Đã có" : scan.pending || scan.notFound ? "Chờ xử lý" : "Không vào"}</span>
+            <ToneIcon tone={scan.tone} /><span className="min-w-0 flex-1 truncate"><b>{scan.title}</b> · {cardNumberOf(scan) ?? "Chưa cấp thẻ"}</span>{scan.person && <PersonScopeBadge scope={scan.person.scope} className="shrink-0" />}<span className="shrink-0 text-xs text-muted-foreground">{scan.added ? "Vào" : scan.out ? "Ra" : scan.tone === "info" ? "Đã có" : scan.pending || scan.notFound ? "Chờ xử lý" : "Không vào"}</span>
           </div>)}
         </div>}
       </div>

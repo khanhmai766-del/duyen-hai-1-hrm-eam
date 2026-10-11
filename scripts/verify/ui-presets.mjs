@@ -963,3 +963,59 @@ PRESETS["tiep-dia-xac-nhan-sau-ca"] = {
     await page.getByRole("button", { name: "Chọn vị trí bình thường trên trang", exact: true }).click();
   },
 };
+
+// Nút "Quét QR" chung đọc thẻ ra vào cổng → thẻ thông tin nhân sự nhà thầu (11/10/2026).
+PRESETS["the-nhan-su-quet"] = {
+  description: "Nút Quét QR chung đọc thẻ ra vào cổng → thẻ thông tin nhân sự (Đại tu / chưa có trong danh bạ) — resolve giả lập, không ghi DB",
+  async prepare() {
+    // Ảnh QR thật (nội dung không quan trọng vì /api/device-qr/resolve bị giả lập) để chọn qua nút "Chọn ảnh QR".
+    const { createElement } = await import("react");
+    const { renderToStaticMarkup } = await import("react-dom/server");
+    const { QRCodeSVG } = await import("qrcode.react");
+    const sharp = (await import("sharp")).default;
+    const svg = renderToStaticMarkup(createElement(QRCodeSVG, { value: "https://the.example.vn/card?id=1234/DH", size: 480, marginSize: 4 }));
+    const { mkdirSync } = await import("node:fs");
+    mkdirSync("reports/verify", { recursive: true });
+    await sharp(Buffer.from(svg)).png().toFile("reports/verify/the-nhan-su-qr.png");
+    return {};
+  },
+  routes: () => ["/devices/scan?the=co", "/devices/scan?the=khong"],
+  async mock(context) {
+    const now = Date.now();
+    const person = { id: "ui-p", code: "1234/DH", name: "Nguyễn Văn A (giả lập)", company: "CTy CP Đầu tư và phát triển Sesan3A", phone: "", canCommand: false, isActive: true, version: 1,
+      scope: "OVERHAUL", jobTitle: "Thợ giàn giáo", birthYear: "1990", trainingResult: "Đạt", trainedAt: new Date(now - 20 * 86_400_000).toISOString(),
+      cardExpiresAt: new Date(now + 60 * 86_400_000).toISOString(), photoUrl: null,
+      activeWorks: [{ sessionId: "s1", role: "MEMBER", openedAt: new Date(now - 90 * 60_000).toISOString(), permit: { id: "ui-permit", number: "4642", year: 2026, kind: "MECHANICAL" } }] };
+    await context.route(/\/api\/device-qr\/resolve/, (route, request) => {
+      const missing = (request.headers().referer ?? "").includes("the=khong");
+      route.fulfill({ json: { data: { type: "WORKER_CARD", code: missing ? "KHONG-CO-123" : "1234/DH", person: missing ? null : person }, meta: null, error: null } });
+    });
+  },
+  async interact(page) {
+    await page.locator('input[type="file"]').setInputFiles("reports/verify/the-nhan-su-qr.png"); // ảnh do prepare() tạo
+    await page.getByText(/Thẻ nhân sự nhà thầu|Chưa có trong danh bạ nhà thầu/).first().waitFor({ timeout: 20_000 });
+  },
+};
+
+// Hộp quét thẻ của PCT: quét người KHÁC nhóm (SCTX / Đại tu) của phiếu → dải cảnh báo "Sai nhóm nhân sự" (11/10/2026).
+PRESETS["quet-the-sai-nhom"] = {
+  description: "Màn hình làm việc PCT giả lập → Quét vào / ra → thẻ người khác nhóm của phiếu — tra thẻ giả lập, không ghi DB",
+  prepare: (ctx) => PRESETS["pct-lam-viec"].prepare(ctx),
+  routes: ({ permitId }) => [`/work-permits/${permitId}/lam-viec`],
+  async mock(context, ctx) {
+    await PRESETS["pct-lam-viec"].mock(context, ctx);
+    await context.route("**/api/work-permits/people/card**", async (route) => {
+      const permit = (await (await context.request.get(`${ctx.base}/api/work-permits/${ctx.permitId}`)).json()).data;
+      const scope = permit.contractorScope === "OVERHAUL" ? "SCTX" : "OVERHAUL";
+      await route.fulfill({ json: { data: { code: "UI-SAI-NHOM", person: { id: "ui-sai-nhom", code: "UI-SAI-NHOM", name: "Trần Văn Sai Nhóm (giả lập)", company: permit.teamName,
+        phone: "", canCommand: false, isActive: true, version: 1, scope, jobTitle: "Thợ phụ", photoUrl: null, activeWorks: [] } }, meta: null, error: null } });
+    });
+  },
+  async interact(page) {
+    await page.getByRole("button", { name: "Quét vào / ra" }).locator("visible=true").first().click();
+    const input = page.getByLabel("Số thẻ hoặc nội dung mã QR");
+    await input.fill("UI-SAI-NHOM");
+    await input.press("Enter");
+    await page.getByText("Sai nhóm nhân sự — không cho vào").waitFor({ timeout: 20_000 });
+  },
+};

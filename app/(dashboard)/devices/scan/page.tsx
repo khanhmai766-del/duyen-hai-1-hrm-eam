@@ -6,9 +6,12 @@ import { AlertTriangle, Camera, CheckCircle2, Flashlight, ImagePlus, Loader2, Qr
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { apiMutate } from "@/lib/fetcher";
+import { WorkerCardResult } from "@/components/work-permits/worker-card-result";
+import type { PermitPerson } from "@/lib/work-permits";
 
 type ScannerControls = { stop: () => void; switchTorch?: (enabled: boolean) => Promise<void> };
-type ScanState = "idle" | "starting" | "scanning" | "resolving" | "error";
+type ScanState = "idle" | "starting" | "scanning" | "resolving" | "error" | "card";
+type ResolveResult = { type: "DEVICE" | "WORK_PERMIT"; url: string; legacy: boolean } | { type: "WORKER_CARD"; code: string; person: PermitPerson | null };
 
 export default function DeviceScannerPage() {
   return <DeviceScanner />;
@@ -25,6 +28,9 @@ function DeviceScanner() {
   const [message, setMessage] = React.useState("Đưa mã QR vào giữa khung ngắm");
   const [torchAvailable, setTorchAvailable] = React.useState(false);
   const [torchOn, setTorchOn] = React.useState(false);
+  /** Thẻ nhân sự nhà thầu vừa quét — hiện thẻ thông tin ngay trên trang, không chuyển trang. */
+  const [card, setCard] = React.useState<{ code: string; person: PermitPerson | null } | null>(null);
+  const cardRef = React.useRef<HTMLDivElement>(null);
 
   const stopScanner = React.useCallback(() => {
     controlsRef.current?.stop();
@@ -53,7 +59,16 @@ function DeviceScanner() {
     setMessage("Đã nhận mã — đang kiểm tra quyền và dữ liệu thiết bị...");
     stopScanner();
     try {
-      const result = await apiMutate<{ type: "DEVICE" | "WORK_PERMIT"; url: string; legacy: boolean }>("/api/device-qr/resolve", "POST", { value });
+      const result = await apiMutate<ResolveResult>("/api/device-qr/resolve", "POST", { value });
+      if (result.type === "WORKER_CARD") {
+        navigator.vibrate?.(result.person ? 90 : [80, 60, 80]);
+        setCard({ code: result.code, person: result.person });
+        setState("card");
+        setMessage(result.person ? `Đã nhận diện thẻ: ${result.person.name}` : `Thẻ ${result.code} chưa có trong danh bạ`);
+        // Điện thoại: thẻ thông tin nằm dưới khung camera — cuộn tới để thấy ngay.
+        requestAnimationFrame(() => cardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
+        return;
+      }
       navigator.vibrate?.(90);
       toast.success(result.type === "WORK_PERMIT" ? "Đã nhận diện PCT Đại tu" : "Đã nhận diện thiết bị");
       router.push(result.url);
@@ -67,6 +82,7 @@ function DeviceScanner() {
   const startScanner = React.useCallback(async () => {
     stopScanner();
     resolvingRef.current = false;
+    setCard(null);
     if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
       setState("error");
       setMessage("Camera chỉ hoạt động khi website dùng HTTPS. Bạn vẫn có thể chọn ảnh QR từ điện thoại.");
@@ -202,7 +218,7 @@ function DeviceScanner() {
             <div>
               <span className="inline-flex items-center gap-2 rounded-full border border-sky-300/25 bg-sky-300/10 px-3 py-1 text-xs font-black uppercase tracking-[0.16em] text-sky-200"><ShieldCheck className="h-4 w-4" /> Đã đăng nhập</span>
               <h1 className="mt-4 text-3xl font-black leading-tight">Quét QR<br /><span className="text-amber-300">tại hiện trường</span></h1>
-              <p className="mt-3 text-sm leading-6 text-slate-300">Quét mã thiết bị để mở hồ sơ hoặc mã PCT Đại tu để vào thẳng bước cho phép làm việc.</p>
+              <p className="mt-3 text-sm leading-6 text-slate-300">Quét mã thiết bị để mở hồ sơ, mã PCT Đại tu để vào thẳng bước cho phép làm việc, hoặc thẻ ra vào cổng để xem nhân sự nhà thầu thuộc nhóm Đại tu hay SCTX.</p>
             </div>
             <div className="space-y-3">
               <Button onClick={startScanner} disabled={active} className="min-h-12 w-full rounded-xl bg-amber-400 text-base font-black text-[#071a2d] shadow-lg shadow-amber-500/20 hover:bg-amber-300">
@@ -218,6 +234,7 @@ function DeviceScanner() {
           </div>
         </div>
       </section>
+      {card && <div ref={cardRef} className="scroll-mt-4"><WorkerCardResult code={card.code} person={card.person} onScanAgain={() => void startScanner()} /></div>}
       <p className="px-2 text-center text-xs leading-5 text-muted-foreground">Camera cần HTTPS và quyền truy cập từ trình duyệt. Mọi kết quả vẫn được kiểm tra theo quyền tài khoản đang đăng nhập.</p>
     </div>
   );
