@@ -3,6 +3,8 @@ import { audit, fail, ok, requireUser } from "@/lib/api";
 import { normalizeText } from "@/lib/nav";
 import { companyScopeLabel } from "@/lib/work-permits";
 import { loadWorkingPeople } from "@/lib/server/work-permit-working";
+import { loadDailyWorkingByCompany } from "@/lib/server/work-permit-daily-working";
+import { permitWorkingDay, permitWorkingDayBounds } from "@/lib/work-permit-daily-people";
 import { permitCapabilities, requirePermitIssue } from "@/lib/server/work-permit-permissions";
 import { permitBody, permitHandle, permitText } from "@/lib/server/work-permits";
 export const dynamic = "force-dynamic";
@@ -54,17 +56,21 @@ export async function GET(req: Request) {
     const user = await requireUser();
     // `summary=1`: bảng đơn vị nhà thầu (mỗi dòng kèm sĩ số và số CHTT). Đếm ngay trong SQL vì
     // danh bạ có thể vài nghìn người — kéo hết về rồi đếm ở Node là phí một vòng dữ liệu.
-    if (new URL(req.url).searchParams.get("summary") === "1") {
-      const [rows, working] = await Promise.all([prisma.$queryRawUnsafe<Array<{ company: string; code: string; sctx: boolean; overhaul: boolean; total: bigint; commanders: bigint; active: bigint }>>(`
+    const params = new URL(req.url).searchParams;
+    if (params.get("summary") === "1") {
+      const now = new Date();
+      const day = params.get("day") ?? permitWorkingDay(now);
+      try { permitWorkingDayBounds(day); } catch { return fail("Ngày không hợp lệ, vui lòng dùng định dạng YYYY-MM-DD"); }
+      const [rows, working, daily] = await Promise.all([prisma.$queryRawUnsafe<Array<{ company: string; code: string; sctx: boolean; overhaul: boolean; total: bigint; commanders: bigint; active: bigint }>>(`
         SELECT c.company, COALESCE(MAX(w."code"), '') AS code, COALESCE(BOOL_OR(w."sctx"), false) AS sctx, COALESCE(BOOL_OR(w."overhaul"), false) AS overhaul, COUNT(p.id) AS total,
                COUNT(p.id) FILTER (WHERE p."canCommand") AS commanders,
                COUNT(p.id) FILTER (WHERE p."isActive") AS active
         FROM (${COMPANY_NAMES}) c
         LEFT JOIN "WorkPermitCompany" w ON w."name" = c.company
         LEFT JOIN "WorkPermitPerson" p ON p."company" = c.company
-        GROUP BY c.company ORDER BY c.company`), workingByCompany()]);
-      return ok(rows.map(row => ({ company: row.company, code: row.code, sctx: row.sctx, overhaul: row.overhaul, total: Number(row.total), commanders: Number(row.commanders), active: Number(row.active), working: working.byCompany.get(row.company) ?? 0 })),
-        { canWrite: (await permitCapabilities(user)).canIssue, working: working.total });
+        GROUP BY c.company ORDER BY overhaul DESC, c.company`), workingByCompany(), loadDailyWorkingByCompany(day, now)]);
+      return ok(rows.map(row => ({ company: row.company, code: row.code, sctx: row.sctx, overhaul: row.overhaul, total: Number(row.total), commanders: Number(row.commanders), active: Number(row.active), working: working.byCompany.get(row.company) ?? 0, workingToday: daily.byCompany.get(row.company) ?? 0 })),
+        { canWrite: (await permitCapabilities(user)).canIssue, working: working.total, workingToday: daily.total, workingDay: day });
     }
     // Lấy từ toàn bộ danh bạ, không giới hạn bởi trang nhân sự hoặc vai trò CHTT.
     const rows = await prisma.$queryRawUnsafe<Array<{ company: string }>>(`SELECT company FROM (${COMPANY_NAMES}) c ORDER BY company`);

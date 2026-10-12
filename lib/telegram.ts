@@ -30,13 +30,22 @@ export function telegramEnabled() {
   return envEnabled(process.env.TELEGRAM_ALERT_ENABLED);
 }
 
-export function telegramChatIds() {
+function parseChatIds(value: string | undefined) {
   return Array.from(new Set(
-    (process.env.TELEGRAM_CHAT_IDS ?? "")
+    (value ?? "")
       .split(",")
       .map((value) => value.trim())
       .filter(Boolean)
   ));
+}
+
+/** Nhóm đại tu có cấu hình riêng; không gửi báo cáo đại tu về nhóm chung khi thiếu cấu hình. */
+export function telegramChatIds(audience: "general" | "overhaul" = "general") {
+  const overhaul = parseChatIds(process.env.TELEGRAM_OVERHAUL_CHAT_IDS);
+  if (audience === "overhaul") return overhaul;
+  // Danh sách chung cũ có thể vẫn chứa cả hai nhóm: nhóm đã chuyển sang đại tu không nhận khiếm khuyết/vật tư/đồng bộ.
+  const reserved = new Set(overhaul);
+  return parseChatIds(process.env.TELEGRAM_CHAT_IDS).filter(id => !reserved.has(id));
 }
 
 export function escapeTelegramHtml(value: unknown) {
@@ -158,10 +167,12 @@ export async function deliverTelegramNotification(params: {
   type: string;
   periodKey: string;
   message: string;
+  /** Giới hạn nơi gửi khi hàng đợi cần nội dung khác nhau cho từng nhóm. Mặc định giữ danh sách cấu hình chung. */
+  chatIds?: readonly string[];
   dryRun?: boolean;
   now?: Date;
 }): Promise<TelegramDeliveryResult> {
-  const chatIds = telegramChatIds();
+  const chatIds = params.chatIds ? Array.from(new Set(params.chatIds.map(id => id.trim()).filter(Boolean))) : telegramChatIds();
   if (!telegramEnabled()) {
     return { enabled: false, allSucceeded: false, sent: 0, skipped: 0, busy: 0, failed: 0, errors: [] };
   }

@@ -1,0 +1,12 @@
+[Unit]
+Description=DH1 — tổng hợp nhân sự và số hiệu PCT đại tu lúc 0h Việt Nam
+
+[Timer]
+# Máy chủ UTC: 17h UTC = 0h Việt Nam ngày tiếp theo.
+OnCalendar=*-*-* 17:00:00
+AccuracySec=1s
+Persistent=true
+Unit=dh1-telegram@overhaul-daily.service
+
+[Install]
+WantedBy=timers.target

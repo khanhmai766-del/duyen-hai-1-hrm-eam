@@ -15,6 +15,7 @@ import { parseSessionItemProgress, sharedOverhaulPercents } from "@/lib/server/w
 import { enqueueOverhaulManualProgress, enqueueOverhaulProgressUpdate, enqueueOverhaulSessionEnd, overhaulProgressKey, pushOverhaulSheetOutboxQuietly, vnDay } from "@/lib/server/overhaul-sheet-writer";
 import { isOverhaulPaperPermit, OVERHAUL_DAY_STATUSES, OVERHAUL_JOURNAL_LIMITS, overhaulItemProgressOf, overhaulItemsOf, overhaulJournalHeaderText, type OverhaulItemProgress } from "@/lib/work-permit-overhaul";
 import { permitDeadline, personScopeError, workersStillInside } from "@/lib/work-permits";
+import { captureOverhaulTelegramBaseline, enqueueOverhaulEnding, enqueueOverhaulOpening, overhaulTelegramEnabled, pushOverhaulTelegramQuietly } from "@/lib/server/work-permit-telegram";
 export const dynamic = "force-dynamic";
 
 /** Phần đầu Nhật ký ngày từ form (Số PCT - Nội dung, CHTT, NVĐV). Không gửi (màn hình cũ / Tiến độ trong ngày) → mẫu cũ. */
@@ -82,10 +83,13 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
         const nextMembers = oldSession ? handoffMembers(members, oldSession.members, input.openedAt)
           : members.map(member => withEntry(member, input.openedAt));
         await assertWorkersFree(tx, [{ personId: person.id, code: person.code, name: person.name, company: person.company }, ...presentMembers(nextMembers)], permit.id);
-        if (oldSession) await tx.workPermitSession.update({ where: { id: oldSession.id }, data: {
-          endedAt: input.openedAt, endConfirmedByName: input.authorizerName, members: permitSnapshot(closeInsideVisits(oldSession.members, input.openedAt)),
-          endNote: `Bàn giao CHTT cho ${person.name}. ${handoffNote}`.trim(), endedById: user.id, endedByName: user.name ?? "",
-        } });
+        if (oldSession) {
+          const endedSession = await tx.workPermitSession.update({ where: { id: oldSession.id }, data: {
+            endedAt: input.openedAt, endConfirmedByName: input.authorizerName, members: permitSnapshot(closeInsideVisits(oldSession.members, input.openedAt)),
+            endNote: `Bàn giao CHTT cho ${person.name}. ${handoffNote}`.trim(), endedById: user.id, endedByName: user.name ?? "",
+          } });
+          await enqueueOverhaulEnding(tx, permit, endedSession);
+        }
         const session = await tx.workPermitSession.create({ data: {
           permitId: permit.id, commanderId: person.id, commanderCode: person.code, commanderName: person.name, company: person.company,
           // Mở mới ghi VÀO; bàn giao giữ người đã RA ở ngoài khu vực.
@@ -97,6 +101,9 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
           status: "ACTIVE", authorizedAt: permit.authorizedAt ?? input.openedAt, authorizerName: input.authorizerName,
           version: { increment: 1 },
         } });
+        if (overhaulTelegramEnabled() && permit.contractorScope === "OVERHAUL") {
+          await enqueueOverhaulOpening(tx, permit, session, await sharedOverhaulPercents(tx, overhaulItemsOf(permit.overhaulItems)));
+        }
         await tx.workPermitHistory.create({ data: { permitId: permit.id, actorId: user.id, actorName: user.name ?? "", action: oldSession ? `Bàn giao CHTT · ${oldSession.commanderName} → ${person.name}` : `Mở lần làm việc · CHTT ${person.name} (${person.code})`, before: permitSnapshot(oldSession ? { ...permit, session: oldSession } : permit), after: permitSnapshot({ ...after, session }) } });
         return session;
       }
@@ -128,7 +135,9 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
         const session = await tx.workPermitSession.findFirst({ where: { id: permitText(body, "sessionId", 100), permitId: permit.id } });
         if (!session || session.endedAt || permit.status !== "ACTIVE") throw fail("Lần làm việc không còn mở. Vui lòng tải lại phiếu.", 409);
         if (!permitItems.length) throw fail("Chỉ PCT nhà thầu · Đại tu có hạng mục mới cập nhật tiến độ giữa chừng");
-        const parsed = parseSessionItemProgress(body.itemProgress, permitItems, await progressHistory());
+        const previous = await progressHistory();
+        await captureOverhaulTelegramBaseline(tx, session.id, permitItems, previous);
+        const parsed = parseSessionItemProgress(body.itemProgress, permitItems, previous);
         if (!parsed.items.some(item => item.done)) throw fail("Tick ít nhất một hạng mục đã thực hiện để cập nhật tiến độ");
         const at = new Date();
         const note = permitText(body, "note", 2000);
@@ -152,7 +161,9 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
       if (!sessionId || !endedAt || !endConfirmedByName) throw fail("Vui lòng nhập lần làm việc, thời điểm kết thúc và người xác nhận kết thúc");
       const session = await tx.workPermitSession.findFirst({ where: { id: sessionId, permitId: permit.id } });
       if (!session || session.endedAt || permit.status !== "ACTIVE") throw fail("Lần làm việc không còn mở. Vui lòng tải lại phiếu.", 409);
-      const itemResult = permitItems.length ? parseSessionItemProgress(body.itemProgress, permitItems, await progressHistory()) : null;
+      const previous = permitItems.length ? await progressHistory() : new Map<string, number>();
+      await captureOverhaulTelegramBaseline(tx, session.id, permitItems, previous);
+      const itemResult = permitItems.length ? parseSessionItemProgress(body.itemProgress, permitItems, previous) : null;
       const progress = itemResult ? itemResult.progress : Number(body.progress);
       if (!itemResult && (body.progress === "" || body.progress === null || body.progress === undefined || !Number.isInteger(progress) || progress < 0 || progress > 100)) throw fail("Tiến độ phải là số nguyên từ 0 đến 100%");
       // Mục đã "Cập nhật tiến độ" trong lần này, cùng ngày kết thúc: không tick lại vẫn tính có làm, giữ % đã cập nhật.
@@ -173,6 +184,7 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
         ...(finalItems ? { itemProgress: permitSnapshot(finalItems) } : {}),
         ...(inside.length ? { members: permitSnapshot(closeInsideVisits(session.members, endedAt)) } : {}),
       } });
+      await enqueueOverhaulEnding(tx, permit, afterSession);
       if (itemResult) await enqueueOverhaulSessionEnd(tx, permit, session, endedAt, itemResult.items, endNote, doneToday, journalHeader(body));
       const after = await tx.workPermit.update({ where: { id: permit.id }, data: { status: "WAITING", progress, version: { increment: 1 } } });
       await tx.workPermitHistory.create({ data: { permitId: permit.id, actorId: user.id, actorName: user.name ?? "", action: `Kết thúc lần làm việc · CHTT ${session.commanderName} (${session.commanderCode})`, before: permitSnapshot({ ...permit, session }), after: permitSnapshot({ ...after, session: afterSession }) } });
@@ -185,6 +197,9 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
     if (body.action === "open" || body.action === "handoff") await syncPermitDocument(await prisma.workPermit.findUnique({ where: { id: params.id } }));
     // Kết quả ngày của PCT đại tu: đẩy lên Google Sheets sau khi đã trả lời — lỗi thì hàng đợi giữ lại cho timer.
     else if (result.itemProgress) afterResponse(pushOverhaulSheetOutboxQuietly);
+    if (body.action === "open" || body.action === "handoff" || body.action === "end") {
+      afterResponse(() => pushOverhaulTelegramQuietly(params.id).then(() => undefined));
+    }
     return ok(result);
   });
 }

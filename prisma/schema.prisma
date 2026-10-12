@@ -1162,6 +1162,31 @@ model TelegramNotificationLog {
   @@index([status, attemptedAt])
 }
 
+/// Báo cáo PCT đại tu: lịch mở ngày +1 giờ, kết thúc/gộp, tổng hợp lúc 0h. Không FK để giữ bản tin khi hồ sơ bị xoá.
+model WorkPermitTelegramOutbox {
+  id              String    @id @default(cuid())
+  dedupeKey       String    @unique
+  permitId        String?
+  sessionId       String?
+  kind            String    // OPEN | END | DAILY
+  dueAt           DateTime
+  baseline        Json?     // Tiến độ từng hạng mục trước lần làm việc, bổ sung khi hạng mục mới được cập nhật.
+  message         String?
+  combinedMessage String?
+  messages        Json?     // Các đoạn tin đã chốt theo chatId; thử lại không đổi nội dung hoặc gửi lại đoạn đã thành công.
+  state           String    @default("PENDING") // PENDING | PROCESSING | SUCCESS | FAILED | CANCELED
+  attemptCount    Int       @default(0)
+  nextAttemptAt   DateTime
+  claimedAt       DateTime?
+  completedAt     DateTime?
+  lastError       String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([state, nextAttemptAt])
+  @@index([sessionId, kind])
+}
+
 // Snapshot danh sách thiết bị liên quan khi phiếu được chuyển sang lịch sử.
 model DefectHistoryRelatedDevice {
   historyId  String

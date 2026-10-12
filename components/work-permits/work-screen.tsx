@@ -35,6 +35,7 @@ export function PermitWorkScreen({ id }: { id: string }) {
   // `?open=1` từ QR PCT Đại tu; `?scan=1` / `?end=1` từ QR hoặc bảng Đang làm việc:
   // bật đúng hộp MỘT lần rồi xoá tham số, tải lại trang không bật lại.
   const searchParams = useSearchParams();
+  const fromLive = searchParams.get("from") === "live";
   const router = useRouter();
   const [initialIntent] = useState(() => searchParams.get("open") === "1" ? "open" : searchParams.get("scan") === "1" ? "scan" : searchParams.get("end") === "1" ? "end" : null);
   const intent = useRef(initialIntent);
@@ -49,9 +50,9 @@ export function PermitWorkScreen({ id }: { id: string }) {
     if (intent.current === "end" && liveSession && canExecute) setAction({ kind: "end", session: liveSession });
     if (intent.current === "open" && canOpen) setAction({ kind: "open" });
     intent.current = null;
-    router.replace(`/work-permits/${encodeURIComponent(id)}/lam-viec`, { scroll: false });
-  }, [permit, liveSession, canExecute, canOpen, id, router]);
-  const back = <Button asChild variant="ghost" size="sm" className="-ml-2 h-8 px-2 text-xs"><Link href={`/work-permits?permitId=${encodeURIComponent(id)}`}><ArrowLeft />Về sổ PCT</Link></Button>;
+    router.replace(`/work-permits/${encodeURIComponent(id)}/lam-viec${fromLive ? "?from=live" : ""}`, { scroll: false });
+  }, [permit, liveSession, canExecute, canOpen, id, router, fromLive]);
+  const back = <Button asChild variant="ghost" size="sm" className="-ml-2 h-8 px-2 text-xs"><Link href={fromLive ? "/work-permits?tab=live" : `/work-permits?permitId=${encodeURIComponent(id)}`}><ArrowLeft />{fromLive ? "Về danh sách đang làm việc" : "Về sổ PCT"}</Link></Button>;
 
   if (query.isError) return <div className="mx-auto max-w-4xl space-y-3">{back}<p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">{query.error.message}</p></div>;
   if (!permit) return <div className="mx-auto max-w-4xl space-y-3">{back}<p role="status" className="text-sm text-muted-foreground">Đang tải phiếu…</p></div>;

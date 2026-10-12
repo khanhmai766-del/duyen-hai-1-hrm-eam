@@ -74,7 +74,7 @@ export function PermitLiveBoard() {
     {query.isError && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">{query.error.message}</p>}
     <div className="space-y-2">
       {rows.map(row => {
-        const href = permitWorkHref(row.permit.id);
+        const href = `${permitWorkHref(row.permit.id)}?from=live`;
         return <article key={row.id} className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-emerald-200 bg-card p-3 shadow-sm transition-colors hover:border-emerald-400 sm:p-4">
           <Link href={href} className="flex min-w-0 flex-1 basis-72 items-start gap-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
             <div className="w-16 shrink-0 rounded-lg bg-emerald-50 py-1.5 text-center" title="Trong khu vực / tổng số người (kèm CHTT)">
@@ -90,8 +90,8 @@ export function PermitLiveBoard() {
           </Link>
           <div className="flex w-full shrink-0 items-center gap-2 sm:w-auto">
             {canExecute && <>
-              <Button asChild size="sm" className="h-10 flex-1 sm:h-9 sm:flex-none"><Link href={`${href}?scan=1`}><ScanLine />Quét</Link></Button>
-              <Button asChild size="sm" variant="outline" className="h-10 flex-1 border-red-200 sm:h-9 sm:flex-none text-red-700 hover:bg-red-50 hover:text-red-800"><Link href={`${href}?end=1`}><Square />Kết thúc</Link></Button>
+              <Button asChild size="sm" className="h-10 flex-1 sm:h-9 sm:flex-none"><Link href={`${href}&scan=1`}><ScanLine />Quét</Link></Button>
+              <Button asChild size="sm" variant="outline" className="h-10 flex-1 border-red-200 sm:h-9 sm:flex-none text-red-700 hover:bg-red-50 hover:text-red-800"><Link href={`${href}&end=1`}><Square />Kết thúc</Link></Button>
             </>}
             <Button asChild size="sm" variant="ghost" className="h-10 px-2 sm:h-9" aria-label={`Mở màn hình làm việc PCT ${formatPermitNumber(row.permit)}`}><Link href={href}><ChevronRight /></Link></Button>
           </div>

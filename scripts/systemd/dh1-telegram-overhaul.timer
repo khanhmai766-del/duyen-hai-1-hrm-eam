@@ -1,0 +1,11 @@
+[Unit]
+Description=DH1 — gửi lịch mở/kết thúc ngày PCT đại tu và thử lại bản tin lỗi
+
+[Timer]
+OnCalendar=*-*-* *:*:00
+AccuracySec=1s
+Persistent=true
+Unit=dh1-telegram@overhaul.service
+
+[Install]
+WantedBy=timers.target

@@ -659,10 +659,10 @@ export const PRESETS = {
     routes: () => ["/work-permits", "/work-permits?ui=edit"],
     async mock(context) {
       const rows = [
-        { company: "Công ty CP Vật tư & Thiết bị công nghiệp", code: "VATCO", sctx: true, overhaul: true, total: 42, commanders: 6, active: 40, working: 12 },
-        { company: "Công ty TNHH Kỹ thuật Đại tu Miền Nam", code: "IDC", sctx: false, overhaul: true, total: 18, commanders: 3, active: 18, working: 5 },
-        { company: "Công ty CP Dịch vụ Sửa chữa thường xuyên", code: "SCTXDV", sctx: true, overhaul: false, total: 9, commanders: 2, active: 9, working: 0 },
-        { company: "Cty Miền Bắc", code: "", sctx: false, overhaul: false, total: 3, commanders: 0, active: 3, working: 0 },
+        { company: "Công ty CP Dịch vụ Sửa chữa thường xuyên", code: "SCTXDV", sctx: true, overhaul: false, total: 9, commanders: 2, active: 9, working: 0, workingToday: 4 },
+        { company: "Công ty CP Vật tư & Thiết bị công nghiệp", code: "VATCO", sctx: true, overhaul: true, total: 42, commanders: 6, active: 40, working: 12, workingToday: 30 },
+        { company: "Công ty TNHH Kỹ thuật Đại tu Miền Nam", code: "IDC", sctx: false, overhaul: true, total: 18, commanders: 3, active: 18, working: 5, workingToday: 12 },
+        { company: "Cty Miền Bắc", code: "", sctx: false, overhaul: false, total: 3, commanders: 0, active: 3, working: 0, workingToday: 0 },
       ];
       await context.route(/\/api\/work-permits\/companies\?summary=1/, (route) => route.fulfill({ json: { data: rows, meta: { canWrite: true, working: 17 }, error: null } }));
     },
@@ -790,7 +790,22 @@ export const PRESETS = {
       `/work-permits?permitId=${permitId}`,
       `/work-permits/${permitId}/lam-viec`,
       `/work-permits/${permitId}/lam-viec?end=1`,
+      `/work-permits/${permitId}/lam-viec?from=live`,
+      `/work-permits/${permitId}/lam-viec?from=live&end=1`,
     ],
+    async interact(page, route) {
+      if (route === "/work-permits?tab=live") {
+        const link = page.locator('article a[href*="/lam-viec?from=live"]').first();
+        await link.click();
+        const back = page.getByRole("link", { name: "Về danh sách đang làm việc" });
+        if (await back.getAttribute("href") !== "/work-permits?tab=live") throw new Error("Nút quay lại không trỏ về Đang làm việc");
+        await back.click();
+        await page.locator('article a[href*="/lam-viec?from=live"]').first().waitFor();
+      } else if (route.includes("from=live")) {
+        const back = page.getByRole("link", { name: "Về danh sách đang làm việc", includeHidden: true });
+        if (await back.getAttribute("href") !== "/work-permits?tab=live") throw new Error("Mất đường dẫn quay lại Đang làm việc");
+      }
+    },
     async mock(context, { permitId, base }) {
       const now = Date.now();
       let permit = null;

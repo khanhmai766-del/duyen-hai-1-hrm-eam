@@ -11,6 +11,8 @@ Bot Telegram gửi các loại thông báo:
 - 07:00: khiếm khuyết Mức 1 còn tồn đọng (đánh dấu tồn trên 24 giờ và 7 ngày) và
   phiếu vật tư cần chú ý (cảnh báo trễ hạn, chưa đem/chưa nhận lại biên bản thu hồi);
 - 07:15 thứ Hai: tổng hợp tuần trước.
+- PCT nhà thầu đại tu: báo mở ngày sau 1 giờ, báo kết thúc ngay sau khi lưu; kết thúc sớm gộp hai phần trong một tin;
+- 00:00: tổng nhân sự đại tu, nhân sự đã làm việc và danh sách số hiệu PCT của từng nhà thầu trong ngày vừa kết thúc.
 
 Ba ca được tính theo giờ Việt Nam: ca sáng 06:00–14:00, ca chiều
 14:00–22:00 và ca đêm 22:00–06:00 ngày kế tiếp. Truy vấn dùng khoảng
@@ -41,6 +43,7 @@ logic cảnh báo đã có trên bảng theo dõi vật tư: `materialTicketAler
 TELEGRAM_ALERT_ENABLED="true"
 TELEGRAM_BOT_TOKEN="token-do-BotFather-cap"
 TELEGRAM_CHAT_IDS="123456789"
+TELEGRAM_OVERHAUL_CHAT_IDS=""
 TELEGRAM_TIMEZONE="Asia/Ho_Chi_Minh"
 TELEGRAM_SYNC_ALERT_AFTER_MINUTES="30"
 TELEGRAM_SYNC_REMINDER_MINUTES="240"
@@ -50,6 +53,15 @@ SYNC_MONITOR_REPORT_TOKEN="token-rieng-de-worker-bao-trang-thai"
 
 `TELEGRAM_CHAT_IDS` nhận nhiều nơi gửi, phân cách bằng dấu phẩy. Không commit
 token thật. File `.env` production phải có quyền `600`.
+
+Nhóm **Báo cáo tự động** nằm trong `TELEGRAM_CHAT_IDS`, tiếp tục nhận khiếm khuyết,
+phiếu vật tư và cảnh báo đồng bộ. Nhóm **Trưởng ca DH1** được chuyển sang nhận báo cáo
+đại tu: đặt chat ID của nhóm đó trong `TELEGRAM_OVERHAUL_CHAT_IDS`.
+Nhóm đã nằm trong danh sách đại tu tự động bị loại khỏi danh sách nhận chung,
+kể cả `TELEGRAM_CHAT_IDS` cũ vẫn chứa cả hai nhóm. Đại tu không dùng nhóm chung
+làm dự phòng khi chưa có `TELEGRAM_OVERHAUL_CHAT_IDS`; hàng đợi giữ lại và báo lỗi cấu hình.
+Các bản tin đang chờ thử lại cũng không gửi tới nhóm đã bị gỡ khỏi danh sách đại tu.
+Đây là thay đổi nơi nhận trong ứng dụng, không đổi tên nhóm Telegram.
 
 ## API tác vụ
 
@@ -61,8 +73,58 @@ Content-Type: application/json
 {"job":"weekly"}
 ```
 
-`job` nhận `monitor`, `shift`, `level-one`, `weekly`. Thêm `"dryRun":true` để xem nội
+`job` nhận `monitor`, `shift`, `level-one`, `weekly`, `overhaul`, `overhaul-daily`. Thêm `"dryRun":true` để xem nội
 dung mà không gửi và không ghi nhật ký `SENT`.
+
+## Báo cáo PCT đại tu
+
+Chỉ áp dụng PCT `CONTRACTOR` / `OVERHAUL`. Bật riêng bằng `TELEGRAM_OVERHAUL_ENABLED=true`
+sau khi đã áp dụng `prisma/manual/add-work-permit-telegram-outbox.sql`. Biến này mặc định tắt;
+không bật trước khi có bảng hàng đợi. Dùng chung bot, gửi riêng tới nhóm trong `TELEGRAM_OVERHAUL_CHAT_IDS`.
+
+- **Mở ngày**: chờ một giờ tính từ `openedAt` (thời điểm cho phép). Timer kiểm tra mỗi phút,
+  nên thường gửi trong phút đầu sau mốc đó. Đếm người thực sự đã vào làm tại lúc gửi, không gồm CHTT.
+- **Kết thúc**: sau transaction lưu thành công, gửi số PCT dạng `số/năm/VH1-NĐDH`, nhà thầu,
+  cương vị cho phép (`WorkPermit.position`), nội dung, CHTT, số nhân viên đã tham gia (kể cả đã ra),
+  giờ cho phép/kết thúc. Không thêm tổ máy. Tiến độ lấy các hạng mục có đổi % hoặc ghi chú,
+  so với ảnh chụp % tại lúc mở, ví dụ `30% → 50%`. Cập nhật giữa chừng vẫn được tính vào thay đổi cuối ngày.
+- **Kết thúc trước khi gửi mở**: huỷ lịch mở còn chờ, gửi một tin gộp mở/kết thúc.
+  Quyết định riêng theo từng nhóm: nhóm đã nhận mở thì chỉ nhận kết thúc, nhóm chưa nhận mở thì nhận bản gộp.
+  Nếu một worker đang gửi mở, bản kết thúc chờ worker đó xong để không gửi ngược thứ tự.
+- **Bàn giao CHTT**: chốt lần làm việc của CHTT cũ, kèm ghi chú bàn giao; tạo lịch mở cho lần của CHTT mới.
+- **00:00 giờ Việt Nam**: tổng hợp ngày vừa kết thúc theo khoảng `[0h, 0h ngày sau)`;
+  chỉ liệt kê nhà thầu có làm đại tu. Mỗi nhà thầu có tổng hồ sơ nhân sự `scope=OVERHAUL`,
+  số người không trùng đã làm trong ngày (gồm CHTT, không tách vai trò), danh sách số hiệu PCT không trùng.
+  Lần làm việc xuyên ngày thuộc cả hai ngày; nhiều lần làm việc của một PCT chỉ liệt kê một số hiệu trong ngày.
+  Sĩ số theo hồ sơ đơn vị hiện tại, giống bảng nhân sự; dữ liệu cũ thiếu lượt vào/ra tính theo danh sách lần làm việc.
+
+`WorkPermitTelegramOutbox` được tạo cùng transaction nghiệp vụ: không mất lịch chờ khi reload,
+không gửi nếu transaction thất bại. Lịch mở lấy số người mới nhất; bản kết thúc và tổng hợp được chốt nội dung.
+Sau lần xử lý đầu tiên, từng đoạn tin của từng nhóm được giữ nguyên cho lần thử lại.
+Mỗi đoạn có khoá riêng trong `TelegramNotificationLog`, đoạn đã `SENT` được bỏ qua khi thử lại.
+Lease 10 phút cho worker bị gián đoạn; lỗi được thử lại mỗi phút. Telegram không cung cấp khoá idempotency:
+nếu tiến trình chết đúng sau khi Telegram nhận nhưng trước khi ghi `SENT`, tin có thể được gửi lại.
+
+Xem trước (không gửi, không claim và không ghi hàng đợi):
+
+```bash
+node scripts/run-telegram-job.mjs overhaul --dry-run
+node scripts/run-telegram-job.mjs overhaul-daily --dry-run
+```
+
+Job `overhaul` xử lý hàng đợi đã đến giờ; job `overhaul-daily` tạo bản tổng hợp của hôm qua,
+không tạo tin nếu không có nhà thầu đại tu làm việc. Bản tổng hợp lỗi được job mỗi phút thử lại.
+SQL và hai timer mới cần cài riêng khi được phép triển khai; sửa mã cục bộ không tự bật chúng.
+
+```bash
+# Sau khi được phép deploy/áp dụng SQL và thay đổi cấu hình:
+./scripts/deploy-server.sh --sql prisma/manual/add-work-permit-telegram-outbox.sql
+# Đặt TELEGRAM_OVERHAUL_ENABLED=true trong .env theo quy trình cấu hình dịch vụ.
+cp scripts/systemd/dh1-telegram-overhaul.timer \
+   scripts/systemd/dh1-telegram-overhaul-daily.timer /etc/systemd/system/
+systemctl daemon-reload
+systemctl enable --now dh1-telegram-overhaul.timer dh1-telegram-overhaul-daily.timer
+```
 
 ## API báo trạng thái đồng bộ
 

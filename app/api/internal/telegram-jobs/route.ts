@@ -4,11 +4,12 @@ import { runLevelOneDefectDigest, runShiftDefectDigest, runWeeklyDefectDigest } 
 import { runMaterialTicketAttentionDigest } from "@/lib/material-ticket-telegram-digest";
 import { verifyBearerToken } from "@/lib/server-token";
 import { runSyncMonitorJob } from "@/lib/sync-monitor";
+import { runOverhaulDailyDigest, runOverhaulTelegramOutbox } from "@/lib/server/work-permit-telegram";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-const JOBS = ["monitor", "shift", "level-one", "weekly"] as const;
+const JOBS = ["monitor", "shift", "level-one", "weekly", "overhaul", "overhaul-daily"] as const;
 type TelegramJob = (typeof JOBS)[number];
 
 export async function POST(req: NextRequest) {
@@ -20,7 +21,11 @@ export async function POST(req: NextRequest) {
     const job = String(body?.job ?? "").trim().toLowerCase() as TelegramJob;
     if (!JOBS.includes(job)) return fail("Tác vụ Telegram không hợp lệ");
     const dryRun = body?.dryRun === true;
-    const result = job === "shift"
+    const result = job === "overhaul"
+      ? await runOverhaulTelegramOutbox({ dryRun })
+      : job === "overhaul-daily"
+      ? await runOverhaulDailyDigest({ dryRun })
+      : job === "shift"
       ? await runShiftDefectDigest({ dryRun })
       : job === "level-one"
         ? {

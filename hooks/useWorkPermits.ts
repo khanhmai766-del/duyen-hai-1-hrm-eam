@@ -248,7 +248,9 @@ export function usePermitCompanies() {
 }
 export interface PermitCompanySummary { company: string; code: string; sctx: boolean; overhaul: boolean; total: number; commanders: number; active: number;
   /** Người đang làm việc (CHTT + nhân viên chưa quét RA ở lần làm việc đang mở). */
-  working: number }
+  working: number;
+  /** Người không trùng đã làm trong ngày Việt Nam, gồm CHTT trên tất cả PCT. */
+  workingToday: number }
 function invalidateCompanies(qc: ReturnType<typeof useQueryClient>) {
   qc.invalidateQueries({ queryKey: ["work-permit-companies"] });
   qc.invalidateQueries({ queryKey: ["work-permit-people"] });
@@ -273,7 +275,7 @@ export function useRenamePermitCompany() {
 }
 /** Bảng đơn vị nhà thầu kèm sĩ số, số CHTT và số người đang làm việc — dùng cho tab "Nhân sự nhà thầu". Tự làm mới mỗi phút vì số đang làm việc đổi theo quét vào/ra. */
 export function usePermitCompanySummary() {
-  return useQuery({ queryKey: ["work-permit-companies", "summary"], staleTime: 30000, refetchInterval: 60000, queryFn: () => apiGet<PermitCompanySummary[]>("/api/work-permits/companies?summary=1") as Promise<{ data: PermitCompanySummary[]; meta: { canWrite: boolean; working: number } }> });
+  return useQuery({ queryKey: ["work-permit-companies", "summary"], staleTime: 30000, refetchInterval: 60000, queryFn: () => apiGet<PermitCompanySummary[]>("/api/work-permits/companies?summary=1") as Promise<{ data: PermitCompanySummary[]; meta: { canWrite: boolean; working: number; workingToday: number; workingDay: string } }> });
 }
 
 export function usePermitActivity<T>(id: string, type: "sessions" | "history", version: number, enabled: boolean) {
