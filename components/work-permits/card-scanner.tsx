@@ -4,10 +4,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Camera, CameraOff, CheckCircle2, CircleAlert, CircleX, UserPlus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
-import { lookupPermitCard, useSavePermitPerson } from "@/hooks/useWorkPermits";
+import { lookupPermitCard, reportPermitScanMetrics, useSavePermitPerson } from "@/hooks/useWorkPermits";
+import { startQrScanner } from "@/lib/qr-camera";
 import { cardExpired, cardlessCode, isCardlessCode, parseCardQr, sameCompany } from "@/lib/work-permit-card";
 import { formatPermitNumber, PERMIT_CONTRACTOR_SCOPES, personScopeError, type PermitContractorScope, type PermitMember, type PermitPerson } from "@/lib/work-permits";
 import { PermitCameraScanGuard } from "@/lib/work-permit-scan-guard";
+import { ScanMetricsCollector, STALL_MS, type ScanMetricResult } from "@/lib/work-permit-scan-metrics";
 import { PersonScopeBadge } from "@/components/work-permits/person-scope-badge";
 
 /*
@@ -17,7 +19,8 @@ import { PersonScopeBadge } from "@/components/work-permits/person-scope-badge";
  * - Khác đơn vị công tác của phiếu, khác nhóm nhân sự (SCTX / Đại tu) của phiếu, ngừng hoạt động → CHẶN (không cho thêm).
  * - Đang làm việc ở PCT khác → chặn bắt buộc; thẻ hết hạn → cảnh báo người cho phép.
  * - Thẻ chưa có trong danh bạ → thêm nhanh (chỉ nhập họ tên, đơn vị khoá theo phiếu).
- * Camera quét liên tục; đầu đọc QR cắm USB (gõ như bàn phím + Enter) dùng ô nhập bên dưới.
+ * Camera quét liên tục (bộ giải mã chọn ở lib/qr-camera.ts); đầu đọc QR cắm USB (gõ như bàn phím + Enter) dùng ô nhập bên dưới.
+ * Thời gian từng lượt được đo và gửi về máy chủ (lib/work-permit-scan-metrics.ts) để chẩn đoán "quét chậm".
  */
 
 type Tone = "ok" | "warn" | "block" | "info";
@@ -31,6 +34,7 @@ type Scan = {
 };
 
 const REPEAT_MS = 2500;
+const metricResult = (scan: Omit<Scan, "id">): ScanMetricResult => scan.added ? "in" : scan.out ? "out" : scan.tone === "ok" ? "in" : scan.tone;
 const vnDate = (value: string | null | undefined) => value ? new Date(value).toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" }) : "";
 
 /** Tiếng bíp ngắn: cao = cho vào, thấp = chặn/cảnh báo. Không có âm thanh thì im lặng, không lỗi. */
@@ -126,6 +130,8 @@ export function PermitCardScanner({ unit, companies, scope, existing, permitId, 
   existingRef.current = existing;
   const busyRef = useRef(false);
   const idRef = useRef(0);
+  const metricsRef = useRef<ScanMetricsCollector | null>(null);
+  metricsRef.current ??= new ScanMetricsCollector(permitId, reportPermitScanMetrics);
   const beep = useBeep();
   const savePerson = useSavePermitPerson();
   const current = scans[0];
@@ -153,7 +159,7 @@ export function PermitCardScanner({ unit, companies, scope, existing, permitId, 
     }
   }, [onAdd]);
 
-  const handle = useCallback(async (raw: string) => {
+  const handle = useCallback(async (raw: string, source: "camera" | "manual" = "manual") => {
     // Đang chờ quyết định (cảnh báo / thêm nhanh) thì bỏ qua lượt quét mới, kẻo đè mất thẻ đang chờ.
     if (busyRef.current || blockedRef.current) return;
     const code = parseCardQr(raw);
@@ -162,21 +168,29 @@ export function PermitCardScanner({ unit, companies, scope, existing, permitId, 
     if (lastRef.current.code === code && now - lastRef.current.at < REPEAT_MS) return; // camera đọc lại cùng thẻ liên tục
     lastRef.current = { code, at: now };
     busyRef.current = true;
+    const metrics = metricsRef.current!;
+    const detected = metrics.detected(source);
+    let lookupMs = 0, actionMs = 0, result: ScanMetricResult = "block";
+    const finish = (scan: Omit<Scan, "id">) => { result = metricResult(scan); push(scan); };
+    /** Ghi VÀO/RA trên máy chủ — tính thời gian vào actionMs. */
+    const act = async (work: () => Promise<ScanOutcome>) => { const startedAt = performance.now(); try { return await work(); } finally { actionMs += performance.now() - startedAt; } };
     try {
+      const lookupAt = performance.now();
       const { person } = await lookupPermitCard(code);
-      if (!person) return push({ code, tone: "warn", title: `Thẻ ${code} chưa có trong danh bạ`, detail: `Nhập họ tên để thêm nhanh vào đơn vị ${unit}.`, notFound: true });
+      lookupMs = performance.now() - lookupAt;
+      if (!person) return finish({ code, tone: "warn", title: `Thẻ ${code} chưa có trong danh bạ`, detail: `Nhập họ tên để thêm nhanh vào đơn vị ${unit}.`, notFound: true });
       if (isExisting(person)) {
-        if (!onExisting) return push({ code, tone: "info", person, title: person.name, detail: "Đã có trong danh sách lần làm việc này." });
-        try { return push({ code, person, title: person.name, ...await onExisting(person) }); }
-        catch (error) { return push({ code, person, title: person.name, tone: "block", detail: error instanceof Error ? error.message : "Không ghi nhận được, quét lại." }); }
+        if (!onExisting) return finish({ code, tone: "info", person, title: person.name, detail: "Đã có trong danh sách lần làm việc này." });
+        try { return finish({ code, person, title: person.name, ...await act(() => onExisting(person)) }); }
+        catch (error) { return finish({ code, person, title: person.name, tone: "block", detail: error instanceof Error ? error.message : "Không ghi nhận được, quét lại." }); }
       }
-      if (!person.isActive) return push({ code, tone: "block", person, title: person.name, detail: "Hồ sơ đang NGỪNG HOẠT ĐỘNG trong danh bạ — không cho vào." });
+      if (!person.isActive) return finish({ code, tone: "block", person, title: person.name, detail: "Hồ sơ đang NGỪNG HOẠT ĐỘNG trong danh bạ — không cho vào." });
       if (!companies.some(company => sameCompany(company, person.company))) {
-        return push({ code, tone: "block", person, title: person.name, detail: `Thuộc đơn vị “${person.company}”, KHÔNG PHẢI đơn vị công tác của phiếu (“${unit}”). Không cho vào.` });
+        return finish({ code, tone: "block", person, title: person.name, detail: `Thuộc đơn vị “${person.company}”, KHÔNG PHẢI đơn vị công tác của phiếu (“${unit}”). Không cho vào.` });
       }
       const scopeError = personScopeError(person, scope);
       if (scopeError) {
-        push({ code, tone: "block", person, title: person.name, detail: `${scopeError} Không cho vào.`, scopeMismatch: true });
+        finish({ code, tone: "block", person, title: person.name, detail: `${scopeError} Không cho vào.`, scopeMismatch: true });
         // Sau push (push đã rung ngắn kiểu chặn): rung dài hơn lượt chặn thường — lỗi dễ lọt khi quét liên tục cả đội.
         navigator.vibrate?.([200, 100, 200, 100, 200]);
         return;
@@ -184,14 +198,15 @@ export function PermitCardScanner({ unit, companies, scope, existing, permitId, 
       const reasons: string[] = [];
       if (cardExpired(person.cardExpiresAt)) reasons.push(`Thẻ đã HẾT HẠN ngày ${vnDate(person.cardExpiresAt)}.`);
       const conflict = person.activeWorks?.find(work => work.permit.id !== permitId);
-      if (conflict) return push({ code, tone: "block", person, title: person.name,
+      if (conflict) return finish({ code, tone: "block", person, title: person.name,
         detail: `Đang ${conflict.role === "CHTT" ? "là CHTT" : "làm việc"} ở PCT ${formatPermitNumber(conflict.permit)}. Phải ghi RA hoặc kết thúc lần làm việc tại phiếu đó trước khi cho vào.` });
-      if (reasons.length) return push({ code, tone: "warn", person, title: person.name, detail: "Cần người cho phép quyết định.", reasons, pending: true });
-      push({ code, person, title: person.name, ...await admit(person) });
+      if (reasons.length) return finish({ code, tone: "warn", person, title: person.name, detail: "Cần người cho phép quyết định.", reasons, pending: true });
+      finish({ code, person, title: person.name, ...await act(() => admit(person)) });
     } catch (error) {
-      push({ code, tone: "block", title: `Không tra được thẻ ${code}`, detail: error instanceof Error ? error.message : "Lỗi kết nối, quét lại." });
+      finish({ code, tone: "block", title: `Không tra được thẻ ${code}`, detail: error instanceof Error ? error.message : "Lỗi kết nối, quét lại." });
     } finally {
       busyRef.current = false;
+      metrics.scanned(detected, { source, lookupMs, actionMs, result });
     }
   }, [admit, companies, isExisting, onExisting, permitId, push, scope, unit]);
 
@@ -215,6 +230,8 @@ export function PermitCardScanner({ unit, companies, scope, existing, permitId, 
     cameraGuardRef.current.reset();
     const stale = () => run !== cameraRunRef.current;
     setCamera("starting");
+    const metrics = metricsRef.current!;
+    metrics.cameraStarting();
     let stream: MediaStream | null = null;
     try {
       stream = await navigator.mediaDevices.getUserMedia({ audio: false, video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } } });
@@ -223,22 +240,22 @@ export function PermitCardScanner({ unit, companies, scope, existing, permitId, 
       if (!video) throw new Error("Không có khung camera");
       video.srcObject = stream;
       await video.play();
-      const { BrowserQRCodeReader } = await import("@zxing/browser");
       if (stale()) { stream.getTracks().forEach(track => track.stop()); return; }
-      const reader = new BrowserQRCodeReader(undefined, { delayBetweenScanAttempts: 100, delayBetweenScanSuccess: 600 });
-      const controls = await reader.decodeFromStream(stream, video, result => {
+      const controls = await startQrScanner(video, (frame, engine) => {
         if (stale()) return;
-        const text = result?.getText();
+        metrics.frame(frame, engine);
+        const text = frame.text;
         const code = text ? parseCardQr(text) ?? text.trim() : null;
         const ready = cameraGuardRef.current.observe(code, Date.now());
         if (text && code && ready && !busyRef.current && !blockedRef.current) {
           cameraGuardRef.current.accept(code);
-          void handleRef.current(text);
+          void handleRef.current(text, "camera");
         }
       });
       if (stale()) { controls.stop(); stream.getTracks().forEach(track => track.stop()); return; }
       controlsRef.current = controls;
       stream = null;
+      metrics.cameraOn(controls.engine, video.videoWidth, video.videoHeight);
       setCamera("on");
     } catch (error) {
       stream?.getTracks().forEach(track => track.stop());
@@ -250,6 +267,29 @@ export function PermitCardScanner({ unit, companies, scope, existing, permitId, 
 
   // Mở hộp quét = thao tác chủ động → bật camera ngay (máy không có camera vẫn dùng ô nhập được).
   useEffect(() => { void startCamera(); return () => stopCamera(); }, [startCamera, stopCamera]);
+
+  // Đo "khung đứng hình": khoảng cách giữa hai lần vẽ màn hình > STALL_MS nghĩa là luồng giao diện bị nghẽn.
+  useEffect(() => {
+    if (camera !== "on") return;
+    let last = performance.now(), frame = 0;
+    const tick = (now: number) => {
+      if (!document.hidden && now - last > STALL_MS) metricsRef.current?.stall(now - last);
+      last = now;
+      frame = requestAnimationFrame(tick);
+    };
+    const onVisibility = () => { last = performance.now(); }; // quay lại tab: khoảng tab ẩn không tính là đứng hình
+    frame = requestAnimationFrame(tick);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => { cancelAnimationFrame(frame); document.removeEventListener("visibilitychange", onVisibility); };
+  }, [camera]);
+
+  // Gửi lô số đo cuối khi đóng hộp quét hoặc rời trang (tắt màn hình, chuyển ứng dụng trên điện thoại).
+  useEffect(() => {
+    const metrics = metricsRef.current!;
+    const flush = () => metrics.flush(true);
+    window.addEventListener("pagehide", flush);
+    return () => { window.removeEventListener("pagehide", flush); flush(); };
+  }, []);
 
   async function decide(allow: boolean) {
     if (!current?.person) return;

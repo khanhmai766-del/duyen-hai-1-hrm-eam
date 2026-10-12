@@ -2,6 +2,7 @@
 import { useMutation, useQuery, useQueryClient, useInfiniteQuery } from "@tanstack/react-query";
 import { apiDownload, apiGet, apiMutate } from "@/lib/fetcher";
 import type { OverhaulItemOption, OverhaulItemProgress, OverhaulItemSnapshot, OverhaulScheduleLink } from "@/lib/work-permit-overhaul";
+import type { ScanMetricsPayload } from "@/lib/work-permit-scan-metrics";
 import type { PermitHistory, PermitKind, PermitListRow, PermitDetailRow, PermitPerson, PermitRow, PermitStatus, PermitSession } from "@/lib/work-permits";
 export interface PermitMeta { total: number; page: number; pageSize: number; counts: Partial<Record<PermitStatus, number>>; overhaulCount: number; canIssue: boolean; canIssueNew: boolean; canExecute: boolean; positionScope?: { all: boolean; codes: string[]; labels: string[] } }
 export interface PermitNumberSuggestion { configured: boolean; baseline: string | null; highest: string | null; suggested: string | null }
@@ -185,6 +186,15 @@ export function usePermitCompanyPeople(company: string, enabled = true) {
 /** Tra một thẻ vừa quét (link QR hoặc số thẻ) — gọi thẳng, không cache: mỗi lượt quét phải là dữ liệu mới. */
 export async function lookupPermitCard(q: string) {
   return (await apiGet<{ code: string; person: PermitPerson | null }>(`/api/work-permits/people/card?q=${encodeURIComponent(q)}`)).data;
+}
+/**
+ * Gửi số đo hộp quét thẻ (lib/work-permit-scan-metrics.ts). Gửi-rồi-quên với `keepalive` để lô cuối vẫn tới khi
+ * đóng hộp quét hay rời trang — vì vậy dùng fetch thẳng thay vì apiMutate; lỗi bỏ qua, không làm phiền người quét.
+ */
+export function reportPermitScanMetrics(payload: ScanMetricsPayload) {
+  try {
+    void fetch("/api/work-permits/scan-metrics", { method: "POST", keepalive: true, credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) }).catch(() => {});
+  } catch { /* trình duyệt từ chối keepalive (lô quá lớn) — bỏ qua */ }
 }
 /** Việc tải ảnh do máy chủ ký ở bước list — chuyển nguyên văn sang bước photos, không sửa. */
 export type PermitPhotoJob = { code: string; source: string; exp: number; sig: string };
