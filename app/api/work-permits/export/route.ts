@@ -21,7 +21,7 @@ export async function GET(req: Request) {
       issuerName: true, leaderName: true, commanderName: true, teamName: true,
       workerCount: true, authorizerName: true, result: true, note: true, statusReason: true,
       unit: true, location: true, repairRequestNumber: true, teamType: true, format: true,
-    }, orderBy: [{ workDate: "asc" }, { createdAt: "asc" }, { id: "asc" }], take: 10001 });
+    }, orderBy: [{ issuedAt: { sort: "asc", nulls: "last" } }, { createdAt: "asc" }, { id: "asc" }], take: 10001 });
     if (rows.length > 10000) return fail("Có hơn 10.000 phiếu. Vui lòng thu hẹp khoảng ngày để xuất sổ.");
     const book = new ExcelJS.Workbook();
     const sheet = book.addWorksheet("Sổ cấp PCT", { pageSetup: { paperSize: 9, orientation: "landscape", fitToPage: true, fitToWidth: 1, fitToHeight: 0, printTitlesRow: "1:3" } });

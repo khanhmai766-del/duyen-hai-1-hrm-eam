@@ -334,8 +334,8 @@ export default function WorkPermitsPage() {
           {showMoreFilters && <div className="grid gap-2.5 sm:col-span-2 sm:grid-cols-2 lg:col-span-6 lg:grid-cols-[repeat(2,minmax(160px,220px))_repeat(2,minmax(140px,170px))]">
             <label><span className={filterLabel}>Loại đơn vị</span><select className={`${filterControl} mt-1`} value={teamType} onChange={e => { setTeamType(e.target.value); setPage(1); }}><option value="">Tất cả đơn vị</option><option value="INTERNAL">Nội bộ</option><option value="CONTRACTOR">Nhà thầu</option></select></label>
             <label><span className={filterLabel}>Nhóm phiếu nhà thầu</span><select className={`${filterControl} mt-1`} value={contractorScope} onChange={e => { setContractorScope(e.target.value); setPage(1); }}><option value="">Tất cả nhóm</option>{Object.entries(PERMIT_CONTRACTOR_SCOPES).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>
-            <label><span className={filterLabel}>Từ ngày</span><input type="date" className={`${filterControl} mt-1`} value={from} onChange={e => { setFrom(e.target.value); setPage(1); }} /></label>
-            <label><span className={filterLabel}>Đến ngày</span><input type="date" className={`${filterControl} mt-1`} value={to} min={from} onChange={e => { setTo(e.target.value); setPage(1); }} /></label>
+            <label><span className={filterLabel}>Ngày cấp từ</span><input type="date" className={`${filterControl} mt-1`} value={from} onChange={e => { setFrom(e.target.value); setPage(1); }} /></label>
+            <label><span className={filterLabel}>Ngày cấp đến</span><input type="date" className={`${filterControl} mt-1`} value={to} min={from} onChange={e => { setTo(e.target.value); setPage(1); }} /></label>
           </div>}
         </div>
       </div>

@@ -42,7 +42,7 @@ export async function GET(req: Request) {
     const overhaulBase = { ...permitFilters(new Request(overhaulUrl)), status: undefined, teamType: "CONTRACTOR", contractorScope: "OVERHAUL" };
     const overhaulWhere = scopeWhere ? { AND: [overhaulBase, scopeWhere] } : overhaulBase;
     const [rows, total, groups, overhaulCount] = await prisma.$transaction([
-      prisma.workPermit.findMany({ where, select: permitListSelect, orderBy: [{ workDate: "desc" }, { createdAt: "desc" }, { id: "desc" }], skip: (page - 1) * PERMIT_PAGE_SIZE, take: PERMIT_PAGE_SIZE }),
+      prisma.workPermit.findMany({ where, select: permitListSelect, orderBy: [{ issuedAt: { sort: "desc", nulls: "last" } }, { createdAt: "desc" }, { id: "desc" }], skip: (page - 1) * PERMIT_PAGE_SIZE, take: PERMIT_PAGE_SIZE }),
       prisma.workPermit.count({ where }),
       prisma.workPermit.groupBy({ by: ["status"], orderBy: { status: "asc" }, where: countWhere, _count: true }),
       prisma.workPermit.count({ where: overhaulWhere }),

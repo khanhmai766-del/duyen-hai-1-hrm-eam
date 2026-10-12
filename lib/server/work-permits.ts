@@ -177,7 +177,11 @@ export function permitFilters(
       ? { status: status === "OPEN" ? { notIn: ["CLOSED", "CANCELLED"] } : status }
       : contractorScope ? {}
         : { status: options.includeClosedByDefault ? { not: "CANCELLED" } : { notIn: ["CLOSED", "CANCELLED"] } }),
-    ...(from || to ? { workDate: { ...(from ? { gte: from } : {}), ...(to ? { lte: to } : {}) } } : {}),
+    // Ngày cấp tính theo giờ Việt Nam; cận trên mở để bao gồm cả ngày cuối.
+    ...(from || to ? { issuedAt: {
+      ...(from ? { gte: new Date(`${from}T00:00:00+07:00`) } : {}),
+      ...(to ? { lt: new Date(new Date(`${to}T00:00:00+07:00`).getTime() + 24 * 60 * 60 * 1000) } : {}),
+    } } : {}),
     ...(q.trim() ? { OR: [{ searchText: { contains: permitSearchTerm(q) } }, { sessions: { some: { searchText: { contains: permitSearchTerm(q) } } } }] } : {}),
   };
 }
