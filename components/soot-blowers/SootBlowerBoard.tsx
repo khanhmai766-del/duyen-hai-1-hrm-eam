@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useMemo, useState } from "react";
-import { Factory, Loader2 } from "lucide-react";
+import dynamic from "next/dynamic";
+import { Box, Factory, Loader2, Map as MapIcon } from "lucide-react";
 import { toast } from "sonner";
 import {
   useSootBlowers,
@@ -29,10 +30,22 @@ import {
   type SootBlowerPageKey,
   type SootBlowerType,
 } from "@/lib/soot-blower-layout";
+import { SB_3D_PLACEMENTS, matchesFilter, sootBlowerWallLabel as wallLabel, type SootBlowerFilter } from "@/lib/soot-blower-3d";
 
-/* Sơ đồ khiếm khuyết vòi thổi bụi — vẽ SVG theo màn DCS SOOT BLOW.
-   - Ký hiệu theo loại: IR ▲, IK thanh có mũi tên, IKEL thanh rỗng, AH ✚
-   - "Làm nổi bật" theo loại vòi, callout khi rê chuột, bản đồ toàn cảnh 98 vòi
+// three.js chỉ tải khi mở sơ đồ này, và chỉ chạy phía trình duyệt.
+const Boiler3D = dynamic(() => import("@/components/soot-blowers/Boiler3D"), {
+  ssr: false,
+  loading: () => (
+    <div className="flex h-[62vh] max-h-[640px] min-h-[380px] items-center justify-center gap-2 text-sm font-semibold text-slate-500">
+      <Loader2 className="h-5 w-5 animate-spin" /> Đang tải mô hình 3D…
+    </div>
+  ),
+});
+
+/* Sơ đồ khiếm khuyết vòi thổi bụi — mặc định mô hình 3D lò hơi (Boiler3D), vẫn giữ
+   sơ đồ SVG theo màn DCS SOOT BLOW cho người quen màn DCS.
+   - Mỗi loại vòi một tab riêng (IK · IR · IKEL · IKSH · IKAH), không chồng lấn
+   - Ký hiệu theo loại: IR ▲, IK thanh có mũi tên, IKEL thanh rỗng, IKSH hai mũi tên, IKAH ✚
    - Panel bên phải thay modal: vẫn nhìn sơ đồ khi nhập liệu */
 
 const CSS = `
@@ -48,15 +61,14 @@ const CSS = `
 `;
 
 const DCS_BG = "#c5c9cd";
-const PIPE = "#b3261e";
 const DASH = "#3a3f45";
-const VALVE = "#4b5563"; // van vẽ theo DCS nhưng không có tín hiệu thật → màu trung tính
 
 type Status = "OK" | "WARN" | "BAD";
+// Màu trạng thái dùng chung cho cả sơ đồ DCS và mô hình 3D: khả dụng = xanh lá, có khiếm khuyết = vàng, bất khả dụng = cam.
 const STATUS_UI: Record<Status, { label: string; fill: string; stroke: string; tag: string; icon: string; chip: string }> = {
-  OK: { label: "Khả dụng", fill: "#eceef0", stroke: "#6b7280", tag: "#0b7a2a", icon: "#4b5563", chip: "bg-emerald-50 text-emerald-700 border-emerald-200" },
-  WARN: { label: "Khả dụng · có khiếm khuyết", fill: "#fde68a", stroke: "#b45309", tag: "#78350f", icon: "#b45309", chip: "bg-amber-50 text-amber-800 border-amber-200" },
-  BAD: { label: "Bất khả dụng", fill: "#dc2626", stroke: "#7f1d1d", tag: "#ffffff", icon: "#fecaca", chip: "bg-red-50 text-red-700 border-red-200" },
+  OK: { label: "Khả dụng", fill: "#dcfce7", stroke: "#16a34a", tag: "#166534", icon: "#16a34a", chip: "bg-green-50 text-green-700 border-green-200" },
+  WARN: { label: "Khả dụng · có khiếm khuyết", fill: "#fde047", stroke: "#a16207", tag: "#713f12", icon: "#a16207", chip: "bg-yellow-50 text-yellow-800 border-yellow-300" },
+  BAD: { label: "Bất khả dụng", fill: "#f97316", stroke: "#9a3412", tag: "#ffffff", icon: "#ffedd5", chip: "bg-orange-50 text-orange-700 border-orange-200" },
 };
 const DEPT_UI: Record<SootBlowerDept, string> = {
   "SCĐ": "text-orange-700 bg-orange-50 border-orange-200",
@@ -77,8 +89,16 @@ const fmtDate = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString(
 /* ---------------- Ký hiệu vòi theo loại (dùng chung sơ đồ + chú giải) ---------------- */
 function Glyph({ type, cx, cy, color }: { type: SootBlowerType; cx: number; cy: number; color: string }) {
   if (type === "IR") return <polygon points={`${cx},${cy - 6} ${cx + 8},${cy + 6} ${cx - 8},${cy + 6}`} fill={color} />;
-  if (type === "AH") return <path d={`M${cx - 2.5} ${cy - 7}h5v4.5h4.5v5h-4.5v4.5h-5v-4.5h-4.5v-5h4.5z`} fill={color} />;
+  if (type === "IKAH") return <path d={`M${cx - 2.5} ${cy - 7}h5v4.5h4.5v5h-4.5v4.5h-5v-4.5h-4.5v-5h4.5z`} fill={color} />;
   const hollow = type === "IKEL";
+  if (type === "IKSH")
+    return (
+      <g>
+        <rect x={cx - 7} y={cy - 3} width={14} height={6} fill={color} />
+        <polygon points={`${cx + 6},${cy - 5} ${cx + 12},${cy} ${cx + 6},${cy + 5}`} fill={color} />
+        <polygon points={`${cx - 6},${cy - 5} ${cx - 12},${cy} ${cx - 6},${cy + 5}`} fill={color} />
+      </g>
+    );
   return (
     <g>
       <rect
@@ -102,7 +122,8 @@ export default function SootBlowerBoard() {
   const [selected, setSelected] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [searchMsg, setSearchMsg] = useState<string | null>(null);
-  const [typeFocus, setTypeFocus] = useState<SootBlowerType | null>(null);
+  const [typeTab, setTypeTab] = useState<SootBlowerFilter>("IK");
+  const [mode, setMode] = useState<"3d" | "dcs">("3d");
 
   const { data, isLoading, error } = useSootBlowers(machine);
   const rbac = useRbacAccess();
@@ -120,7 +141,6 @@ export default function SootBlowerBoard() {
   }, [data]);
 
   const page = SB_PAGES[pageKey];
-  const openCount = (key: SootBlowerPageKey) => SB_PAGES[key].tags.filter((t) => statusOf(t, board) !== "OK").length;
 
   const totals = useMemo(() => {
     const c: Record<Status, number> = { OK: 0, WARN: 0, BAD: 0 };
@@ -129,11 +149,23 @@ export default function SootBlowerBoard() {
     return { ...c, total: all.length };
   }, [board]);
 
+  const statuses = useMemo(() => {
+    const out: Record<string, Status> = {};
+    for (const p of SB_3D_PLACEMENTS) out[p.tag] = statusOf(p.tag, board);
+    return out;
+  }, [board]);
+
   const select = (tag: string) => {
     const pk = pageOf(tag);
     if (!pk) return;
     setPageKey(pk);
+    // đang xem "Tất cả" thì giữ nguyên, không nhảy sang tab loại của vòi vừa chọn
+    setTypeTab((cur) => (cur === "ALL" ? "ALL" : typeOf(tag)));
     setSelected(tag);
+  };
+  const switchType = (t: SootBlowerFilter) => {
+    setTypeTab(t);
+    if (selected && !matchesFilter(t, typeOf(selected))) setSelected(null);
   };
   const switchPage = (k: SootBlowerPageKey) => {
     setPageKey(k);
@@ -159,17 +191,21 @@ export default function SootBlowerBoard() {
       <div className="mb-4 flex flex-wrap items-end gap-4">
         <div>
           <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">Khiếm khuyết vòi thổi bụi · Tổ máy {machine}</h1>
-          <p className="mt-0.5 text-sm text-slate-500">Sơ đồ theo màn DCS SOOT BLOW · chọn vòi để ghi nhận khiếm khuyết</p>
+          <p className="mt-0.5 text-sm text-slate-500">
+            {mode === "3d" ? "Mô hình 3D lò hơi" : "Sơ đồ theo màn DCS SOOT BLOW"} · chọn vòi để ghi nhận khiếm khuyết
+          </p>
         </div>
         <div className="ml-auto flex flex-wrap items-baseline gap-x-6 gap-y-1">
-          <Stat n={totals.OK} label="khả dụng" color="text-emerald-700" />
-          <Stat n={totals.WARN} label="có khiếm khuyết" color="text-amber-600" />
-          <Stat n={totals.BAD} label="bất khả dụng" color="text-red-600" />
+          <Stat n={totals.OK} label="khả dụng" color="text-green-700" />
+          <Stat n={totals.WARN} label="có khiếm khuyết" color="text-yellow-600" />
+          <Stat n={totals.BAD} label="bất khả dụng" color="text-orange-600" />
           <span className="tnum text-xs text-slate-400">/ {totals.total} vòi</span>
         </div>
       </div>
 
-      {/* ===== Thanh điều khiển ===== */}
+      {/* ===== Thanh điều khiển =====
+          Một hàng: trái = tổ máy + loại vòi; phải (thẳng cột panel bên, 370px) = 3D/Sơ đồ + tìm tag.
+          Hẹp thì xuống dòng: thanh loại vòi và cụm bên phải trải hết bề ngang. */}
       <div className="mb-3 flex flex-wrap items-center gap-3">
         <Segmented>
           {SOOT_BLOWER_MACHINES.map((m) => (
@@ -185,45 +221,43 @@ export default function SootBlowerBoard() {
             </SegButton>
           ))}
         </Segmented>
-        <Segmented>
-          {(["left", "right"] as const).map((k) => (
-            <SegButton key={k} active={pageKey === k} onClick={() => switchPage(k)}>
-              {SB_PAGES[k].label}
-              {openCount(k) > 0 && (
-                <span
-                  className={`tnum min-w-5 rounded-full px-1.5 text-[11px] font-bold ${pageKey === k ? "bg-amber-400 text-slate-900" : "bg-amber-100 text-amber-800"}`}
-                >
-                  {openCount(k)}
-                </span>
-              )}
+        <TypeTabs board={board} value={typeTab} onChange={switchType} />
+        <div className="flex w-full min-w-0 items-center gap-2 xl:ml-auto xl:w-[370px]">
+          <Segmented>
+            <SegButton active={mode === "3d"} onClick={() => setMode("3d")}>
+              <Box className="h-3.5 w-3.5" /> 3D
             </SegButton>
-          ))}
-        </Segmented>
-        <div className="flex items-center gap-2">
+            <SegButton active={mode === "dcs"} onClick={() => setMode("dcs")}>
+              <MapIcon className="h-3.5 w-3.5" /> Sơ đồ
+            </SegButton>
+          </Segmented>
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && runSearch()}
-            placeholder="Tìm tag vòi, VD: IR15"
+            placeholder="Tag, VD: IR15"
             aria-label="Tìm tag vòi"
-            className="mono w-44 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+            className="mono min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40"
           />
           <button
             type="button"
             onClick={runSearch}
-            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50"
+            className="shrink-0 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50"
           >
             Tìm
           </button>
-          {searchMsg && <span className="text-sm text-red-600">{searchMsg}</span>}
         </div>
-        <TypeFocus page={page} value={typeFocus} onChange={setTypeFocus} />
+        {searchMsg && <p className="w-full text-right text-sm text-red-600">{searchMsg}</p>}
       </div>
 
       {/* ===== Sơ đồ + panel ===== */}
       <div className="flex flex-col items-start gap-4 xl:flex-row">
-        <div className="relative w-full min-w-0 flex-1 overflow-x-auto rounded-xl border border-slate-300" style={{ background: DCS_BG }}>
-          <Schematic page={page} board={board} selected={selected} typeFocus={typeFocus} onSelect={setSelected} />
+        <div className="relative w-full min-w-0 flex-1 overflow-x-auto rounded-xl border border-slate-300" style={{ background: mode === "dcs" ? DCS_BG : undefined }}>
+          {mode === "3d" ? (
+            <Boiler3D type={typeTab} statuses={statuses} selected={selected} onSelect={select} />
+          ) : (
+            <Schematic page={page} board={board} selected={selected} typeFocus={typeTab === "ALL" ? null : typeTab} onSelect={setSelected} />
+          )}
           {(isLoading || error) && (
             <div className="absolute inset-0 flex items-center justify-center gap-2 bg-white/60 text-sm font-semibold text-slate-600">
               {isLoading ? (
@@ -238,7 +272,7 @@ export default function SootBlowerBoard() {
         </div>
 
         <aside className="w-full shrink-0 overflow-y-auto rounded-xl border border-slate-200 bg-white xl:sticky xl:top-4 xl:max-h-[calc(100vh-2rem)] xl:w-[370px]">
-          <Minimap pageKey={pageKey} board={board} selected={selected} onPage={switchPage} onPick={select} />
+          {mode === "dcs" && <Minimap pageKey={pageKey} board={board} selected={selected} onPage={switchPage} onPick={select} />}
           {selected ? (
             <DetailPanel key={`${machine}-${selected}`} machine={machine} tag={selected} board={board} canManage={canManage} onBack={() => setSelected(null)} />
           ) : (
@@ -275,50 +309,55 @@ function Stat({ n, label, color }: { n: number; label: string; color: string }) 
   );
 }
 
-/* Làm nổi bật theo loại vòi — kiêm luôn chú giải ký hiệu */
-function TypeFocus({
-  page,
+/* Tab loại vòi — mỗi loại một tab, kiêm luôn chú giải ký hiệu; tab cuối "Tất cả" = cả 110 vòi.
+   Số vàng = vòi đang có vấn đề */
+function TypeTabs({
+  board,
   value,
   onChange,
 }: {
-  page: SootBlowerPage;
-  value: SootBlowerType | null;
-  onChange: (v: SootBlowerType | null) => void;
+  board: Board;
+  value: SootBlowerFilter;
+  onChange: (v: SootBlowerFilter) => void;
 }) {
-  const count = (t: SootBlowerType) => page.tags.filter((g) => typeOf(g) === t).length;
   return (
-    <div className="flex min-w-0 max-w-full items-center gap-2 xl:ml-auto">
-      <span className="shrink-0 text-xs text-slate-500">Làm nổi bật</span>
-      <div className="flex min-w-0 overflow-x-auto whitespace-nowrap rounded-lg border border-slate-300 bg-white text-xs font-semibold">
-        <button
-          type="button"
-          onClick={() => onChange(null)}
-          className={`px-3 py-2 ${value === null ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-50"}`}
-        >
-          Tất cả
-        </button>
-        {SOOT_BLOWER_TYPES.filter((t) => count(t) > 0).map((t) => (
+    <div className="grid w-full min-w-0 grid-cols-6 overflow-hidden whitespace-nowrap md:w-auto md:flex-1 lg:max-w-[860px] rounded-lg border border-slate-300 bg-white text-sm font-semibold" role="tablist" aria-label="Loại vòi thổi bụi">
+      {[...SOOT_BLOWER_TYPES, "ALL" as const].map((t, i) => {
+        const tags = SB_3D_PLACEMENTS.filter((p) => matchesFilter(t, p.type)).map((p) => p.tag);
+        const issues = tags.filter((g) => statusOf(g, board) !== "OK").length;
+        const active = value === t;
+        return (
           <button
             type="button"
+            role="tab"
             key={t}
-            onClick={() => onChange(value === t ? null : t)}
-            title={SOOT_BLOWER_TYPE_NAME[t]}
-            aria-pressed={value === t}
-            className={`flex items-center gap-1.5 border-l border-slate-200 px-3 py-2 ${value === t ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-50"}`}
+            aria-selected={active}
+            onClick={() => onChange(t)}
+            title={t === "ALL" ? "Tất cả vòi thổi bụi" : SOOT_BLOWER_TYPE_NAME[t]}
+            className={`flex min-h-11 items-center justify-center gap-1 px-1 py-2 sm:min-h-0 sm:gap-2 sm:px-4 ${i ? "border-l border-slate-200" : ""} ${active ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-50"}`}
           >
-            <svg width="26" height="16" aria-hidden="true">
-              <Glyph type={t} cx={13} cy={8} color={value === t ? "#ffffff" : "#4b5563"} />
-            </svg>
-            <span className="mono">{t}</span>
-            <span className={`tnum ${value === t ? "text-slate-300" : "text-slate-400"}`}>{count(t)}</span>
+            {t === "ALL" ? (
+              <span>Tất cả</span>
+            ) : (
+              <>
+                <svg width="26" height="16" aria-hidden="true" className="hidden shrink-0 2xl:block">
+                  <Glyph type={t} cx={13} cy={8} color={active ? "#ffffff" : "#4b5563"} />
+                </svg>
+                <span className="mono">{t}</span>
+              </>
+            )}
+            <span className={`tnum hidden text-xs sm:inline ${active ? "text-slate-300" : "text-slate-400"}`}>{tags.length}</span>
+            {issues > 0 && (
+              <span className={`tnum min-w-5 rounded-full px-1.5 text-[11px] font-bold ${active ? "bg-amber-400 text-slate-900" : "bg-amber-100 text-amber-800"}`}>{issues}</span>
+            )}
           </button>
-        ))}
-      </div>
+        );
+      })}
     </div>
   );
 }
 
-/* Bản đồ toàn cảnh: 98 vòi theo tọa độ DCS gốc, vòi có vấn đề nổi to */
+/* Bản đồ toàn cảnh: 110 vòi theo tọa độ DCS gốc, vòi có vấn đề nổi to */
 function Minimap({
   pageKey,
   board,
@@ -334,7 +373,7 @@ function Minimap({
 }) {
   const SPLIT = 795;
   const dots = [...Object.entries(SB_LEFT_RAW.tiles), ...Object.entries(SB_RIGHT_RAW.tiles)];
-  const COLOR: Record<Status, string> = { OK: "#94a3b8", WARN: "#f59e0b", BAD: "#dc2626" };
+  const COLOR: Record<Status, string> = { OK: "#22c55e", WARN: "#eab308", BAD: "#f97316" };
   return (
     <div className="border-b border-slate-100 px-4 pb-3 pt-4">
       <div className="mb-2 flex items-baseline justify-between">
@@ -413,26 +452,8 @@ function Schematic({
         </pattern>
       </defs>
       <rect width={vw} height={vh} fill="url(#vtbDots)" />
-      {page.pipes.map((pts, i) => (
-        <polyline key={"p" + i} points={pts} fill="none" stroke={PIPE} strokeWidth="3" />
-      ))}
-      {page.rowPipes.map((pts, i) => (
-        <polyline key={"r" + i} points={pts} fill="none" stroke={PIPE} strokeWidth="2" />
-      ))}
-      {page.tags
-        .filter((t) => page.slopeTags.has(t))
-        .map((t) => {
-          const [x, y] = page.pos[t];
-          return <line key={"s" + t} x1={x} y1={y + H / 2} x2={x} y2={y + H / 2 + 9} stroke={PIPE} strokeWidth="2" />;
-        })}
       {page.outlines.map((pts, i) => (
         <polygon key={"o" + i} points={pts} fill="none" stroke={DASH} strokeWidth="1.8" strokeDasharray="8 6" />
-      ))}
-      {page.valves.map(([x, y], i) => (
-        <g key={"v" + i}>
-          <polygon points={`${x - 11},${y - 9} ${x},${y} ${x - 11},${y + 9}`} fill={VALVE} />
-          <polygon points={`${x + 11},${y - 9} ${x},${y} ${x + 11},${y + 9}`} fill={VALVE} />
-        </g>
       ))}
       {page.labels.map((l) => (
         <g key={l.t}>
@@ -486,7 +507,7 @@ function Callout({ tag, page, status, vw }: { tag: string; page: SootBlowerPage;
       <text x={left + 14 + tag.length * 11 + 10} y={top + 24} fontSize="13" fill="#cbd5e1">
         {SOOT_BLOWER_TYPE_NAME[typeOf(tag)]}
       </text>
-      <circle cx={left + 19} cy={top + 45} r="5" fill={status === "OK" ? "#22c55e" : status === "WARN" ? "#f59e0b" : "#ef4444"} />
+      <circle cx={left + 19} cy={top + 45} r="5" fill={status === "OK" ? "#22c55e" : status === "WARN" ? "#eab308" : "#f97316"} />
       <text x={left + 30} y={top + 50} fontSize="13" fill="#e2e8f0">
         {STATUS_UI[status].label} · {zoneName(tag)}
       </text>
@@ -607,7 +628,7 @@ function OpenList({ board, onPick }: { board: Board; onPick: (tag: string) => vo
             >
               <div className="flex items-center gap-2">
                 <span className="mono font-bold text-slate-900">{r.tag}</span>
-                <span className="text-[11px] text-slate-400">{r.page === "left" ? "Vách trái" : "Vách phải"}</span>
+                <span className="text-[11px] text-slate-400">{SOOT_BLOWER_TYPE_NAME[typeOf(r.tag)]} · {wallLabel(r.tag)}</span>
                 <span className={`ml-auto rounded-full border px-2 py-0.5 text-[11px] font-semibold ${STATUS_UI[r.status].chip}`}>
                   {r.status === "BAD" ? "Bất khả dụng" : "Có khiếm khuyết"}
                 </span>
@@ -701,7 +722,7 @@ function DetailPanel({
           <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${STATUS_UI[status].chip}`}>{STATUS_UI[status].label}</span>
         </div>
         <div className="mt-0.5 text-xs text-slate-400">
-          Tổ máy {machine} · {pageOf(tag) === "left" ? "Vách trái" : "Vách phải"} · {zoneName(tag)} · {SOOT_BLOWER_TYPE_NAME[typeOf(tag)]}
+          Tổ máy {machine} · {SOOT_BLOWER_TYPE_NAME[typeOf(tag)]} · {wallLabel(tag)} · DCS: {zoneName(tag)}
         </div>
 
         <div className="mb-1.5 mt-4 text-xs font-semibold text-slate-500">Trạng thái vận hành</div>
@@ -710,7 +731,7 @@ function DetailPanel({
             type="button"
             disabled={!canManage || setStatus.isPending}
             onClick={() => changeAvail(false)}
-            className={`py-2 disabled:cursor-not-allowed ${!isUnavail ? "bg-emerald-600 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}
+            className={`py-2 disabled:cursor-not-allowed ${!isUnavail ? "bg-green-600 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}
           >
             Khả dụng
           </button>
@@ -718,7 +739,7 @@ function DetailPanel({
             type="button"
             disabled={!canManage || setStatus.isPending}
             onClick={() => changeAvail(true)}
-            className={`py-2 disabled:cursor-not-allowed ${isUnavail ? "bg-red-600 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}
+            className={`py-2 disabled:cursor-not-allowed ${isUnavail ? "bg-orange-500 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}
           >
             Bất khả dụng
           </button>
@@ -780,7 +801,7 @@ function DetailPanel({
               <div className="py-6 text-center text-sm text-slate-400">Không có khiếm khuyết {tab} đang mở.</div>
             ) : (
               list.map((d) => (
-                <div key={d.id} className="mb-2 rounded-lg border border-l-4 border-slate-200 border-l-amber-400 p-3">
+                <div key={d.id} className="mb-2 rounded-lg border border-l-4 border-slate-200 border-l-yellow-400 p-3">
                   <div className="whitespace-pre-wrap text-sm text-slate-800">{d.description}</div>
                   <div className="mt-2 flex items-center gap-2">
                     <span className="mono text-[11px] text-slate-400">

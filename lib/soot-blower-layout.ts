@@ -1,13 +1,16 @@
-// Bố trí vòi thổi bụi theo màn DCS SOOT BLOW — dùng chung cho sơ đồ (client) và
-// kiểm tra tag hợp lệ (server). Tọa độ là pixel ảnh DCS gốc, nhân hệ số S khi vẽ,
-// nên vị trí vòi khớp DCS; khung nét đứt và ống góp TỰ TÍNH từ vị trí vòi.
+// Bố trí vòi thổi bụi theo màn DCS SOOT BLOW, chỉnh theo bản vẽ hệ thống thổi bụi — dùng chung cho
+// sơ đồ (client) và kiểm tra tag hợp lệ (server). Tọa độ là pixel ảnh DCS gốc, nhân hệ số S khi vẽ;
+// khung nét đứt TỰ TÍNH từ vị trí vòi. Không vẽ đường hơi / van (bỏ 12/10/2026 — không có tín hiệu thật).
 
 export const SB_SCALE = 1.55; // hệ số phóng từ tọa độ ảnh DCS
 export const SB_TILE_W = 58; // kích thước ô vòi (đơn vị SVG)
 export const SB_TILE_H = 46;
 const PAD = 12; // lề khung nét đứt
 
-export type SootBlowerType = "IR" | "IK" | "IKEL" | "AH";
+// IKAH = vòi bộ sấy không khí; tag trong DB vẫn là AH01–AH04 (không đổi dữ liệu).
+// IKSH = vòi dài trên hai vách bên khối SCR — 12 vòi IKSH01–12 thêm 12/10/2026 (lẻ vách trái, chẵn vách phải);
+// ô trên sơ đồ DCS đặt vào chỗ trống, chưa theo màn DCS thật.
+export type SootBlowerType = "IK" | "IR" | "IKEL" | "IKSH" | "IKAH";
 export type SootBlowerPageKey = "left" | "right";
 type XY = [number, number];
 
@@ -24,8 +27,6 @@ type RawPage = {
   tiles: Record<string, XY>;
   zones: Zone[];
   labels: { t: string; sub?: string; x: number; y: number; size: number }[];
-  pipes: XY[][];
-  valves: XY[];
 };
 
 export const SB_LEFT_RAW: RawPage = {
@@ -35,19 +36,23 @@ export const SB_LEFT_RAW: RawPage = {
   y0: 15,
   vb: [1200, 985],
   tiles: {
-    IK13: [495, 48], IK15: [495, 110], IK19: [365, 128], IK17: [432, 128], IK23: [365, 200], IK21: [432, 200],
-    IK07: [588, 65], IK01: [640, 65], IK09: [588, 132], IK03: [640, 132], IK11: [588, 198], IK05: [640, 198],
-    IKEL09: [75, 215], IKEL07: [130, 225], IKEL05: [185, 238], IKEL03: [240, 248], IKEL01: [296, 258],
-    IR48: [52, 425], IR46: [98, 432], IR44: [144, 440], IR42: [190, 448], IR40: [236, 456], IR38: [282, 464],
-    IR31: [350, 470], IR33: [396, 470], IR35: [450, 470],
-    IR37: [518, 464], IR39: [563, 456], IR41: [610, 448], IR43: [655, 440], IR45: [700, 432], IR47: [745, 425],
-    IR18: [52, 515], IR16: [98, 522], IR14: [144, 530], IR12: [190, 538], IR10: [236, 546], IR08: [282, 554],
-    IR01: [350, 560], IR03: [396, 560], IR05: [450, 560],
-    IR07: [518, 554], IR09: [563, 546], IR11: [610, 538], IR13: [655, 530], IR15: [700, 522], IR17: [745, 515],
+    // Vị trí theo bản vẽ hệ thống thổi bụi (người dùng gửi 12/10/2026): hàng IK thẳng hàng, IR ba vùng
+    // "IR-3Z" — vùng trái dốc xuống, vùng giữa nằm ngang, vùng phải dốc lên.
+    IK19: [365, 107], IK17: [450, 107], IK23: [365, 187], IK21: [450, 187], IK13: [516, 50], IK15: [516, 107],
+    IK07: [610, 50], IK01: [659, 50], IK09: [610, 107], IK03: [659, 107], IK11: [610, 172], IK05: [659, 172],
+    IKEL09: [75, 220], IKEL07: [130, 229], IKEL05: [185, 240], IKEL03: [240, 248], IKEL01: [296, 258],
+    IR48: [52, 425], IR46: [98, 434], IR44: [144, 442], IR42: [190, 452], IR40: [236, 461], IR38: [282, 472],
+    IR31: [350, 468], IR33: [396, 468], IR35: [450, 468],
+    IR37: [518, 472], IR39: [563, 463], IR41: [610, 455], IR43: [655, 446], IR45: [700, 438], IR47: [745, 429],
+    IR18: [52, 514], IR16: [98, 522], IR14: [144, 530], IR12: [190, 538], IR10: [236, 545], IR08: [282, 553],
+    IR01: [350, 553], IR03: [396, 553], IR05: [450, 553],
+    IR07: [518, 556], IR09: [563, 548], IR11: [610, 539], IR13: [655, 531], IR15: [700, 522], IR17: [745, 514],
+    IKSH01: [150, 330], IKSH03: [205, 330], IKSH05: [260, 330], IKSH07: [150, 375], IKSH09: [205, 375], IKSH11: [260, 375],
   },
   zones: [
     { kind: "box", name: "Left side", tags: ["IK13", "IK15", "IK19", "IK17", "IK23", "IK21", "IK07", "IK01", "IK09", "IK03", "IK11", "IK05"] },
     { kind: "slope", name: "Left side · IKEL", top: ["IKEL09", "IKEL07", "IKEL05", "IKEL03", "IKEL01"] },
+    { kind: "box", name: "Left side · IKSH (SCR)", tags: ["IKSH01", "IKSH03", "IKSH05", "IKSH07", "IKSH09", "IKSH11"] },
     { kind: "slope", name: "Left reverse wall", top: ["IR48", "IR46", "IR44", "IR42", "IR40", "IR38"], bottom: ["IR18", "IR16", "IR14", "IR12", "IR10", "IR08"] },
     { kind: "slope", name: "Giữa · nhánh trái", top: ["IR31", "IR33", "IR35"], bottom: ["IR01", "IR03", "IR05"] },
     { kind: "slope", name: "Front wall · nửa trái", top: ["IR37", "IR39", "IR41", "IR43", "IR45", "IR47"], bottom: ["IR07", "IR09", "IR11", "IR13", "IR15", "IR17"] },
@@ -57,11 +62,6 @@ export const SB_LEFT_RAW: RawPage = {
     { t: "LEFT REVERSE WALL", sub: "Vòi thổi tường IR", x: 38, y: 618, size: 20 },
     { t: "FRONT WALL · NỬA TRÁI", sub: "Vòi thổi tường IR", x: 520, y: 618, size: 20 },
   ],
-  pipes: [
-    [[560, 15], [560, 375], [420, 375], [420, 625]],
-    [[75, 245], [75, 318]],
-  ],
-  valves: [[420, 598], [75, 318]],
 };
 
 export const SB_RIGHT_RAW: RawPage = {
@@ -71,38 +71,32 @@ export const SB_RIGHT_RAW: RawPage = {
   y0: 15,
   vb: [1420, 985],
   tiles: {
-    IK02: [933, 70], IK08: [985, 70], IK14: [1078, 50], IK04: [933, 135], IK10: [985, 135], IK16: [1078, 112],
-    IK06: [933, 200], IK12: [985, 200], IK18: [1140, 130], IK20: [1207, 130], IK22: [1140, 205], IK24: [1207, 205],
-    IKEL02: [1278, 258], IKEL04: [1330, 248], IKEL06: [1385, 238], IKEL08: [1442, 225], IKEL10: [1497, 215],
+    IK02: [933, 50], IK08: [1016, 50], IK14: [1115, 50], IK04: [933, 107], IK10: [1016, 107], IK16: [1115, 107],
+    IK06: [933, 172], IK12: [1016, 172], IK18: [1220, 107], IK20: [1309, 107], IK22: [1220, 187], IK24: [1309, 187],
+    IKEL02: [1278, 258], IKEL04: [1330, 248], IKEL06: [1385, 240], IKEL08: [1442, 229], IKEL10: [1497, 220],
     AH01: [1593, 258], AH02: [1668, 258], AH03: [1593, 335], AH04: [1668, 335],
-    IR49: [825, 425], IR51: [871, 432], IR53: [918, 440], IR55: [963, 448], IR57: [1009, 456], IR59: [1055, 464],
-    IR36: [1125, 470], IR34: [1175, 470], IR32: [1222, 470],
-    IR60: [1292, 464], IR58: [1340, 456], IR56: [1385, 448], IR54: [1430, 440], IR52: [1475, 432], IR50: [1520, 425],
-    IR19: [825, 515], IR21: [871, 522], IR23: [918, 530], IR25: [963, 538], IR27: [1009, 546], IR29: [1055, 554],
-    IR06: [1125, 560], IR04: [1175, 560], IR02: [1222, 560],
-    IR30: [1292, 554], IR28: [1340, 546], IR26: [1385, 538], IR24: [1430, 530], IR22: [1475, 522], IR20: [1520, 515],
+    IR49: [825, 425], IR51: [871, 434], IR53: [918, 442], IR55: [963, 452], IR57: [1009, 461], IR59: [1055, 472],
+    IR36: [1125, 468], IR34: [1175, 468], IR32: [1222, 468],
+    IR60: [1292, 472], IR58: [1340, 463], IR56: [1385, 455], IR54: [1430, 446], IR52: [1475, 438], IR50: [1520, 429],
+    IR19: [825, 514], IR21: [871, 522], IR23: [918, 530], IR25: [963, 538], IR27: [1009, 545], IR29: [1055, 553],
+    IR06: [1125, 553], IR04: [1175, 553], IR02: [1222, 553],
+    IR30: [1292, 556], IR28: [1340, 548], IR26: [1385, 539], IR24: [1430, 531], IR22: [1475, 522], IR20: [1520, 514],
+    IKSH02: [1330, 330], IKSH04: [1385, 330], IKSH06: [1440, 330], IKSH08: [1330, 375], IKSH10: [1385, 375], IKSH12: [1440, 375],
   },
   zones: [
     { kind: "box", name: "Right side", tags: ["IK02", "IK08", "IK14", "IK04", "IK10", "IK16", "IK06", "IK12", "IK18", "IK20", "IK22", "IK24"] },
     { kind: "slope", name: "Right side · IKEL", top: ["IKEL02", "IKEL04", "IKEL06", "IKEL08", "IKEL10"] },
+    { kind: "box", name: "Right side · IKSH (SCR)", tags: ["IKSH02", "IKSH04", "IKSH06", "IKSH08", "IKSH10", "IKSH12"] },
     { kind: "box", name: "Air heater", tags: ["AH01", "AH02", "AH03", "AH04"] },
     { kind: "slope", name: "Front wall · nửa phải", top: ["IR49", "IR51", "IR53", "IR55", "IR57", "IR59"], bottom: ["IR19", "IR21", "IR23", "IR25", "IR27", "IR29"] },
     { kind: "slope", name: "Giữa · nhánh phải", top: ["IR36", "IR34", "IR32"], bottom: ["IR06", "IR04", "IR02"] },
     { kind: "slope", name: "Right reverse wall", top: ["IR60", "IR58", "IR56", "IR54", "IR52", "IR50"], bottom: ["IR30", "IR28", "IR26", "IR24", "IR22", "IR20"] },
   ],
   labels: [
-    { t: "RIGHT SIDE", sub: "Vòi dài IK · IKEL", x: 1265, y: 110, size: 24 },
+    { t: "RIGHT SIDE", sub: "Vòi dài IK · IKEL", x: 1400, y: 110, size: 24 },
     { t: "FRONT WALL · NỬA PHẢI", sub: "Vòi thổi tường IR", x: 815, y: 618, size: 20 },
     { t: "RIGHT REVERSE WALL", sub: "Vòi thổi tường IR", x: 1285, y: 618, size: 20 },
-    { t: "AUX STEAM", x: 1480, y: 62, size: 13 },
   ],
-  pipes: [
-    [[1015, 15], [1015, 375], [1155, 375], [1155, 625]],
-    [[1630, 15], [1630, 405]],
-    [[1540, 75], [1630, 75]],
-    [[1497, 245], [1497, 318]],
-  ],
-  valves: [[1155, 598], [1630, 150], [1575, 75], [1630, 395], [1497, 318]],
 };
 
 const zoneTags = (z: Zone) => (z.kind === "box" ? z.tags : [...z.top, ...(z.bottom ?? [])]);
@@ -129,21 +123,8 @@ function buildPage(raw: RawPage) {
     const [tlx, tly] = pos[top[0]], [trx, tryy] = pos[top[top.length - 1]];
     const [blx, bly] = pos[bottom[0]], [brx, bry] = pos[bottom[bottom.length - 1]];
     const l = Math.min(tlx, blx) - W / 2 - PAD, r = Math.max(trx, brx) + W / 2 + PAD;
-    const extra = 14; // chừa chỗ cho ống góp dưới hàng
-    return `${l},${tly - H / 2 - PAD} ${r},${tryy - H / 2 - PAD} ${r},${bry + H / 2 + PAD + extra} ${l},${bly + H / 2 + PAD + extra}`;
+    return `${l},${tly - H / 2 - PAD} ${r},${tryy - H / 2 - PAD} ${r},${bry + H / 2 + PAD} ${l},${bly + H / 2 + PAD}`;
   });
-
-  // ống góp chạy dưới mỗi hàng của vùng nghiêng
-  const rowPipes: string[] = [];
-  const slopeTags = new Set<string>();
-  for (const z of raw.zones) {
-    if (z.kind !== "slope") continue;
-    for (const row of [z.top, z.bottom]) {
-      if (!row) continue;
-      rowPipes.push(row.map((t) => `${pos[t][0]},${pos[t][1] + H / 2 + 9}`).join(" "));
-      row.forEach((t) => slopeTags.add(t));
-    }
-  }
 
   const zoneOf: Record<string, string> = {};
   for (const z of raw.zones) for (const t of zoneTags(z)) zoneOf[t] = z.name;
@@ -155,11 +136,7 @@ function buildPage(raw: RawPage) {
     pos,
     tags: Object.keys(raw.tiles),
     outlines,
-    rowPipes,
-    slopeTags,
     zoneOf,
-    pipes: raw.pipes.map((line) => line.map(P).map((p) => p.join(",")).join(" ")),
-    valves: raw.valves.map(P),
     labels: raw.labels.map((l) => ({ ...l, p: P([l.x, l.y]) })),
   };
 }
@@ -169,7 +146,7 @@ export const SB_PAGES: Record<SootBlowerPageKey, SootBlowerPage> = {
   right: buildPage(SB_RIGHT_RAW),
 };
 
-/** Toàn bộ 98 tag vòi trên hai vách — server dùng để chặn tag lạ. */
+/** Toàn bộ 110 tag vòi trên hai vách — server dùng để chặn tag lạ. */
 export const SOOT_BLOWER_TAGS: ReadonlySet<string> = new Set([...SB_PAGES.left.tags, ...SB_PAGES.right.tags]);
 
 export const SOOT_BLOWER_MACHINES = ["S1", "S2"] as const;
@@ -192,15 +169,19 @@ export function sootBlowerPageOf(tag: string): SootBlowerPageKey | null {
 }
 
 export function sootBlowerTypeOf(tag: string): SootBlowerType {
-  return tag.startsWith("IKEL") ? "IKEL" : tag.startsWith("IR") ? "IR" : tag.startsWith("AH") ? "AH" : "IK";
+  if (tag.startsWith("IKEL")) return "IKEL";
+  if (tag.startsWith("IKSH")) return "IKSH";
+  if (tag.startsWith("IKAH") || tag.startsWith("AH")) return "IKAH";
+  return tag.startsWith("IR") ? "IR" : "IK";
 }
 
-export const SOOT_BLOWER_TYPES: SootBlowerType[] = ["IR", "IK", "IKEL", "AH"];
+export const SOOT_BLOWER_TYPES: SootBlowerType[] = ["IK", "IR", "IKEL", "IKSH", "IKAH"];
 export const SOOT_BLOWER_TYPE_NAME: Record<SootBlowerType, string> = {
-  IR: "Vòi thổi tường IR",
   IK: "Vòi dài IK",
+  IR: "Vòi thổi tường IR",
   IKEL: "Vòi dài IKEL",
-  AH: "Vòi bộ sấy không khí AH",
+  IKSH: "Vòi dài IKSH",
+  IKAH: "Vòi bộ sấy không khí IKAH",
 };
 
 export function sootBlowerZoneName(tag: string): string {

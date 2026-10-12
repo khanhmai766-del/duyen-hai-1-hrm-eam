@@ -105,6 +105,7 @@
     "tailwind-merge": "^2.5.4",
     "tailwindcss-animate": "^1.0.7",
     "tesseract.js": "^7.0.0",
+    "three": "^0.186.1",
     "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
     "yauzl": "^3.4.0",
     "zod": "^4.6.2"
@@ -116,6 +117,7 @@
     "@types/pg": "^8.23.1",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
+    "@types/three": "^0.186.0",
     "@types/yauzl": "^3.4.0",
     "autoprefixer": "^10.4.20",
     "embedded-postgres": "^18.3.0-beta.17",
