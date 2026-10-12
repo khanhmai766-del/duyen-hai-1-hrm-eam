@@ -141,6 +141,10 @@ export default function SootBlowerBoard() {
   }, [data]);
 
   const page = SB_PAGES[pageKey];
+  // Chế độ Sơ đồ chỉ cho chọn loại vòi có trên vách đang xem (vách trái không có IKAH). Loại đang chọn
+  // không có trên vách này thì xem "Tất cả" — không ghi đè typeTab, quay lại 3D/vách kia vẫn giữ loại cũ.
+  const pageTypes = useMemo(() => new Set(page.tags.map(typeOf)), [page]);
+  const typeView: SootBlowerFilter = mode === "dcs" && typeTab !== "ALL" && !pageTypes.has(typeTab) ? "ALL" : typeTab;
 
   const totals = useMemo(() => {
     const c: Record<Status, number> = { OK: 0, WARN: 0, BAD: 0 };
@@ -221,7 +225,7 @@ export default function SootBlowerBoard() {
             </SegButton>
           ))}
         </Segmented>
-        <TypeTabs board={board} value={typeTab} onChange={switchType} />
+        <TypeTabs board={board} value={typeView} onChange={switchType} only={mode === "dcs" ? pageTypes : undefined} />
         <div className="flex w-full min-w-0 items-center gap-2 xl:ml-auto xl:w-[370px]">
           <Segmented>
             <SegButton active={mode === "3d"} onClick={() => setMode("3d")}>
@@ -256,7 +260,7 @@ export default function SootBlowerBoard() {
           {mode === "3d" ? (
             <Boiler3D type={typeTab} statuses={statuses} selected={selected} onSelect={select} />
           ) : (
-            <Schematic page={page} board={board} selected={selected} typeFocus={typeTab === "ALL" ? null : typeTab} onSelect={setSelected} />
+            <Schematic page={page} board={board} selected={selected} typeFocus={typeView === "ALL" ? null : typeView} onSelect={setSelected} />
           )}
           {(isLoading || error) && (
             <div className="absolute inset-0 flex items-center justify-center gap-2 bg-white/60 text-sm font-semibold text-slate-600">
@@ -315,14 +319,20 @@ function TypeTabs({
   board,
   value,
   onChange,
+  only,
 }: {
   board: Board;
   value: SootBlowerFilter;
   onChange: (v: SootBlowerFilter) => void;
+  /** chỉ hiện các loại này (chế độ Sơ đồ: loại có trên vách đang xem); "Tất cả" luôn hiện */
+  only?: ReadonlySet<SootBlowerType>;
 }) {
+  const tabs: SootBlowerFilter[] = [...SOOT_BLOWER_TYPES.filter((t) => !only || only.has(t)), "ALL"];
   return (
-    <div className="grid w-full min-w-0 grid-cols-6 overflow-hidden whitespace-nowrap md:w-auto md:flex-1 lg:max-w-[860px] rounded-lg border border-slate-300 bg-white text-sm font-semibold" role="tablist" aria-label="Loại vòi thổi bụi">
-      {[...SOOT_BLOWER_TYPES, "ALL" as const].map((t, i) => {
+    <div
+      style={{ gridTemplateColumns: `repeat(${tabs.length}, minmax(0, 1fr))` }}
+      className="grid w-full min-w-0 overflow-hidden whitespace-nowrap md:w-auto md:flex-1 lg:max-w-[860px] rounded-lg border border-slate-300 bg-white text-sm font-semibold" role="tablist" aria-label="Loại vòi thổi bụi">
+      {tabs.map((t, i) => {
         const tags = SB_3D_PLACEMENTS.filter((p) => matchesFilter(t, p.type)).map((p) => p.tag);
         const issues = tags.filter((g) => statusOf(g, board) !== "OK").length;
         const active = value === t;
