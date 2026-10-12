@@ -5,6 +5,7 @@
 // `routes` và tuỳ chọn `mock`.
 
 import { buildMilestoneSchedule } from "../../lib/overhaul-milestones.ts";
+import assert from "node:assert/strict";
 
 const minutesAgo = (now, minutes) => new Date(now - minutes * 60_000).toISOString();
 const WORKER_NAMES = ["Trần Văn Bình", "Lê Thị Cúc", "Phạm Minh Đức", "Võ Thanh Hải", "Ngô Quốc Khánh", "Đặng Văn Lâm", "Bùi Thị Mai", "Huỳnh Tấn Phát",
@@ -673,6 +674,85 @@ export const PRESETS = {
       if (route.endsWith("ui=edit")) { await page.getByRole("button", { name: "Sửa đơn vị Công ty TNHH Kỹ thuật Đại tu Miền Nam" }).locator("visible=true").first().click(); await page.waitForTimeout(300); }
     },
   },
+  "nhan-su-doi-vai-tro-giu-vi-tri": {
+    description: "Chuyển nhiều nhân viên thành CHTT: CHTT vẫn lên đầu, màn hình giữ ở người kế tiếp; PUT giả lập, không ghi DB",
+    async prepare() { return {}; },
+    routes: () => ["/work-permits"],
+    async mock(context) {
+      const company = "Nhà thầu kiểm tra vị trí cuộn";
+      const people = Array.from({ length: 45 }, (_, index) => ({ id: `ui-role-${index + 1}`, code: `UI-${index + 1}`, name: `Nhân viên ${String(index + 1).padStart(3, "0")}`,
+        company, phone: "", scope: "OVERHAUL", canCommand: index < 5, isActive: true, version: 1, jobTitle: "Nhân viên kỹ thuật", activeWorks: [] }));
+      await context.route("**/api/overhaul-milestones**", route => route.fulfill({ json: { data: [], meta: null, error: null } }));
+      await context.route("**/api/work-permits**", async route => {
+        const request = route.request(), url = new URL(request.url());
+        let data = [], meta = null;
+        if (url.pathname === "/api/work-permits") meta = { total: 0, page: 1, pageSize: 25, counts: {}, overhaulCount: 0, canIssue: false, canIssueNew: false, canExecute: false };
+        else if (url.pathname === "/api/work-permits/companies") {
+          data = [{ company, code: "TEST", sctx: false, overhaul: true, total: people.length, commanders: people.filter(person => person.canCommand).length, active: people.length, working: 0 }];
+          meta = { canWrite: true, working: 0 };
+        } else if (url.pathname === "/api/work-permits/people") {
+          data = [...people].sort((a, b) => Number(b.canCommand) - Number(a.canCommand) || a.name.localeCompare(b.name));
+          meta = { total: data.length, pageSize: 200, canWrite: true };
+        } else if (request.method() === "PUT" && url.pathname.startsWith("/api/work-permits/people/")) {
+          const person = people.find(person => url.pathname.endsWith(`/${person.id}`));
+          assert.ok(person, "Chỉ sửa người trong dữ liệu giả lập");
+          const body = request.postDataJSON();
+          assert.equal(body.version, person.version);
+          Object.assign(person, body, { version: person.version + 1 });
+          data = person;
+        }
+        await route.fulfill({ json: { data, meta, error: null } });
+      });
+    },
+    async interact(page) {
+      const tab = page.getByRole("button", { name: "Nhân sự nhà thầu", exact: true }).first();
+      if (await tab.isVisible()) await tab.click();
+      else { await page.getByRole("button", { name: /PCT Cơ|Đang làm việc/ }).first().click(); await page.getByText("Nhân sự nhà thầu", { exact: true }).last().click(); }
+      if (page.viewportSize().width < 768) await page.getByRole("button", { name: /Nhà thầu kiểm tra vị trí cuộn/ }).first().click();
+      else await page.getByRole("row").filter({ hasText: "Nhà thầu kiểm tra vị trí cuộn" }).click();
+      for (const index of [31, 32]) {
+        const target = page.getByRole("switch", { name: new RegExp(`Vai trò của Nhân viên 0${index}:`) }).locator("visible=true");
+        await target.scrollIntoViewIfNeeded();
+        const next = page.locator(`[data-person-row="ui-role-${index + 1}"]:visible`);
+        const before = (await next.boundingBox()).y;
+        const y = await page.evaluate(() => window.scrollY);
+        assert.ok(y > 300, "Phải kiểm ở giữa danh sách dài");
+        await target.click();
+        await page.getByRole("switch", { name: new RegExp(`Vai trò của Nhân viên 0${index}:`), checked: true }).locator("visible=true").waitFor();
+        await page.waitForTimeout(300);
+        const after = (await next.boundingBox()).y;
+        assert.ok(Math.abs(after - before) < 3, `Vị trí người kế tiếp bị nhảy: ${before} → ${after}`);
+        const roles = await page.locator('[data-person-row]:visible [role="switch"]').evaluateAll(buttons => buttons.map(button => button.getAttribute("aria-checked")));
+        const firstWorker = roles.indexOf("false");
+        assert.ok(firstWorker > 0 && roles.slice(firstWorker).every(role => role === "false"), "CHTT vẫn phải nằm trước nhân viên");
+      }
+    },
+  },
+  "nhan-su-dai-tu-du-lieu-local": {
+    description: "Mở nhóm TEST Đại tu trên DB localhost thật để kiểm tra dữ liệu đã thêm; chỉ xem, không đổi vai trò",
+    async prepare({ prisma }) {
+      const company = "TEST Đại tu - kiểm tra nhân sự";
+      const count = await prisma.workPermitPerson.count({ where: { company, scope: "OVERHAUL" } });
+      assert.equal(count, 45, "Phải có đủ 45 nhân sự đại tu thử trên DB local");
+      return { company };
+    },
+    routes: () => ["/work-permits"],
+    async interact(page) {
+      const tab = page.getByRole("button", { name: "Nhân sự nhà thầu", exact: true }).first();
+      if (await tab.isVisible()) await tab.click();
+      else { await page.getByRole("button", { name: /PCT Cơ|Đang làm việc/ }).first().click(); await page.getByText("Nhân sự nhà thầu", { exact: true }).last().click(); }
+      const company = "TEST Đại tu - kiểm tra nhân sự";
+      await page.getByRole("searchbox", { name: "Tìm đơn vị nhà thầu, nhân viên hoặc CHTT" }).fill(company);
+      if (page.viewportSize().width < 768) await page.getByRole("button", { name: new RegExp(company) }).first().click();
+      else await page.getByRole("row").filter({ hasText: company }).click();
+      const switches = page.getByRole("switch", { name: /Vai trò của TEST Nhân sự đại tu/ }).locator("visible=true");
+      await switches.first().waitFor();
+      await page.getByRole("switch", { name: /Vai trò của TEST Nhân sự đại tu 045:/ }).locator("visible=true").waitFor();
+      const count = await switches.count();
+      assert.equal(count, 45, `Danh sách hiển thị ${count}/45 người`);
+      await page.getByRole("switch", { name: /Vai trò của TEST Nhân sự đại tu 031:/ }).locator("visible=true").scrollIntoViewIfNeeded();
+    },
+  },
   "tien-do-dai-tu-lon": {
     description: "Bảng tiến độ đại tu tab lớn nhất (Máy phát · Trực phụ điện) bằng API THẬT trên DB dev, đồng hồ 01/12 — kiểm tra tải/cuộn",
     async prepare() { return {}; },
@@ -730,6 +810,64 @@ export const PRESETS = {
         if (!permit) permit = (await (await context.request.get(`${base}/api/work-permits/${permitId}`)).json()).data;
         await route.fulfill({ json: { data: liveBoardRows(permit, now), meta: { canExecute: true }, error: null } });
       });
+    },
+  },
+  "pct-dai-tu-vao-tu-lan-truoc": {
+    description: "PCT đại tu: chỉ mở danh sách cũ khi bấm; Cho vào ghi nhận ngay từng người qua API giả lập, không ghi DB",
+    prepare: (ctx) => PRESETS["pct-lam-viec"].prepare(ctx),
+    routes: ({ permitId }) => [`/work-permits/${permitId}/lam-viec`, `/work-permits/${permitId}/lam-viec?ui=cho-vao`],
+    async mock(context, { permitId }) {
+      let fixture;
+      await context.route("**/api/overhaul-milestones", route => route.fulfill({ json: { data: [], meta: null, error: null } }));
+      await context.route("**/api/work-permits/companies?summary=1", route => route.fulfill({ json: { data: [], meta: { canWrite: false, working: 0 }, error: null } }));
+      await context.route(`**/api/work-permits/${permitId}`, async route => {
+        if (!fixture) {
+          const json = { data: { id: permitId, number: "9999", year: 2026, kind: "MECHANICAL", unit: "S2", teamType: "CONTRACTOR", teamName: "Nhà thầu giả lập", content: "Đại tu thiết bị — kiểm tra danh sách lần trước", location: "Gian máy", position: "Máy phó", history: [], overhaulItems: [], _count: { history: 0 } }, meta: {}, error: null };
+          fixture = json;
+          const now = Date.now();
+          const current = liveSession(json.data, now);
+          current.members = [];
+          current.workerCount = 1;
+          const previous = { ...liveSession(json.data, now), id: "ui-previous-session", openedAt: minutesAgo(now, 24 * 60), endedAt: minutesAgo(now, 20 * 60) };
+          previous.members = previous.members.slice(0, 3).map(member => ({ ...member, attendance: [{ in: previous.openedAt, out: previous.endedAt }] }));
+          previous.members.push({ personId: previous.commanderId, name: previous.commanderName, code: previous.commanderCode, company: previous.company });
+          json.data = { ...json.data, format: "PAPER", contractorScope: "OVERHAUL", status: "ACTIVE", plannedEndAt: new Date(now + 86400000).toISOString(),
+            sessions: [current, previous], _count: { ...json.data._count, sessions: 2 } };
+          json.meta = { ...json.meta, canExecute: true };
+        }
+        await route.fulfill({ json: fixture });
+      });
+      // Chặn mọi lượt ghi nhận của preset: mô phỏng kết quả và lần GET sau, không chuyển tới DB dev.
+      await context.route(`**/api/work-permits/${permitId}/sessions/attendance`, async route => {
+        const body = route.request().postDataJSON();
+        assert.equal(body.direction, "in");
+        assert.equal(body.sessionId, "ui-live-session");
+        assert.equal(body.personId, "ui-p0");
+        const current = fixture.data.sessions[0];
+        assert.equal(current.members.length, 0, "Không tự cho cả danh sách vào hoặc cho vào trùng");
+        const at = new Date().toISOString();
+        const { attendance: oldAttendance, ...identity } = fixture.data.sessions[1].members[0];
+        assert.ok(oldAttendance[0].out, "Lần cũ đã ghi ra");
+        const member = { ...identity, attendance: [{ in: at, out: null }] };
+        current.members = [member];
+        current.workerCount = 2;
+        await route.fulfill({ json: { data: { outcome: "ADDED", at, inside: 1, total: 1, member }, meta: null, error: null } });
+      });
+    },
+    async interact(page, route) {
+      const open = page.getByRole("button", { name: "Danh sách lần làm việc gần nhất", exact: true });
+      await open.waitFor();
+      assert.equal(await page.getByRole("dialog").count(), 0, "Danh sách cũ phải ẩn trước khi bấm");
+      await open.click();
+      const dialog = page.getByRole("dialog");
+      assert.equal(await dialog.getByRole("button", { name: /^Cho vào/ }).count(), 3, "Chỉ hiện nhân viên, không tính CHTT cũ");
+      if (!route.endsWith("ui=cho-vao")) return;
+      const request = page.waitForRequest(request => request.url().endsWith("/sessions/attendance") && request.method() === "POST");
+      await dialog.getByRole("button", { name: "Cho vào Trần Văn Bình", exact: true }).click();
+      assert.deepEqual((await request).postDataJSON(), { sessionId: "ui-live-session", direction: "in", personId: "ui-p0" });
+      await dialog.getByRole("button", { name: "Đang trong Trần Văn Bình", exact: true }).waitFor();
+      assert.equal(await dialog.getByRole("button", { name: "Đang trong Trần Văn Bình", exact: true }).isDisabled(), true);
+      assert.equal(await dialog.getByRole("button", { name: "Cho vào Lê Thị Cúc", exact: true }).isEnabled(), true, "Người chưa bấm vẫn chưa được cho vào");
     },
   },
   "pct-lich-su-vao-ra": {

@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { Plus, Users, UserPlus, X, Play, Square, Pencil, Trash2, ScanLine, RefreshCw, MonitorPlay, ChevronDown } from "lucide-react";
@@ -188,18 +188,19 @@ export function PermitCompanyDirectory() {
  * Công tắc vai trò ngay trên danh sách: trượt sang phải = CHTT, sang trái = Nhân viên. Lưu ngay (PUT hồ sơ với
  * đúng dữ liệu hiện có + `canCommand` mới), không phải mở hộp sửa. Đổi vai trò không đụng PCT đã ghi.
  */
-function RoleSwitch({ person }: { person: PermitPerson }) {
+function RoleSwitch({ person, beforeToggle }: { person: PermitPerson; beforeToggle: (button: HTMLButtonElement, person: PermitPerson) => () => void }) {
   const save = useSavePermitPerson();
   const on = person.canCommand;
-  async function toggle() {
+  async function toggle(button: HTMLButtonElement) {
+    const cancelScrollRestore = beforeToggle(button, person);
     try {
       await save.mutateAsync({ id: person.id, body: { code: person.code, name: person.name, company: person.company, phone: person.phone ?? "",
         canCommand: !on, isActive: person.isActive, scope: person.scope, version: person.version } });
       toast.success(`${person.name}: ${on ? "chuyển về Nhân viên" : "chuyển thành CHTT"}`);
-    } catch (error) { toast.error(error instanceof Error ? error.message : "Không đổi được vai trò"); }
+    } catch (error) { cancelScrollRestore(); toast.error(error instanceof Error ? error.message : "Không đổi được vai trò"); }
   }
   return <button type="button" role="switch" aria-checked={on} aria-label={`Vai trò của ${person.name}: ${on ? "CHTT" : "Nhân viên"}. Bấm để đổi`}
-    disabled={save.isPending} onClick={() => void toggle()} title={on ? "Bấm để chuyển về Nhân viên" : "Bấm để chuyển thành CHTT"}
+    disabled={save.isPending} onClick={event => void toggle(event.currentTarget)} title={on ? "Bấm để chuyển về Nhân viên" : "Bấm để chuyển thành CHTT"}
     className="group inline-flex min-h-8 cursor-pointer items-center gap-2 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:cursor-wait disabled:opacity-60">
     <span className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${on ? "bg-emerald-500" : "bg-slate-300"}`}>
       <span className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${on ? "translate-x-5" : "translate-x-0"}`} />
@@ -245,16 +246,36 @@ function CompanyPeopleGroups({ people, ...rest }: CompanyPeopleProps) {
 
 /** Danh sách người một nhóm, mỗi người một dòng: Ảnh (chỉ nhóm Đại tu) · Họ tên · Chức vụ · SĐT · Vai trò (số thẻ ẩn — vẫn sửa được trong hồ sơ). */
 function CompanyPeopleTable({ people, canWrite, removing, onEdit, onRemove, withPhoto }: CompanyPeopleProps & { withPhoto: boolean }) {
+  const scrollAnchor = useRef<{ element: HTMLElement; top: number; scrollY: number; personId: string; canCommand: boolean } | null>(null);
+  function beforeToggle(button: HTMLButtonElement, person: PermitPerson) {
+    const row = button.closest<HTMLElement>("[data-person-row]");
+    const neighbor = row?.nextElementSibling ?? row?.previousElementSibling;
+    const anchor = { element: neighbor instanceof HTMLElement ? neighbor : button, top: neighbor?.getBoundingClientRect().top ?? button.getBoundingClientRect().top, scrollY: window.scrollY, personId: person.id, canCommand: !person.canCommand };
+    scrollAnchor.current = anchor;
+    // Nút vừa đổi sẽ chuyển lên nhóm CHTT; bỏ focus để trình duyệt không kéo màn hình theo nút.
+    button.blur();
+    return () => { if (scrollAnchor.current === anchor) scrollAnchor.current = null; };
+  }
+  useLayoutEffect(() => {
+    const anchor = scrollAnchor.current;
+    if (!anchor || people.find(person => person.id === anchor.personId)?.canCommand !== anchor.canCommand) return;
+    scrollAnchor.current = null;
+    if (anchor.element.isConnected) {
+      window.scrollBy({ top: anchor.element.getBoundingClientRect().top - anchor.top, behavior: "instant" });
+    } else {
+      window.scrollTo({ top: anchor.scrollY, behavior: "instant" });
+    }
+  }, [people]);
   const th = "px-3 py-2 text-left text-[10.5px] font-semibold uppercase tracking-wider text-slate-500";
   const role = (person: PermitPerson) => <>
-    {canWrite ? <RoleSwitch person={person} /> : person.canCommand ? <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10.5px] font-semibold uppercase tracking-wide text-emerald-700">CHTT</span> : <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10.5px] font-semibold uppercase tracking-wide text-slate-600">Nhân viên</span>}
+    {canWrite ? <RoleSwitch person={person} beforeToggle={beforeToggle} /> : person.canCommand ? <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10.5px] font-semibold uppercase tracking-wide text-emerald-700">CHTT</span> : <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10.5px] font-semibold uppercase tracking-wide text-slate-600">Nhân viên</span>}
     {!person.isActive && <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10.5px] font-semibold uppercase tracking-wide text-amber-700">Ngừng hoạt động</span>}
   </>;
   const works = (person: PermitPerson) => person.activeWorks?.map(work => <p key={work.sessionId} className="mt-0.5 text-[11px] font-medium text-amber-700">Đang làm PCT {formatPermitNumber(work.permit)} · {PERMIT_KINDS[work.permit.kind]} · {work.role === "CHTT" ? "CHTT" : "Nhân viên công tác"} · từ {fmt(work.openedAt)}</p>);
   const tel = (phone: string) => `tel:${phone.replace(/[^+\d]/g, "")}`;
   return <>
   {/* Điện thoại: mỗi người một thẻ — tên, số thẻ, SĐT bấm gọi, vai trò, nút sửa/xoá 40px. */}
-  <div className="space-y-2 md:hidden">{people.map(person => <div key={person.id} className="flex items-start gap-2 rounded-lg border border-slate-200 bg-white p-3">
+  <div className="space-y-2 md:hidden">{people.map(person => <div key={person.id} data-person-row={person.id} className="flex items-start gap-2 rounded-lg border border-slate-200 bg-white p-3">
     {withPhoto && <PersonPhoto person={person} className="h-14 w-[42px] shrink-0 rounded-md border border-slate-200 text-base" />}
     <div className="min-w-0 flex-1">
       <p className="text-[15px] font-semibold leading-5 text-ink">{person.name}</p>
@@ -273,7 +294,7 @@ function CompanyPeopleTable({ people, canWrite, removing, onEdit, onRemove, with
       <thead className="border-b border-slate-200 bg-slate-50"><tr>
         <th className={cn(th, "w-12 text-center")}>STT</th>{withPhoto && <th className={cn(th, "w-14 text-center")}>Ảnh</th>}<th className={th}>Họ tên</th><th className={th}>Chức vụ</th><th className={th}>SĐT liên hệ</th><th className={th}>Vai trò</th>{canWrite && <th className={cn(th, "w-24 text-center")}>Thao tác</th>}
       </tr></thead>
-      <tbody>{people.map((person, index) => <tr key={person.id} className="border-b border-slate-100 align-middle last:border-0">
+      <tbody>{people.map((person, index) => <tr key={person.id} data-person-row={person.id} className="border-b border-slate-100 align-middle last:border-0">
         <td className="px-3 py-2 text-center tabular-nums text-slate-500">{index + 1}</td>
         {withPhoto && <td className="px-2 py-1.5"><PersonPhoto person={person} className="mx-auto h-12 w-9 rounded-md border border-slate-200 text-sm" /></td>}
         <td className="px-3 py-2">

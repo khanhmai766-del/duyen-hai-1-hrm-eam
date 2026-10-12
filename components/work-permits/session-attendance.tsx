@@ -4,11 +4,13 @@ import { useMemo, useState } from "react";
 import { LogIn, LogOut, ScanLine, Search, Users } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { PermitCardScanner, type ScanOutcome } from "@/components/work-permits/card-scanner";
 import { PermitPeopleDirectory } from "@/components/work-permits/contractor-work";
 import { usePermitAttendance, type PermitAttendanceResult } from "@/hooks/useWorkPermits";
 import { attendanceInside, attendanceTracked } from "@/lib/work-permit-attendance";
 import { normalizeText } from "@/lib/nav";
+import { isOverhaulPaperPermit } from "@/lib/work-permit-overhaul";
 import { isSessionCommander, type PermitDetailRow, type PermitMember, type PermitPerson, type PermitSession } from "@/lib/work-permits";
 
 const hhmm = (iso: string) => new Date(iso).toLocaleTimeString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", hour: "2-digit", minute: "2-digit" });
@@ -38,6 +40,8 @@ export function SessionAttendance({ permit, session, canExecute, size = "md", au
   const [scanning, setScanning] = useState(autoScan && canExecute && !session.endedAt);
   // "Chọn từ danh sách" khi lần làm việc đang mở: người không mang thẻ / không quét được vẫn cho vào được.
   const [picking, setPicking] = useState(false);
+  const [showPrevious, setShowPrevious] = useState(false);
+  const [previousQuery, setPreviousQuery] = useState("");
   const [admitting, setAdmitting] = useState(false);
   const [filter, setFilter] = useState<"inside" | "out" | "waiting" | null>(null);
   const [query, setQuery] = useState("");
@@ -48,6 +52,11 @@ export function SessionAttendance({ permit, session, canExecute, size = "md", au
   const tracked = members.some(({ member }) => attendanceTracked(member));
   const insideCount = members.filter(({ member }) => attendanceInside(member)).length;
   const commander: PermitMember = { personId: session.commanderId ?? undefined, code: session.commanderCode, name: session.commanderName, company: session.company };
+  const previousSession = live && canExecute && isOverhaulPaperPermit(permit)
+    ? permit.sessions.find(previous => previous.id !== session.id && previous.endedAt) : undefined;
+  const previousMembers = previousSession?.members.filter(member => !isSessionCommander(member, previousSession)) ?? [];
+  const matchesMember = (left: PermitMember, right: PermitMember) => Boolean(left.personId && right.personId && left.personId === right.personId)
+    || Boolean(left.code.trim() && left.code.normalize("NFC").trim().toUpperCase() === right.code.normalize("NFC").trim().toUpperCase());
 
   async function record(body: { direction: "auto" | "in" | "out"; personId?: string; index?: number; name?: string }) {
     return outcomeOf(await attendance.mutateAsync({ sessionId: session.id, ...body }));
@@ -85,6 +94,23 @@ export function SessionAttendance({ permit, session, canExecute, size = "md", au
   const picker = picking && <PermitPeopleDirectory onClose={() => setPicking(false)} onPickMany={people => void admitPicked(people)}
     existingMembers={[...members.map(({ member }) => member), commander]} company={permit.teamName || undefined} scope={permit.contractorScope} />;
   const pickButton = (className: string) => <Button type="button" variant="outline" className={className} disabled={admitting} onClick={() => setPicking(true)}><Users />{admitting ? "Đang cho vào…" : "Chọn từ danh sách"}</Button>;
+  const previousButton = previousSession && <Button type="button" variant="outline" className="h-auto min-h-10 w-full whitespace-normal px-3 py-2 text-sm sm:w-auto" onClick={() => { setPreviousQuery(""); setShowPrevious(true); }}><Users className="shrink-0" />Danh sách lần làm việc gần nhất</Button>;
+  const previousDialog = showPrevious && previousSession && <Dialog open onOpenChange={setShowPrevious}><DialogContent className="max-w-2xl">
+    <DialogTitle>Danh sách lần làm việc gần nhất</DialogTitle>
+    <DialogDescription>Lần mở {dayHhmm(previousSession.openedAt)} · CHTT {previousSession.commanderName}. Bấm Cho vào để ghi nhận người đó vào ngay trong lần làm việc đang mở.</DialogDescription>
+    <input type="search" aria-label="Tìm trong danh sách lần làm việc gần nhất" className="h-10 w-full rounded-lg border border-input bg-background px-3 text-base sm:text-sm" placeholder="Tìm tên hoặc mã thẻ…" value={previousQuery} onChange={e => setPreviousQuery(e.target.value)} />
+    <div className="space-y-2">{previousMembers.filter(member => normalizeText(`${member.name} ${member.code}`).includes(normalizeText(previousQuery.trim()))).map((member, index) => {
+      const current = members.find(item => matchesMember(item.member, member));
+      const isCommander = matchesMember(member, commander);
+      const inside = isCommander || Boolean(current && attendanceInside(current.member));
+      const unavailable = !member.personId && !current;
+      return <div key={`${member.personId || member.code}-${index}`} className="flex items-center gap-3 rounded-lg border border-border p-3">
+        <div className="min-w-0 flex-1"><p className="break-words text-sm font-semibold">{member.name}</p><p className="break-words text-xs text-muted-foreground">{[member.code, member.company].filter(Boolean).join(" · ")}</p>{unavailable && <p className="text-xs text-amber-700">Không còn liên kết hồ sơ — quét thẻ hoặc chọn từ danh bạ.</p>}</div>
+        <Button type="button" size="sm" className="h-10 shrink-0" aria-label={`${inside ? "Đang trong" : "Cho vào"} ${member.name}`} disabled={inside || unavailable || attendance.isPending || admitting} onClick={() => void manual(current?.member ?? member, current?.index ?? -1, "in")}>{inside ? "Đang trong" : "Cho vào"}</Button>
+      </div>;
+    })}{!previousMembers.length && <p className="py-4 text-sm text-muted-foreground">Lần làm việc gần nhất không có nhân viên đi cùng.</p>}</div>
+    <div className="flex justify-end"><Button type="button" variant="outline" className="h-10" onClick={() => setShowPrevious(false)}>Đóng</Button></div>
+  </DialogContent></Dialog>;
   const rows = members.map(({ member, index }) => {
     const inside = attendanceInside(member);
     const visits = member.attendance ?? [];
@@ -113,6 +139,7 @@ export function SessionAttendance({ permit, session, canExecute, size = "md", au
       { key: "waiting" as const, value: counts.waiting, label: "Chưa quét", tone: "text-amber-600", ring: "ring-amber-500" },
     ];
     return <div className="space-y-3">
+      {previousButton}
       <div className="grid grid-cols-3 gap-2" role="group" aria-label="Lọc theo trạng thái vào/ra">
         {tiles.map(tile => <button key={tile.key} type="button" aria-pressed={filter === tile.key} onClick={() => setFilter(filter === tile.key ? null : tile.key)}
           className={`rounded-xl border border-border bg-background px-1 py-2.5 text-center transition-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${filter === tile.key ? `ring-2 ${tile.ring}` : ""}`}>
@@ -139,12 +166,13 @@ export function SessionAttendance({ permit, session, canExecute, size = "md", au
       {/* Máy tính (lg) không có thanh điều hướng đáy và màn hình đủ cao: nút nằm yên bên phải, không dính đáy. */}
       {live && canExecute && <div className="sticky bottom-[calc(5.5rem+env(safe-area-inset-bottom))] z-30 grid grid-cols-[2fr_3fr] gap-2 lg:static lg:flex lg:justify-end">
         {pickButton("h-14 bg-background px-2 text-sm shadow-lg lg:h-11 lg:px-5 lg:shadow-sm")}
-        <Button type="button" className="h-14 w-full text-base shadow-lg lg:h-11 lg:w-auto lg:px-8 lg:shadow-sm" onClick={() => setScanning(true)}><ScanLine className="!h-6 !w-6" />Quét vào / ra</Button>
+        <Button type="button" className="h-14 w-full flex-col gap-1 px-2 text-sm shadow-lg sm:text-base lg:h-11 lg:w-auto lg:flex-row lg:gap-2 lg:px-8 lg:shadow-sm" onClick={() => setScanning(true)}><ScanLine className="!h-5 !w-5 sm:!h-6 sm:!w-6" />Quét vào / ra</Button>
       </div>}
-      {scanner}{picker}
+      {scanner}{picker}{previousDialog}
     </div>;
   }
   return <div className="space-y-2 rounded-lg border border-border p-3">
+    {previousButton}
     <div className="flex flex-wrap items-center justify-between gap-2">
       <p className="text-sm font-semibold">
         {live ? <>Trong khu vực: <span className="text-emerald-700">{1 + insideCount}</span>/{1 + members.length} người</> : "Vào / ra vị trí làm việc"}
@@ -153,6 +181,6 @@ export function SessionAttendance({ permit, session, canExecute, size = "md", au
       {live && canExecute && <div className="flex gap-2">{pickButton("h-9 px-3 text-sm")}<Button type="button" size="sm" onClick={() => setScanning(true)}><ScanLine />Quét vào / ra</Button></div>}
     </div>
     {members.length > 0 && <div className="max-h-72 space-y-1 overflow-y-auto">{rows}</div>}
-    {scanner}{picker}
+    {scanner}{picker}{previousDialog}
   </div>;
 }
