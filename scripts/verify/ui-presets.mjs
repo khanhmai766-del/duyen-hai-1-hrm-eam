@@ -675,6 +675,27 @@ export const PRESETS = {
       await page.waitForTimeout(300);
     },
   },
+  "quet-qr-chung-camera-gia": {
+    description: "Trang Quét QR chung (/devices/scan) đọc thẻ từ CAMERA GIẢ bằng bộ quét mới — mã thẻ giả nên chỉ báo \"chưa có trong danh bạ\", không ghi",
+    async prepare({ prisma }) {
+      if (await prisma.workPermitPerson.findUnique({ where: { code: FAKE_CARD_CODE } })) throw new Error(`DB dev có người mang mã ${FAKE_CARD_CODE} — đổi FAKE_CARD_CODE.`);
+      const video = path.resolve("reports", "verify", "camera-gia-qr-mo.y4m");
+      await writeFakeCameraVideo(video);
+      return { video };
+    },
+    launchArgs: (ctx) => PRESETS["quet-the-camera-gia"].launchArgs(ctx),
+    routes: () => ["/devices/scan"],
+    // Trang tự mở camera khi tải; số đo (engine "wasm", crop…) in ra log dev server dòng [qr-scan-metrics] khi rời trang.
+    async interact(page) {
+      await page.getByText(`Thẻ ${FAKE_CARD_CODE} chưa có trong danh bạ`).first().waitFor({ timeout: 30_000 });
+      // Giả lập rời trang để trang gửi lô số đo (chỉ gửi khi rời trang / đủ 15 lượt) — kiểm luôn đường ghi log.
+      const sent = page.waitForRequest((r) => r.url().includes("/api/work-permits/scan-metrics"), { timeout: 10_000 });
+      sent.catch(() => {});
+      await page.evaluate(() => window.dispatchEvent(new Event("pagehide")));
+      await sent;
+      await page.waitForTimeout(300);
+    },
+  },
   "cap-pct-dai-tu-chtt": {
     description: "Form cấp PCT Đại tu · bước Nhân sự: CHTT chọn từ danh bạ HOẶC nhập tên CHTT nội bộ (chỉ gõ trên form, không lưu)",
     async prepare() { return {}; },

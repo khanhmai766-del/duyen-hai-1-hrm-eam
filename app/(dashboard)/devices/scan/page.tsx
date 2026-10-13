@@ -7,9 +7,19 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { apiMutate } from "@/lib/fetcher";
 import { WorkerCardResult } from "@/components/work-permits/worker-card-result";
+import { reportPermitScanMetrics } from "@/hooks/useWorkPermits";
+import { qrCameraTorch, QR_CAMERA_CONSTRAINTS, startQrScanner, tuneQrCameraTrack } from "@/lib/qr-camera";
+import { ScanMetricsCollector, type ScanMetricResult } from "@/lib/work-permit-scan-metrics";
 import type { PermitPerson } from "@/lib/work-permits";
 
-type ScannerControls = { stop: () => void; switchTorch?: (enabled: boolean) => Promise<void> };
+/*
+ * Trang "Quét QR" chung (nút giữa thanh điều hướng): mã thiết bị, mã PCT Đại tu, thẻ nhân sự nhà thầu.
+ * Dùng chung vòng quét của hộp quét thẻ PCT (lib/qr-camera.ts: ZXing-C++, phóng to quanh mã, zoom/đèn pin Android)
+ * và gửi số đo cùng kiểu — log `[qr-scan-metrics]` ghi permitId = SCAN_METRICS_ID để tách khỏi hộp quét PCT.
+ */
+const SCAN_METRICS_ID = "quet-qr-chung";
+
+type ScannerControls = { stop: () => void; switchTorch?: (enabled: boolean) => Promise<boolean> };
 type ScanState = "idle" | "starting" | "scanning" | "resolving" | "error" | "card";
 type ResolveResult = { type: "DEVICE" | "WORK_PERMIT"; url: string; legacy: boolean } | { type: "WORKER_CARD"; code: string; person: PermitPerson | null };
 
@@ -25,21 +35,43 @@ function DeviceScanner() {
   const resolvingRef = React.useRef(false);
   const autoStartedRef = React.useRef(false);
   const [state, setState] = React.useState<ScanState>("idle");
-  const [message, setMessage] = React.useState("Đưa mã QR vào giữa khung ngắm");
+  const [message, setMessage] = React.useState("Đưa mã QR vào khung ngắm, cách 20–25 cm");
   const [torchAvailable, setTorchAvailable] = React.useState(false);
   const [torchOn, setTorchOn] = React.useState(false);
   /** Thẻ nhân sự nhà thầu vừa quét — hiện thẻ thông tin ngay trên trang, không chuyển trang. */
   const [card, setCard] = React.useState<{ code: string; person: PermitPerson | null } | null>(null);
   const cardRef = React.useRef<HTMLDivElement>(null);
+  const metricsRef = React.useRef<ScanMetricsCollector | null>(null);
+  metricsRef.current ??= new ScanMetricsCollector(SCAN_METRICS_ID, reportPermitScanMetrics);
+  /** Mốc lúc bắt được mã của lượt đang tra — chốt số đo khi có kết quả tra. */
+  const detectedRef = React.useRef<ReturnType<ScanMetricsCollector["detected"]> | null>(null);
 
   const stopScanner = React.useCallback(() => {
     controlsRef.current?.stop();
     controlsRef.current = null;
+    const video = videoRef.current;
+    (video?.srcObject as MediaStream | null)?.getTracks().forEach((track) => track.stop());
+    if (video) video.srcObject = null;
     setTorchAvailable(false);
     setTorchOn(false);
   }, []);
 
   React.useEffect(() => stopScanner, [stopScanner]);
+
+  // Gửi lô số đo cuối khi rời trang (tắt màn hình, chuyển ứng dụng, chuyển sang trang thiết bị/PCT vừa quét).
+  React.useEffect(() => {
+    const metrics = metricsRef.current!;
+    const flush = () => metrics.flush(true);
+    window.addEventListener("pagehide", flush);
+    return () => { window.removeEventListener("pagehide", flush); flush(); };
+  }, []);
+
+  /** Chốt số đo lượt vừa tra (chỉ lượt bắt từ camera). */
+  const recordScan = React.useCallback((startedAt: number, result: ScanMetricResult) => {
+    const detected = detectedRef.current;
+    detectedRef.current = null;
+    if (detected) metricsRef.current?.scanned(detected, { source: "camera", lookupMs: performance.now() - startedAt, actionMs: 0, result });
+  }, []);
 
   // Link quét báo mã QR vô hiệu thì hiện lỗi — chỉnh lúc render. Khoá null để lần render đầu cũng xét
   // như effect cũ (effect tự bật camera bên dưới đọc thẳng searchParams nên thứ tự không đổi gì).
@@ -58,8 +90,10 @@ function DeviceScanner() {
     setState("resolving");
     setMessage("Đã nhận mã — đang kiểm tra quyền và dữ liệu thiết bị...");
     stopScanner();
+    const startedAt = performance.now();
     try {
       const result = await apiMutate<ResolveResult>("/api/device-qr/resolve", "POST", { value });
+      recordScan(startedAt, result.type === "WORKER_CARD" && !result.person ? "warn" : "info");
       if (result.type === "WORKER_CARD") {
         navigator.vibrate?.(result.person ? 90 : [80, 60, 80]);
         setCard({ code: result.code, person: result.person });
@@ -73,11 +107,12 @@ function DeviceScanner() {
       toast.success(result.type === "WORK_PERMIT" ? "Đã nhận diện PCT Đại tu" : "Đã nhận diện thiết bị");
       router.push(result.url);
     } catch (error) {
+      recordScan(startedAt, "block");
       resolvingRef.current = false;
       setState("error");
       setMessage(error instanceof Error ? error.message : "Không đọc được mã QR");
     }
-  }, [router, stopScanner]);
+  }, [recordScan, router, stopScanner]);
 
   const startScanner = React.useCallback(async () => {
     stopScanner();
@@ -90,39 +125,34 @@ function DeviceScanner() {
     }
     setState("starting");
     setMessage("Đang mở camera sau...");
+    const metrics = metricsRef.current!;
+    metrics.cameraStarting();
     let stream: MediaStream | null = null;
     try {
       // Xin camera ngay trong chính thao tác chạm. Nếu chờ tải thư viện trước,
       // Safari/iOS có thể làm mất user activation và chặn hộp thoại cấp quyền.
-      stream = await navigator.mediaDevices.getUserMedia({
-        audio: false,
-        video: {
-          facingMode: { ideal: "environment" },
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-        },
-      });
+      stream = await navigator.mediaDevices.getUserMedia(QR_CAMERA_CONSTRAINTS);
+      tuneQrCameraTrack(stream);
       const video = videoRef.current;
       if (!video) throw new Error("Không tìm thấy khung xem camera");
       // Safari/iOS ổn định hơn khi stream được gắn và phát ngay, trước mọi
       // khoảng chờ tải bộ giải mã. Video phải muted + playsInline + autoPlay.
       video.srcObject = stream;
       await video.play();
-      const { BrowserQRCodeReader } = await import("@zxing/browser");
-      const reader = new BrowserQRCodeReader(undefined, { delayBetweenScanAttempts: 120, delayBetweenScanSuccess: 800 });
-      const controls = await reader.decodeFromStream(
-        stream,
-        video,
-        (result) => {
-          if (result?.getText()) void resolveValue(result.getText());
-        }
-      );
-      // Từ đây controls chịu trách nhiệm dừng và giải phóng stream.
+      const scanner = await startQrScanner(video, (frame, engine) => {
+        metrics.frame(frame, engine);
+        if (!frame.text || resolvingRef.current) return;
+        detectedRef.current = metrics.detected("camera");
+        void resolveValue(frame.text);
+      }, { track: stream.getVideoTracks()[0] });
+      const setTorch = qrCameraTorch(stream);
+      // Từ đây stopScanner chịu trách nhiệm dừng vòng quét và tắt luồng camera (gắn trên thẻ video).
       stream = null;
-      controlsRef.current = controls;
-      setTorchAvailable(Boolean(controls.switchTorch));
+      controlsRef.current = { stop: scanner.stop, switchTorch: setTorch ?? undefined };
+      metrics.cameraOn(scanner.engine, video.videoWidth, video.videoHeight);
+      setTorchAvailable(Boolean(setTorch));
       setState("scanning");
-      setMessage("Đưa mã QR vào giữa khung ngắm");
+      setMessage("Đưa mã QR vào khung ngắm, cách 20–25 cm");
     } catch (error) {
       stream?.getTracks().forEach((track) => track.stop());
       if (stream && videoRef.current?.srcObject === stream) videoRef.current.srcObject = null;
@@ -142,12 +172,8 @@ function DeviceScanner() {
 
   async function toggleTorch() {
     if (!controlsRef.current?.switchTorch) return;
-    try {
-      await controlsRef.current.switchTorch(!torchOn);
-      setTorchOn((current) => !current);
-    } catch {
-      toast.error("Thiết bị không hỗ trợ bật đèn pin từ trình duyệt");
-    }
+    if (await controlsRef.current.switchTorch(!torchOn)) setTorchOn((current) => !current);
+    else toast.error("Thiết bị không hỗ trợ bật đèn pin từ trình duyệt");
   }
 
   async function scanImage(file: File | undefined) {
