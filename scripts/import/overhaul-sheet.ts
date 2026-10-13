@@ -17,6 +17,9 @@
  *   npm run overhaul:sheet -- --protect --editor a@gmail.com           # xem trước khoá cột Trạng thái (cột % để mở từ 07/10/2026)
  *   npm run overhaul:sheet -- --protect --editor a@gmail.com --apply   # GHI: khoá (chỉ tài khoản dịch vụ + --editor sửa được);
  *                                                  chạy lại sau khi thêm/bớt hạng mục để khoá đúng hàng
+ *   npm run overhaul:sheet -- --lock-tabs --editor a@gmail.com [--apply]  # khoá CẢ TAB cương vị (tab hạng mục, 13/10/2026);
+ *                                                  chỉ tài khoản dịch vụ + --editor sửa được. Thêm tab mới → chạy lại.
+ *   npm run overhaul:sheet -- --unlock-tabs [--apply]                  # gỡ khoá cả tab do lệnh trên tạo
  *
  * Chỉ ghi Sheet khi .env có OVERHAUL_SHEET_WRITE=1 (máy dev dùng chung link file thật — mặc định KHÔNG ghi).
  * Chạy lại an toàn (hàng đợi chống ghi đôi). Thoát 1 khi còn lỗi để systemctl hiện "failed".
@@ -52,6 +55,12 @@ async function main() {
       const only = args.flatMap((arg, i) => arg === "--only" && args[i + 1] ? [args[i + 1]] : [])[0];
       for (const line of await writer.unprotectOverhaulSheets(apply, only)) console.log(line);
       console.log(apply ? "Đã gỡ các vùng khoá do web tạo." : "Chỉ xem trước — thêm --apply để gỡ khoá trên Sheet.");
+      return;
+    }
+    if (flag("--lock-tabs") || flag("--unlock-tabs")) {
+      const { lockOverhaulTabs } = await import("../../lib/server/overhaul-sheet-locks");
+      const editors = args.flatMap((arg, i) => arg === "--editor" && args[i + 1] ? [args[i + 1]] : []);
+      for (const line of await lockOverhaulTabs(flag("--apply"), editors, { unlock: flag("--unlock-tabs") })) console.log(line);
       return;
     }
     if (flag("--protect")) {

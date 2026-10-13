@@ -58,7 +58,14 @@ Web là nguồn, Sheet theo web. Code: `lib/server/overhaul-sheet-writer.ts`; l�
   ô gộp / danh sách thả xuống / màu trạng thái từ cặp hàng hạng mục đầu tab. Sau đó tiến độ, nhật ký, kết thúc / huỷ phiếu
   ghi như hạng mục thường; đồng bộ 06:00 đọc lại mã PS (không ẩn hạng mục chưa kịp chèn). Chặn cấp phiếu khi: chưa chọn
   cương vị, cương vị không có tab, đơn vị chưa khai mã, thiếu nội dung — bỏ tick nếu không muốn tạo.
-- **Vùng khoá (cập nhật 07/10/2026)**: cột **A–E** (khoá có sẵn của người soạn file) và cột **G** ("Trạng thái hiện
+- **Khoá cả tab cương vị (13/10/2026, đang áp dụng)**: 19 tab cương vị (tab hạng mục web đọc/ghi — có cột "Trạng thái
+  hiện tại"; trừ tab nháp "Điện_1") khoá **toàn bộ tab**, chỉ `khanh.mdk.tpcduyenhai@gmail.com` + tài khoản dịch vụ (và
+  chủ file) sửa được — mọi người KHÔNG còn nhập cột % / ô ngày trên tab cương vị. Tab **"Tiến độ …"** (Lò, Turbine,
+  Điện, CI) để mở cho mọi người có quyền sửa file (lưu ý: ~35% ô ở đó là công thức). Tab nguồn ("Lò- Cơ", "Turbine- Cơ"…),
+  "Chi tiết 1–4", README, "Điện_1" giữ khoá A:E như cũ. Nhãn khoá `[dh1-web] Khoá cả tab` — `--protect`/`--unprotect`
+  cột bên dưới không đụng tới. Thêm tab cương vị mới → chạy lại
+  `npm run overhaul:sheet -- --lock-tabs --editor <email> --apply`; gỡ: `--unlock-tabs --apply` (lib/server/overhaul-sheet-locks.ts).
+- **Vùng khoá cột (07/10/2026, nay nằm trong khoá cả tab ở trên)**: cột **A–E** (khoá có sẵn của người soạn file) và cột **G** ("Trạng thái hiện
   tại", từ hàng dữ liệu đầu tới hết tab — kể cả hàng PHÁT SINH chèn sau) chỉ `khanh.mdk.tpcduyenhai@gmail.com` + tài
   khoản dịch vụ sửa được, trên 20 tab hạng mục. Cột **F** ("% Hoàn thành", mở từ 07/10/2026) và cột ngày từ **H** trở đi
   để mở cho mọi người có quyền chỉnh sửa file. Khoá lại cột G: `npm run overhaul:sheet -- --protect --editor <email> --apply`
