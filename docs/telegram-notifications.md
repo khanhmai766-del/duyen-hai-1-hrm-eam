@@ -11,7 +11,7 @@ Bot Telegram gửi các loại thông báo:
 - 07:00: khiếm khuyết Mức 1 còn tồn đọng (đánh dấu tồn trên 24 giờ và 7 ngày) và
   phiếu vật tư cần chú ý (cảnh báo trễ hạn, chưa đem/chưa nhận lại biên bản thu hồi);
 - 07:15 thứ Hai: tổng hợp tuần trước.
-- PCT nhà thầu đại tu: báo mở ngày sau 1 giờ, báo kết thúc ngay sau khi lưu; kết thúc sớm gộp hai phần trong một tin;
+- PCT nhà thầu đại tu: báo mở ngày sau 30 phút, báo kết thúc ngay sau khi lưu; kết thúc trước 30 phút có thể gộp hai phần trong một tin; bàn giao CHTT có bản tin riêng;
 - 00:00: tổng nhân sự đại tu, nhân sự đã làm việc và danh sách số hiệu PCT của từng nhà thầu trong ngày vừa kết thúc.
 
 Ba ca được tính theo giờ Việt Nam: ca sáng 06:00–14:00, ca chiều
@@ -82,16 +82,22 @@ Chỉ áp dụng PCT `CONTRACTOR` / `OVERHAUL`. Bật riêng bằng `TELEGRAM_OV
 sau khi đã áp dụng `prisma/manual/add-work-permit-telegram-outbox.sql`. Biến này mặc định tắt;
 không bật trước khi có bảng hàng đợi. Dùng chung bot, gửi riêng tới nhóm trong `TELEGRAM_OVERHAUL_CHAT_IDS`.
 
-- **Mở ngày**: chờ một giờ tính từ `openedAt` (thời điểm cho phép). Timer kiểm tra mỗi phút,
+- **Mở ngày**: chờ 30 phút tính từ `openedAt` (thời điểm cho phép). Timer kiểm tra mỗi phút,
   nên thường gửi trong phút đầu sau mốc đó. Đếm người thực sự đã vào làm tại lúc gửi, không gồm CHTT.
 - **Kết thúc**: sau transaction lưu thành công, gửi số PCT dạng `số/năm/VH1-NĐDH`, nhà thầu,
   cương vị cho phép (`WorkPermit.position`), nội dung, CHTT, số nhân viên đã tham gia (kể cả đã ra),
   giờ cho phép/kết thúc. Không thêm tổ máy. Tiến độ lấy các hạng mục có đổi % hoặc ghi chú,
   so với ảnh chụp % tại lúc mở, ví dụ `30% → 50%`. Cập nhật giữa chừng vẫn được tính vào thay đổi cuối ngày.
-- **Kết thúc trước khi gửi mở**: huỷ lịch mở còn chờ, gửi một tin gộp mở/kết thúc.
+- **Kết thúc trước đủ 30 phút**: nếu có lịch mở nhưng chưa gửi thì huỷ lịch còn chờ, gửi một tin gộp mở/kết thúc.
   Quyết định riêng theo từng nhóm: nhóm đã nhận mở thì chỉ nhận kết thúc, nhóm chưa nhận mở thì nhận bản gộp.
-  Nếu một worker đang gửi mở, bản kết thúc chờ worker đó xong để không gửi ngược thứ tự.
-- **Bàn giao CHTT**: chốt lần làm việc của CHTT cũ, kèm ghi chú bàn giao; tạo lịch mở cho lần của CHTT mới.
+  Đúng mốc 30 phút hoặc muộn hơn chỉ báo kết thúc, kể cả báo mở gặp lỗi. Lượt cũ không có lịch mở
+  (ví dụ mở trước khi bật chức năng) chỉ báo kết thúc. Nếu một worker đang gửi mở, bản kết thúc chờ worker đó xong để không gửi ngược thứ tự.
+- **Bàn giao CHTT**: gửi riêng số PCT, nhà thầu, cương vị cho phép, nội dung, CHTT cũ/mới,
+  giờ và ghi chú bàn giao; ghi rõ PCT tiếp tục làm việc. Giữ lịch mở ban đầu (không tính lại 30 phút
+  từ lúc bàn giao), không gửi lại mở nếu đã gửi. Báo kết thúc thật giữ giờ mở, số người không trùng
+  và tiến độ xuyên suốt chuỗi bàn giao, so với ảnh chụp đầu ngày.
+- **Tên nhà thầu**: kèm mã đơn vị trong ngoặc, lấy từ `WorkPermitCompany.code`, ví dụ `Nhà thầu A (IDC)`.
+  Áp dụng cho mở, kết thúc, bàn giao và tổng hợp cuối ngày. Đơn vị chưa khai mã vẫn hiện tên.
 - **00:00 giờ Việt Nam**: tổng hợp ngày vừa kết thúc theo khoảng `[0h, 0h ngày sau)`;
   chỉ liệt kê nhà thầu có làm đại tu. Mỗi nhà thầu có tổng hồ sơ nhân sự `scope=OVERHAUL`,
   số người không trùng đã làm trong ngày (gồm CHTT, không tách vai trò), danh sách số hiệu PCT không trùng.

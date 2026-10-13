@@ -15,7 +15,7 @@ import { parseSessionItemProgress, sharedOverhaulPercents } from "@/lib/server/w
 import { enqueueOverhaulManualProgress, enqueueOverhaulProgressUpdate, enqueueOverhaulSessionEnd, overhaulProgressKey, pushOverhaulSheetOutboxQuietly, vnDay } from "@/lib/server/overhaul-sheet-writer";
 import { isOverhaulPaperPermit, OVERHAUL_DAY_STATUSES, OVERHAUL_JOURNAL_LIMITS, overhaulItemProgressOf, overhaulItemsOf, overhaulJournalHeaderText, type OverhaulItemProgress } from "@/lib/work-permit-overhaul";
 import { permitDeadline, personScopeError, workersStillInside } from "@/lib/work-permits";
-import { captureOverhaulTelegramBaseline, enqueueOverhaulEnding, enqueueOverhaulOpening, overhaulTelegramEnabled, pushOverhaulTelegramQuietly } from "@/lib/server/work-permit-telegram";
+import { captureOverhaulTelegramBaseline, enqueueOverhaulEnding, enqueueOverhaulHandoff, enqueueOverhaulOpening, overhaulTelegramEnabled, pushOverhaulTelegramQuietly } from "@/lib/server/work-permit-telegram";
 export const dynamic = "force-dynamic";
 
 /** Phần đầu Nhật ký ngày từ form (Số PCT - Nội dung, CHTT, NVĐV). Không gửi (màn hình cũ / Tiến độ trong ngày) → mẫu cũ. */
@@ -84,11 +84,10 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
           : members.map(member => withEntry(member, input.openedAt));
         await assertWorkersFree(tx, [{ personId: person.id, code: person.code, name: person.name, company: person.company }, ...presentMembers(nextMembers)], permit.id);
         if (oldSession) {
-          const endedSession = await tx.workPermitSession.update({ where: { id: oldSession.id }, data: {
+          await tx.workPermitSession.update({ where: { id: oldSession.id }, data: {
             endedAt: input.openedAt, endConfirmedByName: input.authorizerName, members: permitSnapshot(closeInsideVisits(oldSession.members, input.openedAt)),
             endNote: `Bàn giao CHTT cho ${person.name}. ${handoffNote}`.trim(), endedById: user.id, endedByName: user.name ?? "",
           } });
-          await enqueueOverhaulEnding(tx, permit, endedSession);
         }
         const session = await tx.workPermitSession.create({ data: {
           permitId: permit.id, commanderId: person.id, commanderCode: person.code, commanderName: person.name, company: person.company,
@@ -101,7 +100,9 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
           status: "ACTIVE", authorizedAt: permit.authorizedAt ?? input.openedAt, authorizerName: input.authorizerName,
           version: { increment: 1 },
         } });
-        if (overhaulTelegramEnabled() && permit.contractorScope === "OVERHAUL") {
+        if (oldSession) {
+          await enqueueOverhaulHandoff(tx, permit, oldSession, session, handoffNote);
+        } else if (overhaulTelegramEnabled() && permit.contractorScope === "OVERHAUL") {
           await enqueueOverhaulOpening(tx, permit, session, await sharedOverhaulPercents(tx, overhaulItemsOf(permit.overhaulItems)));
         }
         await tx.workPermitHistory.create({ data: { permitId: permit.id, actorId: user.id, actorName: user.name ?? "", action: oldSession ? `Bàn giao CHTT · ${oldSession.commanderName} → ${person.name}` : `Mở lần làm việc · CHTT ${person.name} (${person.code})`, before: permitSnapshot(oldSession ? { ...permit, session: oldSession } : permit), after: permitSnapshot({ ...after, session }) } });

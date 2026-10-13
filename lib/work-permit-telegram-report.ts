@@ -4,9 +4,9 @@ import { overhaulItemKey, overhaulItemProgressOf, type OverhaulItemSnapshot } fr
 import { escapeTelegramHtml } from "@/lib/telegram";
 import { formatVietnamDateTime } from "@/lib/vietnam-time";
 
-export const OVERHAUL_OPEN_DELAY_MS = 3600_000;
+export const OVERHAUL_OPEN_DELAY_MS = 30 * 60_000;
 export type ProgressBaseline = Pick<OverhaulItemSnapshot, "code" | "source" | "sheet"> & { percent: number };
-export type TelegramPermit = { id: string; number: string; year: number; content: string; teamName: string; teamType: string; contractorScope: string | null; position: string | null };
+export type TelegramPermit = { id: string; number: string; year: number; content: string; teamName: string; teamType: string; contractorScope: string | null; position: string | null; companyCode?: string };
 export type TelegramSession = {
   id: string; commanderId: string | null; commanderCode: string; commanderName: string; company: string;
   members: unknown; openedAt: Date; endedAt: Date | null; itemProgress: unknown; endNote: string;
@@ -16,9 +16,14 @@ const text = (value: unknown, max = 600) => {
   const raw = String(value ?? "").replace(/\s+/g, " ").trim();
   return escapeTelegramHtml(raw.length > max ? `${raw.slice(0, max - 1)}…` : raw || "—");
 };
+const contractorLabel = (name: string, code?: string) => `${text(name, 200)}${code?.trim() ? ` (${text(code, 80)})` : ""}`;
 export const overhaulTelegramEligible = (permit: Pick<TelegramPermit, "teamType" | "contractorScope">) =>
   permit.teamType === "CONTRACTOR" && permit.contractorScope === "OVERHAUL";
 export const openingDueAt = (openedAt: Date) => new Date(openedAt.getTime() + OVERHAUL_OPEN_DELAY_MS);
+export function endedBeforeOpeningDue(session: Pick<TelegramSession, "openedAt" | "endedAt">) {
+  const elapsed = session.endedAt ? session.endedAt.getTime() - session.openedAt.getTime() : -1;
+  return elapsed >= 0 && elapsed < OVERHAUL_OPEN_DELAY_MS;
+}
 
 /** Mỗi dòng HTML của bản tin là độc lập; chỉ chia tại xuống dòng để không cắt thẻ/entity giữa chừng. */
 export function splitOverhaulTelegramMessage(message: string) {
@@ -69,7 +74,7 @@ export function buildOverhaulSessionMessage(permit: TelegramPermit, session: Tel
     `🔧 <b>${title}</b>`,
     // Chỉ số hiệu của sổ PCT, không thay bằng số NKVH và không đưa tổ máy vào bản tin.
     `Số PCT: <b>${text(formatPermitNumber({ number: permit.number, year: permit.year }), 120)}</b>`,
-    `Nhà thầu: ${text(session.company || permit.teamName, 200)}`,
+    `Nhà thầu: ${contractorLabel(session.company || permit.teamName, permit.companyCode)}`,
     `Cương vị cho phép: ${text(permit.position, 200)}`,
     `Nội dung: ${text(permit.content)}`,
     `CHTT: ${text(session.commanderName, 200)}`,
@@ -91,11 +96,30 @@ export function buildOverhaulSessionMessage(permit: TelegramPermit, session: Tel
   return lines.join("\n");
 }
 
-export type DailyOverhaulContractor = { company: string; totalPersonnel: number; worked: number; permitNumbers: string[] };
+export type DailyOverhaulContractor = { company: string; companyCode?: string; totalPersonnel: number; worked: number; permitNumbers: string[] };
+export function buildOverhaulHandoffMessage(permit: TelegramPermit, previous: TelegramSession, next: TelegramSession, note: string, now = new Date()) {
+  const lines = [
+    "🔄 <b>BÀN GIAO CHTT ĐẠI TU</b>",
+    `Số PCT: <b>${text(formatPermitNumber(permit), 120)}</b>`,
+    `Nhà thầu: ${contractorLabel(next.company || permit.teamName, permit.companyCode)}`,
+    `Cương vị cho phép: ${text(permit.position, 200)}`,
+    `Nội dung: ${text(permit.content)}`,
+    `CHTT bàn giao: ${text(previous.commanderName, 200)}`,
+    `CHTT nhận bàn giao: ${text(next.commanderName, 200)}`,
+    `Thời điểm bàn giao: ${formatVietnamDateTime(next.openedAt)}`,
+    `Số nhân viên công tác: <b>${sessionTelegramWorkerCount(next, now)}</b> (không gồm CHTT)`,
+    "Trạng thái: PCT tiếp tục làm việc.",
+  ];
+  if (note.trim()) lines.push(`Ghi chú bàn giao: ${text(note)}`);
+  const url = (process.env.NEXT_PUBLIC_APP_URL?.trim() || "https://duyenhai1.vn").replace(/\/$/, "");
+  lines.push("", `<a href="${escapeTelegramHtml(`${url}/work-permits/${encodeURIComponent(permit.id)}/lam-viec?from=live`)}">Xem phiếu</a>`);
+  return lines.join("\n");
+}
+
 export function buildOverhaulDailyMessage(day: string, rows: DailyOverhaulContractor[]) {
   const lines = ["📋 <b>NHÂN SỰ ĐẠI TU TRONG NGÀY</b>", `Ngày: ${day.split("-").reverse().join("/")} (giờ Việt Nam)`];
   for (const [index, row] of rows.filter(row => row.worked > 0).entries()) {
-    lines.push("", `${index + 1}. <b>${text(row.company, 200)}</b>`,
+    lines.push("", `${index + 1}. <b>${contractorLabel(row.company, row.companyCode)}</b>`,
       `Tổng nhân sự đại tu: <b>${row.totalPersonnel}</b>`, `Làm việc trong ngày: <b>${row.worked}</b>`, "Số PCT thực hiện:");
     for (const number of [...new Set(row.permitNumbers)]) lines.push(`• ${text(number, 120)}`);
   }

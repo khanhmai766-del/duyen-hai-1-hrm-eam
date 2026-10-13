@@ -2,8 +2,9 @@ import assert from "node:assert/strict";
 import test, { type TestContext } from "node:test";
 import type { Prisma, WorkPermit, WorkPermitSession, WorkPermitTelegramOutbox } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
-import { enqueueOverhaulEnding, enqueueOverhaulOpening, runOverhaulTelegramOutbox } from "../../lib/server/work-permit-telegram";
+import { buildOverhaulDailyDigest, captureOverhaulTelegramBaseline, enqueueOverhaulEnding, enqueueOverhaulHandoff, enqueueOverhaulOpening, runOverhaulTelegramOutbox } from "../../lib/server/work-permit-telegram";
 import { deliverTelegramNotification } from "../../lib/telegram";
+import { overhaulItemKey } from "../../lib/work-permit-overhaul";
 
 const at = (time: string) => new Date(`2026-10-12T${time}+07:00`);
 const permit = { id: "p1", number: "4299", year: 2026, position: "Lò phó", content: "Đại tu bơm", teamName: "Nhà thầu A", teamType: "CONTRACTOR", contractorScope: "OVERHAUL", overhaulItems: [] } as unknown as WorkPermit;
@@ -41,9 +42,11 @@ function harness(t: TestContext, chats = "a,b") {
   const sentOpening = new Set<string>();
   let writes = 0;
   let current = { ...session, permit };
+  const sessions = new Map([[session.id, current]]);
   const queue = {
     findMany: async ({ where }: { where: Record<string, unknown> }) => rows.filter(row => matches(row as unknown as Record<string, unknown>, where)).map(row => ({ ...row })),
     findUnique: async ({ where }: { where: { id?: string; dedupeKey?: string } }) => rows.find(row => where.id ? row.id === where.id : row.dedupeKey === where.dedupeKey) ?? null,
+    findFirst: async ({ where }: { where: Record<string, unknown> }) => rows.find(row => matches(row as unknown as Record<string, unknown>, where)) ?? null,
     findUniqueOrThrow: async ({ where }: { where: { id: string } }) => { const row = rows.find(row => row.id === where.id); assert.ok(row); return { ...row }; },
     updateMany: async ({ where, data }: { where: Record<string, unknown>; data: Record<string, unknown> }) => {
       let count = 0;
@@ -54,6 +57,9 @@ function harness(t: TestContext, chats = "a,b") {
       }
       return { count };
     },
+    update: async ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => {
+      const row = rows.find(row => row.id === where.id); assert.ok(row); Object.assign(row, data); writes++; return row;
+    },
     upsert: async ({ where, create }: { where: { dedupeKey: string }; create: Partial<WorkPermitTelegramOutbox> }) => {
       const existing = rows.find(row => row.dedupeKey === where.dedupeKey);
       if (existing) return existing;
@@ -63,36 +69,39 @@ function harness(t: TestContext, chats = "a,b") {
       rows.push(row); writes++; return row;
     },
   };
-  const db = { workPermitTelegramOutbox: queue, workPermitSession: { findUnique: async () => current },
+  const db = { workPermitTelegramOutbox: queue, workPermitCompany: { findUnique: async () => ({ code: "NTA" }) },
+    workPermitSession: { findUnique: async ({ where }: { where: { id: string } }) => sessions.get(where.id) ?? null,
+      findMany: async ({ where }: { where: { id: { in: string[] } } }) => [...sessions.values()].filter(row => where.id.in.includes(row.id)) },
     telegramNotificationLog: { findMany: async () => [...sentOpening].map(chatId => ({ chatId })) } } as unknown as typeof prisma;
-  return { rows, queue, db, tx: { workPermitTelegramOutbox: queue } as unknown as Prisma.TransactionClient, sentOpening,
-    setSession: (value: typeof current) => { current = value; }, writes: () => writes };
+  return { rows, queue, db, tx: { ...db, $queryRaw: async () => [] } as unknown as Prisma.TransactionClient, sentOpening,
+    setSession: (value: typeof current) => { current = value; sessions.set(value.id, value); }, writes: () => writes };
 }
 
-test("Lưu lịch +1h, chưa đến giờ không gửi; số nhân viên lấy sau khi đã bổ sung", async t => {
+test("Lưu lịch +30 phút, chưa đến giờ không gửi; số nhân viên lấy sau khi đã bổ sung", async t => {
   const h = harness(t, "a");
   await enqueueOverhaulOpening(h.tx, permit, session, new Map());
-  assert.equal(h.rows[0].dueAt.getTime(), at("09:00:00").getTime());
+  assert.equal(h.rows[0].dueAt.getTime(), at("08:30:00").getTime());
   const calls: string[] = [];
   const deliver = async (params: Parameters<typeof deliverTelegramNotification>[0]) => { calls.push(params.message); return success(); };
-  await runOverhaulTelegramOutbox({ db: h.db, now: at("08:59:59"), deliver });
+  await runOverhaulTelegramOutbox({ db: h.db, now: at("08:29:59"), deliver });
   assert.equal(calls.length, 0);
   h.setSession({ ...session, members: [person("w1"), person("w2")], permit });
-  await runOverhaulTelegramOutbox({ db: h.db, now: at("09:00:00"), deliver });
+  await runOverhaulTelegramOutbox({ db: h.db, now: at("08:30:00"), deliver });
   assert.equal(calls.length, 1);
   assert.match(calls[0], /Số nhân viên công tác: <b>2<\/b>/);
+  assert.match(calls[0], /Nhà thầu: Nhà thầu A \(NTA\)/);
   assert.equal(h.rows[0].state, "SUCCESS");
 });
 
-test("Kết thúc trước một giờ: huỷ lịch mở và gửi một bản gộp tới từng nhóm", async t => {
+test("Kết thúc trước 30 phút: huỷ lịch mở và gửi một bản gộp tới từng nhóm", async t => {
   const h = harness(t);
   await enqueueOverhaulOpening(h.tx, permit, session, new Map());
-  const ended = { ...session, endedAt: at("08:45:00") };
-  await enqueueOverhaulEnding(h.tx, permit, ended, at("08:45:00"));
+  const ended = { ...session, endedAt: at("08:20:00") };
+  await enqueueOverhaulEnding(h.tx, permit, ended, at("08:20:00"));
   h.setSession({ ...ended, permit });
   assert.equal(h.rows[0].state, "CANCELED");
   const calls: string[] = [];
-  await runOverhaulTelegramOutbox({ db: h.db, now: at("08:45:00"), deliver: async params => { calls.push(params.message); return success(); } });
+  await runOverhaulTelegramOutbox({ db: h.db, now: at("08:20:00"), deliver: async params => { calls.push(params.message); return success(); } });
   assert.equal(calls.length, 2);
   assert.ok(calls.every(message => message.includes("MỞ VÀ KẾT THÚC")));
   assert.equal(h.rows[1].state, "SUCCESS");
@@ -103,11 +112,231 @@ test("Đã gửi mở cho một nhóm: nhóm đó nhận kết thúc; nhóm chư
   const h = harness(t);
   await enqueueOverhaulOpening(h.tx, permit, session, new Map());
   h.sentOpening.add("a");
-  await enqueueOverhaulEnding(h.tx, permit, { ...session, endedAt: at("10:00:00") }, at("10:00:00"));
+  const ended = { ...session, endedAt: at("08:20:00") };
+  h.setSession({ ...ended, permit });
+  await enqueueOverhaulEnding(h.tx, permit, ended, at("08:20:00"));
   const received = new Map<string, string>();
-  await runOverhaulTelegramOutbox({ db: h.db, now: at("10:00:00"), deliver: async params => { received.set(params.chatIds![0], params.message); return success(); } });
+  await runOverhaulTelegramOutbox({ db: h.db, now: at("08:20:00"), deliver: async params => { received.set(params.chatIds![0], params.message); return success(); } });
   assert.match(received.get("a")!, /<b>KẾT THÚC NGÀY ĐẠI TU/);
   assert.match(received.get("b")!, /MỞ VÀ KẾT THÚC/);
+});
+
+for (const time of ["08:30:00", "08:45:00", "18:00:00"]) test(`Kết thúc lúc ${time}: quá hạn mở chưa gửi cũng không gộp`, async t => {
+  const h = harness(t);
+  await enqueueOverhaulOpening(h.tx, permit, session, new Map());
+  h.rows[0].state = "FAILED";
+  h.sentOpening.add("a");
+  const ended = { ...session, endedAt: at(time) };
+  h.setSession({ ...ended, permit });
+  await enqueueOverhaulEnding(h.tx, permit, ended, at(time));
+  const calls: string[] = [];
+  await runOverhaulTelegramOutbox({ db: h.db, now: at(time), deliver: async params => { calls.push(params.message); return success(); } });
+  assert.equal(calls.length, 2);
+  assert.ok(calls.every(message => message.includes("<b>KẾT THÚC NGÀY") && !message.includes("MỞ VÀ KẾT THÚC")));
+  assert.equal(h.rows[1].combinedMessage, null);
+});
+
+test("Lượt cũ chưa có lịch mở: chỉ báo kết thúc dù thời gian làm dưới 30 phút", async t => {
+  const h = harness(t, "a");
+  const ended = { ...session, endedAt: at("08:20:00") };
+  h.setSession({ ...ended, permit });
+  await enqueueOverhaulEnding(h.tx, permit, ended, at("10:00:00"));
+  await runOverhaulTelegramOutbox({ db: h.db, now: at("10:00:00"), deliver: async params => {
+    assert.match(params.message, /<b>KẾT THÚC NGÀY/); assert.doesNotMatch(params.message, /MỞ VÀ KẾT THÚC/); return success();
+  } });
+});
+
+test("Bản gộp còn chờ từ phiên bản cũ bị giới hạn lại theo 30 phút", async t => {
+  const h = harness(t, "a");
+  await enqueueOverhaulOpening(h.tx, permit, session, new Map());
+  h.setSession({ ...session, endedAt: at("08:45:00"), permit });
+  await h.queue.upsert({ where: { dedupeKey: "S:s1:END" }, create: { dedupeKey: "S:s1:END", sessionId: session.id,
+    kind: "END", dueAt: at("08:45:00"), nextAttemptAt: at("08:45:00"), message: "KẾT THÚC NGÀY", combinedMessage: "MỞ VÀ KẾT THÚC" } });
+  const calls: string[] = [];
+  await runOverhaulTelegramOutbox({ db: h.db, now: at("09:00:00"), deliver: async params => { calls.push(params.message); return success(); } });
+  assert.deepEqual(calls, ["KẾT THÚC NGÀY"]);
+});
+
+const nextSession = (id: string, time: string) => ({ ...session, id, commanderId: `ch-${id}`, commanderCode: `ch-${id}`, commanderName: `CHTT ${id}`, openedAt: at(time),
+  members: [{ ...person("w2"), attendance: [{ in: at(time).toISOString(), out: null }] }] } as unknown as WorkPermitSession);
+
+test("Bàn giao trước giờ gửi: chỉ báo bàn giao, giữ lịch mở ban đầu và dùng CHTT mới", async t => {
+  const h = harness(t, "a");
+  await enqueueOverhaulOpening(h.tx, permit, session, new Map());
+  const next = nextSession("s2", "08:10:00");
+  h.setSession({ ...session, endedAt: next.openedAt, permit });
+  h.setSession({ ...next, permit });
+  await enqueueOverhaulHandoff(h.tx, permit, session, next, "Tiếp tục kiểm tra", at("08:11:00"));
+  assert.equal(h.rows.filter(row => row.kind === "OPEN").length, 1);
+  assert.equal(h.rows.filter(row => row.kind === "END").length, 0);
+  assert.equal(h.rows[0].sessionId, "s2");
+  assert.equal(h.rows[0].dueAt.getTime(), at("08:30:00").getTime());
+  const calls: string[] = [];
+  const deliver = async (params: Parameters<typeof deliverTelegramNotification>[0]) => { calls.push(params.message); return success(); };
+  await runOverhaulTelegramOutbox({ db: h.db, now: at("08:11:00"), deliver });
+  assert.equal(calls.length, 1);
+  assert.match(calls[0], /BÀN GIAO CHTT/);
+  assert.match(calls[0], /Nhà thầu: Nhà thầu A \(NTA\)/);
+  assert.match(calls[0], /Tiếp tục kiểm tra/);
+  assert.doesNotMatch(calls[0], /KẾT THÚC NGÀY/);
+  await runOverhaulTelegramOutbox({ db: h.db, now: at("08:30:00"), deliver });
+  assert.equal(calls.length, 2);
+  assert.match(calls[1], /MỞ NGÀY ĐẠI TU/);
+  assert.match(calls[1], /CHTT: CHTT s2/);
+  assert.match(calls[1], /Cho phép: .*08:00/);
+});
+
+test("Bàn giao sau báo mở: không mở lại; kết thúc giữ nhân sự, tiến độ và giờ mở qua nhiều CHTT", async t => {
+  const h = harness(t, "a");
+  const item = { source: "BOILER" as const, sheet: "Lò phó - Cơ", code: "1.1", device: "Bơm", content: "Kiểm tra", method: "", percent: 20, done: true, note: "Đã kiểm tra" };
+  const first = { ...session, itemProgress: [item] };
+  await enqueueOverhaulOpening(h.tx, { ...permit, overhaulItems: [item] }, first, new Map([[overhaulItemKey(item), 10]]));
+  await runOverhaulTelegramOutbox({ db: h.db, now: at("08:30:00"), deliver: async () => { h.sentOpening.add("a"); return success(); } });
+  const next = nextSession("s2", "08:40:00");
+  h.setSession({ ...first, endedAt: next.openedAt, permit });
+  h.setSession({ ...next, permit });
+  await enqueueOverhaulHandoff(h.tx, permit, first, next, "", at("08:41:00"));
+  const last = nextSession("s3", "08:50:00");
+  h.setSession({ ...next, endedAt: last.openedAt, permit });
+  h.setSession({ ...last, permit });
+  await enqueueOverhaulHandoff(h.tx, permit, next, last, "", at("08:51:00"));
+  const ended = { ...last, endedAt: at("09:00:00"), itemProgress: [{ ...item, percent: 40 }] };
+  h.setSession({ ...ended, permit });
+  await enqueueOverhaulEnding(h.tx, permit, ended, at("09:00:00"));
+  assert.equal(h.rows[0].state, "SUCCESS");
+  assert.equal(h.rows.filter(row => row.kind === "OPEN").length, 1);
+  const calls: string[] = [];
+  await runOverhaulTelegramOutbox({ db: h.db, now: at("09:00:00"), deliver: async params => { calls.push(params.message); return success(); } });
+  assert.equal(calls.length, 3);
+  const ending = calls.find(message => message.includes("<b>KẾT THÚC NGÀY"))!;
+  assert.ok(ending);
+  assert.match(ending, /Cho phép: .*08:00/);
+  assert.match(ending, /10% → <b>40%/);
+  assert.match(ending, /Số nhân viên công tác: <b>2<\/b>/);
+  assert.match(ending, /Nhà thầu: Nhà thầu A \(NTA\)/);
+  assert.doesNotMatch(ending, /MỞ VÀ KẾT THÚC/);
+});
+
+test("Kết thúc sau bàn giao tính giới hạn từ giờ cho phép ban đầu", async t => {
+  const h = harness(t, "a");
+  await enqueueOverhaulOpening(h.tx, permit, session, new Map());
+  const next = nextSession("s2", "08:20:00");
+  h.setSession({ ...session, endedAt: next.openedAt, permit });
+  h.setSession({ ...next, permit });
+  await enqueueOverhaulHandoff(h.tx, permit, session, next, "", at("08:21:00"));
+  const ended = { ...next, endedAt: at("08:40:00") };
+  h.setSession({ ...ended, permit });
+  await enqueueOverhaulEnding(h.tx, permit, ended, at("08:40:00"));
+  const ending = h.rows.find(row => row.kind === "END")!;
+  assert.equal(ending.combinedMessage, null);
+  assert.match(ending.message!, /Cho phép: .*08:00/);
+});
+
+test("Kết thúc trước 30 phút sau bàn giao gộp một lần, giữ ảnh chụp khi thêm hạng mục", async t => {
+  const h = harness(t, "a");
+  await enqueueOverhaulOpening(h.tx, permit, session, new Map());
+  const next = nextSession("s2", "08:10:00");
+  h.setSession({ ...session, endedAt: next.openedAt, permit });
+  h.setSession({ ...next, permit });
+  await enqueueOverhaulHandoff(h.tx, permit, session, next, "", at("08:11:00"));
+  const item = { source: "BOILER" as const, sheet: "Lò phó - Cơ", code: "1.1", device: "Bơm", content: "Kiểm tra", method: "", percent: 20, done: true, note: "" };
+  await captureOverhaulTelegramBaseline(h.tx, next.id, [item], new Map([[overhaulItemKey(item), 10]]));
+  const ended = { ...next, endedAt: at("08:20:00"), itemProgress: [item] };
+  h.setSession({ ...ended, permit });
+  await enqueueOverhaulEnding(h.tx, permit, ended, at("08:20:00"));
+  const calls: string[] = [];
+  await runOverhaulTelegramOutbox({ db: h.db, now: at("08:20:00"), deliver: async params => { calls.push(params.message); return success(); } });
+  assert.equal(calls.length, 2);
+  assert.equal(calls.filter(message => message.includes("MỞ VÀ KẾT THÚC")).length, 1);
+  assert.match(calls[1], /10% → <b>20%/);
+  assert.match(calls[1], /Cho phép: .*08:00/);
+});
+
+test("Bàn giao lượt cũ chưa có báo mở không tạo báo mở mới", async t => {
+  const h = harness(t, "a");
+  const next = nextSession("s2", "09:00:00");
+  h.setSession({ ...session, endedAt: next.openedAt, permit });
+  h.setSession({ ...next, permit });
+  await enqueueOverhaulHandoff(h.tx, permit, session, next, "", at("09:01:00"));
+  assert.deepEqual(h.rows.map(row => row.kind), ["HANDOFF"]);
+});
+
+test("Bàn giao lịch cũ dạng mảng giữ giờ mở và tiến độ chưa cập nhật lại ở CHTT sau", async t => {
+  const h = harness(t, "a");
+  const item = { source: "BOILER" as const, sheet: "Lò phó - Cơ", code: "1.1", percent: 20, done: true, note: "Ghi chú trước bàn giao" };
+  const first = { ...session, itemProgress: [item] };
+  await enqueueOverhaulOpening(h.tx, permit, first, new Map());
+  h.rows[0].baseline = [{ source: item.source, sheet: item.sheet, code: item.code, percent: 10 }];
+  const next = nextSession("s2", "08:10:00");
+  h.setSession({ ...first, endedAt: next.openedAt, permit });
+  h.setSession({ ...next, permit });
+  await enqueueOverhaulHandoff(h.tx, permit, first, next, "", at("08:11:00"));
+  const ended = { ...next, endedAt: at("09:00:00") };
+  h.setSession({ ...ended, permit });
+  await enqueueOverhaulEnding(h.tx, permit, ended, at("09:00:00"));
+  const ending = h.rows.find(row => row.kind === "END")!;
+  assert.match(ending.message!, /10% → <b>20%/);
+  assert.match(ending.message!, /Ghi chú trước bàn giao/);
+  assert.match(ending.message!, /Cho phép: .*08:00/);
+});
+
+test("Bàn giao trong lúc mở đang gửi không tạo lại báo mở và giữ khoá gửi gốc", async t => {
+  const h = harness(t, "a");
+  await enqueueOverhaulOpening(h.tx, permit, session, new Map());
+  let release!: () => void;
+  let started!: () => void;
+  const entered = new Promise<void>(resolve => { started = resolve; });
+  const waiting = new Promise<void>(resolve => { release = resolve; });
+  const calls: string[] = [];
+  const openingRun = runOverhaulTelegramOutbox({ db: h.db, now: at("08:30:00"), deliver: async params => {
+    calls.push(params.message); started(); await waiting; h.sentOpening.add("a"); return success();
+  } });
+  await entered;
+  const next = nextSession("s2", "08:35:00");
+  h.setSession({ ...session, endedAt: next.openedAt, permit });
+  h.setSession({ ...next, permit });
+  await enqueueOverhaulHandoff(h.tx, permit, session, next, "", at("08:36:00"));
+  assert.equal(h.rows[0].dedupeKey, "S:s1:OPEN");
+  assert.equal(h.rows[0].state, "PROCESSING");
+  release(); await openingRun;
+  const ended = { ...next, endedAt: at("09:00:00") };
+  h.setSession({ ...ended, permit });
+  await enqueueOverhaulEnding(h.tx, permit, ended, at("09:00:00"));
+  await runOverhaulTelegramOutbox({ db: h.db, now: at("09:00:00"), deliver: async params => { calls.push(params.message); return success(); } });
+  assert.equal(calls.length, 3);
+  assert.equal(calls.filter(message => message.includes("<b>MỞ NGÀY")).length, 1);
+  assert.match(calls[2], /<b>KẾT THÚC NGÀY/);
+});
+
+test("Bàn giao lỗi gửi được thử lại bằng đúng bản tin riêng, không phát sinh mở/kết thúc", async t => {
+  const h = harness(t, "a");
+  const next = nextSession("s2", "09:00:00");
+  h.setSession({ ...next, permit });
+  await enqueueOverhaulHandoff(h.tx, permit, session, next, "Ghi chú", at("09:01:00"));
+  const calls: string[] = [];
+  await runOverhaulTelegramOutbox({ db: h.db, now: at("09:01:00"), deliver: async params => { calls.push(params.message); return failed(); } });
+  await enqueueOverhaulHandoff(h.tx, permit, session, next, "Ghi chú thay đổi", at("09:02:00"));
+  await runOverhaulTelegramOutbox({ db: h.db, now: at("09:02:00"), deliver: async params => { calls.push(params.message); return success(); } });
+  assert.equal(h.rows.length, 1);
+  assert.equal(h.rows[0].state, "SUCCESS");
+  assert.equal(calls[0], calls[1]);
+  assert.match(calls[1], /BÀN GIAO CHTT/);
+});
+
+test("Tổng hợp cuối ngày lấy mã đơn vị từ danh bạ theo đúng nhà thầu", async () => {
+  const db = {
+    workPermitSession: { findMany: async () => [{ ...session, endedAt: at("09:00:00"), permit }] },
+    workPermitPerson: {
+      findMany: async () => [{ id: "ch1", company: "Nhà thầu A" }, { id: "w1", company: "Nhà thầu A" }],
+      groupBy: async () => [{ company: "Nhà thầu A", _count: { _all: 100 } }],
+    },
+    workPermitCompany: { findMany: async () => [{ name: "Nhà thầu A", code: "IDC" }] },
+  } as unknown as typeof prisma;
+  const digest = await buildOverhaulDailyDigest(new Date("2026-10-13T00:00:00+07:00"), db);
+  assert.match(digest.message!, /Nhà thầu A \(IDC\)/);
+  assert.match(digest.message!, /4299\/2026\/VH1-NĐDH/);
+  assert.match(digest.message!, /Tổng nhân sự đại tu: <b>100/);
+  assert.match(digest.message!, /Làm việc trong ngày: <b>2/);
 });
 
 test("Hai worker chạy đồng thời chỉ một worker claim và gửi", async t => {

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildOverhaulDailyMessage, buildOverhaulSessionMessage, changedTelegramProgress, openingDueAt, sessionTelegramWorkerCount, splitOverhaulTelegramMessage, type ProgressBaseline, type TelegramPermit, type TelegramSession } from "../../lib/work-permit-telegram-report";
+import { buildOverhaulDailyMessage, buildOverhaulHandoffMessage, buildOverhaulSessionMessage, changedTelegramProgress, endedBeforeOpeningDue, openingDueAt, sessionTelegramWorkerCount, splitOverhaulTelegramMessage, type ProgressBaseline, type TelegramPermit, type TelegramSession } from "../../lib/work-permit-telegram-report";
 import { terminalMessageForChat } from "../../lib/server/work-permit-telegram";
 
 const permit: TelegramPermit = { id: "pct-1", number: "4299", year: 2026, content: "Đại tu <bơm> & kiểm tra", teamName: "Nhà thầu A", teamType: "CONTRACTOR", contractorScope: "OVERHAUL", position: "Lò phó" };
@@ -15,9 +15,22 @@ const session: TelegramSession = { id: "session-1", commanderId: "commander", co
     { personId: "commander", code: "CH1", name: "Nguyễn Văn A", company: "Nhà thầu A" },
   ] };
 
-test("Lịch mở đúng một giờ sau giờ cho phép, kể cả qua 0h", () => {
-  assert.equal(openingDueAt(at("08:00:00")).getTime(), at("09:00:00").getTime());
-  assert.equal(openingDueAt(at("23:30:00")).toISOString(), "2026-10-12T17:30:00.000Z");
+test("Lịch mở đúng 30 phút sau giờ cho phép, kể cả qua 0h", () => {
+  assert.equal(openingDueAt(at("08:00:00")).getTime(), at("08:30:00").getTime());
+  assert.equal(openingDueAt(at("23:45:00")).toISOString(), "2026-10-12T17:15:00.000Z");
+});
+test("Chỉ gộp khi kết thúc trước đủ 30 phút", () => {
+  assert.equal(endedBeforeOpeningDue({ ...session, endedAt: at("08:29:59") }), true);
+  for (const endedAt of [at("08:30:00"), at("09:00:00"), at("07:59:59"), null]) assert.equal(endedBeforeOpeningDue({ ...session, endedAt }), false);
+});
+test("Bàn giao có CHTT cũ/mới, mã đơn vị, trạng thái tiếp tục và escape HTML", () => {
+  const message = buildOverhaulHandoffMessage({ ...permit, companyCode: "IDC&1" }, session, { ...session, commanderName: "Trần <B>", openedAt: at("08:15:00") }, "Kiểm tra & tiếp tục", at("08:20:00"));
+  assert.match(message, /BÀN GIAO CHTT ĐẠI TU/);
+  assert.match(message, /CHTT bàn giao: Nguyễn Văn A/);
+  assert.match(message, /CHTT nhận bàn giao: Trần &lt;B&gt;/);
+  assert.match(message, /Nhà thầu: Nhà thầu A \(IDC&amp;1\)/);
+  assert.match(message, /PCT tiếp tục làm việc/);
+  assert.doesNotMatch(message, /KẾT THÚC NGÀY|MỞ NGÀY/);
 });
 test("Báo kết thúc đếm người đã ra, không trùng người và không gồm CHTT/người chưa vào", () => {
   assert.equal(sessionTelegramWorkerCount(session, at("09:00:00")), 1);
@@ -50,11 +63,12 @@ test("Từng nhóm nhận bản kết thúc hoặc bản gộp theo việc đã 
 });
 test("Tổng hợp dùng danh sách số hiệu PCT, không đếm phiếu, không tách CHTT, bỏ nhà thầu không làm", () => {
   const message = buildOverhaulDailyMessage("2026-10-12", [
-    { company: "Nhà thầu A", totalPersonnel: 100, worked: 30, permitNumbers: ["4299/2026/VH1-NĐDH", "4299/2026/VH1-NĐDH", "4300/2026/VH1-NĐDH"] },
+    { company: "Nhà thầu A", companyCode: "IDC", totalPersonnel: 100, worked: 30, permitNumbers: ["4299/2026/VH1-NĐDH", "4299/2026/VH1-NĐDH", "4300/2026/VH1-NĐDH"] },
     { company: "Không làm", totalPersonnel: 50, worked: 0, permitNumbers: [] },
   ]);
   assert.equal(message.split("4299/2026/VH1-NĐDH").length - 1, 1);
   assert.match(message, /4300\/2026\/VH1-NĐDH/);
+  assert.match(message, /Nhà thầu A \(IDC\)/);
   assert.match(message, /Tổng nhân sự đại tu: <b>100<\/b>/);
   assert.match(message, /Làm việc trong ngày: <b>30<\/b>/);
   assert.doesNotMatch(message, /Không làm|CHTT|Số lượng PCT/);

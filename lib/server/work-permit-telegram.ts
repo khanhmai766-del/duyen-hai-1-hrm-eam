@@ -1,8 +1,10 @@
 import { Prisma, type WorkPermit, type WorkPermitSession, type WorkPermitTelegramOutbox } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { deliverTelegramNotification, telegramChatIds, telegramEnabled } from "@/lib/telegram";
-import { buildOverhaulDailyMessage, buildOverhaulSessionMessage, openingDueAt, overhaulTelegramEligible, splitOverhaulTelegramMessage, type ProgressBaseline } from "@/lib/work-permit-telegram-report";
-import { overhaulItemKey, overhaulItemsOf, type OverhaulItemSnapshot } from "@/lib/work-permit-overhaul";
+import { buildOverhaulDailyMessage, buildOverhaulHandoffMessage, buildOverhaulSessionMessage, endedBeforeOpeningDue, openingDueAt, overhaulTelegramEligible, splitOverhaulTelegramMessage, type ProgressBaseline, type TelegramSession } from "@/lib/work-permit-telegram-report";
+import { overhaulItemKey, overhaulItemProgressOf, overhaulItemsOf, type OverhaulItemSnapshot } from "@/lib/work-permit-overhaul";
+import { isSessionCommander } from "@/lib/work-permits";
+import { sessionMembers } from "@/lib/server/work-permit-attendance";
 import { loadDailyWorkingByCompany } from "@/lib/server/work-permit-daily-working";
 import { permitWorkingDay } from "@/lib/work-permit-daily-people";
 import { vietnamDayWindow } from "@/lib/vietnam-time";
@@ -19,8 +21,44 @@ export function overhaulTelegramEnabled() {
 }
 
 function baselines(value: unknown): ProgressBaseline[] {
+  if (value && typeof value === "object" && !Array.isArray(value) && "items" in value) value = value.items;
   return Array.isArray(value) ? value.filter((item): item is ProgressBaseline => item && typeof item === "object"
     && typeof item.code === "string" && typeof item.sheet === "string" && typeof item.source === "string" && typeof item.percent === "number") : [];
+}
+
+type OpeningContext = { openedAt: string; sessionIds: string[]; items: ProgressBaseline[] };
+function openingContext(value: unknown, session: WorkPermitSession): OpeningContext {
+  const stored = value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+  const openedAt = typeof stored.openedAt === "string" && Number.isFinite(new Date(stored.openedAt).getTime()) ? stored.openedAt : session.openedAt.toISOString();
+  const sessionIds = Array.isArray(stored.sessionIds) ? stored.sessionIds.filter((id): id is string => typeof id === "string") : [];
+  return { openedAt, sessionIds: [...new Set([...sessionIds, session.id])], items: baselines(value) };
+}
+
+type ReportDb = Pick<Prisma.TransactionClient, "workPermitSession" | "workPermitCompany">;
+async function permitWithCompanyCode(db: ReportDb, permit: WorkPermit, company: string) {
+  const row = await db.workPermitCompany.findUnique({ where: { name: company || permit.teamName }, select: { code: true } });
+  return { ...permit, companyCode: row?.code ?? "" };
+}
+
+/** Một ngày làm việc tiếp tục qua các lần bàn giao: giữ giờ cho phép, nhân sự và tiến độ toàn chuỗi. */
+async function reportingSession(db: ReportDb, session: WorkPermitSession, opening: WorkPermitTelegramOutbox | null): Promise<TelegramSession> {
+  const context = openingContext(opening?.baseline, session);
+  if (context.sessionIds.length === 1) return { ...session, openedAt: new Date(context.openedAt) };
+  const previous = await db.workPermitSession.findMany({ where: { permitId: session.permitId, id: { in: context.sessionIds.filter(id => id !== session.id) } } });
+  const byId = new Map(previous.map(row => [row.id, row]));
+  const chain = context.sessionIds.map(id => id === session.id ? session : byId.get(id)).filter((row): row is WorkPermitSession => Boolean(row));
+  const progress = new Map(chain.flatMap(row => overhaulItemProgressOf(row.itemProgress).filter(item => item.done).map(item => [overhaulItemKey(item), item] as const)));
+  return { ...session, openedAt: new Date(context.openedAt), itemProgress: [...progress.values()],
+    members: chain.flatMap(row => sessionMembers(row.members).filter(member => !isSessionCommander(member, row))) };
+}
+
+async function findOpening(db: Pick<Prisma.TransactionClient, "workPermitTelegramOutbox">, sessionId: string) {
+  return db.workPermitTelegramOutbox.findFirst({ where: { sessionId, kind: "OPEN" } });
+}
+
+async function lockOpening(tx: Prisma.TransactionClient, sessionId: string) {
+  await tx.$queryRaw`SELECT "id" FROM "WorkPermitTelegramOutbox" WHERE "sessionId" = ${sessionId} AND "kind" = 'OPEN' FOR UPDATE`;
+  return findOpening(tx, sessionId);
 }
 function frozenMessages(value: unknown): Record<string, string[]> | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
@@ -34,46 +72,70 @@ export async function enqueueOverhaulOpening(tx: Prisma.TransactionClient, permi
   const baseline = overhaulItemsOf(permit.overhaulItems).map(item => ({ source: item.source, sheet: item.sheet, code: item.code, percent: previous.get(overhaulItemKey(item)) ?? 0 }));
   const dueAt = openingDueAt(session.openedAt);
   await tx.workPermitTelegramOutbox.upsert({ where: { dedupeKey: openKey(session.id) }, update: {},
-    create: { dedupeKey: openKey(session.id), permitId: permit.id, sessionId: session.id, kind: "OPEN", dueAt, nextAttemptAt: dueAt, baseline } });
+    create: { dedupeKey: openKey(session.id), permitId: permit.id, sessionId: session.id, kind: "OPEN", dueAt, nextAttemptAt: dueAt,
+      baseline: { items: baseline, openedAt: session.openedAt.toISOString(), sessionIds: [session.id] } } });
 }
 
 /** Hạng mục bổ sung sau khi mở ngày: chụp % trước lần cập nhật đầu tiên của mục đó. */
 export async function captureOverhaulTelegramBaseline(tx: Prisma.TransactionClient, sessionId: string, items: OverhaulItemSnapshot[], previous: Map<string, number>) {
   if (!overhaulTelegramEnabled()) return;
-  const key = openKey(sessionId);
-  await tx.$queryRaw`SELECT "id" FROM "WorkPermitTelegramOutbox" WHERE "dedupeKey" = ${key} FOR UPDATE`;
-  const row = await tx.workPermitTelegramOutbox.findUnique({ where: { dedupeKey: key } });
+  const row = await lockOpening(tx, sessionId);
   if (!row) return;
   const baseline = baselines(row.baseline);
   const known = new Set(baseline.map(overhaulItemKey));
   const added = items.filter(item => !known.has(overhaulItemKey(item)))
     .map(item => ({ source: item.source, sheet: item.sheet, code: item.code, percent: previous.get(overhaulItemKey(item)) ?? 0 }));
-  if (added.length) await tx.workPermitTelegramOutbox.update({ where: { id: row.id }, data: { baseline: [...baseline, ...added] } });
+  if (added.length) {
+    const items = [...baseline, ...added];
+    const stored = row.baseline && typeof row.baseline === "object" && !Array.isArray(row.baseline) ? row.baseline : null;
+    await tx.workPermitTelegramOutbox.update({ where: { id: row.id }, data: { baseline: stored ? { ...stored, items } : items } });
+  }
+}
+
+/** Bàn giao không kết thúc ngày và không tạo một lịch mở ngày mới. */
+export async function enqueueOverhaulHandoff(tx: Prisma.TransactionClient, permit: WorkPermit, previous: WorkPermitSession, next: WorkPermitSession, note: string, now = new Date()) {
+  if (!overhaulTelegramEnabled() || !overhaulTelegramEligible(permit)) return;
+  const opening = await lockOpening(tx, previous.id);
+  if (opening) {
+    const context = openingContext(opening.baseline, previous);
+    await tx.workPermitTelegramOutbox.update({ where: { id: opening.id }, data: { sessionId: next.id,
+      baseline: { ...context, sessionIds: [...context.sessionIds, next.id] } } });
+  }
+  const key = `S:${previous.id}:HANDOFF`;
+  const codedPermit = await permitWithCompanyCode(tx, permit, next.company);
+  await tx.workPermitTelegramOutbox.upsert({ where: { dedupeKey: key }, update: {}, create: {
+    dedupeKey: key, permitId: permit.id, sessionId: next.id, kind: "HANDOFF", dueAt: now, nextAttemptAt: now,
+    message: buildOverhaulHandoffMessage(codedPermit, previous, next, note, now),
+  } });
 }
 
 /** Cùng transaction với kết thúc: chốt nội dung và huỷ lịch mở còn chờ, nên không mất sự kiện khi reload. */
 export async function enqueueOverhaulEnding(tx: Prisma.TransactionClient, permit: WorkPermit, session: WorkPermitSession, now = new Date()) {
   if (!overhaulTelegramEnabled() || !overhaulTelegramEligible(permit)) return;
-  const opening = await tx.workPermitTelegramOutbox.findUnique({ where: { dedupeKey: openKey(session.id) } });
+  const opening = await lockOpening(tx, session.id);
   const baseline = baselines(opening?.baseline);
-  await tx.workPermitTelegramOutbox.updateMany({ where: { dedupeKey: openKey(session.id), state: { in: ["PENDING", "FAILED"] } },
+  if (opening) await tx.workPermitTelegramOutbox.updateMany({ where: { id: opening.id, state: { in: ["PENDING", "FAILED"] } },
     data: { state: "CANCELED", completedAt: now } });
+  const reportSession = await reportingSession(tx, session, opening);
+  const codedPermit = await permitWithCompanyCode(tx, permit, session.company);
   await tx.workPermitTelegramOutbox.upsert({ where: { dedupeKey: endKey(session.id) }, update: {},
     create: { dedupeKey: endKey(session.id), permitId: permit.id, sessionId: session.id, kind: "END", dueAt: now, nextAttemptAt: now,
-      message: buildOverhaulSessionMessage(permit, session, "END", baseline, now),
-      combinedMessage: buildOverhaulSessionMessage(permit, session, "COMBINED", baseline, now) } });
+      message: buildOverhaulSessionMessage(codedPermit, reportSession, "END", baseline, now),
+      combinedMessage: opening && endedBeforeOpeningDue(reportSession) ? buildOverhaulSessionMessage(codedPermit, reportSession, "COMBINED", baseline, now) : null } });
 }
 
 /** Bản tin 0h của ngày vừa kết thúc: chỉ PCT/nhân sự thuộc đại tu, số hiệu mỗi PCT không trùng. */
-export async function buildOverhaulDailyDigest(now = new Date()) {
+export async function buildOverhaulDailyDigest(now = new Date(), db = prisma) {
   const day = permitWorkingDay(vietnamDayWindow(now, -1).start);
-  const [daily, roster] = await Promise.all([
-    loadDailyWorkingByCompany(day, now, true),
-    prisma.workPermitPerson.groupBy({ by: ["company"], where: { scope: "OVERHAUL" }, _count: { _all: true } }),
+  const [daily, roster, companies] = await Promise.all([
+    loadDailyWorkingByCompany(day, now, true, db),
+    db.workPermitPerson.groupBy({ by: ["company"], where: { scope: "OVERHAUL" }, _count: { _all: true } }),
+    db.workPermitCompany.findMany({ select: { name: true, code: true } }),
   ]);
   const totals = new Map(roster.map(row => [row.company, row._count._all]));
+  const codes = new Map(companies.map(row => [row.name, row.code]));
   const contractors = [...daily.byCompany].filter(([, count]) => count > 0).map(([company, worked]) => ({
-    company, worked, totalPersonnel: totals.get(company) ?? 0,
+    company, companyCode: codes.get(company) ?? "", worked, totalPersonnel: totals.get(company) ?? 0,
     permitNumbers: [...(daily.permitsByCompany.get(company)?.values() ?? [])].sort((a, b) => a.localeCompare(b, "vi", { numeric: true })),
   })).sort((a, b) => a.company.localeCompare(b.company, "vi"));
   return { day, contractors, message: contractors.length ? buildOverhaulDailyMessage(day, contractors) : null };
@@ -92,23 +154,34 @@ async function prepareMessages(row: WorkPermitTelegramOutbox, now: Date, db = pr
   if (frozen) return { messages: Object.fromEntries(Object.entries(frozen).filter(([chat]) => chats.includes(chat))) };
   let message = row.message;
   if (row.kind === "OPEN") {
-    const session = row.sessionId ? await db.workPermitSession.findUnique({ where: { id: row.sessionId }, include: { permit: true } }) : null;
+    let session = row.sessionId ? await db.workPermitSession.findUnique({ where: { id: row.sessionId }, include: { permit: true } }) : null;
+    // Bàn giao có thể vừa chuyển lịch này sang lần mới trong khi worker đang đọc lần cũ.
+    if (session?.endedAt) {
+      const latest = await db.workPermitTelegramOutbox.findUnique({ where: { id: row.id } });
+      if (latest?.sessionId && latest.sessionId !== row.sessionId) {
+        row = latest;
+        session = await db.workPermitSession.findUnique({ where: { id: latest.sessionId }, include: { permit: true } });
+      }
+    }
     // Kết thúc đã được lưu trong cùng transaction với hàng đợi END. Không gửi một thông báo mở muộn.
     if (!session || session.endedAt) return { canceled: true as const };
-    message = buildOverhaulSessionMessage(session.permit, session, "OPEN", baselines(row.baseline), now);
+    message = buildOverhaulSessionMessage(await permitWithCompanyCode(db, session.permit, session.company), await reportingSession(db, session, row), "OPEN", baselines(row.baseline), now);
   }
   if (!message) throw new Error("Nội dung báo cáo PCT đang trống");
   const messages: Record<string, string[]> = {};
   if (row.kind === "END" && row.sessionId) {
-    const opening = await db.workPermitTelegramOutbox.findUnique({ where: { dedupeKey: openKey(row.sessionId) } });
+    const opening = await findOpening(db, row.sessionId);
     if (opening?.state === "PROCESSING" && opening.claimedAt && opening.claimedAt.getTime() > now.getTime() - STALE_MS) return { deferred: true as const };
     // Dừng cả lịch mở bị treo/đang chờ thử lại trước khi quyết định nội dung cho từng nhóm.
     if (!dryRun && opening && opening.state !== "SUCCESS" && opening.state !== "CANCELED") return { cancelOpening: opening.id };
     const sent = await db.telegramNotificationLog.findMany({ where: {
-      type: DELIVERY_TYPE, periodKey: { startsWith: `${openKey(row.sessionId)}:part:` }, status: "SENT", chatId: { in: chats },
+      type: DELIVERY_TYPE, periodKey: { startsWith: `${opening?.dedupeKey ?? openKey(row.sessionId)}:part:` }, status: "SENT", chatId: { in: chats },
     }, select: { chatId: true } });
     const openedChats = new Set(sent.map(log => log.chatId));
-    for (const chat of chats) messages[chat] = splitOverhaulTelegramMessage(terminalMessageForChat(openedChats.has(chat), message, row.combinedMessage));
+    const session = await db.workPermitSession.findUnique({ where: { id: row.sessionId } });
+    // Kiểm cả bản tin còn chờ từ phiên bản cũ: thiếu lịch mở hoặc quá 30 phút chỉ báo kết thúc.
+    const canCombine = opening && session && endedBeforeOpeningDue({ ...session, openedAt: new Date(openingContext(opening.baseline, session).openedAt) });
+    for (const chat of chats) messages[chat] = splitOverhaulTelegramMessage(terminalMessageForChat(openedChats.has(chat), message, canCombine ? row.combinedMessage : null));
   } else {
     for (const chat of chats) messages[chat] = splitOverhaulTelegramMessage(message);
   }

@@ -1168,9 +1168,9 @@ model WorkPermitTelegramOutbox {
   dedupeKey       String    @unique
   permitId        String?
   sessionId       String?
-  kind            String    // OPEN | END | DAILY
+  kind            String    // OPEN | END | HANDOFF | DAILY
   dueAt           DateTime
-  baseline        Json?     // Tiến độ từng hạng mục trước lần làm việc, bổ sung khi hạng mục mới được cập nhật.
+  baseline        Json?     // % trước ngày làm việc, giờ mở ban đầu và chuỗi lần làm việc qua bàn giao CHTT.
   message         String?
   combinedMessage String?
   messages        Json?     // Các đoạn tin đã chốt theo chatId; thử lại không đổi nội dung hoặc gửi lại đoạn đã thành công.
