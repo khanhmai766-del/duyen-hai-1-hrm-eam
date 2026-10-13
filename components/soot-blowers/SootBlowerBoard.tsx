@@ -257,7 +257,9 @@ export default function SootBlowerBoard() {
       </div>
 
       {/* ===== Sơ đồ + panel ===== */}
-      <div className="flex flex-col items-start gap-4 xl:flex-row">
+      {/* Màn rộng: khung sơ đồ/3D quyết định chiều cao, panel phải giãn bằng nó (nội dung đặt tuyệt đối
+          để không kéo cao hàng) và tự cuộn bên trong — hai khung luôn bằng đáy. */}
+      <div className="flex flex-col items-start gap-4 xl:flex-row xl:items-stretch">
         <div className="relative w-full min-w-0 flex-1 overflow-x-auto rounded-xl border border-slate-300" style={{ background: mode === "dcs" ? DCS_BG : undefined }}>
           {mode === "3d" ? (
             <Boiler3D type={typeTab} statuses={statuses} selected={selected} onSelect={select} />
@@ -277,13 +279,15 @@ export default function SootBlowerBoard() {
           )}
         </div>
 
-        <aside className="w-full shrink-0 overflow-y-auto rounded-xl border border-slate-200 bg-white xl:sticky xl:top-4 xl:max-h-[calc(100vh-2rem)] xl:w-[370px]">
-          {mode === "dcs" && <Minimap pageKey={pageKey} board={board} selected={selected} onPage={switchPage} onPick={select} />}
-          {selected ? (
-            <DetailPanel key={`${machine}-${selected}`} machine={machine} tag={selected} board={board} canManage={canManage} onBack={() => setSelected(null)} />
-          ) : (
-            <OpenList board={board} onPick={select} />
-          )}
+        <aside className="relative w-full shrink-0 overflow-hidden rounded-xl border border-slate-200 bg-white xl:w-[370px]">
+          <div className="xl:absolute xl:inset-0 xl:overflow-y-auto">
+            {mode === "dcs" && <Minimap pageKey={pageKey} board={board} selected={selected} onPage={switchPage} onPick={select} />}
+            {selected ? (
+              <DetailPanel key={`${machine}-${selected}`} machine={machine} tag={selected} board={board} canManage={canManage} onBack={() => setSelected(null)} />
+            ) : (
+              <OpenList board={board} onPick={select} />
+            )}
+          </div>
         </aside>
       </div>
     </div>
