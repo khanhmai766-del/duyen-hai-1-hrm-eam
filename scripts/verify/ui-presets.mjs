@@ -775,6 +775,26 @@ export const PRESETS = {
   "pct-dai-tu": overhaulPreset(false),
   "pct-dai-tu-qua-han": overhaulPreset(true),
   "pct-dai-tu-cap-nhat-sau": overhaulPreset(false, true),
+  "voi-thoi-bui-syc": {
+    description: "Vòi thổi bụi: danh sách vòi cần xử lý và chi tiết IK21 có khiếm khuyết SYC lấy từ cây thiết bị — chỉ bấm, không ghi",
+    async prepare() {
+      return {};
+    },
+    // Tab "Vòi thổi bụi" chỉ là state trong trang Lưu trữ, nên dùng query giả để phân biệt hai trạng thái chụp.
+    routes: () => ["/documents/archive?vtb=list", "/documents/archive?vtb=ik21"],
+    async interact(page, route) {
+      // Trên điện thoại tab này bị thanh "BGTS Tuabin Ngừng / Bộ lọc" đè (lỗi sẵn có của trang Lưu trữ) → bấm thẳng phần tử.
+      await page.getByRole("button", { name: "Vòi thổi bụi" }).first().evaluate((el) => el.click());
+      await page.getByText("Vòi cần xử lý").first().waitFor({ timeout: 60_000 });
+      if (route.endsWith("vtb=ik21")) {
+        await page.getByLabel("Tìm tag vòi").fill("IK21");
+        await page.getByRole("button", { name: "Tìm", exact: true }).click();
+        await page.getByRole("button", { name: "← Vòi cần xử lý" }).waitFor();
+        await page.getByRole("button", { name: /^SCĐ/ }).first().click();
+      }
+      await page.waitForTimeout(500);
+    },
+  },
   "pct-lam-viec": {
     description: "Màn hình làm việc PCT nhà thầu, bảng Đang làm việc, popup phiếu, hộp kết thúc — lần làm việc giả lập",
     async prepare({ prisma }) {

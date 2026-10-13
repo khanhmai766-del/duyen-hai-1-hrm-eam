@@ -25,6 +25,12 @@ export interface SootBlowerDefect {
   createdAt: string;
   resolvedAt: string | null;
   resolvedBy: string | null;
+  /** MANUAL = ghi nhận trên trang này; SYC = phiếu khiếm khuyết chung (chỉ đọc, đóng ở trang Khiếm khuyết) */
+  source: "MANUAL" | "SYC";
+  requestNumber?: string | null;
+  sycStatus?: string;
+  /** SYC: true nếu phiếu đã gắn node trên cây, false nếu khớp theo tên/KKS trong nội dung */
+  linked?: boolean;
 }
 
 export function useSootBlowers(machine: string) {

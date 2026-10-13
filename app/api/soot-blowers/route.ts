@@ -4,6 +4,7 @@ import { ok, fail, requireUser, handle, audit } from "@/lib/api";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
 import { assertOilSootAccess } from "@/lib/server-access";
 import { parseSootBlowerMachine as parseMachine, SOOT_BLOWER_TAGS } from "@/lib/soot-blower-layout";
+import { loadSootBlowerSycDefects } from "@/lib/server/soot-blower-tree-defects";
 
 export const dynamic = "force-dynamic";
 
@@ -19,7 +20,7 @@ export async function GET(req: NextRequest) {
     const machine = parseMachine(req.nextUrl.searchParams.get("machine"));
     if (!machine) return fail("Tổ máy không hợp lệ");
 
-    const [blowers, open, history] = await Promise.all([
+    const [blowers, open, history, syc] = await Promise.all([
       prisma.sootBlower.findMany({ where: { machine }, orderBy: { tag: "asc" } }),
       prisma.sootBlowerDefect.findMany({ where: { machine, resolvedAt: null }, orderBy: { createdAt: "asc" } }),
       prisma.sootBlowerDefect.findMany({
@@ -27,8 +28,11 @@ export async function GET(req: NextRequest) {
         orderBy: { resolvedAt: "desc" },
         take: HISTORY_LIMIT,
       }),
+      // SYC (khiếm khuyết chung) của 24 vòi IK, lấy theo nhánh cây thiết bị
+      loadSootBlowerSycDefects(machine),
     ]);
-    return ok({ blowers, defects: [...open, ...history] }, { machine });
+    const manual = [...open, ...history].map((d) => ({ ...d, source: "MANUAL" as const }));
+    return ok({ blowers, defects: [...manual, ...syc] }, { machine });
   });
 }
 

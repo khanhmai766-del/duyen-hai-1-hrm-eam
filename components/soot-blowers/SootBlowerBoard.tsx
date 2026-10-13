@@ -2,6 +2,7 @@
 
 import React, { useMemo, useState } from "react";
 import dynamic from "next/dynamic";
+import Link from "next/link";
 import { Box, Factory, Loader2, Map as MapIcon } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -136,6 +137,9 @@ export default function SootBlowerBoard() {
       const target = d.resolvedAt ? history : open;
       target.set(d.tag, [...(target.get(d.tag) ?? []), d]);
     }
+    // ghi nhận tay và SYC trộn chung: đang mở cũ trước, lịch sử mới đóng trước
+    for (const list of open.values()) list.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+    for (const list of history.values()) list.sort((a, b) => (b.resolvedAt ?? "").localeCompare(a.resolvedAt ?? ""));
     const unavail = new Set((data?.blowers ?? []).filter((b) => b.status === "unavailable").map((b) => b.tag));
     return { open, history, unavail };
   }, [data]);
@@ -356,8 +360,10 @@ function TypeTabs({
                 <span className="mono">{t}</span>
               </>
             )}
-            <span className={`tnum hidden text-xs sm:inline ${active ? "text-slate-300" : "text-slate-400"}`}>{tags.length}</span>
-            {issues > 0 && (
+            {/* có số vòi lỗi thì nhường chỗ: ô chia đều, màn vừa không đủ chỗ cho cả tổng số lẫn số lỗi */}
+            <span className={`tnum hidden text-xs ${issues > 0 ? "2xl:inline" : "sm:inline"} ${active ? "text-slate-300" : "text-slate-400"}`}>{tags.length}</span>
+            {/* "Tất cả" không gắn số: đã có "có khiếm khuyết" ở đầu trang, và ô cuối hay bị cắt trên điện thoại */}
+            {issues > 0 && t !== "ALL" && (
               <span className={`tnum min-w-5 rounded-full px-1.5 text-[11px] font-bold ${active ? "bg-amber-400 text-slate-900" : "bg-amber-100 text-amber-800"}`}>{issues}</span>
             )}
           </button>
@@ -646,13 +652,39 @@ function OpenList({ board, onPick }: { board: Board; onPick: (tag: string) => vo
               {r.open.map((d) => (
                 <div key={d.id} className="mt-1.5 flex gap-1.5 text-xs text-slate-600">
                   <span className={`mono shrink-0 rounded border px-1 text-[10px] font-bold ${DEPT_UI[d.dept]}`}>{d.dept}</span>
-                  <span className="line-clamp-2">{d.description}</span>
+                  <span className="line-clamp-2">
+                    {d.source === "SYC" && <span className="mono font-semibold text-slate-400">SYC {d.requestNumber ?? "—"} · </span>}
+                    {d.description}
+                  </span>
                 </div>
               ))}
             </button>
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+/* Dòng đầu của khiếm khuyết lấy từ SYC: số phiếu (mở trang Khiếm khuyết) + tình trạng phiếu.
+   Phiếu SYC chỉ đọc ở đây — đóng phiếu bên trang Khiếm khuyết. */
+function SycLine({ d, machine }: { d: SootBlowerDefect; machine: string }) {
+  const href = d.requestNumber
+    ? `/defects?phan=${d.dept === "SCĐ" ? "dien" : "co"}&unit=${machine}&q=${encodeURIComponent(d.requestNumber)}`
+    : null;
+  return (
+    <div
+      className="mb-1 flex items-center gap-2 text-[11px]"
+      title={d.linked ? "Phiếu gắn với vòi trên cây thiết bị" : "Phiếu chưa gắn cây thiết bị — khớp theo tên vòi/KKS trong nội dung"}
+    >
+      {href ? (
+        <Link href={href} className="mono inline-flex min-h-8 items-center font-bold text-blue-700 hover:underline sm:min-h-0">
+          SYC {d.requestNumber}
+        </Link>
+      ) : (
+        <span className="mono font-bold text-slate-500">SYC</span>
+      )}
+      {d.sycStatus && <span className="rounded-full bg-slate-100 px-2 py-0.5 font-semibold text-slate-600">{d.sycStatus}</span>}
     </div>
   );
 }
@@ -812,12 +844,13 @@ function DetailPanel({
             ) : (
               list.map((d) => (
                 <div key={d.id} className="mb-2 rounded-lg border border-l-4 border-slate-200 border-l-yellow-400 p-3">
+                  {d.source === "SYC" && <SycLine d={d} machine={machine} />}
                   <div className="whitespace-pre-wrap text-sm text-slate-800">{d.description}</div>
                   <div className="mt-2 flex items-center gap-2">
                     <span className="mono text-[11px] text-slate-400">
                       {fmtDate(d.createdAt)} · {d.reportedBy ?? "—"}
                     </span>
-                    {canManage && (
+                    {canManage && d.source !== "SYC" && (
                       <button
                         type="button"
                         disabled={resolve.isPending}
@@ -845,9 +878,10 @@ function DetailPanel({
                     {fmtDate(d.createdAt)} → {fmtDate(d.resolvedAt)}
                   </span>
                 </div>
+                {d.source === "SYC" && <SycLine d={d} machine={machine} />}
                 <div className="mt-1 whitespace-pre-wrap text-sm text-slate-700">{d.description}</div>
                 <div className="text-[11px] text-slate-400">
-                  Ghi nhận: {d.reportedBy ?? "—"}
+                  {d.source === "SYC" ? "Cương vị" : "Ghi nhận"}: {d.reportedBy ?? "—"}
                   {d.resolvedBy ? ` · Đóng: ${d.resolvedBy}` : ""}
                 </div>
               </li>
