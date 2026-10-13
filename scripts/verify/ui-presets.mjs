@@ -781,18 +781,18 @@ export const PRESETS = {
       return {};
     },
     // Tab "Vòi thổi bụi" chỉ là state trong trang Lưu trữ, nên dùng query giả để phân biệt hai trạng thái chụp.
-    routes: () => ["/documents/archive?vtb=list", "/documents/archive?vtb=ik21", "/documents/archive?vtb=dcs", "/documents/archive?vtb=ir20"],
+    routes: () => ["/documents/archive?vtb=list", "/documents/archive?vtb=ik21", "/documents/archive?vtb=dcs", "/documents/archive?vtb=ir20", "/documents/archive?vtb=ikah03"],
     async interact(page, route) {
       // Trên điện thoại tab này bị thanh "BGTS Tuabin Ngừng / Bộ lọc" đè (lỗi sẵn có của trang Lưu trữ) → bấm thẳng phần tử.
       await page.getByRole("button", { name: "Vòi thổi bụi" }).first().evaluate((el) => el.click());
       await page.getByText("Vòi cần xử lý").first().waitFor({ timeout: 60_000 });
       if (route.endsWith("vtb=dcs")) await page.getByRole("button", { name: "Sơ đồ", exact: true }).click();
-      const pick = route.match(/vtb=(ik21|ir20)$/)?.[1];
+      const pick = route.match(/vtb=(ik21|ir20|ikah03)$/)?.[1];
       if (pick) {
         await page.getByLabel("Tìm tag vòi").fill(pick.toUpperCase());
         await page.getByRole("button", { name: "Tìm", exact: true }).click();
         await page.getByRole("button", { name: "← Vòi cần xử lý" }).waitFor();
-        await page.getByRole("button", { name: pick === "ir20" ? /^SCCN/ : /^SCĐ/ }).first().click();
+        await page.getByRole("button", { name: pick === "ik21" ? /^SCĐ/ : /^SCCN/ }).first().click();
       }
       await page.waitForTimeout(500);
     },

@@ -5,7 +5,8 @@ import { SOOT_BLOWER_TAGS, type SootBlowerDept } from "@/lib/soot-blower-layout"
 
 /*
  * Khiếm khuyết vòi thổi bụi lấy từ SYC (bảng Defect), theo nhánh cây thiết bị
- * "Hệ thống vòi thổi bụi": hành trình dài (IK01–IK24), hành trình ngắn (IR01–IR60), bộ hâm (IKEL01–IKEL10).
+ * "Hệ thống vòi thổi bụi": hành trình dài (IK01–IK24), hành trình ngắn (IR01–IR60), bộ hâm (IKEL01–IKEL10),
+ * APH (IKAH01–IKAH04, tag sơ đồ AH01–AH04).
  *
  * Cây vật lý chỉ có MỘT bộ node mã chuẩn DH1.S1.x; phiếu S2 gắn vào cùng node với
  * mappedDeviceUnit = "S2" (xem lib/equipment-units.ts canonicalSeq). Nên tổ máy lấy theo
@@ -23,13 +24,15 @@ const REQUEST_DEPT: Record<string, SootBlowerDept> = { "Điện": "SCĐ", "Cơ":
 /**
  * Nhóm vòi lấy từ cây: nhánh cha tìm theo tên (không phụ thuộc mã khi cây được sắp xếp lại),
  * node con có tên kết thúc bằng tag ("Máy thổi bụi hành trình ngắn IR07").
- * Thêm loại vòi khác (IKSH, IKAH…) thì thêm một dòng ở đây.
+ * Thêm loại vòi khác (IKSH…) thì thêm một dòng ở đây.
  */
 const TREE_GROUPS = [
   { prefix: "IK", parentName: "hành trình dài" },
   { prefix: "IR", parentName: "hành trình ngắn" },
   // đủ cụm "thổi bụi …": cây còn "Hệ thống bộ hâm", "Bộ hâm" ở nhánh khác
   { prefix: "IKEL", parentName: "thổi bụi bộ hâm" },
+  // cây còn nhiều nhánh "APH" khác (Hệ thống APH A/B, van, dầu bôi trơn…) → khớp đủ cụm
+  { prefix: "IKAH", parentName: "thổi bụi aph ikah" },
 ] as const;
 type Prefix = (typeof TREE_GROUPS)[number]["prefix"];
 
@@ -55,9 +58,14 @@ type TreeNode = { seq: string; tag: string; kksKey: string | null };
 
 const pad2 = (n: number) => String(n).padStart(2, "0");
 const compact = (s: string) => s.toUpperCase().replace(/\s+/g, "");
-const tagOf = (prefix: Prefix, n: string | number) => `${prefix}${pad2(Number(n))}`;
+/**
+ * Tag trên sơ đồ có thể khác tên vòi: IKAH lưu là AH01–AH04 (lib/soot-blower-layout.ts). Chỉ khớp
+ * "IKAH" trong nội dung, không khớp "AH0…" trơn — chuỗi đó có trong KKS AHU/chiller (A0SAC60AH004).
+ */
+const TAG_PREFIX: Partial<Record<Prefix, string>> = { IKAH: "AH" };
+const tagOf = (prefix: Prefix, n: string | number) => `${TAG_PREFIX[prefix] ?? prefix}${pad2(Number(n))}`;
 
-/** Node vòi của mọi nhóm trong TREE_GROUPS (24 IK + 60 IR + 10 IKEL). */
+/** Node vòi của mọi nhóm trong TREE_GROUPS (24 IK + 60 IR + 10 IKEL + 4 IKAH). */
 async function loadTreeNodes(): Promise<TreeNode[]> {
   const parents = await prisma.equipmentNode.findMany({
     where: { OR: TREE_GROUPS.map((g) => ({ name: { contains: g.parentName, mode: "insensitive" as const } })), childCount: { gt: 0 } },
@@ -147,7 +155,7 @@ const SELECT = {
 
 type Row = Prisma.DefectGetPayload<{ select: typeof SELECT }>;
 
-/** Khiếm khuyết SYC của các vòi lấy từ cây (IK, IR, IKEL) một tổ máy — cả đang mở lẫn đã xử lý (lịch sử). */
+/** Khiếm khuyết SYC của các vòi lấy từ cây (IK, IR, IKEL, IKAH) một tổ máy — cả đang mở lẫn đã xử lý (lịch sử). */
 export async function loadSootBlowerSycDefects(machine: string): Promise<SootBlowerSycDefect[]> {
   const nodes = await loadTreeNodes();
   if (nodes.length === 0) return [];

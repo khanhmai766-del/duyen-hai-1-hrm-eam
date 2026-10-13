@@ -179,7 +179,8 @@ export default function SootBlowerBoard() {
   };
 
   const runSearch = () => {
-    const tag = query.trim().toUpperCase().replace(/\s+/g, "");
+    // vòi IKAH lưu tag AH01–AH04: gõ "IKAH03" cũng tìm được
+    const tag = query.trim().toUpperCase().replace(/\s+/g, "").replace(/^IKAH/, "AH");
     if (!tag) return;
     if (pageOf(tag)) {
       select(tag);
