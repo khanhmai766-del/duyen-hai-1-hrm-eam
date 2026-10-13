@@ -4,25 +4,32 @@ import { DEFECT_STATUS, type DefectStatusKey } from "@/lib/constants";
 import { SOOT_BLOWER_TAGS, type SootBlowerDept } from "@/lib/soot-blower-layout";
 
 /*
- * Khiếm khuyết vòi thổi bụi IK lấy từ SYC (bảng Defect), theo nhánh cây thiết bị
- * "Hệ thống vòi thổi bụi › Thổi bụi hành trình dài" (IK01–IK24).
+ * Khiếm khuyết vòi thổi bụi lấy từ SYC (bảng Defect), theo nhánh cây thiết bị
+ * "Hệ thống vòi thổi bụi": Thổi bụi hành trình dài (IK01–IK24) và hành trình ngắn (IR01–IR60).
  *
  * Cây vật lý chỉ có MỘT bộ node mã chuẩn DH1.S1.x; phiếu S2 gắn vào cùng node với
  * mappedDeviceUnit = "S2" (xem lib/equipment-units.ts canonicalSeq). Nên tổ máy lấy theo
  * mappedDeviceUnit, thiếu thì theo unit của phiếu.
  *
  * Phần lớn phiếu đồng bộ từ Google Sheet chưa gắn node (deviceSeq null), nên với phiếu
- * chưa gắn thiết bị còn khớp theo tên vòi ("IK07", "IK 21") và KKS của chính node
- * (10HCB21AT007) trong nội dung phiếu.
+ * chưa gắn thiết bị còn khớp theo tên vòi ("IK07", "IR 21") và KKS của chính node
+ * (10HCB21AT007, 10HCB24AT021) trong nội dung phiếu.
  *
  * Loại yêu cầu: Điện → SCĐ, Cơ → SCCN; loại khác bỏ qua.
  */
 
 const REQUEST_DEPT: Record<string, SootBlowerDept> = { "Điện": "SCĐ", "Cơ": "SCCN" };
 
-/** Nhánh cha trong cây — tìm theo tên để không phụ thuộc mã khi cây được sắp xếp lại. */
-const PARENT_NAME = "hành trình dài";
-const NODE_TAG_RE = /\bIK\s*0*(\d{1,2})\s*$/i;
+/**
+ * Nhóm vòi lấy từ cây: nhánh cha tìm theo tên (không phụ thuộc mã khi cây được sắp xếp lại),
+ * node con có tên kết thúc bằng tag ("Máy thổi bụi hành trình ngắn IR07").
+ * Thêm loại vòi khác (IKEL, IKSH…) thì thêm một dòng ở đây.
+ */
+const TREE_GROUPS = [
+  { prefix: "IK", parentName: "hành trình dài" },
+  { prefix: "IR", parentName: "hành trình ngắn" },
+] as const;
+type Prefix = (typeof TREE_GROUPS)[number]["prefix"];
 
 /** Dòng khiếm khuyết SYC đã quy về một vòi — cùng dạng SootBlowerDefect để bảng dùng chung. */
 export type SootBlowerSycDefect = {
@@ -42,27 +49,36 @@ export type SootBlowerSycDefect = {
   linked: boolean;
 };
 
-type IkNode = { seq: string; tag: string; kksKey: string | null };
+type TreeNode = { seq: string; tag: string; kksKey: string | null };
 
 const pad2 = (n: number) => String(n).padStart(2, "0");
 const compact = (s: string) => s.toUpperCase().replace(/\s+/g, "");
+const tagOf = (prefix: Prefix, n: string | number) => `${prefix}${pad2(Number(n))}`;
 
-/** 24 node IK dưới nhánh "Thổi bụi hành trình dài". Tên node kết thúc bằng tag: "… IK07". */
-async function loadIkNodes(): Promise<IkNode[]> {
+/** Node vòi của mọi nhóm trong TREE_GROUPS (24 IK + 60 IR). */
+async function loadTreeNodes(): Promise<TreeNode[]> {
   const parents = await prisma.equipmentNode.findMany({
-    where: { name: { contains: PARENT_NAME, mode: "insensitive" }, childCount: { gt: 0 } },
-    select: { seq: true },
+    where: { OR: TREE_GROUPS.map((g) => ({ name: { contains: g.parentName, mode: "insensitive" as const } })), childCount: { gt: 0 } },
+    select: { seq: true, name: true },
   });
-  if (parents.length === 0) return [];
+  const prefixOfParent = new Map<string, Prefix>();
+  for (const p of parents) {
+    const name = p.name.toLowerCase();
+    const group = TREE_GROUPS.find((g) => name.includes(g.parentName));
+    if (group) prefixOfParent.set(p.seq, group.prefix);
+  }
+  if (prefixOfParent.size === 0) return [];
   const nodes = await prisma.equipmentNode.findMany({
-    where: { parentSeq: { in: parents.map((p) => p.seq) } },
-    select: { seq: true, name: true, kks: true },
+    where: { parentSeq: { in: [...prefixOfParent.keys()] } },
+    select: { seq: true, name: true, kks: true, parentSeq: true },
   });
-  const out: IkNode[] = [];
+  const out: TreeNode[] = [];
   for (const n of nodes) {
-    const m = n.name.trim().match(NODE_TAG_RE);
+    const prefix = prefixOfParent.get(n.parentSeq ?? "");
+    if (!prefix) continue;
+    const m = n.name.trim().match(new RegExp(`\\b${prefix}\\s*0*(\\d{1,2})\\s*$`, "i"));
     if (!m) continue;
-    const tag = `IK${pad2(Number(m[1]))}`;
+    const tag = tagOf(prefix, m[1]);
     if (!SOOT_BLOWER_TAGS.has(tag)) continue;
     // KKS "10HCB21AT007": bỏ 2 số đầu (tổ máy) để khớp được cả phiếu S2 ("20HCB21AT007").
     const kks = n.kks ? compact(n.kks) : "";
@@ -72,17 +88,24 @@ async function loadIkNodes(): Promise<IkNode[]> {
 }
 
 /**
- * Tag IK nhắc trong nội dung: "IK07", "IK 21", "VTB IK10", cả dạng liệt kê "IK05,11,21",
- * "IK 01, 03, 05", "ik17 và 20". Không bắt IKEL/IKSH/IKSL/IKAH; số ngay sau dấu cách mà dính
+ * Tag nhắc trong nội dung: "IK07", "IR 21", "VTB IK10", cả dạng liệt kê "IK05,11,21",
+ * "IR 22,24,04", "ik17 và 20". Không bắt IKEL/IKSH/IKSL/IKAH; số ngay sau dấu cách mà dính
  * chữ ("IK 21 10HCB…") không tính là vòi.
  */
-const IK_LIST_RE = /(?<![A-Z0-9])IK\s?(\d{1,2})(?!\d)((?:\s*(?:[,;&/]|và)\s*(?:IK\s?)?\d{1,2}(?![\dA-Z]))*)/gi;
+const LIST_RE: Record<Prefix, RegExp> = Object.fromEntries(
+  TREE_GROUPS.map(({ prefix }) => [
+    prefix,
+    new RegExp(`(?<![A-Z0-9])${prefix}\\s?(\\d{1,2})(?!\\d)((?:\\s*(?:[,;&/]|và)\\s*(?:${prefix}\\s?)?\\d{1,2}(?![\\dA-Z]))*)`, "gi"),
+  ])
+) as Record<Prefix, RegExp>;
 function tagsInText(content: string): Set<string> {
   const out = new Set<string>();
-  for (const m of content.matchAll(IK_LIST_RE)) {
-    for (const n of [m[1], ...(m[2].match(/\d{1,2}/g) ?? [])]) {
-      const tag = `IK${pad2(Number(n))}`;
-      if (SOOT_BLOWER_TAGS.has(tag)) out.add(tag);
+  for (const { prefix } of TREE_GROUPS) {
+    for (const m of content.matchAll(LIST_RE[prefix])) {
+      for (const n of [m[1], ...(m[2].match(/\d{1,2}/g) ?? [])]) {
+        const tag = tagOf(prefix, n);
+        if (SOOT_BLOWER_TAGS.has(tag)) out.add(tag);
+      }
     }
   }
   return out;
@@ -122,9 +145,9 @@ const SELECT = {
 
 type Row = Prisma.DefectGetPayload<{ select: typeof SELECT }>;
 
-/** Khiếm khuyết SYC của 24 vòi IK một tổ máy — cả đang mở lẫn đã xử lý (lịch sử). */
+/** Khiếm khuyết SYC của các vòi lấy từ cây (IK, IR) một tổ máy — cả đang mở lẫn đã xử lý (lịch sử). */
 export async function loadSootBlowerSycDefects(machine: string): Promise<SootBlowerSycDefect[]> {
-  const nodes = await loadIkNodes();
+  const nodes = await loadTreeNodes();
   if (nodes.length === 0) return [];
   const seqToTag = new Map(nodes.map((n) => [n.seq, n.tag]));
   const kksToTag = new Map(nodes.filter((n) => n.kksKey).map((n) => [n.kksKey as string, n.tag]));
@@ -143,14 +166,14 @@ export async function loadSootBlowerSycDefects(machine: string): Promise<SootBlo
       },
       select: SELECT,
     }),
-    // Lọc thô bằng SQL ("IK" hoặc "HCB"), khớp chính xác bằng regex bên dưới.
+    // Lọc thô bằng SQL (tiền tố vòi hoặc "HCB" của KKS), khớp chính xác bằng regex bên dưới.
     prisma.defect.findMany({
       where: {
         ...base,
         unit: machine,
         deviceSeq: null,
         relatedDevices: { none: {} },
-        OR: [{ content: { contains: "IK", mode: "insensitive" } }, { content: { contains: "HCB", mode: "insensitive" } }],
+        OR: [...TREE_GROUPS.map((g) => g.prefix), "HCB"].map((t) => ({ content: { contains: t, mode: "insensitive" as const } })),
       },
       select: SELECT,
     }),
