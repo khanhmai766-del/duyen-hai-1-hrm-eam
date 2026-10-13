@@ -5,7 +5,7 @@ import { SOOT_BLOWER_TAGS, type SootBlowerDept } from "@/lib/soot-blower-layout"
 
 /*
  * Khiếm khuyết vòi thổi bụi lấy từ SYC (bảng Defect), theo nhánh cây thiết bị
- * "Hệ thống vòi thổi bụi": Thổi bụi hành trình dài (IK01–IK24) và hành trình ngắn (IR01–IR60).
+ * "Hệ thống vòi thổi bụi": hành trình dài (IK01–IK24), hành trình ngắn (IR01–IR60), bộ hâm (IKEL01–IKEL10).
  *
  * Cây vật lý chỉ có MỘT bộ node mã chuẩn DH1.S1.x; phiếu S2 gắn vào cùng node với
  * mappedDeviceUnit = "S2" (xem lib/equipment-units.ts canonicalSeq). Nên tổ máy lấy theo
@@ -23,11 +23,13 @@ const REQUEST_DEPT: Record<string, SootBlowerDept> = { "Điện": "SCĐ", "Cơ":
 /**
  * Nhóm vòi lấy từ cây: nhánh cha tìm theo tên (không phụ thuộc mã khi cây được sắp xếp lại),
  * node con có tên kết thúc bằng tag ("Máy thổi bụi hành trình ngắn IR07").
- * Thêm loại vòi khác (IKEL, IKSH…) thì thêm một dòng ở đây.
+ * Thêm loại vòi khác (IKSH, IKAH…) thì thêm một dòng ở đây.
  */
 const TREE_GROUPS = [
   { prefix: "IK", parentName: "hành trình dài" },
   { prefix: "IR", parentName: "hành trình ngắn" },
+  // đủ cụm "thổi bụi …": cây còn "Hệ thống bộ hâm", "Bộ hâm" ở nhánh khác
+  { prefix: "IKEL", parentName: "thổi bụi bộ hâm" },
 ] as const;
 type Prefix = (typeof TREE_GROUPS)[number]["prefix"];
 
@@ -55,7 +57,7 @@ const pad2 = (n: number) => String(n).padStart(2, "0");
 const compact = (s: string) => s.toUpperCase().replace(/\s+/g, "");
 const tagOf = (prefix: Prefix, n: string | number) => `${prefix}${pad2(Number(n))}`;
 
-/** Node vòi của mọi nhóm trong TREE_GROUPS (24 IK + 60 IR). */
+/** Node vòi của mọi nhóm trong TREE_GROUPS (24 IK + 60 IR + 10 IKEL). */
 async function loadTreeNodes(): Promise<TreeNode[]> {
   const parents = await prisma.equipmentNode.findMany({
     where: { OR: TREE_GROUPS.map((g) => ({ name: { contains: g.parentName, mode: "insensitive" as const } })), childCount: { gt: 0 } },
@@ -89,7 +91,7 @@ async function loadTreeNodes(): Promise<TreeNode[]> {
 
 /**
  * Tag nhắc trong nội dung: "IK07", "IR 21", "VTB IK10", cả dạng liệt kê "IK05,11,21",
- * "IR 22,24,04", "ik17 và 20". Không bắt IKEL/IKSH/IKSL/IKAH; số ngay sau dấu cách mà dính
+ * "IR 22,24,04", "IKEL03,07", "ik17 và 20". Tiền tố IK không bắt nhầm IKEL/IKSH/IKSL/IKAH; số sau dấu cách mà dính
  * chữ ("IK 21 10HCB…") không tính là vòi.
  */
 const LIST_RE: Record<Prefix, RegExp> = Object.fromEntries(
@@ -145,7 +147,7 @@ const SELECT = {
 
 type Row = Prisma.DefectGetPayload<{ select: typeof SELECT }>;
 
-/** Khiếm khuyết SYC của các vòi lấy từ cây (IK, IR) một tổ máy — cả đang mở lẫn đã xử lý (lịch sử). */
+/** Khiếm khuyết SYC của các vòi lấy từ cây (IK, IR, IKEL) một tổ máy — cả đang mở lẫn đã xử lý (lịch sử). */
 export async function loadSootBlowerSycDefects(machine: string): Promise<SootBlowerSycDefect[]> {
   const nodes = await loadTreeNodes();
   if (nodes.length === 0) return [];
