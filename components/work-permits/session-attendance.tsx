@@ -53,7 +53,7 @@ export function SessionAttendance({ permit, session, canExecute, size = "md", au
   const insideCount = members.filter(({ member }) => attendanceInside(member)).length;
   const commander: PermitMember = { personId: session.commanderId ?? undefined, code: session.commanderCode, name: session.commanderName, company: session.company };
   const previousSession = live && canExecute && isOverhaulPaperPermit(permit)
-    ? permit.sessions.find(previous => previous.id !== session.id && previous.endedAt) : undefined;
+    ? permit.previousWorkSession ?? undefined : undefined;
   const previousMembers = previousSession?.members.filter(member => !isSessionCommander(member, previousSession)) ?? [];
   const matchesMember = (left: PermitMember, right: PermitMember) => Boolean(left.personId && right.personId && left.personId === right.personId)
     || Boolean(left.code.trim() && left.code.normalize("NFC").trim().toUpperCase() === right.code.normalize("NFC").trim().toUpperCase());

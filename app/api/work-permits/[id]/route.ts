@@ -3,7 +3,7 @@ import { normalizeText } from "@/lib/nav";
 import { assertOverhaulItemsConfirmed, parseOverhaulItems, sharedOverhaulPercents } from "@/lib/server/work-permit-overhaul";
 import { enqueueOverhaulCancel, enqueueOverhaulClose, pushOverhaulSheetOutboxQuietly } from "@/lib/server/overhaul-sheet-writer";
 import { after as afterResponse } from "next/server";
-import { latestOverhaulNotes, overhaulItemsOf } from "@/lib/work-permit-overhaul";
+import { isOverhaulPaperPermit, latestOverhaulNotes, overhaulItemsOf } from "@/lib/work-permit-overhaul";
 import { requirePermitPositionAllowed, requirePermitVisible } from "@/lib/server/work-permit-scope";
 import { permitIssueUpdateNeedsExecution } from "@/lib/work-permit-permissions";
 import { requirePermitCancel, requirePermitIssuer, requirePermitExecute, permitCapabilities, permitRowCapabilities } from "@/lib/server/work-permit-permissions";
@@ -27,6 +27,14 @@ export async function GET(_req: Request, props: { params: Promise<{ id: string }
     await requirePermitVisible(user, params.id);
     const row = await prisma.workPermit.findUnique({ where: { id: params.id }, include: { sessions: { take: 2, orderBy: [{ openedAt: "desc" }, { id: "desc" }], include: { commander: { select: { phone: true } } } }, history: { take: 2, select: historySummarySelect, orderBy: [{ createdAt: "desc" }, { id: "desc" }] }, _count: { select: { sessions: true, history: true } } } });
     if (!row) return fail("Không tìm thấy PCT", 404);
+    const liveSession = row.sessions.find(session => !session.endedAt);
+    // Danh sách cho vào lại thuộc lượt đã kết thúc công việc trước đó. Bàn giao CHTT vẫn tiếp tục
+    // cùng lượt công việc, nên bỏ qua cả chuỗi bàn giao và tìm riêng ngoài 2 lần gần nhất.
+    const previousWorkSession = liveSession && isOverhaulPaperPermit(row)
+      ? await prisma.workPermitSession.findFirst({ where: { permitId: row.id,
+        endedAt: { not: null, lte: liveSession.openedAt }, NOT: { endNote: { startsWith: "Bàn giao CHTT cho " } } },
+      orderBy: [{ openedAt: "desc" }, { id: "desc" }] })
+      : null;
     // Điền sẵn hộp Kết thúc / Cập nhật tiến độ: % lũy kế CHUNG của hạng mục (mọi PCT cùng giữ — Cơ + Điện của hạng mục
     // phối hợp), ghi chú gần nhất của RIÊNG phiếu này (mỗi PCT một đoạn nhật ký).
     const overhaulItems = overhaulItemsOf(row.overhaulItems);
@@ -41,7 +49,7 @@ export async function GET(_req: Request, props: { params: Promise<{ id: string }
     const similarPermits = ["DRAFT", "ISSUED"].includes(row.status)
       ? (await findSimilarPermits(prisma, { kind: row.kind, position: row.position, content: row.content, excludeId: row.id })).map(({ id, number, year, status, content }) => ({ id, number, year, status, content }))
       : [];
-    return ok({ ...row, overhaulPercents, overhaulNotes, similarPermits }, { ...await permitCapabilities(user), ...permitRowCapabilities(user, row), canDelete: user.role === "ADMIN" && user.accessMode !== "DEFECT_READ_ONLY", canEditLivePermit: user.role === "ADMIN" && user.accessMode !== "DEFECT_READ_ONLY" });
+    return ok({ ...row, previousWorkSession, overhaulPercents, overhaulNotes, similarPermits }, { ...await permitCapabilities(user), ...permitRowCapabilities(user, row), canDelete: user.role === "ADMIN" && user.accessMode !== "DEFECT_READ_ONLY", canEditLivePermit: user.role === "ADMIN" && user.accessMode !== "DEFECT_READ_ONLY" });
   });
 }
 

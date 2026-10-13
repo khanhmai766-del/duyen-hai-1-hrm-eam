@@ -828,7 +828,7 @@ export const PRESETS = {
     },
   },
   "pct-dai-tu-vao-tu-lan-truoc": {
-    description: "PCT đại tu: chỉ mở danh sách cũ khi bấm; Cho vào ghi nhận ngay từng người qua API giả lập, không ghi DB",
+    description: "PCT đại tu sau nhiều lần đổi CHTT: giữ danh sách lượt công việc trước; Cho vào qua API giả lập, không ghi DB",
     prepare: (ctx) => PRESETS["pct-lam-viec"].prepare(ctx),
     routes: ({ permitId }) => [`/work-permits/${permitId}/lam-viec`, `/work-permits/${permitId}/lam-viec?ui=cho-vao`],
     async mock(context, { permitId }) {
@@ -846,8 +846,11 @@ export const PRESETS = {
           const previous = { ...liveSession(json.data, now), id: "ui-previous-session", openedAt: minutesAgo(now, 24 * 60), endedAt: minutesAgo(now, 20 * 60) };
           previous.members = previous.members.slice(0, 3).map(member => ({ ...member, attendance: [{ in: previous.openedAt, out: previous.endedAt }] }));
           previous.members.push({ personId: previous.commanderId, name: previous.commanderName, code: previous.commanderCode, company: previous.company });
+          previous.commanderName = "CHTT ngày trước (giả lập)";
+          const handoff = { ...current, id: "ui-handoff-session", commanderName: "CHTT bàn giao (giả lập)",
+            openedAt: minutesAgo(now, 150), endedAt: current.openedAt, endNote: `Bàn giao CHTT cho ${current.commanderName}.` };
           json.data = { ...json.data, format: "PAPER", contractorScope: "OVERHAUL", status: "ACTIVE", plannedEndAt: new Date(now + 86400000).toISOString(),
-            sessions: [current, previous], _count: { ...json.data._count, sessions: 2 } };
+            sessions: [current, handoff], previousWorkSession: previous, _count: { ...json.data._count, sessions: 5 } };
           json.meta = { ...json.meta, canExecute: true };
         }
         await route.fulfill({ json: fixture });
@@ -861,7 +864,7 @@ export const PRESETS = {
         const current = fixture.data.sessions[0];
         assert.equal(current.members.length, 0, "Không tự cho cả danh sách vào hoặc cho vào trùng");
         const at = new Date().toISOString();
-        const { attendance: oldAttendance, ...identity } = fixture.data.sessions[1].members[0];
+        const { attendance: oldAttendance, ...identity } = fixture.data.previousWorkSession.members[0];
         assert.ok(oldAttendance[0].out, "Lần cũ đã ghi ra");
         const member = { ...identity, attendance: [{ in: at, out: null }] };
         current.members = [member];
@@ -875,6 +878,8 @@ export const PRESETS = {
       assert.equal(await page.getByRole("dialog").count(), 0, "Danh sách cũ phải ẩn trước khi bấm");
       await open.click();
       const dialog = page.getByRole("dialog");
+      assert.match(await dialog.innerText(), /CHTT ngày trước \(giả lập\)/, "Lấy đúng lượt trước dù 2 lần gần nhất chỉ gồm lượt đang mở và bàn giao");
+      assert.doesNotMatch(await dialog.innerText(), /CHTT bàn giao/, "Không lấy danh sách từ lượt bàn giao rỗng");
       assert.equal(await dialog.getByRole("button", { name: /^Cho vào/ }).count(), 3, "Chỉ hiện nhân viên, không tính CHTT cũ");
       if (!route.endsWith("ui=cho-vao")) return;
       const request = page.waitForRequest(request => request.url().endsWith("/sessions/attendance") && request.method() === "POST");
