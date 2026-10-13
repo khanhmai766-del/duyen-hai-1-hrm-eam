@@ -662,10 +662,29 @@ export const PRESETS = {
     async prepare() { return {}; },
     routes: () => ["/work-permits?ui=new-overhaul"],
     async interact(page) {
-      await page.getByRole("button", { name: /^Cấp phiếu$/ }).locator("visible=true").first().click();
-      await page.getByRole("menuitem", { name: /Cấp phiếu nhà thầu/ }).or(page.getByRole("button", { name: /Cấp phiếu nhà thầu/ })).locator("visible=true").first().click();
+      // Điện thoại: nút "Cấp phiếu" → menu; máy tính: nút "Nhà thầu" ở đầu sổ.
+      const issue = page.getByRole("button", { name: /^Cấp phiếu$/ }).locator("visible=true");
+      if (await issue.count()) {
+        await issue.first().click();
+        await page.getByRole("menuitem", { name: /Cấp phiếu nhà thầu/ }).or(page.getByRole("button", { name: /Cấp phiếu nhà thầu/ })).locator("visible=true").first().click();
+      } else {
+        await page.getByRole("button", { name: /^Nhà thầu$/ }).locator("visible=true").first().click();
+      }
       await page.getByRole("dialog").getByRole("button", { name: /Đại tu/ }).first().click();
       await page.getByRole("dialog").getByText("Hạng mục phát sinh").first().scrollIntoViewIfNeeded();
+      await page.waitForTimeout(300);
+    },
+  },
+  "cap-pct-dai-tu-chtt": {
+    description: "Form cấp PCT Đại tu · bước Nhân sự: CHTT chọn từ danh bạ HOẶC nhập tên CHTT nội bộ (chỉ gõ trên form, không lưu)",
+    async prepare() { return {}; },
+    routes: () => ["/work-permits?ui=overhaul-chtt-trong", "/work-permits?ui=overhaul-chtt-noi-bo"],
+    async interact(page, route) {
+      await PRESETS["cap-pct-dai-tu"].interact(page);
+      const dialog = page.getByRole("dialog");
+      await dialog.getByRole("button", { name: /Nhân sự/ }).first().click();
+      if (route.endsWith("noi-bo")) await dialog.getByLabel("Tên CHTT nội bộ").fill("Nguyễn Văn Nội Bộ");
+      await dialog.getByText("Chỉ huy trực tiếp").first().scrollIntoViewIfNeeded({ timeout: 3000 }).catch(() => {});
       await page.waitForTimeout(300);
     },
   },

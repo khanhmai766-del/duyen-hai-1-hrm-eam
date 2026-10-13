@@ -62,9 +62,17 @@ test("SCTX không nhận hồ sơ CHTT không hợp lệ", async () => {
   }
 });
 
-test("Đại tu vẫn yêu cầu chọn CHTT; nội bộ vẫn yêu cầu tên và đơn vị", async () => {
-  await assert.rejects(resolvePermitIdentities(fixture().tx, { ...body, contractorScope: "OVERHAUL", commanderName: "Tên nhập tay" }, user),
+test("Đại tu nhận CHTT nội bộ nhập tay (13/10/2026) nhưng không cho để trống CHTT", async () => {
+  // Đại tu vẫn bắt buộc đơn vị công tác khi cấp — CHTT nội bộ không thay cho đơn vị nhà thầu.
+  const typed = parsePermit(await resolvePermitIdentities(fixture().tx, { ...body, contractorScope: "OVERHAUL", teamName: "Cty Đại tu", commanderName: " Trần Nội Bộ " }, user), "ISSUED");
+  assert.equal(typed.commanderPersonId, null);
+  assert.equal(typed.commanderName, "Trần Nội Bộ");
+  assert.equal(typed.teamName, "Cty Đại tu");
+  await assert.rejects(resolvePermitIdentities(fixture().tx, { ...body, contractorScope: "OVERHAUL", commanderName: "  " }, user),
     (error: unknown) => error instanceof Response && error.status === 400);
+});
+
+test("Đại tu và nội bộ vẫn yêu cầu tên CHTT và đơn vị khi cấp", async () => {
   for (const patch of [{ contractorScope: "OVERHAUL" }, { teamType: "INTERNAL", contractorScope: null, workerCount: 1 }]) {
     assert.throws(() => parsePermit({ ...body, issuerName: user.name, ...patch }, "ISSUED"),
       (error: unknown) => error instanceof Response && error.status === 400);

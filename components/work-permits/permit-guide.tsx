@@ -158,7 +158,7 @@ const SECTIONS: GuideSection[] = [
         title: "Chọn CHTT",
         where: "Bước 3 · Nhân sự",
         points: [
-          "SCTX: có thể để trống CHTT, nhập tên trực tiếp hoặc chọn từ danh bạ. Đại tu: bấm Chọn CHTT nhà thầu.",
+          "SCTX: có thể để trống CHTT, nhập tên trực tiếp hoặc chọn từ danh bạ. Đại tu: bấm Chọn CHTT nhà thầu, hoặc nhập tên CHTT nội bộ.",
           "Lãnh đạo, nhân viên công tác bổ sung: mở mục Thông tin bổ sung (không bắt buộc).",
         ],
       },

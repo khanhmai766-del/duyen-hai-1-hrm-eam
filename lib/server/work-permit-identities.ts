@@ -28,9 +28,12 @@ export async function resolvePermitIdentities(
     if (isSctxContractorPermit({ teamType: String(body.teamType), contractorScope: permitText(body, "contractorScope", 20) })) {
       return { ...body, issuerName, issuerUserId, commanderPersonId: null, commanderName: permitText(body, "commanderName") };
     }
-    // Nháp có thể hủy trực tiếp trước khi chọn CHTT; khi cấp thực tế phải chọn danh bạ.
+    // PCT Đại tu (13/10/2026): CHTT nội bộ không có trong danh bạ nhà thầu → nhận tên nhập tay.
+    const typedCommander = permitText(body, "commanderName");
+    if (typedCommander) return { ...body, issuerName, issuerUserId, commanderPersonId: null, commanderName: typedCommander };
+    // Nháp có thể hủy trực tiếp trước khi chọn CHTT; khi cấp thực tế phải chọn danh bạ hoặc nhập tên CHTT nội bộ.
     const cancellingDraft = body.status === "CANCELLED" && before?.status === "DRAFT";
-    if (body.status !== "DRAFT" && !cancellingDraft) throw fail("Vui lòng chọn CHTT từ danh sách nhà thầu trước khi cấp phiếu");
+    if (body.status !== "DRAFT" && !cancellingDraft) throw fail("Vui lòng chọn CHTT từ danh sách nhà thầu hoặc nhập tên CHTT nội bộ trước khi cấp phiếu");
     return { ...body, issuerName, issuerUserId, commanderPersonId: null, commanderName: "" };
   }
   await tx.$queryRaw`SELECT "id" FROM "WorkPermitPerson" WHERE "id" = ${commanderPersonId} FOR UPDATE`;

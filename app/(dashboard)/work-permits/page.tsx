@@ -494,6 +494,8 @@ function PermitEditor({ initial, template, kind, presetTeamType, presetContracto
   // web — gợi ý theo tên đã ghi trên các phiếu nội bộ trước của cùng sổ.
   const internal = form.teamType === "INTERNAL";
   const quickContractor = isSctxContractorPermit(form);
+  // CHTT đủ khi chọn từ danh bạ nhà thầu HOẶC (PCT nhà thầu) nhập tên CHTT nội bộ — server kiểm lại ở lib/server/work-permit-identities.ts.
+  const hasCommander = Boolean(form.commanderPersonId || form.commanderName.trim());
   const nameSuggestions = usePermitNameSuggestions(form.kind, internal);
   const commandersId = useId(); const leadersId = useId(); const contractorLeadersId = useId();
   // PCT nhà thầu: "Người lãnh đạo công việc" gợi ý từ CHTT đang hoạt động của CHÍNH đơn vị nhà thầu trên phiếu.
@@ -511,7 +513,8 @@ function PermitEditor({ initial, template, kind, presetTeamType, presetContracto
     ...prev,
     teamName: company,
     commanderPersonId: null,
-    commanderName: quickContractor && !prev.commanderPersonId ? prev.commanderName : "",
+    // Tên CHTT nhập tay (SCTX, hoặc CHTT nội bộ của PCT Đại tu) không gắn với đơn vị → giữ; CHTT chọn từ danh bạ thì bỏ.
+    commanderName: !prev.commanderPersonId ? prev.commanderName : "",
     leaderName: "",
     members: [],
     workerCount: null,
@@ -542,7 +545,7 @@ function PermitEditor({ initial, template, kind, presetTeamType, presetContracto
   if (issued) {
     requireValue(Boolean(issuerDisplay.trim()), "people", "Người cấp PCT");
     if (!quickContractor) {
-      requireValue(form.teamType === "CONTRACTOR" ? Boolean(form.commanderPersonId) : Boolean(form.commanderName.trim()), "people", "Chỉ huy trực tiếp");
+      requireValue(hasCommander, "people", "Chỉ huy trực tiếp");
       requireValue(Boolean(form.teamName.trim()), paper && (form.kind === "MECHANICAL" || (form.kind === "ELECTRICAL" && form.teamType === "CONTRACTOR")) ? "info" : "people", "Đơn vị công tác");
     }
     if (form.teamType === "INTERNAL") requireValue(Boolean(form.members.length || form.workerCount), "people", "Số nhân viên");
@@ -700,7 +703,9 @@ function PermitEditor({ initial, template, kind, presetTeamType, presetContracto
                   <label className="block space-y-1.5"><span className="font-medium">Chỉ huy trực tiếp</span><input className={control} value={form.commanderName} maxLength={200} placeholder="Nhập tên CHTT nếu cần" onChange={e => setForm(prev => ({ ...prev, commanderName: e.target.value, commanderPersonId: null }))} /></label>
                   <Button type="button" variant="outline" size="sm" onClick={() => setPickCommander(true)}>Chọn CHTT từ danh bạ</Button>
                   <p className="text-xs text-muted-foreground">Không bắt buộc. Có thể nhập tên hoặc chọn người có sẵn.</p>
-                </div> : form.teamType === "CONTRACTOR" ? <div className="space-y-1.5 text-sm"><span className="font-medium">Chỉ huy trực tiếp{issued ? " *" : ""}</span><div className={`rounded-lg border p-3 ${issued && !form.commanderPersonId ? "border-amber-400 bg-amber-50" : "border-input"}`}><div className="flex flex-wrap items-center justify-between gap-2"><p className="min-w-0 truncate font-medium">{form.commanderName || "Chưa chọn CHTT"}</p><Button type="button" variant="outline" size="sm" className="shrink-0 bg-white" disabled={!form.teamName.trim()} onClick={() => setPickCommander(true)}>{form.commanderPersonId ? "Đổi CHTT" : "Chọn CHTT nhà thầu"}</Button></div></div><p className="text-xs text-muted-foreground">{form.teamName ? `Chỉ hiện CHTT của ${form.teamName}.` : paper && form.kind === "ELECTRICAL" ? "Chọn đơn vị công tác ở bước Thông tin trước khi chọn CHTT." : "Chọn đơn vị nhà thầu trước khi chọn CHTT."}</p></div> : textField("commanderName", issued)}
+                </div> : form.teamType === "CONTRACTOR" ? <div className="space-y-1.5 text-sm"><span className="font-medium">Chỉ huy trực tiếp{issued ? " *" : ""}</span><div className={`space-y-2 rounded-lg border p-3 ${issued && !hasCommander ? "border-amber-400 bg-amber-50" : "border-input"}`}><div className="flex flex-wrap items-center justify-between gap-2"><p className="min-w-0 truncate font-medium">{form.commanderPersonId ? form.commanderName : "Chưa chọn CHTT nhà thầu"}</p><Button type="button" variant="outline" size="sm" className="shrink-0 bg-white" disabled={!form.teamName.trim()} onClick={() => setPickCommander(true)}>{form.commanderPersonId ? "Đổi CHTT" : "Chọn CHTT nhà thầu"}</Button></div>
+                  {/* PCT Đại tu (13/10/2026): CHTT có thể là người nội bộ, không có trong danh bạ nhà thầu → nhập tên tay. Gõ tên thì bỏ CHTT đã chọn. */}
+                  <input className={control} value={form.commanderPersonId ? "" : form.commanderName} maxLength={200} placeholder="Hoặc nhập tên CHTT nội bộ" aria-label="Tên CHTT nội bộ" onChange={e => setForm(prev => ({ ...prev, commanderName: e.target.value, commanderPersonId: null }))} /></div><p className="text-xs text-muted-foreground">{form.teamName ? `Danh bạ chỉ hiện CHTT của ${form.teamName}. CHTT nội bộ không có trong danh bạ thì nhập tên.` : paper && form.kind === "ELECTRICAL" ? "Chọn đơn vị công tác ở bước Thông tin trước khi chọn CHTT nhà thầu, hoặc nhập tên CHTT nội bộ." : "Chọn đơn vị nhà thầu trước khi chọn CHTT nhà thầu, hoặc nhập tên CHTT nội bộ."}</p></div> : textField("commanderName", issued)}
                 {paper && form.kind === "MECHANICAL" ? <p className="self-center text-sm text-muted-foreground">Đơn vị công tác: <strong className="text-foreground">{form.teamName || "Chưa nhập"}</strong></p> : paper && form.kind === "ELECTRICAL" && form.teamType === "CONTRACTOR" ? textField("electricalSafetySupervisorName") : form.teamType !== "CONTRACTOR" && textField("teamName", issued)}
                 {form.teamType !== "CONTRACTOR" && <label className="space-y-1.5 text-sm"><span className="font-medium">Số nhân viên{issued ? " *" : ""}</span><input className={control} type="number" min={1} max={10000} step={1} readOnly={form.members.length > 0} value={form.members.length || form.workerCount || ""} onChange={e => set("workerCount", e.target.value ? Number(e.target.value) : null)} /></label>}
                 {form.kind === "ELECTRICAL" && paper && form.teamType !== "CONTRACTOR" && textField("electricalSafetySupervisorName")}
