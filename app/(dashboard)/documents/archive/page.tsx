@@ -69,7 +69,7 @@ const ARCHIVE_TABS: ArchiveTab[] = [
     icon: Wind,
     description: "Sơ đồ khả dụng và khiếm khuyết vòi thổi bụi theo màn DCS SOOT BLOW",
     emptyTitle: "Chưa có dữ liệu vòi thổi bụi",
-    emptyDescription: "Chọn một vòi trên sơ đồ để ghi nhận khiếm khuyết.",
+    emptyDescription: "Chọn một vòi trên sơ đồ để xem khiếm khuyết.",
   },
 ];
 // Hai tab sơ đồ (không phải danh sách hồ sơ): gác theo chức vụ, thay khung bảng bằng sơ đồ.

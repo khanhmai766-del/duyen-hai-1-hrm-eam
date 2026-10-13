@@ -54,15 +54,6 @@ export function useSetSootBlowerStatus() {
   });
 }
 
-export function useAddSootBlowerDefect() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (body: { machine: string; tag: string; dept: SootBlowerDept; description: string; reportedBy?: string }) =>
-      apiMutate<SootBlowerDefect>("/api/soot-blowers/defects", "POST", body),
-    onSuccess: (_d, vars) => qc.invalidateQueries({ queryKey: ["soot-blowers", vars.machine] }),
-  });
-}
-
 export function useResolveSootBlowerDefect() {
   const qc = useQueryClient();
   return useMutation({

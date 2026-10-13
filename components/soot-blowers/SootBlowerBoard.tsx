@@ -8,7 +8,6 @@ import { toast } from "sonner";
 import {
   useSootBlowers,
   useSetSootBlowerStatus,
-  useAddSootBlowerDefect,
   useResolveSootBlowerDefect,
   type SootBlowerDefect,
 } from "@/hooks/useSootBlowers";
@@ -19,7 +18,6 @@ import {
   SB_RIGHT_RAW,
   SB_TILE_H as H,
   SB_TILE_W as W,
-  SOOT_BLOWER_DEPT_LABEL,
   SOOT_BLOWER_MACHINES,
   SOOT_BLOWER_TYPES,
   SOOT_BLOWER_TYPE_NAME,
@@ -200,7 +198,7 @@ export default function SootBlowerBoard() {
         <div>
           <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">Khiếm khuyết vòi thổi bụi · Tổ máy {machine}</h1>
           <p className="mt-0.5 text-sm text-slate-500">
-            {mode === "3d" ? "Mô hình 3D lò hơi" : "Sơ đồ theo màn DCS SOOT BLOW"} · chọn vòi để ghi nhận khiếm khuyết
+            {mode === "3d" ? "Mô hình 3D lò hơi" : "Sơ đồ theo màn DCS SOOT BLOW"} · chọn vòi để xem khiếm khuyết
           </p>
         </div>
         <div className="ml-auto flex flex-wrap items-baseline gap-x-6 gap-y-1">
@@ -704,10 +702,7 @@ function DetailPanel({
   onBack: () => void;
 }) {
   const [tab, setTab] = useState<SootBlowerDept | "LS">("SCĐ");
-  const [desc, setDesc] = useState("");
-  const [by, setBy] = useState("");
   const setStatus = useSetSootBlowerStatus();
-  const addDefect = useAddSootBlowerDefect();
   const resolve = useResolveSootBlowerDefect();
 
   const status = statusOf(tag, board);
@@ -733,18 +728,6 @@ function DetailPanel({
       setStatus.mutateAsync({ machine, tag, status: unavailable ? "unavailable" : "available" }),
       `Đã chuyển ${tag} sang ${unavailable ? "bất khả dụng" : "khả dụng"}`
     );
-  };
-
-  const submit = async () => {
-    if (tab === "LS" || !desc.trim()) return;
-    const okDone = await run(
-      addDefect.mutateAsync({ machine, tag, dept: tab, description: desc.trim(), reportedBy: by.trim() || undefined }),
-      `Đã ghi nhận khiếm khuyết ${tab} cho ${tag}`
-    );
-    if (okDone) {
-      setDesc("");
-      setBy("");
-    }
   };
 
   const TABS: [SootBlowerDept | "LS", string][] = [
@@ -805,40 +788,6 @@ function DetailPanel({
       <div className="p-4">
         {tab !== "LS" ? (
           <>
-            {canManage ? (
-              <div className="mb-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
-                <div className="mb-1.5 text-xs font-semibold text-slate-500">Ghi nhận khiếm khuyết {SOOT_BLOWER_DEPT_LABEL[tab]}</div>
-                <textarea
-                  value={desc}
-                  onChange={(e) => setDesc(e.target.value)}
-                  rows={3}
-                  maxLength={2000}
-                  placeholder="Mô tả hiện tượng, vị trí hư hỏng…"
-                  aria-label="Mô tả khiếm khuyết"
-                  className="w-full resize-none rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40"
-                />
-                <input
-                  value={by}
-                  onChange={(e) => setBy(e.target.value)}
-                  placeholder="Người ghi nhận / Ca (bỏ trống = tên bạn)"
-                  aria-label="Người ghi nhận / Ca"
-                  className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40"
-                />
-                <button
-                  type="button"
-                  onClick={submit}
-                  disabled={!desc.trim() || addDefect.isPending}
-                  className="mt-2 flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 py-2 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-40"
-                >
-                  {addDefect.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-                  Ghi nhận khiếm khuyết
-                </button>
-              </div>
-            ) : (
-              <p className="mb-4 rounded-lg border border-dashed border-slate-300 p-3 text-xs text-slate-500">
-                Bạn chỉ có quyền xem. Cần quyền quản lý dữ liệu vòi đốt để ghi nhận khiếm khuyết.
-              </p>
-            )}
             {list.length === 0 ? (
               <div className="py-6 text-center text-sm text-slate-400">Không có khiếm khuyết {tab} đang mở.</div>
             ) : (
