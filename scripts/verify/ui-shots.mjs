@@ -50,11 +50,11 @@ const secret = process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET;
 const prisma = new PrismaClient();
 const slug = (route) => (route.replace(/^\//, "").replace(/[^a-zA-Z0-9]+/g, "-").replace(/^-|-$/g, "") || "home").slice(0, 60);
 
-async function launch() {
-  try { return await chromium.launch(); }
+async function launch(args = []) {
+  try { return await chromium.launch({ args }); }
   catch {
     // Máy chưa `npx playwright-core install chromium`: dùng Edge có sẵn trên Windows.
-    try { return await chromium.launch({ channel: "msedge" }); }
+    try { return await chromium.launch({ channel: "msedge", args }); }
     catch { fail("không mở được trình duyệt — chạy `npx playwright-core install chromium` một lần."); }
   }
 }
@@ -110,7 +110,8 @@ try {
   const presetCtx = preset ? { ...(await preset.prepare({ prisma })), base: BASE } : null;
   const routes = [...(preset ? preset.routes(presetCtx) : []), ...routeArgs];
   const token = await encode({ token: { sub: user.id, id: user.id, name: user.name, email: user.email, role: "ADMIN", accessMode: "NORMAL", employeeId: user.employeeId }, secret, salt: "authjs.session-token", maxAge: 3600 });
-  browser = await launch();
+  // Preset có thể mở trình duyệt với cờ riêng — vd camera giả phát tệp video (preset "quet-the-camera-gia").
+  browser = await launch(preset?.launchArgs?.(presetCtx) ?? []);
   for (const width of WIDTHS) {
     const mobile = width <= MOBILE_MAX;
     const context = await browser.newContext({ viewport: { width, height: mobile ? 844 : 900 }, deviceScaleFactor: mobile ? 2 : 1, isMobile: mobile, hasTouch: mobile, locale: "vi-VN", timezoneId: "Asia/Ho_Chi_Minh" });

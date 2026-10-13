@@ -81,6 +81,9 @@ MSYS_NO_PATHCONV=1 npm run verify:ui -- --preset=pct-lam-viec --widths=360,1280
 - Linh vật chatbot (`[data-ui-overlay]`) được ẩn khi soi và chụp vì nó đè nội dung; `--keep-mascot` để giữ.
 - `--preset=` dựng trạng thái hiếm trên DB dev (vd lần làm việc đang mở 12 người) bằng **giả lập trong trình duyệt**
   (`page.route`) — không ghi DB. Thêm preset trong `ui-presets.mjs`; `prepare` chỉ được SELECT.
+- Preset có `launchArgs` mở trình duyệt với cờ riêng. `--preset=quet-the-camera-gia` cho Chromium một **camera giả**
+  phát video mã QR hơi mờ (tạo vào `reports/verify/*.y4m`), mở hộp quét thẻ PCT và đợi tới khi tải được bộ giải mã
+  ZXing-C++ (`.wasm`) và đọc ra mã — chạy lại sau mỗi lần sửa `lib/qr-camera.ts` / `lib/qr-decode*.ts`.
 - Không có Chromium của Playwright thì tự dùng Edge (`channel: "msedge"`).
 
 ## Kiểm tra ảnh

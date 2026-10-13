@@ -6,6 +6,7 @@
 
 import { buildMilestoneSchedule } from "../../lib/overhaul-milestones.ts";
 import assert from "node:assert/strict";
+import path from "node:path";
 
 const minutesAgo = (now, minutes) => new Date(now - minutes * 60_000).toISOString();
 const WORKER_NAMES = ["Trần Văn Bình", "Lê Thị Cúc", "Phạm Minh Đức", "Võ Thanh Hải", "Ngô Quốc Khánh", "Đặng Văn Lâm", "Bùi Thị Mai", "Huỳnh Tấn Phát",
@@ -154,7 +155,78 @@ function milestonePreset(day) {
   };
 }
 
+/**
+ * Video camera giả (.y4m, 1080×1920 dọc như điện thoại) cho Chromium: thẻ trắng có mã QR trên nền có vân, mờ nhẹ +
+ * nhiễu — mức bộ giải mã JS cũ không đọc được mà ZXing-C++ + lượt phóng to đọc được (đo 13/10/2026). Mã thẻ không có
+ * trong danh bạ nên hộp quét chỉ tra (GET) rồi báo "chưa có", không ghi gì vào DB.
+ */
+const FAKE_CARD_CODE = "UI-QR-KHONG-CO-THAT";
+async function writeFakeCameraVideo(file, { px = 5, blur = 0.5, noise = 8 } = {}) {
+  const { existsSync, openSync, writeSync, closeSync, mkdirSync } = await import("node:fs");
+  if (existsSync(file)) return;
+  mkdirSync(path.dirname(file), { recursive: true });
+  const { QRCodeWriter, BarcodeFormat, EncodeHintType } = await import("@zxing/library");
+  const W = 1080, H = 1920;
+  const matrix = new QRCodeWriter().encode(`https://duyenhai1.vn/the?id=${FAKE_CARD_CODE}`, BarcodeFormat.QR_CODE, 0, 0, new Map([[EncodeHintType.MARGIN, 0]]));
+  const n = matrix.getWidth(), quiet = 4 * px, card = n * px + 2 * quiet;
+  const x0 = W / 2 + 40 - card / 2, y0 = H / 2 - 60 - card / 2;
+  const g = new Float32Array(W * H);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const fx = (x + 0.5 - x0 - quiet) / px, fy = (y + 0.5 - y0 - quiet) / px;
+    const onCard = x >= x0 - card * 0.15 && x < x0 + card * 1.15 && y >= y0 - card * 0.3 && y < y0 + card * 1.3;
+    g[y * W + x] = !onCard ? 120 + 35 * Math.sin(x / 47) * Math.cos(y / 61) : fx >= 0 && fy >= 0 && fx < n && fy < n && matrix.get(Math.floor(fx), Math.floor(fy)) ? 35 : 232;
+  }
+  const sigma = blur * px, r = Math.ceil(sigma * 3), k = [];
+  for (let i = -r; i <= r; i++) k.push(Math.exp(-i * i / (2 * sigma * sigma)));
+  const ks = k.reduce((a, b) => a + b, 0), t = new Float32Array(W * H);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { let s = 0; for (let i = -r; i <= r; i++) s += g[y * W + Math.min(W - 1, Math.max(0, x + i))] * k[i + r]; t[y * W + x] = s / ks; }
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { let s = 0; for (let i = -r; i <= r; i++) s += t[Math.min(H - 1, Math.max(0, y + i)) * W + x] * k[i + r]; g[y * W + x] = s / ks; }
+  const fd = openSync(file, "w");
+  writeSync(fd, `YUV4MPEG2 W${W} H${H} F10:1 Ip A1:1 C420jpeg\n`);
+  const chroma = Buffer.alloc(W * H / 2, 128);
+  let seed = 7;
+  for (let f = 0; f < 4; f++) {
+    const luma = Buffer.alloc(W * H);
+    for (let i = 0; i < luma.length; i++) { seed = (seed * 1103515245 + 12345) & 0x7fffffff; luma[i] = Math.min(255, Math.max(0, g[i] + (seed / 0x7fffffff - 0.5) * noise)); }
+    writeSync(fd, "FRAME\n"); writeSync(fd, luma); writeSync(fd, chroma);
+  }
+  closeSync(fd);
+}
+
 export const PRESETS = {
+  "quet-the-camera-gia": {
+    description: "Hộp quét thẻ PCT đọc mã từ CAMERA GIẢ (video .y4m, mã hơi mờ): phải tải được ZXing-C++ (.wasm) và hiện thẻ vừa quét — chỉ tra, không ghi",
+    async prepare({ prisma }) {
+      if (await prisma.workPermitPerson.findUnique({ where: { code: FAKE_CARD_CODE } })) throw new Error(`DB dev có người mang mã ${FAKE_CARD_CODE} — đổi FAKE_CARD_CODE để lượt quét không ghi vào lần làm việc.`);
+      // Cần phiếu có nút quét: đang có lần làm việc mở ("Quét vào / ra") hoặc chưa quá hạn (form mở lần làm việc có "Quét thẻ").
+      const permit = await prisma.workPermit.findFirst({
+        where: {
+          teamType: "CONTRACTOR", status: { notIn: ["DRAFT", "CANCELLED", "CLOSED"] },
+          OR: [{ sessions: { some: { endedAt: null } } }, { plannedEndAt: null }, { plannedEndAt: { gt: new Date() } }],
+        },
+        orderBy: { updatedAt: "desc" }, select: { id: true },
+      });
+      if (!permit) throw new Error("DB dev không có PCT nhà thầu nào đang mở hoặc còn hạn — cấp một phiếu nhà thầu trên dev rồi chạy lại.");
+      const video = path.resolve("reports", "verify", "camera-gia-qr-mo.y4m");
+      await writeFakeCameraVideo(video);
+      return { permitId: permit.id, video };
+    },
+    launchArgs: ({ video }) => ["--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream", `--use-file-for-fake-video-capture=${video}`],
+    routes: ({ permitId }) => [`/work-permits/${permitId}/lam-viec`],
+    async interact(page) {
+      // Chưa có lần làm việc mở: mở form "Cho phép / mở lần làm việc" (chỉ mở form, không lưu) để có nút "Quét thẻ".
+      const open = page.getByRole("button", { name: "Cho phép / mở lần làm việc" });
+      if (await open.count()) await open.first().click();
+      const wasm = page.waitForResponse((r) => r.url().includes("zxing_reader.wasm"), { timeout: 60_000 });
+      wasm.catch(() => {}); // bấm nút lỗi thì lời chờ này không được làm sập cả tiến trình
+      await page.getByRole("button", { name: /^(Quét thẻ|Quét vào \/ ra)$/ }).first().click();
+      const response = await wasm;
+      if (response.status() !== 200) throw new Error(`tải zxing_reader.wasm lỗi HTTP ${response.status()}`);
+      // Thẻ không có trong danh bạ → thẻ kết quả hiện "Mã quét <mã>"
+      await page.getByText(FAKE_CARD_CODE).first().waitFor({ timeout: 30_000 });
+      await page.waitForTimeout(300);
+    },
+  },
   "tiep-dia-ca-khong-nhiem-vu": {
     description: "Nhóm 2 khu vực: sáng/chiều mỗi ca một khu vực, đêm không có nhiệm vụ, cả ngày 1/2",
     async prepare() { return {}; },

@@ -86,6 +86,7 @@ export async function proxy(req: NextRequest) {
 export const config = {
   matcher: [
     "/api/:path*",
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|mp4|webm|mov|ico|woff2?)$).*)",
+    // .wasm: bộ giải mã QR ZXing-C++ (public/vendor/zxing-wasm, lib/qr-wasm-asset.ts) — tệp tĩnh công khai của thư viện
+    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|mp4|webm|mov|ico|woff2?|wasm)$).*)",
   ],
 };

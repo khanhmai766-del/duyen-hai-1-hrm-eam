@@ -1,4 +1,4 @@
-import type { QrEngine, QrFrame } from "@/lib/qr-camera";
+import type { QrCrop, QrEngine, QrFrame } from "@/lib/qr-camera";
 
 /*
  * Đo thời gian của hộp quét thẻ PCT để tách hai loại chậm người dùng báo:
@@ -17,6 +17,12 @@ export type ScanMetricRow = {
   attempts: number;
   /** Từ khung đầu tiên thấy hình QR nhưng chưa đọc được tới lúc đọc được; null = đọc được ngay hoặc không biết. */
   struggleMs: number | null;
+  /** Lượt bắt được mã (lib/qr-camera.ts): full/wide = cả khung, zoom = phóng giữa khung, focus = phóng quanh mã đọc lỗi. */
+  crop: QrCrop | null;
+  /** Cạnh dài của mã trên khung video (điểm ảnh video) lúc đọc được — đo gián tiếp thẻ cầm xa hay gần. */
+  qrPx: number | null;
+  /** Mức zoom camera lúc đọc được (Android); null = không chỉnh zoom. */
+  zoom: number | null;
   lookupMs: number;
   actionMs: number;
   /** Bắt được mã → hiện kết quả. */
@@ -38,6 +44,8 @@ export type ScanMetricSession = {
   stalls: number;
   maxStallMs: number;
   openMs: number;
+  /** Màn hình "rộng x cao @ tỉ lệ điểm ảnh" — UA iPhone không ghi đời máy, cỡ màn hình giúp phân nhóm. */
+  screen: string | null;
 };
 export type ScanMetricsPayload = { session: ScanMetricSession; scans: ScanMetricRow[]; final: boolean };
 
@@ -61,6 +69,7 @@ export class ScanMetricsCollector {
   private cycleAttempts = 0;
   private cycleFirstPartial: number | null = null;
   private cycleStall = 0;
+  private lastHit: Pick<QrFrame, "crop" | "box" | "zoom"> | null = null;
   private rows: ScanMetricRow[] = [];
   private sentAnything = false;
 
@@ -82,6 +91,7 @@ export class ScanMetricsCollector {
     if (this.decodeSamples.length < SAMPLE_LIMIT) this.decodeSamples.push(frame.decodeMs);
     if (frame.captureMs) { this.captureTotal += frame.captureMs; this.captureCount++; }
     if (frame.partial && this.cycleFirstPartial === null) this.cycleFirstPartial = performance.now();
+    if (frame.text) this.lastHit = { crop: frame.crop, box: frame.box, zoom: frame.zoom };
   }
 
   stall(ms: number) {
@@ -98,6 +108,9 @@ export class ScanMetricsCollector {
       waitMs: Math.round(now - this.cycleStart),
       attempts: source === "camera" ? this.cycleAttempts : 0,
       struggleMs: source === "camera" && this.cycleFirstPartial !== null ? Math.round(now - this.cycleFirstPartial) : null,
+      crop: source === "camera" ? this.lastHit?.crop ?? null : null,
+      qrPx: source === "camera" && this.lastHit?.box ? Math.round(Math.max(this.lastHit.box.w, this.lastHit.box.h)) : null,
+      zoom: source === "camera" && this.lastHit?.zoom != null ? Math.round(this.lastHit.zoom * 10) / 10 : null,
     };
   }
 
@@ -105,7 +118,7 @@ export class ScanMetricsCollector {
     const now = performance.now();
     this.rows.push({
       source: row.source, engine: row.source === "camera" ? this.engine : null,
-      waitMs: detected.waitMs, attempts: detected.attempts, struggleMs: detected.struggleMs,
+      waitMs: detected.waitMs, attempts: detected.attempts, struggleMs: detected.struggleMs, crop: detected.crop, qrPx: detected.qrPx, zoom: detected.zoom,
       lookupMs: Math.round(row.lookupMs), actionMs: Math.round(row.actionMs), totalMs: Math.round(now - detected.at),
       stallMs: Math.round(this.cycleStall), result: row.result,
     });
@@ -127,6 +140,7 @@ export class ScanMetricsCollector {
         decodeP95Ms: sorted.length ? Math.round(sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * 0.95))]) : null,
         captureAvgMs: avg(this.captureTotal, this.captureCount),
         stalls: this.stalls, maxStallMs: Math.round(this.maxStall), openMs: Math.round(performance.now() - this.openedAt),
+        screen: typeof screen === "undefined" ? null : `${screen.width}x${screen.height}@${Math.round((globalThis.devicePixelRatio ?? 1) * 100) / 100}`,
       },
     });
     this.rows = [];

@@ -1,11 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Camera, CameraOff, CheckCircle2, CircleAlert, CircleX, UserPlus, X } from "lucide-react";
+import { Camera, CameraOff, CheckCircle2, CircleAlert, CircleX, Flashlight, FlashlightOff, UserPlus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { lookupPermitCard, reportPermitScanMetrics, useSavePermitPerson } from "@/hooks/useWorkPermits";
-import { startQrScanner } from "@/lib/qr-camera";
+import { qrCameraTorch, QR_CAMERA_CONSTRAINTS, startQrScanner, tuneQrCameraTrack } from "@/lib/qr-camera";
 import { cardExpired, cardlessCode, isCardlessCode, parseCardQr, sameCompany } from "@/lib/work-permit-card";
 import { formatPermitNumber, PERMIT_CONTRACTOR_SCOPES, personScopeError, type PermitContractorScope, type PermitMember, type PermitPerson } from "@/lib/work-permits";
 import { PermitCameraScanGuard } from "@/lib/work-permit-scan-guard";
@@ -118,6 +118,8 @@ export function PermitCardScanner({ unit, companies, scope, existing, permitId, 
   const [quickName, setQuickName] = useState("");
   const [camera, setCamera] = useState<"off" | "starting" | "on" | "error">("off");
   const [cameraMessage, setCameraMessage] = useState("");
+  // Đèn pin (chỉ Chrome Android cho bật) — chỗ thiếu sáng ở hiện trường làm ảnh nhiễu, khó đọc mã.
+  const [torch, setTorch] = useState<{ set: (on: boolean) => Promise<boolean>; on: boolean } | null>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const controlsRef = useRef<{ stop: () => void } | null>(null);
@@ -221,6 +223,7 @@ export function PermitCardScanner({ unit, companies, scope, existing, permitId, 
     const video = videoRef.current;
     (video?.srcObject as MediaStream | null)?.getTracks().forEach(track => track.stop());
     if (video) video.srcObject = null;
+    setTorch(null);
     setCamera("off");
   }, []);
 
@@ -234,7 +237,8 @@ export function PermitCardScanner({ unit, companies, scope, existing, permitId, 
     metrics.cameraStarting();
     let stream: MediaStream | null = null;
     try {
-      stream = await navigator.mediaDevices.getUserMedia({ audio: false, video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } } });
+      stream = await navigator.mediaDevices.getUserMedia(QR_CAMERA_CONSTRAINTS);
+      tuneQrCameraTrack(stream);
       if (stale()) { stream.getTracks().forEach(track => track.stop()); return; }
       const video = videoRef.current;
       if (!video) throw new Error("Không có khung camera");
@@ -251,9 +255,11 @@ export function PermitCardScanner({ unit, companies, scope, existing, permitId, 
           cameraGuardRef.current.accept(code);
           void handleRef.current(text, "camera");
         }
-      });
+      }, { track: stream.getVideoTracks()[0] });
       if (stale()) { controls.stop(); stream.getTracks().forEach(track => track.stop()); return; }
       controlsRef.current = controls;
+      const setTorchOn = qrCameraTorch(stream);
+      setTorch(setTorchOn ? { set: setTorchOn, on: false } : null);
       stream = null;
       metrics.cameraOn(controls.engine, video.videoWidth, video.videoHeight);
       setCamera("on");
@@ -346,7 +352,12 @@ export function PermitCardScanner({ unit, companies, scope, existing, permitId, 
             {["left-0 top-0 border-l-4 border-t-4 rounded-tl-2xl", "right-0 top-0 border-r-4 border-t-4 rounded-tr-2xl", "bottom-0 left-0 border-b-4 border-l-4 rounded-bl-2xl", "bottom-0 right-0 border-b-4 border-r-4 rounded-br-2xl"]
               .map(corner => <span key={corner} className={`absolute h-8 w-8 border-white ${corner}`} />)}
           </div>
-          <p className="pointer-events-none absolute inset-x-0 bottom-2 px-2 text-center text-xs font-medium text-white/90 drop-shadow">Mỗi thẻ một lượt — đưa mã ra khỏi khung trước khi quét lại</p>
+          {/* iPhone đời Pro không lấy nét được khi thẻ sát camera (< ~20 cm) — áp sát là nhòe, càng khó đọc. */}
+          <p className="pointer-events-none absolute inset-x-0 bottom-2 px-2 text-center text-xs font-medium text-white/90 drop-shadow">Cách 20–25 cm, giữ yên · mỗi thẻ một lượt</p>
+          {torch && <Button type="button" size="sm" variant="secondary" className="absolute left-2 top-2 h-8" aria-pressed={torch.on}
+            onClick={() => { const next = !torch.on; void torch.set(next).then(done => { if (done) setTorch(t => t && { ...t, on: next }); }); }}>
+            {torch.on ? <FlashlightOff /> : <Flashlight />}{torch.on ? "Tắt đèn" : "Đèn"}
+          </Button>}
           <Button type="button" size="sm" variant="secondary" className="absolute right-2 top-2 h-8" onClick={stopCamera}><CameraOff />Tắt</Button>
         </>}
       </div>
