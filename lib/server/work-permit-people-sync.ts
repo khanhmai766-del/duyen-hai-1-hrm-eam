@@ -19,6 +19,11 @@ import { normalizeCardCode, cardlessCode, isCardlessCode } from "@/lib/work-perm
  * trăm người: `syncPeopleList` (nhanh, chỉ chữ) rồi lặp `syncPeoplePhotos` từng nhóm nhỏ.
  * Sheet là nguồn chuẩn cho họ tên / thông tin thẻ; ĐƠN VỊ lấy theo tên tab = Mã đơn vị (unitByTab).
  * Vai trò CHTT và "đang hoạt động" vẫn do sổ quản.
+ *
+ * HAI NGUỒN (14/10/2026): bảng thẻ nhà thầu Đại tu (PERMIT_CARD_SHEET_*) và bảng nhân sự SCTX
+ * (PERMIT_CARD_SHEET_SCTX_*) — mỗi bảng một web app Apps Script riêng. Người MỚI nhận nhóm theo nguồn; người đã có
+ * giữ nhóm trên sổ. Số thẻ là khoá chung của danh bạ: số thẻ đã thuộc người KHÁC (khác họ tên) của nhóm kia thì
+ * không ghi đè mà báo xung đột (bảng SCTX từng đánh lại SGIDC/01–14 trùng 14 người Đại tu).
  */
 
 export type SheetRow = {
@@ -29,7 +34,30 @@ export type SheetRow = {
  * Một ảnh cần tải, do bước list tạo và KÝ; trình duyệt chỉ chuyển nguyên văn sang bước photos. `source` là dấu
  * vết ảnh trong sheet (lưu vào photoSource để lần sau biết ảnh có đổi không), `exp` là hạn chữ ký (ms).
  */
-export type PhotoJob = { code: string; source: string; exp: number; sig: string };
+export type PhotoJob = { code: string; source: string; exp: number; sig: string; src: PeopleSyncSource };
+
+/** Hai bảng nguồn — khoá cũng là nhóm (scope) gán cho người MỚI của bảng đó. */
+export const PEOPLE_SYNC_SOURCES = {
+  OVERHAUL: { label: "Đại tu", urlEnv: "PERMIT_CARD_SHEET_URL", tokenEnv: "PERMIT_CARD_SHEET_TOKEN" },
+  SCTX: { label: "SCTX", urlEnv: "PERMIT_CARD_SHEET_SCTX_URL", tokenEnv: "PERMIT_CARD_SHEET_SCTX_TOKEN" },
+} as const;
+export type PeopleSyncSource = keyof typeof PEOPLE_SYNC_SOURCES;
+export function parsePeopleSyncSource(value: unknown): PeopleSyncSource {
+  if (value === undefined || value === null || value === "") return "OVERHAUL";
+  if (typeof value === "string" && Object.hasOwn(PEOPLE_SYNC_SOURCES, value)) return value as PeopleSyncSource;
+  throw fail("Nguồn đồng bộ không hợp lệ", 400);
+}
+
+/**
+ * Số thẻ trên sheet đã có hồ sơ thuộc NHÓM KHÁC: cùng họ tên → coi là cùng người (cập nhật, giữ nhóm trên sổ);
+ * khác họ tên → hai người dùng chung một số thẻ, KHÔNG ghi đè (trả câu báo).
+ */
+export function cardConflict(before: { name: string; scope: string | null } | undefined, incoming: { name: string; code: string; tab: string }, source: PeopleSyncSource) {
+  if (!before || !before.scope || before.scope === source) return null;
+  if (normalizeText(before.name).trim() === normalizeText(incoming.name).trim()) return null;
+  const owner = PEOPLE_SYNC_SOURCES[before.scope as PeopleSyncSource]?.label ?? before.scope;
+  return `${incoming.tab}: ${incoming.name} · số thẻ ${incoming.code} đã là của ${before.name} (nhóm ${owner}) — đánh số thẻ riêng trên bảng ${PEOPLE_SYNC_SOURCES[source].label}`;
+}
 
 const PHOTO_WIDTH = 360;
 const PHOTO_HEIGHT = 480;
@@ -38,37 +66,39 @@ const MAX_PHOTO_BATCH = 8;
 /** Chữ ký sống đủ cho một lượt đồng bộ vài trăm ảnh; hết hạn thì bấm đồng bộ lại. */
 const PHOTO_JOB_TTL_MS = 60 * 60_000;
 
-function photoJobSignature(code: string, source: string, exp: number) {
+function photoJobSignature(code: string, source: string, exp: number, src: PeopleSyncSource) {
   const secret = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET;
   if (!secret) throw fail("Máy chủ chưa cấu hình AUTH_SECRET", 503);
   return createHmac("sha256", secret).update(`work-permit-photo
+${src}
 ${code}
 ${source}
 ${exp}`).digest("base64url");
 }
-function signPhotoJob(code: string, source: string, exp: number): PhotoJob {
-  return { code, source, exp, sig: photoJobSignature(code, source, exp) };
+function signPhotoJob(code: string, source: string, exp: number, src: PeopleSyncSource): PhotoJob {
+  return { code, source, exp, src, sig: photoJobSignature(code, source, exp, src) };
 }
 function photoJobValid(job: PhotoJob) {
-  if (typeof job.sig !== "string" || !Number.isFinite(job.exp) || job.exp < Date.now()) return false;
-  const expected = Buffer.from(photoJobSignature(job.code, job.source, job.exp));
+  if (typeof job.sig !== "string" || !Number.isFinite(job.exp) || job.exp < Date.now() || !Object.hasOwn(PEOPLE_SYNC_SOURCES, job.src)) return false;
+  const expected = Buffer.from(photoJobSignature(job.code, job.source, job.exp, job.src));
   const received = Buffer.from(job.sig);
   return expected.length === received.length && timingSafeEqual(expected, received);
 }
 
-function sheetConfig() {
-  const url = process.env.PERMIT_CARD_SHEET_URL?.trim();
-  const token = process.env.PERMIT_CARD_SHEET_TOKEN?.trim();
-  if (!url || !token) throw fail("Chưa cấu hình đồng bộ Google Sheets (PERMIT_CARD_SHEET_URL, PERMIT_CARD_SHEET_TOKEN). Liên hệ quản trị.", 503);
-  return { url, token };
+function sheetConfig(source: PeopleSyncSource) {
+  const { label, urlEnv, tokenEnv } = PEOPLE_SYNC_SOURCES[source];
+  const url = process.env[urlEnv]?.trim();
+  const token = process.env[tokenEnv]?.trim();
+  if (!url || !token) throw fail(`Chưa cấu hình đồng bộ bảng nhân sự ${label} (${urlEnv}, ${tokenEnv}). Liên hệ quản trị.`, 503);
+  return { url, token, tokenEnv };
 }
 
 /**
  * `notJson`: thông báo khi web app trả thứ không phải JSON. Lấy danh sách lỗi kiểu này thường là web app chưa có
  * chế độ JSON; còn lấy ảnh thì danh sách đã chạy được nên đó là trang lỗi tạm thời của Google.
  */
-async function callSheet<T>(params: Record<string, string>, timeoutMs: number, notJson: string): Promise<T> {
-  const { url, token } = sheetConfig();
+async function callSheet<T>(source: PeopleSyncSource, params: Record<string, string>, timeoutMs: number, notJson: string): Promise<T> {
+  const { url, token, tokenEnv } = sheetConfig(source);
   const target = `${url}${url.includes("?") ? "&" : "?"}${new URLSearchParams({ ...params, token })}`;
   let res: Response;
   let text: string;
@@ -85,7 +115,7 @@ async function callSheet<T>(params: Record<string, string>, timeoutMs: number, n
   try { json = JSON.parse(text); } catch {
     throw fail(`${notJson} (HTTP ${res.status})`, 502);
   }
-  if (!json.ok) throw fail(json.error === "token" ? "Mã khoá đồng bộ Google Sheets không khớp (PERMIT_CARD_SHEET_TOKEN)." : `Google Sheets báo lỗi: ${json.error ?? "không rõ"}`, 502);
+  if (!json.ok) throw fail(json.error === "token" ? `Mã khoá đồng bộ Google Sheets không khớp (${tokenEnv}).` : `Google Sheets báo lỗi: ${json.error ?? "không rõ"}`, 502);
   return json;
 }
 
@@ -128,10 +158,10 @@ function photoNeedsFetch(before: { photoKey: string | null; photoSource: string 
   return !isRotatingPhotoRef(ref) && before.photoSource !== ref;
 }
 
-export async function syncPeopleList() {
+export async function syncPeopleList(source: PeopleSyncSource = "OVERHAUL") {
   // Apps Script có lúc trả cả danh sách chậm hơn 60s. Phải nhỏ hơn proxy_read_timeout 180s của khối nginx riêng
   // `location = /api/work-permits/people/sync` (thêm 07/10/2026) để người dùng thấy câu báo lỗi của app thay vì 504 trơn.
-  const { rows } = await callSheet<{ rows: SheetRow[] }>({ format: "json" }, 150_000,
+  const { rows } = await callSheet<{ rows: SheetRow[] }>(source, { format: "json" }, 150_000,
     "Google Sheets không trả dữ liệu JSON. Kiểm tra đã thêm đoạn code đồng bộ vào Apps Script và triển khai lại web app");
   if (!Array.isArray(rows)) throw fail("Dữ liệu Google Sheets không đúng định dạng (thiếu rows)", 502);
   const unitOf = await unitByTab();
@@ -167,8 +197,14 @@ export async function syncPeopleList() {
   // Người vừa được cấp thẻ: hồ sơ cũ mang mã tạm HL-… theo họ tên → đổi mã sang số thẻ trên CHÍNH hồ sơ đó
   // (giữ lịch sử lần làm việc, vai trò CHTT), chỉ khi cùng đơn vị và số thẻ chưa có hồ sơ riêng.
   const upgrades = new Map([...byCode.values()].filter(p => !isCardlessCode(p.code)).map(p => [cardlessCode(p.name), p.code]));
-  const existingRows = await prisma.workPermitPerson.findMany({ where: { code: { in: [...byCode.keys(), ...upgrades.keys()] } }, select: { code: true, phone: true, company: true, photoKey: true, photoSource: true } });
+  const existingRows = await prisma.workPermitPerson.findMany({ where: { code: { in: [...byCode.keys(), ...upgrades.keys()] } }, select: { code: true, name: true, scope: true, phone: true, company: true, photoKey: true, photoSource: true } });
   const existing = new Map(existingRows.map(p => [p.code, p]));
+  // Số thẻ đã là của người khác bên nhóm kia → bỏ dòng sheet, không ghi đè hồ sơ đó.
+  const conflicts: string[] = [];
+  for (const [code, data] of byCode) {
+    const conflict = cardConflict(existing.get(code), { name: data.name, code, tab: data.tab }, source);
+    if (conflict) { conflicts.push(conflict); byCode.delete(code); }
+  }
   const renameFrom = new Map<string, string>();
   for (const [temp, real] of upgrades) {
     const old = existing.get(temp);
@@ -190,8 +226,9 @@ export async function syncPeopleList() {
       units.set(data.company, unit);
       const fromCode = renameFrom.get(data.code) ?? data.code;
       if (before && before.company !== data.company) moved.push(`${data.name} (${data.code}): ${before.company} → ${data.company} (tab ${tab})`);
-      if (photoRef && photoNeedsFetch(before, photoRef)) photos.push(signPhotoJob(data.code, photoRef, photoExp));
-      if (!before) { created++; return prisma.workPermitPerson.create({ data: { ...data, canCommand: false, isActive: true, scope: "OVERHAUL" } }); }
+      if (photoRef && photoNeedsFetch(before, photoRef)) photos.push(signPhotoJob(data.code, photoRef, photoExp, source));
+      // Người mới nhận nhóm theo bảng nguồn; người đã có giữ nhóm trên sổ (sổ có thể đã chuyển nhóm tay).
+      if (!before) { created++; return prisma.workPermitPerson.create({ data: { ...data, canCommand: false, isActive: true, scope: source } }); }
       updated++;
       // Sheet để trống SĐT thì giữ SĐT đã nhập trên sổ; vai trò CHTT/"đang hoạt động" không đụng tới.
       const phone = data.phone || before.phone;
@@ -201,6 +238,7 @@ export async function syncPeopleList() {
     }));
   }
   return {
+    source, sourceLabel: PEOPLE_SYNC_SOURCES[source].label, conflicts: conflicts.slice(0, 50), conflictCount: conflicts.length,
     total: byCode.size, created, updated, skipped: skipped.length, skippedSamples: skipped.slice(0, 20),
     skippedTabs: [...skippedTabs].map(([tab, rows]) => ({ tab, rows })).sort((a, b) => a.tab.localeCompare(b.tab, "vi")),
     moved: moved.slice(0, 50), movedCount: moved.length, photos,
@@ -220,7 +258,7 @@ export async function syncPeoplePhotos(input: unknown) {
   if (!Array.isArray(input) || input.length > MAX_PHOTO_BATCH) throw fail(`Mỗi đợt tải tối đa ${MAX_PHOTO_BATCH} ảnh`);
   const jobs = input.map(item => {
     const job = item && typeof item === "object" ? item as Partial<PhotoJob> : {};
-    return { code: str(job.code, 80), source: str(job.source, 2000), exp: Number(job.exp), sig: String(job.sig ?? "") };
+    return { code: str(job.code, 80), source: str(job.source, 2000), exp: Number(job.exp), sig: String(job.sig ?? ""), src: String(job.src ?? "") as PeopleSyncSource };
   });
   if (jobs.some(job => !photoJobValid(job))) throw fail("Danh sách ảnh không hợp lệ hoặc đã hết hạn. Bấm đồng bộ lại.", 400);
   const people = await prisma.workPermitPerson.findMany({ where: { code: { in: jobs.map(job => job.code) } }, select: { code: true, name: true } });
@@ -231,7 +269,7 @@ export async function syncPeoplePhotos(input: unknown) {
       const name = nameOf.get(code);
       if (name === undefined) throw new Error("Không còn hồ sơ của số thẻ này trên sổ");
       // Người chưa có thẻ (mã tạm HL-…): Apps Script tìm ảnh theo họ tên ở cột C; còn lại theo số thẻ.
-      const photo = await callSheet<{ contentType?: string; base64?: string }>({ format: "photo", id: isCardlessCode(code) ? name : code }, 45_000,
+      const photo = await callSheet<{ contentType?: string; base64?: string }>(job.src, { format: "photo", id: isCardlessCode(code) ? name : code }, 45_000,
         "Google tạm thời trả trang lỗi thay cho ảnh. Đồng bộ lại sau để tải tiếp");
       if (!photo.base64) throw new Error("Sheet không có ảnh cho số thẻ này");
       // Ảnh 3x4 để so mặt: thu về tối đa 360x480, WebP q72 (~20–50 KB), xoay theo EXIF.

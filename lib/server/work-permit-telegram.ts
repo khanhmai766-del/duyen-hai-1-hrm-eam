@@ -128,7 +128,7 @@ export async function enqueueOverhaulEnding(tx: Prisma.TransactionClient, permit
 export async function buildOverhaulDailyDigest(now = new Date(), db = prisma) {
   const day = permitWorkingDay(vietnamDayWindow(now, -1).start);
   const [daily, roster, companies] = await Promise.all([
-    loadDailyWorkingByCompany(day, now, true, db),
+    loadDailyWorkingByCompany(day, now, "OVERHAUL", db),
     db.workPermitPerson.groupBy({ by: ["company"], where: { scope: "OVERHAUL" }, _count: { _all: true } }),
     db.workPermitCompany.findMany({ select: { name: true, code: true } }),
   ]);

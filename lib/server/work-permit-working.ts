@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { lastVisit } from "@/lib/work-permit-attendance";
 import { presentMembers, samePermitWorker } from "@/lib/work-permit-presence";
-import { isSessionCommander, type PermitKind, type PermitMember } from "@/lib/work-permits";
+import { isSessionCommander, type PermitContractorScope, type PermitKind, type PermitMember } from "@/lib/work-permits";
 
 export interface WorkingPerson {
   name: string; code: string; personId?: string;
@@ -18,8 +18,8 @@ export interface WorkingPerson {
  * nghĩa với chặn một người vào hai phiếu (lib/server/work-permit-presence.ts). Một người chỉ tính một lần.
  * Dùng chung cho cột "Đang làm việc" của bảng đơn vị và file Excel theo cương vị, để hai số luôn khớp.
  */
-export async function loadWorkingPeople(): Promise<WorkingPerson[]> {
-  const sessions = await prisma.workPermitSession.findMany({ where: { endedAt: null }, orderBy: { openedAt: "asc" },
+export async function loadWorkingPeople(scope: PermitContractorScope | null = null): Promise<WorkingPerson[]> {
+  const sessions = await prisma.workPermitSession.findMany({ where: { endedAt: null, ...(scope ? { permit: { teamType: "CONTRACTOR", contractorScope: scope } } : {}) }, orderBy: { openedAt: "asc" },
     select: { commanderId: true, commanderCode: true, commanderName: true, company: true, members: true, openedAt: true,
       permit: { select: { id: true, number: true, nkvhNumber: true, year: true, kind: true, position: true, content: true, location: true } } } });
   const found: Array<{ member: PermitMember; role: WorkingPerson["role"]; since: Date; permit: WorkingPerson["permit"] }> = [];

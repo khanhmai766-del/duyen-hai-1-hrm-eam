@@ -15,7 +15,7 @@ test("Nhân sự và danh sách số hiệu PCT gộp nhiều lần làm việc,
     { ...base, openedAt: new Date("2026-10-11T23:00:00+07:00"), endedAt: at("01:00:00"), members: [] },
     { ...base, openedAt: new Date("2026-10-11T22:00:00+07:00"), endedAt: at("00:00:00"), permit: { id: "old", number: "4000", year: 2026 }, members: [] },
   ]; } }, workPermitPerson: { findMany: async () => ["ch", "w1", "w2"].map(id => ({ id, company })) } } as unknown as typeof prisma;
-  const result = await loadDailyWorkingByCompany("2026-10-12", at("23:00:00"), true, db);
+  const result = await loadDailyWorkingByCompany("2026-10-12", at("23:00:00"), "OVERHAUL", db);
   assert.equal(result.byCompany.get(company), 3);
   assert.deepEqual([...result.permitsByCompany.get(company)!.values()], ["4299/2026/VH1-NĐDH", "4300/2026/VH1-NĐDH"]);
   assert.deepEqual((where as { permit: unknown }).permit, { teamType: "CONTRACTOR", contractorScope: "OVERHAUL" });

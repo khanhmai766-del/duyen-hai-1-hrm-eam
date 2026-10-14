@@ -143,6 +143,33 @@ PERMIT_CARD_SHEET_TOKEN="<đúng chuỗi SYNC_TOKEN ở bước 1c>"
 
 Sau khi sửa `.env` trên server phải nạp lại tiến trình (`pm2 reload dh1-app --update-env`).
 
+## 3. Bảng nhân sự SCTX (nguồn thứ hai, 14/10/2026)
+
+Bảng nhân sự nhà thầu **SCTX** là một Google Sheets riêng (cùng bố cục cột B → P như bảng thẻ ở trên), có web
+app Apps Script riêng. Hộp **Đồng bộ từ Google Sheets** cho chọn nguồn **Nhà thầu Đại tu / Nhà thầu SCTX**:
+người MỚI nhận nhóm theo nguồn (Đại tu → `OVERHAUL`, SCTX → `SCTX`); người đã có giữ nhóm trên sổ.
+
+**Apps Script của bảng SCTX** — chép code của bảng thẻ (cả khối đồng bộ ở mục 1b) rồi sửa:
+
+- Bảng SCTX chỉ có **1 dòng tiêu đề** (bảng Đại tu có 2): thêm `var HEADER_ROWS = 1;` và thay mọi `<= 2`
+  (`actualRow`, `row`, `startRow + i`) bằng `<= HEADER_ROWS` — để 2 thì mất người ở dòng 2 của mỗi tab.
+- Có tab tổng hợp **TOTAL**: thêm `function isSkipTab_(n) { return /^(DASHBOARD|TOTAL)$/i.test(String(n).trim()); }`
+  và thay mọi so sánh `=== "DASHBOARD"` bằng `isSkipTab_(…)`.
+- `WEB_APP_BASE_URL` = link `/exec` của **bản triển khai trên chính bảng SCTX** (QR in ra mở trang thẻ của bảng SCTX).
+- `SYNC_TOKEN` riêng (khác bảng Đại tu), triển khai Ứng dụng web: *Thực thi: Tôi*, *Truy cập: Bất kỳ ai*.
+
+**Server** — thêm vào `.env` rồi `pm2 reload dh1-app --update-env`:
+
+```
+PERMIT_CARD_SHEET_SCTX_URL="https://script.google.com/macros/s/…/exec"
+PERMIT_CARD_SHEET_SCTX_TOKEN="<SYNC_TOKEN của bảng SCTX>"
+```
+
+**Số thẻ phải riêng giữa hai bảng.** Số thẻ là khoá chung của danh bạ và là thứ QR / ô nhập tra cứu. Ngày 14/10/2026
+bảng SCTX đánh SGIDC/01–14 trùng 14 người Đại tu (khác người) → user chọn **đánh số riêng cho SCTX**. Sổ có lớp chặn:
+số thẻ đã thuộc người KHÁC HỌ TÊN bên nhóm kia thì **không ghi đè**, hộp đồng bộ liệt kê ở khung đỏ
+(`cardConflict`, lib/server/work-permit-people-sync.ts); cùng họ tên thì coi là cùng người và cập nhật.
+
 ## Bảo mật
 
 Trang thẻ cũ (`/exec?id=…`, không có `format`) vẫn mở công khai như trước: ai có link + số thẻ xem được

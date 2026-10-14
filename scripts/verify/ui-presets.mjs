@@ -696,6 +696,28 @@ export const PRESETS = {
       await page.waitForTimeout(300);
     },
   },
+  "nhan-su-nha-thau-theo-nhom": {
+    description: "Tab Nhân sự nhà thầu sổ xuống Đại tu / SCTX — chọn SCTX (sync=1: mở thêm hộp Đồng bộ, KHÔNG bấm đồng bộ)",
+    async prepare() { return {}; },
+    routes: () => ["/work-permits"],
+    async interact(page) {
+      const desktop = page.getByRole("button", { name: /^Nhân sự nhà thầu\. Bấm|^Nhân sự nhà thầu ·/ }).locator("visible=true");
+      if (await desktop.count()) {
+        await desktop.first().click();
+        await page.getByRole("menuitem", { name: "Nhân sự SCTX" }).click();
+      } else {
+        // Điện thoại: các mục sổ gom vào danh sách thả xuống — hai mục nhân sự tách theo nhóm.
+        await page.getByRole("button", { name: /^Đang xem:/ }).click();
+        await page.getByRole("menuitem", { name: "Nhân sự SCTX" }).click();
+      }
+      await page.getByText("Đơn vị nhà thầu · SCTX").waitFor();
+      await page.waitForTimeout(800);
+      if (process.env.UI_SYNC === "1") {
+        await page.getByRole("button", { name: /^Đồng bộ (từ Google )?Sheets$/ }).locator("visible=true").first().click();
+        await page.waitForTimeout(300);
+      }
+    },
+  },
   "doi-chieu-so-nkvh-da-xoa": {
     description: "Khung Đối chiếu số NKVH (PCT Điện) có số kẹt vì phiếu NKVH đã bị xoá — nút quản trị + hộp xác nhận; dữ liệu giả lập, không ghi",
     async prepare() { return {}; },

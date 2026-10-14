@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { audit, fail, ok, requireUser } from "@/lib/api";
 import { normalizeText } from "@/lib/nav";
-import { companyScopeLabel } from "@/lib/work-permits";
+import { companyScopeLabel, PERMIT_CONTRACTOR_SCOPES, type PermitContractorScope } from "@/lib/work-permits";
 import { loadWorkingPeople } from "@/lib/server/work-permit-working";
 import { loadDailyWorkingByCompany } from "@/lib/server/work-permit-daily-working";
 import { permitWorkingDay, permitWorkingDayBounds } from "@/lib/work-permit-daily-people";
@@ -44,8 +44,8 @@ async function assertCodeFree(code: string | undefined, exceptNames: string[]) {
 }
 
 /** Người đang làm việc theo đơn vị (định nghĩa ở lib/server/work-permit-working.ts). */
-async function workingByCompany() {
-  const people = await loadWorkingPeople();
+async function workingByCompany(scope: PermitContractorScope | null) {
+  const people = await loadWorkingPeople(scope);
   const byCompany = new Map<string, number>();
   for (const person of people) byCompany.set(person.company, (byCompany.get(person.company) ?? 0) + 1);
   return { byCompany, total: people.length };
@@ -61,16 +61,26 @@ export async function GET(req: Request) {
       const now = new Date();
       const day = params.get("day") ?? permitWorkingDay(now);
       try { permitWorkingDayBounds(day); } catch { return fail("Ngày không hợp lệ, vui lòng dùng định dạng YYYY-MM-DD"); }
+      // `scope` (OVERHAUL | SCTX): tab "Nhân sự nhà thầu" chọn một nhóm — mọi con số chỉ đếm người / phiếu của nhóm đó,
+      // và chỉ giữ đơn vị gắn nhóm đó, có người nhóm đó, hoặc chưa phân loại lẫn chưa có ai (để còn thêm người).
+      const rawScope = params.get("scope");
+      if (rawScope && !Object.hasOwn(PERMIT_CONTRACTOR_SCOPES, rawScope)) return fail("Nhóm nhà thầu không hợp lệ");
+      const scope = (rawScope || null) as PermitContractorScope | null;
       const [rows, working, daily] = await Promise.all([prisma.$queryRawUnsafe<Array<{ company: string; code: string; sctx: boolean; overhaul: boolean; total: bigint; commanders: bigint; active: bigint }>>(`
         SELECT c.company, COALESCE(MAX(w."code"), '') AS code, COALESCE(BOOL_OR(w."sctx"), false) AS sctx, COALESCE(BOOL_OR(w."overhaul"), false) AS overhaul, COUNT(p.id) AS total,
                COUNT(p.id) FILTER (WHERE p."canCommand") AS commanders,
                COUNT(p.id) FILTER (WHERE p."isActive") AS active
         FROM (${COMPANY_NAMES}) c
         LEFT JOIN "WorkPermitCompany" w ON w."name" = c.company
-        LEFT JOIN "WorkPermitPerson" p ON p."company" = c.company
-        GROUP BY c.company ORDER BY overhaul DESC, c.company`), workingByCompany(), loadDailyWorkingByCompany(day, now)]);
+        LEFT JOIN "WorkPermitPerson" p ON p."company" = c.company AND ($1::text IS NULL OR p."scope" = $1)
+        GROUP BY c.company
+        HAVING $1::text IS NULL OR COUNT(p.id) > 0
+          OR ($1 = 'OVERHAUL' AND COALESCE(BOOL_OR(w."overhaul"), false)) OR ($1 = 'SCTX' AND COALESCE(BOOL_OR(w."sctx"), false))
+          OR (NOT COALESCE(BOOL_OR(w."sctx"), false) AND NOT COALESCE(BOOL_OR(w."overhaul"), false)
+              AND NOT EXISTS (SELECT 1 FROM "WorkPermitPerson" x WHERE x."company" = c.company))
+        ORDER BY overhaul DESC, c.company`, scope), workingByCompany(scope), loadDailyWorkingByCompany(day, now, scope)]);
       return ok(rows.map(row => ({ company: row.company, code: row.code, sctx: row.sctx, overhaul: row.overhaul, total: Number(row.total), commanders: Number(row.commanders), active: Number(row.active), working: working.byCompany.get(row.company) ?? 0, workingToday: daily.byCompany.get(row.company) ?? 0 })),
-        { canWrite: (await permitCapabilities(user)).canIssue, working: working.total, workingToday: daily.total, workingDay: day });
+        { canWrite: (await permitCapabilities(user)).canIssue, working: working.total, workingToday: daily.total, workingDay: day, scope });
     }
     // Lấy từ toàn bộ danh bạ, không giới hạn bởi trang nhân sự hoặc vai trò CHTT.
     const rows = await prisma.$queryRawUnsafe<Array<{ company: string }>>(`SELECT company FROM (${COMPANY_NAMES}) c ORDER BY company`);

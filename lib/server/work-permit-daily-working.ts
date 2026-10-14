@@ -1,13 +1,16 @@
 import { prisma } from "@/lib/prisma";
 import { dailyWorkingPeople, permitWorkingDay, permitWorkingDayBounds } from "@/lib/work-permit-daily-people";
-import { formatPermitNumber } from "@/lib/work-permits";
+import { formatPermitNumber, type PermitContractorScope } from "@/lib/work-permits";
 
-/** Dùng chung cho bảng nhân sự và báo cáo cuối ngày; truyền ngày hôm trước cho báo cáo lúc 0h. */
-export async function loadDailyWorkingByCompany(day = permitWorkingDay(), now = new Date(), overhaulOnly = false, db = prisma) {
+/**
+ * Dùng chung cho bảng nhân sự và báo cáo cuối ngày; truyền ngày hôm trước cho báo cáo lúc 0h.
+ * `scope`: chỉ tính lần làm việc của phiếu nhà thầu nhóm đó (Đại tu / SCTX); null = mọi phiếu.
+ */
+export async function loadDailyWorkingByCompany(day = permitWorkingDay(), now = new Date(), scope: PermitContractorScope | null = null, db = prisma) {
   const { start, end } = permitWorkingDayBounds(day);
   const sessions = await db.workPermitSession.findMany({
     where: { openedAt: { lt: end }, OR: [{ endedAt: null }, { endedAt: { gt: start } }],
-      ...(overhaulOnly ? { permit: { teamType: "CONTRACTOR", contractorScope: "OVERHAUL" } } : {}) },
+      ...(scope ? { permit: { teamType: "CONTRACTOR", contractorScope: scope } } : {}) },
     orderBy: { openedAt: "asc" },
     select: { commanderId: true, commanderCode: true, commanderName: true, company: true, members: true, openedAt: true, endedAt: true,
       permit: { select: { id: true, number: true, year: true } } },

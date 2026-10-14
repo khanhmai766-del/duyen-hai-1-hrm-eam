@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient, useInfiniteQuery } from "@tansta
 import { apiDownload, apiGet, apiMutate } from "@/lib/fetcher";
 import type { OverhaulItemOption, OverhaulItemProgress, OverhaulItemSnapshot, OverhaulScheduleLink } from "@/lib/work-permit-overhaul";
 import type { ScanMetricsPayload } from "@/lib/work-permit-scan-metrics";
-import type { PermitHistory, PermitKind, PermitListRow, PermitDetailRow, PermitPerson, PermitRow, PermitStatus, PermitSession } from "@/lib/work-permits";
+import type { PermitContractorScope, PermitHistory, PermitKind, PermitListRow, PermitDetailRow, PermitPerson, PermitRow, PermitStatus, PermitSession } from "@/lib/work-permits";
 export interface PermitMeta { total: number; page: number; pageSize: number; counts: Partial<Record<PermitStatus, number>>; overhaulCount: number; canIssue: boolean; canIssueNew: boolean; canExecute: boolean; positionScope?: { all: boolean; codes: string[]; labels: string[] } }
 export interface PermitNumberSuggestion { configured: boolean; baseline: string | null; highest: string | null; suggested: string | null }
 export interface PermitNumberReservation {
@@ -171,12 +171,12 @@ export function usePermitPeople(params: { q?: string; page?: number; active?: bo
  * một trang nên lấy lần lượt tới hết. Trước 08/10/2026 chỉ lấy trang đầu — đơn vị trên 200 người (IDC 248) mất người
  * cuối danh sách. Khoá nằm dưới ["work-permit-people"] nên thêm / sửa / xoá người vẫn làm mới.
  */
-export function usePermitCompanyPeople(company: string, enabled = true) {
-  return useQuery({ queryKey: ["work-permit-people", "company-all", company], enabled: enabled && Boolean(company), queryFn: async () => {
+export function usePermitCompanyPeople(company: string, enabled = true, scope?: PermitContractorScope) {
+  return useQuery({ queryKey: ["work-permit-people", "company-all", company, scope ?? ""], enabled: enabled && Boolean(company), queryFn: async () => {
     const all: PermitPerson[] = [];
     let meta = { total: 0, pageSize: 200, canWrite: false };
     for (let page = 1; page <= 50; page++) {
-      const query = new URLSearchParams({ q: "", page: String(page), active: "0", commander: "0", company, limit: "200" });
+      const query = new URLSearchParams({ q: "", page: String(page), active: "0", commander: "0", company, limit: "200", ...(scope ? { scope } : {}) });
       const res = await apiGet<PermitPerson[]>(`/api/work-permits/people?${query}`) as { data: PermitPerson[]; meta: typeof meta };
       all.push(...res.data);
       meta = res.meta;
@@ -199,8 +199,13 @@ export function reportPermitScanMetrics(payload: ScanMetricsPayload) {
   } catch { /* trình duyệt từ chối keepalive (lô quá lớn) — bỏ qua */ }
 }
 /** Việc tải ảnh do máy chủ ký ở bước list — chuyển nguyên văn sang bước photos, không sửa. */
-export type PermitPhotoJob = { code: string; source: string; exp: number; sig: string };
+export type PermitPhotoJob = { code: string; source: string; exp: number; sig: string; src: PermitPeopleSyncSource };
+/** OVERHAUL = bảng thẻ nhà thầu Đại tu · SCTX = bảng nhân sự SCTX (lib/server/work-permit-people-sync.ts). */
+export type PermitPeopleSyncSource = "OVERHAUL" | "SCTX";
 export interface PermitPeopleSyncResult {
+  source: PermitPeopleSyncSource; sourceLabel: string;
+  /** Số thẻ trên sheet đã là của người khác bên nhóm kia — không ghi đè (tối đa 50 dòng). */
+  conflicts: string[]; conflictCount: number;
   total: number; created: number; updated: number; skipped: number; skippedSamples: string[];
   skippedTabs: Array<{ tab: string; rows: number }>; moved: string[]; movedCount: number;
   /** Theo đơn vị: mã (= tên tab), tổng người trên sheet, số người mới + tên (tối đa 30). */
@@ -210,7 +215,7 @@ export interface PermitPeopleSyncResult {
 export function useSyncPermitPeople() {
   const qc = useQueryClient();
   // meta.background: hộp đồng bộ có thanh tiến độ riêng — không bật lớp chờ toàn trang (AppShell).
-  const list = useMutation({ meta: { background: true }, mutationFn: () => apiMutate<PermitPeopleSyncResult>("/api/work-permits/people/sync", "POST", { step: "list" }) });
+  const list = useMutation({ meta: { background: true }, mutationFn: (source: PermitPeopleSyncSource) => apiMutate<PermitPeopleSyncResult>("/api/work-permits/people/sync", "POST", { step: "list", source }) });
   const photos = useMutation({ meta: { background: true }, mutationFn: (jobs: PermitPhotoJob[]) =>
     apiMutate<{ results: Array<{ code: string; ok: boolean; error?: string }> }>("/api/work-permits/people/sync", "POST", { step: "photos", jobs }) });
   const refresh = () => { qc.invalidateQueries({ queryKey: ["work-permit-people"] }); qc.invalidateQueries({ queryKey: ["work-permit-companies"] }); };
@@ -276,8 +281,9 @@ export function useRenamePermitCompany() {
   });
 }
 /** Bảng đơn vị nhà thầu kèm sĩ số, số CHTT và số người đang làm việc — dùng cho tab "Nhân sự nhà thầu". Tự làm mới mỗi phút vì số đang làm việc đổi theo quét vào/ra. */
-export function usePermitCompanySummary() {
-  return useQuery({ queryKey: ["work-permit-companies", "summary"], staleTime: 30000, refetchInterval: 60000, queryFn: () => apiGet<PermitCompanySummary[]>("/api/work-permits/companies?summary=1") as Promise<{ data: PermitCompanySummary[]; meta: { canWrite: boolean; working: number; workingToday: number; workingDay: string } }> });
+/** `scope`: chỉ đếm người / phiếu của một nhóm nhà thầu (tab "Nhân sự nhà thầu"); bỏ trống = mọi nhóm. */
+export function usePermitCompanySummary(scope?: PermitContractorScope) {
+  return useQuery({ queryKey: ["work-permit-companies", "summary", scope ?? ""], staleTime: 30000, refetchInterval: 60000, queryFn: () => apiGet<PermitCompanySummary[]>(`/api/work-permits/companies?summary=1${scope ? `&scope=${scope}` : ""}`) as Promise<{ data: PermitCompanySummary[]; meta: { canWrite: boolean; working: number; workingToday: number; workingDay: string } }> });
 }
 
 export function usePermitActivity<T>(id: string, type: "sessions" | "history", version: number, enabled: boolean) {

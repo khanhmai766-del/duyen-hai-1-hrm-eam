@@ -39,8 +39,11 @@ const fmt = (v: string) => new Date(v).toLocaleString("vi-VN", { timeZone: "Asia
  *
  * Luồng nhập: "Thêm đơn vị" ở đầu trang → mỗi dòng đơn vị có nút "Thêm nhân sự" điền sẵn đơn vị.
  * Thêm xong thì dòng đơn vị tự bung ra để thấy ngay người vừa thêm.
+ *
+ * `scope` (14/10/2026): tab chọn Đại tu hoặc SCTX — bảng, sĩ số, số đang làm việc, tìm kiếm, danh sách người
+ * khi bung, "Thêm nhân sự" và "Đồng bộ" đều chỉ theo nhóm đó.
  */
-export function PermitCompanyDirectory() {
+export function PermitCompanyDirectory({ scope }: { scope: PermitContractorScope }) {
   const [q, setQ] = useState("");
   const [openCompany, setOpenCompany] = useState<string | null>(null);
   const [editing, setEditing] = useState<PermitPerson | null>(null);
@@ -49,19 +52,17 @@ export function PermitCompanyDirectory() {
   const [syncing, setSyncing] = useState(false);
   const remove = useDeletePermitPerson();
   const removeCompany = useDeletePermitCompany();
-  const companies = usePermitCompanySummary();
+  const companies = usePermitCompanySummary(scope);
   // Chỉ gọi danh sách người khi có đơn vị đang mở; lấy ĐỦ mọi trang (đơn vị có thể trên 200 người).
-  const people = usePermitCompanyPeople(openCompany ?? "", Boolean(openCompany));
+  const people = usePermitCompanyPeople(openCompany ?? "", Boolean(openCompany), scope);
   const canWrite = companies.data?.meta.canWrite ?? false;
-  // Nhóm điền sẵn khi thêm người: đơn vị chỉ làm Đại tu → Đại tu, còn lại → SCTX (sửa được trong hộp thoại).
-  const addingRow = companies.data?.data.find(row => row.company === addingPersonTo);
-  const addingScope: PermitContractorScope = addingRow?.overhaul && !addingRow.sctx ? "OVERHAUL" : "SCTX";
+  const scopeLabel = PERMIT_CONTRACTOR_SCOPES[scope];
   // Ô tìm kiếm khớp cả NGƯỜI (họ tên, số thẻ, SĐT — nhân viên lẫn CHTT): tra máy chủ sau khi ngừng gõ,
   // rồi giữ lại các đơn vị có người khớp. Đơn vị khớp theo mã/tên thì vẫn hiện như cũ.
   const term = normalizeText(q.trim());
   const [personQ, setPersonQ] = useState("");
   useEffect(() => { const timer = setTimeout(() => setPersonQ(q.trim()), 300); return () => clearTimeout(timer); }, [q]);
-  const personSearch = usePermitPeople({ q: personQ, limit: 200, enabled: personQ.length >= 2 });
+  const personSearch = usePermitPeople({ q: personQ, scope, limit: 200, enabled: personQ.length >= 2 });
   const personHits = new Map<string, PermitPerson[]>();
   if (term.length >= 2 && normalizeText(personQ) === term) for (const person of personSearch.data?.data ?? []) {
     // searchText có cả tên đơn vị — chỉ tính người khớp theo chính họ tên / số thẻ / SĐT của họ.
@@ -97,12 +98,12 @@ export function PermitCompanyDirectory() {
   const act = (event: React.MouseEvent, run: () => void) => { event.stopPropagation(); run(); };
   return <section className="space-y-4">
     <div className="flex flex-wrap items-start justify-between gap-3">
-      <div><h2 className="flex items-center gap-2 text-base font-semibold"><Users size={18} />Đơn vị nhà thầu</h2><p className="mt-0.5 text-xs text-muted-foreground">Thêm đơn vị trước, rồi thêm nhân sự và CHTT ngay trên dòng của đơn vị đó. Bấm một dòng để xem danh sách người.</p></div>
+      <div><h2 className="flex items-center gap-2 text-base font-semibold"><Users size={18} />Đơn vị nhà thầu · {scopeLabel}</h2><p className="mt-0.5 text-xs text-muted-foreground">Thêm đơn vị trước, rồi thêm nhân sự và CHTT ngay trên dòng của đơn vị đó. Bấm một dòng để xem danh sách người.</p></div>
       {canWrite && <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto"><Button type="button" size="sm" variant="outline" className="h-10 text-xs sm:h-9" title="Lấy họ tên, số thẻ, hạn thẻ, huấn luyện và ảnh từ bảng quản lý thẻ ra vào cổng" onClick={() => setSyncing(true)}><RefreshCw /><span className="sm:hidden">Đồng bộ Sheets</span><span className="hidden sm:inline">Đồng bộ từ Google Sheets</span></Button><Button type="button" size="sm" className="h-10 text-xs sm:h-9" onClick={() => setCompanyForm({ mode: "create" })}><Plus />Thêm đơn vị</Button></div>}
     </div>
     <div className="overflow-hidden rounded-xl border border-border bg-card">
       <div className="flex flex-col gap-3 border-b border-border bg-muted/25 px-4 py-3 md:flex-row md:items-center md:justify-between">
-        <p className="text-sm text-muted-foreground"><strong className="font-semibold text-foreground">{rows.length}</strong> đơn vị · <strong className="font-semibold text-foreground">{rows.reduce((sum, row) => sum + row.total, 0)}</strong> người · <span className={workingTotal ? "text-emerald-700" : undefined} title="CHTT và nhân viên chưa quét RA ở các PCT đang làm việc, tính cho mọi đơn vị"><strong className="font-semibold">{workingTotal}</strong> đang làm việc</span></p>
+        <p className="text-sm text-muted-foreground"><strong className="font-semibold text-foreground">{rows.length}</strong> đơn vị · <strong className="font-semibold text-foreground">{rows.reduce((sum, row) => sum + row.total, 0)}</strong> người · <span className={workingTotal ? "text-emerald-700" : undefined} title={`CHTT và nhân viên chưa quét RA ở các PCT ${scopeLabel} đang làm việc, tính cho mọi đơn vị`}><strong className="font-semibold">{workingTotal}</strong> đang làm việc</span></p>
         <div className="flex w-full items-center gap-2 md:w-auto">
           <span className="hidden text-sm text-muted-foreground md:inline">Tìm kiếm:</span>
           <input type="search" className="h-10 w-full rounded-xl border border-input bg-background px-3 text-base focus:outline-none sm:h-9 sm:text-sm focus:ring-2 focus:ring-ring md:w-72" aria-label="Tìm đơn vị nhà thầu, nhân viên hoặc CHTT" placeholder="Đơn vị, họ tên, số thẻ hoặc SĐT…" value={q} maxLength={200} onChange={e => setQ(e.target.value)} />
@@ -111,7 +112,7 @@ export function PermitCompanyDirectory() {
       <p className="border-b border-border px-4 py-2 text-xs text-muted-foreground">Làm việc trong ngày{workingDay ? ` ${workingDay}` : ""}: gồm CHTT, mỗi người chỉ tính một lần trên tất cả PCT, theo giờ Việt Nam.</p>
       {companies.isPending ? <p role="status" className="p-6 text-sm">Đang tải danh sách đơn vị…</p>
         : companies.isError ? <p role="alert" className="p-6 text-red-700">{companies.error.message}</p>
-        : !rows.length ? <p className="p-8 text-center text-sm text-muted-foreground">{q.trim() ? (personSearch.isFetching || normalizeText(personQ) !== term ? "Đang tìm…" : "Không có đơn vị hay người nào khớp từ khóa.") : "Chưa có đơn vị nhà thầu nào. Bấm “Thêm đơn vị” để bắt đầu."}</p>
+        : !rows.length ? <p className="p-8 text-center text-sm text-muted-foreground">{q.trim() ? (personSearch.isFetching || normalizeText(personQ) !== term ? "Đang tìm…" : `Không có đơn vị hay người ${scopeLabel} nào khớp từ khóa.`) : `Chưa có đơn vị nhà thầu ${scopeLabel} nào.`}</p>
         : <>
         {/* Điện thoại: mỗi đơn vị một thẻ, đủ các số liệu mà không phải cuộn bảng nhiều cột. */}
         <div className="divide-y divide-border md:hidden">{rows.map(row => {
@@ -134,7 +135,7 @@ export function PermitCompanyDirectory() {
             {expanded && <div className="border-t border-sky-100 px-4 pb-4 pt-3">
               {people.isPending ? <p role="status" className="text-sm text-muted-foreground">Đang tải nhân sự…</p>
                 : people.isError ? <p role="alert" className="text-sm text-red-700">{people.error.message}</p>
-                : !people.data?.data.length ? <p className="text-sm text-muted-foreground">Đơn vị này chưa có nhân sự.</p>
+                : !people.data?.data.length ? <p className="text-sm text-muted-foreground">Đơn vị này chưa có nhân sự {scopeLabel}.</p>
                 : <CompanyPeopleGroups people={shownPeople(row.company, people.data.data)} canWrite={canWrite} removing={remove.isPending} onEdit={setEditing} onRemove={person => void removePerson(person)} />}
             </div>}
           </article>;
@@ -176,7 +177,7 @@ export function PermitCompanyDirectory() {
                 <div className="border-l-[3px] border-[#00558F] px-4 py-3">
                   {people.isPending ? <p role="status" className="text-sm text-muted-foreground">Đang tải nhân sự…</p>
                     : people.isError ? <p role="alert" className="text-sm text-red-700">{people.error.message}</p>
-                    : !people.data?.data.length ? <p className="text-sm text-muted-foreground">Đơn vị này chưa có nhân sự.{canWrite ? " Bấm “Thêm nhân sự” trên dòng đơn vị để thêm." : ""}</p>
+                    : !people.data?.data.length ? <p className="text-sm text-muted-foreground">Đơn vị này chưa có nhân sự {scopeLabel}.{canWrite ? " Bấm “Thêm nhân sự” trên dòng đơn vị để thêm." : ""}</p>
                     : <CompanyPeopleGroups people={shownPeople(row.company, people.data.data)} canWrite={canWrite} removing={remove.isPending} onEdit={setEditing} onRemove={person => void removePerson(person)} />}
                 </div>
               </TableCell></TableRow>}
@@ -185,9 +186,9 @@ export function PermitCompanyDirectory() {
         </Table></>}
     </div>
     {editing && <PersonEditor initial={editing} onClose={() => setEditing(null)} />}
-    {addingPersonTo !== null && <PersonEditor presetCompany={addingPersonTo} presetScope={addingScope} onClose={() => setAddingPersonTo(null)} onSaved={() => setOpenCompany(addingPersonTo)} />}
-    {syncing && <PeopleSyncDialog onClose={() => setSyncing(false)} />}
-    {companyForm && <CompanyEditor company={companyForm.mode === "rename" ? companyForm.company : undefined} onClose={() => setCompanyForm(null)} onSaved={name => setOpenCompany(name)} />}
+    {addingPersonTo !== null && <PersonEditor presetCompany={addingPersonTo} presetScope={scope} onClose={() => setAddingPersonTo(null)} onSaved={() => setOpenCompany(addingPersonTo)} />}
+    {syncing && <PeopleSyncDialog initialSource={scope} onClose={() => setSyncing(false)} />}
+    {companyForm && <CompanyEditor company={companyForm.mode === "rename" ? companyForm.company : undefined} presetScope={scope} onClose={() => setCompanyForm(null)} onSaved={name => setOpenCompany(name)} />}
   </section>;
 }
 
@@ -335,7 +336,7 @@ function CompanyScopeBadge({ row, className }: { row: PermitCompanyScopes; class
  * đổi sang tên đã có tức là GỘP hai đơn vị, cũng là cách duy nhất để dọn các bản ghi gõ sai.
  * PCT đã ghi giữ nguyên tên tại thời điểm thực hiện.
  */
-function CompanyEditor({ company, onClose, onSaved }: { company?: string; onClose: () => void; onSaved?: (name: string) => void }) {
+function CompanyEditor({ company, presetScope, onClose, onSaved }: { company?: string; presetScope?: PermitContractorScope; onClose: () => void; onSaved?: (name: string) => void }) {
   const rename = useRenamePermitCompany();
   const create = useCreatePermitCompany();
   const companies = usePermitCompanySummary();
@@ -343,8 +344,9 @@ function CompanyEditor({ company, onClose, onSaved }: { company?: string; onClos
   const currentCode = current?.code ?? "";
   const [name, setName] = useState(company ?? "");
   const [code, setCode] = useState(currentCode);
-  const [sctx, setSctx] = useState(current?.sctx ?? false);
-  const [overhaul, setOverhaul] = useState(current?.overhaul ?? false);
+  // Thêm mới từ tab một nhóm → đánh dấu sẵn nhóm đó để đơn vị hiện ngay trong tab.
+  const [sctx, setSctx] = useState(current?.sctx ?? (!company && presetScope === "SCTX"));
+  const [overhaul, setOverhaul] = useState(current?.overhaul ?? (!company && presetScope === "OVERHAUL"));
   const scopesChanged = sctx !== (current?.sctx ?? false) || overhaul !== (current?.overhaul ?? false);
   const pending = rename.isPending || create.isPending;
   const exists = companies.data?.data.some(row => row.company !== company && row.company === name.trim()) ?? false;

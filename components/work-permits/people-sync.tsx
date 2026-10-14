@@ -4,9 +4,14 @@ import { useState } from "react";
 import { CheckCircle2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
-import { useSyncPermitPeople, type PermitPeopleSyncResult } from "@/hooks/useWorkPermits";
+import { useSyncPermitPeople, type PermitPeopleSyncResult, type PermitPeopleSyncSource } from "@/hooks/useWorkPermits";
 
 const PHOTO_BATCH = 5;
+/** Hai bảng nguồn: người MỚI của bảng nào nhận nhóm của bảng đó. */
+const SOURCES: Array<{ value: PermitPeopleSyncSource; label: string; hint: string }> = [
+  { value: "OVERHAUL", label: "Nhà thầu Đại tu", hint: "Bảng thẻ ra vào cổng & ATVSLĐ" },
+  { value: "SCTX", label: "Nhà thầu SCTX", hint: "Bảng nhân sự SCTX" },
+];
 
 /**
  * Đồng bộ danh bạ nhân sự nhà thầu từ Google Sheets thẻ ra vào cổng: một lượt lấy danh sách (chữ), rồi
@@ -40,18 +45,19 @@ function UnitBreakdown({ units }: { units: PermitPeopleSyncResult["units"] }) {
   </div>;
 }
 
-export function PeopleSyncDialog({ onClose }: { onClose: () => void }) {
+export function PeopleSyncDialog({ onClose, initialSource = "OVERHAUL" }: { onClose: () => void; initialSource?: PermitPeopleSyncSource }) {
   const { list, photos, refresh } = useSyncPermitPeople();
   const [result, setResult] = useState<PermitPeopleSyncResult | null>(null);
   const [done, setDone] = useState(0);
   const [failed, setFailed] = useState<Array<{ code: string; error?: string }>>([]);
   const [error, setError] = useState("");
   const [running, setRunning] = useState(false);
+  const [source, setSource] = useState<PermitPeopleSyncSource>(initialSource);
 
   async function run() {
     setRunning(true); setError(""); setResult(null); setDone(0); setFailed([]);
     try {
-      const summary = await list.mutateAsync();
+      const summary = await list.mutateAsync(source);
       setResult(summary);
       for (let i = 0; i < summary.photos.length; i += PHOTO_BATCH) {
         const { results } = await photos.mutateAsync(summary.photos.slice(i, i + PHOTO_BATCH));
@@ -72,10 +78,22 @@ export function PeopleSyncDialog({ onClose }: { onClose: () => void }) {
     <DialogContent className="max-w-lg">
       <DialogTitle>Đồng bộ nhân sự từ Google Sheets</DialogTitle>
       <DialogDescription>Mỗi tab trong sheet ứng với đơn vị có Mã đơn vị trùng tên tab. Lấy họ tên, số thẻ, hạn thẻ, huấn luyện và ảnh; vai trò CHTT và trạng thái hoạt động trên sổ giữ nguyên.</DialogDescription>
-      {!result && !running && !error && <p className="rounded-lg bg-muted/40 p-3 text-sm">Người mới trong sheet được thêm vào danh bạ; người đã có (cùng số thẻ) được cập nhật theo sheet. Ảnh chỉ tải lại khi ảnh trong sheet thay đổi.</p>}
+      <div role="radiogroup" aria-label="Bảng nguồn" className="grid grid-cols-2 gap-2">
+        {SOURCES.map(item => <button key={item.value} type="button" role="radio" aria-checked={source === item.value} disabled={running}
+          onClick={() => { setSource(item.value); setResult(null); setError(""); setFailed([]); setDone(0); }}
+          className={`min-h-11 rounded-lg border px-3 py-2 text-left text-sm disabled:opacity-60 ${source === item.value ? "border-blue-600 bg-blue-50 text-blue-900 ring-1 ring-blue-600" : "border-border hover:bg-muted/40"}`}>
+          <span className="block font-semibold">{item.label}</span><span className="block text-xs text-muted-foreground">{item.hint}</span>
+        </button>)}
+      </div>
+      {!result && !running && !error && <p className="rounded-lg bg-muted/40 p-3 text-sm">Người mới trong sheet được thêm vào danh bạ với nhóm <b>{source === "SCTX" ? "SCTX" : "Đại tu"}</b>; người đã có (cùng số thẻ) được cập nhật theo sheet. Số thẻ đã là của người khác bên nhóm kia thì không ghi đè. Ảnh chỉ tải lại khi ảnh trong sheet thay đổi.</p>}
       {running && !result && <p role="status" className="text-sm">Đang lấy danh sách từ Google Sheets…</p>}
       {result && <div className="min-w-0 space-y-2 text-sm">
-        <p className="flex items-center gap-2 font-medium"><CheckCircle2 size={16} className="text-emerald-600" />{result.total} người · {result.created} mới · {result.updated} cập nhật{result.skipped ? ` · ${result.skipped} dòng bỏ qua` : ""}</p>
+        <p className="flex items-center gap-2 font-medium"><CheckCircle2 size={16} className="text-emerald-600" />{result.sourceLabel}: {result.total} người · {result.created} mới · {result.updated} cập nhật{result.skipped ? ` · ${result.skipped} dòng bỏ qua` : ""}</p>
+        {result.conflictCount > 0 && <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-red-900">
+          <p className="font-medium">{result.conflictCount} số thẻ trùng người của nhóm khác — không ghi đè:</p>
+          <ul className="mt-1 max-h-40 space-y-0.5 overflow-y-auto text-xs">{result.conflicts.map(line => <li key={line}>{line}</li>)}</ul>
+          <p className="mt-1 text-xs">Đánh số thẻ riêng cho những người này trên bảng {result.sourceLabel} rồi đồng bộ lại.</p>
+        </div>}
         {result.units?.length > 0 && <UnitBreakdown units={result.units} />}
         {total > 0 && <div>
           <p>Ảnh: {done}/{total}{failed.length ? ` · ${failed.length} lỗi` : ""}</p>
@@ -84,7 +102,7 @@ export function PeopleSyncDialog({ onClose }: { onClose: () => void }) {
         {result.skippedTabs.length > 0 && <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-amber-950">
           <p className="font-medium">Tab bỏ qua — tên tab không trùng Mã đơn vị nào trên web:</p>
           <p>{result.skippedTabs.map(t => `${t.tab} (${t.rows} dòng)`).join(" · ")}</p>
-          <p className="mt-1 text-xs">Tab của nhà thầu thì đặt <b>Mã đơn vị</b> cho đơn vị đó trên web (nút bút chì) đúng bằng tên tab, rồi đồng bộ lại. Tab Dashboard / MẪU bỏ qua là đúng.</p>
+          <p className="mt-1 text-xs">Tab của nhà thầu thì đặt <b>Mã đơn vị</b> cho đơn vị đó trên web (nút bút chì) đúng bằng tên tab, rồi đồng bộ lại. Tab Dashboard / TOTAL / MẪU bỏ qua là đúng.</p>
         </div>}
         {result.movedCount > 0 && <details className="rounded-lg border border-sky-200 bg-sky-50 p-3 text-sm text-sky-950"><summary className="cursor-pointer font-medium">{result.movedCount} người được chuyển đơn vị theo sheet</summary>{result.moved.map(line => <p key={line} className="text-xs">{line}</p>)}</details>}
         {result.skippedSamples.length > 0 && <details className="text-xs text-muted-foreground"><summary className="cursor-pointer">Dòng bị bỏ qua (thiếu tên / số thẻ không hợp lệ)</summary>{result.skippedSamples.map(line => <p key={line}>{line}</p>)}</details>}
