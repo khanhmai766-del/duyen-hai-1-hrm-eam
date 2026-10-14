@@ -65,6 +65,11 @@ Web là nguồn, Sheet theo web. Code: `lib/server/overhaul-sheet-writer.ts`; l�
   "Chi tiết 1–4", README, "Điện_1" giữ khoá A:E như cũ. Nhãn khoá `[dh1-web] Khoá cả tab` — `--protect`/`--unprotect`
   cột bên dưới không đụng tới. Thêm tab cương vị mới → chạy lại
   `npm run overhaul:sheet -- --lock-tabs --editor <email> --apply`; gỡ: `--unlock-tabs --apply` (lib/server/overhaul-sheet-locks.ts).
+- **Công thức tab "Tiến độ …" (chuẩn theo tab CI, áp cho Lò/Turbine 14/10/2026)**: mỗi việc 2 dòng. Kế hoạch: E, F
+  nhập số · G `=IF(OR(ISBLANK(E);ISBLANK(F));"";E+F-1)` · H `=IF(OR(ISBLANK(E);ISBLANK(F));"";1)`. Thực tế: E `=E<dòng KH>`
+  · **F nhập số ngày thực tế** · G `=IF(OR(ISBLANK(E);ISBLANK(F));"";E+F-1)` · H `=IF(OR(ISBLANK(F);ISBLANK(F<KH>);F<KH>=0);"";F/F<KH>)`.
+  Trước 14/10 Lò/Turbine để F thực tế là công thức `=G-E+1` và G thực tế `=G<KH>` (luôn bằng kế hoạch) — đã đổi F
+  sang giá trị đang hiển thị; bản sao công thức cũ: `/root/backup-tien-do-{boiler,turbine}-2026-10-14T0143.json` trên server.
 - **Vùng khoá cột (07/10/2026, nay nằm trong khoá cả tab ở trên)**: cột **A–E** (khoá có sẵn của người soạn file) và cột **G** ("Trạng thái hiện
   tại", từ hàng dữ liệu đầu tới hết tab — kể cả hàng PHÁT SINH chèn sau) chỉ `khanh.mdk.tpcduyenhai@gmail.com` + tài
   khoản dịch vụ sửa được, trên 20 tab hạng mục. Cột **F** ("% Hoàn thành", mở từ 07/10/2026) và cột ngày từ **H** trở đi
