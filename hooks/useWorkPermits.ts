@@ -254,6 +254,8 @@ export function usePermitCompanies() {
   return useQuery({ queryKey: ["work-permit-companies"], staleTime: 60000, queryFn: () => apiGet<string[]>("/api/work-permits/companies") });
 }
 export interface PermitCompanySummary { company: string; code: string; sctx: boolean; overhaul: boolean; total: number; commanders: number; active: number;
+  /** Thẻ ra vào cổng còn hạn / đã hết hạn (theo ngày VN) và số người đã có kết quả huấn luyện ATVSLĐ. */
+  cardsValid: number; cardsExpired: number; trained: number;
   /** Người đang làm việc (CHTT + nhân viên chưa quét RA ở lần làm việc đang mở). */
   working: number;
   /** Người không trùng đã làm trong ngày Việt Nam, gồm CHTT trên tất cả PCT. */

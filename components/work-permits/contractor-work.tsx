@@ -9,6 +9,7 @@ import { PermitCompanyPicker } from "@/components/work-permits/company-picker";
 import { PermitEmployeePicker } from "@/components/work-permits/employee-picker";
 import { PermitCardScanner } from "@/components/work-permits/card-scanner";
 import { PeopleSyncDialog } from "@/components/work-permits/people-sync";
+import { ContractorDashboard, participationRate } from "@/components/work-permits/contractor-dashboard";
 import { SessionAttendance } from "@/components/work-permits/session-attendance";
 import { SessionHistoryButton } from "@/components/work-permits/session-history";
 import { attendanceInside } from "@/lib/work-permit-attendance";
@@ -101,6 +102,7 @@ export function PermitCompanyDirectory({ scope }: { scope: PermitContractorScope
       <div><h2 className="flex items-center gap-2 text-base font-semibold"><Users size={18} />Đơn vị nhà thầu · {scopeLabel}</h2><p className="mt-0.5 text-xs text-muted-foreground">Thêm đơn vị trước, rồi thêm nhân sự và CHTT ngay trên dòng của đơn vị đó. Bấm một dòng để xem danh sách người.</p></div>
       {canWrite && <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto"><Button type="button" size="sm" variant="outline" className="h-10 text-xs sm:h-9" title="Lấy họ tên, số thẻ, hạn thẻ, huấn luyện và ảnh từ bảng quản lý thẻ ra vào cổng" onClick={() => setSyncing(true)}><RefreshCw /><span className="sm:hidden">Đồng bộ Sheets</span><span className="hidden sm:inline">Đồng bộ từ Google Sheets</span></Button><Button type="button" size="sm" className="h-10 text-xs sm:h-9" onClick={() => setCompanyForm({ mode: "create" })}><Plus />Thêm đơn vị</Button></div>}
     </div>
+    {companies.data && <ContractorDashboard rows={companies.data.data} workingToday={companies.data.meta.workingToday} workingDay={workingDay} scopeLabel={scopeLabel} />}
     <div className="overflow-hidden rounded-xl border border-border bg-card">
       <div className="flex flex-col gap-3 border-b border-border bg-muted/25 px-4 py-3 md:flex-row md:items-center md:justify-between">
         <p className="text-sm text-muted-foreground"><strong className="font-semibold text-foreground">{rows.length}</strong> đơn vị · <strong className="font-semibold text-foreground">{rows.reduce((sum, row) => sum + row.total, 0)}</strong> người · <span className={workingTotal ? "text-emerald-700" : undefined} title={`CHTT và nhân viên chưa quét RA ở các PCT ${scopeLabel} đang làm việc, tính cho mọi đơn vị`}><strong className="font-semibold">{workingTotal}</strong> đang làm việc</span></p>
@@ -123,7 +125,7 @@ export function PermitCompanyDirectory({ scope }: { scope: PermitContractorScope
               <span className="min-w-0 flex-1">
                 <span className="flex flex-wrap items-center gap-x-2 gap-y-1">{row.code && <span className="rounded-md bg-blue-50 px-1.5 py-0.5 text-xs font-bold tracking-wide text-blue-800">{row.code}</span>}<span className="text-[15px] font-semibold leading-5 text-ink">{row.company}</span><CompanyScopeBadge row={row} /></span>
                 {hitLine(row)}<span className="mt-1 block text-xs text-muted-foreground">Tổng nhân sự <b className="text-foreground">{row.total}</b> · CHTT <b className={row.commanders ? "text-emerald-700" : "text-amber-700"}>{row.commanders}</b>{row.active < row.total && <span className="text-amber-700"> · {row.total - row.active} ngừng hoạt động</span>}</span>
-                <span className="mt-1 block text-xs text-muted-foreground">Đang làm việc <b className="text-emerald-700">{row.working}</b> · <span title={dailyWorkingLabel}>Làm việc trong ngày <b className="text-blue-700">{row.workingToday ?? 0}</b></span></span>
+                <span className="mt-1 block text-xs text-muted-foreground">Đang làm việc <b className="text-emerald-700">{row.working}</b> · <span title={dailyWorkingLabel}>Làm việc trong ngày <b className="text-blue-700">{row.workingToday ?? 0}</b>{row.active > 0 && ` (${Math.round(participationRate(row.workingToday ?? 0, row.active) * 100)}%)`}</span></span>
               </span>
               <ChevronDown className={`mt-0.5 h-5 w-5 shrink-0 text-muted-foreground transition-transform ${expanded ? "rotate-180" : ""}`} />
             </button>
@@ -144,7 +146,7 @@ export function PermitCompanyDirectory({ scope }: { scope: PermitContractorScope
           <TableHeader><TableRow className={TR_HEAD}>
             <TableHead className={cn(TH_NAVY, TH_EXPAND)} />
             <TableHead className={cn(TH_NAVY, "w-12")}><PlainHeader label="STT" /></TableHead>
-            <TableHead className={cn(TH_NAVY, "w-24")}><PlainHeader label="Mã đơn vị" /></TableHead>
+            <TableHead className={cn(TH_NAVY, "w-24 whitespace-nowrap")}><PlainHeader label="Mã đơn vị" /></TableHead>
             <TableHead className={cn(TH_NAVY, "min-w-60")}><PlainHeader label="Tên đơn vị" align="left" /></TableHead>
             <TableHead className={cn(TH_NAVY, "w-24")}><PlainHeader label="Đang làm việc" /></TableHead>
             <TableHead className={cn(TH_NAVY, "w-28")} title={dailyWorkingLabel}><PlainHeader label="Làm việc trong ngày" /></TableHead>
@@ -159,10 +161,10 @@ export function PermitCompanyDirectory({ scope }: { scope: PermitContractorScope
               <TableRow className={cn(rowBg, ROW_HOVER, "cursor-pointer")} onClick={() => setOpenCompany(expanded ? null : row.company)}>
                 <TableCell className={cn(TD_EXPAND, "py-2.5")}><RowExpander expanded={expanded} onToggle={() => setOpenCompany(expanded ? null : row.company)} /></TableCell>
                 <TableCell className={cn(TD_ROW, "py-2.5 text-center tabular-nums text-slate-500")}>{index + 1}</TableCell>
-                <TableCell className={cn(TD_ROW, "py-2.5 text-center font-semibold tracking-wide text-blue-800")}>{row.code || <span className="font-normal text-slate-400">—</span>}</TableCell>
+                <TableCell className={cn(TD_ROW, "whitespace-nowrap py-2.5 text-center font-semibold tracking-wide text-blue-800")}>{row.code || <span className="font-normal text-slate-400">—</span>}</TableCell>
                 <TableCell className={cn(TD_ROW, "py-2.5 font-semibold text-ink")}>{row.company}<CompanyScopeBadge row={row} className="ml-2" />{row.active < row.total && <span className="ml-2 text-[11px] font-medium text-amber-700">{row.total - row.active} ngừng hoạt động</span>}{hitLine(row)}</TableCell>
                 <TableCell className={cn(TD_ROW, "py-2.5 text-center tabular-nums")}>{row.working ? <span className="font-semibold text-emerald-700">{row.working}</span> : <span className="text-slate-400">0</span>}</TableCell>
-                <TableCell className={cn(TD_ROW, "py-2.5 text-center tabular-nums")} title={dailyWorkingLabel}>{row.workingToday ? <span className="font-semibold text-blue-700">{row.workingToday}</span> : <span className="text-slate-400">0</span>}</TableCell>
+                <TableCell className={cn(TD_ROW, "py-2.5 text-center tabular-nums")} title={dailyWorkingLabel}>{row.workingToday ? <><span className="font-semibold text-blue-700">{row.workingToday}</span>{row.active > 0 && <span className="ml-1 text-xs text-muted-foreground">· {Math.round(participationRate(row.workingToday, row.active) * 100)}%</span>}</> : <span className="text-slate-400">0</span>}</TableCell>
                 <TableCell className={cn(TD_ROW, "py-2.5 text-center tabular-nums")}>{row.total}</TableCell>
                 <TableCell className={cn(TD_ROW, "py-2.5 text-center tabular-nums")}>{row.commanders ? <span className="font-semibold text-emerald-700">{row.commanders}</span> : <span className="text-amber-700">0</span>}</TableCell>
                 {canWrite && <TableCell className={cn(TD_ROW, "py-2.5")}>

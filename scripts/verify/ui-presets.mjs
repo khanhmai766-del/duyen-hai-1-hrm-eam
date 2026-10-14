@@ -697,20 +697,22 @@ export const PRESETS = {
     },
   },
   "nhan-su-nha-thau-theo-nhom": {
-    description: "Tab Nhân sự nhà thầu sổ xuống Đại tu / SCTX — chọn SCTX (sync=1: mở thêm hộp Đồng bộ, KHÔNG bấm đồng bộ)",
+    description: "Tab Nhân sự nhà thầu sổ xuống Đại tu / SCTX + dashboard — chọn SCTX (UI_SCOPE=OVERHAUL: Đại tu; UI_SYNC=1: mở thêm hộp Đồng bộ, KHÔNG bấm đồng bộ)",
     async prepare() { return {}; },
     routes: () => ["/work-permits"],
     async interact(page) {
+      // UI_SCOPE=OVERHAUL: chọn Đại tu thay cho SCTX.
+      const label = process.env.UI_SCOPE === "OVERHAUL" ? "Đại tu" : "SCTX";
       const desktop = page.getByRole("button", { name: /^Nhân sự nhà thầu\. Bấm|^Nhân sự nhà thầu ·/ }).locator("visible=true");
       if (await desktop.count()) {
         await desktop.first().click();
-        await page.getByRole("menuitem", { name: "Nhân sự SCTX" }).click();
+        await page.getByRole("menuitem", { name: `Nhân sự ${label}` }).click();
       } else {
         // Điện thoại: các mục sổ gom vào danh sách thả xuống — hai mục nhân sự tách theo nhóm.
         await page.getByRole("button", { name: /^Đang xem:/ }).click();
-        await page.getByRole("menuitem", { name: "Nhân sự SCTX" }).click();
+        await page.getByRole("menuitem", { name: `Nhân sự ${label}` }).click();
       }
-      await page.getByText("Đơn vị nhà thầu · SCTX").waitFor();
+      await page.getByText(`Đơn vị nhà thầu · ${label}`).waitFor();
       await page.waitForTimeout(800);
       if (process.env.UI_SYNC === "1") {
         await page.getByRole("button", { name: /^Đồng bộ (từ Google )?Sheets$/ }).locator("visible=true").first().click();
