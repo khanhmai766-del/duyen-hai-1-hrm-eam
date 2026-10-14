@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { cancelNkvhPermit, claimNkvhPermit, importExistingNkvhPermit, parseNkvhPage, parseExistingNkvhPermitNumber } from "../../lib/server/work-permit-nkvh-claim";
 import { consumePermitNumberReservation, reservePermitNumber } from "../../lib/server/work-permit-number-reservations";
-import { reviewObservedNumber } from "../../lib/server/work-permit-number-review";
+import { cancelDeletedNkvhNumber, reviewObservedNumber } from "../../lib/server/work-permit-number-review";
 import { formatPermitNumber } from "../../lib/work-permits";
 
 const kind = "MECHANICAL" as const;
@@ -245,4 +245,35 @@ test("biểu mẫu đối chiếu cũ bị chặn sau khi trạng thái thay đ�
   f.reservations.push(row); const input = reviewInput(row, "ignore"); row.status = "ISSUED";
   await rejected(() => reviewObservedNumber(f.tx, user, input), /vừa được cập nhật/);
   assert.equal(f.history.length, 0);
+});
+
+// Ca 4453/2026 Điện (14/10/2026): phiếu NKVH đã lưu số rồi bị xoá trên NKVH → không đồng bộ được, nháp kẹt "Chờ NKVH lưu".
+const deletedInput = (row: Record<string, unknown>, sourceChecked = true) => ({
+  id: String(row.id), expectedStatus: String(row.status), expectedUpdatedAt: (row.updatedAt as Date).toISOString(),
+  reason: "Phiếu NKVH đã bị xoá, việc đã cấp ở số khác", sourceChecked,
+});
+test("phiếu NKVH đã bị xoá: hủy nháp chờ NKVH lưu và ghi số Đã hủy (không cấp lại)", async () => {
+  const f = fixture();
+  f.permits.push({ id: "draft", kind, year: 2026, number: "4836", status: "DRAFT", nkvhPctId: pct, version: 1 });
+  const row = { id: "seen", kind, year: 2026, number: "4836", status: "OBSERVED_CONFIRMED", updatedAt: new Date("2026-10-05"), nkvhPctId: pct, permitId: null };
+  f.reservations.push(row);
+  const { saved, cancelledDrafts } = await cancelDeletedNkvhNumber(f.tx, user, deletedInput(row));
+  assert.equal(cancelledDrafts, 1);
+  assert.equal(f.permits[0].status, "CANCELLED"); assert.equal(f.permits[0].nkvhPctId, null); assert.match(String(f.permits[0].statusReason), /đã bị xoá/);
+  assert.equal(saved.status, "CANCELLED"); assert.equal(saved.permitId, "draft"); assert.match(String(saved.cancelReason), /đã bị xoá/);
+  assert.ok(f.history.some(item => item.action === "CANCELLED")); assert.ok(f.history.some(item => String(item.action).includes("phiếu NKVH đã bị xoá")));
+});
+test("phiếu NKVH đã bị xoá: không đụng số đang thuộc phiếu đã cấp", async () => {
+  const f = fixture();
+  const row = { id: "seen", kind, year: 2026, number: "4836", status: "OBSERVED", updatedAt: new Date("2026-10-05"), permitId: null };
+  f.reservations.push(row); f.permits.push({ id: "issued", kind, year: 2026, number: "4836", status: "ISSUED" });
+  await rejected(() => cancelDeletedNkvhNumber(f.tx, user, deletedInput(row)), /phiếu đã cấp/);
+  assert.equal(row.status, "OBSERVED"); assert.equal(f.permits[0].status, "ISSUED"); assert.equal(f.history.length, 0);
+});
+test("phiếu NKVH đã bị xoá: bắt buộc xác nhận đã kiểm tra NKVH", async () => {
+  const f = fixture();
+  const row = { id: "seen", kind, year: 2026, number: "4836", status: "OBSERVED", updatedAt: new Date("2026-10-05"), permitId: null };
+  f.reservations.push(row);
+  await assert.rejects(cancelDeletedNkvhNumber(f.tx, user, deletedInput(row, false)), (error: unknown) => error instanceof Response && error.status === 400);
+  assert.equal(row.status, "OBSERVED");
 });

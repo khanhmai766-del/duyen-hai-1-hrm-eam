@@ -696,6 +696,24 @@ export const PRESETS = {
       await page.waitForTimeout(300);
     },
   },
+  "doi-chieu-so-nkvh-da-xoa": {
+    description: "Khung Đối chiếu số NKVH (PCT Điện) có số kẹt vì phiếu NKVH đã bị xoá — nút quản trị + hộp xác nhận; dữ liệu giả lập, không ghi",
+    async prepare() { return {}; },
+    routes: () => ["/work-permits?kind=ELECTRICAL"],
+    async mock(context) {
+      const entry = { id: "ui-seen", number: "4453", status: "OBSERVED_CONFIRMED", nkvhPctId: "183bec95-b4ac-434b-9fae-4a8d93ecab50", permitId: null,
+        draftPermitId: "ui-draft", updatedAt: "2026-10-12T01:49:38.581Z", ownerName: "Người lấy số (giả lập)" };
+      await context.route("**/api/work-permits/number-review?**", (route) => route.request().method() === "GET"
+        ? route.fulfill({ json: { data: { highest: "4523", suggested: "4524", total: 1, entries: [entry], canCancelDeleted: true }, meta: null, error: null } })
+        : route.fulfill({ status: 400, json: { data: null, meta: null, error: "Giả lập — không ghi" } }));
+    },
+    async interact(page) {
+      await page.getByRole("button", { name: /^Xem 1 số$/ }).first().click();
+      await page.getByRole("button", { name: "Phiếu NKVH đã bị xoá" }).first().click();
+      await page.getByRole("dialog").waitFor();
+      await page.waitForTimeout(300);
+    },
+  },
   "cap-pct-dai-tu-chtt": {
     description: "Form cấp PCT Đại tu · bước Nhân sự: CHTT chọn từ danh bạ HOẶC nhập tên CHTT nội bộ (chỉ gõ trên form, không lưu)",
     async prepare() { return {}; },

@@ -2,10 +2,13 @@ import { audit, fail, ok, requireUser } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 import { requirePermitIssuer } from "@/lib/server/work-permit-permissions";
 import { nextPermitNumber, permitNumberHighWater, permitNumberScope } from "@/lib/server/work-permit-number-reservations";
-import { reviewObservedNumber } from "@/lib/server/work-permit-number-review";
+import { cancelDeletedNkvhNumber, reviewObservedNumber } from "@/lib/server/work-permit-number-review";
 import { permitBody, permitHandle } from "@/lib/server/work-permits";
 
 export const dynamic = "force-dynamic";
+
+/** "Phiếu NKVH đã bị xoá — hủy số": hủy hẳn số (không cấp lại) nên chỉ quản trị, không cho tài khoản tra cứu chỉ đọc. */
+const canCancelDeleted = (user: { role?: string; accessMode?: string }) => user.role === "ADMIN" && user.accessMode !== "DEFECT_READ_ONLY";
 export async function GET(req: Request) {
   return permitHandle(async () => {
     const user = await requireUser(); requirePermitIssuer(user);
@@ -26,7 +29,7 @@ export async function GET(req: Request) {
           AND ("status" = 'OBSERVED_CONFIRMED' OR ("status" = 'OBSERVED'
             AND ("number"::numeric > ${floor}::numeric OR "permitId" IS NOT NULL)))
         ORDER BY "number"::numeric DESC LIMIT 20`;
-      return { highest, suggested: baseline ? await nextPermitNumber(tx, kind, year, baseline.number, highest) : null,
+      return { highest, suggested: baseline ? await nextPermitNumber(tx, kind, year, baseline.number, highest) : null, canCancelDeleted: canCancelDeleted(user),
         total: entries[0]?.total ?? 0, entries: entries.map(({ total: _total, ...entry }) => entry) };
     });
     return ok(data);
@@ -37,8 +40,18 @@ export async function POST(req: Request) {
   return permitHandle(async () => {
     const user = await requireUser(); requirePermitIssuer(user);
     const body = await permitBody(req);
-    if (typeof body.id !== "string" || !body.id || !["confirm", "ignore"].includes(String(body.action))) return fail("Thao tác đối chiếu số không hợp lệ.", 400);
+    if (typeof body.id !== "string" || !body.id || !["confirm", "ignore", "nkvhDeleted"].includes(String(body.action))) return fail("Thao tác đối chiếu số không hợp lệ.", 400);
     if (typeof body.expectedStatus !== "string" || typeof body.expectedUpdatedAt !== "string" || typeof body.reason !== "string") return fail("Thiếu thông tin đối chiếu. Tải lại danh sách số.", 400);
+    if (body.action === "nkvhDeleted") {
+      if (!canCancelDeleted(user)) return fail("Chỉ quản trị được hủy số của phiếu NKVH đã bị xoá.", 403);
+      const result = await prisma.$transaction(tx => cancelDeletedNkvhNumber(tx, user, {
+        id: body.id as string, expectedStatus: body.expectedStatus as string, expectedUpdatedAt: body.expectedUpdatedAt as string,
+        reason: body.reason as string, sourceChecked: body.sourceChecked === true,
+      }));
+      await audit(user.id, "CANCEL_WORK_PERMIT_NUMBER_NKVH_DELETED", "WorkPermitNumberReservation", result.saved.id,
+        `${result.saved.kind} ${result.saved.number}/${result.saved.year}: phiếu NKVH đã bị xoá — hủy số${result.cancelledDrafts ? `, hủy ${result.cancelledDrafts} phiếu nháp chờ NKVH lưu` : ""} — ${body.reason}`);
+      return ok(result.saved);
+    }
     const saved = await prisma.$transaction(tx => reviewObservedNumber(tx, user, {
       id: body.id as string, action: body.action as "confirm" | "ignore", expectedStatus: body.expectedStatus as string,
       expectedUpdatedAt: body.expectedUpdatedAt as string, reason: body.reason as string, sourceChecked: body.sourceChecked === true,

@@ -116,11 +116,13 @@ export interface PermitNumberReviewEntry {
 }
 export function usePermitNumberReview(kind: PermitKind, year: number) {
   return useQuery({ queryKey: ["work-permit-number-review", kind, year], refetchInterval: 15_000,
-    queryFn: () => apiGet<{ highest: string; suggested: string | null; total: number; entries: PermitNumberReviewEntry[] }>(`/api/work-permits/number-review?kind=${kind}&year=${year}`) });
+    queryFn: () => apiGet<{ highest: string; suggested: string | null; total: number; entries: PermitNumberReviewEntry[]; canCancelDeleted?: boolean }>(`/api/work-permits/number-review?kind=${kind}&year=${year}`) });
 }
 export function useReviewPermitNumber() {
   const qc = useQueryClient();
-  return useMutation({ mutationFn: (body: { id: string; action: "confirm" | "ignore"; expectedStatus: string; expectedUpdatedAt: string; reason: string; sourceChecked: boolean }) =>
+/** confirm = nâng dãy · ignore = tiện ích đọc nhầm (số dùng lại) · nkvhDeleted = phiếu NKVH đã bị xoá (hủy số, chỉ quản trị). */
+export type PermitNumberReviewAction = "confirm" | "ignore" | "nkvhDeleted";
+  return useMutation({ mutationFn: (body: { id: string; action: PermitNumberReviewAction; expectedStatus: string; expectedUpdatedAt: string; reason: string; sourceChecked: boolean }) =>
     apiMutate(`/api/work-permits/number-review`, "POST", body), onSuccess: () => {
       for (const key of ["work-permit-number-review", "work-permit-number-suggestion", "work-permit-number-reservations", "work-permit-number-baselines", "work-permits"]) qc.invalidateQueries({ queryKey: [key] });
     } });
