@@ -1767,7 +1767,7 @@ model WorkPermitPerson {
   phone      String              @default("") // SĐT liên hệ; để trống nếu nhà thầu không cung cấp.
   canCommand Boolean             @default(false)
   isActive   Boolean             @default(true)
-  /// Nhóm nhân sự: "SCTX" | "OVERHAUL" (Đại tu). PCT nhà thầu chỉ nhận người đúng nhóm phiếu.
+  /// Nhóm nhân sự: "SCTX" | "OVERHAUL" (Đại tu) | "INVESTMENT" (Đầu tư). PCT nhà thầu chỉ nhận người đúng nhóm phiếu.
   /// Đồng bộ từ Google Sheets → OVERHAUL; nhập tay / thêm nhanh → mặc định SCTX. SQL: prisma/manual/add-work-permit-person-scope.sql
   scope      String              @default("SCTX")
   /// Thông tin thẻ ra vào cổng & ATVSLĐ, đồng bộ từ Google Sheets (lib/server/work-permit-people-sync.ts).
@@ -1878,6 +1878,9 @@ model WorkPermitCompany {
   /// Chưa tick ô nào = "Chưa phân loại" → chọn được ở cả hai nhóm (giai đoạn chuyển đổi).
   sctx      Boolean  @default(false)
   overhaul  Boolean  @default(false)
+  /// Nhóm Đầu tư (dự án đầu tư, 14/10/2026): cấp PCT như Đại tu nhưng không dùng hạng mục đại tu.
+  /// SQL: prisma/manual/add-work-permit-company-investment.sql
+  investment Boolean @default(false)
   /// Mã nhà thầu khác (chuẩn hoá normalizeText như WorkPermitOverhaulItem.contractorCode) mà đơn vị này được dùng TOÀN BỘ
   /// hạng mục đại tu — kể cả hạng mục thêm vào Sheet sau này. Vd S3A dùng hạng mục EPS (10/10/2026). Mở lẻ từng hạng mục
   /// thì dùng WorkPermitOverhaulItem.sharedContractorCodes.

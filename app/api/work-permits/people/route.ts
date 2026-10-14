@@ -4,6 +4,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { audit, fail, ok, requireUser } from "@/lib/api";
 import { permitBody, permitHandle, permitSearchTerm } from "@/lib/server/work-permits";
+import { PERMIT_CONTRACTOR_SCOPES, type PermitContractorScope } from "@/lib/work-permits";
 import { parsePermitPerson, personCardSelect, withPhotoUrl } from "@/lib/server/work-permit-people";
 import { presentMembers, samePermitWorker } from "@/lib/work-permit-presence";
 export const dynamic = "force-dynamic";
@@ -43,7 +44,7 @@ export async function POST(req: Request) {
     const data = parsePermitPerson(await permitBody(req));
     try {
       const row = await prisma.workPermitPerson.create({ data });
-      await audit(user.id, "CREATE_WORK_PERMIT_PERSON", "WorkPermitPerson", row.id, `Thêm ${row.code}: ${row.name} · ${row.company} · nhóm ${row.scope === "OVERHAUL" ? "Đại tu" : "SCTX"}`);
+      await audit(user.id, "CREATE_WORK_PERMIT_PERSON", "WorkPermitPerson", row.id, `Thêm ${row.code}: ${row.name} · ${row.company} · nhóm ${PERMIT_CONTRACTOR_SCOPES[row.scope as PermitContractorScope] ?? row.scope}`);
       return ok(row);
     } catch (e) {
       if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") return fail(isCardlessCode(data.code) ? "Hồ sơ chưa có thẻ với họ tên này đã tồn tại. Hãy tìm và chọn hồ sơ đó." : "Số thẻ ra vào cổng đã tồn tại. Hãy chọn hồ sơ đó để dùng chung giữa các PCT.", 409);

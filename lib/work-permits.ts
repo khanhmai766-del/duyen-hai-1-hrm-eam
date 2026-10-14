@@ -56,10 +56,24 @@ export const PERMIT_WORK_TYPES = {
 } as const;
 export const PERMIT_WORK_TYPE_CODES = { PLANNED: "KH", UNPLANNED: "ĐX", INCIDENT: "SC" } as const;
 export type PermitWorkType = keyof typeof PERMIT_WORK_TYPES;
-export const PERMIT_CONTRACTOR_SCOPES = { SCTX: "SCTX", OVERHAUL: "Đại tu" } as const;
+export const PERMIT_CONTRACTOR_SCOPES = { SCTX: "SCTX", OVERHAUL: "Đại tu", INVESTMENT: "Đầu tư" } as const;
 export type PermitContractorScope = keyof typeof PERMIT_CONTRACTOR_SCOPES;
 /**
- * Nhân sự nhà thầu chia hai nhóm SCTX / Đại tu (07/10/2026): PCT nhà thầu nhóm nào chỉ nhận CHTT và nhân viên nhóm đó.
+ * Nhóm Đầu tư (dự án đầu tư, 14/10/2026 — vd NARIME) cấp phiếu, quản lý và có mã QR GIỐNG Đại tu: PCT giấy có QR,
+ * CHTT chọn từ danh bạ, quét thẻ vào/ra, danh bạ đủ ảnh. KHÔNG dùng hạng mục / Sheet tiến độ / phụ lục đại tu
+ * (isOverhaulPaperPermit vẫn chỉ OVERHAUL) và chưa báo Telegram.
+ */
+export const contractorScopeLikeOverhaul = (scope: string | null | undefined) => scope === "OVERHAUL" || scope === "INVESTMENT";
+/** PCT nhà thầu Đại tu / Đầu tư: có mã QR trên phiếu in và quét QR để vào bước cho phép làm việc. */
+export const permitHasQr = (row: { teamType: string; contractorScope?: string | null }) => row.teamType === "CONTRACTOR" && contractorScopeLikeOverhaul(row.contractorScope);
+/** Màu nhãn nhóm: SCTX xanh ngọc · Đại tu tím · Đầu tư cam. `soft` = nhãn nhạt, `solid` = nền đậm chữ trắng. */
+export const CONTRACTOR_SCOPE_TONE: Record<PermitContractorScope, { soft: string; solid: string }> = {
+  SCTX: { soft: "border-cyan-200 bg-cyan-50 text-cyan-800", solid: "bg-sky-600 text-white" },
+  OVERHAUL: { soft: "border-violet-200 bg-violet-50 text-violet-800", solid: "bg-violet-600 text-white" },
+  INVESTMENT: { soft: "border-amber-200 bg-amber-50 text-amber-800", solid: "bg-amber-600 text-white" },
+};
+/**
+ * Nhân sự nhà thầu chia nhóm SCTX / Đại tu (07/10/2026) / Đầu tư (14/10/2026): PCT nhà thầu nhóm nào chỉ nhận CHTT và nhân viên nhóm đó.
  * Trả câu báo lỗi khi lệch nhóm; phiếu chưa có nhóm (phiếu cũ) hoặc hồ sơ chưa có nhóm → không chặn.
  */
 export function personScopeError(person: { name: string; scope?: string | null }, permitScope: string | null | undefined) {
@@ -67,22 +81,25 @@ export function personScopeError(person: { name: string; scope?: string | null }
   const label = (scope: string) => PERMIT_CONTRACTOR_SCOPES[scope as PermitContractorScope] ?? scope;
   return `${person.name} thuộc nhân sự ${label(person.scope)}, không dùng cho PCT nhà thầu ${label(permitScope)}. Đổi nhóm trong hồ sơ nhân sự nếu cần.`;
 }
-/** Phân loại đơn vị nhà thầu (danh bạ đơn vị): được cấp PCT nhóm SCTX / Đại tu. */
-export type PermitCompanyScopes = { sctx: boolean; overhaul: boolean };
+/** Phân loại đơn vị nhà thầu (danh bạ đơn vị): được cấp PCT nhóm SCTX / Đại tu / Đầu tư. */
+export type PermitCompanyScopes = { sctx: boolean; overhaul: boolean; investment?: boolean };
 /** Đơn vị chưa tick nhóm nào = "Chưa phân loại". */
-export const companyUnclassified = (company: PermitCompanyScopes) => !company.sctx && !company.overhaul;
+export const companyUnclassified = (company: PermitCompanyScopes) => !company.sctx && !company.overhaul && !company.investment;
+/** Các nhóm đơn vị đã tick, theo thứ tự SCTX → Đại tu → Đầu tư. */
+export const companyScopeList = (company: PermitCompanyScopes) =>
+  (["SCTX", "OVERHAUL", "INVESTMENT"] as const).filter(scope => scope === "SCTX" ? company.sctx : scope === "OVERHAUL" ? company.overhaul : Boolean(company.investment));
 /**
  * Đơn vị có được chọn cho PCT nhà thầu nhóm `scope` không (nghiệp vụ 06/10/2026): chưa phân loại → được cả hai nhóm
  * (giai đoạn chuyển đổi); đã phân loại → chỉ nhóm đã tick. Không có thông tin đơn vị / nhóm → không chặn.
  */
 export function companyAllowsScope(company: PermitCompanyScopes | null | undefined, scope: string | null | undefined) {
   if (!company || !scope || companyUnclassified(company)) return true;
-  return scope === "OVERHAUL" ? company.overhaul : company.sctx;
+  return (companyScopeList(company) as string[]).includes(scope);
 }
-/** Nhãn phân loại: "SCTX", "Đại tu", "SCTX + Đại tu", "Chưa phân loại". */
+/** Nhãn phân loại: "SCTX", "Đại tu", "SCTX + Đại tu", "Đầu tư", "Chưa phân loại". */
 export function companyScopeLabel(company: PermitCompanyScopes) {
   if (companyUnclassified(company)) return "Chưa phân loại";
-  return [company.sctx && PERMIT_CONTRACTOR_SCOPES.SCTX, company.overhaul && PERMIT_CONTRACTOR_SCOPES.OVERHAUL].filter(Boolean).join(" + ");
+  return companyScopeList(company).map(scope => PERMIT_CONTRACTOR_SCOPES[scope]).join(" + ");
 }
 /** PCT nhà thầu SCTX có thể ghi nhận cấp nhanh, chưa cần danh bạ đơn vị/CHTT. */
 export function isSctxContractorPermit(row: { teamType: string; contractorScope?: string | null }): boolean {
@@ -212,7 +229,7 @@ export interface PermitMember {
 export interface PermitPerson {
   id: string; code: string; name: string; company: string; phone: string;
   canCommand: boolean; isActive: boolean; version: number;
-  /** Nhóm nhân sự: SCTX (không cần ảnh) / Đại tu (đủ họ tên, ảnh, chức vụ). */
+  /** Nhóm nhân sự: SCTX (không cần ảnh) / Đại tu, Đầu tư (đủ họ tên, ảnh, chức vụ). */
   scope?: PermitContractorScope;
   /** Thông tin thẻ ra vào cổng & ATVSLĐ (đồng bộ từ Google Sheets); ảnh qua proxy S3. */
   birthYear?: string; jobTitle?: string; workPackage?: string; workPosition?: string; workArea?: string;

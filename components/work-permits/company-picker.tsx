@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { usePermitCompanies, usePermitCompanySummary, type PermitCompanySummary } from "@/hooks/useWorkPermits";
 import { normalizeText } from "@/lib/nav";
-import { companyAllowsScope, companyUnclassified } from "@/lib/work-permits";
+import { companyAllowsScope, companyUnclassified, PERMIT_CONTRACTOR_SCOPES, type PermitContractorScope } from "@/lib/work-permits";
 
 const control = "min-h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring";
 
@@ -48,7 +48,7 @@ export function PermitCompanySelect({ value, onChange, required = false, label =
       {currentMissing && <option value={value}>{value}{currentOther ? " (khác nhóm phiếu)" : ""}</option>}
       {scope && unclassified.length && classified.length
         ? <>
-          <optgroup label={`Nhà thầu ${scope === "OVERHAUL" ? "Đại tu" : "SCTX"}`}>{classified.map(row => <option key={row.company} value={row.company}>{optionLabel(row)}</option>)}</optgroup>
+          <optgroup label={`Nhà thầu ${PERMIT_CONTRACTOR_SCOPES[scope as PermitContractorScope] ?? scope}`}>{classified.map(row => <option key={row.company} value={row.company}>{optionLabel(row)}</option>)}</optgroup>
           <optgroup label="Chưa phân loại">{unclassified.map(row => <option key={row.company} value={row.company}>{optionLabel(row)}</option>)}</optgroup>
         </>
         : [...classified, ...unclassified].map(row => <option key={row.company} value={row.company}>{optionLabel(row)}</option>)}

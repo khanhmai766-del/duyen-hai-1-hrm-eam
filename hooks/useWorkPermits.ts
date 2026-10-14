@@ -253,7 +253,7 @@ export function usePermitAttendance(permitId: string) {
 export function usePermitCompanies() {
   return useQuery({ queryKey: ["work-permit-companies"], staleTime: 60000, queryFn: () => apiGet<string[]>("/api/work-permits/companies") });
 }
-export interface PermitCompanySummary { company: string; code: string; sctx: boolean; overhaul: boolean; total: number; commanders: number; active: number;
+export interface PermitCompanySummary { company: string; code: string; sctx: boolean; overhaul: boolean; investment: boolean; total: number; commanders: number; active: number;
   /** Thẻ ra vào cổng còn hạn / đã hết hạn (theo ngày VN) và số người đã có kết quả huấn luyện ATVSLĐ. */
   cardsValid: number; cardsExpired: number; trained: number;
   /** Người đang làm việc (CHTT + nhân viên chưa quét RA ở lần làm việc đang mở). */
@@ -267,7 +267,7 @@ function invalidateCompanies(qc: ReturnType<typeof useQueryClient>) {
 /** Thêm một đơn vị nhà thầu (chưa cần có nhân sự). */
 export function useCreatePermitCompany() {
   const qc = useQueryClient();
-  return useMutation({ mutationFn: (body: { name: string; code: string; sctx: boolean; overhaul: boolean }) => apiMutate<{ id: string; name: string; code: string }>("/api/work-permits/companies", "POST", body), onSuccess: () => invalidateCompanies(qc) });
+  return useMutation({ mutationFn: (body: { name: string; code: string; sctx: boolean; overhaul: boolean; investment: boolean }) => apiMutate<{ id: string; name: string; code: string }>("/api/work-permits/companies", "POST", body), onSuccess: () => invalidateCompanies(qc) });
 }
 /** Xoá đơn vị CHƯA có nhân sự. */
 export function useDeletePermitCompany() {
@@ -278,7 +278,7 @@ export function useDeletePermitCompany() {
 export function useRenamePermitCompany() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: { from: string; to: string; code?: string; sctx?: boolean; overhaul?: boolean }) => apiMutate<{ from: string; to: string; updated: number; merged: number }>("/api/work-permits/companies", "PUT", body),
+    mutationFn: (body: { from: string; to: string; code?: string; sctx?: boolean; overhaul?: boolean; investment?: boolean }) => apiMutate<{ from: string; to: string; updated: number; merged: number }>("/api/work-permits/companies", "PUT", body),
     onSuccess: () => invalidateCompanies(qc),
   });
 }

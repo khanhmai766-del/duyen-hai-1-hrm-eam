@@ -32,10 +32,10 @@ function companyCode(body: Record<string, unknown>) {
   if (code && !/^[\p{L}\p{N}][\p{L}\p{N} ._&/-]*$/u.test(code)) throw fail("Mã đơn vị chỉ gồm chữ, số và các dấu . _ & / -");
   return code;
 }
-/** Phân loại SCTX / Đại tu: `undefined` = không gửi (giữ nguyên). */
+/** Phân loại SCTX / Đại tu / Đầu tư: `undefined` = không gửi (giữ nguyên). */
 function companyScopes(body: Record<string, unknown>) {
-  if (body.sctx === undefined && body.overhaul === undefined) return undefined;
-  return { sctx: body.sctx === true, overhaul: body.overhaul === true };
+  if (body.sctx === undefined && body.overhaul === undefined && body.investment === undefined) return undefined;
+  return { sctx: body.sctx === true, overhaul: body.overhaul === true, investment: body.investment === true };
 }
 async function assertCodeFree(code: string | undefined, exceptNames: string[]) {
   if (!code) return;
@@ -66,8 +66,9 @@ export async function GET(req: Request) {
       const rawScope = params.get("scope");
       if (rawScope && !Object.hasOwn(PERMIT_CONTRACTOR_SCOPES, rawScope)) return fail("Nhóm nhà thầu không hợp lệ");
       const scope = (rawScope || null) as PermitContractorScope | null;
-      const [rows, working, daily] = await Promise.all([prisma.$queryRawUnsafe<Array<{ company: string; code: string; sctx: boolean; overhaul: boolean; total: bigint; commanders: bigint; active: bigint; cardsValid: bigint; cardsExpired: bigint; trained: bigint }>>(`
-        SELECT c.company, COALESCE(MAX(w."code"), '') AS code, COALESCE(BOOL_OR(w."sctx"), false) AS sctx, COALESCE(BOOL_OR(w."overhaul"), false) AS overhaul, COUNT(p.id) AS total,
+      const [rows, working, daily] = await Promise.all([prisma.$queryRawUnsafe<Array<{ company: string; code: string; sctx: boolean; overhaul: boolean; investment: boolean; total: bigint; commanders: bigint; active: bigint; cardsValid: bigint; cardsExpired: bigint; trained: bigint }>>(`
+        SELECT c.company, COALESCE(MAX(w."code"), '') AS code, COALESCE(BOOL_OR(w."sctx"), false) AS sctx, COALESCE(BOOL_OR(w."overhaul"), false) AS overhaul,
+               COALESCE(BOOL_OR(w."investment"), false) AS investment, COUNT(p.id) AS total,
                COUNT(p.id) FILTER (WHERE p."canCommand") AS commanders,
                COUNT(p.id) FILTER (WHERE p."isActive") AS active,
                -- Thẻ ra vào cổng: so theo NGÀY Việt Nam như cardExpired() (lib/work-permit-card.ts); chưa có hạn thì không tính bên nào.
@@ -80,10 +81,11 @@ export async function GET(req: Request) {
         GROUP BY c.company
         HAVING $1::text IS NULL OR COUNT(p.id) > 0
           OR ($1 = 'OVERHAUL' AND COALESCE(BOOL_OR(w."overhaul"), false)) OR ($1 = 'SCTX' AND COALESCE(BOOL_OR(w."sctx"), false))
-          OR (NOT COALESCE(BOOL_OR(w."sctx"), false) AND NOT COALESCE(BOOL_OR(w."overhaul"), false)
+          OR ($1 = 'INVESTMENT' AND COALESCE(BOOL_OR(w."investment"), false))
+          OR (NOT COALESCE(BOOL_OR(w."sctx"), false) AND NOT COALESCE(BOOL_OR(w."overhaul"), false) AND NOT COALESCE(BOOL_OR(w."investment"), false)
               AND NOT EXISTS (SELECT 1 FROM "WorkPermitPerson" x WHERE x."company" = c.company))
         ORDER BY overhaul DESC, c.company`, scope), workingByCompany(scope), loadDailyWorkingByCompany(day, now, scope)]);
-      return ok(rows.map(row => ({ company: row.company, code: row.code, sctx: row.sctx, overhaul: row.overhaul, total: Number(row.total), commanders: Number(row.commanders), active: Number(row.active), cardsValid: Number(row.cardsValid), cardsExpired: Number(row.cardsExpired), trained: Number(row.trained), working: working.byCompany.get(row.company) ?? 0, workingToday: daily.byCompany.get(row.company) ?? 0 })),
+      return ok(rows.map(row => ({ company: row.company, code: row.code, sctx: row.sctx, overhaul: row.overhaul, investment: row.investment, total: Number(row.total), commanders: Number(row.commanders), active: Number(row.active), cardsValid: Number(row.cardsValid), cardsExpired: Number(row.cardsExpired), trained: Number(row.trained), working: working.byCompany.get(row.company) ?? 0, workingToday: daily.byCompany.get(row.company) ?? 0 })),
         { canWrite: (await permitCapabilities(user)).canIssue, working: working.total, workingToday: daily.total, workingDay: day, scope });
     }
     // Lấy từ toàn bộ danh bạ, không giới hạn bởi trang nhân sự hoặc vai trò CHTT.
@@ -97,7 +99,7 @@ export async function POST(req: Request) {
   return permitHandle(async () => {
     const user = await requireUser(); await requirePermitIssue(user);
     const body = await permitBody(req);
-    const name = permitText(body, "name"), code = companyCode(body) ?? "", scopes = companyScopes(body) ?? { sctx: false, overhaul: false };
+    const name = permitText(body, "name"), code = companyCode(body) ?? "", scopes = companyScopes(body) ?? { sctx: false, overhaul: false, investment: false };
     if (!name) return fail("Vui lòng nhập tên đơn vị nhà thầu");
     if (await companyExists(name)) return fail(`Đơn vị "${name}" đã có trong danh sách`, 409);
     await assertCodeFree(code, []);

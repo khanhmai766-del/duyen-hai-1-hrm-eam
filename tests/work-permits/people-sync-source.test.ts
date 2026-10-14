@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { cardConflict, parsePeopleSyncSource } from "../../lib/server/work-permit-people-sync";
+import { cardConflict, newPersonScope, parsePeopleSyncSource } from "../../lib/server/work-permit-people-sync";
 
 // Bảng SCTX (14/10/2026) đánh lại SGIDC/01–14 trùng 14 người Đại tu → không được ghi đè hồ sơ người khác.
 const row = { name: "Phẩm Đình Tứ", code: "SGIDC/01", tab: "IDC" };
@@ -25,4 +25,16 @@ test("nguồn mặc định là Đại tu; nguồn lạ bị từ chối", () =>
   assert.equal(parsePeopleSyncSource(undefined), "OVERHAUL");
   assert.equal(parsePeopleSyncSource("SCTX"), "SCTX");
   assert.throws(() => parsePeopleSyncSource("ABC"), (error: unknown) => error instanceof Response && error.status === 400);
+});
+
+test("đơn vị chỉ tick Đầu tư (NARIME trong bảng Đại tu): người mới vào nhóm Đầu tư", () => {
+  assert.equal(newPersonScope({ sctx: false, overhaul: false, investment: true }, "OVERHAUL"), "INVESTMENT");
+  assert.equal(newPersonScope({ sctx: false, overhaul: true, investment: true }, "OVERHAUL"), "OVERHAUL");
+  assert.equal(newPersonScope({ sctx: false, overhaul: true, investment: false }, "OVERHAUL"), "OVERHAUL");
+  assert.equal(newPersonScope(undefined, "SCTX"), "SCTX");
+});
+
+test("người đã ở nhóm Đầu tư của đơn vị Đầu tư: cập nhật bình thường, không báo xung đột", () => {
+  assert.equal(cardConflict({ name: "Tên khác", scope: "INVESTMENT" }, row, "OVERHAUL", "INVESTMENT"), null);
+  assert.match(cardConflict({ name: "Tên khác", scope: "INVESTMENT" }, row, "OVERHAUL")!, /nhóm Đầu tư/);
 });

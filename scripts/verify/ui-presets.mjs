@@ -696,13 +696,28 @@ export const PRESETS = {
       await page.waitForTimeout(300);
     },
   },
+  "chon-nhom-phieu-nha-thau": {
+    description: "Hộp Chọn nhóm phiếu nhà thầu (SCTX / Đại tu / Đầu tư) — chỉ mở hộp, KHÔNG chọn, không lấy số",
+    async prepare() { return {}; },
+    routes: () => ["/work-permits"],
+    async interact(page) {
+      const desktop = page.getByRole("button", { name: "Nhà thầu", exact: true }).locator("visible=true");
+      if (await desktop.count()) await desktop.first().click();
+      else {
+        await page.getByRole("button", { name: /Cấp phiếu/ }).locator("visible=true").first().click();
+        await page.getByRole("menuitem", { name: /Cấp phiếu nhà thầu/ }).click();
+      }
+      await page.getByText("Chọn nhóm phiếu nhà thầu").waitFor();
+      await page.waitForTimeout(300);
+    },
+  },
   "nhan-su-nha-thau-theo-nhom": {
-    description: "Tab Nhân sự nhà thầu sổ xuống Đại tu / SCTX + dashboard — chọn SCTX (UI_SCOPE=OVERHAUL: Đại tu; UI_SYNC=1: mở thêm hộp Đồng bộ, KHÔNG bấm đồng bộ)",
+    description: "Tab Nhân sự nhà thầu sổ xuống Đại tu / SCTX + dashboard — chọn SCTX (UI_SCOPE=OVERHAUL | INVESTMENT; UI_SYNC=1: mở thêm hộp Đồng bộ, KHÔNG bấm đồng bộ)",
     async prepare() { return {}; },
     routes: () => ["/work-permits"],
     async interact(page) {
       // UI_SCOPE=OVERHAUL: chọn Đại tu thay cho SCTX.
-      const label = process.env.UI_SCOPE === "OVERHAUL" ? "Đại tu" : "SCTX";
+      const label = { OVERHAUL: "Đại tu", INVESTMENT: "Đầu tư" }[process.env.UI_SCOPE] ?? "SCTX";
       const desktop = page.getByRole("button", { name: /^Nhân sự nhà thầu\. Bấm|^Nhân sự nhà thầu ·/ }).locator("visible=true");
       if (await desktop.count()) {
         await desktop.first().click();

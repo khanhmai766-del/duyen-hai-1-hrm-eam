@@ -3,7 +3,7 @@ import path from "node:path";
 import PizZip from "pizzip";
 import { prisma } from "@/lib/prisma";
 import type { WorkPermit } from "@prisma/client";
-import { formatPermitNumber, PERMIT_DISCIPLINES } from "@/lib/work-permits";
+import { formatPermitNumber, PERMIT_DISCIPLINES, permitHasQr } from "@/lib/work-permits";
 import { safetyPrintData, type SafetySelection } from "@/lib/work-permit-safety";
 import { assertPrintFilled, escapeHtml, fillPrintTable, loadPrintTemplate, replacePrintParagraph, replacePrintParagraphMarkup } from "@/lib/print-html";
 import { workPermitQrPrintImage } from "@/lib/work-permit-qr";
@@ -170,13 +170,14 @@ const QR_SIZE_EMU = 900_000; // 2,5 cm, có vùng trắng quanh mã để quét 
 const QR_RELATIONSHIP_ID = "rIdWorkPermitQr";
 const QR_MEDIA_PATH = "word/media/work-permit-qr.png";
 
+/** PCT nhà thầu Đại tu / Đầu tư: in mã QR ở trang đầu (permitHasQr). */
 function hasOverhaulQr(row: WorkPermit) {
-  return Boolean(row.id) && row.teamType === "CONTRACTOR" && row.contractorScope === "OVERHAUL";
+  return Boolean(row.id) && permitHasQr(row);
 }
 
 
 function qrImageParagraph() {
-  return `<w:p><w:pPr><w:spacing w:before="0" w:after="0"/><w:jc w:val="right"/></w:pPr><w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent cx="${QR_SIZE_EMU}" cy="${QR_SIZE_EMU}"/><wp:effectExtent l="0" t="0" r="0" b="0"/><wp:docPr id="9001" name="Mã QR PCT Đại tu"/><wp:cNvGraphicFramePr><a:graphicFrameLocks noChangeAspect="1"/></wp:cNvGraphicFramePr><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic><pic:nvPicPr><pic:cNvPr id="0" name="work-permit-qr.png"/><pic:cNvPicPr/></pic:nvPicPr><pic:blipFill><a:blip r:embed="${QR_RELATIONSHIP_ID}"><a:extLst><a:ext uri="{96DAC541-7B7A-43D3-8B79-37D633B846F1}"><asvg:svgBlip xmlns:asvg="http://schemas.microsoft.com/office/drawing/2016/SVG/main" r:embed="rIdWorkPermitQrSvg"/></a:ext></a:extLst></a:blip><a:stretch><a:fillRect/></a:stretch></pic:blipFill><pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${QR_SIZE_EMU}" cy="${QR_SIZE_EMU}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>`;
+  return `<w:p><w:pPr><w:spacing w:before="0" w:after="0"/><w:jc w:val="right"/></w:pPr><w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent cx="${QR_SIZE_EMU}" cy="${QR_SIZE_EMU}"/><wp:effectExtent l="0" t="0" r="0" b="0"/><wp:docPr id="9001" name="Mã QR PCT nhà thầu"/><wp:cNvGraphicFramePr><a:graphicFrameLocks noChangeAspect="1"/></wp:cNvGraphicFramePr><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic><pic:nvPicPr><pic:cNvPr id="0" name="work-permit-qr.png"/><pic:cNvPicPr/></pic:nvPicPr><pic:blipFill><a:blip r:embed="${QR_RELATIONSHIP_ID}"><a:extLst><a:ext uri="{96DAC541-7B7A-43D3-8B79-37D633B846F1}"><asvg:svgBlip xmlns:asvg="http://schemas.microsoft.com/office/drawing/2016/SVG/main" r:embed="rIdWorkPermitQrSvg"/></a:ext></a:extLst></a:blip><a:stretch><a:fillRect/></a:stretch></pic:blipFill><pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${QR_SIZE_EMU}" cy="${QR_SIZE_EMU}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>`;
 }
 
 /** QR nằm trong chân trang đầu, không lặp ở các trang tiếp theo. */
@@ -217,7 +218,7 @@ async function addOverhaulQrHtml(html: string, row: WorkPermit, qrOrigin?: strin
   .overhaul-first-page-qr { position:absolute;right:var(--pad-r);top:calc(var(--paper-h) - 30mm);width:25mm;height:25mm; }
   .sheet0 { position:relative; }
   @media print { .overhaul-first-page-qr { display:none; } }</style>`;
-  html = html.replace("</head>", `${css}</head>`).replace(/(<section class="sheet sheet0"[^>]*>)/, `$1<img class="overhaul-first-page-qr" alt="Mã QR PCT Đại tu" src="${src}"/>`);
+  html = html.replace("</head>", `${css}</head>`).replace(/(<section class="sheet sheet0"[^>]*>)/, `$1<img class="overhaul-first-page-qr" alt="Mã QR PCT nhà thầu" src="${src}"/>`);
   return html;
 }
 

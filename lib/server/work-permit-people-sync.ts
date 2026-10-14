@@ -6,6 +6,7 @@ import { normalizeText } from "@/lib/nav";
 import { prisma } from "@/lib/prisma";
 import { uploadS3Object } from "@/lib/s3";
 import { normalizeCardCode, cardlessCode, isCardlessCode } from "@/lib/work-permit-card";
+import { PERMIT_CONTRACTOR_SCOPES, type PermitCompanyScopes, type PermitContractorScope } from "@/lib/work-permits";
 
 /*
  * Đồng bộ danh bạ nhân sự nhà thầu từ Google Sheets "thẻ ra vào cổng & ATVSLĐ" (phương án B).
@@ -52,10 +53,10 @@ export function parsePeopleSyncSource(value: unknown): PeopleSyncSource {
  * Số thẻ trên sheet đã có hồ sơ thuộc NHÓM KHÁC: cùng họ tên → coi là cùng người (cập nhật, giữ nhóm trên sổ);
  * khác họ tên → hai người dùng chung một số thẻ, KHÔNG ghi đè (trả câu báo).
  */
-export function cardConflict(before: { name: string; scope: string | null } | undefined, incoming: { name: string; code: string; tab: string }, source: PeopleSyncSource) {
-  if (!before || !before.scope || before.scope === source) return null;
+export function cardConflict(before: { name: string; scope: string | null } | undefined, incoming: { name: string; code: string; tab: string }, source: PeopleSyncSource, accepted?: PermitContractorScope) {
+  if (!before || !before.scope || before.scope === source || before.scope === accepted) return null;
   if (normalizeText(before.name).trim() === normalizeText(incoming.name).trim()) return null;
-  const owner = PEOPLE_SYNC_SOURCES[before.scope as PeopleSyncSource]?.label ?? before.scope;
+  const owner = PERMIT_CONTRACTOR_SCOPES[before.scope as PermitContractorScope] ?? before.scope;
   return `${incoming.tab}: ${incoming.name} · số thẻ ${incoming.code} đã là của ${before.name} (nhóm ${owner}) — đánh số thẻ riêng trên bảng ${PEOPLE_SYNC_SOURCES[source].label}`;
 }
 
@@ -141,9 +142,19 @@ function sheetPhone(value: unknown) {
  * Cột F "Đơn vị" trong sheet không dùng để gán đơn vị — gõ tay dễ lệch tên.
  */
 async function unitByTab() {
-  const companies = await prisma.workPermitCompany.findMany({ where: { code: { not: "" } }, select: { name: true, code: true } });
+  const companies = await prisma.workPermitCompany.findMany({ where: { code: { not: "" } }, select: { name: true, code: true, sctx: true, overhaul: true, investment: true } });
   const byCode = new Map(companies.map(c => [normalizeText(c.code), c.name]));
-  return (tab: string) => byCode.get(normalizeText(tab)) ?? null;
+  const flags = new Map(companies.map(c => [c.name, c]));
+  return { unitOf: (tab: string) => byCode.get(normalizeText(tab)) ?? null, flagsOf: (company: string) => flags.get(company) };
+}
+
+/**
+ * Nhóm gán cho người MỚI của một đơn vị: mặc định theo bảng nguồn; đơn vị đã tick Đầu tư mà KHÔNG tick nhóm của
+ * bảng nguồn (vd NARIME nằm trong bảng thẻ Đại tu nhưng là dự án đầu tư, 14/10/2026) → nhóm Đầu tư.
+ */
+export function newPersonScope(company: PermitCompanyScopes | undefined, source: PeopleSyncSource): PermitContractorScope {
+  if (!company?.investment) return source;
+  return (source === "OVERHAUL" ? company.overhaul : company.sctx) ? source : "INVESTMENT";
 }
 
 /**
@@ -164,7 +175,7 @@ export async function syncPeopleList(source: PeopleSyncSource = "OVERHAUL") {
   const { rows } = await callSheet<{ rows: SheetRow[] }>(source, { format: "json" }, 150_000,
     "Google Sheets không trả dữ liệu JSON. Kiểm tra đã thêm đoạn code đồng bộ vào Apps Script và triển khai lại web app");
   if (!Array.isArray(rows)) throw fail("Dữ liệu Google Sheets không đúng định dạng (thiếu rows)", 502);
-  const unitOf = await unitByTab();
+  const { unitOf, flagsOf } = await unitByTab();
   const skipped: string[] = [];
   const skippedTabs = new Map<string, number>();
   const byCode = new Map<string, Prisma.WorkPermitPersonCreateInput & { photoRef: string; tab: string }>();
@@ -202,7 +213,7 @@ export async function syncPeopleList(source: PeopleSyncSource = "OVERHAUL") {
   // Số thẻ đã là của người khác bên nhóm kia → bỏ dòng sheet, không ghi đè hồ sơ đó.
   const conflicts: string[] = [];
   for (const [code, data] of byCode) {
-    const conflict = cardConflict(existing.get(code), { name: data.name, code, tab: data.tab }, source);
+    const conflict = cardConflict(existing.get(code), { name: data.name, code, tab: data.tab }, source, newPersonScope(flagsOf(data.company), source));
     if (conflict) { conflicts.push(conflict); byCode.delete(code); }
   }
   const renameFrom = new Map<string, string>();
@@ -227,8 +238,8 @@ export async function syncPeopleList(source: PeopleSyncSource = "OVERHAUL") {
       const fromCode = renameFrom.get(data.code) ?? data.code;
       if (before && before.company !== data.company) moved.push(`${data.name} (${data.code}): ${before.company} → ${data.company} (tab ${tab})`);
       if (photoRef && photoNeedsFetch(before, photoRef)) photos.push(signPhotoJob(data.code, photoRef, photoExp, source));
-      // Người mới nhận nhóm theo bảng nguồn; người đã có giữ nhóm trên sổ (sổ có thể đã chuyển nhóm tay).
-      if (!before) { created++; return prisma.workPermitPerson.create({ data: { ...data, canCommand: false, isActive: true, scope: source } }); }
+      // Người mới nhận nhóm theo bảng nguồn (đơn vị Đầu tư → Đầu tư); người đã có giữ nhóm trên sổ (sổ có thể đã chuyển nhóm tay).
+      if (!before) { created++; return prisma.workPermitPerson.create({ data: { ...data, canCommand: false, isActive: true, scope: newPersonScope(flagsOf(data.company), source) } }); }
       updated++;
       // Sheet để trống SĐT thì giữ SĐT đã nhập trên sổ; vai trò CHTT/"đang hoạt động" không đụng tới.
       const phone = data.phone || before.phone;

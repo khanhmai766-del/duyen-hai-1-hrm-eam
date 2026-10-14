@@ -5,6 +5,7 @@ import { resolveActiveDeviceQrCard } from "@/lib/device-qr-access";
 import { assertSeqViewable } from "@/lib/server-access";
 import { prisma } from "@/lib/prisma";
 import { parseWorkPermitQrValue } from "@/lib/work-permit-qr";
+import { permitHasQr, PERMIT_CONTRACTOR_SCOPES, type PermitContractorScope } from "@/lib/work-permits";
 import { requirePermitVisible } from "@/lib/server/work-permit-scope";
 import { requirePermitExecute } from "@/lib/server/work-permit-permissions";
 import { lookupPermitCardPerson } from "@/lib/server/work-permit-people";
@@ -22,16 +23,17 @@ export async function POST(req: NextRequest) {
       const permit = await prisma.workPermit.findUnique({ where: { id: permitTarget.id }, select: {
         id: true, teamType: true, contractorScope: true, status: true,
       } });
-      if (!permit || permit.teamType !== "CONTRACTOR" || permit.contractorScope !== "OVERHAUL") {
-        return fail("Mã QR không thuộc PCT nhà thầu Đại tu", 400);
+      if (!permit || !permitHasQr(permit)) {
+        return fail("Mã QR không thuộc PCT nhà thầu Đại tu / Đầu tư", 400);
       }
+      const label = `PCT ${PERMIT_CONTRACTOR_SCOPES[permit.contractorScope as PermitContractorScope]}`;
       if (["DRAFT", "CLOSED", "CANCELLED"].includes(permit.status)) {
-        const message = permit.status === "DRAFT" ? "PCT Đại tu này chưa được cấp"
-          : permit.status === "CLOSED" ? "PCT Đại tu này đã đóng" : "PCT Đại tu này đã hủy";
+        const message = permit.status === "DRAFT" ? `${label} này chưa được cấp`
+          : permit.status === "CLOSED" ? `${label} này đã đóng` : `${label} này đã hủy`;
         return fail(message, 409);
       }
       if (!["ISSUED", "WAITING", "ACTIVE"].includes(permit.status)) {
-        return fail("PCT Đại tu chưa ở trạng thái có thể cho phép làm việc", 409);
+        return fail(`${label} chưa ở trạng thái có thể cho phép làm việc`, 409);
       }
       const intent = permit.status === "ACTIVE" ? "" : "?open=1";
       return ok({ type: "WORK_PERMIT", url: `/work-permits/${encodeURIComponent(permit.id)}/lam-viec${intent}`, legacy: false });
@@ -39,7 +41,7 @@ export async function POST(req: NextRequest) {
     const target = parseDeviceQrValue(body?.value);
     if (!target) {
       // Thẻ ra vào cổng & ATVSLĐ của nhân sự nhà thầu (11/10/2026): không chuyển trang — trang quét hiện thẻ thông tin
-      // (nhóm SCTX / Đại tu, hạn thẻ, huấn luyện, PCT đang làm). Số thẻ trơn không có trong danh bạ thì coi như mã lạ;
+      // (nhóm SCTX / Đại tu / Đầu tư, hạn thẻ, huấn luyện, PCT đang làm). Số thẻ trơn không có trong danh bạ thì coi như mã lạ;
       // link thẻ (?id=) không có trong danh bạ thì báo rõ "chưa có trong danh bạ".
       const raw = typeof body?.value === "string" ? body.value : "";
       const card = raw ? await lookupPermitCardPerson(raw) : null;

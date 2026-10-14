@@ -60,7 +60,7 @@ export function parsePermit(body: Record<string, unknown>, status: PermitStatus,
   const teamType = permitText(body, "teamType");
   if (!["INTERNAL", "CONTRACTOR"].includes(teamType)) throw fail("Loại đơn vị không hợp lệ");
   const contractorScopeInput = permitText(body, "contractorScope", 20) || null;
-  if (teamType === "CONTRACTOR" && (!contractorScopeInput || !Object.hasOwn(PERMIT_CONTRACTOR_SCOPES, contractorScopeInput))) throw fail("Vui lòng chọn phiếu nhà thầu SCTX hoặc Đại tu");
+  if (teamType === "CONTRACTOR" && (!contractorScopeInput || !Object.hasOwn(PERMIT_CONTRACTOR_SCOPES, contractorScopeInput))) throw fail("Vui lòng chọn phiếu nhà thầu SCTX, Đại tu hoặc Đầu tư");
   const contractorScope = teamType === "CONTRACTOR" ? contractorScopeInput : null;
   const format = permitText(body, "format", 20) || defaultPermitFormat(teamType);
   if (!Object.hasOwn(PERMIT_FORMATS, format)) throw fail("Hình thức phiếu phải là PCT giấy hoặc PCT điện tử");

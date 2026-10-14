@@ -10,7 +10,7 @@ const vnDate = (value: string | null | undefined) => value ? new Date(value).toL
 const vnTime = (value: string) => new Date(value).toLocaleTimeString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", hour: "2-digit", minute: "2-digit" });
 
 /** Dải màu đầu thẻ theo nhóm — nhìn từ xa cũng biết Đại tu (tím) hay SCTX (xanh). */
-const HEADER: Record<string, string> = { OVERHAUL: "bg-violet-600", SCTX: "bg-sky-600" };
+const HEADER: Record<string, string> = { OVERHAUL: "bg-violet-600", SCTX: "bg-sky-600", INVESTMENT: "bg-amber-600" };
 
 /**
  * Thẻ thông tin nhân sự nhà thầu khi quét thẻ ra vào cổng bằng nút "Quét QR" chung (11/10/2026): chỉ xem, không ghi gì.
@@ -20,7 +20,7 @@ export function WorkerCardResult({ code, person, onScanAgain }: { code: string; 
   if (!person) return <section className="overflow-hidden rounded-2xl border-2 border-amber-300 bg-amber-50 text-amber-950" aria-live="assertive">
     <div className="flex items-center gap-2 bg-amber-500 px-4 py-2 text-sm font-bold uppercase tracking-wide text-white"><CircleAlert className="h-4 w-4" />Chưa có trong danh bạ nhà thầu</div>
     <div className="space-y-3 p-4">
-      <p className="text-sm">Thẻ <b>{code}</b> chưa có trong danh bạ nhân sự nhà thầu, nên chưa biết thuộc nhóm SCTX hay Đại tu. Kiểm tra lại với đơn vị nhà thầu hoặc đồng bộ danh bạ từ Google Sheets.</p>
+      <p className="text-sm">Thẻ <b>{code}</b> chưa có trong danh bạ nhân sự nhà thầu, nên chưa biết thuộc nhóm SCTX, Đại tu hay Đầu tư. Kiểm tra lại với đơn vị nhà thầu hoặc đồng bộ danh bạ từ Google Sheets.</p>
       <Button type="button" className="min-h-11 w-full" onClick={onScanAgain}><ScanLine />Quét thẻ khác</Button>
     </div>
   </section>;

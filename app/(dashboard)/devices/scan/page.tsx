@@ -13,7 +13,7 @@ import { ScanMetricsCollector, type ScanMetricResult } from "@/lib/work-permit-s
 import type { PermitPerson } from "@/lib/work-permits";
 
 /*
- * Trang "Quét QR" chung (nút giữa thanh điều hướng): mã thiết bị, mã PCT Đại tu, thẻ nhân sự nhà thầu.
+ * Trang "Quét QR" chung (nút giữa thanh điều hướng): mã thiết bị, mã PCT Đại tu / Đầu tư, thẻ nhân sự nhà thầu.
  * Dùng chung vòng quét của hộp quét thẻ PCT (lib/qr-camera.ts: ZXing-C++, phóng to quanh mã, zoom/đèn pin Android)
  * và gửi số đo cùng kiểu — log `[qr-scan-metrics]` ghi permitId = SCAN_METRICS_ID để tách khỏi hộp quét PCT.
  */
@@ -104,7 +104,7 @@ function DeviceScanner() {
         return;
       }
       navigator.vibrate?.(90);
-      toast.success(result.type === "WORK_PERMIT" ? "Đã nhận diện PCT Đại tu" : "Đã nhận diện thiết bị");
+      toast.success(result.type === "WORK_PERMIT" ? "Đã nhận diện PCT nhà thầu" : "Đã nhận diện thiết bị");
       router.push(result.url);
     } catch (error) {
       recordScan(startedAt, "block");
@@ -244,7 +244,7 @@ function DeviceScanner() {
             <div>
               <span className="inline-flex items-center gap-2 rounded-full border border-sky-300/25 bg-sky-300/10 px-3 py-1 text-xs font-black uppercase tracking-[0.16em] text-sky-200"><ShieldCheck className="h-4 w-4" /> Đã đăng nhập</span>
               <h1 className="mt-4 text-3xl font-black leading-tight">Quét QR<br /><span className="text-amber-300">tại hiện trường</span></h1>
-              <p className="mt-3 text-sm leading-6 text-slate-300">Quét mã thiết bị để mở hồ sơ, mã PCT Đại tu để vào thẳng bước cho phép làm việc, hoặc thẻ ra vào cổng để xem nhân sự nhà thầu thuộc nhóm Đại tu hay SCTX.</p>
+              <p className="mt-3 text-sm leading-6 text-slate-300">Quét mã thiết bị để mở hồ sơ, mã PCT Đại tu / Đầu tư để vào thẳng bước cho phép làm việc, hoặc thẻ ra vào cổng để xem nhân sự nhà thầu thuộc nhóm Đại tu hay SCTX.</p>
             </div>
             <div className="space-y-3">
               <Button onClick={startScanner} disabled={active} className="min-h-12 w-full rounded-xl bg-amber-400 text-base font-black text-[#071a2d] shadow-lg shadow-amber-500/20 hover:bg-amber-300">

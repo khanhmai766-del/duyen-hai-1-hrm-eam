@@ -25,7 +25,7 @@ import { companyUnclassified, formatPermitNumber, isSessionCommander, PERMIT_KIN
 import { isOverhaulPaperPermit, OVERHAUL_DAY_STATUSES, OVERHAUL_JOURNAL_LIMITS, overhaulItemKey, overhaulItemsOf, overhaulJournalTitle, type OverhaulJournalHeader } from "@/lib/work-permit-overhaul";
 import { initialOverhaulDraft, OverhaulItemProgressEditor, overhaulDraftError, overhaulDraftPayload } from "@/components/work-permits/overhaul-item-progress";
 import { PermitDeadlineBadge } from "@/components/work-permits/permit-deadline";
-import { PERMIT_CONTRACTOR_SCOPES, type PermitCompanyScopes, type PermitContractorScope, type PermitDetailRow, type PermitMember, type PermitPerson, type PermitSession } from "@/lib/work-permits";
+import { companyScopeList, CONTRACTOR_SCOPE_TONE, contractorScopeLikeOverhaul, PERMIT_CONTRACTOR_SCOPES, type PermitCompanyScopes, type PermitContractorScope, type PermitDetailRow, type PermitMember, type PermitPerson, type PermitSession } from "@/lib/work-permits";
 
 const control = "min-h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-60";
 const vnNow = () => new Date(Date.now() + 7 * 3600000).toISOString().slice(0, 16);
@@ -189,7 +189,7 @@ export function PermitCompanyDirectory({ scope }: { scope: PermitContractorScope
     </div>
     {editing && <PersonEditor initial={editing} onClose={() => setEditing(null)} />}
     {addingPersonTo !== null && <PersonEditor presetCompany={addingPersonTo} presetScope={scope} onClose={() => setAddingPersonTo(null)} onSaved={() => setOpenCompany(addingPersonTo)} />}
-    {syncing && <PeopleSyncDialog initialSource={scope} onClose={() => setSyncing(false)} />}
+    {syncing && <PeopleSyncDialog initialSource={scope === "SCTX" ? "SCTX" : "OVERHAUL"} onClose={() => setSyncing(false)} />}
     {companyForm && <CompanyEditor company={companyForm.mode === "rename" ? companyForm.company : undefined} presetScope={scope} onClose={() => setCompanyForm(null)} onSaved={name => setOpenCompany(name)} />}
   </section>;
 }
@@ -234,22 +234,24 @@ function PersonPhoto({ person, className }: { person: PermitPerson; className: s
 type CompanyPeopleProps = { people: PermitPerson[]; canWrite: boolean; removing: boolean; onEdit: (person: PermitPerson) => void; onRemove: (person: PermitPerson) => void };
 
 /**
- * Hai nhóm nhân sự của một đơn vị, chuyển bằng 2 nút: Đại tu (đủ họ tên, ảnh, chức vụ) / SCTX (không cần ảnh).
- * Mở mặc định nhóm Đại tu nếu có người, không thì SCTX. Hồ sơ chưa có nhóm tính là SCTX.
+ * Nhân sự của một đơn vị theo nhóm: Đại tu, Đầu tư (đủ họ tên, ảnh, chức vụ) / SCTX (không cần ảnh). Hồ sơ chưa có nhóm
+ * tính là SCTX. Chỉ một nhóm có người (bảng đơn vị đã lọc theo tab) thì không hiện nút chuyển nhóm.
  */
 function CompanyPeopleGroups({ people, ...rest }: CompanyPeopleProps) {
-  const overhaul = people.filter(person => person.scope === "OVERHAUL"), sctx = people.filter(person => person.scope !== "OVERHAUL");
+  const scopeOf = (person: PermitPerson): PermitContractorScope => person.scope === "OVERHAUL" || person.scope === "INVESTMENT" ? person.scope : "SCTX";
+  const groups = (["OVERHAUL", "INVESTMENT", "SCTX"] as const).map(key => ({ key, list: people.filter(person => scopeOf(person) === key) })).filter(item => item.list.length);
   const [picked, setPicked] = useState<PermitContractorScope | null>(null);
-  const group = picked ?? (overhaul.length || !sctx.length ? "OVERHAUL" : "SCTX");
-  const list = group === "OVERHAUL" ? overhaul : sctx;
+  const current = groups.find(item => item.key === picked) ?? groups[0];
+  const group: PermitContractorScope = current?.key ?? "SCTX";
+  const list = current?.list ?? [];
   return <div className="space-y-2">
-    <div role="tablist" aria-label="Nhóm nhân sự" className="inline-flex rounded-lg border border-border bg-background p-0.5">
-      {([["OVERHAUL", overhaul.length], ["SCTX", sctx.length]] as const).map(([key, count]) => <button key={key} type="button" role="tab" aria-selected={group === key} onClick={() => setPicked(key)}
+    {groups.length > 1 && <div role="tablist" aria-label="Nhóm nhân sự" className="inline-flex rounded-lg border border-border bg-background p-0.5">
+      {groups.map(({ key, list: { length: count } }) => <button key={key} type="button" role="tab" aria-selected={group === key} onClick={() => setPicked(key)}
         className={cn("min-h-9 rounded-md px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500", group === key ? "bg-[#00558F] text-white" : "text-slate-600 hover:bg-muted")}>
         Nhân sự {PERMIT_CONTRACTOR_SCOPES[key]} <span className="tabular-nums opacity-80">({count})</span>
       </button>)}
-    </div>
-    {list.length ? <CompanyPeopleTable {...rest} people={list} withPhoto={group === "OVERHAUL"} />
+    </div>}
+    {list.length ? <CompanyPeopleTable {...rest} people={list} withPhoto={contractorScopeLikeOverhaul(group)} />
       : <p className="text-sm text-muted-foreground">Chưa có nhân sự nhóm {PERMIT_CONTRACTOR_SCOPES[group]}.</p>}
   </div>;
 }
@@ -324,12 +326,11 @@ function CompanyPeopleTable({ people, canWrite, removing, onEdit, onRemove, with
   </>;
 }
 
-/** Nhãn phân loại đơn vị: SCTX (xanh ngọc) / Đại tu (tím) như nhãn nhóm phiếu; chưa phân loại để chữ xám. */
+/** Nhãn phân loại đơn vị: SCTX (xanh ngọc) / Đại tu (tím) / Đầu tư (cam) như nhãn nhóm phiếu; chưa phân loại để chữ xám. */
 function CompanyScopeBadge({ row, className }: { row: PermitCompanyScopes; className?: string }) {
   if (companyUnclassified(row)) return <span className={cn("inline-block align-middle text-[11px] font-normal italic text-slate-400", className)}>Chưa phân loại</span>;
   return <span className={cn("inline-flex gap-1 align-middle", className)}>
-    {row.sctx && <span className="rounded border border-cyan-200 bg-cyan-50 px-1.5 py-0.5 text-[11px] font-semibold text-cyan-800">SCTX</span>}
-    {row.overhaul && <span className="rounded border border-violet-200 bg-violet-50 px-1.5 py-0.5 text-[11px] font-semibold text-violet-800">Đại tu</span>}
+    {companyScopeList(row).map(scope => <span key={scope} className={cn("rounded border px-1.5 py-0.5 text-[11px] font-semibold", CONTRACTOR_SCOPE_TONE[scope].soft)}>{PERMIT_CONTRACTOR_SCOPES[scope]}</span>)}
   </span>;
 }
 
@@ -349,7 +350,8 @@ function CompanyEditor({ company, presetScope, onClose, onSaved }: { company?: s
   // Thêm mới từ tab một nhóm → đánh dấu sẵn nhóm đó để đơn vị hiện ngay trong tab.
   const [sctx, setSctx] = useState(current?.sctx ?? (!company && presetScope === "SCTX"));
   const [overhaul, setOverhaul] = useState(current?.overhaul ?? (!company && presetScope === "OVERHAUL"));
-  const scopesChanged = sctx !== (current?.sctx ?? false) || overhaul !== (current?.overhaul ?? false);
+  const [investment, setInvestment] = useState(current?.investment ?? (!company && presetScope === "INVESTMENT"));
+  const scopesChanged = sctx !== (current?.sctx ?? false) || overhaul !== (current?.overhaul ?? false) || investment !== (current?.investment ?? false);
   const pending = rename.isPending || create.isPending;
   const exists = companies.data?.data.some(row => row.company !== company && row.company === name.trim()) ?? false;
   async function submit(event: React.FormEvent) {
@@ -358,12 +360,12 @@ function CompanyEditor({ company, presetScope, onClose, onSaved }: { company?: s
     if (!next) return;
     try {
       if (company === undefined) {
-        await create.mutateAsync({ name: next, code: nextCode, sctx, overhaul });
+        await create.mutateAsync({ name: next, code: nextCode, sctx, overhaul, investment });
         toast.success(`Đã thêm đơn vị "${next}"`);
       } else {
         if (next === company && nextCode === currentCode && !scopesChanged) { onClose(); return; }
         if (exists && !window.confirm(`Đơn vị "${next}" đã có sẵn. Toàn bộ nhân sự của "${company}" sẽ được gộp vào đơn vị đó. Tiếp tục?`)) return;
-        const result = await rename.mutateAsync({ from: company, to: next, code: nextCode, sctx, overhaul });
+        const result = await rename.mutateAsync({ from: company, to: next, code: nextCode, sctx, overhaul, investment });
         toast.success(next === company ? `Đã cập nhật đơn vị "${next}"` : `Đã cập nhật đơn vị "${next}" (${result.updated} hồ sơ nhân sự)`);
       }
       onSaved?.(next);
@@ -379,13 +381,13 @@ function CompanyEditor({ company, presetScope, onClose, onSaved }: { company?: s
       <fieldset className="space-y-1.5 text-sm">
         <legend className="mb-1">Được cấp PCT nhà thầu nhóm</legend>
         <div className="flex flex-wrap gap-2">
-          {([["SCTX", sctx, setSctx], ["Đại tu", overhaul, setOverhaul]] as const).map(([label, checked, setChecked]) => (
+          {([["SCTX", sctx, setSctx], ["Đại tu", overhaul, setOverhaul], ["Đầu tư", investment, setInvestment]] as const).map(([label, checked, setChecked]) => (
             <label key={label} className={cn("inline-flex min-h-10 cursor-pointer items-center gap-2 rounded-lg border px-3", checked ? "border-blue-300 bg-blue-50 text-blue-900" : "border-input")}>
               <input type="checkbox" className="h-4 w-4 accent-blue-700" checked={checked} onChange={e => setChecked(e.target.checked)} />{label}
             </label>
           ))}
         </div>
-        <span className="block text-xs text-muted-foreground">Tick cả hai nếu nhà thầu làm cả SCTX và Đại tu. Chưa tick ô nào = chưa phân loại, chọn được ở cả hai nhóm phiếu. Đã phân loại thì phiếu khác nhóm bị chặn.</span>
+        <span className="block text-xs text-muted-foreground">Tick nhiều ô nếu nhà thầu làm nhiều nhóm. Đầu tư: dự án đầu tư, cấp phiếu như Đại tu nhưng không có hạng mục đại tu. Chưa tick ô nào = chưa phân loại, chọn được ở mọi nhóm phiếu. Đã phân loại thì phiếu khác nhóm bị chặn.</span>
         {overhaul && !code.trim() && <p className="rounded-lg bg-amber-50 p-2.5 text-xs text-amber-900">Nhà thầu Đại tu nên khai Mã đơn vị — hạng mục đại tu khớp theo mã ở cột “Nhà thầu” của file tiến độ.</p>}
       </fieldset>
       {exists && (company === undefined
@@ -425,8 +427,8 @@ export function PermitPeopleDirectory({ onClose, onPick, onPickMany, existingMem
   }
   useEffect(() => { const timer = setTimeout(() => { setSearch(q); setPage(1); }, 300); return () => clearTimeout(timer); }, [q]);
   const query = usePermitPeople({ q: search, page, active: Boolean(onPick || onPickMany), commander: commandersOnly, polling: Boolean(onPick || onPickMany), company, scope });
-  // PCT Đại tu (08/10/2026): chọn CHTT chỉ trong số người ĐÃ đánh dấu CHTT — không thêm người / sửa hồ sơ ngay tại hộp chọn.
-  const pickOnly = commandersOnly && scope === "OVERHAUL";
+  // PCT Đại tu / Đầu tư (08/10/2026): chọn CHTT chỉ trong số người ĐÃ đánh dấu CHTT — không thêm người / sửa hồ sơ ngay tại hộp chọn.
+  const pickOnly = commandersOnly && contractorScopeLikeOverhaul(scope);
   const canWrite = Boolean(query.data?.meta.canWrite) && !pickOnly;
   // Chọn CHTT: người đang làm việc ở PCT khác VẪN chọn được (mở lại 11/10/2026, bỏ khoá 10/10) — dòng "Đang làm PCT …" chỉ để biết.
   const heading = commandersOnly ? "Chọn CHTT nhà thầu" : onPickMany ? "Chọn nhân viên công tác" : "Danh sách nhân sự nhà thầu";
@@ -485,12 +487,12 @@ function PersonEditor({ initial, presetCompany, presetScope, onClose, onSaved }:
       <label className="block space-y-1 text-sm"><span>SĐT liên hệ</span><input className={control} type="tel" inputMode="tel" maxLength={40} value={form.phone ?? ""} onChange={e => setForm({ ...form, phone: e.target.value })} placeholder="Ví dụ: 0912 345 678" /><span className="block text-xs text-muted-foreground">Không bắt buộc; dùng để gọi khi cần liên hệ đơn vị công tác.</span></label>
       <fieldset className="space-y-1.5 text-sm">
         <legend className="mb-1">Nhóm nhân sự *</legend>
-        <div className="grid grid-cols-2 gap-2">
-          {(["OVERHAUL", "SCTX"] as const).map(key => <label key={key} className={cn("inline-flex min-h-10 cursor-pointer items-center gap-2 rounded-lg border px-3", form.scope === key ? "border-blue-300 bg-blue-50 text-blue-900" : "border-input")}>
+        <div className="grid grid-cols-3 gap-2">
+          {(["OVERHAUL", "INVESTMENT", "SCTX"] as const).map(key => <label key={key} className={cn("inline-flex min-h-10 cursor-pointer items-center gap-2 rounded-lg border px-3", form.scope === key ? "border-blue-300 bg-blue-50 text-blue-900" : "border-input")}>
             <input type="radio" name="person-scope" className="h-4 w-4 accent-blue-700" checked={form.scope === key} onChange={() => setForm({ ...form, scope: key })} />{PERMIT_CONTRACTOR_SCOPES[key]}
           </label>)}
         </div>
-        <span className="block text-xs text-muted-foreground">Đại tu: có đủ họ tên, ảnh, chức vụ (đồng bộ từ bảng thẻ ra vào cổng). SCTX: không cần ảnh. PCT nhà thầu chỉ nhận người đúng nhóm phiếu.</span>
+        <span className="block text-xs text-muted-foreground">Đại tu, Đầu tư: có đủ họ tên, ảnh, chức vụ (đồng bộ từ bảng thẻ ra vào cổng). SCTX: không cần ảnh. PCT nhà thầu chỉ nhận người đúng nhóm phiếu.</span>
       </fieldset>
       <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.isActive} onChange={e => setForm({ ...form, isActive: e.target.checked })} />Đang hoạt động</label>
       <div className="flex justify-end gap-2"><Button type="button" variant="outline" onClick={onClose}>Để sau</Button><Button disabled={save.isPending}>{save.isPending ? "Đang lưu…" : "Lưu hồ sơ"}</Button></div>

@@ -77,7 +77,7 @@ export function PeopleSyncDialog({ onClose, initialSource = "OVERHAUL" }: { onCl
   return <Dialog open onOpenChange={v => { if (!v && !running) onClose(); }}>
     <DialogContent className="max-w-lg">
       <DialogTitle>Đồng bộ nhân sự từ Google Sheets</DialogTitle>
-      <DialogDescription>Mỗi tab trong sheet ứng với đơn vị có Mã đơn vị trùng tên tab. Lấy họ tên, số thẻ, hạn thẻ, huấn luyện và ảnh; vai trò CHTT và trạng thái hoạt động trên sổ giữ nguyên.</DialogDescription>
+      <DialogDescription className="sr-only">Mỗi tab trong sheet ứng với đơn vị có Mã đơn vị trùng tên tab. Lấy họ tên, số thẻ, hạn thẻ, huấn luyện và ảnh; vai trò CHTT và trạng thái hoạt động trên sổ giữ nguyên.</DialogDescription>
       <div role="radiogroup" aria-label="Bảng nguồn" className="grid grid-cols-2 gap-2">
         {SOURCES.map(item => <button key={item.value} type="button" role="radio" aria-checked={source === item.value} disabled={running}
           onClick={() => { setSource(item.value); setResult(null); setError(""); setFailed([]); setDone(0); }}
@@ -85,7 +85,7 @@ export function PeopleSyncDialog({ onClose, initialSource = "OVERHAUL" }: { onCl
           <span className="block font-semibold">{item.label}</span><span className="block text-xs text-muted-foreground">{item.hint}</span>
         </button>)}
       </div>
-      {!result && !running && !error && <p className="rounded-lg bg-muted/40 p-3 text-sm">Người mới trong sheet được thêm vào danh bạ với nhóm <b>{source === "SCTX" ? "SCTX" : "Đại tu"}</b>; người đã có (cùng số thẻ) được cập nhật theo sheet. Số thẻ đã là của người khác bên nhóm kia thì không ghi đè. Ảnh chỉ tải lại khi ảnh trong sheet thay đổi.</p>}
+      {!result && !running && !error && <p className="rounded-lg bg-muted/40 p-3 text-sm">Người mới trong sheet được thêm vào danh bạ với nhóm <b>{source === "SCTX" ? "SCTX" : "Đại tu"}</b> (đơn vị chỉ tick Đầu tư → nhóm Đầu tư); người đã có (cùng số thẻ) được cập nhật theo sheet. Số thẻ đã là của người khác bên nhóm kia thì không ghi đè. Ảnh chỉ tải lại khi ảnh trong sheet thay đổi.</p>}
       {running && !result && <p role="status" className="text-sm">Đang lấy danh sách từ Google Sheets…</p>}
       {result && <div className="min-w-0 space-y-2 text-sm">
         <p className="flex items-center gap-2 font-medium"><CheckCircle2 size={16} className="text-emerald-600" />{result.sourceLabel}: {result.total} người · {result.created} mới · {result.updated} cập nhật{result.skipped ? ` · ${result.skipped} dòng bỏ qua` : ""}</p>
