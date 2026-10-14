@@ -29,14 +29,14 @@ export function ContractorDashboard({ rows, workingToday, workingDay, scopeLabel
     { label: "Đã HL ATVSLĐ", value: sum("trained"), note: total ? `${percent(sum("trained") / total)} danh bạ` : "", tone: "text-sky-700" },
   ];
   return <section className="overflow-hidden rounded-xl border border-border bg-card" aria-label={`Tổng quan nhân sự nhà thầu ${scopeLabel}`}>
-    <div className="grid gap-px bg-border lg:grid-cols-[minmax(260px,320px)_1fr]">
+    <div className="grid gap-px bg-border lg:grid-cols-[minmax(340px,auto)_1fr]">
       {/* Ô chính: tỷ lệ tham gia làm việc trong ngày. */}
       <div className="flex items-center gap-4 bg-card p-4">
         <Ring value={rate} />
         <div className="min-w-0">
-          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Làm việc trong ngày{workingDay ? ` ${workingDay}` : ""}</p>
+          <p className="whitespace-nowrap text-xs font-semibold uppercase tracking-wide text-muted-foreground">Làm việc trong ngày{workingDay ? ` ${workingDay}` : ""}</p>
           <p className="mt-1 text-3xl font-bold tabular-nums leading-none text-blue-800">{percent(rate)}</p>
-          <p className="mt-1.5 text-sm text-muted-foreground"><b className="text-foreground">{workingToday}</b> / {active} người đang hoạt động</p>
+          <p className="mt-1.5 whitespace-nowrap text-sm text-muted-foreground"><b className="text-foreground">{workingToday}</b> / {active} người đang hoạt động</p>
         </div>
       </div>
       <div className="grid grid-cols-2 gap-px bg-border sm:grid-cols-4">{tiles.map(tile => <div key={tile.label} className="bg-card px-4 py-3">
@@ -50,7 +50,7 @@ export function ContractorDashboard({ rows, workingToday, workingDay, scopeLabel
       <ul className="mt-2 grid gap-x-8 gap-y-1.5 lg:grid-cols-2">{byCompany.map(({ row, rate: value }) => <li key={row.company} className="grid grid-cols-[minmax(0,7.5rem)_1fr_auto] items-center gap-3 text-xs" title={`${row.company}: ${row.workingToday ?? 0} / ${row.active} người đang hoạt động`}>
         <span className="truncate font-semibold text-blue-800">{row.code || row.company}</span>
         <span className="h-2 overflow-hidden rounded-full bg-slate-100"><span className="block h-full rounded-full bg-blue-600" style={{ width: `${Math.min(100, value * 100)}%` }} /></span>
-        <span className="w-24 text-right tabular-nums text-muted-foreground"><b className="text-foreground">{percent(value)}</b> · {row.workingToday ?? 0}/{row.active}</span>
+        <span className="min-w-28 whitespace-nowrap text-right tabular-nums text-muted-foreground"><b className="text-foreground">{percent(value)}</b> · {row.workingToday ?? 0}/{row.active}</span>
       </li>)}</ul>
     </div>}
   </section>;
