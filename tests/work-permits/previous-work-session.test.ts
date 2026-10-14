@@ -25,10 +25,10 @@ function harness(sessions: ReturnType<typeof session>[], scope = "OVERHAUL", den
       return { id: "permit-1", teamType: "CONTRACTOR", contractorScope: scope, format: "PAPER", status: "ACTIVE", overhaulItems: [],
         sessions: sorted.filter(row => row.permitId === "permit-1").slice(0, 2), _count: { sessions: sessions.length, history: 0 }, history: [] };
     } },
-    workPermitSession: { findFirst: async ({ where }: { where: PreviousWhere }) => {
+    workPermitSession: { findMany: async ({ where, take }: { where: PreviousWhere; take: number }) => {
       previousReads++;
-      return sorted.find(row => row.permitId === where.permitId && row.endedAt && row.endedAt <= where.endedAt.lte
-        && !row.endNote.startsWith(where.NOT.endNote.startsWith)) ?? null;
+      return sorted.filter(row => row.permitId === where.permitId && row.endedAt && row.endedAt <= where.endedAt.lte
+        && !row.endNote.startsWith(where.NOT.endNote.startsWith)).slice(0, take);
     } },
   };
   const modules: Record<string, unknown> = {
@@ -54,6 +54,7 @@ test("Sau đổi CHTT, lấy danh sách ngày trước nằm ngoài 2 lượt g�
   assert.deepEqual(data.sessions.map((s: { id: string }) => s.id), [live.id, handoff.id]);
   assert.equal(data.previousWorkSession.id, completed.id);
   assert.deepEqual(data.previousWorkSession.members, [worker]);
+  assert.deepEqual(data.previousWorkSessions.map((s: { id: string }) => s.id), [completed.id]);
 });
 
 test("Bỏ qua nhiều bàn giao, cả lượt có nhân viên, và giữ lượt kết thúc thực sự gần nhất", async () => {
@@ -72,7 +73,9 @@ test("Không lấy lượt của phiếu khác hoặc lượt kết thúc sau gi
 
 test("Chưa có lượt công việc kết thúc thì không lấy lượt bàn giao làm danh sách cũ", async () => {
   const h = harness([handoff, live]);
-  assert.equal((await (await h.call()).json()).data.previousWorkSession, null);
+  const { data } = await (await h.call()).json();
+  assert.equal(data.previousWorkSession, null);
+  assert.deepEqual(data.previousWorkSessions, []);
 });
 
 test("Lượt kết thúc thực sự không có nhân viên vẫn là lượt trước, không lùi sang ngày khác", async () => {
@@ -95,4 +98,25 @@ test("Kiểm tra quyền xem trước khi đọc danh sách nhân sự", async (
   assert.equal((await h.call()).status, 403);
   assert.equal(h.detailReads(), 0);
   assert.equal(h.previousReads(), 0);
+});
+
+test("Trả 3 lượt ngày/đêm gần nhất theo thời gian, bỏ bàn giao và lượt thứ tư", async () => {
+  const yesterdayDay = session("yesterday-day", at(12, 7), at(12, 18));
+  const yesterdayNight = session("yesterday-night", at(12, 19), at(13, 6));
+  const todayMorning = session("today-morning", at(13, 7), at(13, 8));
+  const h = harness([completed, yesterdayDay, yesterdayNight, todayMorning, handoff, live]);
+  const { data } = await (await h.call()).json();
+  assert.deepEqual(data.previousWorkSessions.map((s: { id: string }) => s.id), [todayMorning.id, yesterdayNight.id, yesterdayDay.id]);
+  assert.equal(data.previousWorkSession.id, todayMorning.id, "Tab cũ vẫn nhận lượt gần nhất");
+  assert.equal(data.previousWorkSessions[1].openedAt, yesterdayNight.openedAt.toISOString());
+  assert.equal(data.previousWorkSessions[1].endedAt, yesterdayNight.endedAt?.toISOString());
+});
+
+test("Chỉ có 2 lượt công việc thì trả đủ 2 lượt, giữ riêng danh sách mỗi nhóm", async () => {
+  const workerNight = { ...worker, personId: "night-worker", code: "NV2", name: "Trần Văn B" };
+  const night = session("night", at(12, 19), at(13, 6), "", [workerNight]);
+  const h = harness([completed, night, handoff, live]);
+  const { data } = await (await h.call()).json();
+  assert.equal(data.previousWorkSessions.length, 2);
+  assert.deepEqual(data.previousWorkSessions.map((s: { members: typeof worker[] }) => s.members), [[workerNight], [worker]]);
 });

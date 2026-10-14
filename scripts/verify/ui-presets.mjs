@@ -1004,9 +1004,9 @@ export const PRESETS = {
     },
   },
   "pct-dai-tu-vao-tu-lan-truoc": {
-    description: "PCT đại tu sau nhiều lần đổi CHTT: giữ danh sách lượt công việc trước; Cho vào qua API giả lập, không ghi DB",
+    description: "Chọn 3 lượt công tác ngày/đêm, tìm nhân viên, cho vào và chống trùng giữa các lượt — giả lập, không ghi DB",
     prepare: (ctx) => PRESETS["pct-lam-viec"].prepare(ctx),
-    routes: ({ permitId }) => [`/work-permits/${permitId}/lam-viec`, `/work-permits/${permitId}/lam-viec?ui=cho-vao`],
+    routes: ({ permitId }) => ["", "?ui=ca-dem", "?ui=cho-vao", "?ui=rong"].map(query => `/work-permits/${permitId}/lam-viec${query}`),
     async mock(context, { permitId }) {
       let fixture;
       await context.route("**/api/overhaul-milestones", route => route.fulfill({ json: { data: [], meta: null, error: null } }));
@@ -1022,11 +1022,17 @@ export const PRESETS = {
           const previous = { ...liveSession(json.data, now), id: "ui-previous-session", openedAt: minutesAgo(now, 24 * 60), endedAt: minutesAgo(now, 20 * 60) };
           previous.members = previous.members.slice(0, 3).map(member => ({ ...member, attendance: [{ in: previous.openedAt, out: previous.endedAt }] }));
           previous.members.push({ personId: previous.commanderId, name: previous.commanderName, code: previous.commanderCode, company: previous.company });
-          previous.commanderName = "CHTT ngày trước (giả lập)";
+          previous.commanderName = "Nguyễn Văn Ban Ngày (giả lập)";
+          const night = { ...previous, id: "ui-previous-night", commanderId: "ui-night-commander", commanderCode: "UI-NIGHT", commanderName: "Trần Thanh Phương Ca Đêm (giả lập)",
+            openedAt: minutesAgo(now, 36 * 60), endedAt: minutesAgo(now, 25 * 60) };
+          night.members = liveSession(json.data, now).members.filter((_, index) => index === 0 || index >= 3).map(member => ({ ...member, attendance: [{ in: night.openedAt, out: night.endedAt }] }));
+          night.members.push({ personId: night.commanderId, name: night.commanderName, code: night.commanderCode, company: night.company });
+          const empty = { ...previous, id: "ui-previous-empty", commanderName: "Lê Văn C (giả lập)",
+            openedAt: minutesAgo(now, 48 * 60), endedAt: minutesAgo(now, 40 * 60), members: [] };
           const handoff = { ...current, id: "ui-handoff-session", commanderName: "CHTT bàn giao (giả lập)",
             openedAt: minutesAgo(now, 150), endedAt: current.openedAt, endNote: `Bàn giao CHTT cho ${current.commanderName}.` };
           json.data = { ...json.data, format: "PAPER", contractorScope: "OVERHAUL", status: "ACTIVE", plannedEndAt: new Date(now + 86400000).toISOString(),
-            sessions: [current, handoff], previousWorkSession: previous, _count: { ...json.data._count, sessions: 5 } };
+            sessions: [current, handoff], previousWorkSession: previous, previousWorkSessions: [previous, night, empty], _count: { ...json.data._count, sessions: 5 } };
           json.meta = { ...json.meta, canExecute: true };
         }
         await route.fulfill({ json: fixture });
@@ -1049,20 +1055,47 @@ export const PRESETS = {
       });
     },
     async interact(page, route) {
-      const open = page.getByRole("button", { name: "Danh sách lần làm việc gần nhất", exact: true });
+      const open = page.getByRole("button", { name: "Danh sách các lần làm việc trước", exact: true });
       await open.waitFor();
       assert.equal(await page.getByRole("dialog").count(), 0, "Danh sách cũ phải ẩn trước khi bấm");
       await open.click();
       const dialog = page.getByRole("dialog");
-      assert.match(await dialog.innerText(), /CHTT ngày trước \(giả lập\)/, "Lấy đúng lượt trước dù 2 lần gần nhất chỉ gồm lượt đang mở và bàn giao");
+      assert.match(await dialog.innerText(), /Nguyễn Văn Ban Ngày \(giả lập\)/, "Lấy đúng lượt trước dù 2 lần gần nhất chỉ gồm lượt đang mở và bàn giao");
       assert.doesNotMatch(await dialog.innerText(), /CHTT bàn giao/, "Không lấy danh sách từ lượt bàn giao rỗng");
-      assert.equal(await dialog.getByRole("button", { name: /^Cho vào/ }).count(), 3, "Chỉ hiện nhân viên, không tính CHTT cũ");
-      if (!route.endsWith("ui=cho-vao")) return;
+      assert.equal(await dialog.getByRole("radio").count(), 3);
+      const first = dialog.getByRole("radio", { name: /^Lượt 1/ });
+      const second = dialog.getByRole("radio", { name: /^Lượt 2/ });
+      const third = dialog.getByRole("radio", { name: /^Lượt 3/ });
+      assert.equal(await first.isChecked(), true, "Mặc định chọn lượt gần nhất");
+      assert.equal(await dialog.getByRole("button", { name: /^(Cho vào|Đang trong) / }).count(), 3, "Chỉ hiện nhân viên, không tính CHTT cũ");
+      if (route.endsWith("ui=rong")) {
+        await third.check();
+        await dialog.getByText("Lượt làm việc này không có nhân viên đi cùng.").waitFor();
+        assert.equal(await dialog.getByRole("button", { name: /^Cho vào/ }).count(), 0);
+        return;
+      }
+      if (!route.endsWith("ui=cho-vao") && !route.endsWith("ui=ca-dem")) return;
+      await second.check();
+      assert.equal(await dialog.getByRole("button", { name: /^Cho vào/ }).count(), 10, "Giữ riêng nhóm ca đêm");
+      assert.equal(await dialog.getByRole("button", { name: "Cho vào Lê Thị Cúc", exact: true }).count(), 0, "Không trộn nhân viên nhóm ngày");
+      const search = dialog.getByRole("searchbox", { name: "Tìm trong danh sách lần làm việc đã chọn" });
+      await search.fill("khong-co-nguoi-nay");
+      await dialog.getByText("Không tìm thấy nhân viên phù hợp.").waitFor();
+      await search.fill("vo thanh hai");
+      await dialog.getByRole("button", { name: "Cho vào Võ Thanh Hải", exact: true }).waitFor();
+      assert.equal(await dialog.getByRole("button", { name: /^Cho vào/ }).count(), 1);
+      await first.check();
+      assert.equal(await search.inputValue(), "", "Đổi lượt xoá từ tìm kiếm cũ");
+      await second.check();
+      if (route.endsWith("ui=ca-dem")) return;
       const request = page.waitForRequest(request => request.url().endsWith("/sessions/attendance") && request.method() === "POST");
       await dialog.getByRole("button", { name: "Cho vào Trần Văn Bình", exact: true }).click();
       assert.deepEqual((await request).postDataJSON(), { sessionId: "ui-live-session", direction: "in", personId: "ui-p0" });
       await dialog.getByRole("button", { name: "Đang trong Trần Văn Bình", exact: true }).waitFor();
       assert.equal(await dialog.getByRole("button", { name: "Đang trong Trần Văn Bình", exact: true }).isDisabled(), true);
+      assert.equal(await second.isChecked(), true, "Ghi nhận xong không chuyển khỏi nhóm đang chọn");
+      await first.check();
+      assert.equal(await dialog.getByRole("button", { name: "Đang trong Trần Văn Bình", exact: true }).isDisabled(), true, "Người chung giữa 2 danh sách chỉ được cho vào một lần");
       assert.equal(await dialog.getByRole("button", { name: "Cho vào Lê Thị Cúc", exact: true }).isEnabled(), true, "Người chưa bấm vẫn chưa được cho vào");
     },
   },

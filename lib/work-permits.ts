@@ -241,6 +241,8 @@ export interface PermitDetailRow extends PermitRow {
   history: PermitHistorySummary[]; sessions: PermitSession[]; _count: { sessions: number; history: number };
   /** Danh sách lượt công việc đã kết thúc gần nhất trước lượt đang mở, bỏ qua bàn giao CHTT. */
   previousWorkSession?: PermitSession | null;
+  /** Tối đa 3 lượt công việc đã kết thúc, mới nhất trước, bỏ qua các lượt bàn giao CHTT. */
+  previousWorkSessions?: PermitSession[];
   /** PCT đại tu: % lũy kế gần nhất theo overhaulItemKey. */
   overhaulPercents?: Record<string, number>;
   /** PCT đại tu: ghi chú gần nhất theo overhaulItemKey (điền sẵn ô ghi chú khi cập nhật tiếp). */

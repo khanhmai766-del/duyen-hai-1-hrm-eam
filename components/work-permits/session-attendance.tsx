@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import { LogIn, LogOut, ScanLine, Search, Users } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -42,6 +42,8 @@ export function SessionAttendance({ permit, session, canExecute, size = "md", au
   const [picking, setPicking] = useState(false);
   const [showPrevious, setShowPrevious] = useState(false);
   const [previousQuery, setPreviousQuery] = useState("");
+  const [previousId, setPreviousId] = useState<string | null>(null);
+  const previousGroupId = useId();
   const [admitting, setAdmitting] = useState(false);
   const [filter, setFilter] = useState<"inside" | "out" | "waiting" | null>(null);
   const [query, setQuery] = useState("");
@@ -52,8 +54,9 @@ export function SessionAttendance({ permit, session, canExecute, size = "md", au
   const tracked = members.some(({ member }) => attendanceTracked(member));
   const insideCount = members.filter(({ member }) => attendanceInside(member)).length;
   const commander: PermitMember = { personId: session.commanderId ?? undefined, code: session.commanderCode, name: session.commanderName, company: session.company };
-  const previousSession = live && canExecute && isOverhaulPaperPermit(permit)
-    ? permit.previousWorkSession ?? undefined : undefined;
+  const previousSessions = live && canExecute && isOverhaulPaperPermit(permit)
+    ? (permit.previousWorkSessions ?? (permit.previousWorkSession ? [permit.previousWorkSession] : [])).slice(0, 3) : [];
+  const previousSession = previousSessions.find(previous => previous.id === previousId) ?? previousSessions[0];
   const previousMembers = previousSession?.members.filter(member => !isSessionCommander(member, previousSession)) ?? [];
   const matchesMember = (left: PermitMember, right: PermitMember) => Boolean(left.personId && right.personId && left.personId === right.personId)
     || Boolean(left.code.trim() && left.code.normalize("NFC").trim().toUpperCase() === right.code.normalize("NFC").trim().toUpperCase());
@@ -94,12 +97,25 @@ export function SessionAttendance({ permit, session, canExecute, size = "md", au
   const picker = picking && <PermitPeopleDirectory onClose={() => setPicking(false)} onPickMany={people => void admitPicked(people)}
     existingMembers={[...members.map(({ member }) => member), commander]} company={permit.teamName || undefined} scope={permit.contractorScope} />;
   const pickButton = (className: string) => <Button type="button" variant="outline" className={className} disabled={admitting} onClick={() => setPicking(true)}><Users />{admitting ? "Đang cho vào…" : "Chọn từ danh sách"}</Button>;
-  const previousButton = previousSession && <Button type="button" variant="outline" className="h-auto min-h-10 w-full whitespace-normal px-3 py-2 text-sm sm:w-auto" onClick={() => { setPreviousQuery(""); setShowPrevious(true); }}><Users className="shrink-0" />Danh sách lần làm việc gần nhất</Button>;
-  const previousDialog = showPrevious && previousSession && <Dialog open onOpenChange={setShowPrevious}><DialogContent className="max-w-2xl">
-    <DialogTitle>Danh sách lần làm việc gần nhất</DialogTitle>
-    <DialogDescription>Lần mở {dayHhmm(previousSession.openedAt)} · CHTT {previousSession.commanderName}. Bấm Cho vào để ghi nhận người đó vào ngay trong lần làm việc đang mở.</DialogDescription>
-    <input type="search" aria-label="Tìm trong danh sách lần làm việc gần nhất" className="h-10 w-full rounded-lg border border-input bg-background px-3 text-base sm:text-sm" placeholder="Tìm tên hoặc mã thẻ…" value={previousQuery} onChange={e => setPreviousQuery(e.target.value)} />
-    <div className="space-y-2">{previousMembers.filter(member => normalizeText(`${member.name} ${member.code}`).includes(normalizeText(previousQuery.trim()))).map((member, index) => {
+  const previousButton = previousSession && <Button type="button" variant="outline" className="h-auto min-h-10 w-full whitespace-normal px-3 py-2 text-sm sm:w-auto" onClick={() => { setPreviousId(previousSessions[0].id); setPreviousQuery(""); setShowPrevious(true); }}><Users className="shrink-0" />Danh sách các lần làm việc trước</Button>;
+  const previousDialog = showPrevious && previousSession && <Dialog open onOpenChange={setShowPrevious}><DialogContent className="flex max-h-[90dvh] max-w-2xl flex-col gap-3 overflow-hidden p-4 sm:p-6">
+    <DialogTitle className="shrink-0 pr-7">Danh sách các lần làm việc trước</DialogTitle>
+    <DialogDescription className="shrink-0">Chọn lượt công tác để xem nhân viên. Bấm Cho vào để ghi nhận từng người trong lần làm việc đang mở.</DialogDescription>
+    <div role="radiogroup" aria-label="Chọn lần làm việc trước" className="shrink-0 space-y-2">
+      {previousSessions.map((previous, index) => {
+        const selected = previous.id === previousSession.id;
+        const count = previous.members.filter(member => !isSessionCommander(member, previous)).length;
+        return <label key={previous.id} className={`flex cursor-pointer items-start gap-2.5 rounded-lg border p-2.5 text-sm ${selected ? "border-blue-500 bg-blue-50/60" : "border-border bg-background"}`}>
+          <input type="radio" name={previousGroupId} value={previous.id} checked={selected} className="mt-0.5 h-4 w-4 shrink-0 accent-blue-600" onChange={() => { setPreviousId(previous.id); setPreviousQuery(""); }} />
+          <span className="min-w-0 space-y-0.5">
+            <span className="block break-words text-xs font-semibold sm:text-sm">Lượt {index + 1} · {dayHhmm(previous.openedAt)} → {previous.endedAt ? dayHhmm(previous.endedAt) : "—"}</span>
+            <span className="block break-words text-xs text-muted-foreground">CHTT {previous.commanderName} · {count} nhân viên</span>
+          </span>
+        </label>;
+      })}
+    </div>
+    <input type="search" aria-label="Tìm trong danh sách lần làm việc đã chọn" className="h-10 w-full shrink-0 rounded-lg border border-input bg-background px-3 text-base sm:text-sm" placeholder="Tìm tên hoặc mã thẻ…" value={previousQuery} onChange={e => setPreviousQuery(e.target.value)} />
+    <div className="min-h-0 space-y-2 overflow-y-auto overscroll-contain">{previousMembers.filter(member => normalizeText(`${member.name} ${member.code}`).includes(normalizeText(previousQuery.trim()))).map((member, index) => {
       const current = members.find(item => matchesMember(item.member, member));
       const isCommander = matchesMember(member, commander);
       const inside = isCommander || Boolean(current && attendanceInside(current.member));
@@ -108,8 +124,8 @@ export function SessionAttendance({ permit, session, canExecute, size = "md", au
         <div className="min-w-0 flex-1"><p className="break-words text-sm font-semibold">{member.name}</p><p className="break-words text-xs text-muted-foreground">{[member.code, member.company].filter(Boolean).join(" · ")}</p>{unavailable && <p className="text-xs text-amber-700">Không còn liên kết hồ sơ — quét thẻ hoặc chọn từ danh bạ.</p>}</div>
         <Button type="button" size="sm" className="h-10 shrink-0" aria-label={`${inside ? "Đang trong" : "Cho vào"} ${member.name}`} disabled={inside || unavailable || attendance.isPending || admitting} onClick={() => void manual(current?.member ?? member, current?.index ?? -1, "in")}>{inside ? "Đang trong" : "Cho vào"}</Button>
       </div>;
-    })}{!previousMembers.length && <p className="py-4 text-sm text-muted-foreground">Lần làm việc gần nhất không có nhân viên đi cùng.</p>}</div>
-    <div className="flex justify-end"><Button type="button" variant="outline" className="h-10" onClick={() => setShowPrevious(false)}>Đóng</Button></div>
+    })}{!previousMembers.length && <p className="py-4 text-sm text-muted-foreground">Lượt làm việc này không có nhân viên đi cùng.</p>}{previousMembers.length > 0 && !previousMembers.some(member => normalizeText(`${member.name} ${member.code}`).includes(normalizeText(previousQuery.trim()))) && <p className="py-4 text-sm text-muted-foreground">Không tìm thấy nhân viên phù hợp.</p>}</div>
+    <div className="flex shrink-0 justify-end"><Button type="button" variant="outline" className="h-10" onClick={() => setShowPrevious(false)}>Đóng</Button></div>
   </DialogContent></Dialog>;
   const rows = members.map(({ member, index }) => {
     const inside = attendanceInside(member);
