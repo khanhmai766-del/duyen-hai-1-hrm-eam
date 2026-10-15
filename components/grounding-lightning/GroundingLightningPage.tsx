@@ -1510,8 +1510,9 @@ export default function GroundingLightningPage() {
                   <span className="flex flex-wrap items-center gap-1 text-sm font-bold text-ink sm:gap-2 sm:text-base">
                     Ca {SHIFT_TYPE[shiftType].label.toLocaleLowerCase("vi")}
                     {current && <><span className="size-1.5 rounded-full bg-cyan-600 sm:hidden" title="Đang diễn ra" /><span className="hidden rounded-full bg-cyan-100 px-2 py-0.5 text-xs text-cyan-800 sm:inline">Đang diễn ra</span></>}
+                    <span className="ml-auto hidden text-xs font-normal text-muted-foreground sm:inline">{GROUNDING_SHIFT_HOURS[shiftType]}</span>
                   </span>
-                  <span className="mt-1 block text-xs text-muted-foreground"><span className="sm:hidden">{GROUNDING_SHIFT_HOURS_COMPACT[shiftType]}</span><span className="hidden sm:inline">{GROUNDING_SHIFT_HOURS[shiftType]}</span></span>
+                  <span className="mt-1 block text-xs text-muted-foreground sm:hidden">{GROUNDING_SHIFT_HOURS_COMPACT[shiftType]}</span>
                   <span className="mt-2 block text-xs sm:text-sm"><span className="hidden sm:inline">Đã xác nhận </span><b className="sm:font-normal">{summary?.confirmed ?? 0}/{summary?.total ?? 0}</b><span className="sm:hidden"> đã xác nhận</span><span className="hidden sm:inline"> khu vực</span></span>
                   <span className={cn("mt-1 block text-xs font-medium", ended && summary?.pending ? "text-rose-700" : "text-muted-foreground")}>
                     <span className="sm:hidden">{summary?.total === 0 ? "Không có nhiệm vụ" : summary?.pending === 0 ? "Hoàn thành" : `Còn ${summary?.pending ?? 0}${ended ? " · Quá ca" : ""}`}</span>
