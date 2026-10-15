@@ -721,14 +721,19 @@ export const PRESETS = {
       const desktop = page.getByRole("button", { name: /^Nhân sự nhà thầu\. Bấm|^Nhân sự nhà thầu ·/ }).locator("visible=true");
       if (await desktop.count()) {
         await desktop.first().click();
-        await page.getByRole("menuitem", { name: `Nhân sự ${label}` }).click();
+        await page.getByRole("menuitem", { name: label === "SCTX" ? "Sản xuất kinh doanh" : label === "Đầu tư" ? "Dự án đầu tư" : label }).click();
       } else {
         // Điện thoại: các mục sổ gom vào danh sách thả xuống — hai mục nhân sự tách theo nhóm.
         await page.getByRole("button", { name: /^Đang xem:/ }).click();
-        await page.getByRole("menuitem", { name: `Nhân sự ${label}` }).click();
+        await page.getByRole("menuitem", { name: `Nhân sự ${label === "SCTX" ? "Sản xuất kinh doanh" : label === "Đầu tư" ? "Dự án đầu tư" : label}` }).click();
       }
       await page.getByText(`Đơn vị nhà thầu · ${label}`).waitFor();
       await page.waitForTimeout(800);
+      // UI_MENU_OPEN=1: mở lại danh sách nhóm để chụp tên các mục.
+      if (process.env.UI_MENU_OPEN === "1") {
+        await ((await desktop.count()) ? desktop.first() : page.getByRole("button", { name: /^Đang xem:/ })).click();
+        await page.waitForTimeout(300);
+      }
       if (process.env.UI_SYNC === "1") {
         await page.getByRole("button", { name: /^Đồng bộ (từ Google )?Sheets$/ }).locator("visible=true").first().click();
         await page.waitForTimeout(300);
