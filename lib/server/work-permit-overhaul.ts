@@ -6,7 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { a1Tab, batchGetValues, columnLetter, getSpreadsheet, GoogleSheetsError, spreadsheetIdFromUrl, type SheetTab } from "@/lib/server/google-sheets";
 import { overhaulScheduleLinks } from "@/lib/server/overhaul-schedules";
 import { formatPermitNumber } from "@/lib/work-permits";
-import { compareOverhaulCodes, isOverhaulExtraCode, isOverhaulPaperPermit, OVERHAUL_CODE_PATTERN, OVERHAUL_EXTRA_PREFIX, OVERHAUL_HOLDING_STATUSES, OVERHAUL_SOURCE_DEFAULT_KIND, OVERHAUL_SOURCES, overhaulItemKey, overhaulItemProgressOf, overhaulItemsOf, type OverhaulItemProgress, type OverhaulItemSnapshot, type OverhaulItemUsage, type OverhaulSource } from "@/lib/work-permit-overhaul";
+import { compareOverhaulCodes, sameOverhaulDevice, isOverhaulExtraCode, isOverhaulPaperPermit, OVERHAUL_CODE_PATTERN, OVERHAUL_EXTRA_PREFIX, OVERHAUL_HOLDING_STATUSES, OVERHAUL_SOURCE_DEFAULT_KIND, OVERHAUL_SOURCES, overhaulItemKey, overhaulItemProgressOf, overhaulItemsOf, type OverhaulItemProgress, type OverhaulItemSnapshot, type OverhaulItemUsage, type OverhaulSource } from "@/lib/work-permit-overhaul";
 
 /*
  * Hạng mục đại tu cho PCT nhà thầu · Đại tu.
@@ -128,6 +128,11 @@ export type OverhaulSourceResult = {
   unknownContractors: string[];
   /** Số dòng có mã nhưng chưa ghi nhà thầu (bỏ qua). */
   missingContractor: number;
+  /**
+   * Chốt chặn mã bị dùng lại (15/10/2026): cùng mã mà hai tab ghi hai thiết bị khác nhau, hoặc mã đã có PCT / tiến độ mà
+   * Sheet đổi sang thiết bị khác (bản trên app được GIỮ NGUYÊN). Cần sửa lại Sheet hoặc đổi sang mã mới.
+   */
+  conflicts: string[];
   error?: string;
 };
 
@@ -190,6 +195,9 @@ async function readSource(source: OverhaulSource, spreadsheetId: string, now: Da
         };
         const existing = items.get(key);
         if (!existing) { items.set(key, parsed); continue; }
+        if (existing.device && parsed.device && !sameOverhaulDevice(existing.device, parsed.device)) {
+          result.conflicts.push(`${code} (${position.title}): tab “${existing.sheet}” hàng ${existing.sheetRow} ghi “${existing.device}”, tab “${parsed.sheet}” hàng ${parsed.sheetRow} ghi “${parsed.device}” — một mã hai thiết bị, sửa lại Sheet`);
+        }
         // Gộp tab nguồn + tab cương vị: điền chỗ trống, vị trí lấy tab có cột ngày.
         for (const field of ["device", "content", "method", "percent", "status"] as const) {
           if (!existing[field] && parsed[field]) existing[field] = parsed[field];
@@ -206,7 +214,7 @@ async function readSource(source: OverhaulSource, spreadsheetId: string, now: Da
 
 const emptyResult = (source: OverhaulSource, configured: boolean): OverhaulSourceResult => ({
   source, label: OVERHAUL_SOURCES[source], configured, rows: 0, mechanical: 0, electrical: 0, created: 0, updated: 0,
-  deactivated: 0, tabs: [], skippedTabs: [], unmatchedPositions: [], unknownContractors: [], missingContractor: 0,
+  deactivated: 0, tabs: [], skippedTabs: [], unmatchedPositions: [], unknownContractors: [], missingContractor: 0, conflicts: [],
 });
 
 /** Đồng bộ một file: upsert theo (nguồn, loại PCT, mã, cương vị); hạng mục biến mất → isActive=false (không xoá). */
@@ -227,9 +235,16 @@ async function syncSource(source: OverhaulSource, url: string, now: Date, compan
   result.unknownContractors = [...new Set(items.map(item => item.contractor!).filter(name => !companyCodes.has(normalizeText(name))))].sort();
 
   const keyOf = (item: { kind: string; code: string; positionTitle?: string | null }) => `${item.kind}\u0000${item.code}\u0000${normalizeText(item.positionTitle ?? "")}`;
+  // Mã "đang dùng": đã nằm trên PCT chưa hủy hoặc đã ghi tiến độ — đổi sang thiết bị khác thì giữ bản cũ.
+  const [permitRows, outboxRows] = await Promise.all([
+    prisma.workPermit.findMany({ where: { overhaulItems: { not: Prisma.DbNull }, status: { not: "CANCELLED" } }, select: { overhaulItems: true } }),
+    prisma.overhaulSheetOutbox.findMany({ where: { source }, distinct: ["code"], select: { code: true } }),
+  ]);
+  const inUse = new Set([...permitRows.flatMap(row => overhaulItemsOf(row.overhaulItems)).filter(item => item.source === source).map(item => item.code), ...outboxRows.map(row => row.code)]);
   await prisma.$transaction(async tx => {
-    const existing = await tx.workPermitOverhaulItem.findMany({ where: { source }, select: { id: true, kind: true, code: true, positionTitle: true, sheetRow: true } });
+    const existing = await tx.workPermitOverhaulItem.findMany({ where: { source }, select: { id: true, kind: true, code: true, positionTitle: true, sheetRow: true, device: true, isActive: true } });
     const byKey = new Map(existing.map(item => [keyOf(item), item.id]));
+    const before = new Map(existing.map(item => [item.id, item]));
     const seen = new Set<string>();
     const toCreate: Prisma.WorkPermitOverhaulItemCreateManyInput[] = [];
     for (const item of items) {
@@ -237,6 +252,11 @@ async function syncSource(source: OverhaulSource, url: string, now: Date, compan
       seen.add(key);
       const id = byKey.get(key);
       if (id) {
+        const old = before.get(id)!;
+        if (old.isActive && old.device && item.device && inUse.has(item.code) && !sameOverhaulDevice(old.device, item.device)) {
+          result.conflicts.push(`${item.code} (${item.positionTitle}): Sheet đổi “${old.device}” → “${item.device}” nhưng mã đã có PCT / tiến độ — GIỮ bản cũ trên app; sửa lại Sheet hoặc dùng mã mới`);
+          continue;
+        }
         const { source: _source, kind: _kind, code: _code, positionTitle: _positionTitle, ...changes } = item;
         await tx.workPermitOverhaulItem.update({ where: { id }, data: changes });
         result.updated++;

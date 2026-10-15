@@ -225,6 +225,7 @@ function syncSummary(result: OverhaulSyncResult) {
     const notes = [
       source.unmatchedPositions.length ? `cương vị chưa khớp: ${source.unmatchedPositions.join(", ")}` : "",
       source.unknownContractors.length ? `nhà thầu chưa có trong danh bạ: ${source.unknownContractors.join(", ")}` : "",
+      source.conflicts?.length ? `⚠ ${source.conflicts.length} mã bị dùng lại: ${source.conflicts.join("; ")}` : "",
     ].filter(Boolean).join("; ");
     return `${source.label}: ${source.mechanical} Cơ · ${source.electrical} Điện${notes ? ` (${notes})` : ""}`;
   }).join(" · ") || "Chưa cấu hình file nào.";

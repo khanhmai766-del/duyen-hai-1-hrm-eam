@@ -116,6 +116,11 @@ function SyncResultDialog({ result, onClose }: { result: OverhaulSyncResult; onC
             {source.error && <p role="alert" className="mt-1 text-xs text-red-700">{source.error}</p>}
             {source.configured && !source.error && !source.rows && <p className="mt-1 text-xs text-muted-foreground">File chưa có bảng hạng mục (cần hàng tiêu đề có “Mã hạng mục”).</p>}
             {warnings.map(text => <p key={text} className="mt-1 flex gap-1.5 text-xs text-amber-800"><AlertTriangle size={13} className="mt-0.5 shrink-0" />{text}</p>)}
+            {/* Chốt chặn mã bị dùng lại: nổi đỏ, mỗi mã một dòng — phải sửa Sheet. */}
+            {source.conflicts?.length > 0 && <div role="alert" className="mt-2 rounded-md border border-red-200 bg-red-50 p-2 text-xs text-red-800">
+              <p className="flex gap-1.5 font-semibold"><AlertTriangle size={13} className="mt-0.5 shrink-0" />{source.conflicts.length} mã bị dùng lại cho thiết bị khác</p>
+              <ul className="mt-1 list-disc space-y-0.5 pl-5">{source.conflicts.map(text => <li key={text}>{text}</li>)}</ul>
+            </div>}
           </div>;
         })}
       </div>

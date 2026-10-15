@@ -25,6 +25,7 @@ async function main() {
       if (s.unknownContractors.length) console.log(`  nhà thầu chưa có trong danh bạ: ${s.unknownContractors.join(", ")}`);
       if (s.unmatchedPositions.length) console.log(`  cương vị chưa khớp: ${s.unmatchedPositions.join(", ")}`);
       if (s.skippedTabs.length) console.log(`  tab bỏ (không rõ Cơ/Điện): ${s.skippedTabs.join(", ")}`);
+      for (const conflict of s.conflicts) console.log(`  ⚠ MÃ BỊ DÙNG LẠI: ${conflict}`);
     }
     console.log(`Xong sau ${Math.round((Date.now() - started) / 1000)}s`);
     if (failed) process.exitCode = 1;

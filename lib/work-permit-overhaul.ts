@@ -1,4 +1,5 @@
 // Hạng mục đại tu trên PCT nhà thầu · Đại tu — phần dùng chung server/client (không import prisma).
+import { normalizeText } from "@/lib/nav";
 
 /**
  * Nguồn hạng mục = dòng 1–4 của bảng "Tiến độ đại tu" (cùng `id` với OVERHAUL_SCHEDULE_DEFAULTS); link lấy từ bảng.
@@ -52,7 +53,11 @@ export type OverhaulItemOption = OverhaulItemSnapshot & {
  * Mã hạng mục hợp lệ trên Sheet: số "1.2.3" hoặc hạng mục PHÁT SINH do web thêm "PS.1.3" (nghiệp vụ 06/10/2026).
  * Ô khác (tiêu đề nhóm "I. PHẦN CƠ", "PHÁT SINH", hàng nhật ký) không phải mã.
  */
-export const OVERHAUL_CODE_PATTERN = /^(PS\.)?\d+(\.\d+)*$/;
+/**
+ * Mã hạng mục: số chấm số; tiền tố "PS." = hạng mục phát sinh web tạo; "MF." = thiết bị máy phát chép từ tab "Điện" của
+ * file tổng sang file Turbine (15/10/2026) — giữ số gốc của file Máy phát, thêm tiền tố để không trùng mã tuabin.
+ */
+export const OVERHAUL_CODE_PATTERN = /^(PS\.|MF\.)?\d+(\.\d+)*$/;
 /** Tiền tố + nhóm mã hạng mục phát sinh: PS.1.1, PS.1.2… (đánh số riêng từng tab). */
 export const OVERHAUL_EXTRA_PREFIX = "PS.1.";
 export const isOverhaulExtraCode = (code: string) => code.startsWith("PS.");
@@ -251,4 +256,18 @@ export function overhaulScheduleUrlError(url: string) {
   } catch {
     return "Link không hợp lệ — dán nguyên đường dẫn chia sẻ của Google Sheets (https://docs.google.com/…)";
   }
+}
+
+/**
+ * Hai tên thiết bị của CÙNG một mã hạng mục có phải một thiết bị không (chốt chặn đồng bộ, 15/10/2026 — tab Trợ thủ-Cơ bị
+ * dán đè nhóm bồn dầu chèn lên mã 10.1.6–10.1.9 của bình gia nhiệt / van an toàn). Bỏ qua dấu, hoa thường, dấu câu; sửa
+ * chính tả nhỏ hoặc thêm bớt vài chữ vẫn là một (một tên chứa tên kia, hoặc trùng từ ≥ 50%).
+ */
+export function sameOverhaulDevice(a: string, b: string) {
+  const words = (value: string) => normalizeText(value).replace(/[^a-z0-9]+/g, " ").trim();
+  const left = words(a), right = words(b);
+  if (!left || !right || left === right || left.includes(right) || right.includes(left)) return true;
+  const setA = new Set(left.split(" ")), setB = new Set(right.split(" "));
+  const shared = [...setA].filter(word => setB.has(word)).length;
+  return shared / new Set([...setA, ...setB]).size >= 0.5;
 }

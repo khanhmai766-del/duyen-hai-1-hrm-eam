@@ -346,7 +346,7 @@ export interface OverhaulSyncResult {
   sources: Array<{
     source: string; label: string; configured: boolean; file?: string; rows: number; mechanical: number; electrical: number;
     created: number; updated: number; deactivated: number; tabs: string[]; skippedTabs: string[]; unmatchedPositions: string[];
-    unknownContractors: string[]; missingContractor: number; error?: string;
+    unknownContractors: string[]; missingContractor: number; conflicts: string[]; error?: string;
   }>;
 }
 /** Hạng mục đại tu gợi ý cho PCT nhà thầu · Đại tu (đã đồng bộ từ Google Sheets tiến độ). */
