@@ -1,13 +1,15 @@
 "use client";
 
 import { useId, useMemo, useState } from "react";
-import { LogIn, LogOut, ScanLine, Search, Users } from "lucide-react";
+import { LogIn, LogOut, ScanLine, Search, Trash2, Users } from "lucide-react";
+import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { PermitCardScanner, type ScanOutcome } from "@/components/work-permits/card-scanner";
 import { PermitPeopleDirectory } from "@/components/work-permits/contractor-work";
-import { usePermitAttendance, type PermitAttendanceResult } from "@/hooks/useWorkPermits";
+import { usePermitAttendance, useRemoveSessionMember, type PermitAttendanceResult } from "@/hooks/useWorkPermits";
+import { useAdminMode } from "@/hooks/useAdminMode";
 import { attendanceInside, attendanceTracked } from "@/lib/work-permit-attendance";
 import { normalizeText } from "@/lib/nav";
 import { isOverhaulPaperPermit } from "@/lib/work-permit-overhaul";
@@ -48,6 +50,11 @@ export function SessionAttendance({ permit, session, canExecute, size = "md", au
   const [filter, setFilter] = useState<"inside" | "out" | "waiting" | null>(null);
   const [query, setQuery] = useState("");
   const attendance = usePermitAttendance(permit.id);
+  const removeMember = useRemoveSessionMember(permit.id);
+  // Quản trị (đang bật chế độ quản trị) gỡ hẳn người đã ra / chưa vào — máy chủ kiểm lại vai trò.
+  const { data: authSession } = useSession();
+  const [adminMode] = useAdminMode();
+  const canRemove = authSession?.user?.role === "ADMIN" && adminMode;
   const live = !session.endedAt;
   const members = useMemo(() => session.members.map((member, index) => ({ member, index }))
     .filter(({ member }) => !isSessionCommander(member, session)), [session]);
@@ -69,6 +76,15 @@ export function SessionAttendance({ permit, session, canExecute, size = "md", au
       const result = await record(member.personId ? { direction, personId: member.personId } : { direction, index, name: member.name });
       toast.success(`${member.name}: ${result.detail}`);
     } catch (error) { toast.error(error instanceof Error ? error.message : "Không ghi nhận được"); }
+  }
+
+  async function remove(member: PermitMember, index: number) {
+    const visits = member.attendance?.length ?? 0;
+    if (!window.confirm(`Gỡ ${member.name}${member.code ? ` (${member.code})` : ""} khỏi lần làm việc này?\n\nXoá luôn ${visits} lượt vào/ra của người này và bỏ khỏi danh sách nhân viên trên phiếu — phiếu không còn vết. Chỉ dùng cho người đã rút ra, quét nhầm hoặc hồ sơ trùng.`)) return;
+    try {
+      await removeMember.mutateAsync(member.personId ? { sessionId: session.id, personId: member.personId } : { sessionId: session.id, index, name: member.name });
+      toast.success(`Đã gỡ ${member.name} khỏi lần làm việc`);
+    } catch (error) { toast.error(error instanceof Error ? error.message : "Không gỡ được"); }
   }
 
   /** Cho vào lần lượt từng người đã chọn — máy chủ kiểm như quét thẻ (đúng đơn vị, đúng nhóm, không đang ở PCT khác). */
@@ -138,6 +154,7 @@ export function SessionAttendance({ permit, session, canExecute, size = "md", au
       {live && canExecute && (inside
         ? <Button type="button" size="sm" variant="outline" className={large ? "h-9 px-3" : "h-7 px-2 text-xs"} disabled={attendance.isPending} onClick={() => void manual(member, index, "out")}><LogOut size={14} />Ra</Button>
         : <Button type="button" size="sm" variant="outline" className={large ? "h-9 px-3" : "h-7 px-2 text-xs"} disabled={attendance.isPending} onClick={() => void manual(member, index, "in")}><LogIn size={14} />{visits.length ? "Vào lại" : "Vào"}</Button>)}
+      {canRemove && !inside && <Button type="button" size="sm" variant="outline" className={`${large ? "h-9 w-9" : "h-7 w-7"} px-0 text-red-700 hover:text-red-800`} disabled={removeMember.isPending} aria-label={`Gỡ ${member.name} khỏi lần làm việc`} title="Gỡ khỏi lần làm việc (Quản trị) — xoá luôn lượt vào/ra" onClick={() => void remove(member, index)}><Trash2 size={14} /></Button>}
     </div>;
   });
 
@@ -177,6 +194,7 @@ export function SessionAttendance({ permit, session, canExecute, size = "md", au
               <span className="block truncate text-xs text-muted-foreground">{member.code || "—"}{last ? ` · ${inside ? `Vào ${shortTime(last.in)}` : `Ra ${shortTime(last.out ?? last.in)}`}${visits.length > 1 ? ` · ${visits.length} lượt` : ""}` : " · Chưa quét"}</span>
             </span>
             {live && canExecute && <Button type="button" variant="outline" className="h-10 min-w-[4.5rem] shrink-0 px-3" disabled={attendance.isPending} onClick={() => void manual(member, index, inside ? "out" : "in")}>{inside ? <><LogOut size={16} />Ra</> : <><LogIn size={16} />{visits.length ? "Vào lại" : "Vào"}</>}</Button>}
+            {canRemove && !inside && <Button type="button" variant="outline" className="h-10 w-10 shrink-0 px-0 text-red-700 hover:text-red-800" disabled={removeMember.isPending} aria-label={`Gỡ ${member.name} khỏi lần làm việc`} title="Gỡ khỏi lần làm việc (Quản trị) — xoá luôn lượt vào/ra" onClick={() => void remove(member, index)}><Trash2 size={16} /></Button>}
           </div>;
         })}</div> : <p className="rounded-lg bg-muted/40 p-3 text-sm text-muted-foreground">Không có người phù hợp.</p>}
       {/* Máy tính (lg) không có thanh điều hướng đáy và màn hình đủ cao: nút nằm yên bên phải, không dính đáy. */}

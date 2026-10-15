@@ -252,6 +252,15 @@ export function usePermitAttendance(permitId: string) {
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["work-permit"] }); qc.invalidateQueries({ queryKey: ["work-permits", "live"] }); qc.invalidateQueries({ queryKey: ["work-permit-people"] }); } });
 }
 
+/** Quản trị gỡ hẳn một nhân viên đã ra khỏi lần làm việc (và khỏi danh sách trên phiếu). */
+export function useRemoveSessionMember(permitId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { sessionId: string; personId?: string; index?: number; name?: string }) =>
+      apiMutate<{ visits: number; removedFromPermit: number }>(`/api/work-permits/${permitId}/sessions/attendance`, "DELETE", body),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["work-permit"] }); qc.invalidateQueries({ queryKey: ["work-permits", "live"] }); qc.invalidateQueries({ queryKey: ["work-permit-people"] }); } });
+}
+
 export function usePermitCompanies() {
   return useQuery({ queryKey: ["work-permit-companies"], staleTime: 60000, queryFn: () => apiGet<string[]>("/api/work-permits/companies") });
 }

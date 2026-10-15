@@ -3,7 +3,7 @@ import { fail } from "@/lib/api";
 import { normalizeText } from "@/lib/nav";
 import { ATTENDANCE_MIN_STAY_MS, attendanceInside, lastVisit, type AttendanceOutcome, type AttendanceVisit } from "@/lib/work-permit-attendance";
 import { sameCompany } from "@/lib/work-permit-card";
-import { personScopeError, type PermitMember } from "@/lib/work-permits";
+import { isSessionCommander, personScopeError, type PermitMember } from "@/lib/work-permits";
 import { permitSnapshot } from "@/lib/server/work-permits";
 import { assertWorkersFree, lockWorkPermitPresence } from "@/lib/server/work-permit-presence";
 
@@ -118,4 +118,37 @@ export async function recordAttendance(tx: Prisma.TransactionClient, input: {
 /** Số người trong khu vực (kèm CHTT — luôn có mặt khi lần làm việc đang mở) / tổng người của lần làm việc. */
 function counts(members: PermitMember[]) {
   return { inside: 1 + members.filter(attendanceInside).length, total: 1 + members.length };
+}
+
+/**
+ * Quản trị GỠ HẲN một nhân viên khỏi lần làm việc (15/10/2026) — người đã rút ra / quét nhầm / hồ sơ trùng (vd cùng
+ * người hai số thẻ "249" và "NPS/249"). Xoá luôn các lượt vào/ra của người đó trong lần làm việc và khỏi danh sách
+ * nhân viên ghi trên phiếu (khớp theo hồ sơ hoặc số thẻ), không để lại vết trên phiếu; dấu vết chỉ còn ở nhật ký
+ * quản trị (AuditLog). Người còn TRONG khu vực phải quét RA trước; CHTT không gỡ ở đây (dùng Đổi CHTT).
+ */
+export async function removeSessionMember(tx: Prisma.TransactionClient, input: { permitId: string; sessionId: string; personId?: string; index?: number; name?: string }) {
+  await lockWorkPermitPresence(tx);
+  await tx.$queryRaw`SELECT "id" FROM "WorkPermitSession" WHERE "id" = ${input.sessionId} FOR UPDATE`;
+  const session = await tx.workPermitSession.findFirst({ where: { id: input.sessionId, permitId: input.permitId } });
+  if (!session) throw fail("Không tìm thấy lần làm việc. Tải lại phiếu.", 404);
+  const members = sessionMembers(session.members);
+  const index = input.personId
+    ? members.findIndex(m => m.personId === input.personId)
+    : Number.isInteger(input.index) && members[input.index!]?.name === input.name ? input.index! : -1;
+  if (index < 0) throw fail("Người này không còn trong lần làm việc. Tải lại phiếu.", 404);
+  const member = members[index];
+  if (isSessionCommander(member, session)) throw fail(`${member.name} là CHTT của lần làm việc — dùng “Đổi CHTT”, không gỡ ở đây.`);
+  if (attendanceInside(member)) throw fail(`${member.name} còn trong khu vực — quét RA trước khi gỡ khỏi lần làm việc.`);
+  members.splice(index, 1);
+  await tx.workPermitSession.update({ where: { id: session.id }, data: { members: permitSnapshot(members), workerCount: 1 + members.length } });
+  // Danh sách nhân viên ghi trên phiếu: bỏ đúng người này (theo hồ sơ, hoặc số thẻ khi ghi tay).
+  const sameAs = (other: PermitMember) => Boolean(member.personId && other.personId === member.personId)
+    || Boolean(!other.personId && member.code && other.code && other.code.normalize("NFC").trim().toUpperCase() === member.code.normalize("NFC").trim().toUpperCase());
+  const permit = await tx.workPermit.findUnique({ where: { id: input.permitId }, select: { members: true } });
+  const permitMembers = sessionMembers(permit?.members ?? null);
+  const kept = permitMembers.filter(other => !sameAs(other));
+  if (kept.length !== permitMembers.length) {
+    await tx.workPermit.update({ where: { id: input.permitId }, data: { members: permitSnapshot(kept), version: { increment: 1 } } });
+  }
+  return { member, visits: member.attendance?.length ?? 0, removedFromPermit: permitMembers.length - kept.length };
 }

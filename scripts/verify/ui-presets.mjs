@@ -1071,6 +1071,24 @@ export const PRESETS = {
       });
     },
   },
+  "pct-go-nhan-vien": {
+    description: "Quản trị gỡ nhân viên đã RA khỏi lần làm việc: nút thùng rác chỉ ở người không còn trong khu vực; hộp xác nhận bị huỷ nên KHÔNG gọi API",
+    prepare: (ctx) => PRESETS["pct-lam-viec"].prepare(ctx),
+    routes: ({ permitId }) => [`/work-permits/${permitId}/lam-viec`],
+    mock: (context, ctx) => PRESETS["pct-lam-viec"].mock(context, ctx),
+    async interact(page) {
+      const remove = page.getByRole("button", { name: /^Gỡ .* khỏi lần làm việc$/ });
+      await remove.first().waitFor();
+      // 3 người đã ra + 2 chưa quét = 5 nút; 7 người đang trong không có nút.
+      if (await remove.count() !== 5) throw new Error(`Số nút gỡ ${await remove.count()} ≠ 5`);
+      let asked = "";
+      page.once("dialog", dialog => { asked = dialog.message(); void dialog.dismiss(); });
+      await remove.first().click();
+      if (!asked.includes("lượt vào/ra")) throw new Error("Không hỏi xác nhận trước khi gỡ");
+      await page.getByRole("button", { name: /Đã ra/ }).click();
+      await page.waitForTimeout(300);
+    },
+  },
   "pct-chon-nhan-vien-tra-cuu": {
     description: "Hộp chọn nhân viên chỉ tra cứu và chọn hồ sơ có sẵn, kể cả khi có quyền quản lý — giả lập, không ghi DB",
     prepare: (ctx) => PRESETS["pct-lam-viec"].prepare(ctx),
