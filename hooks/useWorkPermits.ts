@@ -206,6 +206,8 @@ export type PermitPhotoJob = { code: string; source: string; exp: number; sig: s
 export type PermitPeopleSyncSource = "OVERHAUL" | "SCTX";
 export interface PermitPeopleSyncResult {
   source: PermitPeopleSyncSource; sourceLabel: string;
+  /** Danh sách đọc bằng Sheets API (nhanh) hay web app Apps Script (dự phòng, chậm); có tải ảnh được không (cần Apps Script). */
+  via?: "api" | "apps-script"; photosEnabled?: boolean;
   /** Số thẻ trên sheet đã là của người khác bên nhóm kia — không ghi đè (tối đa 50 dòng). */
   conflicts: string[]; conflictCount: number;
   total: number; created: number; updated: number; skipped: number; skippedSamples: string[];
@@ -214,6 +216,27 @@ export interface PermitPeopleSyncResult {
   units: Array<{ code: string; company: string; total: number; created: number; createdNames: string[] }>;
   photos: PermitPhotoJob[];
 }
+/** Một lượt đồng bộ chạy nền (WorkPermitPeopleSyncRun) — `summary` là kết quả bước danh sách. */
+export interface PermitPeopleSyncRun {
+  id: string; source: PermitPeopleSyncSource; state: "RUNNING" | "DONE" | "FAILED"; trigger: "MANUAL" | "TIMER";
+  startedByName: string; startedAt: string; finishedAt: string | null;
+  summary: Omit<PermitPeopleSyncResult, "photos"> | null; photosTotal: number; photosDone: number;
+  photoErrors: Array<{ code: string; error?: string }> | null; error: string | null;
+}
+/** Lượt gần nhất của từng bảng; đang chạy thì hỏi lại mỗi 2 giây. */
+export function usePeopleSyncRuns(enabled = true) {
+  return useQuery({ queryKey: ["work-permit-people-sync"], enabled, refetchOnWindowFocus: true,
+    queryFn: async () => (await apiGet<Record<PermitPeopleSyncSource, PermitPeopleSyncRun | null>>("/api/work-permits/people/sync")).data,
+    refetchInterval: query => Object.values(query.state.data ?? {}).some(run => run?.state === "RUNNING") ? 2000 : false });
+}
+/** Mở một lượt đồng bộ chạy nền; xong lượt thì làm mới danh bạ. */
+export function useStartPeopleSync() {
+  const qc = useQueryClient();
+  return useMutation({ meta: { background: true },
+    mutationFn: (source: PermitPeopleSyncSource) => apiMutate<{ run: PermitPeopleSyncRun; started: boolean }>("/api/work-permits/people/sync", "POST", { step: "start", source }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["work-permit-people-sync"] }) });
+}
+
 export function useSyncPermitPeople() {
   const qc = useQueryClient();
   // meta.background: hộp đồng bộ có thanh tiến độ riêng — không bật lớp chờ toàn trang (AppShell).

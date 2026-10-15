@@ -744,6 +744,33 @@ export const PRESETS = {
       await page.waitForTimeout(300);
     },
   },
+  "dong-bo-nhan-su-chay-nen": {
+    description: "Hộp Đồng bộ nhân sự chạy nền: lượt Đại tu ĐANG CHẠY (tải ảnh 12/30) và lượt SCTX ĐÃ XONG — response giả lập, KHÔNG bấm đồng bộ",
+    async prepare() { return {}; },
+    routes: () => ["/work-permits?ui=dang-chay", "/work-permits?ui=da-xong"],
+    async mock(context) {
+      const now = Date.now();
+      const summary = (label, total, created) => ({ source: label === "Đại tu" ? "OVERHAUL" : "SCTX", sourceLabel: label, via: "api", photosEnabled: label === "Đại tu", conflicts: [], conflictCount: 0,
+        total, created, updated: total - created, skipped: 0, skippedSamples: [], skippedTabs: [{ tab: "Dashboard", rows: 0 }], moved: [], movedCount: 0,
+        units: [{ code: "NPS", company: "CTy Cổ Phần Sửa Chữa Nhiệt Điện Miền Bắc", total: 278, created, createdNames: ["Nguyễn Văn A (NPS/301)", "Trần Văn B (NPS/302)"] }, { code: "IDC", company: "CTy CPĐT Phát triển Công nghiệp Sài Gòn IDC", total: 336, created: 0, createdNames: [] }] });
+      const runs = {
+        OVERHAUL: { id: "r1", source: "OVERHAUL", state: "RUNNING", trigger: "MANUAL", startedByName: "Người kiểm thử", startedAt: new Date(now - 40_000).toISOString(), finishedAt: null,
+          summary: summary("Đại tu", 1042, 2), photosTotal: 30, photosDone: 12, photoErrors: [], error: null },
+        SCTX: { id: "r2", source: "SCTX", state: "DONE", trigger: "TIMER", startedByName: "Hẹn giờ", startedAt: new Date(now - 3_600_000).toISOString(), finishedAt: new Date(now - 3_595_000).toISOString(),
+          summary: summary("SCTX", 16, 0), photosTotal: 0, photosDone: 0, photoErrors: [], error: null },
+      };
+      await context.route("**/api/work-permits/people/sync", route => route.request().method() === "GET"
+        ? route.fulfill({ json: { data: runs, meta: null, error: null } }) : route.abort());
+    },
+    async interact(page, route) {
+      const desktop = page.getByRole("button", { name: /^Nhân sự nhà thầu/ }).locator("visible=true");
+      if (await desktop.count()) await desktop.first().click(); else await page.getByRole("button", { name: /^Đang xem:/ }).click();
+      await page.getByRole("menuitem", { name: /Đại tu/ }).first().click();
+      await page.getByRole("button", { name: /^Đồng bộ (từ Google )?Sheets$/ }).locator("visible=true").first().click();
+      if (route.endsWith("da-xong")) await page.getByRole("radio", { name: /Nhà thầu SCTX/ }).click();
+      await page.waitForTimeout(500);
+    },
+  },
   "chon-nhom-phieu-nha-thau": {
     description: "Hộp Chọn nhóm phiếu nhà thầu (SCTX / Đại tu / Đầu tư) — chỉ mở hộp, KHÔNG chọn, không lấy số",
     async prepare() { return {}; },

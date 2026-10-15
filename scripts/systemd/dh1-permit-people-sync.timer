@@ -1,9 +1,12 @@
 [Unit]
-Description=Hen gio dong bo nhan su nha thau - 00:00 gio Viet Nam hang dem
+Description=Hen gio dong bo nhan su nha thau - 00:00 va 07-17h moi 2 gio (gio Viet Nam)
 
 [Timer]
-# Server chay UTC: 17:00 UTC = 00:00 gio VN. Persistent: may tat luc 00:00 thi chay bu khi bat lai.
+# Server chay UTC (gio VN - 7): 17:00 UTC = 00:00 VN; 00,02,04,06,08,10 UTC = 07,09,11,13,15,17 gio VN (16/10/2026).
+# Danh sach doc bang Sheets API (~3 s/bang), anh chi tai nguoi moi -> chay ban ngay khong nang.
+# Dang co luot chay do (nguoi vua bam nut) thi script tu bo qua bang do. Persistent: may tat luc gio hen thi chay bu.
 OnCalendar=*-*-* 17:00:00
+OnCalendar=*-*-* 00,02,04,06,08,10:00:00
 Persistent=true
 
 [Install]

@@ -6,6 +6,7 @@ import { normalizeText } from "@/lib/nav";
 import { prisma } from "@/lib/prisma";
 import { uploadS3Object } from "@/lib/s3";
 import { normalizeCardCode, cardlessCode, isCardlessCode } from "@/lib/work-permit-card";
+import { a1Tab, batchGetValues, getSpreadsheet, GoogleSheetsError } from "@/lib/server/google-sheets";
 import { PERMIT_CONTRACTOR_SCOPES, type PermitCompanyScopes, type PermitContractorScope } from "@/lib/work-permits";
 
 /*
@@ -25,6 +26,11 @@ import { PERMIT_CONTRACTOR_SCOPES, type PermitCompanyScopes, type PermitContract
  * (PERMIT_CARD_SHEET_SCTX_*) — mỗi bảng một web app Apps Script riêng. Người MỚI nhận nhóm theo nguồn; người đã có
  * giữ nhóm trên sổ. Số thẻ là khoá chung của danh bạ: số thẻ đã thuộc người KHÁC (khác họ tên) của nhóm kia thì
  * không ghi đè mà báo xung đột (bảng SCTX từng đánh lại SGIDC/01–14 trùng 14 người Đại tu).
+ *
+ * ĐỌC DANH SÁCH BẰNG SHEETS API (16/10/2026): web app Apps Script trả danh sách mất 60–170 s hoặc treo (gọi getContentUrl
+ * cho từng ảnh chèn ô; đường tới script.googleusercontent.com chập chờn) → đồng bộ báo lỗi liên tục. Nay danh sách đọc
+ * thẳng bằng tài khoản dịch vụ (file chia sẻ quyền Xem, ~2–3 s cho 1.000+ người, tự thử lại khi lỗi mạng); Apps Script
+ * chỉ còn dùng để TẢI ẢNH người chưa có ảnh. File chưa chia sẻ / không đọc được → quay về Apps Script như cũ.
  */
 
 export type SheetRow = {
@@ -39,8 +45,12 @@ export type PhotoJob = { code: string; source: string; exp: number; sig: string;
 
 /** Hai bảng nguồn — khoá cũng là nhóm (scope) gán cho người MỚI của bảng đó. */
 export const PEOPLE_SYNC_SOURCES = {
-  OVERHAUL: { label: "Đại tu", urlEnv: "PERMIT_CARD_SHEET_URL", tokenEnv: "PERMIT_CARD_SHEET_TOKEN" },
-  SCTX: { label: "SCTX", urlEnv: "PERMIT_CARD_SHEET_SCTX_URL", tokenEnv: "PERMIT_CARD_SHEET_SCTX_TOKEN" },
+  OVERHAUL: { label: "Đại tu", urlEnv: "PERMIT_CARD_SHEET_URL", tokenEnv: "PERMIT_CARD_SHEET_TOKEN",
+    // "CẤP MÃ QR-NHÂN SỰ ĐẠI TU S2-DH1" — ghi đè được bằng PERMIT_CARD_SHEET_ID.
+    sheetIdEnv: "PERMIT_CARD_SHEET_ID", sheetId: "1I-vS8FRox70vI5teSQrbWIpZb0x5DQyr7vDBOt9g12I" },
+  SCTX: { label: "SCTX", urlEnv: "PERMIT_CARD_SHEET_SCTX_URL", tokenEnv: "PERMIT_CARD_SHEET_SCTX_TOKEN",
+    // "CẤP MÃ QR CHO NHÀ THẦU LÀM VIỆC SXKD".
+    sheetIdEnv: "PERMIT_CARD_SHEET_SCTX_ID", sheetId: "1ME5QE9ukDZBvugPk0_UvVIlVxviSxUOegctJKrnJUTY" },
 } as const;
 export type PeopleSyncSource = keyof typeof PEOPLE_SYNC_SOURCES;
 export function parsePeopleSyncSource(value: unknown): PeopleSyncSource {
@@ -169,12 +179,53 @@ function photoNeedsFetch(before: { photoKey: string | null; photoSource: string 
   return !isRotatingPhotoRef(ref) && before.photoSource !== ref;
 }
 
+/** Apps Script của bảng nguồn đã cấu hình chưa (cần để tải ảnh; danh sách đọc bằng Sheets API). */
+const appsScriptReady = (source: PeopleSyncSource) => Boolean(process.env[PEOPLE_SYNC_SOURCES[source].urlEnv]?.trim() && process.env[PEOPLE_SYNC_SOURCES[source].tokenEnv]?.trim());
+
+/**
+ * Cột như web app Apps Script (syncListRows_): B kết quả HL, C họ tên, D năm sinh, E SĐT, F đơn vị, G gói thầu, H chức vụ,
+ * I vị trí, J khu vực, K ngày HL, L số thẻ, M ngày cấp, N ngày hết hạn, O ảnh. Cùng điều kiện: có họ tên VÀ (ngày HL hoặc
+ * số thẻ); bỏ hàng tiêu đề. Ngày lấy chữ đã định dạng ("28/09/2026") — sheetDate đọc được dd/MM/yyyy.
+ */
+export function peopleRowsFromValues(tab: string, values: string[][]): SheetRow[] {
+  const out: SheetRow[] = [];
+  for (const r of values) {
+    const cell = (i: number) => String(r[i] ?? "").trim();
+    const hoTen = cell(2), ngayHL = cell(10), soThe = cell(11);
+    if (!hoTen || hoTen.includes("Họ tên") || soThe.includes("Số thẻ") || (!ngayHL && !soThe)) continue;
+    const photo = cell(14);
+    out.push({ sheet: tab, ketQuaHL: cell(1), hoTen, namSinh: cell(3), sdt: cell(4), donVi: cell(5), goiThau: cell(6), chucVu: cell(7),
+      viTri: cell(8), khuVuc: cell(9), ngayHL, soThe, ngayCap: cell(12), ngayHetHan: cell(13), photo: /^https?:\/\//.test(photo) ? photo : "" });
+  }
+  return out;
+}
+
+async function readPeopleRows(source: PeopleSyncSource): Promise<{ rows: SheetRow[]; via: "api" | "apps-script" }> {
+  const config = PEOPLE_SYNC_SOURCES[source];
+  const id = process.env[config.sheetIdEnv]?.trim() || config.sheetId;
+  try {
+    const meta = await getSpreadsheet(id);
+    const values = await batchGetValues(id, meta.tabs.map(tab => `${a1Tab(tab.title)}!A1:O${tab.rowCount}`));
+    return { rows: meta.tabs.flatMap((tab, i) => peopleRowsFromValues(tab.title, values[i] ?? [])), via: "api" };
+  } catch (error) {
+    // Chưa chia sẻ / sai mã file → thử web app Apps Script (cách cũ). Lỗi mạng sau 3 lần thử: báo luôn, Apps Script còn chậm hơn.
+    const fallback = error instanceof GoogleSheetsError && [403, 404].includes(error.status) && appsScriptReady(source);
+    if (!fallback) throw error instanceof GoogleSheetsError ? fail(error.message, error.status) : error;
+    // Phải nhỏ hơn proxy_read_timeout 180s của khối nginx riêng `location = /api/work-permits/people/sync`.
+    const { rows } = await callSheet<{ rows: SheetRow[] }>(source, { format: "json" }, 150_000,
+      "Google Sheets không trả dữ liệu JSON. Kiểm tra đã thêm đoạn code đồng bộ vào Apps Script và triển khai lại web app");
+    if (!Array.isArray(rows)) throw fail("Dữ liệu Google Sheets không đúng định dạng (thiếu rows)", 502);
+    return { rows, via: "apps-script" };
+  }
+}
+
+/** Ngày Việt Nam yyyy-mm-dd — đánh dấu "đã thử tải ảnh hôm nay, sheet không có ảnh" (photoSource = none:<ngày>). */
+const vnDay = () => new Date(Date.now() + 7 * 3600_000).toISOString().slice(0, 10);
+const NO_PHOTO = "none:";
+
 export async function syncPeopleList(source: PeopleSyncSource = "OVERHAUL") {
-  // Apps Script có lúc trả cả danh sách chậm hơn 60s. Phải nhỏ hơn proxy_read_timeout 180s của khối nginx riêng
-  // `location = /api/work-permits/people/sync` (thêm 07/10/2026) để người dùng thấy câu báo lỗi của app thay vì 504 trơn.
-  const { rows } = await callSheet<{ rows: SheetRow[] }>(source, { format: "json" }, 150_000,
-    "Google Sheets không trả dữ liệu JSON. Kiểm tra đã thêm đoạn code đồng bộ vào Apps Script và triển khai lại web app");
-  if (!Array.isArray(rows)) throw fail("Dữ liệu Google Sheets không đúng định dạng (thiếu rows)", 502);
+  const { rows, via } = await readPeopleRows(source);
+  const canFetchPhotos = appsScriptReady(source);
   const { unitOf, flagsOf } = await unitByTab();
   const skipped: string[] = [];
   const skippedTabs = new Map<string, number>();
@@ -237,7 +288,11 @@ export async function syncPeopleList(source: PeopleSyncSource = "OVERHAUL") {
       units.set(data.company, unit);
       const fromCode = renameFrom.get(data.code) ?? data.code;
       if (before && before.company !== data.company) moved.push(`${data.name} (${data.code}): ${before.company} → ${data.company} (tab ${tab})`);
-      if (photoRef && photoNeedsFetch(before, photoRef)) photos.push(signPhotoJob(data.code, photoRef, photoExp, source));
+      // Sheets API không thấy ảnh chèn trong ô (chỉ thấy link) → người CHƯA có ảnh thì vẫn thử tải qua Apps Script ("cell");
+      // sheet không có ảnh thì đánh dấu none:<ngày> và hôm đó không thử lại.
+      const ref = photoRef || (before?.photoKey ? "" : "cell");
+      const triedToday = !before?.photoKey && before?.photoSource === `${NO_PHOTO}${vnDay()}`;
+      if (canFetchPhotos && ref && !triedToday && photoNeedsFetch(before, ref)) photos.push(signPhotoJob(data.code, ref, photoExp, source));
       // Người mới nhận nhóm theo bảng nguồn (đơn vị Đầu tư → Đầu tư); người đã có giữ nhóm trên sổ (sổ có thể đã chuyển nhóm tay).
       if (!before) { created++; return prisma.workPermitPerson.create({ data: { ...data, canCommand: false, isActive: true, scope: newPersonScope(flagsOf(data.company), source) } }); }
       updated++;
@@ -249,7 +304,7 @@ export async function syncPeopleList(source: PeopleSyncSource = "OVERHAUL") {
     }));
   }
   return {
-    source, sourceLabel: PEOPLE_SYNC_SOURCES[source].label, conflicts: conflicts.slice(0, 50), conflictCount: conflicts.length,
+    source, sourceLabel: PEOPLE_SYNC_SOURCES[source].label, via, photosEnabled: canFetchPhotos, conflicts: conflicts.slice(0, 50), conflictCount: conflicts.length,
     total: byCode.size, created, updated, skipped: skipped.length, skippedSamples: skipped.slice(0, 20),
     skippedTabs: [...skippedTabs].map(([tab, rows]) => ({ tab, rows })).sort((a, b) => a.tab.localeCompare(b.tab, "vi")),
     moved: moved.slice(0, 50), movedCount: moved.length, photos,
@@ -280,8 +335,18 @@ export async function syncPeoplePhotos(input: unknown) {
       const name = nameOf.get(code);
       if (name === undefined) throw new Error("Không còn hồ sơ của số thẻ này trên sổ");
       // Người chưa có thẻ (mã tạm HL-…): Apps Script tìm ảnh theo họ tên ở cột C; còn lại theo số thẻ.
-      const photo = await callSheet<{ contentType?: string; base64?: string }>(job.src, { format: "photo", id: isCardlessCode(code) ? name : code }, 45_000,
+      const ask = () => callSheet<{ contentType?: string; base64?: string }>(job.src, { format: "photo", id: isCardlessCode(code) ? name : code }, 45_000,
         "Google tạm thời trả trang lỗi thay cho ảnh. Đồng bộ lại sau để tải tiếp");
+      // Lỗi mạng (502) thử lại một lần sau 2 s; quá giờ / Apps Script báo lỗi thì không (đã tốn tới 45 s).
+      const photo = await ask().catch(async error => {
+        if (!(error instanceof Response) || error.status !== 502 || !/lỗi mạng/.test((await error.clone().json().catch(() => null))?.error ?? "")) throw error;
+        await new Promise(resolve => setTimeout(resolve, 2_000));
+        return ask();
+      }).catch(async error => {
+        const message = error instanceof Response ? (await error.clone().json().catch(() => null))?.error ?? "" : "";
+        if (/Không có ảnh/.test(message)) await prisma.workPermitPerson.update({ where: { code }, data: { photoSource: `${NO_PHOTO}${vnDay()}` } }).catch(() => null);
+        throw error;
+      });
       if (!photo.base64) throw new Error("Sheet không có ảnh cho số thẻ này");
       // Ảnh 3x4 để so mặt: thu về tối đa 360x480, WebP q72 (~20–50 KB), xoay theo EXIF.
       const body = await sharp(Buffer.from(photo.base64, "base64")).rotate()

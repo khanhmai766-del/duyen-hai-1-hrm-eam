@@ -57,19 +57,28 @@ async function accessToken() {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({ grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer", assertion }),
-  });
+  }, true); // lấy token: POST nhưng không đổi dữ liệu → thử lại được
   const json = await res.json() as { access_token?: string; expires_in?: number; error_description?: string };
   if (!res.ok || !json.access_token) throw new GoogleSheetsError(`Google từ chối khoá tài khoản dịch vụ: ${json.error_description ?? res.status}`, 502);
   cachedToken = { value: json.access_token, expiresAt: Date.now() + (json.expires_in ?? 3600) * 1000 };
   return cachedToken.value;
 }
 
-async function request(url: string, init: RequestInit) {
-  try {
-    return await fetch(url, { ...init, cache: "no-store", signal: AbortSignal.timeout(TIMEOUT_MS) });
-  } catch (error) {
-    if (error instanceof Error && error.name === "TimeoutError") throw new GoogleSheetsError(`Google Sheets không phản hồi sau ${TIMEOUT_MS / 1000} giây. Thử lại sau.`, 504);
-    throw new GoogleSheetsError("Không kết nối được Google Sheets (lỗi mạng). Thử lại sau.", 502);
+/**
+ * Đường từ server tới Google chập chờn theo đợt (15/10/2026: lỗi mạng / treo xen kẽ cả buổi chiều). Lượt ĐỌC (GET) và lấy
+ * token được thử lại tối đa 3 lần, chờ 1,5 s rồi 4 s — an toàn vì không đổi dữ liệu. Lượt GHI (POST/PUT) KHÔNG thử lại:
+ * Google có thể đã ghi xong dù mình không nhận được trả lời → ghi lặp (vd chèn hàng hai lần); hàng đợi tự đẩy lại sau.
+ */
+const RETRY_DELAYS_MS = [1_500, 4_000];
+async function request(url: string, init: RequestInit, retry = !init.method || init.method === "GET") {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await fetch(url, { ...init, cache: "no-store", signal: AbortSignal.timeout(TIMEOUT_MS) });
+    } catch (error) {
+      if (retry && attempt < RETRY_DELAYS_MS.length) { await new Promise(resolve => setTimeout(resolve, RETRY_DELAYS_MS[attempt])); continue; }
+      if (error instanceof Error && error.name === "TimeoutError") throw new GoogleSheetsError(`Google Sheets không phản hồi sau ${TIMEOUT_MS / 1000} giây. Thử lại sau.`, 504);
+      throw new GoogleSheetsError("Không kết nối được Google Sheets (lỗi mạng). Thử lại sau.", 502);
+    }
   }
 }
 

@@ -3478,3 +3478,28 @@ model TbycnnSignature {
   @@index([userId])
   @@map("tbycnn_signatures")
 }
+
+/// Một lượt đồng bộ danh bạ nhân sự nhà thầu từ Google Sheets (16/10/2026) — chạy NỀN (nút "Đồng bộ" hoặc hẹn giờ), hộp
+/// đồng bộ đọc bảng này để hiện tiến độ / kết quả, kể cả khi đã đóng rồi mở lại hay đổi máy. SQL: prisma/manual/add-work-permit-people-sync-run.sql
+model WorkPermitPeopleSyncRun {
+  id            String    @id @default(cuid())
+  /// OVERHAUL | SCTX (PEOPLE_SYNC_SOURCES)
+  source        String
+  /// RUNNING | DONE | FAILED
+  state         String    @default("RUNNING")
+  /// MANUAL (bấm nút) | TIMER (hẹn giờ trên server)
+  trigger       String    @default("MANUAL")
+  startedById   String?
+  startedByName String    @default("")
+  startedAt     DateTime  @default(now())
+  finishedAt    DateTime?
+  /// Kết quả bước danh sách (syncPeopleList, bỏ danh sách việc ảnh).
+  summary       Json?
+  photosTotal   Int       @default(0)
+  photosDone    Int       @default(0)
+  /// [{ code, error }] tối đa 50.
+  photoErrors   Json?
+  error         String?
+
+  @@index([source, startedAt])
+}
