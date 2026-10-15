@@ -54,10 +54,11 @@ export type OverhaulItemOption = OverhaulItemSnapshot & {
  * Ô khác (tiêu đề nhóm "I. PHẦN CƠ", "PHÁT SINH", hàng nhật ký) không phải mã.
  */
 /**
- * Mã hạng mục: số chấm số; tiền tố "PS." = hạng mục phát sinh web tạo; "MF." = thiết bị máy phát chép từ tab "Điện" của
- * file tổng sang file Turbine (15/10/2026) — giữ số gốc của file Máy phát, thêm tiền tố để không trùng mã tuabin.
+ * Mã hạng mục: số chấm số; tiền tố "PS." = hạng mục phát sinh web tạo. Thiết bị máy phát chép từ tab "Điện" của file
+ * tổng sang file Turbine giữ số gốc của file Máy phát + hậu tố ".MF" (vd 9.2.2.8.MF, 16/10/2026) để không trùng mã tuabin;
+ * dạng tiền tố "MF.9.2.2.8" (15/10/2026) vẫn nhận để chuyển đổi không gãy.
  */
-export const OVERHAUL_CODE_PATTERN = /^(PS\.|MF\.)?\d+(\.\d+)*$/;
+export const OVERHAUL_CODE_PATTERN = /^(PS\.|MF\.)?\d+(\.\d+)*(\.MF)?$/;
 /** Tiền tố + nhóm mã hạng mục phát sinh: PS.1.1, PS.1.2… (đánh số riêng từng tab). */
 export const OVERHAUL_EXTRA_PREFIX = "PS.1.";
 export const isOverhaulExtraCode = (code: string) => code.startsWith("PS.");
