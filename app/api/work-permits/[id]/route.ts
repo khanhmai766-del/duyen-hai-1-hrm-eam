@@ -1,9 +1,10 @@
+import type { Prisma } from "@prisma/client";
 import { assertNkvhLinkAvailable, lockPermitNumberScope } from "@/lib/server/work-permit-number-reservations";
 import { normalizeText } from "@/lib/nav";
-import { assertOverhaulItemsConfirmed, parseOverhaulItems, sharedOverhaulPercents } from "@/lib/server/work-permit-overhaul";
+import { assertOverhaulItemsConfirmed, createOverhaulExtraItem, parseOverhaulItems, sharedOverhaulPercents } from "@/lib/server/work-permit-overhaul";
 import { enqueueOverhaulCancel, enqueueOverhaulClose, pushOverhaulSheetOutboxQuietly } from "@/lib/server/overhaul-sheet-writer";
 import { after as afterResponse } from "next/server";
-import { isOverhaulPaperPermit, latestOverhaulNotes, overhaulItemsOf } from "@/lib/work-permit-overhaul";
+import { isOverhaulExtraCode, isOverhaulPaperPermit, latestOverhaulNotes, overhaulItemsOf, type OverhaulItemSnapshot } from "@/lib/work-permit-overhaul";
 import { requirePermitPositionAllowed, requirePermitVisible } from "@/lib/server/work-permit-scope";
 import { permitIssueUpdateNeedsExecution } from "@/lib/work-permit-permissions";
 import { requirePermitCancel, requirePermitIssuer, requirePermitExecute, permitCapabilities, permitRowCapabilities } from "@/lib/server/work-permit-permissions";
@@ -117,6 +118,7 @@ export async function PUT(req: Request, props: { params: Promise<{ id: string }>
     }
     const numberScope = await prisma.workPermit.findUniqueOrThrow({ where: { id: params.id }, select: { kind: true, year: true, nkvhPctId: true } });
     let previous: Awaited<ReturnType<typeof prisma.workPermit.findUnique>> = null;
+    let extraItem: OverhaulItemSnapshot | null = null;
     const row = await prisma.$transaction(async tx => {
       await assertNkvhLinkAvailable(tx, numberScope.kind as PermitKind, typeof body.nkvhPctId === "string" ? body.nkvhPctId.toLowerCase() : numberScope.nkvhPctId, params.id);
       await lockPermitNumberScope(tx, numberScope.kind as PermitKind, numberScope.year);
@@ -192,7 +194,13 @@ export async function PUT(req: Request, props: { params: Promise<{ id: string }>
         if (last && data.issuedAt && before.authorizedAt && data.issuedAt > before.authorizedAt) throw fail("Thời điểm cấp không được sau lần cho phép làm việc đầu tiên");
       }
       // Không gửi overhaulItems = giữ nguyên; phiếu rời nhóm Đại tu thì parseOverhaulItems trả DbNull để xoá.
-      const overhaulItems = parseOverhaulItems(body.overhaulItems === undefined ? before.overhaulItems ?? undefined : body.overhaulItems, data);
+      let overhaulItems = parseOverhaulItems(body.overhaulItems === undefined ? before.overhaulItems ?? undefined : body.overhaulItems, data);
+      // Cập nhật PCT Đại tu chưa có hạng mục + tick "Hạng mục phát sinh" (15/10/2026, như khi cấp mới): tạo PS.1.x ở tab
+      // cương vị rồi ghi lên Sheet. Phiếu đã kết thúc / huỷ thì bỏ qua.
+      if (body.overhaulExtra === true && isOverhaulPaperPermit(data) && !["CLOSED", "CANCELLED"].includes(status) && !overhaulItemsOf(overhaulItems ?? null).length) {
+        extraItem = await createOverhaulExtraItem(tx, data);
+        overhaulItems = [extraItem] as unknown as Prisma.InputJsonValue;
+      }
       // Phiếu đã cấp (hoặc vừa cấp từ nháp) thêm hạng mục đang nằm trong PCT khác: phải đã xác nhận trong hộp chọn.
       // Nháp → cấp: so với rỗng (mọi mục coi là mới) vì lúc lưu nháp chưa kiểm.
       if (body.overhaulItems !== undefined && !["DRAFT", "CANCELLED", "CLOSED"].includes(status)) await assertOverhaulItemsConfirmed(tx, body.overhaulItems, before.status === "DRAFT" ? null : before.overhaulItems, params.id);
@@ -228,9 +236,12 @@ export async function PUT(req: Request, props: { params: Promise<{ id: string }>
       await tx.workPermitHistory.create({ data: { permitId: after.id, actorId: user.id, actorName: user.name ?? "", action: teamTypeChanged ? `Đổi loại phiếu: ${teamTypeLabel(before.teamType)} → ${teamTypeLabel(data.teamType)}` : status === before.status ? "Cập nhật thông tin" : `Chuyển sang ${PERMIT_STATUSES[status]}`, before: permitSnapshot(before), after: permitSnapshot(after) } });
       return after;
     });
-    await audit(user.id, "UPDATE_WORK_PERMIT", "WorkPermit", row.id, `Cập nhật PCT ${formatPermitNumber(row)}: ${PERMIT_STATUSES[status]}`);
+    // Gán trong giao dịch — TypeScript không lần theo được, đọc lại qua biến có kiểu rõ.
+    const created = extraItem as OverhaulItemSnapshot | null;
+    await audit(user.id, "UPDATE_WORK_PERMIT", "WorkPermit", row.id, `Cập nhật PCT ${formatPermitNumber(row)}: ${PERMIT_STATUSES[status]}${created ? ` · hạng mục phát sinh ${created.code} (${created.sheet})` : ""}`);
     await syncPermitDocument(row, previous);
-    if (["CLOSED", "CANCELLED"].includes(row.status) && row.contractorScope === "OVERHAUL") afterResponse(pushOverhaulSheetOutboxQuietly);
+    // Hạng mục phát sinh vừa tạo: chèn lên Sheet ngay sau khi trả lời (lỗi Google không chặn lưu; timer 15 phút thử lại).
+    if ((["CLOSED", "CANCELLED"].includes(row.status) && row.contractorScope === "OVERHAUL") || (created && isOverhaulExtraCode(created.code))) afterResponse(pushOverhaulSheetOutboxQuietly);
     return ok(row);
   });
 }

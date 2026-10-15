@@ -1071,6 +1071,29 @@ export const PRESETS = {
       });
     },
   },
+  "pct-dai-tu-cap-nhat-phat-sinh": {
+    description: "Cập nhật PCT Đại tu chưa có hạng mục: hiện ô tick Hạng mục phát sinh và tick được — giả lập, KHÔNG lưu",
+    prepare: (ctx) => PRESETS["pct-lam-viec"].prepare(ctx),
+    routes: ({ permitId }) => [`/work-permits?permitId=${permitId}`],
+    async mock(context, { permitId }) {
+      await context.route(`**/api/work-permits/${permitId}`, async (route) => {
+        if (route.request().method() !== "GET") return route.abort();
+        const response = await route.fetch();
+        const json = await response.json();
+        if (json.data) Object.assign(json.data, { contractorScope: "OVERHAUL", format: "PAPER", overhaulItems: [], status: "ISSUED",
+          sessions: [], position: json.data.position || "Máy phó" });
+        await route.fulfill({ response, json });
+      });
+    },
+    async interact(page) {
+      await page.getByRole("button", { name: "Chỉnh sửa / cấp phiếu" }).click();
+      const extra = page.getByText("Hạng mục phát sinh", { exact: true });
+      await extra.waitFor();
+      await page.locator("label", { has: extra }).locator('input[type="checkbox"]').check();
+      await extra.scrollIntoViewIfNeeded();
+      await page.waitForTimeout(300);
+    },
+  },
   "pct-go-nhan-vien": {
     description: "Quản trị gỡ nhân viên đã RA khỏi lần làm việc: nút thùng rác chỉ ở người không còn trong khu vực; hộp xác nhận bị huỷ nên KHÔNG gọi API",
     prepare: (ctx) => PRESETS["pct-lam-viec"].prepare(ctx),
