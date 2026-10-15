@@ -5,7 +5,7 @@ import Link from "next/link";
 import { ChevronRight, ListChecks, RefreshCw, ScanLine, Search, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { permitWorkHref } from "@/components/work-permits/contractor-work";
-import { usePermitLiveSessions } from "@/hooks/useWorkPermits";
+import { usePermitLiveSessions, type PermitLiveSession } from "@/hooks/useWorkPermits";
 import { normalizeText } from "@/lib/nav";
 import { formatPermitNumber, PERMIT_UNITS } from "@/lib/work-permits";
 
@@ -21,6 +21,7 @@ function distinctLabels(values: (string | null | undefined)[]) {
   for (const value of values) { const label = value?.trim(); if (label && !byKey.has(normalizeText(label))) byKey.set(normalizeText(label), label); }
   return [...byKey.values()].sort((a, b) => a.localeCompare(b, "vi"));
 }
+const companyKey = (row: PermitLiveSession) => row.companyCode?.trim() || row.company;
 
 /**
  * Tab "Đang làm việc": mọi lần làm việc nhà thầu đang mở trên cả hai sổ, để trông nhiều nhà thầu cùng lúc
@@ -36,10 +37,11 @@ export function PermitLiveBoard() {
   const [company, setCompany] = useState("");
   const [q, setQ] = useState("");
   const positions = useMemo(() => distinctLabels(allRows.map(row => row.permit.position)), [allRows]);
-  const companies = useMemo(() => distinctLabels(allRows.map(row => row.company)), [allRows]);
+  // Nhà thầu lọc theo mã đơn vị (EPS, NPS, S3A…) — tên đầy đủ quá dài cho ô chọn; đơn vị chưa khai mã thì hiện tên.
+  const companies = useMemo(() => distinctLabels(allRows.map(companyKey)), [allRows]);
   const term = normalizeText(q.trim());
   const rows = allRows.filter(row => (!position || normalizeText(row.permit.position ?? "") === normalizeText(position))
-    && (!company || normalizeText(row.company ?? "") === normalizeText(company))
+    && (!company || normalizeText(companyKey(row)) === normalizeText(company))
     && (!term || normalizeText(`${formatPermitNumber(row.permit)} ${row.permit.content ?? ""}`).includes(term)));
   const filtered = Boolean(position || company || term);
 
@@ -56,8 +58,8 @@ export function PermitLiveBoard() {
           <option value="">Tất cả cương vị</option>
           {positions.map(label => <option key={label} value={label}>{label}</option>)}
         </select>
-        <select aria-label="Lọc theo nhà thầu" value={company} onChange={e => setCompany(e.target.value)}
-          className="h-9 min-w-0 flex-1 basis-40 rounded-lg border border-input bg-background px-2 text-base focus:outline-none focus:ring-2 focus:ring-ring sm:max-w-[16rem] sm:flex-none sm:text-sm">
+        <select aria-label="Lọc theo mã đơn vị nhà thầu" value={company} onChange={e => setCompany(e.target.value)}
+          className="h-9 min-w-0 flex-1 basis-32 rounded-lg border border-input bg-background px-2 text-base focus:outline-none focus:ring-2 focus:ring-ring sm:max-w-[12rem] sm:flex-none sm:text-sm">
           <option value="">Tất cả nhà thầu</option>
           {companies.map(label => <option key={label} value={label}>{label}</option>)}
         </select>

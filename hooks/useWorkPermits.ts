@@ -26,6 +26,8 @@ export function useWorkPermits(filters: string, enabled = true) {
 }
 export interface PermitLiveSession {
   id: string; commanderId: string | null; commanderCode: string; commanderName: string; company: string; openedAt: string; authorizerName: string;
+  /** Mã đơn vị nhà thầu (WorkPermitCompany.code); rỗng = đơn vị chưa khai mã. */
+  companyCode: string;
   permit: Pick<PermitRow, "id" | "number" | "year" | "kind" | "unit" | "content" | "location" | "position" | "teamName" | "progress">;
   /** Nhân viên bổ sung (không kể CHTT) · đang trong khu vực · chưa quét lần nào. */
   workers: number; inside: number; waiting: number;

@@ -5,6 +5,7 @@ import { permitCapabilities } from "@/lib/server/work-permit-permissions";
 import { permitHandle } from "@/lib/server/work-permits";
 import { attendanceInside, attendanceTracked, type AttendanceVisit } from "@/lib/work-permit-attendance";
 import { isSessionCommander } from "@/lib/work-permits";
+import { sameCompany } from "@/lib/work-permit-card";
 export const dynamic = "force-dynamic";
 
 type Member = { personId?: string | null; code?: string; attendance?: AttendanceVisit[] | null };
@@ -29,12 +30,16 @@ export async function GET() {
       permitCapabilities(user),
     ]);
     const scope = await permitScopeOf(user);
+    // Mã đơn vị (tên gọi tắt) cho ô lọc nhà thầu — tra theo tên đơn vị ghi trên lần làm việc.
+    const companies = await prisma.workPermitCompany.findMany({ where: { code: { not: "" } }, select: { name: true, code: true } });
+    const codeOf = (company: string) => companies.find(row => sameCompany(row.name, company))?.code ?? "";
     const data = sessions.filter(session => permitPositionVisible(session.permit.position, scope)).map(({ members, permit, ...session }) => {
       const list = (Array.isArray(members) ? members : []) as Member[];
       // CHTT luôn có mặt suốt lần làm việc, không quét — tính riêng, cộng 1 ở phía hiển thị.
       const workers = list.filter(m => !isSessionCommander(m, session));
       return {
         ...session,
+        companyCode: codeOf(session.company),
         openedAt: session.openedAt.toISOString(),
         permit,
         workers: workers.length,
