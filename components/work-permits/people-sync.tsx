@@ -85,7 +85,6 @@ export function PeopleSyncDialog({ onClose, initialSource = "OVERHAUL" }: { onCl
           <span className="block font-semibold">{item.label}</span><span className="block text-xs text-muted-foreground">{item.hint}</span>
         </button>)}
       </div>
-      {!result && !running && !error && <p className="rounded-lg bg-muted/40 p-3 text-sm">Người mới trong sheet được thêm vào danh bạ với nhóm <b>{source === "SCTX" ? "SCTX" : "Đại tu"}</b> (đơn vị chỉ tick Đầu tư → nhóm Đầu tư); người đã có (cùng số thẻ) được cập nhật theo sheet. Số thẻ đã là của người khác bên nhóm kia thì không ghi đè. Ảnh chỉ tải lại khi ảnh trong sheet thay đổi.</p>}
       {running && !result && <p role="status" className="text-sm">Đang lấy danh sách từ Google Sheets…</p>}
       {result && <div className="min-w-0 space-y-2 text-sm">
         <p className="flex items-center gap-2 font-medium"><CheckCircle2 size={16} className="text-emerald-600" />{result.sourceLabel}: {result.total} người · {result.created} mới · {result.updated} cập nhật{result.skipped ? ` · ${result.skipped} dòng bỏ qua` : ""}</p>
