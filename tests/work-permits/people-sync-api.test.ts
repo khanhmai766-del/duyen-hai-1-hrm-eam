@@ -22,3 +22,12 @@ test("cần họ tên VÀ (ngày huấn luyện hoặc số thẻ); ảnh chỉ 
   assert.equal(rows[0].soThe, "");
   assert.equal(rows[1].photo, "https://drive.google.com/file/d/abc/view");
 });
+
+test("thẻ SCTX lưu kèm /SXKD; số in trên thẻ bỏ hậu tố", async () => {
+  const { sctxCardCode, cardNumberOf } = await import("../../lib/work-permit-card");
+  assert.equal(sctxCardCode("SGIDC/01"), "SGIDC/01/SXKD");
+  assert.equal(sctxCardCode("SGIDC/01/SXKD"), "SGIDC/01/SXKD");
+  assert.equal(sctxCardCode(""), "");
+  assert.equal(cardNumberOf("SGIDC/01/SXKD"), "SGIDC/01");
+  assert.equal(cardNumberOf("NPS/249"), "NPS/249");
+});

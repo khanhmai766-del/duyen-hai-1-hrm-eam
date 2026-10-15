@@ -188,8 +188,8 @@ export function usePermitCompanyPeople(company: string, enabled = true, scope?: 
   } });
 }
 /** Tra một thẻ vừa quét (link QR hoặc số thẻ) — gọi thẳng, không cache: mỗi lượt quét phải là dữ liệu mới. */
-export async function lookupPermitCard(q: string) {
-  return (await apiGet<{ code: string; person: PermitPerson | null }>(`/api/work-permits/people/card?q=${encodeURIComponent(q)}`)).data;
+export async function lookupPermitCard(q: string, scope?: string | null) {
+  return (await apiGet<{ code: string; person: PermitPerson | null }>(`/api/work-permits/people/card?q=${encodeURIComponent(q)}${scope ? `&scope=${scope}` : ""}`)).data;
 }
 /**
  * Gửi số đo hộp quét thẻ (lib/work-permit-scan-metrics.ts). Gửi-rồi-quên với `keepalive` để lô cuối vẫn tới khi

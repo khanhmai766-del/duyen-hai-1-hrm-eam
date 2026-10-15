@@ -5,7 +5,7 @@ import { fail } from "@/lib/api";
 import { normalizeText } from "@/lib/nav";
 import { prisma } from "@/lib/prisma";
 import { uploadS3Object } from "@/lib/s3";
-import { normalizeCardCode, cardlessCode, isCardlessCode } from "@/lib/work-permit-card";
+import { normalizeCardCode, cardlessCode, cardNumberOf, isCardlessCode, sctxCardCode } from "@/lib/work-permit-card";
 import { a1Tab, batchGetValues, getSpreadsheet, GoogleSheetsError } from "@/lib/server/google-sheets";
 import { PERMIT_CONTRACTOR_SCOPES, type PermitCompanyScopes, type PermitContractorScope } from "@/lib/work-permits";
 
@@ -232,7 +232,9 @@ export async function syncPeopleList(source: PeopleSyncSource = "OVERHAUL") {
   const byCode = new Map<string, Prisma.WorkPermitPersonCreateInput & { photoRef: string; tab: string }>();
   for (const row of rows) {
     const tab = str(row.sheet);
-    const card = normalizeCardCode(str(row.soThe, 80));
+    // Bảng SCTX: số thẻ lưu kèm "/SXKD" (trùng dãy số với thẻ Đại tu nhưng là người khác — SCTX_CARD_SUFFIX).
+    const sheetCard = normalizeCardCode(str(row.soThe, 80));
+    const card = source === "SCTX" ? sctxCardCode(sheetCard) : sheetCard;
     const name = str(row.hoTen);
     if (!card && !name) continue;
     // Chưa có số thẻ (mới huấn luyện, cột K) → mã tạm theo họ tên, như QR bảng thẻ đang in (?id=<họ tên>).
@@ -335,7 +337,7 @@ export async function syncPeoplePhotos(input: unknown) {
       const name = nameOf.get(code);
       if (name === undefined) throw new Error("Không còn hồ sơ của số thẻ này trên sổ");
       // Người chưa có thẻ (mã tạm HL-…): Apps Script tìm ảnh theo họ tên ở cột C; còn lại theo số thẻ.
-      const ask = () => callSheet<{ contentType?: string; base64?: string }>(job.src, { format: "photo", id: isCardlessCode(code) ? name : code }, 45_000,
+      const ask = () => callSheet<{ contentType?: string; base64?: string }>(job.src, { format: "photo", id: isCardlessCode(code) ? name : cardNumberOf(code) }, 45_000,
         "Google tạm thời trả trang lỗi thay cho ảnh. Đồng bộ lại sau để tải tiếp");
       // Lỗi mạng (502) thử lại một lần sau 2 s; quá giờ / Apps Script báo lỗi thì không (đã tốn tới 45 s).
       const photo = await ask().catch(async error => {

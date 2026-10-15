@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { lookupPermitCard, reportPermitScanMetrics, useSavePermitPerson } from "@/hooks/useWorkPermits";
 import { qrCameraTorch, QR_CAMERA_CONSTRAINTS, startQrScanner, tuneQrCameraTrack } from "@/lib/qr-camera";
-import { cardExpired, cardlessCode, isCardlessCode, parseCardQr, sameCompany } from "@/lib/work-permit-card";
+import { cardExpired, cardlessCode, isCardlessCode, parseCardQr, sameCompany, sctxCardCode } from "@/lib/work-permit-card";
 import { formatPermitNumber, PERMIT_CONTRACTOR_SCOPES, personScopeError, type PermitContractorScope, type PermitMember, type PermitPerson } from "@/lib/work-permits";
 import { PermitCameraScanGuard } from "@/lib/work-permit-scan-guard";
 import { ScanMetricsCollector, STALL_MS, type ScanMetricResult } from "@/lib/work-permit-scan-metrics";
@@ -178,7 +178,7 @@ export function PermitCardScanner({ unit, companies, scope, existing, permitId, 
     const act = async (work: () => Promise<ScanOutcome>) => { const startedAt = performance.now(); try { return await work(); } finally { actionMs += performance.now() - startedAt; } };
     try {
       const lookupAt = performance.now();
-      const { person } = await lookupPermitCard(code);
+      const { person } = await lookupPermitCard(code, scope);
       lookupMs = performance.now() - lookupAt;
       if (!person) return finish({ code, tone: "warn", title: `Thẻ ${code} chưa có trong danh bạ`, detail: `Nhập họ tên để thêm nhanh vào đơn vị ${unit}.`, notFound: true });
       if (isExisting(person)) {
@@ -312,7 +312,7 @@ export function PermitCardScanner({ unit, companies, scope, existing, permitId, 
     try {
       // QR của người chưa được cấp thẻ mang họ tên → lưu mã tạm HL-… (lib/work-permit-card.ts), không lưu họ tên vào ô số thẻ.
       const code = /\s/.test(current.code) ? cardlessCode(current.code) : current.code;
-      const person = await savePerson.mutateAsync({ body: { code, name: quickName.trim(), company: unit, phone: "", canCommand: false, isActive: true, scope: scope ?? "SCTX" } });
+      const person = await savePerson.mutateAsync({ body: { code: scope === "SCTX" ? sctxCardCode(code) : code, name: quickName.trim(), company: unit, phone: "", canCommand: false, isActive: true, scope: scope ?? "SCTX" } });
       const result = await admit(person);
       setScans(list => list.map(s => s.id === id ? { ...s, notFound: false, person, title: person.name, ...result, detail: result.added ? `Đã thêm vào danh bạ ${unit} và cho vào.` : result.detail } : s));
       setQuickName("");

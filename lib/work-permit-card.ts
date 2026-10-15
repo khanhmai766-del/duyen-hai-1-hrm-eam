@@ -21,6 +21,16 @@ export function cardlessCode(name: string) {
 }
 export const isCardlessCode = (code: string) => code.startsWith(CARDLESS_PREFIX);
 
+/**
+ * Thẻ nhà thầu SCTX (bảng "CẤP MÃ QR CHO NHÀ THẦU LÀM VIỆC SXKD") dùng chung dãy số với thẻ Đại tu (SGIDC/01… là hai người
+ * khác nhau, 16/10/2026: giữ nguyên số trên thẻ). Trên sổ, số thẻ SCTX lưu kèm hậu tố "/SXKD" để mỗi người một hồ sơ; QR in
+ * trên thẻ vẫn là số trơn → quét trong PCT SCTX thì tra số + "/SXKD" trước.
+ */
+export const SCTX_CARD_SUFFIX = "/SXKD";
+export const sctxCardCode = (card: string) => (!card || card.endsWith(SCTX_CARD_SUFFIX) ? card : `${card}${SCTX_CARD_SUFFIX}`);
+/** Số in trên thẻ (bỏ hậu tố /SXKD) — dùng khi hỏi Apps Script / hiển thị số thẻ thật. */
+export const cardNumberOf = (code: string) => (code.endsWith(SCTX_CARD_SUFFIX) ? code.slice(0, -SCTX_CARD_SUFFIX.length) : code);
+
 /** Chuẩn hoá số thẻ giống parsePermitPerson: NFC, bỏ khoảng trắng hai đầu, chữ hoa. */
 export function normalizeCardCode(value: string) {
   return value.normalize("NFC").trim().toUpperCase();

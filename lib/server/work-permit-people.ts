@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import type { WorkPermitPerson } from "@prisma/client";
 import { fail } from "@/lib/api";
 import { normalizeText } from "@/lib/nav";
-import { cardlessCode, isCardlessCode, parseCardQr } from "@/lib/work-permit-card";
+import { cardlessCode, isCardlessCode, parseCardQr, SCTX_CARD_SUFFIX, sctxCardCode } from "@/lib/work-permit-card";
 import { prisma } from "@/lib/prisma";
 import { presentMembers, samePermitWorker } from "@/lib/work-permit-presence";
 import { s3ProxyUrl } from "@/lib/s3";
@@ -46,13 +46,17 @@ export function parsePermitPerson(body: Record<string, unknown>) {
  * Tra đúng số thẻ (khoá duy nhất) nên nhanh, không phụ thuộc Google Sheets. `null` = nội dung không phải mã thẻ.
  * Dùng chung cho hộp quét thẻ của PCT (/api/work-permits/people/card) và nút "Quét QR" chung (/api/device-qr/resolve).
  */
-export async function lookupPermitCardPerson(raw: string) {
+export async function lookupPermitCardPerson(raw: string, scope?: string | null) {
   const code = parseCardQr(raw);
   if (!code) return null;
   const select = { id: true, code: true, name: true, company: true, phone: true, canCommand: true, isActive: true, version: true, ...personCardSelect } as const;
-  // QR người chưa có thẻ mang họ tên → thử tiếp mã tạm HL-… (lib/work-permit-card.ts).
-  const person = await prisma.workPermitPerson.findUnique({ where: { code }, select })
-    ?? (isCardlessCode(code) ? null : await prisma.workPermitPerson.findUnique({ where: { code: cardlessCode(code) }, select }));
+  // Thẻ SCTX in số trơn nhưng lưu kèm "/SXKD": quét trong PCT SCTX thì thử số + "/SXKD" trước; nơi khác thử số trơn trước
+  // (thẻ Đại tu), không có thì thử bản "/SXKD". QR người chưa có thẻ mang họ tên → thử tiếp mã tạm HL-….
+  const tries = isCardlessCode(code) || code.endsWith(SCTX_CARD_SUFFIX) ? [code]
+    : scope === "SCTX" ? [sctxCardCode(code), code] : [code, sctxCardCode(code)];
+  let person = null;
+  for (const candidate of tries) { person = await prisma.workPermitPerson.findUnique({ where: { code: candidate }, select }); if (person) break; }
+  person ??= isCardlessCode(code) ? null : await prisma.workPermitPerson.findUnique({ where: { code: cardlessCode(code) }, select });
   if (!person) return { code, person: null };
   const sessions = await prisma.workPermitSession.findMany({
     where: { endedAt: null },

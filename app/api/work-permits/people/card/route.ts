@@ -7,7 +7,9 @@ export const dynamic = "force-dynamic";
 export async function GET(req: Request) {
   return permitHandle(async () => {
     await requireUser();
-    const result = await lookupPermitCardPerson(new URL(req.url).searchParams.get("q") ?? "");
+    const params = new URL(req.url).searchParams;
+    // `scope`: nhóm PCT đang quét (SCTX → thẻ "/SXKD" trước).
+    const result = await lookupPermitCardPerson(params.get("q") ?? "", params.get("scope"));
     if (!result) return fail("Không đọc được số thẻ từ mã QR");
     return ok(result);
   });
