@@ -234,7 +234,8 @@ function PersonPhoto({ person, className }: { person: PermitPerson; className: s
 type CompanyPeopleProps = { people: PermitPerson[]; canWrite: boolean; removing: boolean; onEdit: (person: PermitPerson) => void; onRemove: (person: PermitPerson) => void };
 
 /**
- * Nhân sự của một đơn vị theo nhóm: Đại tu, Đầu tư (đủ họ tên, ảnh, chức vụ) / SCTX (không cần ảnh). Hồ sơ chưa có nhóm
+ * Nhân sự của một đơn vị theo nhóm: Đại tu, Đầu tư (đủ họ tên, ảnh, chức vụ) / SCTX (hiện cột ảnh khi có người có ảnh — bảng
+ * SCTX có ảnh từ 16/10/2026). Hồ sơ chưa có nhóm
  * tính là SCTX. Chỉ một nhóm có người (bảng đơn vị đã lọc theo tab) thì không hiện nút chuyển nhóm.
  */
 function CompanyPeopleGroups({ people, ...rest }: CompanyPeopleProps) {
@@ -251,7 +252,7 @@ function CompanyPeopleGroups({ people, ...rest }: CompanyPeopleProps) {
         Nhân sự {PERMIT_CONTRACTOR_SCOPES[key]} <span className="tabular-nums opacity-80">({count})</span>
       </button>)}
     </div>}
-    {list.length ? <CompanyPeopleTable {...rest} people={list} withPhoto={contractorScopeLikeOverhaul(group)} />
+    {list.length ? <CompanyPeopleTable {...rest} people={list} withPhoto={contractorScopeLikeOverhaul(group) || list.some(person => person.photoUrl)} />
       : <p className="text-sm text-muted-foreground">Chưa có nhân sự nhóm {PERMIT_CONTRACTOR_SCOPES[group]}.</p>}
   </div>;
 }

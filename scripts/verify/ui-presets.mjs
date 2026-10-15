@@ -744,6 +744,27 @@ export const PRESETS = {
       await page.waitForTimeout(300);
     },
   },
+  "nhan-su-sctx-co-anh": {
+    description: "Tab Nhân sự SCTX bung đơn vị: người SCTX có ảnh thì hiện cột Ảnh — response giả lập, không ghi DB",
+    async prepare() { return {}; },
+    routes: () => ["/work-permits"],
+    async mock(context) {
+      const photo = "data:image/svg+xml;utf8," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="36" height="48"><rect width="36" height="48" fill="#94a3b8"/><circle cx="18" cy="17" r="8" fill="#e2e8f0"/></svg>');
+      await context.route("**/api/work-permits/people?**", route => route.fulfill({ json: { data: [
+        { id: "p1", code: "SGIDC/01/SXKD", name: "Phẩm Đình Tứ", company: "CTy CPĐT Phát triển Công nghiệp Sài Gòn IDC", phone: "", scope: "SCTX", canCommand: true, isActive: true, version: 1, jobTitle: "CHTT (Đạt)", photoUrl: photo, activeWorks: [] },
+        { id: "p2", code: "SGIDC/02/SXKD", name: "Hoàng Văn Khiến", company: "CTy CPĐT Phát triển Công nghiệp Sài Gòn IDC", phone: "", scope: "SCTX", canCommand: false, isActive: true, version: 1, jobTitle: "Công nhân", photoUrl: null, activeWorks: [] },
+      ], meta: { total: 2, pageSize: 200, canWrite: true }, error: null } }));
+    },
+    async interact(page) {
+      const desktop = page.getByRole("button", { name: /^Nhân sự nhà thầu/ }).locator("visible=true");
+      if (await desktop.count()) { await desktop.first().click(); await page.getByRole("menuitem", { name: "Sản xuất kinh doanh" }).click(); }
+      else { await page.getByRole("button", { name: /^Đang xem:/ }).click(); await page.getByRole("menuitem", { name: "Nhân sự Sản xuất kinh doanh" }).click(); }
+      await page.getByText("Đơn vị nhà thầu · SCTX").waitFor();
+      await page.locator("table tbody tr, article button[aria-expanded]").locator("visible=true").first().click();
+      await page.getByText("Phẩm Đình Tứ").locator("visible=true").first().waitFor();
+      await page.waitForTimeout(400);
+    },
+  },
   "dong-bo-nhan-su-chay-nen": {
     description: "Hộp Đồng bộ nhân sự chạy nền: lượt Đại tu ĐANG CHẠY (tải ảnh 12/30) và lượt SCTX ĐÃ XONG — response giả lập, KHÔNG bấm đồng bộ",
     async prepare() { return {}; },
