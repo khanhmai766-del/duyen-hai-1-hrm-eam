@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<title>Hướng dẫn cấp phiếu công tác — PXVH1</title>
+<style>
+  @page { size: A4; margin: 16mm 15mm 16mm 15mm; }
+  :root { --ink:#0f172a; --muted:#475569; --line:#cbd5e1; --blue:#00558f; --blue-soft:#e8f1f8; --red:#b91c1c; --red-soft:#fdecec; --amber:#92400e; --amber-soft:#fff7e6; --green:#166534; --green-soft:#eaf7ee; }
+  * { box-sizing: border-box; }
+  body { font-family: Arial, "Segoe UI", sans-serif; color: var(--ink); font-size: 10.5pt; line-height: 1.45; margin: 0; }
+  h1 { font-size: 20pt; margin: 0 0 4pt; color: var(--blue); letter-spacing: -0.2pt; }
+  h2 { font-size: 13.5pt; color: var(--blue); margin: 16pt 0 6pt; padding-bottom: 3pt; border-bottom: 1.5pt solid var(--blue); break-after: avoid; }
+  h3 { font-size: 11.5pt; margin: 11pt 0 4pt; break-after: avoid; }
+  p { margin: 0 0 5pt; }
+  .sub { color: var(--muted); font-size: 10pt; margin-bottom: 10pt; }
+  .meta { display: flex; gap: 14pt; font-size: 9pt; color: var(--muted); border-top: 1pt solid var(--line); border-bottom: 1pt solid var(--line); padding: 5pt 0; margin: 8pt 0 12pt; }
+  ol, ul { margin: 0 0 6pt; padding-left: 16pt; }
+  li { margin: 0 0 3pt; }
+  ol.steps { counter-reset: s; list-style: none; padding-left: 0; }
+  ol.steps > li { counter-increment: s; position: relative; padding-left: 24pt; margin-bottom: 5pt; break-inside: avoid; }
+  ol.steps > li::before { content: counter(s); position: absolute; left: 0; top: 0; width: 16pt; height: 16pt; border-radius: 50%; background: var(--blue); color: #fff; font-weight: bold; font-size: 8.5pt; display: flex; align-items: center; justify-content: center; }
+  .box { border-radius: 5pt; padding: 7pt 9pt; margin: 6pt 0 8pt; break-inside: avoid; }
+  .box b.t { display: block; margin-bottom: 3pt; }
+  .stop { background: var(--red-soft); border-left: 3.5pt solid var(--red); }
+  .stop b.t { color: var(--red); }
+  .warn { background: var(--amber-soft); border-left: 3.5pt solid #d97706; }
+  .warn b.t { color: var(--amber); }
+  .ok { background: var(--green-soft); border-left: 3.5pt solid #16a34a; }
+  .ok b.t { color: var(--green); }
+  .info { background: var(--blue-soft); border-left: 3.5pt solid var(--blue); }
+  table { width: 100%; border-collapse: collapse; margin: 5pt 0 9pt; font-size: 9.5pt; break-inside: auto; }
+  th, td { border: 0.75pt solid var(--line); padding: 4pt 5pt; vertical-align: top; text-align: left; }
+  th { background: var(--blue); color: #fff; font-weight: bold; }
+  tr { break-inside: avoid; }
+  tbody tr:nth-child(even) td { background: #f8fafc; }
+  .btn { display: inline-block; border: 0.75pt solid #94a3b8; border-radius: 3pt; padding: 0 4pt; font-weight: bold; font-size: 9pt; background: #f1f5f9; white-space: nowrap; }
+  .tag { display: inline-block; border-radius: 3pt; padding: 0 4pt; font-size: 8.5pt; font-weight: bold; }
+  .tag.blue { background: var(--blue-soft); color: var(--blue); }
+  .tag.violet { background: #f3e8ff; color: #6b21a8; }
+  .tag.amber { background: var(--amber-soft); color: var(--amber); }
+  .flow { display: flex; flex-wrap: wrap; align-items: center; gap: 3pt; margin: 4pt 0 8pt; font-size: 9pt; }
+  .flow span { border: 0.75pt solid var(--blue); color: var(--blue); border-radius: 10pt; padding: 1pt 7pt; font-weight: bold; background: #fff; }
+  .flow i { color: var(--muted); font-style: normal; }
+  .rules { counter-reset: r; list-style: none; padding: 0; }
+  .rules li { counter-increment: r; position: relative; padding: 5pt 8pt 5pt 30pt; border: 0.75pt solid var(--line); border-radius: 5pt; margin-bottom: 4pt; break-inside: avoid; }
+  .rules li::before { content: counter(r); position: absolute; left: 8pt; top: 5pt; font-weight: bold; color: var(--red); font-size: 13pt; }
+  .page-break { break-before: page; }
+  .small { font-size: 9pt; color: var(--muted); }
+  .check li { list-style: none; position: relative; padding-left: 14pt; }
+  .check li::before { content: "☐"; position: absolute; left: 0; }
+  ul.check { padding-left: 2pt; }
+</style>
+</head>
+<body>
+
+<h1>HƯỚNG DẪN CẤP PHIẾU CÔNG TÁC</h1>
+<p class="sub">Sổ cấp phiếu công tác trên duyenhai1.vn và tiện ích NKVH — Phân xưởng Vận hành 1, Nhà máy Nhiệt điện Duyên Hải 1</p>
+<div class="meta"><span>Phiên bản: 10/2026</span><span>Áp dụng: người cấp PCT, VHV, Trưởng ca, Trưởng kíp</span><span>Áp dụng cho: sổ Cơ – Nhiệt – Hóa và sổ Điện</span></div>
+
+<h2>1. Mười nguyên tắc bắt buộc</h2>
+<p>Các nguyên tắc dưới đây rút ra từ việc rà soát <b>39 phiếu đã hủy</b> trên sổ (Cơ 14, Điện 25). Phần lớn các lỗi đều tránh được nếu làm đúng các điểm này.</p>
+<ol class="rules">
+  <li><b>Một công việc chỉ cấp MỘT phiếu.</b> Trước khi lấy số, tra trên sổ xem công việc đó (cùng thiết bị, cùng cương vị) đã có phiếu còn hiệu lực chưa. Web sẽ hỏi lại hoặc hiện khung vàng "Có thể trùng nội dung": phải kiểm tra trước khi tiếp tục.</li>
+  <li><b>PCT điện tử: chỉ lấy số bằng nút <span class="btn">Lấy số PCT</span> của tiện ích trên trang NKVH.</b> Không gõ số tay vào ô "Số phiếu" của NKVH, không dùng số NKVH tự sinh dạng <i>…/2025/NĐDH-VH1</i>.</li>
+  <li><b>Số đã lấy cho phiếu NKVH thì chỉ dùng cho đúng phiếu NKVH đó.</b> Tuyệt đối không dùng số ấy để cấp thêm một phiếu khác bằng biểu mẫu web. Đây là nguyên nhân trùng số của PCT 4343 và 4360 ngày 08/10/2026.</li>
+  <li><b>Lấy số xong phải hoàn tất ngay:</b> bấm <span class="btn">Lưu</span> trên NKVH và kiểm tra web đã ghi "Đã cấp". Không bỏ phiếu ở trạng thái "Chờ NKVH lưu" qua ca.</li>
+  <li><b>Không dùng nữa thì trả số ngay</b> bằng <span class="btn">Hủy lượt</span> (trả số chưa dùng), ghi lý do. Không để số treo.</li>
+  <li><b>Sai thông tin thì ưu tiên SỬA, không hủy.</b> CHTT, nhóm SCTX/Đại tu, nội dung… sửa được khi phiếu chưa cho phép làm việc. Chỉ hủy khi phiếu thật sự không dùng.</li>
+  <li><b>Không cấp "phiếu thử" trên hệ thống thật.</b> Phiếu thử làm mất số và làm sai thống kê.</li>
+  <li><b>Bấm một lần, chờ hệ thống phản hồi.</b> Không bấm "Lấy số" / "Lưu" nhiều lần liên tiếp, không mở hai cửa sổ cấp cùng một việc.</li>
+  <li><b>PCT nhà thầu: mọi người vào/ra phải quét thẻ</b> (hoặc chọn từ danh sách). Quét RA hết mới được kết thúc ngày làm việc.</li>
+  <li><b>Hằng ngày xem chuông thông báo và khung "Đối chiếu số NKVH"</b>, xử lý ngay các phiếu báo đỏ "chưa đồng bộ từ NKVH".</li>
+</ol>
+
+<h2>2. Chọn đúng luồng cấp phiếu</h2>
+<table>
+  <thead><tr><th style="width:24%">Trường hợp</th><th style="width:19%">Hình thức</th><th style="width:22%">Lấy số ở đâu</th><th>Ghi chú</th></tr></thead>
+  <tbody>
+    <tr><td><b>Nội bộ PXVH1</b> (bình thường)</td><td><span class="tag blue">PCT điện tử</span></td><td>Trang phiếu trên <b>NKVH</b>, nút <span class="btn">Lấy số PCT</span> của tiện ích</td><td>Luồng A. NKVH là phiếu chính thức; web tự ghi sổ theo NKVH.</td></tr>
+    <tr><td><b>Nội bộ</b> khi NKVH lỗi / phải dùng giấy</td><td><span class="tag amber">PCT giấy</span></td><td>Web: <span class="btn">Cấp phiếu</span> → <span class="btn">Cấp phiếu nội bộ</span> → chọn PCT giấy</td><td>Luồng B.</td></tr>
+    <tr><td><b>Nhà thầu</b> sửa chữa thường xuyên</td><td><span class="tag amber">PCT giấy</span> · nhóm <span class="tag blue">SCTX</span></td><td>Web: <span class="btn">Cấp phiếu</span> → <span class="btn">Cấp phiếu nhà thầu</span> → SCTX</td><td>Luồng C. Có quản lý lần làm việc, quét thẻ vào/ra.</td></tr>
+    <tr><td><b>Nhà thầu</b> phục vụ đại tu</td><td><span class="tag amber">PCT giấy</span> · nhóm <span class="tag violet">Đại tu</span></td><td>Web: <span class="btn">Cấp phiếu</span> → <span class="btn">Cấp phiếu nhà thầu</span> → Đại tu</td><td>Luồng D. Thêm hạng mục đại tu, tiến độ ghi lên Sheet.</td></tr>
+  </tbody>
+</table>
+<div class="box info"><b class="t">Dãy số dùng chung</b>Sổ Cơ – Nhiệt – Hóa và sổ Điện có dãy số riêng theo năm. Nội bộ (điện tử, giấy) và nhà thầu <b>dùng chung một dãy</b> trong cùng sổ. Số đã hủy bị bỏ luôn, không cấp lại; chỉ Quản trị mới giải phóng được, tại mục "Mốc sổ giấy".</div>
+
+<h2 class="page-break">3. Luồng A — PCT nội bộ điện tử trên NKVH</h2>
+<div class="flow"><span>Mở PCT trên NKVH</span><i>→</i><span>Lấy số PCT</span><i>→</i><span>Chờ NKVH lưu</span><i>→</i><span>Lưu trên NKVH</span><i>→</i><span>Đã cấp</span><i>→</i><span>Kết thúc phiếu</span></div>
+<h3>3.1. Cấp phiếu</h3>
+<ol class="steps">
+  <li>Mở PCT ở bước nhập (B1) trên NKVH, trên máy đã cài tiện ích <b>"Cấp số và tự đồng bộ PCT NKVH – PXVH1"</b> và đã đăng nhập duyenhai1.vn.</li>
+  <li>Để trống ô "Số phiếu". Bấm <span class="btn">Lấy số PCT</span> → <span class="btn">Lấy số &amp; điền</span>. Tiện ích điền số dạng <i>4381/2026/VH1-NĐDH</i>; trên web xuất hiện phiếu <b>"Chờ NKVH lưu"</b> mang số này.</li>
+  <li>Hoàn thiện nội dung phiếu trên NKVH (chức danh người cho phép phải đúng cương vị).</li>
+  <li>Bấm <span class="btn">Lưu</span> trên NKVH. Khi NKVH báo lưu thành công, tiện ích <b>tự đồng bộ</b>: phiếu trên web chuyển sang <b>"Đã cấp"</b>, nội dung theo NKVH.</li>
+  <li><b>Kiểm tra:</b> trên sổ web, phiếu đã ở trạng thái "Đã cấp" và số khớp với NKVH. Chưa thấy "Đã cấp" thì làm mục 3.2.</li>
+</ol>
+<h3>3.2. Lưu rồi mà web vẫn "Chờ NKVH lưu"</h3>
+<p>Tiện ích có thể chưa nhận ra thông báo lưu của NKVH. Khi đó:</p>
+<ol class="steps">
+  <li>Mở lại đúng trang PCT trên NKVH. Thanh tiện ích hiện <i>"&lt;số&gt; · đang giữ, chưa cấp"</i>.</li>
+  <li>Bấm <span class="btn">Đồng bộ phiếu đã lưu</span>. Phiếu trên web chuyển "Đã cấp".</li>
+  <li>Nếu báo lỗi (ví dụ "Số đã có lượt cấp hoặc đã hủy"): <b>không tự hủy</b>, báo Quản trị để đối chiếu.</li>
+</ol>
+<div class="box warn"><b class="t">Chuông thông báo sẽ nhắc</b>Phiếu nháp của bạn đã thấy trên NKVH (hoặc đồng bộ bị từ chối) mà sau <b>1 giờ</b> vẫn chưa đồng bộ thì chuông hiện dòng đỏ <i>"PCT … chưa đồng bộ từ NKVH"</i>. Bấm vào để mở phiếu và làm theo mục 3.2.</div>
+<h3>3.3. Lấy số rồi nhưng không cấp nữa</h3>
+<ol class="steps">
+  <li><b>Chưa lưu trên NKVH:</b> vào sổ web, ở khung <b>"Số đã lấy, chưa lưu phiếu"</b> bấm <span class="btn">Hủy lượt</span>, ghi lý do. Số được trả lại để cấp tiếp.</li>
+  <li><b>Đã lưu trên NKVH:</b> hủy phiếu <b>trên NKVH</b>, web tự ghi "Hủy theo NKVH". Không hủy riêng trên web.</li>
+</ol>
+<div class="box stop"><b class="t">KHÔNG làm</b>
+<ul>
+  <li>Không bấm "Tiếp tục" rồi cấp phiếu bằng biểu mẫu web với số đã lấy cho NKVH. Nút này nay là <span class="btn">Mở phiếu nháp</span> và web chặn việc cấp trùng, nhưng vẫn phải nhớ nguyên tắc.</li>
+  <li>Không gõ tay số vào ô "Số phiếu" NKVH, không dùng số NKVH tự sinh <i>…/NĐDH-VH1</i>.</li>
+  <li>Không "Bỏ ghi nhận sai" một số đang có phiếu nháp chờ đồng bộ ở khung "Đối chiếu số NKVH".</li>
+</ul></div>
+<h3>3.4. Dừng / kết thúc / hủy</h3>
+<ul>
+  <li><b>Dừng, kết thúc, hủy trên NKVH</b>: web tự ghi theo NKVH ("Dừng theo NKVH", "Đóng theo NKVH", "Hủy theo NKVH" kèm lý do).</li>
+  <li>Phiếu nội bộ gắn SYC tự đóng khi SYC đã xử lý đủ 24 giờ.</li>
+  <li>Hủy phiếu đã cấp trên web chỉ dành cho Quản trị, Quản lý, Trưởng ca, Trưởng kíp, và <b>phải ghi lý do rõ ràng</b> (không ghi "test", "hủy do").</li>
+</ul>
+
+<h2>4. Luồng B — PCT nội bộ giấy (khi không dùng NKVH)</h2>
+<ol class="steps">
+  <li>Sổ web, chọn đúng sổ (Cơ – Nhiệt – Hóa / Điện) → <span class="btn">Cấp phiếu</span> → <span class="btn">Cấp phiếu nội bộ</span> → chọn <b>PCT giấy</b>.</li>
+  <li>Bấm <span class="btn">Lấy số PCT</span> ở đầu biểu mẫu. Số được giữ ngay; đóng biểu mẫu không làm mất số.</li>
+  <li>Điền thông tin: cương vị, tổ máy, ngày, SYC (nếu có), địa điểm, nội dung, người cấp, CHTT, nhân viên, biện pháp an toàn.</li>
+  <li>Bấm <span class="btn">Xem mẫu in</span> để kiểm tra, rồi lưu (cấp phiếu). Nếu web hỏi "Có thể TRÙNG nội dung…", dừng lại kiểm tra phiếu được liệt kê.</li>
+  <li>Kết thúc: <span class="btn">Ghi nhận đóng phiếu</span> với thời điểm đóng thực tế.</li>
+</ol>
+
+<h2 class="page-break">5. Luồng C — PCT nhà thầu SCTX</h2>
+<div class="flow"><span>Đã cấp</span><i>→</i><span>Đang thực hiện</span><i>⇄</i><span>Chờ làm tiếp</span><i>→</i><span>Kết thúc phiếu</span></div>
+<h3>5.1. Cấp phiếu</h3>
+<ol class="steps">
+  <li><span class="btn">Cấp phiếu</span> → <span class="btn">Cấp phiếu nhà thầu</span> → chọn nhóm <span class="tag blue">SCTX</span>.</li>
+  <li><span class="btn">Lấy số PCT</span>, điền thông tin phiếu giấy và chọn <b>đơn vị công tác</b> đúng nhà thầu.</li>
+  <li>Chọn <b>CHTT</b> bằng <span class="btn">Chọn CHTT từ danh bạ</span>: người phải có trong danh bạ nhà thầu, đang hoạt động, có cờ CHTT.</li>
+  <li>Nhân viên công tác bổ sung: quét thẻ hoặc chọn từ danh sách (có thể nhập tên khi người đó chưa có thẻ).</li>
+  <li>Đặt <b>Kết thúc công việc dự kiến</b> đúng thực tế, kiểm tra mẫu in, rồi lưu.</li>
+</ol>
+<h3>5.2. Làm việc hằng ngày (màn hình làm việc)</h3>
+<ol class="steps">
+  <li>Mở phiếu → <span class="btn">Mở màn hình làm việc</span> → <span class="btn">Cho phép / mở lần làm việc</span>: chọn CHTT, thời điểm cho phép, người cho phép, nhân viên.</li>
+  <li>Người vào/ra khu vực: <span class="btn">Quét vào / ra</span> (quét người đang trong là ghi RA, người đã ra là ghi VÀO lại). Người không mang thẻ: dùng nút Vào/Ra trên dòng của người đó.</li>
+  <li>Đổi CHTT giữa chừng: <span class="btn">Đổi CHTT</span> (bàn giao có giờ và người xác nhận).</li>
+  <li>Cuối ngày: quét <b>RA hết</b> nhân viên → <span class="btn">Kết thúc</span>, ghi thời điểm, người xác nhận, tiến độ. Phiếu sang "Chờ làm tiếp".</li>
+  <li>Công việc xong hoàn toàn: <span class="btn">Kết thúc phiếu</span>. Sau đó phiếu bị khoá, không mở ngày mới được nữa.</li>
+</ol>
+<div class="box warn"><b class="t">Quá hạn "Kết thúc công việc dự kiến"</b>Web chặn mở lần làm việc mới và chặn đổi CHTT. Phải kết thúc phiếu; công việc chưa xong thì cấp PCT mới.</div>
+<div class="box info"><b class="t">Xem lại lịch sử vào/ra</b>Trong chi tiết phiếu, bấm <span class="btn">Lịch sử vào/ra</span> để xem từng lần làm việc (ngày, người cho phép, CHTT) và giờ vào/ra của từng người.</div>
+
+<h2>6. Luồng D — PCT nhà thầu Đại tu</h2>
+<p>Giống luồng C, cộng thêm các điểm sau:</p>
+<table>
+  <thead><tr><th style="width:26%">Bước</th><th>Cách làm đúng</th></tr></thead>
+  <tbody>
+    <tr><td>Chọn nhóm</td><td><span class="btn">Cấp phiếu nhà thầu</span> → <span class="tag violet">Đại tu</span>. Chọn đúng gói thầu; nếu nhầm SCTX ↔ Đại tu thì <b>đổi nhóm trong "Chỉnh sửa"</b> trước khi cho phép làm việc, không hủy.</td></tr>
+    <tr><td>CHTT</td><td><b>Chỉ chọn</b> người đã được đánh dấu CHTT trong mục <b>Nhân sự nhà thầu</b>. Hộp chọn không cho thêm người hay sửa hồ sơ. Cần CHTT mới thì báo người quản lý danh bạ đánh dấu trước.</td></tr>
+    <tr><td>Nhân viên</td><td>Chỉ <span class="btn">Quét thẻ</span> hoặc <span class="btn">Chọn từ danh sách</span>, <b>không nhập tên tay</b>. Người chưa có trong danh bạ: đồng bộ nhân sự từ Google Sheets trước.</td></tr>
+    <tr><td>Hạng mục</td><td>Bấm <span class="btn">Chọn hạng mục đại tu</span>, chọn đúng mã. Nội dung tự thêm khối <i>"Theo hạng mục: …"</i>. Công việc không có trong danh sách: tick <b>Hạng mục phát sinh</b> (mặc định không tick). Phiếu không có hạng mục sẽ không ghi tiến độ lên Sheet.</td></tr>
+    <tr><td>Bổ sung hạng mục sau khi cấp</td><td><span class="btn">Bổ sung hạng mục</span> trên màn hình làm việc (mọi tài khoản thấy phiếu đều làm được). Không bớt được hạng mục đã ghi tiến độ.</td></tr>
+    <tr><td>Cập nhật tiến độ</td><td>Trong ngày: <span class="btn">Cập nhật tiến độ</span>. Điền <b>Số PCT - Nội dung, CHTT, Số lượng NVĐV</b> (điền sẵn, sửa nếu cần), tick hạng mục đã làm, % lũy kế, nội dung thực hiện. Sheet ghi sau ít giây.</td></tr>
+    <tr><td>Cập nhật khi không có lần làm việc mở</td><td>Phiếu "Đã cấp / Chờ làm tiếp / Kết thúc phiếu" vẫn <span class="btn">Cập nhật tiến độ</span> được; chọn trạng thái ghi Sheet (phiếu đã kết thúc gợi ý "Kết thúc công tác"). Ghi vào ngày cập nhật.</td></tr>
+    <tr><td>Kết thúc ngày</td><td>Đánh giá <b>từng hạng mục</b> (tick mục có làm, % lũy kế). Mục không tick ghi "Không thực hiện" cho ngày đó.</td></tr>
+  </tbody>
+</table>
+
+<h2 class="page-break">7. Sai sót: sửa hay hủy?</h2>
+<table>
+  <thead><tr><th style="width:34%">Tình huống</th><th>Cách xử lý đúng</th></tr></thead>
+  <tbody>
+    <tr><td>Chọn sai CHTT (phiếu nhà thầu)</td><td><b>Sửa:</b> mở phiếu → <span class="btn">Chỉnh sửa / cấp phiếu</span> → bước Nhân sự → <span class="btn">Đổi CHTT</span>. Không hủy để cấp lại.</td></tr>
+    <tr><td>Chọn nhầm nhóm SCTX ↔ Đại tu</td><td><b>Sửa:</b> trong "Chỉnh sửa", mục <b>Nhóm phiếu nhà thầu</b>. Chỉ làm được khi phiếu đang "Đã cấp", chưa cho phép làm việc, chưa có lần làm việc.</td></tr>
+    <tr><td>Nhầm nội dung, thiết bị, người cho phép (PCT điện tử)</td><td>Sửa trên NKVH rồi lưu: web đồng bộ theo. Nếu NKVH bắt cấp lại thì hủy trên NKVH và lấy số mới cho phiếu mới.</td></tr>
+    <tr><td>Lỡ bấm lấy số hai lần / mở hai phiếu cùng việc</td><td>Giữ một phiếu. Số thừa <b>chưa lưu</b> → <span class="btn">Hủy lượt</span>. Phiếu thừa <b>đã lưu NKVH</b> → hủy trên NKVH, lý do "Trùng với PCT số …".</td></tr>
+    <tr><td>Công việc đã có phiếu khác đang hiệu lực</td><td>Không cấp mới; làm tiếp trên phiếu đang có (nhà thầu: mở lần làm việc mới).</td></tr>
+    <tr><td>Phiếu nháp "Chờ NKVH lưu" treo lâu</td><td>Đã lưu trên NKVH → mục 3.2. Chưa lưu và không dùng → <span class="btn">Hủy lượt</span>.</td></tr>
+    <tr><td>Đồng bộ báo lỗi về số</td><td>Không tự hủy hay cấp lại. Báo Quản trị kèm số PCT và ảnh thông báo.</td></tr>
+  </tbody>
+</table>
+
+<h2>8. Những lỗi đã xảy ra (để không lặp lại)</h2>
+<table>
+  <thead><tr><th style="width:17%">Phiếu</th><th style="width:40%">Đã xảy ra</th><th>Bài học</th></tr></thead>
+  <tbody>
+    <tr><td>Điện 4343, 4360 (08/10)</td><td>Lấy số từ NKVH, rồi dùng chính số đó cấp thêm phiếu bằng biểu mẫu web → hai phiếu trùng số, phải hủy.</td><td>Nguyên tắc 3. Web nay đã chặn, nút đổi thành "Mở phiếu nháp".</td></tr>
+    <tr><td>Cơ 4501 / 4502</td><td>Cấp hai lần cùng một nội dung cách nhau 7 phút.</td><td>Nguyên tắc 1 và 8: tra sổ trước, bấm một lần.</td></tr>
+    <tr><td>Điện 4111–4113, 4325; Cơ 4499</td><td>Công việc đã nằm trong phiếu khác, phải hủy.</td><td>Tra theo thiết bị / cương vị trước khi lấy số.</td></tr>
+    <tr><td>Điện 4297; 4319</td><td>Sai CHTT; sai gói SCTX → Đại tu, đã hủy cấp lại.</td><td>Sửa CHTT / đổi nhóm thay vì hủy (mục 7).</td></tr>
+    <tr><td>Cơ 1728–1732, 4441; Điện 4092</td><td>Phiếu "test", "thử cấp phiếu" trên hệ thống thật.</td><td>Nguyên tắc 7.</td></tr>
+    <tr><td>Điện 4328, 4341, 4348–4350, 4352, 4362</td><td>NKVH đã lưu nhưng web vẫn nháp 8–27 giờ.</td><td>Nguyên tắc 4 và 10; mục 3.2.</td></tr>
+  </tbody>
+</table>
+
+<h2>9. Kiểm tra cuối ca</h2>
+<ul class="check">
+  <li>Chuông thông báo không còn dòng đỏ "chưa đồng bộ từ NKVH" của mình.</li>
+  <li>Khung "Số đã lấy, chưa lưu phiếu" không còn số của mình bỏ dở.</li>
+  <li>Mọi PCT điện tử đã lưu trên NKVH đều "Đã cấp" trên web, số khớp nhau.</li>
+  <li>PCT nhà thầu: không còn ai "trong khu vực" ở phiếu đã xong ngày; đã bấm Kết thúc ngày.</li>
+  <li>PCT Đại tu: đã cập nhật tiến độ / kết thúc ngày cho các hạng mục đã làm.</li>
+  <li>Phiếu không dùng: đã trả số (chưa lưu) hoặc hủy trên NKVH (đã lưu), có lý do rõ ràng.</li>
+</ul>
+<p class="small">Gặp tình huống ngoài hướng dẫn này: không tự hủy hay cấp lại số, liên hệ Quản trị hệ thống kèm số PCT và ảnh màn hình.</p>
+
+</body>
+</html>
