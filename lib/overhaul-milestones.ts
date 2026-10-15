@@ -1,3 +1,5 @@
+import type { MilestoneProgressLog } from "./overhaul-milestone-progress";
+
 export const OVERHAUL_CAMPAIGN = "S2-2026";
 export const OVERHAUL_TITLE = "Mốc tiến độ SCL S2 — 2026";
 
@@ -13,6 +15,13 @@ export type OverhaulMilestone = {
   updatedById: string | null;
   createdAt: string;
   updatedAt: string;
+  /** Thực tế (15/10/2026, lib/overhaul-milestone-progress.ts): ngày bắt đầu / hoàn thành, % đã làm (mốc khoảng ngày). */
+  actualStart?: string | null;
+  actualEnd?: string | null;
+  actualPercent?: number | null;
+  actualNote?: string | null;
+  actualUpdatedAt?: string | null;
+  actualUpdatedByName?: string | null;
 };
 
 export type MilestoneInput = Pick<OverhaulMilestone, "title" | "startDate" | "endDate" | "note">;
@@ -30,6 +39,9 @@ export type MilestoneSchedule = {
   items: OverhaulMilestone[];
   todayEvents: MilestoneEvent[];
   upcoming: MilestoneEvent[];
+  /** Các lần cập nhật thực tế (đường S) và quyền ghi thực tế của người đang xem — chỉ API trả, bộ dựng lịch không đặt. */
+  logs?: MilestoneProgressLog[];
+  canUpdateActual?: boolean;
 };
 
 /** Ngày nhà máy, độc lập với múi giờ trình duyệt và server. */

@@ -5,7 +5,27 @@ Mọi người đăng nhập được xem; chỉ tài khoản `ADMIN` đang bậ
 thêm, sửa, xoá. API vẫn kiểm tra quyền `operation-events` và giới hạn tài khoản chỉ đọc.
 Các vai trò khác không được ghi kể cả có mức `manage/full` của quyền này.
 Mốc đơn nhắc đúng ngày; khoảng ngày nhắc đầu/cuối, theo `Asia/Ho_Chi_Minh`.
-Đây là lịch kế hoạch, không xác nhận hoàn thành hoặc tự kết luận chậm tiến độ.
+
+## Thực tế so với đường găng (15/10/2026)
+
+Mỗi mốc ghi được **thực tế**: ngày bắt đầu, % đã làm (chỉ mốc khoảng ngày), ngày hoàn thành, ghi chú, ngày ghi nhận.
+Ghi được: Quản trị, Quản lý, Kỹ thuật viên (`ACTUAL_WRITERS`, theo vai trò hiệu lực — ADMIN chưa bật chế độ quản
+trị tính là Quản lý; Trưởng ca, Người xem, tài khoản tra cứu chỉ xem). Sửa *kế hoạch* vẫn chỉ ADMIN.
+API `PUT /api/overhaul-milestones/actual`; mỗi lần ghi thêm một dòng `OverhaulMilestoneProgress` (nhật ký).
+SQL: `prisma/manual/add-overhaul-milestone-actual.sql` (chỉ thêm cột/bảng).
+
+Cách tính ở `lib/overhaul-milestone-progress.ts` (test `tests/overhaul-milestone-progress.test.ts`):
+- trọng số = số ngày kế hoạch (mốc đơn = 1, khoảng ngày tính cả hai đầu);
+- % kế hoạch: mốc đơn 0/100 theo ngày mốc, khoảng ngày tăng đều theo ngày;
+- % thực tế: có ngày hoàn thành = 100, chưa xong lấy % nhập (mốc đơn 0/100);
+- toàn đợt = trung bình có trọng số; SPI = thực tế / kế hoạch;
+- trạng thái: hoàn thành đúng/sớm/trễ, đang làm chậm/vượt (lệch quá 5%), trễ bắt đầu, quá hạn, chưa tới hạn;
+- đường S thực tế: mỗi ngày lấy lần ghi gần nhất có ngày ghi nhận ≤ ngày đó, xong tính từ ngày hoàn thành thực tế.
+
+Trang chủ có dải "Thực hiện x% / KH y%", bấm mở biểu đồ đường S; "Xem toàn bộ lịch" có trạng thái và nút
+"Cập nhật thực tế" từng mốc; sơ đồ đường găng vẽ thêm thanh thực tế (xanh lá đúng hạn, cam chậm, đỏ quá hạn).
+Kiểm tra: `npx tsx scripts/verify/overhaul-milestone-actual.ts` (API thật, tài khoản/mốc tạm, dọn ở finally) và
+`npm run verify:ui -- --preset=scl-s2-thuc-te` (số thực tế mẫu bằng response giả lập, không ghi DB).
 
 Nền trang chủ có minh hoạ SVG chuyển động theo nội dung mốc hôm nay (tách lưới,
 cẩu rotor, tuabin, áp lực, Diesel, nước tuần hoàn, đốt lò, thiết bị điện). Có nhiều
@@ -64,7 +84,7 @@ Nút “Xem sơ đồ” cạnh “Xem toàn bộ lịch” trên trang chủ m�
 thanh khoảng ngày phía dưới. Phóng to để cuộn, đọc rõ và bấm mở chi tiết; tải PNG
 độ phân giải gấp đôi để chia sẻ. Sửa lịch sẽ cập nhật cả hình và phần nhắc mốc.
 Sơ đồ giữ ngày chính xác, bố trí lại ô chữ để tránh đè nhau; không suy diễn quan hệ
-phụ thuộc hoặc kết quả hoàn thành. Kiểm tra tải ảnh và tương tác bằng
+phụ thuộc; lớp thực tế lấy từ số đã cập nhật. Kiểm tra tải ảnh và tương tác bằng
 `node scripts/verify/overhaul-diagram.mjs` sau `npm run verify:ui-session`.
 
 Việc build, triển khai, áp SQL hoặc nạp dữ liệu production là bước riêng cần được yêu cầu.

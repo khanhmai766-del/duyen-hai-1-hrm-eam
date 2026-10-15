@@ -6,6 +6,10 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { milestoneDateLabel, type OverhaulMilestone } from "@/lib/overhaul-milestones";
+import { milestoneStatus, type MilestoneTone } from "@/lib/overhaul-milestone-progress";
+
+/** Màu lớp thực tế trên sơ đồ theo trạng thái (xanh đúng/vượt · cam chậm · đỏ quá hạn). */
+const ACTUAL_COLOR: Record<MilestoneTone, string> = { good: "#16a34a", warn: "#d97706", bad: "#dc2626", idle: "#94a3b8" };
 
 const DAY = 86_400_000;
 const CELL = 48;
@@ -42,7 +46,7 @@ function layout(items: OverhaulMilestone[]) {
     group[lane] = boundEnd;
     return { item, range, start, end, left, lane, text: lines(item.title) };
   });
-  const row = Math.max(ROW, ...nodes.map((node) => node.text.length * 17 + 42));
+  const row = Math.max(ROW, ...nodes.map((node) => node.text.length * 17 + 56)); // +14: chừa chỗ thanh thực tế dưới thanh kế hoạch
   const axis = 110 + lanes[0].length * row;
   const height = axis + 98 + lanes[1].length * row + 60;
   return { nodes, first, days, width, height, axis, row, x };
@@ -93,7 +97,7 @@ export function OverhaulCriticalPath({ items, today, onSelect, open, onOpenChang
       <rect width={chart.width} height={chart.height} fill="#ffffff" />
       <rect width={chart.width} height="82" fill="#eaf3d9" />
       <text x={chart.width / 2} y="33" textAnchor="middle" fontSize="25" fontWeight="700" fill="#23421d">ĐƯỜNG GĂNG TIẾN ĐỘ ĐẠI TU S2-DH1</text>
-      <text x={chart.width / 2} y="61" textAnchor="middle" fontSize="17" fill="#46623f">{milestoneDateLabel(new Date(chart.first).toISOString().slice(0, 10))} – {milestoneDateLabel(new Date(chart.first + (chart.days - 1) * DAY).toISOString().slice(0, 10))} · KẾ HOẠCH</text>
+      <text x={chart.width / 2} y="61" textAnchor="middle" fontSize="17" fill="#46623f">{milestoneDateLabel(new Date(chart.first).toISOString().slice(0, 10))} – {milestoneDateLabel(new Date(chart.first + (chart.days - 1) * DAY).toISOString().slice(0, 10))} · KẾ HOẠCH & THỰC TẾ</text>
       {Array.from({ length: chart.days }, (_, index) => {
         const date = new Date(chart.first + index * DAY), iso = date.toISOString().slice(0, 10);
         const left = PAD + index * CELL;
@@ -112,27 +116,36 @@ export function OverhaulCriticalPath({ items, today, onSelect, open, onOpenChang
       {chart.nodes.map((node) => {
         const y = node.range ? chart.axis + 110 + node.lane * chart.row : chart.axis - (node.lane + 1) * chart.row;
         const boxHeight = node.text.length * 17 + 38;
+        const status = milestoneStatus(node.item, today), color = ACTUAL_COLOR[status.tone];
+        // Thanh thực tế: từ ngày bắt đầu thực tế tới ngày hoàn thành (hoặc tới hôm nay nếu đang làm).
+        const actualFrom = node.item.actualStart ?? (node.item.actualEnd && !node.range ? node.item.actualEnd : null);
+        const actualTo = node.item.actualEnd ?? (actualFrom && today >= actualFrom ? today : null);
         return <g key={node.item.id} data-milestone-id={node.item.id} role={interactive ? "button" : undefined} tabIndex={interactive ? 0 : undefined} aria-label={interactive ? `Xem mốc ${node.item.title}` : undefined} style={{ cursor: interactive ? "pointer" : undefined }} onClick={interactive ? () => { changeOpen(false); onSelect(node.item.id); } : undefined} onKeyDown={interactive ? (event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); changeOpen(false); onSelect(node.item.id); } } : undefined}>
           <title>{node.item.title} · {milestoneDateLabel(node.item.startDate)}{node.range ? ` – ${milestoneDateLabel(node.item.endDate!)}` : ""}</title>
           {node.range ? <>
             <line x1={node.start} x2={node.end} y1={y + boxHeight + 9} y2={y + boxHeight + 9} stroke="#3b82a0" strokeWidth="5" />
             {[node.start, node.end].map((x, i) => <line key={i} x1={x} x2={x} y1={y + boxHeight + 2} y2={y + boxHeight + 16} stroke="#3b82a0" strokeWidth="3" />)}
+            {actualFrom && actualTo && <g pointerEvents="none">
+              <line x1={chart.x(actualFrom)} x2={chart.x(actualTo)} y1={y + boxHeight + 23} y2={y + boxHeight + 23} stroke={color} strokeWidth="5" strokeLinecap="round" />
+              <text x={chart.x(actualTo) + 8} y={y + boxHeight + 27} fontSize="12" fontWeight="700" fill={color}>{node.item.actualEnd ? "Xong" : `${Math.round(status.actual * 100)}%`}</text>
+            </g>}
           </> : <>
             <path d={`M ${node.left + BOX / 2} ${y + boxHeight} L ${node.start} ${chart.axis - 10}`} fill="none" stroke="#d65a4a" strokeWidth="1.6" />
             <path d={`M ${node.start - 5} ${chart.axis - 10} L ${node.start} ${chart.axis - 2} L ${node.start + 5} ${chart.axis - 10}`} fill="#d65a4a" />
           </>}
           <rect x={node.left} y={y} width={BOX} height={boxHeight} rx="6" fill={node.range ? "#edf6fa" : "#fff7f3"} stroke={node.range ? "#65a3bc" : "#dc7660"} strokeWidth="1.5" />
           <text x={node.left + BOX / 2} y={y + 21} textAnchor="middle" fontSize="14" fontWeight="700" fill="#193b52">{node.text.map((line, i) => <tspan key={i} x={node.left + BOX / 2} dy={i ? 17 : 0}>{line}</tspan>)}</text>
+          {status.tone !== "idle" && <g pointerEvents="none"><circle cx={node.left + BOX - 11} cy={y + 11} r="8" fill={color} /><text x={node.left + BOX - 11} y={y + 15} textAnchor="middle" fontSize="11" fontWeight="700" fill="#fff">{node.item.actualEnd ? "✓" : "!"}</text></g>}
           <text x={node.left + BOX / 2} y={y + boxHeight - 10} textAnchor="middle" fontSize="12" fill="#64748b">{node.item.startDate.slice(8)}/{node.item.startDate.slice(5, 7)}{node.range ? ` – ${node.item.endDate!.slice(8)}/${node.item.endDate!.slice(5, 7)}` : ""}</text>
         </g>;
       })}
       {stamp(today) >= chart.first && stamp(today) <= chart.first + (chart.days - 1) * DAY && <g pointerEvents="none"><line x1={chart.x(today)} x2={chart.x(today)} y1="82" y2={chart.height - 35} stroke="#d97706" strokeDasharray="7 5" strokeWidth="2" /><text x={chart.x(today) + 6} y="101" fontSize="14" fontWeight="700" fill="#b45309">Hôm nay</text></g>}
-      <text x="20" y={chart.height - 16} fontSize="14" fill="#64748b">Ô đỏ: mốc theo ngày · Thanh xanh: khoảng công việc theo kế hoạch · Không thể hiện kết quả thực hiện</text>
+      <text x="20" y={chart.height - 16} fontSize="14" fill="#64748b">Ô đỏ: mốc theo ngày · Thanh xanh dương: kế hoạch · Thanh dưới: thực tế (xanh lá đúng hạn, cam chậm, đỏ quá hạn) · ✓ đã xong</text>
     </svg>;
   }
   return <Dialog open={open} onOpenChange={changeOpen}><DialogContent className="flex h-[calc(100dvh-1rem)] max-h-none w-[calc(100vw-1rem)] max-w-[1680px] flex-col gap-3 overflow-hidden p-3 sm:h-[94dvh] sm:w-[92vw] sm:p-4">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-      <DialogHeader className="min-w-0 pr-8 lg:pr-0"><DialogTitle>Đường găng tiến độ đại tu S2-DH1</DialogTitle><DialogDescription>Kéo ngang và dọc để đọc toàn bộ sơ đồ. Các ngày thể hiện kế hoạch.</DialogDescription></DialogHeader>
+      <DialogHeader className="min-w-0 pr-8 lg:pr-0"><DialogTitle>Đường găng tiến độ đại tu S2-DH1</DialogTitle><DialogDescription>Kéo ngang và dọc để đọc toàn bộ sơ đồ. Thanh xanh dương là kế hoạch, thanh dưới là thực tế đã cập nhật.</DialogDescription></DialogHeader>
       <div className="flex shrink-0 flex-wrap items-center gap-2 lg:justify-end lg:pr-8"><Button variant="outline" size="icon" className="h-10 w-10" aria-label="Thu nhỏ sơ đồ" disabled={zoom <= 0.5} onClick={() => setZoom(Math.max(0.5, zoom - 0.25))}><Minus className="h-4 w-4" /></Button><span className="w-12 text-center text-sm tabular-nums">{Math.round(zoom * 100)}%</span><Button variant="outline" size="icon" className="h-10 w-10" aria-label="Phóng lớn sơ đồ" disabled={zoom >= 2} onClick={() => setZoom(Math.min(2, zoom + 0.25))}><Plus className="h-4 w-4" /></Button><Button variant="outline" className="h-10" onClick={() => setZoom(0.5)}>Xem tổng thể</Button><Button variant="outline" className="h-10 gap-2" disabled={exporting} onClick={download}><Download className="h-4 w-4" />{exporting ? "Đang tạo ảnh…" : "Tải ảnh PNG"}</Button></div>
       </div>
       <div ref={scrollRef} className="min-h-0 flex-1 overflow-auto rounded-lg border bg-white" data-critical-path-scroll><div style={{ width: chart.width * zoom }}>{graphic(svgRef, true)}</div></div>

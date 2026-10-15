@@ -1352,9 +1352,31 @@ model OverhaulMilestone {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   deletedAt   DateTime?
+  /// Thực tế so với đường găng (15/10/2026). SQL: prisma/manual/add-overhaul-milestone-actual.sql
+  actualStart       DateTime? @db.Date
+  actualEnd         DateTime? @db.Date
+  actualPercent     Int?
+  actualNote        String?
+  actualUpdatedById String?
+  actualUpdatedAt   DateTime?
 
   @@unique([campaign, sourceKey])
   @@index([campaign, startDate])
+}
+
+/// Nhật ký mỗi lần cập nhật thực tế một mốc SCL — dựng đường S thực tế theo ngày, biết ai ghi gì.
+model OverhaulMilestoneProgress {
+  id          String    @id @default(cuid())
+  milestoneId String
+  reportDate  DateTime  @db.Date
+  actualStart DateTime? @db.Date
+  actualEnd   DateTime? @db.Date
+  percent     Int
+  note        String?
+  createdById String?
+  createdAt   DateTime  @default(now())
+
+  @@index([milestoneId, reportDate])
 }
 
 // Cấu hình ma trận phân quyền (RBAC) do ADMIN chỉnh trong /admin/roles. Bảng được

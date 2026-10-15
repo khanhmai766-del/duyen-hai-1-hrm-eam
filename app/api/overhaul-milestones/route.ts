@@ -4,6 +4,7 @@ import { audit, fail, handle, ok, requireRole, requireUser } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
 import { buildMilestoneSchedule, OVERHAUL_CAMPAIGN, parseMilestoneInput, type MilestoneInput } from "@/lib/overhaul-milestones";
+import { ACTUAL_WRITERS } from "@/lib/overhaul-milestone-progress";
 
 export const dynamic = "force-dynamic";
 
@@ -18,18 +19,32 @@ async function manager() {
   return user;
 }
 
+const day = (value: Date | null) => value?.toISOString().slice(0, 10) ?? null;
+
 export async function GET() {
   return handle(async () => {
-    await requireUser();
+    const user = await requireUser();
     const rows = await prisma.overhaulMilestone.findMany({
       where: { campaign: OVERHAUL_CAMPAIGN, deletedAt: null },
       orderBy: [{ startDate: "asc" }, { sortOrder: "asc" }, { id: "asc" }],
     });
-    const items = rows.map((row) => ({
-      ...row, startDate: row.startDate.toISOString().slice(0, 10), endDate: row.endDate?.toISOString().slice(0, 10) ?? null,
+    const logs = rows.length ? await prisma.overhaulMilestoneProgress.findMany({
+      where: { milestoneId: { in: rows.map((row) => row.id) } }, orderBy: [{ reportDate: "asc" }, { createdAt: "asc" }],
+    }) : [];
+    const userIds = [...new Set([...rows.map((row) => row.actualUpdatedById), ...logs.map((log) => log.createdById)].filter((id): id is string => Boolean(id)))];
+    const names = new Map((userIds.length ? await prisma.user.findMany({ where: { id: { in: userIds } }, select: { id: true, name: true } }) : []).map((u) => [u.id, u.name]));
+    const items = rows.map(({ actualUpdatedById, ...row }) => ({
+      ...row, startDate: day(row.startDate)!, endDate: day(row.endDate),
       createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString(),
+      actualStart: day(row.actualStart), actualEnd: day(row.actualEnd), actualUpdatedAt: row.actualUpdatedAt?.toISOString() ?? null,
+      actualUpdatedByName: actualUpdatedById ? names.get(actualUpdatedById) ?? null : null,
     }));
-    return ok(buildMilestoneSchedule(items));
+    return ok({
+      ...buildMilestoneSchedule(items),
+      logs: logs.map((log) => ({ id: log.id, milestoneId: log.milestoneId, reportDate: day(log.reportDate)!, actualStart: day(log.actualStart), actualEnd: day(log.actualEnd),
+        percent: log.percent, note: log.note, createdByName: log.createdById ? names.get(log.createdById) ?? null : null, createdAt: log.createdAt.toISOString() })),
+      canUpdateActual: (ACTUAL_WRITERS as readonly string[]).includes(user.role),
+    });
   });
 }
 

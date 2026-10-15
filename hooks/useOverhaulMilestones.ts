@@ -28,3 +28,13 @@ export function useDeleteOverhaulMilestone() {
     onSuccess: () => client.invalidateQueries({ queryKey: ["overhaul-milestones"] }),
   });
 }
+
+/** Cập nhật thực tế một mốc (ngày bắt đầu / hoàn thành, %) — Quản trị, Quản lý, Kỹ thuật viên. */
+export function useUpdateMilestoneActual() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { id: string; actualStart: string | null; actualEnd: string | null; percent: number; note: string | null; reportDate: string }) =>
+      apiMutate("/api/overhaul-milestones/actual", "PUT", body),
+    onSuccess: () => client.invalidateQueries({ queryKey: ["overhaul-milestones"] }),
+  });
+}

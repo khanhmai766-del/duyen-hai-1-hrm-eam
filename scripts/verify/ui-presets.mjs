@@ -156,6 +156,53 @@ function milestonePreset(day) {
 }
 
 /**
+ * Mốc SCL S2 có số THỰC TẾ mẫu (15/10/2026): ngày giả lập `day`, số thực tế gán theo sourceKey ngay trong response giả —
+ * KHÔNG ghi DB. Trang chủ (dải tiến độ), biểu đồ đường S, form cập nhật thực tế và sơ đồ đường găng có lớp thực tế.
+ */
+function milestoneActualPreset(day) {
+  const base = milestonePreset(day);
+  const ACTUAL = {
+    "tach-luoi": { actualStart: "2026-10-06", actualEnd: "2026-10-06", actualPercent: 100 },
+    "lam-mat-lo": { actualStart: "2026-10-06", actualEnd: "2026-10-11", actualPercent: 100 },
+    "sua-ap-luc-lo": { actualStart: "2026-10-07", actualEnd: "2026-10-07", actualPercent: 100 },
+    "thao-ggh": { actualStart: "2026-10-08", actualEnd: null, actualPercent: 70 },
+    "cat-dien-mba": { actualStart: "2026-10-09", actualEnd: "2026-10-09", actualPercent: 100 },
+    "scbd-mba": { actualStart: "2026-10-11", actualEnd: null, actualPercent: 30 },
+    "ngung-tro-truc": { actualStart: "2026-10-15", actualEnd: "2026-10-15", actualPercent: 100 },
+    "thao-tuabin-may-phat": { actualStart: "2026-10-17", actualEnd: null, actualPercent: 25 },
+  };
+  return {
+    ...base,
+    description: `Mốc SCL S2 ngày ${day} có số thực tế mẫu — response giả lập, không ghi DB`,
+    async prepare(ctx) {
+      const { schedule } = await base.prepare(ctx);
+      const items = schedule.items.map((item) => ({ ...item, ...(ACTUAL[item.sourceKey.split(":")[1]] ?? {}), actualUpdatedAt: ACTUAL[item.sourceKey.split(":")[1]] ? `${day}T02:00:00Z` : null, actualUpdatedByName: "Người kiểm thử" }));
+      const logs = items.filter((item) => item.actualStart).flatMap((item) => {
+        const steps = item.actualEnd ? [[item.actualEnd, 100]] : [[item.actualStart, Math.round(item.actualPercent / 2)], [day, item.actualPercent]];
+        return steps.map(([reportDate, percent], i) => ({ id: `${item.id}:${i}`, milestoneId: item.id, reportDate, actualStart: item.actualStart, actualEnd: percent === 100 ? item.actualEnd : null,
+          percent, note: i ? "Đang chờ vật tư" : null, createdByName: "Người kiểm thử", createdAt: `${reportDate}T03:00:00Z` }));
+      });
+      const data = { ...buildMilestoneSchedule(items, new Date(`${day}T08:00:00+07:00`)), logs, canUpdateActual: true };
+      return { schedule: data, focusedId: items.find((item) => item.sourceKey.endsWith("thao-tuabin-may-phat"))?.id ?? items[0].id };
+    },
+    routes: () => ["/", "/?milestoneUi=chart", "/?milestoneUi=actual", "/?milestoneUi=diagram"],
+    async interact(page, route) {
+      if (route.endsWith("milestoneUi=chart")) {
+        await page.getByRole("button", { name: /^Tiến độ thực hiện/ }).click();
+        await page.waitForTimeout(300);
+      } else if (route.endsWith("milestoneUi=actual")) {
+        await page.getByRole("button", { name: "Xem toàn bộ lịch" }).click();
+        await page.getByRole("button", { name: "Cập nhật thực tế" }).nth(5).click();
+        await page.waitForTimeout(300);
+      } else if (route.endsWith("milestoneUi=diagram")) {
+        await page.getByRole("button", { name: "Xem sơ đồ", exact: true }).click();
+        await page.waitForTimeout(350);
+      }
+    },
+  };
+}
+
+/**
  * Video camera giả (.y4m, 1080×1920 dọc như điện thoại) cho Chromium: thẻ trắng có mã QR trên nền có vân, mờ nhẹ +
  * nhiễu — mức bộ giải mã JS cũ không đọc được mà ZXing-C++ + lượt phóng to đọc được (đo 13/10/2026). Mã thẻ không có
  * trong danh bạ nên hộp quét chỉ tra (GET) rồi báo "chưa có", không ghi gì vào DB.
@@ -621,6 +668,7 @@ export const PRESETS = {
 
   "scl-s2-so-do": { ...milestonePreset("2026-11-21"), routes: () => ["/", "/?milestoneUi=diagram"] },
   "scl-s2": milestonePreset("2026-11-21"),
+  "scl-s2-thuc-te": milestoneActualPreset("2026-10-23"),
   "scl-s2-ngay-dau": milestonePreset("2026-10-06"),
   "scl-s2-ngay-cuoi": milestonePreset("2026-12-03"),
   "scl-s2-het-lich": milestonePreset("2026-12-04"),
@@ -1021,6 +1069,28 @@ export const PRESETS = {
         if (!permit) permit = (await (await context.request.get(`${base}/api/work-permits/${permitId}`)).json()).data;
         await route.fulfill({ json: { data: liveBoardRows(permit, now), meta: { canExecute: true }, error: null } });
       });
+    },
+  },
+  "pct-chon-nhan-vien-tra-cuu": {
+    description: "Hộp chọn nhân viên chỉ tra cứu và chọn hồ sơ có sẵn, kể cả khi có quyền quản lý — giả lập, không ghi DB",
+    prepare: (ctx) => PRESETS["pct-lam-viec"].prepare(ctx),
+    routes: ({ permitId }) => [`/work-permits/${permitId}/lam-viec`],
+    async mock(context, ctx) {
+      await PRESETS["pct-lam-viec"].mock(context, ctx);
+      await context.route("**/api/work-permits/people?**", route => route.fulfill({ json: {
+        data: [{ id: "ui-existing-worker", code: "NPS/260", name: "Mai Trung Thành", company: "Công ty Cổ phần Sửa chữa Nhiệt điện Miền Bắc", isActive: true, canCommand: false, version: 1 }],
+        meta: { total: 1, pageSize: 25, canWrite: true }, error: null,
+      } }));
+    },
+    async interact(page) {
+      await page.getByRole("button", { name: "Chọn từ danh sách", exact: true }).first().click();
+      const dialog = page.getByRole("dialog");
+      await dialog.getByText("Mai Trung Thành", { exact: true }).waitFor();
+      assert.equal(await dialog.getByRole("button", { name: "Thêm người", exact: true }).count(), 0);
+      assert.equal(await dialog.getByRole("button", { name: /Sửa hồ sơ|Xóa hồ sơ/ }).count(), 0);
+      await dialog.getByRole("textbox", { name: "Tìm nhân sự nhà thầu" }).fill("Mai Trung");
+      await dialog.getByRole("checkbox", { name: "Chọn Mai Trung Thành · NPS/260" }).check();
+      await dialog.getByRole("button", { name: "Thêm 1 người đã chọn", exact: true }).waitFor();
     },
   },
   "pct-dai-tu-vao-tu-lan-truoc": {
