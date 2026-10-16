@@ -1,5 +1,6 @@
 "use client";
 
+import { ContractorPeopleSearch } from "@/components/work-permits/contractor-people-search";
 import { PersonViolations, RecordPersonViolation } from "@/components/work-permits/person-violations";
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
 import Link from "next/link";
@@ -99,6 +100,7 @@ export function PermitCompanyDirectory({ scope }: { scope: PermitContractorScope
   // Nút trong dòng không được làm bung/đóng dòng.
   const act = (event: React.MouseEvent, run: () => void) => { event.stopPropagation(); run(); };
   return <section className="space-y-4">
+    <div className="flex justify-end"><ContractorPeopleSearch /></div>
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div><h2 className="flex items-center gap-2 text-base font-semibold"><Users size={18} />Đơn vị nhà thầu · {scopeLabel}</h2><p className="mt-0.5 text-xs text-muted-foreground">Thêm đơn vị trước, rồi thêm nhân sự và CHTT ngay trên dòng của đơn vị đó. Bấm một dòng để xem danh sách người.</p></div>
       {canWrite && <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto"><Button type="button" size="sm" variant="outline" className="h-10 text-xs sm:h-9" title="Lấy họ tên, số thẻ, hạn thẻ, huấn luyện và ảnh từ bảng quản lý thẻ ra vào cổng" onClick={() => setSyncing(true)}><RefreshCw /><span className="sm:hidden">Đồng bộ Sheets</span><span className="hidden sm:inline">Đồng bộ từ Google Sheets</span></Button><Button type="button" size="sm" className="h-10 text-xs sm:h-9" onClick={() => setCompanyForm({ mode: "create" })}><Plus />Thêm đơn vị</Button></div>}

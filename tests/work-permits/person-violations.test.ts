@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { prisma } from "../../lib/prisma";
-import { recordPermitPersonViolation, requireViolationSessionMember } from "../../lib/server/work-permit-person-violations";
+import { changePermitPersonViolation, recordPermitPersonViolation, requireViolationSessionMember } from "../../lib/server/work-permit-person-violations";
 
 function fixture(person: { version: number; violations: readonly unknown[] } | null) {
   const calls: string[] = [];
@@ -17,6 +17,54 @@ function fixture(person: { version: number; violations: readonly unknown[] } | n
   return { db, calls, update: () => update };
 }
 const user = { id: "recorder", name: "Người ghi nhận" };
+const admin = { role: "ADMIN" };
+
+test("Chỉ Admin được sửa/xóa, từ chối trước khi đọc DB", async () => {
+  for (const role of ["MANAGER", "SUPERVISOR", "TECHNICIAN", "VIEWER"]) {
+    for (const action of ["edit", "delete"] as const) {
+      const state = fixture({ version: 1, violations: [] });
+      await assert.rejects(changePermitPersonViolation("worker", { violationId: "old", version: 1, description: "Lỗi mới" }, { role }, action, state.db), (e: unknown) => e instanceof Response && e.status === 403);
+      assert.deepEqual(state.calls, []);
+    }
+  }
+});
+
+test("Sửa đúng lần vi phạm, giữ người/ngày ghi nhận và liên kết PCT", async () => {
+  const old = { id: "old", description: "Lỗi cũ", recordedById: "author", recordedAt: "2026-10-16", permitId: "pct", sessionId: "session", permitNumber: "1/2026" };
+  const other = { id: "other", description: "Lỗi khác" };
+  const state = fixture({ version: 2, violations: [old, other] });
+  await changePermitPersonViolation("worker", { violationId: "old", version: 2, description: "  Nội dung đã sửa  ", recordedById: "fake", permitId: "fake" }, admin, "edit", state.db);
+  assert.deepEqual(state.calls, ["lock", "read", "write"]);
+  assert.deepEqual(state.update()!.data.violations, [{ ...old, description: "Nội dung đã sửa" }, other]);
+  assert.deepEqual(state.update()!.data.version, { increment: 1 });
+});
+
+test("Xóa đúng lần và cho phép xóa lần cuối về danh sách trống", async () => {
+  const old = { id: "old", description: "Lỗi cũ" }, other = { id: "other", description: "Lỗi khác" };
+  for (const history of [[old, other], [old]]) {
+    const state = fixture({ version: 2, violations: history });
+    await changePermitPersonViolation("worker", { violationId: "old", version: 2 }, admin, "delete", state.db);
+    assert.deepEqual(state.update()!.data.violations, history.filter(v => v.id !== "old"));
+  }
+});
+
+test("Sửa/xóa không ghi đè hồ sơ cũ và không xử lý lần vi phạm của người khác", async () => {
+  for (const action of ["edit", "delete"] as const) {
+    for (const [person, status] of [[{ version: 3, violations: [{ id: "old" }] }, 409], [{ version: 2, violations: [{ id: "other" }] }, 404], [null, 404]] as const) {
+      const state = fixture(person);
+      await assert.rejects(changePermitPersonViolation("worker", { violationId: "old", version: 2, description: "Lỗi mới" }, admin, action, state.db), (e: unknown) => e instanceof Response && e.status === status);
+      assert.equal(state.update(), undefined);
+    }
+  }
+});
+
+test("Chặn nội dung sửa không hợp lệ và mã lần vi phạm thiếu", async () => {
+  for (const body of [{ violationId: "" }, { violationId: null }, { violationId: "old", description: " " }, { violationId: "old", description: "x".repeat(2001) }]) {
+    const state = fixture({ version: 1, violations: [] });
+    await assert.rejects(changePermitPersonViolation("worker", body, admin, "edit", state.db), (e: unknown) => e instanceof Response && e.status === 400);
+    assert.deepEqual(state.calls, []);
+  }
+});
 
 test("Ghi thêm một lỗi, giữ lịch sử và người ghi nhận; khóa trước khi đọc", async () => {
   const previous = { id: "old", description: "Không đội mũ bảo hộ" };

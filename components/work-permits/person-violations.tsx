@@ -1,14 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
+import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 import { Flag } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
-import { usePermitViolationPerson, useRecordPermitPersonViolation, type PermitViolationContext } from "@/hooks/useWorkPermits";
-import type { PermitMember, PermitPerson } from "@/lib/work-permits";
+import { useChangePermitPersonViolation, usePermitViolationPerson, useRecordPermitPersonViolation, type PermitViolationContext, type PermitViolationPerson } from "@/hooks/useWorkPermits";
+import { useAdminMode } from "@/hooks/useAdminMode";
+import type { PermitMember, PermitPerson, PermitPersonViolation } from "@/lib/work-permits";
 
-export function PersonViolations({ person, compact = false }: { person: Pick<PermitPerson, "violations">; compact?: boolean }) {
+export function PersonViolations({ person, compact = false, actions }: { person: Pick<PermitPerson, "violations">; compact?: boolean; actions?: (violation: PermitPersonViolation, index: number) => ReactNode }) {
   const violations = person.violations ?? [];
   if (!violations.length) return null;
   return <div className="mt-1 min-w-0 rounded-md border border-red-200 bg-red-50 px-2 py-1.5 text-xs text-red-900">
@@ -16,8 +18,33 @@ export function PersonViolations({ person, compact = false }: { person: Pick<Per
     <ul className="mt-1 space-y-1">{violations.map((violation, index) => <li key={violation.id} className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
       <span className="font-semibold">{index + 1}.</span> {violation.description}
       {!compact && <span className="block text-[11px] text-red-800">{violation.permitNumber && <span className="font-medium">PCT {violation.permitNumber} · </span>}{new Date(violation.recordedAt).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })} · {violation.recordedByName}</span>}
+      {actions?.(violation, index)}
     </li>)}</ul>
   </div>;
+}
+
+function ViolationHistory({ person, busy, onReload }: { person: PermitViolationPerson; busy: boolean; onReload: () => void }) {
+  const { data: session } = useSession();
+  const [adminMode] = useAdminMode();
+  const isAdmin = session?.user?.role === "ADMIN" && adminMode;
+  const change = useChangePermitPersonViolation();
+  const [selected, setSelected] = useState<{ id: string; action: "edit" | "delete"; description: string } | null>(null);
+  async function apply() {
+    if (!selected || busy || change.isPending) return;
+    try {
+      await change.mutateAsync({ id: person.id, violationId: selected.id, action: selected.action, version: person.version, description: selected.description });
+      toast.success(selected.action === "edit" ? "Đã sửa lỗi vi phạm" : "Đã xóa lần vi phạm");
+      setSelected(null);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Không thể cập nhật vi phạm");
+      setSelected(null);
+      onReload();
+    }
+  }
+  return <PersonViolations person={person} actions={isAdmin ? (violation, index) => selected?.id === violation.id ? <div className="mt-2 space-y-2 rounded-md border border-red-200 bg-background p-2 text-foreground">
+    {selected.action === "edit" ? <label className="block space-y-1"><span className="font-medium">Sửa lỗi vi phạm lần {index + 1}</span><textarea aria-label={`Sửa lỗi vi phạm lần ${index + 1}`} rows={3} maxLength={2000} className="w-full rounded-lg border border-input bg-background p-2 text-base sm:text-sm" value={selected.description} disabled={change.isPending || busy} onChange={event => setSelected({ ...selected, description: event.target.value })} /></label> : <p>Xóa lần vi phạm này của {person.name}? Số lần vi phạm sẽ giảm sau khi xóa.</p>}
+    <div className="flex flex-wrap gap-2"><Button type="button" size="sm" variant={selected.action === "delete" ? "destructive" : "default"} className="h-10" disabled={change.isPending || busy || (selected.action === "edit" && !selected.description.trim())} onClick={() => void apply()}>{change.isPending ? "Đang lưu…" : selected.action === "edit" ? "Lưu chỉnh sửa" : "Xác nhận xóa"}</Button><Button type="button" size="sm" variant="outline" className="h-10" disabled={change.isPending} onClick={() => setSelected(null)}>Hủy</Button></div>
+  </div> : <div className="mt-1 flex gap-2"><Button type="button" size="sm" variant="outline" className="h-10 text-xs" aria-label={`Sửa vi phạm lần ${index + 1}`} disabled={busy || change.isPending} onClick={() => setSelected({ id: violation.id, action: "edit", description: violation.description })}>Sửa</Button><Button type="button" size="sm" variant="outline" className="h-10 text-xs text-red-700" aria-label={`Xóa vi phạm lần ${index + 1}`} disabled={busy || change.isPending} onClick={() => setSelected({ id: violation.id, action: "delete", description: violation.description })}>Xóa</Button></div> : undefined} />;
 }
 
 export function RecordPersonViolation(props: { person: PermitPerson; member?: never; context?: never } | { member: PermitMember; context: PermitViolationContext; violations?: PermitPerson["violations"]; person?: never }) {
@@ -38,7 +65,7 @@ export function RecordPersonViolation(props: { person: PermitPerson; member?: ne
     {open && <Dialog open onOpenChange={value => { if (!value && !save.isPending) setOpen(false); }}><DialogContent>
       <DialogTitle>Ghi nhận vi phạm</DialogTitle>
       <DialogDescription>{snapshot.name} · {snapshot.code} · {snapshot.company}{context && <span className="mt-1 block font-medium">PCT {context.permitNumber}</span>}</DialogDescription>
-      {query.isPending ? <p role="status" className="text-sm text-muted-foreground">Đang tải hồ sơ nhân viên…</p> : query.isError ? <div role="alert" className="space-y-2 text-sm text-red-700"><p>{query.error.message}</p><Button type="button" variant="outline" size="sm" onClick={() => void query.refetch()}>Tải lại hồ sơ</Button></div> : person && <PersonViolations person={person} />}
+      {query.isPending ? <p role="status" className="text-sm text-muted-foreground">Đang tải hồ sơ nhân viên…</p> : query.isError ? <div role="alert" className="space-y-2 text-sm text-red-700"><p>{query.error.message}</p><Button type="button" variant="outline" size="sm" onClick={() => void query.refetch()}>Tải lại hồ sơ</Button></div> : person && <ViolationHistory person={person} busy={query.isFetching || save.isPending} onReload={() => void query.refetch()} />}
       <form className="space-y-4" onSubmit={async event => {
         event.preventDefault(); event.stopPropagation();
         if (!person || query.isError || save.isPending) return;

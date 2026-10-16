@@ -416,6 +416,17 @@ export function useRecordPermitPersonViolation() {
 }
 
 export type PermitViolationContext = { permitId: string; sessionId: string; permitNumber: string };
+export function useChangePermitPersonViolation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, action, ...body }: { id: string; action: "edit" | "delete"; violationId: string; version: number; description?: string }) =>
+      apiMutate<PermitPerson>(`/api/work-permits/people/${encodeURIComponent(id)}/violations`, action === "edit" ? "PATCH" : "DELETE", body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["work-permit-people"] });
+      qc.invalidateQueries({ queryKey: ["work-permit-companies"] });
+    },
+  });
+}
 export type PermitViolationPerson = Pick<PermitPerson, "id" | "name" | "code" | "company" | "version" | "violations">;
 export function usePermitViolationPerson(id: string, enabled: boolean, context?: PermitViolationContext) {
   const query = new URLSearchParams(context ? { permitId: context.permitId, sessionId: context.sessionId } : {});

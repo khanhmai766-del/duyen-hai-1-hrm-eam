@@ -1,3 +1,4 @@
+import { contractorPeopleSearchPreset } from "./presets/contractor-people-search.mjs";
 import { personViolationsPreset } from "./presets/person-violations.mjs";
 import { materialUndoUsagePreset } from "./presets/material-undo-usage.mjs";
 // Kịch bản dựng sẵn cho ui-shots.mjs: tuyến cần chụp + dữ liệu GIẢ LẬP qua page.route.
@@ -243,6 +244,7 @@ async function writeFakeCameraVideo(file, { px = 5, blur = 0.5, noise = 8 } = {}
 }
 
 export const PRESETS = {
+  "tra-cuu-nhan-vien": contractorPeopleSearchPreset,
   "material-undo-usage": materialUndoUsagePreset,
   "quet-the-camera-gia": {
     description: "Hộp quét thẻ PCT đọc mã từ CAMERA GIẢ (video .y4m, mã hơi mờ): phải tải được ZXing-C++ (.wasm) và hiện thẻ vừa quét — chỉ tra, không ghi",
@@ -1696,3 +1698,6 @@ PRESETS["pct-ghi-nhan-vi-pham"] = {
     }
   },
 };
+
+PRESETS["admin-sua-vi-pham"] = personViolationsPreset(true, "edit");
+PRESETS["admin-xoa-vi-pham"] = personViolationsPreset(true, "delete");

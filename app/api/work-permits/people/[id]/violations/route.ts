@@ -1,7 +1,7 @@
-import { audit, fail, ok, requireUser } from "@/lib/api";
+import { audit, fail, ok, requireRole, requireUser } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 import { formatPermitNumber } from "@/lib/work-permits";
-import { recordPermitPersonViolation, requireViolationSessionMember } from "@/lib/server/work-permit-person-violations";
+import { changePermitPersonViolation, recordPermitPersonViolation, requireViolationSessionMember } from "@/lib/server/work-permit-person-violations";
 import { requirePermitExecute, requirePermitIssue } from "@/lib/server/work-permit-permissions";
 import { requirePermitVisible } from "@/lib/server/work-permit-scope";
 import { permitBody, permitHandle } from "@/lib/server/work-permits";
@@ -53,4 +53,24 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
     await audit(user.id, "RECORD_WORK_PERMIT_PERSON_VIOLATION", "WorkPermitPerson", id, `${row.code}: ${row.name}${context ? ` · PCT ${context.permitNumber}` : ""} · ${violation.description}`);
     return ok(row);
   });
+}
+
+async function changeViolation(req: Request, props: { params: Promise<{ id: string }> }, action: "edit" | "delete") {
+  return permitHandle(async () => {
+    const user = await requireUser();
+    requireRole(user, ["ADMIN"]);
+    const { id } = await props.params;
+    const { row, violation, description } = await changePermitPersonViolation(id, await permitBody(req), user, action);
+    await audit(user.id, action === "edit" ? "EDIT_WORK_PERMIT_PERSON_VIOLATION" : "DELETE_WORK_PERMIT_PERSON_VIOLATION", "WorkPermitPerson", id,
+      `${row.code}: ${row.name} · Lần vi phạm ${violation.id} · ${violation.description}${action === "edit" ? ` → ${description}` : ""}`);
+    return ok(row);
+  });
+}
+
+export async function PATCH(req: Request, props: { params: Promise<{ id: string }> }) {
+  return changeViolation(req, props, "edit");
+}
+
+export async function DELETE(req: Request, props: { params: Promise<{ id: string }> }) {
+  return changeViolation(req, props, "delete");
 }

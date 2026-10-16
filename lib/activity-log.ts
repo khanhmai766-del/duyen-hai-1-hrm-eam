@@ -46,6 +46,8 @@ export const ACTION_CONFIG: Record<string, ActionConfig> = Object.fromEntries([
   ["IMPORT_USERS", { category: "SYSTEM", saveToAuditLog: true, label: "Import người dùng" }],
   ["SYNC_OIL_ANALYSIS_FROM_LIMS", { category: "SYSTEM", saveToAuditLog: true, label: "Đồng bộ kết quả phân tích dầu từ LIMS" }],
   ["RECORD_WORK_PERMIT_PERSON_VIOLATION", { category: "USER", saveToAuditLog: true, label: "Ghi nhận vi phạm nhân sự nhà thầu" }],
+  ["EDIT_WORK_PERMIT_PERSON_VIOLATION", { category: "USER", saveToAuditLog: true, label: "Sửa vi phạm nhân sự nhà thầu" }],
+  ["DELETE_WORK_PERMIT_PERSON_VIOLATION", { category: "USER", saveToAuditLog: true, label: "Xóa vi phạm nhân sự nhà thầu" }],
 ]) as Record<string, ActionConfig>;
 
 function inferCategory(action: string): ActivityLogCategory {
