@@ -1659,7 +1659,7 @@ PRESETS["pct-ghi-nhan-vi-pham"] = {
     let person = { id: "ui-p0", code: "UI-100", name: "Trần Văn Bình", company: "Nhà thầu giả lập", version: 17, violations: [
       { id: "old", description: "Không đội mũ bảo hộ", recordedAt: "2026-10-15T08:00:00+07:00", recordedByName: "Người ghi nhận", recordedById: "ui" },
     ] };
-    await context.route(`**/api/work-permits/${ctx.permitId}/people-violations**`, route => route.fulfill({ json: { data: [{ id: person.id, violations: person.violations }], meta: null, error: null } }));
+    await context.route(`**/api/work-permits/${ctx.permitId}/people-violations**`, route => route.fulfill({ json: { data: [{ id: person.id, violations: person.violations }, ...WORKER_NAMES.slice(1).map((_, index) => ({ id: `ui-p${index + 1}`, violations: [] }))], meta: null, error: null } }));
     await context.route("**/api/work-permits/people/*/violations**", async route => {
       const request = route.request(), url = new URL(request.url());
       assert.ok(url.pathname.includes("/ui-p0/violations"));

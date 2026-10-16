@@ -152,7 +152,7 @@ export function SessionAttendance({ permit, session, canExecute, size = "md", au
     <div className="flex shrink-0 justify-end"><Button type="button" variant="outline" className="h-10" onClick={() => setShowPrevious(false)}>Đóng</Button></div>
   </DialogContent></Dialog>;
   const violationButton = (member: PermitMember) => live && canExecute && member.personId
-    ? <RecordPersonViolation member={member} context={{ permitId: permit.id, sessionId: session.id, permitNumber: formatPermitNumber(permit) }} />
+    ? <RecordPersonViolation member={member} violations={violationsById.get(member.personId)?.violations} context={{ permitId: permit.id, sessionId: session.id, permitNumber: formatPermitNumber(permit) }} />
     : null;
   const rows = members.map(({ member, index }) => {
     const inside = attendanceInside(member);

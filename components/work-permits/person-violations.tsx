@@ -20,7 +20,7 @@ export function PersonViolations({ person, compact = false }: { person: Pick<Per
   </div>;
 }
 
-export function RecordPersonViolation(props: { person: PermitPerson; member?: never; context?: never } | { member: PermitMember; context: PermitViolationContext; person?: never }) {
+export function RecordPersonViolation(props: { person: PermitPerson; member?: never; context?: never } | { member: PermitMember; context: PermitViolationContext; violations?: PermitPerson["violations"]; person?: never }) {
   const snapshot = props.person ?? props.member;
   const id = props.person?.id ?? props.member?.personId ?? "";
   const context = props.context;
@@ -29,8 +29,12 @@ export function RecordPersonViolation(props: { person: PermitPerson; member?: ne
   const save = useRecordPermitPersonViolation();
   const query = usePermitViolationPerson(id, open, context);
   const person = query.data?.data;
+  const history = props.person?.violations ?? ("violations" in props ? props.violations : undefined) ?? person?.violations;
+  const status = history === undefined ? "unknown" : history.length ? "violated" : "clean";
+  const tone = status === "violated" ? "text-red-700 hover:bg-red-50 hover:text-red-800" : status === "clean" ? "text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800" : "text-slate-500 hover:bg-slate-50 hover:text-slate-700";
+  const statusLabel = status === "violated" ? `Đã vi phạm ${history?.length ?? 0} lần` : status === "clean" ? "Chưa ghi nhận vi phạm" : "Đang chờ thông tin vi phạm";
   return <>
-    <Button type="button" variant="ghost" size="sm" aria-label="Ghi nhận vi phạm" title={`Ghi nhận vi phạm · ${snapshot.name}`} className="mt-1 h-8 gap-1 px-2 text-[11px] font-medium text-red-700 hover:bg-red-50 hover:text-red-800 md:h-7 [&_svg]:size-3" onClick={() => setOpen(true)}><Flag aria-hidden="true" />Vi phạm</Button>
+    <Button type="button" variant="ghost" size="sm" aria-label="Ghi nhận vi phạm" title={`Ghi nhận vi phạm · ${snapshot.name} · ${statusLabel}`} className={`mt-1 h-8 gap-1 px-2 text-[11px] font-medium md:h-7 [&_svg]:size-3 ${tone}`} onClick={() => setOpen(true)}><Flag aria-hidden="true" />Ghi nhận vi phạm</Button>
     {open && <Dialog open onOpenChange={value => { if (!value && !save.isPending) setOpen(false); }}><DialogContent>
       <DialogTitle>Ghi nhận vi phạm</DialogTitle>
       <DialogDescription>{snapshot.name} · {snapshot.code} · {snapshot.company}{context && <span className="mt-1 block font-medium">PCT {context.permitNumber}</span>}</DialogDescription>
