@@ -5,7 +5,7 @@
 // Tệp .wasm (~1 MB) tự đặt ở public/ — không lấy từ CDN mặc định của gói, mạng nhà máy có thể chặn. Trong lúc tệp
 // đang tải hoặc tải lỗi thì giải mã bằng bản JS (lib/qr-decode.ts) để quét không phải chờ.
 import { prepareZXingModule, readBarcodes, type ReadResult } from "zxing-wasm/reader";
-import { decodeQrRgba, sharpenRgba, type QrBox, type QrDecodeResult } from "./qr-decode";
+import { decodeQrRgba, qrFrameQuality, sharpenRgba, type QrBox, type QrDecodeResult } from "./qr-decode";
 import { ZXING_WASM_PATH } from "./qr-wasm-asset";
 
 export type QrDecoderName = "wasm" | "js";
@@ -48,6 +48,8 @@ self.onmessage = async (event: MessageEvent<DecodeRequest>) => {
   const { id, buffer, width, height, sharpen, forceJs } = event.data;
   const startedAt = performance.now();
   const rgba = new Uint8ClampedArray(buffer);
+  // Giữ bản gốc để đo chất lượng khung đọc lỗi — làm nét sẽ đẩy cả độ lóa lẫn độ nét lên.
+  const original = sharpen ? rgba.slice() : rgba;
   if (sharpen) sharpenRgba(rgba, width, height);
   let decoder: QrDecoderName = "js";
   let result: QrDecodeResult;
@@ -61,6 +63,7 @@ self.onmessage = async (event: MessageEvent<DecodeRequest>) => {
   } else {
     result = decodeQrRgba(rgba, width, height);
   }
+  if (result.partial && result.box) result.quality = qrFrameQuality(original, width, height, result.box);
   const response: DecodeResponse = { id, ...result, decodeMs: performance.now() - startedAt, decoder };
   self.postMessage(response);
 };

@@ -255,7 +255,7 @@ export function PermitCardScanner({ unit, companies, scope, existing, permitId, 
           cameraGuardRef.current.accept(code);
           void handleRef.current(text, "camera");
         }
-      }, { track: stream.getVideoTracks()[0] });
+      }, { track: stream.getVideoTracks()[0], onWorkerRestart: () => { if (!stale()) metrics.workerRestart(); } });
       if (stale()) { controls.stop(); stream.getTracks().forEach(track => track.stop()); return; }
       controlsRef.current = controls;
       const setTorchOn = qrCameraTorch(stream);

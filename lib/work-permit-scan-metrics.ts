@@ -1,9 +1,11 @@
-import type { QrCrop, QrEngine, QrFrame } from "@/lib/qr-camera";
+import type { QrCrop, QrEngine, QrFrame, QrQuality } from "@/lib/qr-camera";
 
 /*
  * Đo thời gian của hộp quét thẻ PCT để tách hai loại chậm người dùng báo:
  *   - "camera lâu mới bắt được mã": waitMs / attempts / struggleMs (thấy hình QR mà chưa đọc được bao lâu);
  *   - "bắt được mã rồi mà chờ lâu": lookupMs + actionMs (mạng + máy chủ) và stallMs (giao diện đứng hình).
+ *   - kẹt vì sao (từ 16/10/2026): số khung thấy mã mà đọc lỗi, cỡ mã lúc mới thấy, độ lóa/tương phản/độ nét trung bình
+ *     của các khung đó (qrFrameQuality ở lib/qr-decode.ts) — theo từng lượt và cả phiên (kể cả phiên không đọc được thẻ nào).
  * Gửi theo lô về /api/work-permits/scan-metrics — máy chủ chỉ ghi một dòng log, không lưu DB.
  */
 
@@ -23,6 +25,14 @@ export type ScanMetricRow = {
   qrPx: number | null;
   /** Mức zoom camera lúc đọc được (Android); null = không chỉnh zoom. */
   zoom: number | null;
+  /** Số khung thấy mã mà đọc lỗi trong khoảng chờ. */
+  partials: number;
+  /** Cạnh dài của mã (điểm ảnh video) ở khung đọc lỗi ĐẦU TIÊN — cầm xa/gần lúc bắt đầu kẹt, khác qrPx lúc đã đọc được. */
+  partialPx: number | null;
+  /** Trung bình chất lượng các khung đọc lỗi trong khoảng chờ. */
+  glare: number | null;
+  contrast: number | null;
+  sharp: number | null;
   lookupMs: number;
   actionMs: number;
   /** Bắt được mã → hiện kết quả. */
@@ -46,12 +56,30 @@ export type ScanMetricSession = {
   openMs: number;
   /** Màn hình "rộng x cao @ tỉ lệ điểm ảnh" — UA iPhone không ghi đời máy, cỡ màn hình giúp phân nhóm. */
   screen: string | null;
+  /** Tổng số khung thấy mã mà đọc lỗi cả phiên — phiên đóng mà không đọc được thẻ nào: > 0 là có đưa thẻ mà kẹt. */
+  partials: number;
+  /** Số lần Worker giải mã treo/lỗi phải dựng lại (lib/qr-camera.ts). */
+  workerRestarts: number;
+  /** Trung bình chất lượng các khung đọc lỗi cả phiên. */
+  glare: number | null;
+  contrast: number | null;
+  sharp: number | null;
 };
 export type ScanMetricsPayload = { session: ScanMetricSession; scans: ScanMetricRow[]; final: boolean };
 
 export const STALL_MS = 250;
 const FLUSH_EVERY = 15;
 const SAMPLE_LIMIT = 600;
+
+/** Trung bình chất lượng các khung đọc lỗi (null = không có khung nào đo được). */
+class QualityAverage {
+  private count = 0; private glare = 0; private contrast = 0; private sharp = 0;
+  add(quality: QrQuality) { this.count++; this.glare += quality.glare; this.contrast += quality.contrast; this.sharp += quality.sharp; }
+  result() {
+    const avg = (total: number) => this.count ? Math.round(total / this.count * 100) / 100 : null;
+    return { glare: avg(this.glare), contrast: this.count ? Math.round(this.contrast / this.count) : null, sharp: avg(this.sharp) };
+  }
+}
 
 export class ScanMetricsCollector {
   private openedAt = performance.now();
@@ -69,6 +97,12 @@ export class ScanMetricsCollector {
   private cycleAttempts = 0;
   private cycleFirstPartial: number | null = null;
   private cycleStall = 0;
+  private cyclePartials = 0;
+  private cyclePartialPx: number | null = null;
+  private cycleQuality = new QualityAverage();
+  private partials = 0;
+  private quality = new QualityAverage();
+  private workerRestarts = 0;
   private lastHit: Pick<QrFrame, "crop" | "box" | "zoom"> | null = null;
   private rows: ScanMetricRow[] = [];
   private sentAnything = false;
@@ -91,8 +125,15 @@ export class ScanMetricsCollector {
     if (this.decodeSamples.length < SAMPLE_LIMIT) this.decodeSamples.push(frame.decodeMs);
     if (frame.captureMs) { this.captureTotal += frame.captureMs; this.captureCount++; }
     if (frame.partial && this.cycleFirstPartial === null) this.cycleFirstPartial = performance.now();
+    if (frame.partial) {
+      this.partials++; this.cyclePartials++;
+      if (this.cyclePartialPx === null && frame.box) this.cyclePartialPx = Math.round(Math.max(frame.box.w, frame.box.h));
+      if (frame.quality) { this.quality.add(frame.quality); this.cycleQuality.add(frame.quality); }
+    }
     if (frame.text) this.lastHit = { crop: frame.crop, box: frame.box, zoom: frame.zoom };
   }
+
+  workerRestart() { this.workerRestarts++; }
 
   stall(ms: number) {
     this.stalls++;
@@ -111,6 +152,9 @@ export class ScanMetricsCollector {
       crop: source === "camera" ? this.lastHit?.crop ?? null : null,
       qrPx: source === "camera" && this.lastHit?.box ? Math.round(Math.max(this.lastHit.box.w, this.lastHit.box.h)) : null,
       zoom: source === "camera" && this.lastHit?.zoom != null ? Math.round(this.lastHit.zoom * 10) / 10 : null,
+      partials: source === "camera" ? this.cyclePartials : 0,
+      partialPx: source === "camera" ? this.cyclePartialPx : null,
+      quality: source === "camera" ? this.cycleQuality.result() : new QualityAverage().result(),
     };
   }
 
@@ -119,6 +163,7 @@ export class ScanMetricsCollector {
     this.rows.push({
       source: row.source, engine: row.source === "camera" ? this.engine : null,
       waitMs: detected.waitMs, attempts: detected.attempts, struggleMs: detected.struggleMs, crop: detected.crop, qrPx: detected.qrPx, zoom: detected.zoom,
+      partials: detected.partials, partialPx: detected.partialPx, ...detected.quality,
       lookupMs: Math.round(row.lookupMs), actionMs: Math.round(row.actionMs), totalMs: Math.round(now - detected.at),
       stallMs: Math.round(this.cycleStall), result: row.result,
     });
@@ -141,6 +186,7 @@ export class ScanMetricsCollector {
         captureAvgMs: avg(this.captureTotal, this.captureCount),
         stalls: this.stalls, maxStallMs: Math.round(this.maxStall), openMs: Math.round(performance.now() - this.openedAt),
         screen: typeof screen === "undefined" ? null : `${screen.width}x${screen.height}@${Math.round((globalThis.devicePixelRatio ?? 1) * 100) / 100}`,
+        partials: this.partials, workerRestarts: this.workerRestarts, ...this.quality.result(),
       },
     });
     this.rows = [];
@@ -149,5 +195,6 @@ export class ScanMetricsCollector {
 
   private startCycle(now: number) {
     this.cycleStart = now; this.cycleAttempts = 0; this.cycleFirstPartial = null; this.cycleStall = 0;
+    this.cyclePartials = 0; this.cyclePartialPx = null; this.cycleQuality = new QualityAverage();
   }
 }

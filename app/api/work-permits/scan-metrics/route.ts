@@ -12,6 +12,10 @@ const MAX_BODY = 32_000;
 
 const ms = (value: unknown) => typeof value === "number" && Number.isFinite(value) ? Math.min(Math.max(Math.round(value), 0), 3_600_000) : null;
 const pick = (value: unknown, allowed: string[]) => typeof value === "string" && allowed.includes(value) ? value : null;
+/** Tỉ lệ độ lóa / độ nét (0–2, hai chữ số lẻ). */
+const ratio = (value: unknown) => typeof value === "number" && Number.isFinite(value) ? Math.min(Math.max(Math.round(value * 100) / 100, 0), 2) : null;
+const level = (value: unknown) => { const v = ms(value); return v === null ? null : Math.min(v, 255); };
+const quality = (row: Record<string, unknown>) => ({ glare: ratio(row.glare), contrast: level(row.contrast), sharp: ratio(row.sharp) });
 const record = (value: unknown) => value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 
 export async function POST(req: Request) {
@@ -28,6 +32,7 @@ export async function POST(req: Request) {
         source: pick(row.source, ["camera", "manual"]), engine: pick(row.engine, ENGINES), result: pick(row.result, RESULTS),
         waitMs: ms(row.waitMs), attempts: ms(row.attempts), struggleMs: ms(row.struggleMs), crop: pick(row.crop, ["full", "wide", "zoom", "focus"]), qrPx: ms(row.qrPx),
         zoom: typeof row.zoom === "number" && Number.isFinite(row.zoom) ? Math.min(Math.max(Math.round(row.zoom * 10) / 10, 0), 100) : null,
+        partials: ms(row.partials), partialPx: ms(row.partialPx), ...quality(row),
         lookupMs: ms(row.lookupMs), actionMs: ms(row.actionMs), totalMs: ms(row.totalMs), stallMs: ms(row.stallMs),
       };
     });
@@ -42,6 +47,7 @@ export async function POST(req: Request) {
         decodeP95Ms: ms(session.decodeP95Ms), captureAvgMs: ms(session.captureAvgMs), stalls: ms(session.stalls),
         maxStallMs: ms(session.maxStallMs), openMs: ms(session.openMs),
         screen: typeof session.screen === "string" && /^\d{2,5}x\d{2,5}@\d{1,2}(\.\d{1,2})?$/.test(session.screen) ? session.screen : null,
+        partials: ms(session.partials), workerRestarts: ms(session.workerRestarts), ...quality(session),
       },
       scans,
     })}`);

@@ -144,7 +144,7 @@ function DeviceScanner() {
         if (!frame.text || resolvingRef.current) return;
         detectedRef.current = metrics.detected("camera");
         void resolveValue(frame.text);
-      }, { track: stream.getVideoTracks()[0] });
+      }, { track: stream.getVideoTracks()[0], onWorkerRestart: () => metrics.workerRestart() });
       const setTorch = qrCameraTorch(stream);
       // Từ đây stopScanner chịu trách nhiệm dừng vòng quét và tắt luồng camera (gắn trên thẻ video).
       stream = null;

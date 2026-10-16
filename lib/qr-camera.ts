@@ -1,4 +1,4 @@
-import { decodeQrRgba, sharpenRgba, type QrBox, type QrDecodeResult } from "@/lib/qr-decode";
+import { decodeQrRgba, sharpenRgba, type QrBox, type QrDecodeResult, type QrQuality } from "@/lib/qr-decode";
 import type { DecodeRequest, DecodeResponse, QrDecoderName } from "@/lib/qr-decode.worker";
 
 /*
@@ -17,7 +17,7 @@ import type { DecodeRequest, DecodeResponse, QrDecoderName } from "@/lib/qr-deco
 
 export type QrEngine = "native" | "wasm" | "worker" | "main";
 export type QrCrop = "full" | "wide" | "zoom" | "focus";
-export type { QrBox };
+export type { QrBox, QrQuality };
 export type QrFrame = {
   text: string | null;
   partial: boolean;
@@ -27,6 +27,8 @@ export type QrFrame = {
   box: QrBox | null;
   /** Mức zoom camera lúc giải mã (null = camera không cho chỉnh zoom). */
   zoom: number | null;
+  /** Độ lóa/độ nét vùng mã ở khung thấy mà đọc lỗi (chỉ ZXing-C++ trong Worker). */
+  quality: QrQuality | null;
   /** Thời gian giải mã một khung (ms). */
   decodeMs: number;
   /** Thời gian chụp khung trên luồng giao diện (drawImage + getImageData). */
@@ -47,6 +49,8 @@ const GAP_MS: Record<QrEngine, number> = { native: 50, wasm: 30, worker: 40, mai
 /** Bắt được mã thì nghỉ ngắn trước lượt kế — đủ để hộp quét xử lý, đỡ tốn pin. */
 const AFTER_HIT_MS = 300;
 const WORKER_TIMEOUT_MS = 4000;
+/** Số lần dựng lại Worker treo/lỗi trong một phiên trước khi đành giải mã trên luồng chính. */
+const MAX_WORKER_RESTARTS = 3;
 
 type NativeCode = { rawValue: string; boundingBox?: DOMRectReadOnly };
 type NativeDetector = { detect: (source: HTMLVideoElement | HTMLCanvasElement) => Promise<NativeCode[]> };
@@ -93,7 +97,7 @@ function cameraZoom(track: MediaStreamTrack | undefined) {
 export async function startQrScanner(
   video: HTMLVideoElement,
   onFrame: (frame: QrFrame, engine: QrEngine) => void,
-  options: { forceEngine?: QrEngine; track?: MediaStreamTrack } = {},
+  options: { forceEngine?: QrEngine; track?: MediaStreamTrack; onWorkerRestart?: () => void } = {},
 ): Promise<QrScannerControls> {
   const force = options.forceEngine;
   let stopped = false;
@@ -110,9 +114,12 @@ export async function startQrScanner(
   if (ctx) { ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high"; }
   const zoom = cameraZoom(options.track);
 
-  // Worker chỉ có một khung đang giải mã tại một thời điểm; lỗi nạp Worker (trình duyệt cũ, lỗi tải tệp) → về luồng chính.
+  // Worker chỉ có một khung đang giải mã tại một thời điểm. Worker treo/lỗi thì DỰNG LẠI (tối đa MAX_WORKER_RESTARTS
+  // lần) — trước đây bỏ hẳn về zxing JS trên luồng chính cho cả phiên: log 16/10/2026 có 8 phiên iPhone như vậy,
+  // chờ 34–172 s mới đọc được thẻ. Chỉ về luồng chính khi trình duyệt không tạo được Worker.
   let pending: ((result: DecodeResponse | null) => void) | null = null;
   let requestId = 0;
+  let workerRestarts = 0;
   const dropWorker = () => {
     worker?.terminate(); worker = null;
     pending?.(null); pending = null;
@@ -121,13 +128,27 @@ export async function startQrScanner(
     worker = next;
     if (!next) return;
     next.onmessage = (event: MessageEvent<DecodeResponse>) => {
-      if (event.data.id !== requestId) return;
+      if (worker !== next || event.data.id !== requestId) return;
       workerDecoder = event.data.decoder;
       pending?.(event.data); pending = null;
     };
-    next.onerror = dropWorker;
+    next.onerror = () => { if (worker === next) restartWorker(); };
+  };
+  const restartWorker = () => {
+    dropWorker();
+    if (stopped || workerRestarts >= MAX_WORKER_RESTARTS) return;
+    workerRestarts++;
+    workerDecoder = "js"; // Worker mới nạp lại .wasm (đã có trong bộ nhớ đệm), trong lúc đó giải mã bằng JS
+    attachWorker(createWorker());
+    options.onWorkerRestart?.();
   };
   attachWorker(worker);
+
+  // Trang ẩn (khoá màn hình, chuyển ứng dụng) thì iOS tạm dừng Worker: không tính là treo, và sau khi hiện lại
+  // chờ đủ WORKER_TIMEOUT_MS nữa mới kết luận.
+  let visibleSince = performance.now();
+  const onVisibility = () => { if (!document.hidden) visibleSince = performance.now(); };
+  document.addEventListener("visibilitychange", onVisibility);
 
   /** Phần video đang hiện trong thẻ <video> (object-cover cắt hai mép) — điểm ảnh video. */
   function viewRect(): QrBox {
@@ -174,8 +195,14 @@ export async function startQrScanner(
         pending = resolve;
         const request: DecodeRequest = { id: ++requestId, buffer: image.data.buffer, width: image.width, height: image.height, sharpen, forceJs: force === "worker" };
         current.postMessage(request, [image.data.buffer]);
-        // Worker không trả lời (treo, bị trình duyệt dừng) thì đừng để vòng quét đứng theo.
-        setTimeout(() => { if (pending === resolve && worker === current) dropWorker(); }, WORKER_TIMEOUT_MS);
+        // Worker không trả lời (treo, bị trình duyệt dừng) thì dựng lại, đừng để vòng quét đứng theo.
+        const watch = () => {
+          if (stopped || pending !== resolve || worker !== current) return;
+          const waitMore = document.hidden ? 1000 : WORKER_TIMEOUT_MS - (performance.now() - visibleSince);
+          if (waitMore > 0) setTimeout(watch, Math.min(waitMore, 1000));
+          else restartWorker();
+        };
+        setTimeout(watch, WORKER_TIMEOUT_MS);
       });
     }
     const startedAt = performance.now();
@@ -198,7 +225,7 @@ export async function startQrScanner(
         const codes = await detector.detect(video);
         nativeErrors = 0;
         const rect = codes[0]?.boundingBox;
-        return { text: codes[0]?.rawValue ?? null, partial: false, crop: "full", box: rect ? { x: rect.x, y: rect.y, w: rect.width, h: rect.height } : null, zoom: zoomValue, decodeMs: performance.now() - startedAt, captureMs: 0 };
+        return { text: codes[0]?.rawValue ?? null, partial: false, crop: "full", box: rect ? { x: rect.x, y: rect.y, w: rect.width, h: rect.height } : null, zoom: zoomValue, quality: null, decodeMs: performance.now() - startedAt, captureMs: 0 };
       } catch {
         // Có máy khai báo BarcodeDetector nhưng detect() lỗi liên tục (thiếu dịch vụ Google Play…) → chỉ dùng ZXing.
         if (++nativeErrors >= 5) detector = null;
@@ -213,7 +240,7 @@ export async function startQrScanner(
     const captureMs = performance.now() - capturedAt;
     const result = await decodeImage(image, crop !== "wide");
     if (!result) return null;
-    return { text: result.text, partial: result.partial, crop, box: toVideo(result.box, src, scale), zoom: zoomValue, decodeMs: result.decodeMs, captureMs };
+    return { text: result.text, partial: result.partial, crop, box: toVideo(result.box, src, scale), zoom: zoomValue, quality: result.quality ?? null, decodeMs: result.decodeMs, captureMs };
   }
 
   // Zoom camera thật (Android): mã thấy được mà nhỏ hơn ~20% cạnh ngắn vùng đang hiện → phóng để mã chiếm ~35%;
@@ -260,6 +287,7 @@ export async function startQrScanner(
     stop() {
       stopped = true;
       clearTimeout(timer);
+      document.removeEventListener("visibilitychange", onVisibility);
       dropWorker();
     },
   };
