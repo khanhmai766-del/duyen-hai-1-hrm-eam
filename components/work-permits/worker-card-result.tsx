@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { CircleAlert, IdCard, ScanLine } from "lucide-react";
+import { PersonViolations } from "@/components/work-permits/person-violations";
 import { Button } from "@/components/ui/button";
 import { cardExpired, isCardlessCode } from "@/lib/work-permit-card";
 import { formatPermitNumber, PERMIT_CONTRACTOR_SCOPES, type PermitPerson } from "@/lib/work-permits";
@@ -51,6 +52,7 @@ export function WorkerCardResult({ code, person, onScanAgain }: { code: string; 
         : <div className="flex h-32 w-24 shrink-0 items-center justify-center rounded-lg border bg-muted text-4xl text-slate-300">👤</div>}
       <div className="min-w-0 flex-1">
         <p className="break-words text-xl font-bold leading-7">{person.name}</p>
+        <PersonViolations person={person} />
         <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm leading-5">
           {rows.map(([label, value]) => <div key={label} className="contents"><dt className="text-xs leading-5 text-muted-foreground">{label}</dt><dd className="min-w-0 break-words">{value}</dd></div>)}
         </dl>

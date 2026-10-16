@@ -1,3 +1,4 @@
+import { personViolationsPreset } from "./presets/person-violations.mjs";
 import { materialUndoUsagePreset } from "./presets/material-undo-usage.mjs";
 // Kịch bản dựng sẵn cho ui-shots.mjs: tuyến cần chụp + dữ liệu GIẢ LẬP qua page.route.
 //
@@ -1616,5 +1617,79 @@ PRESETS["thanh-noi-thuong-dung"] = {
     }
     if (route.endsWith("dock=gon")) await page.getByRole("button", { name: "Thu gọn thanh Thường dùng" }).click();
     await page.waitForTimeout(300);
+  },
+};
+
+PRESETS["nhan-su-vi-pham"] = personViolationsPreset();
+PRESETS["ghi-nhan-vi-pham"] = personViolationsPreset(true);
+
+PRESETS["quet-the-vi-pham"] = {
+  description: "Quét nhân viên có vi phạm phải đọc cảnh báo trước khi cho vào; dữ liệu thẻ giả lập",
+  prepare: ctx => PRESETS["pct-lam-viec"].prepare(ctx),
+  routes: ({ permitId }) => [`/work-permits/${permitId}/lam-viec`],
+  async mock(context, ctx) {
+    await PRESETS["pct-lam-viec"].mock(context, ctx);
+    await context.route("**/api/overhaul-milestones**", route => route.fulfill({ json: { data: [], meta: null, error: null } }));
+    await context.route("**/api/work-permits/companies**", route => route.fulfill({ json: { data: [], meta: { canWrite: true, working: 0 }, error: null } }));
+    await context.route("**/api/work-permits/people/card**", async route => {
+      const permit = (await (await context.request.get(`${ctx.base}/api/work-permits/${ctx.permitId}`)).json()).data;
+      await route.fulfill({ json: { data: { code: "UI-VP-01", person: { id: "ui-violation-person", code: "UI-VP-01", name: "Nguyễn Văn Nhân Viên Đại Tu", company: permit.teamName, phone: "", canCommand: false, isActive: true, version: 1, scope: permit.contractorScope ?? "SCTX", activeWorks: [], violations: [
+        { id: "v1", description: "Không đeo dây an toàn khi làm việc trên cao trong phạm vi PCT.", recordedAt: "2026-10-15T08:00:00+07:00", recordedById: "ui", recordedByName: "Người cho phép" },
+      ] } }, meta: null, error: null } });
+    });
+  },
+  async interact(page) {
+    await page.getByRole("button", { name: "Quét vào / ra" }).locator("visible=true").first().click();
+    const input = page.getByLabel("Số thẻ hoặc nội dung mã QR");
+    await input.fill("UI-VP-01"); await input.press("Enter");
+    await page.getByText("Đã vi phạm 1 lần · Cần chú ý đặc biệt").waitFor();
+    await page.getByRole("button", { name: "Vẫn cho vào", exact: true }).waitFor();
+  },
+};
+
+PRESETS["pct-ghi-nhan-vi-pham"] = {
+  description: "Ghi vi phạm ngay trong nhân viên công tác; tải hồ sơ và lưu giả lập, không ghi DB",
+  prepare: ctx => PRESETS["pct-lam-viec"].prepare(ctx),
+  routes: ({ permitId }) => ["", "?ui=dialog", "?ui=saved"].map(query => `/work-permits/${permitId}/lam-viec${query}`),
+  async mock(context, ctx) {
+    await PRESETS["pct-lam-viec"].mock(context, ctx);
+    await context.route("**/api/overhaul-milestones**", route => route.fulfill({ json: { data: [], meta: null, error: null } }));
+    await context.route("**/api/work-permits/companies**", route => route.fulfill({ json: { data: [], meta: { canWrite: true, working: 0 }, error: null } }));
+    let person = { id: "ui-p0", code: "UI-100", name: "Trần Văn Bình", company: "Nhà thầu giả lập", version: 17, violations: [
+      { id: "old", description: "Không đội mũ bảo hộ", recordedAt: "2026-10-15T08:00:00+07:00", recordedByName: "Người ghi nhận", recordedById: "ui" },
+    ] };
+    await context.route("**/api/work-permits/people/*/violations**", async route => {
+      const request = route.request(), url = new URL(request.url());
+      assert.ok(url.pathname.includes("/ui-p0/violations"));
+      if (request.method() === "GET") {
+        assert.equal(url.searchParams.get("permitId"), ctx.permitId);
+        assert.equal(url.searchParams.get("sessionId"), "ui-live-session");
+      } else {
+        assert.equal(request.method(), "POST");
+        const body = request.postDataJSON();
+        assert.equal(body.version, person.version);
+        assert.equal(body.permitId, ctx.permitId);
+        assert.equal(body.sessionId, "ui-live-session");
+        assert.equal(body.description, "Không sử dụng dây an toàn; đã lập biên bản tại hiện trường.");
+        person = { ...person, version: person.version + 1, violations: [...person.violations, { id: "new", description: body.description, recordedAt: new Date().toISOString(), recordedByName: "Người ghi nhận", recordedById: "ui", permitId: ctx.permitId, sessionId: body.sessionId, permitNumber: body.permitNumber }] };
+      }
+      await route.fulfill({ json: { data: person, meta: null, error: null } });
+    });
+  },
+  async interact(page, route) {
+    const button = page.getByRole("button", { name: "Ghi nhận vi phạm", exact: true }).first();
+    await button.waitFor();
+    if (!route.includes("?ui=")) { await button.scrollIntoViewIfNeeded(); return; }
+    await button.click();
+    const dialog = page.getByRole("dialog");
+    await dialog.getByText("Đã vi phạm 1 lần · Cần chú ý đặc biệt").waitFor();
+    await dialog.getByRole("textbox").fill("Không sử dụng dây an toàn; đã lập biên bản tại hiện trường.");
+    if (route.endsWith("saved")) {
+      await dialog.getByRole("button", { name: "Ghi nhận vi phạm", exact: true }).click();
+      await dialog.waitFor({ state: "hidden" });
+      await button.click();
+      await page.getByRole("dialog").getByText("Đã vi phạm 2 lần · Cần chú ý đặc biệt").waitFor();
+      await page.getByRole("dialog").getByText("Không sử dụng dây an toàn; đã lập biên bản tại hiện trường.", { exact: false }).waitFor();
+    }
   },
 };

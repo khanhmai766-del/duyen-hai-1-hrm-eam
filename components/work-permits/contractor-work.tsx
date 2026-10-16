@@ -1,5 +1,6 @@
 "use client";
 
+import { PersonViolations, RecordPersonViolation } from "@/components/work-permits/person-violations";
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
@@ -124,7 +125,7 @@ export function PermitCompanyDirectory({ scope }: { scope: PermitContractorScope
             <button type="button" aria-expanded={expanded} onClick={toggle} className="flex w-full items-start gap-3 px-4 pb-2 pt-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500">
               <span className="min-w-0 flex-1">
                 <span className="flex flex-wrap items-center gap-x-2 gap-y-1">{row.code && <span className="rounded-md bg-blue-50 px-1.5 py-0.5 text-xs font-bold tracking-wide text-blue-800">{row.code}</span>}<span className="text-[15px] font-semibold leading-5 text-ink">{row.company}</span><CompanyScopeBadge row={row} /></span>
-                {hitLine(row)}<span className="mt-1 block text-xs text-muted-foreground">Tổng nhân sự <b className="text-foreground">{row.total}</b> · CHTT <b className={row.commanders ? "text-emerald-700" : "text-amber-700"}>{row.commanders}</b>{row.active < row.total && <span className="text-amber-700"> · {row.total - row.active} ngừng hoạt động</span>}</span>
+                {Boolean(row.violatingPeople) && <span className="mt-1 block text-xs font-semibold text-red-700">{row.violatingPeople} nhân viên đã vi phạm</span>}{hitLine(row)}<span className="mt-1 block text-xs text-muted-foreground">Tổng nhân sự <b className="text-foreground">{row.total}</b> · CHTT <b className={row.commanders ? "text-emerald-700" : "text-amber-700"}>{row.commanders}</b>{row.active < row.total && <span className="text-amber-700"> · {row.total - row.active} ngừng hoạt động</span>}</span>
                 <span className="mt-1 block text-xs text-muted-foreground">Đang làm việc <b className="text-emerald-700">{row.working}</b> · <span title={dailyWorkingLabel}>Làm việc trong ngày <b className="text-blue-700">{row.workingToday ?? 0}</b>{row.active > 0 && ` (${Math.round(participationRate(row.workingToday ?? 0, row.active) * 100)}%)`}</span></span>
               </span>
               <ChevronDown className={`mt-0.5 h-5 w-5 shrink-0 text-muted-foreground transition-transform ${expanded ? "rotate-180" : ""}`} />
@@ -162,7 +163,7 @@ export function PermitCompanyDirectory({ scope }: { scope: PermitContractorScope
                 <TableCell className={cn(TD_EXPAND, "py-2.5")}><RowExpander expanded={expanded} onToggle={() => setOpenCompany(expanded ? null : row.company)} /></TableCell>
                 <TableCell className={cn(TD_ROW, "py-2.5 text-center tabular-nums text-slate-500")}>{index + 1}</TableCell>
                 <TableCell className={cn(TD_ROW, "whitespace-nowrap py-2.5 text-center font-semibold tracking-wide text-blue-800")}>{row.code || <span className="font-normal text-slate-400">—</span>}</TableCell>
-                <TableCell className={cn(TD_ROW, "py-2.5 font-semibold text-ink")}>{row.company}<CompanyScopeBadge row={row} className="ml-2" />{row.active < row.total && <span className="ml-2 text-[11px] font-medium text-amber-700">{row.total - row.active} ngừng hoạt động</span>}{hitLine(row)}</TableCell>
+                <TableCell className={cn(TD_ROW, "py-2.5 font-semibold text-ink")}>{row.company}<CompanyScopeBadge row={row} className="ml-2" />{row.active < row.total && <span className="ml-2 text-[11px] font-medium text-amber-700">{row.total - row.active} ngừng hoạt động</span>}{Boolean(row.violatingPeople) && <span className="mt-1 block text-xs font-semibold text-red-700">{row.violatingPeople} nhân viên đã vi phạm</span>}{hitLine(row)}</TableCell>
                 <TableCell className={cn(TD_ROW, "py-2.5 text-center tabular-nums")}>{row.working ? <span className="font-semibold text-emerald-700">{row.working}</span> : <span className="text-slate-400">0</span>}</TableCell>
                 <TableCell className={cn(TD_ROW, "py-2.5 text-center tabular-nums")} title={dailyWorkingLabel}>{row.workingToday ? <><span className="font-semibold text-blue-700">{row.workingToday}</span>{row.active > 0 && <span className="ml-1 text-xs text-muted-foreground">· {Math.round(participationRate(row.workingToday, row.active) * 100)}%</span>}</> : <span className="text-slate-400">0</span>}</TableCell>
                 <TableCell className={cn(TD_ROW, "py-2.5 text-center tabular-nums")}>{row.total}</TableCell>
@@ -288,16 +289,18 @@ function CompanyPeopleTable({ people, canWrite, removing, onEdit, onRemove, with
   const tel = (phone: string) => `tel:${phone.replace(/[^+\d]/g, "")}`;
   return <>
   {/* Điện thoại: mỗi người một thẻ — tên, số thẻ, SĐT bấm gọi, vai trò, nút sửa/xoá 40px. */}
-  <div className="space-y-2 md:hidden">{people.map(person => <div key={person.id} data-person-row={person.id} className="flex items-start gap-2 rounded-lg border border-slate-200 bg-white p-3">
+  <div className="space-y-2 md:hidden">{people.map(person => <div key={person.id} data-person-row={person.id} className="flex flex-wrap items-start gap-2 rounded-lg border border-slate-200 bg-white p-3">
     {withPhoto && <PersonPhoto person={person} className="h-14 w-[42px] shrink-0 rounded-md border border-slate-200 text-base" />}
     <div className="min-w-0 flex-1">
       <p className="text-[15px] font-semibold leading-5 text-ink">{person.name}</p>
+      <PersonViolations person={person} />
+      {canWrite && <RecordPersonViolation person={person} />}
       {person.jobTitle?.trim() && <p className="text-xs font-medium text-slate-600">{person.jobTitle.trim()}</p>}
       {person.phone && <p className="mt-0.5 text-xs"><a className="font-medium text-blue-700 underline" href={tel(person.phone)}>{person.phone}</a></p>}
       <div className="mt-1.5 flex flex-wrap items-center gap-1.5">{role(person)}</div>
       {works(person)}
     </div>
-    {canWrite && <div className="flex shrink-0 gap-1.5">
+    {canWrite && <div className="flex w-full justify-end gap-1.5">
       <Button type="button" size="sm" variant="outline" className="h-10 w-10 px-0" aria-label={`Sửa hồ sơ ${person.name}`} onClick={() => onEdit(person)}><Pencil size={16} /></Button>
       <Button type="button" size="sm" variant="outline" className="h-10 w-10 px-0 text-red-700 hover:text-red-800" disabled={removing} aria-label={`Xóa hồ sơ ${person.name}`} onClick={() => onRemove(person)}><Trash2 size={16} /></Button>
     </div>}
@@ -312,6 +315,8 @@ function CompanyPeopleTable({ people, canWrite, removing, onEdit, onRemove, with
         {withPhoto && <td className="px-2 py-1.5"><PersonPhoto person={person} className="mx-auto h-12 w-9 rounded-md border border-slate-200 text-sm" /></td>}
         <td className="px-3 py-2">
           <span className="font-semibold text-ink">{person.name}</span>
+          <PersonViolations person={person} />
+          {canWrite && <RecordPersonViolation person={person} />}
           {works(person)}
         </td>
         <td className="px-3 py-2 text-ink">{person.jobTitle?.trim() || <span className="text-muted-foreground">—</span>}</td>
@@ -433,7 +438,7 @@ export function PermitPeopleDirectory({ onClose, onPick, onPickMany, existingMem
       {pickOnly && <p className="text-xs text-muted-foreground">PCT Đại tu chỉ chọn người đã được đánh dấu CHTT. Cần thêm CHTT thì đánh dấu ở mục <b>Nhân sự nhà thầu</b>.</p>}
       {query.isPending ? <p role="status">Đang tải danh sách…</p> : query.isError ? <p role="alert" className="text-red-700">{query.error.message}</p> : <div className="space-y-2">
         {query.data?.data.map(p => <div key={p.id} className="flex items-center justify-between gap-3 rounded-lg border border-border p-3">
-          <div><b>{p.name}</b><p className="text-sm text-muted-foreground">{p.code} · {p.company}</p><p className="text-xs text-muted-foreground">{p.canCommand ? "CHTT / nhân viên công tác" : "Nhân viên công tác"}{!p.isActive ? " · Ngừng hoạt động" : ""}</p>{cardExpired(p.cardExpiresAt) && <p className="text-xs font-medium text-red-700">Thẻ ra vào hết hạn {new Date(p.cardExpiresAt!).toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })}</p>}{p.activeWorks?.map(work => <p key={work.sessionId} className="mt-1 text-xs font-medium text-amber-700">Đang làm PCT {formatPermitNumber(work.permit)} · {PERMIT_KINDS[work.permit.kind]} · {work.role === "CHTT" ? "CHTT" : "Nhân viên công tác"} · từ {fmt(work.openedAt)}</p>)}</div>
+          <div className="min-w-0 flex-1"><b>{p.name}</b><PersonViolations person={p} /><p className="text-sm text-muted-foreground">{p.code} · {p.company}</p><p className="text-xs text-muted-foreground">{p.canCommand ? "CHTT / nhân viên công tác" : "Nhân viên công tác"}{!p.isActive ? " · Ngừng hoạt động" : ""}</p>{cardExpired(p.cardExpiresAt) && <p className="text-xs font-medium text-red-700">Thẻ ra vào hết hạn {new Date(p.cardExpiresAt!).toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })}</p>}{p.activeWorks?.map(work => <p key={work.sessionId} className="mt-1 text-xs font-medium text-amber-700">Đang làm PCT {formatPermitNumber(work.permit)} · {PERMIT_KINDS[work.permit.kind]} · {work.role === "CHTT" ? "CHTT" : "Nhân viên công tác"} · từ {fmt(work.openedAt)}</p>)}</div>
           <div className="flex gap-2">{onPickMany && <label className="flex cursor-pointer items-center gap-2 whitespace-nowrap text-sm"><input type="checkbox" aria-label={`Chọn ${p.name} · ${p.code}`} checked={alreadyAdded(p) || selected.some(person => person.id === p.id)} disabled={alreadyAdded(p) || (!selected.some(person => person.id === p.id) && selected.length >= capacity)} onChange={() => toggle(p)} />{alreadyAdded(p) ? "Đã có" : "Chọn"}</label>}{onPick && <Button type="button" size="sm" onClick={() => onPick(p)}>Chọn</Button>}</div>
         </div>)}
         {!query.data?.data.length && <p className="py-8 text-center text-muted-foreground">Chưa có nhân sự phù hợp.</p>}

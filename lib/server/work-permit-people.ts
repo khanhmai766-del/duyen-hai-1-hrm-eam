@@ -11,7 +11,7 @@ import { PERMIT_CONTRACTOR_SCOPES } from "@/lib/work-permits";
 
 /** Cột thông tin thẻ (đồng bộ từ Google Sheets) trả kèm hồ sơ người. */
 export const personCardSelect = {
-  scope: true, birthYear: true, jobTitle: true, workPackage: true, workPosition: true, workArea: true, trainingResult: true,
+  violations: true, scope: true, birthYear: true, jobTitle: true, workPackage: true, workPosition: true, workArea: true, trainingResult: true,
   trainedAt: true, cardIssuedAt: true, cardExpiresAt: true, photoKey: true, photoSource: true,
 } as const;
 

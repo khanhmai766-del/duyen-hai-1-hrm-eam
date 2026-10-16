@@ -226,7 +226,12 @@ export interface PermitMember {
   /** Chỉ có ở thành viên của LẦN LÀM VIỆC: các lượt vào/ra vị trí (lib/work-permit-attendance.ts). */
   attendance?: Array<{ in: string; out: string | null }>;
 }
+export interface PermitPersonViolation {
+  id: string; description: string; recordedAt: string; recordedById: string; recordedByName: string;
+  permitId?: string; sessionId?: string; permitNumber?: string;
+}
 export interface PermitPerson {
+  violations?: PermitPersonViolation[];
   id: string; code: string; name: string; company: string; phone: string;
   canCommand: boolean; isActive: boolean; version: number;
   /** Nhóm nhân sự: SCTX (không cần ảnh) / Đại tu, Đầu tư (đủ họ tên, ảnh, chức vụ). */

@@ -1782,6 +1782,8 @@ model MaterialStockMovement {
 
 /// Danh bạ người của nhà thầu: mã người dùng chung giữa cả hai sổ PCT.
 model WorkPermitPerson {
+  /// Lịch sử vi phạm PCT, chỉ bổ sung qua API chuyên biệt; không bị ghi đè khi đồng bộ danh bạ.
+  violations Json @default("[]")
   id         String              @id @default(cuid())
   code       String              @unique
   name       String

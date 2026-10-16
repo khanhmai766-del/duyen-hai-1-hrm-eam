@@ -66,11 +66,12 @@ export async function GET(req: Request) {
       const rawScope = params.get("scope");
       if (rawScope && !Object.hasOwn(PERMIT_CONTRACTOR_SCOPES, rawScope)) return fail("Nhóm nhà thầu không hợp lệ");
       const scope = (rawScope || null) as PermitContractorScope | null;
-      const [rows, working, daily] = await Promise.all([prisma.$queryRawUnsafe<Array<{ company: string; code: string; sctx: boolean; overhaul: boolean; investment: boolean; total: bigint; commanders: bigint; active: bigint; cardsValid: bigint; cardsExpired: bigint; trained: bigint }>>(`
+      const [rows, working, daily] = await Promise.all([prisma.$queryRawUnsafe<Array<{ company: string; code: string; sctx: boolean; overhaul: boolean; investment: boolean; total: bigint; violatingPeople: bigint; commanders: bigint; active: bigint; cardsValid: bigint; cardsExpired: bigint; trained: bigint }>>(`
         SELECT c.company, COALESCE(MAX(w."code"), '') AS code, COALESCE(BOOL_OR(w."sctx"), false) AS sctx, COALESCE(BOOL_OR(w."overhaul"), false) AS overhaul,
                COALESCE(BOOL_OR(w."investment"), false) AS investment, COUNT(p.id) AS total,
                COUNT(p.id) FILTER (WHERE p."canCommand") AS commanders,
                COUNT(p.id) FILTER (WHERE p."isActive") AS active,
+               COUNT(p.id) FILTER (WHERE jsonb_array_length(p."violations") > 0) AS "violatingPeople",
                -- Thẻ ra vào cổng: so theo NGÀY Việt Nam như cardExpired() (lib/work-permit-card.ts); chưa có hạn thì không tính bên nào.
                COUNT(p.id) FILTER (WHERE (p."cardExpiresAt" AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Ho_Chi_Minh')::date >= (now() AT TIME ZONE 'Asia/Ho_Chi_Minh')::date) AS "cardsValid",
                COUNT(p.id) FILTER (WHERE (p."cardExpiresAt" AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Ho_Chi_Minh')::date < (now() AT TIME ZONE 'Asia/Ho_Chi_Minh')::date) AS "cardsExpired",
@@ -85,7 +86,7 @@ export async function GET(req: Request) {
           OR (NOT COALESCE(BOOL_OR(w."sctx"), false) AND NOT COALESCE(BOOL_OR(w."overhaul"), false) AND NOT COALESCE(BOOL_OR(w."investment"), false)
               AND NOT EXISTS (SELECT 1 FROM "WorkPermitPerson" x WHERE x."company" = c.company))
         ORDER BY overhaul DESC, c.company`, scope), workingByCompany(scope), loadDailyWorkingByCompany(day, now, scope)]);
-      return ok(rows.map(row => ({ company: row.company, code: row.code, sctx: row.sctx, overhaul: row.overhaul, investment: row.investment, total: Number(row.total), commanders: Number(row.commanders), active: Number(row.active), cardsValid: Number(row.cardsValid), cardsExpired: Number(row.cardsExpired), trained: Number(row.trained), working: working.byCompany.get(row.company) ?? 0, workingToday: daily.byCompany.get(row.company) ?? 0 })),
+      return ok(rows.map(row => ({ company: row.company, code: row.code, sctx: row.sctx, overhaul: row.overhaul, investment: row.investment, total: Number(row.total), violatingPeople: Number(row.violatingPeople), commanders: Number(row.commanders), active: Number(row.active), cardsValid: Number(row.cardsValid), cardsExpired: Number(row.cardsExpired), trained: Number(row.trained), working: working.byCompany.get(row.company) ?? 0, workingToday: daily.byCompany.get(row.company) ?? 0 })),
         { canWrite: (await permitCapabilities(user)).canIssue, working: working.total, workingToday: daily.total, workingDay: day, scope });
     }
     // Lấy từ toàn bộ danh bạ, không giới hạn bởi trang nhân sự hoặc vai trò CHTT.

@@ -1,5 +1,6 @@
 "use client";
 
+import { RecordPersonViolation } from "@/components/work-permits/person-violations";
 import { useId, useMemo, useState } from "react";
 import { LogIn, LogOut, ScanLine, Search, Trash2, Users } from "lucide-react";
 import { useSession } from "next-auth/react";
@@ -13,7 +14,7 @@ import { useAdminMode } from "@/hooks/useAdminMode";
 import { attendanceInside, attendanceTracked } from "@/lib/work-permit-attendance";
 import { normalizeText } from "@/lib/nav";
 import { isOverhaulPaperPermit } from "@/lib/work-permit-overhaul";
-import { isSessionCommander, type PermitDetailRow, type PermitMember, type PermitPerson, type PermitSession } from "@/lib/work-permits";
+import { formatPermitNumber, isSessionCommander, type PermitDetailRow, type PermitMember, type PermitPerson, type PermitSession } from "@/lib/work-permits";
 
 const hhmm = (iso: string) => new Date(iso).toLocaleTimeString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", hour: "2-digit", minute: "2-digit" });
 /** Giờ gọn cho điện thoại: chỉ HH:mm nếu trong hôm nay, khác ngày thì kèm ngày/tháng. */
@@ -143,6 +144,9 @@ export function SessionAttendance({ permit, session, canExecute, size = "md", au
     })}{!previousMembers.length && <p className="py-4 text-sm text-muted-foreground">Lượt làm việc này không có nhân viên đi cùng.</p>}{previousMembers.length > 0 && !previousMembers.some(member => normalizeText(`${member.name} ${member.code}`).includes(normalizeText(previousQuery.trim()))) && <p className="py-4 text-sm text-muted-foreground">Không tìm thấy nhân viên phù hợp.</p>}</div>
     <div className="flex shrink-0 justify-end"><Button type="button" variant="outline" className="h-10" onClick={() => setShowPrevious(false)}>Đóng</Button></div>
   </DialogContent></Dialog>;
+  const violationButton = (member: PermitMember) => live && canExecute && member.personId
+    ? <RecordPersonViolation member={member} context={{ permitId: permit.id, sessionId: session.id, permitNumber: formatPermitNumber(permit) }} />
+    : null;
   const rows = members.map(({ member, index }) => {
     const inside = attendanceInside(member);
     const visits = member.attendance ?? [];
@@ -150,6 +154,7 @@ export function SessionAttendance({ permit, session, canExecute, size = "md", au
       <span className={`${large ? "h-3 w-3" : "h-2 w-2"} shrink-0 rounded-full ${inside ? "bg-emerald-500" : visits.length ? "bg-slate-300" : "bg-amber-400"}`} aria-hidden />
       <span className="min-w-0 flex-1"><b>{member.name}</b>{member.code ? <span className="text-muted-foreground"> · {member.code}</span> : null}
         <span className="block text-xs text-muted-foreground">{visits.length ? visits.map(v => `Vào ${dayHhmm(v.in)}${v.out ? ` → Ra ${dayHhmm(v.out)}` : " → đang trong"}`).join(" · ") : "Chưa ghi vào/ra"}</span>
+        {violationButton(member)}
       </span>
       {live && canExecute && (inside
         ? <Button type="button" size="sm" variant="outline" className={large ? "h-9 px-3" : "h-7 px-2 text-xs"} disabled={attendance.isPending} onClick={() => void manual(member, index, "out")}><LogOut size={14} />Ra</Button>
@@ -192,6 +197,7 @@ export function SessionAttendance({ permit, session, canExecute, size = "md", au
             <span className="min-w-0 flex-1">
               <span className="block truncate text-[15px] font-semibold leading-5">{member.name}</span>
               <span className="block truncate text-xs text-muted-foreground">{member.code || "—"}{last ? ` · ${inside ? `Vào ${shortTime(last.in)}` : `Ra ${shortTime(last.out ?? last.in)}`}${visits.length > 1 ? ` · ${visits.length} lượt` : ""}` : " · Chưa quét"}</span>
+              {violationButton(member)}
             </span>
             {live && canExecute && <Button type="button" variant="outline" className="h-10 min-w-[4.5rem] shrink-0 px-3" disabled={attendance.isPending} onClick={() => void manual(member, index, inside ? "out" : "in")}>{inside ? <><LogOut size={16} />Ra</> : <><LogIn size={16} />{visits.length ? "Vào lại" : "Vào"}</>}</Button>}
             {canRemove && !inside && <Button type="button" variant="outline" className="h-10 w-10 shrink-0 px-0 text-red-700 hover:text-red-800" disabled={removeMember.isPending} aria-label={`Gỡ ${member.name} khỏi lần làm việc`} title="Gỡ khỏi lần làm việc (Quản trị) — xoá luôn lượt vào/ra" onClick={() => void remove(member, index)}><Trash2 size={16} /></Button>}

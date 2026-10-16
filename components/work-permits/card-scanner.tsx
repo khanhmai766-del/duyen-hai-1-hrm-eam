@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Camera, CameraOff, CheckCircle2, CircleAlert, CircleX, Flashlight, FlashlightOff, UserPlus, X } from "lucide-react";
+import { PersonViolations } from "@/components/work-permits/person-violations";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { lookupPermitCard, reportPermitScanMetrics, useSavePermitPerson } from "@/hooks/useWorkPermits";
@@ -198,6 +199,7 @@ export function PermitCardScanner({ unit, companies, scope, existing, permitId, 
         return;
       }
       const reasons: string[] = [];
+      if (person.violations?.length) reasons.push(`Đã vi phạm ${person.violations.length} lần. Xem lỗi vi phạm và chú ý đặc biệt khi cho vào.`);
       if (cardExpired(person.cardExpiresAt)) reasons.push(`Thẻ đã HẾT HẠN ngày ${vnDate(person.cardExpiresAt)}.`);
       const conflict = person.activeWorks?.find(work => work.permit.id !== permitId);
       if (conflict) return finish({ code, tone: "block", person, title: person.name,
@@ -340,7 +342,7 @@ export function PermitCardScanner({ unit, companies, scope, existing, permitId, 
       </div>
 
       {/* Giữ kích thước camera khi lịch sử dài lên; chỉ vùng kết quả bên dưới được cuộn. */}
-      <div className="relative aspect-[4/3] max-h-[48dvh] shrink-0 overflow-hidden rounded-lg bg-slate-900 sm:aspect-video">
+      <div className={`relative aspect-[4/3] shrink-0 overflow-hidden rounded-lg bg-slate-900 sm:aspect-video ${current?.pending ? "max-h-[22dvh] sm:max-h-[26dvh]" : "max-h-[48dvh]"}`}>
         <video ref={videoRef} muted playsInline autoPlay className={`block h-full w-full object-cover ${camera === "on" ? "" : "opacity-30"}`} />
         {camera !== "on" && <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 p-4 text-center text-sm text-white">
           <p>{camera === "starting" ? "Đang mở camera…" : camera === "error" ? cameraMessage : "Camera đang tắt"}</p>
@@ -383,6 +385,7 @@ export function PermitCardScanner({ unit, companies, scope, existing, permitId, 
             <div className="min-w-0 flex-1">
               <p className="flex items-start gap-1.5 text-lg font-bold leading-6"><ToneIcon tone={current.tone} /><span className="min-w-0 break-words">{current.title}</span></p>
               {current.person && <p className="mt-0.5 line-clamp-2 text-xs font-medium opacity-80">{current.person.company}</p>}
+              {current.person && <PersonViolations person={current.person} />}
               {current.person && <PersonScopeBadge scope={current.person.scope} className="mt-1" />}
               {(() => {
                 const person = current.person;

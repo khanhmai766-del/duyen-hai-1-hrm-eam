@@ -51,6 +51,7 @@ export async function DELETE(req: Request, props: { params: Promise<{ id: string
        * đã đóng và họ đã quét RA. Phiếu/lần làm việc giữ bản chụp tên + số thẻ nên lịch sử vẫn đọc được; chỉ gỡ
        * liên kết tới hồ sơ (commanderPersonId, WorkPermitSession.commanderId → null).
        */
+      if (Array.isArray(before.violations) && before.violations.length) throw fail("Nhân sự đã có lịch sử vi phạm. Hãy ngừng hoạt động hồ sơ để giữ lịch sử.", 409);
       const admin = user.role === "ADMIN";
       const involves = { OR: [{ commanderPersonId: before.id }, { members: { array_contains: [{ personId: before.id }] } }] };
       const [openPermits, sessions] = await Promise.all([

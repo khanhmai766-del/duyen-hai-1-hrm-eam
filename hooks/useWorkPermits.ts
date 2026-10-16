@@ -287,7 +287,7 @@ export function useRemoveSessionMember(permitId: string) {
 export function usePermitCompanies() {
   return useQuery({ queryKey: ["work-permit-companies"], staleTime: 60000, queryFn: () => apiGet<string[]>("/api/work-permits/companies") });
 }
-export interface PermitCompanySummary { company: string; code: string; sctx: boolean; overhaul: boolean; investment: boolean; total: number; commanders: number; active: number;
+export interface PermitCompanySummary { violatingPeople?: number; company: string; code: string; sctx: boolean; overhaul: boolean; investment: boolean; total: number; commanders: number; active: number;
   /** Thẻ ra vào cổng còn hạn / đã hết hạn (theo ngày VN) và số người đã có kết quả huấn luyện ATVSLĐ. */
   cardsValid: number; cardsExpired: number; trained: number;
   /** Người đang làm việc (CHTT + nhân viên chưa quét RA ở lần làm việc đang mở). */
@@ -401,4 +401,24 @@ export function useSaveOverhaulSchedule() {
   const qc = useQueryClient();
   return useMutation({ mutationFn: (body: { id: string; title: string; url: string }) => apiMutate<OverhaulScheduleLink>("/api/work-permits/overhaul-schedules", "PUT", body),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["work-permit-overhaul-schedules"] }) });
+}
+
+export function useRecordPermitPersonViolation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, description, version, context }: { id: string; description: string; version: number; context?: PermitViolationContext }) =>
+      apiMutate<PermitPerson>(`/api/work-permits/people/${id}/violations`, "POST", { description, version, ...context }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["work-permit-people"] });
+      qc.invalidateQueries({ queryKey: ["work-permit-companies"] });
+    },
+  });
+}
+
+export type PermitViolationContext = { permitId: string; sessionId: string; permitNumber: string };
+export type PermitViolationPerson = Pick<PermitPerson, "id" | "name" | "code" | "company" | "version" | "violations">;
+export function usePermitViolationPerson(id: string, enabled: boolean, context?: PermitViolationContext) {
+  const query = new URLSearchParams(context ? { permitId: context.permitId, sessionId: context.sessionId } : {});
+  return useQuery({ queryKey: ["work-permit-people", "violation", id, query.toString()], enabled: enabled && Boolean(id), staleTime: 0,
+    queryFn: () => apiGet<PermitViolationPerson>(`/api/work-permits/people/${encodeURIComponent(id)}/violations?${query}`) });
 }

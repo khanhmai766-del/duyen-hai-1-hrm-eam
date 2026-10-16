@@ -223,3 +223,21 @@ Mở lần làm việc mới chỉ gợi ý CHTT từ lần trước, không l�
 ## Thu gọn lịch sử làm việc
 
 Lịch sử làm việc mặc định đóng hoàn toàn, kể cả lần gần nhất. Bấm **Xem lịch sử làm việc** để mở danh sách, rồi bấm lần cần xem để hiện nhân viên, thời điểm, người cho phép và kết thúc. Lần đang thực hiện trên màn hình làm việc vẫn hiển thị để kiểm soát vào/ra.
+
+## Vi phạm của nhân sự nhà thầu
+
+Trong tab **Nhân sự nhà thầu**, mở đơn vị, chọn **Ghi nhận vi phạm** dưới tên nhân viên và nhập lỗi vi phạm. Mỗi lần lưu tăng số lần vi phạm thêm một; lịch sử giữ nội dung lỗi, giờ Việt Nam và người ghi nhận. Quyền ghi nhận dùng cùng quyền chỉnh sửa danh bạ nhà thầu (`requirePermitIssue`). Không sửa lịch sử qua biểu mẫu hồ sơ hoặc đồng bộ Google Sheets; hồ sơ đã có vi phạm không được xóa, có thể ngừng hoạt động.
+
+Lịch sử hiện dưới tên nhân viên trong danh sách, hộp chọn người, kết quả quét thẻ và trang tra cứu QR. Dưới tên đơn vị hiện số **nhân viên** có vi phạm (mỗi người chỉ đếm một lần). Quét người mới có vi phạm vào lần làm việc sẽ yêu cầu người cho phép chọn **Vẫn cho vào / Không cho vào**; lượt quét người đã có trong lần làm việc vẫn giữ luồng vào/ra và hiển thị lịch sử vi phạm.
+
+Dữ liệu nằm ở `WorkPermitPerson.violations` (JSON, mặc định `[]`), chỉ thêm qua `POST /api/work-permits/people/[id]/violations`. API khóa hồ sơ và kiểm tra `version` để tránh ghi đè đồng thời. Trước khi chạy bản mới cần áp dụng riêng `prisma/manual/add-work-permit-person-violations.sql`; không dùng `db:push` để áp dụng toàn bộ schema trên hệ thống có dữ liệu.
+
+Kiểm tra không ghi dữ liệu thật: `npx tsx --test tests/work-permits/person-violations.test.ts`; các preset UI `nhan-su-vi-pham`, `ghi-nhan-vi-pham`, `quet-the-vi-pham` dùng dữ liệu giả lập (thêm `--existing-admin` để không tạo tài khoản tạm).
+
+### Ghi nhanh vi phạm từ PCT đang làm việc
+
+Ngay trong danh sách **Nhân viên công tác** (màn hình làm việc và phần lần làm việc trong chi tiết PCT), người có quyền thực hiện phiếu bấm **⚑ Vi phạm** dưới tên nhân viên, nhập lỗi rồi lưu. Hệ thống tự gắn số PCT và lần làm việc vào cùng lịch sử vi phạm trong danh bạ nhà thầu. Có thể ghi rõ số biên bản trong nội dung lỗi nếu đã lập biên bản ngoài hiện trường.
+
+Nút chỉ hiện khi lần làm việc đang mở và nhân viên có `personId` liên kết danh bạ. API đọc hồ sơ hiện tại khi mở hộp để lấy đúng `version`; không dùng tên/số thẻ từ snapshot để đoán hồ sơ. Ghi từ PCT dùng `requirePermitExecute` + `requirePermitVisible`, đồng thời máy chủ kiểm tra người thuộc đúng lần làm việc đang mở. Số PCT lưu lịch sử được máy chủ lấy từ phiếu, không tin số phiếu gửi từ trình duyệt. Ghi từ danh bạ vẫn yêu cầu `requirePermitIssue`.
+
+Preset `pct-ghi-nhan-vi-pham` kiểm tra danh sách, hộp ghi nhanh và lưu/mở lại lịch sử bằng API giả lập, không ghi DB thật.
