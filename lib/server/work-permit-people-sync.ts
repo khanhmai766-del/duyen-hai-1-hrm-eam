@@ -173,6 +173,15 @@ export function newPersonScope(company: PermitCompanyScopes | undefined, source:
  * so dấu vết thì lượt nào cũng tải lại cả trăm ảnh. Nên người ĐÃ CÓ ẢNH thì bỏ qua ảnh chèn trong ô; link cố định
  * (Drive / http gõ vào ô) vẫn so dấu vết để thay ảnh khi link đổi.
  */
+/**
+ * Số thẻ lưu trên sổ: bảng SCTX gắn "/SXKD" (SCTX_CARD_SUFFIX) vì dãy số trùng thẻ Đại tu — nhưng CHỈ cho người vào
+ * nhóm SCTX. Đơn vị chỉ-Đầu-tư nằm trong bảng SCTX (NARIME chuyển từ bảng Đại tu sang, 16/10/2026) giữ ĐÚNG số in trên
+ * thẻ → cập nhật tại chỗ hồ sơ cũ (giữ lịch sử lần làm việc), không đẻ bản trùng NARIME/xx/SXKD.
+ */
+export function sheetCardCode(card: string, source: PeopleSyncSource, scope: PermitContractorScope) {
+  return source === "SCTX" && scope === "SCTX" ? sctxCardCode(card) : card;
+}
+
 const isRotatingPhotoRef = (ref: string) => ref === "cell" || /googleusercontent\.com\/sheetsz\//.test(ref);
 function photoNeedsFetch(before: { photoKey: string | null; photoSource: string } | undefined, ref: string) {
   if (!before?.photoKey) return true;
@@ -232,15 +241,15 @@ export async function syncPeopleList(source: PeopleSyncSource = "OVERHAUL") {
   const byCode = new Map<string, Prisma.WorkPermitPersonCreateInput & { photoRef: string; tab: string }>();
   for (const row of rows) {
     const tab = str(row.sheet);
-    // Bảng SCTX: số thẻ lưu kèm "/SXKD" (trùng dãy số với thẻ Đại tu nhưng là người khác — SCTX_CARD_SUFFIX).
     const sheetCard = normalizeCardCode(str(row.soThe, 80));
-    const card = source === "SCTX" ? sctxCardCode(sheetCard) : sheetCard;
     const name = str(row.hoTen);
-    if (!card && !name) continue;
-    // Chưa có số thẻ (mới huấn luyện, cột K) → mã tạm theo họ tên, như QR bảng thẻ đang in (?id=<họ tên>).
-    const code = card || cardlessCode(name);
+    if (!sheetCard && !name) continue;
     const company = unitOf(tab);
     if (!company) { skippedTabs.set(tab || "(không tên)", (skippedTabs.get(tab || "(không tên)") ?? 0) + 1); continue; }
+    // Bảng SCTX: người nhóm SCTX lưu số thẻ kèm "/SXKD"; đơn vị Đầu tư giữ số trơn (sheetCardCode).
+    const card = sheetCardCode(sheetCard, source, newPersonScope(flagsOf(company), source));
+    // Chưa có số thẻ (mới huấn luyện, cột K) → mã tạm theo họ tên, như QR bảng thẻ đang in (?id=<họ tên>).
+    const code = card || cardlessCode(name);
     if (!/^[\p{L}\p{N}][\p{L}\p{N}\/._-]{0,79}$/u.test(code) || !name) {
       skipped.push(`${tab}: ${name || "(không tên)"} · số thẻ "${code}" không hợp lệ`);
       continue;

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { cardConflict, newPersonScope, parsePeopleSyncSource } from "../../lib/server/work-permit-people-sync";
+import { cardConflict, newPersonScope, parsePeopleSyncSource, sheetCardCode } from "../../lib/server/work-permit-people-sync";
 
 // Bảng SCTX (14/10/2026) đánh lại SGIDC/01–14 trùng 14 người Đại tu → không được ghi đè hồ sơ người khác.
 const row = { name: "Phẩm Đình Tứ", code: "SGIDC/01", tab: "IDC" };
@@ -37,4 +37,12 @@ test("đơn vị chỉ tick Đầu tư (NARIME trong bảng Đại tu): người
 test("người đã ở nhóm Đầu tư của đơn vị Đầu tư: cập nhật bình thường, không báo xung đột", () => {
   assert.equal(cardConflict({ name: "Tên khác", scope: "INVESTMENT" }, row, "OVERHAUL", "INVESTMENT"), null);
   assert.match(cardConflict({ name: "Tên khác", scope: "INVESTMENT" }, row, "OVERHAUL")!, /nhóm Đầu tư/);
+});
+
+test("bảng SCTX: nhóm SCTX gắn /SXKD, đơn vị Đầu tư (NARIME) giữ số in trên thẻ; bảng Đại tu không gắn", () => {
+  assert.equal(sheetCardCode("SGIDC/01", "SCTX", "SCTX"), "SGIDC/01/SXKD");
+  assert.equal(sheetCardCode("SGIDC/01/SXKD", "SCTX", "SCTX"), "SGIDC/01/SXKD");
+  assert.equal(sheetCardCode("NARIME/21", "SCTX", newPersonScope({ sctx: false, overhaul: false, investment: true }, "SCTX")), "NARIME/21");
+  assert.equal(sheetCardCode("NARIME/21", "OVERHAUL", "INVESTMENT"), "NARIME/21");
+  assert.equal(sheetCardCode("", "SCTX", "SCTX"), "");
 });
