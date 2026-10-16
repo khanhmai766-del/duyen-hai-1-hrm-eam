@@ -107,12 +107,12 @@ export async function GET(req: NextRequest) {
         replacementPointDisplayLabel(item),
       ])
     );
-    // Chỉ tải log SỬA BƯỚC (UI chi tiết phiếu chỉ hiển thị loại này) — trước đây tải
+    // Chỉ tải log sửa/hủy bước mà UI chi tiết phiếu hiển thị — trước đây tải
     // TOÀN BỘ audit log của 500 phiếu không giới hạn, nặng dần theo thời gian sử dụng.
     const activityRows = tickets.length ? await prisma.auditLog.findMany({
       where: {
         entity: "MaterialTicket",
-        action: "MT_EDIT_STEP",
+        action: { in: ["MT_EDIT_STEP", "MT_UNDO_USAGE"] },
         entityId: { in: tickets.map((ticket) => ticket.id) },
       },
       include: { user: { select: { name: true, position: true } } },

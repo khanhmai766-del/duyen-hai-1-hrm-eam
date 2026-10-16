@@ -1,3 +1,5 @@
+import type { Prisma } from "@prisma/client";
+import { usageUndoError } from "@/lib/material-ticket-undo-usage";
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { buildBbntDoDocument, deliveryNoteForDocuments, getTicket, ITEM_INCLUDE, type FullTicket } from "@/lib/material-ticket-bbnt-do";
@@ -28,6 +30,15 @@ import { existingReceiptEditError } from "@/lib/material-receive-existing";
 import { notifyMaterialTicketStep } from "@/lib/material-ticket-telegram-alert";
 
 export const dynamic = "force-dynamic";
+
+async function claimUsageSnapshot(tx: Prisma.TransactionClient, t: FullTicket, exact = false) {
+  const claim = await tx.materialTicket.updateMany({
+    where: { id: t.id, status: t.status, usedAt: t.usedAt, usedQuantity: t.usedQuantity,
+      ...(exact ? { updatedAt: t.updatedAt } : {}) },
+    data: { updatedAt: new Date() },
+  });
+  if (claim.count !== 1) throw fail("Phiếu đã thay đổi, vui lòng tải lại trước khi thao tác", 409);
+}
 
 function lotStockUnit(category: string | null | undefined, unit: string | null | undefined) {
   return isGasCylinderCategory(category) && ["S1", "S2", "COMMON"].includes(unit ?? "") ? unit! : "COMMON";
@@ -132,10 +143,11 @@ async function assignRecoveryDocNo(t: FullTicket) {
     create: { year, value: 1 },
     update: { value: { increment: 1 } },
   });
-  await prisma.materialTicket.update({
-    where: { id: t.id },
+  const assigned = await prisma.materialTicket.updateMany({
+    where: { id: t.id, status: t.status, usedAt: t.usedAt },
     data: { recoveryDocNo: seq.value, recoveryDocNoYear: year },
   });
+  if (assigned.count !== 1) throw fail("Phiếu đã thay đổi, vui lòng tải lại trước khi xuất biên bản", 409);
   return seq.value;
 }
 
@@ -973,6 +985,60 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
       return ok(up);
     }
 
+    if (action === "undoUsage") {
+      if (user.role !== "ADMIN") return fail("Chỉ Quản trị viên được hủy ghi nhận sử dụng vật tư", 403);
+      const reason = typeof body.reason === "string" ? body.reason.trim() : "";
+      if (!reason || reason.length > 1000) return fail("Vui lòng nhập lý do hủy (tối đa 1.000 ký tự)");
+      if (body.usedAt !== t.usedAt?.toISOString()) return fail("Phiếu đã thay đổi, vui lòng tải lại trước khi thao tác", 409);
+      const error = usageUndoError(t);
+      if (error) return fail(error, 409);
+      const up = await prisma.$transaction(async (tx) => {
+        await claimUsageSnapshot(tx, t, true);
+        // Đọc lại sau khi giữ khóa hàng: không bỏ qua biên bản vừa được cấp số.
+        const current = await tx.materialTicket.findUniqueOrThrow({ where: { id: t.id }, include: ITEM_INCLUDE });
+        const currentError = usageUndoError(current);
+        if (currentError) throw fail(currentError, 409);
+        const usages = await tx.materialLotUsage.findMany({ where: { ticketId: t.id } });
+        if (usages.reduce((sum, row) => sum + row.quantity, 0) !== current.usedQuantity) {
+          throw fail("Phân bổ lô không khớp số lượng sử dụng; cần kiểm tra tồn kho trước khi hủy", 409);
+        }
+        const item = current.items[0];
+        if (!item || current.items.length !== 1) throw fail("Phiếu phải có đúng một vật tư để hủy ghi nhận sử dụng", 409);
+        await releaseUsage(tx, t.id);
+        await syncMaterialQuantity(tx, item.material.code, sharedCodesOf(item.material), stockSyncOptions(item.material.category, current.unit));
+        const updated = await tx.materialTicket.update({
+          where: { id: t.id },
+          data: {
+            status: "SU_DUNG_VAT_TU", usedQuantity: null,
+            remainingQuantity: Math.trunc(current.receivedQuantity ?? current.vhvReceivedQuantity ?? 0),
+            materialUserName: null, lastSupplementDate: null,
+            usedAt: null, usedById: null, usedByName: null, usedByPosition: null,
+            recoveryQuantity: null, recoveryReturnedAt: null,
+            usagePhotoBeforeKey: null, usagePhotoAfterKey: null, usagePhotoSpecKey: null,
+            usagePhotoReviewStatus: null, usagePhotoReviewedAt: null, usagePhotoReviewedById: null,
+            usagePhotoReviewedByName: null, usagePhotoReviewedPosition: null,
+          },
+          include: ITEM_INCLUDE,
+        });
+        // Nhật ký bắt buộc cùng giao dịch; giữ khóa ảnh làm bằng chứng, không xóa tệp S3.
+        await tx.auditLog.create({ data: {
+          userId: user.id, action: "MT_UNDO_USAGE", entity: "MaterialTicket", entityId: t.id,
+          detail: `${materialTicketReference(current)}: Hủy ghi nhận sử dụng ${current.usedQuantity} ${item.material.unit}; lý do: ${reason}.\nDữ liệu đối chiếu: `
+            + JSON.stringify({ before: { status: current.status, usedAt: current.usedAt, usedQuantity: current.usedQuantity,
+              remainingQuantity: current.remainingQuantity, usedById: current.usedById, usedByPosition: current.usedByPosition,
+              materialUserName: current.materialUserName, usedByName: current.usedByName,
+              lastSupplementDate: current.lastSupplementDate, recoveryQuantity: current.recoveryQuantity,
+              recoveryReturnedAt: current.recoveryReturnedAt, usagePhotoReviewStatus: current.usagePhotoReviewStatus,
+              usagePhotoReviewedAt: current.usagePhotoReviewedAt, usagePhotoReviewedById: current.usagePhotoReviewedById,
+              usagePhotoReviewedByName: current.usagePhotoReviewedByName, usagePhotoReviewedPosition: current.usagePhotoReviewedPosition,
+              photos: [current.usagePhotoBeforeKey, current.usagePhotoAfterKey, current.usagePhotoSpecKey], usages },
+              after: { status: updated.status, usedQuantity: null, restoredQuantity: current.usedQuantity } }),
+        } });
+        return updated;
+      });
+      return ok(up);
+    }
+
     // Xem lại/chỉnh sửa dữ liệu của bước đã hoàn thành. Quyền sửa dùng đúng quyền
     // của bước; các thay đổi số lượng được bù trừ theo chênh lệch vào tồn kho.
     if (action === "editStep") {
@@ -1282,6 +1348,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
         before = `Dùng ${t.usedQuantity}; ngày bổ sung gần nhất ${t.lastSupplementDate?.toISOString().slice(0, 10) ?? "—"}; thu hồi ${t.recoveryRequired ? `${t.recoveryQuantity ?? 0}${t.recoveryReturnedAt ? " (đã trả)" : " (chưa trả)"}` : "không"}`;
         after = `Dùng ${value}; ngày bổ sung gần nhất ${(lastSupplementDate === undefined ? t.lastSupplementDate : lastSupplementDate)?.toISOString().slice(0, 10) ?? "—"}; thu hồi ${recoveryRequired ? `${recoveryQuantity}${recoveryReturned ? " (đã trả)" : " (chưa trả)"}` : "không"}`;
         up = await prisma.$transaction(async (tx) => {
+          await claimUsageSnapshot(tx, t, true);
           if (delta) {
             // Chia lại từ đầu theo số dùng mới: trả hết phần cũ về lô rồi cấp lại, không cộng dồn.
             try {
@@ -2829,17 +2896,20 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
       if (countUsagePhotos(t) < photoTotal) return fail(missingUsagePhotoMessage(photoTotal, photoTotal));
 
       const approved = action === "approveUsagePhotos";
-      const up = await prisma.materialTicket.update({
-        where: { id: t.id },
-        data: {
-          status: approved ? "CHO_NGHIEM_THU" : "SU_DUNG_VAT_TU",
-          usagePhotoReviewStatus: approved ? "APPROVED" : "REJECTED",
-          usagePhotoReviewedAt: new Date(),
-          usagePhotoReviewedById: user.id,
-          usagePhotoReviewedByName: user.name ?? "",
-          usagePhotoReviewedPosition: user.position ?? null,
-        },
-        include: ITEM_INCLUDE,
+      const up = await prisma.$transaction(async (tx) => {
+        await claimUsageSnapshot(tx, t, true);
+        return tx.materialTicket.update({
+          where: { id: t.id },
+          data: {
+            status: approved ? "CHO_NGHIEM_THU" : "SU_DUNG_VAT_TU",
+            usagePhotoReviewStatus: approved ? "APPROVED" : "REJECTED",
+            usagePhotoReviewedAt: new Date(),
+            usagePhotoReviewedById: user.id,
+            usagePhotoReviewedByName: user.name ?? "",
+            usagePhotoReviewedPosition: user.position ?? null,
+          },
+          include: ITEM_INCLUDE,
+        });
       });
       await audit(
         user.id,
@@ -2869,17 +2939,20 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
       { const err = assignedPositionError(user, t); if (err) return err; }
       const photoTotal = usagePhotoTotal(t.materialCategory);
       if (countUsagePhotos(t) < photoTotal) return fail(missingUsagePhotoMessage(photoTotal, photoTotal));
-      const up = await prisma.materialTicket.update({
-        where: { id: t.id },
-        data: {
-          status: "CHO_NGHIEM_THU",
-          usagePhotoReviewStatus: "PENDING",
-          usagePhotoReviewedAt: null,
-          usagePhotoReviewedById: null,
-          usagePhotoReviewedByName: null,
-          usagePhotoReviewedPosition: null,
-        },
-        include: ITEM_INCLUDE,
+      const up = await prisma.$transaction(async (tx) => {
+        await claimUsageSnapshot(tx, t, true);
+        return tx.materialTicket.update({
+          where: { id: t.id },
+          data: {
+            status: "CHO_NGHIEM_THU",
+            usagePhotoReviewStatus: "PENDING",
+            usagePhotoReviewedAt: null,
+            usagePhotoReviewedById: null,
+            usagePhotoReviewedByName: null,
+            usagePhotoReviewedPosition: null,
+          },
+          include: ITEM_INCLUDE,
+        });
       });
       await audit(user.id, "MT_USAGE_PHOTOS_RESUBMIT", "MaterialTicket", t.id,
         `${materialTicketReference(t)}: VHV đã tải lại ảnh hiện trường; gửi TC/TK kiểm tra lại`);
@@ -2938,6 +3011,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
             .filter((row) => row.lotId && row.quantity > 0)
         : undefined;
       const up = await prisma.$transaction(async (tx) => {
+        await claimUsageSnapshot(tx, t, true);
         try {
           await consumeStock(tx, {
             materialCode: mat.code,
@@ -3119,6 +3193,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
       if (acceptAllocation?.length) {
         try {
           await prisma.$transaction(async (tx) => {
+            await claimUsageSnapshot(tx, t);
             await consumeStock(tx, {
               materialCode: item.material.code,
               stockUnit: lotStockUnit(item.material.category, t.unit),
@@ -3129,6 +3204,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
             await syncMaterialQuantity(tx, item.material.code, sharedCodesOf(item.material), stockSyncOptions(item.material.category, t.unit));
           });
         } catch (error) {
+          if (error instanceof Response) throw error;
           return fail((error as Error).message);
         }
       }
@@ -3163,6 +3239,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
           : null,
       };
       const up = await prisma.$transaction(async (tx) => {
+        await claimUsageSnapshot(tx, t);
         await tx.materialTicketItem.update({
           where: { id: item.id },
           data: { erpCode, erpName: erpMaterial.name },

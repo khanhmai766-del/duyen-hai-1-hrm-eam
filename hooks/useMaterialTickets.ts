@@ -68,6 +68,7 @@ export interface MaterialTicket {
   /** Con trỏ sang các chuyến xe trong sổ Tồn kho hóa chất (ChemicalReceipt.id). */
   chemicalReceiptIds: string[];
   recoveryDocUrl: string | null;
+  recoveryDocNo?: number | null;
   workStartedAt: string | null;
   workEndedAt: string | null;
   sccnRepresentativeName: string | null;
@@ -303,7 +304,11 @@ export function useTicketAction(id: string | null) {
       apiMutate<MaterialTicket>(`/api/material-tickets/${id}`, "PUT", body),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["material-tickets"] });
-      if (id) qc.invalidateQueries({ queryKey: ["ticket-replacement-request", id] });
+      if (id) {
+        qc.invalidateQueries({ queryKey: ["ticket-replacement-request", id] });
+        qc.invalidateQueries({ queryKey: ["ticket-usage-photos", id] });
+        qc.invalidateQueries({ queryKey: ["ticket-lots", id] });
+      }
       qc.invalidateQueries({ queryKey: ["material-photo-review-tasks"] });
       qc.invalidateQueries({ queryKey: ["material-ticket-options"] });
       qc.invalidateQueries({ queryKey: ["materials"] });

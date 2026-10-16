@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { usageUndoError } from "@/lib/material-ticket-undo-usage";
 import { UsagePhotoCard } from "./UsagePhotoCard";
 import { DeliveryPhotoField } from "./DeliveryPhotoField";
 import {
@@ -1927,6 +1928,7 @@ const showsRepairRequestSection = (ticket: MaterialTicket) =>
 
 function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewer | null; onClose: () => void }) {
   const [showActivity, setShowActivity] = useState(false);
+  const [showUndoUsage, setShowUndoUsage] = useState(false);
   const [reviewStep, setReviewStep] = useState<string | null>(null);
   const flow = flowOf(t);
   const order = orderOf(t);
@@ -1987,8 +1989,8 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
     t.recoveryDocSignedAt && { at: t.recoveryDocSignedAt, who: t.recoveryDocSignedByName, pos: t.recoveryDocSignedByPosition,
       what: "Kho đã ký và trả lại Biên bản vật tư thu hồi" },
     t.settledAt && { at: t.settledAt, who: t.settledByName, what: `Quyết toán vật tư · Số BBNT DO ${t.bbntDoNumber ?? "—"}` },
-    ...(t.activityLogs ?? []).filter((log) => log.action === "MT_EDIT_STEP").map((log) => ({
-      at: log.createdAt, who: log.user.name, pos: log.user.position, what: log.detail ?? "Chỉnh sửa nội dung bước",
+    ...(t.activityLogs ?? []).filter((log) => ["MT_EDIT_STEP", "MT_UNDO_USAGE"].includes(log.action)).map((log) => ({
+      at: log.createdAt, who: log.user.name, pos: log.user.position, what: log.action === "MT_UNDO_USAGE" ? (log.detail?.split("\nDữ liệu đối chiếu: ")[0] ?? "Hủy ghi nhận sử dụng vật tư") : log.detail ?? "Chỉnh sửa nội dung bước",
     })),
   ].filter(Boolean) as Array<{ at: string; who: string | null; pos?: string | null; what: string }>;
 
@@ -1996,6 +1998,15 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
     <>
       {/* Thông tin phiếu (mã, loại, giao, trạng thái...) đã hiện ở dòng bảng — chi tiết chỉ còn tiến trình + nội dung */}
       <div className="p-body">
+        {viewer?.isAdmin && !usageUndoError(t) && (
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3">
+            <span className="text-sm text-amber-950">Nhập nhầm phiếu? Quản trị viên có thể hủy bước sử dụng và hoàn tồn.</span>
+            <Button type="button" variant="outline" className="h-10 whitespace-normal text-sm" onClick={() => setShowUndoUsage(true)}>
+              <Ban size={16} /> Hủy ghi nhận sử dụng
+            </Button>
+          </div>
+        )}
+
         {/* Hàng trên: tiến trình (trái) + Dấu vết (phải) */}
         <div className="p-top">
         <div className="steps">
@@ -2204,9 +2215,50 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
           ))}
         </div>
       </aside>
+      {showUndoUsage && <UndoUsageDialog t={t} onClose={() => setShowUndoUsage(false)} onDone={onClose} />}
       {reviewStep && <StepReviewDialog t={t} viewer={viewer} stepKey={reviewStep} onClose={() => setReviewStep(null)} />}
     </>
   );
+}
+
+function UndoUsageDialog({ t, onClose, onDone }: { t: MaterialTicket; onClose: () => void; onDone: () => void }) {
+  const [reason, setReason] = useState("");
+  const action = useTicketAction(t.id);
+  async function submit() {
+    if (!reason.trim() || action.isPending) return;
+    try {
+      await action.mutateAsync({ action: "undoUsage", reason: reason.trim(), usedAt: t.usedAt });
+      toast.success("Đã hủy ghi nhận sử dụng và hoàn tồn. Hãy nhập lại trên đúng phiếu.");
+      onClose();
+      onDone();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Không thể hủy ghi nhận sử dụng");
+    }
+  }
+  return <Dialog open onOpenChange={(open) => { if (!open && !action.isPending) onClose(); }}>
+    <DialogContent overlayClassName="z-[80]" className="z-[80] max-h-[90dvh] overflow-y-auto sm:max-w-lg" aria-describedby="undo-usage-description">
+      <DialogHeader><DialogTitle>Hủy ghi nhận sử dụng vật tư</DialogTitle></DialogHeader>
+      <div id="undo-usage-description" className="space-y-3 text-sm">
+        <p>Phiếu <b>{materialTicketReference(t)}</b></p>
+        <p>{t.items[0]?.material.name}: hoàn lại <b>{formatVnNumber(t.usedQuantity)} {t.items[0]?.material.unit}</b> vào các lô đã trừ.</p>
+        <p>Phiếu trở về bước Sử dụng vật tư. Thông tin sử dụng, ảnh hiện trường và kết quả duyệt ảnh của lần nhập nhầm sẽ được gỡ khỏi phiếu. Lý do và dữ liệu cũ được lưu trong lịch sử.</p>
+        <p>Sau khi hủy, cần nhập lại trên đúng phiếu; hệ thống không tự chuyển dữ liệu.</p>
+      </div>
+      <label htmlFor="undo-usage-reason" className="space-y-2 text-sm font-medium">
+        <span>Lý do hủy <span aria-hidden="true">*</span></span>
+        <textarea id="undo-usage-reason" required maxLength={1000} rows={3} value={reason}
+          disabled={action.isPending} onChange={(e) => setReason(e.target.value)}
+          placeholder="Ví dụ: Nhập nhầm VT-10 tháng 8, đúng ra là VT-24 tháng 10"
+          className="w-full rounded-md border bg-background p-3 text-base font-normal sm:text-sm" />
+      </label>
+      <DialogFooter className="gap-2">
+        <Button type="button" variant="outline" className="min-h-10" disabled={action.isPending} onClick={onClose}>Đóng</Button>
+        <Button type="button" variant="destructive" className="min-h-10 whitespace-normal" disabled={action.isPending || !reason.trim()} onClick={submit}>
+          {action.isPending && <Loader2 size={16} className="animate-spin" />} Xác nhận hủy và hoàn tồn
+        </Button>
+      </DialogFooter>
+    </DialogContent>
+  </Dialog>;
 }
 
 /* Trạng thái bước → { nội dung gửi lên máy chủ, quyền cần có }. Xem chú thích trong
