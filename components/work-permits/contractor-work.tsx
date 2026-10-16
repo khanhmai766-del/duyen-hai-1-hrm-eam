@@ -1,7 +1,7 @@
 "use client";
 
 import { ContractorPeopleSearch } from "@/components/work-permits/contractor-people-search";
-import { PersonViolations, RecordPersonViolation } from "@/components/work-permits/person-violations";
+import { PersonViolations, PersonViolationTag, RecordPersonViolation } from "@/components/work-permits/person-violations";
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
@@ -295,8 +295,7 @@ function CompanyPeopleTable({ people, canWrite, removing, onEdit, onRemove, with
     {withPhoto && <PersonPhoto person={person} className="h-14 w-[42px] shrink-0 rounded-md border border-slate-200 text-base" />}
     <div className="min-w-0 flex-1">
       <p className="text-[15px] font-semibold leading-5 text-ink">{person.name}</p>
-      <PersonViolations person={person} />
-      {canWrite && <RecordPersonViolation person={person} />}
+      {canWrite ? <RecordPersonViolation person={person} /> : <PersonViolationTag violations={person.violations} />}
       {person.jobTitle?.trim() && <p className="text-xs font-medium text-slate-600">{person.jobTitle.trim()}</p>}
       {person.phone && <p className="mt-0.5 text-xs"><a className="font-medium text-blue-700 underline" href={tel(person.phone)}>{person.phone}</a></p>}
       <div className="mt-1.5 flex flex-wrap items-center gap-1.5">{role(person)}</div>
@@ -317,8 +316,7 @@ function CompanyPeopleTable({ people, canWrite, removing, onEdit, onRemove, with
         {withPhoto && <td className="px-2 py-1.5"><PersonPhoto person={person} className="mx-auto h-12 w-9 rounded-md border border-slate-200 text-sm" /></td>}
         <td className="px-3 py-2">
           <span className="font-semibold text-ink">{person.name}</span>
-          <PersonViolations person={person} />
-          {canWrite && <RecordPersonViolation person={person} />}
+          {canWrite ? <RecordPersonViolation person={person} /> : <PersonViolationTag violations={person.violations} />}
           {works(person)}
         </td>
         <td className="px-3 py-2 text-ink">{person.jobTitle?.trim() || <span className="text-muted-foreground">—</span>}</td>

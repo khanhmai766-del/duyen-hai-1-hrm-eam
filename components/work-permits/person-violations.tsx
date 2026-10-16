@@ -23,6 +23,29 @@ export function PersonViolations({ person, compact = false, actions }: { person:
   </div>;
 }
 
+/**
+ * Số lần vi phạm (ô đỏ) — bấm mới mở chi tiết ngay bên dưới, để danh sách dài không bị khung đỏ chiếm chỗ (16/10/2026).
+ * Đặt trong hàng flex-wrap: chi tiết chiếm trọn một dòng (basis-full).
+ */
+function ViolationCount({ violations, compact }: { violations: PermitPersonViolation[]; compact?: boolean }) {
+  const [open, setOpen] = useState(false);
+  return <>
+    <button type="button" aria-expanded={open} aria-label={`${open ? "Ẩn" : "Xem"} chi tiết ${violations.length} lần vi phạm`} title={open ? "Ẩn chi tiết vi phạm" : "Xem chi tiết vi phạm"}
+      className="inline-flex h-8 min-w-8 items-center justify-center rounded-full bg-red-600 px-2 text-[11px] font-bold tabular-nums text-white hover:bg-red-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400 focus-visible:ring-offset-1 md:h-7 md:min-w-7"
+      onClick={() => setOpen(value => !value)}>{violations.length}</button>
+    {open && <div className="basis-full"><PersonViolations person={{ violations }} compact={compact} /></div>}
+  </>;
+}
+
+/** Nhãn chỉ xem (người không có quyền ghi nhận): "Vi phạm" + số lần; chưa vi phạm thì không hiện gì. */
+export function PersonViolationTag({ violations, compact }: { violations?: PermitPersonViolation[]; compact?: boolean }) {
+  if (!violations?.length) return null;
+  return <div className="mt-1 flex flex-wrap items-center gap-1">
+    <span className="inline-flex h-8 items-center gap-1 px-2 text-[11px] font-medium text-red-700 md:h-7"><Flag aria-hidden="true" className="size-3" />Vi phạm</span>
+    <ViolationCount violations={violations} compact={compact} />
+  </div>;
+}
+
 function ViolationHistory({ person, busy, onReload }: { person: PermitViolationPerson; busy: boolean; onReload: () => void }) {
   const { data: session } = useSession();
   const [adminMode] = useAdminMode();
@@ -47,7 +70,7 @@ function ViolationHistory({ person, busy, onReload }: { person: PermitViolationP
   </div> : <div className="mt-1 flex gap-2"><Button type="button" size="sm" variant="outline" className="h-10 text-xs" aria-label={`Sửa vi phạm lần ${index + 1}`} disabled={busy || change.isPending} onClick={() => setSelected({ id: violation.id, action: "edit", description: violation.description })}>Sửa</Button><Button type="button" size="sm" variant="outline" className="h-10 text-xs text-red-700" aria-label={`Xóa vi phạm lần ${index + 1}`} disabled={busy || change.isPending} onClick={() => setSelected({ id: violation.id, action: "delete", description: violation.description })}>Xóa</Button></div> : undefined} />;
 }
 
-export function RecordPersonViolation(props: { person: PermitPerson; member?: never; context?: never } | { member: PermitMember; context: PermitViolationContext; violations?: PermitPerson["violations"]; person?: never }) {
+export function RecordPersonViolation(props: ({ person: PermitPerson; member?: never; context?: never } | { member: PermitMember; context: PermitViolationContext; violations?: PermitPerson["violations"]; person?: never }) & { compact?: boolean }) {
   const snapshot = props.person ?? props.member;
   const id = props.person?.id ?? props.member?.personId ?? "";
   const context = props.context;
@@ -61,7 +84,11 @@ export function RecordPersonViolation(props: { person: PermitPerson; member?: ne
   const tone = status === "violated" ? "text-red-700 hover:bg-red-50 hover:text-red-800" : status === "clean" ? "text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800" : "text-slate-500 hover:bg-slate-50 hover:text-slate-700";
   const statusLabel = status === "violated" ? `Đã vi phạm ${history?.length ?? 0} lần` : status === "clean" ? "Chưa ghi nhận vi phạm" : "Đang chờ thông tin vi phạm";
   return <>
-    <Button type="button" variant="ghost" size="sm" aria-label="Ghi nhận vi phạm" title={`Ghi nhận vi phạm · ${snapshot.name} · ${statusLabel}`} className={`mt-1 h-8 gap-1 px-2 text-[11px] font-medium md:h-7 [&_svg]:size-3 ${tone}`} onClick={() => setOpen(true)}><Flag aria-hidden="true" />Ghi nhận vi phạm</Button>
+    {/* Đã vi phạm: nhãn đỏ "Vi phạm" (vẫn bấm để ghi thêm lần mới) + số lần — bấm số mới xem chi tiết. */}
+    <div className="mt-1 flex flex-wrap items-center gap-1">
+      <Button type="button" variant="ghost" size="sm" aria-label="Ghi nhận vi phạm" title={`Ghi nhận vi phạm · ${snapshot.name} · ${statusLabel}`} className={`h-8 gap-1 px-2 text-[11px] font-medium md:h-7 [&_svg]:size-3 ${tone}`} onClick={() => setOpen(true)}><Flag aria-hidden="true" />{status === "violated" ? "Vi phạm" : "Ghi nhận vi phạm"}</Button>
+      {status === "violated" && history && <ViolationCount violations={history} compact={props.compact} />}
+    </div>
     {open && <Dialog open onOpenChange={value => { if (!value && !save.isPending) setOpen(false); }}><DialogContent>
       <DialogTitle>Ghi nhận vi phạm</DialogTitle>
       <DialogDescription>{snapshot.name} · {snapshot.code} · {snapshot.company}{context && <span className="mt-1 block font-medium">PCT {context.permitNumber}</span>}</DialogDescription>

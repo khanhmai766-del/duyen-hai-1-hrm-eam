@@ -53,7 +53,15 @@ export function personViolationsPreset(dialog = false, manage = "") {
       await page.getByText("1 nhân viên đã vi phạm").locator("visible=true").waitFor();
       if (page.viewportSize().width < 768) await page.getByRole("button", { name: new RegExp(company) }).first().click();
       else await page.getByRole("row").filter({ hasText: company }).click();
-      await page.getByText("Đã vi phạm 2 lần · Cần chú ý đặc biệt").locator("visible=true").waitFor();
+      // Danh sách chỉ hiện nhãn đỏ "Vi phạm" + số lần; bấm số mới mở chi tiết (16/10/2026).
+      const detail = page.getByText("Đã vi phạm 2 lần · Cần chú ý đặc biệt").locator("visible=true");
+      const count = page.getByRole("button", { name: "Xem chi tiết 2 lần vi phạm", exact: true }).locator("visible=true").first();
+      await count.waitFor();
+      assert.equal(await page.getByRole("button", { name: "Vi phạm", exact: true }).locator("visible=true").count(), 0, "nút ghi nhận của người đã vi phạm phải đọc là “Ghi nhận vi phạm” cho trình đọc màn hình");
+      assert.equal(await detail.count(), 0, "chi tiết vi phạm không được hiện sẵn khi chưa bấm số lần");
+      await count.click();
+      await detail.waitFor();
+      await page.getByRole("button", { name: "Ẩn chi tiết 2 lần vi phạm", exact: true }).locator("visible=true").first().waitFor();
       if (dialog) {
         await page.getByRole("button", { name: "Ghi nhận vi phạm", exact: true }).locator("visible=true").first().click();
         if (!manage) await page.getByRole("dialog").getByRole("textbox").fill("Không sử dụng bảo hộ lao động");

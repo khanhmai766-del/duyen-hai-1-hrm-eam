@@ -1683,7 +1683,8 @@ PRESETS["pct-ghi-nhan-vi-pham"] = {
   async interact(page, route) {
     const button = page.getByRole("button", { name: "Ghi nhận vi phạm", exact: true }).first();
     await button.waitFor();
-    if (!route.includes("?ui=")) { await page.getByText("Đã vi phạm 1 lần", { exact: true }).waitFor(); await button.evaluate(element => element.scrollIntoView({ block: "center" })); return; }
+    // Danh sách chỉ hiện nhãn "Vi phạm" + số lần; chi tiết mở khi bấm số (16/10/2026).
+    if (!route.includes("?ui=")) { await page.getByRole("button", { name: "Xem chi tiết 1 lần vi phạm", exact: true }).first().waitFor(); await button.evaluate(element => element.scrollIntoView({ block: "center" })); return; }
     await button.click();
     const dialog = page.getByRole("dialog");
     await dialog.getByText("Đã vi phạm 1 lần · Cần chú ý đặc biệt").waitFor();
@@ -1691,7 +1692,7 @@ PRESETS["pct-ghi-nhan-vi-pham"] = {
     if (route.endsWith("saved")) {
       await dialog.getByRole("button", { name: "Ghi nhận vi phạm", exact: true }).click();
       await dialog.waitFor({ state: "hidden" });
-      await page.getByText("Đã vi phạm 2 lần", { exact: true }).waitFor();
+      await page.getByRole("button", { name: "Xem chi tiết 2 lần vi phạm", exact: true }).first().waitFor();
       await button.click();
       await page.getByRole("dialog").getByText("Đã vi phạm 2 lần · Cần chú ý đặc biệt").waitFor();
       await page.getByRole("dialog").getByText("Không sử dụng dây an toàn; đã lập biên bản tại hiện trường.", { exact: false }).waitFor();
