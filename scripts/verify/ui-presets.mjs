@@ -1102,6 +1102,7 @@ export const PRESETS = {
       }
     },
     async mock(context, { permitId, base }) {
+      await context.route(`**/api/work-permits/${permitId}/people-violations**`, route => route.fulfill({ json: { data: [], meta: null, error: null } }));
       const now = Date.now();
       let permit = null;
       await context.route(`**/api/work-permits/${permitId}`, async (route) => {
@@ -1658,6 +1659,7 @@ PRESETS["pct-ghi-nhan-vi-pham"] = {
     let person = { id: "ui-p0", code: "UI-100", name: "Trần Văn Bình", company: "Nhà thầu giả lập", version: 17, violations: [
       { id: "old", description: "Không đội mũ bảo hộ", recordedAt: "2026-10-15T08:00:00+07:00", recordedByName: "Người ghi nhận", recordedById: "ui" },
     ] };
+    await context.route(`**/api/work-permits/${ctx.permitId}/people-violations**`, route => route.fulfill({ json: { data: [{ id: person.id, violations: person.violations }], meta: null, error: null } }));
     await context.route("**/api/work-permits/people/*/violations**", async route => {
       const request = route.request(), url = new URL(request.url());
       assert.ok(url.pathname.includes("/ui-p0/violations"));
@@ -1679,7 +1681,7 @@ PRESETS["pct-ghi-nhan-vi-pham"] = {
   async interact(page, route) {
     const button = page.getByRole("button", { name: "Ghi nhận vi phạm", exact: true }).first();
     await button.waitFor();
-    if (!route.includes("?ui=")) { await button.scrollIntoViewIfNeeded(); return; }
+    if (!route.includes("?ui=")) { await page.getByText("Đã vi phạm 1 lần", { exact: true }).waitFor(); await button.evaluate(element => element.scrollIntoView({ block: "center" })); return; }
     await button.click();
     const dialog = page.getByRole("dialog");
     await dialog.getByText("Đã vi phạm 1 lần · Cần chú ý đặc biệt").waitFor();
@@ -1687,6 +1689,7 @@ PRESETS["pct-ghi-nhan-vi-pham"] = {
     if (route.endsWith("saved")) {
       await dialog.getByRole("button", { name: "Ghi nhận vi phạm", exact: true }).click();
       await dialog.waitFor({ state: "hidden" });
+      await page.getByText("Đã vi phạm 2 lần", { exact: true }).waitFor();
       await button.click();
       await page.getByRole("dialog").getByText("Đã vi phạm 2 lần · Cần chú ý đặc biệt").waitFor();
       await page.getByRole("dialog").getByText("Không sử dụng dây an toàn; đã lập biên bản tại hiện trường.", { exact: false }).waitFor();

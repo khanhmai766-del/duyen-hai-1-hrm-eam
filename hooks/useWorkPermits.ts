@@ -422,3 +422,10 @@ export function usePermitViolationPerson(id: string, enabled: boolean, context?:
   return useQuery({ queryKey: ["work-permit-people", "violation", id, query.toString()], enabled: enabled && Boolean(id), staleTime: 0,
     queryFn: () => apiGet<PermitViolationPerson>(`/api/work-permits/people/${encodeURIComponent(id)}/violations?${query}`) });
 }
+
+/** Một yêu cầu cho cả danh sách; cùng khóa danh bạ để ghi lỗi ở đâu cũng cập nhật cảnh báo trên PCT. */
+export function usePermitSessionViolations(permitId: string, sessionId: string, enabled = true) {
+  return useQuery({ queryKey: ["work-permit-people", "session-violations", permitId, sessionId],
+    enabled, staleTime: 15_000, refetchInterval: 30_000,
+    queryFn: () => apiGet<Array<Pick<PermitPerson, "id" | "violations">>>(`/api/work-permits/${encodeURIComponent(permitId)}/people-violations?sessionId=${encodeURIComponent(sessionId)}`) });
+}

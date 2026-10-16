@@ -8,14 +8,14 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/compone
 import { usePermitViolationPerson, useRecordPermitPersonViolation, type PermitViolationContext } from "@/hooks/useWorkPermits";
 import type { PermitMember, PermitPerson } from "@/lib/work-permits";
 
-export function PersonViolations({ person }: { person: Pick<PermitPerson, "violations"> }) {
+export function PersonViolations({ person, compact = false }: { person: Pick<PermitPerson, "violations">; compact?: boolean }) {
   const violations = person.violations ?? [];
   if (!violations.length) return null;
   return <div className="mt-1 min-w-0 rounded-md border border-red-200 bg-red-50 px-2 py-1.5 text-xs text-red-900">
-    <p className="font-bold">Đã vi phạm {violations.length} lần · Cần chú ý đặc biệt</p>
+    <p className="font-bold">Đã vi phạm {violations.length} lần{!compact && " · Cần chú ý đặc biệt"}</p>
     <ul className="mt-1 space-y-1">{violations.map((violation, index) => <li key={violation.id} className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
       <span className="font-semibold">{index + 1}.</span> {violation.description}
-      <span className="block text-[11px] text-red-800">{violation.permitNumber && <span className="font-medium">PCT {violation.permitNumber} · </span>}{new Date(violation.recordedAt).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })} · {violation.recordedByName}</span>
+      {!compact && <span className="block text-[11px] text-red-800">{violation.permitNumber && <span className="font-medium">PCT {violation.permitNumber} · </span>}{new Date(violation.recordedAt).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })} · {violation.recordedByName}</span>}
     </li>)}</ul>
   </div>;
 }

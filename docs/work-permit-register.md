@@ -241,3 +241,8 @@ Ngay trong danh sách **Nhân viên công tác** (màn hình làm việc và ph�
 Nút chỉ hiện khi lần làm việc đang mở và nhân viên có `personId` liên kết danh bạ. API đọc hồ sơ hiện tại khi mở hộp để lấy đúng `version`; không dùng tên/số thẻ từ snapshot để đoán hồ sơ. Ghi từ PCT dùng `requirePermitExecute` + `requirePermitVisible`, đồng thời máy chủ kiểm tra người thuộc đúng lần làm việc đang mở. Số PCT lưu lịch sử được máy chủ lấy từ phiếu, không tin số phiếu gửi từ trình duyệt. Ghi từ danh bạ vẫn yêu cầu `requirePermitIssue`.
 
 Preset `pct-ghi-nhan-vi-pham` kiểm tra danh sách, hộp ghi nhanh và lưu/mở lại lịch sử bằng API giả lập, không ghi DB thật.
+
+
+### Cảnh báo vi phạm ngay trong danh sách nhân viên PCT
+
+Mỗi nhân viên đã vi phạm có cảnh báo đỏ dưới tên, gồm số lần và lỗi vi phạm. Cảnh báo đọc lịch sử hiện tại từ danh bạ theo `personId`, không lấy từ snapshot trên phiếu. API `GET /api/work-permits/[id]/people-violations?sessionId=...` kiểm tra quyền xem PCT, chỉ đọc các hồ sơ liên kết đúng lần làm việc và gộp thành một truy vấn cho toàn danh sách. Sau khi ghi lỗi, danh sách cập nhật ngay; đồng thời tự làm mới mỗi 30 giây để nhận lỗi ghi từ máy khác. Nếu tải lỗi, hiển thị thông báo và nút thử lại.

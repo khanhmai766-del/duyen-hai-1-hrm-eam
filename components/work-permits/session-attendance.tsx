@@ -1,6 +1,6 @@
 "use client";
 
-import { RecordPersonViolation } from "@/components/work-permits/person-violations";
+import { PersonViolations, RecordPersonViolation } from "@/components/work-permits/person-violations";
 import { useId, useMemo, useState } from "react";
 import { LogIn, LogOut, ScanLine, Search, Trash2, Users } from "lucide-react";
 import { useSession } from "next-auth/react";
@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { PermitCardScanner, type ScanOutcome } from "@/components/work-permits/card-scanner";
 import { PermitPeopleDirectory } from "@/components/work-permits/contractor-work";
-import { usePermitAttendance, useRemoveSessionMember, type PermitAttendanceResult } from "@/hooks/useWorkPermits";
+import { usePermitSessionViolations, usePermitAttendance, useRemoveSessionMember, type PermitAttendanceResult } from "@/hooks/useWorkPermits";
 import { useAdminMode } from "@/hooks/useAdminMode";
 import { attendanceInside, attendanceTracked } from "@/lib/work-permit-attendance";
 import { normalizeText } from "@/lib/nav";
@@ -60,6 +60,13 @@ export function SessionAttendance({ permit, session, canExecute, size = "md", au
   const members = useMemo(() => session.members.map((member, index) => ({ member, index }))
     .filter(({ member }) => !isSessionCommander(member, session)), [session]);
   const tracked = members.some(({ member }) => attendanceTracked(member));
+  const violations = usePermitSessionViolations(permit.id, session.id, (live || tracked) && members.some(({ member }) => Boolean(member.personId)));
+  const violationsById = new Map((violations.data?.data ?? []).map(person => [person.id, person]));
+  const violationLoadError = violations.isError && <p role="alert" className="flex flex-wrap items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">Chưa tải được thông tin vi phạm của nhân viên.<Button type="button" variant="ghost" size="sm" onClick={() => void violations.refetch()}>Thử lại</Button></p>;
+  const memberViolations = (member: PermitMember) => {
+    const person = member.personId ? violationsById.get(member.personId) : undefined;
+    return person ? <PersonViolations person={person} compact /> : null;
+  };
   const insideCount = members.filter(({ member }) => attendanceInside(member)).length;
   const commander: PermitMember = { personId: session.commanderId ?? undefined, code: session.commanderCode, name: session.commanderName, company: session.company };
   const previousSessions = live && canExecute && isOverhaulPaperPermit(permit)
@@ -152,14 +159,15 @@ export function SessionAttendance({ permit, session, canExecute, size = "md", au
     const visits = member.attendance ?? [];
     return <div key={member.personId ?? `${index}-${member.name}`} className={`flex flex-wrap items-center gap-2 rounded-md border border-border/70 ${large ? "px-3 py-2.5" : "px-2.5 py-1.5 text-sm"}`}>
       <span className={`${large ? "h-3 w-3" : "h-2 w-2"} shrink-0 rounded-full ${inside ? "bg-emerald-500" : visits.length ? "bg-slate-300" : "bg-amber-400"}`} aria-hidden />
-      <span className="min-w-0 flex-1"><b>{member.name}</b>{member.code ? <span className="text-muted-foreground"> · {member.code}</span> : null}
+      <div className="min-w-0 flex-1"><b>{member.name}</b>{member.code ? <span className="text-muted-foreground"> · {member.code}</span> : null}
         <span className="block text-xs text-muted-foreground">{visits.length ? visits.map(v => `Vào ${dayHhmm(v.in)}${v.out ? ` → Ra ${dayHhmm(v.out)}` : " → đang trong"}`).join(" · ") : "Chưa ghi vào/ra"}</span>
+        {memberViolations(member)}
         {violationButton(member)}
-      </span>
+      </div>
       {live && canExecute && (inside
         ? <Button type="button" size="sm" variant="outline" className={large ? "h-9 px-3" : "h-7 px-2 text-xs"} disabled={attendance.isPending} onClick={() => void manual(member, index, "out")}><LogOut size={14} />Ra</Button>
         : <Button type="button" size="sm" variant="outline" className={large ? "h-9 px-3" : "h-7 px-2 text-xs"} disabled={attendance.isPending} onClick={() => void manual(member, index, "in")}><LogIn size={14} />{visits.length ? "Vào lại" : "Vào"}</Button>)}
-      {canRemove && !inside && <Button type="button" size="sm" variant="outline" className={`${large ? "h-9 w-9" : "h-7 w-7"} px-0 text-red-700 hover:text-red-800`} disabled={removeMember.isPending} aria-label={`Gỡ ${member.name} khỏi lần làm việc`} title="Gỡ khỏi lần làm việc (Quản trị) — xoá luôn lượt vào/ra" onClick={() => void remove(member, index)}><Trash2 size={14} /></Button>}
+      {canRemove && !inside && <Button type="button" size="sm" variant="outline" className={`${large ? "h-10 w-10" : "h-10 w-10 sm:h-7 sm:w-7"} px-0 text-red-700 hover:text-red-800`} disabled={removeMember.isPending} aria-label={`Gỡ ${member.name} khỏi lần làm việc`} title="Gỡ khỏi lần làm việc (Quản trị) — xoá luôn lượt vào/ra" onClick={() => void remove(member, index)}><Trash2 size={14} /></Button>}
     </div>;
   });
 
@@ -187,6 +195,7 @@ export function SessionAttendance({ permit, session, canExecute, size = "md", au
       </div>
       {members.length > 8 && <div className="relative"><Search size={16} className="pointer-events-none absolute left-3 top-3 text-muted-foreground" /><input type="search" aria-label="Tìm nhân viên" className="h-10 w-full rounded-lg border border-input bg-background pl-9 pr-3 text-base focus:outline-none focus:ring-2 focus:ring-ring sm:text-sm" placeholder="Tìm tên hoặc mã thẻ…" value={query} onChange={e => setQuery(e.target.value)} /></div>}
       {filter && <p className="flex items-center justify-between gap-2 text-xs text-muted-foreground"><span>Đang lọc: <b className="text-foreground">{tiles.find(t => t.key === filter)?.label}</b></span><button type="button" className="font-semibold text-blue-700" onClick={() => setFilter(null)}>Bỏ lọc</button></p>}
+      {violationLoadError}
       {members.length === 0 ? <p className="rounded-lg bg-muted/40 p-3 text-sm text-muted-foreground">Chưa có nhân viên bổ sung — quét thẻ người đúng đơn vị để cho vào.</p>
         : shown.length ? <div className="divide-y divide-border overflow-hidden rounded-xl border border-border">{shown.map(({ member, index }) => {
           const inside = attendanceInside(member);
@@ -194,11 +203,12 @@ export function SessionAttendance({ permit, session, canExecute, size = "md", au
           const last = visits[visits.length - 1];
           return <div key={member.personId ?? `${index}-${member.name}`} className="flex items-center gap-3 bg-background px-3 py-2.5">
             <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${inside ? "bg-emerald-500" : visits.length ? "bg-slate-300" : "bg-amber-400"}`} aria-hidden />
-            <span className="min-w-0 flex-1">
+            <div className="min-w-0 flex-1">
               <span className="block truncate text-[15px] font-semibold leading-5">{member.name}</span>
               <span className="block truncate text-xs text-muted-foreground">{member.code || "—"}{last ? ` · ${inside ? `Vào ${shortTime(last.in)}` : `Ra ${shortTime(last.out ?? last.in)}`}${visits.length > 1 ? ` · ${visits.length} lượt` : ""}` : " · Chưa quét"}</span>
+              {memberViolations(member)}
               {violationButton(member)}
-            </span>
+            </div>
             {live && canExecute && <Button type="button" variant="outline" className="h-10 min-w-[4.5rem] shrink-0 px-3" disabled={attendance.isPending} onClick={() => void manual(member, index, inside ? "out" : "in")}>{inside ? <><LogOut size={16} />Ra</> : <><LogIn size={16} />{visits.length ? "Vào lại" : "Vào"}</>}</Button>}
             {canRemove && !inside && <Button type="button" variant="outline" className="h-10 w-10 shrink-0 px-0 text-red-700 hover:text-red-800" disabled={removeMember.isPending} aria-label={`Gỡ ${member.name} khỏi lần làm việc`} title="Gỡ khỏi lần làm việc (Quản trị) — xoá luôn lượt vào/ra" onClick={() => void remove(member, index)}><Trash2 size={16} /></Button>}
           </div>;
@@ -220,6 +230,7 @@ export function SessionAttendance({ permit, session, canExecute, size = "md", au
       </p>
       {live && canExecute && <div className="flex gap-2">{pickButton("h-9 px-3 text-sm")}<Button type="button" size="sm" onClick={() => setScanning(true)}><ScanLine />Quét vào / ra</Button></div>}
     </div>
+    {violationLoadError}
     {members.length > 0 && <div className="max-h-72 space-y-1 overflow-y-auto">{rows}</div>}
     {scanner}{picker}{previousDialog}
   </div>;
