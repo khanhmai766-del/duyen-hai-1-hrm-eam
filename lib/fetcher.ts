@@ -43,8 +43,8 @@ function describeNonJson(res: Response, text: string, fallback: string): string 
   return res.ok ? fallback : `${fallback} (mã ${res.status})`;
 }
 
-export async function apiGet<T>(url: string): Promise<{ data: T; meta: any }> {
-  const res = await fetch(url, { headers: { "Content-Type": "application/json" } });
+export async function apiGet<T>(url: string, options?: { signal?: AbortSignal }): Promise<{ data: T; meta: any }> {
+  const res = await fetch(url, { headers: { "Content-Type": "application/json" }, signal: options?.signal });
   const json = await readEnvelope<T>(res, "Lỗi tải dữ liệu");
   if (!res.ok || json.error) throw new Error(json.error || "Lỗi tải dữ liệu");
   return { data: json.data as T, meta: json.meta };

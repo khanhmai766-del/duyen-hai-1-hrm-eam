@@ -12,6 +12,7 @@ import { PermitCardScanner } from "@/components/work-permits/card-scanner";
 import { PeopleSyncDialog } from "@/components/work-permits/people-sync";
 import { ContractorDashboard, participationRate } from "@/components/work-permits/contractor-dashboard";
 import { SessionAttendance } from "@/components/work-permits/session-attendance";
+import { PersonPhoto } from "@/components/work-permits/person-photo";
 import { SessionHistoryButton } from "@/components/work-permits/session-history";
 import { attendanceInside } from "@/lib/work-permit-attendance";
 import { cardExpired, isCardlessCode } from "@/lib/work-permit-card";
@@ -226,18 +227,6 @@ function RoleSwitch({ person, beforeToggle }: { person: PermitPerson; beforeTogg
     </span>
     <span className={`w-[4.5rem] text-left text-[11px] font-semibold uppercase tracking-wide ${on ? "text-emerald-700" : "text-slate-600"}`}>{on ? "CHTT" : "Nhân viên"}</span>
   </button>;
-}
-
-/**
- * Ảnh thẻ 3x4 thu nhỏ. Chỉ tải khi dòng sắp lọt vào màn hình (lazy) và giải mã ngoài luồng chính; khung cố định
- * nên bảng không nhảy khi ảnh về. Không có ảnh / ảnh lỗi → chữ cái đầu của tên.
- */
-function PersonPhoto({ person, className }: { person: PermitPerson; className: string }) {
-  const [failed, setFailed] = useState(false);
-  const initial = person.name.trim().split(/\s+/).pop()?.[0]?.toUpperCase() ?? "?";
-  if (!person.photoUrl || failed) return <span aria-hidden className={cn(className, "flex items-center justify-center bg-slate-100 font-semibold text-slate-400")}>{initial}</span>;
-  // eslint-disable-next-line @next/next/no-img-element -- ảnh qua proxy S3 có đăng nhập, không đi qua next/image
-  return <img src={person.photoUrl} alt={`Ảnh ${person.name}`} width={36} height={48} loading="lazy" decoding="async" className={cn(className, "object-cover")} onError={() => setFailed(true)} />;
 }
 
 type CompanyPeopleProps = { people: PermitPerson[]; canWrite: boolean; removing: boolean; onEdit: (person: PermitPerson) => void; onRemove: (person: PermitPerson) => void };
@@ -596,10 +585,12 @@ export function ContractorWorkSummary({ permit }: { permit: PermitDetailRow }) {
 /** Lịch sử các lần làm việc; `historyOnly` (màn hình làm việc) chỉ liệt kê lần đã kết thúc — lần đang mở có khối riêng ở trên. */
 export function ContractorSessions({ permit, canExecute, historyOnly = false }: { permit: PermitDetailRow; canExecute: boolean; historyOnly?: boolean }) {
   const [showAllSessions, setShowAllSessions] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [expandedSessions, setExpandedSessions] = useState<string[]>([]);
   const [action, setAction] = useState<"open" | PermitSession | null>(null);
   const [handoff, setHandoff] = useState(false);
   const [updating, setUpdating] = useState(false);
-  const older = usePermitActivity<PermitSession>(permit.id, "sessions", permit.version, showAllSessions && permit.teamType === "CONTRACTOR");
+  const older = usePermitActivity<PermitSession>(permit.id, "sessions", permit.version, historyOpen && showAllSessions && permit.teamType === "CONTRACTOR");
   const visibleSessions = [...permit.sessions, ...(showAllSessions ? older.data?.pages.flatMap(page => page.data) ?? [] : [])].filter(s => !historyOnly || s.endedAt);
   if (permit.teamType !== "CONTRACTOR") return null;
   const live = permit.sessions.find(s => !s.endedAt);
@@ -608,17 +599,21 @@ export function ContractorSessions({ permit, canExecute, historyOnly = false }: 
   return <section className="space-y-3 rounded-xl border border-sky-200 bg-sky-50/40 p-4">
     <div className="flex flex-wrap items-center justify-between gap-3"><h3 className="font-semibold">{historyOnly ? "Các lần làm việc đã kết thúc" : "Các lần làm việc của nhà thầu"}</h3>{!historyOnly && canExecute && !live && !overdue && ["ISSUED", "WAITING"].includes(permit.status) && <Button onClick={() => { setHandoff(false); setUpdating(false); setAction("open"); }}><Play />Cho phép / mở lần làm việc</Button>}</div>
     {!historyOnly && <p className="text-sm text-muted-foreground">Mỗi lần lưu riêng CHTT, nhân viên và thời gian. Kết thúc lần làm việc giải phóng CHTT để làm phiếu khác; PCT vẫn giữ để tiếp tục lần sau.</p>}
-    <details className="rounded-lg border border-border bg-background p-3">
+    <details className="rounded-lg border border-border bg-background p-3" onToggle={event => { if (event.target === event.currentTarget) setHistoryOpen(event.currentTarget.open); }}>
       <summary className="cursor-pointer text-sm font-semibold">Xem lịch sử làm việc · {Math.max(0, permit._count.sessions - (historyOnly && live ? 1 : 0))} lần</summary>
       <div className="mt-3 space-y-3">
     {!visibleSessions.length && <p className="rounded-lg bg-background p-3 text-sm">{historyOnly ? "Chưa có lần làm việc nào kết thúc." : "Chưa ghi nhận lần làm việc. Phiếu phải được cấp trước khi mở lần đầu."}</p>}
-    {visibleSessions.map(s => <details key={s.id} className={`rounded-lg border bg-background p-3 ${s.endedAt ? "border-border" : "border-emerald-400"}`}>
+    {visibleSessions.map(s => <details key={s.id} className={`rounded-lg border bg-background p-3 ${s.endedAt ? "border-border" : "border-emerald-400"}`} onToggle={event => {
+      if (event.target !== event.currentTarget) return;
+      const open = event.currentTarget.open;
+      setExpandedSessions(previous => open ? previous.includes(s.id) ? previous : [...previous, s.id] : previous.filter(id => id !== s.id));
+    }}>
       <summary className="cursor-pointer text-sm font-semibold">{fmt(s.openedAt)} · CHTT {s.commanderName}{!s.endedAt ? " · Đang làm việc" : ""}</summary>
       <div className="mt-3 space-y-2">
       <div className="flex flex-wrap items-start justify-between gap-2"><div><b>{s.commanderName} · {s.commanderCode}</b><p className="text-sm text-muted-foreground">{s.company}</p></div>{!s.endedAt && canExecute && <div className="flex flex-wrap gap-2"><Button variant="outline" disabled={overdue} title={overdue ? "PCT đã quá hạn — không bàn giao, chỉ kết thúc" : undefined} onClick={() => { setHandoff(true); setUpdating(false); setAction(s); }}>Bàn giao / đổi CHTT</Button>{canUpdateOverhaulProgress(permit) && <Button variant="outline" onClick={() => { setHandoff(false); setUpdating(true); setAction(s); }}>Cập nhật tiến độ</Button>}<Button variant="outline" disabled={workersStillInside(s.members, s).length > 0} title={workersStillInside(s.members, s).length ? "Còn nhân viên trong khu vực — quét ra hết rồi mới kết thúc" : undefined} onClick={() => { setHandoff(false); setUpdating(false); setAction(s); }}><Square />Kết thúc lần làm việc</Button></div>}</div>
       <p className="text-sm"><strong>{fmt(s.openedAt)}</strong> → {s.endedAt ? fmt(s.endedAt) : <strong className="text-emerald-700">Đang làm · chưa kết thúc</strong>}</p>
       <p className="text-sm">Người cho phép: {s.authorizerName} · CHTT và {s.members.filter(m => !isSessionCommander(m, s)).length} nhân viên bổ sung</p>
-      <SessionAttendance permit={permit} session={s} canExecute={canExecute} />
+      {historyOpen && expandedSessions.includes(s.id) && <SessionAttendance permit={permit} session={s} canExecute={canExecute} />}
       {s.endedAt && <p className="text-sm">Xác nhận kết thúc: {s.endConfirmedByName}{s.progress != null ? ` · Tiến độ ${s.progress}%` : ""}{s.endNote ? ` · ${s.endNote}` : ""}</p>}
       <details className="text-sm"><summary className="cursor-pointer">Nhân viên và thông tin ghi nhận</summary><div className="mt-2 space-y-1">{s.members.length ? s.members.map((m, i) => <p key={i}>{i + 1}. {[m.name, m.code, m.company].filter(Boolean).join(" · ")}</p>) : <p>Chưa bổ sung danh sách chi tiết.</p>}<p className="pt-2 text-xs text-muted-foreground">Người nhập mở: {s.createdByName}{s.endedByName ? ` · Người nhập kết thúc: ${s.endedByName}` : ""}</p></div></details>
     </div></details>)}

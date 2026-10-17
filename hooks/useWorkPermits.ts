@@ -272,7 +272,7 @@ export function usePermitAttendance(permitId: string) {
   return useMutation({ meta: { background: true },
     mutationFn: (body: { sessionId: string; direction: "auto" | "in" | "out"; personId?: string; index?: number; name?: string }) =>
       apiMutate<PermitAttendanceResult>(`/api/work-permits/${permitId}/sessions/attendance`, "POST", body),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["work-permit"] }); qc.invalidateQueries({ queryKey: ["work-permits", "live"] }); qc.invalidateQueries({ queryKey: ["work-permit-people"] }); } });
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["work-permit"] }); qc.invalidateQueries({ queryKey: ["work-permits", "live"] }); qc.invalidateQueries({ queryKey: ["work-permit-people"], predicate: query => query.queryKey[1] !== "session-violations" }); } });
 }
 
 /** Quản trị gỡ hẳn một nhân viên đã ra khỏi lần làm việc (và khỏi danh sách trên phiếu). */
@@ -281,7 +281,7 @@ export function useRemoveSessionMember(permitId: string) {
   return useMutation({
     mutationFn: (body: { sessionId: string; personId?: string; index?: number; name?: string }) =>
       apiMutate<{ visits: number; removedFromPermit: number }>(`/api/work-permits/${permitId}/sessions/attendance`, "DELETE", body),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["work-permit"] }); qc.invalidateQueries({ queryKey: ["work-permits", "live"] }); qc.invalidateQueries({ queryKey: ["work-permit-people"] }); } });
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["work-permit"] }); qc.invalidateQueries({ queryKey: ["work-permits", "live"] }); qc.invalidateQueries({ queryKey: ["work-permit-people"], predicate: query => query.queryKey[1] !== "session-violations" }); } });
 }
 
 export function usePermitCompanies() {
@@ -434,9 +434,15 @@ export function usePermitViolationPerson(id: string, enabled: boolean, context?:
     queryFn: () => apiGet<PermitViolationPerson>(`/api/work-permits/people/${encodeURIComponent(id)}/violations?${query}`) });
 }
 
-/** Một yêu cầu cho cả danh sách; cùng khóa danh bạ để ghi lỗi ở đâu cũng cập nhật cảnh báo trên PCT. */
-export function usePermitSessionViolations(permitId: string, sessionId: string, enabled = true) {
-  return useQuery({ queryKey: ["work-permit-people", "session-violations", permitId, sessionId],
-    enabled, staleTime: 15_000, refetchInterval: 30_000,
-    queryFn: () => apiGet<Array<Pick<PermitPerson, "id" | "violations">>>(`/api/work-permits/${encodeURIComponent(permitId)}/people-violations?sessionId=${encodeURIComponent(sessionId)}`) });
+/** Một yêu cầu cho cảnh báo + URL ảnh của danh sách đang xem; không lấy cả danh bạ hay byte ảnh. */
+type PermitSessionPerson = Pick<PermitPerson, "id" | "violations" | "photoUrl">;
+export function usePermitSessionViolations(permitId: string, sessionId: string, enabled = true, options: { memberIds?: string[]; live?: boolean } = {}) {
+  // Danh sách đổi sau quét thêm/gỡ người → tải ngay; vào/ra cùng người giữ nguyên cache.
+  const memberIds = [...new Set(options.memberIds ?? [])].sort();
+  return useQuery<{ data: PermitSessionPerson[]; meta: unknown }>({ queryKey: ["work-permit-people", "session-violations", permitId, sessionId, memberIds],
+    enabled: enabled && Boolean(permitId && sessionId), staleTime: 30_000, gcTime: 5 * 60_000,
+    refetchInterval: options.live === false ? false : 30_000, refetchIntervalInBackground: false,
+    // Quét thêm người vẫn giữ ảnh đã có; chuyển PCT/lần làm việc không mang dữ liệu cũ sang.
+    placeholderData: (previous, previousQuery) => previousQuery?.queryKey[2] === permitId && previousQuery.queryKey[3] === sessionId ? previous : undefined,
+    queryFn: ({ signal }) => apiGet<PermitSessionPerson[]>(`/api/work-permits/${encodeURIComponent(permitId)}/people-violations?sessionId=${encodeURIComponent(sessionId)}`, { signal }) });
 }

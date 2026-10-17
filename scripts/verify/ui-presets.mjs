@@ -1,5 +1,6 @@
 import { personViolationsPreset } from "./presets/person-violations.mjs";
 import { materialUndoUsagePreset } from "./presets/material-undo-usage.mjs";
+import { sessionPhotosPreset } from "./presets/session-photos.mjs";
 // Kịch bản dựng sẵn cho ui-shots.mjs: tuyến cần chụp + dữ liệu GIẢ LẬP qua page.route.
 //
 // Giả lập ngay trong trình duyệt để chụp được trạng thái hiếm có trên DB dev (lần làm việc đang mở, danh sách
@@ -1692,6 +1693,7 @@ PRESETS["thanh-noi-thuong-dung"] = {
 };
 
 PRESETS["nhan-su-vi-pham"] = personViolationsPreset();
+PRESETS["pct-nhan-su-co-anh"] = sessionPhotosPreset(PRESETS["pct-lam-viec"], liveSession);
 PRESETS["ghi-nhan-vi-pham"] = personViolationsPreset(true);
 
 PRESETS["quet-the-vi-pham"] = {

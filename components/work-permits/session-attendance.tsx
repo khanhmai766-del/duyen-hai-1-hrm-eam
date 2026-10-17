@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { PermitCardScanner, type ScanOutcome } from "@/components/work-permits/card-scanner";
 import { PermitPeopleDirectory } from "@/components/work-permits/contractor-work";
+import { PersonPhoto } from "@/components/work-permits/person-photo";
 import { usePermitSessionViolations, usePermitAttendance, useRemoveSessionMember, type PermitAttendanceResult } from "@/hooks/useWorkPermits";
 import { useAdminMode } from "@/hooks/useAdminMode";
 import { attendanceInside, attendanceTracked } from "@/lib/work-permit-attendance";
@@ -60,9 +61,11 @@ export function SessionAttendance({ permit, session, canExecute, size = "md", au
   const members = useMemo(() => session.members.map((member, index) => ({ member, index }))
     .filter(({ member }) => !isSessionCommander(member, session)), [session]);
   const tracked = members.some(({ member }) => attendanceTracked(member));
-  const violations = usePermitSessionViolations(permit.id, session.id, (live || tracked) && members.some(({ member }) => Boolean(member.personId)));
-  const violationsById = new Map((violations.data?.data ?? []).map(person => [person.id, person]));
-  const violationLoadError = violations.isError && <p role="alert" className="flex flex-wrap items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">Chưa tải được thông tin vi phạm của nhân viên.<Button type="button" variant="ghost" size="sm" onClick={() => void violations.refetch()}>Thử lại</Button></p>;
+  const memberIds = useMemo(() => members.flatMap(({ member }) => member.personId ? [member.personId] : []), [members]);
+  const violations = usePermitSessionViolations(permit.id, session.id, (live || tracked) && memberIds.length > 0, { memberIds, live });
+  const violationsById = useMemo(() => new Map((violations.data?.data ?? []).map(person => [person.id, person])), [violations.data]);
+  const violationLoadError = violations.isError && <p role="alert" className="flex flex-wrap items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">Chưa tải được ảnh và thông tin vi phạm của nhân viên.<Button type="button" variant="ghost" size="sm" onClick={() => void violations.refetch()}>Thử lại</Button></p>;
+  const memberPhoto = (member: PermitMember) => <PersonPhoto person={{ name: member.name, photoUrl: member.personId ? violationsById.get(member.personId)?.photoUrl : null }} className="h-12 w-9 shrink-0 rounded-md border border-border/60" />;
   const memberViolations = (member: PermitMember) => {
     const person = member.personId ? violationsById.get(member.personId) : undefined;
     return person ? <PersonViolationTag violations={person.violations} compact /> : null;
@@ -154,11 +157,11 @@ export function SessionAttendance({ permit, session, canExecute, size = "md", au
   const violationButton = (member: PermitMember) => live && canExecute && member.personId
     ? <RecordPersonViolation member={member} violations={violationsById.get(member.personId)?.violations} context={{ permitId: permit.id, sessionId: session.id, permitNumber: formatPermitNumber(permit) }} compact />
     : null;
-  const rows = members.map(({ member, index }) => {
+  const rows = !large && members.map(({ member, index }) => {
     const inside = attendanceInside(member);
     const visits = member.attendance ?? [];
     return <div key={member.personId ?? `${index}-${member.name}`} className={`flex flex-wrap items-center gap-2 rounded-md border border-border/70 ${large ? "px-3 py-2.5" : "px-2.5 py-1.5 text-sm"}`}>
-      <span className={`${large ? "h-3 w-3" : "h-2 w-2"} shrink-0 rounded-full ${inside ? "bg-emerald-500" : visits.length ? "bg-slate-300" : "bg-amber-400"}`} aria-hidden />
+      <div className="relative shrink-0">{memberPhoto(member)}<span className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full ring-2 ring-background ${inside ? "bg-emerald-500" : visits.length ? "bg-slate-300" : "bg-amber-400"}`} aria-hidden /></div>
       <div className="min-w-0 flex-1"><b>{member.name}</b>{member.code ? <span className="text-muted-foreground"> · {member.code}</span> : null}
         <span className="block text-xs text-muted-foreground">{visits.length ? visits.map(v => `Vào ${dayHhmm(v.in)}${v.out ? ` → Ra ${dayHhmm(v.out)}` : " → đang trong"}`).join(" · ") : "Chưa ghi vào/ra"}</span>
         {violationButton(member) ?? memberViolations(member)}
@@ -200,15 +203,17 @@ export function SessionAttendance({ permit, session, canExecute, size = "md", au
           const inside = attendanceInside(member);
           const visits = member.attendance ?? [];
           const last = visits[visits.length - 1];
-          return <div key={member.personId ?? `${index}-${member.name}`} className="flex items-center gap-3 bg-background px-3 py-2.5">
-            <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${inside ? "bg-emerald-500" : visits.length ? "bg-slate-300" : "bg-amber-400"}`} aria-hidden />
+          return <div key={member.personId ?? `${index}-${member.name}`} className="grid grid-cols-[2.25rem_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 bg-background px-3 py-2.5">
+            <div className="relative shrink-0">{memberPhoto(member)}<span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full ring-2 ring-background ${inside ? "bg-emerald-500" : visits.length ? "bg-slate-300" : "bg-amber-400"}`} aria-hidden /></div>
             <div className="min-w-0 flex-1">
-              <span className="block truncate text-[15px] font-semibold leading-5">{member.name}</span>
+              <span className="block break-words text-[15px] font-semibold leading-5">{member.name}</span>
               <span className="block truncate text-xs text-muted-foreground">{member.code || "—"}{last ? ` · ${inside ? `Vào ${shortTime(last.in)}` : `Ra ${shortTime(last.out ?? last.in)}`}${visits.length > 1 ? ` · ${visits.length} lượt` : ""}` : " · Chưa quét"}</span>
               {violationButton(member) ?? memberViolations(member)}
             </div>
-            {live && canExecute && <Button type="button" variant="outline" className="h-10 min-w-[4.5rem] shrink-0 px-3" disabled={attendance.isPending} onClick={() => void manual(member, index, inside ? "out" : "in")}>{inside ? <><LogOut size={16} />Ra</> : <><LogIn size={16} />{visits.length ? "Vào lại" : "Vào"}</>}</Button>}
-            {canRemove && !inside && <Button type="button" variant="outline" className="h-10 w-10 shrink-0 px-0 text-red-700 hover:text-red-800" disabled={removeMember.isPending} aria-label={`Gỡ ${member.name} khỏi lần làm việc`} title="Gỡ khỏi lần làm việc (Quản trị) — xoá luôn lượt vào/ra" onClick={() => void remove(member, index)}><Trash2 size={16} /></Button>}
+            <div className={`flex items-center justify-end gap-2 ${canRemove && !inside ? "col-start-2 col-end-4 sm:col-start-auto sm:col-end-auto" : ""}`}>
+              {live && canExecute && <Button type="button" variant="outline" className="h-10 min-w-[4.5rem] shrink-0 px-3" disabled={attendance.isPending} onClick={() => void manual(member, index, inside ? "out" : "in")}>{inside ? <><LogOut size={16} />Ra</> : <><LogIn size={16} />{visits.length ? "Vào lại" : "Vào"}</>}</Button>}
+              {canRemove && !inside && <Button type="button" variant="outline" className="h-10 w-10 shrink-0 px-0 text-red-700 hover:text-red-800" disabled={removeMember.isPending} aria-label={`Gỡ ${member.name} khỏi lần làm việc`} title="Gỡ khỏi lần làm việc (Quản trị) — xoá luôn lượt vào/ra" onClick={() => void remove(member, index)}><Trash2 size={16} /></Button>}
+            </div>
           </div>;
         })}</div> : <p className="rounded-lg bg-muted/40 p-3 text-sm text-muted-foreground">Không có người phù hợp.</p>}
       {/* Máy tính (lg) không có thanh điều hướng đáy và màn hình đủ cao: nút nằm yên bên phải, không dính đáy. */}
