@@ -2,6 +2,7 @@
 import { PermitNumberReview } from "@/components/work-permits/number-review";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { useUrlState } from "@/hooks/useUrlState";
 import { useSession } from "next-auth/react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Activity, BookMarked, ListChecks, ListPlus, ArrowRight, Ban, Building2, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, CircleAlert, ClipboardList, Copy, Download, ExternalLink, FileText, Filter, HardHat, Plus, RefreshCw, RotateCcw, Search, ShieldCheck, SlidersHorizontal, UsersRound, Wrench, Zap, Clock, CalendarRange, Trash2 } from "lucide-react";
@@ -134,15 +135,17 @@ function copiedPaperPermitForm(source: PermitRow): PermitInput {
 /** Tên mục trong danh sách "Nhân sự nhà thầu ▾" (14/10/2026); nhãn ngắn SCTX / Đại tu / Đầu tư vẫn dùng ở chỗ khác. */
 const PEOPLE_SCOPE_NAMES: Record<PermitContractorScope, string> = { SCTX: "Sản xuất kinh doanh", OVERHAUL: "Đại tu", INVESTMENT: "Dự án đầu tư" };
 
+const PAGE_SECTIONS = ["book", "live", "safety", "people", "overhaul"] as const;
+
 export default function WorkPermitsPage() {
   const searchParams = useSearchParams();
   const { data: pageSession } = useSession();
-  const [safetyTab, setSafetyTab] = useState(false);
-  const [peopleTab, setPeopleTab] = useState(false);
-  // Tab "Nhân sự nhà thầu" sổ xuống chọn nhóm: Đại tu hoặc SCTX — mỗi nhóm một danh bạ riêng.
-  const [peopleScope, setPeopleScope] = useState<PermitContractorScope>("OVERHAUL");
-  // Mục "Tiến độ đại tu" (bảng link Google Sheets) — nút ở cuối hàng tab, không nằm trong `tabs`.
-  const [overhaulTab, setOverhaulTab] = useState(false);
+  // Mục đang xem giữ trên URL (?tab=…, ?nhom=…) — F5 vẫn ở đúng mục (17/10/2026); "book" = sổ PCT Cơ/Điện (?kind=).
+  // "overhaul" = mục "Tiến độ đại tu" (bảng link Google Sheets) — nút ở cuối hàng tab, không nằm trong `tabs`.
+  const [section, setSection] = useUrlState("tab", PAGE_SECTIONS, "book");
+  const safetyTab = section === "safety", peopleTab = section === "people", overhaulTab = section === "overhaul", liveTab = section === "live";
+  // Tab "Nhân sự nhà thầu" sổ xuống chọn nhóm: Đại tu / SCTX / Đầu tư — mỗi nhóm một danh bạ riêng.
+  const [peopleScope, setPeopleScope] = useUrlState<PermitContractorScope>("nhom", Object.keys(PERMIT_CONTRACTOR_SCOPES) as PermitContractorScope[], "OVERHAUL");
   const [kind, setKind] = useState<PermitKind>(() => searchParams.get("kind") === "ELECTRICAL" ? "ELECTRICAL" : "MECHANICAL");
   const [q, setQ] = useState(""); const [search, setSearch] = useState("");
   const [workType, setWorkType] = useState("");
@@ -198,7 +201,6 @@ export default function WorkPermitsPage() {
     event.preventDefault();
     setDetail(id);
   };
-  const [liveTab, setLiveTab] = useState(() => searchParams.get("tab") === "live");
   const bookTab = !safetyTab && !peopleTab && !liveTab && !overhaulTab; // đang xem sổ PCT, không phải tab danh mục
   // Luôn tải (nhẹ, 15 giây/lần) để tab "Đang làm việc" có số đếm dù đang ở tab khác.
   const liveSessions = usePermitLiveSessions();
@@ -263,24 +265,21 @@ export default function WorkPermitsPage() {
   // Một nguồn cho cả thanh tab (máy tính) lẫn nút chọn mục (điện thoại).
   const sections = [
     { id: "live", label: "Đang làm việc", menuLabel: "Đang làm việc", icon: Activity, live: true, count: liveCount, active: liveTab, peopleScope: null as PermitContractorScope | null,
-      select: () => { setLiveTab(true); setSafetyTab(false); setPeopleTab(false); setOverhaulTab(false); } },
+      select: () => setSection("live") },
     ...tabs.flatMap(tab => (tab.people ? (Object.keys(PERMIT_CONTRACTOR_SCOPES) as PermitContractorScope[]) : [null]).map(scope => ({
       id: scope ? `${tab.label} ${scope}` : tab.label, label: scope ? `Nhân sự ${PEOPLE_SCOPE_NAMES[scope]}` : tab.label, menuLabel: scope ? PEOPLE_SCOPE_NAMES[scope] : tab.label, icon: tab.icon, live: false, count: 0, peopleScope: scope,
       active: !liveTab && !overhaulTab && (tab.people ? peopleTab && peopleScope === scope : !peopleTab && kind === tab.key && safetyTab === tab.safety),
-      select: () => { if (!tab.people) setKind(tab.key); if (scope) setPeopleScope(scope); setLiveTab(false); setSafetyTab(tab.safety); setPeopleTab(tab.people); setOverhaulTab(false); setPage(1); } }))),
+      select: () => { if (!tab.people) setKind(tab.key); if (scope) setPeopleScope(scope); setSection(tab.people ? "people" : tab.safety ? "safety" : "book"); setPage(1); } }))),
   ];
   // Máy tính: hai mục nhân sự gộp thành MỘT tab "Nhân sự nhà thầu ▾" sổ xuống Đại tu / SCTX.
   const peopleSections = sections.filter(section => section.peopleScope);
   const peopleSection = peopleSections.find(section => section.active);
-  const openOverhaulTab = () => { setOverhaulTab(true); setLiveTab(false); setSafetyTab(false); setPeopleTab(false); };
+  const openOverhaulTab = () => setSection("overhaul");
   const currentSection = overhaulTab ? { label: "Tiến độ đại tu", icon: CalendarRange, live: false } : sections.find(section => section.active) ?? sections[1];
   const CurrentSectionIcon = currentSection.icon;
   const filterLabel = "block text-[11px] font-medium text-muted-foreground";
   function startNewPermit(selectedTeamType: PermitInput["teamType"], selectedKind = kind, reservation?: PermitNumberReservation) {
-    setLiveTab(false);
-    setSafetyTab(false);
-    setPeopleTab(false);
-    setOverhaulTab(false);
+    setSection("book");
     setPage(1);
     setEditor(null);
     setCopySource(null);

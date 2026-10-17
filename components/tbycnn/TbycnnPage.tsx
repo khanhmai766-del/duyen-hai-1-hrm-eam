@@ -15,6 +15,7 @@
 // sắp xếp/lọc được, tra cứu nhanh hơn hẳn cách cuộn tìm khối.
 // =====================================================================
 import { Fragment, useMemo, useState } from "react";
+import { useUrlState } from "@/hooks/useUrlState";
 import { toast } from "sonner";
 import {
   AlertTriangle,
@@ -131,6 +132,7 @@ const ALL = "__all__";
 const MAIN_COL_COUNT = 10;
 /** Khoá tab của sổ chính. Ba tab còn lại lấy khoá từ TBYCNN_TOOL_TABS. */
 const MAIN_TAB = "MAIN";
+const TBYCNN_TABS = [MAIN_TAB, ...TBYCNN_TOOL_TABS.map((t) => t.key)];
 
 /*
  * Hàng CAO HƠN một nhịp so với `TD_ROW` gốc.
@@ -299,7 +301,8 @@ export default function TbycnnPage() {
   const [pageSize, setPageSize] = useState(PCCC_PAGE_SIZES[0]);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   /** Bảng đang xem: MAIN_TAB hoặc khoá của một bảng trong TBYCNN_TOOL_TABS. */
-  const [tab, setTab] = useState<string>(MAIN_TAB);
+  // Tab giữ trên URL (?tab=…) — F5 vẫn ở đúng tab (17/10/2026).
+  const [tab, setTab] = useUrlState<string>("tab", TBYCNN_TABS, MAIN_TAB);
   const [exporting, setExporting] = useState<"excel" | "pdf" | null>(null);
   /** Bản nháp PDF đang mở để xem trước; `null` = chưa dựng bản nào. */
   const [pdfPreview, setPdfPreview] = useState<{ url: string; filename: string } | null>(null);

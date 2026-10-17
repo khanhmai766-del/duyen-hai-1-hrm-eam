@@ -10,6 +10,7 @@ import OilGunBoard from "@/components/oil-guns/OilGunBoard";
 import SootBlowerBoard from "@/components/soot-blowers/SootBlowerBoard";
 import type { DocumentCategory } from "@/hooks/useDocuments";
 import { useRbacAccess } from "@/hooks/useRbacAccess";
+import { useUrlState } from "@/hooks/useUrlState";
 import { useCurrentPosition } from "@/hooks/useCurrentPosition";
 import { OIL_SOOT_GATED_CATEGORIES, positionAllowsOilSoot } from "@/lib/oil-soot-access";
 import { archiveCategoryPermissionId } from "@/lib/archive-permissions";
@@ -119,7 +120,8 @@ export default function ArchiveDocumentsPage() {
     () => (rbac.isLookup && rbac.lookupModules.includes("archive")) || isAdmin || positionAllowsOilSoot(currentPosition.options),
     [isAdmin, currentPosition.options, rbac.isLookup, rbac.lookupModules]
   );
-  const [activeTab, setActiveTab] = React.useState<ArchiveTabKey>("GRID_SEPARATION");
+  // Tab giữ trên URL (?tab=…) — F5 vẫn ở đúng tab (17/10/2026).
+  const [requestedTab, setActiveTab] = useUrlState<ArchiveTabKey>("tab", ARCHIVE_TABS.map((item) => item.key), "GRID_SEPARATION");
   const visibleTabs = React.useMemo(
     () =>
       ARCHIVE_TABS.filter((item) => {
@@ -129,10 +131,8 @@ export default function ArchiveDocumentsPage() {
       }),
     [rbac, canSeeOilSootTabs]
   );
-  // Tab đang chọn không còn quyền xem thì về tab đầu tiên — chỉnh lúc render, điều kiện tự tắt sau khi đặt.
-  if (visibleTabs.length && !visibleTabs.some((item) => item.key === activeTab)) {
-    setActiveTab(visibleTabs[0].key);
-  }
+  // Tab trên URL không có quyền xem (hoặc quyền chưa tải xong) thì hiện tab đầu tiên được xem, không sửa URL.
+  const activeTab: ArchiveTabKey = visibleTabs.some((item) => item.key === requestedTab) ? requestedTab : visibleTabs[0]?.key ?? requestedTab;
   const activeConfig = visibleTabs.find((item) => item.key === activeTab) ?? visibleTabs[0] ?? ARCHIVE_TABS[0];
   const boardContent = BOARD_TABS[activeTab];
   // Tab sơ đồ vòi thổi bụi không có nhóm hồ sơ riêng → khung trang dùng OIL_GUN_DATA (toolbar đã ẩn).

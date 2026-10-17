@@ -281,6 +281,15 @@ export function ReplacementsPageContent({ only }: { only?: TabKey } = {}) {
     only ?? (requestedTab === "status" ? "status" : "schedule")
   );
   const tab: TabKey = only ?? tabState;
+  // Ghi tab đang xem lên URL (?tab=status) để F5 vẫn ở đúng tab (17/10/2026); trang chỉ một tab (only) thì không ghi.
+  React.useEffect(() => {
+    if (only) return;
+    const url = new URL(window.location.href);
+    if ((url.searchParams.get("tab") ?? "schedule") === tabState) return;
+    if (tabState === "schedule") url.searchParams.delete("tab");
+    else url.searchParams.set("tab", tabState);
+    window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
+  }, [only, tabState]);
   // Bộ lọc tháng/năm dùng chung cho cả 2 tab (mặc định tháng hiện tại).
   const [month, setMonth] = React.useState(() => ym(new Date()));
   // Một thanh tìm kiếm dùng chung cho Lịch thay thế và Lịch sử thay thế.

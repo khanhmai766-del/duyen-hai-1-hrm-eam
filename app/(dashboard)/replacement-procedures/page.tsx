@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { useUrlState } from "@/hooks/useUrlState";
+const PROCEDURE_VIEWS = ["TICKETS", "OTHER_STOCK"] as const;
 import { useSession } from "next-auth/react";
 import { BookOpen, Boxes, ChevronDown, ClipboardList, ExternalLink, FileSpreadsheet, FileText, Plus } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
@@ -20,7 +22,8 @@ export default function ReplacementProceduresPage() {
   const position = data?.viewer?.position ?? session?.user?.currentPosition ?? session?.user?.position;
   const canCreate = data?.viewer?.canCreate ?? false;
   const [creating, setCreating] = useState(false);
-  const [view, setView] = useState<"TICKETS" | "OTHER_STOCK">("TICKETS");
+  // Tab giữ trên URL (?tab=…) — F5 vẫn ở đúng tab (17/10/2026).
+  const [view, setView] = useUrlState("tab", PROCEDURE_VIEWS, "TICKETS");
 
   return (
     <div className="space-y-3 sm:space-y-4">

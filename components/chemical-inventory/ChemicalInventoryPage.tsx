@@ -9,6 +9,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useUrlState } from "@/hooks/useUrlState";
+const CHEMICAL_TABS = ["overview", "daily", "grid", "receipts", "annual", "contracts", "history"] as const;
 import { PageHeader } from "@/components/shared/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
@@ -49,7 +51,8 @@ function shiftPeriod(periodKey: string, delta: number) {
 
 export default function ChemicalInventoryPage() {
   const [month, setMonth] = useState(currentPeriodKey);
-  const [tab, setTab] = useState("overview");
+  // Tab giữ trên URL (?tab=…) — F5 vẫn ở đúng tab (17/10/2026).
+  const [tab, setTab] = useUrlState("tab", CHEMICAL_TABS, "overview");
   const [year, setYear] = useState(() => Number(currentPeriodKey().slice(0, 4)));
   const [dailyItemId, setDailyItemId] = useState<string | null>(null);
   const [importOpen, setImportOpen] = useState(false);
@@ -253,7 +256,7 @@ export default function ChemicalInventoryPage() {
           )}
 
           {/* ---------------- Tabs ---------------- */}
-          <Tabs value={tab} onValueChange={setTab}>
+          <Tabs value={tab} onValueChange={(v) => setTab(v as (typeof CHEMICAL_TABS)[number])}>
             <TabsList className="flex w-full flex-wrap justify-start">
               <TabsTrigger value="overview">Tổng quan</TabsTrigger>
               {dailyItems.length > 0 && <TabsTrigger value="daily">Nhật ký NH3</TabsTrigger>}
@@ -265,7 +268,7 @@ export default function ChemicalInventoryPage() {
             </TabsList>
 
             <TabsContent value="overview" className="mt-4">
-              <OverviewTab grid={grid} onOpenTab={setTab} />
+              <OverviewTab grid={grid} onOpenTab={(v) => setTab(v as (typeof CHEMICAL_TABS)[number])} />
             </TabsContent>
 
             {dailyItems.length > 0 && (

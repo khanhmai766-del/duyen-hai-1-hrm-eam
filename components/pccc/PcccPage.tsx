@@ -11,6 +11,7 @@
 // sang chỉ đọc.
 // =====================================================================
 import { useEffect, useMemo, useState } from "react";
+import { useUrlState } from "@/hooks/useUrlState";
 import { toast } from "sonner";
 import {
   Archive,
@@ -126,7 +127,8 @@ import { POSITION_CATALOG } from "@/lib/position-catalog";
 // tab) vì hình dạng dữ liệu giống hệt nhau — tách đôi chỉ làm thanh tab tràn trên
 // màn hình hẹp. Cuộn vòi không có tab riêng: nó là bảng CON nằm dưới tab Tủ chữa cháy,
 // đúng như bản demo.
-type TabKey = "OVERVIEW" | "BCC" | "TCC" | "TDKCC" | "FCD" | "NNBC" | "VAN" | "DEN";
+const TAB_KEYS = ["OVERVIEW", "BCC", "TCC", "TDKCC", "FCD", "NNBC", "VAN", "DEN"] as const;
+type TabKey = (typeof TAB_KEYS)[number];
 
 /**
  * Kỳ của tháng CHƯA TỚI, so theo mốc ngày của server. So bằng chuỗi `<năm><tháng>` cho
@@ -276,7 +278,8 @@ function SelectBox({
 
 export default function PcccPage() {
   const { can } = useRbacAccess();
-  const [tab, setTab] = useState<TabKey>("OVERVIEW");
+  // Tab giữ trên URL (?tab=…) — F5 vẫn ở đúng tab (17/10/2026).
+  const [tab, setTab] = useUrlState<TabKey>("tab", TAB_KEYS, "OVERVIEW");
   const [periodLabel, setPeriodLabel] = useState<string>("");
   const [cuongVi, setCuongVi] = useState("ALL"); // MÃ chức danh, không phải nhãn
   const [machine, setMachine] = useState("ALL");

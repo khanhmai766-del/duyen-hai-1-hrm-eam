@@ -7,6 +7,8 @@
 // Dữ liệu qua hooks/useOilGrouping (TanStack Query).
 // =====================================================================
 import { useEffect, useMemo, useState } from "react";
+import { useUrlState } from "@/hooks/useUrlState";
+const OIL_TABS = ["stock", "all", "pending"] as const;
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { AlertTriangle, ArrowRightLeft, Ban, Check, ChevronDown, ChevronLeft, ChevronRight, CircleDot, Boxes, CloudDownload, Cpu, Cylinder, Droplet, ExternalLink, Filter, FlaskConical, History, Loader2, MoreHorizontal, Paintbrush, Paperclip, Pencil, Plus, RotateCcw, Search, Trash2, Unlink, X, type LucideIcon } from "lucide-react";
@@ -87,7 +89,8 @@ export default function OilGroupingPage() {
   const rbac = useRbacAccess();
   const canManage = rbac.can("erp-material-manage", ["manage", "full"]);
   const category: GroupingCategory = CATEGORY_BY_SLUG[params.get("loai") ?? ""] ?? "Dầu bôi trơn";
-  const [tab, setTab] = useState<"stock" | "all" | "pending">("stock");
+  // Tab giữ trên URL (?tab=…) — F5 vẫn ở đúng tab (17/10/2026).
+  const [tab, setTab] = useUrlState("tab", OIL_TABS, "stock");
   const { data, isLoading, refetch } = useOilStock(category);
   const groups = data?.data.groups ?? [];
   const pendingCount = data?.data.pendingCount ?? 0;
