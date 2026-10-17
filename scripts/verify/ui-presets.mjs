@@ -1087,12 +1087,20 @@ export const PRESETS = {
       return {};
     },
     // Tab "Vòi thổi bụi" chỉ là state trong trang Lưu trữ, nên dùng query giả để phân biệt hai trạng thái chụp.
-    routes: () => ["/documents/archive?vtb=list", "/documents/archive?vtb=ik21", "/documents/archive?vtb=dcs", "/documents/archive?vtb=ir20", "/documents/archive?vtb=ikah03"],
+    routes: () => ["/documents/archive?vtb=list", "/documents/archive?vtb=ik21", "/documents/archive?vtb=dcs", "/documents/archive?vtb=ir20", "/documents/archive?vtb=ikah03", "/documents/archive?vtb=iksh-a1", "/documents/archive?vtb=iksh-b1"],
     async interact(page, route) {
       // Trên điện thoại tab này bị thanh "BGTS Tuabin Ngừng / Bộ lọc" đè (lỗi sẵn có của trang Lưu trữ) → bấm thẳng phần tử.
       await page.getByRole("button", { name: "Vòi thổi bụi" }).first().evaluate((el) => el.click());
       await page.getByText("Vòi cần xử lý").first().waitFor({ timeout: 60_000 });
       if (route.endsWith("vtb=dcs")) await page.getByRole("button", { name: "Sơ đồ", exact: true }).click();
+      // IKSH đánh số lại 17/10/2026 (A1…A6 vách trái, B1…B6 vách phải): tìm IKSH-A1 / B1 → góc nhìn vách đó, nhãn ở vị trí số 1.
+      const iksh = route.match(/vtb=(iksh-[ab]1)$/)?.[1];
+      if (iksh) {
+        await page.getByLabel("Tìm tag vòi").fill(iksh.toUpperCase());
+        await page.getByRole("button", { name: "Tìm", exact: true }).click();
+        await page.getByRole("button", { name: "← Vòi cần xử lý" }).waitFor();
+        await page.getByLabel("Hiện tên vòi").check();
+      }
       const pick = route.match(/vtb=(ik21|ir20|ikah03)$/)?.[1];
       if (pick) {
         await page.getByLabel("Tìm tag vòi").fill(pick.toUpperCase());

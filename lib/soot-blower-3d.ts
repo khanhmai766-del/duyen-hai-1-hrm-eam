@@ -122,6 +122,8 @@ type Group = {
   x?: [number, number] | number;
   rows?: number;
   cols?: number;
+  /** Đảo chiều cột so với màn DCS (cột trái DCS ↔ phía sau-phải người xem). */
+  flip?: boolean;
 };
 
 const ALL_TILES: Record<string, [number, number]> = { ...SB_LEFT_RAW.tiles, ...SB_RIGHT_RAW.tiles };
@@ -148,10 +150,11 @@ const GROUPS: Group[] = [
   { wall: "right", tags: irZone(SB_RIGHT_RAW, "Giữa"), y: [261, 320], x: [160, 213], rows: 2 },
   // IKAH: lưới 2×2 trên mặt sau bộ sấy không khí.
   { wall: "ah", tags: tagsOf("IKAH"), y: [382, 422], x: D_AH, u: [0.25, 0.75] },
-  // IKSH: vòi mới thêm 12/10/2026 trên hai vách bên khối SCR — 2 hàng × 3 vòi cách đều theo bề sâu SCR
-  // (446–550); số lẻ vách trái, số chẵn vách phải như các nhóm khác.
-  { wall: "left", tags: tagsOf("IKSH", (n) => n % 2 === 1), y: [253, 318], x: [463, 533], rows: 2, cols: 3 },
-  { wall: "right", tags: tagsOf("IKSH", (n) => n % 2 === 0), y: [253, 318], x: [463, 533], rows: 2, cols: 3 },
+  // IKSH: hai vách bên khối SCR — 2 hàng × 3 vòi cách đều theo bề sâu SCR (446–550). Đánh số 17/10/2026 theo hình
+  // người dùng (nhìn vách trái từ ngoài): hàng dưới 1-2-3, hàng trên 4-5-6, số 1 phía TRƯỚC lò. Vách trái nhìn từ ngoài
+  // thì phía trước ở bên trái người xem nhưng u tính từ phía sau → đảo cột; vách phải B cùng vị trí vật lý (B1 đối diện A1).
+  { wall: "left", tags: Object.keys(ALL_TILES).filter((t) => t.startsWith("IKSH-A")), y: [253, 318], x: [463, 533], rows: 2, cols: 3, flip: true },
+  { wall: "right", tags: Object.keys(ALL_TILES).filter((t) => t.startsWith("IKSH-B")), y: [253, 318], x: [463, 533], rows: 2, cols: 3 },
 ];
 
 function place(group: Group): BlowerPlacement[] {
@@ -167,7 +170,8 @@ function place(group: Group): BlowerPlacement[] {
   const [hTop, hBottom] = [pxH(group.y[0]), pxH(group.y[1])];
   // Giữ đúng thứ tự cột trái→phải như màn DCS để người vận hành đối chiếu được.
   return group.tags.map((tag) => {
-    const rawX = x1 === x0 ? 0.5 : (ALL_TILES[tag][0] - x0) / (x1 - x0);
+    const dcsX = x1 === x0 ? 0.5 : (ALL_TILES[tag][0] - x0) / (x1 - x0);
+    const rawX = group.flip ? 1 - dcsX : dcsX;
     const nx = group.cols && group.cols > 1 ? Math.round(rawX * (group.cols - 1)) / (group.cols - 1) : rawX;
     const raw = y1 === y0 ? 0.5 : (ALL_TILES[tag][1] - y0) / (y1 - y0);
     const ny = group.rows && group.rows > 1 ? Math.round(raw * (group.rows - 1)) / (group.rows - 1) : raw;
