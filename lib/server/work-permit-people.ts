@@ -42,6 +42,21 @@ export function parsePermitPerson(body: Record<string, unknown>) {
 }
 
 /**
+ * QR họ tên (in cho người lúc CHƯA được cấp thẻ) → hồ sơ ĐÃ CÓ THẺ trùng họ tên (17/10/2026). Người được cấp thẻ rồi vẫn
+ * mang QR cũ thì tra mã tạm HL-… không ra, hộp quét từng cho "Thêm nhanh" → hồ sơ trùng (SGIDC/03 ↔ HL-NGUYEN-TIEN-SY,
+ * thêm/xoá 4 lần). So họ tên không dấu, không phân biệt hoa thường; ưu tiên người đang hoạt động; CHỈ nhận khi đúng một
+ * người khớp — trùng tên hai người thì không đoán.
+ */
+export function pickNamedCardHolder<T extends { code: string; name: string; isActive: boolean }>(candidates: T[], name: string) {
+  const key = (text: string) => normalizeText(text).replace(/\s+/g, " ").trim();
+  const target = key(name);
+  const matches = candidates.filter(person => !isCardlessCode(person.code) && key(person.name) === target);
+  const active = matches.filter(person => person.isActive);
+  if (active.length === 1) return active[0];
+  return !active.length && matches.length === 1 ? matches[0] : null;
+}
+
+/**
  * Tra một thẻ vừa quét: nội dung QR (link ?id= hoặc số thẻ trơn) → hồ sơ + ảnh + các lần làm việc đang mở của người đó.
  * Tra đúng số thẻ (khoá duy nhất) nên nhanh, không phụ thuộc Google Sheets. `null` = nội dung không phải mã thẻ.
  * Dùng chung cho hộp quét thẻ của PCT (/api/work-permits/people/card) và nút "Quét QR" chung (/api/device-qr/resolve).
@@ -51,11 +66,19 @@ export async function lookupPermitCardPerson(raw: string, scope?: string | null)
   if (!code) return null;
   const select = { id: true, code: true, name: true, company: true, phone: true, canCommand: true, isActive: true, version: true, ...personCardSelect } as const;
   // Thẻ SCTX in số trơn nhưng lưu kèm "/SXKD": quét trong PCT SCTX thì thử số + "/SXKD" trước; nơi khác thử số trơn trước
-  // (thẻ Đại tu), không có thì thử bản "/SXKD". QR người chưa có thẻ mang họ tên → thử tiếp mã tạm HL-….
+  // (thẻ Đại tu), không có thì thử bản "/SXKD". QR người chưa có thẻ mang họ tên → người đã có thẻ trùng tên, rồi mã tạm HL-….
   const tries = isCardlessCode(code) || code.endsWith(SCTX_CARD_SUFFIX) ? [code]
     : scope === "SCTX" ? [sctxCardCode(code), code] : [code, sctxCardCode(code)];
   let person = null;
   for (const candidate of tries) { person = await prisma.workPermitPerson.findUnique({ where: { code: candidate }, select }); if (person) break; }
+  // QR họ tên: hồ sơ đã có thẻ trùng tên (cùng nhóm của phiếu nếu biết) trước, rồi mới tới mã tạm HL-… cũ.
+  if (!person && /\s/.test(code)) {
+    const named = await prisma.workPermitPerson.findMany({
+      where: { searchText: { contains: normalizeText(code).replace(/\s+/g, " ").trim() }, ...(scope && Object.hasOwn(PERMIT_CONTRACTOR_SCOPES, scope) ? { scope } : {}) },
+      select, take: 20,
+    });
+    person = pickNamedCardHolder(named, code);
+  }
   person ??= isCardlessCode(code) ? null : await prisma.workPermitPerson.findUnique({ where: { code: cardlessCode(code) }, select });
   if (!person) return { code, person: null };
   const sessions = await prisma.workPermitSession.findMany({

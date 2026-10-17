@@ -1,13 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Camera, CameraOff, CheckCircle2, CircleAlert, CircleX, Flashlight, FlashlightOff, UserPlus, X } from "lucide-react";
+import { Camera, CameraOff, CheckCircle2, CircleAlert, CircleX, Flashlight, FlashlightOff, X } from "lucide-react";
 import { PersonViolations } from "@/components/work-permits/person-violations";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
-import { lookupPermitCard, reportPermitScanMetrics, useSavePermitPerson } from "@/hooks/useWorkPermits";
+import { lookupPermitCard, reportPermitScanMetrics } from "@/hooks/useWorkPermits";
 import { qrCameraTorch, QR_CAMERA_CONSTRAINTS, startQrScanner, tuneQrCameraTrack } from "@/lib/qr-camera";
-import { cardExpired, cardlessCode, isCardlessCode, parseCardQr, sameCompany, sctxCardCode } from "@/lib/work-permit-card";
+import { cardExpired, isCardlessCode, parseCardQr, sameCompany } from "@/lib/work-permit-card";
 import { formatPermitNumber, PERMIT_CONTRACTOR_SCOPES, personScopeError, type PermitContractorScope, type PermitMember, type PermitPerson } from "@/lib/work-permits";
 import { PermitCameraScanGuard } from "@/lib/work-permit-scan-guard";
 import { ScanMetricsCollector, STALL_MS, type ScanMetricResult } from "@/lib/work-permit-scan-metrics";
@@ -116,7 +116,6 @@ export function PermitCardScanner({ unit, companies, scope, existing, permitId, 
 }) {
   const [scans, setScans] = useState<Scan[]>([]);
   const [manual, setManual] = useState("");
-  const [quickName, setQuickName] = useState("");
   const [camera, setCamera] = useState<"off" | "starting" | "on" | "error">("off");
   const [cameraMessage, setCameraMessage] = useState("");
   // Đèn pin (chỉ Chrome Android cho bật) — chỗ thiếu sáng ở hiện trường làm ảnh nhiễu, khó đọc mã.
@@ -136,9 +135,8 @@ export function PermitCardScanner({ unit, companies, scope, existing, permitId, 
   const metricsRef = useRef<ScanMetricsCollector | null>(null);
   metricsRef.current ??= new ScanMetricsCollector(permitId, reportPermitScanMetrics);
   const beep = useBeep();
-  const savePerson = useSavePermitPerson();
   const current = scans[0];
-  const blocked = Boolean(current?.pending || current?.notFound);
+  const blocked = Boolean(current?.pending);
   const blockedRef = useRef(blocked);
   blockedRef.current = blocked;
   const addedCount = scans.filter(s => s.added).length;
@@ -181,7 +179,10 @@ export function PermitCardScanner({ unit, companies, scope, existing, permitId, 
       const lookupAt = performance.now();
       const { person } = await lookupPermitCard(code, scope);
       lookupMs = performance.now() - lookupAt;
-      if (!person) return finish({ code, tone: "warn", title: `Thẻ ${code} chưa có trong danh bạ`, detail: `Nhập họ tên để thêm nhanh vào đơn vị ${unit}.`, notFound: true });
+      // Không còn "Thêm nhanh" (17/10/2026): mỗi lần thêm tay từ hộp quét đẻ một hồ sơ trùng người đã có thẻ (QR họ tên
+      // in lúc chưa cấp thẻ → mã tạm HL-…). Hồ sơ chỉ đến từ bảng thẻ ra vào cổng hoặc quản trị thêm trong danh bạ.
+      if (!person) return finish({ code, tone: "block", title: /\s/.test(code) ? `QR họ tên “${code}” chưa có trong danh bạ` : `Thẻ ${code} chưa có trong danh bạ`,
+        detail: "Không cho vào. Dùng đúng thẻ ra vào cổng đã cấp; người mới cấp thẻ phải có trên bảng thẻ (đồng bộ danh bạ) hoặc nhờ quản trị thêm trong danh bạ.", notFound: true });
       if (isExisting(person)) {
         if (!onExisting) return finish({ code, tone: "info", person, title: person.name, detail: "Đã có trong danh sách lần làm việc này." });
         try { return finish({ code, person, title: person.name, ...await act(() => onExisting(person)) }); }
@@ -307,29 +308,6 @@ export function PermitCardScanner({ unit, companies, scope, existing, permitId, 
     beep(result.tone === "ok");
   }
 
-  async function quickAdd(e: React.FormEvent) {
-    e.preventDefault(); e.stopPropagation();
-    if (!current?.notFound || !quickName.trim()) return;
-    const id = current.id;
-    try {
-      // QR của người chưa được cấp thẻ mang họ tên → lưu mã tạm HL-… (lib/work-permit-card.ts), không lưu họ tên vào ô số thẻ.
-      const code = /\s/.test(current.code) ? cardlessCode(current.code) : current.code;
-      const person = await savePerson.mutateAsync({ body: { code: scope === "SCTX" ? sctxCardCode(code) : code, name: quickName.trim(), company: unit, phone: "", canCommand: false, isActive: true, scope: scope ?? "SCTX" } });
-      const result = await admit(person);
-      setScans(list => list.map(s => s.id === id ? { ...s, notFound: false, person, title: person.name, ...result, detail: result.added ? `Đã thêm vào danh bạ ${unit} và cho vào.` : result.detail } : s));
-      setQuickName("");
-      beep(result.tone === "ok");
-    } catch (error) {
-      setScans(list => list.map(s => s.id === id ? { ...s, detail: error instanceof Error ? error.message : "Không thêm được hồ sơ" } : s));
-      beep(false);
-    }
-  }
-
-  function skipCurrent() {
-    if (!current) return;
-    setScans(list => list.map(s => s.id === current.id ? { ...s, pending: false, notFound: false, tone: "block", detail: s.notFound ? "Bỏ qua — chưa thêm vào danh bạ." : "Không cho vào." } : s));
-  }
-
   return <Dialog open onOpenChange={v => { if (!v) onClose(); }}>
     <DialogContent ref={dialogRef} tabIndex={-1} onOpenAutoFocus={event => {
       // Giữ focus trong hộp quét để dùng bàn phím, nhưng không bật bàn phím ảo khi camera vừa mở.
@@ -415,11 +393,6 @@ export function PermitCardScanner({ unit, companies, scope, existing, permitId, 
             {current.reasons?.map(reason => <p key={reason} className="text-sm font-semibold">⚠ {reason}</p>)}
           </div>
           {current.pending && <div className="flex gap-2 px-3 pb-3"><Button type="button" className="flex-1 bg-amber-600 hover:bg-amber-700" onClick={() => decide(true)}>Vẫn cho vào</Button><Button type="button" variant="outline" className="flex-1" onClick={() => decide(false)}>Không cho vào</Button></div>}
-          {current.notFound && <form className="grid grid-cols-2 gap-2 px-3 pb-3" onSubmit={quickAdd}>
-            <input autoFocus className="col-span-2 min-h-10 min-w-0 rounded-lg border border-input bg-background px-3 text-sm text-foreground" value={quickName} maxLength={200} onChange={e => setQuickName(e.target.value)} placeholder="Họ tên theo thẻ *" aria-label="Họ tên nhân viên" />
-            <Button type="submit" disabled={!quickName.trim() || savePerson.isPending}><UserPlus />{savePerson.isPending ? "Đang thêm…" : "Thêm & cho vào"}</Button>
-            <Button type="button" variant="outline" onClick={skipCurrent}>Bỏ qua</Button>
-          </form>}
         </div> : <p className="rounded-xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">Đưa mã QR trên thẻ vào khung camera, hoặc dùng đầu đọc QR.</p>}
 
         {scans.length > 1 && <div className="space-y-1">
