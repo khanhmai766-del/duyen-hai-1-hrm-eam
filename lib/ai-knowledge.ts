@@ -179,8 +179,12 @@ export type AiKnowledgeSearchChunk = {
  * 0,584–0,668; 4 câu bẫy an toàn (các bước chữa cháy, quy chuẩn kiểm định, cắt điện 6kV) 0,593–0,659.
  * Ngưỡng cũ 0,66 (đo trên 61 đoạn) để lọt câu "ai đang trực ca" — kho lớn thì điểm nền cao lên.
  * Khe hẹp — nạp thêm nhiều tài liệu thì đo lại.
+ *
+ * Đo lại 17/10/2026 khi kho lên 5.754 đoạn (thêm PDF quy trình, tìm bằng pgvector): 6 câu CÓ đáp án đạt
+ * 0,754–0,817; 6 câu không liên quan 0,585–0,691 — "ai đang trực ca hôm nay" 0,691 lọt ngưỡng 0,69.
+ * Nâng 0,72, giữa khe 0,691–0,754.
  */
-export const AI_KNOWLEDGE_MIN_SCORE = 0.69;
+export const AI_KNOWLEDGE_MIN_SCORE = 0.72;
 export const AI_KNOWLEDGE_MAX_RESULTS = 4;
 /** Tối đa 2 đoạn mỗi tài liệu, để một tài liệu dài không chiếm hết chỗ của tài liệu khác. */
 export const AI_KNOWLEDGE_MAX_PER_DOCUMENT = 2;
