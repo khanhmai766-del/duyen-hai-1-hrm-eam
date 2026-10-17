@@ -1,4 +1,3 @@
-import { contractorPeopleSearchPreset } from "./presets/contractor-people-search.mjs";
 import { personViolationsPreset } from "./presets/person-violations.mjs";
 import { materialUndoUsagePreset } from "./presets/material-undo-usage.mjs";
 // Kịch bản dựng sẵn cho ui-shots.mjs: tuyến cần chụp + dữ liệu GIẢ LẬP qua page.route.
@@ -243,8 +242,10 @@ async function writeFakeCameraVideo(file, { px = 5, blur = 0.5, noise = 8 } = {}
   closeSync(fd);
 }
 
+/** Preset nhan-su-loc-nha-thau: interact() không nhận ngữ cảnh của prepare(). */
+let nhanSuLocName = "";
+
 export const PRESETS = {
-  "tra-cuu-nhan-vien": contractorPeopleSearchPreset,
   "material-undo-usage": materialUndoUsagePreset,
   "quet-the-camera-gia": {
     description: "Hộp quét thẻ PCT đọc mã từ CAMERA GIẢ (video .y4m, mã hơi mờ): phải tải được ZXing-C++ (.wasm) và hiện thẻ vừa quét — chỉ tra, không ghi",
@@ -768,6 +769,36 @@ export const PRESETS = {
       await page.locator("table tbody tr, article button[aria-expanded]").locator("visible=true").first().click();
       await page.getByText("Phẩm Đình Tứ").locator("visible=true").first().waitFor();
       await page.waitForTimeout(400);
+    },
+  },
+  "nhan-su-loc-nha-thau": {
+    description: "Danh bạ nhân sự nhà thầu: ô tìm họ tên/số thẻ/SĐT/đơn vị + bộ lọc chọn nhà thầu (chọn → chỉ còn đơn vị đó, tự bung) — DB dev, chỉ đọc",
+    async prepare({ prisma }) {
+      const person = await prisma.workPermitPerson.findFirst({ where: { scope: "OVERHAUL", isActive: true }, orderBy: { name: "asc" }, select: { name: true } });
+      if (!person) throw new Error("DB dev chưa có nhân sự nhà thầu Đại tu nào.");
+      nhanSuLocName = person.name;
+      return {};
+    },
+    routes: () => ["/work-permits"],
+    async interact(page) {
+      const tab = page.getByRole("button", { name: /^Nhân sự nhà thầu/ }).locator("visible=true");
+      if (await tab.count()) await tab.first().click();
+      else await page.getByRole("button", { name: /^Đang xem:/ }).click();
+      await page.getByRole("menuitem", { name: /Đại tu/ }).first().click();
+      const filter = page.getByRole("combobox", { name: "Lọc theo nhà thầu" });
+      await filter.waitFor();
+      const options = await filter.locator("option").allTextContents();
+      assert.ok(options.length >= 2, "Bộ lọc phải có ít nhất một nhà thầu");
+      await filter.selectOption({ index: 1 });
+      const desktop = page.viewportSize().width >= 768;
+      const rows = desktop ? page.locator("table tbody tr:has(button[aria-expanded])") : page.locator("article button[aria-expanded]");
+      await page.waitForTimeout(300);
+      assert.equal(await rows.locator("visible=true").count(), 1, "Chọn nhà thầu thì bảng chỉ còn đơn vị đó");
+      assert.equal(await rows.locator("visible=true").locator("[aria-expanded=true]").count() + (desktop ? 0 : await page.locator("article button[aria-expanded=true]:visible").count()), 1, "Đơn vị vừa chọn phải tự bung");
+      await filter.selectOption({ index: 0 });
+      await page.getByRole("searchbox", { name: "Tìm đơn vị nhà thầu, nhân viên hoặc CHTT" }).fill(nhanSuLocName);
+      await page.getByText(/^Khớp: /).locator("visible=true").first().waitFor().catch(() => {});
+      await page.waitForTimeout(800);
     },
   },
   "dong-bo-nhan-su-chay-nen": {

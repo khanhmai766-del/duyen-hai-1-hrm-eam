@@ -1,6 +1,5 @@
 "use client";
 
-import { ContractorPeopleSearch } from "@/components/work-permits/contractor-people-search";
 import { PersonViolations, PersonViolationTag, RecordPersonViolation } from "@/components/work-permits/person-violations";
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
 import Link from "next/link";
@@ -43,10 +42,12 @@ const fmt = (v: string) => new Date(v).toLocaleString("vi-VN", { timeZone: "Asia
  * Luồng nhập: "Thêm đơn vị" ở đầu trang → mỗi dòng đơn vị có nút "Thêm nhân sự" điền sẵn đơn vị.
  * Thêm xong thì dòng đơn vị tự bung ra để thấy ngay người vừa thêm.
  *
- * `scope` (14/10/2026): tab chọn Đại tu hoặc SCTX — bảng, sĩ số, số đang làm việc, danh sách người
+ * `scope` (14/10/2026): tab chọn Đại tu hoặc SCTX — bảng, sĩ số, số đang làm việc, tìm kiếm, danh sách người
  * khi bung, "Thêm nhân sự" và "Đồng bộ" đều chỉ theo nhóm đó.
  */
 export function PermitCompanyDirectory({ scope }: { scope: PermitContractorScope }) {
+  const [q, setQ] = useState("");
+  const [companyFilter, setCompanyFilter] = useState("");
   const [openCompany, setOpenCompany] = useState<string | null>(null);
   const [editing, setEditing] = useState<PermitPerson | null>(null);
   const [addingPersonTo, setAddingPersonTo] = useState<string | null>(null);
@@ -59,7 +60,32 @@ export function PermitCompanyDirectory({ scope }: { scope: PermitContractorScope
   const people = usePermitCompanyPeople(openCompany ?? "", Boolean(openCompany), scope);
   const canWrite = companies.data?.meta.canWrite ?? false;
   const scopeLabel = PERMIT_CONTRACTOR_SCOPES[scope];
-  const rows = [...(companies.data?.data ?? [])].sort((a, b) => Number(b.overhaul) - Number(a.overhaul) || a.company.localeCompare(b.company, "vi"));
+  // Ô tìm kiếm khớp cả NGƯỜI (họ tên, số thẻ, SĐT — nhân viên lẫn CHTT): tra máy chủ sau khi ngừng gõ,
+  // rồi giữ lại các đơn vị có người khớp. Đơn vị khớp theo mã/tên thì vẫn hiện như cũ.
+  const term = normalizeText(q.trim());
+  const [personQ, setPersonQ] = useState("");
+  useEffect(() => { const timer = setTimeout(() => setPersonQ(q.trim()), 300); return () => clearTimeout(timer); }, [q]);
+  const personSearch = usePermitPeople({ q: personQ, scope, limit: 200, enabled: personQ.length >= 2 });
+  const personHits = new Map<string, PermitPerson[]>();
+  if (term.length >= 2 && normalizeText(personQ) === term) for (const person of personSearch.data?.data ?? []) {
+    // searchText có cả tên đơn vị — chỉ tính người khớp theo chính họ tên / số thẻ / SĐT của họ.
+    if (!normalizeText(`${person.code} ${person.name} ${person.phone ?? ""}`).includes(term)) continue;
+    personHits.set(person.company, [...(personHits.get(person.company) ?? []), person]);
+  }
+  const companyMatches = (row: { code: string; company: string }) => !term || normalizeText(`${row.code} ${row.company}`).includes(term);
+  const allRows = [...(companies.data?.data ?? [])].sort((a, b) => Number(b.overhaul) - Number(a.overhaul) || a.company.localeCompare(b.company, "vi"));
+  // Bộ lọc nhà thầu theo MÃ đơn vị (17/10/2026, thay nút "Tra cứu nhân viên"): chọn một đơn vị → bảng chỉ còn đơn vị đó và tự bung.
+  const pickedCompany = allRows.some(row => row.company === companyFilter) ? companyFilter : "";
+  const companyOptions = [...allRows].sort((a, b) => (a.code || a.company).localeCompare(b.code || b.company, "vi"));
+  const rows = allRows.filter(row => (!pickedCompany || row.company === pickedCompany) && (companyMatches(row) || personHits.has(row.company)));
+  // Đơn vị chỉ hiện vì có người khớp → khi bung ra chỉ liệt kê đúng những người đó.
+  const shownPeople = (company: string, list: PermitPerson[]) => companyMatches({ code: "", company }) || !personHits.has(company) ? list
+    : list.filter(person => normalizeText(`${person.code} ${person.name} ${person.phone ?? ""}`).includes(term));
+  const hitLine = (row: { code: string; company: string }) => {
+    const hits = companyMatches(row) ? undefined : personHits.get(row.company);
+    if (!hits) return null;
+    return <span className="mt-1 block text-xs font-normal text-emerald-800">Khớp: {hits.slice(0, 4).map(person => `${person.name}${person.canCommand ? " (CHTT)" : ""}`).join(", ")}{hits.length > 4 ? ` và ${hits.length - 4} người khác` : ""}</span>;
+  };
   const colCount = canWrite ? 9 : 8;
   const workingTotal = companies.data?.meta.working ?? 0;
   const dailyWorkingLabel = "Số người đã làm việc trong ngày (giờ Việt Nam), gồm CHTT; mỗi người chỉ tính một lần trên tất cả PCT";
@@ -85,13 +111,19 @@ export function PermitCompanyDirectory({ scope }: { scope: PermitContractorScope
     <div className="overflow-hidden rounded-xl border border-border bg-card">
       <div className="flex flex-col gap-3 border-b border-border bg-muted/25 px-4 py-3 md:flex-row md:items-center md:justify-between">
         <p className="text-sm text-muted-foreground"><strong className="font-semibold text-foreground">{rows.length}</strong> đơn vị · <strong className="font-semibold text-foreground">{rows.reduce((sum, row) => sum + row.total, 0)}</strong> người · <span className={workingTotal ? "text-emerald-700" : undefined} title={`CHTT và nhân viên chưa quét RA ở các PCT ${scopeLabel} đang làm việc, tính cho mọi đơn vị`}><strong className="font-semibold">{workingTotal}</strong> đang làm việc</span></p>
-        {/* Tìm người: dùng "Tra cứu nhân viên" (toàn danh bạ, mọi nhóm) — ô lọc bảng đơn vị đã bỏ (17/10/2026). */}
-        <div className="flex justify-end"><ContractorPeopleSearch /></div>
+        <div className="grid w-full grid-cols-1 gap-2 sm:grid-cols-2 md:flex md:w-auto md:items-center">
+          <input type="search" className="h-10 w-full rounded-xl border border-input bg-background px-3 text-base focus:outline-none sm:h-9 sm:text-sm focus:ring-2 focus:ring-ring md:w-72" aria-label="Tìm đơn vị nhà thầu, nhân viên hoặc CHTT" placeholder="Họ tên, số thẻ, SĐT hoặc đơn vị…" value={q} maxLength={200} onChange={e => setQ(e.target.value)} />
+          <select aria-label="Lọc theo nhà thầu" className="h-10 w-full min-w-0 rounded-xl border border-input bg-background px-3 text-base focus:outline-none sm:h-9 sm:text-sm focus:ring-2 focus:ring-ring md:w-52" value={pickedCompany}
+            onChange={e => { setCompanyFilter(e.target.value); setOpenCompany(e.target.value || null); }}>
+            <option value="">Tất cả mã đơn vị ({allRows.length})</option>
+            {companyOptions.map(row => <option key={row.company} value={row.company} title={row.company}>{row.code || row.company}</option>)}
+          </select>
+        </div>
       </div>
       <p className="border-b border-border px-4 py-2 text-xs text-muted-foreground">Làm việc trong ngày{workingDay ? ` ${workingDay}` : ""}: gồm CHTT, mỗi người chỉ tính một lần trên tất cả PCT, theo giờ Việt Nam.</p>
       {companies.isPending ? <p role="status" className="p-6 text-sm">Đang tải danh sách đơn vị…</p>
         : companies.isError ? <p role="alert" className="p-6 text-red-700">{companies.error.message}</p>
-        : !rows.length ? <p className="p-8 text-center text-sm text-muted-foreground">{`Chưa có đơn vị nhà thầu ${scopeLabel} nào.`}</p>
+        : !rows.length ? <p className="p-8 text-center text-sm text-muted-foreground">{q.trim() ? (personSearch.isFetching || normalizeText(personQ) !== term ? "Đang tìm…" : `Không có đơn vị hay người ${scopeLabel} nào khớp từ khóa${pickedCompany ? " trong nhà thầu đang lọc" : ""}.`) : `Chưa có đơn vị nhà thầu ${scopeLabel} nào.`}</p>
         : <>
         {/* Điện thoại: mỗi đơn vị một thẻ, đủ các số liệu mà không phải cuộn bảng nhiều cột. */}
         <div className="divide-y divide-border md:hidden">{rows.map(row => {
@@ -101,7 +133,7 @@ export function PermitCompanyDirectory({ scope }: { scope: PermitContractorScope
             <button type="button" aria-expanded={expanded} onClick={toggle} className="flex w-full items-start gap-3 px-4 pb-2 pt-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500">
               <span className="min-w-0 flex-1">
                 <span className="flex flex-wrap items-center gap-x-2 gap-y-1">{row.code && <span className="rounded-md bg-blue-50 px-1.5 py-0.5 text-xs font-bold tracking-wide text-blue-800">{row.code}</span>}<span className="text-[15px] font-semibold leading-5 text-ink">{row.company}</span><CompanyScopeBadge row={row} /></span>
-                {Boolean(row.violatingPeople) && <span className="mt-1 block text-xs font-semibold text-red-700">{row.violatingPeople} nhân viên đã vi phạm</span>}<span className="mt-1 block text-xs text-muted-foreground">Tổng nhân sự <b className="text-foreground">{row.total}</b> · CHTT <b className={row.commanders ? "text-emerald-700" : "text-amber-700"}>{row.commanders}</b>{row.active < row.total && <span className="text-amber-700"> · {row.total - row.active} ngừng hoạt động</span>}</span>
+                {Boolean(row.violatingPeople) && <span className="mt-1 block text-xs font-semibold text-red-700">{row.violatingPeople} nhân viên đã vi phạm</span>}{hitLine(row)}<span className="mt-1 block text-xs text-muted-foreground">Tổng nhân sự <b className="text-foreground">{row.total}</b> · CHTT <b className={row.commanders ? "text-emerald-700" : "text-amber-700"}>{row.commanders}</b>{row.active < row.total && <span className="text-amber-700"> · {row.total - row.active} ngừng hoạt động</span>}</span>
                 <span className="mt-1 block text-xs text-muted-foreground">Đang làm việc <b className="text-emerald-700">{row.working}</b> · <span title={dailyWorkingLabel}>Làm việc trong ngày <b className="text-blue-700">{row.workingToday ?? 0}</b>{row.active > 0 && ` (${Math.round(participationRate(row.workingToday ?? 0, row.active) * 100)}%)`}</span></span>
               </span>
               <ChevronDown className={`mt-0.5 h-5 w-5 shrink-0 text-muted-foreground transition-transform ${expanded ? "rotate-180" : ""}`} />
@@ -115,7 +147,7 @@ export function PermitCompanyDirectory({ scope }: { scope: PermitContractorScope
               {people.isPending ? <p role="status" className="text-sm text-muted-foreground">Đang tải nhân sự…</p>
                 : people.isError ? <p role="alert" className="text-sm text-red-700">{people.error.message}</p>
                 : !people.data?.data.length ? <p className="text-sm text-muted-foreground">Đơn vị này chưa có nhân sự {scopeLabel}.</p>
-                : <CompanyPeopleGroups people={people.data.data} canWrite={canWrite} removing={remove.isPending} onEdit={setEditing} onRemove={person => void removePerson(person)} />}
+                : <CompanyPeopleGroups people={shownPeople(row.company, people.data.data)} canWrite={canWrite} removing={remove.isPending} onEdit={setEditing} onRemove={person => void removePerson(person)} />}
             </div>}
           </article>;
         })}</div>
@@ -139,7 +171,7 @@ export function PermitCompanyDirectory({ scope }: { scope: PermitContractorScope
                 <TableCell className={cn(TD_EXPAND, "py-2.5")}><RowExpander expanded={expanded} onToggle={() => setOpenCompany(expanded ? null : row.company)} /></TableCell>
                 <TableCell className={cn(TD_ROW, "py-2.5 text-center tabular-nums text-slate-500")}>{index + 1}</TableCell>
                 <TableCell className={cn(TD_ROW, "whitespace-nowrap py-2.5 text-center font-semibold tracking-wide text-blue-800")}>{row.code || <span className="font-normal text-slate-400">—</span>}</TableCell>
-                <TableCell className={cn(TD_ROW, "py-2.5 font-semibold text-ink")}>{row.company}<CompanyScopeBadge row={row} className="ml-2" />{row.active < row.total && <span className="ml-2 text-[11px] font-medium text-amber-700">{row.total - row.active} ngừng hoạt động</span>}{Boolean(row.violatingPeople) && <span className="mt-1 block text-xs font-semibold text-red-700">{row.violatingPeople} nhân viên đã vi phạm</span>}</TableCell>
+                <TableCell className={cn(TD_ROW, "py-2.5 font-semibold text-ink")}>{row.company}<CompanyScopeBadge row={row} className="ml-2" />{row.active < row.total && <span className="ml-2 text-[11px] font-medium text-amber-700">{row.total - row.active} ngừng hoạt động</span>}{Boolean(row.violatingPeople) && <span className="mt-1 block text-xs font-semibold text-red-700">{row.violatingPeople} nhân viên đã vi phạm</span>}{hitLine(row)}</TableCell>
                 <TableCell className={cn(TD_ROW, "py-2.5 text-center tabular-nums")}>{row.working ? <span className="font-semibold text-emerald-700">{row.working}</span> : <span className="text-slate-400">0</span>}</TableCell>
                 <TableCell className={cn(TD_ROW, "py-2.5 text-center tabular-nums")} title={dailyWorkingLabel}>{row.workingToday ? <><span className="font-semibold text-blue-700">{row.workingToday}</span>{row.active > 0 && <span className="ml-1 text-xs text-muted-foreground">· {Math.round(participationRate(row.workingToday, row.active) * 100)}%</span>}</> : <span className="text-slate-400">0</span>}</TableCell>
                 <TableCell className={cn(TD_ROW, "py-2.5 text-center tabular-nums")}>{row.total}</TableCell>
@@ -157,7 +189,7 @@ export function PermitCompanyDirectory({ scope }: { scope: PermitContractorScope
                   {people.isPending ? <p role="status" className="text-sm text-muted-foreground">Đang tải nhân sự…</p>
                     : people.isError ? <p role="alert" className="text-sm text-red-700">{people.error.message}</p>
                     : !people.data?.data.length ? <p className="text-sm text-muted-foreground">Đơn vị này chưa có nhân sự {scopeLabel}.{canWrite ? " Bấm “Thêm nhân sự” trên dòng đơn vị để thêm." : ""}</p>
-                    : <CompanyPeopleGroups people={people.data.data} canWrite={canWrite} removing={remove.isPending} onEdit={setEditing} onRemove={person => void removePerson(person)} />}
+                    : <CompanyPeopleGroups people={shownPeople(row.company, people.data.data)} canWrite={canWrite} removing={remove.isPending} onEdit={setEditing} onRemove={person => void removePerson(person)} />}
                 </div>
               </TableCell></TableRow>}
             </Fragment>;
