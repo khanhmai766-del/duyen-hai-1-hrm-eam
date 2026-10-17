@@ -13,6 +13,15 @@ export const MAX_DOCUMENT_PDF_BYTES = 25 * 1024 * 1024;
 export function isDocumentAiQuotaError(error: string | null | undefined) {
   return /429|quota|RESOURCE_EXHAUSTED/i.test(error ?? "");
 }
+/**
+ * Công tắc tạm dừng nạp PDF vào kho AI (`DOCUMENT_AI_INDEX_PAUSED=1` trong .env): danh sách gửi n8n báo mọi tài liệu
+ * "không cần nạp" và route lập chỉ mục từ chối mà KHÔNG ghi lỗi. Dừng phía web vì tắt workflow bằng CLI n8n phải restart
+ * cả n8n (17/10/2026: gói Gemini miễn phí hết hạn mức, user bảo ngừng nạp). Đồng bộ Drive không bị ảnh hưởng.
+ */
+export function isDocumentAiIndexPaused() {
+  return process.env.DOCUMENT_AI_INDEX_PAUSED?.trim() === "1";
+}
+
 /** Lỗi khác (PDF rỗng / quét không đọc được / quá lớn / quá thời gian…) chờ 3 ngày rồi mới thử lại. */
 export const DOCUMENT_AI_RETRY_DAYS = 3;
 

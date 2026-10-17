@@ -3,7 +3,7 @@ import { fail, handle, ok } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 import { parseGoogleDriveTarget } from "@/lib/google-drive-document";
 import { parseDocumentDriveSyncRecord, verifyN8nDocumentSyncToken } from "@/lib/document-drive-sync";
-import { aiIndexRetryAt, buildDocumentAiIndexVersion } from "@/lib/document-ai-index";
+import { aiIndexRetryAt, buildDocumentAiIndexVersion, isDocumentAiIndexPaused } from "@/lib/document-ai-index";
 import { parseDocumentDriveCandidates } from "@/lib/document-drive-candidates";
 
 export const dynamic = "force-dynamic";
@@ -29,6 +29,7 @@ export async function GET(req: NextRequest) {
     const hasMore = rows.length > limit;
     const nextCursor = hasMore ? String(rows[limit - 1]?.id ?? "") : null;
     const now = Date.now();
+    const paused = isDocumentAiIndexPaused();
     const page = rows.slice(0, limit).map((row) => {
       const source = parseGoogleDriveTarget(String(row.documentUrl ?? ""));
       const desiredAiIndexVersion = buildDocumentAiIndexVersion({
@@ -46,11 +47,11 @@ export async function GET(req: NextRequest) {
         driveFolderId: row.driveFolderId ?? (source.kind === "FOLDER" ? source.id : null),
         driveCandidateFiles: parseDocumentDriveCandidates(row.driveCandidateFiles),
         legacyTargetKind: source.kind,
-        desiredAiIndexVersion: deferred ? row.aiIndexVersion ?? null : desiredAiIndexVersion,
+        desiredAiIndexVersion: deferred || paused ? row.aiIndexVersion ?? null : desiredAiIndexVersion,
         aiIndexRetryAt: deferred ? retryAt!.toISOString() : null,
       };
     });
-    return ok(page, { nextCursor, hasMore });
+    return ok(page, { nextCursor, hasMore, aiIndexPaused: paused });
   });
 }
 

@@ -15,7 +15,12 @@ import {
   isAiKnowledgeCategory,
   rankKnowledgeChunks,
 } from "@/lib/ai-knowledge";
-import { allowedAiKnowledgeCategories, getAiKnowledgeChunks } from "@/lib/ai-knowledge-store";
+import {
+  allowedAiKnowledgeCategories,
+  getAiKnowledgeChunks,
+  searchAiKnowledgeChunksInDb,
+  type AiKnowledgeHit,
+} from "@/lib/ai-knowledge-store";
 import { AiEmbeddingNotConfiguredError, embedTexts } from "@/lib/ai-embedding";
 import {
   AI_MAX_TOOL_CALLS,
@@ -700,9 +705,6 @@ export async function aiSearchKnowledgeBase(user: AiToolUser, input: Record<stri
     return { items: [], message: "Người dùng không có quyền đọc nhóm tài liệu này" };
   }
 
-  const chunks = await getAiKnowledgeChunks();
-  if (!chunks.length) return { items: [], message: "Kho tài liệu chưa được nạp" };
-
   let vector: number[];
   try {
     [vector] = await embedTexts([query], "RETRIEVAL_QUERY", { timeoutMs: 15_000 });
@@ -715,7 +717,12 @@ export async function aiSearchKnowledgeBase(user: AiToolUser, input: Record<stri
     throw error;
   }
 
-  const ranked = rankKnowledgeChunks(vector, chunks, { categories: new Set<string>(categories) });
+  let ranked: AiKnowledgeHit[] | null = await searchAiKnowledgeChunksInDb(vector, categories);
+  if (!ranked) {
+    const chunks = await getAiKnowledgeChunks();
+    if (!chunks.length) return { items: [], message: "Kho tài liệu chưa được nạp" };
+    ranked = rankKnowledgeChunks(vector, chunks, { categories: new Set<string>(categories) });
+  }
   const items = ranked.map(({ chunk, score }) => {
     const group = AI_KNOWLEDGE_CATEGORIES[chunk.category as keyof typeof AI_KNOWLEDGE_CATEGORIES] ?? chunk.category;
     return {

@@ -6,6 +6,7 @@ import { verifyN8nDocumentSyncToken } from "@/lib/document-drive-sync";
 import {
   buildDocumentAiIndexVersion,
   documentAiSourcePath,
+  isDocumentAiIndexPaused,
   MAX_DOCUMENT_PDF_BYTES,
   prepareDocumentAiContent,
 } from "@/lib/document-ai-index";
@@ -38,6 +39,8 @@ export async function POST(req: NextRequest) {
     if (!verifyN8nDocumentSyncToken(req.headers.get("authorization"))) {
       return fail("Không có quyền lập chỉ mục tài liệu", 401);
     }
+    // Tạm dừng thì từ chối TRƯỚC mọi bước ghi: không ghi aiIndexError, để mở lại là tài liệu vào hàng ngay.
+    if (isDocumentAiIndexPaused()) return fail("Đang tạm dừng lập chỉ mục AI cho tài liệu", 503);
 
     const documentId = String(req.nextUrl.searchParams.get("documentId") ?? "").trim();
     const driveFileId = String(req.nextUrl.searchParams.get("fileId") ?? "").trim();
