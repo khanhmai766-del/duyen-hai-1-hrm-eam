@@ -252,9 +252,11 @@ export const SB_3D_TYPE_WALLS: Record<SootBlowerType, BoilerWall[]> = {
   IKEL: ["rear"],
   IKSL: ["left", "right"],
   IKAH: ["ah"],
+  GGH: [], // GGH ở khu FGD, không nằm trên mô hình lò — có mô hình 3D riêng (components/soot-blowers/Ggh3D.tsx)
 };
 
 export function sootBlowerWallLabel(tag: string): string {
+  if (sootBlowerTypeOf(tag) === "GGH") return tag.endsWith("TREN") ? "Bộ GGH · mặt trên" : "Bộ GGH · mặt dưới";
   const p = SB_3D_BY_TAG[tag];
   return p ? BOILER_WALL_LABEL[p.wall] : "";
 }

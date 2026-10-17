@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { Box, Factory, Loader2, Map as MapIcon } from "lucide-react";
@@ -12,6 +12,7 @@ import {
   type SootBlowerDefect,
 } from "@/hooks/useSootBlowers";
 import { useRbacAccess } from "@/hooks/useRbacAccess";
+import { useUrlState } from "@/hooks/useUrlState";
 import {
   SB_LEFT_RAW,
   SB_PAGES,
@@ -29,10 +30,19 @@ import {
   type SootBlowerPageKey,
   type SootBlowerType,
 } from "@/lib/soot-blower-layout";
-import { SB_3D_PLACEMENTS, matchesFilter, sootBlowerWallLabel as wallLabel, type SootBlowerFilter } from "@/lib/soot-blower-3d";
+import { matchesFilter, sootBlowerWallLabel as wallLabel, type SootBlowerFilter } from "@/lib/soot-blower-3d";
 
 // three.js chỉ tải khi mở sơ đồ này, và chỉ chạy phía trình duyệt.
 const Boiler3D = dynamic(() => import("@/components/soot-blowers/Boiler3D"), {
+  ssr: false,
+  loading: () => (
+    <div className="flex h-[62vh] max-h-[640px] min-h-[380px] items-center justify-center gap-2 text-sm font-semibold text-slate-500">
+      <Loader2 className="h-5 w-5 animate-spin" /> Đang tải mô hình 3D…
+    </div>
+  ),
+});
+// Tab GGH: mô hình bộ sấy khói quay GGH (FGD) riêng — cũng chỉ tải khi mở tab đó.
+const Ggh3D = dynamic(() => import("@/components/soot-blowers/Ggh3D"), {
   ssr: false,
   loading: () => (
     <div className="flex h-[62vh] max-h-[640px] min-h-[380px] items-center justify-center gap-2 text-sm font-semibold text-slate-500">
@@ -79,6 +89,8 @@ type Board = {
   history: Map<string, SootBlowerDefect[]>;
   unavail: Set<string>;
 };
+/** Mọi vòi trên sơ đồ DCS — gồm cả GGH (không nằm trên mô hình lò, có mô hình 3D riêng). */
+const ALL_TAGS = [...SB_PAGES.left.tags, ...SB_PAGES.right.tags];
 function statusOf(tag: string, b: Board): Status {
   if (b.unavail.has(tag)) return "BAD";
   return b.open.get(tag)?.length ? "WARN" : "OK";
@@ -89,6 +101,14 @@ const fmtDate = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString(
 function Glyph({ type, cx, cy, color }: { type: SootBlowerType; cx: number; cy: number; color: string }) {
   if (type === "IR") return <polygon points={`${cx},${cy - 6} ${cx + 8},${cy + 6} ${cx - 8},${cy + 6}`} fill={color} />;
   if (type === "IKAH") return <path d={`M${cx - 2.5} ${cy - 7}h5v4.5h4.5v5h-4.5v4.5h-5v-4.5h-4.5v-5h4.5z`} fill={color} />;
+  // GGH: rô-to tròn có nan hướng tâm
+  if (type === "GGH")
+    return (
+      <g stroke={color} fill="none" strokeWidth={1.6}>
+        <circle cx={cx} cy={cy} r={6.5} />
+        <path d={`M${cx - 6.5} ${cy}h13M${cx} ${cy - 6.5}v13M${cx - 4.6} ${cy - 4.6}l9.2 9.2M${cx + 4.6} ${cy - 4.6}l-9.2 9.2`} strokeWidth={1} />
+      </g>
+    );
   const hollow = type === "IKEL";
   if (type === "IKSL")
     return (
@@ -114,17 +134,31 @@ function Glyph({ type, cx, cy, color }: { type: SootBlowerType; cx: number; cy: 
   );
 }
 
+const TYPE_FILTERS: readonly SootBlowerFilter[] = [...SOOT_BLOWER_TYPES, "ALL"];
+const VIEW_MODES = ["3d", "dcs"] as const;
+
 /* ==================== BOARD ==================== */
 export default function SootBlowerBoard() {
-  const [machine, setMachine] = useState<string>("S1");
+  // Tổ máy / loại vòi / chế độ xem giữ trên URL — F5 vẫn ở đúng chỗ (17/10/2026).
+  const [machine, setMachine] = useUrlState<string>("may", SOOT_BLOWER_MACHINES, "S1");
   const [pageKey, setPageKey] = useState<SootBlowerPageKey>("left");
   const [selected, setSelected] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [searchMsg, setSearchMsg] = useState<string | null>(null);
-  const [typeTab, setTypeTab] = useState<SootBlowerFilter>("IK");
-  const [mode, setMode] = useState<"3d" | "dcs">("3d");
+  const [typeTab, setTypeTab] = useUrlState<SootBlowerFilter>("loai", TYPE_FILTERS, "IK");
+  const [mode, setMode] = useUrlState<"3d" | "dcs">("xem", VIEW_MODES, "3d");
 
   const { data, isLoading, error } = useSootBlowers(machine);
+  // Tải trước mã hai mô hình 3D (three.js + lò + GGH) khi trình duyệt rảnh → bấm 3D / tab GGH là hiện ngay (17/10/2026).
+  useEffect(() => {
+    const preload = () => { void import("@/components/soot-blowers/Boiler3D"); void import("@/components/soot-blowers/Ggh3D"); };
+    if (typeof window.requestIdleCallback === "function") {
+      const id = window.requestIdleCallback(preload, { timeout: 4000 });
+      return () => window.cancelIdleCallback(id);
+    }
+    const t = setTimeout(preload, 1500);
+    return () => clearTimeout(t);
+  }, []);
   const rbac = useRbacAccess();
   const canManage = rbac.can("archive-oil-gun-data", ["manage", "full"]);
 
@@ -150,14 +184,13 @@ export default function SootBlowerBoard() {
 
   const totals = useMemo(() => {
     const c: Record<Status, number> = { OK: 0, WARN: 0, BAD: 0 };
-    const all = [...SB_PAGES.left.tags, ...SB_PAGES.right.tags];
-    all.forEach((t) => c[statusOf(t, board)]++);
-    return { ...c, total: all.length };
+    ALL_TAGS.forEach((t) => c[statusOf(t, board)]++);
+    return { ...c, total: ALL_TAGS.length };
   }, [board]);
 
   const statuses = useMemo(() => {
     const out: Record<string, Status> = {};
-    for (const p of SB_3D_PLACEMENTS) out[p.tag] = statusOf(p.tag, board);
+    for (const tag of ALL_TAGS) out[tag] = statusOf(tag, board);
     return out;
   }, [board]);
 
@@ -166,7 +199,7 @@ export default function SootBlowerBoard() {
     if (!pk) return;
     setPageKey(pk);
     // đang xem "Tất cả" thì giữ nguyên, không nhảy sang tab loại của vòi vừa chọn
-    setTypeTab((cur) => (cur === "ALL" ? "ALL" : typeOf(tag)));
+    if (typeTab !== "ALL") setTypeTab(typeOf(tag));
     setSelected(tag);
   };
   const switchType = (t: SootBlowerFilter) => {
@@ -199,7 +232,7 @@ export default function SootBlowerBoard() {
         <div>
           <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">Khiếm khuyết vòi thổi bụi · Tổ máy {machine}</h1>
           <p className="mt-0.5 text-sm text-slate-500">
-            {mode === "3d" ? "Mô hình 3D lò hơi" : "Sơ đồ theo màn DCS SOOT BLOW"} · chọn vòi để xem khiếm khuyết
+            {mode === "3d" ? (typeTab === "GGH" ? "Mô hình 3D bộ sấy khói quay GGH (FGD)" : "Mô hình 3D lò hơi") : "Sơ đồ theo màn DCS SOOT BLOW"} · chọn vòi để xem khiếm khuyết
           </p>
         </div>
         <div className="ml-auto flex flex-wrap items-baseline gap-x-6 gap-y-1">
@@ -211,33 +244,11 @@ export default function SootBlowerBoard() {
       </div>
 
       {/* ===== Thanh điều khiển =====
-          Một hàng: trái = tổ máy + loại vòi; phải (thẳng cột panel bên, 370px) = 3D/Sơ đồ + tìm tag.
-          Hẹp thì xuống dòng: thanh loại vòi và cụm bên phải trải hết bề ngang. */}
+          Một hàng: trái = loại vòi; phải (thẳng cột panel bên, 370px) = tìm tag. Tổ máy + 3D/Sơ đồ nằm trong khung sơ đồ
+          (góc dưới phải, 17/10/2026). Hẹp thì xuống dòng: thanh loại vòi và ô tìm trải hết bề ngang. */}
       <div className="mb-3 flex flex-wrap items-center gap-3">
-        <Segmented>
-          {SOOT_BLOWER_MACHINES.map((m) => (
-            <SegButton
-              key={m}
-              active={machine === m}
-              onClick={() => {
-                setMachine(m);
-                setSelected(null);
-              }}
-            >
-              <Factory className="h-3.5 w-3.5" /> {m}
-            </SegButton>
-          ))}
-        </Segmented>
         <TypeTabs board={board} value={typeView} onChange={switchType} only={mode === "dcs" ? pageTypes : undefined} />
         <div className="flex w-full min-w-0 items-center gap-2 xl:ml-auto xl:w-[370px]">
-          <Segmented>
-            <SegButton active={mode === "3d"} onClick={() => setMode("3d")}>
-              <Box className="h-3.5 w-3.5" /> 3D
-            </SegButton>
-            <SegButton active={mode === "dcs"} onClick={() => setMode("dcs")}>
-              <MapIcon className="h-3.5 w-3.5" /> Sơ đồ
-            </SegButton>
-          </Segmented>
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -261,12 +272,40 @@ export default function SootBlowerBoard() {
       {/* Màn rộng: khung sơ đồ/3D quyết định chiều cao, panel phải giãn bằng nó (nội dung đặt tuyệt đối
           để không kéo cao hàng) và tự cuộn bên trong — hai khung luôn bằng đáy. */}
       <div className="flex flex-col items-start gap-4 xl:flex-row xl:items-stretch">
-        <div className="relative w-full min-w-0 flex-1 overflow-x-auto rounded-xl border border-slate-300" style={{ background: mode === "dcs" ? DCS_BG : undefined }}>
+        {/* Lớp ngoài giữ viền + cụm nút góc (không trôi khi cuộn); lớp trong cuộn ngang ở chế độ Sơ đồ. */}
+        <div className="relative w-full min-w-0 flex-1 overflow-hidden rounded-xl border border-slate-300" style={{ background: mode === "dcs" ? DCS_BG : undefined }}>
+          <div className="overflow-x-auto">
           {mode === "3d" ? (
-            <Boiler3D type={typeTab} statuses={statuses} selected={selected} onSelect={select} />
+            typeTab === "GGH" ? (
+              <Ggh3D statuses={statuses} selected={selected} onSelect={select} />
+            ) : (
+              <Boiler3D type={typeTab} statuses={statuses} selected={selected} onSelect={select} />
+            )
           ) : (
             <Schematic page={page} board={board} selected={selected} typeFocus={typeView === "ALL" ? null : typeView} onSelect={setSelected} />
           )}
+          </div>
+          {/* Góc dưới phải khung: chế độ xem (trên) + tổ máy (dưới), hai hàng cùng bề rộng */}
+          <div className="absolute bottom-3 right-3 z-20 flex w-[168px] flex-col gap-1.5">
+            <FrameToggle
+              label="Chế độ xem"
+              items={[
+                { key: "3d", label: "3D", icon: <Box className="h-3.5 w-3.5" /> },
+                { key: "dcs", label: "Sơ đồ", icon: <MapIcon className="h-3.5 w-3.5" /> },
+              ]}
+              value={mode}
+              onChange={(k) => setMode(k as "3d" | "dcs")}
+            />
+            <FrameToggle
+              label="Tổ máy"
+              items={SOOT_BLOWER_MACHINES.map((m) => ({ key: m, label: m, icon: <Factory className="h-3.5 w-3.5" /> }))}
+              value={machine}
+              onChange={(m) => {
+                setMachine(m);
+                setSelected(null);
+              }}
+            />
+          </div>
           {(isLoading || error) && (
             <div className="absolute inset-0 flex items-center justify-center gap-2 bg-white/60 text-sm font-semibold text-slate-600">
               {isLoading ? (
@@ -295,19 +334,28 @@ export default function SootBlowerBoard() {
   );
 }
 
-function Segmented({ children }: { children: React.ReactNode }) {
-  return <div className="flex overflow-hidden rounded-lg border border-slate-300 bg-white text-sm font-semibold">{children}</div>;
-}
-function SegButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+/** Nhóm nút chọn nổi trên khung sơ đồ (chế độ xem / tổ máy) — chia đều 2 ô, nền trắng mờ để đọc được trên 3D và DCS. */
+function FrameToggle({ label, items, value, onChange }: {
+  label: string;
+  items: { key: string; label: string; icon: React.ReactNode }[];
+  value: string;
+  onChange: (key: string) => void;
+}) {
   return (
-    <button
-      type="button"
-      aria-pressed={active}
-      onClick={onClick}
-      className={`flex items-center gap-2 px-4 py-2 ${active ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-50"}`}
-    >
-      {children}
-    </button>
+    <div role="group" aria-label={label} className="grid grid-cols-2 overflow-hidden rounded-lg border border-slate-300 bg-white/95 text-xs font-semibold shadow-md backdrop-blur">
+      {items.map((it, i) => (
+        <button
+          key={it.key}
+          type="button"
+          aria-pressed={value === it.key}
+          onClick={() => onChange(it.key)}
+          className={`flex h-9 items-center justify-center gap-1.5 ${i ? "border-l border-slate-200" : ""} ${value === it.key ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-50"}`}
+        >
+          {it.icon}
+          {it.label}
+        </button>
+      ))}
+    </div>
   );
 }
 
@@ -320,7 +368,7 @@ function Stat({ n, label, color }: { n: number; label: string; color: string }) 
   );
 }
 
-/* Tab loại vòi — mỗi loại một tab, kiêm luôn chú giải ký hiệu; tab cuối "Tất cả" = cả 110 vòi.
+/* Tab loại vòi — mỗi loại một tab, kiêm luôn chú giải ký hiệu; tab cuối "Tất cả" = mọi vòi (cả GGH).
    Số vàng = vòi đang có vấn đề */
 function TypeTabs({
   board,
@@ -340,7 +388,7 @@ function TypeTabs({
       style={{ gridTemplateColumns: `repeat(${tabs.length}, minmax(0, 1fr))` }}
       className="grid w-full min-w-0 overflow-hidden whitespace-nowrap md:w-auto md:flex-1 lg:max-w-[860px] rounded-lg border border-slate-300 bg-white text-sm font-semibold" role="tablist" aria-label="Loại vòi thổi bụi">
       {tabs.map((t, i) => {
-        const tags = SB_3D_PLACEMENTS.filter((p) => matchesFilter(t, p.type)).map((p) => p.tag);
+        const tags = ALL_TAGS.filter((g) => matchesFilter(t, typeOf(g)));
         const issues = tags.filter((g) => statusOf(g, board) !== "OK").length;
         const active = value === t;
         return (
@@ -459,7 +507,9 @@ function Schematic({
   return (
     <svg
       viewBox={`0 0 ${vw} ${vh}`}
-      className="block h-auto w-full min-w-[720px]"
+      // Cao tối đa 70vh (≤ 760px): màn rộng thì sơ đồ thu lại vừa khung, căn giữa — giãn hết bề ngang thì cao ~800px,
+      // quá to; 62vh thì chữ trong ô vòi quá nhỏ (người dùng chỉnh 17/10/2026).
+      className="block h-auto max-h-[min(70vh,760px)] w-full min-w-[720px]"
       role="img"
       aria-label={`Sơ đồ vòi thổi bụi ${page.label}`}
       onMouseLeave={() => setHover(null)}

@@ -1,4 +1,6 @@
 import { personViolationsPreset } from "./presets/person-violations.mjs";
+import { gghPreset } from "./presets/ggh-3d.mjs";
+import { keepTabPreset } from "./presets/giu-tab-f5.mjs";
 import { materialUndoUsagePreset } from "./presets/material-undo-usage.mjs";
 import { sessionPhotosPreset } from "./presets/session-photos.mjs";
 // Kịch bản dựng sẵn cho ui-shots.mjs: tuyến cần chụp + dữ liệu GIẢ LẬP qua page.route.
@@ -1692,6 +1694,8 @@ PRESETS["thanh-noi-thuong-dung"] = {
   },
 };
 
+PRESETS["ggh-3d"] = gghPreset;
+PRESETS["giu-tab-f5"] = keepTabPreset;
 PRESETS["nhan-su-vi-pham"] = personViolationsPreset();
 PRESETS["pct-nhan-su-co-anh"] = sessionPhotosPreset(PRESETS["pct-lam-viec"], liveSession);
 PRESETS["ghi-nhan-vi-pham"] = personViolationsPreset(true);

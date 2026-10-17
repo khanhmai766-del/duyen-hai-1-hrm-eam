@@ -8,7 +8,8 @@ import { SOOT_BLOWER_TAGS, type SootBlowerDept } from "@/lib/soot-blower-layout"
  * Khiếm khuyết vòi thổi bụi lấy từ SYC (bảng Defect), theo nhánh cây thiết bị
  * "Hệ thống vòi thổi bụi": hành trình dài (IK01–IK24), hành trình ngắn (IR01–IR60), bộ hâm (IKEL01–IKEL10),
  * APH (IKAH01–IKAH04, tag sơ đồ AH01–AH04), và nhánh "Hệ thống thổi bụi SCR" (IKSL-A1…A6, IKSL-B1…B6 — node
- * "Máy thổi bụi SCR nhánh A số 1", KKS 10HSF20AE001…/10HSF30AE001…, 17/10/2026).
+ * "Máy thổi bụi SCR nhánh A số 1", KKS 10HSF20AE001…/10HSF30AE001…, 17/10/2026), và 2 vòi GGH của FGD (GGH-TREN,
+ * GGH-DUOI — nhánh "Bộ GGH", KKS 10HTB10AA001/002, động cơ vòi 10HTB30AE001/002).
  *
  * Cây vật lý chỉ có MỘT bộ node mã chuẩn DH1.S1.x; phiếu S2 gắn vào cùng node với
  * mappedDeviceUnit = "S2" (xem lib/equipment-units.ts canonicalSeq). Nên tổ máy lấy theo
@@ -40,8 +41,12 @@ const TREE_GROUPS: readonly { prefix: string; parentName: string; tagOfName?: (n
     const m = normalizeText(name).match(/nhanh\s*([ab])\s*so\s*0*([1-6])\s*$/);
     return m ? `IKSL-${m[1].toUpperCase()}${m[2]}` : null;
   } },
+  // GGH (FGD, 17/10/2026): node "Vòi thổi bụi trên/dưới" + "Động cơ vòi thổi bụi trên/dưới" dưới "Bộ GGH" → 2 vòi.
+  // "Bản thể GGH" có node con cũng tên "Bộ GGH" nhưng không có con (lọc childCount > 0).
+  { prefix: "GGH", parentName: "bộ ggh", tagOfName: (name) => gghTagOf(normalizeText(name).match(/voi\s+thoi\s+bui\s+(tren|duoi)\s*$/)?.[1]) },
 ];
 type Prefix = string;
+const gghTagOf = (side: string | undefined) => (side === "tren" ? "GGH-TREN" : side === "duoi" ? "GGH-DUOI" : null);
 
 /** Dòng khiếm khuyết SYC đã quy về một vòi — cùng dạng SootBlowerDefect để bảng dùng chung. */
 export type SootBlowerSycDefect = {
@@ -72,7 +77,7 @@ const compact = (s: string) => s.toUpperCase().replace(/\s+/g, "");
 const TAG_PREFIX: Partial<Record<Prefix, string>> = { IKAH: "AH" };
 const tagOf = (prefix: Prefix, n: string | number) => `${TAG_PREFIX[prefix] ?? prefix}${pad2(Number(n))}`;
 
-/** Node vòi của mọi nhóm trong TREE_GROUPS (24 IK + 60 IR + 10 IKEL + 4 IKAH + 12 IKSL). */
+/** Node vòi của mọi nhóm trong TREE_GROUPS (24 IK + 60 IR + 10 IKEL + 4 IKAH + 12 IKSL + 2 GGH). */
 async function loadTreeNodes(): Promise<TreeNode[]> {
   const parents = await prisma.equipmentNode.findMany({
     where: { OR: TREE_GROUPS.map((g) => ({ name: { contains: g.parentName, mode: "insensitive" as const } })), childCount: { gt: 0 } },
@@ -138,9 +143,25 @@ function ikslInText(content: string, out: Set<string>) {
   if (text.includes("thoi bui") && text.includes("scr")) for (const m of text.matchAll(SCR_BRANCH_RE)) add(m[1] ?? m[4], m[2] ?? m[3]);
 }
 
+/**
+ * GGH trong nội dung (bỏ dấu): "vòi thổi bụi trên GGH", "động cơ vòi thổi bụi dưới", "rửa cao áp vòi trên/dưới GGH"
+ * (rửa nước dùng chung cần vòi) — chỉ khi phiếu có ngữ cảnh GGH (chữ "GGH" hoặc KKS HTB…). "đầu vào vòi thổi bụi GGH"
+ * (không nói trên/dưới) không quy về vòi nào.
+ */
+const GGH_PANEL_RE = /htb10gs101\s*-?\s*(top|bot)(?:\s*\/\s*(top|bot))?(?![a-z])/g;
+const GGH_SIDE_RE = /voi\s+(?:thoi\s+bui\s+)?(tren|duoi)(?:\s*(?:\/|va|,)\s*(tren|duoi))?(?![a-z])/g;
+function gghInText(content: string, out: Set<string>) {
+  const text = normalizeText(content);
+  if (!/(?<![a-z])ggh(?![a-z])|htb\d/.test(text)) return;
+  for (const m of text.matchAll(GGH_SIDE_RE)) for (const side of [m[1], m[2]]) { const tag = gghTagOf(side); if (tag) out.add(tag); }
+  // KKS tủ tại chỗ của cần vòi hiện trường hay ghi: "10HTB10GS101-TOP" (vòi trên) / "-BOT" (vòi dưới), cả "-top/bot"
+  for (const m of text.matchAll(GGH_PANEL_RE)) for (const side of [m[1], m[2]]) { const tag = gghTagOf(side === "top" ? "tren" : side === "bot" ? "duoi" : undefined); if (tag) out.add(tag); }
+}
+
 export function tagsInText(content: string): Set<string> {
   const out = new Set<string>();
   ikslInText(content, out);
+  gghInText(content, out);
   for (const { prefix } of NUMBERED_GROUPS) {
     for (const m of content.matchAll(LIST_RE[prefix])) {
       for (const n of [m[1], ...(m[2].match(/\d{1,2}/g) ?? [])]) {
@@ -189,7 +210,7 @@ const SELECT = {
 
 type Row = Prisma.DefectGetPayload<{ select: typeof SELECT }>;
 
-/** Khiếm khuyết SYC của các vòi lấy từ cây (IK, IR, IKEL, IKAH, IKSL) một tổ máy — cả đang mở lẫn đã xử lý (lịch sử). */
+/** Khiếm khuyết SYC của các vòi lấy từ cây (IK, IR, IKEL, IKAH, IKSL, GGH) một tổ máy — cả đang mở lẫn đã xử lý (lịch sử). */
 export async function loadSootBlowerSycDefects(machine: string): Promise<SootBlowerSycDefect[]> {
   const nodes = await loadTreeNodes();
   if (nodes.length === 0) return [];
@@ -217,7 +238,7 @@ export async function loadSootBlowerSycDefects(machine: string): Promise<SootBlo
         unit: machine,
         deviceSeq: null,
         relatedDevices: { none: {} },
-        OR: [...TREE_GROUPS.map((g) => g.prefix), "HCB", "HSF", "SCR"].map((t) => ({ content: { contains: t, mode: "insensitive" as const } })),
+        OR: [...TREE_GROUPS.map((g) => g.prefix), "HCB", "HSF", "SCR", "HTB"].map((t) => ({ content: { contains: t, mode: "insensitive" as const } })),
       },
       select: SELECT,
     }),

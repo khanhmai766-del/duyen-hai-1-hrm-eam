@@ -12,7 +12,9 @@ const PAD = 12; // lề khung nét đứt
 // IKSL-B1…B6 (đánh số lại 17/10/2026 theo hình người dùng, thay IKSL01–12 lẻ trái/chẵn phải). Mỗi vách: hàng dưới 1-2-3,
 // hàng trên 4-5-6, từ phía trước lò ra sau; B cùng vị trí vật lý với A (B1 đối diện A1). Ô trên sơ đồ DCS đặt vào chỗ
 // trống, chưa theo màn DCS thật — hàng trên 4-5-6, hàng dưới 1-2-3, trái→phải.
-export type SootBlowerType = "IK" | "IR" | "IKEL" | "IKSL" | "IKAH";
+// GGH = 2 vòi thổi bụi bộ sấy khói quay GGH của FGD (17/10/2026): vòi trên GGH-TREN (KKS x0HTB10AA001), vòi dưới
+// GGH-DUOI (x0HTB10AA002) — cây thiết bị "Bộ GGH". Ô DCS đặt dưới khối Air heater, chưa theo màn DCS thật.
+export type SootBlowerType = "IK" | "IR" | "IKEL" | "IKSL" | "IKAH" | "GGH";
 export type SootBlowerPageKey = "left" | "right";
 type XY = [number, number];
 
@@ -77,6 +79,7 @@ export const SB_RIGHT_RAW: RawPage = {
     IK06: [933, 172], IK12: [1016, 172], IK18: [1220, 107], IK20: [1309, 107], IK22: [1220, 187], IK24: [1309, 187],
     IKEL02: [1278, 258], IKEL04: [1330, 248], IKEL06: [1385, 240], IKEL08: [1442, 229], IKEL10: [1497, 220],
     AH01: [1593, 258], AH02: [1668, 258], AH03: [1593, 335], AH04: [1668, 335],
+    "GGH-TREN": [1593, 430], "GGH-DUOI": [1668, 430],
     IR49: [825, 425], IR51: [871, 434], IR53: [918, 442], IR55: [963, 452], IR57: [1009, 461], IR59: [1055, 472],
     IR36: [1125, 468], IR34: [1175, 468], IR32: [1222, 468],
     IR60: [1292, 472], IR58: [1340, 463], IR56: [1385, 455], IR54: [1430, 446], IR52: [1475, 438], IR50: [1520, 429],
@@ -90,6 +93,7 @@ export const SB_RIGHT_RAW: RawPage = {
     { kind: "slope", name: "Right side · IKEL", top: ["IKEL02", "IKEL04", "IKEL06", "IKEL08", "IKEL10"] },
     { kind: "box", name: "Right side · IKSL (SCR)", tags: ["IKSL-B4", "IKSL-B5", "IKSL-B6", "IKSL-B1", "IKSL-B2", "IKSL-B3"] },
     { kind: "box", name: "Air heater", tags: ["AH01", "AH02", "AH03", "AH04"] },
+    { kind: "box", name: "GGH (FGD)", tags: ["GGH-TREN", "GGH-DUOI"] },
     { kind: "slope", name: "Front wall · nửa phải", top: ["IR49", "IR51", "IR53", "IR55", "IR57", "IR59"], bottom: ["IR19", "IR21", "IR23", "IR25", "IR27", "IR29"] },
     { kind: "slope", name: "Giữa · nhánh phải", top: ["IR36", "IR34", "IR32"], bottom: ["IR06", "IR04", "IR02"] },
     { kind: "slope", name: "Right reverse wall", top: ["IR60", "IR58", "IR56", "IR54", "IR52", "IR50"], bottom: ["IR30", "IR28", "IR26", "IR24", "IR22", "IR20"] },
@@ -173,17 +177,19 @@ export function sootBlowerPageOf(tag: string): SootBlowerPageKey | null {
 export function sootBlowerTypeOf(tag: string): SootBlowerType {
   if (tag.startsWith("IKEL")) return "IKEL";
   if (tag.startsWith("IKSL")) return "IKSL";
+  if (tag.startsWith("GGH")) return "GGH";
   if (tag.startsWith("IKAH") || tag.startsWith("AH")) return "IKAH";
   return tag.startsWith("IR") ? "IR" : "IK";
 }
 
-export const SOOT_BLOWER_TYPES: SootBlowerType[] = ["IK", "IR", "IKEL", "IKSL", "IKAH"];
+export const SOOT_BLOWER_TYPES: SootBlowerType[] = ["IK", "IR", "IKEL", "IKSL", "IKAH", "GGH"];
 export const SOOT_BLOWER_TYPE_NAME: Record<SootBlowerType, string> = {
   IK: "Vòi dài IK",
   IR: "Vòi thổi tường IR",
   IKEL: "Vòi dài IKEL",
   IKSL: "Vòi dài IKSL",
   IKAH: "Vòi bộ sấy không khí IKAH",
+  GGH: "Vòi thổi bụi GGH",
 };
 
 export function sootBlowerZoneName(tag: string): string {
