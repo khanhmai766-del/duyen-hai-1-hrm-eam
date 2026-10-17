@@ -286,7 +286,7 @@ export default function SootBlowerBoard() {
             {selected ? (
               <DetailPanel key={`${machine}-${selected}`} machine={machine} tag={selected} board={board} canManage={canManage} onBack={() => setSelected(null)} />
             ) : (
-              <OpenList board={board} onPick={select} />
+              <OpenList board={board} type={typeTab} onPick={select} />
             )}
           </div>
         </aside>
@@ -596,11 +596,13 @@ function Tile({
 
 /* ==================== PANEL: DANH SÁCH ĐANG MỞ ==================== */
 type ListFilter = "ALL" | "BAD" | SootBlowerDept;
-function OpenList({ board, onPick }: { board: Board; onPick: (tag: string) => void }) {
+// `type`: tab loại vòi đang chọn (IK · IR · …) — danh sách chỉ liệt kê vòi loại đó; "Tất cả" mới liệt kê mọi loại (17/10/2026).
+function OpenList({ board, type, onPick }: { board: Board; type: SootBlowerFilter; onPick: (tag: string) => void }) {
   const [filter, setFilter] = useState<ListFilter>("ALL");
   const rows = useMemo(() => {
     const tags = new Set([...board.open.keys(), ...board.unavail]);
     return [...tags]
+      .filter((tag) => matchesFilter(type, typeOf(tag)))
       .map((tag) => ({ tag, open: board.open.get(tag) ?? [], status: statusOf(tag, board), page: pageOf(tag) }))
       .filter((r) => {
         if (filter === "BAD") return r.status === "BAD";
@@ -608,7 +610,7 @@ function OpenList({ board, onPick }: { board: Board; onPick: (tag: string) => vo
         return true;
       })
       .sort((a, b) => (a.status === b.status ? a.tag.localeCompare(b.tag) : a.status === "BAD" ? -1 : 1));
-  }, [board, filter]);
+  }, [board, filter, type]);
 
   const FILTERS: [ListFilter, string][] = [
     ["ALL", "Tất cả"],
@@ -619,7 +621,7 @@ function OpenList({ board, onPick }: { board: Board; onPick: (tag: string) => vo
 
   return (
     <div className="p-4">
-      <div className="text-sm font-bold text-slate-800">Vòi cần xử lý</div>
+      <div className="text-sm font-bold text-slate-800">Vòi cần xử lý{type !== "ALL" && <span className="font-semibold text-slate-500"> · {SOOT_BLOWER_TYPE_NAME[type]}</span>}</div>
       <p className="mb-3 text-xs text-slate-500">Chọn một dòng để mở vòi trên sơ đồ.</p>
       <div className="mb-3 flex flex-wrap gap-1.5">
         {FILTERS.map(([k, l]) => (
