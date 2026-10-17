@@ -43,8 +43,8 @@ const Boiler3D = dynamic(() => import("@/components/soot-blowers/Boiler3D"), {
 
 /* Sơ đồ khiếm khuyết vòi thổi bụi — mặc định mô hình 3D lò hơi (Boiler3D), vẫn giữ
    sơ đồ SVG theo màn DCS SOOT BLOW cho người quen màn DCS.
-   - Mỗi loại vòi một tab riêng (IK · IR · IKEL · IKSH · IKAH), không chồng lấn
-   - Ký hiệu theo loại: IR ▲, IK thanh có mũi tên, IKEL thanh rỗng, IKSH hai mũi tên, IKAH ✚
+   - Mỗi loại vòi một tab riêng (IK · IR · IKEL · IKSL · IKAH), không chồng lấn
+   - Ký hiệu theo loại: IR ▲, IK thanh có mũi tên, IKEL thanh rỗng, IKSL hai mũi tên, IKAH ✚
    - Panel bên phải thay modal: vẫn nhìn sơ đồ khi nhập liệu */
 
 const CSS = `
@@ -90,7 +90,7 @@ function Glyph({ type, cx, cy, color }: { type: SootBlowerType; cx: number; cy: 
   if (type === "IR") return <polygon points={`${cx},${cy - 6} ${cx + 8},${cy + 6} ${cx - 8},${cy + 6}`} fill={color} />;
   if (type === "IKAH") return <path d={`M${cx - 2.5} ${cy - 7}h5v4.5h4.5v5h-4.5v4.5h-5v-4.5h-4.5v-5h4.5z`} fill={color} />;
   const hollow = type === "IKEL";
-  if (type === "IKSH")
+  if (type === "IKSL")
     return (
       <g>
         <rect x={cx - 7} y={cy - 3} width={14} height={6} fill={color} />
@@ -648,8 +648,7 @@ function OpenList({ board, type, onPick }: { board: Board; type: SootBlowerFilte
               className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-left hover:border-blue-400 hover:bg-blue-50/40"
             >
               <div className="flex items-center gap-2">
-                <span className="mono font-bold text-slate-900">{r.tag}</span>
-                <span className="text-[11px] text-slate-400">{SOOT_BLOWER_TYPE_NAME[typeOf(r.tag)]} · {wallLabel(r.tag)}</span>
+                <span className="mono whitespace-nowrap font-bold text-slate-900">{r.tag}</span>
                 <span className={`ml-auto rounded-full border px-2 py-0.5 text-[11px] font-semibold ${STATUS_UI[r.status].chip}`}>
                   {r.status === "BAD" ? "Bất khả dụng" : "Có khiếm khuyết"}
                 </span>

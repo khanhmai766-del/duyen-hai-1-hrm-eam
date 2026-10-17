@@ -80,6 +80,25 @@ export const BOILER_FLAME_PLUME: readonly [d: number, h: number][] = (
   [[-14, 418], [14, 418], [10, 340], [5, 280], [0, 245], [-5, 280], [-10, 340]] as const
 ).map(([o, y]) => px(FURNACE_AXIS + o, y));
 
+/** Đường khói thải (người dùng vẽ mũi tên 17/10/2026): từ đỉnh lửa W đi lên thân trên buồng đốt, lách trước mũi lò,
+    qua đường khói ngang dưới mái, xuống đường khói lùi, ra ở đáy đi ngang, lên ống đứng, sang chụp SCR, xuống SCR
+    tới bộ sấy không khí. Mỗi điểm là tâm ống (điểm ảnh bản vẽ) + `half` = nửa bề rộng lòng ống trong mặt cắt (m),
+    lấy nhỏ hơn lòng ống thật chút để khói không chạm vách. Ống đùn đủ bề rộng lò nên khói rải cả bề rộng. */
+export const BOILER_FLUE_PATH: readonly { d: number; h: number; half: number }[] = (
+  [
+    [186.5, 300, 3.0], [186.5, 240, 4.4], [178, 200, 3.4], [176, 140, 4.6], [190, 88, 4.0], // buồng đốt → lách trước mũi lò
+    [235, 78, 4.4], [280, 96, 3.8], // đường khói ngang dưới mái
+    [289, 150, 3.9], [289, 215, 3.9], [292, 252, 3.0], // đường khói lùi
+    [318, 279, 1.6], [350, 280, 1.7], // ra ở đáy, đi ngang
+    [379, 262, 2.2], [380, 228, 2.3], [383, 200, 1.9], // ống đứng
+    [408, 195, 1.9], [440, 196, 2.1], [478, 214, 4.2], // ngang sang chụp SCR
+    [498, 252, 6.2], [498, 312, 6.2], [498, 350, 4.4], [498, 395, 3.4], [498, 430, 3.0], // SCR → bộ sấy không khí
+  ] as const
+).map(([x, y, half]) => {
+  const [d, h] = px(x, y);
+  return { d, h, half };
+});
+
 /** "ah" = mặt sau khối bộ sấy không khí, cuối đường khói. */
 export type BoilerWall = "front" | "rear" | "left" | "right" | "ah";
 
@@ -150,11 +169,11 @@ const GROUPS: Group[] = [
   { wall: "right", tags: irZone(SB_RIGHT_RAW, "Giữa"), y: [261, 320], x: [160, 213], rows: 2 },
   // IKAH: lưới 2×2 trên mặt sau bộ sấy không khí.
   { wall: "ah", tags: tagsOf("IKAH"), y: [382, 422], x: D_AH, u: [0.25, 0.75] },
-  // IKSH: hai vách bên khối SCR — 2 hàng × 3 vòi cách đều theo bề sâu SCR (446–550). Đánh số 17/10/2026 theo hình
+  // IKSL: hai vách bên khối SCR — 2 hàng × 3 vòi cách đều theo bề sâu SCR (446–550). Đánh số 17/10/2026 theo hình
   // người dùng (nhìn vách trái từ ngoài): hàng dưới 1-2-3, hàng trên 4-5-6, số 1 phía TRƯỚC lò. Vách trái nhìn từ ngoài
   // thì phía trước ở bên trái người xem nhưng u tính từ phía sau → đảo cột; vách phải B cùng vị trí vật lý (B1 đối diện A1).
-  { wall: "left", tags: Object.keys(ALL_TILES).filter((t) => t.startsWith("IKSH-A")), y: [253, 318], x: [463, 533], rows: 2, cols: 3, flip: true },
-  { wall: "right", tags: Object.keys(ALL_TILES).filter((t) => t.startsWith("IKSH-B")), y: [253, 318], x: [463, 533], rows: 2, cols: 3 },
+  { wall: "left", tags: Object.keys(ALL_TILES).filter((t) => t.startsWith("IKSL-A")), y: [253, 318], x: [463, 533], rows: 2, cols: 3, flip: true },
+  { wall: "right", tags: Object.keys(ALL_TILES).filter((t) => t.startsWith("IKSL-B")), y: [253, 318], x: [463, 533], rows: 2, cols: 3 },
 ];
 
 function place(group: Group): BlowerPlacement[] {
@@ -226,12 +245,12 @@ export const SB_3D_BY_TAG: Record<string, BlowerPlacement> = Object.fromEntries(
 export type SootBlowerFilter = SootBlowerType | "ALL";
 export const matchesFilter = (filter: SootBlowerFilter, type: SootBlowerType) => filter === "ALL" || filter === type;
 
-/** Vách có vòi của từng loại (IKSH điền sẵn theo mô tả để tô sáng dù chưa có tag). */
+/** Vách có vòi của từng loại (IKSL điền sẵn theo mô tả để tô sáng dù chưa có tag). */
 export const SB_3D_TYPE_WALLS: Record<SootBlowerType, BoilerWall[]> = {
   IK: ["left", "right"],
   IR: ["front", "rear", "left", "right"],
   IKEL: ["rear"],
-  IKSH: ["left", "right"],
+  IKSL: ["left", "right"],
   IKAH: ["ah"],
 };
 

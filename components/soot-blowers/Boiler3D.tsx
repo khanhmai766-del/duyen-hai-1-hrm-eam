@@ -9,6 +9,7 @@ import {
   BOILER_FACES,
   BOILER_FLAME_PLUME,
   BOILER_FLAME_W,
+  BOILER_FLUE_PATH,
   BOILER_INNER_LINES,
   BOILER_PROFILE,
   BOILER_PROFILE_DEPTH,
@@ -62,7 +63,7 @@ const VIEW_POS: Record<BoilerView, [number, number, number]> = {
   right: [139, 20, 0],
 };
 const WALL_VIEW: Record<BoilerWall, BoilerView> = { front: "front", rear: "rear", left: "left", right: "right", ah: "rear" };
-const TYPE_VIEW: Record<SootBlowerFilter, BoilerView> = { IK: "left", IR: "overview", IKEL: "rear", IKSH: "left", IKAH: "rear", ALL: "overview" };
+const TYPE_VIEW: Record<SootBlowerFilter, BoilerView> = { IK: "left", IR: "overview", IKEL: "rear", IKSL: "left", IKAH: "rear", ALL: "overview" };
 
 /** Điểm trên mặt vách + pháp tuyến hướng ra ngoài. */
 function anchor(p: Pick<BlowerPlacement, "wall" | "u" | "h" | "d">): { pos: THREE.Vector3; normal: THREE.Vector3 } {
@@ -122,6 +123,160 @@ function extrudeAcross(shape: THREE.Shape, depth: number, x0: number) {
   return geo;
 }
 
+/* ==================== Dòng khói thải ====================
+   Hạt khói chạy dọc BOILER_FLUE_PATH (tâm các ống khói, mặt cắt y–z), rải đủ bề rộng lò (trục x) và trong lòng ống
+   theo bề rộng ống tại từng đoạn. Hai lớp: cuộn khói lớn mềm đi chậm, nở dần khi nguội; vệt dòng nhỏ sáng đi nhanh
+   cho thấy hướng chảy. Màu "trắng nhiệt": trắng ánh cam ở buồng đốt → trắng → trắng xám ở SCR / bộ sấy.
+   Chạy HẾT trên GPU (tối ưu 17/10/2026): đường khói lấy mẫu một lần vào texture float, vertex shader tự tính vị trí /
+   màu / cỡ / độ mờ từ thời gian → mỗi khung CPU chỉ đổi một uniform, không vòng lặp JS, không đẩy lại bộ đệm.
+   Bản đầu tính trên CPU (~1 900 hạt × 4 thuộc tính đẩy lên GPU mỗi khung). */
+const SMOKE_SAMPLES = 512;
+/** Nhịp vẽ khi chỉ có khói chạy (camera đứng yên): ~30 khung/giây — mắt khó thấy khác 60, GPU đỡ một nửa. */
+const SMOKE_FRAME_MS = 1000 / 30 - 2;
+const SMOKE_VERTEX = /* glsl */ `
+  uniform sampler2D uPath;   // hàng 0: (y, z, pháp tuyến y, pháp tuyến z) · hàng 1: (nửa bề rộng lòng ống, …)
+  uniform float uSamples;
+  uniform float uTime;
+  uniform float uScale;
+  uniform float uMaxSize;
+  uniform float uFW;
+  uniform float uSpread;
+  uniform float uCloud;
+  uniform float uAlpha;
+  attribute vec4 aMotion;    // u0, tốc độ (vòng/giây), lệch ngang [-1,1], lệch trong lòng ống [-1,1]
+  attribute vec3 aLook;      // pha, cỡ gốc, hạt giống nhiễu
+  varying float vAlpha;
+  varying float vSeed;
+  varying vec3 vColor;
+  vec4 pathAt(float row, float i) { return texture2D(uPath, vec2((i + 0.5) / uSamples, (row + 0.5) / 2.0)); }
+  void main() {
+    float u = fract(aMotion.x + uTime * aMotion.y);
+    float f = u * (uSamples - 1.0);
+    float i = min(floor(f), uSamples - 2.0);
+    float a = f - i;
+    vec4 p = mix(pathAt(0.0, i), pathAt(0.0, i + 1.0), a);
+    float h = mix(pathAt(1.0, i).x, pathAt(1.0, i + 1.0).x, a);
+    float ph = aLook.x;
+    // xoáy nhẹ trong lòng ống + dạt ngang theo bề rộng lò
+    float swirl = sin(uTime * mix(1.6, 0.9, uCloud) + ph) * mix(0.12, 0.22, uCloud);
+    float oy = clamp(aMotion.w + swirl, -1.0, 1.0) * h;
+    float x = aMotion.z * uFW * uSpread + sin(uTime * 0.6 + ph * 1.7) * mix(0.25, 0.5, uCloud);
+    vec3 pos = vec3(x, p.x + p.z * oy, p.y + p.w * oy);
+    vAlpha = uAlpha * smoothstep(0.0, 0.07, u) * (1.0 - smoothstep(0.92, 1.0, u));
+    // khói nở ra khi đi xa và to hơn trong buồng rộng (SCR) — theo bề rộng lòng ống
+    float size = aLook.y * mix(1.0, (0.7 + 0.55 * u) * (0.75 + 0.25 * min(h / 2.2, 1.6)), uCloud);
+    vec3 hot = vec3(1.0, 0.84, 0.62), white = vec3(1.0), cool = vec3(0.84, 0.88, 0.93);
+    vColor = u < 0.32 ? mix(hot, white, u / 0.32) : mix(white, cool, (u - 0.32) / 0.68);
+    vSeed = aLook.z;
+    vec4 mv = modelViewMatrix * vec4(pos, 1.0);
+    gl_PointSize = min(size * uScale / max(-mv.z, 0.1), uMaxSize);
+    gl_Position = projectionMatrix * mv;
+  }`;
+const SMOKE_FRAGMENT = /* glsl */ `
+  uniform float uCloud;
+  varying float vAlpha;
+  varying float vSeed;
+  varying vec3 vColor;
+  float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+  float noise(vec2 p) {
+    vec2 i = floor(p), f = fract(p);
+    f = f * f * (3.0 - 2.0 * f);
+    return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), f.x), mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), f.x), f.y);
+  }
+  void main() {
+    if (vAlpha < 0.004) discard;
+    vec2 c = gl_PointCoord - 0.5;
+    float r = length(c) * 2.0;
+    if (r > 1.0) discard;
+    float a = pow(1.0 - r, mix(2.6, 1.5, uCloud));
+    // cuộn khói: nhiễu hai tầng theo hạt → mép lởm chởm như mây; vệt dòng bỏ qua nhiễu (đỡ tính)
+    if (uCloud > 0.5) a *= 0.45 + 1.1 * (noise(c * 3.2 + vSeed * 17.0) * 0.6 + noise(c * 7.5 - vSeed * 9.0) * 0.4);
+    // viền hơi xám để khói trắng vẫn đọc được trên nền sáng
+    vec3 col = mix(vColor * mix(0.82, 0.7, uCloud), vColor, smoothstep(0.95, 0.15, r));
+    gl_FragColor = vec4(col, clamp(a, 0.0, 1.0) * vAlpha);
+  }`;
+
+function createFlueSmoke(track: <T extends { dispose: () => void }>(x: T) => T, coarse: boolean) {
+  // Đường tâm + bề rộng lòng ống, lấy mẫu đều theo chiều dài (getUtoTmapping) để khói đi đều tốc — một lần, vào texture.
+  const curve = new THREE.CatmullRomCurve3(BOILER_FLUE_PATH.map((p) => new THREE.Vector3(0, yOf(p.h), zOf(p.d))), false, "centripetal");
+  const widths = new THREE.CatmullRomCurve3(BOILER_FLUE_PATH.map((p) => new THREE.Vector3(p.half * PX, 0, 0)));
+  const data = new Float32Array(SMOKE_SAMPLES * 2 * 4);
+  const p = new THREE.Vector3();
+  const tan = new THREE.Vector3();
+  const w = new THREE.Vector3();
+  for (let i = 0; i < SMOKE_SAMPLES; i++) {
+    const t = curve.getUtoTmapping(i / (SMOKE_SAMPLES - 1), 0);
+    curve.getPoint(t, p);
+    curve.getTangent(t, tan);
+    const len = Math.hypot(tan.y, tan.z) || 1;
+    data.set([p.y, p.z, -tan.z / len, tan.y / len], i * 4);
+    data[(SMOKE_SAMPLES + i) * 4] = widths.getPoint(t, w).x;
+  }
+  const path = track(new THREE.DataTexture(data, SMOKE_SAMPLES, 2, THREE.RGBAFormat, THREE.FloatType));
+  path.minFilter = path.magFilter = THREE.NearestFilter; // nội suy tay trong shader (float tuyến tính cần extension)
+  path.needsUpdate = true;
+
+  const group = new THREE.Group();
+  const time = { value: 0 };
+  const scale = { value: 400 };
+  const layers: { geo: THREE.BufferGeometry; count: number }[] = [];
+  function layer(count: number, cloud: boolean, cycle: [number, number], size: [number, number], alpha: number) {
+    const rnd = (a: number, b: number) => a + Math.random() * (b - a);
+    const motion = new Float32Array(count * 4);
+    const look = new Float32Array(count * 3);
+    for (let k = 0; k < count; k++) {
+      // dồn về giữa lòng ống (căn bậc hai đảo) cho khói đặc ở lõi, thưa ra mép
+      const oy = Math.sign(Math.random() - 0.5) * (1 - Math.sqrt(Math.random()));
+      motion.set([Math.random(), 1 / rnd(cycle[0], cycle[1]), rnd(-1, 1), oy], k * 4);
+      look.set([rnd(0, Math.PI * 2), rnd(size[0], size[1]), Math.random()], k * 3);
+    }
+    const geo = track(new THREE.BufferGeometry());
+    // three cần thuộc tính position để biết số điểm; vị trí thật do shader tính
+    geo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(count * 3), 3));
+    geo.setAttribute("aMotion", new THREE.BufferAttribute(motion, 4));
+    geo.setAttribute("aLook", new THREE.BufferAttribute(look, 3));
+    const mat = track(new THREE.ShaderMaterial({
+      vertexShader: SMOKE_VERTEX,
+      fragmentShader: SMOKE_FRAGMENT,
+      uniforms: {
+        uPath: { value: path }, uSamples: { value: SMOKE_SAMPLES }, uTime: time, uScale: scale,
+        uMaxSize: { value: coarse ? 120 : 180 }, uFW: { value: FW }, uSpread: { value: cloud ? 0.44 : 0.4 },
+        uCloud: { value: cloud ? 1 : 0 }, uAlpha: { value: alpha },
+      },
+      transparent: true,
+      depthWrite: false,
+    }));
+    const points = new THREE.Points(geo, mat);
+    points.frustumCulled = false; // vị trí do shader tính, khung bao của bộ đệm không có ý nghĩa
+    points.renderOrder = cloud ? 4 : 5;
+    group.add(points);
+    layers.push({ geo, count });
+  }
+  layer(1300, true, [26, 34], [1.8, 3.1], 0.6); // cuộn khói
+  layer(700, false, [12, 16], [0.32, 0.6], 0.95); // vệt dòng
+
+  let quality = 1;
+  return {
+    group,
+    /** Thời gian mô phỏng (giây) — việc duy nhất phải làm mỗi khung. */
+    setTime(t: number) {
+      time.value = t;
+    },
+    /** Cỡ điểm ảnh của 1 đơn vị cảnh ở khoảng cách 1 — đổi khi đổi cỡ khung / tỉ lệ điểm ảnh. */
+    setScale(s: number) {
+      scale.value = s;
+    },
+    /** Tỉ lệ số hạt được vẽ (0–1) — hạt xếp ngẫu nhiên nên vẽ một phần đầu vẫn rải đều. */
+    setQuality(q: number) {
+      quality = q;
+      for (const L of layers) L.geo.setDrawRange(0, Math.max(1, Math.floor(L.count * q)));
+    },
+    get quality() {
+      return quality;
+    },
+  };
+}
+
 function pill(text: string, cls: string) {
   const el = document.createElement("span");
   el.textContent = text;
@@ -134,6 +289,7 @@ type Scene = {
   paint: (statuses: Record<string, BlowerStatus>, selected: string | null) => void;
   fly: (view: BoilerView) => void;
   setShowTags: (on: boolean) => void;
+  setSmoke: (on: boolean) => void;
 };
 
 /* ==================== Dựng cảnh (một lần) ==================== */
@@ -142,7 +298,9 @@ function createScene(host: HTMLDivElement, onPick: (tag: string) => void): { api
   const height = () => Math.max(host.clientHeight, 1);
 
   const renderer = new THREE.WebGLRenderer({ antialias: true });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  // điện thoại / máy bảng (con trỏ thô): độ phân giải tối đa 1,5× và ít hạt khói hơn — khói nhiều lớp trong suốt tốn GPU
+  const coarse = window.matchMedia?.("(pointer: coarse)").matches ?? false;
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, coarse ? 1.5 : 2));
   renderer.setSize(width(), height());
   renderer.domElement.style.touchAction = "none";
   host.appendChild(renderer.domElement);
@@ -214,6 +372,17 @@ function createScene(host: HTMLDivElement, onPick: (tag: string) => void): { api
     const normal = new THREE.Vector3(Math.sign(x), 0, 0);
     wallLabel(key, new THREE.Vector3(x * 1.12, -0.8, zOf(BOILER_LOWER_MID)), new THREE.Vector3(x, HEIGHT / 2, 0), normal);
   }
+  // nền tối mờ sát mặt trong hai vách bên, chỉ hiện khi bật dòng khói: khói trắng vẽ đè lên (renderOrder cao hơn)
+  // nên nổi rõ trên nền sáng — như nhìn xuyên vách thép vào lòng ống
+  const smokeBackdrop = new THREE.Group();
+  const backdropMat = track(new THREE.MeshBasicMaterial({ color: 0x1e293b, transparent: true, opacity: 0.17, side: THREE.DoubleSide, depthWrite: false }));
+  for (const x of [-FW / 2 + 0.05, FW / 2 - 0.05]) {
+    const sheet = new THREE.Mesh(capGeo, backdropMat);
+    sheet.position.x = x;
+    sheet.renderOrder = -1; // vẽ trước kính + lửa → không làm tối ngọn lửa W
+    smokeBackdrop.add(sheet);
+  }
+  scene.add(smokeBackdrop);
   // vách trước / sau / bộ sấy = các mảng phẳng phủ lên vỏ để tô sáng
   for (const key of ["front", "rear", "ah"] as const) {
     const mat = glass(0xcbd5e1, 0);
@@ -293,6 +462,21 @@ function createScene(host: HTMLDivElement, onPick: (tag: string) => void): { api
   const grid = new THREE.GridHelper(80, 40, 0xcbd5e1, 0xdde3ea);
   track(grid.geometry);
   scene.add(grid);
+
+  /* ---- dòng khói thải: chạy liên tục khi đang bật + khung đang hiện trên màn hình; máy đặt "giảm chuyển động"
+     thì đứng yên (vẫn thấy đường khói) ---- */
+  const smoke = createFlueSmoke(track, coarse);
+  if (coarse) smoke.setQuality(0.6);
+  scene.add(smoke.group);
+  const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+  let onScreen = true;
+  let smokeTime = 0;
+  const smokeScale = () => {
+    const buf = renderer.getDrawingBufferSize(new THREE.Vector2());
+    smoke.setScale(buf.y / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2)));
+  };
+  smokeScale();
+  const smokeAnimating = () => smoke.group.visible && onScreen && !reduceMotion;
 
   /* ---- vòi ---- */
   type Marker = {
@@ -419,6 +603,11 @@ function createScene(host: HTMLDivElement, onPick: (tag: string) => void): { api
   const distance = () => camera.position.distanceTo(controls.target);
   let frame = 0;
   let last = 0;
+  // "dirty" = cảnh đổi (camera, dữ liệu, cỡ khung) → phải vẽ lại cả lớp nhãn HTML. Khói chạy một mình thì chỉ vẽ
+  // WebGL, nhịp ~30 khung/giây (SMOKE_FRAME_MS) — CSS2DRenderer đặt lại vị trí mọi nhãn DOM mỗi lần vẽ, rất tốn.
+  let dirty = true;
+  let lastDraw = 0;
+  let slowFor = 0; // giây liên tục khung chậm — để tự hạ số hạt khói trên máy yếu
   function loop(now: number) {
     frame = 0;
     const dt = last ? Math.min((now - last) / 1000, 0.1) : 0.016;
@@ -448,20 +637,43 @@ function createScene(host: HTMLDivElement, onPick: (tag: string) => void): { api
       controls.update();
       busy = true;
     }
-    // chỉ hiện nhãn vách đang quay về phía người xem — nhìn thẳng thì các nhãn khác không chồng lên nhau
-    // "Hiện tên vòi": chỉ vòi trên vách quay về phía người xem — vách xa nhìn xuyên kính sẽ chồng nhãn
-    if (showTags) for (const m of markers) m.label.visible = m.pinned || facesCamera(m);
-    for (const w of wallFacing) {
-      const toCam = camera.position.clone().sub(w.at).normalize();
-      w.obj.visible = toCam.dot(w.normal) > 0.25;
+    const sceneChanged = busy || dirty;
+    const animating = smokeAnimating();
+    if (animating) {
+      smokeTime += dt;
+      smoke.setTime(smokeTime);
+      // máy yếu: khói chạy một mình mà nhịp khung trình duyệt vẫn dưới ~20/giây suốt 2 giây → bớt hạt (tối thiểu 35%)
+      slowFor = !sceneChanged && dt > 0.05 ? slowFor + dt : 0;
+      if (slowFor > 2 && smoke.quality > 0.36) {
+        smoke.setQuality(smoke.quality > 0.7 ? 0.65 : 0.35);
+        slowFor = 0;
+      }
     }
-    renderer.render(scene, camera);
-    labels.render(scene, camera);
-    if (busy) requestRender();
+    if (sceneChanged || !animating || now - lastDraw >= SMOKE_FRAME_MS) {
+      if (sceneChanged) {
+        // chỉ hiện nhãn vách đang quay về phía người xem — nhìn thẳng thì các nhãn khác không chồng lên nhau
+        // "Hiện tên vòi": chỉ vòi trên vách quay về phía người xem — vách xa nhìn xuyên kính sẽ chồng nhãn
+        if (showTags) for (const m of markers) m.label.visible = m.pinned || facesCamera(m);
+        for (const w of wallFacing) {
+          const toCam = camera.position.clone().sub(w.at).normalize();
+          w.obj.visible = toCam.dot(w.normal) > 0.25;
+        }
+      }
+      renderer.render(scene, camera);
+      if (sceneChanged) labels.render(scene, camera);
+      lastDraw = now;
+      dirty = false;
+    }
+    if (busy || animating) scheduleFrame();
     else last = 0;
   }
-  function requestRender() {
+  function scheduleFrame() {
     if (!frame) frame = requestAnimationFrame(loop);
+  }
+  /** Có gì đổi trên cảnh (camera, dữ liệu, cỡ khung…) → vẽ lại đủ, kể cả nhãn. */
+  function requestRender() {
+    dirty = true;
+    scheduleFrame();
   }
   controls.addEventListener("change", requestRender);
 
@@ -559,9 +771,16 @@ function createScene(host: HTMLDivElement, onPick: (tag: string) => void): { api
     camera.updateProjectionMatrix();
     renderer.setSize(width(), height());
     labels.setSize(width(), height());
+    smokeScale();
     requestRender();
   });
   resize.observe(host);
+  // cuộn khung 3D ra khỏi màn hình thì dừng hoạt ảnh khói (đỡ pin điện thoại)
+  const visibility = new IntersectionObserver(([entry]) => {
+    onScreen = entry?.isIntersecting ?? true;
+    if (onScreen) requestRender();
+  });
+  visibility.observe(host);
 
   return {
     api: {
@@ -572,10 +791,16 @@ function createScene(host: HTMLDivElement, onPick: (tag: string) => void): { api
         showTags = on;
         paint(lastPaint.statuses, lastPaint.selected);
       },
+      setSmoke(on) {
+        smoke.group.visible = on;
+        smokeBackdrop.visible = on;
+        requestRender();
+      },
     },
     dispose() {
       cancelAnimationFrame(frame);
       resize.disconnect();
+      visibility.disconnect();
       controls.removeEventListener("change", requestRender);
       controls.removeEventListener("start", onControlStart);
       controls.dispose();
@@ -624,6 +849,7 @@ export default function Boiler3D({
   const autoView = selectedWall ? WALL_VIEW[selectedWall] : TYPE_VIEW[type];
   const [manual, setManual] = useState<{ view: BoilerView; context: string } | null>(null);
   const [showTags, setShowTags] = useState(false);
+  const [showSmoke, setShowSmoke] = useState(true);
   const view = manual?.context === context ? manual.view : autoView;
   const count = SB_3D_PLACEMENTS.filter((p) => matchesFilter(type, p.type)).length;
 
@@ -646,6 +872,7 @@ export default function Boiler3D({
   useEffect(() => sceneRef.current?.paint(statuses, selected), [statuses, selected, type, supported]);
   useEffect(() => sceneRef.current?.fly(view), [view, supported]);
   useEffect(() => sceneRef.current?.setShowTags(showTags), [showTags, supported]);
+  useEffect(() => sceneRef.current?.setSmoke(showSmoke), [showSmoke, supported]);
 
   if (!supported) {
     return <p className="p-6 text-sm text-slate-600">Thiết bị không hỗ trợ đồ hoạ 3D. Chọn “Sơ đồ” để xem vòi.</p>;
@@ -670,15 +897,26 @@ export default function Boiler3D({
             </button>
           ))}
         </div>
-        <label className="pointer-events-auto flex h-9 cursor-pointer items-center gap-2 rounded-lg border border-slate-300 bg-white/90 px-3 text-xs font-semibold text-slate-700 shadow-sm hover:bg-white">
-          <input
-            type="checkbox"
-            checked={showTags}
-            onChange={(e) => setShowTags(e.target.checked)}
-            className="h-4 w-4 accent-slate-900"
-          />
-          Hiện tên vòi
-        </label>
+        <div className="pointer-events-auto flex flex-wrap gap-1">
+          <label className="flex h-9 cursor-pointer items-center gap-2 rounded-lg border border-slate-300 bg-white/90 px-3 text-xs font-semibold text-slate-700 shadow-sm hover:bg-white">
+            <input
+              type="checkbox"
+              checked={showSmoke}
+              onChange={(e) => setShowSmoke(e.target.checked)}
+              className="h-4 w-4 accent-slate-900"
+            />
+            Dòng khói
+          </label>
+          <label className="flex h-9 cursor-pointer items-center gap-2 rounded-lg border border-slate-300 bg-white/90 px-3 text-xs font-semibold text-slate-700 shadow-sm hover:bg-white">
+            <input
+              type="checkbox"
+              checked={showTags}
+              onChange={(e) => setShowTags(e.target.checked)}
+              className="h-4 w-4 accent-slate-900"
+            />
+            Hiện tên vòi
+          </label>
+        </div>
       </div>
 
       {count === 0 && type !== "ALL" ? (

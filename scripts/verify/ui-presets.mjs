@@ -1087,16 +1087,16 @@ export const PRESETS = {
       return {};
     },
     // Tab "Vòi thổi bụi" chỉ là state trong trang Lưu trữ, nên dùng query giả để phân biệt hai trạng thái chụp.
-    routes: () => ["/documents/archive?vtb=list", "/documents/archive?vtb=ik21", "/documents/archive?vtb=dcs", "/documents/archive?vtb=ir20", "/documents/archive?vtb=ikah03", "/documents/archive?vtb=iksh-a1", "/documents/archive?vtb=iksh-b1"],
+    routes: () => ["/documents/archive?vtb=list", "/documents/archive?vtb=ik21", "/documents/archive?vtb=dcs", "/documents/archive?vtb=ir20", "/documents/archive?vtb=ikah03", "/documents/archive?vtb=iksl-a1", "/documents/archive?vtb=iksl-b1"],
     async interact(page, route) {
       // Trên điện thoại tab này bị thanh "BGTS Tuabin Ngừng / Bộ lọc" đè (lỗi sẵn có của trang Lưu trữ) → bấm thẳng phần tử.
       await page.getByRole("button", { name: "Vòi thổi bụi" }).first().evaluate((el) => el.click());
       await page.getByText("Vòi cần xử lý").first().waitFor({ timeout: 60_000 });
       if (route.endsWith("vtb=dcs")) await page.getByRole("button", { name: "Sơ đồ", exact: true }).click();
-      // IKSH đánh số lại 17/10/2026 (A1…A6 vách trái, B1…B6 vách phải): tìm IKSH-A1 / B1 → góc nhìn vách đó, nhãn ở vị trí số 1.
-      const iksh = route.match(/vtb=(iksh-[ab]1)$/)?.[1];
-      if (iksh) {
-        await page.getByLabel("Tìm tag vòi").fill(iksh.toUpperCase());
+      // IKSL đánh số lại 17/10/2026 (A1…A6 vách trái, B1…B6 vách phải): tìm IKSL-A1 / B1 → góc nhìn vách đó, nhãn ở vị trí số 1.
+      const iksl = route.match(/vtb=(iksl-[ab]1)$/)?.[1];
+      if (iksl) {
+        await page.getByLabel("Tìm tag vòi").fill(iksl.toUpperCase());
         await page.getByRole("button", { name: "Tìm", exact: true }).click();
         await page.getByRole("button", { name: "← Vòi cần xử lý" }).waitFor();
         await page.getByLabel("Hiện tên vòi").check();
@@ -1109,6 +1109,35 @@ export const PRESETS = {
         await page.getByRole("button", { name: pick === "ik21" ? /^SCĐ/ : /^SCCN/ }).first().click();
       }
       await page.waitForTimeout(500);
+    },
+  },
+  "dong-khoi-3d": {
+    description: "Dòng khói thải 3D trong lò (17/10/2026): góc nhìn Trái / Toàn cảnh, chờ camera bay xong + khói chạy vài giây — chỉ xem",
+    async prepare() { return {}; },
+    routes: () => ["/documents/archive?khoi=trai", "/documents/archive?khoi=toan-canh"],
+    async interact(page, route) {
+      await page.getByRole("button", { name: "Vòi thổi bụi" }).first().evaluate((el) => el.click());
+      await page.getByText("Vòi cần xử lý").first().waitFor({ timeout: 60_000 });
+      const view = route.endsWith("trai") ? "Trái" : "Toàn cảnh";
+      await page.getByRole("group", { name: "Góc nhìn lò hơi" }).getByRole("button", { name: view, exact: true }).click();
+      await page.waitForTimeout(3500);
+      // SMOKE_PERF=1: đo luồng chính 5 giây khi khói chạy (camera đứng yên) và khi tắt khói — CDP Performance metrics
+      if (process.env.SMOKE_PERF && route.endsWith("trai")) {
+        const cdp = await page.context().newCDPSession(page);
+        await cdp.send("Performance.enable");
+        const sample = async () => Object.fromEntries((await cdp.send("Performance.getMetrics")).metrics.map((m) => [m.name, m.value]));
+        const measure = async (label) => {
+          const frames = page.evaluate(() => new Promise((done) => { let n = 0; const t0 = performance.now(); const tick = () => { n++; if (performance.now() - t0 < 5000) requestAnimationFrame(tick); else done(n); }; requestAnimationFrame(tick); }));
+          const a = await sample(); const n = await frames; const b = await sample();
+          const ms = (k) => ((b[k] - a[k]) * 1000).toFixed(0);
+          console.log(`[khoi-perf] ${label}: script ${ms("ScriptDuration")} ms · layout ${ms("LayoutDuration")} ms · recalc style ${ms("RecalcStyleDuration")} ms · task ${ms("TaskDuration")} ms / 5 s · rAF ${n}`);
+        };
+        await measure("khói BẬT ");
+        await page.getByLabel("Dòng khói").uncheck();
+        await page.waitForTimeout(500);
+        await measure("khói TẮT ");
+        await page.getByLabel("Dòng khói").check();
+      }
     },
   },
   "pct-lam-viec": {
