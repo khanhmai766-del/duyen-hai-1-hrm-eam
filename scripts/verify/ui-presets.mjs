@@ -1017,7 +1017,7 @@ export const PRESETS = {
       if (await tab.isVisible()) await tab.click();
       else { await page.getByRole("button", { name: /PCT Cơ|Đang làm việc/ }).first().click(); await page.getByText("Nhân sự nhà thầu", { exact: true }).last().click(); }
       const company = "TEST Đại tu - kiểm tra nhân sự";
-      await page.getByRole("searchbox", { name: "Tìm đơn vị nhà thầu, nhân viên hoặc CHTT" }).fill(company);
+      // Ô lọc đơn vị đã bỏ (17/10/2026) — bấm thẳng dòng của đơn vị.
       if (page.viewportSize().width < 768) await page.getByRole("button", { name: new RegExp(company) }).first().click();
       else await page.getByRole("row").filter({ hasText: company }).click();
       const switches = page.getByRole("switch", { name: /Vai trò của TEST Nhân sự đại tu/ }).locator("visible=true");

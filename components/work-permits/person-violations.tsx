@@ -6,14 +6,16 @@ import { toast } from "sonner";
 import { Flag } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
 import { useChangePermitPersonViolation, usePermitViolationPerson, useRecordPermitPersonViolation, type PermitViolationContext, type PermitViolationPerson } from "@/hooks/useWorkPermits";
 import { useAdminMode } from "@/hooks/useAdminMode";
 import type { PermitMember, PermitPerson, PermitPersonViolation } from "@/lib/work-permits";
 
-export function PersonViolations({ person, compact = false, actions }: { person: Pick<PermitPerson, "violations">; compact?: boolean; actions?: (violation: PermitPersonViolation, index: number) => ReactNode }) {
+export function PersonViolations({ person, compact = false, actions, className }: { person: Pick<PermitPerson, "violations">; compact?: boolean; actions?: (violation: PermitPersonViolation, index: number) => ReactNode; className?: string }) {
   const violations = person.violations ?? [];
   if (!violations.length) return null;
-  return <div className="mt-1 min-w-0 rounded-md border border-red-200 bg-red-50 px-2 py-1.5 text-xs text-red-900">
+  return <div className={cn("mt-1 min-w-0 rounded-md border border-red-200 bg-red-50 px-2 py-1.5 text-xs text-red-900", className)}>
     <p className="font-bold">Đã vi phạm {violations.length} lần{!compact && " · Cần chú ý đặc biệt"}</p>
     <ul className="mt-1 space-y-1">{violations.map((violation, index) => <li key={violation.id} className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
       <span className="font-semibold">{index + 1}.</span> {violation.description}
@@ -24,23 +26,33 @@ export function PersonViolations({ person, compact = false, actions }: { person:
 }
 
 /**
- * Số lần vi phạm (ô đỏ) — bấm mới mở chi tiết ngay bên dưới, để danh sách dài không bị khung đỏ chiếm chỗ (16/10/2026).
- * Đặt trong hàng flex-wrap: chi tiết chiếm trọn một dòng (basis-full).
+ * Số lần vi phạm: chấm đỏ nhỏ (vùng bấm vẫn 32px cho điện thoại) — bấm mở popup danh sách lỗi, không bung khung đỏ
+ * trong dòng làm xô lệch danh sách (17/10/2026).
  */
 function ViolationCount({ violations, compact }: { violations: PermitPersonViolation[]; compact?: boolean }) {
-  const [open, setOpen] = useState(false);
-  return <>
-    <button type="button" aria-expanded={open} aria-label={`${open ? "Ẩn" : "Xem"} chi tiết ${violations.length} lần vi phạm`} title={open ? "Ẩn chi tiết vi phạm" : "Xem chi tiết vi phạm"}
-      className="inline-flex h-8 min-w-8 items-center justify-center rounded-full bg-red-600 px-2 text-[11px] font-bold tabular-nums text-white hover:bg-red-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400 focus-visible:ring-offset-1 md:h-7 md:min-w-7"
-      onClick={() => setOpen(value => !value)}>{violations.length}</button>
-    {open && <div className="basis-full"><PersonViolations person={{ violations }} compact={compact} /></div>}
-  </>;
+  return <Popover>
+    <PopoverTrigger asChild>
+      <button type="button" aria-label={`Xem chi tiết ${violations.length} lần vi phạm`} title="Xem chi tiết vi phạm"
+        className="group -ml-2 inline-flex h-8 min-w-8 items-center justify-center rounded-full focus-visible:outline-none md:h-7 md:min-w-7">
+        <span className="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold leading-none tabular-nums text-white group-hover:bg-red-700 group-focus-visible:ring-2 group-focus-visible:ring-red-400 group-focus-visible:ring-offset-1">{violations.length}</span>
+      </button>
+    </PopoverTrigger>
+    <PopoverContent align="start" sideOffset={4} className="max-h-[60vh] w-[calc(100vw-24px)] max-w-[380px] overflow-y-auto border-red-200 p-0">
+      <PersonViolations person={{ violations }} compact={compact} className="mt-0 rounded-md border-0" />
+    </PopoverContent>
+  </Popover>;
 }
 
+/**
+ * `inline`: nhãn đứng cùng dòng, bên phải họ tên — nơi gọi bọc họ tên + nhãn trong một hàng flex-wrap; lớp bọc ở đây
+ * là `contents` nên nút và ô số là phần tử của hàng đó.
+ */
+const tagRow = (inline?: boolean) => inline ? "contents" : "mt-1 flex flex-wrap items-center gap-1";
+
 /** Nhãn chỉ xem (người không có quyền ghi nhận): "Vi phạm" + số lần; chưa vi phạm thì không hiện gì. */
-export function PersonViolationTag({ violations, compact }: { violations?: PermitPersonViolation[]; compact?: boolean }) {
+export function PersonViolationTag({ violations, compact, inline }: { violations?: PermitPersonViolation[]; compact?: boolean; inline?: boolean }) {
   if (!violations?.length) return null;
-  return <div className="mt-1 flex flex-wrap items-center gap-1">
+  return <div className={tagRow(inline)}>
     <span className="inline-flex h-8 items-center gap-1 px-2 text-[11px] font-medium text-red-700 md:h-7"><Flag aria-hidden="true" className="size-3" />Vi phạm</span>
     <ViolationCount violations={violations} compact={compact} />
   </div>;
@@ -70,7 +82,7 @@ function ViolationHistory({ person, busy, onReload }: { person: PermitViolationP
   </div> : <div className="mt-1 flex gap-2"><Button type="button" size="sm" variant="outline" className="h-10 text-xs" aria-label={`Sửa vi phạm lần ${index + 1}`} disabled={busy || change.isPending} onClick={() => setSelected({ id: violation.id, action: "edit", description: violation.description })}>Sửa</Button><Button type="button" size="sm" variant="outline" className="h-10 text-xs text-red-700" aria-label={`Xóa vi phạm lần ${index + 1}`} disabled={busy || change.isPending} onClick={() => setSelected({ id: violation.id, action: "delete", description: violation.description })}>Xóa</Button></div> : undefined} />;
 }
 
-export function RecordPersonViolation(props: ({ person: PermitPerson; member?: never; context?: never } | { member: PermitMember; context: PermitViolationContext; violations?: PermitPerson["violations"]; person?: never }) & { compact?: boolean }) {
+export function RecordPersonViolation(props: ({ person: PermitPerson; member?: never; context?: never } | { member: PermitMember; context: PermitViolationContext; violations?: PermitPerson["violations"]; person?: never }) & { compact?: boolean; inline?: boolean }) {
   const snapshot = props.person ?? props.member;
   const id = props.person?.id ?? props.member?.personId ?? "";
   const context = props.context;
@@ -84,8 +96,8 @@ export function RecordPersonViolation(props: ({ person: PermitPerson; member?: n
   const tone = status === "violated" ? "text-red-700 hover:bg-red-50 hover:text-red-800" : status === "clean" ? "text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800" : "text-slate-500 hover:bg-slate-50 hover:text-slate-700";
   const statusLabel = status === "violated" ? `Đã vi phạm ${history?.length ?? 0} lần` : status === "clean" ? "Chưa ghi nhận vi phạm" : "Đang chờ thông tin vi phạm";
   return <>
-    {/* Đã vi phạm: nhãn đỏ "Vi phạm" (vẫn bấm để ghi thêm lần mới) + số lần — bấm số mới xem chi tiết. */}
-    <div className="mt-1 flex flex-wrap items-center gap-1">
+    {/* Đã vi phạm: nhãn đỏ "Vi phạm" (vẫn bấm để ghi thêm lần mới) + số lần — bấm số mở popup chi tiết. */}
+    <div className={tagRow(props.inline)}>
       <Button type="button" variant="ghost" size="sm" aria-label="Ghi nhận vi phạm" title={`Ghi nhận vi phạm · ${snapshot.name} · ${statusLabel}`} className={`h-8 gap-1 px-2 text-[11px] font-medium md:h-7 [&_svg]:size-3 ${tone}`} onClick={() => setOpen(true)}><Flag aria-hidden="true" />{status === "violated" ? "Vi phạm" : "Ghi nhận vi phạm"}</Button>
       {status === "violated" && history && <ViolationCount violations={history} compact={props.compact} />}
     </div>
