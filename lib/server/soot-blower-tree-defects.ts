@@ -1,12 +1,14 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { DEFECT_STATUS, type DefectStatusKey } from "@/lib/constants";
+import { normalizeText } from "@/lib/nav";
 import { SOOT_BLOWER_TAGS, type SootBlowerDept } from "@/lib/soot-blower-layout";
 
 /*
  * Khiếm khuyết vòi thổi bụi lấy từ SYC (bảng Defect), theo nhánh cây thiết bị
  * "Hệ thống vòi thổi bụi": hành trình dài (IK01–IK24), hành trình ngắn (IR01–IR60), bộ hâm (IKEL01–IKEL10),
- * APH (IKAH01–IKAH04, tag sơ đồ AH01–AH04).
+ * APH (IKAH01–IKAH04, tag sơ đồ AH01–AH04), và nhánh "Hệ thống thổi bụi SCR" (IKSH-A1…A6, IKSH-B1…B6 — node
+ * "Máy thổi bụi SCR nhánh A số 1", KKS 10HSF20AE001…/10HSF30AE001…, 17/10/2026).
  *
  * Cây vật lý chỉ có MỘT bộ node mã chuẩn DH1.S1.x; phiếu S2 gắn vào cùng node với
  * mappedDeviceUnit = "S2" (xem lib/equipment-units.ts canonicalSeq). Nên tổ máy lấy theo
@@ -24,17 +26,22 @@ const REQUEST_DEPT: Record<string, SootBlowerDept> = { "Điện": "SCĐ", "Cơ":
 /**
  * Nhóm vòi lấy từ cây: nhánh cha tìm theo tên (không phụ thuộc mã khi cây được sắp xếp lại),
  * node con có tên kết thúc bằng tag ("Máy thổi bụi hành trình ngắn IR07").
- * Thêm loại vòi khác (IKSH…) thì thêm một dòng ở đây.
+ * Loại vòi mà tên node không theo dạng "<tiền tố><số>" thì khai `tagOfName` (IKSH: "nhánh A số 1" → IKSH-A1).
  */
-const TREE_GROUPS = [
+const TREE_GROUPS: readonly { prefix: string; parentName: string; tagOfName?: (name: string) => string | null }[] = [
   { prefix: "IK", parentName: "hành trình dài" },
   { prefix: "IR", parentName: "hành trình ngắn" },
   // đủ cụm "thổi bụi …": cây còn "Hệ thống bộ hâm", "Bộ hâm" ở nhánh khác
   { prefix: "IKEL", parentName: "thổi bụi bộ hâm" },
   // cây còn nhiều nhánh "APH" khác (Hệ thống APH A/B, van, dầu bôi trơn…) → khớp đủ cụm
   { prefix: "IKAH", parentName: "thổi bụi aph ikah" },
-] as const;
-type Prefix = (typeof TREE_GROUPS)[number]["prefix"];
+  // đủ cụm "hệ thống …": còn nhánh "Các van cấp hơi thổi bụi SCR", "Van xả đọng thổi bụi SCR"
+  { prefix: "IKSH", parentName: "hệ thống thổi bụi scr", tagOfName: (name) => {
+    const m = normalizeText(name).match(/nhanh\s*([ab])\s*so\s*0*([1-6])\s*$/);
+    return m ? `IKSH-${m[1].toUpperCase()}${m[2]}` : null;
+  } },
+];
+type Prefix = string;
 
 /** Dòng khiếm khuyết SYC đã quy về một vòi — cùng dạng SootBlowerDefect để bảng dùng chung. */
 export type SootBlowerSycDefect = {
@@ -65,7 +72,7 @@ const compact = (s: string) => s.toUpperCase().replace(/\s+/g, "");
 const TAG_PREFIX: Partial<Record<Prefix, string>> = { IKAH: "AH" };
 const tagOf = (prefix: Prefix, n: string | number) => `${TAG_PREFIX[prefix] ?? prefix}${pad2(Number(n))}`;
 
-/** Node vòi của mọi nhóm trong TREE_GROUPS (24 IK + 60 IR + 10 IKEL + 4 IKAH). */
+/** Node vòi của mọi nhóm trong TREE_GROUPS (24 IK + 60 IR + 10 IKEL + 4 IKAH + 12 IKSH). */
 async function loadTreeNodes(): Promise<TreeNode[]> {
   const parents = await prisma.equipmentNode.findMany({
     where: { OR: TREE_GROUPS.map((g) => ({ name: { contains: g.parentName, mode: "insensitive" as const } })), childCount: { gt: 0 } },
@@ -86,10 +93,10 @@ async function loadTreeNodes(): Promise<TreeNode[]> {
   for (const n of nodes) {
     const prefix = prefixOfParent.get(n.parentSeq ?? "");
     if (!prefix) continue;
-    const m = n.name.trim().match(new RegExp(`\\b${prefix}\\s*0*(\\d{1,2})\\s*$`, "i"));
-    if (!m) continue;
-    const tag = tagOf(prefix, m[1]);
-    if (!SOOT_BLOWER_TAGS.has(tag)) continue;
+    const byName = TREE_GROUPS.find((g) => g.prefix === prefix)?.tagOfName;
+    const m = byName ? null : n.name.trim().match(new RegExp(`\\b${prefix}\\s*0*(\\d{1,2})\\s*$`, "i"));
+    const tag = byName ? byName(n.name) : m ? tagOf(prefix, m[1]) : null;
+    if (!tag || !SOOT_BLOWER_TAGS.has(tag)) continue;
     // KKS "10HCB21AT007": bỏ 2 số đầu (tổ máy) để khớp được cả phiếu S2 ("20HCB21AT007").
     const kks = n.kks ? compact(n.kks) : "";
     out.push({ seq: n.seq, tag, kksKey: /^\d{2}[A-Z]/.test(kks) ? kks.slice(2) : null });
@@ -102,15 +109,39 @@ async function loadTreeNodes(): Promise<TreeNode[]> {
  * "IR 22,24,04", "IKEL03,07", "ik17 và 20". Tiền tố IK không bắt nhầm IKEL/IKSH/IKSL/IKAH; số sau dấu cách mà dính
  * chữ ("IK 21 10HCB…") không tính là vòi.
  */
+const NUMBERED_GROUPS = TREE_GROUPS.filter((g) => !g.tagOfName);
 const LIST_RE: Record<Prefix, RegExp> = Object.fromEntries(
-  TREE_GROUPS.map(({ prefix }) => [
+  NUMBERED_GROUPS.map(({ prefix }) => [
     prefix,
     new RegExp(`(?<![A-Z0-9])${prefix}\\s?(\\d{1,2})(?!\\d)((?:\\s*(?:[,;&/]|và)\\s*(?:${prefix}\\s?)?\\d{1,2}(?![\\dA-Z]))*)`, "gi"),
   ])
 ) as Record<Prefix, RegExp>;
-function tagsInText(content: string): Set<string> {
+/**
+ * IKSH trong nội dung (đã bỏ dấu, chữ thường). Hiện trường gọi các vòi này là "IKSL" kèm nhánh: "IKSL05 nhánh A",
+ * "IKSL 01,06 (A)", "IK SL 02 nhánh A" — chỉ nhận khi có nhánh ngay sau (IKSL trơn hay dùng chỉ vị trí: "dưới IKSL06").
+ * Ngoài ra: tag "IKSH-A1" / "IKSH A1", và "vòi thổi bụi SCR #3 nhánh B", "thổi bụi SCR nhánh A số 2" (dạng này chỉ
+ * tính khi phiếu có cả "thổi bụi" lẫn "SCR").
+ */
+const IKSH_TAG_RE = /(?<![a-z0-9])iksh\s*-?\s*([ab])\s*-?\s*0?([1-6])(?!\d)/g;
+const IKSL_RE = /(?<![a-z0-9])ik\s?sl\s*0?([1-6])(?!\d)((?:\s*(?:[,;&/]|va)\s*0?[1-6](?!\d))*)(?=([^.;\n]{0,25}))/g;
+// nhánh ngay sau số, cho phép chen một cặp ngoặc KKS: "IKSL03 (10HSF20AE003) nhánh A"
+const IKSL_BRANCH_RE = /^\s*(?:\([^)]{0,20}\)\s*)?(?:nhanh\s*([ab])(?![a-z])|\(\s*(?:nhanh\s*)?([ab])\s*\))/;
+const IKSH_BRANCH_RE = /nhanh\s*([ab])\s*(?:so|#)?\s*0?([1-6])(?!\d)|(?:so|#)\s*0?([1-6])\s*,?\s*nhanh\s*([ab])(?![a-z])/g;
+function ikshInText(content: string, out: Set<string>) {
+  const text = normalizeText(content);
+  const add = (branch: string, n: string) => { const tag = `IKSH-${branch.toUpperCase()}${Number(n)}`; if (SOOT_BLOWER_TAGS.has(tag)) out.add(tag); };
+  for (const m of text.matchAll(IKSH_TAG_RE)) add(m[1], m[2]);
+  for (const m of text.matchAll(IKSL_RE)) {
+    const branch = m[3].match(IKSL_BRANCH_RE);
+    if (branch) for (const n of [m[1], ...(m[2].match(/[1-6]/g) ?? [])]) add(branch[1] ?? branch[2], n);
+  }
+  if (text.includes("thoi bui") && text.includes("scr")) for (const m of text.matchAll(IKSH_BRANCH_RE)) add(m[1] ?? m[4], m[2] ?? m[3]);
+}
+
+export function tagsInText(content: string): Set<string> {
   const out = new Set<string>();
-  for (const { prefix } of TREE_GROUPS) {
+  ikshInText(content, out);
+  for (const { prefix } of NUMBERED_GROUPS) {
     for (const m of content.matchAll(LIST_RE[prefix])) {
       for (const n of [m[1], ...(m[2].match(/\d{1,2}/g) ?? [])]) {
         const tag = tagOf(prefix, n);
@@ -131,6 +162,9 @@ function tagsInContent(content: string, kksToTag: Map<string, string>): Set<stri
   const text = compact(content);
   const byKks = new Set<string>();
   for (const [key, tag] of kksToTag) if (text.includes(key)) byKks.add(tag);
+  // Vòi SCR: phiếu ghi nhánh bằng chữ mà KKS kèm theo hay lệch nhánh ("IKSL05 nhánh A (10HSF30AE005)" — trên cây HSF30
+  // là nhánh B). Phiếu gắn node trên prod đều chọn node theo CHỮ "nhánh" → chữ đã chỉ ra vòi SCR thì bỏ phần đoán theo KKS.
+  if ([...byName].some((t) => t.startsWith("IKSH"))) for (const t of byKks) if (t.startsWith("IKSH")) byKks.delete(t);
   if (byName.size > 0 && byName.size === byKks.size && [...byKks].some((t) => !byName.has(t))) return byName;
   return new Set([...byName, ...byKks]);
 }
@@ -155,7 +189,7 @@ const SELECT = {
 
 type Row = Prisma.DefectGetPayload<{ select: typeof SELECT }>;
 
-/** Khiếm khuyết SYC của các vòi lấy từ cây (IK, IR, IKEL, IKAH) một tổ máy — cả đang mở lẫn đã xử lý (lịch sử). */
+/** Khiếm khuyết SYC của các vòi lấy từ cây (IK, IR, IKEL, IKAH, IKSH) một tổ máy — cả đang mở lẫn đã xử lý (lịch sử). */
 export async function loadSootBlowerSycDefects(machine: string): Promise<SootBlowerSycDefect[]> {
   const nodes = await loadTreeNodes();
   if (nodes.length === 0) return [];
@@ -183,7 +217,7 @@ export async function loadSootBlowerSycDefects(machine: string): Promise<SootBlo
         unit: machine,
         deviceSeq: null,
         relatedDevices: { none: {} },
-        OR: [...TREE_GROUPS.map((g) => g.prefix), "HCB"].map((t) => ({ content: { contains: t, mode: "insensitive" as const } })),
+        OR: [...TREE_GROUPS.map((g) => g.prefix), "HCB", "HSF", "SCR"].map((t) => ({ content: { contains: t, mode: "insensitive" as const } })),
       },
       select: SELECT,
     }),
