@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Be_Vietnam_Pro } from "next/font/google";
 import "./globals.css";
 import { Providers } from "./providers";
+import { LEGACY_BROWSER_GUARD_SCRIPT } from "@/lib/legacy-browser-guard";
 
 // Be Vietnam Pro is purpose-built for Vietnamese — even diacritics & clean rhythm.
 const beVietnamPro = Be_Vietnam_Pro({
@@ -40,6 +41,10 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="vi" className={beVietnamPro.variable} suppressHydrationWarning>
+      <head>
+        {/* Chạy trước JS của Next: trình duyệt quá cũ / JS hỏng thì hiện hướng dẫn thay cho trang trắng. */}
+        <script dangerouslySetInnerHTML={{ __html: LEGACY_BROWSER_GUARD_SCRIPT }} />
+      </head>
       <body className="font-sans">
         <Providers>{children}</Providers>
       </body>

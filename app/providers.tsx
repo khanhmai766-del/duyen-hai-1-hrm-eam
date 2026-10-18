@@ -20,6 +20,14 @@ export function Providers({ children }: { children: React.ReactNode }) {
       })
   );
 
+  // Báo cho lib/legacy-browser-guard.ts biết JS của app đã chạy — có cờ này thì lưới an toàn không
+  // hiện thông báo "Chưa tải được ứng dụng" dù trước đó có lỗi lẻ tẻ. Khung "trình duyệt quá cũ"
+  // (data-kind="old") thì giữ nguyên: máy dưới mốc hỗ trợ không nên dùng tiếp dù app chạy được phần nào.
+  React.useEffect(() => {
+    document.documentElement.setAttribute("data-app-ready", "");
+    document.querySelector('#dh1-legacy-browser[data-kind="broken"]')?.remove();
+  }, []);
+
   return (
     // refetchInterval: làm mới phiên mỗi 5 phút khi tab đang mở & online (giữ phiên "trượt"
     // cho người dùng đang hoạt động); không refetch khi offline để cookie kịp hết hạn sau 30 phút.
