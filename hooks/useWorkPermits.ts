@@ -163,9 +163,9 @@ export function useExportWorkingPeople() {
   return useMutation({ mutationFn: () => apiDownload("/api/work-permits/live-sessions/export") });
 }
 
-export function usePermitPeople(params: { q?: string; page?: number; active?: boolean; commander?: boolean; polling?: boolean; company?: string; scope?: string | null; birthYear?: string; limit?: 25 | 200; enabled?: boolean }) {
+export function usePermitPeople(params: { q?: string; page?: number; active?: boolean; commander?: boolean; polling?: boolean; company?: string; scope?: string | null; limit?: 25 | 200; enabled?: boolean }) {
   const query = new URLSearchParams({ q: params.q ?? "", page: String(params.page ?? 1), active: params.active ? "1" : "0", commander: params.commander ? "1" : "0",
-    ...(params.company ? { company: params.company } : {}), ...(params.birthYear ? { birthYear: params.birthYear } : {}), ...(params.scope ? { scope: params.scope } : {}), ...(params.limit ? { limit: String(params.limit) } : {}) });
+    ...(params.company ? { company: params.company } : {}), ...(params.scope ? { scope: params.scope } : {}), ...(params.limit ? { limit: String(params.limit) } : {}) });
   return useQuery({ queryKey: ["work-permit-people", query.toString()], enabled: params.enabled ?? true, refetchInterval: params.polling ? 30000 : false, queryFn: () => apiGet<PermitPerson[]>(`/api/work-permits/people?${query}`) as Promise<{ data: PermitPerson[]; meta: { total: number; pageSize: number; canWrite: boolean } }> });
 }
 /**
@@ -186,6 +186,11 @@ export function usePermitCompanyPeople(company: string, enabled = true, scope?: 
     }
     return { data: all, meta };
   } });
+}
+/** Nhân sự trùng họ tên + năm sinh: `same` = trong cùng nhà thầu, `cross` = với nhà thầu khác. Khoá dưới ["work-permit-people"]. */
+export function usePermitDuplicatePeople(mode: "same" | "cross" | "", scope?: PermitContractorScope) {
+  return useQuery({ queryKey: ["work-permit-people", "duplicates", mode, scope ?? ""], enabled: Boolean(mode),
+    queryFn: () => apiGet<PermitPerson[]>(`/api/work-permits/people/duplicates?mode=${mode}${scope ? `&scope=${scope}` : ""}`) as Promise<{ data: PermitPerson[]; meta: { total: number } }> });
 }
 /** Tra một thẻ vừa quét (link QR hoặc số thẻ) — gọi thẳng, không cache: mỗi lượt quét phải là dữ liệu mới. */
 export async function lookupPermitCard(q: string, scope?: string | null) {

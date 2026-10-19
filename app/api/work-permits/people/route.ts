@@ -16,10 +16,8 @@ export async function GET(req: Request) {
     const company = p.get("company") ?? "";
     // Bảng đơn vị bung ra cả danh sách người của đơn vị đó nên cho lấy nhiều hơn một trang 25.
     const pageSize = p.get("limit") === "200" ? 200 : 25;
-    // Năm sinh lưu dạng chữ theo Sheet thẻ ("1974" hoặc cả ngày "12/03/1974") → khớp 4 chữ số năm nằm trong ô.
-    const birthYear = p.get("birthYear") ?? "";
-    if (q.length > 200 || company.length > 200 || (birthYear && !/^\d{4}$/.test(birthYear)) || !Number.isInteger(page) || page < 1 || page > 100000) return fail("Bộ lọc danh bạ không hợp lệ");
-    const where = { searchText: { contains: permitSearchTerm(q) }, ...(company ? { company } : {}), ...(birthYear ? { birthYear: { contains: birthYear } } : {}), ...(p.get("active") === "1" ? { isActive: true } : {}), ...(p.get("commander") === "1" ? { canCommand: true } : {}), ...(p.get("scope") ? { scope: p.get("scope")! } : {}) };
+    if (q.length > 200 || company.length > 200 || !Number.isInteger(page) || page < 1 || page > 100000) return fail("Bộ lọc danh bạ không hợp lệ");
+    const where = { searchText: { contains: permitSearchTerm(q) }, ...(company ? { company } : {}), ...(p.get("active") === "1" ? { isActive: true } : {}), ...(p.get("commander") === "1" ? { canCommand: true } : {}), ...(p.get("scope") ? { scope: p.get("scope")! } : {}) };
     const [rows, total] = await prisma.$transaction([
       prisma.workPermitPerson.findMany({ where, select: { id: true, code: true, name: true, company: true, phone: true, canCommand: true, isActive: true, version: true, ...personCardSelect }, orderBy: [{ canCommand: "desc" }, { name: "asc" }, { code: "asc" }], skip: (page - 1) * pageSize, take: pageSize }),
       prisma.workPermitPerson.count({ where }),

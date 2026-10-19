@@ -22,7 +22,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { PlainHeader, ROW_HOVER, RowExpander, rowBackground, TD_EXPAND, TD_ROW, TH_EXPAND, TH_NAVY, TR_HEAD } from "@/components/pccc/pccc-table-card";
 import { cn } from "@/lib/utils";
 import { normalizeText } from "@/lib/nav";
-import { useCreatePermitCompany, useDeletePermitCompany, useDeletePermitPerson, usePermitCompanySummary, usePermitPeople, useRenamePermitCompany, useSavePermitPerson, usePermitSessionAction, usePermitActivity, usePermitCompanyPeople } from "@/hooks/useWorkPermits";
+import { useCreatePermitCompany, useDeletePermitCompany, useDeletePermitPerson, usePermitCompanySummary, usePermitPeople, useRenamePermitCompany, useSavePermitPerson, usePermitSessionAction, usePermitActivity, usePermitCompanyPeople, usePermitDuplicatePeople } from "@/hooks/useWorkPermits";
 import { companyUnclassified, formatPermitNumber, isSessionCommander, PERMIT_KINDS, permitDeadline, workersStillInside } from "@/lib/work-permits";
 import { isOverhaulPaperPermit, OVERHAUL_DAY_STATUSES, OVERHAUL_JOURNAL_LIMITS, overhaulItemKey, overhaulItemsOf, overhaulJournalTitle, type OverhaulJournalHeader } from "@/lib/work-permit-overhaul";
 import { initialOverhaulDraft, OverhaulItemProgressEditor, overhaulDraftError, overhaulDraftPayload } from "@/components/work-permits/overhaul-item-progress";
@@ -66,22 +66,27 @@ export function PermitCompanyDirectory({ scope }: { scope: PermitContractorScope
   const term = normalizeText(q.trim());
   const [personQ, setPersonQ] = useState("");
   useEffect(() => { const timer = setTimeout(() => setPersonQ(q.trim()), 300); return () => clearTimeout(timer); }, [q]);
-  // Lọc năm sinh (19/10/2026): dùng riêng (mọi người sinh năm đó) hoặc kèm họ tên để tra người trùng họ tên + năm sinh
-  // ở nhiều nhà thầu. Có năm sinh thì bảng chỉ còn đơn vị có người khớp, bung ra cũng chỉ thấy những người đó.
-  const [birthYear, setBirthYear] = useState("");
-  const year = /^\d{4}$/.test(birthYear) ? birthYear : "";
-  const personSearch = usePermitPeople({ q: personQ, scope, birthYear: year, limit: 200, enabled: personQ.length >= 2 || Boolean(year) });
-  const personMatches = (person: PermitPerson) => (!term || normalizeText(`${person.code} ${person.name} ${person.phone ?? ""}`).includes(term))
-    && (!year || Boolean(person.birthYear?.includes(year)));
+  // Lọc trùng họ tên + năm sinh (19/10/2026) — dò một người hai hồ sơ / hai thẻ: "cùng nhà thầu" hoặc "khác nhà thầu".
+  // Đi cùng bộ lọc Mã đơn vị (chọn một đơn vị → chỉ người trùng của đơn vị đó); ô tìm kiếm thu hẹp tiếp theo họ tên.
+  const [dupMode, setDupMode] = useState<"" | "same" | "cross">("");
+  const duplicates = usePermitDuplicatePeople(dupMode, scope);
+  const personSearch = usePermitPeople({ q: personQ, scope, limit: 200, enabled: !dupMode && personQ.length >= 2 });
+  const dupIds = new Set((duplicates.data?.data ?? []).map(person => person.id));
+  // searchText có cả tên đơn vị — chỉ tính người khớp theo chính họ tên / số thẻ / SĐT của họ.
+  const textMatches = (person: PermitPerson) => normalizeText(`${person.code} ${person.name} ${person.phone ?? ""}`).includes(term);
+  const personMatches = (person: PermitPerson) => dupMode ? dupIds.has(person.id) && (!term || textMatches(person)) : textMatches(person);
+  const hitSource = dupMode ? duplicates.data?.data ?? [] : term.length >= 2 && normalizeText(personQ) === term ? personSearch.data?.data ?? [] : [];
   const personHits = new Map<string, PermitPerson[]>();
-  if ((term.length >= 2 || year) && normalizeText(personQ) === term) for (const person of personSearch.data?.data ?? []) {
-    // searchText có cả tên đơn vị — chỉ tính người khớp theo chính họ tên / số thẻ / SĐT của họ.
+  for (const person of hitSource) {
     if (!personMatches(person)) continue;
     personHits.set(person.company, [...(personHits.get(person.company) ?? []), person]);
   }
-  const hitsTruncated = Boolean(year) && (personSearch.data?.meta.total ?? 0) > (personSearch.data?.data.length ?? 0);
-  const companyMatches = (row: { code: string; company: string }) => !year && (!term || normalizeText(`${row.code} ${row.company}`).includes(term));
+  const companyMatches = (row: { code: string; company: string }) => !dupMode && (!term || normalizeText(`${row.code} ${row.company}`).includes(term));
   const allRows = [...(companies.data?.data ?? [])].sort((a, b) => Number(b.overhaul) - Number(a.overhaul) || a.company.localeCompare(b.company, "vi"));
+  // "Khác nhà thầu": ghi kèm mã các đơn vị còn lại có người trùng, để khỏi phải tự dò.
+  const dupKey = (person: PermitPerson) => `${normalizeText(person.name).replace(/\s+/g, " ").trim()}|${person.birthYear?.match(/\d{4}/)?.[0] ?? ""}`;
+  const codeOf = (company: string) => allRows.find(row => row.company === company)?.code || company;
+  const twinCompanies = (person: PermitPerson) => [...new Set((duplicates.data?.data ?? []).filter(other => other.company !== person.company && dupKey(other) === dupKey(person)).map(other => codeOf(other.company)))];
   // Bộ lọc nhà thầu theo MÃ đơn vị (17/10/2026, thay nút "Tra cứu nhân viên"): chọn một đơn vị → bảng chỉ còn đơn vị đó và tự bung.
   const pickedCompany = allRows.some(row => row.company === companyFilter) ? companyFilter : "";
   const companyOptions = [...allRows].sort((a, b) => (a.code || a.company).localeCompare(b.code || b.company, "vi"));
@@ -92,7 +97,14 @@ export function PermitCompanyDirectory({ scope }: { scope: PermitContractorScope
   const hitLine = (row: { code: string; company: string }) => {
     const hits = companyMatches(row) ? undefined : personHits.get(row.company);
     if (!hits) return null;
-    return <span className="mt-1 block text-xs font-normal text-emerald-800">Khớp: {hits.slice(0, 4).map(person => `${person.name}${year ? ` · ${person.code}` : ""}${person.canCommand ? " (CHTT)" : ""}`).join(", ")}{hits.length > 4 ? ` và ${hits.length - 4} người khác` : ""}</span>;
+    if (dupMode) {
+      const label = (person: PermitPerson) => {
+        const twins = dupMode === "cross" ? twinCompanies(person) : [];
+        return `${person.name} (${person.birthYear?.match(/\d{4}/)?.[0]}) · ${person.code}${twins.length ? ` — trùng ở ${twins.join(", ")}` : ""}`;
+      };
+      return <span className="mt-1 block text-xs font-normal text-amber-800">{hits.length} người trùng: {hits.slice(0, 6).map(label).join("; ")}{hits.length > 6 ? `; và ${hits.length - 6} người khác` : ""}</span>;
+    }
+    return <span className="mt-1 block text-xs font-normal text-emerald-800">Khớp: {hits.slice(0, 4).map(person => `${person.name}${person.canCommand ? " (CHTT)" : ""}`).join(", ")}{hits.length > 4 ? ` và ${hits.length - 4} người khác` : ""}</span>;
   };
   const colCount = canWrite ? 9 : 8;
   const workingTotal = companies.data?.meta.working ?? 0;
@@ -119,12 +131,16 @@ export function PermitCompanyDirectory({ scope }: { scope: PermitContractorScope
     <div className="overflow-hidden rounded-xl border border-border bg-card">
       <div className="flex flex-col gap-3 border-b border-border bg-muted/25 px-4 py-3 md:flex-row md:items-center md:justify-between">
         <p className="text-sm text-muted-foreground"><strong className="font-semibold text-foreground">{rows.length}</strong> đơn vị · <strong className="font-semibold text-foreground">{rows.reduce((sum, row) => sum + row.total, 0)}</strong> người · <span className={workingTotal ? "text-emerald-700" : undefined} title={`CHTT và nhân viên chưa quét RA ở các PCT ${scopeLabel} đang làm việc, tính cho mọi đơn vị`}><strong className="font-semibold">{workingTotal}</strong> đang làm việc</span></p>
-        <div className="grid w-full grid-cols-[7rem_minmax(0,1fr)] gap-2 sm:grid-cols-[minmax(0,1fr)_7rem_minmax(0,1fr)] md:flex md:w-auto md:items-center">
-          <input type="search" className="col-span-2 h-10 w-full sm:col-span-1 rounded-xl border border-input bg-background px-3 text-base focus:outline-none sm:h-9 sm:text-sm focus:ring-2 focus:ring-ring md:w-72" aria-label="Tìm đơn vị nhà thầu, nhân viên hoặc CHTT" placeholder="Họ tên, số thẻ, SĐT hoặc đơn vị…" value={q} maxLength={200} onChange={e => setQ(e.target.value)} />
-          <input type="search" inputMode="numeric" pattern="\d{4}" maxLength={4} aria-label="Lọc theo năm sinh" title="Năm sinh (4 chữ số) — kèm họ tên để tra người trùng họ tên, năm sinh ở các nhà thầu"
-            className={cn("h-10 w-full rounded-xl border border-input bg-background px-3 text-base tabular-nums focus:outline-none sm:h-9 sm:text-sm focus:ring-2 focus:ring-ring md:w-28", birthYear && !year && "border-amber-500")}
-            placeholder="Năm sinh" value={birthYear} onChange={e => setBirthYear(e.target.value.replace(/\D/g, "").slice(0, 4))} />
-          <select aria-label="Lọc theo nhà thầu" className="h-10 w-full min-w-0 rounded-xl border border-input bg-background px-3 text-base focus:outline-none sm:h-9 sm:text-sm focus:ring-2 focus:ring-ring md:w-52" value={pickedCompany}
+        <div className="grid w-full grid-cols-2 gap-2 sm:grid-cols-3 md:flex md:w-auto md:items-center">
+          <input type="search" className="col-span-2 h-10 w-full sm:col-span-1 rounded-xl border border-input bg-background px-3 text-base focus:outline-none sm:h-9 sm:text-sm focus:ring-2 focus:ring-ring md:w-64" aria-label="Tìm đơn vị nhà thầu, nhân viên hoặc CHTT" placeholder="Họ tên, số thẻ, SĐT hoặc đơn vị…" value={q} maxLength={200} onChange={e => setQ(e.target.value)} />
+          <select aria-label="Lọc nhân sự trùng họ tên và năm sinh" title="Người trùng cả họ tên lẫn năm sinh — có thể là một người có hai hồ sơ / hai thẻ"
+            className={cn("col-span-2 h-10 w-full min-w-0 rounded-xl border border-input bg-background px-3 text-base focus:outline-none sm:col-span-1 sm:h-9 sm:text-sm focus:ring-2 focus:ring-ring md:w-52", dupMode && "border-amber-500 bg-amber-50 font-medium text-amber-900")}
+            value={dupMode} onChange={e => setDupMode(e.target.value as typeof dupMode)}>
+            <option value="">Trùng tên + năm sinh…</option>
+            <option value="same">Trùng · cùng nhà thầu</option>
+            <option value="cross">Trùng · khác nhà thầu</option>
+          </select>
+          <select aria-label="Lọc theo nhà thầu" className="col-span-2 h-10 w-full min-w-0 rounded-xl border border-input bg-background px-3 text-base focus:outline-none sm:col-span-1 sm:h-9 sm:text-sm focus:ring-2 focus:ring-ring md:w-52" value={pickedCompany}
             onChange={e => { setCompanyFilter(e.target.value); setOpenCompany(e.target.value || null); }}>
             <option value="">Tất cả mã đơn vị ({allRows.length})</option>
             {companyOptions.map(row => <option key={row.company} value={row.company} title={row.company}>{row.code || row.company}</option>)}
@@ -132,10 +148,12 @@ export function PermitCompanyDirectory({ scope }: { scope: PermitContractorScope
         </div>
       </div>
       <p className="border-b border-border px-4 py-2 text-xs text-muted-foreground">Làm việc trong ngày{workingDay ? ` ${workingDay}` : ""}: gồm CHTT, mỗi người chỉ tính một lần trên tất cả PCT, theo giờ Việt Nam.</p>
-      {hitsTruncated && <p role="status" className="border-b border-border bg-amber-50 px-4 py-2 text-xs text-amber-800">Có {personSearch.data?.meta.total} người sinh năm {year} — chỉ hiện 200 người đầu. Gõ thêm họ tên để thu hẹp.</p>}
+      {dupMode && <p role="status" className="border-b border-border bg-amber-50 px-4 py-2 text-xs text-amber-800">{duplicates.isPending ? "Đang dò người trùng…" : duplicates.isError ? duplicates.error.message
+        : `${rows.reduce((sum, row) => sum + (personHits.get(row.company)?.length ?? 0), 0)} hồ sơ trùng họ tên + năm sinh ${dupMode === "same" ? "trong cùng nhà thầu" : "với nhà thầu khác"}${pickedCompany ? ` · ${codeOf(pickedCompany)}` : ""}. Hồ sơ chưa có năm sinh không được dò.`}</p>}
       {companies.isPending ? <p role="status" className="p-6 text-sm">Đang tải danh sách đơn vị…</p>
         : companies.isError ? <p role="alert" className="p-6 text-red-700">{companies.error.message}</p>
-        : !rows.length ? <p className="p-8 text-center text-sm text-muted-foreground">{q.trim() || year ? (personSearch.isFetching || normalizeText(personQ) !== term ? "Đang tìm…" : `Không có ${year ? `người ${scopeLabel} sinh năm ${year}${term ? " khớp từ khóa" : ""}` : `đơn vị hay người ${scopeLabel} nào khớp từ khóa`}${pickedCompany ? " trong nhà thầu đang lọc" : ""}.`) : `Chưa có đơn vị nhà thầu ${scopeLabel} nào.`}</p>
+        : !rows.length ? <p className="p-8 text-center text-sm text-muted-foreground">{dupMode ? (duplicates.isFetching ? "Đang tìm…" : `Không có nhân sự ${scopeLabel} trùng họ tên + năm sinh${term ? " khớp từ khóa" : ""}${pickedCompany ? " trong nhà thầu đang lọc" : ""}.`)
+          : q.trim() ? (personSearch.isFetching || normalizeText(personQ) !== term ? "Đang tìm…" : `Không có đơn vị hay người ${scopeLabel} nào khớp từ khóa${pickedCompany ? " trong nhà thầu đang lọc" : ""}.`) : `Chưa có đơn vị nhà thầu ${scopeLabel} nào.`}</p>
         : <>
         {/* Điện thoại: mỗi đơn vị một thẻ, đủ các số liệu mà không phải cuộn bảng nhiều cột. */}
         <div className="divide-y divide-border md:hidden">{rows.map(row => {
