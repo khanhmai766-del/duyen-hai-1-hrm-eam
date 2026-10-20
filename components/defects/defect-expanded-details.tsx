@@ -178,7 +178,7 @@ export function DefectExpandedDetails({ defect }: { defect: DefectItem }) {
             <>
               <DetailLine
                 label="Trạng thái đồng bộ"
-                value={defect.syncState === "MISSING" ? "⚠ Không còn trên Google Sheet" : "Đang có trên Google Sheet"}
+                value={defect.syncState === "HIDDEN" ? "Đã ẩn phiếu mất nguồn trên website" : defect.syncState === "MISSING" ? "⚠ Không còn trên Google Sheet" : "Đang có trên Google Sheet"}
               />
               {defect.pendingHistory && (
                 <>

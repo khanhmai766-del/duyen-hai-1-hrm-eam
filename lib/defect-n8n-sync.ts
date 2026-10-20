@@ -337,6 +337,31 @@ export async function ingestN8nDefectBatch(params: {
   }
 }
 
+/** Chỉ đánh dấu thiếu trong snapshot đã hoàn tất; giữ quyết định ẩn cục bộ. */
+export async function markMissingN8nDefects(
+  tx: Prisma.TransactionClient,
+  runId: string,
+  spreadsheetIds: string[],
+) {
+  if (spreadsheetIds.length === 0) return 0;
+  return tx.$executeRaw(Prisma.sql`
+    UPDATE "Defect" AS defect
+    SET
+      "syncState" = 'MISSING',
+      "sourceSyncedAt" = NOW(),
+      "updatedAt" = NOW()
+    WHERE defect."sourceType" = 'GOOGLE_SHEETS'
+      AND defect."sourceKey" IS NOT NULL
+      AND defect."sourceSpreadsheetId" IN (${Prisma.join(spreadsheetIds)})
+      AND defect."syncState" NOT IN ('CONFIRMED', 'HIDDEN')
+      AND NOT EXISTS (
+        SELECT 1 FROM "DefectSyncSeen" AS seen
+        WHERE seen."runId" = ${runId}
+          AND seen."sourceKey" = defect."sourceKey"
+      )
+  `);
+}
+
 export async function finishN8nDefectRun(params: {
   runId: string;
   completedSources: N8nDefectSource[];
@@ -366,23 +391,7 @@ export async function finishN8nDefectRun(params: {
   );
 
   const result = await prisma.$transaction(async (tx) => {
-    const missingCount = await tx.$executeRaw(Prisma.sql`
-      UPDATE "Defect" AS defect
-      SET
-        "syncState" = 'MISSING',
-        "sourceSyncedAt" = NOW(),
-        "updatedAt" = NOW()
-      WHERE defect."sourceType" = 'GOOGLE_SHEETS'
-        AND defect."sourceKey" IS NOT NULL
-        AND defect."sourceSpreadsheetId" IN (${Prisma.join(completedSpreadsheetIds)})
-        AND defect."syncState" <> 'CONFIRMED'
-        AND NOT EXISTS (
-          SELECT 1
-          FROM "DefectSyncSeen" AS seen
-          WHERE seen."runId" = ${run.id}
-            AND seen."sourceKey" = defect."sourceKey"
-        )
-    `);
+    const missingCount = await markMissingN8nDefects(tx, run.id, completedSpreadsheetIds);
 
     // STT là số phiếu yêu cầu duy nhất trong từng Sheet nguồn. Nếu một STT đã
     // xuất hiện lại dưới dạng phiếu ACTIVE thì bản MISSING cùng STT là phiếu cũ

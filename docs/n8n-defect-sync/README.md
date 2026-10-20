@@ -19,6 +19,15 @@ dùng bảng mirror và không `DELETE + INSERT`. Dữ liệu tiếp tục đư�
   đã có phiếu `ACTIVE` mang cùng STT, bản `MISSING` cũ bị xóa ngay khi lượt đồng
   bộ hoàn tất vì đã được phiếu mới thay thế.
 - Nếu workflow dừng giữa chừng, dữ liệu hiện có vẫn được giữ nguyên.
+- Người có quyền `defect-delete: full` có thể chọn **Ẩn phiếu mất nguồn** trên
+  điện thoại hoặc máy tính, kể cả phiếu đã xử lý. Bắt buộc nhập lý do; chỉ nhận
+  phiếu Google `MISSING`, chưa hủy, chưa lưu lịch sử và không còn hàng đợi
+  `PENDING`/`PROCESSING`/`FAILED`. API kiểm tra phiên bản và phạm vi cương vị.
+  Thao tác chỉ chuyển `syncState` sang `HIDDEN`, giữ bản ghi, ảnh, liên kết và
+  nhật ký; không tạo sự kiện Google, không hủy/hoàn thành và không tái cấp số.
+  Danh sách, KPI và báo cáo tồn đọng bỏ phiếu đã ẩn. Snapshot không đánh dấu lại
+  `MISSING`; pull cùng khóa nguồn không khôi phục phiếu `HIDDEN`, kể cả lượt
+  pull đang chạy khi bấm ẩn. Không cần thêm cột hoặc đồng bộ schema DB.
 - Run n8n treo quá 30 phút được tự đóng và dọn khóa staging; lịch sử run/batch
   đã kết thúc được giữ 90 ngày.
 

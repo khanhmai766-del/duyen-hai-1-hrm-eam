@@ -41,6 +41,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
       include: { relatedDevices: { select: { deviceSeq: true, mappedUnit: true } } },
     });
     if (!defect) return fail("Không tìm thấy khiếm khuyết", 404);
+    if (defect.syncState === "HIDDEN") return fail("Phiếu mất nguồn đã được ẩn; không thể lưu lịch sử", 409);
     const sheetOrigin = defect.sourceType === "GOOGLE_SHEETS" && !defect.websiteCreated;
     const sheetTracked = defect.sourceType === "GOOGLE_SHEETS" || defect.websiteCreated;
     if (sheetOrigin && defect.status !== "DA_XU_LY") {
@@ -102,7 +103,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
           },
         });
         const updated = await tx.defect.update({
-          where: { id: defect.id },
+          where: { id: defect.id, syncState: { not: "HIDDEN" } },
           data: {
             createdById: user.id,
             status: "DA_XU_LY",
@@ -200,7 +201,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
         include: HISTORY_INCLUDE,
       });
       const updatedDefect = await tx.defect.update({
-        where: { id: defect.id },
+        where: { id: defect.id, syncState: { not: "HIDDEN" } },
         data: {
           createdById: user.id,
           status: "DA_XU_LY",

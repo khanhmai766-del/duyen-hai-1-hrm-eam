@@ -46,6 +46,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
       include: { pendingHistory: { select: { id: true } } },
     });
     if (!existing) return fail("Không tìm thấy phiếu khiếm khuyết", 404);
+    if (existing.syncState === "HIDDEN") return fail("Phiếu mất nguồn đã được ẩn; không thể hủy", 409);
     if (existing.cancelledAt) return fail("Phiếu khiếm khuyết đã được hủy trước đó", 409);
     if (existing.pendingHistory || existing.syncState === "CONFIRMED") {
       return fail("Phiếu đã xác nhận lịch sử, không thể hủy", 409);
@@ -71,7 +72,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
         goPhieu = await detachMaterialTicketsFromDefect(tx, { defectId: existing.id });
       }
       const updated = await tx.defect.update({
-        where: { id: existing.id },
+        where: { id: existing.id, syncState: { not: "HIDDEN" } },
         data: {
           createdById: user.id,
           status: "DA_XU_LY",

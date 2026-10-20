@@ -48,6 +48,7 @@ export const ACTION_CONFIG: Record<string, ActionConfig> = Object.fromEntries([
   ["RECORD_WORK_PERMIT_PERSON_VIOLATION", { category: "USER", saveToAuditLog: true, label: "Ghi nhận vi phạm nhân sự nhà thầu" }],
   ["EDIT_WORK_PERMIT_PERSON_VIOLATION", { category: "USER", saveToAuditLog: true, label: "Sửa vi phạm nhân sự nhà thầu" }],
   ["DELETE_WORK_PERMIT_PERSON_VIOLATION", { category: "USER", saveToAuditLog: true, label: "Xóa vi phạm nhân sự nhà thầu" }],
+  ["HIDE_MISSING_DEFECT", { category: "USER", saveToAuditLog: true, label: "Ẩn phiếu mất nguồn" }],
 ]) as Record<string, ActionConfig>;
 
 function inferCategory(action: string): ActivityLogCategory {

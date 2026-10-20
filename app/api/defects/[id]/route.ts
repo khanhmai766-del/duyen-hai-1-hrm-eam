@@ -115,6 +115,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
     const body = await req.json();
     const existing = await prisma.defect.findUnique({ where: { id: params.id } });
     if (!existing) return fail("Không tìm thấy phiếu khiếm khuyết", 404);
+    if (existing.syncState === "HIDDEN") return fail("Phiếu mất nguồn đã được ẩn; không thể cập nhật", 409);
     const operationUpdateAvailable = await isDefectSyncFeatureEnabled("UPDATE");
     const operationFields = [
       "severity",
@@ -334,7 +335,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
         || (repeatedRepairRaw !== undefined && repeatedRepairRaw !== (existing.repeatedRepairRaw ?? ""));
       const defect = await prisma.$transaction(async (tx) => {
         const updated = await tx.defect.update({
-          where: { id: params.id },
+          where: { id: params.id, syncState: { not: "HIDDEN" } },
           data: {
           createdById: user.id,
           device: mappingRequested && body.device !== undefined ? body.device || null : undefined,
@@ -499,7 +500,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
           : undefined;
     const defect = await prisma.$transaction(async (tx) => {
       const updated = await tx.defect.update({
-        where: { id: params.id },
+        where: { id: params.id, syncState: { not: "HIDDEN" } },
         data: {
           createdById: user.id,
           unit: body.unit,

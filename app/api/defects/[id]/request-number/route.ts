@@ -142,6 +142,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
     const result = await prisma.$transaction(async (tx) => {
       const defect = await tx.defect.findUnique({ where: { id: params.id } });
       if (!defect) throw fail("Không tìm thấy phiếu khiếm khuyết", 404);
+      if (defect.syncState === "HIDDEN") throw fail("Phiếu mất nguồn đã được ẩn; không thể đổi số", 409);
       if (!defect.websiteCreated) throw fail("Chỉ được điều chỉnh STT của phiếu tạo từ website", 409);
       if (!defect.requestType) throw fail("Phiếu chưa có loại yêu cầu", 409);
       const environment = defect.requestType === "Môi Trường";
@@ -193,7 +194,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
       const nextSourceKey = sheetCopy?.sourceKey
         ?? sourceKeyWithRequestNumber(defect.sourceKey, requestNumber);
       const updated = await tx.defect.update({
-        where: { id: defect.id },
+        where: { id: defect.id, syncState: { not: "HIDDEN" } },
         data: {
           requestNumber,
           sourceKey: nextSourceKey,

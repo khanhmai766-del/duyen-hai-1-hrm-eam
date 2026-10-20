@@ -8,7 +8,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ShieldAlert, Wrench, CircleSlash, CircleDashed, CirclePause, Package, Plus, X, Pencil, CircleX, CheckCircle2, BellRing, CloudOff, FileClock, FileSpreadsheet, ExternalLink, ListTodo, Minus, ChevronLeft, ChevronRight, ChevronDown, ChevronsLeft, ChevronsRight, Filter, Check, ArrowUp, Loader2, ClipboardList, Ban, MoreHorizontal, type LucideIcon } from "lucide-react";
+import { ShieldAlert, Wrench, CircleSlash, CircleDashed, CirclePause, Package, Plus, X, Pencil, CircleX, CheckCircle2, BellRing, CloudOff, FileClock, FileSpreadsheet, ExternalLink, ListTodo, Minus, ChevronLeft, ChevronRight, ChevronDown, ChevronsLeft, ChevronsRight, Filter, Check, ArrowUp, Loader2, ClipboardList, Ban, MoreHorizontal, EyeOff, type LucideIcon } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
 import { TableSkeleton } from "@/components/shared/skeletons";
@@ -48,6 +48,8 @@ import { formatDate, initials, cn } from "@/lib/utils";
 import { isDefectShiftLeaderCandidatePosition } from "@/lib/defect-shift-leader-position";
 import { announcementPositionLabel } from "@/lib/positions";
 import { ELECTRICAL_SHEET_URL, MECHANICAL_CHEMICAL_SHEET_URL } from "@/lib/links";
+import { canHideMissingDefect } from "@/lib/defect-visibility";
+import { HideMissingDefectDialog } from "@/components/defects/hide-missing-defect-dialog";
 
 const PAGE_SIZES = [10, 25, 50, 100];
 // Nhãn hiển thị của từng giá trị statusFilter. Bộ lọc kết quả vận hành không còn
@@ -319,6 +321,7 @@ export default function DefectsPage() {
   const readOnlyDefects = session?.user?.accessMode === "DEFECT_READ_ONLY";
   const canCreate = !readOnlyDefects && rbac.can("defect-manage", ["personal", "manage", "full"]);
   const canManage = !readOnlyDefects && rbac.can("defect-manage", ["manage", "full"]);
+  const canHide = !readOnlyDefects && rbac.can("defect-delete", ["full"]);
   const canClose = !readOnlyDefects && rbac.can("defect-close", ["manage", "full"]);
   const cancelDefect = useCancelDefect();
   const remind = useRemindDefect();
@@ -578,6 +581,7 @@ export default function DefectsPage() {
   const [editTarget, setEditTarget] = React.useState<DefectItem | null>(null);
   const [formHasDeviceHistory, setFormHasDeviceHistory] = React.useState(false);
   const [cancelTarget, setCancelTarget] = React.useState<DefectItem | null>(null);
+  const [hideTarget, setHideTarget] = React.useState<DefectItem | null>(null);
   const [cancelNote, setCancelNote] = React.useState("Vận hành hủy phiếu");
   const [completeTarget, setCompleteTarget] = React.useState<DefectItem | null>(null);
   const [remindTarget, setRemindTarget] = React.useState<DefectItem | null>(null);
@@ -990,6 +994,11 @@ export default function DefectsPage() {
                             <ArrowUp /> Xem xét nâng Mức 2
                           </DropdownMenuItem>
                         )}
+                        {canHide && canHideMissingDefect(d) && (
+                          <DropdownMenuItem className="min-h-10" onSelect={() => setHideTarget(d)}>
+                            <EyeOff /> Ẩn phiếu mất nguồn
+                          </DropdownMenuItem>
+                        )}
                         {canManage && operationUpdateAvailable && !d.cancelledAt && !d.pendingHistory && d.status !== "DA_XU_LY" && (
                           <DropdownMenuItem
                             className="text-rose-700 focus:text-rose-700"
@@ -1303,6 +1312,13 @@ export default function DefectsPage() {
                               <Pencil className="h-4 w-4" />
                             </Button>
                           )}
+                          {canHide && canHideMissingDefect(d) && (
+                            <Button variant="ghost" size="icon" title="Ẩn phiếu mất nguồn" aria-label="Ẩn phiếu mất nguồn"
+                              className="h-9 w-9 shrink-0 text-muted-foreground hover:bg-sky-50 hover:text-sky-700"
+                              onClick={(event) => { event.stopPropagation(); setHideTarget(d); }}>
+                              <EyeOff className="h-4 w-4" />
+                            </Button>
+                          )}
                           {canManage && operationUpdateAvailable && !d.cancelledAt && !d.pendingHistory && d.status !== "DA_XU_LY" && (
                             <Button
                               variant="ghost"
@@ -1444,6 +1460,8 @@ export default function DefectsPage() {
           </Select>
         </div>
       </ConfirmDialog>
+
+      <HideMissingDefectDialog key={hideTarget?.id ?? "closed"} defect={hideTarget} onClose={() => setHideTarget(null)} />
 
       <ConfirmDialog
         open={!!cancelTarget}

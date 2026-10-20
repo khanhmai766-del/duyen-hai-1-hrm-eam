@@ -1,4 +1,5 @@
 import type { Prisma } from "@prisma/client";
+import { HIDDEN_DEFECT_SYNC_STATE } from "@/lib/defect-visibility";
 
 /**
  * Điều kiện của các phiếu còn hiện trên trang Khiếm khuyết (bảng Tồn đọng). Trang
@@ -8,6 +9,7 @@ import type { Prisma } from "@prisma/client";
 export function activeDefectWhere(now: Date = new Date()): Prisma.DefectWhereInput {
   const completedCutoff = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
   return {
+    syncState: { not: HIDDEN_DEFECT_SYNC_STATE },
     AND: [{
       // Đã xác nhận lưu lịch sử thì phiếu chuyển hẳn sang trang Lịch sử sửa
       // chữa (hiện ở đó với trạng thái Chờ chốt), không còn nằm ở bảng Khiếm

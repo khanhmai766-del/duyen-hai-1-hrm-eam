@@ -3,6 +3,7 @@ import { gghPreset } from "./presets/ggh-3d.mjs";
 import { keepTabPreset } from "./presets/giu-tab-f5.mjs";
 import { materialUndoUsagePreset } from "./presets/material-undo-usage.mjs";
 import { sessionPhotosPreset } from "./presets/session-photos.mjs";
+import { hideMissingDefectPreset } from "./presets/hide-missing-defect.mjs";
 // Kịch bản dựng sẵn cho ui-shots.mjs: tuyến cần chụp + dữ liệu GIẢ LẬP qua page.route.
 //
 // Giả lập ngay trong trình duyệt để chụp được trạng thái hiếm có trên DB dev (lần làm việc đang mở, danh sách
@@ -466,6 +467,7 @@ export const PRESETS = {
       await click('Chọn vị trí bình thường trên trang');
     },
   },
+  "khiem-khuyet-an-mat-nguon": hideMissingDefectPreset,
   "khiem-khuyet-dong-chua-so": {
     description: "Nút \"Dòng chưa số\" và hộp rà cột 14 của dòng khiếm khuyết chưa có STT — chỉ giả lập",
     async prepare() { return {}; },

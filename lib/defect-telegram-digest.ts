@@ -194,7 +194,7 @@ async function loadShiftDefects(start: Date, end: Date) {
       where: {
         createdAt: { gte: start, lt: end },
         cancelledAt: null,
-        syncState: { not: "MISSING" },
+        syncState: { notIn: ["MISSING", "HIDDEN"] },
       },
       select: DEFECT_DIGEST_SELECT,
       orderBy: [{ createdAt: "desc" }, { id: "asc" }],
@@ -338,7 +338,7 @@ export async function buildWeeklyDefectDigest(now: Date = new Date()) {
       where: {
         detectedAt: { gte: week.start, lt: week.end },
         cancelledAt: null,
-        syncState: { not: "MISSING" },
+        syncState: { notIn: ["MISSING", "HIDDEN"] },
       },
       select: DEFECT_DIGEST_SELECT,
     }),

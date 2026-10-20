@@ -272,6 +272,20 @@ export function useCancelDefect() {
   });
 }
 
+export function useHideMissingDefect() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...body }: { id: string; reason: string; updatedAt: string }) =>
+      apiMutate<{ id: string; syncState: string }>(`/api/defects/${id}/hide`, "POST", body),
+    onSuccess: (updated) => {
+      void qc.invalidateQueries({ queryKey: ["defects"] });
+      void qc.invalidateQueries({ queryKey: ["defect", updated.id] });
+      void qc.invalidateQueries({ queryKey: ["defect-shift-summary"] });
+      void qc.invalidateQueries({ queryKey: ["equipment-node"] });
+    },
+  });
+}
+
 export function useRemindDefect() {
   const qc = useQueryClient();
   return useMutation({

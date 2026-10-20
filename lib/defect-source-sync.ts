@@ -237,6 +237,7 @@ export async function upsertPreparedDefectRecords(params: {
     ? await prisma.defect.findMany({
         where: {
           cancelledAt: null,
+          syncState: { not: "HIDDEN" },
           requestNumber: { in: requestNumbers },
         },
         select: {
@@ -307,6 +308,7 @@ export async function upsertPreparedDefectRecords(params: {
       if (candidate.id === survivor.id) continue;
       const isEmptySheetDuplicate =
         !candidate.websiteCreated
+        && candidate.syncState !== "HIDDEN"
         && candidate.createdAt >= recentDuplicateCutoff
         && !candidate.deviceSeq
         && !candidate.pendingHistory
@@ -318,7 +320,7 @@ export async function upsertPreparedDefectRecords(params: {
     }
   }
   if (duplicateIdsToDelete.length > 0) {
-    await prisma.defect.deleteMany({ where: { id: { in: duplicateIdsToDelete } } });
+    await prisma.defect.deleteMany({ where: { id: { in: duplicateIdsToDelete }, syncState: { not: "HIDDEN" } } });
     const deleted = new Set(duplicateIdsToDelete);
     existingRows = existingRows.filter((row) => !deleted.has(row.id));
     requestNumberCandidateRows = requestNumberCandidateRows.filter((row) => !deleted.has(row.id));
@@ -526,6 +528,11 @@ export async function upsertPreparedDefectRecords(params: {
     // Tombstone của phiếu đã hủy là nguồn sự thật cho vòng đời phiếu. Pull từ
     // Sheet chỉ được cập nhật dấu đã thấy/hash, tuyệt đối không đổi lại trạng
     // thái hoặc syncState khiến phiếu xuất hiện trở lại trên website.
+    if (existing.syncState === "HIDDEN") {
+      unchangedCount++;
+      unchangedIds.push(existing.id);
+      continue;
+    }
     if (existing.cancelledAt) {
       if (existing.syncState === "CONFIRMED") confirmedSkippedCount++;
       else unchangedCount++;
@@ -672,7 +679,9 @@ export async function upsertPreparedDefectRecords(params: {
   for (let index = 0; index < updates.length; index += CHUNK) {
     await prisma.$transaction(
       updates.slice(index, index + CHUNK).map((item) =>
-        prisma.defect.update({ where: { id: item.id }, data: item.data })
+        // Một lượt pull có thể đã đọc MISSING trước khi quản trị viên ẩn phiếu.
+        // Rào ngay tại UPDATE để lượt pull cũ không khôi phục phiếu đã ẩn.
+        prisma.defect.updateMany({ where: { id: item.id, syncState: { not: "HIDDEN" } }, data: item.data })
       )
     );
   }

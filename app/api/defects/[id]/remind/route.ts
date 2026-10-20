@@ -34,6 +34,7 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
 
     const existing = await prisma.defect.findUnique({ where: { id: params.id } });
     if (!existing) return fail("Không tìm thấy khiếm khuyết", 404);
+    if (existing.syncState === "HIDDEN") return fail("Phiếu mất nguồn đã được ẩn; không thể nhắc lại", 409);
     if (existing.status === "DA_XU_LY") {
       return fail("Khiếm khuyết đã xử lý, không thể nhắc lại");
     }
@@ -85,7 +86,7 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
         });
       }
       const updated = await tx.defect.update({
-        where: { id: existing.id },
+        where: { id: existing.id, syncState: { not: "HIDDEN" } },
         data: {
           createdById: user.id,
           reminderCount: { increment: 1 },
