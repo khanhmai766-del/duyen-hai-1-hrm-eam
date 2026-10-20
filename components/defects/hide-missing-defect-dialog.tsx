@@ -22,7 +22,11 @@ export function HideMissingDefectDialog({ defect, onClose }: { defect: DefectIte
       onConfirm={async () => {
         if (!defect) return;
         try {
-          await hide.mutateAsync({ id: defect.id, reason: reason.trim(), updatedAt: new Date(defect.updatedAt).toISOString() });
+          const updatedAt = new Date(defect.updatedAt);
+          if (!Number.isFinite(updatedAt.getTime())) {
+            throw new Error("Không đọc được phiên bản phiếu; vui lòng tải lại danh sách rồi thử lại");
+          }
+          await hide.mutateAsync({ id: defect.id, reason: reason.trim(), updatedAt: updatedAt.toISOString() });
           toast.success("Đã ẩn phiếu mất nguồn");
           onClose();
         } catch (error) { toast.error((error as Error).message); }

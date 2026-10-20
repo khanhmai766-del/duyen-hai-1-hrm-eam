@@ -95,6 +95,7 @@ const LIST_SELECT = {
   boardDirectionRaw: true,
   note: true,
   createdAt: true,
+  updatedAt: true,
   createdBy: { select: { name: true } },
   pendingHistory: { select: { startedAt: true, finalizeAt: true } },
   relatedDevices: {
