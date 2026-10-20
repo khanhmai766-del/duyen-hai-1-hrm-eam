@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { loadPcccPage } from "@/lib/pccc-pagination";
 import { ok, requireUser, handle } from "@/lib/api";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
 import {
@@ -17,9 +18,6 @@ import {
 import { VALVE_LOAI_OPTIONS, tinhTrangWhere } from "@/lib/pccc-status";
 
 export const dynamic = "force-dynamic";
-
-const DEFAULT_PAGE_SIZE = 25;
-const MAX_PAGE_SIZE = 200;
 
 const SORTABLE = ["stt", "maKks", "tenVan", "loaiVan", "viTri", "cuongVi", "machine", "tinhTrang", "soYcsc", "nguoiKiemTra"] as const;
 
@@ -40,8 +38,6 @@ export async function GET(req: NextRequest) {
     const sp = req.nextUrl.searchParams;
     const viewScope = await resolvePcccViewScope(user);
     const period = await resolvePeriod(sp.get("period"));
-    const page = Math.max(1, Number(sp.get("page") ?? 1));
-    const pageSize = Math.min(MAX_PAGE_SIZE, Math.max(1, Number(sp.get("pageSize") ?? DEFAULT_PAGE_SIZE)));
     const q = sp.get("q")?.trim();
     const tinhTrang = sp.get("tinhTrang");
     // Bảng này có cột Người giám sát nên lọc được theo CẤP GIÁM SÁT, y như bình chữa cháy.
@@ -68,14 +64,16 @@ export async function GET(req: NextRequest) {
         : {}),
     };
 
-    const [total, rows, signatures, cuongViList, giamSatList, writeScope] = await Promise.all([
-      prisma.pcccValve.count({ where }),
-      prisma.pcccValve.findMany({
-        where,
-        orderBy: orderBy(sp.get("sort"), sp.get("dir")),
-        skip: (page - 1) * pageSize,
-        take: pageSize,
-      }),
+    const [{ total, rows, page, pageSize, pageCount }, signatures, cuongViList, giamSatList, writeScope] = await Promise.all([
+      loadPcccPage(
+        sp,
+        () => prisma.pcccValve.count({ where }),
+        (pagination) => prisma.pcccValve.findMany({
+          where,
+          orderBy: orderBy(sp.get("sort"), sp.get("dir")),
+          ...pagination,
+        }),
+      ),
       signaturesOf(period.id, "VALVE"),
       cuongViListOf(period.id, viewScope),
       giamSatListOf(period.id, viewScope),
@@ -89,7 +87,7 @@ export async function GET(req: NextRequest) {
         total,
         page,
         pageSize,
-        pageCount: Math.max(1, Math.ceil(total / pageSize)),
+        pageCount,
         cuongViList,
         giamSatList,
         loaiVanList: [...VALVE_LOAI_OPTIONS],

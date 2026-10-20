@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { loadPcccPage } from "@/lib/pccc-pagination";
 import { handle, ok, requireUser } from "@/lib/api";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
 import {
@@ -17,8 +18,6 @@ import { tinhTrangWhere } from "@/lib/pccc-status";
 
 export const dynamic = "force-dynamic";
 
-const DEFAULT_PAGE_SIZE = 25;
-const MAX_PAGE_SIZE = 200;
 const SORTABLE = ["stt", "heThong", "ma", "viTri", "cuongVi", "machine", "tinhTrang", "nguoiKiemTra"] as const;
 
 function orderBy(sort: string | null, dir: string | null): Prisma.PcccFireControlCabinetOrderByWithRelationInput[] {
@@ -38,8 +37,6 @@ export async function GET(req: NextRequest) {
     const sp = req.nextUrl.searchParams;
     const viewScope = await resolvePcccViewScope(user);
     const period = await resolvePeriod(sp.get("period"));
-    const page = Math.max(1, Number(sp.get("page") ?? 1));
-    const pageSize = Math.min(MAX_PAGE_SIZE, Math.max(1, Number(sp.get("pageSize") ?? DEFAULT_PAGE_SIZE)));
     const q = sp.get("q")?.trim();
     const heThong = sp.get("heThong")?.trim();
 
@@ -60,14 +57,16 @@ export async function GET(req: NextRequest) {
         : {}),
     };
 
-    const [total, rows, signatures, cuongViList, heThongRows, writeScope] = await Promise.all([
-      prisma.pcccFireControlCabinet.count({ where }),
-      prisma.pcccFireControlCabinet.findMany({
-        where,
-        orderBy: orderBy(sp.get("sort"), sp.get("dir")),
-        skip: (page - 1) * pageSize,
-        take: pageSize,
-      }),
+    const [{ total, rows, page, pageSize, pageCount }, signatures, cuongViList, heThongRows, writeScope] = await Promise.all([
+      loadPcccPage(
+        sp,
+        () => prisma.pcccFireControlCabinet.count({ where }),
+        (pagination) => prisma.pcccFireControlCabinet.findMany({
+          where,
+          orderBy: orderBy(sp.get("sort"), sp.get("dir")),
+          ...pagination,
+        }),
+      ),
       signaturesOf(period.id, "FIRE_CONTROL_CABINET"),
       cuongViListOf(period.id, viewScope),
       prisma.pcccFireControlCabinet.findMany({
@@ -86,7 +85,7 @@ export async function GET(req: NextRequest) {
         total,
         page,
         pageSize,
-        pageCount: Math.max(1, Math.ceil(total / pageSize)),
+        pageCount,
         cuongViList,
         heThongList: heThongRows.map((row) => row.heThong),
         writeScope,

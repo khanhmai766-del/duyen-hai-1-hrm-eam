@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { loadPcccPage } from "@/lib/pccc-pagination";
 import { ok, requireUser, handle } from "@/lib/api";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
 import {
@@ -17,9 +18,6 @@ import {
 import { periodEndDate } from "@/lib/pccc-summary";
 
 export const dynamic = "force-dynamic";
-
-const DEFAULT_PAGE_SIZE = 25;
-const MAX_PAGE_SIZE = 200;
 
 /** Cột được phép sắp xếp — chặn tên cột tuỳ ý từ client. */
 const SORTABLE = ["stt", "ma", "chungLoai", "tinhTrang", "apSuat", "cuongVi", "machine", "viTriHienTai", "nguoiKiemTra", "denHanThayThe"] as const;
@@ -40,8 +38,6 @@ export async function GET(req: NextRequest) {
     // Phạm vi XEM chặn ngay ở câu truy vấn — không phải lọc ở client (xem lib/pccc-service.ts)
     const viewScope = await resolvePcccViewScope(user);
     const period = await resolvePeriod(sp.get("period"));
-    const page = Math.max(1, Number(sp.get("page") ?? 1));
-    const pageSize = Math.min(MAX_PAGE_SIZE, Math.max(1, Number(sp.get("pageSize") ?? DEFAULT_PAGE_SIZE)));
     const q = sp.get("q")?.trim();
     const tinhTrang = sp.get("tinhTrang");
     const chungLoai = sp.get("chungLoai");
@@ -68,14 +64,16 @@ export async function GET(req: NextRequest) {
         : {}),
     };
 
-    const [total, rows, signatures, cuongViList, giamSatList, writeScope] = await Promise.all([
-      prisma.pcccExtinguisher.count({ where }),
-      prisma.pcccExtinguisher.findMany({
-        where,
-        orderBy: orderBy(sp.get("sort"), sp.get("dir")),
-        skip: (page - 1) * pageSize,
-        take: pageSize,
-      }),
+    const [{ total, rows, page, pageSize, pageCount }, signatures, cuongViList, giamSatList, writeScope] = await Promise.all([
+      loadPcccPage(
+        sp,
+        () => prisma.pcccExtinguisher.count({ where }),
+        (pagination) => prisma.pcccExtinguisher.findMany({
+          where,
+          orderBy: orderBy(sp.get("sort"), sp.get("dir")),
+          ...pagination,
+        }),
+      ),
       signaturesOf(period.id, "EXTINGUISHER"),
       cuongViListOf(period.id, viewScope),
       giamSatListOf(period.id, viewScope),
@@ -90,7 +88,7 @@ export async function GET(req: NextRequest) {
         total,
         page,
         pageSize,
-        pageCount: Math.max(1, Math.ceil(total / pageSize)),
+        pageCount,
         cuongViList,
         giamSatList,
         writeScope,

@@ -1,6 +1,7 @@
 import { personViolationsPreset } from "./presets/person-violations.mjs";
 import { gghPreset } from "./presets/ggh-3d.mjs";
 import { keepTabPreset } from "./presets/giu-tab-f5.mjs";
+import { pcccPaginationPreset } from "./presets/pccc-pagination.mjs";
 import { materialUndoUsagePreset } from "./presets/material-undo-usage.mjs";
 import { sessionPhotosPreset } from "./presets/session-photos.mjs";
 import { hideMissingDefectPreset } from "./presets/hide-missing-defect.mjs";
@@ -250,6 +251,7 @@ async function writeFakeCameraVideo(file, { px = 5, blur = 0.5, noise = 8 } = {}
 let nhanSuLocName = "";
 
 export const PRESETS = {
+  "pccc-phan-trang": pcccPaginationPreset,
   "material-undo-usage": materialUndoUsagePreset,
   "quet-the-camera-gia": {
     description: "Hộp quét thẻ PCT đọc mã từ CAMERA GIẢ (video .y4m, mã hơi mờ): phải tải được ZXing-C++ (.wasm) và hiện thẻ vừa quét — chỉ tra, không ghi",

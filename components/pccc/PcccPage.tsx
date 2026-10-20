@@ -1167,6 +1167,8 @@ export default function PcccPage() {
     }
     if (editableTab) setDrafts((prev) => ({ ...prev, [editableTab]: {} }));
     setEditing(false);
+    // Mỗi bảng có số dòng khác nhau; trang của bảng trước có thể không tồn tại ở bảng sau.
+    setPage(1);
     setTab(next);
     return true;
   }

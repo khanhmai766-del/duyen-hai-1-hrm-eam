@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { loadPcccPage } from "@/lib/pccc-pagination";
 import { ok, requireUser, handle } from "@/lib/api";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
 import {
@@ -17,9 +18,6 @@ import {
 import { cabinetComponentsForTcc } from "@/lib/pccc-status";
 
 export const dynamic = "force-dynamic";
-
-const DEFAULT_PAGE_SIZE = 25;
-const MAX_PAGE_SIZE = 200;
 
 const SORTABLE = ["stt", "ma", "ten", "cuongVi", "machine", "tinhTrangTongThe", "soYcsc", "nguoiKiemTra"] as const;
 
@@ -40,8 +38,6 @@ export async function GET(req: NextRequest) {
     // Bọc qua `pcccCabinetViewScope`: cương vị được giao trọn bảng tủ thì xem hết.
     const viewScope = pcccCabinetViewScope(await resolvePcccViewScope(user), user);
     const period = await resolvePeriod(sp.get("period"));
-    const page = Math.max(1, Number(sp.get("page") ?? 1));
-    const pageSize = Math.min(MAX_PAGE_SIZE, Math.max(1, Number(sp.get("pageSize") ?? DEFAULT_PAGE_SIZE)));
     const q = sp.get("q")?.trim();
     const tinhTrang = sp.get("tinhTrang");
     const loaiTu = sp.get("loaiTu");
@@ -66,15 +62,17 @@ export async function GET(req: NextRequest) {
         : {}),
     };
 
-    const [total, rows, signatures, cuongViList, writeScope] = await Promise.all([
-      prisma.pcccCabinet.count({ where }),
-      prisma.pcccCabinet.findMany({
-        where,
-        orderBy: orderBy(sp.get("sort"), sp.get("dir")),
-        skip: (page - 1) * pageSize,
-        take: pageSize,
-        include: { components: { orderBy: [{ groupOrder: "asc" }, { statusOrder: "asc" }] } },
-      }),
+    const [{ total, rows, page, pageSize, pageCount }, signatures, cuongViList, writeScope] = await Promise.all([
+      loadPcccPage(
+        sp,
+        () => prisma.pcccCabinet.count({ where }),
+        (pagination) => prisma.pcccCabinet.findMany({
+          where,
+          orderBy: orderBy(sp.get("sort"), sp.get("dir")),
+          ...pagination,
+          include: { components: { orderBy: [{ groupOrder: "asc" }, { statusOrder: "asc" }] } },
+        }),
+      ),
       signaturesOf(period.id, "CABINET"),
       cuongViListOf(period.id, viewScope),
       // Phạm vi GHI của người đang xem — UI khoá sẵn dòng ngoài phạm vi (xem lib/pccc-service.ts)
@@ -99,7 +97,7 @@ export async function GET(req: NextRequest) {
         total,
         page,
         pageSize,
-        pageCount: Math.max(1, Math.ceil(total / pageSize)),
+        pageCount,
         cuongViList,
         groups,
         writeScope,

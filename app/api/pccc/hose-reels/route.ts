@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { loadPcccPage } from "@/lib/pccc-pagination";
 import { ok, fail, requireUser, handle, audit, auditDetailWithPosition } from "@/lib/api";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
 import {
@@ -21,9 +22,6 @@ import { HOSE_REEL_GROUPS, deriveCabinetStatus } from "@/lib/pccc-status";
 
 export const dynamic = "force-dynamic";
 
-const DEFAULT_PAGE_SIZE = 25;
-const MAX_PAGE_SIZE = 200;
-
 const SORTABLE = ["stt", "ma", "ten", "viTri", "cuongVi", "machine", "tinhTrangTongThe", "soYcsc", "nguoiKiemTra"] as const;
 
 function orderBy(sort: string | null, dir: string | null): Prisma.PcccHoseReelOrderByWithRelationInput[] {
@@ -43,8 +41,6 @@ export async function GET(req: NextRequest) {
     // cương vị được giao trọn bảng tủ thì cũng xem được trọn bảng cuộn vòi.
     const viewScope = pcccCabinetViewScope(await resolvePcccViewScope(user), user);
     const period = await resolvePeriod(sp.get("period"));
-    const page = Math.max(1, Number(sp.get("page") ?? 1));
-    const pageSize = Math.min(MAX_PAGE_SIZE, Math.max(1, Number(sp.get("pageSize") ?? DEFAULT_PAGE_SIZE)));
     const q = sp.get("q")?.trim();
     // Ô lọc RIÊNG (`tinhTrangCvcc`), không dùng chung `tinhTrang` với bảng tủ: hai bảng
     // nằm cùng một tab nhưng vốn từ tình trạng khác nhau (tủ ba mức, cuộn vòi hai mức),
@@ -73,18 +69,20 @@ export async function GET(req: NextRequest) {
         : {}),
     };
 
-    const [total, rows, signatures, cuongViList, writeScope] = await Promise.all([
-      prisma.pcccHoseReel.count({ where }),
-      prisma.pcccHoseReel.findMany({
-        where,
-        orderBy: orderBy(sp.get("sort"), sp.get("dir")),
-        skip: (page - 1) * pageSize,
-        take: pageSize,
-        include: {
-          components: { orderBy: [{ groupOrder: "asc" }, { statusOrder: "asc" }] },
-          cabinet: { select: { id: true, ma: true, ten: true } },
-        },
-      }),
+    const [{ total, rows, page, pageSize, pageCount }, signatures, cuongViList, writeScope] = await Promise.all([
+      loadPcccPage(
+        sp,
+        () => prisma.pcccHoseReel.count({ where }),
+        (pagination) => prisma.pcccHoseReel.findMany({
+          where,
+          orderBy: orderBy(sp.get("sort"), sp.get("dir")),
+          ...pagination,
+          include: {
+            components: { orderBy: [{ groupOrder: "asc" }, { statusOrder: "asc" }] },
+            cabinet: { select: { id: true, ma: true, ten: true } },
+          },
+        }),
+      ),
       signaturesOf(period.id, "HOSE_REEL"),
       cuongViListOf(period.id, viewScope),
       pcccWriteScopeOf(user, "HOSE_REEL"),
@@ -104,7 +102,7 @@ export async function GET(req: NextRequest) {
         total,
         page,
         pageSize,
-        pageCount: Math.max(1, Math.ceil(total / pageSize)),
+        pageCount,
         cuongViList,
         groups,
         writeScope,
