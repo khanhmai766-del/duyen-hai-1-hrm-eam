@@ -7,6 +7,7 @@ import { permitBody, permitHandle, permitSearchTerm } from "@/lib/server/work-pe
 import { PERMIT_CONTRACTOR_SCOPES, type PermitContractorScope } from "@/lib/work-permits";
 import { parsePermitPerson, personCardSelect, withPhotoUrl } from "@/lib/server/work-permit-people";
 import { presentMembers, samePermitWorker } from "@/lib/work-permit-presence";
+import { permitPartnerCompanies } from "@/lib/server/work-permit-company-partners";
 export const dynamic = "force-dynamic";
 export async function GET(req: Request) {
   return permitHandle(async () => {
@@ -17,7 +18,10 @@ export async function GET(req: Request) {
     // Bảng đơn vị bung ra cả danh sách người của đơn vị đó nên cho lấy nhiều hơn một trang 25.
     const pageSize = p.get("limit") === "200" ? 200 : 25;
     if (q.length > 200 || company.length > 200 || !Number.isInteger(page) || page < 1 || page > 100000) return fail("Bộ lọc danh bạ không hợp lệ");
-    const where = { searchText: { contains: permitSearchTerm(q) }, ...(company ? { company } : {}), ...(p.get("active") === "1" ? { isActive: true } : {}), ...(p.get("commander") === "1" ? { canCommand: true } : {}), ...(p.get("scope") ? { scope: p.get("scope")! } : {}) };
+    // `partners=1` (ô chọn người trên phiếu): kèm các đơn vị cùng liên danh (EPS + S3A…) để chọn CHTT / nhân viên của cả
+    // nhóm. Bảng đơn vị bung ra không gửi cờ này — vẫn chỉ người của đúng đơn vị đó.
+    const companies = company && p.get("partners") === "1" ? await permitPartnerCompanies(prisma, [company]) : [];
+    const where = { searchText: { contains: permitSearchTerm(q) }, ...(company ? { company: companies.length > 1 ? { in: companies } : company } : {}), ...(p.get("active") === "1" ? { isActive: true } : {}), ...(p.get("commander") === "1" ? { canCommand: true } : {}), ...(p.get("scope") ? { scope: p.get("scope")! } : {}) };
     const [rows, total] = await prisma.$transaction([
       prisma.workPermitPerson.findMany({ where, select: { id: true, code: true, name: true, company: true, phone: true, canCommand: true, isActive: true, version: true, ...personCardSelect }, orderBy: [{ canCommand: "desc" }, { name: "asc" }, { code: "asc" }], skip: (page - 1) * pageSize, take: pageSize }),
       prisma.workPermitPerson.count({ where }),

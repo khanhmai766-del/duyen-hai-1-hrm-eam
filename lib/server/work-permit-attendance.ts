@@ -6,6 +6,7 @@ import { sameCompany } from "@/lib/work-permit-card";
 import { isSessionCommander, personScopeError, type PermitMember } from "@/lib/work-permits";
 import { permitSnapshot } from "@/lib/server/work-permits";
 import { assertWorkersFree, lockWorkPermitPresence } from "@/lib/server/work-permit-presence";
+import { permitPartnerCompanies } from "@/lib/server/work-permit-company-partners";
 
 /** Đọc `WorkPermitSession.members` (Json) an toàn thành mảng thành viên. */
 export function sessionMembers(value: Prisma.JsonValue): PermitMember[] {
@@ -75,7 +76,9 @@ export async function recordAttendance(tx: Prisma.TransactionClient, input: {
     const scopeError = personScopeError(person, session.permit.contractorScope);
     if (scopeError) throw fail(scopeError);
     const commander = session.commanderId ? await tx.workPermitPerson.findUnique({ where: { id: session.commanderId }, select: { company: true } }) : null;
-    if (!sameCompany(person.company, session.permit.teamName) && !sameCompany(person.company, commander?.company ?? "")) {
+    // Đơn vị trên phiếu, đơn vị của CHTT, và các đơn vị cùng liên danh (PERMIT_COMPANY_ALLIANCES).
+    const allowed = await permitPartnerCompanies(tx, [session.permit.teamName, commander?.company ?? ""]);
+    if (!allowed.some(company => sameCompany(person.company, company))) {
       throw fail(`${person.name} thuộc đơn vị “${person.company}”, không phải đơn vị công tác của phiếu (“${session.permit.teamName}”). Không cho vào.`);
     }
     member = { personId: person.id, code: person.code, name: person.name, company: person.company, attendance: [{ in: at, out: null }] };

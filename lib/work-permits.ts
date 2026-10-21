@@ -81,6 +81,16 @@ export function personScopeError(person: { name: string; scope?: string | null }
   const label = (scope: string) => PERMIT_CONTRACTOR_SCOPES[scope as PermitContractorScope] ?? scope;
   return `${person.name} thuộc nhân sự ${label(person.scope)}, không dùng cho PCT nhà thầu ${label(permitScope)}. Đổi nhóm trong hồ sơ nhân sự nếu cần.`;
 }
+/**
+ * Liên danh nhà thầu (21/10/2026): các đơn vị trong cùng một nhóm làm chung PCT — cấp phiếu chọn một trong các đơn vị,
+ * rồi CHTT và nhân viên của mọi đơn vị trong nhóm đều được chọn / quét vào ra. Khai theo MÃ đơn vị (danh bạ đơn vị).
+ */
+export const PERMIT_COMPANY_ALLIANCES: readonly (readonly string[])[] = [["EPS", "S3A"]];
+/** Các mã cùng liên danh với `code` (kể cả chính nó); không thuộc liên danh nào → []. */
+export function permitAllianceCodes(code: string) {
+  const key = code.normalize("NFC").trim().toUpperCase();
+  return key ? [...(PERMIT_COMPANY_ALLIANCES.find(group => group.includes(key)) ?? [])] : [];
+}
 /** Phân loại đơn vị nhà thầu (danh bạ đơn vị): được cấp PCT nhóm SCTX / Đại tu / Đầu tư. */
 export type PermitCompanyScopes = { sctx: boolean; overhaul: boolean; investment?: boolean };
 /** Đơn vị chưa tick nhóm nào = "Chưa phân loại". */

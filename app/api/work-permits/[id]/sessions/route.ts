@@ -6,6 +6,7 @@ import { audit, fail, ok, requireUser } from "@/lib/api";
 import { permitBody, permitHandle, permitInstant, permitSnapshot, permitText } from "@/lib/server/work-permits";
 import { assertCommanderFree, readSessionOpen, resolveSessionMembers, validateSessionTime } from "@/lib/server/work-permit-sessions";
 import { sameCompany } from "@/lib/work-permit-card";
+import { permitPartnerCompanies } from "@/lib/server/work-permit-company-partners";
 import { closeInsideVisits, handoffMembers, membersInside, sessionMembers, withEntry } from "@/lib/server/work-permit-attendance";
 import { syncPermitDocument } from "@/lib/server/work-permit-document-store";
 import { assertWorkersFree, lockWorkPermitPresence } from "@/lib/server/work-permit-presence";
@@ -76,8 +77,9 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
           keep: new Set(oldSession ? sessionMembers(oldSession.members).flatMap(member => member.personId ? [member.personId] : []) : []) })).filter(member => member.personId ? member.personId !== person.id : member.code.toUpperCase() !== person.code.toUpperCase());
         // Chỉ nhân viên ĐÚNG đơn vị công tác của phiếu (tên đơn vị ghi lúc cấp, hoặc đơn vị hiện tại của CHTT
         // khi tên đơn vị đã đổi sau đó) — không để lẫn người của đơn vị làm phiếu khác. Người nhập tay (không
-        // có hồ sơ danh bạ) không kiểm được đơn vị nên giữ như cũ.
-        const foreign = members.find(member => member.personId && !sameCompany(member.company, permit.teamName) && !sameCompany(member.company, person.company));
+        // có hồ sơ danh bạ) không kiểm được đơn vị nên giữ như cũ. Đơn vị cùng liên danh (EPS + S3A…) làm chung phiếu.
+        const allowed = await permitPartnerCompanies(tx, [permit.teamName, person.company]);
+        const foreign = members.find(member => member.personId && !allowed.some(company => sameCompany(member.company, company)));
         if (foreign) throw fail(`${foreign.name} (${foreign.code}) thuộc đơn vị “${foreign.company}”, không phải đơn vị công tác của phiếu (“${permit.teamName}”). Chỉ cho nhân viên đúng đơn vị vào làm việc.`);
         const handoffNote = handoff ? permitText(body, "endNote", 2000) : "";
         const nextMembers = oldSession ? handoffMembers(members, oldSession.members, input.openedAt)

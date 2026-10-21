@@ -165,7 +165,8 @@ export function useExportWorkingPeople() {
 
 export function usePermitPeople(params: { q?: string; page?: number; active?: boolean; commander?: boolean; polling?: boolean; company?: string; scope?: string | null; limit?: 25 | 200; enabled?: boolean }) {
   const query = new URLSearchParams({ q: params.q ?? "", page: String(params.page ?? 1), active: params.active ? "1" : "0", commander: params.commander ? "1" : "0",
-    ...(params.company ? { company: params.company } : {}), ...(params.scope ? { scope: params.scope } : {}), ...(params.limit ? { limit: String(params.limit) } : {}) });
+    // Lọc theo đơn vị của phiếu thì kèm đơn vị cùng liên danh (PERMIT_COMPANY_ALLIANCES).
+    ...(params.company ? { company: params.company, partners: "1" } : {}), ...(params.scope ? { scope: params.scope } : {}), ...(params.limit ? { limit: String(params.limit) } : {}) });
   return useQuery({ queryKey: ["work-permit-people", query.toString()], enabled: params.enabled ?? true, refetchInterval: params.polling ? 30000 : false, queryFn: () => apiGet<PermitPerson[]>(`/api/work-permits/people?${query}`) as Promise<{ data: PermitPerson[]; meta: { total: number; pageSize: number; canWrite: boolean } }> });
 }
 /**
@@ -291,6 +292,16 @@ export function useRemoveSessionMember(permitId: string) {
 
 export function usePermitCompanies() {
   return useQuery({ queryKey: ["work-permit-companies"], staleTime: 60000, queryFn: () => apiGet<string[]>("/api/work-permits/companies") });
+}
+/**
+ * Các đơn vị được nhận trên PCT của `names` (đơn vị trên phiếu, đơn vị CHTT), kèm đơn vị cùng liên danh (EPS + S3A…).
+ * Đang tải / lỗi → trả lại đúng `names` (máy chủ vẫn kiểm lại khi ghi vào).
+ */
+export function usePermitPartnerCompanies(names: string[]) {
+  const list = [...new Set(names.map(name => name.trim()).filter(Boolean))];
+  const query = useQuery({ queryKey: ["work-permit-companies", "partners", ...list], enabled: list.length > 0, staleTime: 60000,
+    queryFn: () => apiGet<string[]>(`/api/work-permits/companies?${new URLSearchParams(list.map(name => ["partner", name]))}`) });
+  return query.data?.data ?? list;
 }
 export interface PermitCompanySummary { violatingPeople?: number; company: string; code: string; sctx: boolean; overhaul: boolean; investment: boolean; total: number; commanders: number; active: number;
   /** Thẻ ra vào cổng còn hạn / đã hết hạn (theo ngày VN) và số người đã có kết quả huấn luyện ATVSLĐ. */

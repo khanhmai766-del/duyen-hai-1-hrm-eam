@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/compone
 import { PermitCardScanner, type ScanOutcome } from "@/components/work-permits/card-scanner";
 import { PermitPeopleDirectory } from "@/components/work-permits/contractor-work";
 import { PersonPhoto } from "@/components/work-permits/person-photo";
-import { usePermitSessionViolations, usePermitAttendance, useRemoveSessionMember, type PermitAttendanceResult } from "@/hooks/useWorkPermits";
+import { usePermitSessionViolations, usePermitAttendance, useRemoveSessionMember, usePermitPartnerCompanies, type PermitAttendanceResult } from "@/hooks/useWorkPermits";
 import { useAdminMode } from "@/hooks/useAdminMode";
 import { attendanceInside, attendanceTracked } from "@/lib/work-permit-attendance";
 import { normalizeText } from "@/lib/nav";
@@ -72,6 +72,8 @@ export function SessionAttendance({ permit, session, canExecute, size = "md", au
   };
   const insideCount = members.filter(({ member }) => attendanceInside(member)).length;
   const commander: PermitMember = { personId: session.commanderId ?? undefined, code: session.commanderCode, name: session.commanderName, company: session.company };
+  // Đơn vị được quét vào: đơn vị trên phiếu + đơn vị CHTT, kèm đơn vị cùng liên danh (EPS + S3A…).
+  const scanCompanies = usePermitPartnerCompanies([permit.teamName, session.company]);
   const previousSessions = live && canExecute && isOverhaulPaperPermit(permit)
     ? (permit.previousWorkSessions ?? (permit.previousWorkSession ? [permit.previousWorkSession] : [])).slice(0, 3) : [];
   const previousSession = previousSessions.find(previous => previous.id === previousId) ?? previousSessions[0];
@@ -114,7 +116,7 @@ export function SessionAttendance({ permit, session, canExecute, size = "md", au
 
   if (!live && !tracked) return null;
   const large = size === "lg";
-  const scanner = scanning && <PermitCardScanner title="Quét vào / ra vị trí làm việc" unit={permit.teamName} companies={[permit.teamName, session.company].filter(Boolean)} scope={permit.contractorScope} permitId={permit.id}
+  const scanner = scanning && <PermitCardScanner title="Quét vào / ra vị trí làm việc" unit={permit.teamName} companies={scanCompanies} scope={permit.contractorScope} permitId={permit.id}
     existing={[...members.map(({ member }) => member), commander]}
     onAdd={member => record({ direction: "in", personId: member.personId })}
     onExisting={async person => person.id === session.commanderId

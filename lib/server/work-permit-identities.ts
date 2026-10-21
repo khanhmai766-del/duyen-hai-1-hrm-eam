@@ -3,6 +3,8 @@ import { fail } from "@/lib/api";
 import { permitText } from "@/lib/server/work-permits";
 import { isSctxContractorPermit, personScopeError } from "@/lib/work-permits";
 import { parsePermitMembers } from "@/lib/server/work-permits";
+import { sameCompany } from "@/lib/work-permit-card";
+import { permitPartnerCompanies } from "@/lib/server/work-permit-company-partners";
 
 /** Điền sẵn người cấp từ phiên đăng nhập (cho phép sửa); CHTT nhà thầu từ danh bạ dùng chung. */
 export async function resolvePermitIdentities(
@@ -42,9 +44,12 @@ export async function resolvePermitIdentities(
   if (!person || (!unchanged && (!person.isActive || !person.canCommand))) throw fail("Người được chọn không có trong danh sách CHTT nhà thầu đang hoạt động");
   const scopeError = unchanged && before?.contractorScope === contractorScope ? null : personScopeError(person, contractorScope);
   if (scopeError) throw fail(scopeError);
+  // Liên danh (EPS + S3A…): CHTT của đơn vị cùng nhóm giữ đơn vị công tác đã chọn trên phiếu; ngoài ra đơn vị theo CHTT.
+  const chosenTeam = typeof body.teamName === "string" ? body.teamName.trim() : "";
+  const keepTeam = unchanged || Boolean(chosenTeam && (await permitPartnerCompanies(tx, [person.company])).some(company => sameCompany(company, chosenTeam)));
   return { ...body, issuerName, issuerUserId, commanderPersonId,
     commanderName: unchanged ? before!.commanderName : person.name,
-    teamName: unchanged ? body.teamName : person.company };
+    teamName: keepTeam ? body.teamName : person.company };
 }
 
 /** Nhân viên công tác ghi trên phiếu phải đúng nhóm SCTX / Đại tu của phiếu. Chỉ xét người mới thêm (hoặc khi đổi nhóm phiếu) — người đã ghi từ trước giữ nguyên. */

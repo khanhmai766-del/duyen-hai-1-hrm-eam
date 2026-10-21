@@ -22,7 +22,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { PlainHeader, ROW_HOVER, RowExpander, rowBackground, TD_EXPAND, TD_ROW, TH_EXPAND, TH_NAVY, TR_HEAD } from "@/components/pccc/pccc-table-card";
 import { cn } from "@/lib/utils";
 import { normalizeText } from "@/lib/nav";
-import { useCreatePermitCompany, useDeletePermitCompany, useDeletePermitPerson, usePermitCompanySummary, usePermitPeople, useRenamePermitCompany, useSavePermitPerson, usePermitSessionAction, usePermitActivity, usePermitCompanyPeople, usePermitDuplicatePeople } from "@/hooks/useWorkPermits";
+import { useCreatePermitCompany, useDeletePermitCompany, useDeletePermitPerson, usePermitCompanySummary, usePermitPeople, useRenamePermitCompany, useSavePermitPerson, usePermitSessionAction, usePermitActivity, usePermitCompanyPeople, usePermitDuplicatePeople, usePermitPartnerCompanies } from "@/hooks/useWorkPermits";
 import { companyUnclassified, formatPermitNumber, isSessionCommander, PERMIT_KINDS, permitDeadline, workersStillInside } from "@/lib/work-permits";
 import { isOverhaulPaperPermit, OVERHAUL_DAY_STATUSES, OVERHAUL_JOURNAL_LIMITS, overhaulItemKey, overhaulItemsOf, overhaulJournalTitle, type OverhaulJournalHeader } from "@/lib/work-permit-overhaul";
 import { initialOverhaulDraft, OverhaulItemProgressEditor, overhaulDraftError, overhaulDraftPayload } from "@/components/work-permits/overhaul-item-progress";
@@ -710,6 +710,8 @@ export function SessionEditor({ permit, session, handoff = false, progressUpdate
   // Còn nhân viên (trừ CHTT) trong khu vực → không cho kết thúc; phải quét ra từng người (server cũng chặn).
   const stillInside = ending && session ? workersStillInside(session.members, session) : [];
   const save = usePermitSessionAction(permit.id);
+  // Hộp quét khi mở lần làm việc: đơn vị trên phiếu + đơn vị CHTT, kèm đơn vị cùng liên danh.
+  const scanCompanies = usePermitPartnerCompanies([permit.teamName, person?.company ?? ""]);
   async function submit(e: React.FormEvent) {
     e.preventDefault(); e.stopPropagation(); setError("");
     if (itemError) { setError(itemError); return; }
@@ -748,7 +750,7 @@ export function SessionEditor({ permit, session, handoff = false, progressUpdate
       {overhaulItems.length > 0 && <OverhaulItemProgressEditor items={overhaulItems} previous={previousPercents} draft={itemDraft} onChange={setItemDraft} noneDone={noneDone} onNoneDone={setNoneDone} updating={updating} />}
       {ending && !overhaulItems.length && <label className="block space-y-2 text-sm"><span className="font-medium">Tiến độ công việc *</span><div className="flex items-center gap-4 rounded-lg border border-border p-3"><input className="h-2 flex-1 cursor-pointer accent-blue-700" type="range" min={0} max={100} step={1} value={progress} onChange={e => setProgress(e.target.value)} /><div className="relative w-28"><input className={`${control} pr-8 text-right tabular-nums`} type="number" min={0} max={100} step={1} required value={progress} onChange={e => setProgress(e.target.value)} /><span className="pointer-events-none absolute right-3 top-2.5 text-muted-foreground">%</span></div></div></label>}
       {!ending && !handoff && !updating && <><p className="rounded-lg bg-sky-50 p-3 text-sm text-sky-950">CHTT tự được tính vào người công tác. Tổng: {person ? 1 + additionalMembers.length : additionalMembers.length} người.</p><PermitMembersEditor members={additionalMembers} onChange={setMembers} commander={person ? { personId: person.id, name: person.name, code: person.code, company: person.company } : undefined}
-        scope={permit.contractorScope} scan={{ unit: permit.teamName, companies: [permit.teamName, person?.company ?? ""].filter(Boolean), permitId: permit.id }} /></>}
+        scope={permit.contractorScope} scan={{ unit: permit.teamName, companies: scanCompanies, permitId: permit.id }} /></>}
       {(ending || handoff || updating) && <label className="block space-y-1 text-sm"><span>{updating ? "Ghi chú làm việc" : handoff ? "Ghi chú bàn giao" : "Ghi chú kết thúc lần làm việc"}</span><textarea className={control} rows={3} maxLength={2000} value={note} onChange={e => setNote(e.target.value)} /></label>}
       {stillInside.length > 0 && <div role="alert" className="space-y-2 rounded-lg border-2 border-red-300 bg-red-50 p-3 text-sm text-red-900">
         <p className="font-semibold">Còn {stillInside.length} nhân viên chưa rút khỏi vị trí làm việc — chưa kết thúc được:</p>
