@@ -38,16 +38,19 @@ export function isShiftLeader(position?: string | null) {
   return isShiftCommandPosition(position);
 }
 
-/** Thống kê — nhập số phiếu Đề xuất vật tư */
+/** Thống kê — nhập số phiếu Đề xuất vật tư.
+ *  `norm()` đã bỏ dấu nên phải so với chuỗi KHÔNG DẤU — bản cũ so với "thống kê" còn dấu
+ *  nên không bao giờ khớp (cùng lỗi từng làm Trưởng ca mất quyền, xem `isShiftLeader`). */
 export function isStats(position?: string | null) {
-  return norm(position).includes("thống kê");
+  return norm(position).includes("thong ke");
 }
 
 /** Kỹ thuật viên: vai trò TECHNICIAN hoặc chức vụ có chữ "Kỹ thuật viên". Một định nghĩa dùng
- *  chung cho quyền tạo phiếu và quyền xác nhận đề xuất ở luồng hóa chất. */
+ *  chung cho quyền tạo phiếu và quyền xác nhận đề xuất ở luồng hóa chất.
+ *  So với chuỗi KHÔNG DẤU vì `norm()` đã bỏ dấu (xem `isStats`). */
 export function isTechnician(user: { role?: string | null; position?: string | null }) {
   if (user.role === "TECHNICIAN") return true;
-  return norm(user.position).includes("kỹ thuật viên");
+  return norm(user.position).includes("ky thuat vien");
 }
 
 /** Ai được TẠO phiếu thay thế vật tư:
