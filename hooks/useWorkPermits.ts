@@ -338,6 +338,25 @@ export function usePermitCompanySummary(scope?: PermitContractorScope) {
   return useQuery({ queryKey: ["work-permit-companies", "summary", scope ?? ""], staleTime: 30000, refetchInterval: 60000, queryFn: () => apiGet<PermitCompanySummary[]>(`/api/work-permits/companies?summary=1${scope ? `&scope=${scope}` : ""}`) as Promise<{ data: PermitCompanySummary[]; meta: { canWrite: boolean; working: number; workingToday: number; workingDay: string } }> });
 }
 
+/** Một ngày trong lịch sử "Làm việc trong ngày": `total` khử trùng trên mọi đơn vị (không phải tổng các ô). */
+export interface PermitDailyHistoryDay { day: string; total: number; byCompany: Record<string, number> }
+export function usePermitDailyHistory(from: string, to: string, scope: PermitContractorScope, enabled = true) {
+  const query = new URLSearchParams({ from, to, scope });
+  return useQuery({ queryKey: ["work-permit-companies", "daily-history", query.toString()], enabled, staleTime: 60000, placeholderData: previous => previous,
+    queryFn: () => apiGet<PermitDailyHistoryDay[]>(`/api/work-permits/companies/daily-history?${query}`) as Promise<{ data: PermitDailyHistoryDay[]; meta: { from: string; to: string } }> });
+}
+export interface PermitDailyWorker { name: string; code: string; commander: boolean; permits: string[] }
+/** Ai của một đơn vị đã làm việc trong một ngày (chỉ tải khi mở ngày đó). */
+export function usePermitDailyWorkers(day: string, company: string, scope: PermitContractorScope, enabled: boolean) {
+  const query = new URLSearchParams({ day, company, scope });
+  return useQuery({ queryKey: ["work-permit-companies", "daily-workers", query.toString()], enabled, staleTime: 60000,
+    queryFn: () => apiGet<PermitDailyWorker[]>(`/api/work-permits/companies/daily-history?${query}`) });
+}
+export function useExportPermitDailyHistory() {
+  return useMutation({ mutationFn: (params: { from: string; to: string; scope: PermitContractorScope }) =>
+    apiDownload(`/api/work-permits/companies/daily-history?${new URLSearchParams({ ...params, format: "xlsx" })}`) });
+}
+
 export function usePermitActivity<T>(id: string, type: "sessions" | "history", version: number, enabled: boolean) {
   return useInfiniteQuery({ queryKey: ["work-permit", id, type, version], enabled, initialPageParam: 2,
     queryFn: ({ pageParam }) => apiGet<T[]>(`/api/work-permits/${id}/activity?type=${type}&offset=${pageParam}&version=${version}`) as Promise<{ data: T[]; meta: { nextOffset: number | null } }>,

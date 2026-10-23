@@ -3,8 +3,9 @@
 import { PersonViolations, PersonViolationTag, RecordPersonViolation } from "@/components/work-permits/person-violations";
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { useSession } from "next-auth/react";
-import { Plus, Users, UserPlus, X, Play, Square, Pencil, Trash2, ScanLine, RefreshCw, MonitorPlay, ChevronDown } from "lucide-react";
+import { Plus, Users, UserPlus, X, Play, Square, Pencil, Trash2, ScanLine, RefreshCw, MonitorPlay, ChevronDown, History } from "lucide-react";
 import { toast } from "sonner";
 import { PermitCompanyPicker } from "@/components/work-permits/company-picker";
 import { PermitEmployeePicker } from "@/components/work-permits/employee-picker";
@@ -28,6 +29,9 @@ import { isOverhaulPaperPermit, OVERHAUL_DAY_STATUSES, OVERHAUL_JOURNAL_LIMITS, 
 import { initialOverhaulDraft, OverhaulItemProgressEditor, overhaulDraftError, overhaulDraftPayload } from "@/components/work-permits/overhaul-item-progress";
 import { PermitDeadlineBadge } from "@/components/work-permits/permit-deadline";
 import { companyScopeList, CONTRACTOR_SCOPE_TONE, contractorScopeLikeOverhaul, PERMIT_CONTRACTOR_SCOPES, type PermitCompanyScopes, type PermitContractorScope, type PermitDetailRow, type PermitMember, type PermitPerson, type PermitSession } from "@/lib/work-permits";
+
+// Hộp thoại lịch sử kéo theo recharts — chỉ tải khi mở.
+const DailyHistoryDialog = dynamic(() => import("@/components/work-permits/contractor-daily-history").then(module => module.DailyHistoryDialog), { ssr: false });
 
 const control = "min-h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-60";
 const vnNow = () => new Date(Date.now() + 7 * 3600000).toISOString().slice(0, 16);
@@ -54,6 +58,8 @@ export function PermitCompanyDirectory({ scope }: { scope: PermitContractorScope
   const [addingPersonTo, setAddingPersonTo] = useState<string | null>(null);
   const [companyForm, setCompanyForm] = useState<{ mode: "create" } | { mode: "rename"; company: string } | null>(null);
   const [syncing, setSyncing] = useState(false);
+  // Lịch sử làm việc trong ngày: null = đóng, "" = mọi đơn vị, tên đơn vị = mở sẵn đơn vị đó.
+  const [historyCompany, setHistoryCompany] = useState<string | null>(null);
   const remove = useDeletePermitPerson();
   const removeCompany = useDeletePermitCompany();
   const companies = usePermitCompanySummary(scope);
@@ -127,7 +133,7 @@ export function PermitCompanyDirectory({ scope }: { scope: PermitContractorScope
       <div><h2 className="flex items-center gap-2 text-base font-semibold"><Users size={18} />Đơn vị nhà thầu · {scopeLabel}</h2><p className="mt-0.5 text-xs text-muted-foreground">Thêm đơn vị trước, rồi thêm nhân sự và CHTT ngay trên dòng của đơn vị đó. Bấm một dòng để xem danh sách người.</p></div>
       {canWrite && <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto"><Button type="button" size="sm" variant="outline" className="h-10 text-xs sm:h-9" title="Lấy họ tên, số thẻ, hạn thẻ, huấn luyện và ảnh từ bảng quản lý thẻ ra vào cổng" onClick={() => setSyncing(true)}><RefreshCw /><span className="sm:hidden">Đồng bộ Sheets</span><span className="hidden sm:inline">Đồng bộ từ Google Sheets</span></Button><Button type="button" size="sm" className="h-10 text-xs sm:h-9" onClick={() => setCompanyForm({ mode: "create" })}><Plus />Thêm đơn vị</Button></div>}
     </div>
-    {companies.data && <ContractorDashboard rows={companies.data.data} workingToday={companies.data.meta.workingToday} workingDay={workingDay} scopeLabel={scopeLabel} />}
+    {companies.data && <ContractorDashboard rows={companies.data.data} workingToday={companies.data.meta.workingToday} workingDay={workingDay} scopeLabel={scopeLabel} onOpenHistory={company => setHistoryCompany(company ?? "")} />}
     <div className="overflow-hidden rounded-xl border border-border bg-card">
       <div className="flex flex-col gap-3 border-b border-border bg-muted/25 px-4 py-3 md:flex-row md:items-center md:justify-between">
         <p className="text-sm text-muted-foreground"><strong className="font-semibold text-foreground">{rows.length}</strong> đơn vị · <strong className="font-semibold text-foreground">{rows.reduce((sum, row) => sum + row.total, 0)}</strong> người · <span className={workingTotal ? "text-emerald-700" : undefined} title={`CHTT và nhân viên chưa quét RA ở các PCT ${scopeLabel} đang làm việc, tính cho mọi đơn vị`}><strong className="font-semibold">{workingTotal}</strong> đang làm việc</span></p>
@@ -174,6 +180,7 @@ export function PermitCompanyDirectory({ scope }: { scope: PermitContractorScope
               {row.total === 0 && <Button type="button" size="sm" variant="outline" className="h-10 w-10 px-0 text-red-700 hover:text-red-800" disabled={removeCompany.isPending} aria-label={`Xóa đơn vị ${row.company}`} onClick={() => void deleteCompany(row.company)}><Trash2 size={16} /></Button>}
             </div>}
             {expanded && <div className="border-t border-sky-100 px-4 pb-4 pt-3">
+              <Button type="button" size="sm" variant="outline" className="mb-3 h-10 w-full bg-background text-xs" onClick={() => setHistoryCompany(row.company)}><History size={16} />Lịch sử làm việc theo ngày</Button>
               {people.isPending ? <p role="status" className="text-sm text-muted-foreground">Đang tải nhân sự…</p>
                 : people.isError ? <p role="alert" className="text-sm text-red-700">{people.error.message}</p>
                 : !people.data?.data.length ? <p className="text-sm text-muted-foreground">Đơn vị này chưa có nhân sự {scopeLabel}.</p>
@@ -203,7 +210,12 @@ export function PermitCompanyDirectory({ scope }: { scope: PermitContractorScope
                 <TableCell className={cn(TD_ROW, "whitespace-nowrap py-2.5 text-center font-semibold tracking-wide text-blue-800")}>{row.code || <span className="font-normal text-slate-400">—</span>}</TableCell>
                 <TableCell className={cn(TD_ROW, "py-2.5 font-semibold text-ink")}>{row.company}<CompanyScopeBadge row={row} className="ml-2" />{row.active < row.total && <span className="ml-2 text-[11px] font-medium text-amber-700">{row.total - row.active} ngừng hoạt động</span>}{Boolean(row.violatingPeople) && <span className="mt-1 block text-xs font-semibold text-red-700">{row.violatingPeople} nhân viên đã vi phạm</span>}{hitLine(row)}</TableCell>
                 <TableCell className={cn(TD_ROW, "py-2.5 text-center tabular-nums")}>{row.working ? <span className="font-semibold text-emerald-700">{row.working}</span> : <span className="text-slate-400">0</span>}</TableCell>
-                <TableCell className={cn(TD_ROW, "py-2.5 text-center tabular-nums")} title={dailyWorkingLabel}>{row.workingToday ? <><span className="font-semibold text-blue-700">{row.workingToday}</span>{row.active > 0 && <span className="ml-1 text-xs text-muted-foreground">· {Math.round(participationRate(row.workingToday, row.active) * 100)}%</span>}</> : <span className="text-slate-400">0</span>}</TableCell>
+                <TableCell className={cn(TD_ROW, "py-1.5 text-center tabular-nums")}>
+                  <button type="button" className="inline-flex min-h-8 items-center gap-1 rounded-md px-2 hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500" title={`${dailyWorkingLabel}. Bấm để xem lịch sử theo ngày`} aria-label={`Lịch sử làm việc theo ngày của ${row.company}`} onClick={e => act(e, () => setHistoryCompany(row.company))}>
+                    {row.workingToday ? <><span className="font-semibold text-blue-700">{row.workingToday}</span>{row.active > 0 && <span className="text-xs text-muted-foreground">· {Math.round(participationRate(row.workingToday, row.active) * 100)}%</span>}</> : <span className="text-slate-400">0</span>}
+                    <History size={12} className="text-slate-400 opacity-0 transition-opacity group-hover:opacity-100" aria-hidden />
+                  </button>
+                </TableCell>
                 <TableCell className={cn(TD_ROW, "py-2.5 text-center tabular-nums")}>{row.total}</TableCell>
                 <TableCell className={cn(TD_ROW, "py-2.5 text-center tabular-nums")}>{row.commanders ? <span className="font-semibold text-emerald-700">{row.commanders}</span> : <span className="text-amber-700">0</span>}</TableCell>
                 {canWrite && <TableCell className={cn(TD_ROW, "py-2.5")}>
@@ -228,6 +240,7 @@ export function PermitCompanyDirectory({ scope }: { scope: PermitContractorScope
     </div>
     {editing && <PersonEditor initial={editing} onClose={() => setEditing(null)} />}
     {addingPersonTo !== null && <PersonEditor presetCompany={addingPersonTo} presetScope={scope} onClose={() => setAddingPersonTo(null)} onSaved={() => setOpenCompany(addingPersonTo)} />}
+    {historyCompany !== null && <DailyHistoryDialog scope={scope} rows={companies.data?.data ?? []} initialCompany={historyCompany} onClose={() => setHistoryCompany(null)} />}
     {syncing && <PeopleSyncDialog initialSource={scope === "SCTX" ? "SCTX" : "OVERHAUL"} onClose={() => setSyncing(false)} />}
     {companyForm && <CompanyEditor company={companyForm.mode === "rename" ? companyForm.company : undefined} presetScope={scope} onClose={() => setCompanyForm(null)} onSaved={name => setOpenCompany(name)} />}
   </section>;

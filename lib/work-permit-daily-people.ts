@@ -22,20 +22,27 @@ export interface DailyWorkingSession {
  * Người từng làm trong khoảng [0h, 0h ngày sau): gồm CHTT và nhân viên có lượt VÀO giao với ngày.
  * Người chưa VÀO (attendance: []) không tính; dữ liệu cũ thiếu attendance tính theo lần làm việc.
  * Khử trùng giữa các PCT/lượt vào/ra bằng cùng quy tắc nhận diện nhân sự đang làm việc.
+ *
+ * `onCount` (tuỳ chọn): gọi cho MỖI lần một người được tính ở một lần làm việc — kể cả lần trùng — với bản ghi
+ * đại diện (người tìm thấy đầu tiên), để biết người đó làm ở những PCT nào và có làm CHTT không.
  */
-export function dailyWorkingPeople(sessions: DailyWorkingSession[], day: string, now: Date = new Date()): PermitMember[] {
+export function dailyWorkingPeople<S extends DailyWorkingSession>(sessions: S[], day: string, now: Date = new Date(),
+  onCount?: (person: PermitMember, session: S, asCommander: boolean) => void): PermitMember[] {
   const { start, end } = permitWorkingDayBounds(day);
   const until = Math.min(end.getTime(), now.getTime());
   const found: PermitMember[] = [];
-  const add = (member: PermitMember) => {
-    if (member.name && !found.some(other => samePermitWorker(member, other))) found.push(member);
+  const add = (member: PermitMember, session: S, asCommander: boolean) => {
+    if (!member.name) return;
+    let person = found.find(other => samePermitWorker(member, other));
+    if (!person) found.push(person = member);
+    onCount?.(person, session, asCommander);
   };
   for (const session of sessions) {
     const sessionEnd = Math.min(session.endedAt?.getTime() ?? until, until);
     const overlaps = (from: number, to: number) => Number.isFinite(from) && Number.isFinite(to)
       && from < until && to > start.getTime() && to > from;
     if (!overlaps(session.openedAt.getTime(), sessionEnd)) continue;
-    add({ personId: session.commanderId ?? undefined, code: session.commanderCode, name: session.commanderName, company: session.company });
+    add({ personId: session.commanderId ?? undefined, code: session.commanderCode, name: session.commanderName, company: session.company }, session, true);
     if (!Array.isArray(session.members)) continue;
     for (const value of session.members) {
       if (!value || typeof value !== "object" || typeof value.name !== "string" || typeof value.company !== "string") continue;
@@ -43,7 +50,7 @@ export function dailyWorkingPeople(sessions: DailyWorkingSession[], day: string,
       const worked = member.attendance == null || (Array.isArray(member.attendance) && member.attendance.some(visit =>
         visit && overlaps(Math.max(new Date(visit.in).getTime(), session.openedAt.getTime()),
           Math.min(visit.out ? new Date(visit.out).getTime() : sessionEnd, sessionEnd))));
-      if (worked) add(member);
+      if (worked) add(member, session, false);
     }
   }
   return found;

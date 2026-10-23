@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { dailyWorkingPeople, permitWorkingDay, permitWorkingDayBounds } from "@/lib/work-permit-daily-people";
+import { dailyWorkers, type DailyWorker } from "@/lib/work-permit-daily-history";
 import { formatPermitNumber, type PermitContractorScope } from "@/lib/work-permits";
 
 /**
@@ -35,4 +36,30 @@ export async function loadDailyWorkingByCompany(day = permitWorkingDay(), now = 
     permitsByCompany.set(company, permits);
   }
   return { day, byCompany, total: people.length, permitsByCompany };
+}
+
+/**
+ * Lịch sử "Làm việc trong ngày" cho một khoảng ngày: MỘT truy vấn lấy mọi lần làm việc chạm khoảng đó, rồi
+ * đếm từng ngày bằng đúng quy tắc của loadDailyWorkingByCompany — số của hôm nay khớp với bảng đơn vị.
+ * Không có bảng chụp số liệu: tính lại từ lượt vào/ra nên xem được cả những ngày trước khi có màn hình này.
+ *
+ * Đơn vị của một người lấy theo hồ sơ danh bạ HIỆN TẠI (như bảng đơn vị); người không có hồ sơ giữ đơn vị ghi trên PCT.
+ */
+export async function loadDailyWorkingHistory(days: string[], now = new Date(), scope: PermitContractorScope | null = null, db = prisma) {
+  if (!days.length) return { days: [] as Array<{ day: string; workers: DailyWorker[] }>, permitNumbers: new Map<string, string>() };
+  const start = permitWorkingDayBounds(days[0]).start, end = permitWorkingDayBounds(days[days.length - 1]).end;
+  const sessions = await db.workPermitSession.findMany({
+    where: { openedAt: { lt: end }, OR: [{ endedAt: null }, { endedAt: { gt: start } }],
+      ...(scope ? { permit: { teamType: "CONTRACTOR", contractorScope: scope } } : {}) },
+    orderBy: { openedAt: "asc" },
+    select: { commanderId: true, commanderCode: true, commanderName: true, company: true, members: true, openedAt: true, endedAt: true,
+      permit: { select: { id: true, number: true, year: true, nkvhNumber: true } } },
+  });
+  const perDay = days.map(day => ({ day, workers: dailyWorkers(sessions, day, now) }));
+  const ids = [...new Set(perDay.flatMap(entry => entry.workers.flatMap(worker => worker.personId ? [worker.personId] : [])))];
+  const profiles = new Map((ids.length ? await db.workPermitPerson.findMany({ where: { id: { in: ids } }, select: { id: true, company: true } }) : [])
+    .map(person => [person.id, person.company]));
+  for (const entry of perDay) for (const worker of entry.workers) worker.company = (worker.personId ? profiles.get(worker.personId) : undefined) || worker.company;
+  const permitNumbers = new Map(sessions.map(session => [session.permit.id, formatPermitNumber(session.permit)]));
+  return { days: perDay, permitNumbers };
 }
