@@ -90,11 +90,13 @@ export async function GET(req: Request) {
       return ok(rows.map(row => ({ company: row.company, code: row.code, sctx: row.sctx, overhaul: row.overhaul, investment: row.investment, total: Number(row.total), violatingPeople: Number(row.violatingPeople), commanders: Number(row.commanders), active: Number(row.active), cardsValid: Number(row.cardsValid), cardsExpired: Number(row.cardsExpired), trained: Number(row.trained), working: working.byCompany.get(row.company) ?? 0, workingToday: daily.byCompany.get(row.company) ?? 0 })),
         { canWrite: (await permitCapabilities(user)).canIssue, working: working.total, workingToday: daily.total, workingDay: day, scope });
     }
-    // `partner=<tên>` (lặp được): các đơn vị được nhận trên PCT của những đơn vị đó, kèm đơn vị cùng liên danh.
+    // `partner=<tên>` (lặp được): các đơn vị được nhận trên PCT của những đơn vị đó, kèm đơn vị cùng liên danh;
+    // `permit=<id>` kèm nhà thầu làm chung hạng mục đại tu trên phiếu đó.
     const partner = params.getAll("partner");
     if (partner.length) {
-      if (partner.length > 5 || partner.some(name => name.length > 200)) return fail("Đơn vị không hợp lệ");
-      return ok(await permitPartnerCompanies(prisma, partner));
+      const permitId = params.get("permit") ?? "";
+      if (partner.length > 5 || partner.some(name => name.length > 200) || permitId.length > 100) return fail("Đơn vị không hợp lệ");
+      return ok(await permitPartnerCompanies(prisma, partner, permitId || undefined));
     }
     // Lấy từ toàn bộ danh bạ, không giới hạn bởi trang nhân sự hoặc vai trò CHTT.
     const rows = await prisma.$queryRawUnsafe<Array<{ company: string }>>(`SELECT company FROM (${COMPANY_NAMES}) c ORDER BY company`);

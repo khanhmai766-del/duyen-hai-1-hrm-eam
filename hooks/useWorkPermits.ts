@@ -295,12 +295,13 @@ export function usePermitCompanies() {
 }
 /**
  * Các đơn vị được nhận trên PCT của `names` (đơn vị trên phiếu, đơn vị CHTT), kèm đơn vị cùng liên danh (EPS + S3A…).
+ * `permitId`: kèm nhà thầu làm chung hạng mục đại tu trên phiếu (IDC + Sinh Lộc…).
  * Đang tải / lỗi → trả lại đúng `names` (máy chủ vẫn kiểm lại khi ghi vào).
  */
-export function usePermitPartnerCompanies(names: string[]) {
+export function usePermitPartnerCompanies(names: string[], permitId?: string) {
   const list = [...new Set(names.map(name => name.trim()).filter(Boolean))];
-  const query = useQuery({ queryKey: ["work-permit-companies", "partners", ...list], enabled: list.length > 0, staleTime: 60000,
-    queryFn: () => apiGet<string[]>(`/api/work-permits/companies?${new URLSearchParams(list.map(name => ["partner", name]))}`) });
+  const query = useQuery({ queryKey: ["work-permit-companies", "partners", permitId ?? "", ...list], enabled: list.length > 0, staleTime: 60000,
+    queryFn: () => apiGet<string[]>(`/api/work-permits/companies?${new URLSearchParams([...list.map(name => ["partner", name]), ...(permitId ? [["permit", permitId]] : [])])}`) });
   return query.data?.data ?? list;
 }
 export interface PermitCompanySummary { violatingPeople?: number; company: string; code: string; sctx: boolean; overhaul: boolean; investment: boolean; total: number; commanders: number; active: number;

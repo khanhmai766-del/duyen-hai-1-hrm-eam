@@ -76,8 +76,9 @@ export async function recordAttendance(tx: Prisma.TransactionClient, input: {
     const scopeError = personScopeError(person, session.permit.contractorScope);
     if (scopeError) throw fail(scopeError);
     const commander = session.commanderId ? await tx.workPermitPerson.findUnique({ where: { id: session.commanderId }, select: { company: true } }) : null;
-    // Đơn vị trên phiếu, đơn vị của CHTT, và các đơn vị cùng liên danh (PERMIT_COMPANY_ALLIANCES).
-    const allowed = await permitPartnerCompanies(tx, [session.permit.teamName, commander?.company ?? ""]);
+    // Đơn vị trên phiếu, đơn vị của CHTT, các đơn vị cùng liên danh (PERMIT_COMPANY_ALLIANCES) và nhà thầu làm chung
+    // hạng mục đại tu trên phiếu (sharedJointWork).
+    const allowed = await permitPartnerCompanies(tx, [session.permit.teamName, commander?.company ?? ""], input.permitId);
     if (!allowed.some(company => sameCompany(person.company, company))) {
       throw fail(`${person.name} thuộc đơn vị “${person.company}”, không phải đơn vị công tác của phiếu (“${session.permit.teamName}”). Không cho vào.`);
     }

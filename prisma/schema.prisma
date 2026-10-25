@@ -1842,6 +1842,9 @@ model WorkPermitOverhaulItem {
   /// Mã nhà thầu KHÁC được mở thêm (chuẩn hoá như contractorCode) — trường hợp đặc biệt, vd Sinh Lộc làm giàn giáo
   /// trong hạng mục của IDC/EPS. Chỉ ghi trên web; đồng bộ Sheet không đụng cột này. Cột Nhà thầu trên Sheet giữ nguyên.
   sharedContractorCodes String[] @default([])
+  /// true = PCT có hạng mục này nhận nhân sự của nhà thầu gốc LẪN các nhà thầu mở thêm (sharedContractorCodes): cùng
+  /// quét vào/ra làm chung một phiếu (vd IDC + Sinh Lộc, 7.6.1.2 / 7.6.1.3 · 25/10/2026). Chỉ ghi trên web như cột trên.
+  sharedJointWork Boolean @default(false)
   percent        String   @default("")
   status         String   @default("")
   /// false = hàng đã biến khỏi Sheet ở lần đồng bộ gần nhất (giữ lại, không xoá).

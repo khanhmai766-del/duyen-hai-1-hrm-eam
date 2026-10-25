@@ -72,8 +72,9 @@ export function SessionAttendance({ permit, session, canExecute, size = "md", au
   };
   const insideCount = members.filter(({ member }) => attendanceInside(member)).length;
   const commander: PermitMember = { personId: session.commanderId ?? undefined, code: session.commanderCode, name: session.commanderName, company: session.company };
-  // Đơn vị được quét vào: đơn vị trên phiếu + đơn vị CHTT, kèm đơn vị cùng liên danh (EPS + S3A…).
-  const scanCompanies = usePermitPartnerCompanies([permit.teamName, session.company]);
+  // Đơn vị được quét vào: đơn vị trên phiếu + đơn vị CHTT, kèm đơn vị cùng liên danh (EPS + S3A…) và nhà thầu làm
+  // chung hạng mục đại tu trên phiếu (IDC + Sinh Lộc…).
+  const scanCompanies = usePermitPartnerCompanies([permit.teamName, session.company], permit.id);
   const previousSessions = live && canExecute && isOverhaulPaperPermit(permit)
     ? (permit.previousWorkSessions ?? (permit.previousWorkSession ? [permit.previousWorkSession] : [])).slice(0, 3) : [];
   const previousSession = previousSessions.find(previous => previous.id === previousId) ?? previousSessions[0];

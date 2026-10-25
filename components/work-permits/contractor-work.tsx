@@ -723,8 +723,8 @@ export function SessionEditor({ permit, session, handoff = false, progressUpdate
   // Còn nhân viên (trừ CHTT) trong khu vực → không cho kết thúc; phải quét ra từng người (server cũng chặn).
   const stillInside = ending && session ? workersStillInside(session.members, session) : [];
   const save = usePermitSessionAction(permit.id);
-  // Hộp quét khi mở lần làm việc: đơn vị trên phiếu + đơn vị CHTT, kèm đơn vị cùng liên danh.
-  const scanCompanies = usePermitPartnerCompanies([permit.teamName, person?.company ?? ""]);
+  // Hộp quét khi mở lần làm việc: đơn vị trên phiếu + đơn vị CHTT, kèm đơn vị cùng liên danh và nhà thầu làm chung hạng mục.
+  const scanCompanies = usePermitPartnerCompanies([permit.teamName, person?.company ?? ""], permit.id);
   async function submit(e: React.FormEvent) {
     e.preventDefault(); e.stopPropagation(); setError("");
     if (itemError) { setError(itemError); return; }
