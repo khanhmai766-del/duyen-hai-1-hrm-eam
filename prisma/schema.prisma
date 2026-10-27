@@ -55,6 +55,7 @@ model User {
   forumPostLikes          ForumPostLike[]          @relation("ForumPostLikeUser")
   forumReplyLikes         ForumReplyLike[]         @relation("ForumReplyLikeUser")
   aiConversations         AiConversation[]
+  groundingShiftReminders GroundingShiftReminder[]
 
   @@index([position])
   @@index([role])
@@ -3001,6 +3002,19 @@ model PcccHoseReelComponent {
 // Một thiết bị có 1..2 điểm kiểm tra con (LIGHTNING / GROUNDING). Mỗi lần xác nhận
 // tạo bản chụp tài khoản, họ tên, cương vị và kết quả; trạng thái/ảnh hiện hành nằm ở Point.
 // ============================================================================
+
+model GroundingShiftReminder {
+  id              String   @id @default(cuid())
+  userId          String
+  inspectionDate  String
+  inspectionShift String
+  shownAt         DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, inspectionDate, inspectionShift], map: "grounding_shift_reminders_user_slot_key")
+  @@map("grounding_shift_reminders")
+}
 
 model GroundingLightningItem {
   id            String   @id @default(cuid())

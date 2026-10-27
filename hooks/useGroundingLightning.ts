@@ -122,6 +122,7 @@ function useInvalidateGrounding() {
   return () =>
     Promise.all([
       qc.invalidateQueries({ queryKey: ["grounding-lightning"] }),
+      qc.invalidateQueries({ queryKey: ["grounding-reminder"] }),
       qc.invalidateQueries({
         queryKey: ["grounding-lightning-area-options"],
       }),

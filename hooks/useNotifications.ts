@@ -2,7 +2,9 @@
 import { useRbacAccess } from "@/hooks/useRbacAccess";
 
 import * as React from "react";
-import { CalendarDays, FileWarning, Images, Megaphone, MessageSquareText, type LucideIcon } from "lucide-react";
+import { CalendarDays, FileWarning, Images, Megaphone, MessageSquareText, RadioTower, type LucideIcon } from "lucide-react";
+import { useGroundingReminder, useOpenGroundingReminder } from "@/hooks/useGroundingReminder";
+import { SHIFT_TYPE } from "@/lib/constants";
 import { useSession } from "next-auth/react";
 import { useQuery } from "@tanstack/react-query";
 import { useAnnouncements } from "@/hooks/useAnnouncements";
@@ -42,6 +44,7 @@ export interface Notice {
   desc: string;
   href: string;
   date?: string;
+  onOpen?: () => Promise<void>;
 }
 
 /** Phiếu nháp "Chờ NKVH lưu" của chính mình đã thấy trên NKVH (hoặc đồng bộ bị từ chối) mà quá 1 giờ chưa đồng bộ. */
@@ -63,6 +66,8 @@ type MaterialPhotoReviewTask = {
 export function useNotifications() {
   const { data: session } = useSession();
   const myId = session?.user?.id;
+  const groundingReminder = useGroundingReminder();
+  const openGrounding = useOpenGroundingReminder();
   const { position: myPosition } = useCurrentPosition();
   const { canReadPage } = useRbacAccess();
   const announcements = useAnnouncements(undefined, canReadPage("/notifications"));
@@ -194,7 +199,15 @@ export function useNotifications() {
     return +new Date(y.date ?? 0) - +new Date(x.date ?? 0);
   });
 
-  return { notices: [...milestoneNotices, ...notices], loading };
+  const groundingNotices: Notice[] = (groundingReminder.data?.groups ?? []).map((group) => ({
+    id: `grounding-${groundingReminder.data!.key}-${group.positionCode}-${group.machine}`,
+    icon: RadioTower, tone: "amber",
+    title: `Tiếp địa & chống sét: còn ${group.pending} vị trí`,
+    desc: `${group.position}${group.machine === "COMMON" ? " · Dùng chung" : ` ${group.machine}`} · Ca ${SHIFT_TYPE[groundingReminder.data!.shiftType].label.toLowerCase()}`,
+    href: group.href,
+    onOpen: () => openGrounding.mutateAsync(group),
+  }));
+  return { notices: [...groundingNotices, ...milestoneNotices, ...notices], loading };
 }
 
 export const NOTICE_TONE = {

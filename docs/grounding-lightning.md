@@ -1,5 +1,17 @@
 # Tiếp địa & chống sét — kiểm tra hằng ngày theo ca
 
+## Nhắc kiểm tra trên website
+
+Người có tên trong sơ đồ ca **đã duyệt, đang diễn ra** nhận hộp nhắc một lần cho mỗi tài khoản/ngày vận hành/ca nếu tuyến của cương vị được phân công còn vị trí chưa xác nhận. Điểm danh sớm cho ca tiếp theo, ca đã kết thúc, trạng thái vắng/đã ra ca, cương vị không có nhiệm vụ hoặc đã hoàn thành không nhận lời nhắc. Tính cả trực thay theo `ShiftAssignment.positionLabel`, không suy từ cương vị hồ sơ. Người chỉ có quyền xem không nhận nhắc kiểm tra.
+
+Hộp nhắc hiện trên mọi trang khi tab đang hiển thị và không có hộp thoại khác. **Đã hiểu**, nút đóng hoặc **Đi kiểm tra** chỉ đóng lời nhắc; không tạo lượt xác nhận kiểm tra. Chuông thông báo vẫn hiển thị số vị trí còn thiếu và tự cập nhật mỗi 30 giây, khi quay lại tab hoặc ngay sau khi xác nhận. Hết ca thì lời nhắc của ca cũ không còn hiệu lực, kể cả trong khoảng cho phép xác nhận muộn.
+
+**Đi kiểm tra** mở đúng bộ lọc cương vị/tổ máy và ca hiện tại. Nếu trực cương vị kiêm nhiệm khác cương vị đang chọn, hộp nhắc ghi rõ việc chuyển cương vị; khi bấm mở sổ sẽ cập nhật qua `/api/me`, chỉ với cương vị đã có trong hồ sơ. Không mở rộng quyền kiểm tra.
+
+`GET /api/grounding-lightning/reminder` chỉ đọc tiến độ; `POST` kiểm tra lại ca/phân công/quyền và nhận quyền hiện popup. Bảng `grounding_shift_reminders` lưu dấu lần nhắc với khoá unique theo tài khoản/ngày/ca, chống trùng khi nhiều tab hoặc thiết bị cùng mở. Nếu tab bị đóng đúng sau khi máy chủ ghi nhận, popup có thể chưa kịp hiện; chuông vẫn giữ nhiệm vụ còn thiếu. Không phụ thuộc Telegram hay timer ngoài ứng dụng.
+
+Trước khi nạp phiên bản có chức năng này, áp dụng riêng `prisma/manual/add-grounding-shift-reminder.sql` và sinh Prisma client. Thay đổi mã cục bộ không tự áp dụng SQL hoặc triển khai server.
+
 Mỗi cương vị **và tổ máy** được chia thành ba tuyến cố định, theo thứ tự khu vực trong danh mục:
 
 | Ca | Giờ Việt Nam |

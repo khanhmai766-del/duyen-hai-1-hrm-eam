@@ -14,6 +14,7 @@ import { AiChatbox } from "@/components/ai/ai-chatbox";
 import { QuickDock } from "@/components/layout/quick-dock";
 import { pathAllowedForPosition } from "@/lib/nav";
 import { cn } from "@/lib/utils";
+import { GroundingShiftReminder } from "@/components/grounding-lightning/GroundingShiftReminder";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { data: session } = useSession();
@@ -86,6 +87,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       {/* Thông báo hệ thống giữa màn hình (do Quản trị phát) */}
       <BroadcastModal />
+      <GroundingShiftReminder />
       <PageScrollButtons />
       <PowerLoadingOverlay active={loadingCount > 0} />
       <AiChatbox />

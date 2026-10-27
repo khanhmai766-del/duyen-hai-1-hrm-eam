@@ -1041,7 +1041,7 @@ function useDebounced<T>(value: T, delay = 350) {
   return debounced;
 }
 
-export default function GroundingLightningPage() {
+export default function GroundingLightningPage({ initialFilters }: { initialFilters?: Partial<GroundingFilters> }) {
   const { can } = useRbacAccess();
   const [filters, setFilters] = useState<GroundingFilters>({
     q: "",
@@ -1050,6 +1050,7 @@ export default function GroundingLightningPage() {
     type: "ALL",
     status: "ALL",
     shiftType: "CURRENT",
+    ...initialFilters,
   });
   /*
     Chữ trong ô tìm kiếm KHÔNG đi thẳng vào khoá truy vấn nữa. Trước đây mỗi phím gõ đổi

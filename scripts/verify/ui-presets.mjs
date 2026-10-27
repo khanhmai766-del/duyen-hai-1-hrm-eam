@@ -1,3 +1,4 @@
+import { groundingReminderPreset } from "./presets/grounding-reminder.mjs";
 import { personViolationsPreset } from "./presets/person-violations.mjs";
 import { gghPreset } from "./presets/ggh-3d.mjs";
 import { keepTabPreset } from "./presets/giu-tab-f5.mjs";
@@ -252,6 +253,7 @@ async function writeFakeCameraVideo(file, { px = 5, blur = 0.5, noise = 8 } = {}
 let nhanSuLocName = "";
 
 export const PRESETS = {
+  "tiep-dia-nhac-ca": groundingReminderPreset,
   "lich-su-lam-viec-trong-ngay": dailyHistoryPreset,
   "pccc-phan-trang": pcccPaginationPreset,
   "material-undo-usage": materialUndoUsagePreset,

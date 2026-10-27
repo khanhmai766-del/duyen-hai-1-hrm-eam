@@ -371,7 +371,11 @@ export function Topbar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
                             <Link
                               href={n.href}
                               prefetch={false}
-                              onClick={() => {
+                              onClick={(event) => {
+                                if (n.onOpen) {
+                                  event.preventDefault();
+                                  void n.onOpen().catch((error: Error) => toast.error(error.message));
+                                }
                                 if (n.id.startsWith("forum-")) acknowledgeForumNotice(n.id.replace(/^forum-/, ""));
                                 setNotifOpen(false);
                               }}
