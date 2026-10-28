@@ -70,6 +70,7 @@ const BANG_MAY = [
 const TRANG_MAC_DINH = [
   ["Trang chủ", "/"],
   ["Lịch làm việc", "/hr"],
+  ["Quản lý công việc", "/work-tasks"],
   ["Khiếm khuyết", "/defects"],
   ["Danh mục vật tư", "/materials"],
   ["Quy trình thay thế", "/replacement-procedures"],

@@ -56,6 +56,8 @@ model User {
   forumReplyLikes         ForumReplyLike[]         @relation("ForumReplyLikeUser")
   aiConversations         AiConversation[]
   groundingShiftReminders GroundingShiftReminder[]
+  workTasksCreated        WorkTask[]               @relation("WorkTaskCreator")
+  workTaskAssignments     WorkTaskAssignee[]
 
   @@index([position])
   @@index([role])
@@ -207,6 +209,43 @@ model Announcement {
   @@index([category, pinned, createdAt])
   @@index([pinned, issuedAt, createdAt]) // khớp orderBy của GET /api/announcements
   @@index([createdById])
+}
+
+// Quản lý công việc (nhóm QUẢN LÝ NGƯỜI DÙNG): thay bảng Excel giao việc của phân xưởng.
+// Ngày lưu kiểu DATE (không giờ) để không lệch múi giờ. Người chỉ đạo là khoá cố định
+// trong lib/work-task.ts. Ghi chú kèm nhiều link Google Drive/Sheets/Docs.
+model WorkTask {
+  id                String    @id @default(cuid())
+  taskDate          DateTime  @db.Date // Ngày
+  content           String // Nội dung công việc
+  director          String // BGD | HUAN | CUONG | YEN
+  dueDate           DateTime? @db.Date // Thời gian hoàn thành
+  report            String? // Báo cáo thực hiện
+  reportUpdatedAt   DateTime?
+  reportUpdatedById String?
+  note              String?
+  links             Json      @default("[]") // [{ url, kind }]
+  createdById       String
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  createdBy User               @relation("WorkTaskCreator", fields: [createdById], references: [id])
+  assignees WorkTaskAssignee[]
+
+  @@index([taskDate])
+  @@index([createdById])
+}
+
+// Người chủ trì của một công việc (chọn nhiều).
+model WorkTaskAssignee {
+  taskId String
+  userId String
+
+  task WorkTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([taskId, userId])
+  @@index([userId])
 }
 
 // Xác nhận đã đọc thông báo / mệnh lệnh của từng user.

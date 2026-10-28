@@ -53,6 +53,10 @@ export const DEFAULT_RBAC_MATRIX: Record<string, Partial<Record<string, RbacLeve
   "material-view": { ADMIN: "full", MANAGER: "full", SUPERVISOR: "manage", TECHNICIAN: "read", VIEWER: "read" },
   "replacement-view": { ADMIN: "full", MANAGER: "full", SUPERVISOR: "manage", TECHNICIAN: "read", VIEWER: "read" },
   "announcement-manage": { ADMIN: "full", MANAGER: "full", SUPERVISOR: "read", TECHNICIAN: "read", VIEWER: "read" },
+  // Quản lý công việc: full = xem/sửa tất cả; manage = thêm, sửa/xoá việc mình tạo; mức khác chỉ
+  // thấy việc mình chủ trì/tạo (lib/server/work-task.ts workTaskAccess). Người chủ trì của một dòng
+  // luôn ghi được báo cáo + ghi chú dòng đó, không phụ thuộc quyền này.
+  "work-task-manage": { ADMIN: "full", MANAGER: "full", SUPERVISOR: "manage", TECHNICIAN: "manage", VIEWER: "read" },
   "operation-events": { ADMIN: "manage", MANAGER: "manage", SUPERVISOR: "manage", TECHNICIAN: "read", VIEWER: "read" },
   "device-code": { ADMIN: "full", MANAGER: "none", SUPERVISOR: "none", TECHNICIAN: "none", VIEWER: "none" },
   "device-public-qr": { ADMIN: "read", MANAGER: "read", SUPERVISOR: "read", TECHNICIAN: "read", VIEWER: "read" },

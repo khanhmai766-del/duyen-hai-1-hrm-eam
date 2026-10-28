@@ -511,6 +511,16 @@ const DEFAULT_PERMISSIONS: PermissionRow[] = [
     matrix: { ADMIN: "full", MANAGER: "full", SUPERVISOR: "read", TECHNICIAN: "read", VIEWER: "read" },
   },
   {
+    id: "work-task-manage",
+    group: "Thông tin vận hành",
+    feature: "Quản lý công việc",
+    note:
+      "Toàn quyền: xem, sửa, xoá MỌI công việc. Quản lý: thêm công việc, chỉ sửa/xoá việc do mình tạo. " +
+      "Mức khác chỉ thấy việc mình chủ trì hoặc do mình tạo. Quản đốc / Phó quản đốc luôn xem được tất cả. " +
+      "Người chủ trì luôn ghi được báo cáo và ghi chú cho dòng của mình.",
+    matrix: { ADMIN: "full", MANAGER: "full", SUPERVISOR: "manage", TECHNICIAN: "manage", VIEWER: "read" },
+  },
+  {
     id: "operation-events",
     group: "Thông tin vận hành",
     feature: "Lịch diễn tập và thông tin nội bộ",

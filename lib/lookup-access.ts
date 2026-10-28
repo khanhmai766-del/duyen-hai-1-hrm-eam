@@ -15,6 +15,7 @@ export const LOOKUP_MODULES = [
   { id: "overview", label: "Tổng quan", group: "Thông tin chung", pages: ["/"], apis: ["/api/dashboard", "/api/safe-operation"], permissions: [] },
   { id: "notifications", label: "Mệnh lệnh sản xuất", group: "Thông tin chung", pages: ["/notifications"], apis: ["/api/announcements", "/api/operations"], permissions: ["announcement-manage", "operation-events"] },
   { id: "hr", label: "Lịch làm việc", group: "Thông tin chung", pages: ["/hr"], apis: ["/api/shifts", "/api/handover", "/api/hc-groups", "/api/hc-registrations", "/api/roster-schedule"], permissions: ["shift-operation-check-in", "hc-attendance-check-in"] },
+  { id: "work-tasks", label: "Quản lý công việc", group: "Thông tin chung", pages: ["/work-tasks"], apis: ["/api/work-tasks"], permissions: ["work-task-manage"] },
   { id: "materials", label: "Danh mục vật tư Vận Hành 1", group: "Vật tư", pages: ["/materials"], apis: ["/api/materials", "/api/material-stock-movements"], permissions: ["material-manage", "material-view"] },
   { id: "erp-materials", label: "Vật tư theo ERP", group: "Vật tư", pages: ["/vat-tu"], apis: ["/api/vat-tu", "/api/erp-materials"], permissions: ["erp-material-manage"] },
   { id: "chemical-inventory", label: "Tịnh kho hóa chất", group: "Vật tư", pages: ["/chemical-inventory"], apis: ["/api/chemical-inventory"], permissions: ["chemical-inventory-manage"] },

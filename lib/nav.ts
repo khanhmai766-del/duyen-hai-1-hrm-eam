@@ -34,6 +34,7 @@ import {
   Gauge,
   HardHat,
   RadioTower,
+  ListTodo,
 } from "lucide-react";
 import { effectiveUserPosition, type PositionCarrier } from "@/lib/current-position";
 
@@ -93,6 +94,7 @@ export const NAV_SECTIONS: NavSection[] = [
       { label: "Overview", href: "/", icon: LayoutDashboard, keywords: "tong quan dashboard bang dieu khien" },
       { label: "Mệnh lệnh sản xuất", href: "/notifications", icon: Megaphone, keywords: "menh lenh san xuat production order thong bao notification bang tin canh bao loa" },
       { label: "Lịch làm việc", href: "/hr", icon: CalendarDays, keywords: "ca truc shift roster diem danh org chart so do" },
+      { label: "Quản lý công việc", href: "/work-tasks", icon: ListTodo, keywords: "quan ly cong viec giao viec task chu tri chi dao bao cao thuc hien" },
       {
         label: "Quản trị",
         href: "/admin/users",
