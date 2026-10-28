@@ -4,6 +4,7 @@ import { gghPreset } from "./presets/ggh-3d.mjs";
 import { keepTabPreset } from "./presets/giu-tab-f5.mjs";
 import { pcccPaginationPreset } from "./presets/pccc-pagination.mjs";
 import { materialUndoUsagePreset } from "./presets/material-undo-usage.mjs";
+import { materialProposalReceiptPreset } from "./presets/material-proposal-receipt.mjs";
 import { sessionPhotosPreset } from "./presets/session-photos.mjs";
 import { hideMissingDefectPreset } from "./presets/hide-missing-defect.mjs";
 import { dailyHistoryPreset } from "./presets/daily-history.mjs";
@@ -258,6 +259,7 @@ export const PRESETS = {
   "lich-su-lam-viec-trong-ngay": dailyHistoryPreset,
   "pccc-phan-trang": pcccPaginationPreset,
   "material-undo-usage": materialUndoUsagePreset,
+  "material-proposal-receipt": materialProposalReceiptPreset,
   "quet-the-camera-gia": {
     description: "Hộp quét thẻ PCT đọc mã từ CAMERA GIẢ (video .y4m, mã hơi mờ): phải tải được ZXing-C++ (.wasm) và hiện thẻ vừa quét — chỉ tra, không ghi",
     async prepare({ prisma }) {

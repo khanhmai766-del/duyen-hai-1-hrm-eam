@@ -28,6 +28,7 @@ import { recordSettledTicketReplacements } from "@/lib/material-ticket-replaceme
 import { invalidateMaterialAnnualPlanCache } from "@/lib/material-annual-plan-cache";
 import { existingReceiptEditError } from "@/lib/material-receive-existing";
 import { notifyMaterialTicketStep } from "@/lib/material-ticket-telegram-alert";
+import { adjustReceiptErp, parseProposalReceipt, recordProposalReceipt, receiptSkippedErpDeduction } from "@/lib/server/material-proposal-receipt";
 
 export const dynamic = "force-dynamic";
 
@@ -1242,37 +1243,45 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
         });
       } else if (step === "receive") {
         if (!t.receivedAt || t.receivedQuantity == null) return fail("Bước xác nhận vật tư lãnh chưa hoàn thành");
-        const value = Math.trunc(Number(body.receivedQuantity));
-        const method = String(body.deliveryNoteNumber || body.receivedMethod || "").trim();
-        const editedDeliveryDate = parseTicketDate(body.deliveryNoteDate);
+        const proposalReceipt = t.type === "DE_XUAT" ? parseProposalReceipt({
+          ...body,
+          deliveryNoteDate: body.deliveryNoteDate === undefined ? t.deliveryNoteDate?.toISOString().slice(0, 10) : body.deliveryNoteDate,
+        }) : null;
+        const value = proposalReceipt?.quantity ?? Math.trunc(Number(body.receivedQuantity));
+        const method = proposalReceipt?.deliveryNoteNumber ?? String(body.deliveryNoteNumber || body.receivedMethod || "").trim();
+        const editedDeliveryDate = proposalReceipt?.deliveryNoteDate ?? parseTicketDate(body.deliveryNoteDate);
         const receiptSource = t.type === "UNG" ? normalizeReceiptSource(body.receiptSource) : "ERP";
         if (!Number.isFinite(value) || value <= 0 || !method) return fail("Khối lượng lãnh hoặc số phiếu giao hàng không hợp lệ");
         const item = t.items[0]; if (!item) return fail("Phiếu chưa có vật tư");
         if (value < (t.usedQuantity ?? 0)) return fail(`Không thể giảm khối lượng lãnh thấp hơn khối lượng đã sử dụng (${t.usedQuantity} ${item.material.unit})`);
         const delta = value - t.receivedQuantity;
         const erpCode = item.erpCode || item.material.code;
-        const erpRows = await prisma.$queryRaw<Array<{ erpStock: number }>>`SELECT "erpStock" FROM "ErpMaterial" WHERE "code" = ${erpCode} LIMIT 1`;
-        if (!erpRows.length) return fail(`Không tìm thấy mã vật tư ERP "${erpCode}"`, 404);
-        const oldSource = normalizeReceiptSource(t.receiptSource);
-        const erpDelta = (oldSource === "ERP" ? t.receivedQuantity : 0) - (receiptSource === "ERP" ? value : 0);
-        if (item.material.quantity + delta < 0 || erpRows[0].erpStock + erpDelta < 0) return fail("Không thể điều chỉnh vì số lượng hiện có hoặc ERP sẽ âm");
         before = `Nhận ${t.receivedQuantity}, phiếu giao hàng ${t.deliveryNoteNumber ?? t.receivedMethod ?? "—"}`; after = `Nhận ${value}, phiếu giao hàng ${method}`;
         // Sửa lại bước nhận cũng là chỗ chụp lại tờ liên 3 khi ảnh cũ mờ hoặc nhầm phiếu.
         // Không gửi ảnh mới thì giữ nguyên ảnh cũ — bắt buộc đã chặn từ lúc xác nhận.
         const replacementPhotoDataUrl = String(body.deliveryPhotoDataUrl || "").trim();
         const editedLot = await prisma.materialStockLot.findFirst({
           where: { ticketId: t.id },
-          select: { id: true, deliveryPhotoKey: true },
+          select: { id: true, deliveryPhotoKey: true, note: true },
         });
+        if (t.type === "DE_XUAT" && !replacementPhotoDataUrl && !editedLot?.deliveryPhotoKey) return fail(MISSING_DELIVERY_PHOTO_MESSAGE);
         const replacementPhoto = replacementPhotoDataUrl
           ? await uploadDeliveryPhoto(t.id, replacementPhotoDataUrl)
           : null;
         up = await prisma.$transaction(async (tx) => {
-          if (delta || method !== (t.deliveryNoteNumber ?? "")) {
+          if (t.type === "DE_XUAT") await claimUsageSnapshot(tx, t, true);
+          // Lô xác nhận theo chứng từ khi ERP thiếu không trừ ERP ở lần sửa sau.
+          // Phiếu thường/phiếu cũ tiếp tục điều chỉnh ERP theo chênh lệch như trước.
+          const skipErp = t.type === "DE_XUAT" && receiptSkippedErpDeduction(editedLot?.note);
+          const oldSource = normalizeReceiptSource(t.receiptSource);
+          const erpDelta = (oldSource === "ERP" ? t.receivedQuantity! : 0) - (receiptSource === "ERP" ? value : 0);
+          await adjustReceiptErp(tx, { erpCode, delta: erpDelta, skipDeduction: skipErp });
+          if (delta || method !== (t.deliveryNoteNumber ?? "") || (proposalReceipt && proposalReceipt.deliveryNoteDate.getTime() !== t.deliveryNoteDate?.getTime())) {
             try {
               await receiveIntoLot(tx, {
                 materialCode: item.material.code, stockUnit: lotStockUnit(item.material.category, t.unit), quantity: delta, ticketId: t.id,
                 deliveryNote: method, erpCode,
+                ...(proposalReceipt ? { receivedAt: proposalReceipt.deliveryNoteDate } : {}),
               });
             } catch (error) {
               throw fail((error as Error).message);
@@ -1293,7 +1302,6 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
               });
             }
           }
-          if (erpDelta) await tx.$executeRaw`UPDATE "ErpMaterial" SET "erpStock" = "erpStock" + ${erpDelta}, "updatedAt" = NOW() WHERE "code" = ${erpCode}`;
           return tx.materialTicket.update({ where: { id: t.id }, data: { receivedQuantity: value, receivedMethod: method || null, deliveryNoteNumber: method || null, receiptSource, remainingQuantity: value - (t.usedQuantity ?? 0), ...(editedDeliveryDate === undefined ? {} : { deliveryNoteDate: editedDeliveryDate }) }, include: ITEM_INCLUDE });
         });
         if (replacementPhoto && editedLot?.deliveryPhotoKey) await deleteDeliveryPhotos([editedLot.deliveryPhotoKey]);
@@ -2769,11 +2777,9 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
       if (!stepAllowedWithMap(await getWorkflowRoleMap(), "receive", user))
         return fail("Bạn không có quyền ở bước Xác nhận vật tư lãnh (Quản trị phân quyền ở mục Phân quyền quy trình)", 403);
       { const err = assignedPositionError(user, t); if (err) return err; }
-      const receivedQuantity = Math.trunc(Number(body.receivedQuantity));
-      if (!Number.isFinite(receivedQuantity) || receivedQuantity <= 0) return fail("Khối lượng vật tư lãnh phải lớn hơn 0");
-      const receivedMethod = String(body.deliveryNoteNumber || body.receivedMethod || "").trim();
-      const receiptSource = "ERP";
-      if (!receivedMethod) return fail("Vui lòng nhập số phiếu giao hàng");
+      const receipt = parseProposalReceipt(body);
+      const receivedQuantity = receipt.quantity;
+      const receivedMethod = receipt.deliveryNoteNumber;
       // Ảnh liên 3 đi liền với số phiếu giao hàng vừa nhập, vì đây là lúc DUY NHẤT tờ liên 3
       // còn trong tay người lãnh. Bắt buộc cho mọi phiếu chứ không chỉ phiếu có thu hồi: phần
       // lãnh về chưa dùng hết nằm lại thành tồn, phiếu sau rút tiếp từ đúng lô đó và vẫn phải
@@ -2793,71 +2799,20 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
       if (!allowedCodes.includes(erpCode)) return fail("Mã vật tư không thuộc tên vật tư đã chọn");
       const erpMaterial = await prisma.erpMaterial.findUnique({ where: { code: erpCode }, select: { name: true } });
       if (!erpMaterial) return fail("Không tìm thấy tên vật tư theo mã ERP đã chọn", 404);
-      const erpRows = await prisma.$queryRaw<Array<{ erpStock: number }>>`
-        SELECT "erpStock" FROM "ErpMaterial" WHERE "code" = ${erpCode} LIMIT 1
-      `;
-      if (erpRows.length === 0) return fail(`Không tìm thấy mã vật tư ERP "${erpCode}"`, 404);
-      const before = item.material.quantity;
-      const erpBefore = Number(erpRows[0]?.erpStock ?? 0);
-      if (receiptSource === "ERP" && receivedQuantity > erpBefore) {
-        return fail(
-          `Tồn ERP của mã ${erpCode} chỉ còn ${erpBefore} ${item.material.unit}, ` +
-          `không đủ để xác nhận lãnh ${receivedQuantity} ${item.material.unit}.`
-        );
-      }
-      const erpAfter = receiptSource === "ERP" ? erpBefore - receivedQuantity : erpBefore;
-      const materialIncrement = receivedQuantity;
-      if (before + materialIncrement < 0) return fail("Số lượng xác nhận làm Hiện có bị âm");
-      // Đưa ảnh lên S3 TRƯỚC giao dịch: gọi mạng bên trong transaction là giữ khoá hàng kho
-      // suốt thời gian chờ. Giao dịch hỏng thì tệp thừa nằm lại S3, chấp nhận được.
       const uploadedPhoto = deliveryPhotoDataUrl ? await uploadDeliveryPhoto(t.id, deliveryPhotoDataUrl) : null;
-      const up = await prisma.$transaction(async (tx) => {
-        const sharedCodes = sharedCodesOf(item.material);
-        // Vào lô mang SỐ PHIẾU GIAO HÀNG vừa nhập; luồng Ứng đã tạo lô ở bước VHV lãnh nên
-        // ở đây chỉ cộng phần chênh và điền số phiếu vào đúng lô đó.
-        const lot = await receiveIntoLot(tx, {
-          materialCode: item.material.code,
-          stockUnit: lotStockUnit(item.material.category, t.unit),
-          quantity: materialIncrement,
-          ticketId: t.id,
-          deliveryNote: receivedMethod,
+      const result = await prisma.$transaction(async (tx) => {
+        const stockResult = await recordProposalReceipt(tx, {
+          ticket: t,
+          receipt,
           erpCode,
+          erpName: erpMaterial.name,
+          photoKey: uploadedPhoto?.key ?? lotBefore?.deliveryPhotoKey ?? "",
+          actor: user,
+          stockOptions: stockSyncOptions(item.material.category, t.unit),
         });
-        // `receiveIntoLot` trả null khi phần chênh bằng 0 và lô chưa tồn tại; lô đã có từ
-        // bước trước thì dùng lại đúng lô đó.
-        const lotId = lot?.id ?? lotBefore?.id ?? null;
-        if (uploadedPhoto && lotId) {
-          await tx.materialStockLot.update({
-            where: { id: lotId },
-            data: {
-              deliveryPhotoKey: uploadedPhoto.key,
-              deliveryPhotoAt: new Date(),
-              deliveryPhotoByName: user.name ?? "",
-            },
-          });
-        }
-        await syncMaterialQuantity(tx, item.material.code, sharedCodes, stockSyncOptions(item.material.category, t.unit));
-        if (receiptSource === "ERP") await tx.$executeRaw`
-          UPDATE "ErpMaterial" SET "erpStock" = ${erpAfter}, "updatedAt" = NOW() WHERE "code" = ${erpCode}
-        `;
-        await tx.materialTicket.update({
-          where: { id: t.id },
-          data: {
-            // Chai khí bỏ cả quyết toán, số yêu cầu sửa chữa lẫn bước Sử dụng vật tư —
-            // lãnh xong là tới thẳng bước Xác nhận trả (bước này mới trừ kho).
-            status: isGasCylinderTicket(t.materialCategory)
-              ? GAS_RETURN_STATUS
-              : "CHO_PHIEU_YCSC",
-            receivedQuantity, receivedMethod: receivedMethod || null, deliveryNoteNumber: receivedMethod || null, receiptSource,
-            remainingQuantity: receivedQuantity - (t.usedQuantity ?? 0),
-            receivedById: user.id, receivedByName: user.name ?? "",
-            receivedByPosition: user.position ?? null, receivedAt: new Date(),
-          },
-          include: ITEM_INCLUDE,
-        });
-        await tx.materialTicketItem.update({ where: { id: item.id }, data: { erpCode, erpName: erpMaterial.name } });
-        return tx.materialTicket.findUnique({ where: { id: t!.id }, include: ITEM_INCLUDE });
+        return { ticket: await tx.materialTicket.findUnique({ where: { id: t.id }, include: ITEM_INCLUDE }), ...stockResult };
       });
+      const up = result.ticket;
       // Ảnh cũ chỉ được xoá SAU khi giao dịch đã ghi khoá ảnh mới: đổi thứ tự là có lúc phiếu
       // trỏ vào tệp vừa bị xoá.
       if (uploadedPhoto && lotBefore?.deliveryPhotoKey) await deleteDeliveryPhotos([lotBefore.deliveryPhotoKey]);
@@ -2877,7 +2832,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
       }
       await audit(
         user.id, "MT_RECEIVE", "MaterialTicket", t.id,
-        `${materialTicketReference(t)}: ${receiptSourceLabel(receiptSource)} ${receivedQuantity} (${receivedMethod}) — Hiện có ${item.material.code}: ${before} → ${before + materialIncrement}; ERP ${erpCode}: ${erpBefore} → ${erpAfter}${uploadedPhoto ? "; đính kèm ảnh phiếu xuất kho liên 3" : ""}; chờ ra SYC sửa chữa`
+        `${materialTicketReference(t)}: lãnh kho DH1 ${receivedQuantity} (${receivedMethod}), ngày phiếu ${receipt.deliveryNoteDate.toISOString().slice(0, 10)} — Hiện có ${item.material.code}: ${result.materialAfter - receivedQuantity} → ${result.materialAfter}; ERP ${erpCode}: ${result.erpBefore} → ${result.erpAfter}${result.deductErp ? "; đã trừ ERP" : "; tồn ERP không đủ, xác nhận theo chứng từ và không trừ ERP"}; đính kèm ảnh phiếu xuất kho liên 3; chờ ra SYC sửa chữa`
       );
       await notifyMaterialTicketStep({ ticketId: t.id, action, actorName: user.name });
       return ok(responseTicket);

@@ -2550,8 +2550,8 @@ function StepReviewDialog({ t, viewer, stepKey, onClose }: { t: MaterialTicket; 
               <input value={receivedMethod} disabled={!canEdit} onChange={(e) => setReceivedMethod(e.target.value)} />
             </label>
           </div>
-          <label>Ngày phiếu giao hàng
-            <input type="date" value={deliveryNoteDateReview} disabled={!canEdit} onChange={(e) => setDeliveryNoteDateReview(e.target.value)} />
+          <label>Ngày phiếu giao hàng{t.type === "DE_XUAT" ? " *" : ""}
+            <input type="date" required={t.type === "DE_XUAT"} value={deliveryNoteDateReview} disabled={!canEdit} onChange={(e) => setDeliveryNoteDateReview(e.target.value)} />
           </label>
           {/* Chụp lại tờ liên 3 khi ảnh cũ mờ hoặc nhầm phiếu. Không chọn ảnh mới thì giữ nguyên
               ảnh đang gắn trên lô. */}
@@ -2611,8 +2611,7 @@ function StepReviewDialog({ t, viewer, stepKey, onClose }: { t: MaterialTicket; 
               cùng lúc xuất BBNT D-Office mang tên người đó. */}
         </>}
         {editStep === "statsExport" && <>
-          {/* Mã vật tư để nguyên đúng như lúc bấm xuất: đổi mã sau khi đã nhận hàng thì ERP
-              đã trừ ở mã cũ, còn biên bản và sổ lịch sử thì mang mã cũ. */}
+          {/* Giữ đúng mã trên phiếu lãnh, biên bản và sổ lịch sử. */}
           <label>Mã vật tư ERP<input value={t.items[0]?.erpCode ?? t.items[0]?.material.code ?? "—"} disabled /></label>
           <label>Tên vật tư ERP<input value={t.items[0]?.erpName ?? t.items[0]?.material.name ?? "—"} disabled /></label>
           <div className="review-accept-grid">
@@ -2718,7 +2717,7 @@ function StepReviewDialog({ t, viewer, stepKey, onClose }: { t: MaterialTicket; 
             </span>
           )}
           <button className="btn ghost" onClick={onClose}>Đóng</button>
-          {canEdit && <button className="btn primary" disabled={act.isPending || missingUsagePhotos || (editStep === "receiveExisting" && (!Number.isInteger(receivedQuantity) || receivedQuantity < Math.max(1, t.usedQuantity ?? 0))) || (editStep === "confirm" && !reason.trim()) || (editStep === "vhvReceive" && (!Number.isFinite(vhvReceivedQuantityReview) || vhvReceivedQuantityReview <= 0 || !vhvReceivedByNameReview.trim())) || (editStep === "stats" && !isChemicalStats && !proposalNumber.trim()) || (editStep === "accept" && (!pctNumber.trim() || !chiHuyName.trim() || !completionNote.trim() || !workStartedAt || !workEndedAt)) || (editStep === "statsExport" && (!sccnRepresentativeReview || !sccnPositionReview)) || (editStep === "settle" && !bbntDoNumberReview.trim()) || (editStep === "recoveryDoc" && !docSentDateReview)} onClick={save}>{act.isPending ? <Loader2 className="spin" size={14} /> : <Pencil size={14} />} Lưu chỉnh sửa</button>}
+          {canEdit && <button className="btn primary" disabled={act.isPending || missingUsagePhotos || (editStep === "receive" && t.type === "DE_XUAT" && (!Number.isSafeInteger(receivedQuantity) || receivedQuantity <= 0 || !receivedMethod.trim() || !deliveryNoteDateReview || (!reviewDeliveryPhoto && !reviewLotPhotoUrl))) || (editStep === "receiveExisting" && (!Number.isInteger(receivedQuantity) || receivedQuantity < Math.max(1, t.usedQuantity ?? 0))) || (editStep === "confirm" && !reason.trim()) || (editStep === "vhvReceive" && (!Number.isFinite(vhvReceivedQuantityReview) || vhvReceivedQuantityReview <= 0 || !vhvReceivedByNameReview.trim())) || (editStep === "stats" && !isChemicalStats && !proposalNumber.trim()) || (editStep === "accept" && (!pctNumber.trim() || !chiHuyName.trim() || !completionNote.trim() || !workStartedAt || !workEndedAt)) || (editStep === "statsExport" && (!sccnRepresentativeReview || !sccnPositionReview)) || (editStep === "settle" && !bbntDoNumberReview.trim()) || (editStep === "recoveryDoc" && !docSentDateReview)} onClick={save}>{act.isPending ? <Loader2 className="spin" size={14} /> : <Pencil size={14} />} Lưu chỉnh sửa</button>}
         </div>
       </div>
     </div>
@@ -4422,15 +4421,15 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
               onChange={(e) => setMethod(e.target.value)}
             />
           </label>
-          {/* Ngày ghi TRÊN tờ phiếu giao hàng, đi liền với số phiếu: BBNT D-Office có sẵn
-              ô "Phiếu giao hàng số … ngày ……". Không bắt buộc, cùng luật với ngày phiếu ĐXVT. */}
-          <label className="field">Ngày phiếu giao hàng
-            <input type="date" value={deliveryDateInput} onChange={(e) => setDeliveryDateInput(e.target.value)} />
+          {/* Ngày trên chứng từ thực lãnh có thể trước ngày nhập hồ sơ. */}
+          <label className="field">Ngày phiếu giao hàng{!isAdvance ? " *" : ""}
+            <input type="date" required={!isAdvance} value={deliveryDateInput} onChange={(e) => setDeliveryDateInput(e.target.value)} />
           </label>
         </div>
         {/* Ảnh liên 3 nằm ngay dưới ô số phiếu giao hàng vì hai thứ đó là một cặp: số phiếu
             và bản chụp của chính tờ phiếu ấy. */}
         <DeliveryPhotoField value={deliveryPhoto} onChange={setDeliveryPhoto} />
+        {!isAdvance && <div className="note ghinhan"><FileText size={15} className="shrink-0" /><span>Nhập đúng ngày trên phiếu, kể cả khi cập nhật hồ sơ sau ngày lãnh. ERP đủ sẽ trừ như cũ; ERP không đủ vẫn cho xác nhận theo chứng từ liên 3 và giữ nguyên ERP.</span></div>}
         {advanceDocumentLocked && (
           <div className="accept-two-grid">
             <label className="field">Đại diện SCCN/ SC. ĐTĐ *
@@ -4462,7 +4461,7 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
             {act.isPending ? <Loader2 className="spin" size={15} /> : <FileText size={15} />} Xác nhận &amp; xuất Phiếu Đề Xuất Vật Tư
           </button>
         ) : (
-          <button className="btn primary big" disabled={qty <= 0 || (isAdvance && (!erpCode || !proposalNumberInput.trim())) || !method.trim() || !deliveryPhoto || act.isPending}
+          <button className="btn primary big" disabled={qty <= 0 || (!isAdvance && !deliveryDateInput) || (isAdvance && (!erpCode || !proposalNumberInput.trim())) || !method.trim() || !deliveryPhoto || act.isPending}
             onClick={() => run({ action: "receive", receivedQuantity: qty, deliveryNoteNumber: method.trim(), deliveryNoteDate: deliveryDateInput || null, deliveryPhotoDataUrl: deliveryPhoto, receiptSource: isAdvance ? receiptSource : "ERP", ...(isAdvance ? { erpCode, proposalNumber: proposalNumberInput.trim() } : {}) }, isAdvance ? (isGasTicket ? "Đã xác nhận ĐXVT, chuyển bước Sử dụng vật tư" : "Đã xác nhận ĐXVT, chuyển Quyết toán") : "Đã xác nhận số phiếu giao hàng")}>
             {act.isPending ? <Loader2 className="spin" size={15} /> : <Check size={15} />} {isAdvance ? "Xác nhận ĐXVT" : "Xác nhận số phiếu giao hàng"}
           </button>
