@@ -4,6 +4,7 @@ import * as React from "react";
 import { useSession } from "next-auth/react";
 import {
   ArrowUpDown,
+  CalendarDays,
   Check,
   ChevronDown,
   ChevronLeft,
@@ -476,27 +477,32 @@ export default function WorkTasksPage() {
     );
 
   const monthNav = (
-    <div className={cn("relative overflow-hidden rounded-xl p-3 text-white shadow-sm", EVN_BAND)}>
-      <span aria-hidden className="pointer-events-none absolute -right-10 -top-12 h-32 w-32 rounded-full bg-white/10" />
-      <div className="relative text-[11px] font-semibold uppercase tracking-wide text-white/75">Thời gian giao việc</div>
-      <div className="relative mt-1.5 flex items-center rounded-lg bg-white/10">
+    // Xanh EVN chuyển sang ngọc + viền vàng kiểu ô tìm kiếm Booking, ô tháng nền trắng — nổi hơn nền đơn sắc.
+    <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-[#00558F] via-[#0077B6] to-[#0EA5A4] p-3 text-white shadow-md ring-2 ring-[#FEBB02]">
+      <span aria-hidden className="pointer-events-none absolute -right-10 -top-12 h-32 w-32 rounded-full bg-white/15" />
+      <span aria-hidden className="pointer-events-none absolute -bottom-14 -left-8 h-28 w-28 rounded-full bg-[#FEBB02]/20" />
+      <div className="relative flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-white/90">
+        <CalendarDays className="h-3.5 w-3.5 text-[#FEBB02]" />
+        Thời gian giao việc
+      </div>
+      <div className="relative mt-1.5 flex items-center rounded-lg bg-white text-[#00426F] shadow-sm">
         <Button
           variant="ghost"
           size="icon"
-          className="h-10 w-10 text-white hover:bg-white/15 hover:text-white"
+          className="h-10 w-10 text-[#00558F] hover:bg-[#00558F]/10 hover:text-[#00426F]"
           aria-label="Tháng trước"
           disabled={!month}
           onClick={() => setMonth(shiftMonth(month, -1))}
         >
           <ChevronLeft />
         </Button>
-        <span className="flex-1 text-center text-sm font-semibold tabular-nums">
+        <span className="flex-1 text-center text-sm font-bold tabular-nums">
           {month ? monthLabel(month) : "Tất cả thời gian"}
         </span>
         <Button
           variant="ghost"
           size="icon"
-          className="h-10 w-10 text-white hover:bg-white/15 hover:text-white"
+          className="h-10 w-10 text-[#00558F] hover:bg-[#00558F]/10 hover:text-[#00426F]"
           aria-label="Tháng sau"
           disabled={!month}
           onClick={() => setMonth(shiftMonth(month, 1))}
@@ -509,7 +515,7 @@ export default function WorkTasksPage() {
           <button
             type="button"
             onClick={() => setMonth(currentMonth())}
-            className="min-h-9 flex-1 rounded-lg bg-white px-3 text-sm font-semibold text-[#00426F] hover:bg-white/90"
+            className="min-h-9 flex-1 rounded-lg bg-[#FEBB02] px-3 text-sm font-bold text-[#00335A] shadow-sm hover:bg-[#FFC933]"
           >
             Tháng này
           </button>
@@ -518,7 +524,7 @@ export default function WorkTasksPage() {
           <button
             type="button"
             onClick={() => setMonth("")}
-            className="min-h-9 flex-1 rounded-lg border border-white/40 px-3 text-sm font-semibold text-white hover:bg-white/10"
+            className="min-h-9 flex-1 rounded-lg border border-white/60 bg-white/10 px-3 text-sm font-semibold text-white hover:bg-white/20"
           >
             Tất cả
           </button>
@@ -551,15 +557,20 @@ export default function WorkTasksPage() {
           {monthNav}
 
           <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
-            <div className="flex items-center justify-between gap-2 px-3 pb-2 pt-3">
-              <h3 className="text-base font-bold text-ink">Chọn lọc theo:</h3>
+            <div className="flex items-center justify-between gap-2 border-b border-amber-200/70 bg-gradient-to-r from-amber-50 to-orange-50 px-3 py-2.5">
+              <h3 className="flex items-center gap-2 text-base font-bold text-[#00426F]">
+                <span aria-hidden className="flex h-7 w-7 items-center justify-center rounded-full bg-orange-500 text-white shadow-sm">
+                  <SlidersHorizontal className="h-3.5 w-3.5" />
+                </span>
+                Chọn lọc theo:
+              </h3>
               {filterCount > 0 && (
                 <button type="button" onClick={clearFilters} className="min-h-8 text-sm font-medium text-[#00558F]">
                   Xoá lọc ({filterCount})
                 </button>
               )}
             </div>
-            <div className="px-3 pb-3">
+            <div className="px-3 py-3">
               <div className="relative">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
