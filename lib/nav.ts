@@ -74,18 +74,10 @@ export const MODEL_CONTROL_ALLOWED_POSITION_KEYWORDS = [
   "TKĐ",
 ] as const;
 
-export const QDU_TOOL_URL =
-  "https://docs.google.com/spreadsheets/d/1ntWvK0kx6Z9zlITa7kIegYXNzAZd00xDZ9oimdZMqX8/edit?usp=sharing";
 export const ASH_SLAG_LOG_URL =
   "https://docs.google.com/spreadsheets/d/1RyWmVWOuJTaQov2Eg7Y-ZxxWhez66RK5XY7seO4ppfE/edit?gid=0#gid=0";
 export const VIBRATION_MONITOR_URL = "https://pxvh1.infinityfree.me/";
 export const PMIS_REPORT_URL = "https://ctktkt-dashboard.vercel.app/pmis-report";
-export const QDU_TOOL_ALLOWED_POSITION_KEYWORDS = [
-  "trưởng ca",
-  "kỹ thuật viên",
-  "phó quản đốc",
-  "quản đốc",
-] as const;
 
 export const NAV_SECTIONS: NavSection[] = [
   {
@@ -263,14 +255,6 @@ export const NAV_SECTIONS: NavSection[] = [
         external: true,
         allowedPositionKeywords: MODEL_CONTROL_ALLOWED_POSITION_KEYWORDS,
         keywords: "dieu khien mo hinh duyen hai 1 demo control simulation",
-      },
-      {
-        label: "Công cụ tính QDU",
-        href: "/api/qdu-tool/open",
-        icon: Calculator,
-        external: true,
-        allowedPositionKeywords: QDU_TOOL_ALLOWED_POSITION_KEYWORDS,
-        keywords: "cong cu tinh qdu google sheets bang tinh",
       },
       {
         label: "Sổ theo dõi tro xỉ",
