@@ -1,5 +1,6 @@
 "use client";
 
+import { DateTime24Input } from "@/components/ui/date-time-24-input";
 import { PersonViolations, PersonViolationTag, RecordPersonViolation } from "@/components/work-permits/person-violations";
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
 import Link from "next/link";
@@ -745,7 +746,7 @@ export function SessionEditor({ permit, session, handoff = false, progressUpdate
     <form onSubmit={submit}><fieldset disabled={save.isPending} className="space-y-4">
       {!ending && !updating && <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border p-3"><Button type="button" variant="outline" onClick={() => setPicking(true)}>Chọn CHTT nhà thầu *</Button><span className="text-sm">{person ? [person.name, person.code, person.company].filter(Boolean).join(" · ") : "Chưa chọn CHTT"}</span></div>}
       {session && <p className="text-sm">CHTT: <b>{session.commanderName}</b> · Mở lúc {fmt(session.openedAt)}</p>}
-      {!updating && <div className="grid gap-4 sm:grid-cols-2"><label className="space-y-1 text-sm"><span>{handoff ? "Thời điểm bàn giao" : ending ? "Thời điểm kết thúc" : "Thời điểm cho phép"} (giờ Việt Nam) *</span><input className={control} type="datetime-local" value={at} required onChange={e => setAt(e.target.value)} /></label><PermitEmployeePicker label={handoff ? "Người xác nhận bàn giao" : ending ? "Người xác nhận kết thúc" : "Người cho phép làm việc"} value={name} onChange={setName} required /></div>}
+      {!updating && <div className="grid gap-4 sm:grid-cols-2"><label className="space-y-1 text-sm"><span>{handoff ? "Thời điểm bàn giao" : ending ? "Thời điểm kết thúc" : "Thời điểm cho phép"} (giờ Việt Nam) *</span><DateTime24Input className={control} value={at} required onChange={setAt} /></label><PermitEmployeePicker label={handoff ? "Người xác nhận bàn giao" : ending ? "Người xác nhận kết thúc" : "Người cho phép làm việc"} value={name} onChange={setName} required /></div>}
       {overhaulItems.length > 0 && <fieldset className="space-y-3 rounded-lg border border-border p-3 text-sm"><legend className="px-1 font-medium">Thông tin ghi Nhật ký ngày</legend>
         <label className="block space-y-1"><span>Số PCT - Nội dung PCT</span><input className={control} maxLength={OVERHAUL_JOURNAL_LIMITS.title} value={journal.title} onChange={e => setJournal({ ...journal, title: e.target.value })} /></label>
         <div className="grid grid-cols-[1fr_6.5rem] gap-3 sm:grid-cols-[1fr_9rem]">

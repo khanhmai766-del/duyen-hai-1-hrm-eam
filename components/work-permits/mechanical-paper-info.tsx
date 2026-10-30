@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { DateTime24Input } from "@/components/ui/date-time-24-input";
 import { Button } from "@/components/ui/button";
 import { PermitCompanySelect } from "@/components/work-permits/company-picker";
 import { OverhaulContentField } from "@/components/work-permits/overhaul-item-picker";
@@ -60,7 +61,7 @@ export function MechanicalPaperInfo({ form, issued, numberField, positionOptions
       <label className={label}><span className="font-medium">Nội dung công việc *</span><textarea className={control} rows={3} required maxLength={5000} value={form.content} onChange={event => onChange("content", event.target.value)} /></label>
       <OverhaulContentField form={form} onExtraChange={extra => onChange("overhaulExtra", extra)} onApply={(items, content, company) => { onChange("overhaulItems", items); if (items.length) onChange("overhaulExtra", false); if (content !== null) onChange("content", content); if (company) onChange("teamName", company); }} />
       <label className={label}><span className="font-medium">Phạm vi công tác</span><textarea className={control} rows={2} maxLength={5000} value={form.workScope ?? ""} onChange={event => onChange("workScope", event.target.value)} /></label>
-      <div className="grid gap-4 md:grid-cols-2">{(["plannedStartAt", "plannedEndAt"] as const).map(key => <label key={key} className={label}><span className="font-medium">{key === "plannedStartAt" ? "Bắt đầu công việc" : "Kết thúc công việc"} dự kiến</span><input className={control} type="datetime-local" value={form[key] ? new Date(new Date(form[key]!).getTime() + 7 * 3600000).toISOString().slice(0, 16) : ""} onChange={event => onChange(key, event.target.value ? `${event.target.value}:00+07:00` : null)} /></label>)}</div>
+      <div className="grid gap-4 md:grid-cols-2">{(["plannedStartAt", "plannedEndAt"] as const).map(key => <label key={key} className={label}><span className="font-medium">{key === "plannedStartAt" ? "Bắt đầu công việc" : "Kết thúc công việc"} dự kiến</span><DateTime24Input className={control} value={form[key] ? new Date(new Date(form[key]!).getTime() + 7 * 3600000).toISOString().slice(0, 16) : ""} onChange={value => onChange(key, value ? `${value}:00+07:00` : null)} /></label>)}</div>
     </div></section>
 
   </div>;

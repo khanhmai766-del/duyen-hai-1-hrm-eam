@@ -1,4 +1,5 @@
 "use client";
+import { DateTime24Input } from "@/components/ui/date-time-24-input";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -51,7 +52,7 @@ export function PermitExecutionDialog({ permit, onClose }: { permit: PermitRow; 
     {status === "PAUSED" && <label className="block space-y-1 text-sm">Lý do tạm dừng<textarea className={inputClass} required maxLength={2000} value={reason} onChange={e => setReason(e.target.value)} /></label>}
     <label className="block space-y-1 text-sm">{internal ? "Ghi nhận kết quả (không bắt buộc)" : "Kết quả công việc"}<textarea className={inputClass} required={!internal && status === "CLOSED"} maxLength={5000} value={result} onChange={e => setResult(e.target.value)} /></label>
     <PreviousResults permit={permit} />
-    {status === "CLOSED" && <label className="block space-y-1 text-sm">Thời điểm đóng phiếu (giờ Việt Nam)<input type="datetime-local" className={inputClass} required value={closedAt} onChange={e => setClosed(e.target.value)} /></label>}
+    {status === "CLOSED" && <label className="block space-y-1 text-sm">Thời điểm đóng phiếu (giờ Việt Nam)<DateTime24Input className={inputClass} required value={closedAt} onChange={setClosed} /></label>}
     <div className="flex justify-end gap-2"><Button variant="outline" type="button" onClick={onClose}>Để sau</Button><Button type="submit">{save.isPending ? "Đang lưu…" : "Lưu thực hiện"}</Button></div>
   </fieldset></form></DialogContent></Dialog>;
 }
