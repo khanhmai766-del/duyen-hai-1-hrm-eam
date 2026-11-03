@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
 import type { Prisma } from "@prisma/client";
-import { fail, requireRole } from "@/lib/api";
+import { fail } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
+import { canChangePermitViolation } from "@/lib/work-permit-positions";
 
 /** Khóa hồ sơ để hai người ghi đồng thời không ghi đè lịch sử của nhau. */
 export async function recordPermitPersonViolation(id: string, body: Record<string, unknown>, user: { id: string; name?: string | null }, db = prisma, context?: { permitId: string; sessionId: string; permitNumber: string }) {
@@ -19,9 +20,9 @@ export async function recordPermitPersonViolation(id: string, body: Record<strin
   return { row, violation };
 }
 
-/** Chỉ Admin được sửa/xóa; version chung và khóa hàng bảo vệ cả thao tác ghi thêm đồng thời. */
-export async function changePermitPersonViolation(id: string, body: Record<string, unknown>, user: { role: string }, action: "edit" | "delete", db = prisma) {
-  requireRole(user, ["ADMIN"]);
+/** Quyền sửa/xóa theo canChangePermitViolation; version chung và khóa hàng bảo vệ cả thao tác ghi thêm đồng thời. */
+export async function changePermitPersonViolation(id: string, body: Record<string, unknown>, user: { role: string; position?: string | null }, action: "edit" | "delete", db = prisma) {
+  if (!canChangePermitViolation(user)) throw fail("Bạn không có quyền sửa hoặc xóa vi phạm", 403);
   if (typeof body.violationId !== "string" || !body.violationId || body.violationId.length > 100)
     throw fail("Lần vi phạm không hợp lệ");
   if (action === "edit" && (typeof body.description !== "string" || !body.description.trim() || body.description.length > 2000))

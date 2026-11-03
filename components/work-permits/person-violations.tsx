@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/compone
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { useChangePermitPersonViolation, usePermitViolationPerson, useRecordPermitPersonViolation, type PermitViolationContext, type PermitViolationPerson } from "@/hooks/useWorkPermits";
-import { useAdminMode } from "@/hooks/useAdminMode";
+import { canChangePermitViolation } from "@/lib/work-permit-positions";
 import type { PermitMember, PermitPerson, PermitPersonViolation } from "@/lib/work-permits";
 
 export function PersonViolations({ person, compact = false, actions, className }: { person: Pick<PermitPerson, "violations">; compact?: boolean; actions?: (violation: PermitPersonViolation, index: number) => ReactNode; className?: string }) {
@@ -60,8 +60,7 @@ export function PersonViolationTag({ violations, compact, inline }: { violations
 
 function ViolationHistory({ person, busy, onReload }: { person: PermitViolationPerson; busy: boolean; onReload: () => void }) {
   const { data: session } = useSession();
-  const [adminMode] = useAdminMode();
-  const isAdmin = session?.user?.role === "ADMIN" && adminMode;
+  const canChange = canChangePermitViolation({ role: session?.user?.role, position: session?.user?.currentPosition ?? session?.user?.position });
   const change = useChangePermitPersonViolation();
   const [selected, setSelected] = useState<{ id: string; action: "edit" | "delete"; description: string } | null>(null);
   async function apply() {
@@ -76,7 +75,7 @@ function ViolationHistory({ person, busy, onReload }: { person: PermitViolationP
       onReload();
     }
   }
-  return <PersonViolations person={person} actions={isAdmin ? (violation, index) => selected?.id === violation.id ? <div className="mt-2 space-y-2 rounded-md border border-red-200 bg-background p-2 text-foreground">
+  return <PersonViolations person={person} actions={canChange ? (violation, index) => selected?.id === violation.id ? <div className="mt-2 space-y-2 rounded-md border border-red-200 bg-background p-2 text-foreground">
     {selected.action === "edit" ? <label className="block space-y-1"><span className="font-medium">Sửa lỗi vi phạm lần {index + 1}</span><textarea aria-label={`Sửa lỗi vi phạm lần ${index + 1}`} rows={3} maxLength={2000} className="w-full rounded-lg border border-input bg-background p-2 text-base sm:text-sm" value={selected.description} disabled={change.isPending || busy} onChange={event => setSelected({ ...selected, description: event.target.value })} /></label> : <p>Xóa lần vi phạm này của {person.name}? Số lần vi phạm sẽ giảm sau khi xóa.</p>}
     <div className="flex flex-wrap gap-2"><Button type="button" size="sm" variant={selected.action === "delete" ? "destructive" : "default"} className="h-10" disabled={change.isPending || busy || (selected.action === "edit" && !selected.description.trim())} onClick={() => void apply()}>{change.isPending ? "Đang lưu…" : selected.action === "edit" ? "Lưu chỉnh sửa" : "Xác nhận xóa"}</Button><Button type="button" size="sm" variant="outline" className="h-10" disabled={change.isPending} onClick={() => setSelected(null)}>Hủy</Button></div>
   </div> : <div className="mt-1 flex gap-2"><Button type="button" size="sm" variant="outline" className="h-10 text-xs" aria-label={`Sửa vi phạm lần ${index + 1}`} disabled={busy || change.isPending} onClick={() => setSelected({ id: violation.id, action: "edit", description: violation.description })}>Sửa</Button><Button type="button" size="sm" variant="outline" className="h-10 text-xs text-red-700" aria-label={`Xóa vi phạm lần ${index + 1}`} disabled={busy || change.isPending} onClick={() => setSelected({ id: violation.id, action: "delete", description: violation.description })}>Xóa</Button></div> : undefined} />;

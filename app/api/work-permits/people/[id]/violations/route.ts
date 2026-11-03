@@ -1,4 +1,4 @@
-import { audit, fail, ok, requireRole, requireUser } from "@/lib/api";
+import { audit, fail, ok, requireUser } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 import { formatPermitNumber } from "@/lib/work-permits";
 import { changePermitPersonViolation, recordPermitPersonViolation, requireViolationSessionMember } from "@/lib/server/work-permit-person-violations";
@@ -58,7 +58,6 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
 async function changeViolation(req: Request, props: { params: Promise<{ id: string }> }, action: "edit" | "delete") {
   return permitHandle(async () => {
     const user = await requireUser();
-    requireRole(user, ["ADMIN"]);
     const { id } = await props.params;
     const { row, violation, description } = await changePermitPersonViolation(id, await permitBody(req), user, action);
     await audit(user.id, action === "edit" ? "EDIT_WORK_PERMIT_PERSON_VIOLATION" : "DELETE_WORK_PERMIT_PERSON_VIOLATION", "WorkPermitPerson", id,

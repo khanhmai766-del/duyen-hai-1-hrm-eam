@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { prisma } from "../../lib/prisma";
 import { changePermitPersonViolation, recordPermitPersonViolation, requireViolationSessionMember } from "../../lib/server/work-permit-person-violations";
+import { canChangePermitViolation } from "../../lib/work-permit-positions";
 
 function fixture(person: { version: number; violations: readonly unknown[] } | null) {
   const calls: string[] = [];
@@ -19,14 +20,19 @@ function fixture(person: { version: number; violations: readonly unknown[] } | n
 const user = { id: "recorder", name: "Người ghi nhận" };
 const admin = { role: "ADMIN" };
 
-test("Chỉ Admin được sửa/xóa, từ chối trước khi đọc DB", async () => {
-  for (const role of ["MANAGER", "SUPERVISOR", "TECHNICIAN", "VIEWER"]) {
+test("Người xem không giữ cương vị chỉ huy ca bị từ chối sửa/xóa trước khi đọc DB", async () => {
+  for (const user of [{ role: "VIEWER" }, { role: "VIEWER", position: "Trực chính lò" }]) {
     for (const action of ["edit", "delete"] as const) {
       const state = fixture({ version: 1, violations: [] });
-      await assert.rejects(changePermitPersonViolation("worker", { violationId: "old", version: 1, description: "Lỗi mới" }, { role }, action, state.db), (e: unknown) => e instanceof Response && e.status === 403);
+      await assert.rejects(changePermitPersonViolation("worker", { violationId: "old", version: 1, description: "Lỗi mới" }, user, action, state.db), (e: unknown) => e instanceof Response && e.status === 403);
       assert.deepEqual(state.calls, []);
     }
   }
+});
+
+test("Quản trị, Quản lý, Trưởng ca, Kỹ thuật viên và cương vị Trưởng ca/Trưởng kíp được sửa/xóa", () => {
+  for (const user of [{ role: "ADMIN" }, { role: "MANAGER" }, { role: "SUPERVISOR" }, { role: "TECHNICIAN" }, { role: "VIEWER", position: "Trưởng ca" }, { role: "VIEWER", position: "TK Lò máy" }, { role: "VIEWER", position: "Trưởng kíp điện" }])
+    assert.equal(canChangePermitViolation(user), true, JSON.stringify(user));
 });
 
 test("Sửa đúng lần vi phạm, giữ người/ngày ghi nhận và liên kết PCT", async () => {
