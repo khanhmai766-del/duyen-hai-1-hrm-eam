@@ -1,0 +1,15 @@
+.ctktkt-module .ppa-detail-table { width:100%; min-width:1000px; table-layout:fixed; border-collapse:collapse; font-size:11px; line-height:1.35; }
+.ctktkt-module .ppa-detail-table :is(th,td) { padding:8px 3px; border:1px solid #e2e7ef; font-variant-numeric:tabular-nums; text-align:center; }
+.ctktkt-module .ppa-detail-table th { white-space:normal; overflow-wrap:normal; font-size:11px; }
+.ctktkt-module .ppa-detail-table tbody td:nth-child(-n+15):not([colspan]) { white-space:nowrap; }
+.ctktkt-module .ppa-detail-table td.ppa-cl-over { color:#b42332; background:#fff0f0; font-weight:700; }
+.ctktkt-module .ppa-detail-table td.ppa-cl-met { color:#16714c; background:#edf8f1; font-weight:700; }
+.ctktkt-module .ppa-detail-table td.ppa-cl-empty { color:#8a95a6; background:#f7f9fc; }
+.ctktkt-module .ppa-detail-table .ppa-month-label { text-align:left; font-size:11px; }
+.ctktkt-module .ppa-detail-table :is(th,td):first-child:not([colspan]) { position:sticky; left:0; background:#f6f8fc; z-index:1; }
+.ctktkt-module .ppa-detail-table thead th:first-child { z-index:2; }
+.ctktkt-module .ppa-detail-table td:nth-last-child(-n+2):not([colspan]) { white-space:normal; text-align:left; overflow-wrap:anywhere; }
+.ctktkt-module .ppa-detail-table td:nth-last-child(-n+2) :is(button,details) { font-size:11px; }
+.ctktkt-module .ppa-detail-legend { display:flex; flex-wrap:wrap; gap:12px; font-size:11px; color:#768399; }
+.ctktkt-module .ppa-legend-over { color:#b42332; }.ctktkt-module .ppa-legend-met { color:#16714c; }
+@media print { .ctktkt-module .ppa-detail-table { min-width:0; font-size:9px; }.ctktkt-module .ppa-detail-table :is(th,td):first-child:not([colspan]) { position:static; } }

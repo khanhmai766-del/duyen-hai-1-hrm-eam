@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="vi"><head><meta charset="utf-8"><title>NKVH → PPA: chạy thử</title><link rel="stylesheet" href="app.css"></head>
+<body><main>
+  <h1>NKVH → Tình hình vận hành PPA</h1>
+  <p>Mở sẵn trang <strong>danh sách nhật ký NKVH</strong> đã đăng nhập. Tiện ích đọc trên một tab riêng; giữ trang này mở khi đồng bộ.</p>
+  <div class="toolbar"><label>Ngày D <input id="day" type="date"></label><button id="sync">Đồng bộ S1 + S2</button><button id="stop" disabled>Dừng</button></div>
+  <p>Chỉ hiển thị sự kiện thuộc 00:00–24:00 ngày D. Sự kiện kéo dài được lấy nếu giao với ngày D; thiếu giờ kết thúc thì lấy theo giờ bắt đầu. Không tự chọn nội dung.</p>
+  <p id="status" role="status">Sẵn sàng.</p><details><summary>Tiến độ và ca chưa đọc được</summary><pre id="log"></pre></details>
+  <div class="toolbar"><span id="count"></span></div>
+  <section id="events"></section>
+  <h2>Nội dung đã chọn</h2><p>Có thể sửa kết quả rồi đưa vào hai ô sự kiện trên web CTKTKT. Sau đó kiểm tra và lưu trên web.</p>
+  <button id="apply" hidden>Đưa nội dung đã chọn vào web S1/S2</button>
+  <div class="outputs"><section><label for="s1">Tổ máy S1</label><textarea id="s1" rows="12"></textarea><button id="copy1">Sao chép S1</button><span id="len1"></span></section><section><label for="s2">Tổ máy S2</label><textarea id="s2" rows="12"></textarea><button id="copy2">Sao chép S2</button><span id="len2"></span></section></div>
+  <p>Ô sự kiện trên web hiện giới hạn 1.000 ký tự. Nếu vượt giới hạn, rút gọn trong ô trên; tiện ích không cắt nội dung. Dữ liệu chỉ giữ trong trang này và mất khi đóng/tải lại.</p>
+</main><script src="filter.js"></script><script src="page.js"></script><script src="app.js"></script></body></html>

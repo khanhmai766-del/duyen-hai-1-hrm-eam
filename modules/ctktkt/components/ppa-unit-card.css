@@ -1,0 +1,71 @@
+.ctktkt-module .ppa-unit-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:18px; }
+.ctktkt-module .ppa-unit-card { min-width:0; background:#fff; border:1px solid #e2e7ef; border-radius:14px; overflow:hidden; color:#24334c; }
+.ctktkt-module .ppa-card-header { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; padding:20px; border-bottom:1px solid #edf0f5; }
+.ctktkt-module .ppa-card-title { display:flex; gap:10px; align-items:center; }
+.ctktkt-module .ppa-unit-marker { display:grid; place-items:center; width:38px; height:38px; border-radius:10px; background:color-mix(in srgb,var(--unit-accent) 9%,white); color:var(--unit-accent); font-size:12px; font-weight:700; }
+.ctktkt-module .ppa-card-title h3 { margin:0; font-size:16px; font-weight:650; }
+.ctktkt-module .ppa-card-title p { margin:4px 0 0; color:#768399; font-size:11px; }
+.ctktkt-module .ppa-status { padding:5px 8px; border-radius:5px; font-size:10px; font-weight:650; white-space:nowrap; }
+.ctktkt-module .ppa-status.over { background:#fff0f0; color:#b73939; }
+.ctktkt-module .ppa-status.met { background:#ecf7f1; color:#237353; }
+.ctktkt-module .ppa-status.empty { background:#f1f4f8; color:#64748b; }
+.ctktkt-module .ppa-rate-metrics { display:grid; grid-template-columns:1fr 1fr; padding:20px; gap:16px; }
+.ctktkt-module .ppa-rate-metrics > div + div { border-left:1px solid #edf0f5; padding-left:16px; }
+.ctktkt-module .ppa-rate-metrics p { font-size:12px; color:#52627a; margin:0 0 8px; }
+.ctktkt-module .ppa-rate-metrics p span { display:block; color:#8a95a6; font-size:10px; margin-top:3px; }
+.ctktkt-module .ppa-rate-metrics strong { display:block; font-size:clamp(20px,1.6vw,28px); font-weight:650; font-variant-numeric:tabular-nums; letter-spacing:-.035em; }
+.ctktkt-module .ppa-metric-unit { font-size:10px; color:#8a95a6; }
+.ctktkt-module .ppa-difference-summary { display:flex; justify-content:space-between; align-items:center; gap:12px; margin:0 20px; padding:14px; border-radius:8px; }
+.ctktkt-module .ppa-difference-summary.over { background:#fff5f4; color:#b73939; }
+.ctktkt-module .ppa-difference-summary.met { background:#f0f8f4; color:#237353; }
+.ctktkt-module .ppa-difference-summary.empty { background:#f7f9fc; color:#64748b; }
+.ctktkt-module .ppa-difference-summary p { margin:0 0 4px; font-size:11px; }
+.ctktkt-module .ppa-difference-summary strong { font-size:23px; font-weight:650; font-variant-numeric:tabular-nums; }
+.ctktkt-module .ppa-difference-summary small { font-size:10px; font-weight:400; }
+.ctktkt-module .ppa-difference-summary > span { font-size:10px; }
+.ctktkt-module .ppa-day-counts { display:flex; justify-content:space-between; padding:16px 20px 9px; gap:12px; font-size:11px; color:#64748b; }
+.ctktkt-module .ppa-day-counts b { margin-left:6px; color:#334155; font-weight:650; }
+.ctktkt-module .ppa-day-counts i { display:inline-block; width:7px; height:7px; border-radius:2px; margin-right:5px; }
+.ctktkt-module .ppa-day-counts i.over { background:#e58080; }.ctktkt-module .ppa-day-counts i.met { background:#48a984; }
+.ctktkt-module .ppa-day-bar { display:flex; height:4px; margin:0 20px 20px; overflow:hidden; border-radius:3px; background:#f1f4f8; }
+.ctktkt-module .ppa-day-bar span:first-child { background:#e58080; }.ctktkt-module .ppa-day-bar span:last-child { background:#48a984; }
+.ctktkt-module .ppa-chart-section { border-top:1px solid #edf0f5; padding:16px 14px 8px; }
+.ctktkt-module .ppa-chart-label { display:flex; justify-content:space-between; align-items:baseline; gap:8px; padding:0 6px; }
+.ctktkt-module .ppa-chart-label h4 { font-size:11px; font-weight:650; margin:0; }
+.ctktkt-module .ppa-chart-label span { font-size:9px; color:#8a95a6; }
+.ctktkt-module .ppa-rate-chart,.ctktkt-module .ppa-diff-chart { width:100%; display:block; height:auto; margin-top:10px; overflow:visible; }
+.ctktkt-module .ppa-unit-card svg text { font-family:inherit; font-size:10px; fill:#768399; }
+.ctktkt-module .ppa-grid-line { stroke:#e8edf4; stroke-dasharray:3 4; }
+.ctktkt-module .ppa-zero-line { stroke:#a5b1c2; stroke-width:1; }
+.ctktkt-module .ppa-actual-path { fill:none; stroke:var(--unit-accent); stroke-width:2.5; stroke-linejoin:round; }
+.ctktkt-module .ppa-standard-path { fill:none; stroke:#64748b; stroke-width:1.7; stroke-dasharray:5 4; }
+.ctktkt-module .ppa-chart-legend { display:flex; justify-content:center; gap:18px; padding:2px 0 9px; font-size:10px; color:#64748b; }
+.ctktkt-module .ppa-chart-legend i { display:inline-block; width:17px; vertical-align:middle; margin-right:6px; border-top:2px solid var(--unit-accent); }
+.ctktkt-module .ppa-chart-legend i.standard { border-top:2px dashed #64748b; }
+.ctktkt-module .ppa-diff-caption { display:flex; justify-content:center; gap:18px; font-size:10px; padding-bottom:7px; }
+.ctktkt-module .ppa-diff-caption .over { color:#b73939; }.ctktkt-module .ppa-diff-caption .met { color:#237353; }
+.ctktkt-module .ppa-chart-empty { display:grid; min-height:150px; place-items:center; color:#8a95a6; font-size:12px; }
+.ctktkt-module .ppa-card-data { border-top:1px solid #edf0f5; padding:12px 20px; font-size:11px; color:#52627a; }
+.ctktkt-module .ppa-card-data summary { cursor:pointer; }.ctktkt-module .ppa-card-data summary:focus-visible { outline:2px solid var(--unit-accent); outline-offset:4px; }
+.ctktkt-module .ppa-card-data-scroll { overflow:auto; max-height:240px; margin-top:12px; }.ctktkt-module .ppa-card-data table { width:100%; min-width:320px; border-collapse:collapse; font-variant-numeric:tabular-nums; }.ctktkt-module .ppa-card-data :is(th,td) { text-align:right; padding:7px 4px; border-bottom:1px solid #edf0f5; }
+.ctktkt-module .ppa-card-footnote { margin:0; padding:0 20px 16px; font-size:9px; line-height:1.5; color:#8a95a6; }
+@media(max-width:1199px) { .ctktkt-module .ppa-unit-grid { grid-template-columns:1fr; }.ctktkt-module .ppa-rate-metrics strong { font-size:26px; }.ctktkt-module .ppa-rate-chart { max-height:240px; }.ctktkt-module .ppa-diff-chart { max-height:160px; } }
+.ctktkt-module .ppa-card-header { padding:12px 14px; gap:8px; }
+.ctktkt-module .ppa-unit-marker { width:32px; height:32px; }
+.ctktkt-module .ppa-rate-metrics { padding:12px 14px; gap:12px; }
+.ctktkt-module .ppa-rate-metrics > div + div { padding-left:12px; }
+.ctktkt-module .ppa-rate-metrics p { margin-bottom:4px; }
+.ctktkt-module .ppa-rate-metrics p span { display:inline; margin-left:4px; }
+.ctktkt-module .ppa-difference-summary { margin:0 14px; padding:9px 12px; }
+.ctktkt-module .ppa-difference-summary strong { font-size:21px; }
+.ctktkt-module .ppa-day-counts { padding:10px 14px 6px; }
+.ctktkt-module .ppa-day-bar { margin:0 14px 12px; }
+.ctktkt-module .ppa-chart-section { padding:12px 8px 8px; }
+.ctktkt-module .ppa-chart-legend { flex-wrap:wrap; gap:8px 12px; padding:4px 0; }
+.ctktkt-module .ppa-chart-legend i.over,.ctktkt-module .ppa-chart-legend i.met { width:8px; height:8px; border:0; border-radius:2px; background:#e58080; }
+.ctktkt-module .ppa-chart-legend i.met { background:#48a984; }
+.ctktkt-module .ppa-axis-note { text-align:center; font-size:9px; color:#768399; margin:4px 0 0; }
+.ctktkt-module .ppa-zero-line { stroke-dasharray:4 3; }
+.ctktkt-module .ppa-card-data { padding:10px 14px; }
+.ctktkt-module .ppa-card-footnote { padding:0 14px 12px; }
+@media print { .ctktkt-module .ppa-unit-grid { grid-template-columns:repeat(3,minmax(0,1fr)); }.ctktkt-module .ppa-card-data { display:none; }.ctktkt-module .ppa-unit-card { break-inside:avoid; } }

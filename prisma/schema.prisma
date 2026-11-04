@@ -1457,6 +1457,114 @@ model SafeOperationSetting {
 // Cây danh mục thiết bị (nhập từ DM_ThietBi.xlsx). Phân cấp dựa trên "Số thứ tự"
 // dạng chấm (vd "1.1.1" là cha của "1.1.1.1"). Tách riêng khỏi Device vận hành:
 // khóa duy nhất là `seq` (mã thiết bị `code` có thể trùng giữa các node).
+// Thông số vận hành: chỉ công bố một lượt sau khi đã nhận đủ gói.
+model TsvhReading {
+  id            String   @id @default(cuid())
+  ngay          DateTime @db.Date
+  phanXuong     String
+  bang          String
+  thuTuBang     Int
+  stt           Int
+  maThietBi     String?
+  machine       String?
+  thietBi       String
+  thongSo       String
+  dvt           String
+  dvtRaw        String
+  deltaRaw      String?
+  deltaValue    Float?
+  deltaMin      Float?
+  deltaMax      Float?
+  gio           Json
+  gioRaw        Json
+  soGioCoSoLieu Int
+  createdAt     DateTime @default(now())
+
+  @@unique([ngay, phanXuong, bang, stt])
+  @@index([ngay, phanXuong, thuTuBang])
+  @@index([maThietBi, ngay])
+}
+
+model TsvhSyncRun {
+  runId         String   @id
+  ngay          DateTime @db.Date
+  phanXuong     String
+  trigger       String?
+  tongSoGoi     Int
+  status        String   @default("RECEIVING")
+  soBang        Int?
+  soDong        Int?
+  errors        Json     @default("[]")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  chunks        TsvhSyncChunk[]
+
+  @@index([ngay, phanXuong, createdAt])
+}
+
+// Giới hạn theo danh tính dòng thông số, độc lập ngày ghi và dữ liệu đồng bộ.
+model TsvhOperatingLimit {
+  key           String   @id
+  phanXuong     String
+  bang          String
+  stt           Int
+  maThietBi     String?
+  thongSo       String
+  dvt           String
+  machine       String?
+  value         String?
+  version       Int      @default(1)
+  updatedById   String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([phanXuong, bang])
+}
+
+// Cấu hình số được xác nhận, tách khỏi giới hạn văn bản theo dòng.
+model TsvhParamConfig {
+  key           String   @id
+  identity      String
+  config        Json
+  version       Int      @default(1)
+  updatedById   String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+// Kết quả theo ngày; dữ liệu gốc và cấu hình được băm để phát hiện bản cũ.
+model TsvhAssessmentDay {
+  ngay        DateTime @id @db.Date
+  signature   String
+  items       Json
+  computedAt  DateTime @default(now())
+}
+
+// Không ghi đè ghi nhận kiểm tra khi tính lại kết quả.
+model TsvhAssessmentReview {
+  id          String   @id @default(cuid())
+  ngay        DateTime @db.Date
+  paramKey    String
+  fingerprint String
+  note        String
+  checkedById String
+  checkedName String
+  checkedAt   DateTime @default(now())
+
+  @@index([ngay, paramKey, checkedAt])
+}
+
+model TsvhSyncChunk {
+  id        String @id @default(cuid())
+  runId     String
+  index     Int
+  hash      String
+  payload   Json
+  run       TsvhSyncRun @relation(fields: [runId], references: [runId], onDelete: Cascade)
+
+  @@unique([runId, index])
+}
+
 model EquipmentNode {
   id           String   @id @default(cuid())
   // seq = MÃ THIẾT BỊ đầy đủ (fullCode), vd "DH1.S1.5.1.1" — nguồn chuẩn ổn định để dựng
@@ -3564,4 +3672,264 @@ model WorkPermitPeopleSyncRun {
   error         String?
 
   @@index([source, startedAt])
+}
+// Chỉ tiêu KTKT — nhập từ gói bàn giao 04/11/2026, dùng tài khoản EAM.
+model CtktktMeasurements {
+  id Int @id @default(autoincrement())
+  metric_code String
+  metric_name String
+  period String
+  actual String
+  limit_value String
+  note String @default("")
+  created_at String @default(dbgenerated("to_char(CURRENT_TIMESTAMP AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS')"))
+
+  @@index([metric_code, period], map: "ctktkt_idx_measurements_metric_period")
+  @@map("ctktkt_measurements")
+}
+
+model CtktktDailyInputs {
+  id Int @id @default(autoincrement())
+  operating_date String
+  field_code String
+  value String
+  note String @default("")
+  updated_at String @default(dbgenerated("to_char(CURRENT_TIMESTAMP AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS')"))
+
+  @@unique([operating_date, field_code], map: "ctktkt_uidx_daily_inputs_date_field")
+  @@index([operating_date], map: "ctktkt_idx_daily_inputs_date")
+  @@index([field_code, operating_date], map: "ctktkt_idx_daily_inputs_field_date")
+  @@map("ctktkt_daily_inputs")
+}
+
+model CtktktPpaHeatRateDaily {
+  id Int @id @default(autoincrement())
+  operating_date String
+  source_data String
+  source_files String @default("[]")
+  gross_s1_kwh String
+  net_s1_kwh String
+  gross_s2_kwh String
+  net_s2_kwh String
+  ppa_plant String
+  ppa_s1 String
+  ppa_s2 String
+  note_s1 String @default("")
+  note_s2 String @default("")
+  updated_at String @default(dbgenerated("to_char(CURRENT_TIMESTAMP AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS')"))
+
+  @@unique([operating_date], map: "ctktkt_uidx_ppa_heat_rate_daily_date")
+  @@index([operating_date], map: "ctktkt_idx_ppa_heat_rate_daily_date")
+  @@map("ctktkt_ppa_heat_rate_daily")
+}
+
+model CtktktOperatingEvents {
+  id Int @id @default(autoincrement())
+  operating_date String
+  unit String
+  start_at String
+  end_at String @default("")
+  event_type Int
+  description String @default("")
+  updated_at String @default(dbgenerated("to_char(CURRENT_TIMESTAMP AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS')"))
+
+  @@index([operating_date, unit], map: "ctktkt_idx_operating_events_date")
+  @@map("ctktkt_operating_events")
+}
+
+model CtktktShiftReadings {
+  id Int @id @default(autoincrement())
+  operating_date String
+  unit String
+  time_slot String
+  metric String
+  value String
+  updated_at String @default(dbgenerated("to_char(CURRENT_TIMESTAMP AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS')"))
+
+  @@unique([operating_date, unit, time_slot, metric], map: "ctktkt_uidx_shift_readings")
+  @@index([operating_date], map: "ctktkt_idx_shift_readings_date")
+  @@map("ctktkt_shift_readings")
+}
+
+model CtktktOperationalReadVersions {
+  cache_key String @id
+  version Int @default(0)
+
+
+  @@map("ctktkt_operational_read_versions")
+}
+
+model CtktktWaterShiftLeaders {
+  id Int @id @default(autoincrement())
+  name String
+  is_active Int @default(1)
+  display_order Int @default(0)
+  created_at String @default(dbgenerated("to_char(CURRENT_TIMESTAMP AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS')"))
+
+  @@unique([name], map: "ctktkt_uidx_water_shift_leaders_name")
+  @@map("ctktkt_water_shift_leaders")
+}
+
+model CtktktWaterShiftLogs {
+  id Int @id @default(autoincrement())
+  log_date String
+  shift_time String
+  shift_team String @default("")
+  shift_leader String @default("")
+  elec_rec_s1 Float? @default(0)
+  elec_rec_s2 Float? @default(0)
+  elec_gen_s1 Float? @default(0)
+  elec_gen_s2 Float? @default(0)
+  water_rec_s1 Float? @default(0)
+  water_rec_s2 Float? @default(0)
+  water_used_s1 Float? @default(0)
+  water_used_s2 Float? @default(0)
+  water_ratio_s1 Float? @default(0)
+  water_ratio_s2 Float? @default(0)
+  condenser_rec_s1 Float? @default(0)
+  condenser_rec_s2 Float? @default(0)
+  condenser_used_s1 Float? @default(0)
+  condenser_used_s2 Float? @default(0)
+  resin_water_s1_24h Float? @default(0)
+  resin_water_s2_24h Float? @default(0)
+  note String? @default("")
+  updated_at String @default(dbgenerated("to_char(CURRENT_TIMESTAMP AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS')"))
+  water_adjustment_s1 Float?
+  water_adjustment_s2 Float?
+  condenser_adjustment_s1 Float?
+  condenser_adjustment_s2 Float?
+
+  @@unique([log_date, shift_time], map: "ctktkt_uidx_water_shift_date_time")
+  @@index([log_date], map: "ctktkt_idx_water_shift_date")
+  @@map("ctktkt_water_shift_logs")
+}
+
+model CtktktChemicalUsageLogs {
+  id Int @id @default(autoincrement())
+  usage_date String
+  chemical_code String
+  material_code String
+  chemical_name String
+  unit String @default("Tấn")
+  quantity Float
+  purpose String @default("")
+  plant_unit String @default("Chung")
+  reference String @default("")
+  entered_by_user_id String
+  entered_by_name String
+  entered_by_position String
+  updated_by_user_id String?
+  updated_by_name String @default("")
+  updated_by_position String @default("")
+  deleted_at String?
+  deleted_by_user_id String?
+  deleted_by_name String @default("")
+  deleted_by_position String @default("")
+  source_key String @default("")
+  created_at String @default(dbgenerated("to_char(CURRENT_TIMESTAMP AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS')"))
+  updated_at String @default(dbgenerated("to_char(CURRENT_TIMESTAMP AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS')"))
+
+  @@index([usage_date], map: "ctktkt_idx_chemical_usage_date")
+  @@index([chemical_code, usage_date], map: "ctktkt_idx_chemical_usage_code_date")
+  // Index duy nhất có điều kiện ctktkt_uidx_chemical_usage_source_key nằm trong prisma/manual/add-ctktkt.sql.
+  @@map("ctktkt_chemical_usage_logs")
+}
+
+model CtktktDailyInputAudit {
+  id Int @id @default(autoincrement())
+  changed_at String @default(dbgenerated("to_char(CURRENT_TIMESTAMP AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS')"))
+  actor_id String
+  actor_username String
+  actor_name String
+  source String
+  operating_date String
+  field_code String
+  action String
+  old_value String?
+  new_value String?
+  old_note String?
+  new_note String?
+
+  @@index([operating_date, id], map: "ctktkt_idx_daily_input_audit_date")
+  @@map("ctktkt_daily_input_audit")
+}
+
+model CtktktCoalMeterPhotos {
+  id String @id
+  owner_id String
+  report_date String
+  slot String
+  type String
+  data String
+  reading String
+  expires_at BigInt
+  created_at BigInt
+
+  @@index([expires_at], map: "ctktkt_coal_photo_expiry")
+  @@map("ctktkt_coal_meter_photos")
+}
+
+model CtktktCoalPhotoUsage {
+  owner_id String
+  bucket Int
+  requests Int
+
+  @@id([owner_id, bucket])
+  @@map("ctktkt_coal_photo_usage")
+}
+
+model CtktktCoalGeminiSettings {
+  name String @id
+  cipher String?
+  model String
+  version Int
+  updated_at String?
+  updated_by String?
+  operation String
+
+
+  @@map("ctktkt_coal_gemini_settings")
+}
+
+model CtktktCoalGeminiSettingsEvents {
+  id String @id
+  version Int
+  actor_id String
+  actor_name String
+  action String
+  created_at String
+
+
+  @@map("ctktkt_coal_gemini_settings_events")
+}
+
+model CtktktGoogleMirrorCredentials {
+  id Int @id
+  token_hash String
+  token_enc String
+
+
+  @@map("ctktkt_google_mirror_credentials")
+}
+
+model CtktktDataRestoreAudit {
+  id Int @id @default(autoincrement())
+  actor_id String
+  checksum String
+  mode String
+  row_count Int
+  created_at String @default(dbgenerated("to_char(CURRENT_TIMESTAMP AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS')"))
+
+
+  @@map("ctktkt_data_restore_audit")
+}
+
+model CtktktGoogleMirrorStatus {
+  file_key String @id
+  period String
+  synced_at String
+  content_hash String
+
+
+  @@map("ctktkt_google_mirror_status")
 }

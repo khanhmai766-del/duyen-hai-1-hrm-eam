@@ -1,0 +1,54 @@
+{
+  "manifest_version": 3,
+  "name": "Đồng bộ QLKT sang Chỉ tiêu KTKT",
+  "version": "0.4.41",
+  "description": "Đồng bộ tổng hợp dữ liệu ngày, PPA, PMIS, BCSX và 02-PĐ từ QLKT về web Chỉ tiêu KTKT.",
+  "permissions": [
+    "activeTab",
+    "tabs",
+    "storage",
+    "scripting"
+  ],
+  "host_permissions": [
+    "http://qlkt.tpcduyenhai.com.vn/qlkt/*",
+    "https://qlkt.tpcduyenhai.com.vn/qlkt/*",
+    "https://ctktkt-dashboard.vercel.app/*",
+    "http://localhost/*",
+    "http://127.0.0.1/*",
+    "https://duyenhai1.vn/*",
+    "https://ctktkt.duyenhai1.vn/*"
+  ],
+  "action": {
+    "default_title": "Đồng bộ QLKT",
+    "default_popup": "popup.html"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "http://qlkt.tpcduyenhai.com.vn/qlkt/*",
+        "https://qlkt.tpcduyenhai.com.vn/qlkt/*"
+      ],
+      "js": [
+        "meter-extract.js",
+        "content.js"
+      ],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://ctktkt-dashboard.vercel.app/*",
+        "http://localhost/*",
+        "http://127.0.0.1/*",
+        "https://duyenhai1.vn/*",
+        "https://ctktkt.duyenhai1.vn/*"
+      ],
+      "js": [
+        "web-bridge.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ]
+}

@@ -113,3 +113,21 @@ export async function apiUpload<T>(url: string, formData: FormData): Promise<T> 
   if (!res.ok || json.error) throw new Error(json.error || "Tải tệp thất bại");
   return json.data as T;
 }
+
+/** Cầu nối cho các báo cáo KTKT nhập từ gói bàn giao, vẫn đọc phong bì API chung. */
+export async function apiReportResponse(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  let response: Response;
+  try { response = await fetch(input, init); }
+  catch(error) {
+    if(error instanceof Error && error.name === "AbortError") throw new DOMException("Đã hủy yêu cầu.","AbortError");
+    throw new Error("Không kết nối được máy chủ báo cáo. Hãy thử lại.");
+  }
+  const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+  if(url.startsWith("/api/ctktkt/") && response.redirected && /\/login/.test(response.url)) throw new Error("Phiên đăng nhập đã hết hạn. Hãy đăng nhập lại.");
+  if(url.startsWith("/api/ctktkt/") && response.headers.get("Content-Type")?.includes("text/html")) throw new Error("Máy chủ chưa trả được dữ liệu báo cáo. Hãy thử lại.");
+  if (!url.startsWith("/api/ctktkt/") || response.headers.has("Content-Disposition") ||
+    !response.headers.get("Content-Type")?.includes("application/json")) return response;
+  const envelope = await readEnvelope<unknown>(response, "Không đọc được dữ liệu báo cáo.");
+  return Response.json(response.ok && !envelope.error ? envelope.data : { error: envelope.error || "Thao tác thất bại." },
+    { status: response.status, headers: { "Cache-Control": "no-store" } });
+}

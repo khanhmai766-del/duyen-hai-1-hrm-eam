@@ -4,6 +4,7 @@ import { getToken } from "next-auth/jwt";
 import { prisma } from "@/lib/prisma";
 import { LOOKUP_ACCESS_MODE, lookupLandingPage, lookupRequestAllowed } from "@/lib/lookup-access";
 import { lookupModulesFor } from "@/lib/server/lookup-access";
+import { isCtktktMachineEndpoint } from "@/modules/ctktkt/lib/machine-endpoints";
 
 // Lightweight guard (Next 16 "proxy", trước là middleware.ts; chạy Node runtime): checks for the NextAuth session cookie and redirects
 // unauthenticated users to /login. Fine-grained RBAC is enforced server-side in
@@ -31,6 +32,8 @@ const AUTHENTICATED_PUBLIC_PATHS = ["/public/equipment", "/public/devices"];
 
 export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
+
+  if (isCtktktMachineEndpoint(pathname, req.method)) return NextResponse.next();
 
   const requiresAuthentication = AUTHENTICATED_PUBLIC_PATHS.some((p) => pathname.startsWith(p));
   if (!requiresAuthentication && PUBLIC_PATHS.some((p) => pathname.startsWith(p))) {

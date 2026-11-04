@@ -34,6 +34,7 @@ systemd 249 trên server **chưa hỗ trợ hậu tố múi giờ trong `OnCalen
 | `dh1-telegram-overhaul` | `*-*-* *:*:00` | mỗi phút | `run-telegram-job.mjs overhaul` (lịch mở sau 1 giờ, kết thúc/gộp và thử lại lỗi) |
 | `dh1-telegram-overhaul-daily` | `*-*-* 17:00:00` | 00:00 hằng ngày | `run-telegram-job.mjs overhaul-daily` (nhân sự và danh sách số hiệu PCT đại tu của hôm qua) |
 | `dh1-disk-guard` | `Sun *-*-* 20:37` | 03:37 thứ Hai | `server-disk-guard.sh` |
+| `dh1-ctktkt-coal-photos` | `*-*-* 00:00:00` | 07:00 hằng ngày | `npm run ctktkt:cleanup-photos` (chỉ ảnh công tơ than hết hạn và bộ đếm OCR cũ; cần `CRON_SECRET`) |
 | `dh1-permit-people-sync` | `*-*-* 17:00` | 00:00 hằng đêm | `npm run import:permit-people` (thẻ nhà thầu từ Google Sheets) |
 | `dh1-overhaul-items-sync` | `*-*-* 23:00` | 06:00 hằng ngày | `npm run import:overhaul-items` (hạng mục đại tu từ 4 file tiến độ, service account — docs/dai-tu-google-sheets.md) |
 | `dh1-overhaul-sheet-push` | `*:0/15` | mỗi 15 phút | `npm run overhaul:sheet` (đẩy hàng đợi kết quả ngày PCT đại tu lên Sheet — **ghi** Google Sheets) |

@@ -45,6 +45,7 @@ export const ACTION_CONFIG: Record<string, ActionConfig> = Object.fromEntries([
   ["ACTIVATE_USER", { category: "SYSTEM", saveToAuditLog: true, label: "Mở khoá người dùng" }],
   ["IMPORT_USERS", { category: "SYSTEM", saveToAuditLog: true, label: "Import người dùng" }],
   ["SYNC_OIL_ANALYSIS_FROM_LIMS", { category: "SYSTEM", saveToAuditLog: true, label: "Đồng bộ kết quả phân tích dầu từ LIMS" }],
+  ["UPDATE_CTKTKT", { category: "USER", saveToAuditLog: true, label: "Cập nhật chỉ tiêu kinh tế kỹ thuật" }],
   ["RECORD_WORK_PERMIT_PERSON_VIOLATION", { category: "USER", saveToAuditLog: true, label: "Ghi nhận vi phạm nhân sự nhà thầu" }],
   ["EDIT_WORK_PERMIT_PERSON_VIOLATION", { category: "USER", saveToAuditLog: true, label: "Sửa vi phạm nhân sự nhà thầu" }],
   ["DELETE_WORK_PERMIT_PERSON_VIOLATION", { category: "USER", saveToAuditLog: true, label: "Xóa vi phạm nhân sự nhà thầu" }],

@@ -48,6 +48,7 @@
     "check:chemical-link": "tsx scripts/check/chemical-ticket-link.ts",
     "check:chemical-api": "tsx scripts/check/chemical-api.ts",
     "check:chemical": "tsx scripts/check/chemical-inventory.ts",
+    "ctktkt:cleanup-photos": "node scripts/data-ops/ctktkt-coal-photos.mjs",
     "demo:chemical": "tsx scripts/check/demo-chemical-inventory.ts",
     "check:pccc": "tsx scripts/check/pccc-summary.ts",
     "pccc:rollover": "tsx scripts/data-ops/pccc-rollover.ts",

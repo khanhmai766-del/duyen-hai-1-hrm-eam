@@ -1,0 +1,17 @@
+:root { font-family: Arial, "Segoe UI", sans-serif; color: #17213b; background: #f5f7fb; }
+body { width: 340px; margin: 0; }
+main { padding: 18px; }
+h1 { margin: 0; color: #173b64; font-size: 20px; }
+.hint, .privacy { color: #52657a; font-size: 13px; line-height: 1.45; }
+label { display: grid; gap: 6px; margin-top: 16px; font-size: 12px; font-weight: 700; color: #40566e; }
+input { height: 38px; border: 1px solid #c9d5e2; border-radius: 9px; padding: 0 10px; background: white; color: #111827; font-size: 13px; }
+button { width: 100%; height: 42px; margin-top: 12px; border: 0; border-radius: 10px; background: #334785; color: white; font-size: 14px; font-weight: 700; cursor: pointer; }
+button:disabled { cursor: wait; opacity: .6; }
+.ppa { background: #176b55; }
+.secondary { margin-top: 8px; border: 1px solid #b8c6d8; background: white; color: #334785; }
+.sources { display: grid; gap: 6px; margin-top: 14px; padding: 10px; border: 1px solid #dce4ed; border-radius: 10px; background: white; }
+.sources div { display: flex; justify-content: space-between; gap: 12px; font-size: 12px; }
+.sources strong { color: #9a3412; }
+.sources strong.ready { color: #157347; }
+#status { min-height: 18px; margin: 10px 0 0; color: #9a3412; font-size: 13px; font-weight: 600; }
+.privacy { margin: 14px 0 0; padding-top: 12px; border-top: 1px solid #dce4ed; font-size: 12px; }

@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Đồng bộ QLKT</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <main>
+      <h1>Đồng bộ QLKT</h1>
+      <p class="hint">Tất cả dữ liệu được đồng bộ bằng một nút tại trang “Dữ liệu các tháng”.</p>
+      <label>Địa chỉ web Chỉ tiêu KTKT
+        <input id="targetUrl" type="url" value="https://ctktkt-dashboard.vercel.app/" spellcheck="false" />
+      </label>
+      <section class="sources" aria-label="Các màn hình nguồn">
+        <div><span>Sản lượng</span><strong id="source-production">Chưa nhận diện</strong></div>
+        <div><span>Nhiên liệu</span><strong id="source-fuel">Chưa nhận diện</strong></div>
+        <div><span>Vận hành</span><strong id="source-operation">Chưa nhận diện</strong></div>
+        <div><span>Công tơ PPA</span><strong id="source-meter">Chưa nhận diện</strong></div>
+        <div><span>Cân bằng nhiệt</span><strong id="source-heatrate">Chưa nhận diện</strong></div>
+        <div><span>Báo cáo 02-PĐ</span><strong id="source-pmis_02pd">Chưa nhận diện</strong></div>
+      </section>
+      <button id="openDashboardButton" type="button">Mở Dữ liệu các tháng</button>
+      <p id="status" role="status"></p>
+      <p class="privacy">Lần đầu: mở từng màn hình nguồn trên QLKT để tiện ích ghi nhớ địa chỉ. Sau đó chọn ngày và bấm “Đồng bộ toàn bộ QLKT” trên web. Tiện ích không đọc hoặc lưu tên đăng nhập, mật khẩu.</p>
+    </main>
+    <script src="popup.js"></script>
+  </body>
+</html>

@@ -1,0 +1,11 @@
+[Unit]
+Description=DH1 - Don anh KTKT luc 07:00 Viet Nam moi ngay
+
+[Timer]
+# VPS dung UTC: 00:00 UTC = 07:00 Viet Nam, giong lich Vercel cua goi nguon.
+OnCalendar=*-*-* 00:00:00
+Persistent=true
+Unit=dh1-ctktkt-coal-photos.service
+
+[Install]
+WantedBy=timers.target

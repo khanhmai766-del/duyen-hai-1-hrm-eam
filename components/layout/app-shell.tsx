@@ -75,7 +75,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <main className="flex-1 p-4 pb-[calc(7rem+env(safe-area-inset-bottom))] md:p-6 md:pb-[calc(7rem+env(safe-area-inset-bottom))] lg:p-8 lg:pb-32 animate-fade-in">
           {blockedByPosition ? (
             <div className="rounded-xl border border-amber-200 bg-amber-50 p-5 text-sm font-medium text-amber-800 shadow-sm">
-              Chức vụ Thống kê chỉ được truy cập các mục Quản lý người dùng và Quản lý vật tư.
+              Chức vụ Thống kê chỉ được truy cập các mục Quản lý người dùng, Quản lý vật tư và Quản lý chỉ tiêu KTKT.
             </div>
           ) : (
             children

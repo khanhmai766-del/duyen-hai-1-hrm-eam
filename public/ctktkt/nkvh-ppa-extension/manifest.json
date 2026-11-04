@@ -1,0 +1,41 @@
+{
+  "manifest_version": 3,
+  "name": "NKVH → PPA (bản thử)",
+  "version": "0.2.1",
+  "description": "Đọc 4 sổ NKVH theo ngày, lọc sự kiện 00–24h và chọn nội dung S1/S2.",
+  "permissions": [
+    "tabs",
+    "scripting",
+    "storage"
+  ],
+  "host_permissions": [
+    "http://nkvh.tpcduyenhai.com.vn/*",
+    "https://nkvh.tpcduyenhai.com.vn/*",
+    "https://ctktkt-dashboard.vercel.app/*",
+    "http://localhost/*",
+    "http://127.0.0.1/*",
+    "https://duyenhai1.vn/*",
+    "https://ctktkt.duyenhai1.vn/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "Mở đồng bộ NKVH → PPA"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://ctktkt-dashboard.vercel.app/*",
+        "http://localhost/*",
+        "http://127.0.0.1/*",
+        "https://duyenhai1.vn/*",
+        "https://ctktkt.duyenhai1.vn/*"
+      ],
+      "js": [
+        "web-bridge.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ]
+}

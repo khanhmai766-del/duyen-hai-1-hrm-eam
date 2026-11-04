@@ -1,0 +1,23 @@
+// Field labels and input ownership from the monthly web grid.
+export const mirrorFields = {
+  production: [
+    { code: "B", label: "Đầu cực S1", unit: "triệu kWh", input: true }, { code: "C", label: "Điểm bán S1", unit: "triệu kWh", input: true },
+    { code: "D", label: "Tự dùng S1", unit: "MWh" }, { code: "E", label: "% tự dùng S1", unit: "%" }, { code: "F", label: "Giờ phát S1", unit: "giờ", input: true }, { code: "G", label: "CS phát BQ S1", unit: "MW" },
+    { code: "H", label: "Đầu cực S2", unit: "triệu kWh", input: true }, { code: "I", label: "Điểm bán S2", unit: "triệu kWh", input: true },
+    { code: "J", label: "Tự dùng S2", unit: "MWh" }, { code: "K", label: "% tự dùng S2", unit: "%" }, { code: "L", label: "Giờ phát S2", unit: "giờ", input: true }, { code: "M", label: "CS phát BQ S2", unit: "MW" },
+    { code: "N", label: "Tổng SL đầu cực", unit: "MWh" }, { code: "O", label: "Tổng SL điểm bán", unit: "MWh" }, { code: "P", label: "Tổng SL tự dùng", unit: "MWh" }, { code: "Q", label: "% tự dùng", unit: "%" }, { code: "R", label: "Tổng giờ phát", unit: "giờ" }, { code: "S", label: "Tổng CS phát BQ", unit: "MW" },
+    { code: "X", label: "Dầu FO tiêu thụ", unit: "tấn", input: true }, { code: "AE", label: "Than nguyên trạng S1", unit: "tấn", input: true }, { code: "AF", label: "Than nguyên trạng S2", unit: "tấn", input: true }, { code: "AE_ADJ", label: "Than quy ẩm S1", unit: "tấn" }, { code: "AF_ADJ", label: "Than quy ẩm S2", unit: "tấn" }, { code: "AJ", label: "Nhiệt trị", unit: "kJ/kg", input: true },
+    { code: "AR", label: "Than tồn kho 06h00", unit: "tấn", input: true }, { code: "AT", label: "Than nhập 06h (PMIS)", unit: "tấn", input: true }, { code: "CJ", label: "Độ ẩm TB ngày", unit: "%", input: true }, { code: "CX", label: "Nhiệt trị trước chỉnh", unit: "kJ/kg", input: true },
+    { code: "T", label: "Tổng than nguyên trạng", unit: "tấn" }, { code: "U", label: "Suất hao than thô NM", unit: "g/kWh" }, { code: "V", label: "Suất hao nhiệt thô NM", unit: "kJ/kWh" }, { code: "W", label: "Suất hao nhiệt tinh NM", unit: "kJ/kWh" }, { code: "Y", label: "Suất hao than thô S1", unit: "g/kWh" }, { code: "Z", label: "Suất hao than thô S2", unit: "g/kWh" }, { code: "AA", label: "Suất hao than tinh NM", unit: "g/kWh" }, { code: "AG", label: "Suất hao than tinh S1", unit: "g/kWh" }, { code: "AH", label: "Suất hao than tinh S2", unit: "g/kWh" }, { code: "AI", label: "Suất hao than tinh DH1", unit: "g/kWh" }, { code: "AL", label: "Suất hao nhiệt tinh S1", unit: "kJ/kWh" }, { code: "AM", label: "Suất hao nhiệt tinh S2", unit: "kJ/kWh" }, { code: "AN", label: "Suất hao nhiệt thô S1", unit: "kJ/kWh" }, { code: "AO", label: "Suất hao nhiệt thô S2", unit: "kJ/kWh" }, { code: "AP", label: "Suất hao nhiệt tinh S1 trước chỉnh", unit: "kJ/kWh" }, { code: "AQ", label: "Suất hao nhiệt tinh S2 trước chỉnh", unit: "kJ/kWh" }, { code: "AK", label: "Nhiệt trị", unit: "kcal/kg" },
+  ],
+  environment: [
+    { code: "BN", label: "NH₃ theo mức bồn", unit: "tấn", input: true }, { code: "BQ", label: "NH₃ DCS S1", unit: "tấn", input: true }, { code: "BR", label: "NH₃ DCS S2", unit: "tấn", input: true }, { code: "CN", label: "NH₃ nhập trong ngày", unit: "tấn", input: true },
+    { code: "BO", label: "SH NH₃ đầu cực DH1", unit: "g/kWh" }, { code: "BP", label: "SH NH₃ trên lưới DH1", unit: "g/kWh" }, { code: "BS", label: "Tổng NH₃ DCS", unit: "tấn" }, { code: "BT", label: "SH NH₃ đầu cực S1", unit: "g/kWh" }, { code: "BU", label: "SH NH₃ trên lưới S1", unit: "g/kWh" }, { code: "BV", label: "SH NH₃ đầu cực S2", unit: "g/kWh" }, { code: "BW", label: "SH NH₃ trên lưới S2", unit: "g/kWh" }, { code: "BX", label: "SH NH₃ đầu cực DH1", unit: "g/kWh" }, { code: "BY", label: "SH NH₃ trên lưới DH1", unit: "g/kWh" },
+    { code: "BZ", label: "Xả xỉ S1", unit: "tấn", input: true }, { code: "CA", label: "Xả xỉ S2", unit: "tấn", input: true }, { code: "CC", label: "Nước bổ sung S1", unit: "m³", input: true }, { code: "CD", label: "Nước bổ sung S2", unit: "m³", input: true },
+    { code: "CE", label: "Nước tái sinh S1", unit: "m³", input: true }, { code: "CF", label: "Nước tái sinh S2", unit: "m³", input: true },
+    { code: "CM", label: "Bi nghiền bổ sung", unit: "kg", input: true },
+  ],
+  operation: [
+    { code: "CQ", label: "Hơi cấp VH2", unit: "tấn", input: true }, { code: "CR", label: "Áp suất hơi VH2", unit: "bar", input: true }, { code: "CS", label: "Thời gian dự phòng", unit: "giờ", input: true }, { code: "CT", label: "Thời gian sự cố", unit: "giờ", input: true }, { code: "CU", label: "Thời gian sửa chữa/bảo dưỡng", unit: "giờ", input: true }, { code: "CV", label: "Thời gian khởi động", unit: "giờ", input: true }, { code: "CW", label: "Ghi chú vận hành", input: true, width: "min-w-64" },
+  ],
+};

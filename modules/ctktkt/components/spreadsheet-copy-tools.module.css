@@ -1,0 +1,12 @@
+.toolbar{display:flex;align-items:center;flex-shrink:0;color:#173b64;font-size:.75rem}
+.options{position:absolute;top:100%;left:0;right:0;display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;padding:.65rem 1rem;border-bottom:1px solid #bed3ed;background:#f1f7ff;box-shadow:0 2px 5px #173b6412}
+.toolbar button,.toolbar select{padding:.4rem .65rem;border:1px solid #b6cbe7;border-radius:.4rem;background:white;color:#173b64;font:inherit;cursor:pointer}
+.toolbar button[aria-pressed=true]{background:#1d4ed8;border-color:#1d4ed8;color:white}
+.toolbar label{display:flex;align-items:center;gap:.4rem}
+.options span{flex:1;min-width:12rem;font-size:.75rem}
+.shortLabel{display:none}
+@media(max-width:640px){.fullLabel{display:none}.shortLabel{display:inline}.toolbar button{white-space:nowrap;padding:.4rem .45rem}}
+.selectionScope :global(table){user-select:none;cursor:cell}
+.selectionScope :global(table input),.selectionScope :global(table textarea),.selectionScope :global(table select){pointer-events:none}
+.selectionScope :global([data-copy-selected=true]){background:#c7dfff!important;box-shadow:inset 0 0 0 1px #568cf0!important;color:#102e59!important}
+.selectionScope :global([data-copy-selected=true] input),.selectionScope :global([data-copy-selected=true] textarea){background:#c7dfff!important;color:#102e59!important}

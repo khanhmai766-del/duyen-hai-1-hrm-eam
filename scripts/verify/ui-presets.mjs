@@ -1,3 +1,4 @@
+import { ctktktIntegrationPreset } from "./presets/ctktkt-integration.mjs";
 import { groundingReminderPreset } from "./presets/grounding-reminder.mjs";
 import { personViolationsPreset } from "./presets/person-violations.mjs";
 import { gghPreset } from "./presets/ggh-3d.mjs";
@@ -263,6 +264,8 @@ async function writeFakeCameraVideo(file, { px = 5, blur = 0.5, noise = 8 } = {}
 let nhanSuLocName = "";
 
 export const PRESETS = {
+  "ctktkt-integration": ctktktIntegrationPreset,
+  "ctktkt-tools": { ...ctktktIntegrationPreset, routes: () => ["", "/tien-ich-dong-bo", "/admin/data-backup", "/admin/data-history"].map(path => "/tien-ich/chi-tieu-ktkt" + path) },
   "tiep-dia-nhac-ca": groundingReminderPreset,
   "lich-su-lam-viec-trong-ngay": dailyHistoryPreset,
   "pccc-phan-trang": pcccPaginationPreset,

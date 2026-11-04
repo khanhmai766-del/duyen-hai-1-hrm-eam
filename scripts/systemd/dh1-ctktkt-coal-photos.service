@@ -1,0 +1,11 @@
+[Unit]
+Description=DH1 - Don anh cong to than KTKT het han
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/var/www/dh1-app
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+ExecStart=/usr/bin/npm run --silent ctktkt:cleanup-photos
+TimeoutStartSec=90
