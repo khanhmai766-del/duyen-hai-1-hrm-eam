@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
-import { overhaulItemKey, type OverhaulItemProgress, type OverhaulItemSnapshot } from "@/lib/work-permit-overhaul";
+import { OVERHAUL_ITEM_NOTE_MAX, overhaulItemKey, type OverhaulItemProgress, type OverhaulItemSnapshot } from "@/lib/work-permit-overhaul";
 
 export type OverhaulProgressDraft = Record<string, { done: boolean; percent: string; note: string }>;
 
@@ -96,7 +96,9 @@ export function OverhaulItemProgressEditor({ items, previous, draft, onChange, n
               <input aria-label={`Tiến độ lũy kế hạng mục ${item.code}`} className="h-2 min-w-0 flex-1 cursor-pointer accent-violet-700" type="range" min={before ?? 0} max={100} step={1} value={entry.percent || 0} onChange={e => set(key, { percent: e.target.value })} />
               <div className="relative w-24 shrink-0"><input aria-label={`% hạng mục ${item.code}`} className={`${control} pr-7 text-right tabular-nums`} type="number" inputMode="numeric" min={before ?? 0} max={100} step={1} value={entry.percent} onChange={e => set(key, { percent: e.target.value })} /><span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">%</span></div>
             </div>
-            <textarea aria-label={`Ghi chú hạng mục ${item.code}`} className={control} rows={2} maxLength={1000} placeholder="Nội dung đã thực hiện trong lần này (ghi vào Nhật ký ngày)" value={entry.note} onChange={e => set(key, { note: e.target.value })} />
+            {/* Chỉ hiện khi sắp đầy: trình duyệt chặn gõ thêm không báo gì, người nhập tưởng ô bị lỗi. Đặt trên ô vì dưới ô bị khung cuộn che. */}
+            {entry.note.length >= OVERHAUL_ITEM_NOTE_MAX * 0.8 && <p role="status" className={`text-right text-xs tabular-nums ${entry.note.length >= OVERHAUL_ITEM_NOTE_MAX ? "font-semibold text-red-700" : "text-amber-700"}`}>{entry.note.length.toLocaleString("vi-VN")}/{OVERHAUL_ITEM_NOTE_MAX.toLocaleString("vi-VN")} ký tự{entry.note.length >= OVERHAUL_ITEM_NOTE_MAX ? " · Đã đầy, hãy rút gọn nội dung cũ" : ""}</p>}
+            <textarea aria-label={`Ghi chú hạng mục ${item.code}`} className={control} rows={2} maxLength={OVERHAUL_ITEM_NOTE_MAX} placeholder="Nội dung đã thực hiện trong lần này (ghi vào Nhật ký ngày)" value={entry.note} onChange={e => set(key, { note: e.target.value })} />
           </div>}
         </div>;
       })}

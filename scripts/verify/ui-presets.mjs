@@ -78,6 +78,14 @@ function overhaulPreset(overdue, closed = false) {
       const dialog = page.getByRole("dialog");
       await dialog.locator('input[type="checkbox"]').first().check();
       await dialog.getByRole("button", { name: "Biện pháp thi công" }).first().click();
+      if (route.endsWith("?tien-do=1")) {
+        // Ghi chú dài (không lưu): vượt mốc cũ 1.000 ký tự, đến 80% trần thì hiện bộ đếm.
+        const note = dialog.getByRole("textbox", { name: /^Ghi chú hạng mục/ }).first();
+        const text = "Vệ sinh và đo thông số bơm. ".repeat(160);
+        await note.fill(text);
+        if ((await note.inputValue()).length !== text.length) throw new Error("Ô ghi chú hạng mục cắt mất nội dung");
+        await dialog.getByText(/\/5\.000 ký tự/).first().waitFor();
+      }
       await page.waitForTimeout(300);
     },
     async mock(context, { permitId, items }) {

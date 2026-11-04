@@ -6,7 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { a1Tab, batchGetValues, columnLetter, getSpreadsheet, GoogleSheetsError, spreadsheetIdFromUrl, type SheetTab } from "@/lib/server/google-sheets";
 import { overhaulScheduleLinks } from "@/lib/server/overhaul-schedules";
 import { formatPermitNumber } from "@/lib/work-permits";
-import { compareOverhaulCodes, sameOverhaulDevice, isOverhaulExtraCode, isOverhaulPaperPermit, OVERHAUL_CODE_PATTERN, OVERHAUL_EXTRA_PREFIX, OVERHAUL_HOLDING_STATUSES, OVERHAUL_SOURCE_DEFAULT_KIND, OVERHAUL_SOURCES, overhaulItemKey, overhaulItemProgressOf, overhaulItemsOf, type OverhaulItemProgress, type OverhaulItemSnapshot, type OverhaulItemUsage, type OverhaulSource } from "@/lib/work-permit-overhaul";
+import { compareOverhaulCodes, OVERHAUL_ITEM_NOTE_MAX, sameOverhaulDevice, isOverhaulExtraCode, isOverhaulPaperPermit, OVERHAUL_CODE_PATTERN, OVERHAUL_EXTRA_PREFIX, OVERHAUL_HOLDING_STATUSES, OVERHAUL_SOURCE_DEFAULT_KIND, OVERHAUL_SOURCES, overhaulItemKey, overhaulItemProgressOf, overhaulItemsOf, type OverhaulItemProgress, type OverhaulItemSnapshot, type OverhaulItemUsage, type OverhaulSource } from "@/lib/work-permit-overhaul";
 
 /*
  * Hạng mục đại tu cho PCT nhà thầu · Đại tu.
@@ -415,7 +415,7 @@ export function parseSessionItemProgress(value: unknown, permitItems: OverhaulIt
     const raw = sent.get(key);
     if (!raw) throw fail(`Thiếu đánh giá hạng mục ${snapshot.code}. Tải lại phiếu rồi thử lại.`);
     const done = raw.done === true;
-    const note = str(raw.note, 1000);
+    const note = str(raw.note, OVERHAUL_ITEM_NOTE_MAX);
     if (!done) return { code: snapshot.code, sheet: snapshot.sheet, source: snapshot.source, done, percent: null, note: "" };
     const percent = Number(raw.percent);
     if (raw.percent === null || raw.percent === "" || !Number.isInteger(percent) || percent < 0 || percent > 100) throw fail(`Tiến độ hạng mục ${snapshot.code} phải là số nguyên từ 0 đến 100%`);

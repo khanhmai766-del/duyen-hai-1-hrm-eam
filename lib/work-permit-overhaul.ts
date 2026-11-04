@@ -217,6 +217,8 @@ export function compactOverhaulContent(content: string) {
  */
 export type OverhaulJournalHeader = { title: string; commander: string; workers: string };
 export const OVERHAUL_JOURNAL_LIMITS = { title: 300, commander: 120 } as const;
+/** Ghi chú một hạng mục, dùng chung cho ô nhập và máy chủ. Ô này điền sẵn nội dung lần trước nên dài dần qua từng ngày. */
+export const OVERHAUL_ITEM_NOTE_MAX = 5000;
 export function overhaulJournalHeaderText(header: OverhaulJournalHeader | null | undefined) {
   if (!header) return "";
   const title = header.title.replace(/\s+/g, " ").trim();
