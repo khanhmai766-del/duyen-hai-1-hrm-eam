@@ -4,7 +4,7 @@
 export type SupportLinkGroup = "ops" | "personal";
 
 export const MATERIAL_TRACKING_SHEET_URL =
-  "https://docs.google.com/spreadsheets/d/1jGwOsAc18N_aCLarHbGppuhcNM1RDkLDfgh4dmVBnoA/edit?gid=780404039#gid=780404039";
+  "https://docs.google.com/spreadsheets/d/1wamJN787FowPLI3zU-383CME5R-EkI72EP5qLrhj5J4/edit?gid=0#gid=0";
 export const MECHANICAL_CHEMICAL_SHEET_URL =
   "https://docs.google.com/spreadsheets/d/1zKRH9zhEAkCwGRl4KiaNwUlkLg9_l4WXNSBeg3FK_MA/edit?gid=428426440#gid=428426440";
 export const ELECTRICAL_SHEET_URL =
