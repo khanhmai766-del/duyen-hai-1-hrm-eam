@@ -1,4 +1,4 @@
-# Cấp số và tự đồng bộ PCT NKVH – PXVH1 (1.1.0)
+# Cấp số và tự đồng bộ PCT NKVH – PXVH1 (1.2.0)
 
 Tiện ích dùng cho PCT nội bộ điện tử của PXVH1. Không tự tạo, ký hoặc bấm Lưu trên NKVH.
 Số, nội dung và trạng thái đã lưu trên NKVH là nguồn chuẩn cho hồ sơ theo dõi duyenhai1.
@@ -65,7 +65,12 @@ thủ công sau khi xác nhận NKVH đã lưu. Cần kiểm tra thông báo th�
 - Cương vị đọc từ **Chức danh người cho phép làm việc**, ánh xạ theo position-catalog. Chưa khớp
   thì mở phần chọn xác nhận; không dùng cương vị lần trước để thay giá trị NKVH.
 - Danh sách tự đối chiếu phiếu trong 48 giờ đang hiển thị, giới hạn 10 phiếu/lượt quét.
-  Không quét toàn bộ lịch sử hoặc tự điều khiển phân trang. Phiếu cũ đồng bộ thủ công.
+  Không quét toàn bộ lịch sử hoặc tự điều khiển phân trang.
+- **Tự xử lý tồn đọng (1.2.0):** khi mở bất kỳ trang danh sách NKVH nào, tiện ích hỏi sổ (`GET ?mode=backlog`) các số đã
+  thấy trên NKVH mà sổ chưa có phiếu chính thức, cả Cơ lẫn Điện, không giới hạn 48 giờ. Mỗi phút đọc lại tối đa 10 phiếu
+  từ NKVH (chỉ GET) rồi đồng bộ về sổ. Phiếu lỗi chờ 1 giờ mới thử lại (lưu ở localStorage của nguồn NKVH).
+  **Không tự hủy số:** phiếu đọc không được vẫn nằm ở khung Đối chiếu số NKVH để xử lý tay. Số không có `id_pct` không
+  tự đọc được. Lỗi 403 của lượt tự động (phiếu ngoài cương vị người đang mở) không ghi vào phiếu nháp.
 - Dừng/hủy/kết thúc NKVH được ghi về sổ. Phiếu hủy chưa có hồ sơ có nút nhận về ở trạng thái hủy.
 - NKVH và website vẫn có khoảng trễ: hai phiếu đã cấp trùng số phải đối chiếu.
   Cấp ở máy chưa có tiện ích hoặc không mở danh sách có thể chưa được website biết ngay.
@@ -80,11 +85,11 @@ SELECT `npx tsx scripts/check/work-permit-number-conflicts.ts` để đối chi�
 Không chạy db:push để áp toàn bộ schema hoặc tự xóa hồ sơ trùng.
 
 Các file JS mới phải có trong cả `chrome-extension/scripts/package-nkvh-pct.mjs` và
-`lib/server/nkvh-pct-extension-package.ts`. Gói tải website và gói đóng sẵn cùng version 1.1.0.
+`lib/server/nkvh-pct-extension-package.ts`. Gói tải website và gói đóng sẵn cùng version trong `manifest.json`.
 
 Cài bằng Load unpacked Chrome/Edge; cập nhật xong Reload tiện ích và tải lại tab NKVH.
 Đóng gói thử localhost: `node chrome-extension/scripts/package-nkvh-pct.mjs --localhost`.
-Gói `chrome-extension/dist/nkvh-pct-localhost-v1.1.0.zip` mặc định gọi `http://localhost:3030`,
+Gói `chrome-extension/dist/nkvh-pct-localhost-v<version>.zip` mặc định gọi `http://localhost:3030`,
 có thể chọn cổng 3000 trong popup; không có quyền gọi máy chủ duyenhai1.vn.
 Giải nén, chọn thư mục bằng Load unpacked và đăng nhập localhost trên cùng trình duyệt.
 Tiện ích GET kiểm tra protocolVersion 2 để tránh dùng luồng mới với máy chủ cũ.

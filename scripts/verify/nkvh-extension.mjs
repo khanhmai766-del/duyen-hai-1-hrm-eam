@@ -62,4 +62,61 @@ try {
   assert.equal(await readNumber("4458/2026/VH1-NĐDH2"), null);
   console.log("✓ Đọc được số kèm ghi chú (ĐT, gấp)");
   console.log("✓ Không đồng bộ trước lưu hoặc khi lưu lỗi; nhận đúng dữ liệu đã lưu; giữ yêu cầu mất mạng và gửi lại; đọc phiếu hủy");
+
+  // Tồn đọng: mở trang danh sách là tự đọc phiếu của cả hai sổ; phiếu đọc không được không gửi gì về sổ.
+  const id = index => `11111111-2222-3333-4444-${String(index).padStart(12, "0")}`;
+  const items = Array.from({ length: 12 }, (_, index) => ({ kind: index % 2 ? "ELECTRICAL" : "MECHANICAL", nkvhPctId: id(index), formatted: `${5000 + index}/2026/VH1-NĐDH` }));
+  const list = await browser.newPage();
+  const nkvhRequests = [];
+  await list.route("**/*", route => {
+    const url = new URL(route.request().url());
+    nkvhRequests.push({ method: route.request().method(), path: url.pathname, pct: url.searchParams.get("id_pct") });
+    const index = items.findIndex(item => item.nkvhPctId === url.searchParams.get("id_pct"));
+    if (index === 2) return route.fulfill({ contentType: "text/html", body: "<html><body>Không tìm thấy phiếu</body></html>" });
+    route.fulfill({ contentType: "text/html", body: index < 0 ? "<html><body><table><tbody></tbody></table></body></html>" : html(items[index].formatted, `Nội dung phiếu ${index}`) });
+  });
+  await list.goto("http://nkvh.test/nkvh/pages/pct/pctc");
+  await list.evaluate(backlog => {
+    window.requests = []; window.backlogCalls = 0;
+    window.chrome = { runtime: { sendMessage(message, callback) {
+      if (message.method === "GET") { window.backlogCalls++; return callback({ ok: true, data: { total: backlog.length, items: backlog } }); }
+      window.requests.push(message.body);
+      callback({ ok: true, data: { changed: true, recorded: [], ahead: [] } });
+    } } };
+  }, items);
+  for (const name of ["page-reader.js", "list.js"]) await list.addScriptTag({ content: await readFile(`chrome-extension/nkvh-pct/${name}`, "utf8") });
+  await list.waitForFunction(() => /tồn đọng/.test(document.getElementById("pxvh1-nkvh-list-sync")?.textContent || ""));
+  const sent = await list.evaluate(() => window.requests.filter(body => body.mode === "sync"));
+  assert.equal(sent.length, 9, "10 phiếu mỗi lượt, 1 phiếu đọc không được");
+  assert.ok(!sent.some(body => body.nkvhPctId === id(2)), "phiếu đọc không được không gửi về sổ");
+  assert.ok(sent.every(body => body.saved === true && body.auto === true));
+  assert.equal(sent[0].page.content, "Nội dung phiếu 0");
+  assert.equal(await list.evaluate(() => window.requests.filter(body => ["cancel", "stop", "close"].includes(body.mode)).length), 0, "không tự hủy/dừng/đóng số");
+  assert.ok(nkvhRequests.every(request => request.method === "GET"), "chỉ đọc từ NKVH, không ghi");
+  const detailPaths = nkvhRequests.filter(request => request.pct);
+  assert.equal(detailPaths.length, 10);
+  assert.equal(detailPaths.find(request => request.pct === id(0)).path, "/nkvh/pages/pct/pctc_ct");
+  assert.equal(detailPaths.find(request => request.pct === id(1)).path, "/nkvh/pages/pct/pctd_ct");
+  const message = await list.locator("#pxvh1-nkvh-list-sync").textContent();
+  assert.match(message, /đã tự đồng bộ 9 phiếu tồn đọng, còn 2 phiếu/);
+  assert.match(message, /1 phiếu chưa đồng bộ được/);
+  // Thông báo làm đổi DOM và kích quét lại: không được hỏi sổ hay đọc NKVH thêm trước lượt sau.
+  await list.waitForTimeout(1500);
+  assert.equal(await list.evaluate(() => window.backlogCalls), 1);
+  assert.equal(nkvhRequests.filter(request => request.pct).length, 10);
+  // Mở lại trang: phiếu đã thử trong giờ này không đọc lại, chỉ xử lý 2 phiếu còn lại.
+  nkvhRequests.length = 0;
+  await list.goto("http://nkvh.test/nkvh/pages/pct/pctd");
+  await list.evaluate(backlog => {
+    window.requests = [];
+    window.chrome = { runtime: { sendMessage(message, callback) {
+      if (message.method === "GET") return callback({ ok: true, data: { total: backlog.length, items: backlog } });
+      window.requests.push(message.body);
+      callback({ ok: true, data: { changed: true, recorded: [], ahead: [] } });
+    } } };
+  }, items);
+  for (const name of ["page-reader.js", "list.js"]) await list.addScriptTag({ content: await readFile(`chrome-extension/nkvh-pct/${name}`, "utf8") });
+  await list.waitForFunction(() => /tồn đọng/.test(document.getElementById("pxvh1-nkvh-list-sync")?.textContent || ""));
+  assert.deepEqual(nkvhRequests.filter(request => request.pct).map(request => request.pct), [id(10), id(11)]);
+  console.log("✓ Tồn đọng: đọc đúng sổ Cơ/Điện, 10 phiếu mỗi lượt, không ghi NKVH, không tự hủy, không đọc lại phiếu vừa thử");
 } finally { await browser.close(); }

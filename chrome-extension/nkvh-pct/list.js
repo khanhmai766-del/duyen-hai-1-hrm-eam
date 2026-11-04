@@ -114,6 +114,59 @@
     if (synced) notice(`Sổ PXVH1: đã đối chiếu và đồng bộ ${synced} phiếu mới cấp trên danh sách đang hiển thị.`);
   }
 
+  // Tồn đọng (1.2.0): số đã thấy trên NKVH mà sổ chưa có phiếu chính thức, kể cả phiếu cũ không nằm trên trang đang
+  // xem và phiếu của sổ còn lại (Cơ/Điện). Chỉ ĐỌC từ NKVH rồi đồng bộ về sổ, không bao giờ tự hủy số: phiếu đọc không
+  // được có thể là đã xoá hoặc chỉ lỗi mạng — để người có quyền xử lý ở khung Đối chiếu số NKVH trên sổ.
+  const BACKLOG_KEY = "pxvh1-nkvh-backlog-tried";
+  const BACKLOG_BATCH = 10;
+  const BACKLOG_NEXT_BATCH_MS = 60_000;
+  const BACKLOG_IDLE_MS = 5 * 60_000;
+  const BACKLOG_RETRY_MS = 60 * 60_000;
+  let backlogNextAt = 0;
+
+  function backlogTried() {
+    try {
+      const tried = JSON.parse(localStorage.getItem(BACKLOG_KEY) || "{}");
+      return tried && typeof tried === "object" ? tried : {};
+    } catch { return {}; }
+  }
+  function keepBacklogTried(tried) {
+    const fresh = Object.entries(tried).filter(([, at]) => Date.now() - at < BACKLOG_RETRY_MS);
+    try { localStorage.setItem(BACKLOG_KEY, JSON.stringify(Object.fromEntries(fresh))); } catch { /* không lưu được thì chỉ thử lại sớm hơn */ }
+  }
+
+  async function syncBacklog() {
+    if (Date.now() < backlogNextAt) return;
+    backlogNextAt = Date.now() + BACKLOG_IDLE_MS;
+    const list = await api(null, "GET", `${API}?mode=backlog`);
+    if (!list.ok || !Array.isArray(list.data?.items)) return;
+    const tried = backlogTried();
+    const due = list.data.items.filter((item) => Date.now() - (tried[item.nkvhPctId] || 0) >= BACKLOG_RETRY_MS);
+    let synced = 0, failed = 0;
+    for (const item of due.slice(0, BACKLOG_BATCH)) {
+      if (item.kind !== "MECHANICAL" && item.kind !== "ELECTRICAL") continue;
+      tried[item.nkvhPctId] = Date.now();
+      keepBacklogTried(tried);
+      const detailUrl = new URL(`/nkvh/pages/pct/${item.kind === "ELECTRICAL" ? "pctd_ct" : "pctc_ct"}`, location.origin);
+      detailUrl.searchParams.set("id_pct", item.nkvhPctId);
+      try {
+        const response = await fetch(detailUrl.toString(), { credentials: "same-origin", cache: "no-store" });
+        if (!response.ok || response.redirected) { failed++; continue; }
+        const saved = new DOMParser().parseFromString(await response.text(), "text/html");
+        const payload = window.PXVH1_NKVH_READER.read(saved, item.kind);
+        const result = await api({ mode: "sync", saved: true, auto: true, kind: item.kind, nkvhPctId: item.nkvhPctId, ...payload });
+        // Chưa đăng nhập sổ: các phiếu sau cũng hỏng, dừng và đừng tính lượt thử cho phiếu này.
+        if (result.status === 401) { delete tried[item.nkvhPctId]; keepBacklogTried(tried); return; }
+        if (result.ok) synced++; else failed++;
+      } catch { failed++; }
+    }
+    const remaining = due.length - synced - failed;
+    if (remaining > 0) backlogNextAt = Date.now() + BACKLOG_NEXT_BATCH_MS;
+    if (synced || failed) {
+      notice(`Sổ PXVH1: đã tự đồng bộ ${synced} phiếu tồn đọng${remaining > 0 ? `, còn ${remaining} phiếu xử lý ở lượt sau` : ""}.${failed ? ` ${failed} phiếu chưa đồng bộ được, xem khung Đối chiếu số NKVH trên sổ.` : ""}`, !synced);
+    }
+  }
+
   function notice(message, error = false) {
     let el = document.getElementById("pxvh1-nkvh-list-sync");
     if (!el) {
@@ -132,6 +185,7 @@
     // Ghi nhận số trước khi đóng phiếu: đây là phần chặn cấp trùng, không được để lỗi đóng làm lỡ.
     try { await observe(); } catch { /* lần quét sau thử lại */ }
     try { await reconcileRecent(); } catch { /* lần sau thử lại */ }
+    try { await syncBacklog(); } catch { /* lần sau thử lại */ }
     let closed = 0;
     for (const formattedNumber of rowsToClose()) {
       const last = attempted.get(formattedNumber) || 0;

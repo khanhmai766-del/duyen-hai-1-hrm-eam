@@ -5,7 +5,7 @@ import { OPERATION_POSITION_TITLES } from "@/lib/positions";
 import { PERMIT_KINDS as PERMIT_KINDS_BY_KEY, PERMIT_UNITS } from "@/lib/work-permits";
 import { permitBody, permitHandle } from "@/lib/server/work-permits";
 import { requirePermitIssuer } from "@/lib/server/work-permit-permissions";
-import { cancelNkvhPermit, claimNkvhPermit, closeNkvhPermit, nkvhClaimResult, NKVH_PENDING_STATUS, observeNkvhNumbers, parseNkvhKind, nkvhPositionOrBlank, parseNkvhPage, parseNkvhScope, stopNkvhPermit, syncNkvhPermit } from "@/lib/server/work-permit-nkvh-claim";
+import { cancelNkvhPermit, claimNkvhPermit, closeNkvhPermit, nkvhClaimResult, NKVH_PENDING_STATUS, nkvhSyncBacklog, observeNkvhNumbers, parseNkvhKind, nkvhPositionOrBlank, parseNkvhPage, parseNkvhScope, stopNkvhPermit, syncNkvhPermit } from "@/lib/server/work-permit-nkvh-claim";
 export const dynamic = "force-dynamic";
 
 /** API của tiện ích "Cấp số PCT NKVH" (chrome-extension/nkvh-pct) — nghiệp vụ ở lib/server/work-permit-nkvh-claim.ts. */
@@ -13,6 +13,7 @@ export async function GET(req: Request) {
   return permitHandle(async () => {
     const user = await requireUser(); requirePermitIssuer(user);
     const params = new URL(req.url).searchParams;
+    if (params.get("mode") === "backlog") return ok(await prisma.$transaction(tx => nkvhSyncBacklog(tx)));
     const { kind, nkvhPctId } = parseNkvhScope({ kind: params.get("kind"), nkvhPctId: params.get("nkvhPctId") });
     const scope = await permitScopeOf(user);
     const select = { id: true, number: true, year: true, status: true, nkvhNumber: true } as const;
@@ -52,6 +53,8 @@ export async function POST(req: Request) {
  */
 async function recordNkvhFailure(user: { id: string; name?: string | null }, body: Record<string, unknown>, error: Response) {
   if (error.status < 400 || error.status >= 500 || error.status === 404) return;
+  // Lượt tự xử lý tồn đọng chạy theo tài khoản của ai đang mở NKVH: phiếu ngoài cương vị của họ không phải lỗi của phiếu.
+  if (error.status === 403 && body.auto === true) return;
   try {
     const message = String((await error.clone().json())?.error ?? "");
     const pct = typeof body.nkvhPctId === "string" ? body.nkvhPctId.toLowerCase() : "";

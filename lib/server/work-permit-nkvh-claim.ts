@@ -478,6 +478,21 @@ export async function cancelNkvhPermit(tx: Tx, user: Actor, input: { kind: Permi
   return nkvhClaimResult(after, false);
 }
 
+/**
+ * Số đã thấy trên NKVH mà sổ chưa có phiếu chính thức (chưa có hồ sơ hoặc còn nháp "Chờ NKVH lưu") — tiện ích đọc lại
+ * từng phiếu từ NKVH rồi đồng bộ, không giới hạn 48 giờ như lượt quét danh sách (04/11/2026: tồn hơn 70 số). Phiếu đã
+ * đồng bộ (kể cả số nhảy cóc còn chờ xác nhận nâng dãy) hay đã hủy không nằm ở đây. Không có id_pct thì không đọc được.
+ */
+export async function nkvhSyncBacklog(tx: Tx, limit = 200) {
+  const rows = await tx.$queryRaw<Array<{ kind: string; nkvhPctId: string; number: string; year: number; total: number }>>`
+    SELECT r."kind", r."nkvhPctId", r."number", r."year", (count(*) OVER())::int AS total
+    FROM "WorkPermitNumberReservation" r
+    WHERE r."status" IN (${OBSERVED_NUMBER_STATUS}, ${CONFIRMED_NUMBER_STATUS}) AND r."nkvhPctId" IS NOT NULL
+      AND NOT EXISTS (SELECT 1 FROM "WorkPermit" p WHERE p."kind" = r."kind" AND p."nkvhPctId" = r."nkvhPctId" AND p."status" <> ${NKVH_PENDING_STATUS})
+    ORDER BY r."updatedAt" ASC LIMIT ${limit}`;
+  return { total: rows[0]?.total ?? 0, items: rows.map(row => ({ kind: row.kind, nkvhPctId: row.nkvhPctId, formatted: formatPermitNumber(row) })) };
+}
+
 /** Đồng bộ thủ công và tự động dùng cùng đường nhận phiếu đã lưu. */
 export async function syncNkvhPermit(tx: Tx, user: Actor, input: Parameters<typeof importExistingNkvhPermit>[2]) {
   return importExistingNkvhPermit(tx, user, input);
