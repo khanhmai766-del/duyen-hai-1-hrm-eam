@@ -3,9 +3,9 @@ import { fail } from "@/lib/api";
 import { normalizeText } from "@/lib/nav";
 import { ATTENDANCE_MIN_STAY_MS, attendanceInside, lastVisit, type AttendanceOutcome, type AttendanceVisit } from "@/lib/work-permit-attendance";
 import { sameCompany } from "@/lib/work-permit-card";
-import { isSessionCommander, personScopeError, type PermitMember } from "@/lib/work-permits";
+import { formatPermitNumber, isSessionCommander, personCardRevokedMessage, personScopeError, type PermitMember } from "@/lib/work-permits";
 import { permitSnapshot } from "@/lib/server/work-permits";
-import { assertWorkersFree, lockWorkPermitPresence } from "@/lib/server/work-permit-presence";
+import { assertCardsNotRevoked, assertWorkersFree, lockWorkPermitPresence } from "@/lib/server/work-permit-presence";
 import { permitPartnerCompanies } from "@/lib/server/work-permit-company-partners";
 
 /** Đọc `WorkPermitSession.members` (Json) an toàn thành mảng thành viên. */
@@ -57,7 +57,7 @@ export async function recordAttendance(tx: Prisma.TransactionClient, input: {
   await lockWorkPermitPresence(tx);
   const now = input.now ?? new Date();
   await tx.$queryRaw`SELECT "id" FROM "WorkPermitSession" WHERE "id" = ${input.sessionId} FOR UPDATE`;
-  const session = await tx.workPermitSession.findFirst({ where: { id: input.sessionId, permitId: input.permitId }, include: { permit: { select: { teamName: true, status: true, contractorScope: true } } } });
+  const session = await tx.workPermitSession.findFirst({ where: { id: input.sessionId, permitId: input.permitId }, include: { permit: { select: { teamName: true, status: true, contractorScope: true, number: true, nkvhNumber: true, year: true } } } });
   if (!session || session.endedAt) throw fail("Lần làm việc đã kết thúc hoặc không tồn tại. Tải lại phiếu.", 409);
   const members = sessionMembers(session.members);
   const index = input.personId
@@ -71,6 +71,7 @@ export async function recordAttendance(tx: Prisma.TransactionClient, input: {
     if (members.length >= 200) throw fail("Lần làm việc đã đủ 200 người");
     const person = await tx.workPermitPerson.findUnique({ where: { id: input.personId } });
     if (!person) throw fail("Không tìm thấy hồ sơ nhân sự", 404);
+    if (person.cardRevokedAt) throw fail(personCardRevokedMessage(person, formatPermitNumber(session.permit)), 403);
     if (!person.isActive) throw fail(`${person.name} đang ngừng hoạt động trong danh bạ — không cho vào.`);
     if (person.id === session.commanderId) throw fail(`${person.name} là CHTT của lần làm việc này.`);
     const scopeError = personScopeError(person, session.permit.contractorScope);
@@ -105,6 +106,8 @@ export async function recordAttendance(tx: Prisma.TransactionClient, input: {
       if (input.direction === "auto" && last?.out && now.getTime() - new Date(last.out).getTime() < ATTENDANCE_MIN_STAY_MS) {
         return { outcome: "TOO_SOON_AFTER_OUT" as const, member, at: last.out, ...counts(members) };
       }
+      // Bị thu thẻ giữa chừng: vẫn quét RA được (nhánh trên) nhưng không VÀO lại.
+      await assertCardsNotRevoked(tx, [member], session.permit);
       await assertWorkersFree(tx, [member], input.permitId);
       visits.push({ in: at, out: null });
       outcome = "IN";

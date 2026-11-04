@@ -26,6 +26,13 @@ export function personViolationsPreset(dialog = false, manage = "") {
           meta = { total: 2, pageSize: 200, canWrite: true };
         } else if (path.endsWith("/violations")) {
           if (route.request().method() === "GET") return route.fulfill({ json: { data: current, meta: null, error: null } });
+          if (route.request().method() === "PUT") {
+            const body = route.request().postDataJSON();
+            assert.equal(body.revoked, true);
+            assert.equal(body.version, current.version);
+            current = { ...current, version: current.version + 1, cardRevokedAt: "2026-11-04T09:00:00+07:00", cardRevokedByName: "Người cho phép" };
+            return route.fulfill({ json: { data: current, meta: null, error: null } });
+          }
           if (manage && ["PATCH", "DELETE"].includes(route.request().method())) {
             const body = route.request().postDataJSON();
             assert.equal(body.version, current.version);
@@ -68,7 +75,20 @@ export function personViolationsPreset(dialog = false, manage = "") {
         await page.getByRole("button", { name: "Ghi nhận vi phạm", exact: true }).locator("visible=true").first().click();
         if (!manage) await page.getByRole("dialog").getByRole("textbox").fill("Không sử dụng bảo hộ lao động");
       }
-      if (manage) {
+      // Thu thẻ: `revoke-confirm` dừng ở bước xác nhận; `revoke` đi hết rồi mở lại hộp để xem trạng thái đã thu thẻ.
+      if (manage.startsWith("revoke")) {
+        const box = page.getByRole("dialog");
+        await box.getByRole("button", { name: "Không cho phép", exact: true }).click();
+        const confirm = box.getByRole("button", { name: "Xác nhận không cho phép", exact: true });
+        await confirm.waitFor();
+        if (manage === "revoke") {
+          await confirm.click();
+          await box.waitFor({ state: "hidden" });
+          const tag = page.getByRole("button", { name: "Ghi nhận vi phạm", exact: true }).filter({ hasText: "Đã thu thẻ" }).locator("visible=true").first();
+          await tag.click();
+          await page.getByRole("dialog").getByRole("button", { name: "Cho phép lại", exact: true }).waitFor();
+        }
+      } else if (manage) {
         const box = page.getByRole("dialog");
         await box.getByRole("button", { name: "Sửa vi phạm lần 1", exact: true }).click();
         await box.getByLabel("Sửa lỗi vi phạm lần 1", { exact: true }).fill("Nội dung vi phạm đã được Admin sửa");

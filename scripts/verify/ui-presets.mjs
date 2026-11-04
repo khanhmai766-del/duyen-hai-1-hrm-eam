@@ -886,6 +886,38 @@ export const PRESETS = {
       }
     },
   },
+  "doi-chieu-so-xac-nhan": {
+    description: "Xác nhận nâng dãy: số rời danh sách chờ ngay, không tải lại trang — dữ liệu giả lập, không ghi",
+    async prepare() { return {}; },
+    routes: () => ["/work-permits?kind=ELECTRICAL"],
+    async mock(context) {
+      const row = (id, number, status) => ({ id, number, status, nkvhPctId: "183bec95-b4ac-434b-9fae-4a8d93ecab50", permitId: null, draftPermitId: "ui-draft", updatedAt: "2026-11-04T01:00:00.000Z", ownerName: "Người lấy số" });
+      let entries = [row("ui-5020", "5020", "OBSERVED"), row("ui-5019", "5019", "OBSERVED"), row("ui-5018", "5018", "OBSERVED_CONFIRMED")];
+      await context.route("**/api/work-permits/number-review**", async route => {
+        const reply = data => route.fulfill({ json: { data, meta: null, error: null } });
+        if (route.request().method() === "GET") return reply({ highest: "5000", suggested: "5001", total: entries.filter(e => e.status === "OBSERVED").length, confirmedTotal: entries.filter(e => e.status !== "OBSERVED").length, entries, canCancelDeleted: true });
+        const { id } = route.request().postDataJSON();
+        const updatedAt = "2026-11-04T02:00:00.000Z";
+        entries = entries.map(e => e.id === id ? { ...e, status: "OBSERVED_CONFIRMED", updatedAt } : e);
+        return reply({ id, status: "OBSERVED_CONFIRMED", updatedAt });
+      });
+    },
+    async interact(page) {
+      let reloads = 0;
+      page.on("framenavigated", frame => { if (frame === page.mainFrame()) reloads++; });
+      await page.getByRole("button", { name: "Xem 2 số", exact: true }).first().click();
+      await page.getByText("5020/2026").first().waitFor();
+      await page.getByRole("button", { name: "Xác nhận nâng dãy", exact: true }).first().click();
+      const dialog = page.getByRole("dialog");
+      await dialog.getByRole("textbox").fill("Đã đối chiếu số phiếu trên NKVH");
+      await dialog.getByRole("checkbox").check();
+      await dialog.getByRole("button", { name: "Xác nhận", exact: true }).click();
+      await page.getByText("5020/2026").first().waitFor({ state: "hidden", timeout: 3000 });
+      if (await page.getByText("5019/2026").count() !== 1) throw new Error("Số còn chờ khác phải giữ nguyên");
+      await page.getByRole("button", { name: "Số đã xác nhận nâng dãy (2)", exact: true }).waitFor({ timeout: 3000 });
+      if (reloads) throw new Error("Không được tải lại trang");
+    },
+  },
   "doi-chieu-so-nkvh-da-xoa": {
     description: "Khung Đối chiếu số NKVH (PCT Điện) có số kẹt vì phiếu NKVH đã bị xoá — nút quản trị + hộp xác nhận; dữ liệu giả lập, không ghi",
     async prepare() { return {}; },
@@ -898,7 +930,7 @@ export const PRESETS = {
         : route.fulfill({ status: 400, json: { data: null, meta: null, error: "Giả lập — không ghi" } }));
     },
     async interact(page) {
-      await page.getByRole("button", { name: /^Xem 1 số$/ }).first().click();
+      await page.getByRole("button", { name: "Số đã xác nhận nâng dãy (1)", exact: true }).first().click();
       await page.getByRole("button", { name: "Phiếu NKVH đã bị xoá" }).first().click();
       await page.getByRole("dialog").waitFor();
       await page.waitForTimeout(300);
@@ -1788,3 +1820,5 @@ PRESETS["pct-ghi-nhan-vi-pham"] = {
 
 PRESETS["admin-sua-vi-pham"] = personViolationsPreset(true, "edit");
 PRESETS["admin-xoa-vi-pham"] = personViolationsPreset(true, "delete");
+PRESETS["thu-the-xac-nhan"] = personViolationsPreset(true, "revoke-confirm");
+PRESETS["thu-the-da-thu"] = personViolationsPreset(true, "revoke");

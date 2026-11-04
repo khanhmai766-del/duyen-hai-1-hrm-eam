@@ -25,7 +25,7 @@ import { PlainHeader, ROW_HOVER, RowExpander, rowBackground, TD_EXPAND, TD_ROW, 
 import { cn } from "@/lib/utils";
 import { normalizeText } from "@/lib/nav";
 import { useCreatePermitCompany, useDeletePermitCompany, useDeletePermitPerson, usePermitCompanySummary, usePermitPeople, useRenamePermitCompany, useSavePermitPerson, usePermitSessionAction, usePermitActivity, usePermitCompanyPeople, usePermitDuplicatePeople, usePermitPartnerCompanies } from "@/hooks/useWorkPermits";
-import { companyUnclassified, formatPermitNumber, isSessionCommander, PERMIT_KINDS, permitDeadline, workersStillInside } from "@/lib/work-permits";
+import { companyUnclassified, formatPermitNumber, isSessionCommander, PERMIT_KINDS, permitDeadline, personCardRevokedMessage, workersStillInside } from "@/lib/work-permits";
 import { isOverhaulPaperPermit, OVERHAUL_DAY_STATUSES, OVERHAUL_JOURNAL_LIMITS, overhaulItemKey, overhaulItemsOf, overhaulJournalTitle, type OverhaulJournalHeader } from "@/lib/work-permit-overhaul";
 import { initialOverhaulDraft, OverhaulItemProgressEditor, overhaulDraftError, overhaulDraftPayload } from "@/components/work-permits/overhaul-item-progress";
 import { PermitDeadlineBadge } from "@/components/work-permits/permit-deadline";
@@ -480,8 +480,9 @@ export function PermitPeopleDirectory({ onClose, onPick, onPickMany, existingMem
       {pickOnly && <p className="text-xs text-muted-foreground">PCT Đại tu chỉ chọn người đã được đánh dấu CHTT. Cần thêm CHTT thì đánh dấu ở mục <b>Nhân sự nhà thầu</b>.</p>}
       {query.isPending ? <p role="status">Đang tải danh sách…</p> : query.isError ? <p role="alert" className="text-red-700">{query.error.message}</p> : <div className="space-y-2">
         {query.data?.data.map(p => <div key={p.id} className="flex items-center justify-between gap-3 rounded-lg border border-border p-3">
-          <div className="min-w-0 flex-1"><b>{p.name}</b><PersonViolations person={p} /><p className="text-sm text-muted-foreground">{p.code} · {p.company}</p><p className="text-xs text-muted-foreground">{p.canCommand ? "CHTT / nhân viên công tác" : "Nhân viên công tác"}{!p.isActive ? " · Ngừng hoạt động" : ""}</p>{cardExpired(p.cardExpiresAt) && <p className="text-xs font-medium text-red-700">Thẻ ra vào hết hạn {new Date(p.cardExpiresAt!).toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })}</p>}{p.activeWorks?.map(work => <p key={work.sessionId} className="mt-1 text-xs font-medium text-amber-700">Đang làm PCT {formatPermitNumber(work.permit)} · {PERMIT_KINDS[work.permit.kind]} · {work.role === "CHTT" ? "CHTT" : "Nhân viên công tác"} · từ {fmt(work.openedAt)}</p>)}</div>
-          <div className="flex gap-2">{onPickMany && <label className="flex cursor-pointer items-center gap-2 whitespace-nowrap text-sm"><input type="checkbox" aria-label={`Chọn ${p.name} · ${p.code}`} checked={alreadyAdded(p) || selected.some(person => person.id === p.id)} disabled={alreadyAdded(p) || (!selected.some(person => person.id === p.id) && selected.length >= capacity)} onChange={() => toggle(p)} />{alreadyAdded(p) ? "Đã có" : "Chọn"}</label>}{onPick && <Button type="button" size="sm" onClick={() => onPick(p)}>Chọn</Button>}</div>
+          <div className="min-w-0 flex-1"><b>{p.name}</b>{p.cardRevokedAt && (onPick || onPickMany) && <p role="alert" className="mt-1 text-xs font-semibold text-red-700">{personCardRevokedMessage(p)}</p>}<PersonViolations person={p} /><p className="text-sm text-muted-foreground">{p.code} · {p.company}</p><p className="text-xs text-muted-foreground">{p.canCommand ? "CHTT / nhân viên công tác" : "Nhân viên công tác"}{!p.isActive ? " · Ngừng hoạt động" : ""}</p>{cardExpired(p.cardExpiresAt) && <p className="text-xs font-medium text-red-700">Thẻ ra vào hết hạn {new Date(p.cardExpiresAt!).toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })}</p>}{p.activeWorks?.map(work => <p key={work.sessionId} className="mt-1 text-xs font-medium text-amber-700">Đang làm PCT {formatPermitNumber(work.permit)} · {PERMIT_KINDS[work.permit.kind]} · {work.role === "CHTT" ? "CHTT" : "Nhân viên công tác"} · từ {fmt(work.openedAt)}</p>)}</div>
+          {/* Đã thu thẻ: vẫn hiện để người chọn đọc được cảnh báo, nhưng khóa chọn. */}
+          <div className="flex gap-2">{onPickMany && <label className="flex cursor-pointer items-center gap-2 whitespace-nowrap text-sm"><input type="checkbox" aria-label={`Chọn ${p.name} · ${p.code}`} checked={alreadyAdded(p) || selected.some(person => person.id === p.id)} disabled={alreadyAdded(p) || Boolean(p.cardRevokedAt) || (!selected.some(person => person.id === p.id) && selected.length >= capacity)} onChange={() => toggle(p)} />{alreadyAdded(p) ? "Đã có" : "Chọn"}</label>}{onPick && <Button type="button" size="sm" disabled={Boolean(p.cardRevokedAt)} onClick={() => onPick(p)}>Chọn</Button>}</div>
         </div>)}
         {!query.data?.data.length && <p className="py-8 text-center text-muted-foreground">Chưa có nhân sự phù hợp.</p>}
       </div>}
@@ -545,7 +546,7 @@ export function PermitMembersEditor({ members, onChange, commander, company, sco
   /** Nhóm PCT nhà thầu: danh sách chọn và máy quét chỉ nhận nhân sự đúng nhóm. */
   scope?: PermitContractorScope | null;
   /** Có thì hiện "Quét thẻ" và lọc "Chọn từ danh sách" theo đơn vị công tác của phiếu. */
-  scan?: { unit: string; companies: string[]; permitId: string };
+  scan?: { unit: string; companies: string[]; permitId: string; permitNumber?: string };
 }) {
   const [picking, setPicking] = useState(false);
   const [scanning, setScanning] = useState(false);
@@ -599,7 +600,7 @@ export function PermitMembersEditor({ members, onChange, commander, company, sco
       </div>;
     })}</div>}
     {picking && <PermitPeopleDirectory onClose={() => setPicking(false)} onPickMany={add} existingMembers={commander ? [...members, commander] : members} company={company || scan?.unit} scope={scope} />}
-    {scanning && scan && <PermitCardScanner unit={scan.unit} companies={scan.companies} scope={scope} permitId={scan.permitId} existing={commander ? [...members, commander] : members} onAdd={addOne} onClose={() => setScanning(false)} />}
+    {scanning && scan && <PermitCardScanner unit={scan.unit} companies={scan.companies} scope={scope} permitId={scan.permitId} permitNumber={scan.permitNumber} existing={commander ? [...members, commander] : members} onAdd={addOne} onClose={() => setScanning(false)} />}
   </div>;
 }
 
@@ -764,7 +765,7 @@ export function SessionEditor({ permit, session, handoff = false, progressUpdate
       {overhaulItems.length > 0 && <OverhaulItemProgressEditor items={overhaulItems} previous={previousPercents} draft={itemDraft} onChange={setItemDraft} noneDone={noneDone} onNoneDone={setNoneDone} updating={updating} />}
       {ending && !overhaulItems.length && <label className="block space-y-2 text-sm"><span className="font-medium">Tiến độ công việc *</span><div className="flex items-center gap-4 rounded-lg border border-border p-3"><input className="h-2 flex-1 cursor-pointer accent-blue-700" type="range" min={0} max={100} step={1} value={progress} onChange={e => setProgress(e.target.value)} /><div className="relative w-28"><input className={`${control} pr-8 text-right tabular-nums`} type="number" min={0} max={100} step={1} required value={progress} onChange={e => setProgress(e.target.value)} /><span className="pointer-events-none absolute right-3 top-2.5 text-muted-foreground">%</span></div></div></label>}
       {!ending && !handoff && !updating && <><p className="rounded-lg bg-sky-50 p-3 text-sm text-sky-950">CHTT tự được tính vào người công tác. Tổng: {person ? 1 + additionalMembers.length : additionalMembers.length} người.</p><PermitMembersEditor members={additionalMembers} onChange={setMembers} commander={person ? { personId: person.id, name: person.name, code: person.code, company: person.company } : undefined}
-        scope={permit.contractorScope} scan={{ unit: permit.teamName, companies: scanCompanies, permitId: permit.id }} /></>}
+        scope={permit.contractorScope} scan={{ unit: permit.teamName, companies: scanCompanies, permitId: permit.id, permitNumber: formatPermitNumber(permit) }} /></>}
       {(ending || handoff || updating) && <label className="block space-y-1 text-sm"><span>{updating ? "Ghi chú làm việc" : handoff ? "Ghi chú bàn giao" : "Ghi chú kết thúc lần làm việc"}</span><textarea className={control} rows={3} maxLength={2000} value={note} onChange={e => setNote(e.target.value)} /></label>}
       {stillInside.length > 0 && <div role="alert" className="space-y-2 rounded-lg border-2 border-red-300 bg-red-50 p-3 text-sm text-red-900">
         <p className="font-semibold">Còn {stillInside.length} nhân viên chưa rút khỏi vị trí làm việc — chưa kết thúc được:</p>

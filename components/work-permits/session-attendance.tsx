@@ -68,7 +68,7 @@ export function SessionAttendance({ permit, session, canExecute, size = "md", au
   const memberPhoto = (member: PermitMember) => <PersonPhoto person={{ name: member.name, photoUrl: member.personId ? violationsById.get(member.personId)?.photoUrl : null }} className="h-12 w-9 shrink-0 rounded-md border border-border/60" />;
   const memberViolations = (member: PermitMember) => {
     const person = member.personId ? violationsById.get(member.personId) : undefined;
-    return person ? <PersonViolationTag violations={person.violations} compact /> : null;
+    return person ? <PersonViolationTag violations={person.violations} revoked={Boolean(person.cardRevokedAt)} compact /> : null;
   };
   const insideCount = members.filter(({ member }) => attendanceInside(member)).length;
   const commander: PermitMember = { personId: session.commanderId ?? undefined, code: session.commanderCode, name: session.commanderName, company: session.company };
@@ -117,7 +117,7 @@ export function SessionAttendance({ permit, session, canExecute, size = "md", au
 
   if (!live && !tracked) return null;
   const large = size === "lg";
-  const scanner = scanning && <PermitCardScanner title="Quét vào / ra vị trí làm việc" unit={permit.teamName} companies={scanCompanies} scope={permit.contractorScope} permitId={permit.id}
+  const scanner = scanning && <PermitCardScanner title="Quét vào / ra vị trí làm việc" unit={permit.teamName} companies={scanCompanies} scope={permit.contractorScope} permitId={permit.id} permitNumber={formatPermitNumber(permit)}
     existing={[...members.map(({ member }) => member), commander]}
     onAdd={member => record({ direction: "in", personId: member.personId })}
     onExisting={async person => person.id === session.commanderId
@@ -158,7 +158,7 @@ export function SessionAttendance({ permit, session, canExecute, size = "md", au
     <div className="flex shrink-0 justify-end"><Button type="button" variant="outline" className="h-10" onClick={() => setShowPrevious(false)}>Đóng</Button></div>
   </DialogContent></Dialog>;
   const violationButton = (member: PermitMember) => live && canExecute && member.personId
-    ? <RecordPersonViolation member={member} violations={violationsById.get(member.personId)?.violations} context={{ permitId: permit.id, sessionId: session.id, permitNumber: formatPermitNumber(permit) }} compact />
+    ? <RecordPersonViolation member={member} violations={violationsById.get(member.personId)?.violations} cardRevokedAt={violationsById.get(member.personId)?.cardRevokedAt} context={{ permitId: permit.id, sessionId: session.id, permitNumber: formatPermitNumber(permit) }} compact />
     : null;
   const rows = !large && members.map(({ member, index }) => {
     const inside = attendanceInside(member);

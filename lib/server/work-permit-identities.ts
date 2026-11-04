@@ -1,7 +1,8 @@
 import type { Prisma, WorkPermit } from "@prisma/client";
 import { fail } from "@/lib/api";
 import { permitText } from "@/lib/server/work-permits";
-import { isSctxContractorPermit, personScopeError } from "@/lib/work-permits";
+import { formatPermitNumber, isSctxContractorPermit, personCardRevokedMessage, personScopeError } from "@/lib/work-permits";
+import { assertCardsNotRevoked } from "@/lib/server/work-permit-presence";
 import { parsePermitMembers } from "@/lib/server/work-permits";
 import { sameCompany } from "@/lib/work-permit-card";
 import { permitPartnerCompanies } from "@/lib/server/work-permit-company-partners";
@@ -24,6 +25,9 @@ export async function resolvePermitIdentities(
     return { ...body, issuerName, issuerUserId, commanderPersonId: null };
   }
   const contractorScope = permitText(body, "contractorScope", 20) || null;
+  const typedNumber = permitText(body, "number", 100);
+  const permitRef = before ?? (typedNumber ? { number: typedNumber, year: Number(body.year) } : undefined);
+  await assertNewMembersCards(tx, body.members, permitRef, before);
   await assertMembersScope(tx, body.members, contractorScope, before);
   const commanderPersonId = permitText(body, "commanderPersonId", 100) || null;
   if (!commanderPersonId) {
@@ -41,6 +45,7 @@ export async function resolvePermitIdentities(
   await tx.$queryRaw`SELECT "id" FROM "WorkPermitPerson" WHERE "id" = ${commanderPersonId} FOR UPDATE`;
   const person = await tx.workPermitPerson.findUnique({ where: { id: commanderPersonId } });
   const unchanged = before?.status !== "DRAFT" && before?.commanderPersonId === commanderPersonId;
+  if (person?.cardRevokedAt && !unchanged) throw fail(personCardRevokedMessage(person, permitRef && formatPermitNumber(permitRef)), 403);
   if (!person || (!unchanged && (!person.isActive || !person.canCommand))) throw fail("Người được chọn không có trong danh sách CHTT nhà thầu đang hoạt động");
   const scopeError = unchanged && before?.contractorScope === contractorScope ? null : personScopeError(person, contractorScope);
   if (scopeError) throw fail(scopeError);
@@ -50,6 +55,13 @@ export async function resolvePermitIdentities(
   return { ...body, issuerName, issuerUserId, commanderPersonId,
     commanderName: unchanged ? before!.commanderName : person.name,
     teamName: keepTeam ? body.teamName : person.company };
+}
+
+/** Không ghi thêm người đã bị thu thẻ. Người đã có trên phiếu giữ nguyên để sửa phiếu không kẹt; lúc mở lần làm việc mới bị chặn. */
+async function assertNewMembersCards(tx: Prisma.TransactionClient, value: unknown, permit: Parameters<typeof formatPermitNumber>[0] | undefined, before?: WorkPermit) {
+  if (!Array.isArray(value)) return;
+  const kept = new Set((Array.isArray(before?.members) ? before.members as Array<{ personId?: string } | null> : []).flatMap(member => member?.personId ? [member.personId] : []));
+  await assertCardsNotRevoked(tx, parsePermitMembers(value).filter(member => member.personId && !kept.has(member.personId)), permit);
 }
 
 /** Nhân viên công tác ghi trên phiếu phải đúng nhóm SCTX / Đại tu của phiếu. Chỉ xét người mới thêm (hoặc khi đổi nhóm phiếu) — người đã ghi từ trước giữ nguyên. */

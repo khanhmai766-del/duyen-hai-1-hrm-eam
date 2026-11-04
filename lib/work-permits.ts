@@ -240,8 +240,14 @@ export interface PermitPersonViolation {
   id: string; description: string; recordedAt: string; recordedById: string; recordedByName: string;
   permitId?: string; sessionId?: string; permitNumber?: string;
 }
+/** Cảnh báo chung cho mọi cửa vào PCT khi người đã bị thu thẻ ("Không cho phép"). */
+export function personCardRevokedMessage(person: { name: string; company: string }, permitNumber?: string) {
+  return `${person.name} (${person.company}) đã vi phạm quá số lần cho phép và đã bị thu thẻ, không thể tiếp tục tham gia thực hiện PCT${permitNumber ? ` ${permitNumber}` : ""}.`;
+}
 export interface PermitPerson {
   violations?: PermitPersonViolation[];
+  /** Khác null: đã bị thu thẻ, không được tham gia PCT nào. */
+  cardRevokedAt?: string | null; cardRevokedByName?: string;
   id: string; code: string; name: string; company: string; phone: string;
   canCommand: boolean; isActive: boolean; version: number;
   /** Nhóm nhân sự: SCTX (không cần ảnh) / Đại tu, Đầu tư (đủ họ tên, ảnh, chức vụ). */

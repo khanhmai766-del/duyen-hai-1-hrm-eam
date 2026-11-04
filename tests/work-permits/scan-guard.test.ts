@@ -38,7 +38,7 @@ function fixture(out: string | null) {
     permit: { teamName: "A", status: "ISSUED" },
     members: [{ personId: "a", code: "A", name: "Nguyễn An", company: "A", attendance: [{ in: entered, out }] }] };
   let writes = 0;
-  const tx = { $executeRaw: async () => 1, $queryRaw: async () => [], workPermitSession: {
+  const tx = { $executeRaw: async () => 1, $queryRaw: async () => [], workPermitPerson: { findFirst: async () => null }, workPermitSession: {
     findFirst: async () => structuredClone(session),
     findMany: async () => [],
     update: async ({ data }: { data: { members: typeof session.members } }) => { writes++; session.members = data.members; return session; },

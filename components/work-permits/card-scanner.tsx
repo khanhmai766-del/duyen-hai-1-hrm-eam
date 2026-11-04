@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/compone
 import { lookupPermitCard, reportPermitScanMetrics } from "@/hooks/useWorkPermits";
 import { qrCameraTorch, QR_CAMERA_CONSTRAINTS, startQrScanner, tuneQrCameraTrack } from "@/lib/qr-camera";
 import { cardExpired, isCardlessCode, parseCardQr, sameCompany } from "@/lib/work-permit-card";
-import { formatPermitNumber, PERMIT_CONTRACTOR_SCOPES, personScopeError, type PermitContractorScope, type PermitMember, type PermitPerson } from "@/lib/work-permits";
+import { formatPermitNumber, PERMIT_CONTRACTOR_SCOPES, personCardRevokedMessage, personScopeError, type PermitContractorScope, type PermitMember, type PermitPerson } from "@/lib/work-permits";
 import { PermitCameraScanGuard } from "@/lib/work-permit-scan-guard";
 import { ScanMetricsCollector, STALL_MS, type ScanMetricResult } from "@/lib/work-permit-scan-metrics";
 import { PersonScopeBadge } from "@/components/work-permits/person-scope-badge";
@@ -97,7 +97,7 @@ function cameraErrorMessage(error: unknown) {
   return "Không mở được camera. Dùng đầu đọc QR hoặc nhập số thẻ ở ô bên dưới.";
 }
 
-export function PermitCardScanner({ unit, companies, scope, existing, permitId, onAdd, onExisting, title = "Quét thẻ vào làm việc", onClose }: {
+export function PermitCardScanner({ unit, companies, scope, existing, permitId, permitNumber, onAdd, onExisting, title = "Quét thẻ vào làm việc", onClose }: {
   /** Đơn vị công tác của phiếu (tên hiển thị và đơn vị gán khi thêm nhanh). */
   unit: string;
   /** Các tên đơn vị được chấp nhận: đơn vị ghi trên phiếu + đơn vị hiện tại của CHTT. */
@@ -107,6 +107,8 @@ export function PermitCardScanner({ unit, companies, scope, existing, permitId, 
   /** Người đã có trong lần làm việc (kể cả CHTT) — quét lại báo "đã có". */
   existing: PermitMember[];
   permitId: string;
+  /** Số PCT ghi trong cảnh báo người đã bị thu thẻ. */
+  permitNumber?: string;
   /** Cho người mới vào: trả true/false (thêm vào danh sách trên form) hoặc kết quả từ API (lần làm việc đang mở). */
   onAdd: (member: PermitMember) => boolean | Promise<ScanOutcome>;
   /** Có thì người ĐÃ có trong lần làm việc được ghi VÀO/RA thay vì chỉ báo "đã có". */
@@ -188,6 +190,7 @@ export function PermitCardScanner({ unit, companies, scope, existing, permitId, 
         try { return finish({ code, person, title: person.name, ...await act(() => onExisting(person)) }); }
         catch (error) { return finish({ code, person, title: person.name, tone: "block", detail: error instanceof Error ? error.message : "Không ghi nhận được, quét lại." }); }
       }
+      if (person.cardRevokedAt) return finish({ code, tone: "block", person, title: person.name, detail: personCardRevokedMessage(person, permitNumber) });
       if (!person.isActive) return finish({ code, tone: "block", person, title: person.name, detail: "Hồ sơ đang NGỪNG HOẠT ĐỘNG trong danh bạ — không cho vào." });
       if (!companies.some(company => sameCompany(company, person.company))) {
         return finish({ code, tone: "block", person, title: person.name, detail: `Thuộc đơn vị “${person.company}”, KHÔNG PHẢI đơn vị công tác của phiếu (“${unit}”). Không cho vào.` });
@@ -213,7 +216,7 @@ export function PermitCardScanner({ unit, companies, scope, existing, permitId, 
       busyRef.current = false;
       metrics.scanned(detected, { source, lookupMs, actionMs, result });
     }
-  }, [admit, companies, isExisting, onExisting, permitId, push, scope, unit]);
+  }, [admit, companies, isExisting, onExisting, permitId, permitNumber, push, scope, unit]);
 
   const handleRef = useRef(handle);
   handleRef.current = handle;

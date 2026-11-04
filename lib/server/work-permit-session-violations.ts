@@ -14,6 +14,6 @@ export async function loadPermitSessionViolations(permitId: string, sessionId: s
   }))];
   if (!ids.length) return [];
   // Chung một truy vấn cho cảnh báo và ảnh; chỉ trả URL có phiên bản, không tải byte ảnh ở đây.
-  const people = await db.workPermitPerson.findMany({ where: { id: { in: ids } }, select: { id: true, violations: true, photoKey: true, photoSource: true } });
+  const people = await db.workPermitPerson.findMany({ where: { id: { in: ids } }, select: { id: true, violations: true, cardRevokedAt: true, photoKey: true, photoSource: true } });
   return people.map(withPhotoUrl);
 }

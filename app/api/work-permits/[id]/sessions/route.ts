@@ -9,7 +9,7 @@ import { sameCompany } from "@/lib/work-permit-card";
 import { permitPartnerCompanies } from "@/lib/server/work-permit-company-partners";
 import { closeInsideVisits, handoffMembers, membersInside, sessionMembers, withEntry } from "@/lib/server/work-permit-attendance";
 import { syncPermitDocument } from "@/lib/server/work-permit-document-store";
-import { assertWorkersFree, lockWorkPermitPresence } from "@/lib/server/work-permit-presence";
+import { assertCardsNotRevoked, assertWorkersFree, lockWorkPermitPresence } from "@/lib/server/work-permit-presence";
 import { presentMembers } from "@/lib/work-permit-presence";
 import { after as afterResponse } from "next/server";
 import { parseSessionItemProgress, sharedOverhaulPercents } from "@/lib/server/work-permit-overhaul";
@@ -85,6 +85,8 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
         const handoffNote = handoff ? permitText(body, "endNote", 2000) : "";
         const nextMembers = oldSession ? handoffMembers(members, oldSession.members, input.openedAt)
           : members.map(member => withEntry(member, input.openedAt));
+        // Chỉ xét người sẽ có mặt: người đã RA trước khi bị thu thẻ không làm kẹt việc bàn giao.
+        await assertCardsNotRevoked(tx, [{ personId: person.id }, ...presentMembers(nextMembers)], permit);
         await assertWorkersFree(tx, [{ personId: person.id, code: person.code, name: person.name, company: person.company }, ...presentMembers(nextMembers)], permit.id);
         if (oldSession) {
           await tx.workPermitSession.update({ where: { id: oldSession.id }, data: {

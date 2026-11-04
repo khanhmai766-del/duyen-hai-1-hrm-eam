@@ -35,6 +35,7 @@ export function WorkerCardResult({ code, person, onScanAgain }: { code: string; 
     ["Đơn vị", person.company],
     ...(person.jobTitle ? [["Chức vụ", person.jobTitle] as [string, React.ReactNode]] : []),
     ["Vai trò", person.canCommand ? "Được làm CHTT" : "Nhân viên"],
+    ...(person.cardRevokedAt ? [["Thẻ", <span key="thu-the" className="font-bold text-red-700">Đã thu thẻ · Không được tham gia PCT</span>] as [string, React.ReactNode]] : []),
     ["Tình trạng", person.isActive ? <span className="font-semibold text-emerald-700">Đang hoạt động</span> : <span className="font-bold text-red-700">Ngừng hoạt động</span>],
     ...(person.cardExpiresAt ? [["Hạn thẻ", <span key="hsd" className={expired ? "font-bold text-red-700" : "font-semibold text-emerald-700"}>{vnDate(person.cardExpiresAt)}{expired ? " · HẾT HẠN" : ""}</span>] as [string, React.ReactNode]] : []),
     ...(person.trainingResult || person.trainedAt ? [["Huấn luyện", [person.trainingResult, person.trainedAt && `ngày ${vnDate(person.trainedAt)}`].filter(Boolean).join(" · ")] as [string, React.ReactNode]] : []),

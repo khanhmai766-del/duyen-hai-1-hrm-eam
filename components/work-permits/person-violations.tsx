@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
-import { useChangePermitPersonViolation, usePermitViolationPerson, useRecordPermitPersonViolation, type PermitViolationContext, type PermitViolationPerson } from "@/hooks/useWorkPermits";
+import { useChangePermitPersonViolation, usePermitViolationPerson, useRecordPermitPersonViolation, useSetPermitPersonCardRevoked, type PermitViolationContext, type PermitViolationPerson } from "@/hooks/useWorkPermits";
 import { canChangePermitViolation } from "@/lib/work-permit-positions";
 import type { PermitMember, PermitPerson, PermitPersonViolation } from "@/lib/work-permits";
 
@@ -49,12 +49,12 @@ function ViolationCount({ violations, compact }: { violations: PermitPersonViola
  */
 const tagRow = (inline?: boolean) => inline ? "contents" : "mt-1 flex flex-wrap items-center gap-1";
 
-/** Nhãn chỉ xem (người không có quyền ghi nhận): "Vi phạm" + số lần; chưa vi phạm thì không hiện gì. */
-export function PersonViolationTag({ violations, compact, inline }: { violations?: PermitPersonViolation[]; compact?: boolean; inline?: boolean }) {
-  if (!violations?.length) return null;
+/** Nhãn chỉ xem (người không có quyền ghi nhận): "Vi phạm" / "Đã thu thẻ" + số lần; chưa vi phạm thì không hiện gì. */
+export function PersonViolationTag({ violations, revoked, compact, inline }: { violations?: PermitPersonViolation[]; revoked?: boolean; compact?: boolean; inline?: boolean }) {
+  if (!violations?.length && !revoked) return null;
   return <div className={tagRow(inline)}>
-    <span className="inline-flex h-8 items-center gap-1 px-2 text-[11px] font-medium text-red-700 md:h-7"><Flag aria-hidden="true" className="size-3" />Vi phạm</span>
-    <ViolationCount violations={violations} compact={compact} />
+    <span className={cn("inline-flex h-8 items-center gap-1 px-2 text-[11px] text-red-700 md:h-7", revoked ? "font-bold" : "font-medium")}><Flag aria-hidden="true" className="size-3" />{revoked ? "Đã thu thẻ" : "Vi phạm"}</span>
+    {violations?.length ? <ViolationCount violations={violations} compact={compact} /> : null}
   </div>;
 }
 
@@ -81,15 +81,29 @@ function ViolationHistory({ person, busy, onReload }: { person: PermitViolationP
   </div> : <div className="mt-1 flex gap-2"><Button type="button" size="sm" variant="outline" className="h-10 text-xs" aria-label={`Sửa vi phạm lần ${index + 1}`} disabled={busy || change.isPending} onClick={() => setSelected({ id: violation.id, action: "edit", description: violation.description })}>Sửa</Button><Button type="button" size="sm" variant="outline" className="h-10 text-xs text-red-700" aria-label={`Xóa vi phạm lần ${index + 1}`} disabled={busy || change.isPending} onClick={() => setSelected({ id: violation.id, action: "delete", description: violation.description })}>Xóa</Button></div> : undefined} />;
 }
 
-export function RecordPersonViolation(props: ({ person: PermitPerson; member?: never; context?: never } | { member: PermitMember; context: PermitViolationContext; violations?: PermitPerson["violations"]; person?: never }) & { compact?: boolean; inline?: boolean }) {
+export function RecordPersonViolation(props: ({ person: PermitPerson; member?: never; context?: never } | { member: PermitMember; context: PermitViolationContext; violations?: PermitPerson["violations"]; cardRevokedAt?: string | null; person?: never }) & { compact?: boolean; inline?: boolean }) {
+  const { data: authSession } = useSession();
+  const canRevoke = canChangePermitViolation({ role: authSession?.user?.role, position: authSession?.user?.currentPosition ?? authSession?.user?.position });
   const snapshot = props.person ?? props.member;
   const id = props.person?.id ?? props.member?.personId ?? "";
   const context = props.context;
   const [open, setOpen] = useState(false);
   const [description, setDescription] = useState("");
+  const [confirmingCard, setConfirmingCard] = useState(false);
   const save = useRecordPermitPersonViolation();
+  const setCard = useSetPermitPersonCardRevoked();
   const query = usePermitViolationPerson(id, open, context);
   const person = query.data?.data;
+  const pending = save.isPending || setCard.isPending;
+  const revoked = Boolean(person?.cardRevokedAt ?? props.person?.cardRevokedAt ?? ("cardRevokedAt" in props ? props.cardRevokedAt : null));
+  async function applyCard() {
+    if (!person || pending) return;
+    try {
+      await setCard.mutateAsync({ id: person.id, revoked: !person.cardRevokedAt, description, version: person.version, context });
+      toast.success(person.cardRevokedAt ? `Đã cho phép lại ${person.name}` : `Đã thu thẻ ${person.name}. Nếu còn trong khu vực, hãy quét RA.`);
+      setDescription(""); setConfirmingCard(false); setOpen(false);
+    } catch (error) { toast.error(error instanceof Error ? error.message : "Không thể cập nhật tình trạng thẻ"); setConfirmingCard(false); void query.refetch(); }
+  }
   const history = props.person?.violations ?? ("violations" in props ? props.violations : undefined) ?? person?.violations;
   const status = history === undefined ? "unknown" : history.length ? "violated" : "clean";
   const tone = status === "violated" ? "text-red-700 hover:bg-red-50 hover:text-red-800" : status === "clean" ? "text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800" : "text-slate-500 hover:bg-slate-50 hover:text-slate-700";
@@ -97,24 +111,33 @@ export function RecordPersonViolation(props: ({ person: PermitPerson; member?: n
   return <>
     {/* Đã vi phạm: nhãn đỏ "Vi phạm" (vẫn bấm để ghi thêm lần mới) + số lần — bấm số mở popup chi tiết. */}
     <div className={tagRow(props.inline)}>
-      <Button type="button" variant="ghost" size="sm" aria-label="Ghi nhận vi phạm" title={`Ghi nhận vi phạm · ${snapshot.name} · ${statusLabel}`} className={`h-8 gap-1 px-2 text-[11px] font-medium md:h-7 [&_svg]:size-3 ${tone}`} onClick={() => setOpen(true)}><Flag aria-hidden="true" />{status === "violated" ? "Vi phạm" : "Ghi nhận vi phạm"}</Button>
+      <Button type="button" variant="ghost" size="sm" aria-label="Ghi nhận vi phạm" title={`Ghi nhận vi phạm · ${snapshot.name} · ${statusLabel}`} className={`h-8 gap-1 px-2 text-[11px] md:h-7 [&_svg]:size-3 ${revoked ? "font-bold text-red-700 hover:bg-red-50 hover:text-red-800" : `font-medium ${tone}`}`} onClick={() => setOpen(true)}><Flag aria-hidden="true" />{revoked ? "Đã thu thẻ" : status === "violated" ? "Vi phạm" : "Ghi nhận vi phạm"}</Button>
       {status === "violated" && history && <ViolationCount violations={history} compact={props.compact} />}
     </div>
-    {open && <Dialog open onOpenChange={value => { if (!value && !save.isPending) setOpen(false); }}><DialogContent>
+    {open && <Dialog open onOpenChange={value => { if (!value && !pending) { setOpen(false); setConfirmingCard(false); } }}><DialogContent>
       <DialogTitle>Ghi nhận vi phạm</DialogTitle>
       <DialogDescription>{snapshot.name} · {snapshot.code} · {snapshot.company}{context && <span className="mt-1 block font-medium">PCT {context.permitNumber}</span>}</DialogDescription>
-      {query.isPending ? <p role="status" className="text-sm text-muted-foreground">Đang tải hồ sơ nhân viên…</p> : query.isError ? <div role="alert" className="space-y-2 text-sm text-red-700"><p>{query.error.message}</p><Button type="button" variant="outline" size="sm" onClick={() => void query.refetch()}>Tải lại hồ sơ</Button></div> : person && <ViolationHistory person={person} busy={query.isFetching || save.isPending} onReload={() => void query.refetch()} />}
+      {query.isPending ? <p role="status" className="text-sm text-muted-foreground">Đang tải hồ sơ nhân viên…</p> : query.isError ? <div role="alert" className="space-y-2 text-sm text-red-700"><p>{query.error.message}</p><Button type="button" variant="outline" size="sm" onClick={() => void query.refetch()}>Tải lại hồ sơ</Button></div> : person && <>
+        {person.cardRevokedAt && <p role="status" className="rounded-md border border-red-300 bg-red-100 px-2 py-1.5 text-xs font-semibold text-red-900">Đã thu thẻ · Không được tham gia PCT<span className="block text-[11px] font-normal">{new Date(person.cardRevokedAt).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })} · {person.cardRevokedByName}</span></p>}
+        <ViolationHistory person={person} busy={query.isFetching || pending} onReload={() => void query.refetch()} />
+      </>}
       <form className="space-y-4" onSubmit={async event => {
         event.preventDefault(); event.stopPropagation();
-        if (!person || query.isError || save.isPending) return;
+        if (!person || query.isError || pending) return;
         try {
           await save.mutateAsync({ id: person.id, description, version: person.version, context });
           toast.success("Đã ghi nhận một lần vi phạm"); setDescription(""); setOpen(false);
         } catch (error) { toast.error(error instanceof Error ? error.message : "Không thể ghi nhận vi phạm"); void query.refetch(); }
       }}>
-        <label className="block space-y-2 text-sm"><span>Lỗi vi phạm *</span><textarea required maxLength={2000} rows={4} value={description} disabled={save.isPending || !person || query.isError} onChange={event => setDescription(event.target.value)} className="w-full rounded-lg border border-input bg-background p-3 text-base sm:text-sm" placeholder="Nhập lỗi vi phạm quy định làm việc của PCT…" /></label>
-        <p className="text-xs text-muted-foreground">Mỗi lần lưu tính là một lần vi phạm và bổ sung vào lịch sử của nhân viên.</p>
-        <div className="flex flex-wrap justify-end gap-2"><Button type="button" variant="outline" disabled={save.isPending} onClick={() => setOpen(false)}>Để sau</Button><Button type="submit" disabled={save.isPending || !person || query.isError || query.isFetching || !description.trim()}>{save.isPending ? "Đang ghi nhận…" : "Ghi nhận vi phạm"}</Button></div>
+        <label className="block space-y-2 text-sm"><span>Lỗi vi phạm *</span><textarea required maxLength={2000} rows={4} value={description} disabled={pending || !person || query.isError} onChange={event => setDescription(event.target.value)} className="w-full rounded-lg border border-input bg-background p-3 text-base sm:text-sm" placeholder="Nhập lỗi vi phạm quy định làm việc của PCT…" /></label>
+        {confirmingCard && person ? <div role="alert" className="space-y-2 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-900">
+          <p>{person.cardRevokedAt ? `Cho phép ${person.name} (${person.company}) tham gia PCT trở lại?` : `Thu thẻ ${person.name} (${person.company})? Người này sẽ không được tham gia bất kỳ PCT nào.`}{!person.cardRevokedAt && description.trim() ? " Lỗi vừa nhập được ghi thêm vào lịch sử vi phạm." : ""}</p>
+          <div className="flex flex-wrap justify-end gap-2"><Button type="button" variant="outline" disabled={pending} onClick={() => setConfirmingCard(false)}>Hủy</Button><Button type="button" variant={person.cardRevokedAt ? "default" : "destructive"} disabled={pending || query.isFetching} onClick={() => void applyCard()}>{setCard.isPending ? "Đang lưu…" : person.cardRevokedAt ? "Xác nhận cho phép lại" : "Xác nhận không cho phép"}</Button></div>
+        </div> : <div className="flex flex-wrap justify-end gap-2"><Button type="button" variant="outline" disabled={pending} onClick={() => setOpen(false)}>Để sau</Button><Button type="submit" disabled={pending || !person || query.isError || query.isFetching || !description.trim()}>{save.isPending ? "Đang ghi nhận…" : "Ghi nhận vi phạm"}</Button>
+          {canRevoke && person && (person.cardRevokedAt
+            ? <Button type="button" variant="outline" disabled={pending || query.isFetching} onClick={() => setConfirmingCard(true)}>Cho phép lại</Button>
+            : <Button type="button" variant="destructive" disabled={pending || query.isFetching || (!person.violations?.length && !description.trim())} title={!person.violations?.length && !description.trim() ? "Nhập lỗi vi phạm trước" : undefined} onClick={() => setConfirmingCard(true)}>Không cho phép</Button>)}
+        </div>}
       </form>
     </DialogContent></Dialog>}
   </>;

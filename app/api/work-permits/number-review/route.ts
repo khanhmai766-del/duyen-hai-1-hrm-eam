@@ -18,19 +18,23 @@ export async function GET(req: Request) {
       const highest = await permitNumberHighWater(tx, kind, year);
       const baseline = await tx.workPermitNumberBaseline.findUnique({ where: { kind_year: { kind, year } } });
       const floor = BigInt(baseline?.number ?? "0") > BigInt(highest) ? baseline!.number : highest;
-      const entries = await tx.$queryRaw<Array<{ id: string; number: string; status: string; nkvhPctId: string | null; permitId: string | null; draftPermitId: string | null; updatedAt: Date; ownerName: string; total: number }>>`
-        SELECT r."id", r."number", r."status", r."nkvhPctId",
+      const entries = await tx.$queryRaw<Array<{ id: string; number: string; status: string; nkvhPctId: string | null; permitId: string | null; draftPermitId: string | null; updatedAt: Date; ownerName: string; total: number; confirmedTotal: number; rank: bigint }>>`
+        -- Lấy 20 số cao nhất MỖI nhóm: số đã xác nhận không được chiếm chỗ của số còn chờ đối chiếu.
+        SELECT * FROM (SELECT r."id", r."number", r."status", r."nkvhPctId",
           CASE WHEN EXISTS (SELECT 1 FROM "WorkPermit" p WHERE p."id" = r."permitId") THEN r."permitId" ELSE NULL END AS "permitId",
           -- Lượt lấy từ NKVH không gắn permitId khi còn chờ: tìm phiếu nháp "Chờ NKVH lưu" mang chính số này.
           (SELECT p."id" FROM "WorkPermit" p WHERE p."kind" = r."kind" AND p."year" = r."year" AND p."number" = r."number" AND p."status" = 'DRAFT' ORDER BY p."createdAt" DESC LIMIT 1) AS "draftPermitId",
-          r."updatedAt", r."ownerName", count(*) OVER()::int AS total
+          r."updatedAt", r."ownerName",
+          (count(*) FILTER (WHERE r."status" = 'OBSERVED') OVER())::int AS total,
+          (count(*) FILTER (WHERE r."status" = 'OBSERVED_CONFIRMED') OVER())::int AS "confirmedTotal",
+          row_number() OVER (PARTITION BY r."status" ORDER BY r."number"::numeric DESC) AS rank
         FROM "WorkPermitNumberReservation" r
         WHERE "kind" = ${kind} AND "year" = ${year} AND "number" ~ '^[0-9]+$'
           AND ("status" = 'OBSERVED_CONFIRMED' OR ("status" = 'OBSERVED'
             AND ("number"::numeric > ${floor}::numeric OR "permitId" IS NOT NULL)))
-        ORDER BY "number"::numeric DESC LIMIT 20`;
+        ) shown WHERE rank <= 20 ORDER BY "number"::numeric DESC`;
       return { highest, suggested: baseline ? await nextPermitNumber(tx, kind, year, baseline.number, highest) : null, canCancelDeleted: canCancelDeleted(user),
-        total: entries[0]?.total ?? 0, entries: entries.map(({ total: _total, ...entry }) => entry) };
+        total: entries[0]?.total ?? 0, confirmedTotal: entries[0]?.confirmedTotal ?? 0, entries: entries.map(({ total: _total, confirmedTotal: _confirmed, rank: _rank, ...entry }) => entry) };
     });
     return ok(data);
   });

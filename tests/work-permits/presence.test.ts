@@ -70,7 +70,7 @@ function attendanceFixture(existing: PermitMember[], occupied: PermitMember[] = 
       findMany: async () => { calls.push("conflict-check"); return [otherSession(occupied)]; },
       update: async () => { calls.push("write"); },
     },
-    workPermitPerson: { findUnique: async ({ where }: { where: { id: string } }) => where.id === "a"
+    workPermitPerson: { findFirst: async () => null, findUnique: async ({ where }: { where: { id: string } }) => where.id === "a"
       ? { id: "a", ...worker, isActive: true } : { company: "Marine" } },
   } as unknown as Prisma.TransactionClient;
   return { tx, calls };
@@ -116,7 +116,7 @@ function lifecycleFixture(action: "open" | "handoff", previousMembers: PermitMem
   const tx = { $executeRaw: async (parts: TemplateStringsArray) => { locks.push(parts.join("")); return 1; },
     $queryRaw: async (parts: TemplateStringsArray) => { locks.push(parts.join("")); return []; },
     workPermit: { findUnique: async () => permit, update: async () => { writes++; return permit; } },
-    workPermitPerson: { findUnique: async () => person },
+    workPermitPerson: { findUnique: async () => person, findFirst: async () => null },
     workPermitSession: {
       findFirst: async ({ where }: { where: { id?: string } }) => where.id === "s1" ? old : null,
       findMany: async () => [otherSession([inside])],

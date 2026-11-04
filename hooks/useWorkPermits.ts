@@ -116,16 +116,30 @@ export interface PermitNumberReviewEntry {
   /** Phiếu nháp "Chờ NKVH lưu" mang số này (lượt lấy từ NKVH chưa đồng bộ). */
   draftPermitId?: string | null;
 }
+/** `total`: số còn chờ đối chiếu; `confirmedTotal`: số đã xác nhận nâng dãy, không nằm trong danh sách chờ. */
+type PermitNumberReviewData = { highest: string; suggested: string | null; total: number; confirmedTotal?: number; entries: PermitNumberReviewEntry[]; canCancelDeleted?: boolean };
+export const PERMIT_NUMBER_CONFIRMED_STATUS = "OBSERVED_CONFIRMED";
+/** Cập nhật ngay danh sách đang hiện theo kết quả vừa lưu: số đã xử lý rời danh sách chờ, không đợi tải lại. */
+function applyPermitNumberReview(data: PermitNumberReviewData, saved: { id: string; status: string; updatedAt: string }): PermitNumberReviewData {
+  const before = data.entries.find(entry => entry.id === saved.id);
+  if (!before) return data;
+  const wasConfirmed = before.status === PERMIT_NUMBER_CONFIRMED_STATUS, nowConfirmed = saved.status === PERMIT_NUMBER_CONFIRMED_STATUS;
+  return { ...data,
+    total: Math.max(0, data.total - (wasConfirmed ? 0 : 1)),
+    confirmedTotal: Math.max(0, (data.confirmedTotal ?? 0) - (wasConfirmed ? 1 : 0) + (nowConfirmed ? 1 : 0)),
+    entries: nowConfirmed ? data.entries.map(entry => entry.id === saved.id ? { ...entry, status: saved.status, updatedAt: saved.updatedAt } : entry) : data.entries.filter(entry => entry.id !== saved.id) };
+}
 export function usePermitNumberReview(kind: PermitKind, year: number) {
   return useQuery({ queryKey: ["work-permit-number-review", kind, year], refetchInterval: 15_000,
-    queryFn: () => apiGet<{ highest: string; suggested: string | null; total: number; entries: PermitNumberReviewEntry[]; canCancelDeleted?: boolean }>(`/api/work-permits/number-review?kind=${kind}&year=${year}`) });
+    queryFn: () => apiGet<PermitNumberReviewData>(`/api/work-permits/number-review?kind=${kind}&year=${year}`) });
 }
 /** confirm = nâng dãy · ignore = tiện ích đọc nhầm (số dùng lại) · nkvhDeleted = phiếu NKVH đã bị xoá (hủy số, chỉ quản trị). */
 export type PermitNumberReviewAction = "confirm" | "ignore" | "nkvhDeleted";
 export function useReviewPermitNumber() {
   const qc = useQueryClient();
   return useMutation({ mutationFn: (body: { id: string; action: PermitNumberReviewAction; expectedStatus: string; expectedUpdatedAt: string; reason: string; sourceChecked: boolean }) =>
-    apiMutate(`/api/work-permits/number-review`, "POST", body), onSuccess: () => {
+    apiMutate<{ id: string; status: string; updatedAt: string }>(`/api/work-permits/number-review`, "POST", body), onSuccess: saved => {
+      qc.setQueriesData<{ data: PermitNumberReviewData; meta: unknown }>({ queryKey: ["work-permit-number-review"] }, old => old && { ...old, data: applyPermitNumberReview(old.data, saved) });
       for (const key of ["work-permit-number-review", "work-permit-number-suggestion", "work-permit-number-reservations", "work-permit-number-baselines", "work-permits"]) qc.invalidateQueries({ queryKey: [key] });
     } });
 }
@@ -463,7 +477,18 @@ export function useChangePermitPersonViolation() {
     },
   });
 }
-export type PermitViolationPerson = Pick<PermitPerson, "id" | "name" | "code" | "company" | "version" | "violations">;
+export function useSetPermitPersonCardRevoked() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, revoked, description, version, context }: { id: string; revoked: boolean; description?: string; version: number; context?: PermitViolationContext }) =>
+      apiMutate<PermitPerson>(`/api/work-permits/people/${encodeURIComponent(id)}/violations`, "PUT", { revoked, description, version, ...(revoked ? context : undefined) }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["work-permit-people"] });
+      qc.invalidateQueries({ queryKey: ["work-permit-companies"] });
+    },
+  });
+}
+export type PermitViolationPerson = Pick<PermitPerson, "id" | "name" | "code" | "company" | "version" | "violations" | "cardRevokedAt" | "cardRevokedByName">;
 export function usePermitViolationPerson(id: string, enabled: boolean, context?: PermitViolationContext) {
   const query = new URLSearchParams(context ? { permitId: context.permitId, sessionId: context.sessionId } : {});
   return useQuery({ queryKey: ["work-permit-people", "violation", id, query.toString()], enabled: enabled && Boolean(id), staleTime: 0,
@@ -471,7 +496,7 @@ export function usePermitViolationPerson(id: string, enabled: boolean, context?:
 }
 
 /** Một yêu cầu cho cảnh báo + URL ảnh của danh sách đang xem; không lấy cả danh bạ hay byte ảnh. */
-type PermitSessionPerson = Pick<PermitPerson, "id" | "violations" | "photoUrl">;
+type PermitSessionPerson = Pick<PermitPerson, "id" | "violations" | "cardRevokedAt" | "photoUrl">;
 export function usePermitSessionViolations(permitId: string, sessionId: string, enabled = true, options: { memberIds?: string[]; live?: boolean } = {}) {
   // Danh sách đổi sau quét thêm/gỡ người → tải ngay; vào/ra cùng người giữ nguyên cache.
   const memberIds = [...new Set(options.memberIds ?? [])].sort();

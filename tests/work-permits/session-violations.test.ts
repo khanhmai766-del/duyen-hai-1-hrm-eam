@@ -21,7 +21,7 @@ test("Đọc lịch sử hiện tại cho toàn bộ người liên kết bằng
   const result = await loadPermitSessionViolations("permit", "session", state.db);
   assert.deepEqual(state.reads, [
     { where: { id: "session", permitId: "permit" }, select: { members: true } },
-    { where: { id: { in: ["worker", "second"] } }, select: { id: true, violations: true, photoKey: true, photoSource: true } },
+    { where: { id: { in: ["worker", "second"] } }, select: { id: true, violations: true, cardRevokedAt: true, photoKey: true, photoSource: true } },
   ]);
   assert.deepEqual(result[0].violations, state.current[0].violations);
   assert.match(result[0].photoUrl!, /^\/api\/files\/s3\?key=work-permit-people%2Fphotos%2Fworker.webp&v=[a-f0-9]{8}$/);

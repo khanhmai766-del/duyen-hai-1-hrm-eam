@@ -3,7 +3,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
-import { usePermitNumberReview, useReviewPermitNumber, type PermitNumberReviewAction, type PermitNumberReviewEntry } from "@/hooks/useWorkPermits";
+import { PERMIT_NUMBER_CONFIRMED_STATUS, usePermitNumberReview, useReviewPermitNumber, type PermitNumberReviewAction, type PermitNumberReviewEntry } from "@/hooks/useWorkPermits";
 import { nkvhPctUrl } from "@/lib/nkvh-pct";
 import { PERMIT_KINDS, type PermitKind } from "@/lib/work-permits";
 
@@ -12,11 +12,17 @@ export function PermitNumberReview({ kind, onOpenPermit }: { kind: PermitKind; o
   const query = usePermitNumberReview(kind, year);
   const save = useReviewPermitNumber();
   const [open, setOpen] = useState(false);
+  const [showConfirmed, setShowConfirmed] = useState(false);
   const [selection, setSelection] = useState<{ entry: PermitNumberReviewEntry; action: PermitNumberReviewAction } | null>(null);
   const [reason, setReason] = useState("");
   const [checked, setChecked] = useState(false);
   const entries = query.data?.data.entries ?? [];
   if (query.isError) return <p role="alert" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">Chưa tải được số NKVH cần đối chiếu. <Button variant="outline" className="h-10" onClick={() => query.refetch()}>Thử lại</Button></p>;
+  // Đã xác nhận = xong việc đối chiếu nên rời danh sách chờ; vẫn mở lại được vì đây là lối duy nhất để hủy số khi phiếu NKVH bị xoá.
+  const pending = entries.filter(entry => entry.status !== PERMIT_NUMBER_CONFIRMED_STATUS);
+  const confirmed = entries.filter(entry => entry.status === PERMIT_NUMBER_CONFIRMED_STATUS);
+  const confirmedTotal = query.data?.data.confirmedTotal ?? confirmed.length;
+  const pendingTotal = query.data?.data.total ?? pending.length;
   if (!entries.length && !selection) return null;
   const start = (entry: PermitNumberReviewEntry, action: PermitNumberReviewAction) => { setSelection({ entry, action }); setReason(""); setChecked(false); };
   const canCancelDeleted = query.data?.data.canCancelDeleted === true;
@@ -29,12 +35,15 @@ export function PermitNumberReview({ kind, onOpenPermit }: { kind: PermitKind; o
     nkvhDeleted: { title: "Phiếu NKVH đã bị xoá — hủy số", description: "Dùng khi phiếu NKVH đã lưu số này nhưng sau đó bị xoá trên NKVH, nên không còn gì để đồng bộ. Phiếu nháp chờ NKVH lưu (nếu có) chuyển Đã hủy; số ghi Đã hủy và KHÔNG cấp lại. Lịch sử vẫn được giữ.",
       check: "Tôi đã kiểm tra trên NKVH: phiếu mang số này không còn (đã bị xoá).", done: "Đã hủy số của phiếu NKVH đã bị xoá" },
   };
-  return <section className="space-y-3 rounded-xl border border-amber-200 bg-amber-50/60 p-3 sm:p-4">
-    <div className="flex flex-wrap items-center justify-between gap-2"><div><h2 className="font-semibold text-amber-950">Đối chiếu số NKVH · PCT {PERMIT_KINDS[kind]}</h2><p className="mt-1 text-xs text-amber-900">Số chờ đối chiếu vẫn chặn cấp trùng, chưa tự nâng dãy. Số tiếp theo dự kiến: <strong>{query.data?.data.suggested ?? "Chưa cấu hình"}</strong>.</p></div><Button variant="outline" className="h-10 text-xs" aria-expanded={open} onClick={() => setOpen(!open)}>{open ? "Thu gọn" : `Xem ${query.data?.data.total ?? entries.length} số`}</Button></div>
-    {open && <div className="space-y-2">{entries.map(entry => <div key={entry.id} className="flex flex-col gap-3 rounded-lg border border-amber-200 bg-background p-3 sm:flex-row sm:items-center sm:justify-between">
+  const renderEntry = (entry: PermitNumberReviewEntry) => <div key={entry.id} className="flex flex-col gap-3 rounded-lg border border-amber-200 bg-background p-3 sm:flex-row sm:items-center sm:justify-between">
       <div className="min-w-0"><p className="font-semibold">{entry.number}/{year} <span className="ml-1 text-xs font-normal text-muted-foreground">{entry.status === "OBSERVED_CONFIRMED" ? "Đã xác nhận nâng dãy" : "Chờ đối chiếu"}</span></p><p className="mt-1 text-xs text-muted-foreground">{entry.permitId ? "Đã có hồ sơ phiếu, chưa xác nhận nâng dãy" : entry.draftPermitId ? <>Có <b className="text-amber-800">phiếu nháp chờ đồng bộ</b> — mở phiếu NKVH và bấm đồng bộ trên tiện ích để chuyển thành Đã cấp</> : "Chưa có hồ sơ phiếu trên website"}</p>{entry.draftPermitId && onOpenPermit && <button type="button" className="mr-4 mt-1 inline-flex min-h-10 items-center text-xs font-medium text-blue-700 underline" onClick={() => onOpenPermit(entry.draftPermitId!)}>Mở phiếu nháp</button>}{entry.nkvhPctId ? <a className="mt-1 inline-flex min-h-10 items-center text-xs font-medium text-blue-700 underline" href={nkvhPctUrl(kind, entry.nkvhPctId)} target="_blank" rel="noopener noreferrer">Mở phiếu NKVH để đối chiếu</a> : <p className="mt-1 text-xs text-muted-foreground">Chưa có liên kết; tìm số này trong sổ NKVH.</p>}</div>
       <div className="grid grid-cols-2 gap-2 sm:flex">{entry.status === "OBSERVED" && <Button className="min-h-10 h-auto whitespace-normal px-2 py-2 text-xs sm:whitespace-nowrap" onClick={() => start(entry, "confirm")}>Xác nhận nâng dãy</Button>}<Button variant="outline" className="min-h-10 h-auto whitespace-normal px-2 py-2 text-xs sm:whitespace-nowrap" disabled={Boolean(entry.permitId || entry.draftPermitId)} title={entry.permitId || entry.draftPermitId ? "Xử lý số trên NKVH và đồng bộ lại trước" : undefined} onClick={() => start(entry, "ignore")}>Bỏ ghi nhận sai</Button>{canCancelDeleted && (!entry.permitId || entry.draftPermitId) && <Button variant="outline" className="col-span-2 min-h-10 h-auto whitespace-normal border-red-200 px-2 py-2 text-xs text-red-700 hover:bg-red-50 hover:text-red-800 sm:col-span-1 sm:whitespace-nowrap" title="Phiếu NKVH đã lưu số này rồi bị xoá — chỉ quản trị" onClick={() => start(entry, "nkvhDeleted")}>Phiếu NKVH đã bị xoá</Button>}</div>
-    </div>)}{(query.data?.data.total ?? 0) > entries.length && <p className="text-xs text-muted-foreground">Đang hiển thị {entries.length} số cao nhất; xử lý xong sẽ tải các số tiếp theo.</p>}</div>}
+    </div>;
+  return <section className={pending.length ? "space-y-3 rounded-xl border border-amber-200 bg-amber-50/60 p-3 sm:p-4" : "space-y-2"}>
+    {pending.length > 0 && <div className="flex flex-wrap items-center justify-between gap-2"><div><h2 className="font-semibold text-amber-950">Đối chiếu số NKVH · PCT {PERMIT_KINDS[kind]}</h2><p className="mt-1 text-xs text-amber-900">Số chờ đối chiếu vẫn chặn cấp trùng, chưa tự nâng dãy. Số tiếp theo dự kiến: <strong>{query.data?.data.suggested ?? "Chưa cấu hình"}</strong>.</p></div><Button variant="outline" className="h-10 text-xs" aria-expanded={open} onClick={() => setOpen(!open)}>{open ? "Thu gọn" : `Xem ${pendingTotal} số`}</Button></div>}
+    {pending.length > 0 && open && <div className="space-y-2">{pending.map(renderEntry)}{pendingTotal > pending.length && <p className="text-xs text-muted-foreground">Đang hiển thị {pending.length} số cao nhất; xử lý xong sẽ tải các số tiếp theo.</p>}</div>}
+    {confirmed.length > 0 && <div className="flex justify-end"><Button variant="ghost" className="h-10 text-xs text-muted-foreground" aria-expanded={showConfirmed} onClick={() => setShowConfirmed(!showConfirmed)}>{showConfirmed ? "Ẩn số đã xác nhận" : `Số đã xác nhận nâng dãy (${confirmedTotal})`}</Button></div>}
+    {confirmed.length > 0 && showConfirmed && <div className="space-y-2">{confirmed.map(renderEntry)}{confirmedTotal > confirmed.length && <p className="text-xs text-muted-foreground">Đang hiển thị {confirmed.length} số cao nhất.</p>}</div>}
     {selection && <Dialog open onOpenChange={value => { if (!value && !save.isPending) setSelection(null); }}><DialogContent className="max-h-[90dvh] overflow-y-auto"><DialogTitle>{copy[selection.action].title} {selection.entry.number}/{year}</DialogTitle><DialogDescription>{copy[selection.action].description}</DialogDescription>
       <label className="block space-y-1.5 text-sm"><span className="font-medium">Lý do đối chiếu *</span><textarea className="min-h-24 w-full rounded-md border bg-background p-3 text-base sm:text-sm" maxLength={2000} value={reason} onChange={event => setReason(event.target.value)} disabled={save.isPending} /></label>
       <label className="flex min-h-10 items-start gap-2 text-sm"><input type="checkbox" className="mt-1 h-5 w-5 shrink-0" checked={checked} disabled={save.isPending} onChange={event => setChecked(event.target.checked)} /><span>{copy[selection.action].check}</span></label>

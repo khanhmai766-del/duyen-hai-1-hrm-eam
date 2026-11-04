@@ -1,7 +1,7 @@
 import { audit, fail, ok, requireUser } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 import { formatPermitNumber } from "@/lib/work-permits";
-import { changePermitPersonViolation, recordPermitPersonViolation, requireViolationSessionMember } from "@/lib/server/work-permit-person-violations";
+import { changePermitPersonViolation, recordPermitPersonViolation, requireViolationSessionMember, setPermitPersonCardRevoked } from "@/lib/server/work-permit-person-violations";
 import { requirePermitExecute, requirePermitIssue } from "@/lib/server/work-permit-permissions";
 import { requirePermitVisible } from "@/lib/server/work-permit-scope";
 import { permitBody, permitHandle } from "@/lib/server/work-permits";
@@ -37,7 +37,7 @@ export async function GET(req: Request, props: { params: Promise<{ id: string }>
       ...(params.has("permitId") ? { permitId: params.get("permitId") } : {}),
       ...(params.has("sessionId") ? { sessionId: params.get("sessionId") } : {}),
     });
-    const person = await prisma.workPermitPerson.findUnique({ where: { id }, select: { id: true, name: true, code: true, company: true, version: true, violations: true } });
+    const person = await prisma.workPermitPerson.findUnique({ where: { id }, select: { id: true, name: true, code: true, company: true, version: true, violations: true, cardRevokedAt: true, cardRevokedByName: true } });
     if (!person) return fail("Không tìm thấy hồ sơ nhân sự. Vui lòng kiểm tra danh bạ nhà thầu.", 404);
     return ok(person);
   });
@@ -51,6 +51,21 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
     const context = await violationContext(user, id, body);
     const { row, violation } = await recordPermitPersonViolation(id, body, user, prisma, context);
     await audit(user.id, "RECORD_WORK_PERMIT_PERSON_VIOLATION", "WorkPermitPerson", id, `${row.code}: ${row.name}${context ? ` · PCT ${context.permitNumber}` : ""} · ${violation.description}`);
+    return ok(row);
+  });
+}
+
+/** "Không cho phép" (`revoked: true`, thu thẻ) hoặc "Cho phép lại" (`revoked: false`). */
+export async function PUT(req: Request, props: { params: Promise<{ id: string }> }) {
+  return permitHandle(async () => {
+    const user = await requireUser();
+    const { id } = await props.params;
+    const body = await permitBody(req);
+    if (typeof body.revoked !== "boolean") return fail("Thao tác thu thẻ không hợp lệ");
+    const context = body.revoked ? await violationContext(user, id, body) : undefined;
+    const row = await setPermitPersonCardRevoked(id, body, user, body.revoked, prisma, context);
+    await audit(user.id, body.revoked ? "REVOKE_WORK_PERMIT_PERSON_CARD" : "RESTORE_WORK_PERMIT_PERSON_CARD", "WorkPermitPerson", id,
+      `${row.code}: ${row.name}${context ? ` · PCT ${context.permitNumber}` : ""}`);
     return ok(row);
   });
 }

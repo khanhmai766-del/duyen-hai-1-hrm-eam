@@ -1824,6 +1824,10 @@ model MaterialStockMovement {
 model WorkPermitPerson {
   /// Lịch sử vi phạm PCT, chỉ bổ sung qua API chuyên biệt; không bị ghi đè khi đồng bộ danh bạ.
   violations Json @default("[]")
+  /// Thu thẻ ("Không cho phép"): khác null thì không được tham gia PCT nào; không bị ghi đè khi đồng bộ danh bạ.
+  /// SQL: prisma/manual/add-work-permit-person-card-revoked.sql
+  cardRevokedAt     DateTime?
+  cardRevokedByName String    @default("")
   id         String              @id @default(cuid())
   code       String              @unique
   name       String

@@ -43,6 +43,29 @@ export async function changePermitPersonViolation(id: string, body: Record<strin
   });
 }
 
+/**
+ * "Không cho phép" (thu thẻ) theo từng người, hoặc mở lại. Lỗi vừa nhập (nếu có) được ghi vào lịch sử trong cùng transaction.
+ * Phải có ít nhất một lần vi phạm: cảnh báo về sau nói người này "đã vi phạm quá số lần cho phép".
+ */
+export async function setPermitPersonCardRevoked(id: string, body: Record<string, unknown>, user: { id: string; name?: string | null; role: string; position?: string | null }, revoked: boolean, db = prisma, context?: { permitId: string; sessionId: string; permitNumber: string }) {
+  if (!canChangePermitViolation(user)) throw fail("Bạn không có quyền thu thẻ hoặc cho phép lại", 403);
+  const description = revoked && typeof body.description === "string" ? body.description.trim() : "";
+  if (description.length > 2000) throw fail("Lỗi vi phạm tối đa 2.000 ký tự");
+  const now = new Date();
+  return db.$transaction(async tx => {
+    await tx.$queryRaw`SELECT "id" FROM "WorkPermitPerson" WHERE "id" = ${id} FOR UPDATE`;
+    const person = await tx.workPermitPerson.findUnique({ where: { id } });
+    if (!person) throw fail("Không tìm thấy nhân sự nhà thầu", 404);
+    if (body.version !== person.version) throw fail("Hồ sơ đã thay đổi. Vui lòng tải lại hồ sơ.", 409);
+    if (Boolean(person.cardRevokedAt) === revoked) throw fail(revoked ? "Nhân viên này đã bị thu thẻ." : "Nhân viên này chưa bị thu thẻ.", 409);
+    if (!revoked) return tx.workPermitPerson.update({ where: { id }, data: { cardRevokedAt: null, cardRevokedByName: "", version: { increment: 1 } } });
+    const previous = Array.isArray(person.violations) ? person.violations : [];
+    if (!previous.length && !description) throw fail("Vui lòng nhập lỗi vi phạm trước khi thu thẻ");
+    const violations = description ? [...previous, { id: randomUUID(), description, recordedAt: now.toISOString(), recordedById: user.id, recordedByName: user.name ?? "", ...(context ?? {}) }] : previous;
+    return tx.workPermitPerson.update({ where: { id }, data: { violations, cardRevokedAt: now, cardRevokedByName: user.name ?? "", version: { increment: 1 } } });
+  });
+}
+
 /** Chỉ nhận liên kết hồ sơ thật; tên/số thẻ trong snapshot không đủ để ghi lỗi cho người khác. */
 export function requireViolationSessionMember(members: unknown, personId: string) {
   if (!Array.isArray(members) || !members.some(member => member && typeof member === "object" && member.personId === personId))
