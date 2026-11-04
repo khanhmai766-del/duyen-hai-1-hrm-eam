@@ -85,7 +85,7 @@ function normalizePermissionRows(value: unknown, roleIds: string[]) {
         matrix: normalizedMatrix,
       };
     })
-    .filter((row) => row.id && row.group && row.feature);
+    .filter((row) => row.id && row.group && row.feature && !row.id.startsWith("ctktkt:"));
 }
 
 function normalizeUserOverrides(value: unknown) {
@@ -103,7 +103,7 @@ function normalizeUserOverrides(value: unknown) {
         createdAt: String(item.createdAt ?? new Date().toISOString()),
       };
     })
-    .filter((row) => row.id && row.userId && row.permissionId);
+    .filter((row) => row.id && row.userId && row.permissionId && !row.permissionId.startsWith("ctktkt:"));
 }
 
 export async function GET() {

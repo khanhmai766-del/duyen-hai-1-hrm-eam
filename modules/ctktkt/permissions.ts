@@ -1,10 +1,7 @@
-import { PERMISSION_LABELS, PERMISSIONS } from "./lib/auth/session";
-const view = { ADMIN:"full", MANAGER:"read", SUPERVISOR:"read", TECHNICIAN:"read", VIEWER:"read" } as const;
-const edit = { ADMIN:"full", MANAGER:"personal", SUPERVISOR:"personal", TECHNICIAN:"personal", VIEWER:"none" } as const;
-const admin = { ADMIN:"full", MANAGER:"none", SUPERVISOR:"none", TECHNICIAN:"none", VIEWER:"none" } as const;
-export const CTKTKT_PERMISSION_ROWS = [
-  {id:"ctktkt-access",group:"Chỉ tiêu KTKT",feature:"Xem số liệu và báo cáo KTKT",note:"Mở phân hệ Chỉ tiêu KTKT trong Tiện ích.",matrix:view},
-  ...PERMISSIONS.filter(p=>p!=="view_all").map(permission=>({id:`ctktkt:${permission}`,group:"Chỉ tiêu KTKT",feature:permission==="manage_users"?"Quản trị toàn bộ phân hệ KTKT":PERMISSION_LABELS[permission],
-    note:permission==="manage_users"?"Toàn quyền số liệu, sao lưu, khôi phục và cấu hình KTKT. Tài khoản được quản lý tại mục Quản trị của web.":"Cá nhân: đúng phạm vi cương vị đang làm việc. Quản lý/Toàn quyền: cấp trực tiếp chức năng này. Chỉ đọc/Không: không cho nhập.",matrix:permission==="manage_users"?admin:edit})),
-];
-export const CTKTKT_DEFAULT_MATRIX=Object.fromEntries(CTKTKT_PERMISSION_ROWS.map(row=>[row.id,row.matrix]));
+/** RBAC chung chỉ điều khiển quyền mở phân hệ. Nghiệp vụ dùng bảng cương vị riêng. */
+export const CTKTKT_PERMISSION_ROWS = [{
+  id: "ctktkt-access", group: "Chỉ tiêu KTKT", feature: "Mở và xem phân hệ KTKT",
+  note: "Quyền nhập liệu, đồng bộ và quản trị được chọn tại Phân quyền KTKT trong phân hệ. Các mức Chỉ xem/Cá nhân/Quản lý/Toàn quyền ở đây đều chỉ cho mở phân hệ.",
+  matrix: { ADMIN: "full", MANAGER: "read", SUPERVISOR: "read", TECHNICIAN: "read", VIEWER: "read" } as const,
+}];
+export const CTKTKT_DEFAULT_MATRIX = Object.fromEntries(CTKTKT_PERMISSION_ROWS.map(row => [row.id, row.matrix]));

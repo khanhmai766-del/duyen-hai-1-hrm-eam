@@ -1,11 +1,11 @@
 import JSZip from "jszip";
-import { requireAdmin } from "@/modules/ctktkt/lib/auth/server";
+import { requirePermission } from "@/modules/ctktkt/lib/auth/server";
 import { getRawDb, readBackupSnapshot } from "@/modules/ctktkt/db";
 import { BACKUP_TABLES, backupSchemas, createDataBackup, type BackupRow } from "@/modules/ctktkt/lib/data-backup";
 import { readBackupArchive, archiveSummary, archiveStatements, MAX_ARCHIVE_BYTES } from "@/modules/ctktkt/lib/backup-archive";
 
 export async function POST(request: Request) {
-  const guard = await requireAdmin(); if (!guard.ok) return guard.response;
+  const guard = await requirePermission("restore_data"); if (!guard.ok) return guard.response;
   const form = await request.formData();
   const file = form.get("file"), action = form.get("action"), mode = form.get("mode");
   if (!(file instanceof File) || file.size > MAX_ARCHIVE_BYTES || !["preview", "restore"].includes(String(action)) || !["missing", "overwrite"].includes(String(mode))) {
@@ -31,7 +31,7 @@ export async function POST(request: Request) {
 }
 
 export async function GET() {
-  const guard = await requireAdmin(); if (!guard.ok) return guard.response;
+  const guard = await requirePermission("backup_data"); if (!guard.ok) return guard.response;
   const data = await readBackupSnapshot(BACKUP_TABLES.map(table => ({ sql: `SELECT * FROM ${table.name} ORDER BY ${table.keys.join(",")} LIMIT 250001`, args: [] })));
   if (data.reduce((sum, rows) => sum + rows.length, 0) > 250_000) return Response.json({ error: "Dữ liệu vượt giới hạn gói. Hãy tải riêng theo khoảng ngày." }, { status: 400 });
   const zip = new JSZip();

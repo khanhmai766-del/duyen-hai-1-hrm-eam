@@ -8,6 +8,7 @@ export const maxDuration = 60;
 type Method = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 type Module = Partial<Record<Method, (request: Request) => Promise<Response>>>;
 const routes: Record<string, () => Promise<Module>> = {
+  "permissions": () => import("@/modules/ctktkt/server/routes/permissions/route"),
   "integration/v1/operating-data": () => import("@/modules/ctktkt/server/routes/integration/v1/operating-data/route"),
   "cron/coal-photos": () => import("@/modules/ctktkt/server/routes/cron/coal-photos/route"),
   "admin/data-backup/archive": () => import("@/modules/ctktkt/server/routes/admin/data-backup/archive/route"),
@@ -65,7 +66,8 @@ async function dispatch(request: Request, context: { params: Promise<{ path?: st
     const handler=handlers[request.method as Method]; if(!handler) return fail("Phương thức không được hỗ trợ.",405);
     const response=await handler(request);
     if(machine) return response; // Giữ hợp đồng JSON gốc cho các hệ thống gọi API.
-    if(actor && response.ok && !["GET","HEAD"].includes(request.method)) await audit(actor.id,"UPDATE_CTKTKT","Ctktkt",undefined,`${request.method} ${path}`);
+    if(path === "permissions") { response.headers.set("Cache-Control", "private, no-store"); return response; }
+    if(actor && path !== "permissions" && response.ok && !["GET","HEAD"].includes(request.method)) await audit(actor.id,"UPDATE_CTKTKT","Ctktkt",undefined,`${request.method} ${path}`);
     if(response.status===304 || response.headers.has("Content-Disposition") || !response.headers.get("Content-Type")?.includes("application/json")) return response;
     const body=await response.json();
     if(!response.ok || body?.error) return fail(body?.error || "Thao tác KTKT thất bại.",response.ok?400:response.status);

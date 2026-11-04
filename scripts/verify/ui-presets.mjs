@@ -1,4 +1,4 @@
-import { ctktktIntegrationPreset } from "./presets/ctktkt-integration.mjs";
+import { ctktktIntegrationPreset, ctktktPermissionsPreset } from "./presets/ctktkt-integration.mjs";
 import { groundingReminderPreset } from "./presets/grounding-reminder.mjs";
 import { personViolationsPreset } from "./presets/person-violations.mjs";
 import { gghPreset } from "./presets/ggh-3d.mjs";
@@ -265,6 +265,8 @@ let nhanSuLocName = "";
 
 export const PRESETS = {
   "ctktkt-integration": ctktktIntegrationPreset,
+  "ctktkt-permissions": ctktktPermissionsPreset,
+  "ctktkt-permissions-grid": { ...ctktktPermissionsPreset, routes: () => ["/tien-ich/chi-tieu-ktkt/phan-quyen", "/tien-ich/chi-tieu-ktkt/phan-quyen?verify=ktkt"] },
   "ctktkt-tools": { ...ctktktIntegrationPreset, routes: () => ["", "/tien-ich-dong-bo", "/admin/data-backup", "/admin/data-history"].map(path => "/tien-ich/chi-tieu-ktkt" + path) },
   "tiep-dia-nhac-ca": groundingReminderPreset,
   "lich-su-lam-viec-trong-ngay": dailyHistoryPreset,

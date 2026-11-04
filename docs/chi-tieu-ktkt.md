@@ -4,11 +4,19 @@ Tích hợp gói `ctktkt-dashboard-transfer-2026-11-04.zip` vào EAM. Thông tin
 
 ## Màn hình
 
-Thanh bên có nhóm **QUẢN LÝ CHỈ TIÊU KTKT**, gồm Dữ liệu các tháng, Báo cáo Chỉ tiêu KTKT, Báo cáo sản xuất, Theo dõi lượng nước, Theo dõi hóa chất, Suất hao nhiệt PPA và Báo cáo PMIS. Bên phải tiêu đề có ba nút biểu tượng: Tiện ích đồng bộ, Sao lưu & nạp dữ liệu (chung một màn hình), Nhật ký số liệu. Hai nút quản trị dữ liệu hiện theo quyền quản trị KTKT; không lặp lại các mục này trong hàng tab báo cáo hoặc thanh bên. Các chức năng sao lưu/nạp/nhật ký đã có trong gói nguồn; phần nhận ZIP chia nhỏ được bổ sung khi tích hợp. Tuyến gốc: `/tien-ich/chi-tieu-ktkt`.
+Thanh bên có nhóm **QUẢN LÝ CHỈ TIÊU KTKT**, gồm Dữ liệu các tháng, Báo cáo Chỉ tiêu KTKT, Báo cáo sản xuất, Theo dõi lượng nước, Theo dõi hóa chất, Suất hao nhiệt PPA và Báo cáo PMIS. Bên phải tiêu đề có ba nút biểu tượng: Tiện ích đồng bộ, Sao lưu & nạp dữ liệu (chung một màn hình), Nhật ký số liệu. Hai nút dữ liệu hiện theo quyền sao lưu/nạp và xem nhật ký; không lặp lại các mục này trong hàng tab báo cáo hoặc thanh bên. Các chức năng sao lưu/nạp/nhật ký đã có trong gói nguồn; phần nhận ZIP chia nhỏ được bổ sung khi tích hợp. Tuyến gốc: `/tien-ich/chi-tieu-ktkt`.
 
 Các màn hình nằm trong khung ứng dụng EAM và sử dụng NextAuth hiện tại. Không tạo thêm tài khoản hoặc cookie đăng nhập của dự án nguồn. `User.id` hiện tại là danh tính người thao tác; quyền lấy từ RBAC của EAM, áp theo cương vị **đang làm việc** do `requireUser()` trả về. Ngày 04/11/2026 đã SSH **chỉ đọc** và đối chiếu 25 tên cương vị chính trên production (174 tài khoản đang hoạt động); các tên khớp chính sách CTKTKT. Không sửa nhân sự trên server.
 
-Quyền `ctktkt-access` mở phân hệ; các quyền `ctktkt:<tên quyền nguồn>` xuất hiện trong Quản trị → Phân quyền. Mức Cá nhân áp theo phạm vi cương vị của gói nguồn; Quản lý/Toàn quyền cấp trực tiếp chức năng tương ứng. VIEWER mặc định chỉ xem. Quyền quản trị KTKT (`ctktkt:manage_users`) mặc định chỉ ADMIN và bao gồm toàn quyền phân hệ, sao lưu, khôi phục và cấu hình; quản lý tài khoản vẫn ở EAM. Tài khoản tra cứu chỉ giới hạn (`DEFECT_READ_ONLY`) chưa được mở phân hệ này.
+RBAC chung chỉ giữ `ctktkt-access` để mở/xem phân hệ. Các mức khác `none` của quyền cửa vào này đều không cấp quyền nghiệp vụ. Các dòng/ngoại lệ `ctktkt:<tên quyền nguồn>` cũ được bỏ khỏi API và màn hình RBAC; mã KTKT không dùng chúng nữa. Các cấu hình RBAC khác được giữ nguyên.
+
+Quyền nghiệp vụ nằm tại **Phân quyền KTKT** (`/tien-ich/chi-tieu-ktkt/phan-quyen`), mở bằng nút cạnh thao tác sao chép Excel. Bảng chọn cương vị cho từng nhóm quyền, có tìm kiếm, lọc cương vị đã giao và chọn/bỏ cả cột đang hiển thị. Nhóm sao lưu, nạp, nhật ký và sửa phân quyền được tách riêng. Quyền **Toàn quyền KTKT** bao gồm mọi thao tác trong phân hệ. Chỉ người có quyền sửa phân quyền hoặc toàn quyền KTKT mới được mở/lưu bảng.
+
+Quyền lấy theo **cương vị đang làm việc**, không suy rộng từ vai trò VIEWER/SUPERVISOR/TECHNICIAN/MANAGER của web. Vì vậy VHV mang vai trò VIEWER vẫn nhập đúng các nhóm ô được giao, còn Giám sát không tự có thêm quyền PPA/hóa chất. Khi đổi cương vị, quyền KTKT đổi ở lần yêu cầu tiếp theo. Tài khoản tra cứu giới hạn (`DEFECT_READ_ONLY`) và tài khoản đang buộc đổi mật khẩu vẫn bị chặn. ADMIN đang bật chế độ quản trị website luôn có toàn quyền để phục hồi cấu hình; điều này không nâng quyền hệ thống cho người được giao quản trị KTKT.
+
+Cấu hình được lưu trong bảng `RbacConfig` có sẵn, khóa `ctktkt-position-permissions`, gồm phiên bản và đầy đủ danh sách cương vị cho từng quyền. Không cần thêm bảng/cột. Chưa từng lưu thì dùng mặc định theo mã nguồn gốc (25 cương vị); không tự ghi cấu hình trong GET. Mảng rỗng đã lưu là **không cấp quyền**, không phục hồi mặc định. Nút **Khôi phục mặc định bản gốc** chỉ thay bản nháp sau xác nhận; cần bấm **Lưu phân quyền** mới áp dụng. Cấu hình tùy chỉnh của hệ thống gốc không có trong gói backup nên không được coi là đã chuyển.
+
+Lưu cấu hình dùng compare-and-swap và `expectedVersion`; hai người mở cùng phiên bản không ghi đè nhau (409, giữ bản nháp và yêu cầu tải lại). Cấu hình lỗi không âm thầm cấp quyền mặc định. Mỗi lần lưu có nhật ký `UPDATE_CTKTKT_PERMISSIONS`. Quyền bao trùm nhập KTKT/nước/hóa chất được quy đổi sang nhóm nhỏ, nên bỏ chọn một nhóm không bị quyền nhập toàn bộ cấp lại; quyền Toàn quyền KTKT là ngoại lệ được nêu rõ trên màn hình.
 
 ## PostgreSQL và dữ liệu bàn giao
 
@@ -55,7 +63,9 @@ npx tsc --noEmit
 npx tsx --test tests/ctktkt/*.test.mjs tests/ctktkt/domain/*.test.mjs
 npx tsx scripts/verify/ctktkt.mjs
 npx tsx scripts/verify/ctktkt-machine.mjs
+npx tsx scripts/verify/ctktkt-permissions.mjs
 MSYS_NO_PATHCONV=1 npm run verify:ui -- --preset=ctktkt-integration --widths=360,1280
+MSYS_NO_PATHCONV=1 npm run verify:ui -- --preset=ctktkt-permissions --widths=360,1280
 ```
 
 Script kiểm tra API chỉ chạy local, tạo rồi xóa tài khoản tạm; kiểm đọc số liệu, VIEWER bị chặn ghi/khôi phục, mở lại Excel xuất ra, tải ZIP rồi kiểm tra toàn bộ phần và xem trước nạp, ghi/audit/rollback trên các dòng riêng được dọn sau đó. Preset ảnh dùng dữ liệu KTKT thật local; chỉ giả lập API thông báo đại tu vì DB local cũ thiếu cột của phân hệ đại tu, không sửa dữ liệu đó để chụp ảnh.
@@ -89,3 +99,5 @@ systemctl list-timers dh1-ctktkt-coal-photos.timer --all --no-pager
 ```
 
 Các lệnh cài timer ở trên là tài liệu, chưa chạy trên VPS. Kiểm tra local bổ sung bao gồm khóa sai/thiếu/thu hồi, tham số kỳ, hợp đồng PMIS/PPA với số 0 và giá trị thiếu, giới hạn ngày, lỗi DB, truy cập không cookie, đọc dữ liệu PostgreSQL thật và dọn ảnh trên bảng TEMP riêng (rollback sau kiểm tra).
+
+Kiểm tra phân quyền bao gồm 25 cương vị × 4 vai trò, nhập theo nhóm và các ô ngoài nhóm, thu hồi quyền rỗng, quyền dữ liệu độc lập, đổi cương vị, ADMIN phục hồi, kiểm dữ liệu đầu vào và xung đột phiên bản. Script API phân quyền chỉ chạy local: tạo cương vị/tài khoản tạm, cấp và thu hồi quyền riêng cho chúng, kiểm 403/409, sau đó hoàn tác cấu hình bằng CAS và dọn tài khoản/nhật ký kiểm thử. Không sửa quyền của nhân sự thật trên production khi kiểm tra local.

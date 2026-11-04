@@ -30,7 +30,7 @@ function fixture(){
   const deps={
     "@/lib/upload-guard": {inspectUpload:async()=>{}},
     '@/modules/ctktkt/db':{getRawDb:()=>db,readBackupSnapshot:async statements=>{snapshots++;return statements.map(s=>sqlite.prepare(s.sql).all(...s.args));}},
-    '@/modules/ctktkt/lib/auth/server':{requireAdmin:async()=>allowed?{ok:true,user:{id:7}}:{ok:false,response:Response.json({error:'Forbidden'},{status:403})}},
+    '@/modules/ctktkt/lib/auth/server':{requirePermission:async permission=>{assert.ok(['backup_data','restore_data'].includes(permission));return allowed?{ok:true,user:{id:7}}:{ok:false,response:Response.json({error:'Forbidden'},{status:403})};}},
     '@/modules/ctktkt/lib/water-report/schema':{ensureWaterSchema:async()=>{}},
     '@/modules/ctktkt/lib/chemical-usage/schema':{ensureChemicalUsageSchema:async()=>{}},
     '@/modules/ctktkt/lib/data-backup':backup,

@@ -1,6 +1,6 @@
 import { inspectUpload } from "@/lib/upload-guard";
 import {getRawDb,readBackupSnapshot} from "@/modules/ctktkt/db";
-import {requireAdmin} from "@/modules/ctktkt/lib/auth/server";
+import {requirePermission} from "@/modules/ctktkt/lib/auth/server";
 import {ensureWaterSchema} from "@/modules/ctktkt/lib/water-report/schema";
 import {ensureChemicalUsageSchema} from "@/modules/ctktkt/lib/chemical-usage/schema";
 import {BACKUP_TABLES,MAX_BACKUP_BYTES,MAX_BACKUP_ROWS,backupRange,backupSchemas,createDataBackup,restoreStatements,validateDataBackup,type BackupRow} from "@/modules/ctktkt/lib/data-backup";
@@ -19,7 +19,7 @@ async function database(){
 }
 
 export async function GET(request:Request){
-  const guard=await requireAdmin();
+  const guard=await requirePermission("backup_data");
   if(!guard.ok)return guard.response;
   try{
     const url=new URL(request.url);
@@ -57,7 +57,7 @@ async function readBody(request:Request){
 }
 
 export async function POST(request:Request){
-  const guard=await requireAdmin();
+  const guard=await requirePermission("restore_data");
   if(!guard.ok)return guard.response;
   if(request.headers.get("origin")!==new URL(request.url).origin)return json({error:"Nguồn yêu cầu không hợp lệ."},403);
   let body:{action?:unknown;mode?:unknown;confirmed?:unknown;file?:unknown};

@@ -891,7 +891,7 @@ function mergeDefaultPermissions(rows: PermissionRow[]) {
     if (legacyMatrix) return { ...row, matrix: { ...row.matrix, ...legacyMatrix } };
     return row;
   });
-  const customRows = rows.filter((row) => !defaultIds.has(row.id) && !legacyIds.has(row.id));
+  const customRows = rows.filter((row) => !defaultIds.has(row.id) && !legacyIds.has(row.id) && !row.id.startsWith("ctktkt:"));
   return [...mergedDefaults, ...customRows];
 }
 

@@ -11,6 +11,10 @@ export const ROLE_LABELS: Record<Role, string> = {
 
 export const PERMISSIONS = [
   "manage_users",
+  "manage_permissions",
+  "backup_data",
+  "restore_data",
+  "view_data_history",
   "edit_monthly_kpi",
   "edit_daily_inputs",
   "edit_ppa",
@@ -35,6 +39,7 @@ export const PERMISSIONS = [
   "ctktkt_startup_shutdown",
   "ctktkt_coal_blend_pmis",
   "ctktkt_pmis_reports",
+  "ctktkt_other_fields",
   "water_meta",
   "water_electricity",
   "water_water_intake",
@@ -49,6 +54,10 @@ export type Permission = (typeof PERMISSIONS)[number];
 
 export const PERMISSION_LABELS: Record<Permission, string> = {
   manage_users: "Quản trị hệ thống & Phân quyền",
+  manage_permissions: "Cấu hình phân quyền KTKT",
+  backup_data: "Tải bản sao lưu dữ liệu",
+  restore_data: "Nạp dữ liệu từ bản sao lưu",
+  view_data_history: "Xem nhật ký số liệu",
   edit_monthly_kpi: "Nhập chỉ tiêu KTKT tháng (7 chỉ tiêu)",
   edit_daily_inputs: "Nhập số liệu sản xuất ngày",
   edit_ppa: "Quản lý Suất hao nhiệt PPA",
@@ -73,6 +82,7 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   ctktkt_startup_shutdown: "Khởi động / Ngừng tổ máy",
   ctktkt_coal_blend_pmis: "Bảng nhập PMIS than trộn 6A10 & Sub bitum",
   ctktkt_pmis_reports: "Báo cáo PMIS 02-PĐ & Đối chiếu ngày",
+  ctktkt_other_fields: "Các ô bổ sung ngoài nhóm",
   water_meta: "Ngày, ca, kíp",
   water_electricity: "Công tơ điện",
   water_water_intake: "Nước nhận ca / bình ngưng",

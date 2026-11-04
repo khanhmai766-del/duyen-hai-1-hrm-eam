@@ -372,7 +372,7 @@ export function canEditCtktktField(
   if (!group) {
     // Nếu ô không thuộc nhóm nào đặc định, chỉ Admin/KTV/Trưởng ca được sửa
     return (
-isAdminUser(user) || user.permissions.includes("edit_ctktkt")
+isAdminUser(user) || user.permissions.includes("edit_ctktkt") || user.permissions.includes("ctktkt_other_fields")
     );
   }
   return canEditCtktktGroup(user, group);
@@ -382,7 +382,7 @@ isAdminUser(user) || user.permissions.includes("edit_ctktkt")
  * Kiểm tra xem người dùng có ít nhất một quyền nhập liệu trên trang CTKTKT hay không
  */
 export function canEditAnyCtktktField(user: SessionUser | null | undefined): boolean {
-  return Boolean(user && (isAdminUser(user) || user.permissions.includes("edit_ctktkt") || getEditableCtktktGroups(user).length));
+  return Boolean(user && (isAdminUser(user) || user.permissions.includes("edit_ctktkt") || user.permissions.includes("ctktkt_other_fields") || getEditableCtktktGroups(user).length));
 }
 
 export function getEditableCtktktGroups(user: SessionUser | null | undefined): CtktktFieldGroup[] {

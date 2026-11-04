@@ -2,12 +2,16 @@ import { mapHostUser } from "./host-user";
 import { cache } from "react";
 import { requireUser, fail } from "@/lib/api";
 import { assignedPermissionMap } from "@/lib/rbac-permissions";
+import { readPositionPermissionConfig } from "./position-permission-store";
 import { isAdminUser, hasPermission, type SessionUser, type Role, type Permission } from "./session";
 
 export const getSessionUser = cache(async (): Promise<SessionUser | null> => {
   let host;
   try { host = await requireUser(); } catch (error) { if(error instanceof Response) return null; throw error; }
-  return mapHostUser(host,await assignedPermissionMap(host));
+  const map = await assignedPermissionMap(host);
+  const base = mapHostUser(host, map);
+  if (!base || host.role === "ADMIN") return base;
+  return mapHostUser(host, map, (await readPositionPermissionConfig()).config.grants);
 });
 
 type Guard = { ok:true; user:SessionUser } | { ok:false; response:Response };

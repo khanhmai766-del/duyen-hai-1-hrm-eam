@@ -1049,6 +1049,7 @@ export function CtktktReport() {
     }
 
     if (editableGroups.length === 0) {
+      if (user.permissions.includes("ctktkt_other_fields")) return "Quyền nhập: Các ô bổ sung ngoài nhóm";
       return "Chế độ chỉ xem (Không có quyền nhập cho cương vị này)";
     }
 

@@ -42,13 +42,13 @@ test('25 cương vị chính đã đọc trên production khớp chính sách tr
  const names=['ESP','FGD','Khí Nén – Nhà Dầu','Kỹ thuật viên','Lò phó','Lò trưởng','Máy nghiền','Máy phó','Máy trưởng','NH3 - Lò hơi phụ','Phó Quản đốc','Quản đốc','Thải xỉ','Thiết bị đo lường điều khiển','Thống kê','TK Lò máy','Trạm bơm nước thô','Trạm bơm tuần hoàn','Trợ thủ','Trực chính Điện','Trực phụ điện','Trưởng ca','Trưởng kíp điện','XLN hỗn hợp','XLNT'];
  for(const name of names)assert.ok(DEFAULT_POSITIONS.some(position=>position.position===name),name);
 });
-test('cương vị đang làm việc nhận đúng phạm vi, VIEWER và quyền bị tắt không được nhập',()=>{
+test('cương vị đang làm việc nhận đúng phạm vi, độc lập vai trò và quyền nghiệp vụ RBAC cũ',()=>{
  const electric=mapHostUser(host('Trưởng kíp điện'),maps('TECHNICIAN'));
  assert.equal(electric.id,'host-user-cuid');assert.ok(electric.permissions.includes('ctktkt_tkd_trend'));
  const water=mapHostUser(host('XLN hỗn hợp'),maps('TECHNICIAN'));
  assert.ok(water.permissions.includes('chemical_HCL_31'));assert.ok(!water.permissions.includes('ctktkt_tkd_trend'));
- assert.ok(!mapHostUser(host('Trưởng kíp điện','VIEWER'),maps('VIEWER')).permissions.includes('ctktkt_tkd_trend'));
- assert.ok(!mapHostUser(host('Trưởng kíp điện'),{...maps('TECHNICIAN'),'ctktkt:ctktkt_tkd_trend':'none'}).permissions.includes('ctktkt_tkd_trend'));
+ assert.ok(mapHostUser(host('Trưởng kíp điện','VIEWER'),maps('VIEWER')).permissions.includes('ctktkt_tkd_trend'));
+ assert.ok(mapHostUser(host('Trưởng kíp điện'),{...maps('TECHNICIAN'),'ctktkt:ctktkt_tkd_trend':'none'}).permissions.includes('ctktkt_tkd_trend'));
  assert.equal(mapHostUser({...host('Trưởng kíp điện'),accessMode:'DEFECT_READ_ONLY'},maps('TECHNICIAN')),null);
 });
 

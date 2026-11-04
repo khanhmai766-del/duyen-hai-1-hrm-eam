@@ -2,14 +2,14 @@ import { AppShell } from "@/modules/ctktkt/components/app-shell";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getRawDb } from "@/modules/ctktkt/db";
-import { requireAdmin } from "@/modules/ctktkt/lib/auth/server";
+import { requirePermission } from "@/modules/ctktkt/lib/auth/server";
 import { vietnamDateIso } from "@/modules/ctktkt/lib/operating-date";
 import { ensureDailyInputAudit } from "@/modules/ctktkt/lib/daily-input-audit";
 
 export const dynamic = "force-dynamic";
 
 export default async function DataHistoryPage({ searchParams }: { searchParams: Promise<{ date?: string; page?: string }> }) {
-  const guard = await requireAdmin();
+  const guard = await requirePermission("view_data_history");
   if (!guard.ok) redirect("/tien-ich/chi-tieu-ktkt");
   const params = await searchParams;
   const date = /^\d{4}-\d{2}-\d{2}$/.test(params.date || "") ? params.date! : vietnamDateIso();
