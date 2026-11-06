@@ -81,7 +81,8 @@ export async function buildMirrorSnapshot(period:string){
  const [kt,wat]=await Promise.all([exportTabs(exportCtktkt,'period='+period),exportTabs(exportWater,'month='+period)]);
  tabs.set('ctktkt',kt);tabs.set('water',wat.map(t=>({...t,template:'T10.2026'})));
  // Water exporter writes the same report layout; retain its missing title labels from the reference.
- const wtab=tabs.get('water')![0];wtab.startRow=3;wtab.rows=wtab.rows.slice(2);wtab.rows[0][0]=previous.split('-').reverse().join('/');wtab.clearRows=210;
+ const wtab=tabs.get('water')![0];wtab.startRow=3;wtab.rows=wtab.rows.slice(2);// A header-only water export has no baseline row; create its display row before writing the date.
+ (wtab.rows[0] ??= Array(20).fill(null))[0]=previous.split('-').reverse().join('/');wtab.clearRows=210;
  const ppaDays=ppa.filter(r=>String(r.operating_date)>=from),year=Number(period.slice(0,4));
  const pr:PpaSheetRow[]=ppaDays.map(r=>{const date=String(r.operating_date),act=calculateActualHeatRate(byDate.get(date)||{});return {date,ppaPlant:num(r.ppa_plant),ppaS1:num(r.ppa_s1),ppaS2:num(r.ppa_s2),actualPlant:act?.actualPlant??null,actualS1:act?.actualS1??null,actualS2:act?.actualS2??null,netS1Kwh:num(r.net_s1_kwh),netS2Kwh:num(r.net_s2_kwh),availableCapacityS1Mw:null,availableCapacityS2Mw:null,noteS1:String(r.note_s1||''),noteS2:String(r.note_s2||'')};});
  const adapter=matrixAdapter(),plant=buildPlantSheet(adapter,[[period,pr]]) as unknown as Matrix;
