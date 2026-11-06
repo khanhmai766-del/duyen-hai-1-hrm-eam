@@ -1,3 +1,4 @@
+import { isCtktktSameOrigin } from "@/modules/ctktkt/lib/request-origin";
 import { handle, requireUser, ok, fail, audit } from "@/lib/api";
 import { getSessionUser } from "@/modules/ctktkt/lib/auth/server";
 import { inspectUpload } from "@/lib/upload-guard";
@@ -50,8 +51,7 @@ async function dispatch(request: Request, context: { params: Promise<{ path?: st
     const actor = machine ? null : await requireUser();
     if (!machine && !await getSessionUser()) return fail("Không đủ quyền truy cập Chỉ tiêu KTKT.",403);
     if (!["GET","HEAD"].includes(request.method)) {
-      const origin=request.headers.get("origin");
-      if(origin && origin !== new URL(request.url).origin) return fail("Nguồn yêu cầu không hợp lệ.",403);
+      if (!isCtktktSameOrigin(request)) return fail("Nguồn yêu cầu không hợp lệ.",403);
     }
     // Quét tệp trước khi parser Excel/ZIP hoặc AI xử lý byte người dùng gửi lên.
     if (request.headers.get("content-type")?.startsWith("multipart/form-data")) {

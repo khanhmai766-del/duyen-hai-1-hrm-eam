@@ -1,3 +1,4 @@
+import { isCtktktSameOrigin } from "@/modules/ctktkt/lib/request-origin";
 import { getRawDb } from "../../../db";
 import { validateMeasurement } from "../../../lib/metrics";
 import { requireAnyPermission, requireSession } from "../../../lib/auth/server";
@@ -15,8 +16,7 @@ export async function GET(request: Request) {
 }
 export async function POST(request: Request) {
   const guard = await requireAnyPermission("edit_monthly_kpi"); if (!guard.ok) return guard.response;
-  const origin = request.headers.get("origin");
-  if (origin && origin !== new URL(request.url).origin) return Response.json({ error: "Nguồn yêu cầu không hợp lệ." }, { status: 403 });
+  if (!isCtktktSameOrigin(request)) return Response.json({ error: "Nguồn yêu cầu không hợp lệ." }, { status: 403 });
   if (!request.headers.get("content-type")?.includes("application/json")) return Response.json({ error: "Yêu cầu phải là JSON." }, { status: 415 });
   let values;
   try {

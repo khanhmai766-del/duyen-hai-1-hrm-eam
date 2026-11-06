@@ -101,3 +101,7 @@ systemctl list-timers dh1-ctktkt-coal-photos.timer --all --no-pager
 Các lệnh cài timer ở trên là tài liệu, chưa chạy trên VPS. Kiểm tra local bổ sung bao gồm khóa sai/thiếu/thu hồi, tham số kỳ, hợp đồng PMIS/PPA với số 0 và giá trị thiếu, giới hạn ngày, lỗi DB, truy cập không cookie, đọc dữ liệu PostgreSQL thật và dọn ảnh trên bảng TEMP riêng (rollback sau kiểm tra).
 
 Kiểm tra phân quyền bao gồm 25 cương vị × 4 vai trò, nhập theo nhóm và các ô ngoài nhóm, thu hồi quyền rỗng, quyền dữ liệu độc lập, đổi cương vị, ADMIN phục hồi, kiểm dữ liệu đầu vào và xung đột phiên bản. Script API phân quyền chỉ chạy local: tạo cương vị/tài khoản tạm, cấp và thu hồi quyền riêng cho chúng, kiểm 403/409, sau đó hoàn tác cấu hình bằng CAS và dọn tài khoản/nhật ký kiểm thử. Không sửa quyền của nhân sự thật trên production khi kiểm tra local.
+
+## Kiểm tra nguồn yêu cầu sau Nginx
+
+Các thao tác ghi dùng chung `modules/ctktkt/lib/request-origin.ts`: chấp nhận cùng origin trực tiếp hoặc origin công khai khai báo trong `NEXT_PUBLIC_APP_URL` (mặc định `https://duyenhai1.vn`). Không lấy origin được tin cậy từ `Host`/`X-Forwarded-*` do bên gọi gửi. Trường hợp Nginx chuyển HTTPS sang HTTP nội bộ không bị từ chối nhầm. Nguồn khác vẫn trả 403; các endpoint trước đây bắt buộc Origin tiếp tục yêu cầu header này. Khi triển khai ở tên miền khác phải cấu hình URL công khai đúng. Không thay đổi quyền hoặc công thức KTKT.

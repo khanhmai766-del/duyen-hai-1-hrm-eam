@@ -1,3 +1,4 @@
+import { isCtktktSameOrigin } from "@/modules/ctktkt/lib/request-origin";
 import {getRawDb} from "@/modules/ctktkt/db";
 import {getSessionUser} from "@/modules/ctktkt/lib/auth/server";
 import {canEditCtktktGroup} from "@/modules/ctktkt/lib/ctktkt-permissions";
@@ -18,7 +19,7 @@ export async function GET(){
 }
 export async function PUT(request:Request){
   const session=await guard();if(!session.ok)return session.response;
-  if(request.headers.get("origin")!==new URL(request.url).origin)return json({error:"Nguồn yêu cầu không hợp lệ."},403);
+  if (!isCtktktSameOrigin(request, true))return json({error:"Nguồn yêu cầu không hợp lệ."},403);
   if(!request.headers.get("content-type")?.includes("application/json"))return json({error:"Yêu cầu phải là JSON."},415);
   const reader=request.body?.getReader();if(!reader)return json({error:"Thiếu dữ liệu."},400);
   const chunks:Uint8Array[]=[];let size=0;

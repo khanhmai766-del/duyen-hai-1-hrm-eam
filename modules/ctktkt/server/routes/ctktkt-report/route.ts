@@ -1,3 +1,4 @@
+import { isCtktktSameOrigin } from "@/modules/ctktkt/lib/request-origin";
 import { auditedDailyBatch } from "@/modules/ctktkt/lib/daily-input-audit";
 import { getRawDb } from "@/modules/ctktkt/db";
 import { getSessionUser, requireSession } from "@/modules/ctktkt/lib/auth/server";
@@ -118,8 +119,7 @@ export async function POST(request: Request) {
   if (!canEditAnyCtktktField(user)) {
     return Response.json({ error: "Tài khoản của bạn không có quyền nhập liệu Chỉ tiêu KTKT." }, { status: 403 });
   }
-  const origin = request.headers.get("origin");
-  if (origin && origin !== new URL(request.url).origin) return Response.json({ error: "Nguồn yêu cầu không hợp lệ." }, { status: 403 });
+  if (!isCtktktSameOrigin(request)) return Response.json({ error: "Nguồn yêu cầu không hợp lệ." }, { status: 403 });
   if (!request.headers.get("content-type")?.includes("application/json")) return Response.json({ error: "Yêu cầu phải là JSON." }, { status: 415 });
   try {
     const raw = await request.text();

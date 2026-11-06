@@ -1,3 +1,4 @@
+import { isCtktktSameOrigin } from "@/modules/ctktkt/lib/request-origin";
 import { inspectUpload } from "@/lib/upload-guard";
 import { getSessionUser } from "@/modules/ctktkt/lib/auth/server";
 import { canEditCtktktGroup } from "@/modules/ctktkt/lib/ctktkt-permissions";
@@ -23,8 +24,7 @@ export async function POST(request: Request) {
   if (!canEditCtktktGroup(user, "may_nghien_coal_s1") && !canEditCtktktGroup(user, "may_nghien_coal_s2")) {
     return Response.json({ error: "Tài khoản của bạn không có quyền nhập công tơ than." }, { status: 403 });
   }
-  const origin = request.headers.get("origin");
-  if (origin && origin !== new URL(request.url).origin) return Response.json({ error: "Nguồn yêu cầu không hợp lệ." }, { status: 403 });
+  if (!isCtktktSameOrigin(request)) return Response.json({ error: "Nguồn yêu cầu không hợp lệ." }, { status: 403 });
   let shared:{key:string;model:string}|null=null;
   if(!request.headers.get("x-coal-gemini-key")?.trim()){
     try{shared=await loadSharedGemini(getRawDb(),process.env.AUTH_SECRET);}catch{return Response.json({error:"Chưa đọc được khóa dùng chung. Có thể nhập khóa tạm để thử riêng hoặc lưu lại khóa dùng chung."},{status:503});}

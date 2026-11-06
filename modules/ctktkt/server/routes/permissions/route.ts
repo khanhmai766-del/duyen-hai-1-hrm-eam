@@ -1,3 +1,4 @@
+import { isCtktktSameOrigin } from "@/modules/ctktkt/lib/request-origin";
 import { audit, fail, ok, requireUser } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/modules/ctktkt/lib/auth/server";
@@ -14,7 +15,7 @@ export async function GET() {
 
 export async function PUT(request: Request) {
   const guard = await requirePermission("manage_permissions"); if (!guard.ok) return guard.response;
-  if (request.headers.get("origin") !== new URL(request.url).origin) return fail("Nguồn yêu cầu không hợp lệ.", 403);
+  if (!isCtktktSameOrigin(request, true)) return fail("Nguồn yêu cầu không hợp lệ.", 403);
   if (!request.headers.get("content-type")?.includes("application/json")) return fail("Yêu cầu phải là JSON.", 415);
   if (!request.body) return fail("Thiếu bảng phân quyền KTKT.");
   const reader = request.body.getReader(), chunks: Uint8Array[] = []; let size = 0;

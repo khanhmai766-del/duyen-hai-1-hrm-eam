@@ -1,3 +1,4 @@
+import { isCtktktSameOrigin } from "@/modules/ctktkt/lib/request-origin";
 import { inspectUpload } from "@/lib/upload-guard";
 import {getRawDb,readBackupSnapshot} from "@/modules/ctktkt/db";
 import {requirePermission} from "@/modules/ctktkt/lib/auth/server";
@@ -59,7 +60,7 @@ async function readBody(request:Request){
 export async function POST(request:Request){
   const guard=await requirePermission("restore_data");
   if(!guard.ok)return guard.response;
-  if(request.headers.get("origin")!==new URL(request.url).origin)return json({error:"Nguồn yêu cầu không hợp lệ."},403);
+  if (!isCtktktSameOrigin(request, true))return json({error:"Nguồn yêu cầu không hợp lệ."},403);
   let body:{action?:unknown;mode?:unknown;confirmed?:unknown;file?:unknown};
   try{body=await readBody(request);}catch(error){return json({error:error instanceof Error?error.message:"Tệp không hợp lệ."},400);}
   if(!body||!["preview","restore"].includes(String(body.action))||!["missing","overwrite"].includes(String(body.mode)))return json({error:"Thao tác nạp dữ liệu không hợp lệ."},400);
