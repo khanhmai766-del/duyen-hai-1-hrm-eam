@@ -9,7 +9,16 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectSeparator,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useSession } from "next-auth/react";
 import { useUsers } from "@/hooks/useUsers";
 import { LinkListEditor, linkErrorsOf } from "@/components/work-tasks/WorkTaskParts";
@@ -18,7 +27,8 @@ import { normalizeText } from "@/lib/nav";
 import { positionLabelOf } from "@/lib/position-catalog";
 import { cn } from "@/lib/utils";
 import {
-  WORK_TASK_DIRECTORS,
+  WORK_TASK_DIRECTOR_GROUPS,
+  WORK_TASK_LEGACY_DIRECTORS,
   isWorkTaskLeadUser,
   workTaskDateInputValue,
   workTaskLeadPositionOf,
@@ -282,8 +292,19 @@ export function WorkTaskDialog({
             <Select value={form.director} onValueChange={(value) => set("director", value)}>
               <SelectTrigger><SelectValue placeholder="Chọn người chỉ đạo" /></SelectTrigger>
               <SelectContent>
-                {WORK_TASK_DIRECTORS.map((item) => (
-                  <SelectItem key={item.value} value={item.value}>{item.label}</SelectItem>
+                {WORK_TASK_DIRECTOR_GROUPS.map((group, index) => (
+                  <React.Fragment key={group.label}>
+                    {index > 0 && <SelectSeparator />}
+                    <SelectGroup>
+                      <SelectLabel>{group.label}</SelectLabel>
+                      {group.items.map((item) => (
+                        <SelectItem key={item.value} value={item.value}>{item.label}</SelectItem>
+                      ))}
+                    </SelectGroup>
+                  </React.Fragment>
+                ))}
+                {WORK_TASK_LEGACY_DIRECTORS.filter((item) => item.value === form.director).map((item) => (
+                  <SelectItem key={item.value} value={item.value} className="hidden">{item.label}</SelectItem>
                 ))}
               </SelectContent>
             </Select>

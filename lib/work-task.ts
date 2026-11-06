@@ -4,22 +4,51 @@ import { normalizeExternalDocumentUrl } from "@/lib/google-drive-document";
 
 export const WORK_TASK_PERMISSION = "work-task-manage";
 
-/** Người chỉ đạo: danh sách cố định. Lưu khoá, hiển thị nhãn. */
-export const WORK_TASK_DIRECTORS = [
-  { value: "BGD", label: "BGĐ" },
-  { value: "HUAN", label: "Ông Huân (Quản đốc)" },
-  { value: "CUONG", label: "Ông Cường (PQĐ)" },
-  { value: "YEN", label: "Ông Yên (PQĐ)" },
+/** Người chỉ đạo: danh sách cố định, chia nhóm. Lưu khoá, hiển thị nhãn. */
+export const WORK_TASK_DIRECTOR_GROUPS = [
+  {
+    label: "Ban Giám đốc",
+    items: [
+      { value: "SY", label: "Ông Ngô Văn Sỹ (Giám đốc)" },
+      { value: "THAO", label: "Ông Âu Nguyễn Đình Thảo (PGĐ)" },
+      { value: "UT", label: "Ông Nguyễn Văn Út (PGĐ)" },
+      { value: "HUNG", label: "Ông Nguyễn Minh Hùng (PGĐ)" },
+    ],
+  },
+  {
+    label: "Lãnh đạo Phân xưởng",
+    items: [
+      { value: "HUAN", label: "Ông Trương Trần Hoàng Huân (Quản đốc)" },
+      { value: "CUONG", label: "Ông Nguyễn Văn Cường (PQĐ)" },
+      { value: "YEN", label: "Ông Nguyễn Ngọc Yên (PQĐ)" },
+    ],
+  },
 ] as const;
 
-export type WorkTaskDirector = (typeof WORK_TASK_DIRECTORS)[number]["value"];
+type DirectorItem = (typeof WORK_TASK_DIRECTOR_GROUPS)[number]["items"][number];
+
+export const WORK_TASK_DIRECTORS: readonly DirectorItem[] = WORK_TASK_DIRECTOR_GROUPS.flatMap(
+  (group): readonly DirectorItem[] => group.items
+);
+
+/**
+ * Khoá cũ trước khi tách tên từng người trong BGĐ. Không cho chọn mới, nhưng công việc
+ * đã lưu với khoá này vẫn hiển thị và sửa được (giữ nguyên nếu người sửa không đổi).
+ */
+export const WORK_TASK_LEGACY_DIRECTORS = [{ value: "BGD", label: "BGĐ" }] as const;
+
+export type WorkTaskDirector =
+  | (typeof WORK_TASK_DIRECTORS)[number]["value"]
+  | (typeof WORK_TASK_LEGACY_DIRECTORS)[number]["value"];
+
+const ALL_DIRECTORS: readonly { value: string; label: string }[] = [...WORK_TASK_DIRECTORS, ...WORK_TASK_LEGACY_DIRECTORS];
 
 export function isWorkTaskDirector(value: unknown): value is WorkTaskDirector {
-  return WORK_TASK_DIRECTORS.some((item) => item.value === value);
+  return ALL_DIRECTORS.some((item) => item.value === value);
 }
 
 export function workTaskDirectorLabel(value?: string | null) {
-  return WORK_TASK_DIRECTORS.find((item) => item.value === value)?.label ?? value ?? "";
+  return ALL_DIRECTORS.find((item) => item.value === value)?.label ?? value ?? "";
 }
 
 // Chủ trì: mọi tài khoản đang hoạt động, TRỪ Quản đốc / Phó quản đốc (họ là người chỉ đạo).

@@ -47,3 +47,17 @@ export const workTaskDetailPreset = {
     await page.getByRole("dialog").waitFor({ timeout: 30_000 });
   },
 };
+
+/** Hộp Thêm công việc: bung ô Người chỉ đạo chia 2 nhóm (BGĐ / Lãnh đạo PX) — chỉ mở, không lưu. */
+export const workTaskDirectorPreset = {
+  ...workTaskDetailPreset,
+  description: "Quản lý công việc: hộp Thêm công việc, ô Người chỉ đạo chia nhóm — chỉ xem, không lưu",
+  async interact(page) {
+    await page.getByRole("button", { name: /Thêm công việc/ }).locator("visible=true").first().click();
+    const dialog = page.getByRole("dialog");
+    await dialog.waitFor({ timeout: 30_000 });
+    await dialog.getByRole("combobox").filter({ hasText: "Chọn người chỉ đạo" }).click();
+    await page.getByRole("option", { name: /Ngô Văn Sỹ/ }).waitFor();
+    await page.waitForTimeout(300);
+  },
+};

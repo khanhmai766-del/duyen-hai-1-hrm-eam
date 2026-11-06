@@ -218,7 +218,7 @@ model WorkTask {
   id                String    @id @default(cuid())
   taskDate          DateTime  @db.Date // Ngày
   content           String // Nội dung công việc
-  director          String // BGD | HUAN | CUONG | YEN
+  director          String // SY | THAO | UT | HUNG | HUAN | CUONG | YEN (BGD: khoá cũ) — lib/work-task.ts
   dueDate           DateTime? @db.Date // Thời gian hoàn thành
   report            String? // Báo cáo thực hiện
   reportUpdatedAt   DateTime?
