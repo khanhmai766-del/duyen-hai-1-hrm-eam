@@ -1,4 +1,6 @@
 "use client";
+import "./ctktkt-report-compact.css";
+import {ReportCorrections} from "./report-corrections";
 import { useCtktktRequest, useCtktktDownload } from "@/hooks/useCtktkt";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -20,14 +22,11 @@ import {
   RefreshCw,
   Mail,
   Camera,
-  Images,
 } from "lucide-react";
 import { DateField } from "@/modules/ctktkt/components/ui/date-field";
 import {saveReviewedCoalEntries} from "@/modules/ctktkt/lib/coal-photo-save";
-import {canReviewCoalPhotos} from "@/modules/ctktkt/lib/coal-photo-review";
 const CtktktEmailModal=dynamic(()=>import("@/modules/ctktkt/components/ctktkt-email-modal").then(module=>module.CtktktEmailModal),{ssr:false});
 const CoalMeterPhotoImport=dynamic(()=>import("@/modules/ctktkt/components/coal-meter-photo-import").then(module=>module.CoalMeterPhotoImport),{ssr:false});
-const CoalMeterPhotoReview=dynamic(()=>import("@/modules/ctktkt/components/coal-meter-photo-review").then(module=>module.CoalMeterPhotoReview),{ssr:false});
 import { calculateCoalStock24h, calculatePmisCoalStockOpening, COAL_STOCK_24H_START_CELL } from "@/modules/ctktkt/lib/coal-stock";
 import { useSessionUser } from "@/modules/ctktkt/components/session-context";
 import { canEditOperatingDate, defaultOperatingDate, vietnamDateIso } from "@/modules/ctktkt/lib/operating-date";
@@ -286,7 +285,6 @@ export function CtktktReport() {
   const [coalPhotoOpen, setCoalPhotoOpenState] = useState(false);
   const [coalPhotoMounted,setCoalPhotoMounted]=useState(false);
   const setCoalPhotoOpen=(open:boolean)=>{if(open)setCoalPhotoMounted(true);setCoalPhotoOpenState(open);};
-  const [coalReviewUnit,setCoalReviewUnit]=useState<"S1"|"S2"|null>(null);
   const canEditCoalCell = useCallback((cell: string) => canEditSelectedDate && canEditCtktktField(user, cell), [user, canEditSelectedDate]);
   const [extensionVersion, setExtensionVersion] = useState("");
   const extensionOutdated = isQlktExtensionOutdated(extensionVersion);
@@ -1222,8 +1220,10 @@ export function CtktktReport() {
         )}
       </div>
 
+      <ReportCorrections key={date} date={date} getStaged={()=>[...dirtyCellsRef.current].filter(cell=>canEditCtktktField(user,cell)).map(cell=>({cell,value:current[cell]||""}))} onUpdated={()=>setReloadVersion(v=>v+1)}/>
+
       {/* 2. BẢNG KẾT QUẢ TÍNH TỰ ĐỘNG KPI & Ô NHẬP TAY CỤM 1 (I35, I36, W87) */}
-      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xs">
+      <div className="ktkt-kpi-panel overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xs">
         <div className="module-section-heading flex flex-wrap items-center justify-between gap-2 border-b bg-[#f8faff] px-4 py-2.5">
           <div className="flex items-center gap-2">
             <h2 className="text-xs font-black text-[#173b64] uppercase tracking-wider">
@@ -1267,6 +1267,7 @@ export function CtktktReport() {
           <div>
             <div className="module-table-scroll ktkt-kpi-scroll">
               <table className="report-data-table w-full text-xs">
+                <colgroup><col style={{width:"22%"}}/><col span={4} style={{width:"14%"}}/><col span={2} style={{width:"8.5%"}}/><col style={{width:"5%"}}/></colgroup>
                 <thead>
                   <tr className="border-b bg-[#e9f2fa] text-[#173b64]">
                     <th rowSpan={2} className="p-2 text-left font-bold">Chỉ tiêu KTKT</th>
@@ -1457,9 +1458,10 @@ export function CtktktReport() {
 
       {/* 3. TABS ĐIỀU HƯỚNG CÁC CỤM VẬN HÀNH (THIẾT KẾ RÕ RÀNG THEO CƯƠNG VỊ) */}
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xs">
-        <div className="grid grid-cols-1 gap-1.5 border-b bg-[#fbf7f2] p-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 2xl:grid-cols-7">
+        <div className="ktkt-option-tabs grid grid-cols-1 gap-1.5 border-b bg-[#fbf7f2] p-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 2xl:grid-cols-7">
           <button
             type="button"
+            aria-pressed={activeTab === "tkd_dcs"}
             onClick={() => setActiveTab("tkd_dcs")}
             className={reportTabClass(activeTab === "tkd_dcs")}
           >
@@ -1469,6 +1471,7 @@ export function CtktktReport() {
 
           <button
             type="button"
+            aria-pressed={activeTab === "unit_meters"}
             onClick={() => setActiveTab("unit_meters")}
             className={reportTabClass(activeTab === "unit_meters")}
           >
@@ -1478,6 +1481,7 @@ export function CtktktReport() {
 
           <button
             type="button"
+            aria-pressed={activeTab === "steam_nh3"}
             onClick={() => setActiveTab("steam_nh3")}
             className={reportTabClass(activeTab === "steam_nh3")}
           >
@@ -1487,6 +1491,7 @@ export function CtktktReport() {
 
           <button
             type="button"
+            aria-pressed={activeTab === "td21_coal_blend"}
             onClick={() => setActiveTab("td21_coal_blend")}
             className={reportTabClass(activeTab === "td21_coal_blend")}
           >
@@ -1496,6 +1501,7 @@ export function CtktktReport() {
 
           <button
             type="button"
+            aria-pressed={activeTab === "startup_shutdown"}
             onClick={() => setActiveTab("startup_shutdown")}
             className={reportTabClass(activeTab === "startup_shutdown")}
           >
@@ -1505,6 +1511,7 @@ export function CtktktReport() {
 
           <button
             type="button"
+            aria-pressed={activeTab === "pmis_reports"}
             onClick={() => setActiveTab("pmis_reports")}
             className={reportTabClass(activeTab === "pmis_reports")}
           >
@@ -1515,7 +1522,8 @@ export function CtktktReport() {
           <div className="min-w-0">
             <button
               type="button"
-              onClick={() => setActiveTab("all_fields")}
+              aria-pressed={activeTab === "all_fields"}
+            onClick={() => setActiveTab("all_fields")}
               className={`${reportTabClass(activeTab === "all_fields")} w-full`}
             >
               <Search className="size-4 shrink-0" />
@@ -2309,14 +2317,13 @@ export function CtktktReport() {
                         <button type="button" onClick={() => setCoalPhotoOpen(true)} className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-2.5 py-1 text-[11px] font-semibold text-indigo-700 hover:bg-indigo-100" title="Tải ảnh công tơ, web tự đọc số và điền vào bảng">
                           <Camera className="size-3.5" aria-hidden /> Đọc công tơ từ ảnh
                         </button>
-                        {canReviewCoalPhotos(user)&&<button type="button" onClick={()=>setCoalReviewUnit("S1")} className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-700"><Images className="size-3.5" aria-hidden/>Đối chiếu ảnh & số liệu</button>}
                         <span className="text-[11px] font-bold text-slate-800">
                           Cương vị nhập: Vận hành viên Máy nghiền S1
                         </span>
                       </span>
                     </div>
                     <div className="overflow-x-auto rounded-lg border">
-                      <table className="report-data-table min-w-[1450px] w-full text-xs">
+                      <table className="report-data-table ktkt-coal-meter-table w-full text-xs"><colgroup><col style={{width:"20%"}}/><col span={3} style={{width:"14%"}}/><col span={4} style={{width:"9.5%"}}/></colgroup>
                         <thead>
                           <tr className="bg-[#f5f5f5] text-slate-800">
                             <th rowSpan={2} className="p-1.5 text-left font-bold">Mã cân than S1</th>
@@ -2632,14 +2639,13 @@ export function CtktktReport() {
                         <button type="button" onClick={() => setCoalPhotoOpen(true)} className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-2.5 py-1 text-[11px] font-semibold text-indigo-700 hover:bg-indigo-100" title="Tải ảnh công tơ, web tự đọc số và điền vào bảng">
                           <Camera className="size-3.5" aria-hidden /> Đọc công tơ từ ảnh
                         </button>
-                        {canReviewCoalPhotos(user)&&<button type="button" onClick={()=>setCoalReviewUnit("S2")} className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-700"><Images className="size-3.5" aria-hidden/>Đối chiếu ảnh & số liệu</button>}
                         <span className="text-[11px] font-bold text-slate-800">
                           Cương vị nhập: Vận hành viên Máy nghiền S2
                         </span>
                       </span>
                     </div>
                     <div className="overflow-x-auto rounded-lg border">
-                      <table className="report-data-table min-w-[1450px] w-full text-xs">
+                      <table className="report-data-table ktkt-coal-meter-table w-full text-xs"><colgroup><col style={{width:"20%"}}/><col span={3} style={{width:"14%"}}/><col span={4} style={{width:"9.5%"}}/></colgroup>
                         <thead>
                           <tr className="bg-[#f5f5f5] text-slate-800">
                             <th rowSpan={2} className="p-1.5 text-left font-bold">Mã cân than S2</th>
@@ -3807,7 +3813,6 @@ export function CtktktReport() {
           setMessage(`Đã điền ${values.length} chỉ số công tơ than từ ảnh. Kiểm tra bảng rồi bấm “Lưu số liệu”.`);
         }}
       />}
-      {coalReviewUnit&&<CoalMeterPhotoReview key={`${date}-${coalReviewUnit}`} open onOpenChange={open=>{if(!open)setCoalReviewUnit(null);}} date={date} unit={coalReviewUnit} current={current}/>}
     </section>
   );
 }

@@ -462,3 +462,9 @@
  .ctktkt-module .ctktkt-content .monthly-toolbar-controls>label>span {width:100%;max-width:100%}
  .ctktkt-module .ctktkt-content .monthly-toolbar-controls>button {width:100%;white-space:normal}
 }
+
+/* Unified typography across the KTKT module only. */
+.ctktkt-module,
+.ctktkt-module * {
+ font-family: "Times New Roman", Times, serif !important;
+}

@@ -1,5 +1,5 @@
 import { isCtktktSameOrigin } from "@/modules/ctktkt/lib/request-origin";
-import { auditedDailyBatch } from "@/modules/ctktkt/lib/daily-input-audit";
+import {saveReportWithShift,CorrectionError} from "@/modules/ctktkt/lib/report-corrections";
 import { getRawDb } from "@/modules/ctktkt/db";
 import { getSessionUser, requireSession } from "@/modules/ctktkt/lib/auth/server";
 import { canEditOperatingDate, isFutureOperatingDate, vietnamDateIso } from "@/modules/ctktkt/lib/operating-date";
@@ -124,14 +124,14 @@ export async function POST(request: Request) {
   try {
     const raw = await request.text();
     if (raw.length > 150_000) return Response.json({ error: "Dữ liệu gửi lên quá lớn." }, { status: 413 });
-    const body = JSON.parse(raw) as { operatingDate?: unknown; entries?: unknown; coalUnit?:unknown };
+    const body = JSON.parse(raw) as { operatingDate?: unknown; entries?: unknown; coalUnit?:unknown; correctionReason?:unknown };
     if (typeof body.operatingDate !== "string" || !datePattern.test(body.operatingDate) || !Array.isArray(body.entries) || body.entries.length > 400) {
       throw new Error("Ngày hoặc danh sách ô nhập không hợp lệ.");
     }
     if (body.operatingDate > vietnamDateIso()) {
       return Response.json({ error: "Không thể nhập số liệu cho ngày trong tương lai." }, { status: 400 });
     }
-    if (!canEditOperatingDate(body.operatingDate, isAdminUser(user))) {
+    if (!body.correctionReason && !canEditOperatingDate(body.operatingDate, user.role === "admin")) {
       return Response.json({ error: "Chỉ tài khoản quản trị được chỉnh sửa ngày trước D-1; tài khoản khác chỉ được nhập ngày D hoặc D-1." }, { status: 403 });
     }
     const clean = body.entries.map(item => {
@@ -173,13 +173,10 @@ export async function POST(request: Request) {
       return Response.json({ error: "Bạn không có quyền sửa các ô dữ liệu đã gửi." }, { status: 403 });
     }
 
-    const db = getRawDb();
-    const statements = authorizedEntries.map(entry => entry.value === ""
-      ? db.prepare("DELETE FROM daily_inputs WHERE operating_date = ? AND field_code = ?").bind(body.operatingDate, `KTKT:${entry.cell}`)
-      : db.prepare("INSERT INTO daily_inputs (operating_date, field_code, value, note, updated_at) VALUES (?, ?, ?, '', CURRENT_TIMESTAMP) ON CONFLICT(operating_date, field_code) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP").bind(body.operatingDate, `KTKT:${entry.cell}`, entry.value));
-    if (statements.length) await auditedDailyBatch(db, user, "ctktkt-report", statements);
-    return Response.json({ saved: authorizedEntries.filter(entry => entry.value !== "").length });
+    if(body.correctionReason!==undefined&&typeof body.correctionReason!=="string")throw new Error("Lý do không hợp lệ.");
+    return Response.json(await saveReportWithShift(user,body.operatingDate,authorizedEntries,body.correctionReason as string|undefined));
   } catch (error) {
+    if(error instanceof CorrectionError)return Response.json({error:error.message},{status:error.status});
     return Response.json({ error: error instanceof SyntaxError ? "Dữ liệu JSON không hợp lệ." : error instanceof Error ? error.message : "Dữ liệu không hợp lệ." }, { status: 400 });
   }
 }

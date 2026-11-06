@@ -105,3 +105,37 @@ Kiểm tra phân quyền bao gồm 25 cương vị × 4 vai trò, nhập theo nh
 ## Kiểm tra nguồn yêu cầu sau Nginx
 
 Các thao tác ghi dùng chung `modules/ctktkt/lib/request-origin.ts`: chấp nhận cùng origin trực tiếp hoặc origin công khai khai báo trong `NEXT_PUBLIC_APP_URL` (mặc định `https://duyenhai1.vn`). Không lấy origin được tin cậy từ `Host`/`X-Forwarded-*` do bên gọi gửi. Trường hợp Nginx chuyển HTTPS sang HTTP nội bộ không bị từ chối nhầm. Nguồn khác vẫn trả 403; các endpoint trước đây bắt buộc Origin tiếp tục yêu cầu header này. Khi triển khai ở tên miền khác phải cấu hình URL công khai đúng. Không thay đổi quyền hoặc công thức KTKT.
+
+## Ảnh công tơ chỉ dùng trong lượt đọc
+
+Luồng OCR mới không ghi ảnh vào database hoặc kho tệp. Ảnh chỉ được gửi trong yêu cầu nhận dạng; sau khi nhận kết quả, trình duyệt thu hồi object URL và bỏ tham chiếu file, giữ lại chỉ số để người dùng kiểm tra và xác nhận. Đóng cửa sổ cũng bỏ các ảnh tạm còn lại. Ảnh đọc lỗi còn trong lượt nhập để thử lại hoặc chọn ảnh khác. Không tự lưu chỉ số khi OCR xong.
+
+Mục ảnh đã lưu và nút đối chiếu kho ảnh được bỏ khỏi giao diện. Ảnh lịch sử có sẵn không bị xóa hàng loạt trong lần sửa mã này; cơ chế dọn ảnh hết hạn cũ vẫn hoạt động. Không có cam kết xóa bộ nhớ vật lý hay chính sách lưu phía dịch vụ nhận dạng Gemini.
+
+## Bố trí theo ba máy chủ của PX
+
+- Server 1: ứng dụng Next.js, giao diện, API, kiểm tra quyền và tạo báo cáo theo yêu cầu. Không cấu hình database local cho production.
+- Server 2: PostgreSQL dùng DATABASE_URL chung của EAM. KTKT chỉ lưu số liệu, kết quả nhận dạng, cấu hình và nhật ký trong các bảng ctktkt_.
+- Server 3: kho S3 chung của EAM, cấu hình bằng S3_ENDPOINT/S3_BUCKET và các khóa hiện có. Tệp cần lưu lâu dài phải qua lib/s3.ts; không thêm kho riêng hoặc lưu nội dung ảnh vào database. KTKT hiện chưa có yêu cầu giữ bản tệp báo cáo; Excel tạo để tải xuống không tự lưu trên server.
+- Ảnh công tơ: ngoại lệ theo yêu cầu không lưu trữ — chỉ xử lý trong lượt OCR, không chuyển sang Server 3. Ảnh cũ vẫn theo lịch hết hạn, chưa xóa hàng loạt.
+- Google Sheets: bản đồng bộ báo cáo, không phải database chính và không phải Server 3.
+
+Kiểm tra chỉ đọc trên Server 1 sau khi có mã mới: node scripts/check/ctktkt-architecture.mjs. Công cụ không in khóa/URL, không ghi DB, không upload tệp; kiểm tra cấu hình, bảng KTKT và kết nối mạng tới kho S3. Kết quả địa chỉ khác nhau chưa chứng minh ba máy chủ vật lý; cần đối chiếu cấu hình hạ tầng do người quản trị cung cấp. Dung lượng và quyền ghi S3 cần kiểm tra riêng trên hệ thống quản trị.
+
+Cập nhật: ảnh OCR được giữ tạm trong trình duyệt 5 phút kể từ lần đọc thành công gần nhất để đối chiếu, hết hạn tự thu hồi. Đóng cửa sổ hoặc bỏ ảnh sẽ giải phóng sớm. Không upload vào kho lưu trữ. Chỉ số AI giữ đầy đủ phần thập phân và chuỗi giá trị khi gửi lưu, không cắt hai chữ số.
+
+## Kiểm soát sửa Báo cáo chỉ tiêu KTKT theo ca
+
+Áp dụng cho ô nhập của toàn bộ Báo cáo chỉ tiêu KTKT, không đổi công thức hoặc quyền nhập theo cương vị. Ca sửa được xác định theo thời điểm lưu lần đầu, giờ Việt Nam: sáng [06,14), chiều [14,22), đêm [22,06 ngày sau). Mốc ghi công tơ 08/16/24 và kỳ báo cáo giữ nguyên; không đổi cách tính sản lượng vì giờ giao ca.
+
+Mỗi ô lưu mới ghi người nhập và đầu ca vào ctktkt_input_ownership. Người nhập chỉ tự sửa ô chính mình đã nhập trong cùng ca; xóa ô không xóa dấu sở hữu để không thể xóa rồi nhận lại ở ca sau. Quản trị website (SessionUser.role=admin) được sửa trực tiếp và là đối tượng duy nhất được duyệt; quyền sửa phân quyền KTKT riêng không đủ để duyệt.
+
+Qua ca, mở Yêu cầu chỉnh sửa, chọn các ô và giá trị mới hoặc lấy danh sách ô đang sửa, nhập lý do rồi gửi. API dùng cùng kiểm tra loại dữ liệu, ngày, quyền và ô liên kết như lưu thường. Yêu cầu không ghi số liệu ngay. Người dùng chỉ thấy yêu cầu của mình, quản trị thấy danh sách để duyệt hoặc từ chối. Khi duyệt, khóa yêu cầu và từng ô, đối chiếu giá trị/ghi chú/thời điểm cập nhật/ID nhật ký, cập nhật số liệu + nhật ký + phiên bản đọc + trạng thái yêu cầu trong cùng giao dịch. Yêu cầu đã xử lý không thể duyệt lại.
+
+Dữ liệu lịch sử chưa có dấu sở hữu không được tự nhận là của người đang xem; sửa trực tiếp bị chặn, chỉ có thể đề nghị quản trị kiểm tra nguồn gốc trước khi duyệt. Không đổi số liệu lịch sử hoặc suy đoán chủ sở hữu khi triển khai.
+
+Triển khai cần áp dụng riêng prisma/manual/add-ctktkt-corrections.sql trước khi chạy mã mới (deploy qua --sql theo hướng dẫn). Hai bảng nằm trên PostgreSQL chung Server 2, không dùng tệp cục bộ hay Google Sheets để lưu duyệt. Chưa áp dụng SQL này lên production. Chưa có bảng thì API lưu trả thông báo chưa triển khai và không ghi bỏ qua quy tắc.
+
+Với số liệu đã có trước khi bật quy tắc ca, chỉ nhận diện chủ sở hữu từ nhật ký đầu tiên nếu đó là thao tác insert từ ctktkt-report, có người nhập và thời điểm rõ ràng; không nhận chủ sở hữu từ nhật ký khôi phục/đồng bộ hoặc một lần sửa sau đó.
+
+Để không đi vòng kiểm soát ca, thao tác nạp JSON/ZIP chứa field_code KTKT: yêu cầu tài khoản quản trị, dù tài khoản khác có restore_data. Quyền xem trước và tải sao lưu giữ nguyên. Nạp dữ liệu các mục khác giữ quyền cũ.

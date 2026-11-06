@@ -9,6 +9,7 @@ export const maxDuration = 60;
 type Method = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 type Module = Partial<Record<Method, (request: Request) => Promise<Response>>>;
 const routes: Record<string, () => Promise<Module>> = {
+  "correction-requests": () => import("@/modules/ctktkt/server/routes/correction-requests/route"),
   "permissions": () => import("@/modules/ctktkt/server/routes/permissions/route"),
   "integration/v1/operating-data": () => import("@/modules/ctktkt/server/routes/integration/v1/operating-data/route"),
   "cron/coal-photos": () => import("@/modules/ctktkt/server/routes/cron/coal-photos/route"),

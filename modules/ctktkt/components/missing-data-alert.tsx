@@ -1,10 +1,12 @@
 "use client";
 
+import { useSyncExternalStore } from "react";
+import { createPortal } from "react-dom";
 import { AlertTriangle, CheckCircle2 } from "lucide-react";
 
 export type MissingDataItem = { key: string; label: string; group?: string };
 
-export function MissingDataAlert({ items, loading = false, scope }: { items: MissingDataItem[]; loading?: boolean; scope: string }) {
+export function MissingDataAlert({ items, loading = false, scope, defaultExpanded = true, compact = false }: { items: MissingDataItem[]; loading?: boolean; scope: string; defaultExpanded?: boolean; compact?: boolean }) {
   if (loading) {
     return <div className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs text-slate-500">Đang kiểm tra ô thiếu số liệu…</div>;
   }
@@ -25,11 +27,11 @@ export function MissingDataAlert({ items, loading = false, scope }: { items: Mis
   }
 
   return (
-    <details open className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-2.5 text-amber-950 shadow-sm">
+    <details open={defaultExpanded} className="group/missing rounded-xl border border-amber-300 bg-amber-50 px-4 py-2.5 text-amber-950 shadow-sm">
       <summary className="flex cursor-pointer list-none items-center gap-2 text-sm font-bold">
         <AlertTriangle className="size-4 shrink-0 text-amber-600" aria-hidden />
-        Ô thiếu số liệu: còn {items.length} ô/mục trong {scope}
-        <span className="ml-auto text-xs font-medium text-amber-700">Bấm để thu gọn</span>
+        Ô thiếu số liệu: {compact ? `${items.length} ô/mục` : `còn ${items.length} ô/mục trong ${scope}`}
+        <span className={`ml-auto text-xs font-medium text-amber-700 ${compact?"monthly-missing-hint":""}`}><span className="group-open/missing:hidden">Bấm để xem chi tiết</span><span className="hidden group-open/missing:inline">Bấm để thu gọn</span></span>
       </summary>
       <div className="mt-2 grid max-h-52 gap-2 overflow-auto border-t border-amber-200 pt-2 text-xs sm:grid-cols-2 xl:grid-cols-3">
         <p className="sm:col-span-2 xl:col-span-3 text-amber-800">
@@ -46,4 +48,12 @@ export function MissingDataAlert({ items, loading = false, scope }: { items: Mis
       </div>
     </details>
   );
+}
+
+/** Mount the monthly warning alongside the module title without moving its data logic. */
+const subscribeHeaderTarget = () => () => {};
+
+export function MonthlyHeaderAlert(props: React.ComponentProps<typeof MissingDataAlert>) {
+  const target = useSyncExternalStore(subscribeHeaderTarget, () => document.getElementById("monthly-header-alert"), () => null);
+  return target ? createPortal(<MissingDataAlert {...props} compact />, target) : null;
 }

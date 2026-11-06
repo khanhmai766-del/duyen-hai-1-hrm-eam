@@ -51,5 +51,5 @@ test('all duplicated KTKT guards use the same public-origin policy',()=>{
   assert.ok(source.includes('isCtktktSameOrigin(request'),file);guarded++;
   assert.ok(!/origin\s*!==\s*new URL\(request.url\).origin/.test(source),file);
  }}
- assert.equal(guarded,18);
+ assert.equal(guarded,19);
 });

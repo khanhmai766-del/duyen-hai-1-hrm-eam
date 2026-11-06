@@ -68,6 +68,7 @@ export async function POST(request:Request){
   await inspectUpload(Buffer.from(JSON.stringify(body.file ?? null)),{fileName:"sao-luu-ktkt.json"});
   let file;
   try{file=validateDataBackup(body.file);}catch(error){return json({error:error instanceof Error?error.message:"Tệp không hợp lệ."},400);}
+  if(body.action==="restore"&&guard.user.role!=="admin"&&(file.tables.daily_inputs||[]).some(row=>String(row.field_code||"").startsWith("KTKT:")))return json({error:"Chỉ tài khoản quản trị được nạp bản sao lưu chứa số liệu Báo cáo KTKT. Người nhập phải gửi yêu cầu chỉnh sửa để duyệt."},403);
   let db;
   try{db=await database();}catch{return json({error:"Chưa kết nối được kho dữ liệu; chưa nạp bản ghi nào."},503);}
   let schemas;

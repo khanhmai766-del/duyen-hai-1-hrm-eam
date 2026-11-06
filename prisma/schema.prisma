@@ -3933,3 +3933,30 @@ model CtktktGoogleMirrorStatus {
 
   @@map("ctktkt_google_mirror_status")
 }
+
+model CtktktInputOwnership {
+ operatingDate String @map("operating_date")
+ fieldCode String @map("field_code")
+ ownerId String @map("owner_id")
+ shiftStart DateTime @db.Timestamptz(6) @map("shift_start")
+ createdAt DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+ @@id([operatingDate,fieldCode])
+ @@map("ctktkt_input_ownership")
+}
+model CtktktCorrectionRequest {
+ id String @id
+ operatingDate String @map("operating_date")
+ requesterId String @map("requester_id")
+ requesterName String @map("requester_name")
+ reason String
+ entries Json
+ status String @default("pending")
+ createdAt DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+ reviewerId String? @map("reviewer_id")
+ reviewerName String? @map("reviewer_name")
+ reviewedAt DateTime? @db.Timestamptz(6) @map("reviewed_at")
+ reviewNote String @default("") @map("review_note")
+ @@index([status,createdAt(sort: Desc)], map:"ctktkt_corrections_status")
+ @@index([requesterId,createdAt(sort: Desc)], map:"ctktkt_corrections_requester")
+ @@map("ctktkt_correction_requests")
+}
