@@ -7,7 +7,8 @@ import {deriveCtktktCellsFromBcsx} from './ctktkt-bcsx-link';
 import {ctktktWaterLogFromRow,deriveCtktktCellsFromWater} from './ctktkt-water-link';
 import {mergeDailyInputsWithCtktkt} from './daily-source-links';
 import {calculateDailyProduction} from './daily-production-calculations';
-import {calculateActualHeatRate,calculatePpaHeatRateDetailed,type PpaSourceData} from './ppa-heat-rate';
+import {calculateActualHeatRate,calculatePpaHeatRateDetailed} from './ppa-heat-rate';
+import {storedPpaMeterSource} from './ppa-stored-source';
 import {buildPlantSheet,buildUnitSheet,buildMeterSheet,type PpaSheetRow} from './ppa-sheet-export';
 import {SHIFT_TIME_SLOTS,deriveA0Readings} from './bcsx';
 import {calculateAuxiliaryElectricity} from './auxiliary-electricity';
@@ -89,7 +90,7 @@ export async function buildMirrorSnapshot(period:string){
  for(const row of plant.slice(1))for(const c of [8,11,14])if(typeof row[c]==='number')row[c]=Number(row[c])/100;
  const pTabs:MirrorTab[]=[{name:'Cả nhà máy DH1',rows:plant.slice(1),startRow:3,clearRows:150,clearColumns:18}];
  const s1=[],s2=[];
- for(const r of ppaDays){const iso=String(r.operating_date),source=JSON.parse(String(r.source_data)) as PpaSourceData,detail=calculatePpaHeatRateDetailed(source,year);s1.push({iso,detail:detail.s1});s2.push({iso,detail:detail.s2});pTabs.push({name:iso.slice(8)+iso.slice(5,7),template:'0110',rows:buildMeterSheet(adapter,iso,source) as unknown as Matrix,clearRows:50,clearColumns:52});}
+ for(const r of ppaDays){const source=storedPpaMeterSource(r.source_data);if(!source)continue;const iso=String(r.operating_date),detail=calculatePpaHeatRateDetailed(source,year);s1.push({iso,detail:detail.s1});s2.push({iso,detail:detail.s2});pTabs.push({name:iso.slice(8)+iso.slice(5,7),template:'0110',rows:buildMeterSheet(adapter,iso,source) as unknown as Matrix,clearRows:50,clearColumns:52});}
  for(const [name,days] of [['S1',s1],['S2',s2]] as const)pTabs.push({name,rows:buildUnitSheet(adapter,days,year) as unknown as Matrix,clearRows:200,clearColumns:55});
  tabs.set('ppa',pTabs);
  for(const [unit,key] of [['S1','bcsx-s1'],['S2','bcsx-s2'],['A0','bcsx-a0']] as const){
