@@ -13,3 +13,11 @@
 .ctktkt-module .ppa-detail-legend { display:flex; flex-wrap:wrap; gap:12px; font-size:11px; color:#768399; }
 .ctktkt-module .ppa-legend-over { color:#b42332; }.ctktkt-module .ppa-legend-met { color:#16714c; }
 @media print { .ctktkt-module .ppa-detail-table { min-width:0; font-size:9px; }.ctktkt-module .ppa-detail-table :is(th,td):first-child:not([colspan]) { position:static; } }
+/* Keep complete numeric values inside a deliberate horizontal table scroller. */
+.ctktkt-module table.ppa-detail-table { width:100%; min-width:1650px; table-layout:fixed; font-size:13px; }
+.ctktkt-module table.ppa-detail-table :is(th,td) { box-sizing:border-box; padding:6px 7px; line-height:1.3; }
+.ctktkt-module table.ppa-detail-table tbody td:not([colspan]) { font-size:13px; }
+.ctktkt-module table.ppa-detail-table tbody td:nth-child(-n+15):not([colspan]) { white-space:nowrap; overflow:hidden; }
+.ctktkt-module table.ppa-detail-table th { font-size:12px; }
+@media print { .ctktkt-module table.ppa-detail-table { min-width:0; table-layout:auto; font-size:9px; }.ctktkt-module table.ppa-detail-table :is(th,td),.ctktkt-module table.ppa-detail-table tbody td:not([colspan]) { padding:3px; font-size:9px; } }
+@media print { .ctktkt-module table.ppa-detail-table col { width:auto !important; }.ctktkt-module table.ppa-detail-table tbody td:nth-child(-n+15):not([colspan]) { white-space:normal; overflow:visible; } }

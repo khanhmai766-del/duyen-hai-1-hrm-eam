@@ -414,7 +414,7 @@ export function PpaHeatRateDashboard() {
     void exportXlsx();
   }
 
-  return <section className="space-y-4">
+  return <section className="ppa-dashboard space-y-4">
     <ExportMissingDialog
       open={exportMissingOpen}
       items={missingPpaExport}
@@ -439,14 +439,16 @@ export function PpaHeatRateDashboard() {
         </div>
       </div>
       <div className="ppa-sheet-row">
+        <details className="ppa-sheet-menu"><summary>Google Sheet ▾</summary><div className="ppa-sheet-menu-content">
         <label className="ppa-sheet-date">Ngày Google Sheet<DateField value={sheetDate} onChange={setSheetDate} className="w-[150px]"/></label>
         <GoogleSheetSyncButton compact operatingDate={sheetDate} disabled={!hasSavedPpaForSheet || !hasAvailableCapacityForSheet} disabledReason={sheetDisabledReason} onImported={() => loadRange(fromDate, toDate, false)}/>
+        </div></details>
         <button type="button" disabled={exporting || loading || !rows.length} onClick={requestExportXlsx} className="ppa-export-button">{exporting ? "Đang xuất…" : "Xuất Excel (.xlsx)"}</button>
       </div>
     </div>
 
     {error && <p role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-sm font-medium text-red-800">{error}</p>}
-    {!loading && restoredCount !== null && <p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-900">Đã khôi phục {restoredCount} ngày kết quả đã lưu trên website.</p>}
+    {!loading && restoredCount !== null && <p role="status" className="ppa-restored-status text-xs text-slate-500">Đã khôi phục {restoredCount} ngày kết quả đã lưu trên website.</p>}
 
     {noteworthy.length > 0 && <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
       <button type="button" onClick={() => setNotesOpen(open => !open)} className="flex w-full items-center justify-between gap-2 text-left text-sm font-bold text-amber-900">
@@ -471,10 +473,10 @@ export function PpaHeatRateDashboard() {
       {!rows.length ? <div className="grid min-h-40 place-items-center p-6 text-sm text-slate-500">{loading ? "Đang tải dữ liệu…" : "Chưa có kết quả đã lưu trong khoảng thời gian này."}</div> : <div className="module-table-scroll w-full min-w-0 max-w-full overflow-x-scroll overflow-y-auto" tabIndex={0} role="region" aria-label="Bảng PPA theo ngày, cuộn ngang để xem các cột">
         <table className="report-data-table ppa-detail-table">
           <colgroup>
-            <col style={{ width: "6%" }}/>
-            {Array.from({ length: 14 }, (_, index) => <col key={index} style={{ width: "5.5%" }}/>) }
-            <col style={{ width: "8.5%" }}/>
-            <col style={{ width: "8.5%" }}/>
+            <col style={{ width: 70 }}/>
+            {Array.from({ length: 14 }, (_, index) => <col key={index} style={{ width: [3,8,13].includes(index) ? 74 : 98 }}/>) }
+            <col style={{ width: 140 }}/>
+            <col style={{ width: 140 }}/>
           </colgroup>
           <thead>
             <tr className="bg-[#dcebf5] text-[#173b64]">
