@@ -1223,6 +1223,7 @@ export function CtktktReport() {
 
       <ReportCorrections key={date} date={date} getStaged={()=>[...dirtyCellsRef.current].filter(cell=>canEditCtktktField(user,cell)).map(cell=>({cell,value:current[cell]||""}))} onUpdated={()=>setReloadVersion(v=>v+1)}/>
 
+      <button type="button" className="my-2 min-h-10 rounded-lg border border-blue-300 px-4 text-sm font-semibold text-blue-800" onClick={() => { const target = document.getElementById('ktkt-correction-requests'); if (target instanceof HTMLDetailsElement) { target.open = true; target.scrollIntoView({behavior:'smooth',block:'start'}); } }}>Đề xuất chỉnh sửa / Xem yêu cầu duyệt</button>
       {/* 2. BẢNG KẾT QUẢ TÍNH TỰ ĐỘNG KPI & Ô NHẬP TAY CỤM 1 (I35, I36, W87) */}
       <div className="ktkt-kpi-panel overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xs">
         <div className="module-section-heading flex flex-wrap items-center justify-between gap-2 border-b bg-[#f8faff] px-4 py-2.5">
@@ -2096,6 +2097,7 @@ export function CtktktReport() {
                   <h3 className="text-sm font-black text-[#173b64]">
                     Cụm 4 & 5: Bảng ghi công tơ Tổ máy S1 & Tổ máy S2
                   </h3>
+      <button type="button" className="my-2 min-h-10 rounded-lg border border-blue-300 px-4 text-sm font-semibold text-blue-800" onClick={() => { const target = document.getElementById('ktkt-correction-requests'); if (target instanceof HTMLDetailsElement) { target.open = true; target.scrollIntoView({behavior:'smooth',block:'start'}); } }}>Đề xuất chỉnh sửa / Xem yêu cầu duyệt</button>
                   <p className="text-xs text-slate-500">
                     Phân tách thành 3 nhóm quyền riêng biệt: Trực phụ điện (Điện) · Lò phó (Dầu F1 -
                     F2) · Vận hành viên Máy nghiền (12 cân than A1..F2).

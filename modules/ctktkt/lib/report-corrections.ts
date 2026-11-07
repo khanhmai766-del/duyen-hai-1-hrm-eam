@@ -1,3 +1,5 @@
+import {isShiftInputCoordinator} from "./auth/delegation-policy";
+import {canProposeCtktktCorrection} from "./ctktkt-permissions";
 import {randomUUID} from "node:crypto";
 import type {PoolClient} from "pg";
 import {getPool} from "../db";
@@ -45,8 +47,9 @@ export async function saveReportWithShift(user:SessionUser,date:string,entries:E
  if(!edits.length)return {saved:0};
  if(reason){
  if(user.role==='admin')throw new CorrectionError('Quản trị có thể sửa trực tiếp, không cần gửi yêu cầu.',400);
+ if(edits.some(e=>!canProposeCtktktCorrection(user,e.cell)))throw new CorrectionError("Không có quyền đề xuất sửa ô này.",403);
  if(reason.trim().length<5||reason.length>1000)throw new CorrectionError('Nhập lý do từ 5 đến 1000 ký tự.',400);
- for(const e of edits){const owner=await ownership(c,date,e.cell);if(owner.rows[0]&&owner.rows[0].owner_id!==user.id)throw new CorrectionError('Chỉ được yêu cầu sửa số liệu do chính mình nhập.',403);if(!owner.rowCount){const original=await c.query("SELECT actor_id,action FROM public.ctktkt_daily_input_audit WHERE operating_date=$1 AND field_code=$2 ORDER BY id ASC LIMIT 1",[date,'KTKT:'+e.cell]);if(original.rows[0]?.action==='insert'&&original.rows[0].actor_id!==user.id)throw new CorrectionError('Nhật ký xác định số liệu do tài khoản khác nhập. Chưa gửi yêu cầu.',403);}if(e.oldValue===null&&!owner.rowCount)throw new CorrectionError('Yêu cầu chỉnh sửa chỉ áp dụng cho số liệu đã nhập; ô chưa có số liệu cần quản trị bổ sung.',400);}
+ for(const e of edits){const owner=await ownership(c,date,e.cell);if(!isShiftInputCoordinator(user)&&owner.rows[0]&&owner.rows[0].owner_id!==user.id)throw new CorrectionError('Chỉ được yêu cầu sửa số liệu do chính mình nhập.',403);if(!owner.rowCount){const original=await c.query("SELECT actor_id,action FROM public.ctktkt_daily_input_audit WHERE operating_date=$1 AND field_code=$2 ORDER BY id ASC LIMIT 1",[date,'KTKT:'+e.cell]);if(!isShiftInputCoordinator(user)&&original.rows[0]?.action==='insert'&&original.rows[0].actor_id!==user.id)throw new CorrectionError('Nhật ký xác định số liệu do tài khoản khác nhập. Chưa gửi yêu cầu.',403);}if(e.oldValue===null&&!owner.rowCount)throw new CorrectionError('Yêu cầu chỉnh sửa chỉ áp dụng cho số liệu đã nhập; ô chưa có số liệu cần quản trị bổ sung.',400);}
  const id=randomUUID();await c.query('INSERT INTO public.ctktkt_correction_requests(id,operating_date,requester_id,requester_name,reason,entries) VALUES($1,$2,$3,$4,$5,$6::jsonb)',[id,date,user.id,user.displayName,reason.trim(),JSON.stringify(edits)]);return {requested:true,requestId:id,saved:0};
  }
  for(const e of edits){const owner=await ownership(c,date,e.cell);if(user.role!=='admin'&&(e.oldValue!==null||owner.rowCount)&&!canSelfCorrect(owner.rows[0]?.owner_id??null,owner.rows[0]?.shift_start??null,user.id,now))throw new CorrectionError('Đã hết ca, số liệu không thuộc bạn hoặc chưa xác định người nhập cũ. Chưa lưu. Mở “Yêu cầu chỉnh sửa” để gửi quản trị duyệt.');}

@@ -1,3 +1,5 @@
+import { normalizeText } from "@/lib/nav";
+import { positionLabelOf } from "@/lib/position-catalog";
 import { isAdminUser, type SessionUser } from "./auth/session";
 import { NH3_OPENING_STOCK_CELL } from "./ctktkt-report";
 
@@ -392,4 +394,12 @@ export function getEditableCtktktGroups(user: SessionUser | null | undefined): C
 /** Only explicit grants are authoritative after legacy conversion. */
 export function canEditCtktktGroup(user: SessionUser | null | undefined, group: CtktktFieldGroup): boolean {
   return Boolean(user && (isAdminUser(user) || user.permissions.includes("edit_ctktkt") || user.permissions.includes(`ctktkt_${group}`)));
+}
+
+/** Proposal access does not grant direct edit or approval rights. */
+export function canProposeCtktktCorrection(user: SessionUser | null | undefined, cell: string): boolean {
+  if (!user || cell === NH3_OPENING_STOCK_CELL) return false;
+  const coordinator = ['truong ca', 'truong kip dien'].includes(normalizeText(positionLabelOf(user.position || '')).replace(/ s[12]$/, '').trim());
+  const group = getCtktktFieldGroup(cell);
+  return canEditCtktktField(user, cell) || Boolean(coordinator && group && ['tpd_tcd_power','lo_pho_oil','may_nghien_coal_s1','may_nghien_coal_s2','td21'].includes(group));
 }

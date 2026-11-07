@@ -24,8 +24,9 @@ function PermissionEditor({ settings, reload }: { settings: CtktktPermissionSett
   const save = useSaveCtktktPermissions(), router = useRouter();
   const viewport = useRef<HTMLDivElement>(null);
   const dirty = JSON.stringify(grants) !== JSON.stringify(settings.grants);
-  const group = CTKTKT_PERMISSION_GROUPS[groupIndex];
-  const positions = settings.positions.filter(position => normalizeText(position).includes(normalizeText(search)) && (!onlyAssigned || POSITION_PERMISSION_IDS.some(id => granted(id, position))));
+  const groups = settings.delegatedOnly ? CTKTKT_PERMISSION_GROUPS.map(g => ({...g, ids:g.ids.filter(id => settings.editablePermissionIds?.includes(id))})).filter(g => g.ids.length) : CTKTKT_PERMISSION_GROUPS;
+  const group = groups[groupIndex] || groups[0];
+  const positions = settings.positions.filter(position => (!settings.delegatedOnly || settings.operatorPositions?.includes(position)) && normalizeText(position).includes(normalizeText(search)) && (!onlyAssigned || POSITION_PERMISSION_IDS.some(id => granted(id, position))));
   function granted(id: PositionPermission, position: string) { return grants[id].some(p => ctktktPositionKey(p) === ctktktPositionKey(position)); }
   function toggle(id: PositionPermission, position: string) {
     setGrants(current => ({ ...current, [id]: granted(id, position) ? current[id].filter(p => ctktktPositionKey(p) !== ctktktPositionKey(position)) : [...current[id], position] }));
@@ -55,18 +56,18 @@ function PermissionEditor({ settings, reload }: { settings: CtktktPermissionSett
     <Link href="/tien-ich/chi-tieu-ktkt" className="inline-flex min-h-10 items-center text-sm font-medium text-blue-700">← Dữ liệu các tháng</Link>
     <div className="rounded-xl border border-blue-200 bg-blue-50 p-4">
       <h2 className="flex items-center gap-2 text-xl font-bold text-slate-900"><ShieldCheck className="size-5 shrink-0"/>Phân quyền KTKT</h2>
-      <p className="mt-2 text-sm leading-6 text-slate-700">Tích chọn quyền cho từng cương vị đang làm việc. Bỏ trống là không cấp quyền.</p>
+      <p className="mt-2 text-sm leading-6 text-slate-700">Tích chọn quyền nhập liệu cho từng cương vị đang làm việc. TKĐ và Trưởng ca chỉ phân công cho VHV trong KTKT; quyền quản trị do quản trị viên cấu hình. Bỏ trống là không cấp quyền.</p>
       <p className="mt-1 text-sm leading-6 text-slate-700"><strong>Toàn quyền KTKT</strong> bao gồm mọi chức năng. Quản trị viên web đang bật chế độ quản trị luôn có toàn quyền.</p>
     </div>
     <div className="flex flex-wrap items-center gap-2">
       <button className={button} disabled={save.isPending} onClick={() => dirty ? setReloadOpen(true) : reload()}><RefreshCw className="size-4"/>Tải lại cấu hình</button>
-      <button className={button} disabled={save.isPending} onClick={() => setResetOpen(true)}><RotateCcw className="size-4"/>Khôi phục mặc định bản gốc</button>
+      <button className={button} disabled={save.isPending || settings.delegatedOnly} onClick={() => setResetOpen(true)}><RotateCcw className="size-4"/>Khôi phục mặc định bản gốc</button>
       <button className={`${button} border-blue-700 bg-blue-700 text-white`} disabled={!dirty || save.isPending} onClick={() => void submit()}><Save className="size-4"/>{save.isPending ? "Đang lưu…" : "Lưu phân quyền"}</button>
     </div>
     <p role="status" className="text-sm text-slate-600">{dirty ? "Có thay đổi chưa lưu." : settings.version ? `Đã lưu phiên bản ${settings.version}.` : "Đang áp dụng mặc định bản gốc; chưa có cấu hình riêng."}</p>
     {save.isError && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">{save.error.message}</p>}
     <div className="grid gap-3 rounded-xl border border-slate-200 bg-white p-3 sm:grid-cols-2">
-      <label className="grid gap-1 text-sm font-semibold">Nhóm quyền<select aria-label="Nhóm quyền" className="min-h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-base sm:text-sm" value={groupIndex} onChange={event => setGroupIndex(Number(event.target.value))}>{CTKTKT_PERMISSION_GROUPS.map((item, index) => <option value={index} key={item.label}>{item.label}</option>)}</select></label>
+      <label className="grid gap-1 text-sm font-semibold">Nhóm quyền<select aria-label="Nhóm quyền" className="min-h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-base sm:text-sm" value={groupIndex} onChange={event => setGroupIndex(Number(event.target.value))}>{groups.map((item, index) => <option value={index} key={item.label}>{item.label}</option>)}</select></label>
       <label className="grid gap-1 text-sm font-semibold">Tìm cương vị<input aria-label="Tìm cương vị" className="min-h-10 w-full rounded-lg border border-slate-300 px-3 text-base sm:text-sm" placeholder="Ví dụ: Trưởng kíp điện" value={search} onChange={event => setSearch(event.target.value)}/></label>
       <label className="flex min-h-10 items-center gap-2 text-sm"><input type="checkbox" checked={onlyAssigned} onChange={event => setOnlyAssigned(event.target.checked)}/>Chỉ hiện cương vị đã cấp quyền</label>
       <span className="flex items-center gap-2 text-sm text-slate-600"><Users className="size-4"/>{positions.length}/{settings.positions.length} cương vị</span>

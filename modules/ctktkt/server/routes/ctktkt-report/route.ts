@@ -1,10 +1,11 @@
+import { isShiftInputCoordinator } from "@/modules/ctktkt/lib/auth/delegation-policy";
 import { isCtktktSameOrigin } from "@/modules/ctktkt/lib/request-origin";
 import {saveReportWithShift,CorrectionError} from "@/modules/ctktkt/lib/report-corrections";
 import { getRawDb } from "@/modules/ctktkt/db";
 import { getSessionUser, requireSession } from "@/modules/ctktkt/lib/auth/server";
 import { canEditOperatingDate, isFutureOperatingDate, vietnamDateIso } from "@/modules/ctktkt/lib/operating-date";
 import { isAdminUser } from "@/modules/ctktkt/lib/auth/session";
-import { canEditAnyCtktktField, canEditCtktktField } from "@/modules/ctktkt/lib/ctktkt-permissions";
+import { canEditAnyCtktktField, canEditCtktktField, canProposeCtktktCorrection } from "@/modules/ctktkt/lib/ctktkt-permissions";
 import { BCSX_COAL_STOCK_24H_CODE, CTKTKT_BCSX_LINKED_CELLS, CTKTKT_COAL_STOCK_24H_CELL, deriveCtktktCellsFromBcsx, type CtktktBcsxReading } from "@/modules/ctktkt/lib/ctktkt-bcsx-link";
 import { CTKTKT_WATER_LINKED_CELLS, ctktktWaterLogFromRow, deriveCtktktCellsFromWater } from "@/modules/ctktkt/lib/ctktkt-water-link";
 import { CTKTKT_INPUT_FIELDS } from "@/modules/ctktkt/lib/ctktkt-fields.generated";
@@ -116,7 +117,7 @@ export async function POST(request: Request) {
   if (!user) {
     return Response.json({ error: "Chưa đăng nhập." }, { status: 401 });
   }
-  if (!canEditAnyCtktktField(user)) {
+  if (!canEditAnyCtktktField(user) && !isShiftInputCoordinator(user)) {
     return Response.json({ error: "Tài khoản của bạn không có quyền nhập liệu Chỉ tiêu KTKT." }, { status: 403 });
   }
   if (!isCtktktSameOrigin(request)) return Response.json({ error: "Nguồn yêu cầu không hợp lệ." }, { status: 403 });
@@ -168,7 +169,7 @@ export async function POST(request: Request) {
       if((body.coalUnit!=="S1"&&body.coalUnit!=="S2")||!coalEntriesMatchUnit(clean,body.coalUnit))throw new Error("Công tơ S1/S2 bị lẫn hoặc khác tổ máy đã chọn. Chưa lưu số liệu.");
     }
     // Chỉ lưu những ô mà người dùng có thẩm quyền theo cương vị / vai trò
-    const authorizedEntries = clean.filter(entry => canEditCtktktField(user, entry.cell));
+    const authorizedEntries = clean.filter(entry => body.correctionReason ? canProposeCtktktCorrection(user, entry.cell) : canEditCtktktField(user, entry.cell));
     if (authorizedEntries.length !== clean.length) {
       return Response.json({ error: "Bạn không có quyền sửa các ô dữ liệu đã gửi." }, { status: 403 });
     }

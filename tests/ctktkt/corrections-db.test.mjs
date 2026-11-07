@@ -12,7 +12,7 @@ test('local PostgreSQL workflow uses isolated TEMP tables; no live operational r
  await c.query('CREATE TEMP SEQUENCE correction_test_audit_seq');await c.query("ALTER TABLE pg_temp.ctktkt_daily_input_audit ALTER COLUMN id SET DEFAULT nextval('pg_temp.correction_test_audit_seq')");
  await c.query('CREATE TEMP SEQUENCE correction_test_input_seq');await c.query("ALTER TABLE pg_temp.ctktkt_daily_inputs ALTER COLUMN id SET DEFAULT nextval('pg_temp.correction_test_input_seq')");
  globalThis.ctktktPool={connect:async()=>({query:(sql,args)=>c.query(sql.replaceAll('public.ctktkt_','pg_temp.ctktkt_'),args),release(){}})};
- const user={id:'operator-a',username:'a',displayName:'Operator A',role:'technician',permissions:[]},other={...user,id:'operator-b'},admin={...user,id:'admin',role:'admin'},manager={...user,permissions:['manage_users']};const date='2026-11-06',morning=new Date(date+'T10:00:00+07:00'),afternoon=new Date(date+'T14:00:00+07:00');
+ const user={id:'operator-a',username:'a',displayName:'Operator A',role:'technician',permissions:['ctktkt_may_nghien_coal_s1']},other={...user,id:'operator-b'},admin={...user,id:'admin',role:'admin'},manager={...user,permissions:['manage_users']};const date='2026-11-06',morning=new Date(date+'T10:00:00+07:00'),afternoon=new Date(date+'T14:00:00+07:00');
  await saveReportWithShift(user,date,[{cell:'X16',value:'16117.496'}],undefined,morning);
  await saveReportWithShift(user,date,[{cell:'X16',value:'16117.4960'}],undefined,morning);
  assert.equal((await c.query("SELECT value FROM pg_temp.ctktkt_daily_inputs WHERE field_code='KTKT:X16'")).rows[0].value,'16117.4960');

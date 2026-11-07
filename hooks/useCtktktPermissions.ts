@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiMutate } from "@/lib/fetcher";
 import type { PositionGrants, PositionPermissionConfig } from "@/modules/ctktkt/lib/auth/position-permissions";
 
-export type CtktktPermissionSettings = PositionPermissionConfig & { defaults: PositionGrants; positions: string[]; updatedAt: string | null };
+export type CtktktPermissionSettings = PositionPermissionConfig & { delegatedOnly?: boolean; editablePermissionIds?: string[]; operatorPositions?: string[]; defaults: PositionGrants; positions: string[]; updatedAt: string | null };
 const key = ["ctktkt", "position-permissions"] as const;
 export function useCtktktPermissions() {
   return useQuery({ queryKey: key, queryFn: async ({ signal }) => (await apiGet<CtktktPermissionSettings>("/api/ctktkt/permissions", { signal })).data, retry: false, refetchOnWindowFocus: false, refetchOnReconnect: false });
