@@ -621,3 +621,26 @@
 .ctktkt-module .ppa-sheet-row .google-sheet-actions { flex-direction: row; align-items: center; flex-wrap: wrap; }
 @media (min-width: 1024px) { .ctktkt-module .ppa-sheet-row { flex-wrap: nowrap; } .ctktkt-module .ppa-sheet-row .google-sheet-buttons { flex-wrap: nowrap; } }
 
+/* Monthly heading: title/actions followed by links and small counters. */
+.ctktkt-module:has([data-module="data"]) { row-gap:6px; }
+.ctktkt-module:has([data-module="data"]) > .ktkt-page-header { min-height:36px; gap:4px 12px; }
+.ctktkt-module:has([data-module="data"]) > .ktkt-page-header h1 { font-size:18px; line-height:1.25; }
+.ctktkt-module:has([data-module="data"]) > .ktkt-page-header p { display:none; }
+.ctktkt-module:has([data-module="data"]) > .ktkt-page-header :is(button,a) { min-height:32px; height:32px; padding-block:4px; }
+.ctktkt-module .monthly-summary-row { display:flex; align-items:center; flex-wrap:wrap; gap:6px 12px; min-height:40px; padding:4px 8px; border:1px solid #dbe4ef; border-radius:8px; background:#fff; }
+.ctktkt-module .monthly-assignment-link { display:inline-flex; align-items:center; min-height:32px; color:#354a9f; font-size:12px; font-weight:600; }
+.ctktkt-module .monthly-summary-row .ktkt-toolbar-link { height:32px; border-radius:6px; padding-inline:8px; font-size:12px; }
+.ctktkt-module .monthly-summary-row .monthly-stats { display:flex; flex-wrap:wrap; gap:4px 14px; margin-left:auto; }
+.ctktkt-module .monthly-summary-row .monthly-stat { display:flex; gap:5px; min-height:28px; padding:0; border:0; border-radius:0; background:none; box-shadow:none; }
+.ctktkt-module .monthly-summary-row .monthly-stat::before,.ctktkt-module .monthly-summary-row .monthly-stat::after { display:none; }
+.ctktkt-module .monthly-summary-row .monthly-stat > div { display:flex; align-items:baseline; gap:5px; }
+.ctktkt-module .monthly-summary-row .monthly-stat p:first-child { font-size:18px; line-height:1.2; }
+.ctktkt-module .monthly-summary-row .monthly-stat p:last-child { margin:0; font-size:12px; }
+.ctktkt-module .monthly-summary-row .monthly-stat-icon { width:22px; height:22px; border-radius:4px; }
+.ctktkt-module .monthly-summary-row .monthly-stat-icon svg { width:15px; height:15px; }
+.ctktkt-module .monthly-workspace > * + * { margin-top:8px; }
+@media (max-width:767px) {
+ .ctktkt-module .monthly-summary-row .monthly-stats { width:100%; margin-left:0; display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); }
+ .ctktkt-module .monthly-summary-row .ktkt-toolbar-link,.ctktkt-module .monthly-assignment-link { min-height:40px; height:auto; }
+ .ctktkt-module:has([data-module="data"]) > .ktkt-page-header :is(button,a) { min-height:40px; height:auto; }
+}
