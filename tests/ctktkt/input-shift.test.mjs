@@ -1,0 +1,5 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {inputShiftStart,canSelfCorrect} from '../../modules/ctktkt/lib/input-shift.ts';
+for(const [instant,start] of [['2026-11-06T05:59:59+07:00','2026-11-05T22:00:00+07:00'],['2026-11-06T06:00:00+07:00','2026-11-06T06:00:00+07:00'],['2026-11-06T13:59:59+07:00','2026-11-06T06:00:00+07:00'],['2026-11-06T14:00:00+07:00','2026-11-06T14:00:00+07:00'],['2026-11-06T21:59:59+07:00','2026-11-06T14:00:00+07:00'],['2026-11-06T22:00:00+07:00','2026-11-06T22:00:00+07:00'],['2027-01-01T00:00:00+07:00','2026-12-31T22:00:00+07:00']])test('shift boundary '+instant,()=>assert.equal(inputShiftStart(new Date(instant)),new Date(start).toISOString()));
+test('only same owner in same shift can self-correct',()=>{const date=new Date('2026-11-06T13:59:59+07:00'),start='2026-11-06T06:00:00+07:00';assert.equal(canSelfCorrect('a',start,'a',date),true);assert.equal(canSelfCorrect('a',start,'b',date),false);assert.equal(canSelfCorrect('a',start,'a',new Date('2026-11-06T14:00:00+07:00')),false);assert.equal(canSelfCorrect(null,null,'a',date),false);});

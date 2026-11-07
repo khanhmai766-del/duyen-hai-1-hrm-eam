@@ -1,3 +1,4 @@
+import { isCtktktSameOrigin } from "@/modules/ctktkt/lib/request-origin";
 import { auditedDailyBatch } from "@/modules/ctktkt/lib/daily-input-audit";
 import { getRawDb } from "@/modules/ctktkt/db";
 import { EVENT_TYPES, validateOperatingEventDateRange, type OperatingEvent } from "@/modules/ctktkt/lib/bcsx";
@@ -56,8 +57,7 @@ function cleanEntries(value: unknown, date: string): DailyEntry[] {
 export async function POST(request: Request) {
   const guard = await requirePermission("edit_bcsx");
   if (!guard.ok) return guard.response;
-  const origin = request.headers.get("origin");
-  if (origin && origin !== new URL(request.url).origin) return Response.json({ error: "Nguồn yêu cầu không hợp lệ." }, { status: 403 });
+  if (!isCtktktSameOrigin(request)) return Response.json({ error: "Nguồn yêu cầu không hợp lệ." }, { status: 403 });
   if (!request.headers.get("content-type")?.includes("application/json")) return Response.json({ error: "Yêu cầu phải là JSON." }, { status: 415 });
 
   try {

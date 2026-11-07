@@ -1,3 +1,4 @@
+import { isCtktktSameOrigin } from "@/modules/ctktkt/lib/request-origin";
 import { requirePermission } from "@/modules/ctktkt/lib/auth/server";
 import { buildSection1ImportPackage } from "@/modules/ctktkt/lib/bcsx-section1-import";
 
@@ -6,8 +7,7 @@ const maxFileBytes = 4 * 1024 * 1024;
 export async function POST(request: Request) {
   const guard = await requirePermission("edit_bcsx");
   if (!guard.ok) return guard.response;
-  const origin = request.headers.get("origin");
-  if (origin && origin !== new URL(request.url).origin) {
+  if (!isCtktktSameOrigin(request)) {
     return Response.json({ error: "Nguồn yêu cầu không hợp lệ." }, { status: 403 });
   }
   if (!request.headers.get("content-type")?.includes("multipart/form-data")) {

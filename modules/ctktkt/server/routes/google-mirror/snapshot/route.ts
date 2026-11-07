@@ -19,5 +19,11 @@ export async function GET(request:Request){
   if(process.env.CTKTKT_READ_CACHE!=='off'&&request.headers.get('if-none-match')===etag)return new Response(null,{status:304,headers});
   return Response.json(await buildMirrorSnapshot(period),{headers});
  }
- catch{return Response.json({error:'Không tạo được bản đồng bộ. File Google Sheets cũ được giữ nguyên.'},{status:503});}
+ catch(error){
+  // Log only classified codes, never raw database/provider messages or secrets.
+  const pgCode=error&&typeof error==='object'&&'code' in error?String(error.code):'';
+  const code=error instanceof Error&&error.message==='PPA_METER_SOURCE_INVALID'?'PPA_METER_SOURCE_INVALID':/^[0-9A-Z]{5}$/.test(pgCode)?pgCode:'MIRROR_SNAPSHOT_FAILED';
+  console.error('[ctktkt/google-mirror/snapshot]',{period,code});
+  return Response.json({error:'Không tạo được bản đồng bộ. File Google Sheets cũ được giữ nguyên.'},{status:503});
+ }
 }

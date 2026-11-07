@@ -1,4 +1,6 @@
 "use client";
+import { ctktktMetricDisplay } from "../lib/ctktkt-report";
+import { ReportCorrections } from "./report-corrections";
 import { useCtktktRequest, useCtktktDownload } from "@/hooks/useCtktkt";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -21,6 +23,7 @@ import {
   Mail,
   Camera,
   Images,
+  FileSpreadsheet,
 } from "lucide-react";
 import { DateField } from "@/modules/ctktkt/components/ui/date-field";
 import {saveReviewedCoalEntries} from "@/modules/ctktkt/lib/coal-photo-save";
@@ -98,6 +101,7 @@ import {
 import { isMissingValue, describeCtktktMissingField } from "@/modules/ctktkt/lib/data-completeness";
 import { shouldShowCtktktMissingField } from "@/modules/ctktkt/lib/ctktkt-missing-fields";
 import { ExportMissingDialog } from "@/modules/ctktkt/components/export-missing-dialog";
+import { GoogleMirrorLinks } from "@/modules/ctktkt/components/google-mirror-links";
 import type { MissingDataItem } from "@/modules/ctktkt/components/missing-data-alert";
 
 type LoadedEntry = { operatingDate: string; cell: string; value: string };
@@ -147,7 +151,7 @@ const editableFields = [
 const numberFormat = new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 4 });
 
 function reportTabClass(active: boolean) {
-  return `flex min-h-11 min-w-0 items-center justify-center gap-2 rounded-xl border px-3 py-2 text-center text-[13px] font-bold leading-snug transition-all ${
+  return `flex min-h-9 flex-1 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border px-2.5 py-1.5 text-center text-xs font-semibold leading-tight transition-all ${
     active
       ? "border-[#765038] bg-[#8a6247] text-white shadow-sm"
       : "border-[#d9c3ad] bg-[#f4eadf] text-[#68462e] hover:border-[#b99472] hover:bg-[#ead9c8]"
@@ -1058,10 +1062,6 @@ export function CtktktReport() {
 
   return (
     <section className="module-report ktkt-workspace mx-auto grid w-full min-w-0 max-w-full gap-3">
-      {extrasState!=="ready"&&<div role="status" className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 bg-slate-50 px-4 py-2 text-sm text-slate-700">
-        <span>{loading?"Đang tải số liệu ngày…":extrasState==="loading"?"Số liệu ngày đã sẵn sàng. Đang tải tiếp tồn kho và giờ lũy kế…":"Chưa tải đủ số liệu tổng hợp. Hãy lưu ô đang nhập rồi tải lại trước khi xuất báo cáo."}</span>
-        {extrasState==="error"&&<button type="button" disabled={dirty||saving||syncingPmis} onClick={()=>{setError("");setReloadVersion(v=>v+1);}} className="rounded border border-slate-300 px-3 py-1 disabled:opacity-50">Tải lại dữ liệu</button>}
-      </div>}
       <ExportMissingDialog
         open={exportMissingOpen}
         items={exportMissingItems}
@@ -1072,24 +1072,11 @@ export function CtktktReport() {
         onExportAnyway={continueCtktktOutput}
       />
       {/* 1. THANH TIÊU ĐỀ, CHỌN NGÀY VÀ ĐIỀU HÀNH */}
-      <div className="module-hero module-toolbar-card rounded-2xl border border-slate-200 bg-white p-3 shadow-xs">
+      <div className="module-hero module-toolbar-card min-w-0 rounded-2xl border border-slate-200 bg-white p-3 shadow-xs">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="module-heading-copy">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="rounded-md bg-indigo-100 px-2 py-0.5 text-[10px] font-extrabold tracking-wider text-indigo-800 uppercase">
-                Báo cáo gốc · Tự tính theo công thức
-              </span>
-              <span className="text-xs text-slate-400">|</span>
-              <span className="text-xs font-semibold text-slate-500">
-                PXVH1 · Phân quyền theo Cương vị
-              </span>
-            </div>
-            <h1 className="mt-1 text-xl font-black text-[#173b64]">
-              Chỉ tiêu kinh tế kỹ thuật NMNĐ Duyên Hải 1
-            </h1>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2">
+          {/* Nhãn mục (cùng nền với khối "Bảng theo dõi lượng nước sử dụng"); nhóm ngày + nút canh phải. */}
+          <div className="module-heading-copy ktkt-section-title"><h2><FileSpreadsheet className="size-5" aria-hidden />CHỈ TIÊU KTKT</h2></div>
+          <div className="ml-auto flex flex-wrap items-center gap-2">
             <label className="flex items-center gap-2 text-xs font-bold text-slate-600">
               <span>Ngày báo cáo:</span>
               <DateField
@@ -1143,26 +1130,34 @@ export function CtktktReport() {
               <Mail className="size-3.5" />
               Báo cáo gửi mail
             </button>
+
+            {/* Yêu cầu chỉnh sửa sau ca (quản trị duyệt): một nút, bấm mở hộp thoại. */}
+            <ReportCorrections key={date} date={date} getStaged={()=>[...dirtyCellsRef.current].filter(cell=>canEditCtktktField(user,cell)).map(cell=>({cell,value:current[cell]||""}))} onUpdated={()=>setReloadVersion(v=>v+1)}/>
+
+            {/* Nút xem Google Sheets của báo cáo (thay khung xanh riêng trên trang này). */}
+            <GoogleMirrorLinks module="ctktkt" variant="inline" />
+
+            {/* Trạng thái tải số liệu tổng hợp nằm trong chú thích của nút (thay dải xám riêng phía trên). */}
+            {extrasState!=="ready"&&(()=>{
+              const busy=loading||extrasState==="loading";
+              const note=loading?"Đang tải số liệu ngày…":extrasState==="loading"?"Số liệu ngày đã sẵn sàng. Đang tải tiếp tồn kho và giờ lũy kế…":"Chưa tải đủ số liệu tổng hợp. Hãy lưu ô đang nhập rồi tải lại trước khi xuất báo cáo.";
+              return <button type="button" title={note} aria-label={busy?note:`Tải lại dữ liệu — ${note}`} disabled={busy||dirty||saving||syncingPmis} onClick={()=>{setError("");setReloadVersion(v=>v+1);}}
+                className="flex h-9 items-center gap-1.5 rounded-xl border border-slate-300 bg-white px-3.5 text-xs font-bold text-slate-700 shadow-xs hover:bg-slate-50 disabled:opacity-60">
+                <RefreshCw className={`size-3.5 ${busy?"animate-spin":""}`} />{busy?"Đang tải…":"Tải lại dữ liệu"}
+              </button>;
+            })()}
           </div>
         </div>
 
         {/* Banner thông tin cương vị & phân quyền */}
-        <div className="ktkt-role-banner mt-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-indigo-100 bg-[#f5f8ff] px-3.5 py-2 text-xs text-[#1e3a8a]">
-          <div className="flex flex-wrap items-center gap-2">
+        {/* Một hàng: quyền của tài khoản + chú thích màu ô / phím tắt. Tên và cương vị đã có ở góc trên trang nên bỏ. */}
+        <div className="ktkt-role-banner mt-3 flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1.5 rounded-xl border border-indigo-100 bg-[#f5f8ff] px-3.5 py-2 text-xs text-[#1e3a8a] min-[1440px]:flex-nowrap">
+          <div className="flex shrink-0 items-center gap-2 whitespace-nowrap">
             <UserCheck className="size-4 text-indigo-700 shrink-0" />
-            <span className="font-bold text-slate-800">
-              {user?.displayName || "Khách"}
-            </span>
-            {user?.position && (
-              <span className="rounded-md bg-indigo-100 px-2 py-0.5 font-bold text-indigo-800">
-                {user.position}
-              </span>
-            )}
-            <span className="text-slate-400">·</span>
             <span className="font-medium text-slate-600">{userRoleDescription}</span>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3 text-[11px] font-semibold text-slate-500">
+          <div className="flex min-w-0 flex-wrap items-center gap-3 text-[11px] font-semibold text-slate-500 min-[1440px]:flex-nowrap min-[1440px]:whitespace-nowrap">
             <span className="flex items-center gap-1">
               <span className="inline-block size-2 rounded-full bg-blue-500"></span>
               Ô xanh: Lấy từ BCSX
@@ -1175,8 +1170,9 @@ export function CtktktReport() {
               <span className="inline-block size-2 rounded-full bg-slate-300"></span>
               Ô xám/khóa: Tự tính / Cương vị khác
             </span>
-            <span className="flex items-center gap-1 rounded border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-indigo-800">
-              ⌨️ Phím mũi tên (← ↑ → ↓) / Enter để chuyển ô · Dán Ctrl+V nhiều ô từ Excel
+            <span title="Phím mũi tên (← ↑ → ↓) / Enter để chuyển ô · Dán Ctrl+V nhiều ô từ Excel"
+              className="min-w-0 truncate rounded border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-indigo-800">
+              ⌨️ ←↑→↓ / Enter chuyển ô · Ctrl+V dán nhiều ô
             </span>
           </div>
         </div>
@@ -1289,22 +1285,22 @@ export function CtktktReport() {
                     <tr key={row.key} className="hover:bg-slate-50/70">
                       <td className="p-2 font-medium text-slate-800">{row.label}</td>
                       <td className="bg-cyan-50/30 p-2 text-center font-mono tabular-nums text-[#173b64] text-sm font-semibold">
-                        {format(summary.s1[row.key])}
+                        {(ctktktMetricDisplay(summary.s1, row.key) ?? format(summary.s1[row.key]))}
                       </td>
                       <td className="bg-amber-50/40 p-2 text-center font-mono tabular-nums text-amber-900 text-sm font-semibold">
-                        {meterComparisonKeys.has(row.key) ? format(meterSummary.s1[row.key]) : "—"}
+                        {meterComparisonKeys.has(row.key) ? (ctktktMetricDisplay(meterSummary.s1, row.key) ?? format(meterSummary.s1[row.key])) : "—"}
                       </td>
                       <td className="bg-cyan-50/30 p-2 text-center font-mono tabular-nums text-[#173b64] text-sm font-semibold">
-                        {format(summary.s2[row.key])}
+                        {(ctktktMetricDisplay(summary.s2, row.key) ?? format(summary.s2[row.key]))}
                       </td>
                       <td className="bg-amber-50/40 p-2 text-center font-mono tabular-nums text-amber-900 text-sm font-semibold">
-                        {meterComparisonKeys.has(row.key) ? format(meterSummary.s2[row.key]) : "—"}
+                        {meterComparisonKeys.has(row.key) ? (ctktktMetricDisplay(meterSummary.s2, row.key) ?? format(meterSummary.s2[row.key])) : "—"}
                       </td>
                       <td className="bg-blue-50/40 p-2 text-center font-mono tabular-nums text-indigo-900 text-sm font-semibold">
-                        {format(summary.plant[row.key])}
+                        {(ctktktMetricDisplay(summary.plant, row.key) ?? format(summary.plant[row.key]))}
                       </td>
                       <td className="bg-amber-50/40 p-2 text-center font-mono tabular-nums text-amber-900 text-sm font-semibold">
-                        {meterComparisonKeys.has(row.key) ? format(meterSummary.plant[row.key]) : "—"}
+                        {meterComparisonKeys.has(row.key) ? (ctktktMetricDisplay(meterSummary.plant, row.key) ?? format(meterSummary.plant[row.key])) : "—"}
                       </td>
                       <td className="p-2 text-center font-medium text-slate-500 text-xs">{row.unit}</td>
                     </tr>
@@ -1457,7 +1453,8 @@ export function CtktktReport() {
 
       {/* 3. TABS ĐIỀU HƯỚNG CÁC CỤM VẬN HÀNH (THIẾT KẾ RÕ RÀNG THEO CƯƠNG VỊ) */}
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xs">
-        <div className="grid grid-cols-1 gap-1.5 border-b bg-[#fbf7f2] p-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 2xl:grid-cols-7">
+        {/* Một hàng tab, chữ không xuống dòng; màn hẹp thì cuộn ngang thay vì xếp nhiều hàng. */}
+        <div className="ktkt-section-tabs flex gap-1 overflow-x-auto border-b bg-[#fbf7f2] p-2">
           <button
             type="button"
             onClick={() => setActiveTab("tkd_dcs")}
@@ -1512,7 +1509,7 @@ export function CtktktReport() {
             <span>Báo cáo từ PMIS</span>
           </button>
 
-          <div className="min-w-0">
+          <div className="flex flex-1 shrink-0">
             <button
               type="button"
               onClick={() => setActiveTab("all_fields")}

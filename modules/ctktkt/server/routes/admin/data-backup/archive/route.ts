@@ -21,6 +21,7 @@ export async function POST(request: Request) {
     return Response.json({ error: error instanceof Error ? error.message : "Không đọc được gói sao lưu." }, { status: 400 });
   }
   if (action === "preview") return Response.json(summary);
+  if(guard.user.role!=="admin"&&files.some(part=>(part.tables.daily_inputs||[]).some(row=>String(row.field_code||"").startsWith("KTKT:"))))return Response.json({error:"Chỉ tài khoản quản trị được nạp gói chứa số liệu Báo cáo KTKT. Người nhập phải gửi yêu cầu chỉnh sửa để duyệt."},{status:403});
   try {
     const result = await getRawDb().batch([...statements, { sql: "INSERT INTO data_restore_audit(actor_id,checksum,mode,row_count) VALUES(?,?,?,?)", args: [guard.user.id, summary.checksum, mode, summary.total] }]);
     const changed = result.slice(0, -1).reduce((sum, item) => sum + item.meta.changes, 0);

@@ -20,7 +20,7 @@ import { isQlktExtensionOutdated, QLKT_EXTENSION_DOWNLOAD_URL, REQUIRED_QLKT_EXT
 import { buildQlktRangeEntries, listIsoDates, QLKT_RANGE_SYNC_DEFAULT_FROM } from "@/modules/ctktkt/lib/qlkt-range-sync";
 import { MissingDataAlert } from "@/modules/ctktkt/components/missing-data-alert";
 import { listMonthlyMissing } from "@/modules/ctktkt/lib/data-completeness";
-import { Activity, BarChart3, CalendarDays, CheckCircle2, ChevronDown, Database, Info, PencilLine, RefreshCw, Save, TriangleAlert } from "lucide-react";
+import { Activity, BarChart3, CalendarDays, CheckCircle2, Info, PencilLine, Save, TriangleAlert } from "lucide-react";
 import "./daily-production-table.css";
 
 type Group = "production" | "environment" | "operation";
@@ -125,6 +125,8 @@ export function DailyProductionTable() {
   const [overviewCode, setOverviewCode] = useState("");
   const [rangeFrom, setRangeFrom] = useState(QLKT_RANGE_SYNC_DEFAULT_FROM), [rangeTo, setRangeTo] = useState(defaultOperatingDate);
   const [rangeState, setRangeState] = useState<RangeState | null>(null), [reloadKey, setReloadKey] = useState(0);
+  // Gộp hai kiểu đồng bộ QLKT vào một khung: 1 ngày (duyệt rồi mới lưu) hoặc nhiều ngày (tự lưu từng ngày).
+  const [syncMode, setSyncMode] = useState<"day" | "range">("day");
   const rangeStopRef = useRef(false);
   // Bấm vào 1 ô (dù là ô nhập liệu hay ô kết quả tính) sẽ tô vàng ô đó để dễ dò theo hàng/cột trên
   // bảng rộng nhiều cột; bấm lại đúng ô đó để bỏ tô.
@@ -338,20 +340,25 @@ export function DailyProductionTable() {
   const overviewField = overviewFields.find(field => field.code === overviewCode) ?? overviewFields[0];
 
   return <section className="monthly-workspace space-y-5">
-    <div className="monthly-heading">
-      <div className="monthly-heading-icon"><Database className="size-6" aria-hidden /></div>
-      <div className="min-w-0 flex-1"><p className="monthly-eyebrow">Dữ liệu vận hành · Duyên Hải 1</p><h2 className="mt-1 text-3xl font-bold tracking-tight text-slate-900">Dữ liệu các tháng</h2><p className="mt-1 text-sm text-slate-500">Quản lý số liệu hằng ngày, theo dõi chỉ tiêu và đối chiếu kết quả trong tháng.</p></div>
-      <span className="monthly-period-badge"><CalendarDays className="size-4" aria-hidden />Tháng {period.slice(5,7)}/{period.slice(0,4)}</span>
-    </div>
-    <div className="monthly-toolbar">
-      <div className="monthly-toolbar-label"><p className="font-bold text-slate-900">Kỳ dữ liệu & thao tác</p><p className="mt-1 text-xs text-slate-500">Chọn tháng để xem hoặc cập nhật số liệu</p></div>
-      <div className="monthly-toolbar-controls flex flex-wrap items-end gap-3"><label className="grid gap-1 text-xs font-bold text-slate-600">THÁNG<MonthField max={today.slice(0,7)} value={period} onChange={e=>setPeriod(e.target.value)} className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm" /></label><label className="grid gap-1 text-xs font-bold text-slate-600">NGÀY ĐỒNG BỘ<DateField max={today} value={syncDate} onChange={setSyncDate} className="w-[150px]"/></label><button type="button" disabled={syncingQlkt||!canSyncDaily||!canEditDate(syncDate)} title={!canSyncDaily?"Tài khoản chưa có quyền đồng bộ dữ liệu ngày.":!canEditDate(syncDate)?"Đồng bộ ngày D hoặc D-1; ngày cũ hơn chỉ admin/quản trị được chỉnh sửa.":extensionOutdated?`Reload tiện ích QLKT ${REQUIRED_QLKT_EXTENSION_VERSION}`:"Đọc dữ liệu chỉ tiêu ngày từ QLKT"} onClick={syncFromQlkt} className="monthly-sync-button h-10 rounded-lg border border-blue-200 bg-blue-50 px-4 text-sm font-bold text-blue-700 disabled:cursor-wait disabled:opacity-60">{syncingQlkt?"Đang đồng bộ…":extensionOutdated?`↻ Reload tiện ích ${REQUIRED_QLKT_EXTENSION_VERSION}`:"⚡ Đồng bộ dữ liệu ngày"}</button><button disabled={saving||loading||isViewer} title={isViewer?"Tài khoản Chỉ xem không có quyền lưu dữ liệu.":undefined} onClick={save} className="monthly-save-button flex h-10 items-center justify-center gap-2 rounded-lg bg-blue-600 px-5 text-sm font-bold text-white shadow-sm disabled:opacity-50"><Save className="size-4" aria-hidden />{saving?"Đang lưu…":"Lưu thay đổi"}</button><p className={`w-full text-right text-[11px] font-semibold ${extensionOutdated?"text-red-700":extensionVersion?"text-emerald-700":"text-amber-700"}`}>{syncProgress|| (extensionOutdated?`Tiện ích v${extensionVersion} chưa Reload — nguồn hiện tại ${REQUIRED_QLKT_EXTENSION_VERSION}`:extensionVersion?`Tiện ích v${extensionVersion} đã kết nối`:"Chưa kết nối tiện ích")}</p></div>
-    </div>
-    <p className="monthly-notice rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-900">Tài khoản có quyền được nhập ngày D và D-1. Ngày trước D-1 chỉ admin/quản trị được chỉnh sửa; ngày tương lai luôn bị khóa.</p>
-
     <div className="monthly-stats grid grid-cols-2 gap-3 xl:grid-cols-4">
       {[{icon:CalendarDays,label:"Ngày trong tháng",value:days,tone:"text-[#4057b5] bg-[#f0f3ff]"},{icon:CheckCircle2,label:"Ngày đã nhập",value:daysWithData,tone:"text-[#19845f] bg-[#edf9f4]"},{icon:PencilLine,label:"Ô vừa thay đổi",value:dirtyCount,tone:"text-[#c87819] bg-[#fff7e8]"},{icon:TriangleAlert,label:"CE/CF bất thường",value:abnormalCount,tone:abnormalCount?"text-red-700 bg-red-50":"text-[#7451d6] bg-[#f5f1ff]"}].map(card=><div key={card.label} className="monthly-stat"><span className={`monthly-stat-icon ${card.tone}`}><card.icon className="size-5" aria-hidden /></span><div><p className="text-3xl font-bold leading-none text-slate-900">{loading?"…":card.value}</p><p className="mt-2 text-sm text-slate-500">{card.label}</p></div></div>)}
     </div>
+    <div className="monthly-toolbar">
+      <div className="monthly-toolbar-label"><p className="font-bold text-slate-900">Kỳ dữ liệu và đồng bộ</p><p className="mt-1 text-xs text-slate-500">Chọn tháng để xem hoặc cập nhật số liệu</p></div>
+      <div data-sync-mode={syncMode} className="monthly-toolbar-controls flex flex-wrap items-end gap-3"><p className={`monthly-extension-status w-full text-right text-[11px] font-semibold ${extensionOutdated?"text-red-300":extensionVersion?"text-emerald-300":"text-amber-300"}`}>{syncProgress|| (extensionOutdated?`Tiện ích v${extensionVersion} chưa Reload — nguồn hiện tại ${REQUIRED_QLKT_EXTENSION_VERSION}`:extensionVersion?`Tiện ích v${extensionVersion} đã kết nối`:"Chưa kết nối tiện ích")}</p><label className="grid gap-1 text-xs font-bold text-slate-600">THÁNG<MonthField max={today.slice(0,7)} value={period} onChange={e=>setPeriod(e.target.value)} className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm" /></label>{canSyncDaily&&<div className="monthly-sync-mode grid gap-1 text-xs font-bold"><span>ĐỒNG BỘ QLKT</span><div role="group" aria-label="Cách đồng bộ QLKT" className="monthly-sync-mode-group">{([["day","1 ngày"],["range","Nhiều ngày"]] as const).map(([mode,label])=><button key={mode} type="button" aria-pressed={syncMode===mode} disabled={Boolean(rangeState?.running)} onClick={()=>setSyncMode(mode)}>{label}</button>)}</div></div>}{syncMode==="range"&&canSyncDaily?<><label className="grid gap-1 text-xs font-bold text-slate-600">TỪ NGÀY<DateField max={today} value={rangeFrom} onChange={setRangeFrom} className="w-[150px]"/></label><label className="grid gap-1 text-xs font-bold text-slate-600">ĐẾN NGÀY<DateField max={today} value={rangeTo} onChange={setRangeTo} className="w-[150px]"/></label>{rangeState?.running
+        ?<button type="button" onClick={()=>{rangeStopRef.current=true;}} className="h-10 rounded-lg border border-red-200 bg-red-50 px-4 text-sm font-bold text-red-700">■ Dừng</button>
+        :<button type="button" disabled={syncingQlkt} title="Đọc QLKT từng ngày trong khoảng và tự lưu; cần mở và đăng nhập QLKT, giữ tab này mở" onClick={syncQlktRange} className="monthly-sync-button h-10 rounded-lg border border-blue-200 bg-blue-50 px-4 text-sm font-bold text-blue-700 disabled:opacity-60">⚡ Đồng bộ</button>}</>:<><label className="grid gap-1 text-xs font-bold text-slate-600">NGÀY ĐỒNG BỘ<DateField max={today} value={syncDate} onChange={setSyncDate} className="w-[150px]"/></label><button type="button" disabled={syncingQlkt||!canSyncDaily||!canEditDate(syncDate)} title={!canSyncDaily?"Tài khoản chưa có quyền đồng bộ dữ liệu ngày.":!canEditDate(syncDate)?"Đồng bộ ngày D hoặc D-1; ngày cũ hơn chỉ admin/quản trị được chỉnh sửa.":extensionOutdated?`Reload tiện ích QLKT ${REQUIRED_QLKT_EXTENSION_VERSION}`:"Đọc dữ liệu chỉ tiêu ngày từ QLKT"} onClick={syncFromQlkt} className="monthly-sync-button h-10 rounded-lg border border-blue-200 bg-blue-50 px-4 text-sm font-bold text-blue-700 disabled:cursor-wait disabled:opacity-60">{syncingQlkt?"Đang đồng bộ…":extensionOutdated?`↻ Reload tiện ích ${REQUIRED_QLKT_EXTENSION_VERSION}`:"⚡ Đồng bộ"}</button></>}<button disabled={saving||loading||isViewer} title={isViewer?"Tài khoản Chỉ xem không có quyền lưu dữ liệu.":"Lưu các ô đã thay đổi vào hệ thống"} onClick={save} className="monthly-save-button flex h-10 items-center justify-center gap-2 rounded-lg bg-blue-600 px-5 text-sm font-bold text-white shadow-sm disabled:opacity-50"><Save className="size-4" aria-hidden />{saving?"Đang lưu…":"Lưu"}</button></div>
+    </div>
+
+    {syncMode==="range"&&canSyncDaily&&<div className="monthly-range-progress rounded-xl border border-[#d7e3ef] bg-white px-4 py-3 text-xs text-slate-600">
+      <p>Đồng bộ nhiều ngày: giờ phát, thời gian vận hành, nhận lưới S1/S2, tồn kho 06h00, nước bổ sung · <strong>tự lưu từng ngày</strong>, không qua bước duyệt · cần mở và đăng nhập QLKT, giữ tab này mở.</p>
+      {rangeState&&<div className="mt-2">
+        <div className="h-1.5 overflow-hidden rounded-full bg-slate-100"><div className="h-full bg-[#438ec1]" style={{width:`${rangeState.total?Math.round(rangeState.done/rangeState.total*100):0}%`}}/></div>
+        <p className="mt-1">{rangeState.running?`Đang đọc ngày ${displayDate(rangeState.current)} · `:""}{rangeState.done}/{rangeState.total} ngày · đã lưu {rangeState.saved} ô{rangeState.failed.length?` · ${rangeState.failed.length} ngày lỗi`:""}</p>
+        {rangeState.failed.length>0&&<details className="mt-1"><summary className="cursor-pointer font-semibold text-amber-800">Ngày lỗi</summary><ul className="mt-1 max-h-32 list-disc overflow-auto pl-5">{rangeState.failed.map(item=><li key={item}>{item}</li>)}</ul></details>}
+      </div>}
+    </div>}
+
 
     {overviewField && <div className="monthly-overview">
       <div className="monthly-overview-header">
@@ -363,22 +370,9 @@ export function DailyProductionTable() {
       </div>
       <div className="monthly-overview-footer"><span><i className="monthly-series-dot" />{overviewField.label}</span><span>Ô không có số liệu giữ trống · Bấm tên cột trong bảng để xem từng chỉ tiêu</span></div>
     </div>}
-    <MissingDataAlert items={monthlyMissing} loading={loading} scope={`tháng ${period.slice(5, 7)}/${period.slice(0, 4)}`} />
-    {canSyncDaily&&<details className="monthly-range"><summary className="monthly-range-summary"><RefreshCw className="size-4 text-blue-600" aria-hidden /><span className="flex-1"><span className="block font-bold text-slate-800">Đồng bộ QLKT nhiều ngày</span><span className="mt-0.5 block text-xs font-normal text-slate-500">Mở thiết lập khoảng ngày và theo dõi tiến độ đồng bộ</span></span><ChevronDown className="monthly-range-chevron size-4 text-slate-400" aria-hidden /></summary><div className="monthly-range-controls flex flex-wrap items-end gap-3">
-      <div className="mr-auto"><p className="text-xs font-bold text-[#173b64]">Đồng bộ QLKT nhiều ngày</p><p className="text-[11px] text-slate-500">Giờ phát, thời gian vận hành, nhận lưới S1/S2, tồn kho 06h00, nước bổ sung · tự lưu từng ngày · cần mở và đăng nhập QLKT, giữ tab này mở</p></div>
-      <label className="grid gap-1 text-xs font-bold text-slate-600">TỪ NGÀY<DateField max={today} value={rangeFrom} onChange={setRangeFrom} className="w-[150px]"/></label>
-      <label className="grid gap-1 text-xs font-bold text-slate-600">ĐẾN NGÀY<DateField max={today} value={rangeTo} onChange={setRangeTo} className="w-[150px]"/></label>
-      {rangeState?.running
-        ?<button type="button" onClick={()=>{rangeStopRef.current=true;}} className="h-10 rounded-xl border border-red-200 bg-red-50 px-4 text-sm font-bold text-red-700">■ Dừng</button>
-        :<button type="button" disabled={syncingQlkt} onClick={syncQlktRange} className="h-10 rounded-xl bg-gradient-to-r from-[#4057b5] to-[#438ec1] px-4 text-sm font-bold text-white shadow-md disabled:opacity-60">⚡ Đồng bộ khoảng ngày</button>}
-      {rangeState&&<div className="w-full text-[11px] text-slate-600">
-        <div className="h-1.5 overflow-hidden rounded-full bg-slate-100"><div className="h-full bg-[#438ec1]" style={{width:`${rangeState.total?Math.round(rangeState.done/rangeState.total*100):0}%`}}/></div>
-        <p className="mt-1">{rangeState.running?`Đang đọc ngày ${displayDate(rangeState.current)} · `:""}{rangeState.done}/{rangeState.total} ngày · đã lưu {rangeState.saved} ô{rangeState.failed.length?` · ${rangeState.failed.length} ngày lỗi`:""}</p>
-        {rangeState.failed.length>0&&<details className="mt-1"><summary className="cursor-pointer font-semibold text-amber-800">Ngày lỗi</summary><ul className="mt-1 max-h-32 list-disc overflow-auto pl-5">{rangeState.failed.map(item=><li key={item}>{item}</li>)}</ul></details>}
-      </div>}
-    </div></details>}
+    <MissingDataAlert items={monthlyMissing} loading={loading} errors={error?[error]:[]} scope={`tháng ${period.slice(5, 7)}/${period.slice(0, 4)}`} />
 
-    {error&&<p role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-sm font-medium text-red-800">{error}</p>}{message&&<p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-900">{message}</p>}
+    {/* Lỗi hiện trong nút cảnh báo trên hàng tiêu đề (tự mở khi có lỗi mới). */}{message&&<p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-900">{message}</p>}
 
     <Tabs value={group} onValueChange={v=>{setGroup(v as Group);setShowCalculated(false);}} className="monthly-data-panel gap-0 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
       <div className="monthly-table-heading"><div><h3 className="flex items-center gap-2 text-base font-bold text-slate-900"><Activity className="size-4 text-blue-600" aria-hidden />Bảng số liệu vận hành</h3><p className="mt-1 text-xs text-slate-500">Chọn nhóm chỉ tiêu và chế độ hiển thị bên dưới</p></div><span className="monthly-chart-hint"><BarChart3 className="size-4" aria-hidden />Bấm tên chỉ tiêu để xem biểu đồ</span></div><div className="monthly-table-filters flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-4 py-3">

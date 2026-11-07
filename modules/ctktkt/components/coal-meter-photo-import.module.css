@@ -15,7 +15,7 @@
   color: var(--coal-ink);
   background: var(--coal-card);
   border-color: var(--coal-line);
-  font-family: "Segoe UI", "Be Vietnam Pro", sans-serif;
+  font-family: var(--font-sans), system-ui, -apple-system, "Segoe UI", sans-serif;
   font-size: 14px;
   line-height: 1.5;
 }

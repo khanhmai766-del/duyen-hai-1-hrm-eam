@@ -1,4 +1,5 @@
 import { ctktktIntegrationPreset, ctktktPermissionsPreset } from "./presets/ctktkt-integration.mjs";
+import { ctktktWaterPreset } from "./presets/ctktkt-water.mjs";
 import { groundingReminderPreset } from "./presets/grounding-reminder.mjs";
 import { personViolationsPreset } from "./presets/person-violations.mjs";
 import { gghPreset } from "./presets/ggh-3d.mjs";
@@ -267,6 +268,47 @@ export const PRESETS = {
   "ctktkt-integration": ctktktIntegrationPreset,
   "ctktkt-permissions": ctktktPermissionsPreset,
   "ctktkt-permissions-grid": { ...ctktktPermissionsPreset, routes: () => ["/tien-ich/chi-tieu-ktkt/phan-quyen", "/tien-ich/chi-tieu-ktkt/phan-quyen?verify=ktkt"] },
+  "ctktkt-water": ctktktWaterPreset,
+  // Báo cáo Chỉ tiêu KTKT: nút + hộp thoại "Yêu cầu chỉnh sửa" với 3 yêu cầu giả lập (không ghi DB).
+  "ctktkt-yeu-cau-sua": {
+    description: "Yêu cầu chỉnh sửa số liệu sau ca: 1 chờ duyệt, 1 đã duyệt, 1 từ chối; giả lập trong trình duyệt.",
+    async prepare() { return {}; },
+    routes: () => ["/tien-ich/chi-tieu-ktkt/ctktkt-report", "/tien-ich/chi-tieu-ktkt/ctktkt-report?verify=all"],
+    async mock(context) {
+      const at = hours => new Date(Date.now() - hours * 3600 * 1000).toISOString();
+      const entries = [
+        { id: "r1", operatingDate: "2026-11-06", requesterName: "Nguyễn Văn Hùng", reason: "Nhập nhầm chỉ số công tơ đầu cực S1 ca đêm, đúng theo sổ giao ca là 16.117,496.", status: "pending", createdAt: at(1), reviewerName: null, reviewNote: "", entries: [{ cell: "X16", oldValue: "16117.946", value: "16117.496" }, { cell: "X17", oldValue: null, value: "321.5" }] },
+        { id: "r2", operatingDate: "2026-11-05", requesterName: "Lê Văn Lễ", reason: "Bổ sung lượng dầu nhập kho theo phiếu xuất.", status: "approved", createdAt: at(20), reviewerName: "Mai Đoàn Kim Khánh", reviewNote: "Đã đối chiếu phiếu.", entries: [{ cell: "I35", oldValue: "0", value: "12.5" }] },
+        { id: "r3", operatingDate: "2026-11-04", requesterName: "Trần Văn Trọng", reason: "Sửa than nhập 24h.", status: "rejected", createdAt: at(44), reviewerName: "Mai Đoàn Kim Khánh", reviewNote: "Số liệu đúng theo PMIS, không cần sửa.", entries: [{ cell: "I36", oldValue: "5120", value: "5210" }] },
+      ];
+      await context.route("**/api/ctktkt/correction-requests**", route => route.fulfill({ json: { data: { entries }, meta: null, error: null } }));
+    },
+    async interact(page, route) {
+      await page.getByRole("button", { name: /^Yêu cầu sửa/ }).first().click();
+      await page.getByRole("dialog").waitFor();
+      if (route.includes("verify=all")) await page.getByRole("button", { name: /^Tất cả/ }).click();
+      await page.waitForTimeout(300);
+    },
+  },
+  // Dữ liệu các tháng: khung đồng bộ QLKT gộp — chụp cả chế độ "1 ngày" và "Nhiều ngày" (chỉ bấm công tắc, không đồng bộ).
+  "ctktkt-dong-bo": {
+    description: "Dữ liệu các tháng: công tắc đồng bộ QLKT 1 ngày / Nhiều ngày; chỉ đọc.",
+    async prepare() { return {}; },
+    routes: () => ["/tien-ich/chi-tieu-ktkt", "/tien-ich/chi-tieu-ktkt?verify=range", "/tien-ich/chi-tieu-ktkt?verify=alert"],
+    // Khung Google Sheets ở trạng thái trễ: lần đồng bộ cuối cách đây 3 giờ (lịch chạy mỗi giờ).
+    async mock(context) {
+      const syncedAt = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString();
+      await context.route("**/api/ctktkt/google-mirror/status**", route => route.fulfill({ json: { data: { configured: true, entries: [{ fileKey: "data", period: "2026-11", syncedAt }] }, meta: null, error: null } }));
+    },
+    async interact(page, route) {
+      // DB dev thiếu bảng KTKT → có lỗi tải → bảng cảnh báo tự mở và che nội dung: đóng trước khi thao tác.
+      if (!route.includes("verify=alert") && (await page.getByRole("dialog").count())) await page.keyboard.press("Escape");
+      if (route.includes("verify=range")) await page.getByRole("button", { name: "Nhiều ngày", exact: true }).click();
+      // Nút cảnh báo trên hàng tiêu đề: đảm bảo bảng chi tiết đang mở (lỗi mới tự mở; nếu chưa thì bấm).
+      if (route.includes("verify=alert") && !(await page.getByRole("dialog").count())) await page.locator("#ktkt-header-alerts button").first().click();
+      await page.waitForTimeout(300);
+    },
+  },
   "ctktkt-tools": { ...ctktktIntegrationPreset, routes: () => ["", "/tien-ich-dong-bo", "/admin/data-backup", "/admin/data-history"].map(path => "/tien-ich/chi-tieu-ktkt" + path) },
   "tiep-dia-nhac-ca": groundingReminderPreset,
   "lich-su-lam-viec-trong-ngay": dailyHistoryPreset,

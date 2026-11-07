@@ -1,3 +1,4 @@
+import { isCtktktSameOrigin } from "@/modules/ctktkt/lib/request-origin";
 import { canEditDailyInput } from "@/modules/ctktkt/lib/auth/daily-input-permissions";
 import { auditedDailyBatch } from "@/modules/ctktkt/lib/daily-input-audit";
 import { getRawDb } from "@/modules/ctktkt/db";
@@ -24,7 +25,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   const guard = await requireAnyPermission("edit_daily_inputs", "edit_pmis"); if (!guard.ok) return guard.response;
-  const origin = request.headers.get("origin"); if (origin && origin !== new URL(request.url).origin) return Response.json({ error: "Nguồn yêu cầu không hợp lệ." }, { status: 403 });
+  if (!isCtktktSameOrigin(request)) return Response.json({ error: "Nguồn yêu cầu không hợp lệ." }, { status: 403 });
   if (!request.headers.get("content-type")?.includes("application/json")) return Response.json({ error: "Yêu cầu phải là JSON." }, { status: 415 });
   try { const raw = await request.text(); if (raw.length > 250_000) return Response.json({ error: "Dữ liệu gửi lên quá lớn." }, { status: 413 });
     const body = JSON.parse(raw) as { period?: unknown; entries?: unknown }; if (typeof body.period !== "string" || !periodPattern.test(body.period) || !Array.isArray(body.entries) || body.entries.length > 1100) throw new Error("Dữ liệu tháng không hợp lệ.");

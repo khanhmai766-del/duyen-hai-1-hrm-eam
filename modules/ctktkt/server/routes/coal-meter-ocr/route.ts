@@ -1,9 +1,10 @@
+import { isCtktktSameOrigin } from "@/modules/ctktkt/lib/request-origin";
 import { inspectUpload } from "@/lib/upload-guard";
 import { getSessionUser } from "@/modules/ctktkt/lib/auth/server";
 import { canEditCtktktGroup } from "@/modules/ctktkt/lib/ctktkt-permissions";
 import { CoalMeterVisionError } from "@/modules/ctktkt/lib/coal-meter-vision";
 import { readCoalMeterGemini } from "@/modules/ctktkt/lib/coal-meter-gemini";
-import { saveCoalPhoto,reserveCoalPhotoRead } from "@/modules/ctktkt/lib/coal-photo-store";
+import { reserveCoalPhotoRead } from "@/modules/ctktkt/lib/coal-photo-store";
 import { coalPhotoExpiry } from "@/modules/ctktkt/lib/coal-photo-retention";
 import {parseVisionTimestamp,slotForPhotoTime} from "@/modules/ctktkt/lib/coal-meter-ocr";
 import {coalGeminiConfig} from "@/modules/ctktkt/lib/coal-gemini-config";
@@ -23,8 +24,7 @@ export async function POST(request: Request) {
   if (!canEditCtktktGroup(user, "may_nghien_coal_s1") && !canEditCtktktGroup(user, "may_nghien_coal_s2")) {
     return Response.json({ error: "Tài khoản của bạn không có quyền nhập công tơ than." }, { status: 403 });
   }
-  const origin = request.headers.get("origin");
-  if (origin && origin !== new URL(request.url).origin) return Response.json({ error: "Nguồn yêu cầu không hợp lệ." }, { status: 403 });
+  if (!isCtktktSameOrigin(request)) return Response.json({ error: "Nguồn yêu cầu không hợp lệ." }, { status: 403 });
   let shared:{key:string;model:string}|null=null;
   if(!request.headers.get("x-coal-gemini-key")?.trim()){
     try{shared=await loadSharedGemini(getRawDb(),process.env.AUTH_SECRET);}catch{return Response.json({error:"Chưa đọc được khóa dùng chung. Có thể nhập khóa tạm để thử riêng hoặc lưu lại khóa dùng chung."},{status:503});}
@@ -53,28 +53,17 @@ export async function POST(request: Request) {
   try {
     if(!await reserveCoalPhotoRead(user.id)) return Response.json({error:"Đã đủ 72 lượt đọc ảnh/kiểm tra Gemini trong giờ này. Hãy thử lại giờ tiếp theo."},{status:429});
   } catch {
-    return Response.json({error:"Chưa kết nối được kho ảnh để kiểm tra lượt đọc. Chưa gửi ảnh tới Gemini; giữ ảnh và bấm Đọc lại sau."},{status:503});
+    return Response.json({error:"Chưa kiểm tra được giới hạn lượt đọc. Chưa gửi ảnh tới Gemini; giữ ảnh và bấm Đọc lại sau."},{status:503});
   }
   try {
     const reading = await readCoalMeterGemini({data,mediaType},config.key,config.model);
     const timestamp=parseVisionTimestamp(reading.photo_timestamp),timing=timestamp?slotForPhotoTime(timestamp):null;
     const photoDate=typeof body?.exifDate==="string"?body.exifDate:timing?.operatingDate;
-    const photoSlot=typeof body?.exifSlot==="string"?body.exifSlot:timing?.slot;
-    let photo = null;
-    let warning = "";
-    if (photoDate && photoDate !== reportDate) {
-      warning = "Chưa lưu ảnh: ngày chụp khác ngày báo cáo. Kiểm tra lại ngày trước khi nhập.";
-    } else {
-      try {
-        photo = await saveCoalPhoto(user.id,reportDate,photoSlot||slot,mediaType,data,reading);
-        if (!photo) warning = "Chưa lưu ảnh: ca này đã quá hạn giữ 4 mốc ca.";
-      } catch {
-        // Preserve a successful OCR result even when storage is unavailable. Do not make
-        // operators call Gemini again just to see the digits it already returned.
-        warning = "Đã đọc số nhưng chưa lưu được ảnh đối chiếu lên máy chủ. Ảnh chỉ còn trong lượt nhập này; đọc lại sau nếu cần lưu ảnh cho TKĐ.";
-      }
-    }
-    return Response.json({ reading, photo, warning },{headers:{"Cache-Control":"no-store"}});
+    const warning = photoDate && photoDate !== reportDate
+      ? "Ngày chụp khác ngày báo cáo. Kiểm tra lại ngày trước khi nhập."
+      : "";
+    // Inline image exists only for this OCR request; never persist it to DB or file storage.
+    return Response.json({ reading, photo: null, imageStored: false, warning },{headers:{"Cache-Control":"no-store"}});
   } catch (error) {
     if (error instanceof CoalMeterVisionError) return Response.json({ error: error.message }, { status: error.status });
     // Never log provider errors, keys or photo content.

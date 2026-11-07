@@ -1,5 +1,30 @@
 // Served only to an authenticated administrator, with a server-held integration token.
 export const GOOGLE_MIRROR_SCRIPT = String.raw`
+// Run in the EXISTING Apps Script project; preserve its one hourly trigger.
+function connectPxSource() {
+  if (CONFIG.base !== 'https://duyenhai1.vn') throw new Error('Chỉ chuyển nguồn sang web PX chính thức.');
+  if (!CONFIG.token || CONFIG.token.length < 32) throw new Error('Chưa có mã kết nối web PX.');
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(1000)) throw new Error('Đợi lần đồng bộ hiện tại hoàn tất.');
+  try {
+    const triggers = ScriptApp.getProjectTriggers().filter(t => t.getHandlerFunction() === 'syncNow');
+    if (triggers.length !== 1) throw new Error('Cần đúng một lịch syncNow trong dự án hiện có; chưa chuyển nguồn.');
+    const response = UrlFetchApp.fetch(CONFIG.base + '/api/ctktkt/google-mirror/snapshot', {
+      headers: {Authorization: 'Bearer ' + CONFIG.token}, muteHttpExceptions: true
+    });
+    if (response.getResponseCode() !== 200) throw new Error('Web PX chưa sẵn sàng. HTTP ' + response.getResponseCode());
+    const snapshot = JSON.parse(response.getContentText());
+    if (!/^20\d{2}-(0[1-9]|1[0-2])$/.test(snapshot.period) || !Array.isArray(snapshot.files)
+      || snapshot.files.length !== CONFIG.files.length || new Set(snapshot.files.map(f => f.key)).size !== CONFIG.files.length
+      || !CONFIG.files.every(target => snapshot.files.some(f => f.key === target.key && f.id === target.id))) {
+      throw new Error('Danh sách Sheet web PX không khớp; chưa chuyển nguồn.');
+    }
+    const props = PropertiesService.getScriptProperties();
+    props.setProperty('token', CONFIG.token);
+    props.deleteProperty('snapshot_etag');
+    console.log('Đã chuyển kết nối sang web PX. Giữ nguyên Sheet, quyền truy cập và lịch mỗi giờ. Chưa ghi dữ liệu lên Sheet; chạy syncNow sau khi đối chiếu đủ dữ liệu.');
+  } finally { lock.releaseLock(); }
+}
 function install() {
   if (CONFIG.token.length < 32) throw new Error('Chưa cấu hình mã kết nối.');
   PropertiesService.getScriptProperties().setProperty('token', CONFIG.token);

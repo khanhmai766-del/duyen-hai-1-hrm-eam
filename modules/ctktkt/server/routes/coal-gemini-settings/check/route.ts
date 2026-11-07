@@ -1,3 +1,4 @@
+import { isCtktktSameOrigin } from "@/modules/ctktkt/lib/request-origin";
 import {getSessionUser} from "@/modules/ctktkt/lib/auth/server";
 import {canEditCtktktGroup} from "@/modules/ctktkt/lib/ctktkt-permissions";
 import {getRawDb} from "@/modules/ctktkt/db";
@@ -15,7 +16,7 @@ export async function POST(request:Request) {
   const user=await getSessionUser();
   if(!user)return json({error:"Chưa đăng nhập."},401);
   if(!canEditCtktktGroup(user,"may_nghien_coal_s1")&&!canEditCtktktGroup(user,"may_nghien_coal_s2"))return json({error:"Bạn không có quyền kiểm tra cấu hình công tơ than."},403);
-  if(request.headers.get("origin")!==new URL(request.url).origin)return json({error:"Nguồn yêu cầu không hợp lệ."},403);
+  if (!isCtktktSameOrigin(request, true))return json({error:"Nguồn yêu cầu không hợp lệ."},403);
   let shared:{key:string;model:string}|null=null;
   try {if(!request.headers.get("x-coal-gemini-key")?.trim())shared=await loadSharedGemini(getRawDb(),process.env.AUTH_SECRET);}
   catch {return json({error:"Chưa đọc được khóa dùng chung từ máy chủ. Đây là lỗi cấu hình/kho khóa, chưa gửi yêu cầu tới Google."},503);}

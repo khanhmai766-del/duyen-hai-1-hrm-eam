@@ -7,7 +7,8 @@ import {deriveCtktktCellsFromBcsx} from './ctktkt-bcsx-link';
 import {ctktktWaterLogFromRow,deriveCtktktCellsFromWater} from './ctktkt-water-link';
 import {mergeDailyInputsWithCtktkt} from './daily-source-links';
 import {calculateDailyProduction} from './daily-production-calculations';
-import {calculateActualHeatRate,calculatePpaHeatRateDetailed,type PpaSourceData} from './ppa-heat-rate';
+import {calculateActualHeatRate,calculatePpaHeatRateDetailed} from './ppa-heat-rate';
+import {storedPpaMeterSource} from './ppa-stored-source';
 import {buildPlantSheet,buildUnitSheet,buildMeterSheet,type PpaSheetRow} from './ppa-sheet-export';
 import {SHIFT_TIME_SLOTS,deriveA0Readings} from './bcsx';
 import {calculateAuxiliaryElectricity} from './auxiliary-electricity';
@@ -81,14 +82,15 @@ export async function buildMirrorSnapshot(period:string){
  const [kt,wat]=await Promise.all([exportTabs(exportCtktkt,'period='+period),exportTabs(exportWater,'month='+period)]);
  tabs.set('ctktkt',kt);tabs.set('water',wat.map(t=>({...t,template:'T10.2026'})));
  // Water exporter writes the same report layout; retain its missing title labels from the reference.
- const wtab=tabs.get('water')![0];wtab.startRow=3;wtab.rows=wtab.rows.slice(2);wtab.rows[0][0]=previous.split('-').reverse().join('/');wtab.clearRows=210;
+ const wtab=tabs.get('water')![0];wtab.startRow=3;wtab.rows=wtab.rows.slice(2);// A header-only water export has no baseline row; create its display row before writing the date.
+ (wtab.rows[0] ??= Array(20).fill(null))[0]=previous.split('-').reverse().join('/');wtab.clearRows=210;
  const ppaDays=ppa.filter(r=>String(r.operating_date)>=from),year=Number(period.slice(0,4));
  const pr:PpaSheetRow[]=ppaDays.map(r=>{const date=String(r.operating_date),act=calculateActualHeatRate(byDate.get(date)||{});return {date,ppaPlant:num(r.ppa_plant),ppaS1:num(r.ppa_s1),ppaS2:num(r.ppa_s2),actualPlant:act?.actualPlant??null,actualS1:act?.actualS1??null,actualS2:act?.actualS2??null,netS1Kwh:num(r.net_s1_kwh),netS2Kwh:num(r.net_s2_kwh),availableCapacityS1Mw:null,availableCapacityS2Mw:null,noteS1:String(r.note_s1||''),noteS2:String(r.note_s2||'')};});
  const adapter=matrixAdapter(),plant=buildPlantSheet(adapter,[[period,pr]]) as unknown as Matrix;
  for(const row of plant.slice(1))for(const c of [8,11,14])if(typeof row[c]==='number')row[c]=Number(row[c])/100;
  const pTabs:MirrorTab[]=[{name:'Cả nhà máy DH1',rows:plant.slice(1),startRow:3,clearRows:150,clearColumns:18}];
  const s1=[],s2=[];
- for(const r of ppaDays){const iso=String(r.operating_date),source=JSON.parse(String(r.source_data)) as PpaSourceData,detail=calculatePpaHeatRateDetailed(source,year);s1.push({iso,detail:detail.s1});s2.push({iso,detail:detail.s2});pTabs.push({name:iso.slice(8)+iso.slice(5,7),template:'0110',rows:buildMeterSheet(adapter,iso,source) as unknown as Matrix,clearRows:50,clearColumns:52});}
+ for(const r of ppaDays){const source=storedPpaMeterSource(r.source_data);if(!source)continue;const iso=String(r.operating_date),detail=calculatePpaHeatRateDetailed(source,year);s1.push({iso,detail:detail.s1});s2.push({iso,detail:detail.s2});pTabs.push({name:iso.slice(8)+iso.slice(5,7),template:'0110',rows:buildMeterSheet(adapter,iso,source) as unknown as Matrix,clearRows:50,clearColumns:52});}
  for(const [name,days] of [['S1',s1],['S2',s2]] as const)pTabs.push({name,rows:buildUnitSheet(adapter,days,year) as unknown as Matrix,clearRows:200,clearColumns:55});
  tabs.set('ppa',pTabs);
  for(const [unit,key] of [['S1','bcsx-s1'],['S2','bcsx-s2'],['A0','bcsx-a0']] as const){

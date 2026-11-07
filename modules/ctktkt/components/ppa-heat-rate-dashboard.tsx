@@ -425,24 +425,24 @@ export function PpaHeatRateDashboard() {
       onExportAnyway={continuePpaExport}
     />
     <div className="ppa-controls">
-      <div className="ppa-control-heading">
-        <p className="text-xs font-bold uppercase tracking-[0.15em] text-[#557187]">Theo dõi hiệu suất vận hành</p>
-        <h1>So sánh suất hao nhiệt thực tế & PPA</h1>
-        <p className="ppa-control-description">Kết quả theo ngày · S1, S2 và toàn nhà máy</p>
+      {/* Tiêu đề bên trái, khoảng ngày + chọn nhanh bên phải trên cùng hàng (thay khung khoảng ngày riêng). */}
+      <div className="ppa-control-heading ppa-heading-row">
+        <div className="min-w-0">
+          <h1>So sánh suất hao nhiệt thực tế & PPA</h1>
+          <p className="ppa-control-description">Kết quả theo ngày · S1, S2 và toàn nhà máy · {loading ? "Đang tải…" : `${rows.length} ngày có kết quả đã lưu`}</p>
+        </div>
+        <div className="ppa-range-controls ppa-range-inline">
+          <label className="grid gap-1 text-xs font-bold text-slate-600">TỪ NGÀY<DateField value={fromDate} max={toDate} onChange={setFromDate} className="w-[150px]"/></label>
+          <label className="grid gap-1 text-xs font-bold text-slate-600">ĐẾN NGÀY<DateField value={toDate} min={fromDate} max={today} onChange={setToDate} className="w-[150px]"/></label>
+          <button type="button" onClick={applyManualRange} className="h-10 rounded-xl border border-[#aebfe1] bg-[#eef3ff] px-4 text-sm font-bold text-[#354a9f]">Áp dụng</button>
+          <div className="ppa-range-presets"><button type="button" onClick={() => applyQuick("month")} aria-pressed={rangeLabel === "Tháng vận hành"}>Tháng vận hành</button><button type="button" onClick={() => applyQuick("last15")} aria-pressed={rangeLabel === "15 ngày gần nhất"}>15 ngày gần nhất</button><button type="button" onClick={() => applyQuick("all")} aria-pressed={rangeLabel === "Xem tất cả"}>Tất cả</button></div>
+        </div>
       </div>
       <div className="ppa-sheet-row">
-        <label>Ngày Google Sheet<DateField value={sheetDate} onChange={setSheetDate} className="w-[150px]"/></label>
+        <label className="ppa-sheet-date">Ngày Google Sheet<DateField value={sheetDate} onChange={setSheetDate} className="w-[150px]"/></label>
         <GoogleSheetSyncButton compact operatingDate={sheetDate} disabled={!hasSavedPpaForSheet || !hasAvailableCapacityForSheet} disabledReason={sheetDisabledReason} onImported={() => loadRange(fromDate, toDate, false)}/>
         <button type="button" disabled={exporting || loading || !rows.length} onClick={requestExportXlsx} className="ppa-export-button">{exporting ? "Đang xuất…" : "Xuất Excel (.xlsx)"}</button>
       </div>
-    </div>
-
-    <div className="ppa-range-controls">
-      <label className="grid gap-1 text-xs font-bold text-slate-600">TỪ NGÀY<DateField value={fromDate} max={toDate} onChange={setFromDate} className="w-[150px]"/></label>
-      <label className="grid gap-1 text-xs font-bold text-slate-600">ĐẾN NGÀY<DateField value={toDate} min={fromDate} max={today} onChange={setToDate} className="w-[150px]"/></label>
-      <button type="button" onClick={applyManualRange} className="h-10 rounded-xl border border-[#aebfe1] bg-[#eef3ff] px-4 text-sm font-bold text-[#354a9f]">Áp dụng</button>
-      <div className="ppa-range-presets"><button type="button" onClick={() => applyQuick("month")} aria-pressed={rangeLabel === "Tháng vận hành"}>Tháng vận hành</button><button type="button" onClick={() => applyQuick("last15")} aria-pressed={rangeLabel === "15 ngày gần nhất"}>15 ngày gần nhất</button><button type="button" onClick={() => applyQuick("all")} aria-pressed={rangeLabel === "Xem tất cả"}>Tất cả</button></div>
-      <p className="ml-auto text-xs font-semibold text-slate-500">{loading ? "Đang tải…" : `${rows.length} ngày có kết quả đã lưu`}</p>
     </div>
 
     {error && <p role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-sm font-medium text-red-800">{error}</p>}

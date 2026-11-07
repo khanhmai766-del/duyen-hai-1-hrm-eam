@@ -158,8 +158,9 @@ export function GoogleSheetSyncButton({ operatingDate, disabled: disabledProp = 
         <button type="button" disabled={loading || disabled} onClick={startHistoricalImport} title={disabled ? disabledReason : "Nhập một lần các đánh giá S1/S2 cũ từ Google Sheet về web"} className="h-10 whitespace-nowrap rounded-xl border border-amber-300 bg-amber-50 px-3 text-sm font-bold text-amber-800 shadow-sm disabled:opacity-60">Nhập đánh giá cũ</button>
         {!serverConfigured && <button type="button" onClick={() => { setError(""); setSettingsOpen(true); }} aria-label="Cài đặt đồng bộ Google Sheet" title="Cài đặt Google Sheet dự phòng" className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-600 shadow-sm">⚙</button>}
       </div>
-      {serverConfigured && <p className="max-w-sm text-right text-[11px] font-semibold text-emerald-700">Đã ghi qua cấu hình Apps Script của chủ sở hữu trên máy chủ; máy người dùng không cần quyền chỉnh sửa Sheet.</p>}
-      {disabled && disabledReason && <p className="max-w-sm text-right text-[11px] font-semibold text-amber-700">{disabledReason}</p>}
+      {/* Dạng gọn (một hàng): lý do khóa nút nằm trong chú thích khi rê chuột vào nút, không thành dòng riêng. */}
+      {!compact && serverConfigured && <p className="max-w-sm text-right text-[11px] font-semibold text-emerald-700">Đã ghi qua cấu hình Apps Script của chủ sở hữu trên máy chủ; máy người dùng không cần quyền chỉnh sửa Sheet.</p>}
+      {!compact && disabled && disabledReason && <p className="max-w-sm text-right text-[11px] font-semibold text-amber-700">{disabledReason}</p>}
       {message && <p role="status" className="max-w-sm text-right text-[11px] font-semibold text-emerald-700">{message}</p>}
       {error && <p role="alert" className="max-w-sm text-right text-[11px] font-semibold text-red-700">{error}</p>}
     </div>

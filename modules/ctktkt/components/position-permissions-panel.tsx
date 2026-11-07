@@ -1,7 +1,6 @@
 "use client";
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { RefreshCw, RotateCcw, Save, ShieldCheck, Users } from "lucide-react";
 import { toast } from "sonner";
 import { normalizeText } from "@/lib/nav";
@@ -52,7 +51,6 @@ function PermissionEditor({ settings, reload }: { settings: CtktktPermissionSett
     } catch { /* Lỗi giữ cùng bản nháp để người dùng kiểm tra/tải lại. */ }
   }
   return <section className="min-w-0 space-y-4" aria-label="Phân quyền KTKT">
-    <Link href="/tien-ich/chi-tieu-ktkt" className="inline-flex min-h-10 items-center text-sm font-medium text-blue-700">← Dữ liệu các tháng</Link>
     <div className="rounded-xl border border-blue-200 bg-blue-50 p-4">
       <h2 className="flex items-center gap-2 text-xl font-bold text-slate-900"><ShieldCheck className="size-5 shrink-0"/>Phân quyền KTKT</h2>
       <p className="mt-2 text-sm leading-6 text-slate-700">Tích chọn quyền cho từng cương vị đang làm việc. Bỏ trống là không cấp quyền.</p>
