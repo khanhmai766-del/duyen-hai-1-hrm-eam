@@ -1,5 +1,6 @@
 "use client";
 import { MonthField } from "./ui/month-field";
+import { Droplets, FlaskConical, Gauge, RefreshCw, TriangleAlert, Zap } from "lucide-react";
 import { useCtktktRequest, useCtktktDownload } from "@/hooks/useCtktkt";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -54,6 +55,8 @@ export function WaterReportClient() {
   const [error, setError] = useState<string>("");
   const [exportMissingOpen, setExportMissingOpen] = useState(false);
   const [successMsg, setSuccessMsg] = useState<string>("");
+  // Điện thoại: mặc định xem dạng thẻ theo ca; vẫn chuyển được sang bảng đầy đủ 21 cột.
+  const [mobileView, setMobileView] = useState<"cards" | "table">("cards");
 
   // Modal thêm/sửa ca
   const [editingShift, setEditingShift] = useState<Partial<WaterShiftLog> | null>(null);
@@ -600,7 +603,7 @@ export function WaterReportClient() {
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
           {/* Thẻ 1: Tổng điện phát */}
           <div className="rounded-2xl border border-slate-200 bg-white p-3.5 shadow-sm">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">⚡ Điện phát trong tháng</p>
+            <p className="flex min-h-[2.8em] items-start gap-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400"><Zap className="mt-px size-3.5 shrink-0 text-slate-500" aria-hidden />Điện phát trong tháng</p>
             <p className="mt-1 font-mono text-lg font-extrabold text-slate-800">
               {formatNum(summary.totalElecGenPlant)} <span className="text-xs font-normal text-slate-500">MW</span>
             </p>
@@ -612,7 +615,7 @@ export function WaterReportClient() {
 
           {/* Thẻ 2: Tổng nước bổ sung */}
           <div className="rounded-2xl border border-slate-200 bg-white p-3.5 shadow-sm">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">💧 Nước bổ sung sử dụng</p>
+            <p className="flex min-h-[2.8em] items-start gap-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400"><Droplets className="mt-px size-3.5 shrink-0 text-sky-600" aria-hidden />Nước bổ sung sử dụng</p>
             <p className="mt-1 font-mono text-lg font-extrabold text-sky-700">
               {formatNum(summary.totalWaterUsedPlant)} <span className="text-xs font-normal text-slate-500">m³</span>
             </p>
@@ -624,7 +627,7 @@ export function WaterReportClient() {
 
           {/* Thẻ 3: Hệ số nước TB */}
           <div className="rounded-2xl border border-slate-200 bg-white p-3.5 shadow-sm">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">📊 Hệ số nước TB tháng</p>
+            <p className="flex min-h-[2.8em] items-start gap-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400"><Gauge className="mt-px size-3.5 shrink-0 text-emerald-600" aria-hidden />Hệ số nước TB tháng</p>
             <p className="mt-1 font-mono text-lg font-extrabold text-emerald-700">
               {formatRatio(summary.avgWaterRatioPlant)} <span className="text-[10px] font-normal text-slate-500">m³/MWh</span>
             </p>
@@ -636,7 +639,7 @@ export function WaterReportClient() {
 
           {/* Thẻ 4: Nước cấp bình ngưng */}
           <div className="rounded-2xl border border-slate-200 bg-white p-3.5 shadow-sm">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">🔄 Nước cấp bình ngưng</p>
+            <p className="flex min-h-[2.8em] items-start gap-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400"><RefreshCw className="mt-px size-3.5 shrink-0 text-indigo-600" aria-hidden />Nước cấp bình ngưng</p>
             <p className="mt-1 font-mono text-lg font-extrabold text-indigo-700">
               {formatNum(summary.totalCondenserUsedS1 + summary.totalCondenserUsedS2)} <span className="text-xs font-normal text-slate-500">m³</span>
             </p>
@@ -648,7 +651,7 @@ export function WaterReportClient() {
 
           {/* Thẻ 5: Tái sinh hạt */}
           <div className="col-span-2 rounded-2xl border border-slate-200 bg-white p-3.5 shadow-sm sm:col-span-1">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">🧪 Tái sinh hạt (24h)</p>
+            <p className="flex min-h-[2.8em] items-start gap-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400"><FlaskConical className="mt-px size-3.5 shrink-0 text-amber-600" aria-hidden />Tái sinh hạt (24h)</p>
             <p className="mt-1 font-mono text-lg font-extrabold text-amber-700">
               {formatNum(summary.totalResinWaterS1 + summary.totalResinWaterS2)} <span className="text-xs font-normal text-slate-500">m³</span>
             </p>
@@ -663,10 +666,10 @@ export function WaterReportClient() {
       {/* Thông báo liên kết công tơ nước 24h DCS với Báo cáo Chỉ tiêu KTKT */}
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-emerald-300 bg-emerald-50/80 p-3 text-xs text-emerald-900 shadow-xs">
         <div className="flex items-center gap-2">
-          <span className="text-base">💧</span>
+          <Droplets className="size-4 shrink-0 text-emerald-700" aria-hidden />
           <div>
             <strong className="font-bold">Công tơ nước demin mốc 24h (S1, S2) &amp; Hiệu chỉnh:</strong> Đã chuyển sang nhập và quản lý tại{" "}
-            <a href="/tien-ich/chi-tieu-ktkt/ctktkt-report" className="font-bold underline decoration-emerald-600 hover:text-emerald-950">
+            <a href="/tien-ich/chi-tieu-ktkt/ctktkt-report" className="ktkt-inline-link font-bold underline decoration-emerald-600 hover:text-emerald-950">
               Báo cáo Chỉ tiêu KTKT (nhóm TKĐ DCS, Hàng 72–74)
             </a>
             . Số liệu lượng nước tái sinh hạt nhập tại đây sẽ tự động link sang CTKTKT.
@@ -698,16 +701,35 @@ export function WaterReportClient() {
             </span>
           </div>
 
-          <div className="flex items-center gap-2 text-[11px] text-slate-500">
-            <span className="inline-block h-3 w-3 rounded bg-[#00b050]"></span>
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-slate-500">
+            <span className="inline-block h-3 w-3 border border-[#c6e3d0] bg-[#e7f5ec] shadow-[inset_0_3px_0_#00b050]"></span>
             <span>Tiêu đề chuẩn gốc</span>
             <span className="ml-2 inline-block h-3 w-3 rounded bg-sky-50 border border-sky-200"></span>
             <span>Cột tự động tính</span>
+            <span className="ml-2 inline-flex items-center gap-1 rounded bg-rose-50 px-1 font-semibold text-rose-700"><TriangleAlert className="size-3" aria-hidden />0.0870</span>
+            <span>Hệ số vượt 0,08 m³/MWh</span>
           </div>
         </div>
 
+        {/* Điện thoại: chọn dạng thẻ hoặc bảng (máy tính luôn hiện bảng) */}
+        <div className="flex items-center justify-between gap-2 border-b border-slate-200 px-3 py-2 md:hidden">
+          <span className="text-xs font-semibold text-slate-600">{shifts.length} ca trong tháng</span>
+          <div className="inline-flex shrink-0 rounded-lg border border-slate-200 bg-slate-50 p-0.5 text-xs" role="group" aria-label="Cách xem số liệu">
+            {(["cards", "table"] as const).map(view => (
+              <button key={view} type="button" aria-pressed={mobileView === view} onClick={() => setMobileView(view)}
+                className={`min-h-10 whitespace-nowrap rounded-md px-3 font-semibold ${mobileView === view ? "bg-white text-emerald-800 shadow-sm" : "text-slate-500"}`}>
+                {view === "cards" ? "Dạng thẻ" : "Dạng bảng"}
+              </button>
+            ))}
+          </div>
+        </div>
+        {mobileView === "cards" && (
+          <WaterShiftCards shifts={shifts} loading={loading} month={month} canEdit={canEditAny} canDelete={canDeleteWaterShift(user)}
+            onEdit={handleOpenEditModal} onDelete={handleDeleteShift} />
+        )}
+
         {/* Khung cuộn bảng */}
-        <div className="module-table-scroll water-table-scroll overflow-x-auto max-h-[70vh]">
+        <div className={`module-table-scroll water-table-scroll overflow-x-auto max-h-[70vh]${mobileView === "cards" ? " max-md:hidden" : ""}`}>
           <table className="w-full border-collapse text-[11px] text-slate-800 select-text">
             {/* Header 2 tầng: Nền xanh lá #00B050 chuẩn file gốc */}
             <thead className="sticky top-0 z-20 bg-[#00b050] text-black font-extrabold shadow-sm">
@@ -826,7 +848,7 @@ export function WaterReportClient() {
                 <>
                   {/* Dòng Mốc cuối tháng trước (Baseline) nếu có */}
                   {baseline && (
-                    <tr className="bg-slate-100/70 text-slate-500 divide-x divide-slate-200 text-[10.5px]">
+                    <tr className="water-baseline-row bg-slate-100/70 text-slate-500 divide-x divide-slate-200 text-[10.5px]">
                       <td className="px-2 py-1 text-center font-bold" title="Ca mốc tính toán liền trước">
                         {formatIsoToDmy(baseline.logDate)}
                         <span className="block text-[9px] text-slate-400 font-normal">Mốc trước</span>
@@ -875,14 +897,16 @@ export function WaterReportClient() {
                   {shifts.map((shift, idx) => {
                     const isHighRatioS1 = shift.waterRatioS1 > 0.08;
                     const isHighRatioS2 = shift.waterRatioS2 > 0.08;
+                    // Gom các ca cùng ngày: ngày chỉ hiện ở ca đầu, vạch đậm mở đầu mỗi ngày.
+                    const isFirstOfDay = idx === 0 || shifts[idx - 1].logDate !== shift.logDate;
 
                     return (
                       <tr
                         key={`${shift.logDate}_${shift.shiftTime}_${shift.id || idx}`}
-                        className="hover:bg-amber-50/40 divide-x divide-slate-200 transition-colors"
+                        className={`hover:bg-amber-50/40 divide-x divide-slate-200 transition-colors${isFirstOfDay ? " water-day-start" : ""}`}
                       >
-                        {/* Ngày */}
-                        <td className="px-2 py-1.5 text-center font-bold text-slate-700 whitespace-nowrap">
+                        {/* Ngày — ca 2, 3 trong ngày vẫn giữ chữ (để Sao chép ra Excel đủ ngày) nhưng làm trong suốt */}
+                        <td className={`px-2 py-1.5 text-center font-bold text-slate-700 whitespace-nowrap${isFirstOfDay ? "" : " water-date-repeat"}`}>
                           {formatIsoToDmy(shift.logDate)}
                         </td>
 
@@ -960,7 +984,12 @@ export function WaterReportClient() {
                           }`}
                           title={isHighRatioS1 ? "Hệ số tiêu thụ nước cao (>0.08)" : undefined}
                         >
-                          {formatRatio(shift.waterRatioS1)}
+                          {isHighRatioS1 ? (
+                            <span className="inline-flex items-center justify-end gap-1">
+                              <TriangleAlert className="size-3.5 shrink-0" aria-label="Vượt ngưỡng 0,08" />
+                              {formatRatio(shift.waterRatioS1)}
+                            </span>
+                          ) : formatRatio(shift.waterRatioS1)}
                         </td>
 
                         {/* Hệ số S2 (Tự động) */}
@@ -972,7 +1001,12 @@ export function WaterReportClient() {
                           }`}
                           title={isHighRatioS2 ? "Hệ số tiêu thụ nước cao (>0.08)" : undefined}
                         >
-                          {formatRatio(shift.waterRatioS2)}
+                          {isHighRatioS2 ? (
+                            <span className="inline-flex items-center justify-end gap-1">
+                              <TriangleAlert className="size-3.5 shrink-0" aria-label="Vượt ngưỡng 0,08" />
+                              {formatRatio(shift.waterRatioS2)}
+                            </span>
+                          ) : formatRatio(shift.waterRatioS2)}
                         </td>
 
                         {/* Nước cấp bình ngưng S1 */}
@@ -1611,6 +1645,74 @@ export function WaterReportClient() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/** Điện thoại: mỗi ca một thẻ, gom theo ngày. Số đội ca cần xem trước; chỉ số công tơ gốc để trong mục mở rộng. */
+function WaterShiftCards({ shifts, loading, month, canEdit, canDelete, onEdit, onDelete }: {
+  shifts: WaterShiftLog[];
+  loading: boolean;
+  month: string;
+  canEdit: boolean;
+  canDelete: boolean;
+  onEdit: (shift: WaterShiftLog) => void;
+  onDelete: (shift: WaterShiftLog) => void;
+}) {
+  if (loading) return <p className="px-4 py-10 text-center text-sm text-slate-400 md:hidden">Đang tải dữ liệu theo dõi lượng nước...</p>;
+  if (shifts.length === 0) return <p className="px-4 py-10 text-center text-sm text-slate-400 md:hidden">Chưa có ca trực nào trong tháng {month}.</p>;
+  const days: { date: string; items: WaterShiftLog[] }[] = [];
+  for (const shift of shifts) {
+    const last = days[days.length - 1];
+    if (last && last.date === shift.logDate) last.items.push(shift);
+    else days.push({ date: shift.logDate, items: [shift] });
+  }
+  const pair = (s1: React.ReactNode, s2: React.ReactNode) => (
+    <span className="tabular-nums"><span className="text-slate-400">S1</span> {s1} <span className="ml-1.5 text-slate-400">S2</span> {s2}</span>
+  );
+  const stacked = (s1: string, s2: string) => (
+    <span className="flex flex-col items-end tabular-nums"><span><span className="text-slate-400">S1</span> {s1}</span><span><span className="text-slate-400">S2</span> {s2}</span></span>
+  );
+  const ratio = (value: number) => (value > 0.08
+    ? <span className="inline-flex items-center gap-0.5 font-bold text-rose-700"><TriangleAlert className="size-3.5" aria-label="Vượt ngưỡng 0,08" />{formatRatio(value)}</span>
+    : formatRatio(value));
+  return (
+    <div className="space-y-4 bg-slate-50/60 p-3 md:hidden">
+      {days.map(day => (
+        <section key={day.date} aria-label={`Ngày ${formatIsoToDmy(day.date)}`}>
+          <h3 className="mb-2 text-sm font-bold text-slate-700">{formatIsoToDmy(day.date)}</h3>
+          <ul className="space-y-2">
+            {day.items.map((shift, idx) => {
+              const high = shift.waterRatioS1 > 0.08 || shift.waterRatioS2 > 0.08;
+              return (
+                <li key={`${shift.shiftTime}_${shift.id ?? idx}`} className={`rounded-xl border bg-white p-3 shadow-sm ${high ? "border-rose-200" : "border-slate-200"}`}>
+                  <div className="flex items-center gap-2 text-sm">
+                    <span className={`rounded px-1.5 py-0.5 text-xs font-bold ${shift.shiftTime === "06h00" ? "bg-blue-100 text-blue-800" : shift.shiftTime === "14h00" ? "bg-amber-100 text-amber-800" : "bg-purple-100 text-purple-800"}`}>{shift.shiftTime}</span>
+                    <span className="min-w-0 flex-1 truncate text-sm text-slate-700">Kíp <strong>{shift.shiftTeam}</strong> · {shift.shiftLeader}</span>
+                    <button type="button" onClick={() => onEdit(shift)} disabled={!canEdit} className="min-h-10 rounded-lg px-3 font-semibold text-blue-700 hover:bg-blue-50 disabled:opacity-40">Sửa</button>
+                    {canDelete && <button type="button" onClick={() => onDelete(shift)} aria-label="Xóa ca này" className="min-h-10 min-w-10 rounded-lg font-bold text-rose-600 hover:bg-rose-50">✕</button>}
+                  </div>
+                  <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-[13px]">
+                    <dt className="text-slate-500">Điện phát (MW)</dt><dd className="text-right font-semibold text-sky-900">{pair(formatNum(shift.elecGenS1, 1), formatNum(shift.elecGenS2, 1))}</dd>
+                    <dt className="text-slate-500">Nước bổ sung (m³)</dt><dd className="text-right font-semibold text-sky-900">{pair(formatNum(shift.waterUsedS1, 2), formatNum(shift.waterUsedS2, 2))}</dd>
+                    <dt className="text-slate-500">Hệ số (m³/MWh)</dt><dd className="text-right font-semibold text-emerald-800">{pair(ratio(shift.waterRatioS1), ratio(shift.waterRatioS2))}</dd>
+                    <dt className="text-slate-500">Bình ngưng (m³)</dt><dd className="text-right font-semibold text-sky-900">{pair(formatNum(shift.condenserUsedS1, 2), formatNum(shift.condenserUsedS2, 2))}</dd>
+                    {(shift.resinWaterS1_24h > 0 || shift.resinWaterS2_24h > 0) && <><dt className="text-slate-500">Tái sinh hạt 24h (m³)</dt><dd className="text-right font-semibold text-amber-800">{pair(formatNum(shift.resinWaterS1_24h, 0), formatNum(shift.resinWaterS2_24h, 0))}</dd></>}
+                  </dl>
+                  <details className="mt-2 border-t border-slate-100 pt-1 text-[13px]">
+                    <summary className="flex min-h-10 cursor-pointer items-center text-xs font-semibold text-slate-500">Chỉ số công tơ nhận ca</summary>
+                    <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 pb-1">
+                      <dt className="text-slate-500">Công tơ điện</dt><dd className="text-right text-slate-700">{stacked(formatNum(shift.elecRecS1, 1), formatNum(shift.elecRecS2, 1))}</dd>
+                      <dt className="text-slate-500">Số nước</dt><dd className="text-right text-slate-700">{stacked(formatNum(shift.waterRecS1, 2), formatNum(shift.waterRecS2, 2))}</dd>
+                      <dt className="text-slate-500">Nước cấp bình ngưng</dt><dd className="text-right text-slate-700">{stacked(formatNum(shift.condenserRecS1, 2), formatNum(shift.condenserRecS2, 2))}</dd>
+                    </dl>
+                  </details>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      ))}
     </div>
   );
 }

@@ -1,4 +1,5 @@
 "use client";
+import { ClipboardList } from "lucide-react";
 import { useCtktktRequest } from "@/hooks/useCtktkt";
 
 import Link from "next/link";
@@ -736,19 +737,96 @@ export function BcsxReport() {
     {/* Header trang tinh gọn */}
     <div className="module-hero rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 shadow-sm">
       <div className="flex flex-wrap items-center justify-between gap-2.5">
-        <div className="module-heading-copy">
-          <h1 className="text-base font-extrabold text-[#173b64]">Nhập liệu vận hành theo ca — Xuất BCSX NMĐ</h1>
-          <p className="text-xs text-slate-500">Nhập 1 lần trên web, xuất lại đúng định dạng file BCSX gửi Điều độ NSMO cho cả 3 tổ máy A0/S1/S2.</p>
-        </div>
-        <div className="flex items-center gap-2">
+        {/* Nhãn mục (cùng nền với khối "Bảng theo dõi lượng nước sử dụng"); nhóm ngày + tổ máy + công cụ canh phải. */}
+        <div className="module-heading-copy ktkt-section-title"><h2><ClipboardList className="size-5" aria-hidden />SẢN XUẤT</h2></div>
+        <div className="bcsx-top-toolbar ml-auto flex flex-wrap items-center justify-end gap-2">
           <span className="text-xs font-bold text-slate-600">Ngày:</span>
           <DateField value={operatingDate} onChange={changeOperatingDate} className="w-[145px] h-8 text-xs"/>
-          <div className="flex rounded-lg border border-slate-200 bg-slate-50 p-0.5">
+          <div role="group" aria-label="Tổ máy" className="bcsx-unit-switch flex h-9 items-center rounded-lg border border-slate-200 bg-slate-50 p-0.5">
             {(["S1", "S2"] as const).map(u => (
               <button key={u} type="button" onClick={() => changeUnit(u)} className={`rounded-md px-3 py-1 text-xs font-bold transition ${unit === u ? "bg-[#334785] text-white shadow-sm" : "text-slate-500 hover:text-slate-800"}`}>
                 {u}
               </button>
             ))}
+          </div>
+            {/* Thanh công cụ mục 1 (chuyển lên hàng trên cùng, bên phải Ngày / S1 / S2): Chế độ xem + Dán Excel + Nạp 2 file + Lưu */}
+            <div className="flex flex-wrap items-center gap-2">
+            <div role="group" aria-label="Chế độ xem bảng thông số" className="bcsx-view-mode flex h-9 items-center rounded-lg border border-slate-200 bg-slate-50 p-0.5 text-xs">
+              <button
+                type="button"
+                onClick={() => setViewMode("3shifts")}
+                className={`rounded px-2 py-0.5 font-bold transition ${viewMode === "3shifts" ? "bg-[#334785] text-white shadow-sm" : "text-slate-600 hover:text-slate-900"}`}
+                title="Hiển thị 3 ca song song vừa khít màn hình, không cần cuộn"
+              >
+                3 Ca song song
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode("ca1")}
+                className={`rounded px-2 py-0.5 font-bold transition ${viewMode === "ca1" ? "bg-[#334785] text-white shadow-sm" : "text-slate-600 hover:text-slate-900"}`}
+              >
+                Ca 1
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode("ca2")}
+                className={`rounded px-2 py-0.5 font-bold transition ${viewMode === "ca2" ? "bg-[#334785] text-white shadow-sm" : "text-slate-600 hover:text-slate-900"}`}
+              >
+                Ca 2
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode("ca3")}
+                className={`rounded px-2 py-0.5 font-bold transition ${viewMode === "ca3" ? "bg-[#334785] text-white shadow-sm" : "text-slate-600 hover:text-slate-900"}`}
+              >
+                Ca 3
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode("scroll")}
+                className={`rounded px-2 py-0.5 font-bold transition ${viewMode === "scroll" ? "bg-[#334785] text-white shadow-sm" : "text-slate-600 hover:text-slate-900"}`}
+                title="Dạng 1 cột cuộn dọc cổ điển"
+              >
+                Cuộn dọc
+              </button>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => { setPastedExcelText(""); setPasteModalOpen(true); }}
+              className="h-7 rounded-lg border border-blue-300 bg-blue-50 px-2.5 text-xs font-bold text-[#334785] shadow-sm hover:bg-blue-100"
+              title="Dán nhanh hàng loạt từ bảng tính Excel"
+            >
+              📋 Dán từ Excel
+            </button>
+
+            <input
+              ref={section1ImportRef}
+              type="file"
+              accept="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,.xlsx"
+              multiple
+              className="hidden"
+              onChange={event => void importSection1History(event.target.files)}
+            />
+            <button
+              type="button"
+              onClick={() => section1ImportRef.current?.click()}
+              disabled={importingSection1 || saving || isViewer}
+              className="h-7 rounded-lg border border-amber-300 bg-amber-50 px-2.5 text-xs font-bold text-amber-800 shadow-sm hover:bg-amber-100 disabled:opacity-50"
+              title="Chọn đồng thời đúng 2 file Excel BCSX S1 và S2; hệ thống tự kiểm tra, sao lưu và đọc lại sau khi ghi"
+            >
+              {importingSection1 ? "Đang nhập 2 file…" : "Chọn 2 file S1 & S2"}
+            </button>
+
+            <button
+              type="button"
+              disabled={saving || isViewer}
+              title={isViewer ? "Tài khoản Chỉ xem không có quyền lưu dữ liệu." : undefined}
+              onClick={() => void saveReadings()}
+              className="h-7 rounded-lg bg-gradient-to-r from-[#334785] to-[#4c6bbd] px-3.5 text-xs font-bold text-white shadow-sm hover:opacity-95 disabled:opacity-50"
+            >
+              {saving ? "Đang lưu…" : "Lưu bảng thông số"}
+            </button>
           </div>
         </div>
       </div>
@@ -769,85 +847,6 @@ export function BcsxReport() {
           </span>
         </div>
 
-        {/* Thanh công cụ: Chế độ xem + Nút dán Excel + Nút Lưu */}
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="flex rounded-lg border border-slate-200 bg-slate-50 p-0.5 text-[11px]">
-            <button
-              type="button"
-              onClick={() => setViewMode("3shifts")}
-              className={`rounded px-2 py-0.5 font-bold transition ${viewMode === "3shifts" ? "bg-[#334785] text-white shadow-sm" : "text-slate-600 hover:text-slate-900"}`}
-              title="Hiển thị 3 ca song song vừa khít màn hình, không cần cuộn"
-            >
-              3 Ca song song
-            </button>
-            <button
-              type="button"
-              onClick={() => setViewMode("ca1")}
-              className={`rounded px-2 py-0.5 font-bold transition ${viewMode === "ca1" ? "bg-[#334785] text-white shadow-sm" : "text-slate-600 hover:text-slate-900"}`}
-            >
-              Ca 1
-            </button>
-            <button
-              type="button"
-              onClick={() => setViewMode("ca2")}
-              className={`rounded px-2 py-0.5 font-bold transition ${viewMode === "ca2" ? "bg-[#334785] text-white shadow-sm" : "text-slate-600 hover:text-slate-900"}`}
-            >
-              Ca 2
-            </button>
-            <button
-              type="button"
-              onClick={() => setViewMode("ca3")}
-              className={`rounded px-2 py-0.5 font-bold transition ${viewMode === "ca3" ? "bg-[#334785] text-white shadow-sm" : "text-slate-600 hover:text-slate-900"}`}
-            >
-              Ca 3
-            </button>
-            <button
-              type="button"
-              onClick={() => setViewMode("scroll")}
-              className={`rounded px-2 py-0.5 font-bold transition ${viewMode === "scroll" ? "bg-[#334785] text-white shadow-sm" : "text-slate-600 hover:text-slate-900"}`}
-              title="Dạng 1 cột cuộn dọc cổ điển"
-            >
-              Cuộn dọc
-            </button>
-          </div>
-
-          <button
-            type="button"
-            onClick={() => { setPastedExcelText(""); setPasteModalOpen(true); }}
-            className="h-7 rounded-lg border border-blue-300 bg-blue-50 px-2.5 text-xs font-bold text-[#334785] shadow-sm hover:bg-blue-100"
-            title="Dán nhanh hàng loạt từ bảng tính Excel"
-          >
-            📋 Dán từ Excel
-          </button>
-
-          <input
-            ref={section1ImportRef}
-            type="file"
-            accept="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,.xlsx"
-            multiple
-            className="hidden"
-            onChange={event => void importSection1History(event.target.files)}
-          />
-          <button
-            type="button"
-            onClick={() => section1ImportRef.current?.click()}
-            disabled={importingSection1 || saving || isViewer}
-            className="h-7 rounded-lg border border-amber-300 bg-amber-50 px-2.5 text-xs font-bold text-amber-800 shadow-sm hover:bg-amber-100 disabled:opacity-50"
-            title="Chọn đồng thời đúng 2 file Excel BCSX S1 và S2; hệ thống tự kiểm tra, sao lưu và đọc lại sau khi ghi"
-          >
-            {importingSection1 ? "Đang nhập 2 file…" : "Chọn 2 file S1 & S2"}
-          </button>
-
-          <button
-            type="button"
-            disabled={saving || isViewer}
-            title={isViewer ? "Tài khoản Chỉ xem không có quyền lưu dữ liệu." : undefined}
-            onClick={() => void saveReadings()}
-            className="h-7 rounded-lg bg-gradient-to-r from-[#334785] to-[#4c6bbd] px-3.5 text-xs font-bold text-white shadow-sm hover:opacity-95 disabled:opacity-50"
-          >
-            {saving ? "Đang lưu…" : "Lưu bảng thông số"}
-          </button>
-        </div>
       </div>
 
       <p className="mt-1.5 text-[11px] text-slate-500">
@@ -1101,7 +1100,6 @@ export function BcsxReport() {
           </tbody>
         </table>
       </div>
-      <div className="mt-3 flex justify-end"><button type="button" disabled={saving || isViewer} title={isViewer ? "Tài khoản Chỉ xem không có quyền lưu dữ liệu." : undefined} onClick={() => void saveEvents()} className="rounded-lg bg-[#334785] px-4 py-2 text-sm font-bold text-white disabled:opacity-50">{saving ? "Đang lưu…" : "Lưu nhật ký sự kiện"}</button></div>
     </div>
 
     <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">

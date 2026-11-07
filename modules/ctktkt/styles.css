@@ -26,7 +26,8 @@
   margin: 0;
   background: var(--ctktkt-background);
   color: var(--ctktkt-foreground);
-  font-family: var(--ctktkt-font-sans);
+  /* Đúng khai báo của lớp `font-sans` toàn web (Be Vietnam Pro), không qua biến trung gian. */
+  font-family: var(--font-sans), system-ui, -apple-system, "Segoe UI", sans-serif;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
@@ -48,7 +49,9 @@
   .ctktkt-module { background: #fff; }
   .ctktkt-module main { padding: 0 !important; }
 }
-.ctktkt-module button, .ctktkt-module input, .ctktkt-module select, .ctktkt-module textarea { font: inherit; }
+/* Độ ưu tiên 0 (:where): vẫn kế thừa phông chung nhưng để các lớp cỡ chữ (text-sm, text-xs…) có tác dụng.
+   Trước đây (0,1,1) thắng mọi lớp tiện ích → nút/ô nhập trong phân hệ đều bị kéo lên 16px. */
+:where(.ctktkt-module) :where(button, input, select, textarea) { font: inherit; }
 
 /* Ô dữ liệu bị khóa: canh giữa và hiển thị rõ hơn các giá trị chỉ đọc. */
 .ctktkt-module input:disabled,
@@ -430,7 +433,7 @@
   .ctktkt-module .app-workspace .monthly-stat p:first-child { font-size: 22px; }
 }
 
-.ctktkt-module { color-scheme:light; color:#0f172a; --ctktkt-font-sans: var(--font-sans), system-ui, sans-serif; }
+.ctktkt-module { color-scheme:light; color:#0f172a; }
 .ctktkt-module .ctktkt-content { padding:0; min-width:0; max-width:100%; }
 .ctktkt-module input,.ctktkt-module select,.ctktkt-module textarea { max-width:100%; }
 @media(max-width:767px){.ctktkt-module button,.ctktkt-module select,.ctktkt-module input:not([type=checkbox]):not([type=radio]){min-height:40px}.ctktkt-module input,.ctktkt-module select,.ctktkt-module textarea{font-size:16px}.ctktkt-module .flex{min-width:0}}
@@ -443,6 +446,8 @@
   .ctktkt-module .monthly-period-badge { margin-left:0; }
   .ctktkt-module .ppa-range-presets button { min-height:40px !important; height:40px !important; }
   .ctktkt-module .ctktkt-content a { display:inline-flex; align-items:center; min-height:40px; }
+  /* Liên kết gạch chân nằm giữa câu: giữ trong dòng chữ, không tách thành khối 40px làm vỡ câu. */
+  .ctktkt-module .ctktkt-content a.ktkt-inline-link { display:inline; min-height:0; padding-block:4px; }
   .ctktkt-module table input:not([type=checkbox]):not([type=radio]) { min-width:40px !important; }
   .ctktkt-module button[aria-label^="Thêm ghi chú"], .ctktkt-module button[aria-label^="Sửa ghi chú"] { min-width:40px; }
   .ctktkt-module button[title="Xóa"], .ctktkt-module button[title="Đóng"] { min-width:40px; }
@@ -463,8 +468,156 @@
  .ctktkt-module .ctktkt-content .monthly-toolbar-controls>button {width:100%;white-space:normal}
 }
 
-/* Unified typography across the KTKT module only. */
-.ctktkt-module,
-.ctktkt-module * {
- font-family: "Times New Roman", Times, serif !important;
+/* ---- Đồng bộ kiểu chữ và cỡ chữ với web chính (07/11/2026) ----
+   Phông: cả mô-đun dùng Be Vietnam Pro như phần còn lại của web (trên Production phần nội dung
+   từng hiện Times New Roman). Số liệu bỏ phông đơn cách: cùng phông với chữ, cột vẫn thẳng nhờ
+   tabular-nums — giống các bảng của web chính (Tồn kho hóa chất, Kế hoạch vật tư).
+   Cỡ chữ: lấy thang của bảng "Dữ liệu các tháng" làm chuẩn — ô dữ liệu 13px, tiêu đề cột 12px,
+   nhãn phụ tối thiểu 11px (trước đây bảng nước, KTKT, PPA, PMIS dùng 9–11px).
+   Không đổi bố cục, màu, công thức, định dạng số hay quyền ô. */
+.ctktkt-module .ctktkt-content :is(table, caption, th, td) { font-family: inherit; }
+.ctktkt-module .font-mono { font-family: inherit; font-variant-numeric: tabular-nums; }
+.ctktkt-module .ctktkt-content table { font-size: 13px; }
+.ctktkt-module .ctktkt-content table thead th { font-size: 12px; line-height: 1.35; }
+/* :where() giữ độ ưu tiên (0,2,0): thắng lớp tiện ích Tailwind, nhưng thua hai quy tắc bảng ở trên. */
+.ctktkt-module .ctktkt-content :where(.text-\[9px\], .text-\[10px\], .text-\[10\.5px\]) { font-size: 11px; line-height: 1.4; }
+.ctktkt-module .ctktkt-content :where(.text-\[11px\]) { font-size: 12px; line-height: 1.45; }
+
+/* ---- Dữ liệu các tháng: khung "Kỳ dữ liệu & thao tác" mang nền xanh đậm của khối tiêu đề cũ ----
+   (dải màu + vòng tròn mờ + lưới ô). Chữ trên nền tối đổi sang trắng/xanh nhạt; ô nhập vẫn nền trắng. */
+.ctktkt-module .ctktkt-content .monthly-toolbar {
+  position: relative; isolation: isolate; overflow: hidden; border: 0;
+  background: linear-gradient(115deg, #122c4d 0%, #17476c 65%, #167a88 100%);
+  box-shadow: 0 12px 30px rgb(18 44 77 / 16%);
 }
+.ctktkt-module .ctktkt-content .monthly-toolbar::before { content: ""; position: absolute; z-index: -1; right: -80px; top: -160px; width: 420px; height: 420px; border: 1px solid rgb(255 255 255 / 15%); border-radius: 50%; box-shadow: 0 0 0 50px rgb(255 255 255 / 4%), 0 0 0 100px rgb(255 255 255 / 3%); pointer-events: none; }
+.ctktkt-module .ctktkt-content .monthly-toolbar::after { content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none; background-image: linear-gradient(rgb(255 255 255 / 4%) 1px, transparent 1px), linear-gradient(90deg, rgb(255 255 255 / 4%) 1px, transparent 1px); background-size: 36px 36px; mask-image: linear-gradient(90deg, transparent 30%, #000); }
+.ctktkt-module .ctktkt-content .monthly-toolbar-label p:first-child { color: #fff; font-size: 17px; }
+.ctktkt-module .ctktkt-content .monthly-toolbar-label p + p { color: #b8d8e8; }
+.ctktkt-module .ctktkt-content .monthly-toolbar-controls > label { color: #b8d8e8; }
+/* Ô nhập nằm trong nhãn: không kế thừa màu nhãn xanh nhạt (ô nền trắng cần chữ tối). */
+.ctktkt-module .ctktkt-content .monthly-toolbar-controls > label > * { color: #0f172a; }
+/* Công tắc "1 ngày / Nhiều ngày" (gộp hai kiểu đồng bộ QLKT) trên nền tối. */
+.ctktkt-module .ctktkt-content .monthly-sync-mode > span { color: #b8d8e8; }
+.ctktkt-module .ctktkt-content .monthly-sync-mode-group { display: inline-flex; height: 40px; padding: 3px; gap: 2px; border-radius: 10px; background: rgb(255 255 255 / 12%); border: 1px solid rgb(255 255 255 / 22%); }
+.ctktkt-module .ctktkt-content .monthly-sync-mode-group > button { min-height: 0; min-width: 0; padding: 0 12px; border-radius: 7px; color: #d5e8f2; font-size: 13px; font-weight: 600; white-space: nowrap; }
+.ctktkt-module .ctktkt-content .monthly-sync-mode-group > button[aria-pressed="true"] { background: #fff; color: #173b64; }
+.ctktkt-module .ctktkt-content .monthly-sync-mode-group > button:disabled { opacity: .6; cursor: not-allowed; }
+@media (max-width: 767px) {
+  .ctktkt-module .ctktkt-content .monthly-sync-mode-group { display: grid; grid-template-columns: 1fr 1fr; height: 44px; }
+}
+/* Trạng thái tiện ích nằm sát mép phải. Máy tính: cùng hàng với nhãn THÁNG / NGÀY ĐỒNG BỘ
+   (ghim góc trên-phải nhóm điều khiển, không chiếm hàng riêng); điện thoại: một dòng phía trên. */
+.ctktkt-module .ctktkt-content .monthly-extension-status { margin: 0; }
+/* Chỉ ghim lên hàng nhãn khi nhóm điều khiển đủ rộng để hàng đầu kết thúc bằng NÚT (không có nhãn ở góc phải
+   để bị đè): 1 ngày cần ~740px (Tháng + công tắc + Ngày + nút), nhiều ngày ~910px (thêm ô Đến ngày).
+   Hẹp hơn thì trạng thái tự về một hàng riêng phía trên. Trình duyệt chưa hỗ trợ container query → hàng riêng. */
+.ctktkt-module .ctktkt-content .monthly-toolbar-controls { position: relative; container-type: inline-size; }
+@container (min-width: 740px) {
+  .ctktkt-module .ctktkt-content .monthly-toolbar-controls[data-sync-mode="day"] .monthly-extension-status { position: absolute; top: 0; right: 0; width: auto; line-height: 16px; }
+}
+@container (min-width: 910px) {
+  .ctktkt-module .ctktkt-content .monthly-toolbar-controls[data-sync-mode="range"] .monthly-extension-status { position: absolute; top: 0; right: 0; width: auto; line-height: 16px; }
+}
+/* Máy tính: mọi ô và nút trên MỘT hàng, không xuống dòng. Nhóm điều khiển rộng theo nội dung;
+   không đủ chỗ cạnh "Kỳ dữ liệu & thao tác" thì cả hàng xuống dưới tiêu đề (vẫn một hàng, canh phải).
+   Hàng luôn kết thúc bằng nút "Lưu" nên trạng thái tiện ích ghim góc trên-phải không đè nhãn nào.
+   container-type phải tắt ở đây: khung đo theo nội dung thì không được làm container kích thước. */
+@media (min-width: 1200px) {
+  .ctktkt-module .ctktkt-content .monthly-toolbar-controls { container-type: normal; flex: 0 0 auto; flex-wrap: nowrap; margin-left: auto; }
+  .ctktkt-module .ctktkt-content .monthly-toolbar-controls > :is(label, div, button) { flex-shrink: 0; }
+  .ctktkt-module .ctktkt-content .monthly-toolbar-controls .monthly-extension-status { position: absolute; top: 0; right: 0; width: auto; line-height: 16px; white-space: nowrap; }
+}
+
+/* ---- Bảng lượng nước: cố định cột đầu khi cuộn ngang (như "Cố định ngăn" của Excel) ----
+   Máy tính giữ 4 cột Ngày · Thời gian · Kíp · Trưởng ca; điện thoại chỉ giữ Ngày · Thời gian để còn chỗ cho số.
+   Bề rộng cột đặt cứng để tính được mép trái của từng cột dính. */
+.ctktkt-module .water-table-scroll { --wcol1: 102px; --wcol2: 68px; --wcol3: 40px; --wcol4: 84px; }
+/* Viền tách (separate): với viền gộp, viền của ô cuộn bên dưới vẽ đè thành vạch lên ô dính.
+   Kẻ dòng chuyển từ <tr> (divide-y, mất tác dụng ở chế độ tách) xuống từng ô. */
+.ctktkt-module .water-table-scroll > table { border-collapse: separate; border-spacing: 0; }
+.ctktkt-module .water-table-scroll > table > tbody > tr > td { border-bottom: 1px solid #e2e8f0; }
+.ctktkt-module .water-table-scroll > table > thead > tr > th { border-bottom: 1px solid #c6e3d0; }
+/* Gom 3 ca theo ngày: vạch đậm mở đầu mỗi ngày; ca 2, 3 ẩn ngày bằng màu trong suốt (innerText vẫn đọc được). */
+.ctktkt-module .water-table-scroll > table > tbody > tr.water-day-start > td { border-top: 2px solid #94a3b8; }
+.ctktkt-module .water-table-scroll > table > tbody > tr:first-child > td { border-top: 0; }
+.ctktkt-module .water-table-scroll td.water-date-repeat { color: transparent; }
+.ctktkt-module .water-table-scroll tr:hover > td.water-date-repeat { color: #94a3b8; }
+/* Tiêu đề "THỜI GIAN" xuống hai dòng thay vì bị cắt trong cột hẹp. */
+.ctktkt-module .water-table-scroll > table > thead > tr:first-child > th:nth-child(2) { white-space: normal; }
+.ctktkt-module .water-table-scroll > table > thead > tr:first-child > th:nth-child(-n+4),
+.ctktkt-module .water-table-scroll > table > tbody > tr > td:not([colspan]):nth-child(-n+4) {
+  position: sticky; z-index: 2;
+}
+.ctktkt-module .water-table-scroll > table > tbody > tr > td:not([colspan]):nth-child(-n+4) { background-color: #fff; }
+.ctktkt-module .water-table-scroll > table > thead > tr:first-child > th:nth-child(-n+4) { z-index: 3; }
+
+/* Tiêu đề dịu: một nền xanh nhạt thay 3 sắc xanh đậm xen kẽ; màu chuẩn gốc #00B050 giữ thành dải mỏng trên đỉnh. */
+.ctktkt-module .water-table-scroll > table > thead { color: #14532d; font-weight: 700; }
+/* :not([hidden]) nâng độ ưu tiên lên trên lớp divide-x của Tailwind (0,3,0) và nền trắng của ô dính. */
+.ctktkt-module .water-table-scroll > table > thead > tr > th:not([hidden]) { background-color: #e7f5ec; border-color: #c6e3d0; }
+.ctktkt-module .water-table-scroll > table > thead > tr:nth-child(2) > th:not([hidden]) { background-color: #f3faf5; color: #3f6b50; }
+.ctktkt-module .water-table-scroll > table > thead > tr:first-child > th { box-shadow: inset 0 3px 0 #00b050; }
+.ctktkt-module .water-table-scroll > table > tbody > tr.water-baseline-row > td:nth-child(-n+4) { background-color: #f1f5f9; }
+.ctktkt-module .water-table-scroll > table > tbody > tr:not(.water-baseline-row):hover > td:nth-child(-n+4) { background-color: #fffbeb; }
+:is(.ctktkt-module .water-table-scroll > table > thead > tr:first-child > th, .ctktkt-module .water-table-scroll > table > tbody > tr > td:not([colspan])):nth-child(1) { left: 0; width: var(--wcol1); min-width: var(--wcol1); max-width: var(--wcol1); }
+:is(.ctktkt-module .water-table-scroll > table > thead > tr:first-child > th, .ctktkt-module .water-table-scroll > table > tbody > tr > td:not([colspan])):nth-child(2) { left: var(--wcol1); width: var(--wcol2); min-width: var(--wcol2); max-width: var(--wcol2); }
+:is(.ctktkt-module .water-table-scroll > table > thead > tr:first-child > th, .ctktkt-module .water-table-scroll > table > tbody > tr > td:not([colspan])):nth-child(3) { left: calc(var(--wcol1) + var(--wcol2)); width: var(--wcol3); min-width: var(--wcol3); max-width: var(--wcol3); }
+:is(.ctktkt-module .water-table-scroll > table > thead > tr:first-child > th, .ctktkt-module .water-table-scroll > table > tbody > tr > td:not([colspan])):nth-child(4) { left: calc(var(--wcol1) + var(--wcol2) + var(--wcol3)); width: var(--wcol4); min-width: var(--wcol4); max-width: var(--wcol4); overflow: hidden; text-overflow: ellipsis; }
+/* Vạch phân cách vùng cố định; dùng bóng vì viền của ô dính bị mất khi bảng gộp viền. */
+:is(.ctktkt-module .water-table-scroll > table > thead > tr:first-child > th, .ctktkt-module .water-table-scroll > table > tbody > tr > td:not([colspan])):nth-child(4) { box-shadow: inset -2px 0 0 #9fcfb3; }
+@media (max-width: 767px) {
+  .ctktkt-module .water-table-scroll { --wcol1: 100px; --wcol2: 62px; }
+  :is(.ctktkt-module .water-table-scroll > table > thead > tr:first-child > th, .ctktkt-module .water-table-scroll > table > tbody > tr > td:not([colspan])):nth-child(n+3):nth-child(-n+4) { position: static; box-shadow: none; }
+  .ctktkt-module .water-table-scroll > table > tbody > tr > td:not([colspan]):nth-child(n+3):nth-child(-n+4) { background-color: transparent; }
+  :is(.ctktkt-module .water-table-scroll > table > thead > tr:first-child > th, .ctktkt-module .water-table-scroll > table > tbody > tr > td:not([colspan])):nth-child(2) { box-shadow: inset -2px 0 0 #9fcfb3; }
+}
+/* Ô tiêu đề vừa là mép vùng cố định vừa mang dải chuẩn gốc: gộp hai bóng (đặt sau để thắng hai quy tắc trên). */
+.ctktkt-module .water-table-scroll > table > thead > tr:first-child > th:nth-child(4) { box-shadow: inset -2px 0 0 #9fcfb3, inset 0 3px 0 #00b050; }
+@media (max-width: 767px) {
+  .ctktkt-module .water-table-scroll > table > thead > tr:first-child > th:nth-child(n+3) { box-shadow: inset 0 3px 0 #00b050; }
+  .ctktkt-module .water-table-scroll > table > thead > tr:first-child > th:nth-child(2) { box-shadow: inset -2px 0 0 #9fcfb3, inset 0 3px 0 #00b050; }
+}
+
+/* ---- Cỡ nút/ô điều khiển thống nhất (theo Quản lý thiết bị / vật tư: nút công cụ cao 36px, chữ 14px) ----
+   Áp cho hàng tiêu đề, khung "Kỳ dữ liệu và đồng bộ", thanh ngày báo cáo của Chỉ tiêu KTKT.
+   Chỉ khổ máy tính; điện thoại giữ vùng chạm ≥ 40px. */
+@media (min-width: 768px) {
+  .ctktkt-module .ktkt-page-header nav a { width: 36px; height: 36px; }
+  .ctktkt-module :is(.ktkt-page-header, .monthly-toolbar-controls, .module-hero) :is(button, a.ktkt-toolbar-link, label > span.relative, .qlkt-date-field):not(.monthly-sync-mode-group > button, .bcsx-view-mode > button, .bcsx-unit-switch > button) {
+    min-height: 36px; height: 36px; font-size: 14px; font-weight: 500; line-height: 1.2;
+  }
+  .ctktkt-module :is(.ktkt-page-header, .monthly-toolbar-controls, .module-hero) button:not(.monthly-sync-mode-group > button, .bcsx-view-mode > button, .bcsx-unit-switch > button) { padding-inline: 12px; font-weight: 600; }
+  .ctktkt-module .monthly-toolbar-controls .monthly-sync-mode-group { height: 36px; }
+  .ctktkt-module .monthly-toolbar-controls .monthly-sync-mode-group > button { font-size: 13px; }
+}
+
+/* Thanh tab các cụm (Báo cáo Chỉ tiêu KTKT): một hàng; dưới 1700px ẩn biểu tượng nhỏ để 7 tab vừa khung. */
+@media (max-width: 1699px) { .ctktkt-module .ktkt-section-tabs svg { display: none; } }
+
+/* Báo cáo sản xuất: Ngày · S1/S2 · chế độ xem · Dán Excel · Nạp 2 file · Lưu trên MỘT hàng (máy tính).
+   Hai nhóm công tắc giữ nút gọn (cao 32px trong khung 36px). */
+.ctktkt-module .bcsx-top-toolbar :is(.bcsx-view-mode, .bcsx-unit-switch) > button { height: 32px; padding-inline: 10px; font-size: 13px; }
+@media (min-width: 1024px) {
+  /* Cụm nút mục 1 luôn liền khối; thiếu chỗ thì cả cụm xuống dòng dưới Ngày / S1 / S2. */
+  .ctktkt-module .bcsx-top-toolbar > div:last-child { flex-wrap: nowrap; white-space: nowrap; }
+}
+@media (min-width: 1440px) {
+  .ctktkt-module .bcsx-top-toolbar { flex-wrap: nowrap; white-space: nowrap; }
+}
+
+/* Nhãn mục ("CHỈ TIÊU KTKT", "SẢN XUẤT") đầu hàng nút: cùng nền khối "Bảng theo dõi lượng nước sử dụng", thu gọn chiều cao. */
+/* Lặp lớp để thắng quy tắc cũ ".bcsx-workspace > .module-hero > div:first-child > .module-heading-copy { flex: 1 1 400px }". */
+.ctktkt-module .module-hero .module-heading-copy.module-heading-copy.ktkt-section-title.ktkt-section-title { flex: 0 0 auto; padding: 8px 18px; }
+.ctktkt-module .module-heading-copy.ktkt-section-title h2 { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 18px; font-weight: 800; letter-spacing: -0.01em; white-space: nowrap; }
+.ctktkt-module .module-heading-copy.ktkt-section-title svg { color: #75d4e4; flex-shrink: 0; }
+
+/* Suất hao nhiệt PPA: khoảng ngày nằm trong khung tiêu đề, bên phải tiêu đề. */
+.ctktkt-module .ppa-heading-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 20px; }
+.ctktkt-module .ppa-range-controls.ppa-range-inline { border: 0; padding: 0; background: transparent; margin-left: auto; }
+/* Hàng Google Sheet: nhãn ngày đứng cạnh ô, các nút và Xuất Excel trên cùng một hàng. */
+.ctktkt-module .ppa-sheet-row { align-items: center; }
+.ctktkt-module .ppa-sheet-row > label.ppa-sheet-date { display: flex; align-items: center; gap: 8px; white-space: nowrap; font-size: 12px; }
+.ctktkt-module .ppa-sheet-row .google-sheet-actions { flex-direction: row; align-items: center; flex-wrap: wrap; }
+@media (min-width: 1024px) { .ctktkt-module .ppa-sheet-row { flex-wrap: nowrap; } .ctktkt-module .ppa-sheet-row .google-sheet-buttons { flex-wrap: nowrap; } }
+
