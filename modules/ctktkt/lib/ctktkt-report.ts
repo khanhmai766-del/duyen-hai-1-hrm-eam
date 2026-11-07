@@ -138,6 +138,7 @@ export function calculateCoalMeterShiftConsumption(
 type CoalUnitResult = {
   rawCoalTonnes: number | null;
   adjustedCoalTonnes: number | null;
+  hhvKjKg: number | null;
 };
 
 type CoalModelResult = {
@@ -226,6 +227,17 @@ export function calculateDailyAverageMoisture(
   return weightedMoisture / totalRawCoal;
 }
 
+function coalHhvKjKg(details: CoalShiftDetail[]): number | null {
+  // An incomplete unit must not erase another unit's measured coal quality.
+  // Never substitute zero for an unknown mass, moisture or calorific value.
+  if (details.some(item => item.rawCoalTonnes === null
+    || item.adjustedCoalTonnes === null || item.asReceivedKcalKg === null
+    || (item.rawCoalTonnes > 0 && (item.dryKcalKg === null || item.dryKcalKg <= 0)))) return null;
+  const adjusted = sum(details.map(item => item.adjustedCoalTonnes));
+  const energy = details.reduce((total, item) => total + item.rawCoalTonnes! * item.asReceivedKcalKg!, 0);
+  return adjusted === null || adjusted <= 0 ? null : energy / adjusted * 4.1868;
+}
+
 function calculateCoalModel(
   current: CtktktDayEntries,
   previous: CtktktDayEntries | undefined,
@@ -235,23 +247,14 @@ function calculateCoalModel(
   const unitResult = (start: number): CoalUnitResult => ({
     rawCoalTonnes: sum(details.slice(start, start + 3).map(item => item.rawCoalTonnes)),
     adjustedCoalTonnes: sum(details.slice(start, start + 3).map(item => item.adjustedCoalTonnes)),
+    hhvKjKg: coalHhvKjKg(details.slice(start, start + 3)),
   });
   const s1 = unitResult(0);
   const s2 = unitResult(3);
-  const plantRaw = sum(details.map(item => item.rawCoalTonnes));
-  const plantAdjusted = sum(details.map(item => item.adjustedCoalTonnes));
-  const energyNumerator = details.some(item => item.rawCoalTonnes === null || item.asReceivedKcalKg === null)
-    ? null
-    : details.reduce((total, item) => total + (item.rawCoalTonnes ?? 0) * (item.asReceivedKcalKg ?? 0), 0);
-  const averageAsReceivedKcalKg = divide(energyNumerator, plantRaw);
-  const correctedKcalKg = averageAsReceivedKcalKg === null || plantRaw === null || plantAdjusted === null || plantAdjusted === 0
-    ? null
-    : averageAsReceivedKcalKg * plantRaw / plantAdjusted;
-
   return {
     s1,
     s2,
-    hhvKjKg: correctedKcalKg === null ? null : correctedKcalKg * 4.1868,
+    hhvKjKg: coalHhvKjKg(details),
   };
 }
 
@@ -360,8 +363,10 @@ function combineUnitKpis(s1: CtktktKpis, s2: CtktktKpis, hhvKjKg: number | null)
 export function calculateCtktktSummary(current: CtktktDayEntries, previous?: CtktktDayEntries): CtktktSummary {
   const coal = calculateCoalModel(current, previous);
   return combineUnitKpis(
-    unitKpis("s1", current, previous, coal.s1, coal.hhvKjKg),
-    unitKpis("s2", current, previous, coal.s2, coal.hhvKjKg),
+    // Preserve the workbook's common HHV when complete; otherwise use only
+    // the complete unit's own measured shifts, never a partial plant average.
+    unitKpis("s1", current, previous, coal.s1, coal.hhvKjKg ?? coal.s1.hhvKjKg),
+    unitKpis("s2", current, previous, coal.s2, coal.hhvKjKg ?? coal.s2.hhvKjKg),
     coal.hhvKjKg,
   );
 }
@@ -369,8 +374,8 @@ export function calculateCtktktSummary(current: CtktktDayEntries, previous?: Ctk
 export function calculateCtktktMeterSummary(current: CtktktDayEntries, previous?: CtktktDayEntries): CtktktSummary {
   const coal = calculateCoalModel(current, previous);
   return combineUnitKpis(
-    meterUnitKpis("s1", current, previous, coal.s1, coal.hhvKjKg),
-    meterUnitKpis("s2", current, previous, coal.s2, coal.hhvKjKg),
+    meterUnitKpis("s1", current, previous, coal.s1, coal.hhvKjKg ?? coal.s1.hhvKjKg),
+    meterUnitKpis("s2", current, previous, coal.s2, coal.hhvKjKg ?? coal.s2.hhvKjKg),
     coal.hhvKjKg,
   );
 }
