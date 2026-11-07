@@ -22,7 +22,6 @@ import {
   readExifTime,
   reviewCoalReading,
   slotForPhotoTime,
-  truncateTwoDecimals,
   type CoalMeterKey,
   type CoalSlot,
   type CoalUnit,
@@ -93,12 +92,13 @@ async function readPhoto(file: File, reportDate:string, slot:CoalSlot, temporary
   if (!response.ok || !body.reading) throw new Error(body.error || "Không đọc được ảnh.");
   const reading = body.reading;
   const aiReasons: string[] = [];
-  if(!body.photo) aiReasons.push(body.warning || "Chưa lưu ảnh đối chiếu trên máy chủ.");
+  if(body.warning) aiReasons.push(body.warning);
   if (reading.screen_type === "no_total_visible") aiReasons.push("Màn hình trong ảnh không hiện chỉ số tổng");
   if (reading.screen_type === "not_a_meter") aiReasons.push("Ảnh không phải màn hình công tơ than");
   if (reading.confidence !== "high") aiReasons.push(`AI chưa chắc chắn${reading.note ? `: ${reading.note}` : ""}`);
   return {
     value: parseVisionTotal(reading.total_display),
+    exactValue: parseVisionTotal(reading.total_display) === null ? "" : reading.total_display!.trim().replace(/\s/g, "").replace(/,/g, "."),
     label: parseMeterLabel(reading.meter_label ?? ""),
     time: exifTime ?? parseVisionTimestamp(reading.photo_timestamp),
     aiReasons,
@@ -107,7 +107,7 @@ async function readPhoto(file: File, reportDate:string, slot:CoalSlot, temporary
 }
 
 const SLOT_LABELS: Record<CoalSlot, string> = { "08": "08h (Ca 1)", "16": "16h (Ca 2)", "24": "24h (Ca 3)" };
-const numberFormat = new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 3 });
+const numberFormat = new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 4 });
 
 export function CoalMeterPhotoImport({
   open, onOpenChange, reportDate, current, previous, canEditCell, onApply, onSave, onDateChange, initialUnit="S1", disabled=false, minDate, maxDate, request: customRequest,
@@ -139,9 +139,6 @@ export function CoalMeterPhotoImport({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [preview, setPreview] = useState<{url:string;fileName:string}|null>(null);
-  const [archive,setArchive]=useState<{id:string;slot:string;reading:VisionReading;expiresAt:number}[]>([]);
-  const [archiveError,setArchiveError]=useState("");
-  const [archiveVersion,setArchiveVersion]=useState(0);
   const [temporaryKey,setTemporaryKey]=useState("");
   const [savingRows,setSavingRows]=useState(false);
   const [saveMessage,setSaveMessage]=useState("");
@@ -158,6 +155,8 @@ export function CoalMeterPhotoImport({
   const replaceId = useRef<string|null>(null);
   const filesRef = useRef(new Map<string,File>());
   const urlsRef = useRef(new Map<string,string>());
+  const photoTimers = useRef(new Map<string,ReturnType<typeof setTimeout>>());
+  function clearPhotoTimers() { photoTimers.current.forEach(timer=>clearTimeout(timer)); photoTimers.current.clear(); }
   const batch = useRef(0);
   const controllers = useRef(new Map<string,AbortController>());
 
@@ -172,12 +171,13 @@ export function CoalMeterPhotoImport({
 
   function changeOpen(next:boolean) {
     if(savingRows)return;
-    if (!next) { stopReading(); resetKeyCheck(); setTemporaryKey(""); setTemporaryMode(false); setPreview(null); }
+    if (!next) { stopReading(); resetKeyCheck(); setTemporaryKey(""); setTemporaryMode(false); setPreview(null); clearPhotoTimers(); urlsRef.current.forEach(url=>URL.revokeObjectURL(url)); urlsRef.current.clear(); filesRef.current.clear(); setRows([]); if(fileInput.current)fileInput.current.value=""; }
     onOpenChange(next);
   }
 
   useEffect(() => () => {
     keyCheckController.current?.abort();
+    clearPhotoTimers();
     batch.current++;
     controllers.current.forEach(controller => controller.abort());
     urlsRef.current.forEach(url => URL.revokeObjectURL(url));
@@ -228,18 +228,6 @@ export function CoalMeterPhotoImport({
       if(keyCheckController.current===controller)keyCheckController.current=null;
     }
   }
-  useEffect(()=>{
-    if(!open) return;
-    const controller=new AbortController();
-    request(`/api/ctktkt/coal-meter-photos?date=${encodeURIComponent(reportDate)}`,{signal:controller.signal,cache:"no-store"})
-      .then(async response=>{
-        if(!response.ok) throw new Error("Chưa tải được ảnh lưu.");
-        return response.json() as Promise<{photos:typeof archive}>;
-      }).then(body=>{setArchive(body.photos||[]);setArchiveError("");})
-      .catch(()=>{if(!controller.signal.aborted)setArchiveError("Chưa tải được ảnh đã lưu. Có thể thử tải lại bên dưới.");});
-    return ()=>controller.abort();
-  },[open,reportDate,archiveVersion,request]);
-
   const reviewed = useMemo(() => rows.map(row => {
     const slot = row.slot || null;
     const value = row.value.trim() === "" ? null : Number(row.value.replace(",", "."));
@@ -279,7 +267,7 @@ export function CoalMeterPhotoImport({
   async function saveConfirmed(){
     if(locked||!onSave||!writable.length)return;
     const ids=new Set(writable.map(item=>item.row.id));
-    const values=writable.map(item=>({cell:item.cell!,value:String(item.numeric)}));
+    const values=writable.map(item=>({cell:item.cell!,value:item.row.value.trim().replace(",", ".")}));
     setSavingRows(true);setError("");setSaveMessage("");
     try{
       await onSave(values,selectedUnit);
@@ -312,9 +300,18 @@ export function CoalMeterPhotoImport({
           const result = await readPhoto(file,reportDate,row.slot||defaultSlot,activeTemporaryKey,geminiModel,controller.signal,request);
           if (generation !== batch.current || !filesRef.current.has(row.id) || controller.signal.aborted) continue;
           const timing = result.time ? slotForPhotoTime(result.time) : null;
-          const numeric = result.value === null ? null : truncateTwoDecimals(result.value);
+          const previousTimer = photoTimers.current.get(row.id);
+          if (previousTimer) clearTimeout(previousTimer);
+          const completedUrl = urlsRef.current.get(row.id);
+          photoTimers.current.set(row.id,setTimeout(()=>{
+            if (urlsRef.current.get(row.id)!==completedUrl) return;
+            if (completedUrl) URL.revokeObjectURL(completedUrl);
+            urlsRef.current.delete(row.id); filesRef.current.delete(row.id); photoTimers.current.delete(row.id);
+            setPreview(previous=>previous?.url===completedUrl?null:previous);
+            setRows(old=>old.map(item=>item.id===row.id?{...item,url:""}:item));
+          },5*60*1000));
           setRows(old=>old.map(item=>item.id===row.id?{
-            ...item,state:"done",ocrValue:result.value,value:numeric===null?"":String(numeric),
+            ...item,state:"done",ocrValue:result.value,value:result.exactValue,
             label:result.label,key:result.label??"",slot:timing?.slot??defaultSlot,
             photoDate:timing?.operatingDate??null,aiReasons:result.aiReasons,error:"",write: false,needsManual:result.needsManual,manual:false,saved:false,readDate:reportDate,
           }:item));
@@ -329,11 +326,12 @@ export function CoalMeterPhotoImport({
     };
     try { await Promise.all(Array.from({length:Math.min(PARALLEL_READS,queue.length)},worker)); }
     finally {
-      if (generation === batch.current) { setBusy(false); setArchiveVersion(v=>v+1); }
+      if (generation === batch.current) { setBusy(false); }
     }
   }
 
   function removeRow(id:string) {
+    const timer=photoTimers.current.get(id);if(timer)clearTimeout(timer);photoTimers.current.delete(id);
     controllers.current.get(id)?.abort();
     controllers.current.delete(id);
     filesRef.current.delete(id);
@@ -347,6 +345,7 @@ export function CoalMeterPhotoImport({
   }
 
   function clearAll() {
+    clearPhotoTimers();
     stopReading();
     resetKeyCheck();
     urlsRef.current.forEach(url=>URL.revokeObjectURL(url));
@@ -384,11 +383,11 @@ export function CoalMeterPhotoImport({
 
   function apply() {
     if (locked || !writable.length) return;
-    onApply(writable.map(item=>({cell:item.cell!,value:String(item.numeric)})));
+    onApply(writable.map(item=>({cell:item.cell!,value:item.row.value.trim().replace(",", ".")})));
     clearAll(); changeOpen(false);
   }
 
-  const stateLabel = (row:PhotoRow) => row.saved?"Đã lưu":coalPhotoUnitIssue(selectedUnit,row.key,row.label)?"Khác tổ đang nhập":row.state==="reading"?"Đang đọc…":row.state==="pending"?"Đang chờ":row.state==="error"?"Đọc chưa thành công":row.needsManual&&!row.manual?"Ảnh chưa rõ · cần nhập tay":row.write?"Đã đối chiếu":"Chờ đối chiếu";
+  const stateLabel = (row:PhotoRow) => row.saved?"Đã lưu":coalPhotoUnitIssue(selectedUnit,row.key,row.label)?"Khác tổ đang nhập":row.state==="reading"?"Đang đọc…":row.state==="pending"?"Đang chờ":row.state==="error"?"Đọc chưa thành công":row.needsManual&&!row.manual?"Ảnh chưa rõ · cần nhập tay":row.write?"Đã đối chiếu":"Chờ kiểm tra số";
 
   return <Dialog open={open} onOpenChange={changeOpen}>
     <DialogContent className={styles.dialog} onOpenAutoFocus={event=>{event.preventDefault();returnFocus.current=document.activeElement as HTMLElement;uploadButton.current?.focus();}} onCloseAutoFocus={event=>{event.preventDefault();returnFocus.current?.focus();}}>
@@ -396,7 +395,7 @@ export function CoalMeterPhotoImport({
         <div className={styles.headingIcon}><Camera size={22} aria-hidden /></div>
         <div><p className={styles.eyebrow}>NHẬP CHỈ SỐ · {reportDate.split("-").reverse().join("/")}</p>
           <DialogTitle ref={heading} tabIndex={-1} className={styles.title}>Đọc công tơ than từ ảnh</DialogTitle>
-          <DialogDescription className={styles.description}>Đọc tổng lũy kế (tấn), đối chiếu ảnh rồi {onSave?"xác nhận và lưu theo ngày/ca.":"xác nhận điền vào bảng."}</DialogDescription>
+          <DialogDescription className={styles.description}>Ảnh chỉ dùng để đọc số, không lưu trên web. Ảnh tạm giữ 5 phút sau khi đọc để đối chiếu, sau đó tự bỏ. Hãy {onSave?"xác nhận và lưu theo ngày/ca.":"xác nhận điền vào bảng."}</DialogDescription>
         </div>
       </header>
       <div className={styles.body}>
@@ -453,7 +452,7 @@ export function CoalMeterPhotoImport({
             <ol>{reviewed.map(({row,canWrite},index)=><li key={row.id} data-active={row.id===active.row.id}>
               <button type="button" className={styles.photoSelect} aria-current={row.id===active.row.id?"true":undefined} onClick={()=>setSelectedId(row.id)}>
                 {/* eslint-disable-next-line @next/next/no-img-element -- local object URL */}
-                <img src={row.url} alt=""/>
+                {row.url?<img src={row.url} alt=""/>:<CheckCircle2 size={20} aria-label="Đã hết thời gian giữ ảnh tạm"/>}
                 <span><strong>{index+1}. {row.key?coalMeterLabel(row.key):"Chưa rõ máy cấp"}</strong>
                   <small title={row.fileName}>{row.fileName}</small>
                   <em data-error={row.state==="error"||Boolean(coalPhotoUnitIssue(selectedUnit,row.key,row.label))} data-confirmed={row.write&&canWrite}>{stateLabel(row)}</em>
@@ -461,21 +460,21 @@ export function CoalMeterPhotoImport({
               </button>
               <button type="button" disabled={savingRows} className={styles.remove} aria-label={`Xóa ảnh ${index+1}`} title="Bỏ ảnh khỏi lượt nhập" onClick={()=>removeRow(row.id)}><Trash2 size={15} aria-hidden/></button>
             </li>)}</ol>
-            <p>Xóa ở đây chỉ bỏ ảnh khỏi lượt nhập, không xóa số liệu trong bảng hay ảnh đã lưu.</p>
+            <p>Ảnh chỉ giữ tạm 5 phút sau khi đọc rồi tự bỏ. Xóa dòng ở đây không xóa số liệu đã lưu trong bảng.</p>
           </nav>
           <section className={styles.editor} aria-label="Đối chiếu ảnh và nhập chỉ số">
             <div className={styles.editorHeader}><div><span className={styles.eyebrow}>ẢNH {rows.findIndex(row=>row.id===active.row.id)+1} / {rows.length}</span><h3>{active.row.key?coalMeterLabel(active.row.key):"Chọn công tơ để ghi số"}</h3></div>
               <div className={styles.actions}>
                 <button type="button" disabled={locked} onClick={()=>chooseFiles(active.row.id)}><ImagePlus size={15} aria-hidden/>Thay ảnh</button>
-                <button type="button" disabled={locked} onClick={()=>void processRows([active.row])}><RefreshCw size={15} aria-hidden/>Đọc lại</button>
+                <button type="button" disabled={locked||!active.row.url} onClick={()=>void processRows([active.row])}><RefreshCw size={15} aria-hidden/>Đọc lại</button>
               </div>
             </div>
             <div className={styles.comparison}>
               <figure className={styles.imageFrame}>
                 {/* eslint-disable-next-line @next/next/no-img-element -- local object URL */}
-                <img src={active.row.url} alt={`Ảnh công tơ ${active.row.fileName}`}/>
-                <button type="button" onClick={()=>setPreview(active.row)}><Expand size={15} aria-hidden/>Phóng to ảnh</button>
-                <figcaption>Đối chiếu tên máy cấp và dòng “Total / Material Total”.</figcaption>
+                {active.row.url?<img src={active.row.url} alt={`Ảnh công tơ ${active.row.fileName}`}/>:<p className={styles.notice}>Ảnh tạm đã hết 5 phút và được bỏ. Web chỉ giữ kết quả số; chọn “Thay ảnh” nếu cần đọc lại.</p>}
+                <button type="button" disabled={!active.row.url} onClick={()=>setPreview(active.row)}><Expand size={15} aria-hidden/>Phóng to ảnh</button>
+                <figcaption>{active.row.url?"Đối chiếu tên máy cấp và dòng “Total / Material Total”.":"Chỉ giữ kết quả nhận dạng; không lưu ảnh trên web."}</figcaption>
               </figure>
               <div className={styles.reading}>
                 {active.unitIssue&&<div role="alert" className={styles.error}><span><strong>Ảnh khác tổ máy đã chọn</strong><p>{active.unitIssue}</p><button type="button" disabled={locked} onClick={()=>removeRow(active.row.id)}>Bỏ ảnh khác tổ</button></span></div>}
@@ -495,12 +494,12 @@ export function CoalMeterPhotoImport({
                 </label>
                 <p className={styles.aiValue}>AI đọc: <strong>{active.row.ocrValue===null?"—":String(active.row.ocrValue)}</strong>{active.row.label?` · Nhãn: ${coalMeterLabel(active.row.label)}`:" · Chưa rõ nhãn máy cấp"}</p>
                 <dl className={styles.measurements}><div><dt>Lần ghi trước</dt><dd>{active.match.previous===null?"—":numberFormat.format(active.match.previous)}</dd></div><div><dt>Tăng so với lần trước</dt><dd data-warning={active.match.delta!==null&&(active.match.delta<0||active.match.delta>1500)}>{active.match.delta===null?"—":numberFormat.format(Math.round(active.match.delta*1000)/1000)} <small>tấn</small></dd></div></dl>
-                {active.review?.level==="ok"&&<p className={styles.success}><CheckCircle2 size={16} aria-hidden/>Không phát hiện bất thường. Vẫn cần đối chiếu ảnh.</p>}
+                {active.review?.level==="ok"&&<p className={styles.success}><CheckCircle2 size={16} aria-hidden/>Không phát hiện bất thường. Hãy kiểm tra chỉ số trước khi xác nhận.</p>}
                 {active.review?.level==="check"&&<ul className={styles.warnings}>{active.review.reasons.map((reason,i)=><li key={i}><TriangleAlert size={14} aria-hidden/>{reason}</li>)}</ul>}
                 {!active.allowed&&active.row.key&&<p className={styles.error}>Bạn không có quyền nhập ô này.</p>}
                 <label className={styles.confirmation} data-checked={active.row.write&&active.canWrite}>
                   <input type="checkbox" checked={active.row.write&&active.canWrite} disabled={locked||!active.canWrite} onChange={e=>setRows(old=>old.map(row=>row.id===active.row.id?{...row,write:e.target.checked}:row))}/>
-                  <span>Tôi đã đối chiếu ảnh và số liệu<small>{onSave?`Đồng ý lưu chỉ số cho ngày ${reportDate.split("-").reverse().join("/")} và mốc ca đã chọn.`:"Đồng ý điền chỉ số này vào bảng."}</small></span>
+                  <span>Tôi đã kiểm tra chỉ số công tơ<small>{onSave?`Đồng ý lưu chỉ số cho ngày ${reportDate.split("-").reverse().join("/")} và mốc ca đã chọn.`:"Đồng ý điền chỉ số này vào bảng."}</small></span>
                 </label>
               </div>
             </div>
@@ -511,21 +510,16 @@ export function CoalMeterPhotoImport({
           <div className={styles.reviewHeading}><div><h3>Bảng thông số công tơ · {selectedUnit}</h3><p>Ngày {reportDate.split("-").reverse().join("/")} · Chỉ lưu công tơ thuộc {selectedUnit} đã tích xác nhận.</p></div><span>{writable.length}/{rows.length} đã xác nhận</span></div>
           <div className={styles.reviewScroll}><table className={styles.reviewTable}><thead><tr><th>Ảnh / Công tơ</th><th>Mốc ca</th><th>Lần trước (t)</th><th>Chỉ số (t)</th><th>Tăng (t)</th><th>Kiểm tra / Xác nhận</th></tr></thead><tbody>{reviewed.map(item=><tr key={item.row.id} data-warning={!item.canWrite&&!item.row.saved}>
             <td><button type="button" onClick={()=>setSelectedId(item.row.id)}>{item.row.key?coalMeterLabel(item.row.key):"Chưa rõ máy cấp"}</button><small title={item.row.fileName}>{item.row.fileName}</small></td>
-            <td>{item.row.slot?SLOT_LABELS[item.row.slot]:"—"}</td><td>{item.match.previous===null?"—":numberFormat.format(item.match.previous)}</td><td><strong>{item.numeric===null?"—":numberFormat.format(item.numeric)}</strong></td><td>{item.match.delta===null?"—":numberFormat.format(Math.round(item.match.delta*1000)/1000)}</td>
+            <td>{item.row.slot?SLOT_LABELS[item.row.slot]:"—"}</td><td>{item.match.previous===null?"—":numberFormat.format(item.match.previous)}</td><td><strong>{item.numeric===null?"—":item.row.value}</strong></td><td>{item.match.delta===null?"—":numberFormat.format(Math.round(item.match.delta*1000)/1000)}</td>
             <td>{item.row.saved?<span className={styles.savedBadge}>Đã lưu</span>:item.unitIssue?<div><strong>Khác tổ {selectedUnit}</strong><button type="button" disabled={locked} onClick={()=>removeRow(item.row.id)}>Bỏ ảnh khác tổ</button></div>:item.canWrite?<label className={styles.reviewConfirm}><input type="checkbox" aria-label={`Xác nhận ảnh ${rows.indexOf(item.row)+1}`} checked={item.row.write} disabled={locked} onChange={event=>setRows(old=>old.map(row=>row.id===item.row.id?{...row,write:event.target.checked}:row))}/>Đã đối chiếu</label>:<div><span>{stateLabel(item.row)}</span><button type="button" disabled={locked} onClick={()=>{setSelectedId(item.row.id);enterManually(item.row);}}>Nhập tay</button><button type="button" disabled={locked} onClick={()=>chooseFiles(item.row.id)}>Tải lại ảnh</button></div>}{item.review?.level==="check"&&<small>{item.review.reasons.join(" · ")}</small>}</td>
           </tr>)}</tbody></table></div>
           {onSave&&<div className={styles.reviewActions}><p>Lưu đúng ngày/ca ở trên. Số liệu được đọc lại từ máy chủ để xác nhận.</p><button type="button" className={styles.primary} disabled={locked||!writable.length} onClick={()=>void saveConfirmed()}>{savingRows?"Đang lưu…":`Xác nhận và lưu ${writable.length} chỉ số`}</button></div>}
         </section>}
 
-        <details className={styles.archive}><summary>Ảnh đã lưu của bạn · {archive.length} ảnh còn hạn</summary>
-          <p>Ảnh giữ theo 4 mốc ca gần nhất. Hết hạn chỉ xóa ảnh, số liệu được giữ lại.</p>
-          {archiveError&&<p role="alert" className={styles.error}>{archiveError}</p>}
-          <button type="button" onClick={()=>setArchiveVersion(v=>v+1)}><RefreshCw size={14} aria-hidden/>Tải lại ảnh đã lưu</button>
-          <div className={styles.archiveItems}>{[...archive].sort((a,b)=>compareCoalMeterOrder({key:parseMeterLabel(a.reading.meter_label||""),slot:a.slot},{key:parseMeterLabel(b.reading.meter_label||""),slot:b.slot})).map(photo=><button type="button" key={photo.id} onClick={()=>setPreview({url:`/api/ctktkt/coal-meter-photos?id=${photo.id}`,fileName:photo.reading.meter_label||"Ảnh đã lưu"})}><strong>{photo.reading.meter_label||"Chưa rõ máy cấp"}</strong><span>{photo.reading.total_display||"—"} t · {photo.slot}h</span></button>)}</div>
-        </details>
+
       </div>
       <footer className={styles.footer}>
-        <p><strong>{writable.length} chỉ số đã xác nhận</strong><span>{onSave?`Lưu cho ${selectedUnit} · ngày ${reportDate.split("-").reverse().join("/")} · giữ ảnh để đối chiếu`:'Sau khi điền, bấm “Lưu số liệu” ở bảng chính.'}</span></p>
+        <p><strong>{writable.length} chỉ số đã xác nhận</strong><span>{onSave?`Lưu cho ${selectedUnit} · ngày ${reportDate.split("-").reverse().join("/")} · chỉ lưu số liệu, không lưu ảnh`:'Sau khi điền, bấm “Lưu số liệu” ở bảng chính.'}</span></p>
         <div><button type="button" disabled={savingRows} onClick={()=>changeOpen(false)}>Đóng{busy?" / dừng đọc":""}</button>{onSave?<button type="button" className={styles.primary} disabled={locked||!writable.length} onClick={()=>void saveConfirmed()}>{savingRows?"Đang lưu…":`Lưu ${writable.length} chỉ số`} <ArrowRight size={16} aria-hidden/></button>:<button type="button" className={styles.primary} disabled={locked||!writable.length} onClick={apply}>Điền {writable.length} chỉ số <ArrowRight size={16} aria-hidden/></button>}</div>
       </footer>
     </DialogContent>
