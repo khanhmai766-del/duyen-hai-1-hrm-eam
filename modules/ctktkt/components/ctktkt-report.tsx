@@ -1,4 +1,5 @@
 "use client";
+import { ctktktMetricDisplay } from "../lib/ctktkt-report";
 import "./ctktkt-report-compact.css";
 import {ReportCorrections} from "./report-corrections";
 import { useCtktktRequest, useCtktktDownload } from "@/hooks/useCtktkt";
@@ -1290,22 +1291,22 @@ export function CtktktReport() {
                     <tr key={row.key} className="hover:bg-slate-50/70">
                       <td className="p-2 font-medium text-slate-800">{row.label}</td>
                       <td className="bg-cyan-50/30 p-2 text-center font-mono tabular-nums text-[#173b64] text-sm font-semibold">
-                        {format(summary.s1[row.key])}
+                        {(ctktktMetricDisplay(summary.s1, row.key) ?? format(summary.s1[row.key]))}
                       </td>
                       <td className="bg-amber-50/40 p-2 text-center font-mono tabular-nums text-amber-900 text-sm font-semibold">
-                        {meterComparisonKeys.has(row.key) ? format(meterSummary.s1[row.key]) : "—"}
+                        {meterComparisonKeys.has(row.key) ? (ctktktMetricDisplay(meterSummary.s1, row.key) ?? format(meterSummary.s1[row.key])) : "—"}
                       </td>
                       <td className="bg-cyan-50/30 p-2 text-center font-mono tabular-nums text-[#173b64] text-sm font-semibold">
-                        {format(summary.s2[row.key])}
+                        {(ctktktMetricDisplay(summary.s2, row.key) ?? format(summary.s2[row.key]))}
                       </td>
                       <td className="bg-amber-50/40 p-2 text-center font-mono tabular-nums text-amber-900 text-sm font-semibold">
-                        {meterComparisonKeys.has(row.key) ? format(meterSummary.s2[row.key]) : "—"}
+                        {meterComparisonKeys.has(row.key) ? (ctktktMetricDisplay(meterSummary.s2, row.key) ?? format(meterSummary.s2[row.key])) : "—"}
                       </td>
                       <td className="bg-blue-50/40 p-2 text-center font-mono tabular-nums text-indigo-900 text-sm font-semibold">
-                        {format(summary.plant[row.key])}
+                        {(ctktktMetricDisplay(summary.plant, row.key) ?? format(summary.plant[row.key]))}
                       </td>
                       <td className="bg-amber-50/40 p-2 text-center font-mono tabular-nums text-amber-900 text-sm font-semibold">
-                        {meterComparisonKeys.has(row.key) ? format(meterSummary.plant[row.key]) : "—"}
+                        {meterComparisonKeys.has(row.key) ? (ctktktMetricDisplay(meterSummary.plant, row.key) ?? format(meterSummary.plant[row.key])) : "—"}
                       </td>
                       <td className="p-2 text-center font-medium text-slate-500 text-xs">{row.unit}</td>
                     </tr>

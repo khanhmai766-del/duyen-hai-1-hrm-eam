@@ -1,4 +1,5 @@
 import ExcelJS from "exceljs";
+import { applyShutdownExportRules } from "../shutdown-export-rules";
 import { applyCtktktExportPresentation, hideCtktktExportScratchArea } from "@/modules/ctktkt/lib/ctktkt-export-presentation";
 import { getRawDb } from "@/modules/ctktkt/db";
 import { calculateDailyProduction } from "@/modules/ctktkt/lib/daily-production-calculations";
@@ -275,6 +276,7 @@ export async function exportReport(request: Request) {
     }
     const totalSheet = workbook.getWorksheet("Tổng hợp tháng");
     if (totalSheet) totalSheet.getCell("A1").value = `Tổng hợp tháng ${month}/${year}`;
+    applyShutdownExportRules(workbook);
     workbook.calcProperties.fullCalcOnLoad = true;
     applyCtktktExportPresentation(workbook);
     hideCtktktExportScratchArea(workbook);

@@ -275,7 +275,7 @@ function unitKpis(
   );
 
   const { rawCoalTonnes, adjustedCoalTonnes } = coal;
-  const netCoalRate = divide(adjustedCoalTonnes, netMwh, 1000);
+  const netCoalRate = netMwh !== null && netMwh > 0 ? divide(adjustedCoalTonnes, netMwh, 1000) : null;
 
   return {
     grossMwh,
@@ -307,7 +307,7 @@ function meterUnitKpis(
   ]);
   const auxiliary = calculateAuxiliaryElectricity(grossMwh, netMwh);
   const { rawCoalTonnes, adjustedCoalTonnes } = coal;
-  const netCoalRate = divide(adjustedCoalTonnes, netMwh, 1000);
+  const netCoalRate = netMwh !== null && netMwh > 0 ? divide(adjustedCoalTonnes, netMwh, 1000) : null;
   return {
     grossMwh,
     netMwh,
@@ -325,32 +325,29 @@ function add(a: number | null, b: number | null) {
   return a === null || b === null ? null : a + b;
 }
 
-/**
- * Workbook I27/I145: when one unit has zero generation, the stopped unit's auxiliary
- * consumption is charged to the running unit: (aux stopped + gross running − net running) / gross running.
- */
-function plantAuxiliaryPercent(s1: CtktktKpis, s2: CtktktKpis): number | null {
-  const oneStopped = (stopped: CtktktKpis, running: CtktktKpis) =>
-    running.grossMwh === null || running.netMwh === null || running.grossMwh === 0
-      ? null
-      : ((stopped.auxiliaryMwh ?? 0) + running.grossMwh - running.netMwh) / running.grossMwh * 100;
-  if (s1.grossMwh === 0 && s2.grossMwh !== 0) return oneStopped(s1, s2);
-  if (s2.grossMwh === 0 && s1.grossMwh !== 0) return oneStopped(s2, s1);
-  return null;
+/** Reporting boundary: exclude the stopped unit's grid-fed auxiliaries. */
+function reportingAuxiliary(s1: CtktktKpis, s2: CtktktKpis) {
+  if (s1.grossMwh === null || s2.grossMwh === null) return { total: null, percent: null };
+  const active = [s1, s2].filter(unit => unit.grossMwh! > 0);
+  if (!active.length) return { total: 0, percent: null };
+  const total = sum(active.map(unit => unit.auxiliaryMwh));
+  const gross = sum(active.map(unit => unit.grossMwh));
+  const internal = sum(active.map(unit => unit.netMwh === null ? null : unit.grossMwh! - unit.netMwh));
+  return { total, percent: divide(internal, gross, 100) };
 }
 
 function combineUnitKpis(s1: CtktktKpis, s2: CtktktKpis, hhvKjKg: number | null): CtktktSummary {
   const grossMwh = add(s1.grossMwh, s2.grossMwh);
   const netMwh = add(s1.netMwh, s2.netMwh);
-  const plantAuxiliary = calculateAuxiliaryElectricity(grossMwh, netMwh);
+  const plantAuxiliary = reportingAuxiliary(s1, s2);
   const adjustedCoalTonnes = add(s1.adjustedCoalTonnes, s2.adjustedCoalTonnes);
   const rawCoalTonnes = add(s1.rawCoalTonnes, s2.rawCoalTonnes);
-  const netCoalRate = divide(adjustedCoalTonnes, netMwh, 1000);
+  const netCoalRate = netMwh !== null && netMwh > 0 ? divide(adjustedCoalTonnes, netMwh, 1000) : null;
   const plant: CtktktKpis = {
     grossMwh,
     netMwh,
-    auxiliaryMwh: add(s1.auxiliaryMwh, s2.auxiliaryMwh),
-    auxiliaryPercent: plantAuxiliaryPercent(s1, s2) ?? plantAuxiliary.percent,
+    auxiliaryMwh: plantAuxiliary.total,
+    auxiliaryPercent: plantAuxiliary.percent,
     rawCoalTonnes,
     adjustedCoalTonnes,
     netCoalRate,
@@ -627,4 +624,12 @@ export function calculateSteamDifferences(entries: CtktktDayEntries, unit: "s1" 
     result.push({ label, totalFlow, consumption });
   }
   return result;
+}
+
+/** Zero generation is an observed reporting state, never inferred from blank input. */
+export function ctktktMetricDisplay(kpis: CtktktKpis, key: keyof CtktktKpis): string | null {
+  if (!['netCoalRate', 'netHeatRate', 'auxiliaryPercent'].includes(key)) return null;
+  if (kpis.grossMwh === 0 && kpis.netMwh === 0) return '— · Ngừng máy — không đánh giá';
+  if (kpis[key] === null || kpis[key] === undefined) return '— · Thiếu dữ liệu';
+  return null;
 }
