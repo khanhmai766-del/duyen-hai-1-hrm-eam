@@ -158,8 +158,6 @@ export function CoalMeterPhotoImport({
   const [archive,setArchive]=useState<{id:string;slot:string;reading:VisionReading;expiresAt:number}[]>([]);
   const [archiveError,setArchiveError]=useState("");
   const [archiveVersion,setArchiveVersion]=useState(0);
-  const photoTimers = useRef(new Map<string,ReturnType<typeof setTimeout>>());
-  function clearPhotoTimers() { photoTimers.current.forEach(timer=>clearTimeout(timer)); photoTimers.current.clear(); }
   const batch = useRef(0);
   const controllers = useRef(new Map<string,AbortController>());
 
@@ -174,13 +172,12 @@ export function CoalMeterPhotoImport({
 
   function changeOpen(next:boolean) {
     if(savingRows)return;
-    if (!next) { stopReading(); resetKeyCheck(); setTemporaryKey(""); setTemporaryMode(false); setPreview(null); clearPhotoTimers(); urlsRef.current.forEach(url=>URL.revokeObjectURL(url)); urlsRef.current.clear(); filesRef.current.clear(); setRows([]); if(fileInput.current)fileInput.current.value=""; }
+    if (!next) { stopReading(); resetKeyCheck(); setTemporaryKey(""); setTemporaryMode(false); setPreview(null); urlsRef.current.forEach(url=>URL.revokeObjectURL(url)); urlsRef.current.clear(); filesRef.current.clear(); setRows([]); if(fileInput.current)fileInput.current.value=""; }
     onOpenChange(next);
   }
 
   useEffect(() => () => {
     keyCheckController.current?.abort();
-    clearPhotoTimers();
     batch.current++;
     controllers.current.forEach(controller => controller.abort());
     urlsRef.current.forEach(url => URL.revokeObjectURL(url));
@@ -315,16 +312,6 @@ export function CoalMeterPhotoImport({
           const result = await readPhoto(file,reportDate,row.slot||defaultSlot,activeTemporaryKey,geminiModel,controller.signal,request);
           if (generation !== batch.current || !filesRef.current.has(row.id) || controller.signal.aborted) continue;
           const timing = result.time ? slotForPhotoTime(result.time) : null;
-          const previousTimer = photoTimers.current.get(row.id);
-          if (previousTimer) clearTimeout(previousTimer);
-          const completedUrl = urlsRef.current.get(row.id);
-          photoTimers.current.set(row.id,setTimeout(()=>{
-            if (urlsRef.current.get(row.id)!==completedUrl) return;
-            if (completedUrl) URL.revokeObjectURL(completedUrl);
-            urlsRef.current.delete(row.id); filesRef.current.delete(row.id); photoTimers.current.delete(row.id);
-            setPreview(previous=>previous?.url===completedUrl?null:previous);
-            setRows(old=>old.map(item=>item.id===row.id?{...item,url:""}:item));
-          },5*60*1000));
           setRows(old=>old.map(item=>item.id===row.id?{
             ...item,state:"done",ocrValue:result.value,value:result.exactValue,
             label:result.label,key:result.label??"",slot:timing?.slot??defaultSlot,
@@ -346,7 +333,6 @@ export function CoalMeterPhotoImport({
   }
 
   function removeRow(id:string) {
-    const timer=photoTimers.current.get(id);if(timer)clearTimeout(timer);photoTimers.current.delete(id);
     controllers.current.get(id)?.abort();
     controllers.current.delete(id);
     filesRef.current.delete(id);
@@ -360,7 +346,6 @@ export function CoalMeterPhotoImport({
   }
 
   function clearAll() {
-    clearPhotoTimers();
     stopReading();
     resetKeyCheck();
     urlsRef.current.forEach(url=>URL.revokeObjectURL(url));
@@ -410,7 +395,7 @@ export function CoalMeterPhotoImport({
         <div className={styles.headingIcon}><Camera size={22} aria-hidden /></div>
         <div><p className={styles.eyebrow}>NHẬP CHỈ SỐ · {reportDate.split("-").reverse().join("/")}</p>
           <DialogTitle ref={heading} tabIndex={-1} className={styles.title}>Đọc công tơ than từ ảnh</DialogTitle>
-          <DialogDescription className={styles.description}>Ảnh đọc xong được lưu trên máy chủ 30 giờ để TKĐ đối chiếu, sau đó tự xoá. Trên màn hình này ảnh chỉ hiện 5 phút sau khi đọc. Hãy {onSave?"xác nhận và lưu theo ngày/ca.":"xác nhận điền vào bảng."}</DialogDescription>
+          <DialogDescription className={styles.description}>Ảnh đọc xong được lưu trên máy chủ 30 giờ để TKĐ đối chiếu, sau đó tự xoá. Hãy {onSave?"xác nhận và lưu theo ngày/ca.":"xác nhận điền vào bảng."}</DialogDescription>
         </div>
       </header>
       <div className={styles.body}>
@@ -475,7 +460,7 @@ export function CoalMeterPhotoImport({
               </button>
               <button type="button" disabled={savingRows} className={styles.remove} aria-label={`Xóa ảnh ${index+1}`} title="Bỏ ảnh khỏi lượt nhập" onClick={()=>removeRow(row.id)}><Trash2 size={15} aria-hidden/></button>
             </li>)}</ol>
-            <p>Ảnh trên màn hình này tự ẩn sau 5 phút; bản lưu trên máy chủ giữ 30 giờ. Xóa dòng ở đây không xóa số liệu hay ảnh đã lưu.</p>
+            <p>Ảnh đã đọc được lưu trên máy chủ 30 giờ rồi tự xoá. Xóa dòng ở đây không xóa số liệu hay ảnh đã lưu.</p>
           </nav>
           <section className={styles.editor} aria-label="Đối chiếu ảnh và nhập chỉ số">
             <div className={styles.editorHeader}><div><span className={styles.eyebrow}>ẢNH {rows.findIndex(row=>row.id===active.row.id)+1} / {rows.length}</span><h3>{active.row.key?coalMeterLabel(active.row.key):"Chọn công tơ để ghi số"}</h3></div>
@@ -487,7 +472,7 @@ export function CoalMeterPhotoImport({
             <div className={styles.comparison}>
               <figure className={styles.imageFrame}>
                 {/* eslint-disable-next-line @next/next/no-img-element -- local object URL */}
-                {active.row.url?<img src={active.row.url} alt={`Ảnh công tơ ${active.row.fileName}`}/>:<p className={styles.notice}>Ảnh đã ẩn khỏi màn hình sau 5 phút; bản lưu trên máy chủ xem ở mục “Ảnh đã lưu của bạn” (giữ 30 giờ). Chọn “Thay ảnh” nếu cần đọc lại.</p>}
+                {active.row.url?<img src={active.row.url} alt={`Ảnh công tơ ${active.row.fileName}`}/>:<p className={styles.notice}>Ảnh không còn trên màn hình; xem bản lưu ở mục “Ảnh đã lưu của bạn” (giữ 30 giờ). Chọn “Thay ảnh” nếu cần đọc lại.</p>}
                 <button type="button" disabled={!active.row.url} onClick={()=>setPreview(active.row)}><Expand size={15} aria-hidden/>Phóng to ảnh</button>
                 <figcaption>{active.row.url?"Đối chiếu tên máy cấp và dòng “Total / Material Total”.":"Ảnh đã ẩn khỏi màn hình; xem lại ở mục “Ảnh đã lưu của bạn”."}</figcaption>
               </figure>
