@@ -117,18 +117,23 @@ export function buildGoogleSheetDayPayload(
   const read = (code: string, label: string) => required(numeric(values.get(code)), label);
   const grossS1 = read("B", "Đầu cực S1"), netS1 = read("C", "Điểm bán S1"), hoursS1 = read("F", "Giờ phát S1");
   const grossS2 = read("H", "Đầu cực S2"), netS2 = read("I", "Điểm bán S2"), hoursS2 = read("L", "Giờ phát S2");
-  const rawCoalS1 = read("AE", "Than tiêu thụ S1"), rawCoalS2 = read("AF", "Than tiêu thụ S2"), heatingValue = read("AJ", "Nhiệt trị");
+  const rawCoalS1 = read("AE", "Than tiêu thụ S1"), rawCoalS2 = read("AF", "Than tiêu thụ S2");
   const coalS1 = numeric(values.get("AE_ADJ")) ?? rawCoalS1;
   const coalS2 = numeric(values.get("AF_ADJ")) ?? rawCoalS2;
+  // Cả hai tổ cùng ngừng (không phát, không đốt than) thì không có mẫu than để tính nhiệt trị:
+  // vẫn cho đẩy ngày đó (sản lượng 0, "Ngừng máy — không đánh giá"), để trống ô nhiệt trị.
+  // Chỉ cần một tổ phát điện hoặc đốt than là vẫn bắt buộc có nhiệt trị như cũ.
+  const bothUnitsStopped = netS1 === 0 && netS2 === 0 && coalS1 === 0 && coalS2 === 0;
+  const heatingValue = bothUnitsStopped ? numeric(values.get("AJ")) : read("AJ", "Nhiệt trị");
   const availableCapacityS1 = required(parseAvailableCapacity(values.get(PPA_AVAILABLE_CAPACITY_S1_CODE), "Công suất khả dụng S1"), "Công suất khả dụng S1");
   const availableCapacityS2 = required(parseAvailableCapacity(values.get(PPA_AVAILABLE_CAPACITY_S2_CODE), "Công suất khả dụng S2"), "Công suất khả dụng S2");
   const operatingEventS1 = String(values.get(PPA_OPERATING_EVENT_S1_CODE) || "").trim();
   const operatingEventS2 = String(values.get(PPA_OPERATING_EVENT_S2_CODE) || "").trim();
   const ppaS1 = required(numeric(ppa.ppaS1), "SHN PPA S1"), ppaS2 = required(numeric(ppa.ppaS2), "SHN PPA S2"), ppaPlant = required(numeric(ppa.ppaPlant), "SHN PPA NMNĐ");
 
-  const actualS1 = divide(coalS1 * heatingValue, netS1, 1 / 1000);
-  const actualS2 = divide(coalS2 * heatingValue, netS2, 1 / 1000);
-  const actualPlant = divide((coalS1 + coalS2) * heatingValue, netS1 + netS2, 1 / 1000);
+  const actualS1 = heatingValue === null ? null : divide(coalS1 * heatingValue, netS1, 1 / 1000);
+  const actualS2 = heatingValue === null ? null : divide(coalS2 * heatingValue, netS2, 1 / 1000);
+  const actualPlant = heatingValue === null ? null : divide((coalS1 + coalS2) * heatingValue, netS1 + netS2, 1 / 1000);
   const grossPlantMwh = (grossS1 + grossS2) * 1000;
   const netPlant = netS1 + netS2;
 
