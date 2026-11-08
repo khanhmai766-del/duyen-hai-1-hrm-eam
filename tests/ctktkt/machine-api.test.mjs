@@ -58,15 +58,19 @@ test('cron kiểm khóa riêng trước khi xóa; báo đúng thành công/lỗi
  const accepted=await runCoalPhotoCleanup(request(),{secret:key,cleanup});assert.equal(accepted.status,200);assert.deepEqual(await accepted.json(),{ok:true});assert.equal(calls,1);
  const failed=await runCoalPhotoCleanup(request(),{secret:key,cleanup:async()=>{throw Error('secret');}});assert.equal(failed.status,503);assert.ok(!(await failed.text()).includes('secret'));
 });
-test('dọn ảnh chỉ theo expires_at và bucket cũ, cùng một giao dịch',async()=>{
- const now=Date.parse('2026-11-04T00:00:00Z');let batches=0;
- const db={prepare:sql=>({bind:(...args)=>({sql,args})}),batch:async statements=>{
-  batches++;assert.equal(statements.length,2);
-  assert.deepEqual(statements[0],{sql:'DELETE FROM coal_meter_photos WHERE expires_at <= ?',args:[now]});
-  assert.deepEqual(statements[1],{sql:'DELETE FROM coal_photo_usage WHERE bucket < ?',args:[Math.floor(now/3600000)-24]});
-  return [{meta:{changes:2}},{meta:{changes:3}}];
- }};
- assert.deepEqual(await cleanupCoalPhotos(now,db),{photos:2,usageBuckets:3});assert.equal(batches,1);
+test('dọn ảnh: chỉ xoá ảnh hết hạn (tệp kho Server 3 trước, rồi dòng) và bucket OCR cũ, không chạm số liệu',async()=>{
+ const now=Date.parse('2026-11-04T00:00:00Z'),sqls=[],removed=[];
+ const db={prepare:sql=>({bind:(...args)=>{sqls.push({sql,args});return {
+  all:async()=>({results:[{id:'a',data:'s3:ctktkt/coal-meter-photos/2026-11-02/a.jpg'},{id:'b',data:'legacy-base64'}]}),
+  run:async()=>({meta:{changes:sql.startsWith('DELETE FROM coal_photo_usage')?3:1}}),
+ };}})};
+ const result=await cleanupCoalPhotos(now,db,{remove:async key=>{removed.push(key);},upload:async()=>{},read:async()=>Buffer.alloc(0)});
+ assert.deepEqual(result,{photos:2,usageBuckets:3});
+ assert.deepEqual(removed,['ctktkt/coal-meter-photos/2026-11-02/a.jpg']);
+ assert.deepEqual(sqls[0],{sql:'SELECT id,data FROM coal_meter_photos WHERE expires_at <= ? LIMIT 500',args:[now]});
+ assert.ok(sqls.filter(x=>x.sql.startsWith('DELETE FROM coal_meter_photos')).every(x=>x.sql==='DELETE FROM coal_meter_photos WHERE id = ? AND expires_at <= ?'&&x.args[1]===now));
+ assert.deepEqual(sqls.at(-1),{sql:'DELETE FROM coal_photo_usage WHERE bucket < ?',args:[Math.floor(now/3600000)-24]});
+ assert.ok(!sqls.some(x=>/daily_inputs/.test(x.sql)));
 });
 test('chỉ bốn cặp đường dẫn/phương thức được qua lớp cookie để tự kiểm bearer',()=>{
  for(const [path,method] of [['integration/v1/operating-data','GET'],['cron/coal-photos','GET'],['google-mirror/snapshot','GET'],['google-mirror/status','POST']]) {

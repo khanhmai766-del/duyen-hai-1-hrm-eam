@@ -142,12 +142,18 @@ Với số liệu đã có trước khi bật quy tắc ca, chỉ nhận diện 
 
 ## Công thức và file xuất khớp web cũ (08/11/2026)
 
-Web cũ (ctktkt-dashboard, commit 5c4659c) là chuẩn cho công thức, cách tính, số liệu và file xuất. Đã đưa về giống web cũ:
+Web cũ (ctktkt-dashboard, commit 5c4659c) là chuẩn cho công thức, cách tính, số liệu và file xuất, trừ các điểm ghi rõ "giữ theo web mới".
 
-- Nhiệt trị than chung nhà máy và điện tự dùng toàn nhà máy (I27/I145: tổ ngừng tính phần tự dùng vào tổ chạy) tính như web cũ; bỏ cách "loại tự dùng tổ ngừng" và "lấy nhiệt trị riêng tổ đủ số liệu".
-- File Excel Chỉ tiêu KTKT: chỉ chặn lỗi chia 0 (`IFERROR(...ERROR.TYPE=2...)`), không ghi đè công thức I25/I27/I169..K172.
+Đã đưa về giống web cũ:
+
+- File Excel Chỉ tiêu KTKT: chặn lỗi chia 0 như web cũ (`IFERROR(...ERROR.TYPE=2...)`) trên mọi sheet; I169..K172 giữ công thức gốc của mẫu.
 - File Lượng nước: suất nước khi điện phát = 0 để trống, không ghi 0.
 - PPA: ngày cả hai tổ ngừng lưu được (sản lượng 0, không đánh giá SHN), hiện trên web, file và Google Sheets như web cũ; PMIS bỏ số cũ của tổ ngừng.
 - Dán từ Excel/Google Sheets lấy giá trị gốc trong clipboard (vd. độ ẩm 8,2567 hiển thị 8,3).
 
-Khác biệt giữ lại có chủ ý: không lưu ảnh công tơ than (chỉ đọc số), giao diện/đường dẫn `/api/ctktkt/*`, đăng nhập dùng chung, PostgreSQL, phân công nhập và yêu cầu sửa theo ca.
+Giữ theo web mới (quyết định 08/11/2026):
+
+- Nhiệt trị than chung nhà máy: thiếu số của một tổ thì tổ đủ số dùng nhiệt trị của chính tổ đó.
+- Điện tự dùng toàn nhà máy và tỷ lệ I27/I145: loại phần điện nhận lưới cấp cho tổ ngừng. File Excel ghi công thức tương ứng ở I25/I27 (`ctktkt-auxiliary-export-rules.ts`). Bảng chỉ tiêu hiện "Ngừng máy — không đánh giá"/"Thiếu dữ liệu" cho suất hao và tỷ lệ tự dùng.
+- Ảnh công tơ than: lưu trên kho tệp Server 3 (S3, thư mục `ctktkt/coal-meter-photos/`) 30 giờ kể từ mốc ca để TKĐ đối chiếu ("Đối chiếu ảnh" ở bảng công tơ than), sau đó tự xoá (xoá tệp trước rồi xoá dòng). Bảng `ctktkt_coal_meter_photos` chỉ giữ khoá ảnh (`s3:...`) và kết quả đọc, không giữ nội dung ảnh. Dọn ảnh chạy mỗi lần mở/đọc/lưu ảnh và qua `/api/ctktkt/cron/coal-photos` (Bearer CRON_SECRET). Tối đa 600 ảnh còn hạn. Kho tệp lỗi thì vẫn trả số đọc được, báo chưa lưu ảnh.
+- Giao diện, đường dẫn `/api/ctktkt/*`, đăng nhập dùng chung, PostgreSQL, phân công nhập và yêu cầu sửa theo ca.

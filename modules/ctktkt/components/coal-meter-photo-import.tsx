@@ -92,7 +92,7 @@ async function readPhoto(file: File, reportDate:string, slot:CoalSlot, temporary
   if (!response.ok || !body.reading) throw new Error(body.error || "Không đọc được ảnh.");
   const reading = body.reading;
   const aiReasons: string[] = [];
-  if(body.warning) aiReasons.push(body.warning);
+  if(!body.photo) aiReasons.push(body.warning || "Chưa lưu ảnh đối chiếu trên máy chủ.");
   if (reading.screen_type === "no_total_visible") aiReasons.push("Màn hình trong ảnh không hiện chỉ số tổng");
   if (reading.screen_type === "not_a_meter") aiReasons.push("Ảnh không phải màn hình công tơ than");
   if (reading.confidence !== "high") aiReasons.push(`AI chưa chắc chắn${reading.note ? `: ${reading.note}` : ""}`);
@@ -155,6 +155,9 @@ export function CoalMeterPhotoImport({
   const replaceId = useRef<string|null>(null);
   const filesRef = useRef(new Map<string,File>());
   const urlsRef = useRef(new Map<string,string>());
+  const [archive,setArchive]=useState<{id:string;slot:string;reading:VisionReading;expiresAt:number}[]>([]);
+  const [archiveError,setArchiveError]=useState("");
+  const [archiveVersion,setArchiveVersion]=useState(0);
   const photoTimers = useRef(new Map<string,ReturnType<typeof setTimeout>>());
   function clearPhotoTimers() { photoTimers.current.forEach(timer=>clearTimeout(timer)); photoTimers.current.clear(); }
   const batch = useRef(0);
@@ -228,6 +231,18 @@ export function CoalMeterPhotoImport({
       if(keyCheckController.current===controller)keyCheckController.current=null;
     }
   }
+  useEffect(()=>{
+    if(!open) return;
+    const controller=new AbortController();
+    request(`/api/ctktkt/coal-meter-photos?date=${encodeURIComponent(reportDate)}`,{signal:controller.signal,cache:"no-store"})
+      .then(async response=>{
+        if(!response.ok) throw new Error("Chưa tải được ảnh lưu.");
+        return response.json() as Promise<{photos:typeof archive}>;
+      }).then(body=>{setArchive(body.photos||[]);setArchiveError("");})
+      .catch(()=>{if(!controller.signal.aborted)setArchiveError("Chưa tải được ảnh đã lưu. Có thể thử tải lại bên dưới.");});
+    return ()=>controller.abort();
+  },[open,reportDate,archiveVersion,request]);
+
   const reviewed = useMemo(() => rows.map(row => {
     const slot = row.slot || null;
     const value = row.value.trim() === "" ? null : Number(row.value.replace(",", "."));
@@ -326,7 +341,7 @@ export function CoalMeterPhotoImport({
     };
     try { await Promise.all(Array.from({length:Math.min(PARALLEL_READS,queue.length)},worker)); }
     finally {
-      if (generation === batch.current) { setBusy(false); }
+      if (generation === batch.current) { setBusy(false); setArchiveVersion(v=>v+1); }
     }
   }
 
@@ -395,7 +410,7 @@ export function CoalMeterPhotoImport({
         <div className={styles.headingIcon}><Camera size={22} aria-hidden /></div>
         <div><p className={styles.eyebrow}>NHẬP CHỈ SỐ · {reportDate.split("-").reverse().join("/")}</p>
           <DialogTitle ref={heading} tabIndex={-1} className={styles.title}>Đọc công tơ than từ ảnh</DialogTitle>
-          <DialogDescription className={styles.description}>Ảnh chỉ dùng để đọc số, không lưu trên web. Ảnh tạm giữ 5 phút sau khi đọc để đối chiếu, sau đó tự bỏ. Hãy {onSave?"xác nhận và lưu theo ngày/ca.":"xác nhận điền vào bảng."}</DialogDescription>
+          <DialogDescription className={styles.description}>Ảnh đọc xong được lưu trên máy chủ 30 giờ để TKĐ đối chiếu, sau đó tự xoá. Trên màn hình này ảnh chỉ hiện 5 phút sau khi đọc. Hãy {onSave?"xác nhận và lưu theo ngày/ca.":"xác nhận điền vào bảng."}</DialogDescription>
         </div>
       </header>
       <div className={styles.body}>
@@ -460,7 +475,7 @@ export function CoalMeterPhotoImport({
               </button>
               <button type="button" disabled={savingRows} className={styles.remove} aria-label={`Xóa ảnh ${index+1}`} title="Bỏ ảnh khỏi lượt nhập" onClick={()=>removeRow(row.id)}><Trash2 size={15} aria-hidden/></button>
             </li>)}</ol>
-            <p>Ảnh chỉ giữ tạm 5 phút sau khi đọc rồi tự bỏ. Xóa dòng ở đây không xóa số liệu đã lưu trong bảng.</p>
+            <p>Ảnh trên màn hình này tự ẩn sau 5 phút; bản lưu trên máy chủ giữ 30 giờ. Xóa dòng ở đây không xóa số liệu hay ảnh đã lưu.</p>
           </nav>
           <section className={styles.editor} aria-label="Đối chiếu ảnh và nhập chỉ số">
             <div className={styles.editorHeader}><div><span className={styles.eyebrow}>ẢNH {rows.findIndex(row=>row.id===active.row.id)+1} / {rows.length}</span><h3>{active.row.key?coalMeterLabel(active.row.key):"Chọn công tơ để ghi số"}</h3></div>
@@ -472,9 +487,9 @@ export function CoalMeterPhotoImport({
             <div className={styles.comparison}>
               <figure className={styles.imageFrame}>
                 {/* eslint-disable-next-line @next/next/no-img-element -- local object URL */}
-                {active.row.url?<img src={active.row.url} alt={`Ảnh công tơ ${active.row.fileName}`}/>:<p className={styles.notice}>Ảnh tạm đã hết 5 phút và được bỏ. Web chỉ giữ kết quả số; chọn “Thay ảnh” nếu cần đọc lại.</p>}
+                {active.row.url?<img src={active.row.url} alt={`Ảnh công tơ ${active.row.fileName}`}/>:<p className={styles.notice}>Ảnh đã ẩn khỏi màn hình sau 5 phút; bản lưu trên máy chủ xem ở mục “Ảnh đã lưu của bạn” (giữ 30 giờ). Chọn “Thay ảnh” nếu cần đọc lại.</p>}
                 <button type="button" disabled={!active.row.url} onClick={()=>setPreview(active.row)}><Expand size={15} aria-hidden/>Phóng to ảnh</button>
-                <figcaption>{active.row.url?"Đối chiếu tên máy cấp và dòng “Total / Material Total”.":"Chỉ giữ kết quả nhận dạng; không lưu ảnh trên web."}</figcaption>
+                <figcaption>{active.row.url?"Đối chiếu tên máy cấp và dòng “Total / Material Total”.":"Ảnh đã ẩn khỏi màn hình; xem lại ở mục “Ảnh đã lưu của bạn”."}</figcaption>
               </figure>
               <div className={styles.reading}>
                 {active.unitIssue&&<div role="alert" className={styles.error}><span><strong>Ảnh khác tổ máy đã chọn</strong><p>{active.unitIssue}</p><button type="button" disabled={locked} onClick={()=>removeRow(active.row.id)}>Bỏ ảnh khác tổ</button></span></div>}
@@ -516,10 +531,15 @@ export function CoalMeterPhotoImport({
           {onSave&&<div className={styles.reviewActions}><p>Lưu đúng ngày/ca ở trên. Số liệu được đọc lại từ máy chủ để xác nhận.</p><button type="button" className={styles.primary} disabled={locked||!writable.length} onClick={()=>void saveConfirmed()}>{savingRows?"Đang lưu…":`Xác nhận và lưu ${writable.length} chỉ số`}</button></div>}
         </section>}
 
-
+        <details className={styles.archive}><summary>Ảnh đã lưu của bạn · {archive.length} ảnh còn hạn</summary>
+          <p>Ảnh lưu trên máy chủ 30 giờ kể từ mốc ca để TKĐ đối chiếu, sau đó tự xoá. Hết hạn chỉ xoá ảnh, số liệu được giữ lại.</p>
+          {archiveError&&<p role="alert" className={styles.error}>{archiveError}</p>}
+          <button type="button" onClick={()=>setArchiveVersion(v=>v+1)}><RefreshCw size={14} aria-hidden/>Tải lại ảnh đã lưu</button>
+          <div className={styles.archiveItems}>{[...archive].sort((a,b)=>compareCoalMeterOrder({key:parseMeterLabel(a.reading.meter_label||""),slot:a.slot},{key:parseMeterLabel(b.reading.meter_label||""),slot:b.slot})).map(photo=><button type="button" key={photo.id} onClick={()=>setPreview({url:`/api/ctktkt/coal-meter-photos?id=${photo.id}`,fileName:photo.reading.meter_label||"Ảnh đã lưu"})}><strong>{photo.reading.meter_label||"Chưa rõ máy cấp"}</strong><span>{photo.reading.total_display||"—"} t · {photo.slot}h</span></button>)}</div>
+        </details>
       </div>
       <footer className={styles.footer}>
-        <p><strong>{writable.length} chỉ số đã xác nhận</strong><span>{onSave?`Lưu cho ${selectedUnit} · ngày ${reportDate.split("-").reverse().join("/")} · chỉ lưu số liệu, không lưu ảnh`:'Sau khi điền, bấm “Lưu số liệu” ở bảng chính.'}</span></p>
+        <p><strong>{writable.length} chỉ số đã xác nhận</strong><span>{onSave?`Lưu cho ${selectedUnit} · ngày ${reportDate.split("-").reverse().join("/")} · giữ ảnh để đối chiếu`:'Sau khi điền, bấm “Lưu số liệu” ở bảng chính.'}</span></p>
         <div><button type="button" disabled={savingRows} onClick={()=>changeOpen(false)}>Đóng{busy?" / dừng đọc":""}</button>{onSave?<button type="button" className={styles.primary} disabled={locked||!writable.length} onClick={()=>void saveConfirmed()}>{savingRows?"Đang lưu…":`Lưu ${writable.length} chỉ số`} <ArrowRight size={16} aria-hidden/></button>:<button type="button" className={styles.primary} disabled={locked||!writable.length} onClick={apply}>Điền {writable.length} chỉ số <ArrowRight size={16} aria-hidden/></button>}</div>
       </footer>
     </DialogContent>

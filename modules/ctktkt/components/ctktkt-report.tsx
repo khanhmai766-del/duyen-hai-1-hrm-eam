@@ -1,4 +1,5 @@
 "use client";
+import { ctktktMetricDisplay } from "../lib/ctktkt-report";
 import { ReportCorrections } from "./report-corrections";
 import { useCtktktRequest, useCtktktDownload } from "@/hooks/useCtktkt";
 
@@ -22,11 +23,14 @@ import {
   Mail,
   Camera,
   FileSpreadsheet,
+  Images,
 } from "lucide-react";
 import { DateField } from "@/modules/ctktkt/components/ui/date-field";
 import {saveReviewedCoalEntries} from "@/modules/ctktkt/lib/coal-photo-save";
 const CtktktEmailModal=dynamic(()=>import("@/modules/ctktkt/components/ctktkt-email-modal").then(module=>module.CtktktEmailModal),{ssr:false});
 const CoalMeterPhotoImport=dynamic(()=>import("@/modules/ctktkt/components/coal-meter-photo-import").then(module=>module.CoalMeterPhotoImport),{ssr:false});
+import {canReviewCoalPhotos} from "@/modules/ctktkt/lib/coal-photo-review";
+const CoalMeterPhotoReview=dynamic(()=>import("@/modules/ctktkt/components/coal-meter-photo-review").then(module=>module.CoalMeterPhotoReview),{ssr:false});
 import { calculateCoalStock24h, calculatePmisCoalStockOpening, COAL_STOCK_24H_START_CELL } from "@/modules/ctktkt/lib/coal-stock";
 import { useSessionUser } from "@/modules/ctktkt/components/session-context";
 import { acknowledgeReportDraft, mergeReportDraft, pruneReportDrafts, readReportDraft, reportDraftKey, writeReportDraft } from "@/modules/ctktkt/lib/report-draft";
@@ -286,6 +290,7 @@ export function CtktktReport() {
   const [exportMissingItems, setExportMissingItems] = useState<MissingDataItem[]>([]);
   const [pendingReportOutput, setPendingReportOutput] = useState<"excel" | "email" | null>(null);
   const [coalPhotoOpen, setCoalPhotoOpenState] = useState(false);
+  const [coalReviewUnit,setCoalReviewUnit]=useState<"S1"|"S2"|null>(null);
   const [coalPhotoMounted,setCoalPhotoMounted]=useState(false);
   const setCoalPhotoOpen=(open:boolean)=>{if(open)setCoalPhotoMounted(true);setCoalPhotoOpenState(open);};
   const canEditCoalCell = useCallback((cell: string) => canEditSelectedDate && canEditCtktktField(user, cell), [user, canEditSelectedDate]);
@@ -1335,22 +1340,22 @@ export function CtktktReport() {
                     <tr key={row.key} className="hover:bg-slate-50/70">
                       <td className="p-2 font-medium text-slate-800">{row.label}</td>
                       <td className="bg-cyan-50/30 p-2 text-center font-mono tabular-nums text-[#173b64] text-sm font-semibold">
-                        {format(summary.s1[row.key])}
+                        {(ctktktMetricDisplay(summary.s1, row.key) ?? format(summary.s1[row.key]))}
                       </td>
                       <td className="bg-amber-50/40 p-2 text-center font-mono tabular-nums text-amber-900 text-sm font-semibold">
-                        {meterComparisonKeys.has(row.key) ? format(meterSummary.s1[row.key]) : "—"}
+                        {meterComparisonKeys.has(row.key) ? (ctktktMetricDisplay(meterSummary.s1, row.key) ?? format(meterSummary.s1[row.key])) : "—"}
                       </td>
                       <td className="bg-cyan-50/30 p-2 text-center font-mono tabular-nums text-[#173b64] text-sm font-semibold">
-                        {format(summary.s2[row.key])}
+                        {(ctktktMetricDisplay(summary.s2, row.key) ?? format(summary.s2[row.key]))}
                       </td>
                       <td className="bg-amber-50/40 p-2 text-center font-mono tabular-nums text-amber-900 text-sm font-semibold">
-                        {meterComparisonKeys.has(row.key) ? format(meterSummary.s2[row.key]) : "—"}
+                        {meterComparisonKeys.has(row.key) ? (ctktktMetricDisplay(meterSummary.s2, row.key) ?? format(meterSummary.s2[row.key])) : "—"}
                       </td>
                       <td className="bg-blue-50/40 p-2 text-center font-mono tabular-nums text-indigo-900 text-sm font-semibold">
-                        {format(summary.plant[row.key])}
+                        {(ctktktMetricDisplay(summary.plant, row.key) ?? format(summary.plant[row.key]))}
                       </td>
                       <td className="bg-amber-50/40 p-2 text-center font-mono tabular-nums text-amber-900 text-sm font-semibold">
-                        {meterComparisonKeys.has(row.key) ? format(meterSummary.plant[row.key]) : "—"}
+                        {meterComparisonKeys.has(row.key) ? (ctktktMetricDisplay(meterSummary.plant, row.key) ?? format(meterSummary.plant[row.key])) : "—"}
                       </td>
                       <td className="p-2 text-center font-medium text-slate-500 text-xs">{row.unit}</td>
                     </tr>
@@ -2357,7 +2362,7 @@ export function CtktktReport() {
                         <button type="button" onClick={() => setCoalPhotoOpen(true)} className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-2.5 py-1 text-[11px] font-semibold text-indigo-700 hover:bg-indigo-100" title="Tải ảnh công tơ, web tự đọc số và điền vào bảng">
                           <Camera className="size-3.5" aria-hidden /> Đọc công tơ từ ảnh
                         </button>
-                        
+                        {canReviewCoalPhotos(user)&&<button type="button" onClick={()=>setCoalReviewUnit("S1")} className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-700"><Images className="size-3.5" aria-hidden/>Đối chiếu ảnh & số liệu</button>}
                         <span className="text-[11px] font-bold text-slate-800">
                           Cương vị nhập: Vận hành viên Máy nghiền S1
                         </span>
@@ -2680,7 +2685,7 @@ export function CtktktReport() {
                         <button type="button" onClick={() => setCoalPhotoOpen(true)} className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-2.5 py-1 text-[11px] font-semibold text-indigo-700 hover:bg-indigo-100" title="Tải ảnh công tơ, web tự đọc số và điền vào bảng">
                           <Camera className="size-3.5" aria-hidden /> Đọc công tơ từ ảnh
                         </button>
-                        
+                        {canReviewCoalPhotos(user)&&<button type="button" onClick={()=>setCoalReviewUnit("S2")} className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-700"><Images className="size-3.5" aria-hidden/>Đối chiếu ảnh & số liệu</button>}
                         <span className="text-[11px] font-bold text-slate-800">
                           Cương vị nhập: Vận hành viên Máy nghiền S2
                         </span>
@@ -3838,6 +3843,7 @@ export function CtktktReport() {
         />
       )}
 
+      {coalReviewUnit&&<CoalMeterPhotoReview key={`${date}-${coalReviewUnit}`} open onOpenChange={open=>{if(!open)setCoalReviewUnit(null);}} date={date} unit={coalReviewUnit} current={current}/>}
       {coalPhotoMounted&&<CoalMeterPhotoImport
         open={coalPhotoOpen}
         onOpenChange={setCoalPhotoOpen}

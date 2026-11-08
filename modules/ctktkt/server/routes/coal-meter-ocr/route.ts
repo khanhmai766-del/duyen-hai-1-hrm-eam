@@ -5,8 +5,8 @@ import { getSessionUser } from "@/modules/ctktkt/lib/auth/server";
 import { canEditCtktktGroup } from "@/modules/ctktkt/lib/ctktkt-permissions";
 import { CoalMeterVisionError } from "@/modules/ctktkt/lib/coal-meter-vision";
 import { readCoalMeterGemini } from "@/modules/ctktkt/lib/coal-meter-gemini";
-import { reserveCoalPhotoRead } from "@/modules/ctktkt/lib/coal-photo-store";
-import { coalPhotoExpiry } from "@/modules/ctktkt/lib/coal-photo-retention";
+import { reserveCoalPhotoRead, saveCoalPhoto } from "@/modules/ctktkt/lib/coal-photo-store";
+import { COAL_PHOTO_FUTURE_LIMIT_MS, coalPhotoExpiry } from "@/modules/ctktkt/lib/coal-photo-retention";
 import {parseVisionTimestamp,slotForPhotoTime} from "@/modules/ctktkt/lib/coal-meter-ocr";
 import {coalGeminiConfig} from "@/modules/ctktkt/lib/coal-gemini-config";
 import {loadSharedGemini} from "@/modules/ctktkt/lib/coal-gemini-shared-store";
@@ -45,7 +45,7 @@ export async function POST(request: Request) {
   if (!data || !MEDIA_TYPES.has(mediaType)) return fail("Ảnh không hợp lệ.", 400);
   if (data.length > MAX_BASE64_LENGTH) return fail("Ảnh quá lớn.", 413);
   const reportDate=String(body?.reportDate||""),slot=String(body?.slot||"");
-  try{if(coalPhotoExpiry(reportDate,slot)>Date.now()+40*3600000)throw new Error("future");}catch{return fail("Ngày hoặc mốc ca không hợp lệ hoặc ở tương lai.", 400);}
+  try{if(coalPhotoExpiry(reportDate,slot)>Date.now()+COAL_PHOTO_FUTURE_LIMIT_MS)throw new Error("future");}catch{return fail("Ngày hoặc mốc ca không hợp lệ hoặc ở tương lai.", 400);}
   if(!/^[A-Za-z0-9+/]+={0,2}$/.test(data)||data.length%4!==0) return fail("Mã ảnh không hợp lệ.", 400);
   const bytes=Buffer.from(data,"base64");
   const signature=mediaType==="image/jpeg"?bytes[0]===255&&bytes[1]===216&&bytes[2]===255:mediaType==="image/png"?bytes.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10])):bytes.toString("ascii",0,4)==="RIFF"&&bytes.toString("ascii",8,12)==="WEBP";
@@ -60,12 +60,23 @@ export async function POST(request: Request) {
     const reading = await readCoalMeterGemini({data,mediaType},config.key,config.model);
     const timestamp=parseVisionTimestamp(reading.photo_timestamp),timing=timestamp?slotForPhotoTime(timestamp):null;
     const photoDate=typeof body?.exifDate==="string"?body.exifDate:timing?.operatingDate;
-    const warning = photoDate && photoDate !== reportDate
-      ? "Ngày chụp khác ngày báo cáo. Kiểm tra lại ngày trước khi nhập."
-      : "";
-    // Inline image exists only for this OCR request; never persist it to DB or file storage.
+    const photoSlot=typeof body?.exifSlot==="string"?body.exifSlot:timing?.slot;
+    let photo:{id:string;expiresAt:number}|null = null;
+    let warning = "";
+    if (photoDate && photoDate !== reportDate) {
+      warning = "Chưa lưu ảnh: ngày chụp khác ngày báo cáo. Kiểm tra lại ngày trước khi nhập.";
+    } else {
+      try {
+        // Ảnh lưu trên kho tệp Server 3 trong 30 giờ để TKĐ đối chiếu, sau đó tự xoá.
+        photo = await saveCoalPhoto(user.id,reportDate,photoSlot||slot,mediaType,bytes,reading);
+        if (!photo) warning = "Chưa lưu ảnh: mốc ca này đã quá 30 giờ giữ ảnh.";
+      } catch {
+        // Giữ kết quả đọc số khi kho ảnh lỗi; không bắt người nhập gọi Gemini lại.
+        warning = "Đã đọc số nhưng chưa lưu được ảnh đối chiếu lên máy chủ. Ảnh chỉ còn trong lượt nhập này; đọc lại sau nếu cần lưu ảnh cho TKĐ.";
+      }
+    }
     // Kết quả đọc ảnh không bao giờ được lưu đệm (kể cả khi gọi route trực tiếp, không qua cổng [[...path]]).
-    const response = ok({ reading, photo: null, imageStored: false, warning });
+    const response = ok({ reading, photo, imageStored: Boolean(photo), warning });
     response.headers.set("Cache-Control", "no-store");
     return response;
   } catch (error) {

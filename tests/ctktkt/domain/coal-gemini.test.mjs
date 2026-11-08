@@ -6,10 +6,10 @@ import {readCoalMeterGemini,checkCoalGeminiConnection} from "../../../modules/ct
 const reading={screen_type:"led_total",meter_label:"1A1",total_display:"8939.810",total_unit:"t",photo_timestamp:null,confidence:"high",note:""};
 function mock(result,status=200){return async()=>new Response(JSON.stringify(result),{status,headers:{"Content-Type":"application/json"}});}
 const noWait={sleep:async()=>{}};
-test("retention follows shift endpoints not upload time, across months and leap day",()=>{
-  assert.equal(coalPhotoExpiry("2026-10-25","08"),Date.parse("2026-10-26T16:00:00+07:00"));
-  assert.equal(coalPhotoExpiry("2026-10-31","24"),Date.parse("2026-11-02T08:00:00+07:00"));
-  assert.equal(coalPhotoExpiry("2028-02-29","16"),Date.parse("2028-03-02T00:00:00+07:00"));
+test("retention keeps 30 hours from the shift endpoint (not upload time), across months and leap day",()=>{
+  assert.equal(coalPhotoExpiry("2026-10-25","08"),Date.parse("2026-10-26T14:00:00+07:00"));
+  assert.equal(coalPhotoExpiry("2026-10-31","24"),Date.parse("2026-11-02T06:00:00+07:00"));
+  assert.equal(coalPhotoExpiry("2028-02-29","16"),Date.parse("2028-03-01T22:00:00+07:00"));
   for(const [date,slot] of [["2026-02-29","08"],["2026-10-25","06"],["bad","08"]]) assert.throws(()=>coalPhotoExpiry(date,slot));
 });
 test("Gemini keeps visible digits, uses header key, returns parsed JSON",async()=>{
@@ -96,7 +96,8 @@ test("archive access is owner-scoped and expiry-gated; cleanup never deletes ope
   assert.ok(route.includes("owner_id=? AND expires_at>?"));
   assert.ok(route.includes("getSessionUser()"));
   const store=readFileSync(new URL("../../../modules/ctktkt/lib/coal-photo-store.ts",import.meta.url),"utf8");
-  assert.ok(store.includes("DELETE FROM coal_meter_photos WHERE expires_at <= ?"));
+  assert.ok(store.includes("DELETE FROM coal_meter_photos WHERE id = ? AND expires_at <= ?"));
+  assert.ok(store.includes("SELECT id,data FROM coal_meter_photos WHERE expires_at <= ?"));
   assert.ok(!store.includes("DELETE FROM daily_inputs"));
   const component=readFileSync(new URL("../../../modules/ctktkt/components/coal-meter-photo-import.tsx",import.meta.url),"utf8");
   assert.ok(!component.includes("matchCoalMeter("));

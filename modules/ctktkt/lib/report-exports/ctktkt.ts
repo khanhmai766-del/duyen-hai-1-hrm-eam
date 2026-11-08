@@ -1,5 +1,6 @@
 import ExcelJS from "exceljs";
 import { guardExportZeroDivisions } from "@/modules/ctktkt/lib/export-zero-division";
+import { applyCtktktAuxiliaryExportRules } from "@/modules/ctktkt/lib/ctktkt-auxiliary-export-rules";
 import { applyCtktktExportPresentation, hideCtktktExportScratchArea } from "@/modules/ctktkt/lib/ctktkt-export-presentation";
 import { getRawDb } from "@/modules/ctktkt/db";
 import { calculateDailyProduction } from "@/modules/ctktkt/lib/daily-production-calculations";
@@ -296,6 +297,7 @@ export async function buildCtktktWorkbook(period: string, presentation = true) {
     }
     const totalSheet = workbook.getWorksheet("Tổng hợp tháng");
     if (totalSheet) totalSheet.getCell("A1").value = `Tổng hợp tháng ${month}/${year}`;
+    applyCtktktAuxiliaryExportRules(workbook);
     guardExportZeroDivisions(workbook);
     workbook.calcProperties.fullCalcOnLoad = true;
     // The Sheets mirror writes only values/formulas into its existing template.

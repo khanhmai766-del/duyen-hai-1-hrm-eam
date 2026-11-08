@@ -1,13 +1,12 @@
 import { timingSafeEqual } from "node:crypto";
 import { getRawDb } from "../db";
+import { cleanupExpiredCoalPhotos, s3CoalPhotoStorage } from "./coal-photo-store";
 
-/** Chỉ xóa ảnh đã hết hạn bốn ca và bộ đếm OCR cũ; không xóa số liệu báo cáo. */
-export async function cleanupCoalPhotos(now = Date.now(), db = getRawDb()) {
-  const result = await db.batch([
-    db.prepare("DELETE FROM coal_meter_photos WHERE expires_at <= ?").bind(now),
-    db.prepare("DELETE FROM coal_photo_usage WHERE bucket < ?").bind(Math.floor(now / 3_600_000) - 24),
-  ]);
-  return { photos: result[0].meta.changes, usageBuckets: result[1].meta.changes };
+/** Xoá ảnh công tơ than đã quá 30 giờ (cả tệp trên kho Server 3) và bộ đếm OCR cũ; không xoá số liệu báo cáo. */
+export async function cleanupCoalPhotos(now = Date.now(), db = getRawDb(), storage = s3CoalPhotoStorage) {
+  const photos = await cleanupExpiredCoalPhotos(now, db, storage);
+  const usage = await db.prepare("DELETE FROM coal_photo_usage WHERE bucket < ?").bind(Math.floor(now / 3_600_000) - 24).run();
+  return { photos, usageBuckets: usage.meta.changes };
 }
 
 export async function runCoalPhotoCleanup(request: Request, dependencies = {
