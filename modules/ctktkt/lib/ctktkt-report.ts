@@ -1,3 +1,4 @@
+import { electricMeterResetAdjustment } from "./ctktkt-electric-meter-reset";
 import { CTKTKT_OIL_EVENT_CONFIG, type CtktktOilEventCode } from "./ctktkt-oil-event";
 import { calculateAuxiliaryElectricity } from "./auxiliary-electricity";
 
@@ -317,12 +318,17 @@ function meterUnitKpis(
   hhvKjKg: number | null,
 ): CtktktKpis {
   const endColumn = unit === "s1" ? "AB" : "AL";
-  const grossMwh = difference(numberOf(current, `${endColumn}8`), numberOf(previous, `${endColumn}8`));
-  const netMwh = difference(numberOf(current, `${endColumn}9`), numberOf(previous, `${endColumn}9`));
+  // Công tơ reset/thay trong ngày: cộng phần hiệu chỉnh nhập tay, giống công thức bù trong file Excel.
+  const meterDelta = (row: 8 | 9 | 10 | 11) => {
+    const delta = difference(numberOf(current, `${endColumn}${row}`), numberOf(previous, `${endColumn}${row}`));
+    return delta === null ? null : delta + electricMeterResetAdjustment(current, unit === "s1" ? "S1" : "S2", row);
+  };
+  const grossMwh = meterDelta(8);
+  const netMwh = meterDelta(9);
   // Mirrors the workbook: E25/H25 = auxiliary meters 9X1 + 9X2 (E22 + E23), E27/H27 = (gross − net) / gross.
   const auxiliaryMwh = sum([
-    difference(numberOf(current, `${endColumn}10`), numberOf(previous, `${endColumn}10`)),
-    difference(numberOf(current, `${endColumn}11`), numberOf(previous, `${endColumn}11`)),
+    meterDelta(10),
+    meterDelta(11),
   ]);
   const auxiliary = calculateAuxiliaryElectricity(grossMwh, netMwh);
   const { rawCoalTonnes, adjustedCoalTonnes } = coal;

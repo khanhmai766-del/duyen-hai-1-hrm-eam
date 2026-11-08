@@ -13,6 +13,7 @@ export function shouldShowCtktktMissingField(
   // The exported workbook supplies these defaults when no override is entered.
   if (cell === "E39" || cell === "H39") return false;
   if (cell === "NH3_DCS_RESET_S1" || cell === "NH3_DCS_RESET_S2") return false;
+  if (cell.startsWith("ELEC_RESET_")) return false;
   if (cell === COAL_STOCK_24H_START_CELL) return isCoalStock24hStartEntryRequired(date);
   if (
     (PMIS_PRODUCTION_CELLS as readonly string[]).includes(cell)

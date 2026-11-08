@@ -131,6 +131,9 @@ const GROUP_CELLS: Record<CtktktFieldGroup, Set<string>> = {
     "AG9", "AI9", "AK9", "AL9",    // MBT T2
     "AG10", "AI10", "AK10", "AL10", // TD 921
     "AG11", "AI11", "AK11", "AL11", // TD 922
+    // Hiệu chỉnh công tơ điện khi reset/thay (MWh) và lý do
+    "ELEC_RESET_S1_8", "ELEC_RESET_S1_9", "ELEC_RESET_S1_10", "ELEC_RESET_S1_11", "ELEC_RESET_NOTE_S1",
+    "ELEC_RESET_S2_8", "ELEC_RESET_S2_9", "ELEC_RESET_S2_10", "ELEC_RESET_S2_11", "ELEC_RESET_NOTE_S2",
   ]),
   lo_pho_oil: new Set([
     // S1 (tấn)

@@ -158,3 +158,13 @@ Giữ theo web mới (quyết định 08/11/2026):
 - Ảnh công tơ than: lưu trên kho tệp Server 3 (S3, thư mục `ctktkt/coal-meter-photos/`) 30 giờ kể từ mốc ca để TKĐ đối chiếu ("Đối chiếu ảnh" ở bảng công tơ than), sau đó tự xoá (xoá tệp trước rồi xoá dòng). Bảng `ctktkt_coal_meter_photos` chỉ giữ khoá ảnh (`s3:...`) và kết quả đọc, không giữ nội dung ảnh. Dọn ảnh chạy mỗi lần mở/đọc/lưu ảnh và qua `/api/ctktkt/cron/coal-photos` (Bearer CRON_SECRET). Tối đa 600 ảnh còn hạn. Kho tệp lỗi thì vẫn trả số đọc được, báo chưa lưu ảnh. Hộp đọc ảnh không tự ẩn ảnh; ảnh chỉ tự xoá khi hết 30 giờ.
 - Số đọc từ ảnh ghi đầy đủ như máy đọc (không cắt còn 2 chữ số thập phân như web cũ).
 - Giao diện, đường dẫn `/api/ctktkt/*`, đăng nhập dùng chung, PostgreSQL, phân công nhập và yêu cầu sửa theo ca.
+
+## Hiệu chỉnh công tơ điện khi reset (08/11/2026)
+
+Khi công tơ điện (máy phát, MBT, tự dùng TD 9X1/9X2 của S1/S2) bị reset hoặc thay trong ngày, Trực phụ/Trực chính điện nhập
+"Hiệu chỉnh reset" (MWh) ở cột cuối bảng công tơ điện và ghi lý do. Ô: `ELEC_RESET_{S1|S2}_{8|9|10|11}`, `ELEC_RESET_NOTE_{S1|S2}`.
+
+- Lượng điện trong ngày = số 24h ngày D − số 24h ngày D-1 + hiệu chỉnh (`lib/ctktkt-electric-meter-reset.ts`).
+- File Excel ghi công thức `D21-C21+(hiệu chỉnh)` ở E20–E23 / H20–H23 và ghi chú lý do, giống cách file chuẩn cộng bù trực tiếp.
+- Ví dụ 03/11/2026: MBT T1 reset 22h → hiệu chỉnh S1 hàng 9 = 6935855,62 + 280,956 = 6936136,576; MBT T2 về 0 khi S2 ngừng → hiệu chỉnh S2 hàng 9 = 6554821,3.
+- Ô trống = 0; không báo thiếu số liệu.

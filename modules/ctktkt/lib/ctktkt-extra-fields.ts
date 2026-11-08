@@ -1,3 +1,4 @@
+import { CTKTKT_ELECTRIC_METER_RESET_CELLS, CTKTKT_ELECTRIC_METER_RESET_FIELDS, CTKTKT_ELECTRIC_METER_RESET_NOTE_FIELDS } from "./ctktkt-electric-meter-reset";
 export const CTKTKT_COAL_ADJUSTMENT_FIELDS = [
   { cell: "W28", section: "coal_meters", sectionLabel: "Hiệu chỉnh cân than", label: "S1 Ca 1 (00h-08h)", row: 28, column: 23 },
   { cell: "Y28", section: "coal_meters", sectionLabel: "Hiệu chỉnh cân than", label: "S1 Ca 2 (08h-16h)", row: 28, column: 25 },
@@ -183,6 +184,7 @@ export const CTKTKT_NH3_DCS_ADJUSTMENT_FIELDS = [
 ] as const;
 
 export const CTKTKT_TEXT_INPUT_CELLS = new Set<string>([
+  ...CTKTKT_ELECTRIC_METER_RESET_NOTE_FIELDS.map(field => field.cell),
   ...CTKTKT_COAL_ADJUSTMENT_NOTE_FIELDS.map(field => field.cell),
   ...CTKTKT_WATER_ADJUSTMENT_NOTE_FIELDS.map(field => field.cell),
   "STARTUP_UNIT",
@@ -197,6 +199,7 @@ export const CTKTKT_NON_WORKBOOK_INPUT_CELLS = new Set<string>([
   ...CTKTKT_WATER_ADJUSTMENT_FIELDS.map(field => field.cell),
   ...CTKTKT_COAL_STOCK_FIELDS.map(field => field.cell),
   ...CTKTKT_NH3_DCS_ADJUSTMENT_FIELDS.map(field => field.cell),
+  ...CTKTKT_ELECTRIC_METER_RESET_CELLS,
   "STARTUP_UNIT",
   "STARTUP_EVENT",
   "STARTUP_EVENTS_JSON",
@@ -246,6 +249,8 @@ export const CTKTKT_EXTRA_INPUT_FIELDS = [
   ...CTKTKT_WATER_ADJUSTMENT_NOTE_FIELDS,
   ...CTKTKT_COAL_STOCK_FIELDS,
   ...CTKTKT_NH3_DCS_ADJUSTMENT_FIELDS,
+  ...CTKTKT_ELECTRIC_METER_RESET_FIELDS,
+  ...CTKTKT_ELECTRIC_METER_RESET_NOTE_FIELDS,
   ...CTKTKT_OPERATING_HOURS_FIELDS,
   ...CTKTKT_COAL_BLEND_FIELDS,
 ] as const;

@@ -1,5 +1,6 @@
 "use client";
 import { ctktktMetricDisplay } from "../lib/ctktkt-report";
+import { CTKTKT_ELECTRIC_METER_RESET_CELLS } from "../lib/ctktkt-electric-meter-reset";
 import { ReportCorrections } from "./report-corrections";
 import { useCtktktRequest, useCtktktDownload } from "@/hooks/useCtktkt";
 
@@ -553,6 +554,7 @@ export function CtktktReport() {
     const optionalCells = new Set([
       "COAL_ADJ_NOTE_S1", "COAL_ADJ_NOTE_S2", "WATER_ADJ_NOTE_S1", "WATER_ADJ_NOTE_S2",
       "WATER_ADJ_S1", "WATER_ADJ_S2", "W28", "Y28", "AA28", "AG28", "AI28", "AK28",
+      ...CTKTKT_ELECTRIC_METER_RESET_CELLS,
     ]);
     const seen = new Set<string>();
     const cells = new Set<string>();
@@ -2214,6 +2216,7 @@ export function CtktktReport() {
                             <th className="p-1.5 text-center font-bold">14h</th>
                             <th className="p-1.5 text-center font-bold">22h</th>
                             <th className="p-1.5 text-center font-bold">24h</th>
+                            <th className="p-1.5 text-center font-bold" title="Nhập khi công tơ bị reset/thay trong ngày: lượng điện cần cộng thêm vào (số cuối ngày − số cuối ngày D-1)">Hiệu chỉnh reset</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100 font-mono">
@@ -2234,6 +2237,9 @@ export function CtktktReport() {
                             <td className="p-1.5 text-center text-xs">
                               {renderCellInput("AB8", { group: "tpd_tcd_power" })}
                             </td>
+                            <td className="p-1.5 text-center text-xs">
+                              {renderCellInput("ELEC_RESET_S1_8", { group: "tpd_tcd_power", placeholder: "0", isNumber: true })}
+                            </td>
                           </tr>
                           <tr>
                             <td className="p-2 font-semibold text-slate-800 font-sans">
@@ -2251,6 +2257,9 @@ export function CtktktReport() {
                             </td>
                             <td className="p-1.5 text-center text-xs">
                               {renderCellInput("AB9", { group: "tpd_tcd_power" })}
+                            </td>
+                            <td className="p-1.5 text-center text-xs">
+                              {renderCellInput("ELEC_RESET_S1_9", { group: "tpd_tcd_power", placeholder: "0", isNumber: true })}
                             </td>
                           </tr>
                           <tr>
@@ -2270,6 +2279,9 @@ export function CtktktReport() {
                             <td className="p-1.5 text-center text-xs">
                               {renderCellInput("AB10", { group: "tpd_tcd_power" })}
                             </td>
+                            <td className="p-1.5 text-center text-xs">
+                              {renderCellInput("ELEC_RESET_S1_10", { group: "tpd_tcd_power", placeholder: "0", isNumber: true })}
+                            </td>
                           </tr>
                           <tr>
                             <td className="p-2 font-semibold text-slate-800 font-sans">
@@ -2287,6 +2299,15 @@ export function CtktktReport() {
                             </td>
                             <td className="p-1.5 text-center text-xs">
                               {renderCellInput("AB11", { group: "tpd_tcd_power" })}
+                            </td>
+                            <td className="p-1.5 text-center text-xs">
+                              {renderCellInput("ELEC_RESET_S1_11", { group: "tpd_tcd_power", placeholder: "0", isNumber: true })}
+                            </td>
+                          </tr>
+                          <tr>
+                            <td className="p-2 font-semibold text-slate-800 font-sans">Lý do hiệu chỉnh công tơ điện</td>
+                            <td colSpan={6} className="p-1.5 text-xs font-sans">
+                              {renderCellInput("ELEC_RESET_NOTE_S1", { group: "tpd_tcd_power", placeholder: "Vd. Công tơ MBT reset lúc 22h: bù số trước reset + điện đi qua", maxLength: 500 })}
                             </td>
                           </tr>
                         </tbody>
@@ -2537,6 +2558,7 @@ export function CtktktReport() {
                             <th className="p-1.5 text-center font-bold">14h</th>
                             <th className="p-1.5 text-center font-bold">22h</th>
                             <th className="p-1.5 text-center font-bold">24h</th>
+                            <th className="p-1.5 text-center font-bold" title="Nhập khi công tơ bị reset/thay trong ngày: lượng điện cần cộng thêm vào (số cuối ngày − số cuối ngày D-1)">Hiệu chỉnh reset</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100 font-mono">
@@ -2557,6 +2579,9 @@ export function CtktktReport() {
                             <td className="p-1.5 text-center text-xs">
                               {renderCellInput("AL8", { group: "tpd_tcd_power" })}
                             </td>
+                            <td className="p-1.5 text-center text-xs">
+                              {renderCellInput("ELEC_RESET_S2_8", { group: "tpd_tcd_power", placeholder: "0", isNumber: true })}
+                            </td>
                           </tr>
                           <tr>
                             <td className="p-2 font-semibold text-slate-800 font-sans">
@@ -2574,6 +2599,9 @@ export function CtktktReport() {
                             </td>
                             <td className="p-1.5 text-center text-xs">
                               {renderCellInput("AL9", { group: "tpd_tcd_power" })}
+                            </td>
+                            <td className="p-1.5 text-center text-xs">
+                              {renderCellInput("ELEC_RESET_S2_9", { group: "tpd_tcd_power", placeholder: "0", isNumber: true })}
                             </td>
                           </tr>
                           <tr>
@@ -2593,6 +2621,9 @@ export function CtktktReport() {
                             <td className="p-1.5 text-center text-xs">
                               {renderCellInput("AL10", { group: "tpd_tcd_power" })}
                             </td>
+                            <td className="p-1.5 text-center text-xs">
+                              {renderCellInput("ELEC_RESET_S2_10", { group: "tpd_tcd_power", placeholder: "0", isNumber: true })}
+                            </td>
                           </tr>
                           <tr>
                             <td className="p-2 font-semibold text-slate-800 font-sans">
@@ -2610,6 +2641,15 @@ export function CtktktReport() {
                             </td>
                             <td className="p-1.5 text-center text-xs">
                               {renderCellInput("AL11", { group: "tpd_tcd_power" })}
+                            </td>
+                            <td className="p-1.5 text-center text-xs">
+                              {renderCellInput("ELEC_RESET_S2_11", { group: "tpd_tcd_power", placeholder: "0", isNumber: true })}
+                            </td>
+                          </tr>
+                          <tr>
+                            <td className="p-2 font-semibold text-slate-800 font-sans">Lý do hiệu chỉnh công tơ điện</td>
+                            <td colSpan={6} className="p-1.5 text-xs font-sans">
+                              {renderCellInput("ELEC_RESET_NOTE_S2", { group: "tpd_tcd_power", placeholder: "Vd. Công tơ MBT reset lúc 22h: bù số trước reset + điện đi qua", maxLength: 500 })}
                             </td>
                           </tr>
                         </tbody>

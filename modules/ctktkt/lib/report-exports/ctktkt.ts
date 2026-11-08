@@ -1,6 +1,7 @@
 import ExcelJS from "exceljs";
 import { guardExportZeroDivisions } from "@/modules/ctktkt/lib/export-zero-division";
 import { applyCtktktAuxiliaryExportRules } from "@/modules/ctktkt/lib/ctktkt-auxiliary-export-rules";
+import { applyElectricMeterResetExport } from "@/modules/ctktkt/lib/ctktkt-electric-meter-reset";
 import { applyCtktktExportPresentation, hideCtktktExportScratchArea } from "@/modules/ctktkt/lib/ctktkt-export-presentation";
 import { getRawDb } from "@/modules/ctktkt/db";
 import { calculateDailyProduction } from "@/modules/ctktkt/lib/daily-production-calculations";
@@ -292,6 +293,7 @@ export async function buildCtktktWorkbook(period: string, presentation = true) {
       applyBcsxLinks(sheet, date);
       applyWaterLinks(sheet, date);
       applyWaterAdjustments(sheet, row);
+      applyElectricMeterResetExport(sheet, row);
       applyCoalAdjustmentNotes(sheet, row);
       applyDateLabels(sheet, date, true);
     }
