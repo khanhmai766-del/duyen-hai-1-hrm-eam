@@ -208,6 +208,25 @@ export function calculateCoalShiftDetails(
   });
 }
 
+/** Explicit operator confirmation, using the existing audited adjustment cells. */
+export function createZeroCoalConsumptionCorrection(
+  current: CtktktDayEntries,
+  previous: CtktktDayEntries | undefined,
+  unit: "S1" | "S2",
+  shift: 1 | 2 | 3,
+): CtktktDayEntries {
+  const isS1 = unit === "S1";
+  const cell = (isS1 ? ["W28", "Y28", "AA28"] : ["AG28", "AI28", "AK28"])[shift - 1];
+  const raw = coalRawShifts(isS1 ? "s1" : "s2", { ...current, [cell]: "0" }, previous)[shift - 1];
+  if (raw === null) throw new Error("Chưa đủ chỉ số cân để xác định hiệu chỉnh. Không tự điền số 0.");
+  const adjustment = -raw;
+  const noteCell = `COAL_ADJ_NOTE_${unit}`;
+  const reason = `Ca ${shift}: xác nhận tổ ngừng, không tiêu thụ than; bù chênh cân ${raw.toLocaleString("vi-VN", { maximumFractionDigits: 6 })} tấn, giữ chỉ số gốc.`;
+  const note = [current[noteCell]?.trim(), reason].filter(Boolean).join(" | ");
+  if (note.length > 500) throw new Error("Lý do hiệu chỉnh quá 500 ký tự. Kiểm tra ghi chú hiệu chỉnh trước khi xác nhận.");
+  return { [cell]: adjustment.toLocaleString("en-US", { useGrouping: false, maximumSignificantDigits: 21 }), [noteCell]: note };
+}
+
 export function calculateDailyAverageMoisture(
   current: CtktktDayEntries,
   previous?: CtktktDayEntries,

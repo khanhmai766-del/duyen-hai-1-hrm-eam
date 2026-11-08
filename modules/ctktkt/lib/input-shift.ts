@@ -7,3 +7,12 @@ export function inputShiftStart(now = new Date()): string {
 export function canSelfCorrect(owner:string|null,shiftStart:string|Date|null,actor:string,now=new Date()) {
  return owner===actor&&shiftStart!==null&&new Date(shiftStart).toISOString()===inputShiftStart(now);
 }
+
+/** The 22:00 D–06:00 D+1 shift finalizes all inputs of reporting date D. */
+export function canFinalizeReportDate(date: string, now = new Date()): boolean {
+ const local = new Date(now.getTime() + 7 * 3600000);
+ const hour = local.getUTCHours();
+ if (hour >= 6 && hour < 22) return false;
+ if (hour < 6) local.setUTCDate(local.getUTCDate() - 1);
+ return date === local.toISOString().slice(0, 10);
+}
