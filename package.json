@@ -63,7 +63,9 @@
     "mobile:audit": "node scripts/check/mobile-audit.mjs",
     "lint:dead": "knip",
     "tcms:migrate": "node scripts/data-ops/tcms-migrate.mjs",
-    "test:tcms": "tsx --test tests/tcms/*.test.ts"
+    "test:tcms": "tsx --test tests/tcms/*.test.ts",
+    "test:ctktkt": "tsx --test tests/ctktkt/*.test.mjs tests/ctktkt/domain/*.test.mjs",
+    "test:ctktkt:contract": "tsx scripts/verify/ctktkt-contract.mjs"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
