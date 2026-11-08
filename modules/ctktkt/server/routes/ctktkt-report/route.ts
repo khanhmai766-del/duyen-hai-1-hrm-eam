@@ -8,10 +8,9 @@ import { isAdminUser } from "@/modules/ctktkt/lib/auth/session";
 import { canEditAnyCtktktField, canEditCtktktField, canProposeCtktktCorrection } from "@/modules/ctktkt/lib/ctktkt-permissions";
 import { BCSX_COAL_STOCK_24H_CODE, CTKTKT_BCSX_LINKED_CELLS, CTKTKT_COAL_STOCK_24H_CELL, deriveCtktktCellsFromBcsx, type CtktktBcsxReading } from "@/modules/ctktkt/lib/ctktkt-bcsx-link";
 import { CTKTKT_WATER_LINKED_CELLS, ctktktWaterLogFromRow, deriveCtktktCellsFromWater } from "@/modules/ctktkt/lib/ctktkt-water-link";
-import { CTKTKT_INPUT_FIELDS } from "@/modules/ctktkt/lib/ctktkt-fields.generated";
-import { CTKTKT_EXTRA_INPUT_FIELDS, CTKTKT_TEXT_INPUT_CELLS, normalizeCtktktInputValue } from "@/modules/ctktkt/lib/ctktkt-extra-fields";
+import { REPORT_WRITABLE_CELLS } from "@/modules/ctktkt/lib/report-writable-fields";
+import { CTKTKT_TEXT_INPUT_CELLS, normalizeCtktktInputValue } from "@/modules/ctktkt/lib/ctktkt-extra-fields";
 import { applyCtktktFixedValue } from "@/modules/ctktkt/lib/ctktkt-defaults";
-import { NH3_DCS_START_METER_CELLS } from "@/modules/ctktkt/lib/ctktkt-report";
 import { ensureWaterSchema } from "@/modules/ctktkt/lib/water-report/schema";
 import { COAL_STOCK_24H_START_CELL } from "@/modules/ctktkt/lib/coal-stock";
 import { CTKTKT_OPERATING_HOURS_CELLS } from "@/modules/ctktkt/lib/ctktkt-extra-fields";
@@ -20,12 +19,7 @@ import { CTKTKT_OPERATION_EVENTS_CELL, normalizeCtktktOperationEvents } from "@/
 import { reportQueryRange } from "@/modules/ctktkt/lib/report-read-range";
 import {coalEntriesMatchUnit} from "@/modules/ctktkt/lib/coal-meter-ocr";
 
-const fieldCells = new Set<string>([
-  ...CTKTKT_INPUT_FIELDS.map(field => field.cell),
-  ...CTKTKT_EXTRA_INPUT_FIELDS.map(field => field.cell),
-].filter(cell => !CTKTKT_BCSX_LINKED_CELLS.has(cell)
-  && !CTKTKT_WATER_LINKED_CELLS.has(cell)
-  && !NH3_DCS_START_METER_CELLS.has(cell)));
+const fieldCells = REPORT_WRITABLE_CELLS;
 const datePattern = /^(19|20|21)\d{2}-(0[1-9]|1[0-2])-([0-2]\d|3[01])$/;
 
 export async function GET(request: Request) {

@@ -16,8 +16,8 @@ test('local PostgreSQL workflow uses isolated TEMP tables; no live operational r
  await saveReportWithShift(user,date,[{cell:'X16',value:'16117.496'}],undefined,morning);
  await saveReportWithShift(user,date,[{cell:'X16',value:'16117.4960'}],undefined,morning);
  assert.equal((await c.query("SELECT value FROM pg_temp.ctktkt_daily_inputs WHERE field_code='KTKT:X16'")).rows[0].value,'16117.4960');
- await assert.rejects(()=>saveReportWithShift(other,date,[{cell:'X16',value:'2'}],undefined,morning),/Đã hết ca/);
- await assert.rejects(()=>saveReportWithShift(user,date,[{cell:'X16',value:'2'}],undefined,afternoon),/Đã hết ca/);
+ await assert.rejects(()=>saveReportWithShift(other,date,[{cell:'X16',value:'2'}],undefined,morning),/Ngoài thời gian chốt ngày/);
+ await assert.rejects(()=>saveReportWithShift(user,date,[{cell:'X16',value:'2'}],undefined,afternoon),/Ngoài thời gian chốt ngày/);
  await assert.rejects(()=>saveReportWithShift(other,date,[{cell:'X16',value:'2'}],'reason why',afternoon),/chính mình/);
  const pending=await saveReportWithShift(user,date,[{cell:'X16',value:'16117.499'}],'Đọc nhầm chữ số cuối',afternoon);assert.equal(pending.requested,true);
  assert.equal((await c.query("SELECT value FROM pg_temp.ctktkt_daily_inputs WHERE field_code='KTKT:X16'")).rows[0].value,'16117.4960');

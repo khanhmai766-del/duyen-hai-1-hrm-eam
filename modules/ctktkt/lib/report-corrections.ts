@@ -4,7 +4,7 @@ import {randomUUID} from "node:crypto";
 import type {PoolClient} from "pg";
 import {getPool} from "../db";
 import type {SessionUser} from "./auth/session";
-import {canSelfCorrect,inputShiftStart} from "./input-shift";
+import {canSelfCorrect,inputShiftStart,canFinalizeReportDate} from "./input-shift";
 import {canEditCtktktField} from "./ctktkt-permissions";
 type Entry={cell:string;value:string};
 type Snapshot=Entry & {oldValue:string|null;oldNote:string|null;oldUpdatedAt:string|null;auditId:string};
@@ -52,7 +52,11 @@ export async function saveReportWithShift(user:SessionUser,date:string,entries:E
  for(const e of edits){const owner=await ownership(c,date,e.cell);if(!isShiftInputCoordinator(user)&&owner.rows[0]&&owner.rows[0].owner_id!==user.id)throw new CorrectionError('Chỉ được yêu cầu sửa số liệu do chính mình nhập.',403);if(!owner.rowCount){const original=await c.query("SELECT actor_id,action FROM public.ctktkt_daily_input_audit WHERE operating_date=$1 AND field_code=$2 ORDER BY id ASC LIMIT 1",[date,'KTKT:'+e.cell]);if(!isShiftInputCoordinator(user)&&original.rows[0]?.action==='insert'&&original.rows[0].actor_id!==user.id)throw new CorrectionError('Nhật ký xác định số liệu do tài khoản khác nhập. Chưa gửi yêu cầu.',403);}if(e.oldValue===null&&!owner.rowCount)throw new CorrectionError('Yêu cầu chỉnh sửa chỉ áp dụng cho số liệu đã nhập; ô chưa có số liệu cần quản trị bổ sung.',400);}
  const id=randomUUID();await c.query('INSERT INTO public.ctktkt_correction_requests(id,operating_date,requester_id,requester_name,reason,entries) VALUES($1,$2,$3,$4,$5,$6::jsonb)',[id,date,user.id,user.displayName,reason.trim(),JSON.stringify(edits)]);return {requested:true,requestId:id,saved:0};
  }
- for(const e of edits){const owner=await ownership(c,date,e.cell);if(user.role!=='admin'&&(e.oldValue!==null||owner.rowCount)&&!canSelfCorrect(owner.rows[0]?.owner_id??null,owner.rows[0]?.shift_start??null,user.id,now))throw new CorrectionError('Đã hết ca, số liệu không thuộc bạn hoặc chưa xác định người nhập cũ. Chưa lưu. Mở “Yêu cầu chỉnh sửa” để gửi quản trị duyệt.');}
+ for(const e of edits){
+ const owner=await ownership(c,date,e.cell);
+ const nightFinalization=canFinalizeReportDate(date,now)&&canEditCtktktField(user,e.cell);
+ if(user.role!=='admin'&&(e.oldValue!==null||owner.rowCount)&&!nightFinalization&&!canSelfCorrect(owner.rows[0]?.owner_id??null,owner.rows[0]?.shift_start??null,user.id,now))throw new CorrectionError('Ngoài thời gian chốt ngày (22h–06h), chỉ được tự sửa số liệu của mình trong cùng ca. Chưa lưu. Mở “Yêu cầu chỉnh sửa” để gửi quản trị duyệt.');
+ }
  await persist(c,date,edits,user,'ctktkt-report');
  for(const e of edits)await c.query('INSERT INTO public.ctktkt_input_ownership(operating_date,field_code,owner_id,shift_start) VALUES($1,$2,$3,$4) ON CONFLICT DO NOTHING',[date,'KTKT:'+e.cell,user.id,inputShiftStart(now)]);
  return {saved:edits.filter(e=>e.value!=='').length};

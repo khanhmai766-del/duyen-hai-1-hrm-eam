@@ -30,6 +30,7 @@ const CtktktEmailModal=dynamic(()=>import("@/modules/ctktkt/components/ctktkt-em
 const CoalMeterPhotoImport=dynamic(()=>import("@/modules/ctktkt/components/coal-meter-photo-import").then(module=>module.CoalMeterPhotoImport),{ssr:false});
 import { calculateCoalStock24h, calculatePmisCoalStockOpening, COAL_STOCK_24H_START_CELL } from "@/modules/ctktkt/lib/coal-stock";
 import { useSessionUser } from "@/modules/ctktkt/components/session-context";
+import { acknowledgeReportDraft, mergeReportDraft, readReportDraft, reportDraftKey, writeReportDraft } from "@/modules/ctktkt/lib/report-draft";
 import { canEditOperatingDate, defaultOperatingDate, vietnamDateIso } from "@/modules/ctktkt/lib/operating-date";
 import { isAdminUser } from "@/modules/ctktkt/lib/auth/session";
 import {
@@ -52,6 +53,7 @@ import {
   calculateNh3Summary,
   calculateNh3DcsSummary,
   calculateCoalShiftDetails,
+  createZeroCoalConsumptionCorrection,
   calculateCoalMeterShiftConsumption,
   applyNh3StartLevelCarryover,
   NH3_DCS_START_METER_CELLS,
@@ -293,10 +295,40 @@ export function CtktktReport() {
   const [syncingPmis, setSyncingPmis] = useState(false);
   const pmisRequestRef = useRef<{ id: string; timer: number; operatingDate: string } | null>(null);
   const dirtyCellsRef = useRef(new Set<string>());
+  const draftRef = useRef<{ key: string; values: CtktktDayEntries }>({ key: "", values: {} });
+  const saveInFlightRef = useRef(false);
+  const [draftWarning, setDraftWarning] = useState("");
+  const draftKey = reportDraftKey(user.id, date);
+
+  const persistDraft = useCallback(() => {
+    try {
+      writeReportDraft(window.localStorage, draftRef.current.key, draftRef.current.values);
+      setDraftWarning("");
+    } catch {
+      setDraftWarning("Trình duyệt chưa giữ được bản nháp. Hãy bấm Lưu số liệu và chờ xác nhận trước khi tải lại hoặc đóng trang.");
+    }
+  }, []);
+
+  const stageValues = useCallback((values: CtktktDayEntries, operatingDate = date) => {
+    if (draftRef.current.key !== reportDraftKey(user.id, operatingDate)) return;
+    draftRef.current.values = mergeReportDraft(draftRef.current.values, values);
+    for (const cell of Object.keys(values)) dirtyCellsRef.current.add(cell);
+    persistDraft();
+    setDirty(true);
+    setByDate(old => ({ ...old, [operatingDate]: mergeReportDraft(old[operatingDate] || {}, values) }));
+  }, [date, user.id, persistDraft]);
+
+  const acknowledgeSaved = useCallback((entries: Array<{ cell: string; value: string }>, operatingDate = date) => {
+    if (draftRef.current.key !== reportDraftKey(user.id, operatingDate)) return;
+    draftRef.current.values = acknowledgeReportDraft(draftRef.current.values, entries);
+    dirtyCellsRef.current = new Set(Object.keys(draftRef.current.values));
+    persistDraft();
+    setDirty(dirtyCellsRef.current.size > 0);
+  }, [date, user.id, persistDraft]);
 
   useEffect(() => {
     const warnBeforeLeaving = (event: BeforeUnloadEvent) => {
-      if (!dirty && !saving) return;
+      if (dirtyCellsRef.current.size === 0 && !saveInFlightRef.current && !saving) return;
       event.preventDefault();
       event.returnValue = "";
     };
@@ -372,13 +404,7 @@ export function CtktktReport() {
       for (const entry of safeEntries) {
         updates[entry.cell] = entry.value;
       }
-      setByDate(old => ({
-        ...old,
-        [request.operatingDate]: {
-          ...(old[request.operatingDate] || {}),
-          ...updates,
-        },
-      }));
+      stageValues(updates, request.operatingDate);
       try {
         const res = await ctktktRequest("/api/ctktkt/ctktkt-report", {
           method: "POST",
@@ -392,8 +418,7 @@ export function CtktktReport() {
         if (!res.ok || resJson.error) {
           throw new Error(resJson.error || "Không lưu được dữ liệu đồng bộ.");
         }
-        for (const entry of safeEntries) dirtyCellsRef.current.delete(entry.cell);
-        setDirty(dirtyCellsRef.current.size > 0);
+        acknowledgeSaved(safeEntries, request.operatingDate);
         setMessage(`Đã đồng bộ và lưu thành công ${safeEntries.length} chỉ tiêu PMIS Sản lượng & 02-PĐ (hàng Duyên Hải 1) từ QLKT cho ngày ${request.operatingDate.split("-").reverse().join("/")}!`);
         setError("");
       } catch (err) {
@@ -412,7 +437,7 @@ export function CtktktReport() {
         pmisRequestRef.current = null;
       }
     };
-  }, [ctktktRequest]);
+  }, [ctktktRequest, stageValues, acknowledgeSaved]);
 
   const period = date.slice(0, 7);
 
@@ -439,16 +464,34 @@ export function CtktktReport() {
     async function run(){
       setLoading(true);setExtrasState("loading");setHoursMissingDates([]);
       try{
-        // Gửi cả 3 yêu cầu cùng lúc (trước đây chờ nối tiếp), nhưng vẫn ÁP kết quả theo thứ tự cũ:
-        // ngày đang sửa trước, rồi đầu tháng, rồi giờ luỹ kế — để phản hồi đến sớm không ghi đè ngày đang sửa.
-        const previous=previousIsoDate(date);
-        const dayRequest=load(new URLSearchParams({period,date,scope:"daily-links"}).toString());
-        const contextRequest=previous>`${period}-01`?load(new URLSearchParams({period,from:`${period}-01`,to:previous,scope:"daily-links"}).toString()):null;
-        const hoursRequest=load(new URLSearchParams({period,date,scope:"operating-hours"}).toString());
-        // Tránh "unhandled rejection" khi yêu cầu sau lỗi trong lúc còn chờ yêu cầu trước; lỗi vẫn được ném ở dòng await.
-        contextRequest?.catch(()=>{});hoursRequest.catch(()=>{});
-        const day=await dayRequest;
-        setByDate(group(day.entries));setLinkedByDate(group(day.linkedEntries));setLinkWarnings(day.warnings||[]);
+        if (draftRef.current.key !== draftKey) {
+          draftRef.current = { key: draftKey, values: {} };
+          try {
+            const restored = readReportDraft(window.localStorage, draftKey);
+            // Keep the account's draft even when its date now needs admin approval.
+            draftRef.current.values = Object.fromEntries(Object.entries(restored).filter(([cell]) => editableFields.some(field => field.cell === cell)));
+            setDraftWarning("");
+          } catch {
+            setDraftWarning("Không đọc được bản nháp trên trình duyệt. Hãy kiểm tra số liệu trước khi tiếp tục nhập.");
+          }
+          dirtyCellsRef.current = new Set(Object.keys(draftRef.current.values));
+          setDirty(dirtyCellsRef.current.size > 0);
+          if (dirtyCellsRef.current.size > 0) setMessage("Đã khôi phục bản nháp chưa lưu của ngày này trên máy. Kiểm tra và bấm Lưu số liệu; bản nháp chưa phải dữ liệu đã lưu trên web.");
+        }
+        // Start all independent reads together, while applying results in the safe legacy order.
+        const previous = previousIsoDate(date);
+        const dayRequest = load(new URLSearchParams({period, date, scope:"daily-links"}).toString());
+        const contextRequest = previous > `${period}-01` ? load(new URLSearchParams({period, from:`${period}-01`, to:previous, scope:"daily-links"}).toString()) : null;
+        const hoursRequest = load(new URLSearchParams({period, date, scope:"operating-hours"}).toString());
+        contextRequest?.catch(()=>{}); hoursRequest.catch(()=>{});
+        const day = await dayRequest;
+        const stored = group(day.entries);
+        const alreadyStored = Object.entries(draftRef.current.values)
+          .filter(([cell, value]) => normalizeCtktktInputValue(cell, stored[date]?.[cell] ?? "") === normalizeCtktktInputValue(cell, value))
+          .map(([cell, value]) => ({cell, value}));
+        if (alreadyStored.length) acknowledgeSaved(alreadyStored);
+        stored[date] = mergeReportDraft(stored[date] || {}, draftRef.current.values);
+        setByDate(stored); setLinkedByDate(group(day.linkedEntries)); setLinkWarnings(day.warnings || []);
         setLoading(false);
         if(contextRequest){
           const context=await contextRequest;
@@ -470,7 +513,7 @@ export function CtktktReport() {
     }
     void run();
     return () => controller.abort();
-  }, [period,date,reloadVersion, ctktktRequest]);
+  }, [period,date,draftKey,reloadVersion, ctktktRequest, acknowledgeSaved]);
 
   const previousDate = previousIsoDate(date);
   const previous = useMemo(() => {
@@ -656,12 +699,7 @@ export function CtktktReport() {
 
   const update = (cell: string, value: string) => {
     if (!canEditSelectedDate || !canEditCtktktField(user, cell)) return;
-    setByDate(old => ({
-      ...old,
-      [date]: { ...(old[date] || {}), [cell]: value },
-    }));
-    dirtyCellsRef.current.add(cell);
-    setDirty(true);
+    stageValues({ [cell]: value });
     setMessage("");
     setError("");
   };
@@ -695,7 +733,8 @@ export function CtktktReport() {
   };
 
   const save = async () => {
-    if (!userCanEditAny) return;
+    if (!userCanEditAny || saveInFlightRef.current) return;
+    saveInFlightRef.current = true;
     setSaving(true);
     setError("");
     setMessage("");
@@ -703,7 +742,7 @@ export function CtktktReport() {
       const dirtyCells = [...dirtyCellsRef.current];
       const toSend = dirtyCells
         .filter(cell => canEditCtktktField(user, cell))
-        .map(cell => ({ cell, value: current[cell] || "" }));
+        .map(cell => ({ cell, value: draftRef.current.values[cell] ?? current[cell] ?? "" }));
       if (!toSend.length) throw new Error("Không có ô dữ liệu nào vừa thay đổi để lưu.");
 
       const response = await ctktktRequest("/api/ctktkt/ctktkt-report", {
@@ -734,15 +773,15 @@ export function CtktktReport() {
       if (mismatches.length) {
         throw new Error(`CSDL chưa giữ đúng ${mismatches.length} ô (${mismatches.slice(0, 6).map(entry => entry.cell).join(", ")}). Chưa xác nhận lưu thành công.`);
       }
-      setByDate(old => ({ ...old, [date]: persisted }));
-      for (const entry of toSend) dirtyCellsRef.current.delete(entry.cell);
-      setDirty(dirtyCellsRef.current.size > 0);
+      acknowledgeSaved(toSend);
+      setByDate(old => ({ ...old, [date]: mergeReportDraft(persisted, draftRef.current.values) }));
       setMessage(
         `Đã lưu thành công ${body.saved || 0} ô dữ liệu ngày ${date.split("-").reverse().join("/")}.`,
       );
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Không lưu được dữ liệu.");
     } finally {
+      saveInFlightRef.current = false;
       setSaving(false);
     }
   };
@@ -954,12 +993,7 @@ export function CtktktReport() {
     }
 
     if (count > 0) {
-      setByDate(old => ({
-        ...old,
-        [date]: { ...(old[date] || {}), ...updates },
-      }));
-      for (const cell of Object.keys(updates)) dirtyCellsRef.current.add(cell);
-      setDirty(true);
+      stageValues(updates);
       setMessage(`Đã dán thành công ${count} ô từ bảng tính vào ngày ${date.split("-").reverse().join("/")}.`);
       setError("");
     }
@@ -1048,10 +1082,11 @@ export function CtktktReport() {
   // Danh tính và thông báo cương vị người dùng
   const userRoleDescription = useMemo(() => {
     if (!user) return "Chưa đăng nhập (Chỉ xem)";
-    const isLeader = isAdminUser(user) || user.permissions.includes("edit_ctktkt");
-
-    if (isLeader) {
+    if (isAdminUser(user)) {
       return "Toàn quyền quản lý, nhập liệu và phê duyệt số liệu";
+    }
+    if (user.permissions.includes("edit_ctktkt")) {
+      return "Nhập toàn bộ nhóm · Ca đêm chốt ngày D.";
     }
 
     if (editableGroups.length === 0) {
@@ -1202,12 +1237,16 @@ export function CtktktReport() {
             {item.message}
           </p>
         ))}
+        {draftWarning && <p role="alert" className="mt-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs text-amber-900">{draftWarning}</p>}
         {error && (
           <p
             role="alert"
             className="mt-2 whitespace-pre-line rounded-xl border border-red-200 bg-red-50 px-3 py-1.5 text-xs text-red-800"
           >
             {error}
+            {error.includes("Yêu cầu chỉnh sửa") && <button type="button" className="mt-2 block min-h-10 rounded-lg border border-red-300 bg-white px-3 font-semibold" onClick={() => {
+              window.dispatchEvent(new Event("ktkt-open-correction"));
+            }}>Mở yêu cầu duyệt — chọn “Lấy các ô đang sửa vào yêu cầu”</button>}
           </p>
         )}
         {message && (
@@ -3156,6 +3195,8 @@ export function CtktktReport() {
                     <tbody className="divide-y divide-slate-100 font-mono">
                       {coalShiftDetails.map((item, index) => {
                         const row = 87 + index;
+                        const adjustmentCell = (item.unit === "S1" ? ["W28", "Y28", "AA28"] : ["AG28", "AI28", "AK28"])[item.shift - 1];
+                        const canConfirmNoCoal = canEditSelectedDate && canEditCtktktField(user, adjustmentCell) && canEditCtktktField(user, `COAL_ADJ_NOTE_${item.unit}`);
                         return (
                           <tr key={`${item.unit}-${item.shift}`} className={item.unit === "S2" ? "bg-slate-50/60" : "bg-white"}>
                             <td className="p-2 text-center font-sans font-extrabold text-[#173b64] text-xs">{item.unit}</td>
@@ -3163,7 +3204,21 @@ export function CtktktReport() {
                             <td className="p-2 text-center tabular-nums text-xs">{format(item.rawCoalTonnes)}</td>
                             <td className="p-1.5 bg-yellow-50/60">{renderCellInput(`AJ${row}`, { group: "coal_blend_pmis" })}</td>
                             <td className="p-1.5 bg-yellow-50/60">{renderCellInput(`AK${row}`, { group: "coal_blend_pmis" })}</td>
-                            <td className="p-2 text-center tabular-nums text-xs">{format(item.adjustedCoalTonnes)}</td>
+                            <td className="p-2 text-center tabular-nums text-xs">
+                              {format(item.adjustedCoalTonnes)}
+                              {item.rawCoalTonnes !== null && item.rawCoalTonnes > 0 && item.dryKcalKg !== null && item.dryKcalKg <= 0 && (
+                                <span role="alert" className="mt-1 block font-sans text-[11px] text-amber-800">
+                                  Cân còn {format(item.rawCoalTonnes)} tấn; Qk = 0. Kiểm tra chỉ số cân và số liệu than. Wtp/Qk = 0 không đưa lượng than về 0.
+                                  {canConfirmNoCoal && <button type="button" disabled={loading || saving} className="mt-1 block min-h-9 w-full rounded border border-amber-400 bg-amber-50 px-2 py-1 font-semibold disabled:opacity-50" onClick={() => {
+                                    try {
+                                      stageValues(createZeroCoalConsumptionCorrection(current, previous, item.unit, item.shift));
+                                      setError("");
+                                      setMessage(`Đã lập hiệu chỉnh ${item.unit} ca ${item.shift} về 0 theo xác nhận không tiêu thụ than, giữ nguyên chỉ số cân. Bấm Lưu số liệu; ngoài thời gian chốt ngày, số khác ca/người nhập cần quản trị duyệt.`);
+                                    } catch (reason) { setError(reason instanceof Error ? reason.message : "Chưa lập được hiệu chỉnh cân than."); }
+                                  }}>Xác nhận {item.unit} ca {item.shift} ngừng, không dùng than</button>}
+                                </span>
+                              )}
+                            </td>
                             <td className="p-2 text-center tabular-nums text-xs">{format(item.asReceivedKcalKg)}</td>
                           </tr>
                         );
@@ -3797,8 +3852,7 @@ export function CtktktReport() {
           try{
             const verified=await saveReviewedCoalEntries(ctktktRequest,date,values,unit);
             setByDate(old=>({...old,[date]:{...(old[date]||{}),...Object.fromEntries(verified.map(entry=>[entry.cell,entry.value]))}}));
-            for(const entry of verified)dirtyCellsRef.current.delete(entry.cell);
-            setDirty(dirtyCellsRef.current.size>0);
+            acknowledgeSaved(values);
             setMessage(`Đã lưu và kiểm tra lại ${verified.length} chỉ số công tơ than ngày ${date.split("-").reverse().join("/")}.`);
           }finally{setSaving(false);}
         }}
