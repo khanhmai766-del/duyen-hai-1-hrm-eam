@@ -35,3 +35,32 @@ export function acknowledgeReportDraft(values: ReportDraftValues, saved: Array<{
 export function mergeReportDraft(stored: ReportDraftValues, pending: ReportDraftValues) {
   return { ...stored, ...pending };
 }
+
+/** Days a forgotten local draft is kept before it is discarded. */
+export const REPORT_DRAFT_KEEP_DAYS = 14;
+
+/**
+ * Remove this account's drafts for operating dates older than `keepDays` before `today` (YYYY-MM-DD).
+ * Other accounts' drafts and unrelated keys are never touched. Returns the number removed.
+ */
+export function pruneReportDrafts(
+  storage: Pick<Storage, "length" | "key" | "removeItem">,
+  userId: string,
+  today: string,
+  keepDays = REPORT_DRAFT_KEEP_DAYS,
+): number {
+  const prefix = `ctktkt:report-draft:v1:${encodeURIComponent(userId)}:`;
+  const cutoff = new Date(`${today}T00:00:00Z`);
+  if (Number.isNaN(cutoff.getTime())) return 0;
+  cutoff.setUTCDate(cutoff.getUTCDate() - keepDays);
+  const limit = cutoff.toISOString().slice(0, 10);
+  const stale: string[] = [];
+  for (let index = 0; index < storage.length; index++) {
+    const key = storage.key(index);
+    if (!key?.startsWith(prefix)) continue;
+    const date = key.slice(prefix.length);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(date) && date < limit) stale.push(key);
+  }
+  for (const key of stale) storage.removeItem(key);
+  return stale.length;
+}
