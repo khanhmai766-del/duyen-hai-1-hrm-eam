@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { DateField } from "@/modules/ctktkt/components/ui/date-field";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/modules/ctktkt/components/ui/dialog";
 import { NkvhPpaSyncButton } from "@/modules/ctktkt/components/nkvh-ppa-sync-button";
-import { calculateActualHeatRate, calculatePpaHeatRate, compareHeatRate, mergeMeterReadings, parseMeterCsv, selectPpaSource, type MeterReading, type PpaResult } from "@/modules/ctktkt/lib/ppa-heat-rate";
+import { calculateActualHeatRate, calculatePpaHeatRate, compareHeatRate, displayPpaRate, mergeMeterReadings, parseMeterCsv, selectPpaSource, type MeterReading, type PpaResult } from "@/modules/ctktkt/lib/ppa-heat-rate";
 import { decodeQlktPpaSyncHash, validateQlktPpaSyncPayload } from "@/modules/ctktkt/lib/qlkt-sync";
 import { isQlktExtensionOutdated, REQUIRED_QLKT_EXTENSION_VERSION } from "@/modules/ctktkt/lib/qlkt-extension-version";
 import { useSessionUser } from "@/modules/ctktkt/components/session-context";
@@ -257,9 +257,9 @@ export function PpaHeatRateComparison() {
   }
 
   const comparisonRows = calculation ? [
-    { label: "Chung 2 tổ", ppa: calculation.ppaPlant, actual: actual?.actualPlant ?? null },
-    { label: "S1", ppa: calculation.ppaS1, actual: actual?.actualS1 ?? null },
-    { label: "S2", ppa: calculation.ppaS2, actual: actual?.actualS2 ?? null },
+    { label: "Chung 2 tổ", net: calculation.netS1Kwh + calculation.netS2Kwh, ppa: displayPpaRate(calculation.ppaPlant, calculation.netS1Kwh + calculation.netS2Kwh), actual: actual?.actualPlant ?? null },
+    { label: "S1", net: calculation.netS1Kwh, ppa: displayPpaRate(calculation.ppaS1, calculation.netS1Kwh), actual: actual?.actualS1 ?? null },
+    { label: "S2", net: calculation.netS2Kwh, ppa: displayPpaRate(calculation.ppaS2, calculation.netS2Kwh), actual: actual?.actualS2 ?? null },
   ] : [];
 
   return <section className="space-y-3">
@@ -314,7 +314,7 @@ export function PpaHeatRateComparison() {
         <div className="flex items-center gap-1.5">
           <span className="font-medium text-slate-500">Nguồn PPA:</span>
           {calculation ? (
-            <span className="rounded-md bg-emerald-100 px-2 py-0.5 font-bold text-emerald-800">✓ Đủ 4 điểm đo (48 chu kỳ)</span>
+            <span className="rounded-md bg-emerald-100 px-2 py-0.5 font-bold text-emerald-800">{calculation.netS1Kwh + calculation.netS2Kwh === 0 ? "Cả hai tổ ngừng — không đánh giá SHN" : "✓ Đủ 4 điểm đo (48 chu kỳ)"}</span>
           ) : calculationState.error ? (
             <span className="rounded-md bg-red-100 px-2 py-0.5 font-semibold text-red-800">Đủ 4 điểm đo nhưng số liệu chưa hợp lệ</span>
           ) : (
@@ -329,7 +329,7 @@ export function PpaHeatRateComparison() {
             <span className="rounded-md bg-emerald-100 px-2 py-0.5 font-bold text-emerald-800">✓ Liên kết từ Chỉ tiêu KTKT</span>
           ) : (
             <span className="rounded-md bg-slate-200 px-2 py-0.5 font-semibold text-slate-600">
-              {missingActualCodes.length ? `Thiếu KTKT: ${missingActualCodes.join(", ")}` : "Số liệu KTKT chưa hợp lệ"}
+              {missingActualCodes.length ? `Thiếu KTKT: ${missingActualCodes.join(", ")}` : calculation && calculation.netS1Kwh + calculation.netS2Kwh === 0 ? "Cả hai tổ ngừng — không áp dụng" : "Số liệu KTKT chưa hợp lệ"}
             </span>
           )}
         </div>
@@ -372,7 +372,7 @@ export function PpaHeatRateComparison() {
             </thead>
             <tbody>
               {comparisonRows.map(row => {
-                const comparison = compareHeatRate(row.actual, row.ppa);
+                const comparison = compareHeatRate(row.actual, row.ppa, row.net);
                 return <tr key={row.label} className="border-t">
                   <td className="p-2 font-bold text-black">{row.label}</td>
                   <td className="p-2 text-center tabular-nums text-black">{format(row.ppa)}</td>
@@ -537,7 +537,7 @@ export function PpaHeatRateComparison() {
             <tbody>
               {history.map(entry => {
                 const rowActual = actualByDate.get(entry.operatingDate);
-                const comparison = compareHeatRate(rowActual?.actualPlant ?? null, Number(entry.ppaPlant));
+                const comparison = compareHeatRate(rowActual?.actualPlant ?? null, Number(entry.ppaPlant), Number(entry.netS1Kwh) + Number(entry.netS2Kwh));
                 const isSelected = entry.operatingDate === operatingDate;
                 return (
                   <tr key={entry.operatingDate} className={`border-t transition ${isSelected ? "bg-blue-50/70" : "hover:bg-slate-50"}`}>
@@ -546,12 +546,12 @@ export function PpaHeatRateComparison() {
                         {entry.operatingDate.split("-").reverse().join("/")}
                       </button>
                     </td>
-                    <td className="p-1.5 text-center text-black">{format(Number(entry.ppaPlant))}</td>
+                    <td className="p-1.5 text-center text-black">{format(displayPpaRate(Number(entry.ppaPlant), Number(entry.netS1Kwh) + Number(entry.netS2Kwh)))}</td>
                     <td className="p-1.5 text-center text-black">{format(rowActual?.actualPlant)}</td>
                     <td className="p-1.5 text-center text-black">{format(comparison.difference)}</td>
                     <td className="p-1.5 text-center font-bold">{comparison.status}</td>
-                    <td className="p-1.5 text-center text-black">{format(Number(entry.ppaS1))}</td>
-                    <td className="p-1.5 text-center text-black">{format(Number(entry.ppaS2))}</td>
+                    <td className="p-1.5 text-center text-black">{format(displayPpaRate(Number(entry.ppaS1), Number(entry.netS1Kwh)))}</td>
+                    <td className="p-1.5 text-center text-black">{format(displayPpaRate(Number(entry.ppaS2), Number(entry.netS2Kwh)))}</td>
                     <td className="max-w-[180px] truncate p-1.5 text-slate-700 text-[11px]" title={entry.noteS1 || undefined}>{entry.noteS1 || "—"}</td>
                     <td className="max-w-[180px] truncate p-1.5 text-slate-700 text-[11px]" title={entry.noteS2 || undefined}>{entry.noteS2 || "—"}</td>
                   </tr>

@@ -139,3 +139,15 @@ Triển khai cần áp dụng riêng prisma/manual/add-ctktkt-corrections.sql tr
 Với số liệu đã có trước khi bật quy tắc ca, chỉ nhận diện chủ sở hữu từ nhật ký đầu tiên nếu đó là thao tác insert từ ctktkt-report, có người nhập và thời điểm rõ ràng; không nhận chủ sở hữu từ nhật ký khôi phục/đồng bộ hoặc một lần sửa sau đó.
 
 Để không đi vòng kiểm soát ca, thao tác nạp JSON/ZIP chứa field_code KTKT: yêu cầu tài khoản quản trị, dù tài khoản khác có restore_data. Quyền xem trước và tải sao lưu giữ nguyên. Nạp dữ liệu các mục khác giữ quyền cũ.
+
+## Công thức và file xuất khớp web cũ (08/11/2026)
+
+Web cũ (ctktkt-dashboard, commit 5c4659c) là chuẩn cho công thức, cách tính, số liệu và file xuất. Đã đưa về giống web cũ:
+
+- Nhiệt trị than chung nhà máy và điện tự dùng toàn nhà máy (I27/I145: tổ ngừng tính phần tự dùng vào tổ chạy) tính như web cũ; bỏ cách "loại tự dùng tổ ngừng" và "lấy nhiệt trị riêng tổ đủ số liệu".
+- File Excel Chỉ tiêu KTKT: chỉ chặn lỗi chia 0 (`IFERROR(...ERROR.TYPE=2...)`), không ghi đè công thức I25/I27/I169..K172.
+- File Lượng nước: suất nước khi điện phát = 0 để trống, không ghi 0.
+- PPA: ngày cả hai tổ ngừng lưu được (sản lượng 0, không đánh giá SHN), hiện trên web, file và Google Sheets như web cũ; PMIS bỏ số cũ của tổ ngừng.
+- Dán từ Excel/Google Sheets lấy giá trị gốc trong clipboard (vd. độ ẩm 8,2567 hiển thị 8,3).
+
+Khác biệt giữ lại có chủ ý: không lưu ảnh công tơ than (chỉ đọc số), giao diện/đường dẫn `/api/ctktkt/*`, đăng nhập dùng chung, PostgreSQL, phân công nhập và yêu cầu sửa theo ca.

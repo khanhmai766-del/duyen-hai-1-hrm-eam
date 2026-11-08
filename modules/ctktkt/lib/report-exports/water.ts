@@ -47,6 +47,27 @@ export async function exportReport(request: Request) {
   }
 
   try {
+    const workbook = await buildWaterWorkbook(month);
+    const buffer = await workbook.xlsx.writeBuffer();
+    const [year, monthStr] = month.split("-");
+    const filename = `Theo_doi_luong_nuoc_Thang_${monthStr}_${year}.xlsx`;
+
+    return new Response(buffer, {
+      headers: {
+        "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "Content-Disposition": `attachment; filename="${filename}"`,
+        "Cache-Control": "no-store",
+      },
+    });
+  } catch (err) {
+    console.error("Lỗi xuất file Excel theo dõi lượng nước:", err);
+    return Response.json({ error: "Không thể xuất file Excel." }, { status: 500 });
+  }
+}
+
+/** Internal report builder shared by Excel downloads and the authenticated Sheets mirror. */
+export async function buildWaterWorkbook(month: string) {
+  if (!monthPattern.test(month)) throw new Error("Tháng không hợp lệ.");
     const rawDb = getRawDb();
     await ensureWaterSchema(rawDb);
 
@@ -291,9 +312,9 @@ export async function exportReport(request: Request) {
         row.getCell(12).value = { formula: meterFormula("J",item.waterAdjustmentS2,25000), result: item.waterUsedS2 };
 
         // Col M: Hệ số S1 = K[r] / G[r]
-        row.getCell(13).value = { formula: `IF(G${currentRowIdx}>0, K${currentRowIdx}/G${currentRowIdx}, 0)`, result: item.waterRatioS1 };
+        row.getCell(13).value = { formula: `IF(G${currentRowIdx}>0, K${currentRowIdx}/G${currentRowIdx}, "")`, result: item.elecGenS1 > 0 ? item.waterRatioS1 : undefined };
         // Col N: Hệ số S2 = L[r] / H[r]
-        row.getCell(14).value = { formula: `IF(H${currentRowIdx}>0, L${currentRowIdx}/H${currentRowIdx}, 0)`, result: item.waterRatioS2 };
+        row.getCell(14).value = { formula: `IF(H${currentRowIdx}>0, L${currentRowIdx}/H${currentRowIdx}, "")`, result: item.elecGenS2 > 0 ? item.waterRatioS2 : undefined };
 
         // Col O: Nước cấp bình ngưng nhận S1
         row.getCell(15).value = item.condenserRecS1;
@@ -369,18 +390,5 @@ export async function exportReport(request: Request) {
       for(const shift of adjusted)correctionSheet.addRow([shift.logDate,shift.shiftTime,shift.waterAdjustmentS1??null,shift.waterAdjustmentS2??null,shift.condenserAdjustmentS1??null,shift.condenserAdjustmentS2??null,shift.note||""]);
       for(let column=1;column<=7;column++)correctionSheet.getColumn(column).width=23;
     }
-    const buffer = await workbook.xlsx.writeBuffer();
-    const filename = `Theo_doi_luong_nuoc_Thang_${monthStr}_${year}.xlsx`;
-
-    return new Response(buffer, {
-      headers: {
-        "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        "Content-Disposition": `attachment; filename="${filename}"`,
-        "Cache-Control": "no-store",
-      },
-    });
-  } catch (err) {
-    console.error("Lỗi xuất file Excel theo dõi lượng nước:", err);
-    return Response.json({ error: "Không thể xuất file Excel." }, { status: 500 });
-  }
+    return workbook;
 }

@@ -1,4 +1,4 @@
-import {CAPACITY_KW, compareHeatRate, ppaCurveForYear, type PpaSourceData, type UnitDetail} from "./ppa-heat-rate";
+import {CAPACITY_KW, compareHeatRate, displayPpaRate, ppaCurveForYear, type PpaSourceData, type UnitDetail} from "./ppa-heat-rate";
 import type {SheetJsLib} from "./sheetjs-loader";
 export type PpaSheetRow = {
   date: string;
@@ -28,11 +28,11 @@ function metricBlockRow(iso: string, values: number[], label: string | null, uni
 // của đúng khoảng chu kỳ đó — đã đối chiếu khớp chính xác với file mẫu gốc (không phải trung bình
 // cộng hay tổng cộng dồn giá trị suất hao nhiệt từng chu kỳ).
 function rateBlockRow(iso: string, intervals: UnitDetail["intervals"], label: string | null, unit: string | null) {
-  const rates = intervals.map(item => item.rate);
+  const rates = intervals.map(item => item.netKwh > 0 ? item.rate : null);
   const heat = intervals.map(item => item.heatKj), net = intervals.map(item => item.netKwh);
   const weighted = (from: number, to: number) => {
     const netSum = sumRange(net, from, to);
-    return netSum > 0 ? sumRange(heat, from, to) / netSum : 0;
+    return netSum > 0 ? sumRange(heat, from, to) / netSum : null;
   };
   return [label, unit, ddMM(iso), weighted(0, 48), ...rates, weighted(0, 16), weighted(16, 32), weighted(32, 48)];
 }
@@ -110,9 +110,9 @@ export function buildPlantSheet(XLSX: SheetJsLib, rowsByMonthLocal: [string, Ppa
   const rowsOut: (string | number | null)[][] = [PLANT_SHEET_HEADER];
   for (const [, monthRows] of rowsByMonthLocal) {
     for (const row of monthRows) {
-      const plant = compareHeatRate(row.actualPlant, row.ppaPlant), s1 = compareHeatRate(row.actualS1, row.ppaS1), s2 = compareHeatRate(row.actualS2, row.ppaS2);
+      const plant = compareHeatRate(row.actualPlant, row.ppaPlant, row.netS1Kwh === null || row.netS2Kwh === null ? null : row.netS1Kwh + row.netS2Kwh), s1 = compareHeatRate(row.actualS1, row.ppaS1, row.netS1Kwh), s2 = compareHeatRate(row.actualS2, row.ppaS2, row.netS2Kwh);
       rowsOut.push([
-        fullDate(row.date), row.ppaPlant, row.ppaS1, row.ppaS2, row.actualPlant, row.actualS1, row.actualS2,
+        fullDate(row.date), displayPpaRate(row.ppaPlant, row.netS1Kwh === null || row.netS2Kwh === null ? null : row.netS1Kwh + row.netS2Kwh), displayPpaRate(row.ppaS1, row.netS1Kwh), displayPpaRate(row.ppaS2, row.netS2Kwh), row.actualPlant, row.actualS1, row.actualS2,
         plant.difference, plant.percent, plant.status,
         s1.difference, s1.percent, s1.status,
         s2.difference, s2.percent, s2.status,
@@ -138,3 +138,4 @@ export function buildPlantSheet(XLSX: SheetJsLib, rowsByMonthLocal: [string, Ppa
   }
   return XLSX.utils.aoa_to_sheet(rowsOut);
 }
+

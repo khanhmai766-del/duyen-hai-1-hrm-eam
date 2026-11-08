@@ -34,3 +34,29 @@ test("gom ô theo tọa độ hiển thị để dùng chung phím mũi tên tr�
   ]);
   assert.deepEqual(rows.map(row => row.map(cell => cell.item)), [["A1", "B1"], ["A2", "B2"]]);
 });
+
+test("dán từ Excel lấy giá trị gốc x:num thay cho số đang hiển thị 1 chữ số thập phân", () => {
+  const html = `<html><body><table><tr><td class=xl65 x:num="8.2567">8,3</td><td x:num>5000</td></tr>
+<tr><td class=xl65 x:num="9.0449999999999999">9,0</td><td class=xl66 x:num="4012.375">4.012</td></tr></table></body></html>`;
+  assert.deepEqual(parseSpreadsheetClipboard("8,3\t5000\r\n9,0\t4.012\r\n", html), [
+    ["8.2567", "5000"],
+    ["9.045", "4012.375"],
+  ]);
+});
+
+test("dán từ Google Sheets lấy giá trị gốc trong data-sheets-value", () => {
+  const html = `<google-sheets-html-origin><table><tbody><tr><td data-sheets-value="{&quot;1&quot;:3,&quot;3&quot;:8.2567}">8.3</td></tr></tbody></table>`;
+  assert.deepEqual(parseSpreadsheetClipboard("8.3", html), [["8.2567"]]);
+});
+
+test("không thay giá trị khi ô là ngày, văn bản hoặc HTML lệch bố cục", () => {
+  const dateHtml = `<table><tr><td x:num="46333">07/11/2026</td><td x:str>Đạt</td></tr></table>`;
+  assert.deepEqual(parseSpreadsheetClipboard("07/11/2026\tĐạt\r\n", dateHtml), [["07/11/2026", "Đạt"]]);
+  const shiftedHtml = `<table><tr><td x:num="8.2567">8,3</td></tr><tr><td x:num="1.25">1,3</td></tr></table>`;
+  assert.deepEqual(parseSpreadsheetClipboard("8,3\t1,3\r\n", shiftedHtml), [["8.3", "1.3"]]);
+});
+
+test("ô định dạng phần trăm được đổi về đúng số % đang dùng", () => {
+  const html = `<table><tr><td x:num="0.082567">8,3%</td></tr></table>`;
+  assert.deepEqual(parseSpreadsheetClipboard("8,3%\r\n", html), [["8.2567"]]);
+});

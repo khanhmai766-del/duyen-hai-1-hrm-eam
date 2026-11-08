@@ -394,10 +394,10 @@ test("meter auxiliary power follows workbook E25/H25 on 19/09/2026 (TD 9X1 + 9X2
   assert.ok(Math.abs(meters.s1.auxiliaryPercent - (11317 - 10370.900000000373) / 11317 * 100) < 1e-9);
 });
 
-test("plant excludes stopped-unit grid auxiliaries from the reporting boundary", () => {
+test("plant auxiliary ratio charges a stopped unit's auxiliary power to the running unit (workbook I27/I145, 24/09/2026)", () => {
   const previous = { AB8: "100", AB9: "100", AB10: "1000", AB11: "500", AL8: "1000", AL9: "1000", AL10: "0", AL11: "0" };
   const current = { AB8: "100", AB9: "100", AB10: "1157.1", AB11: "545.1", AL8: "11645", AL9: "10741.5", AL10: "761.9", AL11: "104.7" };
   const meters = calculateCtktktMeterSummary(current, previous);
   assert.equal(meters.s1.grossMwh, 0);
-  assert.ok(Math.abs(meters.plant.auxiliaryPercent - ((10645 - 9741.5) / 10645 * 100)) < 1e-9);
+  assert.ok(Math.abs(meters.plant.auxiliaryPercent - 10.38703616721531) < 1e-9);
 });

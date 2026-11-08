@@ -49,7 +49,7 @@ export function PpaHeatRateBulkImport() {
           }
           const calculation = calculatePpaHeatRate(selected.source, Number(operatingDate.slice(0, 4)));
           await savePpaDay.mutateAsync({ operatingDate, source: selected.source, sourceFiles: [`Excel · ${sheetName}`] });
-          collected.push({ sheet: sheetName, status: "saved", operatingDate, detail: `Đã lưu — SHN PPA chung ${calculation.ppaPlant.toFixed(2)} kJ/kWh.` });
+          collected.push({ sheet: sheetName, status: "saved", operatingDate, detail: calculation.netS1Kwh + calculation.netS2Kwh === 0 ? "Đã lưu — cả hai tổ ngừng, không đánh giá SHN." : `Đã lưu — SHN PPA chung ${calculation.ppaPlant.toFixed(2)} kJ/kWh.` });
         } catch (caught) {
           collected.push({ sheet: sheetName, status: caught instanceof Error && /không phải|chưa đủ|dòng KwhGiao|cấu trúc CSV|CSV rút gọn/.test(caught.message) ? "skipped" : "error", detail: caught instanceof Error ? caught.message : "Không đọc được sheet này." });
         }

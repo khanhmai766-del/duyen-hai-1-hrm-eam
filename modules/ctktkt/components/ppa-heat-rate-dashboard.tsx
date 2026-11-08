@@ -9,7 +9,7 @@ import "./ppa-controls.css";
 import { DateField } from "@/modules/ctktkt/components/ui/date-field";
 import { ArrowRight, CalendarRange, ChevronDown, Download, Sheet } from "lucide-react";
 import { GoogleSheetSyncButton } from "@/modules/ctktkt/components/google-sheet-sync-button";
-import { calculateActualHeatRate, calculatePpaHeatRateDetailed, compareHeatRate, type PpaSourceData, type UnitDetail } from "@/modules/ctktkt/lib/ppa-heat-rate";
+import { calculateActualHeatRate, calculatePpaHeatRateDetailed, compareHeatRate, displayPpaRate, stoppedPpaDays, type PpaSourceData, type UnitDetail } from "@/modules/ctktkt/lib/ppa-heat-rate";
 import { loadSheetJs } from "@/modules/ctktkt/lib/sheetjs-loader";
 import { useSessionUser } from "@/modules/ctktkt/components/session-context";
 import { hasPermission } from "@/modules/ctktkt/lib/auth/session";
@@ -240,7 +240,7 @@ export function PpaHeatRateDashboard({ tabs }: { tabs?: React.ReactNode }) {
   const actualByDate = useMemo(() => new Map([...dailyValuesByDate].map(([date, values]) => [date, calculateActualHeatRate(values)])), [dailyValuesByDate]);
 
   const rows: Row[] = useMemo(() => {
-    return [...entries]
+    return [...entries, ...stoppedPpaDays(dailyValuesByDate).filter(day => !entries.some(entry => entry.operatingDate === day.operatingDate))]
       .sort((a, b) => a.operatingDate.localeCompare(b.operatingDate))
       .map(entry => {
         const actual = actualByDate.get(entry.operatingDate) || null;
@@ -249,9 +249,9 @@ export function PpaHeatRateDashboard({ tabs }: { tabs?: React.ReactNode }) {
         const capacityS2 = Number(daily[PPA_AVAILABLE_CAPACITY_S2_CODE]);
         return {
           date: entry.operatingDate,
-          ppaPlant: Number(entry.ppaPlant), actualPlant: actual?.actualPlant ?? null,
-          ppaS1: Number(entry.ppaS1), actualS1: actual?.actualS1 ?? null,
-          ppaS2: Number(entry.ppaS2), actualS2: actual?.actualS2 ?? null,
+          ppaPlant: displayPpaRate(Number(entry.ppaPlant), Number(entry.netS1Kwh) + Number(entry.netS2Kwh)), actualPlant: actual?.actualPlant ?? null,
+          ppaS1: displayPpaRate(Number(entry.ppaS1), Number(entry.netS1Kwh)), actualS1: actual?.actualS1 ?? null,
+          ppaS2: displayPpaRate(Number(entry.ppaS2), Number(entry.netS2Kwh)), actualS2: actual?.actualS2 ?? null,
           netS1Kwh: entry.netS1Kwh !== undefined && entry.netS1Kwh !== null ? Number(entry.netS1Kwh) : null,
           netS2Kwh: entry.netS2Kwh !== undefined && entry.netS2Kwh !== null ? Number(entry.netS2Kwh) : null,
           availableCapacityS1Mw: daily[PPA_AVAILABLE_CAPACITY_S1_CODE]?.trim() !== "" && Number.isFinite(capacityS1) ? capacityS1 : null,
@@ -271,7 +271,10 @@ export function PpaHeatRateDashboard({ tabs }: { tabs?: React.ReactNode }) {
       [row.actualS2, "Suất hao nhiệt thực tế S2", "S2"],
     ];
     return required
-      .filter(([value]) => value === null || !Number.isFinite(value))
+      .filter(([value, , group]) => {
+        const net = group === "S1" ? row.netS1Kwh : group === "S2" ? row.netS2Kwh : row.netS1Kwh === null || row.netS2Kwh === null ? null : row.netS1Kwh + row.netS2Kwh;
+        return net !== 0 && (value === null || !Number.isFinite(value));
+      })
       .map(([, label, group]) => ({
         key: `${row.date}:${group}:${label}`,
         label: `${fullDate(row.date)} · ${label}`,
@@ -315,7 +318,7 @@ export function PpaHeatRateDashboard({ tabs }: { tabs?: React.ReactNode }) {
     return { date: shortDate(row.date), thucTe: actual, ppa, chenhLech: comparison.difference };
   });
 
-  const noteworthy = useMemo(() => rows.filter(row => compareHeatRate(row.actualPlant, row.ppaPlant).status === "Vượt PPA"), [rows]);
+  const noteworthy = useMemo(() => rows.filter(row => compareHeatRate(row.actualPlant, row.ppaPlant, row.netS1Kwh === null || row.netS2Kwh === null ? null : row.netS1Kwh + row.netS2Kwh).status === "Vượt PPA"), [rows]);
   const hasSavedPpaForSheet = entries.some(entry => entry.operatingDate === sheetDate);
   const sheetRow = rows.find(row => row.date === sheetDate);
   const hasAvailableCapacityForSheet = Boolean(sheetRow && sheetRow.availableCapacityS1Mw !== null && sheetRow.availableCapacityS2Mw !== null);
@@ -474,7 +477,7 @@ export function PpaHeatRateDashboard({ tabs }: { tabs?: React.ReactNode }) {
             {[...visibleRowsByMonth].reverse().map(([period, monthRows]) => <Fragment key={period}>
               <tr className="bg-slate-100"><td colSpan={17} className="ppa-month-label px-2 py-1.5 text-left font-extrabold uppercase tracking-wide text-slate-500">{monthLabel(period)}</td></tr>
               {[...monthRows].sort((a, b) => b.date.localeCompare(a.date)).map(row => {
-                const plant = compareHeatRate(row.actualPlant, row.ppaPlant), s1 = compareHeatRate(row.actualS1, row.ppaS1), s2 = compareHeatRate(row.actualS2, row.ppaS2);
+                const plant = compareHeatRate(row.actualPlant, row.ppaPlant, row.netS1Kwh === null || row.netS2Kwh === null ? null : row.netS1Kwh + row.netS2Kwh), s1 = compareHeatRate(row.actualS1, row.ppaS1, row.netS1Kwh), s2 = compareHeatRate(row.actualS2, row.ppaS2, row.netS2Kwh);
                 const differenceCells = (comparison: ReturnType<typeof compareHeatRate>) => {
                   const tone = comparison.status === "Vượt PPA" ? "ppa-cl-over" : comparison.status === "Đạt" ? "ppa-cl-met" : "ppa-cl-empty";
                   return <><td className={tone} title={comparison.status}>{format(comparison.difference)}</td><td className={tone} title={comparison.status}>{formatPercent(comparison.percent)}</td></>;
@@ -495,6 +498,7 @@ export function PpaHeatRateDashboard({ tabs }: { tabs?: React.ReactNode }) {
                         <span title={fullDate(row.date)}>{shortDate(row.date)}</span>
                       </>
                     )}
+                    {row.netS1Kwh === 0 && row.netS2Kwh === 0 && <span className="block whitespace-normal text-[10px] font-medium text-slate-500">Cả hai tổ ngừng — không đánh giá</span>}
                   </td>
                   <td>{format(row.actualPlant)}</td><td>{format(row.ppaPlant)}</td>{differenceCells(plant)}
                   <td>{format(row.actualS1)}</td><td>{format(row.ppaS1)}</td><td className="bg-blue-50/50 text-blue-900">{format(row.availableCapacityS1Mw)}</td>{differenceCells(s1)}

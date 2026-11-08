@@ -1,6 +1,7 @@
 "use client";
 import { useDailyInputsRange, useInvalidateKtkt, useSaveDailyInputs } from "@/hooks/useKtktDailyInputs";
 
+import { pmisShutdownEntries } from '@/modules/ctktkt/lib/pmis-shutdown-sync';
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { PmisTrendPanels } from "@/modules/ctktkt/components/pmis-trend-panels";
@@ -107,6 +108,7 @@ export function PmisReport() {
   useEffect(() => {
     const payload = decodeQlktSyncHash(window.location.hash);
     if (!payload) return;
+    payload.entries = [...payload.entries, ...pmisShutdownEntries(payload)];
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setPendingSync(payload);
     setSelectedSyncCodes(new Set(payload.entries.map(entry => entry.fieldCode)));
@@ -125,12 +127,9 @@ export function PmisReport() {
       if (!data.result?.ok) { setError(data.result?.error || "Chưa đồng bộ được dữ liệu từ QLKT."); return; }
       const payload = validateQlktSyncPayload(data.result.payload);
       if (!payload) { setError("Dữ liệu tiện ích trả về không có chỉ tiêu nào của báo cáo này."); return; }
-      if (!payload.entries.length) {
-        setPendingSync(null); setError("");
-        setMessage("QLKT: S1 và S2 ngừng (không có tải tổ máy); không có số liệu vận hành để cập nhật.");
-        return;
-      }
-      if (payload.unavailableHeatRateUnits?.length) setMessage(`QLKT: ${payload.unavailableHeatRateUnits.map(unit => `S${unit}`).join(", ")} ngừng (không có tải tổ máy); chỉ lấy số liệu tổ máy còn vận hành.`);
+      payload.entries = [...payload.entries, ...pmisShutdownEntries(payload)];
+      if (!payload.entries.length) return;
+      if (payload.unavailableHeatRateUnits?.length) setMessage(`QLKT: ${payload.unavailableHeatRateUnits.map(unit => `S${unit}`).join(", ")} ngừng (không có tải tổ máy); số liệu cũ của tổ ngừng sẽ được bỏ khi lưu các ô đã chọn.`);
       setPendingSync(payload); setSelectedSyncCodes(new Set(payload.entries.map(entry => entry.fieldCode))); setError("");
     };
     window.addEventListener("message", handleMessage);
@@ -200,6 +199,7 @@ export function PmisReport() {
       const payload = validateQlktSyncPayload(result.payload);
       if (!payload) { failed.push({ date, error: "Dữ liệu tiện ích không hợp lệ." }); continue; }
       if (payload.unavailableHeatRateUnits?.length) stopped.push({ date, units: payload.unavailableHeatRateUnits });
+      payload.entries = [...payload.entries, ...pmisShutdownEntries(payload)];
       if (!payload.entries.length) continue;
       try {
         const period = payload.operatingDate.slice(0, 7);
@@ -293,7 +293,7 @@ export function PmisReport() {
 
     <DialogPrimitive.Root open={syncHelp} onOpenChange={setSyncHelp}><DialogPrimitive.Portal><DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/45"/><DialogPrimitive.Content className="fixed left-1/2 top-1/2 z-50 grid w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl outline-none"><DialogPrimitive.Title className="text-lg font-bold text-[#173b64]">Đồng bộ dữ liệu QLKT</DialogPrimitive.Title><DialogPrimitive.Description className="text-sm leading-6 text-slate-600">Mở màn hình &quot;Tính toán hiệu suất lò/suất hao nhiệt&quot; trên QLKT, chọn đúng tổ máy và ngày cần lấy, rồi nhấn &quot;Đồng bộ QLKT&quot; trên trang này (hoặc dùng nút &quot;Đồng bộ trang hiện tại&quot; trong tiện ích).</DialogPrimitive.Description><div className="rounded-xl border border-blue-100 bg-blue-50 p-3 text-sm text-[#274f78]"><p className="font-bold">Tiện ích không đọc hoặc lưu mật khẩu.</p><p className="mt-1">Dữ liệu luôn quay về bảng kiểm tra trước và chỉ được lưu khi bạn xác nhận.</p></div><div className="flex justify-end gap-2"><button type="button" onClick={() => setSyncHelp(false)} className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700">Đóng</button><a href="/ctktkt/qlkt-sync-extension.zip" download className="rounded-lg bg-[#334785] px-4 py-2 text-sm font-semibold text-white">Tải tiện ích mới</a></div></DialogPrimitive.Content></DialogPrimitive.Portal></DialogPrimitive.Root>
 
-    <DialogPrimitive.Root open={Boolean(pendingSync)} onOpenChange={open => { if (!open) setPendingSync(null); }}><DialogPrimitive.Portal><DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/45"/><DialogPrimitive.Content className="fixed left-1/2 top-1/2 z-50 grid max-h-[86vh] w-[calc(100%-2rem)] max-w-xl -translate-x-1/2 -translate-y-1/2 gap-4 overflow-hidden rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl outline-none"><div><DialogPrimitive.Title className="text-lg font-bold text-[#173b64]">Kiểm tra dữ liệu từ QLKT</DialogPrimitive.Title><DialogPrimitive.Description className="mt-1 text-sm text-slate-600">Ngày {pendingSync ? pendingSync.operatingDate.split("-").reverse().join("/") : ""}. Bỏ chọn chỉ tiêu chưa muốn cập nhật.</DialogPrimitive.Description></div><div className="overflow-auto rounded-xl border border-slate-200"><table className="w-full text-sm"><thead><tr className="bg-[#dcebf5] text-[#173b64]"><th className="w-10 p-2 text-center">Chọn</th><th className="p-2 text-left">Chỉ tiêu</th><th className="p-2 text-center">Từ QLKT</th></tr></thead><tbody>{pendingSync?.entries.map(entry => <tr key={entry.fieldCode} className="border-t"><td className="p-2 text-center"><input type="checkbox" checked={selectedSyncCodes.has(entry.fieldCode)} onChange={event => setSelectedSyncCodes(old => { const next = new Set(old); if (event.target.checked) next.add(entry.fieldCode); else next.delete(entry.fieldCode); return next; })} aria-label={`Chọn ${qlktFieldLabels[entry.fieldCode]}`}/></td><td className="p-2"><p className="font-semibold text-black">{qlktFieldLabels[entry.fieldCode] || entry.fieldCode}</p><p className="text-xs text-slate-500">{entry.sourceLabel}</p></td><td className="p-2 text-center font-bold tabular-nums text-[#173b64]">{formatInputValue(entry.value)}</td></tr>)}</tbody></table></div><div className="flex items-center justify-between gap-3"><p className="text-xs text-slate-500">Bấm &quot;Lưu vào kho dữ liệu&quot; để ghi ngay các chỉ tiêu đã chọn.</p><div className="flex gap-2"><button type="button" onClick={() => setPendingSync(null)} className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700">Hủy</button><button type="button" disabled={savingSync || selectedSyncCodes.size === 0 || isViewer} title={isViewer ? "Tài khoản Chỉ xem không có quyền lưu dữ liệu." : undefined} onClick={() => void applyQlktSync()} className="rounded-lg bg-[#334785] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{savingSync ? "Đang lưu…" : "Lưu vào kho dữ liệu"}</button></div></div></DialogPrimitive.Content></DialogPrimitive.Portal></DialogPrimitive.Root>
+    <DialogPrimitive.Root open={Boolean(pendingSync)} onOpenChange={open => { if (!open) setPendingSync(null); }}><DialogPrimitive.Portal><DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/45"/><DialogPrimitive.Content className="fixed left-1/2 top-1/2 z-50 grid max-h-[86vh] w-[calc(100%-2rem)] max-w-xl -translate-x-1/2 -translate-y-1/2 gap-4 overflow-hidden rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl outline-none"><div><DialogPrimitive.Title className="text-lg font-bold text-[#173b64]">Kiểm tra dữ liệu từ QLKT</DialogPrimitive.Title><DialogPrimitive.Description className="mt-1 text-sm text-slate-600">Ngày {pendingSync ? pendingSync.operatingDate.split("-").reverse().join("/") : ""}. Bỏ chọn chỉ tiêu chưa muốn cập nhật.</DialogPrimitive.Description></div><div className="overflow-auto rounded-xl border border-slate-200"><table className="w-full text-sm"><thead><tr className="bg-[#dcebf5] text-[#173b64]"><th className="w-10 p-2 text-center">Chọn</th><th className="p-2 text-left">Chỉ tiêu</th><th className="p-2 text-center">Từ QLKT</th></tr></thead><tbody>{pendingSync?.entries.map(entry => <tr key={entry.fieldCode} className="border-t"><td className="p-2 text-center"><input type="checkbox" checked={selectedSyncCodes.has(entry.fieldCode)} onChange={event => setSelectedSyncCodes(old => { const next = new Set(old); if (event.target.checked) next.add(entry.fieldCode); else next.delete(entry.fieldCode); return next; })} aria-label={`Chọn ${qlktFieldLabels[entry.fieldCode]}`}/></td><td className="p-2"><p className="font-semibold text-black">{qlktFieldLabels[entry.fieldCode] || entry.fieldCode}</p><p className="text-xs text-slate-500">{entry.sourceLabel}</p></td><td className="p-2 text-center font-bold tabular-nums text-[#173b64]">{entry.value === "" ? "Không áp dụng — bỏ số cũ" : formatInputValue(entry.value)}</td></tr>)}</tbody></table></div><div className="flex items-center justify-between gap-3"><p className="text-xs text-slate-500">Bấm &quot;Lưu vào kho dữ liệu&quot; để ghi ngay các chỉ tiêu đã chọn.</p><div className="flex gap-2"><button type="button" onClick={() => setPendingSync(null)} className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700">Hủy</button><button type="button" disabled={savingSync || selectedSyncCodes.size === 0 || isViewer} title={isViewer ? "Tài khoản Chỉ xem không có quyền lưu dữ liệu." : undefined} onClick={() => void applyQlktSync()} className="rounded-lg bg-[#334785] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{savingSync ? "Đang lưu…" : "Lưu vào kho dữ liệu"}</button></div></div></DialogPrimitive.Content></DialogPrimitive.Portal></DialogPrimitive.Root>
   </section>;
 }
 

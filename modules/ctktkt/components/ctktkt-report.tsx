@@ -1,5 +1,4 @@
 "use client";
-import { ctktktMetricDisplay } from "../lib/ctktkt-report";
 import { ReportCorrections } from "./report-corrections";
 import { useCtktktRequest, useCtktktDownload } from "@/hooks/useCtktkt";
 
@@ -929,15 +928,23 @@ export function CtktktReport() {
   ) => {
     const text = e.clipboardData.getData("text/plain");
     if (!text) return;
+    // Excel/Google Sheets chỉ đưa số đang hiển thị vào text/plain; HTML giữ giá trị gốc
+    // (vd. độ ẩm 8,2567 hiển thị 8,3) để số dán lên web đúng bằng số trong bảng tính.
+    const html = e.clipboardData.getData("text/html");
 
     // Chỉ can thiệp nếu clipboard chứa tab hoặc xuống dòng (dữ liệu nhiều ô)
     if (!text.includes("\t") && !text.includes("\n") && !text.includes("\r")) {
+      const preciseValue = html ? parseSpreadsheetClipboard(text, html)[0]?.[0] : undefined;
+      if (preciseValue !== undefined && preciseValue !== parseSpreadsheetClipboard(text)[0]?.[0]) {
+        e.preventDefault();
+        update(startCell, preciseValue);
+      }
       return;
     }
 
     e.preventDefault();
 
-    const rows = parseSpreadsheetClipboard(text);
+    const rows = parseSpreadsheetClipboard(text, html);
     if (rows.length === 0) return;
 
     const currentInput = e.currentTarget;
@@ -1328,22 +1335,22 @@ export function CtktktReport() {
                     <tr key={row.key} className="hover:bg-slate-50/70">
                       <td className="p-2 font-medium text-slate-800">{row.label}</td>
                       <td className="bg-cyan-50/30 p-2 text-center font-mono tabular-nums text-[#173b64] text-sm font-semibold">
-                        {(ctktktMetricDisplay(summary.s1, row.key) ?? format(summary.s1[row.key]))}
+                        {format(summary.s1[row.key])}
                       </td>
                       <td className="bg-amber-50/40 p-2 text-center font-mono tabular-nums text-amber-900 text-sm font-semibold">
-                        {meterComparisonKeys.has(row.key) ? (ctktktMetricDisplay(meterSummary.s1, row.key) ?? format(meterSummary.s1[row.key])) : "—"}
+                        {meterComparisonKeys.has(row.key) ? format(meterSummary.s1[row.key]) : "—"}
                       </td>
                       <td className="bg-cyan-50/30 p-2 text-center font-mono tabular-nums text-[#173b64] text-sm font-semibold">
-                        {(ctktktMetricDisplay(summary.s2, row.key) ?? format(summary.s2[row.key]))}
+                        {format(summary.s2[row.key])}
                       </td>
                       <td className="bg-amber-50/40 p-2 text-center font-mono tabular-nums text-amber-900 text-sm font-semibold">
-                        {meterComparisonKeys.has(row.key) ? (ctktktMetricDisplay(meterSummary.s2, row.key) ?? format(meterSummary.s2[row.key])) : "—"}
+                        {meterComparisonKeys.has(row.key) ? format(meterSummary.s2[row.key]) : "—"}
                       </td>
                       <td className="bg-blue-50/40 p-2 text-center font-mono tabular-nums text-indigo-900 text-sm font-semibold">
-                        {(ctktktMetricDisplay(summary.plant, row.key) ?? format(summary.plant[row.key]))}
+                        {format(summary.plant[row.key])}
                       </td>
                       <td className="bg-amber-50/40 p-2 text-center font-mono tabular-nums text-amber-900 text-sm font-semibold">
-                        {meterComparisonKeys.has(row.key) ? (ctktktMetricDisplay(meterSummary.plant, row.key) ?? format(meterSummary.plant[row.key])) : "—"}
+                        {meterComparisonKeys.has(row.key) ? format(meterSummary.plant[row.key]) : "—"}
                       </td>
                       <td className="p-2 text-center font-medium text-slate-500 text-xs">{row.unit}</td>
                     </tr>

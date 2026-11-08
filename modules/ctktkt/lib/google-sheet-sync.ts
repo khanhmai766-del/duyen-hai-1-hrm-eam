@@ -140,6 +140,7 @@ export function buildGoogleSheetDayPayload(
     ppaValue: number,
     note?: string | null,
     availableCapacity?: number | null,
+    netOutput?: number,
   ): GoogleSheetUnitPayload => ({
     sanLuong,
     csKhaDung: availableCapacity ?? null,
@@ -148,18 +149,18 @@ export function buildGoogleSheetDayPayload(
     suatHaoThan,
     nhietTri: heatingValue,
     shnThucTe: actual,
-    shnPPA: ppaValue,
+    shnPPA: netOutput === 0 ? null : ppaValue,
     chenhLech: differenceText(actual, ppaValue),
-    danhGia: assessment(actual, ppaValue, note),
+    danhGia: netOutput === 0 ? ["Ngừng máy — không đánh giá", String(note || "").trim()].filter(Boolean).join(" - ") : assessment(actual, ppaValue, note),
   });
 
   const [year, month, day] = operatingDate.split("-");
   return {
     date: `${Number(month)}/${Number(day)}/${year}`,
     row: null,
-    S1: { ...unit(grossS1, divide(grossS1, hoursS1, 1000), divide(coalS1, netS1), actualS1, ppaS1, ppa.noteS1, availableCapacityS1), tinhHinhVanHanh: operatingEventS1 },
-    S2: { ...unit(grossS2, divide(grossS2, hoursS2, 1000), divide(coalS2, netS2), actualS2, ppaS2, ppa.noteS2, availableCapacityS2), tinhHinhVanHanh: operatingEventS2 },
-    NMND: unit(grossPlantMwh, divide(grossPlantMwh, hoursS1 + hoursS2), divide(coalS1 + coalS2, netPlant), actualPlant, ppaPlant),
+    S1: { ...unit(grossS1, divide(grossS1, hoursS1, 1000), divide(coalS1, netS1), actualS1, ppaS1, ppa.noteS1, availableCapacityS1, netS1), tinhHinhVanHanh: operatingEventS1 },
+    S2: { ...unit(grossS2, divide(grossS2, hoursS2, 1000), divide(coalS2, netS2), actualS2, ppaS2, ppa.noteS2, availableCapacityS2, netS2), tinhHinhVanHanh: operatingEventS2 },
+    NMND: unit(grossPlantMwh, divide(grossPlantMwh, hoursS1 + hoursS2), divide(coalS1 + coalS2, netPlant), actualPlant, ppaPlant, undefined, undefined, netPlant),
   };
 }
 

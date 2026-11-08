@@ -77,8 +77,15 @@ export function SpreadsheetInputBehavior() {
     const onPaste = (event: ClipboardEvent) => {
       if (event.defaultPrevented || !isSpreadsheetInput(event.target as Element)) return;
       const text = event.clipboardData?.getData("text/plain") || "";
-      if (!text.includes("\t") && !/[\r\n]/.test(text)) return;
-      const matrix = parseSpreadsheetClipboard(text);
+      const html = event.clipboardData?.getData("text/html") || "";
+      if (!text.includes("\t") && !/[\r\n]/.test(text)) {
+        const preciseValue = html ? parseSpreadsheetClipboard(text, html)[0]?.[0] : undefined;
+        if (preciseValue === undefined || preciseValue === parseSpreadsheetClipboard(text)[0]?.[0]) return;
+        event.preventDefault();
+        setReactInputValue(event.target as HTMLInputElement, preciseValue);
+        return;
+      }
+      const matrix = parseSpreadsheetClipboard(text, html);
       if (!matrix.length) return;
       const input = event.target as HTMLInputElement;
       const grid = gridOf(input);

@@ -211,7 +211,7 @@ function calculateUnit(gross: number[], net: number[], year: number, unitLabel: 
 export function calculatePpaHeatRate(source: PpaSourceData, year: number): PpaResult {
   const s1 = calculateUnit(source.grossS1, source.netS1, year, "S1"), s2 = calculateUnit(source.grossS2, source.netS2, year, "S2");
   const plantNetTotal = s1.netTotal + s2.netTotal;
-  if (plantNetTotal <= 0) throw new Error("Tổng sản lượng điểm bán của cả S1 và S2 đang bằng 0.");
+  if (plantNetTotal <= 0) return { ppaPlant: 0, ppaS1: 0, ppaS2: 0, grossS1Kwh: 0, netS1Kwh: 0, grossS2Kwh: 0, netS2Kwh: 0 };
   return { ppaPlant: (s1.heat + s2.heat) / plantNetTotal, ppaS1: s1.ppa, ppaS2: s2.ppa, grossS1Kwh: s1.grossTotal, netS1Kwh: s1.netTotal, grossS2Kwh: s2.grossTotal, netS2Kwh: s2.netTotal };
 }
 
@@ -221,7 +221,7 @@ export function calculatePpaHeatRate(source: PpaSourceData, year: number): PpaRe
 export function calculatePpaHeatRateDetailed(source: PpaSourceData, year: number): PpaDetailedResult {
   const s1 = calculateUnit(source.grossS1, source.netS1, year, "S1"), s2 = calculateUnit(source.grossS2, source.netS2, year, "S2");
   const plantNetTotal = s1.netTotal + s2.netTotal;
-  if (plantNetTotal <= 0) throw new Error("Tổng sản lượng điểm bán của cả S1 và S2 đang bằng 0.");
+  if (plantNetTotal <= 0) return { s1, s2, ppaPlant: 0 };
   return { s1, s2, ppaPlant: (s1.heat + s2.heat) / plantNetTotal };
 }
 
@@ -248,7 +248,30 @@ export function calculateActualHeatRate(values: Record<string, string>) {
   return { actualPlant: officialPlant !== null && officialPlant > 0 ? officialPlant : calculatedPlant, actualS1: s1, actualS2: s2 };
 }
 
-export function compareHeatRate(actual: number | null, ppa: number | null) {
+// Stored zero PPA is a shutdown sentinel, never a measured heat rate.
+export function displayPpaRate(value: number | null, netKwh: number | null) {
+  return netKwh === 0 ? null : value;
+}
+
+/** Explicit four-channel zeros only: blank input never proves a shutdown day. */
+export function hasZeroGenerationDay(values: Record<string, string>) {
+  return ['B', 'C', 'H', 'I'].every(code => parseLocaleNumber(values[code] || '') === 0);
+}
+
+export function zeroPpaSource(): PpaSourceData {
+  return { grossS1: Array(48).fill(0), netS1: Array(48).fill(0), grossS2: Array(48).fill(0), netS2: Array(48).fill(0) };
+}
+
+export function stoppedPpaDays(byDate: ReadonlyMap<string, Record<string, string>>) {
+  return [...byDate].filter(([, values]) => hasZeroGenerationDay(values)).map(([operatingDate]) => ({
+    operatingDate, ppaPlant: 0, ppaS1: 0, ppaS2: 0,
+    grossS1Kwh: 0, netS1Kwh: 0, grossS2Kwh: 0, netS2Kwh: 0,
+    sourceFiles: '[]', noteS1: '', noteS2: '', updatedAt: '',
+  }));
+}
+
+export function compareHeatRate(actual: number | null, ppa: number | null, netKwh?: number | null) {
+  if (netKwh === 0) return { difference: null, percent: null, status: "Ngừng máy — không đánh giá" };
   if (actual === null || ppa === null || ppa === 0) return { difference: null, percent: null, status: "Chưa đủ dữ liệu" };
   const difference = actual - ppa;
   return { difference, percent: difference / ppa * 100, status: difference <= 0 ? "Đạt" : "Vượt PPA" };

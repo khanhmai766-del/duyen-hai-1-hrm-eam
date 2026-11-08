@@ -14,15 +14,15 @@ const code=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.Comm
 const meters=()=>({grossS1:Array(48).fill(200000),netS1:Array(48).fill(180000),grossS2:Array(48).fill(0),netS2:Array(48).fill(0)});
 async function snapshot(ppaRows){
   const exports={};
-  async function exportReport(){
+  async function buildWorkbook(){
     const book=new ExcelJS.Workbook();const sheet=book.addWorksheet('T11.2026');
     sheet.addRow(['Header']);sheet.addRow(['Units']);
-    return new Response(await book.xlsx.writeBuffer());
+    return book;
   }
   const db={prepare(sql){return {bind(){return {all:async()=>({results:sql.includes('FROM ppa_heat_rate_daily')?ppaRows:[]})};}};}};
   vm.runInNewContext(code,{exports,Buffer,Response,Request,URL,Date,console,require:name=>{
     if(name==='@/modules/ctktkt/db')return {getRawDb:()=>db};
-    if(name.startsWith('./report-exports/'))return {exportReport};
+    if(name.startsWith('./report-exports/'))return {buildCtktktWorkbook:buildWorkbook,buildWaterWorkbook:buildWorkbook};
     if(name.startsWith('./'))return require(fileURLToPath(new URL(name+(name.endsWith('.json')?'':'.ts'),root)));
     return require(name);
   }});
