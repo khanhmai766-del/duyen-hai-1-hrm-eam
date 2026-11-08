@@ -24,7 +24,7 @@ Tài liệu này ghi kế hoạch đã chốt ngày 08/11/2026 (đã thống nh�
 | Giai đoạn | Việc | Trạng thái |
 |---|---|---|
 | 0 | Test hợp đồng API, lệnh `test:ctktkt`, số đo nền | ✅ 08/11/2026 |
-| 1 + 2 | Theo từng trang: hook TanStack trong `hooks/`, handler trả `ok()/fail()`, tách component, CSS → Tailwind. Thứ tự: **Hoá chất → Lượng nước → PMIS → PPA → Báo cáo sản xuất → Dữ liệu các tháng → Chỉ tiêu KTKT** | Hoá chất ✅ · Lượng nước ✅ · PMIS ✅ · PPA ✅ · Báo cáo sản xuất ✅ · Dữ liệu các tháng ✅ (08/11) · còn Chỉ tiêu KTKT ⏳ |
+| 1 + 2 | Theo từng trang: hook TanStack trong `hooks/`, handler trả `ok()/fail()`, tách component, CSS → Tailwind. Thứ tự: **Hoá chất → Lượng nước → PMIS → PPA → Báo cáo sản xuất → Dữ liệu các tháng → Chỉ tiêu KTKT** | Hoá chất ✅ · Lượng nước ✅ · PMIS ✅ · PPA ✅ · Báo cáo sản xuất ✅ · Dữ liệu các tháng ✅ (08/11) · Chỉ tiêu KTKT: 6 route ✅, 5 component ⏳ (chờ phối hợp — tệp đang được sửa song song) |
 
 ### Mẫu chuyển một trang (theo trang Hoá chất)
 
@@ -74,6 +74,13 @@ xác minh, "nạp lại") gọi thẳng `apiGet`.
 **Phản hồi là FILE** (`bcsx-operation-import`, `bcsx-export`): đọc bằng `apiReportResponse` (file trả nguyên, lỗi JSON →
 `{error}`); route chỉ đổi nhánh lỗi sang `fail()`.
 
+**Chỉ tiêu KTKT — khi chuyển component** (`ctktkt-report.tsx`, `report-corrections.tsx`, `coal-meter-photo-*.tsx`,
+`coal-gemini-shared-settings.tsx`): báo người đang sửa các tệp này đẩy hết lên GitHub trước. `tests/ctktkt/report-input.browser.mjs`
+giả lập `@/hooks/useCtktkt` + API trả JSON kiểu cũ và dùng sự kiện `test-request-change` để mô phỏng "đọc muộn khi đang
+sửa" — phải đổi API giả sang phong bì `{data,meta,error}` và cách kích hoạt đọc lại, GIỮ nguyên 8 kiểm tra. `tests/ctktkt/domain/coal-gemini.test.mjs`
+đọc mã nguồn `coal-meter-photo-import.tsx` (phải còn chuỗi `write: false`, không có `matchCoalMeter(`). Dev không có
+`GEMINI_API_KEY` → hợp đồng chỉ kiểm nhánh "chưa có khoá", không gọi Google.
+
 ### Việc tồn đọng ghi nhận khi chuyển đổi
 
 - `GET water-report` trả 500 cho **cả tháng** nếu một ca có hiệu chỉnh công tơ âm (`normalizeWaterAdjustment` ném lỗi khi đọc).
@@ -83,6 +90,8 @@ xác minh, "nạp lại") gọi thẳng `apiGet`.
 - `bcsx-section1-import` (nạp lịch sử Mục 1 từ 2 file S1/S2): chỉ kiểm nhánh lỗi — file do `bcsx-export` xuất thiếu các sheet theo
   ngày ("01"…) của file BCSX gốc; cần một cặp file gốc mẫu để khoá nhánh thành công. `bcsx-operation-import` cũng vậy (thiếu file
   DanhSachLenhKetThuc mẫu). `bcsx-sync` hiện không có nơi nào gọi — xem lại ở giai đoạn 4.
+- `PATCH correction-requests` với JSON hỏng trả **503** "Chưa truy cập được yêu cầu chỉnh sửa" (nên là 400) — hợp đồng đang khoá
+  hành vi hiện tại; sửa thì ghi lại ảnh chụp có chủ đích.
 - `styles.css` còn các quy tắc `.module-chart-grid …` không phần tử nào dùng (đã xoá phần của PMIS); dọn ở giai đoạn 4.
 - PMIS (đã sửa khi chuyển): bản cũ báo "Không đồng bộ được ngày nào…" rồi tự xoá ngay vì lượt tải lại đặt `error = ""`;
   nay thông báo lỗi còn hiển thị.

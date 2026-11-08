@@ -102,6 +102,12 @@ const ENDPOINTS = [
   "ctktkt-report?period=2026-09&date=2026-09-17&scope=operating-hours",
   "ctktkt-report?period=2026-09&date=2026-09-17&scope=stored",
   "ctktkt-report?period=2026-09",
+  "ctktkt-report?period=2026-13",
+  "ctktkt-report?period=2026-09&date=2026-09-17&scope=khac",
+  "ctktkt-report?period=2026-09&scope=stored",
+  "coal-meter-photos?scope=review&date=2026-09-17",
+  "coal-meter-photos?date=17-09-2026",
+  "coal-gemini-settings",
   "daily-inputs?period=2026-09",
   "daily-inputs?period=2026-09&date=2026-09-17&scope=non-ktkt",
   "daily-inputs?period=2026-09&from=2026-09-01&to=2026-09-18&scope=non-ktkt",
@@ -247,6 +253,37 @@ const WRITE_SCENARIOS = {
     { step: "lệnh điều độ: ngày sai", method: "POST", path: "bcsx-operation-import", form: { date: "17/09/2026" }, files: [["file", "bcsx-export?date=2026-09-17&unit=S1", "DanhSachLenhKetThuc.xlsx"]] },
     { step: "lệnh điều độ: file sai cấu trúc", method: "POST", path: "bcsx-operation-import", form: { date: "2026-09-17" }, files: [["file", "bcsx-export?date=2026-09-17&unit=S1", "DanhSachLenhKetThuc.xlsx"]] },
   ],
+  // Chỉ tiêu KTKT (tài khoản quản trị): lưu ô báo cáo, các lỗi kiểm tra, yêu cầu sửa, ảnh công tơ than + Gemini.
+  // Dev không có GEMINI_API_KEY → mọi nhánh đọc ảnh/kiểm tra dừng ở kiểm cấu hình, KHÔNG gọi Google.
+  "ktkt": [
+    { step: "lưu 2 ô (số có dấu phẩy)", method: "POST", path: "ctktkt-report", json: { operatingDate: "2026-09-17", entries: [{ cell: "W8", value: "31715900,5" }, { cell: "Y8", value: "31719400" }] },
+      after: ["ctktkt-report?period=2026-09&date=2026-09-17&scope=stored", "correction-requests"] },
+    { step: "lưu lại đúng giá trị cũ (không đổi)", method: "POST", path: "ctktkt-report", json: { operatingDate: "2026-09-17", entries: [{ cell: "Y8", value: "31719400" }] } },
+    { step: "xoá 1 ô (rỗng)", method: "POST", path: "ctktkt-report", json: { operatingDate: "2026-09-17", entries: [{ cell: "AA8", value: "" }] },
+      after: ["ctktkt-report?period=2026-09&date=2026-09-17&scope=stored"] },
+    { step: "ô chữ: tổ máy sự kiện S1", method: "POST", path: "ctktkt-report", json: { operatingDate: "2026-09-16", entries: [{ cell: "STARTUP_UNIT", value: "S1" }] },
+      after: ["ctktkt-report?period=2026-09&date=2026-09-16&scope=daily-links"] },
+    { step: "ô chữ: ghi chú hiệu chỉnh than S1", method: "POST", path: "ctktkt-report", json: { operatingDate: "2026-09-17", entries: [{ cell: "COAL_ADJ_NOTE_S1", value: "Hiệu chỉnh theo biên bản kiểm kê" }] },
+      after: ["ctktkt-report?period=2026-09&date=2026-09-17&scope=stored"] },
+    { step: "ô tự liên kết BCSX (M3) bị chặn", method: "POST", path: "ctktkt-report", json: { operatingDate: "2026-09-17", entries: [{ cell: "M3", value: "1" }] } },
+    { step: "ô ngoài mẫu", method: "POST", path: "ctktkt-report", json: { operatingDate: "2026-09-17", entries: [{ cell: "ZZ999", value: "1" }] } },
+    { step: "chữ ở ô số", method: "POST", path: "ctktkt-report", json: { operatingDate: "2026-09-17", entries: [{ cell: "W8", value: "abc" }] } },
+    { step: "ô trùng trong danh sách", method: "POST", path: "ctktkt-report", json: { operatingDate: "2026-09-17", entries: [{ cell: "W8", value: "1" }, { cell: "w8", value: "2" }] } },
+    { step: "tổ máy sự kiện S3", method: "POST", path: "ctktkt-report", json: { operatingDate: "2026-09-17", entries: [{ cell: "STARTUP_UNIT", value: "S3" }] } },
+    { step: "giờ sai dạng HH:mm", method: "POST", path: "ctktkt-report", json: { operatingDate: "2026-09-17", entries: [{ cell: "STARTUP_OIL_START_TIME", value: "25:00" }] } },
+    { step: "ngày tương lai", method: "POST", path: "ctktkt-report", json: { operatingDate: "2099-01-01", entries: [{ cell: "W8", value: "1" }] } },
+    { step: "ngày không tồn tại 30/02", method: "POST", path: "ctktkt-report", json: { operatingDate: "2026-02-30", entries: [{ cell: "W8", value: "1" }] } },
+    { step: "công tơ than lẫn tổ máy", method: "POST", path: "ctktkt-report", json: { operatingDate: "2026-09-17", coalUnit: "S1", entries: [{ cell: "W8", value: "1" }] } },
+    { step: "JSON hỏng", method: "POST", path: "ctktkt-report", raw: "{khong", headers: { "Content-Type": "application/json" } },
+    { step: "không phải JSON (415)", method: "POST", path: "ctktkt-report", raw: "x", headers: { "Content-Type": "text/plain" } },
+    { step: "duyệt yêu cầu không tồn tại", method: "PATCH", path: "correction-requests", origin: true, json: { id: "khong-ton-tai", approve: true, note: "" } },
+    { step: "duyệt: JSON hỏng", method: "PATCH", path: "correction-requests", origin: true, raw: "{", headers: { "Content-Type": "application/json" } },
+    { step: "đọc ảnh công tơ khi chưa có khoá Gemini", method: "POST", path: "coal-meter-ocr", json: { data: "AAAA", mediaType: "image/jpeg", reportDate: "2026-09-17", slot: "06" } },
+    { step: "kiểm tra Gemini khi chưa có khoá", method: "POST", path: "coal-gemini-settings/check", origin: true, json: {} },
+    { step: "cấu hình Gemini: model sai", method: "PUT", path: "coal-gemini-settings", origin: true, json: { key: "", model: "gpt-4", expectedVersion: 0 } },
+    { step: "cấu hình Gemini: thiếu Origin", method: "PUT", path: "coal-gemini-settings", json: { key: "", model: "gemini-2.0-flash", expectedVersion: 0 } },
+    { step: "cấu hình Gemini: đổi model khi chưa có khoá chung (409)", method: "PUT", path: "coal-gemini-settings", origin: true, json: { key: "", model: "gemini-2.0-flash", expectedVersion: 0 }, after: ["coal-gemini-settings"] },
+  ],
 };
 // Giá trị thay đổi giữa các lần chạy: id cấp mới (< 900000) và mốc thời gian ghi.
 function normalize(value, key = "") {
@@ -267,12 +304,19 @@ async function cleanupWrites() {
   const c = new pg.Client({ connectionString: url.toString() }); await c.connect();
   // Chỉ chạy sau seed() — seed đã chặn khi bảng có dòng id < 900000 có sẵn, nên mọi dòng id < 900000 lúc này là do kịch bản tạo ra.
   for (const t of SEEDED_TABLES) await c.query(`DELETE FROM public.ctktkt_${t} WHERE id < $1`, [SEED_ID]);
+  // Lưu Chỉ tiêu KTKT ghi thêm chủ ô theo ca và yêu cầu sửa; PUT cấu hình Gemini ghi bảng dùng chung.
+  // Chỉ dọn phạm vi dữ liệu mẫu (năm 2026 của bảng mẫu) và bảng cấu hình (dev không dùng khoá dùng chung).
+  await c.query("DELETE FROM public.ctktkt_input_ownership WHERE operating_date LIKE '2026-%'");
+  await c.query("DELETE FROM public.ctktkt_correction_requests WHERE operating_date LIKE '2026-%'");
+  await c.query("DELETE FROM public.ctktkt_coal_gemini_settings_events");
+  await c.query("DELETE FROM public.ctktkt_coal_gemini_settings");
   await c.end();
 }
 async function runWrites(cookie) {
   const out = {};
   for (const [group, steps] of Object.entries(WRITE_SCENARIOS)) {
     await seed();
+    await cleanupWrites();
     // File tải lên = file Excel tháng 09/2026 do chính web xuất từ dữ liệu mẫu (vòng xuất → nhập).
     const exported = await fetch(new URL("/api/ctktkt/water-report/export?month=2026-09", base), { headers: { cookie } });
     const xlsx = Buffer.from(await exported.arrayBuffer());
@@ -280,6 +324,7 @@ async function runWrites(cookie) {
       const init = {};
       if (s.json !== undefined) { init.body = JSON.stringify(s.json); init.headers = { "Content-Type": "application/json" }; }
       if (s.raw !== undefined) { init.body = s.raw; init.headers = s.headers; }
+      if (s.origin) init.headers = { ...(init.headers ?? {}), Origin: base.origin };
       if (s.upload || s.form || s.files) {
         const fd = new FormData();
         if (s.upload) fd.set("file", new Blob([xlsx], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }), "theo-doi-nuoc-2026-09.xlsx");

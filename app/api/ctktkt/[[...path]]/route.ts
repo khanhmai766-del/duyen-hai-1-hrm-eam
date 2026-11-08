@@ -48,7 +48,8 @@ const routes: Record<string, () => Promise<Module>> = {
  * và đặt Cache-Control, KHÔNG giải mã rồi bọc lại JSON lần nữa. Thêm tên route vào đây khi chuyển đổi xong
  * (docs/ktkt-chuyen-doi.md); phải giữ `npm run test:ctktkt:contract` khớp.
  */
-const NATIVE_ENVELOPE_ROUTES = new Set(["chemical-usage", "water-report", "water-report/leaders", "water-report/upload", "daily-inputs", "ppa-heat-rate", "ppa-heat-rate/notes", "google-sheet-sync", "shift-readings", "operating-events", "bcsx-coal-stock", "bcsx-section1-import", "bcsx-operation-import"]);
+const NATIVE_ENVELOPE_ROUTES = new Set(["chemical-usage", "water-report", "water-report/leaders", "water-report/upload", "daily-inputs", "ppa-heat-rate", "ppa-heat-rate/notes", "google-sheet-sync", "shift-readings", "operating-events", "bcsx-coal-stock", "bcsx-section1-import", "bcsx-operation-import",
+  "ctktkt-report", "correction-requests", "coal-meter-ocr", "coal-meter-photos", "coal-gemini-settings", "coal-gemini-settings/check"]);
 async function dispatch(request: Request, context: { params: Promise<{ path?: string[] }> }) {
   return handle(async () => {
     const path=(await context.params).path?.join("/") ?? "";

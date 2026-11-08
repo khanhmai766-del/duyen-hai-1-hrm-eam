@@ -11534,6 +11534,65 @@
    "error": null
   }
  },
+ "ctktkt-report?period=2026-13": {
+  "status": 400,
+  "body": {
+   "data": null,
+   "meta": null,
+   "error": "Khoảng đọc dữ liệu không hợp lệ."
+  }
+ },
+ "ctktkt-report?period=2026-09&date=2026-09-17&scope=khac": {
+  "status": 400,
+  "body": {
+   "data": null,
+   "meta": null,
+   "error": "Khoảng đọc dữ liệu không hợp lệ."
+  }
+ },
+ "ctktkt-report?period=2026-09&scope=stored": {
+  "status": 400,
+  "body": {
+   "data": null,
+   "meta": null,
+   "error": "Khoảng đọc dữ liệu không hợp lệ."
+  }
+ },
+ "coal-meter-photos?scope=review&date=2026-09-17": {
+  "status": 200,
+  "body": {
+   "data": {
+    "photos": []
+   },
+   "meta": null,
+   "error": null
+  }
+ },
+ "coal-meter-photos?date=17-09-2026": {
+  "status": 400,
+  "body": {
+   "data": null,
+   "meta": null,
+   "error": "Ngày không hợp lệ."
+  }
+ },
+ "coal-gemini-settings": {
+  "status": 200,
+  "body": {
+   "data": {
+    "shared": {
+     "configured": false,
+     "model": null,
+     "version": 0,
+     "updatedAt": null,
+     "updatedBy": null
+    },
+    "environmentConfigured": false
+   },
+   "meta": null,
+   "error": null
+  }
+ },
  "daily-inputs?period=2026-09": {
   "status": 200,
   "body": {

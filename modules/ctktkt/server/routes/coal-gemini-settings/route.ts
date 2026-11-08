@@ -1,4 +1,5 @@
 import { isCtktktSameOrigin } from "@/modules/ctktkt/lib/request-origin";
+import { ok, fail } from "@/lib/api";
 import {getRawDb} from "@/modules/ctktkt/db";
 import {getSessionUser} from "@/modules/ctktkt/lib/auth/server";
 import {canEditCtktktGroup} from "@/modules/ctktkt/lib/ctktkt-permissions";
@@ -6,7 +7,12 @@ import {coalGeminiConfig} from "@/modules/ctktkt/lib/coal-gemini-config";
 import {sharedGeminiStatus,saveSharedGemini,updateSharedGeminiModel,SharedGeminiConflict} from "@/modules/ctktkt/lib/coal-gemini-shared-store";
 export const runtime="nodejs";
 export const dynamic="force-dynamic";
-const json=(body:unknown,status=200)=>Response.json(body,{status,headers:{"Cache-Control":"private, no-store","X-Content-Type-Options":"nosniff"}});
+// Lỗi ({error}) → fail(), còn lại → ok() — phong bì chung của web; cổng [[...path]] đặt Cache-Control.
+const json=(body:unknown,status=200)=>{
+  const response=body&&typeof body==="object"&&"error" in body?fail(String((body as {error:unknown}).error),status):ok(body);
+  response.headers.set("X-Content-Type-Options","nosniff");
+  return response;
+};
 async function guard(){
   const user=await getSessionUser();
   if(!user) return {ok:false as const,response:json({error:"Chưa đăng nhập."},401)};

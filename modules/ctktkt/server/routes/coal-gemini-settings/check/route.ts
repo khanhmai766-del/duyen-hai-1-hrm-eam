@@ -1,4 +1,5 @@
 import { isCtktktSameOrigin } from "@/modules/ctktkt/lib/request-origin";
+import { ok, fail } from "@/lib/api";
 import {getSessionUser} from "@/modules/ctktkt/lib/auth/server";
 import {canEditCtktktGroup} from "@/modules/ctktkt/lib/ctktkt-permissions";
 import {getRawDb} from "@/modules/ctktkt/db";
@@ -10,7 +11,12 @@ import {reserveCoalPhotoRead} from "@/modules/ctktkt/lib/coal-photo-store";
 
 export const runtime="nodejs";
 export const maxDuration=30;
-const json=(body:unknown,status=200)=>Response.json(body,{status,headers:{"Cache-Control":"private, no-store","X-Content-Type-Options":"nosniff"}});
+// Lỗi ({error}) → fail(), còn lại → ok() — phong bì chung của web; cổng [[...path]] đặt Cache-Control.
+const json=(body:unknown,status=200)=>{
+  const response=body&&typeof body==="object"&&"error" in body?fail(String((body as {error:unknown}).error),status):ok(body);
+  response.headers.set("X-Content-Type-Options","nosniff");
+  return response;
+};
 
 export async function POST(request:Request) {
   const user=await getSessionUser();

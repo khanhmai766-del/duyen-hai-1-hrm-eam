@@ -4417,5 +4417,6588 @@
     "error": "Không tìm thấy sheet chứa danh sách lệnh kết thúc hợp lệ."
    }
   }
+ },
+ "ktkt #01 lưu 2 ô (số có dấu phẩy)": {
+  "request": "POST ctktkt-report",
+  "response": {
+   "status": 200,
+   "body": {
+    "data": {
+     "saved": 2
+    },
+    "meta": null,
+    "error": null
+   }
+  },
+  "sau: GET ctktkt-report?period=2026-09&date=2026-09-17&scope=stored": {
+   "status": 200,
+   "body": {
+    "data": {
+     "entries": [
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AA10",
+       "value": "2132137.2"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AA11",
+       "value": "360972"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AA13",
+       "value": "1617680.4"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AA14",
+       "value": "1595220.2"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AA54",
+       "value": "32793.49"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AA8",
+       "value": "31723353"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AA9",
+       "value": "6454199"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AB10",
+       "value": "2132199.6"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AB11",
+       "value": "360982.2"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AB13",
+       "value": "1617680.4"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AB14",
+       "value": "1595220.2"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AB16",
+       "value": "88880.88"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AB17",
+       "value": "64384.23"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AB18",
+       "value": "92310.37"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AB19",
+       "value": "12646.19"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AB20",
+       "value": "83320.96"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AB21",
+       "value": "69390.9"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AB22",
+       "value": "39651.96"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AB23",
+       "value": "64733.87"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AB24",
+       "value": "70408.48"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AB25",
+       "value": "74464.89"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AB26",
+       "value": "11496.09"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AB27",
+       "value": "23869.31"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AB54",
+       "value": "35582.55"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AB8",
+       "value": "31724225"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AB9",
+       "value": "6454996.5"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AG10",
+       "value": "2105406.5"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AG11",
+       "value": "324904.5"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AG13",
+       "value": "40461930.9"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AG14",
+       "value": "874850691"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AG54",
+       "value": "8072.46"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AG8",
+       "value": "31193384"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AG9",
+       "value": "6343647.8"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AH13",
+       "value": "40461930.9"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AH14",
+       "value": "874850691"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AH16",
+       "value": "81891.8"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AH17",
+       "value": "30963.18"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AH18",
+       "value": "86734"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AH19",
+       "value": "54693.33"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AH20",
+       "value": "44944.14"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AH21",
+       "value": "67356.51"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AH22",
+       "value": "89957.3"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AH23",
+       "value": "1025.9"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AH24",
+       "value": "69223.41"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AH25",
+       "value": "84062.21"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AH26",
+       "value": "33695.87"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AH27",
+       "value": "87613.44"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AH54",
+       "value": "13594.01"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AI10",
+       "value": "2105659.6"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AI11",
+       "value": "324940.6"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AI13",
+       "value": "40564803.6"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AI14",
+       "value": "874953759.5"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AI54",
+       "value": "19005.52"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AI8",
+       "value": "31196868"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AI9",
+       "value": "6346841.9"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AJ13",
+       "value": "40564803.6"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AJ14",
+       "value": "874953759.5"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AJ16",
+       "value": "81891.8"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AJ17",
+       "value": "31310.77"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AJ18",
+       "value": "87057.96"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AJ19",
+       "value": "54693.33"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AJ20",
+       "value": "45112.88"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AJ21",
+       "value": "67507.7"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AJ22",
+       "value": "90098.82"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AJ23",
+       "value": "1165.14"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AJ24",
+       "value": "69329.62"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AJ25",
+       "value": "84171.42"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AJ26",
+       "value": "33802.24"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AJ27",
+       "value": "87719.91"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AJ54",
+       "value": "25275.68"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AJ87",
+       "value": "8.41"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AJ88",
+       "value": "8.61"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AJ89",
+       "value": "8.94"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AJ90",
+       "value": "8.41"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AJ91",
+       "value": "8.61"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AJ92",
+       "value": "8.94"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AK10",
+       "value": "2105935.7"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AK11",
+       "value": "324978.5"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AK13",
+       "value": "40670900.18"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AK14",
+       "value": "875060055.2"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AK28",
+       "value": "-162.51"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AK54",
+       "value": "31734.21"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AK8",
+       "value": "31200913"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AK87",
+       "value": "5379"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AK88",
+       "value": "5156"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AK89",
+       "value": "5156"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AK9",
+       "value": "6350557.7"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AK90",
+       "value": "5379"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AK91",
+       "value": "5156"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AK92",
+       "value": "5156"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AL10",
+       "value": "2105999.8"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AL11",
+       "value": "324988"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AL13",
+       "value": "40670900.18"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AL14",
+       "value": "875060055.2"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AL16",
+       "value": "82054.31"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AL17",
+       "value": "31676.56"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AL18",
+       "value": "87378.7"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AL19",
+       "value": "54693.33"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AL20",
+       "value": "45305.1"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AL21",
+       "value": "67684.17"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AL22",
+       "value": "90269.49"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AL23",
+       "value": "1335.83"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AL24",
+       "value": "69474.1"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AL25",
+       "value": "84315.83"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AL26",
+       "value": "33943.7"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AL27",
+       "value": "87862.34"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AL54",
+       "value": "34544.72"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AL8",
+       "value": "31201785"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AL9",
+       "value": "6351355.4"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AO42",
+       "value": "trước calib"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "C181",
+       "value": "1245"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "D181",
+       "value": "22.0842"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "E181",
+       "value": "0.0002"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "F181",
+       "value": "20.2993"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "G181",
+       "value": "0"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "G52",
+       "value": "1"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "H181",
+       "value": "0"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "I181",
+       "value": "0"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "I36",
+       "value": "0"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "J157",
+       "value": "11053.64"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "J158",
+       "value": "11030.56"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "J181",
+       "value": "0"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "K157",
+       "value": "10166.5842"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "K158",
+       "value": "10132.7348"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "K181",
+       "value": "1.7849"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "L181",
+       "value": "8.0822"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "M10",
+       "value": "4.8"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "M12",
+       "value": "31.9"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "M13",
+       "value": "4.4"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "M181",
+       "value": "0.0107"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "M20",
+       "value": "233"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "M3",
+       "value": "438"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "M4",
+       "value": "8"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "M41",
+       "value": "2989274"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "M42",
+       "value": "264994"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "M43",
+       "value": "6028421"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "M49",
+       "value": "8590.9"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "M5",
+       "value": "438"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "M6",
+       "value": "7"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "M8",
+       "value": "402"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "M81",
+       "value": "87.95"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "M82",
+       "value": "466.13"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "M9",
+       "value": "30.9"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "N10",
+       "value": "5.2"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "N12",
+       "value": "31.6"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "N13",
+       "value": "4.4"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "N181",
+       "value": "484.0985"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "N20",
+       "value": "232"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "N3",
+       "value": "438"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "N4",
+       "value": "23"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "N41",
+       "value": "2989263"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "N42",
+       "value": "2065100"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "N43",
+       "value": "6029758"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "N5",
+       "value": "438"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "N6",
+       "value": "24"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "N61",
+       "value": "53"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "N62",
+       "value": "30"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "N63",
+       "value": "78"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "N64",
+       "value": "77"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "N69",
+       "value": "2570"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "N70",
+       "value": "410"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "N71",
+       "value": "2540"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "N8",
+       "value": "402"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "N81",
+       "value": "96.2"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "N82",
+       "value": "472.6"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "N9",
+       "value": "31"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "O10",
+       "value": "4.7"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "O12",
+       "value": "31.1"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "O13",
+       "value": "4.7"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "O16",
+       "value": "0.1"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "O181",
+       "value": "526.6644"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "O20",
+       "value": "231"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "O3",
+       "value": "438"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "O4",
+       "value": "58"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "O41",
+       "value": "2989255"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "O42",
+       "value": "2065119"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "O43",
+       "value": "6030616"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "O49",
+       "value": "8591.2"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "O5",
+       "value": "438"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "O6",
+       "value": "60"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "O61",
+       "value": "0.69"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "O62",
+       "value": "3.008"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "O63",
+       "value": "4.378"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "O64",
+       "value": "5.178"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "O69",
+       "value": "2090"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "O70",
+       "value": "410"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "O71",
+       "value": "2540"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "O8",
+       "value": "403"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "O9",
+       "value": "30.7"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "P10",
+       "value": "5"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "P12",
+       "value": "39.1"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "P13",
+       "value": "4.9"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "P16",
+       "value": "0.1"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "P181",
+       "value": "9692.4242"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "P20",
+       "value": "231"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "P3",
+       "value": "622.5"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "P4",
+       "value": "71"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "P41",
+       "value": "2989255"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "P42",
+       "value": "2065119"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "P43",
+       "value": "6031669"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "P5",
+       "value": "609"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "P6",
+       "value": "75"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "P61",
+       "value": "53"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "P62",
+       "value": "30"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "P63",
+       "value": "78"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "P64",
+       "value": "77"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "P69",
+       "value": "54.893"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "P70",
+       "value": "6.566"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "P71",
+       "value": "68.315"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "P72",
+       "value": "0"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "P73",
+       "value": "144.165"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "P74",
+       "value": "129.774"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "P8",
+       "value": "566"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "P9",
+       "value": "36.8"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Q10",
+       "value": "4.81"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Q12",
+       "value": "32.71"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Q13",
+       "value": "4.54"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Q16",
+       "value": "0.1"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Q181",
+       "value": "10544.6608"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Q20",
+       "value": "232"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Q3",
+       "value": "439"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Q4",
+       "value": "32"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Q41",
+       "value": "2989240"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Q42",
+       "value": "2065169"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Q43",
+       "value": "6033252"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Q49",
+       "value": "8591.5"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Q5",
+       "value": "438"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Q6",
+       "value": "34"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Q61",
+       "value": "0.69"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Q62",
+       "value": "3.008"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Q63",
+       "value": "4.378"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Q64",
+       "value": "5.178"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Q8",
+       "value": "402"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Q9",
+       "value": "31.07"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "R10",
+       "value": "5.17"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "R12",
+       "value": "31.96"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "R13",
+       "value": "4.93"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "R181",
+       "value": "0.7391"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "R20",
+       "value": "233"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "R3",
+       "value": "439"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "R4",
+       "value": "8"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "R41",
+       "value": "2989238"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "R42",
+       "value": "2065169"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "R43",
+       "value": "6033574"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "R49",
+       "value": "8591.6"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "R5",
+       "value": "438"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "R6",
+       "value": "9"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "R61",
+       "value": "53"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "R62",
+       "value": "30"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "R63",
+       "value": "78"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "R64",
+       "value": "77"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "R8",
+       "value": "402"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "R9",
+       "value": "30.81"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "S181",
+       "value": "0"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "T181",
+       "value": "Đạt"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "W10",
+       "value": "2131618.3"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "W11",
+       "value": "360891.3"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "W13",
+       "value": "1617408.5"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "W14",
+       "value": "1594946.6"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "W54",
+       "value": "8520.17"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "W72",
+       "value": "21721.74"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "W73",
+       "value": "17400.48"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "W8",
+       "value": "31715900.5"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "W86",
+       "value": "208206.49515191233"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "W9",
+       "value": "6447270"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "X13",
+       "value": "1617408.5"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "X14",
+       "value": "1594946.6"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "X16",
+       "value": "88524.33"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "X17",
+       "value": "64013.37"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "X18",
+       "value": "92005.47"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "X19",
+       "value": "12272.71"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "X20",
+       "value": "82994.91"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "X21",
+       "value": "69118.73"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "X22",
+       "value": "39370.56"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "X23",
+       "value": "64454.95"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "X24",
+       "value": "70151.45"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "X25",
+       "value": "74193.89"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "X26",
+       "value": "11066.18"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "X27",
+       "value": "23718.26"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "X54",
+       "value": "14106.7"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "X68",
+       "value": "21720.986999999997"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "X72",
+       "value": "22514.15"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "X73",
+       "value": "18326.98"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Y10",
+       "value": "2131869"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Y11",
+       "value": "360931.9"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Y13",
+       "value": "1617543.9"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Y14",
+       "value": "1595083"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Y54",
+       "value": "19663.18"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Y8",
+       "value": "31719400"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Y9",
+       "value": "6450464.8"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Z13",
+       "value": "1617543.9"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Z14",
+       "value": "1595083"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Z16",
+       "value": "88696.03"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Z17",
+       "value": "64188.43"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Z18",
+       "value": "92146.68"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Z19",
+       "value": "12447.73"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Z20",
+       "value": "83145.79"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Z21",
+       "value": "69240.98"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Z22",
+       "value": "39495.89"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Z23",
+       "value": "64584.76"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Z24",
+       "value": "70267.1"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Z25",
+       "value": "74309.32"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Z26",
+       "value": "11313.22"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Z27",
+       "value": "23733.26"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Z54",
+       "value": "26076.21"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Z72",
+       "value": "0"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Z73",
+       "value": "532"
+      }
+     ]
+    },
+    "meta": null,
+    "error": null
+   }
+  },
+  "sau: GET correction-requests": {
+   "status": 200,
+   "body": {
+    "data": {
+     "entries": []
+    },
+    "meta": null,
+    "error": null
+   }
+  }
+ },
+ "ktkt #02 lưu lại đúng giá trị cũ (không đổi)": {
+  "request": "POST ctktkt-report",
+  "response": {
+   "status": 200,
+   "body": {
+    "data": {
+     "saved": 0
+    },
+    "meta": null,
+    "error": null
+   }
+  }
+ },
+ "ktkt #03 xoá 1 ô (rỗng)": {
+  "request": "POST ctktkt-report",
+  "response": {
+   "status": 200,
+   "body": {
+    "data": {
+     "saved": 0
+    },
+    "meta": null,
+    "error": null
+   }
+  },
+  "sau: GET ctktkt-report?period=2026-09&date=2026-09-17&scope=stored": {
+   "status": 200,
+   "body": {
+    "data": {
+     "entries": [
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AA10",
+       "value": "2132137.2"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AA11",
+       "value": "360972"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AA13",
+       "value": "1617680.4"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AA14",
+       "value": "1595220.2"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AA54",
+       "value": "32793.49"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AA9",
+       "value": "6454199"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AB10",
+       "value": "2132199.6"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AB11",
+       "value": "360982.2"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AB13",
+       "value": "1617680.4"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AB14",
+       "value": "1595220.2"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AB16",
+       "value": "88880.88"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AB17",
+       "value": "64384.23"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AB18",
+       "value": "92310.37"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AB19",
+       "value": "12646.19"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AB20",
+       "value": "83320.96"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AB21",
+       "value": "69390.9"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AB22",
+       "value": "39651.96"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AB23",
+       "value": "64733.87"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AB24",
+       "value": "70408.48"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AB25",
+       "value": "74464.89"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AB26",
+       "value": "11496.09"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AB27",
+       "value": "23869.31"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AB54",
+       "value": "35582.55"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AB8",
+       "value": "31724225"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AB9",
+       "value": "6454996.5"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AG10",
+       "value": "2105406.5"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AG11",
+       "value": "324904.5"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AG13",
+       "value": "40461930.9"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AG14",
+       "value": "874850691"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AG54",
+       "value": "8072.46"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AG8",
+       "value": "31193384"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AG9",
+       "value": "6343647.8"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AH13",
+       "value": "40461930.9"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AH14",
+       "value": "874850691"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AH16",
+       "value": "81891.8"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AH17",
+       "value": "30963.18"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AH18",
+       "value": "86734"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AH19",
+       "value": "54693.33"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AH20",
+       "value": "44944.14"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AH21",
+       "value": "67356.51"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AH22",
+       "value": "89957.3"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AH23",
+       "value": "1025.9"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AH24",
+       "value": "69223.41"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AH25",
+       "value": "84062.21"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AH26",
+       "value": "33695.87"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AH27",
+       "value": "87613.44"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AH54",
+       "value": "13594.01"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AI10",
+       "value": "2105659.6"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AI11",
+       "value": "324940.6"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AI13",
+       "value": "40564803.6"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AI14",
+       "value": "874953759.5"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AI54",
+       "value": "19005.52"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AI8",
+       "value": "31196868"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AI9",
+       "value": "6346841.9"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AJ13",
+       "value": "40564803.6"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AJ14",
+       "value": "874953759.5"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AJ16",
+       "value": "81891.8"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AJ17",
+       "value": "31310.77"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AJ18",
+       "value": "87057.96"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AJ19",
+       "value": "54693.33"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AJ20",
+       "value": "45112.88"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AJ21",
+       "value": "67507.7"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AJ22",
+       "value": "90098.82"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AJ23",
+       "value": "1165.14"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AJ24",
+       "value": "69329.62"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AJ25",
+       "value": "84171.42"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AJ26",
+       "value": "33802.24"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AJ27",
+       "value": "87719.91"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AJ54",
+       "value": "25275.68"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AJ87",
+       "value": "8.41"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AJ88",
+       "value": "8.61"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AJ89",
+       "value": "8.94"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AJ90",
+       "value": "8.41"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AJ91",
+       "value": "8.61"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AJ92",
+       "value": "8.94"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AK10",
+       "value": "2105935.7"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AK11",
+       "value": "324978.5"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AK13",
+       "value": "40670900.18"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AK14",
+       "value": "875060055.2"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AK28",
+       "value": "-162.51"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AK54",
+       "value": "31734.21"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AK8",
+       "value": "31200913"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AK87",
+       "value": "5379"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AK88",
+       "value": "5156"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AK89",
+       "value": "5156"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AK9",
+       "value": "6350557.7"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AK90",
+       "value": "5379"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AK91",
+       "value": "5156"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AK92",
+       "value": "5156"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AL10",
+       "value": "2105999.8"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AL11",
+       "value": "324988"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AL13",
+       "value": "40670900.18"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AL14",
+       "value": "875060055.2"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AL16",
+       "value": "82054.31"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AL17",
+       "value": "31676.56"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AL18",
+       "value": "87378.7"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AL19",
+       "value": "54693.33"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AL20",
+       "value": "45305.1"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AL21",
+       "value": "67684.17"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AL22",
+       "value": "90269.49"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AL23",
+       "value": "1335.83"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AL24",
+       "value": "69474.1"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AL25",
+       "value": "84315.83"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AL26",
+       "value": "33943.7"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AL27",
+       "value": "87862.34"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AL54",
+       "value": "34544.72"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AL8",
+       "value": "31201785"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AL9",
+       "value": "6351355.4"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AO42",
+       "value": "trước calib"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "C181",
+       "value": "1245"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "D181",
+       "value": "22.0842"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "E181",
+       "value": "0.0002"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "F181",
+       "value": "20.2993"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "G181",
+       "value": "0"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "G52",
+       "value": "1"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "H181",
+       "value": "0"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "I181",
+       "value": "0"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "I36",
+       "value": "0"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "J157",
+       "value": "11053.64"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "J158",
+       "value": "11030.56"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "J181",
+       "value": "0"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "K157",
+       "value": "10166.5842"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "K158",
+       "value": "10132.7348"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "K181",
+       "value": "1.7849"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "L181",
+       "value": "8.0822"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "M10",
+       "value": "4.8"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "M12",
+       "value": "31.9"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "M13",
+       "value": "4.4"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "M181",
+       "value": "0.0107"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "M20",
+       "value": "233"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "M3",
+       "value": "438"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "M4",
+       "value": "8"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "M41",
+       "value": "2989274"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "M42",
+       "value": "264994"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "M43",
+       "value": "6028421"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "M49",
+       "value": "8590.9"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "M5",
+       "value": "438"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "M6",
+       "value": "7"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "M8",
+       "value": "402"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "M81",
+       "value": "87.95"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "M82",
+       "value": "466.13"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "M9",
+       "value": "30.9"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "N10",
+       "value": "5.2"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "N12",
+       "value": "31.6"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "N13",
+       "value": "4.4"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "N181",
+       "value": "484.0985"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "N20",
+       "value": "232"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "N3",
+       "value": "438"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "N4",
+       "value": "23"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "N41",
+       "value": "2989263"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "N42",
+       "value": "2065100"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "N43",
+       "value": "6029758"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "N5",
+       "value": "438"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "N6",
+       "value": "24"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "N61",
+       "value": "53"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "N62",
+       "value": "30"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "N63",
+       "value": "78"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "N64",
+       "value": "77"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "N69",
+       "value": "2570"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "N70",
+       "value": "410"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "N71",
+       "value": "2540"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "N8",
+       "value": "402"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "N81",
+       "value": "96.2"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "N82",
+       "value": "472.6"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "N9",
+       "value": "31"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "O10",
+       "value": "4.7"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "O12",
+       "value": "31.1"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "O13",
+       "value": "4.7"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "O16",
+       "value": "0.1"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "O181",
+       "value": "526.6644"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "O20",
+       "value": "231"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "O3",
+       "value": "438"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "O4",
+       "value": "58"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "O41",
+       "value": "2989255"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "O42",
+       "value": "2065119"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "O43",
+       "value": "6030616"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "O49",
+       "value": "8591.2"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "O5",
+       "value": "438"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "O6",
+       "value": "60"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "O61",
+       "value": "0.69"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "O62",
+       "value": "3.008"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "O63",
+       "value": "4.378"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "O64",
+       "value": "5.178"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "O69",
+       "value": "2090"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "O70",
+       "value": "410"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "O71",
+       "value": "2540"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "O8",
+       "value": "403"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "O9",
+       "value": "30.7"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "P10",
+       "value": "5"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "P12",
+       "value": "39.1"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "P13",
+       "value": "4.9"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "P16",
+       "value": "0.1"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "P181",
+       "value": "9692.4242"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "P20",
+       "value": "231"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "P3",
+       "value": "622.5"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "P4",
+       "value": "71"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "P41",
+       "value": "2989255"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "P42",
+       "value": "2065119"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "P43",
+       "value": "6031669"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "P5",
+       "value": "609"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "P6",
+       "value": "75"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "P61",
+       "value": "53"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "P62",
+       "value": "30"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "P63",
+       "value": "78"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "P64",
+       "value": "77"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "P69",
+       "value": "54.893"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "P70",
+       "value": "6.566"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "P71",
+       "value": "68.315"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "P72",
+       "value": "0"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "P73",
+       "value": "144.165"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "P74",
+       "value": "129.774"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "P8",
+       "value": "566"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "P9",
+       "value": "36.8"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Q10",
+       "value": "4.81"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Q12",
+       "value": "32.71"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Q13",
+       "value": "4.54"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Q16",
+       "value": "0.1"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Q181",
+       "value": "10544.6608"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Q20",
+       "value": "232"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Q3",
+       "value": "439"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Q4",
+       "value": "32"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Q41",
+       "value": "2989240"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Q42",
+       "value": "2065169"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Q43",
+       "value": "6033252"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Q49",
+       "value": "8591.5"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Q5",
+       "value": "438"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Q6",
+       "value": "34"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Q61",
+       "value": "0.69"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Q62",
+       "value": "3.008"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Q63",
+       "value": "4.378"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Q64",
+       "value": "5.178"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Q8",
+       "value": "402"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Q9",
+       "value": "31.07"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "R10",
+       "value": "5.17"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "R12",
+       "value": "31.96"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "R13",
+       "value": "4.93"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "R181",
+       "value": "0.7391"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "R20",
+       "value": "233"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "R3",
+       "value": "439"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "R4",
+       "value": "8"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "R41",
+       "value": "2989238"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "R42",
+       "value": "2065169"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "R43",
+       "value": "6033574"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "R49",
+       "value": "8591.6"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "R5",
+       "value": "438"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "R6",
+       "value": "9"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "R61",
+       "value": "53"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "R62",
+       "value": "30"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "R63",
+       "value": "78"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "R64",
+       "value": "77"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "R8",
+       "value": "402"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "R9",
+       "value": "30.81"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "S181",
+       "value": "0"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "T181",
+       "value": "Đạt"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "W10",
+       "value": "2131618.3"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "W11",
+       "value": "360891.3"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "W13",
+       "value": "1617408.5"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "W14",
+       "value": "1594946.6"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "W54",
+       "value": "8520.17"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "W72",
+       "value": "21721.74"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "W73",
+       "value": "17400.48"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "W8",
+       "value": "31715900.5"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "W86",
+       "value": "208206.49515191233"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "W9",
+       "value": "6447270"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "X13",
+       "value": "1617408.5"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "X14",
+       "value": "1594946.6"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "X16",
+       "value": "88524.33"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "X17",
+       "value": "64013.37"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "X18",
+       "value": "92005.47"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "X19",
+       "value": "12272.71"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "X20",
+       "value": "82994.91"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "X21",
+       "value": "69118.73"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "X22",
+       "value": "39370.56"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "X23",
+       "value": "64454.95"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "X24",
+       "value": "70151.45"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "X25",
+       "value": "74193.89"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "X26",
+       "value": "11066.18"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "X27",
+       "value": "23718.26"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "X54",
+       "value": "14106.7"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "X68",
+       "value": "21720.986999999997"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "X72",
+       "value": "22514.15"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "X73",
+       "value": "18326.98"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Y10",
+       "value": "2131869"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Y11",
+       "value": "360931.9"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Y13",
+       "value": "1617543.9"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Y14",
+       "value": "1595083"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Y54",
+       "value": "19663.18"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Y8",
+       "value": "31719400"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Y9",
+       "value": "6450464.8"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Z13",
+       "value": "1617543.9"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Z14",
+       "value": "1595083"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Z16",
+       "value": "88696.03"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Z17",
+       "value": "64188.43"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Z18",
+       "value": "92146.68"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Z19",
+       "value": "12447.73"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Z20",
+       "value": "83145.79"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Z21",
+       "value": "69240.98"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Z22",
+       "value": "39495.89"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Z23",
+       "value": "64584.76"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Z24",
+       "value": "70267.1"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Z25",
+       "value": "74309.32"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Z26",
+       "value": "11313.22"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Z27",
+       "value": "23733.26"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Z54",
+       "value": "26076.21"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Z72",
+       "value": "0"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Z73",
+       "value": "532"
+      }
+     ]
+    },
+    "meta": null,
+    "error": null
+   }
+  }
+ },
+ "ktkt #04 ô chữ: tổ máy sự kiện S1": {
+  "request": "POST ctktkt-report",
+  "response": {
+   "status": 200,
+   "body": {
+    "data": {
+     "saved": 1
+    },
+    "meta": null,
+    "error": null
+   }
+  },
+  "sau: GET ctktkt-report?period=2026-09&date=2026-09-16&scope=daily-links": {
+   "status": 200,
+   "body": {
+    "data": {
+     "entries": [
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AA10",
+       "value": "2131369"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AA11",
+       "value": "360851.1"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AA13",
+       "value": "1617270"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AA14",
+       "value": "1594807"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AA54",
+       "value": "34336.62"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AA8",
+       "value": "31712269"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AA9",
+       "value": "6444044.3"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AB10",
+       "value": "2131432.5"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AB11",
+       "value": "360861.6"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AB13",
+       "value": "1617270"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AB14",
+       "value": "1594807"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AB16",
+       "value": "88355.09"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AB17",
+       "value": "63844.03"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AB18",
+       "value": "91865.39"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AB19",
+       "value": "12098.95"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AB20",
+       "value": "82842.72"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AB21",
+       "value": "68998.58"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AB22",
+       "value": "39246.27"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AB23",
+       "value": "64330.95"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AB24",
+       "value": "70032.93"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AB25",
+       "value": "74075.51"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AB26",
+       "value": "10844.49"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AB27",
+       "value": "23672.17"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AB54",
+       "value": "37232.1"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AB8",
+       "value": "31713182"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AB9",
+       "value": "6444878.9"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AG10",
+       "value": "2104614"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AG11",
+       "value": "324793.5"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AG13",
+       "value": "40147917.9"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AG14",
+       "value": "874536132.6"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AG54",
+       "value": "8044.15"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AG8",
+       "value": "31181780"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AG9",
+       "value": "6333000.1"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AH13",
+       "value": "40147917.9"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AH14",
+       "value": "874536132.6"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AH16",
+       "value": "81891.8"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AH17",
+       "value": "29926.98"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AH18",
+       "value": "85866.58"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AH19",
+       "value": "54526.35"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AH20",
+       "value": "44376.51"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AH21",
+       "value": "66794.3"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AH22",
+       "value": "89561.32"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AH23",
+       "value": "625.89"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AH24",
+       "value": "68795.89"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AH25",
+       "value": "83650.58"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AH26",
+       "value": "33309.5"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AH27",
+       "value": "87178.53"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AH54",
+       "value": "13521.74"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AI10",
+       "value": "2104855.9"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AI11",
+       "value": "324830.3"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AI13",
+       "value": "40253402.82"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AI14",
+       "value": "874641692"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AI54",
+       "value": "19068.22"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AI8",
+       "value": "31185268"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AI9",
+       "value": "6336200.4"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AJ13",
+       "value": "40253402.82"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AJ14",
+       "value": "874641692"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AJ16",
+       "value": "81891.8"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AJ17",
+       "value": "30270.06"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AJ18",
+       "value": "86179.17"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AJ19",
+       "value": "54532.4"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AJ20",
+       "value": "44563.58"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AJ21",
+       "value": "66981.55"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AJ22",
+       "value": "89628.88"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AJ23",
+       "value": "689.58"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AJ24",
+       "value": "68942.82"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AJ25",
+       "value": "83791.7"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AJ26",
+       "value": "33429.12"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AJ27",
+       "value": "87329.79"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AJ54",
+       "value": "25808.99"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AJ87",
+       "value": "9.05"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AJ88",
+       "value": "8.96"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AJ89",
+       "value": "8.72"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AJ90",
+       "value": "9.05"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AJ91",
+       "value": "8.96"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AJ92",
+       "value": "8.72"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AK10",
+       "value": "2105151"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AK11",
+       "value": "324866.8"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AK13",
+       "value": "40359353"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AK14",
+       "value": "874747930"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AK54",
+       "value": "33275.31"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AK8",
+       "value": "31189859"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AK87",
+       "value": "5195"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AK88",
+       "value": "5195"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AK89",
+       "value": "5370"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AK9",
+       "value": "6340429"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AK90",
+       "value": "5195"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AK91",
+       "value": "5195"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AK92",
+       "value": "5370"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AL10",
+       "value": "2105215.8"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AL11",
+       "value": "324876.8"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AL13",
+       "value": "40359353"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AL14",
+       "value": "874747930"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AL16",
+       "value": "81891.8"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AL17",
+       "value": "30626.82"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AL18",
+       "value": "86411.57"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AL19",
+       "value": "54693.33"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AL20",
+       "value": "44770.58"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AL21",
+       "value": "67196.34"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AL22",
+       "value": "89818.02"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AL23",
+       "value": "889.51"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AL24",
+       "value": "69111.44"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AL25",
+       "value": "83958.09"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AL26",
+       "value": "33587.73"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AL27",
+       "value": "87516.05"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AL54",
+       "value": "36273.91"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AL8",
+       "value": "31190765"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "AL9",
+       "value": "6341261.2"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "C181",
+       "value": "1245"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "D181",
+       "value": "23.1957"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "D183",
+       "value": "23.7482"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "E181",
+       "value": "0"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "E183",
+       "value": "0,0226"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "F181",
+       "value": "21.3864"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "F183",
+       "value": "21.8957"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "G181",
+       "value": "0"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "H181",
+       "value": "0"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "I181",
+       "value": "0"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "I36",
+       "value": "0"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "J157",
+       "value": "11605.08"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "J158",
+       "value": "11590.64"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "J181",
+       "value": "0"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "K157",
+       "value": "10701.938"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "K158",
+       "value": "10684.4374"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "K181",
+       "value": "1.8093"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "K183",
+       "value": "1.8525"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "L181",
+       "value": "7.8003"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "L183",
+       "value": "7.8007"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "M10",
+       "value": "4.66"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "M12",
+       "value": "31.62"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "M13",
+       "value": "4.41"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "M181",
+       "value": "0.0111"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "M41",
+       "value": "2988953"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "M42",
+       "value": "2064996"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "M43",
+       "value": "6021425"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "M49",
+       "value": "8590"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "M81",
+       "value": "79.705"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "M82",
+       "value": "459.38"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "M9",
+       "value": "30.98"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "N10",
+       "value": "4.77"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "N12",
+       "value": "29.83"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "N13",
+       "value": "4.48"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "N181",
+       "value": "480.0601"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "N183",
+       "value": "477.9919"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "N41",
+       "value": "2989029"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "N42",
+       "value": "2064994"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "N43",
+       "value": "6022604"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "N61",
+       "value": "53"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "N62",
+       "value": "30"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "N63",
+       "value": "78"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "N64",
+       "value": "77"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "N69",
+       "value": "1250"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "N70",
+       "value": "960"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "N71",
+       "value": "1850"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "N81",
+       "value": "87.95"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "N82",
+       "value": "466.13"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "N9",
+       "value": "30.74"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "O10",
+       "value": "4.7"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "O12",
+       "value": "31.3"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "O13",
+       "value": "4.5"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "O16",
+       "value": "0.1"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "O181",
+       "value": "520.6744"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "O183",
+       "value": "518.4332"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "O41",
+       "value": "2989026"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "O42",
+       "value": "2064994"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "O43",
+       "value": "6023922"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "O49",
+       "value": "8590.3"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "O61",
+       "value": "0.69"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "O62",
+       "value": "3.008"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "O63",
+       "value": "4.378"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "O64",
+       "value": "5.178"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "O69",
+       "value": "2570"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "O70",
+       "value": "410"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "O71",
+       "value": "2540"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "O9",
+       "value": "30.6"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "P10",
+       "value": "5"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "P12",
+       "value": "38.5"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "P13",
+       "value": "4.4"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "P16",
+       "value": "0.1"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "P181",
+       "value": "9681.4675"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "P183",
+       "value": "9890.0394"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "P41",
+       "value": "2989202"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "P42",
+       "value": "2064995"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "P43",
+       "value": "6024819"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "P61",
+       "value": "53"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "P62",
+       "value": "30"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "P63",
+       "value": "78"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "P64",
+       "value": "77"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "P69",
+       "value": "69.284"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "P70",
+       "value": "6.566"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "P71",
+       "value": "68.315"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "P72",
+       "value": "63.7"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "P73",
+       "value": "96.823"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "P74",
+       "value": "144.165"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "P9",
+       "value": "36.5"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "Q10",
+       "value": "4.8"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "Q12",
+       "value": "34.8"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "Q13",
+       "value": "4.5"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "Q16",
+       "value": "0.1"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "Q181",
+       "value": "10500.5455"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "Q183",
+       "value": "10726.8019"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "Q41",
+       "value": "2989231"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "Q42",
+       "value": "2064994"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "Q43",
+       "value": "6026070"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "Q49",
+       "value": "8590.6"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "Q61",
+       "value": "0.69"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "Q62",
+       "value": "3.008"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "Q63",
+       "value": "4.378"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "Q64",
+       "value": "5.178"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "Q9",
+       "value": "33.2"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "R10",
+       "value": "5.2"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "R12",
+       "value": "31.7"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "R13",
+       "value": "4.9"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "R181",
+       "value": "0.7763"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "R183",
+       "value": "0,7948"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "R41",
+       "value": "2989231"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "R42",
+       "value": "2064994"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "R43",
+       "value": "6026670"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "R49",
+       "value": "8590.7"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "R61",
+       "value": "53"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "R62",
+       "value": "30"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "R63",
+       "value": "78"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "R64",
+       "value": "77"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "R9",
+       "value": "31.1"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "S181",
+       "value": "0"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "STARTUP_UNIT",
+       "value": "S1"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "T181",
+       "value": "Đạt"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "W10",
+       "value": "2130835.7"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "W11",
+       "value": "360771.6"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "W13",
+       "value": "1616986"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "W14",
+       "value": "1594521"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "W54",
+       "value": "8464.18"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "W72",
+       "value": "21014.26"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "W73",
+       "value": "16615.73"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "W8",
+       "value": "31704191"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "W86",
+       "value": "219341.83455081977"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "W87",
+       "value": "0"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "W9",
+       "value": "6436613.1"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "X13",
+       "value": "1616986"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "X14",
+       "value": "1594521"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "X16",
+       "value": "87985.8"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "X17",
+       "value": "63474.48"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "X18",
+       "value": "91541.65"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "X19",
+       "value": "11707.09"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "X20",
+       "value": "82487.96"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "X21",
+       "value": "68707.41"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "X22",
+       "value": "38935.34"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "X23",
+       "value": "64019.72"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "X24",
+       "value": "69755.54"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "X25",
+       "value": "73797.94"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "X26",
+       "value": "10495.05"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "X27",
+       "value": "23403.5"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "X54",
+       "value": "14080.49"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "X72",
+       "value": "21721.74"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "X73",
+       "value": "17400.48"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "Y10",
+       "value": "2131083.6"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "Y11",
+       "value": "360811.3"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "Y13",
+       "value": "1617129.7"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "Y14",
+       "value": "1594666.3"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "Y54",
+       "value": "19708.24"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "Y8",
+       "value": "31707681"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "Y89",
+       "value": "219341.835"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "Y9",
+       "value": "6439802"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "Z13",
+       "value": "1617129.7"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "Z14",
+       "value": "1594666.3"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "Z16",
+       "value": "88153.68"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "Z17",
+       "value": "63643"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "Z18",
+       "value": "91682.33"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "Z19",
+       "value": "11883.08"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "Z20",
+       "value": "82643.38"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "Z21",
+       "value": "68832.74"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "Z22",
+       "value": "39079.92"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "Z23",
+       "value": "64166.61"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "Z24",
+       "value": "69869.85"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "Z25",
+       "value": "73914.64"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "Z26",
+       "value": "10648.04"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "Z27",
+       "value": "23509.19"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "Z54",
+       "value": "26605.87"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "Z73",
+       "value": "400"
+      }
+     ],
+     "linkedEntries": [
+      {
+       "operatingDate": "2026-09-15",
+       "cell": "COAL_STOCK_24H_START",
+       "value": "312450.75"
+      },
+      {
+       "operatingDate": "2026-09-15",
+       "cell": "GRID_RECEIVE_S1",
+       "value": "12.5"
+      },
+      {
+       "operatingDate": "2026-09-15",
+       "cell": "GRID_RECEIVE_S2",
+       "value": "0"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "COAL_STOCK_24H_START",
+       "value": "312450.75"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "GRID_RECEIVE_S1",
+       "value": "12.5"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "GRID_RECEIVE_S2",
+       "value": "0"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "M3",
+       "value": "439"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "N3",
+       "value": "439"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "O3",
+       "value": "439"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "P3",
+       "value": "614"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "Q3",
+       "value": "520"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "R3",
+       "value": "439"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "M4",
+       "value": "15"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "N4",
+       "value": "43"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "O4",
+       "value": "46"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "P4",
+       "value": "75"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "Q4",
+       "value": "45"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "R4",
+       "value": "9"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "M5",
+       "value": "437"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "N5",
+       "value": "437"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "O5",
+       "value": "437"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "P5",
+       "value": "607"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "Q5",
+       "value": "525"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "R5",
+       "value": "435.7"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "M6",
+       "value": "16"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "N6",
+       "value": "44"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "O6",
+       "value": "48"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "P6",
+       "value": "77"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "Q6",
+       "value": "47"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "R6",
+       "value": "16"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "M7",
+       "value": "399"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "N7",
+       "value": "399"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "O7",
+       "value": "399"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "P7",
+       "value": "567"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "Q7",
+       "value": "477"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "R7",
+       "value": "398"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "M8",
+       "value": "403"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "N8",
+       "value": "403"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "O8",
+       "value": "403"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "P8",
+       "value": "565"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "Q8",
+       "value": "490"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "R8",
+       "value": "402"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "M20",
+       "value": "232"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "N20",
+       "value": "231"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "O20",
+       "value": "231"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "P20",
+       "value": "231"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "Q20",
+       "value": "232"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "R20",
+       "value": "233"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "Z72",
+       "value": "55.5"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "cell": "Z73",
+       "value": "49"
+      }
+     ],
+     "warnings": [],
+     "operatingHoursMissingDates": []
+    },
+    "meta": null,
+    "error": null
+   }
+  }
+ },
+ "ktkt #05 ô chữ: ghi chú hiệu chỉnh than S1": {
+  "request": "POST ctktkt-report",
+  "response": {
+   "status": 200,
+   "body": {
+    "data": {
+     "saved": 1
+    },
+    "meta": null,
+    "error": null
+   }
+  },
+  "sau: GET ctktkt-report?period=2026-09&date=2026-09-17&scope=stored": {
+   "status": 200,
+   "body": {
+    "data": {
+     "entries": [
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AA10",
+       "value": "2132137.2"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AA11",
+       "value": "360972"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AA13",
+       "value": "1617680.4"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AA14",
+       "value": "1595220.2"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AA54",
+       "value": "32793.49"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AA9",
+       "value": "6454199"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AB10",
+       "value": "2132199.6"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AB11",
+       "value": "360982.2"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AB13",
+       "value": "1617680.4"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AB14",
+       "value": "1595220.2"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AB16",
+       "value": "88880.88"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AB17",
+       "value": "64384.23"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AB18",
+       "value": "92310.37"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AB19",
+       "value": "12646.19"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AB20",
+       "value": "83320.96"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AB21",
+       "value": "69390.9"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AB22",
+       "value": "39651.96"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AB23",
+       "value": "64733.87"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AB24",
+       "value": "70408.48"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AB25",
+       "value": "74464.89"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AB26",
+       "value": "11496.09"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AB27",
+       "value": "23869.31"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AB54",
+       "value": "35582.55"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AB8",
+       "value": "31724225"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AB9",
+       "value": "6454996.5"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AG10",
+       "value": "2105406.5"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AG11",
+       "value": "324904.5"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AG13",
+       "value": "40461930.9"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AG14",
+       "value": "874850691"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AG54",
+       "value": "8072.46"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AG8",
+       "value": "31193384"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AG9",
+       "value": "6343647.8"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AH13",
+       "value": "40461930.9"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AH14",
+       "value": "874850691"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AH16",
+       "value": "81891.8"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AH17",
+       "value": "30963.18"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AH18",
+       "value": "86734"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AH19",
+       "value": "54693.33"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AH20",
+       "value": "44944.14"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AH21",
+       "value": "67356.51"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AH22",
+       "value": "89957.3"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AH23",
+       "value": "1025.9"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AH24",
+       "value": "69223.41"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AH25",
+       "value": "84062.21"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AH26",
+       "value": "33695.87"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AH27",
+       "value": "87613.44"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AH54",
+       "value": "13594.01"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AI10",
+       "value": "2105659.6"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AI11",
+       "value": "324940.6"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AI13",
+       "value": "40564803.6"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AI14",
+       "value": "874953759.5"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AI54",
+       "value": "19005.52"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AI8",
+       "value": "31196868"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AI9",
+       "value": "6346841.9"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AJ13",
+       "value": "40564803.6"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AJ14",
+       "value": "874953759.5"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AJ16",
+       "value": "81891.8"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AJ17",
+       "value": "31310.77"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AJ18",
+       "value": "87057.96"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AJ19",
+       "value": "54693.33"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AJ20",
+       "value": "45112.88"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AJ21",
+       "value": "67507.7"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AJ22",
+       "value": "90098.82"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AJ23",
+       "value": "1165.14"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AJ24",
+       "value": "69329.62"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AJ25",
+       "value": "84171.42"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AJ26",
+       "value": "33802.24"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AJ27",
+       "value": "87719.91"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AJ54",
+       "value": "25275.68"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AJ87",
+       "value": "8.41"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AJ88",
+       "value": "8.61"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AJ89",
+       "value": "8.94"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AJ90",
+       "value": "8.41"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AJ91",
+       "value": "8.61"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AJ92",
+       "value": "8.94"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AK10",
+       "value": "2105935.7"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AK11",
+       "value": "324978.5"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AK13",
+       "value": "40670900.18"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AK14",
+       "value": "875060055.2"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AK28",
+       "value": "-162.51"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AK54",
+       "value": "31734.21"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AK8",
+       "value": "31200913"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AK87",
+       "value": "5379"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AK88",
+       "value": "5156"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AK89",
+       "value": "5156"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AK9",
+       "value": "6350557.7"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AK90",
+       "value": "5379"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AK91",
+       "value": "5156"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AK92",
+       "value": "5156"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AL10",
+       "value": "2105999.8"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AL11",
+       "value": "324988"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AL13",
+       "value": "40670900.18"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AL14",
+       "value": "875060055.2"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AL16",
+       "value": "82054.31"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AL17",
+       "value": "31676.56"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AL18",
+       "value": "87378.7"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AL19",
+       "value": "54693.33"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AL20",
+       "value": "45305.1"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AL21",
+       "value": "67684.17"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AL22",
+       "value": "90269.49"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AL23",
+       "value": "1335.83"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AL24",
+       "value": "69474.1"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AL25",
+       "value": "84315.83"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AL26",
+       "value": "33943.7"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AL27",
+       "value": "87862.34"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AL54",
+       "value": "34544.72"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AL8",
+       "value": "31201785"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AL9",
+       "value": "6351355.4"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "AO42",
+       "value": "trước calib"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "C181",
+       "value": "1245"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "COAL_ADJ_NOTE_S1",
+       "value": "Hiệu chỉnh theo biên bản kiểm kê"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "D181",
+       "value": "22.0842"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "E181",
+       "value": "0.0002"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "F181",
+       "value": "20.2993"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "G181",
+       "value": "0"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "G52",
+       "value": "1"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "H181",
+       "value": "0"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "I181",
+       "value": "0"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "I36",
+       "value": "0"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "J157",
+       "value": "11053.64"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "J158",
+       "value": "11030.56"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "J181",
+       "value": "0"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "K157",
+       "value": "10166.5842"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "K158",
+       "value": "10132.7348"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "K181",
+       "value": "1.7849"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "L181",
+       "value": "8.0822"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "M10",
+       "value": "4.8"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "M12",
+       "value": "31.9"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "M13",
+       "value": "4.4"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "M181",
+       "value": "0.0107"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "M20",
+       "value": "233"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "M3",
+       "value": "438"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "M4",
+       "value": "8"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "M41",
+       "value": "2989274"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "M42",
+       "value": "264994"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "M43",
+       "value": "6028421"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "M49",
+       "value": "8590.9"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "M5",
+       "value": "438"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "M6",
+       "value": "7"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "M8",
+       "value": "402"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "M81",
+       "value": "87.95"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "M82",
+       "value": "466.13"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "M9",
+       "value": "30.9"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "N10",
+       "value": "5.2"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "N12",
+       "value": "31.6"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "N13",
+       "value": "4.4"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "N181",
+       "value": "484.0985"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "N20",
+       "value": "232"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "N3",
+       "value": "438"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "N4",
+       "value": "23"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "N41",
+       "value": "2989263"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "N42",
+       "value": "2065100"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "N43",
+       "value": "6029758"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "N5",
+       "value": "438"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "N6",
+       "value": "24"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "N61",
+       "value": "53"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "N62",
+       "value": "30"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "N63",
+       "value": "78"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "N64",
+       "value": "77"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "N69",
+       "value": "2570"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "N70",
+       "value": "410"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "N71",
+       "value": "2540"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "N8",
+       "value": "402"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "N81",
+       "value": "96.2"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "N82",
+       "value": "472.6"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "N9",
+       "value": "31"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "O10",
+       "value": "4.7"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "O12",
+       "value": "31.1"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "O13",
+       "value": "4.7"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "O16",
+       "value": "0.1"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "O181",
+       "value": "526.6644"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "O20",
+       "value": "231"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "O3",
+       "value": "438"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "O4",
+       "value": "58"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "O41",
+       "value": "2989255"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "O42",
+       "value": "2065119"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "O43",
+       "value": "6030616"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "O49",
+       "value": "8591.2"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "O5",
+       "value": "438"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "O6",
+       "value": "60"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "O61",
+       "value": "0.69"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "O62",
+       "value": "3.008"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "O63",
+       "value": "4.378"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "O64",
+       "value": "5.178"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "O69",
+       "value": "2090"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "O70",
+       "value": "410"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "O71",
+       "value": "2540"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "O8",
+       "value": "403"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "O9",
+       "value": "30.7"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "P10",
+       "value": "5"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "P12",
+       "value": "39.1"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "P13",
+       "value": "4.9"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "P16",
+       "value": "0.1"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "P181",
+       "value": "9692.4242"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "P20",
+       "value": "231"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "P3",
+       "value": "622.5"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "P4",
+       "value": "71"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "P41",
+       "value": "2989255"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "P42",
+       "value": "2065119"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "P43",
+       "value": "6031669"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "P5",
+       "value": "609"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "P6",
+       "value": "75"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "P61",
+       "value": "53"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "P62",
+       "value": "30"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "P63",
+       "value": "78"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "P64",
+       "value": "77"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "P69",
+       "value": "54.893"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "P70",
+       "value": "6.566"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "P71",
+       "value": "68.315"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "P72",
+       "value": "0"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "P73",
+       "value": "144.165"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "P74",
+       "value": "129.774"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "P8",
+       "value": "566"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "P9",
+       "value": "36.8"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Q10",
+       "value": "4.81"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Q12",
+       "value": "32.71"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Q13",
+       "value": "4.54"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Q16",
+       "value": "0.1"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Q181",
+       "value": "10544.6608"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Q20",
+       "value": "232"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Q3",
+       "value": "439"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Q4",
+       "value": "32"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Q41",
+       "value": "2989240"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Q42",
+       "value": "2065169"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Q43",
+       "value": "6033252"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Q49",
+       "value": "8591.5"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Q5",
+       "value": "438"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Q6",
+       "value": "34"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Q61",
+       "value": "0.69"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Q62",
+       "value": "3.008"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Q63",
+       "value": "4.378"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Q64",
+       "value": "5.178"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Q8",
+       "value": "402"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Q9",
+       "value": "31.07"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "R10",
+       "value": "5.17"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "R12",
+       "value": "31.96"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "R13",
+       "value": "4.93"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "R181",
+       "value": "0.7391"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "R20",
+       "value": "233"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "R3",
+       "value": "439"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "R4",
+       "value": "8"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "R41",
+       "value": "2989238"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "R42",
+       "value": "2065169"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "R43",
+       "value": "6033574"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "R49",
+       "value": "8591.6"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "R5",
+       "value": "438"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "R6",
+       "value": "9"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "R61",
+       "value": "53"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "R62",
+       "value": "30"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "R63",
+       "value": "78"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "R64",
+       "value": "77"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "R8",
+       "value": "402"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "R9",
+       "value": "30.81"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "S181",
+       "value": "0"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "T181",
+       "value": "Đạt"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "W10",
+       "value": "2131618.3"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "W11",
+       "value": "360891.3"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "W13",
+       "value": "1617408.5"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "W14",
+       "value": "1594946.6"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "W54",
+       "value": "8520.17"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "W72",
+       "value": "21721.74"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "W73",
+       "value": "17400.48"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "W8",
+       "value": "31715900.5"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "W86",
+       "value": "208206.49515191233"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "W9",
+       "value": "6447270"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "X13",
+       "value": "1617408.5"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "X14",
+       "value": "1594946.6"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "X16",
+       "value": "88524.33"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "X17",
+       "value": "64013.37"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "X18",
+       "value": "92005.47"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "X19",
+       "value": "12272.71"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "X20",
+       "value": "82994.91"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "X21",
+       "value": "69118.73"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "X22",
+       "value": "39370.56"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "X23",
+       "value": "64454.95"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "X24",
+       "value": "70151.45"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "X25",
+       "value": "74193.89"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "X26",
+       "value": "11066.18"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "X27",
+       "value": "23718.26"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "X54",
+       "value": "14106.7"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "X68",
+       "value": "21720.986999999997"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "X72",
+       "value": "22514.15"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "X73",
+       "value": "18326.98"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Y10",
+       "value": "2131869"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Y11",
+       "value": "360931.9"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Y13",
+       "value": "1617543.9"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Y14",
+       "value": "1595083"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Y54",
+       "value": "19663.18"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Y8",
+       "value": "31719400"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Y9",
+       "value": "6450464.8"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Z13",
+       "value": "1617543.9"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Z14",
+       "value": "1595083"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Z16",
+       "value": "88696.03"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Z17",
+       "value": "64188.43"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Z18",
+       "value": "92146.68"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Z19",
+       "value": "12447.73"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Z20",
+       "value": "83145.79"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Z21",
+       "value": "69240.98"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Z22",
+       "value": "39495.89"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Z23",
+       "value": "64584.76"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Z24",
+       "value": "70267.1"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Z25",
+       "value": "74309.32"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Z26",
+       "value": "11313.22"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Z27",
+       "value": "23733.26"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Z54",
+       "value": "26076.21"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Z72",
+       "value": "0"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "cell": "Z73",
+       "value": "532"
+      }
+     ]
+    },
+    "meta": null,
+    "error": null
+   }
+  }
+ },
+ "ktkt #06 ô tự liên kết BCSX (M3) bị chặn": {
+  "request": "POST ctktkt-report",
+  "response": {
+   "status": 400,
+   "body": {
+    "data": null,
+    "meta": null,
+    "error": "Ô M3 không nằm trong mẫu được phép nhập."
+   }
+  }
+ },
+ "ktkt #07 ô ngoài mẫu": {
+  "request": "POST ctktkt-report",
+  "response": {
+   "status": 400,
+   "body": {
+    "data": null,
+    "meta": null,
+    "error": "Ô ZZ999 không nằm trong mẫu được phép nhập."
+   }
+  }
+ },
+ "ktkt #08 chữ ở ô số": {
+  "request": "POST ctktkt-report",
+  "response": {
+   "status": 400,
+   "body": {
+    "data": null,
+    "meta": null,
+    "error": "Ô W8 phải là số."
+   }
+  }
+ },
+ "ktkt #09 ô trùng trong danh sách": {
+  "request": "POST ctktkt-report",
+  "response": {
+   "status": 400,
+   "body": {
+    "data": null,
+    "meta": null,
+    "error": "Danh sách có ô dữ liệu bị trùng. Chưa lưu số liệu."
+   }
+  }
+ },
+ "ktkt #10 tổ máy sự kiện S3": {
+  "request": "POST ctktkt-report",
+  "response": {
+   "status": 400,
+   "body": {
+    "data": null,
+    "meta": null,
+    "error": "Tổ máy sự kiện chỉ được chọn S1 hoặc S2."
+   }
+  }
+ },
+ "ktkt #11 giờ sai dạng HH:mm": {
+  "request": "POST ctktkt-report",
+  "response": {
+   "status": 400,
+   "body": {
+    "data": null,
+    "meta": null,
+    "error": "Ô STARTUP_OIL_START_TIME phải nhập thời gian dạng HH:mm."
+   }
+  }
+ },
+ "ktkt #12 ngày tương lai": {
+  "request": "POST ctktkt-report",
+  "response": {
+   "status": 400,
+   "body": {
+    "data": null,
+    "meta": null,
+    "error": "Không thể nhập số liệu cho ngày trong tương lai."
+   }
+  }
+ },
+ "ktkt #13 ngày không tồn tại 30/02": {
+  "request": "POST ctktkt-report",
+  "response": {
+   "status": 400,
+   "body": {
+    "data": null,
+    "meta": null,
+    "error": "Ngày ghi dữ liệu không tồn tại."
+   }
+  }
+ },
+ "ktkt #14 công tơ than lẫn tổ máy": {
+  "request": "POST ctktkt-report",
+  "response": {
+   "status": 400,
+   "body": {
+    "data": null,
+    "meta": null,
+    "error": "Công tơ S1/S2 bị lẫn hoặc khác tổ máy đã chọn. Chưa lưu số liệu."
+   }
+  }
+ },
+ "ktkt #15 JSON hỏng": {
+  "request": "POST ctktkt-report",
+  "response": {
+   "status": 400,
+   "body": {
+    "data": null,
+    "meta": null,
+    "error": "Dữ liệu JSON không hợp lệ."
+   }
+  }
+ },
+ "ktkt #16 không phải JSON (415)": {
+  "request": "POST ctktkt-report",
+  "response": {
+   "status": 415,
+   "body": {
+    "data": null,
+    "meta": null,
+    "error": "Yêu cầu phải là JSON."
+   }
+  }
+ },
+ "ktkt #17 duyệt yêu cầu không tồn tại": {
+  "request": "PATCH correction-requests",
+  "response": {
+   "status": 400,
+   "body": {
+    "data": null,
+    "meta": null,
+    "error": "Yêu cầu không hợp lệ."
+   }
+  }
+ },
+ "ktkt #18 duyệt: JSON hỏng": {
+  "request": "PATCH correction-requests",
+  "response": {
+   "status": 503,
+   "body": {
+    "data": null,
+    "meta": null,
+    "error": "Chưa truy cập được yêu cầu chỉnh sửa."
+   }
+  }
+ },
+ "ktkt #19 đọc ảnh công tơ khi chưa có khoá Gemini": {
+  "request": "POST coal-meter-ocr",
+  "response": {
+   "status": 503,
+   "body": {
+    "data": null,
+    "meta": null,
+    "error": "Nhập khóa Gemini tạm trong cửa sổ đọc ảnh hoặc cấu hình GEMINI_API_KEY trên máy chủ."
+   }
+  }
+ },
+ "ktkt #20 kiểm tra Gemini khi chưa có khoá": {
+  "request": "POST coal-gemini-settings/check",
+  "response": {
+   "status": 503,
+   "body": {
+    "data": null,
+    "meta": null,
+    "error": "Nhập khóa Gemini tạm trong cửa sổ đọc ảnh hoặc cấu hình GEMINI_API_KEY trên máy chủ."
+   }
+  }
+ },
+ "ktkt #21 cấu hình Gemini: model sai": {
+  "request": "PUT coal-gemini-settings",
+  "response": {
+   "status": 400,
+   "body": {
+    "data": null,
+    "meta": null,
+    "error": "Tên model Gemini không hợp lệ."
+   }
+  }
+ },
+ "ktkt #22 cấu hình Gemini: thiếu Origin": {
+  "request": "PUT coal-gemini-settings",
+  "response": {
+   "status": 403,
+   "body": {
+    "data": null,
+    "meta": null,
+    "error": "Nguồn yêu cầu không hợp lệ."
+   }
+  }
+ },
+ "ktkt #23 cấu hình Gemini: đổi model khi chưa có khoá chung (409)": {
+  "request": "PUT coal-gemini-settings",
+  "response": {
+   "status": 409,
+   "body": {
+    "data": null,
+    "meta": null,
+    "error": "Chưa có khóa chung hoặc cấu hình vừa được thay đổi. Tải lại trạng thái trước khi lưu model."
+   }
+  },
+  "sau: GET coal-gemini-settings": {
+   "status": 200,
+   "body": {
+    "data": {
+     "shared": {
+      "configured": false,
+      "model": null,
+      "version": 0,
+      "updatedAt": null,
+      "updatedBy": null
+     },
+     "environmentConfigured": false
+    },
+    "meta": null,
+    "error": null
+   }
+  }
  }
 }

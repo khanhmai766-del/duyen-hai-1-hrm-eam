@@ -1,4 +1,5 @@
 import { isShiftInputCoordinator } from "@/modules/ctktkt/lib/auth/delegation-policy";
+import { ok, fail } from "@/lib/api";
 import { isCtktktSameOrigin } from "@/modules/ctktkt/lib/request-origin";
 import {saveReportWithShift,CorrectionError} from "@/modules/ctktkt/lib/report-corrections";
 import { getRawDb } from "@/modules/ctktkt/db";
@@ -27,18 +28,18 @@ export async function GET(request: Request) {
   const params = new URL(request.url).searchParams;
   const scope = params.get("scope");
   const range = reportQueryRange(params,scope!=="stored");
-  if (!range || (scope !== null && !["daily-links","stored","operating-hours"].includes(scope)) || (scope==="stored"&&!params.get("date"))) return Response.json({ error: "Khoảng đọc dữ liệu không hợp lệ." }, { status: 400 });
+  if (!range || (scope !== null && !["daily-links","stored","operating-hours"].includes(scope)) || (scope==="stored"&&!params.get("date"))) return fail("Khoảng đọc dữ liệu không hợp lệ.", 400);
   const { from, next } = range;
   const today = vietnamDateIso();
   try {
     const db = getRawDb();
     if(scope==="stored"){
       const {results}=await db.prepare("SELECT operating_date AS operatingDate, substr(field_code, 6) AS cell, value FROM daily_inputs WHERE operating_date >= ? AND operating_date < ? AND field_code LIKE 'KTKT:%' ORDER BY field_code").bind(from,next).all();
-      return Response.json({entries:(results as Array<{operatingDate:string}>).filter(entry=>!isFutureOperatingDate(entry.operatingDate,today))},{headers:{"Cache-Control":"no-store"}});
+      return ok({entries:(results as Array<{operatingDate:string}>).filter(entry=>!isFutureOperatingDate(entry.operatingDate,today))});
     }
     if(scope==="operating-hours"){
       const hours=await loadCtktktOperatingHours(db,from,next);
-      return Response.json({linkedEntries:hours.entries.filter(entry=>!isFutureOperatingDate(entry.operatingDate,today)),operatingHoursMissingDates:hours.missingDates.filter(date=>!isFutureOperatingDate(date,today))},{headers:{"Cache-Control":"no-store"}});
+      return ok({linkedEntries:hours.entries.filter(entry=>!isFutureOperatingDate(entry.operatingDate,today)),operatingHoursMissingDates:hours.missingDates.filter(date=>!isFutureOperatingDate(date,today))});
     }
     await ensureWaterSchema(db);
     const [{ results }, { results: shiftResults }, { results: waterResults }, { results: dailyLinkedResults }] = await Promise.all([
@@ -95,39 +96,39 @@ export async function GET(request: Request) {
         }
       }
     }
-    return Response.json({
+    return ok({
       entries: manualEntries,
       linkedEntries: linkedEntries.filter(entry => !isFutureOperatingDate(entry.operatingDate, today)),
       warnings: warnings.filter(item => !isFutureOperatingDate(item.operatingDate, today)),
       operatingHoursMissingDates: operatingHours.missingDates.filter(date => !isFutureOperatingDate(date, today)),
-    }, { headers: { "Cache-Control": "no-store" } });
+    });
   } catch {
-    return Response.json({ error: "Chưa tải được dữ liệu Chỉ tiêu KTKT." }, { status: 503 });
+    return fail("Chưa tải được dữ liệu Chỉ tiêu KTKT.", 503);
   }
 }
 
 export async function POST(request: Request) {
   const user = await getSessionUser();
   if (!user) {
-    return Response.json({ error: "Chưa đăng nhập." }, { status: 401 });
+    return fail("Chưa đăng nhập.", 401);
   }
   if (!canEditAnyCtktktField(user) && !isShiftInputCoordinator(user)) {
-    return Response.json({ error: "Tài khoản của bạn không có quyền nhập liệu Chỉ tiêu KTKT." }, { status: 403 });
+    return fail("Tài khoản của bạn không có quyền nhập liệu Chỉ tiêu KTKT.", 403);
   }
-  if (!isCtktktSameOrigin(request)) return Response.json({ error: "Nguồn yêu cầu không hợp lệ." }, { status: 403 });
-  if (!request.headers.get("content-type")?.includes("application/json")) return Response.json({ error: "Yêu cầu phải là JSON." }, { status: 415 });
+  if (!isCtktktSameOrigin(request)) return fail("Nguồn yêu cầu không hợp lệ.", 403);
+  if (!request.headers.get("content-type")?.includes("application/json")) return fail("Yêu cầu phải là JSON.", 415);
   try {
     const raw = await request.text();
-    if (raw.length > 150_000) return Response.json({ error: "Dữ liệu gửi lên quá lớn." }, { status: 413 });
+    if (raw.length > 150_000) return fail("Dữ liệu gửi lên quá lớn.", 413);
     const body = JSON.parse(raw) as { operatingDate?: unknown; entries?: unknown; coalUnit?:unknown; correctionReason?:unknown };
     if (typeof body.operatingDate !== "string" || !datePattern.test(body.operatingDate) || !Array.isArray(body.entries) || body.entries.length > 400) {
       throw new Error("Ngày hoặc danh sách ô nhập không hợp lệ.");
     }
     if (body.operatingDate > vietnamDateIso()) {
-      return Response.json({ error: "Không thể nhập số liệu cho ngày trong tương lai." }, { status: 400 });
+      return fail("Không thể nhập số liệu cho ngày trong tương lai.", 400);
     }
     if (!body.correctionReason && !canEditOperatingDate(body.operatingDate, user.role === "admin")) {
-      return Response.json({ error: "Chỉ tài khoản quản trị được chỉnh sửa ngày trước D-1; tài khoản khác chỉ được nhập ngày D hoặc D-1." }, { status: 403 });
+      return fail("Chỉ tài khoản quản trị được chỉnh sửa ngày trước D-1; tài khoản khác chỉ được nhập ngày D hoặc D-1.", 403);
     }
     const clean = body.entries.map(item => {
       if (!item || typeof item !== "object") throw new Error("Một ô dữ liệu không hợp lệ.");
@@ -165,13 +166,13 @@ export async function POST(request: Request) {
     // Chỉ lưu những ô mà người dùng có thẩm quyền theo cương vị / vai trò
     const authorizedEntries = clean.filter(entry => body.correctionReason ? canProposeCtktktCorrection(user, entry.cell) : canEditCtktktField(user, entry.cell));
     if (authorizedEntries.length !== clean.length) {
-      return Response.json({ error: "Bạn không có quyền sửa các ô dữ liệu đã gửi." }, { status: 403 });
+      return fail("Bạn không có quyền sửa các ô dữ liệu đã gửi.", 403);
     }
 
     if(body.correctionReason!==undefined&&typeof body.correctionReason!=="string")throw new Error("Lý do không hợp lệ.");
-    return Response.json(await saveReportWithShift(user,body.operatingDate,authorizedEntries,body.correctionReason as string|undefined));
+    return ok(await saveReportWithShift(user,body.operatingDate,authorizedEntries,body.correctionReason as string|undefined));
   } catch (error) {
-    if(error instanceof CorrectionError)return Response.json({error:error.message},{status:error.status});
-    return Response.json({ error: error instanceof SyntaxError ? "Dữ liệu JSON không hợp lệ." : error instanceof Error ? error.message : "Dữ liệu không hợp lệ." }, { status: 400 });
+    if(error instanceof CorrectionError)return fail(error.message, error.status);
+    return fail(error instanceof SyntaxError ? "Dữ liệu JSON không hợp lệ." : error instanceof Error ? error.message : "Dữ liệu không hợp lệ.", 400);
   }
 }
