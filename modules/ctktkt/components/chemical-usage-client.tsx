@@ -1,30 +1,13 @@
 "use client";
 import { MonthField } from "./ui/month-field";
 import { GoogleMirrorLinks } from "./google-mirror-links";
-import { useCtktktRequest } from "@/hooks/useCtktkt";
+import { useChemicalUsageMonth, useDeleteChemicalUsage, useSaveChemicalUsage, type ChemicalRecord } from "@/hooks/useKtktChemicalUsage";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Beaker, CheckCircle2, LockKeyhole, Pencil, Save, Trash2, X } from "lucide-react";
 import { useSessionUser } from "@/modules/ctktkt/components/session-context";
-import { editableChemicalsFor, type ChemicalCatalogItem, type ChemicalCode } from "@/modules/ctktkt/lib/chemical-usage/catalog";
+import { editableChemicalsFor, type ChemicalCode } from "@/modules/ctktkt/lib/chemical-usage/catalog";
 import { defaultOperatingDate } from "@/modules/ctktkt/lib/operating-date";
-
-type ChemicalRecord = {
-  id: number;
-  usage_date: string;
-  chemical_code: ChemicalCode;
-  material_code: string;
-  chemical_name: string;
-  unit: string;
-  quantity: number;
-  purpose: string;
-  plant_unit: string;
-  reference: string;
-  entered_by_name: string;
-  entered_by_position: string;
-  updated_by_name?: string;
-  updated_by_position?: string;
-};
 
 function currentMonth() {
   return defaultOperatingDate().slice(0, 7);
@@ -40,18 +23,19 @@ function formatDate(value: string) {
 }
 
 export function ChemicalUsageClient() {
-  const ctktktRequest = useCtktktRequest();
-
   const user = useSessionUser();
   const canDeleteRecords = user.role === "admin" || user.permissions.includes("manage_users");
   const allowedCatalog = useMemo(() => editableChemicalsFor(user), [user]);
   const [month, setMonth] = useState(currentMonth);
-  const [records, setRecords] = useState<ChemicalRecord[]>([]);
-  const [catalog, setCatalog] = useState<readonly ChemicalCatalogItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [deletingId, setDeletingId] = useState<number | null>(null);
-  const [error, setError] = useState("");
+  const monthQuery = useChemicalUsageMonth(month);
+  const saveMutation = useSaveChemicalUsage();
+  const deleteMutation = useDeleteChemicalUsage();
+  const records = useMemo(() => monthQuery.data?.records ?? [], [monthQuery.data]);
+  const catalog = monthQuery.data?.catalog ?? [];
+  const loading = monthQuery.isPending;
+  const saving = saveMutation.isPending;
+  const deletingId = deleteMutation.isPending ? deleteMutation.variables ?? null : null;
+  const [actionError, setActionError] = useState("");
   const [success, setSuccess] = useState("");
   const [usageDate, setUsageDate] = useState(defaultOperatingDate);
   const [chemicalCode, setChemicalCode] = useState<string>(allowedCatalog[0]?.code || "");
@@ -62,48 +46,13 @@ export function ChemicalUsageClient() {
   const [filterChemicalCode, setFilterChemicalCode] = useState<ChemicalCode | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
 
-  async function fetchMonth(targetMonth: string) {
-    try {
-      const response = await ctktktRequest(`/api/ctktkt/chemical-usage?month=${targetMonth}`, { cache: "no-store" });
-      const data = await response.json() as { error?: string; records?: ChemicalRecord[]; catalog?: ChemicalCatalogItem[] };
-      if (!response.ok) throw new Error(data.error || "Không thể tải dữ liệu.");
-      setRecords(data.records || []);
-      setCatalog(data.catalog || []);
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Không thể tải dữ liệu.");
-    } finally {
-      setLoading(false);
-    }
-  }
-
+  // Đổi tháng thì bỏ thông báo lỗi thao tác cũ (giữ đúng hành vi trước khi chuyển sang TanStack Query).
   const [trackedMonth, setTrackedMonth] = useState(month);
   if (trackedMonth !== month) {
     setTrackedMonth(month);
-    setLoading(true);
-    setError("");
+    setActionError("");
   }
-
-  useEffect(() => {
-    let cancelled = false;
-    void ctktktRequest(`/api/ctktkt/chemical-usage?month=${month}`, { cache: "no-store" })
-      .then(async response => ({
-        response,
-        data: await response.json() as { error?: string; records?: ChemicalRecord[]; catalog?: ChemicalCatalogItem[] },
-      }))
-      .then(({ response, data }) => {
-        if (cancelled) return;
-        if (!response.ok) throw new Error(data.error || "Không thể tải dữ liệu.");
-        setRecords(data.records || []);
-        setCatalog(data.catalog || []);
-      })
-      .catch(caught => {
-        if (!cancelled) setError(caught instanceof Error ? caught.message : "Không thể tải dữ liệu.");
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => { cancelled = true; };
-  }, [month, ctktktRequest]);
+  const error = actionError || (monthQuery.error instanceof Error ? monthQuery.error.message : "");
 
   const totals = useMemo(() => {
     const result = new Map<string, number>();
@@ -128,56 +77,41 @@ export function ChemicalUsageClient() {
     );
     if (!approved) return;
 
-    setDeletingId(record.id);
-    setError("");
+    setActionError("");
     setSuccess("");
     try {
-      const response = await ctktktRequest(`/api/ctktkt/chemical-usage?id=${record.id}`, { method: "DELETE" });
-      const data = await response.json() as { error?: string };
-      if (!response.ok) throw new Error(data.error || "Không thể xóa bản ghi.");
+      await deleteMutation.mutateAsync(record.id);
       if (editingId === record.id) cancelEdit();
       setSuccess(`Đã xóa bản ghi ${record.chemical_name} ngày ${formatDate(record.usage_date)}.`);
-      await fetchMonth(month);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Không thể xóa bản ghi.");
-    } finally {
-      setDeletingId(null);
+      setActionError(caught instanceof Error ? caught.message : "Không thể xóa bản ghi.");
     }
   }
 
   async function saveRecord(event: React.FormEvent) {
     event.preventDefault();
     const purpose = reasonChoice === "__other__" ? otherReason.trim() : reasonChoice;
-    setSaving(true);
-    setError("");
+    setActionError("");
     setSuccess("");
     try {
-      const response = await ctktktRequest("/api/ctktkt/chemical-usage", {
-        method: editingId === null ? "POST" : "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          id: editingId,
-          usageDate,
-          chemicalCode,
-          quantity: Number(quantity.replace(",", ".")),
-          purpose,
-          reference,
-        }),
+      await saveMutation.mutateAsync({
+        id: editingId,
+        usageDate,
+        chemicalCode,
+        quantity: Number(quantity.replace(",", ".")),
+        purpose,
+        reference,
       });
-      const data = await response.json() as { error?: string };
-      if (!response.ok) throw new Error(data.error || "Không thể lưu dữ liệu.");
       setSuccess(editingId === null ? "Đã lưu lượng hóa chất và thông tin người nhập." : "Đã cập nhật bản ghi hóa chất và lưu người chỉnh sửa.");
       setEditingId(null);
       setQuantity("");
       setOtherReason("");
       setReference("");
+      // Lưu sang tháng khác thì chuyển sang tháng đó; tháng hiện tại tự làm mới qua invalidateQueries.
       const targetMonth = usageDate.slice(0, 7);
       if (targetMonth !== month) setMonth(targetMonth);
-      else await fetchMonth(month);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Không thể lưu dữ liệu.");
-    } finally {
-      setSaving(false);
+      setActionError(caught instanceof Error ? caught.message : "Không thể lưu dữ liệu.");
     }
   }
 
@@ -198,7 +132,7 @@ export function ChemicalUsageClient() {
       setOtherReason(record.purpose);
     }
     setReference(record.reference || "");
-    setError("");
+    setActionError("");
     setSuccess("");
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -214,7 +148,7 @@ export function ChemicalUsageClient() {
   }
 
   return (
-    <div className="module-report chemical-workspace mx-auto flex w-full min-w-0 flex-col gap-3">
+    <div className="module-report mx-auto flex w-full min-w-0 flex-col gap-3">
       <section className="module-hero ktkt-dark-hero rounded-2xl p-4 shadow-sm">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="module-heading-copy">
@@ -231,22 +165,22 @@ export function ChemicalUsageClient() {
         </div>
       </section>
 
-      <section aria-label="Lọc nhật ký theo loại hóa chất" className="module-stat-grid grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+      <section aria-label="Lọc nhật ký theo loại hóa chất" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         {catalog.map(item => (
           <button
             key={item.code}
             type="button"
             aria-pressed={filterChemicalCode === item.code}
             onClick={() => setFilterChemicalCode(current => current === item.code ? null : item.code)}
-            className={`rounded-xl border p-4 text-left shadow-sm transition focus:outline-none focus:ring-2 focus:ring-emerald-300 ${
+            className={`relative !rounded-[14px] border border-t-[3px] px-4 py-3.5 text-left [box-shadow:0_3px_12px_rgb(30_58_90_/_4%)] transition focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400 ${
               filterChemicalCode === item.code
-                ? "border-emerald-500 bg-emerald-50 ring-2 ring-emerald-200"
-                : "border-slate-200 bg-white hover:border-emerald-300 hover:bg-emerald-50/40"
+                ? "border-emerald-500 border-t-[#059669] bg-emerald-50"
+                : "border-slate-200 border-t-[#9ad4c7] bg-white hover:border-emerald-300 hover:border-t-[#9ad4c7] hover:bg-emerald-50/40"
             }`}
           >
             <p className="text-sm font-semibold text-slate-900">{item.name}</p>
             <p className="mt-1 text-2xl font-bold text-emerald-700">{formatNumber(totals.get(item.code) || 0)} <span className="text-sm font-medium text-slate-500">{item.unit}</span></p>
-            <p className="mt-2 text-xs leading-5 text-slate-500">Nhập: {item.allowedPositions.join(" · ")}</p>
+            <p className="mt-1.5 text-xs leading-[1.4] text-slate-500">Nhập: {item.allowedPositions.join(" · ")}</p>
             <p className="mt-2 text-xs font-semibold text-emerald-700">
               {filterChemicalCode === item.code ? "Đang lọc — bấm lại để bỏ lọc" : "Bấm để xem nhật ký"}
             </p>
@@ -254,8 +188,8 @@ export function ChemicalUsageClient() {
         ))}
       </section>
 
-      <section className="chemical-content-grid grid gap-3 lg:grid-cols-[320px_minmax(0,1fr)]">
-        <div className="chemical-entry-panel rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <section className="grid gap-3 lg:grid-cols-[320px_minmax(0,1fr)]">
+        <div className="[align-self:start] rounded-2xl border border-slate-200 bg-white p-4 shadow-sm min-[1100px]:sticky min-[1100px]:top-[82px] print:!static">
           <div className="flex items-center justify-between gap-3">
             <h3 className="font-semibold text-slate-900">{editingId === null ? "Nhập lượng sử dụng" : `Chỉnh sửa bản ghi #${editingId}`}</h3>
             {editingId !== null && <button type="button" onClick={cancelEdit} className="flex items-center gap-1 text-xs font-semibold text-slate-500 hover:text-slate-800"><X className="size-4" /> Hủy sửa</button>}
@@ -268,41 +202,41 @@ export function ChemicalUsageClient() {
               <p className="mt-1">Cương vị của bạn không có hóa chất được phép nhập theo sheet nguồn.</p>
             </div>
           ) : (
-            <form onSubmit={saveRecord} className="mt-5 space-y-4">
-              <label className="block text-sm font-medium text-slate-700">Ngày thực hiện
-                <input required type="date" value={usageDate} onChange={event => setUsageDate(event.target.value)} className="mt-1.5 h-10 w-full rounded-lg border border-slate-200 px-3 outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100" />
+            <form onSubmit={saveRecord} className="mt-3.5 space-y-4">
+              <label className="block text-xs leading-5 font-medium text-slate-700">Ngày thực hiện
+                <input required type="date" value={usageDate} onChange={event => setUsageDate(event.target.value)} className="mt-1.5 h-10 min-h-9 w-full rounded-lg border border-slate-200 px-3 outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100" />
               </label>
-              <label className="block text-sm font-medium text-slate-700">Loại hóa chất
+              <label className="block text-xs leading-5 font-medium text-slate-700">Loại hóa chất
                 <select required value={chemicalCode} onChange={event => {
                   const nextCode = event.target.value;
                   const nextChemical = allowedCatalog.find(item => item.code === nextCode);
                   setChemicalCode(nextCode);
                   setReasonChoice(nextChemical?.suggestedReasons[0] || "");
                   setOtherReason("");
-                }} className="mt-1.5 h-10 w-full rounded-lg border border-slate-200 bg-white px-3 outline-none focus:border-emerald-400">
+                }} className="mt-1.5 h-10 !min-h-9 w-full rounded-lg border border-slate-200 bg-white px-3 outline-none focus:border-emerald-400">
                   {allowedCatalog.map(item => <option key={item.code} value={item.code}>{item.name}</option>)}
                 </select>
                 {selectedChemical && <span className="mt-1 block text-xs text-slate-400">Mã vật tư: {selectedChemical.materialCode}</span>}
               </label>
-              <label className="block text-sm font-medium text-slate-700">Số lượng ({selectedChemical?.unit || "Tấn"})
-                <input required inputMode="decimal" value={quantity} onChange={event => setQuantity(event.target.value)} placeholder="0,000" className="mt-1.5 h-10 w-full rounded-lg border border-slate-200 px-3 outline-none focus:border-emerald-400" />
+              <label className="block text-xs leading-5 font-medium text-slate-700">Số lượng ({selectedChemical?.unit || "Tấn"})
+                <input required inputMode="decimal" value={quantity} onChange={event => setQuantity(event.target.value)} placeholder="0,000" className="mt-1.5 h-10 min-h-9 w-full rounded-lg border border-slate-200 px-3 outline-none focus:border-emerald-400" />
               </label>
               <div className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-800">
                 Tổ máy: <strong>Chung</strong> — áp dụng cho toàn bộ hóa chất trong danh mục.
               </div>
-              <label className="block text-sm font-medium text-slate-700">Nội dung công tác/lý do sử dụng
-                <select required value={reasonChoice} onChange={event => setReasonChoice(event.target.value)} className="mt-1.5 h-10 w-full rounded-lg border border-slate-200 bg-white px-3 outline-none focus:border-emerald-400">
+              <label className="block text-xs leading-5 font-medium text-slate-700">Nội dung công tác/lý do sử dụng
+                <select required value={reasonChoice} onChange={event => setReasonChoice(event.target.value)} className="mt-1.5 h-10 !min-h-9 w-full rounded-lg border border-slate-200 bg-white px-3 outline-none focus:border-emerald-400">
                   {selectedChemical?.suggestedReasons.map(reason => <option key={reason} value={reason}>{reason}</option>)}
                   <option value="__other__">Lý do khác…</option>
                 </select>
               </label>
               {reasonChoice === "__other__" && (
-                <label className="block text-sm font-medium text-slate-700">Ghi rõ lý do khác
+                <label className="block text-xs leading-5 font-medium text-slate-700">Ghi rõ lý do khác
                   <textarea required value={otherReason} onChange={event => setOtherReason(event.target.value)} rows={3} maxLength={500} className="mt-1.5 w-full rounded-lg border border-slate-200 px-3 py-2 outline-none focus:border-emerald-400" />
                 </label>
               )}
-              <label className="block text-sm font-medium text-slate-700">Tham chiếu/đính kèm (nếu có)
-                <input value={reference} onChange={event => setReference(event.target.value)} maxLength={300} placeholder="Số PCT/LCT hoặc tên hồ sơ" className="mt-1.5 h-10 w-full rounded-lg border border-slate-200 px-3 outline-none focus:border-emerald-400" />
+              <label className="block text-xs leading-5 font-medium text-slate-700">Tham chiếu/đính kèm (nếu có)
+                <input value={reference} onChange={event => setReference(event.target.value)} maxLength={300} placeholder="Số PCT/LCT hoặc tên hồ sơ" className="mt-1.5 h-10 min-h-9 w-full rounded-lg border border-slate-200 px-3 outline-none focus:border-emerald-400" />
               </label>
               <button disabled={saving} className="flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-60">
                 <Save className="size-4" aria-hidden /> {saving ? "Đang lưu…" : editingId === null ? "Lưu hóa chất trong ngày" : "Lưu nội dung chỉnh sửa"}
@@ -313,7 +247,7 @@ export function ChemicalUsageClient() {
           {success && <p className="mt-4 flex items-center gap-2 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-700"><CheckCircle2 className="size-4" />{success}</p>}
         </div>
 
-        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div className="min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
           <div className="flex items-start justify-between gap-3 border-b border-slate-100 px-5 py-4">
             <div>
               <h3 className="font-semibold text-slate-900">
@@ -327,9 +261,9 @@ export function ChemicalUsageClient() {
               </button>
             )}
           </div>
-          <div className="overflow-x-auto">
-            <table className="min-w-[1050px] w-full text-sm">
-              <thead className="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+          <div className="max-h-[68vh] overflow-auto">
+            <table className="min-w-[980px] w-full text-sm">
+              <thead className="sticky top-0 z-[5] bg-[#edf7f4] text-left text-xs font-semibold uppercase tracking-wide text-slate-500 print:static">
                 <tr><th className="px-4 py-3">Ngày</th><th className="px-4 py-3">Hóa chất</th><th className="px-4 py-3 text-right">Số lượng</th><th className="px-4 py-3">Tổ máy</th><th className="px-4 py-3">Nội dung/lý do</th><th className="px-4 py-3">Người nhập</th><th className="px-4 py-3">Tham chiếu</th><th className="px-4 py-3">Thao tác</th></tr>
               </thead>
               <tbody className="divide-y divide-slate-100">

@@ -24,7 +24,20 @@ Tài liệu này ghi kế hoạch đã chốt ngày 08/11/2026 (đã thống nh�
 | Giai đoạn | Việc | Trạng thái |
 |---|---|---|
 | 0 | Test hợp đồng API, lệnh `test:ctktkt`, số đo nền | ✅ 08/11/2026 |
-| 1 + 2 | Theo từng trang: hook TanStack trong `hooks/`, handler trả `ok()/fail()`, tách component, CSS → Tailwind. Thứ tự: **Hoá chất → Lượng nước → PMIS → PPA → Báo cáo sản xuất → Dữ liệu các tháng → Chỉ tiêu KTKT** | ⏳ |
+| 1 + 2 | Theo từng trang: hook TanStack trong `hooks/`, handler trả `ok()/fail()`, tách component, CSS → Tailwind. Thứ tự: **Hoá chất → Lượng nước → PMIS → PPA → Báo cáo sản xuất → Dữ liệu các tháng → Chỉ tiêu KTKT** | Hoá chất ✅ 08/11 · còn lại ⏳ |
+
+### Mẫu chuyển một trang (theo trang Hoá chất)
+
+1. **API**: handler trả `ok(body)` / `fail(message, status)` của `lib/api` với **đúng `body` cũ**; thêm tên route vào
+   `NATIVE_ENVELOPE_ROUTES` trong `app/api/ctktkt/[[...path]]/route.ts` (cổng chỉ còn ghi audit + Cache-Control).
+   Thêm các ca lỗi của route vào `ENDPOINTS`, ghi ảnh chụp **trên code cũ** (`git stash` phần đã sửa → `--record` → `git stash pop`), rồi so với code mới.
+2. **Hook**: `hooks/useKtkt<Tên>.ts` — `useQuery` khoá `["ctktkt", "<route>", …]` (nằm dưới `["ctktkt"]` để lượt ghi KTKT khác cũng làm mới),
+   `useMutation` gọi `apiMutate` và `invalidateQueries`. Component bỏ `useCtktktRequest`/`useEffect` tải tay.
+3. **CSS**: chuyển các quy tắc **riêng của trang** trong `styles.css` thành lớp Tailwind rồi xoá quy tắc cũ. Quy tắc chung
+   (`.engineering-workspace :is(button,a)[class*="rounded"]`, min-height trên điện thoại…) có độ ưu tiên cao hơn Tailwind —
+   dùng tiền tố `!` khi cần. Kiểm bằng cách đo `getComputedStyle` các phần tử chính trước/sau ở 1280px và 390px: phải khớp hoàn toàn.
+   Lớp dùng chung nhiều trang (`module-hero ktkt-dark-hero`, `engineering-workspace`) chuyển khi trang cuối cùng dùng nó đã chuyển xong.
+4. **Kiểm thử ghi** trên DB dev qua giao diện (thêm → sửa → xoá → lỗi server), rồi xoá dòng thử (id < 900000) để `--seed` không bị chặn.
 | 3 | `getRawDb()` → Prisma, đọc trước ghi sau; có thể "so bóng" (chạy cả truy vấn cũ và mới, ghi log khi lệch) | ⏳ |
 | 4 | Chuyển 4 API máy; xoá `db/sql.ts`, `getRawDb`, `useCtktktRequest`, cổng `[[...path]]` | ⏳ |
 

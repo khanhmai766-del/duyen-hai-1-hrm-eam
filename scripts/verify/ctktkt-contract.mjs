@@ -109,6 +109,8 @@ const ENDPOINTS = [
   "water-report?month=2026-09",
   "water-report/leaders",
   "chemical-usage?month=2026-09",
+  "chemical-usage?month=2026-13",
+  "chemical-usage",
   "ppa-heat-rate?period=2026-09&from=2026-09-01&to=2026-09-30",
   "ppa-heat-rate?period=2026-09&includeSource=1",
   "measurements?period=2026-09",

@@ -43,6 +43,12 @@ const routes: Record<string, () => Promise<Module>> = {
   "daily-inputs": () => import("@/modules/ctktkt/server/routes/daily-inputs/route"),
   "bcsx-coal-stock": () => import("@/modules/ctktkt/server/routes/bcsx-coal-stock/route")
 };
+/**
+ * Route đã chuyển về chuẩn web chính (handler tự trả `ok()`/`fail()` của lib/api) — cổng này chỉ ghi audit
+ * và đặt Cache-Control, KHÔNG giải mã rồi bọc lại JSON lần nữa. Thêm tên route vào đây khi chuyển đổi xong
+ * (docs/ktkt-chuyen-doi.md); phải giữ `npm run test:ctktkt:contract` khớp.
+ */
+const NATIVE_ENVELOPE_ROUTES = new Set(["chemical-usage"]);
 async function dispatch(request: Request, context: { params: Promise<{ path?: string[] }> }) {
   return handle(async () => {
     const path=(await context.params).path?.join("/") ?? "";
@@ -69,6 +75,7 @@ async function dispatch(request: Request, context: { params: Promise<{ path?: st
     if(machine) return response; // Giữ hợp đồng JSON gốc cho các hệ thống gọi API.
     if(path === "permissions") { response.headers.set("Cache-Control", "private, no-store"); return response; }
     if(actor && path !== "permissions" && response.ok && !["GET","HEAD"].includes(request.method)) await audit(actor.id,"UPDATE_CTKTKT","Ctktkt",undefined,`${request.method} ${path}`);
+    if(NATIVE_ENVELOPE_ROUTES.has(path)) { response.headers.set("Cache-Control","private, no-store"); return response; }
     if(response.status===304 || response.headers.has("Content-Disposition") || !response.headers.get("Content-Type")?.includes("application/json")) return response;
     const body=await response.json();
     if(!response.ok || body?.error) return fail(body?.error || "Thao tác KTKT thất bại.",response.ok?400:response.status);

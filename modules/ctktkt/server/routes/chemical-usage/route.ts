@@ -1,4 +1,5 @@
 import { getRawDb } from "@/modules/ctktkt/db";
+import { ok, fail } from "@/lib/api";
 import { getSessionUser } from "@/modules/ctktkt/lib/auth/server";
 import { isAdminUser } from "@/modules/ctktkt/lib/auth/session";
 import { canEnterChemical, CHEMICAL_CATALOG, editableChemicalsFor, findChemical } from "@/modules/ctktkt/lib/chemical-usage/catalog";
@@ -23,11 +24,11 @@ function nextMonth(month: string): string {
 
 export async function GET(request: Request) {
   const user = await getSessionUser();
-  if (!user) return Response.json({ error: "Chưa đăng nhập." }, { status: 401 });
+  if (!user) return fail("Chưa đăng nhập.", 401);
 
   const month = new URL(request.url).searchParams.get("month") || "";
   if (!monthPattern.test(month)) {
-    return Response.json({ error: "Tháng không hợp lệ, cần định dạng YYYY-MM." }, { status: 400 });
+    return fail("Tháng không hợp lệ, cần định dạng YYYY-MM.", 400);
   }
 
   try {
@@ -43,22 +44,22 @@ export async function GET(request: Request) {
       ORDER BY usage_date DESC, id DESC
     `).bind(`${month}-01`, `${nextMonth(month)}-01`).all();
 
-    return Response.json({
+    return ok({
       ok: true,
       month,
       records: result.results,
       catalog: CHEMICAL_CATALOG,
       editableCodes: editableChemicalsFor(user).map(item => item.code),
-    }, { headers: { "Cache-Control": "no-store" } });
+    });
   } catch (error) {
     console.error("Lỗi đọc theo dõi hóa chất:", error);
-    return Response.json({ error: "Không thể đọc dữ liệu theo dõi hóa chất." }, { status: 500 });
+    return fail("Không thể đọc dữ liệu theo dõi hóa chất.", 500);
   }
 }
 
 export async function POST(request: Request) {
   const user = await getSessionUser();
-  if (!user) return Response.json({ error: "Chưa đăng nhập." }, { status: 401 });
+  if (!user) return fail("Chưa đăng nhập.", 401);
 
   try {
     const body = (await request.json()) as {
@@ -76,19 +77,19 @@ export async function POST(request: Request) {
     const chemical = findChemical(chemicalCode);
 
     if (!isValidIsoDate(usageDate)) {
-      return Response.json({ error: "Ngày thực hiện không hợp lệ." }, { status: 400 });
+      return fail("Ngày thực hiện không hợp lệ.", 400);
     }
     if (!chemical) {
-      return Response.json({ error: "Loại hóa chất không thuộc danh mục được theo dõi." }, { status: 400 });
+      return fail("Loại hóa chất không thuộc danh mục được theo dõi.", 400);
     }
     if (!canEnterChemical(user, chemicalCode)) {
-      return Response.json({ error: `Cương vị ${user.position || "chưa xác định"} không được nhập ${chemical.name}.` }, { status: 403 });
+      return fail(`Cương vị ${user.position || "chưa xác định"} không được nhập ${chemical.name}.`, 403);
     }
     if (!Number.isFinite(quantity) || quantity <= 0 || quantity > 10000) {
-      return Response.json({ error: "Số lượng phải lớn hơn 0 và không vượt quá 10.000 tấn." }, { status: 400 });
+      return fail("Số lượng phải lớn hơn 0 và không vượt quá 10.000 tấn.", 400);
     }
     if (!purpose) {
-      return Response.json({ error: "Vui lòng nhập nội dung công tác/lý do sử dụng." }, { status: 400 });
+      return fail("Vui lòng nhập nội dung công tác/lý do sử dụng.", 400);
     }
     const rawDb = getRawDb();
     await ensureChemicalUsageSchema(rawDb);
@@ -113,16 +114,16 @@ export async function POST(request: Request) {
       user.position || "",
     ).run();
 
-    return Response.json({ ok: true, id: saved.meta.last_row_id }, { status: 201 });
+    return ok({ ok: true, id: saved.meta.last_row_id });
   } catch (error) {
     console.error("Lỗi lưu theo dõi hóa chất:", error);
-    return Response.json({ error: "Không thể lưu dữ liệu theo dõi hóa chất." }, { status: 500 });
+    return fail("Không thể lưu dữ liệu theo dõi hóa chất.", 500);
   }
 }
 
 export async function PUT(request: Request) {
   const user = await getSessionUser();
-  if (!user) return Response.json({ error: "Chưa đăng nhập." }, { status: 401 });
+  if (!user) return fail("Chưa đăng nhập.", 401);
 
   try {
     const body = (await request.json()) as {
@@ -137,23 +138,23 @@ export async function PUT(request: Request) {
     const reference = String(body.reference || "").trim().slice(0, 300);
     const chemical = findChemical(chemicalCode);
 
-    if (!Number.isInteger(id) || id <= 0) return Response.json({ error: "Bản ghi cần sửa không hợp lệ." }, { status: 400 });
-    if (!isValidIsoDate(usageDate)) return Response.json({ error: "Ngày thực hiện không hợp lệ." }, { status: 400 });
-    if (!chemical) return Response.json({ error: "Loại hóa chất không thuộc danh mục được theo dõi." }, { status: 400 });
+    if (!Number.isInteger(id) || id <= 0) return fail("Bản ghi cần sửa không hợp lệ.", 400);
+    if (!isValidIsoDate(usageDate)) return fail("Ngày thực hiện không hợp lệ.", 400);
+    if (!chemical) return fail("Loại hóa chất không thuộc danh mục được theo dõi.", 400);
     if (!canEnterChemical(user, chemicalCode)) {
-      return Response.json({ error: `Cương vị ${user.position || "chưa xác định"} không được sửa ${chemical.name}.` }, { status: 403 });
+      return fail(`Cương vị ${user.position || "chưa xác định"} không được sửa ${chemical.name}.`, 403);
     }
     if (!Number.isFinite(quantity) || quantity <= 0 || quantity > 10000) {
-      return Response.json({ error: "Số lượng phải lớn hơn 0 và không vượt quá 10.000 tấn." }, { status: 400 });
+      return fail("Số lượng phải lớn hơn 0 và không vượt quá 10.000 tấn.", 400);
     }
-    if (!purpose) return Response.json({ error: "Vui lòng nhập nội dung công tác/lý do sử dụng." }, { status: 400 });
+    if (!purpose) return fail("Vui lòng nhập nội dung công tác/lý do sử dụng.", 400);
 
     const rawDb = getRawDb();
     await ensureChemicalUsageSchema(rawDb);
     const existing = await rawDb.prepare("SELECT chemical_code FROM chemical_usage_logs WHERE id = ?").bind(id).first() as { chemical_code: string } | null;
-    if (!existing) return Response.json({ error: "Không tìm thấy bản ghi cần sửa." }, { status: 404 });
+    if (!existing) return fail("Không tìm thấy bản ghi cần sửa.", 404);
     if (!canEnterChemical(user, existing.chemical_code)) {
-      return Response.json({ error: "Cương vị hiện tại không được sửa bản ghi hóa chất này." }, { status: 403 });
+      return fail("Cương vị hiện tại không được sửa bản ghi hóa chất này.", 403);
     }
 
     await rawDb.prepare(`
@@ -167,21 +168,21 @@ export async function PUT(request: Request) {
       quantity, purpose, reference, user.id, user.displayName, user.position || "", id,
     ).run();
 
-    return Response.json({ ok: true, id });
+    return ok({ ok: true, id });
   } catch (error) {
     console.error("Lỗi sửa theo dõi hóa chất:", error);
-    return Response.json({ error: "Không thể sửa dữ liệu theo dõi hóa chất." }, { status: 500 });
+    return fail("Không thể sửa dữ liệu theo dõi hóa chất.", 500);
   }
 }
 
 export async function DELETE(request: Request) {
   const user = await getSessionUser();
-  if (!user) return Response.json({ error: "Chưa đăng nhập." }, { status: 401 });
-  if (!isAdminUser(user)) return Response.json({ error: "Chỉ tài khoản quản trị được xóa bản ghi." }, { status: 403 });
+  if (!user) return fail("Chưa đăng nhập.", 401);
+  if (!isAdminUser(user)) return fail("Chỉ tài khoản quản trị được xóa bản ghi.", 403);
 
   const id = Number(new URL(request.url).searchParams.get("id"));
   if (!Number.isInteger(id) || id <= 0) {
-    return Response.json({ error: "Bản ghi cần xóa không hợp lệ." }, { status: 400 });
+    return fail("Bản ghi cần xóa không hợp lệ.", 400);
   }
 
   try {
@@ -194,11 +195,11 @@ export async function DELETE(request: Request) {
     `).bind(user.id, user.displayName, user.position || "", id).run();
 
     if (Number(deleted.meta.changes) === 0) {
-      return Response.json({ error: "Không tìm thấy bản ghi cần xóa." }, { status: 404 });
+      return fail("Không tìm thấy bản ghi cần xóa.", 404);
     }
-    return Response.json({ ok: true, id });
+    return ok({ ok: true, id });
   } catch (error) {
     console.error("Lỗi xóa theo dõi hóa chất:", error);
-    return Response.json({ error: "Không thể xóa dữ liệu theo dõi hóa chất." }, { status: 500 });
+    return fail("Không thể xóa dữ liệu theo dõi hóa chất.", 500);
   }
 }
