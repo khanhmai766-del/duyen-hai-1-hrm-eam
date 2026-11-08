@@ -18,11 +18,15 @@ const TABS: { key: Tab; label: string }[] = [
 
 export function PpaHeatRatePageClient() {
   const [tab, setTab] = useState<Tab>("dashboard");
+  const tabs = <div className="ppa-tabs" role="group" aria-label="Chức năng suất hao nhiệt">
+    {TABS.map(item => <button key={item.key} type="button" onClick={() => setTab(item.key)} aria-pressed={tab === item.key}>{item.label}</button>)}
+  </div>;
   return <div className="module-report ppa-workspace space-y-3">
     <PpaHeaderTools />
-    <div className="module-page-tabs flex flex-wrap gap-2 rounded-2xl border border-slate-200 bg-white p-1.5 shadow-sm">
-      {TABS.map(item => <button key={item.key} type="button" onClick={() => setTab(item.key)} aria-pressed={tab === item.key} className={`rounded-xl px-4 py-2 text-sm font-bold transition ${tab === item.key ? "bg-gradient-to-r from-[#4057b5] to-[#438ec1] text-white shadow-sm" : "text-slate-600 hover:bg-slate-50"}`}>{item.label}</button>)}
-    </div>
-    {tab === "dashboard" ? <PpaHeatRateDashboard/> : tab === "input" ? <PpaHeatRateComparison/> : tab === "bulk" ? <PpaHeatRateBulkImport/> : <PpaStandardLineReference/>}
+    {/* Tab "So sánh trực quan" gộp hàng tab với thanh điều khiển của nó; các tab khác chỉ có hàng tab trong cùng khối nền tối. */}
+    {tab === "dashboard" ? <PpaHeatRateDashboard tabs={tabs}/> : <>
+      <div className="ppa-command-bar">{tabs}</div>
+      {tab === "input" ? <PpaHeatRateComparison/> : tab === "bulk" ? <PpaHeatRateBulkImport/> : <PpaStandardLineReference/>}
+    </>}
   </div>;
 }

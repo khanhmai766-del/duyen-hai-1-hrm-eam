@@ -12,6 +12,7 @@ import { addDaysIso, defaultOperatingDate, vietnamDateIso } from "@/modules/ctkt
 import { mergeDailyInputsWithCtktkt } from "@/modules/ctktkt/lib/daily-source-links";
 import {loadReportPeriods,reportPeriodQuery,reportPage} from "@/modules/ctktkt/lib/report-loading";
 import {ReportTablePager} from "@/modules/ctktkt/components/report-table-pager";
+import { GoogleMirrorLinks } from "@/modules/ctktkt/components/google-mirror-links";
 
 type DailyInput = { operatingDate: string; fieldCode: string; value: string };
 type CtktktInput = { operatingDate: string; cell: string; value: string };
@@ -295,7 +296,11 @@ export function PmisReport() {
   }
 
   return <section className="module-report pmis-workspace flex min-h-[calc(100vh-88px)] flex-col gap-3">
-    <div className="module-heading-copy pmis-title"><p className="module-eyebrow">Phân tích hiệu suất · S1 / S2</p><h1 className="text-xl font-extrabold tracking-tight text-[#18233d]">Bảng thông số tổn thất khói</h1></div>
+    {/* Nút Google Sheets nằm bên phải khối tiêu đề (thay khung xanh riêng phía trên). */}
+    <div className="module-heading-copy pmis-title flex flex-wrap items-center justify-between gap-3">
+      <div className="min-w-0"><p className="module-eyebrow">Phân tích hiệu suất · S1 / S2</p><h1 className="text-xl font-extrabold uppercase tracking-tight text-[#18233d]">Bảng thông số tổn thất khói</h1></div>
+      <div className="flex shrink-0 items-center print:hidden"><GoogleMirrorLinks module="pmis" variant="inline" /></div>
+    </div>
 
     {/* Cả 2 nhóm điều khiển (xem báo cáo + đồng bộ nhiều ngày) gộp vào đúng 1 hàng trên cùng để
         nhường tối đa chiều cao còn lại cho bảng và biểu đồ bên dưới. */}

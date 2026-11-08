@@ -7,6 +7,7 @@ import { PpaNotePreview } from "@/modules/ctktkt/components/ppa-note-preview";
 import "./ppa-detail-table.css";
 import "./ppa-controls.css";
 import { DateField } from "@/modules/ctktkt/components/ui/date-field";
+import { ArrowRight, CalendarRange, ChevronDown, Download, Sheet } from "lucide-react";
 import { GoogleSheetSyncButton } from "@/modules/ctktkt/components/google-sheet-sync-button";
 import { calculateActualHeatRate, calculatePpaHeatRateDetailed, compareHeatRate, type PpaSourceData, type UnitDetail } from "@/modules/ctktkt/lib/ppa-heat-rate";
 import { loadSheetJs } from "@/modules/ctktkt/lib/sheetjs-loader";
@@ -73,7 +74,7 @@ function periodsBetween(from: string, to: string) {
   return periods;
 }
 
-export function PpaHeatRateDashboard() {
+export function PpaHeatRateDashboard({ tabs }: { tabs?: React.ReactNode }) {
   const ctktktRequest = useCtktktRequest();
 
   const user = useSessionUser();
@@ -424,26 +425,30 @@ export function PpaHeatRateDashboard() {
       onFillMissing={() => { setExportMissingOpen(false); window.scrollTo({ top: 0, behavior: "smooth" }); }}
       onExportAnyway={continuePpaExport}
     />
-    <div className="ppa-controls">
-      {/* Tiêu đề bên trái, khoảng ngày + chọn nhanh bên phải trên cùng hàng (thay khung khoảng ngày riêng). */}
-      <div className="ppa-control-heading ppa-heading-row">
-        <div className="min-w-0">
-          <h1>So sánh suất hao nhiệt thực tế & PPA</h1>
-          <p className="ppa-control-description">Kết quả theo ngày · S1, S2 và toàn nhà máy · {loading ? "Đang tải…" : `${rows.length} ngày có kết quả đã lưu`}</p>
+    {/* Thanh điều khiển nền xanh đậm như các trang KTKT khác: khoảng ngày bên trái, Google Sheet/Excel bên phải. */}
+    {/* Một khối điều khiển duy nhất: tab chức năng (hàng trên) + khoảng ngày, chọn nhanh, Sheet/Excel (hàng dưới). */}
+    <div className="ppa-command-bar">
+      {tabs}
+      <div className="ppa-cmd-controls">
+        <div className="ppa-cmd-range" role="group" aria-label="Khoảng ngày">
+          <span className="ppa-cmd-label"><CalendarRange className="size-4" aria-hidden />Khoảng ngày</span>
+          <DateField value={fromDate} max={toDate} onChange={setFromDate} placeholder="Từ ngày" className="ppa-cmd-date"/>
+          <ArrowRight className="ppa-cmd-sep size-4" aria-hidden />
+          <DateField value={toDate} min={fromDate} max={today} onChange={setToDate} placeholder="Đến ngày" className="ppa-cmd-date"/>
+          <button type="button" onClick={applyManualRange} className="ppa-cmd-apply">Áp dụng</button>
         </div>
-        <div className="ppa-range-controls ppa-range-inline">
-          <label className="grid gap-1 text-xs font-bold text-slate-600">TỪ NGÀY<DateField value={fromDate} max={toDate} onChange={setFromDate} className="w-[150px]"/></label>
-          <label className="grid gap-1 text-xs font-bold text-slate-600">ĐẾN NGÀY<DateField value={toDate} min={fromDate} max={today} onChange={setToDate} className="w-[150px]"/></label>
-          <button type="button" onClick={applyManualRange} className="h-10 rounded-xl border border-[#aebfe1] bg-[#eef3ff] px-4 text-sm font-bold text-[#354a9f]">Áp dụng</button>
-          <div className="ppa-range-presets"><button type="button" onClick={() => applyQuick("month")} aria-pressed={rangeLabel === "Tháng vận hành"}>Tháng vận hành</button><button type="button" onClick={() => applyQuick("last15")} aria-pressed={rangeLabel === "15 ngày gần nhất"}>15 ngày gần nhất</button><button type="button" onClick={() => applyQuick("all")} aria-pressed={rangeLabel === "Xem tất cả"}>Tất cả</button></div>
+        <div className="ppa-cmd-presets" role="group" aria-label="Chọn nhanh khoảng ngày">
+          <button type="button" onClick={() => applyQuick("month")} aria-pressed={rangeLabel === "Tháng vận hành"}>Tháng vận hành</button>
+          <button type="button" onClick={() => applyQuick("last15")} aria-pressed={rangeLabel === "15 ngày gần nhất"}>15 ngày</button>
+          <button type="button" onClick={() => applyQuick("all")} aria-pressed={rangeLabel === "Xem tất cả"}>Tất cả</button>
         </div>
-      </div>
-      <div className="ppa-sheet-row">
-        <details className="ppa-sheet-menu"><summary>Google Sheet ▾</summary><div className="ppa-sheet-menu-content">
-        <label className="ppa-sheet-date">Ngày Google Sheet<DateField value={sheetDate} onChange={setSheetDate} className="w-[150px]"/></label>
-        <GoogleSheetSyncButton compact operatingDate={sheetDate} disabled={!hasSavedPpaForSheet || !hasAvailableCapacityForSheet} disabledReason={sheetDisabledReason} onImported={() => loadRange(fromDate, toDate, false)}/>
-        </div></details>
-        <button type="button" disabled={exporting || loading || !rows.length} onClick={requestExportXlsx} className="ppa-export-button">{exporting ? "Đang xuất…" : "Xuất Excel (.xlsx)"}</button>
+        <div className="ppa-cmd-actions">
+          <details className="ppa-sheet-menu"><summary className="ppa-cmd-ghost"><Sheet className="size-4" aria-hidden />Google Sheet<ChevronDown className="size-3.5" aria-hidden /></summary><div className="ppa-sheet-menu-content">
+            <label className="ppa-sheet-date">Ngày Google Sheet<DateField value={sheetDate} onChange={setSheetDate} className="w-[150px]"/></label>
+            <GoogleSheetSyncButton compact operatingDate={sheetDate} disabled={!hasSavedPpaForSheet || !hasAvailableCapacityForSheet} disabledReason={sheetDisabledReason} onImported={() => loadRange(fromDate, toDate, false)}/>
+          </div></details>
+          <button type="button" disabled={exporting || loading || !rows.length} onClick={requestExportXlsx} className="ppa-cmd-primary"><Download className="size-4" aria-hidden />{exporting ? "Đang xuất…" : "Xuất Excel"}</button>
+        </div>
       </div>
     </div>
 

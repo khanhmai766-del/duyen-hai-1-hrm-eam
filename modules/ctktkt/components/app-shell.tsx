@@ -7,7 +7,7 @@ import { GoogleMirrorLinks } from "./google-mirror-links";
 // Không còn thanh tab báo cáo (thanh bên đã có đủ mục), dòng mô tả và tên người dùng.
 // Nút "Chọn ô để sao chép Excel" nằm ở hàng tiêu đề (layout); Phân quyền KTKT vào từ Quản trị → Phân quyền.
 /** Trang tự đặt nút "Xem Google Sheets" trên hàng điều khiển của mình (không dùng khung xanh riêng). */
-const INLINE_MIRROR_MODULES=new Set(["ctktkt","chemical-usage","data","ppa"]);
+const INLINE_MIRROR_MODULES=new Set(["ctktkt","chemical-usage","data","ppa","pmis"]);
 export async function AppShell({children,active}:{children:React.ReactNode;active:string;hideSearch?:boolean}) {
   const user=await getSessionUser(); if(!user) return null;
   return <SessionProvider user={user}>

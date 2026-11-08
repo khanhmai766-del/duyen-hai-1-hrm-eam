@@ -630,21 +630,16 @@
 /* Monthly heading: title/actions followed by links and small counters. */
 .ctktkt-module:has([data-module="data"]) { row-gap:6px; }
 .ctktkt-module:has([data-module="data"]) > .ktkt-page-header { min-height:36px; gap:4px 12px; }
-.ctktkt-module:has([data-module="data"]) > .ktkt-page-header p { display:none; }
 .ctktkt-module:has([data-module="data"]) > .ktkt-page-header :is(button,a) { min-height:32px; height:32px; padding-block:4px; }
-.ctktkt-module .monthly-summary-row { display:flex; align-items:center; flex-wrap:wrap; gap:6px 12px; min-height:40px; padding:4px 8px; border:1px solid #dbe4ef; border-radius:8px; background:#fff; }
-.ctktkt-module .monthly-summary-row .ktkt-toolbar-link { height:32px; border-radius:6px; padding-inline:8px; font-size:12px; }
-.ctktkt-module .monthly-summary-row .monthly-stats { display:flex; flex-wrap:wrap; gap:4px 14px; margin-left:auto; }
-.ctktkt-module .monthly-summary-row .monthly-stat { display:flex; gap:5px; min-height:28px; padding:0; border:0; border-radius:0; background:none; box-shadow:none; }
-.ctktkt-module .monthly-summary-row .monthly-stat::before,.ctktkt-module .monthly-summary-row .monthly-stat::after { display:none; }
-.ctktkt-module .monthly-summary-row .monthly-stat > div { display:flex; align-items:baseline; gap:5px; }
-.ctktkt-module .monthly-summary-row .monthly-stat p:first-child { font-size:18px; line-height:1.2; }
-.ctktkt-module .monthly-summary-row .monthly-stat p:last-child { margin:0; font-size:12px; }
-.ctktkt-module .monthly-summary-row .monthly-stat-icon { width:22px; height:22px; border-radius:4px; }
-.ctktkt-module .monthly-summary-row .monthly-stat-icon svg { width:15px; height:15px; }
+/* Thẻ thống kê tháng: gọn hơn thẻ gốc (24px đệm, số 36px) để vừa hàng giữa thanh kỳ dữ liệu và bảng. */
+.ctktkt-module .monthly-workspace > .monthly-stats { gap:10px; }
+.ctktkt-module .monthly-workspace > .monthly-stats .monthly-stat { gap:12px; padding:12px 16px; border-radius:12px; box-shadow:none; }
+.ctktkt-module .monthly-workspace > .monthly-stats .monthly-stat::before { inset:12px auto 12px 0; }
+.ctktkt-module .monthly-workspace > .monthly-stats .monthly-stat::after { display:none; }
+.ctktkt-module .monthly-workspace > .monthly-stats .monthly-stat p:first-child { font-size:26px; line-height:1.1; }
+.ctktkt-module .monthly-workspace > .monthly-stats .monthly-stat p:last-child { margin-top:2px; font-size:13px; }
+.ctktkt-module .monthly-workspace > .monthly-stats .monthly-stat-icon { width:38px; height:38px; border-radius:10px; }
 .ctktkt-module .monthly-workspace > * + * { margin-top:8px; }
 @media (max-width:767px) {
- .ctktkt-module .monthly-summary-row .monthly-stats { width:100%; margin-left:0; display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); }
- .ctktkt-module .monthly-summary-row .ktkt-toolbar-link { min-height:40px; height:auto; }
  .ctktkt-module:has([data-module="data"]) > .ktkt-page-header :is(button,a) { min-height:40px; height:auto; }
 }
