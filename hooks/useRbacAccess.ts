@@ -70,7 +70,12 @@ export function useRbacAccess() {
     if (!user?.id || !permissionSignature) return;
     const identity = `${user.id}|${user.accessMode}|${lookupModules.join(",")}|${permissionSignature}`;
     if (lastPermissionIdentity === identity) return;
+    const firstLoad = lastPermissionIdentity === "";
     lastPermissionIdentity = identity;
+    // Lần nhận quyền đầu tiên sau khi tải trang không phải "quyền vừa đổi": các query đã tải bằng
+    // đúng phiên này (server tự kiểm quyền) — làm mới lúc này chỉ gọi trùng API (đo 08/11: due=WARN,
+    // pending-sync… tải 2 lần mỗi lượt mở trang). Chỉ làm mới khi quyền/tài khoản đổi về sau.
+    if (firstLoad) return;
     void queryClient.invalidateQueries({ queryKey: ["materials"] });
     void queryClient.invalidateQueries({ queryKey: ["work-permits"] });
     void queryClient.invalidateQueries({ queryKey: ["defects"] });

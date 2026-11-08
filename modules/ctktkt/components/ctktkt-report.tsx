@@ -439,19 +439,25 @@ export function CtktktReport() {
     async function run(){
       setLoading(true);setExtrasState("loading");setHoursMissingDates([]);
       try{
-        // The editable day and previous readings are ready before monthly/annual totals.
-        const day=await load(new URLSearchParams({period,date,scope:"daily-links"}).toString());
+        // Gửi cả 3 yêu cầu cùng lúc (trước đây chờ nối tiếp), nhưng vẫn ÁP kết quả theo thứ tự cũ:
+        // ngày đang sửa trước, rồi đầu tháng, rồi giờ luỹ kế — để phản hồi đến sớm không ghi đè ngày đang sửa.
+        const previous=previousIsoDate(date);
+        const dayRequest=load(new URLSearchParams({period,date,scope:"daily-links"}).toString());
+        const contextRequest=previous>`${period}-01`?load(new URLSearchParams({period,from:`${period}-01`,to:previous,scope:"daily-links"}).toString()):null;
+        const hoursRequest=load(new URLSearchParams({period,date,scope:"operating-hours"}).toString());
+        // Tránh "unhandled rejection" khi yêu cầu sau lỗi trong lúc còn chờ yêu cầu trước; lỗi vẫn được ném ở dòng await.
+        contextRequest?.catch(()=>{});hoursRequest.catch(()=>{});
+        const day=await dayRequest;
         setByDate(group(day.entries));setLinkedByDate(group(day.linkedEntries));setLinkWarnings(day.warnings||[]);
         setLoading(false);
-        const previous=previousIsoDate(date);
-        if(previous>`${period}-01`){
-          const context=await load(new URLSearchParams({period,from:`${period}-01`,to:previous,scope:"daily-links"}).toString());
+        if(contextRequest){
+          const context=await contextRequest;
           // Do not replace today's inputs or yesterday's readings with a late response.
           const earlier=(entries:LoadedEntry[]=[])=>entries.filter(entry=>entry.operatingDate<previous);
           setByDate(old=>({...group(earlier(context.entries)),...old}));
           setLinkedByDate(old=>({...group(earlier(context.linkedEntries)),...old}));
         }
-        const hours=await load(new URLSearchParams({period,date,scope:"operating-hours"}).toString());
+        const hours=await hoursRequest;
         setLinkedByDate(old=>{
           const next={...old};
           for(const [day,values] of Object.entries(group(hours.linkedEntries)))next[day]={...next[day],...values};

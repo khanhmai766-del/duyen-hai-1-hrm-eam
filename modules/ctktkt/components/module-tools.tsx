@@ -9,7 +9,9 @@ export function ModuleTools({user}:{user:SessionUser}) {
     ...(hasPermission(user,"view_data_history")?[{href:"/admin/data-history",label:"Nhật ký số liệu",icon:History}]:[]),
     // Cài đặt kết nối Google Sheets (tải tệp Apps Script) — cùng điều kiện quyền với trang /google-sheets (requireAdmin).
     ...(hasPermission(user,"manage_users")?[{href:"/google-sheets",label:"Kết nối Google Sheets",icon:FileSpreadsheet}]:[])];
+  // prefetch={false}: các trang này hiếm khi mở; prefetch mặc định chạy lại layout ở server mỗi lần xem trang KTKT
+  // (log nginx 07/11: 8 lượt prefetch kèm mỗi lượt mở trang).
   return <nav aria-label="Tiện ích và quản trị dữ liệu KTKT" className="flex shrink-0 items-center gap-1">
-    {items.map(item=><Link key={item.href} href={base+item.href} title={item.label} aria-label={item.label} className="inline-flex size-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-blue-700 shadow-sm hover:border-blue-300 hover:bg-blue-50"><item.icon className="size-[18px]" aria-hidden="true"/></Link>)}
+    {items.map(item=><Link key={item.href} href={base+item.href} prefetch={false} title={item.label} aria-label={item.label} className="inline-flex size-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-blue-700 shadow-sm hover:border-blue-300 hover:bg-blue-50"><item.icon className="size-[18px]" aria-hidden="true"/></Link>)}
   </nav>;
 }
