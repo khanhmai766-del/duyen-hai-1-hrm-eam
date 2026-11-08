@@ -30,7 +30,7 @@ const CtktktEmailModal=dynamic(()=>import("@/modules/ctktkt/components/ctktkt-em
 const CoalMeterPhotoImport=dynamic(()=>import("@/modules/ctktkt/components/coal-meter-photo-import").then(module=>module.CoalMeterPhotoImport),{ssr:false});
 import { calculateCoalStock24h, calculatePmisCoalStockOpening, COAL_STOCK_24H_START_CELL } from "@/modules/ctktkt/lib/coal-stock";
 import { useSessionUser } from "@/modules/ctktkt/components/session-context";
-import { acknowledgeReportDraft, mergeReportDraft, readReportDraft, reportDraftKey, writeReportDraft } from "@/modules/ctktkt/lib/report-draft";
+import { acknowledgeReportDraft, mergeReportDraft, pruneReportDrafts, readReportDraft, reportDraftKey, writeReportDraft } from "@/modules/ctktkt/lib/report-draft";
 import { canEditOperatingDate, defaultOperatingDate, vietnamDateIso } from "@/modules/ctktkt/lib/operating-date";
 import { isAdminUser } from "@/modules/ctktkt/lib/auth/session";
 import {
@@ -467,6 +467,8 @@ export function CtktktReport() {
         if (draftRef.current.key !== draftKey) {
           draftRef.current = { key: draftKey, values: {} };
           try {
+            // Dọn bản nháp cũ của chính tài khoản này để trình duyệt không tích tụ dữ liệu.
+            try { pruneReportDrafts(window.localStorage, user.id, vietnamDateIso()); } catch { /* không chặn việc mở báo cáo */ }
             const restored = readReportDraft(window.localStorage, draftKey);
             // Keep the account's draft even when its date now needs admin approval.
             draftRef.current.values = Object.fromEntries(Object.entries(restored).filter(([cell]) => editableFields.some(field => field.cell === cell)));
@@ -509,7 +511,7 @@ export function CtktktReport() {
     }
     void run();
     return () => controller.abort();
-  }, [period,date,draftKey,reloadVersion, ctktktRequest, acknowledgeSaved]);
+  }, [period,date,draftKey,reloadVersion, ctktktRequest, acknowledgeSaved, user.id]);
 
   const previousDate = previousIsoDate(date);
   const previous = useMemo(() => {
@@ -1242,7 +1244,7 @@ export function CtktktReport() {
             {error}
             {error.includes("Yêu cầu chỉnh sửa") && <button type="button" className="mt-2 block min-h-10 rounded-lg border border-red-300 bg-white px-3 font-semibold" onClick={() => {
               window.dispatchEvent(new Event("ktkt-open-correction"));
-            }}>Mở yêu cầu duyệt — chọn “Lấy các ô đang sửa vào yêu cầu”</button>}
+            }}>Mở yêu cầu duyệt — bấm “Lấy … ô đang sửa trên báo cáo”</button>}
           </p>
         )}
         {message && (

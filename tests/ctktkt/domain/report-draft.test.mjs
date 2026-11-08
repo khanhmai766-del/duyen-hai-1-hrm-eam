@@ -1,10 +1,13 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { acknowledgeReportDraft, mergeReportDraft, readReportDraft, reportDraftKey, writeReportDraft } from '../../../modules/ctktkt/lib/report-draft.ts';
+import { acknowledgeReportDraft, mergeReportDraft, pruneReportDrafts, readReportDraft, reportDraftKey, writeReportDraft } from '../../../modules/ctktkt/lib/report-draft.ts';
 
 const memoryStorage = () => {
   const values = new Map();
-  return { getItem: key => values.get(key) ?? null, setItem: (key, value) => values.set(key, value), removeItem: key => values.delete(key) };
+  return {
+    getItem: key => values.get(key) ?? null, setItem: (key, value) => values.set(key, value), removeItem: key => values.delete(key),
+    get length() { return values.size; }, key: index => [...values.keys()][index] ?? null,
+  };
 };
 
 test('reload restores zeros, decimal typing and intentional deletion for the same account/day only', () => {
@@ -41,4 +44,19 @@ test('corrupt or unavailable browser storage is reported instead of silently dis
   storage.setItem('bad', '{');
   assert.throws(() => readReportDraft(storage, 'bad'));
   assert.throws(() => writeReportDraft({ ...storage, setItem: () => { throw new Error('quota'); } }, 'key', { AJ91: '0' }), /quota/);
+});
+
+test('old drafts of the same account are pruned; recent drafts, other accounts and other keys are kept', () => {
+  const storage = memoryStorage();
+  for (const date of ['2026-10-01', '2026-10-24', '2026-10-25', '2026-11-08']) writeReportDraft(storage, reportDraftKey('operator', date), { AJ91: '0' });
+  writeReportDraft(storage, reportDraftKey('other', '2026-10-01'), { AJ91: '0' });
+  storage.setItem('unrelated', 'x');
+  assert.equal(pruneReportDrafts(storage, 'operator', '2026-11-08'), 2);
+  assert.equal(storage.getItem(reportDraftKey('operator', '2026-10-01')), null);
+  assert.equal(storage.getItem(reportDraftKey('operator', '2026-10-24')), null);
+  assert.notEqual(storage.getItem(reportDraftKey('operator', '2026-10-25')), null);
+  assert.notEqual(storage.getItem(reportDraftKey('operator', '2026-11-08')), null);
+  assert.notEqual(storage.getItem(reportDraftKey('other', '2026-10-01')), null);
+  assert.equal(storage.getItem('unrelated'), 'x');
+  assert.equal(pruneReportDrafts(storage, 'operator', 'not-a-date'), 0);
 });
