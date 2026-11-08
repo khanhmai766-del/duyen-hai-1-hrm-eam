@@ -4,7 +4,7 @@ import { GoogleMirrorLinks } from "./google-mirror-links";
 import { useCtktktRequest } from "@/hooks/useCtktkt";
 
 import { useEffect, useMemo, useState } from "react";
-import { Beaker, CalendarDays, CheckCircle2, LockKeyhole, Pencil, Save, Trash2, X } from "lucide-react";
+import { Beaker, CheckCircle2, LockKeyhole, Pencil, Save, Trash2, X } from "lucide-react";
 import { useSessionUser } from "@/modules/ctktkt/components/session-context";
 import { editableChemicalsFor, type ChemicalCatalogItem, type ChemicalCode } from "@/modules/ctktkt/lib/chemical-usage/catalog";
 import { defaultOperatingDate } from "@/modules/ctktkt/lib/operating-date";
@@ -219,15 +219,11 @@ export function ChemicalUsageClient() {
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="module-heading-copy">
             <h2 className="flex items-center gap-2 text-xl font-bold text-slate-900"><Beaker className="size-5 shrink-0 text-[#75d4e4]" aria-hidden />THEO DÕI HÓA CHẤT</h2>
-            <p className="mt-1 max-w-3xl text-sm text-slate-500">
-              Danh mục và quyền nhập được xây dựng từ cột “Cương vị” của sheet nguồn.
-            </p>
           </div>
           {/* Tháng xem + nút Google Sheets cùng một hàng (thay khung xanh riêng phía trên). */}
           <div className="flex shrink-0 flex-wrap items-center gap-2 lg:flex-nowrap">
-            <label className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm">
-              <CalendarDays className="size-4 text-slate-500" aria-hidden />
-              <span className="font-medium text-slate-600">Tháng xem</span>
+            <label className="flex items-center text-sm">
+              <span className="sr-only">Tháng xem</span>
               <MonthField value={month} onChange={event => setMonth(event.target.value)} className="rounded-md border border-slate-200 bg-white px-2 py-1 outline-none focus:border-emerald-400" />
             </label>
             <GoogleMirrorLinks module="chemical-usage" variant="inline" />

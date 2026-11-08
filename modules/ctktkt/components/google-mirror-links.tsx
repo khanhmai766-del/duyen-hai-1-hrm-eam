@@ -9,6 +9,9 @@ type Entry={fileKey:string;period:string;syncedAt:string};
 
 /** Lịch Apps Script chạy mỗi giờ: quá 2 giờ chưa có lần đồng bộ mới thì coi là đã trễ. */
 const STALE_AFTER_MS=2*60*60*1000;
+/** Trang có nhiều file (BCSX): nút ghi gọn "Sheet · …". Giữ nguyên `label` vì bản chụp gửi Apps Script dùng nó. */
+const SHORT_LABEL:Record<string,string>={'bcsx-s1':'BCSX S1','bcsx-s2':'BCSX S2','bcsx-a0':'BCSX DH1'};
+const buttonText=(f:{key:string;label:string},many:boolean)=>many?`Sheet · ${SHORT_LABEL[f.key]??f.label}`:'Xem Google Sheets';
 const formatTime=(iso:string)=>new Date(iso).toLocaleString('vi-VN',{timeZone:'Asia/Ho_Chi_Minh',hour:'2-digit',minute:'2-digit',day:'2-digit',month:'2-digit'});
 
 /**
@@ -35,14 +38,14 @@ export function GoogleMirrorLinks({module,variant="bar"}:{module:string;variant?
      :status?`${stale?"Chưa đồng bộ quá 2 giờ · lần cuối ":"Cập nhật "}${formatTime(status.syncedAt)} · tháng ${status.period.slice(5)}/${status.period.slice(0,4)}`:"Chưa có lần đồng bộ được xác nhận";
    return <a key={f.key} href={mirrorUrl(f.id)} target="_blank" rel="noopener noreferrer" title={note}
      className={`ktkt-toolbar-link flex h-9 items-center gap-1.5 whitespace-nowrap rounded-xl border px-3.5 text-xs font-bold shadow-xs ${stale?"border-amber-300 bg-amber-50 text-amber-900 hover:bg-amber-100":"border-emerald-300 bg-white text-emerald-900 hover:bg-emerald-50"}`}>
-     {stale&&<TriangleAlert className="size-3.5 shrink-0" aria-hidden/>}Xem Google Sheets{files.length>1?` · ${f.label}`:''}
+     {stale&&<TriangleAlert className="size-3.5 shrink-0" aria-hidden/>}{buttonText(f,files.length>1)}
    </a>;})}</>;
  return <section aria-label="File Google Sheets của mục này" className="google-mirror-bar mb-4 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-emerald-200 bg-emerald-50/60 px-3 py-2 print:hidden">
   {files.map(f=>{
    const status=entries.find(e=>e.fileKey===f.key);
    const stale=Boolean(configured&&checkedAt&&(!status||checkedAt-Date.parse(status.syncedAt)>STALE_AFTER_MS));
    return <div key={f.key} className="flex flex-wrap items-center gap-2">
-    <a href={mirrorUrl(f.id)} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-9 items-center justify-center rounded-lg border border-emerald-300 bg-white px-3 text-sm font-semibold text-emerald-900 hover:bg-emerald-100">Xem Google Sheets{files.length>1?` · ${f.label}`:''}</a>
+    <a href={mirrorUrl(f.id)} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-9 items-center justify-center rounded-lg border border-emerald-300 bg-white px-3 text-sm font-semibold text-emerald-900 hover:bg-emerald-100">{buttonText(f,files.length>1)}</a>
     {configured&&<span className={`inline-flex items-center gap-1 text-xs ${stale?"font-semibold text-amber-700":"text-slate-600"}`} title={stale?"Lịch đồng bộ chạy mỗi giờ; quá 2 giờ chưa có lần cập nhật mới — kiểm tra dự án Apps Script.":undefined}>
      {stale&&<TriangleAlert className="size-3.5 shrink-0" aria-hidden/>}
      {status?`${stale?"Chưa đồng bộ quá 2 giờ · lần cuối ":"Cập nhật "}${formatTime(status.syncedAt)} · tháng ${status.period.slice(5)}/${status.period.slice(0,4)}`:"Chưa có lần đồng bộ được xác nhận"}

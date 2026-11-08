@@ -1,7 +1,5 @@
 "use client";
-import Link from "next/link";
 import { GoogleMirrorLinks } from "./google-mirror-links";
-import { canManageKtktInputs } from "../lib/auth/delegation-policy";
 import { MonthField } from "./ui/month-field";
 import { useCtktktRequest } from "@/hooks/useCtktkt";
 import { canEditDailyInput } from "@/modules/ctktkt/lib/auth/daily-input-permissions";
@@ -344,7 +342,6 @@ export function DailyProductionTable() {
 
   return <section className="monthly-workspace space-y-5">
     <div className="monthly-summary-row">
-      {canManageKtktInputs(user)&&<Link href="/tien-ich/chi-tieu-ktkt/phan-quyen" className="monthly-assignment-link">Phân công nhập liệu KTKT</Link>}
       <GoogleMirrorLinks module="data" variant="inline" />
     <div className="monthly-stats grid grid-cols-2 gap-3 xl:grid-cols-4">
       {[{icon:CalendarDays,label:"Ngày trong tháng",value:days,tone:"text-[#4057b5] bg-[#f0f3ff]"},{icon:CheckCircle2,label:"Ngày đã nhập",value:daysWithData,tone:"text-[#19845f] bg-[#edf9f4]"},{icon:PencilLine,label:"Ô vừa thay đổi",value:dirtyCount,tone:"text-[#c87819] bg-[#fff7e8]"},{icon:TriangleAlert,label:"CE/CF bất thường",value:abnormalCount,tone:abnormalCount?"text-red-700 bg-red-50":"text-[#7451d6] bg-[#f5f1ff]"}].map(card=><div key={card.label} className="monthly-stat"><span className={`monthly-stat-icon ${card.tone}`}><card.icon className="size-5" aria-hidden /></span><div><p className="text-3xl font-bold leading-none text-slate-900">{loading?"…":card.value}</p><p className="mt-2 text-sm text-slate-500">{card.label}</p></div></div>)}
