@@ -24,7 +24,7 @@ Tài liệu này ghi kế hoạch đã chốt ngày 08/11/2026 (đã thống nh�
 | Giai đoạn | Việc | Trạng thái |
 |---|---|---|
 | 0 | Test hợp đồng API, lệnh `test:ctktkt`, số đo nền | ✅ 08/11/2026 |
-| 1 + 2 | Theo từng trang: hook TanStack trong `hooks/`, handler trả `ok()/fail()`, tách component, CSS → Tailwind. Thứ tự: **Hoá chất → Lượng nước → PMIS → PPA → Báo cáo sản xuất → Dữ liệu các tháng → Chỉ tiêu KTKT** | Hoá chất ✅ · Lượng nước ✅ · PMIS ✅ · PPA ✅ · Báo cáo sản xuất ✅ (08/11) · còn Dữ liệu các tháng, Chỉ tiêu KTKT ⏳ |
+| 1 + 2 | Theo từng trang: hook TanStack trong `hooks/`, handler trả `ok()/fail()`, tách component, CSS → Tailwind. Thứ tự: **Hoá chất → Lượng nước → PMIS → PPA → Báo cáo sản xuất → Dữ liệu các tháng → Chỉ tiêu KTKT** | Hoá chất ✅ · Lượng nước ✅ · PMIS ✅ · PPA ✅ · Báo cáo sản xuất ✅ · Dữ liệu các tháng ✅ (08/11) · còn Chỉ tiêu KTKT ⏳ |
 
 ### Mẫu chuyển một trang (theo trang Hoá chất)
 
@@ -57,6 +57,10 @@ trả lời `PING` bằng `READY` và `SYNC_HEATRATE` bằng `SYNC_HEATRATE_RESU
 **Gọi ra ngoài** (Google Apps Script trong nút Google Sheet): gọi thẳng `apiReportResponse` của `lib/fetcher` — với URL ngoài
 nó chỉ là `fetch` + câu lỗi mất mạng tiếng Việt, đúng như `useCtktktRequest` cũ. Hợp đồng ghi chỉ kiểm nhánh "máy chủ chưa
 cấu hình" (dev không có `GOOGLE_SHEET_APPS_SCRIPT_URL`), không bao giờ gọi Apps Script thật.
+
+**Tách CSS theo trang khỏi `styles.css`**: chỉ chuyển quy tắc mà MỌI selector có lớp của trang ở **cấp ngoài**. Lớp nằm trong
+`:is()/:not()/:where()/:has()` không tính — vd `:is(.ktkt-page-header, .monthly-toolbar-controls, .module-hero)` áp cho nhiều
+trang; chuyển nó sang CSS của component sẽ làm nó biến mất ở trang không nạp component đó (đã suýt mắc 08/11).
 
 **CSS chết**: khi trang đổi cấu trúc, xoá quy tắc theo **selector** (không theo dòng) — tệp CSS module viết dồn nhiều quy tắc/dòng
 và gộp selector bằng dấu phẩy. Trước khi xoá lớp khỏi CSS dùng chung, `grep` toàn repo (`.tsx/.ts/.css`) phải ra 0.

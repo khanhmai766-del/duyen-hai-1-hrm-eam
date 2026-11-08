@@ -1,7 +1,7 @@
 "use client";
 import { GoogleMirrorLinks } from "./google-mirror-links";
 import { MonthField } from "./ui/month-field";
-import { useCtktktRequest } from "@/hooks/useCtktkt";
+import { fetchDailyInputsMonth, useDailyInputsMonth, useSaveDailyInputs } from "@/hooks/useKtktDailyInputs";
 import { canEditDailyInput } from "@/modules/ctktkt/lib/auth/daily-input-permissions";
 
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -109,15 +109,16 @@ function isWaterAbnormal(rows: DailyRow[], dayIndex: number, code: "CE" | "CF") 
 }
 
 export function DailyProductionTable() {
-  const ctktktRequest = useCtktktRequest();
-
   const user = useSessionUser();
   const canEditMonthlyInputs = hasPermission(user, "edit_daily_inputs") || hasPermission(user, "edit_pmis");
   const isViewer = !canEditMonthlyInputs;
   const canSyncDaily = hasPermission(user, "sync_qlkt") && hasPermission(user, "edit_daily_inputs");
   const [period, setPeriod] = useState(currentPeriod), [group, setGroup] = useState<Group>("production");
   const [showCalculated, setShowCalculated] = useState(false), [rows, setRows] = useState<DailyRow[]>(() => Array.from({ length: 31 }, () => ({})));
-  const [loading, setLoading] = useState(true), [saving, setSaving] = useState(false), [message, setMessage] = useState(""), [error, setError] = useState("");
+  const [message, setMessage] = useState(""), [actionError, setError] = useState("");
+  // Lưu (thủ công và đồng bộ nhiều ngày) chỉ đánh dấu dữ liệu KTKT là cũ, không tải lại bảng đang sửa.
+  const saveMutation = useSaveDailyInputs({ invalidate: "mark" });
+  const saving = saveMutation.isPending;
   const [dirtyCount, setDirtyCount] = useState(0);
   const [noteCell, setNoteCell] = useState<{ day: number; code: string; label: string } | null>(null), [noteDraft, setNoteDraft] = useState("");
   const [syncHelp, setSyncHelp] = useState(false), [pendingSync, setPendingSync] = useState<QlktSyncPayload | null>(null), [selectedSyncCodes, setSelectedSyncCodes] = useState<Set<string>>(new Set());
@@ -127,7 +128,7 @@ export function DailyProductionTable() {
   const [chartField, setChartField] = useState<Field | null>(null);
   const [overviewCode, setOverviewCode] = useState("");
   const [rangeFrom, setRangeFrom] = useState(QLKT_RANGE_SYNC_DEFAULT_FROM), [rangeTo, setRangeTo] = useState(defaultOperatingDate);
-  const [rangeState, setRangeState] = useState<RangeState | null>(null), [reloadKey, setReloadKey] = useState(0);
+  const [rangeState, setRangeState] = useState<RangeState | null>(null);
   // Gộp hai kiểu đồng bộ QLKT vào một khung: 1 ngày (duyệt rồi mới lưu) hoặc nhiều ngày (tự lưu từng ngày).
   const [syncMode, setSyncMode] = useState<"day" | "range">("day");
   const rangeStopRef = useRef(false);
@@ -152,47 +153,50 @@ export function DailyProductionTable() {
 
   // Reset view state while rendering when the month changes, instead of synchronously inside the effect.
   const [trackedPeriod, setTrackedPeriod] = useState(period);
-  if (trackedPeriod !== period) { setTrackedPeriod(period); setLoading(true); setError(""); setMessage(""); setDirtyCount(0); }
+  if (trackedPeriod !== period) { setTrackedPeriod(period); setError(""); setMessage(""); setDirtyCount(0); }
   const markDirty = (key: string) => { dirty.current.add(key); setDirtyCount(dirty.current.size); };
 
-  useEffect(() => { const controller = new AbortController(); dirty.current.clear();
-    Promise.all([
-      ctktktRequest(`/api/ctktkt/daily-inputs?period=${encodeURIComponent(period)}`, { cache:"no-store", signal:controller.signal }),
-      ctktktRequest(`/api/ctktkt/ctktkt-report?period=${encodeURIComponent(period)}`, { cache:"no-store", signal:controller.signal }),
-    ]).then(async ([dailyResponse, ctktktResponse]) => {
-      const body=await dailyResponse.json() as { entries?:LoadedEntry[]; error?:string }; if(!dailyResponse.ok) throw new Error(body.error||"Không tải được dữ liệu.");
-      const next=Array.from({length:31},()=>({} as DailyRow)); for(const e of body.entries||[]){const d=Number(e.operatingDate.slice(8,10))-1; if(d>=0&&d<31){next[d][e.fieldCode]=e.value; if(e.note) next[d][`${e.fieldCode}_NOTE`]=e.note;}}
-      const linked = new Set<string>();
-      for (let day = 0; day < 31; day += 1) {
-        for (const code of CTKTKT_LINKED_DAILY_CODES) {
-          delete next[day][code];
+  // Dữ liệu tháng; khi lượt tải MỚI về thì dựng lại lưới (bỏ cột tự liên kết, gắn giá trị suy từ Chỉ tiêu KTKT,
+  // xoá ngày tương lai) — y như bản cũ. Lưu không tải lại nên không ghi đè ô đang sửa dở.
+  const monthQuery = useDailyInputsMonth(period);
+  const loading = monthQuery.isPending;
+  const error = actionError || (monthQuery.error instanceof Error ? monthQuery.error.message : "");
+  const [initializedData, setInitializedData] = useState<unknown>(null);
+  if (monthQuery.data && monthQuery.data !== initializedData) {
+    setInitializedData(monthQuery.data);
+    const next=Array.from({length:31},()=>({} as DailyRow)); for(const e of monthQuery.data.daily as LoadedEntry[]){const d=Number(e.operatingDate.slice(8,10))-1; if(d>=0&&d<31){next[d][e.fieldCode]=e.value; if(e.note) next[d][`${e.fieldCode}_NOTE`]=e.note;}}
+    const linked = new Set<string>();
+    for (let day = 0; day < 31; day += 1) {
+      for (const code of CTKTKT_LINKED_DAILY_CODES) {
+        delete next[day][code];
+        linked.add(`${day}:${code}`);
+      }
+    }
+    if (monthQuery.data.ctktkt) {
+      const byDate = new Map<string, CtktktDayEntries>();
+      for (const entry of monthQuery.data.ctktkt as CtktktLoadedEntry[]) {
+        const values = byDate.get(entry.operatingDate) || {};
+        values[entry.cell] = entry.value;
+        byDate.set(entry.operatingDate, values);
+      }
+      for (const [operatingDate, values] of byDate) {
+        const day = Number(operatingDate.slice(8, 10)) - 1;
+        if (day < 0 || day >= 31) continue;
+        const derived = deriveDailyValuesFromCtktkt(values, byDate.get(previousIsoDate(operatingDate)));
+        for (const [code, value] of Object.entries(derived)) {
+          next[day][code] = value;
           linked.add(`${day}:${code}`);
         }
       }
-      if (ctktktResponse.ok) {
-        const ctktktBody = await ctktktResponse.json() as { entries?: CtktktLoadedEntry[]; linkedEntries?: CtktktLoadedEntry[] };
-        const byDate = new Map<string, CtktktDayEntries>();
-        for (const entry of [...(ctktktBody.entries || []), ...(ctktktBody.linkedEntries || [])]) {
-          const values = byDate.get(entry.operatingDate) || {};
-          values[entry.cell] = entry.value;
-          byDate.set(entry.operatingDate, values);
-        }
-        for (const [operatingDate, values] of byDate) {
-          const day = Number(operatingDate.slice(8, 10)) - 1;
-          if (day < 0 || day >= 31) continue;
-          const derived = deriveDailyValuesFromCtktkt(values, byDate.get(previousIsoDate(operatingDate)));
-          for (const [code, value] of Object.entries(derived)) {
-            next[day][code] = value;
-            linked.add(`${day}:${code}`);
-          }
-        }
-      }
-      for (let day = 0; day < 31; day += 1) {
-        const operatingDate = `${period}-${String(day + 1).padStart(2, "0")}`;
-        if (operatingDate > vietnamDateIso()) next[day] = {};
-      }
-      setCtktktLinkedCells(linked); setRows(next);
-    }).catch(e=>{if(!controller.signal.aborted)setError(e instanceof Error?e.message:"Không tải được dữ liệu.");}).finally(()=>{if(!controller.signal.aborted)setLoading(false);}); return ()=>controller.abort(); },[period,reloadKey, ctktktRequest]);
+    }
+    for (let day = 0; day < 31; day += 1) {
+      const operatingDate = `${period}-${String(day + 1).padStart(2, "0")}`;
+      if (operatingDate > vietnamDateIso()) next[day] = {};
+    }
+    setCtktktLinkedCells(linked); setRows(next);
+  }
+  // Lưới vừa dựng lại từ máy chủ → bỏ đánh dấu "ô vừa sửa" cũ.
+  useEffect(() => { dirty.current.clear(); }, [initializedData]);
 
   useEffect(() => {
     const payload = decodeQlktSyncHash(window.location.hash);
@@ -312,16 +316,12 @@ export function DailyProductionTable() {
         const monthKey=date.slice(0,7);
         try{
           if(!notesByPeriod.has(monthKey)){
-            const response=await ctktktRequest(`/api/ctktkt/daily-inputs?period=${monthKey}`,{cache:"no-store"});
-            const body=await response.json() as {entries?:LoadedEntry[];error?:string};
-            if(!response.ok)throw new Error(body.error||"không đọc được ghi chú hiện có");
-            notesByPeriod.set(monthKey,new Map((body.entries||[]).filter(entry=>entry.note).map(entry=>[`${entry.operatingDate}|${entry.fieldCode}`,entry.note])));
+            const monthEntries=await fetchDailyInputsMonth(monthKey).catch(reason=>{throw new Error(reason instanceof Error&&reason.message?reason.message:"không đọc được ghi chú hiện có");}) as LoadedEntry[];
+            notesByPeriod.set(monthKey,new Map(monthEntries.filter(entry=>entry.note).map(entry=>[`${entry.operatingDate}|${entry.fieldCode}`,entry.note])));
           }
           const entries=buildQlktRangeEntries(date,directQlktPayload(payload).entries.filter(entry=>canEditDailyInput(user,entry.fieldCode)).map(entry=>({fieldCode:entry.fieldCode,value:normalizeQlktValue(entry.value)})),notesByPeriod.get(monthKey)!);
           if(entries.length){
-            const response=await ctktktRequest("/api/ctktkt/daily-inputs",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({period:monthKey,entries})});
-            const body=await response.json() as {error?:string};
-            if(!response.ok)throw new Error(body.error||"không lưu được");
+            await saveMutation.mutateAsync({period:monthKey,entries});
             saved+=entries.length;
           }
         }catch(reason){failed.push(`${displayDate(date)}: ${reason instanceof Error?reason.message:"không lưu được"}`);}
@@ -332,12 +332,13 @@ export function DailyProductionTable() {
     }
     try{await wakeLock?.release();}catch{}
     setRangeState(state=>state&&{...state,running:false});
-    setReloadKey(key=>key+1);
+    // Xong cả khoảng: đọc lại tháng đang xem một lần (bảng không có ô chưa lưu — đã chặn ở đầu hàm).
+    void monthQuery.refetch();
     setMessage(`${rangeStopRef.current?"Đã dừng":"Đã xong"} đồng bộ QLKT ${displayDate(rangeFrom)}–${displayDate(rangeTo)}: lưu ${saved} ô${failed.length?`, ${failed.length} ngày lỗi (xem danh sách bên dưới, có thể chạy lại riêng các ngày đó)`:""}.`);
   }
   function noteButton(day:number, field:Field){ const hasNote=Boolean(rows[day][`${field.code}_NOTE`]?.trim()); return <button type="button" onClick={event=>{event.stopPropagation();openNote(day,field);}} aria-label={`${hasNote?"Xem hoặc sửa":"Thêm"} ghi chú cho ${field.label}, ngày ${day+1}`} title={hasNote?rows[day][`${field.code}_NOTE`]:"Thêm ghi chú"} className={`absolute right-0 top-0 z-10 h-4 w-4 ${hasNote?"opacity-100":"opacity-0 group-hover:opacity-100 focus:opacity-100"}`}><span className={`absolute right-0 top-0 h-0 w-0 border-l-[10px] border-l-transparent ${hasNote?"border-t-[10px] border-t-orange-500":"border-t-[10px] border-t-slate-300"}`}/></button>; }
   async function save(){ setError(""); setMessage(""); const entries=[...dirty.current].map(key=>{const [dayText,code]=key.split(":"); const day=Number(dayText); return {operatingDate:`${period}-${String(day+1).padStart(2,"0")}`,fieldCode:code,value:rows[day][code]||"",note:rows[day][`${code}_NOTE`]||""};});
-    if(!entries.length){setMessage("Không có thay đổi mới để lưu."); return;} setSaving(true); try{const r=await ctktktRequest("/api/ctktkt/daily-inputs",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({period,entries})}); const b=await r.json() as {error?:string;saved?:number}; if(!r.ok)throw new Error(b.error||"Chưa lưu được dữ liệu."); dirty.current.clear(); setDirtyCount(0); setMessage(`Đã lưu ${b.saved||entries.length} ô dữ liệu.`);} catch(e){setError(e instanceof Error?e.message:"Chưa lưu được dữ liệu.");} finally{setSaving(false);} }
+    if(!entries.length){setMessage("Không có thay đổi mới để lưu."); return;} try{const b=await saveMutation.mutateAsync({period,entries}); dirty.current.clear(); setDirtyCount(0); setMessage(`Đã lưu ${b.saved||entries.length} ô dữ liệu.`);} catch(e){setError(e instanceof Error?e.message:"Chưa lưu được dữ liệu.");} }
 
   const overviewFields = visibleFields.filter(field => field.code !== "CW" && !field.noteFor);
   const overviewField = overviewFields.find(field => field.code === overviewCode) ?? overviewFields[0];

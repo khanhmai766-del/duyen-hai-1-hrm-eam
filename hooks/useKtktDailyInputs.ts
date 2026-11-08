@@ -46,15 +46,50 @@ export function useDailyInputsRange(from: string, to: string) {
   });
 }
 
+type CtktktReportEntry = { operatingDate: string; cell: string; value: string };
+
+/**
+ * Bảng Dữ liệu các tháng (bảng nhập đang sửa): toàn bộ ô dữ liệu ngày của tháng (kể cả ghi chú) + ô Chỉ tiêu KTKT
+ * để suy ra các cột tự liên kết. gcTime 0 + staleTime Infinity: đổi tháng luôn đọc mới, không tự tải lại trong lúc
+ * đang sửa (lưu dùng `useSaveDailyInputs({ invalidate: "mark" })`). Chỉ tiêu KTKT đọc lỗi → `ctktkt: null`, bảng vẫn
+ * hiện dữ liệu ngày (đúng như bản cũ bỏ qua lỗi phần này).
+ */
+export function useDailyInputsMonth(period: string) {
+  return useQuery({
+    queryKey: ["ctktkt", "daily-month", period],
+    queryFn: async ({ signal }) => {
+      const [daily, ctktkt] = await Promise.all([
+        apiGet<{ entries: DailyInputEntry[] }>(`/api/ctktkt/daily-inputs?period=${encodeURIComponent(period)}`, { signal }),
+        apiGet<{ entries?: CtktktReportEntry[]; linkedEntries?: CtktktReportEntry[] }>(`/api/ctktkt/ctktkt-report?period=${encodeURIComponent(period)}`, { signal })
+          .then(result => [...(result.data.entries || []), ...(result.data.linkedEntries || [])])
+          .catch(error => { if (signal.aborted) throw error; return null; }),
+      ]);
+      return { daily: daily.data.entries || [], ctktkt };
+    },
+    enabled: /^\d{4}-\d{2}$/.test(period),
+    gcTime: 0,
+    staleTime: Infinity,
+  });
+}
+
+/** Toàn bộ ô dữ liệu ngày của một tháng, đọc mới (dùng giữ ghi chú khi đồng bộ nhiều ngày). */
+export async function fetchDailyInputsMonth(period: string) {
+  return (await apiGet<{ entries: DailyInputEntry[] }>(`/api/ctktkt/daily-inputs?period=${period}`)).data.entries || [];
+}
+
 /**
  * Lưu một lô ô dữ liệu ngày của MỘT tháng (POST /api/ctktkt/daily-inputs). Giá trị và ghi chú cùng rỗng = xoá ô.
  * `invalidate: false` khi lưu nhiều lô liên tiếp (đồng bộ nhiều ngày) — gọi `useInvalidateKtkt()` một lần ở cuối.
+ * `invalidate: "mark"` cho trang có bảng nhập đang sửa: chỉ đánh dấu cũ, KHÔNG tải lại trang đang mở (giữ ô đang sửa dở).
  */
-export function useSaveDailyInputs(options: { invalidate?: boolean } = {}) {
+export function useSaveDailyInputs(options: { invalidate?: boolean | "mark" } = {}) {
   const invalidate = useInvalidateKtkt();
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: (input: { period: string; entries: DailyInputEntry[] }) => apiMutate<{ saved: number }>("/api/ctktkt/daily-inputs", "POST", input),
-    onSuccess: options.invalidate === false ? undefined : invalidate,
+    onSuccess: options.invalidate === false ? undefined
+      : options.invalidate === "mark" ? () => qc.invalidateQueries({ queryKey: ["ctktkt"], refetchType: "none" })
+      : invalidate,
   });
 }
 
