@@ -479,7 +479,7 @@ export function WaterReportClient() {
       />
       <MissingDataAlert items={missingWaterShifts} loading={loading} scope={`theo dõi nước tháng ${month.slice(5, 7)}/${month.slice(0, 4)}`} />
       {/* 1. Header & Điều khiển tháng */}
-      <div className="module-hero flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="module-hero ktkt-dark-hero flex flex-wrap items-center justify-between gap-3 rounded-2xl p-4 shadow-sm">
         <div className="module-heading-copy">
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-xl">💧</span>

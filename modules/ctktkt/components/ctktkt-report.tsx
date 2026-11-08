@@ -1068,13 +1068,13 @@ export function CtktktReport() {
         onExportAnyway={continueCtktktOutput}
       />
       {/* 1. THANH TIÊU ĐỀ, CHỌN NGÀY VÀ ĐIỀU HÀNH */}
-      <div className="module-hero module-toolbar-card min-w-0 rounded-2xl border border-slate-200 bg-white p-3 shadow-xs">
+      <div className="module-hero ktkt-dark-hero module-toolbar-card min-w-0 rounded-2xl p-3 shadow-xs">
         <div className="flex flex-wrap items-center justify-between gap-3">
           {/* Nhãn mục (cùng nền với khối "Bảng theo dõi lượng nước sử dụng"); nhóm ngày + nút canh phải. */}
           <div className="module-heading-copy ktkt-section-title"><h2><FileSpreadsheet className="size-5" aria-hidden />CHỈ TIÊU KTKT</h2></div>
           <div className="ml-auto flex flex-wrap items-center gap-2">
-            <label className="flex items-center gap-2 text-xs font-bold text-slate-600">
-              <span>Ngày báo cáo:</span>
+            <label className="flex items-center gap-2 text-xs font-bold">
+              <span className="ktkt-hero-label">Ngày báo cáo:</span>
               <DateField
                 value={date}
                 max={vietnamDateIso()}

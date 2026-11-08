@@ -735,12 +735,12 @@ export function BcsxReport() {
     />
     <MissingDataAlert items={bcsxMissing} loading={loading} scope={`BCSX ngày ${operatingDate.split("-").reverse().join("/")}`} />
     {/* Header trang tinh gọn */}
-    <div className="module-hero rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 shadow-sm">
+    <div className="module-hero ktkt-dark-hero rounded-xl px-3.5 py-2.5 shadow-sm">
       <div className="flex flex-wrap items-center justify-between gap-2.5">
         {/* Nhãn mục (cùng nền với khối "Bảng theo dõi lượng nước sử dụng"); nhóm ngày + tổ máy + công cụ canh phải. */}
-        <div className="module-heading-copy ktkt-section-title"><h2><ClipboardList className="size-5" aria-hidden />SẢN XUẤT</h2></div>
+        <div className="module-heading-copy ktkt-section-title"><h2><ClipboardList className="size-5" aria-hidden />BÁO CÁO SẢN XUẤT</h2></div>
         <div className="bcsx-top-toolbar ml-auto flex flex-wrap items-center justify-end gap-2">
-          <span className="text-xs font-bold text-slate-600">Ngày:</span>
+          <span className="ktkt-hero-label text-xs font-bold">Ngày:</span>
           <DateField value={operatingDate} onChange={changeOperatingDate} className="w-[145px] h-8 text-xs"/>
           <div role="group" aria-label="Tổ máy" className="bcsx-unit-switch flex h-9 items-center rounded-lg border border-slate-200 bg-slate-50 p-0.5">
             {(["S1", "S2"] as const).map(u => (

@@ -609,8 +609,14 @@
 /* Nhãn mục ("CHỈ TIÊU KTKT", "SẢN XUẤT") đầu hàng nút: cùng nền khối "Bảng theo dõi lượng nước sử dụng", thu gọn chiều cao. */
 /* Lặp lớp để thắng quy tắc cũ ".bcsx-workspace > .module-hero > div:first-child > .module-heading-copy { flex: 1 1 400px }". */
 .ctktkt-module .module-hero .module-heading-copy.module-heading-copy.ktkt-section-title.ktkt-section-title { flex: 0 0 auto; padding: 8px 18px; }
-.ctktkt-module .module-heading-copy.ktkt-section-title h2 { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 18px; font-weight: 800; letter-spacing: -0.01em; white-space: nowrap; }
+.ctktkt-module .module-heading-copy.ktkt-section-title h2 { display: flex; align-items: center; gap: 8px; margin: 0; font-weight: 800; letter-spacing: -0.01em; white-space: nowrap; }
 .ctktkt-module .module-heading-copy.ktkt-section-title svg { color: #75d4e4; flex-shrink: 0; }
+/* Thanh đầu mục (Chỉ tiêu KTKT, Sản xuất, Lượng nước, Hóa chất): cả thanh mang nền xanh đậm của nhãn mục;
+   nhãn hoà vào thanh (không khung riêng). Nút/ô nhập/thông báo bên trong giữ nền sáng riêng. */
+.ctktkt-module .module-hero.ktkt-dark-hero { border: 1px solid rgb(117 212 228 / 18%); background: radial-gradient(ellipse at 100% 0%, #246378, transparent 70%), linear-gradient(110deg, #152d4a, #1d4661); }
+.ctktkt-module .module-hero.ktkt-dark-hero .module-heading-copy.module-heading-copy.module-heading-copy { border: 0; background: transparent; padding: 4px 6px; }
+.ctktkt-module .ktkt-dark-hero .ktkt-hero-label { color: #c1dce8; }
+@media print { .ctktkt-module .module-hero.ktkt-dark-hero { background: #fff; border-color: #d7e3ef; } .ctktkt-module .ktkt-dark-hero .ktkt-hero-label { color: #000; } }
 
 /* Suất hao nhiệt PPA: khoảng ngày nằm trong khung tiêu đề, bên phải tiêu đề. */
 .ctktkt-module .ppa-heading-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 20px; }

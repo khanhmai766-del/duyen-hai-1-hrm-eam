@@ -215,7 +215,7 @@ export function ChemicalUsageClient() {
 
   return (
     <div className="module-report chemical-workspace mx-auto flex w-full min-w-0 flex-col gap-3">
-      <section className="module-hero rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <section className="module-hero ktkt-dark-hero rounded-2xl p-4 shadow-sm">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="module-heading-copy">
             <h2 className="flex items-center gap-2 text-xl font-bold text-slate-900"><Beaker className="size-5 shrink-0 text-[#75d4e4]" aria-hidden />THEO DÕI HÓA CHẤT</h2>
