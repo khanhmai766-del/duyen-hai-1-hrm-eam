@@ -11703,6 +11703,54 @@
      },
      {
       "operatingDate": "2026-09-01",
+      "fieldCode": "DA",
+      "value": "377.4",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-01",
+      "fieldCode": "DB",
+      "value": "388.7",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-01",
+      "fieldCode": "DC",
+      "value": "400",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-01",
+      "fieldCode": "DD",
+      "value": "411.3",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-01",
+      "fieldCode": "DE",
+      "value": "422.6",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-01",
+      "fieldCode": "DF",
+      "value": "433.9",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-01",
+      "fieldCode": "DG",
+      "value": "445.2",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-01",
+      "fieldCode": "DH",
+      "value": "456.5",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-01",
       "fieldCode": "F",
       "value": "22",
       "note": ""
@@ -11891,6 +11939,54 @@
       "operatingDate": "2026-09-02",
       "fieldCode": "CX",
       "value": "166.4",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-02",
+      "fieldCode": "DA",
+      "value": "381.1",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-02",
+      "fieldCode": "DB",
+      "value": "392.4",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-02",
+      "fieldCode": "DC",
+      "value": "403.7",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-02",
+      "fieldCode": "DD",
+      "value": "415",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-02",
+      "fieldCode": "DE",
+      "value": "426.3",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-02",
+      "fieldCode": "DF",
+      "value": "437.6",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-02",
+      "fieldCode": "DG",
+      "value": "",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-02",
+      "fieldCode": "DH",
+      "value": "460.2",
       "note": ""
      },
      {
@@ -12087,6 +12183,54 @@
      },
      {
       "operatingDate": "2026-09-03",
+      "fieldCode": "DA",
+      "value": "384.8",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-03",
+      "fieldCode": "DB",
+      "value": "396.1",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-03",
+      "fieldCode": "DC",
+      "value": "407.4",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-03",
+      "fieldCode": "DD",
+      "value": "418.7",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-03",
+      "fieldCode": "DE",
+      "value": "430",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-03",
+      "fieldCode": "DF",
+      "value": "441.3",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-03",
+      "fieldCode": "DG",
+      "value": "452.6",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-03",
+      "fieldCode": "DH",
+      "value": "463.9",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-03",
       "fieldCode": "F",
       "value": "24",
       "note": ""
@@ -12275,6 +12419,54 @@
       "operatingDate": "2026-09-04",
       "fieldCode": "CX",
       "value": "173.8",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-04",
+      "fieldCode": "DA",
+      "value": "388.5",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-04",
+      "fieldCode": "DB",
+      "value": "399.8",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-04",
+      "fieldCode": "DC",
+      "value": "411.1",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-04",
+      "fieldCode": "DD",
+      "value": "422.4",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-04",
+      "fieldCode": "DE",
+      "value": "433.7",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-04",
+      "fieldCode": "DF",
+      "value": "445",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-04",
+      "fieldCode": "DG",
+      "value": "456.3",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-04",
+      "fieldCode": "DH",
+      "value": "467.6",
       "note": ""
      },
      {
@@ -12471,6 +12663,54 @@
      },
      {
       "operatingDate": "2026-09-05",
+      "fieldCode": "DA",
+      "value": "392.2",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-05",
+      "fieldCode": "DB",
+      "value": "403.5",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-05",
+      "fieldCode": "DC",
+      "value": "414.8",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-05",
+      "fieldCode": "DD",
+      "value": "426.1",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-05",
+      "fieldCode": "DE",
+      "value": "437.4",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-05",
+      "fieldCode": "DF",
+      "value": "448.7",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-05",
+      "fieldCode": "DG",
+      "value": "460",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-05",
+      "fieldCode": "DH",
+      "value": "471.3",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-05",
       "fieldCode": "F",
       "value": "19",
       "note": ""
@@ -12659,6 +12899,54 @@
       "operatingDate": "2026-09-06",
       "fieldCode": "CX",
       "value": "181.2",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-06",
+      "fieldCode": "DA",
+      "value": "395.9",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-06",
+      "fieldCode": "DB",
+      "value": "407.2",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-06",
+      "fieldCode": "DC",
+      "value": "418.5",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-06",
+      "fieldCode": "DD",
+      "value": "429.8",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-06",
+      "fieldCode": "DE",
+      "value": "441.1",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-06",
+      "fieldCode": "DF",
+      "value": "452.4",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-06",
+      "fieldCode": "DG",
+      "value": "",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-06",
+      "fieldCode": "DH",
+      "value": "475",
       "note": ""
      },
      {
@@ -12855,6 +13143,54 @@
      },
      {
       "operatingDate": "2026-09-07",
+      "fieldCode": "DA",
+      "value": "399.6",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-07",
+      "fieldCode": "DB",
+      "value": "410.9",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-07",
+      "fieldCode": "DC",
+      "value": "422.2",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-07",
+      "fieldCode": "DD",
+      "value": "433.5",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-07",
+      "fieldCode": "DE",
+      "value": "444.8",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-07",
+      "fieldCode": "DF",
+      "value": "456.1",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-07",
+      "fieldCode": "DG",
+      "value": "467.4",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-07",
+      "fieldCode": "DH",
+      "value": "478.7",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-07",
       "fieldCode": "F",
       "value": "21",
       "note": ""
@@ -13043,6 +13379,54 @@
       "operatingDate": "2026-09-08",
       "fieldCode": "CX",
       "value": "188.6",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-08",
+      "fieldCode": "DA",
+      "value": "403.3",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-08",
+      "fieldCode": "DB",
+      "value": "414.6",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-08",
+      "fieldCode": "DC",
+      "value": "425.9",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-08",
+      "fieldCode": "DD",
+      "value": "437.2",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-08",
+      "fieldCode": "DE",
+      "value": "448.5",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-08",
+      "fieldCode": "DF",
+      "value": "459.8",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-08",
+      "fieldCode": "DG",
+      "value": "471.1",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-08",
+      "fieldCode": "DH",
+      "value": "482.4",
       "note": ""
      },
      {
@@ -13239,6 +13623,54 @@
      },
      {
       "operatingDate": "2026-09-09",
+      "fieldCode": "DA",
+      "value": "407",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-09",
+      "fieldCode": "DB",
+      "value": "418.3",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-09",
+      "fieldCode": "DC",
+      "value": "429.6",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-09",
+      "fieldCode": "DD",
+      "value": "440.9",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-09",
+      "fieldCode": "DE",
+      "value": "452.2",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-09",
+      "fieldCode": "DF",
+      "value": "463.5",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-09",
+      "fieldCode": "DG",
+      "value": "474.8",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-09",
+      "fieldCode": "DH",
+      "value": "486.1",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-09",
       "fieldCode": "F",
       "value": "23",
       "note": ""
@@ -13427,6 +13859,54 @@
       "operatingDate": "2026-09-10",
       "fieldCode": "CX",
       "value": "196",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-10",
+      "fieldCode": "DA",
+      "value": "410.7",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-10",
+      "fieldCode": "DB",
+      "value": "422",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-10",
+      "fieldCode": "DC",
+      "value": "433.3",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-10",
+      "fieldCode": "DD",
+      "value": "444.6",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-10",
+      "fieldCode": "DE",
+      "value": "455.9",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-10",
+      "fieldCode": "DF",
+      "value": "467.2",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-10",
+      "fieldCode": "DG",
+      "value": "",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-10",
+      "fieldCode": "DH",
+      "value": "489.8",
       "note": ""
      },
      {
@@ -13623,6 +14103,54 @@
      },
      {
       "operatingDate": "2026-09-11",
+      "fieldCode": "DA",
+      "value": "414.4",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-11",
+      "fieldCode": "DB",
+      "value": "425.7",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-11",
+      "fieldCode": "DC",
+      "value": "437",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-11",
+      "fieldCode": "DD",
+      "value": "448.3",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-11",
+      "fieldCode": "DE",
+      "value": "459.6",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-11",
+      "fieldCode": "DF",
+      "value": "470.9",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-11",
+      "fieldCode": "DG",
+      "value": "482.2",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-11",
+      "fieldCode": "DH",
+      "value": "493.5",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-11",
       "fieldCode": "F",
       "value": "18",
       "note": ""
@@ -13815,6 +14343,54 @@
      },
      {
       "operatingDate": "2026-09-12",
+      "fieldCode": "DA",
+      "value": "418.1",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-12",
+      "fieldCode": "DB",
+      "value": "429.4",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-12",
+      "fieldCode": "DC",
+      "value": "440.7",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-12",
+      "fieldCode": "DD",
+      "value": "452",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-12",
+      "fieldCode": "DE",
+      "value": "463.3",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-12",
+      "fieldCode": "DF",
+      "value": "474.6",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-12",
+      "fieldCode": "DG",
+      "value": "485.9",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-12",
+      "fieldCode": "DH",
+      "value": "497.2",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-12",
       "fieldCode": "F",
       "value": "19",
       "note": ""
@@ -14003,6 +14579,54 @@
       "operatingDate": "2026-09-13",
       "fieldCode": "CX",
       "value": "207.1",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-13",
+      "fieldCode": "DA",
+      "value": "421.8",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-13",
+      "fieldCode": "DB",
+      "value": "433.1",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-13",
+      "fieldCode": "DC",
+      "value": "444.4",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-13",
+      "fieldCode": "DD",
+      "value": "455.7",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-13",
+      "fieldCode": "DE",
+      "value": "467",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-13",
+      "fieldCode": "DF",
+      "value": "478.3",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-13",
+      "fieldCode": "DG",
+      "value": "489.6",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-13",
+      "fieldCode": "DH",
+      "value": "500.9",
       "note": ""
      },
      {
@@ -14201,6 +14825,54 @@
       "operatingDate": "2026-09-14",
       "fieldCode": "CX",
       "value": "210.8",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-14",
+      "fieldCode": "DA",
+      "value": "425.5",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-14",
+      "fieldCode": "DB",
+      "value": "436.8",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-14",
+      "fieldCode": "DC",
+      "value": "448.1",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-14",
+      "fieldCode": "DD",
+      "value": "459.4",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-14",
+      "fieldCode": "DE",
+      "value": "470.7",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-14",
+      "fieldCode": "DF",
+      "value": "482",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-14",
+      "fieldCode": "DG",
+      "value": "",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-14",
+      "fieldCode": "DH",
+      "value": "504.6",
       "note": ""
      },
      {
@@ -14415,6 +15087,54 @@
      },
      {
       "operatingDate": "2026-09-15",
+      "fieldCode": "DA",
+      "value": "429.2",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-15",
+      "fieldCode": "DB",
+      "value": "440.5",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-15",
+      "fieldCode": "DC",
+      "value": "451.8",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-15",
+      "fieldCode": "DD",
+      "value": "463.1",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-15",
+      "fieldCode": "DE",
+      "value": "474.4",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-15",
+      "fieldCode": "DF",
+      "value": "485.7",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-15",
+      "fieldCode": "DG",
+      "value": "497",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-15",
+      "fieldCode": "DH",
+      "value": "508.3",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-15",
       "fieldCode": "F",
       "value": "22",
       "note": ""
@@ -14621,6 +15341,54 @@
       "operatingDate": "2026-09-16",
       "fieldCode": "CX",
       "value": "218.2",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-16",
+      "fieldCode": "DA",
+      "value": "432.9",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-16",
+      "fieldCode": "DB",
+      "value": "444.2",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-16",
+      "fieldCode": "DC",
+      "value": "455.5",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-16",
+      "fieldCode": "DD",
+      "value": "466.8",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-16",
+      "fieldCode": "DE",
+      "value": "478.1",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-16",
+      "fieldCode": "DF",
+      "value": "489.4",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-16",
+      "fieldCode": "DG",
+      "value": "500.7",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-16",
+      "fieldCode": "DH",
+      "value": "512",
       "note": ""
      },
      {
@@ -16725,6 +17493,54 @@
      },
      {
       "operatingDate": "2026-09-17",
+      "fieldCode": "DA",
+      "value": "436.6",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-17",
+      "fieldCode": "DB",
+      "value": "447.9",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-17",
+      "fieldCode": "DC",
+      "value": "459.2",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-17",
+      "fieldCode": "DD",
+      "value": "470.5",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-17",
+      "fieldCode": "DE",
+      "value": "481.8",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-17",
+      "fieldCode": "DF",
+      "value": "493.1",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-17",
+      "fieldCode": "DG",
+      "value": "504.4",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-17",
+      "fieldCode": "DH",
+      "value": "515.7",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-17",
       "fieldCode": "F",
       "value": "24",
       "note": ""
@@ -18777,6 +19593,54 @@
      },
      {
       "operatingDate": "2026-09-18",
+      "fieldCode": "DA",
+      "value": "440.3",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-18",
+      "fieldCode": "DB",
+      "value": "451.6",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-18",
+      "fieldCode": "DC",
+      "value": "462.9",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-18",
+      "fieldCode": "DD",
+      "value": "474.2",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-18",
+      "fieldCode": "DE",
+      "value": "485.5",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-18",
+      "fieldCode": "DF",
+      "value": "496.8",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-18",
+      "fieldCode": "DG",
+      "value": "",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-18",
+      "fieldCode": "DH",
+      "value": "519.4",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-18",
       "fieldCode": "F",
       "value": "18",
       "note": ""
@@ -18998,6 +19862,54 @@
      },
      {
       "operatingDate": "2026-09-17",
+      "fieldCode": "DA",
+      "value": "436.6",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-17",
+      "fieldCode": "DB",
+      "value": "447.9",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-17",
+      "fieldCode": "DC",
+      "value": "459.2",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-17",
+      "fieldCode": "DD",
+      "value": "470.5",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-17",
+      "fieldCode": "DE",
+      "value": "481.8",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-17",
+      "fieldCode": "DF",
+      "value": "493.1",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-17",
+      "fieldCode": "DG",
+      "value": "504.4",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-17",
+      "fieldCode": "DH",
+      "value": "515.7",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-17",
       "fieldCode": "F",
       "value": "24",
       "note": ""
@@ -19213,6 +20125,54 @@
      },
      {
       "operatingDate": "2026-09-01",
+      "fieldCode": "DA",
+      "value": "377.4",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-01",
+      "fieldCode": "DB",
+      "value": "388.7",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-01",
+      "fieldCode": "DC",
+      "value": "400",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-01",
+      "fieldCode": "DD",
+      "value": "411.3",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-01",
+      "fieldCode": "DE",
+      "value": "422.6",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-01",
+      "fieldCode": "DF",
+      "value": "433.9",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-01",
+      "fieldCode": "DG",
+      "value": "445.2",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-01",
+      "fieldCode": "DH",
+      "value": "456.5",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-01",
       "fieldCode": "F",
       "value": "22",
       "note": ""
@@ -19401,6 +20361,54 @@
       "operatingDate": "2026-09-02",
       "fieldCode": "CX",
       "value": "166.4",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-02",
+      "fieldCode": "DA",
+      "value": "381.1",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-02",
+      "fieldCode": "DB",
+      "value": "392.4",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-02",
+      "fieldCode": "DC",
+      "value": "403.7",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-02",
+      "fieldCode": "DD",
+      "value": "415",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-02",
+      "fieldCode": "DE",
+      "value": "426.3",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-02",
+      "fieldCode": "DF",
+      "value": "437.6",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-02",
+      "fieldCode": "DG",
+      "value": "",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-02",
+      "fieldCode": "DH",
+      "value": "460.2",
       "note": ""
      },
      {
@@ -19597,6 +20605,54 @@
      },
      {
       "operatingDate": "2026-09-03",
+      "fieldCode": "DA",
+      "value": "384.8",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-03",
+      "fieldCode": "DB",
+      "value": "396.1",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-03",
+      "fieldCode": "DC",
+      "value": "407.4",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-03",
+      "fieldCode": "DD",
+      "value": "418.7",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-03",
+      "fieldCode": "DE",
+      "value": "430",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-03",
+      "fieldCode": "DF",
+      "value": "441.3",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-03",
+      "fieldCode": "DG",
+      "value": "452.6",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-03",
+      "fieldCode": "DH",
+      "value": "463.9",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-03",
       "fieldCode": "F",
       "value": "24",
       "note": ""
@@ -19785,6 +20841,54 @@
       "operatingDate": "2026-09-04",
       "fieldCode": "CX",
       "value": "173.8",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-04",
+      "fieldCode": "DA",
+      "value": "388.5",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-04",
+      "fieldCode": "DB",
+      "value": "399.8",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-04",
+      "fieldCode": "DC",
+      "value": "411.1",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-04",
+      "fieldCode": "DD",
+      "value": "422.4",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-04",
+      "fieldCode": "DE",
+      "value": "433.7",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-04",
+      "fieldCode": "DF",
+      "value": "445",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-04",
+      "fieldCode": "DG",
+      "value": "456.3",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-04",
+      "fieldCode": "DH",
+      "value": "467.6",
       "note": ""
      },
      {
@@ -19981,6 +21085,54 @@
      },
      {
       "operatingDate": "2026-09-05",
+      "fieldCode": "DA",
+      "value": "392.2",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-05",
+      "fieldCode": "DB",
+      "value": "403.5",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-05",
+      "fieldCode": "DC",
+      "value": "414.8",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-05",
+      "fieldCode": "DD",
+      "value": "426.1",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-05",
+      "fieldCode": "DE",
+      "value": "437.4",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-05",
+      "fieldCode": "DF",
+      "value": "448.7",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-05",
+      "fieldCode": "DG",
+      "value": "460",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-05",
+      "fieldCode": "DH",
+      "value": "471.3",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-05",
       "fieldCode": "F",
       "value": "19",
       "note": ""
@@ -20169,6 +21321,54 @@
       "operatingDate": "2026-09-06",
       "fieldCode": "CX",
       "value": "181.2",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-06",
+      "fieldCode": "DA",
+      "value": "395.9",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-06",
+      "fieldCode": "DB",
+      "value": "407.2",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-06",
+      "fieldCode": "DC",
+      "value": "418.5",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-06",
+      "fieldCode": "DD",
+      "value": "429.8",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-06",
+      "fieldCode": "DE",
+      "value": "441.1",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-06",
+      "fieldCode": "DF",
+      "value": "452.4",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-06",
+      "fieldCode": "DG",
+      "value": "",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-06",
+      "fieldCode": "DH",
+      "value": "475",
       "note": ""
      },
      {
@@ -20365,6 +21565,54 @@
      },
      {
       "operatingDate": "2026-09-07",
+      "fieldCode": "DA",
+      "value": "399.6",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-07",
+      "fieldCode": "DB",
+      "value": "410.9",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-07",
+      "fieldCode": "DC",
+      "value": "422.2",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-07",
+      "fieldCode": "DD",
+      "value": "433.5",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-07",
+      "fieldCode": "DE",
+      "value": "444.8",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-07",
+      "fieldCode": "DF",
+      "value": "456.1",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-07",
+      "fieldCode": "DG",
+      "value": "467.4",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-07",
+      "fieldCode": "DH",
+      "value": "478.7",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-07",
       "fieldCode": "F",
       "value": "21",
       "note": ""
@@ -20553,6 +21801,54 @@
       "operatingDate": "2026-09-08",
       "fieldCode": "CX",
       "value": "188.6",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-08",
+      "fieldCode": "DA",
+      "value": "403.3",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-08",
+      "fieldCode": "DB",
+      "value": "414.6",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-08",
+      "fieldCode": "DC",
+      "value": "425.9",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-08",
+      "fieldCode": "DD",
+      "value": "437.2",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-08",
+      "fieldCode": "DE",
+      "value": "448.5",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-08",
+      "fieldCode": "DF",
+      "value": "459.8",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-08",
+      "fieldCode": "DG",
+      "value": "471.1",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-08",
+      "fieldCode": "DH",
+      "value": "482.4",
       "note": ""
      },
      {
@@ -20749,6 +22045,54 @@
      },
      {
       "operatingDate": "2026-09-09",
+      "fieldCode": "DA",
+      "value": "407",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-09",
+      "fieldCode": "DB",
+      "value": "418.3",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-09",
+      "fieldCode": "DC",
+      "value": "429.6",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-09",
+      "fieldCode": "DD",
+      "value": "440.9",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-09",
+      "fieldCode": "DE",
+      "value": "452.2",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-09",
+      "fieldCode": "DF",
+      "value": "463.5",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-09",
+      "fieldCode": "DG",
+      "value": "474.8",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-09",
+      "fieldCode": "DH",
+      "value": "486.1",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-09",
       "fieldCode": "F",
       "value": "23",
       "note": ""
@@ -20937,6 +22281,54 @@
       "operatingDate": "2026-09-10",
       "fieldCode": "CX",
       "value": "196",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-10",
+      "fieldCode": "DA",
+      "value": "410.7",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-10",
+      "fieldCode": "DB",
+      "value": "422",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-10",
+      "fieldCode": "DC",
+      "value": "433.3",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-10",
+      "fieldCode": "DD",
+      "value": "444.6",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-10",
+      "fieldCode": "DE",
+      "value": "455.9",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-10",
+      "fieldCode": "DF",
+      "value": "467.2",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-10",
+      "fieldCode": "DG",
+      "value": "",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-10",
+      "fieldCode": "DH",
+      "value": "489.8",
       "note": ""
      },
      {
@@ -21133,6 +22525,54 @@
      },
      {
       "operatingDate": "2026-09-11",
+      "fieldCode": "DA",
+      "value": "414.4",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-11",
+      "fieldCode": "DB",
+      "value": "425.7",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-11",
+      "fieldCode": "DC",
+      "value": "437",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-11",
+      "fieldCode": "DD",
+      "value": "448.3",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-11",
+      "fieldCode": "DE",
+      "value": "459.6",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-11",
+      "fieldCode": "DF",
+      "value": "470.9",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-11",
+      "fieldCode": "DG",
+      "value": "482.2",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-11",
+      "fieldCode": "DH",
+      "value": "493.5",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-11",
       "fieldCode": "F",
       "value": "18",
       "note": ""
@@ -21325,6 +22765,54 @@
      },
      {
       "operatingDate": "2026-09-12",
+      "fieldCode": "DA",
+      "value": "418.1",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-12",
+      "fieldCode": "DB",
+      "value": "429.4",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-12",
+      "fieldCode": "DC",
+      "value": "440.7",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-12",
+      "fieldCode": "DD",
+      "value": "452",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-12",
+      "fieldCode": "DE",
+      "value": "463.3",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-12",
+      "fieldCode": "DF",
+      "value": "474.6",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-12",
+      "fieldCode": "DG",
+      "value": "485.9",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-12",
+      "fieldCode": "DH",
+      "value": "497.2",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-12",
       "fieldCode": "F",
       "value": "19",
       "note": ""
@@ -21513,6 +23001,54 @@
       "operatingDate": "2026-09-13",
       "fieldCode": "CX",
       "value": "207.1",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-13",
+      "fieldCode": "DA",
+      "value": "421.8",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-13",
+      "fieldCode": "DB",
+      "value": "433.1",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-13",
+      "fieldCode": "DC",
+      "value": "444.4",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-13",
+      "fieldCode": "DD",
+      "value": "455.7",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-13",
+      "fieldCode": "DE",
+      "value": "467",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-13",
+      "fieldCode": "DF",
+      "value": "478.3",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-13",
+      "fieldCode": "DG",
+      "value": "489.6",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-13",
+      "fieldCode": "DH",
+      "value": "500.9",
       "note": ""
      },
      {
@@ -21711,6 +23247,54 @@
       "operatingDate": "2026-09-14",
       "fieldCode": "CX",
       "value": "210.8",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-14",
+      "fieldCode": "DA",
+      "value": "425.5",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-14",
+      "fieldCode": "DB",
+      "value": "436.8",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-14",
+      "fieldCode": "DC",
+      "value": "448.1",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-14",
+      "fieldCode": "DD",
+      "value": "459.4",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-14",
+      "fieldCode": "DE",
+      "value": "470.7",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-14",
+      "fieldCode": "DF",
+      "value": "482",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-14",
+      "fieldCode": "DG",
+      "value": "",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-14",
+      "fieldCode": "DH",
+      "value": "504.6",
       "note": ""
      },
      {
@@ -21925,6 +23509,54 @@
      },
      {
       "operatingDate": "2026-09-15",
+      "fieldCode": "DA",
+      "value": "429.2",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-15",
+      "fieldCode": "DB",
+      "value": "440.5",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-15",
+      "fieldCode": "DC",
+      "value": "451.8",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-15",
+      "fieldCode": "DD",
+      "value": "463.1",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-15",
+      "fieldCode": "DE",
+      "value": "474.4",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-15",
+      "fieldCode": "DF",
+      "value": "485.7",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-15",
+      "fieldCode": "DG",
+      "value": "497",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-15",
+      "fieldCode": "DH",
+      "value": "508.3",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-15",
       "fieldCode": "F",
       "value": "22",
       "note": ""
@@ -22131,6 +23763,54 @@
       "operatingDate": "2026-09-16",
       "fieldCode": "CX",
       "value": "218.2",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-16",
+      "fieldCode": "DA",
+      "value": "432.9",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-16",
+      "fieldCode": "DB",
+      "value": "444.2",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-16",
+      "fieldCode": "DC",
+      "value": "455.5",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-16",
+      "fieldCode": "DD",
+      "value": "466.8",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-16",
+      "fieldCode": "DE",
+      "value": "478.1",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-16",
+      "fieldCode": "DF",
+      "value": "489.4",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-16",
+      "fieldCode": "DG",
+      "value": "500.7",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-16",
+      "fieldCode": "DH",
+      "value": "512",
       "note": ""
      },
      {
@@ -22345,6 +24025,54 @@
      },
      {
       "operatingDate": "2026-09-17",
+      "fieldCode": "DA",
+      "value": "436.6",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-17",
+      "fieldCode": "DB",
+      "value": "447.9",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-17",
+      "fieldCode": "DC",
+      "value": "459.2",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-17",
+      "fieldCode": "DD",
+      "value": "470.5",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-17",
+      "fieldCode": "DE",
+      "value": "481.8",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-17",
+      "fieldCode": "DF",
+      "value": "493.1",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-17",
+      "fieldCode": "DG",
+      "value": "504.4",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-17",
+      "fieldCode": "DH",
+      "value": "515.7",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-17",
       "fieldCode": "F",
       "value": "24",
       "note": ""
@@ -22551,6 +24279,54 @@
       "operatingDate": "2026-09-18",
       "fieldCode": "CX",
       "value": "225.6",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-18",
+      "fieldCode": "DA",
+      "value": "440.3",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-18",
+      "fieldCode": "DB",
+      "value": "451.6",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-18",
+      "fieldCode": "DC",
+      "value": "462.9",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-18",
+      "fieldCode": "DD",
+      "value": "474.2",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-18",
+      "fieldCode": "DE",
+      "value": "485.5",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-18",
+      "fieldCode": "DF",
+      "value": "496.8",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-18",
+      "fieldCode": "DG",
+      "value": "",
+      "note": ""
+     },
+     {
+      "operatingDate": "2026-09-18",
+      "fieldCode": "DH",
+      "value": "519.4",
       "note": ""
      },
      {
@@ -22880,7 +24656,7 @@
    "data": {
     "events": [
      {
-      "id": 901425,
+      "id": 940000,
       "unit": "S1",
       "startAt": "2026-09-17T02:15",
       "endAt": "2026-09-17T05:40",
@@ -22888,7 +24664,7 @@
       "description": "Ngừng sự cố mẫu"
      },
      {
-      "id": 901426,
+      "id": 940001,
       "unit": "S2",
       "startAt": "2026-09-17T10:00",
       "endAt": "",
@@ -22917,7 +24693,7 @@
       "waterAdjustmentS2": null,
       "condenserAdjustmentS1": null,
       "condenserAdjustmentS2": null,
-      "id": 901429,
+      "id": 980000,
       "logDate": "2026-09-16",
       "shiftTime": "06h00",
       "shiftTeam": "Kíp 1",
@@ -22946,7 +24722,7 @@
       "waterAdjustmentS2": null,
       "condenserAdjustmentS1": null,
       "condenserAdjustmentS2": null,
-      "id": 901430,
+      "id": 980001,
       "logDate": "2026-09-16",
       "shiftTime": "14h00",
       "shiftTeam": "Kíp 2",
@@ -22975,7 +24751,7 @@
       "waterAdjustmentS2": null,
       "condenserAdjustmentS1": null,
       "condenserAdjustmentS2": null,
-      "id": 901431,
+      "id": 980002,
       "logDate": "2026-09-16",
       "shiftTime": "22h00",
       "shiftTeam": "Kíp 3",
@@ -23004,7 +24780,7 @@
       "waterAdjustmentS2": null,
       "condenserAdjustmentS1": null,
       "condenserAdjustmentS2": 1.25,
-      "id": 901432,
+      "id": 980003,
       "logDate": "2026-09-17",
       "shiftTime": "06h00",
       "shiftTeam": "Kíp 1",
@@ -23033,7 +24809,7 @@
       "waterAdjustmentS2": null,
       "condenserAdjustmentS1": null,
       "condenserAdjustmentS2": null,
-      "id": 901433,
+      "id": 980004,
       "logDate": "2026-09-17",
       "shiftTime": "14h00",
       "shiftTeam": "Kíp 2",
@@ -23062,7 +24838,7 @@
       "waterAdjustmentS2": null,
       "condenserAdjustmentS1": null,
       "condenserAdjustmentS2": null,
-      "id": 901434,
+      "id": 980005,
       "logDate": "2026-09-17",
       "shiftTime": "22h00",
       "shiftTeam": "Kíp 3",
@@ -23115,13 +24891,13 @@
     "ok": true,
     "leaders": [
      {
-      "id": 901427,
+      "id": 960000,
       "name": "Trưởng ca Mẫu A",
       "isActive": 1,
       "displayOrder": 1
      },
      {
-      "id": 901428,
+      "id": 960001,
       "name": "Trưởng ca Mẫu B",
       "isActive": 0,
       "displayOrder": 2
@@ -23140,7 +24916,7 @@
     "month": "2026-09",
     "records": [
      {
-      "id": 901436,
+      "id": 1000001,
       "usage_date": "2026-09-17",
       "chemical_code": "PAC",
       "material_code": "1.61.86.566.VIE.00.000",
@@ -23160,7 +24936,7 @@
       "updated_at": "2026-09-20 08:00:00"
      },
      {
-      "id": 901435,
+      "id": 1000000,
       "usage_date": "2026-09-16",
       "chemical_code": "PAC",
       "material_code": "1.61.86.566.VIE.00.000",
@@ -23410,7 +25186,7 @@
    "data": {
     "measurements": [
      {
-      "id": 901440,
+      "id": 1040000,
       "metricCode": "HR",
       "metricName": "Suất hao nhiệt mẫu",
       "period": "2026-09",

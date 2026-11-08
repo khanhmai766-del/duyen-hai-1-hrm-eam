@@ -1,5 +1,6 @@
 "use client";
-import { useCtktktRequest } from "@/hooks/useCtktkt";
+import { useSavePpaDay } from "@/hooks/useKtktPpa";
+import { useInvalidateKtkt } from "@/hooks/useKtktDailyInputs";
 
 import { useRef, useState } from "react";
 import { calculatePpaHeatRate, mergeMeterReadings, parseMeterCsv, selectPpaSource } from "@/modules/ctktkt/lib/ppa-heat-rate";
@@ -10,7 +11,9 @@ import { hasPermission } from "@/modules/ctktkt/lib/auth/session";
 type RowResult = { sheet: string; status: "saved" | "skipped" | "error"; detail: string; operatingDate?: string };
 
 export function PpaHeatRateBulkImport() {
-  const ctktktRequest = useCtktktRequest();
+  // Lưu từng sheet (ngày) một; làm mới dữ liệu KTKT một lần sau khi xong cả file.
+  const savePpaDay = useSavePpaDay({ invalidate: false });
+  const invalidateKtkt = useInvalidateKtkt();
 
   const isViewer = !hasPermission(useSessionUser(), "edit_ppa");
   const [importing, setImporting] = useState(false);
@@ -45,19 +48,14 @@ export function PpaHeatRateBulkImport() {
             continue;
           }
           const calculation = calculatePpaHeatRate(selected.source, Number(operatingDate.slice(0, 4)));
-          const response = await ctktktRequest("/api/ctktkt/ppa-heat-rate", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ operatingDate, source: selected.source, sourceFiles: [`Excel · ${sheetName}`] }),
-          });
-          const body = await response.json() as { error?: string };
-          if (!response.ok) throw new Error(body.error || "Chưa lưu được.");
+          await savePpaDay.mutateAsync({ operatingDate, source: selected.source, sourceFiles: [`Excel · ${sheetName}`] });
           collected.push({ sheet: sheetName, status: "saved", operatingDate, detail: `Đã lưu — SHN PPA chung ${calculation.ppaPlant.toFixed(2)} kJ/kWh.` });
         } catch (caught) {
           collected.push({ sheet: sheetName, status: caught instanceof Error && /không phải|chưa đủ|dòng KwhGiao|cấu trúc CSV|CSV rút gọn/.test(caught.message) ? "skipped" : "error", detail: caught instanceof Error ? caught.message : "Không đọc được sheet này." });
         }
       }
       setResults(collected);
+      if (collected.some(item => item.status === "saved")) void invalidateKtkt();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Không đọc được file Excel.");
     } finally {

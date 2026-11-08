@@ -1,4 +1,5 @@
 import { getRawDb } from "@/modules/ctktkt/db";
+import { ok, fail } from "@/lib/api";
 import { getSessionUser } from "@/modules/ctktkt/lib/auth/server";
 import { canEditAnyWaterField } from "@/modules/ctktkt/lib/water-report/permissions";
 import { ensureWaterSchema } from "@/modules/ctktkt/lib/water-report/schema";
@@ -39,11 +40,11 @@ function rowToLog(row: Record<string, unknown>): WaterShiftLog {
 export async function POST(request: Request) {
   const user = await getSessionUser();
   if (!user) {
-    return Response.json({ error: "Vui lòng đăng nhập để tải lên file." }, { status: 401 });
+    return fail("Vui lòng đăng nhập để tải lên file.", 401);
   }
 
   if (!canEditAnyWaterField(user)) {
-    return Response.json({ error: "Tài khoản của bạn không có quyền nhập liệu." }, { status: 403 });
+    return fail("Tài khoản của bạn không có quyền nhập liệu.", 403);
   }
 
   try {
@@ -54,7 +55,7 @@ export async function POST(request: Request) {
     const uploaded = formData.get("file");
     const file = uploaded instanceof File ? uploaded : null;
     if (file && (file.size <= 0 || file.size > MAX_UPLOAD_BYTES)) {
-      return Response.json({ error: "File trống hoặc vượt quá 12 MB." }, { status: 413 });
+      return fail("File trống hoặc vượt quá 12 MB.", 413);
     }
     const action = String(formData.get("action") || "scan");
     const rawSheets = formData.get("sheetNames");
@@ -68,7 +69,7 @@ export async function POST(request: Request) {
     }
 
     if (!file) {
-      return Response.json({ error: "Chưa chọn file Excel." }, { status: 400 });
+      return fail("Chưa chọn file Excel.", 400);
     }
 
     const arrayBuffer = await file.arrayBuffer();
@@ -76,14 +77,14 @@ export async function POST(request: Request) {
     // 1. Chế độ quét thông tin các sheet trong file
     if (action === "scan") {
       const scanResults = await scanWorkbookBuffer(arrayBuffer);
-      return Response.json({ ok: true, sheets: scanResults });
+      return ok({ ok: true, sheets: scanResults });
     }
 
     // 2. Chế độ nạp dữ liệu (import)
     const { shifts, months } = await extractWorkbookShifts(arrayBuffer, targetSheets);
 
     if (shifts.length === 0) {
-      return Response.json({ error: "Không tìm thấy dữ liệu ca trực nào trong file." }, { status: 400 });
+      return fail("Không tìm thấy dữ liệu ca trực nào trong file.", 400);
     }
 
     // Lưu theo từng chunk để tối ưu Turso batch
@@ -191,7 +192,7 @@ export async function POST(request: Request) {
       }
     }
 
-    return Response.json({
+    return ok({
       ok: true,
       totalShifts: shifts.length,
       months,
@@ -199,9 +200,6 @@ export async function POST(request: Request) {
     });
   } catch (err) {
     console.error("Lỗi xử lý file tháng:", err);
-    return Response.json(
-      { error: err instanceof Error ? err.message : "Không thể xử lý file Excel." },
-      { status: 500 }
-    );
+    return fail(err instanceof Error ? err.message : "Không thể xử lý file Excel.", 500);
   }
 }

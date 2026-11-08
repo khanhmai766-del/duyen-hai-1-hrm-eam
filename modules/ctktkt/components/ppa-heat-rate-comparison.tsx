@@ -1,7 +1,7 @@
 "use client";
-import { useCtktktRequest } from "@/hooks/useCtktkt";
+import { usePpaMonth, useSavePpaDay, useSavePpaNotes } from "@/hooks/useKtktPpa";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { DateField } from "@/modules/ctktkt/components/ui/date-field";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/modules/ctktkt/components/ui/dialog";
 import { NkvhPpaSyncButton } from "@/modules/ctktkt/components/nkvh-ppa-sync-button";
@@ -11,11 +11,9 @@ import { isQlktExtensionOutdated, REQUIRED_QLKT_EXTENSION_VERSION } from "@/modu
 import { useSessionUser } from "@/modules/ctktkt/components/session-context";
 import { hasPermission } from "@/modules/ctktkt/lib/auth/session";
 import { defaultOperatingDate } from "@/modules/ctktkt/lib/operating-date";
-import { mergeDailyInputsWithCtktkt } from "@/modules/ctktkt/lib/daily-source-links";
 import { parseAvailableCapacity, PPA_AVAILABLE_CAPACITY_S1_CODE, PPA_AVAILABLE_CAPACITY_S2_CODE, PPA_OPERATING_EVENT_S1_CODE, PPA_OPERATING_EVENT_S2_CODE } from "@/modules/ctktkt/lib/google-sheet-sync";
 
 type DailyInput = { operatingDate: string; fieldCode: string; value: string };
-type CtktktInput = { operatingDate: string; cell: string; value: string };
 type StoredPpa = PpaResult & { operatingDate: string; sourceFiles: string; noteS1: string; noteS2: string; updatedAt: string };
 
 const numberFormat = new Intl.NumberFormat("vi-VN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -31,16 +29,13 @@ async function readCsvFile(file: File) {
 }
 
 export function PpaHeatRateComparison() {
-  const ctktktRequest = useCtktktRequest();
-
   const user = useSessionUser();
   const isViewer = !hasPermission(user, "edit_ppa");
   const [operatingDate, setOperatingDate] = useState(defaultOperatingDate), [readings, setReadings] = useState<MeterReading[]>([]), [sourceFiles, setSourceFiles] = useState<string[]>([]);
   const [pastedText, setPastedText] = useState(""), [noteS1, setNoteS1] = useState(""), [noteS2, setNoteS2] = useState("");
   const [eventS1, setEventS1] = useState(""), [eventS2, setEventS2] = useState("");
   const [availableCapacityS1Mw, setAvailableCapacityS1Mw] = useState(""), [availableCapacityS2Mw, setAvailableCapacityS2Mw] = useState("");
-  const [dailyInputs, setDailyInputs] = useState<DailyInput[]>([]), [history, setHistory] = useState<StoredPpa[]>([]);
-  const [loading, setLoading] = useState(true), [saving, setSaving] = useState(false), [savingNotes, setSavingNotes] = useState(false), [error, setError] = useState(""), [message, setMessage] = useState("");
+  const [saving, setSaving] = useState(false), [savingNotes, setSavingNotes] = useState(false), [actionError, setError] = useState(""), [message, setMessage] = useState("");
   const [extensionVersion, setExtensionVersion] = useState(""), [syncingQlkt, setSyncingQlkt] = useState(false);
   const [stoppedUnits, setStoppedUnits] = useState<string[]>([]);
   const [stopDialogOpen, setStopDialogOpen] = useState(false);
@@ -52,50 +47,17 @@ export function PpaHeatRateComparison() {
   }
   const fileRef = useRef<HTMLInputElement>(null);
   const qlktRequestRef = useRef<{ id: string; timer: number } | null>(null);
-  const loadPeriodControllerRef = useRef<AbortController | null>(null);
   const period = operatingDate.slice(0, 7);
-
-  const loadPeriod = useCallback(async () => {
-    loadPeriodControllerRef.current?.abort();
-    const controller = new AbortController();
-    loadPeriodControllerRef.current = controller;
-    setLoading(true); setError("");
-    try {
-      const [dailyResponse, ctktktResponse, ppaResponse] = await Promise.all([
-        ctktktRequest(`/api/ctktkt/daily-inputs?period=${period}`, { cache: "no-store", signal: controller.signal }),
-        ctktktRequest(`/api/ctktkt/ctktkt-report?period=${period}&scope=daily-links`, { cache: "no-store", signal: controller.signal }),
-        ctktktRequest(`/api/ctktkt/ppa-heat-rate?period=${period}`, { cache: "no-store", signal: controller.signal }),
-      ]);
-      const dailyBody = await dailyResponse.json() as { entries?: DailyInput[]; error?: string };
-      const ctktktBody = await ctktktResponse.json() as { entries?: CtktktInput[]; linkedEntries?: CtktktInput[]; error?: string };
-      const ppaBody = await ppaResponse.json() as { entries?: StoredPpa[]; error?: string };
-      if (!dailyResponse.ok) throw new Error(dailyBody.error || "Không tải được dữ liệu KTKT.");
-      if (!ctktktResponse.ok) throw new Error(ctktktBody.error || "Không tải được dữ liệu Chỉ tiêu KTKT.");
-      if (!ppaResponse.ok) throw new Error(ppaBody.error || "Không tải được lịch sử PPA.");
-      if (loadPeriodControllerRef.current !== controller) return;
-      setDailyInputs(mergeDailyInputsWithCtktkt(
-        dailyBody.entries || [],
-        [...(ctktktBody.entries || []), ...(ctktktBody.linkedEntries || [])],
-        period,
-      ));
-      setHistory(ppaBody.entries || []);
-    } catch (caught) {
-      if (!controller.signal.aborted) setError(caught instanceof Error ? caught.message : "Không tải được dữ liệu.");
-    } finally {
-      if (loadPeriodControllerRef.current === controller) {
-        loadPeriodControllerRef.current = null;
-        setLoading(false);
-      }
-    }
-  }, [period, ctktktRequest]);
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => void loadPeriod(), 0);
-    return () => {
-      window.clearTimeout(timer);
-      loadPeriodControllerRef.current?.abort();
-    };
-  }, [loadPeriod]);
+  // Dữ liệu ngày + lịch sử PPA của tháng chứa ngày đang chọn (đổi tháng: giữ dữ liệu cũ tới khi tháng mới về).
+  const monthQuery = usePpaMonth(period);
+  const dailyInputs: DailyInput[] = useMemo(() => monthQuery.data?.daily ?? [], [monthQuery.data]);
+  // Kiểu StoredPpa cũ khai báo số, API trả chuỗi (lúc chạy vẫn dùng Number(...)) — giữ nguyên như bản cũ.
+  const history = useMemo(() => (monthQuery.data?.history ?? []) as unknown as StoredPpa[], [monthQuery.data]);
+  const loading = monthQuery.isFetching;
+  const error = actionError || (monthQuery.error instanceof Error ? monthQuery.error.message : "");
+  // Lưu kết quả xong mới lưu nhận xét, rồi làm mới một lần.
+  const savePpaDay = useSavePpaDay({ invalidate: false });
+  const savePpaNotes = useSavePpaNotes();
 
   // Tự động điền nhận xét đã lưu của ngày đang chọn khi đổi ngày hoặc khi history tải xong
   useEffect(() => {
@@ -266,15 +228,7 @@ export function PpaHeatRateComparison() {
   async function persistDayDetails() {
     const capacityS1 = parseAvailableCapacity(availableCapacityS1Mw, "Công suất khả dụng S1");
     const capacityS2 = parseAvailableCapacity(availableCapacityS2Mw, "Công suất khả dụng S2");
-    const response = await ctktktRequest("/api/ctktkt/ppa-heat-rate/notes", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        entries: [{ operatingDate, noteS1: noteS1.trim(), noteS2: noteS2.trim(), eventS1: eventS1.trim(), eventS2: eventS2.trim(), availableCapacityS1Mw: capacityS1, availableCapacityS2Mw: capacityS2 }]
-      })
-    });
-    const body = await response.json() as { error?: string };
-    if (!response.ok) throw new Error(body.error || "Chưa lưu được thông tin tổ máy.");
+    await savePpaNotes.mutateAsync([{ operatingDate, noteS1: noteS1.trim(), noteS2: noteS2.trim(), eventS1: eventS1.trim(), eventS2: eventS2.trim(), availableCapacityS1Mw: capacityS1, availableCapacityS2Mw: capacityS2 }]);
   }
 
   async function saveNotesOnly() {
@@ -282,7 +236,6 @@ export function PpaHeatRateComparison() {
     try {
       await persistDayDetails();
       setMessage(`Đã lưu công suất khả dụng, nhận xét và sự kiện S1 & S2 cho ngày ${operatingDate.split("-").reverse().join("/")}.`);
-      await loadPeriod();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Chưa lưu được nhận xét.");
     } finally {
@@ -296,12 +249,9 @@ export function PpaHeatRateComparison() {
     try {
       parseAvailableCapacity(availableCapacityS1Mw, "Công suất khả dụng S1");
       parseAvailableCapacity(availableCapacityS2Mw, "Công suất khả dụng S2");
-      const response = await ctktktRequest("/api/ctktkt/ppa-heat-rate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ operatingDate, source: selected.source, sourceFiles, noteS1, noteS2 }) });
-      const body = await response.json() as { error?: string };
-      if (!response.ok) throw new Error(body.error || "Chưa lưu được kết quả.");
+      await savePpaDay.mutateAsync({ operatingDate, source: selected.source, sourceFiles, noteS1, noteS2 });
       await persistDayDetails();
       setMessage(`Đã lưu kết quả so sánh ngày ${operatingDate.split("-").reverse().join("/")}.`);
-      await loadPeriod();
     } catch (caught) { setError(caught instanceof Error ? caught.message : "Chưa lưu được kết quả."); }
     finally { setSaving(false); }
   }

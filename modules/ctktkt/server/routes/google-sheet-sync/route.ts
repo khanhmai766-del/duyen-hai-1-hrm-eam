@@ -1,4 +1,5 @@
 import { isCtktktSameOrigin } from "@/modules/ctktkt/lib/request-origin";
+import { ok, fail } from "@/lib/api";
 import { getRawDb } from "@/modules/ctktkt/db";
 import {
   buildGoogleSheetDayPayload,
@@ -36,14 +37,14 @@ async function callAppsScript(config: { url: string; token: string }, init?: Req
 export async function POST(request: Request) {
   const guard = await requirePermission("sync_google_sheet");
   if (!guard.ok) return guard.response;
-  if (!isCtktktSameOrigin(request)) return Response.json({ error: "Nguồn yêu cầu không hợp lệ." }, { status: 403 });
-  if (!request.headers.get("content-type")?.includes("application/json")) return Response.json({ error: "Yêu cầu phải là JSON." }, { status: 415 });
+  if (!isCtktktSameOrigin(request)) return fail("Nguồn yêu cầu không hợp lệ.", 403);
+  if (!request.headers.get("content-type")?.includes("application/json")) return fail("Yêu cầu phải là JSON.", 415);
 
   let diagnosticDate = "";
   let diagnosticAction = "";
   try {
     const raw = await request.text();
-    if (raw.length > 10_000) return Response.json({ error: "Yêu cầu quá lớn." }, { status: 413 });
+    if (raw.length > 10_000) return fail("Yêu cầu quá lớn.", 413);
     const body = JSON.parse(raw) as Record<string, unknown>;
     const operatingDate = String(body.operatingDate || "");
     const action = String(body.action || "preview");
@@ -78,16 +79,16 @@ export async function POST(request: Request) {
     const config = getServerConfig();
     if (!config) {
       if (action === "sync") {
-        return Response.json({ error: "Máy chủ chưa được cấu hình Google Sheet. Hãy liên hệ quản trị viên; không nhập tài khoản Gmail hoặc mã kết nối trên máy người dùng." }, { status: 503 });
+        return fail("Máy chủ chưa được cấu hình Google Sheet. Hãy liên hệ quản trị viên; không nhập tài khoản Gmail hoặc mã kết nối trên máy người dùng.", 503);
       }
-      return Response.json({ configured: false, preview }, { headers: { "Cache-Control": "no-store" } });
+      return ok({ configured: false, preview });
     }
 
     const datesBody = await callAppsScript(config, { method: "GET" }, "dates");
     const row = resolveGoogleSheetRow(operatingDate, datesBody.rows);
     if (!row) throw new Error(`Không tìm thấy ngày ${operatingDate.split("-").reverse().join("/")} trong cột Ngày của trang DH1.`);
     const payload = { ...preview, row };
-    if (action === "preview") return Response.json({ configured: true, preview: payload }, { headers: { "Cache-Control": "no-store" } });
+    if (action === "preview") return ok({ configured: true, preview: payload });
 
     const writeBody = await callAppsScript(config, {
       method: "POST",
@@ -98,12 +99,12 @@ export async function POST(request: Request) {
     if (!confirmsGoogleSheetWrite(results, row)) {
       throw new Error(`Google Apps Script chưa xác nhận đã ghi đúng hàng ${row}.`);
     }
-    return Response.json({ configured: true, preview: payload, results }, { headers: { "Cache-Control": "no-store" } });
+    return ok({ configured: true, preview: payload, results });
   } catch (error) {
     const message = error instanceof SyntaxError
         ? "Dữ liệu JSON không hợp lệ."
         : error instanceof Error ? error.message : "Không đồng bộ được Google Sheet.";
     console.error("[google-sheet-sync]", { action: diagnosticAction || "unknown", operatingDate: diagnosticDate || "unknown", message });
-    return Response.json({ error: message }, { status: 400 });
+    return fail(message, 400);
   }
 }

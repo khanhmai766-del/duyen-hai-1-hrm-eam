@@ -28,8 +28,8 @@ const SEED_ID = 900000;
 const SEEDED_TABLES = ["daily_inputs", "shift_readings", "operating_events", "water_shift_leaders", "water_shift_logs", "chemical_usage_logs", "ppa_heat_rate_daily", "measurements"];
 const STAMP = "2026-09-20 08:00:00";
 
-// Mã nhập tay của bảng Dữ liệu các tháng (daily-production-table.tsx) — gồm cả nguồn giờ luỹ kế F, L, CS, CT, CU.
-const DAILY_CODES = "B C F H I L X AE AF AJ AR AT CJ CX BN BQ BR CN BZ CA CC CD CE CF CM CQ CR CS CT CU CV CW".split(" ");
+// Mã nhập tay của bảng Dữ liệu các tháng (daily-production-table.tsx) — gồm cả nguồn giờ luỹ kế F, L, CS, CT, CU — và mã PMIS DA…DH.
+const DAILY_CODES = "B C F H I L X AE AF AJ AR AT CJ CX BN BQ BR CN BZ CA CC CD CE CF CM CQ CR CS CT CU CV CW DA DB DC DD DE DF DG DH".split(" ");
 
 function seedRows() {
   let id = SEED_ID;
@@ -68,6 +68,8 @@ function seedRows() {
     { id: id++, operating_date: "2026-09-16", source_data: src(1), source_files: '["mau-16.xlsx"]', gross_s1_kwh: "14610000", net_s1_kwh: "13560000", gross_s2_kwh: "0", net_s2_kwh: "0", ppa_plant: "10234.32", ppa_s1: "10234.32", ppa_s2: "", note_s1: "Ghi chú S1", note_s2: "", updated_at: STAMP },
     { id: id++, operating_date: "2026-09-17", source_data: src(2), source_files: "[]", gross_s1_kwh: "14590000", net_s1_kwh: "13530000", gross_s2_kwh: "14200000", net_s2_kwh: "13100000", ppa_plant: "10190.5", ppa_s1: "10180.1", ppa_s2: "10201.7", note_s1: "", note_s2: "S2 khởi động", updated_at: STAMP });
   rows.measurements.push({ id: id++, metric_code: "HR", metric_name: "Suất hao nhiệt mẫu", period: "2026-09", actual: "10746.39", limit_value: "10500", note: "", created_at: STAMP });
+  // Mỗi bảng một dải id cố định (900000 + 20000 × thứ tự bảng): thêm dòng mẫu vào bảng này không làm dịch id bảng khác.
+  SEEDED_TABLES.forEach((t, ti) => rows[t].forEach((row, i) => { row.id = SEED_ID + ti * 20000 + i; }));
   return rows;
 }
 
@@ -147,6 +149,145 @@ function diff(a, b, at = "", acc = []) {
     for (const k of new Set([...Object.keys(a), ...Object.keys(b)])) diff(a[k], b[k], `${at}/${k}`, acc);
   } else if (a !== b) acc.push(`${at}: ${JSON.stringify(a)?.slice(0, 80)} ≠ ${JSON.stringify(b)?.slice(0, 80)}`);
   return acc;
+}
+
+// ---- Hợp đồng GHI: một kịch bản thêm/sửa/xoá cố định chạy trên dữ liệu mẫu; ghi phản hồi + trạng thái sau mỗi bước.
+// Chạy trên code CŨ với --writes --record, rồi trên code MỚI với --writes để so. Luôn đổ lại dữ liệu mẫu trước và sau.
+const WRITE_SNAPSHOT = path.join("tests", "ctktkt", "contracts", "api-write-snapshots.json");
+const shift = (logDate, shiftTime, k, extra = {}) => ({ logDate, shiftTime, shiftTeam: `Kíp ${k}`, shiftLeader: "Trưởng ca Mẫu A",
+  elecRecS1: 1300.5 + k, elecRecS2: 1180.25 + k, waterRecS1: 5100.75 + k * 3, waterRecS2: 4900 + k * 2, condenserRecS1: 2030 + k, condenserRecS2: 2120 + k,
+  resinWaterS1_24h: shiftTime === "06h00" ? 60 : 0, resinWaterS2_24h: shiftTime === "06h00" ? 52 : 0, note: `Ca mẫu ${k}`, ...extra });
+const WRITE_SCENARIOS = {
+  "water-report": [
+    { step: "thêm 1 ca", method: "POST", path: "water-report", json: { shift: shift("2026-09-18", "06h00", 1) }, after: ["water-report?month=2026-09"] },
+    { step: "sửa có changedFields (elecRecS1 phải bị bỏ qua)", method: "POST", path: "water-report", json: { shift: { logDate: "2026-09-17", shiftTime: "14h00", note: "Sửa ghi chú", waterRecS1: 5100, elecRecS1: 99999 }, changedFields: ["note", "waterRecS1"] }, after: ["water-report?month=2026-09"] },
+    { step: "thêm nhiều ca + hiệu chỉnh", method: "POST", path: "water-report", json: { shifts: [shift("2026-09-18", "14h00", 2, { waterAdjustmentS1: 3.5 }), shift("2026-09-18", "22h00", 3)] }, after: ["water-report?month=2026-09"] },
+    { step: "giờ giao ca sai", method: "POST", path: "water-report", json: { shift: shift("2026-09-19", "07h00", 4) } },
+    { step: "hiệu chỉnh âm", method: "POST", path: "water-report", json: { shift: shift("2026-09-19", "06h00", 5, { waterAdjustmentS1: -1 }) } },
+    { step: "không có ca", method: "POST", path: "water-report", json: {} },
+    { step: "xoá theo ngày + ca", method: "DELETE", path: "water-report?logDate=2026-09-18&shiftTime=14h00", after: ["water-report?month=2026-09"] },
+    { step: "xoá thiếu tham số", method: "DELETE", path: "water-report" },
+    { step: "thêm Trưởng ca", method: "POST", path: "water-report/leaders", json: { name: "Trưởng ca Mẫu C", displayOrder: 3 }, after: ["water-report/leaders"] },
+    { step: "Trưởng ca trống", method: "POST", path: "water-report/leaders", json: { name: "  " } },
+    { step: "xoá Trưởng ca theo tên", method: "DELETE", path: `water-report/leaders?name=${encodeURIComponent("Trưởng ca Mẫu C")}`, after: ["water-report/leaders"] },
+    { step: "xoá Trưởng ca thiếu tham số", method: "DELETE", path: "water-report/leaders" },
+    { step: "tải lên: quét sheet (file xuất từ chính web)", method: "POST", path: "water-report/upload", upload: { action: "scan" } },
+    { step: "tải lên: nạp dữ liệu", method: "POST", path: "water-report/upload", upload: { action: "import" }, after: ["water-report?month=2026-09", "water-report?month=2026-10"] },
+    { step: "tải lên: không có file", method: "POST", path: "water-report/upload", form: { action: "scan" } },
+  ],
+  // Dữ liệu ngày (PMIS, Dữ liệu các tháng, đồng bộ QLKT). B, C, H… tự liên kết từ Chỉ tiêu KTKT nên bị chặn khi ghi.
+  "daily-inputs": [
+    { step: "lưu số (dấu phẩy) + ghi chú + chữ CW + 'không chỉnh'", method: "POST", path: "daily-inputs", json: { period: "2026-09", entries: [
+      { operatingDate: "2026-09-17", fieldCode: "F", value: "23,5", note: "" }, { operatingDate: "2026-09-17", fieldCode: "DA", value: "101.25", note: "Ghi chú PMIS" },
+      { operatingDate: "2026-09-17", fieldCode: "CW", value: "Chạy 1 lò", note: "" }, { operatingDate: "2026-09-16", fieldCode: "CX", value: "Không chỉnh", note: "" }] },
+      after: ["daily-inputs?period=2026-09&date=2026-09-17&scope=non-ktkt", "daily-inputs?period=2026-09&date=2026-09-16&scope=non-ktkt"] },
+    { step: "xoá ô (giá trị và ghi chú rỗng)", method: "POST", path: "daily-inputs", json: { period: "2026-09", entries: [{ operatingDate: "2026-09-17", fieldCode: "DA", value: "", note: "" }] },
+      after: ["daily-inputs?period=2026-09&date=2026-09-17&scope=non-ktkt"] },
+    { step: "mã tự liên kết KTKT (B)", method: "POST", path: "daily-inputs", json: { period: "2026-09", entries: [{ operatingDate: "2026-09-17", fieldCode: "B", value: "1", note: "" }] } },
+    { step: "mã không cho phép", method: "POST", path: "daily-inputs", json: { period: "2026-09", entries: [{ operatingDate: "2026-09-17", fieldCode: "ZZZ", value: "1", note: "" }] } },
+    { step: "ngày tương lai", method: "POST", path: "daily-inputs", json: { period: "2099-01", entries: [{ operatingDate: "2099-01-01", fieldCode: "F", value: "1", note: "" }] } },
+    { step: "ngày khác kỳ", method: "POST", path: "daily-inputs", json: { period: "2026-08", entries: [{ operatingDate: "2026-09-17", fieldCode: "F", value: "1", note: "" }] } },
+    { step: "giá trị chữ ở ô số", method: "POST", path: "daily-inputs", json: { period: "2026-09", entries: [{ operatingDate: "2026-09-17", fieldCode: "F", value: "mười", note: "" }] } },
+    { step: "kỳ sai định dạng", method: "POST", path: "daily-inputs", json: { period: "09/2026", entries: [] } },
+    { step: "JSON hỏng", method: "POST", path: "daily-inputs", raw: "{không phải json", headers: { "Content-Type": "application/json" } },
+    { step: "không phải JSON (415)", method: "POST", path: "daily-inputs", raw: "period=2026-09", headers: { "Content-Type": "text/plain" } },
+    { step: "đọc: khoảng sai", method: "GET", path: "daily-inputs?period=2026-13" },
+    { step: "đọc: scope lạ", method: "GET", path: "daily-inputs?period=2026-09&scope=khac" },
+  ],
+  // Suất hao nhiệt PPA: lưu 48 điểm nửa giờ/ngày, ghi chú + công suất khả dụng + tình hình vận hành, Google Sheet (chưa cấu hình ở dev).
+  "ppa": [
+    { step: "lưu ngày mới đủ 48 điểm", method: "POST", path: "ppa-heat-rate", json: { operatingDate: "2026-09-15", sourceFiles: ["s1.xlsx", "s2.xlsx"], noteS1: "Ghi chú S1 mẫu", noteS2: "",
+      source: Object.fromEntries([["grossS1", 300000], ["netS1", 282000], ["grossS2", 295000], ["netS2", 277500]].map(([k, base]) => [k, Array.from({ length: 48 }, (_, i) => base + (i % 6) * 125.5)])) },
+      after: ["ppa-heat-rate?period=2026-09&from=2026-09-01&to=2026-09-30", "ppa-heat-rate?period=2026-09&includeSource=1"] },
+    { step: "ghi đè ngày có sẵn", method: "POST", path: "ppa-heat-rate", json: { operatingDate: "2026-09-16", sourceFiles: [], noteS1: "", noteS2: "Đè ghi chú",
+      source: Object.fromEntries(["grossS1", "netS1", "grossS2", "netS2"].map((k, j) => [k, Array.from({ length: 48 }, (_, i) => 280000 - j * 9000 + i * 10)])) },
+      after: ["ppa-heat-rate?period=2026-09&from=2026-09-01&to=2026-09-30"] },
+    { step: "thiếu điểm (47)", method: "POST", path: "ppa-heat-rate", json: { operatingDate: "2026-09-15", source: { grossS1: Array(47).fill(1), netS1: Array(48).fill(1), grossS2: Array(48).fill(1), netS2: Array(48).fill(1) } } },
+    { step: "điểm âm", method: "POST", path: "ppa-heat-rate", json: { operatingDate: "2026-09-15", source: { grossS1: Array(48).fill(-1), netS1: Array(48).fill(1), grossS2: Array(48).fill(1), netS2: Array(48).fill(1) } } },
+    { step: "ngày sai", method: "POST", path: "ppa-heat-rate", json: { operatingDate: "15/09/2026", source: { grossS1: Array(48).fill(1), netS1: Array(48).fill(1), grossS2: Array(48).fill(1), netS2: Array(48).fill(1) } } },
+    { step: "đọc: tháng sai", method: "GET", path: "ppa-heat-rate?period=2026-13" },
+    { step: "ghi chú + công suất khả dụng + tình hình vận hành", method: "POST", path: "ppa-heat-rate/notes", json: { entries: [
+      { operatingDate: "2026-09-17", noteS1: "Đánh giá S1", noteS2: "Đánh giá S2", eventS1: "Ngừng 2 giờ", eventS2: "", availableCapacityS1Mw: "612,5", availableCapacityS2Mw: 600 },
+      { operatingDate: "2026-09-14", noteS1: "Ngày chưa có số liệu", noteS2: "" }] },
+      after: ["ppa-heat-rate?period=2026-09&from=2026-09-01&to=2026-09-30", "daily-inputs?period=2026-09&date=2026-09-17&scope=non-ktkt"] },
+    { step: "Google Sheet: xem trước (máy chủ chưa cấu hình)", method: "POST", path: "google-sheet-sync", json: { operatingDate: "2026-09-17", action: "preview" } },
+    { step: "Google Sheet: đồng bộ khi chưa cấu hình (503)", method: "POST", path: "google-sheet-sync", json: { operatingDate: "2026-09-17", action: "sync" } },
+    { step: "xoá công suất + tình hình (giá trị rỗng)", method: "POST", path: "ppa-heat-rate/notes", json: { entries: [{ operatingDate: "2026-09-17", noteS1: "Đánh giá S1", noteS2: "", eventS1: "", availableCapacityS1Mw: "" }] },
+      after: ["daily-inputs?period=2026-09&date=2026-09-17&scope=non-ktkt"] },
+    { step: "ghi chú: ngày trùng", method: "POST", path: "ppa-heat-rate/notes", json: { entries: [{ operatingDate: "2026-09-17" }, { operatingDate: "2026-09-17" }] } },
+    { step: "ghi chú: ngày tương lai", method: "POST", path: "ppa-heat-rate/notes", json: { entries: [{ operatingDate: "2099-01-01", noteS1: "x" }] } },
+    { step: "ghi chú: công suất quá 1.000 MW", method: "POST", path: "ppa-heat-rate/notes", json: { entries: [{ operatingDate: "2026-09-17", availableCapacityS1Mw: 1200 }] } },
+    { step: "Google Sheet: xem trước khi thiếu công suất S1", method: "POST", path: "google-sheet-sync", json: { operatingDate: "2026-09-17", action: "preview" } },
+    { step: "Google Sheet: thao tác lạ", method: "POST", path: "google-sheet-sync", json: { operatingDate: "2026-09-17", action: "xoa" } },
+  ],
+};
+// Giá trị thay đổi giữa các lần chạy: id cấp mới (< 900000) và mốc thời gian ghi.
+function normalize(value, key = "") {
+  if (Array.isArray(value)) return value.map(v => normalize(v));
+  if (value && typeof value === "object") return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, normalize(v, k)]));
+  if (/^(updated_?at|created_?at|deleted_?at|changed_?at)$/i.test(key) && value) return "<thời điểm>";
+  if (key === "id" && typeof value === "number" && value < SEED_ID) return "<id mới>";
+  return value;
+}
+async function call(cookie, method, p, init = {}) {
+  const res = await fetch(new URL(`/api/ctktkt/${p}`, base), { method, headers: { cookie, ...(init.headers ?? {}) }, body: init.body });
+  const text = await res.text();
+  let body; try { body = JSON.parse(text); } catch { body = { nonJson: text.slice(0, 200) }; }
+  return { status: res.status, body: normalize(body) };
+}
+async function cleanupWrites() {
+  const url = new URL(process.env.DATABASE_URL); url.search = "";
+  const c = new pg.Client({ connectionString: url.toString() }); await c.connect();
+  // Chỉ chạy sau seed() — seed đã chặn khi bảng có dòng id < 900000 có sẵn, nên mọi dòng id < 900000 lúc này là do kịch bản tạo ra.
+  for (const t of SEEDED_TABLES) await c.query(`DELETE FROM public.ctktkt_${t} WHERE id < $1`, [SEED_ID]);
+  await c.end();
+}
+async function runWrites(cookie) {
+  const out = {};
+  for (const [group, steps] of Object.entries(WRITE_SCENARIOS)) {
+    await seed();
+    // File tải lên = file Excel tháng 09/2026 do chính web xuất từ dữ liệu mẫu (vòng xuất → nhập).
+    const exported = await fetch(new URL("/api/ctktkt/water-report/export?month=2026-09", base), { headers: { cookie } });
+    const xlsx = Buffer.from(await exported.arrayBuffer());
+    for (const [i, s] of steps.entries()) {
+      const init = {};
+      if (s.json !== undefined) { init.body = JSON.stringify(s.json); init.headers = { "Content-Type": "application/json" }; }
+      if (s.raw !== undefined) { init.body = s.raw; init.headers = s.headers; }
+      if (s.upload || s.form) {
+        const fd = new FormData();
+        if (s.upload) fd.set("file", new Blob([xlsx], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }), "theo-doi-nuoc-2026-09.xlsx");
+        for (const [k, v] of Object.entries(s.upload ?? s.form)) fd.set(k, v);
+        init.body = fd;
+      }
+      const result = { request: `${s.method} ${s.path}`, response: await call(cookie, s.method, s.path, init) };
+      for (const a of s.after ?? []) result[`sau: GET ${a}`] = await call(cookie, "GET", a);
+      out[`${group} #${String(i + 1).padStart(2, "0")} ${s.step}`] = result;
+    }
+    await cleanupWrites();
+  }
+  await seed();
+  return out;
+}
+
+if (args.includes("--writes")) {
+  const cookie = await sessionCookie();
+  const actual = await runWrites(cookie);
+  if (args.includes("--record")) {
+    writeFileSync(WRITE_SNAPSHOT, JSON.stringify(actual, null, 1) + "\n");
+    console.log(`Đã ghi hợp đồng GHI ${WRITE_SNAPSHOT}: ${Object.keys(actual).length} bước.`);
+    for (const [k, v] of Object.entries(actual)) console.log(`  ${v.response.status}  ${k}`);
+    process.exit(0);
+  }
+  if (!existsSync(WRITE_SNAPSHOT)) fail(`chưa có ${WRITE_SNAPSHOT} — chạy --writes --record trên code CŨ trước.`);
+  const expected = JSON.parse(readFileSync(WRITE_SNAPSHOT, "utf8"));
+  let failed = 0;
+  for (const k of new Set([...Object.keys(expected), ...Object.keys(actual)])) {
+    const d = diff(expected[k], actual[k]);
+    if (d.length) { failed++; console.log(`✗  ${k}`); for (const line of d) console.log(`     ${line}`); } else console.log(`✓  ${k}`);
+  }
+  const total = Object.keys(expected).length;
+  console.log(failed ? `KẾT QUẢ GHI: ${failed}/${total} bước LỆCH hợp đồng` : `KẾT QUẢ GHI: ${total}/${total} bước khớp hợp đồng`);
+  process.exit(failed ? 1 : 0);
 }
 
 if (args.includes("--seed")) await seed();

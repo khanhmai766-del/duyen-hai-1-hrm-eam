@@ -236,12 +236,6 @@
 .ctktkt-module .engineering-workspace .module-section-heading :is(h2,h3) { font-size: 13px; color: #24425e; }
 .ctktkt-module .engineering-workspace :is(button,a)[class*="rounded"] { border-radius: 8px; }
 .ctktkt-module .engineering-workspace :is(input,textarea,select):not(:disabled):not([readonly]):focus-visible { outline-color: var(--module-accent); }
-.ctktkt-module .engineering-workspace .module-page-tabs { border-radius: 12px; padding: 6px; gap: 4px; }
-.ctktkt-module .module-page-tabs button { flex: 1; min-width: 0; min-height: 36px; font-size: 13px; white-space: normal; line-height: 1.4; }
-.ctktkt-module .module-page-tabs button[aria-pressed="true"] { background: linear-gradient(100deg, #1b4264, #1686a0); color: #fff; box-shadow: 0 3px 10px rgb(22 134 160 / 15%); }
-.ctktkt-module .ppa-workspace .module-hero > div:last-child { min-width: 0; max-width: 100%; flex: 1 1 480px; }
-.ctktkt-module .ppa-workspace .module-hero > div:last-child > div { max-width: 100%; }
-.ctktkt-module .ppa-workspace .module-hero > div:last-child div.flex { flex-wrap: wrap; }
 .ctktkt-module .engineering-workspace .module-table-scroll { max-height: 65vh; overflow: auto; scrollbar-gutter: stable; border-radius: 12px; }
 .ctktkt-module .module-table-scroll > table { width: 100%; }
 .ctktkt-module .module-table-scroll > table > thead { position: sticky; top: 0; z-index: 15; }
@@ -250,8 +244,6 @@
 .ctktkt-module .engineering-workspace .report-data-table thead th { color: #24425e; background: #e6eff8; }
 .ctktkt-module .engineering-workspace .report-data-table thead tr:nth-child(n+2) th { background: #f0f5fa; }
 .ctktkt-module .engineering-workspace .report-data-table tbody tr:hover > td { box-shadow: inset 0 1px #aecce5, inset 0 -1px #aecce5; }
-.ctktkt-module .water-workspace > .grid > div { border-top: 3px solid #9acfc8; border-radius: 13px; }
-.ctktkt-module .water-table-scroll > table { min-width: 1250px; }
 .ctktkt-module .ktkt-kpi-scroll > table { min-width: 980px; }
 .ctktkt-module .ktkt-workspace .module-heading-copy { padding: 12px 16px; }
 .ctktkt-module .ktkt-workspace .module-toolbar-card > div:first-child { align-items: center; }
@@ -262,17 +254,10 @@
 .ctktkt-module .bcsx-workspace .module-section-heading { margin: -12px -12px 12px; border-radius: 12px 12px 0 0; }
 .ctktkt-module .bcsx-workspace > .module-hero > div:first-child > .module-heading-copy { flex: 1 1 400px; }
 .ctktkt-module .module-filter-bar { padding: 12px 14px; border-left: 3px solid var(--module-accent); }
-.ctktkt-module .pmis-title { padding: 13px 18px; }
-.ctktkt-module .pmis-table-scroll thead th:not(:first-child) { background: #23677d; border-color: #367c91; }
-.ctktkt-module .pmis-table-scroll tbody tr > td[colspan] { background: #e4f0f4; color: #20465c; border-color: #c6dde5; font-weight: 800; }
-.ctktkt-module .pmis-table-scroll tbody tr > td:first-child:not([colspan]) { background: #f0f6fa; color: #24425e; border-color: #d7e3ef; }
 .ctktkt-module .module-chart-grid > div { border-radius: 14px; border-color: #d7e3ef; box-shadow: 0 4px 14px rgb(30 58 90 / 4%); }
 .ctktkt-module .module-chart-grid > div > div:first-child { border-bottom: 1px solid #e2eaf3; }
 .ctktkt-module .module-chart-grid .recharts-cartesian-grid line { stroke: #e0e8f0; }
 .ctktkt-module .engineering-workspace .recharts-tooltip-wrapper .recharts-default-tooltip { border-radius: 10px; box-shadow: 0 6px 20px rgb(30 58 90 / 10%); }
-@media (min-width: 1100px) {
-  .ctktkt-module .engineering-workspace[data-module="pmis"] .module-chart-grid { min-height: 400px; }
-}
 @media (max-width: 767px) {
   .ctktkt-module .engineering-workspace { padding: 12px; }
   .ctktkt-module .module-hero { padding: 10px; }
@@ -281,9 +266,6 @@
   .ctktkt-module .module-hero > div.flex:first-child { gap: 12px; }
   .ctktkt-module .module-hero > div.flex:first-child > .module-heading-copy { flex-basis: 100%; }
   .ctktkt-module .module-section-heading { padding: 10px 12px; }
-  .ctktkt-module .module-page-tabs button { flex: 1 1 140px; font-size: 12px; padding: 8px; }
-  .ctktkt-module .ppa-workspace .module-hero > div:last-child { justify-content: flex-start; }
-  .ctktkt-module .ppa-workspace .module-hero > div:last-child > div { align-items: flex-start; }
   .ctktkt-module .module-filter-bar > label { flex: 1 1 128px; }
   .ctktkt-module .module-filter-bar > label > button { width: 100%; }
   .ctktkt-module .bcsx-workspace label:has(> select) { min-width: 0; max-width: 100%; }
@@ -396,15 +378,12 @@
 .ctktkt-module .app-workspace .module-heading-copy p { line-height: 1.45; }
 .ctktkt-module .app-workspace .module-section-heading { padding: 9px 14px; }
 .ctktkt-module .app-workspace .module-filter-bar { padding: 8px 12px; }
-.ctktkt-module .app-workspace .module-page-tabs { padding: 4px; }
-.ctktkt-module .app-workspace .module-page-tabs button { min-height: 32px; }
 .ctktkt-module .app-workspace .module-chart-grid > div { border-radius: 12px; box-shadow: none; }
 
 /* Khối tiêu đề các mục: giữ tên mục; bỏ câu mô tả, dòng nhãn phụ và huy hiệu trùng với thanh đầu trang/thanh bên. */
 .ctktkt-module .app-workspace .module-heading-copy > p,
 .ctktkt-module .app-workspace .module-heading-copy > div:first-child:has(+ :is(h1,h2)),
-.ctktkt-module .app-workspace .module-heading-copy span.rounded-full,
-.ctktkt-module .app-workspace .ppa-control-heading > p { display: none; }
+.ctktkt-module .app-workspace .module-heading-copy span.rounded-full { display: none; }
 .ctktkt-module .app-workspace .module-heading-copy :is(h1,h2) { margin-top: 0; }
 .ctktkt-module .app-workspace .module-heading-copy > div:first-child:has(> h1) { margin-bottom: 0; }
 
@@ -428,7 +407,6 @@
   .ctktkt-module .monthly-heading-icon { display:none; }
   .ctktkt-module .monthly-heading > div:nth-child(2) { flex:1 1 100%; }
   .ctktkt-module .monthly-period-badge { margin-left:0; }
-  .ctktkt-module .ppa-range-presets button { min-height:40px !important; height:40px !important; }
   .ctktkt-module .ctktkt-content a { display:inline-flex; align-items:center; min-height:40px; }
   /* Liên kết gạch chân nằm giữa câu: giữ trong dòng chữ, không tách thành khối 40px làm vỡ câu. */
   .ctktkt-module .ctktkt-content a.ktkt-inline-link { display:inline; min-height:0; padding-block:4px; }
@@ -513,56 +491,6 @@
   .ctktkt-module .ctktkt-content .monthly-toolbar-controls .monthly-extension-status { position: absolute; top: 0; right: 0; width: auto; line-height: 16px; white-space: nowrap; }
 }
 
-/* ---- Bảng lượng nước: cố định cột đầu khi cuộn ngang (như "Cố định ngăn" của Excel) ----
-   Máy tính giữ 4 cột Ngày · Thời gian · Kíp · Trưởng ca; điện thoại chỉ giữ Ngày · Thời gian để còn chỗ cho số.
-   Bề rộng cột đặt cứng để tính được mép trái của từng cột dính. */
-.ctktkt-module .water-table-scroll { --wcol1: 102px; --wcol2: 68px; --wcol3: 40px; --wcol4: 84px; }
-/* Viền tách (separate): với viền gộp, viền của ô cuộn bên dưới vẽ đè thành vạch lên ô dính.
-   Kẻ dòng chuyển từ <tr> (divide-y, mất tác dụng ở chế độ tách) xuống từng ô. */
-.ctktkt-module .water-table-scroll > table { border-collapse: separate; border-spacing: 0; }
-.ctktkt-module .water-table-scroll > table > tbody > tr > td { border-bottom: 1px solid #e2e8f0; }
-.ctktkt-module .water-table-scroll > table > thead > tr > th { border-bottom: 1px solid #c6e3d0; }
-/* Gom 3 ca theo ngày: vạch đậm mở đầu mỗi ngày; ca 2, 3 ẩn ngày bằng màu trong suốt (innerText vẫn đọc được). */
-.ctktkt-module .water-table-scroll > table > tbody > tr.water-day-start > td { border-top: 2px solid #94a3b8; }
-.ctktkt-module .water-table-scroll > table > tbody > tr:first-child > td { border-top: 0; }
-.ctktkt-module .water-table-scroll td.water-date-repeat { color: transparent; }
-.ctktkt-module .water-table-scroll tr:hover > td.water-date-repeat { color: #94a3b8; }
-/* Tiêu đề "THỜI GIAN" xuống hai dòng thay vì bị cắt trong cột hẹp. */
-.ctktkt-module .water-table-scroll > table > thead > tr:first-child > th:nth-child(2) { white-space: normal; }
-.ctktkt-module .water-table-scroll > table > thead > tr:first-child > th:nth-child(-n+4),
-.ctktkt-module .water-table-scroll > table > tbody > tr > td:not([colspan]):nth-child(-n+4) {
-  position: sticky; z-index: 2;
-}
-.ctktkt-module .water-table-scroll > table > tbody > tr > td:not([colspan]):nth-child(-n+4) { background-color: #fff; }
-.ctktkt-module .water-table-scroll > table > thead > tr:first-child > th:nth-child(-n+4) { z-index: 3; }
-
-/* Tiêu đề dịu: một nền xanh nhạt thay 3 sắc xanh đậm xen kẽ; màu chuẩn gốc #00B050 giữ thành dải mỏng trên đỉnh. */
-.ctktkt-module .water-table-scroll > table > thead { color: #14532d; font-weight: 700; }
-/* :not([hidden]) nâng độ ưu tiên lên trên lớp divide-x của Tailwind (0,3,0) và nền trắng của ô dính. */
-.ctktkt-module .water-table-scroll > table > thead > tr > th:not([hidden]) { background-color: #e7f5ec; border-color: #c6e3d0; }
-.ctktkt-module .water-table-scroll > table > thead > tr:nth-child(2) > th:not([hidden]) { background-color: #f3faf5; color: #3f6b50; }
-.ctktkt-module .water-table-scroll > table > thead > tr:first-child > th { box-shadow: inset 0 3px 0 #00b050; }
-.ctktkt-module .water-table-scroll > table > tbody > tr.water-baseline-row > td:nth-child(-n+4) { background-color: #f1f5f9; }
-.ctktkt-module .water-table-scroll > table > tbody > tr:not(.water-baseline-row):hover > td:nth-child(-n+4) { background-color: #fffbeb; }
-:is(.ctktkt-module .water-table-scroll > table > thead > tr:first-child > th, .ctktkt-module .water-table-scroll > table > tbody > tr > td:not([colspan])):nth-child(1) { left: 0; width: var(--wcol1); min-width: var(--wcol1); max-width: var(--wcol1); }
-:is(.ctktkt-module .water-table-scroll > table > thead > tr:first-child > th, .ctktkt-module .water-table-scroll > table > tbody > tr > td:not([colspan])):nth-child(2) { left: var(--wcol1); width: var(--wcol2); min-width: var(--wcol2); max-width: var(--wcol2); }
-:is(.ctktkt-module .water-table-scroll > table > thead > tr:first-child > th, .ctktkt-module .water-table-scroll > table > tbody > tr > td:not([colspan])):nth-child(3) { left: calc(var(--wcol1) + var(--wcol2)); width: var(--wcol3); min-width: var(--wcol3); max-width: var(--wcol3); }
-:is(.ctktkt-module .water-table-scroll > table > thead > tr:first-child > th, .ctktkt-module .water-table-scroll > table > tbody > tr > td:not([colspan])):nth-child(4) { left: calc(var(--wcol1) + var(--wcol2) + var(--wcol3)); width: var(--wcol4); min-width: var(--wcol4); max-width: var(--wcol4); overflow: hidden; text-overflow: ellipsis; }
-/* Vạch phân cách vùng cố định; dùng bóng vì viền của ô dính bị mất khi bảng gộp viền. */
-:is(.ctktkt-module .water-table-scroll > table > thead > tr:first-child > th, .ctktkt-module .water-table-scroll > table > tbody > tr > td:not([colspan])):nth-child(4) { box-shadow: inset -2px 0 0 #9fcfb3; }
-@media (max-width: 767px) {
-  .ctktkt-module .water-table-scroll { --wcol1: 100px; --wcol2: 62px; }
-  :is(.ctktkt-module .water-table-scroll > table > thead > tr:first-child > th, .ctktkt-module .water-table-scroll > table > tbody > tr > td:not([colspan])):nth-child(n+3):nth-child(-n+4) { position: static; box-shadow: none; }
-  .ctktkt-module .water-table-scroll > table > tbody > tr > td:not([colspan]):nth-child(n+3):nth-child(-n+4) { background-color: transparent; }
-  :is(.ctktkt-module .water-table-scroll > table > thead > tr:first-child > th, .ctktkt-module .water-table-scroll > table > tbody > tr > td:not([colspan])):nth-child(2) { box-shadow: inset -2px 0 0 #9fcfb3; }
-}
-/* Ô tiêu đề vừa là mép vùng cố định vừa mang dải chuẩn gốc: gộp hai bóng (đặt sau để thắng hai quy tắc trên). */
-.ctktkt-module .water-table-scroll > table > thead > tr:first-child > th:nth-child(4) { box-shadow: inset -2px 0 0 #9fcfb3, inset 0 3px 0 #00b050; }
-@media (max-width: 767px) {
-  .ctktkt-module .water-table-scroll > table > thead > tr:first-child > th:nth-child(n+3) { box-shadow: inset 0 3px 0 #00b050; }
-  .ctktkt-module .water-table-scroll > table > thead > tr:first-child > th:nth-child(2) { box-shadow: inset -2px 0 0 #9fcfb3, inset 0 3px 0 #00b050; }
-}
-
 /* ---- Cỡ nút/ô điều khiển thống nhất (theo Quản lý thiết bị / vật tư: nút công cụ cao 36px, chữ 14px) ----
    Áp cho hàng tiêu đề, khung "Kỳ dữ liệu và đồng bộ", thanh ngày báo cáo của Chỉ tiêu KTKT.
    Chỉ khổ máy tính; điện thoại giữ vùng chạm ≥ 40px. */
@@ -603,13 +531,8 @@
 @media print { .ctktkt-module .module-hero.ktkt-dark-hero { background: #fff; border-color: #d7e3ef; } .ctktkt-module .ktkt-dark-hero .ktkt-hero-label { color: #000; } }
 
 /* Suất hao nhiệt PPA: khoảng ngày nằm trong khung tiêu đề, bên phải tiêu đề. */
-.ctktkt-module .ppa-heading-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 20px; }
-.ctktkt-module .ppa-range-controls.ppa-range-inline { border: 0; padding: 0; background: transparent; margin-left: auto; }
+
 /* Hàng Google Sheet: nhãn ngày đứng cạnh ô, các nút và Xuất Excel trên cùng một hàng. */
-.ctktkt-module .ppa-sheet-row { align-items: center; }
-.ctktkt-module .ppa-sheet-row > label.ppa-sheet-date { display: flex; align-items: center; gap: 8px; white-space: nowrap; font-size: 12px; }
-.ctktkt-module .ppa-sheet-row .google-sheet-actions { flex-direction: row; align-items: center; flex-wrap: wrap; }
-@media (min-width: 1024px) { .ctktkt-module .ppa-sheet-row { flex-wrap: nowrap; } .ctktkt-module .ppa-sheet-row .google-sheet-buttons { flex-wrap: nowrap; } }
 
 /* Monthly heading: title/actions followed by links and small counters. */
 .ctktkt-module:has([data-module="data"]) { row-gap:6px; }

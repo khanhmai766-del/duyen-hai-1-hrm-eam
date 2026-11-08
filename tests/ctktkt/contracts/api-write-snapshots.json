@@ -1,0 +1,3818 @@
+{
+ "water-report #01 thêm 1 ca": {
+  "request": "POST water-report",
+  "response": {
+   "status": 200,
+   "body": {
+    "data": {
+     "ok": true,
+     "saved": 1
+    },
+    "meta": null,
+    "error": null
+   }
+  },
+  "sau: GET water-report?month=2026-09": {
+   "status": 200,
+   "body": {
+    "data": {
+     "ok": true,
+     "month": "2026-09",
+     "leaders": [
+      "Trưởng ca Mẫu A"
+     ],
+     "baseline": null,
+     "shifts": [
+      {
+       "waterAdjustmentS1": null,
+       "waterAdjustmentS2": null,
+       "condenserAdjustmentS1": null,
+       "condenserAdjustmentS2": null,
+       "id": 980000,
+       "logDate": "2026-09-16",
+       "shiftTime": "06h00",
+       "shiftTeam": "Kíp 1",
+       "shiftLeader": "Trưởng ca Mẫu A",
+       "elecRecS1": 1031.5,
+       "elecRecS2": 927.25,
+       "elecGenS1": 241,
+       "elecGenS2": 231,
+       "waterRecS1": 5012.75,
+       "waterRecS2": 4810.5,
+       "waterUsedS1": 41,
+       "waterUsedS2": 39,
+       "waterRatioS1": 0.07,
+       "waterRatioS2": 0.0812,
+       "condenserRecS1": 2003,
+       "condenserRecS2": 2102,
+       "condenserUsedS1": 13,
+       "condenserUsedS2": 12,
+       "resinWaterS1_24h": 55.5,
+       "resinWaterS2_24h": 49,
+       "note": "",
+       "updatedAt": "<thời điểm>"
+      },
+      {
+       "waterAdjustmentS1": null,
+       "waterAdjustmentS2": null,
+       "condenserAdjustmentS1": null,
+       "condenserAdjustmentS2": null,
+       "id": 980001,
+       "logDate": "2026-09-16",
+       "shiftTime": "14h00",
+       "shiftTeam": "Kíp 2",
+       "shiftLeader": "Trưởng ca Mẫu B",
+       "elecRecS1": 1063,
+       "elecRecS2": 954.5,
+       "elecGenS1": 31.5,
+       "elecGenS2": 27.25,
+       "waterRecS1": 5025.5,
+       "waterRecS2": 4821,
+       "waterUsedS1": 12.75,
+       "waterUsedS2": 10.5,
+       "waterRatioS1": 0.4048,
+       "waterRatioS2": 0.3853,
+       "condenserRecS1": 2006,
+       "condenserRecS2": 2104,
+       "condenserUsedS1": 3,
+       "condenserUsedS2": 2,
+       "resinWaterS1_24h": 0,
+       "resinWaterS2_24h": 0,
+       "note": "Ghi chú ca",
+       "updatedAt": "<thời điểm>"
+      },
+      {
+       "waterAdjustmentS1": 2.5,
+       "waterAdjustmentS2": null,
+       "condenserAdjustmentS1": null,
+       "condenserAdjustmentS2": null,
+       "id": 980002,
+       "logDate": "2026-09-16",
+       "shiftTime": "22h00",
+       "shiftTeam": "Kíp 3",
+       "shiftLeader": "Trưởng ca Mẫu A",
+       "elecRecS1": 1094.5,
+       "elecRecS2": 981.75,
+       "elecGenS1": 31.5,
+       "elecGenS2": 27.25,
+       "waterRecS1": 5038.25,
+       "waterRecS2": 4831.5,
+       "waterUsedS1": 15.25,
+       "waterUsedS2": 10.5,
+       "waterRatioS1": 0.4841,
+       "waterRatioS2": 0.3853,
+       "condenserRecS1": 2009,
+       "condenserRecS2": 2106,
+       "condenserUsedS1": 3,
+       "condenserUsedS2": 2,
+       "resinWaterS1_24h": 0,
+       "resinWaterS2_24h": 0,
+       "note": "",
+       "updatedAt": "<thời điểm>"
+      },
+      {
+       "waterAdjustmentS1": null,
+       "waterAdjustmentS2": null,
+       "condenserAdjustmentS1": null,
+       "condenserAdjustmentS2": 1.25,
+       "id": 980003,
+       "logDate": "2026-09-17",
+       "shiftTime": "06h00",
+       "shiftTeam": "Kíp 1",
+       "shiftLeader": "Trưởng ca Mẫu A",
+       "elecRecS1": 1126,
+       "elecRecS2": 1009,
+       "elecGenS1": 31.5,
+       "elecGenS2": 27.25,
+       "waterRecS1": 5051,
+       "waterRecS2": 4842,
+       "waterUsedS1": 12.75,
+       "waterUsedS2": 10.5,
+       "waterRatioS1": 0.4048,
+       "waterRatioS2": 0.3853,
+       "condenserRecS1": 2012,
+       "condenserRecS2": 2108,
+       "condenserUsedS1": 3,
+       "condenserUsedS2": 3.25,
+       "resinWaterS1_24h": 55.5,
+       "resinWaterS2_24h": 49,
+       "note": "",
+       "updatedAt": "<thời điểm>"
+      },
+      {
+       "waterAdjustmentS1": null,
+       "waterAdjustmentS2": null,
+       "condenserAdjustmentS1": null,
+       "condenserAdjustmentS2": null,
+       "id": 980004,
+       "logDate": "2026-09-17",
+       "shiftTime": "14h00",
+       "shiftTeam": "Kíp 2",
+       "shiftLeader": "Trưởng ca Mẫu B",
+       "elecRecS1": 1157.5,
+       "elecRecS2": 1036.25,
+       "elecGenS1": 31.5,
+       "elecGenS2": 27.25,
+       "waterRecS1": 5063.75,
+       "waterRecS2": 4852.5,
+       "waterUsedS1": 12.75,
+       "waterUsedS2": 10.5,
+       "waterRatioS1": 0.4048,
+       "waterRatioS2": 0.3853,
+       "condenserRecS1": 2015,
+       "condenserRecS2": 2110,
+       "condenserUsedS1": 3,
+       "condenserUsedS2": 2,
+       "resinWaterS1_24h": 0,
+       "resinWaterS2_24h": 0,
+       "note": "",
+       "updatedAt": "<thời điểm>"
+      },
+      {
+       "waterAdjustmentS1": null,
+       "waterAdjustmentS2": null,
+       "condenserAdjustmentS1": null,
+       "condenserAdjustmentS2": null,
+       "id": 980005,
+       "logDate": "2026-09-17",
+       "shiftTime": "22h00",
+       "shiftTeam": "Kíp 3",
+       "shiftLeader": "Trưởng ca Mẫu A",
+       "elecRecS1": 1189,
+       "elecRecS2": 1063.5,
+       "elecGenS1": 31.5,
+       "elecGenS2": 27.25,
+       "waterRecS1": 5076.5,
+       "waterRecS2": 4863,
+       "waterUsedS1": 12.75,
+       "waterUsedS2": 10.5,
+       "waterRatioS1": 0.4048,
+       "waterRatioS2": 0.3853,
+       "condenserRecS1": 2018,
+       "condenserRecS2": 2112,
+       "condenserUsedS1": 3,
+       "condenserUsedS2": 2,
+       "resinWaterS1_24h": 0,
+       "resinWaterS2_24h": 0,
+       "note": "",
+       "updatedAt": "<thời điểm>"
+      },
+      {
+       "waterAdjustmentS1": null,
+       "waterAdjustmentS2": null,
+       "condenserAdjustmentS1": null,
+       "condenserAdjustmentS2": null,
+       "id": "<id mới>",
+       "logDate": "2026-09-18",
+       "shiftTime": "06h00",
+       "shiftTeam": "Kíp 1",
+       "shiftLeader": "Trưởng ca Mẫu A",
+       "elecRecS1": 1301.5,
+       "elecRecS2": 1181.25,
+       "elecGenS1": 112.5,
+       "elecGenS2": 117.75,
+       "waterRecS1": 5103.75,
+       "waterRecS2": 4902,
+       "waterUsedS1": 27.25,
+       "waterUsedS2": 39,
+       "waterRatioS1": 0.2422,
+       "waterRatioS2": 0.3312,
+       "condenserRecS1": 2031,
+       "condenserRecS2": 2121,
+       "condenserUsedS1": 13,
+       "condenserUsedS2": 9,
+       "resinWaterS1_24h": 60,
+       "resinWaterS2_24h": 52,
+       "note": "Ca mẫu 1",
+       "updatedAt": "<thời điểm>"
+      }
+     ],
+     "summary": {
+      "totalElecGenS1": 511,
+      "totalElecGenS2": 485,
+      "totalElecGenPlant": 996,
+      "totalWaterUsedS1": 134.5,
+      "totalWaterUsedS2": 130.5,
+      "totalWaterUsedPlant": 265,
+      "avgWaterRatioS1": 0.2632,
+      "avgWaterRatioS2": 0.2691,
+      "avgWaterRatioPlant": 0.2661,
+      "totalCondenserUsedS1": 41,
+      "totalCondenserUsedS2": 32.25,
+      "totalResinWaterS1": 171,
+      "totalResinWaterS2": 150,
+      "shiftCount": 7
+     }
+    },
+    "meta": null,
+    "error": null
+   }
+  }
+ },
+ "water-report #02 sửa có changedFields (elecRecS1 phải bị bỏ qua)": {
+  "request": "POST water-report",
+  "response": {
+   "status": 200,
+   "body": {
+    "data": {
+     "ok": true,
+     "saved": 1
+    },
+    "meta": null,
+    "error": null
+   }
+  },
+  "sau: GET water-report?month=2026-09": {
+   "status": 200,
+   "body": {
+    "data": {
+     "ok": true,
+     "month": "2026-09",
+     "leaders": [
+      "Trưởng ca Mẫu A"
+     ],
+     "baseline": null,
+     "shifts": [
+      {
+       "waterAdjustmentS1": null,
+       "waterAdjustmentS2": null,
+       "condenserAdjustmentS1": null,
+       "condenserAdjustmentS2": null,
+       "id": 980000,
+       "logDate": "2026-09-16",
+       "shiftTime": "06h00",
+       "shiftTeam": "Kíp 1",
+       "shiftLeader": "Trưởng ca Mẫu A",
+       "elecRecS1": 1031.5,
+       "elecRecS2": 927.25,
+       "elecGenS1": 241,
+       "elecGenS2": 231,
+       "waterRecS1": 5012.75,
+       "waterRecS2": 4810.5,
+       "waterUsedS1": 41,
+       "waterUsedS2": 39,
+       "waterRatioS1": 0.07,
+       "waterRatioS2": 0.0812,
+       "condenserRecS1": 2003,
+       "condenserRecS2": 2102,
+       "condenserUsedS1": 13,
+       "condenserUsedS2": 12,
+       "resinWaterS1_24h": 55.5,
+       "resinWaterS2_24h": 49,
+       "note": "",
+       "updatedAt": "<thời điểm>"
+      },
+      {
+       "waterAdjustmentS1": null,
+       "waterAdjustmentS2": null,
+       "condenserAdjustmentS1": null,
+       "condenserAdjustmentS2": null,
+       "id": 980001,
+       "logDate": "2026-09-16",
+       "shiftTime": "14h00",
+       "shiftTeam": "Kíp 2",
+       "shiftLeader": "Trưởng ca Mẫu B",
+       "elecRecS1": 1063,
+       "elecRecS2": 954.5,
+       "elecGenS1": 31.5,
+       "elecGenS2": 27.25,
+       "waterRecS1": 5025.5,
+       "waterRecS2": 4821,
+       "waterUsedS1": 12.75,
+       "waterUsedS2": 10.5,
+       "waterRatioS1": 0.4048,
+       "waterRatioS2": 0.3853,
+       "condenserRecS1": 2006,
+       "condenserRecS2": 2104,
+       "condenserUsedS1": 3,
+       "condenserUsedS2": 2,
+       "resinWaterS1_24h": 0,
+       "resinWaterS2_24h": 0,
+       "note": "Ghi chú ca",
+       "updatedAt": "<thời điểm>"
+      },
+      {
+       "waterAdjustmentS1": 2.5,
+       "waterAdjustmentS2": null,
+       "condenserAdjustmentS1": null,
+       "condenserAdjustmentS2": null,
+       "id": 980002,
+       "logDate": "2026-09-16",
+       "shiftTime": "22h00",
+       "shiftTeam": "Kíp 3",
+       "shiftLeader": "Trưởng ca Mẫu A",
+       "elecRecS1": 1094.5,
+       "elecRecS2": 981.75,
+       "elecGenS1": 31.5,
+       "elecGenS2": 27.25,
+       "waterRecS1": 5038.25,
+       "waterRecS2": 4831.5,
+       "waterUsedS1": 15.25,
+       "waterUsedS2": 10.5,
+       "waterRatioS1": 0.4841,
+       "waterRatioS2": 0.3853,
+       "condenserRecS1": 2009,
+       "condenserRecS2": 2106,
+       "condenserUsedS1": 3,
+       "condenserUsedS2": 2,
+       "resinWaterS1_24h": 0,
+       "resinWaterS2_24h": 0,
+       "note": "",
+       "updatedAt": "<thời điểm>"
+      },
+      {
+       "waterAdjustmentS1": null,
+       "waterAdjustmentS2": null,
+       "condenserAdjustmentS1": null,
+       "condenserAdjustmentS2": 1.25,
+       "id": 980003,
+       "logDate": "2026-09-17",
+       "shiftTime": "06h00",
+       "shiftTeam": "Kíp 1",
+       "shiftLeader": "Trưởng ca Mẫu A",
+       "elecRecS1": 1126,
+       "elecRecS2": 1009,
+       "elecGenS1": 31.5,
+       "elecGenS2": 27.25,
+       "waterRecS1": 5051,
+       "waterRecS2": 4842,
+       "waterUsedS1": 12.75,
+       "waterUsedS2": 10.5,
+       "waterRatioS1": 0.4048,
+       "waterRatioS2": 0.3853,
+       "condenserRecS1": 2012,
+       "condenserRecS2": 2108,
+       "condenserUsedS1": 3,
+       "condenserUsedS2": 3.25,
+       "resinWaterS1_24h": 55.5,
+       "resinWaterS2_24h": 49,
+       "note": "",
+       "updatedAt": "<thời điểm>"
+      },
+      {
+       "waterAdjustmentS1": null,
+       "waterAdjustmentS2": null,
+       "condenserAdjustmentS1": null,
+       "condenserAdjustmentS2": null,
+       "id": 980004,
+       "logDate": "2026-09-17",
+       "shiftTime": "14h00",
+       "shiftTeam": "Kíp 2",
+       "shiftLeader": "Trưởng ca Mẫu B",
+       "elecRecS1": 1157.5,
+       "elecRecS2": 1036.25,
+       "elecGenS1": 31.5,
+       "elecGenS2": 27.25,
+       "waterRecS1": 5100,
+       "waterRecS2": 4852.5,
+       "waterUsedS1": 49,
+       "waterUsedS2": 10.5,
+       "waterRatioS1": 1.5556,
+       "waterRatioS2": 0.3853,
+       "condenserRecS1": 2015,
+       "condenserRecS2": 2110,
+       "condenserUsedS1": 3,
+       "condenserUsedS2": 2,
+       "resinWaterS1_24h": 0,
+       "resinWaterS2_24h": 0,
+       "note": "Sửa ghi chú",
+       "updatedAt": "<thời điểm>"
+      },
+      {
+       "waterAdjustmentS1": null,
+       "waterAdjustmentS2": null,
+       "condenserAdjustmentS1": null,
+       "condenserAdjustmentS2": null,
+       "id": 980005,
+       "logDate": "2026-09-17",
+       "shiftTime": "22h00",
+       "shiftTeam": "Kíp 3",
+       "shiftLeader": "Trưởng ca Mẫu A",
+       "elecRecS1": 1189,
+       "elecRecS2": 1063.5,
+       "elecGenS1": 31.5,
+       "elecGenS2": 27.25,
+       "waterRecS1": 5076.5,
+       "waterRecS2": 4863,
+       "waterUsedS1": 24976.5,
+       "waterUsedS2": 10.5,
+       "waterRatioS1": 792.9048,
+       "waterRatioS2": 0.3853,
+       "condenserRecS1": 2018,
+       "condenserRecS2": 2112,
+       "condenserUsedS1": 3,
+       "condenserUsedS2": 2,
+       "resinWaterS1_24h": 0,
+       "resinWaterS2_24h": 0,
+       "note": "",
+       "updatedAt": "<thời điểm>"
+      },
+      {
+       "waterAdjustmentS1": null,
+       "waterAdjustmentS2": null,
+       "condenserAdjustmentS1": null,
+       "condenserAdjustmentS2": null,
+       "id": "<id mới>",
+       "logDate": "2026-09-18",
+       "shiftTime": "06h00",
+       "shiftTeam": "Kíp 1",
+       "shiftLeader": "Trưởng ca Mẫu A",
+       "elecRecS1": 1301.5,
+       "elecRecS2": 1181.25,
+       "elecGenS1": 112.5,
+       "elecGenS2": 117.75,
+       "waterRecS1": 5103.75,
+       "waterRecS2": 4902,
+       "waterUsedS1": 27.25,
+       "waterUsedS2": 39,
+       "waterRatioS1": 0.2422,
+       "waterRatioS2": 0.3312,
+       "condenserRecS1": 2031,
+       "condenserRecS2": 2121,
+       "condenserUsedS1": 13,
+       "condenserUsedS2": 9,
+       "resinWaterS1_24h": 60,
+       "resinWaterS2_24h": 52,
+       "note": "Ca mẫu 1",
+       "updatedAt": "<thời điểm>"
+      }
+     ],
+     "summary": {
+      "totalElecGenS1": 511,
+      "totalElecGenS2": 485,
+      "totalElecGenPlant": 996,
+      "totalWaterUsedS1": 25134.5,
+      "totalWaterUsedS2": 130.5,
+      "totalWaterUsedPlant": 25265,
+      "avgWaterRatioS1": 49.1869,
+      "avgWaterRatioS2": 0.2691,
+      "avgWaterRatioPlant": 25.3665,
+      "totalCondenserUsedS1": 41,
+      "totalCondenserUsedS2": 32.25,
+      "totalResinWaterS1": 171,
+      "totalResinWaterS2": 150,
+      "shiftCount": 7
+     }
+    },
+    "meta": null,
+    "error": null
+   }
+  }
+ },
+ "water-report #03 thêm nhiều ca + hiệu chỉnh": {
+  "request": "POST water-report",
+  "response": {
+   "status": 200,
+   "body": {
+    "data": {
+     "ok": true,
+     "saved": 2
+    },
+    "meta": null,
+    "error": null
+   }
+  },
+  "sau: GET water-report?month=2026-09": {
+   "status": 200,
+   "body": {
+    "data": {
+     "ok": true,
+     "month": "2026-09",
+     "leaders": [
+      "Trưởng ca Mẫu A"
+     ],
+     "baseline": null,
+     "shifts": [
+      {
+       "waterAdjustmentS1": null,
+       "waterAdjustmentS2": null,
+       "condenserAdjustmentS1": null,
+       "condenserAdjustmentS2": null,
+       "id": 980000,
+       "logDate": "2026-09-16",
+       "shiftTime": "06h00",
+       "shiftTeam": "Kíp 1",
+       "shiftLeader": "Trưởng ca Mẫu A",
+       "elecRecS1": 1031.5,
+       "elecRecS2": 927.25,
+       "elecGenS1": 241,
+       "elecGenS2": 231,
+       "waterRecS1": 5012.75,
+       "waterRecS2": 4810.5,
+       "waterUsedS1": 41,
+       "waterUsedS2": 39,
+       "waterRatioS1": 0.07,
+       "waterRatioS2": 0.0812,
+       "condenserRecS1": 2003,
+       "condenserRecS2": 2102,
+       "condenserUsedS1": 13,
+       "condenserUsedS2": 12,
+       "resinWaterS1_24h": 55.5,
+       "resinWaterS2_24h": 49,
+       "note": "",
+       "updatedAt": "<thời điểm>"
+      },
+      {
+       "waterAdjustmentS1": null,
+       "waterAdjustmentS2": null,
+       "condenserAdjustmentS1": null,
+       "condenserAdjustmentS2": null,
+       "id": 980001,
+       "logDate": "2026-09-16",
+       "shiftTime": "14h00",
+       "shiftTeam": "Kíp 2",
+       "shiftLeader": "Trưởng ca Mẫu B",
+       "elecRecS1": 1063,
+       "elecRecS2": 954.5,
+       "elecGenS1": 31.5,
+       "elecGenS2": 27.25,
+       "waterRecS1": 5025.5,
+       "waterRecS2": 4821,
+       "waterUsedS1": 12.75,
+       "waterUsedS2": 10.5,
+       "waterRatioS1": 0.4048,
+       "waterRatioS2": 0.3853,
+       "condenserRecS1": 2006,
+       "condenserRecS2": 2104,
+       "condenserUsedS1": 3,
+       "condenserUsedS2": 2,
+       "resinWaterS1_24h": 0,
+       "resinWaterS2_24h": 0,
+       "note": "Ghi chú ca",
+       "updatedAt": "<thời điểm>"
+      },
+      {
+       "waterAdjustmentS1": 2.5,
+       "waterAdjustmentS2": null,
+       "condenserAdjustmentS1": null,
+       "condenserAdjustmentS2": null,
+       "id": 980002,
+       "logDate": "2026-09-16",
+       "shiftTime": "22h00",
+       "shiftTeam": "Kíp 3",
+       "shiftLeader": "Trưởng ca Mẫu A",
+       "elecRecS1": 1094.5,
+       "elecRecS2": 981.75,
+       "elecGenS1": 31.5,
+       "elecGenS2": 27.25,
+       "waterRecS1": 5038.25,
+       "waterRecS2": 4831.5,
+       "waterUsedS1": 15.25,
+       "waterUsedS2": 10.5,
+       "waterRatioS1": 0.4841,
+       "waterRatioS2": 0.3853,
+       "condenserRecS1": 2009,
+       "condenserRecS2": 2106,
+       "condenserUsedS1": 3,
+       "condenserUsedS2": 2,
+       "resinWaterS1_24h": 0,
+       "resinWaterS2_24h": 0,
+       "note": "",
+       "updatedAt": "<thời điểm>"
+      },
+      {
+       "waterAdjustmentS1": null,
+       "waterAdjustmentS2": null,
+       "condenserAdjustmentS1": null,
+       "condenserAdjustmentS2": 1.25,
+       "id": 980003,
+       "logDate": "2026-09-17",
+       "shiftTime": "06h00",
+       "shiftTeam": "Kíp 1",
+       "shiftLeader": "Trưởng ca Mẫu A",
+       "elecRecS1": 1126,
+       "elecRecS2": 1009,
+       "elecGenS1": 31.5,
+       "elecGenS2": 27.25,
+       "waterRecS1": 5051,
+       "waterRecS2": 4842,
+       "waterUsedS1": 12.75,
+       "waterUsedS2": 10.5,
+       "waterRatioS1": 0.4048,
+       "waterRatioS2": 0.3853,
+       "condenserRecS1": 2012,
+       "condenserRecS2": 2108,
+       "condenserUsedS1": 3,
+       "condenserUsedS2": 3.25,
+       "resinWaterS1_24h": 55.5,
+       "resinWaterS2_24h": 49,
+       "note": "",
+       "updatedAt": "<thời điểm>"
+      },
+      {
+       "waterAdjustmentS1": null,
+       "waterAdjustmentS2": null,
+       "condenserAdjustmentS1": null,
+       "condenserAdjustmentS2": null,
+       "id": 980004,
+       "logDate": "2026-09-17",
+       "shiftTime": "14h00",
+       "shiftTeam": "Kíp 2",
+       "shiftLeader": "Trưởng ca Mẫu B",
+       "elecRecS1": 1157.5,
+       "elecRecS2": 1036.25,
+       "elecGenS1": 31.5,
+       "elecGenS2": 27.25,
+       "waterRecS1": 5100,
+       "waterRecS2": 4852.5,
+       "waterUsedS1": 49,
+       "waterUsedS2": 10.5,
+       "waterRatioS1": 1.5556,
+       "waterRatioS2": 0.3853,
+       "condenserRecS1": 2015,
+       "condenserRecS2": 2110,
+       "condenserUsedS1": 3,
+       "condenserUsedS2": 2,
+       "resinWaterS1_24h": 0,
+       "resinWaterS2_24h": 0,
+       "note": "Sửa ghi chú",
+       "updatedAt": "<thời điểm>"
+      },
+      {
+       "waterAdjustmentS1": null,
+       "waterAdjustmentS2": null,
+       "condenserAdjustmentS1": null,
+       "condenserAdjustmentS2": null,
+       "id": 980005,
+       "logDate": "2026-09-17",
+       "shiftTime": "22h00",
+       "shiftTeam": "Kíp 3",
+       "shiftLeader": "Trưởng ca Mẫu A",
+       "elecRecS1": 1189,
+       "elecRecS2": 1063.5,
+       "elecGenS1": 31.5,
+       "elecGenS2": 27.25,
+       "waterRecS1": 5076.5,
+       "waterRecS2": 4863,
+       "waterUsedS1": 24976.5,
+       "waterUsedS2": 10.5,
+       "waterRatioS1": 792.9048,
+       "waterRatioS2": 0.3853,
+       "condenserRecS1": 2018,
+       "condenserRecS2": 2112,
+       "condenserUsedS1": 3,
+       "condenserUsedS2": 2,
+       "resinWaterS1_24h": 0,
+       "resinWaterS2_24h": 0,
+       "note": "",
+       "updatedAt": "<thời điểm>"
+      },
+      {
+       "waterAdjustmentS1": null,
+       "waterAdjustmentS2": null,
+       "condenserAdjustmentS1": null,
+       "condenserAdjustmentS2": null,
+       "id": "<id mới>",
+       "logDate": "2026-09-18",
+       "shiftTime": "06h00",
+       "shiftTeam": "Kíp 1",
+       "shiftLeader": "Trưởng ca Mẫu A",
+       "elecRecS1": 1301.5,
+       "elecRecS2": 1181.25,
+       "elecGenS1": 112.5,
+       "elecGenS2": 117.75,
+       "waterRecS1": 5103.75,
+       "waterRecS2": 4902,
+       "waterUsedS1": 27.25,
+       "waterUsedS2": 39,
+       "waterRatioS1": 0.2422,
+       "waterRatioS2": 0.3312,
+       "condenserRecS1": 2031,
+       "condenserRecS2": 2121,
+       "condenserUsedS1": 13,
+       "condenserUsedS2": 9,
+       "resinWaterS1_24h": 60,
+       "resinWaterS2_24h": 52,
+       "note": "Ca mẫu 1",
+       "updatedAt": "<thời điểm>"
+      },
+      {
+       "waterAdjustmentS1": 3.5,
+       "waterAdjustmentS2": null,
+       "condenserAdjustmentS1": null,
+       "condenserAdjustmentS2": null,
+       "id": "<id mới>",
+       "logDate": "2026-09-18",
+       "shiftTime": "14h00",
+       "shiftTeam": "Kíp 2",
+       "shiftLeader": "Trưởng ca Mẫu A",
+       "elecRecS1": 1302.5,
+       "elecRecS2": 1182.25,
+       "elecGenS1": 1,
+       "elecGenS2": 1,
+       "waterRecS1": 5106.75,
+       "waterRecS2": 4904,
+       "waterUsedS1": 6.5,
+       "waterUsedS2": 2,
+       "waterRatioS1": 6.5,
+       "waterRatioS2": 2,
+       "condenserRecS1": 2032,
+       "condenserRecS2": 2122,
+       "condenserUsedS1": 1,
+       "condenserUsedS2": 1,
+       "resinWaterS1_24h": 0,
+       "resinWaterS2_24h": 0,
+       "note": "Ca mẫu 2",
+       "updatedAt": "<thời điểm>"
+      },
+      {
+       "waterAdjustmentS1": null,
+       "waterAdjustmentS2": null,
+       "condenserAdjustmentS1": null,
+       "condenserAdjustmentS2": null,
+       "id": "<id mới>",
+       "logDate": "2026-09-18",
+       "shiftTime": "22h00",
+       "shiftTeam": "Kíp 3",
+       "shiftLeader": "Trưởng ca Mẫu A",
+       "elecRecS1": 1303.5,
+       "elecRecS2": 1183.25,
+       "elecGenS1": 1,
+       "elecGenS2": 1,
+       "waterRecS1": 5109.75,
+       "waterRecS2": 4906,
+       "waterUsedS1": 3,
+       "waterUsedS2": 2,
+       "waterRatioS1": 3,
+       "waterRatioS2": 2,
+       "condenserRecS1": 2033,
+       "condenserRecS2": 2123,
+       "condenserUsedS1": 1,
+       "condenserUsedS2": 1,
+       "resinWaterS1_24h": 0,
+       "resinWaterS2_24h": 0,
+       "note": "Ca mẫu 3",
+       "updatedAt": "<thời điểm>"
+      }
+     ],
+     "summary": {
+      "totalElecGenS1": 513,
+      "totalElecGenS2": 487,
+      "totalElecGenPlant": 1000,
+      "totalWaterUsedS1": 25144,
+      "totalWaterUsedS2": 134.5,
+      "totalWaterUsedPlant": 25278.5,
+      "avgWaterRatioS1": 49.0136,
+      "avgWaterRatioS2": 0.2762,
+      "avgWaterRatioPlant": 25.2785,
+      "totalCondenserUsedS1": 43,
+      "totalCondenserUsedS2": 34.25,
+      "totalResinWaterS1": 171,
+      "totalResinWaterS2": 150,
+      "shiftCount": 9
+     }
+    },
+    "meta": null,
+    "error": null
+   }
+  }
+ },
+ "water-report #04 giờ giao ca sai": {
+  "request": "POST water-report",
+  "response": {
+   "status": 400,
+   "body": {
+    "data": null,
+    "meta": null,
+    "error": "Giờ giao ca phải là 06h00, 14h00 hoặc 22h00 (nhận được: 07h00)"
+   }
+  }
+ },
+ "water-report #05 hiệu chỉnh âm": {
+  "request": "POST water-report",
+  "response": {
+   "status": 400,
+   "body": {
+    "data": null,
+    "meta": null,
+    "error": "Hiệu chỉnh công tơ phải là số từ 0 đến 1.000.000.000 m³ hoặc để trống."
+   }
+  }
+ },
+ "water-report #06 không có ca": {
+  "request": "POST water-report",
+  "response": {
+   "status": 400,
+   "body": {
+    "data": null,
+    "meta": null,
+    "error": "Không có dữ liệu ca trực để lưu."
+   }
+  }
+ },
+ "water-report #07 xoá theo ngày + ca": {
+  "request": "DELETE water-report?logDate=2026-09-18&shiftTime=14h00",
+  "response": {
+   "status": 200,
+   "body": {
+    "data": {
+     "ok": true,
+     "message": "Đã xoá ca thành công."
+    },
+    "meta": null,
+    "error": null
+   }
+  },
+  "sau: GET water-report?month=2026-09": {
+   "status": 200,
+   "body": {
+    "data": {
+     "ok": true,
+     "month": "2026-09",
+     "leaders": [
+      "Trưởng ca Mẫu A"
+     ],
+     "baseline": null,
+     "shifts": [
+      {
+       "waterAdjustmentS1": null,
+       "waterAdjustmentS2": null,
+       "condenserAdjustmentS1": null,
+       "condenserAdjustmentS2": null,
+       "id": 980000,
+       "logDate": "2026-09-16",
+       "shiftTime": "06h00",
+       "shiftTeam": "Kíp 1",
+       "shiftLeader": "Trưởng ca Mẫu A",
+       "elecRecS1": 1031.5,
+       "elecRecS2": 927.25,
+       "elecGenS1": 241,
+       "elecGenS2": 231,
+       "waterRecS1": 5012.75,
+       "waterRecS2": 4810.5,
+       "waterUsedS1": 41,
+       "waterUsedS2": 39,
+       "waterRatioS1": 0.07,
+       "waterRatioS2": 0.0812,
+       "condenserRecS1": 2003,
+       "condenserRecS2": 2102,
+       "condenserUsedS1": 13,
+       "condenserUsedS2": 12,
+       "resinWaterS1_24h": 55.5,
+       "resinWaterS2_24h": 49,
+       "note": "",
+       "updatedAt": "<thời điểm>"
+      },
+      {
+       "waterAdjustmentS1": null,
+       "waterAdjustmentS2": null,
+       "condenserAdjustmentS1": null,
+       "condenserAdjustmentS2": null,
+       "id": 980001,
+       "logDate": "2026-09-16",
+       "shiftTime": "14h00",
+       "shiftTeam": "Kíp 2",
+       "shiftLeader": "Trưởng ca Mẫu B",
+       "elecRecS1": 1063,
+       "elecRecS2": 954.5,
+       "elecGenS1": 31.5,
+       "elecGenS2": 27.25,
+       "waterRecS1": 5025.5,
+       "waterRecS2": 4821,
+       "waterUsedS1": 12.75,
+       "waterUsedS2": 10.5,
+       "waterRatioS1": 0.4048,
+       "waterRatioS2": 0.3853,
+       "condenserRecS1": 2006,
+       "condenserRecS2": 2104,
+       "condenserUsedS1": 3,
+       "condenserUsedS2": 2,
+       "resinWaterS1_24h": 0,
+       "resinWaterS2_24h": 0,
+       "note": "Ghi chú ca",
+       "updatedAt": "<thời điểm>"
+      },
+      {
+       "waterAdjustmentS1": 2.5,
+       "waterAdjustmentS2": null,
+       "condenserAdjustmentS1": null,
+       "condenserAdjustmentS2": null,
+       "id": 980002,
+       "logDate": "2026-09-16",
+       "shiftTime": "22h00",
+       "shiftTeam": "Kíp 3",
+       "shiftLeader": "Trưởng ca Mẫu A",
+       "elecRecS1": 1094.5,
+       "elecRecS2": 981.75,
+       "elecGenS1": 31.5,
+       "elecGenS2": 27.25,
+       "waterRecS1": 5038.25,
+       "waterRecS2": 4831.5,
+       "waterUsedS1": 15.25,
+       "waterUsedS2": 10.5,
+       "waterRatioS1": 0.4841,
+       "waterRatioS2": 0.3853,
+       "condenserRecS1": 2009,
+       "condenserRecS2": 2106,
+       "condenserUsedS1": 3,
+       "condenserUsedS2": 2,
+       "resinWaterS1_24h": 0,
+       "resinWaterS2_24h": 0,
+       "note": "",
+       "updatedAt": "<thời điểm>"
+      },
+      {
+       "waterAdjustmentS1": null,
+       "waterAdjustmentS2": null,
+       "condenserAdjustmentS1": null,
+       "condenserAdjustmentS2": 1.25,
+       "id": 980003,
+       "logDate": "2026-09-17",
+       "shiftTime": "06h00",
+       "shiftTeam": "Kíp 1",
+       "shiftLeader": "Trưởng ca Mẫu A",
+       "elecRecS1": 1126,
+       "elecRecS2": 1009,
+       "elecGenS1": 31.5,
+       "elecGenS2": 27.25,
+       "waterRecS1": 5051,
+       "waterRecS2": 4842,
+       "waterUsedS1": 12.75,
+       "waterUsedS2": 10.5,
+       "waterRatioS1": 0.4048,
+       "waterRatioS2": 0.3853,
+       "condenserRecS1": 2012,
+       "condenserRecS2": 2108,
+       "condenserUsedS1": 3,
+       "condenserUsedS2": 3.25,
+       "resinWaterS1_24h": 55.5,
+       "resinWaterS2_24h": 49,
+       "note": "",
+       "updatedAt": "<thời điểm>"
+      },
+      {
+       "waterAdjustmentS1": null,
+       "waterAdjustmentS2": null,
+       "condenserAdjustmentS1": null,
+       "condenserAdjustmentS2": null,
+       "id": 980004,
+       "logDate": "2026-09-17",
+       "shiftTime": "14h00",
+       "shiftTeam": "Kíp 2",
+       "shiftLeader": "Trưởng ca Mẫu B",
+       "elecRecS1": 1157.5,
+       "elecRecS2": 1036.25,
+       "elecGenS1": 31.5,
+       "elecGenS2": 27.25,
+       "waterRecS1": 5100,
+       "waterRecS2": 4852.5,
+       "waterUsedS1": 49,
+       "waterUsedS2": 10.5,
+       "waterRatioS1": 1.5556,
+       "waterRatioS2": 0.3853,
+       "condenserRecS1": 2015,
+       "condenserRecS2": 2110,
+       "condenserUsedS1": 3,
+       "condenserUsedS2": 2,
+       "resinWaterS1_24h": 0,
+       "resinWaterS2_24h": 0,
+       "note": "Sửa ghi chú",
+       "updatedAt": "<thời điểm>"
+      },
+      {
+       "waterAdjustmentS1": null,
+       "waterAdjustmentS2": null,
+       "condenserAdjustmentS1": null,
+       "condenserAdjustmentS2": null,
+       "id": 980005,
+       "logDate": "2026-09-17",
+       "shiftTime": "22h00",
+       "shiftTeam": "Kíp 3",
+       "shiftLeader": "Trưởng ca Mẫu A",
+       "elecRecS1": 1189,
+       "elecRecS2": 1063.5,
+       "elecGenS1": 31.5,
+       "elecGenS2": 27.25,
+       "waterRecS1": 5076.5,
+       "waterRecS2": 4863,
+       "waterUsedS1": 24976.5,
+       "waterUsedS2": 10.5,
+       "waterRatioS1": 792.9048,
+       "waterRatioS2": 0.3853,
+       "condenserRecS1": 2018,
+       "condenserRecS2": 2112,
+       "condenserUsedS1": 3,
+       "condenserUsedS2": 2,
+       "resinWaterS1_24h": 0,
+       "resinWaterS2_24h": 0,
+       "note": "",
+       "updatedAt": "<thời điểm>"
+      },
+      {
+       "waterAdjustmentS1": null,
+       "waterAdjustmentS2": null,
+       "condenserAdjustmentS1": null,
+       "condenserAdjustmentS2": null,
+       "id": "<id mới>",
+       "logDate": "2026-09-18",
+       "shiftTime": "06h00",
+       "shiftTeam": "Kíp 1",
+       "shiftLeader": "Trưởng ca Mẫu A",
+       "elecRecS1": 1301.5,
+       "elecRecS2": 1181.25,
+       "elecGenS1": 112.5,
+       "elecGenS2": 117.75,
+       "waterRecS1": 5103.75,
+       "waterRecS2": 4902,
+       "waterUsedS1": 27.25,
+       "waterUsedS2": 39,
+       "waterRatioS1": 0.2422,
+       "waterRatioS2": 0.3312,
+       "condenserRecS1": 2031,
+       "condenserRecS2": 2121,
+       "condenserUsedS1": 13,
+       "condenserUsedS2": 9,
+       "resinWaterS1_24h": 60,
+       "resinWaterS2_24h": 52,
+       "note": "Ca mẫu 1",
+       "updatedAt": "<thời điểm>"
+      },
+      {
+       "waterAdjustmentS1": null,
+       "waterAdjustmentS2": null,
+       "condenserAdjustmentS1": null,
+       "condenserAdjustmentS2": null,
+       "id": "<id mới>",
+       "logDate": "2026-09-18",
+       "shiftTime": "22h00",
+       "shiftTeam": "Kíp 3",
+       "shiftLeader": "Trưởng ca Mẫu A",
+       "elecRecS1": 1303.5,
+       "elecRecS2": 1183.25,
+       "elecGenS1": 2,
+       "elecGenS2": 2,
+       "waterRecS1": 5109.75,
+       "waterRecS2": 4906,
+       "waterUsedS1": 6,
+       "waterUsedS2": 4,
+       "waterRatioS1": 3,
+       "waterRatioS2": 2,
+       "condenserRecS1": 2033,
+       "condenserRecS2": 2123,
+       "condenserUsedS1": 2,
+       "condenserUsedS2": 2,
+       "resinWaterS1_24h": 0,
+       "resinWaterS2_24h": 0,
+       "note": "Ca mẫu 3",
+       "updatedAt": "<thời điểm>"
+      }
+     ],
+     "summary": {
+      "totalElecGenS1": 513,
+      "totalElecGenS2": 487,
+      "totalElecGenPlant": 1000,
+      "totalWaterUsedS1": 25140.5,
+      "totalWaterUsedS2": 134.5,
+      "totalWaterUsedPlant": 25275,
+      "avgWaterRatioS1": 49.0068,
+      "avgWaterRatioS2": 0.2762,
+      "avgWaterRatioPlant": 25.275,
+      "totalCondenserUsedS1": 43,
+      "totalCondenserUsedS2": 34.25,
+      "totalResinWaterS1": 171,
+      "totalResinWaterS2": 150,
+      "shiftCount": 8
+     }
+    },
+    "meta": null,
+    "error": null
+   }
+  }
+ },
+ "water-report #08 xoá thiếu tham số": {
+  "request": "DELETE water-report",
+  "response": {
+   "status": 400,
+   "body": {
+    "data": null,
+    "meta": null,
+    "error": "Thiếu ID hoặc thông tin ca để xoá."
+   }
+  }
+ },
+ "water-report #09 thêm Trưởng ca": {
+  "request": "POST water-report/leaders",
+  "response": {
+   "status": 200,
+   "body": {
+    "data": {
+     "ok": true,
+     "message": "Đã cập nhật Trưởng ca: Trưởng ca Mẫu C"
+    },
+    "meta": null,
+    "error": null
+   }
+  },
+  "sau: GET water-report/leaders": {
+   "status": 200,
+   "body": {
+    "data": {
+     "ok": true,
+     "leaders": [
+      {
+       "id": 960000,
+       "name": "Trưởng ca Mẫu A",
+       "isActive": 1,
+       "displayOrder": 1
+      },
+      {
+       "id": 960001,
+       "name": "Trưởng ca Mẫu B",
+       "isActive": 0,
+       "displayOrder": 2
+      },
+      {
+       "id": "<id mới>",
+       "name": "Trưởng ca Mẫu C",
+       "isActive": 1,
+       "displayOrder": 3
+      }
+     ]
+    },
+    "meta": null,
+    "error": null
+   }
+  }
+ },
+ "water-report #10 Trưởng ca trống": {
+  "request": "POST water-report/leaders",
+  "response": {
+   "status": 400,
+   "body": {
+    "data": null,
+    "meta": null,
+    "error": "Tên Trưởng ca không được để trống."
+   }
+  }
+ },
+ "water-report #11 xoá Trưởng ca theo tên": {
+  "request": "DELETE water-report/leaders?name=Tr%C6%B0%E1%BB%9Fng%20ca%20M%E1%BA%ABu%20C",
+  "response": {
+   "status": 200,
+   "body": {
+    "data": {
+     "ok": true,
+     "message": "Đã xoá Trưởng ca thành công."
+    },
+    "meta": null,
+    "error": null
+   }
+  },
+  "sau: GET water-report/leaders": {
+   "status": 200,
+   "body": {
+    "data": {
+     "ok": true,
+     "leaders": [
+      {
+       "id": 960000,
+       "name": "Trưởng ca Mẫu A",
+       "isActive": 1,
+       "displayOrder": 1
+      },
+      {
+       "id": 960001,
+       "name": "Trưởng ca Mẫu B",
+       "isActive": 0,
+       "displayOrder": 2
+      }
+     ]
+    },
+    "meta": null,
+    "error": null
+   }
+  }
+ },
+ "water-report #12 xoá Trưởng ca thiếu tham số": {
+  "request": "DELETE water-report/leaders",
+  "response": {
+   "status": 400,
+   "body": {
+    "data": null,
+    "meta": null,
+    "error": "Thiếu ID hoặc tên Trưởng ca cần xoá."
+   }
+  }
+ },
+ "water-report #13 tải lên: quét sheet (file xuất từ chính web)": {
+  "request": "POST water-report/upload",
+  "response": {
+   "status": 200,
+   "body": {
+    "data": {
+     "ok": true,
+     "sheets": [
+      {
+       "sheetName": "T09.2026",
+       "month": "2026-09",
+       "shiftCount": 6,
+       "firstDate": "2026-09-16",
+       "lastDate": "2026-09-17"
+      },
+      {
+       "sheetName": "Hieu chinh cong to",
+       "month": "2026-09",
+       "shiftCount": 1,
+       "firstDate": "2026-09-17",
+       "lastDate": "2026-09-17"
+      }
+     ]
+    },
+    "meta": null,
+    "error": null
+   }
+  }
+ },
+ "water-report #14 tải lên: nạp dữ liệu": {
+  "request": "POST water-report/upload",
+  "response": {
+   "status": 200,
+   "body": {
+    "data": {
+     "ok": true,
+     "totalShifts": 6,
+     "months": [
+      "2026-09"
+     ],
+     "message": "Đã nạp thành công 6 ca trực của 1 tháng vào hệ thống."
+    },
+    "meta": null,
+    "error": null
+   }
+  },
+  "sau: GET water-report?month=2026-09": {
+   "status": 200,
+   "body": {
+    "data": {
+     "ok": true,
+     "month": "2026-09",
+     "leaders": [
+      "Trưởng ca Mẫu A"
+     ],
+     "baseline": null,
+     "shifts": [
+      {
+       "waterAdjustmentS1": null,
+       "waterAdjustmentS2": null,
+       "condenserAdjustmentS1": null,
+       "condenserAdjustmentS2": null,
+       "id": 980000,
+       "logDate": "2026-09-16",
+       "shiftTime": "06h00",
+       "shiftTeam": "KÍP 1",
+       "shiftLeader": "Trưởng ca Mẫu A",
+       "elecRecS1": 1031.5,
+       "elecRecS2": 927.25,
+       "elecGenS1": 241,
+       "elecGenS2": 231,
+       "waterRecS1": 5012.75,
+       "waterRecS2": 4810.5,
+       "waterUsedS1": 41,
+       "waterUsedS2": 39,
+       "waterRatioS1": 0.07,
+       "waterRatioS2": 0.0812,
+       "condenserRecS1": 2003,
+       "condenserRecS2": 2102,
+       "condenserUsedS1": 13,
+       "condenserUsedS2": 12,
+       "resinWaterS1_24h": 55.5,
+       "resinWaterS2_24h": 49,
+       "note": "",
+       "updatedAt": "<thời điểm>"
+      },
+      {
+       "waterAdjustmentS1": null,
+       "waterAdjustmentS2": null,
+       "condenserAdjustmentS1": null,
+       "condenserAdjustmentS2": null,
+       "id": 980001,
+       "logDate": "2026-09-16",
+       "shiftTime": "14h00",
+       "shiftTeam": "KÍP 2",
+       "shiftLeader": "Trưởng ca Mẫu B",
+       "elecRecS1": 1063,
+       "elecRecS2": 954.5,
+       "elecGenS1": 31.5,
+       "elecGenS2": 27.25,
+       "waterRecS1": 5025.5,
+       "waterRecS2": 4821,
+       "waterUsedS1": 12.75,
+       "waterUsedS2": 10.5,
+       "waterRatioS1": 0.4048,
+       "waterRatioS2": 0.3853,
+       "condenserRecS1": 2006,
+       "condenserRecS2": 2104,
+       "condenserUsedS1": 3,
+       "condenserUsedS2": 2,
+       "resinWaterS1_24h": 55.5,
+       "resinWaterS2_24h": 49,
+       "note": "Ghi chú ca",
+       "updatedAt": "<thời điểm>"
+      },
+      {
+       "waterAdjustmentS1": 2.5,
+       "waterAdjustmentS2": null,
+       "condenserAdjustmentS1": null,
+       "condenserAdjustmentS2": null,
+       "id": 980002,
+       "logDate": "2026-09-16",
+       "shiftTime": "22h00",
+       "shiftTeam": "KÍP 3",
+       "shiftLeader": "Trưởng ca Mẫu A",
+       "elecRecS1": 1094.5,
+       "elecRecS2": 981.75,
+       "elecGenS1": 31.5,
+       "elecGenS2": 27.25,
+       "waterRecS1": 5038.25,
+       "waterRecS2": 4831.5,
+       "waterUsedS1": 15.25,
+       "waterUsedS2": 10.5,
+       "waterRatioS1": 0.4841,
+       "waterRatioS2": 0.3853,
+       "condenserRecS1": 2009,
+       "condenserRecS2": 2106,
+       "condenserUsedS1": 3,
+       "condenserUsedS2": 2,
+       "resinWaterS1_24h": 55.5,
+       "resinWaterS2_24h": 49,
+       "note": "",
+       "updatedAt": "<thời điểm>"
+      },
+      {
+       "waterAdjustmentS1": null,
+       "waterAdjustmentS2": null,
+       "condenserAdjustmentS1": null,
+       "condenserAdjustmentS2": 1.25,
+       "id": 980003,
+       "logDate": "2026-09-17",
+       "shiftTime": "06h00",
+       "shiftTeam": "KÍP 1",
+       "shiftLeader": "Trưởng ca Mẫu A",
+       "elecRecS1": 1126,
+       "elecRecS2": 1009,
+       "elecGenS1": 31.5,
+       "elecGenS2": 27.25,
+       "waterRecS1": 5051,
+       "waterRecS2": 4842,
+       "waterUsedS1": 12.75,
+       "waterUsedS2": 10.5,
+       "waterRatioS1": 0.4048,
+       "waterRatioS2": 0.3853,
+       "condenserRecS1": 2012,
+       "condenserRecS2": 2108,
+       "condenserUsedS1": 3,
+       "condenserUsedS2": 3.25,
+       "resinWaterS1_24h": 55.5,
+       "resinWaterS2_24h": 49,
+       "note": "",
+       "updatedAt": "<thời điểm>"
+      },
+      {
+       "waterAdjustmentS1": null,
+       "waterAdjustmentS2": null,
+       "condenserAdjustmentS1": null,
+       "condenserAdjustmentS2": null,
+       "id": 980004,
+       "logDate": "2026-09-17",
+       "shiftTime": "14h00",
+       "shiftTeam": "KÍP 2",
+       "shiftLeader": "Trưởng ca Mẫu B",
+       "elecRecS1": 1157.5,
+       "elecRecS2": 1036.25,
+       "elecGenS1": 31.5,
+       "elecGenS2": 27.25,
+       "waterRecS1": 5063.75,
+       "waterRecS2": 4852.5,
+       "waterUsedS1": 12.75,
+       "waterUsedS2": 10.5,
+       "waterRatioS1": 0.4048,
+       "waterRatioS2": 0.3853,
+       "condenserRecS1": 2015,
+       "condenserRecS2": 2110,
+       "condenserUsedS1": 3,
+       "condenserUsedS2": 2,
+       "resinWaterS1_24h": 55.5,
+       "resinWaterS2_24h": 49,
+       "note": "Sửa ghi chú",
+       "updatedAt": "<thời điểm>"
+      },
+      {
+       "waterAdjustmentS1": null,
+       "waterAdjustmentS2": null,
+       "condenserAdjustmentS1": null,
+       "condenserAdjustmentS2": null,
+       "id": 980005,
+       "logDate": "2026-09-17",
+       "shiftTime": "22h00",
+       "shiftTeam": "KÍP 3",
+       "shiftLeader": "Trưởng ca Mẫu A",
+       "elecRecS1": 1189,
+       "elecRecS2": 1063.5,
+       "elecGenS1": 31.5,
+       "elecGenS2": 27.25,
+       "waterRecS1": 5076.5,
+       "waterRecS2": 4863,
+       "waterUsedS1": 12.75,
+       "waterUsedS2": 10.5,
+       "waterRatioS1": 0.4048,
+       "waterRatioS2": 0.3853,
+       "condenserRecS1": 2018,
+       "condenserRecS2": 2112,
+       "condenserUsedS1": 3,
+       "condenserUsedS2": 2,
+       "resinWaterS1_24h": 55.5,
+       "resinWaterS2_24h": 49,
+       "note": "",
+       "updatedAt": "<thời điểm>"
+      },
+      {
+       "waterAdjustmentS1": null,
+       "waterAdjustmentS2": null,
+       "condenserAdjustmentS1": null,
+       "condenserAdjustmentS2": null,
+       "id": "<id mới>",
+       "logDate": "2026-09-18",
+       "shiftTime": "06h00",
+       "shiftTeam": "Kíp 1",
+       "shiftLeader": "Trưởng ca Mẫu A",
+       "elecRecS1": 1301.5,
+       "elecRecS2": 1181.25,
+       "elecGenS1": 112.5,
+       "elecGenS2": 117.75,
+       "waterRecS1": 5103.75,
+       "waterRecS2": 4902,
+       "waterUsedS1": 27.25,
+       "waterUsedS2": 39,
+       "waterRatioS1": 0.2422,
+       "waterRatioS2": 0.3312,
+       "condenserRecS1": 2031,
+       "condenserRecS2": 2121,
+       "condenserUsedS1": 13,
+       "condenserUsedS2": 9,
+       "resinWaterS1_24h": 60,
+       "resinWaterS2_24h": 52,
+       "note": "Ca mẫu 1",
+       "updatedAt": "<thời điểm>"
+      },
+      {
+       "waterAdjustmentS1": null,
+       "waterAdjustmentS2": null,
+       "condenserAdjustmentS1": null,
+       "condenserAdjustmentS2": null,
+       "id": "<id mới>",
+       "logDate": "2026-09-18",
+       "shiftTime": "22h00",
+       "shiftTeam": "Kíp 3",
+       "shiftLeader": "Trưởng ca Mẫu A",
+       "elecRecS1": 1303.5,
+       "elecRecS2": 1183.25,
+       "elecGenS1": 2,
+       "elecGenS2": 2,
+       "waterRecS1": 5109.75,
+       "waterRecS2": 4906,
+       "waterUsedS1": 6,
+       "waterUsedS2": 4,
+       "waterRatioS1": 3,
+       "waterRatioS2": 2,
+       "condenserRecS1": 2033,
+       "condenserRecS2": 2123,
+       "condenserUsedS1": 2,
+       "condenserUsedS2": 2,
+       "resinWaterS1_24h": 0,
+       "resinWaterS2_24h": 0,
+       "note": "Ca mẫu 3",
+       "updatedAt": "<thời điểm>"
+      }
+     ],
+     "summary": {
+      "totalElecGenS1": 513,
+      "totalElecGenS2": 487,
+      "totalElecGenPlant": 1000,
+      "totalWaterUsedS1": 140.5,
+      "totalWaterUsedS2": 134.5,
+      "totalWaterUsedPlant": 275,
+      "avgWaterRatioS1": 0.2739,
+      "avgWaterRatioS2": 0.2762,
+      "avgWaterRatioPlant": 0.275,
+      "totalCondenserUsedS1": 43,
+      "totalCondenserUsedS2": 34.25,
+      "totalResinWaterS1": 393,
+      "totalResinWaterS2": 346,
+      "shiftCount": 8
+     }
+    },
+    "meta": null,
+    "error": null
+   }
+  },
+  "sau: GET water-report?month=2026-10": {
+   "status": 200,
+   "body": {
+    "data": {
+     "ok": true,
+     "month": "2026-10",
+     "leaders": [
+      "Trưởng ca Mẫu A"
+     ],
+     "baseline": {
+      "waterAdjustmentS1": null,
+      "waterAdjustmentS2": null,
+      "condenserAdjustmentS1": null,
+      "condenserAdjustmentS2": null,
+      "id": "<id mới>",
+      "logDate": "2026-09-18",
+      "shiftTime": "22h00",
+      "shiftTeam": "Kíp 3",
+      "shiftLeader": "Trưởng ca Mẫu A",
+      "elecRecS1": 1303.5,
+      "elecRecS2": 1183.25,
+      "elecGenS1": 2,
+      "elecGenS2": 2,
+      "waterRecS1": 5109.75,
+      "waterRecS2": 4906,
+      "waterUsedS1": 6,
+      "waterUsedS2": 4,
+      "waterRatioS1": 3,
+      "waterRatioS2": 2,
+      "condenserRecS1": 2033,
+      "condenserRecS2": 2123,
+      "condenserUsedS1": 2,
+      "condenserUsedS2": 2,
+      "resinWaterS1_24h": 0,
+      "resinWaterS2_24h": 0,
+      "note": "Ca mẫu 3",
+      "updatedAt": "<thời điểm>"
+     },
+     "shifts": [],
+     "summary": {
+      "totalElecGenS1": 0,
+      "totalElecGenS2": 0,
+      "totalElecGenPlant": 0,
+      "totalWaterUsedS1": 0,
+      "totalWaterUsedS2": 0,
+      "totalWaterUsedPlant": 0,
+      "avgWaterRatioS1": 0,
+      "avgWaterRatioS2": 0,
+      "avgWaterRatioPlant": 0,
+      "totalCondenserUsedS1": 0,
+      "totalCondenserUsedS2": 0,
+      "totalResinWaterS1": 0,
+      "totalResinWaterS2": 0,
+      "shiftCount": 0
+     }
+    },
+    "meta": null,
+    "error": null
+   }
+  }
+ },
+ "water-report #15 tải lên: không có file": {
+  "request": "POST water-report/upload",
+  "response": {
+   "status": 400,
+   "body": {
+    "data": null,
+    "meta": null,
+    "error": "Chưa chọn file Excel."
+   }
+  }
+ },
+ "daily-inputs #01 lưu số (dấu phẩy) + ghi chú + chữ CW + 'không chỉnh'": {
+  "request": "POST daily-inputs",
+  "response": {
+   "status": 200,
+   "body": {
+    "data": {
+     "saved": 4
+    },
+    "meta": null,
+    "error": null
+   }
+  },
+  "sau: GET daily-inputs?period=2026-09&date=2026-09-17&scope=non-ktkt": {
+   "status": 200,
+   "body": {
+    "data": {
+     "entries": [
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "AE",
+       "value": "154.1",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "AF",
+       "value": "165.4",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "AJ",
+       "value": "176.7",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "AR",
+       "value": "188",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "AT",
+       "value": "199.3",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "B",
+       "value": "75",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "BCSX_COAL_STOCK_24H",
+       "value": "312450.75",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "BN",
+       "value": "233.2",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "BQ",
+       "value": "244.5",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "BR",
+       "value": "255.8",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "BZ",
+       "value": "278.4",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "C",
+       "value": "86.3",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CA",
+       "value": "289.7",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CC",
+       "value": "301",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CD",
+       "value": "312.3",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CE",
+       "value": "323.6",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CF",
+       "value": "334.9",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CJ",
+       "value": "210.6",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CM",
+       "value": "346.2",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CN",
+       "value": "267.1",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CQ",
+       "value": "357.5",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CR",
+       "value": "368.8",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CS",
+       "value": "380.1",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CT",
+       "value": "391.4",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CU",
+       "value": "402.7",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CV",
+       "value": "414",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CW",
+       "value": "Chạy 1 lò",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CX",
+       "value": "221.9",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "DA",
+       "value": "101.25",
+       "note": "Ghi chú PMIS"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "DB",
+       "value": "447.9",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "DC",
+       "value": "459.2",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "DD",
+       "value": "470.5",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "DE",
+       "value": "481.8",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "DF",
+       "value": "493.1",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "DG",
+       "value": "504.4",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "DH",
+       "value": "515.7",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "F",
+       "value": "23.5",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "GRID_RECEIVE_S1",
+       "value": "12.5",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "GRID_RECEIVE_S2",
+       "value": "0",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "H",
+       "value": "108.9",
+       "note": "Ghi chú mẫu 2026-09-17"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "I",
+       "value": "120.2",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "L",
+       "value": "24",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "X",
+       "value": "142.8",
+       "note": ""
+      }
+     ]
+    },
+    "meta": null,
+    "error": null
+   }
+  },
+  "sau: GET daily-inputs?period=2026-09&date=2026-09-16&scope=non-ktkt": {
+   "status": 200,
+   "body": {
+    "data": {
+     "entries": [
+      {
+       "operatingDate": "2026-09-16",
+       "fieldCode": "AE",
+       "value": "150.4",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "fieldCode": "AF",
+       "value": "161.7",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "fieldCode": "AJ",
+       "value": "173",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "fieldCode": "AR",
+       "value": "184.3",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "fieldCode": "AT",
+       "value": "195.6",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "fieldCode": "B",
+       "value": "71.3",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "fieldCode": "BCSX_COAL_STOCK_24H",
+       "value": "312450.75",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "fieldCode": "BN",
+       "value": "229.5",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "fieldCode": "BQ",
+       "value": "240.8",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "fieldCode": "BR",
+       "value": "252.1",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "fieldCode": "BZ",
+       "value": "274.7",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "fieldCode": "C",
+       "value": "82.6",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "fieldCode": "CA",
+       "value": "286",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "fieldCode": "CC",
+       "value": "297.3",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "fieldCode": "CD",
+       "value": "308.6",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "fieldCode": "CE",
+       "value": "319.9",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "fieldCode": "CF",
+       "value": "331.2",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "fieldCode": "CJ",
+       "value": "206.9",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "fieldCode": "CM",
+       "value": "342.5",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "fieldCode": "CN",
+       "value": "263.4",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "fieldCode": "CQ",
+       "value": "353.8",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "fieldCode": "CR",
+       "value": "365.1",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "fieldCode": "CS",
+       "value": "376.4",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "fieldCode": "CT",
+       "value": "387.7",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "fieldCode": "CU",
+       "value": "399",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "fieldCode": "CV",
+       "value": "410.3",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "fieldCode": "CW",
+       "value": "Bình thường",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "fieldCode": "CX",
+       "value": "Không chỉnh",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "fieldCode": "DA",
+       "value": "432.9",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "fieldCode": "DB",
+       "value": "444.2",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "fieldCode": "DC",
+       "value": "455.5",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "fieldCode": "DD",
+       "value": "466.8",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "fieldCode": "DE",
+       "value": "478.1",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "fieldCode": "DF",
+       "value": "489.4",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "fieldCode": "DG",
+       "value": "500.7",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "fieldCode": "DH",
+       "value": "512",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "fieldCode": "F",
+       "value": "23",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "fieldCode": "GRID_RECEIVE_S1",
+       "value": "12.5",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "fieldCode": "GRID_RECEIVE_S2",
+       "value": "0",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "fieldCode": "H",
+       "value": "105.2",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "fieldCode": "I",
+       "value": "116.5",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "fieldCode": "L",
+       "value": "23",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "fieldCode": "X",
+       "value": "139.1",
+       "note": ""
+      }
+     ]
+    },
+    "meta": null,
+    "error": null
+   }
+  }
+ },
+ "daily-inputs #02 xoá ô (giá trị và ghi chú rỗng)": {
+  "request": "POST daily-inputs",
+  "response": {
+   "status": 200,
+   "body": {
+    "data": {
+     "saved": 1
+    },
+    "meta": null,
+    "error": null
+   }
+  },
+  "sau: GET daily-inputs?period=2026-09&date=2026-09-17&scope=non-ktkt": {
+   "status": 200,
+   "body": {
+    "data": {
+     "entries": [
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "AE",
+       "value": "154.1",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "AF",
+       "value": "165.4",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "AJ",
+       "value": "176.7",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "AR",
+       "value": "188",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "AT",
+       "value": "199.3",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "B",
+       "value": "75",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "BCSX_COAL_STOCK_24H",
+       "value": "312450.75",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "BN",
+       "value": "233.2",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "BQ",
+       "value": "244.5",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "BR",
+       "value": "255.8",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "BZ",
+       "value": "278.4",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "C",
+       "value": "86.3",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CA",
+       "value": "289.7",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CC",
+       "value": "301",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CD",
+       "value": "312.3",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CE",
+       "value": "323.6",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CF",
+       "value": "334.9",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CJ",
+       "value": "210.6",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CM",
+       "value": "346.2",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CN",
+       "value": "267.1",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CQ",
+       "value": "357.5",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CR",
+       "value": "368.8",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CS",
+       "value": "380.1",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CT",
+       "value": "391.4",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CU",
+       "value": "402.7",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CV",
+       "value": "414",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CW",
+       "value": "Chạy 1 lò",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CX",
+       "value": "221.9",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "DB",
+       "value": "447.9",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "DC",
+       "value": "459.2",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "DD",
+       "value": "470.5",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "DE",
+       "value": "481.8",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "DF",
+       "value": "493.1",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "DG",
+       "value": "504.4",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "DH",
+       "value": "515.7",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "F",
+       "value": "23.5",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "GRID_RECEIVE_S1",
+       "value": "12.5",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "GRID_RECEIVE_S2",
+       "value": "0",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "H",
+       "value": "108.9",
+       "note": "Ghi chú mẫu 2026-09-17"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "I",
+       "value": "120.2",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "L",
+       "value": "24",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "X",
+       "value": "142.8",
+       "note": ""
+      }
+     ]
+    },
+    "meta": null,
+    "error": null
+   }
+  }
+ },
+ "daily-inputs #03 mã tự liên kết KTKT (B)": {
+  "request": "POST daily-inputs",
+  "response": {
+   "status": 400,
+   "body": {
+    "data": null,
+    "meta": null,
+    "error": "Chỉ tiêu B tự liên kết từ Chỉ tiêu KTKT, không được nhập hoặc đồng bộ lần hai."
+   }
+  }
+ },
+ "daily-inputs #04 mã không cho phép": {
+  "request": "POST daily-inputs",
+  "response": {
+   "status": 400,
+   "body": {
+    "data": null,
+    "meta": null,
+    "error": "Ngày hoặc mã chỉ tiêu không hợp lệ."
+   }
+  }
+ },
+ "daily-inputs #05 ngày tương lai": {
+  "request": "POST daily-inputs",
+  "response": {
+   "status": 400,
+   "body": {
+    "data": null,
+    "meta": null,
+    "error": "Không thể nhập hoặc đồng bộ dữ liệu cho ngày trong tương lai."
+   }
+  }
+ },
+ "daily-inputs #06 ngày khác kỳ": {
+  "request": "POST daily-inputs",
+  "response": {
+   "status": 400,
+   "body": {
+    "data": null,
+    "meta": null,
+    "error": "Ngày hoặc mã chỉ tiêu không hợp lệ."
+   }
+  }
+ },
+ "daily-inputs #07 giá trị chữ ở ô số": {
+  "request": "POST daily-inputs",
+  "response": {
+   "status": 400,
+   "body": {
+    "data": null,
+    "meta": null,
+    "error": "Giá trị F phải là số hoặc trạng thái được hỗ trợ."
+   }
+  }
+ },
+ "daily-inputs #08 kỳ sai định dạng": {
+  "request": "POST daily-inputs",
+  "response": {
+   "status": 400,
+   "body": {
+    "data": null,
+    "meta": null,
+    "error": "Dữ liệu tháng không hợp lệ."
+   }
+  }
+ },
+ "daily-inputs #09 JSON hỏng": {
+  "request": "POST daily-inputs",
+  "response": {
+   "status": 400,
+   "body": {
+    "data": null,
+    "meta": null,
+    "error": "Dữ liệu JSON không hợp lệ."
+   }
+  }
+ },
+ "daily-inputs #10 không phải JSON (415)": {
+  "request": "POST daily-inputs",
+  "response": {
+   "status": 415,
+   "body": {
+    "data": null,
+    "meta": null,
+    "error": "Yêu cầu phải là JSON."
+   }
+  }
+ },
+ "daily-inputs #11 đọc: khoảng sai": {
+  "request": "GET daily-inputs?period=2026-13",
+  "response": {
+   "status": 400,
+   "body": {
+    "data": null,
+    "meta": null,
+    "error": "Khoảng đọc dữ liệu không hợp lệ."
+   }
+  }
+ },
+ "daily-inputs #12 đọc: scope lạ": {
+  "request": "GET daily-inputs?period=2026-09&scope=khac",
+  "response": {
+   "status": 400,
+   "body": {
+    "data": null,
+    "meta": null,
+    "error": "Khoảng đọc dữ liệu không hợp lệ."
+   }
+  }
+ },
+ "ppa #01 lưu ngày mới đủ 48 điểm": {
+  "request": "POST ppa-heat-rate",
+  "response": {
+   "status": 200,
+   "body": {
+    "data": {
+     "result": {
+      "ppaPlant": 10252.717263663444,
+      "ppaS1": 10245.333037365508,
+      "ppaS2": 10260.221098938046,
+      "grossS1Kwh": 14415060,
+      "netS1Kwh": 13551060,
+      "grossS2Kwh": 14175060,
+      "netS2Kwh": 13335060
+     }
+    },
+    "meta": null,
+    "error": null
+   }
+  },
+  "sau: GET ppa-heat-rate?period=2026-09&from=2026-09-01&to=2026-09-30": {
+   "status": 200,
+   "body": {
+    "data": {
+     "entries": [
+      {
+       "operatingDate": "2026-09-15",
+       "sourceFiles": "[\"s1.xlsx\",\"s2.xlsx\"]",
+       "grossS1Kwh": "14415060",
+       "netS1Kwh": "13551060",
+       "grossS2Kwh": "14175060",
+       "netS2Kwh": "13335060",
+       "ppaPlant": "10252.717263663444",
+       "ppaS1": "10245.333037365508",
+       "ppaS2": "10260.221098938046",
+       "noteS1": "Ghi chú S1 mẫu",
+       "noteS2": "",
+       "updatedAt": "<thời điểm>"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "sourceFiles": "[\"mau-16.xlsx\"]",
+       "grossS1Kwh": "14610000",
+       "netS1Kwh": "13560000",
+       "grossS2Kwh": "0",
+       "netS2Kwh": "0",
+       "ppaPlant": "10234.32",
+       "ppaS1": "10234.32",
+       "ppaS2": "",
+       "noteS1": "Ghi chú S1",
+       "noteS2": "",
+       "updatedAt": "<thời điểm>"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "sourceFiles": "[]",
+       "grossS1Kwh": "14590000",
+       "netS1Kwh": "13530000",
+       "grossS2Kwh": "14200000",
+       "netS2Kwh": "13100000",
+       "ppaPlant": "10190.5",
+       "ppaS1": "10180.1",
+       "ppaS2": "10201.7",
+       "noteS1": "",
+       "noteS2": "S2 khởi động",
+       "updatedAt": "<thời điểm>"
+      }
+     ]
+    },
+    "meta": null,
+    "error": null
+   }
+  },
+  "sau: GET ppa-heat-rate?period=2026-09&includeSource=1": {
+   "status": 200,
+   "body": {
+    "data": {
+     "entries": [
+      {
+       "operatingDate": "2026-09-15",
+       "sourceFiles": "[\"s1.xlsx\",\"s2.xlsx\"]",
+       "grossS1Kwh": "14415060",
+       "netS1Kwh": "13551060",
+       "grossS2Kwh": "14175060",
+       "netS2Kwh": "13335060",
+       "ppaPlant": "10252.717263663444",
+       "ppaS1": "10245.333037365508",
+       "ppaS2": "10260.221098938046",
+       "noteS1": "Ghi chú S1 mẫu",
+       "noteS2": "",
+       "updatedAt": "<thời điểm>",
+       "source": {
+        "grossS1": [
+         300000,
+         300125.5,
+         300251,
+         300376.5,
+         300502,
+         300627.5,
+         300000,
+         300125.5,
+         300251,
+         300376.5,
+         300502,
+         300627.5,
+         300000,
+         300125.5,
+         300251,
+         300376.5,
+         300502,
+         300627.5,
+         300000,
+         300125.5,
+         300251,
+         300376.5,
+         300502,
+         300627.5,
+         300000,
+         300125.5,
+         300251,
+         300376.5,
+         300502,
+         300627.5,
+         300000,
+         300125.5,
+         300251,
+         300376.5,
+         300502,
+         300627.5,
+         300000,
+         300125.5,
+         300251,
+         300376.5,
+         300502,
+         300627.5,
+         300000,
+         300125.5,
+         300251,
+         300376.5,
+         300502,
+         300627.5
+        ],
+        "netS1": [
+         282000,
+         282125.5,
+         282251,
+         282376.5,
+         282502,
+         282627.5,
+         282000,
+         282125.5,
+         282251,
+         282376.5,
+         282502,
+         282627.5,
+         282000,
+         282125.5,
+         282251,
+         282376.5,
+         282502,
+         282627.5,
+         282000,
+         282125.5,
+         282251,
+         282376.5,
+         282502,
+         282627.5,
+         282000,
+         282125.5,
+         282251,
+         282376.5,
+         282502,
+         282627.5,
+         282000,
+         282125.5,
+         282251,
+         282376.5,
+         282502,
+         282627.5,
+         282000,
+         282125.5,
+         282251,
+         282376.5,
+         282502,
+         282627.5,
+         282000,
+         282125.5,
+         282251,
+         282376.5,
+         282502,
+         282627.5
+        ],
+        "grossS2": [
+         295000,
+         295125.5,
+         295251,
+         295376.5,
+         295502,
+         295627.5,
+         295000,
+         295125.5,
+         295251,
+         295376.5,
+         295502,
+         295627.5,
+         295000,
+         295125.5,
+         295251,
+         295376.5,
+         295502,
+         295627.5,
+         295000,
+         295125.5,
+         295251,
+         295376.5,
+         295502,
+         295627.5,
+         295000,
+         295125.5,
+         295251,
+         295376.5,
+         295502,
+         295627.5,
+         295000,
+         295125.5,
+         295251,
+         295376.5,
+         295502,
+         295627.5,
+         295000,
+         295125.5,
+         295251,
+         295376.5,
+         295502,
+         295627.5,
+         295000,
+         295125.5,
+         295251,
+         295376.5,
+         295502,
+         295627.5
+        ],
+        "netS2": [
+         277500,
+         277625.5,
+         277751,
+         277876.5,
+         278002,
+         278127.5,
+         277500,
+         277625.5,
+         277751,
+         277876.5,
+         278002,
+         278127.5,
+         277500,
+         277625.5,
+         277751,
+         277876.5,
+         278002,
+         278127.5,
+         277500,
+         277625.5,
+         277751,
+         277876.5,
+         278002,
+         278127.5,
+         277500,
+         277625.5,
+         277751,
+         277876.5,
+         278002,
+         278127.5,
+         277500,
+         277625.5,
+         277751,
+         277876.5,
+         278002,
+         278127.5,
+         277500,
+         277625.5,
+         277751,
+         277876.5,
+         278002,
+         278127.5,
+         277500,
+         277625.5,
+         277751,
+         277876.5,
+         278002,
+         278127.5
+        ]
+       }
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "sourceFiles": "[\"mau-16.xlsx\"]",
+       "grossS1Kwh": "14610000",
+       "netS1Kwh": "13560000",
+       "grossS2Kwh": "0",
+       "netS2Kwh": "0",
+       "ppaPlant": "10234.32",
+       "ppaS1": "10234.32",
+       "ppaS2": "",
+       "noteS1": "Ghi chú S1",
+       "noteS2": "",
+       "updatedAt": "<thời điểm>",
+       "source": {
+        "grossS1": [
+         101,
+         201
+        ],
+        "netS1": [
+         96,
+         191
+        ],
+        "grossS2": [
+         111,
+         211
+        ],
+        "netS2": [
+         105,
+         200
+        ]
+       }
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "sourceFiles": "[]",
+       "grossS1Kwh": "14590000",
+       "netS1Kwh": "13530000",
+       "grossS2Kwh": "14200000",
+       "netS2Kwh": "13100000",
+       "ppaPlant": "10190.5",
+       "ppaS1": "10180.1",
+       "ppaS2": "10201.7",
+       "noteS1": "",
+       "noteS2": "S2 khởi động",
+       "updatedAt": "<thời điểm>",
+       "source": {
+        "grossS1": [
+         102,
+         202
+        ],
+        "netS1": [
+         97,
+         192
+        ],
+        "grossS2": [
+         112,
+         212
+        ],
+        "netS2": [
+         106,
+         201
+        ]
+       }
+      }
+     ]
+    },
+    "meta": null,
+    "error": null
+   }
+  }
+ },
+ "ppa #02 ghi đè ngày có sẵn": {
+  "request": "POST ppa-heat-rate",
+  "response": {
+   "status": 200,
+   "body": {
+    "data": {
+     "result": {
+      "ppaPlant": 10330.998858636829,
+      "ppaS1": 10305.120075974735,
+      "ppaS2": 10358.717110913778,
+      "grossS1Kwh": 13451280,
+      "netS1Kwh": 13019280,
+      "grossS2Kwh": 12587280,
+      "netS2Kwh": 12155280
+     }
+    },
+    "meta": null,
+    "error": null
+   }
+  },
+  "sau: GET ppa-heat-rate?period=2026-09&from=2026-09-01&to=2026-09-30": {
+   "status": 200,
+   "body": {
+    "data": {
+     "entries": [
+      {
+       "operatingDate": "2026-09-15",
+       "sourceFiles": "[\"s1.xlsx\",\"s2.xlsx\"]",
+       "grossS1Kwh": "14415060",
+       "netS1Kwh": "13551060",
+       "grossS2Kwh": "14175060",
+       "netS2Kwh": "13335060",
+       "ppaPlant": "10252.717263663444",
+       "ppaS1": "10245.333037365508",
+       "ppaS2": "10260.221098938046",
+       "noteS1": "Ghi chú S1 mẫu",
+       "noteS2": "",
+       "updatedAt": "<thời điểm>"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "sourceFiles": "[]",
+       "grossS1Kwh": "13451280",
+       "netS1Kwh": "13019280",
+       "grossS2Kwh": "12587280",
+       "netS2Kwh": "12155280",
+       "ppaPlant": "10330.998858636829",
+       "ppaS1": "10305.120075974735",
+       "ppaS2": "10358.717110913778",
+       "noteS1": "Ghi chú S1",
+       "noteS2": "Đè ghi chú",
+       "updatedAt": "<thời điểm>"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "sourceFiles": "[]",
+       "grossS1Kwh": "14590000",
+       "netS1Kwh": "13530000",
+       "grossS2Kwh": "14200000",
+       "netS2Kwh": "13100000",
+       "ppaPlant": "10190.5",
+       "ppaS1": "10180.1",
+       "ppaS2": "10201.7",
+       "noteS1": "",
+       "noteS2": "S2 khởi động",
+       "updatedAt": "<thời điểm>"
+      }
+     ]
+    },
+    "meta": null,
+    "error": null
+   }
+  }
+ },
+ "ppa #03 thiếu điểm (47)": {
+  "request": "POST ppa-heat-rate",
+  "response": {
+   "status": 400,
+   "body": {
+    "data": null,
+    "meta": null,
+    "error": "Mỗi điểm đo phải có đủ 48 giá trị nửa giờ hợp lệ."
+   }
+  }
+ },
+ "ppa #04 điểm âm": {
+  "request": "POST ppa-heat-rate",
+  "response": {
+   "status": 400,
+   "body": {
+    "data": null,
+    "meta": null,
+    "error": "Mỗi điểm đo phải có đủ 48 giá trị nửa giờ hợp lệ."
+   }
+  }
+ },
+ "ppa #05 ngày sai": {
+  "request": "POST ppa-heat-rate",
+  "response": {
+   "status": 400,
+   "body": {
+    "data": null,
+    "meta": null,
+    "error": "Ngày vận hành không hợp lệ."
+   }
+  }
+ },
+ "ppa #06 đọc: tháng sai": {
+  "request": "GET ppa-heat-rate?period=2026-13",
+  "response": {
+   "status": 400,
+   "body": {
+    "data": null,
+    "meta": null,
+    "error": "Tháng theo dõi không hợp lệ."
+   }
+  }
+ },
+ "ppa #07 ghi chú + công suất khả dụng + tình hình vận hành": {
+  "request": "POST ppa-heat-rate/notes",
+  "response": {
+   "status": 200,
+   "body": {
+    "data": {
+     "received": 2,
+     "updated": 2,
+     "skipped": 0
+    },
+    "meta": null,
+    "error": null
+   }
+  },
+  "sau: GET ppa-heat-rate?period=2026-09&from=2026-09-01&to=2026-09-30": {
+   "status": 200,
+   "body": {
+    "data": {
+     "entries": [
+      {
+       "operatingDate": "2026-09-14",
+       "sourceFiles": "[]",
+       "grossS1Kwh": "0",
+       "netS1Kwh": "0",
+       "grossS2Kwh": "0",
+       "netS2Kwh": "0",
+       "ppaPlant": "0",
+       "ppaS1": "0",
+       "ppaS2": "0",
+       "noteS1": "Ngày chưa có số liệu",
+       "noteS2": "",
+       "updatedAt": "<thời điểm>"
+      },
+      {
+       "operatingDate": "2026-09-15",
+       "sourceFiles": "[\"s1.xlsx\",\"s2.xlsx\"]",
+       "grossS1Kwh": "14415060",
+       "netS1Kwh": "13551060",
+       "grossS2Kwh": "14175060",
+       "netS2Kwh": "13335060",
+       "ppaPlant": "10252.717263663444",
+       "ppaS1": "10245.333037365508",
+       "ppaS2": "10260.221098938046",
+       "noteS1": "Ghi chú S1 mẫu",
+       "noteS2": "",
+       "updatedAt": "<thời điểm>"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "sourceFiles": "[]",
+       "grossS1Kwh": "13451280",
+       "netS1Kwh": "13019280",
+       "grossS2Kwh": "12587280",
+       "netS2Kwh": "12155280",
+       "ppaPlant": "10330.998858636829",
+       "ppaS1": "10305.120075974735",
+       "ppaS2": "10358.717110913778",
+       "noteS1": "Ghi chú S1",
+       "noteS2": "Đè ghi chú",
+       "updatedAt": "<thời điểm>"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "sourceFiles": "[]",
+       "grossS1Kwh": "14590000",
+       "netS1Kwh": "13530000",
+       "grossS2Kwh": "14200000",
+       "netS2Kwh": "13100000",
+       "ppaPlant": "10190.5",
+       "ppaS1": "10180.1",
+       "ppaS2": "10201.7",
+       "noteS1": "Đánh giá S1",
+       "noteS2": "Đánh giá S2",
+       "updatedAt": "<thời điểm>"
+      }
+     ]
+    },
+    "meta": null,
+    "error": null
+   }
+  },
+  "sau: GET daily-inputs?period=2026-09&date=2026-09-17&scope=non-ktkt": {
+   "status": 200,
+   "body": {
+    "data": {
+     "entries": [
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "AE",
+       "value": "154.1",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "AF",
+       "value": "165.4",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "AJ",
+       "value": "176.7",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "AR",
+       "value": "188",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "AT",
+       "value": "199.3",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "B",
+       "value": "75",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "BCSX_COAL_STOCK_24H",
+       "value": "312450.75",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "BN",
+       "value": "233.2",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "BQ",
+       "value": "244.5",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "BR",
+       "value": "255.8",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "BZ",
+       "value": "278.4",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "C",
+       "value": "86.3",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CA",
+       "value": "289.7",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CC",
+       "value": "301",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CD",
+       "value": "312.3",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CE",
+       "value": "323.6",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CF",
+       "value": "334.9",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CJ",
+       "value": "210.6",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CM",
+       "value": "346.2",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CN",
+       "value": "267.1",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CQ",
+       "value": "357.5",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CR",
+       "value": "368.8",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CS",
+       "value": "380.1",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CT",
+       "value": "391.4",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CU",
+       "value": "402.7",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CV",
+       "value": "414",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CW",
+       "value": "Bình thường",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CX",
+       "value": "221.9",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "DA",
+       "value": "436.6",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "DB",
+       "value": "447.9",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "DC",
+       "value": "459.2",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "DD",
+       "value": "470.5",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "DE",
+       "value": "481.8",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "DF",
+       "value": "493.1",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "DG",
+       "value": "504.4",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "DH",
+       "value": "515.7",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "F",
+       "value": "24",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "GRID_RECEIVE_S1",
+       "value": "12.5",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "GRID_RECEIVE_S2",
+       "value": "0",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "H",
+       "value": "108.9",
+       "note": "Ghi chú mẫu 2026-09-17"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "I",
+       "value": "120.2",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "L",
+       "value": "24",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "PPA_CSKD_S1",
+       "value": "612.5",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "PPA_CSKD_S2",
+       "value": "600",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "PPA_EVENT_S1",
+       "value": "Ngừng 2 giờ",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "X",
+       "value": "142.8",
+       "note": ""
+      }
+     ]
+    },
+    "meta": null,
+    "error": null
+   }
+  }
+ },
+ "ppa #08 Google Sheet: xem trước (máy chủ chưa cấu hình)": {
+  "request": "POST google-sheet-sync",
+  "response": {
+   "status": 200,
+   "body": {
+    "data": {
+     "configured": false,
+     "preview": {
+      "date": "9/17/2026",
+      "row": null,
+      "S1": {
+       "sanLuong": 11.05364,
+       "csKhaDung": 612.5,
+       "tinhHinhVanHanh": "Ngừng 2 giờ",
+       "csBinhQuan": 460.5683333333333,
+       "suatHaoThan": 525.3594404780692,
+       "nhietTri": 20021.5934392878,
+       "shnThucTe": 10518.533126743623,
+       "shnPPA": 10180.1,
+       "chenhLech": "+338,43 kJ/kWh (+3.32%)",
+       "danhGia": "Không đạt PPA - Đánh giá S1"
+      },
+      "S2": {
+       "sanLuong": 11.03056,
+       "csKhaDung": 600,
+       "tinhHinhVanHanh": "",
+       "csBinhQuan": 459.6066666666667,
+       "suatHaoThan": 527.9737159220283,
+       "nhietTri": 20021.5934392878,
+       "shnThucTe": 10570.875086820883,
+       "shnPPA": 10201.7,
+       "chenhLech": "+369,18 kJ/kWh (+3.62%)",
+       "danhGia": "Không đạt PPA - Đánh giá S2"
+      },
+      "NMND": {
+       "sanLuong": 22084.2,
+       "csKhaDung": null,
+       "tinhHinhVanHanh": "",
+       "csBinhQuan": 460.08750000000003,
+       "suatHaoThan": 526.6643985295088,
+       "nhietTri": 20021.5934392878,
+       "shnThucTe": 10544.66046630487,
+       "shnPPA": 10190.5,
+       "chenhLech": "+354,16 kJ/kWh (+3.48%)",
+       "danhGia": "Không đạt PPA"
+      }
+     }
+    },
+    "meta": null,
+    "error": null
+   }
+  }
+ },
+ "ppa #09 Google Sheet: đồng bộ khi chưa cấu hình (503)": {
+  "request": "POST google-sheet-sync",
+  "response": {
+   "status": 503,
+   "body": {
+    "data": null,
+    "meta": null,
+    "error": "Máy chủ chưa được cấu hình Google Sheet. Hãy liên hệ quản trị viên; không nhập tài khoản Gmail hoặc mã kết nối trên máy người dùng."
+   }
+  }
+ },
+ "ppa #10 xoá công suất + tình hình (giá trị rỗng)": {
+  "request": "POST ppa-heat-rate/notes",
+  "response": {
+   "status": 200,
+   "body": {
+    "data": {
+     "received": 1,
+     "updated": 1,
+     "skipped": 0
+    },
+    "meta": null,
+    "error": null
+   }
+  },
+  "sau: GET daily-inputs?period=2026-09&date=2026-09-17&scope=non-ktkt": {
+   "status": 200,
+   "body": {
+    "data": {
+     "entries": [
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "AE",
+       "value": "154.1",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "AF",
+       "value": "165.4",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "AJ",
+       "value": "176.7",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "AR",
+       "value": "188",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "AT",
+       "value": "199.3",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "B",
+       "value": "75",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "BCSX_COAL_STOCK_24H",
+       "value": "312450.75",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "BN",
+       "value": "233.2",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "BQ",
+       "value": "244.5",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "BR",
+       "value": "255.8",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "BZ",
+       "value": "278.4",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "C",
+       "value": "86.3",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CA",
+       "value": "289.7",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CC",
+       "value": "301",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CD",
+       "value": "312.3",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CE",
+       "value": "323.6",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CF",
+       "value": "334.9",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CJ",
+       "value": "210.6",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CM",
+       "value": "346.2",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CN",
+       "value": "267.1",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CQ",
+       "value": "357.5",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CR",
+       "value": "368.8",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CS",
+       "value": "380.1",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CT",
+       "value": "391.4",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CU",
+       "value": "402.7",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CV",
+       "value": "414",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CW",
+       "value": "Bình thường",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CX",
+       "value": "221.9",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "DA",
+       "value": "436.6",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "DB",
+       "value": "447.9",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "DC",
+       "value": "459.2",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "DD",
+       "value": "470.5",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "DE",
+       "value": "481.8",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "DF",
+       "value": "493.1",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "DG",
+       "value": "504.4",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "DH",
+       "value": "515.7",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "F",
+       "value": "24",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "GRID_RECEIVE_S1",
+       "value": "12.5",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "GRID_RECEIVE_S2",
+       "value": "0",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "H",
+       "value": "108.9",
+       "note": "Ghi chú mẫu 2026-09-17"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "I",
+       "value": "120.2",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "L",
+       "value": "24",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "PPA_CSKD_S2",
+       "value": "600",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "X",
+       "value": "142.8",
+       "note": ""
+      }
+     ]
+    },
+    "meta": null,
+    "error": null
+   }
+  }
+ },
+ "ppa #11 ghi chú: ngày trùng": {
+  "request": "POST ppa-heat-rate/notes",
+  "response": {
+   "status": 400,
+   "body": {
+    "data": null,
+    "meta": null,
+    "error": "Ngày đánh giá không hợp lệ hoặc bị trùng."
+   }
+  }
+ },
+ "ppa #12 ghi chú: ngày tương lai": {
+  "request": "POST ppa-heat-rate/notes",
+  "response": {
+   "status": 400,
+   "body": {
+    "data": null,
+    "meta": null,
+    "error": "Không thể đánh giá hoặc lưu dữ liệu cho ngày trong tương lai."
+   }
+  }
+ },
+ "ppa #13 ghi chú: công suất quá 1.000 MW": {
+  "request": "POST ppa-heat-rate/notes",
+  "response": {
+   "status": 400,
+   "body": {
+    "data": null,
+    "meta": null,
+    "error": "Công suất khả dụng S1 phải là số từ 0 đến 1.000 MW."
+   }
+  }
+ },
+ "ppa #14 Google Sheet: xem trước khi thiếu công suất S1": {
+  "request": "POST google-sheet-sync",
+  "response": {
+   "status": 400,
+   "body": {
+    "data": null,
+    "meta": null,
+    "error": "Thiếu dữ liệu “Công suất khả dụng S1” của ngày đã chọn."
+   }
+  }
+ },
+ "ppa #15 Google Sheet: thao tác lạ": {
+  "request": "POST google-sheet-sync",
+  "response": {
+   "status": 400,
+   "body": {
+    "data": null,
+    "meta": null,
+    "error": "Thao tác đồng bộ không hợp lệ."
+   }
+  }
+ }
+}

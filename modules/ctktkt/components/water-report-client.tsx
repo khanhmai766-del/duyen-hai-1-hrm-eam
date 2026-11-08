@@ -1,9 +1,15 @@
 "use client";
 import { MonthField } from "./ui/month-field";
 import { Droplets, FlaskConical, Gauge, RefreshCw, TriangleAlert, Zap } from "lucide-react";
-import { useCtktktRequest, useCtktktDownload } from "@/hooks/useCtktkt";
+import { useCtktktDownload } from "@/hooks/useCtktkt";
+import { keepPreviousData } from "@tanstack/react-query";
+import {
+  useDeleteWaterLeader, useDeleteWaterShift, useImportWaterWorkbook, useSaveWaterLeader, useSaveWaterShift,
+  useScanWaterWorkbook, useWaterLeaders, useWaterReportMonth, type WaterSheetScan,
+} from "@/hooks/useKtktWaterReport";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
+import "./water-report-table.css";
 import { useSessionUser } from "@/modules/ctktkt/components/session-context";
 import { isAdminUser } from "@/modules/ctktkt/lib/auth/session";
 import { formatIsoToDmy, roundTo, type MonthlyWaterSummary, type WaterShiftLog } from "@/modules/ctktkt/lib/water-report/calculations";
@@ -42,17 +48,28 @@ function formatRatio(val: number | null | undefined): string {
 }
 
 export function WaterReportClient() {
-  const ctktktRequest = useCtktktRequest();
   const downloadReport=useCtktktDownload();
 
   const user = useSessionUser();
   const [month, setMonth] = useState<string>(getCurrentMonth);
-  const [shifts, setShifts] = useState<WaterShiftLog[]>([]);
-  const [baseline, setBaseline] = useState<WaterShiftLog | null>(null);
+  // Đổi tháng: giữ dữ liệu tháng trước trên màn hình tới khi tháng mới về (như bản cũ), nhưng vẫn báo đang tải.
+  const monthQuery = useWaterReportMonth(month, { placeholderData: keepPreviousData });
+  const shifts = useMemo<WaterShiftLog[]>(() => monthQuery.data?.shifts ?? [], [monthQuery.data]);
+  const baseline: WaterShiftLog | null = monthQuery.data?.baseline ?? null;
+  const summary: MonthlyWaterSummary | null = monthQuery.data?.summary ?? null;
+  const loading = monthQuery.isPending || monthQuery.isPlaceholderData;
+  // Danh sách Trưởng ca: giữ danh sách gần nhất server trả (không nhảy về mặc định khi tháng mới đang tải).
   const [leaders, setLeaders] = useState<string[]>(DEFAULT_SHIFT_LEADERS);
-  const [summary, setSummary] = useState<MonthlyWaterSummary | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string>("");
+  const serverLeaders = monthQuery.data?.leaders;
+  if (Array.isArray(serverLeaders) && serverLeaders.length > 0 && serverLeaders !== leaders && serverLeaders.join("|") !== leaders.join("|")) setLeaders(serverLeaders);
+  const [actionError, setError] = useState<string>("");
+  const error = actionError || (monthQuery.error instanceof Error ? monthQuery.error.message : "");
+  const saveShiftMutation = useSaveWaterShift();
+  const deleteShiftMutation = useDeleteWaterShift();
+  const saveLeaderMutation = useSaveWaterLeader();
+  const deleteLeaderMutation = useDeleteWaterLeader();
+  const scanMutation = useScanWaterWorkbook();
+  const importMutation = useImportWaterWorkbook();
   const [exportMissingOpen, setExportMissingOpen] = useState(false);
   const [successMsg, setSuccessMsg] = useState<string>("");
   // Điện thoại: mặc định xem dạng thẻ theo ca; vẫn chuyển được sang bảng đầy đủ 21 cột.
@@ -61,21 +78,21 @@ export function WaterReportClient() {
   // Modal thêm/sửa ca
   const [editingShift, setEditingShift] = useState<Partial<WaterShiftLog> | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [savingShift, setSavingShift] = useState(false);
+  const savingShift = saveShiftMutation.isPending;
   const dirtyShiftFieldsRef = useRef(new Set<keyof WaterShiftLog>());
 
 
   // Modal quản lý Trưởng ca (Admin)
   const [isLeaderModalOpen, setIsLeaderModalOpen] = useState(false);
   const [newLeaderName, setNewLeaderName] = useState("");
-  const [leaderList, setLeaderList] = useState<{ id: number; name: string; isActive: number }[]>([]);
+  const leaderList = useWaterLeaders(isLeaderModalOpen).data ?? [];
 
   // Modal tải lên file tháng (nhận dữ liệu các tháng trước)
   const [isMonthUploadModalOpen, setIsMonthUploadModalOpen] = useState(false);
   const [monthFile, setMonthFile] = useState<File | null>(null);
-  const [scanningMonthFile, setScanningMonthFile] = useState(false);
-  const [uploadingMonthFile, setUploadingMonthFile] = useState(false);
-  const [scannedSheets, setScannedSheets] = useState<{ sheetName: string; month: string; shiftCount: number; firstDate: string; lastDate: string }[]>([]);
+  const scanningMonthFile = scanMutation.isPending;
+  const uploadingMonthFile = importMutation.isPending;
+  const [scannedSheets, setScannedSheets] = useState<WaterSheetScan[]>([]);
   const [selectedSheetsForImport, setSelectedSheetsForImport] = useState<string[]>([]);
   const [importAllSheets, setImportAllSheets] = useState(true);
   const monthFileInputRef = useRef<HTMLInputElement>(null);
@@ -113,51 +130,12 @@ export function WaterReportClient() {
     handleOpenAddModal({ logDate, shiftTime });
   }
 
-  // Tải dữ liệu tháng; chỉ áp dụng phản hồi của yêu cầu mới nhất để đổi tháng nhanh không bị ghi đè dữ liệu cũ.
-  const loadSeqRef = useRef(0);
-  async function loadData(targetMonth: string) {
-    setLoading(true);
-    setError("");
-    await fetchMonth(targetMonth);
-  }
-
-  const fetchMonth=useCallback(async (targetMonth: string) => {
-    const seq = ++loadSeqRef.current;
-    try {
-      const res = await ctktktRequest(`/api/ctktkt/water-report?month=${targetMonth}`, { cache: "no-store" });
-      const data = (await res.json()) as {
-        ok?: boolean;
-        error?: string;
-        shifts?: WaterShiftLog[];
-        baseline?: WaterShiftLog | null;
-        leaders?: string[];
-        summary?: MonthlyWaterSummary | null;
-      };
-      if (seq !== loadSeqRef.current) return;
-      if (!res.ok) throw new Error(data.error || "Không thể tải dữ liệu.");
-      setShifts(data.shifts || []);
-      setBaseline(data.baseline || null);
-      if (Array.isArray(data.leaders) && data.leaders.length > 0) {
-        setLeaders(data.leaders);
-      }
-      setSummary(data.summary || null);
-    } catch (err) {
-      if (seq === loadSeqRef.current) setError(err instanceof Error ? err.message : "Lỗi kết nối.");
-    } finally {
-      if (seq === loadSeqRef.current) setLoading(false);
-    }
-  },[ctktktRequest]);
-
+  // Đổi tháng thì bỏ thông báo lỗi thao tác cũ (giữ đúng hành vi trước khi chuyển sang TanStack Query).
   const [trackedMonth, setTrackedMonth] = useState(month);
   if (trackedMonth !== month) {
     setTrackedMonth(month);
-    setLoading(true);
     setError("");
   }
-
-  useEffect(() => {
-    void fetchMonth(month);
-  }, [month,fetchMonth]);
 
   // Thông báo tạm thời
   function showSuccess(msg: string) {
@@ -290,33 +268,22 @@ export function WaterReportClient() {
       setError("Không có ô dữ liệu nào vừa thay đổi để lưu.");
       return;
     }
-    setSavingShift(true);
     try {
-      const res = await ctktktRequest("/api/ctktkt/water-report", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          shift: editingShift,
-          changedFields: editingShift.id ? [...dirtyShiftFieldsRef.current] : undefined,
-        }),
+      await saveShiftMutation.mutateAsync({
+        shift: editingShift,
+        changedFields: editingShift.id ? [...dirtyShiftFieldsRef.current] : undefined,
       });
-      const data = (await res.json()) as { error?: string };
-      if (!res.ok) throw new Error(data.error || "Không thể lưu ca.");
 
       showSuccess(`Đã lưu thành công ca ${editingShift.shiftTime} ngày ${formatIsoToDmy(editingShift.logDate || "")}`);
       setIsModalOpen(false);
       setEditingShift(null);
       dirtyShiftFieldsRef.current.clear();
-      // Tải lại dữ liệu tháng của ca đó
+      // Ca thuộc tháng khác thì chuyển sang tháng đó; tháng đang xem tự làm mới (invalidateQueries).
       if (editingShift.logDate && !editingShift.logDate.startsWith(month)) {
         setMonth(editingShift.logDate.slice(0, 7));
-      } else {
-        await loadData(month);
       }
     } catch (err) {
       alert(err instanceof Error ? err.message : "Lỗi khi lưu ca.");
-    } finally {
-      setSavingShift(false);
     }
   }
 
@@ -327,27 +294,11 @@ export function WaterReportClient() {
       return;
     }
     try {
-      const res = await ctktktRequest(`/api/ctktkt/water-report?id=${shift.id}&logDate=${shift.logDate}&shiftTime=${shift.shiftTime}`, {
-        method: "DELETE",
-      });
-      const data = (await res.json()) as { error?: string };
-      if (!res.ok) throw new Error(data.error || "Không thể xoá ca.");
+      await deleteShiftMutation.mutateAsync(shift);
       showSuccess(`Đã xoá ca ${shift.shiftTime} ngày ${formatIsoToDmy(shift.logDate)}`);
-      await loadData(month);
     } catch (err) {
       alert(err instanceof Error ? err.message : "Lỗi khi xoá ca.");
     }
-  }
-
-  // Tải danh sách Trưởng ca (cho Admin modal)
-  async function loadLeaderList() {
-    try {
-      const res = await ctktktRequest("/api/ctktkt/water-report/leaders");
-      const data = (await res.json()) as { ok?: boolean; leaders?: { id: number; name: string; isActive: number }[] };
-      if (data.ok && Array.isArray(data.leaders)) {
-        setLeaderList(data.leaders);
-      }
-    } catch {}
   }
 
   // Thêm Trưởng ca mới
@@ -355,16 +306,8 @@ export function WaterReportClient() {
     e.preventDefault();
     if (!newLeaderName.trim()) return;
     try {
-      const res = await ctktktRequest("/api/ctktkt/water-report/leaders", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: newLeaderName.trim(), displayOrder: leaderList.length + 1 }),
-      });
-      const data = (await res.json()) as { error?: string };
-      if (!res.ok) throw new Error(data.error || "Không thể thêm Trưởng ca.");
+      await saveLeaderMutation.mutateAsync({ name: newLeaderName.trim(), displayOrder: leaderList.length + 1 });
       setNewLeaderName("");
-      await loadLeaderList();
-      await loadData(month);
       showSuccess(`Đã thêm Trưởng ca: ${newLeaderName.trim()}`);
     } catch (err) {
       alert(err instanceof Error ? err.message : "Lỗi thêm Trưởng ca.");
@@ -375,11 +318,7 @@ export function WaterReportClient() {
   async function handleDeleteLeader(id: number, name: string) {
     if (!confirm(`Xoá Trưởng ca "${name}" khỏi danh sách?`)) return;
     try {
-      const res = await ctktktRequest(`/api/ctktkt/water-report/leaders?id=${id}`, { method: "DELETE" });
-      const data = (await res.json()) as { error?: string };
-      if (!res.ok) throw new Error(data.error || "Không thể xoá.");
-      await loadLeaderList();
-      await loadData(month);
+      await deleteLeaderMutation.mutateAsync(id);
       showSuccess(`Đã xoá Trưởng ca: ${name}`);
     } catch (err) {
       alert(err instanceof Error ? err.message : "Lỗi xoá Trưởng ca.");
@@ -389,61 +328,27 @@ export function WaterReportClient() {
   // Quét cấu trúc các tháng trong file Excel tải lên
   async function handleMonthFileSelected(file: File) {
     setMonthFile(file);
-    setScanningMonthFile(true);
     setScannedSheets([]);
     setSelectedSheetsForImport([]);
     try {
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("action", "scan");
-
-      const res = await ctktktRequest("/api/ctktkt/water-report/upload", {
-        method: "POST",
-        body: formData,
-      });
-      const data = (await res.json()) as {
-        ok?: boolean;
-        error?: string;
-        sheets?: { sheetName: string; month: string; shiftCount: number; firstDate: string; lastDate: string }[];
-      };
-      if (!res.ok) throw new Error(data.error || "Không thể quét cấu trúc file.");
-
+      const data = await scanMutation.mutateAsync(file);
       const sheets = data.sheets || [];
       setScannedSheets(sheets);
       setSelectedSheetsForImport(sheets.map(s => s.sheetName));
       setImportAllSheets(true);
     } catch (err) {
       alert(err instanceof Error ? err.message : "Lỗi khi quét file Excel.");
-    } finally {
-      setScanningMonthFile(false);
     }
   }
 
   // Thực hiện nạp các tháng đã chọn từ file vào hệ thống
   async function handleExecuteMonthImport() {
     if (!monthFile) return;
-    setUploadingMonthFile(true);
     try {
-      const formData = new FormData();
-      formData.append("file", monthFile);
-      formData.append("action", "import");
-
-      if (!importAllSheets && selectedSheetsForImport.length > 0) {
-        formData.append("sheetNames", JSON.stringify(selectedSheetsForImport));
-      }
-
-      const res = await ctktktRequest("/api/ctktkt/water-report/upload", {
-        method: "POST",
-        body: formData,
+      const data = await importMutation.mutateAsync({
+        file: monthFile,
+        sheetNames: !importAllSheets && selectedSheetsForImport.length > 0 ? selectedSheetsForImport : undefined,
       });
-      const data = (await res.json()) as {
-        ok?: boolean;
-        error?: string;
-        totalShifts?: number;
-        months?: string[];
-        message?: string;
-      };
-      if (!res.ok) throw new Error(data.error || "Không thể nạp dữ liệu.");
 
       showSuccess(data.message || `Đã nạp thành công ${data.totalShifts || 0} ca trực vào hệ thống!`);
       setIsMonthUploadModalOpen(false);
@@ -454,20 +359,16 @@ export function WaterReportClient() {
       if (data.months && data.months.length > 0) {
         const latest = data.months[data.months.length - 1];
         setMonth(latest);
-      } else {
-        await loadData(month);
       }
     } catch (err) {
       alert(err instanceof Error ? err.message : "Lỗi khi nạp dữ liệu các tháng.");
-    } finally {
-      setUploadingMonthFile(false);
     }
   }
 
 
 
   return (
-    <div className="module-report water-workspace space-y-3">
+    <div className="module-report space-y-3">
       <ExportMissingDialog
         open={exportMissingOpen}
         items={missingWaterShifts}
@@ -572,10 +473,7 @@ export function WaterReportClient() {
           {isAdmin && (
             <button
               type="button"
-              onClick={() => {
-                loadLeaderList();
-                setIsLeaderModalOpen(true);
-              }}
+              onClick={() => setIsLeaderModalOpen(true)}
               className="flex items-center gap-1.5 rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs font-bold text-indigo-700 shadow-sm hover:bg-indigo-100"
               title="Quản lý danh sách Trưởng ca"
             >
@@ -602,7 +500,7 @@ export function WaterReportClient() {
       {summary && (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
           {/* Thẻ 1: Tổng điện phát */}
-          <div className="rounded-2xl border border-slate-200 bg-white p-3.5 shadow-sm">
+          <div className="rounded-2xl !rounded-[13px] border border-t-[3px] border-slate-200 bg-white p-3.5 shadow-sm">
             <p className="flex min-h-[2.8em] items-start gap-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400"><Zap className="mt-px size-3.5 shrink-0 text-slate-500" aria-hidden />Điện phát trong tháng</p>
             <p className="mt-1 font-mono text-lg font-extrabold text-slate-800">
               {formatNum(summary.totalElecGenPlant)} <span className="text-xs font-normal text-slate-500">MW</span>
@@ -614,7 +512,7 @@ export function WaterReportClient() {
           </div>
 
           {/* Thẻ 2: Tổng nước bổ sung */}
-          <div className="rounded-2xl border border-slate-200 bg-white p-3.5 shadow-sm">
+          <div className="rounded-2xl !rounded-[13px] border border-t-[3px] border-slate-200 bg-white p-3.5 shadow-sm">
             <p className="flex min-h-[2.8em] items-start gap-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400"><Droplets className="mt-px size-3.5 shrink-0 text-sky-600" aria-hidden />Nước bổ sung sử dụng</p>
             <p className="mt-1 font-mono text-lg font-extrabold text-sky-700">
               {formatNum(summary.totalWaterUsedPlant)} <span className="text-xs font-normal text-slate-500">m³</span>
@@ -626,7 +524,7 @@ export function WaterReportClient() {
           </div>
 
           {/* Thẻ 3: Hệ số nước TB */}
-          <div className="rounded-2xl border border-slate-200 bg-white p-3.5 shadow-sm">
+          <div className="rounded-2xl !rounded-[13px] border border-t-[3px] border-slate-200 bg-white p-3.5 shadow-sm">
             <p className="flex min-h-[2.8em] items-start gap-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400"><Gauge className="mt-px size-3.5 shrink-0 text-emerald-600" aria-hidden />Hệ số nước TB tháng</p>
             <p className="mt-1 font-mono text-lg font-extrabold text-emerald-700">
               {formatRatio(summary.avgWaterRatioPlant)} <span className="text-[10px] font-normal text-slate-500">m³/MWh</span>
@@ -638,7 +536,7 @@ export function WaterReportClient() {
           </div>
 
           {/* Thẻ 4: Nước cấp bình ngưng */}
-          <div className="rounded-2xl border border-slate-200 bg-white p-3.5 shadow-sm">
+          <div className="rounded-2xl !rounded-[13px] border border-t-[3px] border-slate-200 bg-white p-3.5 shadow-sm">
             <p className="flex min-h-[2.8em] items-start gap-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400"><RefreshCw className="mt-px size-3.5 shrink-0 text-indigo-600" aria-hidden />Nước cấp bình ngưng</p>
             <p className="mt-1 font-mono text-lg font-extrabold text-indigo-700">
               {formatNum(summary.totalCondenserUsedS1 + summary.totalCondenserUsedS2)} <span className="text-xs font-normal text-slate-500">m³</span>
@@ -650,7 +548,7 @@ export function WaterReportClient() {
           </div>
 
           {/* Thẻ 5: Tái sinh hạt */}
-          <div className="col-span-2 rounded-2xl border border-slate-200 bg-white p-3.5 shadow-sm sm:col-span-1">
+          <div className="col-span-2 rounded-2xl !rounded-[13px] border border-t-[3px] border-slate-200 bg-white p-3.5 shadow-sm sm:col-span-1">
             <p className="flex min-h-[2.8em] items-start gap-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400"><FlaskConical className="mt-px size-3.5 shrink-0 text-amber-600" aria-hidden />Tái sinh hạt (24h)</p>
             <p className="mt-1 font-mono text-lg font-extrabold text-amber-700">
               {formatNum(summary.totalResinWaterS1 + summary.totalResinWaterS2)} <span className="text-xs font-normal text-slate-500">m³</span>
@@ -730,7 +628,7 @@ export function WaterReportClient() {
 
         {/* Khung cuộn bảng */}
         <div className={`module-table-scroll water-table-scroll overflow-x-auto max-h-[70vh]${mobileView === "cards" ? " max-md:hidden" : ""}`}>
-          <table className="w-full border-collapse text-[11px] text-slate-800 select-text">
+          <table className="w-full min-w-[1250px] border-collapse text-[11px] text-slate-800 select-text">
             {/* Header 2 tầng: Nền xanh lá #00B050 chuẩn file gốc */}
             <thead className="sticky top-0 z-20 bg-[#00b050] text-black font-extrabold shadow-sm">
               {/* Tầng 1: Nhóm cột */}

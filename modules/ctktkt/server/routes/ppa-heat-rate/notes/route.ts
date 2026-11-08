@@ -1,4 +1,5 @@
 import { isCtktktSameOrigin } from "@/modules/ctktkt/lib/request-origin";
+import { ok, fail } from "@/lib/api";
 import { auditedDailyBatch } from "@/modules/ctktkt/lib/daily-input-audit";
 import { getRawDb } from "@/modules/ctktkt/db";
 import { isFutureOperatingDate } from "@/modules/ctktkt/lib/operating-date";
@@ -9,11 +10,11 @@ const datePattern = /^20\d{2}-(0[1-9]|1[0-2])-([0-2]\d|3[01])$/;
 
 export async function POST(request: Request) {
   const guard = await requireAnyPermission("edit_ppa"); if (!guard.ok) return guard.response;
-  if (!isCtktktSameOrigin(request)) return Response.json({ error: "Nguồn yêu cầu không hợp lệ." }, { status: 403 });
-  if (!request.headers.get("content-type")?.includes("application/json")) return Response.json({ error: "Yêu cầu phải là JSON." }, { status: 415 });
+  if (!isCtktktSameOrigin(request)) return fail("Nguồn yêu cầu không hợp lệ.", 403);
+  if (!request.headers.get("content-type")?.includes("application/json")) return fail("Yêu cầu phải là JSON.", 415);
   try {
     const raw = await request.text();
-    if (raw.length > 600_000) return Response.json({ error: "Dữ liệu gửi lên quá lớn." }, { status: 413 });
+    if (raw.length > 600_000) return fail("Dữ liệu gửi lên quá lớn.", 413);
     const body = JSON.parse(raw) as { entries?: unknown };
     if (!Array.isArray(body.entries) || body.entries.length > 500) throw new Error("Danh sách đánh giá lịch sử không hợp lệ.");
     const seen = new Set<string>();
@@ -75,8 +76,8 @@ export async function POST(request: Request) {
     }
     const results = statements.length ? await auditedDailyBatch(db, guard.user, "ppa-heat-rate/notes", statements) : [];
     const updated = results.slice(0, noteStatementCount).reduce((sum, result) => sum + Number(result.meta.changes || 0), 0);
-    return Response.json({ received: entries.length, updated, skipped: entries.length - updated });
+    return ok({ received: entries.length, updated, skipped: entries.length - updated });
   } catch (error) {
-    return Response.json({ error: error instanceof SyntaxError ? "Dữ liệu JSON không hợp lệ." : error instanceof Error ? error.message : "Dữ liệu không hợp lệ." }, { status: 400 });
+    return fail(error instanceof SyntaxError ? "Dữ liệu JSON không hợp lệ." : error instanceof Error ? error.message : "Dữ liệu không hợp lệ.", 400);
   }
 }

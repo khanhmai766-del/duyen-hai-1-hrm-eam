@@ -24,7 +24,7 @@ Tài liệu này ghi kế hoạch đã chốt ngày 08/11/2026 (đã thống nh�
 | Giai đoạn | Việc | Trạng thái |
 |---|---|---|
 | 0 | Test hợp đồng API, lệnh `test:ctktkt`, số đo nền | ✅ 08/11/2026 |
-| 1 + 2 | Theo từng trang: hook TanStack trong `hooks/`, handler trả `ok()/fail()`, tách component, CSS → Tailwind. Thứ tự: **Hoá chất → Lượng nước → PMIS → PPA → Báo cáo sản xuất → Dữ liệu các tháng → Chỉ tiêu KTKT** | Hoá chất ✅ 08/11 · còn lại ⏳ |
+| 1 + 2 | Theo từng trang: hook TanStack trong `hooks/`, handler trả `ok()/fail()`, tách component, CSS → Tailwind. Thứ tự: **Hoá chất → Lượng nước → PMIS → PPA → Báo cáo sản xuất → Dữ liệu các tháng → Chỉ tiêu KTKT** | Hoá chất ✅ · Lượng nước ✅ · PMIS ✅ · PPA ✅ (08/11) · còn lại ⏳ |
 
 ### Mẫu chuyển một trang (theo trang Hoá chất)
 
@@ -37,7 +37,39 @@ Tài liệu này ghi kế hoạch đã chốt ngày 08/11/2026 (đã thống nh�
    (`.engineering-workspace :is(button,a)[class*="rounded"]`, min-height trên điện thoại…) có độ ưu tiên cao hơn Tailwind —
    dùng tiền tố `!` khi cần. Kiểm bằng cách đo `getComputedStyle` các phần tử chính trước/sau ở 1280px và 390px: phải khớp hoàn toàn.
    Lớp dùng chung nhiều trang (`module-hero ktkt-dark-hero`, `engineering-workspace`) chuyển khi trang cuối cùng dùng nó đã chuyển xong.
+   **Bảng phức tạp** (cố định cột bằng `nth-child`, biến độ rộng cột, đổi màu ô khi rê hàng — vd bảng Lượng nước) không ép sang
+   lớp Tailwind: chuyển **nguyên văn** quy tắc sang tệp CSS cạnh component (`water-report-table.css`), xoá khỏi `styles.css`.
+   Lưu ý quy tắc chung `.app-content :is(.rounded-2xl,…).bg-white` chỉ áp khi phần tử còn lớp `rounded-2xl` — đổi bo góc thì
+   giữ lớp đó và thêm `!rounded-[…]`.
 4. **Kiểm thử ghi** trên DB dev qua giao diện (thêm → sửa → xoá → lỗi server), rồi xoá dòng thử (id < 900000) để `--seed` không bị chặn.
+
+**Route dùng chung nhiều trang** (vd `daily-inputs`: PMIS, Dữ liệu các tháng, Báo cáo sản xuất) chuyển cùng trang đầu tiên
+dùng nó — phong bì `{data, meta, error}` không đổi nên các trang còn dùng `useCtktktRequest` không bị ảnh hưởng (hợp đồng
+đọc + ghi chứng minh). Hook dùng chung: `hooks/useKtktDailyInputs.ts` (`useSaveDailyInputs`, `useInvalidateKtkt`).
+`ctktkt-report` chuyển cùng trang Chỉ tiêu KTKT (cuối cùng); trước đó các hook đọc nó bằng `apiGet` vẫn đúng.
+
+**Dữ liệu mẫu**: mỗi bảng một dải id cố định (900000 + 20000 × thứ tự bảng). Thêm dòng mẫu vào một bảng thì chỉ ảnh chụp
+của API đọc bảng đó đổi — ghi lại khi route đó còn là code cũ (hoặc đã chứng minh khớp), và kiểm phần khác ngoài `id` = 0.
+
+**Trang có tiện ích Chrome** (PMIS, Dữ liệu các tháng, BCSX): kiểm luồng đồng bộ bằng tiện ích giả lập — `addInitScript`
+trả lời `PING` bằng `READY` và `SYNC_HEATRATE` bằng `SYNC_HEATRATE_RESULT` đúng kênh `ctktkt-qlkt-sync`.
+
+**Gọi ra ngoài** (Google Apps Script trong nút Google Sheet): gọi thẳng `apiReportResponse` của `lib/fetcher` — với URL ngoài
+nó chỉ là `fetch` + câu lỗi mất mạng tiếng Việt, đúng như `useCtktktRequest` cũ. Hợp đồng ghi chỉ kiểm nhánh "máy chủ chưa
+cấu hình" (dev không có `GOOGLE_SHEET_APPS_SCRIPT_URL`), không bao giờ gọi Apps Script thật.
+
+**CSS chết**: khi trang đổi cấu trúc, xoá quy tắc theo **selector** (không theo dòng) — tệp CSS module viết dồn nhiều quy tắc/dòng
+và gộp selector bằng dấu phẩy. Trước khi xoá lớp khỏi CSS dùng chung, `grep` toàn repo (`.tsx/.ts/.css`) phải ra 0.
+
+### Việc tồn đọng ghi nhận khi chuyển đổi
+
+- `GET water-report` trả 500 cho **cả tháng** nếu một ca có hiệu chỉnh công tơ âm (`normalizeWaterAdjustment` ném lỗi khi đọc).
+  Form và API ghi đã chặn số âm nên dữ liệu thật chưa gặp; chỉ có thể lọt qua đường khôi phục/nạp dữ liệu. Chưa sửa (đổi hành vi API).
+- `POST water-report` ghi từng ca và tính lại chuỗi bằng các câu lệnh riêng lẻ, không cùng một giao dịch — lỗi giữa chừng
+  để lại tháng tính dở. Xử lý khi chuyển sang Prisma (giai đoạn 3) bằng `prisma.$transaction`.
+- `styles.css` còn các quy tắc `.module-chart-grid …` không phần tử nào dùng (đã xoá phần của PMIS); dọn ở giai đoạn 4.
+- PMIS (đã sửa khi chuyển): bản cũ báo "Không đồng bộ được ngày nào…" rồi tự xoá ngay vì lượt tải lại đặt `error = ""`;
+  nay thông báo lỗi còn hiển thị.
 | 3 | `getRawDb()` → Prisma, đọc trước ghi sau; có thể "so bóng" (chạy cả truy vấn cũ và mới, ghi log khi lệch) | ⏳ |
 | 4 | Chuyển 4 API máy; xoá `db/sql.ts`, `getRawDb`, `useCtktktRequest`, cổng `[[...path]]` | ⏳ |
 
@@ -47,7 +79,8 @@ Trước khi bắt đầu một trang: báo cho người còn lại để không
 
 ```bash
 npm run test:ctktkt                 # 251 test đơn vị/miền (cần bảng ctktkt_* trên DB dev, xem dưới)
-npm run test:ctktkt:contract        # 20 API GET phải khớp ảnh chụp chuẩn (cần dev server ở :3030)
+npm run test:ctktkt:contract        # các API GET phải khớp ảnh chụp chuẩn (cần dev server ở :3030)
+npm run test:ctktkt:contract -- --writes   # kịch bản thêm/sửa/xoá phải ra phản hồi + trạng thái y hệt
 npx tsc --noEmit
 MSYS_NO_PATHCONV=1 npm run verify:ui -- /tien-ich/chi-tieu-ktkt/<trang>
 ```
@@ -59,6 +92,9 @@ MSYS_NO_PATHCONV=1 npm run verify:ui -- /tien-ich/chi-tieu-ktkt/<trang>
 - Gọi 20 API GET bằng phiên ADMIN dev, so từng giá trị với `tests/ctktkt/contracts/api-snapshots.json`.
 - `--seed` đổ lại dữ liệu mẫu; `--record` ghi đè ảnh chụp chuẩn — **chỉ ghi lại khi cố ý đổi hành vi API**, và ghi rõ lý do trong commit.
 - Thêm API mới vào mảng `ENDPOINTS` khi chuyển đổi tới nó.
+- **Hợp đồng ghi** (`--writes`, ảnh chụp `api-write-snapshots.json`): mỗi nhóm trong `WRITE_SCENARIOS` chạy trên dữ liệu
+  mẫu mới đổ, ghi phản hồi từng bước + kết quả GET sau bước đó (id cấp mới và mốc thời gian được chuẩn hoá). Thêm kịch bản
+  cho route sắp chuyển và `--writes --record` **trên code cũ** trước khi sửa. Tệp Excel tải lên lấy từ chính API xuất của web.
 
 ### Dựng bảng KTKT trên DB dev (một lần)
 

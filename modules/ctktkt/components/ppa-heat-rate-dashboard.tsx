@@ -1,7 +1,7 @@
 "use client";
-import { useCtktktRequest } from "@/hooks/useCtktkt";
+import { fetchPpaWithSource, usePatchPpaRange, usePpaRange, useSavePpaNotes } from "@/hooks/useKtktPpa";
 
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { PpaUnitCard } from "@/modules/ctktkt/components/ppa-unit-card";
 import { PpaNotePreview } from "@/modules/ctktkt/components/ppa-note-preview";
 import "./ppa-detail-table.css";
@@ -15,15 +15,13 @@ import { useSessionUser } from "@/modules/ctktkt/components/session-context";
 import { hasPermission } from "@/modules/ctktkt/lib/auth/session";
 import { PPA_AVAILABLE_CAPACITY_S1_CODE, PPA_AVAILABLE_CAPACITY_S2_CODE } from "@/modules/ctktkt/lib/google-sheet-sync";
 import { addDaysIso, defaultOperatingDate, vietnamDateIso } from "@/modules/ctktkt/lib/operating-date";
-import { mergeDailyInputsWithCtktkt } from "@/modules/ctktkt/lib/daily-source-links";
-import {loadReportPeriods,reportPeriodQuery,reportPage} from "@/modules/ctktkt/lib/report-loading";
+import {reportPage} from "@/modules/ctktkt/lib/report-loading";
 import {ReportTablePager} from "@/modules/ctktkt/components/report-table-pager";
 import {buildUnitSheet,buildMeterSheet,buildPlantSheet} from "@/modules/ctktkt/lib/ppa-sheet-export";
 import { ExportMissingDialog } from "@/modules/ctktkt/components/export-missing-dialog";
 import type { MissingDataItem } from "@/modules/ctktkt/components/missing-data-alert";
 
 type DailyInput = { operatingDate: string; fieldCode: string; value: string };
-type CtktktInput = { operatingDate: string; cell: string; value: string };
 type StoredPpa = {
   operatingDate: string;
   ppaPlant: string | number;
@@ -75,8 +73,6 @@ function periodsBetween(from: string, to: string) {
 }
 
 export function PpaHeatRateDashboard({ tabs }: { tabs?: React.ReactNode }) {
-  const ctktktRequest = useCtktktRequest();
-
   const user = useSessionUser();
   const canEdit = hasPermission(user, "edit_ppa");
   const today = useMemo(() => vietnamDateIso(), []);
@@ -84,18 +80,42 @@ export function PpaHeatRateDashboard({ tabs }: { tabs?: React.ReactNode }) {
   const [fromDate, setFromDate] = useState(() => `${defaultOperatingDate().slice(0, 7)}-01`);
   const [toDate, setToDate] = useState(defaultDate);
   const [rangeLabel, setRangeLabel] = useState("Tháng vận hành");
-  const [entries, setEntries] = useState<StoredPpa[]>([]);
-  const [dailyInputs, setDailyInputs] = useState<DailyInput[]>([]);
-  const [loading, setLoading] = useState(true);
   const [tablePage,setTablePage]=useState(0);
-  const loadControllerRef=useRef<AbortController|null>(null);
-  useEffect(()=>()=>loadControllerRef.current?.abort(),[]);
-  const [error, setError] = useState("");
-  const [restoredCount, setRestoredCount] = useState<number | null>(null);
+  const [actionError, setError] = useState("");
+  const [sheetDate, setSheetDate] = useState(defaultDate);
+  // Khoảng đã yêu cầu tải (Áp dụng / chọn nhanh). clamp: chế độ "Tất cả" — co khoảng xem về phạm vi có dữ liệu.
+  const [request, setRequest] = useState(() => ({ from: fromDate, to: toDate, clamp: false }));
+  const rangeQuery = usePpaRange(request.from, request.to);
+  const loading = rangeQuery.isFetching;
+  const error = actionError || (rangeQuery.error instanceof Error ? rangeQuery.error.message : "");
+  // Khoảng đang lọc để hiển thị — chốt lúc dữ liệu của lượt tải về (như bản cũ lọc ngay khi tải xong).
+  const [view, setView] = useState<{ from: string; to: string } | null>(null);
+  const [handledData, setHandledData] = useState<unknown>(null);
+  const loaded = rangeQuery.isPlaceholderData ? undefined : rangeQuery.data;
+  if (loaded && loaded !== handledData) {
+    setHandledData(loaded);
+    let from = request.from, to = request.to;
+    if (request.clamp && loaded.ppa.length) {
+      const dates = loaded.ppa.map(entry => entry.operatingDate).sort();
+      from = dates[0]; to = dates[dates.length - 1];
+      setFromDate(from); setToDate(to);
+    }
+    const filtered = loaded.ppa.filter(entry => entry.operatingDate >= from && entry.operatingDate <= to);
+    if (filtered.length) {
+      const latestSavedDate = [...filtered].sort((a, b) => b.operatingDate.localeCompare(a.operatingDate))[0].operatingDate;
+      if (!filtered.some(entry => entry.operatingDate === sheetDate)) setSheetDate(latestSavedDate);
+    }
+    setView({ from, to });
+  }
+  const shown = view ? rangeQuery.data : undefined;
+  const entries: StoredPpa[] = useMemo(() => view && shown ? shown.ppa.filter(entry => entry.operatingDate >= view.from && entry.operatingDate <= view.to) : [], [shown, view]);
+  const dailyInputs: DailyInput[] = useMemo(() => view && shown ? shown.daily.filter(entry => entry.operatingDate >= view.from && entry.operatingDate <= view.to) : [], [shown, view]);
+  const restoredCount = view ? entries.length : null;
+  const saveNotesMutation = useSavePpaNotes({ invalidate: false });
+  const patchRange = usePatchPpaRange();
   const [notesOpen, setNotesOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [exportMissingOpen, setExportMissingOpen] = useState(false);
-  const [sheetDate, setSheetDate] = useState(defaultDate);
   const [editModal, setEditModal] = useState<{
     isOpen: boolean;
     date: string;
@@ -133,38 +153,24 @@ export function PpaHeatRateDashboard({ tabs }: { tabs?: React.ReactNode }) {
     if (!editModal.date) return;
     setEditModal(prev => ({ ...prev, saving: true, error: "" }));
     try {
-      const response = await ctktktRequest("/api/ctktkt/ppa-heat-rate/notes", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          entries: [{
-            operatingDate: editModal.date,
-            noteS1: editModal.noteS1.trim(),
-            noteS2: editModal.noteS2.trim(),
-            availableCapacityS1Mw: editModal.availableCapacityS1Mw.trim(),
-            availableCapacityS2Mw: editModal.availableCapacityS2Mw.trim(),
-          }]
-        })
-      });
-      const body = await response.json() as { error?: string };
-      if (!response.ok) throw new Error(body.error || "Chưa lưu được nhận xét.");
+      await saveNotesMutation.mutateAsync([{
+        operatingDate: editModal.date,
+        noteS1: editModal.noteS1.trim(),
+        noteS2: editModal.noteS2.trim(),
+        availableCapacityS1Mw: editModal.availableCapacityS1Mw.trim(),
+        availableCapacityS2Mw: editModal.availableCapacityS2Mw.trim(),
+      }]);
 
-      setEntries(prev => prev.map(entry => {
-        if (entry.operatingDate === editModal.date) {
-          return {
-            ...entry,
-            noteS1: editModal.noteS1.trim(),
-            noteS2: editModal.noteS2.trim(),
-          };
-        }
-        return entry;
+      // Vá ngay dữ liệu đang xem (không tải lại), đúng như bản cũ vá state.
+      patchRange(request.from, request.to, data => ({
+        ppa: data.ppa.map(entry => entry.operatingDate === editModal.date ? { ...entry, noteS1: editModal.noteS1.trim(), noteS2: editModal.noteS2.trim() } : entry),
+        daily: (() => {
+          const next = data.daily.filter(entry => !(entry.operatingDate === editModal.date && (entry.fieldCode === PPA_AVAILABLE_CAPACITY_S1_CODE || entry.fieldCode === PPA_AVAILABLE_CAPACITY_S2_CODE)));
+          if (editModal.availableCapacityS1Mw.trim()) next.push({ operatingDate: editModal.date, fieldCode: PPA_AVAILABLE_CAPACITY_S1_CODE, value: editModal.availableCapacityS1Mw.trim().replace(",", ".") });
+          if (editModal.availableCapacityS2Mw.trim()) next.push({ operatingDate: editModal.date, fieldCode: PPA_AVAILABLE_CAPACITY_S2_CODE, value: editModal.availableCapacityS2Mw.trim().replace(",", ".") });
+          return next;
+        })(),
       }));
-      setDailyInputs(prev => {
-        const next = prev.filter(entry => !(entry.operatingDate === editModal.date && (entry.fieldCode === PPA_AVAILABLE_CAPACITY_S1_CODE || entry.fieldCode === PPA_AVAILABLE_CAPACITY_S2_CODE)));
-        if (editModal.availableCapacityS1Mw.trim()) next.push({ operatingDate: editModal.date, fieldCode: PPA_AVAILABLE_CAPACITY_S1_CODE, value: editModal.availableCapacityS1Mw.trim().replace(",", ".") });
-        if (editModal.availableCapacityS2Mw.trim()) next.push({ operatingDate: editModal.date, fieldCode: PPA_AVAILABLE_CAPACITY_S2_CODE, value: editModal.availableCapacityS2Mw.trim().replace(",", ".") });
-        return next;
-      });
 
       setEditModal(prev => ({ ...prev, isOpen: false, saving: false }));
     } catch (caught) {
@@ -176,47 +182,23 @@ export function PpaHeatRateDashboard({ tabs }: { tabs?: React.ReactNode }) {
     }
   }
 
-  async function loadRange(from: string, to: string, clampToData: boolean) {
-    loadControllerRef.current?.abort();
-    const controller=new AbortController();loadControllerRef.current=controller;
-    setTablePage(0);
-    setLoading(true); setError("");
-    try {
-      const periods = periodsBetween(from, to);
-      const responses = await loadReportPeriods(periods,period => {
-        const query=reportPeriodQuery(period,from,to);
-        return Promise.all([
-          ctktktRequest(`/api/ctktkt/ppa-heat-rate?${query}`, { cache: "no-store",signal:controller.signal }).then(response => response.json() as Promise<{ entries?: StoredPpa[]; error?: string }>),
-          ctktktRequest(`/api/ctktkt/daily-inputs?${query}&scope=non-ktkt`, { cache: "no-store",signal:controller.signal }).then(response => response.json() as Promise<{ entries?: DailyInput[]; error?: string }>),
-          ctktktRequest(`/api/ctktkt/ctktkt-report?${query}&scope=daily-links`, { cache: "no-store",signal:controller.signal }).then(response => response.json() as Promise<{ entries?: CtktktInput[]; linkedEntries?: CtktktInput[]; error?: string }>),
-        ]);
-      },controller.signal);
-      for (const bodies of responses) {
-        for (const body of bodies) if (body.error) throw new Error(body.error);
-      }
-      const allPpa = responses.flatMap(([ppaBody]) => ppaBody.entries || []);
-      const allDaily = responses.flatMap(([, dailyBody, ctktktBody], index) => mergeDailyInputsWithCtktkt(
-        dailyBody.entries || [],
-        [...(ctktktBody.entries || []), ...(ctktktBody.linkedEntries || [])],
-        periods[index],
-      ));
-      if (clampToData && allPpa.length) {
-        const dates = allPpa.map(entry => entry.operatingDate).sort();
-        from = dates[0]; to = dates[dates.length - 1];
-        setFromDate(from); setToDate(to);
-      }
-      const filteredPpa = allPpa.filter(entry => entry.operatingDate >= from && entry.operatingDate <= to);
-      setEntries(filteredPpa);
-      if (filteredPpa.length) {
-        const latestSavedDate = [...filteredPpa].sort((a, b) => b.operatingDate.localeCompare(a.operatingDate))[0].operatingDate;
-        setSheetDate(current => filteredPpa.some(entry => entry.operatingDate === current) ? current : latestSavedDate);
-      }
-      setDailyInputs(allDaily.filter(entry => entry.operatingDate >= from && entry.operatingDate <= to));
-      setRestoredCount(filteredPpa.length);
-    } catch (caught) {
-      if(!controller.signal.aborted)setError(caught instanceof Error ? caught.message : "Không tải được dữ liệu so sánh.");
-    } finally { if(loadControllerRef.current===controller)setLoading(false); }
+  // Yêu cầu tải một khoảng. Cùng khoảng → tải lại (và xử lý lại kết quả, vd co khoảng ở chế độ "Tất cả").
+  function loadRange(from: string, to: string, clampToData: boolean) {
+    setTablePage(0); setError("");
+    if (from === request.from && to === request.to && clampToData === request.clamp) { setHandledData(null); void rangeQuery.refetch(); }
+    else setRequest({ from, to, clamp: clampToData });
   }
+
+  // Cuộn tới dòng còn thiếu sau khi khoảng mới đã tải xong và hiển thị.
+  const [scrollToDate, setScrollToDate] = useState<string | null>(null);
+  useEffect(() => {
+    if (!scrollToDate || loading || !view || view.from !== scrollToDate) return;
+    const frame = window.requestAnimationFrame(() => {
+      document.getElementById(`ppa-row-${scrollToDate}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+      setScrollToDate(null);
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [scrollToDate, loading, view]);
 
   async function goToPpaMissingRow(item: MissingDataItem) {
     const date = item.key.split(":", 1)[0];
@@ -224,16 +206,10 @@ export function PpaHeatRateDashboard({ tabs }: { tabs?: React.ReactNode }) {
     setFromDate(date);
     setToDate(date);
     setRangeLabel("Tuỳ chọn");
-    await loadRange(date, date, false);
-    window.requestAnimationFrame(() => {
-      const row = document.getElementById(`ppa-row-${date}`);
-      row?.scrollIntoView({ behavior: "smooth", block: "center" });
-    });
+    loadRange(date, date, false);
+    setScrollToDate(date);
   }
 
-  // Chỉ tải một lần khi mở trang; các thao tác đổi khoảng ngày sau đó tự gọi loadRange qua sự kiện người dùng.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { void loadRange(fromDate, toDate, false); }, []);
 
   function applyQuick(kind: "month" | "last15" | "all") {
     if (kind === "month") {
@@ -369,9 +345,7 @@ export function PpaHeatRateDashboard({ tabs }: { tabs?: React.ReactNode }) {
       // trang không kèm phần này (nặng, chỉ cần khi xuất file).
       const periods = periodsBetween(fromDate, toDate);
       for (const period of periods) {
-        const response = await ctktktRequest(`/api/ctktkt/ppa-heat-rate?period=${period}&includeSource=1`, { cache: "no-store" });
-        const body = await response.json() as { entries?: StoredPpaWithSource[]; error?: string };
-        const entries = (body.entries || [])
+        const entries = (await fetchPpaWithSource(period) as StoredPpaWithSource[])
           .filter(entry => entry.operatingDate >= fromDate && entry.operatingDate <= toDate && entry.source)
           .sort((a, b) => a.operatingDate.localeCompare(b.operatingDate));
         if (!entries.length) continue;

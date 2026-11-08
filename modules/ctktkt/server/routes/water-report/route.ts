@@ -1,4 +1,5 @@
 import { getRawDb } from "@/modules/ctktkt/db";
+import { ok, fail } from "@/lib/api";
 import { getSessionUser, requireSession } from "@/modules/ctktkt/lib/auth/server";
 import {
   calculateMonthlyWaterSummary,
@@ -47,7 +48,7 @@ export async function GET(request: Request) {
   const month = url.searchParams.get("month") || "";
 
   if (!monthPattern.test(month)) {
-    return Response.json({ error: "Tháng yêu cầu không hợp lệ (định dạng YYYY-MM)." }, { status: 400 });
+    return fail("Tháng yêu cầu không hợp lệ (định dạng YYYY-MM).", 400);
   }
 
   try {
@@ -100,34 +101,28 @@ export async function GET(request: Request) {
     const shiftsInMonth = baseline ? chained.slice(1) : chained;
     const summary = calculateMonthlyWaterSummary(shiftsInMonth);
 
-    return Response.json(
-      {
+    return ok({
         ok: true,
         month,
         leaders,
         baseline,
         shifts: shiftsInMonth,
         summary,
-      },
-      { headers: { "Cache-Control": "no-store" } }
-    );
+      });
   } catch (err) {
     console.error("Lỗi đọc dữ liệu theo dõi lượng nước:", err);
-    return Response.json({ error: "Không thể truy vấn kho dữ liệu theo dõi lượng nước." }, { status: 500 });
+    return fail("Không thể truy vấn kho dữ liệu theo dõi lượng nước.", 500);
   }
 }
 
 export async function POST(request: Request) {
   const user = await getSessionUser();
   if (!user) {
-    return Response.json({ error: "Vui lòng đăng nhập để thực hiện thao tác." }, { status: 401 });
+    return fail("Vui lòng đăng nhập để thực hiện thao tác.", 401);
   }
 
   if (!canEditAnyWaterField(user)) {
-    return Response.json(
-      { error: "Tài khoản của bạn không có quyền nhập liệu báo cáo lượng nước." },
-      { status: 403 }
-    );
+    return fail("Tài khoản của bạn không có quyền nhập liệu báo cáo lượng nước.", 403);
   }
 
   try {
@@ -151,7 +146,7 @@ export async function POST(request: Request) {
       : null;
 
     if (inputList.length === 0) {
-      return Response.json({ error: "Không có dữ liệu ca trực để lưu." }, { status: 400 });
+      return fail("Không có dữ liệu ca trực để lưu.", 400);
     }
 
     const canEditMeta = canEditWaterField(user, "meta");
@@ -185,7 +180,7 @@ export async function POST(request: Request) {
       const shouldUpdate = (field: keyof WaterShiftLog) => !prevLog || !changedFields || changedFields.has(field);
       const adjustments=waterAdjustmentsFromRow({});
       for(const field of Object.keys(WATER_ADJUSTMENT_FIELDS) as Array<keyof typeof WATER_ADJUSTMENT_FIELDS>){
-        if(!canEditIntake&&Object.hasOwn(item,field)&&normalizeWaterAdjustment(item[field])!==(prevLog?.[field]??null))return Response.json({error:"Bạn không có quyền hiệu chỉnh công tơ nước."},{status:403});
+        if(!canEditIntake&&Object.hasOwn(item,field)&&normalizeWaterAdjustment(item[field])!==(prevLog?.[field]??null))return fail("Bạn không có quyền hiệu chỉnh công tơ nước.", 403);
         adjustments[field]=canEditIntake&&shouldUpdate(field)&&Object.hasOwn(item,field)?normalizeWaterAdjustment(item[field]):prevLog?.[field]??null;
       }
 
@@ -327,24 +322,21 @@ export async function POST(request: Request) {
       }
     }
 
-    return Response.json({ ok: true, saved: inputList.length });
+    return ok({ ok: true, saved: inputList.length });
   } catch (err) {
     console.error("Lỗi lưu ca trực theo dõi nước:", err);
-    return Response.json(
-      { error: err instanceof Error ? err.message : "Không thể lưu dữ liệu ca trực." },
-      { status: 400 }
-    );
+    return fail(err instanceof Error ? err.message : "Không thể lưu dữ liệu ca trực.", 400);
   }
 }
 
 export async function DELETE(request: Request) {
   const user = await getSessionUser();
   if (!user) {
-    return Response.json({ error: "Vui lòng đăng nhập." }, { status: 401 });
+    return fail("Vui lòng đăng nhập.", 401);
   }
 
   if (!canDeleteWaterShift(user)) {
-    return Response.json({ error: "Chỉ Quản trị hoặc Trưởng ca được cấp toàn quyền Nước mới được xóa ca." }, { status: 403 });
+    return fail("Chỉ Quản trị hoặc Trưởng ca được cấp toàn quyền Nước mới được xóa ca.", 403);
   }
 
   const url = new URL(request.url);
@@ -362,12 +354,12 @@ export async function DELETE(request: Request) {
         .bind(logDate, shiftTime)
         .run();
     } else {
-      return Response.json({ error: "Thiếu ID hoặc thông tin ca để xoá." }, { status: 400 });
+      return fail("Thiếu ID hoặc thông tin ca để xoá.", 400);
     }
 
-    return Response.json({ ok: true, message: "Đã xoá ca thành công." });
+    return ok({ ok: true, message: "Đã xoá ca thành công." });
   } catch (err) {
     console.error("Lỗi xoá ca:", err);
-    return Response.json({ error: "Không thể xoá ca." }, { status: 500 });
+    return fail("Không thể xoá ca.", 500);
   }
 }

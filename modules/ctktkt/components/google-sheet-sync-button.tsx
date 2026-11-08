@@ -1,5 +1,6 @@
 "use client";
-import { useCtktktRequest } from "@/hooks/useCtktkt";
+import { apiReportResponse } from "@/lib/fetcher";
+import { useGoogleSheetSync, useSavePpaNotes } from "@/hooks/useKtktPpa";
 
 import { useState } from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
@@ -9,10 +10,11 @@ import { hasPermission } from "@/modules/ctktkt/lib/auth/session";
 
 const URL_KEY = "ctktkt-google-script-url";
 const TOKEN_KEY = "ctktkt-google-script-token";
-type PreviewResponse = { configured?: boolean; preview?: GoogleSheetDayPayload; error?: string; results?: unknown };
 
 export function GoogleSheetSyncButton({ operatingDate, disabled: disabledProp = false, disabledReason: disabledReasonProp = "", onImported, compact = false }: { operatingDate: string; disabled?: boolean; disabledReason?: string; onImported?: () => void | Promise<void>; compact?: boolean }) {
-  const ctktktRequest = useCtktktRequest();
+  // Apps Script (bên ngoài) gọi thẳng như bản cũ; API nội bộ đi qua hook.
+  const savePpaNotes = useSavePpaNotes();
+  const googleSheetSync = useGoogleSheetSync();
 
   const user = useSessionUser();
   const isViewer = !hasPermission(user, "sync_google_sheet");
@@ -29,7 +31,7 @@ export function GoogleSheetSyncButton({ operatingDate, disabled: disabledProp = 
   async function readSheetRow(url = scriptUrl) {
     const datesUrl = new URL(validateGoogleAppsScriptUrl(url.trim()));
     datesUrl.searchParams.set("action", "dates");
-    const response = await ctktktRequest(datesUrl.toString(), { method: "GET", cache: "no-store" });
+    const response = await apiReportResponse(datesUrl.toString(), { method: "GET", cache: "no-store" });
     const body = await response.json() as { ok?: boolean; error?: string; rows?: unknown };
     if (!response.ok || !body.ok) throw new Error(body.error || "Không đọc được danh sách ngày từ Google Sheet.");
     const row = resolveGoogleSheetRow(operatingDate, body.rows);
@@ -40,7 +42,7 @@ export function GoogleSheetSyncButton({ operatingDate, disabled: disabledProp = 
   async function loadHistoricalAssessments(credentials = { url: scriptUrl, token }) {
     setLoading(true); setError(""); setMessage("");
     try {
-      const response = await ctktktRequest(validateGoogleAppsScriptUrl(credentials.url.trim()), {
+      const response = await apiReportResponse(validateGoogleAppsScriptUrl(credentials.url.trim()), {
         method: "POST",
         headers: { "Content-Type": "text/plain;charset=utf-8" },
         body: JSON.stringify({ token: credentials.token, action: "readAssessments" }),
@@ -81,13 +83,7 @@ export function GoogleSheetSyncButton({ operatingDate, disabled: disabledProp = 
     setLoading(true); setError(""); setMessage("");
     try {
       if (!assessmentPreview?.length) throw new Error("Chưa có đánh giá lịch sử để nhập.");
-      const response = await ctktktRequest("/api/ctktkt/ppa-heat-rate/notes", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ entries: assessmentPreview.map(item => ({ operatingDate: item.iso, noteS1: item.noteS1, noteS2: item.noteS2 })) }),
-      });
-      const body = await response.json() as { updated?: number; skipped?: number; error?: string };
-      if (!response.ok) throw new Error(body.error || "Web chưa lưu được đánh giá lịch sử.");
+      const body = await savePpaNotes.mutateAsync(assessmentPreview.map(item => ({ operatingDate: item.iso, noteS1: item.noteS1, noteS2: item.noteS2 })));
       setAssessmentPreview(null);
       setMessage(`Đã nhập đánh giá cho ${body.updated || 0} ngày. ${body.skipped ? `${body.skipped} ngày chưa có kết quả PPA trên web nên được bỏ qua.` : ""}`.trim());
       await onImported?.();
@@ -98,7 +94,7 @@ export function GoogleSheetSyncButton({ operatingDate, disabled: disabledProp = 
   async function writeDirect(payload: GoogleSheetDayPayload, credentials = { url: scriptUrl, token }) {
     const row = await readSheetRow(credentials.url);
     const day = { ...payload, row };
-    const response = await ctktktRequest(validateGoogleAppsScriptUrl(credentials.url.trim()), {
+    const response = await apiReportResponse(validateGoogleAppsScriptUrl(credentials.url.trim()), {
       method: "POST",
       headers: { "Content-Type": "text/plain;charset=utf-8" },
       body: JSON.stringify({ token: credentials.token, days: [day] }),
@@ -117,13 +113,7 @@ export function GoogleSheetSyncButton({ operatingDate, disabled: disabledProp = 
     try {
       let payload = fallbackPreview || null;
       if (!payload) {
-        const response = await ctktktRequest("/api/ctktkt/google-sheet-sync", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ operatingDate, action: "sync" }),
-        });
-        const body = await response.json() as PreviewResponse;
-        if (!response.ok || body.error) throw new Error(body.error || "Không đồng bộ được Google Sheet.");
+        const body = await googleSheetSync.mutateAsync({ operatingDate, action: "sync" });
         setServerConfigured(Boolean(body.configured));
         if (body.configured) {
           const row = body.preview?.row;

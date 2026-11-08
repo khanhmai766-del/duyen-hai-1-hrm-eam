@@ -1,5 +1,5 @@
 "use client";
-import { useCtktktRequest } from "@/hooks/useCtktkt";
+import { useDailyInputsRange, useInvalidateKtkt, useSaveDailyInputs } from "@/hooks/useKtktDailyInputs";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
@@ -9,13 +9,11 @@ import { decodeQlktSyncHash, normalizeQlktValue, qlktFieldLabels, validateQlktSy
 import { useSessionUser } from "@/modules/ctktkt/components/session-context";
 import { hasPermission } from "@/modules/ctktkt/lib/auth/session";
 import { addDaysIso, defaultOperatingDate, vietnamDateIso } from "@/modules/ctktkt/lib/operating-date";
-import { mergeDailyInputsWithCtktkt } from "@/modules/ctktkt/lib/daily-source-links";
-import {loadReportPeriods,reportPeriodQuery,reportPage} from "@/modules/ctktkt/lib/report-loading";
+import {reportPage} from "@/modules/ctktkt/lib/report-loading";
 import {ReportTablePager} from "@/modules/ctktkt/components/report-table-pager";
 import { GoogleMirrorLinks } from "@/modules/ctktkt/components/google-mirror-links";
+import "./pmis-report.css";
 
-type DailyInput = { operatingDate: string; fieldCode: string; value: string };
-type CtktktInput = { operatingDate: string; cell: string; value: string };
 type Unit = "s1" | "s2";
 
 // 5 chỉ tiêu của báo cáo "THEO PMIS" lấy từ QLKT, tách theo tổ máy S1/S2. 4 chỉ tiêu đầu là số liệu
@@ -53,30 +51,14 @@ function datesBetween(from: string, to: string) {
   return dates;
 }
 
-function periodsBetween(from: string, to: string) {
-  const periods: string[] = [];
-  let [year, month] = [Number(from.slice(0, 4)), Number(from.slice(5, 7))];
-  const endYear = Number(to.slice(0, 4)), endMonth = Number(to.slice(5, 7));
-  while (year < endYear || (year === endYear && month <= endMonth)) {
-    periods.push(`${year}-${String(month).padStart(2, "0")}`);
-    month += 1; if (month > 12) { month = 1; year += 1; }
-    if (periods.length > 24) break;
-  }
-  return periods;
-}
-
 export function PmisReport() {
-  const ctktktRequest = useCtktktRequest();
-
   const user = useSessionUser();
   const isViewer = !hasPermission(user, "edit_pmis");
   const today = useMemo(() => vietnamDateIso(), []);
   const defaultDate = useMemo(() => defaultOperatingDate(), []);
   const [fromDate, setFromDate] = useState(() => addDaysIso(defaultOperatingDate(), -9));
   const [toDate, setToDate] = useState(defaultDate);
-  const [dailyInputs, setDailyInputs] = useState<DailyInput[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const [actionError, setError] = useState("");
   const [message, setMessage] = useState("");
   const [syncHelp, setSyncHelp] = useState(false);
   const [pendingSync, setPendingSync] = useState<QlktSyncPayload | null>(null);
@@ -84,7 +66,11 @@ export function PmisReport() {
   const [syncDate, setSyncDate] = useState(defaultOperatingDate);
   const [extensionVersion, setExtensionVersion] = useState("");
   const [syncingQlkt, setSyncingQlkt] = useState(false);
-  const [savingSync, setSavingSync] = useState(false);
+  const saveSyncMutation = useSaveDailyInputs();
+  const savingSync = saveSyncMutation.isPending;
+  // Đồng bộ nhiều ngày lưu từng ngày một: không làm mới sau mỗi ngày, chỉ làm mới một lần ở cuối.
+  const saveRangeDayMutation = useSaveDailyInputs({ invalidate: false });
+  const invalidateKtkt = useInvalidateKtkt();
   const qlktRequestRef = useRef<{ id: string; timer: number } | null>(null);
   // Đồng bộ nhiều ngày liên tiếp (ví dụ lấy lại dữ liệu tháng trước): lặp qua từng ngày trong
   // khoảng đã chọn, gọi lại đúng luồng "1 ngày · 2 tổ máy" ở trên cho mỗi ngày rồi tự lưu luôn (không
@@ -98,49 +84,22 @@ export function PmisReport() {
   const [chartFromDate, setChartFromDate] = useState(() => addDaysIso(defaultOperatingDate(), -9));
   const [chartToDate, setChartToDate] = useState(defaultDate);
   const cancelRangeRef = useRef(false);
-  const loadControllerRef=useRef<AbortController|null>(null);
-  useEffect(()=>()=>loadControllerRef.current?.abort(),[]);
 
-  // Bảng và biểu đồ có thể xem hai khoảng khác nhau. Chỉ tải phần tháng giao với
-  // khoảng gộp, lần lượt từng tháng; yêu cầu mới hủy yêu cầu cũ.
-  async function loadRange(from: string, to: string) {
-    loadControllerRef.current?.abort();
-    const controller=new AbortController();loadControllerRef.current=controller;
-    setLoading(true); setError("");
-    try {
-      const periods = periodsBetween(from, to);
-      const responses = await loadReportPeriods(periods,async period => {
-        const query=reportPeriodQuery(period,from,to);
-        const [dailyResponse, ctktktResponse] = await Promise.all([
-          ctktktRequest(`/api/ctktkt/daily-inputs?${query}&scope=non-ktkt`, { cache: "no-store",signal:controller.signal }),
-          ctktktRequest(`/api/ctktkt/ctktkt-report?${query}&scope=daily-links`, { cache: "no-store",signal:controller.signal }),
-        ]);
-        const dailyBody = await dailyResponse.json() as { entries?: DailyInput[]; error?: string };
-        const ctktktBody = await ctktktResponse.json() as { entries?: CtktktInput[]; linkedEntries?: CtktktInput[]; error?: string };
-        if (!dailyResponse.ok) throw new Error(dailyBody.error || "Không tải được dữ liệu PMIS.");
-        if (!ctktktResponse.ok) throw new Error(ctktktBody.error || "Không tải được dữ liệu Chỉ tiêu KTKT.");
-        return mergeDailyInputsWithCtktkt(
-          dailyBody.entries || [],
-          [...(ctktktBody.entries || []), ...(ctktktBody.linkedEntries || [])],
-          period,
-        );
-      },controller.signal);
-      const all = responses.flat();
-      setDailyInputs(all);
-    } catch (caught) { if(!controller.signal.aborted)setError(caught instanceof Error ? caught.message : "Không tải được dữ liệu."); }
-    finally { if(loadControllerRef.current===controller)setLoading(false); }
-  }
+  // Bảng và biểu đồ có thể xem hai khoảng khác nhau: luôn tải đủ ngày cho CẢ hai khoảng (gộp lại), để đổi riêng
+  // 1 trong 2 khoảng không làm mất dữ liệu của khoảng còn lại. Chỉ tải lại khi bấm Áp dụng (như bản cũ).
+  const [loadedRange, setLoadedRange] = useState(() => ({ from: fromDate < chartFromDate ? fromDate : chartFromDate, to: toDate > chartToDate ? toDate : chartToDate }));
+  const rangeQuery = useDailyInputsRange(loadedRange.from, loadedRange.to);
+  const dailyInputs = useMemo(() => rangeQuery.data ?? [], [rangeQuery.data]);
+  const loading = rangeQuery.isFetching;
+  const error = actionError || (rangeQuery.error instanceof Error ? rangeQuery.error.message : "");
 
-  // Luôn tải đủ ngày cho CẢ khoảng của bảng lẫn của biểu đồ (gộp lại), để đổi riêng 1 trong 2
-  // khoảng không làm mất dữ liệu của khoảng còn lại.
   function reloadForBothRanges() {
     const from = fromDate < chartFromDate ? fromDate : chartFromDate;
     const to = toDate > chartToDate ? toDate : chartToDate;
-    return loadRange(from, to);
+    setError("");
+    if (from === loadedRange.from && to === loadedRange.to) return rangeQuery.refetch();
+    setLoadedRange({ from, to });
   }
-
-  // eslint-disable-next-line react-hooks/set-state-in-effect, react-hooks/exhaustive-deps
-  useEffect(() => { void reloadForBothRanges(); }, []);
 
   function applyManualRange() { void reloadForBothRanges(); }
   function applyChartRange() { void reloadForBothRanges(); }
@@ -245,9 +204,7 @@ export function PmisReport() {
       try {
         const period = payload.operatingDate.slice(0, 7);
         const entries = payload.entries.map(entry => ({ operatingDate: payload.operatingDate, fieldCode: entry.fieldCode, value: normalizeQlktValue(entry.value), note: "" }));
-        const response = await ctktktRequest("/api/ctktkt/daily-inputs", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ period, entries }) });
-        const body = await response.json() as { error?: string; saved?: number };
-        if (!response.ok) throw new Error(body.error || "Chưa lưu được dữ liệu.");
+        await saveRangeDayMutation.mutateAsync({ period, entries });
         saved.push(date);
       } catch (caught) { failed.push({ date, error: caught instanceof Error ? caught.message : "Chưa lưu được dữ liệu." }); }
     }
@@ -257,26 +214,23 @@ export function PmisReport() {
     const stoppedSummary = stopped.length ? ` Tổ máy ngừng (không có tải): ${stopped.slice(0, 5).map(item => `${item.date.split("-").reverse().join("/")} (${item.units.map(unit => `S${unit}`).join(", ")})`).join("; ")}${stopped.length > 5 ? "…" : ""}.` : "";
     if (saved.length || stopped.length) setMessage(`Đã lưu${cancelled ? " (dừng giữa chừng)" : ""} số liệu vận hành ${saved.length}/${dateList.length} ngày vào kho dữ liệu.${stoppedSummary}${failedSummary}`);
     else setError(`Không đồng bộ được ngày nào.${failedSummary}`);
-    await reloadForBothRanges();
+    if (saved.length) await invalidateKtkt();
   }
 
   async function applyQlktSync() {
     if (!pendingSync) return;
     const selected = pendingSync.entries.filter(entry => selectedSyncCodes.has(entry.fieldCode));
     if (!selected.length) { setPendingSync(null); return; }
-    setSavingSync(true); setError("");
+    setError("");
     try {
       const period = pendingSync.operatingDate.slice(0, 7);
       const entries = selected.map(entry => ({ operatingDate: pendingSync.operatingDate, fieldCode: entry.fieldCode, value: normalizeQlktValue(entry.value), note: "" }));
-      const response = await ctktktRequest("/api/ctktkt/daily-inputs", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ period, entries }) });
-      const body = await response.json() as { error?: string; saved?: number };
-      if (!response.ok) throw new Error(body.error || "Chưa lưu được dữ liệu.");
+      const body = await saveSyncMutation.mutateAsync({ period, entries });
       setPendingSync(null);
       const stoppedNote = pendingSync.unavailableHeatRateUnits?.length ? ` ${pendingSync.unavailableHeatRateUnits.map(unit => `S${unit}`).join(", ")} ngừng (không có tải tổ máy).` : "";
+      // Bảng tự làm mới qua invalidateQueries của lượt lưu.
       setMessage(`Đã lưu ${body.saved ?? selected.length} số liệu QLKT vào ngày ${pendingSync.operatingDate.split("-").reverse().join("/")}.${stoppedNote}`);
-      if ((pendingSync.operatingDate >= fromDate && pendingSync.operatingDate <= toDate) || (pendingSync.operatingDate >= chartFromDate && pendingSync.operatingDate <= chartToDate)) await reloadForBothRanges();
     } catch (caught) { setError(caught instanceof Error ? caught.message : "Chưa lưu được dữ liệu."); }
-    finally { setSavingSync(false); }
   }
 
   const dataByDate = useMemo(() => {
@@ -295,9 +249,9 @@ export function PmisReport() {
     return n(metric.codes![unit]);
   }
 
-  return <section className="module-report pmis-workspace flex min-h-[calc(100vh-88px)] flex-col gap-3">
+  return <section className="module-report flex min-h-[calc(100vh-88px)] flex-col gap-3">
     {/* Nút Google Sheets nằm bên phải khối tiêu đề (thay khung xanh riêng phía trên). */}
-    <div className="module-heading-copy pmis-title flex flex-wrap items-center justify-between gap-3">
+    <div className="module-heading-copy flex flex-wrap items-center justify-between gap-3 !px-[18px] !py-[13px] max-md:!p-3.5">
       <div className="min-w-0"><p className="module-eyebrow">Phân tích hiệu suất · S1 / S2</p><h1 className="text-xl font-extrabold uppercase tracking-tight text-[#18233d]">Bảng thông số tổn thất khói</h1></div>
       <div className="flex shrink-0 items-center print:hidden"><GoogleMirrorLinks module="pmis" variant="inline" /></div>
     </div>
