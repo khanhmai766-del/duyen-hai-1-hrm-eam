@@ -24,7 +24,7 @@ Tài liệu này ghi kế hoạch đã chốt ngày 08/11/2026 (đã thống nh�
 | Giai đoạn | Việc | Trạng thái |
 |---|---|---|
 | 0 | Test hợp đồng API, lệnh `test:ctktkt`, số đo nền | ✅ 08/11/2026 |
-| 1 + 2 | Theo từng trang: hook TanStack trong `hooks/`, handler trả `ok()/fail()`, tách component, CSS → Tailwind. Thứ tự: **Hoá chất → Lượng nước → PMIS → PPA → Báo cáo sản xuất → Dữ liệu các tháng → Chỉ tiêu KTKT** | Hoá chất ✅ · Lượng nước ✅ · PMIS ✅ · PPA ✅ (08/11) · còn lại ⏳ |
+| 1 + 2 | Theo từng trang: hook TanStack trong `hooks/`, handler trả `ok()/fail()`, tách component, CSS → Tailwind. Thứ tự: **Hoá chất → Lượng nước → PMIS → PPA → Báo cáo sản xuất → Dữ liệu các tháng → Chỉ tiêu KTKT** | Hoá chất ✅ · Lượng nước ✅ · PMIS ✅ · PPA ✅ · Báo cáo sản xuất ✅ (08/11) · còn Dữ liệu các tháng, Chỉ tiêu KTKT ⏳ |
 
 ### Mẫu chuyển một trang (theo trang Hoá chất)
 
@@ -61,12 +61,24 @@ cấu hình" (dev không có `GOOGLE_SHEET_APPS_SCRIPT_URL`), không bao giờ g
 **CSS chết**: khi trang đổi cấu trúc, xoá quy tắc theo **selector** (không theo dòng) — tệp CSS module viết dồn nhiều quy tắc/dòng
 và gộp selector bằng dấu phẩy. Trước khi xoá lớp khỏi CSS dùng chung, `grep` toàn repo (`.tsx/.ts/.css`) phải ra 0.
 
+**Trang có bảng nhập đang sửa** (BCSX; sắp tới Dữ liệu các tháng, Chỉ tiêu KTKT): dữ liệu tải về được chép vào state đang sửa.
+Truy vấn ngày dùng `gcTime: 0` + `staleTime: Infinity` (chọn lại ngày luôn đọc mới, không hiện bản cũ), chép vào state khi
+lượt tải MỚI về (so tham chiếu `data` trong lúc render), và các lượt lưu chỉ `invalidateQueries({ refetchType: "none" })` —
+không tải lại ngày đang sửa, để không ghi đè ô người dùng đang sửa dở ở tổ máy/khối khác. Đọc bắt buộc mới (sao lưu, đọc lại
+xác minh, "nạp lại") gọi thẳng `apiGet`.
+
+**Phản hồi là FILE** (`bcsx-operation-import`, `bcsx-export`): đọc bằng `apiReportResponse` (file trả nguyên, lỗi JSON →
+`{error}`); route chỉ đổi nhánh lỗi sang `fail()`.
+
 ### Việc tồn đọng ghi nhận khi chuyển đổi
 
 - `GET water-report` trả 500 cho **cả tháng** nếu một ca có hiệu chỉnh công tơ âm (`normalizeWaterAdjustment` ném lỗi khi đọc).
   Form và API ghi đã chặn số âm nên dữ liệu thật chưa gặp; chỉ có thể lọt qua đường khôi phục/nạp dữ liệu. Chưa sửa (đổi hành vi API).
 - `POST water-report` ghi từng ca và tính lại chuỗi bằng các câu lệnh riêng lẻ, không cùng một giao dịch — lỗi giữa chừng
   để lại tháng tính dở. Xử lý khi chuyển sang Prisma (giai đoạn 3) bằng `prisma.$transaction`.
+- `bcsx-section1-import` (nạp lịch sử Mục 1 từ 2 file S1/S2): chỉ kiểm nhánh lỗi — file do `bcsx-export` xuất thiếu các sheet theo
+  ngày ("01"…) của file BCSX gốc; cần một cặp file gốc mẫu để khoá nhánh thành công. `bcsx-operation-import` cũng vậy (thiếu file
+  DanhSachLenhKetThuc mẫu). `bcsx-sync` hiện không có nơi nào gọi — xem lại ở giai đoạn 4.
 - `styles.css` còn các quy tắc `.module-chart-grid …` không phần tử nào dùng (đã xoá phần của PMIS); dọn ở giai đoạn 4.
 - PMIS (đã sửa khi chuyển): bản cũ báo "Không đồng bộ được ngày nào…" rồi tự xoá ngay vì lượt tải lại đặt `error = ""`;
   nay thông báo lỗi còn hiển thị.

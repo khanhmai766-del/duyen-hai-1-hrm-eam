@@ -1,0 +1,28 @@
+/* Báo cáo sản xuất — chuyển NGUYÊN VĂN từ modules/ctktkt/styles.css (08/11/2026, docs/ktkt-chuyen-doi.md).
+   Giữ dạng CSS cạnh component: cỡ chữ 15px !important cho cả vùng nửa giờ, khung ca, thanh công cụ theo bề rộng màn hình. */
+.ctktkt-module .bcsx-workspace .module-shift-card { border-color: #d4e1ee; box-shadow: 0 3px 10px rgb(30 58 90 / 4%); }
+.ctktkt-module .bcsx-workspace .module-shift-card table input { min-height: 30px; }
+.ctktkt-module .bcsx-workspace .module-section-heading { margin: -12px -12px 12px; border-radius: 12px 12px 0 0; }
+.ctktkt-module .bcsx-workspace > .module-hero > div:first-child > .module-heading-copy { flex: 1 1 400px; }
+
+@media (max-width: 767px) {
+  .ctktkt-module .bcsx-workspace label:has(> select) { min-width: 0; max-width: 100%; }
+  .ctktkt-module .bcsx-workspace label > select { width: 100%; max-width: 100%; }
+}
+
+/* Use one consistent font size throughout the half-hour BCSX section. */
+.ctktkt-module .bcsx-half-hour-font,
+.ctktkt-module .bcsx-half-hour-font * { font-size: 15px !important; }
+.ctktkt-module .bcsx-half-hour-font .module-shift-card input { min-height: 36px; }
+.ctktkt-module .bcsx-half-hour-font .module-shift-card th:first-child { width: 64px; }
+
+/* Báo cáo sản xuất: Ngày · S1/S2 · chế độ xem · Dán Excel · Nạp 2 file · Lưu trên MỘT hàng (máy tính).
+   Hai nhóm công tắc giữ nút gọn (cao 32px trong khung 36px). */
+.ctktkt-module .bcsx-top-toolbar :is(.bcsx-view-mode, .bcsx-unit-switch) > button { height: 32px; padding-inline: 10px; font-size: 13px; }
+@media (min-width: 1024px) {
+  /* Cụm nút mục 1 luôn liền khối; thiếu chỗ thì cả cụm xuống dòng dưới Ngày / S1 / S2. */
+  .ctktkt-module .bcsx-top-toolbar > div:last-child { flex-wrap: nowrap; white-space: nowrap; }
+}
+@media (min-width: 1440px) {
+  .ctktkt-module .bcsx-top-toolbar { flex-wrap: nowrap; white-space: nowrap; }
+}

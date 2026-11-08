@@ -1,4 +1,5 @@
 import { isCtktktSameOrigin } from "@/modules/ctktkt/lib/request-origin";
+import { fail } from "@/lib/api";
 import { getRawDb } from "@/modules/ctktkt/db";
 import { requirePermission } from "@/modules/ctktkt/lib/auth/server";
 import { buildQlktOperationWorkbook, derivePreviousCompletedPowerMw, parseOperationCommandWorkbook, qlktOperationFileName } from "@/modules/ctktkt/lib/bcsx-operation-import";
@@ -10,8 +11,8 @@ const datePattern = /^(19|20|21)\d{2}-(0[1-9]|1[0-2])-([0-2]\d|3[01])$/;
 export async function POST(request: Request) {
   const guard = await requirePermission("edit_bcsx");
   if (!guard.ok) return guard.response;
-  if (!isCtktktSameOrigin(request)) return Response.json({ error: "Nguồn yêu cầu không hợp lệ." }, { status: 403 });
-  if (!request.headers.get("content-type")?.includes("multipart/form-data")) return Response.json({ error: "Hãy gửi file Excel DanhSachLenhKetThuc." }, { status: 415 });
+  if (!isCtktktSameOrigin(request)) return fail("Nguồn yêu cầu không hợp lệ.", 403);
+  if (!request.headers.get("content-type")?.includes("multipart/form-data")) return fail("Hãy gửi file Excel DanhSachLenhKetThuc.", 415);
 
   try {
     const formData = await request.formData();
@@ -54,6 +55,6 @@ export async function POST(request: Request) {
       },
     });
   } catch (error) {
-    return Response.json({ error: error instanceof Error ? error.message : "Không nhập được file lệnh điều độ." }, { status: 400 });
+    return fail(error instanceof Error ? error.message : "Không nhập được file lệnh điều độ.", 400);
   }
 }

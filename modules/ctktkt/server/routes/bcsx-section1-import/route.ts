@@ -1,4 +1,5 @@
 import { isCtktktSameOrigin } from "@/modules/ctktkt/lib/request-origin";
+import { ok, fail } from "@/lib/api";
 import { requirePermission } from "@/modules/ctktkt/lib/auth/server";
 import { buildSection1ImportPackage } from "@/modules/ctktkt/lib/bcsx-section1-import";
 
@@ -8,10 +9,10 @@ export async function POST(request: Request) {
   const guard = await requirePermission("edit_bcsx");
   if (!guard.ok) return guard.response;
   if (!isCtktktSameOrigin(request)) {
-    return Response.json({ error: "Nguồn yêu cầu không hợp lệ." }, { status: 403 });
+    return fail("Nguồn yêu cầu không hợp lệ.", 403);
   }
   if (!request.headers.get("content-type")?.includes("multipart/form-data")) {
-    return Response.json({ error: "Hãy gửi đồng thời 2 file Excel S1 và S2." }, { status: 415 });
+    return fail("Hãy gửi đồng thời 2 file Excel S1 và S2.", 415);
   }
 
   try {
@@ -26,8 +27,8 @@ export async function POST(request: Request) {
       fileName: file.name,
       bytes: await file.arrayBuffer(),
     }))));
-    return Response.json(importPackage, { headers: { "Cache-Control": "no-store" } });
+    return ok(importPackage);
   } catch (error) {
-    return Response.json({ error: error instanceof Error ? error.message : "Không đọc được hai file Excel S1/S2." }, { status: 400 });
+    return fail(error instanceof Error ? error.message : "Không đọc được hai file Excel S1/S2.", 400);
   }
 }

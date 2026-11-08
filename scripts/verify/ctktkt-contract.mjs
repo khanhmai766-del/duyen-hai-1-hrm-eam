@@ -220,6 +220,33 @@ const WRITE_SCENARIOS = {
     { step: "Google Sheet: xem trước khi thiếu công suất S1", method: "POST", path: "google-sheet-sync", json: { operatingDate: "2026-09-17", action: "preview" } },
     { step: "Google Sheet: thao tác lạ", method: "POST", path: "google-sheet-sync", json: { operatingDate: "2026-09-17", action: "xoa" } },
   ],
+  // Báo cáo sản xuất: số liệu nửa giờ, sự kiện vận hành, than tồn 24h, nạp 2 file S1/S2 (file xuất từ chính web), file lệnh điều độ (chỉ nhánh lỗi).
+  "bcsx": [
+    { step: "số liệu nửa giờ: lưu (dấu phẩy) 2 tổ máy", method: "POST", path: "shift-readings", json: { date: "2026-09-18", entries: [
+      { unit: "S1", timeSlot: "00:30", metric: "P", value: "455,5" }, { unit: "S1", timeSlot: "01:00", metric: "Q", value: "12" }, { unit: "S2", timeSlot: "23:59", metric: "E", value: "221.4" }] },
+      after: ["shift-readings?date=2026-09-18"] },
+    { step: "số liệu nửa giờ: xoá ô (rỗng)", method: "POST", path: "shift-readings", json: { date: "2026-09-18", entries: [{ unit: "S1", timeSlot: "01:00", metric: "Q", value: "" }] },
+      after: ["shift-readings?date=2026-09-18"] },
+    { step: "số liệu nửa giờ: tổ máy sai", method: "POST", path: "shift-readings", json: { date: "2026-09-18", entries: [{ unit: "S3", timeSlot: "00:30", metric: "P", value: "1" }] } },
+    { step: "số liệu nửa giờ: giá trị chữ", method: "POST", path: "shift-readings", json: { date: "2026-09-18", entries: [{ unit: "S1", timeSlot: "00:30", metric: "P", value: "abc" }] } },
+    { step: "số liệu nửa giờ: đọc ngày sai", method: "GET", path: "shift-readings?date=18-09-2026" },
+    { step: "sự kiện: thay danh sách S1", method: "POST", path: "operating-events", json: { date: "2026-09-17", unit: "S1", events: [
+      { startAt: "2026-09-17 08:00", endAt: "2026-09-17 09:30", eventType: 1, description: "Giảm tải theo lệnh A0" }, { startAt: "2026-09-17 20:00", eventType: 4, description: "" }] },
+      after: ["operating-events?date=2026-09-17"] },
+    { step: "sự kiện: xoá hết S2 (danh sách rỗng)", method: "POST", path: "operating-events", json: { date: "2026-09-17", unit: "S2", events: [] }, after: ["operating-events?date=2026-09-17"] },
+    { step: "sự kiện: thời gian sai", method: "POST", path: "operating-events", json: { date: "2026-09-17", unit: "S1", events: [{ startAt: "2026-09-17T08:00", eventType: 1 }] } },
+    { step: "sự kiện: loại sai", method: "POST", path: "operating-events", json: { date: "2026-09-17", unit: "S1", events: [{ startAt: "2026-09-17 08:00", eventType: 9 }] } },
+    { step: "than tồn 24h: lưu", method: "POST", path: "bcsx-coal-stock", json: { operatingDate: "2026-09-17", value: "312450,75" }, after: ["daily-inputs?period=2026-09&date=2026-09-17&scope=non-ktkt"] },
+    { step: "than tồn 24h: số âm", method: "POST", path: "bcsx-coal-stock", json: { operatingDate: "2026-09-17", value: "-5" } },
+    { step: "than tồn 24h: ngày tương lai", method: "POST", path: "bcsx-coal-stock", json: { operatingDate: "2099-01-01", value: "5" } },
+    { step: "nạp 2 file S1/S2 (xuất từ chính web)", method: "POST", path: "bcsx-section1-import", files: [["files", "bcsx-export?date=2026-09-17&unit=S1", "BCSX S1 17.09.2026.xlsx"], ["files", "bcsx-export?date=2026-09-17&unit=S2", "BCSX S2 17.09.2026.xlsx"]] },
+    { step: "nạp chỉ 1 file", method: "POST", path: "bcsx-section1-import", files: [["files", "bcsx-export?date=2026-09-17&unit=S1", "BCSX_S1_17-09.xlsx"]] },
+    { step: "nạp file không phải .xlsx", method: "POST", path: "bcsx-section1-import", files: [["files", "bcsx-export?date=2026-09-17&unit=S1", "a.xls"], ["files", "bcsx-export?date=2026-09-17&unit=S2", "b.csv"]] },
+    { step: "nạp không phải multipart (415)", method: "POST", path: "bcsx-section1-import", json: {} },
+    { step: "lệnh điều độ: thiếu file", method: "POST", path: "bcsx-operation-import", form: { date: "2026-09-17" } },
+    { step: "lệnh điều độ: ngày sai", method: "POST", path: "bcsx-operation-import", form: { date: "17/09/2026" }, files: [["file", "bcsx-export?date=2026-09-17&unit=S1", "DanhSachLenhKetThuc.xlsx"]] },
+    { step: "lệnh điều độ: file sai cấu trúc", method: "POST", path: "bcsx-operation-import", form: { date: "2026-09-17" }, files: [["file", "bcsx-export?date=2026-09-17&unit=S1", "DanhSachLenhKetThuc.xlsx"]] },
+  ],
 };
 // Giá trị thay đổi giữa các lần chạy: id cấp mới (< 900000) và mốc thời gian ghi.
 function normalize(value, key = "") {
@@ -253,10 +280,15 @@ async function runWrites(cookie) {
       const init = {};
       if (s.json !== undefined) { init.body = JSON.stringify(s.json); init.headers = { "Content-Type": "application/json" }; }
       if (s.raw !== undefined) { init.body = s.raw; init.headers = s.headers; }
-      if (s.upload || s.form) {
+      if (s.upload || s.form || s.files) {
         const fd = new FormData();
         if (s.upload) fd.set("file", new Blob([xlsx], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }), "theo-doi-nuoc-2026-09.xlsx");
-        for (const [k, v] of Object.entries(s.upload ?? s.form)) fd.set(k, v);
+        for (const [k, v] of Object.entries(s.upload ?? s.form ?? {})) fd.set(k, v);
+        // Tệp lấy từ API xuất của chính web tại thời điểm chạy (dữ liệu mẫu cố định → tệp cố định).
+        for (const [field, from, name] of s.files ?? []) {
+          const res = await fetch(new URL(`/api/ctktkt/${from}`, base), { headers: { cookie } });
+          fd.append(field, new Blob([Buffer.from(await res.arrayBuffer())], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }), name);
+        }
         init.body = fd;
       }
       const result = { request: `${s.method} ${s.path}`, response: await call(cookie, s.method, s.path, init) };

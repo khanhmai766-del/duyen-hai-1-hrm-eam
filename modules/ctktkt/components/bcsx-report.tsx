@@ -1,6 +1,9 @@
 "use client";
 import { ClipboardList } from "lucide-react";
-import { useCtktktRequest } from "@/hooks/useCtktkt";
+import {
+  downloadBcsxExport, fetchBcsxTotalsSource, fetchOperatingEvents, fetchShiftReadings, useBcsxDay, useImportOperationCommands,
+  useParseSection1Import, useSaveCoalStock, useSaveOperatingEvents, useSaveShiftReadings,
+} from "@/hooks/useKtktBcsx";
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -15,6 +18,7 @@ import { defaultBcsxDate,millisecondsToBcsxRollover } from "@/modules/ctktkt/lib
 import { MissingDataAlert, type MissingDataItem } from "@/modules/ctktkt/components/missing-data-alert";
 import { ExportMissingDialog } from "@/modules/ctktkt/components/export-missing-dialog";
 import { isMissingValue, listBcsxMissing } from "@/modules/ctktkt/lib/data-completeness";
+import "./bcsx-report.css";
 
 type Unit = "S1" | "S2";
 type ReadingsGrid = Record<ShiftMetric, string[]>;
@@ -68,9 +72,33 @@ function ctktktEntriesByDate(entries: Array<{ operatingDate: string; cell: strin
   return byDate;
 }
 
-export function BcsxReport() {
-  const ctktktRequest = useCtktktRequest();
+function buildTotals(daily: { operatingDate: string; fieldCode: string; value: string }[], ctktkt: { operatingDate: string; cell: string; value: string }[], operatingDate: string): Record<Unit, TotalsDraft> {
+  const byCode = new Map(daily.filter(e => e.operatingDate === operatingDate).map(e => [e.fieldCode, e.value]));
+  const ktktByDate = ctktktEntriesByDate(ctktkt);
+  const ktktValues = deriveDailyValuesFromCtktkt(
+    ktktByDate.get(operatingDate) || {},
+    ktktByDate.get(previousIsoDate(operatingDate)),
+  );
+  const stock24h = byCode.get(BCSX_COAL_STOCK_24H_CODE) || "";
+  return {
+    S1: {
+      dauCuc: parseAndScaleMwh(ktktValues.B),
+      thuongPham: parseAndScaleMwh(ktktValues.C),
+      gridReceivedMwh: byCode.get("GRID_RECEIVE_S1") || "",
+      thanTieuThu: ktktValues.AE_ADJ || "",
+      thanTonKho: stock24h,
+    },
+    S2: {
+      dauCuc: parseAndScaleMwh(ktktValues.H),
+      thuongPham: parseAndScaleMwh(ktktValues.I),
+      gridReceivedMwh: byCode.get("GRID_RECEIVE_S2") || "",
+      thanTieuThu: ktktValues.AF_ADJ || "",
+      thanTonKho: stock24h,
+    },
+  };
+}
 
+export function BcsxReport() {
   const user = useSessionUser();
   const isViewer = !hasPermission(user, "edit_bcsx");
   const [operatingDate, setOperatingDate] = useState(defaultBcsxDate);
@@ -80,14 +108,18 @@ export function BcsxReport() {
   const [draft, setDraft] = useState<EventDraft>(() => blankEventDraft(defaultBcsxDate()));
   const [editingEventIndex, setEditingEventIndex] = useState<number | null>(null);
   const [totals, setTotals] = useState<Record<Unit, TotalsDraft>>({ S1: blankTotals(), S2: blankTotals() });
-  const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [savingCoalStock, setSavingCoalStock] = useState(false);
+  const saveReadingsMutation = useSaveShiftReadings();
+  const saveEventsMutation = useSaveOperatingEvents();
+  const saveCoalStockMutation = useSaveCoalStock();
+  const parseSection1 = useParseSection1Import<Partial<Section1ImportPackage>>();
+  const importOperations = useImportOperationCommands();
+  const savingCoalStock = saveCoalStockMutation.isPending;
   const [exporting, setExporting] = useState<string | null>(null);
   const [exportMissingOpen, setExportMissingOpen] = useState(false);
   const [exportMissingItems, setExportMissingItems] = useState<MissingDataItem[]>([]);
   const [pendingExportTarget, setPendingExportTarget] = useState<"S1" | "S2" | "A0" | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [actionError, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [importingSection1, setImportingSection1] = useState(false);
   const [importingOperations, setImportingOperations] = useState(false);
@@ -103,7 +135,7 @@ export function BcsxReport() {
       clearTimeout(timer);
       const next=defaultBcsxDate();
       if(autoDateEnabled.current&&automaticDate.current!==next){
-        automaticDate.current=next;setLoading(true);setOperatingDate(next);setDraft(blankEventDraft(next));setEditingEventIndex(null);
+        automaticDate.current=next;setOperatingDate(next);setDraft(blankEventDraft(next));setEditingEventIndex(null);
         setNotice("Đã chuyển ngày BCSX theo mốc 06:00 giờ Việt Nam.");
       }
       timer=setTimeout(check,millisecondsToBcsxRollover()+100);
@@ -113,74 +145,31 @@ export function BcsxReport() {
     return ()=>{clearTimeout(timer);window.removeEventListener("focus",check);document.removeEventListener("visibilitychange",check);};
   },[]);
 
-  useEffect(() => {
-    let cancelled = false;
-    const controller=new AbortController();
-    async function load() {
-      setLoading(true); setError(null);
-      try {
-        const [readingsRes, eventsRes] = await Promise.all([
-          ctktktRequest(`/api/ctktkt/shift-readings?date=${operatingDate}`,{signal:controller.signal}),
-          ctktktRequest(`/api/ctktkt/operating-events?date=${operatingDate}`,{signal:controller.signal}),
-        ]);
-        const [totalsRes, ctktktRes] = await Promise.all([
-          ctktktRequest(`/api/ctktkt/daily-inputs?period=${operatingDate.slice(0, 7)}&date=${operatingDate}&scope=non-ktkt`,{signal:controller.signal}),
-          ctktktRequest(`/api/ctktkt/ctktkt-report?period=${operatingDate.slice(0, 7)}&date=${operatingDate}&scope=daily-links`,{signal:controller.signal}),
-        ]);
-        const readingsJson = await readingsRes.json() as { entries?: { unit: Unit; timeSlot: string; metric: ShiftMetric; value: string }[]; error?: string };
-        const eventsJson = await eventsRes.json() as { events?: (OperatingEvent & { unit: Unit })[]; error?: string };
-        const totalsJson = await totalsRes.json() as { entries?: { operatingDate: string; fieldCode: string; value: string }[]; error?: string };
-        const ctktktJson = await ctktktRes.json() as { entries?: { operatingDate: string; cell: string; value: string }[]; linkedEntries?: { operatingDate: string; cell: string; value: string }[]; error?: string };
-        if (cancelled) return;
-        if (readingsJson.error || eventsJson.error || totalsJson.error || ctktktJson.error) throw new Error(readingsJson.error || eventsJson.error || totalsJson.error || ctktktJson.error);
-
-        const nextGrids: Record<Unit, ReadingsGrid> = { S1: emptyGrid(), S2: emptyGrid() };
-        const slotIndex = new Map(SHIFT_TIME_SLOTS.map((s, i) => [s, i]));
-        for (const entry of readingsJson.entries || []) {
-          const idx = slotIndex.get(entry.timeSlot);
-          if (idx === undefined) continue;
-          nextGrids[entry.unit][entry.metric][idx] = entry.value;
-        }
-        setGrids(nextGrids);
-        dirtyReadingsRef.current.clear();
-
-        const nextEvents: Record<Unit, OperatingEvent[]> = { S1: [], S2: [] };
-        for (const e of eventsJson.events || []) nextEvents[e.unit]?.push(e);
-        setEvents(nextEvents);
-
-        const byCode = new Map((totalsJson.entries || []).filter(e => e.operatingDate === operatingDate).map(e => [e.fieldCode, e.value]));
-        const ktktByDate = ctktktEntriesByDate([...(ctktktJson.entries || []), ...(ctktktJson.linkedEntries || [])]);
-        const ktktValues = deriveDailyValuesFromCtktkt(
-          ktktByDate.get(operatingDate) || {},
-          ktktByDate.get(previousIsoDate(operatingDate)),
-        );
-        const stock24h = byCode.get(BCSX_COAL_STOCK_24H_CODE) || "";
-
-        setTotals({
-          S1: {
-            dauCuc: parseAndScaleMwh(ktktValues.B),
-            thuongPham: parseAndScaleMwh(ktktValues.C),
-            gridReceivedMwh: byCode.get("GRID_RECEIVE_S1") || "",
-            thanTieuThu: ktktValues.AE_ADJ || "",
-            thanTonKho: stock24h,
-          },
-          S2: {
-            dauCuc: parseAndScaleMwh(ktktValues.H),
-            thuongPham: parseAndScaleMwh(ktktValues.I),
-            gridReceivedMwh: byCode.get("GRID_RECEIVE_S2") || "",
-            thanTieuThu: ktktValues.AF_ADJ || "",
-            thanTonKho: stock24h,
-          },
-        });
-      } catch (err) {
-        if (!cancelled) setError(err instanceof Error ? err.message : "Không tải được dữ liệu.");
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
+  // Dữ liệu ngày đang chọn; khi lượt tải mới về thì chép vào bảng đang sửa (Mục 1 lưới số liệu, Mục 2 tổng hợp, Mục 3 sự kiện).
+  const dayQuery = useBcsxDay(operatingDate);
+  const loading = dayQuery.isFetching;
+  const error = actionError ?? (dayQuery.error instanceof Error ? dayQuery.error.message : null);
+  const [initializedData, setInitializedData] = useState<unknown>(null);
+  if (dayQuery.data && dayQuery.data !== initializedData) {
+    setInitializedData(dayQuery.data);
+    const nextGrids: Record<Unit, ReadingsGrid> = { S1: emptyGrid(), S2: emptyGrid() };
+    const slotIndex = new Map(SHIFT_TIME_SLOTS.map((s, i) => [s, i]));
+    for (const entry of dayQuery.data.readings) {
+      const idx = slotIndex.get(entry.timeSlot);
+      if (idx === undefined) continue;
+      nextGrids[entry.unit][entry.metric][idx] = entry.value;
     }
-    void load();
-    return () => { cancelled = true;controller.abort(); };
-  }, [operatingDate, ctktktRequest]);
+    setGrids(nextGrids);
+    const nextEvents: Record<Unit, OperatingEvent[]> = { S1: [], S2: [] };
+    for (const e of dayQuery.data.events) nextEvents[e.unit]?.push(e);
+    setEvents(nextEvents);
+    setTotals(buildTotals(dayQuery.data.daily, dayQuery.data.ctktkt, operatingDate));
+  }
+  // Bảng vừa nạp dữ liệu ngày mới → bỏ đánh dấu "ô vừa sửa" cũ.
+  useEffect(() => { dirtyReadingsRef.current.clear(); }, [initializedData]);
+  // Đổi ngày: bỏ thông báo lỗi thao tác của ngày trước (bản cũ xoá lỗi khi bắt đầu tải ngày mới).
+  const [errorDate, setErrorDate] = useState(operatingDate);
+  if (errorDate !== operatingDate) { setErrorDate(operatingDate); setError(null); }
 
   const grid = grids[unit];
   const unitEvents = events[unit];
@@ -193,21 +182,13 @@ export function BcsxReport() {
   }
 
   async function saveCoalStock() {
-    setSavingCoalStock(true); setError(null); setNotice(null);
+    setError(null); setNotice(null);
     try {
-      const response = await ctktktRequest("/api/ctktkt/bcsx-coal-stock", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ operatingDate, value: totals[unit].thanTonKho }),
-      });
-      const body = await response.json() as { error?: string; value?: string };
-      if (!response.ok || body.error) throw new Error(body.error || "Không lưu được than tồn kho 24h.");
+      const body = await saveCoalStockMutation.mutateAsync({ operatingDate, value: totals[unit].thanTonKho });
       setCoalStock(body.value || totals[unit].thanTonKho);
       setNotice(`Đã lưu than tồn kho 24h toàn nhà máy ngày ${operatingDate.split("-").reverse().join("/")} và liên kết sang Chỉ tiêu KTKT.`);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Không lưu được than tồn kho 24h.");
-    } finally {
-      setSavingCoalStock(false);
     }
   }
 
@@ -240,9 +221,7 @@ export function BcsxReport() {
         return { unit, timeSlot: SHIFT_TIME_SLOTS[index], metric, value: grid[metric][index].trim() };
       });
       if (!entries.length) throw new Error(`Không có ô nào của tổ máy ${unit} vừa thay đổi để lưu.`);
-      const res = await ctktktRequest("/api/ctktkt/shift-readings", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ date: operatingDate, entries }) });
-      const json = await res.json() as { saved?: number; error?: string };
-      if (!res.ok || json.error) throw new Error(json.error || "Không lưu được số liệu.");
+      const json = await saveReadingsMutation.mutateAsync({ date: operatingDate, entries });
       for (const key of dirtyKeys) dirtyReadingsRef.current.delete(key);
       setNotice(`Đã lưu ${json.saved ?? entries.length} ô vừa thay đổi của tổ máy ${unit}.`);
     } catch (err) {
@@ -259,28 +238,12 @@ export function BcsxReport() {
     let backup: Record<string, Section1ImportEntry[]> | null = null;
 
     const postDay = async (day: Section1ImportDay) => {
-      const response = await ctktktRequest("/api/ctktkt/shift-readings", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ date: day.date, entries: day.entries }),
-      });
-      const body = await response.json() as { error?: string };
-      if (!response.ok || body.error) throw new Error(body.error || `Không ghi được Mục 1 ngày ${day.date}.`);
+      await saveReadingsMutation.mutateAsync({ date: day.date, entries: day.entries });
     };
 
     try {
       if (files.length !== 2) throw new Error("Hãy chọn đồng thời đúng 2 file Excel BCSX: một file S1 và một file S2.");
-      const formData = new FormData();
-      Array.from(files).forEach(file => formData.append("files", file));
-      const parseResponse = await ctktktRequest("/api/ctktkt/bcsx-section1-import", { method: "POST", body: formData });
-      const rawParseResponse = await parseResponse.text();
-      let parsed: Partial<Section1ImportPackage> & { error?: string };
-      try {
-        parsed = JSON.parse(rawParseResponse) as Partial<Section1ImportPackage> & { error?: string };
-      } catch {
-        throw new Error("Máy chủ không trả dữ liệu JSON hợp lệ khi đọc hai file Excel S1/S2.");
-      }
-      if (!parseResponse.ok || parsed.error) throw new Error(parsed.error || "Không đọc được hai file Excel S1/S2.");
+      const parsed = await parseSection1.mutateAsync(Array.from(files));
       if (parsed.kind !== "BCSX_SECTION_1_HISTORY" || parsed.version !== 1 || !/^\d{4}-\d{2}$/.test(parsed.month || "") || !Number.isInteger(parsed.throughDay) || Number(parsed.throughDay) < 1 || Number(parsed.throughDay) > 31 || !Array.isArray(parsed.days) || parsed.days.length !== parsed.throughDay) {
         throw new Error("Gói nhập Mục 1 BCSX không đúng cấu trúc.");
       }
@@ -311,10 +274,7 @@ export function BcsxReport() {
 
       backup = {};
       for (const day of importPackage.days) {
-        const response = await ctktktRequest(`/api/ctktkt/shift-readings?date=${encodeURIComponent(day.date)}`, { cache: "no-store" });
-        const body = await response.json() as { entries?: Section1ImportEntry[]; error?: string };
-        if (!response.ok || body.error) throw new Error(body.error || `Không sao lưu được ngày ${day.date}.`);
-        backup[day.date] = body.entries || [];
+        backup[day.date] = await fetchShiftReadings(day.date);
       }
       const backupBlob = new Blob([JSON.stringify({ kind: "BCSX_SECTION_1_BACKUP", createdAt: new Date().toISOString(), entriesByDate: backup }, null, 2)], { type: "application/json" });
       const backupUrl = URL.createObjectURL(backupBlob);
@@ -330,10 +290,7 @@ export function BcsxReport() {
       }
 
       for (const day of importPackage.days) {
-        const response = await ctktktRequest(`/api/ctktkt/shift-readings?date=${encodeURIComponent(day.date)}`, { cache: "no-store" });
-        const body = await response.json() as { entries?: Section1ImportEntry[]; error?: string };
-        if (!response.ok || body.error) throw new Error(body.error || `Không đọc lại được ngày ${day.date}.`);
-        const actual = new Map((body.entries || []).map(entry => [`${entry.unit}|${entry.timeSlot}|${entry.metric}`, entry.value]));
+        const actual = new Map((await fetchShiftReadings(day.date)).map(entry => [`${entry.unit}|${entry.timeSlot}|${entry.metric}`, entry.value]));
         for (const entry of day.entries) {
           const saved = actual.get(`${entry.unit}|${entry.timeSlot}|${entry.metric}`);
           if (saved === undefined || Math.abs(Number(saved) - Number(entry.value)) > 1e-9) throw new Error(`Đọc lại không khớp ${entry.unit} ${entry.timeSlot} ${entry.metric}, ngày ${day.date}.`);
@@ -379,17 +336,8 @@ export function BcsxReport() {
     setImportingOperations(true); setError(null); setNotice(null);
     try {
       if (files.length !== 1) throw new Error("Hãy chọn đúng 1 file DanhSachLenhKetThuc dạng .xlsx.");
-      const formData = new FormData();
-      formData.append("file", files[0]);
-      formData.append("date", operatingDate);
-      const response = await ctktktRequest("/api/ctktkt/bcsx-operation-import", { method: "POST", body: formData });
-      if (!response.ok) {
-        const body = await response.json().catch(() => null) as { error?: string } | null;
-        throw new Error(body?.error || "Không nhập được file lệnh điều độ.");
-      }
-
-      const blob = await response.blob();
-      const disposition = response.headers.get("Content-Disposition") || "";
+      const { blob, headers } = await importOperations.mutateAsync({ file: files[0], date: operatingDate });
+      const disposition = headers.get("Content-Disposition") || "";
       const fileName = /filename="([^"]+)"/.exec(disposition)?.[1] || "DH1_Thoi_gian_VH.xlsx";
       const downloadUrl = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
@@ -400,16 +348,14 @@ export function BcsxReport() {
       anchor.remove();
       URL.revokeObjectURL(downloadUrl);
 
-      const eventsResponse = await ctktktRequest("/api/ctktkt/operating-events?date=" + encodeURIComponent(operatingDate), { cache: "no-store" });
-      const eventsBody = await eventsResponse.json() as { events?: (OperatingEvent & { unit: Unit })[]; error?: string };
-      if (!eventsResponse.ok || eventsBody.error) throw new Error(eventsBody.error || "Đã lưu và tải file QLKT nhưng không tải lại được Mục 3.");
+      const freshEvents = await fetchOperatingEvents(operatingDate).catch(caught => { throw new Error(caught instanceof Error && caught.message ? caught.message : "Đã lưu và tải file QLKT nhưng không tải lại được Mục 3."); });
       const nextEvents: Record<Unit, OperatingEvent[]> = { S1: [], S2: [] };
-      for (const event of eventsBody.events || []) nextEvents[event.unit]?.push(event);
+      for (const event of freshEvents) nextEvents[event.unit]?.push(event);
       setEvents(nextEvents);
 
-      const s1Count = Number(response.headers.get("X-BCSX-S1-Events") || nextEvents.S1.length);
-      const s2Count = Number(response.headers.get("X-BCSX-S2-Events") || nextEvents.S2.length);
-      const ignoredRows = Number(response.headers.get("X-BCSX-Ignored-Rows") || 0);
+      const s1Count = Number(headers.get("X-BCSX-S1-Events") || nextEvents.S1.length);
+      const s2Count = Number(headers.get("X-BCSX-S2-Events") || nextEvents.S2.length);
+      const ignoredRows = Number(headers.get("X-BCSX-Ignored-Rows") || 0);
       setNotice("Đã tự lưu Mục 3: S1 (" + s1Count + " sự kiện), S2 (" + s2Count + " sự kiện) và tải file QLKT " + fileName + (ignoredRows ? ". Bỏ qua " + ignoredRows + " dòng không thuộc ngày đang chọn hoặc không đủ điều kiện nhập." : "."));
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Không nhập được file lệnh điều độ.");
@@ -422,38 +368,9 @@ export function BcsxReport() {
   async function reloadTotalsFromCtktkt() {
     setError(null); setNotice(null);
     try {
-      const period = operatingDate.slice(0, 7);
-      const [totalsRes, ctktktRes] = await Promise.all([
-        ctktktRequest(`/api/ctktkt/daily-inputs?period=${period}&date=${operatingDate}`),
-        ctktktRequest(`/api/ctktkt/ctktkt-report?period=${period}&date=${operatingDate}&scope=daily-links`),
-      ]);
-      const totalsJson = await totalsRes.json() as { entries?: { operatingDate: string; fieldCode: string; value: string }[]; error?: string };
-      const ctktktJson = await ctktktRes.json() as { entries?: { operatingDate: string; cell: string; value: string }[]; linkedEntries?: { operatingDate: string; cell: string; value: string }[]; error?: string };
-      if (!totalsRes.ok || !ctktktRes.ok || totalsJson.error || ctktktJson.error) throw new Error(totalsJson.error || ctktktJson.error || "Không tải được số liệu liên kết.");
-      const byCode = new Map((totalsJson.entries || []).filter(e => e.operatingDate === operatingDate).map(e => [e.fieldCode, e.value]));
-      const ktktByDate = ctktktEntriesByDate([...(ctktktJson.entries || []), ...(ctktktJson.linkedEntries || [])]);
-      const ktktValues = deriveDailyValuesFromCtktkt(
-        ktktByDate.get(operatingDate) || {},
-        ktktByDate.get(previousIsoDate(operatingDate)),
-      );
-      const stock24h = byCode.get(BCSX_COAL_STOCK_24H_CODE) || "";
-
-      setTotals({
-        S1: {
-          dauCuc: parseAndScaleMwh(ktktValues.B),
-          thuongPham: parseAndScaleMwh(ktktValues.C),
-          gridReceivedMwh: byCode.get("GRID_RECEIVE_S1") || "",
-          thanTieuThu: ktktValues.AE_ADJ || "",
-          thanTonKho: stock24h,
-        },
-        S2: {
-          dauCuc: parseAndScaleMwh(ktktValues.H),
-          thuongPham: parseAndScaleMwh(ktktValues.I),
-          gridReceivedMwh: byCode.get("GRID_RECEIVE_S2") || "",
-          thanTieuThu: ktktValues.AF_ADJ || "",
-          thanTonKho: stock24h,
-        },
-      });
+      // Nạp lại luôn đọc mới; dữ liệu ngày lấy cả ô KTKT như bản cũ (không có scope).
+      const source = await fetchBcsxTotalsSource(operatingDate, false);
+      setTotals(buildTotals(source.daily, source.ctktkt, operatingDate));
       setNotice(`Đã nạp lại số liệu liên kết và than tồn kho 24h đã nhập tại BCSX cho ngày ${operatingDate.split("-").reverse().join("/")}.`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Không tải lại được số liệu từ Chỉ tiêu KTKT.");
@@ -496,9 +413,7 @@ export function BcsxReport() {
   async function saveEvents() {
     setSaving(true); setError(null); setNotice(null);
     try {
-      const res = await ctktktRequest("/api/ctktkt/operating-events", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ date: operatingDate, unit, events: unitEvents }) });
-      const json = await res.json() as { saved?: number; error?: string };
-      if (!res.ok || json.error) throw new Error(json.error || "Không lưu được nhật ký sự kiện.");
+      await saveEventsMutation.mutateAsync({ date: operatingDate, unit, events: unitEvents });
       setNotice(`Đã lưu nhật ký sự kiện tổ máy ${unit}.`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Không lưu được nhật ký sự kiện.");
@@ -510,14 +425,10 @@ export function BcsxReport() {
   async function exportFile(target: "S1" | "S2" | "A0") {
     setExporting(target); setError(null);
     try {
-      const res = await ctktktRequest(`/api/ctktkt/bcsx-export?date=${operatingDate}&unit=${target}`);
-      if (!res.ok) { const json = await res.json().catch(() => null) as { error?: string } | null; throw new Error(json?.error || "Không xuất được file."); }
-      const blob = await res.blob();
-      const disposition = res.headers.get("Content-Disposition") || "";
-      const match = /filename="([^"]+)"/.exec(disposition);
+      const { blob, fileName } = await downloadBcsxExport(operatingDate, target);
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
-      a.href = url; a.download = match?.[1] || `BCSX_NMD_${target}_${operatingDate}.xlsx`;
+      a.href = url; a.download = fileName;
       document.body.appendChild(a); a.click(); a.remove();
       URL.revokeObjectURL(url);
     } catch (err) {

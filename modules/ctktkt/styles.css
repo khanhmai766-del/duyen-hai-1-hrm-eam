@@ -249,10 +249,6 @@
 .ctktkt-module .ktkt-workspace .module-toolbar-card > div:first-child { align-items: center; }
 .ctktkt-module .ktkt-workspace .module-toolbar-card > div:first-child > div:last-child { flex: 1 1 360px; justify-content: flex-end; align-content: center; }
 .ctktkt-module .ktkt-workspace .module-section-heading > div:first-child { flex-wrap: wrap; }
-.ctktkt-module .bcsx-workspace .module-shift-card { border-color: #d4e1ee; box-shadow: 0 3px 10px rgb(30 58 90 / 4%); }
-.ctktkt-module .bcsx-workspace .module-shift-card table input { min-height: 30px; }
-.ctktkt-module .bcsx-workspace .module-section-heading { margin: -12px -12px 12px; border-radius: 12px 12px 0 0; }
-.ctktkt-module .bcsx-workspace > .module-hero > div:first-child > .module-heading-copy { flex: 1 1 400px; }
 .ctktkt-module .module-filter-bar { padding: 12px 14px; border-left: 3px solid var(--module-accent); }
 .ctktkt-module .module-chart-grid > div { border-radius: 14px; border-color: #d7e3ef; box-shadow: 0 4px 14px rgb(30 58 90 / 4%); }
 .ctktkt-module .module-chart-grid > div > div:first-child { border-bottom: 1px solid #e2eaf3; }
@@ -268,8 +264,6 @@
   .ctktkt-module .module-section-heading { padding: 10px 12px; }
   .ctktkt-module .module-filter-bar > label { flex: 1 1 128px; }
   .ctktkt-module .module-filter-bar > label > button { width: 100%; }
-  .ctktkt-module .bcsx-workspace label:has(> select) { min-width: 0; max-width: 100%; }
-  .ctktkt-module .bcsx-workspace label > select { width: 100%; max-width: 100%; }
   .ctktkt-module .engineering-workspace .module-table-scroll { max-height: 62vh; }
 }
 @media print {
@@ -280,11 +274,6 @@
   .ctktkt-module .module-table-scroll > table > thead { position: static; }
 }
 
-/* Use one consistent font size throughout the half-hour BCSX section. */
-.ctktkt-module .bcsx-half-hour-font,
-.ctktkt-module .bcsx-half-hour-font * { font-size: 15px !important; }
-.ctktkt-module .bcsx-half-hour-font .module-shift-card input { min-height: 36px; }
-.ctktkt-module .bcsx-half-hour-font .module-shift-card th:first-child { width: 64px; }
 
 /* Giao diện gọn (27/10/2026): giữ nguyên cấu trúc trang, chỉ giảm khoảng trống, chiều cao và trang trí lặp lại.
    Nạp sau cùng trong app/layout.tsx; mọi bộ chọn có tiền tố .app-workspace để thắng CSS riêng của từng mục.
@@ -507,16 +496,6 @@
 /* Thanh tab các cụm (Báo cáo Chỉ tiêu KTKT): một hàng; dưới 1700px ẩn biểu tượng nhỏ để 7 tab vừa khung. */
 @media (max-width: 1699px) { .ctktkt-module .ktkt-section-tabs svg { display: none; } }
 
-/* Báo cáo sản xuất: Ngày · S1/S2 · chế độ xem · Dán Excel · Nạp 2 file · Lưu trên MỘT hàng (máy tính).
-   Hai nhóm công tắc giữ nút gọn (cao 32px trong khung 36px). */
-.ctktkt-module .bcsx-top-toolbar :is(.bcsx-view-mode, .bcsx-unit-switch) > button { height: 32px; padding-inline: 10px; font-size: 13px; }
-@media (min-width: 1024px) {
-  /* Cụm nút mục 1 luôn liền khối; thiếu chỗ thì cả cụm xuống dòng dưới Ngày / S1 / S2. */
-  .ctktkt-module .bcsx-top-toolbar > div:last-child { flex-wrap: nowrap; white-space: nowrap; }
-}
-@media (min-width: 1440px) {
-  .ctktkt-module .bcsx-top-toolbar { flex-wrap: nowrap; white-space: nowrap; }
-}
 
 /* Nhãn mục ("CHỈ TIÊU KTKT", "SẢN XUẤT") đầu hàng nút: cùng nền khối "Bảng theo dõi lượng nước sử dụng", thu gọn chiều cao. */
 /* Lặp lớp để thắng quy tắc cũ ".bcsx-workspace > .module-hero > div:first-child > .module-heading-copy { flex: 1 1 400px }". */
