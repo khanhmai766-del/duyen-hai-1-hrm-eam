@@ -35,6 +35,7 @@ import {
   HardHat,
   RadioTower,
   ListTodo,
+  UserCog,
 } from "lucide-react";
 import { effectiveUserPosition, type PositionCarrier } from "@/lib/current-position";
 
@@ -235,6 +236,7 @@ export const NAV_SECTIONS: NavSection[] = [
       { label: "Theo dõi hóa chất", href: "/tien-ich/chi-tieu-ktkt/chemical-usage", icon: FlaskConical, permissionIds: ["ctktkt-access"], keywords: "ctktkt chi tieu kinh te ky thuat pmis ppa san xuat" },
       { label: "Suất hao nhiệt PPA", href: "/tien-ich/chi-tieu-ktkt/ppa-heat-rate", icon: BarChart3, permissionIds: ["ctktkt-access"], keywords: "ctktkt chi tieu kinh te ky thuat pmis ppa san xuat" },
       { label: "Báo cáo PMIS", href: "/tien-ich/chi-tieu-ktkt/pmis-report", icon: Gauge, permissionIds: ["ctktkt-access"], keywords: "ctktkt chi tieu kinh te ky thuat pmis ppa san xuat" },
+      { label: "Phân công nhập liệu", href: "/tien-ich/chi-tieu-ktkt/phan-quyen", icon: UserCog, permissionIds: ["ctktkt-delegate"], keywords: "ctktkt phan cong nhap lieu phan quyen giao quyen tkd truong ca" },
     ],
   },
   {

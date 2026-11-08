@@ -65,7 +65,10 @@ test('giám sát/vai trò tùy chỉnh không cấp thêm quyền; RBAC cũ khô
   const user=mapHostUser(host('Máy nghiền',role),{...access,'ctktkt:edit_ppa':'full','ctktkt:manage_users':'full'});
   assert.equal(hasPermission(user,'edit_ppa'),false);assert.equal(isAdminUser(user),false);assert.equal(canEditCtktktGroup(user,'may_nghien_coal_s1'),true);
  }
- assert.deepEqual(Object.keys(CTKTKT_DEFAULT_MATRIX),['ctktkt-access']);
+ // RBAC chung chỉ có quyền mở phân hệ + quyền mở trang Phân công nhập liệu; không cấp quyền nhập/sửa nào.
+ assert.deepEqual(Object.keys(CTKTKT_DEFAULT_MATRIX),['ctktkt-access','ctktkt-delegate']);
+ const delegated=mapHostUser(host('Máy nghiền','VIEWER'),{...access,'ctktkt-delegate':'full'}), plain=mapHostUser(host('Máy nghiền','VIEWER'),access);
+ assert.deepEqual(delegated.permissions,plain.permissions);assert.equal(isAdminUser(delegated),false);
 });
 test('cửa vào RBAC, tài khoản tra cứu và buộc đổi mật khẩu vẫn được chặn',()=>{
  assert.equal(mapHostUser(host('Quản đốc'),{'ctktkt-access':'none'}),null);

@@ -103,6 +103,8 @@ export type SessionUser = {
   position?: string;
   employeeCode?: string;
   permissions: Permission[];
+  /** Được cấp quyền RBAC "ctktkt-delegate": mở trang Phân công nhập liệu KTKT. */
+  canDelegateInputs?: boolean;
   /** Set when the account still uses a temporary or weak password; only password change is allowed. */
   mustChangePassword?: boolean;
 };

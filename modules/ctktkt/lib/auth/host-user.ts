@@ -15,5 +15,6 @@ export function mapHostUser(host: HostUser, map: Record<string, string>, grants:
     id: host.id, username: host.email || host.employeeId || host.id, displayName: host.name || "Người dùng",
     employeeCode: host.employeeId ?? undefined, position, role,
     permissions: host.role === "ADMIN" ? [...PERMISSIONS] : permissionsForPosition(position, grants),
+    canDelegateInputs: host.role === "ADMIN" || ["read", "personal", "manage", "full"].includes(map["ctktkt-delegate"]),
   };
 }
