@@ -5,14 +5,13 @@ import {useCtktktRequest} from "@/hooks/useCtktkt";
 import {Dialog,DialogClose,DialogContent,DialogDescription,DialogHeader,DialogTitle} from "@/modules/ctktkt/components/ui/dialog";
 import {canProposeCtktktCorrection} from "../lib/ctktkt-permissions";
 import {useSessionUser} from "./session-context";
-import {CTKTKT_INPUT_FIELDS} from "../lib/ctktkt-fields.generated";
-import {CTKTKT_EXTRA_INPUT_FIELDS} from "../lib/ctktkt-extra-fields";
+import {REPORT_WRITABLE_FIELDS,REPORT_WRITABLE_CELLS} from "../lib/report-writable-fields";
 
 type Status="pending"|"approved"|"rejected";
 type Row={id:string;operatingDate:string;requesterName:string;reason:string;status:Status;createdAt?:string;reviewerName:string|null;reviewNote:string;entries:Array<{cell:string;oldValue:string|null;value:string}>};
 type Draft={cell:string;value:string};
 
-const fields=[...CTKTKT_INPUT_FIELDS,...CTKTKT_EXTRA_INPUT_FIELDS].filter((f,i,a)=>a.findIndex(x=>x.cell===f.cell)===i);
+const fields=REPORT_WRITABLE_FIELDS;
 const fieldLabel=new Map<string,string>(fields.map(f=>[f.cell,f.label]));
 const STATUS:Record<Status,{label:string;tone:string}>={
  pending:{label:"Chờ duyệt",tone:"border-amber-200 bg-amber-50 text-amber-800"},
@@ -94,9 +93,9 @@ export function ReportCorrections({date,onUpdated,getStaged}:{date:string;onUpda
      <div className="flex gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
       <Clock3 className="mt-0.5 size-4 shrink-0 text-slate-500" aria-hidden/>
       <div className="space-y-1.5">
-       <p>Tự sửa số liệu chính mình nhập <strong className="text-slate-800">trong cùng ca</strong>:</p>
+       <p>Ca <strong>22h ngày D–06h ngày D+1</strong> được chốt toàn bộ số liệu ngày D trong nhóm được phân quyền, kể cả ca trước/người khác nhập.</p>
        <div className="flex flex-wrap gap-1.5">{["06h – 14h","14h – 22h","22h – 06h hôm sau"].map(s=><span key={s} className="rounded-md border border-slate-200 bg-white px-2 py-0.5 text-xs font-semibold text-slate-700">{s}</span>)}</div>
-       <p>Qua ca thì gửi yêu cầu kèm lý do. Ô lịch sử chưa rõ người nhập phải được quản trị kiểm tra.</p>
+       <p>Ngoài thời gian chốt ngày, chỉ tự sửa số liệu của mình trong cùng ca; trường hợp khác gửi quản trị duyệt. Ô liên kết BCSX (ví dụ O4) phải sửa tại báo cáo sản xuất nguồn.</p>
       </div>
      </div>
 
@@ -107,7 +106,7 @@ export function ReportCorrections({date,onUpdated,getStaged}:{date:string;onUpda
      {!admin&&<section className="space-y-3 rounded-xl border border-indigo-100 p-4" aria-label="Đề nghị sửa">
       <div className="flex flex-wrap items-center justify-between gap-2">
        <h3 className="text-sm font-bold text-slate-900">Đề nghị sửa ngày {dmy(date)}</h3>
-       {getStaged&&<button type="button" disabled={busy||!stagedCount} onClick={()=>setDraft(getStaged?.()||[])}
+       {getStaged&&<button type="button" disabled={busy||!stagedCount} onClick={()=>{const staged=getStaged?.()||[];const allowed=staged.filter(e=>REPORT_WRITABLE_CELLS.has(e.cell)&&canProposeCtktktCorrection(user,e.cell));setDraft(allowed);const skipped=staged.filter(e=>!allowed.includes(e));setError(skipped.length?`Không đưa các ô liên kết/không có quyền vào yêu cầu: ${skipped.map(e=>e.cell).join(", ")}. Ô BCSX phải sửa tại nguồn.`:"");}}
         className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
         Lấy {stagedCount} ô đang sửa trên báo cáo</button>}
       </div>
