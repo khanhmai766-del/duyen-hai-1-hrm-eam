@@ -115,6 +115,9 @@ Chi tiết và cách dùng: `docs/ktkt-chuyen-doi.md` ("Kiểm tra bắt buộc 
   dọn/dời CSS; chụp code cũ ≥ 2 lần và truyền `--unstable` để loại phần tử tự dao động). Thêm khổ "print" (`@media print`).
   `CTKTKT_STYLE_PAGES=pmis-report,ppa-heat-rate` chỉ chụp vài trang (không cần "/" đầu); `CTKTKT_STYLE_NOW=2026-09-20` đặt
   "hôm nay" vào khoảng có dữ liệu mẫu (bảng PPA… mới có dòng); `SCENARIOS` trong tệp = trạng thái chụp thêm (mở menu, đổi tab,
-  rê chuột), tắt bằng `CTKTKT_STYLE_SCENARIOS=0`. Biến `--tw-*` của Tailwind không tính là khác. Nhiễu đã biết: nút nổi
+  rê chuột), tắt bằng `CTKTKT_STYLE_SCENARIOS=0` hoặc lọc theo tên (`CTKTKT_STYLE_SCENARIOS=anh-than`).
+  `CTKTKT_STYLE_WIDTHS=1280,1024,390,print` thêm khổ trung gian; trang sao lưu cần `CTKTKT_STYLE_BACKUP_DIR` (thư mục có
+  `backup-sample.json` tải từ API sao lưu + `backup-bad.json`). Kịch bản hộp thoại ảnh công tơ than chặn API đọc ảnh/kho ảnh
+  ngay trên trình duyệt (không gọi Gemini, không ghi DB). Pseudo-element không vẽ ở cả hai phía không tính là khác. Biến `--tw-*` của Tailwind không tính là khác. Nhiễu đã biết: nút nổi
   "cuộn xuống" (`div:1>div:4>button:1`), lề `header:0>div:2`, tooltip/đường recharts ở trang nhập liệu.
 - `ctktkt.mjs`, `ctktkt-machine.mjs` — kiểm tích hợp (DB dev chỉ có dữ liệu mẫu → `CTKTKT_VERIFY_DAY=2026-09-17`).

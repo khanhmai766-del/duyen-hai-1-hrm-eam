@@ -23,7 +23,9 @@ for (const unstablePath of unstablePaths) {
 if (unstablePaths.length) console.log(`Bỏ qua ${unstable.size} phần tử tự dao động giữa các lần chụp code cũ.`);
 const skip = (page, path) => /(^|>)script:/.test(path) || [...unstable].some(key => { const [p, q] = key.split("|"); return p === page && (path === q || path.startsWith(q + ">")); });
 // Ba phần: phần tử | ::before | ::after — đặt tiền tố để không trộn khoá.
-const props = s => Object.fromEntries(s.split("|").flatMap((part, i) => part.split(";").map(x => { const j = x.indexOf(":"); return [["", "::before ", "::after "][i] + x.slice(0, j), x.slice(j + 1)]; })));
+// ::before/::after không được vẽ (content none/normal hoặc display none) → coi như không có, khỏi so từng thuộc tính.
+const rendered = part => !/(^|;)display:none(;|$)/.test(part) && !/(^|;)content:(none|normal)(;|$)/.test(part);
+const props = s => Object.fromEntries(s.split("|").flatMap((part, i) => i && !rendered(part) ? [[["", "::before ", "::after "][i] + "(không vẽ)", "1"]] : part.split(";").map(x => { const j = x.indexOf(":"); return [["", "::before ", "::after "][i] + x.slice(0, j), x.slice(j + 1)]; })));
 let pagesDiff = 0;
 // Chỉ so các trang có trong cả hai lần chụp (lần chụp sau có thể chỉ gồm vài trang).
 for (const page of Object.keys(b.hashed).filter(page => page in a.hashed)) {

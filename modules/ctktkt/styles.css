@@ -256,3 +256,12 @@
  .ctktkt-module:has([data-module="ppa"]) > .ktkt-page-header > div:first-child { flex-basis:100%; }
  .ctktkt-module:has([data-module="ppa"]) > .ktkt-page-header :is(button,a) { min-height:40px; height:auto; }
 }
+
+/* Trang Dữ liệu các tháng thu gọn thanh đầu trang của layout — dời NGUYÊN VĂN từ components/daily-production-table.css
+   (09/11/2026) khi chuyển phần còn lại sang Tailwind (thanh đầu trang thuộc layout, không gắn lớp từ component được). */
+.ctktkt-module:has([data-module="data"]) { row-gap:6px; }
+.ctktkt-module:has([data-module="data"]) > .ktkt-page-header { min-height:36px; gap:4px 12px; }
+.ctktkt-module:has([data-module="data"]) > .ktkt-page-header :is(button,a) { min-height:32px; height:32px; padding-block:4px; }
+@media (max-width:767px) {
+ .ctktkt-module:has([data-module="data"]) > .ktkt-page-header :is(button,a) { min-height:40px; height:auto; }
+}
