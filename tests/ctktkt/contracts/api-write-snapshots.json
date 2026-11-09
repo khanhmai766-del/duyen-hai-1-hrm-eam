@@ -4474,6 +4474,60 @@
    "daily_inputs",
    "daily_inputs:2026-09"
   ],
+  "nhật ký sửa ô": [
+   {
+    "actor_id": "cmrvydnw90000chzlmavbmkqu",
+    "actor_username": "admin@powerplant.vn",
+    "actor_name": "Nguyễn Văn Hùng",
+    "source": "daily-inputs",
+    "operating_date": "2026-09-17",
+    "field_code": "F",
+    "action": "update",
+    "old_value": "24",
+    "new_value": "23.5",
+    "old_note": "",
+    "new_note": ""
+   },
+   {
+    "actor_id": "cmrvydnw90000chzlmavbmkqu",
+    "actor_username": "admin@powerplant.vn",
+    "actor_name": "Nguyễn Văn Hùng",
+    "source": "daily-inputs",
+    "operating_date": "2026-09-17",
+    "field_code": "DA",
+    "action": "update",
+    "old_value": "436.6",
+    "new_value": "101.25",
+    "old_note": "",
+    "new_note": "Ghi chú PMIS"
+   },
+   {
+    "actor_id": "cmrvydnw90000chzlmavbmkqu",
+    "actor_username": "admin@powerplant.vn",
+    "actor_name": "Nguyễn Văn Hùng",
+    "source": "daily-inputs",
+    "operating_date": "2026-09-17",
+    "field_code": "CW",
+    "action": "update",
+    "old_value": "Bình thường",
+    "new_value": "Chạy 1 lò",
+    "old_note": "",
+    "new_note": ""
+   },
+   {
+    "actor_id": "cmrvydnw90000chzlmavbmkqu",
+    "actor_username": "admin@powerplant.vn",
+    "actor_name": "Nguyễn Văn Hùng",
+    "source": "daily-inputs",
+    "operating_date": "2026-09-16",
+    "field_code": "CX",
+    "action": "update",
+    "old_value": "218.2",
+    "new_value": "Không chỉnh",
+    "old_note": "",
+    "new_note": ""
+   }
+  ],
   "sau: GET daily-inputs?period=2026-09&date=2026-09-17&scope=non-ktkt": {
    "status": 200,
    "body": {
@@ -5029,6 +5083,21 @@
    "daily_inputs",
    "daily_inputs:2026-09"
   ],
+  "nhật ký sửa ô": [
+   {
+    "actor_id": "cmrvydnw90000chzlmavbmkqu",
+    "actor_username": "admin@powerplant.vn",
+    "actor_name": "Nguyễn Văn Hùng",
+    "source": "daily-inputs",
+    "operating_date": "2026-09-17",
+    "field_code": "DA",
+    "action": "delete",
+    "old_value": "101.25",
+    "new_value": null,
+    "old_note": "Ghi chú PMIS",
+    "new_note": null
+   }
+  ],
   "sau: GET daily-inputs?period=2026-09&date=2026-09-17&scope=non-ktkt": {
    "status": 200,
    "body": {
@@ -5389,7 +5458,1047 @@
   },
   "phiên bản đọc tăng": []
  },
- "daily-inputs #11 đọc: khoảng sai": {
+ "daily-inputs #11 sửa ô đã có: đổi giá trị + ghi chú": {
+  "request": "POST daily-inputs",
+  "response": {
+   "status": 200,
+   "body": {
+    "data": {
+     "saved": 1
+    },
+    "meta": null,
+    "error": null
+   }
+  },
+  "phiên bản đọc tăng": [
+   "daily_inputs",
+   "daily_inputs:2026-09"
+  ],
+  "nhật ký sửa ô": [
+   {
+    "actor_id": "cmrvydnw90000chzlmavbmkqu",
+    "actor_username": "admin@powerplant.vn",
+    "actor_name": "Nguyễn Văn Hùng",
+    "source": "daily-inputs",
+    "operating_date": "2026-09-17",
+    "field_code": "F",
+    "action": "update",
+    "old_value": "23.5",
+    "new_value": "24",
+    "old_note": "",
+    "new_note": "Sửa lại"
+   }
+  ],
+  "sau: GET daily-inputs?period=2026-09&date=2026-09-17&scope=non-ktkt": {
+   "status": 200,
+   "body": {
+    "data": {
+     "entries": [
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "AE",
+       "value": "154.1",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "AF",
+       "value": "165.4",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "AJ",
+       "value": "176.7",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "AR",
+       "value": "188",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "AT",
+       "value": "199.3",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "B",
+       "value": "75",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "BCSX_COAL_STOCK_24H",
+       "value": "312450.75",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "BN",
+       "value": "233.2",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "BQ",
+       "value": "244.5",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "BR",
+       "value": "255.8",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "BZ",
+       "value": "278.4",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "C",
+       "value": "86.3",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CA",
+       "value": "289.7",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CC",
+       "value": "301",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CD",
+       "value": "312.3",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CE",
+       "value": "323.6",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CF",
+       "value": "334.9",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CJ",
+       "value": "210.6",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CM",
+       "value": "346.2",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CN",
+       "value": "267.1",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CQ",
+       "value": "357.5",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CR",
+       "value": "368.8",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CS",
+       "value": "380.1",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CT",
+       "value": "391.4",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CU",
+       "value": "402.7",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CV",
+       "value": "414",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CW",
+       "value": "Chạy 1 lò",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CX",
+       "value": "221.9",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "DB",
+       "value": "447.9",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "DC",
+       "value": "459.2",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "DD",
+       "value": "470.5",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "DE",
+       "value": "481.8",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "DF",
+       "value": "493.1",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "DG",
+       "value": "504.4",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "DH",
+       "value": "515.7",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "F",
+       "value": "24",
+       "note": "Sửa lại"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "GRID_RECEIVE_S1",
+       "value": "12.5",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "GRID_RECEIVE_S2",
+       "value": "0",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "H",
+       "value": "108.9",
+       "note": "Ghi chú mẫu 2026-09-17"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "I",
+       "value": "120.2",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "L",
+       "value": "24",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "X",
+       "value": "142.8",
+       "note": ""
+      }
+     ]
+    },
+    "meta": null,
+    "error": null
+   }
+  }
+ },
+ "daily-inputs #12 lưu lại đúng giá trị cũ (không ghi nhật ký)": {
+  "request": "POST daily-inputs",
+  "response": {
+   "status": 200,
+   "body": {
+    "data": {
+     "saved": 1
+    },
+    "meta": null,
+    "error": null
+   }
+  },
+  "phiên bản đọc tăng": [
+   "daily_inputs",
+   "daily_inputs:2026-09"
+  ]
+ },
+ "daily-inputs #13 chỉ đổi ghi chú": {
+  "request": "POST daily-inputs",
+  "response": {
+   "status": 200,
+   "body": {
+    "data": {
+     "saved": 1
+    },
+    "meta": null,
+    "error": null
+   }
+  },
+  "phiên bản đọc tăng": [
+   "daily_inputs",
+   "daily_inputs:2026-09"
+  ],
+  "nhật ký sửa ô": [
+   {
+    "actor_id": "cmrvydnw90000chzlmavbmkqu",
+    "actor_username": "admin@powerplant.vn",
+    "actor_name": "Nguyễn Văn Hùng",
+    "source": "daily-inputs",
+    "operating_date": "2026-09-17",
+    "field_code": "F",
+    "action": "update",
+    "old_value": "24",
+    "new_value": "24",
+    "old_note": "Sửa lại",
+    "new_note": ""
+   }
+  ]
+ },
+ "daily-inputs #14 một ô hai lần trong cùng lượt": {
+  "request": "POST daily-inputs",
+  "response": {
+   "status": 200,
+   "body": {
+    "data": {
+     "saved": 2
+    },
+    "meta": null,
+    "error": null
+   }
+  },
+  "phiên bản đọc tăng": [
+   "daily_inputs",
+   "daily_inputs:2026-09"
+  ],
+  "nhật ký sửa ô": [
+   {
+    "actor_id": "cmrvydnw90000chzlmavbmkqu",
+    "actor_username": "admin@powerplant.vn",
+    "actor_name": "Nguyễn Văn Hùng",
+    "source": "daily-inputs",
+    "operating_date": "2026-09-16",
+    "field_code": "G",
+    "action": "insert",
+    "old_value": null,
+    "new_value": "1",
+    "old_note": null,
+    "new_note": ""
+   },
+   {
+    "actor_id": "cmrvydnw90000chzlmavbmkqu",
+    "actor_username": "admin@powerplant.vn",
+    "actor_name": "Nguyễn Văn Hùng",
+    "source": "daily-inputs",
+    "operating_date": "2026-09-16",
+    "field_code": "G",
+    "action": "update",
+    "old_value": "1",
+    "new_value": "2",
+    "old_note": "",
+    "new_note": "x"
+   }
+  ],
+  "sau: GET daily-inputs?period=2026-09&date=2026-09-16&scope=non-ktkt": {
+   "status": 200,
+   "body": {
+    "data": {
+     "entries": [
+      {
+       "operatingDate": "2026-09-16",
+       "fieldCode": "AE",
+       "value": "150.4",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "fieldCode": "AF",
+       "value": "161.7",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "fieldCode": "AJ",
+       "value": "173",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "fieldCode": "AR",
+       "value": "184.3",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "fieldCode": "AT",
+       "value": "195.6",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "fieldCode": "B",
+       "value": "71.3",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "fieldCode": "BCSX_COAL_STOCK_24H",
+       "value": "312450.75",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "fieldCode": "BN",
+       "value": "229.5",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "fieldCode": "BQ",
+       "value": "240.8",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "fieldCode": "BR",
+       "value": "252.1",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "fieldCode": "BZ",
+       "value": "274.7",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "fieldCode": "C",
+       "value": "82.6",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "fieldCode": "CA",
+       "value": "286",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "fieldCode": "CC",
+       "value": "297.3",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "fieldCode": "CD",
+       "value": "308.6",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "fieldCode": "CE",
+       "value": "319.9",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "fieldCode": "CF",
+       "value": "331.2",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "fieldCode": "CJ",
+       "value": "206.9",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "fieldCode": "CM",
+       "value": "342.5",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "fieldCode": "CN",
+       "value": "263.4",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "fieldCode": "CQ",
+       "value": "353.8",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "fieldCode": "CR",
+       "value": "365.1",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "fieldCode": "CS",
+       "value": "376.4",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "fieldCode": "CT",
+       "value": "387.7",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "fieldCode": "CU",
+       "value": "399",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "fieldCode": "CV",
+       "value": "410.3",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "fieldCode": "CW",
+       "value": "Bình thường",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "fieldCode": "CX",
+       "value": "Không chỉnh",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "fieldCode": "DA",
+       "value": "432.9",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "fieldCode": "DB",
+       "value": "444.2",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "fieldCode": "DC",
+       "value": "455.5",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "fieldCode": "DD",
+       "value": "466.8",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "fieldCode": "DE",
+       "value": "478.1",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "fieldCode": "DF",
+       "value": "489.4",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "fieldCode": "DG",
+       "value": "500.7",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "fieldCode": "DH",
+       "value": "512",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "fieldCode": "F",
+       "value": "23",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "fieldCode": "G",
+       "value": "2",
+       "note": "x"
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "fieldCode": "GRID_RECEIVE_S1",
+       "value": "12.5",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "fieldCode": "GRID_RECEIVE_S2",
+       "value": "0",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "fieldCode": "H",
+       "value": "105.2",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "fieldCode": "I",
+       "value": "116.5",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "fieldCode": "L",
+       "value": "23",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-16",
+       "fieldCode": "X",
+       "value": "139.1",
+       "note": ""
+      }
+     ]
+    },
+    "meta": null,
+    "error": null
+   }
+  }
+ },
+ "daily-inputs #15 xoá ô không tồn tại": {
+  "request": "POST daily-inputs",
+  "response": {
+   "status": 400,
+   "body": {
+    "data": null,
+    "meta": null,
+    "error": "Chỉ tiêu H tự liên kết từ Chỉ tiêu KTKT, không được nhập hoặc đồng bộ lần hai."
+   }
+  },
+  "phiên bản đọc tăng": []
+ },
+ "daily-inputs #16 chỉ có ghi chú (giá trị rỗng)": {
+  "request": "POST daily-inputs",
+  "response": {
+   "status": 200,
+   "body": {
+    "data": {
+     "saved": 1
+    },
+    "meta": null,
+    "error": null
+   }
+  },
+  "phiên bản đọc tăng": [
+   "daily_inputs",
+   "daily_inputs:2026-09"
+  ],
+  "nhật ký sửa ô": [
+   {
+    "actor_id": "cmrvydnw90000chzlmavbmkqu",
+    "actor_username": "admin@powerplant.vn",
+    "actor_name": "Nguyễn Văn Hùng",
+    "source": "daily-inputs",
+    "operating_date": "2026-09-15",
+    "field_code": "CW",
+    "action": "update",
+    "old_value": "",
+    "new_value": "",
+    "old_note": "",
+    "new_note": "Chỉ ghi chú"
+   }
+  ],
+  "sau: GET daily-inputs?period=2026-09&date=2026-09-15&scope=non-ktkt": {
+   "status": 200,
+   "body": {
+    "data": {
+     "entries": [
+      {
+       "operatingDate": "2026-09-15",
+       "fieldCode": "AE",
+       "value": "146.7",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-15",
+       "fieldCode": "AF",
+       "value": "158",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-15",
+       "fieldCode": "AJ",
+       "value": "169.3",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-15",
+       "fieldCode": "AR",
+       "value": "180.6",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-15",
+       "fieldCode": "AT",
+       "value": "191.9",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-15",
+       "fieldCode": "B",
+       "value": "67.6",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-15",
+       "fieldCode": "BCSX_COAL_STOCK_24H",
+       "value": "312450.75",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-15",
+       "fieldCode": "BN",
+       "value": "225.8",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-15",
+       "fieldCode": "BQ",
+       "value": "237.1",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-15",
+       "fieldCode": "BR",
+       "value": "248.4",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-15",
+       "fieldCode": "BZ",
+       "value": "271",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-15",
+       "fieldCode": "C",
+       "value": "78.9",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-15",
+       "fieldCode": "CA",
+       "value": "282.3",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-15",
+       "fieldCode": "CC",
+       "value": "293.6",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-15",
+       "fieldCode": "CD",
+       "value": "304.9",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-15",
+       "fieldCode": "CE",
+       "value": "316.2",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-15",
+       "fieldCode": "CF",
+       "value": "327.5",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-15",
+       "fieldCode": "CJ",
+       "value": "203.2",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-15",
+       "fieldCode": "CM",
+       "value": "338.8",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-15",
+       "fieldCode": "CN",
+       "value": "259.7",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-15",
+       "fieldCode": "CQ",
+       "value": "350.1",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-15",
+       "fieldCode": "CR",
+       "value": "361.4",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-15",
+       "fieldCode": "CS",
+       "value": "372.7",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-15",
+       "fieldCode": "CT",
+       "value": "384",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-15",
+       "fieldCode": "CU",
+       "value": "395.3",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-15",
+       "fieldCode": "CV",
+       "value": "406.6",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-15",
+       "fieldCode": "CW",
+       "value": "",
+       "note": "Chỉ ghi chú"
+      },
+      {
+       "operatingDate": "2026-09-15",
+       "fieldCode": "CX",
+       "value": "214.5",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-15",
+       "fieldCode": "DA",
+       "value": "429.2",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-15",
+       "fieldCode": "DB",
+       "value": "440.5",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-15",
+       "fieldCode": "DC",
+       "value": "451.8",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-15",
+       "fieldCode": "DD",
+       "value": "463.1",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-15",
+       "fieldCode": "DE",
+       "value": "474.4",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-15",
+       "fieldCode": "DF",
+       "value": "485.7",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-15",
+       "fieldCode": "DG",
+       "value": "497",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-15",
+       "fieldCode": "DH",
+       "value": "508.3",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-15",
+       "fieldCode": "F",
+       "value": "22",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-15",
+       "fieldCode": "GRID_RECEIVE_S1",
+       "value": "12.5",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-15",
+       "fieldCode": "GRID_RECEIVE_S2",
+       "value": "0",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-15",
+       "fieldCode": "H",
+       "value": "101.5",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-15",
+       "fieldCode": "I",
+       "value": "112.8",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-15",
+       "fieldCode": "L",
+       "value": "22",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-15",
+       "fieldCode": "X",
+       "value": "135.4",
+       "note": ""
+      }
+     ]
+    },
+    "meta": null,
+    "error": null
+   }
+  }
+ },
+ "daily-inputs #17 danh sách rỗng": {
+  "request": "POST daily-inputs",
+  "response": {
+   "status": 200,
+   "body": {
+    "data": {
+     "saved": 0
+    },
+    "meta": null,
+    "error": null
+   }
+  },
+  "phiên bản đọc tăng": []
+ },
+ "daily-inputs #18 ngày năm 1999": {
+  "request": "POST daily-inputs",
+  "response": {
+   "status": 200,
+   "body": {
+    "data": {
+     "saved": 1
+    },
+    "meta": null,
+    "error": null
+   }
+  },
+  "phiên bản đọc tăng": [
+   "daily_inputs",
+   "daily_inputs:all"
+  ],
+  "nhật ký sửa ô": [
+   {
+    "actor_id": "cmrvydnw90000chzlmavbmkqu",
+    "actor_username": "admin@powerplant.vn",
+    "actor_name": "Nguyễn Văn Hùng",
+    "source": "daily-inputs",
+    "operating_date": "1999-12-31",
+    "field_code": "F",
+    "action": "insert",
+    "old_value": null,
+    "new_value": "7",
+    "old_note": null,
+    "new_note": ""
+   }
+  ],
+  "sau: GET daily-inputs?period=1999-12": {
+   "status": 200,
+   "body": {
+    "data": {
+     "entries": [
+      {
+       "operatingDate": "1999-12-31",
+       "fieldCode": "F",
+       "value": "7",
+       "note": ""
+      }
+     ]
+    },
+    "meta": null,
+    "error": null
+   }
+  }
+ },
+ "daily-inputs #19 đọc: khoảng sai": {
   "request": "GET daily-inputs?period=2026-13",
   "response": {
    "status": 400,
@@ -5401,7 +6510,7 @@
   },
   "phiên bản đọc tăng": []
  },
- "daily-inputs #12 đọc: scope lạ": {
+ "daily-inputs #20 đọc: scope lạ": {
   "request": "GET daily-inputs?period=2026-09&scope=khac",
   "response": {
    "status": 400,
@@ -5928,6 +7037,47 @@
    "ppa_heat_rate_daily",
    "ppa_heat_rate_daily:2026-09"
   ],
+  "nhật ký sửa ô": [
+   {
+    "actor_id": "cmrvydnw90000chzlmavbmkqu",
+    "actor_username": "admin@powerplant.vn",
+    "actor_name": "Nguyễn Văn Hùng",
+    "source": "ppa-heat-rate/notes",
+    "operating_date": "2026-09-17",
+    "field_code": "PPA_CSKD_S1",
+    "action": "insert",
+    "old_value": null,
+    "new_value": "612.5",
+    "old_note": null,
+    "new_note": ""
+   },
+   {
+    "actor_id": "cmrvydnw90000chzlmavbmkqu",
+    "actor_username": "admin@powerplant.vn",
+    "actor_name": "Nguyễn Văn Hùng",
+    "source": "ppa-heat-rate/notes",
+    "operating_date": "2026-09-17",
+    "field_code": "PPA_CSKD_S2",
+    "action": "insert",
+    "old_value": null,
+    "new_value": "600",
+    "old_note": null,
+    "new_note": ""
+   },
+   {
+    "actor_id": "cmrvydnw90000chzlmavbmkqu",
+    "actor_username": "admin@powerplant.vn",
+    "actor_name": "Nguyễn Văn Hùng",
+    "source": "ppa-heat-rate/notes",
+    "operating_date": "2026-09-17",
+    "field_code": "PPA_EVENT_S1",
+    "action": "insert",
+    "old_value": null,
+    "new_value": "Ngừng 2 giờ",
+    "old_note": null,
+    "new_note": ""
+   }
+  ],
   "sau: GET ppa-heat-rate?period=2026-09&from=2026-09-01&to=2026-09-30": {
    "status": 200,
    "body": {
@@ -6368,6 +7518,34 @@
    "daily_inputs:2026-09",
    "ppa_heat_rate_daily",
    "ppa_heat_rate_daily:2026-09"
+  ],
+  "nhật ký sửa ô": [
+   {
+    "actor_id": "cmrvydnw90000chzlmavbmkqu",
+    "actor_username": "admin@powerplant.vn",
+    "actor_name": "Nguyễn Văn Hùng",
+    "source": "ppa-heat-rate/notes",
+    "operating_date": "2026-09-17",
+    "field_code": "PPA_CSKD_S1",
+    "action": "delete",
+    "old_value": "612.5",
+    "new_value": null,
+    "old_note": "",
+    "new_note": null
+   },
+   {
+    "actor_id": "cmrvydnw90000chzlmavbmkqu",
+    "actor_username": "admin@powerplant.vn",
+    "actor_name": "Nguyễn Văn Hùng",
+    "source": "ppa-heat-rate/notes",
+    "operating_date": "2026-09-17",
+    "field_code": "PPA_EVENT_S1",
+    "action": "delete",
+    "old_value": "Ngừng 2 giờ",
+    "new_value": null,
+    "old_note": "",
+    "new_note": null
+   }
   ],
   "sau: GET daily-inputs?period=2026-09&date=2026-09-17&scope=non-ktkt": {
    "status": 200,
@@ -7358,6 +8536,34 @@
    "daily_inputs",
    "daily_inputs:2026-09",
    "daily_inputs:all"
+  ],
+  "nhật ký sửa ô": [
+   {
+    "actor_id": "cmrvydnw90000chzlmavbmkqu",
+    "actor_username": "admin@powerplant.vn",
+    "actor_name": "Nguyễn Văn Hùng",
+    "source": "ctktkt-report",
+    "operating_date": "2026-09-17",
+    "field_code": "KTKT:W8",
+    "action": "update",
+    "old_value": "31715794",
+    "new_value": "31715900.5",
+    "old_note": "",
+    "new_note": ""
+   },
+   {
+    "actor_id": "cmrvydnw90000chzlmavbmkqu",
+    "actor_username": "admin@powerplant.vn",
+    "actor_name": "Nguyễn Văn Hùng",
+    "source": "ctktkt-report",
+    "operating_date": "2026-09-17",
+    "field_code": "KTKT:Y8",
+    "action": "update",
+    "old_value": "31719301",
+    "new_value": "31719400",
+    "old_note": "",
+    "new_note": ""
+   }
   ],
   "sau: GET ctktkt-report?period=2026-09&date=2026-09-17&scope=stored": {
    "status": 200,
@@ -8947,6 +10153,21 @@
    "daily_inputs:2026-09",
    "daily_inputs:all"
   ],
+  "nhật ký sửa ô": [
+   {
+    "actor_id": "cmrvydnw90000chzlmavbmkqu",
+    "actor_username": "admin@powerplant.vn",
+    "actor_name": "Nguyễn Văn Hùng",
+    "source": "ctktkt-report",
+    "operating_date": "2026-09-17",
+    "field_code": "KTKT:AA8",
+    "action": "delete",
+    "old_value": "31723353",
+    "new_value": null,
+    "old_note": "",
+    "new_note": null
+   }
+  ],
   "sau: GET ctktkt-report?period=2026-09&date=2026-09-17&scope=stored": {
    "status": 200,
    "body": {
@@ -10505,6 +11726,21 @@
    "daily_inputs",
    "daily_inputs:2026-09",
    "daily_inputs:all"
+  ],
+  "nhật ký sửa ô": [
+   {
+    "actor_id": "cmrvydnw90000chzlmavbmkqu",
+    "actor_username": "admin@powerplant.vn",
+    "actor_name": "Nguyễn Văn Hùng",
+    "source": "ctktkt-report",
+    "operating_date": "2026-09-16",
+    "field_code": "KTKT:STARTUP_UNIT",
+    "action": "insert",
+    "old_value": null,
+    "new_value": "S1",
+    "old_note": null,
+    "new_note": ""
+   }
   ],
   "sau: GET ctktkt-report?period=2026-09&date=2026-09-16&scope=daily-links": {
    "status": 200,
@@ -12183,6 +13419,21 @@
    "daily_inputs",
    "daily_inputs:2026-09",
    "daily_inputs:all"
+  ],
+  "nhật ký sửa ô": [
+   {
+    "actor_id": "cmrvydnw90000chzlmavbmkqu",
+    "actor_username": "admin@powerplant.vn",
+    "actor_name": "Nguyễn Văn Hùng",
+    "source": "ctktkt-report",
+    "operating_date": "2026-09-17",
+    "field_code": "KTKT:COAL_ADJ_NOTE_S1",
+    "action": "insert",
+    "old_value": null,
+    "new_value": "Hiệu chỉnh theo biên bản kiểm kê",
+    "old_note": null,
+    "new_note": ""
+   }
   ],
   "sau: GET ctktkt-report?period=2026-09&date=2026-09-17&scope=stored": {
    "status": 200,

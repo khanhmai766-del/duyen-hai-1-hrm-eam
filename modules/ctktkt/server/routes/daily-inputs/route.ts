@@ -1,7 +1,9 @@
 import { isCtktktSameOrigin } from "@/modules/ctktkt/lib/request-origin";
 import { canEditDailyInput } from "@/modules/ctktkt/lib/auth/daily-input-permissions";
-import { auditedDailyBatch } from "@/modules/ctktkt/lib/daily-input-audit";
-import { getRawDb } from "@/modules/ctktkt/db";
+import { writeDailyInputs } from "@/modules/ctktkt/lib/daily-input-store";
+import { prisma } from "@/lib/prisma";
+import { ktktUtcNow, ktktWrite } from "@/modules/ctktkt/db/prisma";
+import { operationalWriteKeysFor } from "@/modules/ctktkt/lib/operational-query-policy";
 import { ok, fail } from "@/lib/api";
 import { CTKTKT_LINKED_DAILY_CODES } from "@/modules/ctktkt/lib/daily-source-links";
 import { requireAnyPermission, requireSession } from "@/modules/ctktkt/lib/auth/server";
@@ -20,7 +22,15 @@ export async function GET(request: Request) {
   const range = reportQueryRange(params);
   const scope=params.get("scope");
   if (!range||(scope!==null&&scope!=="non-ktkt")) return fail("Khoảng đọc dữ liệu không hợp lệ.", 400);
-  try { const { results } = await getRawDb().prepare(`SELECT operating_date AS operatingDate, field_code AS fieldCode, value, note FROM daily_inputs WHERE operating_date >= ? AND operating_date < ? AND operating_date <= ? ${scope==="non-ktkt"?"AND field_code NOT LIKE 'KTKT:%'":""} ORDER BY operating_date, field_code`).bind(range.from, range.next, vietnamDateIso()).all(); return ok({ entries: results }); }
+  try {
+    // Không trả ngày tương lai; scope=non-ktkt bỏ các ô "KTKT:…" (đã có ở Chỉ tiêu KTKT).
+    const rows = await prisma.ctktktDailyInputs.findMany({
+      where: { operating_date: { gte: range.from, lt: range.next, lte: vietnamDateIso() }, ...(scope === "non-ktkt" ? { NOT: { field_code: { startsWith: "KTKT:" } } } : {}) },
+      orderBy: [{ operating_date: "asc" }, { field_code: "asc" }],
+      select: { operating_date: true, field_code: true, value: true, note: true },
+    });
+    return ok({ entries: rows.map(r => ({ operatingDate: r.operating_date, fieldCode: r.field_code, value: r.value, note: r.note })) });
+  }
   catch { return unavailable(); }
 }
 
@@ -34,6 +44,12 @@ export async function POST(request: Request) {
       if (!datePattern.test(operatingDate) || !operatingDate.startsWith(`${body.period}-`) || !allowedCodes.has(fieldCode)) throw new Error("Ngày hoặc mã chỉ tiêu không hợp lệ."); if(operatingDate>vietnamDateIso()) throw new Error("Không thể nhập hoặc đồng bộ dữ liệu cho ngày trong tương lai."); if (CTKTKT_LINKED_DAILY_CODES.has(fieldCode)) throw new Error(`Chỉ tiêu ${fieldCode} tự liên kết từ Chỉ tiêu KTKT, không được nhập hoặc đồng bộ lần hai.`); if (value.length>100 || note.length>500) throw new Error("Giá trị hoặc ghi chú quá dài."); const isNumeric=/^-?\d+(?:[.,]\d+)?$/.test(value), isNoAdjustment=fieldCode==="CX"&&value.toLocaleLowerCase("vi")==="không chỉnh"; if(fieldCode!=="CW"&&value!==""&&!isNumeric&&!isNoAdjustment) throw new Error(`Giá trị ${fieldCode} phải là số hoặc trạng thái được hỗ trợ.`); return {operatingDate,fieldCode,value:value.replace(",","."),note}; });
     if (clean.some(entry => !canEditDailyInput(guard.user, entry.fieldCode))) return fail("Tài khoản không có quyền nhập một hoặc nhiều chỉ tiêu được gửi lên.", 403);
     if (clean.some(entry => !canEditOperatingDate(entry.operatingDate, isAdminUser(guard.user)))) return fail("Chỉ tài khoản admin/quản trị được chỉnh sửa dữ liệu trước ngày D-1.", 403);
-    const db=getRawDb(); const statements=clean.map(e=>e.value===""&&e.note===""?db.prepare("DELETE FROM daily_inputs WHERE operating_date = ? AND field_code = ?").bind(e.operatingDate,e.fieldCode):db.prepare("INSERT INTO daily_inputs (operating_date, field_code, value, note, updated_at) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP) ON CONFLICT(operating_date, field_code) DO UPDATE SET value = excluded.value, note = excluded.note, updated_at = CURRENT_TIMESTAMP").bind(e.operatingDate,e.fieldCode,e.value,e.note)); if(statements.length)await auditedDailyBatch(db, guard.user, "daily-inputs", statements); return ok({saved:clean.length});
+    // Giá trị và ghi chú đều rỗng = xoá ô; còn lại thêm/sửa (ghi đè ghi chú). Nhật ký sửa + phiên bản đọc cùng giao dịch.
+    if (clean.length) {
+      const user = guard.user, updatedAt = ktktUtcNow();
+      await ktktWrite([...new Set(clean.flatMap(e => operationalWriteKeysFor("daily_inputs", [e.operatingDate])))], tx => writeDailyInputs(tx, user, "daily-inputs",
+        clean.map(e => e.value === "" && e.note === "" ? { kind: "delete" as const, operatingDate: e.operatingDate, fieldCode: e.fieldCode } : { kind: "upsert" as const, ...e }), updatedAt));
+    }
+    return ok({saved:clean.length});
   } catch(error) { return fail(error instanceof SyntaxError?"Dữ liệu JSON không hợp lệ.":error instanceof Error?error.message:"Dữ liệu không hợp lệ.",400); }
 }

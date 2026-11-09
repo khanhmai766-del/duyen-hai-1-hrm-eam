@@ -228,6 +228,18 @@ const WRITE_SCENARIOS = {
     { step: "kỳ sai định dạng", method: "POST", path: "daily-inputs", json: { period: "09/2026", entries: [] } },
     { step: "JSON hỏng", method: "POST", path: "daily-inputs", raw: "{không phải json", headers: { "Content-Type": "application/json" } },
     { step: "không phải JSON (415)", method: "POST", path: "daily-inputs", raw: "period=2026-09", headers: { "Content-Type": "text/plain" } },
+    { step: "sửa ô đã có: đổi giá trị + ghi chú", method: "POST", path: "daily-inputs", json: { period: "2026-09", entries: [{ operatingDate: "2026-09-17", fieldCode: "F", value: "24", note: "Sửa lại" }] },
+      after: ["daily-inputs?period=2026-09&date=2026-09-17&scope=non-ktkt"] },
+    { step: "lưu lại đúng giá trị cũ (không ghi nhật ký)", method: "POST", path: "daily-inputs", json: { period: "2026-09", entries: [{ operatingDate: "2026-09-17", fieldCode: "F", value: "24", note: "Sửa lại" }] } },
+    { step: "chỉ đổi ghi chú", method: "POST", path: "daily-inputs", json: { period: "2026-09", entries: [{ operatingDate: "2026-09-17", fieldCode: "F", value: "24", note: "" }] } },
+    { step: "một ô hai lần trong cùng lượt", method: "POST", path: "daily-inputs", json: { period: "2026-09", entries: [{ operatingDate: "2026-09-16", fieldCode: "G", value: "1", note: "" }, { operatingDate: "2026-09-16", fieldCode: "G", value: "2", note: "x" }] },
+      after: ["daily-inputs?period=2026-09&date=2026-09-16&scope=non-ktkt"] },
+    { step: "xoá ô không tồn tại", method: "POST", path: "daily-inputs", json: { period: "2026-09", entries: [{ operatingDate: "2026-09-15", fieldCode: "H", value: "", note: "" }] } },
+    { step: "chỉ có ghi chú (giá trị rỗng)", method: "POST", path: "daily-inputs", json: { period: "2026-09", entries: [{ operatingDate: "2026-09-15", fieldCode: "CW", value: "", note: "Chỉ ghi chú" }] },
+      after: ["daily-inputs?period=2026-09&date=2026-09-15&scope=non-ktkt"] },
+    { step: "danh sách rỗng", method: "POST", path: "daily-inputs", json: { period: "2026-09", entries: [] } },
+    { step: "ngày năm 1999", method: "POST", path: "daily-inputs", json: { period: "1999-12", entries: [{ operatingDate: "1999-12-31", fieldCode: "F", value: "7", note: "" }] },
+      after: ["daily-inputs?period=1999-12"] },
     { step: "đọc: khoảng sai", method: "GET", path: "daily-inputs?period=2026-13" },
     { step: "đọc: scope lạ", method: "GET", path: "daily-inputs?period=2026-09&scope=khac" },
   ],
@@ -356,6 +368,22 @@ async function readVersions() {
 function versionDelta(before, after) {
   return Object.keys(after).filter(k => after[k] !== (before[k] ?? 0)).sort();
 }
+// Nhật ký sửa ô dữ liệu ngày (ctktkt_daily_input_audit) mà một bước ghi sinh ra — bỏ id và mốc giờ.
+async function auditMaxId() {
+  const url = new URL(process.env.DATABASE_URL); url.search = "";
+  const c = new pg.Client({ connectionString: url.toString() }); await c.connect();
+  const { rows } = await c.query("SELECT COALESCE(MAX(id), 0) AS id FROM public.ctktkt_daily_input_audit");
+  await c.end();
+  return Number(rows[0].id);
+}
+async function auditSince(id) {
+  const url = new URL(process.env.DATABASE_URL); url.search = "";
+  const c = new pg.Client({ connectionString: url.toString() }); await c.connect();
+  const { rows } = await c.query(`SELECT actor_id, actor_username, actor_name, source, operating_date, field_code, action, old_value, new_value, old_note, new_note
+    FROM public.ctktkt_daily_input_audit WHERE id > $1 ORDER BY id`, [id]);
+  await c.end();
+  return rows;
+}
 async function runWrites(cookie) {
   const out = {};
   for (const [group, steps] of Object.entries(WRITE_SCENARIOS)) {
@@ -380,9 +408,11 @@ async function runWrites(cookie) {
         }
         init.body = fd;
       }
-      const versionsBefore = await readVersions();
+      const versionsBefore = await readVersions(), auditBefore = await auditMaxId();
       const result = { request: `${s.method} ${s.path}`, response: await call(cookie, s.method, s.path, init) };
       result["phiên bản đọc tăng"] = versionDelta(versionsBefore, await readVersions());
+      const audit = await auditSince(auditBefore);
+      if (audit.length) result["nhật ký sửa ô"] = audit;
       for (const a of s.after ?? []) result[`sau: GET ${a}`] = await call(cookie, "GET", a);
       out[`${group} #${String(i + 1).padStart(2, "0")} ${s.step}`] = result;
     }

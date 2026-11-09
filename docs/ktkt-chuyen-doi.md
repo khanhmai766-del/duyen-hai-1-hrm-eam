@@ -102,7 +102,7 @@ xác minh, "nạp lại") gọi thẳng `apiGet`.
 - `styles.css` còn các quy tắc `.module-chart-grid …` không phần tử nào dùng (đã xoá phần của PMIS); dọn ở giai đoạn 4.
 - PMIS (đã sửa khi chuyển): bản cũ báo "Không đồng bộ được ngày nào…" rồi tự xoá ngay vì lượt tải lại đặt `error = ""`;
   nay thông báo lỗi còn hiển thị.
-| 3 | `getRawDb()` → Prisma, đọc trước ghi sau; có thể "so bóng" (chạy cả truy vấn cũ và mới, ghi log khi lệch). Cùng thứ tự trang | Hoá chất ✅ · Lượng nước ✅ (09/11) · còn lại ⏳ |
+| 3 | `getRawDb()` → Prisma, đọc trước ghi sau; có thể "so bóng" (chạy cả truy vấn cũ và mới, ghi log khi lệch). Cùng thứ tự trang | Hoá chất ✅ · Lượng nước ✅ · PMIS (`daily-inputs`, dùng chung với Dữ liệu các tháng) ✅ (09/11) · còn lại ⏳ |
 | 4 | Chuyển 4 API máy; xoá `db/sql.ts`, `getRawDb`, `useCtktktRequest`, cổng `[[...path]]` | ⏳ |
 
 ### Giai đoạn 3 — mẫu chuyển một route sang Prisma (theo Hoá chất, 09/11/2026)
@@ -119,6 +119,10 @@ xác minh, "nạp lại") gọi thẳng `apiGet`.
   (06h→14h→22h, giờ lạ cuối; ca mốc lấy ca muộn nhất của ngày gần nhất). Lưu nhiều ca và nạp file chạy trong MỘT giao dịch
   (đã sửa tồn đọng): ca nào lỗi thì cả lượt huỷ — bước hợp đồng "nhiều ca, ca sau sai giờ" ghi lại có chủ đích.
   File Excel Lượng nước so bằng `scripts/verify/ctktkt-export-dump.mjs` (giá trị từng ô + ô gộp, cũ ↔ mới): giống hệt.
+- Ô dữ liệu ngày: `writeDailyInputs()` (`lib/daily-input-store.ts`) = bản Prisma của `auditedDailyBatch` — đọc ô cũ, ghi
+  nhật ký sửa (chỉ khi giá trị/ghi chú đổi), rồi xoá hoặc thêm/sửa; `keepNote` cho các route giữ ghi chú cũ. `auditedDailyBatch`
+  còn dùng ở ppa-heat-rate/notes, bcsx-coal-stock, bcsx-sync tới khi chuyển các trang đó. Hợp đồng ghi chụp cả
+  **"nhật ký sửa ô"** mỗi bước.
 - Test hợp đồng ghi nay chụp cả **"phiên bản đọc tăng"** (tập khoá, không đếm số lần) mỗi bước. Trước khi chuyển một route: thêm kịch bản ghi nếu chưa có
   và `--writes --record` **trên code cũ**.
 

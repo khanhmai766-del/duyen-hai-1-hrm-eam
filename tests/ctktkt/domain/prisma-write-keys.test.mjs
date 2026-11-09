@@ -39,6 +39,10 @@ const CASES = [
              WHERE log_date = ? AND shift_time = ?`, d => [1, 2, 3, 4, 5, 6, 7, 8, d, '06h00'], d => operationalWriteKeysFor('water_shift_logs', [d])],
   ['water xoá theo ngày + ca', 'DELETE FROM water_shift_logs WHERE log_date = ? AND shift_time = ?', d => [d, '14h00'], d => operationalWriteKeysFor('water_shift_logs', [d])],
   ['water xoá theo id', 'DELETE FROM water_shift_logs WHERE id = ?', () => [7], () => operationalWriteKeysFor('water_shift_logs')],
+  // Ô dữ liệu ngày (PMIS / Dữ liệu các tháng): thêm-sửa và xoá theo ngày + mã ô.
+  ['daily_inputs thêm/sửa', "INSERT INTO daily_inputs (operating_date, field_code, value, note, updated_at) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP) ON CONFLICT(operating_date, field_code) DO UPDATE SET value = excluded.value, note = excluded.note, updated_at = CURRENT_TIMESTAMP",
+    d => [d, 'F', '23.5', ''], d => operationalWriteKeysFor('daily_inputs', [d])],
+  ['daily_inputs xoá', 'DELETE FROM daily_inputs WHERE operating_date = ? AND field_code = ?', d => [d, 'F'], d => operationalWriteKeysFor('daily_inputs', [d])],
   ['trưởng ca (không phải dữ liệu vận hành)', `INSERT INTO water_shift_leaders (name, is_active, display_order)
          VALUES (?, ?, ?)
          ON CONFLICT(name) DO UPDATE SET is_active = excluded.is_active, display_order = excluded.display_order`, () => ['A', 1, 0], () => operationalWriteKeysFor('water_shift_leaders')],
