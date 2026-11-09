@@ -1,4 +1,4 @@
-import { getRawDb } from "../db";
+import { prisma } from "@/lib/prisma";
 import { integrationAuthorized, integrationPeriod } from "./integration-api";
 import { mergeDailyInputsWithCtktkt } from "./daily-source-links";
 import { calculateActualHeatRate, compareHeatRate } from "./ppa-heat-rate";
@@ -7,9 +7,29 @@ import { vietnamDateIso } from "./operating-date";
 const headers = { "Cache-Control":"no-store, private", "X-Content-Type-Options":"nosniff" };
 const json = (body: unknown, status=200) => Response.json(body,{status,headers});
 const number = (value:unknown) => { if(value===null || value===undefined || String(value).trim()==="") return null; const n=Number(String(value).replace(",",".")); return Number.isFinite(n)?n:null; };
-// Tách phụ thuộc để kiểm hợp đồng bearer và truy vấn PostgreSQL mà không cần khóa thật.
-export async function readOperatingData(request: Request, dependencies = {
-  getDb: getRawDb,
+type DailyRow = { operatingDate: string; fieldCode: string; value: string };
+type CellRow = { operatingDate: string; cell: string; value: string };
+type PpaRow = { operatingDate: string; ppaPlant: string; ppaS1: string; ppaS2: string; updatedAt: string };
+export type OperatingDataReader = {
+  daily: (from: string, next: string, today: string) => Promise<DailyRow[]>;
+  ctktkt: (from: string, next: string, today: string) => Promise<CellRow[]>;
+  ppa: (from: string, next: string, today: string) => Promise<PpaRow[]>;
+};
+/** Bộ đọc Prisma — cùng điều kiện và thứ tự như các câu SQL cũ (ô ngày không sắp; PPA theo ngày). */
+export const prismaOperatingDataReader: OperatingDataReader = {
+  daily: async (from, next, today) => (await prisma.ctktktDailyInputs.findMany({
+    where: { operating_date: { gte: from, lt: next, lte: today } }, select: { operating_date: true, field_code: true, value: true },
+  })).map(r => ({ operatingDate: r.operating_date, fieldCode: r.field_code, value: r.value })),
+  ctktkt: async (from, next, today) => (await prisma.ctktktDailyInputs.findMany({
+    where: { field_code: { startsWith: "KTKT:" }, operating_date: { gte: from, lt: next, lte: today } }, select: { operating_date: true, field_code: true, value: true },
+  })).map(r => ({ operatingDate: r.operating_date, cell: r.field_code.slice(5), value: r.value })),
+  ppa: async (from, next, today) => (await prisma.ctktktPpaHeatRateDaily.findMany({
+    where: { operating_date: { gte: from, lt: next, lte: today } }, orderBy: { operating_date: "asc" },
+    select: { operating_date: true, ppa_plant: true, ppa_s1: true, ppa_s2: true, updated_at: true },
+  })).map(r => ({ operatingDate: r.operating_date, ppaPlant: r.ppa_plant, ppaS1: r.ppa_s1, ppaS2: r.ppa_s2, updatedAt: r.updated_at })),
+};
+// Tách phụ thuộc để kiểm hợp đồng bearer và dữ liệu trả về mà không cần khóa/DB thật.
+export async function readOperatingData(request: Request, dependencies: { reader?: OperatingDataReader; expectedHash?: string; today?: string } = {
   expectedHash: process.env.PXVH1_READ_API_KEY_SHA256,
   today: vietnamDateIso(),
 }) {
@@ -19,12 +39,12 @@ export async function readOperatingData(request: Request, dependencies = {
   const dataset=url.searchParams.get("dataset");
   if(!range || (dataset!=="pmis" && dataset!=="ppa")) return json({error:"Cần period=YYYY-MM và dataset=pmis hoặc ppa."},400);
   try {
-    const db=dependencies.getDb(), today=dependencies.today;
+    const reader=dependencies.reader ?? prismaOperatingDataReader, today=dependencies.today ?? vietnamDateIso();
     const previousDate=new Date(`${range.from}T00:00:00Z`);
     previousDate.setUTCDate(previousDate.getUTCDate()-1);
-    const daily=await db.prepare("SELECT operating_date AS operatingDate, field_code AS fieldCode, value FROM daily_inputs WHERE operating_date >= ? AND operating_date < ? AND operating_date <= ?").bind(range.from,range.next,today).all();
-    const ct=await db.prepare("SELECT operating_date AS operatingDate, substr(field_code, 6) AS cell, value FROM daily_inputs WHERE field_code LIKE 'KTKT:%' AND operating_date >= ? AND operating_date < ? AND operating_date <= ?").bind(previousDate.toISOString().slice(0,10),range.next,today).all();
-    const merged=mergeDailyInputsWithCtktkt(daily.results as {operatingDate:string;fieldCode:string;value:string}[],ct.results as {operatingDate:string;cell:string;value:string}[],range.period);
+    const daily=await reader.daily(range.from,range.next,today);
+    const ct=await reader.ctktkt(previousDate.toISOString().slice(0,10),range.next,today);
+    const merged=mergeDailyInputsWithCtktkt(daily,ct,range.period);
     const byDate=new Map<string,Record<string,string>>();
     for(const entry of merged) { const values=byDate.get(entry.operatingDate)||{}; values[entry.fieldCode]=entry.value; byDate.set(entry.operatingDate,values); }
     if(dataset==="pmis") {
@@ -35,8 +55,8 @@ export async function readOperatingData(request: Request, dependencies = {
       });
       return json({version:1,dataset,period:range.period,entries});
     }
-    const ppa=await db.prepare("SELECT operating_date AS operatingDate, ppa_plant AS ppaPlant, ppa_s1 AS ppaS1, ppa_s2 AS ppaS2, updated_at AS updatedAt FROM ppa_heat_rate_daily WHERE operating_date >= ? AND operating_date < ? AND operating_date <= ? ORDER BY operating_date").bind(range.from,range.next,today).all();
-    const entries=ppa.results.map(row=>{
+    const ppa=await reader.ppa(range.from,range.next,today);
+    const entries=ppa.map(row=>{
       const actual=calculateActualHeatRate(byDate.get(String(row.operatingDate))||{});
       const unit=(a:number|null,p:unknown)=>({actual:a,ppa:number(p),...compareHeatRate(a,number(p))});
       return {operatingDate:row.operatingDate,updatedAt:row.updatedAt,unit:"kJ/kWh",plant:unit(actual?.actualPlant??null,row.ppaPlant),s1:unit(actual?.actualS1??null,row.ppaS1),s2:unit(actual?.actualS2??null,row.ppaS2)};

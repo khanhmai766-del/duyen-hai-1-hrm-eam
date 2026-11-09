@@ -19,9 +19,11 @@ async function snapshot(ppaRows){
     sheet.addRow(['Header']);sheet.addRow(['Units']);
     return book;
   }
-  const db={prepare(sql){return {bind(){return {all:async()=>({results:sql.includes('FROM ppa_heat_rate_daily')?ppaRows:[]})};}};}};
+  // Prisma giả: chỉ bảng PPA có dòng; các bảng khác rỗng. Truy vấn Prisma thật so với SQL cũ bằng ctktkt-shadow-dump.mjs.
+  const none={findMany:async()=>[]};
+  const prisma={ctktktDailyInputs:none,ctktktShiftReadings:none,ctktktWaterShiftLogs:none,ctktktChemicalUsageLogs:none,ctktktOperatingEvents:none,ctktktPpaHeatRateDaily:{findMany:async()=>ppaRows}};
   vm.runInNewContext(code,{exports,Buffer,Response,Request,URL,Date,console,require:name=>{
-    if(name==='@/modules/ctktkt/db')return {getRawDb:()=>db};
+    if(name==='@/lib/prisma')return {prisma};
     if(name.startsWith('./report-exports/'))return {buildCtktktWorkbook:buildWorkbook,buildWaterWorkbook:buildWorkbook};
     if(name.startsWith('./'))return require(fileURLToPath(new URL(name+(name.endsWith('.json')?'':'.ts'),root)));
     return require(name);

@@ -104,7 +104,7 @@ xác minh, "nạp lại") gọi thẳng `apiGet`.
 - PMIS (đã sửa khi chuyển): bản cũ báo "Không đồng bộ được ngày nào…" rồi tự xoá ngay vì lượt tải lại đặt `error = ""`;
   nay thông báo lỗi còn hiển thị.
 | 3 | `getRawDb()` → Prisma, đọc trước ghi sau; có thể "so bóng" (chạy cả truy vấn cũ và mới, ghi log khi lệch). Cùng thứ tự trang | Hoá chất ✅ · Lượng nước ✅ · PMIS (`daily-inputs`, dùng chung với Dữ liệu các tháng) ✅ · PPA (`ppa-heat-rate`, `/notes`, `google-sheet-sync`) ✅ · Báo cáo sản xuất (5 route; `bcsx-sync` không ai gọi — giai đoạn 4) ✅ · Chỉ tiêu KTKT ✅ (09/11: đọc, xuất Excel, lưu theo ca/yêu cầu sửa, ảnh công tơ than, Gemini dùng chung) · còn `measurements`, `bcsx-sync`, sao lưu dữ liệu, Google Mirror, API máy → giai đoạn 4 |
-| 4 | Chuyển 4 API máy; xoá `db/sql.ts`, `getRawDb`, `useCtktktRequest`, cổng `[[...path]]` | ⏳ |
+| 4 | Chuyển 4 API máy; xoá `db/sql.ts`, `getRawDb`, `useCtktktRequest`, cổng `[[...path]]` | API tích hợp + Google Mirror (snapshot, status, mã kết nối) ✅ 09/11 · sao lưu/khôi phục, lịch sử dữ liệu, `measurements`, `bcsx-sync`, 3 component, gỡ lớp cũ ⏳ |
 
 ### Giai đoạn 3 — mẫu chuyển một route sang Prisma (theo Hoá chất, 09/11/2026)
 
@@ -136,6 +136,9 @@ xác minh, "nạp lại") gọi thẳng `apiGet`.
   thật, kho tệp giả; đạt trên CẢ code cũ lẫn mới, kể cả 10 lượt đọc đồng thời) + hợp đồng API 7 đường ảnh (chủ ảnh, quyền duyệt,
   hết hạn, tải ảnh kèm tiêu đề an toàn; ảnh mẫu `contract-photo-a/b/c`).
   `measurements` và `bcsx-sync`: không nơi nào gọi — quyết định giữ/bỏ ở giai đoạn 4.
+- API tích hợp (`operating-data-api.ts`) nhận `reader` (bộ đọc) thay `getDb`; Google Mirror đọc bằng Prisma. So bằng
+  `scripts/verify/ctktkt-shadow-dump.mjs` (gọi thẳng hàm, cũ ↔ mới, bỏ `generatedAt`): ảnh chụp Mirror 4 tháng (có một ngày PPA
+  đủ 48 điểm, cả trường hợp nguồn PPA hỏng phải dừng) và API PMIS/PPA — giống hệt.
 - Test hợp đồng ghi nay chụp cả **"phiên bản đọc tăng"** (tập khoá, không đếm số lần) mỗi bước. Trước khi chuyển một route: thêm kịch bản ghi nếu chưa có
   và `--writes --record` **trên code cũ**.
 

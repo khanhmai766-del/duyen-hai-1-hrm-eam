@@ -1,6 +1,6 @@
 import {mirrorWorkbookTabs} from './google-mirror-workbook';
 import {indexMirrorReadings} from './google-mirror-readings';
-import {getRawDb} from '@/modules/ctktkt/db';
+import {prisma} from '@/lib/prisma';
 import {createHash} from 'node:crypto';
 import {deriveCtktktCellsFromBcsx} from './ctktkt-bcsx-link';
 import {ctktktWaterLogFromRow,deriveCtktktCellsFromWater} from './ctktkt-water-link';
@@ -29,17 +29,18 @@ function column(code:string){return [...code].reduce((n,c)=>n*26+c.charCodeAt(0)
 function put(rows:Matrix,address:string,value:MirrorCell){const m=/^([A-Z]+)(\d+)$/.exec(address);if(m&&rows[Number(m[2])-1])rows[Number(m[2])-1][column(m[1])]=value;}
 /** A bounded month read, with the preceding day for counter carry-over. No personnel/ACL tables. */
 export async function buildMirrorSnapshot(period:string,_versions?:Record<string,number>){
- const db=getRawDb(),from=period+'-01',next=addDaysIso(period+'-28',4).slice(0,7)+'-01',previous=addDaysIso(from,-1);
+ const from=period+'-01',next=addDaysIso(period+'-28',4).slice(0,7)+'-01',previous=addDaysIso(from,-1);
  const end=period===vietnamDateIso().slice(0,7)?addDaysIso(vietnamDateIso(),1):next;
- const read=async(sql:string)=> (await db.prepare(sql).bind(previous,end).all()).results as DbRow[];
+ // Sáu lượt đọc [ngày trước tháng, end) bằng Prisma — cùng cột (tên snake_case) và thứ tự như SQL cũ.
+ const day={gte:previous,lt:end};
  const [daily,shift,water,ppa,chemical,events]=await Promise.all([
-  read('SELECT operating_date,field_code,value FROM daily_inputs WHERE operating_date>=? AND operating_date<? ORDER BY operating_date,field_code'),
-  read('SELECT operating_date,unit,time_slot,metric,value FROM shift_readings WHERE operating_date>=? AND operating_date<? ORDER BY operating_date'),
-  read('SELECT * FROM water_shift_logs WHERE log_date>=? AND log_date<? ORDER BY log_date,shift_time'),
-  read('SELECT operating_date,source_data,net_s1_kwh,net_s2_kwh,ppa_plant,ppa_s1,ppa_s2,note_s1,note_s2 FROM ppa_heat_rate_daily WHERE operating_date>=? AND operating_date<? ORDER BY operating_date'),
-  read('SELECT usage_date,chemical_code,chemical_name,material_code,unit,quantity,purpose,plant_unit,reference FROM chemical_usage_logs WHERE usage_date>=? AND usage_date<? AND deleted_at IS NULL ORDER BY usage_date,id'),
-  read('SELECT operating_date,unit,start_at,end_at,event_type,description FROM operating_events WHERE operating_date>=? AND operating_date<? ORDER BY operating_date,unit,start_at'),
- ]);
+  prisma.ctktktDailyInputs.findMany({where:{operating_date:day},orderBy:[{operating_date:'asc'},{field_code:'asc'}],select:{operating_date:true,field_code:true,value:true}}),
+  prisma.ctktktShiftReadings.findMany({where:{operating_date:day},orderBy:{operating_date:'asc'},select:{operating_date:true,unit:true,time_slot:true,metric:true,value:true}}),
+  prisma.ctktktWaterShiftLogs.findMany({where:{log_date:day},orderBy:[{log_date:'asc'},{shift_time:'asc'}]}),
+  prisma.ctktktPpaHeatRateDaily.findMany({where:{operating_date:day},orderBy:{operating_date:'asc'},select:{operating_date:true,source_data:true,net_s1_kwh:true,net_s2_kwh:true,ppa_plant:true,ppa_s1:true,ppa_s2:true,note_s1:true,note_s2:true}}),
+  prisma.ctktktChemicalUsageLogs.findMany({where:{usage_date:day,deleted_at:null},orderBy:[{usage_date:'asc'},{id:'asc'}],select:{usage_date:true,chemical_code:true,chemical_name:true,material_code:true,unit:true,quantity:true,purpose:true,plant_unit:true,reference:true}}),
+  prisma.ctktktOperatingEvents.findMany({where:{operating_date:day},orderBy:[{operating_date:'asc'},{unit:'asc'},{start_at:'asc'}],select:{operating_date:true,unit:true,start_at:true,end_at:true,event_type:true,description:true}}),
+ ]) as DbRow[][];
  const findReading=indexMirrorReadings(shift);
  const ct=new Map<string,CtktktDayEntries>();
  for(const r of daily)if(String(r.field_code).startsWith('KTKT:')){const day=String(r.operating_date),values=ct.get(day)||{};values[String(r.field_code).slice(5)]=String(r.value??'');ct.set(day,values);}
