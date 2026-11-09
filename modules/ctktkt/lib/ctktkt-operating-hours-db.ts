@@ -1,4 +1,4 @@
-import type { getRawDb } from "@/modules/ctktkt/db";
+import { prisma } from "@/lib/prisma";
 import {
   calculateOperatingHours,
   CTKTKT_OPERATING_HOURS_SOURCE_CODES,
@@ -6,8 +6,6 @@ import {
   formatOperatingHours,
   type OperatingHoursTotals,
 } from "./ctktkt-operating-hours";
-
-type RawDb = ReturnType<typeof getRawDb>;
 
 function monthlyRanges(next: string) {
   const ranges: Array<[string, string]> = [];
@@ -27,12 +25,13 @@ function monthlyRanges(next: string) {
  * Lũy kế giờ theo QLKT cho các ngày trong [from, next).
  * Trả về các ô W68:Z69 dạng liên kết và danh sách ngày QLKT còn thiếu giờ phát tới hết khoảng.
  */
-export async function loadCtktktOperatingHours(db: RawDb, from: string, next: string) {
+export async function loadCtktktOperatingHours(from: string, next: string) {
   const codes = [...CTKTKT_OPERATING_HOURS_SOURCE_CODES];
-  const chunks = await Promise.all(monthlyRanges(next).map(([start, end]) => db.prepare(
-    `SELECT operating_date AS operatingDate, field_code AS fieldCode, value FROM daily_inputs WHERE operating_date >= ? AND operating_date < ? AND field_code IN (${codes.map(() => "?").join(", ")})`,
-  ).bind(start, end, ...codes).all()));
-  const results = chunks.flatMap(chunk => chunk.results);
+  const chunks = await Promise.all(monthlyRanges(next).map(([start, end]) => prisma.ctktktDailyInputs.findMany({
+    where: { operating_date: { gte: start, lt: end }, field_code: { in: codes } },
+    select: { operating_date: true, field_code: true, value: true },
+  })));
+  const results = chunks.flat().map(row => ({ operatingDate: row.operating_date, fieldCode: row.field_code, value: row.value }));
   const daily = new Map<string, Record<string, string>>();
   for (const row of results as Array<{ operatingDate: string; fieldCode: string; value: string }>) {
     const day = daily.get(row.operatingDate) || {};

@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {canFinalizeReportDate} from '../../modules/ctktkt/lib/input-shift.ts';
 import {saveReportWithShift} from '../../modules/ctktkt/lib/report-corrections.ts';
+import {testClient,cleanupMonth,seedCell,cellValue,closeImplementationConnections} from './helpers/corrections-db.mjs';
 
 for(const [date,time,allowed] of [
  ['2026-11-07','2026-11-07T21:59:59+07:00',false],
@@ -16,22 +17,21 @@ for(const [date,time,allowed] of [
  ['2028-02-29','2028-03-01T05:59:59+07:00',true],
 ]) test(`night reporting date ${date} at ${time}`,()=>assert.equal(canFinalizeReportDate(date,new Date(time)),allowed));
 
+// DB dev THẬT, tháng thử 2001-12; dọn trước và sau.
 test('night finalization saves earlier shifts and other owners with audit, without changing original ownership',async()=>{
- const prior=globalThis.ctktktPool,statements=[];
- globalThis.ctktktPool={connect:async()=>({release(){},query:async(sql,args)=>{
-  statements.push({sql,args});
-  if(sql.startsWith('SELECT value,note'))return {rows:[{value:'100',note:'',updated_at:'2026-11-07 01:00:00'}],rowCount:1};
-  if(sql.startsWith('SELECT id FROM'))return {rows:[{id:1}],rowCount:1};
-  if(sql.includes('SELECT owner_id'))return {rows:[{owner_id:'day-operator',shift_start:'2026-11-07T07:00:00Z'}],rowCount:1};
-  return {rows:[],rowCount:1};
- }})};
- const user={id:'night-operator',username:'night',displayName:'Ca đêm',role:'editor',position:'Trưởng kíp điện',permissions:['edit_ctktkt']};
+ const c=await testClient(),month='2001-12',date='2001-12-07';
+ const user={id:'test-corr-night-operator',username:'night',displayName:'Ca đêm',role:'editor',position:'Trưởng kíp điện',permissions:['edit_ctktkt']};
  try{
-  assert.equal((await saveReportWithShift(user,'2026-11-07',[{cell:'I35',value:'150'},{cell:'Z27',value:'200'}],undefined,new Date('2026-11-08T04:39:00+07:00'))).saved,2);
-  assert.ok(statements.some(s=>s.sql.startsWith('INSERT INTO public.ctktkt_daily_input_audit')&&s.args[0]==='night-operator'));
-  assert.ok(statements.some(s=>s.sql==='COMMIT'));
-  assert.ok(!statements.some(s=>s.sql.startsWith('UPDATE public.ctktkt_input_ownership')));
-  for(const time of ['2026-11-07T21:59:59+07:00','2026-11-08T06:00:00+07:00'])await assert.rejects(()=>saveReportWithShift(user,'2026-11-07',[{cell:'I35',value:'150'}],undefined,new Date(time)),/Ngoài thời gian chốt ngày/);
-  await assert.rejects(()=>saveReportWithShift({...user,permissions:['view_all']},'2026-11-07',[{cell:'I35',value:'150'}],undefined,new Date('2026-11-08T04:39:00+07:00')),/Ngoài thời gian chốt ngày/);
- }finally{globalThis.ctktktPool=prior;}
+  await cleanupMonth(c,month);
+  for(const cell of ['I35','Z27'])await seedCell(c,date,cell,'100',{id:'test-corr-day-operator',shiftStart:'2001-12-07T07:00:00Z'});
+  assert.equal((await saveReportWithShift(user,date,[{cell:'I35',value:'150'},{cell:'Z27',value:'200'}],undefined,new Date('2001-12-08T04:39:00+07:00'))).saved,2);
+  assert.equal(await cellValue(c,date,'I35'),'150');assert.equal(await cellValue(c,date,'Z27'),'200');
+  const audit=(await c.query("SELECT actor_id,field_code,action,old_value,new_value FROM public.ctktkt_daily_input_audit WHERE operating_date=$1 ORDER BY id",[date])).rows;
+  assert.deepEqual(audit.map(a=>[a.actor_id,a.field_code,a.action,a.old_value,a.new_value]),[['test-corr-night-operator','KTKT:I35','update','100','150'],['test-corr-night-operator','KTKT:Z27','update','100','200']]);
+  // Chủ ô gốc giữ nguyên.
+  assert.deepEqual((await c.query('SELECT DISTINCT owner_id FROM public.ctktkt_input_ownership WHERE operating_date=$1',[date])).rows,[{owner_id:'test-corr-day-operator'}]);
+  for(const time of ['2001-12-07T21:59:59+07:00','2001-12-08T06:00:00+07:00'])await assert.rejects(()=>saveReportWithShift(user,date,[{cell:'I35',value:'151'}],undefined,new Date(time)),/Ngoài thời gian chốt ngày/);
+  await assert.rejects(()=>saveReportWithShift({...user,permissions:['view_all']},date,[{cell:'I35',value:'151'}],undefined,new Date('2001-12-08T04:39:00+07:00')),/Ngoài thời gian chốt ngày/);
+  assert.equal(await cellValue(c,date,'I35'),'150');
+ }finally{await cleanupMonth(c,month).catch(()=>{});await c.end();await closeImplementationConnections();}
 });

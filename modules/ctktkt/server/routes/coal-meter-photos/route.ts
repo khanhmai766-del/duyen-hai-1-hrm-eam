@@ -12,17 +12,18 @@ export async function GET(request:Request) {
   try {
     const db=await coalPhotoDb(),id=url.searchParams.get("id");
     if(id){
-      const photo=review
-        ?await db.prepare("SELECT type,data FROM coal_meter_photos WHERE id=? AND expires_at>?").bind(id,Date.now()).first()
-        :await db.prepare("SELECT type,data FROM coal_meter_photos WHERE id=? AND owner_id=? AND expires_at>?").bind(id,user.id,Date.now()).first();
+      // Người duyệt xem mọi ảnh còn hạn; người nhập chỉ ảnh của chính mình.
+      const photo=await db.ctktktCoalMeterPhotos.findFirst({where:{id,...(review?{}:{owner_id:user.id}),expires_at:{gt:BigInt(Date.now())}},select:{type:true,data:true}});
       if(!photo) return fail("Ảnh hết hạn hoặc không có quyền xem.", 404);
       return new Response(new Uint8Array(await readCoalPhotoBytes(photo.data)),{headers:{"Content-Type":String(photo.type),"Cache-Control":"private, no-store","X-Content-Type-Options":"nosniff","Content-Security-Policy":"default-src 'none'; sandbox"}});
     }
     const date=url.searchParams.get("date")||"";
     if(!/^20\d{2}-\d{2}-\d{2}$/.test(date)) return fail("Ngày không hợp lệ.", 400);
-    const photos=review
-      ?await db.prepare("SELECT id,slot,reading,expires_at AS expiresAt FROM coal_meter_photos WHERE report_date=? AND expires_at>? ORDER BY created_at DESC LIMIT 200").bind(date,Date.now()).all()
-      :await db.prepare("SELECT id,slot,reading,expires_at AS expiresAt FROM coal_meter_photos WHERE owner_id=? AND report_date=? AND expires_at>? ORDER BY created_at DESC LIMIT 72").bind(user.id,date,Date.now()).all();
-    return ok({photos:photos.results.map(p=>({...p,reading:JSON.parse(String(p.reading))}))});
+    // Người duyệt: 200 ảnh mới nhất của ngày; người nhập: 72 ảnh mới nhất của chính mình. Hạn (BIGINT) trả dạng số.
+    const photos=await db.ctktktCoalMeterPhotos.findMany({
+      where:{...(review?{}:{owner_id:user.id}),report_date:date,expires_at:{gt:BigInt(Date.now())}},
+      orderBy:{created_at:"desc"},take:review?200:72,select:{id:true,slot:true,reading:true,expires_at:true},
+    });
+    return ok({photos:photos.map(p=>({id:p.id,slot:p.slot,reading:JSON.parse(String(p.reading)),expiresAt:Number(p.expires_at)}))});
   }catch{return fail("Chưa truy cập được kho ảnh.", 503);}
 }

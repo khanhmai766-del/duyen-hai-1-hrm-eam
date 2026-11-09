@@ -10,7 +10,7 @@ import { COAL_PHOTO_FUTURE_LIMIT_MS, coalPhotoExpiry } from "@/modules/ctktkt/li
 import {parseVisionTimestamp,slotForPhotoTime} from "@/modules/ctktkt/lib/coal-meter-ocr";
 import {coalGeminiConfig} from "@/modules/ctktkt/lib/coal-gemini-config";
 import {loadSharedGemini} from "@/modules/ctktkt/lib/coal-gemini-shared-store";
-import {getRawDb} from "@/modules/ctktkt/db";
+import {prisma} from "@/lib/prisma";
 
 // Reading one photo with the vision model usually takes a few seconds, occasionally longer.
 export const maxDuration = 60;
@@ -28,7 +28,7 @@ export async function POST(request: Request) {
   if (!isCtktktSameOrigin(request)) return fail("Nguồn yêu cầu không hợp lệ.", 403);
   let shared:{key:string;model:string}|null=null;
   if(!request.headers.get("x-coal-gemini-key")?.trim()){
-    try{shared=await loadSharedGemini(getRawDb(),process.env.AUTH_SECRET);}catch{return fail("Chưa đọc được khóa dùng chung. Có thể nhập khóa tạm để thử riêng hoặc lưu lại khóa dùng chung.", 503);}
+    try{shared=await loadSharedGemini(prisma,process.env.AUTH_SECRET);}catch{return fail("Chưa đọc được khóa dùng chung. Có thể nhập khóa tạm để thử riêng hoặc lưu lại khóa dùng chung.", 503);}
   }
   const config=coalGeminiConfig(request.headers,shared?.key||process.env.GEMINI_API_KEY,shared?.model||process.env.GEMINI_VISION_MODEL);
   if(!config.ok) return fail(config.error, config.status);

@@ -93,12 +93,13 @@ test("provider key, permission, model, quota and service errors stay distinct an
 });
 test("archive access is owner-scoped and expiry-gated; cleanup never deletes operating readings",()=>{
   const route=readFileSync(new URL("../../../modules/ctktkt/server/routes/coal-meter-photos/route.ts",import.meta.url),"utf8");
-  assert.ok(route.includes("owner_id=? AND expires_at>?"));
+  // Giới hạn theo chủ ảnh + hạn: kiểm bằng hợp đồng API (coal-meter-photos?id=… của người khác → 404, ảnh hết hạn → 404)
+  // và tests/ctktkt/coal-photo-db.test.mjs (dọn ảnh trên DB thật) — giai đoạn 3, Prisma.
+  assert.ok(route.includes("owner_id:user.id"));
+  assert.ok(route.includes("expires_at:{gt:BigInt(Date.now())}"));
   assert.ok(route.includes("getSessionUser()"));
   const store=readFileSync(new URL("../../../modules/ctktkt/lib/coal-photo-store.ts",import.meta.url),"utf8");
-  assert.ok(store.includes("DELETE FROM coal_meter_photos WHERE id = ? AND expires_at <= ?"));
-  assert.ok(store.includes("SELECT id,data FROM coal_meter_photos WHERE expires_at <= ?"));
-  assert.ok(!store.includes("DELETE FROM daily_inputs"));
+  assert.ok(!/daily_?inputs|DailyInputs/i.test(store));
   const component=readFileSync(new URL("../../../modules/ctktkt/components/coal-meter-photo-import.tsx",import.meta.url),"utf8");
   assert.ok(!component.includes("matchCoalMeter("));
   assert.ok(component.includes("write: false"));

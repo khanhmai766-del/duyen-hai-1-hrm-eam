@@ -1,6 +1,6 @@
 import { isCtktktSameOrigin } from "@/modules/ctktkt/lib/request-origin";
 import { ok, fail } from "@/lib/api";
-import {getRawDb} from "@/modules/ctktkt/db";
+import {prisma} from "@/lib/prisma";
 import {getSessionUser} from "@/modules/ctktkt/lib/auth/server";
 import {canEditCtktktGroup} from "@/modules/ctktkt/lib/ctktkt-permissions";
 import {coalGeminiConfig} from "@/modules/ctktkt/lib/coal-gemini-config";
@@ -21,7 +21,7 @@ async function guard(){
 }
 export async function GET(){
   const session=await guard();if(!session.ok)return session.response;
-  try{return json({shared:await sharedGeminiStatus(getRawDb()),environmentConfigured:Boolean(process.env.GEMINI_API_KEY)});}catch{return json({error:"Chưa tải được trạng thái khóa dùng chung."},503);}
+  try{return json({shared:await sharedGeminiStatus(prisma),environmentConfigured:Boolean(process.env.GEMINI_API_KEY)});}catch{return json({error:"Chưa tải được trạng thái khóa dùng chung."},503);}
 }
 export async function PUT(request:Request){
   const session=await guard();if(!session.ok)return session.response;
@@ -39,14 +39,14 @@ export async function PUT(request:Request){
     const model=body.model.trim();
     if(!/^gemini-[a-zA-Z0-9.-]{1,100}$/.test(model))return json({error:"Tên model Gemini không hợp lệ."},400);
     try{
-      const shared=await updateSharedGeminiModel(getRawDb(),{model,expectedVersion:Number(body.expectedVersion),actorId:session.user.id,actorName:session.user.displayName});
+      const shared=await updateSharedGeminiModel(prisma,{model,expectedVersion:Number(body.expectedVersion),actorId:session.user.id,actorName:session.user.displayName});
       return json({shared});
     }catch(error){return json({error:error instanceof SharedGeminiConflict?error.message:"Chưa cập nhật được model dùng chung."},error instanceof SharedGeminiConflict?409:503);}
   }
   const config=coalGeminiConfig(new Headers({"x-coal-gemini-key":body.key,"x-coal-gemini-model":body.model}));
   if(!config.ok)return json({error:config.error},400);
   try{
-    const shared=await saveSharedGemini(getRawDb(),process.env.AUTH_SECRET,{key:config.key,model:config.model,expectedVersion:Number(body.expectedVersion),actorId:session.user.id,actorName:session.user.displayName});
+    const shared=await saveSharedGemini(prisma,process.env.AUTH_SECRET,{key:config.key,model:config.model,expectedVersion:Number(body.expectedVersion),actorId:session.user.id,actorName:session.user.displayName});
     return json({shared});
   }catch(error){return json({error:error instanceof SharedGeminiConflict?error.message:"Chưa lưu được khóa dùng chung. Kiểm tra CSDL và cấu hình mã hóa máy chủ."},error instanceof SharedGeminiConflict?409:503);}
 }

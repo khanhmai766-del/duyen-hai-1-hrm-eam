@@ -11562,10 +11562,101 @@
   "status": 200,
   "body": {
    "data": {
-    "photos": []
+    "photos": [
+     {
+      "id": "contract-photo-b",
+      "slot": "16",
+      "reading": {
+       "meter_label": "S1-B",
+       "total_display": "2345.6",
+       "confidence": "low",
+       "note": "Mờ"
+      },
+      "expiresAt": 4102444800001
+     },
+     {
+      "id": "contract-photo-a",
+      "slot": "08",
+      "reading": {
+       "meter_label": "S1-A",
+       "total_display": "1234.5",
+       "confidence": "high"
+      },
+      "expiresAt": 4102444800000
+     }
+    ]
    },
    "meta": null,
    "error": null
+  }
+ },
+ "coal-meter-photos?date=2026-09-17": {
+  "status": 200,
+  "body": {
+   "data": {
+    "photos": [
+     {
+      "id": "contract-photo-a",
+      "slot": "08",
+      "reading": {
+       "meter_label": "S1-A",
+       "total_display": "1234.5",
+       "confidence": "high"
+      },
+      "expiresAt": 4102444800000
+     }
+    ]
+   },
+   "meta": null,
+   "error": null
+  }
+ },
+ "coal-meter-photos?id=contract-photo-a": {
+  "status": 200,
+  "body": {
+   "nonJson": "PNG-contract-photo-a",
+   "headers": {
+    "content-type": "image/png",
+    "cache-control": "private, no-store",
+    "content-security-policy": "default-src 'none'; sandbox",
+    "x-content-type-options": "nosniff"
+   }
+  }
+ },
+ "coal-meter-photos?id=contract-photo-b": {
+  "status": 404,
+  "body": {
+   "data": null,
+   "meta": null,
+   "error": "Ảnh hết hạn hoặc không có quyền xem."
+  }
+ },
+ "coal-meter-photos?scope=review&id=contract-photo-b": {
+  "status": 200,
+  "body": {
+   "nonJson": "PNG-contract-photo-b",
+   "headers": {
+    "content-type": "image/png",
+    "cache-control": "private, no-store",
+    "content-security-policy": "default-src 'none'; sandbox",
+    "x-content-type-options": "nosniff"
+   }
+  }
+ },
+ "coal-meter-photos?scope=review&id=contract-photo-c": {
+  "status": 404,
+  "body": {
+   "data": null,
+   "meta": null,
+   "error": "Ảnh hết hạn hoặc không có quyền xem."
+  }
+ },
+ "coal-meter-photos?scope=review&id=khong-co": {
+  "status": 404,
+  "body": {
+   "data": null,
+   "meta": null,
+   "error": "Ảnh hết hạn hoặc không có quyền xem."
   }
  },
  "coal-meter-photos?date=17-09-2026": {

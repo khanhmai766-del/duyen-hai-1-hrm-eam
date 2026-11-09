@@ -93,6 +93,16 @@ async function seed() {
         await c.query(`INSERT INTO public.ctktkt_${t} (${cols.join(",")}) VALUES (${cols.map((_, i) => `$${i + 1}`).join(",")})`, cols.map(k => row[k]));
       }
     }
+    // Ảnh công tơ than mẫu (dữ liệu base64 kiểu cũ — không cần kho tệp S3): 'a' của tài khoản ADMIN chạy hợp đồng,
+    // 'b' của người khác, 'c' đã hết hạn (lượt đọc kho ảnh tự dọn). Hạn năm 2100 để không bao giờ bị dọn.
+    const admin = (await c.query('SELECT id FROM "User" WHERE role = $1 AND "isActive" = true AND locked_at IS NULL ORDER BY "createdAt" ASC LIMIT 1', ["ADMIN"])).rows[0].id;
+    await c.query("DELETE FROM public.ctktkt_coal_meter_photos WHERE id LIKE 'contract-photo-%'");
+    for (const [id, owner, slot, expires, reading] of [
+      ["contract-photo-a", admin, "08", 4102444800000, { meter_label: "S1-A", total_display: "1234.5", confidence: "high" }],
+      ["contract-photo-b", "contract-other-owner", "16", 4102444800001, { meter_label: "S1-B", total_display: "2345.6", confidence: "low", note: "Mờ" }],
+      ["contract-photo-c", admin, "24", 1000, { meter_label: "S1-C", total_display: "1" }],
+    ]) await c.query("INSERT INTO public.ctktkt_coal_meter_photos(id,owner_id,report_date,slot,type,data,reading,expires_at,created_at) VALUES ($1,$2,'2026-09-17',$3,'image/png',$4,$5,$6,$7)",
+      [id, owner, slot, Buffer.from(`PNG-${id}`).toString("base64"), JSON.stringify(reading), expires, 1789000000000 + Number(slot)]);
     await c.query("COMMIT");
     console.log("Đã đổ dữ liệu mẫu:", Object.entries(rows).map(([t, r]) => `${t}=${r.length}`).join(", "));
   } catch (e) { await c.query("ROLLBACK").catch(() => {}); throw e; } finally { await c.end(); }
@@ -109,6 +119,12 @@ const ENDPOINTS = [
   "ctktkt-report?period=2026-09&date=2026-09-17&scope=khac",
   "ctktkt-report?period=2026-09&scope=stored",
   "coal-meter-photos?scope=review&date=2026-09-17",
+  "coal-meter-photos?date=2026-09-17",
+  "coal-meter-photos?id=contract-photo-a",
+  "coal-meter-photos?id=contract-photo-b",
+  "coal-meter-photos?scope=review&id=contract-photo-b",
+  "coal-meter-photos?scope=review&id=contract-photo-c",
+  "coal-meter-photos?scope=review&id=khong-co",
   "coal-meter-photos?date=17-09-2026",
   "coal-gemini-settings",
   "daily-inputs?period=2026-09",
@@ -146,6 +162,8 @@ async function capture(cookie) {
     const res = await fetch(new URL(`/api/ctktkt/${ep}`, base), { headers: { cookie } });
     const text = await res.text();
     let body; try { body = JSON.parse(text); } catch { body = { nonJson: text.slice(0, 200) }; }
+    // Phản hồi không phải JSON (ảnh): khoá cả các tiêu đề an toàn.
+    if (body.nonJson !== undefined) body.headers = Object.fromEntries(["content-type", "cache-control", "content-security-policy", "x-content-type-options"].map(h => [h, res.headers.get(h)]));
     out[ep] = { status: res.status, body };
   }
   return out;

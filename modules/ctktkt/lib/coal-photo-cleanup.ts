@@ -1,12 +1,12 @@
 import { timingSafeEqual } from "node:crypto";
-import { getRawDb } from "../db";
+import { prisma } from "@/lib/prisma";
 import { cleanupExpiredCoalPhotos, s3CoalPhotoStorage } from "./coal-photo-store";
 
 /** Xoá ảnh công tơ than đã quá 30 giờ (cả tệp trên kho Server 3) và bộ đếm OCR cũ; không xoá số liệu báo cáo. */
-export async function cleanupCoalPhotos(now = Date.now(), db = getRawDb(), storage = s3CoalPhotoStorage) {
+export async function cleanupCoalPhotos(now = Date.now(), db = prisma, storage = s3CoalPhotoStorage) {
   const photos = await cleanupExpiredCoalPhotos(now, db, storage);
-  const usage = await db.prepare("DELETE FROM coal_photo_usage WHERE bucket < ?").bind(Math.floor(now / 3_600_000) - 24).run();
-  return { photos, usageBuckets: usage.meta.changes };
+  const usage = await db.ctktktCoalPhotoUsage.deleteMany({ where: { bucket: { lt: Math.floor(now / 3_600_000) - 24 } } });
+  return { photos, usageBuckets: usage.count };
 }
 
 export async function runCoalPhotoCleanup(request: Request, dependencies = {

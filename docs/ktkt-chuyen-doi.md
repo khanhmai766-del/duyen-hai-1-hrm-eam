@@ -103,7 +103,7 @@ xác minh, "nạp lại") gọi thẳng `apiGet`.
 - `styles.css` còn các quy tắc `.module-chart-grid …` không phần tử nào dùng (đã xoá phần của PMIS); dọn ở giai đoạn 4.
 - PMIS (đã sửa khi chuyển): bản cũ báo "Không đồng bộ được ngày nào…" rồi tự xoá ngay vì lượt tải lại đặt `error = ""`;
   nay thông báo lỗi còn hiển thị.
-| 3 | `getRawDb()` → Prisma, đọc trước ghi sau; có thể "so bóng" (chạy cả truy vấn cũ và mới, ghi log khi lệch). Cùng thứ tự trang | Hoá chất ✅ · Lượng nước ✅ · PMIS (`daily-inputs`, dùng chung với Dữ liệu các tháng) ✅ · PPA (`ppa-heat-rate`, `/notes`, `google-sheet-sync`) ✅ · Báo cáo sản xuất (5 route; `bcsx-sync` không ai gọi — giai đoạn 4) ✅ (09/11) · còn lại ⏳ |
+| 3 | `getRawDb()` → Prisma, đọc trước ghi sau; có thể "so bóng" (chạy cả truy vấn cũ và mới, ghi log khi lệch). Cùng thứ tự trang | Hoá chất ✅ · Lượng nước ✅ · PMIS (`daily-inputs`, dùng chung với Dữ liệu các tháng) ✅ · PPA (`ppa-heat-rate`, `/notes`, `google-sheet-sync`) ✅ · Báo cáo sản xuất (5 route; `bcsx-sync` không ai gọi — giai đoạn 4) ✅ · Chỉ tiêu KTKT ✅ (09/11: đọc, xuất Excel, lưu theo ca/yêu cầu sửa, ảnh công tơ than, Gemini dùng chung) · còn `measurements`, `bcsx-sync`, sao lưu dữ liệu, Google Mirror, API máy → giai đoạn 4 |
 | 4 | Chuyển 4 API máy; xoá `db/sql.ts`, `getRawDb`, `useCtktktRequest`, cổng `[[...path]]` | ⏳ |
 
 ### Giai đoạn 3 — mẫu chuyển một route sang Prisma (theo Hoá chất, 09/11/2026)
@@ -124,6 +124,18 @@ xác minh, "nạp lại") gọi thẳng `apiGet`.
   nhật ký sửa (chỉ khi giá trị/ghi chú đổi), rồi xoá hoặc thêm/sửa; `keepNote` cho các route giữ ghi chú cũ. `auditedDailyBatch`
   chỉ còn ở `bcsx-sync` (không nơi nào gọi). PPA: `upsertPpaDay()` giữ quy tắc "ghi chú rỗng thì giữ ghi chú cũ". Hợp đồng ghi chụp cả
   **"nhật ký sửa ô"** mỗi bước.
+- Chỉ tiêu KTKT: lượt đọc dùng chung ở `lib/ctktkt-report-store.ts` (route + file xuất 35 sheet — so bằng ctktkt-export-dump:
+  giống hệt). `lib/report-corrections.ts` (lưu theo ca, yêu cầu sửa) chạy trong `prisma.$transaction`; chỉ còn 3 câu SQL qua
+  `$executeRaw/$queryRaw` cho KHOÁ: `pg_advisory_xact_lock` (ngày + ô) và `SELECT … FOR UPDATE` (ô, yêu cầu) — Prisma không có API.
+  Ba test `corrections-db`, `coordinator-correction`, `night-finalization` viết lại chạy trên DB dev THẬT (tháng thử 2001-10/11/12,
+  dọn trước và sau, `tests/ctktkt/helpers/corrections-db.mjs`) — đã chạy đạt trên CẢ code cũ lẫn mới, kể cả lưu đồng thời một ô.
+- Ảnh công tơ than + Gemini dùng chung (09/11): `coal-photo-store`, `coal-photo-cleanup`, `coal-gemini-shared-store` và các route
+  dùng Prisma; `expires_at/created_at` BIGINT → `bigint` của Prisma, trả JSON bằng `Number(...)` như bản cũ. Bộ đếm 72 lượt/giờ
+  giữ đúng câu `INSERT … ON CONFLICT … DO UPDATE … WHERE requests < 72 RETURNING` qua `$queryRaw` (một lệnh — không vượt hạn mức
+  khi nhiều lượt cùng lúc). Test cũ kiểm chuỗi SQL/giả lập `db.prepare` thay bằng `tests/ctktkt/coal-photo-db.test.mjs` (DB dev
+  thật, kho tệp giả; đạt trên CẢ code cũ lẫn mới, kể cả 10 lượt đọc đồng thời) + hợp đồng API 7 đường ảnh (chủ ảnh, quyền duyệt,
+  hết hạn, tải ảnh kèm tiêu đề an toàn; ảnh mẫu `contract-photo-a/b/c`).
+  `measurements` và `bcsx-sync`: không nơi nào gọi — quyết định giữ/bỏ ở giai đoạn 4.
 - Test hợp đồng ghi nay chụp cả **"phiên bản đọc tăng"** (tập khoá, không đếm số lần) mỗi bước. Trước khi chuyển một route: thêm kịch bản ghi nếu chưa có
   và `--writes --record` **trên code cũ**.
 

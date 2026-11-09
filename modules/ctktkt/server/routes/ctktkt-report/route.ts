@@ -2,7 +2,7 @@ import { isShiftInputCoordinator } from "@/modules/ctktkt/lib/auth/delegation-po
 import { ok, fail } from "@/lib/api";
 import { isCtktktSameOrigin } from "@/modules/ctktkt/lib/request-origin";
 import {saveReportWithShift,CorrectionError} from "@/modules/ctktkt/lib/report-corrections";
-import { getRawDb } from "@/modules/ctktkt/db";
+import { loadDailyCodes, loadKtktCells, loadShiftReadingsRange, loadWaterLinkRows } from "@/modules/ctktkt/lib/ctktkt-report-store";
 import { getSessionUser, requireSession } from "@/modules/ctktkt/lib/auth/server";
 import { canEditOperatingDate, isFutureOperatingDate, vietnamDateIso } from "@/modules/ctktkt/lib/operating-date";
 import { isAdminUser } from "@/modules/ctktkt/lib/auth/session";
@@ -12,7 +12,6 @@ import { CTKTKT_WATER_LINKED_CELLS, ctktktWaterLogFromRow, deriveCtktktCellsFrom
 import { REPORT_WRITABLE_CELLS } from "@/modules/ctktkt/lib/report-writable-fields";
 import { CTKTKT_TEXT_INPUT_CELLS, normalizeCtktktInputValue } from "@/modules/ctktkt/lib/ctktkt-extra-fields";
 import { applyCtktktFixedValue } from "@/modules/ctktkt/lib/ctktkt-defaults";
-import { ensureWaterSchema } from "@/modules/ctktkt/lib/water-report/schema";
 import { COAL_STOCK_24H_START_CELL } from "@/modules/ctktkt/lib/coal-stock";
 import { CTKTKT_OPERATING_HOURS_CELLS } from "@/modules/ctktkt/lib/ctktkt-extra-fields";
 import { loadCtktktOperatingHours } from "@/modules/ctktkt/lib/ctktkt-operating-hours-db";
@@ -32,29 +31,19 @@ export async function GET(request: Request) {
   const { from, next } = range;
   const today = vietnamDateIso();
   try {
-    const db = getRawDb();
     if(scope==="stored"){
-      const {results}=await db.prepare("SELECT operating_date AS operatingDate, substr(field_code, 6) AS cell, value FROM daily_inputs WHERE operating_date >= ? AND operating_date < ? AND field_code LIKE 'KTKT:%' ORDER BY field_code").bind(from,next).all();
-      return ok({entries:(results as Array<{operatingDate:string}>).filter(entry=>!isFutureOperatingDate(entry.operatingDate,today))});
+      const results=await loadKtktCells(from,next,"field");
+      return ok({entries:results.filter(entry=>!isFutureOperatingDate(entry.operatingDate,today))});
     }
     if(scope==="operating-hours"){
-      const hours=await loadCtktktOperatingHours(db,from,next);
+      const hours=await loadCtktktOperatingHours(from,next);
       return ok({linkedEntries:hours.entries.filter(entry=>!isFutureOperatingDate(entry.operatingDate,today)),operatingHoursMissingDates:hours.missingDates.filter(date=>!isFutureOperatingDate(date,today))});
     }
-    await ensureWaterSchema(db);
-    const [{ results }, { results: shiftResults }, { results: waterResults }, { results: dailyLinkedResults }] = await Promise.all([
-      db.prepare(
-        "SELECT operating_date AS operatingDate, substr(field_code, 6) AS cell, value FROM daily_inputs WHERE operating_date >= ? AND operating_date < ? AND field_code LIKE 'KTKT:%' ORDER BY operating_date, field_code",
-      ).bind(from, next).all(),
-      db.prepare(
-        "SELECT operating_date AS operatingDate, unit, time_slot AS timeSlot, metric, value FROM shift_readings WHERE operating_date >= ? AND operating_date < ? ORDER BY operating_date, unit, time_slot, metric",
-      ).bind(from, next).all(),
-      db.prepare(
-        "SELECT log_date AS logDate, shift_time AS shiftTime, water_rec_s1 AS waterRecS1, water_rec_s2 AS waterRecS2, resin_water_s1_24h AS resinWaterS1_24h, resin_water_s2_24h AS resinWaterS2_24h FROM water_shift_logs WHERE log_date >= ? AND log_date < ? ORDER BY log_date, CASE shift_time WHEN '06h00' THEN 1 WHEN '14h00' THEN 2 WHEN '22h00' THEN 3 ELSE 9 END",
-      ).bind(from, next).all(),
-      db.prepare(
-        "SELECT operating_date AS operatingDate, field_code AS cell, value FROM daily_inputs WHERE operating_date >= ? AND operating_date < ? AND field_code IN ('GRID_RECEIVE_S1', 'GRID_RECEIVE_S2', ?) ORDER BY operating_date, field_code",
-      ).bind(from, next, BCSX_COAL_STOCK_24H_CODE).all(),
+    const [results, shiftResults, waterResults, dailyLinkedResults] = await Promise.all([
+      loadKtktCells(from, next),
+      loadShiftReadingsRange(from, next),
+      loadWaterLinkRows(from, next),
+      loadDailyCodes(from, next, ["GRID_RECEIVE_S1", "GRID_RECEIVE_S2", BCSX_COAL_STOCK_24H_CODE]),
     ]);
 
     const readingsByDate = new Map<string, CtktktBcsxReading[]>();
@@ -85,7 +74,7 @@ export async function GET(request: Request) {
     // Daily links do not consume W68:Z69. Full CTKTKT reads/exports retain annual totals.
     const operatingHours = scope === "daily-links"
       ? { entries: [], missingDates: [] }
-      : await loadCtktktOperatingHours(db, from, next);
+      : await loadCtktktOperatingHours(from, next);
     linkedEntries.push(...operatingHours.entries.filter(entry => !isFutureOperatingDate(entry.operatingDate, today)));
     const nonEmptyManualKeys = new Set(manualEntries.filter(e => e.value !== "" && e.value !== null && e.value !== undefined).map(e => `${e.operatingDate}|${e.cell}`));
     const waterLogs = (waterResults as Record<string, unknown>[]).map(ctktktWaterLogFromRow);

@@ -3,7 +3,7 @@ import { guardExportZeroDivisions } from "@/modules/ctktkt/lib/export-zero-divis
 import { applyCtktktAuxiliaryExportRules } from "@/modules/ctktkt/lib/ctktkt-auxiliary-export-rules";
 import { applyElectricMeterResetExport } from "@/modules/ctktkt/lib/ctktkt-electric-meter-reset";
 import { applyCtktktExportPresentation, hideCtktktExportScratchArea } from "@/modules/ctktkt/lib/ctktkt-export-presentation";
-import { getRawDb } from "@/modules/ctktkt/db";
+import { loadDailyRange, loadShiftReadingsRange, loadWaterLinkRows } from "@/modules/ctktkt/lib/ctktkt-report-store";
 import { calculateDailyProduction } from "@/modules/ctktkt/lib/daily-production-calculations";
 import { CTKTKT_BCSX_LINKED_CELLS, deriveCtktktCellsFromBcsx, type CtktktBcsxReading } from "@/modules/ctktkt/lib/ctktkt-bcsx-link";
 import { CTKTKT_WATER_LINKED_CELLS, ctktktWaterLogFromRow, deriveCtktktCellsFromWater } from "@/modules/ctktkt/lib/ctktkt-water-link";
@@ -12,7 +12,6 @@ import { CTKTKT_CARRY_FORWARD_INPUT_CELLS, CTKTKT_EXTRA_INPUT_FIELDS, CTKTKT_NON
 import { loadCtktktOperatingHours } from "@/modules/ctktkt/lib/ctktkt-operating-hours-db";
 import { addDaysIso, vietnamDateIso } from "@/modules/ctktkt/lib/operating-date";
 import { CTKTKT_TEMPLATE_BASE64 } from "@/modules/ctktkt/lib/ctktkt-template.generated";
-import { ensureWaterSchema } from "@/modules/ctktkt/lib/water-report/schema";
 import { CTKTKT_INSTALLED_CAPACITY_CELL, CTKTKT_INSTALLED_CAPACITY_MW } from "@/modules/ctktkt/lib/ctktkt-defaults";
 import { deriveNh3StartLevels, deriveNh3OpeningStock, NH3_OPENING_STOCK_CELL, type CtktktDayEntries } from "@/modules/ctktkt/lib/ctktkt-report";
 import { applyCtktktOperationEventLayout, applyCtktktOperationEvents, CTKTKT_OPERATION_EVENTS_CELL, legacyCtktktOperationEvents } from "@/modules/ctktkt/lib/ctktkt-operation-events";
@@ -164,20 +163,12 @@ export async function buildCtktktWorkbook(period: string, presentation = true) {
   if (period > today.slice(0, 7)) throw new Error("Tháng trong tương lai.");
     const { year, month, previous, next } = monthBounds(period);
     const throughExclusive = period === today.slice(0, 7) ? addDaysIso(today, 1) : next;
-    const db = getRawDb();
-    await ensureWaterSchema(db);
-    const [{ results }, { results: shiftResults }, { results: waterResults }, operatingHours] = await Promise.all([
-      db.prepare(
-        "SELECT operating_date AS operatingDate, field_code AS fieldCode, value FROM daily_inputs WHERE operating_date >= ? AND operating_date < ? ORDER BY operating_date, field_code",
-      ).bind(previous, throughExclusive).all(),
-      db.prepare(
-        "SELECT operating_date AS operatingDate, unit, time_slot AS timeSlot, metric, value FROM shift_readings WHERE operating_date >= ? AND operating_date < ? ORDER BY operating_date, unit, time_slot, metric",
-      ).bind(previous, throughExclusive).all(),
-      db.prepare(
-        "SELECT log_date AS logDate, shift_time AS shiftTime, water_rec_s1 AS waterRecS1, water_rec_s2 AS waterRecS2, resin_water_s1_24h AS resinWaterS1_24h, resin_water_s2_24h AS resinWaterS2_24h FROM water_shift_logs WHERE log_date >= ? AND log_date < ? ORDER BY log_date, CASE shift_time WHEN '06h00' THEN 1 WHEN '14h00' THEN 2 WHEN '22h00' THEN 3 ELSE 9 END",
-      ).bind(previous, throughExclusive).all(),
+    const [results, shiftResults, waterResults, operatingHours] = await Promise.all([
+      loadDailyRange(previous, throughExclusive),
+      loadShiftReadingsRange(previous, throughExclusive),
+      loadWaterLinkRows(previous, throughExclusive),
       // Operating hours are accumulated from the QLKT daily hours since 01/01/2026.
-      loadCtktktOperatingHours(db, previous, throughExclusive),
+      loadCtktktOperatingHours(previous, throughExclusive),
     ]);
 
     const byDate = new Map<string, Record<string, string>>();
