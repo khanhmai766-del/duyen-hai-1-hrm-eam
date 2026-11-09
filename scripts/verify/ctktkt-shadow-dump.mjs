@@ -15,8 +15,6 @@ if (!out) fail("thiếu tệp ra");
 
 const { buildMirrorSnapshot } = await import("../../modules/ctktkt/lib/google-mirror-snapshot.ts");
 const { readOperatingData } = await import("../../modules/ctktkt/lib/operating-data-api.ts");
-let legacyDb;
-try { legacyDb = (await import("../../modules/ctktkt/db/index.ts")).getRawDb; } catch { /* đã gỡ lớp cũ */ }
 
 const key = "shadow-dump-key-".repeat(4), expectedHash = createHash("sha256").update(key).digest("hex");
 const result = {};
@@ -34,8 +32,7 @@ try {
 for (const period of ["2026-08", "2026-09", "2026-10", "2026-11"]) result[`mirror ${period}`] = await buildMirrorSnapshot(period).catch(error => ({ error: String(error?.message ?? error) }));
 for (const period of ["2026-09", "2026-10"]) for (const dataset of ["pmis", "ppa"]) {
   const request = new Request(`http://localhost/api/ctktkt/integration/v1/operating-data?period=${period}&dataset=${dataset}`, { headers: { authorization: `Bearer ${key}` } });
-  // Bản cũ đọc qua getDb; bản Prisma bỏ qua getDb và dùng bộ đọc mặc định.
-  const response = await readOperatingData(request, { getDb: legacyDb, expectedHash, today: "2026-09-18" });
+  const response = await readOperatingData(request, { expectedHash, today: "2026-09-18" });
   result[`operating-data ${period} ${dataset}`] = { status: response.status, headers: Object.fromEntries(response.headers), body: await response.json() };
 }
 } finally { await client.query("DELETE FROM public.ctktkt_ppa_heat_rate_daily WHERE id = 999999"); await client.end(); }

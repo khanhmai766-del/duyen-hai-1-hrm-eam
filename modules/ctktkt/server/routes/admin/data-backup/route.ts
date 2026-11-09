@@ -1,23 +1,20 @@
 import { isCtktktSameOrigin } from "@/modules/ctktkt/lib/request-origin";
+import { ok, fail } from "@/lib/api";
 import { inspectUpload } from "@/lib/upload-guard";
-import {getRawDb,readBackupSnapshot} from "@/modules/ctktkt/db";
 import {requirePermission} from "@/modules/ctktkt/lib/auth/server";
-import {ensureWaterSchema} from "@/modules/ctktkt/lib/water-report/schema";
-import {ensureChemicalUsageSchema} from "@/modules/ctktkt/lib/chemical-usage/schema";
-import {BACKUP_TABLES,MAX_BACKUP_BYTES,MAX_BACKUP_ROWS,backupRange,backupSchemas,createDataBackup,restoreStatements,validateDataBackup,type BackupRow} from "@/modules/ctktkt/lib/data-backup";
+import {BACKUP_TABLES,MAX_BACKUP_BYTES,MAX_BACKUP_ROWS,backupRange,createDataBackup,restoreStatements,validateDataBackup,type BackupRow} from "@/modules/ctktkt/lib/data-backup";
+import {loadBackupSchemas,readBackupTables,restoreBackup} from "@/modules/ctktkt/lib/data-backup-store";
 
 export const runtime="nodejs";
 export const dynamic="force-dynamic";
 export const maxDuration=60;
 const headers={"Cache-Control":"private, no-store","X-Content-Type-Options":"nosniff"};
-const json=(body:unknown,status=200)=>Response.json(body,{status,headers});
-
-async function database(){
-  const db=getRawDb();
-  await ensureWaterSchema(db);
-  await ensureChemicalUsageSchema(db);
-  return db;
-}
+// Lỗi ({error}) → fail(), còn lại → ok() — phong bì chung của web.
+const json=(body:unknown,status=200)=>{
+  const response=body&&typeof body==="object"&&"error" in body?fail(String((body as {error:unknown}).error),status):ok(body);
+  for(const [name,value] of Object.entries(headers))response.headers.set(name,value);
+  return response;
+};
 
 export async function GET(request:Request){
   const guard=await requirePermission("backup_data");
@@ -25,17 +22,10 @@ export async function GET(request:Request){
   try{
     const url=new URL(request.url);
     const range=backupRange(url.searchParams.get("from"),url.searchParams.get("to"));
-    const db=await database(),schemas=await backupSchemas(db);
+    const schemas=await loadBackupSchemas();
     const active=BACKUP_TABLES.filter(table=>schemas.get(table.name)?.length);
-    const queries=active.map(table=>{
-      let where="",args:string[]=[];
-      if(range&&table.date){
-        where=` WHERE ${table.date} >= ? AND ${table.date} <= ?`;
-        args=table.date==="period"?[range.from.slice(0,7),range.to.slice(0,7)+"\uffff"]:[range.from,range.to];
-      }
-      return {sql:`SELECT * FROM ${table.name}${where} ORDER BY ${table.keys.join(",")} LIMIT ${MAX_BACKUP_ROWS+1}`,args};
-    });
-    const rows=await readBackupSnapshot(queries);
+    // Một ảnh chụp nhất quán của các bảng (theo khoảng ngày nếu có), sắp theo khoá.
+    const rows=await readBackupTables(active,range,MAX_BACKUP_ROWS+1);
     const tables=Object.fromEntries(BACKUP_TABLES.map(table=>[table.name,[] as BackupRow[]]));
     active.forEach((table,index)=>{tables[table.name]=rows[index] as BackupRow[];});
     const file=createDataBackup(tables,range);
@@ -69,10 +59,8 @@ export async function POST(request:Request){
   let file;
   try{file=validateDataBackup(body.file);}catch(error){return json({error:error instanceof Error?error.message:"Tệp không hợp lệ."},400);}
   if(body.action==="restore"&&guard.user.role!=="admin"&&(file.tables.daily_inputs||[]).some(row=>String(row.field_code||"").startsWith("KTKT:")))return json({error:"Chỉ tài khoản quản trị được nạp bản sao lưu chứa số liệu Báo cáo KTKT. Người nhập phải gửi yêu cầu chỉnh sửa để duyệt."},403);
-  let db;
-  try{db=await database();}catch{return json({error:"Chưa kết nối được kho dữ liệu; chưa nạp bản ghi nào."},503);}
   let schemas;
-  try{schemas=await backupSchemas(db);}catch{return json({error:"Chưa kiểm tra được cấu trúc kho dữ liệu; chưa nạp bản ghi nào."},503);}
+  try{schemas=await loadBackupSchemas();}catch{return json({error:"Chưa kiểm tra được cấu trúc kho dữ liệu; chưa nạp bản ghi nào."},503);}
   let statements;
   try{statements=restoreStatements(file,schemas,body.mode as "missing"|"overwrite");}
   catch(error){return json({error:error instanceof Error?error.message:"Cấu trúc tệp không phù hợp."},400);}
@@ -81,8 +69,7 @@ export async function POST(request:Request){
   if(body.action==="preview")return json({createdAt:file.createdAt,range:file.range,tables,total,checksum:file.checksum});
   try{
     // A single transaction: all restored rows and the audit record commit together.
-    const result=await db.batch([...statements,{sql:"INSERT INTO data_restore_audit (actor_id, checksum, mode, row_count) VALUES (?, ?, ?, ?)",args:[guard.user.id,file.checksum,String(body.mode),total]}]);
-    const changed=result.slice(0,-1).reduce((sum,item)=>sum+item.meta.changes,0);
+    const changed=await restoreBackup(statements,{actorId:String(guard.user.id),checksum:file.checksum,mode:String(body.mode),rowCount:total});
     return json({changed,total,message:`Đã nạp ${changed} bản ghi. ${body.mode==="missing"?"Bản ghi đã có được giữ nguyên.":"Các bản ghi trùng khóa đã được cập nhật từ tệp."} Tải lại trang báo cáo để xem số liệu.`});
   }catch{return json({error:"Nạp dữ liệu gặp lỗi hoặc chưa nhận được xác nhận từ máy chủ. Lỗi dữ liệu sẽ hoàn tác toàn bộ giao dịch; nếu mất kết nối, hãy tải bản sao mới để kiểm tra trước khi nạp lại. Giữ lại tệp sao lưu."},503);}
 }

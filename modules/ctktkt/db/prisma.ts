@@ -40,3 +40,9 @@ export function ktktWrite<T>(keys: readonly string[] | ((result: T) => readonly 
 export class KtktAbort extends Error {
   constructor(readonly response: Response) { super("KtktAbort"); }
 }
+
+/** Toàn bộ phiên bản đọc (Google Mirror dùng làm ETag) — thay getOperationalReadVersions của lớp SQL cũ. */
+export async function getOperationalReadVersions() {
+  const rows = await prisma.ctktktOperationalReadVersions.findMany({ select: { cache_key: true, version: true } });
+  return Object.fromEntries(rows.map(row => [String(row.cache_key), Number(row.version)]));
+}

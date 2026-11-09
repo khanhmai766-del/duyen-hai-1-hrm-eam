@@ -3,15 +3,14 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
 import ts from 'typescript';
-async function restore(kind,role,code){let writes=0;const user={id:'actor',role};const file={tables:{daily_inputs:[{field_code:code}]},checksum:'test'};const database={batch:async()=>{writes++;return[{meta:{changes:1}}]}};
+async function restore(kind,role,code){let writes=0;const user={id:'actor',role};const file={tables:{daily_inputs:[{field_code:code}]},checksum:'test'};
  const deps={
  '@/modules/ctktkt/lib/request-origin':{isCtktktSameOrigin:()=>true},
  '@/lib/upload-guard':{inspectUpload:async()=>{}},
- '@/modules/ctktkt/db':{getRawDb:()=>database},
+ '@/lib/api':{ok:(data,meta)=>Response.json({data,meta:meta??null,error:null}),fail:(error,status=400)=>Response.json({data:null,meta:null,error},{status})},
  '@/modules/ctktkt/lib/auth/server':{requirePermission:async()=>({ok:true,user})},
- '@/modules/ctktkt/lib/water-report/schema':{ensureWaterSchema:async()=>{}},
- '@/modules/ctktkt/lib/chemical-usage/schema':{ensureChemicalUsageSchema:async()=>{}},
- '@/modules/ctktkt/lib/data-backup':{BACKUP_TABLES:[{name:"daily_inputs"}],MAX_BACKUP_BYTES:3000000,validateDataBackup:()=>file,backupSchemas:async()=>new Map(),restoreStatements:()=>[]},
+ '@/modules/ctktkt/lib/data-backup-store':{loadBackupSchemas:async()=>new Map(),readBackupTables:async()=>[],restoreBackup:async()=>{writes++;return 1;}},
+ '@/modules/ctktkt/lib/data-backup':{BACKUP_TABLES:[{name:"daily_inputs"}],MAX_BACKUP_BYTES:3000000,validateDataBackup:()=>file,restoreStatements:()=>[]},
  '@/modules/ctktkt/lib/backup-archive':{MAX_ARCHIVE_BYTES:25000000,readBackupArchive:async()=>[file],archiveSummary:()=>({checksum:'test',total:1}),archiveStatements:()=>[]},
  jszip:{default:class{}}
  };

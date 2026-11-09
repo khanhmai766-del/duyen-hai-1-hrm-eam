@@ -25561,28 +25561,6 @@
    "error": null
   }
  },
- "measurements?period=2026-09": {
-  "status": 200,
-  "body": {
-   "data": {
-    "measurements": [
-     {
-      "id": 1040000,
-      "metricCode": "HR",
-      "metricName": "Suất hao nhiệt mẫu",
-      "period": "2026-09",
-      "actual": "10746.39",
-      "limitValue": "10500",
-      "note": "",
-      "createdAt": "2026-09-20 08:00:00"
-     }
-    ],
-    "truncated": false
-   },
-   "meta": null,
-   "error": null
-  }
- },
  "correction-requests": {
   "status": 200,
   "body": {

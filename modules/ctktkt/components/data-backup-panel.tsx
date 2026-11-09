@@ -1,5 +1,6 @@
 "use client";
-import { useCtktktRequest } from "@/hooks/useCtktkt";
+import { apiDownload, apiMutate, apiUpload } from "@/lib/fetcher";
+import { useQueryClient } from "@tanstack/react-query";
 
 import {useRef,useState} from "react";
 import {DatabaseBackup,Download,FileJson,Upload,CheckCircle2,ShieldCheck} from "lucide-react";
@@ -12,8 +13,7 @@ const MAX_FILE_BYTES=3_000_000;
 const api="/api/ctktkt/admin/data-backup";
 
 export function DataBackupPanel({canBackup = true, canRestore = true}:{canBackup?:boolean;canRestore?:boolean}){
-  const ctktktRequest = useCtktktRequest();
-
+  const queryClient = useQueryClient();
   const [today]=useState(()=>vietnamDateIso());
   const [from,setFrom]=useState(today.slice(0,7)+"-01"),[to,setTo]=useState(today);
   const [all,setAll]=useState(false),[busy,setBusy]=useState("");
@@ -25,9 +25,9 @@ export function DataBackupPanel({canBackup = true, canRestore = true}:{canBackup
   async function download(){
     setBusy("download");setError("");setNotice("");
     try{
-      const response=await ctktktRequest(api+(all?"/archive":`?from=${from}&to=${to}`),{cache:"no-store",signal:AbortSignal.timeout(65000)});
-      if(!response.ok){const body=await response.json() as {error?:string};throw new Error(body.error||"Không tải được bản sao lưu.");}
-      const blob=await response.blob(),url=URL.createObjectURL(blob),link=document.createElement("a");
+      // Lỗi máy chủ (phong bì {error}) → câu báo của máy chủ; thành công là tệp JSON/ZIP.
+      const {blob}=await apiDownload(api+(all?"/archive":`?from=${from}&to=${to}`),{signal:AbortSignal.timeout(65000)});
+      const url=URL.createObjectURL(blob),link=document.createElement("a");
       link.href=url;link.download=`ctktkt-backup-${all?"all":from+"_"+to}-${today}.${all?"zip":"json"}`;link.click();
       setTimeout(()=>URL.revokeObjectURL(url),10000);
       setNotice("Đã tạo tệp sao lưu và gửi tới trình duyệt để tải xuống. Giữ tệp sao lưu nguyên gốc để nạp lại khi cần.");
@@ -49,11 +49,13 @@ export function DataBackupPanel({canBackup = true, canRestore = true}:{canBackup
     try{
       const archive=file instanceof File;
       const form=new FormData(); if(archive){form.set("file",file);form.set("action",action);form.set("mode",mode);form.set("confirmed",String(confirmed));}
-      const response=await ctktktRequest(api+(archive?"/archive":""),{method:"POST",...(archive?{}:{headers:{"Content-Type":"application/json"}}),body:archive?form:JSON.stringify({action,mode,file,confirmed}),signal:AbortSignal.timeout(65000)});
-      const body=await response.json() as Preview&{error?:string;message?:string};
-      if(!response.ok)throw new Error(body.error||"Không thực hiện được thao tác.");
+      const signal=AbortSignal.timeout(65000);
+      const body=archive
+        ?await apiUpload<Preview&{message?:string}>(api+"/archive",form,{signal})
+        :await apiMutate<Preview&{message?:string}>(api,"POST",{action,mode,file,confirmed},{signal});
       if(action==="preview"){setPreview(body);setConfirmed(false);}
-      else{setNotice(body.message||"Đã nạp dữ liệu.");reset();}
+      // Nạp xong: mọi dữ liệu KTKT đang lưu tạm trên trình duyệt coi là cũ (như lượt ghi KTKT khác).
+      else{setNotice(body.message||"Đã nạp dữ liệu.");reset();void queryClient.invalidateQueries({queryKey:["ctktkt"]});}
     }catch(e){setError(e instanceof Error&&e.name!=="TimeoutError"?e.message:action==="restore"?"Đã hết thời gian chờ phản hồi. Kết quả nạp chưa xác định; tải bản sao lưu mới để kiểm tra dữ liệu trước khi thử lại.":"Kiểm tra tệp quá thời gian chờ; hãy thử lại.");}
     finally{setBusy("");}
   }

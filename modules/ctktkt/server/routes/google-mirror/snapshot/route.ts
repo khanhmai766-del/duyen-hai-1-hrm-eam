@@ -2,7 +2,7 @@ import {mirrorAuthorized} from '@/modules/ctktkt/lib/google-mirror-auth';
 import {buildMirrorSnapshot} from '@/modules/ctktkt/lib/google-mirror-snapshot';
 import {validMirrorPeriod} from '@/modules/ctktkt/lib/google-mirror';
 import {vietnamDateIso} from '@/modules/ctktkt/lib/operating-date';
-import {getOperationalReadVersions} from '@/modules/ctktkt/db';
+import {getOperationalReadVersions} from '@/modules/ctktkt/db/prisma';
 import {mirrorSourceVersions} from '@/modules/ctktkt/lib/google-mirror-revision';
 import {createHash} from 'node:crypto';
 export const maxDuration=60;

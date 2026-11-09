@@ -4458,6 +4458,7140 @@
   },
   "phiên bản đọc tăng": []
  },
+ "backup #01 tải sao lưu theo khoảng ngày": {
+  "request": "GET admin/data-backup?from=2026-09-16&to=2026-09-17",
+  "response": {
+   "status": 200,
+   "body": {
+    "format": "ctktkt-operating-backup",
+    "version": 1,
+    "createdAt": "<thời điểm>",
+    "range": {
+     "from": "2026-09-16",
+     "to": "2026-09-17"
+    },
+    "tables": {
+     "daily_inputs": [
+      {
+       "id": 900767,
+       "operating_date": "2026-09-16",
+       "field_code": "AE",
+       "value": "150.4",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900768,
+       "operating_date": "2026-09-16",
+       "field_code": "AF",
+       "value": "161.7",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900769,
+       "operating_date": "2026-09-16",
+       "field_code": "AJ",
+       "value": "173",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900770,
+       "operating_date": "2026-09-16",
+       "field_code": "AR",
+       "value": "184.3",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900771,
+       "operating_date": "2026-09-16",
+       "field_code": "AT",
+       "value": "195.6",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900760,
+       "operating_date": "2026-09-16",
+       "field_code": "B",
+       "value": "71.3",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900888,
+       "operating_date": "2026-09-16",
+       "field_code": "BCSX_COAL_STOCK_24H",
+       "value": "312450.75",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900774,
+       "operating_date": "2026-09-16",
+       "field_code": "BN",
+       "value": "229.5",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900775,
+       "operating_date": "2026-09-16",
+       "field_code": "BQ",
+       "value": "240.8",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900776,
+       "operating_date": "2026-09-16",
+       "field_code": "BR",
+       "value": "252.1",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900778,
+       "operating_date": "2026-09-16",
+       "field_code": "BZ",
+       "value": "274.7",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900761,
+       "operating_date": "2026-09-16",
+       "field_code": "C",
+       "value": "82.6",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900779,
+       "operating_date": "2026-09-16",
+       "field_code": "CA",
+       "value": "286",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900780,
+       "operating_date": "2026-09-16",
+       "field_code": "CC",
+       "value": "297.3",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900781,
+       "operating_date": "2026-09-16",
+       "field_code": "CD",
+       "value": "308.6",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900782,
+       "operating_date": "2026-09-16",
+       "field_code": "CE",
+       "value": "319.9",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900783,
+       "operating_date": "2026-09-16",
+       "field_code": "CF",
+       "value": "331.2",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900772,
+       "operating_date": "2026-09-16",
+       "field_code": "CJ",
+       "value": "206.9",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900784,
+       "operating_date": "2026-09-16",
+       "field_code": "CM",
+       "value": "342.5",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900777,
+       "operating_date": "2026-09-16",
+       "field_code": "CN",
+       "value": "263.4",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900785,
+       "operating_date": "2026-09-16",
+       "field_code": "CQ",
+       "value": "353.8",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900786,
+       "operating_date": "2026-09-16",
+       "field_code": "CR",
+       "value": "365.1",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900787,
+       "operating_date": "2026-09-16",
+       "field_code": "CS",
+       "value": "376.4",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900788,
+       "operating_date": "2026-09-16",
+       "field_code": "CT",
+       "value": "387.7",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900789,
+       "operating_date": "2026-09-16",
+       "field_code": "CU",
+       "value": "399",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900790,
+       "operating_date": "2026-09-16",
+       "field_code": "CV",
+       "value": "410.3",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900791,
+       "operating_date": "2026-09-16",
+       "field_code": "CW",
+       "value": "Bình thường",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900773,
+       "operating_date": "2026-09-16",
+       "field_code": "CX",
+       "value": "218.2",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900792,
+       "operating_date": "2026-09-16",
+       "field_code": "DA",
+       "value": "432.9",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900793,
+       "operating_date": "2026-09-16",
+       "field_code": "DB",
+       "value": "444.2",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900794,
+       "operating_date": "2026-09-16",
+       "field_code": "DC",
+       "value": "455.5",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900795,
+       "operating_date": "2026-09-16",
+       "field_code": "DD",
+       "value": "466.8",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900796,
+       "operating_date": "2026-09-16",
+       "field_code": "DE",
+       "value": "478.1",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900797,
+       "operating_date": "2026-09-16",
+       "field_code": "DF",
+       "value": "489.4",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900798,
+       "operating_date": "2026-09-16",
+       "field_code": "DG",
+       "value": "500.7",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900799,
+       "operating_date": "2026-09-16",
+       "field_code": "DH",
+       "value": "512",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900762,
+       "operating_date": "2026-09-16",
+       "field_code": "F",
+       "value": "23",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900886,
+       "operating_date": "2026-09-16",
+       "field_code": "GRID_RECEIVE_S1",
+       "value": "12.5",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900887,
+       "operating_date": "2026-09-16",
+       "field_code": "GRID_RECEIVE_S2",
+       "value": "0",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900763,
+       "operating_date": "2026-09-16",
+       "field_code": "H",
+       "value": "105.2",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900764,
+       "operating_date": "2026-09-16",
+       "field_code": "I",
+       "value": "116.5",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900955,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AA10",
+       "value": "2131369",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900963,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AA11",
+       "value": "360851.1",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900985,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AA13",
+       "value": "1617270",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900997,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AA14",
+       "value": "1594807",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901113,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AA54",
+       "value": "34336.62",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900927,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AA8",
+       "value": "31712269",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900941,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AA9",
+       "value": "6444044.3",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900956,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AB10",
+       "value": "2131432.5",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900964,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AB11",
+       "value": "360861.6",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900986,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AB13",
+       "value": "1617270",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900998,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AB14",
+       "value": "1594807",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901010,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AB16",
+       "value": "88355.09",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901016,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AB17",
+       "value": "63844.03",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901022,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AB18",
+       "value": "91865.39",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901028,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AB19",
+       "value": "12098.95",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901040,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AB20",
+       "value": "82842.72",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901046,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AB21",
+       "value": "68998.58",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901052,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AB22",
+       "value": "39246.27",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901058,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AB23",
+       "value": "64330.95",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901064,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AB24",
+       "value": "70032.93",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901070,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AB25",
+       "value": "74075.51",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901076,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AB26",
+       "value": "10844.49",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901082,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AB27",
+       "value": "23672.17",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901114,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AB54",
+       "value": "37232.1",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900928,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AB8",
+       "value": "31713182",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900942,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AB9",
+       "value": "6444878.9",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900957,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AG10",
+       "value": "2104614",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900965,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AG11",
+       "value": "324793.5",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900987,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AG13",
+       "value": "40147917.9",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900999,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AG14",
+       "value": "874536132.6",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901115,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AG54",
+       "value": "8044.15",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900929,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AG8",
+       "value": "31181780",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900943,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AG9",
+       "value": "6333000.1",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900988,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AH13",
+       "value": "40147917.9",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901000,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AH14",
+       "value": "874536132.6",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901011,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AH16",
+       "value": "81891.8",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901017,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AH17",
+       "value": "29926.98",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901023,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AH18",
+       "value": "85866.58",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901029,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AH19",
+       "value": "54526.35",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901041,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AH20",
+       "value": "44376.51",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901047,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AH21",
+       "value": "66794.3",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901053,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AH22",
+       "value": "89561.32",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901059,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AH23",
+       "value": "625.89",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901065,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AH24",
+       "value": "68795.89",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901071,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AH25",
+       "value": "83650.58",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901077,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AH26",
+       "value": "33309.5",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901083,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AH27",
+       "value": "87178.53",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901116,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AH54",
+       "value": "13521.74",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900958,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AI10",
+       "value": "2104855.9",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900966,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AI11",
+       "value": "324830.3",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900989,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AI13",
+       "value": "40253402.82",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901001,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AI14",
+       "value": "874641692",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901117,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AI54",
+       "value": "19068.22",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900930,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AI8",
+       "value": "31185268",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900944,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AI9",
+       "value": "6336200.4",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900990,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AJ13",
+       "value": "40253402.82",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901002,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AJ14",
+       "value": "874641692",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901012,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AJ16",
+       "value": "81891.8",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901018,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AJ17",
+       "value": "30270.06",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901024,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AJ18",
+       "value": "86179.17",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901030,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AJ19",
+       "value": "54532.4",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901042,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AJ20",
+       "value": "44563.58",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901048,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AJ21",
+       "value": "66981.55",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901054,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AJ22",
+       "value": "89628.88",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901060,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AJ23",
+       "value": "689.58",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901066,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AJ24",
+       "value": "68942.82",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901072,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AJ25",
+       "value": "83791.7",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901078,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AJ26",
+       "value": "33429.12",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901084,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AJ27",
+       "value": "87329.79",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901118,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AJ54",
+       "value": "25808.99",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901165,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AJ87",
+       "value": "9.05",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901167,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AJ88",
+       "value": "8.96",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901170,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AJ89",
+       "value": "8.72",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901172,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AJ90",
+       "value": "9.05",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901174,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AJ91",
+       "value": "8.96",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901176,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AJ92",
+       "value": "8.72",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900959,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AK10",
+       "value": "2105151",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900967,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AK11",
+       "value": "324866.8",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900991,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AK13",
+       "value": "40359353",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901003,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AK14",
+       "value": "874747930",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901119,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AK54",
+       "value": "33275.31",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900931,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AK8",
+       "value": "31189859",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901166,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AK87",
+       "value": "5195",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901168,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AK88",
+       "value": "5195",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901171,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AK89",
+       "value": "5370",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900945,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AK9",
+       "value": "6340429",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901173,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AK90",
+       "value": "5195",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901175,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AK91",
+       "value": "5195",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901177,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AK92",
+       "value": "5370",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900960,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AL10",
+       "value": "2105215.8",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900968,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AL11",
+       "value": "324876.8",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900992,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AL13",
+       "value": "40359353",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901004,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AL14",
+       "value": "874747930",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901013,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AL16",
+       "value": "81891.8",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901019,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AL17",
+       "value": "30626.82",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901025,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AL18",
+       "value": "86411.57",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901031,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AL19",
+       "value": "54693.33",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901043,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AL20",
+       "value": "44770.58",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901049,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AL21",
+       "value": "67196.34",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901055,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AL22",
+       "value": "89818.02",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901061,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AL23",
+       "value": "889.51",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901067,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AL24",
+       "value": "69111.44",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901073,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AL25",
+       "value": "83958.09",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901079,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AL26",
+       "value": "33587.73",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901085,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AL27",
+       "value": "87516.05",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901120,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AL54",
+       "value": "36273.91",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900932,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AL8",
+       "value": "31190765",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900946,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:AL9",
+       "value": "6341261.2",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901182,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:C181",
+       "value": "1245",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901183,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:D181",
+       "value": "23.1957",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901200,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:D183",
+       "value": "23.7482",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901184,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:E181",
+       "value": "0",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901201,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:E183",
+       "value": "0,0226",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901185,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:F181",
+       "value": "21.3864",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901202,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:F183",
+       "value": "21.8957",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901186,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:G181",
+       "value": "0",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901187,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:H181",
+       "value": "0",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901188,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:I181",
+       "value": "0",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901086,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:I36",
+       "value": "0",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901178,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:J157",
+       "value": "11605.08",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901180,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:J158",
+       "value": "11590.64",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901189,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:J181",
+       "value": "0",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901179,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:K157",
+       "value": "10701.938",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901181,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:K158",
+       "value": "10684.4374",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901190,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:K181",
+       "value": "1.8093",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901203,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:K183",
+       "value": "1.8525",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901191,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:L181",
+       "value": "7.8003",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901204,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:L183",
+       "value": "7.8007",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900947,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:M10",
+       "value": "4.66",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900969,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:M12",
+       "value": "31.62",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900975,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:M13",
+       "value": "4.41",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901192,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:M181",
+       "value": "0.0111",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901032,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:M20",
+       "value": "232",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900895,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:M3",
+       "value": "439",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900901,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:M4",
+       "value": "15",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901087,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:M41",
+       "value": "2988953",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901093,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:M42",
+       "value": "2064996",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901099,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:M43",
+       "value": "6021425",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901105,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:M49",
+       "value": "8590",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900907,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:M5",
+       "value": "437",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900913,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:M6",
+       "value": "16",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900919,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:M8",
+       "value": "403",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901159,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:M81",
+       "value": "79.705",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901161,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:M82",
+       "value": "459.38",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900933,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:M9",
+       "value": "30.98",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900948,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:N10",
+       "value": "4.77",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900970,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:N12",
+       "value": "29.83",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900976,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:N13",
+       "value": "4.48",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901193,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:N181",
+       "value": "480.0601",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901205,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:N183",
+       "value": "477.9919",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901033,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:N20",
+       "value": "231",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900896,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:N3",
+       "value": "439",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900902,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:N4",
+       "value": "43",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901088,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:N41",
+       "value": "2989029",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901094,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:N42",
+       "value": "2064994",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901100,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:N43",
+       "value": "6022604",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900908,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:N5",
+       "value": "437",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900914,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:N6",
+       "value": "44",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901121,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:N61",
+       "value": "53",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901126,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:N62",
+       "value": "30",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901131,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:N63",
+       "value": "78",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901136,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:N64",
+       "value": "77",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901142,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:N69",
+       "value": "1250",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901145,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:N70",
+       "value": "960",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901148,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:N71",
+       "value": "1850",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900920,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:N8",
+       "value": "403",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901160,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:N81",
+       "value": "87.95",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901162,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:N82",
+       "value": "466.13",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900934,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:N9",
+       "value": "30.74",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900949,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:O10",
+       "value": "4.7",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900971,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:O12",
+       "value": "31.3",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900977,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:O13",
+       "value": "4.5",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901005,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:O16",
+       "value": "0.1",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901194,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:O181",
+       "value": "520.6744",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901206,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:O183",
+       "value": "518.4332",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901034,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:O20",
+       "value": "231",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900897,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:O3",
+       "value": "439",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900903,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:O4",
+       "value": "46",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901089,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:O41",
+       "value": "2989026",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901095,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:O42",
+       "value": "2064994",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901101,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:O43",
+       "value": "6023922",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901106,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:O49",
+       "value": "8590.3",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900909,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:O5",
+       "value": "437",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900915,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:O6",
+       "value": "48",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901122,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:O61",
+       "value": "0.69",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901127,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:O62",
+       "value": "3.008",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901132,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:O63",
+       "value": "4.378",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901137,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:O64",
+       "value": "5.178",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901143,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:O69",
+       "value": "2570",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901146,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:O70",
+       "value": "410",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901149,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:O71",
+       "value": "2540",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900921,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:O8",
+       "value": "403",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900935,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:O9",
+       "value": "30.6",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900950,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:P10",
+       "value": "5",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900972,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:P12",
+       "value": "38.5",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900978,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:P13",
+       "value": "4.4",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901006,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:P16",
+       "value": "0.1",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901195,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:P181",
+       "value": "9681.4675",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901207,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:P183",
+       "value": "9890.0394",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901035,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:P20",
+       "value": "231",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900898,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:P3",
+       "value": "614",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900904,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:P4",
+       "value": "75",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901090,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:P41",
+       "value": "2989202",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901096,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:P42",
+       "value": "2064995",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901102,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:P43",
+       "value": "6024819",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900910,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:P5",
+       "value": "607",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900916,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:P6",
+       "value": "77",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901123,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:P61",
+       "value": "53",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901128,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:P62",
+       "value": "30",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901133,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:P63",
+       "value": "78",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901138,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:P64",
+       "value": "77",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901144,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:P69",
+       "value": "69.284",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901147,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:P70",
+       "value": "6.566",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901150,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:P71",
+       "value": "68.315",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901151,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:P72",
+       "value": "63.7",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901154,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:P73",
+       "value": "96.823",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901158,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:P74",
+       "value": "144.165",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900922,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:P8",
+       "value": "565",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900936,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:P9",
+       "value": "36.5",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900951,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:Q10",
+       "value": "4.8",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900973,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:Q12",
+       "value": "34.8",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900979,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:Q13",
+       "value": "4.5",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901007,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:Q16",
+       "value": "0.1",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901196,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:Q181",
+       "value": "10500.5455",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901208,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:Q183",
+       "value": "10726.8019",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901036,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:Q20",
+       "value": "232",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900899,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:Q3",
+       "value": "520",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900905,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:Q4",
+       "value": "45",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901091,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:Q41",
+       "value": "2989231",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901097,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:Q42",
+       "value": "2064994",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901103,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:Q43",
+       "value": "6026070",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901107,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:Q49",
+       "value": "8590.6",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900911,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:Q5",
+       "value": "525",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900917,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:Q6",
+       "value": "47",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901124,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:Q61",
+       "value": "0.69",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901129,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:Q62",
+       "value": "3.008",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901134,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:Q63",
+       "value": "4.378",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901139,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:Q64",
+       "value": "5.178",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900923,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:Q8",
+       "value": "490",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900937,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:Q9",
+       "value": "33.2",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900952,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:R10",
+       "value": "5.2",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900974,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:R12",
+       "value": "31.7",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900980,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:R13",
+       "value": "4.9",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901197,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:R181",
+       "value": "0.7763",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901209,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:R183",
+       "value": "0,7948",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901037,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:R20",
+       "value": "233",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900900,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:R3",
+       "value": "439",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900906,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:R4",
+       "value": "9",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901092,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:R41",
+       "value": "2989231",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901098,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:R42",
+       "value": "2064994",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901104,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:R43",
+       "value": "6026670",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901108,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:R49",
+       "value": "8590.7",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900912,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:R5",
+       "value": "435.7",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900918,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:R6",
+       "value": "16",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901125,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:R61",
+       "value": "53",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901130,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:R62",
+       "value": "30",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901135,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:R63",
+       "value": "78",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901140,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:R64",
+       "value": "77",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900924,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:R8",
+       "value": "402",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900938,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:R9",
+       "value": "31.1",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901198,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:S181",
+       "value": "0",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901199,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:T181",
+       "value": "Đạt",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900953,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:W10",
+       "value": "2130835.7",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900961,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:W11",
+       "value": "360771.6",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900981,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:W13",
+       "value": "1616986",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900993,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:W14",
+       "value": "1594521",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901109,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:W54",
+       "value": "8464.18",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901152,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:W72",
+       "value": "21014.26",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901155,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:W73",
+       "value": "16615.73",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900925,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:W8",
+       "value": "31704191",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901163,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:W86",
+       "value": "219341.83455081977",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901164,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:W87",
+       "value": "0",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900939,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:W9",
+       "value": "6436613.1",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900982,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:X13",
+       "value": "1616986",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900994,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:X14",
+       "value": "1594521",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901008,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:X16",
+       "value": "87985.8",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901014,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:X17",
+       "value": "63474.48",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901020,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:X18",
+       "value": "91541.65",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901026,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:X19",
+       "value": "11707.09",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901038,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:X20",
+       "value": "82487.96",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901044,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:X21",
+       "value": "68707.41",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901050,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:X22",
+       "value": "38935.34",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901056,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:X23",
+       "value": "64019.72",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901062,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:X24",
+       "value": "69755.54",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901068,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:X25",
+       "value": "73797.94",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901074,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:X26",
+       "value": "10495.05",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901080,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:X27",
+       "value": "23403.5",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901110,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:X54",
+       "value": "14080.49",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901141,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:X68",
+       "value": "21720.986999999997",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901153,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:X72",
+       "value": "21721.74",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901156,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:X73",
+       "value": "17400.48",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900954,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:Y10",
+       "value": "2131083.6",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900962,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:Y11",
+       "value": "360811.3",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900983,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:Y13",
+       "value": "1617129.7",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900995,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:Y14",
+       "value": "1594666.3",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901111,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:Y54",
+       "value": "19708.24",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900926,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:Y8",
+       "value": "31707681",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901169,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:Y89",
+       "value": "219341.835",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900940,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:Y9",
+       "value": "6439802",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900984,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:Z13",
+       "value": "1617129.7",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900996,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:Z14",
+       "value": "1594666.3",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901009,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:Z16",
+       "value": "88153.68",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901015,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:Z17",
+       "value": "63643",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901021,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:Z18",
+       "value": "91682.33",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901027,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:Z19",
+       "value": "11883.08",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901039,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:Z20",
+       "value": "82643.38",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901045,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:Z21",
+       "value": "68832.74",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901051,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:Z22",
+       "value": "39079.92",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901057,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:Z23",
+       "value": "64166.61",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901063,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:Z24",
+       "value": "69869.85",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901069,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:Z25",
+       "value": "73914.64",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901075,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:Z26",
+       "value": "10648.04",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901081,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:Z27",
+       "value": "23509.19",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901112,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:Z54",
+       "value": "26605.87",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901157,
+       "operating_date": "2026-09-16",
+       "field_code": "KTKT:Z73",
+       "value": "400",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900765,
+       "operating_date": "2026-09-16",
+       "field_code": "L",
+       "value": "23",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900766,
+       "operating_date": "2026-09-16",
+       "field_code": "X",
+       "value": "139.1",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900807,
+       "operating_date": "2026-09-17",
+       "field_code": "AE",
+       "value": "154.1",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900808,
+       "operating_date": "2026-09-17",
+       "field_code": "AF",
+       "value": "165.4",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900809,
+       "operating_date": "2026-09-17",
+       "field_code": "AJ",
+       "value": "176.7",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900810,
+       "operating_date": "2026-09-17",
+       "field_code": "AR",
+       "value": "188",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900811,
+       "operating_date": "2026-09-17",
+       "field_code": "AT",
+       "value": "199.3",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900800,
+       "operating_date": "2026-09-17",
+       "field_code": "B",
+       "value": "75",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900891,
+       "operating_date": "2026-09-17",
+       "field_code": "BCSX_COAL_STOCK_24H",
+       "value": "312450.75",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900814,
+       "operating_date": "2026-09-17",
+       "field_code": "BN",
+       "value": "233.2",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900815,
+       "operating_date": "2026-09-17",
+       "field_code": "BQ",
+       "value": "244.5",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900816,
+       "operating_date": "2026-09-17",
+       "field_code": "BR",
+       "value": "255.8",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900818,
+       "operating_date": "2026-09-17",
+       "field_code": "BZ",
+       "value": "278.4",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900801,
+       "operating_date": "2026-09-17",
+       "field_code": "C",
+       "value": "86.3",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900819,
+       "operating_date": "2026-09-17",
+       "field_code": "CA",
+       "value": "289.7",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900820,
+       "operating_date": "2026-09-17",
+       "field_code": "CC",
+       "value": "301",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900821,
+       "operating_date": "2026-09-17",
+       "field_code": "CD",
+       "value": "312.3",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900822,
+       "operating_date": "2026-09-17",
+       "field_code": "CE",
+       "value": "323.6",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900823,
+       "operating_date": "2026-09-17",
+       "field_code": "CF",
+       "value": "334.9",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900812,
+       "operating_date": "2026-09-17",
+       "field_code": "CJ",
+       "value": "210.6",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900824,
+       "operating_date": "2026-09-17",
+       "field_code": "CM",
+       "value": "346.2",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900817,
+       "operating_date": "2026-09-17",
+       "field_code": "CN",
+       "value": "267.1",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900825,
+       "operating_date": "2026-09-17",
+       "field_code": "CQ",
+       "value": "357.5",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900826,
+       "operating_date": "2026-09-17",
+       "field_code": "CR",
+       "value": "368.8",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900827,
+       "operating_date": "2026-09-17",
+       "field_code": "CS",
+       "value": "380.1",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900828,
+       "operating_date": "2026-09-17",
+       "field_code": "CT",
+       "value": "391.4",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900829,
+       "operating_date": "2026-09-17",
+       "field_code": "CU",
+       "value": "402.7",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900830,
+       "operating_date": "2026-09-17",
+       "field_code": "CV",
+       "value": "414",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900831,
+       "operating_date": "2026-09-17",
+       "field_code": "CW",
+       "value": "Bình thường",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900813,
+       "operating_date": "2026-09-17",
+       "field_code": "CX",
+       "value": "221.9",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900832,
+       "operating_date": "2026-09-17",
+       "field_code": "DA",
+       "value": "436.6",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900833,
+       "operating_date": "2026-09-17",
+       "field_code": "DB",
+       "value": "447.9",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900834,
+       "operating_date": "2026-09-17",
+       "field_code": "DC",
+       "value": "459.2",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900835,
+       "operating_date": "2026-09-17",
+       "field_code": "DD",
+       "value": "470.5",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900836,
+       "operating_date": "2026-09-17",
+       "field_code": "DE",
+       "value": "481.8",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900837,
+       "operating_date": "2026-09-17",
+       "field_code": "DF",
+       "value": "493.1",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900838,
+       "operating_date": "2026-09-17",
+       "field_code": "DG",
+       "value": "504.4",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900839,
+       "operating_date": "2026-09-17",
+       "field_code": "DH",
+       "value": "515.7",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900802,
+       "operating_date": "2026-09-17",
+       "field_code": "F",
+       "value": "24",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900889,
+       "operating_date": "2026-09-17",
+       "field_code": "GRID_RECEIVE_S1",
+       "value": "12.5",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900890,
+       "operating_date": "2026-09-17",
+       "field_code": "GRID_RECEIVE_S2",
+       "value": "0",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900803,
+       "operating_date": "2026-09-17",
+       "field_code": "H",
+       "value": "108.9",
+       "note": "Ghi chú mẫu 2026-09-17",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900804,
+       "operating_date": "2026-09-17",
+       "field_code": "I",
+       "value": "120.2",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901270,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AA10",
+       "value": "2132137.2",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901278,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AA11",
+       "value": "360972",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901300,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AA13",
+       "value": "1617680.4",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901312,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AA14",
+       "value": "1595220.2",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901430,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AA54",
+       "value": "32793.49",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901242,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AA8",
+       "value": "31723353",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901256,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AA9",
+       "value": "6454199",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901271,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AB10",
+       "value": "2132199.6",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901279,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AB11",
+       "value": "360982.2",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901301,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AB13",
+       "value": "1617680.4",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901313,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AB14",
+       "value": "1595220.2",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901325,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AB16",
+       "value": "88880.88",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901331,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AB17",
+       "value": "64384.23",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901337,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AB18",
+       "value": "92310.37",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901343,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AB19",
+       "value": "12646.19",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901355,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AB20",
+       "value": "83320.96",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901361,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AB21",
+       "value": "69390.9",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901367,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AB22",
+       "value": "39651.96",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901373,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AB23",
+       "value": "64733.87",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901379,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AB24",
+       "value": "70408.48",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901385,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AB25",
+       "value": "74464.89",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901391,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AB26",
+       "value": "11496.09",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901397,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AB27",
+       "value": "23869.31",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901431,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AB54",
+       "value": "35582.55",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901243,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AB8",
+       "value": "31724225",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901257,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AB9",
+       "value": "6454996.5",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901272,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AG10",
+       "value": "2105406.5",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901280,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AG11",
+       "value": "324904.5",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901302,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AG13",
+       "value": "40461930.9",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901314,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AG14",
+       "value": "874850691",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901432,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AG54",
+       "value": "8072.46",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901244,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AG8",
+       "value": "31193384",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901258,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AG9",
+       "value": "6343647.8",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901303,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AH13",
+       "value": "40461930.9",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901315,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AH14",
+       "value": "874850691",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901326,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AH16",
+       "value": "81891.8",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901332,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AH17",
+       "value": "30963.18",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901338,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AH18",
+       "value": "86734",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901344,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AH19",
+       "value": "54693.33",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901356,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AH20",
+       "value": "44944.14",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901362,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AH21",
+       "value": "67356.51",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901368,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AH22",
+       "value": "89957.3",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901374,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AH23",
+       "value": "1025.9",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901380,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AH24",
+       "value": "69223.41",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901386,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AH25",
+       "value": "84062.21",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901392,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AH26",
+       "value": "33695.87",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901398,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AH27",
+       "value": "87613.44",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901433,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AH54",
+       "value": "13594.01",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901273,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AI10",
+       "value": "2105659.6",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901281,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AI11",
+       "value": "324940.6",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901304,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AI13",
+       "value": "40564803.6",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901316,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AI14",
+       "value": "874953759.5",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901434,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AI54",
+       "value": "19005.52",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901245,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AI8",
+       "value": "31196868",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901259,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AI9",
+       "value": "6346841.9",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901305,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AJ13",
+       "value": "40564803.6",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901317,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AJ14",
+       "value": "874953759.5",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901327,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AJ16",
+       "value": "81891.8",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901333,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AJ17",
+       "value": "31310.77",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901339,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AJ18",
+       "value": "87057.96",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901345,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AJ19",
+       "value": "54693.33",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901357,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AJ20",
+       "value": "45112.88",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901363,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AJ21",
+       "value": "67507.7",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901369,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AJ22",
+       "value": "90098.82",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901375,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AJ23",
+       "value": "1165.14",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901381,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AJ24",
+       "value": "69329.62",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901387,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AJ25",
+       "value": "84171.42",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901393,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AJ26",
+       "value": "33802.24",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901399,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AJ27",
+       "value": "87719.91",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901435,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AJ54",
+       "value": "25275.68",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901483,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AJ87",
+       "value": "8.41",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901485,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AJ88",
+       "value": "8.61",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901487,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AJ89",
+       "value": "8.94",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901489,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AJ90",
+       "value": "8.41",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901491,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AJ91",
+       "value": "8.61",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901493,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AJ92",
+       "value": "8.94",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901274,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AK10",
+       "value": "2105935.7",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901282,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AK11",
+       "value": "324978.5",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901306,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AK13",
+       "value": "40670900.18",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901318,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AK14",
+       "value": "875060055.2",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901482,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AK28",
+       "value": "-162.51",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901436,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AK54",
+       "value": "31734.21",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901246,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AK8",
+       "value": "31200913",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901484,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AK87",
+       "value": "5379",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901486,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AK88",
+       "value": "5156",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901488,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AK89",
+       "value": "5156",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901260,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AK9",
+       "value": "6350557.7",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901490,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AK90",
+       "value": "5379",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901492,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AK91",
+       "value": "5156",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901494,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AK92",
+       "value": "5156",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901275,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AL10",
+       "value": "2105999.8",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901283,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AL11",
+       "value": "324988",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901307,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AL13",
+       "value": "40670900.18",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901319,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AL14",
+       "value": "875060055.2",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901328,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AL16",
+       "value": "82054.31",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901334,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AL17",
+       "value": "31676.56",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901340,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AL18",
+       "value": "87378.7",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901346,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AL19",
+       "value": "54693.33",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901358,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AL20",
+       "value": "45305.1",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901364,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AL21",
+       "value": "67684.17",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901370,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AL22",
+       "value": "90269.49",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901376,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AL23",
+       "value": "1335.83",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901382,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AL24",
+       "value": "69474.1",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901388,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AL25",
+       "value": "84315.83",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901394,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AL26",
+       "value": "33943.7",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901400,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AL27",
+       "value": "87862.34",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901437,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AL54",
+       "value": "34544.72",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901247,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AL8",
+       "value": "31201785",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901261,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AL9",
+       "value": "6351355.4",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901414,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:AO42",
+       "value": "trước calib",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901499,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:C181",
+       "value": "1245",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901500,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:D181",
+       "value": "22.0842",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901501,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:E181",
+       "value": "0.0002",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901502,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:F181",
+       "value": "20.2993",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901503,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:G181",
+       "value": "0",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901425,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:G52",
+       "value": "1",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901504,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:H181",
+       "value": "0",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901505,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:I181",
+       "value": "0",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901401,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:I36",
+       "value": "0",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901495,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:J157",
+       "value": "11053.64",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901497,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:J158",
+       "value": "11030.56",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901506,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:J181",
+       "value": "0",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901496,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:K157",
+       "value": "10166.5842",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901498,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:K158",
+       "value": "10132.7348",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901507,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:K181",
+       "value": "1.7849",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901508,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:L181",
+       "value": "8.0822",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901262,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:M10",
+       "value": "4.8",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901284,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:M12",
+       "value": "31.9",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901290,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:M13",
+       "value": "4.4",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901509,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:M181",
+       "value": "0.0107",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901347,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:M20",
+       "value": "233",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901210,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:M3",
+       "value": "438",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901216,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:M4",
+       "value": "8",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901402,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:M41",
+       "value": "2989274",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901408,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:M42",
+       "value": "264994",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901415,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:M43",
+       "value": "6028421",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901421,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:M49",
+       "value": "8590.9",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901222,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:M5",
+       "value": "438",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901228,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:M6",
+       "value": "7",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901234,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:M8",
+       "value": "402",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901477,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:M81",
+       "value": "87.95",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901479,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:M82",
+       "value": "466.13",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901248,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:M9",
+       "value": "30.9",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901263,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:N10",
+       "value": "5.2",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901285,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:N12",
+       "value": "31.6",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901291,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:N13",
+       "value": "4.4",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901510,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:N181",
+       "value": "484.0985",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901348,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:N20",
+       "value": "232",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901211,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:N3",
+       "value": "438",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901217,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:N4",
+       "value": "23",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901403,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:N41",
+       "value": "2989263",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901409,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:N42",
+       "value": "2065100",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901416,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:N43",
+       "value": "6029758",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901223,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:N5",
+       "value": "438",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901229,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:N6",
+       "value": "24",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901438,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:N61",
+       "value": "53",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901443,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:N62",
+       "value": "30",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901448,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:N63",
+       "value": "78",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901453,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:N64",
+       "value": "77",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901459,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:N69",
+       "value": "2570",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901462,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:N70",
+       "value": "410",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901465,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:N71",
+       "value": "2540",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901235,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:N8",
+       "value": "402",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901478,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:N81",
+       "value": "96.2",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901480,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:N82",
+       "value": "472.6",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901249,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:N9",
+       "value": "31",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901264,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:O10",
+       "value": "4.7",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901286,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:O12",
+       "value": "31.1",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901292,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:O13",
+       "value": "4.7",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901320,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:O16",
+       "value": "0.1",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901511,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:O181",
+       "value": "526.6644",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901349,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:O20",
+       "value": "231",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901212,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:O3",
+       "value": "438",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901218,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:O4",
+       "value": "58",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901404,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:O41",
+       "value": "2989255",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901410,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:O42",
+       "value": "2065119",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901417,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:O43",
+       "value": "6030616",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901422,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:O49",
+       "value": "8591.2",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901224,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:O5",
+       "value": "438",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901230,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:O6",
+       "value": "60",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901439,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:O61",
+       "value": "0.69",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901444,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:O62",
+       "value": "3.008",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901449,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:O63",
+       "value": "4.378",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901454,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:O64",
+       "value": "5.178",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901460,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:O69",
+       "value": "2090",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901463,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:O70",
+       "value": "410",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901466,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:O71",
+       "value": "2540",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901236,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:O8",
+       "value": "403",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901250,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:O9",
+       "value": "30.7",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901265,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:P10",
+       "value": "5",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901287,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:P12",
+       "value": "39.1",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901293,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:P13",
+       "value": "4.9",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901321,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:P16",
+       "value": "0.1",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901512,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:P181",
+       "value": "9692.4242",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901350,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:P20",
+       "value": "231",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901213,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:P3",
+       "value": "622.5",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901219,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:P4",
+       "value": "71",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901405,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:P41",
+       "value": "2989255",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901411,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:P42",
+       "value": "2065119",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901418,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:P43",
+       "value": "6031669",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901225,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:P5",
+       "value": "609",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901231,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:P6",
+       "value": "75",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901440,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:P61",
+       "value": "53",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901445,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:P62",
+       "value": "30",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901450,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:P63",
+       "value": "78",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901455,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:P64",
+       "value": "77",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901461,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:P69",
+       "value": "54.893",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901464,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:P70",
+       "value": "6.566",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901467,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:P71",
+       "value": "68.315",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901468,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:P72",
+       "value": "0",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901472,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:P73",
+       "value": "144.165",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901476,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:P74",
+       "value": "129.774",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901237,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:P8",
+       "value": "566",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901251,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:P9",
+       "value": "36.8",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901266,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:Q10",
+       "value": "4.81",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901288,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:Q12",
+       "value": "32.71",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901294,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:Q13",
+       "value": "4.54",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901322,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:Q16",
+       "value": "0.1",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901513,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:Q181",
+       "value": "10544.6608",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901351,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:Q20",
+       "value": "232",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901214,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:Q3",
+       "value": "439",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901220,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:Q4",
+       "value": "32",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901406,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:Q41",
+       "value": "2989240",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901412,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:Q42",
+       "value": "2065169",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901419,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:Q43",
+       "value": "6033252",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901423,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:Q49",
+       "value": "8591.5",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901226,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:Q5",
+       "value": "438",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901232,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:Q6",
+       "value": "34",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901441,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:Q61",
+       "value": "0.69",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901446,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:Q62",
+       "value": "3.008",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901451,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:Q63",
+       "value": "4.378",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901456,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:Q64",
+       "value": "5.178",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901238,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:Q8",
+       "value": "402",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901252,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:Q9",
+       "value": "31.07",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901267,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:R10",
+       "value": "5.17",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901289,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:R12",
+       "value": "31.96",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901295,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:R13",
+       "value": "4.93",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901514,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:R181",
+       "value": "0.7391",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901352,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:R20",
+       "value": "233",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901215,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:R3",
+       "value": "439",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901221,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:R4",
+       "value": "8",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901407,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:R41",
+       "value": "2989238",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901413,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:R42",
+       "value": "2065169",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901420,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:R43",
+       "value": "6033574",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901424,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:R49",
+       "value": "8591.6",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901227,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:R5",
+       "value": "438",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901233,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:R6",
+       "value": "9",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901442,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:R61",
+       "value": "53",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901447,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:R62",
+       "value": "30",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901452,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:R63",
+       "value": "78",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901457,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:R64",
+       "value": "77",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901239,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:R8",
+       "value": "402",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901253,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:R9",
+       "value": "30.81",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901515,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:S181",
+       "value": "0",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901516,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:T181",
+       "value": "Đạt",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901268,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:W10",
+       "value": "2131618.3",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901276,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:W11",
+       "value": "360891.3",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901296,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:W13",
+       "value": "1617408.5",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901308,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:W14",
+       "value": "1594946.6",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901426,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:W54",
+       "value": "8520.17",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901469,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:W72",
+       "value": "21721.74",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901473,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:W73",
+       "value": "17400.48",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901240,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:W8",
+       "value": "31715794",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901481,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:W86",
+       "value": "208206.49515191233",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901254,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:W9",
+       "value": "6447270",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901297,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:X13",
+       "value": "1617408.5",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901309,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:X14",
+       "value": "1594946.6",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901323,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:X16",
+       "value": "88524.33",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901329,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:X17",
+       "value": "64013.37",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901335,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:X18",
+       "value": "92005.47",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901341,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:X19",
+       "value": "12272.71",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901353,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:X20",
+       "value": "82994.91",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901359,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:X21",
+       "value": "69118.73",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901365,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:X22",
+       "value": "39370.56",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901371,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:X23",
+       "value": "64454.95",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901377,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:X24",
+       "value": "70151.45",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901383,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:X25",
+       "value": "74193.89",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901389,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:X26",
+       "value": "11066.18",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901395,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:X27",
+       "value": "23718.26",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901427,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:X54",
+       "value": "14106.7",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901458,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:X68",
+       "value": "21720.986999999997",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901470,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:X72",
+       "value": "22514.15",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901474,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:X73",
+       "value": "18326.98",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901269,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:Y10",
+       "value": "2131869",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901277,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:Y11",
+       "value": "360931.9",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901298,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:Y13",
+       "value": "1617543.9",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901310,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:Y14",
+       "value": "1595083",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901428,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:Y54",
+       "value": "19663.18",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901241,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:Y8",
+       "value": "31719301",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901255,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:Y9",
+       "value": "6450464.8",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901299,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:Z13",
+       "value": "1617543.9",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901311,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:Z14",
+       "value": "1595083",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901324,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:Z16",
+       "value": "88696.03",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901330,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:Z17",
+       "value": "64188.43",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901336,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:Z18",
+       "value": "92146.68",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901342,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:Z19",
+       "value": "12447.73",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901354,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:Z20",
+       "value": "83145.79",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901360,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:Z21",
+       "value": "69240.98",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901366,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:Z22",
+       "value": "39495.89",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901372,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:Z23",
+       "value": "64584.76",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901378,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:Z24",
+       "value": "70267.1",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901384,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:Z25",
+       "value": "74309.32",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901390,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:Z26",
+       "value": "11313.22",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901396,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:Z27",
+       "value": "23733.26",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901429,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:Z54",
+       "value": "26076.21",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901471,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:Z72",
+       "value": "0",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 901475,
+       "operating_date": "2026-09-17",
+       "field_code": "KTKT:Z73",
+       "value": "532",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900805,
+       "operating_date": "2026-09-17",
+       "field_code": "L",
+       "value": "24",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 900806,
+       "operating_date": "2026-09-17",
+       "field_code": "X",
+       "value": "142.8",
+       "note": "",
+       "updated_at": "<thời điểm>"
+      }
+     ],
+     "shift_readings": [
+      {
+       "id": 920002,
+       "operating_date": "2026-09-16",
+       "unit": "S1",
+       "time_slot": "06:00",
+       "metric": "D",
+       "value": "399",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 920006,
+       "operating_date": "2026-09-16",
+       "unit": "S1",
+       "time_slot": "06:00",
+       "metric": "E",
+       "value": "232",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 920000,
+       "operating_date": "2026-09-16",
+       "unit": "S1",
+       "time_slot": "06:00",
+       "metric": "P",
+       "value": "439",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 920001,
+       "operating_date": "2026-09-16",
+       "unit": "S1",
+       "time_slot": "06:00",
+       "metric": "Q",
+       "value": "15",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 920009,
+       "operating_date": "2026-09-16",
+       "unit": "S1",
+       "time_slot": "10:00",
+       "metric": "D",
+       "value": "399",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 920013,
+       "operating_date": "2026-09-16",
+       "unit": "S1",
+       "time_slot": "10:00",
+       "metric": "E",
+       "value": "231",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 920007,
+       "operating_date": "2026-09-16",
+       "unit": "S1",
+       "time_slot": "10:00",
+       "metric": "P",
+       "value": "439",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 920008,
+       "operating_date": "2026-09-16",
+       "unit": "S1",
+       "time_slot": "10:00",
+       "metric": "Q",
+       "value": "43",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 920016,
+       "operating_date": "2026-09-16",
+       "unit": "S1",
+       "time_slot": "14:00",
+       "metric": "D",
+       "value": "399",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 920020,
+       "operating_date": "2026-09-16",
+       "unit": "S1",
+       "time_slot": "14:00",
+       "metric": "E",
+       "value": "231",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 920014,
+       "operating_date": "2026-09-16",
+       "unit": "S1",
+       "time_slot": "14:00",
+       "metric": "P",
+       "value": "439",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 920015,
+       "operating_date": "2026-09-16",
+       "unit": "S1",
+       "time_slot": "14:00",
+       "metric": "Q",
+       "value": "46",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 920023,
+       "operating_date": "2026-09-16",
+       "unit": "S1",
+       "time_slot": "18:00",
+       "metric": "D",
+       "value": "567",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 920027,
+       "operating_date": "2026-09-16",
+       "unit": "S1",
+       "time_slot": "18:00",
+       "metric": "E",
+       "value": "231",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 920021,
+       "operating_date": "2026-09-16",
+       "unit": "S1",
+       "time_slot": "18:00",
+       "metric": "P",
+       "value": "614",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 920022,
+       "operating_date": "2026-09-16",
+       "unit": "S1",
+       "time_slot": "18:00",
+       "metric": "Q",
+       "value": "75",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 920030,
+       "operating_date": "2026-09-16",
+       "unit": "S1",
+       "time_slot": "22:00",
+       "metric": "D",
+       "value": "477",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 920034,
+       "operating_date": "2026-09-16",
+       "unit": "S1",
+       "time_slot": "22:00",
+       "metric": "E",
+       "value": "232",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 920028,
+       "operating_date": "2026-09-16",
+       "unit": "S1",
+       "time_slot": "22:00",
+       "metric": "P",
+       "value": "520",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 920029,
+       "operating_date": "2026-09-16",
+       "unit": "S1",
+       "time_slot": "22:00",
+       "metric": "Q",
+       "value": "45",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 920037,
+       "operating_date": "2026-09-16",
+       "unit": "S1",
+       "time_slot": "23:59",
+       "metric": "D",
+       "value": "398",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 920041,
+       "operating_date": "2026-09-16",
+       "unit": "S1",
+       "time_slot": "23:59",
+       "metric": "E",
+       "value": "233",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 920035,
+       "operating_date": "2026-09-16",
+       "unit": "S1",
+       "time_slot": "23:59",
+       "metric": "P",
+       "value": "439",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 920036,
+       "operating_date": "2026-09-16",
+       "unit": "S1",
+       "time_slot": "23:59",
+       "metric": "Q",
+       "value": "9",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 920005,
+       "operating_date": "2026-09-16",
+       "unit": "S2",
+       "time_slot": "06:00",
+       "metric": "D",
+       "value": "403",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 920003,
+       "operating_date": "2026-09-16",
+       "unit": "S2",
+       "time_slot": "06:00",
+       "metric": "P",
+       "value": "437",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 920004,
+       "operating_date": "2026-09-16",
+       "unit": "S2",
+       "time_slot": "06:00",
+       "metric": "Q",
+       "value": "16",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 920012,
+       "operating_date": "2026-09-16",
+       "unit": "S2",
+       "time_slot": "10:00",
+       "metric": "D",
+       "value": "403",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 920010,
+       "operating_date": "2026-09-16",
+       "unit": "S2",
+       "time_slot": "10:00",
+       "metric": "P",
+       "value": "437",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 920011,
+       "operating_date": "2026-09-16",
+       "unit": "S2",
+       "time_slot": "10:00",
+       "metric": "Q",
+       "value": "44",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 920019,
+       "operating_date": "2026-09-16",
+       "unit": "S2",
+       "time_slot": "14:00",
+       "metric": "D",
+       "value": "403",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 920017,
+       "operating_date": "2026-09-16",
+       "unit": "S2",
+       "time_slot": "14:00",
+       "metric": "P",
+       "value": "437",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 920018,
+       "operating_date": "2026-09-16",
+       "unit": "S2",
+       "time_slot": "14:00",
+       "metric": "Q",
+       "value": "48",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 920026,
+       "operating_date": "2026-09-16",
+       "unit": "S2",
+       "time_slot": "18:00",
+       "metric": "D",
+       "value": "565",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 920024,
+       "operating_date": "2026-09-16",
+       "unit": "S2",
+       "time_slot": "18:00",
+       "metric": "P",
+       "value": "607",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 920025,
+       "operating_date": "2026-09-16",
+       "unit": "S2",
+       "time_slot": "18:00",
+       "metric": "Q",
+       "value": "77",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 920033,
+       "operating_date": "2026-09-16",
+       "unit": "S2",
+       "time_slot": "22:00",
+       "metric": "D",
+       "value": "490",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 920031,
+       "operating_date": "2026-09-16",
+       "unit": "S2",
+       "time_slot": "22:00",
+       "metric": "P",
+       "value": "525",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 920032,
+       "operating_date": "2026-09-16",
+       "unit": "S2",
+       "time_slot": "22:00",
+       "metric": "Q",
+       "value": "47",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 920040,
+       "operating_date": "2026-09-16",
+       "unit": "S2",
+       "time_slot": "23:59",
+       "metric": "D",
+       "value": "402",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 920038,
+       "operating_date": "2026-09-16",
+       "unit": "S2",
+       "time_slot": "23:59",
+       "metric": "P",
+       "value": "435.7",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 920039,
+       "operating_date": "2026-09-16",
+       "unit": "S2",
+       "time_slot": "23:59",
+       "metric": "Q",
+       "value": "16",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 920044,
+       "operating_date": "2026-09-17",
+       "unit": "S1",
+       "time_slot": "06:00",
+       "metric": "D",
+       "value": "400",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 920048,
+       "operating_date": "2026-09-17",
+       "unit": "S1",
+       "time_slot": "06:00",
+       "metric": "E",
+       "value": "233",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 920042,
+       "operating_date": "2026-09-17",
+       "unit": "S1",
+       "time_slot": "06:00",
+       "metric": "P",
+       "value": "438",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 920043,
+       "operating_date": "2026-09-17",
+       "unit": "S1",
+       "time_slot": "06:00",
+       "metric": "Q",
+       "value": "8",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 920051,
+       "operating_date": "2026-09-17",
+       "unit": "S1",
+       "time_slot": "10:00",
+       "metric": "D",
+       "value": "400",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 920055,
+       "operating_date": "2026-09-17",
+       "unit": "S1",
+       "time_slot": "10:00",
+       "metric": "E",
+       "value": "232",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 920049,
+       "operating_date": "2026-09-17",
+       "unit": "S1",
+       "time_slot": "10:00",
+       "metric": "P",
+       "value": "438",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 920050,
+       "operating_date": "2026-09-17",
+       "unit": "S1",
+       "time_slot": "10:00",
+       "metric": "Q",
+       "value": "23",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 920058,
+       "operating_date": "2026-09-17",
+       "unit": "S1",
+       "time_slot": "14:00",
+       "metric": "D",
+       "value": "398",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 920062,
+       "operating_date": "2026-09-17",
+       "unit": "S1",
+       "time_slot": "14:00",
+       "metric": "E",
+       "value": "231",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 920056,
+       "operating_date": "2026-09-17",
+       "unit": "S1",
+       "time_slot": "14:00",
+       "metric": "P",
+       "value": "438",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 920057,
+       "operating_date": "2026-09-17",
+       "unit": "S1",
+       "time_slot": "14:00",
+       "metric": "Q",
+       "value": "58",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 920065,
+       "operating_date": "2026-09-17",
+       "unit": "S1",
+       "time_slot": "18:00",
+       "metric": "D",
+       "value": "575",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 920069,
+       "operating_date": "2026-09-17",
+       "unit": "S1",
+       "time_slot": "18:00",
+       "metric": "E",
+       "value": "231",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 920063,
+       "operating_date": "2026-09-17",
+       "unit": "S1",
+       "time_slot": "18:00",
+       "metric": "P",
+       "value": "622.5",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 920064,
+       "operating_date": "2026-09-17",
+       "unit": "S1",
+       "time_slot": "18:00",
+       "metric": "Q",
+       "value": "71",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 920072,
+       "operating_date": "2026-09-17",
+       "unit": "S1",
+       "time_slot": "22:00",
+       "metric": "D",
+       "value": "399",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 920076,
+       "operating_date": "2026-09-17",
+       "unit": "S1",
+       "time_slot": "22:00",
+       "metric": "E",
+       "value": "232",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 920070,
+       "operating_date": "2026-09-17",
+       "unit": "S1",
+       "time_slot": "22:00",
+       "metric": "P",
+       "value": "439",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 920071,
+       "operating_date": "2026-09-17",
+       "unit": "S1",
+       "time_slot": "22:00",
+       "metric": "Q",
+       "value": "32",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 920079,
+       "operating_date": "2026-09-17",
+       "unit": "S1",
+       "time_slot": "23:59",
+       "metric": "D",
+       "value": "399",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 920083,
+       "operating_date": "2026-09-17",
+       "unit": "S1",
+       "time_slot": "23:59",
+       "metric": "E",
+       "value": "233",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 920077,
+       "operating_date": "2026-09-17",
+       "unit": "S1",
+       "time_slot": "23:59",
+       "metric": "P",
+       "value": "439",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 920078,
+       "operating_date": "2026-09-17",
+       "unit": "S1",
+       "time_slot": "23:59",
+       "metric": "Q",
+       "value": "8",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 920047,
+       "operating_date": "2026-09-17",
+       "unit": "S2",
+       "time_slot": "06:00",
+       "metric": "D",
+       "value": "402",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 920045,
+       "operating_date": "2026-09-17",
+       "unit": "S2",
+       "time_slot": "06:00",
+       "metric": "P",
+       "value": "438",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 920046,
+       "operating_date": "2026-09-17",
+       "unit": "S2",
+       "time_slot": "06:00",
+       "metric": "Q",
+       "value": "7",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 920054,
+       "operating_date": "2026-09-17",
+       "unit": "S2",
+       "time_slot": "10:00",
+       "metric": "D",
+       "value": "402",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 920052,
+       "operating_date": "2026-09-17",
+       "unit": "S2",
+       "time_slot": "10:00",
+       "metric": "P",
+       "value": "438",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 920053,
+       "operating_date": "2026-09-17",
+       "unit": "S2",
+       "time_slot": "10:00",
+       "metric": "Q",
+       "value": "24",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 920061,
+       "operating_date": "2026-09-17",
+       "unit": "S2",
+       "time_slot": "14:00",
+       "metric": "D",
+       "value": "403",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 920059,
+       "operating_date": "2026-09-17",
+       "unit": "S2",
+       "time_slot": "14:00",
+       "metric": "P",
+       "value": "438",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 920060,
+       "operating_date": "2026-09-17",
+       "unit": "S2",
+       "time_slot": "14:00",
+       "metric": "Q",
+       "value": "60",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 920068,
+       "operating_date": "2026-09-17",
+       "unit": "S2",
+       "time_slot": "18:00",
+       "metric": "D",
+       "value": "566",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 920066,
+       "operating_date": "2026-09-17",
+       "unit": "S2",
+       "time_slot": "18:00",
+       "metric": "P",
+       "value": "609",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 920067,
+       "operating_date": "2026-09-17",
+       "unit": "S2",
+       "time_slot": "18:00",
+       "metric": "Q",
+       "value": "75",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 920075,
+       "operating_date": "2026-09-17",
+       "unit": "S2",
+       "time_slot": "22:00",
+       "metric": "D",
+       "value": "402",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 920073,
+       "operating_date": "2026-09-17",
+       "unit": "S2",
+       "time_slot": "22:00",
+       "metric": "P",
+       "value": "438",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 920074,
+       "operating_date": "2026-09-17",
+       "unit": "S2",
+       "time_slot": "22:00",
+       "metric": "Q",
+       "value": "34",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 920082,
+       "operating_date": "2026-09-17",
+       "unit": "S2",
+       "time_slot": "23:59",
+       "metric": "D",
+       "value": "402",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 920080,
+       "operating_date": "2026-09-17",
+       "unit": "S2",
+       "time_slot": "23:59",
+       "metric": "P",
+       "value": "438",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 920081,
+       "operating_date": "2026-09-17",
+       "unit": "S2",
+       "time_slot": "23:59",
+       "metric": "Q",
+       "value": "9",
+       "updated_at": "<thời điểm>"
+      }
+     ],
+     "operating_events": [
+      {
+       "id": 940000,
+       "operating_date": "2026-09-17",
+       "unit": "S1",
+       "start_at": "2026-09-17T02:15",
+       "end_at": "2026-09-17T05:40",
+       "event_type": 1,
+       "description": "Ngừng sự cố mẫu",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 940001,
+       "operating_date": "2026-09-17",
+       "unit": "S2",
+       "start_at": "2026-09-17T10:00",
+       "end_at": "",
+       "event_type": 2,
+       "description": "",
+       "updated_at": "<thời điểm>"
+      }
+     ],
+     "ppa_heat_rate_daily": [
+      {
+       "id": 1020000,
+       "operating_date": "2026-09-16",
+       "source_data": "{\"grossS1\":[101,201],\"netS1\":[96,191],\"grossS2\":[111,211],\"netS2\":[105,200]}",
+       "source_files": "[\"mau-16.xlsx\"]",
+       "gross_s1_kwh": "14610000",
+       "net_s1_kwh": "13560000",
+       "gross_s2_kwh": "0",
+       "net_s2_kwh": "0",
+       "ppa_plant": "10234.32",
+       "ppa_s1": "10234.32",
+       "ppa_s2": "",
+       "note_s1": "Ghi chú S1",
+       "note_s2": "",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 1020001,
+       "operating_date": "2026-09-17",
+       "source_data": "{\"grossS1\":[102,202],\"netS1\":[97,192],\"grossS2\":[112,212],\"netS2\":[106,201]}",
+       "source_files": "[]",
+       "gross_s1_kwh": "14590000",
+       "net_s1_kwh": "13530000",
+       "gross_s2_kwh": "14200000",
+       "net_s2_kwh": "13100000",
+       "ppa_plant": "10190.5",
+       "ppa_s1": "10180.1",
+       "ppa_s2": "10201.7",
+       "note_s1": "",
+       "note_s2": "S2 khởi động",
+       "updated_at": "<thời điểm>"
+      }
+     ],
+     "water_shift_logs": [
+      {
+       "id": 980000,
+       "log_date": "2026-09-16",
+       "shift_time": "06h00",
+       "shift_team": "Kíp 1",
+       "shift_leader": "Trưởng ca Mẫu A",
+       "elec_rec_s1": 1031.5,
+       "elec_rec_s2": 927.25,
+       "elec_gen_s1": 241,
+       "elec_gen_s2": 231,
+       "water_rec_s1": 5012.75,
+       "water_rec_s2": 4810.5,
+       "water_used_s1": 41,
+       "water_used_s2": 39,
+       "water_ratio_s1": 0.07,
+       "water_ratio_s2": 0.0812,
+       "condenser_rec_s1": 2003,
+       "condenser_rec_s2": 2102,
+       "condenser_used_s1": 13,
+       "condenser_used_s2": 12,
+       "resin_water_s1_24h": 55.5,
+       "resin_water_s2_24h": 49,
+       "note": "",
+       "updated_at": "<thời điểm>",
+       "water_adjustment_s1": null,
+       "water_adjustment_s2": null,
+       "condenser_adjustment_s1": null,
+       "condenser_adjustment_s2": null
+      },
+      {
+       "id": 980001,
+       "log_date": "2026-09-16",
+       "shift_time": "14h00",
+       "shift_team": "Kíp 2",
+       "shift_leader": "Trưởng ca Mẫu B",
+       "elec_rec_s1": 1063,
+       "elec_rec_s2": 954.5,
+       "elec_gen_s1": 242,
+       "elec_gen_s2": 232,
+       "water_rec_s1": 5025.5,
+       "water_rec_s2": 4821,
+       "water_used_s1": 42,
+       "water_used_s2": 40,
+       "water_ratio_s1": 0.07,
+       "water_ratio_s2": 0.0812,
+       "condenser_rec_s1": 2006,
+       "condenser_rec_s2": 2104,
+       "condenser_used_s1": 14,
+       "condenser_used_s2": 13,
+       "resin_water_s1_24h": 0,
+       "resin_water_s2_24h": 0,
+       "note": "Ghi chú ca",
+       "updated_at": "<thời điểm>",
+       "water_adjustment_s1": null,
+       "water_adjustment_s2": null,
+       "condenser_adjustment_s1": null,
+       "condenser_adjustment_s2": null
+      },
+      {
+       "id": 980002,
+       "log_date": "2026-09-16",
+       "shift_time": "22h00",
+       "shift_team": "Kíp 3",
+       "shift_leader": "Trưởng ca Mẫu A",
+       "elec_rec_s1": 1094.5,
+       "elec_rec_s2": 981.75,
+       "elec_gen_s1": 243,
+       "elec_gen_s2": 0,
+       "water_rec_s1": 5038.25,
+       "water_rec_s2": 4831.5,
+       "water_used_s1": 43,
+       "water_used_s2": 41,
+       "water_ratio_s1": 0.07,
+       "water_ratio_s2": 0.0812,
+       "condenser_rec_s1": 2009,
+       "condenser_rec_s2": 2106,
+       "condenser_used_s1": 15,
+       "condenser_used_s2": 14,
+       "resin_water_s1_24h": 0,
+       "resin_water_s2_24h": 0,
+       "note": "",
+       "updated_at": "<thời điểm>",
+       "water_adjustment_s1": 2.5,
+       "water_adjustment_s2": null,
+       "condenser_adjustment_s1": null,
+       "condenser_adjustment_s2": null
+      },
+      {
+       "id": 980003,
+       "log_date": "2026-09-17",
+       "shift_time": "06h00",
+       "shift_team": "Kíp 1",
+       "shift_leader": "Trưởng ca Mẫu A",
+       "elec_rec_s1": 1126,
+       "elec_rec_s2": 1009,
+       "elec_gen_s1": 244,
+       "elec_gen_s2": 234,
+       "water_rec_s1": 5051,
+       "water_rec_s2": 4842,
+       "water_used_s1": 44,
+       "water_used_s2": 42,
+       "water_ratio_s1": 0.07,
+       "water_ratio_s2": 0.0812,
+       "condenser_rec_s1": 2012,
+       "condenser_rec_s2": 2108,
+       "condenser_used_s1": 16,
+       "condenser_used_s2": 15,
+       "resin_water_s1_24h": 55.5,
+       "resin_water_s2_24h": 49,
+       "note": "",
+       "updated_at": "<thời điểm>",
+       "water_adjustment_s1": null,
+       "water_adjustment_s2": null,
+       "condenser_adjustment_s1": null,
+       "condenser_adjustment_s2": 1.25
+      },
+      {
+       "id": 980004,
+       "log_date": "2026-09-17",
+       "shift_time": "14h00",
+       "shift_team": "Kíp 2",
+       "shift_leader": "Trưởng ca Mẫu B",
+       "elec_rec_s1": 1157.5,
+       "elec_rec_s2": 1036.25,
+       "elec_gen_s1": 245,
+       "elec_gen_s2": 235,
+       "water_rec_s1": 5063.75,
+       "water_rec_s2": 4852.5,
+       "water_used_s1": 45,
+       "water_used_s2": 43,
+       "water_ratio_s1": 0.07,
+       "water_ratio_s2": 0.0812,
+       "condenser_rec_s1": 2015,
+       "condenser_rec_s2": 2110,
+       "condenser_used_s1": 17,
+       "condenser_used_s2": 16,
+       "resin_water_s1_24h": 0,
+       "resin_water_s2_24h": 0,
+       "note": "",
+       "updated_at": "<thời điểm>",
+       "water_adjustment_s1": null,
+       "water_adjustment_s2": null,
+       "condenser_adjustment_s1": null,
+       "condenser_adjustment_s2": null
+      },
+      {
+       "id": 980005,
+       "log_date": "2026-09-17",
+       "shift_time": "22h00",
+       "shift_team": "Kíp 3",
+       "shift_leader": "Trưởng ca Mẫu A",
+       "elec_rec_s1": 1189,
+       "elec_rec_s2": 1063.5,
+       "elec_gen_s1": 246,
+       "elec_gen_s2": 0,
+       "water_rec_s1": 5076.5,
+       "water_rec_s2": 4863,
+       "water_used_s1": 46,
+       "water_used_s2": 44,
+       "water_ratio_s1": 0.07,
+       "water_ratio_s2": 0.0812,
+       "condenser_rec_s1": 2018,
+       "condenser_rec_s2": 2112,
+       "condenser_used_s1": 18,
+       "condenser_used_s2": 17,
+       "resin_water_s1_24h": 0,
+       "resin_water_s2_24h": 0,
+       "note": "",
+       "updated_at": "<thời điểm>",
+       "water_adjustment_s1": null,
+       "water_adjustment_s2": null,
+       "condenser_adjustment_s1": null,
+       "condenser_adjustment_s2": null
+      }
+     ],
+     "chemical_usage_logs": [
+      {
+       "id": 1000000,
+       "usage_date": "2026-09-16",
+       "chemical_code": "PAC",
+       "material_code": "1.61.86.566.VIE.00.000",
+       "chemical_name": "PAC lỏng",
+       "unit": "Tấn",
+       "quantity": 1.25,
+       "purpose": "Sử dụng cho sản xuất",
+       "plant_unit": "Chung",
+       "reference": "",
+       "entered_by_user_id": "contract-seed",
+       "entered_by_name": "Người nhập mẫu",
+       "entered_by_position": "Trưởng kíp Lò - Máy",
+       "updated_by_user_id": null,
+       "updated_by_name": "",
+       "updated_by_position": "",
+       "deleted_at": null,
+       "deleted_by_user_id": null,
+       "deleted_by_name": "",
+       "deleted_by_position": "",
+       "source_key": "",
+       "created_at": "<thời điểm>",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 1000001,
+       "usage_date": "2026-09-17",
+       "chemical_code": "PAC",
+       "material_code": "1.61.86.566.VIE.00.000",
+       "chemical_name": "PAC lỏng",
+       "unit": "Tấn",
+       "quantity": 0.875,
+       "purpose": "Sử dụng cho sản xuất",
+       "plant_unit": "Chung",
+       "reference": "PCT-01",
+       "entered_by_user_id": "contract-seed",
+       "entered_by_name": "Người nhập mẫu",
+       "entered_by_position": "Trưởng kíp Lò - Máy",
+       "updated_by_user_id": null,
+       "updated_by_name": "",
+       "updated_by_position": "",
+       "deleted_at": null,
+       "deleted_by_user_id": null,
+       "deleted_by_name": "",
+       "deleted_by_position": "",
+       "source_key": "",
+       "created_at": "<thời điểm>",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 1000002,
+       "usage_date": "2026-09-17",
+       "chemical_code": "NH3",
+       "material_code": "1.61.10.001",
+       "chemical_name": "Amoniac",
+       "unit": "Tấn",
+       "quantity": 3.5,
+       "purpose": "Sử dụng cho sản xuất",
+       "plant_unit": "Chung",
+       "reference": "",
+       "entered_by_user_id": "contract-seed",
+       "entered_by_name": "Người nhập mẫu",
+       "entered_by_position": "Trưởng kíp Lò - Máy",
+       "updated_by_user_id": null,
+       "updated_by_name": "",
+       "updated_by_position": "",
+       "deleted_at": "<thời điểm>",
+       "deleted_by_user_id": "contract-seed",
+       "deleted_by_name": "Người xoá mẫu",
+       "deleted_by_position": "Trưởng ca",
+       "source_key": "",
+       "created_at": "<thời điểm>",
+       "updated_at": "<thời điểm>"
+      }
+     ],
+     "measurements": [
+      {
+       "id": 1040000,
+       "metric_code": "HR",
+       "metric_name": "Suất hao nhiệt mẫu",
+       "period": "2026-09",
+       "actual": "10746.39",
+       "limit_value": "10500",
+       "note": "",
+       "created_at": "<thời điểm>"
+      }
+     ],
+     "water_shift_leaders": [
+      {
+       "id": 960000,
+       "name": "Trưởng ca Mẫu A",
+       "is_active": 1,
+       "display_order": 1,
+       "created_at": "<thời điểm>"
+      },
+      {
+       "id": 960001,
+       "name": "Trưởng ca Mẫu B",
+       "is_active": 0,
+       "display_order": 2,
+       "created_at": "<thời điểm>"
+      }
+     ]
+    },
+    "checksum": "<checksum>"
+   }
+  },
+  "phiên bản đọc tăng": []
+ },
+ "backup #02 tải sao lưu: khoảng ngày sai": {
+  "request": "GET admin/data-backup?from=2026-09-17&to=2026-09-16",
+  "response": {
+   "status": 400,
+   "body": {
+    "data": null,
+    "meta": null,
+    "error": "Khoảng ngày sao lưu không hợp lệ."
+   }
+  },
+  "phiên bản đọc tăng": []
+ },
+ "backup #03 xem trước tệp JSON": {
+  "request": "POST admin/data-backup",
+  "response": {
+   "status": 200,
+   "body": {
+    "data": {
+     "createdAt": "<thời điểm>",
+     "range": null,
+     "tables": [
+      {
+       "name": "daily_inputs",
+       "label": "KTKT / PMIS và dữ liệu ngày",
+       "count": 2
+      },
+      {
+       "name": "shift_readings",
+       "label": "Thông số nửa giờ BCSX",
+       "count": 0
+      },
+      {
+       "name": "operating_events",
+       "label": "Sự kiện vận hành",
+       "count": 0
+      },
+      {
+       "name": "ppa_heat_rate_daily",
+       "label": "Suất hao nhiệt PPA",
+       "count": 0
+      },
+      {
+       "name": "water_shift_logs",
+       "label": "Công tơ nước và hiệu chỉnh",
+       "count": 0
+      },
+      {
+       "name": "chemical_usage_logs",
+       "label": "Sử dụng hóa chất",
+       "count": 0
+      },
+      {
+       "name": "measurements",
+       "label": "Chỉ tiêu theo kỳ",
+       "count": 0
+      },
+      {
+       "name": "water_shift_leaders",
+       "label": "Danh sách trưởng ca",
+       "count": 0
+      }
+     ],
+     "total": 2,
+     "checksum": "<checksum>"
+    },
+    "meta": null,
+    "error": null
+   }
+  },
+  "phiên bản đọc tăng": []
+ },
+ "backup #04 tệp sai mã kiểm tra": {
+  "request": "POST admin/data-backup",
+  "response": {
+   "status": 400,
+   "body": {
+    "data": null,
+    "meta": null,
+    "error": "Tệp đã bị thay đổi hoặc bị hỏng. Hãy chọn bản sao lưu nguyên gốc."
+   }
+  },
+  "phiên bản đọc tăng": []
+ },
+ "backup #05 nạp chưa xác nhận": {
+  "request": "POST admin/data-backup",
+  "response": {
+   "status": 400,
+   "body": {
+    "data": null,
+    "meta": null,
+    "error": "Hãy xác nhận trước khi nạp dữ liệu."
+   }
+  },
+  "phiên bản đọc tăng": []
+ },
+ "backup #06 thao tác lạ": {
+  "request": "POST admin/data-backup",
+  "response": {
+   "status": 400,
+   "body": {
+    "data": null,
+    "meta": null,
+    "error": "Thao tác nạp dữ liệu không hợp lệ."
+   }
+  },
+  "phiên bản đọc tăng": []
+ },
+ "backup #07 nạp tệp JSON (bổ sung)": {
+  "request": "POST admin/data-backup",
+  "response": {
+   "status": 200,
+   "body": {
+    "data": {
+     "changed": 2,
+     "total": 2,
+     "message": "Đã nạp 2 bản ghi. Bản ghi đã có được giữ nguyên. Tải lại trang báo cáo để xem số liệu."
+    },
+    "meta": null,
+    "error": null
+   }
+  },
+  "phiên bản đọc tăng": [
+   "daily_inputs",
+   "daily_inputs:2026-09"
+  ],
+  "sau: GET daily-inputs?period=2026-09&date=2026-09-20&scope=non-ktkt": {
+   "status": 200,
+   "body": {
+    "data": {
+     "entries": [
+      {
+       "operatingDate": "2026-09-20",
+       "fieldCode": "BK-CONTRACT-A",
+       "value": "1",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-20",
+       "fieldCode": "BK-CONTRACT-B",
+       "value": "2.5",
+       "note": ""
+      }
+     ]
+    },
+    "meta": null,
+    "error": null
+   }
+  }
+ },
+ "backup #08 nạp lại (không nhân đôi)": {
+  "request": "POST admin/data-backup",
+  "response": {
+   "status": 200,
+   "body": {
+    "data": {
+     "changed": 2,
+     "total": 2,
+     "message": "Đã nạp 2 bản ghi. Các bản ghi trùng khóa đã được cập nhật từ tệp. Tải lại trang báo cáo để xem số liệu."
+    },
+    "meta": null,
+    "error": null
+   }
+  },
+  "phiên bản đọc tăng": [
+   "daily_inputs",
+   "daily_inputs:2026-09"
+  ]
+ },
+ "backup #09 gói ZIP: xem trước": {
+  "request": "POST admin/data-backup/archive",
+  "response": {
+   "status": 200,
+   "body": {
+    "data": {
+     "createdAt": "<thời điểm>",
+     "range": null,
+     "tables": [
+      {
+       "name": "daily_inputs",
+       "label": "KTKT / PMIS và dữ liệu ngày",
+       "count": 2
+      },
+      {
+       "name": "shift_readings",
+       "label": "Thông số nửa giờ BCSX",
+       "count": 0
+      },
+      {
+       "name": "operating_events",
+       "label": "Sự kiện vận hành",
+       "count": 0
+      },
+      {
+       "name": "ppa_heat_rate_daily",
+       "label": "Suất hao nhiệt PPA",
+       "count": 0
+      },
+      {
+       "name": "water_shift_logs",
+       "label": "Công tơ nước và hiệu chỉnh",
+       "count": 0
+      },
+      {
+       "name": "chemical_usage_logs",
+       "label": "Sử dụng hóa chất",
+       "count": 0
+      },
+      {
+       "name": "measurements",
+       "label": "Chỉ tiêu theo kỳ",
+       "count": 0
+      },
+      {
+       "name": "water_shift_leaders",
+       "label": "Danh sách trưởng ca",
+       "count": 0
+      }
+     ],
+     "total": 2,
+     "files": 2,
+     "checksum": "<checksum>"
+    },
+    "meta": null,
+    "error": null
+   }
+  },
+  "phiên bản đọc tăng": []
+ },
+ "backup #10 gói ZIP: nạp": {
+  "request": "POST admin/data-backup/archive",
+  "response": {
+   "status": 200,
+   "body": {
+    "data": {
+     "changed": 2,
+     "total": 2,
+     "message": "Đã nạp 2 bản ghi từ 2 tệp. Tải lại báo cáo để xem số liệu."
+    },
+    "meta": null,
+    "error": null
+   }
+  },
+  "phiên bản đọc tăng": [
+   "daily_inputs",
+   "daily_inputs:2026-09"
+  ],
+  "sau: GET daily-inputs?period=2026-09&date=2026-09-20&scope=non-ktkt": {
+   "status": 200,
+   "body": {
+    "data": {
+     "entries": [
+      {
+       "operatingDate": "2026-09-20",
+       "fieldCode": "BK-CONTRACT-A",
+       "value": "1",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-20",
+       "fieldCode": "BK-CONTRACT-B",
+       "value": "2.5",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-20",
+       "fieldCode": "BK-CONTRACT-Z1",
+       "value": "7",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-20",
+       "fieldCode": "BK-CONTRACT-Z2",
+       "value": "8",
+       "note": ""
+      }
+     ]
+    },
+    "meta": null,
+    "error": null
+   }
+  }
+ },
+ "backup #11 gói ZIP: thao tác lạ": {
+  "request": "POST admin/data-backup/archive",
+  "response": {
+   "status": 400,
+   "body": {
+    "data": null,
+    "meta": null,
+    "error": "Gói sao lưu hoặc thao tác không hợp lệ."
+   }
+  },
+  "phiên bản đọc tăng": []
+ },
+ "backup #12 xuất Chỉ tiêu KTKT: tháng sai": {
+  "request": "GET ctktkt-report/export?period=2026-13",
+  "response": {
+   "status": 400,
+   "body": {
+    "data": null,
+    "meta": null,
+    "error": "Tháng không hợp lệ."
+   }
+  },
+  "phiên bản đọc tăng": []
+ },
+ "backup #13 xuất Chỉ tiêu KTKT: tháng tương lai": {
+  "request": "GET ctktkt-report/export?period=2099-01",
+  "response": {
+   "status": 400,
+   "body": {
+    "data": null,
+    "meta": null,
+    "error": "Chưa thể xuất dữ liệu cho tháng trong tương lai."
+   }
+  },
+  "phiên bản đọc tăng": []
+ },
+ "backup #14 xuất Lượng nước: tháng sai": {
+  "request": "GET water-report/export?month=2026-13",
+  "response": {
+   "status": 400,
+   "body": {
+    "data": null,
+    "meta": null,
+    "error": "Tháng không hợp lệ (định dạng YYYY-MM)."
+   }
+  },
+  "phiên bản đọc tăng": []
+ },
+ "backup #15 xuất BCSX: ngày sai": {
+  "request": "GET bcsx-export?date=17-09-2026&unit=S1",
+  "response": {
+   "status": 400,
+   "body": {
+    "data": null,
+    "meta": null,
+    "error": "Ngày không hợp lệ."
+   }
+  },
+  "phiên bản đọc tăng": []
+ },
+ "backup #16 xuất BCSX: tổ máy sai": {
+  "request": "GET bcsx-export?date=2026-09-17&unit=S9",
+  "response": {
+   "status": 400,
+   "body": {
+    "data": null,
+    "meta": null,
+    "error": "Tổ máy không hợp lệ."
+   }
+  },
+  "phiên bản đọc tăng": []
+ },
  "daily-inputs #01 lưu số (dấu phẩy) + ghi chú + chữ CW + 'không chỉnh'": {
   "request": "POST daily-inputs",
   "response": {

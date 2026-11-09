@@ -1,4 +1,5 @@
 import { requireSession } from "@/modules/ctktkt/lib/auth/server";
+import { ok, fail } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 import { loadAllWaterRows } from "@/modules/ctktkt/lib/water-report/store";
 
@@ -16,7 +17,7 @@ export async function GET() {
     }
     const leaders = await prisma.ctktktWaterShiftLeaders.findMany({ orderBy: { display_order: "asc" } });
 
-    return Response.json({
+    return ok({
       ok: true,
       totalCount,
       months,
@@ -25,6 +26,6 @@ export async function GET() {
     });
   } catch (err) {
     console.error("Lỗi lấy dữ liệu đối chiếu:", err);
-    return Response.json({ error: "Chưa tải được dữ liệu đối chiếu." }, { status: 500 });
+    return fail("Chưa tải được dữ liệu đối chiếu.", 500);
   }
 }

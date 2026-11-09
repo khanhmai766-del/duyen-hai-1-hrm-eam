@@ -1,4 +1,5 @@
 import ExcelJS from "exceljs";
+import { ok, fail } from "@/lib/api";
 import { guardExportZeroDivisions } from "@/modules/ctktkt/lib/export-zero-division";
 import { applyCtktktAuxiliaryExportRules } from "@/modules/ctktkt/lib/ctktkt-auxiliary-export-rules";
 import { applyElectricMeterResetExport } from "@/modules/ctktkt/lib/ctktkt-electric-meter-reset";
@@ -135,10 +136,10 @@ function normalizeCoalMeterFormulas(sheet: ExcelJS.Worksheet, previousSheetName:
 
 export async function exportReport(request: Request) {
   const period = new URL(request.url).searchParams.get("period") || "";
-  if (!periodPattern.test(period)) return Response.json({ error: "Tháng không hợp lệ." }, { status: 400 });
+  if (!periodPattern.test(period)) return fail("Tháng không hợp lệ.", 400);
   const today = vietnamDateIso();
   if (period > today.slice(0, 7)) {
-    return Response.json({ error: "Chưa thể xuất dữ liệu cho tháng trong tương lai." }, { status: 400 });
+    return fail("Chưa thể xuất dữ liệu cho tháng trong tương lai.", 400);
   }
   try {
     const workbook = await buildCtktktWorkbook(period);
@@ -152,7 +153,7 @@ export async function exportReport(request: Request) {
     });
   } catch (error) {
     console.error("Không xuất được file Chỉ tiêu KTKT.", error);
-    return Response.json({ error: "Không xuất được file Chỉ tiêu KTKT." }, { status: 500 });
+    return fail("Không xuất được file Chỉ tiêu KTKT.", 500);
   }
 }
 

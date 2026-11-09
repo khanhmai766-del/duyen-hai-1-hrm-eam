@@ -68,8 +68,9 @@ export async function apiMutate<T>(
   return json.data as T;
 }
 
-export async function apiDownload(url: string) {
-  const res = await fetch(url);
+/** `options.signal`: huỷ / hết giờ chờ (không bắt buộc). */
+export async function apiDownload(url: string, options?: { signal?: AbortSignal }) {
+  const res = await fetch(url, { signal: options?.signal });
   if (!res.ok) {
     const text = await res.text().catch(() => "");
     let message: string | null = null;
@@ -110,8 +111,8 @@ export async function apiDownloadPost(url: string, payload: unknown) {
   return { blob: await res.blob(), filename };
 }
 
-export async function apiUpload<T>(url: string, formData: FormData): Promise<T> {
-  const res = await fetch(url, { method: "POST", body: formData });
+export async function apiUpload<T>(url: string, formData: FormData, options?: { signal?: AbortSignal }): Promise<T> {
+  const res = await fetch(url, { method: "POST", body: formData, signal: options?.signal });
   const json = await readEnvelope<T>(res, "Tải tệp thất bại");
   if (!res.ok || json.error) throw new Error(json.error || "Tải tệp thất bại");
   return json.data as T;

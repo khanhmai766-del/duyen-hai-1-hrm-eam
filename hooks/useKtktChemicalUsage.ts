@@ -43,7 +43,7 @@ export type ChemicalUsageInput = {
 };
 
 const URL = "/api/ctktkt/chemical-usage";
-/** Nằm dưới ["ctktkt"]: lượt ghi KTKT khác (useCtktktRequest) cũng làm mới dữ liệu này. */
+/** Nằm dưới ["ctktkt"]: lượt ghi KTKT khác (làm cũ ["ctktkt"]) cũng làm mới dữ liệu này. */
 const KEY = ["ctktkt", "chemical-usage"] as const;
 
 /** Nhật ký hoá chất một tháng (YYYY-MM). */

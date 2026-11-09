@@ -1,7 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import JSZip from 'jszip';
-import {postgresSql} from '../../modules/ctktkt/db/sql.ts';
 import {readBackupArchive,archiveSummary} from '../../modules/ctktkt/lib/backup-archive.ts';
 import {BACKUP_TABLES,createDataBackup} from '../../modules/ctktkt/lib/data-backup.ts';
 import {mapHostUser} from '../../modules/ctktkt/lib/auth/host-user.ts';
@@ -10,13 +9,6 @@ import {DEFAULT_POSITIONS} from '../../modules/ctktkt/lib/auth/default-positions
 import {readFile} from 'node:fs/promises';
 import vm from 'node:vm';
 import {pathAllowedForPosition} from '../../lib/nav.ts';
-
-test('PostgreSQL giữ literal/comment, thay đúng tham số và bảo toàn alias camelCase',()=>{
- const sql=postgresSql("SELECT value AS operatingDate, '?' AS literal FROM daily_inputs WHERE field_code=? /* ? daily_inputs */ AND value=?");
- assert.equal(sql,"SELECT value AS \"operatingDate\", '?' AS literal FROM \"public\".\"ctktkt_daily_inputs\" WHERE field_code=$1 /* ? daily_inputs */ AND value=$2");
- assert.match(postgresSql('SELECT value AS "operatingDate" FROM "daily_inputs"'),/AS "operatingDate" FROM "public"\."ctktkt_daily_inputs"/);
- assert.match(postgresSql('INSERT OR IGNORE INTO google_mirror_credentials(id,token_hash,token_enc) VALUES(1,?,?)'),/VALUES\(1,\$1,\$2\) ON CONFLICT DO NOTHING$/);
-});
 
 const empty=()=>Object.fromEntries(BACKUP_TABLES.map(table=>[table.name,[]]));
 const file=()=>createDataBackup({...empty(),daily_inputs:[{id:1,operating_date:'2026-10-19',field_code:'KTKT:TEST',value:'0',note:'',updated_at:'2026-10-19 00:00:00'}]},null);

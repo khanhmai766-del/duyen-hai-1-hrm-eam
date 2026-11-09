@@ -17,10 +17,6 @@ export type BackupRow = Record<string,string|number|null>;
 export type BackupRange = {from:string;to:string}|null;
 export type DataBackup = {format:"ctktkt-operating-backup";version:1;createdAt:string;range:BackupRange;tables:Record<string,BackupRow[]>;checksum:string};
 export type BackupColumn = {name:string;type:string;notnull:number;dflt_value:unknown;pk:number};
-export type BackupDb = {
-  prepare:(sql:string)=>{all:()=>Promise<{results:Record<string,unknown>[]}>};
-  batch:(statements:Array<{sql:string;args:(string|number|null)[]}>)=>Promise<Array<{meta:{changes:number}}>>;
-};
 
 export function validBackupDate(value:unknown):value is string {
   return typeof value==="string" && /^20\d{2}-\d{2}-\d{2}$/.test(value)
@@ -70,16 +66,6 @@ export function validateDataBackup(value:unknown):DataBackup {
   const data={format:file.format,version:file.version,createdAt:file.createdAt,range:file.range,tables:file.tables};
   if(typeof file.checksum!=="string"||file.checksum!==checksum(data))throw new Error("Tệp đã bị thay đổi hoặc bị hỏng. Hãy chọn bản sao lưu nguyên gốc.");
   return file;
-}
-
-/** Schema names come only from PRAGMA on allowlisted tables, never from SQL in a file. */
-export async function backupSchemas(db:BackupDb){
-  const schemas=new Map<string,BackupColumn[]>();
-  for(const table of BACKUP_TABLES){
-    const {results}=await db.prepare(`PRAGMA table_info(${table.name})`).all();
-    schemas.set(table.name,results as BackupColumn[]);
-  }
-  return schemas;
 }
 
 export function restoreStatements(file:DataBackup,schemas:Map<string,BackupColumn[]>,mode:"missing"|"overwrite"){

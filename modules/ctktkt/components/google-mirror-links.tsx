@@ -1,5 +1,5 @@
 "use client";
-import { useCtktktRequest } from "@/hooks/useCtktkt";
+import { apiGet } from "@/lib/fetcher";
 import {useEffect,useState} from 'react';
 import {TriangleAlert} from 'lucide-react';
 import {useSessionUser} from './session-context';
@@ -20,7 +20,6 @@ const formatTime=(iso:string)=>new Date(iso).toLocaleString('vi-VN',{timeZone:'A
  * Người dùng thường không thấy thông báo "chưa kết nối" — chỉ thấy nút xem file.
  */
 export function GoogleMirrorLinks({module,variant="bar"}:{module:string;variant?:"bar"|"inline"}){
- const ctktktRequest=useCtktktRequest();
  const user=useSessionUser();
  const isAdmin=hasPermission(user,"manage_users");
  const [configured,setConfigured]=useState(false);
@@ -28,7 +27,7 @@ export function GoogleMirrorLinks({module,variant="bar"}:{module:string;variant?
  const [entries,setEntries]=useState<Entry[]>([]);
  // Mốc "bây giờ" lấy sau khi tải trạng thái (không gọi Date.now() lúc render để tránh lệch hydrate).
  const [checkedAt,setCheckedAt]=useState(0);
- useEffect(()=>{if(!files.length)return;const controller=new AbortController();ctktktRequest('/api/ctktkt/google-mirror/status',{signal:controller.signal}).then(async r=>r.ok?await r.json() as {entries?:Entry[];configured?:boolean}:null).then(b=>{if(b?.entries)setEntries(b.entries);setConfigured(Boolean(b?.configured));setCheckedAt(Date.now());}).catch(()=>{});return()=>controller.abort();},[module,files.length,ctktktRequest]);
+ useEffect(()=>{if(!files.length)return;const controller=new AbortController();apiGet<{entries?:Entry[];configured?:boolean}>('/api/ctktkt/google-mirror/status',{signal:controller.signal}).then(r=>r.data,()=>null).then(b=>{if(controller.signal.aborted)return;if(b?.entries)setEntries(b.entries);setConfigured(Boolean(b?.configured));setCheckedAt(Date.now());}).catch(()=>{});return()=>controller.abort();},[module,files.length]);
  if(!files.length)return null;
  // Kiểu "inline": chỉ nút (cùng cỡ nút thanh công cụ), giờ cập nhật đưa vào chú thích khi rê chuột.
  if(variant==="inline")return <>{files.map(f=>{

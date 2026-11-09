@@ -45,11 +45,12 @@ test('invalid configured URLs fail closed for public origins',()=>{
 test('all duplicated KTKT guards use the same public-origin policy',()=>{
  const root=fileURLToPath(new URL('../../',import.meta.url));
  const walk=d=>readdirSync(d,{withFileTypes:true}).flatMap(e=>e.isDirectory()?walk(path.join(d,e.name)):[path.join(d,e.name)]);
- const files=[path.join(root,'app/api/ctktkt/[[...path]]/route.ts'),...walk(path.join(root,'modules/ctktkt/server/routes')).filter(f=>f.endsWith('.ts'))];
+ const files=[path.join(root,'modules/ctktkt/server/ktkt-route.ts'),...walk(path.join(root,'modules/ctktkt/server/routes')).filter(f=>f.endsWith('.ts'))];
  let guarded=0;
  for(const file of files){const source=readFileSync(file,'utf8');if(source.includes('Nguồn yêu cầu không hợp lệ.')){
   assert.ok(source.includes('isCtktktSameOrigin(request'),file);guarded++;
   assert.ok(!/origin\s*!==\s*new URL\(request.url\).origin/.test(source),file);
  }}
- assert.equal(guarded,19);
+ // 17 từ 09/11/2026: đã xoá measurements và bcsx-sync (không nơi nào gọi).
+ assert.equal(guarded,17);
 });

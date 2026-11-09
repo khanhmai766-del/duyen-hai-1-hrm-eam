@@ -1,10 +1,9 @@
 import { AppShell } from "@/modules/ctktkt/components/app-shell";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { getRawDb } from "@/modules/ctktkt/db";
+import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/modules/ctktkt/lib/auth/server";
 import { vietnamDateIso } from "@/modules/ctktkt/lib/operating-date";
-import { ensureDailyInputAudit } from "@/modules/ctktkt/lib/daily-input-audit";
 
 export const dynamic = "force-dynamic";
 
@@ -15,13 +14,11 @@ export default async function DataHistoryPage({ searchParams }: { searchParams: 
   const date = /^\d{4}-\d{2}-\d{2}$/.test(params.date || "") ? params.date! : vietnamDateIso();
   const requestedPage = Number(params.page || 1);
   const page = Number.isSafeInteger(requestedPage) && requestedPage > 0 && requestedPage <= 100000 ? requestedPage : 1;
-  const db = getRawDb();
   let rows: Record<string, unknown>[] = [];
   let failed = false;
   try {
-    await ensureDailyInputAudit(db);
-    const result = await db.prepare("SELECT * FROM daily_input_audit WHERE operating_date = ? ORDER BY id DESC LIMIT 201 OFFSET ?").bind(date, (page - 1) * 200).all();
-    rows = result.results as Record<string, unknown>[];
+    // 200 thay đổi/trang (lấy 201 để biết còn trang sau), mới nhất trước.
+    rows = await prisma.ctktktDailyInputAudit.findMany({ where: { operating_date: date }, orderBy: { id: "desc" }, take: 201, skip: (page - 1) * 200 });
   } catch { failed = true; }
   const display = (value: unknown) => value === null ? "∅" : String(value || "");
   const time = (value: unknown) => new Intl.DateTimeFormat("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", dateStyle: "short", timeStyle: "medium" }).format(new Date(String(value).replace(" ", "T") + "Z"));

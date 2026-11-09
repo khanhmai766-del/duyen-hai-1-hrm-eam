@@ -1,9 +1,11 @@
 import { loadEnvConfig } from "@next/env";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { getPool, getRawDb } from "../../modules/ctktkt/db";
+import pg from "pg";
+import { prisma } from "../../lib/prisma";
 import { readBackupArchive, archiveSummary, archiveStatements } from "../../modules/ctktkt/lib/backup-archive";
-import { BACKUP_TABLES, backupSchemas } from "../../modules/ctktkt/lib/data-backup";
+import { BACKUP_TABLES } from "../../modules/ctktkt/lib/data-backup";
+import { countBackupTables, loadBackupSchemas, restoreBackup } from "../../modules/ctktkt/lib/data-backup-store";
 import { inspectUpload } from "../../lib/upload-guard";
 
 /** Mặc định chỉ kiểm tra; DB ngoài local cần đồng thời --apply và --production. */
@@ -21,15 +23,21 @@ async function main() {
   if (!local && !args.includes("--production")) throw new Error("Nạp vào DB ngoài local cần xác nhận rõ bằng --apply --production.");
   if (args.includes("--production") && args.includes("--init-schema")) throw new Error("Cấu trúc production phải được áp bằng quy trình deploy trước khi nạp dữ liệu.");
   console.log(`Đích nạp KTKT: ${url.hostname}:${url.port || "5432"}${url.pathname}; chỉ bổ sung bản ghi thiếu.`);
-  if (args.includes("--init-schema")) await getPool().query(await readFile("prisma/manual/add-ctktkt.sql", "utf8"));
-  const db = getRawDb(), schemas = await backupSchemas(db);
-  const before = await Promise.all(BACKUP_TABLES.map(async table => Number((await db.prepare(`SELECT count(*) AS count FROM ${table.name}`).first())?.count ?? 0)));
+  if (args.includes("--init-schema")) {
+    // Tệp SQL nhiều câu lệnh: chạy bằng kết nối pg trực tiếp (Prisma không chạy nhiều câu trong một lệnh).
+    const schemaUrl = new URL(url); schemaUrl.searchParams.delete("schema");
+    const client = new pg.Client({ connectionString: schemaUrl.toString() });
+    await client.connect();
+    try { await client.query(await readFile("prisma/manual/add-ctktkt.sql", "utf8")); } finally { await client.end(); }
+  }
+  const schemas = await loadBackupSchemas();
+  const before = await countBackupTables();
   const statements = archiveStatements(files, schemas, "missing");
-  const result = await db.batch([...statements, { sql: "INSERT INTO data_restore_audit(actor_id,checksum,mode,row_count) VALUES(?,?,?,?)", args: [local ? "local-import" : "production-import", summary.checksum, "missing", summary.total] }]);
-  const changed = result.slice(0, -1).reduce((sum, item) => sum + item.meta.changes, 0);
-  const counts = await Promise.all(BACKUP_TABLES.map(async (table, index) => ({ table: table.name, before: before[index], after: Number((await db.prepare(`SELECT count(*) AS count FROM ${table.name}`).first())?.count ?? 0), source: summary.tables[index].count })));
+  const changed = await restoreBackup(statements, { actorId: local ? "local-import" : "production-import", checksum: summary.checksum, mode: "missing", rowCount: summary.total });
+  const afterCounts = await countBackupTables();
+  const counts = BACKUP_TABLES.map((table, index) => ({ table: table.name, before: before[index], after: afterCounts[index], source: summary.tables[index].count }));
   if (counts.some(row => row.before === 0 && row.after !== row.source)) throw new Error("Số bản ghi sau nạp không khớp gói nguồn.");
   console.log(JSON.stringify({ changed, counts }, null, 2));
 }
 main().catch(error => { console.error(error instanceof Error ? error.message : "Không nạp được gói sao lưu."); process.exitCode = 1; })
-  .finally(async () => { if (process.env.DATABASE_URL) await getPool().end(); });
+  .finally(async () => { await prisma.$disconnect(); });

@@ -1,7 +1,8 @@
 import JSZip from "jszip";
+import { ok, fail } from "@/lib/api";
 import { requirePermission } from "@/modules/ctktkt/lib/auth/server";
-import { getRawDb, readBackupSnapshot } from "@/modules/ctktkt/db";
-import { BACKUP_TABLES, backupSchemas, createDataBackup, type BackupRow } from "@/modules/ctktkt/lib/data-backup";
+import { BACKUP_TABLES, createDataBackup, type BackupRow } from "@/modules/ctktkt/lib/data-backup";
+import { loadBackupSchemas, readBackupTables, restoreBackup } from "@/modules/ctktkt/lib/data-backup-store";
 import { readBackupArchive, archiveSummary, archiveStatements, MAX_ARCHIVE_BYTES } from "@/modules/ctktkt/lib/backup-archive";
 
 export async function POST(request: Request) {
@@ -9,32 +10,31 @@ export async function POST(request: Request) {
   const form = await request.formData();
   const file = form.get("file"), action = form.get("action"), mode = form.get("mode");
   if (!(file instanceof File) || file.size > MAX_ARCHIVE_BYTES || !["preview", "restore"].includes(String(action)) || !["missing", "overwrite"].includes(String(mode))) {
-    return Response.json({ error: "Gói sao lưu hoặc thao tác không hợp lệ." }, { status: 400 });
+    return fail("Gói sao lưu hoặc thao tác không hợp lệ.", 400);
   }
-  if (action === "restore" && form.get("confirmed") !== "true") return Response.json({ error: "Hãy xác nhận trước khi nạp dữ liệu." }, { status: 400 });
+  if (action === "restore" && form.get("confirmed") !== "true") return fail("Hãy xác nhận trước khi nạp dữ liệu.", 400);
   let files, summary, statements;
   try {
     files = await readBackupArchive(Buffer.from(await file.arrayBuffer()));
     summary = archiveSummary(files);
-    statements = archiveStatements(files, await backupSchemas(getRawDb()), mode as "missing" | "overwrite");
+    statements = archiveStatements(files, await loadBackupSchemas(), mode as "missing" | "overwrite");
   } catch (error) {
-    return Response.json({ error: error instanceof Error ? error.message : "Không đọc được gói sao lưu." }, { status: 400 });
+    return fail(error instanceof Error ? error.message : "Không đọc được gói sao lưu.", 400);
   }
-  if (action === "preview") return Response.json(summary);
-  if(guard.user.role!=="admin"&&files.some(part=>(part.tables.daily_inputs||[]).some(row=>String(row.field_code||"").startsWith("KTKT:"))))return Response.json({error:"Chỉ tài khoản quản trị được nạp gói chứa số liệu Báo cáo KTKT. Người nhập phải gửi yêu cầu chỉnh sửa để duyệt."},{status:403});
+  if (action === "preview") return ok(summary);
+  if(guard.user.role!=="admin"&&files.some(part=>(part.tables.daily_inputs||[]).some(row=>String(row.field_code||"").startsWith("KTKT:"))))return fail("Chỉ tài khoản quản trị được nạp gói chứa số liệu Báo cáo KTKT. Người nhập phải gửi yêu cầu chỉnh sửa để duyệt.", 403);
   try {
-    const result = await getRawDb().batch([...statements, { sql: "INSERT INTO data_restore_audit(actor_id,checksum,mode,row_count) VALUES(?,?,?,?)", args: [guard.user.id, summary.checksum, mode, summary.total] }]);
-    const changed = result.slice(0, -1).reduce((sum, item) => sum + item.meta.changes, 0);
-    return Response.json({ changed, total: summary.total, message: `Đã nạp ${changed.toLocaleString("vi-VN")} bản ghi từ ${files.length} tệp. Tải lại báo cáo để xem số liệu.` });
+    const changed = await restoreBackup(statements, { actorId: String(guard.user.id), checksum: summary.checksum, mode: String(mode), rowCount: summary.total });
+    return ok({ changed, total: summary.total, message: `Đã nạp ${changed.toLocaleString("vi-VN")} bản ghi từ ${files.length} tệp. Tải lại báo cáo để xem số liệu.` });
   } catch {
-    return Response.json({ error: "Chưa nạp được gói sao lưu. Giao dịch lỗi được hoàn tác; hãy kiểm tra dữ liệu trước khi thử lại nếu mất kết nối." }, { status: 503 });
+    return fail("Chưa nạp được gói sao lưu. Giao dịch lỗi được hoàn tác; hãy kiểm tra dữ liệu trước khi thử lại nếu mất kết nối.", 503);
   }
 }
 
 export async function GET() {
   const guard = await requirePermission("backup_data"); if (!guard.ok) return guard.response;
-  const data = await readBackupSnapshot(BACKUP_TABLES.map(table => ({ sql: `SELECT * FROM ${table.name} ORDER BY ${table.keys.join(",")} LIMIT 250001`, args: [] })));
-  if (data.reduce((sum, rows) => sum + rows.length, 0) > 250_000) return Response.json({ error: "Dữ liệu vượt giới hạn gói. Hãy tải riêng theo khoảng ngày." }, { status: 400 });
+  const data = await readBackupTables(BACKUP_TABLES, null, 250_001);
+  if (data.reduce((sum, rows) => sum + rows.length, 0) > 250_000) return fail("Dữ liệu vượt giới hạn gói. Hãy tải riêng theo khoảng ngày.", 400);
   const zip = new JSZip();
   BACKUP_TABLES.forEach((table, index) => {
     for (let offset = 0; offset < data[index].length; offset += 1000) {

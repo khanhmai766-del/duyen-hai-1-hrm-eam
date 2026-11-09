@@ -19,6 +19,23 @@ import { encode } from "next-auth/jwt";
 import { assertDevDatabase, assertLocalBase, fail, loadDevEnv } from "./_safety.mjs";
 import { CTKTKT_SAMPLE_2DAYS } from "../../tests/ctktkt/fixtures/ctktkt-sample-data.ts";
 import { BCSX_COAL_STOCK_24H_CODE } from "../../modules/ctktkt/lib/ctktkt-bcsx-link.ts";
+import { BACKUP_TABLES, createDataBackup } from "../../modules/ctktkt/lib/data-backup.ts";
+import JSZip from "jszip";
+
+// Tệp/gói sao lưu mẫu (ngày 2026-09-20, mã ô BK-CONTRACT-*) cho kịch bản "backup".
+function backupFile(rows, range = null) {
+  const tables = Object.fromEntries(BACKUP_TABLES.map(table => [table.name, []]));
+  tables.daily_inputs = rows.map(([field, value]) => ({ operating_date: "2026-09-20", field_code: field, value, note: "", updated_at: "2026-09-20 00:00:00" }));
+  return createDataBackup(tables, range);
+}
+const BACKUP_JSON = backupFile([["BK-CONTRACT-A", "1"], ["BK-CONTRACT-B", "2.5"]]);
+const BACKUP_BAD = { ...BACKUP_JSON, checksum: "0".repeat(64) };
+async function backupZip() {
+  const zip = new JSZip();
+  zip.file("a.json", JSON.stringify(backupFile([["BK-CONTRACT-Z1", "7"]])));
+  zip.file("b.json", JSON.stringify(backupFile([["BK-CONTRACT-Z2", "8"]])));
+  return Buffer.from(await zip.generateAsync({ type: "uint8array" }));
+}
 
 loadDevEnv();
 assertDevDatabase();
@@ -141,7 +158,6 @@ const ENDPOINTS = [
   "chemical-usage",
   "ppa-heat-rate?period=2026-09&from=2026-09-01&to=2026-09-30",
   "ppa-heat-rate?period=2026-09&includeSource=1",
-  "measurements?period=2026-09",
   "correction-requests",
   "google-mirror/status",
   "permissions",
@@ -231,6 +247,27 @@ const WRITE_SCENARIOS = {
     { step: "xoá lại bản đã xoá", method: "DELETE", path: "chemical-usage?id=1000003" },
     { step: "xoá bản mẫu đã xoá sẵn", method: "DELETE", path: "chemical-usage?id=1000002" },
     { step: "xoá id sai", method: "DELETE", path: "chemical-usage?id=abc" },
+  ],
+  // Sao lưu / khôi phục (tài khoản quản trị) và lỗi của các file xuất — giai đoạn 4 (route tự trả phong bì).
+  "backup": [
+    { step: "tải sao lưu theo khoảng ngày", method: "GET", path: "admin/data-backup?from=2026-09-16&to=2026-09-17" },
+    { step: "tải sao lưu: khoảng ngày sai", method: "GET", path: "admin/data-backup?from=2026-09-17&to=2026-09-16" },
+    { step: "xem trước tệp JSON", method: "POST", path: "admin/data-backup", origin: true, json: { action: "preview", mode: "missing", file: BACKUP_JSON } },
+    { step: "tệp sai mã kiểm tra", method: "POST", path: "admin/data-backup", origin: true, json: { action: "preview", mode: "missing", file: BACKUP_BAD } },
+    { step: "nạp chưa xác nhận", method: "POST", path: "admin/data-backup", origin: true, json: { action: "restore", mode: "missing", file: BACKUP_JSON, confirmed: false } },
+    { step: "thao tác lạ", method: "POST", path: "admin/data-backup", origin: true, json: { action: "xoa", mode: "missing", file: BACKUP_JSON } },
+    { step: "nạp tệp JSON (bổ sung)", method: "POST", path: "admin/data-backup", origin: true, json: { action: "restore", mode: "missing", file: BACKUP_JSON, confirmed: true },
+      after: ["daily-inputs?period=2026-09&date=2026-09-20&scope=non-ktkt"] },
+    { step: "nạp lại (không nhân đôi)", method: "POST", path: "admin/data-backup", origin: true, json: { action: "restore", mode: "overwrite", file: BACKUP_JSON, confirmed: true } },
+    { step: "gói ZIP: xem trước", method: "POST", path: "admin/data-backup/archive", form: { action: "preview", mode: "missing" }, files: [["file", "gen:sao-luu-zip", "goi.zip"]] },
+    { step: "gói ZIP: nạp", method: "POST", path: "admin/data-backup/archive", form: { action: "restore", mode: "missing", confirmed: "true" }, files: [["file", "gen:sao-luu-zip", "goi.zip"]],
+      after: ["daily-inputs?period=2026-09&date=2026-09-20&scope=non-ktkt"] },
+    { step: "gói ZIP: thao tác lạ", method: "POST", path: "admin/data-backup/archive", form: { action: "xoa", mode: "missing" }, files: [["file", "gen:sao-luu-zip", "goi.zip"]] },
+    { step: "xuất Chỉ tiêu KTKT: tháng sai", method: "GET", path: "ctktkt-report/export?period=2026-13" },
+    { step: "xuất Chỉ tiêu KTKT: tháng tương lai", method: "GET", path: "ctktkt-report/export?period=2099-01" },
+    { step: "xuất Lượng nước: tháng sai", method: "GET", path: "water-report/export?month=2026-13" },
+    { step: "xuất BCSX: ngày sai", method: "GET", path: "bcsx-export?date=17-09-2026&unit=S1" },
+    { step: "xuất BCSX: tổ máy sai", method: "GET", path: "bcsx-export?date=2026-09-17&unit=S9" },
   ],
   "daily-inputs": [
     { step: "lưu số (dấu phẩy) + ghi chú + chữ CW + 'không chỉnh'", method: "POST", path: "daily-inputs", json: { period: "2026-09", entries: [
@@ -365,6 +402,7 @@ function normalize(value, key = "") {
   if (value && typeof value === "object") return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, normalize(v, k)]));
   if (/^(updated_?at|created_?at|deleted_?at|changed_?at)$/i.test(key) && value) return "<thời điểm>";
   if (key === "id" && typeof value === "number" && value < SEED_ID) return "<id mới>";
+  if (key === "checksum" && typeof value === "string" && /^[0-9a-f]{64}$/.test(value)) return "<checksum>";
   return value;
 }
 async function call(cookie, method, p, init = {}) {
@@ -440,6 +478,7 @@ const GENERATED_FILES = {
     ["Duyên Hải 1", "S2", "Thay đổi công suất", 550, "2026-09-17 15:00", "2026-09-17 15:20", "x"],
   ]),
 };
+GENERATED_FILES["sao-luu-zip"] = backupZip;
 async function runWrites(cookie) {
   const out = {};
   for (const [group, steps] of Object.entries(WRITE_SCENARIOS)) {
@@ -460,7 +499,7 @@ async function runWrites(cookie) {
         // Tệp lấy từ API xuất của chính web tại thời điểm chạy (dữ liệu mẫu cố định → tệp cố định).
         for (const [field, from, name] of s.files ?? []) {
           const bytes = from.startsWith("gen:") ? await GENERATED_FILES[from.slice(4)]() : Buffer.from(await (await fetch(new URL(`/api/ctktkt/${from}`, base), { headers: { cookie } })).arrayBuffer());
-          fd.append(field, new Blob([bytes], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }), name);
+          fd.append(field, new Blob([bytes], { type: name.endsWith(".zip") ? "application/zip" : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }), name);
         }
         init.body = fd;
       }

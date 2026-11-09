@@ -3,7 +3,7 @@ import type { SessionUser } from "./auth/session";
 
 /**
  * Ghi ô dữ liệu ngày (ctktkt_daily_inputs) kèm nhật ký sửa (ctktkt_daily_input_audit) bằng Prisma — bản giai đoạn 3 của
- * `auditedDailyBatch` (lib/daily-input-audit.ts, còn dùng cho các route chưa chuyển). Gọi trong `ktktWrite` để dữ liệu,
+ * `auditedDailyBatch` cũ (lib/daily-input-audit.ts, đã gỡ ở giai đoạn 4). Gọi trong `ktktWrite` để dữ liệu,
  * nhật ký và phiên bản đọc cùng một giao dịch: nhật ký lỗi thì không lưu gì.
  *
  * Mỗi thao tác chạy lần lượt (thao tác sau thấy kết quả thao tác trước — một ô gửi hai lần ra hai dòng nhật ký, như cũ):

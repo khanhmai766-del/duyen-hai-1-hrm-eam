@@ -1,4 +1,5 @@
 import { requireSession } from "@/modules/ctktkt/lib/auth/server";
+import { ok, fail } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 import { calculateCoalStock24h } from "@/modules/ctktkt/lib/coal-stock";
 import { buildBcsxWorkbook, deriveA0Readings, fileNameFor, SHIFT_METRICS, SHIFT_TIME_SLOTS, type ExportUnit, type OperatingEvent, type ShiftMetric, type UnitTotals } from "@/modules/ctktkt/lib/bcsx";
@@ -97,8 +98,8 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const date = url.searchParams.get("date") || "";
   const unit = (url.searchParams.get("unit") || "") as ExportUnit;
-  if (!datePattern.test(date)) return Response.json({ error: "Ngày không hợp lệ." }, { status: 400 });
-  if (!exportUnits.has(unit)) return Response.json({ error: "Tổ máy không hợp lệ." }, { status: 400 });
+  if (!datePattern.test(date)) return fail("Ngày không hợp lệ.", 400);
+  if (!exportUnits.has(unit)) return fail("Tổ máy không hợp lệ.", 400);
 
   try {
     let payload;
@@ -134,6 +135,6 @@ export async function GET(request: Request) {
     });
   } catch (error) {
     console.error("Không xuất được file.", error);
-    return Response.json({ error: "Không xuất được file." }, { status: 500 });
+    return fail("Không xuất được file.", 500);
   }
 }

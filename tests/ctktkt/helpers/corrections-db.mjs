@@ -44,6 +44,5 @@ export async function cellValue(client, date, cell) {
 
 /** Đóng kết nối của code được kiểm (pool pg cũ và/hoặc Prisma) để tiến trình test kết thúc. */
 export async function closeImplementationConnections() {
-  try { const { getPool } = await import('../../../modules/ctktkt/db/index.ts'); if (globalThis.ctktktPool) await getPool().end(); } catch { /* bản không dùng pool */ }
   try { const { prisma } = await import('../../../lib/prisma.ts'); await prisma.$disconnect(); } catch { /* bản không dùng Prisma */ }
 }

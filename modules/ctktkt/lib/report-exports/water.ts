@@ -1,4 +1,5 @@
 import ExcelJS from "exceljs";
+import { ok, fail } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 import { loadWaterChain } from "@/modules/ctktkt/lib/water-report/store";
 import {
@@ -15,7 +16,7 @@ export async function exportReport(request: Request) {
   const month = url.searchParams.get("month") || "";
 
   if (!monthPattern.test(month)) {
-    return Response.json({ error: "Tháng không hợp lệ (định dạng YYYY-MM)." }, { status: 400 });
+    return fail("Tháng không hợp lệ (định dạng YYYY-MM).", 400);
   }
 
   try {
@@ -33,7 +34,7 @@ export async function exportReport(request: Request) {
     });
   } catch (err) {
     console.error("Lỗi xuất file Excel theo dõi lượng nước:", err);
-    return Response.json({ error: "Không thể xuất file Excel." }, { status: 500 });
+    return fail("Không thể xuất file Excel.", 500);
   }
 }
 

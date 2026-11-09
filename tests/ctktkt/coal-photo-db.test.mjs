@@ -3,7 +3,6 @@
 // Dòng thử: owner_id 'test-coal-%' (dọn trước/sau); kho tệp S3 thay bằng kho giả trong bộ nhớ.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import { testClient, closeImplementationConnections } from './helpers/corrections-db.mjs';
 import { coalPhotoExpiry } from '../../modules/ctktkt/lib/coal-photo-retention.ts';
 import * as store from '../../modules/ctktkt/lib/coal-photo-store.ts';
@@ -26,9 +25,7 @@ async function cleanup(c) {
 const photoRows = async c => (await c.query("SELECT id,owner_id,report_date,slot,type,data,reading,expires_at,created_at FROM public.ctktkt_coal_meter_photos WHERE owner_id LIKE 'test-coal-%' ORDER BY created_at, id")).rows;
 /** Hàm Gemini nhận kho dữ liệu ở tham số đầu: bản cũ getRawDb(), bản Prisma prisma. */
 async function geminiDb() {
-  const source = readFileSync(new URL('../../modules/ctktkt/lib/coal-gemini-shared-store.ts', import.meta.url), 'utf8');
-  if (source.includes('@/lib/prisma')) return (await import('../../lib/prisma.ts')).prisma;
-  return (await import('../../modules/ctktkt/db/index.ts')).getRawDb();
+  return (await import('../../lib/prisma.ts')).prisma;
 }
 
 test('kho ảnh công tơ than trên DB thật', async t => {

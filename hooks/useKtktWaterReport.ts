@@ -21,7 +21,7 @@ const KEY = ["ctktkt", "water-report"] as const;
 
 /**
  * Ghi ca nước làm đổi cả các ô Chỉ tiêu KTKT liên kết (W/X/Y/Z nước tái sinh…): làm mới mọi dữ liệu KTKT,
- * đúng như useCtktktRequest cũ (invalidate ["ctktkt"]).
+ * đúng như lớp gọi API cũ (invalidate ["ctktkt"]).
  */
 function useInvalidateKtkt() {
   const qc = useQueryClient();

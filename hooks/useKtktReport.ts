@@ -5,7 +5,7 @@ import { apiDownload, apiGet, apiMutate } from "@/lib/fetcher";
 
 /**
  * Trang Chỉ tiêu KTKT (`/api/ctktkt/ctktkt-report`, yêu cầu sửa, ảnh công tơ than, Gemini dùng chung).
- * Mọi khoá nằm dưới ["ctktkt"] để lượt ghi KTKT ở trang khác cũng đánh dấu cũ — như useCtktktRequest trước đây.
+ * Mọi khoá nằm dưới ["ctktkt"] để lượt ghi KTKT ở trang khác cũng đánh dấu cũ (lưu báo cáo, yêu cầu sửa, khôi phục sao lưu…).
  */
 export type CtktktReportEntry = { operatingDate: string; cell: string; value: string };
 export type CtktktReportRead<W = unknown> = {

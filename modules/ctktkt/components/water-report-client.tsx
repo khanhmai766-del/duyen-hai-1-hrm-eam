@@ -1,7 +1,7 @@
 "use client";
 import { MonthField } from "./ui/month-field";
 import { Droplets, FlaskConical, Gauge, RefreshCw, TriangleAlert, Zap } from "lucide-react";
-import { useCtktktDownload } from "@/hooks/useCtktkt";
+import { downloadCtktktFile } from "@/hooks/useKtktReport";
 import { keepPreviousData } from "@tanstack/react-query";
 import {
   useDeleteWaterLeader, useDeleteWaterShift, useImportWaterWorkbook, useSaveWaterLeader, useSaveWaterShift,
@@ -48,7 +48,7 @@ function formatRatio(val: number | null | undefined): string {
 }
 
 export function WaterReportClient() {
-  const downloadReport=useCtktktDownload();
+  const downloadReport=downloadCtktktFile;
 
   const user = useSessionUser();
   const [month, setMonth] = useState<string>(getCurrentMonth);

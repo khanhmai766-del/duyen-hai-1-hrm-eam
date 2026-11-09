@@ -4,14 +4,11 @@ import {sealCoalGeminiKey,openCoalGeminiKey} from "./coal-gemini-secret";
 type Db=typeof prisma;
 const name="coal-meter";
 export class SharedGeminiConflict extends Error {}
-export async function ensureSharedGemini(_db:Db) { /* prisma/manual/add-ctktkt.sql */ }
 export async function sharedGeminiStatus(db:Db) {
-  await ensureSharedGemini(db);
   const row=await db.ctktktCoalGeminiSettings.findUnique({where:{name},select:{model:true,version:true,updated_at:true,updated_by:true,cipher:true}});
   return {configured:row?.cipher!=null,model:row?String(row.model):null,version:row?Number(row.version):0,updatedAt:row?.updated_at?String(row.updated_at):null,updatedBy:row?.updated_by?String(row.updated_by):null};
 }
 export async function loadSharedGemini(db:Db,secret:string|undefined) {
-  await ensureSharedGemini(db);
   const row=await db.ctktktCoalGeminiSettings.findUnique({where:{name},select:{cipher:true,model:true}});
   if(!row?.cipher) return null;
   return {key:openCoalGeminiKey(String(row.cipher),secret),model:String(row.model)};
@@ -24,7 +21,6 @@ async function logEvent(tx:Parameters<Parameters<Db["$transaction"]>[0]>[0],id:s
 export async function saveSharedGemini(db:Db,secret:string|undefined,input:{key:string;model:string;expectedVersion:number;actorId:string;actorName:string}) {
   // Encrypt before any write. Neither table contains plaintext keys or photo data.
   const cipher=sealCoalGeminiKey(input.key,secret),id=crypto.randomUUID(),now=new Date().toISOString();
-  await ensureSharedGemini(db);
   // Như bản cũ: dòng cấu hình rỗng được tạo (và giữ lại) ngay cả khi lượt lưu xung đột phiên bản.
   const changed=await db.$transaction(async tx=>{
     await tx.ctktktCoalGeminiSettings.createMany({data:[{name,cipher:null,model:"",version:0,operation:""}],skipDuplicates:true});
@@ -38,7 +34,6 @@ export async function saveSharedGemini(db:Db,secret:string|undefined,input:{key:
 
 /** Update the model without decrypting, replacing or returning the saved key. */
 export async function updateSharedGeminiModel(db:Db,input:{model:string;expectedVersion:number;actorId:string;actorName:string}) {
-  await ensureSharedGemini(db);
   const id=crypto.randomUUID(),now=new Date().toISOString();
   const changed=await db.$transaction(async tx=>{
     const result=await tx.ctktktCoalGeminiSettings.updateMany({where:{name,version:input.expectedVersion,cipher:{not:null}},data:{model:input.model,version:{increment:1},updated_at:now,updated_by:input.actorName,operation:id}});

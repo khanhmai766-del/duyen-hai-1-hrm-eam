@@ -1,7 +1,7 @@
 import { fromBuffer } from "yauzl";
 import { createHash } from "node:crypto";
 import { BACKUP_TABLES, MAX_BACKUP_BYTES, validateDataBackup, restoreStatements, type DataBackup, type BackupColumn } from "./data-backup";
-import type { Statement } from "../db";
+type Statement = { sql: string; args: (string | number | null)[] };
 
 export const MAX_ARCHIVE_BYTES = 25 * 1024 * 1024;
 const MAX_EXPANDED_BYTES = 50 * 1024 * 1024;

@@ -86,7 +86,7 @@ xác minh, "nạp lại") gọi thẳng `apiGet`.
 - `lib/coal-photo-save.ts` nhận `{save, readStored}` thay cho `fetch`.
 - `tests/ctktkt/report-input.browser.mjs`: API giả trả phong bì; dùng hook thật, chỉ bọc `useReadCtktktReport` để sự kiện
   `test-request-change` kích hoạt "đọc muộn khi đang sửa" (đã kiểm có thêm đúng 1 lượt đọc). Vẫn 8 kiểm tra.
-- Còn dùng `useCtktktRequest`/`useCtktktDownload` (chuyển ở giai đoạn 4): `google-mirror-links.tsx`, `data-backup-panel.tsx`,
+- ~~Còn dùng `useCtktktRequest`/`useCtktktDownload`~~ (đã chuyển ở giai đoạn 4, 09/11): `google-mirror-links.tsx`, `data-backup-panel.tsx`,
   `water-report-client.tsx` (chỉ phần tải file).
 
 ### Việc tồn đọng ghi nhận khi chuyển đổi
@@ -104,7 +104,7 @@ xác minh, "nạp lại") gọi thẳng `apiGet`.
 - PMIS (đã sửa khi chuyển): bản cũ báo "Không đồng bộ được ngày nào…" rồi tự xoá ngay vì lượt tải lại đặt `error = ""`;
   nay thông báo lỗi còn hiển thị.
 | 3 | `getRawDb()` → Prisma, đọc trước ghi sau; có thể "so bóng" (chạy cả truy vấn cũ và mới, ghi log khi lệch). Cùng thứ tự trang | Hoá chất ✅ · Lượng nước ✅ · PMIS (`daily-inputs`, dùng chung với Dữ liệu các tháng) ✅ · PPA (`ppa-heat-rate`, `/notes`, `google-sheet-sync`) ✅ · Báo cáo sản xuất (5 route; `bcsx-sync` không ai gọi — giai đoạn 4) ✅ · Chỉ tiêu KTKT ✅ (09/11: đọc, xuất Excel, lưu theo ca/yêu cầu sửa, ảnh công tơ than, Gemini dùng chung) · còn `measurements`, `bcsx-sync`, sao lưu dữ liệu, Google Mirror, API máy → giai đoạn 4 |
-| 4 | Chuyển 4 API máy; xoá `db/sql.ts`, `getRawDb`, `useCtktktRequest`, cổng `[[...path]]` | API tích hợp + Google Mirror (snapshot, status, mã kết nối) ✅ 09/11 · sao lưu/khôi phục, lịch sử dữ liệu, `measurements`, `bcsx-sync`, 3 component, gỡ lớp cũ ⏳ |
+| 4 | Chuyển 4 API máy; xoá `db/sql.ts`, `getRawDb`, `useCtktktRequest`, cổng `[[...path]]` | ✅ 09/11/2026 (xem "Sau giai đoạn 4") |
 
 ### Giai đoạn 3 — mẫu chuyển một route sang Prisma (theo Hoá chất, 09/11/2026)
 
@@ -135,7 +135,7 @@ xác minh, "nạp lại") gọi thẳng `apiGet`.
   khi nhiều lượt cùng lúc). Test cũ kiểm chuỗi SQL/giả lập `db.prepare` thay bằng `tests/ctktkt/coal-photo-db.test.mjs` (DB dev
   thật, kho tệp giả; đạt trên CẢ code cũ lẫn mới, kể cả 10 lượt đọc đồng thời) + hợp đồng API 7 đường ảnh (chủ ảnh, quyền duyệt,
   hết hạn, tải ảnh kèm tiêu đề an toàn; ảnh mẫu `contract-photo-a/b/c`).
-  `measurements` và `bcsx-sync`: không nơi nào gọi — quyết định giữ/bỏ ở giai đoạn 4.
+  `measurements` và `bcsx-sync`: không nơi nào gọi — ĐÃ XOÁ 09/11/2026 (bảng `ctktkt_measurements` vẫn giữ và vẫn có trong sao lưu).
 - API tích hợp (`operating-data-api.ts`) nhận `reader` (bộ đọc) thay `getDb`; Google Mirror đọc bằng Prisma. So bằng
   `scripts/verify/ctktkt-shadow-dump.mjs` (gọi thẳng hàm, cũ ↔ mới, bỏ `generatedAt`): ảnh chụp Mirror 4 tháng (có một ngày PPA
   đủ 48 điểm, cả trường hợp nguồn PPA hỏng phải dừng) và API PMIS/PPA — giống hệt.
@@ -143,6 +143,27 @@ xác minh, "nạp lại") gọi thẳng `apiGet`.
   và `--writes --record` **trên code cũ**.
 
 Trước khi bắt đầu một trang: báo cho người còn lại để không sửa song song trang đó; `git fetch` trước khi sửa.
+
+## Sau giai đoạn 4 (09/11/2026) — kiến trúc hiện tại
+
+- **Route**: mỗi đường dẫn có tệp riêng `app/api/ctktkt/<đường dẫn>/route.ts` (31 tệp) chỉ gọi
+  `ktktRoute("<đường dẫn>", handlers)` (`modules/ctktkt/server/ktkt-route.ts`). Lớp bọc làm đúng các bước của cổng cũ, cùng
+  thứ tự: kiểm đăng nhập (trừ 4 API máy), cùng nguồn cho phương thức ghi, quét tệp tải lên, 405, audit `UPDATE_CTKTKT`,
+  `Cache-Control: private, no-store` (file xuất/sao lưu giữ tiêu đề riêng). Thêm route mới = thêm handler trong
+  `modules/ctktkt/server/routes/<…>/route.ts` + một tệp route 7 dòng như các tệp có sẵn.
+- **Phong bì**: mọi route người dùng tự trả `ok()/fail()`. Chỉ 4 API máy giữ JSON gốc: `integration/v1/operating-data`,
+  `cron/coal-photos`, `google-mirror/snapshot`, `POST google-mirror/status` (Apps Script / hệ thống ngoài đọc theo định dạng cũ).
+- **Dữ liệu**: toàn bộ qua Prisma (`@/lib/prisma`, `modules/ctktkt/db/prisma.ts`). SQL còn viết qua `$executeRaw/$queryRaw`
+  CHỈ ở các chỗ Prisma không có API, có chú thích tại chỗ: khoá `pg_advisory_xact_lock` + `FOR UPDATE` (lưu theo ca, duyệt yêu
+  cầu), bộ đếm 72 lượt đọc ảnh/giờ (upsert có điều kiện), khôi phục sao lưu (`INSERT … VALUES (…),(…) ON CONFLICT` 50 dòng/lô,
+  `LOCK TABLE` + `setval`), đọc cấu trúc cột (`information_schema`). Đã xoá `db/index.ts`, `db/sql.ts`, `daily-input-audit.ts`,
+  `chemical-usage/schema.ts`, `hooks/useCtktkt.ts`.
+- **Kiểm**: `npm run test:ctktkt` (316), `npm run test:ctktkt:contract` (34 API đọc) và `-- --writes` (140 bước, kèm phiên bản
+  đọc + nhật ký sửa ô), `scripts/verify/ctktkt-export-dump.mjs` (nội dung file Excel), `scripts/verify/ctktkt-shadow-dump.mjs`
+  (Mirror + API tích hợp), `CTKTKT_VERIFY_DAY=2026-09-17 npx tsx scripts/verify/ctktkt.mjs` / `ctktkt-machine.mjs` (tích hợp,
+  DB dev chỉ có dữ liệu mẫu).
+- Khác biệt nhỏ còn lại so với cổng cũ: đường dẫn KTKT không tồn tại (đã đăng nhập) trả trang 404 của Next thay cho JSON
+  "Không tìm thấy chức năng KTKT."; lỗi của các route xuất/sao lưu nay cũng có `Cache-Control: private, no-store`.
 
 ## Kiểm tra bắt buộc mỗi bước
 
