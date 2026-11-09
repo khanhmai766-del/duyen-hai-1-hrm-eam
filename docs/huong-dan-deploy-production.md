@@ -77,6 +77,7 @@ setsid nohup ./scripts/deploy-server.sh --sql prisma/manual/them-cot-abc.sql > "
 | `--keep <n>` | Số bản cũ giữ để quay lại (mặc định **3**) |
 | `--branch <nhánh>` | Deploy nhánh khác `main` (hầu như không dùng) |
 | `--rollback` | Quay lại bản build trước (mục 7) |
+| `--skip-ktkt-check` | Bỏ bước 2a (kiểm chuẩn module KTKT). **Chỉ dùng** cho hotfix khẩn có chủ ý |
 
 ### Script làm gì và mất bao lâu
 
@@ -85,6 +86,7 @@ setsid nohup ./scripts/deploy-server.sh --sql prisma/manual/them-cot-abc.sql > "
 | Kiểm tra | Cây làm việc sạch, vai trò sao lưu, đĩa, pm2 | ~5 giây | Bình thường |
 | 1/7 | Sao lưu DB (vai trò `dh1_backup`) → `/root/backup-dh1db-<ngày>-truoc-<sha>.sql.gz` | ~5 giây | Bình thường |
 | 2/7 | `git pull` (+ `npm install` nếu phụ thuộc đổi) | vài giây – vài phút | Bình thường* |
+| 2a | Kiểm chuẩn module KTKT (`scripts/check/ctktkt-standards.mjs`, chỉ đọc) | < 1 giây | Bình thường |
 | 3/7 | Chạy các file `--sql` | tuỳ file | Bình thường |
 | 4/7 | Tạo `.next-builds/<sha>-<giờ>`, chép cache build | ~5–10 giây | Bình thường |
 | 5/7 | **Build trong thư mục riêng** — app đang chạy không bị đụng | ~2–3 phút | Bình thường |
@@ -112,6 +114,7 @@ Sau đó mở web, đăng nhập, vào đúng trang vừa sửa để xem tận 
 | Tình huống | Trạng thái web | Làm gì |
 |---|---|---|
 | Script dừng ở **KIỂM TRA** (cây bẩn, đĩa đầy, pm2…) | Chưa bị đụng | Xử lý đúng thông báo, chạy lại |
+| Dừng ở **2a · KIỂM CHUẨN MODULE KTKT** | Chưa bị đụng (mã đã đưa về bản đang chạy) | Code mới quay lại kiểu cũ (SQL thô, tệp CSS mới…) — danh sách in ngay trên. Sửa trên máy dev, đẩy lại, deploy lại. Hotfix khẩn có chủ ý: `--skip-ktkt-check` |
 | **Vai trò sao lưu** không đăng nhập được | Chưa bị đụng | Xem **Phụ lục C** (dựng vai trò `dh1_backup`). Chỉ dùng `--no-backup` nếu bản này không có SQL |
 | **BUILD GÃY** | Vẫn chạy bản cũ, không ảnh hưởng | Server đã pull mã mới nhưng chưa dùng. Sửa lỗi trên máy dev → push → deploy lại. Muốn server khớp bản đang chạy: `git reset --hard <sha cũ>` (script in sẵn sha) |
 | **Tự kiểm tra sau reload thất bại** / web lỗi sau deploy | Đang chạy bản mới bị lỗi | `./scripts/deploy-server.sh --rollback` |

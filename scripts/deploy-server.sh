@@ -6,6 +6,7 @@
 #   ./scripts/deploy-server.sh --sql prisma/manual/tbycnn-init.sql --sql prisma/manual/abc.sql
 #   ./scripts/deploy-server.sh --dry-run          # xem sẽ làm gì, không đụng gì
 #   ./scripts/deploy-server.sh --rollback         # quay lại bản build trước
+#   ./scripts/deploy-server.sh --skip-ktkt-check  # hotfix khẩn: bỏ bước kiểm chuẩn module KTKT (2a)
 #   Hướng dẫn từng bước + sự cố: docs/huong-dan-deploy-production.md
 #   ĐỪNG chạy `npm run build` tay trên server — nó ghi đè .next đang chạy (xem nguyên tắc 2).
 #
@@ -78,6 +79,7 @@ KEEP=3
 DRY_RUN=0
 DO_ROLLBACK=0
 SKIP_BACKUP=0
+SKIP_KTKT_CHECK=0
 SQL_FILES=()
 
 while [[ $# -gt 0 ]]; do
@@ -88,7 +90,8 @@ while [[ $# -gt 0 ]]; do
     --dry-run) DRY_RUN=1; shift ;;
     --rollback) DO_ROLLBACK=1; shift ;;
     --no-backup) SKIP_BACKUP=1; shift ;;
-    -h|--help) sed -n '2,13p' "${BASH_SOURCE[0]}"; exit 0 ;;
+    --skip-ktkt-check) SKIP_KTKT_CHECK=1; shift ;;
+    -h|--help) sed -n '2,14p' "${BASH_SOURCE[0]}"; exit 0 ;;
     *) echo "Tham số lạ: $1" >&2; exit 2 ;;
   esac
 done
@@ -284,6 +287,21 @@ step "2/7 · LẤY CODE origin/$BRANCH"
 run "git pull origin '$BRANCH'"
 NEW_SHA=$([[ $DRY_RUN == 1 ]] && echo "$OLD_SHA" || git rev-parse --short HEAD)
 ok "$OLD_SHA → $NEW_SHA"
+
+# ---------------------------------------------------------------- 2a. chuẩn module KTKT
+# Chặn code quay lại kiểu cũ (SQL thô ngoài danh sách, lớp SQL/cổng đã gỡ, CSS ghi đè mới) — xem
+# scripts/check/ctktkt-standards.mjs. CHỈ ĐỌC tệp, chạy TRƯỚC khi build nên bản đang chạy không bị đụng.
+# Vi phạm → đưa mã về $OLD_SHA (`reset --keep`: giữ thay đổi chưa commit, tự dừng nếu đụng nhau) để lần
+# deploy sau vẫn so package.json từ đúng bản đang chạy. Hotfix khẩn cấp có chủ ý: --skip-ktkt-check.
+if [[ $SKIP_KTKT_CHECK == 1 ]]; then
+  warn "Bỏ qua kiểm chuẩn module KTKT (--skip-ktkt-check)."
+elif [[ -f scripts/check/ctktkt-standards.mjs ]]; then
+  step "2a · KIỂM CHUẨN MODULE KTKT (chỉ đọc)"
+  if ! node scripts/check/ctktkt-standards.mjs; then
+    [[ $DRY_RUN == 1 ]] || git reset --keep "$OLD_SHA" || warn "Không đưa được mã về $OLD_SHA — kiểm tra 'git status' trên server."
+    die "Code mới vi phạm chuẩn module KTKT (danh sách ở trên) — DỪNG trước khi build, bản đang chạy ($OLD_SHA) không bị đụng. Sửa rồi đẩy lại."
+  fi
+fi
 
 # npm install chỉ khi khai báo phụ thuộc thực sự đổi — đỡ vài phút mỗi lần deploy.
 if [[ $DRY_RUN == 0 ]] && ! git diff --quiet "$OLD_SHA" "$NEW_SHA" -- package-lock.json package.json; then

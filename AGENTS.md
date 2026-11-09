@@ -121,6 +121,18 @@ Two modules share one shape: a **period** row per month plus equipment rows scop
 Đã chuyển hết về chuẩn web (Prisma, route `ok()/fail()`, TanStack Query) — kế hoạch, quyết định và nhật ký ở
 `docs/ktkt-chuyen-doi.md`; đọc trước khi sửa module. Kiểm: `npm run test:ctktkt`, `npm run test:ctktkt:contract` (`-- --writes`).
 
+**Quy tắc bắt buộc** (máy kiểm bằng `npm run check:ctktkt` — chạy trên GitHub Actions mỗi lần push và ở bước 2a của
+`deploy-server.sh`; vi phạm thì **không deploy được**):
+- Đọc/ghi dữ liệu bằng API Prisma (`@/lib/prisma`). Không `$queryRaw`/`$executeRaw` mới, không thư viện `pg`, không dựng lại
+  lớp SQL cũ (`modules/ctktkt/db/sql|index`, `useCtktkt`, `daily-input-audit`) hay cổng `app/api/ctktkt/[[...path]]`.
+  SQL thô chỉ khi Prisma không có API (khoá advisory, `LOCK TABLE`…) — khi đó thêm tệp vào `RAW_SQL_ALLOWED` trong
+  `scripts/check/ctktkt-standards.mjs` cùng commit, kèm lý do.
+- Mỗi chức năng một route riêng theo chuẩn `handle()/ok()/fail()` (mục API route convention ở trên); client gọi qua hook
+  TanStack Query trong `hooks/useKtktReport.ts`.
+- Không tạo tệp `.css` mới, không thêm quy tắc vào các tệp CSS còn lại (giới hạn dòng trong `CSS_ALLOWED`) — viết lớp
+  Tailwind trên phần tử, lưu ý các bẫy dưới đây.
+- Trang Chỉ tiêu KTKT: sửa đúng `ctktkt-report/tab-*.tsx` của nhóm chỉ tiêu; khung `ctktkt-report.tsx` giới hạn 450 dòng.
+
 **Giao diện:** `modules/ctktkt/styles.css` là lớp giao diện chung của module, có quy tắc **bám theo tên lớp Tailwind** với độ ưu
 tiên cao hơn tiện ích. Khi viết lớp Tailwind trong module:
 - `flex` bị đặt `min-width:0` trên điện thoại → dùng `[display:flex]` nếu không muốn thế.
@@ -134,7 +146,9 @@ tiên cao hơn tiện ích. Khi viết lớp Tailwind trong module:
 Đổi CSS của module thì so kiểu hiển thị trước/sau bằng `scripts/verify/ctktkt-style-dump.mjs` + `ctktkt-style-compare.mjs`
 (getComputedStyle mọi phần tử, 1280 · 390 · bản in, kèm kịch bản mở menu/đổi tab/rê chuột; hướng dẫn ở `scripts/verify/README.md`),
 phải ra 0 phần tử khác ngoài nhiễu đã biết. Giữ dạng CSS có chủ đích: `water-report-table.css`, `.monthly-grid` trong
-`daily-production-table.css`, `spreadsheet-copy-tools.module.css` (lý do ở `docs/ktkt-chuyen-doi.md`).
+`daily-production-table.css`, `spreadsheet-copy-tools.module.css`, `coal-meter-photo-import.module.css` (lý do ở
+`docs/ktkt-chuyen-doi.md`). Trang Chỉ tiêu KTKT: khung `ctktkt-report.tsx` + `ctktkt-report/` (state ở
+`use-ctktkt-report.tsx`, mỗi nhóm chỉ tiêu một `tab-*.tsx` nhận `ctx`) — thêm ô/nhóm thì sửa đúng tab, không dồn lại về khung.
 
 ### Shared conventions
 - `lib/constants.ts` holds enum→label maps and ordering (`ROLES`, `REPAIR_STATUS`, `DEFECT_*`, `SHIFT_TYPE`, …) plus shift-window/date helpers — reuse these instead of hardcoding Vietnamese labels.

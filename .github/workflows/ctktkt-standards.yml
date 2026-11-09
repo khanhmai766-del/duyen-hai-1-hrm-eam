@@ -1,0 +1,45 @@
+# Kiểm module Chỉ tiêu KTKT không quay lại kiểu cũ (SQL thô ngoài danh sách, lớp SQL/cổng đã gỡ, CSS ghi đè mới).
+# Script: scripts/check/ctktkt-standards.mjs — Node thuần, không cần npm install. Cùng script chạy ở bước 2a của
+# scripts/deploy-server.sh, nên commit bị báo đỏ ở đây cũng sẽ KHÔNG deploy được.
+#
+# Hỏng → dấu ✗ đỏ trên commit/PR, và báo vào nhóm Telegram nhận thông báo commit (dùng chung 2 secret của
+# telegram-commit.yml: TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID; thiếu secret thì chỉ bỏ qua bước báo).
+
+name: Kiểm chuẩn module KTKT
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  ktkt-standards:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Kiểm chuẩn
+        run: node scripts/check/ctktkt-standards.mjs 2>&1 | tee ktkt-check.log; exit ${PIPESTATUS[0]}
+        shell: bash
+      - name: Báo Telegram khi hỏng
+        if: failure()
+        env:
+          TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          WHO: ${{ github.actor }}
+          SHA: ${{ github.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        shell: bash
+        run: |
+          [[ -n "$TOKEN" && -n "$CHAT_ID" ]] || { echo "Chưa có secret Telegram — bỏ qua báo."; exit 0; }
+          TEXT="⚠️ Module KTKT: commit ${SHA:0:8} của ${WHO} quay lại kiểu cũ — sẽ KHÔNG deploy được cho tới khi sửa.
+          $(head -c 3000 ktkt-check.log)
+          Chi tiết: ${RUN_URL}"
+          curl -sS -X POST "https://api.telegram.org/bot${TOKEN}/sendMessage" \
+            --data-urlencode "chat_id=${CHAT_ID}" --data-urlencode "text=${TEXT}" > /dev/null

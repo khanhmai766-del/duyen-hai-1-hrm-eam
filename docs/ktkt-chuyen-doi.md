@@ -183,11 +183,28 @@ Trước khi bắt đầu một trang: báo cho người còn lại để không
   (`[&>button]:…`); viền ô bảng bị ép `#d7e3ef` → `!border-…`; `.ctktkt-content table` ép 13px → `!`; `rounded-lg` của theme
   là 10px; `bcsx-view-mode`/`bcsx-unit-switch` vẫn là móc của `styles.css` — giữ tên lớp. Tailwind chỉ quét chuỗi nguyên văn:
   không ghép lớp bằng `${…}`.
+  **Đợt 2 (09/11)**: trang Dữ liệu các tháng (thanh kỳ dữ liệu nền tối, thẻ thống kê, biểu đồ tổng quan — so ở 1280 · 1024 ·
+  390 · in, kèm "Nhiều ngày" / "Kết quả tính" / hộp thoại biểu đồ; `daily-production-table.css` chỉ còn phần bảng) và
+  `data-backup-panel.module.css` (so ở 1280 · 800 · 390 · in, kèm đã chọn tệp / xem trước / tệp lỗi). Quy tắc `.monthly-chart-*`
+  bỏ hẳn: hộp thoại nằm trong Portal ngoài `.ctktkt-module` nên chưa từng áp dụng. Thêm bẫy: `rounded-full` là 9999px (CSS cũ
+  50%), `-z-10` ≠ `z-index:-1`, `border:0`/`border-bottom:0`/`list-style:none` dạng viết tắt còn đặt lại kiểu + màu → dùng
+  thuộc tính tuỳ ý; CSS Module nạp SAU `styles.css` nên thắng quy tắc cùng độ ưu tiên (`button{min-height:40px}` trên điện
+  thoại) → bản Tailwind cần `!` đúng chỗ đó.
   **Giữ dạng CSS có chủ đích**: `water-report-table.css` (4 cột dính bằng `nth-child` + biến độ rộng + màu khi rê hàng),
   `.monthly-grid` trong `daily-production-table.css` (bảng shadcn: `!important`, cột/tiêu đề/chân dính),
-  `spreadsheet-copy-tools.module.css` (lớp gắn lúc chạy vào bảng bất kỳ, tô ô `[data-copy-selected]`), và lớp giao diện
-  chung trong `styles.css`. `coal-meter-photo-import.module.css`, `data-backup-panel.module.css` là CSS Module (đã cô lập
-  phạm vi) — chưa chuyển.
+  `spreadsheet-copy-tools.module.css` (lớp gắn lúc chạy vào bảng bất kỳ, tô ô `[data-copy-selected]`),
+  `coal-meter-photo-import.module.css` (hệ giao diện riêng của hộp thoại: biến màu + chế độ tối `:global(.dark)`, quy tắc
+  chung cho mọi nút/ô trong hộp thoại và ~80 quy tắc thành phần đè lên nhau — bản Tailwind ~200 biến thể `[&_…]`, khó đọc
+  hơn; kịch bản so `anh-than-*` đã có sẵn nếu sau này chuyển), và lớp giao diện chung trong `styles.css`.
+- **Tách `ctktkt-report.tsx` (09/11/2026)**: 3.924 dòng → khung trang (359) + `ctktkt-report/use-ctktkt-report.tsx` (state và
+  logic chép nguyên văn, trả `ctx`; kiểu `CtktktReportCtx` suy từ giá trị trả về) + `shared.tsx` (hằng/hàm cấp module) +
+  `kpi-section.tsx` và 7 `tab-*.tsx` theo nhóm chỉ tiêu. Tách bằng TypeScript API; mỗi tệp so CÂY CÚ PHÁP với vùng gốc (8/8
+  khớp), kiểu hiển thị 7 tab + S2 + in giống hệt, `report-input.browser.mjs` 8/8.
+- **Chặn quay lại kiểu cũ (09/11/2026)**: `scripts/check/ctktkt-standards.mjs` (`npm run check:ctktkt`, chỉ đọc, Node thuần)
+  báo lỗi khi có SQL thô ngoài 4 tệp được phép hoặc nhiều hơn số chỗ hiện có, import `pg`/lớp SQL cũ/hook cũ, dựng lại cổng
+  `[[...path]]`, tệp CSS mới hoặc CSS dài thêm, khung `ctktkt-report.tsx` > 450 dòng. Chạy ở GitHub Actions
+  (`.github/workflows/ctktkt-standards.yml`, hỏng thì báo Telegram) và bước 2a của `deploy-server.sh` (dừng trước build, đưa
+  mã về bản đang chạy; hotfix khẩn: `--skip-ktkt-check`). Muốn nới: sửa danh sách trong script cùng commit, kèm lý do.
 - Khác biệt nhỏ còn lại so với cổng cũ: đường dẫn KTKT không tồn tại (đã đăng nhập) trả trang 404 của Next thay cho JSON
   "Không tìm thấy chức năng KTKT."; lỗi của các route xuất/sao lưu nay cũng có `Cache-Control: private, no-store`.
 
