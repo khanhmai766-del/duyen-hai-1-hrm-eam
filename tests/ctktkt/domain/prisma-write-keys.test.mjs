@@ -43,6 +43,28 @@ const CASES = [
   ['daily_inputs thêm/sửa', "INSERT INTO daily_inputs (operating_date, field_code, value, note, updated_at) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP) ON CONFLICT(operating_date, field_code) DO UPDATE SET value = excluded.value, note = excluded.note, updated_at = CURRENT_TIMESTAMP",
     d => [d, 'F', '23.5', ''], d => operationalWriteKeysFor('daily_inputs', [d])],
   ['daily_inputs xoá', 'DELETE FROM daily_inputs WHERE operating_date = ? AND field_code = ?', d => [d, 'F'], d => operationalWriteKeysFor('daily_inputs', [d])],
+  // PPA: lưu kết quả ngày, ghi chú đánh giá (tạo dòng số 0 nếu chưa có), ô dữ liệu ngày giữ ghi chú.
+  ['ppa lưu ngày', `
+  INSERT INTO ppa_heat_rate_daily (
+    operating_date, source_data, source_files,
+    gross_s1_kwh, net_s1_kwh, gross_s2_kwh, net_s2_kwh,
+    ppa_plant, ppa_s1, ppa_s2,
+    note_s1, note_s2, updated_at
+  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+  ON CONFLICT(operating_date) DO UPDATE SET note_s1 = CASE WHEN excluded.note_s1 = '' THEN ppa_heat_rate_daily.note_s1 ELSE excluded.note_s1 END`.trim(),
+    d => [d, '{}', '[]', '1', '1', '1', '1', '1', '1', '1', '', ''], d => operationalWriteKeysFor('ppa_heat_rate_daily', [d])],
+  ['ppa ghi chú', `INSERT INTO ppa_heat_rate_daily (
+          operating_date, source_data, source_files,
+          gross_s1_kwh, net_s1_kwh, gross_s2_kwh, net_s2_kwh,
+          ppa_plant, ppa_s1, ppa_s2,
+          note_s1, note_s2, updated_at
+        ) VALUES (?, '{}', '[]', '0', '0', '0', '0', '0', '0', '0', ?, ?, CURRENT_TIMESTAMP)
+        ON CONFLICT(operating_date) DO UPDATE SET
+          note_s1 = excluded.note_s1,
+          note_s2 = excluded.note_s2,
+          updated_at = CURRENT_TIMESTAMP`, d => [d, 'a', 'b'], d => operationalWriteKeysFor('ppa_heat_rate_daily', [d])],
+  ['ô ngày giữ ghi chú (PPA)', "INSERT INTO daily_inputs (operating_date, field_code, value, note, updated_at) VALUES (?, ?, ?, '', CURRENT_TIMESTAMP) ON CONFLICT(operating_date, field_code) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP",
+    d => [d, 'PPA_CSKD_S1', '600'], d => operationalWriteKeysFor('daily_inputs', [d])],
   ['trưởng ca (không phải dữ liệu vận hành)', `INSERT INTO water_shift_leaders (name, is_active, display_order)
          VALUES (?, ?, ?)
          ON CONFLICT(name) DO UPDATE SET is_active = excluded.is_active, display_order = excluded.display_order`, () => ['A', 1, 0], () => operationalWriteKeysFor('water_shift_leaders')],

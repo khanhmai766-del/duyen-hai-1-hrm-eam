@@ -1,6 +1,6 @@
 import { isCtktktSameOrigin } from "@/modules/ctktkt/lib/request-origin";
 import { ok, fail } from "@/lib/api";
-import { getRawDb } from "@/modules/ctktkt/db";
+import { prisma } from "@/lib/prisma";
 import {
   buildGoogleSheetDayPayload,
   confirmsGoogleSheetWrite,
@@ -53,21 +53,25 @@ export async function POST(request: Request) {
     if (action !== "preview" && action !== "sync") throw new Error("Thao tác đồng bộ không hợp lệ.");
     if (!datePattern.test(operatingDate)) throw new Error("Ngày đồng bộ không hợp lệ.");
 
-    const db = getRawDb();
     const previousDate = previousIsoDate(operatingDate);
-    const [dailyResult, ppaResult, ctktktResult] = await Promise.all([
-      db.prepare("SELECT field_code AS fieldCode, value FROM daily_inputs WHERE operating_date = ? ORDER BY field_code").bind(operatingDate).all(),
-      db.prepare("SELECT ppa_plant AS ppaPlant, ppa_s1 AS ppaS1, ppa_s2 AS ppaS2, note_s1 AS noteS1, note_s2 AS noteS2 FROM ppa_heat_rate_daily WHERE operating_date = ? LIMIT 1").bind(operatingDate).first(),
-      db.prepare("SELECT operating_date AS operatingDate, substr(field_code, 6) AS cell, value FROM daily_inputs WHERE operating_date IN (?, ?) AND field_code LIKE 'KTKT:%' ORDER BY operating_date, field_code").bind(previousDate, operatingDate).all(),
+    const [dailyRows, ppaRow, ctktktRows] = await Promise.all([
+      prisma.ctktktDailyInputs.findMany({ where: { operating_date: operatingDate }, orderBy: { field_code: "asc" }, select: { field_code: true, value: true } }),
+      prisma.ctktktPpaHeatRateDaily.findUnique({ where: { operating_date: operatingDate }, select: { ppa_plant: true, ppa_s1: true, ppa_s2: true, note_s1: true, note_s2: true } }),
+      prisma.ctktktDailyInputs.findMany({
+        where: { operating_date: { in: [previousDate, operatingDate] }, field_code: { startsWith: "KTKT:" } },
+        orderBy: [{ operating_date: "asc" }, { field_code: "asc" }], select: { operating_date: true, field_code: true, value: true },
+      }),
     ]);
     const ctktktByDate = new Map<string, CtktktDayEntries>();
-    for (const entry of ctktktResult.results as Array<{ operatingDate: string; cell: string; value: string }>) {
-      const values = ctktktByDate.get(entry.operatingDate) || {};
-      values[entry.cell] = entry.value;
-      ctktktByDate.set(entry.operatingDate, values);
+    for (const entry of ctktktRows) {
+      // Ô Chỉ tiêu KTKT lưu dạng "KTKT:<ô>" (= substr(field_code, 6) của SQL cũ).
+      const values = ctktktByDate.get(entry.operating_date) || {};
+      values[entry.field_code.slice(5)] = entry.value;
+      ctktktByDate.set(entry.operating_date, values);
     }
+    const ppaResult = ppaRow ? { ppaPlant: ppaRow.ppa_plant, ppaS1: ppaRow.ppa_s1, ppaS2: ppaRow.ppa_s2, noteS1: ppaRow.note_s1, noteS2: ppaRow.note_s2 } : null;
     const dailyEntries = mergeCtktktLinkedDailyEntries(
-      dailyResult.results as unknown as DailyInputEntry[],
+      dailyRows.map(row => ({ fieldCode: row.field_code, value: row.value })) as unknown as DailyInputEntry[],
       ctktktByDate.get(operatingDate) || {},
       ctktktByDate.get(previousDate),
     );

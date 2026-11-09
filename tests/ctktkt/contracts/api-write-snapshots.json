@@ -7883,6 +7883,401 @@
   },
   "phiên bản đọc tăng": []
  },
+ "ppa #16 ghi chú: danh sách rỗng": {
+  "request": "POST ppa-heat-rate/notes",
+  "response": {
+   "status": 200,
+   "body": {
+    "data": {
+     "received": 0,
+     "updated": 0,
+     "skipped": 0
+    },
+    "meta": null,
+    "error": null
+   }
+  },
+  "phiên bản đọc tăng": []
+ },
+ "ppa #17 ghi chú: đổi công suất S2 đã có (giữ ghi chú ô)": {
+  "request": "POST ppa-heat-rate/notes",
+  "response": {
+   "status": 200,
+   "body": {
+    "data": {
+     "received": 1,
+     "updated": 1,
+     "skipped": 0
+    },
+    "meta": null,
+    "error": null
+   }
+  },
+  "phiên bản đọc tăng": [
+   "daily_inputs",
+   "daily_inputs:2026-09",
+   "ppa_heat_rate_daily",
+   "ppa_heat_rate_daily:2026-09"
+  ],
+  "nhật ký sửa ô": [
+   {
+    "actor_id": "cmrvydnw90000chzlmavbmkqu",
+    "actor_username": "admin@powerplant.vn",
+    "actor_name": "Nguyễn Văn Hùng",
+    "source": "ppa-heat-rate/notes",
+    "operating_date": "2026-09-17",
+    "field_code": "PPA_CSKD_S2",
+    "action": "update",
+    "old_value": "600",
+    "new_value": "590.5",
+    "old_note": "",
+    "new_note": ""
+   },
+   {
+    "actor_id": "cmrvydnw90000chzlmavbmkqu",
+    "actor_username": "admin@powerplant.vn",
+    "actor_name": "Nguyễn Văn Hùng",
+    "source": "ppa-heat-rate/notes",
+    "operating_date": "2026-09-17",
+    "field_code": "PPA_EVENT_S2",
+    "action": "insert",
+    "old_value": null,
+    "new_value": "Giảm tải",
+    "old_note": null,
+    "new_note": ""
+   }
+  ],
+  "sau: GET ppa-heat-rate?period=2026-09&from=2026-09-17&to=2026-09-17": {
+   "status": 200,
+   "body": {
+    "data": {
+     "entries": [
+      {
+       "operatingDate": "2026-09-17",
+       "sourceFiles": "[]",
+       "grossS1Kwh": "14590000",
+       "netS1Kwh": "13530000",
+       "grossS2Kwh": "14200000",
+       "netS2Kwh": "13100000",
+       "ppaPlant": "10190.5",
+       "ppaS1": "10180.1",
+       "ppaS2": "10201.7",
+       "noteS1": "",
+       "noteS2": "Đánh giá S2 mới",
+       "updatedAt": "<thời điểm>"
+      }
+     ]
+    },
+    "meta": null,
+    "error": null
+   }
+  },
+  "sau: GET daily-inputs?period=2026-09&date=2026-09-17&scope=non-ktkt": {
+   "status": 200,
+   "body": {
+    "data": {
+     "entries": [
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "AE",
+       "value": "154.1",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "AF",
+       "value": "165.4",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "AJ",
+       "value": "176.7",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "AR",
+       "value": "188",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "AT",
+       "value": "199.3",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "B",
+       "value": "75",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "BCSX_COAL_STOCK_24H",
+       "value": "312450.75",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "BN",
+       "value": "233.2",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "BQ",
+       "value": "244.5",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "BR",
+       "value": "255.8",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "BZ",
+       "value": "278.4",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "C",
+       "value": "86.3",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CA",
+       "value": "289.7",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CC",
+       "value": "301",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CD",
+       "value": "312.3",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CE",
+       "value": "323.6",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CF",
+       "value": "334.9",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CJ",
+       "value": "210.6",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CM",
+       "value": "346.2",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CN",
+       "value": "267.1",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CQ",
+       "value": "357.5",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CR",
+       "value": "368.8",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CS",
+       "value": "380.1",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CT",
+       "value": "391.4",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CU",
+       "value": "402.7",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CV",
+       "value": "414",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CW",
+       "value": "Bình thường",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CX",
+       "value": "221.9",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "DA",
+       "value": "436.6",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "DB",
+       "value": "447.9",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "DC",
+       "value": "459.2",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "DD",
+       "value": "470.5",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "DE",
+       "value": "481.8",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "DF",
+       "value": "493.1",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "DG",
+       "value": "504.4",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "DH",
+       "value": "515.7",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "F",
+       "value": "24",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "GRID_RECEIVE_S1",
+       "value": "12.5",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "GRID_RECEIVE_S2",
+       "value": "0",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "H",
+       "value": "108.9",
+       "note": "Ghi chú mẫu 2026-09-17"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "I",
+       "value": "120.2",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "L",
+       "value": "24",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "PPA_CSKD_S2",
+       "value": "590.5",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "PPA_EVENT_S2",
+       "value": "Giảm tải",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "X",
+       "value": "142.8",
+       "note": ""
+      }
+     ]
+    },
+    "meta": null,
+    "error": null
+   }
+  }
+ },
+ "ppa #18 Google Sheet: xem trước ngày chưa có PPA": {
+  "request": "POST google-sheet-sync",
+  "response": {
+   "status": 400,
+   "body": {
+    "data": null,
+    "meta": null,
+    "error": "Ngày đã chọn chưa có kết quả PPA. Hãy đồng bộ và lưu kết quả PPA trước."
+   }
+  },
+  "phiên bản đọc tăng": []
+ },
+ "ppa #19 Google Sheet: ngày sai": {
+  "request": "POST google-sheet-sync",
+  "response": {
+   "status": 400,
+   "body": {
+    "data": null,
+    "meta": null,
+    "error": "Ngày đã chọn chưa có kết quả PPA. Hãy đồng bộ và lưu kết quả PPA trước."
+   }
+  },
+  "phiên bản đọc tăng": []
+ },
  "bcsx #01 số liệu nửa giờ: lưu (dấu phẩy) 2 tổ máy": {
   "request": "POST shift-readings",
   "response": {

@@ -1,7 +1,8 @@
 import { isCtktktSameOrigin } from "@/modules/ctktkt/lib/request-origin";
 import { ok, fail } from "@/lib/api";
-import { auditedDailyBatch } from "@/modules/ctktkt/lib/daily-input-audit";
-import { getRawDb } from "@/modules/ctktkt/db";
+import { writeDailyInputs, type DailyInputWrite } from "@/modules/ctktkt/lib/daily-input-store";
+import { ktktUtcNow, ktktWrite } from "@/modules/ctktkt/db/prisma";
+import { operationalWriteKeysFor } from "@/modules/ctktkt/lib/operational-query-policy";
 import { isFutureOperatingDate } from "@/modules/ctktkt/lib/operating-date";
 import { requireAnyPermission } from "@/modules/ctktkt/lib/auth/server";
 import { parseAvailableCapacity, PPA_AVAILABLE_CAPACITY_S1_CODE, PPA_AVAILABLE_CAPACITY_S2_CODE, PPA_OPERATING_EVENT_S1_CODE, PPA_OPERATING_EVENT_S2_CODE } from "@/modules/ctktkt/lib/google-sheet-sync";
@@ -36,22 +37,8 @@ export async function POST(request: Request) {
       seen.add(operatingDate);
       return { operatingDate, noteS1, noteS2, hasEventS1, hasEventS2, eventS1, eventS2, hasAvailableCapacityS1, hasAvailableCapacityS2, availableCapacityS1Mw, availableCapacityS2Mw };
     });
-    const db = getRawDb();
-    const statements = entries.map(entry =>
-      db.prepare(`
-        INSERT INTO ppa_heat_rate_daily (
-          operating_date, source_data, source_files,
-          gross_s1_kwh, net_s1_kwh, gross_s2_kwh, net_s2_kwh,
-          ppa_plant, ppa_s1, ppa_s2,
-          note_s1, note_s2, updated_at
-        ) VALUES (?, '{}', '[]', '0', '0', '0', '0', '0', '0', '0', ?, ?, CURRENT_TIMESTAMP)
-        ON CONFLICT(operating_date) DO UPDATE SET
-          note_s1 = excluded.note_s1,
-          note_s2 = excluded.note_s2,
-          updated_at = CURRENT_TIMESTAMP
-      `).bind(entry.operatingDate, entry.noteS1, entry.noteS2)
-    );
-    const noteStatementCount = statements.length;
+    // Ô dữ liệu ngày đi kèm (công suất khả dụng, tình hình vận hành): rỗng = xoá; có giá trị = thêm/sửa, GIỮ ghi chú ô.
+    const dailyWrites: DailyInputWrite[] = [];
     for (const entry of entries) {
       const capacities = [
         [entry.hasAvailableCapacityS1, PPA_AVAILABLE_CAPACITY_S1_CODE, entry.availableCapacityS1Mw],
@@ -59,9 +46,9 @@ export async function POST(request: Request) {
       ] as const;
       for (const [present, fieldCode, value] of capacities) {
         if (!present) continue;
-        statements.push(value === null
-          ? db.prepare("DELETE FROM daily_inputs WHERE operating_date = ? AND field_code = ?").bind(entry.operatingDate, fieldCode)
-          : db.prepare("INSERT INTO daily_inputs (operating_date, field_code, value, note, updated_at) VALUES (?, ?, ?, '', CURRENT_TIMESTAMP) ON CONFLICT(operating_date, field_code) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP").bind(entry.operatingDate, fieldCode, String(value)));
+        dailyWrites.push(value === null
+          ? { kind: "delete", operatingDate: entry.operatingDate, fieldCode }
+          : { kind: "upsert", operatingDate: entry.operatingDate, fieldCode, value: String(value), keepNote: true });
       }
       const events = [
         [entry.hasEventS1, PPA_OPERATING_EVENT_S1_CODE, entry.eventS1],
@@ -69,13 +56,35 @@ export async function POST(request: Request) {
       ] as const;
       for (const [present, fieldCode, value] of events) {
         if (!present) continue;
-        statements.push(value === ""
-          ? db.prepare("DELETE FROM daily_inputs WHERE operating_date = ? AND field_code = ?").bind(entry.operatingDate, fieldCode)
-          : db.prepare("INSERT INTO daily_inputs (operating_date, field_code, value, note, updated_at) VALUES (?, ?, ?, '', CURRENT_TIMESTAMP) ON CONFLICT(operating_date, field_code) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP").bind(entry.operatingDate, fieldCode, value));
+        dailyWrites.push(value === ""
+          ? { kind: "delete", operatingDate: entry.operatingDate, fieldCode }
+          : { kind: "upsert", operatingDate: entry.operatingDate, fieldCode, value, keepNote: true });
       }
     }
-    const results = statements.length ? await auditedDailyBatch(db, guard.user, "ppa-heat-rate/notes", statements) : [];
-    const updated = results.slice(0, noteStatementCount).reduce((sum, result) => sum + Number(result.meta.changes || 0), 0);
+    // Như bản cũ: ghi chú đánh giá trước (ngày chưa có PPA → tạo dòng số 0, chỉ có ghi chú), rồi các ô dữ liệu ngày.
+    // updated = số ngày ghi được ghi chú (thêm hoặc sửa đều tính 1, như ON CONFLICT DO UPDATE của Postgres).
+    if (entries.length) {
+      const user = guard.user, updatedAt = ktktUtcNow();
+      const keys = [...new Set([
+        ...entries.flatMap(entry => operationalWriteKeysFor("ppa_heat_rate_daily", [entry.operatingDate])),
+        ...dailyWrites.flatMap(write => operationalWriteKeysFor("daily_inputs", [write.operatingDate])),
+      ])];
+      await ktktWrite(keys, async tx => {
+        for (const entry of entries) {
+          await tx.ctktktPpaHeatRateDaily.upsert({
+            where: { operating_date: entry.operatingDate },
+            create: {
+              operating_date: entry.operatingDate, source_data: "{}", source_files: "[]",
+              gross_s1_kwh: "0", net_s1_kwh: "0", gross_s2_kwh: "0", net_s2_kwh: "0", ppa_plant: "0", ppa_s1: "0", ppa_s2: "0",
+              note_s1: entry.noteS1, note_s2: entry.noteS2,
+            },
+            update: { note_s1: entry.noteS1, note_s2: entry.noteS2, updated_at: updatedAt },
+          });
+        }
+        await writeDailyInputs(tx, user, "ppa-heat-rate/notes", dailyWrites, updatedAt);
+      });
+    }
+    const updated = entries.length;
     return ok({ received: entries.length, updated, skipped: entries.length - updated });
   } catch (error) {
     return fail(error instanceof SyntaxError ? "Dữ liệu JSON không hợp lệ." : error instanceof Error ? error.message : "Dữ liệu không hợp lệ.", 400);

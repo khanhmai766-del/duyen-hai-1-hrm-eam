@@ -268,6 +268,11 @@ const WRITE_SCENARIOS = {
     { step: "ghi chú: công suất quá 1.000 MW", method: "POST", path: "ppa-heat-rate/notes", json: { entries: [{ operatingDate: "2026-09-17", availableCapacityS1Mw: 1200 }] } },
     { step: "Google Sheet: xem trước khi thiếu công suất S1", method: "POST", path: "google-sheet-sync", json: { operatingDate: "2026-09-17", action: "preview" } },
     { step: "Google Sheet: thao tác lạ", method: "POST", path: "google-sheet-sync", json: { operatingDate: "2026-09-17", action: "xoa" } },
+    { step: "ghi chú: danh sách rỗng", method: "POST", path: "ppa-heat-rate/notes", json: { entries: [] } },
+    { step: "ghi chú: đổi công suất S2 đã có (giữ ghi chú ô)", method: "POST", path: "ppa-heat-rate/notes", json: { entries: [{ operatingDate: "2026-09-17", noteS1: "", noteS2: "Đánh giá S2 mới", availableCapacityS2Mw: 590.5, eventS2: "Giảm tải" }] },
+      after: ["ppa-heat-rate?period=2026-09&from=2026-09-17&to=2026-09-17", "daily-inputs?period=2026-09&date=2026-09-17&scope=non-ktkt"] },
+    { step: "Google Sheet: xem trước ngày chưa có PPA", method: "POST", path: "google-sheet-sync", json: { operatingDate: "2026-09-10", action: "preview" } },
+    { step: "Google Sheet: ngày sai", method: "POST", path: "google-sheet-sync", json: { operatingDate: "2026-02-30", action: "preview" } },
   ],
   // Báo cáo sản xuất: số liệu nửa giờ, sự kiện vận hành, than tồn 24h, nạp 2 file S1/S2 (file xuất từ chính web), file lệnh điều độ (chỉ nhánh lỗi).
   "bcsx": [

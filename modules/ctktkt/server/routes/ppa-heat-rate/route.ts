@@ -1,8 +1,10 @@
 import { isCtktktSameOrigin } from "@/modules/ctktkt/lib/request-origin";
 import { ok, fail } from "@/lib/api";
-import { getRawDb } from "@/modules/ctktkt/db";
+import { prisma } from "@/lib/prisma";
+import { ktktUtcNow, ktktWrite } from "@/modules/ctktkt/db/prisma";
+import { operationalWriteKeysFor } from "@/modules/ctktkt/lib/operational-query-policy";
 import { calculatePpaHeatRate, type PpaSourceData } from "@/modules/ctktkt/lib/ppa-heat-rate";
-import { PPA_HEAT_RATE_UPSERT_SQL } from "@/modules/ctktkt/lib/ppa-heat-rate-persistence";
+import { upsertPpaDay } from "@/modules/ctktkt/lib/ppa-heat-rate-persistence";
 import { requireAnyPermission, requireSession } from "@/modules/ctktkt/lib/auth/server";
 import {reportQueryRange} from "@/modules/ctktkt/lib/report-read-range";
 
@@ -28,19 +30,20 @@ export async function GET(request: Request) {
   const range=reportQueryRange(url.searchParams);
   if (!periodPattern.test(period)||!range) return fail("Tháng theo dõi không hợp lệ.", 400);
   try {
-    const columns = `operating_date AS operatingDate, source_files AS sourceFiles, gross_s1_kwh AS grossS1Kwh, net_s1_kwh AS netS1Kwh, gross_s2_kwh AS grossS2Kwh, net_s2_kwh AS netS2Kwh, ppa_plant AS ppaPlant, ppa_s1 AS ppaS1, ppa_s2 AS ppaS2, note_s1 AS noteS1, note_s2 AS noteS2, updated_at AS updatedAt${includeSource ? ", source_data AS sourceData" : ""}`;
-    const { results } = await getRawDb().prepare(`SELECT ${columns} FROM ppa_heat_rate_daily WHERE operating_date >= ? AND operating_date < ? ORDER BY operating_date`).bind(range.from, range.next).all();
-    const entries = includeSource
-      ? results.map(row => {
-          const record = row as Record<string, unknown>;
-          const raw = record.sourceData;
-          let source: unknown = null;
-          if (typeof raw === "string") { try { source = JSON.parse(raw); } catch { source = null; } }
-          const rest = { ...record };
-          delete rest.sourceData;
-          return { ...rest, source };
-        })
-      : results;
+    const rows = await prisma.ctktktPpaHeatRateDaily.findMany({
+      where: { operating_date: { gte: range.from, lt: range.next } }, orderBy: { operating_date: "asc" },
+    });
+    const entries = rows.map(row => {
+      const record = {
+        operatingDate: row.operating_date, sourceFiles: row.source_files, grossS1Kwh: row.gross_s1_kwh, netS1Kwh: row.net_s1_kwh,
+        grossS2Kwh: row.gross_s2_kwh, netS2Kwh: row.net_s2_kwh, ppaPlant: row.ppa_plant, ppaS1: row.ppa_s1, ppaS2: row.ppa_s2,
+        noteS1: row.note_s1, noteS2: row.note_s2, updatedAt: row.updated_at,
+      };
+      if (!includeSource) return record;
+      let source: unknown = null;
+      try { source = JSON.parse(row.source_data); } catch { source = null; }
+      return { ...record, source };
+    });
     return ok({ entries });
   } catch { return unavailable(); }
 }
@@ -58,7 +61,12 @@ export async function POST(request: Request) {
     const sourceFiles = Array.isArray(body.sourceFiles) ? body.sourceFiles.map(value => String(value).slice(0, 150)).slice(0, 8) : [];
     const noteS1 = String(body.noteS1 || "").trim().slice(0, 1000), noteS2 = String(body.noteS2 || "").trim().slice(0, 1000);
     const result = calculatePpaHeatRate(source, Number(operatingDate.slice(0, 4)));
-    await getRawDb().prepare(PPA_HEAT_RATE_UPSERT_SQL).bind(operatingDate, JSON.stringify(source), JSON.stringify(sourceFiles), String(result.grossS1Kwh), String(result.netS1Kwh), String(result.grossS2Kwh), String(result.netS2Kwh), String(result.ppaPlant), String(result.ppaS1), String(result.ppaS2), noteS1, noteS2).run();
+    const updatedAt = ktktUtcNow();
+    await ktktWrite(operationalWriteKeysFor("ppa_heat_rate_daily", [operatingDate]), tx => upsertPpaDay(tx, {
+      operatingDate, sourceData: JSON.stringify(source), sourceFiles: JSON.stringify(sourceFiles),
+      grossS1Kwh: String(result.grossS1Kwh), netS1Kwh: String(result.netS1Kwh), grossS2Kwh: String(result.grossS2Kwh), netS2Kwh: String(result.netS2Kwh),
+      ppaPlant: String(result.ppaPlant), ppaS1: String(result.ppaS1), ppaS2: String(result.ppaS2), noteS1, noteS2,
+    }, updatedAt));
     return ok({ result });
   } catch (error) {
     return fail(error instanceof SyntaxError ? "Dữ liệu JSON không hợp lệ." : error instanceof Error ? error.message : "Dữ liệu không hợp lệ.", 400);
