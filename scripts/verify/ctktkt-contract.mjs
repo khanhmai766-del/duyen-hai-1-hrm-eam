@@ -62,7 +62,9 @@ function seedRows() {
   }));
   const chem = (date, code, material, name, quantity, extra = {}) => ({ id: id++, usage_date: date, chemical_code: code, material_code: material, chemical_name: name, unit: "Tấn", quantity, purpose: "Sử dụng cho sản xuất", plant_unit: "Chung", reference: "", entered_by_user_id: "contract-seed", entered_by_name: "Người nhập mẫu", entered_by_position: "Trưởng kíp Lò - Máy", updated_by_user_id: null, updated_by_name: "", updated_by_position: "", deleted_at: null, deleted_by_user_id: null, deleted_by_name: "", deleted_by_position: "", source_key: "", created_at: STAMP, updated_at: STAMP, ...extra });
   rows.chemical_usage_logs.push(chem("2026-09-16", "PAC", "1.61.86.566.VIE.00.000", "PAC lỏng", 1.25), chem("2026-09-17", "PAC", "1.61.86.566.VIE.00.000", "PAC lỏng", 0.875, { reference: "PCT-01" }),
-    chem("2026-09-17", "NH3", "1.61.10.001", "Amoniac", 3.5, { deleted_at: STAMP, deleted_by_user_id: "contract-seed", deleted_by_name: "Người xoá mẫu", deleted_by_position: "Trưởng ca" }));
+    chem("2026-09-17", "NH3", "1.61.10.001", "Amoniac", 3.5, { deleted_at: STAMP, deleted_by_user_id: "contract-seed", deleted_by_name: "Người xoá mẫu", deleted_by_position: "Trưởng ca" }),
+    // Mã trong danh mục (id 1000003) để kịch bản ghi sửa/xoá đi tới nhánh thành công.
+    chem("2026-09-18", "NAOH_31", "1.61.10.003", "NaOH 31%", 2.25, { reference: "PCT-02" }));
   const src = n => JSON.stringify({ grossS1: [100 + n, 200 + n], netS1: [95 + n, 190 + n], grossS2: [110 + n, 210 + n], netS2: [104 + n, 199 + n] });
   rows.ppa_heat_rate_daily.push(
     { id: id++, operating_date: "2026-09-16", source_data: src(1), source_files: '["mau-16.xlsx"]', gross_s1_kwh: "14610000", net_s1_kwh: "13560000", gross_s2_kwh: "0", net_s2_kwh: "0", ppa_plant: "10234.32", ppa_s1: "10234.32", ppa_s2: "", note_s1: "Ghi chú S1", note_s2: "", updated_at: STAMP },
@@ -182,6 +184,25 @@ const WRITE_SCENARIOS = {
     { step: "tải lên: không có file", method: "POST", path: "water-report/upload", form: { action: "scan" } },
   ],
   // Dữ liệu ngày (PMIS, Dữ liệu các tháng, đồng bộ QLKT). B, C, H… tự liên kết từ Chỉ tiêu KTKT nên bị chặn khi ghi.
+  // Hoá chất (tài khoản quản trị): id mẫu 1000000 = mã "PAC" ngoài danh mục, 1000002 = đã xoá, 1000003 = NAOH_31.
+  "chemical-usage": [
+    { step: "thêm hợp lệ", method: "POST", path: "chemical-usage", json: { usageDate: "2026-09-17", chemicalCode: "NAOCL", quantity: 0.5, purpose: "Khử trùng nước", reference: "PCT-03" }, after: ["chemical-usage?month=2026-09"] },
+    { step: "thêm ngày 1999 (ngoài khoá tháng)", method: "POST", path: "chemical-usage", json: { usageDate: "1999-12-31", chemicalCode: "HCL_31", quantity: "1.5", purpose: "Tái sinh" }, after: ["chemical-usage?month=1999-12"] },
+    { step: "ngày không tồn tại", method: "POST", path: "chemical-usage", json: { usageDate: "2026-02-30", chemicalCode: "NAOCL", quantity: 1, purpose: "x" } },
+    { step: "mã ngoài danh mục", method: "POST", path: "chemical-usage", json: { usageDate: "2026-09-17", chemicalCode: "PAC", quantity: 1, purpose: "x" } },
+    { step: "số lượng 0", method: "POST", path: "chemical-usage", json: { usageDate: "2026-09-17", chemicalCode: "NAOCL", quantity: 0, purpose: "x" } },
+    { step: "số lượng quá 10.000", method: "POST", path: "chemical-usage", json: { usageDate: "2026-09-17", chemicalCode: "NAOCL", quantity: 10001, purpose: "x" } },
+    { step: "thiếu nội dung", method: "POST", path: "chemical-usage", json: { usageDate: "2026-09-17", chemicalCode: "NAOCL", quantity: 1, purpose: "  " } },
+    { step: "JSON hỏng", method: "POST", path: "chemical-usage", raw: "{", headers: { "Content-Type": "application/json" } },
+    { step: "sửa sang tháng 10", method: "PUT", path: "chemical-usage", json: { id: 1000003, usageDate: "2026-10-02", chemicalCode: "NAOH_31", quantity: 3, purpose: "Trung hoà", reference: "" }, after: ["chemical-usage?month=2026-09", "chemical-usage?month=2026-10"] },
+    { step: "sửa bản ghi không tồn tại", method: "PUT", path: "chemical-usage", json: { id: 999999, usageDate: "2026-09-17", chemicalCode: "NAOCL", quantity: 1, purpose: "x" } },
+    { step: "sửa bản ghi mã cũ ngoài danh mục", method: "PUT", path: "chemical-usage", json: { id: 1000000, usageDate: "2026-09-16", chemicalCode: "NAOCL", quantity: 1, purpose: "x" } },
+    { step: "sửa id sai", method: "PUT", path: "chemical-usage", json: { id: "abc", usageDate: "2026-09-17", chemicalCode: "NAOCL", quantity: 1, purpose: "x" } },
+    { step: "xoá", method: "DELETE", path: "chemical-usage?id=1000003", after: ["chemical-usage?month=2026-10"] },
+    { step: "xoá lại bản đã xoá", method: "DELETE", path: "chemical-usage?id=1000003" },
+    { step: "xoá bản mẫu đã xoá sẵn", method: "DELETE", path: "chemical-usage?id=1000002" },
+    { step: "xoá id sai", method: "DELETE", path: "chemical-usage?id=abc" },
+  ],
   "daily-inputs": [
     { step: "lưu số (dấu phẩy) + ghi chú + chữ CW + 'không chỉnh'", method: "POST", path: "daily-inputs", json: { period: "2026-09", entries: [
       { operatingDate: "2026-09-17", fieldCode: "F", value: "23,5", note: "" }, { operatingDate: "2026-09-17", fieldCode: "DA", value: "101.25", note: "Ghi chú PMIS" },
@@ -312,6 +333,17 @@ async function cleanupWrites() {
   await c.query("DELETE FROM public.ctktkt_coal_gemini_settings");
   await c.end();
 }
+// Bảng phiên bản đọc (Google Mirror/ETag dựa vào nó): mỗi bước ghi phải tăng ĐÚNG các khoá như bản cũ.
+async function readVersions() {
+  const url = new URL(process.env.DATABASE_URL); url.search = "";
+  const c = new pg.Client({ connectionString: url.toString() }); await c.connect();
+  const { rows } = await c.query("SELECT cache_key, version FROM public.ctktkt_operational_read_versions");
+  await c.end();
+  return Object.fromEntries(rows.map(r => [r.cache_key, Number(r.version)]));
+}
+function versionDelta(before, after) {
+  return Object.fromEntries(Object.keys(after).filter(k => after[k] !== (before[k] ?? 0)).sort().map(k => [k, after[k] - (before[k] ?? 0)]));
+}
 async function runWrites(cookie) {
   const out = {};
   for (const [group, steps] of Object.entries(WRITE_SCENARIOS)) {
@@ -336,7 +368,9 @@ async function runWrites(cookie) {
         }
         init.body = fd;
       }
+      const versionsBefore = await readVersions();
       const result = { request: `${s.method} ${s.path}`, response: await call(cookie, s.method, s.path, init) };
+      result["phiên bản đọc tăng"] = versionDelta(versionsBefore, await readVersions());
       for (const a of s.after ?? []) result[`sau: GET ${a}`] = await call(cookie, "GET", a);
       out[`${group} #${String(i + 1).padStart(2, "0")} ${s.step}`] = result;
     }

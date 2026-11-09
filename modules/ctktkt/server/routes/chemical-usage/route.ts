@@ -1,9 +1,12 @@
-import { getRawDb } from "@/modules/ctktkt/db";
+import { prisma } from "@/lib/prisma";
+import { ktktUtcNow, ktktWrite } from "@/modules/ctktkt/db/prisma";
+import { operationalWriteKeysFor } from "@/modules/ctktkt/lib/operational-query-policy";
 import { ok, fail } from "@/lib/api";
 import { getSessionUser } from "@/modules/ctktkt/lib/auth/server";
 import { isAdminUser } from "@/modules/ctktkt/lib/auth/session";
 import { canEnterChemical, CHEMICAL_CATALOG, editableChemicalsFor, findChemical } from "@/modules/ctktkt/lib/chemical-usage/catalog";
-import { ensureChemicalUsageSchema } from "@/modules/ctktkt/lib/chemical-usage/schema";
+
+const TABLE = "chemical_usage_logs";
 
 const monthPattern = /^(19|20|21)\d{2}-(0[1-9]|1[0-2])$/;
 const datePattern = /^(19|20|21)\d{2}-(0[1-9]|1[0-2])-([0-2]\d|3[01])$/;
@@ -32,22 +35,21 @@ export async function GET(request: Request) {
   }
 
   try {
-    const rawDb = getRawDb();
-    await ensureChemicalUsageSchema(rawDb);
-    const result = await rawDb.prepare(`
-      SELECT id, usage_date, chemical_code, material_code, chemical_name, unit, quantity,
-             purpose, plant_unit, reference, entered_by_user_id, entered_by_name,
-             entered_by_position, updated_by_user_id, updated_by_name, updated_by_position,
-             created_at, updated_at
-      FROM chemical_usage_logs
-      WHERE usage_date >= ? AND usage_date < ? AND deleted_at IS NULL
-      ORDER BY usage_date DESC, id DESC
-    `).bind(`${month}-01`, `${nextMonth(month)}-01`).all();
+    const records = await prisma.ctktktChemicalUsageLogs.findMany({
+      where: { usage_date: { gte: `${month}-01`, lt: `${nextMonth(month)}-01` }, deleted_at: null },
+      orderBy: [{ usage_date: "desc" }, { id: "desc" }],
+      select: {
+        id: true, usage_date: true, chemical_code: true, material_code: true, chemical_name: true, unit: true, quantity: true,
+        purpose: true, plant_unit: true, reference: true, entered_by_user_id: true, entered_by_name: true,
+        entered_by_position: true, updated_by_user_id: true, updated_by_name: true, updated_by_position: true,
+        created_at: true, updated_at: true,
+      },
+    });
 
     return ok({
       ok: true,
       month,
-      records: result.results,
+      records,
       catalog: CHEMICAL_CATALOG,
       editableCodes: editableChemicalsFor(user).map(item => item.code),
     });
@@ -91,30 +93,26 @@ export async function POST(request: Request) {
     if (!purpose) {
       return fail("Vui lòng nhập nội dung công tác/lý do sử dụng.", 400);
     }
-    const rawDb = getRawDb();
-    await ensureChemicalUsageSchema(rawDb);
-    const saved = await rawDb.prepare(`
-      INSERT INTO chemical_usage_logs (
-        usage_date, chemical_code, material_code, chemical_name, unit, quantity,
-        purpose, plant_unit, reference, entered_by_user_id, entered_by_name,
-        entered_by_position, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-    `).bind(
-      usageDate,
-      chemical.code,
-      chemical.materialCode,
-      chemical.name,
-      chemical.unit,
-      quantity,
-      purpose,
-      "Chung",
-      reference,
-      user.id,
-      user.displayName,
-      user.position || "",
-    ).run();
+    // created_at/updated_at lấy mặc định của cột (= CURRENT_TIMESTAMP giờ UTC như SQL cũ).
+    const saved = await ktktWrite(operationalWriteKeysFor(TABLE, [usageDate]), tx => tx.ctktktChemicalUsageLogs.create({
+      data: {
+        usage_date: usageDate,
+        chemical_code: chemical.code,
+        material_code: chemical.materialCode,
+        chemical_name: chemical.name,
+        unit: chemical.unit,
+        quantity,
+        purpose,
+        plant_unit: "Chung",
+        reference,
+        entered_by_user_id: user.id,
+        entered_by_name: user.displayName,
+        entered_by_position: user.position || "",
+      },
+      select: { id: true },
+    }));
 
-    return ok({ ok: true, id: saved.meta.last_row_id });
+    return ok({ ok: true, id: saved.id });
   } catch (error) {
     console.error("Lỗi lưu theo dõi hóa chất:", error);
     return fail("Không thể lưu dữ liệu theo dõi hóa chất.", 500);
@@ -149,24 +147,22 @@ export async function PUT(request: Request) {
     }
     if (!purpose) return fail("Vui lòng nhập nội dung công tác/lý do sử dụng.", 400);
 
-    const rawDb = getRawDb();
-    await ensureChemicalUsageSchema(rawDb);
-    const existing = await rawDb.prepare("SELECT chemical_code FROM chemical_usage_logs WHERE id = ?").bind(id).first() as { chemical_code: string } | null;
+    // Như bản cũ: kiểm cả bản ghi đã xoá mềm (không lọc deleted_at).
+    const existing = await prisma.ctktktChemicalUsageLogs.findUnique({ where: { id }, select: { chemical_code: true } });
     if (!existing) return fail("Không tìm thấy bản ghi cần sửa.", 404);
     if (!canEnterChemical(user, existing.chemical_code)) {
       return fail("Cương vị hiện tại không được sửa bản ghi hóa chất này.", 403);
     }
 
-    await rawDb.prepare(`
-      UPDATE chemical_usage_logs SET
-        usage_date = ?, chemical_code = ?, material_code = ?, chemical_name = ?, unit = ?,
-        quantity = ?, purpose = ?, plant_unit = 'Chung', reference = ?,
-        updated_by_user_id = ?, updated_by_name = ?, updated_by_position = ?, updated_at = CURRENT_TIMESTAMP
-      WHERE id = ?
-    `).bind(
-      usageDate, chemical.code, chemical.materialCode, chemical.name, chemical.unit,
-      quantity, purpose, reference, user.id, user.displayName, user.position || "", id,
-    ).run();
+    // updateMany (không ném lỗi khi dòng vừa biến mất) — như UPDATE … WHERE id = ? cũ.
+    await ktktWrite(operationalWriteKeysFor(TABLE), tx => tx.ctktktChemicalUsageLogs.updateMany({
+      where: { id },
+      data: {
+        usage_date: usageDate, chemical_code: chemical.code, material_code: chemical.materialCode, chemical_name: chemical.name, unit: chemical.unit,
+        quantity, purpose, plant_unit: "Chung", reference,
+        updated_by_user_id: user.id, updated_by_name: user.displayName, updated_by_position: user.position || "", updated_at: ktktUtcNow(),
+      },
+    }));
 
     return ok({ ok: true, id });
   } catch (error) {
@@ -186,15 +182,12 @@ export async function DELETE(request: Request) {
   }
 
   try {
-    const rawDb = getRawDb();
-    await ensureChemicalUsageSchema(rawDb);
-    const deleted = await rawDb.prepare(`
-      UPDATE chemical_usage_logs
-      SET deleted_at = CURRENT_TIMESTAMP, deleted_by_user_id = ?, deleted_by_name = ?, deleted_by_position = ?
-      WHERE id = ? AND deleted_at IS NULL
-    `).bind(user.id, user.displayName, user.position || "", id).run();
+    const deleted = await ktktWrite(operationalWriteKeysFor(TABLE), tx => tx.ctktktChemicalUsageLogs.updateMany({
+      where: { id, deleted_at: null },
+      data: { deleted_at: ktktUtcNow(), deleted_by_user_id: user.id, deleted_by_name: user.displayName, deleted_by_position: user.position || "" },
+    }));
 
-    if (Number(deleted.meta.changes) === 0) {
+    if (deleted.count === 0) {
       return fail("Không tìm thấy bản ghi cần xóa.", 404);
     }
     return ok({ ok: true, id });

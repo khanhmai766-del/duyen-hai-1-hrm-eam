@@ -83,3 +83,14 @@ export function operationalWriteKeys(sql: string, args: unknown[]): string[] {
   const months = [...new Set(dates.map(date => date.slice(0, 7)))];
   return [table, ...months.map(month => `${table}:${month}`)];
 }
+
+/**
+ * Khoá phiên bản đọc cho một lần ghi bằng Prisma — cùng kết quả với `operationalWriteKeys` của câu SQL cũ:
+ * ghi ĐIỂM theo ngày (mọi ngày đều hợp lệ dạng 20xx-MM-DD) → bảng + bảng:YYYY-MM của từng tháng;
+ * ghi theo id / khoảng / ngày ngoài dạng đó (`dates` rỗng hoặc null) → bảng + bảng:all.
+ */
+export function operationalWriteKeysFor(table: string, dates: readonly unknown[] | null = null): string[] {
+  if (!OPERATIONAL_TABLES.has(table)) return [];
+  if (!dates || !dates.length || !dates.every(isIsoDate)) return [table, `${table}:all`];
+  return [table, ...[...new Set(dates.map(date => date.slice(0, 7)))].map(month => `${table}:${month}`)];
+}

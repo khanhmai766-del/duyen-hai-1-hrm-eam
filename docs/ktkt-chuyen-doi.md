@@ -103,8 +103,21 @@ xác minh, "nạp lại") gọi thẳng `apiGet`.
 - `styles.css` còn các quy tắc `.module-chart-grid …` không phần tử nào dùng (đã xoá phần của PMIS); dọn ở giai đoạn 4.
 - PMIS (đã sửa khi chuyển): bản cũ báo "Không đồng bộ được ngày nào…" rồi tự xoá ngay vì lượt tải lại đặt `error = ""`;
   nay thông báo lỗi còn hiển thị.
-| 3 | `getRawDb()` → Prisma, đọc trước ghi sau; có thể "so bóng" (chạy cả truy vấn cũ và mới, ghi log khi lệch) | ⏳ |
+| 3 | `getRawDb()` → Prisma, đọc trước ghi sau; có thể "so bóng" (chạy cả truy vấn cũ và mới, ghi log khi lệch). Cùng thứ tự trang | Hoá chất ✅ (09/11) · còn lại ⏳ |
 | 4 | Chuyển 4 API máy; xoá `db/sql.ts`, `getRawDb`, `useCtktktRequest`, cổng `[[...path]]` | ⏳ |
+
+### Giai đoạn 3 — mẫu chuyển một route sang Prisma (theo Hoá chất, 09/11/2026)
+
+- Model `Ctktkt*` đã có sẵn trong `prisma/schema.prisma` (`@@map("ctktkt_…")`), đã đối chiếu với bảng thật bằng
+  `prisma db pull --print` (chỉ khác cách viết biểu thức mặc định). **Không** `db push`. Đổi schema → dừng dev → `prisma generate`.
+- Ghi qua `ktktWrite(keys, tx => …)` của `modules/ctktkt/db/prisma.ts`: dữ liệu + **phiên bản đọc** cùng một giao dịch.
+  Khoá lấy bằng `operationalWriteKeysFor(bảng, [ngày…])` — ghi điểm theo ngày → `bảng:YYYY-MM`; theo id/khoảng → `bảng:all`;
+  phải ra đúng khoá mà `operationalWriteKeys(sqlCũ)` đã ra (thêm ca vào `tests/ctktkt/domain/prisma-write-keys.test.mjs`).
+  Như bản cũ, phiên bản vẫn tăng khi câu ghi không trúng dòng nào.
+- Cột thời gian là CHUỖI giờ UTC: tạo mới thì bỏ trống để cột tự lấy mặc định; cập nhật thì gán `ktktUtcNow()`.
+- `UPDATE … WHERE id = ?` cũ → `updateMany` (không ném lỗi khi dòng vừa mất) — `update` của Prisma sẽ ném P2025 → 500.
+- Test hợp đồng ghi nay chụp cả **"phiên bản đọc tăng"** mỗi bước. Trước khi chuyển một route: thêm kịch bản ghi nếu chưa có
+  và `--writes --record` **trên code cũ**.
 
 Trước khi bắt đầu một trang: báo cho người còn lại để không sửa song song trang đó; `git fetch` trước khi sửa.
 

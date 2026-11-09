@@ -24975,6 +24975,26 @@
     "month": "2026-09",
     "records": [
      {
+      "id": 1000003,
+      "usage_date": "2026-09-18",
+      "chemical_code": "NAOH_31",
+      "material_code": "1.61.10.003",
+      "chemical_name": "NaOH 31%",
+      "unit": "Tấn",
+      "quantity": 2.25,
+      "purpose": "Sử dụng cho sản xuất",
+      "plant_unit": "Chung",
+      "reference": "PCT-02",
+      "entered_by_user_id": "contract-seed",
+      "entered_by_name": "Người nhập mẫu",
+      "entered_by_position": "Trưởng kíp Lò - Máy",
+      "updated_by_user_id": null,
+      "updated_by_name": "",
+      "updated_by_position": "",
+      "created_at": "2026-09-20 08:00:00",
+      "updated_at": "2026-09-20 08:00:00"
+     },
+     {
       "id": 1000001,
       "usage_date": "2026-09-17",
       "chemical_code": "PAC",

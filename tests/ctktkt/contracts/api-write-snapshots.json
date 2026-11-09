@@ -12,6 +12,10 @@
     "error": null
    }
   },
+  "phiên bản đọc tăng": {
+   "water_shift_logs": 8,
+   "water_shift_logs:2026-09": 8
+  },
   "sau: GET water-report?month=2026-09": {
    "status": 200,
    "body": {
@@ -262,6 +266,10 @@
     "error": null
    }
   },
+  "phiên bản đọc tăng": {
+   "water_shift_logs": 8,
+   "water_shift_logs:2026-09": 8
+  },
   "sau: GET water-report?month=2026-09": {
    "status": 200,
    "body": {
@@ -511,6 +519,10 @@
     "meta": null,
     "error": null
    }
+  },
+  "phiên bản đọc tăng": {
+   "water_shift_logs": 11,
+   "water_shift_logs:2026-09": 11
   },
   "sau: GET water-report?month=2026-09": {
    "status": 200,
@@ -816,7 +828,8 @@
     "meta": null,
     "error": "Giờ giao ca phải là 06h00, 14h00 hoặc 22h00 (nhận được: 07h00)"
    }
-  }
+  },
+  "phiên bản đọc tăng": {}
  },
  "water-report #05 hiệu chỉnh âm": {
   "request": "POST water-report",
@@ -827,7 +840,8 @@
     "meta": null,
     "error": "Hiệu chỉnh công tơ phải là số từ 0 đến 1.000.000.000 m³ hoặc để trống."
    }
-  }
+  },
+  "phiên bản đọc tăng": {}
  },
  "water-report #06 không có ca": {
   "request": "POST water-report",
@@ -838,7 +852,8 @@
     "meta": null,
     "error": "Không có dữ liệu ca trực để lưu."
    }
-  }
+  },
+  "phiên bản đọc tăng": {}
  },
  "water-report #07 xoá theo ngày + ca": {
   "request": "DELETE water-report?logDate=2026-09-18&shiftTime=14h00",
@@ -852,6 +867,10 @@
     "meta": null,
     "error": null
    }
+  },
+  "phiên bản đọc tăng": {
+   "water_shift_logs": 1,
+   "water_shift_logs:2026-09": 1
   },
   "sau: GET water-report?month=2026-09": {
    "status": 200,
@@ -1128,7 +1147,8 @@
     "meta": null,
     "error": "Thiếu ID hoặc thông tin ca để xoá."
    }
-  }
+  },
+  "phiên bản đọc tăng": {}
  },
  "water-report #09 thêm Trưởng ca": {
   "request": "POST water-report/leaders",
@@ -1143,6 +1163,7 @@
     "error": null
    }
   },
+  "phiên bản đọc tăng": {},
   "sau: GET water-report/leaders": {
    "status": 200,
    "body": {
@@ -1183,7 +1204,8 @@
     "meta": null,
     "error": "Tên Trưởng ca không được để trống."
    }
-  }
+  },
+  "phiên bản đọc tăng": {}
  },
  "water-report #11 xoá Trưởng ca theo tên": {
   "request": "DELETE water-report/leaders?name=Tr%C6%B0%E1%BB%9Fng%20ca%20M%E1%BA%ABu%20C",
@@ -1198,6 +1220,7 @@
     "error": null
    }
   },
+  "phiên bản đọc tăng": {},
   "sau: GET water-report/leaders": {
    "status": 200,
    "body": {
@@ -1232,7 +1255,8 @@
     "meta": null,
     "error": "Thiếu ID hoặc tên Trưởng ca cần xoá."
    }
-  }
+  },
+  "phiên bản đọc tăng": {}
  },
  "water-report #13 tải lên: quét sheet (file xuất từ chính web)": {
   "request": "POST water-report/upload",
@@ -1261,7 +1285,8 @@
     "meta": null,
     "error": null
    }
-  }
+  },
+  "phiên bản đọc tăng": {}
  },
  "water-report #14 tải lên: nạp dữ liệu": {
   "request": "POST water-report/upload",
@@ -1279,6 +1304,10 @@
     "meta": null,
     "error": null
    }
+  },
+  "phiên bản đọc tăng": {
+   "water_shift_logs": 2,
+   "water_shift_logs:2026-09": 2
   },
   "sau: GET water-report?month=2026-09": {
    "status": 200,
@@ -1615,7 +1644,919 @@
     "meta": null,
     "error": "Chưa chọn file Excel."
    }
+  },
+  "phiên bản đọc tăng": {}
+ },
+ "chemical-usage #01 thêm hợp lệ": {
+  "request": "POST chemical-usage",
+  "response": {
+   "status": 200,
+   "body": {
+    "data": {
+     "ok": true,
+     "id": "<id mới>"
+    },
+    "meta": null,
+    "error": null
+   }
+  },
+  "phiên bản đọc tăng": {
+   "chemical_usage_logs": 1,
+   "chemical_usage_logs:2026-09": 1
+  },
+  "sau: GET chemical-usage?month=2026-09": {
+   "status": 200,
+   "body": {
+    "data": {
+     "ok": true,
+     "month": "2026-09",
+     "records": [
+      {
+       "id": 1000003,
+       "usage_date": "2026-09-18",
+       "chemical_code": "NAOH_31",
+       "material_code": "1.61.10.003",
+       "chemical_name": "NaOH 31%",
+       "unit": "Tấn",
+       "quantity": 2.25,
+       "purpose": "Sử dụng cho sản xuất",
+       "plant_unit": "Chung",
+       "reference": "PCT-02",
+       "entered_by_user_id": "contract-seed",
+       "entered_by_name": "Người nhập mẫu",
+       "entered_by_position": "Trưởng kíp Lò - Máy",
+       "updated_by_user_id": null,
+       "updated_by_name": "",
+       "updated_by_position": "",
+       "created_at": "<thời điểm>",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 1000001,
+       "usage_date": "2026-09-17",
+       "chemical_code": "PAC",
+       "material_code": "1.61.86.566.VIE.00.000",
+       "chemical_name": "PAC lỏng",
+       "unit": "Tấn",
+       "quantity": 0.875,
+       "purpose": "Sử dụng cho sản xuất",
+       "plant_unit": "Chung",
+       "reference": "PCT-01",
+       "entered_by_user_id": "contract-seed",
+       "entered_by_name": "Người nhập mẫu",
+       "entered_by_position": "Trưởng kíp Lò - Máy",
+       "updated_by_user_id": null,
+       "updated_by_name": "",
+       "updated_by_position": "",
+       "created_at": "<thời điểm>",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": "<id mới>",
+       "usage_date": "2026-09-17",
+       "chemical_code": "NAOCL",
+       "material_code": "1.61.26.003.VIE.00.000",
+       "chemical_name": "NaOCl",
+       "unit": "Tấn",
+       "quantity": 0.5,
+       "purpose": "Khử trùng nước",
+       "plant_unit": "Chung",
+       "reference": "PCT-03",
+       "entered_by_user_id": "cmrvydnw90000chzlmavbmkqu",
+       "entered_by_name": "Nguyễn Văn Hùng",
+       "entered_by_position": "Trưởng kíp Lò - Máy",
+       "updated_by_user_id": null,
+       "updated_by_name": "",
+       "updated_by_position": "",
+       "created_at": "<thời điểm>",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 1000000,
+       "usage_date": "2026-09-16",
+       "chemical_code": "PAC",
+       "material_code": "1.61.86.566.VIE.00.000",
+       "chemical_name": "PAC lỏng",
+       "unit": "Tấn",
+       "quantity": 1.25,
+       "purpose": "Sử dụng cho sản xuất",
+       "plant_unit": "Chung",
+       "reference": "",
+       "entered_by_user_id": "contract-seed",
+       "entered_by_name": "Người nhập mẫu",
+       "entered_by_position": "Trưởng kíp Lò - Máy",
+       "updated_by_user_id": null,
+       "updated_by_name": "",
+       "updated_by_position": "",
+       "created_at": "<thời điểm>",
+       "updated_at": "<thời điểm>"
+      }
+     ],
+     "catalog": [
+      {
+       "code": "PAC_LIQUID",
+       "materialCode": "1.61.86.566.VIE.00.000",
+       "name": "PAC lỏng",
+       "unit": "Tấn",
+       "allowedPositions": [
+        "XLN hỗn hợp"
+       ],
+       "suggestedReasons": [
+        "Sử dụng cho sản xuất"
+       ]
+      },
+      {
+       "code": "NAOCL",
+       "materialCode": "1.61.26.003.VIE.00.000",
+       "name": "NaOCl",
+       "unit": "Tấn",
+       "allowedPositions": [
+        "XLN hỗn hợp"
+       ],
+       "suggestedReasons": [
+        "Sử dụng cho sản xuất"
+       ]
+      },
+      {
+       "code": "NH4OH_20",
+       "materialCode": "1.61.86.518.VIE.00.000",
+       "name": "NH₄OH 20%",
+       "unit": "Tấn",
+       "allowedPositions": [
+        "Máy phó"
+       ],
+       "suggestedReasons": [
+        "Pha để thực hiện XLN Lò"
+       ]
+      },
+      {
+       "code": "HCL_31",
+       "materialCode": "1.61.06.038.VIE.00.000",
+       "name": "HCl 31%",
+       "unit": "Tấn",
+       "allowedPositions": [
+        "Trợ thủ",
+        "Máy phó",
+        "XLN hỗn hợp",
+        "XLNT"
+       ],
+       "suggestedReasons": [
+        "Sử dụng cho sản xuất",
+        "Tái sinh hạt CRT Hỗn Hợp 1",
+        "Tái sinh hạt CRT Hỗn Hợp 2",
+        "Tái sinh hạt CRT Hỗn Hợp 3",
+        "Tái sinh hạt CRT Hỗn Hợp 4",
+        "Tái sinh hạt CRT Hỗn Hợp 5",
+        "Tái sinh hạt CRT Hỗn Hợp 6",
+        "Tái sinh hạt CRT Hỗn Hợp 7"
+       ]
+      },
+      {
+       "code": "NAOH_31",
+       "materialCode": "1.61.16.008.VIE.00.000",
+       "name": "NaOH 31%",
+       "unit": "Tấn",
+       "allowedPositions": [
+        "Trợ thủ",
+        "Máy phó",
+        "XLN hỗn hợp",
+        "XLNT"
+       ],
+       "suggestedReasons": [
+        "Sử dụng cho sản xuất",
+        "Tái sinh hạt ART Hỗn Hợp 1",
+        "Tái sinh hạt ART Hỗn Hợp 2",
+        "Tái sinh hạt ART Hỗn Hợp 3",
+        "Tái sinh hạt ART Hỗn Hợp 4",
+        "Tái sinh hạt ART Hỗn Hợp 5",
+        "Tái sinh hạt ART Hỗn Hợp 6",
+        "Tái sinh hạt ART Hỗn Hợp 7"
+       ]
+      }
+     ],
+     "editableCodes": [
+      "PAC_LIQUID",
+      "NAOCL",
+      "NH4OH_20",
+      "HCL_31",
+      "NAOH_31"
+     ]
+    },
+    "meta": null,
+    "error": null
+   }
   }
+ },
+ "chemical-usage #02 thêm ngày 1999 (ngoài khoá tháng)": {
+  "request": "POST chemical-usage",
+  "response": {
+   "status": 200,
+   "body": {
+    "data": {
+     "ok": true,
+     "id": "<id mới>"
+    },
+    "meta": null,
+    "error": null
+   }
+  },
+  "phiên bản đọc tăng": {
+   "chemical_usage_logs": 1,
+   "chemical_usage_logs:all": 1
+  },
+  "sau: GET chemical-usage?month=1999-12": {
+   "status": 200,
+   "body": {
+    "data": {
+     "ok": true,
+     "month": "1999-12",
+     "records": [
+      {
+       "id": "<id mới>",
+       "usage_date": "1999-12-31",
+       "chemical_code": "HCL_31",
+       "material_code": "1.61.06.038.VIE.00.000",
+       "chemical_name": "HCl 31%",
+       "unit": "Tấn",
+       "quantity": 1.5,
+       "purpose": "Tái sinh",
+       "plant_unit": "Chung",
+       "reference": "",
+       "entered_by_user_id": "cmrvydnw90000chzlmavbmkqu",
+       "entered_by_name": "Nguyễn Văn Hùng",
+       "entered_by_position": "Trưởng kíp Lò - Máy",
+       "updated_by_user_id": null,
+       "updated_by_name": "",
+       "updated_by_position": "",
+       "created_at": "<thời điểm>",
+       "updated_at": "<thời điểm>"
+      }
+     ],
+     "catalog": [
+      {
+       "code": "PAC_LIQUID",
+       "materialCode": "1.61.86.566.VIE.00.000",
+       "name": "PAC lỏng",
+       "unit": "Tấn",
+       "allowedPositions": [
+        "XLN hỗn hợp"
+       ],
+       "suggestedReasons": [
+        "Sử dụng cho sản xuất"
+       ]
+      },
+      {
+       "code": "NAOCL",
+       "materialCode": "1.61.26.003.VIE.00.000",
+       "name": "NaOCl",
+       "unit": "Tấn",
+       "allowedPositions": [
+        "XLN hỗn hợp"
+       ],
+       "suggestedReasons": [
+        "Sử dụng cho sản xuất"
+       ]
+      },
+      {
+       "code": "NH4OH_20",
+       "materialCode": "1.61.86.518.VIE.00.000",
+       "name": "NH₄OH 20%",
+       "unit": "Tấn",
+       "allowedPositions": [
+        "Máy phó"
+       ],
+       "suggestedReasons": [
+        "Pha để thực hiện XLN Lò"
+       ]
+      },
+      {
+       "code": "HCL_31",
+       "materialCode": "1.61.06.038.VIE.00.000",
+       "name": "HCl 31%",
+       "unit": "Tấn",
+       "allowedPositions": [
+        "Trợ thủ",
+        "Máy phó",
+        "XLN hỗn hợp",
+        "XLNT"
+       ],
+       "suggestedReasons": [
+        "Sử dụng cho sản xuất",
+        "Tái sinh hạt CRT Hỗn Hợp 1",
+        "Tái sinh hạt CRT Hỗn Hợp 2",
+        "Tái sinh hạt CRT Hỗn Hợp 3",
+        "Tái sinh hạt CRT Hỗn Hợp 4",
+        "Tái sinh hạt CRT Hỗn Hợp 5",
+        "Tái sinh hạt CRT Hỗn Hợp 6",
+        "Tái sinh hạt CRT Hỗn Hợp 7"
+       ]
+      },
+      {
+       "code": "NAOH_31",
+       "materialCode": "1.61.16.008.VIE.00.000",
+       "name": "NaOH 31%",
+       "unit": "Tấn",
+       "allowedPositions": [
+        "Trợ thủ",
+        "Máy phó",
+        "XLN hỗn hợp",
+        "XLNT"
+       ],
+       "suggestedReasons": [
+        "Sử dụng cho sản xuất",
+        "Tái sinh hạt ART Hỗn Hợp 1",
+        "Tái sinh hạt ART Hỗn Hợp 2",
+        "Tái sinh hạt ART Hỗn Hợp 3",
+        "Tái sinh hạt ART Hỗn Hợp 4",
+        "Tái sinh hạt ART Hỗn Hợp 5",
+        "Tái sinh hạt ART Hỗn Hợp 6",
+        "Tái sinh hạt ART Hỗn Hợp 7"
+       ]
+      }
+     ],
+     "editableCodes": [
+      "PAC_LIQUID",
+      "NAOCL",
+      "NH4OH_20",
+      "HCL_31",
+      "NAOH_31"
+     ]
+    },
+    "meta": null,
+    "error": null
+   }
+  }
+ },
+ "chemical-usage #03 ngày không tồn tại": {
+  "request": "POST chemical-usage",
+  "response": {
+   "status": 400,
+   "body": {
+    "data": null,
+    "meta": null,
+    "error": "Ngày thực hiện không hợp lệ."
+   }
+  },
+  "phiên bản đọc tăng": {}
+ },
+ "chemical-usage #04 mã ngoài danh mục": {
+  "request": "POST chemical-usage",
+  "response": {
+   "status": 400,
+   "body": {
+    "data": null,
+    "meta": null,
+    "error": "Loại hóa chất không thuộc danh mục được theo dõi."
+   }
+  },
+  "phiên bản đọc tăng": {}
+ },
+ "chemical-usage #05 số lượng 0": {
+  "request": "POST chemical-usage",
+  "response": {
+   "status": 400,
+   "body": {
+    "data": null,
+    "meta": null,
+    "error": "Số lượng phải lớn hơn 0 và không vượt quá 10.000 tấn."
+   }
+  },
+  "phiên bản đọc tăng": {}
+ },
+ "chemical-usage #06 số lượng quá 10.000": {
+  "request": "POST chemical-usage",
+  "response": {
+   "status": 400,
+   "body": {
+    "data": null,
+    "meta": null,
+    "error": "Số lượng phải lớn hơn 0 và không vượt quá 10.000 tấn."
+   }
+  },
+  "phiên bản đọc tăng": {}
+ },
+ "chemical-usage #07 thiếu nội dung": {
+  "request": "POST chemical-usage",
+  "response": {
+   "status": 400,
+   "body": {
+    "data": null,
+    "meta": null,
+    "error": "Vui lòng nhập nội dung công tác/lý do sử dụng."
+   }
+  },
+  "phiên bản đọc tăng": {}
+ },
+ "chemical-usage #08 JSON hỏng": {
+  "request": "POST chemical-usage",
+  "response": {
+   "status": 500,
+   "body": {
+    "data": null,
+    "meta": null,
+    "error": "Không thể lưu dữ liệu theo dõi hóa chất."
+   }
+  },
+  "phiên bản đọc tăng": {}
+ },
+ "chemical-usage #09 sửa sang tháng 10": {
+  "request": "PUT chemical-usage",
+  "response": {
+   "status": 200,
+   "body": {
+    "data": {
+     "ok": true,
+     "id": 1000003
+    },
+    "meta": null,
+    "error": null
+   }
+  },
+  "phiên bản đọc tăng": {
+   "chemical_usage_logs": 1,
+   "chemical_usage_logs:all": 1
+  },
+  "sau: GET chemical-usage?month=2026-09": {
+   "status": 200,
+   "body": {
+    "data": {
+     "ok": true,
+     "month": "2026-09",
+     "records": [
+      {
+       "id": 1000001,
+       "usage_date": "2026-09-17",
+       "chemical_code": "PAC",
+       "material_code": "1.61.86.566.VIE.00.000",
+       "chemical_name": "PAC lỏng",
+       "unit": "Tấn",
+       "quantity": 0.875,
+       "purpose": "Sử dụng cho sản xuất",
+       "plant_unit": "Chung",
+       "reference": "PCT-01",
+       "entered_by_user_id": "contract-seed",
+       "entered_by_name": "Người nhập mẫu",
+       "entered_by_position": "Trưởng kíp Lò - Máy",
+       "updated_by_user_id": null,
+       "updated_by_name": "",
+       "updated_by_position": "",
+       "created_at": "<thời điểm>",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": "<id mới>",
+       "usage_date": "2026-09-17",
+       "chemical_code": "NAOCL",
+       "material_code": "1.61.26.003.VIE.00.000",
+       "chemical_name": "NaOCl",
+       "unit": "Tấn",
+       "quantity": 0.5,
+       "purpose": "Khử trùng nước",
+       "plant_unit": "Chung",
+       "reference": "PCT-03",
+       "entered_by_user_id": "cmrvydnw90000chzlmavbmkqu",
+       "entered_by_name": "Nguyễn Văn Hùng",
+       "entered_by_position": "Trưởng kíp Lò - Máy",
+       "updated_by_user_id": null,
+       "updated_by_name": "",
+       "updated_by_position": "",
+       "created_at": "<thời điểm>",
+       "updated_at": "<thời điểm>"
+      },
+      {
+       "id": 1000000,
+       "usage_date": "2026-09-16",
+       "chemical_code": "PAC",
+       "material_code": "1.61.86.566.VIE.00.000",
+       "chemical_name": "PAC lỏng",
+       "unit": "Tấn",
+       "quantity": 1.25,
+       "purpose": "Sử dụng cho sản xuất",
+       "plant_unit": "Chung",
+       "reference": "",
+       "entered_by_user_id": "contract-seed",
+       "entered_by_name": "Người nhập mẫu",
+       "entered_by_position": "Trưởng kíp Lò - Máy",
+       "updated_by_user_id": null,
+       "updated_by_name": "",
+       "updated_by_position": "",
+       "created_at": "<thời điểm>",
+       "updated_at": "<thời điểm>"
+      }
+     ],
+     "catalog": [
+      {
+       "code": "PAC_LIQUID",
+       "materialCode": "1.61.86.566.VIE.00.000",
+       "name": "PAC lỏng",
+       "unit": "Tấn",
+       "allowedPositions": [
+        "XLN hỗn hợp"
+       ],
+       "suggestedReasons": [
+        "Sử dụng cho sản xuất"
+       ]
+      },
+      {
+       "code": "NAOCL",
+       "materialCode": "1.61.26.003.VIE.00.000",
+       "name": "NaOCl",
+       "unit": "Tấn",
+       "allowedPositions": [
+        "XLN hỗn hợp"
+       ],
+       "suggestedReasons": [
+        "Sử dụng cho sản xuất"
+       ]
+      },
+      {
+       "code": "NH4OH_20",
+       "materialCode": "1.61.86.518.VIE.00.000",
+       "name": "NH₄OH 20%",
+       "unit": "Tấn",
+       "allowedPositions": [
+        "Máy phó"
+       ],
+       "suggestedReasons": [
+        "Pha để thực hiện XLN Lò"
+       ]
+      },
+      {
+       "code": "HCL_31",
+       "materialCode": "1.61.06.038.VIE.00.000",
+       "name": "HCl 31%",
+       "unit": "Tấn",
+       "allowedPositions": [
+        "Trợ thủ",
+        "Máy phó",
+        "XLN hỗn hợp",
+        "XLNT"
+       ],
+       "suggestedReasons": [
+        "Sử dụng cho sản xuất",
+        "Tái sinh hạt CRT Hỗn Hợp 1",
+        "Tái sinh hạt CRT Hỗn Hợp 2",
+        "Tái sinh hạt CRT Hỗn Hợp 3",
+        "Tái sinh hạt CRT Hỗn Hợp 4",
+        "Tái sinh hạt CRT Hỗn Hợp 5",
+        "Tái sinh hạt CRT Hỗn Hợp 6",
+        "Tái sinh hạt CRT Hỗn Hợp 7"
+       ]
+      },
+      {
+       "code": "NAOH_31",
+       "materialCode": "1.61.16.008.VIE.00.000",
+       "name": "NaOH 31%",
+       "unit": "Tấn",
+       "allowedPositions": [
+        "Trợ thủ",
+        "Máy phó",
+        "XLN hỗn hợp",
+        "XLNT"
+       ],
+       "suggestedReasons": [
+        "Sử dụng cho sản xuất",
+        "Tái sinh hạt ART Hỗn Hợp 1",
+        "Tái sinh hạt ART Hỗn Hợp 2",
+        "Tái sinh hạt ART Hỗn Hợp 3",
+        "Tái sinh hạt ART Hỗn Hợp 4",
+        "Tái sinh hạt ART Hỗn Hợp 5",
+        "Tái sinh hạt ART Hỗn Hợp 6",
+        "Tái sinh hạt ART Hỗn Hợp 7"
+       ]
+      }
+     ],
+     "editableCodes": [
+      "PAC_LIQUID",
+      "NAOCL",
+      "NH4OH_20",
+      "HCL_31",
+      "NAOH_31"
+     ]
+    },
+    "meta": null,
+    "error": null
+   }
+  },
+  "sau: GET chemical-usage?month=2026-10": {
+   "status": 200,
+   "body": {
+    "data": {
+     "ok": true,
+     "month": "2026-10",
+     "records": [
+      {
+       "id": 1000003,
+       "usage_date": "2026-10-02",
+       "chemical_code": "NAOH_31",
+       "material_code": "1.61.16.008.VIE.00.000",
+       "chemical_name": "NaOH 31%",
+       "unit": "Tấn",
+       "quantity": 3,
+       "purpose": "Trung hoà",
+       "plant_unit": "Chung",
+       "reference": "",
+       "entered_by_user_id": "contract-seed",
+       "entered_by_name": "Người nhập mẫu",
+       "entered_by_position": "Trưởng kíp Lò - Máy",
+       "updated_by_user_id": "cmrvydnw90000chzlmavbmkqu",
+       "updated_by_name": "Nguyễn Văn Hùng",
+       "updated_by_position": "Trưởng kíp Lò - Máy",
+       "created_at": "<thời điểm>",
+       "updated_at": "<thời điểm>"
+      }
+     ],
+     "catalog": [
+      {
+       "code": "PAC_LIQUID",
+       "materialCode": "1.61.86.566.VIE.00.000",
+       "name": "PAC lỏng",
+       "unit": "Tấn",
+       "allowedPositions": [
+        "XLN hỗn hợp"
+       ],
+       "suggestedReasons": [
+        "Sử dụng cho sản xuất"
+       ]
+      },
+      {
+       "code": "NAOCL",
+       "materialCode": "1.61.26.003.VIE.00.000",
+       "name": "NaOCl",
+       "unit": "Tấn",
+       "allowedPositions": [
+        "XLN hỗn hợp"
+       ],
+       "suggestedReasons": [
+        "Sử dụng cho sản xuất"
+       ]
+      },
+      {
+       "code": "NH4OH_20",
+       "materialCode": "1.61.86.518.VIE.00.000",
+       "name": "NH₄OH 20%",
+       "unit": "Tấn",
+       "allowedPositions": [
+        "Máy phó"
+       ],
+       "suggestedReasons": [
+        "Pha để thực hiện XLN Lò"
+       ]
+      },
+      {
+       "code": "HCL_31",
+       "materialCode": "1.61.06.038.VIE.00.000",
+       "name": "HCl 31%",
+       "unit": "Tấn",
+       "allowedPositions": [
+        "Trợ thủ",
+        "Máy phó",
+        "XLN hỗn hợp",
+        "XLNT"
+       ],
+       "suggestedReasons": [
+        "Sử dụng cho sản xuất",
+        "Tái sinh hạt CRT Hỗn Hợp 1",
+        "Tái sinh hạt CRT Hỗn Hợp 2",
+        "Tái sinh hạt CRT Hỗn Hợp 3",
+        "Tái sinh hạt CRT Hỗn Hợp 4",
+        "Tái sinh hạt CRT Hỗn Hợp 5",
+        "Tái sinh hạt CRT Hỗn Hợp 6",
+        "Tái sinh hạt CRT Hỗn Hợp 7"
+       ]
+      },
+      {
+       "code": "NAOH_31",
+       "materialCode": "1.61.16.008.VIE.00.000",
+       "name": "NaOH 31%",
+       "unit": "Tấn",
+       "allowedPositions": [
+        "Trợ thủ",
+        "Máy phó",
+        "XLN hỗn hợp",
+        "XLNT"
+       ],
+       "suggestedReasons": [
+        "Sử dụng cho sản xuất",
+        "Tái sinh hạt ART Hỗn Hợp 1",
+        "Tái sinh hạt ART Hỗn Hợp 2",
+        "Tái sinh hạt ART Hỗn Hợp 3",
+        "Tái sinh hạt ART Hỗn Hợp 4",
+        "Tái sinh hạt ART Hỗn Hợp 5",
+        "Tái sinh hạt ART Hỗn Hợp 6",
+        "Tái sinh hạt ART Hỗn Hợp 7"
+       ]
+      }
+     ],
+     "editableCodes": [
+      "PAC_LIQUID",
+      "NAOCL",
+      "NH4OH_20",
+      "HCL_31",
+      "NAOH_31"
+     ]
+    },
+    "meta": null,
+    "error": null
+   }
+  }
+ },
+ "chemical-usage #10 sửa bản ghi không tồn tại": {
+  "request": "PUT chemical-usage",
+  "response": {
+   "status": 404,
+   "body": {
+    "data": null,
+    "meta": null,
+    "error": "Không tìm thấy bản ghi cần sửa."
+   }
+  },
+  "phiên bản đọc tăng": {}
+ },
+ "chemical-usage #11 sửa bản ghi mã cũ ngoài danh mục": {
+  "request": "PUT chemical-usage",
+  "response": {
+   "status": 403,
+   "body": {
+    "data": null,
+    "meta": null,
+    "error": "Cương vị hiện tại không được sửa bản ghi hóa chất này."
+   }
+  },
+  "phiên bản đọc tăng": {}
+ },
+ "chemical-usage #12 sửa id sai": {
+  "request": "PUT chemical-usage",
+  "response": {
+   "status": 400,
+   "body": {
+    "data": null,
+    "meta": null,
+    "error": "Bản ghi cần sửa không hợp lệ."
+   }
+  },
+  "phiên bản đọc tăng": {}
+ },
+ "chemical-usage #13 xoá": {
+  "request": "DELETE chemical-usage?id=1000003",
+  "response": {
+   "status": 200,
+   "body": {
+    "data": {
+     "ok": true,
+     "id": 1000003
+    },
+    "meta": null,
+    "error": null
+   }
+  },
+  "phiên bản đọc tăng": {
+   "chemical_usage_logs": 1,
+   "chemical_usage_logs:all": 1
+  },
+  "sau: GET chemical-usage?month=2026-10": {
+   "status": 200,
+   "body": {
+    "data": {
+     "ok": true,
+     "month": "2026-10",
+     "records": [],
+     "catalog": [
+      {
+       "code": "PAC_LIQUID",
+       "materialCode": "1.61.86.566.VIE.00.000",
+       "name": "PAC lỏng",
+       "unit": "Tấn",
+       "allowedPositions": [
+        "XLN hỗn hợp"
+       ],
+       "suggestedReasons": [
+        "Sử dụng cho sản xuất"
+       ]
+      },
+      {
+       "code": "NAOCL",
+       "materialCode": "1.61.26.003.VIE.00.000",
+       "name": "NaOCl",
+       "unit": "Tấn",
+       "allowedPositions": [
+        "XLN hỗn hợp"
+       ],
+       "suggestedReasons": [
+        "Sử dụng cho sản xuất"
+       ]
+      },
+      {
+       "code": "NH4OH_20",
+       "materialCode": "1.61.86.518.VIE.00.000",
+       "name": "NH₄OH 20%",
+       "unit": "Tấn",
+       "allowedPositions": [
+        "Máy phó"
+       ],
+       "suggestedReasons": [
+        "Pha để thực hiện XLN Lò"
+       ]
+      },
+      {
+       "code": "HCL_31",
+       "materialCode": "1.61.06.038.VIE.00.000",
+       "name": "HCl 31%",
+       "unit": "Tấn",
+       "allowedPositions": [
+        "Trợ thủ",
+        "Máy phó",
+        "XLN hỗn hợp",
+        "XLNT"
+       ],
+       "suggestedReasons": [
+        "Sử dụng cho sản xuất",
+        "Tái sinh hạt CRT Hỗn Hợp 1",
+        "Tái sinh hạt CRT Hỗn Hợp 2",
+        "Tái sinh hạt CRT Hỗn Hợp 3",
+        "Tái sinh hạt CRT Hỗn Hợp 4",
+        "Tái sinh hạt CRT Hỗn Hợp 5",
+        "Tái sinh hạt CRT Hỗn Hợp 6",
+        "Tái sinh hạt CRT Hỗn Hợp 7"
+       ]
+      },
+      {
+       "code": "NAOH_31",
+       "materialCode": "1.61.16.008.VIE.00.000",
+       "name": "NaOH 31%",
+       "unit": "Tấn",
+       "allowedPositions": [
+        "Trợ thủ",
+        "Máy phó",
+        "XLN hỗn hợp",
+        "XLNT"
+       ],
+       "suggestedReasons": [
+        "Sử dụng cho sản xuất",
+        "Tái sinh hạt ART Hỗn Hợp 1",
+        "Tái sinh hạt ART Hỗn Hợp 2",
+        "Tái sinh hạt ART Hỗn Hợp 3",
+        "Tái sinh hạt ART Hỗn Hợp 4",
+        "Tái sinh hạt ART Hỗn Hợp 5",
+        "Tái sinh hạt ART Hỗn Hợp 6",
+        "Tái sinh hạt ART Hỗn Hợp 7"
+       ]
+      }
+     ],
+     "editableCodes": [
+      "PAC_LIQUID",
+      "NAOCL",
+      "NH4OH_20",
+      "HCL_31",
+      "NAOH_31"
+     ]
+    },
+    "meta": null,
+    "error": null
+   }
+  }
+ },
+ "chemical-usage #14 xoá lại bản đã xoá": {
+  "request": "DELETE chemical-usage?id=1000003",
+  "response": {
+   "status": 404,
+   "body": {
+    "data": null,
+    "meta": null,
+    "error": "Không tìm thấy bản ghi cần xóa."
+   }
+  },
+  "phiên bản đọc tăng": {
+   "chemical_usage_logs": 1,
+   "chemical_usage_logs:all": 1
+  }
+ },
+ "chemical-usage #15 xoá bản mẫu đã xoá sẵn": {
+  "request": "DELETE chemical-usage?id=1000002",
+  "response": {
+   "status": 404,
+   "body": {
+    "data": null,
+    "meta": null,
+    "error": "Không tìm thấy bản ghi cần xóa."
+   }
+  },
+  "phiên bản đọc tăng": {
+   "chemical_usage_logs": 1,
+   "chemical_usage_logs:all": 1
+  }
+ },
+ "chemical-usage #16 xoá id sai": {
+  "request": "DELETE chemical-usage?id=abc",
+  "response": {
+   "status": 400,
+   "body": {
+    "data": null,
+    "meta": null,
+    "error": "Bản ghi cần xóa không hợp lệ."
+   }
+  },
+  "phiên bản đọc tăng": {}
  },
  "daily-inputs #01 lưu số (dấu phẩy) + ghi chú + chữ CW + 'không chỉnh'": {
   "request": "POST daily-inputs",
@@ -1628,6 +2569,10 @@
     "meta": null,
     "error": null
    }
+  },
+  "phiên bản đọc tăng": {
+   "daily_inputs": 1,
+   "daily_inputs:2026-09": 1
   },
   "sau: GET daily-inputs?period=2026-09&date=2026-09-17&scope=non-ktkt": {
    "status": 200,
@@ -2180,6 +3125,10 @@
     "error": null
    }
   },
+  "phiên bản đọc tăng": {
+   "daily_inputs": 1,
+   "daily_inputs:2026-09": 1
+  },
   "sau: GET daily-inputs?period=2026-09&date=2026-09-17&scope=non-ktkt": {
    "status": 200,
    "body": {
@@ -2453,7 +3402,8 @@
     "meta": null,
     "error": "Chỉ tiêu B tự liên kết từ Chỉ tiêu KTKT, không được nhập hoặc đồng bộ lần hai."
    }
-  }
+  },
+  "phiên bản đọc tăng": {}
  },
  "daily-inputs #04 mã không cho phép": {
   "request": "POST daily-inputs",
@@ -2464,7 +3414,8 @@
     "meta": null,
     "error": "Ngày hoặc mã chỉ tiêu không hợp lệ."
    }
-  }
+  },
+  "phiên bản đọc tăng": {}
  },
  "daily-inputs #05 ngày tương lai": {
   "request": "POST daily-inputs",
@@ -2475,7 +3426,8 @@
     "meta": null,
     "error": "Không thể nhập hoặc đồng bộ dữ liệu cho ngày trong tương lai."
    }
-  }
+  },
+  "phiên bản đọc tăng": {}
  },
  "daily-inputs #06 ngày khác kỳ": {
   "request": "POST daily-inputs",
@@ -2486,7 +3438,8 @@
     "meta": null,
     "error": "Ngày hoặc mã chỉ tiêu không hợp lệ."
    }
-  }
+  },
+  "phiên bản đọc tăng": {}
  },
  "daily-inputs #07 giá trị chữ ở ô số": {
   "request": "POST daily-inputs",
@@ -2497,7 +3450,8 @@
     "meta": null,
     "error": "Giá trị F phải là số hoặc trạng thái được hỗ trợ."
    }
-  }
+  },
+  "phiên bản đọc tăng": {}
  },
  "daily-inputs #08 kỳ sai định dạng": {
   "request": "POST daily-inputs",
@@ -2508,7 +3462,8 @@
     "meta": null,
     "error": "Dữ liệu tháng không hợp lệ."
    }
-  }
+  },
+  "phiên bản đọc tăng": {}
  },
  "daily-inputs #09 JSON hỏng": {
   "request": "POST daily-inputs",
@@ -2519,7 +3474,8 @@
     "meta": null,
     "error": "Dữ liệu JSON không hợp lệ."
    }
-  }
+  },
+  "phiên bản đọc tăng": {}
  },
  "daily-inputs #10 không phải JSON (415)": {
   "request": "POST daily-inputs",
@@ -2530,7 +3486,8 @@
     "meta": null,
     "error": "Yêu cầu phải là JSON."
    }
-  }
+  },
+  "phiên bản đọc tăng": {}
  },
  "daily-inputs #11 đọc: khoảng sai": {
   "request": "GET daily-inputs?period=2026-13",
@@ -2541,7 +3498,8 @@
     "meta": null,
     "error": "Khoảng đọc dữ liệu không hợp lệ."
    }
-  }
+  },
+  "phiên bản đọc tăng": {}
  },
  "daily-inputs #12 đọc: scope lạ": {
   "request": "GET daily-inputs?period=2026-09&scope=khac",
@@ -2552,7 +3510,8 @@
     "meta": null,
     "error": "Khoảng đọc dữ liệu không hợp lệ."
    }
-  }
+  },
+  "phiên bản đọc tăng": {}
  },
  "ppa #01 lưu ngày mới đủ 48 điểm": {
   "request": "POST ppa-heat-rate",
@@ -2573,6 +3532,10 @@
     "meta": null,
     "error": null
    }
+  },
+  "phiên bản đọc tăng": {
+   "ppa_heat_rate_daily": 1,
+   "ppa_heat_rate_daily:2026-09": 1
   },
   "sau: GET ppa-heat-rate?period=2026-09&from=2026-09-01&to=2026-09-30": {
    "status": 200,
@@ -2939,6 +3902,10 @@
     "error": null
    }
   },
+  "phiên bản đọc tăng": {
+   "ppa_heat_rate_daily": 1,
+   "ppa_heat_rate_daily:2026-09": 1
+  },
   "sau: GET ppa-heat-rate?period=2026-09&from=2026-09-01&to=2026-09-30": {
    "status": 200,
    "body": {
@@ -3002,7 +3969,8 @@
     "meta": null,
     "error": "Mỗi điểm đo phải có đủ 48 giá trị nửa giờ hợp lệ."
    }
-  }
+  },
+  "phiên bản đọc tăng": {}
  },
  "ppa #04 điểm âm": {
   "request": "POST ppa-heat-rate",
@@ -3013,7 +3981,8 @@
     "meta": null,
     "error": "Mỗi điểm đo phải có đủ 48 giá trị nửa giờ hợp lệ."
    }
-  }
+  },
+  "phiên bản đọc tăng": {}
  },
  "ppa #05 ngày sai": {
   "request": "POST ppa-heat-rate",
@@ -3024,7 +3993,8 @@
     "meta": null,
     "error": "Ngày vận hành không hợp lệ."
    }
-  }
+  },
+  "phiên bản đọc tăng": {}
  },
  "ppa #06 đọc: tháng sai": {
   "request": "GET ppa-heat-rate?period=2026-13",
@@ -3035,7 +4005,8 @@
     "meta": null,
     "error": "Tháng theo dõi không hợp lệ."
    }
-  }
+  },
+  "phiên bản đọc tăng": {}
  },
  "ppa #07 ghi chú + công suất khả dụng + tình hình vận hành": {
   "request": "POST ppa-heat-rate/notes",
@@ -3050,6 +4021,12 @@
     "meta": null,
     "error": null
    }
+  },
+  "phiên bản đọc tăng": {
+   "daily_inputs": 1,
+   "daily_inputs:2026-09": 1,
+   "ppa_heat_rate_daily": 1,
+   "ppa_heat_rate_daily:2026-09": 1
   },
   "sau: GET ppa-heat-rate?period=2026-09&from=2026-09-01&to=2026-09-30": {
    "status": 200,
@@ -3457,7 +4434,8 @@
     "meta": null,
     "error": null
    }
-  }
+  },
+  "phiên bản đọc tăng": {}
  },
  "ppa #09 Google Sheet: đồng bộ khi chưa cấu hình (503)": {
   "request": "POST google-sheet-sync",
@@ -3468,7 +4446,8 @@
     "meta": null,
     "error": "Máy chủ chưa được cấu hình Google Sheet. Hãy liên hệ quản trị viên; không nhập tài khoản Gmail hoặc mã kết nối trên máy người dùng."
    }
-  }
+  },
+  "phiên bản đọc tăng": {}
  },
  "ppa #10 xoá công suất + tình hình (giá trị rỗng)": {
   "request": "POST ppa-heat-rate/notes",
@@ -3483,6 +4462,12 @@
     "meta": null,
     "error": null
    }
+  },
+  "phiên bản đọc tăng": {
+   "daily_inputs": 1,
+   "daily_inputs:2026-09": 1,
+   "ppa_heat_rate_daily": 1,
+   "ppa_heat_rate_daily:2026-09": 1
   },
   "sau: GET daily-inputs?period=2026-09&date=2026-09-17&scope=non-ktkt": {
    "status": 200,
@@ -3769,7 +4754,8 @@
     "meta": null,
     "error": "Ngày đánh giá không hợp lệ hoặc bị trùng."
    }
-  }
+  },
+  "phiên bản đọc tăng": {}
  },
  "ppa #12 ghi chú: ngày tương lai": {
   "request": "POST ppa-heat-rate/notes",
@@ -3780,7 +4766,8 @@
     "meta": null,
     "error": "Không thể đánh giá hoặc lưu dữ liệu cho ngày trong tương lai."
    }
-  }
+  },
+  "phiên bản đọc tăng": {}
  },
  "ppa #13 ghi chú: công suất quá 1.000 MW": {
   "request": "POST ppa-heat-rate/notes",
@@ -3791,7 +4778,8 @@
     "meta": null,
     "error": "Công suất khả dụng S1 phải là số từ 0 đến 1.000 MW."
    }
-  }
+  },
+  "phiên bản đọc tăng": {}
  },
  "ppa #14 Google Sheet: xem trước khi thiếu công suất S1": {
   "request": "POST google-sheet-sync",
@@ -3802,7 +4790,8 @@
     "meta": null,
     "error": "Thiếu dữ liệu “Công suất khả dụng S1” của ngày đã chọn."
    }
-  }
+  },
+  "phiên bản đọc tăng": {}
  },
  "ppa #15 Google Sheet: thao tác lạ": {
   "request": "POST google-sheet-sync",
@@ -3813,7 +4802,8 @@
     "meta": null,
     "error": "Thao tác đồng bộ không hợp lệ."
    }
-  }
+  },
+  "phiên bản đọc tăng": {}
  },
  "bcsx #01 số liệu nửa giờ: lưu (dấu phẩy) 2 tổ máy": {
   "request": "POST shift-readings",
@@ -3826,6 +4816,10 @@
     "meta": null,
     "error": null
    }
+  },
+  "phiên bản đọc tăng": {
+   "shift_readings": 1,
+   "shift_readings:2026-09": 1
   },
   "sau: GET shift-readings?date=2026-09-18": {
    "status": 200,
@@ -3869,6 +4863,10 @@
     "error": null
    }
   },
+  "phiên bản đọc tăng": {
+   "shift_readings": 1,
+   "shift_readings:2026-09": 1
+  },
   "sau: GET shift-readings?date=2026-09-18": {
    "status": 200,
    "body": {
@@ -3902,7 +4900,8 @@
     "meta": null,
     "error": "Tổ máy, mốc giờ hoặc thông số không hợp lệ."
    }
-  }
+  },
+  "phiên bản đọc tăng": {}
  },
  "bcsx #04 số liệu nửa giờ: giá trị chữ": {
   "request": "POST shift-readings",
@@ -3913,7 +4912,8 @@
     "meta": null,
     "error": "Giá trị tại 00:30 phải là số."
    }
-  }
+  },
+  "phiên bản đọc tăng": {}
  },
  "bcsx #05 số liệu nửa giờ: đọc ngày sai": {
   "request": "GET shift-readings?date=18-09-2026",
@@ -3924,7 +4924,8 @@
     "meta": null,
     "error": "Ngày không hợp lệ."
    }
-  }
+  },
+  "phiên bản đọc tăng": {}
  },
  "bcsx #06 sự kiện: thay danh sách S1": {
   "request": "POST operating-events",
@@ -3937,6 +4938,10 @@
     "meta": null,
     "error": null
    }
+  },
+  "phiên bản đọc tăng": {
+   "operating_events": 1,
+   "operating_events:2026-09": 1
   },
   "sau: GET operating-events?date=2026-09-17": {
    "status": 200,
@@ -3986,6 +4991,10 @@
     "error": null
    }
   },
+  "phiên bản đọc tăng": {
+   "operating_events": 1,
+   "operating_events:2026-09": 1
+  },
   "sau: GET operating-events?date=2026-09-17": {
    "status": 200,
    "body": {
@@ -4023,7 +5032,8 @@
     "meta": null,
     "error": "Thời gian bắt đầu không hợp lệ."
    }
-  }
+  },
+  "phiên bản đọc tăng": {}
  },
  "bcsx #09 sự kiện: loại sai": {
   "request": "POST operating-events",
@@ -4034,7 +5044,8 @@
     "meta": null,
     "error": "Loại sự kiện không hợp lệ."
    }
-  }
+  },
+  "phiên bản đọc tăng": {}
  },
  "bcsx #10 than tồn 24h: lưu": {
   "request": "POST bcsx-coal-stock",
@@ -4048,6 +5059,10 @@
     "meta": null,
     "error": null
    }
+  },
+  "phiên bản đọc tăng": {
+   "daily_inputs": 1,
+   "daily_inputs:2026-09": 1
   },
   "sau: GET daily-inputs?period=2026-09&date=2026-09-17&scope=non-ktkt": {
    "status": 200,
@@ -4328,7 +5343,8 @@
     "meta": null,
     "error": "Than tồn kho 24h phải là số không âm hợp lệ."
    }
-  }
+  },
+  "phiên bản đọc tăng": {}
  },
  "bcsx #12 than tồn 24h: ngày tương lai": {
   "request": "POST bcsx-coal-stock",
@@ -4339,7 +5355,8 @@
     "meta": null,
     "error": "Không thể lưu dữ liệu cho ngày trong tương lai."
    }
-  }
+  },
+  "phiên bản đọc tăng": {}
  },
  "bcsx #13 nạp 2 file S1/S2 (xuất từ chính web)": {
   "request": "POST bcsx-section1-import",
@@ -4350,7 +5367,8 @@
     "meta": null,
     "error": "BCSX S1 17.09.2026.xlsx thiếu sheet 01."
    }
-  }
+  },
+  "phiên bản đọc tăng": {}
  },
  "bcsx #14 nạp chỉ 1 file": {
   "request": "POST bcsx-section1-import",
@@ -4361,7 +5379,8 @@
     "meta": null,
     "error": "Hãy chọn đồng thời đúng 2 file Excel BCSX: một file S1 và một file S2."
    }
-  }
+  },
+  "phiên bản đọc tăng": {}
  },
  "bcsx #15 nạp file không phải .xlsx": {
   "request": "POST bcsx-section1-import",
@@ -4372,7 +5391,8 @@
     "meta": null,
     "error": "a.xls: chỉ chấp nhận file .xlsx."
    }
-  }
+  },
+  "phiên bản đọc tăng": {}
  },
  "bcsx #16 nạp không phải multipart (415)": {
   "request": "POST bcsx-section1-import",
@@ -4383,7 +5403,8 @@
     "meta": null,
     "error": "Hãy gửi đồng thời 2 file Excel S1 và S2."
    }
-  }
+  },
+  "phiên bản đọc tăng": {}
  },
  "bcsx #17 lệnh điều độ: thiếu file": {
   "request": "POST bcsx-operation-import",
@@ -4394,7 +5415,8 @@
     "meta": null,
     "error": "Chưa chọn file DanhSachLenhKetThuc."
    }
-  }
+  },
+  "phiên bản đọc tăng": {}
  },
  "bcsx #18 lệnh điều độ: ngày sai": {
   "request": "POST bcsx-operation-import",
@@ -4405,7 +5427,8 @@
     "meta": null,
     "error": "Ngày nhập liệu không hợp lệ."
    }
-  }
+  },
+  "phiên bản đọc tăng": {}
  },
  "bcsx #19 lệnh điều độ: file sai cấu trúc": {
   "request": "POST bcsx-operation-import",
@@ -4416,7 +5439,8 @@
     "meta": null,
     "error": "Không tìm thấy sheet chứa danh sách lệnh kết thúc hợp lệ."
    }
-  }
+  },
+  "phiên bản đọc tăng": {}
  },
  "ktkt #01 lưu 2 ô (số có dấu phẩy)": {
   "request": "POST ctktkt-report",
@@ -4429,6 +5453,11 @@
     "meta": null,
     "error": null
    }
+  },
+  "phiên bản đọc tăng": {
+   "daily_inputs": 1,
+   "daily_inputs:2026-09": 1,
+   "daily_inputs:all": 1
   },
   "sau: GET ctktkt-report?period=2026-09&date=2026-09-17&scope=stored": {
    "status": 200,
@@ -5998,7 +7027,8 @@
     "meta": null,
     "error": null
    }
-  }
+  },
+  "phiên bản đọc tăng": {}
  },
  "ktkt #03 xoá 1 ô (rỗng)": {
   "request": "POST ctktkt-report",
@@ -6011,6 +7041,11 @@
     "meta": null,
     "error": null
    }
+  },
+  "phiên bản đọc tăng": {
+   "daily_inputs": 1,
+   "daily_inputs:2026-09": 1,
+   "daily_inputs:all": 1
   },
   "sau: GET ctktkt-report?period=2026-09&date=2026-09-17&scope=stored": {
    "status": 200,
@@ -7565,6 +8600,11 @@
     "meta": null,
     "error": null
    }
+  },
+  "phiên bản đọc tăng": {
+   "daily_inputs": 1,
+   "daily_inputs:2026-09": 1,
+   "daily_inputs:all": 1
   },
   "sau: GET ctktkt-report?period=2026-09&date=2026-09-16&scope=daily-links": {
    "status": 200,
@@ -9239,6 +10279,11 @@
     "error": null
    }
   },
+  "phiên bản đọc tăng": {
+   "daily_inputs": 1,
+   "daily_inputs:2026-09": 1,
+   "daily_inputs:all": 1
+  },
   "sau: GET ctktkt-report?period=2026-09&date=2026-09-17&scope=stored": {
    "status": 200,
    "body": {
@@ -10795,7 +11840,8 @@
     "meta": null,
     "error": "Ô M3 không nằm trong mẫu được phép nhập."
    }
-  }
+  },
+  "phiên bản đọc tăng": {}
  },
  "ktkt #07 ô ngoài mẫu": {
   "request": "POST ctktkt-report",
@@ -10806,7 +11852,8 @@
     "meta": null,
     "error": "Ô ZZ999 không nằm trong mẫu được phép nhập."
    }
-  }
+  },
+  "phiên bản đọc tăng": {}
  },
  "ktkt #08 chữ ở ô số": {
   "request": "POST ctktkt-report",
@@ -10817,7 +11864,8 @@
     "meta": null,
     "error": "Ô W8 phải là số."
    }
-  }
+  },
+  "phiên bản đọc tăng": {}
  },
  "ktkt #09 ô trùng trong danh sách": {
   "request": "POST ctktkt-report",
@@ -10828,7 +11876,8 @@
     "meta": null,
     "error": "Danh sách có ô dữ liệu bị trùng. Chưa lưu số liệu."
    }
-  }
+  },
+  "phiên bản đọc tăng": {}
  },
  "ktkt #10 tổ máy sự kiện S3": {
   "request": "POST ctktkt-report",
@@ -10839,7 +11888,8 @@
     "meta": null,
     "error": "Tổ máy sự kiện chỉ được chọn S1 hoặc S2."
    }
-  }
+  },
+  "phiên bản đọc tăng": {}
  },
  "ktkt #11 giờ sai dạng HH:mm": {
   "request": "POST ctktkt-report",
@@ -10850,7 +11900,8 @@
     "meta": null,
     "error": "Ô STARTUP_OIL_START_TIME phải nhập thời gian dạng HH:mm."
    }
-  }
+  },
+  "phiên bản đọc tăng": {}
  },
  "ktkt #12 ngày tương lai": {
   "request": "POST ctktkt-report",
@@ -10861,7 +11912,8 @@
     "meta": null,
     "error": "Không thể nhập số liệu cho ngày trong tương lai."
    }
-  }
+  },
+  "phiên bản đọc tăng": {}
  },
  "ktkt #13 ngày không tồn tại 30/02": {
   "request": "POST ctktkt-report",
@@ -10872,7 +11924,8 @@
     "meta": null,
     "error": "Ngày ghi dữ liệu không tồn tại."
    }
-  }
+  },
+  "phiên bản đọc tăng": {}
  },
  "ktkt #14 công tơ than lẫn tổ máy": {
   "request": "POST ctktkt-report",
@@ -10883,7 +11936,8 @@
     "meta": null,
     "error": "Công tơ S1/S2 bị lẫn hoặc khác tổ máy đã chọn. Chưa lưu số liệu."
    }
-  }
+  },
+  "phiên bản đọc tăng": {}
  },
  "ktkt #15 JSON hỏng": {
   "request": "POST ctktkt-report",
@@ -10894,7 +11948,8 @@
     "meta": null,
     "error": "Dữ liệu JSON không hợp lệ."
    }
-  }
+  },
+  "phiên bản đọc tăng": {}
  },
  "ktkt #16 không phải JSON (415)": {
   "request": "POST ctktkt-report",
@@ -10905,7 +11960,8 @@
     "meta": null,
     "error": "Yêu cầu phải là JSON."
    }
-  }
+  },
+  "phiên bản đọc tăng": {}
  },
  "ktkt #17 duyệt yêu cầu không tồn tại": {
   "request": "PATCH correction-requests",
@@ -10916,7 +11972,8 @@
     "meta": null,
     "error": "Yêu cầu không hợp lệ."
    }
-  }
+  },
+  "phiên bản đọc tăng": {}
  },
  "ktkt #18 duyệt: JSON hỏng": {
   "request": "PATCH correction-requests",
@@ -10927,7 +11984,8 @@
     "meta": null,
     "error": "Chưa truy cập được yêu cầu chỉnh sửa."
    }
-  }
+  },
+  "phiên bản đọc tăng": {}
  },
  "ktkt #19 đọc ảnh công tơ khi chưa có khoá Gemini": {
   "request": "POST coal-meter-ocr",
@@ -10938,7 +11996,8 @@
     "meta": null,
     "error": "Nhập khóa Gemini tạm trong cửa sổ đọc ảnh hoặc cấu hình GEMINI_API_KEY trên máy chủ."
    }
-  }
+  },
+  "phiên bản đọc tăng": {}
  },
  "ktkt #20 kiểm tra Gemini khi chưa có khoá": {
   "request": "POST coal-gemini-settings/check",
@@ -10949,7 +12008,8 @@
     "meta": null,
     "error": "Nhập khóa Gemini tạm trong cửa sổ đọc ảnh hoặc cấu hình GEMINI_API_KEY trên máy chủ."
    }
-  }
+  },
+  "phiên bản đọc tăng": {}
  },
  "ktkt #21 cấu hình Gemini: model sai": {
   "request": "PUT coal-gemini-settings",
@@ -10960,7 +12020,8 @@
     "meta": null,
     "error": "Tên model Gemini không hợp lệ."
    }
-  }
+  },
+  "phiên bản đọc tăng": {}
  },
  "ktkt #22 cấu hình Gemini: thiếu Origin": {
   "request": "PUT coal-gemini-settings",
@@ -10971,7 +12032,8 @@
     "meta": null,
     "error": "Nguồn yêu cầu không hợp lệ."
    }
-  }
+  },
+  "phiên bản đọc tăng": {}
  },
  "ktkt #23 cấu hình Gemini: đổi model khi chưa có khoá chung (409)": {
   "request": "PUT coal-gemini-settings",
@@ -10983,6 +12045,7 @@
     "error": "Chưa có khóa chung hoặc cấu hình vừa được thay đổi. Tải lại trạng thái trước khi lưu model."
    }
   },
+  "phiên bản đọc tăng": {},
   "sau: GET coal-gemini-settings": {
    "status": 200,
    "body": {
