@@ -172,6 +172,22 @@ Trước khi bắt đầu một trang: báo cho người còn lại để không
   `report-data-table`…) và quy tắc trộn nhiều trang — giữ dạng CSS. Kiểm bằng `scripts/verify/ctktkt-style-dump.mjs` +
   `ctktkt-style-compare.mjs` (getComputedStyle mọi phần tử, 12 trang × 1280/390; chụp code cũ ≥ 2 lần để loại phần tử tự dao động
   như nút nổi "cuộn xuống", khung gợi ý biểu đồ) → 0 phần tử khác.
+- **CSS → Tailwind (09/11/2026)**: xoá 7 tệp — `pmis-report.css`, `pmis-trend-panels.css`, `ctktkt-report.css`,
+  `bcsx-report.css`, `ppa-unit-card.css`, `ppa-detail-table.css`, `ppa-controls.css` — thành lớp trên phần tử (PMIS, Chỉ tiêu
+  KTKT, Báo cáo sản xuất, PPA). Mỗi trang so `ctktkt-style-dump` trước/sau ở 1280 · 390 · bản in, kèm trạng thái mở menu / đổi tab
+  / rê chuột (PPA) → 0 phần tử khác. 6 quy tắc PPA chỉnh **thanh đầu trang của layout** (`.ctktkt-module:has([data-module="ppa"])
+  > .ktkt-page-header`) không gắn được lên component nên dời nguyên văn về cuối `styles.css`.
+  Bẫy khi viết lớp trong module (do `styles.css` có quy tắc bám theo tên lớp, độ ưu tiên cao hơn tiện ích):
+  `flex` (điện thoại đặt `min-width:0`) → dùng `[display:flex]`; `text-[9px|10px|10.5px|11px]` bị nâng cỡ → `[font-size:…]`;
+  nút/liên kết có chữ "rounded" trong lớp bị ép bo 8px + transition → `[border-radius:…]` hoặc định kiểu nút từ cha
+  (`[&>button]:…`); viền ô bảng bị ép `#d7e3ef` → `!border-…`; `.ctktkt-content table` ép 13px → `!`; `rounded-lg` của theme
+  là 10px; `bcsx-view-mode`/`bcsx-unit-switch` vẫn là móc của `styles.css` — giữ tên lớp. Tailwind chỉ quét chuỗi nguyên văn:
+  không ghép lớp bằng `${…}`.
+  **Giữ dạng CSS có chủ đích**: `water-report-table.css` (4 cột dính bằng `nth-child` + biến độ rộng + màu khi rê hàng),
+  `.monthly-grid` trong `daily-production-table.css` (bảng shadcn: `!important`, cột/tiêu đề/chân dính),
+  `spreadsheet-copy-tools.module.css` (lớp gắn lúc chạy vào bảng bất kỳ, tô ô `[data-copy-selected]`), và lớp giao diện
+  chung trong `styles.css`. `coal-meter-photo-import.module.css`, `data-backup-panel.module.css` là CSS Module (đã cô lập
+  phạm vi) — chưa chuyển.
 - Khác biệt nhỏ còn lại so với cổng cũ: đường dẫn KTKT không tồn tại (đã đăng nhập) trả trang 404 của Next thay cho JSON
   "Không tìm thấy chức năng KTKT."; lỗi của các route xuất/sao lưu nay cũng có `Cache-Control: private, no-store`.
 

@@ -18,7 +18,6 @@ import { defaultBcsxDate,millisecondsToBcsxRollover } from "@/modules/ctktkt/lib
 import { MissingDataAlert, type MissingDataItem } from "@/modules/ctktkt/components/missing-data-alert";
 import { ExportMissingDialog } from "@/modules/ctktkt/components/export-missing-dialog";
 import { isMissingValue, listBcsxMissing } from "@/modules/ctktkt/lib/data-completeness";
-import "./bcsx-report.css";
 
 type Unit = "S1" | "S2";
 type ReadingsGrid = Record<ShiftMetric, string[]>;
@@ -549,7 +548,7 @@ export function BcsxReport() {
     const needDummyRow = (endIdx - startIdx) < 16;
 
     return (
-      <div className="module-shift-card overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+      <div className="overflow-hidden rounded-xl border border-[#d4e1ee] bg-white [box-shadow:0_3px_10px_rgb(30_58_90_/_4%)]">
         {title && (
           <div className={`flex items-center justify-between border-b px-2.5 py-1.5 ${headerClass || "bg-[#dcebf5] text-[#173b64]"}`}>
             <span className="font-extrabold text-xs tracking-tight">{title}</span>
@@ -559,7 +558,7 @@ export function BcsxReport() {
         <table className="report-data-table w-full text-xs">
           <thead>
             <tr className="bg-slate-100/90 text-[#173b64] text-[10px] font-bold">
-              <th className="py-1 px-1 text-center w-[40px]">Giờ</th>
+              <th className="py-1 px-1 text-center w-16">Giờ</th>
               <th className="py-1 px-0.5 text-center" title="Tổng P (MW) đầu cực máy phát">P cực</th>
               <th className="py-1 px-0.5 text-center" title="Tổng Q (MVAr) đầu cực máy phát">Q cực</th>
               <th className="py-1 px-0.5 text-center" title="Tổng P (MW) điểm bán điện">P bán</th>
@@ -581,7 +580,7 @@ export function BcsxReport() {
                         onKeyDown={e => handleKeyDown(m.key, i, e)}
                         onPaste={e => handleCellPaste(m.key, i, e)}
                         inputMode="decimal"
-                        className="h-8 w-full rounded border border-slate-200 bg-white px-1 text-center font-mono text-[24px] font-bold text-black outline-none transition focus:border-[#334785] focus:bg-blue-50/50 focus:ring-1 focus:ring-[#334785]/20"
+                        className="h-8 !min-h-[30px] w-full rounded border border-slate-200 bg-white px-1 text-center font-mono text-[24px] font-bold text-black outline-none transition focus:border-[#334785] focus:bg-blue-50/50 focus:ring-1 focus:ring-[#334785]/20"
                         placeholder="—"
                       />
                     </td>
@@ -634,7 +633,7 @@ export function BcsxReport() {
     if (target) void exportFile(target);
   }
 
-  return <div className="module-report bcsx-workspace flex flex-col gap-3" onChangeCapture={()=>{autoDateEnabled.current=false;}} onPasteCapture={()=>{autoDateEnabled.current=false;}}>
+  return <div className="module-report flex flex-col gap-3" onChangeCapture={()=>{autoDateEnabled.current=false;}} onPasteCapture={()=>{autoDateEnabled.current=false;}}>
     <ExportMissingDialog
       open={exportMissingOpen}
       items={exportMissingItems}
@@ -650,10 +649,10 @@ export function BcsxReport() {
       <div className="flex flex-wrap items-center justify-between gap-2.5">
         {/* Nhãn mục (cùng nền với khối "Bảng theo dõi lượng nước sử dụng"); nhóm ngày + tổ máy + công cụ canh phải. */}
         <div className="module-heading-copy ktkt-section-title"><h2><ClipboardList className="size-5" aria-hidden />BÁO CÁO SẢN XUẤT</h2></div>
-        <div className="bcsx-top-toolbar ml-auto flex flex-wrap items-center justify-end gap-2">
+        <div className="ml-auto flex flex-wrap items-center justify-end gap-2 min-[1440px]:flex-nowrap min-[1440px]:whitespace-nowrap lg:[&>div:last-child]:flex-nowrap lg:[&>div:last-child]:whitespace-nowrap">
           <span className="ktkt-hero-label text-xs font-bold">Ngày:</span>
           <DateField value={operatingDate} onChange={changeOperatingDate} className="w-[145px] h-8 text-xs"/>
-          <div role="group" aria-label="Tổ máy" className="bcsx-unit-switch flex h-9 items-center rounded-lg border border-slate-200 bg-slate-50 p-0.5">
+          <div role="group" aria-label="Tổ máy" className="bcsx-unit-switch flex h-9 items-center rounded-lg border border-slate-200 bg-slate-50 p-0.5 [&>button]:h-8 [&>button]:px-2.5 [&>button]:[font-size:13px]">
             {(["S1", "S2"] as const).map(u => (
               <button key={u} type="button" onClick={() => changeUnit(u)} className={`rounded-md px-3 py-1 text-xs font-bold transition ${unit === u ? "bg-[#334785] text-white shadow-sm" : "text-slate-500 hover:text-slate-800"}`}>
                 {u}
@@ -662,7 +661,7 @@ export function BcsxReport() {
           </div>
             {/* Thanh công cụ mục 1 (chuyển lên hàng trên cùng, bên phải Ngày / S1 / S2): Chế độ xem + Dán Excel + Nạp 2 file + Lưu */}
             <div className="flex flex-wrap items-center gap-2">
-            <div role="group" aria-label="Chế độ xem bảng thông số" className="bcsx-view-mode flex h-9 items-center rounded-lg border border-slate-200 bg-slate-50 p-0.5 text-xs">
+            <div role="group" aria-label="Chế độ xem bảng thông số" className="bcsx-view-mode flex h-9 items-center rounded-lg border border-slate-200 bg-slate-50 p-0.5 text-xs [&>button]:h-8 [&>button]:px-2.5 [&>button]:[font-size:13px]">
               <button
                 type="button"
                 onClick={() => setViewMode("3shifts")}
@@ -747,8 +746,8 @@ export function BcsxReport() {
     </div>
 
     {/* 1. Bảng thông số nửa giờ — 3 Ca song song không cần cuộn */}
-    <div className="bcsx-half-hour-font rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
-      <div className="module-section-heading flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-2.5">
+    <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm !text-[15px] [&_*]:!text-[15px]">
+      <div className="module-section-heading -mx-3 -mt-3 mb-3 flex flex-wrap items-center justify-between gap-2 rounded-t-xl rounded-b-none border-b border-slate-100 pb-2.5">
         <div className="flex flex-wrap items-center gap-2">
           <h2 className="text-xs font-extrabold uppercase tracking-wide text-[#173b64]">
             1. Bảng thông số nửa giờ — tổ máy {unit}
@@ -970,7 +969,7 @@ export function BcsxReport() {
         <label className="flex flex-col text-xs font-semibold text-slate-500">Bắt đầu<input type="time" value={draft.startTime} onChange={e => setDraft(d => ({ ...d, startTime: e.target.value }))} className="mt-1 rounded-md border border-slate-200 px-2 py-1.5 text-black"/></label>
         <label className="flex flex-col text-xs font-semibold text-slate-500">Ngày kết thúc<DateField value={draft.endDate} onChange={endDate => setDraft(d => ({ ...d, endDate }))} min={operatingDate} max={nextOperatingDate(operatingDate)} className="mt-1 h-9 w-[145px]" disabled={isViewer}/></label>
         <label className="flex flex-col text-xs font-semibold text-slate-500">Kết thúc<input type="time" value={draft.endTime} onChange={e => setDraft(d => ({ ...d, endTime: e.target.value }))} className="mt-1 rounded-md border border-slate-200 px-2 py-1.5 text-black"/></label>
-        <label className="flex flex-col text-xs font-semibold text-slate-500">Loại sự kiện<select value={draft.eventType} onChange={e => setDraft(d => ({ ...d, eventType: Number(e.target.value) }))} className="mt-1 rounded-md border border-slate-200 px-2 py-1.5 text-black">{EVENT_TYPES.map(t => <option key={t.code} value={t.code}>{t.code} — {t.label}</option>)}</select></label>
+        <label className="flex flex-col text-xs font-semibold text-slate-500 max-md:min-w-0 max-md:max-w-full">Loại sự kiện<select value={draft.eventType} onChange={e => setDraft(d => ({ ...d, eventType: Number(e.target.value) }))} className="mt-1 max-md:w-full max-md:max-w-full rounded-md border border-slate-200 px-2 py-1.5 text-black">{EVENT_TYPES.map(t => <option key={t.code} value={t.code}>{t.code} — {t.label}</option>)}</select></label>
         <label className="flex min-w-[220px] flex-1 flex-col text-xs font-semibold text-slate-500">Mô tả<input value={draft.description} onChange={e => setDraft(d => ({ ...d, description: e.target.value }))} placeholder="Ví dụ: Tăng tải S1 từ 435.7MW lên 536MW" className="mt-1 rounded-md border border-slate-200 px-2 py-1.5 text-black"/></label>
         <button type="button" disabled={isViewer} onClick={addEvent} className="rounded-lg border border-[#334785] px-3 py-1.5 text-xs font-bold text-[#334785] hover:bg-slate-50 disabled:opacity-50">{editingEventIndex === null ? "+ Thêm dòng" : "Cập nhật"}</button>
         {editingEventIndex !== null && <button type="button" onClick={() => { setEditingEventIndex(null); setDraft(blankEventDraft(operatingDate)); }} className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-bold text-slate-600">Hủy</button>}

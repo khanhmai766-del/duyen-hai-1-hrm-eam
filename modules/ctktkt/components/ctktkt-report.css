@@ -1,9 +1,0 @@
-
-/* ---- Chuyển NGUYÊN VĂN từ modules/ctktkt/styles.css (09/11/2026, docs/ktkt-chuyen-doi.md): quy tắc chỉ thành phần này dùng. Kiểm bằng scripts/verify/ctktkt-style-dump.mjs (kiểu hiển thị giống hệt trước/sau). ---- */
-.ctktkt-module .ktkt-kpi-scroll > table { min-width: 980px; }
-.ctktkt-module .ktkt-workspace .module-heading-copy { padding: 12px 16px; }
-.ctktkt-module .ktkt-workspace .module-toolbar-card > div:first-child { align-items: center; }
-.ctktkt-module .ktkt-workspace .module-toolbar-card > div:first-child > div:last-child { flex: 1 1 360px; justify-content: flex-end; align-content: center; }
-.ctktkt-module .ktkt-workspace .module-section-heading > div:first-child { flex-wrap: wrap; }
-@media (max-width: 1699px) { .ctktkt-module .ktkt-section-tabs svg { display: none; }
-}

@@ -117,6 +117,25 @@ Single source of truth; richer than the README. Core entities: `User` (role enum
 ### Periodic safety registers (PCCC, TBYCNN)
 Two modules share one shape: a **period** row per month plus equipment rows scoped to it, positions normalized against `lib/position-catalog.ts` (label without unit suffix + `PositionCode` + `machine`), server-side xlsx export via exceljs, and writes blocked once the period is closed. PCCC (`pccc_*`, `docs/pccc.md`) is the mature one; TBYCNN — thiết bị yêu cầu nghiêm ngặt về ATLĐ (`tbycnn_*`, `docs/tbycnn.md`) was ported from a standalone localStorage HTML app and is at phase 1 (no period rollover yet). Copy the PCCC patterns when extending either.
 
+### Chỉ tiêu KTKT (`modules/ctktkt`, trang `/tien-ich/chi-tieu-ktkt`)
+Đã chuyển hết về chuẩn web (Prisma, route `ok()/fail()`, TanStack Query) — kế hoạch, quyết định và nhật ký ở
+`docs/ktkt-chuyen-doi.md`; đọc trước khi sửa module. Kiểm: `npm run test:ctktkt`, `npm run test:ctktkt:contract` (`-- --writes`).
+
+**Giao diện:** `modules/ctktkt/styles.css` là lớp giao diện chung của module, có quy tắc **bám theo tên lớp Tailwind** với độ ưu
+tiên cao hơn tiện ích. Khi viết lớp Tailwind trong module:
+- `flex` bị đặt `min-width:0` trên điện thoại → dùng `[display:flex]` nếu không muốn thế.
+- `text-[9px]`/`[10px]`/`[10.5px]`/`[11px]` bị tự nâng cỡ chữ → dùng `[font-size:…]` khi cần đúng cỡ.
+- Nút/liên kết có chữ `rounded` trong lớp bị ép bo góc 8px + transition → dùng `[border-radius:…]` hoặc định kiểu nút từ phần tử cha (`[&>button]:…`).
+- Viền ô bảng bị ép `#d7e3ef` → cần `!border-…`; `.ctktkt-content table` ép cỡ chữ 13px → cần `!`.
+- `rounded-lg` của theme là 10px, không phải 8px.
+- Không ghép lớp bằng `${…}` — Tailwind chỉ quét chuỗi nguyên văn.
+- Một số tên lớp vẫn là móc của `styles.css` (vd. `bcsx-view-mode`, `bcsx-unit-switch`, `module-*`, `ktkt-*`) — `grep` trước khi bỏ.
+
+Đổi CSS của module thì so kiểu hiển thị trước/sau bằng `scripts/verify/ctktkt-style-dump.mjs` + `ctktkt-style-compare.mjs`
+(getComputedStyle mọi phần tử, 1280 · 390 · bản in, kèm kịch bản mở menu/đổi tab/rê chuột; hướng dẫn ở `scripts/verify/README.md`),
+phải ra 0 phần tử khác ngoài nhiễu đã biết. Giữ dạng CSS có chủ đích: `water-report-table.css`, `.monthly-grid` trong
+`daily-production-table.css`, `spreadsheet-copy-tools.module.css` (lý do ở `docs/ktkt-chuyen-doi.md`).
+
 ### Shared conventions
 - `lib/constants.ts` holds enum→label maps and ordering (`ROLES`, `REPAIR_STATUS`, `DEFECT_*`, `SHIFT_TYPE`, …) plus shift-window/date helpers — reuse these instead of hardcoding Vietnamese labels.
 - `lib/nav.ts` `normalizeText()` does diacritic-insensitive, lowercase folding — used for all search/filter/position matching (e.g. excluding management positions from selects). Reuse it for any Vietnamese text comparison.

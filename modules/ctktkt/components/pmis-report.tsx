@@ -13,7 +13,6 @@ import { addDaysIso, defaultOperatingDate, vietnamDateIso } from "@/modules/ctkt
 import {reportPage} from "@/modules/ctktkt/lib/report-loading";
 import {ReportTablePager} from "@/modules/ctktkt/components/report-table-pager";
 import { GoogleMirrorLinks } from "@/modules/ctktkt/components/google-mirror-links";
-import "./pmis-report.css";
 
 type Unit = "s1" | "s2";
 
@@ -258,7 +257,7 @@ export function PmisReport() {
 
     {/* Cả 2 nhóm điều khiển (xem báo cáo + đồng bộ nhiều ngày) gộp vào đúng 1 hàng trên cùng để
         nhường tối đa chiều cao còn lại cho bảng và biểu đồ bên dưới. */}
-    <div className="module-filter-bar flex flex-wrap items-end gap-x-4 gap-y-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm">
+    <div className="flex flex-wrap items-end gap-x-4 gap-y-2 rounded-2xl border border-slate-200 border-l-[3px] border-l-[color:var(--module-accent)] bg-white px-[14px] py-3 shadow-sm max-md:[&>label]:flex-[1_1_128px] max-md:[&>label>button]:w-full">
       <label className="grid gap-0.5 text-[10px] font-bold text-slate-600">TỪ NGÀY<DateField value={fromDate} max={toDate} onChange={setFromDate} className="h-8 w-[128px]"/></label>
       <label className="grid gap-0.5 text-[10px] font-bold text-slate-600">ĐẾN NGÀY<DateField value={toDate} min={fromDate} max={today} onChange={setToDate} className="h-8 w-[128px]"/></label>
       <button type="button" onClick={applyManualRange} className="h-8 rounded-xl border border-[#aebfe1] bg-[#eef3ff] px-3 text-xs font-bold text-[#354a9f]">Áp dụng</button>
@@ -281,12 +280,12 @@ export function PmisReport() {
 
     <PmisPagedTable key={`${fromDate}:${toDate}`} dates={dates} valueFor={valueFor}/>
 
-    <div className="pmis-chart-toolbar">
-      <div><h2>Xu hướng chỉ tiêu PMIS</h2><p>Đối chiếu từng chỉ tiêu giữa hai tổ máy</p></div>
+    <div className="flex-wrap gap-4 [align-items:end] rounded-xl border border-[#e2e7ef] [display:flex] bg-white px-5 py-[18px] max-md:gap-3 max-md:p-4 [&>label]:grid [&>label]:gap-1.5 [&>label]:[font-size:10px] [&>label]:font-semibold [&>label]:text-[#64748b] max-md:[&>label]:flex-1">
+      <div className="mr-auto max-md:w-full"><h2 className="m-0 text-[15px] font-[650] text-[#24334c]">Xu hướng chỉ tiêu PMIS</h2><p className="mx-0 mb-0 mt-[5px] text-[#768399] [font-size:11px]">Đối chiếu từng chỉ tiêu giữa hai tổ máy</p></div>
       <label>TỪ NGÀY<DateField value={chartFromDate} max={chartToDate} onChange={setChartFromDate} className="h-10 w-[150px]"/></label>
       <label>ĐẾN NGÀY<DateField value={chartToDate} min={chartFromDate} max={today} onChange={setChartToDate} className="h-10 w-[150px]"/></label>
-      <button type="button" onClick={applyChartRange}>Áp dụng</button>
-      <span className="pmis-range-count">{chartDates.length} ngày</span>
+      <button type="button" onClick={applyChartRange} className="!min-h-[38px] bg-[#245cdb] px-[18px] py-0 text-[12px] font-semibold text-white [border-radius:7px] [border:0]">Áp dụng</button>
+      <span className="border-l border-l-[#e2e7ef] py-2 pl-4 pr-0 text-[12px] text-[#52627a] max-md:p-0 max-md:[border:0]">{chartDates.length} ngày</span>
     </div>
 
     <PmisCharts dates={chartDates} valueFor={valueFor}/>
@@ -310,8 +309,8 @@ function PmisPagedTable({dates,valueFor}:{dates:string[];valueFor:ValueFor}){
 // bảng riêng như trước, nên không còn phải lo lệch hàng giữa 2 bảng).
 function PmisTable({ dates, valueFor }: { dates: string[]; valueFor: ValueFor }) {
   if (!dates.length) return <div className="grid min-h-40 place-items-center rounded-2xl border border-slate-200 bg-white p-6 text-sm text-slate-500 shadow-sm">Chưa chọn khoảng ngày hợp lệ.</div>;
-  const dateColClass = `${HEADER_ROW_H} min-w-14 border border-[#c9791a] bg-[#e8973a] px-1.5 text-center align-middle text-[11px] font-extrabold text-white`;
-  return <div className="module-table-scroll pmis-table-scroll shrink-0 overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
+  const dateColClass = `${HEADER_ROW_H} min-w-14 border !border-[#367c91] bg-[#23677d] px-1.5 text-center align-middle text-[11px] font-extrabold text-white`;
+  return <div className="module-table-scroll shrink-0 overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
     <table className="w-full border-collapse text-xs" style={{ minWidth: `${LABEL_COL_PX + Math.max(dates.length, 12) * 56}px` }}>
       <thead><tr>
         <th className={`${HEADER_ROW_H} ${LABEL_COL} sticky left-0 z-10 border border-[#1d3f7a] bg-[#1d3f7a] px-1.5 text-left align-middle text-xs font-extrabold text-white`}>THEO PMIS</th>
@@ -326,11 +325,11 @@ function PmisTable({ dates, valueFor }: { dates: string[]; valueFor: ValueFor })
 
 function PmisUnitRows({ unit, dates, valueFor, withLabel }: { unit: Unit; dates: string[]; valueFor: ValueFor; withLabel: boolean }) {
   return <>
-    <tr><td colSpan={dates.length + (withLabel ? 1 : 0)} className={`${BAND_ROW_H} border border-[#c9791a] bg-[#f0a53a] px-2 align-middle text-xs font-extrabold text-white`}>{withLabel ? UNIT_LABEL[unit] : " "}</td></tr>
+    <tr><td colSpan={dates.length + (withLabel ? 1 : 0)} className={`${BAND_ROW_H} border !border-[#c6dde5] bg-[#e4f0f4] px-2 align-middle text-xs font-extrabold text-[#20465c]`}>{withLabel ? UNIT_LABEL[unit] : " "}</td></tr>
     {METRICS.map(metric => {
       const label = metric.label + (metric.unit ? ` (${metric.unit})` : "");
       return <tr key={metric.key}>
-        {withLabel && <td title={label} className={`${METRIC_ROW_H} ${LABEL_COL} sticky left-0 z-10 truncate border border-slate-200 bg-[#fff6b0] px-2 align-middle text-left text-[11px] font-extrabold italic text-[#5a4a06]`}>{label}</td>}
+        {withLabel && <td title={label} className={`${METRIC_ROW_H} ${LABEL_COL} sticky left-0 z-10 truncate border !border-[#d7e3ef] bg-[#f0f6fa] px-2 align-middle text-left text-[11px] font-extrabold italic text-[#24425e]`}>{label}</td>}
         {dates.map(date => <td key={date} className={`${METRIC_ROW_H} min-w-14 border border-slate-200 px-1.5 align-middle text-center tabular-nums text-black`}>{format(valueFor(unit, metric, date))}</td>)}
       </tr>;
     })}

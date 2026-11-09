@@ -245,3 +245,14 @@
 .ctktkt-module .module-hero.ktkt-dark-hero .module-heading-copy.module-heading-copy.module-heading-copy { border: 0; background: transparent; padding: 4px 6px; }
 .ctktkt-module .ktkt-dark-hero .ktkt-hero-label { color: #c1dce8; }
 @media print { .ctktkt-module .module-hero.ktkt-dark-hero { background: #fff; border-color: #d7e3ef; } .ctktkt-module .ktkt-dark-hero .ktkt-hero-label { color: #000; } }
+
+/* Trang PPA thu gọn thanh đầu trang của layout (.ktkt-page-header nằm ở layout, không thuộc component PPA) —
+   dời NGUYÊN VĂN từ components/ppa-controls.css (09/11/2026) khi chuyển phần còn lại sang Tailwind. */
+.ctktkt-module:has([data-module="ppa"]) { row-gap:6px; }
+.ctktkt-module:has([data-module="ppa"]) > .ktkt-page-header { gap:4px 10px; min-height:34px; }
+.ctktkt-module:has([data-module="ppa"]) > .ktkt-page-header > div:first-child { flex:1; flex-basis:auto; }
+.ctktkt-module:has([data-module="ppa"]) > .ktkt-page-header :is(button,a) { height:32px; min-height:32px; padding:4px 8px; font-size:12px; border-radius:6px; }
+@media(max-width:767px) {
+ .ctktkt-module:has([data-module="ppa"]) > .ktkt-page-header > div:first-child { flex-basis:100%; }
+ .ctktkt-module:has([data-module="ppa"]) > .ktkt-page-header :is(button,a) { min-height:40px; height:auto; }
+}

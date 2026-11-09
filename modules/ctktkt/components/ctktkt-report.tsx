@@ -1,7 +1,6 @@
 "use client";
 import { ctktktMetricDisplay } from "../lib/ctktkt-report";
 import { CTKTKT_ELECTRIC_METER_RESET_CELLS } from "../lib/ctktkt-electric-meter-reset";
-import "./ctktkt-report.css";
 import { CTKTKT_PMIS_AUX_CELLS, PMIS_AUX_SOURCE_LABEL, calculatePmisAuxiliary } from "../lib/ctktkt-pmis-auxiliary";
 import { ReportCorrections } from "./report-corrections";
 import { downloadCtktktFile, fetchStoredCtktktReport, useReadCtktktReport, useSaveCtktktReport } from "@/hooks/useKtktReport";
@@ -1091,7 +1090,7 @@ export function CtktktReport() {
   }, [user, editableGroups]);
 
   return (
-    <section className="module-report ktkt-workspace mx-auto grid w-full min-w-0 max-w-full gap-3">
+    <section className="module-report mx-auto grid w-full min-w-0 max-w-full gap-3">
       <ExportMissingDialog
         open={exportMissingOpen}
         items={exportMissingItems}
@@ -1102,11 +1101,11 @@ export function CtktktReport() {
         onExportAnyway={continueCtktktOutput}
       />
       {/* 1. THANH TIÊU ĐỀ, CHỌN NGÀY VÀ ĐIỀU HÀNH */}
-      <div className="module-hero ktkt-dark-hero module-toolbar-card min-w-0 rounded-2xl p-3 shadow-xs">
+      <div className="module-hero ktkt-dark-hero min-w-0 rounded-2xl p-3 shadow-xs">
         <div className="flex flex-wrap items-center justify-between gap-3">
           {/* Nhãn mục (cùng nền với khối "Bảng theo dõi lượng nước sử dụng"); nhóm ngày + nút canh phải. */}
           <div className="module-heading-copy ktkt-section-title"><h2><FileSpreadsheet className="size-5" aria-hidden />CHỈ TIÊU KTKT</h2></div>
-          <div className="ml-auto flex flex-wrap items-center gap-2">
+          <div className="ml-auto flex flex-[1_1_360px] flex-wrap content-center items-center justify-end gap-2">
             <label className="flex items-center gap-2 text-xs font-bold">
               <span className="ktkt-hero-label">Ngày báo cáo:</span>
               <DateField
@@ -1255,7 +1254,7 @@ export function CtktktReport() {
       {/* 2. BẢNG KẾT QUẢ TÍNH TỰ ĐỘNG KPI & Ô NHẬP TAY CỤM 1 (I35, I36, W87) */}
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xs">
         <div className="module-section-heading flex flex-wrap items-center justify-between gap-2 border-b bg-[#f8faff] px-4 py-2.5">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <h2 className="text-xs font-black text-[#173b64] uppercase tracking-wider">
               Cụm 1 · Thống kê chỉ tiêu KTKT NMNĐ Duyên Hải 1
             </h2>
@@ -1295,8 +1294,8 @@ export function CtktktReport() {
 
         {!isKpiCollapsed ? (
           <div>
-            <div className="module-table-scroll ktkt-kpi-scroll">
-              <table className="report-data-table w-full text-xs">
+            <div className="module-table-scroll">
+              <table className="report-data-table w-full min-w-[980px] text-xs">
                 <thead>
                   <tr className="border-b bg-[#e9f2fa] text-[#173b64]">
                     <th rowSpan={2} className="p-2 text-left font-bold">Chỉ tiêu KTKT</th>
@@ -1488,7 +1487,7 @@ export function CtktktReport() {
       {/* 3. TABS ĐIỀU HƯỚNG CÁC CỤM VẬN HÀNH (THIẾT KẾ RÕ RÀNG THEO CƯƠNG VỊ) */}
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xs">
         {/* Một hàng tab, chữ không xuống dòng; màn hẹp thì cuộn ngang thay vì xếp nhiều hàng. */}
-        <div className="ktkt-section-tabs flex gap-1 overflow-x-auto border-b bg-[#fbf7f2] p-2">
+        <div className="flex gap-1 overflow-x-auto max-[1699px]:[&_svg]:hidden border-b bg-[#fbf7f2] p-2">
           <button
             type="button"
             onClick={() => setActiveTab("tkd_dcs")}

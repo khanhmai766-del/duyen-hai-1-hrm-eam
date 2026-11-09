@@ -4,8 +4,6 @@ import { fetchPpaWithSource, usePatchPpaRange, usePpaRange, useSavePpaNotes } fr
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { PpaUnitCard } from "@/modules/ctktkt/components/ppa-unit-card";
 import { PpaNotePreview } from "@/modules/ctktkt/components/ppa-note-preview";
-import "./ppa-detail-table.css";
-import "./ppa-controls.css";
 import { DateField } from "@/modules/ctktkt/components/ui/date-field";
 import { ArrowRight, CalendarRange, ChevronDown, Download, Sheet } from "lucide-react";
 import { GoogleSheetSyncButton } from "@/modules/ctktkt/components/google-sheet-sync-button";
@@ -71,6 +69,50 @@ function periodsBetween(from: string, to: string) {
   }
   return periods;
 }
+
+// Khối điều khiển PPA nền xanh đậm (tab + khoảng ngày + Sheet/Excel) — dùng ở cả tab "So sánh trực quan" và các tab khác.
+// Nút con không mang lớp riêng (định kiểu qua [&>button]) để khỏi dính quy tắc chung của styles.css cho nút có lớp "rounded…".
+export const PPA_COMMAND_BAR = [
+  "relative grid gap-3 overflow-hidden rounded-[16px] border border-[rgb(117_212_228_/_18%)] p-2.5 max-md:gap-2.5 max-md:p-2 has-[details[open]]:overflow-visible",
+  "[background:radial-gradient(ellipse_at_100%_0%,#246378,transparent_70%),linear-gradient(110deg,#152d4a,#1d4661)] [box-shadow:0_10px_26px_rgb(18_44_77_/_14%)]",
+  "after:pointer-events-none after:absolute after:inset-0 after:rounded-[inherit] after:content-[''] after:[background-size:32px_32px] after:[mask-image:linear-gradient(90deg,transparent_35%,#000)]",
+  "after:[background-image:linear-gradient(rgb(255_255_255_/_3%)_1px,transparent_1px),linear-gradient(90deg,rgb(255_255_255_/_3%)_1px,transparent_1px)]",
+  "[&>*]:relative [&>*]:z-[1] [&_:is(button,summary):focus-visible]:![outline-offset:2px] [&_:is(button,summary):focus-visible]:![outline:2px_solid_#75d4e4]",
+].join(" ");
+// Dải tab: viên thuốc trong suốt, tab đang chọn (aria-pressed) nền trắng chữ xanh đậm.
+export const PPA_TABS = [
+  "gap-1 overflow-x-auto rounded-[12px] border border-[rgb(255_255_255_/_10%)] bg-[rgb(255_255_255_/_8%)] p-1 [display:flex] ![scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+  "[&>button]:min-h-9 [&>button]:flex-[1_0_auto] [&>button]:whitespace-nowrap [&>button]:px-4 [&>button]:py-1.5 [&>button]:font-bold [&>button]:text-[#c1dce8] [&>button]:[border-radius:9px] [&>button]:[font-size:13px]",
+  "[&>button]:[transition:background_.15s,color_.15s] max-md:[&>button]:min-h-10 max-md:[&>button]:flex-[0_0_auto]",
+  "[&>button:not([aria-pressed=true]):hover]:bg-[rgb(255_255_255_/_8%)] [&>button:not([aria-pressed=true]):hover]:text-white",
+  "[&>button[aria-pressed=true]]:bg-white [&>button[aria-pressed=true]]:text-[#173a5c] [&>button[aria-pressed=true]]:[box-shadow:0_2px_8px_rgb(0_0_0_/_18%)]",
+].join(" ");
+const PPA_PRESETS = [
+  "gap-0.5 rounded-[12px] border border-[rgb(255_255_255_/_12%)] bg-[rgb(255_255_255_/_8%)] p-1 [display:flex] max-md:w-full",
+  "[&>button]:h-9 [&>button]:whitespace-nowrap [&>button]:px-3 [&>button]:font-semibold [&>button]:text-[#c1dce8] [&>button]:[border-radius:8px] [&>button]:[font-size:13px]",
+  "max-md:[&>button]:h-10 max-md:[&>button]:flex-[1_1_auto] max-md:[&>button]:px-2.5 [&>button:not([aria-pressed=true]):hover]:text-white",
+  "[&>button[aria-pressed=true]]:bg-[rgb(117_212_228_/_22%)] [&>button[aria-pressed=true]]:text-white [&>button[aria-pressed=true]]:[box-shadow:inset_0_0_0_1px_rgb(117_212_228_/_45%)]",
+].join(" ");
+const PPA_SHEET_SUMMARY = "inline-flex h-[46px] min-h-[46px] cursor-pointer items-center [list-style:none] gap-1.5 whitespace-nowrap rounded-[10px] border border-[rgb(255_255_255_/_22%)] bg-[rgb(255_255_255_/_6%)] px-[14px] py-0 font-bold text-white [font-size:13px] hover:bg-[rgb(255_255_255_/_12%)] max-md:w-full max-md:justify-center [&::-webkit-details-marker]:hidden [&_svg:first-child]:text-[#86efac]";
+const PPA_SHEET_CONTENT = "absolute right-0 top-[calc(100%+6px)] z-30 grid w-[min(420px,calc(100vw-40px))] gap-2.5 rounded-[8px] border border-[#dbe4ef] bg-white p-3 [box-shadow:0_8px_24px_#173b6420] max-md:static max-md:mt-1.5 max-md:w-full max-md:[box-shadow:none] [details:not([open])>&]:hidden [&_.google-sheet-actions]:items-stretch max-md:[&_.google-sheet-actions]:basis-auto";
+const PPA_DATE = "h-9 w-[138px] rounded-[8px] font-semibold ![border:0] max-md:h-10 max-md:w-auto max-md:flex-[1_1_0]";
+const PPA_PRIMARY = "inline-flex h-[46px] items-center gap-1.5 whitespace-nowrap bg-white px-4 font-extrabold text-[#173a5c] [border-radius:10px] [box-shadow:0_2px_8px_rgb(0_0_0_/_18%)] [font-size:13px] enabled:hover:bg-[#eaf6f9] disabled:cursor-not-allowed disabled:opacity-[.45] disabled:[box-shadow:none] max-md:w-full max-md:justify-center";
+// Bảng chi tiết PPA (trước ở ppa-detail-table.css): bảng cố định 17 cột, cuộn ngang; cột đầu dính trái;
+// 15 cột số không xuống dòng; 2 cột "Nhận xét" cuối được xuống dòng. Bản in: co theo giấy, cỡ 9px.
+// Tên lớp phải viết nguyên văn (Tailwind chỉ quét chuỗi có sẵn trong mã, không hiểu `${...}` ghép lớp).
+const PPA_DETAIL_TABLE = [
+  "w-full min-w-[1650px] table-fixed border-collapse leading-[1.35] [font-size:13px]",
+  "print:min-w-0 print:table-auto print:![font-size:9px] print:[&_col]:!w-auto",
+  "[&_:is(th,td)]:box-border [&_:is(th,td)]:border [&_:is(th,td)]:border-[#e2e7ef] [&_:is(th,td)]:px-[7px] [&_:is(th,td)]:py-[6px]",
+  "[&_:is(th,td)]:text-center [&_:is(th,td)]:leading-[1.3] [&_:is(th,td)]:tabular-nums print:[&_:is(th,td)]:p-[3px] print:[&_:is(th,td)]:[font-size:9px]",
+  "[&_th]:whitespace-normal [&_th]:[font-size:12px] [&_th]:[overflow-wrap:normal]",
+  "[&_tbody_td:not([colspan])]:[font-size:13px] print:[&_tbody_td:not([colspan])]:p-[3px] print:[&_tbody_td:not([colspan])]:[font-size:9px]",
+  "[&_tbody_td:nth-child(-n+15):not([colspan])]:overflow-hidden [&_tbody_td:nth-child(-n+15):not([colspan])]:whitespace-nowrap print:[&_tbody_td:nth-child(-n+15):not([colspan])]:overflow-visible print:[&_tbody_td:nth-child(-n+15):not([colspan])]:whitespace-normal",
+  "[&_:is(th,td):first-child:not([colspan])]:sticky [&_:is(th,td):first-child:not([colspan])]:left-0 [&_:is(th,td):first-child:not([colspan])]:z-[1] [&_:is(th,td):first-child:not([colspan])]:bg-[#f6f8fc] print:[&_:is(th,td):first-child:not([colspan])]:static",
+  "[&_td:nth-last-child(-n+2):not([colspan])]:whitespace-normal [&_td:nth-last-child(-n+2):not([colspan])]:text-left [&_td:nth-last-child(-n+2):not([colspan])]:[overflow-wrap:anywhere]",
+  "[&_td:nth-last-child(-n+2)_:is(button,details)]:[font-size:11px]",
+].join(" ");
+const CL_TONE = { over: "bg-[#fff0f0] font-bold text-[#b42332]", met: "bg-[#edf8f1] font-bold text-[#16714c]", empty: "bg-[#f7f9fc] text-[#8a95a6]" };
 
 export function PpaHeatRateDashboard({ tabs }: { tabs?: React.ReactNode }) {
   const user = useSessionUser();
@@ -392,7 +434,7 @@ export function PpaHeatRateDashboard({ tabs }: { tabs?: React.ReactNode }) {
     void exportXlsx();
   }
 
-  return <section className="ppa-dashboard space-y-4">
+  return <section className="space-y-4">
     <ExportMissingDialog
       open={exportMissingOpen}
       items={missingPpaExport}
@@ -404,33 +446,33 @@ export function PpaHeatRateDashboard({ tabs }: { tabs?: React.ReactNode }) {
     />
     {/* Thanh điều khiển nền xanh đậm như các trang KTKT khác: khoảng ngày bên trái, Google Sheet/Excel bên phải. */}
     {/* Một khối điều khiển duy nhất: tab chức năng (hàng trên) + khoảng ngày, chọn nhanh, Sheet/Excel (hàng dưới). */}
-    <div className="ppa-command-bar">
+    <div className={PPA_COMMAND_BAR}>
       {tabs}
-      <div className="ppa-cmd-controls">
-        <div className="ppa-cmd-range" role="group" aria-label="Khoảng ngày">
-          <span className="ppa-cmd-label"><CalendarRange className="size-4" aria-hidden />Khoảng ngày</span>
-          <DateField value={fromDate} max={toDate} onChange={setFromDate} placeholder="Từ ngày" className="ppa-cmd-date"/>
-          <ArrowRight className="ppa-cmd-sep size-4" aria-hidden />
-          <DateField value={toDate} min={fromDate} max={today} onChange={setToDate} placeholder="Đến ngày" className="ppa-cmd-date"/>
-          <button type="button" onClick={applyManualRange} className="ppa-cmd-apply">Áp dụng</button>
+      <div className="flex-wrap items-center gap-2.5 px-0.5 py-0 [display:flex] max-md:p-0">
+        <div className="items-center gap-1.5 rounded-[12px] border border-[rgb(255_255_255_/_12%)] bg-[rgb(255_255_255_/_8%)] py-1 pl-3 pr-1 [display:flex] max-md:w-full max-md:flex-wrap max-md:p-2" role="group" aria-label="Khoảng ngày">
+          <span className="mr-1 inline-flex items-center gap-1.5 whitespace-nowrap text-[12px] font-bold text-[#c1dce8] max-md:w-full [&_svg]:text-[#75d4e4]"><CalendarRange className="size-4" aria-hidden />Khoảng ngày</span>
+          <DateField value={fromDate} max={toDate} onChange={setFromDate} placeholder="Từ ngày" className={PPA_DATE}/>
+          <ArrowRight className="size-4 shrink-0 text-[#75d4e4]" aria-hidden />
+          <DateField value={toDate} min={fromDate} max={today} onChange={setToDate} placeholder="Đến ngày" className={PPA_DATE}/>
+          <button type="button" onClick={applyManualRange} className="h-9 whitespace-nowrap bg-[#75d4e4] px-[14px] font-extrabold text-[#0f2a44] [border-radius:8px] [font-size:13px] hover:bg-[#9ee4ee] max-md:h-10 max-md:w-full">Áp dụng</button>
         </div>
-        <div className="ppa-cmd-presets" role="group" aria-label="Chọn nhanh khoảng ngày">
+        <div className={PPA_PRESETS} role="group" aria-label="Chọn nhanh khoảng ngày">
           <button type="button" onClick={() => applyQuick("month")} aria-pressed={rangeLabel === "Tháng vận hành"}>Tháng vận hành</button>
           <button type="button" onClick={() => applyQuick("last15")} aria-pressed={rangeLabel === "15 ngày gần nhất"}>15 ngày</button>
           <button type="button" onClick={() => applyQuick("all")} aria-pressed={rangeLabel === "Xem tất cả"}>Tất cả</button>
         </div>
-        <div className="ppa-cmd-actions">
-          <details className="ppa-sheet-menu"><summary className="ppa-cmd-ghost"><Sheet className="size-4" aria-hidden />Google Sheet<ChevronDown className="size-3.5" aria-hidden /></summary><div className="ppa-sheet-menu-content">
-            <label className="ppa-sheet-date">Ngày Google Sheet<DateField value={sheetDate} onChange={setSheetDate} className="w-[150px]"/></label>
+        <div className="ml-auto items-center gap-2 [display:flex] max-md:ml-0 max-md:w-full max-md:flex-wrap max-md:[&>*]:flex-[1_1_0]">
+          <details className="relative max-md:[&[open]]:flex-[1_1_100%]"><summary className={PPA_SHEET_SUMMARY}><Sheet className="size-4" aria-hidden />Google Sheet<ChevronDown className="size-3.5" aria-hidden /></summary><div className={PPA_SHEET_CONTENT}>
+            <label className="items-center gap-2 text-[12px] [display:flex]">Ngày Google Sheet<DateField value={sheetDate} onChange={setSheetDate} className="w-[150px]"/></label>
             <GoogleSheetSyncButton compact operatingDate={sheetDate} disabled={!hasSavedPpaForSheet || !hasAvailableCapacityForSheet} disabledReason={sheetDisabledReason} onImported={() => loadRange(fromDate, toDate, false)}/>
           </div></details>
-          <button type="button" disabled={exporting || loading || !rows.length} onClick={requestExportXlsx} className="ppa-cmd-primary"><Download className="size-4" aria-hidden />{exporting ? "Đang xuất…" : "Xuất Excel"}</button>
+          <button type="button" disabled={exporting || loading || !rows.length} onClick={requestExportXlsx} className={PPA_PRIMARY}><Download className="size-4" aria-hidden />{exporting ? "Đang xuất…" : "Xuất Excel"}</button>
         </div>
       </div>
     </div>
 
     {error && <p role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-sm font-medium text-red-800">{error}</p>}
-    {!loading && restoredCount !== null && <p role="status" className="ppa-restored-status text-xs text-slate-500">Đã khôi phục {restoredCount} ngày kết quả đã lưu trên website.</p>}
+    {!loading && restoredCount !== null && <p role="status" className="!mx-0 !my-1 text-xs text-slate-500 ![font-size:11px]">Đã khôi phục {restoredCount} ngày kết quả đã lưu trên website.</p>}
 
     {noteworthy.length > 0 && <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
       <button type="button" onClick={() => setNotesOpen(open => !open)} className="flex w-full items-center justify-between gap-2 text-left text-sm font-bold text-amber-900">
@@ -442,7 +484,7 @@ export function PpaHeatRateDashboard({ tabs }: { tabs?: React.ReactNode }) {
       </ul>}
     </div>}
 
-    <div className="ppa-unit-grid">
+    <div className="grid grid-cols-3 gap-[18px] max-[1199px]:grid-cols-[1fr] print:grid-cols-3">
       {(["s1", "s2", "plant"] as UnitKey[]).map(unit => {
         const summary = summaryFor(unit);
         const unitChartData = chartData(unit);
@@ -451,9 +493,9 @@ export function PpaHeatRateDashboard({ tabs }: { tabs?: React.ReactNode }) {
     </div>
 
     <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b bg-[#f8fafc] px-4 py-3"><h2 className="font-extrabold text-[#20345f]">Bảng chi tiết theo ngày</h2><span className="ppa-detail-legend"><span className="ppa-legend-over">CL đỏ: vượt PPA</span><span className="ppa-legend-met">CL xanh: đạt PPA</span><span>SHN: kJ/kWh · CS: MW</span></span></div>
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b bg-[#f8fafc] px-4 py-3"><h2 className="font-extrabold text-[#20345f]">Bảng chi tiết theo ngày</h2><span className="flex-wrap gap-3 text-[#768399] [display:flex] [font-size:11px]"><span className="text-[#b42332]">CL đỏ: vượt PPA</span><span className="text-[#16714c]">CL xanh: đạt PPA</span><span>SHN: kJ/kWh · CS: MW</span></span></div>
       {!rows.length ? <div className="grid min-h-40 place-items-center p-6 text-sm text-slate-500">{loading ? "Đang tải dữ liệu…" : "Chưa có kết quả đã lưu trong khoảng thời gian này."}</div> : <div className="module-table-scroll w-full min-w-0 max-w-full overflow-x-scroll overflow-y-auto" tabIndex={0} role="region" aria-label="Bảng PPA theo ngày, cuộn ngang để xem các cột">
-        <table className="report-data-table ppa-detail-table">
+        <table className={`report-data-table ${PPA_DETAIL_TABLE}`}>
           <colgroup>
             <col style={{ width: 70 }}/>
             {Array.from({ length: 14 }, (_, index) => <col key={index} style={{ width: [3,8,13].includes(index) ? 74 : 98 }}/>) }
@@ -462,7 +504,7 @@ export function PpaHeatRateDashboard({ tabs }: { tabs?: React.ReactNode }) {
           </colgroup>
           <thead>
             <tr className="bg-[#dcebf5] text-[#173b64]">
-              <th rowSpan={2} className="px-1 py-2 text-center align-bottom">Ngày</th>
+              <th rowSpan={2} className="!bg-[#f6f8fc] px-1 py-2 text-center align-bottom">Ngày</th>
               <th colSpan={4} className="border-l border-white/60 p-2 text-center text-purple-900">Chung 2 tổ</th>
               <th colSpan={5} className="border-l border-white/60 p-2 text-center text-blue-900">Tổ máy S1</th>
               <th colSpan={5} className="border-l border-white/60 p-2 text-center text-amber-900">Tổ máy S2</th>
@@ -475,11 +517,11 @@ export function PpaHeatRateDashboard({ tabs }: { tabs?: React.ReactNode }) {
           </thead>
           <tbody>
             {[...visibleRowsByMonth].reverse().map(([period, monthRows]) => <Fragment key={period}>
-              <tr className="bg-slate-100"><td colSpan={17} className="ppa-month-label px-2 py-1.5 text-left font-extrabold uppercase tracking-wide text-slate-500">{monthLabel(period)}</td></tr>
+              <tr className="bg-slate-100"><td colSpan={17} className="px-2 py-1.5 !text-left font-extrabold ![font-size:11px] uppercase tracking-wide text-slate-500">{monthLabel(period)}</td></tr>
               {[...monthRows].sort((a, b) => b.date.localeCompare(a.date)).map(row => {
                 const plant = compareHeatRate(row.actualPlant, row.ppaPlant, row.netS1Kwh === null || row.netS2Kwh === null ? null : row.netS1Kwh + row.netS2Kwh), s1 = compareHeatRate(row.actualS1, row.ppaS1, row.netS1Kwh), s2 = compareHeatRate(row.actualS2, row.ppaS2, row.netS2Kwh);
                 const differenceCells = (comparison: ReturnType<typeof compareHeatRate>) => {
-                  const tone = comparison.status === "Vượt PPA" ? "ppa-cl-over" : comparison.status === "Đạt" ? "ppa-cl-met" : "ppa-cl-empty";
+                  const tone = CL_TONE[comparison.status === "Vượt PPA" ? "over" : comparison.status === "Đạt" ? "met" : "empty"];
                   return <><td className={tone} title={comparison.status}>{format(comparison.difference)}</td><td className={tone} title={comparison.status}>{formatPercent(comparison.percent)}</td></>;
                 };
                 return <tr id={`ppa-row-${row.date}`} key={row.date} className="border-t border-slate-200 hover:bg-slate-50/60">

@@ -112,5 +112,9 @@ Chi tiết và cách dùng: `docs/ktkt-chuyen-doi.md` ("Kiểm tra bắt buộc 
 - `ctktkt-export-dump.mjs` — nội dung file Excel xuất (so cũ ↔ mới).
 - `ctktkt-shadow-dump.mjs` — ảnh chụp Google Mirror + API tích hợp (so cũ ↔ mới).
 - `ctktkt-style-dump.mjs` + `ctktkt-style-compare.mjs` — kiểu hiển thị thực tế mọi phần tử 12 trang × 1280/390 (so khi
-  dọn/dời CSS; chụp code cũ ≥ 2 lần và truyền `--unstable` để loại phần tử tự dao động).
+  dọn/dời CSS; chụp code cũ ≥ 2 lần và truyền `--unstable` để loại phần tử tự dao động). Thêm khổ "print" (`@media print`).
+  `CTKTKT_STYLE_PAGES=pmis-report,ppa-heat-rate` chỉ chụp vài trang (không cần "/" đầu); `CTKTKT_STYLE_NOW=2026-09-20` đặt
+  "hôm nay" vào khoảng có dữ liệu mẫu (bảng PPA… mới có dòng); `SCENARIOS` trong tệp = trạng thái chụp thêm (mở menu, đổi tab,
+  rê chuột), tắt bằng `CTKTKT_STYLE_SCENARIOS=0`. Biến `--tw-*` của Tailwind không tính là khác. Nhiễu đã biết: nút nổi
+  "cuộn xuống" (`div:1>div:4>button:1`), lề `header:0>div:2`, tooltip/đường recharts ở trang nhập liệu.
 - `ctktkt.mjs`, `ctktkt-machine.mjs` — kiểm tích hợp (DB dev chỉ có dữ liệu mẫu → `CTKTKT_VERIFY_DAY=2026-09-17`).

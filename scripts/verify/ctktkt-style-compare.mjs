@@ -25,7 +25,8 @@ const skip = (page, path) => /(^|>)script:/.test(path) || [...unstable].some(key
 // Ba phần: phần tử | ::before | ::after — đặt tiền tố để không trộn khoá.
 const props = s => Object.fromEntries(s.split("|").flatMap((part, i) => part.split(";").map(x => { const j = x.indexOf(":"); return [["", "::before ", "::after "][i] + x.slice(0, j), x.slice(j + 1)]; })));
 let pagesDiff = 0;
-for (const page of new Set([...Object.keys(a.hashed), ...Object.keys(b.hashed)])) {
+// Chỉ so các trang có trong cả hai lần chụp (lần chụp sau có thể chỉ gồm vài trang).
+for (const page of Object.keys(b.hashed).filter(page => page in a.hashed)) {
   const ra = a.hashed[page] || [], rb = b.hashed[page] || [];
   const mb = new Map(rb.map(r => [r[0], r]));
   const diffs = [];
@@ -37,7 +38,10 @@ for (const page of new Set([...Object.keys(a.hashed), ...Object.keys(b.hashed)])
     if (!other) { diffs.push(`thiếu ${path} (${cls})`); continue; }
     if (other[2] === h) continue;
     const pa = props(a.styles[h]), pb = props(b.styles[other[2]]);
-    const changed = Object.keys({ ...pa, ...pb }).filter(k => pa[k] !== pb[k]).slice(0, 6).map(k => `${k}: ${pa[k]} → ${pb[k]}`);
+    // Biến nội bộ của Tailwind (--tw-border-opacity…) tự nó không vẽ gì — thuộc tính thật dùng nó vẫn được so.
+    const keys = Object.keys({ ...pa, ...pb }).filter(k => pa[k] !== pb[k] && !/^(::(before|after) )?--tw-/.test(k));
+    if (!keys.length) continue;
+    const changed = keys.slice(0, 6).map(k => `${k}: ${pa[k]} → ${pb[k]}`);
     diffs.push(`${path} [${cls.slice(0, 60)}] ${changed.join("; ")}`);
   }
   if (diffs.length) { pagesDiff++; console.log(`✗ ${page}: ${diffs.length} phần tử khác`); for (const d of diffs.slice(0, limit)) console.log("   " + d.slice(0, 300)); }
