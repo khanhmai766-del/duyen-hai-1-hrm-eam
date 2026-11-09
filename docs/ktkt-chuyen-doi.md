@@ -93,8 +93,7 @@ xác minh, "nạp lại") gọi thẳng `apiGet`.
 
 - `GET water-report` trả 500 cho **cả tháng** nếu một ca có hiệu chỉnh công tơ âm (`normalizeWaterAdjustment` ném lỗi khi đọc).
   Form và API ghi đã chặn số âm nên dữ liệu thật chưa gặp; chỉ có thể lọt qua đường khôi phục/nạp dữ liệu. Chưa sửa (đổi hành vi API).
-- `POST water-report` ghi từng ca và tính lại chuỗi bằng các câu lệnh riêng lẻ, không cùng một giao dịch — lỗi giữa chừng
-  để lại tháng tính dở. Xử lý khi chuyển sang Prisma (giai đoạn 3) bằng `prisma.$transaction`.
+- ~~`POST water-report` không cùng một giao dịch~~ — đã sửa 09/11/2026 (giai đoạn 3, `ktktWrite`), cả `water-report/upload`.
 - `bcsx-section1-import` (nạp lịch sử Mục 1 từ 2 file S1/S2): chỉ kiểm nhánh lỗi — file do `bcsx-export` xuất thiếu các sheet theo
   ngày ("01"…) của file BCSX gốc; cần một cặp file gốc mẫu để khoá nhánh thành công. `bcsx-operation-import` cũng vậy (thiếu file
   DanhSachLenhKetThuc mẫu). `bcsx-sync` hiện không có nơi nào gọi — xem lại ở giai đoạn 4.
@@ -103,7 +102,7 @@ xác minh, "nạp lại") gọi thẳng `apiGet`.
 - `styles.css` còn các quy tắc `.module-chart-grid …` không phần tử nào dùng (đã xoá phần của PMIS); dọn ở giai đoạn 4.
 - PMIS (đã sửa khi chuyển): bản cũ báo "Không đồng bộ được ngày nào…" rồi tự xoá ngay vì lượt tải lại đặt `error = ""`;
   nay thông báo lỗi còn hiển thị.
-| 3 | `getRawDb()` → Prisma, đọc trước ghi sau; có thể "so bóng" (chạy cả truy vấn cũ và mới, ghi log khi lệch). Cùng thứ tự trang | Hoá chất ✅ (09/11) · còn lại ⏳ |
+| 3 | `getRawDb()` → Prisma, đọc trước ghi sau; có thể "so bóng" (chạy cả truy vấn cũ và mới, ghi log khi lệch). Cùng thứ tự trang | Hoá chất ✅ · Lượng nước ✅ (09/11) · còn lại ⏳ |
 | 4 | Chuyển 4 API máy; xoá `db/sql.ts`, `getRawDb`, `useCtktktRequest`, cổng `[[...path]]` | ⏳ |
 
 ### Giai đoạn 3 — mẫu chuyển một route sang Prisma (theo Hoá chất, 09/11/2026)
@@ -116,7 +115,11 @@ xác minh, "nạp lại") gọi thẳng `apiGet`.
   Như bản cũ, phiên bản vẫn tăng khi câu ghi không trúng dòng nào.
 - Cột thời gian là CHUỖI giờ UTC: tạo mới thì bỏ trống để cột tự lấy mặc định; cập nhật thì gán `ktktUtcNow()`.
 - `UPDATE … WHERE id = ?` cũ → `updateMany` (không ném lỗi khi dòng vừa mất) — `update` của Prisma sẽ ném P2025 → 500.
-- Test hợp đồng ghi nay chụp cả **"phiên bản đọc tăng"** mỗi bước. Trước khi chuyển một route: thêm kịch bản ghi nếu chưa có
+- Lượng nước (`lib/water-report/store.ts`): Prisma không sắp theo `CASE shift_time` → lấy theo ngày rồi sắp ca trong JS
+  (06h→14h→22h, giờ lạ cuối; ca mốc lấy ca muộn nhất của ngày gần nhất). Lưu nhiều ca và nạp file chạy trong MỘT giao dịch
+  (đã sửa tồn đọng): ca nào lỗi thì cả lượt huỷ — bước hợp đồng "nhiều ca, ca sau sai giờ" ghi lại có chủ đích.
+  File Excel Lượng nước so bằng `scripts/verify/ctktkt-export-dump.mjs` (giá trị từng ô + ô gộp, cũ ↔ mới): giống hệt.
+- Test hợp đồng ghi nay chụp cả **"phiên bản đọc tăng"** (tập khoá, không đếm số lần) mỗi bước. Trước khi chuyển một route: thêm kịch bản ghi nếu chưa có
   và `--writes --record` **trên code cũ**.
 
 Trước khi bắt đầu một trang: báo cho người còn lại để không sửa song song trang đó; `git fetch` trước khi sửa.

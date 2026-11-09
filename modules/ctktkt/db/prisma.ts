@@ -25,10 +25,18 @@ export async function bumpReadVersions(tx: KtktTx, keys: readonly string[]) {
  * Một lần ghi KTKT: dữ liệu + phiên bản đọc cùng commit; lỗi ở bất kỳ bước nào đều rollback.
  * Như bản cũ, phiên bản vẫn tăng khi câu ghi không trúng dòng nào (vd xoá bản ghi không tồn tại).
  */
-export function ktktWrite<T>(keys: readonly string[], work: (tx: KtktTx) => Promise<T>) {
+export function ktktWrite<T>(keys: readonly string[] | ((result: T) => readonly string[]), work: (tx: KtktTx) => Promise<T>) {
   return prisma.$transaction(async tx => {
     const result = await work(tx);
-    await bumpReadVersions(tx, keys);
+    await bumpReadVersions(tx, typeof keys === "function" ? keys(result) : keys);
     return result;
+  }, {
+    // Nạp file một năm ≈ 1.100 ca + tính lại chuỗi từng tháng: vượt mặc định 5 giây của Prisma.
+    timeout: 120_000, maxWait: 15_000,
   });
+}
+
+/** Ném ra trong `ktktWrite` để huỷ cả giao dịch rồi trả đúng phản hồi lỗi (vd thiếu quyền giữa danh sách). */
+export class KtktAbort extends Error {
+  constructor(readonly response: Response) { super("KtktAbort"); }
 }

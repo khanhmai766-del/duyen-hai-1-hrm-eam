@@ -20,6 +20,28 @@ const CASES = [
   ['chemical DELETE', `UPDATE chemical_usage_logs
       SET deleted_at = CURRENT_TIMESTAMP, deleted_by_user_id = ?, deleted_by_name = ?, deleted_by_position = ?
       WHERE id = ? AND deleted_at IS NULL`, () => ['u', 'U', 'TC', 5], () => operationalWriteKeysFor('chemical_usage_logs')],
+  // Lượng nước: thêm/sửa ca (route chính + nạp file), tính lại chuỗi, xoá theo ngày/ca và theo id.
+  ['water upsert ca', `INSERT INTO water_shift_logs (
+            log_date, shift_time, shift_team, shift_leader,
+            elec_rec_s1, elec_rec_s2, elec_gen_s1, elec_gen_s2,
+            water_rec_s1, water_rec_s2, water_used_s1, water_used_s2,
+            water_ratio_s1, water_ratio_s2,
+            condenser_rec_s1, condenser_rec_s2, condenser_used_s1, condenser_used_s2,
+            resin_water_s1_24h, resin_water_s2_24h, note, updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, 0, 0, ?, ?, 0, 0, 0, 0, ?, ?, 0, 0, ?, ?, '', CURRENT_TIMESTAMP)
+          ON CONFLICT(log_date, shift_time) DO UPDATE SET shift_team = excluded.shift_team, updated_at = CURRENT_TIMESTAMP`,
+    d => [d, '06h00', 'Kíp 1', 'A', 1, 2, 3, 4, 5, 6, 7, 8], d => operationalWriteKeysFor('water_shift_logs', [d])],
+  ['water tính lại chuỗi', `UPDATE water_shift_logs
+             SET elec_gen_s1 = ?, elec_gen_s2 = ?,
+                 water_used_s1 = ?, water_used_s2 = ?,
+                 water_ratio_s1 = ?, water_ratio_s2 = ?,
+                 condenser_used_s1 = ?, condenser_used_s2 = ?
+             WHERE log_date = ? AND shift_time = ?`, d => [1, 2, 3, 4, 5, 6, 7, 8, d, '06h00'], d => operationalWriteKeysFor('water_shift_logs', [d])],
+  ['water xoá theo ngày + ca', 'DELETE FROM water_shift_logs WHERE log_date = ? AND shift_time = ?', d => [d, '14h00'], d => operationalWriteKeysFor('water_shift_logs', [d])],
+  ['water xoá theo id', 'DELETE FROM water_shift_logs WHERE id = ?', () => [7], () => operationalWriteKeysFor('water_shift_logs')],
+  ['trưởng ca (không phải dữ liệu vận hành)', `INSERT INTO water_shift_leaders (name, is_active, display_order)
+         VALUES (?, ?, ?)
+         ON CONFLICT(name) DO UPDATE SET is_active = excluded.is_active, display_order = excluded.display_order`, () => ['A', 1, 0], () => operationalWriteKeysFor('water_shift_leaders')],
 ];
 
 for (const [name, sql, args, keys] of CASES) {

@@ -1,42 +1,14 @@
 import ExcelJS from "exceljs";
-import { getRawDb } from "@/modules/ctktkt/db";
+import { prisma } from "@/lib/prisma";
+import { loadWaterChain } from "@/modules/ctktkt/lib/water-report/store";
 import {
   formatIsoToDmy,
-  recalculateWaterShiftChain,
   type WaterShiftLog,
 } from "@/modules/ctktkt/lib/water-report/calculations";
-import { ensureWaterSchema } from "@/modules/ctktkt/lib/water-report/schema";
 
 const monthPattern = /^(19|20|21)\d{2}-(0[1-9]|1[0-2])$/;
 
 import {waterAdjustmentsFromRow} from "@/modules/ctktkt/lib/water-report/adjustments";
-function rowToLog(row: Record<string, unknown>): WaterShiftLog {
-  return {
-    ...waterAdjustmentsFromRow(row),
-    id: Number(row.id || 0),
-    logDate: String(row.log_date || ""),
-    shiftTime: String(row.shift_time || ""),
-    shiftTeam: String(row.shift_team || ""),
-    shiftLeader: String(row.shift_leader || ""),
-    elecRecS1: Number(row.elec_rec_s1 ?? 0),
-    elecRecS2: Number(row.elec_rec_s2 ?? 0),
-    elecGenS1: Number(row.elec_gen_s1 ?? 0),
-    elecGenS2: Number(row.elec_gen_s2 ?? 0),
-    waterRecS1: Number(row.water_rec_s1 ?? 0),
-    waterRecS2: Number(row.water_rec_s2 ?? 0),
-    waterUsedS1: Number(row.water_used_s1 ?? 0),
-    waterUsedS2: Number(row.water_used_s2 ?? 0),
-    waterRatioS1: Number(row.water_ratio_s1 ?? 0),
-    waterRatioS2: Number(row.water_ratio_s2 ?? 0),
-    condenserRecS1: Number(row.condenser_rec_s1 ?? 0),
-    condenserRecS2: Number(row.condenser_rec_s2 ?? 0),
-    condenserUsedS1: Number(row.condenser_used_s1 ?? 0),
-    condenserUsedS2: Number(row.condenser_used_s2 ?? 0),
-    resinWaterS1_24h: Number(row.resin_water_s1_24h ?? 0),
-    resinWaterS2_24h: Number(row.resin_water_s2_24h ?? 0),
-    note: String(row.note || ""),
-  };
-}
 
 export async function exportReport(request: Request) {
   const url = new URL(request.url);
@@ -68,42 +40,10 @@ export async function exportReport(request: Request) {
 /** Internal report builder shared by Excel downloads and the authenticated Sheets mirror. */
 export async function buildWaterWorkbook(month: string) {
   if (!monthPattern.test(month)) throw new Error("Tháng không hợp lệ.");
-    const rawDb = getRawDb();
-    await ensureWaterSchema(rawDb);
-
-    // Lấy baseline
-    const baselineRow = (await rawDb
-      .prepare(
-        `SELECT * FROM water_shift_logs
-         WHERE log_date < ?
-         ORDER BY log_date DESC,
-                  CASE shift_time WHEN '22h00' THEN 3 WHEN '14h00' THEN 2 WHEN '06h00' THEN 1 ELSE 0 END DESC
-         LIMIT 1`
-      )
-      .bind(`${month}-01`)
-      .first()) as Record<string, unknown> | null;
-
-    const baseline = baselineRow ? rowToLog(baselineRow) : null;
-
-    // Lấy toàn bộ ca trong tháng
+    // Ca mốc + các ca trong tháng đã tính chuỗi (đọc bằng Prisma, cùng thứ tự ca như SQL cũ).
     const [yearStr, monthStr] = month.split("-");
     const year = Number(yearStr);
-    const m = Number(monthStr);
-    const nextMonth = m === 12 ? `${year + 1}-01` : `${year}-${String(m + 1).padStart(2, "0")}`;
-
-    const monthRowsRes = await rawDb
-      .prepare(
-        `SELECT * FROM water_shift_logs
-         WHERE log_date >= ? AND log_date < ?
-         ORDER BY log_date ASC,
-                  CASE shift_time WHEN '06h00' THEN 1 WHEN '14h00' THEN 2 WHEN '22h00' THEN 3 ELSE 9 END ASC`
-      )
-      .bind(`${month}-01`, `${nextMonth}-01`)
-      .all();
-
-    const monthShifts = monthRowsRes.results.map(r => rowToLog(r as Record<string, unknown>));
-    const chainInput = baseline ? [baseline, ...monthShifts] : monthShifts;
-    const chained = recalculateWaterShiftChain(chainInput);
+    const { baseline, monthShifts, chained } = await loadWaterChain(prisma, month);
 
     // Tạo Workbook
     const workbook = new ExcelJS.Workbook();

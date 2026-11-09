@@ -118,6 +118,7 @@ const ENDPOINTS = [
   "operating-events?date=2026-09-17",
   "water-report?month=2026-09",
   "water-report/leaders",
+  "water-report/compare",
   "chemical-usage?month=2026-09",
   "chemical-usage?month=2026-13",
   "chemical-usage",
@@ -175,6 +176,12 @@ const WRITE_SCENARIOS = {
     { step: "không có ca", method: "POST", path: "water-report", json: {} },
     { step: "xoá theo ngày + ca", method: "DELETE", path: "water-report?logDate=2026-09-18&shiftTime=14h00", after: ["water-report?month=2026-09"] },
     { step: "xoá thiếu tham số", method: "DELETE", path: "water-report" },
+    { step: "vắt qua 2 tháng", method: "POST", path: "water-report", json: { shifts: [shift("2026-09-30", "22h00", 8), shift("2026-10-01", "06h00", 9)] }, after: ["water-report?month=2026-09", "water-report?month=2026-10"] },
+    { step: "ngày năm 1999", method: "POST", path: "water-report", json: { shift: shift("1999-12-31", "22h00", 10) }, after: ["water-report?month=1999-12", "water-report?month=2026-09"] },
+    { step: "xoá theo id", method: "DELETE", path: "water-report?id=980000", after: ["water-report?month=2026-09"] },
+    { step: "xoá ca không tồn tại", method: "DELETE", path: "water-report?logDate=2026-08-01&shiftTime=06h00" },
+    { step: "sửa Trưởng ca đã có (ẩn + đổi thứ tự)", method: "POST", path: "water-report/leaders", json: { name: "Trưởng ca Mẫu A", isActive: 0, displayOrder: 5 }, after: ["water-report/leaders", "water-report?month=2026-09"] },
+    { step: "xoá Trưởng ca theo id", method: "DELETE", path: "water-report/leaders?id=960001", after: ["water-report/leaders"] },
     { step: "thêm Trưởng ca", method: "POST", path: "water-report/leaders", json: { name: "Trưởng ca Mẫu C", displayOrder: 3 }, after: ["water-report/leaders"] },
     { step: "Trưởng ca trống", method: "POST", path: "water-report/leaders", json: { name: "  " } },
     { step: "xoá Trưởng ca theo tên", method: "DELETE", path: `water-report/leaders?name=${encodeURIComponent("Trưởng ca Mẫu C")}`, after: ["water-report/leaders"] },
@@ -182,6 +189,9 @@ const WRITE_SCENARIOS = {
     { step: "tải lên: quét sheet (file xuất từ chính web)", method: "POST", path: "water-report/upload", upload: { action: "scan" } },
     { step: "tải lên: nạp dữ liệu", method: "POST", path: "water-report/upload", upload: { action: "import" }, after: ["water-report?month=2026-09", "water-report?month=2026-10"] },
     { step: "tải lên: không có file", method: "POST", path: "water-report/upload", form: { action: "scan" } },
+    // Cuối nhóm (không kéo theo bước khác): lượt lưu nhiều ca có ca sau lỗi. Bản cũ ghi từng câu nên để lại ca trước
+    // mà chưa tính lại chuỗi; từ giai đoạn 3 (Prisma, một giao dịch) cả lượt bị huỷ — đổi hành vi CÓ CHỦ ĐÍCH.
+    { step: "nhiều ca, ca sau sai giờ", method: "POST", path: "water-report", json: { shifts: [shift("2026-09-19", "06h00", 6), shift("2026-09-19", "07h00", 7)] }, after: ["water-report?month=2026-09"] },
   ],
   // Dữ liệu ngày (PMIS, Dữ liệu các tháng, đồng bộ QLKT). B, C, H… tự liên kết từ Chỉ tiêu KTKT nên bị chặn khi ghi.
   // Hoá chất (tài khoản quản trị): id mẫu 1000000 = mã "PAC" ngoài danh mục, 1000002 = đã xoá, 1000003 = NAOH_31.
@@ -341,8 +351,10 @@ async function readVersions() {
   await c.end();
   return Object.fromEntries(rows.map(r => [r.cache_key, Number(r.version)]));
 }
+// Chỉ so TẬP khoá đã tăng (không so số lần): SQL cũ mỗi câu một giao dịch nên tăng nhiều lần, bản Prisma tăng một lần
+// mỗi giao dịch — Google Mirror chỉ cần biết khoá nào đổi.
 function versionDelta(before, after) {
-  return Object.fromEntries(Object.keys(after).filter(k => after[k] !== (before[k] ?? 0)).sort().map(k => [k, after[k] - (before[k] ?? 0)]));
+  return Object.keys(after).filter(k => after[k] !== (before[k] ?? 0)).sort();
 }
 async function runWrites(cookie) {
   const out = {};
