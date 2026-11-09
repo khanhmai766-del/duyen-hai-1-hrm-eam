@@ -11,6 +11,7 @@ export const BACKUP_TABLES = [
   {name:"measurements",label:"Chỉ tiêu theo kỳ",date:"period",keys:["id"]},
   {name:"water_shift_leaders",label:"Danh sách trưởng ca",date:null,keys:["name"]},
 ] as const;
+const WATER_ADJUSTMENT_COLUMNS=new Set(["water_adjustment_s1","water_adjustment_s2","condenser_adjustment_s1","condenser_adjustment_s2"]);
 export const MAX_BACKUP_BYTES = 3_000_000;
 export const MAX_BACKUP_ROWS = 12000;
 export type BackupRow = Record<string,string|number|null>;
@@ -82,6 +83,8 @@ export function restoreStatements(file:DataBackup,schemas:Map<string,BackupColum
         if(value===null&&column.notnull)throw new Error(`Ô bắt buộc bị trống: ${table.name}.${name}.`);
         if(value!==null&&/INT|REAL|NUM|FLOAT|DOUBLE/i.test(column.type)&&(typeof value!=="number"||!Number.isFinite(value)||(/INT/i.test(column.type)&&!Number.isSafeInteger(value))))throw new Error(`Kiểu số không hợp lệ: ${table.name}.${name}.`);
         if(value!==null&&/TEXT/i.test(column.type)&&typeof value!=="string")throw new Error(`Kiểu chữ không hợp lệ: ${table.name}.${name}.`);
+        // Hiệu chỉnh công tơ nước: cùng giới hạn như form nhập (0 … 1.000.000.000 m³ hoặc trống).
+        if(table.name==="water_shift_logs"&&WATER_ADJUSTMENT_COLUMNS.has(name)&&value!==null&&(typeof value!=="number"||value<0||value>1_000_000_000))throw new Error(`Hiệu chỉnh công tơ phải từ 0 đến 1.000.000.000 m³ hoặc để trống: ${table.name}.${name} ngày ${String(row.log_date??"")} ca ${String(row.shift_time??"")}.`);
       }
       for(const col of schema)if(col.notnull&&!col.pk&&col.dflt_value===null&&!(col.name in row))throw new Error(`Thiếu cột bắt buộc: ${table.name}.${col.name}.`);
       // Natural keys preserve the destination row ID. Event/chemical/measurement IDs are part of their identity.

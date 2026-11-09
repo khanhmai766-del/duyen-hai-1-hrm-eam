@@ -1,6 +1,7 @@
 "use client";
 import { ctktktMetricDisplay } from "../lib/ctktkt-report";
 import { CTKTKT_ELECTRIC_METER_RESET_CELLS } from "../lib/ctktkt-electric-meter-reset";
+import "./ctktkt-report.css";
 import { ReportCorrections } from "./report-corrections";
 import { downloadCtktktFile, fetchStoredCtktktReport, useReadCtktktReport, useSaveCtktktReport } from "@/hooks/useKtktReport";
 

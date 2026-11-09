@@ -91,16 +91,19 @@ xác minh, "nạp lại") gọi thẳng `apiGet`.
 
 ### Việc tồn đọng ghi nhận khi chuyển đổi
 
-- `GET water-report` trả 500 cho **cả tháng** nếu một ca có hiệu chỉnh công tơ âm (`normalizeWaterAdjustment` ném lỗi khi đọc).
-  Form và API ghi đã chặn số âm nên dữ liệu thật chưa gặp; chỉ có thể lọt qua đường khôi phục/nạp dữ liệu. Chưa sửa (đổi hành vi API).
+- ~~`GET water-report` trả 500 cho cả tháng nếu một ca có hiệu chỉnh công tơ âm~~ — sửa 09/11/2026: (a) khôi phục sao lưu (JSON/ZIP)
+  chặn hiệu chỉnh âm/quá 1 tỷ m³ ngay bước xem trước (400); (b) đọc dữ liệu đã lưu dùng `readStoredWaterAdjustments`: giá trị hỏng
+  → bỏ qua khi tính + GET trả `invalidAdjustments` (chỉ ca TRONG tháng, không tính ca mốc) → trang Lượng nước hiện cảnh báo.
+  Test: `water-store-db.test.mjs`, `water-adjustments.test.mjs`, `data-backup-db.test.mjs`.
 - ~~`POST water-report` không cùng một giao dịch~~ — đã sửa 09/11/2026 (giai đoạn 3, `ktktWrite`), cả `water-report/upload`.
-- `bcsx-section1-import` (nạp lịch sử Mục 1 từ 2 file S1/S2): chỉ kiểm nhánh lỗi — file do `bcsx-export` xuất thiếu các sheet theo
-  ngày ("01"…) của file BCSX gốc; cần một cặp file gốc mẫu để khoá nhánh thành công. `bcsx-operation-import` cũng vậy (thiếu file
-  DanhSachLenhKetThuc mẫu — ĐÃ có từ 09/11: test tự sinh file lệnh mẫu, khoá nhánh nạp thành công). `bcsx-sync` hiện không có
-  nơi nào gọi — xem lại ở giai đoạn 4.
-- `PATCH correction-requests` với JSON hỏng trả **503** "Chưa truy cập được yêu cầu chỉnh sửa" (nên là 400) — hợp đồng đang khoá
-  hành vi hiện tại; sửa thì ghi lại ảnh chụp có chủ đích.
-- `styles.css` còn các quy tắc `.module-chart-grid …` không phần tử nào dùng (đã xoá phần của PMIS); dọn ở giai đoạn 4.
+- ~~`bcsx-section1-import`: chỉ kiểm nhánh lỗi~~ — từ 09/11/2026 hợp đồng tự sinh cặp file BCSX gốc mẫu S1/S2 (sheet "01", "02";
+  dòng 11–58) → khoá nhánh thành công (2 ngày, 768 giá trị) và 5 nhánh lỗi (ô công thức, thiếu sheet, sai mốc giờ, trùng tổ máy,
+  khác ngày). `bcsx-operation-import` cũng vậy (thiếu file
+  DanhSachLenhKetThuc mẫu — ĐÃ có từ 09/11: test tự sinh file lệnh mẫu, khoá nhánh nạp thành công). `bcsx-sync` không có nơi
+  nào gọi — đã xoá 09/11/2026.
+- ~~`PATCH correction-requests` với JSON hỏng trả 503~~ — sửa 09/11/2026: JSON hỏng → 400 "Dữ liệu JSON không hợp lệ.", JSON
+  `null` → 400 "Yêu cầu không hợp lệ."; ảnh chụp hợp đồng ghi lại có chủ đích (chỉ bước này đổi).
+- ~~`styles.css` còn các quy tắc `.module-chart-grid …` không phần tử nào dùng~~ — đã xoá 09/11/2026.
 - PMIS (đã sửa khi chuyển): bản cũ báo "Không đồng bộ được ngày nào…" rồi tự xoá ngay vì lượt tải lại đặt `error = ""`;
   nay thông báo lỗi còn hiển thị.
 | 3 | `getRawDb()` → Prisma, đọc trước ghi sau; có thể "so bóng" (chạy cả truy vấn cũ và mới, ghi log khi lệch). Cùng thứ tự trang | Hoá chất ✅ · Lượng nước ✅ · PMIS (`daily-inputs`, dùng chung với Dữ liệu các tháng) ✅ · PPA (`ppa-heat-rate`, `/notes`, `google-sheet-sync`) ✅ · Báo cáo sản xuất (5 route; `bcsx-sync` không ai gọi — giai đoạn 4) ✅ · Chỉ tiêu KTKT ✅ (09/11: đọc, xuất Excel, lưu theo ca/yêu cầu sửa, ảnh công tơ than, Gemini dùng chung) · còn `measurements`, `bcsx-sync`, sao lưu dữ liệu, Google Mirror, API máy → giai đoạn 4 |
@@ -162,6 +165,13 @@ Trước khi bắt đầu một trang: báo cho người còn lại để không
   đọc + nhật ký sửa ô), `scripts/verify/ctktkt-export-dump.mjs` (nội dung file Excel), `scripts/verify/ctktkt-shadow-dump.mjs`
   (Mirror + API tích hợp), `CTKTKT_VERIFY_DAY=2026-09-17 npx tsx scripts/verify/ctktkt.mjs` / `ctktkt-machine.mjs` (tích hợp,
   DB dev chỉ có dữ liệu mẫu).
+- **CSS (09/11/2026)**: bỏ 117 bộ chọn chết (lớp `app-workspace`, `app-nav-*`, `app-sidebar*`, `ui-3d-*`, `auth-*`… từ gói bàn
+  giao, không phần tử nào dùng — chỉ bỏ khi lớp chết nằm ở cấp ngoài, không trong `:not/:is`), dời quy tắc riêng của từng thành phần
+  về tệp đi kèm (`ctktkt-report.css`, `pmis-report.css`, `water-report-table.css`). `modules/ctktkt/styles.css` (247 dòng) còn lại
+  là **lớp giao diện chung của module** (`ctktkt-module`, `engineering-workspace`, `module-hero`, `ktkt-dark-hero`,
+  `report-data-table`…) và quy tắc trộn nhiều trang — giữ dạng CSS. Kiểm bằng `scripts/verify/ctktkt-style-dump.mjs` +
+  `ctktkt-style-compare.mjs` (getComputedStyle mọi phần tử, 12 trang × 1280/390; chụp code cũ ≥ 2 lần để loại phần tử tự dao động
+  như nút nổi "cuộn xuống", khung gợi ý biểu đồ) → 0 phần tử khác.
 - Khác biệt nhỏ còn lại so với cổng cũ: đường dẫn KTKT không tồn tại (đã đăng nhập) trả trang 404 của Next thay cho JSON
   "Không tìm thấy chức năng KTKT."; lỗi của các route xuất/sao lưu nay cũng có `Cache-Control: private, no-store`.
 

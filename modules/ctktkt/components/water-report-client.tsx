@@ -47,6 +47,12 @@ function formatRatio(val: number | null | undefined): string {
   return val.toFixed(4);
 }
 
+/** Tên hiệu chỉnh công tơ để báo giá trị hỏng (khớp WATER_ADJUSTMENT_FIELDS). */
+const ADJUSTMENT_LABELS: Record<string, string> = {
+  waterAdjustmentS1: "Hiệu chỉnh nước nhận S1", waterAdjustmentS2: "Hiệu chỉnh nước nhận S2",
+  condenserAdjustmentS1: "Hiệu chỉnh bình ngưng S1", condenserAdjustmentS2: "Hiệu chỉnh bình ngưng S2",
+};
+
 export function WaterReportClient() {
   const downloadReport=downloadCtktktFile;
 
@@ -57,6 +63,7 @@ export function WaterReportClient() {
   const shifts = useMemo<WaterShiftLog[]>(() => monthQuery.data?.shifts ?? [], [monthQuery.data]);
   const baseline: WaterShiftLog | null = monthQuery.data?.baseline ?? null;
   const summary: MonthlyWaterSummary | null = monthQuery.data?.summary ?? null;
+  const invalidAdjustments = monthQuery.data?.invalidAdjustments ?? [];
   const loading = monthQuery.isPending || monthQuery.isPlaceholderData;
   // Danh sách Trưởng ca: giữ danh sách gần nhất server trả (không nhảy về mặc định khi tháng mới đang tải).
   const [leaders, setLeaders] = useState<string[]>(DEFAULT_SHIFT_LEADERS);
@@ -493,6 +500,19 @@ export function WaterReportClient() {
       {error && (
         <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs font-bold text-rose-800 shadow-sm">
           ⚠ {error}
+        </div>
+      )}
+      {invalidAdjustments.length > 0 && (
+        <div role="alert" className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900 shadow-sm">
+          <p className="font-bold">⚠ Có hiệu chỉnh công tơ không hợp lệ — đã bỏ qua khi tính lượng nước dùng:</p>
+          <ul className="mt-1 list-disc pl-5">
+            {invalidAdjustments.map(item => (
+              <li key={`${item.logDate}-${item.shiftTime}-${item.field}`}>
+                Ca {item.shiftTime} ngày {item.logDate.split("-").reverse().join("/")} · {ADJUSTMENT_LABELS[item.field] ?? item.field}: {String(item.value)}
+              </li>
+            ))}
+          </ul>
+          <p className="mt-1">Mở ca đó, nhập lại hiệu chỉnh đúng (từ 0 m³) hoặc để trống rồi lưu.</p>
         </div>
       )}
 

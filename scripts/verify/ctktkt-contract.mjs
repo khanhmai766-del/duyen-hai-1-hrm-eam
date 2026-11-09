@@ -354,6 +354,18 @@ const WRITE_SCENARIOS = {
     { step: "than tồn 24h: ngày tương lai", method: "POST", path: "bcsx-coal-stock", json: { operatingDate: "2099-01-01", value: "5" } },
     { step: "nạp 2 file S1/S2 (xuất từ chính web)", method: "POST", path: "bcsx-section1-import", files: [["files", "bcsx-export?date=2026-09-17&unit=S1", "BCSX S1 17.09.2026.xlsx"], ["files", "bcsx-export?date=2026-09-17&unit=S2", "BCSX S2 17.09.2026.xlsx"]] },
     { step: "nạp chỉ 1 file", method: "POST", path: "bcsx-section1-import", files: [["files", "bcsx-export?date=2026-09-17&unit=S1", "BCSX_S1_17-09.xlsx"]] },
+    { step: "nạp lịch sử Mục 1: cặp file gốc mẫu (2 ngày)", method: "POST", path: "bcsx-section1-import", form: {},
+      files: [["files", "gen:muc1-s1", "BCSX S1 02.09.2026.xlsx"], ["files", "gen:muc1-s2", "BCSX S2 02.09.2026.xlsx"]] },
+    { step: "Mục 1: ô công thức", method: "POST", path: "bcsx-section1-import", form: {},
+      files: [["files", "gen:muc1-s1", "BCSX S1 02.09.2026.xlsx"], ["files", "gen:muc1-s2-cong-thuc", "BCSX S2 02.09.2026.xlsx"]] },
+    { step: "Mục 1: thiếu sheet ngày", method: "POST", path: "bcsx-section1-import", form: {},
+      files: [["files", "gen:muc1-s1", "BCSX S1 02.09.2026.xlsx"], ["files", "gen:muc1-s2-thieu-sheet", "BCSX S2 02.09.2026.xlsx"]] },
+    { step: "Mục 1: sai mốc giờ", method: "POST", path: "bcsx-section1-import", form: {},
+      files: [["files", "gen:muc1-s1", "BCSX S1 02.09.2026.xlsx"], ["files", "gen:muc1-s2-sai-gio", "BCSX S2 02.09.2026.xlsx"]] },
+    { step: "Mục 1: hai file cùng S1", method: "POST", path: "bcsx-section1-import", form: {},
+      files: [["files", "gen:muc1-s1", "BCSX S1 02.09.2026.xlsx"], ["files", "gen:muc1-s1", "BCSX S1 bản 2 02.09.2026.xlsx"]] },
+    { step: "Mục 1: hai file khác ngày", method: "POST", path: "bcsx-section1-import", form: {},
+      files: [["files", "gen:muc1-s1", "BCSX S1 02.09.2026.xlsx"], ["files", "gen:muc1-s2", "BCSX S2 01.09.2026.xlsx"]] },
     { step: "nạp file không phải .xlsx", method: "POST", path: "bcsx-section1-import", files: [["files", "bcsx-export?date=2026-09-17&unit=S1", "a.xls"], ["files", "bcsx-export?date=2026-09-17&unit=S2", "b.csv"]] },
     { step: "nạp không phải multipart (415)", method: "POST", path: "bcsx-section1-import", json: {} },
     { step: "lệnh điều độ: thiếu file", method: "POST", path: "bcsx-operation-import", form: { date: "2026-09-17" } },
@@ -389,6 +401,7 @@ const WRITE_SCENARIOS = {
     { step: "không phải JSON (415)", method: "POST", path: "ctktkt-report", raw: "x", headers: { "Content-Type": "text/plain" } },
     { step: "duyệt yêu cầu không tồn tại", method: "PATCH", path: "correction-requests", origin: true, json: { id: "khong-ton-tai", approve: true, note: "" } },
     { step: "duyệt: JSON hỏng", method: "PATCH", path: "correction-requests", origin: true, raw: "{", headers: { "Content-Type": "application/json" } },
+    { step: "duyệt: JSON là null", method: "PATCH", path: "correction-requests", origin: true, raw: "null", headers: { "Content-Type": "application/json" } },
     { step: "đọc ảnh công tơ khi chưa có khoá Gemini", method: "POST", path: "coal-meter-ocr", json: { data: "AAAA", mediaType: "image/jpeg", reportDate: "2026-09-17", slot: "06" } },
     { step: "kiểm tra Gemini khi chưa có khoá", method: "POST", path: "coal-gemini-settings/check", origin: true, json: {} },
     { step: "cấu hình Gemini: model sai", method: "PUT", path: "coal-gemini-settings", origin: true, json: { key: "", model: "gpt-4", expectedVersion: 0 } },
@@ -479,6 +492,32 @@ const GENERATED_FILES = {
   ]),
 };
 GENERATED_FILES["sao-luu-zip"] = backupZip;
+// File BCSX gốc mẫu cho "nạp lịch sử Mục 1": mỗi ngày một sheet "01", "02"…; dòng 11–58: A = mốc giờ, B–E = P/Q/D/E.
+async function section1File(unit, days, { formulaAt, missingSheet, wrongTimeAt } = {}) {
+  const workbook = new ExcelJS.Workbook();
+  for (let day = 1; day <= days; day++) {
+    const name = String(day).padStart(2, "0");
+    if (name === missingSheet) continue;
+    const sheet = workbook.addWorksheet(name);
+    sheet.getCell("A1").value = `BÁO CÁO SẢN XUẤT ${unit} ngày ${name}`;
+    for (let i = 0; i < 48; i++) {
+      const minutes = 30 + i * 30, row = 11 + i;
+      const time = i === 47 ? "23:59" : `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
+      sheet.getCell(`A${row}`).value = wrongTimeAt === `${name}!A${row}` ? "12:00" : time;
+      ["B", "C", "D", "E"].forEach((col, j) => {
+        const address = `${col}${row}`;
+        sheet.getCell(address).value = formulaAt === `${name}!${address}` ? { formula: "1+1", result: 2 } : (unit === "S1" ? 600 : 590) - i + j * 0.25 + day / 10;
+      });
+    }
+  }
+  return Buffer.from(await workbook.xlsx.writeBuffer());
+}
+Object.assign(GENERATED_FILES, {
+  "muc1-s1": () => section1File("S1", 2), "muc1-s2": () => section1File("S2", 2),
+  "muc1-s2-cong-thuc": () => section1File("S2", 2, { formulaAt: "02!C20" }),
+  "muc1-s2-thieu-sheet": () => section1File("S2", 2, { missingSheet: "02" }),
+  "muc1-s2-sai-gio": () => section1File("S2", 2, { wrongTimeAt: "01!A15" }),
+});
 async function runWrites(cookie) {
   const out = {};
   for (const [group, steps] of Object.entries(WRITE_SCENARIOS)) {

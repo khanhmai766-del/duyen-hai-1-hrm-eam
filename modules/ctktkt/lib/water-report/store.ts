@@ -1,6 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import { recalculateWaterShiftChain, type WaterShiftLog } from "./calculations";
-import { waterAdjustmentsFromRow } from "./adjustments";
+import { readStoredWaterAdjustments, type InvalidWaterAdjustment } from "./adjustments";
 
 /**
  * Đọc/ghi sổ theo dõi lượng nước bằng Prisma (giai đoạn 3) — dùng chung cho route chính, route nạp file và file xuất Excel.
@@ -15,9 +15,14 @@ const monthRank = (shiftTime: string) => ({ "06h00": 1, "14h00": 2, "22h00": 3 }
 /** Ca mốc: ca muộn nhất của ngày trước tháng, giờ lạ thấp nhất (ELSE 0). */
 const baselineRank = (shiftTime: string) => ({ "22h00": 3, "14h00": 2, "06h00": 1 } as Record<string, number>)[shiftTime] ?? 0;
 
-export function waterRowToLog(row: Row, options: { updatedAt?: boolean } = {}): WaterShiftLog {
+/** Hiệu chỉnh hỏng của một ca (kèm ngày + giờ ca) — trả cho trang để cảnh báo. */
+export type InvalidShiftAdjustment = InvalidWaterAdjustment & { logDate: string; shiftTime: string };
+
+export function waterRowToLog(row: Row, options: { updatedAt?: boolean; onInvalid?: (items: InvalidShiftAdjustment[]) => void } = {}): WaterShiftLog {
+  const adjustments = readStoredWaterAdjustments(row);
+  if (adjustments.invalid.length) options.onInvalid?.(adjustments.invalid.map(item => ({ ...item, logDate: String(row.log_date || ""), shiftTime: String(row.shift_time || "") })));
   const log: WaterShiftLog = {
-    ...waterAdjustmentsFromRow(row),
+    ...adjustments.values,
     id: Number(row.id || 0),
     logDate: String(row.log_date || ""),
     shiftTime: String(row.shift_time || ""),
@@ -88,11 +93,15 @@ export async function loadAllWaterRows(db: Db) {
 /** Ca mốc + các ca trong tháng đã tính chuỗi (số dùng/suất) — như GET và file xuất. */
 export async function loadWaterChain(db: Db, month: string, options: { updatedAt?: boolean } = {}) {
   const [baselineRow, monthRows] = [await loadWaterBaseline(db, month), await loadWaterMonthRows(db, month)];
+  // Hiệu chỉnh hỏng (chỉ có thể lọt qua đường ngoài form, vd sửa tay DB) → tính như chưa hiệu chỉnh và báo lại.
+  const invalidAdjustments: InvalidShiftAdjustment[] = [];
+  const read = { ...options, onInvalid: (items: InvalidShiftAdjustment[]) => { invalidAdjustments.push(...items); } };
+  // Ca mốc (tháng trước) chỉ cho chỉ số đầu kỳ — hiệu chỉnh của nó không vào phép tính tháng này, nên không báo ở đây.
   const baseline = baselineRow ? waterRowToLog(baselineRow, options) : null;
-  const monthShifts = monthRows.map(row => waterRowToLog(row, options));
+  const monthShifts = monthRows.map(row => waterRowToLog(row, read));
   const chained = recalculateWaterShiftChain(baseline ? [baseline, ...monthShifts] : monthShifts);
   // chained = ca mốc (giữ nguyên) + ca trong tháng đã tính; monthShifts = ca trong tháng chưa tính (sheet hiệu chỉnh).
-  return { baseline, monthShifts, chained, shifts: baseline ? chained.slice(1) : chained };
+  return { baseline, monthShifts, chained, shifts: baseline ? chained.slice(1) : chained, invalidAdjustments };
 }
 
 /** Tính lại và ghi các cột suy ra (điện phát, nước dùng, suất…) cho từng tháng bị ảnh hưởng, trong giao dịch `tx`. */

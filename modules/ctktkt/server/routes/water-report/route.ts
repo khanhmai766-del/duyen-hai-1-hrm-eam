@@ -31,7 +31,7 @@ export async function GET(request: Request) {
     })).map(r => String(r.name || "")).filter(Boolean);
 
     // 2–4. Ca mốc liền trước (thường 22h00 cuối tháng trước) + các ca trong tháng, tính chuỗi liên tục từ ca mốc
-    const { baseline, shifts: shiftsInMonth } = await loadWaterChain(prisma, month, { updatedAt: true });
+    const { baseline, shifts: shiftsInMonth, invalidAdjustments } = await loadWaterChain(prisma, month, { updatedAt: true });
     const summary = calculateMonthlyWaterSummary(shiftsInMonth);
 
     return ok({
@@ -41,6 +41,8 @@ export async function GET(request: Request) {
         baseline,
         shifts: shiftsInMonth,
         summary,
+        // Chỉ có khi DB lỡ chứa hiệu chỉnh hỏng: các giá trị này bị bỏ qua khi tính (tháng vẫn xem được).
+        ...(invalidAdjustments.length ? { invalidAdjustments } : {}),
       });
   } catch (err) {
     console.error("Lỗi đọc dữ liệu theo dõi lượng nước:", err);

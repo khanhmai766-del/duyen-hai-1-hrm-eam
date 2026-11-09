@@ -103,3 +103,14 @@ sách trong `image-check.mjs`.
   (`.next/dev`) → mọi trang 500 với lỗi Tailwind `ENOENT`. Lỡ bị: tắt dev, xoá `.next/dev`, chạy lại.
 - Tắt hẳn server theo cổng sau khi crawl (`netstat -ano | findstr :3031` → `taskkill /PID <pid> /T /F`), nếu không
   `prisma generate` ở lần build sau báo `EPERM`.
+
+## Module Chỉ tiêu KTKT (`ctktkt-*`)
+
+Chi tiết và cách dùng: `docs/ktkt-chuyen-doi.md` ("Kiểm tra bắt buộc mỗi bước", "Sau giai đoạn 4").
+
+- `ctktkt-contract.mjs` — hợp đồng API (đọc + `--writes`), dữ liệu mẫu cố định trên DB dev.
+- `ctktkt-export-dump.mjs` — nội dung file Excel xuất (so cũ ↔ mới).
+- `ctktkt-shadow-dump.mjs` — ảnh chụp Google Mirror + API tích hợp (so cũ ↔ mới).
+- `ctktkt-style-dump.mjs` + `ctktkt-style-compare.mjs` — kiểu hiển thị thực tế mọi phần tử 12 trang × 1280/390 (so khi
+  dọn/dời CSS; chụp code cũ ≥ 2 lần và truyền `--unstable` để loại phần tử tự dao động).
+- `ctktkt.mjs`, `ctktkt-machine.mjs` — kiểm tích hợp (DB dev chỉ có dữ liệu mẫu → `CTKTKT_VERIFY_DAY=2026-09-17`).

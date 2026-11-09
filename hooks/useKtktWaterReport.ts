@@ -11,6 +11,8 @@ export type WaterReportMonth = {
   baseline: WaterShiftLog | null;
   shifts: WaterShiftLog[];
   summary: MonthlyWaterSummary;
+  /** Hiệu chỉnh công tơ đã lưu nhưng không hợp lệ — bị bỏ qua khi tính (chỉ có khi DB lỡ chứa giá trị hỏng). */
+  invalidAdjustments?: Array<{ field: string; value: unknown; logDate: string; shiftTime: string }>;
 };
 export type WaterLeader = { id: number; name: string; isActive: number; displayOrder: number };
 export type WaterSheetScan = { sheetName: string; month: string; shiftCount: number; firstDate: string; lastDate: string };

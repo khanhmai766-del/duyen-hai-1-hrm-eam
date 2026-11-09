@@ -50,3 +50,9 @@
   .ctktkt-module .water-table-scroll > table > thead > tr:first-child > th:nth-child(n+3) { box-shadow: inset 0 3px 0 #00b050; }
   .ctktkt-module .water-table-scroll > table > thead > tr:first-child > th:nth-child(2) { box-shadow: inset -2px 0 0 #9fcfb3, inset 0 3px 0 #00b050; }
 }
+
+/* ---- Chuyển NGUYÊN VĂN từ modules/ctktkt/styles.css (09/11/2026, docs/ktkt-chuyen-doi.md): quy tắc chỉ thành phần này dùng. Kiểm bằng scripts/verify/ctktkt-style-dump.mjs (kiểu hiển thị giống hệt trước/sau). ---- */
+@media (max-width:767px) {
+  /* Liên kết gạch chân nằm giữa câu: giữ trong dòng chữ, không tách thành khối 40px làm vỡ câu. */
+  .ctktkt-module .ctktkt-content a.ktkt-inline-link { display:inline; min-height:0; padding-block:4px; }
+}

@@ -6,7 +6,7 @@ import path from 'node:path';
 import vm from 'node:vm';
 import {createRequire} from 'node:module';
 import ts from 'typescript';
-import {waterMeterUsage,normalizeWaterAdjustment,waterAdjustmentsFromRow} from '../../../modules/ctktkt/lib/water-report/adjustments.ts';
+import {waterMeterUsage,normalizeWaterAdjustment,waterAdjustmentsFromRow,readStoredWaterAdjustments} from '../../../modules/ctktkt/lib/water-report/adjustments.ts';
 import {recalculateWaterShiftChain,calculateDailyWaterUsages} from '../../../modules/ctktkt/lib/water-report/calculations.ts';
 
 test('explicit reset correction replaces automatic rollover; zero and null have distinct meanings',()=>{
@@ -20,6 +20,15 @@ test('explicit reset correction replaces automatic rollover; zero and null have 
   for(const bad of [-1,Infinity,NaN,'bad',true,{},1000000001])assert.throws(()=>normalizeWaterAdjustment(bad));
   assert.equal(normalizeWaterAdjustment(''),null);assert.equal(normalizeWaterAdjustment(0),0);
   assert.equal(waterAdjustmentsFromRow({water_adjustment_s1:25000}).waterAdjustmentS1,25000);
+});
+
+test('stored adjustments: a damaged value is ignored and reported, never breaks reading the month',()=>{
+  const {values,invalid}=readStoredWaterAdjustments({water_adjustment_s1:-5,water_adjustment_s2:null,condenser_adjustment_s1:2000000000,condenser_adjustment_s2:12.5});
+  assert.deepEqual(values,{waterAdjustmentS1:null,waterAdjustmentS2:null,condenserAdjustmentS1:null,condenserAdjustmentS2:12.5});
+  assert.deepEqual(invalid,[{field:'waterAdjustmentS1',value:-5},{field:'condenserAdjustmentS1',value:2000000000}]);
+  assert.deepEqual(readStoredWaterAdjustments({water_adjustment_s1:0}).invalid,[]);
+  // Dữ liệu người dùng gửi lên vẫn kiểm chặt.
+  assert.throws(()=>waterAdjustmentsFromRow({water_adjustment_s1:-5}));
 });
 
 test('a reset belongs only to its shift; daily totals include its correction once',()=>{

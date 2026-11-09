@@ -96,6 +96,8 @@ test('sao lưu / khôi phục trên DB thật', async t => {
       const before = await versions();
       const preview = await post(makeFile({ daily_inputs: [day('1')] }));
       assert.equal(preview.status, 200); assert.equal(preview.body.total, 1); assert.deepEqual(preview.body.tables.find(r => r.name === 'daily_inputs'), { name: 'daily_inputs', label: 'KTKT / PMIS và dữ liệu ngày', count: 1 });
+      const badWater = await post(makeFile({ water_shift_logs: [{ id: 7, log_date: '2001-11-05', shift_time: '06h00', water_adjustment_s1: -1 }] }));
+      assert.equal(badWater.status, 400); assert.match(badWater.body.error, /^Hiệu chỉnh công tơ phải từ 0 đến 1\.000\.000\.000 m³ hoặc để trống: water_shift_logs\.water_adjustment_s1 ngày 2001-11-05 ca 06h00\.$/);
       for (const [row, message] of [[{ ...day('1'), unexpected: 'x' }, /cột chưa được hỗ trợ/], [{ ...day('1'), value: null }, /bắt buộc bị trống/], [{ ...day('1'), id: '9' }, /Kiểu số/], [{ ...day('1'), field_code: null }, /khóa nhận diện/]]) {
         const res = await post(makeFile({ daily_inputs: [row] }), 'restore');
         assert.equal(res.status, 400); assert.match(res.body.error, message);

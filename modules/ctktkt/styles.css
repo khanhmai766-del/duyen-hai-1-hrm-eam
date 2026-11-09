@@ -44,7 +44,7 @@
 }
 
 @media print {
-  .ctktkt-module .app-sidebar, .ctktkt-module .app-header, .ctktkt-module button, .ctktkt-module [role="combobox"] { display: none !important; }
+   .ctktkt-module button, .ctktkt-module [role="combobox"] { display: none !important; }
   .ctktkt-module .lg\:pl-64 { padding-left: 0 !important; }
   .ctktkt-module { background: #fff; }
   .ctktkt-module main { padding: 0 !important; }
@@ -59,34 +59,6 @@
   text-align: center !important;
   font-size: 0.9375rem !important;
   font-weight: 700 !important;
-}
-
-.ctktkt-module .ui-3d-card,
-.ctktkt-module .ui-3d-control,
-.ctktkt-module .ui-3d-tab {
-  position: relative;
-  border: 1px solid rgba(148, 163, 184, 0.28);
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05), 0 1px 3px rgba(15, 23, 42, 0.06);
-  transition: transform 150ms ease, box-shadow 150ms ease, border-color 150ms ease;
-}
-.ctktkt-module .ui-3d-card:hover,
-.ctktkt-module .ui-3d-control:hover,
-.ctktkt-module .ui-3d-tab:hover {
-  border-color: rgba(129, 140, 248, 0.45);
-  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08), 0 1px 3px rgba(15, 23, 42, 0.06);
-}
-.ctktkt-module .ui-3d-control:hover,
-.ctktkt-module .ui-3d-tab:hover { transform: none; }
-.ctktkt-module .ui-3d-control:focus,
-.ctktkt-module .ui-3d-control:focus-visible,
-.ctktkt-module .ui-3d-tab:focus-visible {
-  outline: 2px solid rgba(99, 102, 241, 0.45);
-  outline-offset: 2px;
-}
-.ctktkt-module .ui-3d-control:active,
-.ctktkt-module .ui-3d-tab:active {
-  transform: translateY(0);
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
 }
 
 .ctktkt-module .report-data-table,
@@ -110,45 +82,10 @@
 }
 
 /* Shared presentation layer. Do not change value formatting or cell permissions. */
-.ctktkt-module .app-sidebar,
-.ctktkt-module .app-mobile-nav {
-  background: var(--nav-bg);
-  color: var(--nav-text);
-  border-color: transparent;
-}
-.ctktkt-module .app-sidebar { box-shadow: 4px 0 24px rgb(15 23 42 / 5%); }
-.ctktkt-module .app-sidebar-brand { border-bottom: 1px solid rgb(255 255 255 / 9%); }
-.ctktkt-module .app-brand-title { color: #f8fafc; }
-.ctktkt-module .app-brand-subtitle { color: var(--nav-text); }
-.ctktkt-module .app-nav-group { color: #b2c3d8; font-size: 11px; letter-spacing: 0.08em; }
-.ctktkt-module .app-nav-link { min-height: 44px; color: var(--nav-text); border: 1px solid transparent; }
-.ctktkt-module .app-nav-link svg { color: #a5b8d0; }
-.ctktkt-module .app-nav-link:hover { background: var(--nav-hover); color: #fff; }
-.ctktkt-module .app-nav-link:hover svg { color: #fff; }
-.ctktkt-module .app-nav-link[aria-current="page"] {
-  background: #2563eb;
-  color: #fff;
-  border-color: rgb(147 197 253 / 30%);
-  box-shadow: none;
-}
-.ctktkt-module .app-nav-link[aria-current="page"] svg { color: #fff; }
-.ctktkt-module .app-nav-link[aria-current="page"] > span:last-child:not(:first-of-type) { background: #bae6fd; }
-.ctktkt-module .app-sidebar-footer { border-top: 1px solid rgb(255 255 255 / 9%); }
-.ctktkt-module .app-user-card { background: rgb(0 21 40 / 22%); }
-.ctktkt-module .app-user-card a:hover { background: var(--nav-hover); color: #fff; }
-.ctktkt-module .app-mobile-nav > button { color: #e2e8f0; }
 
 /* Static navigation: groups open immediately, without glow, sliding or stagger. */
-.ctktkt-module .app-nav .app-nav-link { transition:none; animation:none; }
-.ctktkt-module .app-nav-group-toggle { cursor: pointer; text-align: left; }
-.ctktkt-module .app-nav-group-toggle:hover .app-nav-group { color: #fff; }
-.ctktkt-module .app-nav-rule { flex: 1; height: 1px; background: linear-gradient(90deg, rgb(178 195 216 / 30%), transparent); }
-.ctktkt-module .app-nav-chevron { color: #b2c3d8; transform: rotate(90deg); }
-.ctktkt-module .app-nav-group-toggle[aria-expanded="false"] .app-nav-chevron { transform: none; }
-.ctktkt-module .app-nav-group-toggle:hover .app-nav-chevron { color: #7cc0ff; }
-.ctktkt-module .app-nav-items[hidden] { display:none; }
-.ctktkt-module .app-mobile-nav[data-slot="sheet-content"],.ctktkt-module:has(.app-mobile-nav) [data-slot="sheet-overlay"] { animation:none !important; transition:none !important; }
-.ctktkt-module .app-header { box-shadow: 0 2px 10px rgb(15 23 42 / 3%); }
+
+.ctktkt-module:has(.app-mobile-nav) [data-slot="sheet-overlay"] { animation:none !important; transition:none !important; }
 .ctktkt-module .app-content { min-width: 0; }
 .ctktkt-module .app-content :is(h1, h2, h3) { text-wrap: balance; }
 .ctktkt-module .app-content :is(.rounded-2xl, .ui-3d-card).bg-white {
@@ -169,32 +106,7 @@
   box-shadow: inset 0 1px #b7d4f1, inset 0 -1px #b7d4f1;
 }
 .ctktkt-module .app-content table :is(input, textarea):not(:disabled):not([readonly]):hover { border-color: #60a5fa; }
-.ctktkt-module .auth-hero {
-  background: radial-gradient(ellipse at 100% 0%, #28628d 0, transparent 55%), linear-gradient(145deg, #304156, #122a42);
-}
-.ctktkt-module .auth-hero::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background-image: linear-gradient(rgb(255 255 255 / 4%) 1px, transparent 1px), linear-gradient(90deg, rgb(255 255 255 / 4%) 1px, transparent 1px);
-  background-size: 56px 56px;
-  mask-image: linear-gradient(to bottom, #000, transparent);
-}
-.ctktkt-module .auth-form-panel > form {
-  max-width: 430px;
-  padding: 36px;
-  border: 1px solid #dbe4ef;
-  border-radius: 24px;
-  background: #fff;
-  box-shadow: 0 20px 60px rgb(30 58 90 / 7%);
-}
-@media (max-width: 639px) {
-  .ctktkt-module .auth-form-panel > form { padding: 28px 22px; }
-  .ctktkt-module .app-header { height: 68px; }
-}
 @media print {
-  .ctktkt-module .app-workspace > div { padding-left: 0 !important; }
   .ctktkt-module .app-content :is(.rounded-2xl, .ui-3d-card).bg-white { box-shadow: none; }
   .ctktkt-module .app-content table tbody tr:hover > td { box-shadow: none; }
 }
@@ -215,7 +127,6 @@
 
 /* Presentation only, scoped to the six engineering reports; monthly data stays separate. */
 .ctktkt-module .engineering-workspace { --module-accent: #1686a0; padding: 16px 20px; }
-.ctktkt-module .app-workspace:has(.engineering-workspace) .app-header { height: 66px; }
 .ctktkt-module .engineering-workspace[data-module="water"] { --module-accent: #0d9488; }
 .ctktkt-module .engineering-workspace[data-module="chemical-usage"] { --module-accent: #059669; }
 .ctktkt-module .engineering-workspace[data-module="ppa"] { --module-accent: #6366f1; }
@@ -244,15 +155,6 @@
 .ctktkt-module .engineering-workspace .report-data-table thead th { color: #24425e; background: #e6eff8; }
 .ctktkt-module .engineering-workspace .report-data-table thead tr:nth-child(n+2) th { background: #f0f5fa; }
 .ctktkt-module .engineering-workspace .report-data-table tbody tr:hover > td { box-shadow: inset 0 1px #aecce5, inset 0 -1px #aecce5; }
-.ctktkt-module .ktkt-kpi-scroll > table { min-width: 980px; }
-.ctktkt-module .ktkt-workspace .module-heading-copy { padding: 12px 16px; }
-.ctktkt-module .ktkt-workspace .module-toolbar-card > div:first-child { align-items: center; }
-.ctktkt-module .ktkt-workspace .module-toolbar-card > div:first-child > div:last-child { flex: 1 1 360px; justify-content: flex-end; align-content: center; }
-.ctktkt-module .ktkt-workspace .module-section-heading > div:first-child { flex-wrap: wrap; }
-.ctktkt-module .module-filter-bar { padding: 12px 14px; border-left: 3px solid var(--module-accent); }
-.ctktkt-module .module-chart-grid > div { border-radius: 14px; border-color: #d7e3ef; box-shadow: 0 4px 14px rgb(30 58 90 / 4%); }
-.ctktkt-module .module-chart-grid > div > div:first-child { border-bottom: 1px solid #e2eaf3; }
-.ctktkt-module .module-chart-grid .recharts-cartesian-grid line { stroke: #e0e8f0; }
 .ctktkt-module .engineering-workspace .recharts-tooltip-wrapper .recharts-default-tooltip { border-radius: 10px; box-shadow: 0 6px 20px rgb(30 58 90 / 10%); }
 @media (max-width: 767px) {
   .ctktkt-module .engineering-workspace { padding: 12px; }
@@ -262,8 +164,6 @@
   .ctktkt-module .module-hero > div.flex:first-child { gap: 12px; }
   .ctktkt-module .module-hero > div.flex:first-child > .module-heading-copy { flex-basis: 100%; }
   .ctktkt-module .module-section-heading { padding: 10px 12px; }
-  .ctktkt-module .module-filter-bar > label { flex: 1 1 128px; }
-  .ctktkt-module .module-filter-bar > label > button { width: 100%; }
   .ctktkt-module .engineering-workspace .module-table-scroll { max-height: 62vh; }
 }
 @media print {
@@ -279,64 +179,16 @@
    Không đổi công thức, định dạng số hay quyền ô dữ liệu. */
 
 /* ---- Thanh bên ---- */
-.ctktkt-module .app-workspace .app-sidebar-brand { height: 60px; padding-inline: 16px; }
-.ctktkt-module .app-workspace .app-brand { gap: 10px; }
-.ctktkt-module .app-workspace .app-brand > span:first-child { width: 34px; height: 34px; border-radius: 9px; }
-.ctktkt-module .app-workspace .app-brand > span:first-child svg { width: 18px; height: 18px; }
-.ctktkt-module .app-workspace .app-brand-title { font-size: 15px; }
-.ctktkt-module .app-workspace .app-brand-subtitle { font-size: 11px; }
-.ctktkt-module .app-workspace .app-sidebar-scroll { padding: 10px 10px 12px; }
-.ctktkt-module .app-workspace .app-nav { gap: 8px; }
-.ctktkt-module .app-workspace .app-nav-group-toggle { padding: 2px 10px 4px; }
-.ctktkt-module .app-workspace .app-nav-group { font-size: 10px; }
-.ctktkt-module .app-workspace .app-nav-items > ul { gap: 2px; }
-.ctktkt-module .app-workspace .app-nav .app-nav-link { min-height: 36px; padding: 7px 10px; gap: 10px; border-radius: 8px; font-size: 13.5px; }
-.ctktkt-module .app-workspace .app-nav .app-nav-link svg { width: 17px; height: 17px; }
-.ctktkt-module .app-workspace .app-sidebar-footer { padding: 8px 10px; }
-.ctktkt-module .app-workspace .app-sidebar-tagline { display: none; }
-.ctktkt-module .app-workspace .app-user-card { padding: 6px 8px; }
-.ctktkt-module .app-workspace .app-user-avatar { width: 32px; height: 32px; }
 
 /* ---- Thanh đầu trang: bỏ dòng đường dẫn lặp lại tên đơn vị đã có ở thanh bên ---- */
-.ctktkt-module .app-workspace .app-header,
-.ctktkt-module .app-workspace:has(.engineering-workspace) .app-header { height: 60px; }
-.ctktkt-module .app-workspace .app-breadcrumb { display: none; }
-.ctktkt-module .app-workspace .app-header h1 { font-size: 17px; line-height: 1.3; }
-.ctktkt-module .app-workspace .app-page-desc { font-size: 12px; line-height: 1.35; }
 
 /* ---- Vùng nội dung ---- */
-.ctktkt-module .app-workspace .app-content:not(.engineering-workspace) { padding: 12px; }
-.ctktkt-module .app-workspace .engineering-workspace { padding: 12px; }
-@media (min-width: 640px) {
-  .ctktkt-module .app-workspace .app-content:not(.engineering-workspace),
-  .ctktkt-module .app-workspace .engineering-workspace { padding: 14px 18px 20px; }
-}
 
 /* Dải Google Sheets: một hàng mảnh thay cho khung cao. */
-.ctktkt-module .app-workspace .google-mirror-bar { margin-bottom: 12px; padding: 6px 10px; gap: 4px 14px; border-radius: 10px; }
-.ctktkt-module .app-workspace .google-mirror-bar > div { flex-direction: row; align-items: center; gap: 10px; }
-.ctktkt-module .app-workspace .google-mirror-bar a { min-height: 30px; padding-inline: 10px; font-size: 13px; }
 
 /* ---- Sáu mục nghiệp vụ (KTKT, BCSX, Nước, Hóa chất, PPA, PMIS) ---- */
-.ctktkt-module .app-workspace .module-hero { padding: 8px; border-radius: 12px; box-shadow: none; }
-.ctktkt-module .app-workspace .module-heading-copy { padding: 10px 14px; border-radius: 10px; }
-.ctktkt-module .app-workspace .module-heading-copy :is(h1,h2) { font-size: 18px; }
-.ctktkt-module .app-workspace .module-heading-copy p { line-height: 1.45; }
-.ctktkt-module .app-workspace .module-section-heading { padding: 9px 14px; }
-.ctktkt-module .app-workspace .module-filter-bar { padding: 8px 12px; }
-.ctktkt-module .app-workspace .module-chart-grid > div { border-radius: 12px; box-shadow: none; }
 
 /* Khối tiêu đề các mục: giữ tên mục; bỏ câu mô tả, dòng nhãn phụ và huy hiệu trùng với thanh đầu trang/thanh bên. */
-.ctktkt-module .app-workspace .module-heading-copy > p,
-.ctktkt-module .app-workspace .module-heading-copy > div:first-child:has(+ :is(h1,h2)),
-.ctktkt-module .app-workspace .module-heading-copy span.rounded-full { display: none; }
-.ctktkt-module .app-workspace .module-heading-copy :is(h1,h2) { margin-top: 0; }
-.ctktkt-module .app-workspace .module-heading-copy > div:first-child:has(> h1) { margin-bottom: 0; }
-
-@media (max-width: 767px) {
-  .ctktkt-module .app-workspace .app-header,
-  .ctktkt-module .app-workspace:has(.engineering-workspace) .app-header { height: 56px; }
-}
 
 .ctktkt-module { color-scheme:light; color:#0f172a; }
 .ctktkt-module .ctktkt-content { padding:0; min-width:0; max-width:100%; }
@@ -344,8 +196,6 @@
 @media(max-width:767px){.ctktkt-module button,.ctktkt-module select,.ctktkt-module input:not([type=checkbox]):not([type=radio]){min-height:40px}.ctktkt-module input,.ctktkt-module select,.ctktkt-module textarea{font-size:16px}.ctktkt-module .flex{min-width:0}}
 @media (max-width:767px) {
   .ctktkt-module .ctktkt-content a { display:inline-flex; align-items:center; min-height:40px; }
-  /* Liên kết gạch chân nằm giữa câu: giữ trong dòng chữ, không tách thành khối 40px làm vỡ câu. */
-  .ctktkt-module .ctktkt-content a.ktkt-inline-link { display:inline; min-height:0; padding-block:4px; }
   .ctktkt-module table input:not([type=checkbox]):not([type=radio]) { min-width:40px !important; }
   .ctktkt-module button[aria-label^="Thêm ghi chú"], .ctktkt-module button[aria-label^="Sửa ghi chú"] { min-width:40px; }
   .ctktkt-module button[title="Xóa"], .ctktkt-module button[title="Đóng"] { min-width:40px; }
@@ -383,7 +233,6 @@
 }
 
 /* Thanh tab các cụm (Báo cáo Chỉ tiêu KTKT): một hàng; dưới 1700px ẩn biểu tượng nhỏ để 7 tab vừa khung. */
-@media (max-width: 1699px) { .ctktkt-module .ktkt-section-tabs svg { display: none; } }
 
 /* Nhãn mục ("CHỈ TIÊU KTKT", "SẢN XUẤT") đầu hàng nút: cùng nền khối "Bảng theo dõi lượng nước sử dụng", thu gọn chiều cao. */
 /* Lặp lớp để thắng quy tắc cũ ".bcsx-workspace > .module-hero > div:first-child > .module-heading-copy { flex: 1 1 400px }". */
