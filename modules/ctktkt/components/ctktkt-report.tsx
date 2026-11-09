@@ -2,6 +2,7 @@
 import { ctktktMetricDisplay } from "../lib/ctktkt-report";
 import { CTKTKT_ELECTRIC_METER_RESET_CELLS } from "../lib/ctktkt-electric-meter-reset";
 import "./ctktkt-report.css";
+import { CTKTKT_PMIS_AUX_CELLS, PMIS_AUX_SOURCE_LABEL, calculatePmisAuxiliary } from "../lib/ctktkt-pmis-auxiliary";
 import { ReportCorrections } from "./report-corrections";
 import { downloadCtktktFile, fetchStoredCtktktReport, useReadCtktktReport, useSaveCtktktReport } from "@/hooks/useKtktReport";
 
@@ -539,6 +540,7 @@ export function CtktktReport() {
       "COAL_ADJ_NOTE_S1", "COAL_ADJ_NOTE_S2", "WATER_ADJ_NOTE_S1", "WATER_ADJ_NOTE_S2",
       "WATER_ADJ_S1", "WATER_ADJ_S2", "W28", "Y28", "AA28", "AG28", "AI28", "AK28",
       ...CTKTKT_ELECTRIC_METER_RESET_CELLS,
+      ...CTKTKT_PMIS_AUX_CELLS,
     ]);
     const seen = new Set<string>();
     const cells = new Set<string>();
@@ -3448,11 +3450,12 @@ export function CtktktReport() {
           {activeTab === "pmis_reports" && (() => {
             const j157 = num(current, "J157");
             const k157 = num(current, "K157");
-            const l157 = j157 !== null && k157 !== null ? j157 - k157 : null;
-
             const j158 = num(current, "J158");
             const k158 = num(current, "K158");
-            const l158 = j158 !== null && k158 !== null ? j158 - k158 : null;
+            // Tổng tự dùng PMIS (L157/L158): cùng quy tắc với file xuất (ctktkt-pmis-auxiliary.ts).
+            const pmisAux = calculatePmisAuxiliary({ values: current, previousTd21: previous?.R49 });
+            const l157 = pmisAux.S1.value;
+            const l158 = pmisAux.S2.value;
 
             const jSum = (j157 ?? 0) + (j158 ?? 0);
             const kSum = (k157 ?? 0) + (k158 ?? 0);
@@ -3552,8 +3555,21 @@ export function CtktktReport() {
                               placeholder: "9631.526",
                             })}
                           </td>
-                          <td className="border border-slate-400 px-3 py-2 text-center font-mono font-normal text-red-300 text-xs text-xs">
-                            {l157 !== null ? format(l157) : "—"}
+                          <td className="border border-slate-400 px-2 py-1.5 text-center text-xs">
+                            <div className="font-mono text-red-300">{l157 !== null ? format(l157) : "—"}</div>
+                            <div className="mt-0.5 text-[10px] leading-tight text-emerald-100">{PMIS_AUX_SOURCE_LABEL[pmisAux.S1.source]}</div>
+                            {renderCellInput("PMIS_AUX_MANUAL_S1", {
+                              group: "pmis_reports",
+                              isNumber: true,
+                              placeholder: "Nhập tay (nếu cần)",
+                              className: "mt-1 !bg-[#005a00] !text-white text-xs text-center placeholder:!text-emerald-200",
+                            })}
+                            {num(current, "PMIS_AUX_MANUAL_S1") !== null && renderCellInput("PMIS_AUX_NOTE_S1", {
+                              group: "pmis_reports",
+                              placeholder: "Lý do, vd. nhận XT 283 đến 10h rồi cắt MBA, chuyển TD21",
+                              maxLength: 300,
+                              className: "mt-1 !bg-[#005a00] !text-white text-[11px] placeholder:!text-emerald-200",
+                            })}
                           </td>
                         </tr>
 
@@ -3576,8 +3592,21 @@ export function CtktktReport() {
                               placeholder: "9593.341",
                             })}
                           </td>
-                          <td className="border border-slate-400 px-3 py-2 text-center font-mono font-normal text-red-300 text-xs text-xs">
-                            {l158 !== null ? format(l158) : "—"}
+                          <td className="border border-slate-400 px-2 py-1.5 text-center text-xs">
+                            <div className="font-mono text-red-300">{l158 !== null ? format(l158) : "—"}</div>
+                            <div className="mt-0.5 text-[10px] leading-tight text-emerald-100">{PMIS_AUX_SOURCE_LABEL[pmisAux.S2.source]}</div>
+                            {renderCellInput("PMIS_AUX_MANUAL_S2", {
+                              group: "pmis_reports",
+                              isNumber: true,
+                              placeholder: "Nhập tay (nếu cần)",
+                              className: "mt-1 !bg-[#005a00] !text-white text-xs text-center placeholder:!text-emerald-200",
+                            })}
+                            {num(current, "PMIS_AUX_MANUAL_S2") !== null && renderCellInput("PMIS_AUX_NOTE_S2", {
+                              group: "pmis_reports",
+                              placeholder: "Lý do, vd. nhận XT 283 đến 10h rồi cắt MBA, chuyển TD21",
+                              maxLength: 300,
+                              className: "mt-1 !bg-[#005a00] !text-white text-[11px] placeholder:!text-emerald-200",
+                            })}
                           </td>
                         </tr>
 
@@ -3604,7 +3633,7 @@ export function CtktktReport() {
                     <span>
                       💡 <b>Liên kết trực tiếp:</b> Số liệu Điện đầu cực (J157, J158) và Xuất tuyến (K157, K158) ở đây tự động làm nguồn cho <b>Cụm 1 · Thống kê chỉ tiêu KTKT</b> và <b>Mục 2 của Báo cáo sản xuất (BCSX)</b> cho cả 3 file S1, S2, A0.
                     </span>
-                    <span className="text-slate-500">Công thức: Tự dùng PMIS = Đầu cực − Xuất tuyến</span>
+                    <span className="text-slate-500">Tự dùng PMIS: có phát = (đầu cực − xuất tuyến) + nhận xuất tuyến; không phát = nhận xuất tuyến của tổ (285/283), không nhận thì lấy công tơ TD21. Trường hợp đặc biệt (nhận XT rồi cắt MBA…) nhập tay.</span>
                   </div>
                 </div>
 

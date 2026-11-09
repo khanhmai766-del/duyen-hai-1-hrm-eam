@@ -1,4 +1,5 @@
 import type ExcelJS from "exceljs";
+import { calculatePmisAuxiliary, pmisAuxManualCell } from "./ctktkt-pmis-auxiliary";
 
 const STEAM_COLUMNS = ["W", "X", "Y", "Z", "AA", "AB", "AG", "AH", "AI", "AJ", "AK", "AL"];
 
@@ -155,7 +156,7 @@ function applySourceDayLayout(sheet: ExcelJS.Worksheet) {
   const side: Array<[string, string]> = [
     ["H157", "E157/24"], ["H158", "E158/24"], ["H159", "F157/24"], ["H160", "F158/24"],
     ["H162", "F162-E162"], ["I162", "E161-F161"], ["I163", "(E162+F162)/2"], ["J163", "E159-F159"],
-    ["L159", "L158-L157"], ["L160", "J158+J157"], ["L161", "K158+K157"], ["L162", "L158+L157+I24"],
+    ["L159", "L158-L157"], ["L160", "J158+J157"], ["L161", "K158+K157"], ["L162", "L158+L157"],
   ];
   for (const [cell, formula] of side) setFormula(sheet, cell, formula);
 }
@@ -217,24 +218,19 @@ export function applyCtktktDailyCarryovers(
   for (const cell of ["E39", "H39"]) {
     if (numeric(row[`KTKT:${cell}`]) === null) sheet.getCell(cell).value = CTKTKT_GRINDING_BALL_DEFAULT;
   }
-  // Auxiliary electricity L157/L158 = gross − net. A unit that did not generate draws all of its
-  // auxiliary power from the grid, which the source enters in L157/L158. While the unit runs,
-  // the source keeps the grid-received energy beside the report (M157:M160) instead.
-  for (const [cell, gross, net, code, dailyGross] of [
-    ["L157", "J157", "K157", "GRID_RECEIVE_S1", "B"],
-    ["L158", "J158", "K158", "GRID_RECEIVE_S2", "H"],
-  ] as const) {
-    const received = numeric(row[code]);
-    const generated = numeric(row[dailyGross]);
-    const running = generated !== null && generated > 0;
-    setFormula(sheet, cell, received !== null && received > 0 && !running ? `${gross}-${net}+${received}` : `${gross}-${net}`);
-    if (cell === "L157" && received !== null && received > 0 && running) {
-      sheet.getCell("M157").value = "Tự dùng nhận lưới S1";
-      sheet.getCell("M158").value = received;
-      setFormula(sheet, "M159", "M158+L157");
-      setFormula(sheet, "M160", "M159+L158+I24");
-    }
-  }
+  // Tổng tự dùng PMIS L157 (S1) / L158 (S2): quy tắc ở ctktkt-pmis-auxiliary.ts (dùng chung với màn hình).
+  const ktkt = (cell: string) => row[`KTKT:${cell}`];
+  const aux = calculatePmisAuxiliary({
+    values: {
+      J157: ktkt("J157"), K157: ktkt("K157"), J158: ktkt("J158"), K158: ktkt("K158"), R49: ktkt("R49"),
+      GRID_RECEIVE_S1: row.GRID_RECEIVE_S1, GRID_RECEIVE_S2: row.GRID_RECEIVE_S2,
+      [pmisAuxManualCell("S1")]: ktkt(pmisAuxManualCell("S1")), [pmisAuxManualCell("S2")]: ktkt(pmisAuxManualCell("S2")),
+    },
+    previousTd21: previousRow?.["KTKT:R49"],
+    generatedFallback: { S1: row.B, S2: row.H },
+  });
+  setFormula(sheet, "L157", aux.S1.formula);
+  setFormula(sheet, "L158", aux.S2.formula);
 }
 
 function signedConstant(value: number) {

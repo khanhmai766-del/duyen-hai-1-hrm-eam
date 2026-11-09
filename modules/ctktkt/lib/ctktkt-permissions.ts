@@ -195,6 +195,7 @@ const GROUP_CELLS: Record<CtktktFieldGroup, Set<string>> = {
   ]),
   pmis_reports: new Set([
     "J157", "K157", "J158", "K158",
+    "PMIS_AUX_MANUAL_S1", "PMIS_AUX_MANUAL_S2", "PMIS_AUX_NOTE_S1", "PMIS_AUX_NOTE_S2",
     "C181", "D181", "E181", "F181", "G181", "H181", "I181", "J181", "K181", "L181",
     "M181", "N181", "O181", "P181", "Q181", "R181", "S181", "T181",
     "D183", "E183", "F183", "K183", "L183", "N183", "O183", "P183", "Q183", "R183",
