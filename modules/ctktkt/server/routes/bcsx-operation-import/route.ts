@@ -1,6 +1,8 @@
 import { isCtktktSameOrigin } from "@/modules/ctktkt/lib/request-origin";
 import { fail } from "@/lib/api";
-import { getRawDb } from "@/modules/ctktkt/db";
+import { prisma } from "@/lib/prisma";
+import { ktktWrite } from "@/modules/ctktkt/db/prisma";
+import { operationalWriteKeysFor } from "@/modules/ctktkt/lib/operational-query-policy";
 import { requirePermission } from "@/modules/ctktkt/lib/auth/server";
 import { buildQlktOperationWorkbook, derivePreviousCompletedPowerMw, parseOperationCommandWorkbook, qlktOperationFileName } from "@/modules/ctktkt/lib/bcsx-operation-import";
 import { previousIsoDate } from "@/modules/ctktkt/lib/ctktkt-report";
@@ -23,23 +25,27 @@ export async function POST(request: Request) {
     if (!file.name.toLowerCase().endsWith(".xlsx")) throw new Error("Chỉ chấp nhận file .xlsx.");
     if (file.size <= 0 || file.size > maxFileBytes) throw new Error("File rỗng hoặc vượt quá 4 MB.");
 
-    const db = getRawDb();
-    const previousEvents = await db.prepare(
-      "SELECT unit, description FROM operating_events WHERE operating_date = ? ORDER BY COALESCE(NULLIF(end_at, ''), start_at) DESC, id DESC",
-    ).bind(previousIsoDate(operatingDate)).all();
-    const previousCompletedPowerMw = derivePreviousCompletedPowerMw(previousEvents.results);
+    // Sự kiện ngày trước, mới nhất trước (= ORDER BY COALESCE(NULLIF(end_at, ''), start_at) DESC, id DESC).
+    const previousRows = await prisma.ctktktOperatingEvents.findMany({
+      where: { operating_date: previousIsoDate(operatingDate) }, select: { id: true, unit: true, description: true, start_at: true, end_at: true },
+    });
+    const finishedAt = (row: { start_at: string; end_at: string }) => row.end_at || row.start_at;
+    previousRows.sort((a, b) => finishedAt(a) < finishedAt(b) ? 1 : finishedAt(a) > finishedAt(b) ? -1 : b.id - a.id);
+    const previousCompletedPowerMw = derivePreviousCompletedPowerMw(previousRows.map(row => ({ unit: row.unit, description: row.description })));
     const importResult = await parseOperationCommandWorkbook(await file.arrayBuffer(), file.name, operatingDate, previousCompletedPowerMw);
     const output = await buildQlktOperationWorkbook(importResult);
-    await db.batch([
-      ...(importResult.events.S1.length ? [
-        db.prepare("DELETE FROM operating_events WHERE operating_date = ? AND unit = 'S1'").bind(operatingDate),
-        ...importResult.events.S1.map(event => db.prepare("INSERT INTO operating_events (operating_date, unit, start_at, end_at, event_type, description, updated_at) VALUES (?, 'S1', ?, ?, ?, ?, CURRENT_TIMESTAMP)").bind(operatingDate, event.startAt, event.endAt, event.eventType, event.description)),
-      ] : []),
-      ...(importResult.events.S2.length ? [
-        db.prepare("DELETE FROM operating_events WHERE operating_date = ? AND unit = 'S2'").bind(operatingDate),
-        ...importResult.events.S2.map(event => db.prepare("INSERT INTO operating_events (operating_date, unit, start_at, end_at, event_type, description, updated_at) VALUES (?, 'S2', ?, ?, ?, ?, CURRENT_TIMESTAMP)").bind(operatingDate, event.startAt, event.endAt, event.eventType, event.description)),
-      ] : []),
-    ]);
+    // Tổ máy có lệnh trong file: thay toàn bộ sự kiện ngày đó; tổ máy không có lệnh: giữ nguyên. Một giao dịch.
+    const units = (["S1", "S2"] as const).filter(unit => importResult.events[unit].length);
+    if (units.length) {
+      await ktktWrite(operationalWriteKeysFor("operating_events", [operatingDate]), async tx => {
+        for (const unit of units) {
+          await tx.ctktktOperatingEvents.deleteMany({ where: { operating_date: operatingDate, unit } });
+          for (const event of importResult.events[unit]) {
+            await tx.ctktktOperatingEvents.create({ data: { operating_date: operatingDate, unit, start_at: event.startAt, end_at: event.endAt, event_type: event.eventType, description: event.description } });
+          }
+        }
+      });
+    }
 
     const fileName = qlktOperationFileName(operatingDate);
     return new Response(output, {

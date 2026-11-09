@@ -1,7 +1,8 @@
 import { isCtktktSameOrigin } from "@/modules/ctktkt/lib/request-origin";
 import { ok, fail } from "@/lib/api";
-import { auditedDailyBatch } from "@/modules/ctktkt/lib/daily-input-audit";
-import { getRawDb } from "@/modules/ctktkt/db";
+import { writeDailyInputs } from "@/modules/ctktkt/lib/daily-input-store";
+import { ktktUtcNow, ktktWrite } from "@/modules/ctktkt/db/prisma";
+import { operationalWriteKeysFor } from "@/modules/ctktkt/lib/operational-query-policy";
 import { requirePermission } from "@/modules/ctktkt/lib/auth/server";
 import { BCSX_COAL_STOCK_24H_CODE } from "@/modules/ctktkt/lib/ctktkt-bcsx-link";
 import { isFutureOperatingDate } from "@/modules/ctktkt/lib/operating-date";
@@ -21,10 +22,10 @@ export async function POST(request: Request) {
     if (!datePattern.test(operatingDate)) throw new Error("Ngày vận hành không hợp lệ.");
     if (isFutureOperatingDate(operatingDate)) throw new Error("Không thể lưu dữ liệu cho ngày trong tương lai.");
     if (!valueText || !Number.isFinite(value) || value < 0 || value > 10_000_000) throw new Error("Than tồn kho 24h phải là số không âm hợp lệ.");
-    const db = getRawDb();
-    await auditedDailyBatch(db, guard.user, "bcsx-coal-stock", [db.prepare(
-      "INSERT INTO daily_inputs (operating_date, field_code, value, note, updated_at) VALUES (?, ?, ?, '', CURRENT_TIMESTAMP) ON CONFLICT(operating_date, field_code) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP",
-    ).bind(operatingDate, BCSX_COAL_STOCK_24H_CODE, String(value))]);
+    // Thêm/sửa ô than tồn 24h, giữ ghi chú ô; nhật ký sửa ô cùng giao dịch.
+    const user = guard.user, updatedAt = ktktUtcNow();
+    await ktktWrite(operationalWriteKeysFor("daily_inputs", [operatingDate]), tx => writeDailyInputs(tx, user, "bcsx-coal-stock",
+      [{ kind: "upsert", operatingDate, fieldCode: BCSX_COAL_STOCK_24H_CODE, value: String(value), keepNote: true }], updatedAt));
     return ok({ saved: true, value: String(value) });
   } catch (error) {
     return fail(error instanceof Error ? error.message : "Không lưu được than tồn kho 24h.", 400);

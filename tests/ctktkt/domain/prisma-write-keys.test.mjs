@@ -65,6 +65,14 @@ const CASES = [
           updated_at = CURRENT_TIMESTAMP`, d => [d, 'a', 'b'], d => operationalWriteKeysFor('ppa_heat_rate_daily', [d])],
   ['ô ngày giữ ghi chú (PPA)', "INSERT INTO daily_inputs (operating_date, field_code, value, note, updated_at) VALUES (?, ?, ?, '', CURRENT_TIMESTAMP) ON CONFLICT(operating_date, field_code) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP",
     d => [d, 'PPA_CSKD_S1', '600'], d => operationalWriteKeysFor('daily_inputs', [d])],
+  // Báo cáo sản xuất: số liệu nửa giờ, sự kiện vận hành (thay theo tổ máy, cả khi nạp lệnh điều độ).
+  ['shift_readings thêm/sửa', "INSERT INTO shift_readings (operating_date, unit, time_slot, metric, value, updated_at) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP) ON CONFLICT(operating_date, unit, time_slot, metric) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP",
+    d => [d, 'S1', '01:00', 'Q', '1'], d => operationalWriteKeysFor('shift_readings', [d])],
+  ['shift_readings xoá', 'DELETE FROM shift_readings WHERE operating_date = ? AND unit = ? AND time_slot = ? AND metric = ?', d => [d, 'S1', '01:00', 'Q'], d => operationalWriteKeysFor('shift_readings', [d])],
+  ['operating_events xoá theo tổ máy', 'DELETE FROM operating_events WHERE operating_date = ? AND unit = ?', d => [d, 'S1'], d => operationalWriteKeysFor('operating_events', [d])],
+  ['operating_events xoá S1 (nạp lệnh)', "DELETE FROM operating_events WHERE operating_date = ? AND unit = 'S1'", d => [d], d => operationalWriteKeysFor('operating_events', [d])],
+  ['operating_events thêm', 'INSERT INTO operating_events (operating_date, unit, start_at, end_at, event_type, description, updated_at) VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)',
+    d => [d, 'S1', '2026-09-17 08:00', '', 1, 'x'], d => operationalWriteKeysFor('operating_events', [d])],
   ['trưởng ca (không phải dữ liệu vận hành)', `INSERT INTO water_shift_leaders (name, is_active, display_order)
          VALUES (?, ?, ?)
          ON CONFLICT(name) DO UPDATE SET is_active = excluded.is_active, display_order = excluded.display_order`, () => ['A', 1, 0], () => operationalWriteKeysFor('water_shift_leaders')],

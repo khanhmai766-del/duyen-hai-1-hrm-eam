@@ -1,5 +1,5 @@
 import { requireSession } from "@/modules/ctktkt/lib/auth/server";
-import { getRawDb } from "@/modules/ctktkt/db";
+import { prisma } from "@/lib/prisma";
 import { calculateCoalStock24h } from "@/modules/ctktkt/lib/coal-stock";
 import { buildBcsxWorkbook, deriveA0Readings, fileNameFor, SHIFT_METRICS, SHIFT_TIME_SLOTS, type ExportUnit, type OperatingEvent, type ShiftMetric, type UnitTotals } from "@/modules/ctktkt/lib/bcsx";
 import { deriveCtktktCellsFromBcsx, type CtktktBcsxReading } from "@/modules/ctktkt/lib/ctktkt-bcsx-link";
@@ -10,17 +10,22 @@ const datePattern = /^(19|20|21)\d{2}-(0[1-9]|1[0-2])-([0-2]\d|3[01])$/;
 const exportUnits = new Set(["S1", "S2", "A0"]);
 
 async function loadUnitData(date: string, unit: "S1" | "S2") {
-  const db = getRawDb();
   const previousDate = previousIsoDate(date);
   // The 24h coal stock chains from day 01 of the month, whose consumption needs the day before.
   const rangeStart = previousIsoDate(`${date.slice(0, 8)}01`);
-  const [readingsRes, eventsRes, stockRes, ktktRes, ktktShiftRes] = await Promise.all([
-    db.prepare("SELECT time_slot AS timeSlot, metric, value FROM shift_readings WHERE operating_date = ? AND unit = ?").bind(date, unit).all(),
-    db.prepare("SELECT start_at AS startAt, end_at AS endAt, event_type AS eventType, description FROM operating_events WHERE operating_date = ? AND unit = ? ORDER BY start_at").bind(date, unit).all(),
-    db.prepare("SELECT field_code AS fieldCode, value FROM daily_inputs WHERE operating_date = ? AND field_code IN (?, ?)").bind(date, "GRID_RECEIVE_S1", "GRID_RECEIVE_S2").all(),
-    db.prepare("SELECT operating_date AS operatingDate, substr(field_code, 6) AS cell, value FROM daily_inputs WHERE operating_date BETWEEN ? AND ? AND field_code LIKE 'KTKT:%'").bind(rangeStart, date).all(),
-    db.prepare("SELECT operating_date AS operatingDate, unit, time_slot AS timeSlot, metric, value FROM shift_readings WHERE operating_date IN (?, ?)").bind(previousDate, date).all(),
+  // Cùng 5 lượt đọc như SQL cũ (không thêm thứ tự ở các lượt cũ không sắp); ô "KTKT:<ô>" cắt tiền tố như substr cũ.
+  const [readingRows, eventRows, stockRows, ktktRows, ktktShiftRows] = await Promise.all([
+    prisma.ctktktShiftReadings.findMany({ where: { operating_date: date, unit }, select: { time_slot: true, metric: true, value: true } }),
+    prisma.ctktktOperatingEvents.findMany({ where: { operating_date: date, unit }, orderBy: { start_at: "asc" }, select: { start_at: true, end_at: true, event_type: true, description: true } }),
+    prisma.ctktktDailyInputs.findMany({ where: { operating_date: date, field_code: { in: ["GRID_RECEIVE_S1", "GRID_RECEIVE_S2"] } }, select: { field_code: true, value: true } }),
+    prisma.ctktktDailyInputs.findMany({ where: { operating_date: { gte: rangeStart, lte: date }, field_code: { startsWith: "KTKT:" } }, select: { operating_date: true, field_code: true, value: true } }),
+    prisma.ctktktShiftReadings.findMany({ where: { operating_date: { in: [previousDate, date] } }, select: { operating_date: true, unit: true, time_slot: true, metric: true, value: true } }),
   ]);
+  const readingsRes = { results: readingRows.map(r => ({ timeSlot: r.time_slot, metric: r.metric, value: r.value })) };
+  const eventsRes = { results: eventRows.map(r => ({ startAt: r.start_at, endAt: r.end_at, eventType: r.event_type, description: r.description })) };
+  const stockRes = { results: stockRows.map(r => ({ fieldCode: r.field_code, value: r.value })) };
+  const ktktRes = { results: ktktRows.map(r => ({ operatingDate: r.operating_date, cell: r.field_code.slice(5), value: r.value })) };
+  const ktktShiftRes = { results: ktktShiftRows.map(r => ({ operatingDate: r.operating_date, unit: r.unit, timeSlot: r.time_slot, metric: r.metric, value: r.value })) };
 
   const readings: Partial<Record<ShiftMetric, (number | null)[]>> = {};
   for (const m of SHIFT_METRICS) readings[m.key] = new Array(SHIFT_TIME_SLOTS.length).fill(null);

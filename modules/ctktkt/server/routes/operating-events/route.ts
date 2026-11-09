@@ -1,6 +1,8 @@
 import { isCtktktSameOrigin } from "@/modules/ctktkt/lib/request-origin";
 import { ok, fail } from "@/lib/api";
-import { getRawDb } from "@/modules/ctktkt/db";
+import { prisma } from "@/lib/prisma";
+import { ktktWrite } from "@/modules/ctktkt/db/prisma";
+import { operationalWriteKeysFor } from "@/modules/ctktkt/lib/operational-query-policy";
 import { EVENT_TYPES } from "@/modules/ctktkt/lib/bcsx";
 import { requirePermission, requireSession } from "@/modules/ctktkt/lib/auth/server";
 
@@ -15,8 +17,11 @@ export async function GET(request: Request) {
   const date = new URL(request.url).searchParams.get("date") || "";
   if (!datePattern.test(date)) return fail("Ngày không hợp lệ.", 400);
   try {
-    const { results } = await getRawDb().prepare("SELECT id, unit, start_at AS startAt, end_at AS endAt, event_type AS eventType, description FROM operating_events WHERE operating_date = ? ORDER BY start_at").bind(date).all();
-    return ok({ events: results });
+    const rows = await prisma.ctktktOperatingEvents.findMany({
+      where: { operating_date: date }, orderBy: { start_at: "asc" },
+      select: { id: true, unit: true, start_at: true, end_at: true, event_type: true, description: true },
+    });
+    return ok({ events: rows.map(r => ({ id: r.id, unit: r.unit, startAt: r.start_at, endAt: r.end_at, eventType: r.event_type, description: r.description })) });
   } catch { return unavailable(); }
 }
 
@@ -40,12 +45,14 @@ export async function POST(request: Request) {
       if (description.length > 500) throw new Error("Mô tả sự kiện quá dài.");
       return { startAt, endAt, eventType, description };
     });
-    const db = getRawDb();
-    const statements = [
-      db.prepare("DELETE FROM operating_events WHERE operating_date = ? AND unit = ?").bind(body.date, body.unit),
-      ...clean.map(e => db.prepare("INSERT INTO operating_events (operating_date, unit, start_at, end_at, event_type, description, updated_at) VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)").bind(body.date, body.unit, e.startAt, e.endAt, e.eventType, e.description)),
-    ];
-    await db.batch(statements);
+    // Thay toàn bộ danh sách sự kiện của (ngày, tổ máy) trong một giao dịch; thêm lần lượt để id tăng theo thứ tự gửi.
+    const date = body.date, unit = body.unit;
+    await ktktWrite(operationalWriteKeysFor("operating_events", [date]), async tx => {
+      await tx.ctktktOperatingEvents.deleteMany({ where: { operating_date: date, unit } });
+      for (const e of clean) {
+        await tx.ctktktOperatingEvents.create({ data: { operating_date: date, unit, start_at: e.startAt, end_at: e.endAt, event_type: e.eventType, description: e.description } });
+      }
+    });
     return ok({ saved: clean.length });
   } catch (error) {
     return fail(error instanceof SyntaxError ? "Dữ liệu JSON không hợp lệ." : error instanceof Error ? error.message : "Dữ liệu không hợp lệ.", 400);

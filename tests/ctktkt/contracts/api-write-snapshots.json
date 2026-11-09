@@ -8807,7 +8807,376 @@
    }
   }
  },
- "bcsx #11 than tồn 24h: số âm": {
+ "bcsx #11 than tồn 24h: đổi giá trị (ghi nhật ký)": {
+  "request": "POST bcsx-coal-stock",
+  "response": {
+   "status": 200,
+   "body": {
+    "data": {
+     "saved": true,
+     "value": "310000"
+    },
+    "meta": null,
+    "error": null
+   }
+  },
+  "phiên bản đọc tăng": [
+   "daily_inputs",
+   "daily_inputs:2026-09"
+  ],
+  "nhật ký sửa ô": [
+   {
+    "actor_id": "cmrvydnw90000chzlmavbmkqu",
+    "actor_username": "admin@powerplant.vn",
+    "actor_name": "Nguyễn Văn Hùng",
+    "source": "bcsx-coal-stock",
+    "operating_date": "2026-09-17",
+    "field_code": "BCSX_COAL_STOCK_24H",
+    "action": "update",
+    "old_value": "312450.75",
+    "new_value": "310000",
+    "old_note": "",
+    "new_note": ""
+   }
+  ],
+  "sau: GET daily-inputs?period=2026-09&date=2026-09-17&scope=non-ktkt": {
+   "status": 200,
+   "body": {
+    "data": {
+     "entries": [
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "AE",
+       "value": "154.1",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "AF",
+       "value": "165.4",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "AJ",
+       "value": "176.7",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "AR",
+       "value": "188",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "AT",
+       "value": "199.3",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "B",
+       "value": "75",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "BCSX_COAL_STOCK_24H",
+       "value": "310000",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "BN",
+       "value": "233.2",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "BQ",
+       "value": "244.5",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "BR",
+       "value": "255.8",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "BZ",
+       "value": "278.4",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "C",
+       "value": "86.3",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CA",
+       "value": "289.7",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CC",
+       "value": "301",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CD",
+       "value": "312.3",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CE",
+       "value": "323.6",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CF",
+       "value": "334.9",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CJ",
+       "value": "210.6",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CM",
+       "value": "346.2",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CN",
+       "value": "267.1",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CQ",
+       "value": "357.5",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CR",
+       "value": "368.8",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CS",
+       "value": "380.1",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CT",
+       "value": "391.4",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CU",
+       "value": "402.7",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CV",
+       "value": "414",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CW",
+       "value": "Bình thường",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "CX",
+       "value": "221.9",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "DA",
+       "value": "436.6",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "DB",
+       "value": "447.9",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "DC",
+       "value": "459.2",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "DD",
+       "value": "470.5",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "DE",
+       "value": "481.8",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "DF",
+       "value": "493.1",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "DG",
+       "value": "504.4",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "DH",
+       "value": "515.7",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "F",
+       "value": "24",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "GRID_RECEIVE_S1",
+       "value": "12.5",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "GRID_RECEIVE_S2",
+       "value": "0",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "H",
+       "value": "108.9",
+       "note": "Ghi chú mẫu 2026-09-17"
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "I",
+       "value": "120.2",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "L",
+       "value": "24",
+       "note": ""
+      },
+      {
+       "operatingDate": "2026-09-17",
+       "fieldCode": "X",
+       "value": "142.8",
+       "note": ""
+      }
+     ]
+    },
+    "meta": null,
+    "error": null
+   }
+  }
+ },
+ "bcsx #12 than tồn 24h: ngày chưa có (thêm mới)": {
+  "request": "POST bcsx-coal-stock",
+  "response": {
+   "status": 200,
+   "body": {
+    "data": {
+     "saved": true,
+     "value": "299000.5"
+    },
+    "meta": null,
+    "error": null
+   }
+  },
+  "phiên bản đọc tăng": [
+   "daily_inputs",
+   "daily_inputs:2026-09"
+  ],
+  "nhật ký sửa ô": [
+   {
+    "actor_id": "cmrvydnw90000chzlmavbmkqu",
+    "actor_username": "admin@powerplant.vn",
+    "actor_name": "Nguyễn Văn Hùng",
+    "source": "bcsx-coal-stock",
+    "operating_date": "2026-09-01",
+    "field_code": "BCSX_COAL_STOCK_24H",
+    "action": "insert",
+    "old_value": null,
+    "new_value": "299000.5",
+    "old_note": null,
+    "new_note": ""
+   }
+  ]
+ },
+ "bcsx #13 số liệu nửa giờ: ngày năm 1999": {
+  "request": "POST shift-readings",
+  "response": {
+   "status": 200,
+   "body": {
+    "data": {
+     "saved": 1
+    },
+    "meta": null,
+    "error": null
+   }
+  },
+  "phiên bản đọc tăng": [
+   "shift_readings",
+   "shift_readings:all"
+  ],
+  "sau: GET shift-readings?date=1999-12-31": {
+   "status": 200,
+   "body": {
+    "data": {
+     "entries": [
+      {
+       "unit": "S1",
+       "timeSlot": "01:00",
+       "metric": "Q",
+       "value": "1"
+      }
+     ]
+    },
+    "meta": null,
+    "error": null
+   }
+  }
+ },
+ "bcsx #14 than tồn 24h: số âm": {
   "request": "POST bcsx-coal-stock",
   "response": {
    "status": 400,
@@ -8819,7 +9188,7 @@
   },
   "phiên bản đọc tăng": []
  },
- "bcsx #12 than tồn 24h: ngày tương lai": {
+ "bcsx #15 than tồn 24h: ngày tương lai": {
   "request": "POST bcsx-coal-stock",
   "response": {
    "status": 400,
@@ -8831,7 +9200,7 @@
   },
   "phiên bản đọc tăng": []
  },
- "bcsx #13 nạp 2 file S1/S2 (xuất từ chính web)": {
+ "bcsx #16 nạp 2 file S1/S2 (xuất từ chính web)": {
   "request": "POST bcsx-section1-import",
   "response": {
    "status": 400,
@@ -8843,7 +9212,7 @@
   },
   "phiên bản đọc tăng": []
  },
- "bcsx #14 nạp chỉ 1 file": {
+ "bcsx #17 nạp chỉ 1 file": {
   "request": "POST bcsx-section1-import",
   "response": {
    "status": 400,
@@ -8855,7 +9224,7 @@
   },
   "phiên bản đọc tăng": []
  },
- "bcsx #15 nạp file không phải .xlsx": {
+ "bcsx #18 nạp file không phải .xlsx": {
   "request": "POST bcsx-section1-import",
   "response": {
    "status": 400,
@@ -8867,7 +9236,7 @@
   },
   "phiên bản đọc tăng": []
  },
- "bcsx #16 nạp không phải multipart (415)": {
+ "bcsx #19 nạp không phải multipart (415)": {
   "request": "POST bcsx-section1-import",
   "response": {
    "status": 415,
@@ -8879,7 +9248,7 @@
   },
   "phiên bản đọc tăng": []
  },
- "bcsx #17 lệnh điều độ: thiếu file": {
+ "bcsx #20 lệnh điều độ: thiếu file": {
   "request": "POST bcsx-operation-import",
   "response": {
    "status": 400,
@@ -8891,7 +9260,7 @@
   },
   "phiên bản đọc tăng": []
  },
- "bcsx #18 lệnh điều độ: ngày sai": {
+ "bcsx #21 lệnh điều độ: ngày sai": {
   "request": "POST bcsx-operation-import",
   "response": {
    "status": 400,
@@ -8903,7 +9272,7 @@
   },
   "phiên bản đọc tăng": []
  },
- "bcsx #19 lệnh điều độ: file sai cấu trúc": {
+ "bcsx #22 lệnh điều độ: file sai cấu trúc": {
   "request": "POST bcsx-operation-import",
   "response": {
    "status": 400,
@@ -8914,6 +9283,116 @@
    }
   },
   "phiên bản đọc tăng": []
+ },
+ "bcsx #23 lệnh điều độ: nạp S1 + S2 (file mẫu)": {
+  "request": "POST bcsx-operation-import",
+  "response": {
+   "status": 200,
+   "file": {
+    "disposition": "attachment; filename=\"DH1_Thoi_gian_VH_17.09.2026.xlsx\"",
+    "headers": {
+     "x-bcsx-ignored-rows": "1",
+     "x-bcsx-s1-events": "2",
+     "x-bcsx-s1-preserved": "false",
+     "x-bcsx-s2-events": "1",
+     "x-bcsx-s2-preserved": "false"
+    }
+   }
+  },
+  "phiên bản đọc tăng": [
+   "operating_events",
+   "operating_events:2026-09"
+  ],
+  "sau: GET operating-events?date=2026-09-17": {
+   "status": 200,
+   "body": {
+    "data": {
+     "events": [
+      {
+       "id": "<id mới>",
+       "unit": "S1",
+       "startAt": "2026-09-17 08:00",
+       "endAt": "2026-09-17 08:40",
+       "eventType": 1,
+       "description": "Tăng tải S1 từ 435.7MW lên 520MW"
+      },
+      {
+       "id": "<id mới>",
+       "unit": "S2",
+       "startAt": "2026-09-17 10:15",
+       "endAt": "2026-09-17 10:45",
+       "eventType": 1,
+       "description": "Tăng tải S2 từ 435.7MW lên 480MW"
+      },
+      {
+       "id": "<id mới>",
+       "unit": "S1",
+       "startAt": "2026-09-17 13:00",
+       "endAt": "2026-09-17 13:30",
+       "eventType": 1,
+       "description": "Tăng tải S1 từ 520MW lên 600MW"
+      }
+     ]
+    },
+    "meta": null,
+    "error": null
+   }
+  }
+ },
+ "bcsx #24 lệnh điều độ: chỉ có S2 (giữ sự kiện S1)": {
+  "request": "POST bcsx-operation-import",
+  "response": {
+   "status": 200,
+   "file": {
+    "disposition": "attachment; filename=\"DH1_Thoi_gian_VH_17.09.2026.xlsx\"",
+    "headers": {
+     "x-bcsx-ignored-rows": "0",
+     "x-bcsx-s1-events": "0",
+     "x-bcsx-s1-preserved": "true",
+     "x-bcsx-s2-events": "1",
+     "x-bcsx-s2-preserved": "false"
+    }
+   }
+  },
+  "phiên bản đọc tăng": [
+   "operating_events",
+   "operating_events:2026-09"
+  ],
+  "sau: GET operating-events?date=2026-09-17": {
+   "status": 200,
+   "body": {
+    "data": {
+     "events": [
+      {
+       "id": "<id mới>",
+       "unit": "S1",
+       "startAt": "2026-09-17 08:00",
+       "endAt": "2026-09-17 08:40",
+       "eventType": 1,
+       "description": "Tăng tải S1 từ 435.7MW lên 520MW"
+      },
+      {
+       "id": "<id mới>",
+       "unit": "S1",
+       "startAt": "2026-09-17 13:00",
+       "endAt": "2026-09-17 13:30",
+       "eventType": 1,
+       "description": "Tăng tải S1 từ 520MW lên 600MW"
+      },
+      {
+       "id": "<id mới>",
+       "unit": "S2",
+       "startAt": "2026-09-17 15:00",
+       "endAt": "2026-09-17 15:20",
+       "eventType": 1,
+       "description": "Tăng tải S2 từ 435.7MW lên 550MW"
+      }
+     ]
+    },
+    "meta": null,
+    "error": null
+   }
+  }
  },
  "ktkt #01 lưu 2 ô (số có dấu phẩy)": {
   "request": "POST ctktkt-report",

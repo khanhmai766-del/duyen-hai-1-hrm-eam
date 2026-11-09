@@ -13,6 +13,7 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
 import path from "node:path";
 import pg from "pg";
+import ExcelJS from "exceljs";
 import { PrismaClient } from "@prisma/client";
 import { encode } from "next-auth/jwt";
 import { assertDevDatabase, assertLocalBase, fail, loadDevEnv } from "./_safety.mjs";
@@ -291,6 +292,9 @@ const WRITE_SCENARIOS = {
     { step: "sự kiện: thời gian sai", method: "POST", path: "operating-events", json: { date: "2026-09-17", unit: "S1", events: [{ startAt: "2026-09-17T08:00", eventType: 1 }] } },
     { step: "sự kiện: loại sai", method: "POST", path: "operating-events", json: { date: "2026-09-17", unit: "S1", events: [{ startAt: "2026-09-17 08:00", eventType: 9 }] } },
     { step: "than tồn 24h: lưu", method: "POST", path: "bcsx-coal-stock", json: { operatingDate: "2026-09-17", value: "312450,75" }, after: ["daily-inputs?period=2026-09&date=2026-09-17&scope=non-ktkt"] },
+    { step: "than tồn 24h: đổi giá trị (ghi nhật ký)", method: "POST", path: "bcsx-coal-stock", json: { operatingDate: "2026-09-17", value: "310000" }, after: ["daily-inputs?period=2026-09&date=2026-09-17&scope=non-ktkt"] },
+    { step: "than tồn 24h: ngày chưa có (thêm mới)", method: "POST", path: "bcsx-coal-stock", json: { operatingDate: "2026-09-01", value: "299000.5" } },
+    { step: "số liệu nửa giờ: ngày năm 1999", method: "POST", path: "shift-readings", json: { date: "1999-12-31", entries: [{ unit: "S1", timeSlot: "01:00", metric: "Q", value: "1" }] }, after: ["shift-readings?date=1999-12-31"] },
     { step: "than tồn 24h: số âm", method: "POST", path: "bcsx-coal-stock", json: { operatingDate: "2026-09-17", value: "-5" } },
     { step: "than tồn 24h: ngày tương lai", method: "POST", path: "bcsx-coal-stock", json: { operatingDate: "2099-01-01", value: "5" } },
     { step: "nạp 2 file S1/S2 (xuất từ chính web)", method: "POST", path: "bcsx-section1-import", files: [["files", "bcsx-export?date=2026-09-17&unit=S1", "BCSX S1 17.09.2026.xlsx"], ["files", "bcsx-export?date=2026-09-17&unit=S2", "BCSX S2 17.09.2026.xlsx"]] },
@@ -300,6 +304,10 @@ const WRITE_SCENARIOS = {
     { step: "lệnh điều độ: thiếu file", method: "POST", path: "bcsx-operation-import", form: { date: "2026-09-17" } },
     { step: "lệnh điều độ: ngày sai", method: "POST", path: "bcsx-operation-import", form: { date: "17/09/2026" }, files: [["file", "bcsx-export?date=2026-09-17&unit=S1", "DanhSachLenhKetThuc.xlsx"]] },
     { step: "lệnh điều độ: file sai cấu trúc", method: "POST", path: "bcsx-operation-import", form: { date: "2026-09-17" }, files: [["file", "bcsx-export?date=2026-09-17&unit=S1", "DanhSachLenhKetThuc.xlsx"]] },
+    { step: "lệnh điều độ: nạp S1 + S2 (file mẫu)", method: "POST", path: "bcsx-operation-import", form: { date: "2026-09-17" }, files: [["file", "gen:lenh-s1-s2", "DanhSachLenhKetThuc.xlsx"]],
+      after: ["operating-events?date=2026-09-17"] },
+    { step: "lệnh điều độ: chỉ có S2 (giữ sự kiện S1)", method: "POST", path: "bcsx-operation-import", form: { date: "2026-09-17" }, files: [["file", "gen:lenh-chi-s2", "DanhSachLenhKetThuc.xlsx"]],
+      after: ["operating-events?date=2026-09-17"] },
   ],
   // Chỉ tiêu KTKT (tài khoản quản trị): lưu ô báo cáo, các lỗi kiểm tra, yêu cầu sửa, ảnh công tơ than + Gemini.
   // Dev không có GEMINI_API_KEY → mọi nhánh đọc ảnh/kiểm tra dừng ở kiểm cấu hình, KHÔNG gọi Google.
@@ -343,6 +351,13 @@ function normalize(value, key = "") {
 }
 async function call(cookie, method, p, init = {}) {
   const res = await fetch(new URL(`/api/ctktkt/${p}`, base), { method, headers: { cookie, ...(init.headers ?? {}) }, body: init.body });
+  if ((res.headers.get("content-type") ?? "").includes("spreadsheetml")) {
+    await res.arrayBuffer();
+    return { status: res.status, file: {
+      disposition: res.headers.get("content-disposition"),
+      headers: Object.fromEntries([...res.headers.entries()].filter(([k]) => k.startsWith("x-bcsx-")).sort()),
+    } };
+  }
   const text = await res.text();
   let body; try { body = JSON.parse(text); } catch { body = { nonJson: text.slice(0, 200) }; }
   return { status: res.status, body: normalize(body) };
@@ -389,6 +404,24 @@ async function auditSince(id) {
   await c.end();
   return rows;
 }
+async function operationCommandFile(rows) {
+  const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet("All");
+  sheet.addRow(["Nhà máy", "Tổ máy", "Nội dung lệnh", "CS hoàn thành (MW)", "Thời điểm BĐTH", "Thời điểm hoàn thành", "Hoàn thành"]);
+  for (const row of rows) sheet.addRow(row);
+  return Buffer.from(await workbook.xlsx.writeBuffer());
+}
+const GENERATED_FILES = {
+  "lenh-s1-s2": () => operationCommandFile([
+    ["Duyên Hải 1", "S1", "Thay đổi công suất", 520, "2026-09-17 08:00", "2026-09-17 08:40", "x"],
+    ["Duyên Hải 1", "S1", "Thay đổi công suất", 600, "2026-09-17 13:00", "2026-09-17 13:30", "x"],
+    ["Duyên Hải 1", "S2", "Thay đổi công suất", 480, "2026-09-17 10:15", "2026-09-17 10:45", "x"],
+    ["Duyên Hải 3", "S1", "Thay đổi công suất", 400, "2026-09-17 09:00", "2026-09-17 09:30", "x"],
+  ]),
+  "lenh-chi-s2": () => operationCommandFile([
+    ["Duyên Hải 1", "S2", "Thay đổi công suất", 550, "2026-09-17 15:00", "2026-09-17 15:20", "x"],
+  ]),
+};
 async function runWrites(cookie) {
   const out = {};
   for (const [group, steps] of Object.entries(WRITE_SCENARIOS)) {
@@ -408,8 +441,8 @@ async function runWrites(cookie) {
         for (const [k, v] of Object.entries(s.upload ?? s.form ?? {})) fd.set(k, v);
         // Tệp lấy từ API xuất của chính web tại thời điểm chạy (dữ liệu mẫu cố định → tệp cố định).
         for (const [field, from, name] of s.files ?? []) {
-          const res = await fetch(new URL(`/api/ctktkt/${from}`, base), { headers: { cookie } });
-          fd.append(field, new Blob([Buffer.from(await res.arrayBuffer())], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }), name);
+          const bytes = from.startsWith("gen:") ? await GENERATED_FILES[from.slice(4)]() : Buffer.from(await (await fetch(new URL(`/api/ctktkt/${from}`, base), { headers: { cookie } })).arrayBuffer());
+          fd.append(field, new Blob([bytes], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }), name);
         }
         init.body = fd;
       }

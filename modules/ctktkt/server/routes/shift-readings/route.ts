@@ -1,6 +1,8 @@
 import { isCtktktSameOrigin } from "@/modules/ctktkt/lib/request-origin";
 import { ok, fail } from "@/lib/api";
-import { getRawDb } from "@/modules/ctktkt/db";
+import { prisma } from "@/lib/prisma";
+import { ktktUtcNow, ktktWrite } from "@/modules/ctktkt/db/prisma";
+import { operationalWriteKeysFor } from "@/modules/ctktkt/lib/operational-query-policy";
 import { SHIFT_METRICS, SHIFT_TIME_SLOTS } from "@/modules/ctktkt/lib/bcsx";
 import { requirePermission, requireSession } from "@/modules/ctktkt/lib/auth/server";
 
@@ -15,8 +17,9 @@ export async function GET(request: Request) {
   const date = new URL(request.url).searchParams.get("date") || "";
   if (!datePattern.test(date)) return fail("Ngày không hợp lệ.", 400);
   try {
-    const { results } = await getRawDb().prepare("SELECT unit, time_slot AS timeSlot, metric, value FROM shift_readings WHERE operating_date = ?").bind(date).all();
-    return ok({ entries: results });
+    // Không sắp thứ tự — như SQL cũ (trang tự xếp theo mốc giờ).
+    const rows = await prisma.ctktktShiftReadings.findMany({ where: { operating_date: date }, select: { unit: true, time_slot: true, metric: true, value: true } });
+    return ok({ entries: rows.map(r => ({ unit: r.unit, timeSlot: r.time_slot, metric: r.metric, value: r.value })) });
   } catch { return unavailable(); }
 }
 
@@ -38,11 +41,21 @@ export async function POST(request: Request) {
       if (value.length > 40) throw new Error("Giá trị quá dài.");
       return { unit, timeSlot, metric, value: value.replace(",", ".") };
     });
-    const db = getRawDb();
-    const statements = clean.map(e => e.value === ""
-      ? db.prepare("DELETE FROM shift_readings WHERE operating_date = ? AND unit = ? AND time_slot = ? AND metric = ?").bind(body.date, e.unit, e.timeSlot, e.metric)
-      : db.prepare("INSERT INTO shift_readings (operating_date, unit, time_slot, metric, value, updated_at) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP) ON CONFLICT(operating_date, unit, time_slot, metric) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP").bind(body.date, e.unit, e.timeSlot, e.metric, e.value));
-    if (statements.length) await db.batch(statements);
+    // Ô rỗng = xoá; còn lại thêm/sửa. Cả lượt một giao dịch.
+    if (clean.length) {
+      const date = body.date, updatedAt = ktktUtcNow();
+      await ktktWrite(operationalWriteKeysFor("shift_readings", [date]), async tx => {
+        for (const e of clean) {
+          const key = { operating_date: date, unit: e.unit, time_slot: e.timeSlot, metric: e.metric };
+          if (e.value === "") await tx.ctktktShiftReadings.deleteMany({ where: key });
+          else await tx.ctktktShiftReadings.upsert({
+            where: { operating_date_unit_time_slot_metric: key },
+            create: { ...key, value: e.value },
+            update: { value: e.value, updated_at: updatedAt },
+          });
+        }
+      });
+    }
     return ok({ saved: clean.length });
   } catch (error) {
     return fail(error instanceof SyntaxError ? "Dữ liệu JSON không hợp lệ." : error instanceof Error ? error.message : "Dữ liệu không hợp lệ.", 400);
