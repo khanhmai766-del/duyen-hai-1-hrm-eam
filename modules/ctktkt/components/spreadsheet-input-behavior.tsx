@@ -42,6 +42,17 @@ function focusAndSelect(input: HTMLInputElement | undefined) {
   input.scrollIntoView({ block: "nearest", inline: "nearest" });
 }
 
+type WheelTarget = { tagName?: string; type?: string; closest?: (selector: string) => unknown } | null;
+
+/**
+ * Ô số (type="number") đang được chọn sẽ tự cộng/trừ khi lăn chuột trên nó — dễ làm sai chỉ số
+ * công tơ mà người nhập không để ý. Bỏ chọn ô ngay khi lăn để trang cuộn bình thường, số giữ nguyên.
+ */
+export function shouldBlurNumberInputOnWheel(target: WheelTarget, active: unknown): boolean {
+  return Boolean(target && target === active && target.tagName === "INPUT" && target.type === "number"
+    && target.closest?.(".ctktkt-content, .ctktkt-module"));
+}
+
 /** Áp dụng dán khối và phím điều hướng cho mọi ô nhập dữ liệu trong ứng dụng. */
 export function SpreadsheetInputBehavior() {
   useEffect(() => {
@@ -103,11 +114,19 @@ export function SpreadsheetInputBehavior() {
       focusAndSelect(last || input);
     };
 
+    const onWheel = (event: WheelEvent) => {
+      const target = event.target as HTMLInputElement | null;
+      if (shouldBlurNumberInputOnWheel(target, document.activeElement)) target?.blur();
+    };
+
     document.addEventListener("keydown", onKeyDown);
     document.addEventListener("paste", onPaste);
+    // passive: không chặn cuộn trang; capture: chạy trước khi trình duyệt đổi giá trị ô số.
+    document.addEventListener("wheel", onWheel, { passive: true, capture: true });
     return () => {
       document.removeEventListener("keydown", onKeyDown);
       document.removeEventListener("paste", onPaste);
+      document.removeEventListener("wheel", onWheel, { capture: true });
     };
   }, []);
 
