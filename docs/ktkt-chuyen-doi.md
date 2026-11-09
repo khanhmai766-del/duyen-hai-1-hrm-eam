@@ -24,7 +24,7 @@ Tài liệu này ghi kế hoạch đã chốt ngày 08/11/2026 (đã thống nh�
 | Giai đoạn | Việc | Trạng thái |
 |---|---|---|
 | 0 | Test hợp đồng API, lệnh `test:ctktkt`, số đo nền | ✅ 08/11/2026 |
-| 1 + 2 | Theo từng trang: hook TanStack trong `hooks/`, handler trả `ok()/fail()`, tách component, CSS → Tailwind. Thứ tự: **Hoá chất → Lượng nước → PMIS → PPA → Báo cáo sản xuất → Dữ liệu các tháng → Chỉ tiêu KTKT** | Hoá chất ✅ · Lượng nước ✅ · PMIS ✅ · PPA ✅ · Báo cáo sản xuất ✅ · Dữ liệu các tháng ✅ (08/11) · Chỉ tiêu KTKT: 6 route ✅, 5 component ⏳ (chờ phối hợp — tệp đang được sửa song song) |
+| 1 + 2 | Theo từng trang: hook TanStack trong `hooks/`, handler trả `ok()/fail()`, tách component, CSS → Tailwind. Thứ tự: **Hoá chất → Lượng nước → PMIS → PPA → Báo cáo sản xuất → Dữ liệu các tháng → Chỉ tiêu KTKT** | Hoá chất ✅ · Lượng nước ✅ · PMIS ✅ · PPA ✅ · Báo cáo sản xuất ✅ · Dữ liệu các tháng ✅ (08/11) · Chỉ tiêu KTKT ✅ (6 route 08/11, 5 component 09/11) |
 
 ### Mẫu chuyển một trang (theo trang Hoá chất)
 
@@ -74,12 +74,20 @@ xác minh, "nạp lại") gọi thẳng `apiGet`.
 **Phản hồi là FILE** (`bcsx-operation-import`, `bcsx-export`): đọc bằng `apiReportResponse` (file trả nguyên, lỗi JSON →
 `{error}`); route chỉ đổi nhánh lỗi sang `fail()`.
 
-**Chỉ tiêu KTKT — khi chuyển component** (`ctktkt-report.tsx`, `report-corrections.tsx`, `coal-meter-photo-*.tsx`,
-`coal-gemini-shared-settings.tsx`): báo người đang sửa các tệp này đẩy hết lên GitHub trước. `tests/ctktkt/report-input.browser.mjs`
-giả lập `@/hooks/useCtktkt` + API trả JSON kiểu cũ và dùng sự kiện `test-request-change` để mô phỏng "đọc muộn khi đang
-sửa" — phải đổi API giả sang phong bì `{data,meta,error}` và cách kích hoạt đọc lại, GIỮ nguyên 8 kiểm tra. `tests/ctktkt/domain/coal-gemini.test.mjs`
-đọc mã nguồn `coal-meter-photo-import.tsx` (phải còn chuỗi `write: false`, không có `matchCoalMeter(`). Dev không có
-`GEMINI_API_KEY` → hợp đồng chỉ kiểm nhánh "chưa có khoá", không gọi Google.
+**Chỉ tiêu KTKT — đã chuyển component (09/11/2026)**, hook `hooks/useKtktReport.ts`:
+- Bảng nhập (`ctktkt-report.tsx`) giữ bản nháp trên trình duyệt nên vẫn đọc kiểu mệnh lệnh: `useReadCtktktReport()` =
+  `fetchQuery` staleTime 0 (luôn đọc máy chủ, hai lượt đọc cùng URL dùng chung) — y như bản cũ; lưu qua `useSaveCtktktReport`
+  (làm cũ `["ctktkt"]`), đọc lại xác nhận bằng `fetchStoredCtktktReport` (không qua bộ nhớ đệm).
+- `report-corrections.tsx`: danh sách = `useCorrectionRequests` (staleTime 0); gửi/duyệt qua mutation. Khác bản cũ đúng một
+  điểm: lưu ô trên bảng làm danh sách yêu cầu tự đọc lại (số "chờ duyệt" luôn mới) — thêm 1 GET mỗi lần lưu.
+- `coal-meter-photo-import.tsx`: ảnh đã lưu = `useOwnCoalPhotos` (giữ danh sách cũ khi đổi ngày); đọc ảnh/kiểm tra Gemini
+  qua `apiMutate(..., { headers, signal })` — `lib/fetcher.ts` thêm tham số tuỳ chọn thứ 4 cho tiêu đề khoá tạm + huỷ.
+  Bỏ prop `request` (không nơi nào truyền). `coal-gemini-shared-settings.tsx`: `useCoalGeminiSettings` + `useSaveCoalGeminiSettings`.
+- `lib/coal-photo-save.ts` nhận `{save, readStored}` thay cho `fetch`.
+- `tests/ctktkt/report-input.browser.mjs`: API giả trả phong bì; dùng hook thật, chỉ bọc `useReadCtktktReport` để sự kiện
+  `test-request-change` kích hoạt "đọc muộn khi đang sửa" (đã kiểm có thêm đúng 1 lượt đọc). Vẫn 8 kiểm tra.
+- Còn dùng `useCtktktRequest`/`useCtktktDownload` (chuyển ở giai đoạn 4): `google-mirror-links.tsx`, `data-backup-panel.tsx`,
+  `water-report-client.tsx` (chỉ phần tải file).
 
 ### Việc tồn đọng ghi nhận khi chuyển đổi
 

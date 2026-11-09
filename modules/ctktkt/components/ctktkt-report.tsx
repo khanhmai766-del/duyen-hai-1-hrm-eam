@@ -2,7 +2,7 @@
 import { ctktktMetricDisplay } from "../lib/ctktkt-report";
 import { CTKTKT_ELECTRIC_METER_RESET_CELLS } from "../lib/ctktkt-electric-meter-reset";
 import { ReportCorrections } from "./report-corrections";
-import { useCtktktRequest, useCtktktDownload } from "@/hooks/useCtktkt";
+import { downloadCtktktFile, fetchStoredCtktktReport, useReadCtktktReport, useSaveCtktktReport } from "@/hooks/useKtktReport";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
@@ -257,8 +257,10 @@ function num(entries: CtktktDayEntries, cell: string): number | null {
 }
 
 export function CtktktReport() {
-  const ctktktRequest = useCtktktRequest();
-  const downloadReport=useCtktktDownload();
+  // Bảng nhập tự giữ số đang sửa (bản nháp): đọc kiểu mệnh lệnh qua TanStack, lưu qua mutation (làm cũ ["ctktkt"]).
+  const readReport = useReadCtktktReport();
+  const { mutateAsync: saveReport } = useSaveCtktktReport();
+  const downloadReport = downloadCtktktFile;
 
   const user = useSessionUser();
   const editableGroups = useMemo(() => getEditableCtktktGroups(user), [user]);
@@ -411,18 +413,7 @@ export function CtktktReport() {
       }
       stageValues(updates, request.operatingDate);
       try {
-        const res = await ctktktRequest("/api/ctktkt/ctktkt-report", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            operatingDate: request.operatingDate,
-            entries: safeEntries,
-          }),
-        });
-        const resJson = (await res.json()) as { error?: string; saved?: number };
-        if (!res.ok || resJson.error) {
-          throw new Error(resJson.error || "Không lưu được dữ liệu đồng bộ.");
-        }
+        await saveReport({ operatingDate: request.operatingDate, entries: safeEntries });
         acknowledgeSaved(safeEntries, request.operatingDate);
         setMessage(`Đã đồng bộ và lưu thành công ${safeEntries.length} chỉ tiêu PMIS Sản lượng & 02-PĐ (hàng Duyên Hải 1) từ QLKT cho ngày ${request.operatingDate.split("-").reverse().join("/")}!`);
         setError("");
@@ -442,22 +433,14 @@ export function CtktktReport() {
         pmisRequestRef.current = null;
       }
     };
-  }, [ctktktRequest, stageValues, acknowledgeSaved]);
+  }, [saveReport, stageValues, acknowledgeSaved]);
 
   const period = date.slice(0, 7);
 
   useEffect(() => {
     const controller = new AbortController();
     const load=async(query:string)=>{
-        const response=await ctktktRequest(`/api/ctktkt/ctktkt-report?${query}`,{cache:"no-store",signal:controller.signal});
-        const body = (await response.json()) as {
-          entries?: LoadedEntry[];
-          linkedEntries?: LoadedEntry[];
-          warnings?: LinkWarning[];
-          operatingHoursMissingDates?: string[];
-          error?: string;
-        };
-        if (!response.ok) throw new Error(body.error || "Không tải được dữ liệu.");
+        const body = await readReport<LinkWarning>(query);
         controller.signal.throwIfAborted();
         return body;
     };
@@ -520,7 +503,7 @@ export function CtktktReport() {
     }
     void run();
     return () => controller.abort();
-  }, [period,date,draftKey,reloadVersion, ctktktRequest, acknowledgeSaved, user.id]);
+  }, [period,date,draftKey,reloadVersion, readReport, acknowledgeSaved, user.id]);
 
   const previousDate = previousIsoDate(date);
   const previous = useMemo(() => {
@@ -753,24 +736,15 @@ export function CtktktReport() {
         .map(cell => ({ cell, value: draftRef.current.values[cell] ?? current[cell] ?? "" }));
       if (!toSend.length) throw new Error("Không có ô dữ liệu nào vừa thay đổi để lưu.");
 
-      const response = await ctktktRequest("/api/ctktkt/ctktkt-report", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          operatingDate: date,
-          entries: toSend,
-        }),
-      });
-      const body = (await response.json()) as { saved?: number; error?: string };
-      if (!response.ok) throw new Error(body.error || "Không lưu được dữ liệu.");
+      const body = await saveReport({ operatingDate: date, entries: toSend });
 
       // Đọc lại ngay từ CSDL để không báo thành công giả. Lỗi từng gặp ở cụm
       // NH3 là giao diện vẫn giữ số vừa nhập nhưng tải lại trang thì mất.
-      const verifyResponse = await ctktktRequest(`/api/ctktkt/ctktkt-report?period=${period}&date=${date}&scope=stored`, { cache: "no-store" });
-      const verifyBody = (await verifyResponse.json()) as { entries?: LoadedEntry[]; error?: string };
-      if (!verifyResponse.ok) throw new Error(verifyBody.error || "Đã gửi dữ liệu nhưng chưa kiểm tra lại được CSDL.");
+      const verifiedEntries = await fetchStoredCtktktReport(period, date).catch(reason => {
+        throw reason instanceof Error && reason.message ? reason : new Error("Đã gửi dữ liệu nhưng chưa kiểm tra lại được CSDL.");
+      });
       const persisted = Object.fromEntries(
-        (verifyBody.entries || [])
+        (verifiedEntries || [])
           .filter(entry => entry.operatingDate === date)
           .map(entry => [entry.cell, entry.value]),
       );
@@ -3905,7 +3879,7 @@ export function CtktktReport() {
           if(loading||saving||!canEditSelectedDate)throw new Error("Ngày này chưa sẵn sàng hoặc bạn không có quyền lưu.");
           setSaving(true);
           try{
-            const verified=await saveReviewedCoalEntries(ctktktRequest,date,values,unit);
+            const verified=await saveReviewedCoalEntries({save:saveReport,readStored:(p,d)=>fetchStoredCtktktReport(p,d)},date,values,unit);
             setByDate(old=>({...old,[date]:{...(old[date]||{}),...Object.fromEntries(verified.map(entry=>[entry.cell,entry.value]))}}));
             acknowledgeSaved(values);
             setMessage(`Đã lưu và kiểm tra lại ${verified.length} chỉ số công tơ than ngày ${date.split("-").reverse().join("/")}.`);

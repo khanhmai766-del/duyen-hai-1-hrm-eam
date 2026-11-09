@@ -1,5 +1,5 @@
 "use client";
-import { useCtktktRequest } from "@/hooks/useCtktkt";
+import { checkCoalGemini, readCoalMeterPhoto, useOwnCoalPhotos } from "@/hooks/useKtktReport";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Camera, CheckCircle2, ImagePlus, Loader2, RefreshCw, Trash2, TriangleAlert, Expand, ArrowRight, Images } from "lucide-react";
@@ -79,17 +79,14 @@ type VisionReading = {
   note: string;
 };
 
-async function readPhoto(file: File, reportDate:string, slot:CoalSlot, temporaryKey:string, model:string, signal:AbortSignal, request:typeof fetch) {
+async function readPhoto(file: File, reportDate:string, slot:CoalSlot, temporaryKey:string, model:string, signal:AbortSignal) {
   const exifTime = readExifTime(await file.arrayBuffer());
   const exifSlot=exifTime?slotForPhotoTime(exifTime):null;
-  const response = await request("/api/ctktkt/coal-meter-ocr", {
-    method: "POST",
-    signal,
-    headers: coalGeminiRequestHeaders(temporaryKey,model),
-    body: JSON.stringify({ data: await photoAsJpegBase64(file), mediaType: "image/jpeg",reportDate,slot:exifSlot?.operatingDate===reportDate?exifSlot.slot:slot,exifDate:exifSlot?.operatingDate,exifSlot:exifSlot?.slot }),
-  });
-  const body = await response.json().catch(() => ({})) as { reading?: VisionReading; error?: string;photo?:unknown;warning?:string };
-  if (!response.ok || !body.reading) throw new Error(body.error || "Không đọc được ảnh.");
+  const body = await readCoalMeterPhoto<{ reading?: VisionReading; photo?:unknown; warning?:string }>(
+    { data: await photoAsJpegBase64(file), mediaType: "image/jpeg",reportDate,slot:exifSlot?.operatingDate===reportDate?exifSlot.slot:slot,exifDate:exifSlot?.operatingDate,exifSlot:exifSlot?.slot },
+    coalGeminiRequestHeaders(temporaryKey,model), signal,
+  );
+  if (!body.reading) throw new Error("Không đọc được ảnh.");
   const reading = body.reading;
   const aiReasons: string[] = [];
   if(!body.photo) aiReasons.push(body.warning || "Chưa lưu ảnh đối chiếu trên máy chủ.");
@@ -110,7 +107,7 @@ const SLOT_LABELS: Record<CoalSlot, string> = { "08": "08h (Ca 1)", "16": "16h (
 const numberFormat = new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 4 });
 
 export function CoalMeterPhotoImport({
-  open, onOpenChange, reportDate, current, previous, canEditCell, onApply, onSave, onDateChange, initialUnit="S1", disabled=false, minDate, maxDate, request: customRequest,
+  open, onOpenChange, reportDate, current, previous, canEditCell, onApply, onSave, onDateChange, initialUnit="S1", disabled=false, minDate, maxDate,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -125,10 +122,7 @@ export function CoalMeterPhotoImport({
   disabled?: boolean;
   minDate?: string;
   maxDate?: string;
-  request?: typeof fetch;
 }) {
-  const ctktktRequest = useCtktktRequest();
-  const request = customRequest ?? ctktktRequest;
 
   const [rows, setRows] = useState<PhotoRow[]>([]);
   const [selectedUnit,setSelectedUnit]=useState<CoalUnit>(initialUnit);
@@ -155,9 +149,10 @@ export function CoalMeterPhotoImport({
   const replaceId = useRef<string|null>(null);
   const filesRef = useRef(new Map<string,File>());
   const urlsRef = useRef(new Map<string,string>());
-  const [archive,setArchive]=useState<{id:string;slot:string;reading:VisionReading;expiresAt:number}[]>([]);
-  const [archiveError,setArchiveError]=useState("");
-  const [archiveVersion,setArchiveVersion]=useState(0);
+  // Ảnh đã lưu của chính người dùng trong ngày: tải khi mở hộp, đổi ngày thì giữ danh sách cũ tới khi danh sách mới về.
+  const archiveQuery=useOwnCoalPhotos<VisionReading>(reportDate,open);
+  const archive=archiveQuery.data||[];
+  const archiveError=archiveQuery.isError?"Chưa tải được ảnh đã lưu. Có thể thử tải lại bên dưới.":"";
   const batch = useRef(0);
   const controllers = useRef(new Map<string,AbortController>());
 
@@ -215,12 +210,8 @@ export function CoalMeterPhotoImport({
     keyCheckController.current=controller;
     setKeyCheck({state:"checking",message:"Đang gửi yêu cầu thử tới Gemini…"});
     try {
-      const response=await request("/api/ctktkt/coal-gemini-settings/check",{
-        method:"POST",headers:coalGeminiRequestHeaders(activeTemporaryKey,geminiModel),body:"{}",cache:"no-store",
-        signal:AbortSignal.any([controller.signal,AbortSignal.timeout(30000)]),
-      });
-      const body=await response.json() as {message?:string;error?:string};
-      if(!response.ok||!body.message)throw new Error(body.error||"Chưa kiểm tra được Gemini.");
+      const body=await checkCoalGemini(coalGeminiRequestHeaders(activeTemporaryKey,geminiModel),AbortSignal.any([controller.signal,AbortSignal.timeout(30000)]));
+      if(!body.message)throw new Error("Chưa kiểm tra được Gemini.");
       if(!controller.signal.aborted)setKeyCheck({state:"ok",message:body.message});
     } catch(error) {
       if(!controller.signal.aborted)setKeyCheck({state:"error",message:error instanceof Error?error.message:"Chưa kiểm tra được Gemini."});
@@ -228,17 +219,6 @@ export function CoalMeterPhotoImport({
       if(keyCheckController.current===controller)keyCheckController.current=null;
     }
   }
-  useEffect(()=>{
-    if(!open) return;
-    const controller=new AbortController();
-    request(`/api/ctktkt/coal-meter-photos?date=${encodeURIComponent(reportDate)}`,{signal:controller.signal,cache:"no-store"})
-      .then(async response=>{
-        if(!response.ok) throw new Error("Chưa tải được ảnh lưu.");
-        return response.json() as Promise<{photos:typeof archive}>;
-      }).then(body=>{setArchive(body.photos||[]);setArchiveError("");})
-      .catch(()=>{if(!controller.signal.aborted)setArchiveError("Chưa tải được ảnh đã lưu. Có thể thử tải lại bên dưới.");});
-    return ()=>controller.abort();
-  },[open,reportDate,archiveVersion,request]);
 
   const reviewed = useMemo(() => rows.map(row => {
     const slot = row.slot || null;
@@ -309,7 +289,7 @@ export function CoalMeterPhotoImport({
         controllers.current.set(row.id,controller);
         setRows(old=>old.map(item=>item.id===row.id?{...item,state:"reading",error:""}:item));
         try {
-          const result = await readPhoto(file,reportDate,row.slot||defaultSlot,activeTemporaryKey,geminiModel,controller.signal,request);
+          const result = await readPhoto(file,reportDate,row.slot||defaultSlot,activeTemporaryKey,geminiModel,controller.signal);
           if (generation !== batch.current || !filesRef.current.has(row.id) || controller.signal.aborted) continue;
           const timing = result.time ? slotForPhotoTime(result.time) : null;
           setRows(old=>old.map(item=>item.id===row.id?{
@@ -328,7 +308,7 @@ export function CoalMeterPhotoImport({
     };
     try { await Promise.all(Array.from({length:Math.min(PARALLEL_READS,queue.length)},worker)); }
     finally {
-      if (generation === batch.current) { setBusy(false); setArchiveVersion(v=>v+1); }
+      if (generation === batch.current) { setBusy(false); void archiveQuery.refetch(); }
     }
   }
 
@@ -400,7 +380,7 @@ export function CoalMeterPhotoImport({
       </header>
       <div className={styles.body}>
         <div className={styles.settings}>
-          <CoalGeminiSharedSettings disabled={locked} request={request} onSaved={switchToSharedKey}/>
+          <CoalGeminiSharedSettings disabled={locked} onSaved={switchToSharedKey}/>
           <details className={styles.temporary}>
             <summary>Khóa tạm cho lượt nhập này</summary>
             {!temporaryMode?<><p>Mặc định dùng khóa chung trên máy chủ. Chỉ bật khi muốn thử bằng khóa riêng.</p><button type="button" disabled={locked} onClick={()=>{resetKeyCheck();setTemporaryKey("");setTemporaryMode(true);}}>Chọn dùng khóa tạm</button></>:<><div className={styles.fields}>
@@ -519,7 +499,7 @@ export function CoalMeterPhotoImport({
         <details className={styles.archive}><summary>Ảnh đã lưu của bạn · {archive.length} ảnh còn hạn</summary>
           <p>Ảnh lưu trên máy chủ 30 giờ kể từ mốc ca để TKĐ đối chiếu, sau đó tự xoá. Hết hạn chỉ xoá ảnh, số liệu được giữ lại.</p>
           {archiveError&&<p role="alert" className={styles.error}>{archiveError}</p>}
-          <button type="button" onClick={()=>setArchiveVersion(v=>v+1)}><RefreshCw size={14} aria-hidden/>Tải lại ảnh đã lưu</button>
+          <button type="button" onClick={()=>void archiveQuery.refetch()}><RefreshCw size={14} aria-hidden/>Tải lại ảnh đã lưu</button>
           <div className={styles.archiveItems}>{[...archive].sort((a,b)=>compareCoalMeterOrder({key:parseMeterLabel(a.reading.meter_label||""),slot:a.slot},{key:parseMeterLabel(b.reading.meter_label||""),slot:b.slot})).map(photo=><button type="button" key={photo.id} onClick={()=>setPreview({url:`/api/ctktkt/coal-meter-photos?id=${photo.id}`,fileName:photo.reading.meter_label||"Ảnh đã lưu"})}><strong>{photo.reading.meter_label||"Chưa rõ máy cấp"}</strong><span>{photo.reading.total_display||"—"} t · {photo.slot}h</span></button>)}</div>
         </details>
       </div>

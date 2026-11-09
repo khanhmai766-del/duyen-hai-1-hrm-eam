@@ -1,39 +1,32 @@
 "use client";
-import { useCtktktRequest } from "@/hooks/useCtktkt";
-import {useEffect,useState} from "react";
+import { useCoalGeminiSettings, useSaveCoalGeminiSettings, type CoalGeminiSettings } from "@/hooks/useKtktReport";
+import {useState} from "react";
 import {KeyRound,Save,RefreshCw} from "lucide-react";
 import styles from "./coal-meter-photo-import.module.css";
 import {DEFAULT_COAL_GEMINI_MODEL} from "@/modules/ctktkt/lib/coal-gemini-config";
-type Status={configured:boolean;model:string|null;version:number;updatedAt:string|null;updatedBy:string|null};
-type Body={shared?:Status;environmentConfigured?:boolean;error?:string};
-export function CoalGeminiSharedSettings({disabled=false,request: customRequest,onSaved}:{disabled?:boolean;request?:typeof fetch;onSaved?:()=>void}){
-  const ctktktRequest = useCtktktRequest();
-  const request = customRequest ?? ctktktRequest;
-
-  const [status,setStatus]=useState<Status|null>(null),[key,setKey]=useState(""),[model,setModel]=useState(DEFAULT_COAL_GEMINI_MODEL);
-  const [saving,setSaving]=useState(false),[error,setError]=useState(""),[message,setMessage]=useState("");
-  const [environment,setEnvironment]=useState(false);
+export function CoalGeminiSharedSettings({disabled=false,onSaved}:{disabled?:boolean;onSaved?:()=>void}){
+  const settings=useCoalGeminiSettings(),saveSettings=useSaveCoalGeminiSettings();
+  const [key,setKey]=useState(""),[model,setModel]=useState(DEFAULT_COAL_GEMINI_MODEL);
+  const [busy,setBusy]=useState(false),[actionError,setError]=useState(""),[message,setMessage]=useState("");
   const [expanded,setExpanded]=useState(false);
-  function accept(body:Body){if(!body.shared)throw new Error("Không nhận được trạng thái cấu hình.");setStatus(body.shared);if(body.shared.model)setModel(body.shared.model);setEnvironment(Boolean(body.environmentConfigured));}
-  useEffect(()=>{
-    const controller=new AbortController();
-    request("/api/ctktkt/coal-gemini-settings",{signal:controller.signal,cache:"no-store"}).then(async response=>{const body=await response.json() as Body;if(!response.ok)throw new Error(body.error||"Chưa tải được cấu hình.");accept(body);}).catch(error=>{if(!controller.signal.aborted)setError(error instanceof Error?error.message:"Chưa tải được cấu hình.");});
-    return ()=>controller.abort();
-  },[request]);
+  const status=settings.data?.shared??null,environment=Boolean(settings.data?.environmentConfigured);
+  const saving=busy||saveSettings.isPending;
+  // Trạng thái mới từ máy chủ (tải/tải lại/lưu) → ô Model lấy theo model đang lưu chung, như bản cũ.
+  const [accepted,setAccepted]=useState<CoalGeminiSettings|null>(null);
+  if(settings.data&&settings.data!==accepted){setAccepted(settings.data);if(settings.data.shared.model)setModel(settings.data.shared.model);}
+  const error=actionError||(settings.error instanceof Error?settings.error.message||"Chưa tải được cấu hình.":"");
   async function refresh(){
-    setSaving(true);setError("");setMessage("");
-    try{const response=await request("/api/ctktkt/coal-gemini-settings",{cache:"no-store"});const body=await response.json() as Body;if(!response.ok)throw new Error(body.error||"Chưa tải được trạng thái.");accept(body);}catch(error){setError(error instanceof Error?error.message:"Chưa tải được trạng thái.");}finally{setSaving(false);}
+    setBusy(true);setError("");setMessage("");
+    try{const result=await settings.refetch();if(result.error)setError(result.error.message||"Chưa tải được trạng thái.");}finally{setBusy(false);}
   }
   async function save(modelOnly=false){
     if(!status)return;
     const replacementKey=modelOnly?"":key.trim();
-    setSaving(true);setError("");setMessage("");
+    setError("");setMessage("");
     try{
-      const response=await request("/api/ctktkt/coal-gemini-settings",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({key:replacementKey,model:model.trim(),expectedVersion:status.version})});
-      const body=await response.json() as Body;
-      if(!response.ok)throw new Error(body.error||"Chưa lưu được khóa.");
-      accept(body);setKey("");onSaved?.();setMessage(replacementKey?"Đã lưu khóa dùng chung và chuyển lượt nhập này sang khóa chung. Các VHV có quyền nhập công tơ không cần nhập lại. Bấm Kiểm tra Gemini để thử gọi Google.":"Đã cập nhật model và giữ nguyên khóa dùng chung. Bấm Kiểm tra Gemini hoặc đọc lại ảnh để kiểm tra model mới.");
-    }catch(error){setError(error instanceof Error?error.message:"Chưa lưu được khóa.");}finally{setSaving(false);}
+      await saveSettings.mutateAsync({key:replacementKey,model:model.trim(),expectedVersion:status.version});
+      setKey("");onSaved?.();setMessage(replacementKey?"Đã lưu khóa dùng chung và chuyển lượt nhập này sang khóa chung. Các VHV có quyền nhập công tơ không cần nhập lại. Bấm Kiểm tra Gemini để thử gọi Google.":"Đã cập nhật model và giữ nguyên khóa dùng chung. Bấm Kiểm tra Gemini hoặc đọc lại ảnh để kiểm tra model mới.");
+    }catch(error){setError(error instanceof Error?error.message:"Chưa lưu được khóa.");}
   }
   const locked=disabled||saving;
   return <section className={styles.settingsCard} aria-label="Khóa Gemini dùng chung">

@@ -1,5 +1,5 @@
 "use client";
-import { useCtktktRequest } from "@/hooks/useCtktkt";
+import { fetchCoalReviewPhotos, fetchStoredCtktktReport } from "@/hooks/useKtktReport";
 import {useEffect,useState} from "react";
 import {Dialog,DialogContent,DialogHeader,DialogTitle,DialogDescription} from "@/modules/ctktkt/components/ui/dialog";
 import {coalPhotoComparison,filterCoalReviewPhotos,type CoalReviewFilter} from "@/modules/ctktkt/lib/coal-photo-review";
@@ -11,8 +11,6 @@ type Photo={id:string;slot:CoalSlot;expiresAt:number;reading:{meter_label:string
 const display=(n:number|null)=>n===null?"—":new Intl.NumberFormat("vi-VN",{maximumFractionDigits:3}).format(n);
 const labels={unmapped:"Chưa rõ máy cấp",unreadable:"Chưa đọc được số",empty:"Ô bảng đang trống",match:"Khớp số AI",different:"Khác số — cần kiểm tra"};
 export function CoalMeterPhotoReview({open,onOpenChange,date,unit,current}:{open:boolean;onOpenChange:(open:boolean)=>void;date:string;unit:"S1"|"S2";current:Record<string,string>}){
-  const ctktktRequest = useCtktktRequest();
-
   const [photos,setPhotos]=useState<Photo[]>([]),[selected,setSelected]=useState(""),[error,setError]=useState(""),[loading,setLoading]=useState(false),[reload,setReload]=useState(0);
   const [overrides,setOverrides]=useState<Record<string,{meter:CoalMeterKey|"";slot:CoalSlot}>>({});
   const [missingImage,setMissingImage]=useState("");
@@ -26,22 +24,19 @@ export function CoalMeterPhotoReview({open,onOpenChange,date,unit,current}:{open
     const controller=new AbortController();
     const filter=applied;
     async function load(){setLoading(true);setError("");try{
-      const [response,valuesResponse]=await Promise.all([
-        ctktktRequest(`/api/ctktkt/coal-meter-photos?scope=review&date=${encodeURIComponent(filter.date)}`,{signal:controller.signal,cache:"no-store"}),
-        filter.date===date?Promise.resolve(null):ctktktRequest(`/api/ctktkt/ctktkt-report?period=${filter.date.slice(0,7)}&date=${filter.date}&scope=stored`,{signal:controller.signal,cache:"no-store"}),
+      const [loadedPhotos,storedEntries]=await Promise.all([
+        fetchCoalReviewPhotos<Photo>(filter.date,controller.signal),
+        filter.date===date?Promise.resolve(null):fetchStoredCtktktReport(filter.date.slice(0,7),filter.date,controller.signal),
       ]);
-      const body=await response.json() as {photos?:Photo[];error?:string};
-      if(!response.ok)throw new Error(body.error||"Chưa tải được ảnh.");
       let values:Record<string,string>={};
-      if(valuesResponse){
-        const result=await valuesResponse.json() as {entries?:Array<{operatingDate:string;cell:string;value:string}>;error?:string};
-        if(!valuesResponse.ok||!Array.isArray(result.entries))throw new Error(result.error||"Chưa đọc được số liệu đúng ngày để đối chiếu.");
-        values=Object.fromEntries(result.entries.filter(entry=>entry.operatingDate===filter.date).map(entry=>[entry.cell,entry.value]));
+      if(storedEntries!==null){
+        if(!Array.isArray(storedEntries))throw new Error("Chưa đọc được số liệu đúng ngày để đối chiếu.");
+        values=Object.fromEntries(storedEntries.filter(entry=>entry.operatingDate===filter.date).map(entry=>[entry.cell,entry.value]));
       }
-      if(!controller.signal.aborted){setPhotos(body.photos||[]);setStored(values);setLoadedKey(appliedKey);}
+      if(!controller.signal.aborted){setPhotos(loadedPhotos);setStored(values);setLoadedKey(appliedKey);}
     }catch(error){if(!controller.signal.aborted){setPhotos([]);setLoadedKey("");setError(error instanceof Error?error.message:"Chưa tải được ảnh.");}}finally{if(!controller.signal.aborted)setLoading(false);}}
     void load();return ()=>controller.abort();
-  },[open,date,reload,applied,appliedKey, ctktktRequest]);
+  },[open,date,reload,applied,appliedKey]);
   const visible=(applied&&loadedKey===appliedKey?filterCoalReviewPhotos(photos,applied):[])
     .sort((a,b)=>compareCoalMeterOrder(
       {key:overrides[a.id]?.meter||parseMeterLabel(a.reading.meter_label||""),slot:overrides[a.id]?.slot||a.slot},

@@ -18,18 +18,23 @@ const bundled = await build({
     import React from 'react'; import {createRoot} from 'react-dom/client';
     import {CtktktReport} from '@/modules/ctktkt/components/ctktkt-report';
     import {SessionProvider} from '@/modules/ctktkt/components/session-context';
+    import {QueryClient,QueryClientProvider} from '@tanstack/react-query';
     import '@/modules/ctktkt/styles.css';
   const user={id:'test-operator',username:'test',displayName:'Kiểm thử cục bộ',role:'editor',permissions:['edit_ctktkt'],position:'Trưởng kíp điện'};
-    createRoot(document.getElementById('root')).render(<SessionProvider user={user}><CtktktReport/></SessionProvider>);
+    const client=new QueryClient({defaultOptions:{queries:{staleTime:30_000,refetchOnWindowFocus:false,retry:1}}});
+    createRoot(document.getElementById('root')).render(<QueryClientProvider client={client}><SessionProvider user={user}><CtktktReport/></SessionProvider></QueryClientProvider>);
   `, resolveDir: process.cwd(), loader: 'tsx' },
   bundle: true, write: false, outfile: path.join(out, 'report.js'), format: 'iife', jsx: 'automatic',
   define: { 'process.env.NODE_ENV': '"development"' },
   plugins: [{ name: 'test-adapters', setup(b) {
-    b.onResolve({ filter: /^@\/hooks\/useCtktkt$/ }, () => ({ path: 'request', namespace: 'test' }));
+    // Hook THẬT (apiGet/apiMutate, phong bì {data,meta,error}); chỉ bọc useReadCtktktReport để sự kiện
+    // 'test-request-change' đổi danh tính hàm đọc → bảng chạy lại lượt đọc khi đang có số chưa lưu ("đọc muộn").
+    b.onResolve({ filter: /^@\/hooks\/useKtktReport$/ }, args => args.importer.endsWith('ctktkt-report.tsx') ? ({ path: 'report-hook', namespace: 'test' }) : undefined);
     b.onLoad({ filter: /.*/, namespace: 'test' }, () => ({ contents: `
       import {useCallback,useEffect,useState} from 'react';
-      export function useCtktktRequest(){const [version,setVersion]=useState(0);useEffect(()=>{const f=()=>setVersion(v=>v+1);window.addEventListener('test-request-change',f);return()=>window.removeEventListener('test-request-change',f);},[]);return useCallback((input,init)=>fetch(input,init),[version]);}
-      export function useCtktktDownload(){return useCallback(async()=>{},[]);}
+      import {useReadCtktktReport as realRead} from ${JSON.stringify(path.resolve('hooks/useKtktReport.ts'))};
+      export * from ${JSON.stringify(path.resolve('hooks/useKtktReport.ts'))};
+      export function useReadCtktktReport(){const read=realRead();const [version,setVersion]=useState(0);useEffect(()=>{const f=()=>setVersion(v=>v+1);window.addEventListener('test-request-change',f);return()=>window.removeEventListener('test-request-change',f);},[]);return useCallback(query=>read(query),[read,version]);}
     `, resolveDir: process.cwd() }));
     b.onResolve({ filter: /^next\/dynamic$/ }, () => ({ path: 'dynamic', namespace: 'dynamic-test' }));
     b.onLoad({ filter: /.*/, namespace: 'dynamic-test' }, () => ({ contents: 'export default function dynamic(){return function Deferred(){return null;}}' }));
@@ -55,17 +60,19 @@ const server=createServer(async(req,res)=>{
   if(assets.has(url.pathname.slice(1))){res.setHeader('Content-Type',url.pathname.endsWith('.css')?'text/css':'text/javascript');res.end(assets.get(url.pathname.slice(1)));return;}
   if(url.pathname.startsWith('/api/')){
     res.setHeader('Content-Type','application/json');
+    // Phong bì chung của web, như ok()/fail() của lib/api.ts.
+    const ok=data=>res.end(JSON.stringify({data,meta:null,error:null})), fail=(status,error)=>{res.statusCode=status;res.end(JSON.stringify({data:null,meta:null,error}));};
     if(req.method==='POST'){
       postCount++;let raw='';for await(const chunk of req)raw+=chunk;
-      if(failSave){res.statusCode=409;res.end(JSON.stringify({error:'Đã hết ca, số liệu không thuộc bạn hoặc chưa xác định người nhập cũ. Chưa lưu. Mở “Yêu cầu chỉnh sửa” để gửi quản trị duyệt.'}));return;}
+      if(failSave){fail(409,'Đã hết ca, số liệu không thuộc bạn hoặc chưa xác định người nhập cũ. Chưa lưu. Mở “Yêu cầu chỉnh sửa” để gửi quản trị duyệt.');return;}
       const body=JSON.parse(raw);for(const {cell,value}of body.entries){if(value==='')delete current[cell];else current[cell]=value;}
-      res.end(JSON.stringify({saved:body.entries.length}));return;
+      ok({saved:body.entries.length});return;
     }
-    if(url.pathname.includes('correction-requests')){res.end('{"entries":[]}');return;}
+    if(url.pathname.includes('correction-requests')){ok({entries:[]});return;}
     const result={entries:entries(),linkedEntries:[],warnings:[],operatingHoursMissingDates:[]};
     if(url.searchParams.get('scope')==='stored'&&mismatchRead)result.entries=result.entries.filter(e=>e.cell!=='I35');
     if(url.searchParams.get('scope')==='daily-links'&&dailyDelay)await new Promise(r=>setTimeout(r,dailyDelay));
-    res.end(JSON.stringify(result));return;
+    ok(result);return;
   }
   res.setHeader('Content-Type','text/html; charset=utf-8');res.end('<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/utilities.css"><link rel="stylesheet" href="/report.css"><body class="ctktkt-module"><main class="ctktkt-content" style="padding:12px"><div id="root"></div></main><script src="/report.js"></script>');
 });

@@ -53,12 +53,15 @@ export async function apiGet<T>(url: string, options?: { signal?: AbortSignal })
 export async function apiMutate<T>(
   url: string,
   method: "POST" | "PUT" | "PATCH" | "DELETE",
-  body?: unknown
+  body?: unknown,
+  /** Tiêu đề thêm (vd khoá Gemini tạm của KTKT) và tín hiệu huỷ — không bắt buộc. */
+  options?: { headers?: Record<string, string>; signal?: AbortSignal }
 ): Promise<T> {
   const res = await fetch(url, {
     method,
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...options?.headers },
     body: body ? JSON.stringify(body) : undefined,
+    signal: options?.signal,
   });
   const json = await readEnvelope<T>(res, "Thao tác thất bại");
   if (!res.ok || json.error) throw new Error(json.error || "Thao tác thất bại");

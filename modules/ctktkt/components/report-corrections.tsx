@@ -1,7 +1,7 @@
 "use client";
 import {useCallback,useEffect,useMemo,useState} from "react";
 import {ArrowRight,CheckCircle2,Clock3,FilePenLine,Inbox,Plus,RefreshCw,Send,Trash2,X,XCircle} from "lucide-react";
-import {useCtktktRequest} from "@/hooks/useCtktkt";
+import {useCorrectionRequests,useReviewCorrection,useSaveCtktktReport} from "@/hooks/useKtktReport";
 import {Dialog,DialogClose,DialogContent,DialogDescription,DialogHeader,DialogTitle} from "@/modules/ctktkt/components/ui/dialog";
 import {canProposeCtktktCorrection} from "../lib/ctktkt-permissions";
 import {useSessionUser} from "./session-context";
@@ -28,22 +28,21 @@ const shown=(value:string|null)=>value===null||value===""?<span className="itali
  * Gọi API giữ nguyên như bản gốc: gửi qua /api/ctktkt/ctktkt-report kèm correctionReason; duyệt/từ chối PATCH /api/ctktkt/correction-requests.
  */
 export function ReportCorrections({date,onUpdated,getStaged}:{date:string;onUpdated:()=>void;getStaged?:()=>Draft[]}){
- const request=useCtktktRequest(),user=useSessionUser();const admin=user.role==="admin";
+ const user=useSessionUser();const admin=user.role==="admin";
  const [open,setOpen]=useState(false);
- const [rows,setRows]=useState<Row[]>([]),[loaded,setLoaded]=useState(false);
- const [error,setError]=useState(""),[message,setMessage]=useState(""),[busy,setBusy]=useState(false);
+ // Danh sách tải ngay khi gắn (nút hiện số yêu cầu chờ duyệt) và tải lại mỗi lần mở hộp thoại/sau thao tác.
+ const list=useCorrectionRequests<Row>(),saveReport=useSaveCtktktReport(),reviewRequest=useReviewCorrection();
+ const rows=list.data||[],loaded=!list.isPending;
+ const [actionError,setError]=useState(""),[message,setMessage]=useState(""),[busy,setBusy]=useState(false);
+ const error=actionError||(list.error instanceof Error?list.error.message||"Chưa tải được yêu cầu.":"");
  const [reason,setReason]=useState(""),[cell,setCell]=useState(""),[value,setValue]=useState(""),[draft,setDraft]=useState<Draft[]>([]);
  const [reviewNotes,setReviewNotes]=useState<Record<string,string>>({});
  const [filter,setFilter]=useState<"pending"|"all">("pending");
  const [stagedCount,setStagedCount]=useState(0);
 
- const load=useCallback(async()=>{
-  try{const r=await request("/api/ctktkt/correction-requests",{cache:"no-store"});const b=await r.json();if(!r.ok)throw Error(b.error);setRows(b.entries||[]);setError("");}
-  catch(e){setError(e instanceof Error?e.message:"Chưa tải được yêu cầu.");}
-  finally{setLoaded(true);}
- },[request]);
- // Tải ngay để nút hiện số yêu cầu chờ duyệt.
- useEffect(()=>{const timer=setTimeout(()=>void load(),0);return()=>clearTimeout(timer);},[load]);
+ const {refetch}=list;
+ // Tải lại thành công thì bỏ câu báo lỗi cũ (như bản cũ); lỗi tải hiện qua list.error.
+ const load=useCallback(async()=>{const result=await refetch();if(!result.error)setError("");},[refetch]);
 
  useEffect(()=>{const show=()=>{setOpen(true);setMessage("");setStagedCount(getStaged?.().length||0);void load();};window.addEventListener("ktkt-open-correction",show);return()=>window.removeEventListener("ktkt-open-correction",show);},[getStaged,load]);
  const pending=rows.filter(r=>r.status==="pending").length;
@@ -56,8 +55,7 @@ export function ReportCorrections({date,onUpdated,getStaged}:{date:string;onUpda
  async function send(){
   setBusy(true);setError("");setMessage("");
   try{
-   const r=await request("/api/ctktkt/ctktkt-report",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({operatingDate:date,entries:draft,correctionReason:reason})});
-   const b=await r.json();if(!r.ok)throw Error(b.error);if(!b.requested)throw Error("Không có số liệu thay đổi để gửi.");
+   const b=await saveReport.mutateAsync({operatingDate:date,entries:draft,correctionReason:reason});if(!b.requested)throw Error("Không có số liệu thay đổi để gửi.");
    setMessage("Đã gửi yêu cầu. Số liệu chưa thay đổi; chờ quản trị duyệt.");setDraft([]);setReason("");setFilter("pending");await load();
   }catch(e){setError(e instanceof Error?e.message:"Chưa gửi được yêu cầu.");}
   finally{setBusy(false);}
@@ -66,8 +64,7 @@ export function ReportCorrections({date,onUpdated,getStaged}:{date:string;onUpda
   if(action==="approve"&&(getStaged?.().length||0)>0){setError("Hãy lưu hoặc bỏ các ô đang sửa trên báo cáo trước khi duyệt yêu cầu.");return;}
   setBusy(true);setError("");setMessage("");
   try{
-   const r=await request("/api/ctktkt/correction-requests",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({id,action,note:reviewNotes[id]||""})});
-   const b=await r.json();if(!r.ok)throw Error(b.error);
+   await reviewRequest.mutateAsync({id,action,note:reviewNotes[id]||""});
    setMessage(action==="approve"?"Đã duyệt và cập nhật số liệu.":"Đã từ chối; số liệu giữ nguyên.");await load();if(action==="approve")onUpdated();
   }catch(e){setError(e instanceof Error?e.message:"Chưa xử lý được yêu cầu.");}
   finally{setBusy(false);}
