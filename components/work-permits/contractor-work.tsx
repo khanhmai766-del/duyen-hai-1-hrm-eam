@@ -24,7 +24,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { PlainHeader, ROW_HOVER, RowExpander, rowBackground, TD_EXPAND, TD_ROW, TH_EXPAND, TH_NAVY, TR_HEAD } from "@/components/pccc/pccc-table-card";
 import { cn } from "@/lib/utils";
 import { normalizeText } from "@/lib/nav";
-import { useCreatePermitCompany, useDeletePermitCompany, useDeletePermitPerson, usePermitCompanySummary, usePermitPeople, useRenamePermitCompany, useSavePermitPerson, usePermitSessionAction, usePermitActivity, usePermitCompanyPeople, usePermitDuplicatePeople, usePermitPartnerCompanies } from "@/hooks/useWorkPermits";
+import { matchesPermitPersonText } from "@/lib/work-permit-person-search";
+import { useCreatePermitCompany, useDeletePermitCompany, useDeletePermitPerson, usePermitCompanySummary, usePermitPeople, usePermitPeopleMatches, useRenamePermitCompany, useSavePermitPerson, usePermitSessionAction, usePermitActivity, usePermitCompanyPeople, usePermitDuplicatePeople, usePermitPartnerCompanies } from "@/hooks/useWorkPermits";
 import { companyUnclassified, formatPermitNumber, isSessionCommander, PERMIT_KINDS, permitDeadline, personCardRevokedMessage, workersStillInside } from "@/lib/work-permits";
 import { isOverhaulPaperPermit, OVERHAUL_DAY_STATUSES, OVERHAUL_JOURNAL_LIMITS, overhaulItemKey, overhaulItemsOf, overhaulJournalTitle, type OverhaulJournalHeader } from "@/lib/work-permit-overhaul";
 import { initialOverhaulDraft, OverhaulItemProgressEditor, overhaulDraftError, overhaulDraftPayload } from "@/components/work-permits/overhaul-item-progress";
@@ -54,6 +55,8 @@ const fmt = (v: string) => new Date(v).toLocaleString("vi-VN", { timeZone: "Asia
 export function PermitCompanyDirectory({ scope }: { scope: PermitContractorScope }) {
   const [q, setQ] = useState("");
   const [companyFilter, setCompanyFilter] = useState("");
+  const [pendingOnly, setPendingOnly] = useState(false);
+  const [pendingPage, setPendingPage] = useState(1);
   const [openCompany, setOpenCompany] = useState<string | null>(null);
   const [editing, setEditing] = useState<PermitPerson | null>(null);
   const [addingPersonTo, setAddingPersonTo] = useState<string | null>(null);
@@ -68,19 +71,25 @@ export function PermitCompanyDirectory({ scope }: { scope: PermitContractorScope
   const people = usePermitCompanyPeople(openCompany ?? "", Boolean(openCompany), scope);
   const canWrite = companies.data?.meta.canWrite ?? false;
   const scopeLabel = PERMIT_CONTRACTOR_SCOPES[scope];
-  // Ô tìm kiếm khớp cả NGƯỜI (họ tên, số thẻ, SĐT — nhân viên lẫn CHTT): tra máy chủ sau khi ngừng gõ,
+  // Ô tìm kiếm khớp cả NGƯỜI (họ tên, số thẻ, SĐT, chức vụ — nhân viên lẫn CHTT): tra máy chủ sau khi ngừng gõ,
   // rồi giữ lại các đơn vị có người khớp. Đơn vị khớp theo mã/tên thì vẫn hiện như cũ.
   const term = normalizeText(q.trim());
   const [personQ, setPersonQ] = useState("");
-  useEffect(() => { const timer = setTimeout(() => setPersonQ(q.trim()), 300); return () => clearTimeout(timer); }, [q]);
+  useEffect(() => { const timer = setTimeout(() => { setPersonQ(q.trim()); setPendingPage(1); }, 300); return () => clearTimeout(timer); }, [q]);
   // Lọc trùng họ tên + năm sinh (19/10/2026) — dò một người hai hồ sơ / hai thẻ: "cùng nhà thầu" hoặc "khác nhà thầu".
   // Đi cùng bộ lọc Mã đơn vị (chọn một đơn vị → chỉ người trùng của đơn vị đó); ô tìm kiếm thu hẹp tiếp theo họ tên.
   const [dupMode, setDupMode] = useState<"" | "same" | "cross">("");
   const duplicates = usePermitDuplicatePeople(dupMode, scope);
-  const personSearch = usePermitPeople({ q: personQ, scope, limit: 200, enabled: !dupMode && personQ.length >= 2 });
+  const personSearch = usePermitPeopleMatches(personQ, scope, !pendingOnly && !dupMode && personQ.length >= 2);
+  const pending = usePermitPeople({ pendingCommand: true, scope, company: companyFilter, partners: false,
+    q: pendingOnly ? personQ : "", page: pendingOnly ? pendingPage : 1 });
+  const pendingTotal = pending.data?.meta.total;
+  const lastPendingPage = Math.max(1, Math.ceil((pendingTotal ?? 0) / 25));
+  // Người cuối trang vừa được bật CHTT sẽ rời bộ lọc: quay lại trang còn dữ liệu.
+  if (pendingTotal !== undefined && pendingPage > lastPendingPage) setPendingPage(lastPendingPage);
   const dupIds = new Set((duplicates.data?.data ?? []).map(person => person.id));
-  // searchText có cả tên đơn vị — chỉ tính người khớp theo chính họ tên / số thẻ / SĐT của họ.
-  const textMatches = (person: PermitPerson) => normalizeText(`${person.code} ${person.name} ${person.phone ?? ""}`).includes(term);
+  // searchText có cả tên đơn vị — chỉ tính người khớp theo chính họ tên / số thẻ / SĐT / chức vụ của họ.
+  const textMatches = (person: PermitPerson) => matchesPermitPersonText(person, term);
   const personMatches = (person: PermitPerson) => dupMode ? dupIds.has(person.id) && (!term || textMatches(person)) : textMatches(person);
   const hitSource = dupMode ? duplicates.data?.data ?? [] : term.length >= 2 && normalizeText(personQ) === term ? personSearch.data?.data ?? [] : [];
   const personHits = new Map<string, PermitPerson[]>();
@@ -136,24 +145,42 @@ export function PermitCompanyDirectory({ scope }: { scope: PermitContractorScope
     </div>
     {companies.data && <ContractorDashboard rows={companies.data.data} workingToday={companies.data.meta.workingToday} workingDay={workingDay} scopeLabel={scopeLabel} onOpenHistory={company => setHistoryCompany(company ?? "")} />}
     <div className="overflow-hidden rounded-xl border border-border bg-card">
-      <div className="flex flex-col gap-3 border-b border-border bg-muted/25 px-4 py-3 md:flex-row md:items-center md:justify-between">
-        <p className="text-sm text-muted-foreground"><strong className="font-semibold text-foreground">{rows.length}</strong> đơn vị · <strong className="font-semibold text-foreground">{rows.reduce((sum, row) => sum + row.total, 0)}</strong> người · <span className={workingTotal ? "text-emerald-700" : undefined} title={`CHTT và nhân viên chưa quét RA ở các PCT ${scopeLabel} đang làm việc, tính cho mọi đơn vị`}><strong className="font-semibold">{workingTotal}</strong> đang làm việc</span></p>
-        <div className="grid w-full grid-cols-2 gap-2 sm:grid-cols-3 md:flex md:w-auto md:items-center">
-          <input type="search" className="col-span-2 h-10 w-full sm:col-span-1 rounded-xl border border-input bg-background px-3 text-base focus:outline-none sm:h-9 sm:text-sm focus:ring-2 focus:ring-ring md:w-64" aria-label="Tìm đơn vị nhà thầu, nhân viên hoặc CHTT" placeholder="Họ tên, số thẻ, SĐT hoặc đơn vị…" value={q} maxLength={200} onChange={e => setQ(e.target.value)} />
+      <div className="flex flex-col gap-3 border-b border-border bg-muted/25 px-4 py-3">
+        <p className="text-sm text-muted-foreground">{pendingOnly ? <><strong className="font-semibold text-foreground">{pendingTotal ?? "…"}</strong> người chờ đối chiếu CHTT</> : <><strong className="font-semibold text-foreground">{rows.length}</strong> đơn vị · <strong className="font-semibold text-foreground">{rows.reduce((sum, row) => sum + row.total, 0)}</strong> người · <span className={workingTotal ? "text-emerald-700" : undefined} title={`CHTT và nhân viên chưa quét RA ở các PCT ${scopeLabel} đang làm việc, tính cho mọi đơn vị`}><strong className="font-semibold">{workingTotal}</strong> đang làm việc</span></>}</p>
+        <div className="grid w-full grid-cols-2 gap-2 sm:grid-cols-3">
+          <input type="search" className="col-span-2 h-10 w-full min-w-0 sm:col-span-1 rounded-xl border border-input bg-background px-3 text-base focus:outline-none sm:h-9 sm:text-sm focus:ring-2 focus:ring-ring" aria-label="Tìm đơn vị nhà thầu, nhân viên hoặc CHTT" placeholder="Họ tên, số thẻ, chức vụ, SĐT, đơn vị…" value={q} maxLength={200} onChange={e => setQ(e.target.value)} />
           <select aria-label="Lọc nhân sự trùng họ tên và năm sinh" title="Người trùng cả họ tên lẫn năm sinh — có thể là một người có hai hồ sơ / hai thẻ"
-            className={cn("col-span-2 h-10 w-full min-w-0 rounded-xl border border-input bg-background px-3 text-base focus:outline-none sm:col-span-1 sm:h-9 sm:text-sm focus:ring-2 focus:ring-ring md:w-52", dupMode && "border-amber-500 bg-amber-50 font-medium text-amber-900")}
-            value={dupMode} onChange={e => setDupMode(e.target.value as typeof dupMode)}>
+            className={cn("col-span-2 h-10 w-full min-w-0 rounded-xl border border-input bg-background px-3 text-base focus:outline-none sm:col-span-1 sm:h-9 sm:text-sm focus:ring-2 focus:ring-ring", dupMode && "border-amber-500 bg-amber-50 font-medium text-amber-900")}
+            value={dupMode} onChange={e => { setDupMode(e.target.value as typeof dupMode); setPendingOnly(false); }}>
             <option value="">Trùng tên + năm sinh…</option>
             <option value="same">Trùng · cùng nhà thầu</option>
             <option value="cross">Trùng · khác nhà thầu</option>
           </select>
-          <select aria-label="Lọc theo nhà thầu" className="col-span-2 h-10 w-full min-w-0 rounded-xl border border-input bg-background px-3 text-base focus:outline-none sm:col-span-1 sm:h-9 sm:text-sm focus:ring-2 focus:ring-ring md:w-52" value={pickedCompany}
-            onChange={e => { setCompanyFilter(e.target.value); setOpenCompany(e.target.value || null); }}>
+          <select aria-label="Lọc theo nhà thầu" className="col-span-2 h-10 w-full min-w-0 rounded-xl border border-input bg-background px-3 text-base focus:outline-none sm:col-span-1 sm:h-9 sm:text-sm focus:ring-2 focus:ring-ring" value={pickedCompany}
+            onChange={e => { setCompanyFilter(e.target.value); setPendingPage(1); setOpenCompany(e.target.value || null); }}>
             <option value="">Tất cả mã đơn vị ({allRows.length})</option>
             {companyOptions.map(row => <option key={row.company} value={row.company} title={row.company}>{row.code || row.company}</option>)}
           </select>
         </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button type="button" variant={pendingOnly ? "default" : "outline"} className="h-10 max-w-full px-3 text-xs sm:text-sm" aria-pressed={pendingOnly}
+            onClick={() => { setPendingOnly(value => !value); setPendingPage(1); setDupMode(""); }}>
+            Chờ cập nhật CHTT ({pendingTotal ?? "…"})
+          </Button>
+          {pendingOnly && <p className="min-w-0 flex-1 basis-52 text-xs leading-5 text-muted-foreground">Chức vụ ghi CHTT nhưng chưa bật vai trò. Đối chiếu hồ sơ rồi bật công tắc từng người.</p>}
+        </div>
       </div>
+      {pendingOnly ? <div className="space-y-3 p-3 sm:p-4">
+        {pending.isPending || normalizeText(personQ) !== term ? <p role="status" className="py-4 text-sm">Đang tìm người chờ cập nhật CHTT…</p>
+          : pending.isError ? <p role="alert" className="text-sm text-red-700">{pending.error.message}<Button type="button" variant="outline" className="ml-2 h-10" onClick={() => void pending.refetch()}>Thử lại</Button></p>
+          : !pending.data?.data.length ? <p className="py-4 text-center text-sm text-muted-foreground">Không có người chờ cập nhật CHTT{term || pickedCompany ? " khớp bộ lọc" : ""} trong nhóm {scopeLabel}.</p>
+          : <CompanyPeopleTable people={pending.data.data} canWrite={canWrite} removing={remove.isPending} onEdit={setEditing} onRemove={person => void removePerson(person)} withPhoto={false} showCompany />}
+        <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+          <span>{pendingTotal ?? "…"} người · Trang {pendingPage}</span>
+          <div className="flex gap-2"><Button type="button" variant="outline" className="h-10" disabled={pendingPage <= 1 || pending.isFetching} onClick={() => setPendingPage(page => page - 1)}>Trước</Button>
+            <Button type="button" variant="outline" className="h-10" disabled={pendingTotal === undefined || pendingPage * 25 >= pendingTotal || pending.isFetching} onClick={() => setPendingPage(page => page + 1)}>Sau</Button></div>
+        </div>
+      </div> : <>
       <p className="border-b border-border px-4 py-2 text-xs text-muted-foreground">Làm việc trong ngày{workingDay ? ` ${workingDay}` : ""}: gồm CHTT, mỗi người chỉ tính một lần trên tất cả PCT, theo giờ Việt Nam.</p>
       {dupMode && <p role="status" className="border-b border-border bg-amber-50 px-4 py-2 text-xs text-amber-800">{duplicates.isPending ? "Đang dò người trùng…" : duplicates.isError ? duplicates.error.message
         : `${rows.reduce((sum, row) => sum + (personHits.get(row.company)?.length ?? 0), 0)} hồ sơ trùng họ tên + năm sinh ${dupMode === "same" ? "trong cùng nhà thầu" : "với nhà thầu khác"}${pickedCompany ? ` · ${codeOf(pickedCompany)}` : ""}. Hồ sơ chưa có năm sinh không được dò.`}</p>}
@@ -237,7 +264,7 @@ export function PermitCompanyDirectory({ scope }: { scope: PermitContractorScope
               </TableCell></TableRow>}
             </Fragment>;
           })}</TableBody>
-        </Table></>}
+        </Table></>}</>}
     </div>
     {editing && <PersonEditor initial={editing} onClose={() => setEditing(null)} />}
     {addingPersonTo !== null && <PersonEditor presetCompany={addingPersonTo} presetScope={scope} onClose={() => setAddingPersonTo(null)} onSaved={() => setOpenCompany(addingPersonTo)} />}
@@ -272,7 +299,7 @@ function RoleSwitch({ person, beforeToggle }: { person: PermitPerson; beforeTogg
   </button>;
 }
 
-type CompanyPeopleProps = { people: PermitPerson[]; canWrite: boolean; removing: boolean; onEdit: (person: PermitPerson) => void; onRemove: (person: PermitPerson) => void };
+type CompanyPeopleProps = { people: PermitPerson[]; canWrite: boolean; removing: boolean; onEdit: (person: PermitPerson) => void; onRemove: (person: PermitPerson) => void; showCompany?: boolean };
 
 /**
  * Nhân sự của một đơn vị theo nhóm: Đại tu, Đầu tư (đủ họ tên, ảnh, chức vụ) / SCTX (hiện cột ảnh khi có người có ảnh — bảng
@@ -298,8 +325,8 @@ function CompanyPeopleGroups({ people, ...rest }: CompanyPeopleProps) {
   </div>;
 }
 
-/** Danh sách người một nhóm, mỗi người một dòng: Ảnh (chỉ nhóm Đại tu) · Họ tên · Chức vụ · SĐT · Vai trò (số thẻ ẩn — vẫn sửa được trong hồ sơ). */
-function CompanyPeopleTable({ people, canWrite, removing, onEdit, onRemove, withPhoto }: CompanyPeopleProps & { withPhoto: boolean }) {
+/** Danh sách người một nhóm; danh sách chờ CHTT kèm đơn vị và số thẻ để đối chiếu. */
+function CompanyPeopleTable({ people, canWrite, removing, onEdit, onRemove, withPhoto, showCompany = false }: CompanyPeopleProps & { withPhoto: boolean }) {
   const scrollAnchor = useRef<{ element: HTMLElement; top: number; scrollY: number; personId: string; canCommand: boolean } | null>(null);
   function beforeToggle(button: HTMLButtonElement, person: PermitPerson) {
     const row = button.closest<HTMLElement>("[data-person-row]");
@@ -312,7 +339,9 @@ function CompanyPeopleTable({ people, canWrite, removing, onEdit, onRemove, with
   }
   useLayoutEffect(() => {
     const anchor = scrollAnchor.current;
-    if (!anchor || people.find(person => person.id === anchor.personId)?.canCommand !== anchor.canCommand) return;
+    if (!anchor) return;
+    const updated = people.find(person => person.id === anchor.personId);
+    if (updated && updated.canCommand !== anchor.canCommand) return;
     scrollAnchor.current = null;
     if (anchor.element.isConnected) {
       window.scrollBy({ top: anchor.element.getBoundingClientRect().top - anchor.top, behavior: "instant" });
@@ -336,8 +365,10 @@ function CompanyPeopleTable({ people, canWrite, removing, onEdit, onRemove, with
         <p className="text-[15px] font-semibold leading-5 text-ink">{person.name}</p>
         {canWrite ? <RecordPersonViolation person={person} inline /> : <PersonViolationTag violations={person.violations} inline />}
       </div>
+      {showCompany && <p className="mt-0.5 break-words text-xs text-muted-foreground">{person.company}</p>}
+      {showCompany && <p className="mt-0.5 break-words text-xs text-muted-foreground">{isCardlessCode(person.code) ? "Chưa có số thẻ" : `Số thẻ: ${person.code}`}</p>}
       {person.jobTitle?.trim() && <p className="text-xs font-medium text-slate-600">{person.jobTitle.trim()}</p>}
-      {person.phone && <p className="mt-0.5 text-xs"><a className="font-medium text-blue-700 underline" href={tel(person.phone)}>{person.phone}</a></p>}
+      {person.phone && <p className="mt-0.5 text-xs"><a className="inline-flex min-h-10 items-center font-medium text-blue-700 underline" href={tel(person.phone)}>{person.phone}</a></p>}
       <div className="mt-1.5 flex flex-wrap items-center gap-1.5">{role(person)}</div>
       {works(person)}
     </div>
@@ -359,6 +390,8 @@ function CompanyPeopleTable({ people, canWrite, removing, onEdit, onRemove, with
             <span className="font-semibold text-ink">{person.name}</span>
             {canWrite ? <RecordPersonViolation person={person} inline /> : <PersonViolationTag violations={person.violations} inline />}
           </div>
+          {showCompany && <p className="mt-0.5 text-xs text-muted-foreground">{person.company}</p>}
+          {showCompany && <p className="mt-0.5 text-xs text-muted-foreground">{isCardlessCode(person.code) ? "Chưa có số thẻ" : `Số thẻ: ${person.code}`}</p>}
           {works(person)}
         </td>
         <td className="px-3 py-2 text-ink">{person.jobTitle?.trim() || <span className="text-muted-foreground">—</span>}</td>
@@ -472,15 +505,15 @@ export function PermitPeopleDirectory({ onClose, onPick, onPickMany, existingMem
   const pickOnly = commandersOnly && contractorScopeLikeOverhaul(scope);
   // Chọn CHTT: người đang làm việc ở PCT khác VẪN chọn được (mở lại 11/10/2026, bỏ khoá 10/10) — dòng "Đang làm PCT …" chỉ để biết.
   const heading = commandersOnly ? "Chọn CHTT nhà thầu" : onPickMany ? "Chọn nhân viên công tác" : "Danh sách nhân sự nhà thầu";
-  const description = onPickMany ? "Đánh dấu nhiều nhân viên rồi bấm Thêm người đã chọn. Lựa chọn được giữ khi tìm kiếm hoặc chuyển trang; tối đa 200 nhân viên trong danh sách công tác." : "Tra cứu và chọn nhân sự đã có trong danh bạ theo số thẻ, họ tên hoặc đơn vị nhà thầu.";
+  const description = onPickMany ? "Đánh dấu nhiều nhân viên rồi bấm Thêm người đã chọn. Lựa chọn được giữ khi tìm kiếm hoặc chuyển trang; tối đa 200 nhân viên trong danh sách công tác." : "Tra cứu và chọn nhân sự đã có trong danh bạ theo số thẻ, họ tên, chức vụ hoặc đơn vị nhà thầu.";
   const body = <>
       <div className="flex flex-wrap gap-2">
-        <input className={`${control} flex-1`} aria-label="Tìm nhân sự nhà thầu" placeholder="Số thẻ ra vào cổng, họ tên, đơn vị nhà thầu…" value={q} maxLength={200} onKeyDown={e => { if (e.key === "Enter") e.preventDefault(); }} onChange={e => setQ(e.target.value)} />
+        <input className={`${control} flex-1`} aria-label="Tìm nhân sự nhà thầu" placeholder="Số thẻ, họ tên, chức vụ, đơn vị nhà thầu…" value={q} maxLength={200} onKeyDown={e => { if (e.key === "Enter") e.preventDefault(); }} onChange={e => setQ(e.target.value)} />
       </div>
       {pickOnly && <p className="text-xs text-muted-foreground">PCT Đại tu chỉ chọn người đã được đánh dấu CHTT. Cần thêm CHTT thì đánh dấu ở mục <b>Nhân sự nhà thầu</b>.</p>}
       {query.isPending ? <p role="status">Đang tải danh sách…</p> : query.isError ? <p role="alert" className="text-red-700">{query.error.message}</p> : <div className="space-y-2">
         {query.data?.data.map(p => <div key={p.id} className="flex items-center justify-between gap-3 rounded-lg border border-border p-3">
-          <div className="min-w-0 flex-1"><b>{p.name}</b>{p.cardRevokedAt && (onPick || onPickMany) && <p role="alert" className="mt-1 text-xs font-semibold text-red-700">{personCardRevokedMessage(p)}</p>}<PersonViolations person={p} /><p className="text-sm text-muted-foreground">{p.code} · {p.company}</p><p className="text-xs text-muted-foreground">{p.canCommand ? "CHTT / nhân viên công tác" : "Nhân viên công tác"}{!p.isActive ? " · Ngừng hoạt động" : ""}</p>{cardExpired(p.cardExpiresAt) && <p className="text-xs font-medium text-red-700">Thẻ ra vào hết hạn {new Date(p.cardExpiresAt!).toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })}</p>}{p.activeWorks?.map(work => <p key={work.sessionId} className="mt-1 text-xs font-medium text-amber-700">Đang làm PCT {formatPermitNumber(work.permit)} · {PERMIT_KINDS[work.permit.kind]} · {work.role === "CHTT" ? "CHTT" : "Nhân viên công tác"} · từ {fmt(work.openedAt)}</p>)}</div>
+          <div className="min-w-0 flex-1"><b>{p.name}</b>{p.cardRevokedAt && (onPick || onPickMany) && <p role="alert" className="mt-1 text-xs font-semibold text-red-700">{personCardRevokedMessage(p)}</p>}<PersonViolations person={p} /><p className="text-sm text-muted-foreground">{p.code} · {p.company}</p><p className="text-xs text-muted-foreground">{p.canCommand ? "CHTT / nhân viên công tác" : "Nhân viên công tác"}{!p.isActive ? " · Ngừng hoạt động" : ""}</p>{cardExpired(p.cardExpiresAt) && <p className="text-xs font-medium text-red-700">Thẻ ra vào hết hạn {new Date(p.cardExpiresAt!).toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })}</p>}{p.activeWorks?.map(work => <p key={work.sessionId} className="mt-1 text-xs font-medium text-amber-700">Đang làm PCT {formatPermitNumber(work.permit)} · {PERMIT_KINDS[work.permit.kind]} · {work.role === "CHTT" ? "CHTT" : "Nhân viên công tác"} · từ {fmt(work.openedAt)}</p>)}{p.jobTitle?.trim() && <p className="text-xs text-muted-foreground">{p.jobTitle.trim()}</p>}</div>
           {/* Đã thu thẻ: vẫn hiện để người chọn đọc được cảnh báo, nhưng khóa chọn. */}
           <div className="flex gap-2">{onPickMany && <label className="flex cursor-pointer items-center gap-2 whitespace-nowrap text-sm"><input type="checkbox" aria-label={`Chọn ${p.name} · ${p.code}`} checked={alreadyAdded(p) || selected.some(person => person.id === p.id)} disabled={alreadyAdded(p) || Boolean(p.cardRevokedAt) || (!selected.some(person => person.id === p.id) && selected.length >= capacity)} onChange={() => toggle(p)} />{alreadyAdded(p) ? "Đã có" : "Chọn"}</label>}{onPick && <Button type="button" size="sm" disabled={Boolean(p.cardRevokedAt)} onClick={() => onPick(p)}>Chọn</Button>}</div>
         </div>)}

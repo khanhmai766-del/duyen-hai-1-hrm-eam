@@ -3,11 +3,12 @@ import { isCardlessCode } from "@/lib/work-permit-card";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { audit, fail, ok, requireUser } from "@/lib/api";
-import { permitBody, permitHandle, permitSearchTerm } from "@/lib/server/work-permits";
+import { permitBody, permitHandle } from "@/lib/server/work-permits";
 import { PERMIT_CONTRACTOR_SCOPES, type PermitContractorScope } from "@/lib/work-permits";
 import { parsePermitPerson, personCardSelect, withPhotoUrl } from "@/lib/server/work-permit-people";
 import { presentMembers, samePermitWorker } from "@/lib/work-permit-presence";
 import { permitPartnerCompanies } from "@/lib/server/work-permit-company-partners";
+import { permitPeopleSearchWhere } from "@/lib/server/work-permit-people-search";
 export const dynamic = "force-dynamic";
 export async function GET(req: Request) {
   return permitHandle(async () => {
@@ -21,7 +22,14 @@ export async function GET(req: Request) {
     // `partners=1` (ô chọn người trên phiếu): kèm các đơn vị cùng liên danh (EPS + S3A…) để chọn CHTT / nhân viên của cả
     // nhóm. Bảng đơn vị bung ra không gửi cờ này — vẫn chỉ người của đúng đơn vị đó.
     const companies = company && p.get("partners") === "1" ? await permitPartnerCompanies(prisma, [company]) : [];
-    const where = { searchText: { contains: permitSearchTerm(q) }, ...(company ? { company: companies.length > 1 ? { in: companies } : company } : {}), ...(p.get("active") === "1" ? { isActive: true } : {}), ...(p.get("commander") === "1" ? { canCommand: true } : {}), ...(p.get("scope") ? { scope: p.get("scope")! } : {}) };
+    const pendingCommand = p.get("pendingCommand") === "1";
+    const baseWhere: Prisma.WorkPermitPersonWhereInput = {
+      ...(company ? { company: companies.length > 1 ? { in: companies } : company } : {}),
+      ...(p.get("active") === "1" || pendingCommand ? { isActive: true } : {}),
+      ...(p.get("commander") === "1" ? { canCommand: true } : {}),
+      ...(p.get("scope") ? { scope: p.get("scope")! } : {}),
+    };
+    const where = await permitPeopleSearchWhere(baseWhere, q, pendingCommand);
     const [rows, total] = await prisma.$transaction([
       prisma.workPermitPerson.findMany({ where, select: { id: true, code: true, name: true, company: true, phone: true, canCommand: true, isActive: true, version: true, ...personCardSelect }, orderBy: [{ canCommand: "desc" }, { name: "asc" }, { code: "asc" }], skip: (page - 1) * pageSize, take: pageSize }),
       prisma.workPermitPerson.count({ where }),

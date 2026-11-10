@@ -177,11 +177,25 @@ export function useExportWorkingPeople() {
   return useMutation({ mutationFn: () => apiDownload("/api/work-permits/live-sessions/export") });
 }
 
-export function usePermitPeople(params: { q?: string; page?: number; active?: boolean; commander?: boolean; polling?: boolean; company?: string; scope?: string | null; limit?: 25 | 200; enabled?: boolean }) {
+export function usePermitPeople(params: { q?: string; page?: number; active?: boolean; commander?: boolean; pendingCommand?: boolean; partners?: boolean; polling?: boolean; company?: string; scope?: string | null; limit?: 25 | 200; enabled?: boolean }) {
   const query = new URLSearchParams({ q: params.q ?? "", page: String(params.page ?? 1), active: params.active ? "1" : "0", commander: params.commander ? "1" : "0",
     // Lọc theo đơn vị của phiếu thì kèm đơn vị cùng liên danh (PERMIT_COMPANY_ALLIANCES).
-    ...(params.company ? { company: params.company, partners: "1" } : {}), ...(params.scope ? { scope: params.scope } : {}), ...(params.limit ? { limit: String(params.limit) } : {}) });
+    ...(params.company ? { company: params.company, partners: params.partners === false ? "0" : "1" } : {}), ...(params.scope ? { scope: params.scope } : {}), ...(params.limit ? { limit: String(params.limit) } : {}),
+    ...(params.pendingCommand ? { pendingCommand: "1" } : {}) });
   return useQuery({ queryKey: ["work-permit-people", query.toString()], enabled: params.enabled ?? true, refetchInterval: params.polling ? 30000 : false, queryFn: () => apiGet<PermitPerson[]>(`/api/work-permits/people?${query}`) as Promise<{ data: PermitPerson[]; meta: { total: number; pageSize: number; canWrite: boolean } }> });
+}
+/** Kết quả tra danh bạ theo người/chức vụ: lấy đủ trang để không mất đơn vị sau người thứ 200. */
+export function usePermitPeopleMatches(q: string, scope: PermitContractorScope, enabled: boolean) {
+  return useQuery({ queryKey: ["work-permit-people", "matches-all", q, scope], enabled, queryFn: async ({ signal }) => {
+    const all: PermitPerson[] = [];
+    for (let page = 1; ; page++) {
+      const query = new URLSearchParams({ q, scope, page: String(page), limit: "200" });
+      const res = await apiGet<PermitPerson[]>(`/api/work-permits/people?${query}`, { signal }) as { data: PermitPerson[]; meta: { total: number } };
+      all.push(...res.data);
+      if (!res.data.length || all.length >= res.meta.total) break;
+    }
+    return { data: all };
+  } });
 }
 /**
  * TOÀN BỘ người của một đơn vị (bảng đơn vị bung ra, danh sách nhân viên của phiếu): máy chủ trả tối đa 200 người

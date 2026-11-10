@@ -15,6 +15,13 @@
 
 ## Sổ cấp PCT chung
 
+### Rà soát nhân sự mới đạt CHTT
+
+- Trong **Nhân sự nhà thầu**, nút **Chờ cập nhật CHTT (số người)** liệt kê người đang hoạt động, chức vụ ghi `CHTT` hoặc `Chỉ huy trực tiếp`, nhưng chưa bật vai trò CHTT. Chức vụ ghi chưa/không đạt, chờ xét, đang học, dự kiến, đề xuất, tạm dừng, thu hồi hoặc hết hạn không được đưa vào gợi ý.
+- Danh sách kèm đơn vị, số thẻ và nguyên văn chức vụ; lọc thêm theo nhà thầu hoặc từ khóa, phân trang 25 người. Đối chiếu hồ sơ rồi bật công tắc từng người; người vừa bật rời danh sách và số lượng cập nhật. Quyền sửa giữ như danh bạ hiện tại.
+- Ô tìm kiếm trong danh bạ và hộp chọn người tìm được cả chức vụ, không phân biệt hoa thường hoặc dấu tiếng Việt. Kết quả tra danh bạ lấy đủ các trang API, kể cả khi có hơn 200 người khớp.
+- Đây là gợi ý rà soát từ chức vụ, không tự cấp vai trò hoặc thay đổi cách đồng bộ Sheets. Không cần đổi schema hay ghi lại dữ liệu cũ.
+
 ### Luồng nội bộ và nhà thầu
 
 - **Nội bộ (mặc định điện tử):** Đã cấp → Kết thúc phiếu, có thể hủy từ phiếu chưa đóng. Phiếu nháp cũ vẫn hoàn tất được sau khi lấy số. Không bắt buộc bước cho phép, không tạo lần làm việc hay quản lý tiến độ. Người có quyền Cấp phiếu ghi nhận đóng trong form; người có quyền Thực hiện phiếu dùng nút **Ghi nhận đóng phiếu**. Đóng thủ công cần thời điểm đóng không trước thời điểm cấp; kết quả không bắt buộc. Dữ liệu cho phép/tiến độ cũ giữ lại, không cho tạo vòng thực hiện mới.
