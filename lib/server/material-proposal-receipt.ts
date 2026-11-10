@@ -2,7 +2,7 @@ import type { Prisma } from "@prisma/client";
 import { fail } from "@/lib/api";
 import type { FullTicket } from "@/lib/material-ticket-bbnt-do";
 import { isGasCylinderTicket, GAS_RETURN_STATUS } from "@/lib/constants";
-import { receiveIntoLot, sharedCodesOf, syncMaterialQuantity } from "@/lib/material-stock-lot";
+import { lockMaterialStock, receiveIntoLot, sharedCodesOf, syncMaterialQuantity } from "@/lib/material-stock-lot";
 
 // Gắn trên lô để lần sửa sau nhận ra phiếu đã không trừ ERP, kể cả sau khi
 // đồng bộ/nhập kho làm tồn ERP tăng lại. Phiếu cũ không có dấu này đã trừ ERP.
@@ -17,6 +17,7 @@ export async function adjustReceiptErp(
   tx: Prisma.TransactionClient,
   params: { erpCode: string; delta: number; skipDeduction: boolean },
 ) {
+  await lockMaterialStock(tx);
   if (params.skipDeduction || params.delta === 0) return;
   const rows = await tx.$queryRaw<Array<{ erpStock: number }>>`
     SELECT "erpStock" FROM "ErpMaterial" WHERE "code" = ${params.erpCode} FOR UPDATE
@@ -57,6 +58,7 @@ export async function recordProposalReceipt(
     stockOptions: { stockUnit: string; machine?: string };
   },
 ) {
+  await lockMaterialStock(tx);
   const { ticket: t, receipt, actor, stockOptions } = params;
   const item = t.items[0];
   if (!item) throw fail("Phiếu chưa có vật tư");

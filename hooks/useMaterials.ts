@@ -1,5 +1,7 @@
 "use client";
 
+import { invalidateMaterialQueries } from "@/lib/material-query-cache";
+
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSession } from "next-auth/react";
 import { apiGet, apiMutate } from "@/lib/fetcher";
@@ -97,6 +99,7 @@ export function useMaterials(params: { machine?: string; includeUsage?: boolean 
 }
 
 export type MaterialReplacementInput = {
+  id?: string;
   deviceSeq?: string | null;
   system?: string | null;
   location?: string | null;
@@ -116,23 +119,14 @@ export type MaterialInput = Partial<Material> & {
   documentUrl?: string | null;
   documentName?: string | null;
   replacements?: MaterialReplacementInput[];
+  deletedReplacementIds?: string[];
   syncAll?: boolean;
   machines?: string[];
 };
 
 // Danh mục đổi thì dropdown "Vật tư trong danh mục" của khai báo vật tư thiết bị
 // (["device-material-options"]) cũng phải làm mới, không thì dialog dùng cache cũ 5 phút.
-function invalidateMaterialCatalog(qc: ReturnType<typeof useQueryClient>) {
-  qc.invalidateQueries({ queryKey: ["materials"] });
-  qc.invalidateQueries({ queryKey: ["device-material-options"] });
-  // Chi tiết điểm thay thế cũng chính là nguồn của khối "Vật tư được khai báo"
-  // trên lý lịch thiết bị. Không làm mới cache này sẽ khiến hai màn hình lệch nhau.
-  qc.invalidateQueries({ queryKey: ["device"] });
-  // Danh mục cũng là nguồn của dropdown "Mã vật tư" ở phiếu (bước Đề xuất và bước
-  // Nghiệm thu/xuất biên bản). Thiếu dòng này thì thêm mã ERP xong, màn hình theo dõi
-  // vật tư vẫn giữ danh sách mã cũ cho tới khi hết staleTime hoặc tải lại trang.
-  qc.invalidateQueries({ queryKey: ["material-ticket-options"] });
-}
+function invalidateMaterialCatalog(qc: ReturnType<typeof useQueryClient>) { return invalidateMaterialQueries(qc); }
 
 export function useUpsertMaterial() {
   const qc = useQueryClient();

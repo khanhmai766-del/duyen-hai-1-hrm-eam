@@ -1,3 +1,4 @@
+import { invalidateEquipmentDashboardCache } from "@/lib/equipment-dashboard-service";
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { runMaterialRetention } from "@/lib/material-retention";
@@ -337,6 +338,7 @@ export async function POST(req: NextRequest) {
       await audit(user.id, workflowType === "UNG" ? "CREATE_OTHER_MATERIAL_ADVANCE_TICKET" : "CREATE_OTHER_MATERIAL_TICKET", "MaterialTicket", ticket.id,
         `${materialTicketReference(ticket)}: luồng ${workflowType === "UNG" ? "Ứng" : "Đề xuất"}, ${requestedItems.length} vật tư, ${assignedPosition}, ${unit}`);
       await notifyMaterialTicketStep({ ticketId: ticket.id, action: "create", actorName: user.name });
+      invalidateEquipmentDashboardCache();
       return ok(ticket);
     }
     // Hóa chất luôn đi thẳng luồng Đề xuất — nghiệp vụ này không có Ứng lẫn Sử dụng hiện có
@@ -468,6 +470,7 @@ export async function POST(req: NextRequest) {
     await audit(user.id, "CREATE_MATERIAL_TICKET", "MaterialTicket", ticket.id,
       `${materialTicketReference(ticket)} (${workflowLabel}, ${unit}) — giao: ${assignedPosition}, loại: ${materialCategory}, vật tư: ${selectedMaterial!.name}, số lượng đề xuất: ${proposedQuantity}, thiết bị: ${replacementDeviceLabels.join(", ")}`);
     await notifyMaterialTicketStep({ ticketId: ticket.id, action: "create", actorName: user.name });
+    invalidateEquipmentDashboardCache();
     return ok(ticket);
   });
 }

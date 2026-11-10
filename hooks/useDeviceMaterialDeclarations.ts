@@ -1,5 +1,7 @@
 "use client";
 
+import { invalidateMaterialQueries } from "@/lib/material-query-cache";
+
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiMutate } from "@/lib/fetcher";
 
@@ -53,14 +55,7 @@ export function useCreateDeviceMaterialDeclaration() {
   return useMutation({
     mutationFn: (body: DeviceMaterialDeclarationInput) =>
       apiMutate("/api/device-material-declarations", "POST", body),
-    onSuccess: async (_data, variables) => {
-      await Promise.all([
-        qc.invalidateQueries({ queryKey: ["device", variables.deviceSeq] }),
-        qc.invalidateQueries({ queryKey: ["materials"] }),
-        qc.invalidateQueries({ queryKey: ["replacements"] }),
-        qc.invalidateQueries({ queryKey: ["material-ticket-options"] }),
-      ]);
-    },
+    onSuccess: () => invalidateMaterialQueries(qc),
   });
 }
 
@@ -88,13 +83,6 @@ export function useUpdateDeviceMaterialDeclaration() {
       body.machines && body.machines.length > 1
         ? apiMutate("/api/device-material-declarations", "PUT", { id, deviceSeq, ...body })
         : apiMutate(`/api/material-replacements/${encodeURIComponent(id)}`, "PUT", body),
-    onSuccess: async (_data, variables) => {
-      await Promise.all([
-        qc.invalidateQueries({ queryKey: ["device", variables.deviceSeq] }),
-        qc.invalidateQueries({ queryKey: ["materials"] }),
-        qc.invalidateQueries({ queryKey: ["replacements"] }),
-        qc.invalidateQueries({ queryKey: ["material-ticket-options"] }),
-      ]);
-    },
+    onSuccess: () => invalidateMaterialQueries(qc),
   });
 }

@@ -1,3 +1,4 @@
+import { invalidateEquipmentDashboardCache } from "@/lib/equipment-dashboard-service";
 import type { NextRequest } from "next/server";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
@@ -335,6 +336,7 @@ export async function POST(req: NextRequest) {
       });
     });
     await audit(user.id, "CREATE_REPLACEMENT", "MaterialReplacement", point.id, auditDetailWithPosition(user, material.code));
+    invalidateEquipmentDashboardCache();
     return ok(mapPoint(point));
   });
 }

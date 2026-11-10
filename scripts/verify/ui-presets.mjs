@@ -15,6 +15,7 @@ import { commanderCandidatesPreset } from "./presets/commander-candidates.mjs";
 import { adminUsersPreset } from "./presets/admin-users.mjs";
 import { devicesPreset } from "./presets/devices.mjs";
 import { equipmentChartsPreset } from "./presets/equipment-charts.mjs";
+import { materialIntegrityPreset } from "./presets/material-integrity.mjs";
 // Kịch bản dựng sẵn cho ui-shots.mjs: tuyến cần chụp + dữ liệu GIẢ LẬP qua page.route.
 //
 // Giả lập ngay trong trình duyệt để chụp được trạng thái hiếm có trên DB dev (lần làm việc đang mở, danh sách
@@ -269,6 +270,7 @@ async function writeFakeCameraVideo(file, { px = 5, blur = 0.5, noise = 8 } = {}
 let nhanSuLocName = "";
 
 export const PRESETS = {
+  "material-integrity": materialIntegrityPreset,
   "equipment-charts": equipmentChartsPreset,
   "equipment-rankings": { ...equipmentChartsPreset, routes: () => ["ranking", "ranking-long", "ranking-single", "ranking-empty"].map(mode => `/reports?verify=${mode}`) },
   "devices": devicesPreset,

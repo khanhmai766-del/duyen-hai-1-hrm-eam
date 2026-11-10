@@ -1,3 +1,4 @@
+import { invalidateEquipmentDashboardCache } from "@/lib/equipment-dashboard-service";
 import type { NextRequest } from "next/server";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
@@ -6,7 +7,8 @@ import { addMonths, DEFECT_UNITS, isGasCylinderCategory, materialTrackingGroup, 
 import { EQUIPMENT_DEVICE_SELECT, equipmentNodeToDevice } from "@/lib/equipment-device";
 import { resolveEquipmentAccessForUser } from "@/lib/server-access";
 import { materialCatalogAccessWhere } from "@/lib/material-catalog-access";
-import { adjustStockToQuantity, sharedCodesOf, syncMaterialQuantity } from "@/lib/material-stock-lot";
+import { adjustStockToQuantity, lockMaterialStock, sharedCodesOf, syncMaterialQuantity } from "@/lib/material-stock-lot";
+import { materialHasHistory, syncMaterialDeclarations } from "@/lib/server/material-catalog-write";
 import { assertSeqsInScope } from "@/lib/equipment-tree-scope";
 import { maybeUploadDataUrl } from "@/lib/s3";
 import { hasPermissionLevel, requirePermissionLevel } from "@/lib/rbac-guard";
@@ -60,63 +62,16 @@ type MaterialDocumentFields = {
   erpCodes?: string[];
 };
 
-let materialDocumentColumnsReady = false;
-
-async function ensureMaterialDocumentColumns() {
-  if (materialDocumentColumnsReady) return;
-  await prisma.$executeRawUnsafe(`
-    ALTER TABLE "Material"
-    ADD COLUMN IF NOT EXISTS "documentUrl" TEXT,
-    ADD COLUMN IF NOT EXISTS "documentName" TEXT
-  `);
-  materialDocumentColumnsReady = true;
-}
-
 async function normalizeMaterialDocument(body: { documentUrl?: unknown; documentName?: unknown }): Promise<MaterialDocumentFields> {
-  // Tầng 3: dán data URL cũng được đẩy lên MinIO; DB chỉ giữ URL ngắn.
-  const documentUrl = await maybeUploadDataUrl({
-    value: String(body.documentUrl ?? "").trim() || null,
-    folder: "materials/documents",
-    preset: "document-image",
-  });
-  const documentName = String(body.documentName ?? "").trim() || null;
-  return { documentUrl, documentName: documentUrl ? documentName : null };
+  const documentUrl = await maybeUploadDataUrl({ value: String(body.documentUrl ?? "").trim() || null,
+    folder: "materials/documents", preset: "document-image" });
+  return { documentUrl, documentName: documentUrl ? String(body.documentName ?? "").trim() || null : null };
 }
 
 async function materialDocumentMap(ids?: string[]) {
-  try {
-    await ensureMaterialDocumentColumns();
-    // Chỉ quét đúng các vật tư cần trả về (khi có ids) thay vì cả bảng.
-    if (ids && ids.length === 0) return new Map<string, MaterialDocumentFields>();
-    const rows = ids
-      ? await prisma.$queryRaw<Array<{ id: string; documentUrl: string | null; documentName: string | null; erpCodes: string[] | null }>>`
-          SELECT "id", "documentUrl", "documentName", "erpCodes" FROM "Material" WHERE "id" = ANY(${ids}::text[])
-        `
-      : await prisma.$queryRaw<Array<{ id: string; documentUrl: string | null; documentName: string | null; erpCodes: string[] | null }>>`
-          SELECT "id", "documentUrl", "documentName", "erpCodes" FROM "Material"
-        `;
-    return new Map(rows.map((row) => [row.id, { documentUrl: row.documentUrl, documentName: row.documentName, erpCodes: row.erpCodes ?? [] }]));
-  } catch {
-    return new Map<string, MaterialDocumentFields>();
-  }
-}
-
-/**
- * Ghi ĐÚNG giá trị được truyền vào, kể cả null.
- *
- * Trước đây hàm này tự bỏ qua khi cả hai trường rỗng, nên thao tác "Gỡ tài liệu"
- * (nút ✕ ở form vật tư gửi lên documentUrl = null) không bao giờ chạm tới DB —
- * tải lại trang là tài liệu cũ hiện lại. Việc quyết định "có cần ghi không" thuộc
- * về nơi gọi, vì chỉ nơi đó phân biệt được "client không gửi trường tài liệu" với
- * "client cố ý gửi rỗng để gỡ".
- */
-async function updateMaterialDocument(materialId: string, fields: MaterialDocumentFields) {
-  await ensureMaterialDocumentColumns();
-  await prisma.$executeRaw`
-    UPDATE "Material"
-    SET "documentUrl" = ${fields.documentUrl}, "documentName" = ${fields.documentName}
-    WHERE "id" = ${materialId}
-  `;
+  const rows = await prisma.material.findMany({ where: ids ? { id: { in: ids } } : undefined,
+    select: { id: true, documentUrl: true, documentName: true, erpCodes: true } });
+  return new Map(rows.map(row => [row.id, row]));
 }
 
 function mapMaterial<T extends { id?: string; quantity: number; deviceMaterials?: Array<any>; replacements?: Array<any> }>(
@@ -154,6 +109,7 @@ function mapMaterial<T extends { id?: string; quantity: number; deviceMaterials?
 }
 
 type ReplacementInput = {
+  id?: string;
   deviceSeq?: string | null;
   system?: string | null;
   location?: string | null; // tên thiết bị nhập tay (khi không chọn từ cây)
@@ -175,6 +131,7 @@ function buildReplacementCreate(entry: ReplacementInput, userId: string, default
   const quantity = Math.max(0, Math.round(Number(entry.quantity)) || 0);
   const lastReplacedAt = entry.lastReplacedAt ? new Date(entry.lastReplacedAt) : null;
   return {
+    id: entry.id,
     // Đồng bộ tổ máy của điểm thay thế với tổ máy của vật tư — trang thiết bị lọc theo machine.
     machine,
     deviceSeq: entry.deviceSeq?.trim() || null,
@@ -216,80 +173,9 @@ function parseErpCodes(body: { code?: unknown; erpCodes?: unknown }) {
   );
 }
 
-async function materialWithAnyErpCode(erpCodes: string[], excludeId?: string, machine?: string) {
-  if (!erpCodes.length) return null;
-  // Khi có machine, chỉ kiểm tra trùng trong cùng tổ máy (dùng cho PUT).
-  // Khi không có machine, kiểm tra toàn bộ (dùng cho POST kiểm tra global).
-  const rows = excludeId
-    ? machine
-      ? await prisma.$queryRaw<Array<{ id: string }>>`
-          SELECT "id" FROM "Material"
-          WHERE "id" <> ${excludeId}
-            AND "machine" = ${machine}
-            AND ("code" = ANY(${erpCodes}::text[]) OR "erpCodes" && ${erpCodes}::text[])
-          LIMIT 1
-        `
-      : await prisma.$queryRaw<Array<{ id: string }>>`
-          SELECT "id" FROM "Material"
-          WHERE "id" <> ${excludeId}
-            AND ("code" = ANY(${erpCodes}::text[]) OR "erpCodes" && ${erpCodes}::text[])
-          LIMIT 1
-        `
-    : await prisma.$queryRaw<Array<{ id: string }>>`
-        SELECT "id" FROM "Material"
-        WHERE "code" = ANY(${erpCodes}::text[]) OR "erpCodes" && ${erpCodes}::text[]
-        LIMIT 1
-      `;
-  return rows[0] ?? null;
-}
-
-async function updateMaterialErpCodes(materialId: string, erpCodes: string[]) {
-  await prisma.$executeRaw`
-    UPDATE "Material"
-    SET "erpCodes" = ${erpCodes}::text[]
-    WHERE "id" = ${materialId}
-  `;
-}
-
-/**
- * Đồng bộ danh mục mã ERP sang các DÒNG SIBLING của cùng vật tư (khác tổ máy).
- *
- * Một vật tư dùng chung cho nhiều tổ máy tồn tại thành NHIỀU dòng `Material`, gom nhóm
- * theo `code` (xem cột "machines" ở GET). Nhưng phiếu vật tư neo vào ĐÚNG dòng của tổ máy
- * mình, còn dropdown "Mã vật tư" ở bước Đề xuất / Nghiệm thu lại đọc `erpCodes` của chính
- * dòng đó. Nếu chỉ ghi mã cho dòng đang mở, người sửa ở tab S1 sẽ thấy phiếu tổ máy S2 vẫn
- * hiện danh sách mã cũ — đúng vết "cập nhật 4 mã nhưng phiếu chỉ có 3 mã".
- *
- * Tìm sibling theo `code` CŨ vì dòng chính có thể vừa đổi mã chính; đổi xong ở đây thì
- * bước đồng bộ tổ máy phía sau (gom theo `code` mới) mới không coi sibling là dòng thiếu.
- */
-async function syncSiblingErpCodes(args: {
-  materialId: string;
-  previousCode: string;
-  primaryCode: string;
-  erpCodes: string[];
-  minStock?: number | null;
-}) {
-  const siblings = await prisma.material.findMany({
-    where: { code: args.previousCode, id: { not: args.materialId } },
-    select: { id: true },
-  });
-  if (!siblings.length) return [];
-  const ids = siblings.map((sibling) => sibling.id);
-  await prisma.material.updateMany({
-    where: { id: { in: ids } },
-    data: {
-      code: args.primaryCode,
-      // "Số liệu ERP" là tổng tồn của đúng cụm mã vừa chọn nên đi kèm luôn.
-      ...(args.minStock != null ? { minStock: Number(args.minStock) } : {}),
-    },
-  });
-  await prisma.$executeRaw`
-    UPDATE "Material"
-    SET "erpCodes" = ${args.erpCodes}::text[]
-    WHERE "id" = ANY(${ids}::text[])
-  `;
-  return ids;
+async function materialWithAnyErpCode(db: Prisma.TransactionClient, erpCodes: string[], excludeId?: string, machine?: string) {
+  return db.material.findFirst({ where: { ...(excludeId ? { id: { not: excludeId } } : {}), ...(machine ? { machine } : {}),
+    OR: [{ code: { in: erpCodes } }, { erpCodes: { hasSome: erpCodes } }] }, select: { id: true } });
 }
 
 /**
@@ -504,99 +390,68 @@ export async function GET(req: NextRequest) {
   });
 }
 
+function stockValue(value: unknown, label: string) {
+  const number = Number(value);
+  if (!Number.isFinite(number) || number < 0 || number > 2_147_483_647) throw fail(`${label} phải là số không âm hợp lệ`);
+  return roundStock(number);
+}
+
+function selectedMachines(value: unknown): string[] | undefined {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value) || !value.length || value.some(machine => !parseMachine(machine))) throw fail("Vui lòng chọn ít nhất một tổ máy hợp lệ");
+  return [...new Set(value as string[])];
+}
+
 export async function POST(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
     await requirePermissionLevel(user, "material-manage", ["personal", "manage", "full"], "Không đủ quyền thêm vật tư");
     const body = await req.json();
-    const erpCodes = parseErpCodes(body);
-    const primaryCode = erpCodes[0];
-    if (!primaryCode || !body.name || !body.unit) return fail("Thiếu thông tin bắt buộc");
-    const exists = await materialWithAnyErpCode(erpCodes);
-    if (exists) return fail("Mã vật tư ERP đã được gom trong Danh mục vật tư PXVH1");
-    const defaultSystem = body.system?.trim() || null;
-    // Điểm dùng/thay thế chỉ gắn vào tổ máy chính — đồng bộ machine của điểm với tổ máy đó.
-    const primaryMachineForReplacements = parseMachine(body.machine) ?? "COMMON";
-    const replacements = parseReplacements(body, user.id, defaultSystem, primaryMachineForReplacements);
+    const erpCodes = parseErpCodes(body), code = erpCodes[0];
+    if (!code || !String(body.name ?? "").trim() || !String(body.unit ?? "").trim()) return fail("Thiếu thông tin bắt buộc");
+    const machines = selectedMachines(body.machines) ?? (body.syncAll === true ? ["S1", "S2", "COMMON"] : [parseMachine(body.machine) ?? "COMMON"]);
+    const primaryMachine = parseMachine(body.machine) ?? machines[0];
+    if (!machines.includes(primaryMachine)) return fail("Tổ máy chính phải thuộc danh sách đã chọn");
+    const quantity = stockValue(body.quantity ?? 0, "Hiện có"), minStock = stockValue(body.minStock ?? 0, "Tồn ERP");
+    const system = String(body.system ?? "").trim() || null;
+    const replacements = parseReplacements(body, user.id, system, primaryMachine).map(({ id: _id, ...row }) => ({ ...row, isActive: false }));
     const imageUrl = await maybeUploadDataUrl({ value: body.imageUrl || null, folder: "materials/images", preset: "image" });
     const document = await normalizeMaterialDocument(body);
-    const syncAll = body.syncAll === true;
-    const requestedMachines: string[] = Array.isArray(body.machines)
-      ? body.machines.filter((m: unknown) => typeof m === "string" && (DEFECT_UNITS as readonly string[]).includes(m as string))
-      : [];
-    const machines = requestedMachines.length
-      ? requestedMachines
-      : syncAll
-        ? ["S1", "S2", "COMMON"]
-        : [parseMachine(body.machine) ?? "COMMON"];
-    const sharedData = {
-      code: primaryCode,
-      name: body.name,
-      unit: body.unit,
-      quantity: Number(body.quantity) || 0,
-      minStock: Number(body.minStock) || 0,
-      location: null,
-      system: defaultSystem,
-      category: body.category?.trim() || null,
-      imageUrl,
-      unitPrice: body.unitPrice != null ? Number(body.unitPrice) : null,
-      note: body.note || null,
-    };
-    // Tổ máy chính (nhận điểm dùng/thay thế): lấy theo tab đang chọn hoặc fallback "COMMON".
-    const primaryMachine = parseMachine(body.machine) ?? "COMMON";
-    let firstMaterial: any = null;
-    for (const machine of machines) {
-      // Chỉ tổ máy chính nhận điểm dùng/thay thế (vì gắn thiết bị cụ thể của tổ máy đó).
-      const isMachineWithReplacements = machine === primaryMachine;
-      const m = await prisma.material.create({
-        data: {
-          ...sharedData,
-          machine,
-          ...(isMachineWithReplacements && replacements.length ? { replacements: { create: replacements } } : {}),
-        },
-        include: MATERIAL_INCLUDE,
-      });
-      await updateMaterialErpCodes(m.id, erpCodes);
-      // Vật tư vừa tạo đã có sẵn hai cột NULL nên không có tài liệu thì khỏi ghi —
-      // tránh một UPDATE thừa (kèm cả bước ensure cột) cho mỗi tổ máy khi tạo hàng loạt.
-      if (document.documentUrl) await updateMaterialDocument(m.id, document);
-      await audit(user.id, "CREATE_MATERIAL", "Material", m.id, auditDetailWithPosition(user, `${m.code} (${machine})`));
-      if (!firstMaterial) firstMaterial = m;
-    }
-    // Vật tư mới khai kèm tồn mở đầu cũng phải có lô, y như khi sửa tay số tồn —
-    // không thì lại sinh ra một mã "có hàng trên màn hình, rỗng dưới kho lô".
-    // Chạy SAU vòng lặp vì các dòng sibling S1/S2/COMMON dùng CHUNG một kho theo mã.
-    const tonMoDau = Math.max(0, Math.trunc(Number(body.quantity) || 0));
-    if (tonMoDau > 0 && firstMaterial) {
-      await prisma.$transaction(async (tx) => {
-        const stockUnit = isGasCylinderCategory(sharedData.category) ? primaryMachine : "COMMON";
-        await adjustStockToQuantity(tx, primaryCode, tonMoDau, stockUnit);
-        await syncMaterialQuantity(tx, primaryCode, sharedCodesOf({ code: primaryCode, erpCodes }),
-          isGasCylinderCategory(sharedData.category) ? { stockUnit, machine: primaryMachine } : { stockUnit });
-      });
-    }
-    return ok(mapMaterial(firstMaterial, { ...document, erpCodes }));
+    const materials = await prisma.$transaction(async tx => {
+      await lockMaterialStock(tx);
+      if (await materialWithAnyErpCode(tx, erpCodes)) throw fail("Mã vật tư ERP đã được gom trong Danh mục vật tư PXVH1");
+      const created = [];
+      for (const machine of machines) {
+        created.push(await tx.material.create({ data: {
+          code, erpCodes, machine, name: String(body.name).trim(), unit: String(body.unit).trim(), quantity, minStock,
+          system, category: body.category?.trim() || null, imageUrl, ...document,
+          unitPrice: body.unitPrice != null ? Number(body.unitPrice) : null, note: body.note || null,
+          ...(machine === primaryMachine && replacements.length ? { replacements: { create: replacements } } : {}),
+        }, include: MATERIAL_INCLUDE }));
+      }
+      if (quantity > 0) {
+        for (const stockUnit of isGasCylinderCategory(body.category) ? machines : ["COMMON"]) {
+          await adjustStockToQuantity(tx, code, quantity, stockUnit);
+          await syncMaterialQuantity(tx, code, erpCodes, isGasCylinderCategory(body.category) ? { stockUnit, machine: stockUnit } : { stockUnit });
+        }
+      }
+      return created;
+    }, { timeout: 60_000 });
+    for (const material of materials) await audit(user.id, "CREATE_MATERIAL", "Material", material.id, auditDetailWithPosition(user, `${material.code} (${material.machine})`));
+    invalidateEquipmentDashboardCache();
+    return ok(mapMaterial(materials[0], { ...document, erpCodes }));
   });
 }
 
-/**
- * Sửa RIÊNG ô "Hiện có"? Thân yêu cầu chỉ có đúng `id` và `quantity`. Phân biệt được hai
- * trường hợp này mới nới quyền cho cương vị giữ vật tư mà không mở luôn việc đổi tên, mã ERP,
- * loại hay tổ máy của vật tư.
- */
 function isStockOnlyUpdate(body: Record<string, unknown>) {
-  const keys = Object.keys(body).filter((key) => body[key] !== undefined);
-  return keys.length > 0 && keys.every((key) => key === "id" || key === "quantity") && keys.includes("quantity");
+  const keys = Object.keys(body).filter(key => body[key] !== undefined);
+  return keys.includes("quantity") && keys.every(key => key === "id" || key === "quantity");
 }
 
-/** Cương vị đang trực có quản lý thiết bị nào đã khai báo vật tư này không? */
 async function keepsMaterialStock(materialId: string, position?: string | null) {
   if (!position?.trim()) return false;
-  const points = await prisma.materialReplacement.findMany({
-    where: { materialId },
-    select: { managingPosition: true, managingPositionCode: true },
-  });
-  return points.some((point) => positionsMatch(point.managingPositionCode ?? point.managingPosition, position));
+  const points = await prisma.materialReplacement.findMany({ where: { materialId }, select: { managingPosition: true, managingPositionCode: true } });
+  return points.some(point => positionsMatch(point.managingPositionCode ?? point.managingPosition, position));
 }
 
 export async function PUT(req: NextRequest) {
@@ -604,219 +459,111 @@ export async function PUT(req: NextRequest) {
     const user = await requireUser();
     const body = await req.json();
     if (!body.id) return fail("Thiếu id");
-    // Ô "Hiện có" là số đếm thực tế tại kho, người đếm chính là cương vị đang giữ vật tư — họ
-    // được tự sửa ô này. Các ô còn lại của danh mục vẫn chỉ nhóm quản lý được đổi.
     if (isStockOnlyUpdate(body)) {
       await requirePermissionLevel(user, "material-manage", ["read", "personal", "manage", "full"], "Không đủ quyền cập nhật vật tư");
-      const allowed =
-        (await hasPermissionLevel(user, "material-manage", ["manage", "full"])) ||
-        (await keepsMaterialStock(String(body.id), user.position));
-      if (!allowed) {
+      if (!(await hasPermissionLevel(user, "material-manage", ["manage", "full"])) && !(await keepsMaterialStock(String(body.id), user.position))) {
         return fail("Cương vị của bạn không quản lý thiết bị nào đã khai báo vật tư này", 403);
       }
-    } else {
-      await requirePermissionLevel(user, "material-manage", ["manage", "full"], "Không đủ quyền cập nhật vật tư");
-    }
+    } else await requirePermissionLevel(user, "material-manage", ["manage", "full"], "Không đủ quyền cập nhật vật tư");
+    const machines = selectedMachines(body.machines);
     const erpCodes = body.erpCodes !== undefined || body.code !== undefined ? parseErpCodes(body) : undefined;
-    const primaryCode = erpCodes?.[0];
-    if (erpCodes && !primaryCode) return fail("Vui lòng chọn ít nhất một mã vật tư ERP");
-    // Lấy tổ máy hiện tại của bản ghi để scope duplicate check đúng tổ máy.
-    const currentMaterial = await prisma.material.findUnique({ where: { id: body.id }, select: { machine: true, code: true } });
-    if (!currentMaterial) return fail("Không tìm thấy vật tư", 404);
-    if (erpCodes?.length) {
-      const exists = await materialWithAnyErpCode(erpCodes, body.id, currentMaterial.machine);
-      if (exists) return fail("Mã vật tư ERP đã được gom trong Danh mục vật tư PXVH1");
-    }
-    let syncedSiblingIds: string[] = [];
-    const defaultSystem = body.system !== undefined ? body.system?.trim() || null : undefined;
-    const imageUrl =
-      body.imageUrl !== undefined
-        ? await maybeUploadDataUrl({ value: body.imageUrl || null, folder: "materials/images", preset: "image" })
-        : undefined;
-    const document = body.documentUrl !== undefined || body.documentName !== undefined
-      ? await normalizeMaterialDocument(body)
-      : undefined;
-    await prisma.material.update({
-      where: { id: body.id },
-      data: {
-        ...(primaryCode ? { code: primaryCode } : {}),
-        ...(body.name != null ? { name: body.name } : {}),
-        ...(body.unit != null ? { unit: body.unit } : {}),
-        ...(body.quantity != null ? { quantity: roundStock(body.quantity) } : {}),
-        ...(body.minStock != null ? { minStock: Number(body.minStock) } : {}),
-        ...(defaultSystem !== undefined ? { system: defaultSystem } : {}),
-        ...(body.category !== undefined ? { category: body.category?.trim() || null } : {}),
-        ...(body.machine !== undefined ? { machine: parseMachine(body.machine) ?? "COMMON" } : {}),
-        ...(body.imageUrl !== undefined ? { imageUrl } : {}),
-        ...(body.unitPrice != null ? { unitPrice: Number(body.unitPrice) } : {}),
-        ...(body.note !== undefined ? { note: body.note || null } : {}),
-      },
-    });
-    if (erpCodes) {
-      await updateMaterialErpCodes(body.id, erpCodes);
-      syncedSiblingIds = await syncSiblingErpCodes({
-        materialId: body.id,
-        previousCode: currentMaterial.code,
-        primaryCode: primaryCode!,
-        erpCodes,
-        minStock: body.minStock,
-      });
-    }
-    if (document !== undefined) {
-      await updateMaterialDocument(body.id, document);
-    }
-    // Đồng bộ DÒNG KHAI BÁO thiết bị (isActive=false) theo form: xoá rồi tạo lại.
-    // Các ĐIỂM THEO DÕI thời gian (isActive=true, tạo từ nút "Thêm điểm") GIỮ NGUYÊN.
-    if (Array.isArray(body.replacements)) {
-      const current = await prisma.material.findUnique({ where: { id: body.id }, select: { system: true } });
-      const replacements = parseReplacements(body, user.id, defaultSystem ?? current?.system ?? null, currentMaterial.machine);
-      await prisma.materialReplacement.deleteMany({ where: { materialId: body.id, isActive: false } });
-      for (const data of replacements) {
-        await prisma.materialReplacement.create({
-          data: {
-            ...data,
-            materialId: body.id,
-          },
-        });
+    if (erpCodes && !erpCodes.length) return fail("Vui lòng chọn ít nhất một mã vật tư ERP");
+    const quantity = body.quantity != null ? stockValue(body.quantity, "Hiện có") : undefined;
+    const minStock = body.minStock != null ? stockValue(body.minStock, "Tồn ERP") : undefined;
+    if (body.deletedReplacementIds !== undefined && (!Array.isArray(body.deletedReplacementIds) || body.deletedReplacementIds.some((id: unknown) => typeof id !== "string"))) return fail("Danh sách điểm cần xoá không hợp lệ");
+    const imageUrl = body.imageUrl !== undefined ? await maybeUploadDataUrl({ value: body.imageUrl || null, folder: "materials/images", preset: "image" }) : undefined;
+    const document = body.documentUrl !== undefined || body.documentName !== undefined ? await normalizeMaterialDocument(body) : undefined;
+    const [access, view] = await Promise.all([resolveEquipmentAccessForUser(user), resolvePositionViewScope(user, "material")]);
+    const result = await prisma.$transaction(async tx => {
+      await lockMaterialStock(tx);
+      const current = await tx.material.findUnique({ where: { id: body.id } });
+      if (!current) throw fail("Không tìm thấy vật tư", 404);
+      const siblings = await tx.material.findMany({ where: { code: current.code } });
+      const ids = siblings.map(row => row.id), code = erpCodes?.[0] ?? current.code;
+      if (code !== current.code && (siblings.some(row => row.quantity > 0) || await materialHasHistory(tx, ids, current.code))) {
+        throw fail("Vật tư đã có tồn kho hoặc chứng từ; không thể đổi mã chính. Có thể bổ sung mã ERP mà vẫn giữ mã chính hiện tại.", 409);
       }
-    }
-    // Đồng bộ danh sách TỔ MÁY được tick (multi-select ở form Cập nhật): vật tư
-    // tồn tại đúng trên các tổ máy đã chọn — tạo dòng sibling còn thiếu (copy thông
-    // tin chung + mã ERP + tài liệu); dòng bỏ tick chỉ xoá khi không còn điểm
-    // khai báo/theo dõi để tránh mất dữ liệu.
-    const requestedMachines: string[] | undefined = Array.isArray(body.machines)
-      ? Array.from(
-          new Set(
-            body.machines.filter(
-              (m: unknown): m is string => typeof m === "string" && (DEFECT_UNITS as readonly string[]).includes(m)
-            )
-          )
-        )
-      : undefined;
-    if (requestedMachines !== undefined) {
-      if (!requestedMachines.length) return fail("Vui lòng chọn ít nhất một tổ máy");
-      const main = await prisma.material.findUnique({ where: { id: body.id } });
-      if (main) {
-        const siblings = await prisma.material.findMany({ where: { code: main.code }, select: { id: true, machine: true } });
-        const existingMachines = new Set(siblings.map((s) => s.machine));
-        for (const machineKey of requestedMachines) {
-          if (existingMachines.has(machineKey)) continue;
-          const created = await prisma.material.create({
-            data: {
-              code: main.code,
-              name: main.name,
-              unit: main.unit,
-              quantity: main.quantity,
-              minStock: main.minStock,
-              location: main.location,
-              system: main.system,
-              category: main.category,
-              imageUrl: main.imageUrl,
-              unitPrice: main.unitPrice,
-              note: main.note,
-              machine: machineKey,
-            },
-          });
-          // Copy mã ERP + tài liệu (cột raw ngoài schema Prisma).
-          await ensureMaterialDocumentColumns();
-          await prisma.$executeRaw`
-            UPDATE "Material" SET "erpCodes" = src."erpCodes", "documentUrl" = src."documentUrl", "documentName" = src."documentName"
-            FROM "Material" src WHERE src."id" = ${main.id} AND "Material"."id" = ${created.id}
-          `;
-          await audit(user.id, "CREATE_MATERIAL", "Material", created.id, auditDetailWithPosition(user, `${main.code} (${machineKey})`));
+      if (erpCodes && await materialWithAnyErpCode(tx, erpCodes, current.id, current.machine)) throw fail("Mã vật tư ERP đã được gom trong Danh mục vật tư PXVH1");
+      const machine = body.machine !== undefined ? parseMachine(body.machine) : current.machine;
+      if (!machine) throw fail("Tổ máy không hợp lệ");
+      if ((machine !== current.machine || (body.category !== undefined && isGasCylinderCategory(body.category) !== isGasCylinderCategory(current.category)))
+        && (await tx.materialReplacement.count({ where: { materialId: current.id } }) > 0 || await materialHasHistory(tx, [current.id], current.code))) {
+        throw fail("Không thể đổi tổ máy hoặc loại kho của vật tư đã có khai báo hay chứng từ", 409);
+      }
+      const system = body.system !== undefined ? String(body.system ?? "").trim() || null : current.system;
+      if (Array.isArray(body.replacements) || body.deletedReplacementIds?.length) {
+        const rows = parseReplacements(body, user.id, system, machine);
+        await syncMaterialDeclarations(tx, current.id, rows, body.deletedReplacementIds ?? [], access, view);
+      }
+      const events: Array<{ action: string; id: string; detail: string }> = [];
+      await tx.material.update({ where: { id: current.id }, data: {
+        code, erpCodes, machine, system, minStock,
+        name: body.name != null ? body.name : undefined, unit: body.unit != null ? body.unit : undefined,
+        category: body.category !== undefined ? body.category?.trim() || null : undefined, imageUrl, ...document,
+        unitPrice: body.unitPrice != null ? Number(body.unitPrice) : undefined,
+        note: body.note !== undefined ? body.note || null : undefined,
+      } });
+      if (erpCodes) await tx.material.updateMany({ where: { id: { in: ids.filter(id => id !== current.id) } }, data: { code, erpCodes, minStock } });
+      const main = await tx.material.findUniqueOrThrow({ where: { id: current.id } });
+      if (machines) {
+        const existingMachines = new Set(siblings.map(row => row.id === current.id ? machine : row.machine));
+        for (const target of machines) {
+          if (existingMachines.has(target)) continue;
+          const created = await tx.material.create({ data: {
+            code, erpCodes: main.erpCodes, machine: target, name: main.name, unit: main.unit, quantity: isGasCylinderCategory(main.category) ? 0 : main.quantity,
+            minStock: main.minStock, location: main.location, system: main.system, category: main.category,
+            imageUrl: main.imageUrl, documentUrl: main.documentUrl, documentName: main.documentName, unitPrice: main.unitPrice, note: main.note,
+          } });
+          events.push({ action: "CREATE_MATERIAL", id: created.id, detail: `${code} (${target})` });
         }
         for (const sibling of siblings) {
-          if (requestedMachines.includes(sibling.machine)) continue;
-          const points = await prisma.materialReplacement.count({ where: { materialId: sibling.id } });
-          if (points > 0) {
-            return fail(
-              `Không thể bỏ Tổ máy ${sibling.machine}: còn ${points} điểm khai báo/theo dõi ở tổ máy này — xoá các điểm trước khi bỏ chọn.`
-            );
+          if (machines.includes(sibling.id === current.id ? machine : sibling.machine)) continue;
+          if (await tx.materialReplacement.count({ where: { materialId: sibling.id } }) || await materialHasHistory(tx, [sibling.id], code)) {
+            throw fail(`Không thể bỏ Tổ máy ${sibling.machine}: vật tư còn khai báo, lô kho hoặc chứng từ`, 409);
           }
-          await prisma.equipmentMaterial.deleteMany({ where: { materialId: sibling.id } });
-          await prisma.material.delete({ where: { id: sibling.id } });
-          await audit(user.id, "DELETE_MATERIAL", "Material", sibling.id, auditDetailWithPosition(user, `${main.code} (${sibling.machine})`));
+          await tx.equipmentMaterial.deleteMany({ where: { materialId: sibling.id } });
+          await tx.material.delete({ where: { id: sibling.id } });
+          events.push({ action: "DELETE_MATERIAL", id: sibling.id, detail: `${code} (${sibling.machine})` });
         }
       }
-    }
-    /*
-     * Sửa tay số tồn = ĐIỀU CHỈNH KHO, không phải ghi đè một con số.
-     *
-     * Tồn thật nằm ở MaterialStockLot; `Material.quantity` chỉ là bản sao để hiển thị.
-     * Bản cũ ghi thẳng vào cột đó nên hai bên lệch nhau vĩnh viễn: màn hình phiếu báo
-     * còn hàng mà bước Sử dụng vật tư chết vì kho lô rỗng (đúng vết sự cố Dầu Shell
-     * Omala S2 GX320 — hiện có 418, lô 0). Giờ sinh/bớt lô cho khớp rồi mới đồng bộ
-     * con số hiển thị, nên hai bảng không thể lệch nữa.
-     */
-    if (body.quantity != null) {
-      const updated = await prisma.material.findUnique({
-        where: { id: body.id },
-        select: { code: true, erpCodes: true, category: true, machine: true },
-      });
-      if (updated) {
-        const muc = Math.max(0, Math.trunc(Number(body.quantity)));
-        const delta = await prisma.$transaction(async (tx) => {
-          const stockUnit = isGasCylinderCategory(updated.category) ? updated.machine : "COMMON";
-          const changed = await adjustStockToQuantity(tx, updated.code, muc, stockUnit);
-          // Ghi lại con số hiển thị TỪ LÔ chứ không từ giá trị người dùng gõ: nếu hai
-          // đường tính ra khác nhau thì lô mới là bên đúng.
-          await syncMaterialQuantity(tx, updated.code, sharedCodesOf(updated),
-            isGasCylinderCategory(updated.category) ? { stockUnit, machine: updated.machine } : { stockUnit });
-          return changed;
-        });
-        if (delta !== 0) {
-          await audit(
-            user.id,
-            "ADJUST_MATERIAL_STOCK",
-            "Material",
-            body.id,
-            auditDetailWithPosition(user, `${updated.code}: điều chỉnh tồn ${delta > 0 ? "+" : ""}${delta} → ${muc}`)
-          );
-        }
+      if (quantity !== undefined) {
+        const stockUnit = isGasCylinderCategory(main.category) ? machine : "COMMON";
+        const delta = await adjustStockToQuantity(tx, code, quantity, stockUnit);
+        await syncMaterialQuantity(tx, code, sharedCodesOf(main), isGasCylinderCategory(main.category) ? { stockUnit, machine } : { stockUnit });
+        if (delta) events.push({ action: "ADJUST_MATERIAL_STOCK", id: current.id, detail: `${code}: điều chỉnh tồn ${delta > 0 ? "+" : ""}${delta} → ${quantity}` });
       }
-    }
-    const m = await prisma.material.findUnique({ where: { id: body.id }, include: MATERIAL_INCLUDE });
-    await audit(
-      user.id,
-      "UPDATE_MATERIAL",
-      "Material",
-      body.id,
-      auditDetailWithPosition(
-        user,
-        syncedSiblingIds.length ? `${m?.code} (đồng bộ mã ERP cho ${syncedSiblingIds.length} tổ máy khác)` : m?.code
-      )
-    );
-    return ok(m ? mapMaterial(m, document ?? (await materialDocumentMap()).get(body.id)) : null);
+      const material = await tx.material.findFirst({ where: { code, machine: machines && !machines.includes(machine) ? machines[0] : machine }, include: MATERIAL_INCLUDE });
+      return { material, events };
+    }, { timeout: 60_000 });
+    for (const event of result.events) await audit(user.id, event.action, "Material", event.id, auditDetailWithPosition(user, event.detail));
+    await audit(user.id, "UPDATE_MATERIAL", "Material", body.id, auditDetailWithPosition(user, result.material?.code));
+    invalidateEquipmentDashboardCache();
+    return ok(result.material ? mapMaterial(result.material, result.material) : null);
   });
 }
-
-/**
- * DELETE /api/materials — xoá vật tư (Quản trị / Quản lý).
- *  - Một vật tư:  ?id=<id>
- *  - Nhiều vật tư: body JSON { ids: string[] }
- */
 export async function DELETE(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
     await requirePermissionLevel(user, "material-manage", ["manage", "full"], "Không đủ quyền xoá vật tư");
-
-    // Gom danh sách id cần xoá từ query (đơn) hoặc body (hàng loạt).
     const single = req.nextUrl.searchParams.get("id");
-    let ids: string[] = single ? [single] : [];
-    if (!ids.length) {
-      const body = await req.json().catch(() => ({}));
-      if (Array.isArray(body?.ids)) ids = body.ids.filter((x: unknown) => typeof x === "string");
-    }
+    const body = single ? null : await req.json().catch(() => ({}));
+    const ids: string[] = single ? [single] : Array.isArray(body?.ids) ? body.ids.filter((id: unknown) => typeof id === "string") : [];
     if (!ids.length) return fail("Thiếu id vật tư");
-
-    const materials = await prisma.material.findMany({ where: { id: { in: ids } }, select: { id: true, code: true } });
-    if (!materials.length) return fail("Không tìm thấy vật tư", 404);
-    const foundIds = materials.map((m) => m.id);
-
-    // Gỡ liên kết tiêu hao (lịch sử dùng cho thiết bị) trước khi xoá vật tư.
-    await prisma.equipmentMaterial.deleteMany({ where: { materialId: { in: foundIds } } });
-    const { count } = await prisma.material.deleteMany({ where: { id: { in: foundIds } } });
-    await audit(user.id, "DELETE_MATERIAL", "Material", foundIds.join(","), auditDetailWithPosition(user, materials.map((m) => m.code).join(", ")));
-    return ok({ ids: foundIds, count });
+    const materials = await prisma.$transaction(async tx => {
+      await lockMaterialStock(tx);
+      const rows = await tx.material.findMany({ where: { id: { in: ids } } });
+      if (!rows.length) throw fail("Không tìm thấy vật tư", 404);
+      for (const row of rows) {
+        if (row.quantity > 0 || await materialHasHistory(tx, [row.id], row.code)) throw fail(`Không thể xoá ${row.code}: vật tư còn tồn kho, lô kho hoặc chứng từ`, 409);
+      }
+      const foundIds = rows.map(row => row.id);
+      await tx.equipmentMaterial.deleteMany({ where: { materialId: { in: foundIds } } });
+      await tx.material.deleteMany({ where: { id: { in: foundIds } } });
+      return rows;
+    }, { timeout: 60_000 });
+    const idsDeleted = materials.map(row => row.id);
+    await audit(user.id, "DELETE_MATERIAL", "Material", idsDeleted.join(","), auditDetailWithPosition(user, materials.map(row => row.code).join(", ")));
+    invalidateEquipmentDashboardCache();
+    return ok({ ids: idsDeleted, count: idsDeleted.length });
   });
 }

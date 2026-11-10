@@ -1,3 +1,4 @@
+import { invalidateEquipmentDashboardCache } from "@/lib/equipment-dashboard-service";
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { addMonths, DEFECT_UNITS } from "@/lib/constants";
@@ -167,6 +168,7 @@ export async function POST(req: NextRequest) {
     });
 
     if (errors.length || body.dryRun === true) {
+      invalidateEquipmentDashboardCache();
       return ok({ validCount: normalized.length, errors, preview: normalized.slice(0, 50), materialsCreated: 0, created: 0, updated: 0 });
     }
 
@@ -234,6 +236,7 @@ export async function POST(req: NextRequest) {
       return { materialsCreated, created, updated };
     }, { timeout: 120_000 });
     await audit(user.id, "IMPORT_MATERIAL_DEVICE_LINKS", "MaterialReplacement", undefined, auditDetailWithPosition(user, `${result.materialsCreated} vật tư, ${result.created} liên kết mới, ${result.updated} cập nhật`));
+    invalidateEquipmentDashboardCache();
     return ok({ validCount: normalized.length, errors: [], preview: normalized.slice(0, 50), ...result });
   });
 }

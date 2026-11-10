@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { Prisma } from "@prisma/client";
 import { isGasCylinderCategory } from "@/lib/constants";
-import { adjustStockToQuantity, consumeStock, receiveIntoLot, sharedCodesOf, syncMaterialQuantity } from "@/lib/material-stock-lot";
+import { adjustStockToQuantity, consumeStock, lockMaterialStock, receiveIntoLot, sharedCodesOf, syncMaterialQuantity } from "@/lib/material-stock-lot";
 
 type Actor = { id: string; name?: string | null; position?: string | null };
 
@@ -17,6 +17,14 @@ async function stockByLots(tx: Prisma.TransactionClient, materialCode: string, s
     _sum: { quantityLeft: true },
   });
   return Math.max(0, result._sum.quantityLeft ?? 0);
+}
+
+async function ensureOpeningStock(tx: Prisma.TransactionClient, code: string, quantity: number, stockUnit: string) {
+  await lockMaterialStock(tx);
+  // Chỉ dựng tồn đầu khi chưa từng có lô; không kéo tồn đã tiêu hao về số đọc trước giao dịch.
+  if (quantity > 0 && !(await tx.materialStockLot.count({ where: { materialCode: code, stockUnit } }))) {
+    await adjustStockToQuantity(tx, code, quantity, stockUnit);
+  }
 }
 
 /** Lãnh một dòng của phiếu Vật tư khác: tạo lô, cộng tồn và ghi sổ trong cùng transaction. */
@@ -39,7 +47,7 @@ export async function receiveOtherMaterial(
 ) {
   const stockUnit = stockUnitOf(params.material);
   // Bảo toàn tồn cũ vốn chỉ nằm ở Material.quantity trước khi sổ lô được bổ sung.
-  await adjustStockToQuantity(tx, params.material.code, params.material.quantity, stockUnit);
+  await ensureOpeningStock(tx, params.material.code, params.material.quantity, stockUnit);
   const before = await stockByLots(tx, params.material.code, stockUnit);
   await receiveIntoLot(tx, {
     materialCode: params.material.code,
@@ -94,7 +102,7 @@ export async function consumeOtherMaterial(
   const stockUnit = stockUnitOf(params.material);
   // Dữ liệu cũ có thể chỉ có Material.quantity mà chưa có lô. Đồng bộ thành lô điều chỉnh
   // trước khi trừ để nghiệp vụ mới không làm mất tồn đã nhập từ trước.
-  await adjustStockToQuantity(tx, params.material.code, params.material.quantity, stockUnit);
+  await ensureOpeningStock(tx, params.material.code, params.material.quantity, stockUnit);
   const before = await stockByLots(tx, params.material.code, stockUnit);
   if (params.quantity > before) throw new Error(`Số lượng hiện có chỉ còn ${before}, không đủ để xuất ${params.quantity}`);
 

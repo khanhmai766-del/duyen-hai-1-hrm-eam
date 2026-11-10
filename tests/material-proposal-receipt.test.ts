@@ -30,6 +30,7 @@ function fixture(erpStock: number) {
       state.erpStock += (data.erpStock.increment ?? 0) - (data.erpStock.decrement ?? 0);
     } },
     $queryRaw: async (sql: TemplateStringsArray) => {
+      if (sql.join("?").includes("pg_advisory_xact_lock")) return [];
       assert.match(sql.join("?"), /FOR UPDATE/);
       return [{ erpStock: state.erpStock }];
     },

@@ -1,3 +1,4 @@
+import { invalidateEquipmentDashboardCache } from "@/lib/equipment-dashboard-service";
 import type { Prisma } from "@prisma/client";
 import { usageUndoError } from "@/lib/material-ticket-undo-usage";
 import type { NextRequest } from "next/server";
@@ -11,7 +12,7 @@ import { generateBbthvtDoc } from "@/lib/bbthvt-doc";
 import { generateDxvtDoc } from "@/lib/dxvt-doc";
 import { materialTicketFileBase, materialTicketReference } from "@/lib/material-ticket-sequence";
 import { normalizeText } from "@/lib/nav";
-import { consumeStock, deliveryNoteSummary, receiveIntoLot, releaseUsage, reverseTicketStock, sharedCodesOf, syncMaterialQuantity, usedLotsOfTicket } from "@/lib/material-stock-lot";
+import { lockMaterialStock, consumeStock, deliveryNoteSummary, receiveIntoLot, releaseUsage, reverseTicketStock, sharedCodesOf, syncMaterialQuantity, usedLotsOfTicket } from "@/lib/material-stock-lot";
 import { parseDateInput, parseVietnamDateTimeInput } from "@/lib/utils";
 import { parseVnNumber, VN_NUMBER_HINT } from "@/lib/vn-number";
 import { linkTicketTrucks, unlinkTicketTrucks, type TruckInput } from "@/lib/chemical-inventory/ticket-link";
@@ -394,6 +395,7 @@ export async function DELETE(_req: NextRequest, props: { params: Promise<{ id: s
     const deletedMaterials = [...new Map(t.items.map((item) => [item.material.code, item.material])).values()];
     let removedChemicalTrucks = 0;
     await prisma.$transaction(async (tx) => {
+      await lockMaterialStock(tx);
       // Chặn thao tác tạo/xóa đồng thời trong lúc dồn STT để không phát sinh
       // số trùng hoặc khoảng trống giữa các phiếu.
       await tx.$executeRaw`LOCK TABLE "MaterialTicket" IN EXCLUSIVE MODE`;
@@ -488,6 +490,7 @@ export async function DELETE(_req: NextRequest, props: { params: Promise<{ id: s
             ? `; xóa ${removedChemicalTrucks} chuyến xe khỏi sổ hóa chất`
             : `; giữ ${t.chemicalReceiptIds.length} chuyến xe trong sổ hóa chất (chỉ tháo liên kết)`),
     );
+    invalidateEquipmentDashboardCache();
     return ok({
       id: t.id,
       sequenceNumber: t.sequenceNumber,
@@ -580,6 +583,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
       }
 
       const updated = await prisma.$transaction(async (tx) => {
+        await lockMaterialStock(tx);
         await tx.$queryRaw`SELECT "id" FROM "MaterialTicket" WHERE "id" = ${t.id} FOR UPDATE`;
         const current = await tx.materialTicket.findUnique({ where: { id: t.id }, select: { status: true } });
         if (current?.status !== "NHAN_VAT_TU") throw fail("Phiếu đã được người khác xác nhận lãnh trước đó", 409);
@@ -637,6 +641,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
       await audit(user.id, "MT_OTHER_ADVANCE_RECEIVE", "MaterialTicket", t.id,
         `${materialTicketReference(t)}: lãnh ứng ${t.items.length} vật tư từ ${receiptSourceLabel(receiptSource)}; đã cộng Hiện có`);
       await notifyMaterialTicketStep({ ticketId: t.id, action, actorName: user.name });
+      invalidateEquipmentDashboardCache();
       return ok(updated);
     }
 
@@ -673,6 +678,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
       const proposalDoc = await buildProposalDocument(t, user, overrides);
       const completedAt = new Date();
       const updated = await prisma.$transaction(async (tx) => {
+        await lockMaterialStock(tx);
         await tx.$queryRaw`SELECT "id" FROM "MaterialTicket" WHERE "id" = ${t.id} FOR UPDATE`;
         const current = await tx.materialTicket.findUnique({ where: { id: t.id }, select: { status: true } });
         if (current?.status !== "CHO_THONG_KE") throw fail("Phiếu đã được người khác hoàn thiện trước đó", 409);
@@ -706,6 +712,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
       await audit(user.id, "MT_OTHER_ADVANCE_APPROVE", "MaterialTicket", t.id,
         `${materialTicketReference(t)}: hoàn thiện ĐXVT ${proposalNumber}, phiếu giao hàng ${deliveryNoteNumber}; không thay đổi tồn kho`);
       await notifyMaterialTicketStep({ ticketId: t.id, action, actorName: user.name });
+      invalidateEquipmentDashboardCache();
       return ok(updated);
     }
 
@@ -764,6 +771,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
       });
       await audit(user.id, "MT_OTHER_APPROVE", "MaterialTicket", t.id, `${materialTicketReference(t)}: xác nhận ${t.items.length} mã ERP, số phiếu ${proposalNumber}`);
       await notifyMaterialTicketStep({ ticketId: t.id, action, actorName: user.name });
+      invalidateEquipmentDashboardCache();
       return ok(updated);
     }
 
@@ -794,8 +802,13 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
         if (quantity > stock) return fail(`Mã ERP "${code}" chỉ còn ${stock.toLocaleString("vi-VN")}, không đủ số lượng thực lãnh ${quantity.toLocaleString("vi-VN")}`);
       }
       const updated = await prisma.$transaction(async (tx) => {
+        await lockMaterialStock(tx);
+        await tx.$queryRaw`SELECT "id" FROM "MaterialTicket" WHERE "id" = ${t.id} FOR UPDATE`;
+        const current = await tx.materialTicket.findUnique({ where: { id: t.id }, select: { status: true } });
+        if (current?.status !== "NHAN_VAT_TU") throw fail("Phiếu đã được người khác xác nhận lãnh trước đó", 409);
         for (const [code, quantity] of requestedByCode) {
-          await tx.erpMaterial.update({ where: { code }, data: { erpStock: { decrement: quantity } } });
+          const changed = await tx.erpMaterial.updateMany({ where: { code, erpStock: { gte: quantity } }, data: { erpStock: { decrement: quantity } } });
+          if (changed.count !== 1) throw fail(`Mã ERP "${code}" không còn đủ số lượng để lãnh`, 409);
         }
         for (const item of t.items) {
           const quantity = quantityByItemId.get(item.id)!;
@@ -834,6 +847,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
       });
       await audit(user.id, "MT_OTHER_RECEIVE", "MaterialTicket", t.id, `${materialTicketReference(t)}: lãnh ${t.items.length} vật tư, phiếu giao hàng ${deliveryNoteNumber}; đã cộng Hiện có`);
       await notifyMaterialTicketStep({ ticketId: t.id, action, actorName: user.name });
+      invalidateEquipmentDashboardCache();
       return ok(updated);
     }
 
@@ -983,6 +997,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
         });
       });
       await audit(user.id, "MT_EDIT_INFO", "MaterialTicket", t.id, `${materialTicketReference(t)}: sửa thông tin phiếu`);
+      invalidateEquipmentDashboardCache();
       return ok(up);
     }
 
@@ -994,6 +1009,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
       const error = usageUndoError(t);
       if (error) return fail(error, 409);
       const up = await prisma.$transaction(async (tx) => {
+        await lockMaterialStock(tx);
         await claimUsageSnapshot(tx, t, true);
         // Đọc lại sau khi giữ khóa hàng: không bỏ qua biên bản vừa được cấp số.
         const current = await tx.materialTicket.findUniqueOrThrow({ where: { id: t.id }, include: ITEM_INCLUDE });
@@ -1037,6 +1053,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
         } });
         return updated;
       });
+      invalidateEquipmentDashboardCache();
       return ok(up);
     }
 
@@ -1090,6 +1107,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
         after = `VHV lãnh ${value} ${item.material.unit}; người lãnh: ${vhvReceivedByName}`;
 
         up = await prisma.$transaction(async (tx) => {
+          await lockMaterialStock(tx);
           // Khi Thống kê chưa chốt số cuối, vhvReceivedQuantity chính là số đã đưa vào lô
           // và tồn Hiện có. Sau khi đã có receivedQuantity, tổng lô đã được bù về số chốt;
           // sửa lại dấu vết VHV lúc đó tuyệt đối không được cộng/trừ kho lần thứ hai.
@@ -1269,6 +1287,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
           ? await uploadDeliveryPhoto(t.id, replacementPhotoDataUrl)
           : null;
         up = await prisma.$transaction(async (tx) => {
+          await lockMaterialStock(tx);
           if (t.type === "DE_XUAT") await claimUsageSnapshot(tx, t, true);
           // Lô xác nhận theo chứng từ khi ERP thiếu không trừ ERP ở lần sửa sau.
           // Phiếu thường/phiếu cũ tiếp tục điều chỉnh ERP theo chênh lệch như trước.
@@ -1356,6 +1375,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
         before = `Dùng ${t.usedQuantity}; ngày bổ sung gần nhất ${t.lastSupplementDate?.toISOString().slice(0, 10) ?? "—"}; thu hồi ${t.recoveryRequired ? `${t.recoveryQuantity ?? 0}${t.recoveryReturnedAt ? " (đã trả)" : " (chưa trả)"}` : "không"}`;
         after = `Dùng ${value}; ngày bổ sung gần nhất ${(lastSupplementDate === undefined ? t.lastSupplementDate : lastSupplementDate)?.toISOString().slice(0, 10) ?? "—"}; thu hồi ${recoveryRequired ? `${recoveryQuantity}${recoveryReturned ? " (đã trả)" : " (chưa trả)"}` : "không"}`;
         up = await prisma.$transaction(async (tx) => {
+          await lockMaterialStock(tx);
           await claimUsageSnapshot(tx, t, true);
           if (delta) {
             // Chia lại từ đầu theo số dùng mới: trả hết phần cũ về lô rồi cấp lại, không cộng dồn.
@@ -1600,6 +1620,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
         );
       }
       await audit(user.id, "MT_EDIT_STEP", "MaterialTicket", t.id, `${materialTicketReference(t)}: chỉnh sửa bước ${step} — ${before} → ${after}`, { actorName: user.name, beforeData: { summary: before }, afterData: { summary: after }, changedFields: [step] });
+      invalidateEquipmentDashboardCache();
       return ok(up);
     }
 
@@ -1714,6 +1735,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
           },
           include: ITEM_INCLUDE,
         });
+        invalidateEquipmentDashboardCache();
         return ok(up);
       }
 
@@ -1729,7 +1751,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
       });
       if (claimed.count === 0) {
         const current = await prisma.materialTicket.findUnique({ where: { id: t.id }, include: ITEM_INCLUDE });
-        if (current?.defectId === defect.id) return ok(current);
+        if (current?.defectId === defect.id) { invalidateEquipmentDashboardCache(); return ok(current); }
         return fail("Phiếu vừa được gắn với một SYC khác; dữ liệu mới không được ghi đè", 409);
       }
       const up = await prisma.materialTicket.findUnique({ where: { id: t.id }, include: ITEM_INCLUDE });
@@ -1737,6 +1759,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
       await audit(user.id, "MT_LINK_DEFECT", "MaterialTicket", t.id,
         `${materialTicketReference(t)}: gắn số yêu cầu sửa chữa ${defect.requestNumber}`);
       await notifyMaterialTicketStep({ ticketId: t.id, action, actorName: user.name });
+      invalidateEquipmentDashboardCache();
       return ok(up);
     }
 
@@ -1856,6 +1879,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
       const up = await prisma.materialTicket.findUnique({ where: { id: t.id }, include: ITEM_INCLUDE });
       if (!up) return fail("Không tìm thấy phiếu sau khi gắn SYC", 404);
       await notifyMaterialTicketStep({ ticketId: t.id, action, actorName: user.name });
+      invalidateEquipmentDashboardCache();
       return ok(up);
     }
 
@@ -1883,6 +1907,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
       await audit(user.id, "MT_SKIP_DEFECT", "MaterialTicket", t.id,
         `${materialTicketReference(t)}: VHV xác nhận tự thực hiện, không phát sinh SYC sửa chữa`);
       await notifyMaterialTicketStep({ ticketId: t.id, action, actorName: user.name });
+      invalidateEquipmentDashboardCache();
       return ok(up);
     }
 
@@ -1983,6 +2008,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
       });
       await audit(user.id, "MT_PROPOSE", "MaterialTicket", t.id, `${materialTicketReference(t)}: gửi đề xuất`);
       await notifyMaterialTicketStep({ ticketId: t.id, action, actorName: user.name });
+      invalidateEquipmentDashboardCache();
       return ok(up);
     }
 
@@ -2009,6 +2035,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
         await audit(user.id, "MT_CONFIRM", "MaterialTicket", t.id,
           `${materialTicketReference(t)}: Xác nhận bồn/thiết bị đủ điều kiện nhận hóa chất`);
         await notifyMaterialTicketStep({ ticketId: t.id, action, actorName: user.name });
+        invalidateEquipmentDashboardCache();
         return ok(up);
       }
       if (!["DE_XUAT", "CHUA_CHON"].includes(t.type) || t.status !== "CHO_XAC_NHAN") return fail("Phiếu không ở bước Trưởng ca/Trưởng kíp xử lý");
@@ -2078,6 +2105,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
       });
       await audit(user.id, "MT_CONFIRM", "MaterialTicket", t.id, `${materialTicketReference(t)}: chọn luồng ${workflowType}`);
       await notifyMaterialTicketStep({ ticketId: t.id, action, actorName: user.name });
+      invalidateEquipmentDashboardCache();
       return ok(up);
     }
 
@@ -2107,6 +2135,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
       });
       await audit(user.id, "MT_RECEIVE_EXISTING", "MaterialTicket", t.id, `${materialTicketReference(t)}: nhận ${quantity} từ Hiện có, chưa trừ tồn`);
       await notifyMaterialTicketStep({ ticketId: t.id, action, actorName: user.name });
+      invalidateEquipmentDashboardCache();
       return ok(up);
     }
 
@@ -2132,6 +2161,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
       if (!item) return fail("Phiếu chưa có vật tư");
       const sharedCodes = item.material.erpCodes.length ? item.material.erpCodes : [item.material.code];
       const up = await prisma.$transaction(async (tx) => {
+        await lockMaterialStock(tx);
         const claimed = await tx.materialTicket.updateMany({
           where: { id: t.id, status: "VHV_LANH_VAT_TU", vhvReceivedAt: null },
           data: {
@@ -2159,6 +2189,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
       if (!up) return fail("Bước VHV lãnh vật tư đã được xác nhận trước đó");
       await audit(user.id, "MT_VHV_RECEIVE", "MaterialTicket", t.id, `${materialTicketReference(t)}: VHV lãnh ${quantity}${vhvReceivedByName ? ` — ${vhvReceivedByName}` : ""}; Hiện có ${item.material.quantity} → ${item.material.quantity + quantity}; ERP không đổi`);
       await notifyMaterialTicketStep({ ticketId: t.id, action, actorName: user.name });
+      invalidateEquipmentDashboardCache();
       return ok(up);
     }
 
@@ -2176,6 +2207,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
       });
       await audit(user.id, "MT_REJECT", "MaterialTicket", t.id, `${materialTicketReference(t)}: từ chối — ${reason}`);
       await notifyMaterialTicketStep({ ticketId: t.id, action, actorName: user.name });
+      invalidateEquipmentDashboardCache();
       return ok(up);
     }
 
@@ -2222,6 +2254,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
       };
       const proposalDoc = await buildProposalDocument(t, user, itemOverride);
       const up = await prisma.$transaction(async (tx) => {
+        await lockMaterialStock(tx);
         if (t.type === "UNG") {
           // VHV đã cộng số thực lãnh vào Hiện có ở bước trước. Pha đầu của Thống kê
           // chỉ bù chênh lệch và chốt nguồn lãnh; số giao hàng + ảnh được bổ sung ở pha 2.
@@ -2267,6 +2300,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
         `${materialTicketReference(t)}: xác nhận mã ${erpCode}${t.type === "UNG" ? `, khối lượng lãnh ${receivedQuantity}, ${receiptSourceLabel(receiptSource)}` : ""}; xuất Phiếu ĐXVT (QLVT.12)`,
       );
       await notifyMaterialTicketStep({ ticketId: t.id, action, actorName: user.name });
+      invalidateEquipmentDashboardCache();
       return ok(up);
     }
 
@@ -2322,6 +2356,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
       await audit(user.id, "MT_STATS_EXPORT_BBNT_DO", "MaterialTicket", t.id,
         `${materialTicketReference(t)}: xuất BBNT D-Office; chuyển ${nextStatus === RECOVERY_HANDOVER_STATUS ? "Trả phiếu vật tư thu hồi" : "Quyết toán"}`);
       await notifyMaterialTicketStep({ ticketId: t.id, action, actorName: user.name });
+      invalidateEquipmentDashboardCache();
       return ok(up);
     }
 
@@ -2355,6 +2390,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
         await audit(user.id, "MT_STATS", "MaterialTicket", t.id,
           `${materialTicketReference(t)}: Xác nhận đề xuất hóa chất — giao ${deliveryQuantity} ngày ${deliveryScheduledAt.toLocaleDateString("vi-VN")}`);
         await notifyMaterialTicketStep({ ticketId: t.id, action, actorName: user.name });
+        invalidateEquipmentDashboardCache();
         return ok(updated);
       }
       if (!["DE_XUAT", "UNG"].includes(t.type) || !["CHO_THONG_KE", "CHO_PHIEU__XUAT_KHO", "CHO_XAC_NHAN_PHAT"].includes(t.status)) return fail("Phiếu không ở bước Thống Kê xác nhận ĐXVT");
@@ -2421,6 +2457,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
         });
         await audit(user.id, "MT_STATS", "MaterialTicket", t.id, `${materialTicketReference(t)}: Xác nhận số phiếu ĐXVT: ${num}${proposalDate ? ` ngày ${proposalDate.toLocaleDateString("vi-VN")}` : ""}${erpCode ? `; mã vật tư ${erpCode}` : ""}`);
         await notifyMaterialTicketStep({ ticketId: t.id, action, actorName: user.name });
+        invalidateEquipmentDashboardCache();
         return ok(up);
       }
 
@@ -2439,6 +2476,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
       });
       await audit(user.id, "MT_STATS", "MaterialTicket", t.id, `${materialTicketReference(t)}: Xác nhận ĐXVT: ${num}${t.type === "UNG" ? "; đã xác nhận trả phiếu" : proposalReceiverName ? `; VHV nhận phiếu ${proposalReceiverName}` : ""}`);
       await notifyMaterialTicketStep({ ticketId: t.id, action, actorName: user.name });
+      invalidateEquipmentDashboardCache();
       return ok(up);
     }
 
@@ -2503,6 +2541,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
         await audit(user.id, "MT_CHEMICAL_TRUCKS", "MaterialTicket", t.id,
           `${materialTicketReference(t)}: gỡ toàn bộ chuyến xe khỏi sổ hóa chất (${removed} dòng bị xóa)`);
         await notifyMaterialTicketStep({ ticketId: t.id, action, actorName: user.name });
+        invalidateEquipmentDashboardCache();
         return ok(await getTicket(t.id));
       }
 
@@ -2555,6 +2594,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
         (completesNow ? "; hoàn tất phiếu" : ""));
 
       await notifyMaterialTicketStep({ ticketId: t.id, action, actorName: user.name });
+      invalidateEquipmentDashboardCache();
       return ok({ ...(await getTicket(t.id)), chemicalLink: linkResult });
     }
 
@@ -2616,6 +2656,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
             `${linkResult.created} chuyến ghi mới, ${linkResult.linked} chuyến gắn vào bản ghi có sẵn; hoàn tất phiếu`);
 
           await notifyMaterialTicketStep({ ticketId: t.id, action, actorName: user.name });
+          invalidateEquipmentDashboardCache();
           return ok({ ...updated, chemicalLink: linkResult });
         }
 
@@ -2664,6 +2705,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
           await audit(user.id, "MT_ADVANCE_RETRY_RECOVERY_DOC", "MaterialTicket", t.id,
             `${materialTicketReference(t)}: xuất lại BBTHVT từ số giao hàng và ảnh liên 3 đã lưu`);
           await notifyMaterialTicketStep({ ticketId: t.id, action, actorName: user.name });
+          invalidateEquipmentDashboardCache();
           return ok(recovered);
         }
         const item = t.items[0];
@@ -2703,6 +2745,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
 
         const uploadedPhoto = deliveryPhotoDataUrl ? await uploadDeliveryPhoto(t.id, deliveryPhotoDataUrl) : null;
         let up = await prisma.$transaction(async (tx) => {
+          await lockMaterialStock(tx);
           const materialIncrement = needsLegacyStockReconcile
             ? receivedQuantity - (t.vhvReceivedQuantity ?? 0)
             : 0;
@@ -2770,6 +2813,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
         await audit(user.id, "MT_ADVANCE_CONFIRM_DOCUMENTS", "MaterialTicket", t.id,
           `${materialTicketReference(t)}: xác nhận số ĐXVT ${proposalNumber}, số giao hàng ${deliveryNoteNumber}, ảnh liên 3${up.recoveryDocUrl ? "; xuất BBTHVT" : ""}`);
         await notifyMaterialTicketStep({ ticketId: t.id, action, actorName: user.name });
+        invalidateEquipmentDashboardCache();
         return ok(up);
       }
 
@@ -2801,6 +2845,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
       if (!erpMaterial) return fail("Không tìm thấy tên vật tư theo mã ERP đã chọn", 404);
       const uploadedPhoto = deliveryPhotoDataUrl ? await uploadDeliveryPhoto(t.id, deliveryPhotoDataUrl) : null;
       const result = await prisma.$transaction(async (tx) => {
+        await lockMaterialStock(tx);
         const stockResult = await recordProposalReceipt(tx, {
           ticket: t,
           receipt,
@@ -2835,6 +2880,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
         `${materialTicketReference(t)}: lãnh kho DH1 ${receivedQuantity} (${receivedMethod}), ngày phiếu ${receipt.deliveryNoteDate.toISOString().slice(0, 10)} — Hiện có ${item.material.code}: ${result.materialAfter - receivedQuantity} → ${result.materialAfter}; ERP ${erpCode}: ${result.erpBefore} → ${result.erpAfter}${result.deductErp ? "; đã trừ ERP" : "; tồn ERP không đủ, xác nhận theo chứng từ và không trừ ERP"}; đính kèm ảnh phiếu xuất kho liên 3; chờ ra SYC sửa chữa`
       );
       await notifyMaterialTicketStep({ ticketId: t.id, action, actorName: user.name });
+      invalidateEquipmentDashboardCache();
       return ok(responseTicket);
     }
 
@@ -2876,6 +2922,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
           : `${materialTicketReference(t)}: TC/TK xác nhận ảnh hiện trường chưa đạt; trả VHV tải lại ảnh`,
       );
       await notifyMaterialTicketStep({ ticketId: t.id, action, actorName: user.name });
+      invalidateEquipmentDashboardCache();
       return ok(up);
     }
 
@@ -2912,6 +2959,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
       await audit(user.id, "MT_USAGE_PHOTOS_RESUBMIT", "MaterialTicket", t.id,
         `${materialTicketReference(t)}: VHV đã tải lại ảnh hiện trường; gửi TC/TK kiểm tra lại`);
       await notifyMaterialTicketStep({ ticketId: t.id, action, actorName: user.name });
+      invalidateEquipmentDashboardCache();
       return ok(up);
     }
 
@@ -2966,6 +3014,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
             .filter((row) => row.lotId && row.quantity > 0)
         : undefined;
       const up = await prisma.$transaction(async (tx) => {
+        await lockMaterialStock(tx);
         await claimUsageSnapshot(tx, t, true);
         try {
           await consumeStock(tx, {
@@ -3010,6 +3059,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
         `${materialTicketReference(t)}: VHV sử dụng ${materialUserName}; lãnh ${received}, dùng ${usedQuantity}, còn lại ${remaining} — tồn kho ${mat.code}: ${mat.quantity} → ${newQty}`
       );
       await notifyMaterialTicketStep({ ticketId: t.id, action, actorName: user.name });
+      invalidateEquipmentDashboardCache();
       return ok(up);
     }
 
@@ -3053,6 +3103,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
         return fail(`Số chai trả vượt số lượng hiện có. ${mat.name} hiện còn ${mat.quantity + heldByTicket} ${unitLabel}.`);
       }
       const up = await prisma.$transaction(async (tx) => {
+        await lockMaterialStock(tx);
         // Chai khí không còn bước Sử dụng vật tư, nên chính bước TRẢ là lúc trừ kho: trả vỏ
         // nghĩa là số chai đó đã dùng hết. Không trừ ở đây thì lượng lãnh về nằm lại trong
         // Hiện có vĩnh viễn — đúng loại tồn ảo đã phải đi dọn hôm 17/08.
@@ -3090,6 +3141,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
       await audit(user.id, "MT_RETURN", "MaterialTicket", t.id,
         `${materialTicketReference(t)}: Xác nhận trả ${returnedQuantity} ${unitLabel} ngày ${returnedAt.toLocaleDateString("vi-VN")} — ${returnedByName}; Hiện có ${mat.code}: ${mat.quantity} → ${mat.quantity - returnedQuantity}; hoàn tất phiếu`);
       await notifyMaterialTicketStep({ ticketId: t.id, action, actorName: user.name });
+      invalidateEquipmentDashboardCache();
       return ok(up);
     }
 
@@ -3148,6 +3200,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
       if (acceptAllocation?.length) {
         try {
           await prisma.$transaction(async (tx) => {
+            await lockMaterialStock(tx);
             await claimUsageSnapshot(tx, t);
             await consumeStock(tx, {
               materialCode: item.material.code,
@@ -3194,6 +3247,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
           : null,
       };
       const up = await prisma.$transaction(async (tx) => {
+        await lockMaterialStock(tx);
         await claimUsageSnapshot(tx, t);
         await tx.materialTicketItem.update({
           where: { id: item.id },
@@ -3220,6 +3274,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
       });
       await audit(user.id, "MT_ACCEPT", "MaterialTicket", t.id, `${materialTicketReference(t)}: nghiệm thu với mã ERP ${erpCode}${documents.bbkt ? ", xuất BBNT ký tay" : ""}${documents.recovery ? ", xuất Biên bản vật tư thu hồi" : ""}, ${t.type === "UNG" ? "chuyển Thống kê xác nhận ĐXVT; BBTHVT chờ ảnh liên 3" : t.type === "DE_XUAT" ? "chuyển Thống kê xuất BBNT D-Office" : t.type === "SU_DUNG_HIEN_CO" ? "chuyển Thống kê xác nhận mã vật tư" : "chờ Thống kê quyết toán"}`);
       await notifyMaterialTicketStep({ ticketId: t.id, action, actorName: user.name });
+      invalidateEquipmentDashboardCache();
       return ok(up);
     }
 
@@ -3274,6 +3329,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
 
       // BBTHVT đã được xuất ở bước Nghiệm thu.
       const up = await prisma.$transaction(async (tx) => {
+        await lockMaterialStock(tx);
         await tx.materialTicketItem.update({ where: { id: item.id }, data: { erpCode, erpName: erpMaterial.name } });
         return tx.materialTicket.update({
           where: { id: t.id },
@@ -3300,6 +3356,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
           `chuyển ${statusAfterMaterialDocuments(t) === RECOVERY_HANDOVER_STATUS ? "Trả phiếu vật tư thu hồi" : "Quyết toán"}`,
       );
       await notifyMaterialTicketStep({ ticketId: t.id, action, actorName: user.name });
+      invalidateEquipmentDashboardCache();
       return ok(up);
     }
 
@@ -3363,6 +3420,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
           `${materialTicketReference(t)}: đã đem Biên bản vật tư thu hồi sang kho ngày ${now.toLocaleDateString("vi-VN")} — ${actor.name}; ` +
           `${t.settledAt ? "hoàn tất phiếu" : "chuyển Quyết toán"}, chờ kho ký trả lại biên bản`);
         await notifyMaterialTicketStep({ ticketId: t.id, action, actorName: user.name });
+        invalidateEquipmentDashboardCache();
         return ok(up);
       }
 
@@ -3386,6 +3444,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
       await audit(user.id, "MT_RECOVERY_DOC_SIGNED", "MaterialTicket", t.id,
         `${materialTicketReference(t)}: kho đã ký và trả lại Biên bản vật tư thu hồi ngày ${now.toLocaleDateString("vi-VN")} — ${actor.name}`);
       await notifyMaterialTicketStep({ ticketId: t.id, action, actorName: user.name });
+      invalidateEquipmentDashboardCache();
       return ok(up);
     }
 
@@ -3459,6 +3518,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
           (removedDeliveryPhotos ? `; xóa ${removedDeliveryPhotos} ảnh phiếu xuất kho liên 3 của lô đã dùng hết` : "")
       );
       await notifyMaterialTicketStep({ ticketId: t.id, action, actorName: user.name });
+      invalidateEquipmentDashboardCache();
       return ok(up);
     }
 

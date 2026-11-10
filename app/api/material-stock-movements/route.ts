@@ -1,3 +1,4 @@
+import { invalidateEquipmentDashboardCache } from "@/lib/equipment-dashboard-service";
 import type { NextRequest } from "next/server";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
@@ -134,6 +135,7 @@ export async function PATCH(req: NextRequest) {
     if (!material || !isOtherMaterialCategory(material.category)) return fail("Không tìm thấy vật tư trong nhóm Vật tư khác", 404);
     const updated = await prisma.material.update({ where: { id: material.id }, data: { location }, select: { id: true, location: true } });
     await audit(user.id, "OTHER_MATERIAL_LOCATION", "Material", material.id, `${material.code} · ${material.name}: ${material.location || "Chưa cập nhật"} → ${location}`);
+    invalidateEquipmentDashboardCache();
     return ok(updated);
   });
 }
@@ -188,7 +190,7 @@ export async function POST(req: NextRequest) {
     }
 
     const movement = await prisma.$transaction(async (tx) => consumeOtherMaterial(tx, {
-      material: { id: material.id, code: material.code, erpCodes: material.erpCodes, quantity: material.quantity },
+      material: { id: material.id, code: material.code, erpCodes: material.erpCodes, quantity: material.quantity, category: material.category, machine: material.machine },
       type,
       quantity,
       occurredAt,
@@ -201,6 +203,7 @@ export async function POST(req: NextRequest) {
     }));
     await audit(user.id, type === "ISSUE" ? "OTHER_MATERIAL_ISSUE" : "OTHER_MATERIAL_USE", "MaterialStockMovement", movement.id,
       `${material.code} · ${material.name}: ${type === "ISSUE" ? "cấp" : "sử dụng"} ${quantity} ${material.unit}; tồn ${movement.stockBefore} → ${movement.stockAfter}`);
+    invalidateEquipmentDashboardCache();
     return ok(movement);
   });
 }

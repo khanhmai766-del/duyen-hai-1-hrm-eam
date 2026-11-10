@@ -22,6 +22,11 @@ import type { Prisma, PrismaClient } from "@prisma/client";
 
 type Db = PrismaClient | Prisma.TransactionClient;
 
+/** Các mã ERP có thể dùng chung kho; mọi đường ghi kho giữ cùng khoá tới hết giao dịch. */
+export async function lockMaterialStock(tx: Prisma.TransactionClient) {
+  await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext('material-stock-write'))::text AS lock_result`;
+}
+
 export type StockLot = {
   id: string;
   stockUnit: string;
@@ -119,6 +124,7 @@ export async function syncMaterialQuantity(
   sharedCodes: string[],
   options: { stockUnit?: string; machine?: string } = {},
 ) {
+  await lockMaterialStock(tx);
   const stockUnit = options.stockUnit ?? "COMMON";
   const sum = await tx.materialStockLot.aggregate({
     where: { materialCode, stockUnit },
@@ -161,6 +167,7 @@ export async function receiveIntoLot(
     receivedAt?: Date | null;
   }
 ) {
+  await lockMaterialStock(tx);
   const { materialCode, ticketId, quantity } = params;
   const stockUnit = params.stockUnit ?? "COMMON";
   const deliveryNote = params.deliveryNote?.trim() || null;
@@ -207,6 +214,7 @@ export async function receiveIntoLot(
 
 /** Trả lại toàn bộ phần một phiếu đã trừ (dùng khi sửa số dùng hoặc phân bổ lại). */
 export async function releaseUsage(tx: Prisma.TransactionClient, ticketId: string) {
+  await lockMaterialStock(tx);
   const usages = await tx.materialLotUsage.findMany({ where: { ticketId }, select: { lotId: true, quantity: true } });
   for (const usage of usages) {
     await tx.materialStockLot.update({
@@ -244,6 +252,14 @@ export async function consumeStock(
   params: { materialCode: string; stockUnit?: string; ticketId: string; quantity: number; allocation?: LotAllocation[] }
 ): Promise<LotAllocation[]> {
   const { materialCode, ticketId, quantity } = params;
+  if (!Number.isSafeInteger(quantity) || quantity < 0) throw new Error("Số lượng sử dụng phải là số nguyên không âm hợp lệ");
+  const lotIds = new Set<string>();
+  for (const item of params.allocation ?? []) {
+    if (lotIds.has(item.lotId)) throw new Error("Một lô vật tư không được phân bổ nhiều lần");
+    if (!Number.isSafeInteger(item.quantity) || item.quantity <= 0) throw new Error("Số lượng phân bổ phải là số nguyên dương hợp lệ");
+    lotIds.add(item.lotId);
+  }
+  await lockMaterialStock(tx);
   await releaseUsage(tx, ticketId);
   if (quantity <= 0) return [];
 
@@ -282,10 +298,11 @@ export async function consumeStock(
   }
 
   for (const item of plan) {
-    await tx.materialStockLot.update({
-      where: { id: item.lotId },
+    const changed = await tx.materialStockLot.updateMany({
+      where: { id: item.lotId, quantityLeft: { gte: item.quantity } },
       data: { quantityLeft: { decrement: item.quantity } },
     });
+    if (changed.count !== 1) throw new Error("Tồn lô đã thay đổi hoặc không đủ; vui lòng tải lại trước khi sử dụng");
     await tx.materialLotUsage.create({ data: { lotId: item.lotId, ticketId, quantity: item.quantity } });
   }
   return plan;
@@ -327,6 +344,7 @@ export async function reverseTicketStock(
   tx: Prisma.TransactionClient,
   params: { materialCode: string; stockUnit?: string; ticketId: string }
 ) {
+  await lockMaterialStock(tx);
   const { materialCode, ticketId } = params;
   const stockUnit = params.stockUnit ?? "COMMON";
   await releaseUsage(tx, ticketId);
@@ -388,6 +406,7 @@ export async function adjustStockToQuantity(
   target: number,
   stockUnit = "COMMON",
 ): Promise<number> {
+  await lockMaterialStock(tx);
   const muc = Math.max(0, Math.trunc(target));
   const lots = await tx.materialStockLot.findMany({
     where: { materialCode, stockUnit },

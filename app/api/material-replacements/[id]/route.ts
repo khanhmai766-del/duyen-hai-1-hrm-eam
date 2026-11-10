@@ -1,3 +1,4 @@
+import { invalidateEquipmentDashboardCache } from "@/lib/equipment-dashboard-service";
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { audit, auditDetailWithPosition, fail, handle, ok, requireUser } from "@/lib/api";
@@ -197,6 +198,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
       }
     }
     await audit(user.id, "UPDATE_REPLACEMENT", "MaterialReplacement", point.id, auditDetailWithPosition(user));
+    invalidateEquipmentDashboardCache();
     return ok(mapPoint(point));
   });
 }
@@ -214,6 +216,7 @@ export async function DELETE(_req: NextRequest, props: { params: Promise<{ id: s
     }
     await prisma.materialReplacement.delete({ where: { id: params.id } });
     await audit(user.id, "DELETE_REPLACEMENT", "MaterialReplacement", params.id, auditDetailWithPosition(user));
+    invalidateEquipmentDashboardCache();
     return ok({ id: params.id });
   });
 }

@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowDownToLine, ArrowUpFromLine, Boxes, CalendarDays, History, Loader2, MapPin, PackageCheck, Pencil, Search, UserRound } from "lucide-react";
 import { toast } from "sonner";
 import { apiGet, apiMutate } from "@/lib/fetcher";
+import { invalidateMaterialQueries } from "@/lib/material-query-cache";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -87,9 +88,7 @@ export default function OtherMaterialStockBoard() {
     onSuccess: () => {
       toast.success(selected?.scope === "COMMON" ? "Đã cấp vật tư và trừ Hiện có" : "Đã ghi nhận sử dụng và trừ Hiện có");
       setSelected(null); setQuantity(1); setReceiverId(""); setPosition(""); setDeviceSeq(""); setNote("");
-      qc.invalidateQueries({ queryKey: ["other-material-stock"] });
-      qc.invalidateQueries({ queryKey: ["materials"] });
-      qc.invalidateQueries({ queryKey: ["material-ticket-options"] });
+      return invalidateMaterialQueries(qc);
     },
     onError: (reason) => toast.error(reason instanceof Error ? reason.message : "Không thể ghi nhận tồn kho"),
   });
@@ -98,8 +97,7 @@ export default function OtherMaterialStockBoard() {
     onSuccess: () => {
       toast.success("Đã cập nhật vị trí lưu vật tư");
       setLocationMaterial(null); setLocationInput("");
-      qc.invalidateQueries({ queryKey: ["other-material-stock"] });
-      qc.invalidateQueries({ queryKey: ["materials"] });
+      return invalidateMaterialQueries(qc);
     },
     onError: (reason) => toast.error(reason instanceof Error ? reason.message : "Không thể cập nhật vị trí"),
   });

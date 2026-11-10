@@ -1,3 +1,4 @@
+import { invalidateEquipmentDashboardCache } from "@/lib/equipment-dashboard-service";
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { addMonths, DEFECT_UNITS } from "@/lib/constants";
@@ -265,6 +266,7 @@ export async function POST(req: NextRequest) {
     });
 
     if (errors.length || body.dryRun === true) {
+      invalidateEquipmentDashboardCache();
       return ok({
         validCount: normalized.length,
         // Số dòng sẽ được lên lịch theo dõi (có "Lần thay gần nhất") — cho người dùng xem trước.
@@ -363,6 +365,7 @@ export async function POST(req: NextRequest) {
         `${result.created} điểm mới, ${result.updated} cập nhật, ${result.scheduled} lên lịch theo dõi`
       )
     );
+    invalidateEquipmentDashboardCache();
     return ok({
       validCount: normalized.length,
       willSchedule: normalized.filter((r) => r.lastReplacedAt).length,

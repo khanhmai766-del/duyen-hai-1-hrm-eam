@@ -82,7 +82,7 @@ export function ReplacementPointsEditor({
               </Select>
             </div>
           </div>
-          <div className="grid grid-cols-[1fr_1fr_1fr_1fr_36px] items-end gap-2">
+          <div className="grid grid-cols-2 items-end gap-2 sm:grid-cols-[1fr_1fr_1fr_1fr_36px] [&>div]:min-w-0">
             <div>
               <label className="mb-1 block text-[11px] font-medium text-muted-foreground">Chu kỳ (tháng)</label>
               <Input
@@ -119,7 +119,7 @@ export function ReplacementPointsEditor({
                 onChange={(e) => update(i, { deviceCount: Math.max(1, Number(e.target.value) || 1) })}
               />
             </div>
-            <Button type="button" variant="ghost" size="icon" className="mb-0.5 text-muted-foreground hover:text-destructive" title="Xoá điểm" onClick={() => remove(i)}>
+            <Button type="button" variant="ghost" size="icon" className="col-span-2 mb-0.5 justify-self-end text-muted-foreground hover:text-destructive sm:col-span-1" title="Xoá điểm" onClick={() => remove(i)}>
               <Trash2 className="h-4 w-4" />
             </Button>
           </div>

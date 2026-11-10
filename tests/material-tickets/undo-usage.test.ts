@@ -33,6 +33,7 @@ function harness(options: { role?: string; ticket?: object; allocated?: number; 
     } },
   };
   const modules: Record<string, unknown> = {
+    "@/lib/equipment-dashboard-service": { invalidateEquipmentDashboardCache: () => {} },
     "@/lib/prisma": { prisma: { $transaction: async (fn: (arg: typeof tx) => Promise<unknown>) => {
       const saved = structuredClone({ ticket, lots, restored, synced });
       try { return await fn(tx); } catch (e) {
@@ -48,6 +49,7 @@ function harness(options: { role?: string; ticket?: object; allocated?: number; 
     "@/lib/material-ticket-undo-usage": { usageUndoError },
     "@/lib/material-ticket-sequence": { materialTicketReference: () => "VT-10 tháng 8/2026" },
     "@/lib/material-stock-lot": {
+      lockMaterialStock: async () => {},
       releaseUsage: async () => { restored += lots.reduce((s, r) => s + r.quantity, 0); lots = []; },
       syncMaterialQuantity: async () => { synced++; }, sharedCodesOf: () => ["OIL"],
     },

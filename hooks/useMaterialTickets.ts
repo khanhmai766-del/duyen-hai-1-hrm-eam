@@ -1,5 +1,7 @@
 "use client";
 
+import { invalidateMaterialQueries } from "@/lib/material-query-cache";
+
 import { useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiMutate } from "@/lib/fetcher";
@@ -287,12 +289,8 @@ export function useCreateTicket() {
     }) =>
       apiMutate<MaterialTicket>("/api/material-tickets", "POST", body),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["material-tickets"] });
       qc.invalidateQueries({ queryKey: ["material-photo-review-tasks"] });
-      qc.invalidateQueries({ queryKey: ["material-ticket-options"] });
-      qc.invalidateQueries({ queryKey: ["materials"] });
-      qc.invalidateQueries({ queryKey: ["oil-stock"] });
-      qc.invalidateQueries({ queryKey: ["other-material-stock"] });
+      return invalidateMaterialQueries(qc);
     },
   });
 }
@@ -303,17 +301,13 @@ export function useTicketAction(id: string | null) {
     mutationFn: (body: Record<string, unknown>) =>
       apiMutate<MaterialTicket>(`/api/material-tickets/${id}`, "PUT", body),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["material-tickets"] });
       if (id) {
         qc.invalidateQueries({ queryKey: ["ticket-replacement-request", id] });
         qc.invalidateQueries({ queryKey: ["ticket-usage-photos", id] });
         qc.invalidateQueries({ queryKey: ["ticket-lots", id] });
       }
       qc.invalidateQueries({ queryKey: ["material-photo-review-tasks"] });
-      qc.invalidateQueries({ queryKey: ["material-ticket-options"] });
-      qc.invalidateQueries({ queryKey: ["materials"] });
-      qc.invalidateQueries({ queryKey: ["oil-stock"] });
-      qc.invalidateQueries({ queryKey: ["other-material-stock"] });
+      return invalidateMaterialQueries(qc);
     },
   });
 }
@@ -323,10 +317,7 @@ export function useDeleteTicket() {
   return useMutation({
     mutationFn: (id: string) => apiMutate(`/api/material-tickets/${id}`, "DELETE"),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["material-tickets"] });
-      qc.invalidateQueries({ queryKey: ["material-ticket-options"] });
-      qc.invalidateQueries({ queryKey: ["materials"] });
-      qc.invalidateQueries({ queryKey: ["other-material-stock"] });
+      return invalidateMaterialQueries(qc);
     },
   });
 }

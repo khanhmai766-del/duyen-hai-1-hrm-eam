@@ -1,3 +1,4 @@
+import { invalidateEquipmentDashboardCache } from "@/lib/equipment-dashboard-service";
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { audit, auditDetailWithPosition, fail, handle, ok, requireUser } from "@/lib/api";
@@ -233,6 +234,7 @@ export async function POST(req: NextRequest) {
         `${deviceSeq} · ${materials[0].code} · ${machines.join(" + ")}${lastReplacedAt ? " · đồng bộ lịch thay thế" : ""}`
       )
     );
+    invalidateEquipmentDashboardCache();
     return ok(points);
   });
 }
@@ -417,6 +419,7 @@ export async function PUT(req: NextRequest) {
       points.map((point) => point.id).join(","),
       auditDetailWithPosition(user, `${deviceSeq} · ${materials[0].code} · S1 + S2`)
     );
+    invalidateEquipmentDashboardCache();
     return ok(points);
   });
 }

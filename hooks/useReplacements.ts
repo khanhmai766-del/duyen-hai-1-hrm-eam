@@ -1,5 +1,7 @@
 "use client";
 
+import { invalidateMaterialQueries } from "@/lib/material-query-cache";
+
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiMutate } from "@/lib/fetcher";
 import type { MaterialReplacement, MaterialReplacementLog } from "@prisma/client";
@@ -280,11 +282,7 @@ export function useReplacement(id: string | undefined) {
 
 export type ReplacementInput = Record<string, unknown>;
 
-function invalidate(qc: ReturnType<typeof useQueryClient>) {
-  qc.invalidateQueries({ queryKey: ["replacements"] });
-  qc.invalidateQueries({ queryKey: ["replacement-history"] });
-  qc.invalidateQueries({ queryKey: ["materials"] });
-}
+function invalidate(qc: ReturnType<typeof useQueryClient>) { return invalidateMaterialQueries(qc); }
 
 /** Tạo một điểm theo dõi thời gian thay thế (bản ghi riêng, isActive=true). */
 export function useCreateReplacement() {

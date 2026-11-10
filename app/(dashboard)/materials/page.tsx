@@ -553,8 +553,9 @@ function MaterialsPageContent() {
 
   function replacementRowsForEdit(m: MaterialWithDevices): MaterialReplacementInput[] {
     return (m.replacements ?? [])
-      .filter((r) => !r.isActive)
+      .filter((r) => !r.isActive && !(r._count?.logs))
       .map((r) => ({
+        id: r.id,
         deviceSeq: r.deviceSeq,
         system: r.system,
         location: r.location,
@@ -587,7 +588,9 @@ function MaterialsPageContent() {
   async function saveDetails() {
     if (!editingDetails) return;
     try {
-      await upsert.mutateAsync({ id: editingDetails.id, replacements: detailRows });
+      const keptIds = new Set(detailRows.map(row => row.id));
+      const deletedReplacementIds = replacementRowsForEdit(editingDetails).flatMap(row => row.id && !keptIds.has(row.id) ? [row.id] : []);
+      await upsert.mutateAsync({ id: editingDetails.id, replacements: detailRows, deletedReplacementIds });
       toast.success("Đã cập nhật chi tiết điểm thay thế");
       setEditingDetails(null);
       setDetailRows([]);
@@ -599,23 +602,7 @@ function MaterialsPageContent() {
   async function confirmDeleteDetails() {
     if (!deletingDetails || selectedDetailIds.size === 0) return;
     try {
-      const remainingRows = (deletingDetails.replacements ?? [])
-        .filter((row) => !row.isActive && !selectedDetailIds.has(row.id))
-        .map((row) => ({
-          deviceSeq: row.deviceSeq,
-          system: row.system,
-          location: row.location,
-          deviceCount: row.deviceCount ?? 1,
-          managingPosition: row.managingPosition,
-          quantity: row.quantity,
-          intervalMonths: row.intervalMonths,
-          intervalNote: row.intervalNote,
-          lastReplacedAt: typeof row.lastReplacedAt === "string" ? row.lastReplacedAt : null,
-          // PUT dựng lại toàn bộ dòng khai báo, nên phải chép lại mọi cờ — bỏ sót là mất cờ.
-          recoveryOnSupplement: row.recoveryOnSupplement === true,
-          separateTracking: row.separateTracking === true,
-        }));
-      await upsert.mutateAsync({ id: deletingDetails.id, replacements: remainingRows });
+      await upsert.mutateAsync({ id: deletingDetails.id, deletedReplacementIds: [...selectedDetailIds] });
       toast.success(`Đã xóa ${selectedDetailIds.size} dòng chi tiết điểm thay thế`);
       setDeletingDetails(null);
       setSelectedDetailIds(new Set());
@@ -649,22 +636,6 @@ function MaterialsPageContent() {
       return;
     }
     try {
-      const currentRows = (trackingMaterial.replacements ?? [])
-        .filter((row) => !row.isActive)
-        .map((row) => ({
-          deviceSeq: row.deviceSeq,
-          system: row.system,
-          location: row.location,
-          deviceCount: row.deviceCount ?? 1,
-          managingPosition: row.managingPosition,
-          quantity: row.quantity,
-          intervalMonths: row.intervalMonths,
-          intervalNote: row.intervalNote,
-          lastReplacedAt: typeof row.lastReplacedAt === "string" ? row.lastReplacedAt : null,
-          // PUT dựng lại toàn bộ dòng khai báo, nên phải chép lại mọi cờ — bỏ sót là mất cờ.
-          recoveryOnSupplement: row.recoveryOnSupplement === true,
-          separateTracking: row.separateTracking === true,
-        }));
       const addedRows = rows.map((row) => ({
         deviceSeq: row.deviceSeq ?? null,
         system: row.system ?? null,
@@ -678,7 +649,7 @@ function MaterialsPageContent() {
       }));
       await upsert.mutateAsync({
         id: trackingMaterial.id,
-        replacements: [...currentRows, ...addedRows],
+        replacements: addedRows,
       });
       toast.success(`Đã thêm ${rows.length} thiết bị theo dõi`);
       setTrackingMaterial(null);
@@ -964,7 +935,7 @@ function MaterialsPageContent() {
                     </div>
 
                     <div className="mt-3 flex items-center justify-between border-t border-dashed border-slate-200 pt-3">
-                      <button type="button" onClick={() => toggleExpanded(m.id)} className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#00558F]">
+                      <button type="button" onClick={() => toggleExpanded(m.id)} className="inline-flex min-h-10 items-center gap-1.5 text-xs font-semibold text-[#00558F]">
                         <Activity className="h-3.5 w-3.5" />
                         {expanded ? "Ẩn thông tin" : "Xem thông tin & điểm thay thế"}
                       </button>
@@ -1465,7 +1436,7 @@ function MaterialsPageContent() {
             </p>
           </DialogHeader>
           {deletingDetails && (() => {
-            const rows = (deletingDetails.replacements ?? []).filter((row) => !row.isActive);
+            const rows = (deletingDetails.replacements ?? []).filter((row) => !row.isActive && !(row._count?.logs));
             const allSelected = rows.length > 0 && rows.every((row) => selectedDetailIds.has(row.id));
             return (
               <div className="overflow-hidden rounded-lg border border-border">
