@@ -12,6 +12,7 @@ import {
 } from "@/modules/ctktkt/lib/google-sheet-sync";
 import { previousIsoDate, type CtktktDayEntries } from "@/modules/ctktkt/lib/ctktkt-report";
 import { requirePermission } from "@/modules/ctktkt/lib/auth/server";
+import { rethrowKtktServerFault } from "@/modules/ctktkt/server/server-fault";
 
 const datePattern = /^20\d{2}-(0[1-9]|1[0-2])-([0-2]\d|3[01])$/;
 
@@ -25,7 +26,9 @@ function getServerConfig() {
 async function callAppsScript(config: { url: string; token: string }, init?: RequestInit, query?: string) {
   const target = new URL(config.url);
   if (query) target.searchParams.set("action", query);
-  const response = await fetch(target, { ...init, redirect: "follow", cache: "no-store" });
+  let response: Response;
+  try { response = await fetch(target, { ...init, redirect: "follow", cache: "no-store" }); }
+  catch { throw new Error("Không kết nối được Google Apps Script. Thử lại sau ít phút."); }
   const text = await response.text();
   let body: Record<string, unknown>;
   try { body = JSON.parse(text) as Record<string, unknown>; }
@@ -105,6 +108,7 @@ export async function POST(request: Request) {
     }
     return ok({ configured: true, preview: payload, results });
   } catch (error) {
+    rethrowKtktServerFault(error);
     const message = error instanceof SyntaxError
         ? "Dữ liệu JSON không hợp lệ."
         : error instanceof Error ? error.message : "Không đồng bộ được Google Sheet.";

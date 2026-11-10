@@ -6,6 +6,7 @@ import { operationalWriteKeysFor } from "@/modules/ctktkt/lib/operational-query-
 import { requirePermission } from "@/modules/ctktkt/lib/auth/server";
 import { BCSX_COAL_STOCK_24H_CODE } from "@/modules/ctktkt/lib/ctktkt-bcsx-link";
 import { isFutureOperatingDate } from "@/modules/ctktkt/lib/operating-date";
+import { rethrowKtktServerFault } from "@/modules/ctktkt/server/server-fault";
 
 const datePattern = /^(19|20|21)\d{2}-(0[1-9]|1[0-2])-([0-2]\d|3[01])$/;
 
@@ -28,6 +29,7 @@ export async function POST(request: Request) {
       [{ kind: "upsert", operatingDate, fieldCode: BCSX_COAL_STOCK_24H_CODE, value: String(value), keepNote: true }], updatedAt));
     return ok({ saved: true, value: String(value) });
   } catch (error) {
+    rethrowKtktServerFault(error);
     return fail(error instanceof Error ? error.message : "Không lưu được than tồn kho 24h.", 400);
   }
 }

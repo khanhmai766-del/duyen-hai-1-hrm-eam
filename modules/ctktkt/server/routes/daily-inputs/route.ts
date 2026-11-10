@@ -10,6 +10,7 @@ import { requireAnyPermission, requireSession } from "@/modules/ctktkt/lib/auth/
 import { canEditOperatingDate, vietnamDateIso } from "@/modules/ctktkt/lib/operating-date";
 import { isAdminUser } from "@/modules/ctktkt/lib/auth/session";
 import { reportQueryRange } from "@/modules/ctktkt/lib/report-read-range";
+import { rethrowKtktServerFault } from "@/modules/ctktkt/server/server-fault";
 
 const allowedCodes = new Set(["B","C","D","E","F","G","H","I","J","K","L","M","N","O","P","Q","R","S","T","U","V","W","X","Y","Z","AA","AE","AF","AG","AH","AJ","AK","AR","AT","CJ","CX","BN","BO","BP","BQ","BR","BS","BT","BU","BV","BW","BX","BY","CN","BZ","CA","CC","CD","CE","CF","CM","CQ","CR","CS","CT","CU","CV","CW","DA","DB","DC","DD","DE","DF","DG","DH","GRID_RECEIVE_S1","GRID_RECEIVE_S2","BCSX_COAL_STOCK_24H"]);
 const periodPattern = /^(19|20|21)\d{2}-(0[1-9]|1[0-2])$/;
@@ -51,5 +52,5 @@ export async function POST(request: Request) {
         clean.map(e => e.value === "" && e.note === "" ? { kind: "delete" as const, operatingDate: e.operatingDate, fieldCode: e.fieldCode } : { kind: "upsert" as const, ...e }), updatedAt));
     }
     return ok({saved:clean.length});
-  } catch(error) { return fail(error instanceof SyntaxError?"Dữ liệu JSON không hợp lệ.":error instanceof Error?error.message:"Dữ liệu không hợp lệ.",400); }
+  } catch(error) { rethrowKtktServerFault(error); return fail(error instanceof SyntaxError?"Dữ liệu JSON không hợp lệ.":error instanceof Error?error.message:"Dữ liệu không hợp lệ.",400); }
 }

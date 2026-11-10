@@ -10,6 +10,7 @@ import {WATER_ADJUSTMENT_FIELDS,normalizeWaterAdjustment,waterAdjustmentsFromRow
 import { loadWaterChain, recalculateWaterMonths, waterRowToLog } from "@/modules/ctktkt/lib/water-report/store";
 import { KtktAbort, ktktUtcNow, ktktWrite } from "@/modules/ctktkt/db/prisma";
 import { operationalWriteKeysFor } from "@/modules/ctktkt/lib/operational-query-policy";
+import { rethrowKtktServerFault } from "@/modules/ctktkt/server/server-fault";
 
 const monthPattern = /^(19|20|21)\d{2}-(0[1-9]|1[0-2])$/;
 const datePattern = /^(19|20|21)\d{2}-(0[1-9]|1[0-2])-([0-2]\d|3[01])$/;
@@ -173,6 +174,7 @@ export async function POST(request: Request) {
 
     return ok({ ok: true, saved: inputList.length });
   } catch (err) {
+    rethrowKtktServerFault(err);
     if (err instanceof KtktAbort) return err.response;
     console.error("Lỗi lưu ca trực theo dõi nước:", err);
     return fail(err instanceof Error ? err.message : "Không thể lưu dữ liệu ca trực.", 400);

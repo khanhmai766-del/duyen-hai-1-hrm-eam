@@ -205,6 +205,12 @@ Trước khi bắt đầu một trang: báo cho người còn lại để không
   `[[...path]]`, tệp CSS mới hoặc CSS dài thêm, khung `ctktkt-report.tsx` > 450 dòng. Chạy ở GitHub Actions
   (`.github/workflows/ctktkt-standards.yml`, hỏng thì báo Telegram) và bước 2a của `deploy-server.sh` (dừng trước build, đưa
   mã về bản đang chạy; hotfix khẩn: `--skip-ktkt-check`). Muốn nới: sửa danh sách trong script cùng commit, kèm lý do.
+- **Lỗi máy chủ không trả nguyên văn (10/11/2026)**: 13 handler gói cả kiểm dữ liệu lẫn ghi DB trong một `try` rồi
+  `fail(error.message, 400)` — lỗi Prisma/mất kết nối DB từng hiện cho người dùng thành câu tiếng Anh kèm tên bảng/địa chỉ
+  DB, mã 400. Nay dòng đầu mỗi `catch` gọi `rethrowKtktServerFault(error)` (`modules/ctktkt/server/server-fault.ts`): lỗi
+  Prisma, lỗi hệ thống Node (`E…`), `fetch failed` → ném tiếp, `handle()` ghi log và trả 500 "Lỗi máy chủ"; câu báo lỗi dữ
+  liệu giữ nguyên (hợp đồng đọc 34/34, ghi 147/147 không đổi). Handler mới có `catch` trả `error.message` phải làm như vậy.
+  Gọi Apps Script hỏng mạng (`google-sheet-sync`) báo "Không kết nối được Google Apps Script…".
 - Khác biệt nhỏ còn lại so với cổng cũ: đường dẫn KTKT không tồn tại (đã đăng nhập) trả trang 404 của Next thay cho JSON
   "Không tìm thấy chức năng KTKT."; lỗi của các route xuất/sao lưu nay cũng có `Cache-Control: private, no-store`.
 

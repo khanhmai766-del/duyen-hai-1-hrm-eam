@@ -4,6 +4,7 @@ import { requirePermission } from "@/modules/ctktkt/lib/auth/server";
 import { BACKUP_TABLES, createDataBackup, type BackupRow } from "@/modules/ctktkt/lib/data-backup";
 import { loadBackupSchemas, readBackupTables, restoreBackup } from "@/modules/ctktkt/lib/data-backup-store";
 import { readBackupArchive, archiveSummary, archiveStatements, MAX_ARCHIVE_BYTES } from "@/modules/ctktkt/lib/backup-archive";
+import { rethrowKtktServerFault } from "@/modules/ctktkt/server/server-fault";
 
 export async function POST(request: Request) {
   const guard = await requirePermission("restore_data"); if (!guard.ok) return guard.response;
@@ -19,6 +20,7 @@ export async function POST(request: Request) {
     summary = archiveSummary(files);
     statements = archiveStatements(files, await loadBackupSchemas(), mode as "missing" | "overwrite");
   } catch (error) {
+    rethrowKtktServerFault(error);
     return fail(error instanceof Error ? error.message : "Không đọc được gói sao lưu.", 400);
   }
   if (action === "preview") return ok(summary);

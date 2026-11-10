@@ -7,6 +7,7 @@ import { calculatePpaHeatRate, type PpaSourceData } from "@/modules/ctktkt/lib/p
 import { upsertPpaDay } from "@/modules/ctktkt/lib/ppa-heat-rate-persistence";
 import { requireAnyPermission, requireSession } from "@/modules/ctktkt/lib/auth/server";
 import {reportQueryRange} from "@/modules/ctktkt/lib/report-read-range";
+import { rethrowKtktServerFault } from "@/modules/ctktkt/server/server-fault";
 
 const datePattern = /^(20\d{2})-(0[1-9]|1[0-2])-([0-2]\d|3[01])$/;
 const periodPattern = /^20\d{2}-(0[1-9]|1[0-2])$/;
@@ -69,6 +70,7 @@ export async function POST(request: Request) {
     }, updatedAt));
     return ok({ result });
   } catch (error) {
+    rethrowKtktServerFault(error);
     return fail(error instanceof SyntaxError ? "Dữ liệu JSON không hợp lệ." : error instanceof Error ? error.message : "Dữ liệu không hợp lệ.", 400);
   }
 }

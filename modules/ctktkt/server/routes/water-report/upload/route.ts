@@ -5,6 +5,7 @@ import { extractWorkbookShifts, scanWorkbookBuffer } from "@/modules/ctktkt/lib/
 import { recalculateWaterMonths } from "@/modules/ctktkt/lib/water-report/store";
 import { ktktUtcNow, ktktWrite } from "@/modules/ctktkt/db/prisma";
 import { operationalWriteKeysFor } from "@/modules/ctktkt/lib/operational-query-policy";
+import { rethrowKtktServerFault } from "@/modules/ctktkt/server/server-fault";
 
 const MAX_UPLOAD_BYTES = 12 * 1024 * 1024;
 
@@ -87,6 +88,7 @@ export async function POST(request: Request) {
       message: `Đã nạp thành công ${shifts.length} ca trực của ${months.length} tháng vào hệ thống.`,
     });
   } catch (err) {
+    rethrowKtktServerFault(err);
     console.error("Lỗi xử lý file tháng:", err);
     return fail(err instanceof Error ? err.message : "Không thể xử lý file Excel.", 500);
   }

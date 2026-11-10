@@ -6,6 +6,7 @@ import { operationalWriteKeysFor } from "@/modules/ctktkt/lib/operational-query-
 import { isFutureOperatingDate } from "@/modules/ctktkt/lib/operating-date";
 import { requireAnyPermission } from "@/modules/ctktkt/lib/auth/server";
 import { parseAvailableCapacity, PPA_AVAILABLE_CAPACITY_S1_CODE, PPA_AVAILABLE_CAPACITY_S2_CODE, PPA_OPERATING_EVENT_S1_CODE, PPA_OPERATING_EVENT_S2_CODE } from "@/modules/ctktkt/lib/google-sheet-sync";
+import { rethrowKtktServerFault } from "@/modules/ctktkt/server/server-fault";
 
 const datePattern = /^20\d{2}-(0[1-9]|1[0-2])-([0-2]\d|3[01])$/;
 
@@ -87,6 +88,7 @@ export async function POST(request: Request) {
     const updated = entries.length;
     return ok({ received: entries.length, updated, skipped: entries.length - updated });
   } catch (error) {
+    rethrowKtktServerFault(error);
     return fail(error instanceof SyntaxError ? "Dữ liệu JSON không hợp lệ." : error instanceof Error ? error.message : "Dữ liệu không hợp lệ.", 400);
   }
 }

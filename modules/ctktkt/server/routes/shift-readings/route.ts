@@ -5,6 +5,7 @@ import { ktktUtcNow, ktktWrite } from "@/modules/ctktkt/db/prisma";
 import { operationalWriteKeysFor } from "@/modules/ctktkt/lib/operational-query-policy";
 import { SHIFT_METRICS, SHIFT_TIME_SLOTS } from "@/modules/ctktkt/lib/bcsx";
 import { requirePermission, requireSession } from "@/modules/ctktkt/lib/auth/server";
+import { rethrowKtktServerFault } from "@/modules/ctktkt/server/server-fault";
 
 const units = new Set(["S1", "S2"]);
 const metrics = new Set(SHIFT_METRICS.map(m => m.key));
@@ -58,6 +59,7 @@ export async function POST(request: Request) {
     }
     return ok({ saved: clean.length });
   } catch (error) {
+    rethrowKtktServerFault(error);
     return fail(error instanceof SyntaxError ? "Dữ liệu JSON không hợp lệ." : error instanceof Error ? error.message : "Dữ liệu không hợp lệ.", 400);
   }
 }

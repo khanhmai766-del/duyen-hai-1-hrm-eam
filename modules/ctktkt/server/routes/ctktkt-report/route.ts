@@ -18,6 +18,7 @@ import { loadCtktktOperatingHours } from "@/modules/ctktkt/lib/ctktkt-operating-
 import { CTKTKT_OPERATION_EVENTS_CELL, normalizeCtktktOperationEvents } from "@/modules/ctktkt/lib/ctktkt-operation-events";
 import { reportQueryRange } from "@/modules/ctktkt/lib/report-read-range";
 import {coalEntriesMatchUnit} from "@/modules/ctktkt/lib/coal-meter-ocr";
+import { rethrowKtktServerFault } from "@/modules/ctktkt/server/server-fault";
 
 const fieldCells = REPORT_WRITABLE_CELLS;
 const datePattern = /^(19|20|21)\d{2}-(0[1-9]|1[0-2])-([0-2]\d|3[01])$/;
@@ -161,6 +162,7 @@ export async function POST(request: Request) {
     if(body.correctionReason!==undefined&&typeof body.correctionReason!=="string")throw new Error("Lý do không hợp lệ.");
     return ok(await saveReportWithShift(user,body.operatingDate,authorizedEntries,body.correctionReason as string|undefined));
   } catch (error) {
+    rethrowKtktServerFault(error);
     if(error instanceof CorrectionError)return fail(error.message, error.status);
     return fail(error instanceof SyntaxError ? "Dữ liệu JSON không hợp lệ." : error instanceof Error ? error.message : "Dữ liệu không hợp lệ.", 400);
   }

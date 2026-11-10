@@ -6,6 +6,7 @@ import { operationalWriteKeysFor } from "@/modules/ctktkt/lib/operational-query-
 import { requirePermission } from "@/modules/ctktkt/lib/auth/server";
 import { buildQlktOperationWorkbook, derivePreviousCompletedPowerMw, parseOperationCommandWorkbook, qlktOperationFileName } from "@/modules/ctktkt/lib/bcsx-operation-import";
 import { previousIsoDate } from "@/modules/ctktkt/lib/ctktkt-report";
+import { rethrowKtktServerFault } from "@/modules/ctktkt/server/server-fault";
 
 const maxFileBytes = 4 * 1024 * 1024;
 const datePattern = /^(19|20|21)\d{2}-(0[1-9]|1[0-2])-([0-2]\d|3[01])$/;
@@ -61,6 +62,7 @@ export async function POST(request: Request) {
       },
     });
   } catch (error) {
+    rethrowKtktServerFault(error);
     return fail(error instanceof Error ? error.message : "Không nhập được file lệnh điều độ.", 400);
   }
 }

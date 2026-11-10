@@ -2,6 +2,7 @@ import { isCtktktSameOrigin } from "@/modules/ctktkt/lib/request-origin";
 import { ok, fail } from "@/lib/api";
 import { requirePermission } from "@/modules/ctktkt/lib/auth/server";
 import { buildSection1ImportPackage } from "@/modules/ctktkt/lib/bcsx-section1-import";
+import { rethrowKtktServerFault } from "@/modules/ctktkt/server/server-fault";
 
 const maxFileBytes = 4 * 1024 * 1024;
 
@@ -29,6 +30,7 @@ export async function POST(request: Request) {
     }))));
     return ok(importPackage);
   } catch (error) {
+    rethrowKtktServerFault(error);
     return fail(error instanceof Error ? error.message : "Không đọc được hai file Excel S1/S2.", 400);
   }
 }
