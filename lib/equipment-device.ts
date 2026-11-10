@@ -1,4 +1,19 @@
 import type { EquipmentNode } from "@prisma/client";
+import { scopeKks, type EquipmentMachine } from "@/lib/equipment-units";
+
+type ProfileFields = Pick<EquipmentNode, "name" | "kks" | "imageUrl" | "attachedInfo" | "documentUrl">;
+
+/** Cây và QR cùng đọc hồ sơ tổ máy; chuỗi rỗng là chủ động xóa phần kế thừa. */
+export function equipmentProfileFields(node: Pick<ProfileFields, "name"> & Partial<ProfileFields>, profile: Partial<Omit<ProfileFields, "name"> & { name: string | null }> | null | undefined, machine: EquipmentMachine) {
+  const imageUrl = profile?.imageUrl ?? (machine === "S2" ? null : node.imageUrl);
+  return {
+    name: profile?.name ?? node.name,
+    kks: profile?.kks ?? scopeKks(node.kks ?? null, machine),
+    images: imageUrl ? [imageUrl] : [],
+    attachedInfo: profile?.attachedInfo ?? (machine === "S2" ? null : node.attachedInfo) ?? null,
+    documentUrl: profile?.documentUrl ?? (machine === "S2" ? null : node.documentUrl) ?? null,
+  };
+}
 
 export const EQUIPMENT_DEVICE_SELECT = {
   seq: true,

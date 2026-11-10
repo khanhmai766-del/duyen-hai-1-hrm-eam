@@ -27,7 +27,7 @@
  */
 import { randomUUID } from "node:crypto";
 import type { Prisma, PrismaClient } from "@prisma/client";
-import { MAX_EQUIPMENT_DEPTH, machinesOf } from "@/lib/equipment-units";
+import { MAX_EQUIPMENT_DEPTH, machinesOf, validateEquipmentSeq } from "@/lib/equipment-units";
 import { displayCode } from "@/lib/equipment-import";
 import { normalizeText } from "@/lib/nav";
 import { recomputeChildCount } from "@/lib/equipment-child-count";
@@ -56,9 +56,12 @@ export type EquipmentMovePlanResult = { ok: false; error: string } | { ok: true;
 
 export async function planEquipmentMove(
   db: EquipmentDb,
-  params: { sourceSeq: string; targetParentSeq: string; allowScopeChange?: boolean }
+  params: { sourceSeq: string; targetParentSeq: string; targetSeq?: string; allowScopeChange?: boolean }
 ): Promise<EquipmentMovePlanResult> {
-  const { sourceSeq, targetParentSeq, allowScopeChange = false } = params;
+  const { sourceSeq, targetParentSeq, targetSeq, allowScopeChange = false } = params;
+  if (targetSeq && (validateEquipmentSeq(targetSeq) || targetSeq.slice(0, targetSeq.lastIndexOf(".")) !== targetParentSeq)) {
+    return { ok: false, error: "Mã thiết bị mới không hợp lệ hoặc không thuộc thư mục đích" };
+  }
   if (!sourceSeq || !targetParentSeq) return { ok: false, error: "Thiếu thiết bị cần di chuyển hoặc thư mục đích" };
   if (sourceSeq === targetParentSeq) return { ok: false, error: "Không thể di chuyển thiết bị vào chính nó" };
   if (targetParentSeq.startsWith(`${sourceSeq}.`)) {
@@ -100,14 +103,15 @@ export async function planEquipmentMove(
   // Giữ nguyên số thứ tự cuối của mã cũ nếu chỗ đó còn trống — mã quen thuộc thì người dùng
   // đỡ phải học lại; kẹt thì lấy số kế tiếp trong thư mục đích.
   const oldSegment = sourceSeq.slice(sourceSeq.lastIndexOf(".") + 1);
-  const preferredPrefix = `${targetParentSeq}.${oldSegment}`;
+  const preferredPrefix = targetSeq ?? `${targetParentSeq}.${oldSegment}`;
   const insideSource = { OR: [{ seq: sourceSeq }, { seq: { startsWith: `${sourceSeq}.` } }] };
   const preferredTaken = await db.equipmentNode.findFirst({
-    where: { seq: { startsWith: preferredPrefix }, NOT: insideSource },
+    where: { OR: [{ seq: preferredPrefix }, { seq: { startsWith: `${preferredPrefix}.` } }], NOT: insideSource },
     select: { seq: true },
   });
   let rootSeq = preferredPrefix;
   if (preferredTaken) {
+    if (targetSeq) return { ok: false, error: "Mã thiết bị mới hoặc nhánh con đã tồn tại" };
     const siblings = await db.equipmentNode.findMany({ where: { parentSeq: targetParentSeq }, select: { seq: true } });
     const nextSegment =
       siblings.reduce((max, row) => {
@@ -213,6 +217,7 @@ export async function applyEquipmentMove(tx: Prisma.TransactionClient, plan: Equ
     // các lệnh này thành không-làm-gì. Vẫn gọi để chạy đúng cả trên DB cũ chưa có cascade.
     await tx.repairLog.updateMany({ where: { deviceSeq: oldSeq }, data: { deviceSeq: nextSeq } });
     await tx.materialReplacement.updateMany({ where: { deviceSeq: oldSeq }, data: { deviceSeq: nextSeq } });
+    await tx.materialReplacement.updateMany({ where: { system: oldSeq }, data: { system: nextSeq } });
     await tx.equipmentMaterial.updateMany({ where: { deviceSeq: oldSeq }, data: { deviceSeq: nextSeq } });
     await tx.defect.updateMany({ where: { deviceSeq: oldSeq }, data: { deviceSeq: nextSeq } });
     await tx.defectHistory.updateMany({ where: { deviceSeq: oldSeq }, data: { deviceSeq: nextSeq } });

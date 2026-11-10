@@ -2,10 +2,12 @@ import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { audit, fail, handle, ok, requireUser } from "@/lib/api";
 import { requireDeviceManage } from "@/lib/device-permissions";
-import { assertSeqEditable } from "@/lib/server-access";
+import { assertSeqEditable, invalidateEquipmentAccessCache } from "@/lib/server-access";
 import { applyEquipmentMove, planEquipmentMove } from "@/lib/equipment-move";
 import { invalidateEquipmentNodeCache } from "@/lib/equipment-node-cache";
 import { invalidateDeviceListCache } from "@/lib/device-list-cache";
+import { invalidatePositionScopeCache } from "@/lib/position-scope-cache";
+import { invalidateEquipmentProfileCache } from "@/lib/equipment-profile-cache";
 
 export const dynamic = "force-dynamic";
 
@@ -48,6 +50,9 @@ export async function POST(req: NextRequest) {
     );
     invalidateEquipmentNodeCache();
     invalidateDeviceListCache();
+    invalidatePositionScopeCache();
+    invalidateEquipmentAccessCache();
+    invalidateEquipmentProfileCache();
     return ok({ sourceSeq, seq: result.seq, movedCount: result.movedCount, targetParentSeq });
   });
 }

@@ -5,28 +5,8 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { QRCodeSVG } from "qrcode.react";
-import { EquipmentCardEditDialog } from "@/components/devices/equipment-card-edit-dialog";
-import {
-  LayoutGrid,
-  FilePlus2,
-  Cpu,
-  Folder,
-  QrCode,
-  Eye,
-  Trash2,
-  Filter,
-  ChevronLeft,
-  ChevronRight,
-  ChevronsLeft,
-  ChevronsRight,
-  ShieldAlert,
-  Network,
-  Wrench,
-  Package,
-  Plus,
-  Loader2,
-  type LucideIcon,
-} from "lucide-react";
+
+import { LayoutGrid, FilePlus2, Cpu, QrCode, Eye, Trash2, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ShieldAlert, Network, Wrench, Package, Plus, Loader2, type LucideIcon } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/shared/page-header";
 import { SearchBar } from "@/components/shared/search-bar";
@@ -40,24 +20,9 @@ import { EquipmentTreeView } from "@/components/devices/equipment-tree";
 import { defaultScopeOf, parseScope, scopeCode, seqInScope, TREE_SCOPES, type TreeScope } from "@/lib/equipment-units";
 import { QRModal } from "@/components/devices/qr-modal";
 import { RbacProtectedRoute } from "@/components/shared/rbac-protected-route";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+
 import { type DeviceListItem } from "@/hooks/useDevices";
 import { useDeviceQrCards, useAddDeviceQrCard, useRemoveDeviceQrCard } from "@/hooks/useDeviceQrCards";
 import { EquipmentTreePicker } from "@/components/devices/equipment-tree-picker";
@@ -65,10 +30,10 @@ import { type EquipmentNode, type TreeNode } from "@/hooks/useEquipment";
 import { apiGet } from "@/lib/fetcher";
 import { useRbacAccess } from "@/hooks/useRbacAccess";
 import { normalizeText } from "@/lib/nav";
-import { announcementPositionLabel, uniqueVietnamesePositions } from "@/lib/positions";
-import { positionsMatch } from "@/lib/position-catalog";
+
 import { formatDate, cn } from "@/lib/utils";
-import { deviceQrValue } from "@/lib/device-qr";
+import { deviceDetailUrl, deviceQrValue } from "@/lib/device-qr";
+import { buildEquipmentTreeIndex, compareEquipmentSeq } from "@/lib/equipment-tree";
 
 type ViewMode = "tree" | "detail" | "form";
 const VIEWS: { key: ViewMode; label: string; icon: LucideIcon; adminOnly?: boolean }[] = [
@@ -76,19 +41,6 @@ const VIEWS: { key: ViewMode; label: string; icon: LucideIcon; adminOnly?: boole
   { key: "detail", label: "Thẻ", icon: LayoutGrid },
   { key: "form", label: "Thêm mới", icon: FilePlus2, adminOnly: true },
 ];
-
-type SystemTreeRow = {
-  seq: string;
-  parentSeq: string | null;
-  name: string;
-  parentName: string;
-  drawing: string | null;
-  isGroup: boolean;
-  childCount: number;
-  deviceId: string | null;
-  duplicateSeqs?: string[];
-  duplicateCount?: number;
-};
 
 export default function DevicesPage() {
   return (
@@ -166,7 +118,7 @@ function DevicesPageContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params, canCreateDevices]);
 
-  const visibleViews = VIEWS.filter((v) => !v.adminOnly || canManageDevices);
+  const visibleViews = VIEWS.filter((v) => !v.adminOnly || canCreateDevices);
 
   // Xuất báo cáo cây thiết bị: tải toàn bộ node NGAY KHI bấm xuất (lazy) — không tải khi mở trang.
   // Chỉ xuất PHẠM VI đang xem (Tổ máy S1 / Tổ máy S2 / Dùng chung) cho khớp cây trên màn hình.
@@ -340,43 +292,14 @@ function lastRepair(d: DeviceListItem) {
   return d.repairLogs?.[0]?.startedAt ? formatDate(d.repairLogs[0].startedAt) : "—";
 }
 
-/** So sánh số thứ tự theo từng đoạn số (1.1.10 sau 1.1.2). */
-function compareSeq(a: string, b: string) {
-  const pa = a.split(".");
-  const pb = b.split(".");
-  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
-    const x = i < pa.length ? Number(pa[i]) : -1;
-    const y = i < pb.length ? Number(pb[i]) : -1;
-    if (x !== y) return x - y;
-  }
-  return 0;
-}
-
 /** Dựng dữ liệu xuất báo cáo cho TOÀN BỘ cây thiết bị (sắp theo số thứ tự phân cấp). */
 function buildTreeExportRows(nodes: EquipmentNode[], scope: TreeScope): Record<string, unknown>[] {
-  const bySeq = new Map(nodes.map((n) => [n.seq, n]));
-  // Cha hiệu lực = tổ tiên gần nhất có thật; đếm số con trực tiếp cho cột "Phân loại".
-  const effParent = new Map<string, string | null>();
-  const childCount = new Map<string, number>();
-  for (const n of nodes) {
-    let parent: string | null = n.parentSeq && bySeq.has(n.parentSeq) ? n.parentSeq : null;
-    if (!parent) {
-      const parts = n.seq.split(".");
-      parts.pop();
-      while (parts.length) {
-        const p = parts.join(".");
-        if (bySeq.has(p)) { parent = p; break; }
-        parts.pop();
-      }
-    }
-    effParent.set(n.seq, parent);
-    if (parent) childCount.set(parent, (childCount.get(parent) ?? 0) + 1);
-  }
+  const { bySeq, parentOf, childrenOf } = buildEquipmentTreeIndex(nodes);
   return [...nodes]
-    .sort((a, b) => compareSeq(a.seq, b.seq))
+    .sort((a, b) => compareEquipmentSeq(a.seq, b.seq))
     .map((n) => {
-      const kids = childCount.get(n.seq) ?? 0;
-      const parentSeq = effParent.get(n.seq);
+      const kids = childrenOf.get(n.seq)?.length ?? 0;
+      const parentSeq = parentOf.get(n.seq);
       const parent = parentSeq ? bySeq.get(parentSeq) : null;
       return {
         seq: scopeCode(n.seq, scope),
@@ -390,435 +313,12 @@ function buildTreeExportRows(nodes: EquipmentNode[], scope: TreeScope): Record<s
     });
 }
 
-function systemRowQrValue(row: SystemTreeRow) {
-  return deviceQrValue(row.seq, defaultScopeOf(row.seq), typeof window !== "undefined" ? window.location.origin : null);
-}
-
-function SystemLeafCardView({ rows, selectedSystemName }: { rows: SystemTreeRow[]; selectedSystemName: string }) {
-  const [editSeq, setEditSeq] = React.useState<string | null>(null);
-  const [page, setPage] = React.useState(1);
-  const [pageSize, setPageSize] = React.useState(24);
-  const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
-  const firstShown = rows.length ? (page - 1) * pageSize + 1 : 0;
-  const lastShown = Math.min(page * pageSize, rows.length);
-  const pagedRows = rows.slice((page - 1) * pageSize, page * pageSize);
-  // Số trang đổi thì kéo trang về trong [1, số trang]; danh sách (prop rows) hoặc cỡ trang đổi thì về trang 1.
-  // Chỉnh lúc render thay cho useEffect.
-  const [pageClampTotal, setPageClampTotal] = React.useState(totalPages);
-  if (pageClampTotal !== totalPages) {
-    setPageClampTotal(totalPages);
-    setPage((current) => Math.min(Math.max(1, current), totalPages));
-  }
-  const [pageResetKey, setPageResetKey] = React.useState({ rows, pageSize });
-  if (pageResetKey.rows !== rows || pageResetKey.pageSize !== pageSize) {
-    setPageResetKey({ rows, pageSize });
-    setPage(1);
-  }
-  if (rows.length === 0) {
-    return (
-      <EmptyState
-        icon={Cpu}
-        title="Không có thiết bị"
-        description="Không tìm thấy thiết bị ở thư mục con cuối cùng của hệ thống đã chọn."
-      />
-    );
-  }
-
-  return (
-    <div className="space-y-3">
-      <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border bg-white px-4 py-3">
-        <div>
-          <div className="text-sm font-semibold text-ink">{selectedSystemName}</div>
-          <div className="text-xs text-muted-foreground">Hiển thị {rows.length} thiết bị ở thư mục con cuối cùng để tra mã QR</div>
-        </div>
-        <span className="rounded-full bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-700">{rows.length} thiết bị</span>
-      </div>
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-        {pagedRows.map((row) => (
-          <Card
-            key={row.seq}
-            onClick={() => setEditSeq(row.seq)}
-            title="Bấm để chỉnh sửa thẻ thiết bị"
-            className="cursor-pointer overflow-hidden transition-shadow hover:shadow-md hover:ring-1 hover:ring-accent/40"
-          >
-            <CardContent className="p-4">
-              <div className="flex items-start gap-4">
-                <div className="flex h-24 w-24 shrink-0 items-center justify-center rounded-xl border border-border bg-white p-2 shadow-sm">
-                  <QRCodeSVG value={systemRowQrValue(row)} size={76} includeMargin={false} />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="font-mono text-xs font-bold text-navy">{row.seq}</div>
-                  <h3 className="mt-1 line-clamp-2 font-semibold leading-tight text-ink" title={row.name}>
-                    {row.name}
-                  </h3>
-                  {(row.duplicateCount ?? 1) > 1 && (
-                    <div className="mt-1 inline-flex rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
-                      Gộp {row.duplicateCount} mã trùng
-                    </div>
-                  )}
-                  <div className="mt-2 line-clamp-2 text-xs text-muted-foreground" title={row.parentName}>
-                    {row.parentName || "Thư mục con cuối cùng"}
-                  </div>
-                </div>
-              </div>
-              <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
-                <InfoPill label="Bản vẽ" value={row.drawing || "—"} />
-                <InfoPill label="Loại" value={row.deviceId ? "Có lý lịch" : "Node cây"} />
-              </div>
-              <div className="mt-4 flex gap-2" onClick={(e) => e.stopPropagation()}>
-                <Button asChild size="sm" variant="outline" className="flex-1">
-                  <Link href={`/devices?view=tree&scope=${defaultScopeOf(row.seq)}&focusSeq=${encodeURIComponent(row.seq)}`}>
-                    <Network className="h-4 w-4" /> Trong cây
-                  </Link>
-                </Button>
-                {row.deviceId && (
-                  <Button asChild size="sm" className="flex-1">
-                    <Link href={`/devices/${row.deviceId}`}>
-                      <Eye className="h-4 w-4" /> Lý lịch
-                    </Link>
-                  </Button>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-      <CardGridPagination
-        firstShown={firstShown}
-        lastShown={lastShown}
-        total={rows.length}
-        page={page}
-        totalPages={totalPages}
-        pageSize={pageSize}
-        onPageSize={setPageSize}
-        onPage={setPage}
-      />
-      <EquipmentCardEditDialog seq={editSeq} onOpenChange={(o) => !o && setEditSeq(null)} />
-    </div>
-  );
-}
-
 function InfoPill({ label, value }: { label: string; value: string }) {
   return (
     <div className="min-w-0 rounded-lg bg-muted/50 px-3 py-2">
       <div className="text-[10px] font-semibold uppercase text-muted-foreground">{label}</div>
       <div className="mt-0.5 truncate font-medium text-ink" title={value}>{value}</div>
     </div>
-  );
-}
-
-function SystemTreeTableView({ rows, selectedSystemName }: { rows: SystemTreeRow[]; selectedSystemName: string }) {
-  const [page, setPage] = React.useState(1);
-  const [pageSize, setPageSize] = React.useState(20);
-  const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
-  const firstShown = rows.length ? (page - 1) * pageSize + 1 : 0;
-  const lastShown = Math.min(page * pageSize, rows.length);
-  const pagedRows = rows.slice((page - 1) * pageSize, page * pageSize);
-
-  // Số trang đổi thì kéo trang về trong [1, số trang]; danh sách (prop rows) hoặc cỡ trang đổi thì về trang 1.
-  // Chỉnh lúc render thay cho useEffect.
-  const [pageClampTotal, setPageClampTotal] = React.useState(totalPages);
-  if (pageClampTotal !== totalPages) {
-    setPageClampTotal(totalPages);
-    setPage((current) => Math.min(Math.max(1, current), totalPages));
-  }
-  const [pageResetKey, setPageResetKey] = React.useState({ rows, pageSize });
-  if (pageResetKey.rows !== rows || pageResetKey.pageSize !== pageSize) {
-    setPageResetKey({ rows, pageSize });
-    setPage(1);
-  }
-
-  return (
-    <Card className="overflow-hidden">
-      <div className="border-b border-border px-4 py-3">
-        <div className="text-sm font-semibold text-ink">{selectedSystemName}</div>
-        <div className="text-xs text-muted-foreground">Danh sách thư mục và thiết bị thuộc hệ thống đã chọn</div>
-      </div>
-      {rows.length === 0 ? (
-        <div className="flex min-h-[220px] flex-col items-center justify-center gap-2 text-center text-sm text-muted-foreground">
-          <Cpu className="h-9 w-9 text-muted-foreground/40" />
-          Không có dữ liệu phù hợp trong hệ thống này.
-        </div>
-      ) : (
-        <>
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-[130px] text-center">Số thứ tự</TableHead>
-                  <TableHead className="min-w-[260px] text-center">Tên thư mục / thiết bị</TableHead>
-                  <TableHead className="min-w-[220px] text-center">Thuộc thư mục</TableHead>
-                  <TableHead className="w-[180px] text-center">Bản vẽ liên quan</TableHead>
-                  <TableHead className="w-[130px] text-center">Phân loại</TableHead>
-                  <TableHead className="w-[110px] text-center">Thao tác</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {pagedRows.map((row) => (
-                  <TableRow key={row.seq}>
-                    <TableCell className="text-center font-mono text-xs font-semibold text-navy">{row.seq}</TableCell>
-                    <TableCell>
-                      <div className="flex min-w-0 items-center gap-2">
-                        {row.isGroup ? (
-                          <Folder className="h-4 w-4 shrink-0 text-amber-500" />
-                        ) : (
-                          <Cpu className="h-4 w-4 shrink-0 text-sky-500" />
-                        )}
-                        <span className="truncate font-medium text-ink" title={row.name}>{row.name}</span>
-                        {(row.duplicateCount ?? 1) > 1 && (
-                          <span className="shrink-0 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
-                            Gộp {row.duplicateCount}
-                          </span>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-center text-muted-foreground">
-                      <span className="line-clamp-2" title={row.parentName}>{row.parentName || "—"}</span>
-                    </TableCell>
-                    <TableCell className="text-center text-muted-foreground">{row.drawing || "—"}</TableCell>
-                    <TableCell className="text-center">
-                      {row.isGroup ? (
-                        <span className="rounded-full bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-700">
-                          Nhóm · {row.childCount}
-                        </span>
-                      ) : (
-                        <span className="rounded-full bg-sky-50 px-2 py-1 text-xs font-semibold text-sky-700">Thiết bị</span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center justify-center gap-1">
-                        <Button asChild variant="ghost" size="icon" title="Xem trong cây">
-                          <Link href={`/devices?view=tree&scope=${defaultScopeOf(row.seq)}&focusSeq=${encodeURIComponent(row.seq)}`}>
-                            <Network className="h-4 w-4" />
-                          </Link>
-                        </Button>
-                        {row.deviceId && (
-                          <Button asChild variant="ghost" size="icon" title="Lý lịch thiết bị">
-                            <Link href={`/devices/${row.deviceId}`}>
-                              <Eye className="h-4 w-4" />
-                            </Link>
-                          </Button>
-                        )}
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-          <div className="flex flex-col gap-3 border-t border-border px-4 py-3 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
-            <div>Hiển thị {firstShown}-{lastShown} trong tổng số {rows.length} dòng</div>
-            <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-              <span>Hiển thị</span>
-              <select
-                value={pageSize}
-                onChange={(event) => setPageSize(Number(event.target.value))}
-                className="h-8 rounded-md border border-input bg-white px-2 text-sm font-medium text-ink shadow-none"
-                aria-label="Số dòng hiển thị"
-              >
-                {[20, 50, 100].map((size) => (
-                  <option key={size} value={size}>{size}</option>
-                ))}
-              </select>
-              <span>dòng</span>
-              <PageButton icon={ChevronsLeft} label="Trang đầu" disabled={page <= 1} onClick={() => setPage(1)} />
-              <PageButton icon={ChevronLeft} label="Trang trước" disabled={page <= 1} onClick={() => setPage((current) => Math.max(1, current - 1))} />
-              <span className="rounded-md bg-muted px-2.5 py-1 text-xs font-bold text-ink">{page}/{totalPages}</span>
-              <PageButton icon={ChevronRight} label="Trang sau" disabled={page >= totalPages} onClick={() => setPage((current) => Math.min(totalPages, current + 1))} />
-              <PageButton icon={ChevronsRight} label="Trang cuối" disabled={page >= totalPages} onClick={() => setPage(totalPages)} />
-            </div>
-          </div>
-        </>
-      )}
-    </Card>
-  );
-}
-
-function TableView({
-  devices,
-  canDelete,
-  onQr,
-  onDelete,
-}: {
-  devices: DeviceListItem[];
-  canDelete: boolean;
-  onQr: (d: DeviceListItem) => void;
-  onDelete: (d: DeviceListItem) => void;
-}) {
-  const [page, setPage] = React.useState(1);
-  const [pageSize, setPageSize] = React.useState(10);
-  const [positionFilter, setPositionFilter] = React.useState("ALL");
-  const [deleteTarget, setDeleteTarget] = React.useState<DeviceListItem | null>(null);
-  const positionOptions = React.useMemo(
-    () => uniqueVietnamesePositions(devices.map((device) => announcementPositionLabel(device.managingPosition))).sort((a, b) => a.localeCompare(b, "vi")),
-    [devices]
-  );
-  const filteredDevices = React.useMemo(
-    () => (positionFilter === "ALL" ? devices : devices.filter((device) => positionsMatch(device.managingPosition, positionFilter))),
-    [devices, positionFilter]
-  );
-  const totalPages = Math.max(1, Math.ceil(filteredDevices.length / pageSize));
-  const firstShown = filteredDevices.length ? (page - 1) * pageSize + 1 : 0;
-  const lastShown = Math.min(page * pageSize, filteredDevices.length);
-  const pagedDevices = filteredDevices.slice((page - 1) * pageSize, page * pageSize);
-
-  // Số trang đổi thì kéo trang về trong [1, số trang]; danh sách đã lọc (useMemo) hoặc cỡ trang đổi thì về trang 1.
-  // Chỉnh lúc render thay cho useEffect.
-  const [pageClampTotal, setPageClampTotal] = React.useState(totalPages);
-  if (pageClampTotal !== totalPages) {
-    setPageClampTotal(totalPages);
-    setPage((current) => Math.min(Math.max(1, current), totalPages));
-  }
-  const [pageResetKey, setPageResetKey] = React.useState({ filteredDevices, pageSize });
-  if (pageResetKey.filteredDevices !== filteredDevices || pageResetKey.pageSize !== pageSize) {
-    setPageResetKey({ filteredDevices, pageSize });
-    setPage(1);
-  }
-  // Cương vị đang lọc không còn trong danh sách thì về "Tất cả" — điều kiện tự tắt ngay sau khi đặt.
-  if (positionFilter !== "ALL" && !positionOptions.includes(positionFilter)) {
-    setPositionFilter("ALL");
-  }
-
-  return (
-    <Card className="overflow-hidden">
-      <div className="overflow-x-auto">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="text-center">Mã</TableHead>
-              <TableHead className="text-center">Tên thiết bị</TableHead>
-              <TableHead className="text-center">Hệ thống</TableHead>
-              <TableHead className="w-[170px] text-center">
-                <div className="inline-flex h-8 items-center justify-center gap-1">
-                  <span className="whitespace-nowrap">Cương vị quản lý</span>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className={cn(
-                          "h-6 w-6 rounded-full border border-transparent text-muted-foreground transition-colors hover:border-blue-100 hover:bg-blue-50 hover:text-blue-700",
-                          positionFilter !== "ALL" && "border-blue-200 bg-blue-50 text-blue-700 shadow-sm shadow-blue-100"
-                        )}
-                        title="Lọc theo cương vị quản lý"
-                        aria-label="Lọc theo cương vị quản lý"
-                      >
-                        <Filter className="h-3.5 w-3.5" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-56">
-                      <DropdownMenuLabel className="text-xs text-muted-foreground">Cương vị quản lý</DropdownMenuLabel>
-                      <DropdownMenuItem
-                        className={cn("justify-between text-sm", positionFilter === "ALL" && "bg-blue-50 text-blue-700")}
-                        onClick={() => setPositionFilter("ALL")}
-                      >
-                        <span>Tất cả cương vị</span>
-                        {positionFilter === "ALL" && <span className="text-xs font-bold">✓</span>}
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <div className="max-h-64 overflow-y-auto">
-                        {positionOptions.map((position) => (
-                          <DropdownMenuItem
-                            key={position}
-                            className={cn("justify-between gap-3 text-sm", positionFilter === position && "bg-blue-50 text-blue-700")}
-                            onClick={() => setPositionFilter(position)}
-                          >
-                            <span className="truncate">{position}</span>
-                            {positionFilter === position && <span className="text-xs font-bold">✓</span>}
-                          </DropdownMenuItem>
-                        ))}
-                      </div>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-              </TableHead>
-              <TableHead className="text-center">Hình ảnh</TableHead>
-              <TableHead className="text-center">Thao tác</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {pagedDevices.map((d) => (
-              <TableRow key={d.id}>
-                <TableCell className="text-center font-mono text-xs font-medium text-navy">{d.code}</TableCell>
-                <TableCell className="text-center font-medium">{d.name}</TableCell>
-                <TableCell className="text-center text-muted-foreground">{d.system ?? "—"}</TableCell>
-                <TableCell className="text-center text-muted-foreground">{d.managingPosition ?? "—"}</TableCell>
-                <TableCell>
-                  {d.images?.[0] ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={d.images[0]} alt={d.name} className="mx-auto h-10 w-10 rounded-md border border-border object-cover" />
-                  ) : (
-                    <span className="mx-auto flex h-10 w-10 items-center justify-center rounded-md bg-muted text-muted-foreground"><Cpu className="h-4 w-4" /></span>
-                  )}
-                </TableCell>
-                <TableCell>
-                  <div className="flex items-center justify-center gap-1">
-                    <Button asChild variant="ghost" size="icon" title="Chi tiết">
-                      <Link href={`/devices/${d.id}`}><Eye className="h-4 w-4" /></Link>
-                    </Button>
-                    <Button variant="ghost" size="icon" title="Mã QR" onClick={() => onQr(d)}>
-                      <QrCode className="h-4 w-4" />
-                    </Button>
-                    {canDelete && (
-                      <Button variant="ghost" size="icon" title="Xoá" onClick={() => setDeleteTarget(d)}>
-                        <Trash2 className="h-4 w-4 text-destructive" />
-                      </Button>
-                    )}
-                  </div>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </div>
-      <div className="flex flex-col gap-3 border-t border-border px-4 py-3 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          Hiển thị {firstShown}-{lastShown} trong tổng số {filteredDevices.length} bản ghi
-          {positionFilter !== "ALL" && (
-            <span className="ml-2 inline-flex max-w-[160px] align-middle rounded-full bg-blue-50 px-2 py-0.5 text-xs font-semibold text-blue-700">
-              <span className="truncate">{positionFilter}</span>
-            </span>
-          )}
-        </div>
-        <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-          <span>Hiển thị</span>
-          <select
-            value={pageSize}
-            onChange={(event) => setPageSize(Number(event.target.value))}
-            className="h-8 rounded-md border border-input bg-white px-2 text-sm font-medium text-ink shadow-none"
-            aria-label="Số dòng hiển thị"
-          >
-            {[10, 20, 50].map((size) => (
-              <option key={size} value={size}>
-                {size}
-              </option>
-            ))}
-          </select>
-          <span>dòng</span>
-          <PageButton icon={ChevronsLeft} label="Trang đầu" disabled={page <= 1} onClick={() => setPage(1)} />
-          <PageButton icon={ChevronLeft} label="Trang trước" disabled={page <= 1} onClick={() => setPage((current) => Math.max(1, current - 1))} />
-          <span className="rounded-md bg-muted px-2.5 py-1 text-xs font-bold text-ink">
-            {page}/{totalPages}
-          </span>
-          <PageButton icon={ChevronRight} label="Trang sau" disabled={page >= totalPages} onClick={() => setPage((current) => Math.min(totalPages, current + 1))} />
-          <PageButton icon={ChevronsRight} label="Trang cuối" disabled={page >= totalPages} onClick={() => setPage(totalPages)} />
-        </div>
-      </div>
-      <ConfirmDialog
-        open={!!deleteTarget}
-        onOpenChange={(open) => !open && setDeleteTarget(null)}
-        title="Xoá thiết bị?"
-        description={deleteTarget ? `Bạn chắc chắn muốn xoá "${deleteTarget.code} — ${deleteTarget.name}" và toàn bộ lịch sử liên quan?` : undefined}
-        confirmLabel="Xoá"
-        loading={false}
-        onConfirm={() => {
-          if (!deleteTarget) return;
-          onDelete(deleteTarget);
-          setDeleteTarget(null);
-        }}
-      />
-    </Card>
   );
 }
 
@@ -912,14 +412,17 @@ function DetailView({
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-        {pagedDevices.map((d) => (
+        {pagedDevices.map((d) => {
+          const machine = parseScope(d.machine ?? defaultScopeOf(d.id));
+          const detailUrl = deviceDetailUrl(d.id, machine);
+          return (
           <Card
             key={d.qrCardKey ?? `${d.id}:${d.machine ?? ""}`}
             role="button"
             tabIndex={0}
-            onClick={() => router.push(`/devices/${encodeURIComponent(d.id)}${d.machine ? `?machine=${encodeURIComponent(d.machine)}` : ""}`)}
+            onClick={() => router.push(detailUrl)}
             onKeyDown={(event) => {
-              if (event.key === "Enter" || event.key === " ") router.push(`/devices/${encodeURIComponent(d.id)}${d.machine ? `?machine=${encodeURIComponent(d.machine)}` : ""}`);
+              if (event.target === event.currentTarget && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); router.push(detailUrl); }
             }}
             className="group overflow-hidden border-border bg-white transition-all hover:-translate-y-0.5 hover:border-accent/50 hover:shadow-lg"
           >
@@ -965,7 +468,7 @@ function DetailView({
 
               <div className="grid grid-cols-2 gap-2">
                 <Link
-                  href={`/repair-history/${encodeURIComponent(d.id)}`}
+                  href={`/repair-history?deviceSeq=${encodeURIComponent(d.id)}&mappedUnit=${machine}`}
                   onClick={(event) => event.stopPropagation()}
                   className="rounded-lg border border-border bg-muted/30 px-3 py-2 transition-colors hover:border-blue-200 hover:bg-blue-50"
                 >
@@ -986,7 +489,7 @@ function DetailView({
 
               <div className="flex gap-2" onClick={(event) => event.stopPropagation()}>
                 <Button asChild size="sm" className="flex-1">
-                  <Link href={`/devices/${encodeURIComponent(d.id)}`}>
+                  <Link href={detailUrl}>
                     <Eye className="h-4 w-4" /> Xem lý lịch
                   </Link>
                 </Button>
@@ -998,7 +501,8 @@ function DetailView({
               </div>
             </CardContent>
           </Card>
-        ))}
+          );
+        })}
       </div>
 
       <CardGridPagination

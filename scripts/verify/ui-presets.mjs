@@ -13,6 +13,7 @@ import { dailyHistoryPreset } from "./presets/daily-history.mjs";
 import { workTaskDetailPreset, workTaskDirectorPreset } from "./presets/work-task-detail.mjs";
 import { commanderCandidatesPreset } from "./presets/commander-candidates.mjs";
 import { adminUsersPreset } from "./presets/admin-users.mjs";
+import { devicesPreset } from "./presets/devices.mjs";
 // Kịch bản dựng sẵn cho ui-shots.mjs: tuyến cần chụp + dữ liệu GIẢ LẬP qua page.route.
 //
 // Giả lập ngay trong trình duyệt để chụp được trạng thái hiếm có trên DB dev (lần làm việc đang mở, danh sách
@@ -267,6 +268,7 @@ async function writeFakeCameraVideo(file, { px = 5, blur = 0.5, noise = 8 } = {}
 let nhanSuLocName = "";
 
 export const PRESETS = {
+  "devices": devicesPreset,
   "admin-users": adminUsersPreset,
   "chtt-cho-cap-nhat": commanderCandidatesPreset,
   "ctktkt-integration": ctktktIntegrationPreset,

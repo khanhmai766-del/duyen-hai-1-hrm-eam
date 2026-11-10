@@ -3,6 +3,7 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { apiGet, apiMutate } from "@/lib/fetcher";
 import type { TreeScope } from "@/lib/equipment-units";
+import { invalidateEquipmentQueries } from "@/lib/equipment-query-cache";
 
 export interface EquipmentNode {
   seq: string;
@@ -225,24 +226,7 @@ export function useImportEquipmentTree() {
     mutationFn: (body: { rows: RawImportRow[]; system: string; mode: ImportMode; dryRun: boolean }) =>
       apiMutate<ImportResult>("/api/equipment-tree/import", "POST", body),
     onSuccess: (data) => {
-      if (data.result) qc.invalidateQueries({ queryKey: ["equipment-tree"] });
-    },
-  });
-}
-
-// Hồ sơ theo tổ máy không còn được đọc từ client: tổ máy đã chọn ở CÂY (?scope=) và mã/KKS
-// theo tổ máy được các API cây/thiết bị chiếu sẵn. /api/equipment-tree/profiles chỉ còn là
-// nơi lưu ghi đè tên/KKS riêng của một tổ máy (xem lib/equipment-profile-cache.ts).
-
-/** Cập nhật thông tin/tài liệu/ảnh bổ sung của một node thiết bị (theo seq). */
-export function useUpdateEquipmentNode() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (body: { seq: string; attachedInfo?: string | null; documentUrl?: string | null; imageUrl?: string | null }) =>
-      apiMutate("/api/equipment-tree", "PUT", body),
-    onSuccess: (_data, body) => {
-      qc.invalidateQueries({ queryKey: ["equipment-tree"] });
-      qc.invalidateQueries({ queryKey: ["equipment-node", body.seq] });
+      if (data.result) return invalidateEquipmentQueries(qc, true);
     },
   });
 }
@@ -256,11 +240,7 @@ export function useMoveEquipmentNode() {
         "POST",
         body
       ),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["equipment-tree"] });
-      qc.invalidateQueries({ queryKey: ["equipment-node"] });
-      qc.invalidateQueries({ queryKey: ["devices"] });
-    },
+    onSuccess: () => invalidateEquipmentQueries(qc, true),
   });
 }
 
@@ -275,13 +255,7 @@ export function useCopyEquipmentSubtree() {
         copiedCount: number;
         materialDeclarationCount: number;
       }>("/api/equipment-tree/copy", "POST", body),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["equipment-tree"] });
-      qc.invalidateQueries({ queryKey: ["equipment-node"] });
-      qc.invalidateQueries({ queryKey: ["devices"] });
-      qc.invalidateQueries({ queryKey: ["materials"] });
-      qc.invalidateQueries({ queryKey: ["replacements"] });
-    },
+    onSuccess: () => invalidateEquipmentQueries(qc, true),
   });
 }
 
@@ -294,11 +268,7 @@ export function useUpdateEquipmentProfile() {
         "PUT",
         body
       ),
-    onSuccess: (_data, body) => {
-      qc.invalidateQueries({ queryKey: ["equipment-tree"] });
-      qc.invalidateQueries({ queryKey: ["equipment-node", body.seq] });
-      qc.invalidateQueries({ queryKey: ["devices"] });
-    },
+    onSuccess: () => invalidateEquipmentQueries(qc),
   });
 }
 
@@ -311,10 +281,6 @@ export function useUpdateCommonEquipmentProfile() {
         "PUT",
         { machine: "COMMON", sourceScope: body.sourceScope, name: body.name, kks: body.kks }
       ),
-    onSuccess: (_data, body) => {
-      qc.invalidateQueries({ queryKey: ["equipment-tree"] });
-      qc.invalidateQueries({ queryKey: ["equipment-node", body.seq] });
-      qc.invalidateQueries({ queryKey: ["devices"] });
-    },
+    onSuccess: () => invalidateEquipmentQueries(qc),
   });
 }

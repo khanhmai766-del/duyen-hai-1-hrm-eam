@@ -8,9 +8,11 @@ import {
 } from "@/lib/equipment-tree";
 import {
   assertSeqEditable,
+  assertSeqsEditable,
   assertSeqViewable,
   managingPositionsForEquipmentSeq,
   resolveEquipmentAccessForUser,
+  invalidateEquipmentAccessCache,
 } from "@/lib/server-access";
 import { maybeUploadDataUrl } from "@/lib/s3";
 import { invalidateDeviceListCache } from "@/lib/device-list-cache";
@@ -21,12 +23,16 @@ import { requireDeviceDelete, requireDeviceManage, requireDeviceView } from "@/l
 import { ensureRepairMachineColumn } from "@/lib/repair-machine";
 import { ensureDeviceQrCardTable } from "@/lib/device-qr-card-table";
 import { normalizeText } from "@/lib/nav";
-import { EQUIPMENT_DEVICE_SELECT, equipmentNodeToDevice } from "@/lib/equipment-device";
-import { MAX_EQUIPMENT_DEPTH, canonicalSeq, machinesOf, s2Code, s2Kks, type EquipmentMachine, validateEquipmentSeq } from "@/lib/equipment-units";
+import { EQUIPMENT_DEVICE_SELECT, equipmentNodeToDevice, equipmentProfileFields } from "@/lib/equipment-device";
+import { MAX_EQUIPMENT_DEPTH, canonicalSeq, machinesOf, s2Code, scopeKks, type EquipmentMachine, validateEquipmentSeq } from "@/lib/equipment-units";
 import { deviceQrValue } from "@/lib/device-qr";
 import { resolvePositionViewScope } from "@/lib/position-data-scope";
 import { canViewMaterialReplacement } from "@/lib/material-replacement-access";
 import { outstandingDefectWhere } from "@/lib/defect-active-where";
+import { applyEquipmentMove, planEquipmentMove } from "@/lib/equipment-move";
+import { invalidateEquipmentProfileCache } from "@/lib/equipment-profile-cache";
+import { invalidatePositionScopeCache } from "@/lib/position-scope-cache";
+import { normalizeQrMachine } from "@/lib/device-qr";
 
 export const dynamic = "force-dynamic";
 
@@ -214,18 +220,12 @@ async function findEquipmentRecord(seq: string, requestedMachine?: string | null
   ]);
   const base = toDeviceRecord(node, parent);
   const profileCode = machine === "S2" ? s2Code(node.seq) : node.seq;
-  const profileKks = profile?.kks ?? (machine === "S2" ? s2Kks(node.kks ?? null) : node.kks ?? null);
-  const isSecondary = machine === "S2";
   return {
     ...base,
     machine,
     code: profileCode,
-    name: profile?.name ?? node.name,
-    kks: profileKks,
+    ...equipmentProfileFields(node, profile, machine),
     system: parentProfile?.name ?? parent?.name ?? null,
-    images: profile?.imageUrl ? [profile.imageUrl] : (isSecondary ? [] : base.images),
-    attachedInfo: profile?.attachedInfo ?? (isSecondary ? null : base.attachedInfo),
-    documentUrl: profile?.documentUrl ?? (isSecondary ? null : base.documentUrl),
     qrCodeData: deviceQrValue(node.seq, machine),
     managingPosition: managingPositions[0] ?? null,
     managingPositions,
@@ -302,6 +302,8 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
     const body = await req.json();
     const current = await prisma.equipmentNode.findUnique({ where: { seq: currentSeq } });
     if (!current) return fail("Không tìm thấy thiết bị", 404);
+    const machine = body.machine === undefined ? null : normalizeQrMachine(body.machine);
+    if (body.machine !== undefined && (!machine || !machinesOf(currentSeq).includes(machine))) return fail("Tổ máy không phù hợp với thiết bị");
 
     // Mã gửi lên có thể theo tổ máy đang xem (DH1.S2.…) — quy về mã chuẩn trước khi dùng.
     const nextSeq = typeof body.code === "string" ? canonicalSeq(body.code.trim()) : currentSeq;
@@ -321,13 +323,9 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
     }
 
     const images = Array.isArray(body.images) ? body.images.filter(Boolean) : [];
-    const imageUrl =
-      body.images !== undefined
-        ? await maybeUploadDataUrl({ value: images[0] ?? null, folder: "equipment/images", preset: "image" })
-        : undefined;
     const parentSeq = typeof body.systemSeq === "string" && body.systemSeq.trim()
       ? canonicalSeq(body.systemSeq.trim())
-      : parentSeqOf(nextSeq);
+      : nextSeq === currentSeq ? current.parentSeq : parentSeqOf(nextSeq);
     if (parentSeq) {
       // Dùng cây chuẩn hoá giống API cây thiết bị; một số thư mục hệ thống tổng
       // hợp có trên giao diện nhưng không có dòng vật lý riêng trong DB.
@@ -337,34 +335,65 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
       if (parent.seq === currentSeq) return fail("Thiết bị không thể là thư mục cha của chính nó");
       if (parent.seq.split(".").length >= MAX_EQUIPMENT_DEPTH) return fail(`Không thể đặt thiết bị con dưới cấp ${MAX_EQUIPMENT_DEPTH}`);
       if (parentSeqOf(nextSeq) !== parentSeq) return fail(`Số thứ tự thiết bị phải nằm ngay dưới thư mục cha ${parentSeq}`);
+      if (nextSeq !== currentSeq) await assertSeqEditable(user, parentSeq);
     }
-    const node = await prisma.equipmentNode.update({
-      where: { seq: currentSeq },
-      data: {
-        seq: nextSeq,
-        code: nextSeq,
-        name,
-        kks,
-        searchText: normalizeText(`${name} ${kks ?? ""} ${nextSeq.replace(/^DH1\.S1\.?/, "")} ${nextSeq}`),
-        parentSeq,
-        depth: nextSeq.split(".").length,
-        attachedInfo: body.attachedInfo !== undefined ? String(body.attachedInfo || "").trim() || null : undefined,
-        documentUrl:
-          body.documentUrl !== undefined
-            ? await maybeUploadDataUrl({
-                value: String(body.documentUrl || "").trim() || null,
-                folder: "equipment/documents",
-                preset: "document-image",
-              })
-            : undefined,
-        imageUrl,
-      },
-    });
+    const imageUrl = body.images !== undefined
+      ? await maybeUploadDataUrl({ value: images[0] ?? null, folder: "equipment/images", preset: "image" }) : undefined;
+    const fields = {
+      name: body.name !== undefined ? name : undefined,
+      kks: body.kks !== undefined ? kks : undefined,
+      attachedInfo: body.attachedInfo !== undefined ? String(body.attachedInfo || "").trim() || null : undefined,
+      documentUrl: body.documentUrl !== undefined ? await maybeUploadDataUrl({
+        value: String(body.documentUrl || "").trim() || null, folder: "equipment/documents", preset: "document-image",
+      }) : undefined,
+      imageUrl,
+    };
+    const node = await prisma.$transaction(async (tx) => {
+      if (nextSeq !== currentSeq) {
+        // Khóa ghi cấu trúc trong giao dịch để kiểm tra trùng mã và đổi cả nhánh cùng một lúc.
+        await tx.$executeRaw`LOCK TABLE "EquipmentNode" IN SHARE ROW EXCLUSIVE MODE`;
+        const planned = await planEquipmentMove(tx, { sourceSeq: currentSeq, targetParentSeq: parentSeq ?? "", targetSeq: nextSeq });
+        if (!planned.ok) throw fail(planned.error);
+        await assertSeqsEditable(user, planned.plan.nodes.map(item => item.seq));
+        await applyEquipmentMove(tx, planned.plan);
+      }
+      if (machine && machine !== "COMMON") {
+        const defaults: Record<string, string | null> = {
+          name: current.name, kks: scopeKks(current.kks, machine),
+          attachedInfo: machine === "S2" ? null : current.attachedInfo,
+          documentUrl: machine === "S2" ? null : current.documentUrl,
+          imageUrl: machine === "S2" ? null : current.imageUrl,
+        };
+        const data: Record<string, string | null> = {};
+        for (const [key, value] of Object.entries(fields)) {
+          if (value === undefined) continue;
+          data[key] = value === defaults[key] || (value === null && (key === "name" || key === "kks")) ? null : value ?? "";
+        }
+        await tx.equipmentProfile.upsert({
+          where: { nodeSeq_machine: { nodeSeq: nextSeq, machine } },
+          create: { nodeSeq: nextSeq, machine, createdById: user.id, ...data }, update: data,
+        });
+      } else {
+        await tx.equipmentNode.update({ where: { seq: nextSeq }, data: {
+          ...fields, parentSeq, depth: nextSeq.split(".").length,
+          searchText: normalizeText(`${name} ${kks ?? ""} ${nextSeq.replace(/^DH1\.S1\.?/, "")} ${nextSeq}`),
+        } });
+        if (machinesOf(nextSeq).includes("COMMON")) {
+          await tx.equipmentProfile.updateMany({ where: { nodeSeq: nextSeq, machine: "COMMON" },
+            data: Object.fromEntries(Object.entries(fields).filter(([, value]) => value !== undefined).map(([key]) => [key, null])) });
+        }
+      }
+      await tx.equipmentProfile.deleteMany({ where: { nodeSeq: nextSeq, ...(machine ? { machine } : { machine: "COMMON" }),
+        name: null, kks: null, imageUrl: null, attachedInfo: null, documentUrl: null } });
+      return tx.equipmentNode.findUniqueOrThrow({ where: { seq: nextSeq } });
+    }, { timeout: 60_000 });
 
-    await audit(user.id, "UPDATE_EQUIPMENT_NODE", "EquipmentNode", node.id, node.seq);
+    await audit(user.id, machine && machine !== "COMMON" ? "UPDATE_EQUIPMENT_PROFILE" : "UPDATE_EQUIPMENT_NODE", "EquipmentNode", node.id, `${node.seq}${machine ? ` · ${machine}` : ""}`);
     invalidateEquipmentNodeCache();
+    invalidateEquipmentProfileCache();
     invalidateDeviceListCache();
-    const device = await findEquipmentRecord(node.seq);
+    if (nextSeq !== currentSeq) { invalidatePositionScopeCache(); invalidateEquipmentAccessCache(); }
+    const device = await findEquipmentRecord(node.seq, machine);
     return ok(device);
   });
 }
@@ -386,6 +415,7 @@ export async function DELETE(_req: NextRequest, props: { params: Promise<{ id: s
     await recomputeChildCount(prisma, [node.parentSeq]);
     await audit(user.id, "DELETE_EQUIPMENT_NODE", "EquipmentNode", node.id, node.seq);
     invalidateEquipmentNodeCache();
+    invalidateEquipmentProfileCache();
     invalidateDeviceListCache();
     return ok({ id: seq, code: seq });
   });

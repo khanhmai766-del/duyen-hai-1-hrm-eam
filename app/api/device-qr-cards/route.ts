@@ -13,6 +13,7 @@ import { ensureDeviceQrCardTable } from "@/lib/device-qr-card-table";
 import { ensureRepairMachineColumn } from "@/lib/repair-machine";
 import { deviceQrValue, normalizeQrMachine } from "@/lib/device-qr";
 import { defaultScopeOf, machinesOf, scopeCode } from "@/lib/equipment-units";
+import { equipmentProfileFields } from "@/lib/equipment-device";
 
 export const dynamic = "force-dynamic";
 
@@ -21,21 +22,18 @@ function toCardRecord(
   node: NormalizedEquipmentNode,
   parent: NormalizedEquipmentNode | null,
   machine: "S1" | "S2" | "COMMON",
-  stats?: { repairCount: number; latestRepairAt: Date | null }
+  stats?: { repairCount: number; latestRepairAt: Date | null },
+  profile?: Parameters<typeof equipmentProfileFields>[1]
 ) {
   return {
     id: node.seq,
     qrCardKey: `${node.seq}:${machine}`,
     code: scopeCode(node.seq, machine),
     machine,
-    name: node.name,
-    kks: node.kks ?? null,
+    ...equipmentProfileFields(node, profile, machine),
     system: parent?.name ?? null,
     systemSeq: parent?.seq ?? null,
     managingPosition: null,
-    images: node.imageUrl ? [node.imageUrl] : [],
-    attachedInfo: node.attachedInfo ?? null,
-    documentUrl: node.documentUrl ?? null,
     qrCodeData: deviceQrValue(node.seq, machine),
     createdAt: new Date(0).toISOString(),
     updatedAt: new Date(0).toISOString(),
@@ -63,21 +61,24 @@ export async function GET() {
     const index = getEquipmentTreeIndexFor(nodes);
 
     const seqs = [...cardSeqs].filter((seq) => visibleSeqs.has(seq) && index.bySeq.has(seq));
-    const [repairStats, cardDetails] = seqs.length
+    const profileSeqs = [...new Set([...seqs, ...seqs.flatMap(seq => index.parentOf.get(seq) ? [index.parentOf.get(seq)!] : [])])];
+    const [repairStats, cardDetails, profiles] = seqs.length
       ? await Promise.all([prisma.repairLog.groupBy({
-          by: ["deviceSeq"],
+          by: ["deviceSeq", "machine"],
           where: { deviceSeq: { in: seqs } },
           _count: { _all: true },
           _max: { startedAt: true },
         }), prisma.equipmentNode.findMany({
           where: { seq: { in: seqs } },
           select: { seq: true, name: true, kks: true, attachedInfo: true, documentUrl: true, imageUrl: true },
-        })])
-      : [[], []];
+        }), prisma.equipmentProfile.findMany({ where: { nodeSeq: { in: profileSeqs } },
+          select: { nodeSeq: true, machine: true, name: true, kks: true, imageUrl: true, attachedInfo: true, documentUrl: true } })])
+      : [[], [], []];
     const statsBySeq = new Map(
-      repairStats.map((item) => [item.deviceSeq, { repairCount: item._count._all, latestRepairAt: item._max.startedAt }])
+      repairStats.map((item) => [`${item.deviceSeq}:${item.machine}`, { repairCount: item._count._all, latestRepairAt: item._max.startedAt }])
     );
     const detailBySeq = new Map(cardDetails.map((item) => [item.seq, item]));
+    const profileByKey = new Map(profiles.map(profile => [`${profile.nodeSeq}:${profile.machine}`, profile]));
 
     const data = cards
       .filter((card) => visibleSeqs.has(card.deviceSeq) && index.bySeq.has(card.deviceSeq))
@@ -95,9 +96,11 @@ export async function GET() {
           imageUrl: detail?.imageUrl ?? null,
         };
         const parentSeq = index.parentOf.get(seq) ?? node.parentSeq ?? null;
-        const parent = parentSeq ? index.bySeq.get(parentSeq) ?? null : null;
         const machine = normalizeQrMachine(card.machine) ?? defaultScopeOf(seq);
-        return toCardRecord(node, parent, machine, statsBySeq.get(seq));
+        const baseParent = parentSeq ? index.bySeq.get(parentSeq) ?? null : null;
+        const parent = baseParent ? { ...baseParent, name: profileByKey.get(`${parentSeq}:${machine}`)?.name ?? baseParent.name } : null;
+        const key = `${seq}:${machine}`;
+        return toCardRecord(node, parent, machine, statsBySeq.get(key), profileByKey.get(key));
       });
     return ok(data, { total: data.length });
   });

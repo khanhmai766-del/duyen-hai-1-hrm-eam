@@ -23,8 +23,8 @@ import { useRbacAccess } from "@/hooks/useRbacAccess";
 import { useAddDeviceQrCard, useRemoveDeviceQrCard } from "@/hooks/useDeviceQrCards";
 import { cn, formatDate } from "@/lib/utils";
 import { DEFECT_SEVERITY, DEFECT_STATUS, defectSeverityCriteriaLabels } from "@/lib/constants";
-import { defaultScopeOf, scopeCode, TREE_SCOPES } from "@/lib/equipment-units";
-import { deviceQrValue } from "@/lib/device-qr";
+import { defaultScopeOf, parseScope, scopeCode, TREE_SCOPES } from "@/lib/equipment-units";
+import { deviceDetailUrl, deviceQrValue } from "@/lib/device-qr";
 
 export default function DeviceDetailPage() {
   return (
@@ -67,7 +67,7 @@ function DeviceDetailPageContent() {
   const canEditMaterialDeclaration = Boolean(device && rbac.can("replacement-manage", ["manage", "full"]) && access.canEdit);
   const deviceMachine = React.useMemo(() => {
     if (!device) return "S1";
-    return device.machine ?? defaultScopeOf(device.id);
+    return parseScope(device.machine ?? defaultScopeOf(device.id));
   }, [device]);
   const materialEditDeclaration = device?.materialDeclarations.find((item) => item.id === materialEditId) ?? null;
   const materialEditDevice = materialEditDeclaration?.device
@@ -577,7 +577,10 @@ function DeviceDetailPageContent() {
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
         <DialogContent className="max-w-2xl">
           <DialogHeader><DialogTitle>Chỉnh sửa thiết bị</DialogTitle></DialogHeader>
-          <DeviceForm device={device} onDone={() => setEditOpen(false)} />
+          <DeviceForm device={device} onDone={(saved) => {
+            setEditOpen(false);
+            if (saved.id !== device.id) router.replace(deviceDetailUrl(saved.id, deviceMachine));
+          }} />
         </DialogContent>
       </Dialog>
 

@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiMutate } from "@/lib/fetcher";
+import { invalidateEquipmentQueries } from "@/lib/equipment-query-cache";
 
 export interface DeviceRecord {
   id: string;
@@ -25,12 +26,6 @@ export interface DeviceRecord {
 export interface DeviceListItem extends DeviceRecord {
   repairLogs: { startedAt: string }[];
   _count: { repairLogs: number };
-}
-
-export interface DeviceListMeta {
-  total: number;
-  totalSystemDevices: number;
-  source: string;
 }
 
 export interface DeviceWithRelations extends DeviceRecord {
@@ -111,22 +106,6 @@ export interface DeviceWithRelations extends DeviceRecord {
   includedDescendantDepth?: number;
 }
 
-export function useDevices(params: {
-  enabled?: boolean;
-  permissionScope?: "material-manage" | "replacement-manage";
-}) {
-  const qs = new URLSearchParams();
-  if (params.permissionScope) qs.set("permissionScope", params.permissionScope);
-  const { enabled = true, ...queryParams } = params;
-  return useQuery({
-    queryKey: ["devices", queryParams],
-    queryFn: () => apiGet<DeviceListItem[]>(`/api/devices?${qs.toString()}`) as Promise<{ data: DeviceListItem[]; meta: DeviceListMeta }>,
-    enabled,
-    staleTime: 5 * 60 * 1000,
-    refetchOnWindowFocus: false,
-  });
-}
-
 export function useDevice(id: string | undefined, machine?: string | null, includeDescendants?: number) {
   const machineParam = machine?.toUpperCase() ?? "";
   const descendantDepth = includeDescendants === undefined
@@ -152,11 +131,7 @@ export function useCreateDevice() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (body: DeviceInput) => apiMutate<DeviceRecord>("/api/devices", "POST", body),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["devices"] });
-      qc.invalidateQueries({ queryKey: ["equipment-tree"] });
-      qc.invalidateQueries({ queryKey: ["material-ticket-options"] });
-    },
+    onSuccess: () => invalidateEquipmentQueries(qc),
   });
 }
 
@@ -165,12 +140,7 @@ export function useUpdateDevice() {
   return useMutation({
     mutationFn: ({ id, ...body }: DeviceInput & { id: string }) =>
       apiMutate<DeviceRecord>(`/api/devices/${id}`, "PUT", body),
-    onSuccess: (_d, vars) => {
-      qc.invalidateQueries({ queryKey: ["devices"] });
-      qc.invalidateQueries({ queryKey: ["device", vars.id] });
-      qc.invalidateQueries({ queryKey: ["equipment-tree"] });
-      qc.invalidateQueries({ queryKey: ["material-ticket-options"] });
-    },
+    onSuccess: (saved, vars) => invalidateEquipmentQueries(qc, saved.id !== vars.id, saved.id !== vars.id ? vars.id : undefined),
   });
 }
 
@@ -178,29 +148,6 @@ export function useDeleteDevice() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => apiMutate(`/api/devices/${encodeURIComponent(id)}`, "DELETE"),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["devices"] });
-      qc.invalidateQueries({ queryKey: ["equipment-tree"] });
-      qc.invalidateQueries({ queryKey: ["material-ticket-options"] });
-    },
-  });
-}
-
-export interface ImportResult {
-  created: number;
-  updated: number;
-  skipped: string[];
-}
-
-export function useImportDevices() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (rows: Array<{ code: string; name?: string; system?: string; systemSeq?: string }>) =>
-      apiMutate<ImportResult>("/api/devices/import", "POST", { rows }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["devices"] });
-      qc.invalidateQueries({ queryKey: ["equipment-tree"] });
-      qc.invalidateQueries({ queryKey: ["material-ticket-options"] });
-    },
+    onSuccess: () => invalidateEquipmentQueries(qc, true),
   });
 }

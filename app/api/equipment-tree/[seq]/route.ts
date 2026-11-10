@@ -162,7 +162,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ seq: stri
       update: { ...(hasName ? { name: name ?? null } : {}), ...(hasKks ? { kks: kks ?? null } : {}) },
       select: { id: true, name: true, kks: true, attachedInfo: true, documentUrl: true, imageUrl: true },
     });
-    if (!profile.name && !profile.kks && !profile.attachedInfo && !profile.documentUrl && !profile.imageUrl) {
+    if ([profile.name, profile.kks, profile.attachedInfo, profile.documentUrl, profile.imageUrl].every(value => value === null)) {
       await prisma.equipmentProfile.delete({ where: { id: profile.id } });
     }
 

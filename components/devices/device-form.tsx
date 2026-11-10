@@ -23,6 +23,7 @@ import {
   canonicalSeq,
   defaultScopeOf,
   MAX_EQUIPMENT_DEPTH,
+  parseScope,
   s2Kks,
   scopeCode,
   seqInScope,
@@ -104,13 +105,9 @@ export function DeviceForm({
     []
   );
   // Phạm vi cây đang tạo. Với thiết bị đã có thì suy từ chính mã của nó.
-  const [scope, setScope] = React.useState<TreeScope>(() =>
-    normalizeScope(
-      device
-        ? defaultScopeOf(device.code)
-        : initialScope ?? (initialParentSeq ? defaultScopeOf(initialParentSeq) : "S1")
-    )
-  );
+  const [scope, setScope] = React.useState<TreeScope>(() => device
+    ? parseScope(device.machine ?? defaultScopeOf(device.id))
+    : normalizeScope(initialScope ?? (initialParentSeq ? defaultScopeOf(initialParentSeq) : "S1")));
 
   const [form, setForm] = React.useState({
     // `code` giữ MÃ HIỂN THỊ theo phạm vi; quy về mã chuẩn ngay trước khi gửi.
@@ -118,7 +115,7 @@ export function DeviceForm({
     name: device?.name ?? "",
     kks: device?.kks ?? "",
     system: device?.system ?? "",
-    systemSeq: initialParentSeq ?? "",
+    systemSeq: device?.systemSeq ?? initialParentSeq ?? "",
     managingPosition: positionLabelOf(device?.managingPosition),
     images: device?.images ?? [],
     attachedInfo: device?.attachedInfo ?? "",
@@ -266,7 +263,7 @@ export function DeviceForm({
     const payload = { ...form, code: canonicalSeq(form.code.trim()) };
     try {
       const result = isEdit
-        ? await update.mutateAsync({ id: device!.id, ...payload })
+        ? await update.mutateAsync({ id: device!.id, ...payload, machine: device!.machine ?? defaultScopeOf(device!.id) })
         : await create.mutateAsync(payload);
       toast.success(isEdit ? "Đã cập nhật thiết bị" : "Đã thêm thiết bị mới");
       if (!keepAdding) {
@@ -301,7 +298,7 @@ export function DeviceForm({
   const pending = create.isPending || update.isPending;
   const kksTrimmed = form.kks.trim();
   const derivedS2Kks = scope === "COMMON" ? null : s2Kks(kksTrimmed);
-  const showS2Kks = Boolean(derivedS2Kks && derivedS2Kks !== kksTrimmed);
+  const showS2Kks = !isEdit && Boolean(derivedS2Kks && derivedS2Kks !== kksTrimmed);
 
   /* ------------------------------------------------------------ các khối dùng chung */
 
@@ -344,8 +341,10 @@ export function DeviceForm({
       />
       {scope !== "COMMON" && (
         <p className="mt-1 text-xs text-muted-foreground">
-          Nhập KKS của <b className="text-ink">Tổ máy S1</b> (bắt đầu bằng 1…). KKS S2 được suy ra tự động
-          bằng cách đổi ký tự đầu 1 → 2.
+          {isEdit ? <>KKS này chỉ lưu cho <b className="text-ink">Tổ máy {scope}</b>.</> : <>
+            Nhập KKS của <b className="text-ink">Tổ máy S1</b> (bắt đầu bằng 1…). KKS S2 được suy ra tự động
+            bằng cách đổi ký tự đầu 1 → 2.
+          </>}
         </p>
       )}
       {showS2Kks && (
@@ -374,7 +373,8 @@ export function DeviceForm({
         onChange={selectParent}
       />
       <p className="mt-1 text-xs text-muted-foreground">
-        Có thể chọn thiết bị hiện tại làm thư mục cha. Mã thiết bị sẽ tự điền mã cha kèm số cấp con còn trống.
+        {isEdit ? "Khi đổi thư mục cha, cập nhật mã thiết bị cho đúng nhánh đã chọn."
+          : "Có thể chọn thiết bị hiện tại làm thư mục cha. Mã thiết bị sẽ tự điền mã cha kèm số cấp con còn trống."}
       </p>
     </Field>
   );
@@ -499,8 +499,8 @@ export function DeviceForm({
         </p>
       </div>
 
-      <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_340px]">
-      <div className="space-y-4">
+      <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-[minmax(0,1fr)_340px]">
+      <div className="min-w-0 space-y-4">
         <Section step={1} title="Vị trí trong cây thiết bị" hint="Quyết định mã thiết bị">
           <Field label="Thiết bị thuộc *">
             <div className="flex flex-wrap items-center gap-1 rounded-lg border border-border bg-muted/40 p-1">
@@ -596,7 +596,7 @@ export function DeviceForm({
       </div>
 
       {/* ------------------------------------------------------------- cột phải */}
-      <div className="space-y-3.5 lg:sticky lg:top-4">
+      <div className="min-w-0 space-y-3.5 lg:sticky lg:top-4">
         {/* Bảng tên thiết bị — xem trước đúng thứ sẽ được lưu. */}
         <div className="relative overflow-hidden rounded-2xl bg-gradient-to-b from-[#1b2b4d] to-[#101a30] p-4 text-[#e8eefc] shadow-lg">
           <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-widest text-[#8ba3d4]">
@@ -708,7 +708,7 @@ export function DeviceForm({
       </div>
 
       {/* --------------------------------------------------- thanh hành động dính đáy */}
-      <div className="sticky bottom-0 z-20 -mx-1 flex flex-wrap items-center gap-3 border-t border-border bg-background/90 px-1 py-3 backdrop-blur lg:col-span-2">
+      <div className="sticky bottom-[calc(5.5rem+env(safe-area-inset-bottom))] z-20 -mx-1 flex flex-wrap items-center gap-3 border-t border-border bg-background/90 px-1 py-3 backdrop-blur lg:static lg:col-span-2">
         <ProgressRing done={doneCount} total={totalCount} />
         <span className="text-[13px] text-muted-foreground">
           {canSubmit ? (
@@ -745,7 +745,7 @@ function Section({
 }) {
   return (
     <section className="rounded-2xl border border-border bg-card p-5 shadow-sm">
-      <div className="mb-4 flex items-center gap-2.5">
+      <div className="mb-4 flex flex-wrap items-center gap-2.5">
         <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-navy text-xs font-bold text-white">
           {step}
         </span>
