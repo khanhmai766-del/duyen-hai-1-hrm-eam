@@ -161,13 +161,13 @@ Trước khi bắt đầu một trang: báo cho người còn lại để không
   cầu), bộ đếm 72 lượt đọc ảnh/giờ (upsert có điều kiện), khôi phục sao lưu (`INSERT … VALUES (…),(…) ON CONFLICT` 50 dòng/lô,
   `LOCK TABLE` + `setval`), đọc cấu trúc cột (`information_schema`). Đã xoá `db/index.ts`, `db/sql.ts`, `daily-input-audit.ts`,
   `chemical-usage/schema.ts`, `hooks/useCtktkt.ts`.
-- **Kiểm**: `npm run test:ctktkt` (316), `npm run test:ctktkt:contract` (34 API đọc) và `-- --writes` (140 bước, kèm phiên bản
+- **Kiểm**: `npm run test:ctktkt` (329, 10/11/2026), `npm run test:ctktkt:contract` (34 API đọc) và `-- --writes` (147 bước, kèm phiên bản
   đọc + nhật ký sửa ô), `scripts/verify/ctktkt-export-dump.mjs` (nội dung file Excel), `scripts/verify/ctktkt-shadow-dump.mjs`
   (Mirror + API tích hợp), `CTKTKT_VERIFY_DAY=2026-09-17 npx tsx scripts/verify/ctktkt.mjs` / `ctktkt-machine.mjs` (tích hợp,
   DB dev chỉ có dữ liệu mẫu).
 - **CSS (09/11/2026)**: bỏ 117 bộ chọn chết (lớp `app-workspace`, `app-nav-*`, `app-sidebar*`, `ui-3d-*`, `auth-*`… từ gói bàn
   giao, không phần tử nào dùng — chỉ bỏ khi lớp chết nằm ở cấp ngoài, không trong `:not/:is`), dời quy tắc riêng của từng thành phần
-  về tệp đi kèm (`ctktkt-report.css`, `pmis-report.css`, `water-report-table.css`). `modules/ctktkt/styles.css` (247 dòng) còn lại
+  về tệp đi kèm (`ctktkt-report.css`, `pmis-report.css`, `water-report-table.css`). `modules/ctktkt/styles.css` (267 dòng sau đợt Tailwind; hạn mức ở `CSS_ALLOWED`) còn lại
   là **lớp giao diện chung của module** (`ctktkt-module`, `engineering-workspace`, `module-hero`, `ktkt-dark-hero`,
   `report-data-table`…) và quy tắc trộn nhiều trang — giữ dạng CSS. Kiểm bằng `scripts/verify/ctktkt-style-dump.mjs` +
   `ctktkt-style-compare.mjs` (getComputedStyle mọi phần tử, 12 trang × 1280/390; chụp code cũ ≥ 2 lần để loại phần tử tự dao động
@@ -217,7 +217,7 @@ Trước khi bắt đầu một trang: báo cho người còn lại để không
 ## Kiểm tra bắt buộc mỗi bước
 
 ```bash
-npm run test:ctktkt                 # 251 test đơn vị/miền (cần bảng ctktkt_* trên DB dev, xem dưới)
+npm run test:ctktkt                 # 329 test đơn vị/miền (cần bảng ctktkt_* trên DB dev, xem dưới)
 npm run test:ctktkt:contract        # các API GET phải khớp ảnh chụp chuẩn (cần dev server ở :3030)
 npm run test:ctktkt:contract -- --writes   # kịch bản thêm/sửa/xoá phải ra phản hồi + trạng thái y hệt
 npx tsc --noEmit
