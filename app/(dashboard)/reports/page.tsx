@@ -39,6 +39,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useEquipmentDashboard } from "@/hooks/useEquipmentDashboard";
+import { DefectStatusChart, DeviceSignalChart, RepairYearChart, ReplacementDueChart } from "@/components/reports/equipment-summary-charts";
 import { DEFECT_REQUEST_TYPES } from "@/lib/constants";
 import { cn, formatDate } from "@/lib/utils";
 import type { EquipmentDashboardSignalRow } from "@/types/equipment-dashboard";
@@ -124,10 +125,7 @@ function ReportsPageContent() {
       monthlyTrend,
       hasMonthlyTrend,
       repairYearOptions,
-      yearlyTrend:
-        selectedYearRepairs > 0
-          ? [{ year: String(selectedRepairYear), repairs: selectedYearRepairs }]
-          : [],
+      yearlyTrend: [{ year: String(selectedRepairYear), repairs: selectedYearRepairs }],
     };
   }, [
     dashboardData,
@@ -374,7 +372,7 @@ function ReportsPageContent() {
               Lượt sửa chữa theo năm
             </CardTitle>
             <Select value={repairYearFilter} onValueChange={setRepairYearFilter}>
-              <SelectTrigger className="h-8 w-[112px] rounded-lg bg-white text-xs shadow-none">
+              <SelectTrigger aria-label="Năm sửa chữa" className="h-10 w-[112px] rounded-lg bg-white text-sm shadow-none sm:h-9">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -389,26 +387,8 @@ function ReportsPageContent() {
           <CardContent>
             {isLoading ? (
               <ChartSkeleton />
-            ) : dashboard.yearlyTrend.length ? (
-              <div className="h-[300px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={dashboard.yearlyTrend} margin={{ top: 10, right: 16, left: 0, bottom: 4 }}>
-                    <defs>
-                      <linearGradient id="areaYear" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#0EA5E9" stopOpacity={0.4} />
-                        <stop offset="95%" stopColor="#0EA5E9" stopOpacity={0.03} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="#EEF2F7" />
-                    <XAxis dataKey="year" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
-                    <YAxis tick={{ fontSize: 11 }} allowDecimals={false} tickLine={false} axisLine={false} width={28} />
-                    <Tooltip content={<DashboardTooltip />} />
-                    <Area type="monotone" dataKey="repairs" name="Lượt sửa chữa" stroke="#0EA5E9" strokeWidth={2.5} fill="url(#areaYear)" dot={{ r: 3 }} activeDot={{ r: 5 }} />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
             ) : (
-              <EmptyPanel text="Chưa có lịch sử sửa chữa" />
+              <RepairYearChart rows={dashboard.yearlyTrend} />
             )}
           </CardContent>
         </Card>
@@ -426,17 +406,7 @@ function ReportsPageContent() {
             {isLoading ? (
               <ChartSkeleton compact />
             ) : dashboard.statusRows.length ? (
-              <div className="space-y-3">
-                {dashboard.statusRows.map((row, index) => (
-                  <ProgressRow
-                    key={row.name}
-                    label={row.name}
-                    value={row.value}
-                    max={Math.max(...dashboard.statusRows.map((item) => item.value), 1)}
-                    color={CHART_COLORS[index % CHART_COLORS.length]}
-                  />
-                ))}
-              </div>
+              <DefectStatusChart rows={dashboard.statusRows} />
             ) : (
               <EmptyPanel text="Không có khiếm khuyết trong phạm vi lọc" />
             )}
@@ -452,22 +422,28 @@ function ReportsPageContent() {
           </CardHeader>
           <CardContent>
             {isLoading ? (
-              <ListSkeleton />
-            ) : dashboard.upcomingReplacements.length ? (
-              <div className="space-y-2">
-                {dashboard.upcomingReplacements.map((item) => (
-                  <ReplacementAlert key={item.id} item={item} />
-                ))}
-              </div>
+              <ChartSkeleton />
             ) : (
-              <EmptyPanel text="Chưa có điểm thay thế vật tư" />
+              <>
+                <ReplacementDueChart groups={dashboard.dueGroups} />
+                {dashboard.upcomingReplacements.length > 0 && (
+                  <details className="mt-4 border-t border-slate-100 pt-2">
+                    <summary className="min-h-10 cursor-pointer py-2 text-sm font-semibold text-navy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
+                      Xem {dashboard.upcomingReplacements.length} lịch thay thế gần nhất
+                    </summary>
+                    <div className="mt-2 space-y-2">
+                      {dashboard.upcomingReplacements.map(item => <ReplacementAlert key={item.id} item={item} />)}
+                    </div>
+                  </details>
+                )}
+              </>
             )}
           </CardContent>
         </Card>
       </div>
 
       <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
-          <SignalMiniChart
+          <DeviceSignalChart
             icon={AlertTriangle}
             title="Top khiếm khuyết tồn đọng"
             rows={dashboard.defectChartRows}
@@ -475,7 +451,7 @@ function ReportsPageContent() {
             color="#EF4444"
             emptyText="Không có thiết bị đang tồn đọng khiếm khuyết"
           />
-          <SignalMiniChart
+          <DeviceSignalChart
             icon={TimerReset}
             title="Cảnh báo thay thế theo thiết bị"
             rows={dashboard.replacementChartRows}
@@ -740,70 +716,6 @@ function SignalCounter({ label, value, color }: { label: string; value: number; 
   );
 }
 
-function SignalMiniChart({
-  icon: Icon,
-  title,
-  rows,
-  dataKey,
-  color,
-  emptyText,
-}: {
-  icon: React.ElementType;
-  title: string;
-  rows: Array<{ name: string; code: string; [key: string]: string | number }>;
-  dataKey: string;
-  color: string;
-  emptyText: string;
-}) {
-  return (
-    <Card className="overflow-hidden">
-      <CardHeader className="pb-2">
-        <CardTitle className="flex items-center gap-2 text-base">
-          <Icon className="h-4 w-4" style={{ color }} />
-          {title}
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        {rows.length ? (
-          <div className="h-[150px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={rows} layout="vertical" margin={{ top: 4, right: 16, left: 8, bottom: 4 }}>
-                <XAxis type="number" tick={{ fontSize: 10 }} allowDecimals={false} hide />
-                <YAxis
-                  type="category"
-                  dataKey="name"
-                  width={104}
-                  tick={{ fontSize: 10 }}
-                  tickFormatter={(value) => shortLabel(String(value), 18)}
-                />
-                <Tooltip content={<DashboardTooltip />} />
-                <Bar dataKey={dataKey} name={title} fill={color} radius={[0, 6, 6, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        ) : (
-          <EmptyPanel text={emptyText} />
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
-function ProgressRow({ label, value, max, color }: { label: string; value: number; max: number; color: string }) {
-  const width = Math.max(6, Math.round((value / max) * 100));
-  return (
-    <div className="space-y-1.5">
-      <div className="flex items-center justify-between gap-3 text-sm">
-        <span className="font-medium text-ink">{label}</span>
-        <span className="font-semibold text-slate-700">{value}</span>
-      </div>
-      <div className="h-2.5 overflow-hidden rounded-full bg-slate-100">
-        <div className="h-full rounded-full" style={{ width: `${width}%`, backgroundColor: color }} />
-      </div>
-    </div>
-  );
-}
-
 function ReplacementAlert({
   item,
 }: {
@@ -878,16 +790,6 @@ function DashboardTooltip({ active, payload, label }: { active?: boolean; payloa
 
 function ChartSkeleton({ compact = false }: { compact?: boolean }) {
   return <div className={cn("animate-pulse rounded-lg bg-slate-100", compact ? "h-[170px]" : "h-[300px]")} />;
-}
-
-function ListSkeleton() {
-  return (
-    <div className="space-y-2">
-      {Array.from({ length: 4 }).map((_, index) => (
-        <div key={index} className="h-16 animate-pulse rounded-lg bg-slate-100" />
-      ))}
-    </div>
-  );
 }
 
 function EmptyPanel({ text }: { text: string }) {
