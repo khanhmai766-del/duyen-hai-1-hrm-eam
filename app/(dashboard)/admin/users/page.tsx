@@ -15,14 +15,13 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { RoleBadge } from "@/components/devices/status-badge";
 import { AvatarPicker } from "@/components/shared/avatar-picker";
 import { SignaturePad } from "@/components/shared/signature-pad";
 import { useAdminUserDetail, useAdminUsers, useCreateUser, useUpdateUser, useDeleteUser, usePermanentDeleteUser, usePositions } from "@/hooks/useUsers";
 import { useRbacAccess } from "@/hooks/useRbacAccess";
-import { apiGet, apiMutate } from "@/lib/fetcher";
+import { apiGet, apiMutate, apiUpload } from "@/lib/fetcher";
 import { ROLES, type RoleKey } from "@/lib/constants";
-import { passwordPolicyMessage } from "@/lib/password-policy";
+import { DEFAULT_PASSWORD, passwordPolicyMessage } from "@/lib/password-policy";
 import { cn, formatDateTime, initials } from "@/lib/utils";
 import type { SafeUser } from "@/types";
 
@@ -30,6 +29,8 @@ const ROLE_KEYS = Object.keys(ROLES) as RoleKey[];
 const PERMANENT_DELETE_CONFIRMATION = "xác nhận xóa";
 const ROLE_PROFILE_PERMISSION = "__ROLE_PROFILE__";
 const NO_ROLE_PROFILE = "__none__";
+const EMPTY_USER_FORM = { name: "", email: "", workEmail: "", username: "", employeeId: "", phone: "", position: "", secondaryPosition: "", secondaryPosition2: "", department: "", role: "VIEWER", accessMode: "NORMAL", avatarUrl: "", signatureUrl: "" };
+type UserForm = typeof EMPTY_USER_FORM;
 type ActivityCategory = "SYSTEM" | "SECURITY" | "ATTENDANCE" | "USER";
 type PermissionValue = "full" | "manage" | "personal" | "read" | "none";
 type RbacRoleProfile = {
@@ -151,7 +152,7 @@ export default function AdminUsersPage() {
   const [positionFilter, setPositionFilter] = React.useState("ALL");
   const [page, setPage] = React.useState(1);
   const [pageSize, setPageSize] = React.useState(10);
-  const [form, setForm] = React.useState({ name: "", email: "", workEmail: "", username: "", employeeId: "", position: "", secondaryPosition: "", secondaryPosition2: "", department: "", role: "VIEWER", accessMode: "NORMAL", password: "password123", avatarUrl: "", signatureUrl: "" });
+  const [form, setForm] = React.useState({ ...EMPTY_USER_FORM, password: DEFAULT_PASSWORD });
   const [newUserRoleProfile, setNewUserRoleProfile] = React.useState("");
   const [editTarget, setEditTarget] = React.useState<SafeUser | null>(null);
   const [delTarget, setDelTarget] = React.useState<SafeUser | null>(null);
@@ -213,7 +214,6 @@ export default function AdminUsersPage() {
   const totalPages = Math.max(1, Math.ceil(totalUsers / pageSize));
   const firstShown = totalUsers ? (page - 1) * pageSize + 1 : 0;
   const lastShown = Math.min(page * pageSize, totalUsers);
-  const pagedUsers = users;
   const auditRows = audit.data?.data ?? [];
   const activityAuditMeta = audit.data?.meta as AuditMeta | null;
   const systemAuditRows = (systemAudit.data?.data ?? []).slice(0, 100);
@@ -253,15 +253,21 @@ export default function AdminUsersPage() {
 
   async function createUser() {
     if (!form.name || !form.email || !form.employeeId || !form.username.trim()) return toast.error("Nhập đủ thông tin bắt buộc");
+    if (newUserRoleProfile && !canManageRbac) return toast.error("Không đủ quyền gán phân quyền mở rộng");
     try {
       const created = await create.mutateAsync(form);
+      setOpen(false);
+      setForm({ ...EMPTY_USER_FORM, password: DEFAULT_PASSWORD });
+      setNewUserRoleProfile("");
       if (newUserRoleProfile) {
-        await changeRoleProfile(created.id, newUserRoleProfile, { silent: true });
+        try {
+          await changeRoleProfile(created.id, newUserRoleProfile, { silent: true });
+        } catch (e) {
+          toast.warning("Đã tạo người dùng nhưng chưa gán được phân quyền mở rộng", { description: (e as Error).message });
+          return;
+        }
       }
       toast.success("Đã tạo người dùng");
-      setOpen(false);
-      setForm({ name: "", email: "", workEmail: "", username: "", employeeId: "", position: "", secondaryPosition: "", secondaryPosition2: "", department: "", role: "VIEWER", accessMode: "NORMAL", password: "password123", avatarUrl: "", signatureUrl: "" });
-      setNewUserRoleProfile("");
     } catch (e) {
       toast.error((e as Error).message);
     }
@@ -276,14 +282,13 @@ export default function AdminUsersPage() {
     setResetPasswordForm({ newPassword: "", confirmPassword: "" });
   }
   async function changeRoleProfile(userId: string, roleId: string, options: { silent?: boolean } = {}) {
+    if (!canManageRbac) throw new Error("Không đủ quyền gán phân quyền mở rộng");
     const normalizedRoleId = roleId === NO_ROLE_PROFILE ? "" : roleId;
     if (normalizedRoleId && !roleProfiles.some((role) => role.id === normalizedRoleId)) {
-      toast.error("Phân quyền mở rộng không còn tồn tại");
-      return;
+      throw new Error("Phân quyền mở rộng không còn tồn tại");
     }
     if (!rbacConfig.permissions.length) {
-      toast.error("Chưa có cấu hình RBAC để lưu phân quyền mở rộng");
-      return;
+      throw new Error("Chưa có cấu hình RBAC để lưu phân quyền mở rộng");
     }
     const nextOverrides = [
       ...(rbacConfig.userOverrides ?? []).filter(
@@ -301,12 +306,8 @@ export default function AdminUsersPage() {
           }]
         : []),
     ];
-    try {
-      await saveRbac.mutateAsync({ ...rbacConfig, userOverrides: nextOverrides });
-      if (!options.silent) toast.success(normalizedRoleId ? "Đã gán phân quyền mở rộng" : "Đã gỡ phân quyền mở rộng");
-    } catch (e) {
-      toast.error((e as Error).message);
-    }
+    await saveRbac.mutateAsync({ ...rbacConfig, userOverrides: nextOverrides });
+    if (!options.silent) toast.success(normalizedRoleId ? "Đã gán phân quyền mở rộng" : "Đã gỡ phân quyền mở rộng");
   }
   async function toggleActive(id: string, isActive: boolean) {
     try { await update.mutateAsync({ id, isActive }); toast.success(isActive ? "Đã kích hoạt" : "Đã vô hiệu hoá"); }
@@ -373,7 +374,7 @@ export default function AdminUsersPage() {
                   </TableCell>
                 </TableRow>
               )}
-              {pagedUsers.map((u) => (
+              {users.map((u) => (
                 <TableRow key={u.id}>
                   <TableCell>
                     <div className="mx-auto flex h-11 w-11 items-center justify-center overflow-hidden rounded-full bg-navy text-sm font-semibold text-white ring-1 ring-border">
@@ -427,8 +428,8 @@ export default function AdminUsersPage() {
                     <RoleProfileSelect
                       value={roleProfileByUser.get(u.id) ?? ""}
                       profiles={roleProfiles}
-                      disabled={!canManageUsers || rbacQuery.isLoading || saveRbac.isPending}
-                      onChange={(value) => changeRoleProfile(u.id, value)}
+                      disabled={!canManageRbac || rbacQuery.isLoading || saveRbac.isPending}
+                      onChange={(value) => { void changeRoleProfile(u.id, value).catch((e: Error) => toast.error(e.message)); }}
                     />
                   </TableCell>
                   <TableCell>
@@ -640,41 +641,12 @@ export default function AdminUsersPage() {
         <DialogContent>
           <DialogHeader><DialogTitle>Thêm người dùng</DialogTitle></DialogHeader>
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Hình ảnh" className="col-span-2">
-              <AvatarPicker value={form.avatarUrl} onChange={(v) => setForm({ ...form, avatarUrl: v })} name={form.name} />
-            </Field>
-            <Field label="Chữ ký số" className="col-span-2">
-              <SignaturePad value={form.signatureUrl} onChange={(v) => setForm({ ...form, signatureUrl: v })} />
-            </Field>
-            <Field label="Họ tên *" className="col-span-2"><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></Field>
-            <Field label="Email công ty *"><Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></Field>
-            <Field label="Email làm việc"><Input type="email" value={form.workEmail} onChange={(e) => setForm({ ...form, workEmail: e.target.value })} /></Field>
-            <Field label="User *"><Input value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} /></Field>
-            <Field label="Mã NV *"><Input value={form.employeeId} onChange={(e) => setForm({ ...form, employeeId: e.target.value })} /></Field>
-            <Field label="Chức vụ chính"><PositionSelect value={form.position} onChange={(v) => setForm({ ...form, position: v })} /></Field>
-            <Field label="Chức vụ phụ 1"><PositionSelect value={form.secondaryPosition} onChange={(v) => setForm({ ...form, secondaryPosition: v })} /></Field>
-            <Field label="Chức vụ phụ 2"><PositionSelect value={form.secondaryPosition2} onChange={(v) => setForm({ ...form, secondaryPosition2: v })} /></Field>
-            <Field label="Bộ phận"><Input value={form.department} onChange={(e) => setForm({ ...form, department: e.target.value })} /></Field>
-            <Field label="Vai trò">
-              <Select value={form.role} onValueChange={(v) => setForm({ ...form, role: v })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>{ROLE_KEYS.map((r) => <SelectItem key={r} value={r}>{ROLES[r].label}</SelectItem>)}</SelectContent>
-              </Select>
-            </Field>
-            <Field label="Chế độ tài khoản">
-              <Select value={form.accessMode} onValueChange={(v) => setForm({ ...form, accessMode: v })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="NORMAL">Sử dụng bình thường</SelectItem>
-                  <SelectItem value="DEFECT_READ_ONLY">Tài khoản tra cứu</SelectItem>
-                </SelectContent>
-              </Select>
-            </Field>
-            <Field label="Phân quyền mở rộng">
+            <UserFields form={form} onChange={setForm} required />
+            <Field label="Phân quyền mở rộng" className="min-w-0 [&>button]:w-full">
               <RoleProfileSelect
                 value={newUserRoleProfile}
                 profiles={roleProfiles}
-                disabled={rbacQuery.isLoading}
+                disabled={!canManageRbac || rbacQuery.isLoading}
                 onChange={(value) => setNewUserRoleProfile(value === NO_ROLE_PROFILE ? "" : value)}
               />
             </Field>
@@ -682,7 +654,7 @@ export default function AdminUsersPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)}>Huỷ</Button>
-            <Button onClick={createUser} disabled={create.isPending}>Tạo</Button>
+            <Button onClick={createUser} disabled={create.isPending || saveRbac.isPending}>Tạo</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -945,13 +917,6 @@ type ZipReport = {
   errors: Array<{ file: string; reason: string }>;
 };
 
-async function postForm<T>(url: string, formData: FormData): Promise<T> {
-  const res = await fetch(url, { method: "POST", body: formData });
-  const json = await res.json();
-  if (!res.ok || json.error) throw new Error(json.error || "Thao tác thất bại");
-  return json.data as T;
-}
-
 function AdminUserUploadPanel() {
   const enabled = process.env.NEXT_PUBLIC_USER_IMPORT_ENABLED === "true";
   const qc = useQueryClient();
@@ -967,11 +932,8 @@ function AdminUserUploadPanel() {
   const [busy, setBusy] = React.useState<string | null>(null);
 
   async function refreshAfterMutation() {
-    await Promise.all([
-      qc.invalidateQueries({ queryKey: ["users"] }),
-      qc.invalidateQueries({ queryKey: ["audit"] }),
-      qc.invalidateQueries({ queryKey: ["me-dashboard"] }),
-    ]);
+    await Promise.all(["users", "admin-users", "admin-user", "me", "audit", "system-audit", "me-dashboard"]
+      .map((key) => qc.invalidateQueries({ queryKey: [key] })));
   }
 
   async function submitImport(preview: boolean) {
@@ -982,7 +944,7 @@ function AdminUserUploadPanel() {
     fd.append("preview", String(preview));
     setBusy(preview ? "preview" : "import");
     try {
-      const report = await postForm<ImportReport>("/admin/import-users", fd);
+      const report = await apiUpload<ImportReport>("/admin/import-users", fd);
       setImportReport(report);
       toast.success(preview ? "Đã đọc thử file import" : "Đã import người dùng");
       if (!preview) await refreshAfterMutation();
@@ -1002,7 +964,7 @@ function AdminUserUploadPanel() {
     fd.append("file", file);
     setBusy(kind);
     try {
-      await postForm(kind === "avatar" ? "/admin/upload-avatar" : "/admin/upload-signature", fd);
+      await apiUpload(kind === "avatar" ? "/admin/upload-avatar" : "/admin/upload-signature", fd);
       toast.success(kind === "avatar" ? "Đã upload ảnh đại diện" : "Đã upload chữ ký");
       await refreshAfterMutation();
     } catch (e) {
@@ -1019,7 +981,7 @@ function AdminUserUploadPanel() {
     fd.append("file", file);
     setBusy(`${kind}-zip`);
     try {
-      const report = await postForm<ZipReport>(kind === "avatar" ? "/admin/upload-avatars-zip" : "/admin/upload-signatures-zip", fd);
+      const report = await apiUpload<ZipReport>(kind === "avatar" ? "/admin/upload-avatars-zip" : "/admin/upload-signatures-zip", fd);
       setZipReport(report);
       toast.success(`Đã xử lý ${report.success_files}/${report.total_files} file`);
       await refreshAfterMutation();
@@ -1182,7 +1144,7 @@ function EditUserDialog({ target, onClose }: { target: SafeUser | null; onClose:
   const update = useUpdateUser();
   const detail = useAdminUserDetail(target?.id, !!target);
   const activeTarget = detail.data?.data ?? target;
-  const [form, setForm] = React.useState<any>(null);
+  const [form, setForm] = React.useState<UserForm | null>(null);
 
   // Người dùng đang sửa (chi tiết từ server, hoặc dòng bảng khi chưa tải xong) đổi thì nạp lại form —
   // chỉnh lúc render. Khoá null để lần render đầu cũng nạp như effect cũ.
@@ -1231,37 +1193,7 @@ function EditUserDialog({ target, onClose }: { target: SafeUser | null; onClose:
         )}
         {form && !detail.isLoading && (
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Hình ảnh" className="col-span-2">
-              <AvatarPicker value={form.avatarUrl} onChange={(v) => setForm({ ...form, avatarUrl: v })} name={form.name} />
-            </Field>
-            <Field label="Chữ ký số" className="col-span-2">
-              <SignaturePad value={form.signatureUrl} onChange={(v) => setForm({ ...form, signatureUrl: v })} />
-            </Field>
-            <Field label="Họ tên" className="col-span-2"><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></Field>
-            <Field label="Email công ty"><Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></Field>
-            <Field label="Email làm việc"><Input type="email" value={form.workEmail} onChange={(e) => setForm({ ...form, workEmail: e.target.value })} /></Field>
-            <Field label="User"><Input value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} /></Field>
-            <Field label="Mã NV"><Input value={form.employeeId} onChange={(e) => setForm({ ...form, employeeId: e.target.value })} /></Field>
-            <Field label="SĐT"><Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></Field>
-            <Field label="Chức vụ chính"><PositionSelect value={form.position} onChange={(v) => setForm({ ...form, position: v })} /></Field>
-            <Field label="Chức vụ phụ 1"><PositionSelect value={form.secondaryPosition} onChange={(v) => setForm({ ...form, secondaryPosition: v })} /></Field>
-            <Field label="Chức vụ phụ 2"><PositionSelect value={form.secondaryPosition2} onChange={(v) => setForm({ ...form, secondaryPosition2: v })} /></Field>
-            <Field label="Bộ phận"><Input value={form.department} onChange={(e) => setForm({ ...form, department: e.target.value })} /></Field>
-            <Field label="Vai trò">
-              <Select value={form.role} onValueChange={(v) => setForm({ ...form, role: v })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>{ROLE_KEYS.map((r) => <SelectItem key={r} value={r}>{ROLES[r].label}</SelectItem>)}</SelectContent>
-              </Select>
-            </Field>
-            <Field label="Chế độ tài khoản">
-              <Select value={form.accessMode} onValueChange={(v) => setForm({ ...form, accessMode: v })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="NORMAL">Sử dụng bình thường</SelectItem>
-                  <SelectItem value="DEFECT_READ_ONLY">Tài khoản tra cứu</SelectItem>
-                </SelectContent>
-              </Select>
-            </Field>
+            <UserFields form={form} onChange={setForm} showPhone />
           </div>
         )}
         <DialogFooter>
@@ -1271,6 +1203,44 @@ function EditUserDialog({ target, onClose }: { target: SafeUser | null; onClose:
       </DialogContent>
     </Dialog>
   );
+}
+
+function UserFields<T extends UserForm>({ form, onChange, required = false, showPhone = false }: {
+  form: T; onChange: (form: T) => void; required?: boolean; showPhone?: boolean;
+}) {
+  return <>
+    <Field label="Hình ảnh" className="col-span-2">
+      <AvatarPicker value={form.avatarUrl} onChange={(v) => onChange({ ...form, avatarUrl: v })} name={form.name} />
+    </Field>
+    <Field label="Chữ ký số" className="col-span-2">
+      <SignaturePad value={form.signatureUrl} onChange={(v) => onChange({ ...form, signatureUrl: v })} />
+    </Field>
+    <Field label={required ? "Họ tên *" : "Họ tên"} className="col-span-2"><Input value={form.name} onChange={(e) => onChange({ ...form, name: e.target.value })} /></Field>
+    <Field label={required ? "Email công ty *" : "Email công ty"}><Input type="email" value={form.email} onChange={(e) => onChange({ ...form, email: e.target.value })} /></Field>
+    <Field label="Email làm việc"><Input type="email" value={form.workEmail} onChange={(e) => onChange({ ...form, workEmail: e.target.value })} /></Field>
+    <Field label={required ? "User *" : "User"}><Input value={form.username} onChange={(e) => onChange({ ...form, username: e.target.value })} /></Field>
+    <Field label={required ? "Mã NV *" : "Mã NV"}><Input value={form.employeeId} onChange={(e) => onChange({ ...form, employeeId: e.target.value })} /></Field>
+    {showPhone && <Field label="SĐT"><Input value={form.phone} onChange={(e) => onChange({ ...form, phone: e.target.value })} /></Field>}
+    <Field label="Chức vụ chính"><PositionSelect value={form.position} onChange={(v) => onChange({ ...form, position: v })} /></Field>
+    <Field label="Chức vụ phụ 1"><PositionSelect value={form.secondaryPosition} onChange={(v) => onChange({ ...form, secondaryPosition: v })} /></Field>
+    <Field label="Chức vụ phụ 2"><PositionSelect value={form.secondaryPosition2} onChange={(v) => onChange({ ...form, secondaryPosition2: v })} /></Field>
+    <Field label="Bộ phận"><Input value={form.department} onChange={(e) => onChange({ ...form, department: e.target.value })} /></Field>
+    <Field label="Vai trò">
+      <Select value={form.role} onValueChange={(v) => onChange({ ...form, role: v })}>
+        <SelectTrigger><SelectValue /></SelectTrigger>
+        <SelectContent>{ROLE_KEYS.map((r) => <SelectItem key={r} value={r}>{ROLES[r].label}</SelectItem>)}</SelectContent>
+      </Select>
+    </Field>
+    <Field label="Chế độ tài khoản">
+      <Select value={form.accessMode} onValueChange={(v) => onChange({ ...form, accessMode: v })}>
+        <SelectTrigger><SelectValue /></SelectTrigger>
+        <SelectContent>
+          <SelectItem value="NORMAL">Sử dụng bình thường</SelectItem>
+          <SelectItem value="DEFECT_READ_ONLY">Tài khoản tra cứu</SelectItem>
+        </SelectContent>
+      </Select>
+    </Field>
+  </>;
 }
 
 function RoleProfileSelect({

@@ -42,23 +42,6 @@ const SUMMARY_SELECT = {
   createdAt: true,
 } as const;
 
-// DDL chỉ chạy 1 lần mỗi process — ALTER TABLE (kể cả IF NOT EXISTS no-op) chiếm khóa
-// ACCESS EXCLUSIVE trên "User", chạy mỗi request sẽ tuần tự hóa mọi truy vấn user.
-let userColumnsReady = false;
-async function ensureUserSecondaryPositionColumn() {
-  if (userColumnsReady) return;
-  await prisma.$executeRawUnsafe(`
-    ALTER TABLE "User"
-    ADD COLUMN IF NOT EXISTS "secondaryPosition" TEXT,
-    ADD COLUMN IF NOT EXISTS "secondaryPosition2" TEXT,
-    ADD COLUMN IF NOT EXISTS "currentPosition" TEXT,
-    ADD COLUMN IF NOT EXISTS "failed_login_attempts" INTEGER NOT NULL DEFAULT 0,
-    ADD COLUMN IF NOT EXISTS "locked_at" TIMESTAMP(3)
-    , ADD COLUMN IF NOT EXISTS "accessMode" TEXT NOT NULL DEFAULT 'NORMAL'
-  `);
-  userColumnsReady = true;
-}
-
 async function safe<T extends { passwordHash?: string; avatarUrl?: string | null; signatureUrl?: string | null; avatarKey?: string | null; signatureKey?: string | null }>(u: T) {
   const { passwordHash, ...rest } = u;
   return userWithSignedMedia(rest);
@@ -67,7 +50,6 @@ async function safe<T extends { passwordHash?: string; avatarUrl?: string | null
 export async function GET(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    await ensureUserSecondaryPositionColumn();
     // ?summary=1 → trả bản nhẹ (bỏ chữ ký base64; avatar qua proxy S3 nếu đã migrate).
     // Dùng cho sidebar (mọi trang), dropdown chọn người, danh sách chức vụ...
     // Quản trị người dùng dùng /api/admin/users để phân trang từ server.
@@ -97,7 +79,6 @@ export async function POST(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
     await requirePermissionLevel(user, "user-manage", ["manage", "full"], "Không đủ quyền tạo người dùng");
-    await ensureUserSecondaryPositionColumn();
     const body = await req.json();
     const accessMode = body.accessMode === "DEFECT_READ_ONLY" ? "DEFECT_READ_ONLY" : "NORMAL";
     const username = String(body.username ?? "").trim() || null;
@@ -166,7 +147,6 @@ export async function POST(req: NextRequest) {
 export async function PUT(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    await ensureUserSecondaryPositionColumn();
     const body = await req.json();
     if (!body.id) return fail("Thiếu id");
     if (body.resetPassword) {
@@ -233,12 +213,7 @@ export async function PUT(req: NextRequest) {
       const ex = await prisma.user.findFirst({ where: { username: data.username as string, NOT: { id: body.id } } });
       if (ex) return fail("User đã tồn tại");
     }
-    const nextPositions = {
-      position: (data.position as string | null | undefined) ?? before?.position ?? null,
-      secondaryPosition: (data.secondaryPosition as string | null | undefined) ?? before?.secondaryPosition ?? null,
-      secondaryPosition2: (data.secondaryPosition2 as string | null | undefined) ?? before?.secondaryPosition2 ?? null,
-      currentPosition: (data.currentPosition as string | null | undefined) ?? before?.currentPosition ?? null,
-    };
+    const nextPositions = { ...before, ...data };
     if (!isValidCurrentPosition(nextPositions, nextPositions.currentPosition)) {
       data.currentPosition = effectiveUserPosition({ ...nextPositions, currentPosition: null });
     }

@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { audit } from "@/lib/api";
 import { fileExtension, safeEmployeeCode, uploadImageBufferToS3, uploadS3Object } from "@/lib/s3";
 import { inspectUpload } from "@/lib/upload-guard";
+import { invalidateUserSummaryCache } from "@/lib/user-summary-cache";
 
 type MediaKind = "avatar" | "signature";
 
@@ -156,6 +157,7 @@ async function uploadForUser(kind: MediaKind, employeeCode: string, fileName: st
         ? { avatarKey: key, avatarUrl: null }
         : { signatureKey: key, signatureUrl: null },
   });
+  invalidateUserSummaryCache();
   return key;
 }
 

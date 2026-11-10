@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { audit } from "@/lib/api";
 import { dateFolder, fileExtension, uploadS3Object } from "@/lib/s3";
 import type { Role } from "@prisma/client";
+import { invalidateUserSummaryCache } from "@/lib/user-summary-cache";
 
 type ImportMode = "create" | "update" | "upsert";
 
@@ -316,6 +317,7 @@ export async function importUsersFromForm(form: FormData, actorId: string) {
       created++;
     }
 
+    invalidateUserSummaryCache();
     reports.push({
       row: row.rowNumber,
       employee_code: row.employeeId,

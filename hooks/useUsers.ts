@@ -35,19 +35,6 @@ export type AdminUsersPage = {
   pageSize: number;
 };
 
-/**
- * Bản đầy đủ legacy. Giữ lại cho tương thích, nhưng chỉ chạy khi caller bật enabled.
- */
-export function useUsersFull(options: { enabled?: boolean } = {}) {
-  const { enabled = true } = options;
-  return useQuery({
-    queryKey: ["users"],
-    queryFn: () => apiGet<SafeUser[]>("/api/users"),
-    enabled,
-    staleTime: 60 * 1000,
-  });
-}
-
 export function useAdminUsers(params: AdminUsersParams = {}) {
   const { enabled = true, page = 1, pageSize = 10, q = "", position = "ALL" } = params;
   return useQuery({
