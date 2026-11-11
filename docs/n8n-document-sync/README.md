@@ -121,3 +121,13 @@ quay về sử dụng link cũ; không cần xoá dữ liệu.
 
 Dữ liệu AI sinh từ danh mục có `sourcePath` bắt đầu bằng `digital-document:` nên có thể
 nhận diện và xóa riêng khi cần rollback phần AI.
+
+## Khi sửa hoặc nhập lại danh mục
+
+- Đổi link nguồn sẽ xoá metadata Drive và chỉ mục AI cũ trong cùng giao dịch; đổi tên sẽ yêu cầu nạp lại chỉ mục với tên mới.
+- Xoá tài liệu sẽ xoá cả các đoạn AI liên quan. Không xoá file gốc trên Drive.
+- Chỉ mục chỉ được tra cứu khi PDF đã xác nhận, trạng thái `SYNCED` và phiên bản chỉ mục khớp phiên bản Drive hiện tại; cả đường pgvector và dự phòng đều áp dụng quy tắc này.
+- Xác nhận lại đúng PDF, checksum và ngày sửa cũ giữ được chỉ mục hợp lệ. Chọn PDF khác sẽ bỏ chỉ mục cũ.
+- Nếu nguồn hoặc lựa chọn PDF thay đổi trong lúc workflow đang chạy, kết quả cũ bị từ chối với HTTP 409; chạy đối soát lại trước khi nạp tiếp.
+- Nhập Excel lưu cả batch trong một giao dịch, bỏ qua các dòng trùng tên/số quyết định/link và chỉ làm mới danh sách một lần. Mỗi batch tối đa 500 dòng.
+- Các thay đổi này không bật lại nạp AI khi `DOCUMENT_AI_INDEX_PAUSED=1`.

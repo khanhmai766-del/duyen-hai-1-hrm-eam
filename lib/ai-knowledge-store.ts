@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { hasAssignedPermissionLevel } from "@/lib/rbac-permissions";
 import { AI_EMBEDDING_DIMENSIONS } from "@/lib/ai-embedding";
+import { buildDocumentAiIndexVersion, documentAiSourcePath } from "@/lib/document-ai-index";
 import {
   AI_KNOWLEDGE_CATEGORIES,
   AI_KNOWLEDGE_MAX_PER_DOCUMENT,
@@ -19,10 +20,20 @@ import {
  */
 const CACHE_TTL_MS = 5 * 60_000;
 const globalCache = globalThis as typeof globalThis & {
-  __dh1AiKnowledge?: { expiresAt: number; promise: Promise<AiKnowledgeSearchChunk[]> };
+  __dh1AiKnowledge?: { expiresAt: number; promise: Promise<CachedChunk[]> };
 };
+type CachedChunk = AiKnowledgeSearchChunk & { sourcePath: string };
 
-async function loadChunks(): Promise<AiKnowledgeSearchChunk[]> {
+export function invalidateAiKnowledgeCache() { delete globalCache.__dh1AiKnowledge; }
+
+/** Trạng thái nguồn luôn đọc mới, kể cả khi các vector dự phòng còn nằm trong cache. */
+export async function eligibleDigitalDocumentSources() {
+  const rows = await prisma.digitalDocument.findMany({ where: { category: "PROCEDURE", driveSyncStatus: "SYNCED", driveFileId: { not: null }, aiIndexVersion: { not: null } },
+    select: { id: true, driveChecksum: true, driveModifiedAt: true, aiIndexVersion: true } });
+  return rows.filter(row => row.aiIndexVersion === buildDocumentAiIndexVersion(row)).map(row => documentAiSourcePath(row.id));
+}
+
+async function loadChunks(): Promise<CachedChunk[]> {
   const rows = await prisma.aiKnowledgeChunk.findMany({
     select: {
       documentId: true,
@@ -30,7 +41,7 @@ async function loadChunks(): Promise<AiKnowledgeSearchChunk[]> {
       heading: true,
       content: true,
       embedding: true,
-      document: { select: { category: true, title: true } },
+      document: { select: { category: true, title: true, sourcePath: true } },
     },
   });
   return rows.map((row) => ({
@@ -41,20 +52,22 @@ async function loadChunks(): Promise<AiKnowledgeSearchChunk[]> {
     embedding: row.embedding,
     category: row.document.category,
     title: row.document.title,
+    sourcePath: row.document.sourcePath,
   }));
 }
 
-export function getAiKnowledgeChunks() {
+export async function getAiKnowledgeChunks() {
   const now = Date.now();
   const cached = globalCache.__dh1AiKnowledge;
-  if (cached && cached.expiresAt > now) return cached.promise;
-  const promise = loadChunks();
-  globalCache.__dh1AiKnowledge = { expiresAt: now + CACHE_TTL_MS, promise };
+  const promise = cached && cached.expiresAt > now ? cached.promise : loadChunks();
+  if (promise !== cached?.promise) globalCache.__dh1AiKnowledge = { expiresAt: now + CACHE_TTL_MS, promise };
   // Lỗi DB không được nằm lì trong cache 5 phút.
   promise.catch(() => {
     if (globalCache.__dh1AiKnowledge?.promise === promise) delete globalCache.__dh1AiKnowledge;
   });
-  return promise;
+  const [chunks, sources] = await Promise.all([promise, eligibleDigitalDocumentSources()]);
+  const eligible = new Set(sources);
+  return chunks.filter(chunk => !chunk.sourcePath.startsWith("digital-document:") || eligible.has(chunk.sourcePath));
 }
 
 export type AiKnowledgeHit = { chunk: Omit<AiKnowledgeSearchChunk, "embedding">; score: number };
@@ -92,6 +105,7 @@ export async function searchAiKnowledgeChunksInDb(
   const { limit = AI_KNOWLEDGE_MAX_RESULTS, minScore = AI_KNOWLEDGE_MIN_SCORE, perDocument = AI_KNOWLEDGE_MAX_PER_DOCUMENT } = options;
   if (query.length !== AI_EMBEDDING_DIMENSIONS || !(await pgvectorReady())) return null;
   const vector = `[${query.join(",")}]`;
+  const sources = await eligibleDigitalDocumentSources();
   try {
     const rows = await prisma.$queryRaw<Array<Omit<AiKnowledgeSearchChunk, "embedding"> & { score: number }>>`
       WITH scored AS (
@@ -100,6 +114,11 @@ export async function searchAiKnowledgeChunksInDb(
           FROM "AiKnowledgeChunk" c
           JOIN "AiKnowledgeDocument" d ON d."id" = c."documentId"
          WHERE d."category" = ANY(${categories}::text[]) AND c."embeddingVec" IS NOT NULL
+           AND (d."sourcePath" NOT LIKE 'digital-document:%' OR d."sourcePath" = ANY(${sources}::text[]))
+           AND (d."sourcePath" NOT LIKE 'digital-document:%' OR EXISTS (
+             SELECT 1 FROM "DigitalDocument" source WHERE d."sourcePath" = 'digital-document:' || source.id
+               AND source.category = 'PROCEDURE' AND source."driveSyncStatus" = 'SYNCED' AND source."aiIndexVersion" IS NOT NULL
+           ))
       ), ranked AS (
         SELECT *, row_number() OVER (PARTITION BY "documentId" ORDER BY score DESC) AS rn
           FROM scored

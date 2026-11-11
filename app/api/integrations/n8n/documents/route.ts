@@ -6,6 +6,9 @@ import { parseDocumentDriveSyncRecord, verifyN8nDocumentSyncToken } from "@/lib/
 import { aiIndexRetryAt, buildDocumentAiIndexVersion, isDocumentAiIndexPaused } from "@/lib/document-ai-index";
 import { parseDocumentDriveCandidates } from "@/lib/document-drive-candidates";
 
+import { applyDocumentDriveSync } from "@/lib/server/document-drive-update";
+import { invalidateAiKnowledgeCache } from "@/lib/ai-knowledge-store";
+
 export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
@@ -14,17 +17,8 @@ export async function GET(req: NextRequest) {
     const requestedLimit = Number(req.nextUrl.searchParams.get("limit") ?? 100);
     const limit = Number.isInteger(requestedLimit) ? Math.min(500, Math.max(1, requestedLimit)) : 100;
     const cursor = String(req.nextUrl.searchParams.get("cursor") ?? "").trim();
-    const rows = await prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(`
-      SELECT id, title, "decisionNumber", "documentUrl", "driveFolderId", "driveFileId",
-             "driveFileName", "driveMimeType", "driveModifiedAt", "driveChecksum",
-             "driveCandidateFiles", "driveManualFileId",
-             "driveSyncStatus", "driveSyncError", "driveLastSyncedAt",
-             "aiIndexedAt", "aiIndexVersion", "aiIndexError", "aiIndexAttemptedAt"
-      FROM "DigitalDocument"
-      WHERE category = 'PROCEDURE' AND id > $1
-      ORDER BY id ASC
-      LIMIT $2
-    `, cursor, limit + 1);
+    const rows = await prisma.digitalDocument.findMany({ where: { category: "PROCEDURE", id: { gt: cursor } },
+      orderBy: { id: "asc" }, take: limit + 1 });
 
     const hasMore = rows.length > limit;
     const nextCursor = hasMore ? String(rows[limit - 1]?.id ?? "") : null;
@@ -62,33 +56,21 @@ export async function POST(req: NextRequest) {
     if (!Array.isArray(body?.documents) || body.documents.length === 0) return fail("Danh sách tài liệu đồng bộ đang trống");
     if (body.documents.length > 100) return fail("Mỗi batch chỉ nhận tối đa 100 tài liệu");
 
-    const records = body.documents.map(parseDocumentDriveSyncRecord);
+    let records;
+    try { records = body.documents.map(parseDocumentDriveSyncRecord); }
+    catch (error) { return fail(error instanceof Error ? error.message : "Bản ghi đồng bộ không hợp lệ"); }
     const uniqueIds = new Set(records.map((record) => record.documentId));
     if (uniqueIds.size !== records.length) return fail("Batch đồng bộ có documentId bị trùng");
 
     const updated = await prisma.$transaction(async (tx) => {
       let count = 0;
-      for (const record of records) {
-        const changed = await tx.$executeRaw`
-          UPDATE "DigitalDocument"
-          SET "driveFolderId" = ${record.driveFolderId},
-              "driveFileId" = CASE WHEN ${record.driveSyncStatus} = 'ERROR' THEN "driveFileId" ELSE ${record.driveFileId} END,
-              "driveFileName" = CASE WHEN ${record.driveSyncStatus} = 'ERROR' THEN "driveFileName" ELSE ${record.driveFileName} END,
-              "driveMimeType" = CASE WHEN ${record.driveSyncStatus} = 'ERROR' THEN "driveMimeType" ELSE ${record.driveMimeType} END,
-              "driveModifiedAt" = CASE WHEN ${record.driveSyncStatus} = 'ERROR' THEN "driveModifiedAt" ELSE ${record.driveModifiedAt} END,
-              "driveWebViewLink" = CASE WHEN ${record.driveSyncStatus} = 'ERROR' THEN "driveWebViewLink" ELSE ${record.driveWebViewLink} END,
-              "driveChecksum" = CASE WHEN ${record.driveSyncStatus} = 'ERROR' THEN "driveChecksum" ELSE ${record.driveChecksum} END,
-              "driveCandidateFiles" = CASE WHEN ${record.driveSyncStatus} = 'ERROR' THEN "driveCandidateFiles" ELSE ${JSON.stringify(record.driveCandidateFiles)} END,
-              "driveSyncStatus" = ${record.driveSyncStatus},
-              "driveSyncError" = ${record.driveSyncError},
-              "driveLastSyncedAt" = CURRENT_TIMESTAMP
-          WHERE id = ${record.documentId} AND category = 'PROCEDURE'
-        `;
-        count += changed;
+      for (const record of [...records].sort((a, b) => a.documentId.localeCompare(b.documentId))) {
+        if (await applyDocumentDriveSync(tx, record)) count++;
       }
       return count;
     });
 
+    invalidateAiKnowledgeCache();
     return ok({ received: records.length, updated, missing: records.length - updated });
   });
 }

@@ -2,13 +2,12 @@ import { randomUUID } from "crypto";
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, handle, audit } from "@/lib/api";
-import { ensureForumReplyLikeTable, isForeignKeyViolation } from "@/lib/forum-likes";
+import { isForeignKeyViolation } from "@/lib/forum-likes";
 
 export async function POST(_req: NextRequest, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
   return handle(async () => {
     const user = await requireUser();
-    await ensureForumReplyLikeTable();
 
     // Toggle nguyên tử trong 1 round-trip: xóa nếu đã thích, ngược lại chèn mới.
     // Vi phạm khóa ngoại (23503) = phản hồi không tồn tại → 404 thân thiện.

@@ -1,225 +1,48 @@
-import { randomUUID } from "crypto";
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { ok, fail, requireUser, handle, audit } from "@/lib/api";
-import { ensureForumPostLikeTable } from "@/lib/forum-likes";
-import { normalizeForumTargetPositions } from "@/lib/forum-targets";
-import { ensureForumLifecycleColumns } from "@/lib/forum-targets-server";
+import { audit, handle, ok, requireUser } from "@/lib/api";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
 import { publicUserRef } from "@/lib/s3";
-
-const AUTHOR_SELECT = `
-  json_build_object(
-    'id', u.id,
-    'name', u.name,
-    'position', u.position,
-    'avatarUrl', u."avatarUrl",
-    'avatarKey', u."avatar_key"
-  )
-`;
-
-const REPLY_COUNT_SELECT = `
-  (
-    SELECT COUNT(*)::int
-    FROM "ForumReply" r
-    WHERE r."postId" = p.id
-  ) AS "replyCount"
-`;
-
-const viTime = (column: string) => `to_char(${column}, 'YYYY-MM-DD"T"HH24:MI:SS.MS') || '+07:00'`;
-
-// Chỉ dùng cho feed chuông thông báo ("Bình luận mới"). Trang forum không đọc 2 trường này,
-// nên chỉ tính khi client yêu cầu (?replyMeta=1) để tránh subquery đắt trên query danh sách nặng.
-const REPLY_AUTHOR_IDS_SELECT = `
-  COALESCE(
-    (
-      SELECT array_agg(DISTINCT r."authorId")
-      FROM "ForumReply" r
-      WHERE r."postId" = p.id
-    ),
-    ARRAY[]::TEXT[]
-  ) AS "replyAuthorIds"
-`;
-
-const LATEST_REPLY_SELECT = `
-  (
-    SELECT json_build_object(
-      'id', r.id,
-      'postId', r."postId",
-      'content', r.content,
-      'attachments', r.attachments,
-      'createdAt', ${viTime('r."createdAt"')},
-      'author', json_build_object(
-        'id', ru.id,
-        'name', ru.name,
-        'position', ru.position,
-        'avatarUrl', ru."avatarUrl",
-        'avatarKey', ru."avatar_key"
-      )
-    )
-    FROM "ForumReply" r
-    JOIN "User" ru ON ru.id = r."authorId"
-    WHERE r."postId" = p.id
-    ORDER BY r."createdAt" DESC
-    LIMIT 1
-  ) AS "latestReply"
-`;
-
-function likesSelect(currentUserParam: number) {
-  return `
-    (
-      SELECT COUNT(*)::int
-      FROM "ForumPostLike" l
-      WHERE l."postId" = p.id
-    ) AS "likeCount",
-    EXISTS (
-      SELECT 1
-      FROM "ForumPostLike" ml
-      WHERE ml."postId" = p.id AND ml."userId" = $${currentUserParam}
-    ) AS "likedByMe"
-  `;
-}
+import { forumNow, FORUM_AUTHOR, forumPostInput, forumTime, publicForumReply } from "@/lib/server/forum";
 
 export async function GET(req: NextRequest) {
   return handle(async () => {
-    const user = await requireUser();
-    await ensureForumPostLikeTable();
-    await ensureForumLifecycleColumns();
-    const sp = req.nextUrl.searchParams;
-    const category = sp.get("category")?.trim();
-    const q = sp.get("q")?.trim();
-    const status = sp.get("status")?.trim().toUpperCase();
-    const withReplyMeta = sp.get("replyMeta") === "1";
-    const where: string[] = [];
-    const params: unknown[] = [];
-
-    if (status === "CLOSED") {
-      where.push(`p."closedAt" IS NOT NULL`);
-    } else {
-      where.push(`p."closedAt" IS NULL`);
-    }
-    if (category && category !== "ALL") {
-      params.push(category);
-      where.push(`p.category = $${params.length}`);
-    }
-    if (q) {
-      params.push(`%${q}%`);
-      where.push(`(p.title ILIKE $${params.length} OR p.content ILIKE $${params.length} OR EXISTS (SELECT 1 FROM unnest(p.tags) tag WHERE tag ILIKE $${params.length}))`);
-    }
-
-    const currentUserParam = params.length + 1;
-    params.push(user.id);
-
-    const sql = `
-      SELECT
-        p.id,
-        p.title,
-        p.content,
-        p.category,
-        p.tags,
-        p.attachments,
-        p."targetPositions",
-        p."isPinned",
-        p."closeSummary",
-        ${viTime('p."closedAt"')} AS "closedAt",
-        CASE
-          WHEN cb.id IS NULL THEN NULL
-          ELSE json_build_object(
-            'id', cb.id,
-            'name', cb.name,
-            'position', cb.position,
-            'avatarUrl', cb."avatarUrl",
-            'avatarKey', cb."avatar_key"
-          )
-        END AS "closedBy",
-        ${viTime('p."createdAt"')} AS "createdAt",
-        ${viTime('p."updatedAt"')} AS "updatedAt",
-        ${AUTHOR_SELECT} AS author,
-        ${REPLY_COUNT_SELECT},
-        ${withReplyMeta ? `${REPLY_AUTHOR_IDS_SELECT},\n        ${LATEST_REPLY_SELECT},` : ""}
-        ${likesSelect(currentUserParam)}
-      FROM "ForumPost" p
-      JOIN "User" u ON u.id = p."authorId"
-      LEFT JOIN "User" cb ON cb.id = p."closedById"
-      ${where.length ? `WHERE ${where.join(" AND ")}` : ""}
-      ORDER BY p."isPinned" DESC, COALESCE(p."closedAt", p."updatedAt") DESC
-      LIMIT 100
-    `;
-    const posts = await prisma.$queryRawUnsafe<RawForumPost[]>(sql, ...params);
-    return ok(posts.map(publicForumPost));
+    const user = await requireUser(), sp = req.nextUrl.searchParams;
+    const category = sp.get("category")?.trim(), q = sp.get("q")?.trim();
+    const closed = sp.get("status")?.trim().toUpperCase() === "CLOSED", withReplyMeta = sp.get("replyMeta") === "1";
+    // Prisma không hỗ trợ tìm một phần tử mảng theo ILIKE; chỉ giữ SQL cho phần tìm tag.
+    const tagMatches = q ? await prisma.$queryRaw<Array<{ id: string }>>
+      `SELECT id FROM "ForumPost" WHERE EXISTS (SELECT 1 FROM unnest(tags) tag WHERE tag ILIKE ${'%'+q+'%'})` : [];
+    const posts = await prisma.forumPost.findMany({
+      where: { closedAt: closed ? { not: null } : null, ...(category && category !== "ALL" ? { category } : {}),
+        ...(q ? { OR: [{ title: { contains: q, mode: "insensitive" } }, { content: { contains: q, mode: "insensitive" } }, { id: { in: tagMatches.map(row => row.id) } }] } : {}) },
+      orderBy: [{ isPinned: "desc" }, closed ? { closedAt: "desc" } : { updatedAt: "desc" }], take: 100,
+      select: { id: true, title: true, content: true, category: true, tags: true, attachments: true, targetPositions: true,
+        isPinned: true, closeSummary: true, closedAt: true, closedById: true, createdAt: true, updatedAt: true,
+        author: { select: FORUM_AUTHOR }, _count: { select: { replies: true, likes: true } },
+        likes: { where: { userId: user.id }, select: { id: true } },
+        replies: { orderBy: { createdAt: "desc" }, take: withReplyMeta ? 1 : 0,
+          select: { id: true, postId: true, content: true, attachments: true, createdAt: true, author: { select: FORUM_AUTHOR } } } },
+    });
+    const ids = [...new Set(posts.map(row => row.closedById).filter((id): id is string => !!id))];
+    const closedBy = new Map((ids.length ? await prisma.user.findMany({ where: { id: { in: ids } }, select: FORUM_AUTHOR }) : []).map(user => [user.id, publicUserRef(user)]));
+    const authors = withReplyMeta ? await prisma.forumReply.findMany({ where: { postId: { in: posts.map(row => row.id) } },
+      select: { postId: true, authorId: true }, distinct: ["postId", "authorId"] }) : [];
+    return ok(posts.map(({ _count, likes, closedById, replies, author, ...post }) => ({ ...post,
+      createdAt: forumTime(post.createdAt), updatedAt: forumTime(post.updatedAt), closedAt: forumTime(post.closedAt),
+      author: publicUserRef(author), closedBy: closedById ? closedBy.get(closedById) ?? null : null,
+      replyCount: _count.replies, likeCount: _count.likes, likedByMe: likes.length > 0,
+      ...(withReplyMeta ? { replyAuthorIds: authors.filter(row => row.postId === post.id).map(row => row.authorId),
+        latestReply: replies?.[0] ? publicForumReply(replies[0]) : null } : {}) })));
   });
 }
-
 export async function POST(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
     await requirePermissionLevel(user, "forum-write", ["personal", "manage", "full"], "Không đủ quyền tạo chủ đề forum");
-    await ensureForumLifecycleColumns();
-    const body = await req.json();
-    const title = String(body.title ?? "").trim();
-    const content = String(body.content ?? "").trim();
-    const category = String(body.category ?? "DISCUSSION").trim() || "DISCUSSION";
-    const tags = normalizeList(body.tags, 8);
-    const attachments = normalizeList(body.attachments, 8);
-    const targetPositions = normalizeForumTargetPositions(body.targetPositions);
-
-    if (!title) return fail("Vui lòng nhập tiêu đề chủ đề");
-    if (!content) return fail("Vui lòng nhập nội dung trao đổi");
-
-    const id = randomUUID();
-    // updatedAt là @updatedAt trong Prisma (NOT NULL, KHÔNG có default ở DB). Vì đây là
-    // raw INSERT (bỏ qua Prisma) nên phải tự điền, không sẽ lỗi 23502 NOT NULL.
-    await prisma.$executeRawUnsafe(
-      `INSERT INTO "ForumPost" (id, title, content, category, tags, attachments, "targetPositions", "authorId", "updatedAt") VALUES ($1, $2, $3, $4, $5, $6, $7, $8, CURRENT_TIMESTAMP)`,
-      id,
-      title,
-      content,
-      category,
-      tags,
-      attachments,
-      targetPositions,
-      user.id
-    );
-    await audit(user.id, "CREATE_FORUM_POST", "ForumPost", id, title);
-    return ok({ id });
+    const data = forumPostInput(await req.json()), now = await forumNow(prisma);
+    const post = await prisma.forumPost.create({ data: { ...data, authorId: user.id, createdAt: now, updatedAt: now } });
+    await audit(user.id, "CREATE_FORUM_POST", "ForumPost", post.id, post.title);
+    return ok({ id: post.id });
   });
-}
-
-function normalizeList(value: unknown, max: number) {
-  if (Array.isArray(value)) {
-    return value.map((v) => String(v).trim()).filter(Boolean).slice(0, max);
-  }
-  if (typeof value === "string") {
-    return value.split(/[,\n]/).map((v) => v.trim()).filter(Boolean).slice(0, max);
-  }
-  return [];
-}
-
-type RawForumAuthor = {
-  id: string;
-  name: string;
-  position: string | null;
-  avatarUrl?: string | null;
-  avatarKey?: string | null;
-};
-
-type RawForumReply = {
-  author: RawForumAuthor;
-};
-
-type RawForumPost = {
-  author: RawForumAuthor;
-  closedBy: RawForumAuthor | null;
-  latestReply?: RawForumReply | null;
-};
-
-function publicForumPost<T extends RawForumPost>(post: T) {
-  return {
-    ...post,
-    author: publicUserRef(post.author),
-    closedBy: post.closedBy ? publicUserRef(post.closedBy) : null,
-    ...(post.latestReply
-      ? { latestReply: { ...post.latestReply, author: publicUserRef(post.latestReply.author) } }
-      : {}),
-  };
 }

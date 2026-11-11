@@ -121,3 +121,11 @@ export function useSelectDocumentDriveFile() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["documents", "PROCEDURE"] }),
   });
 }
+
+export function useImportProcedures() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (documents: DigitalDocumentInput[]) => apiMutate<{ imported: number; skipped: number }>("/api/documents/import", "POST", { documents }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["documents", "PROCEDURE"] }),
+  });
+}

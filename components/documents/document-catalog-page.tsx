@@ -2,7 +2,6 @@
 
 import * as React from "react";
 import { useSession } from "next-auth/react";
-import * as XLSX from "xlsx";
 import { AlertCircle, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ExternalLink, FileCheck2, FileSpreadsheet, FileText, FolderOpen, ListFilter, Loader2, Minus, Pencil, Plus, RotateCcw, Search, Sparkles, Trash2, Upload, X } from "lucide-react";
 import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
@@ -35,13 +34,16 @@ import {
   useDocuments,
   useSelectDocumentDriveFile,
   useUpsertDocument,
+  useImportProcedures,
 } from "@/hooks/useDocuments";
-import { EQUIPMENT_BLOCKS, blockForPosition, isSelectableManagingPosition } from "@/lib/constants";
+import { blockForPosition, isSelectableManagingPosition } from "@/lib/constants";
 import { archiveCategoryPermissionId } from "@/lib/archive-permissions";
 import { normalizeText } from "@/lib/nav";
 import { googleDriveFolderViewUrl, normalizeExternalDocumentUrl, parseGoogleDriveTarget } from "@/lib/google-drive-document";
 import { announcementPositionLabel, announcementPositionOptions } from "@/lib/positions";
 import { cn, formatDate, formatDateTime } from "@/lib/utils";
+import { COMMON_BLOCK, LEGACY_COMMON_POSITION, LEGACY_COMMON_BLOCK, MANAGEMENT_BLOCK_OPTIONS, PROCEDURE_TYPES, EXPIRING_PROCEDURE_TYPES, normalizeManagementBlock, normalizeProcedureType } from "@/lib/document-catalog";
+import { DocumentChoiceField, DocumentDateField, DocumentTagField } from "@/components/documents/document-form-fields";
 import { SeparationTimelineView } from "@/components/documents/separation-timeline-view";
 import { SeparationTimelineEditor } from "@/components/documents/separation-timeline-editor";
 
@@ -81,24 +83,8 @@ const EMPTY_FORM: DocumentForm = {
   attachmentUrls: [],
 };
 
-const LEGACY_COMMON_POSITION = "Chung";
-const LEGACY_COMMON_BLOCK = "QT Chung";
-const COMMON_BLOCK = "Chung";
-const MANAGEMENT_BLOCK_OPTIONS = [COMMON_BLOCK, ...EQUIPMENT_BLOCKS] as const;
 const ALL_FILTER = "__ALL__";
 const PAGE_SIZE_OPTIONS = ["10", "20", "50"];
-const PROCEDURE_TYPES = ["QTVH-XLSC", "QT thử nghiệm - nghiệm thu", "QTNV", "QTAT-MT", "QT sữa chữa, bảo dưỡng", "QT khác", "Thông tư - nghị định"] as const;
-const EXPIRING_PROCEDURE_TYPES = new Set(["QTVH-XLSC", "QT thử nghiệm - nghiệm thu", "QTNV", "QT sữa chữa, bảo dưỡng"]);
-
-type ProcedureImportRow = {
-  title: string;
-  managingPosition: string;
-  managementBlock: string;
-  procedureType: string;
-  decisionNumber: string;
-  issueDate: string;
-  documentUrl: string;
-};
 
 function blockForDocumentPosition(position?: string | null): string {
   const value = position?.trim();
@@ -161,18 +147,6 @@ function documentManagementBlocks(item: { managingPosition?: string | null; mana
 
 function documentManagementBlock(item: { managingPosition?: string | null; managementBlock?: string | null }): string {
   return documentManagementBlocks(item).join(", ") || COMMON_BLOCK;
-}
-
-function normalizeProcedureType(value?: string | null) {
-  const raw = String(value ?? "").trim();
-  return PROCEDURE_TYPES.includes(raw as (typeof PROCEDURE_TYPES)[number]) ? raw : "QT khác";
-}
-
-function normalizeManagementBlock(value?: string | null) {
-  const raw = String(value ?? "").trim();
-  if (!raw || raw === LEGACY_COMMON_POSITION || raw === LEGACY_COMMON_BLOCK) return COMMON_BLOCK;
-  const matched = MANAGEMENT_BLOCK_OPTIONS.find((block) => normalizeText(block) === normalizeText(raw));
-  return matched ?? COMMON_BLOCK;
 }
 
 interface DocumentCatalogPageProps {
@@ -301,6 +275,7 @@ export function DocumentCatalogPage({
   const docs = useDocuments(category);
   const userPositions = usePositions({ enabled: needsPositionOptions });
   const upsert = useUpsertDocument();
+  const importProcedures = useImportProcedures();
   const remove = useDeleteDocument();
   const [q, setQ] = React.useState("");
   const [formOpen, setFormOpen] = React.useState(false);
@@ -562,88 +537,25 @@ export function DocumentCatalogPage({
     setFormOpen(true);
   }
 
-  function downloadProcedureImportTemplate() {
-    const columns = ["STT", "Tên quy trình", "Loại QT", "Cương vị", "Khối quản lý", "Số quyết định", "Ngày ban hành", "Link tài liệu"];
-    const sheet = XLSX.utils.aoa_to_sheet([
-      columns,
-      [1, "Quy trình vận hành mẫu", "QTVH-XLSC", "Lò trưởng S1, Máy trưởng S1", "Chung", "QD-001/2026", "2026-06-29", "https://..."],
-    ]);
-    sheet["!cols"] = [
-      { wch: 8 },
-      { wch: 36 },
-      { wch: 24 },
-      { wch: 34 },
-      { wch: 18 },
-      { wch: 22 },
-      { wch: 16 },
-      { wch: 42 },
-    ];
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, sheet, "Mau nhap quy trinh");
-    XLSX.writeFile(workbook, "mau-nhap-quy-trinh-van-hanh.xlsx", { compression: true });
+  async function downloadProcedureImportTemplate() {
+    const { downloadProcedureImportTemplate: download } = await import("@/lib/procedure-import");
+    download();
     toast.success("Đã tạo file Excel mẫu");
   }
 
   async function handleProcedureImportFile(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     event.target.value = "";
-    if (!file) return;
-    if (!canImportProcedure || !hasProcedureValidity) {
-      toast.error("Chỉ quản trị viên hoặc kỹ thuật viên mới được nhập quy trình bằng Excel");
-      return;
-    }
-    if (!/\.(xlsx|xls)$/i.test(file.name)) {
-      toast.error("Chỉ chấp nhận file Excel .xlsx hoặc .xls");
-      return;
-    }
-
-    let imported = 0;
+    if (!file || !canImportProcedure || !hasProcedureValidity) return;
+    if (!/\.(xlsx|xls)$/i.test(file.name)) { toast.error("Chỉ chấp nhận file Excel .xlsx hoặc .xls"); return; }
+    setProcedureImporting(true);
     try {
-      const workbook = XLSX.read(await file.arrayBuffer(), { type: "array", cellDates: false });
-      const sheetName = workbook.SheetNames[0];
-      const sheet = sheetName ? workbook.Sheets[sheetName] : null;
-      if (!sheet) {
-        toast.error("File Excel không có dữ liệu");
-        return;
-      }
-
-      const rows = XLSX.utils.sheet_to_json<Array<string | number | Date | null>>(sheet, { header: 1, defval: "" });
-      const parsed = parseProcedureImportRows(rows, sheet);
-      if (parsed.errors.length) {
-        toast.error(parsed.errors[0]);
-        return;
-      }
-      if (!parsed.items.length) {
-        toast.error("File Excel chưa có dòng quy trình hợp lệ");
-        return;
-      }
-
-      setProcedureImporting(true);
-      for (const item of parsed.items) {
-        await upsert.mutateAsync({
-          category: "PROCEDURE",
-          title: item.title,
-          decisionNumber: item.decisionNumber || null,
-          issueDate: item.issueDate || null,
-          documentUrl: item.documentUrl,
-          managingPosition: JSON.stringify(importProcedurePositions(item.managingPosition, positionOptions)),
-          managementBlock: normalizeManagementBlock(item.managementBlock),
-          procedureType: normalizeProcedureType(item.procedureType),
-          reason: null,
-          progress: null,
-          timelineJson: null,
-          note: null,
-          attachmentUrls: [],
-        });
-        imported += 1;
-      }
-      toast.success(`Đã nhập ${imported} quy trình từ Excel`);
-    } catch (error) {
-      const message = (error as Error).message || "Không nhập được file Excel";
-      toast.error(imported ? `Đã nhập ${imported} dòng, sau đó lỗi: ${message}` : message);
-    } finally {
-      setProcedureImporting(false);
-    }
+      const { readProcedureImport } = await import("@/lib/procedure-import");
+      const documents = readProcedureImport(await file.arrayBuffer(), positionOptions);
+      const result = await importProcedures.mutateAsync(documents);
+      toast.success(`Đã nhập ${result.imported} quy trình${result.skipped ? `, bỏ qua ${result.skipped} dòng trùng` : ""}`);
+    } catch (error) { toast.error((error as Error).message || "Không nhập được file Excel"); }
+    finally { setProcedureImporting(false); }
   }
 
   function openEdit(item: DigitalDocument) {
@@ -1094,7 +1006,7 @@ export function DocumentCatalogPage({
                             setExpandedId(expanded ? null : item.id);
                           }}
                           className={cn(
-                            "flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-white shadow-sm transition-colors",
+                            "flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white shadow-sm transition-colors sm:h-5 sm:w-5",
                             expanded ? "bg-rose-500" : "bg-emerald-500"
                           )}
                           title={expanded ? "Thu gọn" : "Mở chi tiết"}
@@ -1527,87 +1439,16 @@ export function DocumentCatalogPage({
                 )}
               </div>
               {useHistoryFormLayout && hasTagField && (
-                <div className="grid gap-1.5">
-                  <Label>{tagLabel}{requireTag ? " *" : ""}</Label>
-                  <div className="flex flex-wrap gap-2">
-                    {tagOptions.map((option) => {
-                      const active = form.decisionNumber === option.value;
-                      return (
-                        <button
-                          key={option.value}
-                          type="button"
-                          aria-pressed={active}
-                          onClick={() => setForm((state) => ({ ...state, decisionNumber: option.value }))}
-                          className={cn(
-                            "inline-flex h-9 min-w-16 items-center justify-center rounded-lg border px-4 text-sm font-semibold transition-colors",
-                            active
-                              ? "border-navy bg-navy text-white shadow-sm"
-                              : "border-slate-200 bg-white text-muted-foreground hover:border-navy/40 hover:text-navy"
-                          )}
-                        >
-                          {option.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
+                <DocumentTagField label={tagLabel} required={requireTag} value={form.decisionNumber} onChange={value => setForm(state => ({ ...state, decisionNumber: value }))} options={tagOptions} wrap />
               )}
               {hasYearField && (!historyTableLayout || isCompactArchiveForm) && (
-                <div className="grid gap-1.5">
-                  <Label>{yearLabel}{requireYear ? " *" : ""}</Label>
-                  <Select
-                    value={form.archiveYear}
-                    onValueChange={(value) => setForm((state) => ({ ...state, archiveYear: value }))}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Chọn năm" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {formYearOptions.map((year) => (
-                        <SelectItem key={year} value={year}>
-                          {year}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+                <DocumentChoiceField label={yearLabel} required={requireYear} value={form.archiveYear} onChange={value => setForm(state => ({ ...state, archiveYear: value }))} options={formYearOptions} placeholder="Chọn năm" />
               )}
               {isCompactArchiveForm && (
-                <div className="grid min-w-0 gap-1.5">
-                  <Label>{tagLabel}{requireTag ? " *" : ""}</Label>
-                  <div className="flex flex-nowrap gap-2">
-                    {tagOptions.map((option) => {
-                      const active = form.decisionNumber === option.value;
-                      return (
-                        <button
-                          key={option.value}
-                          type="button"
-                          aria-pressed={active}
-                          onClick={() => setForm((state) => ({ ...state, decisionNumber: option.value }))}
-                          className={cn(
-                            "inline-flex h-10 min-w-16 flex-1 items-center justify-center rounded-lg border px-3 text-sm font-semibold transition-colors",
-                            active
-                              ? "border-navy bg-navy text-white shadow-sm"
-                              : "border-slate-200 bg-white text-muted-foreground hover:border-navy/40 hover:text-navy"
-                          )}
-                        >
-                          {option.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
+                <DocumentTagField label={tagLabel} required={requireTag} value={form.decisionNumber} onChange={value => setForm(state => ({ ...state, decisionNumber: value }))} options={tagOptions} compact />
               )}
               {isCompactArchiveForm && (
-                <div className="grid min-w-0 gap-1.5">
-                  <Label>{dateLabel}{requireDate ? " *" : ""}</Label>
-                  <Input
-                    type={dateInputType}
-                    value={form.recordDate}
-                    onChange={(event) => setForm((state) => ({ ...state, recordDate: event.target.value }))}
-                    className="w-full min-w-0"
-                  />
-                </div>
+                <DocumentDateField label={dateLabel} required={requireDate} type={dateInputType} value={form.recordDate} onChange={value => setForm(state => ({ ...state, recordDate: value }))} />
               )}
             </div>
             {showEquipmentScope && (
@@ -1639,42 +1480,11 @@ export function DocumentCatalogPage({
                     </Select>
                   )}
                 </div>
-                <div className="grid gap-1.5">
-                  <Label>Khối quản lý</Label>
-                  <Select
-                    value={managementBlock}
-                    onValueChange={(value) => setForm((state) => ({ ...state, managementBlock: value }))}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Chọn khối quản lý" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {blockOptions.map((block) => (
-                        <SelectItem key={block} value={block}>
-                          {block}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+                <DocumentChoiceField label="Khối quản lý" value={managementBlock} onChange={value => setForm(state => ({ ...state, managementBlock: value }))} options={blockOptions} placeholder="Chọn khối quản lý" />
               </div>
             )}
             {hasProcedureValidity && (
-              <div className="grid gap-1.5">
-                <Label>Loại QT</Label>
-                <Select value={form.procedureType} onValueChange={(value) => setForm((state) => ({ ...state, procedureType: value }))}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Chọn loại quy trình" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {PROCEDURE_TYPES.map((type) => (
-                      <SelectItem key={type} value={type}>
-                        {type}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              <DocumentChoiceField label="Loại QT" value={form.procedureType} onChange={value => setForm(state => ({ ...state, procedureType: value }))} options={[...PROCEDURE_TYPES]} placeholder="Chọn loại quy trình" />
             )}
             {!isCompactArchiveForm && ((hasTagField && !historyTableLayout) || hasDateField || (hasYearField && useHistoryFormLayout)) && (
               <div
@@ -1686,61 +1496,13 @@ export function DocumentCatalogPage({
                 )}
               >
                 {hasTagField && (!historyTableLayout || isCompactArchiveForm) && (
-                  <div className="grid min-w-0 gap-1.5">
-                    <Label>{tagLabel}{requireTag ? " *" : ""}</Label>
-                    <div className="flex flex-nowrap gap-2">
-                      {tagOptions.map((option) => {
-                        const active = form.decisionNumber === option.value;
-                        return (
-                          <button
-                            key={option.value}
-                            type="button"
-                            aria-pressed={active}
-                            onClick={() => setForm((state) => ({ ...state, decisionNumber: option.value }))}
-                            className={cn(
-                              "inline-flex h-9 min-w-16 items-center justify-center rounded-lg border px-4 text-sm font-semibold transition-colors",
-                              active
-                                ? "border-navy bg-navy text-white shadow-sm"
-                                : "border-slate-200 bg-white text-muted-foreground hover:border-navy/40 hover:text-navy"
-                            )}
-                          >
-                            {option.label}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
+                  <DocumentTagField label={tagLabel} required={requireTag} value={form.decisionNumber} onChange={value => setForm(state => ({ ...state, decisionNumber: value }))} options={tagOptions} />
                 )}
                 {hasDateField && (
-                  <div className="grid min-w-0 gap-1.5">
-                    <Label>{dateLabel}{requireDate ? " *" : ""}</Label>
-                    <Input
-                      type={dateInputType}
-                      value={form.recordDate}
-                      onChange={(event) => setForm((state) => ({ ...state, recordDate: event.target.value }))}
-                      className="w-full min-w-0"
-                    />
-                  </div>
+                  <DocumentDateField label={dateLabel} required={requireDate} type={dateInputType} value={form.recordDate} onChange={value => setForm(state => ({ ...state, recordDate: value }))} />
                 )}
                 {hasYearField && useHistoryFormLayout && (
-                  <div className="grid min-w-0 gap-1.5">
-                    <Label>{yearLabel}{requireYear ? " *" : ""}</Label>
-                    <Select
-                      value={form.archiveYear}
-                      onValueChange={(value) => setForm((state) => ({ ...state, archiveYear: value }))}
-                    >
-                      <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Chọn năm" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {formYearOptions.map((year) => (
-                          <SelectItem key={year} value={year}>
-                            {year}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                  <DocumentChoiceField label={yearLabel} required={requireYear} value={form.archiveYear} onChange={value => setForm(state => ({ ...state, archiveYear: value }))} options={formYearOptions} placeholder="Chọn năm" />
                 )}
               </div>
             )}
@@ -1968,133 +1730,6 @@ function ProcedurePositionPicker({
       </PopoverContent>
     </Popover>
   );
-}
-
-function parseProcedureImportRows(rows: Array<Array<string | number | Date | null>>, sheet: XLSX.WorkSheet) {
-  const errors: string[] = [];
-  const headerIndex = rows.findIndex((row) => row.some((cell) => normalizeText(cellString(cell)) === "ten quy trinh"));
-  if (headerIndex < 0) return { items: [] as ProcedureImportRow[], errors: ["File Excel thiếu dòng tiêu đề mẫu"] };
-
-  const headers = rows[headerIndex].map((cell) => normalizeText(cellString(cell)));
-  const sttIndex = findColumnIndex(headers, ["stt"]);
-  const titleIndex = findColumnIndex(headers, ["ten quy trinh"]);
-  const procedureTypeIndex = findColumnIndex(headers, ["loai qt", "loai quy trinh"]);
-  const positionIndex = findColumnIndex(headers, ["cuong vi"]);
-  const managementBlockIndex = findColumnIndex(headers, ["khoi quan ly"]);
-  const decisionIndex = findColumnIndex(headers, ["so quyet dinh"]);
-  const issueDateIndex = findColumnIndex(headers, ["ngay ban hanh"]);
-  const linkIndex = findColumnIndex(headers, ["link tai lieu", "duong dan tai lieu", "tai lieu"]);
-
-  if (sttIndex < 0 || titleIndex < 0 || procedureTypeIndex < 0 || positionIndex < 0 || decisionIndex < 0 || issueDateIndex < 0 || linkIndex < 0) {
-    return {
-      items: [] as ProcedureImportRow[],
-      errors: ["File Excel phải có đủ cột: STT, Tên quy trình, Loại QT, Cương vị, Số quyết định, Ngày ban hành, Link tài liệu"],
-    };
-  }
-
-  const items: ProcedureImportRow[] = [];
-  rows.slice(headerIndex + 1).forEach((row, index) => {
-    const line = headerIndex + index + 2;
-    const sheetRowIndex = headerIndex + index + 1;
-    const title = cellString(row[titleIndex]);
-    const documentUrl = cellLink(sheet, sheetRowIndex, linkIndex) || cellString(row[linkIndex]) || cellLink(sheet, sheetRowIndex, titleIndex);
-    const rawIssueDate = row[issueDateIndex];
-    const issueDate = cellDate(rawIssueDate);
-    const hasContent = row.some((cell) => cellString(cell));
-    if (!hasContent) return;
-
-    if (!title) {
-      errors.push(`Dòng ${line}: thiếu tên quy trình`);
-      return;
-    }
-    if (!documentUrl) {
-      errors.push(`Dòng ${line}: thiếu link tài liệu`);
-      return;
-    }
-    if (!normalizeExternalDocumentUrl(documentUrl)) {
-      errors.push(`Dòng ${line}: link tài liệu không hợp lệ (phải bắt đầu bằng http:// hoặc https://)`);
-      return;
-    }
-    if (cellString(rawIssueDate) && !issueDate) {
-      errors.push(`Dòng ${line}: ngày ban hành không hợp lệ`);
-      return;
-    }
-
-    items.push({
-      title,
-      managingPosition: cellString(row[positionIndex]),
-      managementBlock: normalizeManagementBlock(managementBlockIndex >= 0 ? cellString(row[managementBlockIndex]) : ""),
-      procedureType: normalizeProcedureType(cellString(row[procedureTypeIndex])),
-      decisionNumber: cellString(row[decisionIndex]),
-      issueDate,
-      documentUrl,
-    });
-  });
-
-  return { items, errors };
-}
-
-function findColumnIndex(headers: string[], aliases: string[]) {
-  return headers.findIndex((header) => aliases.includes(header));
-}
-
-function cellString(value: string | number | Date | null | undefined) {
-  if (value == null) return "";
-  if (value instanceof Date) return formatInputDate(value);
-  return String(value).trim();
-}
-
-function cellLink(sheet: XLSX.WorkSheet, rowIndex: number, columnIndex: number) {
-  if (columnIndex < 0) return "";
-  const cell = sheet[XLSX.utils.encode_cell({ r: rowIndex, c: columnIndex })] as (XLSX.CellObject & { l?: { Target?: string } }) | undefined;
-  const target = cell?.l?.Target?.trim();
-  if (target) return target;
-  const formulaLink = formulaHyperlink(cell?.f);
-  return formulaLink;
-}
-
-function formulaHyperlink(formula?: string) {
-  const raw = String(formula ?? "").trim();
-  if (!raw) return "";
-  const match = raw.match(/^HYPERLINK\(\s*"([^"]+)"/i) ?? raw.match(/^HYPERLINK\(\s*'([^']+)'/i);
-  return match?.[1]?.trim() ?? "";
-}
-
-function cellDate(value: string | number | Date | null | undefined) {
-  if (value == null || value === "") return "";
-  if (value instanceof Date) return formatInputDate(value);
-  if (typeof value === "number") {
-    const parsed = XLSX.SSF.parse_date_code(value);
-    if (!parsed) return "";
-    return `${parsed.y}-${String(parsed.m).padStart(2, "0")}-${String(parsed.d).padStart(2, "0")}`;
-  }
-
-  const raw = value.trim();
-  const isoMatch = raw.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/);
-  if (isoMatch) return `${isoMatch[1]}-${isoMatch[2].padStart(2, "0")}-${isoMatch[3].padStart(2, "0")}`;
-
-  const viMatch = raw.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/);
-  if (viMatch) return `${viMatch[3]}-${viMatch[2].padStart(2, "0")}-${viMatch[1].padStart(2, "0")}`;
-
-  const date = new Date(raw);
-  return Number.isNaN(date.getTime()) ? "" : formatInputDate(date);
-}
-
-function importProcedurePositions(value: string, positionOptions: string[]) {
-  const raw = value.trim();
-  if (!raw) return positionOptions;
-  if (normalizeText(raw) === normalizeText(COMMON_BLOCK) || normalizeText(raw) === normalizeText(LEGACY_COMMON_POSITION) || normalizeText(raw) === "tat ca cuong vi") {
-    return positionOptions;
-  }
-  const requested = raw
-    .split(/[;,]/)
-    .map((item) => item.trim())
-    .filter(Boolean);
-  return requested.length ? requested : positionOptions;
-}
-
-function formatInputDate(date: Date) {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
 function normalizeRecordDateForInput(value: string | null | undefined, inputType: "date" | "datetime-local") {
