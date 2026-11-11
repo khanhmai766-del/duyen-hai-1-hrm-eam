@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { AlertTriangle, Camera, CheckCircle2, Flashlight, ImagePlus, Loader2, QrCode, RotateCcw, ScanLine, ShieldCheck } from "lucide-react";
+import { AlertTriangle, Camera, CheckCircle2, Flashlight, ImagePlus, Loader2, QrCode, RotateCcw, ScanLine, ShieldCheck, Wrench, Zap } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { apiMutate } from "@/lib/fetcher";
@@ -20,8 +20,11 @@ import type { PermitPerson } from "@/lib/work-permits";
 const SCAN_METRICS_ID = "quet-qr-chung";
 
 type ScannerControls = { stop: () => void; switchTorch?: (enabled: boolean) => Promise<boolean> };
-type ScanState = "idle" | "starting" | "scanning" | "resolving" | "error" | "card";
-type ResolveResult = { type: "DEVICE" | "WORK_PERMIT"; url: string; legacy: boolean } | { type: "WORKER_CARD"; code: string; person: PermitPerson | null };
+type ScanState = "idle" | "starting" | "scanning" | "resolving" | "error" | "card" | "permit";
+type ScannedPermit = { number: string; kind: string; scope: string; active: boolean; content: string; location: string; teamName: string };
+type ResolveResult = { type: "DEVICE"; url: string; legacy: boolean }
+  | { type: "WORK_PERMIT"; url: string; legacy: boolean; permit?: ScannedPermit }
+  | { type: "WORKER_CARD"; code: string; person: PermitPerson | null };
 
 export default function DeviceScannerPage() {
   return <DeviceScanner />;
@@ -41,6 +44,8 @@ function DeviceScanner() {
   /** Thẻ nhân sự nhà thầu vừa quét — hiện thẻ thông tin ngay trên trang, không chuyển trang. */
   const [card, setCard] = React.useState<{ code: string; person: PermitPerson | null } | null>(null);
   const cardRef = React.useRef<HTMLDivElement>(null);
+  /** PCT vừa quét — hỏi xác nhận số phiếu + Cơ/Điện trước khi vào màn hình làm việc. */
+  const [permit, setPermit] = React.useState<{ url: string; info: ScannedPermit } | null>(null);
   const metricsRef = React.useRef<ScanMetricsCollector | null>(null);
   metricsRef.current ??= new ScanMetricsCollector(SCAN_METRICS_ID, reportPermitScanMetrics);
   /** Mốc lúc bắt được mã của lượt đang tra — chốt số đo khi có kết quả tra. */
@@ -104,6 +109,14 @@ function DeviceScanner() {
         return;
       }
       navigator.vibrate?.(90);
+      if (result.type === "WORK_PERMIT" && result.permit) {
+        // Không vào thẳng: hai tờ PCT cùng nhà thầu thường để cạnh nhau, camera có thể bắt trúng mã của tờ kia.
+        setPermit({ url: result.url, info: result.permit });
+        setState("permit");
+        setMessage(`Đã nhận diện PCT ${result.permit.number} — kiểm tra đúng phiếu`);
+        requestAnimationFrame(() => cardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
+        return;
+      }
       toast.success(result.type === "WORK_PERMIT" ? "Đã nhận diện PCT nhà thầu" : "Đã nhận diện thiết bị");
       router.push(result.url);
     } catch (error) {
@@ -118,6 +131,7 @@ function DeviceScanner() {
     stopScanner();
     resolvingRef.current = false;
     setCard(null);
+    setPermit(null);
     if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
       setState("error");
       setMessage("Camera chỉ hoạt động khi website dùng HTTPS. Bạn vẫn có thể chọn ảnh QR từ điện thoại.");
@@ -261,8 +275,36 @@ function DeviceScanner() {
         </div>
       </section>
       {card && <div ref={cardRef} className="scroll-mt-4"><WorkerCardResult code={card.code} person={card.person} onScanAgain={() => void startScanner()} /></div>}
+      {permit && <div ref={cardRef} className="scroll-mt-4"><ScannedPermitConfirm info={permit.info} onEnter={() => router.push(permit.url)} onScanAgain={() => void startScanner()} /></div>}
       <p className="px-2 text-center text-xs leading-5 text-muted-foreground">Camera cần HTTPS và quyền truy cập từ trình duyệt. Mọi kết quả vẫn được kiểm tra theo quyền tài khoản đang đăng nhập.</p>
     </div>
+  );
+}
+
+/** Khung xác nhận PCT vừa quét: số phiếu to, Cơ (cam) / Điện (xanh) khác màu để nhìn là phân biệt. */
+function ScannedPermitConfirm({ info, onEnter, onScanAgain }: { info: ScannedPermit; onEnter: () => void; onScanAgain: () => void }) {
+  const electrical = info.kind === "ELECTRICAL";
+  const tone = electrical
+    ? { box: "border-sky-300 bg-sky-50 dark:border-sky-700 dark:bg-sky-950/40", chip: "bg-sky-600 text-white", Icon: Zap, label: "PHIẾU ĐIỆN" }
+    : { box: "border-orange-300 bg-orange-50 dark:border-orange-700 dark:bg-orange-950/40", chip: "bg-orange-600 text-white", Icon: Wrench, label: "PHIẾU CƠ – NHIỆT – HÓA" };
+  return (
+    <section className={`rounded-2xl border-2 p-4 shadow-sm sm:p-5 ${tone.box}`} aria-live="polite">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-black tracking-wide ${tone.chip}`}><tone.Icon className="h-4 w-4" /> {tone.label}</span>
+        <span className="text-xs font-semibold text-muted-foreground">{info.scope}{info.active ? " · đang làm việc" : ""}</span>
+      </div>
+      <p className="mt-3 text-2xl font-black leading-tight text-foreground sm:text-3xl">PCT {info.number}</p>
+      {info.content && <p className="mt-2 line-clamp-3 whitespace-pre-line text-sm leading-5 text-foreground/80">{info.content}</p>}
+      <dl className="mt-2 space-y-0.5 text-sm text-muted-foreground">
+        {info.location && <div><dt className="inline font-semibold">Địa điểm: </dt><dd className="inline">{info.location}</dd></div>}
+        {info.teamName && <div><dt className="inline font-semibold">Đơn vị: </dt><dd className="inline">{info.teamName}</dd></div>}
+      </dl>
+      <p className="mt-3 text-sm font-semibold text-foreground">Đối chiếu số phiếu với tờ PCT đang cầm trước khi vào.</p>
+      <div className="mt-3 grid gap-2 sm:grid-cols-2">
+        <Button onClick={onEnter} className="min-h-12 rounded-xl text-base font-black"><CheckCircle2 /> Đúng phiếu — vào làm việc</Button>
+        <Button variant="outline" onClick={onScanAgain} className="min-h-12 rounded-xl text-base font-bold"><RotateCcw /> Không đúng — quét lại</Button>
+      </div>
+    </section>
   );
 }
 

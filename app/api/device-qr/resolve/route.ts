@@ -5,7 +5,7 @@ import { resolveActiveDeviceQrCard } from "@/lib/device-qr-access";
 import { assertSeqViewable } from "@/lib/server-access";
 import { prisma } from "@/lib/prisma";
 import { parseWorkPermitQrValue } from "@/lib/work-permit-qr";
-import { permitHasQr, PERMIT_CONTRACTOR_SCOPES, type PermitContractorScope } from "@/lib/work-permits";
+import { formatPermitNumber, permitHasQr, PERMIT_CONTRACTOR_SCOPES, type PermitContractorScope } from "@/lib/work-permits";
 import { requirePermitVisible } from "@/lib/server/work-permit-scope";
 import { requirePermitExecute } from "@/lib/server/work-permit-permissions";
 import { lookupPermitCardPerson } from "@/lib/server/work-permit-people";
@@ -22,6 +22,7 @@ export async function POST(req: NextRequest) {
       await requirePermitExecute(user);
       const permit = await prisma.workPermit.findUnique({ where: { id: permitTarget.id }, select: {
         id: true, teamType: true, contractorScope: true, status: true,
+        kind: true, number: true, year: true, nkvhNumber: true, content: true, location: true, teamName: true,
       } });
       if (!permit || !permitHasQr(permit)) {
         return fail("Mã QR không thuộc PCT nhà thầu Đại tu / Đầu tư", 400);
@@ -36,7 +37,15 @@ export async function POST(req: NextRequest) {
         return fail(`${label} chưa ở trạng thái có thể cho phép làm việc`, 409);
       }
       const intent = permit.status === "ACTIVE" ? "" : "?open=1";
-      return ok({ type: "WORK_PERMIT", url: `/work-permits/${encodeURIComponent(permit.id)}/lam-viec${intent}`, legacy: false });
+      // Kèm số phiếu + loại Cơ/Điện để trang quét hỏi xác nhận trước khi vào: 11/11/2026 camera bắt nhầm mã QR của
+      // tờ PCT điện để cạnh tờ PCT cơ cùng nhà thầu, cả đội bị quét vào nhầm phiếu mà không ai nhận ra.
+      return ok({
+        type: "WORK_PERMIT", url: `/work-permits/${encodeURIComponent(permit.id)}/lam-viec${intent}`, legacy: false,
+        permit: {
+          number: formatPermitNumber(permit), kind: permit.kind, scope: label, active: permit.status === "ACTIVE",
+          content: permit.content.slice(0, 400), location: permit.location.slice(0, 200), teamName: permit.teamName,
+        },
+      });
     }
     const target = parseDeviceQrValue(body?.value);
     if (!target) {
