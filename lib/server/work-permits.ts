@@ -47,7 +47,11 @@ export function permitInstant(body: Record<string, unknown>, key: string) {
  * có thể chưa có CHTT/số nhân viên (PCT T-C-N-H khai CHTT ở bước sau). Phiếu vẫn vào sổ ở trạng thái
  * Đã cấp và hiện nhãn "Cần bổ sung"; mọi lần sửa sau đó đi qua kiểm tra đầy đủ như bình thường.
  */
-export function parsePermit(body: Record<string, unknown>, status: PermitStatus, options: { allowIncompleteIssue?: boolean } = {}) {
+export function parsePermit(body: Record<string, unknown>, status: PermitStatus, options: {
+  allowIncompleteIssue?: boolean;
+  /** Chỉ API kết thúc phiếu dùng sau khi khóa PCT và xác minh Đã cấp, chưa có lần làm việc. */
+  allowUnstartedClose?: boolean;
+} = {}) {
   const kind = permitText(body, "kind"), unit = permitText(body, "unit"), workDate = permitText(body, "workDate");
   if (!Object.hasOwn(PERMIT_KINDS, kind) || !Object.hasOwn(PERMIT_UNITS, unit)) throw fail("Loại PCT hoặc tổ máy không hợp lệ");
   const year = Number(body.year), number = permitText(body, "number", 80).toUpperCase().replace(/\s+/g, "");
@@ -106,7 +110,8 @@ export function parsePermit(body: Record<string, unknown>, status: PermitStatus,
     if (!data.issuerName || !data.issuedAt) throw fail("Để ghi cấp phiếu, cần người cấp và thời điểm cấp phiếu");
     if (!quickContractor && (!data.commanderName || !data.teamName || (teamType !== "CONTRACTOR" && !data.workerCount))) throw fail("Để ghi cấp phiếu, cần chỉ huy trực tiếp, đơn vị và số nhân viên");
   }
-  if (teamType === "CONTRACTOR" && ["ACTIVE", "PAUSED", "WAITING", "CLOSED"].includes(status) && (!data.authorizerName || !data.authorizedAt)) throw fail("Vui lòng ghi người và thời điểm cho phép làm việc");
+  const unstartedClose = teamType === "CONTRACTOR" && status === "CLOSED" && options.allowUnstartedClose === true && !data.authorizerName && !data.authorizedAt;
+  if (teamType === "CONTRACTOR" && !unstartedClose && ["ACTIVE", "PAUSED", "WAITING", "CLOSED"].includes(status) && (!data.authorizerName || !data.authorizedAt)) throw fail("Vui lòng ghi người và thời điểm cho phép làm việc");
   if (["PAUSED", "CANCELLED"].includes(status) && !data.statusReason) throw fail("Vui lòng nhập lý do tạm dừng hoặc hủy phiếu");
   if (status === "CLOSED" && (!data.closedAt || (teamType === "CONTRACTOR" && !data.result))) throw fail("Vui lòng nhập thông tin và thời điểm đóng phiếu");
   if (status === "DRAFT" && (data.issuedAt || data.authorizedAt || data.closedAt)) throw fail("Phiếu nháp chưa ghi thời điểm cấp hoặc thực hiện");
@@ -114,7 +119,7 @@ export function parsePermit(body: Record<string, unknown>, status: PermitStatus,
   if (status !== "CLOSED" && data.closedAt) throw fail("Chỉ ghi thời điểm đóng khi chọn Kết thúc phiếu");
   if (data.issuedAt && Number(new Intl.DateTimeFormat("en", { year: "numeric", timeZone: "Asia/Ho_Chi_Minh" }).format(data.issuedAt)) !== year) throw fail("Năm cấp số phải khớp năm của thời điểm cấp phiếu");
   if (data.authorizedAt && (!data.issuedAt || data.authorizedAt < data.issuedAt)) throw fail("Thời điểm cho phép làm việc phải từ thời điểm cấp trở đi");
-  const earliestClose = teamType === "CONTRACTOR" ? data.authorizedAt : data.issuedAt;
+  const earliestClose = teamType === "CONTRACTOR" && !unstartedClose ? data.authorizedAt : data.issuedAt;
   if (data.closedAt && (!earliestClose || data.closedAt < earliestClose)) throw fail("Thời điểm đóng phải từ thời điểm cấp / cho phép làm việc trở đi");
   if (data.closedAt && data.authorizedAt && data.closedAt < data.authorizedAt) throw fail("Thời điểm đóng không được trước thời điểm cho phép đã ghi nhận");
   return { ...data, searchText: normalizeText([number, formatPermitNumber({ number, year }), data.position, sourceClassification ? PERMIT_SOURCE_CLASSIFICATIONS[sourceClassification as keyof typeof PERMIT_SOURCE_CLASSIFICATIONS] : "", data.content, data.location, data.issuerName, data.electricalSafetySupervisorName, data.commanderName, data.leaderName, data.authorizerName, data.teamName, data.repairRequestNumber, data.registrationNumber, data.workScope, data.managingUnit, data.plantName, data.note].join(" ")) };

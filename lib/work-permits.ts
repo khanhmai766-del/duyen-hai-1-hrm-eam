@@ -147,7 +147,7 @@ export const PERMIT_TRANSITIONS: Record<PermitStatus, readonly PermitStatus[]> =
 };
 // ACTIVE/WAITING của nhà thầu chỉ do API mở/kết thúc lần làm việc thay đổi.
 export const CONTRACTOR_PERMIT_TRANSITIONS: Record<PermitStatus, readonly PermitStatus[]> = {
-  DRAFT: ["ISSUED", "CANCELLED"], ISSUED: ["CANCELLED"], ACTIVE: [], PAUSED: [],
+  DRAFT: ["ISSUED", "CANCELLED"], ISSUED: ["CLOSED", "CANCELLED"], ACTIVE: [], PAUSED: [],
   WAITING: ["CLOSED", "CANCELLED"], CLOSED: [], CANCELLED: [],
 };
 export const PERMIT_DISCIPLINES = { HYDRO: "Thủy", MECHANICAL: "Cơ", THERMAL: "Nhiệt", CHEMICAL: "Hóa" } as const;

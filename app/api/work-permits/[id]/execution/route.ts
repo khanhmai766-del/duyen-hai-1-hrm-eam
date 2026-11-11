@@ -35,17 +35,21 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
         if (!["ACTIVE", "PAUSED", "WAITING", "CLOSED"].includes(status)) throw fail("Chỉ cập nhật tiến độ khi phiếu đã vào làm việc");
         progress = body.progress;
       }
+      // Khóa PCT ở trên dùng chung với API mở/kết thúc lần làm việc: không thể mở lượt mới trong lúc đóng.
+      const closingContractor = before.teamType === "CONTRACTOR" && status === "CLOSED";
+      const live = closingContractor ? await tx.workPermitSession.findFirst({ where: { permitId: before.id, endedAt: null } }) : null;
+      const last = closingContractor ? await tx.workPermitSession.findFirst({ where: { permitId: before.id }, orderBy: { openedAt: "desc" } }) : null;
+      const unstartedClose = closingContractor && before.status === "ISSUED" && !last;
+      if (closingContractor && !unstartedClose && (before.status === "ISSUED" || live || !last?.endedAt)) throw fail("Cần kết thúc lần làm việc cuối trước khi đóng PCT", 409);
       const source = { ...JSON.parse(JSON.stringify(before)), ...body, status };
       // Nút "Kết thúc phiếu" (chi tiết PCT nhà thầu) chỉ xác nhận khoá phiếu, không hỏi kết quả: còn trống thì ghi mặc định.
-      if (status === "CLOSED" && before.teamType === "CONTRACTOR" && !String(source.result ?? "").trim()) source.result = "Kết thúc phiếu";
-      const data = parsePermit(source, status);
+      if (closingContractor && !String(source.result ?? "").trim()) source.result = unstartedClose ? "Kết thúc phiếu — chưa mở lần làm việc" : "Kết thúc phiếu";
+      const data = parsePermit(source, status, { allowUnstartedClose: unstartedClose });
       if (before.authorizedAt && !data.authorizedAt) throw fail("Không được xóa thời điểm cho phép đã ghi nhận", 409);
       if (before.teamType === "CONTRACTOR") {
         if (data.authorizerName !== before.authorizerName || (data.authorizedAt?.getTime() ?? null) !== (before.authorizedAt?.getTime() ?? null)) throw fail("Cho phép nhà thầu vào làm việc phải ghi qua chức năng mở lần làm việc", 409);
-        if (status === "CLOSED") {
-          const live = await tx.workPermitSession.findFirst({ where: { permitId: before.id, endedAt: null } });
-          const last = await tx.workPermitSession.findFirst({ where: { permitId: before.id }, orderBy: { openedAt: "desc" } });
-          if (live || !last?.endedAt || !data.closedAt || data.closedAt < last.endedAt) throw fail("Cần kết thúc lần làm việc cuối trước khi đóng PCT", 409);
+        if (closingContractor && (!data.closedAt || (last?.endedAt && data.closedAt < last.endedAt))) {
+          throw fail("Thời điểm đóng PCT phải từ thời điểm kết thúc lần làm việc cuối trở đi", 409);
         }
       }
       const after = await tx.workPermit.update({ where: { id: before.id }, data: {
@@ -53,7 +57,7 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
         closedAt: data.closedAt, result: data.result, statusReason: data.statusReason,
         searchText: data.searchText, version: { increment: 1 },
       } });
-      await tx.workPermitHistory.create({ data: { permitId: after.id, actorId: user.id, actorName: user.name ?? "", action: status === before.status ? "Cập nhật thực hiện / tiến độ" : `Chuyển sang ${PERMIT_STATUSES[status]}`, before: permitSnapshot(before), after: permitSnapshot(after) } });
+      await tx.workPermitHistory.create({ data: { permitId: after.id, actorId: user.id, actorName: user.name ?? "", action: unstartedClose ? "Kết thúc phiếu chưa mở lần làm việc" : status === before.status ? "Cập nhật thực hiện / tiến độ" : `Chuyển sang ${PERMIT_STATUSES[status]}`, before: permitSnapshot(before), after: permitSnapshot(after) } });
       // Kết thúc phiếu đại tu → "Kết thúc công tác" trên Sheet tiến độ (hạng mục được mở khoá cho PCT mới).
       if (status === "CLOSED" && before.status !== "CLOSED") await enqueueOverhaulClose(tx, after, after.closedAt ?? new Date());
       return after;

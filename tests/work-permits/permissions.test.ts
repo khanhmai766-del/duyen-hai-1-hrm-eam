@@ -95,5 +95,5 @@ test("nội bộ: ghi nhận đóng/kết quả bằng quyền cấp, nhà thầ
   assert.equal(policy.permitIssueUpdateNeedsExecution({ teamType: "INTERNAL", status: "ISSUED" }, { status: "CLOSED", closedAt: "2026-09-12", result: "Xong" }), false);
   assert.equal(policy.permitIssueUpdateNeedsExecution({ teamType: "CONTRACTOR", status: "WAITING" }, { status: "CLOSED" }), true);
   assert.deepEqual(permits.PERMIT_TRANSITIONS.ISSUED, ["CLOSED", "CANCELLED"]);
-  assert.deepEqual(permits.CONTRACTOR_PERMIT_TRANSITIONS.ISSUED, ["CANCELLED"]);
+  assert.deepEqual(permits.CONTRACTOR_PERMIT_TRANSITIONS.ISSUED, ["CLOSED", "CANCELLED"]);
 });
