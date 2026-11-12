@@ -147,7 +147,7 @@ export function PermitCompanyDirectory({ scope }: { scope: PermitContractorScope
     <div className="overflow-hidden rounded-xl border border-border bg-card">
       <div className="flex flex-col gap-3 border-b border-border bg-muted/25 px-4 py-3">
         <p className="text-sm text-muted-foreground">{pendingOnly ? <><strong className="font-semibold text-foreground">{pendingTotal ?? "…"}</strong> người chờ đối chiếu CHTT</> : <><strong className="font-semibold text-foreground">{rows.length}</strong> đơn vị · <strong className="font-semibold text-foreground">{rows.reduce((sum, row) => sum + row.total, 0)}</strong> người · <span className={workingTotal ? "text-emerald-700" : undefined} title={`CHTT và nhân viên chưa quét RA ở các PCT ${scopeLabel} đang làm việc, tính cho mọi đơn vị`}><strong className="font-semibold">{workingTotal}</strong> đang làm việc</span></>}</p>
-        <div className="grid w-full grid-cols-2 gap-2 sm:grid-cols-3">
+        <div className="grid w-full grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,1fr)_auto]">
           <input type="search" className="col-span-2 h-10 w-full min-w-0 sm:col-span-1 rounded-xl border border-input bg-background px-3 text-base focus:outline-none sm:h-9 sm:text-sm focus:ring-2 focus:ring-ring" aria-label="Tìm đơn vị nhà thầu, nhân viên hoặc CHTT" placeholder="Họ tên, số thẻ, chức vụ, SĐT, đơn vị…" value={q} maxLength={200} onChange={e => setQ(e.target.value)} />
           <select aria-label="Lọc nhân sự trùng họ tên và năm sinh" title="Người trùng cả họ tên lẫn năm sinh — có thể là một người có hai hồ sơ / hai thẻ"
             className={cn("col-span-2 h-10 w-full min-w-0 rounded-xl border border-input bg-background px-3 text-base focus:outline-none sm:col-span-1 sm:h-9 sm:text-sm focus:ring-2 focus:ring-ring", dupMode && "border-amber-500 bg-amber-50 font-medium text-amber-900")}
@@ -161,14 +161,12 @@ export function PermitCompanyDirectory({ scope }: { scope: PermitContractorScope
             <option value="">Tất cả mã đơn vị ({allRows.length})</option>
             {companyOptions.map(row => <option key={row.company} value={row.company} title={row.company}>{row.code || row.company}</option>)}
           </select>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button type="button" variant={pendingOnly ? "default" : "outline"} className="h-10 max-w-full px-3 text-xs sm:text-sm" aria-pressed={pendingOnly}
+          <Button type="button" variant={pendingOnly ? "default" : "outline"} className="col-span-2 h-10 max-w-full justify-self-start rounded-xl px-3 text-xs sm:col-span-3 sm:h-9 sm:text-sm lg:col-span-1" aria-pressed={pendingOnly}
             onClick={() => { setPendingOnly(value => !value); setPendingPage(1); setDupMode(""); }}>
             Chờ cập nhật CHTT ({pendingTotal ?? "…"})
           </Button>
-          {pendingOnly && <p className="min-w-0 flex-1 basis-52 text-xs leading-5 text-muted-foreground">Chức vụ ghi CHTT nhưng chưa bật vai trò. Đối chiếu hồ sơ rồi bật công tắc từng người.</p>}
         </div>
+        {pendingOnly && <p className="text-xs leading-5 text-muted-foreground">Chức vụ ghi CHTT nhưng chưa bật vai trò. Đối chiếu hồ sơ rồi bật công tắc từng người.</p>}
       </div>
       {pendingOnly ? <div className="space-y-3 p-3 sm:p-4">
         {pending.isPending || normalizeText(personQ) !== term ? <p role="status" className="py-4 text-sm">Đang tìm người chờ cập nhật CHTT…</p>
