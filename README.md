@@ -1,220 +1,198 @@
-# PowerPlant EAM — HRM & Equipment Asset Management
+# PowerPlant EAM — Duyên Hải 1
 
-Hệ thống quản lý nhân sự ca kíp & tài sản thiết bị cho nhà máy nhiệt điện.
-Production-grade Next.js 16 (React 19) application with role-based access control, shift
-management, equipment lifecycle tracking, repair history, materials inventory,
-and reporting.
+Hệ thống quản lý nhân sự ca kíp, thiết bị và nghiệp vụ vận hành cho **Phân xưởng Vận hành 1 — Nhà máy Nhiệt điện Duyên Hải 1**. Giao diện tiếng Việt, hỗ trợ sử dụng trên điện thoại tại hiện trường và máy tính tại phòng điều khiển.
 
-## Tech stack
+Ứng dụng dùng Next.js App Router, PostgreSQL và phân quyền theo vai trò, chức năng, cương vị làm việc. Các phân hệ dùng chung tài khoản đăng nhập và nhật ký thao tác.
 
-| Layer      | Technology                                            |
-| ---------- | ----------------------------------------------------- |
-| Runtime    | Node.js 24 (`engines` `>=24 <25`, `.nvmrc`)           |
-| Framework  | Next.js 16 (App Router, Turbopack, TypeScript strict) |
-| UI library | React 19                                              |
-| Database   | PostgreSQL + Prisma ORM 5.22 (lộ trình lên 6/7 bên dưới) |
-| Auth       | Auth.js / NextAuth v5 (credentials + passkey, JWT)    |
-| Styling    | Tailwind CSS + shadcn/ui                              |
-| State      | TanStack Query (server state)                         |
-| Charts     | Recharts                                              |
-| QR         | qrcode.react                                          |
-| Font       | Be Vietnam Pro (next/font/google)                     |
-| Lint       | ESLint 9 flat config + eslint-config-next 16          |
+## Chức năng chính
 
-Upgraded on 2026-09-13 from Node 20 / Next.js 14 / React 18 — change records, rollback steps and
-test evidence: `docs/ATTT_HO_SO_RELEASE.md`.
+| Nhóm | Nghiệp vụ |
+| --- | --- |
+| Nhân sự và ca kíp | Lịch làm việc, điểm danh, bàn giao ca, sơ đồ ca trực, quản lý công việc và mệnh lệnh sản xuất |
+| Thiết bị | Danh mục, thông tin thiết bị, mã QR, khiếm khuyết Cơ – Hóa/Điện, lịch sử sửa chữa và báo cáo |
+| Phiếu công tác | Sổ Cơ/Điện, giữ và cấp số theo năm, phiếu nội bộ/nhà thầu, theo dõi trạng thái, xuất tài liệu và tích hợp NKVH |
+| An toàn | Sổ thiết bị PCCC, tiếp địa và chống sét, thiết bị yêu cầu nghiêm ngặt về ATLĐ |
+| Vật tư | Danh mục, tồn kho hóa chất, vật tư theo ERP, kế hoạch năm, nhu cầu tháng, lịch và lịch sử thay thế |
+| Tài liệu số | Hợp đồng, quy trình, sơ đồ P&ID, diễn đàn kỹ thuật và hồ sơ lưu trữ vận hành |
+| Chỉ tiêu KTKT | Dữ liệu tháng, báo cáo chỉ tiêu kinh tế kỹ thuật, báo cáo sản xuất, lượng nước, hóa chất, suất hao nhiệt PPA và PMIS |
+| Tiện ích | Tiến độ đại tu, kết quả phân tích dầu LIMS, liên kết các công cụ phục vụ vận hành |
+| Quản trị và tích hợp | Người dùng, phân quyền, nhật ký, thông báo hệ thống, trợ lý AI, đồng bộ n8n/Google Sheets và cảnh báo Telegram |
 
-## Features
+Chức năng hiển thị và thao tác được phép phụ thuộc cấu hình phân quyền của từng tài khoản/cương vị. Một số tích hợp cần cấu hình dịch vụ riêng, không tự hoạt động chỉ bằng việc khởi chạy ứng dụng.
 
-- **Dashboard** — KPIs, repair donut, device-status bar chart, today's shift, quick actions
-- **HR & Shifts** — monthly shift roster, check-in/out + handover, live shift org chart
-- **Devices** — 5 view modes (Dashboard / Table / Cards / Form / Deck), status filter chips, debounced search, QR codes
-- **Repair history** — filters, slide-over drawer, create/edit modal, Open→In Progress→Resolved→Closed tracker, approval flow
-- **Reports** — repair frequency, MTBF, attendance, downtime by category, material consumption, CSV/print export
-- **Materials** — stock levels with OK/Low/Critical badges, quick edit
-- **Admin** — users + role assignment, RBAC matrix, audit log
-- RBAC enforced on every API route, skeleton loaders, empty states, toasts, confirm dialogs, print styles, keyboard shortcuts (`/` search, `n` new device)
+## Công nghệ
 
-## Prerequisites
+| Thành phần | Công nghệ |
+| --- | --- |
+| Runtime | Node.js 24 (`>=24 <25`, xem [`.nvmrc`](.nvmrc)) |
+| Framework | Next.js 16, App Router, React 19, TypeScript strict |
+| Cơ sở dữ liệu | PostgreSQL, Prisma ORM 5.22 |
+| Đăng nhập | Auth.js / NextAuth v5, mật khẩu và WebAuthn/passkey, phiên JWT |
+| Giao diện | Tailwind CSS 3, shadcn/ui, Be Vietnam Pro |
+| Dữ liệu phía client | TanStack Query |
+| Biểu đồ và tài liệu | Recharts, ExcelJS, công cụ Word/PDF, mã QR |
+| Lưu trữ tệp | PostgreSQL và kho S3-compatible tùy loại dữ liệu/cấu hình |
+| Kiểm tra mã | ESLint 9 flat config, TypeScript, bộ kiểm tra theo phân hệ |
 
-- Node.js 24 (see `.nvmrc`; production runs 24.x since 2026-09-13). Node 20/22 is not supported.
-- A PostgreSQL 13+ database — **or** use the bundled zero-install DB below.
+Phiên bản khai báo và toàn bộ lệnh nằm trong [`package.json`](package.json). Lịch sử nâng cấp cùng kế hoạch nâng Prisma nằm trong [hồ sơ release](docs/ATTT_HO_SO_RELEASE.md).
 
-## Quick start (zero-install database)
+## Khởi chạy trên máy phát triển
 
-No Docker or system PostgreSQL required. The `embedded-postgres` dev dependency
-downloads a real Postgres binary and runs it on **port 5433**, with data persisted
-in `./.pgdata`. `.env` is already pointed at it.
+### 1. Chuẩn bị
+
+- Cài **Node.js 24** và npm.
+- Clone kho mã rồi mở terminal tại thư mục gốc dự án.
+- Chọn PostgreSQL tích hợp bên dưới hoặc một PostgreSQL riêng.
 
 ```bash
 npm install
-npm run db:push   # first time only: create schema
-npm run db:seed   # first time only: demo data
-npm run dev       # starts the embedded Postgres automatically if it is not running, then next dev
+npm run sync:skills
 ```
 
-Open http://localhost:3000 → `/login`. `npm run db:start` still exists if you want to run only the database.
+`npm install` tự sinh Prisma Client qua `postinstall`. `sync:skills` dựng hướng dẫn cho Codex trong `.agents/` từ nguồn `.claude/`.
 
-> The embedded DB initializes with **UTF8** encoding (required for Vietnamese text).
-> If you ever need to reset it, stop the dev server, delete `.pgdata`, and re-run
-> `db:start` → `db:push` → `db:seed`.
+### 2. Cấu hình môi trường
 
-## Setup (your own PostgreSQL)
+Sao chép [`.env.example`](.env.example) thành `.env` (PowerShell: `Copy-Item .env.example .env`). Với PostgreSQL tích hợp, sửa các giá trị sau:
+
+```dotenv
+DATABASE_URL="postgresql://postgres:postgres@localhost:5433/powerplant?schema=public"
+AUTH_SECRET="thay-bang-chuoi-ngau-nhien-rieng"
+AUTH_TRUST_HOST="true"
+NEXT_PUBLIC_APP_URL="http://localhost:3000"
+```
+
+Tạo giá trị ngẫu nhiên cho `AUTH_SECRET` bằng lệnh sau rồi chép kết quả vào `.env`:
 
 ```bash
-npm install
-cp .env.example .env       # set DATABASE_URL to your server + a real AUTH_SECRET
+node -e "console.log(require('node:crypto').randomBytes(32).toString('base64'))"
+```
+
+Không commit `.env`, khóa dịch vụ hay dữ liệu sao lưu. Các biến n8n, Telegram, S3, ClamAV, AI và Google Sheets được mô tả trong `.env.example` và tài liệu từng tích hợp; chỉ cấu hình khi sử dụng.
+
+### 3. Khởi tạo cơ sở dữ liệu local mới
+
+PostgreSQL tích hợp dùng `embedded-postgres`, không cần Docker hoặc cài PostgreSQL hệ thống. Dữ liệu lưu trong `.pgdata/`, cổng **5433**, mã hóa UTF-8 để lưu tiếng Việt.
+
+Mở một terminal và giữ tiến trình này chạy:
+
+```bash
+npm run db:start
+```
+
+Khi PostgreSQL báo sẵn sàng, mở terminal thứ hai tại gốc dự án:
+
+```bash
 npm run db:push
 npm run db:seed
 npm run dev
 ```
 
-### Demo accounts (password: `password123`)
+**Chỉ chạy `db:push` và `db:seed` ở bước này với cơ sở dữ liệu local mới dành cho demo.** Seed xóa dữ liệu ở nhiều bảng trước khi tạo dữ liệu mẫu; không chạy trên DB đang sử dụng. `db:push` đồng bộ toàn bộ schema và có thể đề nghị xóa bảng/cột ngoài schema; không dùng `--accept-data-loss` để bỏ qua cảnh báo. Các phân hệ có SQL bổ sung cần làm theo tài liệu riêng trong mục Tài liệu.
 
-| Role        | Email                       |
-| ----------- | --------------------------- |
-| Admin       | admin@powerplant.vn         |
-| Supervisor  | supervisor@powerplant.vn    |
-| Technician  | tech@powerplant.vn          |
-| Viewer      | viewer@powerplant.vn        |
+Mở [http://localhost:3000](http://localhost:3000), đăng nhập tại `/login`.
 
-## Scripts
+Ở những lần chạy sau, chỉ cần `npm run dev`: script tự bật PostgreSQL tích hợp nếu cổng 5433 chưa có tiến trình lắng nghe, sau đó chạy Next.js. Có thể đổi cổng web bằng `npm run dev -- -p 3030`.
 
-| Command              | Description                                       |
-| -------------------- | ------------------------------------------------- |
-| `npm run dev`        | Start embedded Postgres (if needed) + dev server  |
-| `npm run db:start`   | Start only the bundled local PostgreSQL           |
-| `npm run build`      | Generate Prisma client + production build         |
-| `npm start`          | Run the production build                          |
-| `npm run lint`       | ESLint (`eslint .` — Next 16 removed `next lint`) |
-| `npx tsc --noEmit`   | Type-check                                        |
-| `npm run db:push`    | Sync schema to the database                       |
-| `npm run db:migrate` | Create a migration                                |
-| `npm run db:seed`    | Seed demo data                                    |
-| `npm run db:studio`  | Open Prisma Studio                                |
+**Dùng PostgreSQL riêng:** đặt `DATABASE_URL` đúng máy chủ/cổng/tên DB. Tự bảo đảm DB đã chạy; có thể dùng `npm run dev:next` để chỉ mở Next.js, không khởi động PostgreSQL tích hợp. Với DB hiện hữu, áp dụng thay đổi cấu trúc theo tài liệu phân hệ thay vì chạy các lệnh khởi tạo demo.
 
-## Deploying to production
+### Tài khoản demo
 
-Never run `npm run build`, `npm install` or `pm2 restart` by hand in `/var/www/dh1-app` — an in-place
-build wipes the live `.next`. Deploy only with `scripts/deploy-server.sh` (DB backup → build in a
-separate directory → swap → `pm2 reload`, keeps 3 builds for `--rollback`). Step-by-step guide:
-`docs/huong-dan-deploy-production.md`. Change control and rollback plans: `docs/ATTT_CHINH_SACH.md`.
+Các tài khoản sau được tạo bởi seed, dùng mật khẩu **`password123`** và chỉ dành cho môi trường demo:
 
-## Upgrade / regression verification
+| Vai trò | Email |
+| --- | --- |
+| Quản trị | `admin@powerplant.vn` |
+| Trưởng ca | `supervisor@powerplant.vn` |
+| Kỹ thuật viên | `tech@powerplant.vn` |
+| Người xem | `viewer@powerplant.vn` |
 
-`scripts/verify/` holds the tools used for the Node 24 / Next 16 / React 19 upgrade: a 55-page crawl
-compared before/after, a hydration-mismatch check, and image-optimizer checks. They only run against
-a local build and the local dev database (they refuse production). See `scripts/verify/README.md`.
+## Lệnh thường dùng
+
+| Lệnh | Công dụng |
+| --- | --- |
+| `npm run dev` | PostgreSQL tích hợp nếu cần + Next.js dev |
+| `npm run dev:next` | Chỉ Next.js dev |
+| `npm run db:start` | Chỉ PostgreSQL tích hợp |
+| `npm run db:studio` | Mở Prisma Studio |
+| `npx prisma generate` | Sinh lại Prisma Client sau khi sửa schema |
+| `npm run db:push` | Đồng bộ toàn bộ schema; đọc cảnh báo dữ liệu trước khi dùng |
+| `npm run db:seed` | Xóa dữ liệu demo cũ ở nhiều bảng và tạo dữ liệu mẫu |
+| `npm run lint` | Kiểm tra ESLint |
+| `npx tsc --noEmit` | Kiểm tra kiểu TypeScript |
+| `npm run check:ctktkt` | Kiểm tra chuẩn kiến trúc phân hệ KTKT |
+| `npm run test:ctktkt` | Kiểm thử phân hệ KTKT |
+| `npm run test:ctktkt:contract` | Kiểm tra hợp đồng API KTKT trên môi trường local |
+| `npm run test:tcms` | Kiểm thử phân hệ hợp đồng |
+| `npm run verify:ui -- /tuyen` | Chụp và kiểm tra giao diện tuyến được chọn |
+| `npm run sync:skills` | Sinh lại `.agents/` từ nguồn skill/agent |
+| `npm run build` | Sinh Prisma Client và build production |
+| `npm start` | Chạy bản production đã build |
+
+Repo có các bộ kiểm thử theo phân hệ; xem thêm [`tests/`](tests/) và [hướng dẫn kiểm tra giao diện](scripts/verify/README.md). Với Git Bash trên Windows, dùng `MSYS_NO_PATHCONV=1 npm run verify:ui -- /tuyen` để giữ nguyên đường dẫn tuyến.
+
+Sau khi sửa giao diện, phải xem ảnh chụp ở khổ điện thoại 360/390px và máy tính 1280px. Kiểm thử có ghi dữ liệu phải dùng dữ liệu thử tách biệt trên DB local; không thao tác phá hủy trên hồ sơ thật.
+
+## Kiến trúc và phân quyền
+
+- **API:** route dùng `handle()`, `requireUser()`, kiểm tra quyền, trả envelope `{ data, meta, error }` qua `ok()`/`fail()`; thao tác ghi có audit.
+- **Client:** các hook trong `hooks/` dùng TanStack Query và `apiGet`/`apiMutate` từ `lib/fetcher.ts`.
+- **Đăng nhập:** `proxy.ts` kiểm tra sự hiện diện của cookie phiên; quyền thực tế phải được kiểm tra phía server trong route/page.
+- **Vai trò hệ thống:** `ADMIN`, `MANAGER`, `SUPERVISOR`, `TECHNICIAN`, `VIEWER`. Quyền chức năng có các mức Toàn quyền, Quản lý, Cá nhân, Chỉ xem và Không có quyền; cấu hình mặc định ở `lib/rbac-defaults.ts`, cấu hình tùy chỉnh lưu trong `RbacConfig`.
+- **KTKT:** quyền vào phân hệ và quyền nghiệp vụ tách riêng. Quyền nhập/xem từng nhóm số liệu lấy theo cương vị đang làm việc; xem [tài liệu KTKT](docs/chi-tieu-ktkt.md).
+- **Tệp tải lên:** kiểm định dạng thật và quét ClamAV khi được cấu hình qua `lib/upload-guard.ts`. Cách lưu ảnh/tệp phụ thuộc phân hệ.
+
+Hướng dẫn đầy đủ cho việc phát triển nằm trong [`AGENTS.md`](AGENTS.md), nguồn duy nhất của quy ước AI trong repo. `CLAUDE.md` chỉ trỏ về tệp này.
+
+```text
+app/                    Trang App Router và API handlers
+components/             Thành phần giao diện chung và theo nghiệp vụ
+hooks/                  Hook truy vấn và cập nhật dữ liệu
+lib/                    Auth, API, RBAC, Prisma và nghiệp vụ phía server
+modules/ctktkt/         Phân hệ chỉ tiêu kinh tế kỹ thuật
+prisma/                 Schema, seed và SQL thủ công trong manual/
+chrome-extension/       Các tiện ích đồng bộ và công cụ đóng gói
+scripts/                Import, kiểm tra, xử lý dữ liệu, triển khai, xác minh UI
+tests/                  Kiểm thử theo phân hệ
+docs/                   Hướng dẫn vận hành và tài liệu kỹ thuật
+public/                 Tài nguyên tĩnh và mẫu tài liệu
+proxy.ts                Bảo vệ tuyến bằng cookie phiên
+```
+
+## Triển khai production
+
+Làm theo [hướng dẫn triển khai](docs/huong-dan-deploy-production.md), sử dụng **`scripts/deploy-server.sh`**. Script build trong thư mục riêng rồi chuyển bản chạy và dùng `pm2 reload`, có quy trình sao lưu/rollback.
+
+**Không chạy thủ công `npm run build`, `npm install` hoặc `pm2 restart` trong `/var/www/dh1-app`.** Build trực tiếp có thể làm mất `.next` đang phục vụ và gây lỗi cho người dùng.
+
+Thay đổi DB phải được xem xét riêng; SQL thủ công chỉ đặt trong [`prisma/manual/`](prisma/manual/README.md). Trên Windows, dừng dev server trước khi sinh lại Prisma Client để tránh khóa `query_engine-windows.dll.node`.
 
 ## Tài liệu
 
-Mục lục mọi tài liệu còn dùng (gộp lại ngày 14/09/2026 — các file cũ đã gộp/xoá vẫn xem được trong lịch sử Git).
-
-| Tài liệu | Nội dung |
+| Chủ đề | Tài liệu |
 | --- | --- |
-| `docs/huong-dan-deploy-production.md` | Cách deploy bằng `deploy-server.sh`, xử lý sự cố, rollback, dung lượng server. Phụ lục C: dựng vai trò sao lưu `dh1_backup`. Phụ lục D: ràng buộc hạ tầng (pm2 fork, gzip, pool DB) |
-| `docs/ATTT_CHINH_SACH.md` | Chính sách ATTT (CS-ATTT-KTAT-21) gộp một file: A kiểm tra dependency · B tách môi trường + yêu cầu phần mềm · C checklist trước deploy · D kế hoạch rollback · E dữ liệu test |
-| `docs/ATTT_HO_SO_RELEASE.md` | Hồ sơ đã điền của đợt nâng cấp Node 24 / Next 16 / React 19 (bậc 1, 2a, 2b, 3 và các đợt sau) + kế hoạch nâng Prisma (mục 7) |
-| `reports/npm-audit-*.json` | Bằng chứng `npm audit` (máy dev và production). `reports/verify/` là kết quả chạy kiểm thử, không commit |
-| `scripts/verify/README.md` | Bộ kiểm thử nâng cấp: crawl so mốc, hydrate, ảnh — chỉ chạy local |
-| `docs/pccc.md` | Sổ theo dõi PCCC theo kỳ tháng (module mẫu cho các sổ an toàn) |
-| `docs/tbycnn.md` | Sổ thiết bị yêu cầu nghiêm ngặt về ATLĐ (giai đoạn 1) |
-| `docs/work-permit-register.md` | Sổ đăng ký phiếu công tác: dữ liệu, API, Word/Excel, kết quả tối ưu tải 10/09/2026 |
-| `docs/ton-kho-hoa-chat-spec.md` | Đặc tả tồn kho hoá chất |
-| `docs/contract-integration.md` | Tích hợp quản lý hợp đồng TCMS (schema `tcms`, RLS) |
-| `docs/n8n-defect-sync/` | Đồng bộ khiếm khuyết hai chiều qua n8n: `README.md`, `BACKUP_RESTORE.md`, `TWO_WAY_COPY_TEST.md`, các workflow JSON |
-| `docs/n8n-material-sync/` | Đồng bộ vật tư/hoá chất qua n8n: `README.md`, `README-backup.md`, các workflow JSON |
-| `chrome-extension/qlvt-sync/README.md` | Extension đọc QLVT/LIMS — các bẫy kỹ thuật cần biết trước khi sửa |
-| `public/material-procedures/huong-dan-quan-ly-vat-tu.pdf` | Hướng dẫn quản lý vật tư, mở từ trang Quy trình thay thế |
-| `CLAUDE.md` / `AGENTS.md` | Quy ước code, kiến trúc, bẫy môi trường dev cho trợ lý lập trình |
+| Triển khai, xử lý sự cố và rollback | [Hướng dẫn production](docs/huong-dan-deploy-production.md) |
+| An toàn thông tin và lịch sử nâng cấp | [Chính sách ATTT](docs/ATTT_CHINH_SACH.md) · [Hồ sơ release](docs/ATTT_HO_SO_RELEASE.md) |
+| Quy ước phát triển và script | [AGENTS.md](AGENTS.md) · [Danh mục script](scripts/README.md) · [Kiểm tra UI](scripts/verify/README.md) |
+| Phiếu công tác | [Sổ đăng ký PCT](docs/work-permit-register.md) · [Hướng dẫn cấp phiếu](docs/huong-dan-cap-phieu-cong-tac.html) |
+| Đại tu và nhà thầu | [Google Sheets đại tu](docs/dai-tu-google-sheets.md) · [Mốc SCL S2](docs/scl-s2-milestones.md) · [Thẻ nhà thầu](docs/the-nha-thau-apps-script.md) |
+| Thiết bị an toàn | [PCCC](docs/pccc.md) · [Tiếp địa và chống sét](docs/grounding-lightning.md) · [TBYCNN](docs/tbycnn.md) |
+| Chỉ tiêu KTKT | [Nghiệp vụ và phân quyền](docs/chi-tieu-ktkt.md) · [Chuyển đổi về kiến trúc web chung](docs/ktkt-chuyen-doi.md) |
+| Vật tư và hóa chất | [Đặc tả tồn kho hóa chất](docs/ton-kho-hoa-chat-spec.md) · [Quy trình quản lý vật tư](public/material-procedures/huong-dan-quan-ly-vat-tu.pdf) |
+| Hợp đồng và tài khoản tra cứu | [Tích hợp TCMS](docs/contract-integration.md) · [Phân quyền tra cứu](docs/phan-quyen-tra-cuu.md) |
+| Đồng bộ khiếm khuyết | [n8n](docs/n8n-defect-sync/README.md) · [Backup/restore](docs/n8n-defect-sync/BACKUP_RESTORE.md) · [Kiểm tra hai chiều](docs/n8n-defect-sync/TWO_WAY_COPY_TEST.md) |
+| Đồng bộ vật tư và tài liệu | [Vật tư](docs/n8n-material-sync/README.md) · [Sao lưu vật tư](docs/n8n-material-sync/README-backup.md) · [Tài liệu](docs/n8n-document-sync/README.md) |
+| Tiện ích trình duyệt | [QLVT/LIMS](chrome-extension/qlvt-sync/README.md) · [NKVH PCT](chrome-extension/nkvh-pct/README.md) |
+| AI và thông báo | [Chatbox AI](docs/n8n-ai-chat/README.md) · [Telegram](docs/telegram-notifications.md) |
 
-## Lộ trình nâng Prisma (chưa thực hiện)
+### Tích hợp qua tiện ích trình duyệt
 
-Kế hoạch chi tiết, tiêu chí dừng và rollback: `docs/ATTT_HO_SO_RELEASE.md` mục 7. Chỉ bắt đầu sau khi dọn bản
-lùi Node 20/Next 14 và có lệnh của chủ dự án.
+- **QLVT/LIMS:** đọc dữ liệu trong tab nguồn đã đăng nhập, trả về website; không chuyển cookie đăng nhập và không ghi ngược vào nguồn.
+- **NKVH PCT:** lấy số/điền số phiếu và đồng bộ hồ sơ đã lưu về website. Người dùng tự hoàn thiện và bấm Lưu trên NKVH; tiện ích không tự bấm Lưu.
+- Các tiện ích phục vụ KTKT nằm cùng cây `chrome-extension/`; đóng gói bằng script tương ứng trong `chrome-extension/scripts/`.
 
-| Bậc | Phạm vi | Rủi ro | Việc chính |
-| --- | --- | --- | --- |
-| P1 | 5.22 → 6.19.3 | Thấp (~nửa ngày) | Các thay đổi phá vỡ của v6 không đụng dự án; chuyển `$use` trong `lib/prisma.ts` sang `$extends`; kiểm tsc/lint/build/crawl, route SQL thô, bench vật tư |
-| P2 | 6.19.3 → 7.10.x | Trung bình (1–2 ngày) | Giữ generator `prisma-client-js`; thêm `@prisma/adapter-pg` và `prisma.config.ts`; khai pool/schema tường minh vì adapter bỏ qua `connection_limit`/`pool_timeout`/`schema` trong URL; sửa lệnh `db execute --schema` ở `deploy-server.sh` và tài liệu; diễn tập trên DB UAT khôi phục từ bản sao lưu |
+### Hồ sơ lưu trữ vận hành
 
-Không làm lúc này: Prisma 8 (đang RC), generator `prisma-client` mới.
+Trang `/documents/archive` quản lý dữ liệu tách lưới, khởi động, hiệu chỉnh lò và vòi dầu. Quyền đọc, chỉnh sửa và xuất sao lưu được kiểm tra theo từng chức năng/tab; mặc định trong `lib/rbac-defaults.ts` và có thể cấu hình lại qua Phân quyền.
 
-## Thư mục lưu trữ — phân quyền và backup theo năm
-
-Trang `/documents/archive` (gộp từ ghi chú 16/06/2026, đã cập nhật theo code 14/09/2026). Quyền mặc định lấy từ
-`lib/rbac-defaults.ts`; ADMIN chỉnh lại được trên trang Phân quyền, cấu hình lưu ở bảng `RbacConfig`.
-
-| Quyền | ADMIN | MANAGER | SUPERVISOR | TECHNICIAN | VIEWER |
-| --- | :---: | :---: | :---: | :---: | :---: |
-| `archive-read` — tra cứu chung | Xem | Xem | Xem | Xem | Xem |
-| `archive-grid-separation` — tab Tách lưới (và BGTS tuabin ngừng) | Toàn quyền | Quản lý | Quản lý | Quản lý | Xem |
-| `archive-startup-data` — tab Khởi động | Toàn quyền | Quản lý | Quản lý | Quản lý | Xem |
-| `archive-boiler-calibration` — tab Hiệu chỉnh lò | Toàn quyền | Quản lý | Quản lý | Quản lý | Xem |
-| `archive-oil-gun-data` — tab Vòi dầu | Toàn quyền | Quản lý | Quản lý | Quản lý | Xem |
-| `archive-create-delete` — thêm/xoá hồ sơ trong danh mục | Toàn quyền | Không | Không | Không | Không |
-| `archive-edit` — sửa hồ sơ đã ghi | Quản lý | Quản lý | Quản lý | Quản lý | Xem |
-| `archive-backup` — thanh backup năm (khi không có quyền riêng theo tab) | Toàn quyền | Không | Không | Không | Không |
-
-- **Tab dữ liệu:** Tách lưới (sự cố / có kế hoạch; nguyên nhân, tiến trình dạng dòng thời gian, link xử lý), Khởi động
-  (sau sự cố / có kế hoạch; tiến trình dạng dòng thời gian), Hiệu chỉnh lò (nội dung, tối đa 2 ảnh biên bản, người cập
-  nhật), Vòi dầu (chỉ hiện cho ADMIN hoặc chức vụ được phép). Lọc chung theo từ khoá, tổ máy S1 (xanh lá)/S2 (cam), năm
-  (từ 2024). Quyền `archive-major-repair`, `archive-soot-blower-data` đã bỏ.
-- **Backup:** thanh backup (chọn năm, Excel, PDF) chỉ hiện khi có quyền **Toàn quyền** ở quyền của tab đang xem (mặc
-  định chỉ ADMIN). Xuất tất cả bản ghi của năm trong tab, không chỉ trang đang hiển thị. File:
-  `backup-du-lieu-tach-luoi-<năm>.xlsx`, `backup-du-lieu-khoi-dong-<năm>.xlsx`, `backup-du-lieu-hieu-chinh-lo-<năm>.xlsx`,
-  `backup-du-lieu-voi-dau-<năm>.xlsx`; PDF mở trang in A4 ngang.
-- **Lưu giữ (quy tắc đề xuất):** hệ thống chỉ tạo file để tải về, không tự lưu trên server. Backup mỗi năm một lần sau
-  khi chốt dữ liệu, giữ tối thiểu 5 năm (lâu dài với sự cố lớn, khởi động bất thường, biên bản hiệu chỉnh quan trọng),
-  lưu song song Excel + PDF theo cấu trúc `Backup/<năm>/Du-lieu-tach-luoi/` … trong kho tài liệu nội bộ.
-- **API `/api/rbac`:** GET cho ADMIN hoặc người có `rbac-manage` Toàn quyền / `user-manage` Quản lý trở lên; PUT cần
-  `rbac-manage` Toàn quyền. Vai trò hệ thống của user đổi qua `/api/users`.
-
-## Project structure
-
-```
-app/
-  (auth)/login            Login page
-  (dashboard)/            Authenticated shell (sidebar + topbar)
-    page.tsx              Dashboard
-    hr/                   Overview, shift-roster, check-in, org-chart
-    devices/              List (5 views), [id] detail, [id]/qr
-    repair-history/       All logs + [deviceId] history
-    reports/  materials/  admin/(users|roles)
-  api/                    Route handlers (devices, repair-history, shifts,
-                          check-in, handover, users, materials, reports, audit)
-components/
-  ui/        shadcn primitives
-  layout/    Sidebar, Topbar, AppShell
-  hr/  devices/  repair/  shared/
-lib/         prisma, auth, api helpers, constants, utils, fetcher
-hooks/       useDevices, useRepair, useShifts, useMaterials, useUsers
-prisma/      schema.prisma, seed.ts
-scripts/     deploy-server.sh, server-disk-guard.sh, verify/ (upgrade checks)
-proxy.ts     Session-cookie guard (Next 16 name for middleware.ts)
-docs/        Deploy guide, ATTT (information security) controls, module specs — see "Tài liệu"
-reports/     npm audit evidence (JSON)
-types/       shared types + NextAuth augmentation
-```
-
-## RBAC matrix
-
-| Feature                | ADMIN | SUPERVISOR | TECHNICIAN | VIEWER |
-| ---------------------- | :---: | :--------: | :--------: | :----: |
-| View all pages         |  ✅   |     ✅     |     ✅     |   ✅   |
-| Create repair log      |  ✅   |     ✅     |     ✅     |   ❌   |
-| Edit/delete repair     |  ✅   |  ✅ (own)  |  ✅ (own)  |   ❌   |
-| Approve repair         |  ✅   |     ✅     |     ❌     |   ❌   |
-| Approve check-in       |  ✅   |     ✅     |     ❌     |   ❌   |
-| Manage users/roles     |  ✅   |     ❌     |     ❌     |   ❌   |
-| Delete device          |  ✅   |     ❌     |     ❌     |   ❌   |
-| Manage materials       |  ✅   |     ✅     |     ❌     |   ❌   |
-
-## Notes
-
-- The shift-roster grid renders a deterministic rotation pattern for visualization;
-  per-cell edits are wired to a modal (persisting roster edits is a natural next step).
-- Exports produce UTF-8 CSV (Excel-compatible); PDF export uses the browser print dialog.
-- The QR detail page (`/devices/[id]/qr`) is print-optimized via `@media print`.
-- Static images in `public/brand|chucvu|icons3d` are served through `next/image` (`/_next/image`,
-  WebP) with a locked-down config in `next.config.mjs`.
+Xuất dữ liệu theo năm để tải về dưới dạng Excel hoặc in PDF. Người phụ trách cần chủ động lưu bản xuất trong kho tài liệu nội bộ; thao tác tải xuống không tự tạo bản lưu trên server.
