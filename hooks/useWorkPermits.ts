@@ -34,7 +34,7 @@ export interface PermitLiveSession {
 }
 /** Bảng "Đang làm việc": khoá nằm dưới ["work-permits"] nên mọi thao tác mở/kết thúc lần làm việc đều làm mới nó. */
 export function usePermitLiveSessions(enabled = true) {
-  return useQuery({ queryKey: ["work-permits", "live"], enabled, refetchInterval: 15_000, queryFn: () => apiGet<PermitLiveSession[]>("/api/work-permits/live-sessions") as Promise<{ data: PermitLiveSession[]; meta: { canExecute: boolean } }> });
+  return useQuery({ queryKey: ["work-permits", "live"], enabled, refetchInterval: 15_000, queryFn: () => apiGet<PermitLiveSession[]>("/api/work-permits/live-sessions") as Promise<{ data: PermitLiveSession[]; meta: { canExecute: boolean; truncated?: boolean } }> });
 }
 /** Một PCT đại tu đang có lần làm việc mở — màn hình "Tiến độ trong ngày". */
 export interface OverhaulTodayRow {
@@ -73,6 +73,7 @@ export function useCancelDraftWorkPermit() {
     qc.invalidateQueries({ queryKey: ["work-permits"] });
     qc.invalidateQueries({ queryKey: ["work-permit"] });
     qc.invalidateQueries({ queryKey: ["work-permit-number-suggestion"] });
+    qc.invalidateQueries({ queryKey: ["work-permit-number-reservations"] });
   } });
 }
 export function useDeleteWorkPermit() {
@@ -144,7 +145,9 @@ export function useReviewPermitNumber() {
     } });
 }
 export function usePermitNumberReservations(enabled = true) {
-  return useQuery({ queryKey: ["work-permit-number-reservations"], enabled, refetchInterval: 5000,
+  // 30 giây (trước là 5 giây — 7.260 lượt/ngày, nhiều nhất module): lấy/huỷ/dùng số đã tự làm mới khoá này; số lấy từ
+  // tiện ích NKVH ở tab khác hiện ngay khi quay lại tab sổ (app/providers.tsx tắt mặc định nên bật riêng ở đây).
+  return useQuery({ queryKey: ["work-permit-number-reservations"], enabled, refetchInterval: 30_000, refetchOnWindowFocus: "always",
     queryFn: () => apiGet<PermitNumberReservation[]>("/api/work-permits/number-reservations") });
 }
 export function useTakePermitNumber() {

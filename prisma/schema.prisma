@@ -1214,7 +1214,7 @@ model WorkPermitTelegramOutbox {
   message         String?
   combinedMessage String?
   messages        Json?     // Các đoạn tin đã chốt theo chatId; thử lại không đổi nội dung hoặc gửi lại đoạn đã thành công.
-  state           String    @default("PENDING") // PENDING | PROCESSING | SUCCESS | FAILED | CANCELED
+  state           String    @default("PENDING") // PENDING | PROCESSING | SUCCESS | FAILED (sẽ thử lại) | CANCELED | EXPIRED (gửi lỗi quá 24 giờ, bỏ)
   attemptCount    Int       @default(0)
   nextAttemptAt   DateTime
   claimedAt       DateTime?

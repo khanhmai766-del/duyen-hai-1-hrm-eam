@@ -402,6 +402,19 @@ test("Hết ngân sách thời gian giữ lại các đoạn chưa gửi để t
   await runOverhaulTelegramOutbox({ db: h.db, now: at("09:01:00"), deliver: async () => success() });
   assert.equal(h.rows[0].state, "SUCCESS");
 });
+test("Gửi lỗi: thử lại mỗi phút, quá 24 giờ sau hạn thì bỏ (EXPIRED)", async t => {
+  const h = harness(t, "a");
+  await h.queue.upsert({ where: { dedupeKey: "D:2026-10-11" }, create: { dedupeKey: "D:2026-10-11", kind: "DAILY", dueAt: at("00:00:00"), nextAttemptAt: at("00:00:00"), message: "Tổng hợp" } });
+  await runOverhaulTelegramOutbox({ db: h.db, now: at("09:00:00"), deliver: async () => failed() });
+  assert.equal(h.rows[0].state, "FAILED");
+  assert.equal(h.rows[0].nextAttemptAt.getTime(), at("09:01:00").getTime());
+  const nextDay = new Date(at("00:00:00").getTime() + 25 * 60 * 60_000);
+  await runOverhaulTelegramOutbox({ db: h.db, now: nextDay, deliver: async () => failed() });
+  assert.equal(h.rows[0].state, "EXPIRED");
+  let sends = 0;
+  await runOverhaulTelegramOutbox({ db: h.db, now: new Date(nextDay.getTime() + 60 * 60_000), deliver: async () => { sends++; return success(); } });
+  assert.equal(sends, 0);
+});
 test("Worker bị dừng có lease quá 10 phút được nhận lại", async t => {
   const h = harness(t, "a");
   await enqueueOverhaulOpening(h.tx, permit, session, new Map());

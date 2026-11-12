@@ -12,6 +12,13 @@ import { vietnamDayWindow } from "@/lib/vietnam-time";
 const DELIVERY_TYPE = "OVERHAUL_WORK_PERMIT";
 const STALE_MS = 10 * 60_000;
 const RETRY_MS = 60_000;
+/** Gửi lỗi: thử lại mỗi phút; quá 24 giờ sau hạn gửi thì bỏ (EXPIRED) — bản tin đã cũ, thử mãi chỉ tốn lượt gọi
+ * Telegram. Không lấy `attemptCount` làm trần vì lượt chờ dữ liệu (WAITING) và lượt hết giờ cũng tăng nó. */
+const GIVE_UP_AFTER_MS = 24 * 60 * 60_000;
+function afterFailure(dueAt: Date, now: Date) {
+  if (now.getTime() - dueAt.getTime() > GIVE_UP_AFTER_MS) return { state: "EXPIRED", completedAt: now };
+  return { state: "FAILED", completedAt: null, nextAttemptAt: new Date(now.getTime() + RETRY_MS) };
+}
 const openKey = (id: string) => `S:${id}:OPEN`;
 const endKey = (id: string) => `S:${id}:END`;
 
@@ -249,23 +256,37 @@ export async function runOverhaulTelegramOutbox(params: { now?: Date; dryRun?: b
           if (!result.allSucceeded) { complete = false; errors.push(...result.errors); break; }
         }
       }
-      const state = complete ? "SUCCESS" : "FAILED";
-      await db.workPermitTelegramOutbox.updateMany({ where: owned, data: { state,
-        completedAt: complete ? now : null, lastError: complete ? null : errors.join("; ").slice(0, 2000) || "Chưa gửi xong tới mọi nhóm",
-        nextAttemptAt: new Date(now.getTime() + RETRY_MS) } });
-      results.push({ key: row.dedupeKey, state });
+      const next = complete ? { state: "SUCCESS", completedAt: now, nextAttemptAt: new Date(now.getTime() + RETRY_MS) } : afterFailure(row.dueAt, now);
+      await db.workPermitTelegramOutbox.updateMany({ where: owned, data: { ...next,
+        lastError: complete ? null : errors.join("; ").slice(0, 2000) || "Chưa gửi xong tới mọi nhóm" } });
+      results.push({ key: row.dedupeKey, state: next.state });
     } catch (error) {
-      await db.workPermitTelegramOutbox.updateMany({ where: owned, data: { state: "FAILED", nextAttemptAt: new Date(now.getTime() + RETRY_MS),
+      const next = afterFailure(candidate.dueAt, now);
+      await db.workPermitTelegramOutbox.updateMany({ where: owned, data: { ...next,
         lastError: (error instanceof Error ? error.message : "Không gửi được báo cáo PCT").slice(0, 2000) } });
-      results.push({ key: candidate.dedupeKey, state: "FAILED" });
+      results.push({ key: candidate.dedupeKey, state: next.state });
     }
   }
   return { enabled: true, processed: results.length, results };
 }
 
+/** Bản tin đã xong (gửi được / huỷ / bỏ) giữ 90 ngày rồi xoá — bảng này chỉ là hàng đợi, không trang nào đọc lại lịch sử
+ * (khác OverhaulSheetOutbox: trang tiến độ đại tu đọc nó làm lịch sử, KHÔNG được dọn). Khoá chống gửi lại từng đoạn nằm ở
+ * TelegramNotificationLog nên xoá dòng ở đây không làm gửi lặp. Chạy cùng job tổng hợp ngày (một lần/ngày). */
+const DONE_RETENTION_MS = 90 * 24 * 60 * 60_000;
+export async function pruneOverhaulTelegramOutbox(now = new Date(), db = prisma) {
+  const { count } = await db.workPermitTelegramOutbox.deleteMany({ where: {
+    state: { in: ["SUCCESS", "CANCELED", "EXPIRED"] }, completedAt: { lt: new Date(now.getTime() - DONE_RETENTION_MS) } } });
+  return count;
+}
+
 export async function runOverhaulDailyDigest(params: { now?: Date; dryRun?: boolean } = {}) {
   const now = params.now ?? new Date();
   if (!params.dryRun && !overhaulTelegramEnabled()) return { enabled: false };
+  if (!params.dryRun) {
+    const pruned = await pruneOverhaulTelegramOutbox(now).catch(error => { console.error("Không dọn được hàng đợi Telegram PCT:", error); return 0; });
+    if (pruned) console.info(`Sổ PCT: xoá ${pruned} bản tin Telegram đã xong quá 90 ngày.`);
+  }
   const digest = await buildOverhaulDailyDigest(now);
   if (params.dryRun || !digest.message) return { ...digest, dryRun: Boolean(params.dryRun) };
   // Nội dung ngày được chốt một lần. Lỗi Telegram được timer mỗi phút thử lại với đúng bản chốt.
