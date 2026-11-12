@@ -49,26 +49,26 @@ export function Sidebar({ onNavigate, collapsed = false, showQuick = false }: { 
           onClick={onNavigate}
           aria-label="Về trang chủ"
           className={cn(
-            "group relative flex items-center overflow-hidden rounded-2xl transition-all duration-200",
+            "group relative isolate flex items-center overflow-hidden transition-all duration-200",
             collapsed
-              ? "h-12 justify-center"
-              : "gap-3 px-3 py-3 bg-[linear-gradient(135deg,#173b73_0%,#1d6fd6_58%,#f59e0b_135%)] text-white shadow-[0_18px_35px_-22px_rgba(15,23,42,0.9)] ring-1 ring-white/70 hover:-translate-y-0.5 hover:shadow-[0_22px_40px_-22px_rgba(29,78,216,0.9)]"
+              ? "h-12 justify-center rounded-2xl"
+              : "gap-3 rounded-[18px] border border-sky-300/30 bg-[linear-gradient(135deg,#061a36_0%,#0b376d_58%,#075b9a_100%)] py-2 pl-2 pr-3 text-white shadow-[0_10px_26px_-12px_rgba(3,74,140,0.9)] ring-1 ring-white/70 before:pointer-events-none before:absolute before:inset-0 before:bg-[radial-gradient(circle_at_18%_-30%,rgba(125,211,252,0.65),transparent_48%)] after:pointer-events-none after:absolute after:-right-5 after:-top-8 after:h-16 after:w-16 after:rounded-full after:border after:border-white/10 hover:-translate-y-0.5 hover:border-sky-200/60 hover:shadow-[0_14px_30px_-12px_rgba(2,132,199,0.95)]"
           )}
         >
-          {!collapsed && <span className="absolute inset-x-0 top-0 h-1/2 bg-white/12" />}
-          <span className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white shadow-[inset_0_1px_0_rgba(255,255,255,0.95),0_10px_20px_-12px_rgba(15,23,42,0.75)] ring-1 ring-white/70">
+          <span className="relative z-10 grid h-11 w-11 shrink-0 place-items-center rounded-[13px] border border-white/80 bg-white/95 shadow-[0_0_0_3px_rgba(56,189,248,0.12),0_5px_12px_-4px_rgba(0,0,0,0.55)] transition-transform duration-200 group-hover:scale-105">
             <Image src="/brand/4.png" alt="EVNGENCO1" width={32} height={32} className="h-8 w-8 object-contain" />
           </span>
           {!collapsed && (
-            <>
-              <span className="relative min-w-0 flex-1">
-                <span className="block text-base font-extrabold leading-tight tracking-wide">VẬN HÀNH 1</span>
-                <span className="mt-0.5 block text-[9px] font-semibold uppercase tracking-[0.11em] text-blue-50/90">
-                  Digital Operations
-                </span>
+            <span className="relative z-10 flex min-w-0 flex-1 flex-col justify-center border-l border-white/20 pl-3 leading-none">
+              <span className="whitespace-nowrap text-[9px] font-bold uppercase tracking-[0.18em] text-sky-200">Nhiệt Điện</span>
+              <span className="mt-1 whitespace-nowrap text-[17px] font-black uppercase tracking-[0.04em] text-white [text-shadow:0_1px_8px_rgba(125,211,252,0.35)]">
+                Duyên Hải 1
               </span>
-              <PowerGridMark />
-            </>
+              <span aria-hidden="true" className="mt-1.5 h-[2px] w-full rounded-full bg-gradient-to-r from-cyan-300 via-sky-400 to-transparent opacity-90" />
+              <span className="mt-1.5 block whitespace-nowrap text-[9px] font-semibold uppercase tracking-[0.11em] text-blue-50/90">
+                Digital Operations
+              </span>
+            </span>
           )}
         </Link>
       </div>
@@ -194,20 +194,6 @@ export function Sidebar({ onNavigate, collapsed = false, showQuick = false }: { 
         </div>
       </div>
     </div>
-  );
-}
-
-function PowerGridMark() {
-  return (
-    <span
-      className="relative flex h-9 w-9 shrink-0 items-center justify-center text-amber-300 transition-transform duration-200 group-hover:scale-105"
-      aria-hidden="true"
-    >
-      <svg viewBox="0 0 36 36" className="h-8 w-8 drop-shadow-[0_1px_3px_rgba(15,23,42,0.55)]">
-        <polygon points="18,2.5 31.4,10.25 31.4,25.75 18,33.5 4.6,25.75 4.6,10.25" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinejoin="round" />
-        <polygon points="20,8 12,19 17.5,19 15,28.5 24,16 18.5,16" fill="currentColor" />
-      </svg>
-    </span>
   );
 }
 
