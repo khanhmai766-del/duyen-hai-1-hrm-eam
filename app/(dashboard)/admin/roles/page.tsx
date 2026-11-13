@@ -18,14 +18,12 @@ import {
   Search,
   Settings2,
   ShieldCheck,
-  SlidersHorizontal,
   Trash2,
   UserCog,
   Users,
   XCircle,
   type LucideIcon,
 } from "lucide-react";
-import Link from "next/link";
 import { PageHeader } from "@/components/shared/page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -1255,18 +1253,11 @@ export default function RolesPage() {
           <>
             <Button type="button" size="toolbar" variant="soft" onClick={() => setWorkflowRolesOpen(true)}>
               <UserCog className="h-4 w-4" />
-              Phân quyền quy trình
+              Quy trình
             </Button>
             <Button type="button" size="toolbar" variant="soft" onClick={() => setLookupPermissionsOpen(true)}>
               <Eye className="h-4 w-4" />
-              Phân quyền tra cứu
-            </Button>
-            {/* Quyền nhập liệu/đồng bộ của phân hệ KTKT cấu hình theo cương vị, ở trang riêng của phân hệ. */}
-            <Button type="button" size="toolbar" variant="soft" asChild>
-              <Link href="/tien-ich/chi-tieu-ktkt/phan-quyen">
-                <SlidersHorizontal className="h-4 w-4" />
-                Phân quyền KTKT
-              </Link>
+              Tra cứu
             </Button>
             <Button type="button" size="toolbar" variant="soft" onClick={() => setAddOpen(true)}>
               <Plus className="h-4 w-4" />
