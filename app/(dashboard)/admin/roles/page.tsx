@@ -1247,7 +1247,6 @@ export default function RolesPage() {
       <PageHeader
         title="Phân quyền (RBAC)"
         description="Ma trận quyền truy cập theo vai trò và nghiệp vụ quản lý"
-        stacked
       >
         {isAdmin && (
           <>
