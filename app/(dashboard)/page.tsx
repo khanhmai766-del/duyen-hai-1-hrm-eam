@@ -31,6 +31,9 @@ import {
   ContactRound,
   PhoneCall,
 } from "lucide-react";
+import CountUp from "@/components/react-bits/CountUp";
+import FadeContent from "@/components/react-bits/FadeContent";
+import SpotlightCard from "@/components/react-bits/SpotlightCard";
 import { StatCard } from "@/components/shared/stat-card";
 import { StatCardSkeleton } from "@/components/shared/skeletons";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
@@ -91,7 +94,7 @@ export default function DashboardPage() {
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
         <div className="hidden shrink-0 sm:block">
           <h1 className="text-2xl font-bold tracking-tight text-ink">
-            Welcome back, {session?.user?.name ?? ""} 👋
+            Chào mừng trở lại, {session?.user?.name ?? ""} 👋
           </h1>
         </div>
         {/* Safety slogan ticker — two messages alternating every 30s */}
@@ -104,18 +107,20 @@ export default function DashboardPage() {
         <OverhaulMilestonesCard canManage={session?.user?.role === "ADMIN" && adminMode && rbac.can("operation-events", ["manage", "full"])} />
       </React.Suspense>
 
-      <MobileKpiGrid
-        m={m}
-        loading={me.isLoading}
-        online={online}
-        avatarUrl={m?.avatarUrl}
-        userName={session?.user?.name}
-        userPosition={currentPosition.position || session?.user?.position}
-        employeeId={session?.user?.employeeId}
-      />
+      <FadeContent duration={0.2} trigger="mount">
+        <MobileKpiGrid
+          m={m}
+          loading={me.isLoading}
+          online={online}
+          avatarUrl={m?.avatarUrl}
+          userName={session?.user?.name}
+          userPosition={currentPosition.position || session?.user?.position}
+          employeeId={session?.user?.employeeId}
+        />
+      </FadeContent>
 
       {/* Stat row — all four cards stretch to the user-photo card's height */}
-      <div className="hidden gap-4 sm:grid sm:grid-cols-2 xl:grid-cols-4 xl:items-stretch">
+      <FadeContent duration={0.2} trigger="mount" className="hidden gap-4 sm:grid sm:grid-cols-2 xl:grid-cols-4 xl:items-stretch">
         {/* 1 — Current user: full-bleed photo with overlaid name/title */}
         <Link href="/account" className="group block h-full rounded-xl focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2" aria-label="Mở thông tin cá nhân">
           <Card className="relative min-h-[230px] overflow-hidden border-0 text-white transition-shadow group-hover:shadow-md">
@@ -137,7 +142,7 @@ export default function DashboardPage() {
                 online ? "bg-emerald-400 shadow-[0_0_6px] shadow-emerald-400 animate-pulse" : "bg-slate-400"
               )}
             />
-            {online ? "Online" : "Offline"}
+            {online ? "Có mạng" : "Mất mạng"}
           </div>
           {/* Name + position */}
           <div className="absolute inset-x-0 bottom-0 p-4">
@@ -158,7 +163,7 @@ export default function DashboardPage() {
           ) : (
             <StatCard
               label="Ngày công trong tháng"
-              value={m?.workingDays ?? 0}
+              value={<CountUp to={m?.workingDays ?? 0} duration={0.5} separator="." />}
               icon={CalendarCheck}
               tint="green"
               hint="Quy đổi 8 giờ = 1 ngày công"
@@ -172,10 +177,10 @@ export default function DashboardPage() {
 
         {/* 4 — Live weather, with location-photo background */}
         <WeatherCard />
-      </div>
+      </FadeContent>
 
       {/* Body cards mirror the compact 3-panel dashboard layout: nội bộ · link · liên lạc. */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)_minmax(0,0.92fr)] lg:items-stretch">
+      <FadeContent duration={0.25} trigger="mount" className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)_minmax(0,0.92fr)] lg:items-stretch">
         <div className="min-w-0 [&>*]:h-full">
           <OperationInfoCard
             canCreate={rbac.can("operation-events", ["personal", "manage", "full"])}
@@ -191,7 +196,7 @@ export default function DashboardPage() {
         <div className="hidden min-w-0 sm:block sm:[&>*]:h-full">
           <ContactCard />
         </div>
-      </div>
+      </FadeContent>
     </div>
   );
 }
@@ -246,7 +251,7 @@ function MobileKpiGrid({
           </span>
           <span className="inline-flex items-center gap-1 rounded-full bg-white/80 px-2 py-1 text-[10px] font-bold text-slate-600 shadow-sm ring-1 ring-slate-200/70">
             <span className={cn("h-1.5 w-1.5 rounded-full", online ? "bg-emerald-500" : "bg-slate-400")} />
-            {online ? "Online" : "Offline"}
+            {online ? "Có mạng" : "Mất mạng"}
           </span>
         </div>
         <div className="mt-auto min-w-0 pt-3">
@@ -270,7 +275,7 @@ function MobileKpiGrid({
         </div>
         <div className="mt-auto pt-2.5">
           <p className="text-[22px] font-extrabold leading-none tracking-tight text-emerald-700 tabular-nums">
-            {loading ? "—" : `${m?.workingDays ?? 0} ngày`}
+            {loading ? "—" : <><CountUp to={m?.workingDays ?? 0} duration={0.5} separator="." /> ngày</>}
           </p>
           <p className="mt-1 text-[11px] font-semibold leading-tight text-emerald-950/75">Ngày công · {monthLabel}</p>
         </div>
@@ -362,9 +367,9 @@ function SupportLinksCard() {
   const links = SUPPORT_LINKS.filter((l) => l.group === tab);
   return (
     <Card className="h-full">
-      <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0">
+      <CardHeader className="items-start gap-3 space-y-0">
         <CardTitle className="flex items-center gap-2">
-          <Link2 className="h-4 w-4 text-accent" /> Danh mục LINK hỗ trợ
+          <Link2 className="h-4 w-4 shrink-0 text-accent" /> Liên kết hỗ trợ
         </CardTitle>
         <div className="inline-flex shrink-0 rounded-lg border border-border bg-white p-0.5">
           <SupportLinkTab active={tab === "ops"} onClick={() => setTab("ops")} label="Vận hành" />
@@ -378,12 +383,13 @@ function SupportLinksCard() {
             <p className="px-1 py-8 text-center text-sm text-muted-foreground">Chưa có đường link nào trong nhóm này.</p>
           ) : (
             links.map((l, i) => (
+              <SpotlightCard key={l.href + i} theme="light" spotlightColor="#38bdf8" intensity={0.45} proximity={0} flare={false} className="!rounded-lg !p-0">
               <a
                 key={l.href + i}
                 href={l.href}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="group flex h-[50px] items-center gap-3 rounded-lg border border-border px-3 transition-colors hover:border-accent hover:bg-accent/5"
+                className="group flex h-[50px] items-center gap-3 rounded-lg border border-border px-3 transition-colors hover:border-accent hover:bg-accent/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent"
               >
                 <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-accent/10 text-xs font-semibold text-accent">
                   {i + 1}
@@ -391,6 +397,7 @@ function SupportLinksCard() {
                 <span className="min-w-0 flex-1 truncate text-sm font-medium uppercase text-ink">{l.name}</span>
                 <ExternalLink className="h-4 w-4 shrink-0 text-muted-foreground transition-colors group-hover:text-accent" />
               </a>
+              </SpotlightCard>
             ))
           )}
         </div>
@@ -515,12 +522,13 @@ function MobileUtilityHub() {
 
           <div className="space-y-2">
             {links.map((link, index) => (
+              <SpotlightCard key={link.href} theme="light" spotlightColor="#38bdf8" intensity={0.45} proximity={0} flare={false} className="!rounded-2xl !p-0">
               <a
                 key={link.href}
                 href={link.href}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="group flex min-h-[58px] items-center gap-3 rounded-2xl border border-slate-200/90 bg-gradient-to-r from-white to-sky-50/40 px-3 py-2.5 shadow-[0_4px_16px_-14px_rgba(15,23,42,0.55)] transition-[border-color,background-color,transform] duration-200 active:scale-[0.985] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                className="group flex min-h-[58px] items-center gap-3 rounded-2xl border border-slate-200/90 bg-transparent px-3 py-2.5 shadow-[0_4px_16px_-14px_rgba(15,23,42,0.55)] transition-[border-color,background-color,transform] duration-200 active:scale-[0.985] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
               >
                 <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-sky-100 text-[11px] font-extrabold text-sky-700 ring-1 ring-sky-200/70">
                   {String(index + 1).padStart(2, "0")}
@@ -530,6 +538,7 @@ function MobileUtilityHub() {
                   <ExternalLink className="h-3.5 w-3.5" />
                 </span>
               </a>
+              </SpotlightCard>
             ))}
           </div>
         </div>
@@ -1738,7 +1747,7 @@ function OperationInfoCard({ canCreate, canManage }: { canCreate: boolean; canMa
               <div className="flex items-center gap-2">
                 <h2 className="text-[17px] font-extrabold leading-tight tracking-tight">Bảng tin nội bộ</h2>
                 <span className="inline-flex items-center gap-1 rounded-full bg-emerald-400/15 px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-wide text-emerald-100 ring-1 ring-emerald-300/25">
-                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-300" /> Live
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-300" /> Trực tiếp
                 </span>
               </div>
               <p className="mt-0.5 text-[11px] font-medium text-sky-100/85">Lịch diễn tập và thông tin vận hành sắp tới</p>

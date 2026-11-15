@@ -402,7 +402,7 @@ function LoginInner() {
                   asChild
                   type="button"
                   variant="outline"
-                  className="h-auto w-full justify-between gap-3 border-emerald-200 bg-emerald-50/70 px-4 py-3 text-left text-emerald-950 shadow-sm transition-all hover:border-emerald-300 hover:bg-emerald-100/80 hover:text-emerald-950"
+                  className="h-auto w-full justify-between gap-3 whitespace-normal border-emerald-200 bg-emerald-50/70 px-4 py-3 text-left text-emerald-950 shadow-sm transition-all hover:border-emerald-300 hover:bg-emerald-100/80 hover:text-emerald-950"
                 >
                   <Link href="/public/org-chart">
                     <span className="flex min-w-0 items-center gap-3">

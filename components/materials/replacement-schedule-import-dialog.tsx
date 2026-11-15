@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import Stepper, { Step } from "@/components/react-bits/Stepper";
 import {
   Dialog,
   DialogContent,
@@ -162,6 +163,7 @@ export function ReplacementScheduleImportDialog({
   const [skippedWithoutDate, setSkippedWithoutDate] = React.useState(0);
   const [result, setResult] = React.useState<ImportResult | null>(null);
   const [busy, setBusy] = React.useState(false);
+  const [completedResult, setCompletedResult] = React.useState<ImportResult | null>(null);
 
   function reset() {
     setFileName("");
@@ -170,6 +172,7 @@ export function ReplacementScheduleImportDialog({
     setSkippedWithoutDate(0);
     setResult(null);
     setBusy(false);
+    setCompletedResult(null);
     if (inputRef.current) inputRef.current.value = "";
   }
 
@@ -193,6 +196,7 @@ export function ReplacementScheduleImportDialog({
 
   async function handleFile(file: File | undefined) {
     if (!file) return;
+    setCompletedResult(null);
     setBusy(true);
     setResult(null);
     setRows([]);
@@ -296,7 +300,7 @@ export function ReplacementScheduleImportDialog({
   }
 
   async function confirmImport() {
-    if (!rows.length || !result || result.errors.length > 0 || result.willSchedule === 0) return;
+    if (busy || completedResult || !rows.length || !result || result.errors.length > 0 || result.willSchedule === 0) return;
     setBusy(true);
     try {
       const imported = await runImport(rows, false);
@@ -308,7 +312,7 @@ export function ReplacementScheduleImportDialog({
       toast.success(
         `Đã tạo/cập nhật lịch theo dõi cho ${imported.scheduled} điểm thay thế`
       );
-      close();
+      setCompletedResult(imported);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Nhập lịch theo dõi thất bại");
     } finally {
@@ -321,12 +325,14 @@ export function ReplacementScheduleImportDialog({
     Boolean(result) &&
     !hasErrors &&
     (result?.willSchedule ?? 0) > 0 &&
+    !completedResult &&
     !busy;
+  const importStep = completedResult ? 4 : result ? (hasErrors ? 2 : 3) : busy ? 2 : 1;
 
   return (
     <Dialog open={open} onOpenChange={(nextOpen) => (nextOpen ? onOpenChange(true) : close())}>
-      <DialogContent className="max-w-5xl gap-0 overflow-hidden p-0">
-        <DialogHeader className="border-b border-border bg-slate-50/80 px-6 py-5">
+      <DialogContent className="max-h-[calc(100dvh-2rem)] w-[calc(100vw-2rem)] max-w-5xl grid-rows-[auto_minmax(0,1fr)_auto] gap-0 overflow-hidden p-0">
+        <DialogHeader className="border-b border-border bg-slate-50/80 px-4 py-4 pr-10 sm:px-6 sm:py-5">
           <DialogTitle className="flex items-center gap-2.5">
             <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-navy text-white shadow-sm">
               <CalendarClock className="h-5 w-5" />
@@ -338,27 +344,27 @@ export function ReplacementScheduleImportDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="max-h-[72vh] space-y-4 overflow-y-auto px-6 py-5">
-          <div className="grid gap-3 rounded-xl border border-sky-100 bg-sky-50/60 p-4 text-sm md:grid-cols-3">
-            <div>
-              <p className="font-semibold text-ink">1. Chuẩn bị file</p>
-              <p className="mt-1 text-muted-foreground">
-                Dùng file xuất điểm thay thế và điền cột ngày theo định dạng dd/mm/yyyy.
-              </p>
-            </div>
-            <div>
-              <p className="font-semibold text-ink">2. Kiểm tra trước</p>
-              <p className="mt-1 text-muted-foreground">
-                Mã thiết bị được đối chiếu với tên thiết bị, vật tư và tổ máy.
-              </p>
-            </div>
-            <div>
-              <p className="font-semibold text-ink">3. Tạo lịch</p>
-              <p className="mt-1 text-muted-foreground">
-                Hạn kế tiếp được tính từ lần thay gần nhất cộng chu kỳ tháng.
-              </p>
-            </div>
-          </div>
+        <div className="min-h-0 max-h-[72vh] space-y-4 overflow-y-auto px-4 py-4 sm:px-6 sm:py-5">
+          <Stepper step={importStep} showFooter={false} disableStepIndicators theme="light" accentColor="#0c4a6e" frame={false} width="100%" radius={12} transition="fade">
+            <Step title="Chọn tệp">
+              <p className="text-sm text-muted-foreground">Chọn tệp Excel và điền ngày thay gần nhất theo định dạng dd/mm/yyyy.</p>
+            </Step>
+            <Step title="Kiểm tra">
+              <p role="status" className="text-sm text-muted-foreground">{busy ? "Đang kiểm tra thiết bị, vật tư và tổ máy…" : "Sửa các dòng lỗi trong tệp rồi chọn lại để kiểm tra."}</p>
+            </Step>
+            <Step title="Xác nhận">
+              <p className="text-sm text-muted-foreground">{busy ? "Đang nhập lịch theo dõi…" : "Kiểm tra hạn kế tiếp trong bảng bên dưới rồi xác nhận nhập."}</p>
+            </Step>
+            <Step title="Kết quả">
+              <div role="status" className="flex items-start gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-900">
+                <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0" />
+                <div>
+                  <p className="font-semibold">Đã nhập lịch theo dõi</p>
+                  <p className="mt-1 text-sm">{completedResult?.scheduled ?? 0} điểm đã lên lịch · {completedResult?.created ?? 0} điểm mới · {completedResult?.updated ?? 0} điểm cập nhật.</p>
+                </div>
+              </div>
+            </Step>
+          </Stepper>
 
           <input
             ref={inputRef}
@@ -368,7 +374,7 @@ export function ReplacementScheduleImportDialog({
             onChange={(event) => handleFile(event.target.files?.[0])}
           />
 
-          <button
+          {!completedResult && <button
             type="button"
             onClick={() => inputRef.current?.click()}
             disabled={busy}
@@ -382,7 +388,7 @@ export function ReplacementScheduleImportDialog({
             <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-sky-50 text-accent transition-transform group-hover:-translate-y-0.5">
               {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : <Upload className="h-5 w-5" />}
             </span>
-            <span>
+            <span className="min-w-0 break-words [overflow-wrap:anywhere]">
               <span className="block font-semibold text-ink">
                 {fileName || "Chọn file Excel để kiểm tra"}
               </span>
@@ -390,9 +396,9 @@ export function ReplacementScheduleImportDialog({
                 Chỉ các dòng có “Lần thay gần nhất” mới được xử lý
               </span>
             </span>
-          </button>
+          </button>}
 
-          {result && (
+          {result && !completedResult && (
             <div className="space-y-4">
               <div className="grid gap-3 sm:grid-cols-4">
                 <SummaryCard label="Dòng dữ liệu" value={sourceRowCount} />
@@ -512,14 +518,14 @@ export function ReplacementScheduleImportDialog({
           )}
         </div>
 
-        <DialogFooter className="border-t border-border bg-slate-50/70 px-6 py-4">
-          <Button type="button" variant="outline" onClick={close} disabled={busy}>
+        <DialogFooter className="gap-2 border-t border-border bg-slate-50/70 px-4 py-4 sm:gap-0 sm:px-6">
+          <Button type="button" className="h-10" variant="outline" onClick={close} disabled={busy}>
             Đóng
           </Button>
-          <Button type="button" onClick={confirmImport} disabled={!canConfirm}>
+          {!completedResult && <Button type="button" className="h-10" onClick={confirmImport} disabled={!canConfirm}>
             {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileSpreadsheet className="h-4 w-4" />}
             Xác nhận nhập {result?.willSchedule ? `${result.willSchedule} điểm` : ""}
-          </Button>
+          </Button>}
         </DialogFooter>
       </DialogContent>
     </Dialog>

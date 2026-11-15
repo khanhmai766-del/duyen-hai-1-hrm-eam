@@ -535,7 +535,7 @@ export function Topbar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
 
         <div className="order-2 min-w-0 text-right sm:hidden">
           <p className="whitespace-nowrap text-[12px] font-semibold leading-4 text-muted-foreground">
-            Welcome back
+            Chào mừng trở lại
           </p>
           <p className="flex min-w-0 items-center justify-end gap-1 whitespace-nowrap text-[13px] font-bold leading-5 tracking-tight text-ink min-[380px]:text-[15px] sm:text-[16px]">
             {/* `truncate` la BAT BUOC: thieu overflow:hidden thi ten dai tran khoi cot

@@ -4,6 +4,7 @@ import * as React from "react";
 import { useSession } from "next-auth/react";
 import { useSearchParams } from "next/navigation";
 import { Megaphone, Plus, Pencil, Trash2, Pin, Loader2, Link2, FileText, ExternalLink, Upload, X, Check, Users, Clock, CheckCircle2, Search, Ban, RotateCcw, Archive, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ChevronDown, ChevronUp, CalendarDays, Radio, SlidersHorizontal, ArrowUpRight } from "lucide-react";
+import AnimatedList from "@/components/react-bits/AnimatedList";
 import { EmptyState } from "@/components/shared/empty-state";
 import { TableSkeleton } from "@/components/shared/skeletons";
 import { Card, CardContent } from "@/components/ui/card";
@@ -76,6 +77,9 @@ const ORDER_AUTHORITIES = ["BGĐ", "LĐPX"] as const;
 type OrderAuthority = (typeof ORDER_AUTHORITIES)[number];
 const INVALID_ARCHIVE_DAYS = 15;
 const ORDERS_PER_PAGE = 10;
+const subscribeHydration = () => () => {};
+const clientSnapshot = () => true;
+const serverSnapshot = () => false;
 
 // Cấp BGĐ ra lệnh: danh sách cố định. LĐPX lấy động từ DS Quản đốc / Phó quản đốc.
 const BGD_ORDERERS = ["Phó Giám Đốc Quản Lý Vận Hành", "Giám Đốc"];
@@ -314,7 +318,7 @@ const PostCard = React.memo(function PostCard({
           {isManager && (
             <button
               onClick={() => onShowReaders(a)}
-              className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-medium text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+              className="inline-flex min-h-10 items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-medium text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 sm:min-h-0"
               title="Xem ai đã/chưa đọc"
             >
               <Users className="h-3.5 w-3.5" /> Đã đọc {readCount}/{total}
@@ -338,6 +342,7 @@ const PostCard = React.memo(function PostCard({
 });
 
 export default function NotificationsPage() {
+  const clientReady = React.useSyncExternalStore(subscribeHydration, clientSnapshot, serverSnapshot);
   const searchParams = useSearchParams();
   const linkedAnnouncementId = searchParams.get("announcementId");
   const { data: session } = useSession();
@@ -364,8 +369,10 @@ export default function NotificationsPage() {
   }, [search]);
 
   // Server chỉ trả mệnh lệnh của năm đang xem ("ALL" = tất cả các năm).
-  const { data: annData, isLoading: annLoading } = useAnnouncements(yearFilter);
-  const announcements = React.useMemo(() => annData?.data ?? [], [annData?.data]);
+  const { data: annData, isLoading } = useAnnouncements(yearFilter);
+  const annLoading = !clientReady || isLoading;
+  // The shared query may resolve in the header before this page hydrates.
+  const announcements = React.useMemo(() => clientReady ? annData?.data ?? [] : [], [clientReady, annData?.data]);
   const { data: usersData } = useUsers();
   const allUsers = React.useMemo(() => usersData?.data ?? [], [usersData?.data]);
   // Map tra cứu người đọc — payload mệnh lệnh chỉ còn userId, thông tin user lấy từ cache này.
@@ -867,25 +874,45 @@ export default function NotificationsPage() {
           </Card>
         ) : (
           <div className="space-y-3">
-            {pagedAnnouncements.map((a) => (
-              <PostCard
-                key={a.id}
-                a={a}
-                activeUsers={activeUsers}
-                myId={myId}
-                currentPosition={currentPosition}
-                linkedAnnouncementId={linkedAnnouncementId}
-                canManage={canManageAnnouncements}
-                isManager={isManager}
-                markReadPending={markRead.isPending}
-                onConfirmRead={confirmRead}
-                onEdit={openEdit}
-                onInvalidate={markIneffective}
-                onRestore={restoreOrder}
-                onDelete={setDeleting}
-                onShowReaders={setReadersOf}
-              />
-            ))}
+            <AnimatedList
+              key={`${page}-${showInvalidArchive}`}
+              items={pagedAnnouncements.map((a) => ({ id: a.id, title: a.title }))}
+              animation="fade"
+              animateOnce
+              stagger={0.025}
+              frame={false}
+              theme="light"
+              width="100%"
+              maxHeight="none"
+              gap={12}
+              showGradients={false}
+              selectOnHover={false}
+              enableArrowNavigation={false}
+              className="[&>[role=list]]:p-0"
+              itemClassName="!block !p-0 !select-auto !bg-none !shadow-none [&>span[aria-hidden]]:hidden"
+              renderItem={(_item, index) => {
+                const a = pagedAnnouncements[index];
+                return (
+                  <PostCard
+                    key={a.id}
+                    a={a}
+                    activeUsers={activeUsers}
+                    myId={myId}
+                    currentPosition={currentPosition}
+                    linkedAnnouncementId={linkedAnnouncementId}
+                    canManage={canManageAnnouncements}
+                    isManager={isManager}
+                    markReadPending={markRead.isPending}
+                    onConfirmRead={confirmRead}
+                    onEdit={openEdit}
+                    onInvalidate={markIneffective}
+                    onRestore={restoreOrder}
+                    onDelete={setDeleting}
+                    onShowReaders={setReadersOf}
+                  />
+                );
+              }}
+            />
             {sortedFiltered.length > ORDERS_PER_PAGE && (
               <div className="flex flex-col gap-2 rounded-lg border border-border bg-card px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
                 <div className="text-xs font-medium text-muted-foreground">

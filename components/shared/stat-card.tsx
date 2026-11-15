@@ -1,3 +1,4 @@
+import type * as React from "react";
 import Image from "next/image";
 import { cn } from "@/lib/utils";
 import { isOptimizableImage } from "@/lib/optimizable-image";
@@ -5,7 +6,7 @@ import { ArrowDownRight, ArrowUpRight, ArrowRight, type LucideIcon } from "lucid
 
 interface StatCardProps {
   label: string;
-  value: string | number;
+  value: React.ReactNode;
   icon: LucideIcon;
   tint?: "navy" | "green" | "amber" | "red" | "blue";
   trend?: { value: number; positive?: boolean };
