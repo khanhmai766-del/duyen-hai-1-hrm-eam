@@ -44,12 +44,11 @@ export async function resolvePermitSafety(tx: Prisma.TransactionClient, body: Re
   for (const row of rows) {
     if (!row.sourceId) continue;
     const source = sources.find(s => s.id === row.sourceId);
-    // Biện pháp có thể bị XOÁ khỏi danh mục sau khi phiếu đã ghi. Nội dung đã sao lên phiếu
-    // vẫn còn nên phiếu cũ phải lưu lại được; chỉ chặn khi lượt lưu này mới thêm nó vào.
+    // Danh mục có thể đổi sau khi sao chép hoặc trong lúc đang nhập phiếu.
+    // Giữ nội dung đã kiểm tra như biện pháp bổ sung riêng, bỏ liên kết nguồn đã hết hiệu lực.
     const kept = previous.some(s => s.sourceId === row.sourceId);
-    if (!source) { if (!kept) throw fail("Biện pháp đã bị xóa khỏi danh mục. Vui lòng chọn lại."); continue; }
-    if (source.kind !== body.kind) throw fail("Biện pháp không thuộc loại PCT đã chọn. Vui lòng chọn lại.");
-    if (!source.isActive && !kept) throw fail("Biện pháp vừa ngừng sử dụng. Vui lòng chọn lại.", 409);
+    if (source && source.kind !== body.kind) throw fail("Biện pháp không thuộc loại PCT đã chọn. Vui lòng chọn lại.");
+    if (!kept && (!source || !source.isActive)) delete row.sourceId;
   }
   return rows;
 }

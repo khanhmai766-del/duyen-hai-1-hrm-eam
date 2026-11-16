@@ -10,7 +10,7 @@ export const closeUnstartedPermitPreset = {
     "/work-permits?kind=MECHANICAL&permitId=ui-unstarted",
     "/work-permits?kind=MECHANICAL&permitId=ui-unstarted&verifyClose=1",
   ],
-  async mock(context, { permitStatus = "ISSUED" } = {}) {
+  async mock(context, { permitStatus = "ISSUED", safetyItems = [] } = {}) {
     await context.route("**/api/overhaul-milestones**", route => route.fulfill({ json: { data: [], meta: null, error: null } }));
     const initial = () => ({
       id: "ui-unstarted", number: "4635", year: 2026, kind: "MECHANICAL", unit: "S2", position: "FGD",
@@ -24,7 +24,7 @@ export const closeUnstartedPermitPreset = {
       registrationNumber: "", printWorkerCount: null, workScope: "", workType: null, sourceClassification: null,
       plannedStartAt: "2026-10-09T07:30:00+07:00", plannedEndAt: new Date(Date.now() - 86400_000).toISOString(),
       authorizedAt: null, authorizerName: "", closedAt: null, result: "", progress: null,
-      safetyItems: [], disciplines: [], overhaulItems: [], overhaulNotes: {}, overhaulPercents: {},
+      safetyItems, disciplines: [], overhaulItems: [], overhaulNotes: {}, overhaulPercents: {},
       repairRequestNumber: "", defectId: null, nkvhPctId: null, nkvhNumber: null, note: "", statusReason: "",
       version: 1, createdAt: "2026-10-09T16:31:00+07:00", updatedAt: "2026-10-09T16:31:00+07:00",
       createdById: "ui", createdByName: "Người cấp phiếu", sessions: [], history: [],
@@ -78,21 +78,31 @@ export const closeUnstartedPermitPreset = {
 };
 
 /** Sao chép PCT quá hạn đang chờ làm tiếp, không lấy số hoặc lưu phiếu thật. */
+const copiedSafety = [
+  { sourceId: "ui-deleted-safety", hazard: "Khí bụi có hại cho sức khỏe;", measure: "Mang mặt nạ hoặc khẩu trang phòng độc", forAuthorization: false, forExecution: true },
+  { sourceId: "ui-inactive-safety", hazard: "Thiếu ánh sáng", measure: "Trang bị đèn chiếu phù hợp.", forAuthorization: true, forExecution: true },
+];
 export const copyOverduePermitPreset = {
   ...closeUnstartedPermitPreset,
   description: "Sao chép PCT giấy quá hạn đang chờ làm tiếp sang biểu mẫu mới",
-  routes: () => ["detail", "editor"].map(step => `/work-permits?permitId=ui-unstarted&verifyCopy=${step}`),
-  mock: context => closeUnstartedPermitPreset.mock(context, { permitStatus: "WAITING" }),
+  routes: () => ["detail", "editor", "safety"].map(step => `/work-permits?permitId=ui-unstarted&verifyCopy=${step}`),
+  mock: context => closeUnstartedPermitPreset.mock(context, { permitStatus: "WAITING", safetyItems: copiedSafety }),
   async interact(page, route) {
     const dialog = page.getByRole("dialog");
     const copy = dialog.getByRole("button", { name: "Sao chép tạo PCT mới", exact: true });
     await copy.waitFor();
     assert.ok((await copy.boundingBox()).height >= (page.viewportSize().width < 640 ? 40 : 32));
-    if (!route.includes("verifyCopy=editor")) return;
+    if (route.includes("verifyCopy=detail")) return;
     await copy.click();
     await dialog.getByRole("heading", { name: /Sao chép PCT .* thành phiếu mới/ }).waitFor();
     assert.match(await dialog.getByLabel("Nội dung công việc", { exact: false }).inputValue(), /Sửa chữa bơm hấp thụ số 2/);
     assert.equal(await dialog.locator("input").evaluateAll(inputs => inputs.some(input => input.value === "4635")), false);
     await dialog.getByRole("button", { name: "Lấy số PCT", exact: true }).first().waitFor();
+    if (!route.includes("verifyCopy=safety")) return;
+    await dialog.getByRole("navigation", { name: "Các bước ghi cấp phiếu" }).getByRole("button", { name: /Mẫu giấy/ }).click();
+    const measures = dialog.getByRole("textbox", { name: "Biện pháp an toàn *", exact: true });
+    await measures.first().waitFor();
+    assert.deepEqual(await measures.evaluateAll(inputs => inputs.map(input => input.value)), copiedSafety.map(item => item.measure));
+    assert.equal(await dialog.getByText(/Cặp \d+ · Từ danh mục/).count(), 0);
   },
 };

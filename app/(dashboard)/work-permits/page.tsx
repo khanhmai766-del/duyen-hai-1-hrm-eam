@@ -17,6 +17,7 @@ import { OverhaulContentField } from "@/components/work-permits/overhaul-item-pi
 import { PermitDeadlineBadge } from "@/components/work-permits/permit-deadline";
 import { canEditOverhaulItems, OverhaulItemsDialog } from "@/components/work-permits/overhaul-items-edit";
 import { compactOverhaulContent } from "@/lib/work-permit-overhaul";
+import { copyPermitSnapshots } from "@/lib/work-permit-copy";
 import { OverhaulScheduleLinks } from "@/components/work-permits/overhaul-schedules";
 import { PermitGuideButton } from "@/components/work-permits/permit-guide";
 import { PermitExecutionDialog } from "@/components/work-permits/execution";
@@ -115,7 +116,7 @@ function copiedPaperPermitForm(source: PermitRow): PermitInput {
     plantName: source.plantName || DEFAULT_PERMIT_PLANT,
     workScope: source.workScope ?? "",
     disciplines: [...(source.disciplines ?? [])],
-    safetyItems: (source.safetyItems ?? []).map(item => ({ ...item })),
+    ...copyPermitSnapshots(source),
     workType: source.workType,
     sourceClassification: source.sourceClassification ?? null,
     position: source.position,
