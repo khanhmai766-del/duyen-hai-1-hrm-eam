@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { ArrowRight, Check, PenLine, ShieldCheck, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { SpotlightCard } from "@/components/react-bits/spotlight-card";
 import { round2ToneOf, type PcccTone } from "@/lib/pccc-status";
 
 /**
@@ -120,6 +121,7 @@ export function StatCard({
   active,
   onClick,
   actionLabel,
+  spotlight = false,
 }: {
   label: string;
   value: string | number;
@@ -130,6 +132,7 @@ export function StatCard({
   onClick?: () => void;
   /** Bấm vào thì lọc ra gì — hiện thành tooltip, cũng là nhãn cho trình đọc màn hình. */
   actionLabel?: string;
+  spotlight?: boolean;
 }) {
   /** Dải màu mảnh bên trái — đủ để nhận ra mức độ mà không nhuộm cả thẻ. */
   const rail: Record<StatusTone, string> = {
@@ -150,7 +153,7 @@ export function StatCard({
     bad: "text-rose-700",
     none: "text-ink",
   };
-  return (
+  const card = (
     <button
       type="button"
       disabled={!onClick}
@@ -160,9 +163,9 @@ export function StatCard({
       className={cn(
         // NỀN TRẮNG, không nhuộm màu cả thẻ: một dải KPI bốn thẻ đỏ/xanh kín nền đọc như
         // bốn cảnh báo ngang hàng nhau. Màu dồn vào dải trái + ô biểu tượng + con số.
-        "group relative flex min-w-0 flex-1 items-start gap-3 overflow-hidden rounded-xl border border-slate-200 bg-white py-3.5 pl-4 pr-3.5 text-left shadow-[0_1px_2px_rgba(16,24,40,0.04)] transition duration-150",
+        "group relative flex min-w-0 flex-1 items-start gap-3 overflow-hidden rounded-xl border border-slate-200 bg-white p-4 text-left shadow-[0_2px_6px_rgba(16,24,40,0.03)] transition-colors duration-200",
         onClick &&
-          "cursor-pointer hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md focus-visible:-translate-y-0.5 focus-visible:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-navy/30 active:translate-y-0 active:shadow-sm",
+          "cursor-pointer hover:border-sky-300 hover:bg-sky-50/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-600 focus-visible:ring-offset-2 active:bg-sky-50",
         active && "border-navy/40 ring-2 ring-navy/20",
         !onClick && "cursor-default"
       )}
@@ -173,10 +176,10 @@ export function StatCard({
           <Icon className="size-4" />
         </span>
       )}
-      <span className="min-w-0">
-        <span className="block truncate text-[10.5px] font-semibold uppercase tracking-[0.06em] text-slate-500">{label}</span>
-        <span className={cn("mt-1 block text-[26px] font-bold leading-none tracking-tight tabular-nums", valueColor[tone])}>{value}</span>
-        {hint && <span className="mt-1.5 block truncate text-[11px] leading-tight text-muted-foreground">{hint}</span>}
+      <span className="min-w-0 flex-1">
+        <span className="block text-xs font-semibold leading-5 text-slate-600">{label}</span>
+        <span className={cn("mt-1 block text-[32px] font-bold leading-none tracking-tight tabular-nums", valueColor[tone])}>{value}</span>
+        {hint && <span className="mt-2 block text-xs leading-5 text-slate-600">{hint}</span>}
       </span>
       {/* Chỉ dấu "bấm được" — chỉ hiện khi rê chuột nên lúc thường thẻ vẫn gọn như cũ. */}
       {onClick && (
@@ -187,6 +190,7 @@ export function StatCard({
       )}
     </button>
   );
+  return spotlight ? <SpotlightCard>{card}</SpotlightCard> : card;
 }
 
 /** Thanh % dùng cho "% khả dụng" (BCC) và "% còn lại" (FCD/FM200). */
@@ -200,9 +204,9 @@ export function PercentBar({ value, tone }: { value: number | null; tone?: Statu
     none: "bg-slate-300",
   };
   return (
-    <div className="flex items-center gap-2">
-      <div className="h-1.5 w-full min-w-[52px] overflow-hidden rounded-full bg-slate-200/80">
-        <div className={cn("h-full rounded-full transition-all", bar[t])} style={{ width: `${pct * 100}%` }} />
+    <div className="flex min-w-0 items-center gap-2">
+      <div className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-slate-200/80">
+        <div className={cn("h-full rounded-full", bar[t])} style={{ width: `${pct * 100}%` }} />
       </div>
       <span className="w-11 shrink-0 text-right text-[11px] font-semibold tabular-nums text-muted-foreground">
         {value === null ? "—" : `${Math.round(pct * 100)}%`}
@@ -679,7 +683,7 @@ export function TableShell({
   fill?: boolean;
 }) {
   return (
-    <div className={cn("overflow-auto rounded-xl border border-slate-200 bg-white", className)}>
+    <div className={cn("min-w-0 overflow-auto rounded-xl border border-slate-200 bg-white", className)}>
       <table className={cn("w-full border-collapse text-[12px]", fill && "h-full")}>{children}</table>
     </div>
   );

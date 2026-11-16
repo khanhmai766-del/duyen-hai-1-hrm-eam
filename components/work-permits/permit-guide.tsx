@@ -133,7 +133,7 @@ const SECTIONS: GuideSection[] = [
         points: [
           "PCT SCTX có thể ghi nhận cấp nhanh: nhà thầu và CHTT không bắt buộc; tên CHTT có thể nhập trực tiếp.",
           "PCT Đại tu cần chọn nhà thầu và CHTT có sẵn trong tab Nhân sự nhà thầu (xem phần Danh mục dùng chung).",
-          "Để cấp nhanh công việc tương tự: mở PCT giấy ở trạng thái Đã cấp hoặc Kết thúc phiếu, bấm Sao chép tạo PCT mới. Nội dung, nhân sự và biện pháp được giữ; số PCT, ĐKCT/SYC, thời gian và trạng thái được đặt lại.",
+          "Để cấp nhanh công việc tương tự: mở PCT giấy ở trạng thái Đã cấp, Kết thúc phiếu hoặc đã quá hạn, bấm Sao chép tạo PCT mới. Nội dung, nhân sự và biện pháp được giữ; số PCT, ĐKCT/SYC, thời gian và trạng thái được đặt lại. Phiếu cũ giữ nguyên; cần kết thúc phiếu quá hạn theo quy trình.",
         ],
       },
       {

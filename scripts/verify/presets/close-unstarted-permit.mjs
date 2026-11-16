@@ -10,11 +10,11 @@ export const closeUnstartedPermitPreset = {
     "/work-permits?kind=MECHANICAL&permitId=ui-unstarted",
     "/work-permits?kind=MECHANICAL&permitId=ui-unstarted&verifyClose=1",
   ],
-  async mock(context) {
+  async mock(context, { permitStatus = "ISSUED" } = {}) {
     await context.route("**/api/overhaul-milestones**", route => route.fulfill({ json: { data: [], meta: null, error: null } }));
     const initial = () => ({
       id: "ui-unstarted", number: "4635", year: 2026, kind: "MECHANICAL", unit: "S2", position: "FGD",
-      format: "PAPER", status: "ISSUED", teamType: "CONTRACTOR", contractorScope: "SCTX",
+      format: "PAPER", status: permitStatus, teamType: "CONTRACTOR", contractorScope: "SCTX",
       teamName: "Công ty CP Đầu tư Phát triển Công nghiệp Sài Gòn IDC (giả lập)",
       content: "Sửa chữa bơm hấp thụ số 2, van đầu thoát bơm hấp thụ số 2 và bơm nước chèn trục hấp thụ số 2.",
       workDate: "2026-10-09", issuedAt: "2026-10-09T16:19:00+07:00", issuerName: "Người cấp phiếu",
@@ -74,5 +74,25 @@ export const closeUnstartedPermitPreset = {
     assert.ok(savedContexts.has(page.context()));
     assert.equal(await button.count(), 0);
     await dialog.getByRole("button", { name: "Sao chép tạo PCT mới", exact: true }).waitFor();
+  },
+};
+
+/** Sao chép PCT quá hạn đang chờ làm tiếp, không lấy số hoặc lưu phiếu thật. */
+export const copyOverduePermitPreset = {
+  ...closeUnstartedPermitPreset,
+  description: "Sao chép PCT giấy quá hạn đang chờ làm tiếp sang biểu mẫu mới",
+  routes: () => ["detail", "editor"].map(step => `/work-permits?permitId=ui-unstarted&verifyCopy=${step}`),
+  mock: context => closeUnstartedPermitPreset.mock(context, { permitStatus: "WAITING" }),
+  async interact(page, route) {
+    const dialog = page.getByRole("dialog");
+    const copy = dialog.getByRole("button", { name: "Sao chép tạo PCT mới", exact: true });
+    await copy.waitFor();
+    assert.ok((await copy.boundingBox()).height >= (page.viewportSize().width < 640 ? 40 : 32));
+    if (!route.includes("verifyCopy=editor")) return;
+    await copy.click();
+    await dialog.getByRole("heading", { name: /Sao chép PCT .* thành phiếu mới/ }).waitFor();
+    assert.match(await dialog.getByLabel("Nội dung công việc", { exact: false }).inputValue(), /Sửa chữa bơm hấp thụ số 2/);
+    assert.equal(await dialog.locator("input").evaluateAll(inputs => inputs.some(input => input.value === "4635")), false);
+    await dialog.getByRole("button", { name: "Lấy số PCT", exact: true }).first().waitFor();
   },
 };

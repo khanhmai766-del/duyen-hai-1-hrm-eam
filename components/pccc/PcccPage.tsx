@@ -1589,141 +1589,9 @@ export default function PcccPage() {
 
   return (
     <div className="space-y-4">
-      <PageHeader title="QUẢN LÝ THIẾT BỊ PCCC" description="Phân xưởng Vận hành 1">
-        {/*
-          SỔ THEO DÕI (Mẫu số 01) — chỉ hiện khi cương vị đã ký ĐỦ cả bảng Bình chữa cháy
-          lẫn Tủ chữa cháy của kỳ. Không hiện dạng "nút xám bấm không được": người dùng
-          chưa ký xong thì chưa có việc gì với nút này, cứ để thanh công cụ gọn.
-          Điều kiện do SERVER tính trên toàn kỳ (xem app/api/pccc/so-theo-doi).
-        */}
-        {bookStatus?.ready && (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setBookOpen(true)}
-            disabled={downloading}
-            title={
-              (tab === "FCD"
-                ? `Bảng theo dõi Foam · CO2 · Diesel · FM200 — ${period.label}`
-                : `Sổ theo dõi phương tiện PCCC (Mẫu số 01) — ${bookStatus.positionLabel} · ${period.label}`) +
-              " · bấm để xem trước bản nháp"
-            }
-            className="border-rose-200 bg-rose-50/60 text-rose-700 hover:bg-rose-100 hover:text-rose-800"
-          >
-            <FileText className={cn("mr-1.5 size-4", downloading && "animate-pulse")} />
-            Xuất PDF
-          </Button>
-        )}
-
-        {/*
-          CHƯA đủ điều kiện xuất: hiện nút MỜ kèm LÝ DO thay vì giấu hẳn. Giấu thì người
-          dùng ký xong, nhập xong mà không thấy nút, không biết còn thiếu gì — đúng cái
-          bẫy đã gặp thật (ký trước rồi lưu chỉnh sửa làm chữ ký bị xoá). Nút này bấm vào
-          chỉ hiện lời nhắc, không xuất được gì.
-        */}
-        {!bookStatus?.ready && bookStatus?.reason && editableTab && (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => toast.info(bookStatus.reason ?? "Chọn một cương vị ở bộ lọc để xuất sổ theo dõi")}
-            className="border-dashed text-slate-500"
-            title={bookStatus.reason ?? undefined}
-          >
-            <FileText className="mr-1.5 size-4" />
-            Xuất PDF
-          </Button>
-        )}
-
-        {/* Xuất Excel: kỳ đang xem lấy thẳng từ DB, các tháng cũ lấy BẢN LƯU TRỮ trên S3 —
-            DB chỉ giữ 6 kỳ nên tháng cũ hơn chỉ còn tồn tại dưới dạng file. */}
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button variant="outline" size="sm" disabled={downloading}>
-              <Download className={cn("mr-1.5 size-4", downloading && "animate-pulse")} />
-              Xuất Excel
-              <ChevronDown className="ml-1 size-3.5 text-slate-400" />
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent align="end" sideOffset={8} className="w-[min(24rem,calc(100vw-2rem))] p-0">
-            <div className="border-b border-slate-100 px-3.5 py-2.5">
-              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-sky-700">Kỳ đang xem</p>
-              <button
-                type="button"
-                onClick={() => setExcelOpen(true)}
-                disabled={downloading}
-                className="mt-1 flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[13px] hover:bg-slate-50 disabled:opacity-60"
-              >
-                <FileSpreadsheet className="size-4 shrink-0 text-emerald-600" />
-                <span className="min-w-0">
-                  <span className="block font-semibold text-ink">Chọn tháng và sheet…</span>
-                  <span className="block text-[11px] text-muted-foreground">
-                    {hasActiveFilter ? "theo bộ lọc đang đặt" : "toàn bộ"} · mặc định {period.label}
-                  </span>
-                </span>
-              </button>
-            </div>
-            <div className="max-h-72 overflow-auto px-3.5 py-2.5">
-              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">
-                Bản lưu trữ trên S3 · 12 tháng gần nhất
-              </p>
-              {/* File lưu trữ là bản đầy đủ cả phân xưởng, không cắt lại theo cương vị
-                  được — server trả 403, nên nói thẳng thay vì để danh sách rỗng khó hiểu. */}
-              {viewLimited ? (
-                <p className="mt-1.5 text-[12px] text-muted-foreground">
-                  Bản lưu trữ là file đầy đủ của cả phân xưởng nên chỉ cấp quản lý tải được. Kỳ đang xem vẫn xuất được
-                  phần thuộc cương vị của bạn ở mục trên.
-                </p>
-              ) : archives.length === 0 ? (
-                <p className="mt-1.5 text-[12px] text-muted-foreground">
-                  Chưa có bản lưu trữ nào. File được tạo tự động khi chốt kỳ cuối mỗi tháng.
-                </p>
-              ) : (
-                <ul className="mt-1 space-y-0.5">
-                  {archives.map((a) => (
-                    <li key={a.key}>
-                      <button
-                        type="button"
-                        onClick={() => downloadArchive(a.label)}
-                        disabled={downloading}
-                        className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[13px] hover:bg-slate-50 disabled:opacity-60"
-                      >
-                        <Archive className="size-4 shrink-0 text-slate-400" />
-                        <span className="min-w-0 flex-1">
-                          <span className="block font-medium text-ink">{a.label}</span>
-                          <span className="block text-[11px] text-muted-foreground">
-                            {(a.bytes / 1024).toFixed(0)} KB
-                            {a.archivedAt ? ` · lưu ${new Date(a.archivedAt).toLocaleDateString("vi-VN")}` : ""}
-                          </span>
-                        </span>
-                        <Download className="size-3.5 shrink-0 text-slate-400" />
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          </PopoverContent>
-        </Popover>
-
-        {/* MỘT nút duy nhất thay cho "Sinh kỳ mới" + "Chốt kỳ": hai việc đó phải đi liền
-            nhau (chốt thì bắt buộc xuất được file lên S3, xong mới sinh kỳ mới), tách ra
-            chỉ tạo cơ hội làm nửa vời. Bình thường chẳng ai phải bấm — bộ hẹn giờ và
-            đường tự động lúc mở trang đã lo; nút này là lối chạy tay khi job lỗi. */}
-        {/* Chỉ hiện trong CỬA SỔ CUỐI THÁNG (3 ngày cuối tháng + 2 ngày đầu tháng sau,
-            xem lib/pccc-clock.ts). Ngày do SERVER tính theo giờ VN — máy người dùng lệch
-            đồng hồ thì nút hiện sai ngày, mà đây là thao tác không hoàn tác được. */}
-        {can("pccc-close-period", ["manage", "full"]) && clock?.rolloverWindow === true && (
-          <Button variant="outline" size="sm" onClick={runRollover} disabled={rollover.isPending}>
-            <CalendarCheck className={cn("mr-1.5 size-4", rollover.isPending && "animate-spin")} />
-            {rollover.isPending ? "Đang chuyển kỳ…" : "Chuyển kỳ"}
-          </Button>
-        )}
-      </PageHeader>
-
-      {/* Chọn bảng bằng DROPDOWN thay cho thanh tab: bảy nhóm thiết bị thì thanh tab
-          tràn dòng trên màn hình hẹp và đẩy nút Bộ lọc xuống. Cùng khuôn với ô chọn
-          loại vật tư ở trang Danh mục vật tư. */}
-      <div className="flex flex-wrap items-center gap-3 border-b border-slate-200 pb-3">
+      <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+        <PageHeader title="QUẢN LÝ THIẾT BỊ PCCC" description="Phân xưởng Vận hành 1" />
+        <div className="flex min-w-0 flex-wrap items-center gap-2 xl:flex-1 xl:justify-end">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
@@ -1761,7 +1629,7 @@ export default function PcccPage() {
 
         {/* Kỳ quyết định dữ liệu của tất cả các bảng, đặt trước nhóm công cụ lọc/chỉnh sửa
             để người dùng chọn ngữ cảnh làm việc rồi mới thao tác trên bảng. */}
-        <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Kỳ</span>
           {/* Kỳ là lựa chọn BẮT BUỘC — không có mục "tất cả", nên dùng select thuần
               thay cho SelectBox (SelectBox luôn thêm 1 mục ALL, sẽ lặp kỳ hiện tại). */}
@@ -1774,7 +1642,7 @@ export default function PcccPage() {
               setInspectionSelections({});
               setPage(1);
             }}
-            className="h-9 rounded-md border border-input bg-white px-2 text-[13px] font-semibold outline-none focus:ring-2 focus:ring-accent/20"
+            className="h-10 w-36 rounded-md border border-input bg-white px-2 text-[13px] font-semibold outline-none focus:ring-2 focus:ring-accent/20"
           >
             {periods.map((p) => (
               <option key={p.id} value={p.label}>
@@ -2255,6 +2123,136 @@ export default function PcccPage() {
             )}
           </div>
         )}
+
+        {/*
+          SỔ THEO DÕI (Mẫu số 01) — chỉ hiện khi cương vị đã ký ĐỦ cả bảng Bình chữa cháy
+          lẫn Tủ chữa cháy của kỳ. Không hiện dạng "nút xám bấm không được": người dùng
+          chưa ký xong thì chưa có việc gì với nút này, cứ để thanh công cụ gọn.
+          Điều kiện do SERVER tính trên toàn kỳ (xem app/api/pccc/so-theo-doi).
+        */}
+        {bookStatus?.ready && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setBookOpen(true)}
+            disabled={downloading}
+            title={
+              (tab === "FCD"
+                ? `Bảng theo dõi Foam · CO2 · Diesel · FM200 — ${period.label}`
+                : `Sổ theo dõi phương tiện PCCC (Mẫu số 01) — ${bookStatus.positionLabel} · ${period.label}`) +
+              " · bấm để xem trước bản nháp"
+            }
+            className="border-rose-200 bg-rose-50/60 text-rose-700 hover:bg-rose-100 hover:text-rose-800"
+          >
+            <FileText className={cn("mr-1.5 size-4", downloading && "animate-pulse")} />
+            Xuất PDF
+          </Button>
+        )}
+
+        {/*
+          CHƯA đủ điều kiện xuất: hiện nút MỜ kèm LÝ DO thay vì giấu hẳn. Giấu thì người
+          dùng ký xong, nhập xong mà không thấy nút, không biết còn thiếu gì — đúng cái
+          bẫy đã gặp thật (ký trước rồi lưu chỉnh sửa làm chữ ký bị xoá). Nút này bấm vào
+          chỉ hiện lời nhắc, không xuất được gì.
+        */}
+        {!bookStatus?.ready && bookStatus?.reason && editableTab && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => toast.info(bookStatus.reason ?? "Chọn một cương vị ở bộ lọc để xuất sổ theo dõi")}
+            className="border-dashed text-slate-500"
+            title={bookStatus.reason ?? undefined}
+          >
+            <FileText className="mr-1.5 size-4" />
+            Xuất PDF
+          </Button>
+        )}
+
+        {/* Xuất Excel: kỳ đang xem lấy thẳng từ DB, các tháng cũ lấy BẢN LƯU TRỮ trên S3 —
+            DB chỉ giữ 6 kỳ nên tháng cũ hơn chỉ còn tồn tại dưới dạng file. */}
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button variant="outline" size="sm" disabled={downloading}>
+              <Download className={cn("mr-1.5 size-4", downloading && "animate-pulse")} />
+              Xuất Excel
+              <ChevronDown className="ml-1 size-3.5 text-slate-400" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent align="end" sideOffset={8} className="w-[min(24rem,calc(100vw-2rem))] p-0">
+            <div className="border-b border-slate-100 px-3.5 py-2.5">
+              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-sky-700">Kỳ đang xem</p>
+              <button
+                type="button"
+                onClick={() => setExcelOpen(true)}
+                disabled={downloading}
+                className="mt-1 flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[13px] hover:bg-slate-50 disabled:opacity-60"
+              >
+                <FileSpreadsheet className="size-4 shrink-0 text-emerald-600" />
+                <span className="min-w-0">
+                  <span className="block font-semibold text-ink">Chọn tháng và sheet…</span>
+                  <span className="block text-[11px] text-muted-foreground">
+                    {hasActiveFilter ? "theo bộ lọc đang đặt" : "toàn bộ"} · mặc định {period.label}
+                  </span>
+                </span>
+              </button>
+            </div>
+            <div className="max-h-72 overflow-auto px-3.5 py-2.5">
+              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">
+                Bản lưu trữ trên S3 · 12 tháng gần nhất
+              </p>
+              {/* File lưu trữ là bản đầy đủ cả phân xưởng, không cắt lại theo cương vị
+                  được — server trả 403, nên nói thẳng thay vì để danh sách rỗng khó hiểu. */}
+              {viewLimited ? (
+                <p className="mt-1.5 text-[12px] text-muted-foreground">
+                  Bản lưu trữ là file đầy đủ của cả phân xưởng nên chỉ cấp quản lý tải được. Kỳ đang xem vẫn xuất được
+                  phần thuộc cương vị của bạn ở mục trên.
+                </p>
+              ) : archives.length === 0 ? (
+                <p className="mt-1.5 text-[12px] text-muted-foreground">
+                  Chưa có bản lưu trữ nào. File được tạo tự động khi chốt kỳ cuối mỗi tháng.
+                </p>
+              ) : (
+                <ul className="mt-1 space-y-0.5">
+                  {archives.map((a) => (
+                    <li key={a.key}>
+                      <button
+                        type="button"
+                        onClick={() => downloadArchive(a.label)}
+                        disabled={downloading}
+                        className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[13px] hover:bg-slate-50 disabled:opacity-60"
+                      >
+                        <Archive className="size-4 shrink-0 text-slate-400" />
+                        <span className="min-w-0 flex-1">
+                          <span className="block font-medium text-ink">{a.label}</span>
+                          <span className="block text-[11px] text-muted-foreground">
+                            {(a.bytes / 1024).toFixed(0)} KB
+                            {a.archivedAt ? ` · lưu ${new Date(a.archivedAt).toLocaleDateString("vi-VN")}` : ""}
+                          </span>
+                        </span>
+                        <Download className="size-3.5 shrink-0 text-slate-400" />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </PopoverContent>
+        </Popover>
+
+        {/* MỘT nút duy nhất thay cho "Sinh kỳ mới" + "Chốt kỳ": hai việc đó phải đi liền
+            nhau (chốt thì bắt buộc xuất được file lên S3, xong mới sinh kỳ mới), tách ra
+            chỉ tạo cơ hội làm nửa vời. Bình thường chẳng ai phải bấm — bộ hẹn giờ và
+            đường tự động lúc mở trang đã lo; nút này là lối chạy tay khi job lỗi. */}
+        {/* Chỉ hiện trong CỬA SỔ CUỐI THÁNG (3 ngày cuối tháng + 2 ngày đầu tháng sau,
+            xem lib/pccc-clock.ts). Ngày do SERVER tính theo giờ VN — máy người dùng lệch
+            đồng hồ thì nút hiện sai ngày, mà đây là thao tác không hoàn tác được. */}
+        {can("pccc-close-period", ["manage", "full"]) && clock?.rolloverWindow === true && (
+          <Button variant="outline" size="sm" onClick={runRollover} disabled={rollover.isPending}>
+            <CalendarCheck className={cn("mr-1.5 size-4", rollover.isPending && "animate-spin")} />
+            {rollover.isPending ? "Đang chuyển kỳ…" : "Chuyển kỳ"}
+          </Button>
+        )}
+        </div>
       </div>
 
       {/* Hộp thoại XÁC NHẬN KÝ — số liệu lấy từ server (preview), không đoán ở client:

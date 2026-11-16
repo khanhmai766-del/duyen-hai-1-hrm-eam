@@ -17,7 +17,7 @@ import { devicesPreset } from "./presets/devices.mjs";
 import { equipmentChartsPreset } from "./presets/equipment-charts.mjs";
 import { materialIntegrityPreset } from "./presets/material-integrity.mjs";
 import { documentIntegrityPreset } from "./presets/document-integrity.mjs";
-import { closeUnstartedPermitPreset } from "./presets/close-unstarted-permit.mjs";
+import { closeUnstartedPermitPreset, copyOverduePermitPreset } from "./presets/close-unstarted-permit.mjs";
 import { reactBitsPreset } from "./presets/react-bits.mjs";
 // Kịch bản dựng sẵn cho ui-shots.mjs: tuyến cần chụp + dữ liệu GIẢ LẬP qua page.route.
 //
@@ -275,6 +275,7 @@ let nhanSuLocName = "";
 export const PRESETS = {
   "react-bits": reactBitsPreset,
   "pct-ket-thuc-chua-lam-viec": closeUnstartedPermitPreset,
+  "pct-sao-chep-qua-han": copyOverduePermitPreset,
   "material-integrity": materialIntegrityPreset,
   "document-integrity": documentIntegrityPreset,
   "equipment-charts": equipmentChartsPreset,

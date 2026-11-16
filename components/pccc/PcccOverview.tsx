@@ -3,9 +3,10 @@
 // TÍNH TỪ DỮ LIỆU CHI TIẾT (sheet gốc là bảng nhập tay). Xem docs/pccc.md mục 3.
 import { useMemo } from "react";
 import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { AlertTriangle, CalendarClock, CircleGauge, Droplets, FlameKindling, Layers, Lightbulb, ShieldCheck } from "lucide-react";
+import { AlertTriangle, CalendarClock, CircleGauge, Droplets, FlameKindling, Layers, ShieldCheck } from "lucide-react";
 import { PercentBar, StatCard, StatusBadge, TD_CLASS, TH_CLASS, TableShell, fmtPercent } from "@/components/pccc/pccc-shared";
-import { LIGHT_KHONG_CO_DEN, TINH_TRANG_CHUA_CAP_NHAT } from "@/lib/pccc-status";
+import { TINH_TRANG_CHUA_CAP_NHAT } from "@/lib/pccc-status";
+import { PcccLightingOverview } from "./PcccLightingOverview";
 import type { PcccSummary } from "@/hooks/usePccc";
 
 // `none` = chưa có kết quả kiểm tra — xám trung tính, KHÔNG tô đỏ như lỗi.
@@ -36,10 +37,10 @@ function TccChartTooltip({ active, payload }: { active?: boolean; payload?: { pa
 
 function SectionTitle({ index, title, note }: { index: string; title: string; note?: string }) {
   return (
-    <div className="mb-2.5 flex items-baseline gap-2">
-      <span className="grid size-6 shrink-0 place-items-center rounded-md bg-navy text-[11px] font-bold text-white">{index}</span>
-      <h3 className="text-sm font-bold uppercase tracking-wide text-navy">{title}</h3>
-      {note && <span className="truncate text-[11px] text-muted-foreground">{note}</span>}
+    <div className="mb-4 flex flex-wrap items-center gap-x-2.5 gap-y-1.5 border-b border-slate-200 pb-3">
+      <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-navy text-xs font-bold text-white">{index}</span>
+      <h3 className="text-base font-bold tracking-tight text-navy">{title}</h3>
+      {note && <span className="basis-full text-xs leading-5 text-slate-600 sm:basis-auto">{note}</span>}
     </div>
   );
 }
@@ -109,19 +110,21 @@ export function PcccOverview({ summary, onDrill }: { summary: PcccSummary; onDri
   );
 
   return (
-    <div className="space-y-6">
+    <div className="min-w-0 space-y-8 [&_table]:text-[13px] [&_td]:py-3 [&_th]:py-3 [&_th]:normal-case [&_th]:tracking-normal [&_th]:text-slate-600">
       {/* Dải số liệu chính */}
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-2 sm:gap-3 xl:grid-cols-4 [&_button]:p-3 sm:[&_button]:p-4 [&_button>span:nth-child(2)]:hidden sm:[&_button>span:nth-child(2)]:grid [&_button>span:nth-child(3)>span:first-child]:min-h-10 sm:[&_button>span:nth-child(3)>span:first-child]:min-h-0">
         <StatCard
+          spotlight
           label="Bình chữa cháy"
           value={bccTotal.tongSo}
           hint={`${fmtPercent(bccTotal.phanTramDat, 1)} đạt`}
           tone={bccTotal.phanTramDat >= 0.9 ? "ok" : bccTotal.phanTramDat >= 0.7 ? "watch" : "bad"}
           icon={FlameKindling}
-          onClick={drill({ bang: "BCC", tinhTrang: "Đạt" })}
-          actionLabel={`Bấm để xem ${bccTotal.dat} bình đạt ở tab Bình chữa cháy`}
+          onClick={drill({ bang: "BCC" })}
+          actionLabel={`Bấm để xem toàn bộ ${bccTotal.tongSo} bình chữa cháy`}
         />
         <StatCard
+          spotlight
           label="Bình bất khả dụng"
           value={bccTotal.khongDat}
           hint={`${bccTotal.chuaCapNhat} bình chưa cập nhật`}
@@ -131,6 +134,7 @@ export function PcccOverview({ summary, onDrill }: { summary: PcccSummary; onDri
           actionLabel={`Bấm để xem ${bccTotal.khongDat} bình không đạt ở tab Bình chữa cháy`}
         />
         <StatCard
+          spotlight
           label="Quá hạn thay thế"
           value={bccTotal.quaHanThayThe}
           hint={`${bccTotal.sapDenHan} bình sắp đến hạn (90 ngày)`}
@@ -140,6 +144,7 @@ export function PcccOverview({ summary, onDrill }: { summary: PcccSummary; onDri
           actionLabel={`Bấm để xem ${bccTotal.quaHanThayThe} bình quá hạn thay thế ở tab Bình chữa cháy`}
         />
         <StatCard
+          spotlight
           label="Linh kiện tủ hỏng nặng"
           value={summary.tcc.total.huHongHoanToan}
           hint={`${summary.tcc.total.huHong1Phan} lỗi nhẹ · ${summary.tcc.total.binhThuong} bình thường`}
@@ -153,12 +158,13 @@ export function PcccOverview({ summary, onDrill }: { summary: PcccSummary; onDri
       {/* I. BCC */}
       <section>
         <SectionTitle index="I" title="Bình chữa cháy (BCC)" note="theo chủng loại" />
-        <div className="grid gap-4 lg:grid-cols-[1fr_280px]">
+        <p className="mb-3 text-xs text-slate-600 2xl:hidden">Cuộn ngang bảng để xem đầy đủ chỉ số →</p>
+        <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_240px] 2xl:grid-cols-[minmax(0,1fr)_280px]">
           {/* Cột trái cao hơn bảng BCC (bảng chỉ 4 dòng, biểu đồ tròn bên phải cao gấp
               đôi) nên hai thẻ RON được kê vào đúng khoảng trắng đó — số liệu ron tính
               từ tủ chữa cháy, nhưng đặt ở đây thì không ai phải cuộn để thấy nó. */}
           <div className="min-w-0 space-y-3">
-          <TableShell>
+          <TableShell className="[&_td:first-child]:sticky [&_td:first-child]:left-0 [&_td:first-child]:bg-white [&_td:first-child]:font-semibold [&_tr:last-child>td]:bg-slate-100/90">
             <thead>
               <tr>
                 {["Chỉ số", "Tổng số", "Đạt", "Không đạt", "Chưa cập nhật", "Quá hạn", "Sắp đến hạn", "Gỉ sét thân", "Gỉ sét tay nắm", "% Đạt"].map(
@@ -204,7 +210,7 @@ export function PcccOverview({ summary, onDrill }: { summary: PcccSummary; onDri
                 className="w-full rounded-xl border border-slate-200 bg-white p-3.5 text-left transition hover:border-sky-300 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 disabled:cursor-default disabled:hover:border-slate-200 disabled:hover:shadow-none"
                 aria-label={`Mở danh sách tủ ${r.loaiTu} của ron ${r.loaiRon}`}
               >
-                <div className="flex items-center justify-between">
+                <div className="flex flex-wrap items-center justify-between gap-2">
                   <p className="text-sm font-bold text-navy">Ron chữa cháy {r.loaiRon}</p>
                   <StatusBadge status={r.thieuRon > 0 ? "Không đạt" : r.chuaCapNhat > 0 ? "Chưa cập nhật" : "Đạt"} />
                 </div>
@@ -237,12 +243,13 @@ export function PcccOverview({ summary, onDrill }: { summary: PcccSummary; onDri
           </div>
           </div>
 
-          <div className="rounded-xl border border-slate-200 bg-white p-3">
-            <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Cơ cấu tình trạng</p>
-            <div className="h-[168px]">
+          <div className="min-w-0 rounded-xl border border-slate-200 bg-white p-4">
+            <p className="text-sm font-semibold text-navy">Cơ cấu tình trạng</p>
+            <p className="mt-1 text-xs text-slate-600">{bccTotal.tongSo} bình chữa cháy</p>
+            <div className="relative h-[192px]" role="img" aria-label={`Tỷ lệ bình chữa cháy đạt: ${fmtPercent(bccTotal.phanTramDat, 0)}`}>
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
-                  <Pie data={donut} dataKey="value" nameKey="name" innerRadius={46} outerRadius={70} paddingAngle={2} strokeWidth={0}>
+                  <Pie data={donut} dataKey="value" nameKey="name" innerRadius={58} outerRadius={78} paddingAngle={2} strokeWidth={0} isAnimationActive={false}>
                     {donut.map((d) => (
                       <Cell key={d.name} fill={TONE_COLOR[d.tone]} />
                     ))}
@@ -250,8 +257,12 @@ export function PcccOverview({ summary, onDrill }: { summary: PcccSummary; onDri
                   <Tooltip formatter={(v: number, n: string) => [`${v} bình`, n]} />
                 </PieChart>
               </ResponsiveContainer>
+              <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+                <span className="text-[30px] font-bold leading-none tracking-tight tabular-nums text-navy">{fmtPercent(bccTotal.phanTramDat, 0)}</span>
+                <span className="mt-1.5 text-xs text-slate-600">Tỷ lệ đạt</span>
+              </div>
             </div>
-            <ul className="mt-1 space-y-1">
+            <ul className="space-y-3 border-t border-slate-100 pt-4">
               {donut.map((d) => (
                 <li key={d.name} className="flex items-center justify-between text-[12px]">
                   <span className="flex items-center gap-1.5 text-muted-foreground">
@@ -271,7 +282,7 @@ export function PcccOverview({ summary, onDrill }: { summary: PcccSummary; onDri
         <SectionTitle index="II" title="Tủ chữa cháy (TCC)" note="đếm theo ô đã tích, một nhóm có thể có nhiều lỗi" />
         {/* Cột phải rộng hơn mục I (340 thay vì 280): trục dọc ở đây là TÊN NHÓM LINH
             KIỆN, dài tới "VAN TAY CHẶN TỔNG" — hẹp như bên kia là phải cắt chữ. */}
-        <div className="grid gap-4 lg:grid-cols-[1fr_340px]">
+        <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_300px] 2xl:grid-cols-[minmax(0,1fr)_340px]">
         {/* `min-w-0` là bắt buộc: cột `1fr` mặc định không co nhỏ hơn bề rộng tối thiểu
             của bảng, nên màn hình hẹp là bảng TRÀN ĐÈ lên biểu đồ bên phải thay vì tự
             cuộn ngang trong khung của nó. */}
@@ -316,8 +327,8 @@ export function PcccOverview({ summary, onDrill }: { summary: PcccSummary; onDri
             và câu hỏi thực tế là "hỏng ở đâu nhiều nhất" — cột ngang xếp hạng trả lời
             được, hình tròn thì không. */}
         <div className="rounded-xl border border-slate-200 bg-white p-3">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Nhóm linh kiện lỗi nhiều nhất</p>
-          <p className="mt-0.5 text-[10.5px] text-muted-foreground">xếp theo số ô lỗi · rê chuột để xem cả số bình thường</p>
+          <p className="text-sm font-semibold text-navy">Nhóm linh kiện lỗi nhiều nhất</p>
+          <p className="mt-1 text-xs leading-5 text-slate-600">Xếp theo số ô lỗi · chạm hoặc rê chuột để xem</p>
           <div className="mt-1.5 h-[268px]">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={tccRanked} layout="vertical" margin={{ top: 2, right: 14, left: 0, bottom: 2 }} barCategoryGap={3}>
@@ -334,8 +345,8 @@ export function PcccOverview({ summary, onDrill }: { summary: PcccSummary; onDri
                   stroke="#64748B"
                 />
                 <Tooltip cursor={{ fill: "#F1F5F9" }} content={<TccChartTooltip />} />
-                <Bar dataKey="huHong1Phan" name="Hư hỏng 1 phần" stackId="loi" fill={TONE_COLOR.watch} radius={[3, 0, 0, 3]} />
-                <Bar dataKey="huHongHoanToan" name="Hư hỏng hoàn toàn" stackId="loi" fill={TONE_COLOR.bad} radius={[0, 3, 3, 0]} />
+                <Bar dataKey="huHong1Phan" name="Hư hỏng 1 phần" stackId="loi" fill={TONE_COLOR.watch} radius={[3, 0, 0, 3]} isAnimationActive={false} />
+                <Bar dataKey="huHongHoanToan" name="Hư hỏng hoàn toàn" stackId="loi" fill={TONE_COLOR.bad} radius={[0, 3, 3, 0]} isAnimationActive={false} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -362,11 +373,11 @@ export function PcccOverview({ summary, onDrill }: { summary: PcccSummary; onDri
             nhóm CUỘN ỐNG / LĂNG PHUN đã chuyển hẳn xuống đây, nên số liệu tủ phía trên
             KHÔNG còn tính hai nhóm đó nữa — xem TCC_ABSORBED_GROUPS. */}
         <div className="mt-4 rounded-xl border border-slate-200 bg-white p-3.5">
-          <div className="mb-2.5 flex items-baseline gap-2">
+          <div className="mb-2.5 flex flex-wrap items-baseline gap-2">
             <h4 className="text-[13px] font-bold uppercase tracking-wide text-navy">Cuộn vòi chữa cháy (CVCC)</h4>
             <span className="text-[11px] text-muted-foreground">danh mục con của tủ · cuộn ống + lăng phun</span>
           </div>
-          <div className="grid gap-3 lg:grid-cols-[260px_1fr]">
+          <div className="grid min-w-0 gap-3 xl:grid-cols-[240px_minmax(0,1fr)]">
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
               <StatCard
                 label="Đạt"
@@ -429,8 +440,8 @@ export function PcccOverview({ summary, onDrill }: { summary: PcccSummary; onDri
             icon={CircleGauge}
           />
           {summary.fcd.map((b) => (
-            <div key={b.id} className="rounded-xl border border-slate-200 bg-white p-3.5">
-              <div className="flex items-start justify-between gap-2">
+            <div key={b.ten} className="min-w-0 rounded-xl border border-slate-200 bg-white p-3.5">
+              <div className="flex flex-wrap items-start justify-between gap-2">
                 <p className="min-w-0 truncate text-sm font-semibold text-ink" title={b.ten}>
                   {b.ten}
                 </p>
@@ -494,7 +505,7 @@ export function PcccOverview({ summary, onDrill }: { summary: PcccSummary; onDri
       {/* IV. NÚT NHẤN BÁO CHÁY */}
       <section>
         <SectionTitle index="IV" title="Nút nhấn báo cháy (NNBC)" note="đếm theo ô đã tích, một nhóm có thể có nhiều lỗi" />
-        <div className="grid gap-3 lg:grid-cols-[320px_1fr]">
+        <div className="grid min-w-0 gap-3 xl:grid-cols-[280px_minmax(0,1fr)]">
           <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-1">
             <StatCard
               label="Đạt"
@@ -546,6 +557,19 @@ export function PcccOverview({ summary, onDrill }: { summary: PcccSummary; onDri
       {/* V. VAN CHỮA CHÁY */}
       <section>
         <SectionTitle index="V" title="Van chữa cháy" note="tách theo loại van (Deluge / Alarm)" />
+        <div className="grid min-w-0 gap-4 xl:grid-cols-[220px_minmax(0,1fr)]">
+        <aside className="flex flex-col justify-between rounded-xl border border-slate-200 bg-slate-100/70 p-5" aria-label="Tổng hợp van chữa cháy">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wider text-slate-600">Van khả dụng</p>
+            <p className="mt-3 text-[40px] font-bold leading-none tracking-tight tabular-nums text-navy">{summary.van.total.khaDung}<span className="ml-2 text-lg font-medium text-slate-500">/ {summary.van.total.tongSo}</span></p>
+            <p className="mt-2 text-xs text-slate-600">Tổng số van được quản lý</p>
+          </div>
+          <div className="mt-5 space-y-2.5 border-t border-slate-200 pt-4 text-xs">
+            <p className="flex items-center justify-between gap-2"><span className="text-slate-600">Suy giảm, vẫn dùng được</span><b className="tabular-nums text-amber-700">{summary.van.total.suyGiam}</b></p>
+            <p className="flex items-center justify-between gap-2"><span className="text-slate-600">Không khả dụng</span><b className="tabular-nums text-rose-700">{summary.van.total.khongKhaDung}</b></p>
+            <p className="flex items-center justify-between gap-2"><span className="text-slate-600">Chưa cập nhật</span><b className="tabular-nums text-slate-600">{summary.van.total.chuaCapNhat}</b></p>
+          </div>
+        </aside>
         <TableShell>
           <thead>
             <tr>
@@ -578,75 +602,10 @@ export function PcccOverview({ summary, onDrill }: { summary: PcccSummary; onDri
             </tr>
           </tbody>
         </TableShell>
+        </div>
       </section>
 
-      {/* VI + VII. HAI LOẠI ĐÈN — tách thành hai mục riêng, đúng như sheet TỔNG QUAN của
-          bản gốc (VI. ĐÈN EXIT, VII. ĐÈN CHIẾU SÁNG SỰ CỐ). Hai loại đèn phục vụ hai việc
-          khác nhau (chỉ dẫn thoát nạn / chiếu sáng khi mất điện) nên người đọc báo cáo cần
-          thấy tách bạch, dù trên trang danh sách chúng dùng chung một tab. */}
-      {(["EXIT", "CSSC"] as const).map((loai, i) => {
-        const r = summary.den.find((x) => x.loai === loai);
-        // Mẫu số BỎ QUA "không có đèn": vị trí không lắp đèn thì không phải đối tượng
-        // kiểm tra, để nó trong mẫu số là tự dìm tỉ lệ đạt của cả bảng.
-        const denominator = (r?.tongSo ?? 0) - (r?.khongCoDen ?? 0);
-        const tiLeDat = denominator > 0 ? (r?.dat ?? 0) / denominator : null;
-        return (
-          <section key={loai}>
-            <SectionTitle
-              index={i === 0 ? "VI" : "VII"}
-              title={loai === "EXIT" ? "Đèn EXIT" : "Đèn chiếu sáng sự cố"}
-              note={loai === "EXIT" ? "đèn chỉ dẫn thoát nạn" : undefined}
-            />
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              <StatCard
-                label="Đạt"
-                value={r?.dat ?? 0}
-                hint={tiLeDat === null ? `trên ${r?.tongSo ?? 0} vị trí` : `${fmtPercent(tiLeDat, 0)} số đèn đã lắp`}
-                tone="ok"
-                icon={Lightbulb}
-                onClick={drill({ bang: "DEN", loai, tinhTrang: "Đạt" })}
-              />
-              <StatCard
-                label="Không đạt"
-                value={r?.khongDat ?? 0}
-                hint="cần xử lý"
-                tone="bad"
-                icon={AlertTriangle}
-                onClick={drill({ bang: "DEN", loai, tinhTrang: "Không đạt" })}
-              />
-              {/* Tô XÁM, không phải đỏ: đây là ghi nhận hiện trạng lắp đặt chứ không phải
-                  hỏng hóc — tô đỏ sẽ thổi phồng tỉ lệ lỗi của cả phân xưởng. */}
-              <StatCard
-                label="Không có đèn"
-                value={r?.khongCoDen ?? 0}
-                hint="vị trí chưa lắp đèn"
-                tone="none"
-                icon={Layers}
-                onClick={drill({ bang: "DEN", loai, tinhTrang: LIGHT_KHONG_CO_DEN })}
-              />
-              <StatCard
-                label="Chưa cập nhật"
-                value={r?.chuaCapNhat ?? 0}
-                hint={`tổng ${r?.tongSo ?? 0} vị trí`}
-                tone={r?.chuaCapNhat ? "watch" : "none"}
-                icon={CalendarClock}
-                onClick={drill({ bang: "DEN", loai, tinhTrang: TINH_TRANG_CHUA_CAP_NHAT })}
-              />
-            </div>
-            {tiLeDat !== null && (
-              <div className="mt-3 rounded-xl border border-slate-200 bg-white p-3.5">
-                <div className="mb-1.5 flex items-baseline justify-between">
-                  <p className="text-[12px] font-semibold text-ink">Tỉ lệ đạt trên số đèn đã lắp</p>
-                  <span className="text-[11px] text-muted-foreground">
-                    {r?.dat ?? 0}/{denominator} vị trí
-                  </span>
-                </div>
-                <PercentBar value={tiLeDat} />
-              </div>
-            )}
-          </section>
-        );
-      })}
+      <PcccLightingOverview rows={summary.den} onDrill={onDrill} />
     </div>
   );
 }
