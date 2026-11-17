@@ -51,7 +51,8 @@ export async function readOperatingData(request: Request, dependencies: { reader
       const entries=[...byDate].sort(([a],[b])=>a.localeCompare(b)).map(([operatingDate,v])=>{
         const unit=(codes:string[])=>Object.fromEntries(codes.map((code,i)=>[["grossPowerMw","dryFlueGasLossPercent","condenserVacuumKpa","coolingWaterTemperatureC"][i],number(v[code])]));
         const nh3=(a:string,b:string)=>{const x=number(v[a]),y=number(v[b]);return x===null||y===null||y===0?null:x/y;};
-        return {operatingDate,s1:{...unit(["DA","DC","DE","DG"]),nh3PerGrossKwh:nh3("BQ","B")},s2:{...unit(["DB","DD","DF","DH"]),nh3PerGrossKwh:nh3("BR","H")}};
+        // nh3PerNetKwh: suất hao NH3 phát lưới (điểm bán C/I), cùng đơn vị g/kWh = kg/MWh với nh3PerGrossKwh.
+        return {operatingDate,s1:{...unit(["DA","DC","DE","DG"]),nh3PerGrossKwh:nh3("BQ","B"),nh3PerNetKwh:nh3("BQ","C")},s2:{...unit(["DB","DD","DF","DH"]),nh3PerGrossKwh:nh3("BR","H"),nh3PerNetKwh:nh3("BR","I")}};
       });
       return json({version:1,dataset,period:range.period,entries});
     }

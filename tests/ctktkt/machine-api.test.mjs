@@ -42,9 +42,19 @@ test('PMIS giữ hợp đồng gốc, số 0/thiếu/số thập phân và giớ
  const body=await response.json();assert.equal(body.version,1);assert.equal(body.dataset,'pmis');assert.equal(body.period,'2026-10');
  assert.deepEqual(body.entries.map(e=>e.operatingDate),['2026-10-01','2026-10-02']);
  assert.equal(body.entries[0].s1.dryFlueGasLossPercent,null);assert.equal(body.entries[0].s1.condenserVacuumKpa,-95);
- assert.equal(body.entries[1].s1.grossPowerMw,0);assert.equal(body.entries[1].s2.grossPowerMw,1.5);assert.equal(body.entries[1].s2.nh3PerGrossKwh,null);
+ assert.equal(body.entries[1].s1.grossPowerMw,0);assert.equal(body.entries[1].s2.grossPowerMw,1.5);assert.equal(body.entries[1].s2.nh3PerGrossKwh,null);assert.equal(body.entries[1].s2.nh3PerNetKwh,null);
  assert.deepEqual(db.calls[0],{kind:'daily',args:['2026-10-01','2026-11-01','2026-10-02']});
  assert.deepEqual(db.calls[1],{kind:'ctktkt',args:['2026-09-30','2026-11-01','2026-10-02']});assert.equal(db.calls.length,2);
+});
+test('PMIS trả suất hao NH3 đầu cực và phát lưới riêng S1/S2 (kg/MWh)',async()=>{
+ const cells=[['2026-09-30','N81','100'],['2026-10-01','N81','101,2'],['2026-10-01','J157','10000'],['2026-10-01','K157','9000'],
+  ['2026-09-30','N82','50'],['2026-10-01','N82','50'],['2026-10-01','J158','8000'],['2026-10-01','K158','7000']].map(([operatingDate,cell,value])=>({operatingDate,cell,value}));
+ const reader={daily:async()=>[],ctktkt:async()=>cells,ppa:async()=>[]};
+ const response=await readOperatingData(request(),{expectedHash,reader,today:'2026-10-02'});
+ const [day]=(await response.json()).entries;
+ assert.equal(day.operatingDate,'2026-10-01');
+ assert.ok(Math.abs(day.s1.nh3PerGrossKwh-0.12)<1e-9);assert.ok(Math.abs(day.s1.nh3PerNetKwh-1.2/9)<1e-9);
+ assert.equal(day.s2.nh3PerGrossKwh,0);assert.equal(day.s2.nh3PerNetKwh,0);
 });
 test('PPA giữ đơn vị, thời điểm cập nhật và phân biệt thiếu với 0',async()=>{
  const response=await readOperatingData(request('period=2026-10&dataset=ppa'),{expectedHash,reader:fixtureReader(),today:'2026-11-04'});
