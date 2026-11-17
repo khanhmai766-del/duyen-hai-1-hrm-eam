@@ -59,11 +59,11 @@ function PermissionEditor({ settings, reload }: { settings: CtktktPermissionSett
     </div>
     {dirty && <p role="status" className="text-sm text-slate-600">Có thay đổi chưa lưu.</p>}
     {save.isError && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">{save.error.message}</p>}
-    <div className="grid gap-3 rounded-xl border border-slate-200 bg-white p-3 sm:grid-cols-2">
+    <div className="grid gap-3 rounded-xl border border-slate-200 bg-white p-3 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto_auto] lg:items-end lg:gap-x-4">
       <label className="grid gap-1 text-sm font-semibold">Nhóm quyền<select aria-label="Nhóm quyền" className="min-h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-base sm:text-sm" value={groupIndex} onChange={event => setGroupIndex(Number(event.target.value))}>{groups.map((item, index) => <option value={index} key={item.label}>{item.label}</option>)}</select></label>
       <label className="grid gap-1 text-sm font-semibold">Tìm cương vị<input aria-label="Tìm cương vị" className="min-h-10 w-full rounded-lg border border-slate-300 px-3 text-base sm:text-sm" placeholder="Ví dụ: Trưởng kíp điện" value={search} onChange={event => setSearch(event.target.value)}/></label>
       <label className="flex min-h-10 items-center gap-2 text-sm"><input type="checkbox" checked={onlyAssigned} onChange={event => setOnlyAssigned(event.target.checked)}/>Chỉ hiện cương vị đã cấp quyền</label>
-      <span className="flex items-center gap-2 text-sm text-slate-600"><Users className="size-4"/>{positions.length}/{settings.positions.length} cương vị</span>
+      <span className="flex min-h-10 items-center gap-2 whitespace-nowrap text-sm text-slate-600"><Users className="size-4"/>{positions.length}/{settings.positions.length} cương vị</span>
     </div>
     <div ref={viewport} className="max-h-[65vh] overflow-auto rounded-xl border border-slate-200 bg-white" aria-label={`Bảng quyền ${group.label}`}>
       <table className="w-full border-separate border-spacing-0 text-sm">
