@@ -1,7 +1,7 @@
 "use client";
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { RefreshCw, RotateCcw, Save, ShieldCheck, Users } from "lucide-react";
+import { RefreshCw, RotateCcw, Save, Users } from "lucide-react";
 import { toast } from "sonner";
 import { normalizeText } from "@/lib/nav";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -52,17 +52,12 @@ function PermissionEditor({ settings, reload }: { settings: CtktktPermissionSett
     } catch { /* Lỗi giữ cùng bản nháp để người dùng kiểm tra/tải lại. */ }
   }
   return <section className="min-w-0 space-y-4" aria-label="Phân quyền KTKT">
-    <div className="rounded-xl border border-blue-200 bg-blue-50 p-4">
-      <h2 className="flex items-center gap-2 text-xl font-bold text-slate-900"><ShieldCheck className="size-5 shrink-0"/>Phân quyền KTKT</h2>
-      <p className="mt-2 text-sm leading-6 text-slate-700">Tích chọn quyền nhập liệu cho từng cương vị đang làm việc. TKĐ và Trưởng ca chỉ phân công cho VHV trong KTKT; quyền quản trị do quản trị viên cấu hình. Bỏ trống là không cấp quyền.</p>
-      <p className="mt-1 text-sm leading-6 text-slate-700"><strong>Toàn quyền KTKT</strong> bao gồm mọi chức năng. Quản trị viên web đang bật chế độ quản trị luôn có toàn quyền.</p>
-    </div>
     <div className="flex flex-wrap items-center gap-2">
       <button className={button} disabled={save.isPending} onClick={() => dirty ? setReloadOpen(true) : reload()}><RefreshCw className="size-4"/>Tải lại cấu hình</button>
       <button className={button} disabled={save.isPending || settings.delegatedOnly} onClick={() => setResetOpen(true)}><RotateCcw className="size-4"/>Khôi phục mặc định bản gốc</button>
       <button className={`${button} border-blue-700 bg-blue-700 text-white`} disabled={!dirty || save.isPending} onClick={() => void submit()}><Save className="size-4"/>{save.isPending ? "Đang lưu…" : "Lưu phân quyền"}</button>
     </div>
-    <p role="status" className="text-sm text-slate-600">{dirty ? "Có thay đổi chưa lưu." : settings.version ? `Đã lưu phiên bản ${settings.version}.` : "Đang áp dụng mặc định bản gốc; chưa có cấu hình riêng."}</p>
+    {dirty && <p role="status" className="text-sm text-slate-600">Có thay đổi chưa lưu.</p>}
     {save.isError && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">{save.error.message}</p>}
     <div className="grid gap-3 rounded-xl border border-slate-200 bg-white p-3 sm:grid-cols-2">
       <label className="grid gap-1 text-sm font-semibold">Nhóm quyền<select aria-label="Nhóm quyền" className="min-h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-base sm:text-sm" value={groupIndex} onChange={event => setGroupIndex(Number(event.target.value))}>{groups.map((item, index) => <option value={index} key={item.label}>{item.label}</option>)}</select></label>
@@ -70,7 +65,6 @@ function PermissionEditor({ settings, reload }: { settings: CtktktPermissionSett
       <label className="flex min-h-10 items-center gap-2 text-sm"><input type="checkbox" checked={onlyAssigned} onChange={event => setOnlyAssigned(event.target.checked)}/>Chỉ hiện cương vị đã cấp quyền</label>
       <span className="flex items-center gap-2 text-sm text-slate-600"><Users className="size-4"/>{positions.length}/{settings.positions.length} cương vị</span>
     </div>
-    <p className="text-sm text-slate-600">Cuộn ngang để xem đủ quyền. Nút ở tiêu đề chọn hoặc bỏ toàn bộ cương vị đang hiển thị.</p>
     <div ref={viewport} className="max-h-[65vh] overflow-auto rounded-xl border border-slate-200 bg-white" aria-label={`Bảng quyền ${group.label}`}>
       <table className="w-full border-separate border-spacing-0 text-sm">
         <thead className="sticky top-0 z-20 bg-slate-100"><tr><th className="sticky left-0 z-30 min-w-[155px] border-b border-r border-slate-200 bg-slate-100 p-3 text-left">Cương vị</th>{group.ids.map(id => <th key={id} className="min-w-[145px] border-b border-r border-slate-200 p-2"><button type="button" disabled={!positions.length || save.isPending} className="min-h-10 w-full rounded-lg p-2 text-left hover:bg-blue-100" onClick={() => toggleColumn(id)}><span className="block font-semibold">{POSITION_PERMISSION_LABELS[id]}</span><span className="mt-1 block text-xs font-normal text-slate-600">{grants[id].length} cương vị</span></button></th>)}</tr></thead>
