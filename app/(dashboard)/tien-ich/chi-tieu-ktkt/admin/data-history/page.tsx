@@ -22,14 +22,31 @@ export default async function DataHistoryPage({ searchParams }: { searchParams: 
   } catch { failed = true; }
   const display = (value: unknown) => value === null ? "∅" : String(value || "");
   const time = (value: unknown) => new Intl.DateTimeFormat("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", dateStyle: "short", timeStyle: "medium" }).format(new Date(String(value).replace(" ", "T") + "Z"));
-  return <AppShell active="data-history"><main className="space-y-4">
-    <h1 className="text-2xl font-bold">Nhật ký thay đổi dữ liệu</h1>
-    <form className="flex items-end gap-3"><label className="grid gap-1">Ngày dữ liệu<input name="date" type="date" defaultValue={date} className="border rounded p-2" /></label><button className="bg-blue-600 text-white rounded px-4 py-2">Tra cứu</button></form>
-    {failed ? <p role="alert">Không tải được nhật ký. Hãy thử lại.</p> : <>
-      <div className="flex gap-4"><span>Trang {page} · tối đa 200 thay đổi/trang</span>{page > 1 && <Link className="text-blue-700 underline" href={`?date=${date}&page=${page - 1}`}>Trang trước</Link>}{rows.length > 200 && <Link className="text-blue-700 underline" href={`?date=${date}&page=${page + 1}`}>Trang sau</Link>}</div>
-      <div className="overflow-auto"><table className="w-full border-collapse text-sm"><thead><tr>{["Thời điểm", "Tài khoản", "Họ tên", "Nguồn lưu", "Ô", "Thao tác", "Giá trị trước", "Giá trị sau", "Ghi chú trước", "Ghi chú sau"].map(label => <th key={label} className="border p-2 text-left bg-blue-50">{label}</th>)}</tr></thead>
-      <tbody>{rows.slice(0, 200).map(row => <tr key={String(row.id)}>{[time(row.changed_at), row.actor_username, row.actor_name, row.source, row.field_code, ({ insert: "Thêm", update: "Sửa", delete: "Xóa" } as Record<string, string>)[String(row.action)], display(row.old_value), display(row.new_value), display(row.old_note), display(row.new_note)].map((value, index) => <td key={index} className="border p-2 whitespace-pre-wrap">{String(value ?? "")}</td>)}</tr>)}</tbody></table></div>
-      {!rows.length && <p>Chưa có nhật ký cho ngày này.</p>}
-    </>}
+  return <AppShell active="data-history"><main className="min-w-0 space-y-3">
+    {/* Một hàng: tiêu đề + phân trang bên trái, ô tra cứu ngày bên phải (xuống dòng trên điện thoại). */}
+    <div className="flex flex-wrap items-end justify-between gap-3">
+      <div className="min-w-0">
+        <h1 className="text-xl font-bold text-slate-900 sm:text-2xl">Nhật ký thay đổi dữ liệu</h1>
+        <p className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-slate-600">
+          <span>Trang {page} · tối đa 200 thay đổi/trang</span>
+          {!failed && page > 1 && <Link className="font-semibold text-blue-700 hover:underline" href={`?date=${date}&page=${page - 1}`}>← Trang trước</Link>}
+          {!failed && rows.length > 200 && <Link className="font-semibold text-blue-700 hover:underline" href={`?date=${date}&page=${page + 1}`}>Trang sau →</Link>}
+        </p>
+      </div>
+      <form className="flex items-end gap-2">
+        <label className="grid gap-1 text-sm font-semibold text-slate-700">Ngày dữ liệu
+          <input name="date" type="date" defaultValue={date} className="min-h-10 rounded-lg border border-slate-300 bg-white px-3 text-base sm:text-sm" />
+        </label>
+        <button className="min-h-10 rounded-lg bg-blue-700 px-4 text-sm font-semibold text-white hover:bg-blue-800">Tra cứu</button>
+      </form>
+    </div>
+    {failed ? <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">Không tải được nhật ký. Hãy thử lại.</p> :
+      <div className="max-h-[70vh] overflow-auto rounded-xl border border-slate-200 bg-white">
+        <table className="w-full border-separate border-spacing-0 text-sm">
+          <thead className="sticky top-0 z-10 bg-slate-100"><tr>{["Thời điểm", "Tài khoản", "Họ tên", "Nguồn lưu", "Ô", "Thao tác", "Giá trị trước", "Giá trị sau", "Ghi chú trước", "Ghi chú sau"].map(label => <th key={label} className="whitespace-nowrap border-b border-r border-slate-200 bg-slate-100 p-3 text-left font-semibold text-slate-800">{label}</th>)}</tr></thead>
+          <tbody>{rows.slice(0, 200).map(row => <tr key={String(row.id)} className="hover:bg-blue-50/50">{[time(row.changed_at), row.actor_username, row.actor_name, row.source, row.field_code, ({ insert: "Thêm", update: "Sửa", delete: "Xóa" } as Record<string, string>)[String(row.action)], display(row.old_value), display(row.new_value), display(row.old_note), display(row.new_note)].map((value, index) => <td key={index} className="border-b border-r border-slate-100 px-3 py-2 align-top whitespace-pre-wrap">{String(value ?? "")}</td>)}</tr>)}</tbody>
+        </table>
+        {!rows.length && <p className="p-4 text-sm text-slate-600">Chưa có nhật ký cho ngày này.</p>}
+      </div>}
   </main></AppShell>;
 }
