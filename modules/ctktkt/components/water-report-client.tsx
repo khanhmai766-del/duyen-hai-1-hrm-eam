@@ -581,27 +581,6 @@ export function WaterReportClient() {
         </div>
       )}
 
-      {/* Thông báo liên kết công tơ nước 24h DCS với Báo cáo Chỉ tiêu KTKT */}
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-emerald-300 bg-emerald-50/80 p-3 text-xs text-emerald-900 shadow-xs">
-        <div className="flex items-center gap-2">
-          <Droplets className="size-4 shrink-0 text-emerald-700" aria-hidden />
-          <div>
-            <strong className="font-bold">Công tơ nước demin mốc 24h (S1, S2) &amp; Hiệu chỉnh:</strong> Đã chuyển sang nhập và quản lý tại{" "}
-            <a href="/tien-ich/chi-tieu-ktkt/ctktkt-report" className="ktkt-inline-link font-bold underline decoration-emerald-600 hover:text-emerald-950">
-              Báo cáo Chỉ tiêu KTKT (nhóm TKĐ DCS, Hàng 72–74)
-            </a>
-            . Số liệu lượng nước tái sinh hạt nhập tại đây sẽ tự động link sang CTKTKT.
-          </div>
-        </div>
-        <a
-          href="/tien-ich/chi-tieu-ktkt/ctktkt-report"
-          className="inline-flex items-center gap-1 rounded-lg bg-emerald-700 px-3 py-1.5 font-bold text-white text-[11px] shadow-xs hover:bg-emerald-800 transition-colors"
-        >
-          <span>Mở Chỉ tiêu KTKT</span>
-          <span>↗</span>
-        </a>
-      </div>
-
       {/* 3. Bảng dữ liệu theo dõi lượng nước (20 cột gốc chuẩn Nhà máy) */}
       <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
         {/* Thanh ghi chú phân quyền */}
