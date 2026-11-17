@@ -5,7 +5,6 @@ import {
   useParseSection1Import, useSaveCoalStock, useSaveOperatingEvents, useSaveShiftReadings,
 } from "@/hooks/useKtktBcsx";
 
-import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { DateField } from "@/modules/ctktkt/components/ui/date-field";
 import { EVENT_TYPES, SHIFT_METRICS, SHIFT_TIME_SLOTS, nextOperatingDate, validateOperatingEventDateRange, type OperatingEvent, type ShiftMetric } from "@/modules/ctktkt/lib/bcsx";
@@ -893,7 +892,6 @@ export function BcsxReport() {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h2 className="text-sm font-extrabold text-[#173b64]">2. Số liệu tổng ngày — tổ máy {unit}</h2>
-          <p className="mt-0.5 text-xs text-slate-500">Sản lượng và than tiêu thụ tự liên kết từ <Link href="/tien-ich/chi-tieu-ktkt/ctktkt-report" className="font-semibold text-[#334785] underline">Chỉ tiêu KTKT</Link>. <b>Than tồn kho 24h</b> nhập tay một lần tại đây, dùng chung cho S1/S2/A0 và tự liên kết ngược sang Cụm 1 Chỉ tiêu KTKT.</p>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -934,7 +932,6 @@ export function BcsxReport() {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h2 className="text-sm font-extrabold text-[#173b64]">3. Tình hình vận hành (nhật ký sự kiện) — tổ máy {unit}</h2>
-          <p className="mt-0.5 text-xs text-slate-500">Chọn file DanhSachLenhKetThuc: hệ thống tự nhận diện lệnh S1/S2, lưu ngay vào Mục 3 và tải file DH1 Thời gian vận hành để nhập lên QLKT. Có thể sửa tay sau khi nhập.</p>
         </div>
         <div className="flex items-center gap-2">
           <input
@@ -1014,7 +1011,6 @@ export function BcsxReport() {
 
     <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
       <h2 className="text-sm font-extrabold text-[#173b64]">4. Xuất file BCSX_NMD</h2>
-      <p className="mt-1 text-sm text-slate-500">Xuất đúng định dạng file mẫu gốc, đã điền số liệu — nhớ Lưu bảng thông số, Lưu số liệu tổng ngày và Lưu nhật ký sự kiện trước khi xuất. File A0 cộng S1+S2 cho P/Q/P điểm bán; riêng Utc 220 kV lấy S1. Nhật ký sự kiện A0 xếp các dòng của S1 trước rồi đến S2.</p>
       <div className="mt-3 flex flex-wrap gap-2">
         {(["A0", "S1", "S2"] as const).map(target => <button key={target} type="button" disabled={exporting !== null || loading || saving} onClick={() => requestExport(target)} className="rounded-lg border border-[#334785] bg-white px-4 py-2 text-sm font-bold text-[#334785] disabled:opacity-50">{exporting === target ? "Đang xuất…" : `Xuất BCSX_NMD_${target}`}</button>)}
       </div>

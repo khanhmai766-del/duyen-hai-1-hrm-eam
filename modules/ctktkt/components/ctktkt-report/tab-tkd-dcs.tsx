@@ -13,11 +13,6 @@ export function CtktktTkdDcsTab({ ctx }: { ctx: CtktktReportCtx }) {
           <h3 className="text-sm font-black text-[#173b64]">
             Cụm 2: Bảng TKĐ trend DCS nhập (6 mốc giờ: 06h, 10h, 14h, 18h, 22h, 24h)
           </h3>
-          <p className="text-xs text-slate-500">
-            Trưởng kíp điện nhập 6 hàng: P TD 911, P TD 912, P TD 921, P TD 922, P TD 21,
-            Q TD 21. Các hàng công suất tổ máy lấy tự động từ BCSX mục 1. Các hàng tổng
-            tự động tính.
-          </p>
         </div>
         <div className="flex items-center gap-2 text-xs">
           <span className="rounded-md bg-blue-100 px-2 py-0.5 font-bold text-blue-800">
@@ -325,9 +320,6 @@ export function CtktktTkdDcsTab({ ctx }: { ctx: CtktktReportCtx }) {
               <span className="inline-block w-2.5 h-2.5 rounded-full bg-[#00b050]" />
               Bảng công tơ nước demin tại DCS (Mốc 24h) — Hàng 72 đến 74
             </h3>
-            <p className="text-xs text-slate-500">
-              Trưởng kíp điện nhập chỉ số công tơ 24h ngày D, lượng nước tái sinh hạt và số hiệu chỉnh (khi công tơ chạm dãy max 25.000 m³ reset về 0). Cột 24h ngày D-1 tự động kế thừa từ ngày trước. Lượng tiêu thụ ngày D tự động tính (X − W + Hiệu chỉnh).
-            </p>
           </div>
           <div className="flex items-center gap-2 text-xs">
             <span className="rounded-md bg-emerald-100 px-2 py-0.5 font-bold text-emerald-800">

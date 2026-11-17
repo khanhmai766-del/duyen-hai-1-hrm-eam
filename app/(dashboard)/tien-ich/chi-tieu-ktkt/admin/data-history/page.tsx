@@ -23,9 +23,7 @@ export default async function DataHistoryPage({ searchParams }: { searchParams: 
   const display = (value: unknown) => value === null ? "∅" : String(value || "");
   const time = (value: unknown) => new Intl.DateTimeFormat("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", dateStyle: "short", timeStyle: "medium" }).format(new Date(String(value).replace(" ", "T") + "Z"));
   return <AppShell active="data-history"><main className="space-y-4">
-    <Link href="/tien-ich/chi-tieu-ktkt" className="text-blue-700 underline">← Dữ liệu các tháng</Link>
     <h1 className="text-2xl font-bold">Nhật ký thay đổi dữ liệu</h1>
-    <p className="text-sm text-slate-600">Chỉ ghi nhận thay đổi từ khi tính năng được triển khai. Dữ liệu cũ không có thông tin người nhập. Thời gian theo giờ Việt Nam.</p>
     <form className="flex items-end gap-3"><label className="grid gap-1">Ngày dữ liệu<input name="date" type="date" defaultValue={date} className="border rounded p-2" /></label><button className="bg-blue-600 text-white rounded px-4 py-2">Tra cứu</button></form>
     {failed ? <p role="alert">Không tải được nhật ký. Hãy thử lại.</p> : <>
       <div className="flex gap-4"><span>Trang {page} · tối đa 200 thay đổi/trang</span>{page > 1 && <Link className="text-blue-700 underline" href={`?date=${date}&page=${page - 1}`}>Trang trước</Link>}{rows.length > 200 && <Link className="text-blue-700 underline" href={`?date=${date}&page=${page + 1}`}>Trang sau</Link>}</div>
