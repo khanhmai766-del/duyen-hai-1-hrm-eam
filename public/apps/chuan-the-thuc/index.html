@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chuẩn Thể Thức 3.0</title>
+<meta name="author" content="Kỹ sư Nguyễn Quang Đàm - PXVH1 - CTY NĐDH">
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="embed.css">
+</head>
+<body>
+<div class="shell">
+  <header class="topbar">
+    <div class="brand"><span class="brand-mark">✦</span><div><strong>CHUẨN THỂ THỨC</strong><small>KIỂM TRA & SỬA VĂN BẢN THEO NĐ 30/2020/NĐ-CP · THIẾT KẾ BỞI KỸ SƯ NGUYỄN QUANG ĐÀM - PXVH1 - CTY NĐDH</small></div></div>
+    <button id="settingsBtn" class="pill"><span id="aiDot" class="dot"></span><span id="aiStatus">Cài đặt AI</span></button>
+  </header>
+
+  <!-- Bước 1: tải file -->
+  <section id="stageUpload">
+    <div class="hero">
+      <div class="eyebrow">KIỂM TRA & SỬA TRỰC TIẾP FILE WORD</div>
+      <h1>Văn bản rõ ràng.<br><em>Đúng thể thức.</em></h1>
+      <p>Thả file <b>.docx</b> vào đây. Phần mềm đối chiếu khổ giấy, lề, phông, cỡ chữ, giãn dòng, Quốc hiệu, số ký hiệu, ngày tháng, nơi nhận, chữ ký… với Nghị định 30/2020/NĐ-CP, sửa ngay trên file gốc và giữ nguyên nội dung.</p>
+    </div>
+    <label id="drop" class="drop">
+      <input id="fileInput" type="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" hidden>
+      <span class="drop-icon">⇪</span>
+      <strong>Kéo thả file Word vào đây</strong>
+      <span>hoặc bấm để chọn file (.docx, tối đa 30 MB)</span>
+    </label>
+    <p id="uploadMsg" class="msg"></p>
+    <section class="tips">
+      <div><span>✦</span><strong>Sửa bằng quy tắc, không bịa nội dung</strong><p>Định dạng được sửa theo quy định cụ thể; câu chữ chỉ thay đổi ở những lỗi trình bày rõ ràng (ngày tháng, "Số:", dấu cách…).</p></div>
+      <div><span>⌁</span><strong>AI chỉ đề xuất</strong><p>Gemini rà soát chính tả, viết hoa, dấu câu. Bạn chọn từng đề xuất trước khi áp dụng.</p></div>
+      <div><span>◌</span><strong>Chạy trên máy của bạn</strong><p>File chỉ xử lý tại máy này. Nội dung chỉ được gửi tới Gemini khi bạn bấm rà soát bằng AI.</p></div>
+    </section>
+  </section>
+
+  <!-- Bước 2: kết quả -->
+  <section id="stageWork" hidden>
+    <div class="work">
+      <aside class="side">
+        <div class="card file-card">
+          <div><small>FILE ĐANG KIỂM TRA</small><strong id="fileName">—</strong></div>
+          <button id="changeFile" class="ghost">Đổi file</button>
+        </div>
+
+        <div class="card score-card">
+          <div class="ring" id="ring"><b id="score">0</b><small>/100</small></div>
+          <div>
+            <div id="scoreLabel" class="score-label">—</div>
+            <div class="counts"><span class="c-error"><b id="cError">0</b> lỗi</span><span class="c-warning"><b id="cWarning">0</b> cảnh báo</span><span class="c-info"><b id="cInfo">0</b> gợi ý</span></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="row"><label for="standard">Chuẩn áp dụng</label>
+            <select id="standard"><option value="evn">EVN (QĐ 739/QĐ-EVN)</option><option value="nd30">NĐ 30/2020/NĐ-CP</option></select></div>
+          <p class="hint std-note" id="stdNote"></p>
+          <div class="row"><label for="bodySize">Cỡ chữ phần nội dung</label>
+            <select id="bodySize"><option value="14">14</option><option value="13">13</option></select></div>
+          <button id="fixBtn" class="primary wide">Sửa thể thức & chính tả <span>→</span></button>
+          <p id="fixMsg" class="msg"></p>
+        </div>
+
+        <div class="card">
+          <div class="card-head"><h3>Lỗi thể thức & chính tả</h3><button id="toggleAll" class="ghost">Bỏ chọn tất cả</button></div>
+          <p class="hint">Đánh dấu nhóm lỗi muốn sửa tự động. Nhóm "Cần tự sửa" phải chỉnh tay trong Word.</p>
+          <div id="issueList"></div>
+        </div>
+
+        <div class="card">
+          <div class="card-head"><h3>Chính tả & câu chữ (AI)</h3><span class="tag">Gemini</span></div>
+          <p class="hint">AI tìm lỗi chính tả, viết hoa, dấu câu. Chỉ những đề xuất được đánh dấu mới được áp dụng khi bấm sửa.</p>
+          <label class="check-line"><input id="twoPass" type="checkbox" checked> Rà soát 2 lần để đối chiếu <small>(chính xác hơn, tốn gấp đôi lượt gọi)</small></label>
+          <button id="aiBtn" class="secondary wide">Rà soát bằng AI</button>
+          <p id="aiMsg" class="msg"></p>
+          <div id="aiList"></div>
+        </div>
+
+        <div class="card">
+          <div class="card-head"><h3>Chuẩn hóa thuật ngữ & câu chữ (AI)</h3><span class="tag">Gemini</span></div>
+          <p class="hint">AI gợi ý thuật ngữ kỹ thuật chuẩn, văn phong hành chính, câu chữ chặt chẽ. Giữ nguyên số liệu, tên riêng, ký hiệu. Đọc kỹ, sửa lại nếu cần và chọn từng đề xuất trước khi áp dụng.</p>
+          <button id="styleBtn" class="secondary wide">Gợi ý chuẩn hóa câu chữ</button>
+          <p id="styleMsg" class="msg"></p>
+          <div id="styleList"></div>
+        </div>
+      </aside>
+
+      <section class="card preview-card">
+        <div class="tabs">
+          <button class="tab active" data-view="orig">Bản gốc</button>
+          <button class="tab" data-view="fixed" disabled>Bản đã sửa</button>
+          <span id="applied" class="applied"></span>
+          <span class="tab-actions">
+            <button id="resetBtn" class="ghost" hidden title="Bỏ mọi sửa đổi, quay về file gốc">↺ Về bản gốc</button>
+            <a id="downloadLink" class="dl-btn" hidden>⇩ Tải file đã sửa</a>
+          </span>
+        </div>
+        <p id="previewNote" class="hint note"></p>
+        <div id="preview" class="preview"></div>
+      </section>
+    </div>
+  </section>
+
+  <footer>
+    <div class="credit">Phiên bản 3.0 · Thiết kế bởi <b>Kỹ sư Nguyễn Quang Đàm</b> - PXVH1 - CTY NĐDH</div>
+    <div>CHUẨN THỂ THỨC <span>•</span> Căn cứ Nghị định 30/2020/NĐ-CP về công tác văn thư <span>•</span> Luôn rà soát lại trước khi phát hành</div>
+  </footer>
+</div>
+
+<dialog id="settings">
+  <form method="dialog">
+    <h3>Cài đặt AI (Gemini)</h3>
+    <p id="serverKeyNote" class="hint"></p>
+    <label>Khóa Gemini API (khóa chính)<input id="apiKey" type="password" placeholder="Dán khóa API (bỏ trống nếu máy chủ đã cấu hình)" autocomplete="off"></label>
+    <label>Khóa dự phòng 1 <small>(dùng khi khóa chính lỗi, hết hạn mức)</small><input id="apiKey2" type="password" placeholder="Để trống nếu không dùng" autocomplete="off"></label>
+    <label>Khóa dự phòng 2<input id="apiKey3" type="password" placeholder="Để trống nếu không dùng" autocomplete="off"></label>
+    <label class="check"><input id="remember" type="checkbox"> Ghi nhớ các khóa trên trình duyệt này</label>
+    <div class="models-head"><b>Mô hình</b><button type="button" id="loadModels" class="ghost">↻ Tải danh sách từ Google</button></div>
+    <p id="modelsNote" class="hint">Bấm "Tải danh sách" để xem các mô hình khóa của bạn dùng được (phần mềm thử từng mô hình và ẩn mô hình gói miễn phí không dùng được), hoặc gõ tên mô hình.</p>
+    <label>Mô hình chính<input id="model1" type="text" placeholder="gemini-..." autocomplete="off"></label>
+    <label>Dự phòng 1 <small>(dùng khi mô hình chính quá tải/lỗi)</small><input id="model2" type="text" placeholder="Để trống nếu không dùng" autocomplete="off"></label>
+    <label>Dự phòng 2<input id="model3" type="text" placeholder="Để trống nếu không dùng" autocomplete="off"></label>
+    <div class="dialog-actions"><button value="cancel" class="ghost">Đóng</button><button id="saveSettings" value="ok" class="primary">Lưu</button></div>
+  </form>
+</dialog>
+
+<script src="app.js"></script>
+<script src="embed.js"></script>
+</body>
+</html>

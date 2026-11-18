@@ -19,6 +19,7 @@ import { materialIntegrityPreset } from "./presets/material-integrity.mjs";
 import { documentIntegrityPreset } from "./presets/document-integrity.mjs";
 import { closeUnstartedPermitPreset, copyOverduePermitPreset } from "./presets/close-unstarted-permit.mjs";
 import { reactBitsPreset } from "./presets/react-bits.mjs";
+import { chuanTheThucPreset } from "./presets/chuan-the-thuc.mjs";
 // Kịch bản dựng sẵn cho ui-shots.mjs: tuyến cần chụp + dữ liệu GIẢ LẬP qua page.route.
 //
 // Giả lập ngay trong trình duyệt để chụp được trạng thái hiếm có trên DB dev (lần làm việc đang mở, danh sách
@@ -274,6 +275,7 @@ let nhanSuLocName = "";
 
 export const PRESETS = {
   "react-bits": reactBitsPreset,
+  "chuan-the-thuc": chuanTheThucPreset,
   "pct-ket-thuc-chua-lam-viec": closeUnstartedPermitPreset,
   "pct-sao-chep-qua-han": copyOverduePermitPreset,
   "material-integrity": materialIntegrityPreset,

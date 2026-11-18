@@ -30,6 +30,7 @@ export const LOOKUP_MODULES = [
   { id: "forum", label: "Forum kỹ thuật", group: "Tài liệu số", pages: ["/forum"], apis: ["/api/forum"], permissions: [] },
   { id: "overhaul", label: "Tiến độ đại tu", group: "Tiện ích", pages: ["/tien-ich/tien-do-dai-tu"], apis: ["/api/overhaul-progress", "/api/overhaul-milestones"], permissions: [] },
   { id: "oil-analysis", label: "Kết quả phân tích dầu", group: "Tiện ích", pages: ["/tien-ich/phan-tich-dau"], apis: ["/api/lims/oil-analysis"], permissions: [] },
+  { id: "chuan-the-thuc", label: "Chuẩn thể thức văn bản", group: "Tiện ích", pages: ["/tien-ich/chuan-the-thuc"], apis: [], permissions: [] },
 ] as const;
 
 export type LookupModuleId = typeof LOOKUP_MODULES[number]["id"];

@@ -1,0 +1,62 @@
+/* Lớp giao diện riêng khi Chuẩn thể thức chạy NHÚNG trong web chính (iframe ở /tien-ich/chuan-the-thuc).
+   scripts/build/chuan-the-thuc.mjs chép tệp này thành public/apps/chuan-the-thuc/embed.css và nạp SAU styles.css.
+   Repo chuan-the-thuc giữ nguyên giao diện bản độc lập; chỉnh bản nhúng thì sửa ở đây. */
+
+/* Khung: web chính đã có thanh tiêu đề và lề, nên thu gọn khung của ứng dụng */
+body{background:#f6f8f4}
+.shell{max-width:none;min-height:0;height:100vh;padding:0 16px}
+.topbar{height:48px;flex:none}
+.brand{gap:10px}
+.brand-mark{width:28px;height:28px;border-radius:8px;font-size:16px}
+.brand small{display:none}
+footer{flex:none;flex-direction:row;flex-wrap:wrap;align-items:center;gap:4px 16px;padding:6px 0 8px;font-size:10px}
+footer .credit{font-size:11px}
+
+/* Bước 1: tải file */
+#stageUpload:not([hidden]){flex:1;min-height:0;overflow:auto}
+.hero{padding:20px 0 14px;max-width:none}
+.hero h1{font-size:clamp(24px,2.6vw,34px);letter-spacing:-.03em}
+.hero p{font-size:13.5px;line-height:1.6;margin-top:10px;max-width:880px}
+.drop{padding:28px 16px;border-radius:14px}
+.drop strong{font-size:15px}.drop-icon{font-size:26px}
+.tips{gap:16px;padding:18px 0 12px}
+
+/* Bước 2: kết quả — cột trái tự cuộn, bản xem trước chiếm trọn chiều cao còn lại */
+#stageWork:not([hidden]){flex:1;min-height:0;display:flex}
+.work{flex:1;min-height:0;grid-template-columns:minmax(300px,360px) 1fr;gap:12px;padding:12px 0;align-items:stretch}
+.side{gap:10px;overflow-y:auto;min-height:0;padding-right:4px;scrollbar-width:thin}
+.card{border-radius:12px;padding:12px 14px;box-shadow:none}
+.card h3{font-size:13.5px}
+.hint{margin:4px 0 8px}
+.row{margin-bottom:8px}
+.row select{max-width:62%}
+.primary{padding:11px 16px}
+.secondary{padding:9px 14px}
+
+/* Tên file một dòng, điểm số gọn */
+.file-card{padding:10px 14px}
+.file-card>div{min-width:0}
+.file-card small{font-size:9px;margin-bottom:2px}
+.file-card strong{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;word-break:normal}
+.score-card{gap:12px;padding:10px 14px}
+.ring{width:60px;height:60px}
+.ring b{font-size:20px}.ring small{font-size:9px}
+.score-label{margin-bottom:4px;font-size:13.5px}
+
+.preview-card{position:static;display:flex;flex-direction:column;min-height:0;border-radius:12px}
+.tabs{padding:6px 8px;flex:none}
+.tab{padding:6px 12px}
+.note{flex:none}
+.preview{flex:1;height:auto;min-height:0}
+/* embed.js thu nhỏ trang cho vừa khung, nên khung trang không cần rộng theo khổ A4 thật */
+.preview .docx-wrapper{padding:14px;width:auto;min-width:0}
+
+/* Điện thoại / máy tính bảng: trở lại cuộn cả trang như thường */
+@media(max-width:900px){
+  .shell{height:auto;min-height:100vh;padding:0 12px}
+  #stageWork:not([hidden]),#stageUpload:not([hidden]){display:block;overflow:visible}
+  .work{display:grid;grid-template-columns:1fr}
+  .side{overflow:visible;padding-right:0}
+  .preview{height:70vh;flex:none}
+  .row select{max-width:58%}
+}

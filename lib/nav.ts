@@ -25,6 +25,7 @@ import {
   Boxes,
   Database,
   FlaskConical,
+  FileCheck2,
   FlameKindling,
   MonitorCog,
   Calculator,
@@ -254,6 +255,12 @@ export const NAV_SECTIONS: NavSection[] = [
         href: "/tien-ich/phan-tich-dau",
         icon: FlaskConical,
         keywords: "lims ket qua phan tich dau khong dat mau dau thi nghiem hoa y kien pkt qlvh oil analysis tien ich",
+      },
+      {
+        label: "Chuẩn thể thức văn bản",
+        href: "/tien-ich/chuan-the-thuc",
+        icon: FileCheck2,
+        keywords: "chuan the thuc van ban hanh chinh nd 30 2020 qd 739 evn kiem tra sua docx word chinh ta gemini tien ich",
       },
       {
         label: "Điều khiển mô hình DH1",

@@ -8,6 +8,9 @@ build
 !/scripts/build/
 /scripts/build/*
 !/scripts/build/docx-to-print-html.py
+!/scripts/build/chuan-the-thuc.mjs
+!/scripts/build/chuan-the-thuc.embed.css
+!/scripts/build/chuan-the-thuc.embed.js
 .env
 .env*.local
 *.log

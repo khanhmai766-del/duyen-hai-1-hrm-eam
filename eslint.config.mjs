@@ -13,6 +13,8 @@ export default defineConfig([
     "**/.next-builds/",
     "**/node_modules/",
     "prisma/generated/",
+    // Bản sinh tự động từ repo chuan-the-thuc (scripts/build/chuan-the-thuc.mjs).
+    "public/apps/",
     "scripts/check/perf-audit.mjs",
     // Thư mục nháp của phiên làm việc — không phải mã nguồn dự án (xem .gitignore).
     "tmp/",
