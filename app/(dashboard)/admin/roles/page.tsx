@@ -52,6 +52,7 @@ import { apiGet, apiMutate } from "@/lib/fetcher";
 import { normalizeText } from "@/lib/nav";
 import { cn } from "@/lib/utils";
 import { CTKTKT_PERMISSION_ROWS } from "@/modules/ctktkt/permissions";
+import { UTILITY_PERMISSION_ROWS } from "@/lib/utility-permissions";
 
 type PermissionValue = "full" | "manage" | "personal" | "read" | "none";
 
@@ -807,6 +808,7 @@ const DEFAULT_PERMISSIONS: PermissionRow[] = [
       "Mức Cá nhân/Quản lý/Toàn quyền đều cho phép đồng bộ; Chỉ đọc = chỉ xem lịch sử; Không = ẩn nút đồng bộ.",
     matrix: { ADMIN: "full", MANAGER: "manage", SUPERVISOR: "manage", TECHNICIAN: "personal", VIEWER: "none" },
   },
+  ...UTILITY_PERMISSION_ROWS,
   ...CTKTKT_PERMISSION_ROWS,
 ];
 

@@ -1,4 +1,6 @@
 import { audit, fail, handle, ok, requireUser } from "@/lib/api";
+import { requirePermissionLevel } from "@/lib/rbac-guard";
+import { UTILITY_VIEW_LEVELS } from "@/lib/utility-permissions";
 import { createAiLimiter, parseAiReviewRequest, sharedGeminiModels, type AiReviewRequest } from "@/modules/chuan-the-thuc/ai-request";
 import { aiReview } from "@/modules/chuan-the-thuc/vendor/gemini.js";
 
@@ -15,11 +17,13 @@ const limiter = createAiLimiter();
 // Khoảng trắng đứng trước JSON vẫn hợp lệ nên dùng làm tín hiệu giữ kết nối.
 const KEEP_ALIVE_MS = 15_000;
 
+const NO_ACCESS = "Bạn không có quyền dùng Chuẩn thể thức văn bản";
 const sharedKey = () => process.env.CHUAN_THE_THUC_GEMINI_API_KEY?.trim() ?? "";
 
 export async function GET() {
   return handle(async () => {
-    await requireUser();
+    const user = await requireUser();
+    await requirePermissionLevel(user, "utility-chuan-the-thuc-view", [...UTILITY_VIEW_LEVELS], NO_ACCESS);
     return ok({ enabled: Boolean(sharedKey()), model: sharedGeminiModels()[0] });
   });
 }
@@ -27,6 +31,7 @@ export async function GET() {
 export async function POST(req: Request) {
   return handle(async () => {
     const user = await requireUser();
+    await requirePermissionLevel(user, "utility-chuan-the-thuc-view", [...UTILITY_VIEW_LEVELS], NO_ACCESS);
     const apiKey = sharedKey();
     if (!apiKey) return fail("Máy chủ chưa cấu hình khoá AI dùng chung.", 503);
 

@@ -2,7 +2,8 @@ import type { NextRequest } from "next/server";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { handle, ok, requireUser } from "@/lib/api";
-import { hasPermissionLevel } from "@/lib/rbac-guard";
+import { hasPermissionLevel, requirePermissionLevel } from "@/lib/rbac-guard";
+import { UTILITY_VIEW_LEVELS } from "@/lib/utility-permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -10,10 +11,11 @@ const DEFAULT_DAYS = 14;
 const MAX_DAYS = 365;
 
 /** Danh sách mẫu dầu Không Đạt đã đồng bộ từ LIMS.
- *  Mọi cương vị đều được XEM; chỉ nhóm quản lý mới được bấm đồng bộ (xem route import). */
+ *  Xem theo quyền "utility-oil-analysis-view"; bấm đồng bộ theo "lims-sync" (xem route import). */
 export async function GET(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
+    await requirePermissionLevel(user, "utility-oil-analysis-view", [...UTILITY_VIEW_LEVELS], "Bạn không có quyền xem kết quả phân tích dầu");
 
     const params = req.nextUrl.searchParams;
     const requestedDays = Number(params.get("days"));

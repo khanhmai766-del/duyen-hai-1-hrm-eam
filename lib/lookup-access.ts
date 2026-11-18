@@ -28,9 +28,9 @@ export const LOOKUP_MODULES = [
   { id: "archive", label: "Thư mục lưu trữ", group: "Tài liệu số", pages: ["/documents/archive"], apis: ["/api/bgts-tuabin-ngung", "/api/voi-dot", "/api/soot-blowers", "/api/oil-guns"], permissions: ["archive-read", "archive-grid-separation", "archive-startup-data", "archive-boiler-calibration", "archive-oil-gun-data", "archive-soot-blower-data"] },
   { id: "contracts", label: "Quản lý hợp đồng", group: "Tài liệu số", pages: ["/documents/contracts"], apis: ["/api/tcms"], permissions: ["contract-access"] },
   { id: "forum", label: "Forum kỹ thuật", group: "Tài liệu số", pages: ["/forum"], apis: ["/api/forum"], permissions: [] },
-  { id: "overhaul", label: "Tiến độ đại tu", group: "Tiện ích", pages: ["/tien-ich/tien-do-dai-tu"], apis: ["/api/overhaul-progress", "/api/overhaul-milestones"], permissions: [] },
-  { id: "oil-analysis", label: "Kết quả phân tích dầu", group: "Tiện ích", pages: ["/tien-ich/phan-tich-dau"], apis: ["/api/lims/oil-analysis"], permissions: [] },
-  { id: "chuan-the-thuc", label: "Chuẩn thể thức văn bản", group: "Tiện ích", pages: ["/tien-ich/chuan-the-thuc"], apis: ["/api/chuan-the-thuc"], permissions: [] },
+  { id: "overhaul", label: "Tiến độ đại tu", group: "Tiện ích", pages: ["/tien-ich/tien-do-dai-tu"], apis: ["/api/overhaul-progress", "/api/overhaul-milestones"], permissions: ["utility-overhaul-view"] },
+  { id: "oil-analysis", label: "Kết quả phân tích dầu", group: "Tiện ích", pages: ["/tien-ich/phan-tich-dau"], apis: ["/api/lims/oil-analysis"], permissions: ["utility-oil-analysis-view"] },
+  { id: "chuan-the-thuc", label: "Chuẩn thể thức văn bản", group: "Tiện ích", pages: ["/tien-ich/chuan-the-thuc"], apis: ["/api/chuan-the-thuc"], permissions: ["utility-chuan-the-thuc-view"] },
 ] as const;
 
 export type LookupModuleId = typeof LOOKUP_MODULES[number]["id"];

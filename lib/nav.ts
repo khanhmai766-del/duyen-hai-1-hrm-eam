@@ -248,18 +248,21 @@ export const NAV_SECTIONS: NavSection[] = [
         label: "Tiến độ đại tu",
         href: "/tien-ich/tien-do-dai-tu",
         icon: CalendarRange,
+        permissionIds: ["utility-overhaul-view"],
         keywords: "tien do dai tu s2 hang muc nhat ky ngay google sheet lo hoi turbine may phat c&i overhaul",
       },
       {
         label: "Kết quả phân tích dầu",
         href: "/tien-ich/phan-tich-dau",
         icon: FlaskConical,
+        permissionIds: ["utility-oil-analysis-view"],
         keywords: "lims ket qua phan tich dau khong dat mau dau thi nghiem hoa y kien pkt qlvh oil analysis tien ich",
       },
       {
         label: "Chuẩn thể thức văn bản",
         href: "/tien-ich/chuan-the-thuc",
         icon: FileCheck2,
+        permissionIds: ["utility-chuan-the-thuc-view"],
         keywords: "chuan the thuc van ban hanh chinh nd 30 2020 qd 739 evn kiem tra sua docx word chinh ta gemini tien ich",
       },
       {
