@@ -1,4 +1,4 @@
-// Nguồn: repo chuan-the-thuc @ 09f82a9 — tệp sinh tự động bởi scripts/build/chuan-the-thuc.mjs, không sửa tay
+// Nguồn: repo chuan-the-thuc @ 749484b — tệp sinh tự động bởi scripts/build/chuan-the-thuc.mjs, không sửa tay
 // Kiểm tra chính tả tiếng Việt KHÔNG cần AI:
 //  1) Cấu trúc âm tiết (phụ âm đầu + vần + thanh) → bắt chữ gõ nhầm, gõ sót Telex, sai quy tắc c/k, g/gh, ng/ngh
 //  2) Từ điển lỗi hay gặp trong văn bản hành chính (hỏi/ngã, ch/tr, s/x, d/gi/r…)
@@ -106,7 +106,7 @@ sữa chữa|sửa chữa; sữa đổi|sửa đổi; chỉnh sữa|chỉnh sử
 giử gìn|giữ gìn; lưu giử|lưu giữ; dữ gìn|giữ gìn; giữ liệu|dữ liệu; cơ sở giữ liệu|cơ sở dữ liệu
 sử lý|xử lý; sử lí|xử lí; xử dụng|sử dụng; sử phạt|xử phạt; sát nhập|sáp nhập; chuẩn đoán|chẩn đoán; thăm quan|tham quan
 vô hình chung|vô hình trung; tựu chung|tựu trung; cọ sát|cọ xát; suất sắc|xuất sắc; chuyền đạt|truyền đạt; chuyền thông|truyền thông
-chính sát|chính xác; xác xuất|xác suất; sơ xuất|sơ suất; suất bản|xuất bản; suất khẩu|xuất khẩu; sản suất|sản xuất; đề suất|đề xuất
+chính sát|chính xác; xác xuất|xác suất; sơ xuất|sơ suất; suất khẩu|xuất khẩu; sản suất|sản xuất; đề suất|đề xuất
 suất hiện|xuất hiện; năng xuất|năng suất; công xuất|công suất; hiệu xuất|hiệu suất; lãi xuất|lãi suất; tần xuất|tần suất
 giành cho|dành cho; dành giật|giành giật; dành độc lập|giành độc lập; giáo giục|giáo dục; rèn rũa|rèn giũa; giao động|dao động
 dõ ràng|rõ ràng; nổ lực|nỗ lực; lảnh đạo|lãnh đạo; cũng cố|củng cố; kỷ lưỡng|kỹ lưỡng; kỹ luật|kỷ luật; kỷ năng|kỹ năng; kỷ thuật|kỹ thuật; kỷ càng|kỹ càng
