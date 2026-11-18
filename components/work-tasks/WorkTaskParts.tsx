@@ -41,15 +41,22 @@ export function DateTile({ value, showYear = false }: { value: string; showYear?
   );
 }
 
-/** Chữ viết tắt + tên + chức danh. Bỏ "Ông/Bà" khi lấy chữ viết tắt. */
-export function Person({ name, sub }: { name: string; sub?: string | null }) {
+/** Ảnh đại diện (hoặc chữ viết tắt khi chưa có ảnh/ảnh lỗi) + tên + chức danh. Bỏ "Ông/Bà" khi lấy chữ viết tắt. */
+export function Person({ name, sub, avatarUrl }: { name: string; sub?: string | null; avatarUrl?: string | null }) {
+  const [broken, setBroken] = React.useState(false);
+  const showImage = !!avatarUrl && !broken;
   return (
     <div className="flex min-w-0 items-start gap-2">
       <span
         aria-hidden
-        className="mt-px flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#00558F]/10 text-[11px] font-semibold text-[#00426F] ring-1 ring-inset ring-[#00558F]/15"
+        className="mt-px flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#00558F]/10 text-[11px] font-semibold text-[#00426F] ring-1 ring-inset ring-[#00558F]/15"
       >
-        {initials(name.replace(/^(ông|bà)\s+/i, ""))}
+        {showImage ? (
+          // eslint-disable-next-line @next/next/no-img-element -- ảnh proxy /api/files/s3, không qua bộ tối ưu
+          <img src={avatarUrl} alt="" loading="lazy" className="h-full w-full object-cover" onError={() => setBroken(true)} />
+        ) : (
+          initials(name.replace(/^(ông|bà)\s+/i, ""))
+        )}
       </span>
       <div className="min-w-0 leading-tight">
         <div className="font-medium text-ink">{name}</div>
@@ -60,10 +67,14 @@ export function Person({ name, sub }: { name: string; sub?: string | null }) {
 }
 
 /** "Ông Huân (Quản đốc)" → tên + chức danh tách dòng. */
-export function Director({ value }: { value: string }) {
+export function Director({ value, avatarUrl }: { value: string; avatarUrl?: string | null }) {
   const label = workTaskDirectorLabel(value);
   const match = /^(.*?)\s*\((.*)\)$/.exec(label);
-  return match ? <Person name={match[1]} sub={match[2]} /> : <Person name={label} />;
+  return match ? (
+    <Person name={match[1]} sub={match[2]} avatarUrl={avatarUrl} />
+  ) : (
+    <Person name={label} avatarUrl={avatarUrl} />
+  );
 }
 
 export function Assignees({ task }: { task: WorkTask }) {
@@ -72,7 +83,7 @@ export function Assignees({ task }: { task: WorkTask }) {
     <ul className="space-y-2">
       {task.assignees.map((item) => (
         <li key={item.id}>
-          <Person name={item.name} sub={item.position} />
+          <Person name={item.name} sub={item.position} avatarUrl={item.avatarUrl} />
         </li>
       ))}
     </ul>

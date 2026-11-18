@@ -3,7 +3,10 @@ import { prisma } from "@/lib/prisma";
 import { fail } from "@/lib/api";
 import { hasPermissionLevel } from "@/lib/rbac-guard";
 import { assignedPermissionLevel } from "@/lib/rbac-permissions";
+import { normalizeText } from "@/lib/nav";
+import { publicUserRef } from "@/lib/s3";
 import {
+  WORK_TASK_DIRECTORS,
   WORK_TASK_PERMISSION,
   isWorkTaskDirector,
   isWorkTaskLeadUser,
@@ -76,7 +79,15 @@ export const WORK_TASK_INCLUDE = {
   assignees: {
     select: {
       user: {
-        select: { id: true, name: true, position: true, secondaryPosition: true, secondaryPosition2: true },
+        select: {
+          id: true,
+          name: true,
+          position: true,
+          secondaryPosition: true,
+          secondaryPosition2: true,
+          avatarUrl: true,
+          avatarKey: true,
+        },
       },
     },
   },
@@ -84,14 +95,57 @@ export const WORK_TASK_INCLUDE = {
 
 type WorkTaskRow = Prisma.WorkTaskGetPayload<{ include: typeof WORK_TASK_INCLUDE }>;
 
-/** Làm phẳng chủ trì về { id, name, position } cho client. */
-export function serializeWorkTask(row: WorkTaskRow) {
+/** Khoá người chỉ đạo → URL ảnh đại diện (null nếu không tìm thấy tài khoản/ảnh). */
+export type WorkTaskDirectorAvatars = Record<string, string | null>;
+
+const DIRECTOR_AVATAR_TTL_MS = 5 * 60_000;
+let directorAvatarCache: { at: number; value: WorkTaskDirectorAvatars } | null = null;
+
+/** "Ông Trương Trần Hoàng Huân (Quản đốc)" → "Trương Trần Hoàng Huân". */
+function directorPersonName(label: string) {
+  return label.replace(/\s*\(.*\)\s*$/, "").replace(/^(ông|bà)\s+/i, "").trim();
+}
+
+/**
+ * Người chỉ đạo là danh sách cố định (không phải User) → khớp theo tên với tài khoản đang hoạt động
+ * để lấy ảnh đại diện. Bộ nhớ đệm 5 phút vì danh sách gần như không đổi.
+ */
+export async function workTaskDirectorAvatars(): Promise<WorkTaskDirectorAvatars> {
+  if (directorAvatarCache && Date.now() - directorAvatarCache.at < DIRECTOR_AVATAR_TTL_MS) {
+    return directorAvatarCache.value;
+  }
+  const people = WORK_TASK_DIRECTORS.map((item) => ({ value: item.value, name: directorPersonName(item.label) }));
+  const users = await prisma.user.findMany({
+    where: { isActive: true, name: { in: people.map((p) => p.name), mode: "insensitive" } },
+    select: { name: true, avatarUrl: true, avatarKey: true },
+  });
+  const value: WorkTaskDirectorAvatars = {};
+  for (const person of people) {
+    const key = normalizeText(person.name);
+    const avatar = users
+      .filter((u) => normalizeText(u.name) === key)
+      .map((u) => publicUserRef(u).avatarUrl)
+      .find(Boolean);
+    value[person.value] = avatar ?? null;
+  }
+  directorAvatarCache = { at: Date.now(), value };
+  return value;
+}
+
+/** Làm phẳng chủ trì về { id, name, position, avatarUrl } cho client. */
+export function serializeWorkTask(row: WorkTaskRow, directorAvatars: WorkTaskDirectorAvatars = {}) {
   const { assignees, ...rest } = row;
   return {
     ...rest,
+    directorAvatarUrl: directorAvatars[row.director] ?? null,
     links: Array.isArray(row.links) ? (row.links as unknown as WorkTaskLink[]) : [],
     assignees: assignees
-      .map(({ user }) => ({ id: user.id, name: user.name, position: workTaskLeadPositionOf(user) }))
+      .map(({ user }) => ({
+        id: user.id,
+        name: user.name,
+        position: workTaskLeadPositionOf(user),
+        avatarUrl: publicUserRef(user).avatarUrl,
+      }))
       .sort((a, b) => a.name.localeCompare(b.name, "vi")),
   };
 }

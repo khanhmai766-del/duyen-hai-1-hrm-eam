@@ -122,7 +122,7 @@ export function WorkTaskDetailDialog({
               <div className="grid gap-4 sm:grid-cols-2">
                 <section>
                   <SectionTitle>Người chỉ đạo</SectionTitle>
-                  <div className="text-sm"><Director value={task.director} /></div>
+                  <div className="text-sm"><Director value={task.director} avatarUrl={task.directorAvatarUrl} /></div>
                 </section>
                 <section>
                   <SectionTitle>Chủ trì</SectionTitle>

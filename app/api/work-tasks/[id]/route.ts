@@ -9,6 +9,7 @@ import {
   parseWorkTaskInput,
   requireWorkTaskManager,
   serializeWorkTask,
+  workTaskDirectorAvatars,
   workTaskAccess,
 } from "@/lib/server/work-task";
 
@@ -81,7 +82,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
         id,
         auditDetailWithPosition(user, "Cập nhật báo cáo thực hiện / ghi chú")
       );
-      return ok(serializeWorkTask(row));
+      return ok(serializeWorkTask(row, await workTaskDirectorAvatars()));
     }
 
     await requireWorkTaskManager(user);
@@ -122,7 +123,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
       id,
       auditDetailWithPosition(user, reportData ? "Sửa công việc (kèm báo cáo thực hiện)" : "Sửa công việc")
     );
-    return ok(serializeWorkTask(row));
+    return ok(serializeWorkTask(row, await workTaskDirectorAvatars()));
   });
 }
 

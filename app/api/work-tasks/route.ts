@@ -7,6 +7,7 @@ import {
   parseWorkTaskInput,
   requireWorkTaskManager,
   serializeWorkTask,
+  workTaskDirectorAvatars,
   workTaskAccess,
   workTaskVisibleWhere,
 } from "@/lib/server/work-task";
@@ -36,13 +37,14 @@ export async function GET(req: NextRequest) {
     const where: Prisma.WorkTaskWhereInput = {
       AND: [range ? { taskDate: range } : {}, workTaskVisibleWhere(access)],
     };
+    const directorAvatars = await workTaskDirectorAvatars();
     const rows = await prisma.workTask.findMany({
       where,
       include: WORK_TASK_INCLUDE,
       orderBy: [{ taskDate: "desc" }, { createdAt: "desc" }],
       take: 1000,
     });
-    return ok(rows.map(serializeWorkTask), { viewAll: access.viewAll });
+    return ok(rows.map((row) => serializeWorkTask(row, directorAvatars)), { viewAll: access.viewAll });
   });
 }
 
@@ -75,6 +77,6 @@ export async function POST(req: NextRequest) {
       row.id,
       auditDetailWithPosition(user, `Thêm công việc: ${row.content.slice(0, 120)}`)
     );
-    return ok(serializeWorkTask(row));
+    return ok(serializeWorkTask(row, await workTaskDirectorAvatars()));
   });
 }

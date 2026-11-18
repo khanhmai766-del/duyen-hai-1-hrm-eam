@@ -8,6 +8,7 @@ export interface WorkTaskAssignee {
   id: string;
   name: string;
   position: string;
+  avatarUrl?: string | null;
 }
 
 export interface WorkTask {
@@ -15,6 +16,7 @@ export interface WorkTask {
   taskDate: string;
   content: string;
   director: string;
+  directorAvatarUrl?: string | null;
   dueDate: string | null;
   report: string | null;
   reportUpdatedAt: string | null;
