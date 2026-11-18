@@ -442,7 +442,8 @@ function ReportsPageContent() {
         </Card>
       </div>
 
-      <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
+      {/* items-start: mỗi thẻ cao theo số thiết bị của nó — thẻ ít dòng không bị kéo dài bằng thẻ bên cạnh, để lại khoảng trắng. */}
+      <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-2">
           <DeviceSignalChart
             icon={AlertTriangle}
             title="Top khiếm khuyết tồn đọng"
