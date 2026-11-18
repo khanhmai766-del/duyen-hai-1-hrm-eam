@@ -11,6 +11,7 @@ build
 !/scripts/build/chuan-the-thuc.mjs
 !/scripts/build/chuan-the-thuc.embed.css
 !/scripts/build/chuan-the-thuc.embed.js
+!/scripts/build/chuan-the-thuc.embed-pre.js
 .env
 .env*.local
 *.log

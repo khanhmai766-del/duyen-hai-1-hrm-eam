@@ -28,7 +28,12 @@ fs.mkdirSync(out, { recursive: true });
 const banner = `// Nguồn: repo chuan-the-thuc @ ${sha} — tệp sinh tự động, sửa ở repo chuan-the-thuc rồi chạy lại script\n`;
 fs.writeFileSync(
   path.join(out, "app.js"),
-  banner + [bundle.outputFiles[0].text, read("node_modules/docx-preview/dist/docx-preview.min.js"), read("public/app.js")].join(";\n"),
+  banner + [
+    bundle.outputFiles[0].text,
+    read("node_modules/docx-preview/dist/docx-preview.min.js"),
+    fs.readFileSync(path.join(repo, "scripts/build/chuan-the-thuc.embed-pre.js"), "utf8"), // phải chạy trước app.js
+    read("public/app.js"),
+  ].join(";\n"),
 );
 fs.copyFileSync(path.join(src, "public/styles.css"), path.join(out, "styles.css"));
 // Lớp giao diện gọn cho bản nhúng trong web chính, nạp sau styles.css
@@ -42,5 +47,14 @@ const html = read("public/index.html")
   .replace(/<div id="gate"[\s\S]*?<\/form>\s*<\/div>\s*/, "");
 if (/src="\/|href="\/|id="gate"/.test(html)) throw new Error("index.html còn tham chiếu tuyệt đối hoặc khối đăng nhập: " + (html.match(/(src|href)="\/[^"]*"|id="gate"/) ?? [])[0]);
 fs.writeFileSync(path.join(out, "index.html"), html);
+
+// Bản cho API máy chủ /api/chuan-the-thuc/ai. Tắt console.log của thư viện vì nó in cả nội dung văn bản ra log.
+const vendor = path.join(repo, "modules/chuan-the-thuc/vendor");
+fs.mkdirSync(vendor, { recursive: true });
+const note = `// Nguồn: repo chuan-the-thuc @ ${sha} — tệp sinh tự động bởi scripts/build/chuan-the-thuc.mjs, không sửa tay
+`;
+fs.writeFileSync(path.join(vendor, "gemini.js"), `${note}const console = { log() {} };
+${read("lib/gemini.js")}`);
+fs.writeFileSync(path.join(vendor, "spelling.js"), note + read("lib/spelling.js"));
 
 console.log(`Đã sinh ${path.relative(repo, out)} từ chuan-the-thuc@${sha}`);

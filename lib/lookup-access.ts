@@ -30,7 +30,7 @@ export const LOOKUP_MODULES = [
   { id: "forum", label: "Forum kỹ thuật", group: "Tài liệu số", pages: ["/forum"], apis: ["/api/forum"], permissions: [] },
   { id: "overhaul", label: "Tiến độ đại tu", group: "Tiện ích", pages: ["/tien-ich/tien-do-dai-tu"], apis: ["/api/overhaul-progress", "/api/overhaul-milestones"], permissions: [] },
   { id: "oil-analysis", label: "Kết quả phân tích dầu", group: "Tiện ích", pages: ["/tien-ich/phan-tich-dau"], apis: ["/api/lims/oil-analysis"], permissions: [] },
-  { id: "chuan-the-thuc", label: "Chuẩn thể thức văn bản", group: "Tiện ích", pages: ["/tien-ich/chuan-the-thuc"], apis: [], permissions: [] },
+  { id: "chuan-the-thuc", label: "Chuẩn thể thức văn bản", group: "Tiện ích", pages: ["/tien-ich/chuan-the-thuc"], apis: ["/api/chuan-the-thuc"], permissions: [] },
 ] as const;
 
 export type LookupModuleId = typeof LOOKUP_MODULES[number]["id"];
@@ -82,6 +82,7 @@ export function lookupRequestAllowed(url: URL, method: string, modules: readonly
   if (path === "/api/device-qr/resolve") return method === "POST";
   if (matches(path, "/api/ai")) return modules.includes("defects") &&
     !matches(path, "/api/ai/stats"); // Trợ lý tra khiếm khuyết hiện có, chưa mở công cụ phân hệ khác.
+  if (matches(path, "/api/chuan-the-thuc")) return modules.includes("chuan-the-thuc"); // Rà soát AI là POST nhưng không ghi dữ liệu nghiệp vụ.
   if (method !== "GET" && method !== "HEAD") return false;
   if (path === "/account" || path === "/devices/scan" || matches(path, "/public/equipment") || matches(path, "/public/devices")) return true;
   if (path === "/api/me/dashboard" || path === "/api/broadcast") return true;

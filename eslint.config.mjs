@@ -15,6 +15,7 @@ export default defineConfig([
     "prisma/generated/",
     // Bản sinh tự động từ repo chuan-the-thuc (scripts/build/chuan-the-thuc.mjs).
     "public/apps/",
+    "modules/chuan-the-thuc/vendor/",
     "scripts/check/perf-audit.mjs",
     // Thư mục nháp của phiên làm việc — không phải mã nguồn dự án (xem .gitignore).
     "tmp/",
