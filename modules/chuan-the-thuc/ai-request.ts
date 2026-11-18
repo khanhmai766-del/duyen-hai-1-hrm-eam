@@ -17,7 +17,7 @@ const requestSchema = z.object({
   })).min(1).max(MAX_PARAGRAPHS),
   passes: z.number().int().min(1).max(2).default(1),
   kind: z.enum(["spelling", "style"]).default("spelling"),
-  standard: z.enum(["evn", "nd30"]).default("evn"),
+  standard: z.enum(["evn", "nd30", "nddh"]).default("evn"),
 });
 
 export type AiReviewRequest = z.infer<typeof requestSchema>;

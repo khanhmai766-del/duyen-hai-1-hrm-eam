@@ -1,4 +1,4 @@
-// Nguồn: repo chuan-the-thuc @ 844924f — tệp sinh tự động bởi scripts/build/chuan-the-thuc.mjs, không sửa tay
+// Nguồn: repo chuan-the-thuc @ 09f82a9 — tệp sinh tự động bởi scripts/build/chuan-the-thuc.mjs, không sửa tay
 const console = { log() {} };
 // Rà soát chính tả, viết hoa, dấu câu bằng Gemini. AI chỉ ĐỀ XUẤT; người dùng chọn áp dụng.
 import { checkSpelling } from './spelling.js';
@@ -238,8 +238,9 @@ const SKIP_ROLES = /Quốc hiệu|Tiêu ngữ|Số, ký hiệu|Địa danh|Họ 
  * nếu sinh thêm lỗi (vd. viết thường chữ đầu câu, viết hoa sai bảng EVN, bỏ dấu chấm cuối) thì loại. Trả về lý do hoặc null.
  */
 export function ruleConflict(text, s, role = '', standard = 'nd30') {
-  const body = /Nội dung|Điều|Căn cứ/.test(role), evn = standard === 'evn';
-  const opts = { sentenceCase: body, colonCase: evn && body, evnCase: evn, capRules: true };
+  const nddh = standard === 'nddh';
+  const body = /Nội dung|Điều|Căn cứ/.test(role), evn = standard === 'evn' || nddh;
+  const opts = { sentenceCase: body, colonCase: evn && body, evnCase: evn, nddh, capRules: true };
   const at = text.indexOf(s.before);
   const after = text.slice(0, at) + s.after + text.slice(at + s.before.length);
   const key = x => `${x.code}|${x.before}`;
@@ -259,10 +260,12 @@ export function ruleConflict(text, s, role = '', standard = 'nd30') {
  */
 const EVN_NOTE = `\nVăn bản thuộc Tập đoàn Điện lực Việt Nam (EVN) — áp dụng thêm Quy định 739/QĐ-EVN: viết hoa theo bảng của EVN (vd. "Tổng giám đốc", "Phó Tổng giám đốc", "Trưởng phòng", "Phó Trưởng phòng", "Chánh Văn phòng", "Kế toán trưởng", "Tổng công ty", "Nhà nước"); chức danh kèm tên ban thì viết hoa chữ đầu tên ban (vd. "Trưởng ban Kỹ thuật sản xuất"); viết hoa chữ đầu sau dấu hai chấm.`;
 
+const NDDH_NOTE = `\nVăn bản của Công ty Nhiệt điện Duyên Hải: giữ nguyên cách viết "Trưởng Phòng", "Phó Trưởng Phòng" và "phòng" viết thường (theo biểu mẫu của Công ty), không đề xuất sửa các chức danh này.`;
+
 export async function aiReview(paragraphs, { apiKey, apiKeys, models, passes = 1, standard, kind = 'spelling' } = {}) {
   const style = kind === 'style';
   passes = style ? 1 : Math.min(3, Math.max(1, Number(passes) || 1)); // câu viết lại mỗi lần một khác → không đối chiếu 2 lần
-  const prompt = (style ? STYLE_PROMPT : PROMPT) + RULES_NOTE + (standard === 'evn' ? EVN_NOTE : '');
+  const prompt = (style ? STYLE_PROMPT : PROMPT) + RULES_NOTE + (standard === 'evn' || standard === 'nddh' ? EVN_NOTE : '') + (standard === 'nddh' ? NDDH_NOTE : '');
   const runs = await Promise.all(Array.from({ length: passes }, () => aiReviewOnce(paragraphs.filter(p => !SKIP_ROLES.test(p.role || '')), { apiKey, apiKeys, models, standard, prompt, style })));
   const merged = new Map(); let rejected = 0, conflicts = 0;
   runs.forEach(r => {

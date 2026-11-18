@@ -1,4 +1,4 @@
-// Nguồn: repo chuan-the-thuc @ 844924f — tệp sinh tự động bởi scripts/build/chuan-the-thuc.mjs, không sửa tay
+// Nguồn: repo chuan-the-thuc @ 09f82a9 — tệp sinh tự động bởi scripts/build/chuan-the-thuc.mjs, không sửa tay
 // Kiểm tra chính tả tiếng Việt KHÔNG cần AI:
 //  1) Cấu trúc âm tiết (phụ âm đầu + vần + thanh) → bắt chữ gõ nhầm, gõ sót Telex, sai quy tắc c/k, g/gh, ng/ngh
 //  2) Từ điển lỗi hay gặp trong văn bản hành chính (hỏi/ngã, ch/tr, s/x, d/gi/r…)
@@ -107,7 +107,7 @@ giử gìn|giữ gìn; lưu giử|lưu giữ; dữ gìn|giữ gìn; giữ liệu
 sử lý|xử lý; sử lí|xử lí; xử dụng|sử dụng; sử phạt|xử phạt; sát nhập|sáp nhập; chuẩn đoán|chẩn đoán; thăm quan|tham quan
 vô hình chung|vô hình trung; tựu chung|tựu trung; cọ sát|cọ xát; suất sắc|xuất sắc; chuyền đạt|truyền đạt; chuyền thông|truyền thông
 chính sát|chính xác; xác xuất|xác suất; sơ xuất|sơ suất; suất bản|xuất bản; suất khẩu|xuất khẩu; sản suất|sản xuất; đề suất|đề xuất
-suất phát|xuất phát; suất hiện|xuất hiện; năng xuất|năng suất; công xuất|công suất; hiệu xuất|hiệu suất; lãi xuất|lãi suất; tần xuất|tần suất
+suất hiện|xuất hiện; năng xuất|năng suất; công xuất|công suất; hiệu xuất|hiệu suất; lãi xuất|lãi suất; tần xuất|tần suất
 giành cho|dành cho; dành giật|giành giật; dành độc lập|giành độc lập; giáo giục|giáo dục; rèn rũa|rèn giũa; giao động|dao động
 dõ ràng|rõ ràng; nổ lực|nỗ lực; lảnh đạo|lãnh đạo; cũng cố|củng cố; kỷ lưỡng|kỹ lưỡng; kỹ luật|kỷ luật; kỷ năng|kỹ năng; kỷ thuật|kỹ thuật; kỷ càng|kỹ càng
 nghỉa vụ|nghĩa vụ; suy nghỉ|suy nghĩ; nghĩ phép|nghỉ phép; nghĩ ngơi|nghỉ ngơi; nghỉ định|nghị định; nghỉ quyết|nghị quyết; nghỉ rằng|nghĩ rằng
@@ -138,19 +138,35 @@ const EVN_RE = EVN_TERMS.map(t => [new RegExp(`(?<![\\p{L}])${t.replace(/ /g, '\
 
 const up1 = s => s[0].toLocaleUpperCase('vi') + s.slice(1);
 const low1 = s => s[0].toLocaleLowerCase('vi') + s.slice(1);
+// Từ ghép: "hạng mục 1", "danh mục 2", "tiểu mục 3", "cổ phần II"… không phải viện dẫn nên không viết hoa
+const after = words => `(?<!(?:^|\\s)(?:${words.split('|').flatMap(w => [w, w[0].toLocaleUpperCase('vi') + w.slice(1)]).join('|')})\\s+)`;
 // [mẫu, cách sửa, căn cứ] — chỉ bắt dạng sai nên dòng IN HOA và dạng đúng không bị đụng tới
 const CAP_RULES = [
   [/(?<![\p{L}])(nghị quyết|quyết định|nghị định|thông tư|chỉ thị|công văn|kế hoạch|tờ trình|báo cáo|thông báo|quy chế|quy định|hướng dẫn|biên bản|công điện|chương trình|đề án|phương án)(?=\s+số\s+\d)/gu, up1,
     'Tên loại văn bản cụ thể (có số) viết hoa chữ đầu (NĐ 30 Phụ lục II; QĐ 739 Điều 26)'],
   [/(?<![\p{L}])điều(?=\s+\d)/gu, up1, 'Viện dẫn Điều cụ thể viết hoa chữ "Điều" (QĐ 739 Điều 26 khoản 7)'],
-  [/(?<![\p{L}])(chương|phần)(?=\s+[IVXLC]+(?![\p{L}]))/gu, up1, 'Viện dẫn Chương, Phần cụ thể viết hoa (QĐ 739 Điều 26 khoản 7)'],
-  [/(?<![\p{L}])mục(?=\s+\d)/gu, up1, 'Viện dẫn Mục cụ thể viết hoa (QĐ 739 Điều 26 khoản 7)'],
+  [new RegExp(`(?<![\\p{L}])${after('cổ|thành|bộ|một|từng|toàn|hết|phân|nửa|tiểu')}(chương|phần)(?=\\s+[IVXLC]+(?![\\p{L}]))`, 'gu'), up1, 'Viện dẫn Chương, Phần cụ thể viết hoa (QĐ 739 Điều 26 khoản 7)'],
+  [new RegExp(`(?<![\\p{L}])${after('hạng|danh|tiểu|đề|chuyên|tên')}mục(?=\\s+\\d)`, 'gu'), up1, 'Viện dẫn Mục cụ thể viết hoa (QĐ 739 Điều 26 khoản 7)'],
   [/(?<=\p{L}\s)Khoản(?=\s+\d)/gu, low1, 'Khi viện dẫn, "khoản" viết thường (QĐ 739 Điều 26 khoản 7)'],
   [/(?<=\p{L}\s)Điểm(?=\s+[a-zđ]\)?(?![\p{L}]))/gu, low1, 'Khi viện dẫn, "điểm" viết thường (QĐ 739 Điều 26 khoản 7)'],
   [/(?<=\p{L}\s)(Tỉnh|Huyện|Thị xã|Thành phố)(?=\s+\p{Lu})(?!\s+Hồ Chí Minh)/gu, low1, 'Danh từ chung chỉ đơn vị hành chính viết thường (NĐ 30 Phụ lục II; QĐ 739 Điều 24)'],
   [/(?<![\p{L}])nhà nước(?![\p{L}])/gu, up1, '"Nhà nước" luôn viết hoa (NĐ 30 Phụ lục II; QĐ 739 Điều 26)'],
 ];
 
+// Từ mượn kỹ thuật thường gặp (không phải lỗi gõ)
+const LOANWORDS = new Set(['rulô', 'bulông', 'palăng', 'silô', 'ôxy', 'rơle', 'urê', 'tuýp', 'ôxít', 'ôxi', 'amiăng', 'ắcquy', 'mômen', 'mêtan', 'nitơ'].map(x => x.normalize('NFC')));
+const VOWELS = 'aăâeêioôơuưyàáảãạằắẳẵặầấẩẫậèéẻẽẹềếểễệìíỉĩịòóỏõọồốổỗộờớởỡợùúủũụừứửữựỳýỷỹỵ';
+// Viết tắt: không có nguyên âm (đc, đcc, dđ, kdđ…) hoặc IN HOA có cụm phụ âm không thể có trong tiếng Việt (TƯLĐTT)
+const isAcronym = w => {
+  const lw = w.toLocaleLowerCase('vi');
+  if (![...lw].some(c => VOWELS.includes(c))) return true;
+  if (w.length < 3 || w !== w.toLocaleUpperCase('vi')) return false;
+  const rest = lw.replace(/^(ngh|ng|nh|ch|tr|th|ph|kh|gh|gi|qu)/, '');
+  return new RegExp('[^' + VOWELS + ']{3}$|[^' + VOWELS + ']{4}', 'u').test(rest);
+};
+
+// URL, e-mail, tên tệp, mã kiểu "f.1", "x.y": không được viết hoa đầu câu
+const isTechToken = t => /^(https?:|ftp:|www\.)|@|[\p{L}\d][./\\:_][\p{L}\d]/u.test(t);
 // Chữ viết tắt thường gặp trước dấu chấm (không phải hết câu)
 const ABBR = /^(TP|Tp|TS|ThS|PGS|GS|KS|BS|Ths|St|v\.v|vv|tr|Tr|đ|đc|Đc|ĐC|P|Q|KT|TM|TL|TUQ|No|Mr|Mrs|Ms|Dr|ca|tt|TT)$/;
 
@@ -185,15 +201,16 @@ export function checkSpelling(raw, opts = {}) {
     for (const [re, right] of EVN_RE) {
       for (const m of raw.matchAll(re)) {
         if (m[0] === right || m[0] === m[0].toLocaleUpperCase('vi')) continue; // đúng rồi, hoặc dòng in hoa
+        if (opts.nddh && (right === 'Trưởng phòng' || right === 'Phó Trưởng phòng')) continue; // NĐDH: biểu mẫu viết "Trưởng Phòng", "Phó Trưởng Phòng"
         push({ start: m.index, end: m.index + m[0].length, before: m[0], after: right, code: 'viet-hoa-evn', msg: `Viết hoa theo bảng của EVN: "${m[0]}" → "${right}".` });
       }
     }
   }
 
   // 1) Từng âm tiết
-  for (const m of raw.matchAll(/[\p{L}]+/gu)) {
-    const w = m[0], s = m.index, e = s + w.length;
-    if (overlap(s, e) || w.length > 7) continue;
+  for (const m of raw.matchAll(/[\p{L}\p{M}]+/gu)) {
+    const s = m.index, e = s + m[0].length, w = m[0].normalize('NFC'); // dấu rời (Unicode tổ hợp) ghép lại; vị trí s, e vẫn theo chuỗi gốc
+    if (overlap(s, e) || w.length > 7 || w === 'đ' || LOANWORDS.has(w.toLocaleLowerCase('vi')) || isAcronym(w)) continue;
     if (/[fjwz]/i.test(w) && !/(w|j|f|z)$/i.test(w) && !hasVnMark(w)) continue; // chữ nước ngoài
     const isAbbr = w === w.toUpperCase() && !hasVnMark(w.replace(/Đ/g, 'D')) && w.length <= 6; // NĐ, NMNĐ, UBND…
     if (isAbbr) continue;
@@ -201,30 +218,31 @@ export function checkSpelling(raw, opts = {}) {
     const lower = w.toLocaleLowerCase('vi');
     if (parseSyllable(lower)) continue;
     const rule = onsetRule(lower);
-    if (rule) { push({ start: s, end: e, before: w, after: keepCase(w, rule), code: 'chinh-ta-phu-am', msg: `Sai quy tắc c/k, g/gh, ng/ngh: "${w}" → "${keepCase(w, rule)}".` }); continue; }
+    if (rule) { push({ start: s, end: e, before: m[0], after: keepCase(w, rule), code: 'chinh-ta-phu-am', msg: `Sai quy tắc c/k, g/gh, ng/ngh: "${w}" → "${keepCase(w, rule)}".` }); continue; }
     if (!hasVnMark(w)) {
       const t = fromTelex(lower);
-      if (t && t !== lower) push({ start: s, end: e, before: w, after: keepCase(w, t), code: 'chinh-ta-telex', msg: `Gõ sót kiểu Telex: "${w}" → "${keepCase(w, t)}".` });
+      if (t && t !== lower) push({ start: s, end: e, before: m[0], after: keepCase(w, t), code: 'chinh-ta-telex', msg: `Gõ sót kiểu Telex: "${w}" → "${keepCase(w, t)}".` });
       continue; // chữ không dấu, không phải Telex → có thể là từ nước ngoài, bỏ qua
     }
-    push({ start: s, end: e, before: w, after: null, code: 'chinh-ta-am-tiet', msg: `"${w}" không phải âm tiết tiếng Việt hợp lệ — có thể gõ nhầm, cần xem lại.` });
+    push({ start: s, end: e, before: m[0], after: null, code: 'chinh-ta-am-tiet', msg: `"${w}" không phải âm tiết tiếng Việt hợp lệ — có thể gõ nhầm, cần xem lại.` });
   }
 
   // 3) Viết hoa đầu câu
   if (opts.sentenceCase) {
     const lead = raw.match(/^(\s*(?:\d+(?:\.\d+)*\.\s+)?)(\p{Ll})/u);
-    if (lead && !/^\s*[-–+•*]/.test(raw) && !/^\s*[a-zđ][).]\s/u.test(raw)) {
+    if (lead && !isTechToken(raw.slice(lead[1].length).match(/^\S+/)[0]) && !/^\s*[-–+•*]/.test(raw) && !/^\s*[a-zđ][).]\s/u.test(raw)) {
       const at = lead[1].length;
       push({ start: at, end: at + 1, before: lead[2], after: lead[2].toLocaleUpperCase('vi'), code: 'viet-hoa-dau-cau', msg: 'Chữ đầu đoạn phải viết hoa.' });
     }
     for (const m of raw.matchAll(/(\p{L}+)([.!?])\s+(\p{Ll})/gu)) {
       if (m[1].length === 1 || ABBR.test(m[1]) || m[1] === m[1].toUpperCase()) continue; // v.v., TP., A.
       const at = m.index + m[0].length - 1;
+      if (isTechToken(raw.slice(0, m.index + m[1].length).match(/\S+$/)[0]) || isTechToken(raw.slice(at).match(/^\S+/)[0])) continue; // URL, e-mail, tên tệp: không đổi chữ
       push({ start: at, end: at + 1, before: m[3], after: m[3].toLocaleUpperCase('vi'), code: 'viet-hoa-dau-cau', msg: `Chữ sau dấu "${m[2]}" phải viết hoa.` });
     }
     // EVN (Điều 22 QĐ 739): sau dấu hai chấm
     if (opts.colonCase) {
-      for (const m of raw.matchAll(/(\p{L}|\))\s*:\s+(\p{Ll})/gu)) {
+      for (const m of raw.matchAll(/(\p{L}|\))\s*:\s+(\p{Ll})(?![\p{L}\p{M}]*\s*[.…_]{2,})/gu)) { // bỏ qua chỗ trống chờ điền ("ngày......tháng......")
         const at = m.index + m[0].length - 1;
         // Điều 22 chỉ yêu cầu viết hoa khi sau dấu hai chấm là MỘT CÂU HOÀN CHỈNH — máy không xác định chắc được → chỉ gợi ý, không tự sửa
         push({ start: at, end: at + 1, before: m[2], after: null, code: 'viet-hoa-hai-cham', msg: `Sau dấu hai chấm: nếu phần sau là một câu hoàn chỉnh thì viết hoa chữ đầu ("${raw.slice(at, at + 12).trim()}…") — QĐ 739/QĐ-EVN, Điều 22. Liệt kê thì giữ chữ thường.` });

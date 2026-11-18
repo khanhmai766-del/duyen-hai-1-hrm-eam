@@ -17,6 +17,13 @@ test("chỉ nhận đúng dữ liệu văn bản, bỏ khoá hoặc mô hình do
   assert.ok("error" in parseAiReviewRequest({ paragraphs: [{ i: 1, text: "a" }], passes: 3 }));
 });
 
+test("chấp nhận chuẩn NĐDH và từ chối chuẩn lạ", () => {
+  const paragraphs = [{ i: 1, text: "Nội dung" }];
+  const parsed = parseAiReviewRequest({ paragraphs, standard: "nddh" });
+  assert.ok("data" in parsed && parsed.data.standard === "nddh");
+  assert.ok("error" in parseAiReviewRequest({ paragraphs, standard: "khac" }));
+});
+
 test("chặn văn bản vượt tổng số ký tự", () => {
   const text = "a".repeat(50_000);
   const count = Math.floor(MAX_TOTAL_CHARS / text.length) + 1;

@@ -13,5 +13,8 @@ export const chuanTheThucPreset = {
     if (!route.endsWith("ui=result")) return;
     await app.locator("#fileInput").setInputFiles(SAMPLE);
     await app.locator("#stageWork:not([hidden]) #preview .docx").first().waitFor({ timeout: 30_000 });
+    // Web chính mặc định chuẩn NĐDH: cỡ chữ nội dung cố định 14 theo Phụ lục II
+    if ((await app.locator("#standard").inputValue()) !== "nddh") throw new Error("Chuẩn mặc định không phải NĐDH");
+    if ((await app.locator("#bodySize").inputValue()) !== "14" || !(await app.locator("#bodySize").isDisabled())) throw new Error("Ô cỡ chữ chưa khoá ở 14");
   },
 };

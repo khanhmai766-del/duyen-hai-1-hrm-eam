@@ -2,6 +2,19 @@
 // Ai tự nhập khoá riêng trong "Cài đặt AI" thì vẫn gọi thẳng Google như bản độc lập.
 // scripts/build/chuan-the-thuc.mjs chèn đoạn này vào app.js, ngay trước mã giao diện.
 (function () {
+  // Chuẩn mặc định của web chính là NĐDH. Lần đầu sau đợt phát hành này (chưa có khóa "standard-default-nddh-v1") ép về NĐDH kể cả trình duyệt đã lưu lựa chọn cũ;
+  // sau đó lựa chọn tự chọn của người dùng (app.js lưu ở localStorage "standard") được giữ nguyên.
+  try {
+    var std = document.getElementById("standard");
+    try {
+      if (!localStorage.getItem("standard-default-nddh-v1")) {
+        localStorage.setItem("standard", "nddh");
+        localStorage.setItem("standard-default-nddh-v1", "1");
+        if (std) std.value = "nddh";
+      }
+    } catch (e1) { if (std) std.value = "nddh"; /* không ghi được localStorage: vẫn dùng NĐDH */ }
+    try { if (std && !localStorage.getItem("standard")) std.value = "nddh"; } catch (e2) { if (std) std.value = "nddh"; }
+  } catch (e) { /* không có DOM */ }
   var localFetch = globalThis.fetch.bind(globalThis);
   var SHARED_API = "/api/chuan-the-thuc/ai";
   function reply(status, body) {
