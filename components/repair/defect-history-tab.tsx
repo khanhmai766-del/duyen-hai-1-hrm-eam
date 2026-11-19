@@ -54,6 +54,18 @@ type SortKey = "workOrderNumber" | "requestNumber" | "performedAt" | "unit" | "c
 type SortDir = "asc" | "desc";
 
 const PAGE_SIZES = [10, 25, 50, 100];
+const HISTORY_SORT_OPTIONS: { value: SortKey; label: string }[] = [
+  { value: "performedAt", label: "Ngày kết thúc" },
+  { value: "defectContent", label: "Nội dung khiếm khuyết" },
+  { value: "device", label: "Thiết bị" },
+  { value: "workOrderNumber", label: "Số phiếu công tác" },
+  { value: "requestType", label: "Loại yêu cầu" },
+  { value: "unit", label: "Tổ máy" },
+  { value: "system", label: "Cương vị" },
+  { value: "requestNumber", label: "Số yêu cầu" },
+  { value: "createdBy", label: "Người cập nhật" },
+  { value: "locked", label: "Chốt lịch sử" },
+];
 
 /**
  * Phiếu đã xác nhận lưu lịch sử nằm ở đây với trạng thái Chờ chốt, nên mặc
@@ -182,13 +194,12 @@ export function DefectHistoryTab({ role }: { role?: string }) {
   const firstShown = totalRows ? (page - 1) * pageSize + 1 : 0;
   const lastShown = Math.min(page * pageSize, totalRows);
   const actionCol = canManage || canDelete || canReopenPending;
-  // Mở rộng + Nội dung khiếm khuyết + Loại yêu cầu + Tổ máy + Cương vị
-  // + Kết thúc + Người cập nhật + Chốt lịch sử (+ Thao tác)
-  // Cột "Nguồn" chỉ có nghĩa khi bản ghi CÒN CHỜ CHỐT: lúc đó nó vẫn dính với phiếu
+  // Mở rộng + Nội dung & thiết bị + Cương vị + Theo dõi (+ Thao tác)
+  // Số yêu cầu nguồn chỉ có nghĩa khi bản ghi CÒN CHỜ CHỐT: lúc đó nó vẫn dính với phiếu
   // khiếm khuyết đang mở, tra ngược được. Chốt xong thì bản ghi tự đứng một mình và số
   // yêu cầu có thể được thu hồi để dùng lại, in ra chỉ gây hiểu nhầm.
   const showSourceColumn = statusFilter === "PENDING";
-  const detailColSpan = 8 + (showSourceColumn ? 1 : 0) + (actionCol ? 1 : 0);
+  const detailColSpan = 4 + (actionCol ? 1 : 0);
   // Tổ máy LUÔN có giá trị (mặc định S1) nên không tính là đang lọc, nếu không
   // nút Xoá bộ lọc sẽ sáng vĩnh viễn và ô "Chưa có lịch sử" không bao giờ hiện.
   const hasActiveFilters =
@@ -214,7 +225,7 @@ export function DefectHistoryTab({ role }: { role?: string }) {
   );
 
   return (
-    <div className="space-y-6">
+    <div className="min-w-0 space-y-6">
       <PageHeader title="LỊCH SỬ SỬA CHỮA" description="Lịch sử khiếm khuyết thiết bị đã xử lý theo cương vị">
         <AnnualBackupExport
           rows={visibleRows.filter((row) => row.historyStatus !== "PENDING")}
@@ -235,7 +246,7 @@ export function DefectHistoryTab({ role }: { role?: string }) {
         <div className="col-span-2 flex items-center justify-between gap-2 sm:col-span-1 sm:justify-start">
           <FilterLabel>Cương vị</FilterLabel>
           <Select value={filters.position ?? "ALL"} onValueChange={(v) => setFilter("position", v === "ALL" ? "" : v)}>
-            <SelectTrigger className="h-8 w-40 rounded-md text-[13px] md:w-44"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="h-10 w-40 rounded-md text-[13px] sm:h-8 md:w-44"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="ALL">Tất cả</SelectItem>
               {positions.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
@@ -243,7 +254,7 @@ export function DefectHistoryTab({ role }: { role?: string }) {
           </Select>
         </div>
 
-        <div className="flex min-w-0 flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-2">
+        <div className="col-span-2 flex min-w-0 flex-wrap items-center justify-between gap-2 sm:justify-start">
           <FilterLabel>Trạng thái</FilterLabel>
           <div className="inline-flex overflow-hidden rounded-md border border-input bg-white">
             {HISTORY_STATUSES.map((option) => {
@@ -255,7 +266,7 @@ export function DefectHistoryTab({ role }: { role?: string }) {
                   aria-pressed={active}
                   onClick={() => setStatusFilter(option.value)}
                   className={cn(
-                    "border-r border-input px-3.5 py-1.5 text-[12.5px] font-semibold transition-colors last:border-r-0",
+                    "min-h-10 whitespace-nowrap border-r border-input px-3.5 py-1.5 text-[12.5px] font-semibold transition-colors last:border-r-0 sm:min-h-0",
                     active ? "bg-[#00558F] text-white" : "text-ink/70 hover:bg-muted hover:text-ink"
                   )}
                 >
@@ -266,7 +277,7 @@ export function DefectHistoryTab({ role }: { role?: string }) {
           </div>
         </div>
 
-        <div className="flex min-w-0 flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-2">
+        <div className="col-span-2 flex min-w-0 flex-wrap items-center justify-between gap-2 sm:justify-start">
           <FilterLabel>Tổ máy</FilterLabel>
           <div className="inline-flex overflow-hidden rounded-md border border-input bg-white">
             {DEFECT_UNITS.map((u) => {
@@ -278,7 +289,7 @@ export function DefectHistoryTab({ role }: { role?: string }) {
                   aria-pressed={active}
                   onClick={() => setFilter("unit", u)}
                   className={cn(
-                    "border-r border-input px-3.5 py-1.5 text-[12.5px] font-semibold transition-colors last:border-r-0",
+                    "min-h-10 whitespace-nowrap border-r border-input px-3.5 py-1.5 text-[12.5px] font-semibold transition-colors last:border-r-0 sm:min-h-0",
                     active ? "bg-[#00558F] text-white" : "text-ink/70 hover:bg-muted hover:text-ink"
                   )}
                 >
@@ -291,9 +302,9 @@ export function DefectHistoryTab({ role }: { role?: string }) {
 
         <div className="col-span-2 grid grid-cols-2 gap-x-2 gap-y-1.5 sm:flex sm:items-center sm:gap-2">
           <FilterLabel>Từ ngày</FilterLabel>
-          <Input type="date" value={filters.from ?? ""} onChange={(e) => setFilter("from", e.target.value)} className="h-8 w-[150px] rounded-md bg-white text-[13px]" />
+          <Input type="date" value={filters.from ?? ""} onChange={(e) => setFilter("from", e.target.value)} className="h-10 w-[150px] rounded-md bg-white text-base sm:h-8 sm:text-[13px]" />
           <FilterLabel>Đến ngày</FilterLabel>
-          <Input type="date" value={filters.to ?? ""} onChange={(e) => setFilter("to", e.target.value)} className="h-8 w-[150px] rounded-md bg-white text-[13px]" />
+          <Input type="date" value={filters.to ?? ""} onChange={(e) => setFilter("to", e.target.value)} className="h-10 w-[150px] rounded-md bg-white text-base sm:h-8 sm:text-[13px]" />
         </div>
 
         <button
@@ -315,7 +326,7 @@ export function DefectHistoryTab({ role }: { role?: string }) {
           description="Khi một khiếm khuyết được bấm “Hoàn thành”, bản ghi sẽ xuất hiện ở đây."
         />
       ) : (
-        <Card className="overflow-hidden">
+        <Card className="min-w-0 overflow-hidden">
           {/* Thanh công cụ của bảng: số dòng bên trái, tìm kiếm bên phải */}
           <div className="flex flex-col gap-3 border-b border-border bg-muted/25 px-3 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:px-4">
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -323,7 +334,7 @@ export function DefectHistoryTab({ role }: { role?: string }) {
               <select
                 value={pageSize}
                 onChange={(e) => setPageSize(Number(e.target.value))}
-                className="h-8 rounded-lg border border-input bg-white px-2 text-sm font-medium text-ink"
+                className="h-10 rounded-lg border border-input bg-white px-2 text-sm font-medium text-ink sm:h-8"
                 aria-label="Số dòng mỗi trang"
               >
                 {PAGE_SIZES.map((n) => (
@@ -340,9 +351,25 @@ export function DefectHistoryTab({ role }: { role?: string }) {
                   value={tableSearch}
                   onChange={(e) => setTableSearch(e.target.value)}
                   placeholder="Tên thiết bị, nội dung, số phiếu..."
-                  className="h-9 rounded-xl pl-9"
+                  className="h-10 rounded-xl pl-9 text-base sm:h-9 sm:text-sm"
                 />
               </div>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-[#00558F] px-3 py-2.5 sm:px-4">
+            <div className="flex items-center gap-2 text-xs font-medium text-white">
+              <span>Loại yêu cầu{requestTypeFilter !== "ALL" ? `: ${requestTypeFilter}` : ": Tất cả"}</span>
+              <RequestTypeColumnFilter value={requestTypeFilter} onChange={setRequestTypeFilter} />
+            </div>
+            <div className="flex max-w-full items-center gap-2 text-xs text-white">
+              <span className="shrink-0">Sắp xếp</span>
+              <select aria-label="Sắp xếp lịch sử" value={sort.key} onChange={(e) => setSort({ key: e.target.value as SortKey, dir: sort.dir })} className="h-10 min-w-0 rounded-md border border-white/30 bg-white px-2 text-xs font-medium text-ink sm:h-8">
+                {HISTORY_SORT_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+              </select>
+              <button type="button" aria-label={sort.dir === "asc" ? "Đổi sang giảm dần" : "Đổi sang tăng dần"} onClick={() => toggleSort(sort.key)} className="flex size-10 shrink-0 items-center justify-center rounded-md border border-white/30 hover:bg-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white sm:size-8">
+                {sort.dir === "asc" ? <ArrowUp className="size-4" /> : <ArrowDown className="size-4" />}
+              </button>
             </div>
           </div>
 
@@ -367,12 +394,8 @@ export function DefectHistoryTab({ role }: { role?: string }) {
                       <LockChip pending={pending} />
                     </div>
 
-                    <button type="button" onClick={() => setExpandedId(expanded ? null : r.id)} className="mt-3 block w-full text-left">
-                      <h3 className="line-clamp-3 text-[15px] font-bold leading-[1.45] text-slate-900">{r.defectContent || "Chưa có nội dung khiếm khuyết"}</h3>
-                      <div className="mt-2 rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2.5">
-                        <div className="line-clamp-2 text-xs font-semibold text-slate-700">{deviceName}</div>
-                        <div className="mt-0.5 truncate font-mono text-[10.5px] text-slate-500">{r.device || "Chưa có KKS"}{r.workOrderNumber ? ` · ${r.workOrderNumber}` : ""}</div>
-                      </div>
+                    <button type="button" aria-expanded={expanded} onClick={() => setExpandedId(expanded ? null : r.id)} className="mt-3 block w-full min-w-0 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500">
+                      <HistorySummary row={r} deviceName={deviceName} />
                     </button>
 
                     <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
@@ -387,23 +410,23 @@ export function DefectHistoryTab({ role }: { role?: string }) {
                     </div>
 
                     <div className="mt-3 flex items-center justify-between border-t border-dashed border-slate-200 pt-3">
-                      <button type="button" onClick={() => setExpandedId(expanded ? null : r.id)} aria-expanded={expanded} className="inline-flex items-center gap-2 text-xs font-bold text-[#00558F]">
+                      <button type="button" onClick={() => setExpandedId(expanded ? null : r.id)} aria-expanded={expanded} className="inline-flex min-h-10 items-center gap-2 text-xs font-bold text-[#00558F]">
                         <span className={cn("grid h-7 w-7 place-items-center rounded-full bg-sky-50 transition", expanded && "rotate-45 bg-[#00558F] text-white")}><Plus className="h-3.5 w-3.5" /></span>
                         {expanded ? "Thu gọn" : "Xem chi tiết"}
                       </button>
                       {actionCol && (
                         <div className="flex items-center gap-1">
-                          {canManage && pending && r.pendingDefectId && <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600" title="Sửa thông tin lịch sử" onClick={() => setPendingEditDefectId(r.pendingDefectId!)}><FileClock className="h-4 w-4" /></Button>}
-                          {canReopenPending && pending && r.pendingDefectId && <Button variant="ghost" size="icon" className="h-8 w-8 text-amber-700" title="Rút chờ chốt" onClick={() => setReopenTarget({ id: r.pendingDefectId!, requestNumber: r.requestNumber })}><RotateCcw className="h-4 w-4" /></Button>}
-                          {canManage && !pending && <Button variant="ghost" size="icon" className="h-8 w-8" title="Sửa" onClick={() => setEditTarget(r)}><Pencil className="h-4 w-4" /></Button>}
-                          {canDelete && !pending && <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-500 hover:text-destructive" title="Xóa" onClick={() => setDelTarget(r)}><Trash2 className="h-4 w-4" /></Button>}
+                          {canManage && pending && r.pendingDefectId && <Button variant="ghost" size="icon" className="h-10 w-10 text-blue-600" title="Sửa thông tin lịch sử" onClick={() => setPendingEditDefectId(r.pendingDefectId!)}><FileClock className="h-4 w-4" /></Button>}
+                          {canReopenPending && pending && r.pendingDefectId && <Button variant="ghost" size="icon" className="h-10 w-10 text-amber-700" title="Rút chờ chốt" onClick={() => setReopenTarget({ id: r.pendingDefectId!, requestNumber: r.requestNumber })}><RotateCcw className="h-4 w-4" /></Button>}
+                          {canManage && !pending && <Button variant="ghost" size="icon" className="h-10 w-10" title="Sửa" onClick={() => setEditTarget(r)}><Pencil className="h-4 w-4" /></Button>}
+                          {canDelete && !pending && <Button variant="ghost" size="icon" className="h-10 w-10 text-slate-500 hover:text-destructive" title="Xóa" onClick={() => setDelTarget(r)}><Trash2 className="h-4 w-4" /></Button>}
                         </div>
                       )}
                     </div>
                     {pending && r.finalizeAt && <div className="mt-2 text-right font-mono text-[10px] text-slate-400">Hạn chốt {formatDate(r.finalizeAt)}</div>}
                   </div>
                   {expanded && (
-                    <div className="border-t border-sky-100 bg-[linear-gradient(180deg,#f8fbff,#ffffff)] p-3">
+                    <div className="border-t border-sky-100 bg-[linear-gradient(180deg,#f8fbff,#ffffff)] p-3 [&_button]:min-h-10 sm:[&_button]:min-h-0">
                       {pending && r.pendingDefectId ? <DefectExpandedDetailsById id={r.pendingDefectId} /> : <ExpandedDetails row={r} deviceName={deviceName} />}
                     </div>
                   )}
@@ -412,29 +435,17 @@ export function DefectHistoryTab({ role }: { role?: string }) {
             })}
           </div>
 
-          <div className="hidden overflow-x-auto md:block">
-          <Table className="min-w-[1160px]">
-            {/* Đầu bảng nền xanh EVN, dính khi cuộn dọc trong vùng bảng */}
+          <div className="hidden min-w-0 md:block">
+          <Table className="table-fixed" wrapperClassName="overflow-visible">
+            <colgroup><col className="w-11" /><col /><col className="w-[120px] xl:w-[136px]" /><col className="w-[164px] xl:w-[184px]" />{actionCol && <col className="w-[104px]" />}</colgroup>
             <TableHeader>
-              <TableRow className="border-0 hover:bg-transparent [&>th]:border-r [&>th]:border-white/20 [&>th:last-child]:border-r-0">
-                <TableHead className="w-[44px] bg-[#00558F]" />
-                <TableHead className="min-w-[272px] bg-[#00558F]"><SortHeader label="Nội dung khiếm khuyết" sortKey="defectContent" sort={sort} onSort={toggleSort} /></TableHead>
-                <TableHead className="w-[104px] min-w-[104px] bg-[#00558F] px-2">
-                  <div className="flex items-center justify-center gap-1.5">
-                    <SortHeader label="Yêu cầu" sortKey="requestType" sort={sort} onSort={toggleSort} align="center" inline />
-                    <RequestTypeColumnFilter value={requestTypeFilter} onChange={setRequestTypeFilter} />
-                  </div>
-                </TableHead>
-                <TableHead className="w-[88px] bg-[#00558F] px-2"><SortHeader label="Tổ máy" sortKey="unit" sort={sort} onSort={toggleSort} align="center" /></TableHead>
-                <TableHead className="w-[136px] min-w-[136px] bg-[#00558F] px-2"><SortHeader label="Cương vị" sortKey="system" sort={sort} onSort={toggleSort} /></TableHead>
-                {showSourceColumn && (
-                  <TableHead className="w-[92px] bg-[#00558F] px-2"><SortHeader label="Nguồn" sortKey="requestNumber" sort={sort} onSort={toggleSort} align="center" /></TableHead>
-                )}
-                <TableHead className="w-[100px] bg-[#00558F] px-2"><SortHeader label="Kết thúc" sortKey="performedAt" sort={sort} onSort={toggleSort} align="center" /></TableHead>
-                <TableHead className="w-[124px] bg-[#00558F] px-2"><SortHeader label="Người cập nhật" sortKey="createdBy" sort={sort} onSort={toggleSort} align="center" /></TableHead>
-                <TableHead className="w-[124px] min-w-[124px] bg-[#00558F] px-2"><SortHeader label="Chốt lịch sử" sortKey="locked" sort={sort} onSort={toggleSort} align="center" /></TableHead>
+              <TableRow className="bg-slate-50 hover:bg-slate-50">
+                <TableHead><span className="sr-only">Chi tiết</span></TableHead>
+                <TableHead><SortHeader label="Nội dung & thiết bị" sortKey="defectContent" sort={sort} onSort={toggleSort} /></TableHead>
+                <TableHead className="px-2"><SortHeader label="Cương vị" sortKey="system" sort={sort} onSort={toggleSort} /></TableHead>
+                <TableHead className="px-3 text-[11px] text-slate-500">Theo dõi</TableHead>
                 {actionCol && (
-                  <TableHead className="w-[76px] bg-[#00558F] px-2 text-center text-[11px] font-semibold uppercase tracking-wider text-white">
+                  <TableHead className="px-2 text-center text-[11px] font-semibold uppercase tracking-wider text-slate-500">
                     Thao tác
                   </TableHead>
                 )}
@@ -455,7 +466,7 @@ export function DefectHistoryTab({ role }: { role?: string }) {
                   return (
                     <React.Fragment key={r.id}>
                       <TableRow
-                        className={cn("cursor-pointer", expanded ? "bg-sky-50/70 hover:bg-sky-50/70" : "hover:bg-sky-50/40")}
+                        className={cn("cursor-pointer [&>td]:align-top", expanded ? "bg-sky-50/70 hover:bg-sky-50/70" : "hover:bg-sky-50/40")}
                         onClick={() => setExpandedId(expanded ? null : r.id)}
                       >
                         <TableCell className="px-0 py-3 text-center">
@@ -465,70 +476,38 @@ export function DefectHistoryTab({ role }: { role?: string }) {
                               e.stopPropagation();
                               setExpandedId(expanded ? null : r.id);
                             }}
-                            aria-expanded={expanded}
+                            aria-label={expanded ? "Thu gọn lịch sử" : "Xem chi tiết lịch sử"} aria-expanded={expanded}
                             className={cn(
-                              "inline-flex h-6 w-6 items-center justify-center rounded-full text-white shadow-sm transition-all duration-200",
-                              expanded ? "rotate-45 bg-[#00558F]" : "bg-emerald-600 hover:bg-emerald-700"
+                              "inline-flex h-9 w-9 items-center justify-center rounded-lg border transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500",
+                              expanded ? "border-[#00558F] bg-[#00558F] text-white" : "border-slate-200 bg-white text-[#00558F] hover:border-sky-300 hover:bg-sky-50"
                             )}
                             title={expanded ? "Thu gọn" : "Xem chi tiết"}
                           >
-                            <Plus className="h-3.5 w-3.5" />
+                            <Plus className={cn("h-3.5 w-3.5 transition-transform", expanded && "rotate-45")} />
                           </button>
                         </TableCell>
-                        <TableCell className="px-3 py-2.5">
-                          <div className="line-clamp-2 font-semibold leading-snug text-ink" title={r.defectContent || "Chưa có nội dung khiếm khuyết"}>
-                            {r.defectContent || "Chưa có nội dung khiếm khuyết"}
+                        <TableCell className="min-w-0 px-3 py-4">
+                          <HistorySummary row={r} deviceName={deviceName} />
+                          <div className="mt-3 flex flex-wrap items-center gap-1.5">
+                            <UnitBadge unit={r.unit} />
+                            {r.requestType && <span className="rounded-md bg-sky-50 px-2 py-1 text-[11px] font-semibold text-[#00558F]">{r.requestType}</span>}
+                            {showSourceColumn && r.requestNumber && <span className="rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-600">Yêu cầu <b className="font-mono">#{r.requestNumber}</b></span>}
                           </div>
-                          <div className="mt-1 truncate text-[11.5px] text-muted-foreground" title={deviceName}>
-                            <span className="font-medium text-slate-600">{deviceName}</span>
-                            <span className="font-mono tracking-tight"> · {r.device || "chưa có KKS"}</span>
-                            {r.workOrderNumber ? ` · ${r.workOrderNumber}` : ""}
-                          </div>
-                        </TableCell>
-                        <TableCell className="px-2 py-2.5 text-center">
-                          {r.requestType ? (
-                            <span className="inline-block rounded-md bg-sky-50 px-2.5 py-0.5 text-[12.5px] font-semibold text-[#00558F]">
-                              {r.requestType}
-                            </span>
-                          ) : (
-                            <span className="text-[13px] text-muted-foreground">—</span>
-                          )}
-                        </TableCell>
-                        <TableCell className="px-2 py-2.5 text-center">
-                          <UnitBadge unit={r.unit} />
                         </TableCell>
                         <TableCell className="px-3 py-2.5">
                           <div className="line-clamp-2 text-[13px] font-medium leading-snug text-ink" title={r.system || "Chưa xác định cương vị"}>
                             {r.system || "Chưa xác định"}
                           </div>
                         </TableCell>
-                        {showSourceColumn && (
-                          <TableCell className="px-2 py-2.5 text-center">
-                            {r.requestNumber ? (
-                              <span
-                                className="inline-block rounded-md bg-sky-50 px-2.5 py-0.5 text-[12.5px] font-semibold text-[#00558F]"
-                                title={`Số yêu cầu khếm khuyết ${r.requestNumber}`}
-                              >
-                                {r.requestNumber}
-                              </span>
-                            ) : (
-                              <span className="text-[13px] text-muted-foreground">—</span>
-                            )}
-                          </TableCell>
-                        )}
-                        <TableCell className="whitespace-nowrap px-2 py-2.5 text-center font-mono text-[13px] font-semibold text-ink">
-                          {formatDate(r.performedAt)}
-                        </TableCell>
-                        <TableCell className="px-3 py-2.5">
-                          <div className="flex justify-center">
-                            <UserByline user={r.createdBy} createdAt={r.createdAt} />
+                        <TableCell className="px-3 py-4">
+                          <div className="space-y-3">
+                            <div><p className="text-[10px] font-medium uppercase tracking-wide text-slate-400">Kết thúc</p><p className="mt-0.5 text-xs font-semibold tabular-nums text-slate-800">{formatDate(r.performedAt)}</p></div>
+                            <div className="flex min-w-0 items-center gap-2">
+                              <UserByline user={r.createdBy} createdAt={r.createdAt} />
+                              <span className="min-w-0 text-[11px] leading-4 text-slate-600 [overflow-wrap:anywhere]">{r.createdBy?.name || "Chưa có người cập nhật"}</span>
+                            </div>
+                            <div><LockChip pending={pending} />{pending && r.finalizeAt && <p className="mt-1 text-[10px] tabular-nums text-slate-500">Hạn chốt {formatDate(r.finalizeAt)}</p>}</div>
                           </div>
-                        </TableCell>
-                        <TableCell className="px-3 py-2.5 text-center">
-                          <LockChip pending={pending} />
-                          {pending && (
-                            <div className="mt-1 font-mono text-[11px] text-muted-foreground">hạn {formatDate(r.finalizeAt)}</div>
-                          )}
                         </TableCell>
                         {actionCol && (
                           <TableCell className="px-2 py-2.5">
@@ -577,7 +556,7 @@ export function DefectHistoryTab({ role }: { role?: string }) {
                       {expanded && (
                         <TableRow className="hover:bg-transparent">
                           <TableCell colSpan={detailColSpan} className="bg-slate-50/80 p-0">
-                            <div className="border-l-[3px] border-[#00558F] py-4 pl-6 pr-5">
+                            <div className="min-w-0 border-l-[3px] border-[#00558F] p-4 [overflow-wrap:anywhere] xl:[&>div]:grid-cols-2 2xl:[&>div]:grid-cols-3 xl:[&>div>div:nth-child(3)]:col-span-2 2xl:[&>div>div:nth-child(3)]:col-span-1 [&>div>div:last-child]:col-span-full">
                               {/* Chờ chốt: dữ liệu còn nằm ở phiếu khiếm khuyết nên hiện
                                   đúng 3 bảng của phiếu. Đã chốt: đọc từ bản ghi lịch sử. */}
                               {pending && r.pendingDefectId ? (
@@ -646,6 +625,20 @@ export function DefectHistoryTab({ role }: { role?: string }) {
   );
 }
 
+function HistorySummary({ row, deviceName }: { row: DefectHistoryItem; deviceName: string }) {
+  return <div className="min-w-0 space-y-2.5 [overflow-wrap:anywhere]">
+    <h3 className="text-sm font-semibold leading-6 text-slate-900">{row.defectContent || "Chưa có nội dung khiếm khuyết"}</h3>
+    <div className="min-w-0 border-l-2 border-sky-200 pl-3">
+      <p className="text-xs font-medium leading-5 text-slate-600">{deviceName}</p>
+      <p className="mt-0.5 font-mono text-[11px] leading-5 text-slate-400">{row.device || "Chưa có mã thiết bị"}</p>
+    </div>
+    {row.workOrderNumber && <div className="flex min-w-0 items-start gap-2 rounded-md bg-slate-50 px-2.5 py-2 text-xs leading-5">
+      <span className="shrink-0 font-semibold text-slate-500">PCT/LCT</span>
+      <p className="min-w-0 whitespace-pre-wrap text-slate-700">{row.workOrderNumber}</p>
+    </div>}
+  </div>;
+}
+
 function SortHeader({
   label,
   sortKey,
@@ -669,13 +662,13 @@ function SortHeader({
       type="button"
       onClick={() => onSort(sortKey)}
       className={cn(
-        "inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase leading-tight tracking-wider text-white/90 transition-colors hover:text-white",
+        "inline-flex min-h-9 items-center gap-1.5 text-[11px] font-semibold uppercase leading-tight tracking-wider text-slate-500 transition-colors hover:text-[#00558F] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500",
         !inline && "w-full",
         align === "center" && "justify-center"
       )}
     >
       <span className="whitespace-nowrap">{label}</span>
-      <Icon className={cn("h-3.5 w-3.5", active ? "text-white" : "text-white/50")} />
+      <Icon className={cn("h-3.5 w-3.5 shrink-0", active ? "text-[#00558F]" : "text-slate-400")} />
     </button>
   );
 }
@@ -704,7 +697,7 @@ function RequestTypeColumnFilter({ value, onChange }: { value: string; onChange:
           aria-label="Lọc theo loại yêu cầu"
           title={active ? `Đang lọc: ${value}` : "Lọc theo loại yêu cầu"}
           className={cn(
-            "flex h-6 w-7 shrink-0 items-center justify-center rounded-md border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40",
+            "flex h-10 w-10 shrink-0 items-center justify-center rounded-md border transition-colors sm:h-6 sm:w-7 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40",
             active
               ? "border-white bg-white text-[#00558F] shadow-sm"
               : "border-white/40 bg-white/10 text-white/80 hover:bg-white/25 hover:text-white"

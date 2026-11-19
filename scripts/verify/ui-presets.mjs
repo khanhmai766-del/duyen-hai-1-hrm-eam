@@ -20,6 +20,7 @@ import { documentIntegrityPreset } from "./presets/document-integrity.mjs";
 import { closeUnstartedPermitPreset, copyOverduePermitPreset } from "./presets/close-unstarted-permit.mjs";
 import { reactBitsPreset } from "./presets/react-bits.mjs";
 import { chuanTheThucPreset } from "./presets/chuan-the-thuc.mjs";
+import { repairHistoryPreset } from "./presets/repair-history.mjs";
 // Kịch bản dựng sẵn cho ui-shots.mjs: tuyến cần chụp + dữ liệu GIẢ LẬP qua page.route.
 //
 // Giả lập ngay trong trình duyệt để chụp được trạng thái hiếm có trên DB dev (lần làm việc đang mở, danh sách
@@ -274,6 +275,7 @@ async function writeFakeCameraVideo(file, { px = 5, blur = 0.5, noise = 8 } = {}
 let nhanSuLocName = "";
 
 export const PRESETS = {
+  "repair-history": repairHistoryPreset,
   "react-bits": reactBitsPreset,
   "chuan-the-thuc": chuanTheThucPreset,
   "pct-ket-thuc-chua-lam-viec": closeUnstartedPermitPreset,
