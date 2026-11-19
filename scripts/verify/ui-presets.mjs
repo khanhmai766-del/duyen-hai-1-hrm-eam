@@ -287,13 +287,13 @@ export const PRESETS = {
   "chtt-cho-cap-nhat": commanderCandidatesPreset,
   "ctktkt-integration": ctktktIntegrationPreset,
   "ctktkt-permissions": ctktktPermissionsPreset,
-  "ctktkt-permissions-grid": { ...ctktktPermissionsPreset, routes: () => ["/tien-ich/chi-tieu-ktkt/phan-quyen", "/tien-ich/chi-tieu-ktkt/phan-quyen?verify=ktkt"] },
+  "ctktkt-permissions-grid": { ...ctktktPermissionsPreset, routes: () => ["/chi-tieu-ktkt/phan-quyen", "/chi-tieu-ktkt/phan-quyen?verify=ktkt"] },
   "ctktkt-water": ctktktWaterPreset,
   // Báo cáo Chỉ tiêu KTKT: nút + hộp thoại "Yêu cầu chỉnh sửa" với 3 yêu cầu giả lập (không ghi DB).
   "ctktkt-yeu-cau-sua": {
     description: "Yêu cầu chỉnh sửa số liệu sau ca: 1 chờ duyệt, 1 đã duyệt, 1 từ chối; giả lập trong trình duyệt.",
     async prepare() { return {}; },
-    routes: () => ["/tien-ich/chi-tieu-ktkt/ctktkt-report", "/tien-ich/chi-tieu-ktkt/ctktkt-report?verify=all"],
+    routes: () => ["/chi-tieu-ktkt/ctktkt-report", "/chi-tieu-ktkt/ctktkt-report?verify=all"],
     async mock(context) {
       const at = hours => new Date(Date.now() - hours * 3600 * 1000).toISOString();
       const entries = [
@@ -314,7 +314,7 @@ export const PRESETS = {
   "ctktkt-dong-bo": {
     description: "Dữ liệu các tháng: công tắc đồng bộ QLKT 1 ngày / Nhiều ngày; chỉ đọc.",
     async prepare() { return {}; },
-    routes: () => ["/tien-ich/chi-tieu-ktkt", "/tien-ich/chi-tieu-ktkt?verify=range", "/tien-ich/chi-tieu-ktkt?verify=alert"],
+    routes: () => ["/chi-tieu-ktkt", "/chi-tieu-ktkt?verify=range", "/chi-tieu-ktkt?verify=alert"],
     // Khung Google Sheets ở trạng thái trễ: lần đồng bộ cuối cách đây 3 giờ (lịch chạy mỗi giờ).
     async mock(context) {
       const syncedAt = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString();
@@ -329,7 +329,7 @@ export const PRESETS = {
       await page.waitForTimeout(300);
     },
   },
-  "ctktkt-tools": { ...ctktktIntegrationPreset, routes: () => ["", "/tien-ich-dong-bo", "/admin/data-backup", "/admin/data-history"].map(path => "/tien-ich/chi-tieu-ktkt" + path) },
+  "ctktkt-tools": { ...ctktktIntegrationPreset, routes: () => ["", "/tien-ich-dong-bo", "/admin/data-backup", "/admin/data-history"].map(path => "/chi-tieu-ktkt" + path) },
   "tiep-dia-nhac-ca": groundingReminderPreset,
   "lich-su-lam-viec-trong-ngay": dailyHistoryPreset,
   "pccc-phan-trang": pcccPaginationPreset,

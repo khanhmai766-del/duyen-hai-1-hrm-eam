@@ -79,7 +79,7 @@ export const MODEL_CONTROL_ALLOWED_POSITION_KEYWORDS = [
 export const ASH_SLAG_LOG_URL =
   "https://docs.google.com/spreadsheets/d/1RyWmVWOuJTaQov2Eg7Y-ZxxWhez66RK5XY7seO4ppfE/edit?gid=0#gid=0";
 export const VIBRATION_MONITOR_URL = "https://pxvh1.infinityfree.me/";
-export const PMIS_REPORT_URL = "/tien-ich/chi-tieu-ktkt/pmis-report";
+export const PMIS_REPORT_URL = "/chi-tieu-ktkt/pmis-report";
 
 export const NAV_SECTIONS: NavSection[] = [
   {
@@ -230,14 +230,14 @@ export const NAV_SECTIONS: NavSection[] = [
   {
     title: "QUẢN LÝ CHỈ TIÊU KTKT",
     items: [
-      { label: "Dữ liệu các tháng", href: "/tien-ich/chi-tieu-ktkt", icon: CalendarRange, permissionIds: ["ctktkt-access"], exact: true, keywords: "ctktkt du lieu thang chi tieu kinh te ky thuat pmis ppa san xuat" },
-      { label: "Báo cáo Chỉ tiêu KTKT", href: "/tien-ich/chi-tieu-ktkt/ctktkt-report", icon: FileSpreadsheet, permissionIds: ["ctktkt-access"], keywords: "ctktkt chi tieu kinh te ky thuat pmis ppa san xuat" },
-      { label: "Báo cáo sản xuất", href: "/tien-ich/chi-tieu-ktkt/bcsx-report", icon: ClipboardList, permissionIds: ["ctktkt-access"], keywords: "ctktkt chi tieu kinh te ky thuat pmis ppa san xuat" },
-      { label: "Theo dõi lượng nước", href: "/tien-ich/chi-tieu-ktkt/water-report", icon: Gauge, permissionIds: ["ctktkt-access"], keywords: "ctktkt chi tieu kinh te ky thuat pmis ppa san xuat" },
-      { label: "Theo dõi hóa chất", href: "/tien-ich/chi-tieu-ktkt/chemical-usage", icon: FlaskConical, permissionIds: ["ctktkt-access"], keywords: "ctktkt chi tieu kinh te ky thuat pmis ppa san xuat" },
-      { label: "Suất hao nhiệt PPA", href: "/tien-ich/chi-tieu-ktkt/ppa-heat-rate", icon: BarChart3, permissionIds: ["ctktkt-access"], keywords: "ctktkt chi tieu kinh te ky thuat pmis ppa san xuat" },
-      { label: "Báo cáo PMIS", href: "/tien-ich/chi-tieu-ktkt/pmis-report", icon: Gauge, permissionIds: ["ctktkt-access"], keywords: "ctktkt chi tieu kinh te ky thuat pmis ppa san xuat" },
-      { label: "Phân công nhập liệu", href: "/tien-ich/chi-tieu-ktkt/phan-quyen", icon: UserCog, permissionIds: ["ctktkt-delegate"], keywords: "ctktkt phan cong nhap lieu phan quyen giao quyen tkd truong ca" },
+      { label: "Dữ liệu các tháng", href: "/chi-tieu-ktkt", icon: CalendarRange, permissionIds: ["ctktkt-access"], exact: true, keywords: "ctktkt du lieu thang chi tieu kinh te ky thuat pmis ppa san xuat" },
+      { label: "Báo cáo Chỉ tiêu KTKT", href: "/chi-tieu-ktkt/ctktkt-report", icon: FileSpreadsheet, permissionIds: ["ctktkt-access"], keywords: "ctktkt chi tieu kinh te ky thuat pmis ppa san xuat" },
+      { label: "Báo cáo sản xuất", href: "/chi-tieu-ktkt/bcsx-report", icon: ClipboardList, permissionIds: ["ctktkt-access"], keywords: "ctktkt chi tieu kinh te ky thuat pmis ppa san xuat" },
+      { label: "Theo dõi lượng nước", href: "/chi-tieu-ktkt/water-report", icon: Gauge, permissionIds: ["ctktkt-access"], keywords: "ctktkt chi tieu kinh te ky thuat pmis ppa san xuat" },
+      { label: "Theo dõi hóa chất", href: "/chi-tieu-ktkt/chemical-usage", icon: FlaskConical, permissionIds: ["ctktkt-access"], keywords: "ctktkt chi tieu kinh te ky thuat pmis ppa san xuat" },
+      { label: "Suất hao nhiệt PPA", href: "/chi-tieu-ktkt/ppa-heat-rate", icon: BarChart3, permissionIds: ["ctktkt-access"], keywords: "ctktkt chi tieu kinh te ky thuat pmis ppa san xuat" },
+      { label: "Báo cáo PMIS", href: "/chi-tieu-ktkt/pmis-report", icon: Gauge, permissionIds: ["ctktkt-access"], keywords: "ctktkt chi tieu kinh te ky thuat pmis ppa san xuat" },
+      { label: "Phân công nhập liệu", href: "/chi-tieu-ktkt/phan-quyen", icon: UserCog, permissionIds: ["ctktkt-delegate"], keywords: "ctktkt phan cong nhap lieu phan quyen giao quyen tkd truong ca" },
     ],
   },
   {

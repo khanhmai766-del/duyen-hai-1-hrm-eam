@@ -4,6 +4,13 @@ const nextConfig = {
   // Next 16.3 `next dev` tự chèn khối "nextjs-agent-rules" vào AGENTS.md mỗi lần chạy. AGENTS.md
   // là hướng dẫn nhóm tự viết cho Codex — không để công cụ ghi đè (và làm bẩn cây làm việc).
   agentRules: false,
+  async redirects() {
+    return [{
+      source: "/tien-ich/chi-tieu-ktkt/:path*",
+      destination: "/chi-tieu-ktkt/:path*",
+      permanent: true,
+    }];
+  },
   // Next 15+ đổi tên từ experimental.serverComponentsExternalPackages.
   serverExternalPackages: ["pg", "@node-rs/argon2", "pdf-parse", "@napi-rs/canvas", "tesseract.js", "tesseract.js-core", "@tesseract.js-data/eng", "@tesseract.js-data/vie"],
   // BẬT LẠI bộ tối ưu ảnh `/_next/image` (2026-09-14). Tắt ngày 13/09 vì Next 14 còn lỗ hổng RCE

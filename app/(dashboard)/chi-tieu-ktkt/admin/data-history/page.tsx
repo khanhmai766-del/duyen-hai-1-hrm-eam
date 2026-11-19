@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 
 export default async function DataHistoryPage({ searchParams }: { searchParams: Promise<{ date?: string; page?: string }> }) {
   const guard = await requirePermission("view_data_history");
-  if (!guard.ok) redirect("/tien-ich/chi-tieu-ktkt");
+  if (!guard.ok) redirect("/chi-tieu-ktkt");
   const params = await searchParams;
   const date = /^\d{4}-\d{2}-\d{2}$/.test(params.date || "") ? params.date! : vietnamDateIso();
   const requestedPage = Number(params.page || 1);

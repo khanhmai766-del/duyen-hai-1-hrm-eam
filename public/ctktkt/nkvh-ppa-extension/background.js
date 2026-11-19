@@ -5,7 +5,7 @@ chrome.action.onClicked.addListener(() => {
 function isWeb(url) {
   try {
     const u = new URL(url);
-    return u.pathname.replace(/^\/tien-ich\/chi-tieu-ktkt/, "").replace(/\/$/, "") === "/ppa-heat-rate" &&
+    return u.pathname.replace(/^\/(?:tien-ich\/)?chi-tieu-ktkt(?=\/|$)/, "").replace(/\/$/, "") === "/ppa-heat-rate" &&
       (["https://ctktkt-dashboard.vercel.app","https://duyenhai1.vn","https://ctktkt.duyenhai1.vn"].includes(u.origin) || (u.protocol === "http:" && ["localhost","127.0.0.1"].includes(u.hostname)));
   } catch { return false; }
 }

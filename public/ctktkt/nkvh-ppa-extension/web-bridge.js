@@ -1,5 +1,5 @@
 (() => {
-  if (location.pathname.replace(/^\/tien-ich\/chi-tieu-ktkt/, "").replace(/\/$/,"") !== "/ppa-heat-rate") return;
+  if (location.pathname.replace(/^\/(?:tien-ich\/)?chi-tieu-ktkt(?=\/|$)/, "").replace(/\/$/,"") !== "/ppa-heat-rate") return;
   const channel="ctktkt-nkvh-ppa", requests=new Map();
   const post=message=>window.postMessage({channel,sender:"nkvh-extension",...message},location.origin);
   window.addEventListener("message",async event=>{

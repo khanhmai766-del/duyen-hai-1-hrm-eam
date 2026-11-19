@@ -1,6 +1,6 @@
 # Bản tích hợp Duyên Hải 1 — v0.2.1
 
-Dùng cho phân hệ **Quản lý chỉ tiêu KTKT** tại `https://duyenhai1.vn/tien-ich/chi-tieu-ktkt` và tên miền phụ `https://ctktkt.duyenhai1.vn` khi được cấu hình.
+Dùng cho phân hệ **Quản lý chỉ tiêu KTKT** tại `https://duyenhai1.vn/chi-tieu-ktkt` và tên miền phụ `https://ctktkt.duyenhai1.vn` khi được cấu hình.
 
 Tải và giải nén ZIP vào thư mục cố định. Mở trang quản lý tiện ích Chrome/Edge, bật chế độ dành cho nhà phát triển và chọn thư mục có `manifest.json`. Sau khi cài hoặc cập nhật, tải lại trang KTKT. Khi đồng bộ, cần đăng nhập hệ thống nguồn trên cùng trình duyệt.
 

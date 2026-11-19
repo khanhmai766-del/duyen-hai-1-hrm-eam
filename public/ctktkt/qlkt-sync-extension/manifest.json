@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Đồng bộ QLKT sang Chỉ tiêu KTKT",
-  "version": "0.4.41",
+  "version": "0.4.42",
   "description": "Đồng bộ tổng hợp dữ liệu ngày, PPA, PMIS, BCSX và 02-PĐ từ QLKT về web Chỉ tiêu KTKT.",
   "permissions": [
     "activeTab",

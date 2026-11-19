@@ -45,8 +45,8 @@ test('cương vị đang làm việc nhận đúng phạm vi, độc lập vai t
 });
 
 test('Thống kê mở được nhóm KTKT và vẫn giữ giới hạn các nhóm khác',()=>{
- assert.equal(pathAllowedForPosition('/tien-ich/chi-tieu-ktkt','Thống kê'),true);
- assert.equal(pathAllowedForPosition('/tien-ich/chi-tieu-ktkt/tien-ich-dong-bo','Thống kê'),true);
+ assert.equal(pathAllowedForPosition('/chi-tieu-ktkt','Thống kê'),true);
+ assert.equal(pathAllowedForPosition('/chi-tieu-ktkt/tien-ich-dong-bo','Thống kê'),true);
  assert.equal(pathAllowedForPosition('/tien-ich/phan-tich-dau','Thống kê'),false);
 });
 
@@ -64,11 +64,13 @@ test('gói tiện ích tải xuống có đúng phiên bản, đủ tệp và ch
 
 test('cầu nối QLKT và NKVH khởi tạo đúng trên đường dẫn KTKT đã tích hợp',async()=>{
  for(const [name,path] of [['qlkt-sync-extension','/ctktkt-report'],['nkvh-ppa-extension','/ppa-heat-rate']]){
+ for(const prefix of ['/chi-tieu-ktkt','/tien-ich/chi-tieu-ktkt','']){
   const handlers=[];
-  const location={pathname:'/tien-ich/chi-tieu-ktkt'+path,origin:'https://duyenhai1.vn'};
+  const location={pathname:prefix+path,origin:'https://duyenhai1.vn'};
   const window={location,addEventListener:(_event,fn)=>handlers.push(fn),postMessage:()=>{}};
   const context={window,location,chrome:{runtime:{getManifest:()=>({version:'1.0.0'}),onMessage:{addListener:()=>{}}}}};
   vm.runInNewContext(await readFile(new URL(`../../public/ctktkt/${name}/web-bridge.js`,import.meta.url),'utf8'),context);
   assert.ok(handlers.length>0,name);
+ }
  }
 });

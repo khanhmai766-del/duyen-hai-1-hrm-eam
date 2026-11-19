@@ -117,7 +117,7 @@ Single source of truth; richer than the README. Core entities: `User` (role enum
 ### Periodic safety registers (PCCC, TBYCNN)
 Two modules share one shape: a **period** row per month plus equipment rows scoped to it, positions normalized against `lib/position-catalog.ts` (label without unit suffix + `PositionCode` + `machine`), server-side xlsx export via exceljs, and writes blocked once the period is closed. PCCC (`pccc_*`, `docs/pccc.md`) is the mature one; TBYCNN — thiết bị yêu cầu nghiêm ngặt về ATLĐ (`tbycnn_*`, `docs/tbycnn.md`) was ported from a standalone localStorage HTML app and is at phase 1 (no period rollover yet). Copy the PCCC patterns when extending either.
 
-### Chỉ tiêu KTKT (`modules/ctktkt`, trang `/tien-ich/chi-tieu-ktkt`)
+### Chỉ tiêu KTKT (`modules/ctktkt`, trang `/chi-tieu-ktkt`)
 Đã chuyển hết về chuẩn web (Prisma, route `ok()/fail()`, TanStack Query) — kế hoạch, quyết định và nhật ký ở
 `docs/ktkt-chuyen-doi.md`; đọc trước khi sửa module. Kiểm: `npm run test:ctktkt`, `npm run test:ctktkt:contract` (`-- --writes`).
 

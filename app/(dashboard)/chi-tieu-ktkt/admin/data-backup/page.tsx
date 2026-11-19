@@ -7,6 +7,6 @@ import {DataBackupPanel} from "@/modules/ctktkt/components/data-backup-panel";
 export const dynamic="force-dynamic";
 export default async function DataBackupPage(){
   const guard=await requireAnyPermission("backup_data", "restore_data");
-  if(!guard.ok)redirect("/tien-ich/chi-tieu-ktkt");
+  if(!guard.ok)redirect("/chi-tieu-ktkt");
   return <AppShell active="data-backup"><DataBackupPanel canBackup={hasPermission(guard.user,"backup_data")} canRestore={hasPermission(guard.user,"restore_data")}/></AppShell>;
 }

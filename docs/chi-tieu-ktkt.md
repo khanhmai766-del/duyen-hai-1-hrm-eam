@@ -4,13 +4,13 @@ Tích hợp gói `ctktkt-dashboard-transfer-2026-11-04.zip` vào EAM. Thông tin
 
 ## Màn hình
 
-Thanh bên có nhóm **QUẢN LÝ CHỈ TIÊU KTKT**, gồm Dữ liệu các tháng, Báo cáo Chỉ tiêu KTKT, Báo cáo sản xuất, Theo dõi lượng nước, Theo dõi hóa chất, Suất hao nhiệt PPA và Báo cáo PMIS. Bên phải tiêu đề có ba nút biểu tượng: Tiện ích đồng bộ, Sao lưu & nạp dữ liệu (chung một màn hình), Nhật ký số liệu. Hai nút dữ liệu hiện theo quyền sao lưu/nạp và xem nhật ký; không lặp lại các mục này trong hàng tab báo cáo hoặc thanh bên. Các chức năng sao lưu/nạp/nhật ký đã có trong gói nguồn; phần nhận ZIP chia nhỏ được bổ sung khi tích hợp. Tuyến gốc: `/tien-ich/chi-tieu-ktkt`.
+Thanh bên có nhóm **QUẢN LÝ CHỈ TIÊU KTKT**, gồm Dữ liệu các tháng, Báo cáo Chỉ tiêu KTKT, Báo cáo sản xuất, Theo dõi lượng nước, Theo dõi hóa chất, Suất hao nhiệt PPA và Báo cáo PMIS. Bên phải tiêu đề có ba nút biểu tượng: Tiện ích đồng bộ, Sao lưu & nạp dữ liệu (chung một màn hình), Nhật ký số liệu. Hai nút dữ liệu hiện theo quyền sao lưu/nạp và xem nhật ký; không lặp lại các mục này trong hàng tab báo cáo hoặc thanh bên. Các chức năng sao lưu/nạp/nhật ký đã có trong gói nguồn; phần nhận ZIP chia nhỏ được bổ sung khi tích hợp. Tuyến gốc: `/chi-tieu-ktkt`.
 
 Các màn hình nằm trong khung ứng dụng EAM và sử dụng NextAuth hiện tại. Không tạo thêm tài khoản hoặc cookie đăng nhập của dự án nguồn. `User.id` hiện tại là danh tính người thao tác; quyền lấy từ RBAC của EAM, áp theo cương vị **đang làm việc** do `requireUser()` trả về. Ngày 04/11/2026 đã SSH **chỉ đọc** và đối chiếu 25 tên cương vị chính trên production (174 tài khoản đang hoạt động); các tên khớp chính sách CTKTKT. Không sửa nhân sự trên server.
 
 RBAC chung chỉ giữ `ctktkt-access` để mở/xem phân hệ. Các mức khác `none` của quyền cửa vào này đều không cấp quyền nghiệp vụ. Các dòng/ngoại lệ `ctktkt:<tên quyền nguồn>` cũ được bỏ khỏi API và màn hình RBAC; mã KTKT không dùng chúng nữa. Các cấu hình RBAC khác được giữ nguyên.
 
-Quyền nghiệp vụ nằm tại **Phân quyền KTKT** (`/tien-ich/chi-tieu-ktkt/phan-quyen`), mở bằng nút cạnh thao tác sao chép Excel. Bảng chọn cương vị cho từng nhóm quyền, có tìm kiếm, lọc cương vị đã giao và chọn/bỏ cả cột đang hiển thị. Nhóm sao lưu, nạp, nhật ký và sửa phân quyền được tách riêng. Quyền **Toàn quyền KTKT** bao gồm mọi thao tác trong phân hệ. Chỉ người có quyền sửa phân quyền hoặc toàn quyền KTKT mới được mở/lưu bảng.
+Quyền nghiệp vụ nằm tại **Phân quyền KTKT** (`/chi-tieu-ktkt/phan-quyen`), mở bằng nút cạnh thao tác sao chép Excel. Bảng chọn cương vị cho từng nhóm quyền, có tìm kiếm, lọc cương vị đã giao và chọn/bỏ cả cột đang hiển thị. Nhóm sao lưu, nạp, nhật ký và sửa phân quyền được tách riêng. Quyền **Toàn quyền KTKT** bao gồm mọi thao tác trong phân hệ. Chỉ người có quyền sửa phân quyền hoặc toàn quyền KTKT mới được mở/lưu bảng.
 
 Quyền lấy theo **cương vị đang làm việc**, không suy rộng từ vai trò VIEWER/SUPERVISOR/TECHNICIAN/MANAGER của web. Vì vậy VHV mang vai trò VIEWER vẫn nhập đúng các nhóm ô được giao, còn Giám sát không tự có thêm quyền PPA/hóa chất. Khi đổi cương vị, quyền KTKT đổi ở lần yêu cầu tiếp theo. Tài khoản tra cứu giới hạn (`DEFECT_READ_ONLY`) và tài khoản đang buộc đổi mật khẩu vẫn bị chặn. ADMIN đang bật chế độ quản trị website luôn có toàn quyền để phục hồi cấu hình; điều này không nâng quyền hệ thống cho người được giao quản trị KTKT.
 
@@ -74,7 +74,7 @@ Script kiểm tra API chỉ chạy local, tạo rồi xóa tài khoản tạm; k
 
 Các bản tiện ích QLKT/NKVH của gói này nằm riêng tại `public/ctktkt/`, đã cập nhật đường dẫn và danh sách host cho `duyenhai1.vn`, `ctktkt.duyenhai1.vn` và local. Không thay các tiện ích DH1 đang sửa dở trong `chrome-extension/`. Chưa kiểm nghiệm với phiên đăng nhập EVN nội bộ; phải cài bản ZIP mới khi kiểm tra đồng bộ thực tế. Google Sheets/AI vẫn cần cấu hình khóa và quyền truy cập tương ứng; liên kết mirror chỉ hiện khi cấu hình hoạt động.
 
-Trang `/tien-ich/chi-tieu-ktkt/tien-ich-dong-bo` có nút tải QLKT v0.4.41 và NKVH v0.2.1 cùng hướng dẫn cài Chrome/Edge. Đóng gói lại sau khi sửa tiện ích bằng `node chrome-extension/scripts/package-ctktkt.mjs`; danh sách tệp được cố định trong script này.
+Trang `/chi-tieu-ktkt/tien-ich-dong-bo` có nút tải QLKT v0.4.42 và NKVH v0.2.2 cùng hướng dẫn cài Chrome/Edge. Đóng gói lại sau khi sửa tiện ích bằng `node chrome-extension/scripts/package-ctktkt.mjs`; danh sách tệp được cố định trong script này.
 
 Có thể thêm `ctktkt.duyenhai1.vn` trỏ vào cùng ứng dụng; cần cấu hình DNS, HTTPS, định tuyến và phiên đăng nhập trước khi sử dụng. Tên miền phụ chưa được cấu hình. Ngày 04/11/2026 người dùng đã cho phép đưa bản tích hợp KTKT lên `main`, build/deploy bằng quy trình production, thêm bảng KTKT và nạp gói backup theo chế độ chỉ bổ sung dữ liệu thiếu. Kết quả triển khai phải được xác nhận riêng sau khi chạy.
 

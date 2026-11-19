@@ -41,10 +41,10 @@ try {
  const preview=await fetch(base+'/api/ctktkt/admin/data-backup',{method:'POST',headers:{...restore,'content-type':'application/json'},body:JSON.stringify({action:'preview',mode:'missing',file})});assert.equal(preview.status,200);checks.push({restoreOnlyPreview:200});
  await call('admin/data-backup',restore,403);await call('permissions',restore,403);
  for(const [headers,showBackup,showRestore] of [[backup,true,false],[restore,false,true]]) {
-  const response=await fetch(base+'/tien-ich/chi-tieu-ktkt/admin/data-backup',{headers,redirect:'manual'});assert.equal(response.status,200);const html=await response.text();
+  const response=await fetch(base+'/chi-tieu-ktkt/admin/data-backup',{headers,redirect:'manual'});assert.equal(response.status,200);const html=await response.text();
   assert.equal(html.includes('id="sao-luu"'),showBackup);assert.equal(html.includes('id="nap-du-lieu"'),showRestore);
  }
- const historyPage=await fetch(base+'/tien-ich/chi-tieu-ktkt/admin/data-history',{headers:history,redirect:'manual'});assert.equal(historyPage.status,200);
+ const historyPage=await fetch(base+'/chi-tieu-ktkt/admin/data-history',{headers:history,redirect:'manual'});assert.equal(historyPage.status,200);
  await call('admin/data-backup',history,403);await call('permissions',history,403);
  for(const path of ['admin/data-backup','admin/data-backup/archive']) {
   const response=await fetch(base+'/api/ctktkt/'+path,{method:'POST',headers:{...backup,'content-type':'application/json'},body:'{}'});assert.equal(response.status,403);checks.push({path,restoreWithBackupOnly:403});

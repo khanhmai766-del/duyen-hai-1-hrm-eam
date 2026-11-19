@@ -1,4 +1,4 @@
-export const REQUIRED_QLKT_EXTENSION_VERSION = "0.4.41";
+export const REQUIRED_QLKT_EXTENSION_VERSION = "0.4.42";
 export const QLKT_EXTENSION_DOWNLOAD_URL = `/ctktkt/qlkt-sync-extension.zip?v=${REQUIRED_QLKT_EXTENSION_VERSION}`;
 
 function versionParts(version: string) {

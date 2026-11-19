@@ -31,7 +31,7 @@ async function json(route,headers,init={}){
 }
 try{
  const admin=await session('ADMIN'),viewer=await session('VIEWER');
- const downloadPage=await fetch(base+'/tien-ich/chi-tieu-ktkt/tien-ich-dong-bo',{headers:admin});assert.equal(downloadPage.status,200);const html=await downloadPage.text();
+ const downloadPage=await fetch(base+'/chi-tieu-ktkt/tien-ich-dong-bo',{headers:admin});assert.equal(downloadPage.status,200);const html=await downloadPage.text();
  for(const name of ['qlkt-sync-extension','nkvh-ppa-extension']){
   assert.ok(html.includes('/ctktkt/'+name+'.zip'),name);
   const response=await fetch(base+'/ctktkt/'+name+'.zip',{headers:admin});assert.equal(response.status,200);

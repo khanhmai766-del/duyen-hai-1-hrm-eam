@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { DatabaseBackup, FileSpreadsheet, History, Puzzle } from "lucide-react";
 import { hasPermission, type SessionUser } from "../lib/auth/session";
-const base="/tien-ich/chi-tieu-ktkt";
+const base="/chi-tieu-ktkt";
 export function ModuleTools({user}:{user:SessionUser}) {
   const backup=hasPermission(user,"backup_data")||hasPermission(user,"restore_data");
   const items=[{href:"/tien-ich-dong-bo",label:"Tải tiện ích đồng bộ",icon:Puzzle},

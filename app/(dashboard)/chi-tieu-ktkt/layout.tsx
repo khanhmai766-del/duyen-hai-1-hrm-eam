@@ -4,7 +4,6 @@ import { getSessionUser } from "@/modules/ctktkt/lib/auth/server";
 import { ModuleTools } from "@/modules/ctktkt/components/module-tools";
 import { HeaderCopyTools } from "@/modules/ctktkt/components/header-copy-tools";import "@/modules/ctktkt/styles.css";
 export const dynamic = "force-dynamic";
-export const metadata = {title:"Chỉ tiêu KTKT · Duyên Hải 1"};
 export default async function Layout({children}:{children:React.ReactNode}) {
   const user=await getSessionUser();
   if(!user) redirect("/");

@@ -2,7 +2,7 @@ import { buildMilestoneSchedule } from "../../../lib/overhaul-milestones.ts";
 export const ctktktIntegrationPreset = {
   description: "Các báo cáo KTKT với số liệu đã chuyển local; chỉ đọc. Giả lập thông báo đại tu vì DB dev cũ thiếu cột ngoài phân hệ này.",
   async prepare() { return {}; },
-  routes: () => [...["", "/ctktkt-report", "/pmis-report", "/ppa-heat-rate", "/water-report", "/chemical-usage", "/bcsx-report", "/admin/data-backup", "/admin/data-history", "/tien-ich-dong-bo"].map(path => "/tien-ich/chi-tieu-ktkt" + path), "/admin/roles"],
+  routes: () => [...["", "/ctktkt-report", "/pmis-report", "/ppa-heat-rate", "/water-report", "/chemical-usage", "/bcsx-report", "/admin/data-backup", "/admin/data-history", "/tien-ich-dong-bo"].map(path => "/chi-tieu-ktkt" + path), "/admin/roles"],
   async mock(context) {
     await context.route("**/api/overhaul-milestones", route => route.fulfill({ json: { data: buildMilestoneSchedule([], new Date()), meta: null, error: null } }));
   },
@@ -21,7 +21,7 @@ export const ctktktIntegrationPreset = {
 export const ctktktPermissionsPreset = {
   ...ctktktIntegrationPreset,
   description: "Phân quyền KTKT theo cương vị: bảng quản trị, nhóm KTKT, hộp khôi phục và RBAC chỉ còn cửa vào. Chỉ đọc và sửa bản nháp trên trình duyệt.",
-  routes: () => ["/tien-ich/chi-tieu-ktkt", "/tien-ich/chi-tieu-ktkt/phan-quyen", "/tien-ich/chi-tieu-ktkt/phan-quyen?verify=ktkt", "/tien-ich/chi-tieu-ktkt/phan-quyen?verify=reset", "/tien-ich/chi-tieu-ktkt/admin/data-backup", "/tien-ich/chi-tieu-ktkt/admin/data-history", "/admin/roles"],
+  routes: () => ["/chi-tieu-ktkt", "/chi-tieu-ktkt/phan-quyen", "/chi-tieu-ktkt/phan-quyen?verify=ktkt", "/chi-tieu-ktkt/phan-quyen?verify=reset", "/chi-tieu-ktkt/admin/data-backup", "/chi-tieu-ktkt/admin/data-history", "/admin/roles"],
   async interact(page, route) {
     if (!route.includes("/phan-quyen")) return ctktktIntegrationPreset.interact(page, route);
     await page.getByRole("heading", { name: "Phân quyền KTKT", exact: true }).waitFor();

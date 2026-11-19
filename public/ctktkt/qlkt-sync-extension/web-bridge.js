@@ -1,5 +1,5 @@
 (() => {
-  if (!/^(?:\/|\/ppa-heat-rate\/?|\/pmis-report\/?|\/bcsx-report\/?|\/ctktkt-report\/?)$/.test(window.location.pathname.replace(/^\/tien-ich\/chi-tieu-ktkt/, "") || "/")) return;
+  if (!/^(?:\/|\/ppa-heat-rate\/?|\/pmis-report\/?|\/bcsx-report\/?|\/ctktkt-report\/?)$/.test(window.location.pathname.replace(/^\/(?:tien-ich\/)?chi-tieu-ktkt(?=\/|$)/, "") || "/")) return;
   const channel = "ctktkt-qlkt-sync";
   const post = message => window.postMessage({ channel, sender: "ctktkt-extension", ...message }, window.location.origin);
 

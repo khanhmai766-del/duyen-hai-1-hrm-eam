@@ -47,7 +47,7 @@ function buildShifts() {
 export const ctktktWaterPreset = {
   description: "Theo dõi lượng nước: 24 ca giả lập (8 ngày), có ca hệ số > 0,08; chỉ đọc.",
   async prepare() { return {}; },
-  routes: () => ["/tien-ich/chi-tieu-ktkt/water-report", "/tien-ich/chi-tieu-ktkt/water-report?verify=scroll", "/tien-ich/chi-tieu-ktkt/water-report?verify=cards", "/tien-ich/chi-tieu-ktkt/water-report?verify=copy"],
+  routes: () => ["/chi-tieu-ktkt/water-report", "/chi-tieu-ktkt/water-report?verify=scroll", "/chi-tieu-ktkt/water-report?verify=cards", "/chi-tieu-ktkt/water-report?verify=copy"],
   async mock(context) {
     const shifts = buildShifts();
     const baseline = { ...shifts[0], id: 0, logDate: "2026-10-31", shiftTime: "22h00", shiftTeam: "A", shiftLeader: "Châu", elecRecS1: 6_920_576.6, waterRecS1: 11_111.47, condenserRecS1: 7_676.02, resinWaterS1_24h: 267 };

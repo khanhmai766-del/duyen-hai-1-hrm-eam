@@ -11,7 +11,7 @@ import { readdirSync, readFileSync, statSync, existsSync } from "node:fs";
 import { join, relative, sep } from "node:path";
 
 const ROOT = process.cwd();
-const SCOPE = ["modules/ctktkt", "app/api/ctktkt", "app/(dashboard)/tien-ich/chi-tieu-ktkt", "hooks/useKtktReport.ts"];
+const SCOPE = ["modules/ctktkt", "app/api/ctktkt", "app/(dashboard)/chi-tieu-ktkt", "hooks/useKtktReport.ts"];
 
 // Luật 1 — SQL thô: chỉ các chỗ Prisma không có API (khoá advisory/FOR UPDATE, LOCK TABLE + setval khi khôi phục,
 // upsert có điều kiện của bộ đếm lượt đọc ảnh, information_schema). Số = số lần gọi tối đa hiện có.

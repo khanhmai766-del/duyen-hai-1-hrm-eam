@@ -15,6 +15,6 @@ export default async function GoogleSheetsSetup() {
    <li>Sau khi xác nhận dữ liệu web PX đầy đủ, chọn <strong>syncNow</strong> và nhấn <strong>Chạy</strong> một lần. Kiểm tra dữ liệu và thời gian cập nhật trên Sheet và web PX. Lịch hiện có tiếp tục chạy mỗi giờ.</li>
   </ol>
   <p className="rounded-lg bg-amber-50 p-3 text-amber-900">Không chạy install khi chuyển từ web cũ: dùng connectPxSource để giữ lịch hiện tại. Nếu báo không có hoặc có nhiều lịch syncNow, dừng và kiểm tra dự án đang mở trước khi tiếp tục.</p>
-  <Link className="inline-flex min-h-10 items-center text-blue-700 underline" href="/tien-ich/chi-tieu-ktkt">Quay lại dữ liệu các tháng</Link>
+  <Link className="inline-flex min-h-10 items-center text-blue-700 underline" href="/chi-tieu-ktkt">Quay lại dữ liệu các tháng</Link>
  </section></AppShell>;
 }

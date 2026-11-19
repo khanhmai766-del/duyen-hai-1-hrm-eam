@@ -14,12 +14,12 @@ const base = process.env.CTKTKT_VERIFY_BASE || "http://localhost:3030";
 const PAGES = [
   "", "/ctktkt-report", "/chemical-usage", "/water-report", "/pmis-report", "/ppa-heat-rate", "/bcsx-report",
   "/admin/data-backup", "/admin/data-history?date=2026-09-17", "/phan-quyen", "/google-sheets", "/tien-ich-dong-bo",
-].map(p => `/tien-ich/chi-tieu-ktkt${p}`)
+].map(p => `/chi-tieu-ktkt${p}`)
   // CTKTKT_STYLE_PAGES=pmis-report,ppa-heat-rate → chỉ chụp các trang này (nhanh khi sửa từng trang). Không cần "/" đầu
   // (Git Bash đổi "/x" thành đường dẫn Windows); "/" hoặc "nhap-lieu" = trang nhập liệu.
   .filter(p => !process.env.CTKTKT_STYLE_PAGES || process.env.CTKTKT_STYLE_PAGES.split(",").some(x => {
     const name = x.trim().replace(/^[A-Za-z]:\/.*?\/Git\//, "").replace(/^\/+/, "");
-    return p === `/tien-ich/chi-tieu-ktkt${name === "" || name === "nhap-lieu" ? "" : "/" + name}`;
+    return p === `/chi-tieu-ktkt${name === "" || name === "nhap-lieu" ? "" : "/" + name}`;
   }));
 
 // Trạng thái cần chụp thêm cho từng trang: tên → thao tác (chạy sau khi tải lại trang). CTKTKT_STYLE_SCENARIOS=0 → bỏ qua.
@@ -101,7 +101,7 @@ try {
       await page.waitForTimeout(2500); // chờ hiệu ứng vẽ biểu đồ (recharts ~1,5 s) xong
       await snapshot(`${width} ${path}`);
       // Trạng thái sau thao tác (mở menu, đổi tab, rê chuột) — CSS cũ có quy tắc riêng cho các trạng thái này.
-      for (const [name, run] of Object.entries(SCENARIOS[path.replace("/tien-ich/chi-tieu-ktkt", "") || "/"] || {})) {
+      for (const [name, run] of Object.entries(SCENARIOS[path.replace("/chi-tieu-ktkt", "") || "/"] || {})) {
         if (process.env.CTKTKT_STYLE_SCENARIOS === "0" || width === "print") break; // bản in ẩn mọi nút
         // CTKTKT_STYLE_SCENARIOS=anh-than → chỉ chạy kịch bản có tên khớp (biểu thức chính quy).
         if (process.env.CTKTKT_STYLE_SCENARIOS && !new RegExp(process.env.CTKTKT_STYLE_SCENARIOS).test(name)) continue;
@@ -138,4 +138,4 @@ const hashed = Object.fromEntries(Object.entries(result).map(([k, rows]) => [k, 
 })]));
 writeFileSync(out, JSON.stringify({ hashed }));
 writeFileSync(out.replace(/\.json$/, "") + ".styles.json", JSON.stringify(styles));
-console.log(`Đã ghi ${out}:`, Object.entries(hashed).map(([k, v]) => `${k.replace("/tien-ich/chi-tieu-ktkt", "") || "/"}=${v.length}`).join(" "));
+console.log(`Đã ghi ${out}:`, Object.entries(hashed).map(([k, v]) => `${k.replace("/chi-tieu-ktkt", "") || "/"}=${v.length}`).join(" "));

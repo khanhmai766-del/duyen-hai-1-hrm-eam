@@ -7,6 +7,6 @@ import { canManageKtktInputs } from "@/modules/ctktkt/lib/auth/delegation-policy
 export const dynamic = "force-dynamic";
 export default async function PositionPermissionsPage() {
   const guard = await requireSession();
-  if (!guard.ok || !canManageKtktInputs(guard.user)) redirect("/tien-ich/chi-tieu-ktkt");
+  if (!guard.ok || !canManageKtktInputs(guard.user)) redirect("/chi-tieu-ktkt");
   return <AppShell active="permissions"><PositionPermissionsPanel/></AppShell>;
 }

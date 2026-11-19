@@ -221,7 +221,7 @@ npm run test:ctktkt                 # 329 test đơn vị/miền (cần bảng c
 npm run test:ctktkt:contract        # các API GET phải khớp ảnh chụp chuẩn (cần dev server ở :3030)
 npm run test:ctktkt:contract -- --writes   # kịch bản thêm/sửa/xoá phải ra phản hồi + trạng thái y hệt
 npx tsc --noEmit
-MSYS_NO_PATHCONV=1 npm run verify:ui -- /tien-ich/chi-tieu-ktkt/<trang>
+MSYS_NO_PATHCONV=1 npm run verify:ui -- /chi-tieu-ktkt/<trang>
 ```
 
 ### Test hợp đồng (`scripts/verify/ctktkt-contract.mjs`)
