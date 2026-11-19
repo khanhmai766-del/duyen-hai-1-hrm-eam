@@ -405,7 +405,6 @@ async function buildEquipmentDashboard(
     });
   }
   signalRows.sort((a, b) => b.riskScore - a.riskScore || b.signalTotal - a.signalTotal);
-  const topSignalRows = signalRows.slice(0, 8);
 
   const systemRowsByPosition: Record<string, EquipmentDashboardSystemRow[]> = {};
   const buildSystemRows = (allowed?: Set<string>) => {
@@ -559,12 +558,14 @@ async function buildEquipmentDashboard(
     systemRowsByPosition,
     positionRows,
     statusRows,
-    defectChartRows: topSignalRows
+    defectChartRows: signalRows
       .filter((device) => device.openDefectCount > 0)
-      .sort((a, b) => b.openDefectCount - a.openDefectCount),
-    replacementChartRows: topSignalRows
+      .sort((a, b) => b.openDefectCount - a.openDefectCount)
+      .slice(0, 8),
+    replacementChartRows: signalRows
       .filter((device) => device.replacementWarn > 0)
-      .sort((a, b) => b.replacementWarn - a.replacementWarn),
+      .sort((a, b) => b.replacementWarn - a.replacementWarn)
+      .slice(0, 8),
     upcomingReplacements,
     currentYear,
     monthlyTrendByRequestType,
