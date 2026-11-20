@@ -83,42 +83,48 @@ const compactMeterCodes: Record<string, string> = {
   "6303": "DH1_285M",
 };
 
-function meterFromCompactFileName(sourceName: string) {
-  const fileName = sourceName.split(/[\\/]/).at(-1)?.replace(/\.csv$/i, "") || "";
+export function meterFromCompactFileName(sourceName: string) {
+  const fileName = sourceName.split(/[\\/]/).at(-1)?.replace(/\.{1,2}csv$/i, "") || "";
   const match = fileName.match(/(6001|6002|6301|6303)(?:\s*\(\d+\))?$/i);
   return match ? compactMeterCodes[match[1]] : "";
 }
 
-function parseCompactMeterCsv(rows: string[][], sourceName: string) {
+function parseCompactMeterCsv(rows: string[][], sourceName: string, includeGridReceived: boolean) {
   const meter = meterFromCompactFileName(sourceName);
   if (!meter) {
     throw new Error(`${sourceName}: CSV rút gọn chưa có “Tên điểm đo”. Tên file phải kết thúc bằng 6001, 6002, 6301 hoặc 6303.`);
   }
   const row = rows.find(candidate => normalizeText(candidate[1] || "") === "kwhgiao");
   if (!row) throw new Error(`${sourceName}: không tìm thấy dòng KwhGiao.`);
-  if (row.length < 50) throw new Error(`${sourceName}: dòng KwhGiao chưa đủ 48 chu kỳ nửa giờ.`);
-  const operatingDate = normalizeDate(row[0] || "");
-  if (!operatingDate) throw new Error(`${sourceName}: ngày báo cáo không hợp lệ.`);
-  const intervals = row.slice(2, 50).map(value => parseLocaleNumber(value));
-  if (intervals.some(value => value === null || value < 0)) throw new Error(`${sourceName}: có giá trị KwhGiao không hợp lệ.`);
-  const numericIntervals = intervals as number[];
-  return [{
-    meter,
-    channel: "kWhGiao",
-    operatingDate,
-    total: numericIntervals.reduce((sum, value) => sum + value, 0),
-    intervals: numericIntervals,
-    sourceName,
-  }] satisfies MeterReading[];
+  const parseChannel = (line: string[], channel: string): MeterReading => {
+    if (line.length < 50) throw new Error(`${sourceName}: dòng ${channel} chưa đủ 48 chu kỳ nửa giờ.`);
+    const operatingDate = normalizeDate(line[0] || "");
+    if (!operatingDate) throw new Error(`${sourceName}: ngày báo cáo không hợp lệ.`);
+    const intervals = line.slice(2, 50).map(value => parseLocaleNumber(value));
+    if (intervals.some(value => value === null || value < 0)) throw new Error(`${sourceName}: có giá trị ${channel} không hợp lệ.`);
+    const numericIntervals = intervals as number[];
+    return {
+      meter, channel, operatingDate, sourceName,
+      total: numericIntervals.reduce((sum, value) => sum + value, 0),
+      intervals: numericIntervals,
+    };
+  };
+  const readings = [parseChannel(row, "kWhGiao")];
+  if (includeGridReceived && (meter === "DH1_285M" || meter === "DH1_283M")) {
+    for (const line of rows.filter(candidate => normalizeText(candidate[1] || "") === "kwhnhan")) {
+      readings.push(parseChannel(line, "kWhNhan"));
+    }
+  }
+  return readings;
 }
 
-export function parseMeterCsv(text: string, sourceName = "Dữ liệu dán") {
+export function parseMeterCsv(text: string, sourceName = "Dữ liệu dán", { includeGridReceived = false } = {}) {
   const lines = text.replace(/\r\n?/g, "\n").split("\n").filter(line => line.trim());
   if (!lines.length) return [] as MeterReading[];
   const delimiter = detectDelimiter(lines);
   const rows = lines.map(line => splitDelimitedLine(line, delimiter));
   const headerIndex = rows.findIndex(row => row.some(cell => normalizeText(cell) === "ten diem do") && row.some(cell => normalizeText(cell) === "kenh"));
-  if (headerIndex < 0) return parseCompactMeterCsv(rows, sourceName);
+  if (headerIndex < 0) return parseCompactMeterCsv(rows, sourceName, includeGridReceived);
   const header = rows[headerIndex].map(normalizeText);
   const meterIndex = header.findIndex(cell => cell === "ten diem do");
   const channelIndex = header.findIndex(cell => cell === "kenh");
@@ -132,7 +138,7 @@ export function parseMeterCsv(text: string, sourceName = "Dữ liệu dán") {
     const meter = cleanText(row[meterIndex] || ""), channel = cleanText(row[channelIndex] || "");
     if (!meter || !channel) continue;
     const intervals = hourIndexes.map(index => parseLocaleNumber(row[index] || ""));
-    if (intervals.some(value => value === null)) continue;
+    if (intervals.some(value => value === null || value < 0)) throw new Error(`${sourceName}: ${meter} / ${channel}: cần đủ 48 giá trị không âm.`);
     const numericIntervals = intervals as number[];
     const reportedTotal = totalIndex >= 0 ? parseLocaleNumber(row[totalIndex] || "") : null;
     readings.push({ meter, channel, operatingDate: dateIndex >= 0 ? normalizeDate(row[dateIndex] || "") : "", total: reportedTotal ?? numericIntervals.reduce((sum, value) => sum + value, 0), intervals: numericIntervals, sourceName });

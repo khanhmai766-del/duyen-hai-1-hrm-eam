@@ -2,6 +2,7 @@
 import { useCallback } from "react";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiDownload, apiGet, apiMutate } from "@/lib/fetcher";
+import type { ProductionCsvPreview } from "@/modules/ctktkt/lib/production-csv";
 
 /**
  * Trang Chỉ tiêu KTKT (`/api/ctktkt/ctktkt-report`, yêu cầu sửa, ảnh công tơ than, Gemini dùng chung).
@@ -22,6 +23,17 @@ export type CtktktReportSaveInput = {
 };
 
 const REPORT_URL = "/api/ctktkt/ctktkt-report";
+
+export function usePreviewProductionCsv() {
+  return useMutation({
+    mutationFn: async (body: FormData) => {
+      const response = await fetch("/api/ctktkt/production-csv", { method: "POST", body });
+      const result = await response.json().catch(() => null) as { data?: ProductionCsvPreview; error?: string } | null;
+      if (!response.ok || !result?.data) throw new Error(result?.error || "Không đọc được CSV.");
+      return result.data;
+    },
+  });
+}
 
 /**
  * Đọc báo cáo theo chuỗi truy vấn (`period=…&date=…&scope=…`). Bảng nhập tự giữ số đang sửa nên đọc kiểu mệnh lệnh:

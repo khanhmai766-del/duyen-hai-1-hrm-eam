@@ -19,6 +19,8 @@ import { CTKTKT_OPERATION_EVENTS_CELL, normalizeCtktktOperationEvents } from "@/
 import { reportQueryRange } from "@/modules/ctktkt/lib/report-read-range";
 import {coalEntriesMatchUnit} from "@/modules/ctktkt/lib/coal-meter-ocr";
 import { rethrowKtktServerFault } from "@/modules/ctktkt/server/server-fault";
+import { isGridReceiveCell } from "@/modules/ctktkt/lib/auxiliary-electricity";
+import { canEditDailyInput } from "@/modules/ctktkt/lib/auth/daily-input-permissions";
 
 const fieldCells = REPORT_WRITABLE_CELLS;
 const datePattern = /^(19|20|21)\d{2}-(0[1-9]|1[0-2])-([0-2]\d|3[01])$/;
@@ -129,7 +131,7 @@ export async function POST(request: Request) {
       const value = cell === CTKTKT_OPERATION_EVENTS_CELL
         ? normalizeCtktktOperationEvents(normalizedValue)
         : normalizedValue;
-      if (!fieldCells.has(cell)) throw new Error(`Ô ${cell || "không rõ"} không nằm trong mẫu được phép nhập.`);
+      if (!fieldCells.has(cell) && !isGridReceiveCell(cell)) throw new Error(`Ô ${cell || "không rõ"} không nằm trong mẫu được phép nhập.`);
       if (cell === COAL_STOCK_24H_START_CELL && value && !String(body.operatingDate).endsWith("-01")) {
         throw new Error("Than tồn kho 24h chỉ nhập tại ngày 01; các ngày sau tự tính.");
       }
@@ -145,6 +147,9 @@ export async function POST(request: Request) {
       const maxLength = cell === CTKTKT_OPERATION_EVENTS_CELL ? 25_000 : CTKTKT_TEXT_INPUT_CELLS.has(cell) ? 500 : 80;
       if (value.length > maxLength) throw new Error(`Giá trị ô ${cell} quá dài.`);
       if (value && !isText && !/^-?\d+(?:\.\d+)?$/.test(value)) throw new Error(`Ô ${cell} phải là số.`);
+      if (isGridReceiveCell(cell) && (!value || !Number.isFinite(Number(value)) || Number(value) < 0)) {
+        throw new Error("Điện nhận lưới phải là số MWh không âm.");
+      }
       return { cell, value };
     });
     if(new Set(clean.map(entry=>entry.cell)).size!==clean.length)throw new Error("Danh sách có ô dữ liệu bị trùng. Chưa lưu số liệu.");
@@ -154,7 +159,12 @@ export async function POST(request: Request) {
       if((body.coalUnit!=="S1"&&body.coalUnit!=="S2")||!coalEntriesMatchUnit(clean,body.coalUnit))throw new Error("Công tơ S1/S2 bị lẫn hoặc khác tổ máy đã chọn. Chưa lưu số liệu.");
     }
     // Chỉ lưu những ô mà người dùng có thẩm quyền theo cương vị / vai trò
-    const authorizedEntries = clean.filter(entry => body.correctionReason ? canProposeCtktktCorrection(user, entry.cell) : canEditCtktktField(user, entry.cell));
+    const authorizedEntries = clean.filter(({ cell }) => {
+      if (isGridReceiveCell(cell)) {
+        return body.correctionReason === undefined && canEditCtktktField(user, "J157") && canEditDailyInput(user, cell);
+      }
+      return body.correctionReason ? canProposeCtktktCorrection(user, cell) : canEditCtktktField(user, cell);
+    });
     if (authorizedEntries.length !== clean.length) {
       return fail("Bạn không có quyền sửa các ô dữ liệu đã gửi.", 403);
     }

@@ -2,12 +2,14 @@
 // Tab 6 · Báo cáo PMIS 02-PĐ & đối chiếu ngày (sản lượng, chỉ tiêu KTKT).
 import { PMIS_AUX_SOURCE_LABEL, calculatePmisAuxiliary } from "../../lib/ctktkt-pmis-auxiliary";
 import { Save, RefreshCw } from "lucide-react";
-import { canEditCtktktGroup } from "@/modules/ctktkt/lib/ctktkt-permissions";
+import { canEditCtktktField, canEditCtktktGroup } from "@/modules/ctktkt/lib/ctktkt-permissions";
+import { canEditDailyInput } from "@/modules/ctktkt/lib/auth/daily-input-permissions";
+import { ProductionCsvImport } from "../production-csv-import";
 import { format, num } from "./shared";
 import type { CtktktReportCtx } from "./use-ctktkt-report";
 
 export function CtktktPmisReportsTab({ ctx }: { ctx: CtktktReportCtx }) {
-  const { user, canEditSelectedDate, userCanEditAny, saving, extensionVersion, extensionOutdated, syncingPmis, previous, current, save, syncPmis02PdFromQlkt, renderCellInput } = ctx;
+  const { user, date, canEditSelectedDate, userCanEditAny, loading, saving, dirty, extensionVersion, extensionOutdated, syncingPmis, previous, current, save, syncPmis02PdFromQlkt, renderCellInput, setReloadVersion } = ctx;
             const j157 = num(current, "J157");
             const k157 = num(current, "K157");
             const j158 = num(current, "J158");
@@ -38,10 +40,19 @@ export function CtktktPmisReportsTab({ ctx }: { ctx: CtktktReportCtx }) {
                       </span>
                     </div>
                     <p className="mt-0.5 text-xs text-slate-500">
-                      Chỉ lấy tự động từ QLKT (mục Sản lượng DH1_MF1/MF2 và mục 02-PĐ hàng Duyên Hải 1), không dùng công tơ và không nhập tay. Các số liệu này tự động liên kết sang Cụm 1 và Mục 2 của BCSX S1, S2, A0.
+                      Đồng bộ từ QLKT hoặc nhập CSV công tơ khi QLKT không khả dụng. Sản lượng đã lưu tự liên kết sang Cụm 1 và Mục 2 của BCSX S1, S2, A0.
                     </p>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <ProductionCsvImport
+                      key={date}
+                      date={date}
+                      current={current}
+                      editableIndicators={(["S181", "T181"] as const).filter(cell => canEditCtktktField(user, cell))}
+                      canSaveGridReceived={canEditDailyInput(user, "GRID_RECEIVE_S1")}
+                      disabled={loading || saving || syncingPmis || dirty || !canEditPmis}
+                      onSaved={() => setReloadVersion(version => version + 1)}
+                    />
                     <button
                       type="button"
                       disabled={syncingPmis || !canEditPmis}

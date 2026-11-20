@@ -13,7 +13,7 @@ import net from "node:net";
 //
 // KHÔNG import next/* hay lib/api: lib/s3.ts (script tsx cũng dùng) gọi file này.
 
-export type FileKind = "jpeg" | "png" | "gif" | "webp" | "avif" | "tiff" | "pdf" | "zip" | "ole";
+export type FileKind = "jpeg" | "png" | "gif" | "webp" | "avif" | "tiff" | "pdf" | "zip" | "rar" | "ole";
 
 /** Ảnh sharp giải mã được — ảnh sau đó luôn được mã hóa lại, xoá mọi dữ liệu nhúng. */
 export const IMAGE_KINDS: FileKind[] = ["jpeg", "png", "gif", "webp", "avif", "tiff"];
@@ -39,6 +39,7 @@ export function detectFileKind(buffer: Buffer): FileKind | null {
   if (ascii(0, 4) === "RIFF" && ascii(8, 12) === "WEBP") return "webp";
   if (ascii(4, 8) === "ftyp" && ["avif", "avis"].includes(ascii(8, 12))) return "avif";
   if (ascii(0, 4) === "II*\0" || ascii(0, 4) === "MM\0*") return "tiff";
+  if (ascii(0, 7) === "Rar!\x1a\x07\x00" || ascii(0, 8) === "Rar!\x1a\x07\x01\x00") return "rar";
   // Chuẩn PDF cho phép "%PDF-" nằm trong 1024 byte đầu (Acrobat chấp nhận vậy).
   if (buffer.subarray(0, 1024).includes("%PDF-")) return "pdf";
   if (ascii(0, 4) === "PK\x03\x04" || ascii(0, 4) === "PK\x05\x06") return "zip";

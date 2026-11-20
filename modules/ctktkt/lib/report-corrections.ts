@@ -7,6 +7,7 @@ import {bumpReadVersions, ktktUtcNow, type KtktTx} from "../db/prisma";
 import type {SessionUser} from "./auth/session";
 import {canSelfCorrect,inputShiftStart,canFinalizeReportDate} from "./input-shift";
 import {canEditCtktktField} from "./ctktkt-permissions";
+import {isGridReceiveCell} from "./auxiliary-electricity";
 
 /**
  * Lưu Chỉ tiêu KTKT theo ca + yêu cầu chỉnh sửa (giai đoạn 3: Prisma). Hai chỗ duy nhất còn viết SQL qua Prisma
@@ -19,9 +20,10 @@ type Entry={cell:string;value:string};
 type Snapshot=Entry & {oldValue:string|null;oldNote:string|null;oldUpdatedAt:string|null;auditId:string};
 type Ownership={owner_id:string;shift_start:Date};
 export class CorrectionError extends Error {constructor(message:string,public status=409){super(message);}}
+const storageCode = (cell: string) => isGridReceiveCell(cell) ? cell : 'KTKT:' + cell;
 
 async function snapshot(tx:KtktTx,date:string,entry:Entry):Promise<Snapshot> {
- const code='KTKT:'+entry.cell;
+ const code=storageCode(entry.cell);
  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${date+':'+code},0))`;
  const rows=await tx.$queryRaw<Array<{value:string;note:string;updated_at:string}>>`SELECT value,note,updated_at FROM public.ctktkt_daily_inputs WHERE operating_date=${date} AND field_code=${code} FOR UPDATE`;
  const audit=await tx.ctktktDailyInputAudit.findFirst({where:{operating_date:date,field_code:code},orderBy:{id:"desc"},select:{id:true}});
@@ -33,7 +35,7 @@ async function findOwnership(tx:KtktTx,date:string,code:string):Promise<Ownershi
 }
 /** Chủ ô: bảng chủ ô; chưa có thì suy từ dòng nhật ký đầu tiên (thêm mới từ trang báo cáo) và ghi lại. */
 async function ownership(tx:KtktTx,date:string,cell:string):Promise<Ownership|null> {
- const code='KTKT:'+cell;
+ const code=storageCode(cell);
  let result=await findOwnership(tx,date,code);
  if(!result){
  const first=await tx.ctktktDailyInputAudit.findFirst({where:{operating_date:date,field_code:code},orderBy:{id:"asc"},select:{actor_id:true,action:true,source:true,changed_at:true}});
@@ -49,7 +51,7 @@ async function ownership(tx:KtktTx,date:string,cell:string):Promise<Ownership|nu
 }
 async function persist(tx:KtktTx,date:string,entries:Snapshot[],user:SessionUser,source:string) {
  const updatedAt=ktktUtcNow();
- for(const e of entries){const code='KTKT:'+e.cell;
+ for(const e of entries){const code=storageCode(e.cell);
  await tx.ctktktDailyInputAudit.create({data:{actor_id:user.id,actor_username:user.username,actor_name:user.displayName,source,operating_date:date,field_code:code,action:e.value===''?'delete':e.oldValue===null?'insert':'update',old_value:e.oldValue,new_value:e.value||null,old_note:e.oldNote,new_note:e.value===''?null:e.oldNote??''}});
  if(e.value==='')await tx.ctktktDailyInputs.deleteMany({where:{operating_date:date,field_code:code}});
  else await tx.ctktktDailyInputs.upsert({where:{operating_date_field_code:{operating_date:date,field_code:code}},create:{operating_date:date,field_code:code,value:e.value,note:'',updated_at:updatedAt},update:{value:e.value,updated_at:updatedAt}});
@@ -68,7 +70,13 @@ async function inTransaction<T>(run:(tx:KtktTx)=>Promise<T>):Promise<T>{
 export async function saveReportWithShift(user:SessionUser,date:string,entries:Entry[],reason?:string,now=new Date()) {
  return inTransaction(async tx=>{
  const edits:Snapshot[]=[];
- for(const e of [...entries].sort((a,b)=>a.cell.localeCompare(b.cell))){const before=await snapshot(tx,date,e);if((before.oldValue??'')!==e.value)edits.push(before);}
+ for (const e of [...entries].sort((a,b) => a.cell.localeCompare(b.cell))) {
+   const before = await snapshot(tx, date, e);
+   if ((before.oldValue ?? '') === e.value) continue;
+   if (isGridReceiveCell(e.cell) && before.oldValue?.trim() &&
+       Number(before.oldValue).toPrecision(15) === Number(e.value).toPrecision(15)) continue;
+   edits.push(before);
+ }
  if(!edits.length)return {saved:0};
  if(reason){
  if(user.role==='admin')throw new CorrectionError('Quản trị có thể sửa trực tiếp, không cần gửi yêu cầu.',400);
@@ -84,7 +92,7 @@ export async function saveReportWithShift(user:SessionUser,date:string,entries:E
  }
  await persist(tx,date,edits,user,'ctktkt-report');
  // Chủ ô: ghi khi chưa có (ON CONFLICT DO NOTHING) — chốt ngày đêm không đổi chủ ô gốc.
- await tx.ctktktInputOwnership.createMany({data:edits.map(e=>({operatingDate:date,fieldCode:'KTKT:'+e.cell,ownerId:user.id,shiftStart:inputShiftStart(now)})),skipDuplicates:true});
+ await tx.ctktktInputOwnership.createMany({data:edits.map(e=>({operatingDate:date,fieldCode:storageCode(e.cell),ownerId:user.id,shiftStart:inputShiftStart(now)})),skipDuplicates:true});
  return {saved:edits.filter(e=>e.value!=='').length};
  });
 }

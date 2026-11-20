@@ -29,7 +29,8 @@ export function ktktRoute(path: string, handlers: Handlers) {
     if (!["GET", "HEAD"].includes(request.method)) {
       if (!isCtktktSameOrigin(request)) return fail("Nguồn yêu cầu không hợp lệ.", 403);
     }
-    if (request.headers.get("content-type")?.startsWith("multipart/form-data")) {
+    // The CSV preview validates and scans each supported format in its own handler.
+    if (path !== "production-csv" && request.headers.get("content-type")?.startsWith("multipart/form-data")) {
       if (Number(request.headers.get("content-length") ?? 0) > 32 * 1024 * 1024) return fail("Tệp tải lên quá lớn.", 413);
       const form = await request.clone().formData();
       for (const [, value] of form) if (value instanceof File) {
@@ -42,7 +43,7 @@ export function ktktRoute(path: string, handlers: Handlers) {
     const response = await handler(request);
     if (machine) return response; // Giữ hợp đồng JSON gốc cho các hệ thống gọi API.
     if (path === "permissions") { response.headers.set("Cache-Control", "private, no-store"); return response; }
-    if (actor && response.ok && !["GET", "HEAD"].includes(request.method)) await audit(actor.id, "UPDATE_CTKTKT", "Ctktkt", undefined, `${request.method} ${path}`);
+    if (actor && path !== "production-csv" && response.ok && !["GET", "HEAD"].includes(request.method)) await audit(actor.id, "UPDATE_CTKTKT", "Ctktkt", undefined, `${request.method} ${path}`);
     if (FILE_PASSTHROUGH.has(path) && response.headers.has("Content-Disposition")) return response;
     response.headers.set("Cache-Control", "private, no-store");
     return response;
