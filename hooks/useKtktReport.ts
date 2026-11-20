@@ -27,10 +27,15 @@ const REPORT_URL = "/api/ctktkt/ctktkt-report";
 export function usePreviewProductionCsv() {
   return useMutation({
     mutationFn: async (body: FormData) => {
-      const response = await fetch("/api/ctktkt/production-csv", { method: "POST", body });
-      const result = await response.json().catch(() => null) as { data?: ProductionCsvPreview; error?: string } | null;
-      if (!response.ok || !result?.data) throw new Error(result?.error || "Không đọc được CSV.");
-      return result.data;
+      try {
+        const response = await fetch("/api/ctktkt/production-csv", { method: "POST", body });
+        const result = await response.json().catch(() => null) as { data?: ProductionCsvPreview; error?: string } | null;
+        if (!response.ok || !result?.data) throw new Error(result?.error || "Không đọc được CSV.");
+        return result.data;
+      } finally {
+        // Mutation state can outlive the request. Release its uploaded files immediately.
+        body.delete("files");
+      }
     },
   });
 }

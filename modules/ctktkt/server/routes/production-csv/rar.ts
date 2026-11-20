@@ -45,6 +45,6 @@ export async function readRarCsv(buffer: Buffer, maxBytes: number, maxFiles: num
     if (!files.length) throw new Error("RAR không chứa tệp CSV.");
     return files;
   } finally {
-    await rm(directory, { recursive: true, force: true });
+    await rm(directory, { recursive: true, force: true, maxRetries: 4, retryDelay: 100 });
   }
 }
