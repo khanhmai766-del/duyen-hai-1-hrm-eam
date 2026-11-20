@@ -61,5 +61,6 @@ export function calculateCsvProduction(files: { name: string; text: string }[]):
     const mwh = sumMeterChannel(matches, label) / 1000;
     return [{ cell, label, value: String(Number(mwh.toPrecision(15))) }];
   });
-  return { operatingDate, entries, gridReceived, sourceFiles: [...new Set(relevant.map(item => item.sourceName))] };
+  const sourceNames = relevant.map(item => item.sourceName).filter((name): name is string => name !== undefined);
+  return { operatingDate, entries, gridReceived, sourceFiles: [...new Set(sourceNames)] };
 }
