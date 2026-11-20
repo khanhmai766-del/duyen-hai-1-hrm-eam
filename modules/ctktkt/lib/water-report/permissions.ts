@@ -73,6 +73,11 @@ export function canEditWaterField(user: SessionUser | null | undefined, group: W
   return Boolean(user && (isAdminUser(user) || user.permissions.includes("edit_water") || user.permissions.includes(`water_${group}`)));
 }
 
+/** Kíp nhập liệu chọn Trưởng ca khi tạo ca hoặc bổ sung ca chưa có tên. */
+export function canSetWaterShiftLeader(user: SessionUser | null | undefined, savedLeader?: string): boolean {
+  return canEditWaterField(user, "meta") || (!savedLeader?.trim() && canEditAnyWaterField(user));
+}
+
 export function canDeleteWaterShift(user: SessionUser | null | undefined): boolean {
   return Boolean(user && (isAdminUser(user) || (user.permissions.includes("edit_water") && (user.role === "supervisor" || (user.position || "").toLowerCase().includes("trưởng ca")))));
 }

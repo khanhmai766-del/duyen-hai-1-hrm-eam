@@ -7,7 +7,19 @@ import {
   getShiftSortKey,
   recalculateWaterShiftChain,
 } from "../../../modules/ctktkt/lib/water-report/calculations.ts";
-import { canEditWaterField as currentCanEditWaterField } from "../../../modules/ctktkt/lib/water-report/permissions.ts";
+import { canEditWaterField as currentCanEditWaterField, canSetWaterShiftLeader } from "../../../modules/ctktkt/lib/water-report/permissions.ts";
+
+test("water editors may set an unassigned shift leader but may not replace an assignment", () => {
+  const assistant = { role: "viewer", position: "Trợ thủ", permissions: ["water_resin_water"] };
+  const readOnly = { role: "viewer", permissions: ["view_all"] };
+  const coordinator = { role: "viewer", permissions: ["water_meta"] };
+  assert.equal(canSetWaterShiftLeader(assistant), true);
+  assert.equal(canSetWaterShiftLeader(assistant, ""), true);
+  assert.equal(canSetWaterShiftLeader(assistant, "Việt"), false);
+  assert.equal(currentCanEditWaterField(assistant, "meta"), false);
+  assert.equal(canSetWaterShiftLeader(readOnly, ""), false);
+  assert.equal(canSetWaterShiftLeader(coordinator, "Việt"), true);
+});
 
 test("getShiftSortKey correctly orders shifts within and across days", () => {
   const k1 = getShiftSortKey("2026-09-01", "06h00");

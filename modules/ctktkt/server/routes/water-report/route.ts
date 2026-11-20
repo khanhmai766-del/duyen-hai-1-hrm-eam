@@ -5,7 +5,7 @@ import {
   calculateMonthlyWaterSummary,
   type WaterShiftLog,
 } from "@/modules/ctktkt/lib/water-report/calculations";
-import { canEditAnyWaterField, canEditWaterField, canDeleteWaterShift } from "@/modules/ctktkt/lib/water-report/permissions";
+import { canEditAnyWaterField, canEditWaterField, canDeleteWaterShift, canSetWaterShiftLeader } from "@/modules/ctktkt/lib/water-report/permissions";
 import {WATER_ADJUSTMENT_FIELDS,normalizeWaterAdjustment,waterAdjustmentsFromRow} from "@/modules/ctktkt/lib/water-report/adjustments";
 import { loadWaterChain, recalculateWaterMonths, waterRowToLog } from "@/modules/ctktkt/lib/water-report/store";
 import { KtktAbort, ktktUtcNow, ktktWrite } from "@/modules/ctktkt/db/prisma";
@@ -119,9 +119,20 @@ export async function POST(request: Request) {
         }
 
         const shiftTeam = canEditMeta && shouldUpdate("shiftTeam") ? String(item.shiftTeam || prevLog?.shiftTeam || "") : prevLog?.shiftTeam || "";
-        const shiftLeader = canEditMeta
-          && shouldUpdate("shiftLeader") ? String(item.shiftLeader || prevLog?.shiftLeader || "")
-          : prevLog?.shiftLeader || "";
+        const savedLeader = prevLog?.shiftLeader ?? "";
+        const selectedLeader = typeof item.shiftLeader === "string" ? item.shiftLeader.trim() : "";
+        const changeLeader = shouldUpdate("shiftLeader") && selectedLeader !== "" && selectedLeader !== savedLeader;
+        if (!prevLog && !selectedLeader) throw new Error("Hãy chọn Trưởng ca trước khi lưu ca mới.");
+        if (changeLeader && !canSetWaterShiftLeader(user, savedLeader)) {
+          throw new KtktAbort(fail("Ca này đã có Trưởng ca. Chỉ người có quyền sửa thông tin ca mới được thay đổi.", 403));
+        }
+        if (changeLeader && !canEditMeta) {
+          const activeLeader = await tx.ctktktWaterShiftLeaders.findFirst({
+            where: { name: selectedLeader, is_active: 1 }, select: { id: true },
+          });
+          if (!activeLeader) throw new Error("Hãy chọn tên trong danh sách Trưởng ca đang hoạt động.");
+        }
+        const shiftLeader = changeLeader ? selectedLeader : savedLeader;
 
         const elecRecS1 = canEditElec && shouldUpdate("elecRecS1") ? Number(item.elecRecS1 ?? prevLog?.elecRecS1 ?? 0) : prevLog?.elecRecS1 ?? 0;
         const elecRecS2 = canEditElec && shouldUpdate("elecRecS2") ? Number(item.elecRecS2 ?? prevLog?.elecRecS2 ?? 0) : prevLog?.elecRecS2 ?? 0;
@@ -156,15 +167,25 @@ export async function POST(request: Request) {
           water_adjustment_s1: adjustments.waterAdjustmentS1, water_adjustment_s2: adjustments.waterAdjustmentS2,
           condenser_adjustment_s1: adjustments.condenserAdjustmentS1, condenser_adjustment_s2: adjustments.condenserAdjustmentS2,
         };
-        await tx.ctktktWaterShiftLogs.upsert({
-          where: { log_date_shift_time: { log_date: logDate, shift_time: shiftTime } },
+        const shiftKey = { log_date: logDate, shift_time: shiftTime };
+        const saved = await tx.ctktktWaterShiftLogs.upsert({
+          where: { log_date_shift_time: shiftKey },
           create: {
-            log_date: logDate, shift_time: shiftTime, ...raw,
+            ...shiftKey, ...raw,
             elec_gen_s1: 0, elec_gen_s2: 0, water_used_s1: 0, water_used_s2: 0, water_ratio_s1: 0, water_ratio_s2: 0,
             condenser_used_s1: 0, condenser_used_s2: 0,
           },
-          update: { ...raw, updated_at: ktktUtcNow() },
+          update: { ...raw, shift_leader: canEditMeta && changeLeader ? shiftLeader : undefined, updated_at: ktktUtcNow() },
+          select: { shift_leader: true },
         });
+        if (changeLeader && saved.shift_leader !== shiftLeader) {
+          // Only fill a blank leader. The shift could have been filled concurrently.
+          const filled = await tx.ctktktWaterShiftLogs.updateMany({
+            where: { ...shiftKey, shift_leader: savedLeader },
+            data: { shift_leader: shiftLeader },
+          });
+          if (!filled.count) throw new KtktAbort(fail("Ca vừa được cập nhật Trưởng ca. Vui lòng tải lại và kiểm tra.", 409));
+        }
         savedDates.push(logDate);
       }
 

@@ -13,7 +13,7 @@ import "./water-report-table.css";
 import { useSessionUser } from "@/modules/ctktkt/components/session-context";
 import { isAdminUser } from "@/modules/ctktkt/lib/auth/session";
 import { formatIsoToDmy, roundTo, type MonthlyWaterSummary, type WaterShiftLog } from "@/modules/ctktkt/lib/water-report/calculations";
-import { canEditAnyWaterField, canEditWaterField, canDeleteWaterShift } from "@/modules/ctktkt/lib/water-report/permissions";
+import { canEditAnyWaterField, canEditWaterField, canDeleteWaterShift, canSetWaterShiftLeader } from "@/modules/ctktkt/lib/water-report/permissions";
 import { DEFAULT_SHIFT_LEADERS, SHIFT_TEAMS, SHIFT_TIMES } from "@/modules/ctktkt/lib/water-report/schema";
 import { defaultOperatingDate } from "@/modules/ctktkt/lib/operating-date";
 import {waterMeterUsage,type WaterAdjustmentField} from "@/modules/ctktkt/lib/water-report/adjustments";
@@ -110,6 +110,8 @@ export function WaterReportClient() {
   const canEditElec = canEditWaterField(user, "electricity");
   const canEditIntake = canEditWaterField(user, "water_intake");
   const canEditResin = canEditWaterField(user, "resin_water");
+  const savedEditingLeader = shifts.find(shift => shift.id === editingShift?.id)?.shiftLeader;
+  const canSetLeader = canSetWaterShiftLeader(user, savedEditingLeader);
   const isAdmin = isAdminUser(user);
   const missingWaterShifts = useMemo(
     () => listMissingWaterShifts(shifts, month, defaultOperatingDate()),
@@ -184,7 +186,7 @@ export function WaterReportClient() {
       logDate: prefill?.logDate || nextDate,
       shiftTime: prefill?.shiftTime || nextTime,
       shiftTeam: nextTeam,
-      shiftLeader: leaders[0] || "Việt",
+      shiftLeader: "",
       elecRecS1: lastShift?.elecRecS1 || 0,
       elecRecS2: lastShift?.elecRecS2 || 0,
       waterRecS1: lastShift?.waterRecS1 || 0,
@@ -1051,13 +1053,19 @@ export function WaterReportClient() {
                   </div>
 
                   <div>
-                    <label className="block text-[11px] font-bold text-slate-700 mb-1">TRƯỞNG CA</label>
+                    <label htmlFor="water-shift-leader" className="block text-[11px] font-bold text-slate-700 mb-1">TRƯỞNG CA</label>
                     <select
-                      disabled={!canEditMeta}
-                      value={editingShift.shiftLeader || leaders[0]}
+                      id="water-shift-leader"
+                      disabled={!canSetLeader}
+                      required={!editingShift.id}
+                      value={editingShift.shiftLeader ?? ""}
                       onChange={e => updateEditingShift("shiftLeader", e.target.value)}
                       className="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-bold outline-none focus:border-emerald-500"
                     >
+                      <option value="" disabled>Chọn Trưởng ca</option>
+                      {editingShift.shiftLeader && !leaders.includes(editingShift.shiftLeader) && (
+                        <option value={editingShift.shiftLeader}>{editingShift.shiftLeader}</option>
+                      )}
                       {leaders.map(name => (
                         <option key={name} value={name}>
                           {name}
