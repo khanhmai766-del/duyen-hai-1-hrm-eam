@@ -6,7 +6,7 @@
 .options span{flex:1;min-width:12rem;font-size:.75rem}
 .shortLabel{display:none}
 @media(max-width:640px){.fullLabel{display:none}.shortLabel{display:inline}.toolbar button{white-space:nowrap;padding:.4rem .45rem}}
-.selectionScope :global(table){user-select:none;cursor:cell}
-.selectionScope :global(table input),.selectionScope :global(table textarea),.selectionScope :global(table select){pointer-events:none}
+.selectionScope[data-copy-mode=true] :global(table){user-select:none;cursor:cell}
+.selectionScope[data-copy-mode=true] :global(table input),.selectionScope[data-copy-mode=true] :global(table textarea),.selectionScope[data-copy-mode=true] :global(table select){pointer-events:none}
 .selectionScope :global([data-copy-selected=true]){background:#c7dfff!important;box-shadow:inset 0 0 0 1px #568cf0!important;color:#102e59!important}
 .selectionScope :global([data-copy-selected=true] input),.selectionScope :global([data-copy-selected=true] textarea){background:#c7dfff!important;color:#102e59!important}

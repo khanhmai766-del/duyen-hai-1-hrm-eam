@@ -1,6 +1,7 @@
 import { electricMeterResetAdjustment } from "./ctktkt-electric-meter-reset";
 import { CTKTKT_OIL_EVENT_CONFIG, type CtktktOilEventCode } from "./ctktkt-oil-event";
 import { calculateAuxiliaryElectricity } from "./auxiliary-electricity";
+import { COAL_ADJUSTMENT_CELLS, coalFeederCode, coalMeterAdjustments, coalShiftAdjustments } from "./coal-meter-adjustments";
 
 export type CtktktDayEntries = Record<string, string>;
 
@@ -115,6 +116,19 @@ function meterSum(entries: CtktktDayEntries | undefined, column: string) {
   return sum(Array.from({ length: 12 }, (_, index) => numberOf(entries, `${column}${16 + index}`)));
 }
 
+function legacyCoalMeterAdjustment(current: CtktktDayEntries, unit: "s1" | "s2", row: number) {
+  const feeder = coalFeederCode(row);
+  const note = current[`COAL_ADJ_NOTE_${unit.toUpperCase()}`] ?? "";
+  const unitNumber = unit.slice(1);
+  const feeders = new Set(Array.from(note.toUpperCase().matchAll(/(?<![\p{L}\p{N}])([12]?)([A-F][12])(?![\p{L}\p{N}])/gu),
+    ([, prefix, code]) => `${prefix || unitNumber}${code}`));
+  if (feeders.size !== 1 || !feeders.has(`${unitNumber}${feeder}`)) return null;
+
+  // Lý do là ô dùng chung cho cả ngày. Chỉ gán vào dòng máy cấp khi xác định được đúng một ca và một máy.
+  const adjustments = COAL_ADJUSTMENT_CELLS[unit].map(cell => numberOf(current, cell) ?? 0);
+  return adjustments.filter(value => value !== 0).length === 1 ? adjustments : null;
+}
+
 export function calculateCoalMeterShiftConsumption(
   current: CtktktDayEntries,
   previous: CtktktDayEntries | undefined,
@@ -128,11 +142,14 @@ export function calculateCoalMeterShiftConsumption(
   const first = numberOf(current, `${firstColumn}${row}`);
   const second = numberOf(current, `${secondColumn}${row}`);
   const end = numberOf(current, `${endColumn}${row}`);
+  const legacyAdjustment = legacyCoalMeterAdjustment(current, unit, row);
+  const adjustment = coalMeterAdjustments(current, unit, row).map((value, index) => value + (legacyAdjustment?.[index] ?? 0));
+  const applyAdjustment = (value: number | null, amount: number) => value === null ? null : value + amount;
   return {
-    shift1: difference(first, previousEnd),
-    shift2: difference(second, first),
-    shift3: difference(end, second),
-    total: difference(end, previousEnd),
+    shift1: applyAdjustment(difference(first, previousEnd), adjustment[0]),
+    shift2: applyAdjustment(difference(second, first), adjustment[1]),
+    shift3: applyAdjustment(difference(end, second), adjustment[2]),
+    total: applyAdjustment(difference(end, previousEnd), adjustment.reduce((total, value) => total + value, 0)),
   };
 }
 
@@ -158,15 +175,15 @@ function coalRawShifts(
   const firstColumn = isS1 ? "X" : "AH";
   const secondColumn = isS1 ? "Z" : "AJ";
   const previousCoal = meterSum(previous, endColumn);
-  const adjustmentColumns = isS1 ? ["W", "Y", "AA"] : ["AG", "AI", "AK"];
   const base = [
     difference(meterSum(current, firstColumn), previousCoal),
     difference(meterSum(current, secondColumn), meterSum(current, firstColumn)),
     difference(meterSum(current, endColumn), meterSum(current, secondColumn)),
   ];
+  const adjustments = coalShiftAdjustments(current, unit);
   return base.map((value, index) => value === null
     ? null
-    : value + (numberOf(current, `${adjustmentColumns[index]}28`) ?? 0));
+    : value + adjustments[index]);
 }
 
 /**
@@ -217,7 +234,7 @@ export function createZeroCoalConsumptionCorrection(
   shift: 1 | 2 | 3,
 ): CtktktDayEntries {
   const isS1 = unit === "S1";
-  const cell = (isS1 ? ["W28", "Y28", "AA28"] : ["AG28", "AI28", "AK28"])[shift - 1];
+  const cell = COAL_ADJUSTMENT_CELLS[isS1 ? "s1" : "s2"][shift - 1];
   const raw = coalRawShifts(isS1 ? "s1" : "s2", { ...current, [cell]: "0" }, previous)[shift - 1];
   if (raw === null) throw new Error("Chưa đủ chỉ số cân để xác định hiệu chỉnh. Không tự điền số 0.");
   const adjustment = -raw;

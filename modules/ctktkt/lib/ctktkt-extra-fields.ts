@@ -1,5 +1,6 @@
 import { CTKTKT_ELECTRIC_METER_RESET_CELLS, CTKTKT_ELECTRIC_METER_RESET_FIELDS, CTKTKT_ELECTRIC_METER_RESET_NOTE_FIELDS } from "./ctktkt-electric-meter-reset";
 import { CTKTKT_PMIS_AUX_CELLS, CTKTKT_PMIS_AUX_MANUAL_FIELDS, CTKTKT_PMIS_AUX_NOTE_FIELDS } from "./ctktkt-pmis-auxiliary";
+import { COAL_METER_ROWS, COAL_SHIFT_HOURS, coalFeederCode, coalMeterAdjustmentCell } from "./coal-meter-adjustments";
 export const CTKTKT_COAL_ADJUSTMENT_FIELDS = [
   { cell: "W28", section: "coal_meters", sectionLabel: "Hiệu chỉnh cân than", label: "S1 Ca 1 (00h-08h)", row: 28, column: 23 },
   { cell: "Y28", section: "coal_meters", sectionLabel: "Hiệu chỉnh cân than", label: "S1 Ca 2 (08h-16h)", row: 28, column: 25 },
@@ -13,6 +14,18 @@ export const CTKTKT_COAL_ADJUSTMENT_NOTE_FIELDS = [
   { cell: "COAL_ADJ_NOTE_S1", section: "coal_meters", sectionLabel: "Hiệu chỉnh cân than", label: "Lý do hiệu chỉnh S1", row: 28, column: 29 },
   { cell: "COAL_ADJ_NOTE_S2", section: "coal_meters", sectionLabel: "Hiệu chỉnh cân than", label: "Lý do hiệu chỉnh S2", row: 28, column: 39 },
 ] as const;
+
+export const CTKTKT_COAL_METER_ADJUSTMENT_FIELDS = (["s1", "s2"] as const).flatMap(unit =>
+  COAL_METER_ROWS.flatMap(row => COAL_SHIFT_HOURS.map((hour, index) => ({
+    unit,
+    cell: coalMeterAdjustmentCell(unit, row, index),
+    section: "coal_meters",
+    sectionLabel: "Hiệu chỉnh cân than",
+    label: `Hiệu chỉnh ${unit.toUpperCase()} · ${coalFeederCode(row)} · ${hour} (tấn)`,
+    row,
+    column: (unit === "s1" ? 24 : 34) + 2 * index,
+  }))),
+);
 
 export const CTKTKT_WATER_ADJUSTMENT_FIELDS = [
   { cell: "WATER_ADJ_S1", section: "tkd_trend", sectionLabel: "Công tơ nước demin DCS", label: "Hiệu chỉnh nước demin S1 (m³)", row: 72, column: 29 },
@@ -198,6 +211,7 @@ export const CTKTKT_TEXT_INPUT_CELLS = new Set<string>([
 ]);
 export const CTKTKT_NON_WORKBOOK_INPUT_CELLS = new Set<string>([
   ...CTKTKT_TEXT_INPUT_CELLS,
+  ...CTKTKT_COAL_METER_ADJUSTMENT_FIELDS.map(field => field.cell),
   ...CTKTKT_WATER_ADJUSTMENT_FIELDS.map(field => field.cell),
   ...CTKTKT_COAL_STOCK_FIELDS.map(field => field.cell),
   ...CTKTKT_NH3_DCS_ADJUSTMENT_FIELDS.map(field => field.cell),
@@ -247,6 +261,7 @@ export const CTKTKT_COAL_BLEND_FIELDS = [] as const;
 export const CTKTKT_EXTRA_INPUT_FIELDS = [
   ...CTKTKT_BLANK_TEMPLATE_INPUT_FIELDS,
   ...CTKTKT_COAL_ADJUSTMENT_FIELDS,
+  ...CTKTKT_COAL_METER_ADJUSTMENT_FIELDS,
   ...CTKTKT_COAL_ADJUSTMENT_NOTE_FIELDS,
   ...CTKTKT_WATER_ADJUSTMENT_FIELDS,
   ...CTKTKT_WATER_ADJUSTMENT_NOTE_FIELDS,

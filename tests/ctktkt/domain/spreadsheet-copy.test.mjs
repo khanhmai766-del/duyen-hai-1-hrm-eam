@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {copyBounds,spreadsheetCopyPayload} from '../../../modules/ctktkt/lib/spreadsheet-copy.ts';
+import {parseSpreadsheetClipboard} from '../../../modules/ctktkt/lib/spreadsheet-grid.ts';
 
 test('drag selection supports reversed corners, whole rows and whole columns',()=>{
   const a={row:4,column:3},b={row:2,column:1};
@@ -20,4 +21,12 @@ test('copied notes cannot inject HTML or turn into spreadsheet formulas',()=>{
   assert.match(result.html,/&lt;img src=x&gt;/);
   assert.ok(result.text.includes("'=HYPERLINK"));assert.ok(result.text.includes("'+SUM"));
   assert.ok(result.text.includes('\t-12.5\t'));assert.ok(result.text.endsWith('a b c'));
+});
+
+test('a meter block pasted back into the web keeps its rows, zero and missing readings',()=>{
+  const readings=[['18217.16','18217.160','18217.160'],['89204.792','0','0'],['20045.664','','20045.664']];
+  const clipboard=spreadsheetCopyPayload(readings);
+  assert.deepEqual(parseSpreadsheetClipboard(clipboard.text,clipboard.html),[
+    ['18217.16','18217.16','18217.16'],['89204.792','0','0'],['20045.664','','20045.664'],
+  ]);
 });

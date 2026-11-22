@@ -1,13 +1,89 @@
 "use client";
 // Tab 2 · Cụm 4 & 5 — công tơ tổ máy S1/S2 (điện, dầu lò phó, than máy nghiền, thống kê).
-import { Camera, Images } from "lucide-react";
+import { Camera, Images, Pencil } from "lucide-react";
 import { canReviewCoalPhotos } from "@/modules/ctktkt/lib/coal-photo-review";
 import { calculateCoalMeterShiftConsumption, OIL_HOURS } from "@/modules/ctktkt/lib/ctktkt-report";
+import { COAL_ADJUSTMENT_CELLS, COAL_SHIFT_HOURS, coalFeederCode, coalMeterAdjustmentCell, coalShiftAdjustments, type CoalMeterUnit } from "@/modules/ctktkt/lib/coal-meter-adjustments";
+import { Popover, PopoverContent, PopoverTrigger } from "@/modules/ctktkt/components/ui/popover";
 import { format, coalConsumptionCellClass } from "./shared";
 import type { CtktktReportCtx } from "./use-ctktkt-report";
 
+function CoalMeterInput({ ctx, unit, row, column, index }: {
+  ctx: CtktktReportCtx;
+  unit: CoalMeterUnit;
+  row: number;
+  column: string;
+  index: number;
+}) {
+  const group = unit === "s1" ? "may_nghien_coal_s1" : "may_nghien_coal_s2";
+  const cell = coalMeterAdjustmentCell(unit, row, index);
+  const title = `Hiệu chỉnh ${unit.toUpperCase()} · ${coalFeederCode(row)} · ${COAL_SHIFT_HOURS[index]}`;
+  const adjusted = Number(ctx.current[cell]?.replace(",", ".")) || 0;
+  const legacy = Number(ctx.current[COAL_ADJUSTMENT_CELLS[unit][index]]?.replace(",", ".")) || 0;
+  return (
+    <td className="p-1 text-center text-xs">
+      <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-1">
+        {ctx.renderCellInput(`${column}${row}`, { group })}
+        <Popover>
+          <PopoverTrigger type="button" aria-label={title} title={adjusted ? `${title}: ${format(adjusted)} tấn` : title}
+            className={`inline-flex size-9 items-center justify-center rounded border sm:size-7 ${adjusted ? "border-amber-400 bg-amber-100 text-amber-900" : "border-slate-200 text-slate-600 hover:bg-slate-100"}`}>
+            <Pencil className="size-3.5" aria-hidden="true" />
+          </PopoverTrigger>
+          <PopoverContent aria-label={title} className="w-64 border-slate-200 bg-white text-slate-900" align="end">
+            <div className="mb-2 text-sm font-semibold">{title} (tấn)</div>
+            {ctx.renderCellInput(cell, { group, placeholder: "0", maxLength: 80 })}
+            <p className="mt-2 text-xs text-slate-600">Số dương để cộng, số âm để trừ. Dùng nút Lưu số liệu để lưu.</p>
+            {legacy !== 0 && (
+              <p className="mt-2 text-xs text-amber-900">Ca này có hiệu chỉnh cũ {format(legacy)} tấn. Nếu nhập lại khoản đó theo từng cân, hãy xóa khoản cũ ở hàng tổng.</p>
+            )}
+          </PopoverContent>
+        </Popover>
+      </div>
+    </td>
+  );
+}
+
+function CoalAdjustmentTotals({ ctx, unit }: { ctx: CtktktReportCtx; unit: CoalMeterUnit }) {
+  const group = unit === "s1" ? "may_nghien_coal_s1" : "may_nghien_coal_s2";
+  return coalShiftAdjustments(ctx.current, unit).map((amount, index) => {
+    const legacyCell = COAL_ADJUSTMENT_CELLS[unit][index];
+    const legacyAmount = Number(ctx.current[legacyCell]?.replace(",", ".")) || 0;
+    return (
+      <td key={legacyCell} data-copy-value={String(amount)} className="p-2 text-center tabular-nums">
+        <span className="font-bold" title="Tổng hiệu chỉnh của ca (tấn)">{format(amount)}</span>
+        {legacyAmount !== 0 && (
+          <details className="mt-1 text-xs">
+            <summary className="cursor-pointer text-amber-900">Hiệu chỉnh cũ</summary>
+            {ctx.renderCellInput(legacyCell, { group })}
+          </details>
+        )}
+      </td>
+    );
+  });
+}
+
+function CoalShiftTotalCells({ totals }: { totals: (number | null)[] }) {
+  const total = totals.some(value => value === null)
+    ? null
+    : totals.reduce<number>((sum, value) => sum + (value ?? 0), 0);
+  return (
+    <>
+      {totals.map((value, index) => (
+        <td key={index} className={`border-l p-2 text-center tabular-nums ${coalConsumptionCellClass(value, true)}`}
+          title={value === null ? "Chưa đủ chỉ số của 12 cân than ở hai mốc" : `Tổng than ca ${index + 1} sau hiệu chỉnh (tấn)`}>
+          {format(value)}
+        </td>
+      ))}
+      <td className={`border-l p-2 text-center tabular-nums ${coalConsumptionCellClass(total, true)}`}
+        title={total === null ? "Chưa đủ số liệu của cả 3 ca" : "Tổng than 3 ca sau hiệu chỉnh (tấn)"}>
+        {format(total)}
+      </td>
+    </>
+  );
+}
+
 export function CtktktUnitMetersTab({ ctx }: { ctx: CtktktReportCtx }) {
-  const { user, unitView, setUnitView, setCoalReviewUnit, setCoalPhotoOpen, previous, current, summary, oilS1, oilS2, renderCellInput } = ctx;
+  const { user, unitView, setUnitView, setCoalReviewUnit, setCoalPhotoOpen, previous, current, summary, coalShiftDetails, oilS1, oilS2, renderCellInput } = ctx;
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b pb-2">
@@ -264,12 +340,12 @@ export function CtktktUnitMetersTab({ ctx }: { ctx: CtktktReportCtx }) {
               </span>
             </div>
             <div className="overflow-x-auto rounded-lg border">
-              <table className="report-data-table min-w-[1450px] w-full text-xs">
+              <table data-copy-range className="report-data-table min-w-[1450px] w-full text-xs">
                 <thead>
                   <tr className="bg-[#f5f5f5] text-slate-800">
                     <th rowSpan={2} className="p-1.5 text-left font-bold">Mã cân than S1</th>
                     <th colSpan={3} className="border-l p-1.5 text-center font-bold">Chỉ số lũy kế (tấn)</th>
-                    <th colSpan={4} className="border-l bg-sky-100 p-1.5 text-center font-bold text-[#173b64]">Tiêu thụ theo công tơ — chưa gồm hiệu chỉnh (tấn)</th>
+                    <th colSpan={4} className="border-l bg-sky-100 p-1.5 text-center font-bold text-[#173b64]">Tiêu thụ than (tấn)</th>
                   </tr>
                   <tr className="bg-[#f5f5f5] text-slate-800">
                     <th className="border-l p-1.5 text-center font-bold">08h (Ca 1)</th>
@@ -301,21 +377,9 @@ export function CtktktUnitMetersTab({ ctx }: { ctx: CtktktReportCtx }) {
                       <td className="p-1.5 font-bold text-slate-800 font-sans">
                         Công tơ than # {c.code}
                       </td>
-                      <td className="p-1 text-center text-xs">
-                        {renderCellInput(`X${c.row}`, {
-                          group: "may_nghien_coal_s1",
-                        })}
-                      </td>
-                      <td className="p-1 text-center text-xs">
-                        {renderCellInput(`Z${c.row}`, {
-                          group: "may_nghien_coal_s1",
-                        })}
-                      </td>
-                      <td className="p-1 text-center text-xs">
-                        {renderCellInput(`AB${c.row}`, {
-                          group: "may_nghien_coal_s1",
-                        })}
-                      </td>
+                      {["X", "Z", "AB"].map((column, index) => (
+                        <CoalMeterInput key={column} ctx={ctx} unit="s1" row={c.row} column={column} index={index} />
+                      ))}
                       {[consumption.shift1, consumption.shift2, consumption.shift3].map((value, index) => (
                         <td key={index} className={`border-l p-2 text-center tabular-nums ${coalConsumptionCellClass(value)}`}>
                           {format(value)}
@@ -330,12 +394,8 @@ export function CtktktUnitMetersTab({ ctx }: { ctx: CtktktReportCtx }) {
                     <td className="p-2 font-bold text-amber-950 font-sans">
                       Hiệu chỉnh chênh lệch cân than (tấn, mặc định 0)
                     </td>
-                    {(["W28", "Y28", "AA28"] as const).map(cell => (
-                      <td key={cell} className="p-1 text-center text-xs">
-                        {renderCellInput(cell, { group: "may_nghien_coal_s1" })}
-                      </td>
-                    ))}
-                    <td colSpan={4} className="bg-sky-50/40 p-2 text-center font-sans text-slate-500 text-xs">Không phân bổ tự động theo từng công tơ</td>
+                    <CoalAdjustmentTotals ctx={ctx} unit="s1" />
+                    <CoalShiftTotalCells totals={coalShiftDetails.filter(item => item.unit === "S1").map(item => item.rawCoalTonnes)} />
                   </tr>
                   <tr className="bg-amber-50/30">
                     <td className="p-2 font-bold text-amber-950 font-sans">
@@ -606,12 +666,12 @@ export function CtktktUnitMetersTab({ ctx }: { ctx: CtktktReportCtx }) {
               </span>
             </div>
             <div className="overflow-x-auto rounded-lg border">
-              <table className="report-data-table min-w-[1450px] w-full text-xs">
+              <table data-copy-range className="report-data-table min-w-[1450px] w-full text-xs">
                 <thead>
                   <tr className="bg-[#f5f5f5] text-slate-800">
                     <th rowSpan={2} className="p-1.5 text-left font-bold">Mã cân than S2</th>
                     <th colSpan={3} className="border-l p-1.5 text-center font-bold">Chỉ số lũy kế (tấn)</th>
-                    <th colSpan={4} className="border-l bg-sky-100 p-1.5 text-center font-bold text-[#173b64]">Tiêu thụ theo công tơ — chưa gồm hiệu chỉnh (tấn)</th>
+                    <th colSpan={4} className="border-l bg-sky-100 p-1.5 text-center font-bold text-[#173b64]">Tiêu thụ than (tấn)</th>
                   </tr>
                   <tr className="bg-[#f5f5f5] text-slate-800">
                     <th className="border-l p-1.5 text-center font-bold">08h (Ca 1)</th>
@@ -643,21 +703,9 @@ export function CtktktUnitMetersTab({ ctx }: { ctx: CtktktReportCtx }) {
                       <td className="p-1.5 font-bold text-slate-800 font-sans">
                         Công tơ than # {c.code}
                       </td>
-                      <td className="p-1 text-center text-xs">
-                        {renderCellInput(`AH${c.row}`, {
-                          group: "may_nghien_coal_s2",
-                        })}
-                      </td>
-                      <td className="p-1 text-center text-xs">
-                        {renderCellInput(`AJ${c.row}`, {
-                          group: "may_nghien_coal_s2",
-                        })}
-                      </td>
-                      <td className="p-1 text-center text-xs">
-                        {renderCellInput(`AL${c.row}`, {
-                          group: "may_nghien_coal_s2",
-                        })}
-                      </td>
+                      {["AH", "AJ", "AL"].map((column, index) => (
+                        <CoalMeterInput key={column} ctx={ctx} unit="s2" row={c.row} column={column} index={index} />
+                      ))}
                       {[consumption.shift1, consumption.shift2, consumption.shift3].map((value, index) => (
                         <td key={index} className={`border-l p-2 text-center tabular-nums ${coalConsumptionCellClass(value)}`}>
                           {format(value)}
@@ -672,12 +720,8 @@ export function CtktktUnitMetersTab({ ctx }: { ctx: CtktktReportCtx }) {
                     <td className="p-2 font-bold text-amber-950 font-sans">
                       Hiệu chỉnh chênh lệch cân than (tấn, mặc định 0)
                     </td>
-                    {(["AG28", "AI28", "AK28"] as const).map(cell => (
-                      <td key={cell} className="p-1 text-center text-xs">
-                        {renderCellInput(cell, { group: "may_nghien_coal_s2" })}
-                      </td>
-                    ))}
-                    <td colSpan={4} className="bg-sky-50/40 p-2 text-center font-sans text-slate-500 text-xs">Không phân bổ tự động theo từng công tơ</td>
+                    <CoalAdjustmentTotals ctx={ctx} unit="s2" />
+                    <CoalShiftTotalCells totals={coalShiftDetails.filter(item => item.unit === "S2").map(item => item.rawCoalTonnes)} />
                   </tr>
                   <tr className="bg-amber-50/30">
                     <td className="p-2 font-bold text-amber-950 font-sans">

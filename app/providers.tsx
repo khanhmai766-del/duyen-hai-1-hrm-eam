@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { SessionProvider } from "next-auth/react";
 import { Toaster } from "@/components/ui/sonner";
 import { ToastMirrorProvider } from "@/components/ai/toast-mirror";
+import { installNumberInputWheelGuard } from "@/lib/number-input-wheel";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = React.useState(
@@ -26,6 +27,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
   React.useEffect(() => {
     document.documentElement.setAttribute("data-app-ready", "");
     document.querySelector('#dh1-legacy-browser[data-kind="broken"]')?.remove();
+    return installNumberInputWheelGuard(window);
   }, []);
 
   return (

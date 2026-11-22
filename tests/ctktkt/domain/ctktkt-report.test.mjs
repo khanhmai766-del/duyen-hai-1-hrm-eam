@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { calculateCoalMeterShiftConsumption, calculateCtktktMeterSummary, calculateCtktktSummary, calculateDailyAverageMoisture, calculateNh3DcsSummary, previousIsoDate } from "../../../modules/ctktkt/lib/ctktkt-report.ts";
+import { coalShiftAdjustments } from "../../../modules/ctktkt/lib/coal-meter-adjustments.ts";
+import { REPORT_WRITABLE_CELLS } from "../../../modules/ctktkt/lib/report-writable-fields.ts";
+import { getCtktktFieldGroup } from "../../../modules/ctktkt/lib/ctktkt-permissions.ts";
+import { calculateCoalMeterShiftConsumption, calculateCoalShiftDetails, calculateCtktktMeterSummary, calculateCtktktSummary, calculateDailyAverageMoisture, calculateNh3DcsSummary, previousIsoDate } from "../../../modules/ctktkt/lib/ctktkt-report.ts";
 
 function coalMeters(entries, columns, totals) {
   for (const column of columns) for (let row = 16; row <= 27; row += 1) entries[`${column}${row}`] = "0";
@@ -33,6 +36,61 @@ test("coal meter comparison leaves unavailable periods blank and preserves negat
     shift3: 30,
     total: null,
   });
+});
+
+test("coal shift totals add the adjustment for the matching shift and unit", () => {
+  const previous = {};
+  const current = { Y28: "8.5", AA28: "-3", AI28: "6" };
+  coalMeters(previous, ["X", "Z", "AB"], [0, 0, 100]);
+  coalMeters(previous, ["AH", "AJ", "AL"], [0, 0, 500]);
+  coalMeters(current, ["X", "Z", "AB"], [130, 170, 220]);
+  coalMeters(current, ["AH", "AJ", "AL"], [500, 500, 500]);
+  Object.assign(previous, { AB27: "900" });
+  Object.assign(current, { X27: "912", Z27: "920", AB27: "933" });
+  const totals = before => calculateCoalShiftDetails(current, before).map(item => item.rawCoalTonnes);
+  assert.deepEqual(totals(previous), [42, 56.5, 60, 0, 6, 0]);
+  assert.deepEqual(totals(undefined), [null, 56.5, 60, null, 6, 0]);
+  delete current.Z27;
+  assert.deepEqual(totals(previous), [42, null, null, 0, 6, 0]);
+});
+
+test("a single named feeder receives the shift adjustment without changing other meters", () => {
+  const current = { X17: "89204.792", Z17: "0", AB17: "0", Y28: "89204.792",
+    COAL_ADJ_NOTE_S1: "Máy cấp 1A2 thay board mới, công tơ cũ 89204.792" };
+  const previous = { AB17: "89204.792" };
+  assert.deepEqual(calculateCoalMeterShiftConsumption(current, previous, "s1", 17), {
+    shift1: 0, shift2: 0, shift3: 0, total: 0,
+  });
+  assert.equal(calculateCoalMeterShiftConsumption({ ...current, X16: "10", Z16: "12" }, previous, "s1", 16).shift2, 2);
+  for (const changes of [
+    { COAL_ADJ_NOTE_S1: "" },
+    { COAL_ADJ_NOTE_S1: "Máy cấp 1A2 và 1F2" },
+    { COAL_ADJ_NOTE_S1: "Máy cấp 2A2" },
+    { AA28: "3" },
+  ]) {
+    assert.equal(calculateCoalMeterShiftConsumption({ ...current, ...changes }, previous, "s1", 17).shift2, -89204.792);
+  }
+  assert.equal(calculateCoalMeterShiftConsumption({
+    AH27: "100", AJ27: "2", AI28: "100", COAL_ADJ_NOTE_S2: "Máy cấp 2F2 thay board",
+  }, undefined, "s2", 27).shift2, 2);
+});
+
+test("two meters in one shift have independent adjustments counted once in each total", () => {
+  const current = { COAL_ADJ_S1_A2_CA2: "89204.792", COAL_ADJ_S1_B1_CA2: "-5,5", COAL_ADJ_S2_A2_CA2: "9" };
+  const previous = {};
+  coalMeters(previous, ["X", "Z", "AB"], [0, 0, 0]);
+  coalMeters(current, ["X", "Z", "AB"], [0, 0, 0]);
+  Object.assign(current, { X17: "89204.792", Z18: "20", AB18: "20" });
+  assert.equal(calculateCoalMeterShiftConsumption(current, previous, "s1", 17).shift2, 0);
+  assert.equal(calculateCoalMeterShiftConsumption(current, previous, "s1", 18).shift2, 14.5);
+  assert.ok(Math.abs(calculateCoalShiftDetails(current, previous)[1].rawCoalTonnes - 14.5) < 1e-8);
+  assert.deepEqual(coalShiftAdjustments(current, "s1"), [0, 89199.292, 0]);
+  assert.deepEqual(coalShiftAdjustments({"KTKT:COAL_ADJ_S1_A2_CA2": "89204.792","KTKT:Y28": "-5"}, "s1", "KTKT:"), [0, 89199.792, 0]);
+  assert.ok(REPORT_WRITABLE_CELLS.has("COAL_ADJ_S1_A2_CA2"));
+  assert.equal(getCtktktFieldGroup("COAL_ADJ_S1_A2_CA2"), "may_nghien_coal_s1");
+  assert.equal(getCtktktFieldGroup("COAL_ADJ_S2_A2_CA2"), "may_nghien_coal_s2");
+  delete current.COAL_ADJ_S1_B1_CA2;
+  assert.equal(calculateCoalMeterShiftConsumption(current, previous, "s1", 18).shift2, 20);
 });
 
 test("CTKTKT uses full-precision meter differences and the 8.5% moisture basis", () => {

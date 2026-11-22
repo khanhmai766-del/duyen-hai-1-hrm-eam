@@ -1,5 +1,6 @@
 import type ExcelJS from "exceljs";
 import { calculatePmisAuxiliary, pmisAuxManualCell } from "./ctktkt-pmis-auxiliary";
+import { coalShiftAdjustments } from "./coal-meter-adjustments";
 
 const STEAM_COLUMNS = ["W", "X", "Y", "Z", "AA", "AB", "AG", "AH", "AI", "AJ", "AK", "AL"];
 
@@ -246,13 +247,14 @@ function signedConstant(value: number) {
  * E19/H19 add the unit total.
  */
 export function applyCtktktCoalAdjustments(sheet: ExcelJS.Worksheet, row: Record<string, string>) {
-  for (const [unitTotal, mills, pairs] of [
-    ["E19", "E7:E18", [["W28", "X28"], ["Y28", "Z28"], ["AA28", "AB28"]]],
-    ["H19", "H7:H18", [["AG28", "AH28"], ["AI28", "AJ28"], ["AK28", "AL28"]]],
+  for (const [unit, unitTotal, mills, pairs] of [
+    ["s1", "E19", "E7:E18", [["W28", "X28"], ["Y28", "Z28"], ["AA28", "AB28"]]],
+    ["s2", "H19", "H7:H18", [["AG28", "AH28"], ["AI28", "AJ28"], ["AK28", "AL28"]]],
   ] as const) {
+    const adjustments = coalShiftAdjustments(row, unit, "KTKT:");
     let total = 0;
-    for (const [adjustmentCell, consumptionCell] of pairs) {
-      const adjustment = numeric(row[`KTKT:${adjustmentCell}`]) ?? 0;
+    for (const [index, [adjustmentCell, consumptionCell]] of pairs.entries()) {
+      const adjustment = adjustments[index];
       sheet.getCell(adjustmentCell).value = 0;
       const formula = sheet.getCell(consumptionCell).formula;
       if (adjustment !== 0 && formula) setFormula(sheet, consumptionCell, `${formula}${signedConstant(adjustment)}`);

@@ -2,6 +2,7 @@ import { normalizeText } from "@/lib/nav";
 import { positionLabelOf } from "@/lib/position-catalog";
 import { isAdminUser, type SessionUser } from "./auth/session";
 import { NH3_OPENING_STOCK_CELL } from "./ctktkt-report";
+import { CTKTKT_COAL_METER_ADJUSTMENT_FIELDS } from "./ctktkt-extra-fields";
 
 export type CtktktFieldGroup =
   | "kpi_summary"        // Ô I35, I36, E39, H39, W86, W87, giờ vận hành W68:Z69
@@ -144,6 +145,7 @@ const GROUP_CELLS: Record<CtktktFieldGroup, Set<string>> = {
     "AG14", "AH14", "AI14", "AJ14", "AK14", "AL14", // F2 về
   ]),
   may_nghien_coal_s1: new Set([
+    ...CTKTKT_COAL_METER_ADJUSTMENT_FIELDS.filter(field => field.unit === "s1").map(field => field.cell),
     "W28", "Y28", "AA28", // hiệu chỉnh 3 ca
     "COAL_ADJ_NOTE_S1", // lý do hiệu chỉnh
     // 12 cân than S1 (cols X, Z, AB; rows 16 to 27)
@@ -155,6 +157,7 @@ const GROUP_CELLS: Record<CtktktFieldGroup, Set<string>> = {
     "X26", "Z26", "AB26", "X27", "Z27", "AB27",
   ]),
   may_nghien_coal_s2: new Set([
+    ...CTKTKT_COAL_METER_ADJUSTMENT_FIELDS.filter(field => field.unit === "s2").map(field => field.cell),
     "AG28", "AI28", "AK28", // hiệu chỉnh 3 ca
     "COAL_ADJ_NOTE_S2", // lý do hiệu chỉnh
     // 12 cân than S2 (cols AH, AJ, AL; rows 16 to 27)

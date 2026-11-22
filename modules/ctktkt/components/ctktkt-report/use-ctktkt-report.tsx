@@ -14,7 +14,7 @@ import { canEditAnyCtktktField, canEditCtktktField, canEditCtktktGroup, getEdita
 import { CTKTKT_BCSX_LINKED_CELLS } from "@/modules/ctktkt/lib/ctktkt-bcsx-link";
 import { CTKTKT_WATER_LINKED_CELLS } from "@/modules/ctktkt/lib/ctktkt-water-link";
 import { calculateCtktktSummary, calculateCtktktMeterSummary, calculateTkdDcsSummary, calculateOilDifferences, calculateSteamDifferences, calculateNh3Summary, calculateNh3DcsSummary, calculateCoalShiftDetails, applyNh3StartLevelCarryover, NH3_DCS_START_METER_CELLS, NH3_START_LEVEL_CELLS, NH3_OPENING_STOCK_CELL, previousIsoDate, type CtktktDayEntries } from "@/modules/ctktkt/lib/ctktkt-report";
-import { normalizeCtktktInputValue } from "@/modules/ctktkt/lib/ctktkt-extra-fields";
+import { CTKTKT_COAL_METER_ADJUSTMENT_FIELDS, normalizeCtktktInputValue } from "@/modules/ctktkt/lib/ctktkt-extra-fields";
 import { parseSpreadsheetClipboard } from "@/modules/ctktkt/lib/spreadsheet-grid";
 import { CTKTKT_INSTALLED_CAPACITY_CELL, CTKTKT_INSTALLED_CAPACITY_MW } from "@/modules/ctktkt/lib/ctktkt-defaults";
 import { isQlktExtensionOutdated } from "@/modules/ctktkt/lib/qlkt-extension-version";
@@ -306,6 +306,7 @@ export function useCtktktReport() {
     const optionalCells = new Set([
       "COAL_ADJ_NOTE_S1", "COAL_ADJ_NOTE_S2", "WATER_ADJ_NOTE_S1", "WATER_ADJ_NOTE_S2",
       "WATER_ADJ_S1", "WATER_ADJ_S2", "W28", "Y28", "AA28", "AG28", "AI28", "AK28",
+      ...CTKTKT_COAL_METER_ADJUSTMENT_FIELDS.map(field => field.cell),
       ...CTKTKT_ELECTRIC_METER_RESET_CELLS,
       ...CTKTKT_PMIS_AUX_CELLS,
     ]);

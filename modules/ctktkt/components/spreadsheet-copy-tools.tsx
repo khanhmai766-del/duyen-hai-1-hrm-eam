@@ -25,11 +25,13 @@ function tableGrid(table:HTMLTableElement){
   return grid;
 }
 function cellValue(cell:HTMLTableCellElement){
-  const fields=Array.from(cell.querySelectorAll('input:not([type="checkbox"]):not([type="hidden"]),textarea,select'));
-  return fields.length?fields.map(field=>(field as unknown as {value:string}).value).join(" "):cell.innerText.trim();
+  if (cell.dataset.copyValue !== undefined) return cell.dataset.copyValue;
+  const fields=Array.from(cell.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>('input:not([type="checkbox"]):not([type="hidden"]),textarea,select'))
+    .filter(field => field.getClientRects().length);
+  return fields.length?fields.map(field=>field.value).join(" "):cell.innerText.trim();
 }
 
-/** Read-only selection: intercepts pointer input only while explicitly enabled. */
+/** Whole-table copy mode and direct range selection on meter tables. */
 export function SpreadsheetCopyTools(){
   const root=useRef<HTMLDivElement>(null);
   const [enabled,setEnabled]=useState(false),[mode,setMode]=useState<CopyMode>("cells");
@@ -37,6 +39,7 @@ export function SpreadsheetCopyTools(){
   const selection=useRef<{table:HTMLTableElement;grid:Cell[][];anchor:CopyPoint;end:CopyPoint}|null>(null);
   const highlighted=useRef(new Set<HTMLTableCellElement>());
   const drag=useRef(false);
+  const anchorCell=useRef<HTMLTableCellElement | null>(null);
   const payload=useRef(()=>({text:"",html:""}));
 
   function clear(){
@@ -45,8 +48,8 @@ export function SpreadsheetCopyTools(){
   }
   useEffect(()=>{
     const scope=root.current?.closest("[data-app-copy-scope]")?.querySelector<HTMLElement>(".ctktkt-content");
-    if(!scope||!enabled)return;
-    scope.setAttribute("data-copy-mode","true");
+    if(!scope)return;
+    if(enabled)scope.setAttribute("data-copy-mode","true");
     scope.classList.add(styles.selectionScope);
     const paint=()=>{
       const value=selection.current;if(!value)return;
@@ -79,41 +82,61 @@ export function SpreadsheetCopyTools(){
     };
     const down=(event:PointerEvent)=>{
       if(event.button!==0)return;
-      const found=target(event);if(!found)return;
-      event.preventDefault();event.stopPropagation();
+      const found=target(event);
+      if(!found || (!enabled && (!found.table.hasAttribute("data-copy-range") || event.pointerType!=="mouse"
+        || (event.target instanceof Element && event.target.closest("button, a, select, textarea, summary"))))){
+        clear();anchorCell.current=null;return;
+      }
+      const start=event.shiftKey&&anchorCell.current?.closest("table")===found.table?anchorCell.current:found.element;
+      clear();
+      anchorCell.current=start;
       const grid=tableGrid(found.table);let point:CopyPoint|undefined;
-      grid.forEach(row=>row.forEach(cell=>{if(cell.element===found.element)point=cell.origin;}));
+      grid.forEach(row=>row.forEach(cell=>{if(cell.element===start)point=cell.origin;}));
       if(!point)return;
-      const anchor=event.shiftKey&&selection.current?.table===found.table?selection.current.anchor:point;
-      selection.current={table:found.table,grid,anchor,end:point};drag.current=true;
-      if(document.activeElement instanceof HTMLElement)document.activeElement.blur();
-      paint();
+      const end=grid.flat().find(cell=>cell?.element===found.element)?.origin ?? point;
+      selection.current={table:found.table,grid,anchor:point,end};drag.current=true;
+      if(enabled||start!==found.element){
+        event.preventDefault();event.stopPropagation();
+        if(document.activeElement instanceof HTMLElement)document.activeElement.blur();
+        paint();
+      }
     };
     const over=(event:PointerEvent)=>{
       if(!drag.current)return;const found=target(event),value=selection.current;
       if(!found||!value||value.table!==found.table)return;
       const cell=value.grid.flat().find(cell=>cell?.element===found.element);
-      if(cell){value.end=cell.origin;paint();}
+      if(!cell||cell.origin===value.end)return;
+      value.end=cell.origin;
+      if(!enabled){
+        if(document.activeElement instanceof HTMLElement)document.activeElement.blur();
+        window.getSelection()?.removeAllRanges();
+      }
+      paint();
     };
     const up=()=>{drag.current=false;};
+    const dragStart=(event:DragEvent)=>{
+      if(drag.current && selection.current?.table.hasAttribute("data-copy-range"))event.preventDefault();
+    };
     const copy=(event:ClipboardEvent)=>{
-      if(!selection.current||!event.clipboardData||!scope.contains(selection.current.table))return;
+      if(!selection.current||!highlighted.current.size||!event.clipboardData||!scope.contains(selection.current.table))return;
       if(event.target instanceof Element&&event.target!==document.body&&!scope.contains(event.target)&&!root.current?.contains(event.target))return;
       const data=payload.current();if(!data.html)return;
       event.preventDefault();event.clipboardData.setData("text/plain",data.text);event.clipboardData.setData("text/html",data.html);
-      setMessage("Đã copy. Mở Excel, chọn ô bắt đầu rồi Ctrl+V.");
+      setMessage("Đã sao chép. Chọn ô đích trên web hoặc Excel rồi Ctrl+V.");
     };
-    const key=(event:KeyboardEvent)=>{if(event.key==="Escape"){clear();setMessage("Đã bỏ vùng chọn.");}};
-    scope.addEventListener("pointerdown",down,true);scope.addEventListener("pointerover",over,true);
-    document.addEventListener("pointerup",up);document.addEventListener("copy",copy);document.addEventListener("keydown",key);
-    return ()=>{clear();scope.removeAttribute("data-copy-mode");scope.classList.remove(styles.selectionScope);scope.removeEventListener("pointerdown",down,true);scope.removeEventListener("pointerover",over,true);document.removeEventListener("pointerup",up);document.removeEventListener("copy",copy);document.removeEventListener("keydown",key);};
+    const key=(event:KeyboardEvent)=>{
+      if(event.key==="Escape"){clear();anchorCell.current=null;setMessage("Đã bỏ vùng chọn.");}
+    };
+    scope.addEventListener("pointerdown",down,true);scope.addEventListener("pointerover",over,true);scope.addEventListener("dragstart",dragStart);
+    document.addEventListener("pointerup",up);document.addEventListener("pointercancel",up);document.addEventListener("copy",copy);document.addEventListener("keydown",key);
+    return ()=>{clear();anchorCell.current=null;scope.removeAttribute("data-copy-mode");scope.classList.remove(styles.selectionScope);scope.removeEventListener("pointerdown",down,true);scope.removeEventListener("pointerover",over,true);scope.removeEventListener("dragstart",dragStart);document.removeEventListener("pointerup",up);document.removeEventListener("pointercancel",up);document.removeEventListener("copy",copy);document.removeEventListener("keydown",key);};
   },[enabled,mode]);
 
   const copySelected=async()=>{
     const data=payload.current();if(!data.html){setMessage("Hãy chọn vùng ô trong bảng trước.");return;}
     try{
       await navigator.clipboard.write([new ClipboardItem({"text/plain":new Blob([data.text],{type:"text/plain"}),"text/html":new Blob([data.html],{type:"text/html"})})]);
-      setMessage("Đã copy. Mở Excel, chọn ô bắt đầu rồi Ctrl+V.");
+      setMessage("Đã sao chép. Chọn ô đích trên web hoặc Excel rồi Ctrl+V.");
     }catch{setMessage("Trình duyệt chưa cho copy bằng nút. Nhấn Ctrl+C để sao chép vùng đã chọn.");}
   };
   return <div ref={root} className={styles.toolbar}>
