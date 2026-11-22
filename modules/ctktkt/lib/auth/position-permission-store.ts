@@ -1,7 +1,8 @@
 import { prisma } from "@/lib/prisma";
-import { defaultPositionGrants, validatePositionGrants, type PositionPermissionConfig, type PositionGrants } from "./position-permissions";
+import { defaultPositionGrants, POSITION_PERMISSION_IDS, validatePositionGrants, type PositionPermissionConfig, type PositionGrants } from "./position-permissions";
 
 export const CTKTKT_POSITION_CONFIG_KEY = "ctktkt-position-permissions";
+const DIESEL_PERMISSION_IDS = POSITION_PERMISSION_IDS.filter(id => id.startsWith("chemical_DO_"));
 export class PositionPermissionConflict extends Error {
   constructor() { super("Phân quyền đã được người khác thay đổi. Hãy tải lại cấu hình trước khi lưu."); }
 }
@@ -15,7 +16,16 @@ export async function readPositionPermissionConfig(db = prisma) {
   try {
     const parsed = JSON.parse(row.value);
     if (parsed.schemaVersion !== 1 || !Number.isSafeInteger(parsed.version) || parsed.version < 1) throw new Error();
-    return { raw: row.value, config: { schemaVersion: 1, version: parsed.version, grants: validatePositionGrants(parsed.grants) } as PositionPermissionConfig, updatedAt: row.updatedAt };
+    let grants: unknown = parsed.grants;
+    // Cấu hình đã lưu trước khi có dầu DO giữ các quyền cũ và nhận ba quyền mới theo mặc định.
+    if (grants && typeof grants === "object" && !Array.isArray(grants)) {
+      const storedGrants = grants as Record<string, unknown>;
+      if (DIESEL_PERMISSION_IDS.every(id => !Object.hasOwn(storedGrants, id))) {
+        const defaults = defaultPositionGrants();
+        grants = { ...storedGrants, ...Object.fromEntries(DIESEL_PERMISSION_IDS.map(id => [id, defaults[id]])) };
+      }
+    }
+    return { raw: row.value, config: { schemaVersion: 1, version: parsed.version, grants: validatePositionGrants(grants) } as PositionPermissionConfig, updatedAt: row.updatedAt };
   } catch { throw new Error("Cấu hình phân quyền KTKT không hợp lệ. Chưa áp dụng quyền nhập liệu."); }
 }
 

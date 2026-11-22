@@ -1,5 +1,7 @@
 import { isAdminUser, type SessionUser } from "../auth/session";
 
+const DIESEL_MATERIAL_CODE = "1.11.01.002.VIE.00.000";
+
 export const CHEMICAL_CATALOG = [
   {
     code: "PAC_LIQUID",
@@ -59,6 +61,30 @@ export const CHEMICAL_CATALOG = [
       "Tái sinh hạt ART Hỗn Hợp 7",
     ],
   },
+  {
+    code: "DO_AUX_BOILER",
+    materialCode: DIESEL_MATERIAL_CODE,
+    name: "Dầu DO – Lò hơi phụ",
+    unit: "Lít",
+    allowedPositions: ["NH3 - Lò hơi phụ"],
+    suggestedReasons: ["Vận hành lò hơi phụ"],
+  },
+  {
+    code: "DO_FIRE_PUMP",
+    materialCode: DIESEL_MATERIAL_CODE,
+    name: "Dầu DO – Bơm diesel chữa cháy khẩn cấp",
+    unit: "Lít",
+    allowedPositions: ["NH3 - Lò hơi phụ"],
+    suggestedReasons: ["Chạy thử bơm chữa cháy", "Vận hành chữa cháy"],
+  },
+  {
+    code: "DO_EMERGENCY_GENERATOR",
+    materialCode: DIESEL_MATERIAL_CODE,
+    name: "Dầu DO – Máy phát diesel khẩn cấp",
+    unit: "Lít",
+    allowedPositions: ["Trực phụ điện"],
+    suggestedReasons: ["Chạy thử máy phát diesel", "Vận hành máy phát diesel khẩn cấp"],
+  },
 ] as const;
 
 export type ChemicalCode = (typeof CHEMICAL_CATALOG)[number]["code"];
@@ -93,5 +119,8 @@ export function editableChemicalsFor(user: SessionUser | null | undefined): Chem
 
 export function canEnterChemical(user: SessionUser | null | undefined, chemicalCode: string): boolean {
   const chemical = findChemical(chemicalCode);
-  return Boolean(user && chemical && (isAdminUser(user) || user.permissions.includes("edit_chemical") || user.permissions.includes(`chemical_${chemical.code}`)));
+  if (!user || !chemical) return false;
+  return isAdminUser(user)
+    || user.permissions.includes(`chemical_${chemical.code}`)
+    || (chemical.unit === "Tấn" && user.permissions.includes("edit_chemical"));
 }

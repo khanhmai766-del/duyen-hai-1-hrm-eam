@@ -105,9 +105,9 @@ export async function buildMirrorSnapshot(period:string,_versions?:Record<string
  }
  const chem=chemical.filter(r=>String(r.usage_date)>=from);
  tabs.set('chemical',[
-  {name:'Nhật ký hóa chất',rows:[['Ngày','Loại hóa chất','Mã vật tư','Số lượng','Đơn vị','Tổ máy','Mục đích sử dụng','Tham chiếu'],...chem.map(r=>[String(r.usage_date).split('-').reverse().join('/'),String(r.chemical_name),String(r.material_code),num(r.quantity),String(r.unit),String(r.plant_unit||''),String(r.purpose||''),String(r.reference||'')])],clearRows:5000,clearColumns:8},
-  {name:'Tổng hợp tháng',rows:[['Hóa chất','Mã vật tư',`Sử dụng ${period}`,'Đơn vị'],...CHEMICAL_CATALOG.map(c=>[c.name,c.materialCode,chem.filter(r=>r.chemical_code===c.code).reduce((sum,r)=>sum+(num(r.quantity)??0),0),c.unit])],clearRows:6,clearColumns:4},
-  {name:'Danh mục',rows:[['Mã hóa chất','Hóa chất','Mã vật tư','Đơn vị'],...CHEMICAL_CATALOG.map(c=>[c.code,c.name,c.materialCode,c.unit])],clearRows:6,clearColumns:4},
+  {name:'Nhật ký hóa chất',rows:[['Ngày','Hóa chất / Dầu DO','Mã vật tư','Số lượng','Đơn vị','Tổ máy','Mục đích sử dụng','Tham chiếu'],...chem.map(r=>[String(r.usage_date).split('-').reverse().join('/'),String(r.chemical_name),String(r.material_code),num(r.quantity),String(r.unit),String(r.plant_unit||''),String(r.purpose||''),String(r.reference||'')])],clearRows:5000,clearColumns:8},
+  {name:'Tổng hợp tháng',rows:[['Hóa chất / Dầu DO','Mã vật tư',`Sử dụng ${period}`,'Đơn vị'],...CHEMICAL_CATALOG.map(c=>[c.name,c.materialCode,chem.filter(r=>r.chemical_code===c.code).reduce((sum,r)=>sum+(num(r.quantity)??0),0),c.unit])],clearRows:CHEMICAL_CATALOG.length+1,clearColumns:4},
+  {name:'Danh mục',rows:[['Mã theo dõi','Hóa chất / Dầu DO','Mã vật tư','Đơn vị'],...CHEMICAL_CATALOG.map(c=>[c.code,c.name,c.materialCode,c.unit])],clearRows:CHEMICAL_CATALOG.length+1,clearColumns:4},
  ]);
  const pmis:Matrix=[[`BÁO CÁO THEO PMIS – ${period}`],['Chỉ tiêu','Đơn vị',...dates.map(d=>d.slice(8)+'/'+d.slice(5,7))]];
  for(const [i,u] of ['S1-DH1','S2-DH1'].entries()){

@@ -15,7 +15,7 @@ export const CTKTKT_PERMISSION_GROUPS = [
   { label: "Số liệu, báo cáo và đồng bộ", ids: ["edit_monthly_kpi", "edit_daily_inputs", "edit_ppa", "edit_pmis", "edit_bcsx", "sync_qlkt", "sync_google_sheet"] },
   { label: "Báo cáo Chỉ tiêu KTKT", ids: POSITION_PERMISSION_IDS.filter(p => p.startsWith("ctktkt_")) },
   { label: "Theo dõi lượng nước", ids: POSITION_PERMISSION_IDS.filter(p => p.startsWith("water_")) },
-  { label: "Theo dõi hóa chất", ids: POSITION_PERMISSION_IDS.filter(p => p.startsWith("chemical_")) },
+  { label: "Theo dõi hóa chất, dầu DO", ids: POSITION_PERMISSION_IDS.filter(p => p.startsWith("chemical_")) },
 ].map(group => ({ ...group, ids: group.ids as PositionPermission[] }));
 export const POSITION_PERMISSION_LABELS = {
   ...PERMISSION_LABELS, manage_users: "Toàn quyền KTKT",
@@ -43,7 +43,7 @@ export function defaultPositionGrants(): PositionGrants {
       const allowed = original.has(id)
         || (id.startsWith("ctktkt_") && original.has("edit_ctktkt"))
         || (id.startsWith("water_") && original.has("edit_water"))
-        || (id.startsWith("chemical_") && original.has("edit_chemical"));
+        || (id.startsWith("chemical_") && !id.startsWith("chemical_DO_") && original.has("edit_chemical"));
       if (allowed) grants[id].push(policy.position);
     }
   }
@@ -77,7 +77,7 @@ export function permissionsForPosition(position: string, grants: PositionGrants)
   if (selected.includes("manage_users")) return [...PERMISSIONS];
   const permissions: Permission[] = ["view_all", ...selected];
   for (const [umbrella, prefix] of [["edit_ctktkt", "ctktkt_"], ["edit_water", "water_"], ["edit_chemical", "chemical_"]] as const) {
-    const children = POSITION_PERMISSION_IDS.filter(id => id.startsWith(prefix));
+    const children = POSITION_PERMISSION_IDS.filter(id => id.startsWith(prefix) && !id.startsWith("chemical_DO_"));
     if (children.every(id => selected.includes(id))) permissions.push(umbrella);
   }
   return permissions;

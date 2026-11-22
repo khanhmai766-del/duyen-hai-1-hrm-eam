@@ -102,7 +102,7 @@ export function ChemicalUsageClient() {
         purpose,
         reference,
       });
-      setSuccess(editingId === null ? "Đã lưu lượng hóa chất và thông tin người nhập." : "Đã cập nhật bản ghi hóa chất và lưu người chỉnh sửa.");
+      setSuccess(editingId === null ? "Đã lưu lượng sử dụng và thông tin người nhập." : "Đã cập nhật bản ghi và lưu người chỉnh sửa.");
       setEditingId(null);
       setQuantity("");
       setOtherReason("");
@@ -152,7 +152,7 @@ export function ChemicalUsageClient() {
       <section className="module-hero ktkt-dark-hero rounded-2xl p-4 shadow-sm">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="module-heading-copy">
-            <h2 className="flex items-center gap-2 text-xl font-bold text-slate-900"><Beaker className="size-5 shrink-0 text-[#75d4e4]" aria-hidden />THEO DÕI HÓA CHẤT</h2>
+            <h2 className="flex items-center gap-2 text-xl font-bold text-slate-900"><Beaker className="size-5 shrink-0 text-[#75d4e4]" aria-hidden />THEO DÕI HÓA CHẤT, DẦU DO</h2>
           </div>
           {/* Tháng xem + nút Google Sheets cùng một hàng (thay khung xanh riêng phía trên). */}
           <div className="flex shrink-0 flex-wrap items-center gap-2 lg:flex-nowrap">
@@ -165,7 +165,7 @@ export function ChemicalUsageClient() {
         </div>
       </section>
 
-      <section aria-label="Lọc nhật ký theo loại hóa chất" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+      <section aria-label="Lọc nhật ký hóa chất, dầu DO" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         {catalog.map(item => (
           <button
             key={item.code}
@@ -199,14 +199,14 @@ export function ChemicalUsageClient() {
           {allowedCatalog.length === 0 ? (
             <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
               <div className="flex items-center gap-2 font-semibold"><LockKeyhole className="size-4" /> Chế độ chỉ xem</div>
-              <p className="mt-1">Cương vị của bạn không có hóa chất được phép nhập theo sheet nguồn.</p>
+              <p className="mt-1">Cương vị của bạn chưa có quyền nhập hóa chất hoặc dầu DO.</p>
             </div>
           ) : (
             <form onSubmit={saveRecord} className="mt-3.5 space-y-4">
               <label className="block text-xs leading-5 font-medium text-slate-700">Ngày thực hiện
                 <input required type="date" value={usageDate} onChange={event => setUsageDate(event.target.value)} className="mt-1.5 h-10 min-h-9 w-full rounded-lg border border-slate-200 px-3 outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100" />
               </label>
-              <label className="block text-xs leading-5 font-medium text-slate-700">Loại hóa chất
+              <label className="block text-xs leading-5 font-medium text-slate-700">Hóa chất / Dầu DO
                 <select required value={chemicalCode} onChange={event => {
                   const nextCode = event.target.value;
                   const nextChemical = allowedCatalog.find(item => item.code === nextCode);
@@ -222,7 +222,7 @@ export function ChemicalUsageClient() {
                 <input required inputMode="decimal" value={quantity} onChange={event => setQuantity(event.target.value)} placeholder="0,000" className="mt-1.5 h-10 min-h-9 w-full rounded-lg border border-slate-200 px-3 outline-none focus:border-emerald-400" />
               </label>
               <div className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-800">
-                Tổ máy: <strong>Chung</strong> — áp dụng cho toàn bộ hóa chất trong danh mục.
+                Tổ máy: <strong>Chung</strong>
               </div>
               <label className="block text-xs leading-5 font-medium text-slate-700">Nội dung công tác/lý do sử dụng
                 <select required value={reasonChoice} onChange={event => setReasonChoice(event.target.value)} className="mt-1.5 h-10 !min-h-9 w-full rounded-lg border border-slate-200 bg-white px-3 outline-none focus:border-emerald-400">
@@ -239,7 +239,7 @@ export function ChemicalUsageClient() {
                 <input value={reference} onChange={event => setReference(event.target.value)} maxLength={300} placeholder="Số PCT/LCT hoặc tên hồ sơ" className="mt-1.5 h-10 min-h-9 w-full rounded-lg border border-slate-200 px-3 outline-none focus:border-emerald-400" />
               </label>
               <button disabled={saving} className="flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-60">
-                <Save className="size-4" aria-hidden /> {saving ? "Đang lưu…" : editingId === null ? "Lưu hóa chất trong ngày" : "Lưu nội dung chỉnh sửa"}
+                <Save className="size-4" aria-hidden /> {saving ? "Đang lưu…" : editingId === null ? "Lưu lượng sử dụng" : "Lưu nội dung chỉnh sửa"}
               </button>
             </form>
           )}
@@ -251,7 +251,7 @@ export function ChemicalUsageClient() {
           <div className="flex items-start justify-between gap-3 border-b border-slate-100 px-5 py-4">
             <div>
               <h3 className="font-semibold text-slate-900">
-                Nhật ký {filteredChemical ? filteredChemical.name : "tất cả hóa chất"} tháng {month.slice(5, 7)}/{month.slice(0, 4)}
+                Nhật ký {filteredChemical ? filteredChemical.name : "hóa chất, dầu DO"} tháng {month.slice(5, 7)}/{month.slice(0, 4)}
               </h3>
               <p className="mt-1 text-sm text-slate-500">{filteredRecords.length} lượt sử dụng đã ghi nhận</p>
             </div>
@@ -264,7 +264,7 @@ export function ChemicalUsageClient() {
           <div className="max-h-[68vh] overflow-auto">
             <table className="min-w-[980px] w-full text-sm">
               <thead className="sticky top-0 z-[5] bg-[#edf7f4] text-left text-xs font-semibold uppercase tracking-wide text-slate-500 print:static">
-                <tr><th className="px-4 py-3">Ngày</th><th className="px-4 py-3">Hóa chất</th><th className="px-4 py-3 text-right">Số lượng</th><th className="px-4 py-3">Tổ máy</th><th className="px-4 py-3">Nội dung/lý do</th><th className="px-4 py-3">Người nhập</th><th className="px-4 py-3">Tham chiếu</th><th className="px-4 py-3">Thao tác</th></tr>
+                <tr><th className="px-4 py-3">Ngày</th><th className="px-4 py-3">Hóa chất / Dầu DO</th><th className="px-4 py-3 text-right">Số lượng</th><th className="px-4 py-3">Tổ máy</th><th className="px-4 py-3">Nội dung/lý do</th><th className="px-4 py-3">Người nhập</th><th className="px-4 py-3">Tham chiếu</th><th className="px-4 py-3">Thao tác</th></tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {loading ? <tr><td colSpan={8} className="px-4 py-10 text-center text-slate-400">Đang tải dữ liệu…</td></tr> : null}

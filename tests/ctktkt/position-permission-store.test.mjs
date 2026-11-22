@@ -26,6 +26,20 @@ test('cấu hình trống được lưu và đọc nguyên trạng, không quay 
  assert.equal(saved.config.version,1);assert.equal(fixture.writes,1);
  const loaded=await readPositionPermissionConfig(fixture.db);assert.deepEqual(loaded.config.grants,emptyPositionGrants());assert.equal(loaded.config.version,1);
 });
+test('cấu hình đã lưu trước khi có dầu DO giữ quyền cũ và bổ sung đúng ba quyền mới',async()=>{
+ const grants=emptyPositionGrants();
+ grants.chemical_NAOCL=['Trợ thủ'];
+ for(const id of Object.keys(grants).filter(id=>id.startsWith('chemical_DO_'))) delete grants[id];
+ const fixture=store(JSON.stringify({schemaVersion:1,version:3,grants}));
+ const loaded=await readPositionPermissionConfig(fixture.db);
+ assert.equal(loaded.config.version,3);
+ assert.deepEqual(loaded.config.grants.chemical_NAOCL,['Trợ thủ']);
+ assert.deepEqual(loaded.config.grants.chemical_PAC_LIQUID,[]);
+ assert.deepEqual(loaded.config.grants.chemical_DO_AUX_BOILER,['Quản đốc','Phó Quản đốc','NH3 - Lò hơi phụ']);
+ assert.deepEqual(loaded.config.grants.chemical_DO_FIRE_PUMP,loaded.config.grants.chemical_DO_AUX_BOILER);
+ assert.deepEqual(loaded.config.grants.chemical_DO_EMERGENCY_GENERATOR,['Quản đốc','Phó Quản đốc','Trực phụ điện']);
+ assert.equal(fixture.writes,0);
+});
 test('hai người cùng mở phiên bản 0: chỉ một người lưu được, người kia nhận xung đột',async()=>{
  const fixture=store();const grants=emptyPositionGrants();grants.backup_data=['Máy nghiền'];
  const results=await Promise.allSettled([savePositionPermissionConfig(grants,0,'first',fixture.db),savePositionPermissionConfig(defaultPositionGrants(),0,'second',fixture.db)]);

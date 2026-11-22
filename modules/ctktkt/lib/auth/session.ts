@@ -49,6 +49,9 @@ export const PERMISSIONS = [
   "chemical_NH4OH_20",
   "chemical_HCL_31",
   "chemical_NAOH_31",
+  "chemical_DO_AUX_BOILER",
+  "chemical_DO_FIRE_PUMP",
+  "chemical_DO_EMERGENCY_GENERATOR",
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
 
@@ -92,6 +95,9 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   chemical_NH4OH_20: "NH4OH 20%",
   chemical_HCL_31: "HCl 31%",
   chemical_NAOH_31: "NaOH 31%",
+  chemical_DO_AUX_BOILER: "Dầu DO – Lò hơi phụ",
+  chemical_DO_FIRE_PUMP: "Dầu DO – Bơm diesel chữa cháy khẩn cấp",
+  chemical_DO_EMERGENCY_GENERATOR: "Dầu DO – Máy phát diesel khẩn cấp",
 
 };
 

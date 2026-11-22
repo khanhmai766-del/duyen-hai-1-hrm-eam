@@ -234,7 +234,7 @@ export const NAV_SECTIONS: NavSection[] = [
       { label: "Báo cáo Chỉ tiêu KTKT", href: "/chi-tieu-ktkt/ctktkt-report", icon: FileSpreadsheet, permissionIds: ["ctktkt-access"], keywords: "ctktkt chi tieu kinh te ky thuat pmis ppa san xuat" },
       { label: "Báo cáo sản xuất", href: "/chi-tieu-ktkt/bcsx-report", icon: ClipboardList, permissionIds: ["ctktkt-access"], keywords: "ctktkt chi tieu kinh te ky thuat pmis ppa san xuat" },
       { label: "Theo dõi lượng nước", href: "/chi-tieu-ktkt/water-report", icon: Gauge, permissionIds: ["ctktkt-access"], keywords: "ctktkt chi tieu kinh te ky thuat pmis ppa san xuat" },
-      { label: "Theo dõi hóa chất", href: "/chi-tieu-ktkt/chemical-usage", icon: FlaskConical, permissionIds: ["ctktkt-access"], keywords: "ctktkt chi tieu kinh te ky thuat pmis ppa san xuat" },
+      { label: "Theo dõi hóa chất, dầu DO", href: "/chi-tieu-ktkt/chemical-usage", icon: FlaskConical, permissionIds: ["ctktkt-access"], keywords: "ctktkt chi tieu kinh te ky thuat pmis ppa san xuat dau do diesel" },
       { label: "Suất hao nhiệt PPA", href: "/chi-tieu-ktkt/ppa-heat-rate", icon: BarChart3, permissionIds: ["ctktkt-access"], keywords: "ctktkt chi tieu kinh te ky thuat pmis ppa san xuat" },
       { label: "Báo cáo PMIS", href: "/chi-tieu-ktkt/pmis-report", icon: Gauge, permissionIds: ["ctktkt-access"], keywords: "ctktkt chi tieu kinh te ky thuat pmis ppa san xuat" },
       { label: "Phân công nhập liệu", href: "/chi-tieu-ktkt/phan-quyen", icon: UserCog, permissionIds: ["ctktkt-delegate"], keywords: "ctktkt phan cong nhap lieu phan quyen giao quyen tkd truong ca" },

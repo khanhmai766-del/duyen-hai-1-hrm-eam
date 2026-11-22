@@ -35,6 +35,16 @@ test('bỏ toàn bộ cương vị không khôi phục quyền kể cả Quản 
   for(const permission of PERMISSIONS.filter(p=>p!=='view_all'))assert.equal(hasPermission(user,permission),false,position+'/'+permission);
  }
 });
+test('quyền dầu DO tách theo thiết bị và nhận tên cương vị thực tế',()=>{
+ const grants=defaultPositionGrants();
+ const dieselCodes=['DO_AUX_BOILER','DO_FIRE_PUMP','DO_EMERGENCY_GENERATOR'];
+ const allowed=position=>dieselCodes.filter(code=>canEnterChemical(mapHostUser(host(position),access,grants),code));
+ assert.deepEqual(allowed('VHV NH3 và lò hơi phụ'),dieselCodes.slice(0,2));
+ assert.deepEqual(allowed('VHV Trực phụ điện S2'),dieselCodes.slice(2));
+ assert.deepEqual(allowed('Trực chính Điện'),[]);
+ grants.chemical_DO_FIRE_PUMP=[];
+ assert.deepEqual(allowed('VHV NH3-LHP'),['DO_AUX_BOILER']);
+});
 test('bỏ một nhóm KTKT/nước/hóa chất không bị quyền nhập toàn bộ cấp lại',()=>{
  for(const [id,position,check] of [
   ['ctktkt_tkd_trend','Kỹ thuật viên',u=>canEditCtktktGroup(u,'tkd_trend')],

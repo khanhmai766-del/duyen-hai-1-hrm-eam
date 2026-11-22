@@ -82,13 +82,13 @@ export async function POST(request: Request) {
       return fail("Ngày thực hiện không hợp lệ.", 400);
     }
     if (!chemical) {
-      return fail("Loại hóa chất không thuộc danh mục được theo dõi.", 400);
+      return fail("Mục đã chọn không thuộc danh mục theo dõi hóa chất, dầu DO.", 400);
     }
     if (!canEnterChemical(user, chemicalCode)) {
       return fail(`Cương vị ${user.position || "chưa xác định"} không được nhập ${chemical.name}.`, 403);
     }
     if (!Number.isFinite(quantity) || quantity <= 0 || quantity > 10000) {
-      return fail("Số lượng phải lớn hơn 0 và không vượt quá 10.000 tấn.", 400);
+      return fail(`Số lượng phải lớn hơn 0 và không vượt quá 10.000 ${chemical.unit.toLocaleLowerCase("vi-VN")}.`, 400);
     }
     if (!purpose) {
       return fail("Vui lòng nhập nội dung công tác/lý do sử dụng.", 400);
@@ -138,12 +138,12 @@ export async function PUT(request: Request) {
 
     if (!Number.isInteger(id) || id <= 0) return fail("Bản ghi cần sửa không hợp lệ.", 400);
     if (!isValidIsoDate(usageDate)) return fail("Ngày thực hiện không hợp lệ.", 400);
-    if (!chemical) return fail("Loại hóa chất không thuộc danh mục được theo dõi.", 400);
+    if (!chemical) return fail("Mục đã chọn không thuộc danh mục theo dõi hóa chất, dầu DO.", 400);
     if (!canEnterChemical(user, chemicalCode)) {
       return fail(`Cương vị ${user.position || "chưa xác định"} không được sửa ${chemical.name}.`, 403);
     }
     if (!Number.isFinite(quantity) || quantity <= 0 || quantity > 10000) {
-      return fail("Số lượng phải lớn hơn 0 và không vượt quá 10.000 tấn.", 400);
+      return fail(`Số lượng phải lớn hơn 0 và không vượt quá 10.000 ${chemical.unit.toLocaleLowerCase("vi-VN")}.`, 400);
     }
     if (!purpose) return fail("Vui lòng nhập nội dung công tác/lý do sử dụng.", 400);
 
@@ -151,12 +151,12 @@ export async function PUT(request: Request) {
     const existing = await prisma.ctktktChemicalUsageLogs.findUnique({ where: { id }, select: { chemical_code: true } });
     if (!existing) return fail("Không tìm thấy bản ghi cần sửa.", 404);
     if (!canEnterChemical(user, existing.chemical_code)) {
-      return fail("Cương vị hiện tại không được sửa bản ghi hóa chất này.", 403);
+      return fail("Cương vị hiện tại không được sửa bản ghi này.", 403);
     }
 
-    // updateMany (không ném lỗi khi dòng vừa biến mất) — như UPDATE … WHERE id = ? cũ.
-    await ktktWrite(operationalWriteKeysFor(TABLE), tx => tx.ctktktChemicalUsageLogs.updateMany({
-      where: { id },
+    // Chỉ ghi nếu loại vật tư vẫn là loại đã kiểm quyền ở trên.
+    const updated = await ktktWrite(operationalWriteKeysFor(TABLE), tx => tx.ctktktChemicalUsageLogs.updateMany({
+      where: { id, chemical_code: existing.chemical_code },
       data: {
         usage_date: usageDate, chemical_code: chemical.code, material_code: chemical.materialCode, chemical_name: chemical.name, unit: chemical.unit,
         quantity, purpose, plant_unit: "Chung", reference,
@@ -164,6 +164,7 @@ export async function PUT(request: Request) {
       },
     }));
 
+    if (updated.count === 0) return fail("Bản ghi đã thay đổi. Vui lòng tải lại nhật ký trước khi sửa.", 409);
     return ok({ ok: true, id });
   } catch (error) {
     console.error("Lỗi sửa theo dõi hóa chất:", error);

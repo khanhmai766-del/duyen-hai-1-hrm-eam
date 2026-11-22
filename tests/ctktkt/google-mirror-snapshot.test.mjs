@@ -12,7 +12,7 @@ const root=new URL('../../modules/ctktkt/lib/',import.meta.url);
 const source=readFileSync(new URL('google-mirror-snapshot.ts',root),'utf8');
 const code=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,esModuleInterop:true}}).outputText;
 const meters=()=>({grossS1:Array(48).fill(200000),netS1:Array(48).fill(180000),grossS2:Array(48).fill(0),netS2:Array(48).fill(0)});
-async function snapshot(ppaRows){
+async function snapshot(ppaRows, chemicalRows=[]){
   const exports={};
   async function buildWorkbook(){
     const book=new ExcelJS.Workbook();const sheet=book.addWorksheet('T11.2026');
@@ -21,7 +21,7 @@ async function snapshot(ppaRows){
   }
   // Prisma giả: chỉ bảng PPA có dòng; các bảng khác rỗng. Truy vấn Prisma thật so với SQL cũ bằng ctktkt-shadow-dump.mjs.
   const none={findMany:async()=>[]};
-  const prisma={ctktktDailyInputs:none,ctktktShiftReadings:none,ctktktWaterShiftLogs:none,ctktktChemicalUsageLogs:none,ctktktOperatingEvents:none,ctktktPpaHeatRateDaily:{findMany:async()=>ppaRows}};
+  const prisma={ctktktDailyInputs:none,ctktktShiftReadings:none,ctktktWaterShiftLogs:none,ctktktChemicalUsageLogs:{findMany:async()=>chemicalRows},ctktktOperatingEvents:none,ctktktPpaHeatRateDaily:{findMany:async()=>ppaRows}};
   vm.runInNewContext(code,{exports,Buffer,Response,Request,URL,Date,console,require:name=>{
     if(name==='@/lib/prisma')return {prisma};
     if(name.startsWith('./report-exports/'))return {buildCtktktWorkbook:buildWorkbook,buildWaterWorkbook:buildWorkbook};
@@ -61,4 +61,18 @@ test('notes-only day does not prevent valid PPA day from being exported',async()
 });
 test('invalid partially populated PPA day cannot silently disappear from snapshot',async()=>{
   await assert.rejects(()=>snapshot([{...noteRow,source_data:'{"grossS1":[1]}'}]),/PPA_METER_SOURCE_INVALID/);
+});
+test('chemical mirror keeps the three equipment totals separate despite a shared diesel material code',async()=>{
+  const code='1.11.01.002.VIE.00.000';
+  const rows=[
+    {chemical_code:'DO_AUX_BOILER',chemical_name:'Dầu DO – Lò hơi phụ',quantity:14.5},
+    {chemical_code:'DO_FIRE_PUMP',chemical_name:'Dầu DO – Bơm diesel chữa cháy khẩn cấp',quantity:2},
+  ].map(row=>({...row,usage_date:'2026-11-02',material_code:code,unit:'Lít'}));
+  const {files}=await snapshot([],rows);
+  const [,summary,catalog]=files.find(file=>file.key==='chemical').tabs;
+  assert.equal(summary.clearRows,summary.rows.length);
+  assert.equal(catalog.clearRows,catalog.rows.length);
+  assert.deepEqual(Array.from(summary.rows.slice(-3),row=>Array.from(row.slice(1))),[
+    [code,14.5,'Lít'],[code,2,'Lít'],[code,0,'Lít'],
+  ]);
 });
