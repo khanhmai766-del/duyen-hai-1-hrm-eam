@@ -98,8 +98,15 @@ export function format(value: number | null | undefined) {
   return numberFormat.format(value);
 }
 
+export function formatCoalConsumption(value: number | null) {
+  const formatted = format(value);
+  return formatted === "-0" ? "0" : formatted;
+}
+
 export function coalConsumptionCellClass(value: number | null, total = false) {
-  if (value !== null && value < 0) return "bg-red-50 text-red-700 font-black";
+  if (value !== null && value < 0 && formatCoalConsumption(value) !== "0") {
+    return "bg-red-50 text-red-700 font-black";
+  }
   return total ? "bg-blue-50 text-blue-950 font-black" : "bg-sky-50/60 text-slate-900 font-bold";
 }
 

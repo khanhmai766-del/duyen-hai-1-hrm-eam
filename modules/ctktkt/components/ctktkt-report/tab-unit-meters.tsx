@@ -5,7 +5,7 @@ import { canReviewCoalPhotos } from "@/modules/ctktkt/lib/coal-photo-review";
 import { calculateCoalMeterShiftConsumption, OIL_HOURS } from "@/modules/ctktkt/lib/ctktkt-report";
 import { COAL_ADJUSTMENT_CELLS, COAL_SHIFT_HOURS, coalFeederCode, coalMeterAdjustmentCell, coalShiftAdjustments, type CoalMeterUnit } from "@/modules/ctktkt/lib/coal-meter-adjustments";
 import { Popover, PopoverContent, PopoverTrigger } from "@/modules/ctktkt/components/ui/popover";
-import { format, coalConsumptionCellClass } from "./shared";
+import { format, formatCoalConsumption, coalConsumptionCellClass } from "./shared";
 import type { CtktktReportCtx } from "./use-ctktkt-report";
 
 function CoalMeterInput({ ctx, unit, row, column, index }: {
@@ -71,12 +71,12 @@ function CoalShiftTotalCells({ totals }: { totals: (number | null)[] }) {
       {totals.map((value, index) => (
         <td key={index} className={`border-l p-2 text-center tabular-nums ${coalConsumptionCellClass(value, true)}`}
           title={value === null ? "Chưa đủ chỉ số của 12 cân than ở hai mốc" : `Tổng than ca ${index + 1} sau hiệu chỉnh (tấn)`}>
-          {format(value)}
+          {formatCoalConsumption(value)}
         </td>
       ))}
       <td className={`border-l p-2 text-center tabular-nums ${coalConsumptionCellClass(total, true)}`}
         title={total === null ? "Chưa đủ số liệu của cả 3 ca" : "Tổng than 3 ca sau hiệu chỉnh (tấn)"}>
-        {format(total)}
+        {formatCoalConsumption(total)}
       </td>
     </>
   );
@@ -382,11 +382,11 @@ export function CtktktUnitMetersTab({ ctx }: { ctx: CtktktReportCtx }) {
                       ))}
                       {[consumption.shift1, consumption.shift2, consumption.shift3].map((value, index) => (
                         <td key={index} className={`border-l p-2 text-center tabular-nums ${coalConsumptionCellClass(value)}`}>
-                          {format(value)}
+                          {formatCoalConsumption(value)}
                         </td>
                       ))}
                       <td className={`border-l p-2 text-center tabular-nums ${coalConsumptionCellClass(consumption.total, true)}`}>
-                        {format(consumption.total)}
+                        {formatCoalConsumption(consumption.total)}
                       </td>
                     </tr>;
                   })}
@@ -708,11 +708,11 @@ export function CtktktUnitMetersTab({ ctx }: { ctx: CtktktReportCtx }) {
                       ))}
                       {[consumption.shift1, consumption.shift2, consumption.shift3].map((value, index) => (
                         <td key={index} className={`border-l p-2 text-center tabular-nums ${coalConsumptionCellClass(value)}`}>
-                          {format(value)}
+                          {formatCoalConsumption(value)}
                         </td>
                       ))}
                       <td className={`border-l p-2 text-center tabular-nums ${coalConsumptionCellClass(consumption.total, true)}`}>
-                        {format(consumption.total)}
+                        {formatCoalConsumption(consumption.total)}
                       </td>
                     </tr>;
                   })}
