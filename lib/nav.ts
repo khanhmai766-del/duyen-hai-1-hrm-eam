@@ -304,6 +304,8 @@ export function navQuickItems(input?: PositionCarrier | string | null): NavItem[
 }
 
 const STATISTICS_ALLOWED_SECTION_KEYS = new Set(["quan ly nguoi dung", "quan ly vat tu", "quan ly chi tieu ktkt"]);
+// Cương vị Thống kê chỉ thấy riêng các mục này trong nhóm Tiện ích (quyền mở trang vẫn kiểm tra như thường).
+const STATISTICS_ALLOWED_UTILITY_HREFS = new Set(["/tien-ich/chuan-the-thuc"]);
 
 function navPathMatches(pathname: string, href: string) {
   const base = href.split("?")[0];
@@ -347,11 +349,15 @@ export function isStatisticsPosition(input?: PositionCarrier | string | null) {
 
 export function navSectionAllowedForPosition(section: NavSection, input?: PositionCarrier | string | null) {
   if (!isStatisticsPosition(input)) return true;
-  return STATISTICS_ALLOWED_SECTION_KEYS.has(normalizeText(section.title));
+  return STATISTICS_ALLOWED_SECTION_KEYS.has(normalizeText(section.title))
+    || section.items.some((item) => STATISTICS_ALLOWED_UTILITY_HREFS.has(item.href));
 }
 
 export function navSectionsForPosition(input?: PositionCarrier | string | null) {
-  return NAV_SECTIONS.filter((section) => navSectionAllowedForPosition(section, input));
+  return NAV_SECTIONS.filter((section) => navSectionAllowedForPosition(section, input)).map((section) =>
+    !isStatisticsPosition(input) || STATISTICS_ALLOWED_SECTION_KEYS.has(normalizeText(section.title))
+      ? section
+      : { ...section, items: section.items.filter((item) => STATISTICS_ALLOWED_UTILITY_HREFS.has(item.href)) });
 }
 
 export function pathAllowedForPosition(pathname: string, input?: PositionCarrier | string | null) {
