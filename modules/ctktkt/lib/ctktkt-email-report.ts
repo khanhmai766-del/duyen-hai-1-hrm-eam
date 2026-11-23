@@ -58,7 +58,8 @@ export function formatMetricNumber(
   }
   // Nếu là số nguyên và yêu cầu hiển thị đẹp (hoặc 0)
   if (Math.abs(value) < 1e-9) return "0";
-  return value.toFixed(decimals);
+  const formatted = value.toFixed(decimals);
+  return /^-0(?:\.0+)?$/.test(formatted) ? formatted.slice(1) : formatted;
 }
 
 export function extractCtktktEmailMetrics(

@@ -59,7 +59,7 @@ export const editableFields = [
   && !isCtktktOperationPowerCell(field.cell)
   && describeCtktktMissingField(field) !== null);
 
-export const numberFormat = new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 4 });
+const numberFormat = new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 4 });
 
 export function reportTabClass(active: boolean) {
   return `flex min-h-9 flex-1 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border px-2.5 py-1.5 text-center text-xs font-semibold leading-tight transition-all ${
@@ -95,16 +95,12 @@ export const meterComparisonKeys = new Set<keyof CtktktKpis>([
 
 export function format(value: number | null | undefined) {
   if (value === null || value === undefined || !Number.isFinite(value)) return "—";
-  return numberFormat.format(value);
-}
-
-export function formatCoalConsumption(value: number | null) {
-  const formatted = format(value);
+  const formatted = numberFormat.format(value);
   return formatted === "-0" ? "0" : formatted;
 }
 
 export function coalConsumptionCellClass(value: number | null, total = false) {
-  if (value !== null && value < 0 && formatCoalConsumption(value) !== "0") {
+  if (value !== null && value < 0 && format(value) !== "0") {
     return "bg-red-50 text-red-700 font-black";
   }
   return total ? "bg-blue-50 text-blue-950 font-black" : "bg-sky-50/60 text-slate-900 font-bold";
@@ -126,7 +122,7 @@ export function formatDeminDiff(
   const w = parseDeminNum(wVal);
   const adj = parseDeminNum(adjVal) ?? 0;
   if (x === null || w === null) return "—";
-  return numberFormat.format(x - w + adj);
+  return format(x - w + adj);
 }
 
 export function formatDeminTotal(
@@ -149,14 +145,14 @@ export function formatDeminTotal(
 
   if (diff1 === null && diff2 === null) return "—";
   const total = (diff1 ?? 0) + (diff2 ?? 0);
-  return numberFormat.format(total);
+  return format(total);
 }
 
 export function formatAdjTotal(adj1: string | undefined, adj2: string | undefined): string {
   const a1 = parseDeminNum(adj1);
   const a2 = parseDeminNum(adj2);
   if (a1 === null && a2 === null) return "0";
-  return numberFormat.format((a1 ?? 0) + (a2 ?? 0));
+  return format((a1 ?? 0) + (a2 ?? 0));
 }
 
 export function formatResinTotal(z1: string | undefined, z2: string | undefined): string {
@@ -164,7 +160,7 @@ export function formatResinTotal(z1: string | undefined, z2: string | undefined)
   const nz2 = parseDeminNum(z2);
   if (nz1 === null && nz2 === null) return "—";
   const total = (nz1 ?? 0) + (nz2 ?? 0);
-  return numberFormat.format(total);
+  return format(total);
 }
 
 export function num(entries: CtktktDayEntries, cell: string): number | null {

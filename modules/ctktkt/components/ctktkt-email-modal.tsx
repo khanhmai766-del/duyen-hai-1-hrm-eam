@@ -18,6 +18,7 @@ import {
   extractCtktktEmailMetrics,
   generateEmailReportText,
   generateEmailReportHtml,
+  formatMetricNumber,
   CtktktEmailReportMetrics,
 } from "@/modules/ctktkt/lib/ctktkt-email-report";
 
@@ -281,46 +282,46 @@ export function CtktktEmailModal({
                   <p className="font-bold text-black mb-0.5">
                     <strong>- Tổ máy S1 vận hành:</strong>
                   </p>
-                  <p className="text-black mb-0.5">+ Tổng sản lượng đầu cực máy phát S1: {metrics.grossMwhS1 != null ? metrics.grossMwhS1.toFixed(2) : "—"} (MWh)</p>
-                  <p className="text-black mb-0.5">+ Tổng sản lượng tại điểm mua bán điện S1: {metrics.netMwhS1 != null ? metrics.netMwhS1.toFixed(2) : "—"} (MWh)</p>
-                  <p className="text-black mb-0.5">+ Lượng điện tự dùng S1: {metrics.auxMwhS1 != null ? metrics.auxMwhS1.toFixed(2) : "—"} (MWh)</p>
-                  <p className="text-black mb-0.5">+ Phần trăm điện tự dùng S1: {metrics.auxPercentS1 != null ? metrics.auxPercentS1.toFixed(2) : "—"} % (đã bao gồm tổn thất MBA)</p>
-                  <p className="text-black mb-0.5">+ Tổng lượng than tiêu thụ S1: {metrics.coalTonnesS1 != null ? metrics.coalTonnesS1.toFixed(3) : "—"} (tấn) - đã quy ẩm về 8.5%</p>
-                  <p className="text-black mb-0.5">+ Suất tiêu hao than tinh S1: {metrics.netCoalRateS1 != null ? metrics.netCoalRateS1.toFixed(3) : "—"} (g/kWh)</p>
-                  <p className="text-black mb-0.5">+ Nhiệt trị than quy ẩm: {metrics.hhvKjKgS1 != null ? metrics.hhvKjKgS1.toFixed(2) : "—"} (kJ/kg)</p>
-                  <p className="text-black mb-0.5">+ Suất hao nhiệt tinh S1: {metrics.netHeatRateS1 != null ? metrics.netHeatRateS1.toFixed(3) : "—"} (kJ/kWh)</p>
-                  <p className="text-black mb-0.5">+ Tổng lượng hơi tiêu thụ S1: {metrics.steamTonnesS1 != null ? metrics.steamTonnesS1.toFixed(2) : "—"} (tấn)</p>
-                  <p className="text-black mb-0.5">+ Suất tiêu hao hơi theo sản lượng đầu cực S1: {metrics.steamRateGrossS1 != null ? metrics.steamRateGrossS1.toFixed(2) : "—"} (g/kWh)</p>
-                  <p className="text-black mb-0.5">+ Suất tiêu hao hơi theo sản lượng phát lưới S1: {metrics.steamRateNetS1 != null ? metrics.steamRateNetS1.toFixed(2) : "—"} (g/kWh)</p>
-                  <p className="text-black mb-1">+ Lượng nước demin sử dụng S1: {metrics.deminWaterS1 != null ? metrics.deminWaterS1.toFixed(2) : "—"} (m³)</p>
+                  <p className="text-black mb-0.5">+ Tổng sản lượng đầu cực máy phát S1: {formatMetricNumber(metrics.grossMwhS1, 2)} (MWh)</p>
+                  <p className="text-black mb-0.5">+ Tổng sản lượng tại điểm mua bán điện S1: {formatMetricNumber(metrics.netMwhS1, 2)} (MWh)</p>
+                  <p className="text-black mb-0.5">+ Lượng điện tự dùng S1: {formatMetricNumber(metrics.auxMwhS1, 2)} (MWh)</p>
+                  <p className="text-black mb-0.5">+ Phần trăm điện tự dùng S1: {formatMetricNumber(metrics.auxPercentS1, 2)} % (đã bao gồm tổn thất MBA)</p>
+                  <p className="text-black mb-0.5">+ Tổng lượng than tiêu thụ S1: {formatMetricNumber(metrics.coalTonnesS1, 3)} (tấn) - đã quy ẩm về 8.5%</p>
+                  <p className="text-black mb-0.5">+ Suất tiêu hao than tinh S1: {formatMetricNumber(metrics.netCoalRateS1, 3)} (g/kWh)</p>
+                  <p className="text-black mb-0.5">+ Nhiệt trị than quy ẩm: {formatMetricNumber(metrics.hhvKjKgS1, 2)} (kJ/kg)</p>
+                  <p className="text-black mb-0.5">+ Suất hao nhiệt tinh S1: {formatMetricNumber(metrics.netHeatRateS1, 3)} (kJ/kWh)</p>
+                  <p className="text-black mb-0.5">+ Tổng lượng hơi tiêu thụ S1: {formatMetricNumber(metrics.steamTonnesS1, 2)} (tấn)</p>
+                  <p className="text-black mb-0.5">+ Suất tiêu hao hơi theo sản lượng đầu cực S1: {formatMetricNumber(metrics.steamRateGrossS1, 2)} (g/kWh)</p>
+                  <p className="text-black mb-0.5">+ Suất tiêu hao hơi theo sản lượng phát lưới S1: {formatMetricNumber(metrics.steamRateNetS1, 2)} (g/kWh)</p>
+                  <p className="text-black mb-1">+ Lượng nước demin sử dụng S1: {formatMetricNumber(metrics.deminWaterS1, 2)} (m³)</p>
 
                   {/* S2 */}
                   <p className="font-bold text-black mb-0.5">
                     <strong>- Tổ máy S2 vận hành:</strong>
                   </p>
-                  <p className="text-black mb-0.5">+ Tổng sản lượng đầu cực máy phát S2: {metrics.grossMwhS2 != null ? metrics.grossMwhS2.toFixed(2) : "—"} (MWh)</p>
-                  <p className="text-black mb-0.5">+ Tổng sản lượng tại điểm mua bán điện S2: {metrics.netMwhS2 != null ? metrics.netMwhS2.toFixed(2) : "—"} (MWh)</p>
-                  <p className="text-black mb-0.5">+ Lượng điện tự dùng S2: {metrics.auxMwhS2 != null ? metrics.auxMwhS2.toFixed(2) : "—"} (MWh)</p>
-                  <p className="text-black mb-0.5">+ Phần trăm điện tự dùng S2: {metrics.auxPercentS2 != null ? metrics.auxPercentS2.toFixed(2) : "—"} % (đã bao gồm tổn thất MBA)</p>
-                  <p className="text-black mb-0.5">+ Tổng lượng than tiêu thụ S2: {metrics.coalTonnesS2 != null ? metrics.coalTonnesS2.toFixed(3) : "—"} (tấn) - đã quy ẩm về 8.5%</p>
-                  <p className="text-black mb-0.5">+ Suất tiêu hao than tinh S2: {metrics.netCoalRateS2 != null ? metrics.netCoalRateS2.toFixed(3) : "—"} (g/kWh)</p>
-                  <p className="text-black mb-0.5">+ Nhiệt trị than quy ẩm: {metrics.hhvKjKgS2 != null ? metrics.hhvKjKgS2.toFixed(2) : "—"} (kJ/kg)</p>
-                  <p className="text-black mb-0.5">+ Suất hao nhiệt tinh S2: {metrics.netHeatRateS2 != null ? metrics.netHeatRateS2.toFixed(3) : "—"} (kJ/kWh)</p>
-                  <p className="text-black mb-0.5">+ Tổng lượng hơi tiêu thụ S2: {metrics.steamTonnesS2 != null ? metrics.steamTonnesS2.toFixed(2) : "—"} (tấn)</p>
-                  <p className="text-black mb-0.5">+ Suất tiêu hao hơi theo sản lượng đầu cực S2: {metrics.steamRateGrossS2 != null ? metrics.steamRateGrossS2.toFixed(2) : "—"} (g/kWh)</p>
-                  <p className="text-black mb-0.5">+ Suất tiêu hao hơi theo sản lượng phát lưới S2: {metrics.steamRateNetS2 != null ? metrics.steamRateNetS2.toFixed(2) : "—"} (g/kWh)</p>
-                  <p className="text-black mb-1">+ Lượng nước demin sử dụng S2: {metrics.deminWaterS2 != null ? metrics.deminWaterS2.toFixed(2) : "—"} (m³)</p>
+                  <p className="text-black mb-0.5">+ Tổng sản lượng đầu cực máy phát S2: {formatMetricNumber(metrics.grossMwhS2, 2)} (MWh)</p>
+                  <p className="text-black mb-0.5">+ Tổng sản lượng tại điểm mua bán điện S2: {formatMetricNumber(metrics.netMwhS2, 2)} (MWh)</p>
+                  <p className="text-black mb-0.5">+ Lượng điện tự dùng S2: {formatMetricNumber(metrics.auxMwhS2, 2)} (MWh)</p>
+                  <p className="text-black mb-0.5">+ Phần trăm điện tự dùng S2: {formatMetricNumber(metrics.auxPercentS2, 2)} % (đã bao gồm tổn thất MBA)</p>
+                  <p className="text-black mb-0.5">+ Tổng lượng than tiêu thụ S2: {formatMetricNumber(metrics.coalTonnesS2, 3)} (tấn) - đã quy ẩm về 8.5%</p>
+                  <p className="text-black mb-0.5">+ Suất tiêu hao than tinh S2: {formatMetricNumber(metrics.netCoalRateS2, 3)} (g/kWh)</p>
+                  <p className="text-black mb-0.5">+ Nhiệt trị than quy ẩm: {formatMetricNumber(metrics.hhvKjKgS2, 2)} (kJ/kg)</p>
+                  <p className="text-black mb-0.5">+ Suất hao nhiệt tinh S2: {formatMetricNumber(metrics.netHeatRateS2, 3)} (kJ/kWh)</p>
+                  <p className="text-black mb-0.5">+ Tổng lượng hơi tiêu thụ S2: {formatMetricNumber(metrics.steamTonnesS2, 2)} (tấn)</p>
+                  <p className="text-black mb-0.5">+ Suất tiêu hao hơi theo sản lượng đầu cực S2: {formatMetricNumber(metrics.steamRateGrossS2, 2)} (g/kWh)</p>
+                  <p className="text-black mb-0.5">+ Suất tiêu hao hơi theo sản lượng phát lưới S2: {formatMetricNumber(metrics.steamRateNetS2, 2)} (g/kWh)</p>
+                  <p className="text-black mb-1">+ Lượng nước demin sử dụng S2: {formatMetricNumber(metrics.deminWaterS2, 2)} (m³)</p>
 
                   <div className="h-3"></div>
 
                   {/* Toàn nhà máy */}
-                  <p className="text-black mb-0.5">- Tổng lượng nước demin sử dụng ngày D của 2 tổ máy: {metrics.deminWaterTotal != null ? metrics.deminWaterTotal.toFixed(2) : "—"} (m³)</p>
-                  <p className="text-black mb-0.5">- Tổng lượng than nhập kho 24h theo số liệu từ PX nhiêu liệu: {metrics.coalIntake24h != null ? metrics.coalIntake24h.toFixed(2).replace(/\.00$/, "") : "0"} (tấn)</p>
-                  <p className="text-black mb-0.5">- Tổng lượng NH3 tiêu thụ trong ngày: {metrics.nh3UsedTonnes != null ? metrics.nh3UsedTonnes.toFixed(2) : "—"} (tấn)</p>
-                  <p className="text-black mb-0.5">- Suất tiêu hao NH3 theo sản lượng đầu cực: {metrics.nh3RateGross != null ? metrics.nh3RateGross.toFixed(2) : "—"} (g/kWh)</p>
-                  <p className="text-black mb-0.5">- Suất tiêu hao NH3 theo sản lượng phát lưới: {metrics.nh3RateNet != null ? metrics.nh3RateNet.toFixed(2) : "—"} (g/kWh)</p>
-                  <p className="text-black mb-0.5">- Tổng lượng NH3 tồn kho: {metrics.nh3Stock24h != null ? metrics.nh3Stock24h.toFixed(3) : "—"} (tấn)</p>
-                  <p className="text-black mb-2">- NH3 nhập trong ngày: {metrics.nh3IntakeDay != null ? metrics.nh3IntakeDay.toFixed(2) : "—"} (tấn)</p>
+                  <p className="text-black mb-0.5">- Tổng lượng nước demin sử dụng ngày D của 2 tổ máy: {formatMetricNumber(metrics.deminWaterTotal, 2)} (m³)</p>
+                  <p className="text-black mb-0.5">- Tổng lượng than nhập kho 24h theo số liệu từ PX nhiêu liệu: {formatMetricNumber(metrics.coalIntake24h, 2, "0").replace(/\.00$/, "")} (tấn)</p>
+                  <p className="text-black mb-0.5">- Tổng lượng NH3 tiêu thụ trong ngày: {formatMetricNumber(metrics.nh3UsedTonnes, 2)} (tấn)</p>
+                  <p className="text-black mb-0.5">- Suất tiêu hao NH3 theo sản lượng đầu cực: {formatMetricNumber(metrics.nh3RateGross, 2)} (g/kWh)</p>
+                  <p className="text-black mb-0.5">- Suất tiêu hao NH3 theo sản lượng phát lưới: {formatMetricNumber(metrics.nh3RateNet, 2)} (g/kWh)</p>
+                  <p className="text-black mb-0.5">- Tổng lượng NH3 tồn kho: {formatMetricNumber(metrics.nh3Stock24h, 3)} (tấn)</p>
+                  <p className="text-black mb-2">- NH3 nhập trong ngày: {formatMetricNumber(metrics.nh3IntakeDay, 2)} (tấn)</p>
 
                   {/* Danh sách file */}
                   <p className="font-bold text-black mb-1">
