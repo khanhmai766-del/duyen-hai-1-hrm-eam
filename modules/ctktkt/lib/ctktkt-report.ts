@@ -210,7 +210,8 @@ export function calculateCoalShiftDetails(
         rawCoalTonnes: raw,
         moisturePercent: moisture,
         dryKcalKg,
-        adjustedCoalTonnes: null,
+        // Ca không đốt than (tổ dừng): khối lượng quy ẩm chắc chắn bằng 0, không cần độ ẩm/nhiệt trị.
+        adjustedCoalTonnes: raw === 0 ? 0 : null,
         asReceivedKcalKg: null,
       };
     }
@@ -249,7 +250,8 @@ export function calculateDailyAverageMoisture(
   current: CtktktDayEntries,
   previous?: CtktktDayEntries,
 ) {
-  const details = calculateCoalShiftDetails(current, previous);
+  // Ca không đốt than không tham gia bình quân gia quyền nên không cần độ ẩm.
+  const details = calculateCoalShiftDetails(current, previous).filter(item => item.rawCoalTonnes !== 0);
   if (details.some(item => item.rawCoalTonnes === null || item.moisturePercent === null)) {
     return null;
   }
@@ -264,9 +266,12 @@ export function calculateDailyAverageMoisture(
   return weightedMoisture / totalRawCoal;
 }
 
-function coalHhvKjKg(details: CoalShiftDetail[]): number | null {
+function coalHhvKjKg(allDetails: CoalShiftDetail[]): number | null {
   // An incomplete unit must not erase another unit's measured coal quality.
   // Never substitute zero for an unknown mass, moisture or calorific value.
+  // A shift that burned no coal (known mass 0) has no quality to weigh in.
+  const details = allDetails.filter(item => item.rawCoalTonnes !== 0);
+  if (!details.length) return null;
   if (details.some(item => item.rawCoalTonnes === null
     || item.adjustedCoalTonnes === null || item.asReceivedKcalKg === null
     || (item.rawCoalTonnes > 0 && (item.dryKcalKg === null || item.dryKcalKg <= 0)))) return null;

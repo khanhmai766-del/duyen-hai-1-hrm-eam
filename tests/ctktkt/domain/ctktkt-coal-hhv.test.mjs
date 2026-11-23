@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { calculateCtktktSummary, calculateCtktktMeterSummary } from '../../../modules/ctktkt/lib/ctktkt-report.ts';
+import { calculateCtktktSummary, calculateCtktktMeterSummary, calculateDailyAverageMoisture } from '../../../modules/ctktkt/lib/ctktkt-report.ts';
 
 // Reconstructed from the displayed 06/11/2026 shift totals; no production writes.
 function fixture(unit = 's1') {
@@ -88,4 +88,15 @@ test('complete two-unit data retains the existing common weighted HHV convention
 test('missing previous-day readings never produce an HHV', () => {
   const { current } = fixture();
   for (const calculate of [calculateCtktktSummary, calculateCtktktMeterSummary]) assert.equal(calculate(current).s1.hhvKjKg, null);
+});
+
+test('stopped S2 (known zero coal, no moisture/HHV entered) keeps plant HHV and daily moisture from S1', () => {
+  const { current, previous } = fixture();
+  // S2 dừng: chỉ số cân không đổi, ca S2 không nhập độ ẩm/nhiệt trị.
+  for (let row = 16; row <= 27; row++) { previous[`AL${row}`] = '100'; for (const c of ['AH', 'AJ', 'AL']) current[`${c}${row}`] = '100'; }
+  for (const row of [90, 91, 92]) { delete current[`AJ${row}`]; delete current[`AK${row}`]; }
+  const result = calculateCtktktSummary(current, previous);
+  near(result.plant.hhvKjKg, expectedHhv);
+  assert.equal(result.s2.adjustedCoalTonnes, 0);
+  near(calculateDailyAverageMoisture(current, previous), masses.reduce((t, m, i) => t + m * moistures[i], 0) / masses.reduce((t, m) => t + m, 0));
 });
