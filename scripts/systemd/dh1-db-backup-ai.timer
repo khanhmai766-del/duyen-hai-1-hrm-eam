@@ -1,0 +1,13 @@
+# Chạy 03:47 giờ VN ngày 2 hằng tháng.
+# Giờ ghi theo UTC — systemd 249 trên VPS chưa hỗ trợ hậu tố múi giờ (VN = UTC+7).
+[Unit]
+Description=DH1 — lịch sao lưu: bảng AiKnowledgeChunk
+
+[Timer]
+OnCalendar=*-*-01 20:47:00
+Unit=dh1-db-backup@ai.service
+Persistent=true
+RandomizedDelaySec=60
+
+[Install]
+WantedBy=timers.target

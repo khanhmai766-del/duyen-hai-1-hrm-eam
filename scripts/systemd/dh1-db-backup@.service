@@ -1,0 +1,18 @@
+# Sao lưu định kỳ dh1db + tệp KTKT/PCT — xem scripts/server-db-backup.sh và
+# docs/huong-dan-deploy-production.md phụ lục E. %i = lệnh (shift|core|ai|files|verify|check|restore-test).
+# Cài: install -m 0750 scripts/server-db-backup.sh /usr/local/sbin/dh1-db-backup
+#      cp scripts/systemd/dh1-db-backup* /etc/systemd/system/ && systemctl daemon-reload
+#      systemctl enable --now dh1-db-backup-{shift,core,ai,files,verify,check,restore-test}.timer
+# Xem:  journalctl -u 'dh1-db-backup@*' · systemctl list-timers 'dh1-db-backup*'
+[Unit]
+Description=DH1 — sao lưu %i (restic → máy app + MinIO)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+Environment=HOME=/root
+ExecStart=/usr/local/sbin/dh1-db-backup %i
+Nice=10
+IOSchedulingClass=idle
+TimeoutStartSec=3h

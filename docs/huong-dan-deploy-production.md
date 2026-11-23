@@ -346,3 +346,55 @@ trong đó đã bị thay bằng `deploy-server.sh`, bản đầy đủ xem lị
 - Việc còn ghi nhận: picker cây thiết bị/form khiếm khuyết/thẻ phân quyền còn tải cây đầy đủ (kế hoạch chuyển
   lazy theo cương vị); `/api/devices` trả ~20k lá cần phân trang phía server; nối `machine` (S1/S2/COMMON) vào luồng
   ghi vật tư/QR; file Excel nguồn búa gõ (DH1.S1.1.13.2) còn 720 dòng cũ — sửa file nguồn trước khi nhập lại.
+
+## Phụ lục E — Sao lưu định kỳ (restic → máy app + MinIO, từ 23/11/2026)
+
+Bản sao lưu lúc deploy (bước 1/7) chỉ có khi có deploy. Lịch dưới đây chạy độc lập, không phụ thuộc deploy.
+Script: `scripts/server-db-backup.sh`, **bản chạy thật** ở `/usr/local/sbin/dh1-db-backup` (chép tay, không chạy từ
+`/var/www/dh1-app` để git/deploy không đụng vào). Unit: `scripts/systemd/dh1-db-backup@.service` + `dh1-db-backup-*.timer`.
+
+| Lịch (giờ VN) | Lệnh | Nội dung | Giữ trên MinIO | Giữ trên máy app |
+|---|---|---|---|---|
+| 06:37 · 14:37 · 22:37 | `shift` | 19 bảng `ctktkt_*`, 13 bảng `WorkPermit*`, `RbacConfig` | 14 ngày | 2 ngày |
+| 02:37 hằng ngày | `core` | Toàn bộ `dh1db` (public + tcms), trừ **dữ liệu** `AiKnowledgeChunk` | 35 ngày + 12 tuần + 12 tháng | 7 ngày |
+| 03:47 ngày 2 hằng tháng | `ai` | Riêng `AiKnowledgeChunk` | 3 tháng | 1 bản |
+| 03:07 hằng ngày | `files` | Tệp MinIO `ctktkt/`, `work-permits/` → `/var/backups/dh1/minio-files` (không xoá theo nguồn) | — | 30 ngày + 6 tháng |
+| 08:07 hằng ngày | `verify` | Bản mới nhất đủ tươi; bản cũ nhất không bị mất sớm; `restic check` cả hai kho | | |
+| 04:17 thứ Ba | `check` | `prune` kho MinIO; đọc thử 5 % (MinIO) / 10 % (máy app); bản core có dòng kết thúc pg_dump | | |
+| 04:47 ngày 2 hằng tháng | `restore-test` | Khôi phục bản core mới nhất vào Postgres tạm (Docker `pgvector/pgvector:0.8.1-pg16`), so số dòng từng bảng với DB thật | | |
+
+Timer ghi giờ UTC (systemd 249 không nhận múi giờ). Lỗi hoặc bất thường → Telegram (`TELEGRAM_CHAT_IDS`);
+`restore-test` báo cả khi thành công.
+
+**Thành phần:**
+- restic 0.19.1 ở `/usr/local/bin/restic` (cài từ bản phát hành GitHub, đã kiểm SHA256).
+- `pg_dump` bằng vai trò `dh1_backup` (phụ lục C) → kho cục bộ `/var/backups/dh1/restic` → `restic copy` sang
+  `s3:http://103.42.56.82:9000/yen-nn-cbsxdh1/db-backups/restic` (khoá S3 của web, đọc từ `.env`). Hai kho cùng tham số
+  chia khối nên khử trùng được, mã hoá bằng **`/root/.config/dh1-backup/restic-password`**. Mất mật khẩu là mất
+  hết bản sao lưu, nên user giữ thêm một bản ngoài máy chủ.
+- `--stdin-from-command`: pg_dump lỗi thì restic không tạo bản sao lưu.
+- Vì sao `verify` soi "bản cũ nhất": bucket web không bật versioning, không hỗ trợ khoá chống xoá, và tài khoản web
+  không đọc được lifecycle (nghi đã làm mất sổ PCCC 08/2026). Nếu MinIO ngầm xoá theo hạn thì bản cũ nhất sẽ trẻ hơn
+  mức giữ, và lần `verify` đầu tiên sau đó báo ngay. Mốc bắt đầu tính từ `/var/lib/dh1-backup/started`.
+
+**Lệnh hay dùng:**
+```bash
+dh1-db-backup status                                    # liệt kê bản sao lưu hai kho + dung lượng
+journalctl -u 'dh1-db-backup@*' --since today           # nhật ký
+TZ=Asia/Ho_Chi_Minh systemctl list-timers 'dh1-db-backup*'
+systemctl start dh1-db-backup@shift.service             # chạy ngay một lượt (vd. trước khi sửa dữ liệu lớn)
+```
+
+**Khôi phục** (lấy bản ra tệp trước, đọc kỹ rồi mới đưa vào DB — đừng đổ thẳng đè lên `dh1db`):
+```bash
+export RESTIC_PASSWORD_FILE=/root/.config/dh1-backup/restic-password
+restic -r /var/backups/dh1/restic snapshots                       # bản trên máy app
+restic -r /var/backups/dh1/restic dump <ID|latest> /dh1db-core.sql > /root/khoi-phuc.sql   # hoặc /dh1db-ktkt-pct.sql
+# Máy app mất → dùng kho MinIO, thêm khoá S3:
+AWS_ACCESS_KEY_ID=… AWS_SECRET_ACCESS_KEY=… restic -r s3:http://103.42.56.82:9000/yen-nn-cbsxdh1/db-backups/restic \
+  -o s3.bucket-lookup=path snapshots
+# Tệp MinIO bị mất: restic -r /var/backups/dh1/restic restore latest --tag files --target /root/khoi-phuc-tep
+```
+Sửa script thì chép lại: `install -m 0750 scripts/server-db-backup.sh /usr/local/sbin/dh1-db-backup`.
+Dựng lại máy chủ mới thì cài restic, `libarchive-tools`, `.pgpass` (phụ lục C), chép mật khẩu restic vào
+`/root/.config/dh1-backup/`, cài unit và bật timer (lệnh ở đầu `dh1-db-backup@.service`).

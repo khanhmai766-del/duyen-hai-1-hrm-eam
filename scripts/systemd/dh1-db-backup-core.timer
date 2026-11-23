@@ -1,0 +1,13 @@
+# Chạy 02:37 giờ VN hằng ngày.
+# Giờ ghi theo UTC — systemd 249 trên VPS chưa hỗ trợ hậu tố múi giờ (VN = UTC+7).
+[Unit]
+Description=DH1 — lịch sao lưu: toàn bộ DB (trừ dữ liệu AI)
+
+[Timer]
+OnCalendar=*-*-* 19:37:00
+Unit=dh1-db-backup@core.service
+Persistent=true
+RandomizedDelaySec=60
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,13 @@
+# Chạy 04:17 giờ VN thứ Ba hằng tuần (tránh disk-guard 03:37 thứ Hai).
+# Giờ ghi theo UTC — systemd 249 trên VPS chưa hỗ trợ hậu tố múi giờ (VN = UTC+7).
+[Unit]
+Description=DH1 — lịch sao lưu: restic check đọc mẫu + prune MinIO
+
+[Timer]
+OnCalendar=Mon *-*-* 21:17:00
+Unit=dh1-db-backup@check.service
+Persistent=true
+RandomizedDelaySec=60
+
+[Install]
+WantedBy=timers.target

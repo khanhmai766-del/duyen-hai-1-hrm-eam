@@ -1,0 +1,13 @@
+# Chạy 04:47 giờ VN ngày 2 hằng tháng (sau lượt ai).
+# Giờ ghi theo UTC — systemd 249 trên VPS chưa hỗ trợ hậu tố múi giờ (VN = UTC+7).
+[Unit]
+Description=DH1 — lịch sao lưu: thử khôi phục vào Postgres tạm
+
+[Timer]
+OnCalendar=*-*-01 21:47:00
+Unit=dh1-db-backup@restore-test.service
+Persistent=true
+RandomizedDelaySec=60
+
+[Install]
+WantedBy=timers.target

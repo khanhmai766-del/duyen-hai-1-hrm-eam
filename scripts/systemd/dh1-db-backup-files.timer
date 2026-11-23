@@ -1,0 +1,13 @@
+# Chạy 03:07 giờ VN hằng ngày.
+# Giờ ghi theo UTC — systemd 249 trên VPS chưa hỗ trợ hậu tố múi giờ (VN = UTC+7).
+[Unit]
+Description=DH1 — lịch sao lưu: tệp ctktkt/ + work-permits/ từ MinIO về máy app
+
+[Timer]
+OnCalendar=*-*-* 20:07:00
+Unit=dh1-db-backup@files.service
+Persistent=true
+RandomizedDelaySec=60
+
+[Install]
+WantedBy=timers.target

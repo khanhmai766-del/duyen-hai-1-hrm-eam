@@ -1,0 +1,13 @@
+# Chạy 08:07 giờ VN hằng ngày (sau lượt core và ca sáng).
+# Giờ ghi theo UTC — systemd 249 trên VPS chưa hỗ trợ hậu tố múi giờ (VN = UTC+7).
+[Unit]
+Description=DH1 — lịch sao lưu: kiểm bản sao lưu trên MinIO còn đủ
+
+[Timer]
+OnCalendar=*-*-* 01:07:00
+Unit=dh1-db-backup@verify.service
+Persistent=true
+RandomizedDelaySec=60
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,15 @@
+# Chạy 06:37 · 14:37 · 22:37 giờ VN (sau giao ca).
+# Giờ ghi theo UTC — systemd 249 trên VPS chưa hỗ trợ hậu tố múi giờ (VN = UTC+7).
+[Unit]
+Description=DH1 — lịch sao lưu: bảng KTKT + PCT sau mỗi ca
+
+[Timer]
+OnCalendar=*-*-* 23:37:00
+OnCalendar=*-*-* 07:37:00
+OnCalendar=*-*-* 15:37:00
+Unit=dh1-db-backup@shift.service
+Persistent=true
+RandomizedDelaySec=60
+
+[Install]
+WantedBy=timers.target
