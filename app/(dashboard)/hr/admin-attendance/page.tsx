@@ -23,7 +23,7 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   useHcGroups, useCreateHcGroup, useUpdateHcGroup, useDeleteHcGroup,
   useHcCheckIn, useHcRecall, useHcApprove, type HcGroup,
-  useHcUpdateWorkNote, useHcCancelRegistration, useDeleteHcCheckIn, type HcMember,
+  useHcUpdateWorkNote, useDeleteHcCheckIn, type HcMember,
 } from "@/hooks/useHcAttendance";
 import { useRbacAccess } from "@/hooks/useRbacAccess";
 import { normalizeText } from "@/lib/nav";
@@ -230,7 +230,7 @@ function HanhChinhCard({
 }) {
   const recall = useHcRecall();
   const approve = useHcApprove();
-  const reject = useHcCancelRegistration();
+  const reject = useDeleteHcCheckIn();
   const entries = groups.flatMap((group) =>
     group.members
       .map((member) => ({
@@ -243,7 +243,13 @@ function HanhChinhCard({
   const pendingGroups = groups.filter((group) => group.members.some((member) => !member.isApproved));
   const myEntry = entries.find((entry) => entry.userId === myId && !entry.isRegistered);
   const [rejectTarget, setRejectTarget] = React.useState<(typeof entries)[number] | null>(null);
+  const [rejectReason, setRejectReason] = React.useState("");
   const [recallTarget, setRecallTarget] = React.useState<(typeof entries)[number] | null>(null);
+
+  function closeRejectDialog() {
+    setRejectTarget(null);
+    setRejectReason("");
+  }
 
   async function doRecall(groupId: string) {
     try {
@@ -275,10 +281,13 @@ function HanhChinhCard({
     }
   }
 
-  async function doReject(checkInId: string) {
+  async function doReject() {
+    const reason = rejectReason.trim();
+    if (!rejectTarget || !reason) return;
     try {
-      await reject.mutateAsync(checkInId);
+      await reject.mutateAsync({ checkInId: rejectTarget.id, reason });
       toast.success("Đã không duyệt chấm công hành chính");
+      closeRejectDialog();
     } catch (e) {
       toast.error((e as Error).message);
     }
@@ -406,17 +415,30 @@ function HanhChinhCard({
       )}
       <ConfirmDialog
         open={!!rejectTarget}
-        onOpenChange={(open) => !open && setRejectTarget(null)}
+        onOpenChange={(open) => {
+          if (!open && !reject.isPending) closeRejectDialog();
+        }}
         title="Xác nhận không duyệt"
-        description={rejectTarget ? `Bạn chắc chắn muốn không duyệt chấm công hành chính của ${rejectTarget.user.name}?` : undefined}
+        description={rejectTarget ? `Nhập lý do không duyệt chấm công hành chính của ${rejectTarget.user.name}. Bản chấm công sẽ được xóa và lý do được lưu vào nhật ký.` : undefined}
         confirmLabel="Không duyệt"
         loading={reject.isPending}
-        onConfirm={async () => {
-          if (!rejectTarget) return;
-          await doReject(rejectTarget.id);
-          setRejectTarget(null);
-        }}
-      />
+        confirmDisabled={!rejectReason.trim()}
+        onConfirm={doReject}
+      >
+        <div className="space-y-2">
+          <Label htmlFor="hc-reject-reason">Lý do không duyệt <span className="text-destructive">*</span></Label>
+          <Textarea
+            id="hc-reject-reason"
+            value={rejectReason}
+            onChange={(event) => setRejectReason(event.target.value)}
+            maxLength={500}
+            rows={3}
+            required
+            disabled={reject.isPending}
+            className="text-base sm:text-sm"
+          />
+        </div>
+      </ConfirmDialog>
       <ConfirmDialog
         open={!!recallTarget}
         onOpenChange={(open) => !open && setRecallTarget(null)}

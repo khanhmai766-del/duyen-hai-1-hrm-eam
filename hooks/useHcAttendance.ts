@@ -152,10 +152,8 @@ export function useHcUpdateWorkNote() {
 export function useHcCancelRegistration() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (input: string | { checkInId: string; action: "REJECT" | "CANCEL"; reason?: string; note?: string }) =>
-      typeof input === "string"
-        ? apiMutate(`/api/hc-groups/checkin?checkInId=${input}`, "DELETE")
-        : apiMutate("/api/hc-groups/checkin", "PATCH", input),
+    mutationFn: (input: { checkInId: string; action: "REJECT" | "CANCEL"; reason?: string; note?: string }) =>
+      apiMutate("/api/hc-groups/checkin", "PATCH", input),
     onSuccess: () => invalidateHcAttendance(qc),
   });
 }
