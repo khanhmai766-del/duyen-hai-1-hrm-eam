@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { useRbacAccess } from "@/hooks/useRbacAccess";
+import { useVibrationAccess } from "@/hooks/useVibrationAccess";
 import { useVibrationDevices, useVibrationRecords } from "@/hooks/useVibration";
 import { MNK_AREA, SHIFT_IDS, SHIFT_WINDOWS, type ShiftId } from "@/lib/vibration/constants";
 import { vnShift } from "@/lib/vibration/parse";
@@ -17,7 +18,9 @@ const shortName = (n: string) => n.replace(/^Động cơ MNK điều khiển và
 
 export function MnkEntryView() {
   const { can } = useRbacAccess();
-  const canEdit = can("vibration-entry", [...VIBRATION_ENTRY_LEVELS]);
+  const rbacEdit = can("vibration-entry", [...VIBRATION_ENTRY_LEVELS]);
+  const vibAccess = useVibrationAccess();
+  const canEdit = rbacEdit && vibAccess.canEditArea(MNK_AREA);
   const [now] = React.useState(() => vnShift());
   const [date, setDate] = React.useState(now.date);
   const [shift, setShift] = React.useState<ShiftId>(now.shift);
@@ -58,6 +61,7 @@ export function MnkEntryView() {
           noun="máy"
           saveLabel={(n) => `Lưu ca (${n} máy)`}
           readOnly={!canEdit}
+          readOnlyNotice={rbacEdit ? vibAccess.notice(MNK_AREA) : null}
           showSystem={false}
           showPower={false}
           hiddenIdx={MNK_HIDDEN_VALUES}

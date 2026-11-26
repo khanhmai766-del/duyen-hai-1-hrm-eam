@@ -3,6 +3,8 @@ import { fail } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 import { classifyDevice } from "./classify";
 import { MEASURE_GROUP_RANGES, SHIFT_IDS, VIB_ENTRY_KINDS, VIB_VALUE_COUNT, type ShiftId } from "./constants";
+import type { VibrationUserLike } from "./position-access";
+import { assertVibrationAreasEditable } from "./server";
 import { actualDateOf, CELL_ERROR, isValidDate, normalizeTime, parseCell, timeInShift } from "./parse";
 import type { DeviceKind } from "./types";
 
@@ -31,7 +33,8 @@ function enabledForIndex(config: unknown, i: number) {
 }
 
 /** Kiểm tra toàn bộ rồi upsert trong một transaction. Ném Response (fail) nếu sai. */
-export async function saveVibrationRecords(userId: string, body: SaveBody) {
+export async function saveVibrationRecords(user: VibrationUserLike & { id: string }, body: SaveBody) {
+  const userId = user.id;
   const kind = body.kind as EntryKind;
   if (!VIB_ENTRY_KINDS.includes(kind)) throw fail("Loại số đo không hợp lệ", 400);
   if (!isValidDate(body.date)) throw fail("Ngày không hợp lệ (định dạng YYYY-MM-DD)", 400);
@@ -51,6 +54,8 @@ export async function saveVibrationRecords(userId: string, body: SaveBody) {
   if (new Set(ids).size !== ids.length) throw fail("Một thiết bị xuất hiện nhiều lần trong danh sách", 400);
   const devices = await prisma.vibrationDevice.findMany({ where: { id: { in: ids } } });
   const byId = new Map(devices.map((d) => [d.id, d]));
+  // Phân quyền theo cương vị (app cũ): chỉ được nhập / sửa thiết bị thuộc cương vị đã khai báo; admin không bị giới hạn.
+  assertVibrationAreasEditable(user, devices);
 
   const existingWhere: Prisma.VibrationRecordWhereInput = { deviceId: { in: ids }, date, kind, ...(shift ? { shift } : {}) };
   const existing = await prisma.vibrationRecord.findMany({ where: existingWhere, orderBy: { savedAt: "desc" } });

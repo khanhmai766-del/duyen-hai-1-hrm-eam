@@ -28,6 +28,8 @@ export interface EntrySheetProps {
   noun: string;
   saveLabel: (n: number) => string;
   readOnly: boolean;
+  /** Câu chỉ-xem thay cho câu mặc định (vd. ngoài cương vị). */
+  readOnlyNotice?: string | null;
   showSystem: boolean;
   showPower: boolean;
   /** Các cột đo ẩn cố định (MNK_HIDE). */
@@ -59,7 +61,7 @@ const SPARE_NOTE = "Thiết bị không vận hành phải ghi nhận xét “M�
 
 /** Bảng nhập: giữ nháp, người đo, lưu cả bảng / lưu riêng. Thanh chọn (ngày, cương vị, ca…) do trang bọc ngoài. */
 export function EntrySheet(props: EntrySheetProps) {
-  const { kind, date, draftKey, devices, records, recordsLoading, captionPrefix, noun, saveLabel, readOnly, showSystem, showPower, hiddenIdx, layoutClass, helpInside, toolbar, exportSlot } = props;
+  const { kind, date, draftKey, devices, records, recordsLoading, captionPrefix, noun, saveLabel, readOnly, readOnlyNotice, showSystem, showPower, hiddenIdx, layoutClass, helpInside, toolbar, exportSlot } = props;
   const { data: session } = useSession();
   const qc = useQueryClient();
   const save = useSaveVibrationRecords();
@@ -217,7 +219,7 @@ export function EntrySheet(props: EntrySheetProps) {
       {toolbar({ person: personField, actions })}
       {exp?.caption}
       <p id="weekMessage" role="status">{message ?? DEFAULT_MESSAGE}</p>
-      {readOnly && <p className="rs-msg" data-kind="warn">Bạn chỉ có quyền xem — không thể nhập hoặc lưu số đo.</p>}
+      {readOnly && <p className="rs-msg" data-kind="warn">{readOnlyNotice || "Bạn chỉ có quyền xem — không thể nhập hoặc lưu số đo."}</p>}
       {!helpInside && help}
       <section className={`panel excel-entry${helpInside ? " mnk-entry" : ""}`}>
         {helpInside && help}

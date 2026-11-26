@@ -4,6 +4,7 @@ import * as React from "react";
 import { toast } from "sonner";
 import { useSession } from "next-auth/react";
 import { useRbacAccess } from "@/hooks/useRbacAccess";
+import { useVibrationAccess } from "@/hooks/useVibrationAccess";
 import { useSaveVibrationRecords, useVibrationDevices, useVibrationRecords } from "@/hooks/useVibration";
 import { QUICK_NOTES, SHIFT_WINDOWS, TBNT_AREA, VIB_VALUE_COUNT } from "@/lib/vibration/constants";
 import { cellNumber, normalizeTime, parseCell, timeInShift, vnShift, vnToday } from "@/lib/vibration/parse";
@@ -76,7 +77,9 @@ function parseTimeOld(v: string): string {
 export function TbntShiftView() {
   const { data: session } = useSession();
   const rbac = useRbacAccess();
-  const canEdit = rbac.can("vibration-entry", ["personal", "manage", "full"]);
+  const rbacEdit = rbac.can("vibration-entry", ["personal", "manage", "full"]);
+  const vibAccess = useVibrationAccess();
+  const canEdit = rbacEdit && vibAccess.canEditArea(TBNT_AREA);
   const [date, setDate] = React.useState(() => vnShift().date);
   const [personEdit, setPerson] = React.useState<string | null>(null);
   const [drafts, updateDrafts] = useDrafts<TbntEdit>("vibration-tbnt-drafts-v1");
@@ -284,7 +287,7 @@ export function TbntShiftView() {
       <TbntExportBar date={date} person={person} collect={collectExport} savedCount={done} total={devices.length} onMessage={(text, kind) => setMsg({ text, kind })} />
       <p className="tbnt-muted" id="tbntGoogleStatus" role="status" aria-live="polite">Một lần/bơm/ngày · Ca chiều. Lưu lại cập nhật đúng ngày; nhập theo kỳ vẫn giữ riêng trên web.</p>
       <p className="rs-msg" id="tbntMsg" role="status" hidden={!msg} data-kind={msg?.kind}>{msg?.text}</p>
-      {!canEdit && <p className="rs-msg" data-kind="warn">Chỉ xem: tài khoản không có quyền nhập số đo độ rung.</p>}
+      {!canEdit && <p className="rs-msg" data-kind="warn">{(rbacEdit && vibAccess.notice(TBNT_AREA)) || "Chỉ xem: tài khoản không có quyền nhập số đo độ rung."}</p>}
 
       <div className="panel tbnt-wrap">
         <div className="sheet-scroll" onKeyDown={onKeyDown} onPaste={onPaste}>

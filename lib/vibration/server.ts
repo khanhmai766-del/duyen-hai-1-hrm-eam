@@ -1,8 +1,9 @@
 import type { VibrationDevice, VibrationRecord } from "@prisma/client";
-import { requireUser } from "@/lib/api";
+import { fail, requireUser } from "@/lib/api";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
 import { VIBRATION_ENTRY_LEVELS, VIBRATION_MANAGE_LEVELS, VIBRATION_VIEW_LEVELS } from "@/lib/vibration-permissions";
 import { classifyDevice } from "./classify";
+import { canEditVibrationArea, vibrationAccessFor, vibrationDenyMessage, type VibrationUserLike } from "./position-access";
 import type { VibKind } from "./constants";
 import type { ShiftId } from "./constants";
 import type { VibrationDeviceDto, VibrationRecordDto, MapStatus } from "./types";
@@ -23,6 +24,14 @@ export async function requireVibrationManage() {
   await requirePermissionLevel(user, "vibration-view", [...VIBRATION_VIEW_LEVELS], "Bạn không có quyền xem số đo độ rung");
   await requirePermissionLevel(user, "vibration-manage", [...VIBRATION_MANAGE_LEVELS], "Bạn không có quyền quản lý ánh xạ thiết bị độ rung");
   return user;
+}
+
+/** Phân quyền theo cương vị (app cũ): chỉ admin vượt qua; còn lại chỉ ghi thiết bị có area thuộc editAreas. Ném 403 nếu có thiết bị ngoài phạm vi. */
+export function assertVibrationAreasEditable(user: VibrationUserLike, devices: { area: string; name: string }[]) {
+  const access = vibrationAccessFor(user);
+  if (access.admin || !devices.length) return;
+  const denied = devices.filter((d) => !canEditVibrationArea(access, d.area));
+  if (denied.length) throw fail(vibrationDenyMessage(access, denied.map((d) => d.name)), 403);
 }
 
 const obj = (v: unknown) => (v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : {});

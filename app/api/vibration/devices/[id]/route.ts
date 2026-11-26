@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { audit, fail, handle, ok, requireRole } from "@/lib/api";
 import { devicePatchSchema } from "@/lib/vibration/catalog";
 import { buildUpdate, sameDeviceKey, syncSparePair } from "@/lib/vibration/catalog-server";
-import { requireVibrationManage, requireVibrationView, toDeviceDto } from "@/lib/vibration/server";
+import { assertVibrationAreasEditable, requireVibrationManage, requireVibrationView, toDeviceDto } from "@/lib/vibration/server";
 
 export const dynamic = "force-dynamic";
 
@@ -39,6 +39,8 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
     const patch = parsed.data;
     const row = await prisma.vibrationDevice.findUnique({ where: { id } });
     if (!row) return fail("Không tìm thấy thiết bị độ rung", 404);
+    // Cương vị hiện tại và cương vị đích (nếu đổi) đều phải thuộc phạm vi được nhập (app cũ).
+    assertVibrationAreasEditable(user, [{ area: row.area, name: row.name }, ...(patch.area ? [{ area: patch.area, name: row.name }] : [])]);
 
     const next = { area: patch.area ?? row.area, system: patch.system ?? row.system, name: patch.name ?? row.name };
     if (patch.area !== undefined || patch.system !== undefined || patch.name !== undefined) {

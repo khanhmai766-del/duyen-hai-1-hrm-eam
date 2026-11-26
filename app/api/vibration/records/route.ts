@@ -69,6 +69,7 @@ export async function GET(req: NextRequest) {
  *  Body: { kind: "WEEKLY"|"MNK"|"MILL"|"TBNT", date: "YYYY-MM-DD", shift?: "sang"|"chieu"|"dem" (bắt buộc với MILL/TBNT),
  *          items: [{ deviceId, person, measureTime?: "HH:mm", power?: number|null, values?: (number|null)[23],
  *                    millData?: { b1vX…b6dZ, b1t…b6t, gearSmall, gearRing, oil: number|null }, note?: string }] }
+ *  Ngoài RBAC còn giới hạn theo cương vị: area của thiết bị phải thuộc cương vị của người dùng (admin: mọi cương vị), sai → 403.
  *  Khoá duy nhất: WEEKLY/MNK = thiết bị+ngày; MILL/TBNT = thiết bị+ngày+ca. Thiết bị không có số/nhận xét bị bỏ qua.
  *  MILL: millData được GỘP vào bản ghi cũ (gửi riêng {oil} để chỉ cập nhật dầu VRL).
  *  Trả data: VibrationRecordDto[] đã lưu, meta.skipped = deviceId bị bỏ qua. */
@@ -77,7 +78,7 @@ export async function POST(req: NextRequest) {
     const user = await requireVibrationEntry();
     const body = (await req.json().catch(() => null)) as SaveBody | null;
     if (!body) return fail("Dữ liệu gửi lên không hợp lệ", 400);
-    const result = await saveVibrationRecords(user.id, body);
+    const result = await saveVibrationRecords(user, body);
     await audit(
       user.id, "SAVE_VIBRATION_RECORDS", "VibrationRecord", undefined,
       `${result.kind} ${result.date}${result.shift ? ` ca ${result.shift}` : ""}: ${result.saved.length} thiết bị`

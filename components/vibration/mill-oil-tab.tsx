@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { toast } from "sonner";
+import { useVibrationAccess } from "@/hooks/useVibrationAccess";
 import { useSaveVibrationRecords, useVibrationDevices, useVibrationRecords } from "@/hooks/useVibration";
 import { unitOfArea } from "@/lib/vibration/classify";
 import { SHIFT_IDS, SHIFT_WINDOWS, type ShiftId } from "@/lib/vibration/constants";
@@ -13,12 +14,13 @@ import { isMeasured } from "./mill-vib-tab";
 import { dmy, MILL_NUM_ERROR, OIL_HIGH, OIL_LOW } from "./mill-utils";
 import { DeviceAnalysisLink, millAnalysisHref } from "./analysis-links";
 
-function OilTable({ date, devices, recordOf, edits, canEdit, onEdit }: {
+function OilTable({ date, devices, recordOf, edits, canEdit, canEditDev, onEdit }: {
   date: string;
   devices: VibrationDeviceDto[];
   recordOf: (d: VibrationDeviceDto) => VibrationRecordDto | undefined;
   edits: Record<string, string>;
   canEdit: boolean;
+  canEditDev: (d: VibrationDeviceDto) => boolean;
   onEdit: (id: string, value: string) => void;
 }) {
   return (
@@ -56,7 +58,7 @@ function OilTable({ date, devices, recordOf, edits, canEdit, onEdit }: {
                     value={raw}
                     aria-label={`${d.name} dầu VRL tiêu hao (cm)`}
                     data-oil-bad={out ? "" : undefined}
-                    readOnly={!canEdit}
+                    readOnly={!canEdit || !canEditDev(d)}
                     onChange={(e) => onEdit(d.id, e.target.value)}
                   />
                 </td>
@@ -69,13 +71,25 @@ function OilTable({ date, devices, recordOf, edits, canEdit, onEdit }: {
   );
 }
 
+
+const MILL_UNITS = [
+  { id: "S1", area: "Máy nghiền S1" },
+  { id: "S2", area: "Máy nghiền S2" },
+] as const;
+
 export function MillOilTab({ date, setDate, person, canEdit }: {
   date: string;
   setDate: (d: string) => void;
   person: string;
   canEdit: boolean;
 }) {
-  const [unit, setUnit] = React.useState<"S1" | "S2" | "all">("S1");
+  // Cương vị máy nghiền: người vận hành chỉ thấy / nhập cương vị của mình (app cũ); mặc định = cương vị đầu tiên của người dùng.
+  const vibAccess = useVibrationAccess();
+  const ownAreas = vibAccess.entryAreas(MILL_UNITS.map((u) => u.area));
+  const [unitPick, setUnitPick] = React.useState<"S1" | "S2" | "all" | null>(null);
+  const defaultUnit = MILL_UNITS.find((u) => u.area === ownAreas[0])?.id ?? "S1";
+  const unit = unitPick && (unitPick === "all" ? ownAreas.length > 1 : ownAreas.includes("Máy nghiền " + unitPick)) ? unitPick : defaultUnit;
+  const canEditDev = (d: VibrationDeviceDto) => canEdit && vibAccess.canEditArea(d.area);
   const [edits, setEdits] = React.useState<Record<string, string>>({});
   const [saving, setSaving] = React.useState(false);
   const [message, setMessage] = React.useState("");
@@ -120,7 +134,7 @@ export function MillOilTab({ date, setDate, person, canEdit }: {
     if (!changed.length) return notify("Không có thay đổi dầu VRL để lưu.", "warn");
     if (!person.trim()) return notify("Chưa lưu: Vui lòng nhập người đo ở tab Độ rung/nhiệt độ MILL.", "err");
     const byShift = new Map<ShiftId, { deviceId: string; person: string; millData: { oil: number | null } }[]>();
-    for (const d of changed) {
+    for (const d of changed.filter(canEditDev)) {
       const n = parseCell(edits[d.id]);
       if (n === undefined) {
         notify(`Chưa lưu: ${d.name} · Dầu VRL: ${MILL_NUM_ERROR}`, "err");
@@ -162,14 +176,13 @@ export function MillOilTab({ date, setDate, person, canEdit }: {
         <EntryDateBar label="Ngày" inputId="oilDate" date={date} onChange={setDate} resetLabel="Hôm nay" onReset={() => setDate(vnToday())} />
         <label>
           Cương vị
-          <select id="oilUnit" value={unit} onChange={(e) => setUnit(e.target.value as typeof unit)}>
-            <option value="S1">Máy nghiền S1</option>
-            <option value="S2">Máy nghiền S2</option>
-            <option value="all">Tất cả cương vị máy nghiền</option>
+          <select id="oilUnit" value={unit} onChange={(e) => setUnitPick(e.target.value as typeof unit)}>
+            {MILL_UNITS.filter((u) => ownAreas.includes(u.area)).map((u) => <option key={u.id} value={u.id}>{u.area}</option>)}
+            {ownAreas.length > 1 && <option value="all">Tất cả cương vị máy nghiền</option>}
           </select>
         </label>
         <div className="mill-actions">
-          <button id="oilSave" type="button" className="primary-button" disabled={!canEdit || saving} onClick={onSave}>
+          <button id="oilSave" type="button" className="primary-button" disabled={!canEdit || saving || !changed.some(canEditDev)} onClick={onSave}>
             {saving ? "Đang lưu…" : `Lưu dầu VRL (${devices.length} máy)`}
           </button>
         </div>
@@ -177,14 +190,14 @@ export function MillOilTab({ date, setDate, person, canEdit }: {
       <p className="mill-caption">
         <span>Nhập cuối ngày — số tự điền vào ô «Dầu VRL tiêu hao/ngày» của bảng máy nghiền đúng ca đo của từng máy, ngày {dmy(date)}. Ô trống = chưa nhập.</span>
       </p>
-      {!canEdit && <p className="rs-msg" data-kind="warn">Chỉ xem: tài khoản không có quyền nhập số đo độ rung.</p>}
+      {!canEdit ? <p className="rs-msg" data-kind="warn">Chỉ xem: tài khoản không có quyền nhập số đo độ rung.</p> : devices.some((d) => !canEditDev(d)) && <p className="rs-msg" data-kind="warn">{vibAccess.notice(devices.find((d) => !canEditDev(d))?.area) ?? "Chỉ xem: thiết bị ngoài cương vị của bạn."}</p>}
       <div className="panel mill-oil-grid">
         {devicesQ.isLoading || dayQ.isLoading ? (
           <p>Đang tải...</p>
         ) : (
           <>
-            <OilTable date={date} devices={left} recordOf={recordOf} edits={edits} canEdit={canEdit} onEdit={onEdit} />
-            <OilTable date={date} devices={right} recordOf={recordOf} edits={edits} canEdit={canEdit} onEdit={onEdit} />
+            <OilTable date={date} devices={left} recordOf={recordOf} edits={edits} canEdit={canEdit} canEditDev={canEditDev} onEdit={onEdit} />
+            <OilTable date={date} devices={right} recordOf={recordOf} edits={edits} canEdit={canEdit} canEditDev={canEditDev} onEdit={onEdit} />
           </>
         )}
       </div>

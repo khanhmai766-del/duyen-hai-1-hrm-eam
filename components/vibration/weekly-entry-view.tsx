@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { useRbacAccess } from "@/hooks/useRbacAccess";
+import { useVibrationAccess } from "@/hooks/useVibrationAccess";
 import { useVibrationDevices, useVibrationRecords } from "@/hooks/useVibration";
 import { groupsOf } from "@/lib/vibration/classify";
 import { DEFAULT_MEASURE_GROUP, MEASURE_GROUPS } from "@/lib/vibration/constants";
@@ -17,7 +18,8 @@ const collator = new Intl.Collator("vi", { numeric: true });
 
 export function WeeklyEntryView() {
   const { can } = useRbacAccess();
-  const canEdit = can("vibration-entry", [...VIBRATION_ENTRY_LEVELS]);
+  const rbacEdit = can("vibration-entry", [...VIBRATION_ENTRY_LEVELS]);
+  const vibAccess = useVibrationAccess();
   const [date, setDate] = React.useState(() => vnToday());
   const [areaPick, setAreaPick] = React.useState("");
   const [groupPick, setGroupPick] = React.useState(DEFAULT_MEASURE_GROUP);
@@ -27,8 +29,11 @@ export function WeeklyEntryView() {
   const recordsQ = useVibrationRecords({ kind: "WEEKLY", date });
 
   const all = React.useMemo(() => devicesQ.data ?? [], [devicesQ.data]);
-  const areas = React.useMemo(() => [...new Set(all.map((d) => d.area))].sort(compareAreas), [all]);
-  const area = areas.includes(areaPick) ? areaPick : areas[0] ?? "";
+  const allAreas = React.useMemo(() => [...new Set(all.map((d) => d.area))].sort(compareAreas), [all]);
+  const areas = vibAccess.entryAreas(allAreas);
+  const area = areas.includes(areaPick) ? areaPick : vibAccess.defaultArea(areas);
+  // RBAC (vibration-entry) + cương vị: chỉ nhập thiết bị thuộc cương vị của mình (app cũ).
+  const canEdit = rbacEdit && vibAccess.canEditArea(area);
   const inArea = React.useMemo(() => all.filter((d) => d.area === area), [all, area]);
 
   const groupOptions = React.useMemo(
@@ -72,6 +77,7 @@ export function WeeklyEntryView() {
           noun="thiết bị"
           saveLabel={(n) => `Lưu bảng (${n} thiết bị)`}
           readOnly={!canEdit}
+          readOnlyNotice={rbacEdit ? vibAccess.notice(area) : null}
           showSystem
           showPower
           layoutClass="weekly-layout"

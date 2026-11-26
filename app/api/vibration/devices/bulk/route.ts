@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { audit, fail, handle, ok } from "@/lib/api";
 import { bulkSchema } from "@/lib/vibration/catalog";
 import { buildUpdate } from "@/lib/vibration/catalog-server";
-import { requireVibrationManage, requireVibrationView } from "@/lib/vibration/server";
+import { assertVibrationAreasEditable, requireVibrationManage, requireVibrationView } from "@/lib/vibration/server";
 
 export const dynamic = "force-dynamic";
 
@@ -30,6 +30,8 @@ export async function PATCH(req: NextRequest) {
     const byId = new Map(rows.map((r) => [r.id, r]));
     const missing = items.find((i) => !byId.has(i.id));
     if (missing) return fail("Có thiết bị không còn tồn tại, hãy tải lại trang", 404);
+
+    assertVibrationAreasEditable(user, rows);
 
     const planned = items.map(({ id, ...patch }) => {
       const row = byId.get(id)!;

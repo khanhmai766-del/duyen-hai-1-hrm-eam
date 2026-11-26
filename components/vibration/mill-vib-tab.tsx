@@ -3,6 +3,7 @@
 import * as React from "react";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { useVibrationAccess } from "@/hooks/useVibrationAccess";
 import { fetchVibrationRecords, useSaveVibrationRecords, useVibrationDevices, useVibrationRecords } from "@/hooks/useVibration";
 import { unitOfArea } from "@/lib/vibration/classify";
 import { SHIFT_IDS, SHIFT_WINDOWS, type ShiftId } from "@/lib/vibration/constants";
@@ -62,6 +63,12 @@ function millKeyDown(e: React.KeyboardEvent<HTMLElement>) {
   }
 }
 
+
+const MILL_UNITS = [
+  { id: "S1", area: "Máy nghiền S1" },
+  { id: "S2", area: "Máy nghiền S2" },
+] as const;
+
 export function MillVibTab({ date, setDate, person, setPerson, canEdit }: {
   date: string;
   setDate: (d: string) => void;
@@ -70,7 +77,13 @@ export function MillVibTab({ date, setDate, person, setPerson, canEdit }: {
   canEdit: boolean;
 }) {
   const [shift, setShift] = React.useState<ShiftId>(() => vnShift().shift);
-  const [unit, setUnit] = React.useState<"S1" | "S2" | "all">("S1");
+  // Cương vị máy nghiền: người vận hành chỉ thấy / nhập cương vị của mình (app cũ); mặc định = cương vị đầu tiên của người dùng.
+  const vibAccess = useVibrationAccess();
+  const ownAreas = vibAccess.entryAreas(MILL_UNITS.map((u) => u.area));
+  const [unitPick, setUnitPick] = React.useState<"S1" | "S2" | "all" | null>(null);
+  const defaultUnit = MILL_UNITS.find((u) => u.area === ownAreas[0])?.id ?? "S1";
+  const unit = unitPick && (unitPick === "all" ? ownAreas.length > 1 : ownAreas.includes("Máy nghiền " + unitPick)) ? unitPick : defaultUnit;
+  const canEditDev = (d: VibrationDeviceDto) => canEdit && vibAccess.canEditArea(d.area);
   const [exportScope, setExportScope] = React.useState("all");
   const [message, setMessage] = React.useState(MSG_DEFAULT);
   const [drafts, updateDrafts] = useDrafts<MillEdit>("vibration-mill-drafts-v1");
@@ -143,7 +156,7 @@ export function MillVibTab({ date, setDate, person, setPerson, canEdit }: {
       const card = el.closest<HTMLElement>("[data-mill-card]");
       const d = shiftDevices.find((x) => x.id === card?.dataset.millCard);
       const tbody = el.closest("tbody");
-      if (!d || !tbody || !canEdit) throw new Error("Vùng dán vượt bảng của máy đang nhập.");
+      if (!d || !tbody || !canEditDev(d)) throw new Error("Vùng dán vượt bảng của máy đang nhập.");
       const trs = [...tbody.querySelectorAll("tr")];
       const start = trs.indexOf(el.closest("tr") as HTMLTableRowElement);
       const col = [...trs[start].querySelectorAll("input")].indexOf(el);
@@ -178,6 +191,7 @@ export function MillVibTab({ date, setDate, person, setPerson, canEdit }: {
   }
 
   async function doSave(targets: VibrationDeviceDto[], whole: boolean) {
+    targets = targets.filter(canEditDev);
     if (!canEdit) return;
     const items: { deviceId: string; person: string; measureTime: string; note: string; millData: Record<string, number | null> }[] = [];
     const missing: string[] = [];
@@ -263,10 +277,9 @@ export function MillVibTab({ date, setDate, person, setPerson, canEdit }: {
         />
         <label>
           Cương vị
-          <select id="millUnit" value={unit} onChange={(e) => setUnit(e.target.value as typeof unit)}>
-            <option value="S1">Máy nghiền S1</option>
-            <option value="S2">Máy nghiền S2</option>
-            <option value="all">Tất cả cương vị máy nghiền</option>
+          <select id="millUnit" value={unit} onChange={(e) => setUnitPick(e.target.value as typeof unit)}>
+            {MILL_UNITS.filter((u) => ownAreas.includes(u.area)).map((u) => <option key={u.id} value={u.id}>{u.area}</option>)}
+            {ownAreas.length > 1 && <option value="all">Tất cả cương vị máy nghiền</option>}
           </select>
         </label>
         <label>
@@ -274,7 +287,7 @@ export function MillVibTab({ date, setDate, person, setPerson, canEdit }: {
           <input id="millPerson" value={person} readOnly={!canEdit} onChange={(e) => setPerson(e.target.value)} />
         </label>
         <div className="mill-actions">
-          <button id="millSave" type="button" className="primary-button" disabled={!canEdit || savingId !== null || !shiftDevices.length} onClick={() => doSave(shiftDevices, true)}>
+          <button id="millSave" type="button" className="primary-button" disabled={!canEdit || savingId !== null || !shiftDevices.some(canEditDev)} onClick={() => doSave(shiftDevices, true)}>
             {savingId === "all" ? "Đang lưu…" : `Lưu ca (${shiftDevices.length} máy)`}
           </button>
         </div>
@@ -321,7 +334,7 @@ export function MillVibTab({ date, setDate, person, setPerson, canEdit }: {
         onMessage={setMessage}
       />
       <p id="millMessage" role="status">{message}</p>
-      {!canEdit && <p className="rs-msg" data-kind="warn">Chỉ xem: tài khoản không có quyền nhập số đo độ rung.</p>}
+      {!canEdit ? <p className="rs-msg" data-kind="warn">Chỉ xem: tài khoản không có quyền nhập số đo độ rung.</p> : shiftDevices.some((d) => !canEditDev(d)) && <p className="rs-msg" data-kind="warn">{vibAccess.notice(shiftDevices.find((d) => !canEditDev(d))?.area) ?? "Chỉ xem: thiết bị ngoài cương vị của bạn."}</p>}
       <MillHelp />
       <datalist id="millNoteHints">
         <option value="Máy dự phòng" />
@@ -344,7 +357,7 @@ export function MillVibTab({ date, setDate, person, setPerson, canEdit }: {
               previous={previous[d.id]}
               trend={trendOf(d.id)}
               dirty={isDirty(d)}
-              canEdit={canEdit}
+              canEdit={canEditDev(d)}
               saving={savingId === d.id}
               onField={(field, value) => onField(d, field, value)}
               onTime={(value) => edit(d, (e) => ({ ...e, time: value }))}
