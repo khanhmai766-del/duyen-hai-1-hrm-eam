@@ -19,6 +19,9 @@ const STATUS:Record<Status,{label:string;tone:string}>={
  rejected:{label:"Từ chối",tone:"border-rose-200 bg-rose-50 text-rose-700"},
 };
 const dmy=(iso:string)=>iso.slice(0,10).split("-").reverse().join("/");
+// Tìm chỉ tiêu không dấu ("hieu chinh" khớp "Hiệu chỉnh").
+const fold=(s:string)=>s.normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/đ/g,"d").replace(/Đ/g,"D").toLowerCase();
+const vnToday=()=>new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Ho_Chi_Minh"}).format(new Date());
 const stamp=(iso?:string)=>iso?new Date(iso).toLocaleString("vi-VN",{timeZone:"Asia/Ho_Chi_Minh",hour:"2-digit",minute:"2-digit",day:"2-digit",month:"2-digit"}):"";
 const shown=(value:string|null)=>value===null||value===""?<span className="italic text-slate-400">trống</span>:<span className="font-semibold tabular-nums text-slate-900">{value}</span>;
 
@@ -37,6 +40,8 @@ export function ReportCorrections({date,onUpdated,getStaged}:{date:string;onUpda
  const error=actionError||(list.error instanceof Error?list.error.message||"Chưa tải được yêu cầu.":"");
  const [reason,setReason]=useState(""),[cell,setCell]=useState(""),[value,setValue]=useState(""),[draft,setDraft]=useState<Draft[]>([]);
  const [reviewNotes,setReviewNotes]=useState<Record<string,string>>({});
+ // Ngày đề nghị sửa: mặc định ngày đang mở báo cáo, chọn được ngày khác (không quá hôm nay).
+ const [reqDate,setReqDate]=useState(date),[q,setQ]=useState("");
  const [filter,setFilter]=useState<"pending"|"all">("pending");
  const [stagedCount,setStagedCount]=useState(0);
 
@@ -44,12 +49,13 @@ export function ReportCorrections({date,onUpdated,getStaged}:{date:string;onUpda
  // Tải lại thành công thì bỏ câu báo lỗi cũ (như bản cũ); lỗi tải hiện qua list.error.
  const load=useCallback(async()=>{const result=await refetch();if(!result.error)setError("");},[refetch]);
 
- useEffect(()=>{const show=()=>{setOpen(true);setMessage("");setStagedCount(getStaged?.().length||0);void load();};window.addEventListener("ktkt-open-correction",show);return()=>window.removeEventListener("ktkt-open-correction",show);},[getStaged,load]);
+ useEffect(()=>{const show=()=>{setOpen(true);setMessage("");setReqDate(date);setStagedCount(getStaged?.().length||0);void load();};window.addEventListener("ktkt-open-correction",show);return()=>window.removeEventListener("ktkt-open-correction",show);},[getStaged,load,date]);
  const pending=rows.filter(r=>r.status==="pending").length;
  const visible=filter==="pending"?rows.filter(r=>r.status==="pending"):rows;
  const editable=useMemo(()=>fields.filter(f=>canProposeCtktktCorrection(user,f.cell)),[user]);
+ const shownFields=useMemo(()=>{const k=fold(q.trim());return k?editable.filter(f=>fold(`${f.label} ${f.cell}`).includes(k)):editable;},[editable,q]);
 
- function openDialog(){setOpen(true);setMessage("");setStagedCount(getStaged?.().length||0);void load();}
+ function openDialog(){setOpen(true);setMessage("");setReqDate(date);setStagedCount(getStaged?.().length||0);void load();}
  function addDraft(){if(!cell)return;setDraft(old=>[...old.filter(e=>e.cell!==cell),{cell,value:value.trim()}]);setCell("");setValue("");}
 
  async function send(){
@@ -57,8 +63,8 @@ export function ReportCorrections({date,onUpdated,getStaged}:{date:string;onUpda
   try{
    // Chỉ tiêu đang chọn mà chưa bấm "Thêm" vẫn được gửi kèm (người dùng hay bỏ sót bước Thêm).
    const entries=cell?[...draft.filter(e=>e.cell!==cell),{cell,value:value.trim()}]:draft;
-   const b=await saveReport.mutateAsync({operatingDate:date,entries,correctionReason:reason});if(!b.requested)throw Error("Không có số liệu thay đổi để gửi.");
-   setMessage("Đã gửi yêu cầu. Số liệu chưa thay đổi; chờ quản trị duyệt.");setDraft([]);setCell("");setValue("");setReason("");setFilter("pending");await load();
+   const b=await saveReport.mutateAsync({operatingDate:reqDate,entries,correctionReason:reason});if(!b.requested)throw Error("Không có số liệu thay đổi để gửi.");
+   setMessage("Đã gửi yêu cầu. Số liệu chưa thay đổi; chờ quản trị duyệt.");setDraft([]);setCell("");setValue("");setReason("");setQ("");setFilter("pending");await load();
   }catch(e){setError(e instanceof Error?e.message:"Chưa gửi được yêu cầu.");}
   finally{setBusy(false);}
  }
@@ -84,7 +90,7 @@ export function ReportCorrections({date,onUpdated,getStaged}:{date:string;onUpda
     <DialogHeader className="relative border-b border-slate-200 px-5 py-4 pr-14 text-left">
      <DialogClose aria-label="Đóng" className="absolute right-3 top-3 grid size-9 place-items-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700"><X className="size-5" aria-hidden/></DialogClose>
      <DialogTitle className="flex items-center gap-2 text-lg font-bold text-slate-900"><FilePenLine className="size-5 text-indigo-600" aria-hidden/>Yêu cầu chỉnh sửa số liệu</DialogTitle>
-     <DialogDescription className="text-sm text-slate-500">{admin?"Quản trị xem và duyệt các đề nghị sửa số liệu sau ca.":`Đề nghị sửa số liệu ngày ${dmy(date)} đã nhập ở ca trước; số liệu chỉ đổi khi quản trị duyệt.`}</DialogDescription>
+     <DialogDescription className="text-sm text-slate-500">{admin?"Quản trị xem và duyệt các đề nghị sửa số liệu sau ca.":`Đề nghị sửa số liệu ngày ${dmy(reqDate)} đã nhập ở ca trước; số liệu chỉ đổi khi quản trị duyệt.`}</DialogDescription>
     </DialogHeader>
 
     <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
@@ -104,15 +110,17 @@ export function ReportCorrections({date,onUpdated,getStaged}:{date:string;onUpda
      {/* Đề nghị sửa (người dùng thường; quản trị sửa trực tiếp trên báo cáo) */}
      {!admin&&<section className="space-y-3 rounded-xl border border-indigo-100 p-4" aria-label="Đề nghị sửa">
       <div className="flex flex-wrap items-center justify-between gap-2">
-       <h3 className="text-sm font-bold text-slate-900">Đề nghị sửa ngày {dmy(date)}</h3>
-       {getStaged&&<button type="button" disabled={busy||!stagedCount} onClick={()=>{const staged=getStaged?.()||[];const allowed=staged.filter(e=>REPORT_WRITABLE_CELLS.has(e.cell)&&canProposeCtktktCorrection(user,e.cell));setDraft(allowed);const skipped=staged.filter(e=>!allowed.includes(e));setError(skipped.length?`Không đưa các ô liên kết/không có quyền vào yêu cầu: ${skipped.map(e=>e.cell).join(", ")}. Ô BCSX phải sửa tại nguồn.`:"");}}
+       <label className="flex items-center gap-2 text-sm font-bold text-slate-900">Đề nghị sửa ngày
+        <input type="date" value={reqDate} max={vnToday()} onChange={e=>{if(e.target.value){setReqDate(e.target.value);setDraft([]);}}} className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-sm font-semibold text-slate-900"/></label>
+       {getStaged&&<button type="button" disabled={busy||!stagedCount||reqDate!==date} title={reqDate!==date?`Chỉ lấy được ô đang sửa khi đề nghị đúng ngày đang mở báo cáo (${dmy(date)})`:undefined} onClick={()=>{const staged=getStaged?.()||[];const allowed=staged.filter(e=>REPORT_WRITABLE_CELLS.has(e.cell)&&canProposeCtktktCorrection(user,e.cell));setDraft(allowed);const skipped=staged.filter(e=>!allowed.includes(e));setError(skipped.length?`Không đưa các ô liên kết/không có quyền vào yêu cầu: ${skipped.map(e=>e.cell).join(", ")}. Ô BCSX phải sửa tại nguồn.`:"");}}
         className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
         Lấy {stagedCount} ô đang sửa trên báo cáo</button>}
       </div>
       <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_160px_auto] sm:items-end">
        <label className="grid min-w-0 gap-1 text-xs font-semibold text-slate-600">Chỉ tiêu cần sửa
+        <input type="search" value={q} onChange={e=>{setQ(e.target.value);const k=fold(e.target.value.trim());const hit=k?editable.filter(f=>fold(`${f.label} ${f.cell}`).includes(k)):[];if(hit.length===1)setCell(hit[0].cell);}} placeholder="Gõ để tìm chỉ tiêu (không dấu cũng được)…" className="h-9 w-full min-w-0 rounded-lg border border-slate-200 bg-white px-2 text-sm font-normal text-slate-900"/>
         <select className="h-9 w-full min-w-0 rounded-lg border border-slate-200 bg-white px-2 text-sm text-slate-900" value={cell} onChange={e=>setCell(e.target.value)}>
-         <option value="">Chọn chỉ tiêu…</option>{editable.map(f=><option key={f.cell} value={f.cell}>{f.label} ({f.cell})</option>)}
+         <option value="">{q.trim()?`Chọn chỉ tiêu… (${shownFields.length} kết quả)`:"Chọn chỉ tiêu…"}</option>{(cell&&!shownFields.some(f=>f.cell===cell)?[...editable.filter(f=>f.cell===cell),...shownFields]:shownFields).map(f=><option key={f.cell} value={f.cell}>{f.label} ({f.cell})</option>)}
         </select></label>
        <label className="grid gap-1 text-xs font-semibold text-slate-600">Giá trị mới
         <input className="h-9 rounded-lg border border-slate-200 px-2 text-sm tabular-nums text-slate-900" placeholder="Để trống = xóa" value={value} onChange={e=>setValue(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();addDraft();}}}/></label>
