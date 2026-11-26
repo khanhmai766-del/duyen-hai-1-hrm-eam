@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { isStatisticsPosition, NAV_SECTIONS, navItemAllowedForPosition, navSectionsForPosition, normalizeText } from "@/lib/nav";
+import { flatNavChildren, isStatisticsPosition, NAV_SECTIONS, navItemAllowedForPosition, navSectionsForPosition, normalizeText } from "@/lib/nav";
 import { apiMutate } from "@/lib/fetcher";
 import { passwordPolicyMessage } from "@/lib/password-policy";
 import { acknowledgeForumNotice, useNotifications, NOTICE_TONE } from "@/hooks/useNotifications";
@@ -188,7 +188,7 @@ export function Topbar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
         s.items
           .map((i) => ({
             ...i,
-            children: i.children?.filter((child) => navItemAllowed(child, role, rbac.can, adminMode, positionCarrier)),
+            children: i.children ? flatNavChildren(i).filter((child) => navItemAllowed(child, role, rbac.can, adminMode, positionCarrier)) : undefined,
           }))
           .filter((i) => (i.children ? i.children.length > 0 : navItemAllowed(i, role, rbac.can, adminMode, positionCarrier)))
           .flatMap((i) => {

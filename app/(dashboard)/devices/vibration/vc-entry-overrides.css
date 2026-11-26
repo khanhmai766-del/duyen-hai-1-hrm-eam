@@ -1,0 +1,26 @@
+/* Ô vượt ngưỡng / sai định dạng: quy tắc nền `!important` của vibracontrol.css (field) đè mất màu đỏ/vàng của bản cũ. */
+.vc-app[data-theme] :is(.mill-sheet, .mill-extra-input) input.up:not(:disabled) {
+  background: color-mix(in srgb, var(--amber) 18%, transparent) !important;
+  border-color: color-mix(in srgb, var(--amber) 55%, transparent);
+}
+.vc-app[data-theme] :is(.mill-sheet, .mill-extra-input) input.up2:not(:disabled) {
+  background: color-mix(in srgb, var(--red) 20%, transparent) !important;
+  border-color: var(--red);
+}
+.vc-app[data-theme] .tbnt-sheet input.up:not(:disabled) {
+  background: color-mix(in srgb, var(--amber) 18%, transparent) !important;
+  border-color: color-mix(in srgb, var(--amber) 55%, transparent);
+}
+.vc-app[data-theme] .tbnt-sheet input.up2:not(:disabled) {
+  background: color-mix(in srgb, var(--red) 20%, transparent) !important;
+  border-color: var(--red);
+}
+.vc-app[data-theme] :is(.mill-sheet, .mill-extra-input) input.invalid:not(:disabled),
+.vc-app[data-theme] :is(.entry-sheet, .tbnt-sheet) input[aria-invalid="true"]:not(:disabled) {
+  background: color-mix(in srgb, var(--red) 20%, transparent) !important;
+  border-color: var(--red);
+}
+.vc-app[data-theme] .mill-oil-table input[data-oil-bad]:not(:disabled) {
+  background: color-mix(in srgb, var(--red) 20%, transparent) !important;
+  border-color: var(--red);
+}

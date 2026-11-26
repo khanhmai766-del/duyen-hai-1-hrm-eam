@@ -1,0 +1,28 @@
+/* Khôi phục mặc định của trình duyệt (UA) mà Tailwind preflight của app chính đã xoá.
+   Web độ rung cũ không có preflight nên CSS cũ (vibracontrol.css) dựa vào các mặc định này.
+   Độ ưu tiên bằng 0 (:where) nên mọi luật .vc-app trong vibracontrol.css vẫn thắng. */
+.vc-app :where(h1, h2, h3, h4, h5, h6) { font-weight: bold; }
+.vc-app :where(h1) { font-size: 2em; margin: 0.67em 0; }
+.vc-app :where(h2) { font-size: 1.5em; margin: 0.83em 0; }
+.vc-app :where(h3) { font-size: 1.17em; margin: 1em 0; }
+.vc-app :where(h4) { margin: 1.33em 0; }
+.vc-app :where(p) { margin: 1em 0; }
+.vc-app :where(ul, ol) { margin: 1em 0; padding-left: 40px; }
+.vc-app :where(ul) { list-style: disc; }
+.vc-app :where(ol) { list-style: decimal; }
+.vc-app :where(dl) { margin: 1em 0; }
+.vc-app :where(dd) { margin-left: 40px; }
+.vc-app :where(figure) { margin: 1em 40px; }
+.vc-app :where(summary) { display: list-item; }
+
+/* Bảng "Tổng hợp ưu tiên": rộng, cuộn ngang trong .an-table-wrap (cả 10 cột có số liệu). */
+.vc-app .an-table.an-summary { min-width: 1700px; }
+.vc-app .an-table.an-summary td:nth-child(1) { min-width: 140px; }
+.vc-app .an-table.an-summary td:nth-child(2) { min-width: 200px; }
+.vc-app .an-table.an-summary td:nth-child(3) { min-width: 100px; white-space: nowrap; }
+.vc-app .an-table.an-summary td:nth-child(5) { min-width: 240px; }
+.vc-app .an-table.an-summary td:nth-child(9),
+.vc-app .an-table.an-summary td:nth-child(10) { min-width: 240px; }
+
+/* Chất lượng số liệu: 2 bảng cạnh nhau cuộn ngang trong ô của mình. */
+.vc-app .an-two > div { min-width: 0; overflow-x: auto; }

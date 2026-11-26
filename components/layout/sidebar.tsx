@@ -6,7 +6,7 @@ import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { ChevronDown, Clock, ExternalLink, LifeBuoy, Phone, ShieldCheck } from "lucide-react";
 import { cn, initials } from "@/lib/utils";
-import { type NavItem } from "@/lib/nav";
+import { flatNavChildren, type NavItem } from "@/lib/nav";
 import { hrefActive, pathActive, useNavAccess } from "@/components/layout/use-nav-access";
 import { lookupLandingPage } from "@/lib/lookup-access";
 
@@ -77,7 +77,10 @@ export function Sidebar({ onNavigate, collapsed = false, showQuick = false }: { 
         {sections.map((section, sectionIndex) => {
           const items = section.items
             .map((item) => {
-              const children = item.children?.filter((child) => allowed(child));
+              // Mục con nhóm (có mục con riêng) giữ lại khi còn ít nhất một mục con được phép.
+              const children = item.children
+                ?.map((child) => (child.children ? { ...child, children: child.children.filter((g) => allowed(g)) } : child))
+                .filter((child) => (child.children ? child.children.length > 0 : allowed(child)));
               return children ? { ...item, children } : item;
             })
             .filter((item) => {
@@ -203,8 +206,8 @@ function NavEntry({ item, onNavigate, collapsed = false, tintOf }: { item: NavIt
   const search = useSearchParams();
   const Icon = item.icon;
   const hasChildren = !!item.children?.length;
-  const tint = tintOf?.(hasChildren ? item.children![0].href : item.href);
-  const childActive = hasChildren && item.children!.some((c) => pathActive(pathname, c.href, c.exact));
+  const tint = tintOf?.(hasChildren ? flatNavChildren(item)[0].href : item.href);
+  const childActive = hasChildren && flatNavChildren(item).some((c) => pathActive(pathname, c.href, c.exact));
   const active = (hasChildren ? pathActive(pathname, item.href, item.exact) : hrefActive(pathname, search, item.href, item.exact)) || childActive;
   const [open, setOpen] = React.useState(childActive);
 
@@ -317,6 +320,7 @@ function NavEntry({ item, onNavigate, collapsed = false, tintOf }: { item: NavIt
       {open && (
         <div className="ml-4 mt-1.5 space-y-1 border-l border-blue-100 pl-3">
           {item.children!.map((c) => {
+            if (c.children?.length) return <NavSubGroup key={c.href} item={c} onNavigate={onNavigate} tintOf={tintOf} />;
             const ChildIcon = c.icon;
             const cActive = hrefActive(pathname, search, c.href, c.exact);
             const cTint = tintOf?.(c.href);
@@ -340,6 +344,75 @@ function NavEntry({ item, onNavigate, collapsed = false, tintOf }: { item: NavIt
                   )}
                 >
                   <ChildIcon className="h-3.5 w-3.5" />
+                </span>
+                <span className="min-w-0 flex-1">{c.label}</span>
+              </Link>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Mục con nhóm (cấp 3): nút mở/đóng + danh sách mục con, cùng kiểu với mục con thường. */
+function NavSubGroup({ item, onNavigate, tintOf }: { item: NavItem; onNavigate?: () => void; tintOf?: (href: string) => string | undefined }) {
+  const pathname = usePathname();
+  const search = useSearchParams();
+  const Icon = item.icon;
+  const active = item.children!.some((c) => pathActive(pathname, c.href, c.exact));
+  const [open, setOpen] = React.useState(active);
+  const [seenActive, setSeenActive] = React.useState(active);
+  if (seenActive !== active) {
+    setSeenActive(active);
+    if (active) setOpen(true);
+  }
+  const tint = tintOf?.(item.children![0].href);
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className={cn(
+          "group flex min-h-9 w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[12.5px] font-medium leading-tight transition-colors",
+          active ? "bg-white text-navy shadow-sm ring-1 ring-blue-100" : "text-slate-500 hover:bg-white hover:text-navy"
+        )}
+      >
+        <span
+          className={cn(
+            "flex h-6 w-6 shrink-0 items-center justify-center rounded-lg ring-1",
+            active ? "bg-blue-600 text-white ring-blue-100" : tint ? cn(tint, "ring-black/5") : "bg-white text-slate-500 ring-blue-100 group-hover:text-accent"
+          )}
+        >
+          <Icon className="h-3.5 w-3.5" />
+        </span>
+        <span className="min-w-0 flex-1">{item.label}</span>
+        <ChevronDown className={cn("h-3.5 w-3.5 shrink-0 text-slate-400 transition-transform", open && "rotate-180")} />
+      </button>
+      {open && (
+        <div className="ml-3 mt-1 space-y-1 border-l border-blue-100 pl-2.5">
+          {item.children!.map((c) => {
+            const ChildIcon = c.icon;
+            const cActive = hrefActive(pathname, search, c.href, c.exact);
+            const cTint = tintOf?.(c.href);
+            return (
+              <Link
+                key={c.href}
+                href={c.href}
+                prefetch={false}
+                onClick={onNavigate}
+                className={cn(
+                  "group flex min-h-8 items-center gap-2 rounded-lg px-2 py-1 text-[12px] font-medium leading-tight transition-colors",
+                  cActive ? "bg-white text-navy shadow-sm ring-1 ring-blue-100" : "text-slate-500 hover:bg-white hover:text-navy"
+                )}
+              >
+                <span
+                  className={cn(
+                    "flex h-5 w-5 shrink-0 items-center justify-center rounded-md ring-1",
+                    cActive ? "bg-blue-600 text-white ring-blue-100" : cTint ? cn(cTint, "ring-black/5") : "bg-white text-slate-500 ring-blue-100 group-hover:text-accent"
+                  )}
+                >
+                  <ChildIcon className="h-3 w-3" />
                 </span>
                 <span className="min-w-0 flex-1">{c.label}</span>
               </Link>

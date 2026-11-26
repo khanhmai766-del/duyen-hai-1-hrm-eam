@@ -3960,3 +3960,66 @@ model CtktktCorrectionRequest {
  @@index([requesterId,createdAt(sort: Desc)], map:"ctktkt_corrections_requester")
  @@map("ctktkt_correction_requests")
 }
+
+// Nhập thông số độ rung (chuyển từ ứng dụng VibraControl cũ). Chi tiết: docs hoặc lib/vibration/.
+model VibrationDevice {
+  id                String   @id @default(cuid())
+  legacyId          String   @unique // config.id cũ: EQ-0001, CAT-…, NEW-…
+  area              String
+  system            String   @default("")
+  name              String
+  active            Boolean  @default(true)
+  sortOrder         Int      @default(0)
+  labels            Json // 23 nhãn cột
+  measurementConfig Json     @default("{}")
+  alertConfig       Json     @default("{}")
+  machine           Json?
+  measureGroups     String[] // rỗng ⇒ coi như ["thu5"]
+  equipmentSeq      String? // EquipmentNode.seq đã ánh xạ
+  mapStatus         String   @default("none") // none | auto | confirmed
+  mapScore          Float?
+  mapNote           String?
+  suggestSeq        String? // gợi ý tốt nhất (chưa đủ chắc để tự gán)
+  suggestScore      Float?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  records VibrationRecord[]
+
+  @@index([area])
+  @@index([equipmentSeq])
+}
+
+model VibrationRecord {
+  id           String          @id @default(cuid())
+  deviceId     String
+  date         String? // YYYY-MM-DD; null với bản Excel lịch sử thiếu ngày
+  kind         String // WEEKLY | MNK | MILL | TBNT | HISTORY_XLSX
+  shift        String? // sang | chieu | dem
+  person       String          @default("")
+  measureTime  String          @default("")
+  power        Float?
+  values       Json // mảng 23 (số hoặc null; bản Excel giữ chuỗi)
+  millData     Json?
+  note         String          @default("")
+  sourceLabel  String          @default("")
+  savedAt      DateTime        @default(now())
+  createdById  String?
+  updatedById  String?
+  legacy       Boolean         @default(false)
+
+  device VibrationDevice @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  @@index([deviceId, date])
+  @@index([kind, date])
+}
+
+/// Cài đặt phân tích độ rung dạng khoá–giá trị: "settings" (tham số chung), "baseline:<deviceId>" (đặt lại mức nền sau sửa chữa),
+/// "report:<id>" (phiếu phân tích ngoài danh mục đã lưu). Port từ db.analysisSettings / device.analysis / db.externalReports của VibraControl.
+model VibrationAnalysisMeta {
+  key           String   @id
+  value         Json
+  updatedAt     DateTime @updatedAt
+  updatedById   String?
+  updatedByName String   @default("")
+}

@@ -6,7 +6,7 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { QRCodeSVG } from "qrcode.react";
 import { toast } from "sonner";
-import { AlertTriangle, ArrowLeft, Download, Pencil, Trash2, FileText, Package, UserCog, ExternalLink, QrCode, Loader2, Plus, PackagePlus, Cpu, Wrench, PackageCheck, CheckCircle2, ImageIcon, type LucideIcon } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Download, Pencil, Trash2, FileText, Package, UserCog, ExternalLink, QrCode, Activity, Loader2, Plus, PackagePlus, Cpu, Wrench, PackageCheck, CheckCircle2, ImageIcon, type LucideIcon } from "lucide-react";
 import { AskAiButton } from "@/components/ai/ask-ai-button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -20,11 +20,13 @@ import { CardSkeleton } from "@/components/shared/skeletons";
 import { useDevice, useDeleteDevice } from "@/hooks/useDevices";
 import { useSeqAccess } from "@/hooks/useSystemAccess";
 import { useRbacAccess } from "@/hooks/useRbacAccess";
+import { useVibrationHistory } from "@/hooks/useVibration";
 import { useAddDeviceQrCard, useRemoveDeviceQrCard } from "@/hooks/useDeviceQrCards";
 import { cn, formatDate } from "@/lib/utils";
 import { DEFECT_SEVERITY, DEFECT_STATUS, defectSeverityCriteriaLabels } from "@/lib/constants";
 import { defaultScopeOf, parseScope, scopeCode, TREE_SCOPES } from "@/lib/equipment-units";
 import { deviceDetailUrl, deviceQrValue } from "@/lib/device-qr";
+import { analysisHref, millAnalysisHref } from "@/components/vibration/analysis-links";
 
 export default function DeviceDetailPage() {
   return (
@@ -491,6 +493,8 @@ function DeviceDetailPageContent() {
               )}
             </>
           </SectionCard>
+
+          <VibrationHistorySection seq={device.id} />
         </div>
       </div>
 
@@ -613,6 +617,49 @@ function DeviceDetailPageContent() {
  * vá. Gom về một khung: ô icon màu theo nhóm, tiêu đề, phụ đề tuỳ chọn, số đếm
  * tuỳ chọn, hàng hành động bên phải.
  */
+const VIB_KIND_LABEL: Record<string, string> = { WEEKLY: "Theo kỳ", MNK: "MNK theo ca", MILL: "Mill theo ca", TBNT: "TBNT theo ca", HISTORY_XLSX: "Lịch sử (Excel)" };
+const VIB_SHIFT_LABEL: Record<string, string> = { sang: "ca sáng", chieu: "ca chiều", dem: "ca đêm" };
+
+/** Lịch sử đo độ rung của các thiết bị đo đã ánh xạ vào thiết bị này; ẩn khi không có dữ liệu (hoặc không có quyền xem). */
+function VibrationHistorySection({ seq }: { seq: string }) {
+  const { data } = useVibrationHistory(seq, 12);
+  if (!data?.length) return null;
+  const fmt = (n: number | null, digits = 1) => (n == null ? "—" : n.toFixed(digits).replace(/.0+$|(.d*[1-9])0+$/, "$1"));
+  return (
+    <SectionCard icon={Activity} title="Lịch sử đo độ rung" subtitle="Các lần đo gần nhất của thiết bị đo độ rung đã ánh xạ vào thiết bị này" tone="sky" className="order-7 lg:order-none">
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b text-left text-[11px] font-semibold uppercase text-muted-foreground">
+              <th className="py-2 pr-3">Ngày</th>
+              <th className="py-2 pr-3">Loại / ca</th>
+              <th className="py-2 pr-3 text-right">Vận tốc max (mm/s)</th>
+              <th className="py-2 pr-3 text-right">Nhiệt độ max (°C)</th>
+              <th className="py-2">Ghi chú</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.map((r) => (
+              <tr key={r.id} className="border-b border-slate-100 last:border-0">
+                <td className="whitespace-nowrap py-2 pr-3">
+                  <Link className="text-sky-700 hover:underline" title="Mở Phân tích độ rung của thiết bị đo này" href={r.kind === "MILL" ? millAnalysisHref(r.deviceId, r.date ?? undefined) : analysisHref(r.deviceId, r.date ?? undefined, true)}>{r.date ? formatDate(r.date) : "—"} ↗</Link>
+                </td>
+                <td className="py-2 pr-3">
+                  <div>{VIB_KIND_LABEL[r.kind] ?? r.kind}{r.shift ? ` · ${VIB_SHIFT_LABEL[r.shift] ?? r.shift}` : ""}</div>
+                  {data.some((x) => x.deviceName !== r.deviceName) && <div className="text-xs text-muted-foreground">{r.deviceName}</div>}
+                </td>
+                <td className="py-2 pr-3 text-right tabular-nums">{fmt(r.maxVelocity)}</td>
+                <td className="py-2 pr-3 text-right tabular-nums">{fmt(r.maxTemp)}</td>
+                <td className="py-2 text-muted-foreground">{r.note || "—"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </SectionCard>
+  );
+}
+
 function SectionCard({
   icon: Icon,
   title,

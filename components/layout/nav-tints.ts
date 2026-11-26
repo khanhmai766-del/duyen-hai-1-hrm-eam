@@ -1,4 +1,4 @@
-import type { NavItem, NavSection } from "@/lib/nav";
+import { flatNavChildren, type NavItem, type NavSection } from "@/lib/nav";
 
 // Tông màu ô icon của thanh bên và thanh nổi "Thường dùng", gán theo vị trí của mục (giữ đúng màu của bảng truy cập
 // nhanh ở thanh trên — bảng đã gỡ 11/10/2026).
@@ -27,7 +27,7 @@ export const gridTint = (index: number) => GRID_TINTS[index % GRID_TINTS.length]
  */
 export function launcherItems(sections: NavSection[], allowed: (item: NavItem) => boolean): NavItem[] {
   return sections.flatMap((section) => section.items.flatMap((item) => {
-    const children = item.children?.filter(allowed);
+    const children = item.children ? flatNavChildren(item).filter(allowed) : undefined;
     if (children) return children;
     return allowed(item) ? [item] : [];
   }));

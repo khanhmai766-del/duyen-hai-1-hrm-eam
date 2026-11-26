@@ -1,10 +1,12 @@
 import { CTKTKT_DEFAULT_MATRIX } from "@/modules/ctktkt/permissions";
 import { UTILITY_DEFAULT_MATRIX } from "@/lib/utility-permissions";
+import { VIBRATION_DEFAULT_MATRIX } from "@/lib/vibration-permissions";
 export type RbacLevel = "none" | "read" | "personal" | "manage" | "full";
 
 export const DEFAULT_RBAC_MATRIX: Record<string, Partial<Record<string, RbacLevel>>> = {
   ...CTKTKT_DEFAULT_MATRIX,
   ...UTILITY_DEFAULT_MATRIX,
+  ...VIBRATION_DEFAULT_MATRIX,
   "shift-operation-check-in": { ADMIN: "personal", MANAGER: "personal", SUPERVISOR: "personal", TECHNICIAN: "personal", VIEWER: "read" },
   "shift-operation-approve": { ADMIN: "manage", MANAGER: "manage", SUPERVISOR: "manage", TECHNICIAN: "none", VIEWER: "none" },
   "hc-attendance-group-create": { ADMIN: "personal", MANAGER: "personal", SUPERVISOR: "personal", TECHNICIAN: "personal", VIEWER: "none" },

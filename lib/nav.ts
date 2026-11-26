@@ -1,4 +1,5 @@
 import {
+  Activity,
   Vibrate,
   LayoutDashboard,
   Megaphone,
@@ -54,7 +55,13 @@ export interface NavItem {
   exact?: boolean;
   /** Extra search terms (accent-free) to improve topbar search matching. */
   keywords?: string;
+  /** Mục con; một mục con có thể có mục con riêng (tối đa 3 cấp, vd Nhập thông số độ rung › Phân tích độ rung › …). */
   children?: NavItem[];
+}
+
+/** Các mục lá (có trang) dưới một mục: mục con thường + mục con của mục con nhóm. */
+export function flatNavChildren(item: NavItem): NavItem[] {
+  return (item.children ?? []).flatMap((child) => (child.children?.length ? child.children : [child]));
 }
 
 export interface NavSection {
@@ -110,6 +117,33 @@ export const NAV_SECTIONS: NavSection[] = [
     items: [
       { label: "Dashboard", href: "/reports", icon: BarChart3, keywords: "report bao cao thong ke analytics dashboard thiet bi" },
       { label: "Thông tin thiết bị", href: "/devices", icon: Cpu, permissionIds: ["device-view"], keywords: "device thiet bi may moc esp fgd boiler turbine" },
+      {
+        label: "Nhập thông số độ rung",
+        href: "/devices/vibration/weekly",
+        icon: Vibrate,
+        permissionIds: ["vibration-view"],
+        keywords: "do rung nhiet do thong so rung vibration nhap so do theo ky mill nghien mnk may nen khi tbnt tram bom nuoc tho anh xa",
+        children: [
+          { label: "Theo kỳ", href: "/devices/vibration/weekly", icon: CalendarRange, permissionIds: ["vibration-view"], keywords: "do rung theo ky hang tuan thu 5 tuan" },
+          { label: "Mill theo ca", href: "/devices/vibration/mill", icon: Factory, permissionIds: ["vibration-view"], keywords: "do rung mill may nghien theo ca dau vrl" },
+          { label: "MNK theo ca", href: "/devices/vibration/mnk", icon: Gauge, permissionIds: ["vibration-view"], keywords: "do rung mnk may nen khi theo ca" },
+          { label: "TBNT theo ca", href: "/devices/vibration/tbnt", icon: Boxes, permissionIds: ["vibration-view"], keywords: "do rung tbnt tram bom nuoc tho theo ca" },
+          {
+            label: "Phân tích độ rung",
+            href: "/devices/vibration/analysis",
+            icon: Activity,
+            permissionIds: ["vibration-view"],
+            keywords: "phan tich do rung theo doi xu huong mill danh muc thiet bi cau hinh vung do anh xa",
+            children: [
+          { label: "Phân tích độ rung", href: "/devices/vibration/analysis", icon: Activity, permissionIds: ["vibration-view"], keywords: "phan tich do rung theo doi xu huong iso wowk tieu chuan nguong canh bao" },
+          { label: "Phân tích độ rung MILL", href: "/devices/vibration/mill-analysis", icon: BarChart3, permissionIds: ["vibration-view"], keywords: "phan tich do rung mill may nghien goi xu huong" },
+          { label: "Danh mục thiết bị", href: "/devices/vibration/catalog", icon: ListChecks, permissionIds: ["vibration-view"], keywords: "danh muc thiet bi do rung cuong vi he thong thong so may" },
+          { label: "Cấu hình vùng đo", href: "/devices/vibration/measurements", icon: Settings, permissionIds: ["vibration-view"], keywords: "cau hinh vung do diem do ky do nguong canh bao" },
+          { label: "Ánh xạ thiết bị", href: "/devices/vibration/mapping", icon: Workflow, permissionIds: ["vibration-manage"], keywords: "do rung anh xa thiet bi cay thiet bi lien ket mapping" },
+            ],
+          },
+        ],
+      },
       {
         // Hai sheet khiếm khuyết và sổ PCT liên kết với SYC.
         label: "Khiếm khuyết thiết bị",
@@ -298,7 +332,7 @@ export const NAV_SECTIONS: NavSection[] = [
 export const NAV_QUICK_HREFS = ["/defects?phan=co", "/defects?phan=dien", "/work-permits", "/replacement-procedures", "/hr"] as const;
 
 export function navQuickItems(input?: PositionCarrier | string | null): NavItem[] {
-  const all = navSectionsForPosition(input).flatMap((section) => section.items.flatMap((item) => [item, ...(item.children ?? [])]));
+  const all = navSectionsForPosition(input).flatMap((section) => section.items.flatMap((item) => [item, ...flatNavChildren(item)]));
   return NAV_QUICK_HREFS.map((href) => all.find((item) => item.href === href && !item.children?.length))
     .filter((item): item is NavItem => Boolean(item));
 }
@@ -364,7 +398,7 @@ export function pathAllowedForPosition(pathname: string, input?: PositionCarrier
   if (!isStatisticsPosition(input)) return true;
   if (navPathMatches(pathname, "/account")) return true;
   return navSectionsForPosition(input).some((section) =>
-    section.items.some((item) => navPathMatches(pathname, item.href) || item.children?.some((child) => navPathMatches(pathname, child.href)))
+    section.items.some((item) => navPathMatches(pathname, item.href) || flatNavChildren(item).some((child) => navPathMatches(pathname, child.href)))
   );
 }
 

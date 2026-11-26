@@ -30,6 +30,7 @@ import {
 import { useAdminMode } from "@/hooks/useAdminMode";
 import { useRbacAccess } from "@/hooks/useRbacAccess";
 import {
+  flatNavChildren,
   NAV_SECTIONS,
   navItemAllowedForPosition,
   navSectionsForPosition,
@@ -116,7 +117,7 @@ export function MobileBottomNav({ onOpenAllMenu }: { onOpenAllMenu: () => void }
       .map((section) => {
         const items = section.items.flatMap((item) => {
           if (item.children?.length) {
-            return item.children.filter((child) =>
+            return flatNavChildren(item).filter((child) =>
               (readOnlyDefects || mobileMoreItemAllowed(section.title, child))
               && itemAllowed(child, user?.role, can, adminMode, positionCarrier)
             );

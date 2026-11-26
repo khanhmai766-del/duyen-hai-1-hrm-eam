@@ -53,6 +53,7 @@ import { normalizeText } from "@/lib/nav";
 import { cn } from "@/lib/utils";
 import { CTKTKT_PERMISSION_ROWS } from "@/modules/ctktkt/permissions";
 import { UTILITY_PERMISSION_ROWS } from "@/lib/utility-permissions";
+import { VIBRATION_PERMISSION_ROWS } from "@/lib/vibration-permissions";
 
 type PermissionValue = "full" | "manage" | "personal" | "read" | "none";
 
@@ -809,6 +810,7 @@ const DEFAULT_PERMISSIONS: PermissionRow[] = [
     matrix: { ADMIN: "full", MANAGER: "manage", SUPERVISOR: "manage", TECHNICIAN: "personal", VIEWER: "none" },
   },
   ...UTILITY_PERMISSION_ROWS,
+  ...VIBRATION_PERMISSION_ROWS,
   ...CTKTKT_PERMISSION_ROWS,
 ];
 
