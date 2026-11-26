@@ -3,6 +3,7 @@
 import * as React from "react";
 import { useSession } from "next-auth/react";
 import { useRbacAccess } from "@/hooks/useRbacAccess";
+import { useVibrationAccess } from "@/hooks/useVibrationAccess";
 import { vnShift } from "@/lib/vibration/parse";
 import { VcPageTitle } from "./export-ui";
 import { MillOilTab } from "./mill-oil-tab";
@@ -16,7 +17,8 @@ const TABS = [
 export function MillShiftView() {
   const { data: session } = useSession();
   const rbac = useRbacAccess();
-  const canEdit = rbac.can("vibration-entry", ["personal", "manage", "full"]);
+  const vibAccess = useVibrationAccess();
+  const canEdit = rbac.can("vibration-entry", ["personal", "manage", "full"]) || vibAccess.hasEntryArea;
   const [tab, setTab] = React.useState<"vib" | "oil">("vib");
   const [date, setDate] = React.useState(() => vnShift().date);
   const [personEdit, setPerson] = React.useState<string | null>(null);

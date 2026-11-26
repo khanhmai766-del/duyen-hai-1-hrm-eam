@@ -16,6 +16,9 @@ export async function requireVibrationView() {
 export async function requireVibrationEntry() {
   const user = await requireUser();
   await requirePermissionLevel(user, "vibration-view", [...VIBRATION_VIEW_LEVELS], "Bạn không có quyền xem số đo độ rung");
+  // Như web độ rung cũ: người giữ cương vị vận hành có thiết bị rung được nhập (giới hạn theo cương vị ở
+  // assertVibrationAreasEditable) bất kể vai trò; quyền "vibration-entry" theo vai trò dành cho người không có cương vị đó.
+  if (vibrationAccessFor(user).editAreas.length > 0) return user;
   await requirePermissionLevel(user, "vibration-entry", [...VIBRATION_ENTRY_LEVELS], "Bạn không có quyền nhập số đo độ rung");
   return user;
 }

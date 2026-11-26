@@ -18,8 +18,8 @@ const shortName = (n: string) => n.replace(/^Động cơ MNK điều khiển và
 
 export function MnkEntryView() {
   const { can } = useRbacAccess();
-  const rbacEdit = can("vibration-entry", [...VIBRATION_ENTRY_LEVELS]);
   const vibAccess = useVibrationAccess();
+  const rbacEdit = can("vibration-entry", [...VIBRATION_ENTRY_LEVELS]) || vibAccess.hasEntryArea;
   const canEdit = rbacEdit && vibAccess.canEditArea(MNK_AREA);
   const [now] = React.useState(() => vnShift());
   const [date, setDate] = React.useState(now.date);

@@ -15,6 +15,8 @@ export function useVibrationAccess() {
   return {
     access,
     isLoading: q.isLoading,
+    /** Có cương vị vận hành độ rung → được nhập (theo cương vị) dù vai trò không có quyền "Nhập số đo độ rung". */
+    hasEntryArea: !!access && access.editAreas.length > 0,
     /** Được nhập thiết bị thuộc cương vị này (chưa tải xong → false). */
     canEditArea: (area: string) => !!access && canEditVibrationArea(access, area),
     /** Cương vị mặc định của ô chọn: cương vị nhập đầu tiên của người dùng có trong danh sách, không có thì phần tử đầu. */

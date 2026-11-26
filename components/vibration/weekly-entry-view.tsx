@@ -18,8 +18,8 @@ const collator = new Intl.Collator("vi", { numeric: true });
 
 export function WeeklyEntryView() {
   const { can } = useRbacAccess();
-  const rbacEdit = can("vibration-entry", [...VIBRATION_ENTRY_LEVELS]);
   const vibAccess = useVibrationAccess();
+  const rbacEdit = can("vibration-entry", [...VIBRATION_ENTRY_LEVELS]) || vibAccess.hasEntryArea;
   const [date, setDate] = React.useState(() => vnToday());
   const [areaPick, setAreaPick] = React.useState("");
   const [groupPick, setGroupPick] = React.useState(DEFAULT_MEASURE_GROUP);

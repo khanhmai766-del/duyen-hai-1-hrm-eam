@@ -77,8 +77,8 @@ function parseTimeOld(v: string): string {
 export function TbntShiftView() {
   const { data: session } = useSession();
   const rbac = useRbacAccess();
-  const rbacEdit = rbac.can("vibration-entry", ["personal", "manage", "full"]);
   const vibAccess = useVibrationAccess();
+  const rbacEdit = rbac.can("vibration-entry", ["personal", "manage", "full"]) || vibAccess.hasEntryArea;
   const canEdit = rbacEdit && vibAccess.canEditArea(TBNT_AREA);
   const [date, setDate] = React.useState(() => vnShift().date);
   const [personEdit, setPerson] = React.useState<string | null>(null);
