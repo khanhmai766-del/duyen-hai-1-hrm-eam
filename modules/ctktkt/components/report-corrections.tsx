@@ -55,8 +55,10 @@ export function ReportCorrections({date,onUpdated,getStaged}:{date:string;onUpda
  async function send(){
   setBusy(true);setError("");setMessage("");
   try{
-   const b=await saveReport.mutateAsync({operatingDate:date,entries:draft,correctionReason:reason});if(!b.requested)throw Error("Không có số liệu thay đổi để gửi.");
-   setMessage("Đã gửi yêu cầu. Số liệu chưa thay đổi; chờ quản trị duyệt.");setDraft([]);setReason("");setFilter("pending");await load();
+   // Chỉ tiêu đang chọn mà chưa bấm "Thêm" vẫn được gửi kèm (người dùng hay bỏ sót bước Thêm).
+   const entries=cell?[...draft.filter(e=>e.cell!==cell),{cell,value:value.trim()}]:draft;
+   const b=await saveReport.mutateAsync({operatingDate:date,entries,correctionReason:reason});if(!b.requested)throw Error("Không có số liệu thay đổi để gửi.");
+   setMessage("Đã gửi yêu cầu. Số liệu chưa thay đổi; chờ quản trị duyệt.");setDraft([]);setCell("");setValue("");setReason("");setFilter("pending");await load();
   }catch(e){setError(e instanceof Error?e.message:"Chưa gửi được yêu cầu.");}
   finally{setBusy(false);}
  }
@@ -126,8 +128,9 @@ export function ReportCorrections({date,onUpdated,getStaged}:{date:string;onUpda
       <label className="grid gap-1 text-xs font-semibold text-slate-600">Lý do chỉnh sửa
        <textarea rows={2} maxLength={1000} className="rounded-lg border border-slate-200 p-2 text-sm text-slate-900" placeholder="Ví dụ: nhập nhầm chỉ số công tơ ca trước (tối thiểu 5 ký tự)" value={reason} onChange={e=>setReason(e.target.value)}/>
        <span className="text-right font-normal text-slate-400">{reason.length}/1000</span></label>
-      <div className="flex justify-end">
-       <button type="button" disabled={busy||!draft.length||reason.trim().length<5} onClick={()=>void send()} className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-indigo-600 px-4 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"><Send className="size-4" aria-hidden/>Gửi quản trị duyệt</button>
+      <div className="flex items-center justify-end gap-3">
+       {!busy&&(!draft.length&&!cell?<span className="text-xs text-slate-500">Chọn chỉ tiêu cần sửa để gửi.</span>:reason.trim().length<5?<span className="text-xs text-slate-500">Nhập lý do chỉnh sửa (tối thiểu 5 ký tự).</span>:null)}
+       <button type="button" disabled={busy||(!draft.length&&!cell)||reason.trim().length<5} onClick={()=>void send()} className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-indigo-600 px-4 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"><Send className="size-4" aria-hidden/>Gửi quản trị duyệt</button>
       </div>
      </section>}
 
