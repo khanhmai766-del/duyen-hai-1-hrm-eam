@@ -18,15 +18,24 @@ export async function requireVibrationEntry() {
   await requirePermissionLevel(user, "vibration-view", [...VIBRATION_VIEW_LEVELS], "Bạn không có quyền xem số đo độ rung");
   // Như web độ rung cũ: người giữ cương vị vận hành có thiết bị rung được nhập (giới hạn theo cương vị ở
   // assertVibrationAreasEditable) bất kể vai trò; quyền "vibration-entry" theo vai trò dành cho người không có cương vị đó.
-  if (vibrationAccessFor(user).editAreas.length > 0) return user;
+  const access = vibrationAccessFor(user);
+  // KTV: lưu thiết lập Phân tích (mức nền, tham số, phiếu); ghi số đo vẫn bị chặn bởi assertVibrationAreasEditable.
+  if (access.editAreas.length > 0 || access.catalogEditor) return user;
   await requirePermissionLevel(user, "vibration-entry", [...VIBRATION_ENTRY_LEVELS], "Bạn không có quyền nhập số đo độ rung");
   return user;
 }
 export async function requireVibrationManage() {
   const user = await requireUser();
   await requirePermissionLevel(user, "vibration-view", [...VIBRATION_VIEW_LEVELS], "Bạn không có quyền xem số đo độ rung");
+  if (vibrationAccessFor(user).catalogEditor) return user; // KTV sửa danh mục / cấu hình vùng đo
   await requirePermissionLevel(user, "vibration-manage", [...VIBRATION_MANAGE_LEVELS], "Bạn không có quyền quản lý ánh xạ thiết bị độ rung");
   return user;
+}
+
+/** Ghi danh mục / cấu hình thiết bị: admin và KTV mọi cương vị; người khác theo cương vị như số đo. */
+export function assertCatalogAreasEditable(user: VibrationUserLike, devices: { area: string; name: string }[]) {
+  if (vibrationAccessFor(user).catalogEditor) return;
+  assertVibrationAreasEditable(user, devices);
 }
 
 /** Phân quyền theo cương vị (app cũ): chỉ admin vượt qua; còn lại chỉ ghi thiết bị có area thuộc editAreas. Ném 403 nếu có thiết bị ngoài phạm vi. */

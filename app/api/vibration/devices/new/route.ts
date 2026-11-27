@@ -6,7 +6,7 @@ import { audit, fail, handle, ok } from "@/lib/api";
 import { DEFAULT_ALERT } from "@/lib/vibration/constants";
 import { deviceCreateSchema, defaultMeasurementConfig, emptyLabels } from "@/lib/vibration/catalog";
 import { buildUpdate, sameDeviceKey } from "@/lib/vibration/catalog-server";
-import { assertVibrationAreasEditable, requireVibrationManage, toDeviceDto } from "@/lib/vibration/server";
+import { assertCatalogAreasEditable, requireVibrationManage, toDeviceDto } from "@/lib/vibration/server";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
     const parsed = deviceCreateSchema.safeParse(await req.json().catch(() => null));
     if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? "Dữ liệu không hợp lệ", 400);
     const p = parsed.data;
-    assertVibrationAreasEditable(user, [{ area: p.area, name: p.name }]);
+    assertCatalogAreasEditable(user, [{ area: p.area, name: p.name }]);
     const key = { area: p.area, system: p.system ?? "", name: p.name };
     const same = await prisma.vibrationDevice.findMany({ where: { area: p.area }, select: { area: true, system: true, name: true, sortOrder: true } });
     if (same.some((d) => sameDeviceKey(d, key))) return fail("Thiết bị đã tồn tại trong cương vị và hệ thống này.", 409);

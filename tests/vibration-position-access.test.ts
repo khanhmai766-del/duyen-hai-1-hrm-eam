@@ -77,9 +77,18 @@ test("admin: mọi quyền; không cương vị: chưa gán", () => {
   assert.equal(admin.admin, true);
   assert.equal(admin.viewAll, true);
   const none = vibrationAccessFor({ role: "TECHNICIAN" });
-  assert.deepEqual(none, { admin: false, viewAll: false, editAreas: [], declared: false, supervisor: false });
+  assert.deepEqual(none, { admin: false, viewAll: false, editAreas: [], declared: false, supervisor: false, catalogEditor: false });
   assert.equal(vibrationAccessFor(null).declared, false);
   const office = vibrationAccessFor(pos("Nhân viên văn phòng"));
   assert.deepEqual(office.editAreas, []);
   assert.equal(office.viewAll, false);
+});
+
+test("chức danh KTV được sửa danh mục / cấu hình / phân tích, không nhập số đo; KTV I&C và giám sát khác thì không", () => {
+  for (const p of ["KTV", "Kỹ thuật viên", "Kỹ thuật viên vận hành"]) {
+    const a = vibrationAccessFor(pos(p));
+    assert.equal(a.catalogEditor, true, p);
+    assert.deepEqual(a.editAreas, [], p);
+  }
+  for (const p of ["Kỹ thuật viên I&C", "Trưởng ca", "TK Lò máy", "Lò phó S1"]) assert.equal(vibrationAccessFor(pos(p)).catalogEditor, false, p);
 });

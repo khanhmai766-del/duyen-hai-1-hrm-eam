@@ -69,6 +69,14 @@ export interface VibrationAccess {
   declared: boolean;
   /** Có vị trí giám sát (Trưởng ca, TKLM, TKĐ, QĐ, PQĐ, KTV, Kỹ sư). */
   supervisor: boolean;
+  /** Chức danh KTV: sửa Danh mục thiết bị, Cấu hình vùng đo và thiết lập Phân tích cho mọi cương vị (không nhập số đo). */
+  catalogEditor: boolean;
+}
+
+// Chức danh KTV (Kỹ thuật viên) — không có mã trong danh mục cương vị; "KTV I&C" có mã INSTRUMENT_CONTROL nên không khớp.
+const KTV_TITLE_RE = /^(ky thuat vien|ktv)(?: .*)?$/;
+function isKtvTitle(position: string) {
+  return !positionCodeOf(position) && KTV_TITLE_RE.test(normalizeText(position).replace(/[^a-z0-9]+/g, " ").trim());
 }
 
 function unitOf(position: string): "S1" | "S2" | null {
@@ -92,7 +100,7 @@ export function vibrationUserPositions(user: VibrationUserLike) {
 }
 
 export function vibrationAccessFor(user: VibrationUserLike | null | undefined): VibrationAccess {
-  if (!user) return { admin: false, viewAll: false, editAreas: [], declared: false, supervisor: false };
+  if (!user) return { admin: false, viewAll: false, editAreas: [], declared: false, supervisor: false, catalogEditor: false };
   const admin = user.role === "ADMIN";
   const positions = vibrationUserPositions(user);
   const supervisor = positions.some(isViewAllPosition);
@@ -111,6 +119,7 @@ export function vibrationAccessFor(user: VibrationUserLike | null | undefined): 
     editAreas: VIBRATION_AREA_MAP.map((a) => a.area).filter((a) => editSet.has(a)),
     declared: positions.length > 0,
     supervisor,
+    catalogEditor: positions.some(isKtvTitle),
   };
 }
 
