@@ -1,4 +1,4 @@
-// Nguồn: repo chuan-the-thuc @ eb3b814 — tệp sinh tự động bởi scripts/build/chuan-the-thuc.mjs, không sửa tay
+// Nguồn: repo chuan-the-thuc @ e87042a — tệp sinh tự động bởi scripts/build/chuan-the-thuc.mjs, không sửa tay
 // Kiểm tra chính tả tiếng Việt KHÔNG cần AI:
 //  1) Cấu trúc âm tiết (phụ âm đầu + vần + thanh) → bắt chữ gõ nhầm, gõ sót Telex, sai quy tắc c/k, g/gh, ng/ngh
 //  2) Từ điển lỗi hay gặp trong văn bản hành chính (hỏi/ngã, ch/tr, s/x, d/gi/r…)

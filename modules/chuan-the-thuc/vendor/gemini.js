@@ -1,4 +1,4 @@
-// Nguồn: repo chuan-the-thuc @ eb3b814 — tệp sinh tự động bởi scripts/build/chuan-the-thuc.mjs, không sửa tay
+// Nguồn: repo chuan-the-thuc @ e87042a — tệp sinh tự động bởi scripts/build/chuan-the-thuc.mjs, không sửa tay
 const console = { log() {} };
 // Rà soát chính tả, viết hoa, dấu câu bằng Gemini. AI chỉ ĐỀ XUẤT; người dùng chọn áp dụng.
 import { checkSpelling } from './spelling.js';

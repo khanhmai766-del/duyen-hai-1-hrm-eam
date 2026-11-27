@@ -59,6 +59,11 @@
           <p class="hint std-note" id="stdNote"></p>
           <div class="row"><label for="bodySize">Cỡ chữ phần nội dung</label>
             <select id="bodySize"><option value="14">14</option><option value="13">13</option></select></div>
+          <label class="check-line"><input id="layoutHint" type="checkbox"> Gợi ý bố cục phân cấp <small>(chỉ nhắc, không tính lỗi)</small></label>
+          <details class="hint layout-hint"><summary>Xem thứ tự bố cục</summary>
+            <ol><li>Phần (số La Mã: I, II…)</li><li>Chương (số La Mã: I, II…)</li><li>Mục (số Ả Rập: 1, 2…)</li><li>Tiểu mục (số Ả Rập: 1, 2…)</li><li>Điều (số Ả Rập: 1, 2…)</li><li>Khoản (1., 2.…)</li><li>Điểm (a), b), c)…)</li><li>Gạch đầu dòng (-)</li><li>Dấu cộng (+)</li></ol>
+            <p>NĐ 30/2020/NĐ-CP quy định đến Điểm; hai cấp (-) và (+) là thông lệ trình bày. Tích ô trên để web nhắc khi dùng (+) mà phía trên chưa có (-).</p>
+          </details>
           <button id="fixBtn" class="primary wide">Sửa thể thức & chính tả <span>→</span></button>
           <p id="fixMsg" class="msg"></p>
         </div>
