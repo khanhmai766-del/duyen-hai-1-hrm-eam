@@ -1,0 +1,138 @@
+/* Sửa bố cục chung cho mọi màn "độ rung" (nạp một lần ở layout.tsx, sau vibracontrol.css).
+   Chỉ giao diện sáng. Phần hộp thoại: `VcModal` (components/vibration/vc-modal.tsx) vẽ ra <body>. */
+
+/* ---- Hộp thoại `.modal` ---------------------------------------------------------------------------------------------
+   z-index: tiêu đề trang dính 25, thanh "Thường dùng"/mascot/thanh đáy điện thoại 40, hộp thoại Radix (xác nhận xoá) 50.
+   Hộp phải nằm giữa 40 và 50 để đè tiêu đề + thanh nổi nhưng vẫn để hộp xác nhận hiện trên nó. */
+.vc-app.vc-portal { display: contents; }
+.vc-app .modal-backdrop {
+  z-index: 45;
+  background: rgba(15, 30, 44, 0.45);
+  backdrop-filter: blur(2px);
+  padding: 20px;
+  padding-bottom: calc(20px + env(safe-area-inset-bottom));
+  overflow: hidden;
+}
+.vc-app .modal {
+  display: flex;
+  flex-direction: column;
+  width: min(560px, 100%);
+  max-height: calc(100dvh - 40px);
+  padding: 0;
+  overflow: hidden;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  box-shadow: 0 24px 70px rgba(15, 30, 44, 0.35);
+}
+.vc-app .modal.vc-modal-wide { width: min(860px, 100%); }
+.vc-app .modal .modal-header {
+  flex: none;
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+  padding: 14px 22px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+.vc-app .modal .modal-header h2 { font-size: 19px; line-height: 1.3; }
+.vc-app .modal .close-button {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: 26px;
+  line-height: 1;
+}
+.vc-app .modal .close-button:hover { background: var(--hover, var(--surface-2)); color: var(--text); }
+.vc-app .modal .modal-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 16px 22px 20px; }
+.vc-app .modal .form-actions {
+  flex: none;
+  margin: 0;
+  padding: 12px 22px calc(12px + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+}
+.vc-app .modal .form-actions :is(.primary-button, .secondary-button) { min-height: 40px; }
+/* Chữ/ô nhập hộp thoại: màu cứng kiểu tối của bản cũ không đọc được trên nền sáng. */
+.vc-app .modal .form-grid label { color: var(--muted); font-size: 12px; }
+.vc-app .modal .form-grid :is(input, select) {
+  background: var(--field, #fff);
+  border-color: var(--border);
+  color: var(--text);
+  font-size: 14px;
+  min-height: 40px;
+}
+.vc-app .modal .form-grid :is(input[type="checkbox"], input[type="radio"]) { min-height: 0; }
+.vc-app .modal .form-grid :is(input, select):disabled { background: var(--input-disabled, var(--surface-2)); color: var(--input-disabled-text, var(--muted)); }
+.vc-app .modal .form-grid :is(input, select):focus { border-color: var(--cyan); }
+.vc-app .modal .machine-hint { color: var(--muted); font-size: 12px; }
+.vc-app .modal .scope-options { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px; }
+.vc-app .modal .scope-card { grid-template-columns: 1fr; gap: 8px; align-content: start; background: var(--surface-2); border-color: var(--border); }
+.vc-app .modal .scope-card :is(input:not([type="checkbox"]), select) { width: 100%; }
+.vc-app .modal .scope-card .scope-toggle { grid-column: auto; display: inline-flex; align-items: center; gap: 8px; padding: 0; border: 0; background: none; }
+.vc-app .modal .scope-options label:has(input:checked) { background: none; }
+.vc-app .modal .scope-toggle { color: var(--text) !important; font-size: 13px !important; }
+.vc-app .modal .scope-toggle input { width: 16px; height: 16px; accent-color: var(--cyan); }
+.vc-app .modal .form-grid h3 { margin: 4px 0 6px; font-size: 14px; }
+.vc-app .modal .mg-chips { flex-wrap: wrap; gap: 6px; }
+.vc-app .modal .mg-chip { min-height: 36px; padding: 6px 10px; }
+.vc-app .modal .mg-chip[aria-pressed="true"] { background: var(--cyan); color: #fff; border-color: var(--cyan); }
+.vc-app .modal .mg-chip:not([aria-pressed="true"]) { background: var(--surface-2); color: var(--text); }
+.vc-app .modal details > summary { cursor: pointer; padding: 8px 0; font-weight: 700; }
+@media (max-width: 640px) {
+  .vc-app .modal-backdrop { padding: 0; align-items: stretch; }
+  .vc-app .modal, .vc-app .modal.vc-modal-wide {
+    width: 100%;
+    max-height: none;
+    height: 100dvh;
+    border-radius: 0;
+    border: 0;
+  }
+  .vc-app .modal .modal-header, .vc-app .modal .form-actions { padding-left: 14px; padding-right: 14px; }
+  .vc-app .modal .modal-body { padding: 12px 14px 16px; }
+  .vc-app .modal .form-actions { flex-wrap: wrap; }
+  .vc-app .modal .form-actions .primary-button { order: -1; flex: 1 1 100%; }
+  .vc-app .modal .form-actions .secondary-button { flex: 1 1 auto; }
+  .vc-app .modal .form-grid :is(input, select) { font-size: 16px; }
+}
+
+/* ---- Nhập liệu trên màn hình cảm ứng / hẹp (Theo kỳ, MNK, MILL, TBNT) -----------------------------------------------
+   Ô ≥ 44px cao; chữ ≥ 16px để iOS không tự phóng to khi chạm vào ô. Bàn phím/dán trên máy tính không đổi (chỉ khi cảm ứng/hẹp). */
+@media (pointer: coarse), (max-width: 900px) {
+  .vc-app.vc-app[data-theme] :is(.entry-sheet, .tbnt-sheet, .mill-sheet, .mill-extra-input, .mill-oil-table) :is(input, select) {
+    min-height: 44px;
+    font-size: 16px;
+  }
+  .vc-app.vc-app[data-theme] :is(.entry-sheet, .tbnt-sheet) input { height: 44px; padding: 6px 8px; }
+  .vc-app.vc-app[data-theme] :is(.entry-sheet, .tbnt-sheet) td:has(> input) { min-width: 68px; }
+  .vc-app.vc-app[data-theme] .mill-entry :is(input, select), .vc-app.vc-app[data-theme] .tbnt-tools :is(input, select) { min-height: 44px; font-size: 16px; }
+  .vc-app.vc-app[data-theme] .mill-entry :is(.primary-button, .secondary-button),
+  .vc-app.vc-app[data-theme] .tbnt-tools :is(.primary-button, .secondary-button) { min-height: 44px; }
+  .vc-app.vc-app[data-theme] .mill-sheet input { height: 44px; }
+}
+
+/* Thanh đáy điện thoại (68px) + mascot: chừa đáy trang và đặt nút Lưu cố định phía trên thanh đáy để luôn chạm được. */
+@media (max-width: 1023px) {
+  .vc-app { padding-bottom: 88px; }
+  .vc-app.vc-app[data-theme] :is(#saveWeek, #millSave, #tbntSaveAll) {
+    position: fixed;
+    left: 12px;
+    bottom: calc(68px + env(safe-area-inset-bottom) + 12px);
+    z-index: 35;
+    min-height: 48px;
+    padding-inline: 20px;
+    font-size: 15px;
+    box-shadow: 0 10px 26px rgba(15, 30, 44, 0.35);
+  }
+}
+.vc-app .modal .form-grid label.scope-toggle { flex-direction: row; align-items: center; gap: 8px; }
+@media (pointer: coarse), (max-width: 900px) {
+  .vc-app.vc-app[data-theme] .excel-entry .entry-sheet tbody :is(input, select) { height: 44px; min-height: 44px; }
+}
+@media (pointer: coarse), (max-width: 900px) {
+  /* TBNT: bảng bố cục cố định ép ô nhập còn ~39px — chữ 16px không đủ chỗ cho "14.6". */
+  .vc-app.vc-app[data-theme] .tbnt-sheet { table-layout: auto; }
+  .vc-app.vc-app[data-theme] .tbnt-sheet td:has(> input) { min-width: 64px; }
+}

@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { touchDecimal } from "./touch-input";
 import { toast } from "sonner";
 import { useSession } from "next-auth/react";
 import { useRbacAccess } from "@/hooks/useRbacAccess";
@@ -361,6 +362,7 @@ export function TbntShiftView() {
                                   data-time-mask=""
                                   maxLength={5}
                                   inputMode="numeric"
+                                  enterKeyHint="next"
                                   autoComplete="off"
                                   className="tbnt-time"
                                   title="Giờ 24h: nhập 730 → 07:30 hoặc 1430 → 14:30"
@@ -404,12 +406,13 @@ export function TbntShiftView() {
                                     className={lvl === "over" ? "up2" : lvl === "rise" ? "up" : ""}
                                     value={raw}
                                     inputMode="decimal"
+                                    enterKeyHint="next"
                                     autoComplete="off"
                                     aria-invalid={n === undefined ? true : undefined}
                                     title={pv != null && prev ? `Lần đo trước ${dmy(prev.date ?? "")}: ${pv} ${ci === 2 ? "°C" : "mm/s"}` : undefined}
                                     readOnly={ro}
                                     onChange={(e) => {
-                                      const v = e.target.value;
+                                      const v = touchDecimal(e.target.value);
                                       edit(d, (x) => ({ ...x, v: { ...(x.v ?? {}), [idx]: v } }));
                                     }}
                                   />

@@ -10,6 +10,7 @@ import { vnToday } from "@/lib/vibration/parse";
 import { VIBRATION_ENTRY_LEVELS } from "@/lib/vibration-permissions";
 import { EntryDateBar } from "./entry-date-bar";
 import { EntrySheet } from "./entry-sheet";
+import { EntrySummaryPanel } from "./entry-summary-panel";
 import { VcPageTitle } from "./export-ui";
 import { compareAreas } from "./vibration-area-order";
 import { weeklyExport } from "./weekly-export-bar";
@@ -60,6 +61,14 @@ export function WeeklyEntryView() {
   return (
     <>
       <VcPageTitle>Nhập thông số theo kỳ</VcPageTitle>
+      <EntrySummaryPanel
+        onJump={(j) => {
+          setDate(j.date);
+          setAreaPick(j.area);
+          setGroupPick(j.group);
+          requestAnimationFrame(() => document.getElementById("weekDate")?.scrollIntoView({ behavior: "smooth", block: "center" }));
+        }}
+      />
       {devicesQ.isLoading ? (
         <p className="rs-msg" role="status">Đang tải danh sách thiết bị...</p>
       ) : devicesQ.isError ? (

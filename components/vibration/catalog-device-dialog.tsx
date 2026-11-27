@@ -4,6 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
+import { VcModal } from "@/components/vibration/vc-modal";
 import { CatalogMachineForm, formToMachine, machineToForm, type MachineForm } from "@/components/vibration/catalog-machine-form";
 import { ScopeAreaControl, SCOPE_LABEL } from "@/components/vibration/config-scope-table";
 import { useCreateVibrationDevice, useDeleteVibrationDevice, useUpdateVibrationDevice, useVibrationDevice } from "@/hooks/useVibrationCatalog";
@@ -124,12 +125,13 @@ export function CatalogDeviceDialog({
 
   return (
     <>
-      <div className="modal-backdrop open" role="dialog" aria-modal="true" onMouseDown={(e) => { if (e.target === e.currentTarget) onOpenChange(false); }}>
-        <form className="modal" style={{ width: "min(860px,100%)", maxHeight: "92vh", overflowY: "auto" }} onSubmit={(e) => { e.preventDefault(); if (!ro) save(); }}>
+      <VcModal onClose={() => { if (!confirmDelete) onOpenChange(false); }}>
+        <form className="modal vc-modal-wide" onSubmit={(e) => { e.preventDefault(); if (!ro) save(); }}>
           <div className="modal-header">
             <h2>{device ? (ro ? "Thiết bị đo độ rung" : "Sửa thiết bị đo") : "Thêm thiết bị đo độ rung"}</h2>
             <button type="button" className="close-button" aria-label="Đóng" onClick={() => onOpenChange(false)}>×</button>
           </div>
+          <div className="modal-body">
           <p className="device-edit-note">
             {device ? `Mã ${device.legacyId}. Các lần đo đã lưu được giữ nguyên. Nếu đổi cương vị, hãy kiểm tra cấu hình vùng đo của thiết bị.` : "Thiết bị mới có mã NEW-… và cấu hình vùng đo / ngưỡng mặc định."}
           </p>
@@ -213,6 +215,7 @@ export function CatalogDeviceDialog({
             )}
           </div>
           {error && <p className="an-warn" role="alert">{error}</p>}
+          </div>
 
           <div className="form-actions">
             {device && isAdmin && canManage && (
@@ -223,7 +226,7 @@ export function CatalogDeviceDialog({
             {!ro && <button type="submit" className="primary-button" disabled={busy}>{create.isPending || update.isPending ? "Đang lưu…" : "Lưu"}</button>}
           </div>
         </form>
-      </div>
+      </VcModal>
 
       <ConfirmDialog
         open={confirmDelete}

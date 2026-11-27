@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { touchDecimal } from "./touch-input";
 import { toast } from "sonner";
 import { useVibrationAccess } from "@/hooks/useVibrationAccess";
 import { useSaveVibrationRecords, useVibrationDevices, useVibrationRecords } from "@/hooks/useVibration";
@@ -52,6 +53,7 @@ function OilTable({ date, devices, recordOf, edits, canEdit, canEditDev, onEdit 
                   <input
                     type="text"
                     inputMode="decimal"
+                    enterKeyHint="next"
                     autoComplete="off"
                     data-oil={d.id}
                     data-oil-shift={d.shift ?? undefined}
@@ -59,7 +61,7 @@ function OilTable({ date, devices, recordOf, edits, canEdit, canEditDev, onEdit 
                     aria-label={`${d.name} dầu VRL tiêu hao (cm)`}
                     data-oil-bad={out ? "" : undefined}
                     readOnly={!canEdit || !canEditDev(d)}
-                    onChange={(e) => onEdit(d.id, e.target.value)}
+                    onChange={(e) => onEdit(d.id, touchDecimal(e.target.value))}
                   />
                 </td>
               </tr>

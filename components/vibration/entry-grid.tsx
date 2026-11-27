@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { touchDecimal } from "./touch-input";
 import { MEASURE_GROUP_RANGES, QUICK_NOTES, VIB_LABELS } from "@/lib/vibration/constants";
 import { normalizeTime, parseCell } from "@/lib/vibration/parse";
 import type { VibrationDeviceDto } from "@/lib/vibration/types";
@@ -67,6 +68,7 @@ export function EntryGrid(props: EntryGridProps) {
       return;
     }
     let value = el.value;
+    if (col !== "time" && col !== "note") value = touchDecimal(value); // điện thoại: bàn phím số gõ "," ⇒ đổi thành "."
     if (col === "time") {
       const ev = e.nativeEvent as InputEvent;
       if (!/^delete/.test(ev.inputType || "")) value = maskTime(value);
@@ -252,6 +254,7 @@ const EntryRow = React.memo(function EntryRow({
       data-numeric="true"
       type="text"
       inputMode="decimal"
+      enterKeyHint="next"
       pattern={NUMBER_PATTERN}
       title={NUM_TITLE}
       aria-invalid={parseCell(value) === undefined ? true : undefined}
@@ -275,6 +278,7 @@ const EntryRow = React.memo(function EntryRow({
           value={row.time}
           type="text"
           inputMode="numeric"
+          enterKeyHint="next"
           maxLength={5}
           pattern={TIME_PATTERN}
           placeholder=":"
@@ -290,7 +294,7 @@ const EntryRow = React.memo(function EntryRow({
       <td className="sheet-readonly person-cell">{person || "—"}</td>
       <td className="note-col">
         <div className="note-entry">
-          <input aria-label={`${d.name} / Nhận xét`} {...common} data-col={29} data-field="note" value={row.note} maxLength={500} disabled={readOnly} onChange={NOOP} />
+          <input aria-label={`${d.name} / Nhận xét`} {...common} data-col={29} data-field="note" enterKeyHint="next" value={row.note} maxLength={500} disabled={readOnly} onChange={NOOP} />
           <select data-note-choice="" {...common} data-field="note" aria-label={`${d.name} / Chọn nhận xét`} value="" disabled={readOnly} onChange={NOOP}>
             <option value="">⌄</option>
             {QUICK_NOTES.map((n) => <option key={n} value={n}>{n}</option>)}

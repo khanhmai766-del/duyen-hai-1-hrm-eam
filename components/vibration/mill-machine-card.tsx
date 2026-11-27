@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { touchDecimal } from "./touch-input";
 import { cellNumber, parseCell } from "@/lib/vibration/parse";
 import { fixedCellLevel, millMax, riseVsPrevious } from "@/lib/vibration/severity";
 import type { VibrationDeviceDto, VibrationRecordDto } from "@/lib/vibration/types";
@@ -28,6 +29,7 @@ function Cell({ field, row, prev, readOnly, label, onChange }: {
     <input
       type="text"
       inputMode="decimal"
+      enterKeyHint="next"
       autoComplete="off"
       data-field={field}
       value={raw}
@@ -35,7 +37,7 @@ function Cell({ field, row, prev, readOnly, label, onChange }: {
       aria-label={label}
       readOnly={readOnly}
       {...(previous != null ? { "data-prev": previous, title: `Lần trước: ${previous}` } : {})}
-      onChange={(e) => onChange(field, e.target.value)}
+      onChange={(e) => onChange(field, touchDecimal(e.target.value))}
     />
   );
 }
@@ -219,6 +221,7 @@ export function MillMachineCard({ device, date, row, saved, previous, trend, dir
           <input
             type="text"
             inputMode="numeric"
+            enterKeyHint="next"
             placeholder=":"
             data-time-mask=""
             maxLength={5}
