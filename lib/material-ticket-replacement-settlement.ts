@@ -24,6 +24,8 @@ const POINT_SELECT = {
   isActive: true,
   renewalAppliedAt: true,
   autoRenew: true,
+  alternateMaterialIds: true,
+  lubricantGroup: true,
   createdById: true,
   material: { select: { unit: true } },
   device: { select: { name: true, parentSeq: true } },
@@ -372,9 +374,14 @@ export async function recordSettledTicketReplacements(
         : null,
     });
 
+    // Phiếu có thể lãnh dầu THAY THẾ của điểm: log vẫn neo vào điểm (replacementId) nhưng ghi đúng
+    // loại dầu đã dùng để luỹ kế sử dụng theo vật tư không bị lệch sang dầu chính.
+    const usedMaterialId = ticket.items[0]?.materialId;
+    const usedAlternate = !!usedMaterialId && logPoint.alternateMaterialIds.includes(usedMaterialId);
     await tx.materialReplacementLog.create({
       data: {
         ...logData,
+        ...(usedAlternate ? { materialId: usedMaterialId } : {}),
         ...ticketColumns,
         usedQuantity: group.usedQuantity,
       },
@@ -416,6 +423,8 @@ export async function recordSettledTicketReplacements(
             isActive: true,
             renewalAppliedAt: null,
             autoRenew: tracked.autoRenew,
+            alternateMaterialIds: tracked.alternateMaterialIds,
+            lubricantGroup: tracked.lubricantGroup,
             createdById: tracked.createdById,
           },
         });

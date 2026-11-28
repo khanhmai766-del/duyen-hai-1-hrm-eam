@@ -641,6 +641,11 @@ model MaterialReplacement {
   // Công tắc tự động gia hạn. Tắt cho những điểm có chu kỳ thực tế lệch nhiều so với khai
   // báo — khi đó vẫn ghi lịch sử nhưng để người dùng tự khai lại chu kỳ mới.
   autoRenew            Boolean   @default(true)
+  // Dầu mỡ dùng thay thế lẫn nhau tại điểm này (materialId là loại chính). Phiếu vật tư và
+  // lịch sử chọn/nhận điểm theo loại chính HOẶC bất kỳ loại nào trong danh sách.
+  alternateMaterialIds String[]  @default([])
+  // Nhóm/khu vực hiển thị ở trang Theo dõi dầu mỡ cho điểm tạo tay (Lò S1, Tuabin S2, ... hoặc tự do).
+  lubricantGroup       String?
   createdById          String
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt
@@ -668,6 +673,17 @@ model MaterialReplacement {
 model LubricantSourceDate {
   sourceKey      String   @id
   lastReplacedAt DateTime @db.Date
+}
+
+// Quyết định liên kết tay của dòng Excel ở trang Theo dõi dầu mỡ (ghi đè JSON đã xác minh).
+// mode: point = gắn điểm replacementId; excel = giữ theo Excel; none = bỏ liên kết.
+model LubricantRowLink {
+  sourceKey     String   @id
+  replacementId String?
+  mode          String
+  updatedById   String
+  updatedByName String
+  updatedAt     DateTime @default(now()) @updatedAt
 }
 
 // Lịch sử mỗi lần thay thế vật tư tại một điểm thay thế.

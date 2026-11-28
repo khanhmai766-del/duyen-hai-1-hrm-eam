@@ -2,6 +2,9 @@
  * Đối chiếu "Theo dõi dầu mỡ thiết bị": mỗi dòng Excel đã có đích xác minh chưa, và đích đó
  * có tồn tại thành điểm thay thế đang hoạt động trong DB không. CHỈ ĐỌC.
  *
+ * Quyết định liên kết tay trong DB (LubricantRowLink) ghi đè JSON: point → đếm theo điểm được gắn,
+ * excel → "theo Excel", none → chưa có đích.
+ *
  *   npx tsx scripts/check/lubricant-link-coverage.ts [--all]
  */
 import { PrismaClient } from "@prisma/client";
@@ -13,13 +16,16 @@ const fold = (v: string) => v.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/
 
 async function main() {
   const rows = expandSourceRows(groups);
-  const [points, materials] = await Promise.all([
+  const [points, materials, overrides] = await Promise.all([
     prisma.materialReplacement.findMany({
       where: { isActive: true },
-      select: { deviceSeq: true, location: true, machine: true, material: { select: { code: true } } },
+      select: { id: true, deviceSeq: true, location: true, machine: true, material: { select: { code: true } } },
     }),
     prisma.material.findMany({ select: { code: true } }),
+    prisma.lubricantRowLink.findMany(),
   ]);
+  const overrideByKey = new Map(overrides.map((row) => [row.sourceKey, row]));
+  const activeIds = new Set(points.map((p) => p.id));
   const materialCodes = new Set(materials.map((m) => m.code));
   const pointsAt = new Map<string, string[]>();
   for (const p of points) {
@@ -32,6 +38,11 @@ async function main() {
     const s = stats.get(row.group) ?? { total: 0, ok: 0, theoExcel: 0, chuaTao: 0, noTarget: 0, missingMaterial: 0, missingPoint: 0 };
     stats.set(row.group, s);
     s.total += 1;
+    const override = overrideByKey.get(row.key);
+    if (override?.mode === "excel") { s.theoExcel += 1; continue; }
+    if (override?.mode === "none") { s.noTarget += 1; problems.push(`${row.group} | ${row.name} | liên kết tay: BỎ LIÊN KẾT`); continue; }
+    if (override?.mode === "point" && override.replacementId && activeIds.has(override.replacementId)) { s.ok += 1; continue; }
+    if (override?.mode === "point") problems.push(`${row.group} | ${row.name} | liên kết tay trỏ tới điểm không còn hoạt động — dùng liên kết tự động`);
     if (!row.target) {
       if (isExcelOnly(row.key)) { s.theoExcel += 1; continue; }
       s.noTarget += 1; problems.push(`${row.group} | ${row.name} | CHƯA CÓ ĐÍCH XÁC MINH`); continue;

@@ -50,3 +50,22 @@ export function latestSupplements(logs: SupplementLog[]): Record<string, Supplem
   }
   return result;
 }
+
+/**
+ * Lần bổ sung gần nhất của một điểm: theo id điểm, hoặc theo thiết bị + tổ máy + vật tư
+ * (loại chính HOẶC bất kỳ dầu thay thế nào của điểm). Lấy ngày mới nhất trong các khoá khớp.
+ */
+export function findPointSupplement(
+  point: { id: string; deviceSeq: string | null; machine: string; materialId: string; alternateMaterialIds?: string[] | null },
+  data: Record<string, SupplementInfo> | undefined,
+): SupplementInfo | undefined {
+  if (!data) return undefined;
+  const keys = [supplementIdKey(point.id)];
+  if (point.deviceSeq) {
+    for (const materialId of [point.materialId, ...(point.alternateMaterialIds ?? [])]) {
+      keys.push(supplementDeviceKey(point.deviceSeq, point.machine, materialId));
+    }
+  }
+  return keys.map((key) => data[key]).filter((info): info is SupplementInfo => !!info)
+    .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0))[0];
+}

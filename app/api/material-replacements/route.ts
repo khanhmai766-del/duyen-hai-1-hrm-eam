@@ -9,7 +9,8 @@ import {
 } from "@/lib/server-access";
 import { getCachedEquipmentNodeFull } from "@/lib/equipment-node-cache";
 import { assertSeqsInScope } from "@/lib/equipment-tree-scope";
-import { materialTrackingGroup, replacementDueStatus } from "@/lib/constants";
+import { materialCategoryMatches, materialTrackingGroup, replacementDueStatus } from "@/lib/constants";
+import { normalizeAlternateMaterialIds } from "@/lib/lubricant-alternates";
 import { EQUIPMENT_DEVICE_SELECT, equipmentNodeToDevice } from "@/lib/equipment-device";
 import { normalizeText } from "@/lib/nav";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
@@ -50,9 +51,12 @@ const INCLUDE = {
   _count: { select: { logs: true } },
 } satisfies Prisma.MaterialReplacementInclude;
 
-function mapPoint(point: any, inProgressTickets: ReplacementTicketProgress[] = []) {
+type AlternateMaterial = { id: string; code: string; name: string; unit: string };
+
+function mapPoint(point: any, inProgressTickets: ReplacementTicketProgress[] = [], alternates?: Map<string, AlternateMaterial>) {
   return {
     ...point,
+    alternateMaterials: ((point.alternateMaterialIds ?? []) as string[]).flatMap((id) => alternates?.get(id) ?? []),
     inProgressTickets,
     deviceId: point.deviceSeq ?? null,
     device: equipmentNodeToDevice(point.device),
@@ -172,7 +176,12 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    return ok(filtered.map((point) => mapPoint(point, progressOf(point))), {
+    const alternateIds = [...new Set(filtered.flatMap((point) => point.alternateMaterialIds ?? []))];
+    const alternates = new Map<string, AlternateMaterial>(alternateIds.length
+      ? (await prisma.material.findMany({ where: { id: { in: alternateIds } }, select: { id: true, code: true, name: true, unit: true } })).map((m) => [m.id, m])
+      : []);
+
+    return ok(filtered.map((point) => mapPoint(point, progressOf(point), alternates)), {
       total: filtered.length,
       counts,
       warn: counts.OVERDUE + counts.DUE_SOON,
@@ -188,12 +197,17 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    await requirePermissionLevel(user, "replacement-manage", ["personal", "manage", "full"], "Không đủ quyền thêm điểm theo dõi");
     const body = await req.json();
 
     const materialId = String(body.materialId || "").trim();
     const material = await prisma.material.findUnique({ where: { id: materialId }, select: { id: true, code: true, machine: true, category: true } });
     if (!material) return fail("Không tìm thấy vật tư", 404);
+    // Chức danh giám sát thêm được điểm dầu mỡ ở mọi nơi (kể cả khi chưa có dòng khai báo trong Danh mục).
+    const lubricant = materialCategoryMatches(material.category, "Dầu bôi trơn");
+    const supervisorLubricant = lubricant && isLubricantSupervisor(user);
+    if (!supervisorLubricant) await requirePermissionLevel(user, "replacement-manage", ["personal", "manage", "full"], "Không đủ quyền thêm điểm theo dõi");
+    const alternateMaterialIds = lubricant ? await normalizeAlternateMaterialIds(prisma, material, body.alternateMaterialIds) : [];
+    const lubricantGroup = lubricant ? String(body.lubricantGroup ?? "").trim().slice(0, 80) || null : null;
 
     const materialCategory = material.category;
     const deviceSeq = String(body.deviceSeq ?? body.deviceId ?? "").trim() || null;
@@ -205,10 +219,11 @@ export async function POST(req: NextRequest) {
     assertSeqsInScope([deviceSeq], material.machine);
 
     const access = await resolveEquipmentAccessForUser(user);
-    if (!canEditMaterialReplacement(access, { deviceSeq, system })) {
+    if (!supervisorLubricant && !canEditMaterialReplacement(access, { deviceSeq, system })) {
       return fail("Cương vị của bạn không có quyền thao tác trên hệ thống/thiết bị này", 403);
     }
     let managingPosition = String(body.managingPosition ?? "").trim() || null;
+    if (!deviceSeq && !location) return fail("Chọn thiết bị hoặc nhập vị trí");
     if (deviceSeq) {
       const nodes = await getCachedEquipmentNodeFull();
       const positions = await managingPositionsForEquipmentSeq(deviceSeq, nodes);
@@ -264,7 +279,8 @@ export async function POST(req: NextRequest) {
         orderBy: { createdAt: "asc" },
         select: { id: true, deviceCount: true, recoveryOnSupplement: true, separateTracking: true },
       });
-      if (!declaration) {
+      // Dầu mỡ: điểm có thể tạo thẳng từ trang Theo dõi dầu mỡ, không cần dòng khai báo trước.
+      if (!declaration && !lubricant) {
         throw fail(
           "Không tìm thấy dòng khai báo thiết bị tương ứng trong Danh mục vật tư. Vui lòng cập nhật danh mục trước khi thêm điểm theo dõi.",
           400
@@ -279,7 +295,7 @@ export async function POST(req: NextRequest) {
        * năng) đứng ngoài quy tắc này.
        */
       const group = materialTrackingGroup(materialCategory);
-      if (group && deviceSeq && !declaration.separateTracking) {
+      if (group && deviceSeq && !declaration?.separateTracking) {
         const running = await tx.materialReplacement.findFirst({
           where: {
             deviceSeq,
@@ -298,7 +314,7 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      const limit = Math.max(1, declaration.deviceCount);
+      const limit = Math.max(1, declaration?.deviceCount ?? 1);
       const activeCount = await tx.materialReplacement.count({
         where: { ...targetWhere, isActive: true },
       });
@@ -327,7 +343,9 @@ export async function POST(req: NextRequest) {
           intervalNote: String(body.intervalNote ?? "").trim() || null,
           // Điểm chỉ lấy mẫu/theo dõi theo O&M, không phải thay thế định kỳ.
           samplingOnly: body.samplingOnly === true,
-          recoveryOnSupplement: declaration.recoveryOnSupplement,
+          recoveryOnSupplement: declaration?.recoveryOnSupplement ?? false,
+          alternateMaterialIds,
+          lubricantGroup,
           lastReplacedAt,
           nextDueAt,
           note: String(body.note ?? "").trim() || null,

@@ -24,6 +24,8 @@ export interface ReplacementItem extends MaterialReplacement {
   material: ReplacementMaterial & { imageUrl: string | null };
   device: ReplacementDevice | null;
   _count: { logs: number };
+  /** Dầu thay thế lẫn nhau tại điểm (tên/mã để hiển thị; id nằm ở alternateMaterialIds). */
+  alternateMaterials?: Array<{ id: string; code: string; name: string; unit: string }>;
   /** Phiếu vật tư đã gắn với điểm nhưng chưa quyết toán: điểm không còn tính quá hạn. */
   inProgressTickets?: Array<{
     id: string;
@@ -363,5 +365,37 @@ export function useDeleteReplacementLog() {
   return useMutation({
     mutationFn: (id: string) => apiMutate(`/api/material-replacements/history/${id}`, "DELETE"),
     onSuccess: () => invalidate(qc),
+  });
+}
+
+export type LubricantMaterialOption = { id: string; code: string; name: string; unit: string; machine: string; system: string | null };
+
+/** Dầu mỡ trong Danh mục vật tư (để chọn dầu chính/dầu thay thế của điểm theo dõi). */
+export function useLubricantMaterials(enabled = true) {
+  return useQuery({
+    queryKey: ["lubricant-materials"],
+    queryFn: async () => (await apiGet<LubricantMaterialOption[]>("/api/material-replacements/lubricant-materials")).data,
+    enabled,
+    staleTime: 5 * 60_000,
+  });
+}
+
+const rowLinksKey = ["lubricant-row-links"];
+const rowLinksUrl = "/api/material-replacements/lubricant-row-links";
+
+/** Quyết định liên kết tay của dòng Excel (ghi đè JSON đã xác minh). */
+export function useLubricantRowLinks() {
+  return useQuery({
+    queryKey: rowLinksKey,
+    queryFn: async () => (await apiGet<Record<string, import("@/lib/lubricant-row-links").RowLinkOverride>>(rowLinksUrl)).data,
+  });
+}
+
+export function useUpdateLubricantRowLink() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { sourceKey: string; mode: "point" | "excel" | "none" | "auto"; replacementId?: string }) =>
+      apiMutate<typeof input>(rowLinksUrl, "PUT", input),
+    onSuccess: () => client.invalidateQueries({ queryKey: rowLinksKey }),
   });
 }

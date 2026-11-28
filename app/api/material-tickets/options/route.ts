@@ -54,9 +54,24 @@ export async function GET() {
       },
       orderBy: { name: "asc" },
     });
+    // Điểm có dầu thay thế lẫn nhau cũng phải chọn được khi lập phiếu cho dầu thay thế.
+    const altPoints = await prisma.materialReplacement.findMany({
+      where: { alternateMaterialIds: { isEmpty: false } },
+      select: {
+        id: true, alternateMaterialIds: true, deviceSeq: true, location: true, system: true, managingPosition: true,
+        managingPositionCode: true, recoveryOnSupplement: true, createdAt: true, isActive: true,
+        device: { select: { name: true, parentSeq: true } },
+      },
+      orderBy: [{ isActive: "asc" }, { createdAt: "asc" }],
+    });
+    const altPointsByMaterial = new Map<string, typeof altPoints>();
+    for (const point of altPoints) {
+      for (const materialId of point.alternateMaterialIds) altPointsByMaterial.set(materialId, [...(altPointsByMaterial.get(materialId) ?? []), point]);
+    }
+    const replacementsOf = (material: (typeof materialsRaw)[number]) => [...material.replacements, ...(altPointsByMaterial.get(material.id) ?? [])];
     const erpCodes = Array.from(new Set(materialsRaw.flatMap((m) => (m.erpCodes?.length ? m.erpCodes : [m.code]).filter(Boolean))));
     const parentSeqs = Array.from(new Set(materialsRaw.flatMap((material) =>
-      material.replacements.map((replacement) => replacement.device?.parentSeq).filter(Boolean) as string[]
+      replacementsOf(material).map((replacement) => replacement.device?.parentSeq).filter(Boolean) as string[]
     )));
     const [erpRows, parentNodes] = await Promise.all([
       erpCodes.length
@@ -82,7 +97,7 @@ export async function GET() {
       const seen = new Set<string>();
       const positions = new Set<string>();
       const mdevices: { seq: string; label: string; system: string | null; managingPosition: string | null; recoveryOnSupplement: boolean }[] = [];
-      for (const r of m.replacements) {
+      for (const r of replacementsOf(m)) {
         const managingPosition = positionLabelOf(r.managingPositionCode ?? r.managingPosition);
         if (managingPosition) positions.add(managingPosition);
         const seq = replacementPointSelectionKey(r);

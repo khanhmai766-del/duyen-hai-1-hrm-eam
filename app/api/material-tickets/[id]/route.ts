@@ -24,6 +24,7 @@ import { pointLabelOf, resolveMaterialRequest } from "@/lib/defect-material-requ
 import { missingUsagePhotoMessage, requiredUsagePhotos, usagePhotoTotal, usesHandwrittenBbnt, CHEMICAL_TICKET_TYPE, isChemicalFlowMaterialCode, isChemicalWorkflowCategory, ticketUsesChemicalFlow, COMMON_MATERIAL_POSITION, GAS_RETURN_STATUS, isGasCylinderCategory, isGasCylinderTicket, isOtherMaterialAdvanceTicket, isOtherMaterialTicketType, materialTicketRequiresRecovery, minRecoveryQuantity, SCCN_POSITIONS, SCCN_REPRESENTATIVES, RECOVERY_HANDOVER_STATUS, statusAfterMaterialDocuments, OTHER_MATERIAL_ADVANCE_TICKET_TYPE, OTHER_MATERIAL_TICKET_TYPE, recoveryRequiredForReason, SINGLE_STEP_TICKET_TYPE, ticketReasonAllowed, TICKET_MATERIAL_CATEGORIES, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
 import { positionLabelOf, positionsMatch } from "@/lib/position-catalog";
 import { replacementPointDisplayLabel, replacementPointSelectionKey } from "@/lib/material-replacement-display";
+import { replacementPointsOfMaterial } from "@/lib/lubricant-alternates";
 import { receiveOtherMaterial } from "@/lib/other-material-stock";
 import { recordSettledTicketReplacements } from "@/lib/material-ticket-replacement-settlement";
 import { invalidateMaterialAnnualPlanCache } from "@/lib/material-annual-plan-cache";
@@ -68,7 +69,7 @@ async function recoveryRequiredForTicketReason(t: FullTicket, proposalNote: stri
   const selectedKeys = new Set(item?.replacementPointKeys ?? []);
   if (!item || selectedKeys.size === 0) return recoveryRequiredForReason(proposalNote);
   const points = await prisma.materialReplacement.findMany({
-    where: { materialId: item.materialId },
+    where: replacementPointsOfMaterial(item.materialId),
     select: { id: true, deviceSeq: true, location: true, system: true, managingPosition: true, recoveryOnSupplement: true },
   });
   const recoveryOnSupplement = points.some(
@@ -928,7 +929,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
         const allowedCodes = material.erpCodes.length ? material.erpCodes : [material.code];
         if (erpCode && !allowedCodes.includes(erpCode)) return fail("Mã vật tư không thuộc tên vật tư đã chọn");
         const replacementPoints = await prisma.materialReplacement.findMany({
-          where: { materialId },
+          where: replacementPointsOfMaterial(materialId),
           select: { id: true, deviceSeq: true, location: true, system: true, managingPosition: true, recoveryOnSupplement: true, quantity: true, deviceCount: true, device: { select: { name: true } } },
         });
         const assignedPointByKey = new Map<string, (typeof replacementPoints)[number]>();
@@ -1937,10 +1938,13 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
       // Không lọc isActive/chu kỳ: đề xuất bổ sung do hao hụt hoặc chất lượng dầu
       // không đạt vẫn được phép chọn điểm không theo dõi lịch.
       const matIds = [...new Set(items.map((i) => i.materialId))];
-      const decls = await prisma.materialReplacement.findMany({
-        where: { materialId: { in: matIds } },
-        select: { id: true, materialId: true, deviceSeq: true, location: true, system: true, managingPosition: true, device: { select: { name: true } } },
+      const rawDecls = await prisma.materialReplacement.findMany({
+        where: { OR: [{ materialId: { in: matIds } }, { alternateMaterialIds: { hasSome: matIds } }] },
+        select: { id: true, materialId: true, alternateMaterialIds: true, deviceSeq: true, location: true, system: true, managingPosition: true, device: { select: { name: true } } },
       });
+      // Điểm có dầu thay thế lẫn nhau được chọn theo loại chính HOẶC bất kỳ dầu thay thế nào.
+      const decls = rawDecls.flatMap((decl) =>
+        [decl.materialId, ...decl.alternateMaterialIds].filter((id) => matIds.includes(id)).map((materialId) => ({ ...decl, materialId })));
       const assignedDecls = decls.filter(
         (decl) => positionsMatch(decl.managingPosition, t!.assignedPosition)
       );

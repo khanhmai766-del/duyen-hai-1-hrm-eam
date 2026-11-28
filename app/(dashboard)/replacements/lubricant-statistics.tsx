@@ -1,20 +1,23 @@
 import { Fragment, useMemo, useState } from "react";
 import Link from "next/link";
-import { BarChart3, ChevronDown, Droplets, Pencil } from "lucide-react";
+import { BarChart3, ChevronDown, Droplets, Link2, Pencil, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { EmptyState } from "@/components/shared/empty-state";
-import { useLubricantSourceDates, useLubricantSupplements, useReplacements, useUpdateLubricantSourceDate, type ReplacementItem } from "@/hooks/useReplacements";
+import { useLubricantRowLinks, useLubricantSourceDates, useLubricantSupplements, useReplacements, useUpdateLubricantSourceDate, type ReplacementItem } from "@/hooks/useReplacements";
+import { LubricantPointDialog } from "@/components/materials/lubricant-point-dialog";
+import { LubricantLinkPicker, pointLabel, type LinkPickerRow } from "./lubricant-link-picker";
+import { resolveRowLink, type RowLinkOverride } from "@/lib/lubricant-row-links";
 import { useCurrentPosition } from "@/hooks/useCurrentPosition";
 import { lubricantNextDue, materialCategoryMatches, replacementIntervalLabel } from "@/lib/constants";
 import { normalizeText } from "@/lib/nav";
 import { positionsMatch } from "@/lib/position-catalog";
 import { lubricantChainConveyors, lubricantCoalFeeders, lubricantHvacPumps } from "@/lib/lubricant-source-splits";
 import { excelIntervalMonths, hasOilSupplement, parseExcelLastDate } from "@/lib/lubricant-excel-dates";
-import { supplementDeviceKey, supplementIdKey, type SupplementInfo } from "@/lib/lubricant-supplements";
+import { findPointSupplement, type SupplementInfo } from "@/lib/lubricant-supplements";
 import { formatVNDate, parseVNDate } from "@/lib/tbycnn";
 import { cn, formatDate, formatDateInput } from "@/lib/utils";
 import groups from "./lubricant-statistics.json";
@@ -31,6 +34,9 @@ type SourceRow = {
   headers: string[];
   cells: string[];
   points: ReplacementItem[];
+  /** Sau khi áp quyết định liên kết tay: dòng giữ theo Excel. */
+  excelOnly?: boolean;
+  manual?: RowLinkOverride;
 };
 
 function bearingCells(cells: string[], bearing: ReturnType<typeof aphBearings>[number]) {
@@ -133,6 +139,7 @@ type Line = {
   owner: string;
   device: string;
   area: string;
+  groupName?: string;
   material: string;
   code?: string;
   need: string;
@@ -147,12 +154,6 @@ type Line = {
 const SOON_DAYS = 30;
 const quantityLabel = (value: number | null | undefined) =>
   value == null ? "" : Number(value.toFixed(2)).toLocaleString("vi-VN");
-
-function findSupplement(point: ReplacementItem | undefined, data?: Record<string, SupplementInfo>) {
-  if (!point || !data) return undefined;
-  return data[supplementIdKey(point.id)] ??
-    (point.deviceSeq ? data[supplementDeviceKey(point.deviceSeq, point.machine, point.materialId)] : undefined);
-}
 
 function dueStatus(nextDate: Date | null): Line["status"] {
   if (!nextDate) return "none";
@@ -180,6 +181,9 @@ export function LubricantStatistics({ search, onEdit, editAll = false }: {
   const { position } = useCurrentPosition();
   const sourceDates = useLubricantSourceDates();
   const supplements = useLubricantSupplements();
+  const rowLinks = useLubricantRowLinks();
+  const [adding, setAdding] = useState(false);
+  const [linkRow, setLinkRow] = useState<LinkPickerRow | null>(null);
   const updateSourceDate = useUpdateLubricantSourceDate();
   const [sourceEdit, setSourceEdit] = useState<{ sourceKey: string; name: string; date: string } | null>(null);
   const [group, setGroup] = useState("");
@@ -194,7 +198,12 @@ export function LubricantStatistics({ search, onEdit, editAll = false }: {
   }
   const points = useMemo(() => (query.data?.data ?? []).filter((point) =>
     materialCategoryMatches(point.material.category, "Dầu bôi trơn")), [query.data?.data]);
-  const source = useMemo(() => reconcile(points), [points]);
+  const pointsById = useMemo(() => new Map(points.map((point) => [point.id, point])), [points]);
+  // Quyết định liên kết tay (DB) ghi đè liên kết tự động từ JSON đã xác minh.
+  const source = useMemo(() => reconcile(points).map((row) => {
+    const resolved = resolveRowLink(row.points, isExcelOnly(row.key), rowLinks.data?.[row.key], pointsById);
+    return { ...row, points: resolved.points, excelOnly: resolved.excelOnly, manual: resolved.manual };
+  }), [points, rowLinks.data, pointsById]);
   const allRows = useMemo(() => {
     const linkedIds = new Set(source.flatMap((row) => row.points.map((point) => point.id)));
     return [
@@ -214,19 +223,21 @@ export function LubricantStatistics({ search, onEdit, editAll = false }: {
       const webDevice = point?.device?.name ?? point?.location;
       const nextDate = point ? lubricantNextDue(point.lastReplacedAt, point.intervalMonths) : excelCycleDue(cells, editedDate);
       const owner = (point ? point.managingPositionCode ?? point.managingPosition : cells?.[1]) ?? "";
+      const oils = point ? [point.material, ...(point.alternateMaterials ?? [])] : [];
       return {
         id: [sourceRow?.key, point?.id].filter(Boolean).join(":") || `p${pointIndex}`,
         point, source: sourceRow, showSource: pointIndex === rowPoints.length - 1, owner,
         device: ((webDevice === "Bồn dầu" && cells?.[2] ? cells[2] : webDevice) ?? cells?.[2]) || "Chưa gắn thiết bị",
-        area: [sourceRow?.group ?? point?.machine, point?.managingPosition ?? cells?.[1]].filter(Boolean).join(" · "),
-        material: (point?.material.name ?? cells?.[3]) || "Chưa ghi loại dầu mỡ",
-        code: point?.material.code ?? cells?.[4],
+        area: [sourceRow?.group ?? point?.lubricantGroup ?? point?.machine, point?.managingPosition ?? cells?.[1]].filter(Boolean).join(" · "),
+        groupName: sourceRow?.group ?? point?.lubricantGroup ?? undefined,
+        material: (point ? oils.map((oil) => oil.name).join(" / ") : cells?.[3]) || "Chưa ghi loại dầu mỡ",
+        code: point ? oils.map((oil) => oil.code).join(" / ") : cells?.[4],
         need: point ? `${point.quantity} ${point.material.unit}` : cells?.[5]?.split("\n")[0] ?? "",
         lastDate: (point ? formatDate(point.lastReplacedAt) : editedDate || excelLastDateLabel(cells?.[6])).split("\n")[0],
         nextDate, status: dueStatus(nextDate),
-        supplement: findSupplement(point, supplements.data),
+        supplement: point ? findPointSupplement(point, supplements.data) : undefined,
         editable: !!onEdit && (editAll || positionsMatch(position, owner)),
-        excelOnly: !point && !!sourceRow && isExcelOnly(sourceRow.key),
+        excelOnly: !point && !!sourceRow?.excelOnly,
       };
     });
   }), [allRows, sourceDates.data, supplements.data, onEdit, position, editAll]);
@@ -243,9 +254,11 @@ export function LubricantStatistics({ search, onEdit, editAll = false }: {
   const defaultPosition = positionOptions.find((option) => positionsMatch(position, option)) ?? "";
   const positionFilter = positionChoice ?? defaultPosition;
 
+  const extraGroups = useMemo(() => [...new Set(points.flatMap((point) => point.lubricantGroup ?? []))]
+    .filter((name) => !groups.some((item) => item.name === name)).sort((a, b) => a.localeCompare(b, "vi")), [points]);
   const needle = normalize(search);
   const rows = lines.filter((line) =>
-    (!group || (group === "other" ? !line.source : line.source?.group === group)) &&
+    (!group || (group === "other" ? !line.groupName : line.groupName === group)) &&
     (!positionFilter || positionsMatch(positionFilter, line.owner) || normalize(line.owner) === normalize(positionFilter)) &&
     (!statusFilter || (statusFilter === "unlinked" ? !line.point && !line.excelOnly : statusFilter === "excel" ? line.excelOnly : line.status === statusFilter)) &&
     normalize([line.source?.group, line.source?.originalName, ...(line.source?.cells ?? []), line.device, line.material,
@@ -275,11 +288,17 @@ export function LubricantStatistics({ search, onEdit, editAll = false }: {
         </h2>
         <span className="text-xs text-muted-foreground">{rows.length} dòng · {linked} đã liên kết · {excelOnlyCount} theo Excel</span>
         <div className="ml-auto grid w-full grid-cols-1 gap-2 sm:flex sm:w-auto sm:flex-wrap">
+          {onEdit && (
+            <Button type="button" size="sm" className="h-9 gap-1" onClick={() => setAdding(true)}>
+              <Plus className="size-4" aria-hidden="true" />Thêm thiết bị
+            </Button>
+          )}
           <select aria-label="Nhóm thiết bị" className={selectClass} value={group}
             onChange={(event) => { setGroup(event.target.value); setPage(1); }}>
             <option value="">Tất cả nhóm</option>
             {groups.map(({ name }) => <option key={name}>{name}</option>)}
-            {(group === "other" || allRows.some((row) => !row.source)) && <option value="other">Nhóm khác</option>}
+            {extraGroups.map((name) => <option key={name}>{name}</option>)}
+            {(group === "other" || lines.some((line) => !line.groupName)) && <option value="other">Nhóm khác</option>}
           </select>
           <select aria-label="Cương vị" className={selectClass} value={positionFilter}
             onChange={(event) => { setPositionChoice(event.target.value); setPage(1); }}>
@@ -309,69 +328,94 @@ export function LubricantStatistics({ search, onEdit, editAll = false }: {
         <EmptyState icon={BarChart3} title="Không tìm thấy dòng phù hợp" />
       ) : (
         <Card className="overflow-hidden">
-          <div className="max-h-[70vh] overflow-auto">
-            <table className="w-full min-w-[1000px] border-separate border-spacing-0 text-xs">
+          <div className="max-h-[70vh] overflow-x-auto overflow-y-auto">
+            <table className="w-full min-w-[720px] table-fixed border-separate border-spacing-0 text-xs md:min-w-0">
+              <colgroup>
+                <col className="w-[25%]" /><col className="w-[27%]" /><col className="w-[15%]" /><col className="w-[11%]" />
+                <col className="w-[9%]" /><col className="w-[13%]" />
+              </colgroup>
               <thead>
-                <tr className="text-left text-muted-foreground [&>th]:sticky [&>th]:top-0 [&>th]:z-20 [&>th]:border-b [&>th]:border-border [&>th]:bg-muted [&>th]:px-2 [&>th]:py-2 [&>th]:font-semibold [&>th]:whitespace-nowrap">
-                  <th className="left-0 z-30 min-w-[180px] max-w-[260px]">Thiết bị</th>
-                  <th>Vật tư</th><th>KL cần thay</th><th>Thay gần nhất</th><th>Kế tiếp</th>
-                  <th>Bổ sung gần nhất</th><th>KL bổ sung</th><th>Liên kết</th><th><span className="sr-only">Thao tác</span></th>
+                <tr className="text-left text-muted-foreground [&>th]:sticky [&>th]:top-0 [&>th]:z-20 [&>th]:border-b [&>th]:border-border [&>th]:bg-muted [&>th]:px-1.5 [&>th]:py-1.5 [&>th]:font-semibold">
+                  <th>Thiết bị</th><th>Vật tư · KL cần thay</th><th>Thay / Kế tiếp</th><th>Bổ sung</th><th>Liên kết</th>
+                  <th><span className="sr-only">Thao tác</span></th>
                 </tr>
               </thead>
-              <tbody className="[&>tr>td]:border-b [&>tr>td]:border-border [&>tr>td]:px-2 [&>tr>td]:py-1.5 [&>tr>td]:align-top">
+              <tbody className="[&>tr>td]:border-b [&>tr>td]:border-border [&>tr>td]:px-1.5 [&>tr>td]:py-1.5 [&>tr>td]:align-top [&>tr>td]:break-words">
                 {rows.slice((activePage - 1) * PAGE_SIZE, activePage * PAGE_SIZE).map((line) => {
                   const open = expanded.has(line.id);
+                  const manual = line.source?.manual;
                   return (
                     <Fragment key={line.id}>
                       <tr className="hover:bg-muted/30">
-                        <td className="sticky left-0 z-10 min-w-[180px] max-w-[260px] bg-background">
+                        <td>
                           <div className="font-semibold text-ink">{line.device}</div>
                           <div className="text-[11px] text-muted-foreground">{line.area}</div>
                         </td>
-                        <td className="min-w-[160px] max-w-[240px]">
+                        <td>
                           {line.point ? (
                             <Link className="font-medium text-navy hover:underline" href={`/materials?may=${encodeURIComponent(line.point.material.machine ?? line.point.machine)}&track=${encodeURIComponent(line.point.materialId)}`}>
                               {line.material}
                             </Link>
                           ) : <span className="whitespace-pre-line">{line.material}</span>}
                           {line.code && <div className="text-[11px] text-muted-foreground">{line.code}</div>}
+                          {line.need && <div className="text-[11px]">KL: {line.need}</div>}
                         </td>
-                        <td className="whitespace-nowrap">{line.need || "—"}</td>
-                        <td className="whitespace-nowrap">{line.lastDate}</td>
-                        <td className={cn("whitespace-nowrap font-semibold", statusStyle[line.status])}>
-                          {line.nextDate ? formatDate(line.nextDate) : "—"}
-                          {line.status !== "none" && <span className="ml-1 text-[11px] font-normal">{statusText[line.status]}</span>}
+                        <td>
+                          <div>{line.lastDate}</div>
+                          <div className={cn("font-semibold", statusStyle[line.status])}>
+                            {line.nextDate ? formatDate(line.nextDate) : "—"}
+                            {line.status !== "none" && <span className="ml-1 text-[11px] font-normal">{statusText[line.status]}</span>}
+                          </div>
                         </td>
-                        <td className="whitespace-nowrap">{line.supplement ? formatDate(line.supplement.date) : "—"}</td>
-                        <td className="whitespace-nowrap">
-                          {line.supplement?.quantity != null
-                            ? `${quantityLabel(line.supplement.quantity)} ${line.supplement.unit ?? line.point?.material.unit ?? ""}`.trim()
-                            : "—"}
+                        <td>
+                          <div>{line.supplement ? formatDate(line.supplement.date) : "—"}</div>
+                          {line.supplement?.quantity != null && (
+                            <div className="text-[11px] text-muted-foreground">
+                              {`${quantityLabel(line.supplement.quantity)} ${line.supplement.unit ?? line.point?.material.unit ?? ""}`.trim()}
+                            </div>
+                          )}
                         </td>
-                        <td className="whitespace-nowrap">
-                          <span className={cn("rounded-full px-2 py-0.5 text-[11px]", line.point ? "bg-emerald-50 text-emerald-700" : line.excelOnly ? "bg-muted text-muted-foreground" : "bg-amber-50 text-amber-800")}>
+                        <td>
+                          <span className={cn("inline-block rounded-full px-1.5 py-0.5 text-[10px] leading-4", line.point ? "bg-emerald-50 text-emerald-700" : line.excelOnly ? "bg-muted text-muted-foreground" : "bg-amber-50 text-amber-800")}>
                             {line.point ? "Đã liên kết" : line.excelOnly ? "Theo Excel" : "Chưa liên kết"}
                           </span>
+                          {manual && (
+                            <div className="text-[10px] italic text-muted-foreground"
+                              title={`Liên kết tay: ${manual.updatedByName} · ${formatDate(manual.updatedAt)}`}>liên kết tay</div>
+                          )}
                         </td>
-                        <td className="whitespace-nowrap text-right">
-                          {line.editable && (
-                            <Button type="button" variant="ghost" size="sm" className="h-7 gap-1 px-2 text-navy"
-                              onClick={() => line.point ? onEdit?.(line.point) : line.source && editSource(line.source)}
-                              aria-label={`Sửa lần thay gần nhất của ${line.device}`}>
-                              <Pencil className="size-3" /> Sửa
-                            </Button>
-                          )}
-                          {line.source && line.showSource && (
-                            <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-muted-foreground"
-                              aria-expanded={open} aria-label={`Chi tiết dòng Excel của ${line.device}`} onClick={() => toggle(line.id)}>
-                              <ChevronDown className={cn("size-4 transition-transform", open && "rotate-180")} />
-                            </Button>
-                          )}
+                        <td className="text-right">
+                          <div className="flex justify-end">
+                            {line.editable && (
+                              <Button type="button" variant="ghost" size="icon" className="size-7 text-navy" title="Sửa lần thay gần nhất"
+                                onClick={() => line.point ? onEdit?.(line.point) : line.source && editSource(line.source)}
+                                aria-label={`Sửa lần thay gần nhất của ${line.device}`}>
+                                <Pencil className="size-3.5" />
+                              </Button>
+                            )}
+                            {line.source && onEdit && (
+                              <Button type="button" variant="ghost" size="icon" className="size-7 text-navy"
+                                title={line.point ? "Sửa liên kết" : "Liên kết với điểm theo dõi"}
+                                aria-label={`${line.point ? "Sửa liên kết" : "Liên kết"} của ${line.device}`}
+                                onClick={() => line.source && setLinkRow({
+                                  key: line.source.key, name: line.source.cells[2], group: line.source.group,
+                                  material: line.source.cells[3] ?? "", current: line.point, manual: line.source.manual,
+                                })}>
+                                <Link2 className="size-3.5" />
+                              </Button>
+                            )}
+                            {line.source && line.showSource && (
+                              <Button type="button" variant="ghost" size="icon" className="size-7 text-muted-foreground"
+                                aria-expanded={open} aria-label={`Chi tiết dòng Excel của ${line.device}`} onClick={() => toggle(line.id)}>
+                                <ChevronDown className={cn("size-4 transition-transform", open && "rotate-180")} />
+                              </Button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                       {open && line.source && (
                         <tr>
-                          <td colSpan={9} className="bg-muted/30">
+                          <td colSpan={6} className="bg-muted/30">
                             <dl className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                               {line.point && <div className="min-w-0 break-words"><dt className="font-semibold text-muted-foreground">Chu kỳ web</dt>
                                 <dd>{replacementIntervalLabel(line.point.intervalMonths, line.point.intervalNote)}</dd></div>}
@@ -400,6 +444,9 @@ export function LubricantStatistics({ search, onEdit, editAll = false }: {
           </div>
         </Card>
       )}
+      <LubricantPointDialog open={adding} onOpenChange={setAdding} groupNames={groups.map(({ name }) => name)}
+        defaultGroup={group && group !== "other" ? group : undefined} />
+      <LubricantLinkPicker row={linkRow} points={points} onClose={() => setLinkRow(null)} />
       <Dialog open={!!sourceEdit} onOpenChange={(open) => { if (!open && !updateSourceDate.isPending) setSourceEdit(null); }}>
         <DialogContent className="max-w-sm">
           <DialogHeader><DialogTitle>Sửa lần thay gần nhất</DialogTitle></DialogHeader>

@@ -10,7 +10,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { EquipmentTreePicker, type PickerEquipmentNode } from "@/components/devices/equipment-tree-picker";
 import { useEquipmentNode } from "@/hooks/useEquipment";
-import { useUpdateReplacement, type ReplacementItem } from "@/hooks/useReplacements";
+import { LubricantMaterialPicker } from "@/components/materials/lubricant-material-picker";
+import { useLubricantMaterials, useUpdateReplacement, type ReplacementItem } from "@/hooks/useReplacements";
 import { usePositions } from "@/hooks/useUsers";
 import { addMonths, lubricantNextDue, materialCategoryMatches } from "@/lib/constants";
 import { positionLabelOf } from "@/lib/position-catalog";
@@ -56,6 +57,8 @@ export function ReplacementPointForm({
     note: point?.note ?? "",
     samplingOnly: point?.samplingOnly === true,
   });
+  const lubricantMaterials = useLubricantMaterials(autoCalculateDue);
+  const [alternateIds, setAlternateIds] = React.useState<string[]>(point?.alternateMaterialIds ?? []);
   const calculatedDueAt = autoCalculateDue
     ? toDateInput(lubricantNextDue(form.lastReplacedAt, Number(form.intervalMonths)))
     : form.nextDueAt;
@@ -137,6 +140,7 @@ export function ReplacementPointForm({
       nextDueAt: calculatedDueAt || null,
       note: form.note,
       samplingOnly: form.samplingOnly,
+      alternateMaterialIds: autoCalculateDue ? alternateIds : undefined,
     };
     try {
       await update.mutateAsync({ id: point.id, ...payload });
@@ -195,6 +199,14 @@ export function ReplacementPointForm({
       <Field label="Ghi chú chu kỳ">
         <Input value={form.intervalNote} onChange={(e) => set("intervalNote", e.target.value)} placeholder="VD: 2500h" />
       </Field>
+
+      {autoCalculateDue && (
+        <div className="sm:col-span-2">
+          <Label className="mb-1.5 block">Dầu thay thế lẫn nhau</Label>
+          <LubricantMaterialPicker multiple materials={lubricantMaterials.data ?? []} machine={point?.machine}
+            excludeIds={[materialId]} value={alternateIds} onChange={setAlternateIds} placeholder="Tìm dầu có thể dùng thay" />
+        </div>
+      )}
 
       {/* Đổi được nhóm sau khi tạo: điểm lỡ khai là thay thế định kỳ có thể
           chuyển sang chỉ lấy mẫu mà không phải xoá rồi tạo lại. */}

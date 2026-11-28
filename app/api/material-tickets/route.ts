@@ -24,6 +24,7 @@ import {
   materialTicketReference,
 } from "@/lib/material-ticket-sequence";
 import { replacementPointDisplayLabel, replacementPointSelectionKey } from "@/lib/material-replacement-display";
+import { replacementPointsOfMaterial } from "@/lib/lubricant-alternates";
 import { syncTicketReplacementLinks, type LinkablePoint } from "@/lib/material-ticket-replacement-link";
 import { notifyMaterialTicketStep } from "@/lib/material-ticket-telegram-alert";
 
@@ -391,7 +392,7 @@ export async function POST(req: NextRequest) {
       type = CHEMICAL_TICKET_TYPE;
     }
     const replacementPoints = await prisma.materialReplacement.findMany({
-      where: { materialId: selectedMaterial.id },
+      where: replacementPointsOfMaterial(selectedMaterial.id),
       select: { id: true, deviceSeq: true, location: true, system: true, managingPosition: true, recoveryOnSupplement: true, quantity: true, deviceCount: true, device: { select: { name: true } } },
     });
     const assignedPointByKey = new Map<string, (typeof replacementPoints)[number]>();

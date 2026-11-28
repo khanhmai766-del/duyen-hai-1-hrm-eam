@@ -20,6 +20,7 @@ import {
 } from "@/lib/material-replacement-access";
 import { resolvePositionViewScope } from "@/lib/position-data-scope";
 import { materialCategoryMatches } from "@/lib/constants";
+import { normalizeAlternateMaterialIds } from "@/lib/lubricant-alternates";
 
 const DETAIL_INCLUDE = {
   material: { select: { id: true, code: true, name: true, unit: true, imageUrl: true } },
@@ -76,7 +77,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
     const body = await req.json();
     const existing = await prisma.materialReplacement.findUnique({
       where: { id: params.id },
-      include: { material: { select: { category: true } }, _count: { select: { logs: true, defectRequests: true } } },
+      include: { material: { select: { id: true, category: true, machine: true } }, _count: { select: { logs: true, defectRequests: true } } },
     });
     if (!existing) return fail("Không tìm thấy điểm thay thế", 404);
     const lubricant = materialCategoryMatches(existing.material.category, "Dầu bôi trơn");
@@ -136,6 +137,10 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
         return fail("Khai báo đang có điểm theo dõi; hãy kết thúc hoặc gỡ điểm theo dõi trước khi đổi vật tư");
       }
     }
+    // Dầu thay thế lẫn nhau: chỉ áp dụng cho điểm dầu bôi trơn; loại chính tính theo vật tư đích.
+    const alternateMaterialIds = body.alternateMaterialIds !== undefined && lubricant
+      ? await normalizeAlternateMaterialIds(prisma, { id: targetMaterialId, machine: existing.machine }, body.alternateMaterialIds)
+      : undefined;
     const quantity = body.quantity !== undefined ? Math.round(Number(body.quantity)) : undefined;
     if (quantity !== undefined && (!Number.isFinite(quantity) || quantity <= 0)) {
       return fail("Dung tích hoặc số lượng phải lớn hơn 0");
@@ -186,6 +191,10 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
         // Cho phép đổi nhóm sau khi tạo: điểm khai báo nhầm là thay thế định kỳ
         // có thể chuyển sang chỉ lấy mẫu mà không phải xoá rồi tạo lại.
         samplingOnly: body.samplingOnly !== undefined ? body.samplingOnly === true : undefined,
+        alternateMaterialIds,
+        lubricantGroup: body.lubricantGroup !== undefined && lubricant
+          ? String(body.lubricantGroup ?? "").trim().slice(0, 80) || null
+          : undefined,
         recoveryOnSupplement: body.recoveryOnSupplement !== undefined
           ? body.recoveryOnSupplement === true
           : undefined,
