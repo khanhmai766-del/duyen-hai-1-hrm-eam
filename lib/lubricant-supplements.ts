@@ -22,7 +22,7 @@ export const supplementDeviceKey = (deviceSeq: string, machine: string, material
   `dev:${deviceSeq}|${machine}|${materialId}`;
 
 /** Ngày theo giờ Việt Nam (UTC+7), dạng YYYY-MM-DD. */
-function vnDay(value: Date | string) {
+export function vnDay(value: Date | string) {
   return new Date(new Date(value).getTime() + 7 * 3_600_000).toISOString().slice(0, 10);
 }
 
@@ -68,4 +68,35 @@ export function findPointSupplement(
   }
   return keys.map((key) => data[key]).filter((info): info is SupplementInfo => !!info)
     .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0))[0];
+}
+
+/** Ngày VN YYYY-MM-DD → thời điểm lưu DB (0h giờ VN, nên vnDay() trả lại đúng ngày đó). */
+export const supplementDayToDate = (day: string) => new Date(`${day}T00:00:00+07:00`);
+
+/** Lần bổ sung nhập tay (LubricantSupplement) → dạng log để gộp chung vào latestSupplements(). */
+export function manualSupplementLogs(
+  rows: { replacementId: string; suppliedAt: Date | string; quantity: number | null; unit: string | null }[],
+): SupplementLog[] {
+  return rows.map((row) => ({
+    replacementId: row.replacementId, deviceSeq: null, machine: null, materialId: null,
+    replacedAt: row.suppliedAt, usedQuantity: row.quantity, quantity: null, unitLabel: row.unit,
+  }));
+}
+
+export type SupplementHistoryItem = {
+  id: string;
+  source: "manual" | "ticket";
+  sourceLabel: string;
+  date: string;
+  quantity: number | null;
+  unit: string | null;
+  materialName: string | null;
+  note: string | null;
+  byName: string | null;
+  deletable: boolean;
+};
+
+/** Mới nhất trước; cùng ngày thì nhập tay xếp trước phiếu. */
+export function sortSupplementHistory(items: SupplementHistoryItem[]) {
+  return [...items].sort((a, b) => (a.date === b.date ? (a.source === b.source ? 0 : a.source === "manual" ? -1 : 1) : a.date < b.date ? 1 : -1));
 }

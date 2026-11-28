@@ -5,13 +5,14 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/shared/empty-state";
 import { useLubricantRowLinks, useLubricantSourceDates, useLubricantSupplements, useReplacements, type ReplacementItem } from "@/hooks/useReplacements";
+import { LubricantSupplementDialog } from "@/components/materials/lubricant-supplement-dialog";
 import { LubricantPointDialog, type LubricantExcelSource } from "@/components/materials/lubricant-point-dialog";
 import { LubricantLinkPicker, pointLabel, type LinkPickerRow } from "./lubricant-link-picker";
 import { resolveRowLink, type RowLinkOverride } from "@/lib/lubricant-row-links";
 import { useCurrentPosition } from "@/hooks/useCurrentPosition";
 import { lubricantNextDue, materialCategoryMatches, replacementIntervalLabel } from "@/lib/constants";
 import { normalizeText } from "@/lib/nav";
-import { positionsMatch } from "@/lib/position-catalog";
+import { positionCatalogItem, positionsMatch } from "@/lib/position-catalog";
 import { lubricantChainConveyors, lubricantCoalFeeders, lubricantHvacPumps } from "@/lib/lubricant-source-splits";
 import { excelIntervalMonths, hasOilSupplement, parseExcelLastDate } from "@/lib/lubricant-excel-dates";
 import { findPointSupplement, type SupplementInfo } from "@/lib/lubricant-supplements";
@@ -183,6 +184,7 @@ export function LubricantStatistics({ search, onEdit, editAll = false }: {
   const [linkRow, setLinkRow] = useState<LinkPickerRow | null>(null);
   const [createFrom, setCreateFrom] = useState<LubricantExcelSource | null>(null);
   const [group, setGroup] = useState("");
+  const [supplementRow, setSupplementRow] = useState<{ point: ReplacementItem; editable: boolean } | null>(null);
   const [positionChoice, setPositionChoice] = useState<string | undefined>();
   const [statusFilter, setStatusFilter] = useState("");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -241,8 +243,8 @@ export function LubricantStatistics({ search, onEdit, editAll = false }: {
   const positionOptions = useMemo(() => {
     const seen = new Map<string, string>();
     for (const line of lines) {
-      const label = line.point?.managingPosition ?? line.source?.cells[1];
-      if (label && !seen.has(normalize(label))) seen.set(normalize(label), label);
+      const item = positionCatalogItem(line.point?.managingPosition ?? line.source?.cells[1]);
+      if (item) seen.set(item.code, item.label);
     }
     return [...seen.values()].sort((a, b) => a.localeCompare(b, "vi"));
   }, [lines]);
@@ -255,7 +257,7 @@ export function LubricantStatistics({ search, onEdit, editAll = false }: {
   const needle = normalize(search);
   const rows = lines.filter((line) =>
     (!group || (group === "other" ? !line.groupName : line.groupName === group)) &&
-    (!positionFilter || positionsMatch(positionFilter, line.owner) || normalize(line.owner) === normalize(positionFilter)) &&
+    (!positionFilter || positionsMatch(positionFilter, line.owner)) &&
     (!statusFilter || (statusFilter === "unlinked" ? !line.point && !line.excelOnly : statusFilter === "excel" ? line.excelOnly : line.status === statusFilter)) &&
     normalize([line.source?.group, line.source?.originalName, ...(line.source?.cells ?? []), line.device, line.material,
       line.code, line.point?.system, line.point?.managingPosition, line.point?.machine].join(" ")).includes(needle));
@@ -365,12 +367,29 @@ export function LubricantStatistics({ search, onEdit, editAll = false }: {
                           </div>
                         </td>
                         <td>
-                          <div>{line.supplement ? formatDate(line.supplement.date) : "—"}</div>
-                          {line.supplement?.quantity != null && (
-                            <div className="text-[11px] text-muted-foreground">
-                              {`${quantityLabel(line.supplement.quantity)} ${line.supplement.unit ?? line.point?.material.unit ?? ""}`.trim()}
-                            </div>
-                          )}
+                          {(() => {
+                            const content = (
+                              <>
+                                <div>{line.supplement ? formatDate(line.supplement.date) : "—"}</div>
+                                {line.supplement?.quantity != null && (
+                                  <div className="text-[11px] text-muted-foreground">
+                                    {`${quantityLabel(line.supplement.quantity)} ${line.supplement.unit ?? line.point?.material.unit ?? ""}`.trim()}
+                                  </div>
+                                )}
+                              </>
+                            );
+                            const supplementPoint = line.point;
+                            if (!supplementPoint) return content;
+                            return (
+                              <button type="button" className="group flex items-start gap-1 rounded text-left hover:text-navy focus-visible:outline focus-visible:outline-2"
+                                title={line.editable ? "Xem lịch sử và thêm lần bổ sung" : "Xem lịch sử bổ sung"}
+                                aria-label={`Lịch sử bổ sung của ${line.device}`}
+                                onClick={() => setSupplementRow({ point: supplementPoint, editable: line.editable })}>
+                                <span>{content}</span>
+                                {line.editable && <Plus className="mt-0.5 size-3 shrink-0 text-navy" aria-hidden />}
+                              </button>
+                            );
+                          })()}
                         </td>
                         <td>
                           <span className={cn("inline-block rounded-full px-1.5 py-0.5 text-[10px] leading-4", line.point ? "bg-emerald-50 text-emerald-700" : line.excelOnly ? "bg-muted text-muted-foreground" : "bg-amber-50 text-amber-800")}>
@@ -443,6 +462,7 @@ export function LubricantStatistics({ search, onEdit, editAll = false }: {
       )}
       <LubricantPointDialog open={adding} onOpenChange={setAdding} groupNames={groups.map(({ name }) => name)}
         defaultGroup={group && group !== "other" ? group : undefined} />
+      <LubricantSupplementDialog point={supplementRow?.point ?? null} canEdit={!!supplementRow?.editable} onClose={() => setSupplementRow(null)} />
       <LubricantLinkPicker row={linkRow} points={points} onClose={() => setLinkRow(null)} />
       <LubricantPointDialog open={!!createFrom} onOpenChange={(open) => { if (!open) setCreateFrom(null); }}
         groupNames={groups.map(({ name }) => name)} fromExcel={createFrom} />

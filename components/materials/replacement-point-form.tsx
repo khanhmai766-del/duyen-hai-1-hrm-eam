@@ -12,10 +12,8 @@ import { EquipmentTreePicker, type PickerEquipmentNode } from "@/components/devi
 import { useEquipmentNode } from "@/hooks/useEquipment";
 import { LubricantMaterialPicker } from "@/components/materials/lubricant-material-picker";
 import { useLubricantMaterials, useUpdateReplacement, type ReplacementItem } from "@/hooks/useReplacements";
-import { usePositions } from "@/hooks/useUsers";
 import { addMonths, lubricantNextDue, materialCategoryMatches } from "@/lib/constants";
-import { positionLabelOf } from "@/lib/position-catalog";
-import { selectableManagingPositionOptions } from "@/lib/positions";
+import { positionLabelOf, positionLabelsForUnit } from "@/lib/position-catalog";
 import { parseScopeParam } from "@/lib/equipment-units";
 import { formatDateInput } from "@/lib/utils";
 
@@ -38,11 +36,12 @@ export function ReplacementPointForm({
   onDone?: () => void;
 }) {
   const update = useUpdateReplacement();
-  const allPositions = usePositions();
-  const devicePositions = React.useMemo(
-    () => selectableManagingPositionOptions(allPositions),
-    [allPositions]
-  );
+  // Danh mục cương vị cố định theo tổ máy của điểm; vị trí đang lưu không map được thì giữ thành một lựa chọn riêng.
+  const devicePositions = React.useMemo(() => {
+    const labels = positionLabelsForUnit(point?.machine);
+    const current = positionLabelOf(point?.managingPosition);
+    return current && !labels.includes(current) ? [...labels, current] : labels;
+  }, [point?.machine, point?.managingPosition]);
   const scope = parseScopeParam(point?.machine) ?? undefined;
   const autoCalculateDue = materialCategoryMatches(point?.material.category, "Dầu bôi trơn");
 

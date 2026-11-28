@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { toast } from "sonner";
-import { Loader2 } from "lucide-react";
+import { Loader2, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,12 +11,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { EquipmentTreePicker, type PickerEquipmentNode } from "@/components/devices/equipment-tree-picker";
 import { LubricantMaterialPicker } from "@/components/materials/lubricant-material-picker";
-import { useCreateReplacement, useLubricantMaterials, useUpdateLubricantRowLink } from "@/hooks/useReplacements";
+import { useAddLubricantSupplement, useCreateReplacement, useLubricantMaterials, useUpdateLubricantRowLink } from "@/hooks/useReplacements";
+import { emptySupplementRow, SupplementFields, supplementPayload, type SupplementRow } from "@/components/materials/lubricant-supplement-dialog";
 import { excelIntervalMonths, parseExcelLastDate } from "@/lib/lubricant-excel-dates";
 import { foldVn } from "@/lib/vibration/parse";
-import { usePositions } from "@/hooks/useUsers";
 import { lubricantNextDue } from "@/lib/constants";
-import { selectableManagingPositionOptions } from "@/lib/positions";
+import { positionAllowedForUnit, positionCatalogItem, positionLabelsForUnit } from "@/lib/position-catalog";
 import { parseScopeParam } from "@/lib/equipment-units";
 import { formatDateInput } from "@/lib/utils";
 
@@ -57,8 +57,7 @@ export function LubricantPointDialog({ open, onOpenChange, groupNames, defaultGr
   const create = useCreateReplacement();
   const link = useUpdateLubricantRowLink();
   const materialsQuery = useLubricantMaterials(open);
-  const allPositions = usePositions();
-  const positions = React.useMemo(() => selectableManagingPositionOptions(allPositions), [allPositions]);
+  const add = useAddLubricantSupplement();
   const initial = React.useCallback(() => {
     const wanted = fromExcel?.group ?? defaultGroup;
     const group = wanted && groupNames.includes(wanted) ? wanted : groupNames[0] ?? CUSTOM_GROUP;
@@ -69,19 +68,19 @@ export function LubricantPointDialog({ open, onOpenChange, groupNames, defaultGr
     const excelDate = fromExcel?.lastDate
       || (parsed ? formatDateInput(parsed) : monthOnly ? `${monthOnly[2]}-${monthOnly[1].padStart(2, "0")}-01` : "");
     const excelPosition = foldVn(cells[1] ?? "").trim();
-    const position = excelPosition
-      ? positions.find((name) => foldVn(name) === excelPosition)
-        ?? positions.find((name) => excelPosition.startsWith(foldVn(name)))
-      : undefined;
+    const machine = defaultMachineOfGroup(group);
+    // Danh mục cương vị cố định: "Lò phó S1" → "Lò phó"; chỉ nhận khi hợp với tổ máy.
+    const excelLabel = excelPosition ? positionCatalogItem(cells[1])?.label : undefined;
+    const position = excelLabel && positionAllowedForUnit(machine, excelLabel) ? excelLabel : undefined;
     return {
-      groupChoice: group, customGroup: "", machine: defaultMachineOfGroup(group), position: position ?? AUTO_POSITION,
+      groupChoice: group, customGroup: "", machine, position: position ?? AUTO_POSITION, supplements: [] as SupplementRow[],
       freeLocation: false, deviceId: "", deviceName: "", location: cells[2]?.trim() ?? "",
       materialIds: [] as string[], alternateIds: [] as string[], materialMatched: !fromExcel,
       quantity: fromExcel ? String(Number(/\d+(?:[.,]\d+)?/.exec(cells[5] ?? "")?.[0].replace(",", ".") ?? 0) || 0) : "0",
       intervalMonths: String((fromExcel && excelIntervalMonths(cells[7])) || 6), intervalNote: "",
       lastReplacedAt: excelDate || formatDateInput(),
     };
-  }, [defaultGroup, groupNames, fromExcel, positions]);
+  }, [defaultGroup, groupNames, fromExcel]);
   const [form, setForm] = React.useState(initial);
   const [wasOpen, setWasOpen] = React.useState(false);
   if (open !== wasOpen) {
@@ -98,17 +97,26 @@ export function LubricantPointDialog({ open, onOpenChange, groupNames, defaultGr
   }
   const mainId = form.materialIds[0];
   const main = materials.find((material) => material.id === mainId);
+  const positions = React.useMemo(() => positionLabelsForUnit(form.machine), [form.machine]);
+  const oils = [main, ...form.alternateIds.map((id) => materials.find((material) => material.id === id))]
+    .filter((oil): oil is NonNullable<typeof main> => !!oil).map(({ id, name, unit }) => ({ id, name, unit }));
   const group = form.groupChoice === CUSTOM_GROUP ? form.customGroup.trim() : form.groupChoice;
 
   function setGroup(choice: string) {
-    setForm((current) => ({
-      ...current, groupChoice: choice,
-      machine: choice === CUSTOM_GROUP ? current.machine : defaultMachineOfGroup(choice),
-      materialIds: [], alternateIds: [], deviceId: "", deviceName: "",
-    }));
+    setForm((current) => {
+      const machine = choice === CUSTOM_GROUP ? current.machine : defaultMachineOfGroup(choice);
+      return {
+        ...current, groupChoice: choice, machine,
+        materialIds: [], alternateIds: [], deviceId: "", deviceName: "", supplements: [],
+        position: current.position === AUTO_POSITION || positionAllowedForUnit(machine, current.position) ? current.position : AUTO_POSITION,
+      };
+    });
   }
   function setMachine(machine: string) {
-    setForm((current) => ({ ...current, machine, materialIds: [], alternateIds: [], deviceId: "", deviceName: "" }));
+    setForm((current) => ({
+      ...current, machine, materialIds: [], alternateIds: [], deviceId: "", deviceName: "", supplements: [],
+      position: current.position === AUTO_POSITION || positionAllowedForUnit(machine, current.position) ? current.position : AUTO_POSITION,
+    }));
   }
   function pickDevice(node: PickerEquipmentNode | null) {
     setForm((current) => ({ ...current, deviceId: node?.seq ?? "", deviceName: node?.name ?? "" }));
@@ -125,6 +133,10 @@ export function LubricantPointDialog({ open, onOpenChange, groupNames, defaultGr
     if (form.freeLocation && !position) return toast.error("Chọn cương vị quản lý");
     if (!form.lastReplacedAt) return toast.error("Nhập ngày thay gần nhất để tính hạn");
     const nextDueAt = lubricantNextDue(form.lastReplacedAt, months);
+    const oilIds = new Set(oils.map((oil) => oil.id));
+    const checked = form.supplements.map((row) => supplementPayload({ ...row, materialId: oilIds.has(row.materialId) ? row.materialId : main.id }, "", main.id));
+    const invalid = checked.find((item) => "error" in item);
+    if (invalid && "error" in invalid) return toast.error(`Bổ sung: ${invalid.error}`);
     try {
       const created = await create.mutateAsync({
         materialId: main.id,
@@ -141,6 +153,12 @@ export function LubricantPointDialog({ open, onOpenChange, groupNames, defaultGr
         nextDueAt: nextDueAt ? formatDateInput(nextDueAt) : undefined,
       });
       if (fromExcel) await link.mutateAsync({ sourceKey: fromExcel.sourceKey, mode: "point", replacementId: created.id });
+      let failed = 0;
+      for (const item of checked) {
+        if (!("value" in item)) continue;
+        try { await add.mutateAsync({ ...item.value, replacementId: created.id }); } catch { failed += 1; }
+      }
+      if (failed) toast.error(`Đã tạo điểm nhưng ${failed} lần bổ sung chưa ghi được — thêm lại trong Lịch sử bổ sung`);
       toast.success(fromExcel ? "Đã tạo điểm thay thế và liên kết dòng Excel" : "Đã thêm thiết bị theo dõi dầu mỡ");
       onOpenChange(false);
     } catch (error) {
@@ -149,7 +167,7 @@ export function LubricantPointDialog({ open, onOpenChange, groupNames, defaultGr
   }
 
   return (
-    <Dialog open={open} onOpenChange={(next) => { if (!create.isPending && !link.isPending) onOpenChange(next); }}>
+    <Dialog open={open} onOpenChange={(next) => { if (!create.isPending && !link.isPending && !add.isPending) onOpenChange(next); }}>
       <DialogContent className="max-h-[92vh] max-w-2xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{fromExcel ? "Tạo điểm thay thế từ dòng Excel" : "Thêm thiết bị theo dõi dầu mỡ"}</DialogTitle>
@@ -245,10 +263,27 @@ export function LubricantPointDialog({ open, onOpenChange, groupNames, defaultGr
             <Input type="date" value={form.lastReplacedAt} onChange={(event) => set("lastReplacedAt", event.target.value)} />
           </div>
 
+          <div className="space-y-2 sm:col-span-2">
+            <div className="flex items-center justify-between gap-2">
+              <Label>Bổ sung (tuỳ chọn)</Label>
+              <Button type="button" variant="ghost" size="sm" className="h-7 text-xs text-navy" disabled={!main}
+                onClick={() => set("supplements", [...form.supplements, emptySupplementRow(main?.id)])}>
+                <Plus className="size-3.5" />Thêm lần bổ sung
+              </Button>
+            </div>
+            {form.supplements.length === 0 ? (
+              <p className="text-xs text-muted-foreground">Ghi lại các lần châm bổ sung đã có; mỗi lần sẽ lưu vào lịch sử bổ sung của điểm.</p>
+            ) : form.supplements.map((row, index) => (
+              <SupplementFields key={index} row={row} oils={oils}
+                onChange={(next) => set("supplements", form.supplements.map((item, i) => (i === index ? next : item)))}
+                onRemove={() => set("supplements", form.supplements.filter((_, i) => i !== index))} />
+            ))}
+          </div>
+
           <div className="flex justify-end gap-2 sm:col-span-2">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={create.isPending}>Hủy</Button>
-            <Button type="submit" disabled={create.isPending || link.isPending}>
-              {(create.isPending || link.isPending) && <Loader2 className="h-4 w-4 animate-spin" />}{fromExcel ? "Tạo và liên kết" : "Thêm thiết bị"}
+            <Button type="submit" disabled={create.isPending || link.isPending || add.isPending}>
+              {(create.isPending || link.isPending || add.isPending) && <Loader2 className="h-4 w-4 animate-spin" />}{fromExcel ? "Tạo và liên kết" : "Thêm thiết bị"}
             </Button>
           </div>
         </form>

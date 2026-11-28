@@ -500,6 +500,7 @@ model Material {
   ticketItems     MaterialTicketItem[]
   defectRequests  DefectMaterialRequest[]
   replacementLogs MaterialReplacementLog[]
+  lubricantSupplements LubricantSupplement[]
   stockMovements  MaterialStockMovement[]
   annualPlans     MaterialAnnualPlan[]
 
@@ -654,6 +655,7 @@ model MaterialReplacement {
   device         EquipmentNode?              @relation(fields: [deviceSeq], references: [seq], onDelete: SetNull)
   createdBy      User                        @relation("MrCreatedBy", fields: [createdById], references: [id])
   logs           MaterialReplacementLog[]
+  supplements    LubricantSupplement[]
   // Các SYC thay thế đã ra cho chính điểm khai báo này.
   defectRequests DefectMaterialRequest[]
   // Các phiếu vật tư phục vụ điểm này — xem model MaterialTicketReplacement.
@@ -673,6 +675,25 @@ model MaterialReplacement {
 model LubricantSourceDate {
   sourceKey      String   @id
   lastReplacedAt DateTime @db.Date
+}
+
+// Lần bổ sung dầu mỡ nhập tay tại một điểm theo dõi (khác dòng lịch sử thay thế từ phiếu vật tư).
+model LubricantSupplement {
+  id            String   @id @default(cuid())
+  replacementId String
+  suppliedAt    DateTime
+  quantity      Float?
+  unit          String?
+  materialId    String?
+  note          String?
+  createdById   String?
+  createdByName String?
+  createdAt     DateTime @default(now())
+
+  replacement MaterialReplacement @relation(fields: [replacementId], references: [id], onDelete: Cascade)
+  material    Material?           @relation(fields: [materialId], references: [id], onDelete: SetNull)
+
+  @@index([replacementId])
 }
 
 // Quyết định liên kết tay của dòng Excel ở trang Theo dõi dầu mỡ (ghi đè JSON đã xác minh).

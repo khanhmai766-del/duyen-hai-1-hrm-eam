@@ -293,6 +293,42 @@ export function useLubricantSupplements() {
   });
 }
 
+const supplementsUrl = "/api/material-replacements/lubricant-supplements";
+
+export function useLubricantSupplementHistory(replacementId: string | null) {
+  return useQuery({
+    queryKey: ["lubricant-supplement-history", replacementId],
+    enabled: !!replacementId,
+    queryFn: async () => (await apiGet<import("@/lib/lubricant-supplements").SupplementHistoryItem[]>(
+      `${supplementsUrl}/history?replacementId=${encodeURIComponent(replacementId ?? "")}`)).data,
+  });
+}
+
+export type LubricantSupplementInput = { replacementId: string; date: string; quantity?: number | null; materialId?: string | null; note?: string };
+
+function invalidateSupplements(client: ReturnType<typeof useQueryClient>) {
+  return Promise.all([
+    client.invalidateQueries({ queryKey: ["lubricant-supplements"] }),
+    client.invalidateQueries({ queryKey: ["lubricant-supplement-history"] }),
+  ]);
+}
+
+export function useAddLubricantSupplement() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: LubricantSupplementInput) => apiMutate<{ id: string }>(supplementsUrl, "POST", input),
+    onSuccess: () => invalidateSupplements(client),
+  });
+}
+
+export function useDeleteLubricantSupplement() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => apiMutate<{ id: string }>(`${supplementsUrl}?id=${encodeURIComponent(id)}`, "DELETE"),
+    onSuccess: () => invalidateSupplements(client),
+  });
+}
+
 export function useUpdateLubricantSourceDate() {
   const client = useQueryClient();
   return useMutation({
