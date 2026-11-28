@@ -895,6 +895,19 @@ export function addMonths(base: Date | string, months: number): Date {
   return d;
 }
 
+/** Lịch thay dầu tính theo tháng lịch, kể cả khi tháng đích ngắn hơn. */
+export function lubricantNextDue(base: Date | string | null | undefined, months: number): Date | null {
+  if (!base || !Number.isInteger(months) || months <= 0) return null;
+  const date = parseDateInput(base);
+  if (!Number.isFinite(date.getTime())) return null;
+  const day = date.getDate();
+  date.setDate(1);
+  const due = addMonths(date, months);
+  const monthEnd = new Date(due.getFullYear(), due.getMonth() + 1, 0).getDate();
+  due.setDate(Math.min(day, monthEnd));
+  return due;
+}
+
 // ---- Cảnh báo thay thế vật tư (Material replacement) ----
 
 /** Gửi cảnh báo khi còn ≤ số ngày này trước hạn thay thế (≈ 1 tháng). */

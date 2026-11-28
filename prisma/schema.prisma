@@ -664,6 +664,12 @@ model MaterialReplacement {
   @@index([createdById])
 }
 
+// Ngày thay được cập nhật cho dòng Excel chưa liên kết điểm theo dõi.
+model LubricantSourceDate {
+  sourceKey      String   @id
+  lastReplacedAt DateTime @db.Date
+}
+
 // Lịch sử mỗi lần thay thế vật tư tại một điểm thay thế.
 model MaterialReplacementLog {
   id            String   @id @default(cuid())

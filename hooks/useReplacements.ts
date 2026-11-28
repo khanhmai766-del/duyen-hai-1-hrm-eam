@@ -272,6 +272,37 @@ export function useReplacementAlerts(enabled = true) {
   });
 }
 
+const lubricantDatesKey = ["lubricant-source-dates"];
+const lubricantDatesUrl = "/api/material-replacements/lubricant-source-dates";
+
+export function useLubricantSourceDates() {
+  return useQuery({
+    queryKey: lubricantDatesKey,
+    queryFn: async () => (await apiGet<Record<string, string>>(lubricantDatesUrl)).data,
+  });
+}
+
+/** Lần bổ sung dầu mỡ gần nhất theo khoá điểm (xem lib/lubricant-supplements.ts). */
+export function useLubricantSupplements() {
+  return useQuery({
+    queryKey: ["lubricant-supplements"],
+    queryFn: async () => (await apiGet<Record<string, import("@/lib/lubricant-supplements").SupplementInfo>>("/api/material-replacements/lubricant-supplements")).data,
+    staleTime: 60_000,
+  });
+}
+
+export function useUpdateLubricantSourceDate() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { sourceKey: string; date: string }) =>
+      apiMutate<typeof input>(lubricantDatesUrl, "PUT", input),
+    onSuccess: ({ sourceKey, date }) => {
+      client.setQueryData<Record<string, string>>(lubricantDatesKey, (dates) => ({ ...dates, [sourceKey]: date }));
+      return client.invalidateQueries({ queryKey: lubricantDatesKey });
+    },
+  });
+}
+
 export function useReplacement(id: string | undefined) {
   return useQuery({
     queryKey: ["replacement", id],

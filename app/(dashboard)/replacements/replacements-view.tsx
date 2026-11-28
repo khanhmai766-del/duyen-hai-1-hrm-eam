@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
-import { Repeat, Eye, Pencil, Trash2, Cpu, History, CalendarCheck, Activity, ChevronDown, ChevronLeft, ChevronRight, ListFilter, RotateCcw, Upload, FileClock, Search, Plus, ArrowDown, ArrowUp, ArrowUpDown, ArrowUpRight } from "lucide-react";
+import { Repeat, Eye, Pencil, Trash2, Cpu, History, CalendarCheck, Activity, BarChart3, ChevronDown, ChevronLeft, ChevronRight, ListFilter, RotateCcw, Upload, FileClock, Search, Plus, ArrowDown, ArrowUp, ArrowUpDown, ArrowUpRight } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { ExportButton } from "@/components/shared/export-button";
 import { SearchBar } from "@/components/shared/search-bar";
@@ -66,8 +66,10 @@ import { EquipmentTreePicker } from "@/components/devices/equipment-tree-picker"
 import { usePositions } from "@/hooks/useUsers";
 import { normalizePctNumber } from "@/lib/material-replacement-source";
 import { normalizeText } from "@/lib/nav";
+import { useVibrationAccess } from "@/hooks/useVibrationAccess";
+import { LubricantStatistics } from "./lubricant-statistics";
 
-type TabKey = "schedule" | "status" | "history";
+type TabKey = "schedule" | "status" | "lubricants" | "history";
 type HistorySortKey = "subject" | "pctNumber" | "replacedAt" | "quantity" | "doneBy" | "locked";
 type SortDir = "asc" | "desc";
 type HistoryTableRow =
@@ -276,11 +278,14 @@ export function ReplacementsPageContent({ only }: { only?: TabKey } = {}) {
   const rbac = useRbacAccess();
   const canCreate = rbac.can("replacement-manage", ["personal", "manage", "full"]);
   const canManage = rbac.can("replacement-manage", ["manage", "full"]);
+  // Chức danh giám sát được sửa trang Theo dõi dầu mỡ dù vai trò không có quyền quản lý.
+  const lubricantSupervisor = !!useVibrationAccess().access?.supervisor || role === "ADMIN";
   const canDelete = rbac.can("replacement-manage", ["manage", "full"]);
   const [tabState, setTab] = React.useState<TabKey>(() =>
-    only ?? (requestedTab === "status" ? "status" : "schedule")
+    only ?? (requestedTab === "status" || requestedTab === "lubricants" ? requestedTab : "schedule")
   );
   const tab: TabKey = only ?? tabState;
+  const [lubricantSearch, setLubricantSearch] = React.useState("");
   // Ghi tab đang xem lên URL (?tab=status) để F5 vẫn ở đúng tab (17/10/2026); trang chỉ một tab (only) thì không ghi.
   React.useEffect(() => {
     if (only) return;
@@ -744,7 +749,7 @@ export function ReplacementsPageContent({ only }: { only?: TabKey } = {}) {
             : "Tổng hợp lịch thay thế & trạng thái theo dõi vật tư"
         }
       >
-        {tab !== "history" && <Popover>
+        {(tab === "schedule" || tab === "status") && <Popover>
           <PopoverTrigger asChild>
             <Button type="button" variant="soft" size="toolbar" className="group min-w-[112px] justify-between">
               <span className="flex items-center gap-2">
@@ -994,13 +999,19 @@ export function ReplacementsPageContent({ only }: { only?: TabKey } = {}) {
               label="Trạng thái theo dõi"
               count={statusPoints.length}
             />
+            <TabBtn
+              active={tab === "lubricants"}
+              onClick={() => setTab("lubricants")}
+              icon={BarChart3}
+              label="Thống kê dầu mỡ"
+            />
           </>
         )}
         <div className="ml-auto flex w-full flex-wrap items-center justify-end gap-2 pb-2 sm:w-auto">
           <SearchBar
-            value={searchQ}
-            onChange={setSearchQ}
-            placeholder="Tìm theo vật tư, thiết bị, ghi chú..."
+            value={tab === "lubricants" ? lubricantSearch : searchQ}
+            onChange={tab === "lubricants" ? setLubricantSearch : setSearchQ}
+            placeholder={tab === "lubricants" ? "Tìm thiết bị, dầu mỡ, khu vực..." : "Tìm theo vật tư, thiết bị, ghi chú..."}
             className="w-full sm:w-72 lg:w-80"
             shortcut
           />
@@ -1148,6 +1159,8 @@ export function ReplacementsPageContent({ only }: { only?: TabKey } = {}) {
             </div>
           )}
         </div>
+      ) : tab === "lubricants" ? (
+        <LubricantStatistics search={lubricantSearch} onEdit={canManage || lubricantSupervisor ? setEditTarget : undefined} editAll={lubricantSupervisor} />
       ) : tab === "status" ? (
         <ReplacementStatusDashboard
           points={statusPoints}

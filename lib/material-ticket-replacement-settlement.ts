@@ -1,5 +1,5 @@
 import type { Prisma } from "@prisma/client";
-import { addMonths, isChemicalWorkflowCategory, isLubricantCategory, isSupplementReason } from "@/lib/constants";
+import { addMonths, isChemicalWorkflowCategory, isLubricantCategory, isSupplementReason, lubricantNextDue } from "@/lib/constants";
 import { fail } from "@/lib/api";
 import { buildReplacementLogData } from "@/lib/material-replacement-log";
 import { deliveryNoteSummary, usedLotsOfTicket } from "@/lib/material-stock-lot";
@@ -409,7 +409,9 @@ export async function recordSettledTicketReplacements(
             samplingOnly: tracked.samplingOnly,
             recoveryOnSupplement: tracked.recoveryOnSupplement,
             lastReplacedAt: replacedAt,
-            nextDueAt: addMonths(replacedAt, tracked.intervalMonths),
+            nextDueAt: (isLubricantCategory(ticket.materialCategory)
+              ? lubricantNextDue(replacedAt, tracked.intervalMonths)
+              : null) ?? addMonths(replacedAt, tracked.intervalMonths),
             note: tracked.note,
             isActive: true,
             renewalAppliedAt: null,

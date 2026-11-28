@@ -13,13 +13,14 @@ import { materialTrackingGroup, replacementDueStatus } from "@/lib/constants";
 import { EQUIPMENT_DEVICE_SELECT, equipmentNodeToDevice } from "@/lib/equipment-device";
 import { normalizeText } from "@/lib/nav";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
+import { isLubricantSupervisor } from "@/lib/lubricant-access";
 import { parseDateInput } from "@/lib/utils";
 import { positionCodeOf, positionsMatch } from "@/lib/position-catalog";
 import {
   canEditMaterialReplacement,
   canViewMaterialReplacement,
 } from "@/lib/material-replacement-access";
-import { positionViewScopeMeta, resolvePositionViewScope } from "@/lib/position-data-scope";
+import { POSITION_SCOPE_ALL, positionViewScopeMeta, resolvePositionViewScope } from "@/lib/position-data-scope";
 import { materialTicketReference } from "@/lib/material-ticket-sequence";
 import {
   replacementTargetKey,
@@ -73,7 +74,8 @@ export async function GET(req: NextRequest) {
     const access = await resolveEquipmentAccessForUser(user);
     // Rào cương vị cho CẢ tab Lịch thay thế lẫn tab Tình trạng (hai tab đọc chung
     // endpoint này) và cho chuông cảnh báo đến hạn ở thanh trên cùng (due=WARN).
-    const viewScope = await resolvePositionViewScope(user, "replacement");
+    // Chức danh giám sát xem được mọi điểm (trang Theo dõi dầu mỡ đọc chung endpoint này).
+    const viewScope = isLubricantSupervisor(user) ? POSITION_SCOPE_ALL : await resolvePositionViewScope(user, "replacement");
     const sp = req.nextUrl.searchParams;
     const q = sp.get("q")?.trim();
     const materialId = sp.get("materialId");

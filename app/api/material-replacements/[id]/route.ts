@@ -10,6 +10,7 @@ import { getCachedEquipmentNodeFull } from "@/lib/equipment-node-cache";
 import { assertSeqsInScope } from "@/lib/equipment-tree-scope";
 import { EQUIPMENT_DEVICE_SELECT, equipmentNodeToDevice } from "@/lib/equipment-device";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
+import { isLubricantSupervisor } from "@/lib/lubricant-access";
 import { parseDateInput } from "@/lib/utils";
 import { publicUserRef } from "@/lib/s3";
 import { positionCodeOf, positionsMatch } from "@/lib/position-catalog";
@@ -18,6 +19,7 @@ import {
   canViewMaterialReplacement,
 } from "@/lib/material-replacement-access";
 import { resolvePositionViewScope } from "@/lib/position-data-scope";
+import { materialCategoryMatches } from "@/lib/constants";
 
 const DETAIL_INCLUDE = {
   material: { select: { id: true, code: true, name: true, unit: true, imageUrl: true } },
@@ -68,15 +70,23 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
   const params = await props.params;
   return handle(async () => {
     const user = await requireUser();
-    await requirePermissionLevel(user, "replacement-manage", ["manage", "full"], "Không đủ quyền cập nhật điểm thay thế");
+    // Chức danh giám sát (Trưởng ca, TKLM, TKĐ, KTV, PQĐ, QĐ, Kỹ sư) sửa được mọi điểm dầu mỡ.
+    const supervisor = isLubricantSupervisor(user);
+    if (!supervisor) await requirePermissionLevel(user, "replacement-manage", ["manage", "full"], "Không đủ quyền cập nhật điểm thay thế");
     const body = await req.json();
     const existing = await prisma.materialReplacement.findUnique({
       where: { id: params.id },
-      include: { _count: { select: { logs: true, defectRequests: true } } },
+      include: { material: { select: { category: true } }, _count: { select: { logs: true, defectRequests: true } } },
     });
     if (!existing) return fail("Không tìm thấy điểm thay thế", 404);
+    const lubricant = materialCategoryMatches(existing.material.category, "Dầu bôi trơn");
+    if (supervisor && !lubricant) await requirePermissionLevel(user, "replacement-manage", ["manage", "full"], "Không đủ quyền cập nhật điểm thay thế");
+    if (lubricant && !supervisor &&
+      !positionsMatch(user.currentPosition, existing.managingPositionCode ?? existing.managingPosition)) {
+      return fail("Chỉ cương vị quản lý thiết bị được sửa điểm thay dầu mỡ này", 403);
+    }
     const access = await resolveEquipmentAccessForUser(user);
-    if (!canEditMaterialReplacement(access, existing)) {
+    if (!(supervisor && lubricant) && !canEditMaterialReplacement(access, existing)) {
       return fail("Cương vị của bạn không có quyền cập nhật điểm thay thế này", 403);
     }
     // Đổi thiết bị của một điểm cũng phải nằm trong đúng cây của tổ máy sở hữu điểm.

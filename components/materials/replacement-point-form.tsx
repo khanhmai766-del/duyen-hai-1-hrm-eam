@@ -12,7 +12,7 @@ import { EquipmentTreePicker, type PickerEquipmentNode } from "@/components/devi
 import { useEquipmentNode } from "@/hooks/useEquipment";
 import { useUpdateReplacement, type ReplacementItem } from "@/hooks/useReplacements";
 import { usePositions } from "@/hooks/useUsers";
-import { addMonths } from "@/lib/constants";
+import { addMonths, lubricantNextDue, materialCategoryMatches } from "@/lib/constants";
 import { positionLabelOf } from "@/lib/position-catalog";
 import { selectableManagingPositionOptions } from "@/lib/positions";
 import { parseScopeParam } from "@/lib/equipment-units";
@@ -43,6 +43,7 @@ export function ReplacementPointForm({
     [allPositions]
   );
   const scope = parseScopeParam(point?.machine) ?? undefined;
+  const autoCalculateDue = materialCategoryMatches(point?.material.category, "Dầu bôi trơn");
 
   const [form, setForm] = React.useState({
     deviceId: point?.deviceId ?? "",
@@ -55,6 +56,9 @@ export function ReplacementPointForm({
     note: point?.note ?? "",
     samplingOnly: point?.samplingOnly === true,
   });
+  const calculatedDueAt = autoCalculateDue
+    ? toDateInput(lubricantNextDue(form.lastReplacedAt, Number(form.intervalMonths)))
+    : form.nextDueAt;
   const [selectedParentSeq, setSelectedParentSeq] = React.useState<string | null>(null);
   const parentQuery = useEquipmentNode(
     selectedParentSeq,
@@ -112,26 +116,29 @@ export function ReplacementPointForm({
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (!form.managingPosition) return toast.error("Vui lòng chọn cương vị");
-    if (!form.system) return toast.error("Vui lòng chọn hệ thống");
-    if (!form.deviceId) return toast.error("Vui lòng chọn thiết bị");
-    if (Number(form.intervalMonths) > 0 && !form.nextDueAt) return toast.error("Vui lòng nhập ngày đến hạn");
+    if (!point) return toast.error("Không tìm thấy điểm thay thế cần cập nhật");
+    const deviceChanged = form.deviceId !== (point.deviceId ?? "");
+    const positionChanged = form.managingPosition !== positionLabelOf(point.managingPosition);
+    if ((deviceChanged || positionChanged) && !form.managingPosition) return toast.error("Vui lòng chọn cương vị");
+    if (deviceChanged && !form.deviceId) return toast.error("Vui lòng chọn thiết bị");
+    if (deviceChanged && !form.system) return toast.error("Vui lòng chọn hệ thống");
+    if (Number(form.intervalMonths) > 0 && !calculatedDueAt) {
+      return toast.error(autoCalculateDue ? "Vui lòng nhập lần thay gần nhất để tính hạn" : "Vui lòng nhập ngày đến hạn");
+    }
 
     const payload = {
       materialId,
-      deviceId: form.deviceId,
-      location: null,
-      system: form.system || null,
-      managingPosition: form.managingPosition,
+      deviceId: deviceChanged ? form.deviceId : undefined,
+      system: deviceChanged || form.system !== (point.system ?? "") ? form.system || null : undefined,
+      managingPosition: deviceChanged || positionChanged ? form.managingPosition : undefined,
       intervalMonths: Number(form.intervalMonths),
       intervalNote: form.intervalNote,
       lastReplacedAt: form.lastReplacedAt || null,
-      nextDueAt: form.nextDueAt || null,
+      nextDueAt: calculatedDueAt || null,
       note: form.note,
       samplingOnly: form.samplingOnly,
     };
     try {
-      if (!point) return toast.error("Không tìm thấy điểm thay thế cần cập nhật");
       await update.mutateAsync({ id: point.id, ...payload });
       toast.success("Đã cập nhật điểm thay thế");
       onDone?.();
@@ -211,7 +218,9 @@ export function ReplacementPointForm({
         <Input type="date" value={form.lastReplacedAt} onChange={(e) => onLastChange(e.target.value)} />
       </Field>
       <Field label={Number(form.intervalMonths) > 0 ? "Đến hạn kế tiếp *" : "Đến hạn kế tiếp"}>
-        <Input type="date" value={form.nextDueAt} onChange={(e) => set("nextDueAt", e.target.value)} required={Number(form.intervalMonths) > 0} disabled={Number(form.intervalMonths) === 0} />
+        <Input type="date" value={calculatedDueAt} onChange={(e) => set("nextDueAt", e.target.value)}
+          readOnly={autoCalculateDue} required={!autoCalculateDue && Number(form.intervalMonths) > 0}
+          disabled={Number(form.intervalMonths) === 0} />
       </Field>
 
       <Field label="Ghi chú" className="sm:col-span-2">
