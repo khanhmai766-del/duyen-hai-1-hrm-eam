@@ -11,7 +11,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { EquipmentTreePicker, type PickerEquipmentNode } from "@/components/devices/equipment-tree-picker";
 import { LubricantMaterialPicker } from "@/components/materials/lubricant-material-picker";
-import { useCreateReplacement, useLubricantMaterials } from "@/hooks/useReplacements";
+import { useCreateReplacement, useLubricantMaterials, useUpdateLubricantRowLink } from "@/hooks/useReplacements";
+import { excelIntervalMonths, parseExcelLastDate } from "@/lib/lubricant-excel-dates";
+import { foldVn } from "@/lib/vibration/parse";
 import { usePositions } from "@/hooks/useUsers";
 import { lubricantNextDue } from "@/lib/constants";
 import { selectableManagingPositionOptions } from "@/lib/positions";
@@ -25,26 +27,61 @@ const AUTO_POSITION = "__auto__";
 /** Tổ máy mặc định theo nhóm: "Lò S1"/"Tuabin S2" → S1/S2, còn lại (BOP, Máy nén khí, Điện) → COMMON. */
 export const defaultMachineOfGroup = (group: string) => /S([12])$/.exec(group.trim())?.[0] ?? "COMMON";
 
-/** Hộp thoại thêm một điểm theo dõi dầu mỡ (tạo qua POST /api/material-replacements). */
-export function LubricantPointDialog({ open, onOpenChange, groupNames, defaultGroup }: {
+/** Dòng Excel "Theo Excel"/"Chưa liên kết" cần tạo điểm thay thế rồi liên kết. */
+export type LubricantExcelSource = { sourceKey: string; group: string; cells: string[]; lastDate?: string };
+
+/** Khớp dầu trong Excel với danh mục: ưu tiên mã, sau đó tên dài nhất nằm trong ô "Loại dầu". */
+function matchExcelMaterial<M extends { id: string; code: string; name: string; machine: string | null }>(materials: M[], cells: string[], machine: string) {
+  const pool = materials.filter((material) => !material.machine || material.machine === machine);
+  const code = cells[4]?.trim();
+  const byCode = code && pool.find((material) => material.code === code);
+  if (byCode) return byCode;
+  const text = foldVn(cells[3] ?? "").replace(/\s+/g, " ");
+  return pool
+    .filter((material) => {
+      const name = foldVn(material.name).replace(/^(dau|mo)\s+(nhon\s+|boi tron\s+)?/, "").trim();
+      return name.length > 3 && text.includes(name);
+    })
+    .sort((a, b) => b.name.length - a.name.length)[0];
+}
+
+/** Hộp thoại thêm một điểm theo dõi dầu mỡ (tạo qua POST /api/material-replacements).
+ *  Có `fromExcel`: điền sẵn theo dòng Excel, tạo xong thì liên kết dòng đó với điểm mới. */
+export function LubricantPointDialog({ open, onOpenChange, groupNames, defaultGroup, fromExcel }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   groupNames: string[];
   defaultGroup?: string;
+  fromExcel?: LubricantExcelSource | null;
 }) {
   const create = useCreateReplacement();
+  const link = useUpdateLubricantRowLink();
   const materialsQuery = useLubricantMaterials(open);
   const allPositions = usePositions();
   const positions = React.useMemo(() => selectableManagingPositionOptions(allPositions), [allPositions]);
   const initial = React.useCallback(() => {
-    const group = defaultGroup && groupNames.includes(defaultGroup) ? defaultGroup : groupNames[0] ?? CUSTOM_GROUP;
+    const wanted = fromExcel?.group ?? defaultGroup;
+    const group = wanted && groupNames.includes(wanted) ? wanted : groupNames[0] ?? CUSTOM_GROUP;
+    const cells = fromExcel?.cells ?? [];
+    // Ô ngày Excel: "07/07/2025" hoặc chỉ tháng "05/2025" (lấy ngày 1).
+    const parsed = parseExcelLastDate(cells[6]);
+    const monthOnly = /^\s*(\d{1,2})\/(\d{4})\s*$/.exec(cells[6] ?? "");
+    const excelDate = fromExcel?.lastDate
+      || (parsed ? formatDateInput(parsed) : monthOnly ? `${monthOnly[2]}-${monthOnly[1].padStart(2, "0")}-01` : "");
+    const excelPosition = foldVn(cells[1] ?? "").trim();
+    const position = excelPosition
+      ? positions.find((name) => foldVn(name) === excelPosition)
+        ?? positions.find((name) => excelPosition.startsWith(foldVn(name)))
+      : undefined;
     return {
-      groupChoice: group, customGroup: "", machine: defaultMachineOfGroup(group), position: AUTO_POSITION,
-      freeLocation: false, deviceId: "", deviceName: "", location: "",
-      materialIds: [] as string[], alternateIds: [] as string[],
-      quantity: "0", intervalMonths: "6", intervalNote: "", lastReplacedAt: formatDateInput(),
+      groupChoice: group, customGroup: "", machine: defaultMachineOfGroup(group), position: position ?? AUTO_POSITION,
+      freeLocation: false, deviceId: "", deviceName: "", location: cells[2]?.trim() ?? "",
+      materialIds: [] as string[], alternateIds: [] as string[], materialMatched: !fromExcel,
+      quantity: fromExcel ? String(Number(/\d+(?:[.,]\d+)?/.exec(cells[5] ?? "")?.[0].replace(",", ".") ?? 0) || 0) : "0",
+      intervalMonths: String((fromExcel && excelIntervalMonths(cells[7])) || 6), intervalNote: "",
+      lastReplacedAt: excelDate || formatDateInput(),
     };
-  }, [defaultGroup, groupNames]);
+  }, [defaultGroup, groupNames, fromExcel, positions]);
   const [form, setForm] = React.useState(initial);
   const [wasOpen, setWasOpen] = React.useState(false);
   if (open !== wasOpen) {
@@ -54,6 +91,11 @@ export function LubricantPointDialog({ open, onOpenChange, groupNames, defaultGr
   const set = <K extends keyof typeof form>(key: K, value: (typeof form)[K]) => setForm((current) => ({ ...current, [key]: value }));
 
   const materials = materialsQuery.data ?? [];
+  // Dầu của dòng Excel được khớp khi danh mục dầu đã tải xong (một lần mỗi lần mở).
+  if (open && fromExcel && !form.materialMatched && materials.length) {
+    const found = matchExcelMaterial(materials, fromExcel.cells, form.machine);
+    setForm((current) => ({ ...current, materialMatched: true, materialIds: found ? [found.id] : current.materialIds }));
+  }
   const mainId = form.materialIds[0];
   const main = materials.find((material) => material.id === mainId);
   const group = form.groupChoice === CUSTOM_GROUP ? form.customGroup.trim() : form.groupChoice;
@@ -84,7 +126,7 @@ export function LubricantPointDialog({ open, onOpenChange, groupNames, defaultGr
     if (!form.lastReplacedAt) return toast.error("Nhập ngày thay gần nhất để tính hạn");
     const nextDueAt = lubricantNextDue(form.lastReplacedAt, months);
     try {
-      await create.mutateAsync({
+      const created = await create.mutateAsync({
         materialId: main.id,
         alternateMaterialIds: form.alternateIds,
         deviceSeq: form.freeLocation ? undefined : form.deviceId,
@@ -98,7 +140,8 @@ export function LubricantPointDialog({ open, onOpenChange, groupNames, defaultGr
         lastReplacedAt: form.lastReplacedAt,
         nextDueAt: nextDueAt ? formatDateInput(nextDueAt) : undefined,
       });
-      toast.success("Đã thêm thiết bị theo dõi dầu mỡ");
+      if (fromExcel) await link.mutateAsync({ sourceKey: fromExcel.sourceKey, mode: "point", replacementId: created.id });
+      toast.success(fromExcel ? "Đã tạo điểm thay thế và liên kết dòng Excel" : "Đã thêm thiết bị theo dõi dầu mỡ");
       onOpenChange(false);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Không thêm được thiết bị");
@@ -106,9 +149,16 @@ export function LubricantPointDialog({ open, onOpenChange, groupNames, defaultGr
   }
 
   return (
-    <Dialog open={open} onOpenChange={(next) => { if (!create.isPending) onOpenChange(next); }}>
+    <Dialog open={open} onOpenChange={(next) => { if (!create.isPending && !link.isPending) onOpenChange(next); }}>
       <DialogContent className="max-h-[92vh] max-w-2xl overflow-y-auto">
-        <DialogHeader><DialogTitle>Thêm thiết bị theo dõi dầu mỡ</DialogTitle></DialogHeader>
+        <DialogHeader>
+          <DialogTitle>{fromExcel ? "Tạo điểm thay thế từ dòng Excel" : "Thêm thiết bị theo dõi dầu mỡ"}</DialogTitle>
+          {fromExcel && (
+            <p className="text-sm text-muted-foreground">
+              {fromExcel.cells[2]} · {fromExcel.cells[3]?.split(/\n/)[0]} — chọn thiết bị trên cây, lưu xong dòng chuyển sang “Đã liên kết”.
+            </p>
+          )}
+        </DialogHeader>
         <form onSubmit={submit} className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <Label className="mb-1.5 block">Nhóm / khu vực *</Label>
@@ -197,8 +247,8 @@ export function LubricantPointDialog({ open, onOpenChange, groupNames, defaultGr
 
           <div className="flex justify-end gap-2 sm:col-span-2">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={create.isPending}>Hủy</Button>
-            <Button type="submit" disabled={create.isPending}>
-              {create.isPending && <Loader2 className="h-4 w-4 animate-spin" />}Thêm thiết bị
+            <Button type="submit" disabled={create.isPending || link.isPending}>
+              {(create.isPending || link.isPending) && <Loader2 className="h-4 w-4 animate-spin" />}{fromExcel ? "Tạo và liên kết" : "Thêm thiết bị"}
             </Button>
           </div>
         </form>

@@ -1,14 +1,11 @@
 import { Fragment, useMemo, useState } from "react";
 import Link from "next/link";
 import { BarChart3, ChevronDown, Droplets, Link2, Pencil, Plus } from "lucide-react";
-import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
 import { EmptyState } from "@/components/shared/empty-state";
-import { useLubricantRowLinks, useLubricantSourceDates, useLubricantSupplements, useReplacements, useUpdateLubricantSourceDate, type ReplacementItem } from "@/hooks/useReplacements";
-import { LubricantPointDialog } from "@/components/materials/lubricant-point-dialog";
+import { useLubricantRowLinks, useLubricantSourceDates, useLubricantSupplements, useReplacements, type ReplacementItem } from "@/hooks/useReplacements";
+import { LubricantPointDialog, type LubricantExcelSource } from "@/components/materials/lubricant-point-dialog";
 import { LubricantLinkPicker, pointLabel, type LinkPickerRow } from "./lubricant-link-picker";
 import { resolveRowLink, type RowLinkOverride } from "@/lib/lubricant-row-links";
 import { useCurrentPosition } from "@/hooks/useCurrentPosition";
@@ -184,8 +181,7 @@ export function LubricantStatistics({ search, onEdit, editAll = false }: {
   const rowLinks = useLubricantRowLinks();
   const [adding, setAdding] = useState(false);
   const [linkRow, setLinkRow] = useState<LinkPickerRow | null>(null);
-  const updateSourceDate = useUpdateLubricantSourceDate();
-  const [sourceEdit, setSourceEdit] = useState<{ sourceKey: string; name: string; date: string } | null>(null);
+  const [createFrom, setCreateFrom] = useState<LubricantExcelSource | null>(null);
   const [group, setGroup] = useState("");
   const [positionChoice, setPositionChoice] = useState<string | undefined>();
   const [statusFilter, setStatusFilter] = useState("");
@@ -269,9 +265,10 @@ export function LubricantStatistics({ search, onEdit, editAll = false }: {
   const excelOnlyCount = rows.filter((line) => line.excelOnly).length;
 
   function editSource(row: SourceRow) {
-    const initial = parseExcelLastDate(row.cells[6])?.toISOString().slice(0, 10) ?? "";
+    const parsed = parseExcelLastDate(row.cells[6]);
+    const initial = parsed ? formatDateInput(parsed) : "";
     const saved = sourceDates.data?.[row.key] ?? (row.originalKey && sourceDates.data?.[row.originalKey]);
-    setSourceEdit({ sourceKey: row.key, name: row.cells[2], date: saved ?? initial });
+    setCreateFrom({ sourceKey: row.key, group: row.group, cells: row.cells, lastDate: saved || initial });
   }
   const toggle = (id: string) => setExpanded((current) => {
     const next = new Set(current);
@@ -387,9 +384,9 @@ export function LubricantStatistics({ search, onEdit, editAll = false }: {
                         <td className="text-right">
                           <div className="flex justify-end">
                             {line.editable && (
-                              <Button type="button" variant="ghost" size="icon" className="size-7 text-navy" title="Sửa lần thay gần nhất"
+                              <Button type="button" variant="ghost" size="icon" className="size-7 text-navy" title={line.point ? "Sửa điểm thay thế" : "Tạo điểm thay thế và liên kết"}
                                 onClick={() => line.point ? onEdit?.(line.point) : line.source && editSource(line.source)}
-                                aria-label={`Sửa lần thay gần nhất của ${line.device}`}>
+                                aria-label={`${line.point ? "Sửa điểm thay thế" : "Tạo điểm thay thế"} của ${line.device}`}>
                                 <Pencil className="size-3.5" />
                               </Button>
                             )}
@@ -447,31 +444,8 @@ export function LubricantStatistics({ search, onEdit, editAll = false }: {
       <LubricantPointDialog open={adding} onOpenChange={setAdding} groupNames={groups.map(({ name }) => name)}
         defaultGroup={group && group !== "other" ? group : undefined} />
       <LubricantLinkPicker row={linkRow} points={points} onClose={() => setLinkRow(null)} />
-      <Dialog open={!!sourceEdit} onOpenChange={(open) => { if (!open && !updateSourceDate.isPending) setSourceEdit(null); }}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader><DialogTitle>Sửa lần thay gần nhất</DialogTitle></DialogHeader>
-          {sourceEdit && (
-            <form className="space-y-4" onSubmit={async (event) => {
-              event.preventDefault();
-              try {
-                await updateSourceDate.mutateAsync({ sourceKey: sourceEdit.sourceKey, date: sourceEdit.date });
-                setSourceEdit(null);
-                toast.success("Đã lưu lần thay gần nhất");
-              } catch (error) {
-                toast.error(error instanceof Error ? error.message : "Không lưu được ngày thay");
-              }
-            }}>
-              <p className="text-sm font-medium">{sourceEdit.name}</p>
-              <label className="block text-sm">
-                Ngày thay gần nhất
-                <Input type="date" className="mt-1" value={sourceEdit.date} required
-                  onChange={(event) => setSourceEdit({ ...sourceEdit, date: event.target.value })} />
-              </label>
-              <Button type="submit" disabled={updateSourceDate.isPending}>Lưu thay đổi</Button>
-            </form>
-          )}
-        </DialogContent>
-      </Dialog>
+      <LubricantPointDialog open={!!createFrom} onOpenChange={(open) => { if (!open) setCreateFrom(null); }}
+        groupNames={groups.map(({ name }) => name)} fromExcel={createFrom} />
     </section>
   );
 }
